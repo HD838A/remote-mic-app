@@ -175,18 +175,21 @@ struct CommonPhrasePanelView: View {
 
     var body: some View {
         VStack(spacing: 12) {
-            HStack(alignment: .top, spacing: 8) {
-                Text(localization.text(controller.messageKey))
-                    .font(.system(size: 16, weight: .medium))
-                    .frame(maxWidth: .infinity)
-                    .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
-                Button { controller.close(reason: "close_button") } label: {
-                    Image(systemName: "xmark").font(.system(size: 16, weight: .semibold))
-                        .frame(width: 30, height: 30)
+            Text(localization.text(controller.messageKey))
+                .font(.system(size: 14, weight: .medium))
+                .lineSpacing(6)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, minHeight: 48, alignment: .top)
+                .overlay(alignment: .bottomTrailing) {
+                    Button { controller.close(reason: "close_button") } label: {
+                        Image(systemName: "xmark").font(.system(size: 16, weight: .semibold))
+                            .frame(width: 30, height: 30)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(localization.text("common_phrases.close"))
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel(localization.text("common_phrases.close"))
-            }
             CommonPhrasePad(store: controller.store, diameter: 272, onSelect: controller.insert)
         }
         .padding(14).frame(width: Self.size.width, height: Self.size.height)

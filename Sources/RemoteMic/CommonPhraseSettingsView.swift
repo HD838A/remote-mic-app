@@ -31,9 +31,13 @@ struct CommonPhraseSettingsView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .center, spacing: 14) {
                 Button(action: onReturn) {
-                    Label(localization.text("common_phrases.return_to_buttons"), systemImage: "chevron.left")
+                    Text(localization.text("common_phrases.return_to_buttons"))
+                        .font(.system(size: 16, weight: .medium))
+                        .frame(minWidth: 72, minHeight: 44)
+                        .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 8))
+                        .contentShape(RoundedRectangle(cornerRadius: 8))
                 }
                 .buttonStyle(.plain).foregroundStyle(.secondary)
                 .accessibilityIdentifier("common-phrases-return")

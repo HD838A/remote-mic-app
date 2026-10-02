@@ -2216,6 +2216,7 @@ struct SettingsView: View {
                                     lineWidth: 1
                                 )
                         }
+                        .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
                 .accessibilityAddTraits(isSelected ? .isSelected : [])
@@ -2337,6 +2338,7 @@ struct SettingsView: View {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .stroke(isSelected ? Color.accentColor.opacity(0.55) : Color.secondary.opacity(0.16))
         }
+        .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 
     @ViewBuilder
