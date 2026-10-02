@@ -78,11 +78,6 @@ enum SettingsPermissionAction: Equatable {
     }
 }
 
-struct SettingsNavigationState: Equatable {
-    let selectedSection: SettingsSection
-    let expandedShareSection: SettingsSection?
-}
-
 struct SettingsDiagnosticSnapshot: Equatable {
     let appVersion: String
     let bluetoothGranted: Bool
@@ -183,11 +178,6 @@ enum SettingsPageBehavior {
     static func marksUpdateAsSeen(whenSelecting section: SettingsSection) -> Bool {
         section == .about
     }
-
-    static let shareNavigationState = SettingsNavigationState(
-        selectedSection: .about,
-        expandedShareSection: .about
-    )
 
     static func permissionAction(
         for permission: SettingsPermissionKind,
@@ -662,25 +652,6 @@ struct SettingsView: View {
                     }
                 }
             }
-            Button {
-                let navigation = SettingsPageBehavior.shareNavigationState
-                selectedSection = navigation.selectedSection
-                expandedShareSection = navigation.expandedShareSection
-            } label: {
-                VStack(spacing: 7) {
-                    Image(systemName: "square.and.arrow.up")
-                        .font(.system(size: 21, weight: .semibold))
-                    Text("share.action")
-                        .font(.system(size: 13, weight: .semibold))
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .compatibilityFocusEffectDisabled()
-            .foregroundStyle(Color.secondary)
-            .accessibilityLabel(Text("share.sidebar.accessibility_label"))
             if visibleSections.contains(.statistics) {
                 sidebarButton(.statistics)
             }
@@ -858,28 +829,12 @@ struct SettingsView: View {
 
             Divider()
 
-            ScrollViewReader { proxy in
-                ScrollView(.vertical, showsIndicators: false) {
-                    content()
-                        .padding(contentPadding)
-                        .frame(maxWidth: .infinity, alignment: .topLeading)
-                }
-                .compatibilityScrollEdgeEffect()
-                .onChange(of: expandedShareSection) { section in
-                    guard let section else { return }
-                    DispatchQueue.main.async {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            proxy.scrollTo(shareAnchor(for: section), anchor: .bottom)
-                        }
-                    }
-                }
-                .onAppear {
-                    guard let section = expandedShareSection else { return }
-                    DispatchQueue.main.async {
-                        proxy.scrollTo(shareAnchor(for: section), anchor: .bottom)
-                    }
-                }
+            ScrollView(.vertical, showsIndicators: false) {
+                content()
+                    .padding(contentPadding)
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
             }
+            .compatibilityScrollEdgeEffect()
         }
     }
 
@@ -2882,21 +2837,19 @@ struct SettingsView: View {
             HStack(spacing: 14) {
                 PageHeader(title: localization.text("statistics.page.title"))
                 Spacer(minLength: 20)
-                StatusPill(
-                    text: localization.text("about.privacy.local_only"),
-                    tint: .green
-                )
+                Label(localization.text("about.privacy.local_only"), systemImage: "lock")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.secondary)
             }
         } content: {
-            CompatibilityGlassContainer(spacing: 14) {
-                VStack(spacing: 14) {
-                    statisticsSummaryGrid
-                    StatisticsColumnsLayout {
-                        statisticsRankingPanel
-                        VStack(spacing: 14) {
-                            statisticsCalendarPanel
-                            statisticsVoiceSessionRankingPanel
-                        }
+            VStack(spacing: 14) {
+                sharePanel(for: .statistics)
+                statisticsSummaryGrid
+                StatisticsColumnsLayout {
+                    statisticsRankingPanel
+                    VStack(spacing: 14) {
+                        statisticsCalendarPanel
+                        statisticsVoiceSessionRankingPanel
                     }
                 }
             }
@@ -2961,7 +2914,7 @@ struct SettingsView: View {
     }
 
     private var statisticsRankingPanel: some View {
-        GlassPanel {
+        ProfilePanel {
             VStack(alignment: .leading, spacing: 12) {
                 Text("statistics.ranking.title")
                     .font(.title3.weight(.semibold))
@@ -3032,7 +2985,7 @@ struct SettingsView: View {
     }
 
     private var statisticsCalendarPanel: some View {
-        GlassPanel {
+        ProfilePanel {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .firstTextBaseline) {
                     Text("statistics.calendar.title")
@@ -3082,7 +3035,7 @@ struct SettingsView: View {
     }
 
     private var statisticsVoiceSessionRankingPanel: some View {
-        GlassPanel {
+        ProfilePanel {
             VStack(alignment: .leading, spacing: 7) {
                 Label(
                     localization.text("statistics.ranking.voice_sessions"),
@@ -3698,9 +3651,6 @@ struct SettingsView: View {
                     }
 
                     settingsSupportSection
-
-                    sharePanel(for: .about)
-                        .padding(.top, 14)
                 }
             }
         }
@@ -3776,7 +3726,7 @@ struct SettingsView: View {
         let isExpanded = expandedShareSection == section
         let shareURL = AppShareLink.url(for: localization.locale)
 
-        return GlassPanel {
+        return ProfilePanel {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(spacing: 14) {
                     Image(systemName: "square.and.arrow.up")
@@ -3799,7 +3749,7 @@ struct SettingsView: View {
                             systemImage: isExpanded ? "chevron.up" : "qrcode"
                         )
                     }
-                    .compatibilityButtonStyle(.standard)
+                    .buttonStyle(.bordered)
                 }
 
                 if isExpanded {
@@ -3809,11 +3759,6 @@ struct SettingsView: View {
                 }
             }
         }
-        .id(shareAnchor(for: section))
-    }
-
-    private func shareAnchor(for section: SettingsSection) -> String {
-        "settings-share-\(section.rawValue)"
     }
 
     private func sectionTitle(_ section: SettingsSection) -> String {
@@ -4677,6 +4622,20 @@ struct GlassPanel<Content: View>: View {
     }
 }
 
+private struct ProfilePanel<Content: View>: View {
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        content
+            .padding(16)
+            .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(Color.secondary.opacity(0.18))
+            }
+    }
+}
+
 private struct ShareCard: View {
     let url: URL
     @State private var copySucceeded: Bool?
@@ -4719,7 +4678,7 @@ private struct ShareCard: View {
                 } label: {
                     Label("share.copy_action", systemImage: "doc.on.doc")
                 }
-                .compatibilityButtonStyle(.prominent)
+                .buttonStyle(.borderedProminent)
                 .accessibilityHint(Text("share.copy.accessibility_hint"))
 
                 if let copySucceeded {
@@ -4784,7 +4743,7 @@ private struct ProfileMetricCard: View {
                 .font(.system(size: 20, weight: .semibold))
                 .foregroundStyle(tint)
                 .frame(width: 42, height: 42)
-                .compatibilityTintedGlass(tint: tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+                .background(tint.opacity(0.10), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
                     .font(.system(size: 12))
@@ -4807,10 +4766,11 @@ private struct ProfileMetricCard: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity, minHeight: 88, alignment: .leading)
-        .compatibilityTintedGlass(
-            tint: tint.opacity(0.06),
-            in: RoundedRectangle(cornerRadius: 16, style: .continuous)
-        )
+        .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(Color.secondary.opacity(0.18))
+        }
     }
 }
 
