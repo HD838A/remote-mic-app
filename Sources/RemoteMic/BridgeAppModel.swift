@@ -634,6 +634,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private var transcriptHistoryToggleCancellable: AnyCancellable?
     private var recordingToggleCancellable: AnyCancellable?
     private var membershipAccessCancellable: AnyCancellable?
+    private var membershipCompanionAccessCancellable: AnyCancellable?
     private var membershipAccountCancellable: AnyCancellable?
     private var membershipEnvironmentCancellable: AnyCancellable?
     private var testToneGeneration = 0
@@ -876,6 +877,11 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             .sink { [weak macroFeature] decision in
                 macroFeature?.updateButtonProfilesAccess(decision)
             }
+        membershipCompanionAccessCancellable = membershipFeature.$canUseCompanionConnections
+            .removeDuplicates()
+            .sink { [weak self] allowed in
+                if !allowed { self?.disablePhoneRemoteConnection() }
+            }
         membershipAccountCancellable = membershipFeature.$accountDisplayName
             .removeDuplicates()
             .sink { [weak self] account in
@@ -993,11 +999,17 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         }
 #endif
         phoneRemoteServer.isIdentityTrusted = { [weak self] fingerprint in
-            self?.settings.isPhoneIdentityTrusted(fingerprint) ?? false
+            guard let self, self.membershipFeature.canStartCompanionConnection else { return false }
+            return self.settings.isPhoneIdentityTrusted(fingerprint)
         }
         phoneRemoteServer.onConnectionStateChange = { [weak self] connected in
             DispatchQueue.main.async {
-                self?.isPhoneRemoteConnected = connected
+                guard let self else { return }
+                if connected && !self.membershipFeature.canStartCompanionConnection {
+                    self.disablePhoneRemoteConnection()
+                    return
+                }
+                self.isPhoneRemoteConnected = connected
             }
         }
         phoneRemoteServer.onInvitationChange = { [weak self] invitation in
@@ -1009,7 +1021,8 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             self?.cancelPhoneApproval()
         }
         phoneRemoteServer.onApprovalRequested = { [weak self] deviceName, pairingCode, fingerprint, completion in
-            guard let self, self.isPhoneRemoteConnectionEnabled else {
+            guard let self, self.isPhoneRemoteConnectionEnabled,
+                  self.membershipFeature.canStartCompanionConnection else {
                 completion(false)
                 return
             }
@@ -1076,18 +1089,25 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             }
         }
         watchBluetoothServer.isIdentityTrusted = { [weak self] fingerprint in
-            self?.settings.isPhoneIdentityTrusted(fingerprint) ?? false
+            guard let self, self.membershipFeature.canStartCompanionConnection else { return false }
+            return self.settings.isPhoneIdentityTrusted(fingerprint)
         }
         watchBluetoothServer.onConnectionStateChange = { [weak self] connected in
             DispatchQueue.main.async {
-                self?.isWatchRemoteConnected = connected
+                guard let self else { return }
+                if connected && !self.membershipFeature.canStartCompanionConnection {
+                    self.disablePhoneRemoteConnection()
+                    return
+                }
+                self.isWatchRemoteConnected = connected
             }
         }
         watchBluetoothServer.onApprovalCancelled = { [weak self] in
             self?.cancelPhoneApproval()
         }
         watchBluetoothServer.onApprovalRequested = { [weak self] deviceName, pairingCode, fingerprint, completion in
-            guard let self, self.isPhoneRemoteConnectionEnabled else {
+            guard let self, self.isPhoneRemoteConnectionEnabled,
+                  self.membershipFeature.canStartCompanionConnection else {
                 completion(false)
                 return
             }
@@ -5725,6 +5745,10 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         _ button: RemoteButton,
         source: UsageEventSource
     ) -> Bool {
+        guard source != .nearbyPhone || membershipFeature.canStartCompanionConnection else {
+            disablePhoneRemoteConnection()
+            return false
+        }
         if OnboardingControlValidationPolicy.suppressConfiguredActions(
             at: settings.onboardingStep,
             source: settings.onboardingControlSource
@@ -5749,6 +5773,10 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         phase: RemoteButtonPhase,
         source: UsageEventSource
     ) -> Bool {
+        if phase == .press && source == .nearbyPhone && !membershipFeature.canStartCompanionConnection {
+            disablePhoneRemoteConnection()
+            return false
+        }
         if OnboardingControlValidationPolicy.suppressConfiguredActions(
             at: settings.onboardingStep,
             source: settings.onboardingControlSource
@@ -6313,6 +6341,11 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         source: MobileVoiceSource,
         completion: @escaping (RemoteVoiceStartResult) -> Void
     ) {
+        guard source == .web || membershipFeature.canStartCompanionConnection else {
+            disablePhoneRemoteConnection()
+            completion(.unavailable)
+            return
+        }
         switch mobileVoiceLifecycle.requestStart(source) {
         case .startNow:
             completion(startPhoneVoice(source: source))
@@ -6661,6 +6694,10 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     }
 
     private func receivePhoneAudio(_ samples: [Int16], source: MobileVoiceSource) {
+        guard source == .web || membershipFeature.canStartCompanionConnection else {
+            disablePhoneRemoteConnection()
+            return
+        }
         guard activeMobileVoiceSource == source else {
             mobileVoiceAudioSourceMismatchCount += 1
             if mobileVoiceAudioSourceMismatchCount == 1 ||

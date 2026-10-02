@@ -1094,18 +1094,18 @@ struct SettingsPageRegressionTests {
         #expect(membershipSource.contains("supportsRemoteSessionAuthorization"))
         #expect(bridgeSource.contains(".createRemoteSessionAuthorization("))
         #expect(bridgeSource.contains("idempotencyKey: idempotencyKey"))
-        #expect(bridgeSource.contains("webRemoteState = .plusRequired("))
+        #expect(bridgeSource.contains("webRemoteState = .membershipRequired"))
         #expect(bridgeSource.contains("membership_check=bypassed"))
         #expect(bridgeSource.contains("/__local-test/remote-session"))
         #expect(!bridgeSource.contains("webRemoteBuildChannel"))
-        #expect(bridgeSource.contains("webRemoteServiceEnvironment == \"staging\""))
+        #expect(!bridgeSource.contains("webRemoteServiceEnvironment == \"staging\""))
         #expect(bridgeSource.contains("Self.isLoopbackRelayURL(relayURL)"))
         #expect(!bridgeSource.contains("webRemoteMembershipBypassRequested"))
         #expect(bridgeSource.contains("var isWebRemoteMembershipBypassAvailable: Bool { false }"))
         #expect(bridgeSource.contains("func setWebRemoteMembershipBypassEnabled(_ enabled: Bool) {}"))
         let bypassPolicy = bridgeSource.components(separatedBy: "var isWebRemoteMembershipBypassEnabled: Bool {")[1]
             .components(separatedBy: "private static func isLoopbackRelayURL")[0]
-        #expect(bypassPolicy.contains("membershipFeature.supportsRemoteSessionAuthorization"))
+        #expect(bypassPolicy.contains("membershipFeature.remoteSessionMembershipBypassEnabled"))
         #expect(!bypassPolicy.contains("WebRemoteConfiguration.relayURL()"))
         #expect(bridgeSource.contains("testMembershipBypass: isWebRemoteMembershipBypassEnabled"))
         let environmentSubscription = bridgeSource.components(
