@@ -380,6 +380,8 @@ enum KeyboardInjector {
             systemKeyPoster(18)
         case .nextCommandRight:
             systemKeyPoster(17)
+        case .combinationAction:
+            return false // The host action-library adapter owns execution.
         case .customShortcut:
             if let shortcut {
                 let eventFlags = shortcut.cgEventFlags

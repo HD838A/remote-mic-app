@@ -951,11 +951,11 @@ struct SettingsPageRegressionTests {
             "copyTestFlightPublicBetaLink()",
             "requestWebRemoteSession()",
             "settings.clearTrustedPhoneIdentities()",
-            "settings.setAction(action, for: button, trigger: trigger)",
-            "settings.setShortcut(",
+            "setMappingAction(action, for: button, trigger: trigger)",
+            "setMappingShortcut(",
             "chooseCustomApplication(for:",
             "recordCustomApplicationInput(profileID:",
-            "settings.setApplicationProfileID(",
+            "setMappingApplicationProfileID(",
             ".openCustomApplication",
             "settings.resetBindings()",
         ] {
@@ -1034,7 +1034,7 @@ struct SettingsPageRegressionTests {
         #expect(source.contains(".accessibilityAddTraits(isSelected ? .isSelected : [])"))
         #expect(source.contains("LazyVGrid("))
         #expect(source.contains("button_mapping.action.disable_switch"))
-        #expect(source.contains(").filter { $0 != .disabled }"))
+        #expect(source.contains(").filter { $0 != .disabled && $0 != .combinationAction }"))
         #expect(source.contains("DisclosureGroup(isExpanded: $isPresetApplicationActionsExpanded)"))
         #expect(source.contains("isPresetApplicationActionsExpanded = false"))
         #expect(source.contains("custom_application.accessibility.learn_help"))

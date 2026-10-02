@@ -1137,3 +1137,23 @@
 "settings.corrupted.item.remote_device" = "遥控器设备配置";
 "settings.corrupted.item.statistics" = "使用统计记录";
 "settings.corrupted.item.other" = "其他设置";
+
+"action.combination_action" = "组合动作";
+
+"button_mapping.editing_profile" = "正在编辑";
+
+"button_mapping.active_profile" = "正在使用";
+
+"button_mapping.base_profile" = "基础映射";
+
+"button_mapping.inherit_base" = "继承基础映射";
+
+"button_mapping.inherited" = "继承";
+
+"button_mapping.search_macros" = "搜索组合动作";
+
+"button_mapping.manage_macros" = "管理组合动作";
+
+"button_mapping.macro_unavailable" = "组合动作不可用，请重新选择";
+
+"button_mapping.return_choose_macro" = "返回原按键并选择组合动作";

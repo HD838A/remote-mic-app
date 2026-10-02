@@ -511,15 +511,18 @@ struct ConfiguredButtonAction: Codable, Equatable {
     var action: ButtonAction
     var shortcut: CustomKeyboardShortcut?
     var applicationProfileID: UUID?
+    var macroID: String?
 
     init(
         action: ButtonAction,
         shortcut: CustomKeyboardShortcut?,
-        applicationProfileID: UUID? = nil
+        applicationProfileID: UUID? = nil,
+        macroID: String? = nil
     ) {
         self.action = action
         self.shortcut = shortcut
         self.applicationProfileID = applicationProfileID
+        self.macroID = macroID
     }
 
     static let disabled = ConfiguredButtonAction(action: .disabled, shortcut: nil)
@@ -716,6 +719,7 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
     case previousCommandLeft
     case nextCommandRight
     case customShortcut
+    case combinationAction
     case focusInput
     case openCustomApplication
     case toggleLongRecording
@@ -769,6 +773,7 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
         case .playPause: return localization.text("action.play_pause")
         case .previousCommandLeft: return localization.text("action.previous_command_left")
         case .nextCommandRight: return localization.text("action.next_command_right")
+        case .combinationAction: return localization.text("action.combination_action")
         case .customShortcut: return localization.text("action.custom_shortcut")
         case .focusInput: return localization.text("action.focus_input")
         case .openCustomApplication: return localization.text("action.open_custom_application")
@@ -820,7 +825,7 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
         case .showDesktop, .contextMenu, .appSwitcher, .volumeUp, .volumeDown, .volumeMute,
              .playPause, .previousCommandLeft, .nextCommandRight, .toggleLongRecording:
             return .systemAndMedia
-        case .customShortcut, .focusInput, .openCustomApplication:
+        case .customShortcut, .combinationAction, .focusInput, .openCustomApplication:
             return .custom
         case .openRemoteMic, .openCodex, .openClaude, .openCmux, .openWeChat, .openCursor,
              .openXcode, .openSlack, .openWeCom, .openNeteaseMusic, .openChrome, .openSafari,

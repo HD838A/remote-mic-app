@@ -437,6 +437,11 @@ struct SettingsView: View {
     @ObservedObject var model: BridgeAppModel
     @ObservedObject var settings: AppSettings
     @ObservedObject private var privateFeature: PrivateFeatureIntegration
+    @State private var preservesMappingContextOnNavigation = false
+    @State private var returnsToMappingFromLibrary = false
+    @State private var editingMappingProfileID: UUID?
+    @State private var mappingMacroSearch = ""
+
     @ObservedObject private var macroFeature: MacroFeatureIntegration
     @ObservedObject private var membershipFeature: MembershipFeatureIntegration
     @ObservedObject private var loginItemService: LoginItemService
@@ -555,7 +560,8 @@ struct SettingsView: View {
         }
         .onChange(of: selectedSection) { section in
             if section == .mapping {
-                model.selectDefaultMappingRemoteIfAvailable()
+                if preservesMappingContextOnNavigation { preservesMappingContextOnNavigation = false }
+                else { model.selectDefaultMappingRemoteIfAvailable() }
             }
             if section == .connection || section == .mapping {
                 model.refreshRemoteDeviceNames(reason: .page)
@@ -784,8 +790,26 @@ struct SettingsView: View {
                                   let trigger = ButtonTrigger(rawValue: triggerValue)
                             else { return nil }
                             return mappingActionSummary(for: button, trigger: trigger)
+                        },
+                        settings: settings,
+                        onEditBinding: { device, profile, button, trigger in
+                            preservesMappingContextOnNavigation = true
+                            if let device { settings.selectRemoteProfile(device) }
+                            editingMappingProfileID = profile
+                            mappingEditingTarget = ShortcutEditingTarget(button: button, trigger: trigger)
+                            selectedSection = .mapping
                         }
                     )
+                    if returnsToMappingFromLibrary {
+                        Divider()
+                        Button(localization.text("button_mapping.return_choose_macro")) {
+                            returnsToMappingFromLibrary = false
+                            preservesMappingContextOnNavigation = true
+                            selectedSection = .mapping
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .padding(10)
+                    }
                     Divider()
                     Label(
                         localization.text("macro.integration.focus_mcp_boundary"),
@@ -806,7 +830,12 @@ struct SettingsView: View {
                 macroFeature.buttonProfilesView(
                     selectedRemoteProfileID: settings.selectedRemoteProfileID,
                     remoteModel: settings.selectedRemoteProfile?.model,
-                    hostActionSections: buttonProfileHostActionSections
+                    hostActionSections: buttonProfileHostActionSections,
+                    onEditKeys: { profile in
+                        preservesMappingContextOnNavigation = true
+                        editingMappingProfileID = profile
+                        selectedSection = .mapping
+                    }
                 )
             } else {
                 aboutPage
@@ -1481,13 +1510,136 @@ struct SettingsView: View {
     }
     #endif
 
+    private func mappingConfiguration(for button: RemoteButton, trigger: ButtonTrigger) -> ConfiguredButtonAction {
+        if let profile = editingMappingProfileID {
+            return macroFeature.profileBinding(device: settings.selectedRemoteProfileID, profile: profile,
+                button: button, trigger: trigger)
+                ?? settings.configuredBaseAction(for: button, trigger: trigger)
+        }
+        return settings.configuredBaseAction(for: button, trigger: trigger)
+    }
+
+    private func saveMappingBinding(_ configured: ConfiguredButtonAction, button: RemoteButton, trigger: ButtonTrigger) {
+        if let profile = editingMappingProfileID {
+            macroFeature.setProfileBinding(configured, profile: profile, button: button, trigger: trigger,
+                displayName: configured.action == .customShortcut
+                    ? configured.shortcut?.visualDisplayName(using: localization) ?? configured.action.displayName(using: localization)
+                    : configured.action.displayName(using: localization))
+        } else {
+            settings.setBaseBinding(configured, for: button, trigger: trigger, profileID: settings.selectedRemoteProfileID)
+        }
+    }
+
+    private func setMappingAction(_ action: ButtonAction, for button: RemoteButton, trigger: ButtonTrigger) {
+        var configured = mappingConfiguration(for: button, trigger: trigger)
+        configured.action = action
+        saveMappingBinding(configured, button: button, trigger: trigger)
+    }
+
+    private func setMappingShortcut(_ shortcut: CustomKeyboardShortcut?, for button: RemoteButton, trigger: ButtonTrigger) {
+        var configured = mappingConfiguration(for: button, trigger: trigger)
+        configured.shortcut = shortcut
+        saveMappingBinding(configured, button: button, trigger: trigger)
+    }
+
+    private func setMappingApplicationProfileID(_ id: UUID?, for button: RemoteButton, trigger: ButtonTrigger) {
+        var configured = mappingConfiguration(for: button, trigger: trigger)
+        configured.applicationProfileID = id
+        saveMappingBinding(configured, button: button, trigger: trigger)
+    }
+
+    private var mappingProfileSelector: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(localization.text("button_mapping.editing_profile")).font(.system(size: 13, weight: .semibold))
+                Spacer()
+                if let active = macroFeature.activeMappingProfileID(device: settings.selectedRemoteProfileID),
+                   let profile = macroFeature.mappingProfiles(device: settings.selectedRemoteProfileID).first(where: { $0.id == active }) {
+                    Text(localization.text("button_mapping.active_profile") + "：" + profile.name)
+                        .font(.system(size: 12)).foregroundStyle(.secondary)
+                } else {
+                    Text(localization.text("button_mapping.active_profile") + "：" + localization.text("button_mapping.base_profile"))
+                        .font(.system(size: 12)).foregroundStyle(.secondary)
+                }
+            }
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack {
+                    Button(localization.text("button_mapping.base_profile")) { editingMappingProfileID = nil }
+                        .tint(editingMappingProfileID == nil ? .accentColor : .secondary)
+                    ForEach(macroFeature.mappingProfiles(device: settings.selectedRemoteProfileID)) { profile in
+                        Button(profile.name) { editingMappingProfileID = profile.id; shortcutCaptureTarget = nil }
+                            .tint(editingMappingProfileID == profile.id ? .accentColor : .secondary)
+                    }
+                }.buttonStyle(.bordered)
+            }
+        }
+        .onAppear { macroFeature.prepareMappingDevice(settings.selectedRemoteProfileID) }
+        .onChange(of: macroFeature.mappingProfiles(device: settings.selectedRemoteProfileID).map(\.id)) { ids in
+            if let profile = editingMappingProfileID, !ids.contains(profile) {
+                editingMappingProfileID = nil
+                shortcutCaptureTarget = nil
+            }
+        }
+        .onChange(of: settings.selectedRemoteProfileID) { _ in
+            macroFeature.prepareMappingDevice(settings.selectedRemoteProfileID)
+            if let profile = editingMappingProfileID,
+               !macroFeature.mappingProfiles(device: settings.selectedRemoteProfileID).contains(where: { $0.id == profile }) {
+                editingMappingProfileID = nil
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func mappingInheritanceControl(button: RemoteButton, trigger: ButtonTrigger) -> some View {
+            if let profile = editingMappingProfileID {
+                Button(localization.text("button_mapping.inherit_base")) {
+                    macroFeature.setProfileBinding(nil, profile: profile, button: button, trigger: trigger)
+                }.buttonStyle(.bordered)
+                if macroFeature.profileBinding(device: settings.selectedRemoteProfileID, profile: profile,
+                    button: button, trigger: trigger) == nil {
+                    Text(localization.text("button_mapping.inherited") + "：" + mappingActionSummary(for: button, trigger: trigger))
+                        .font(.system(size: 12)).foregroundStyle(.secondary)
+                }
+            }
+    }
+
+    private func mappingMacroChoices(button: RemoteButton, trigger: ButtonTrigger,
+                                     configured: ConfiguredButtonAction) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(localization.text("action.combination_action")).font(.system(size: 14, weight: .semibold))
+            TextField(localization.text("button_mapping.search_macros"), text: $mappingMacroSearch)
+                .textFieldStyle(.roundedBorder).font(.system(size: 13))
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 160))]) {
+                ForEach(macroFeature.libraryActions.filter {
+                    mappingMacroSearch.isEmpty || $0.name.localizedCaseInsensitiveContains(mappingMacroSearch)
+                }) { action in
+                    Button(action.name) {
+                        var binding = configured
+                        binding.action = .combinationAction
+                        binding.macroID = action.id
+                        saveMappingBinding(binding, button: button, trigger: trigger)
+                    }.buttonStyle(.bordered)
+                }
+            }
+            if configured.action == .combinationAction,
+               !macroFeature.libraryActions.contains(where: { $0.id == configured.macroID }) {
+                Text(localization.text("button_mapping.macro_unavailable")).font(.system(size: 13)).foregroundStyle(.orange)
+            }
+            Button(localization.text("button_mapping.manage_macros")) {
+                returnsToMappingFromLibrary = true
+                selectedSection = .macros
+            }
+                .buttonStyle(.bordered)
+        }
+    }
+
     private var mappingPage: some View {
         hardwareMappingPage {
             RemoteMappingCanvas(
                 selectedButton: $selectedRemoteButton,
                 activeButtons: model.activeRemoteButtons,
                 voiceActive: model.isStreaming,
-                actionSummary: mappingActionSummary,
+                actionSummary: { button, trigger in mappingActionSummary(for: button, trigger: trigger) },
                 onEdit: { button, trigger in
                     selectedRemoteButton = button
                     mappingActionFilter = .all
@@ -1546,6 +1698,7 @@ struct SettingsView: View {
                             Color.clear
                                 .frame(height: 0)
                                 .id("mapping-page-top")
+                            mappingProfileSelector
                             configurationImportBanner
                             corruptedSettingsBanner
 
@@ -1703,13 +1856,13 @@ struct SettingsView: View {
                         "button_mapping.action.disable_switch",
                         isOn: Binding(
                             get: {
-                                settings.configuredAction(
+                                mappingConfiguration(
                                     for: target.button,
                                     trigger: target.trigger
                                 ).action == .disabled
                             },
                             set: { disabled in
-                                settings.setAction(
+                                setMappingAction(
                                     disabled ? .disabled : .escape,
                                     for: target.button,
                                     trigger: target.trigger
@@ -1873,7 +2026,13 @@ struct SettingsView: View {
 
     private var mappingRestoreDefaultsButton: some View {
         Button("common.action.restore_defaults") {
-            settings.resetBindings()
+            if let profile = editingMappingProfileID {
+                for button in RemoteButton.allCases {
+                    for trigger in ButtonTrigger.allCases {
+                        macroFeature.setProfileBinding(nil, profile: profile, button: button, trigger: trigger)
+                    }
+                }
+            } else { settings.resetBindings() }
             selectedRemoteButton = .ok
         }
         .compatibilityButtonStyle(.standard)
@@ -2103,17 +2262,18 @@ struct SettingsView: View {
         _ button: RemoteButton,
         trigger: ButtonTrigger
     ) -> some View {
-        let configured = settings.configuredAction(for: button, trigger: trigger)
+        let configured = mappingConfiguration(for: button, trigger: trigger)
         let installedBundleIdentifiers = PresetApplication.installedBundleIdentifiers
         let actions = ButtonAction.pickerActions(
             installedBundleIdentifiers: installedBundleIdentifiers,
             current: configured.action,
             experimentalContinuousRecordingEnabled: settings.experimentalContinuousRecordingEnabled
-        ).filter { $0 != .disabled }
+        ).filter { $0 != .disabled && $0 != .combinationAction }
         let isManagedPowerAction = button == .power &&
             trigger == .singleClick &&
             settings.experimentalContinuousRecordingEnabled
         return VStack(alignment: .leading, spacing: 16) {
+            mappingInheritanceControl(button: button, trigger: trigger)
             mappingActionFilterControl
 
             ForEach(ButtonActionCategory.allCases.filter(mappingActionFilter.includes)) { category in
@@ -2126,7 +2286,7 @@ struct SettingsView: View {
                         installedBundleIdentifiers: installedBundleIdentifiers,
                         isManagedPowerAction: isManagedPowerAction,
                         onSelect: { action in
-                            settings.setAction(action, for: button, trigger: trigger)
+                            setMappingAction(action, for: button, trigger: trigger)
                             shortcutCaptureTarget = nil
                             applicationShortcutCaptureProfileID = nil
                         }
@@ -2134,6 +2294,9 @@ struct SettingsView: View {
                 }
             }
 
+            if mappingActionFilter.includes(.custom), macroFeature.isFeatureVisible {
+                mappingMacroChoices(button: button, trigger: trigger, configured: configured)
+            }
             if configured.action == .customShortcut {
                 inlineShortcutEditor(
                     button: button,
@@ -2363,7 +2526,7 @@ struct SettingsView: View {
 
                 ShortcutCaptureView(
                     onCapture: { shortcut in
-                        settings.setShortcut(shortcut, for: button, trigger: trigger)
+                        setMappingShortcut(shortcut, for: button, trigger: trigger)
                         AppLogger.shared.write("SHORTCUT CAPTURE completed target=button")
                         shortcutCaptureFeedback = ShortcutCaptureFeedback(
                             contextID: contextID,
@@ -2411,7 +2574,7 @@ struct SettingsView: View {
                         .compatibilityButtonStyle(.standard)
 
                         Button("common.action.clear") {
-                            settings.setShortcut(nil, for: button, trigger: trigger)
+                            setMappingShortcut(nil, for: button, trigger: trigger)
                             shortcutCaptureFeedback = nil
                         }
                         .compatibilityButtonStyle(.standard)
@@ -2424,7 +2587,7 @@ struct SettingsView: View {
                         shortcut: configured.shortcut,
                         showsStandardKeyboardInitially: initialShortcutPickerShowsKeyboard,
                         onSelect: { shortcut in
-                            settings.setShortcut(shortcut, for: button, trigger: trigger)
+                            setMappingShortcut(shortcut, for: button, trigger: trigger)
                             shortcutCaptureFeedback = nil
                         }
                     )
@@ -2456,7 +2619,7 @@ struct SettingsView: View {
                         profile,
                         selected: configured.applicationProfileID == profile.id
                     ) {
-                        settings.setApplicationProfileID(profile.id, for: button, trigger: trigger)
+                        setMappingApplicationProfileID(profile.id, for: button, trigger: trigger)
                     }
                 }
 
@@ -2754,7 +2917,7 @@ struct SettingsView: View {
                 )
             )
         }
-        settings.setApplicationProfileID(profileID, for: button, trigger: trigger)
+        setMappingApplicationProfileID(profileID, for: button, trigger: trigger)
     }
 
     private func recordCustomApplicationInput(profileID: UUID) {
@@ -2798,10 +2961,15 @@ struct SettingsView: View {
         }
     }
 
-    private func mappingActionSummary(for button: RemoteButton, trigger: ButtonTrigger) -> String {
-        let configured = settings.configuredAction(for: button, trigger: trigger)
+    private func mappingActionSummary(for button: RemoteButton, trigger: ButtonTrigger,
+                                      configuredAction: ConfiguredButtonAction? = nil) -> String {
+        let configured = configuredAction ?? mappingConfiguration(for: button, trigger: trigger)
         guard configured.action != .disabled else {
             return localization.text("button_mapping.action.not_set")
+        }
+        if configured.action == .combinationAction {
+            return macroFeature.libraryActions.first { $0.id == configured.macroID }?.name
+                ?? localization.text("button_mapping.macro_unavailable")
         }
         if configured.action == .customShortcut, let shortcut = configured.shortcut {
             return shortcut.visualDisplayName(using: localization)
@@ -2830,7 +2998,7 @@ struct SettingsView: View {
             current: .disabled,
             experimentalContinuousRecordingEnabled: settings.experimentalContinuousRecordingEnabled
         ).filter {
-            $0 != .disabled && $0 != .customShortcut && $0 != .openCustomApplication
+            $0 != .disabled && $0 != .customShortcut && $0 != .openCustomApplication && $0 != .combinationAction
         }
         return ButtonActionCategory.allCases.compactMap { category in
             let actions: [ButtonProfileHostAction] = availableActions
@@ -4065,7 +4233,7 @@ struct SettingsView: View {
             guard count > 0 else { continue }
             let action = settings.configuredAction(for: button, trigger: .singleClick)
             guard action.action != .disabled else { continue }
-            let title = mappingActionSummary(for: button, trigger: .singleClick)
+            let title = mappingActionSummary(for: button, trigger: .singleClick, configuredAction: action)
             counts[title, default: 0] += count
         }
         return counts.map { StatisticsRankingEntry(title: $0.key, count: $0.value) }

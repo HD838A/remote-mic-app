@@ -177,6 +177,33 @@ enum SettingsScreenshotRenderer {
         NSApp.appearance = appearance
         defer { NSApp.appearance = previousAppearance }
 
+        // Interactive review uses the production view, navigation and window geometry,
+        // with the same isolated fixture settings as the offscreen renderer.
+        if ProcessInfo.processInfo.environment["REMOTE_MIC_SETTINGS_SCREENSHOT_INTERACTIVE"] == "1" {
+            let controller = NSHostingController(rootView: SettingsView(
+                model: model, updateInformation: updateInformation, initialSection: .mapping
+            ).environmentObject(localization))
+            let window = NSWindow(contentRect: NSRect(origin: .zero, size: size),
+                styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+                backing: .buffered, defer: false)
+            window.title = "SayAll — Settings Review"
+            window.titleVisibility = .hidden
+            window.titlebarAppearsTransparent = true
+            window.titlebarSeparatorStyle = .none
+            window.isMovableByWindowBackground = false
+            window.hidesOnDeactivate = false
+            window.isReleasedWhenClosed = false
+            window.minSize = NSSize(width: 1020, height: 772)
+            window.contentViewController = controller
+            window.setContentSize(size)
+            window.center()
+            NSApp.setActivationPolicy(.regular)
+            window.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            NSApp.run()
+            return
+        }
+
         for section in sections {
             let rootView = SettingsView(
                 model: model,
