@@ -93,6 +93,8 @@ macOS CI 和发布证明共用 verify-release-control-plane-diff.sh 的分类。
 
 仅修改开发启动入口 script/build_and_run.sh 时，不触发产品构建或发布检查；该入口不在 CI 中执行，其改动不能冒充新的产品验证证明。发布只允许继承经核对无产品变化的既有双架构证明。
 
+文档、上述手工入口及精确治理 allowlist（verify-repository-governance.sh、repository-governance.yml）的单类改动在 Ubuntu 分类和检查，不启动 Mac、Swift 或私有 checkout。required contexts 保持原名，但只表示适用检查通过，不表示产品重新构建。混合产品、未知路径、mac-ci.yml 和分类器自身改动仍走完整矩阵。发布遇到快速检查时，必须核对同分支 first-parent 的成功双架构产品证明及整个祖先差异；产品差异不得继承。PR 新提交可取消旧 PR CI；main/Hotfix 按 SHA 隔离并保留必要验证，不因新 Push 取消 running 或替换 pending。
+
 2026-10-02 已移除 RC003 专用实验包构建、两个 RC003 启动器、Siri 手工蓝牙 trace、旧语音验收和 Chromecast 旧日志监听工具；这些一次性或过时工具不是当前产品、测试包或日志收集入口。现行测试包使用统一签名、公证流程，日志收集按 Testing/RuntimeLogging.md 执行。历史 Bug 文档中出现的旧工具名称只保留为当时的调查证据。
 
 ## Preview publication：无 Apple 凭据

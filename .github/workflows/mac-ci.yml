@@ -8,8 +8,9 @@ on:
     branches: [main, 'hotfix/**']
 
 concurrency:
-  group: mac-ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # Keep every source SHA proof, including pending main/hotfix runs.
+  group: mac-ci-${{ github.workflow }}-${{ github.ref }}-${{ github.event_name == 'pull_request' && 'pr' || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -18,12 +19,13 @@ permissions:
 jobs:
   classify_changes:
     name: Classify changed files
-    runs-on: macos-15
+    runs-on: ubuntu-latest
     outputs:
       docs_only: ${{ steps.changes.outputs.docs_only }}
       release_control_plane_only: ${{ steps.changes.outputs.release_control_plane_only }}
       product_change: ${{ steps.changes.outputs.product_change }}
       tooling_only: ${{ steps.changes.outputs.tooling_only }}
+      repository_only: ${{ steps.changes.outputs.repository_only }}
       release_checks: ${{ steps.changes.outputs.release_checks }}
     steps:
       - name: Check out repository
@@ -40,7 +42,7 @@ jobs:
         run: |
           if [[ "$GITHUB_EVENT_NAME" == workflow_dispatch ]]; then
             {
-              printf '%s\n' docs_only=false release_control_plane_only=false tooling_only=false product_change=true release_checks=true
+              printf '%s\n' docs_only=false release_control_plane_only=false tooling_only=false repository_only=false product_change=true release_checks=true
             } >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -50,7 +52,7 @@ jobs:
             before_sha="${{ github.event.before }}"
             if [[ -z "$before_sha" || "$before_sha" == 0000000000000000000000000000000000000000 ]]; then
               {
-                printf '%s\n' docs_only=false release_control_plane_only=false tooling_only=false product_change=true release_checks=true
+                printf '%s\n' docs_only=false release_control_plane_only=false tooling_only=false repository_only=false product_change=true release_checks=true
               } >> "$GITHUB_OUTPUT"
               exit 0
             fi
@@ -63,7 +65,7 @@ jobs:
   public_test:
     name: Public Swift tests and build (${{ matrix.label }})
     needs: classify_changes
-    runs-on: macos-15
+    runs-on: ${{ needs.classify_changes.outputs.product_change == 'true' && 'macos-15' || 'ubuntu-latest' }}
     timeout-minutes: 45
     strategy:
       fail-fast: false
@@ -106,6 +108,16 @@ jobs:
       - name: Run tooling checks
         if: needs.classify_changes.outputs.tooling_only == 'true'
         run: echo "Manual developer tooling only; product and release checks are not applicable."
+
+      - name: Run repository checks
+        if: needs.classify_changes.outputs.repository_only == 'true'
+        env:
+          GOVERNANCE_BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          GOVERNANCE_PR_BODY: ${{ github.event_name == 'pull_request' && github.event.pull_request.body || '' }}
+          GOVERNANCE_PR_IS_DRAFT: ${{ github.event_name == 'pull_request' && github.event.pull_request.draft || false }}
+        run: |
+          ./scripts/verify-repository-governance.sh "$GOVERNANCE_BASE_SHA"
+          echo "Repository-only change passed; product and release checks are not applicable."
 
       - name: Enforce repository boundaries
         if: needs.classify_changes.outputs.product_change == 'true'
@@ -385,19 +397,22 @@ jobs:
         run: |
           test "$CLASSIFY_RESULT" = success
           test "$PUBLIC_RESULT" = success
+          [[ "$PRODUCT_CHANGE" == true || "$PRODUCT_CHANGE" == false ]] || exit 1
+          [[ "$RELEASE_CHECKS_REQUIRED" == true || "$RELEASE_CHECKS_REQUIRED" == false ]] || exit 1
           if [[ "$RELEASE_CHECKS_REQUIRED" == true ]]; then
             test "$RELEASE_CHECKS_RESULT" = success
           else
             test "$RELEASE_CHECKS_RESULT" = skipped
           fi
-          case "$PRIVATE_ACCESS_RESULT" in
-            success|skipped) ;;
-            *) exit 1 ;;
-          esac
-          case "$PRIVATE_TEST_RESULT" in
-            success|skipped) ;;
-            *) exit 1 ;;
-          esac
-          if [[ "$PRODUCT_CHANGE" == true && "$PRIVATE_AVAILABLE" == true ]]; then
-            test "$PRIVATE_TEST_RESULT" = success
+          if [[ "$PRODUCT_CHANGE" == true ]]; then
+            test "$PRIVATE_ACCESS_RESULT" = success
+            [[ "$PRIVATE_AVAILABLE" == true || "$PRIVATE_AVAILABLE" == false ]] || exit 1
+            if [[ "$PRIVATE_AVAILABLE" == true ]]; then
+              test "$PRIVATE_TEST_RESULT" = success
+            else
+              test "$PRIVATE_TEST_RESULT" = skipped
+            fi
+          else
+            test "$PRIVATE_ACCESS_RESULT" = skipped
+            test "$PRIVATE_TEST_RESULT" = skipped
           fi

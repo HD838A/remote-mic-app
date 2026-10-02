@@ -146,7 +146,7 @@ is_docs_only_run() {
         (.name == "Swift tests and build (Apple Silicon)" or
          .name == "Public Swift tests and build (Apple Silicon)") and
         .status == "completed" and .conclusion == "success" and
-        ([.steps[] | select((.name == "Run documentation checks" or .name == "Run tooling checks") and .conclusion == "success")] | length) == 1 and
+        ([.steps[] | select((.name == "Run documentation checks" or .name == "Run tooling checks" or .name == "Run repository checks") and .conclusion == "success")] | length) == 1 and
         ([.steps[] | select((.name == "Run release control-plane fixture" or
           .name == "Run Swift tests" or .name == "Run project self-test" or
           .name == "Build release configuration") and .conclusion == "success")] | length) == 0
@@ -155,7 +155,7 @@ is_docs_only_run() {
         (.name == "Swift tests and build (Intel Ventura)" or
          .name == "Public Swift tests and build (Intel Ventura)") and
         .status == "completed" and .conclusion == "success" and
-        ([.steps[] | select((.name == "Run documentation checks" or .name == "Run tooling checks") and .conclusion == "success")] | length) == 1 and
+        ([.steps[] | select((.name == "Run documentation checks" or .name == "Run tooling checks" or .name == "Run repository checks") and .conclusion == "success")] | length) == 1 and
         ([.steps[] | select((.name == "Run release control-plane fixture" or
           .name == "Run Swift tests" or .name == "Run project self-test" or
           .name == "Build release configuration") and .conclusion == "success")] | length) == 0
