@@ -1209,3 +1209,9 @@
 "common_phrases.error.clipboard_restore_failed" = "粘贴后未能恢复剪贴板，请检查剪贴板内容。";
 "common_phrases.error.paste_failed" = "无法执行粘贴，请检查辅助功能权限后重试。";
 "common_phrases.error.cancelled" = "插入已取消。";
+
+"custom_application.accessibility.test" = "测试输入框";
+
+"custom_application.accessibility.needs_verification" = "待学习或验证";
+
+"settings.portable_configuration.title" = "组合动作、App 配置与键位方案";

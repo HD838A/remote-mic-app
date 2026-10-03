@@ -1379,7 +1379,11 @@ final class AppSettings: ObservableObject {
         guard let index = customApplicationProfiles.firstIndex(where: { $0.id == profile.id }) else {
             return
         }
+        let previous = customApplicationProfiles[index]
         customApplicationProfiles[index] = profile
+        if profile.accessibilityTarget != nil && profile.accessibilityTarget != previous.accessibilityTarget {
+            markPortableApplicationVerified(profile.id)
+        }
     }
 
     func configuredBaseAction(
@@ -2071,6 +2075,67 @@ final class AppSettings: ObservableObject {
         return try encoder.encode(configuration)
     }
 
+    // Internal recovery snapshots are never emitted as portable exchange files.
+    func portableLocalSnapshot() throws -> Data {
+        let configuration = try JSONSerialization.jsonObject(with: exportedConfigurationData())
+        let envelope: [String: Any] = ["configuration": configuration,
+            "selectedRemoteProfileID": selectedRemoteProfileID?.uuidString ?? "",
+            "pendingApplications": portablePendingApplications.sorted()]
+        return try JSONSerialization.data(withJSONObject: envelope, options: [.sortedKeys])
+    }
+
+    var portablePendingApplications: Set<String> {
+        Set(defaults.stringArray(forKey: "portableTransferPendingApplications") ?? [])
+    }
+
+    func portableApplicationRequiresVerification(_ profile: CustomApplicationProfile) -> Bool {
+        profile.focusStrategy == .recordedAccessibility
+            && portablePendingApplications.contains(profile.id.uuidString)
+    }
+
+    func markPortableApplicationVerified(_ id: UUID) {
+        var pending = portablePendingApplications
+        pending.remove(id.uuidString)
+        defaults.set(pending.sorted(), forKey: "portableTransferPendingApplications")
+        objectWillChange.send()
+    }
+
+    func applyPortableLocalSnapshot(_ data: Data) throws {
+        guard let envelope = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let configuration = envelope["configuration"],
+              envelope["selectedRemoteProfileID"] as? String == (selectedRemoteProfileID?.uuidString ?? ""),
+              let pending = envelope["pendingApplications"] as? [String]
+        else { throw AppConfigurationError.invalidValues }
+        // This path accepts only our validated in-memory preparation or 0600 recovery journal.
+        // Do not call the external legacy importer: it filters and replaces records.
+        let c = try JSONDecoder().decode(PersonalizedConfiguration.self,
+            from: JSONSerialization.data(withJSONObject: configuration))
+        guard [1, 2].contains(c.formatVersion) else { throw AppConfigurationError.invalidValues }
+        if gainDB != c.gainDB { gainDB = c.gainDB }
+        if selectedAudioDeviceUID != c.selectedAudioDeviceUID { selectedAudioDeviceUID = c.selectedAudioDeviceUID }
+        if customMappingEnabled != c.customMappingEnabled { customMappingEnabled = c.customMappingEnabled }
+        unifiedBaseBindings = c.unifiedBaseBindings ?? []
+        buttonBindings = Dictionary(uniqueKeysWithValues: c.buttonBindings.compactMap { key,value in RemoteButton(rawValue: key).map { ($0,value) } })
+        buttonShortcuts = Dictionary(uniqueKeysWithValues: c.buttonShortcuts.compactMap { key,value in RemoteButton(rawValue: key).map { ($0,value) } })
+        buttonApplicationProfileIDs = Dictionary(uniqueKeysWithValues: (c.buttonApplicationProfileIDs ?? [:]).compactMap { key,value in RemoteButton(rawValue: key).map { ($0,value) } })
+        secondaryButtonBindings = Dictionary(uniqueKeysWithValues: c.secondaryButtonBindings.compactMap { key,values in
+            RemoteButton(rawValue: key).map { button in (button, Dictionary(uniqueKeysWithValues: values.compactMap { k,v in ButtonTrigger(rawValue: k).map { ($0,v) } })) }
+        })
+        buttonRapidPressEnabled = Dictionary(uniqueKeysWithValues: (c.buttonRapidPressEnabled ?? [:]).compactMap { key,value in RemoteButton(rawValue: key).map { ($0,value) } })
+        customApplicationProfiles = c.customApplicationProfiles ?? []
+        applicationLanguage = c.applicationLanguage
+        if let value = c.appIconIdentifier { appIconIdentifier = value }
+        showDockIcon = c.showDockIcon
+        if let value = c.showStatusBarIcon { showStatusBarIcon = value }
+        if let value = c.openMainWindowAtLaunch { openMainWindowAtLaunch = value }
+        if let value = c.checksForPreReleaseUpdates { checksForPreReleaseUpdates = value }
+        voiceKeyMode = c.voiceKeyMode ?? .function
+        voiceFnTapModeEnabled = c.voiceFnTapModeEnabled ?? false
+        applyContinuousRecordingExperimentState(enabled: c.experimentalContinuousRecordingEnabled ?? false,
+            backup: c.continuousRecordingPowerBindingBackup)
+        defaults.set(pending, forKey: "portableTransferPendingApplications")
+    }
+
     var voiceKeyConfigurationState: VoiceKeyConfigurationState {
         VoiceKeyConfigurationState(
             mode: voiceKeyMode,
@@ -2316,7 +2381,7 @@ final class AppSettings: ObservableObject {
     ) -> ImportedApplicationProfile {
         guard profile.displayName.count <= maximumImportedIdentifierLength,
               isWellFormedBundleIdentifier(profile.bundleIdentifier),
-              isWellFormedApplicationBundlePath(profile.applicationPath)
+              profile.applicationPath.isEmpty || isWellFormedApplicationBundlePath(profile.applicationPath)
         else { return .rejected }
 
         var sanitized = profile
@@ -2326,6 +2391,7 @@ final class AppSettings: ObservableObject {
         sanitized.accessibilityTarget = profile.accessibilityTarget
             .flatMap(validatedAccessibilityTarget)
 
+        guard !sanitized.applicationPath.isEmpty else { return .notInstalledOnThisMac(sanitized) }
         let url = URL(fileURLWithPath: sanitized.applicationPath)
         guard FileManager.default.fileExists(atPath: url.path) else {
             return .notInstalledOnThisMac(sanitized)

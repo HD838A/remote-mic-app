@@ -1209,3 +1209,9 @@
 "common_phrases.error.clipboard_restore_failed" = "Could not restore the clipboard after pasting. Check your clipboard.";
 "common_phrases.error.paste_failed" = "Could not paste. Check Accessibility permission and try again.";
 "common_phrases.error.cancelled" = "Insertion cancelled.";
+
+"custom_application.accessibility.test" = "Test input field";
+
+"custom_application.accessibility.needs_verification" = "Needs learning or verification";
+
+"settings.portable_configuration.title" = "Combination actions, app configurations and button profiles";
