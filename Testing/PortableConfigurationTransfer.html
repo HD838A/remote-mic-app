@@ -1,6 +1,6 @@
 <!doctype html><html lang="zh-Hans"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>配置导入导出验证</title><style>body{max-width:1000px;margin:40px auto;padding:0 24px;font:16px/1.7 system-ui}table{border-collapse:collapse;width:100%}th,td{border:1px solid #bbc6d2;padding:9px;text-align:left;vertical-align:top}code{background:#eef2f6;padding:2px 5px}h2{margin-top:32px}</style></head><body><main>
 <h1>配置导入导出验证</h1>
-<p>2026-10-03。此手册验证统一配置包的宿主适配。标准来自 sayall-market 的 docs/portable-transfer-standard.html。文件格式为 sayall-transfer / 0.2-draft。旧个人配置 formatVersion: 1 的入口保持可用。</p>
+<p>2026-10-03。此手册验证统一配置包的宿主适配。标准来自 sayall-market 的 docs/portable-transfer-standard.html。文件格式已冻结为正式第一版 sayall-transfer / 1.0。后续读取器必须继续兼容第一版。旧个人配置 formatVersion: 1 的入口保持可用。</p>
 <h2>准备</h2>
 <p>使用隔离测试账号和合成数据。记录宏库、自动化库、方案库、普通绑定及宿主个人设置摘要。准备含嵌套动作、实际快捷键、App 配置、输入框依赖及多个方案的包。另准备个人备份、未知字段、内部引用缺失、循环及型号不匹配的文件。</p>
 <h2>必测场景</h2>
@@ -18,6 +18,7 @@
 <tr><td>已有缺快捷键的 App/方案，导出正常对象或仅通用设置</td><td>只读取所选对象及依赖。未选待配置对象不阻断。所选缺依赖对象或映射组明确报错。所选方案携带实际快捷键和 App 配置。</td></tr>
 <tr><td>并发编辑、写入错误及重启</td><td>旧预览不覆盖新配置。失败恢复原状态。未知并发状态阻断恢复并保留现场。取消零写入。</td></tr>
 <tr><td>1.9.21 个人配置</td><td>旧 formatVersion: 1 文件可导入。旧普通映射、快捷键、自定义 App、音频与语音键保留。空 App 路径保留为待安装。</td></tr>
+<tr><td>第一版冻结文件与此前导出</td><td>正式 1.0 文件解析、引用和往返保持。此前 0.2-draft 包及 0.3-draft 步骤仍可读取，重新导出统一为 1.0。未知未来版本及混合步骤版本拒绝，既有配置不变。</td></tr>
 <tr><td>最小生产窗口</td><td>在 1020 × 772 逐一进入组合动作、键位方案、App 编辑和设置。检查中英文、浅深色、展开预览、滚动和取消。中文至少 12pt。</td></tr>
 </tbody></table>
 <h2>自动化与构建</h2>
