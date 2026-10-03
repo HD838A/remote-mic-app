@@ -1,6 +1,6 @@
 # 常用语本地测试
 
-适用分支：`codex/common-phrases-docs-alignment-20261002`；产品行为以 [`PRODUCT_SPEC.md`](../feature/common-phrases/PRODUCT_SPEC.md) 为准。当前为本地候选，尚未合入 main 或完成真实设备验收。
+适用分支：`codex/common-phrases-docs-alignment-20261002`（PR #558 集成至 main）；产品行为以 [`PRODUCT_SPEC.md`](../feature/common-phrases/PRODUCT_SPEC.md) 为准。2026-10-03 用户确认本轮真机测试通过；具体来源与验证边界见下方最新验收记录。
 
 ## 准备
 
@@ -138,6 +138,14 @@ PR #558 提交前已同步 `origin/main` 的 `eb96536cca4ed519ced7db6d5d3b5a1ab1
 最新中/英 × 浅/深的两种页面及圆盘生产截图、实际窗口原始 JPEG 位于 `Screenshots/common-phrases/pr-review-20261003/`，共 25 张图片的格式、尺寸、字节数和 SHA-256 见 `manifest.json`。截图来自上述产品源码，随后证据提交不改变产品代码。真实遥控器/移动来源、第三方文字上屏、语音稳定基线、原生拖放、编辑区滚动和多屏浮层仍待用户验收；PR 保持 Draft，TODO 保持候选。
 
 PR 首次 CI 的 Xcode 26.3 Release 因常用语列表表达式类型推断超时失败，随后将原样行视图拆为独立方法；相关 186 项测试通过。复现、日志、最小修复及编译器验证边界见 [构建故障记录](../Bugs/2026-10-03-common-phrase-library-type-check.md)。最终 CI 结果以 PR #558 最新 run 为准；不把本地 Swift 6.4 构建通过表述为旧编译器验证通过。
+
+### 2026-10-03 用户真机验收确认
+
+用户在本任务明确确认“真机测试通过，合入吧”。验收对象为已交付的本轮 macOS 常用语功能与直接关联界面；产品源码为 `850e2ba867ebe193617426a9d7c10c03cf891bdc`。据此将本轮功能标记为用户验收通过，TODO 同步完成，PR #558 可进入普通 Merge 流程。前文“待用户验收”“候选”和 Draft 状态均为此次确认之前的历史记录。
+
+用户未提供设备型号、目标 App、逐用例结果、延迟测量或现场原始日志，因此不将这一整体确认扩展为所有遥控器、移动来源、多屏、权限与失败场景均已逐项实测，也不宣称 Windows/iOS/Web 客户端同步完成。上述实机矩阵继续用于后续对应环境验收；自动化、代理与用户实测的证据边界保持独立。
+
+产品源码对应的 PR CI [37057380116](https://github.com/HD838A/remote-mic-app/actions/runs/37057380116) 全部通过：公开、免费组合动作、付费键位方案的测试及 Apple Silicon/Intel Release 构建成功；原先 Xcode 26.3 类型推断失败已转为通过。本次只同步验收文档，不修改产品代码或重建已验收本地包。
 
 ## 本轮文件与证据
 
