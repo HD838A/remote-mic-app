@@ -1,0 +1,152 @@
+{
+  "schemaVersion": 1,
+  "rendering": "production_offscreen",
+  "sourceBaseline": "cfa5553b563748c94d57f655e907b2111305e917",
+  "sourceTreeSHA256": "6db6dd8aba648f4a176e49687f86fc8d4249f39216596dc05c3d55c740a7faa3",
+  "appVersion": "1.9.21",
+  "appBuild": "228",
+  "normalStartupVerified": false,
+  "realHardwareVerified": false,
+  "images": [
+    {
+      "path": "en-dark-1020x772/panel.png",
+      "format": "PNG",
+      "width": 960,
+      "height": 660,
+      "sha256": "d85fda77bfff37cc8e8a4010ccaf735eb932cec25bc63c3b853f0ed1122db7de"
+    },
+    {
+      "path": "en-dark-1020x772/settings.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "bfc9162e42a77631a37b059fcde2150fcd86163abc55e9c7eb997114fe534108"
+    },
+    {
+      "path": "en-dark-800x2200/settings.png",
+      "format": "PNG",
+      "width": 1600,
+      "height": 4400,
+      "sha256": "581d5730c3023b40ecc7e793770c1229ce5d5eb91f6741cb7e6ee242d11beecb"
+    },
+    {
+      "path": "en-dark-800x650/panel.png",
+      "format": "PNG",
+      "width": 960,
+      "height": 660,
+      "sha256": "d85fda77bfff37cc8e8a4010ccaf735eb932cec25bc63c3b853f0ed1122db7de"
+    },
+    {
+      "path": "en-dark-800x650/settings.png",
+      "format": "PNG",
+      "width": 1600,
+      "height": 1300,
+      "sha256": "75821a1b63f63913c81d6d2f6a369d4ec43a7ce79b737bb20b899a4a40750b4a"
+    },
+    {
+      "path": "en-light-1020x772/panel.png",
+      "format": "PNG",
+      "width": 960,
+      "height": 660,
+      "sha256": "195431369726cd3018cf9adf1838d08301da7b3a73d46c2f84dba0a06b1b60bd"
+    },
+    {
+      "path": "en-light-1020x772/settings.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "9cc19d4d3a96f4c20ba0decfc1c1cfe3106acf4bda482155dcb103da2df5b584"
+    },
+    {
+      "path": "en-light-800x2200/settings.png",
+      "format": "PNG",
+      "width": 1600,
+      "height": 4400,
+      "sha256": "c652574742441273fc51b74531c2a7d7410df9625d856ac0460b11a930ae5b43"
+    },
+    {
+      "path": "en-light-800x650/panel.png",
+      "format": "PNG",
+      "width": 960,
+      "height": 660,
+      "sha256": "195431369726cd3018cf9adf1838d08301da7b3a73d46c2f84dba0a06b1b60bd"
+    },
+    {
+      "path": "en-light-800x650/settings.png",
+      "format": "PNG",
+      "width": 1600,
+      "height": 1300,
+      "sha256": "972554ff5f4dc7cd0893bfdf908e0f2d86664ef69bc76b7f48980c516b180d34"
+    },
+    {
+      "path": "zh-hans-dark-1020x772/panel.png",
+      "format": "PNG",
+      "width": 960,
+      "height": 660,
+      "sha256": "52ea99121ba94939220e4b57eea778c71224a6603edd50430e8fb7aa5b023ec4"
+    },
+    {
+      "path": "zh-hans-dark-1020x772/settings.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "cb430acef395902ac9294aa7fa30e1d0f9183399b1fe4f3868f39285b3d6d8eb"
+    },
+    {
+      "path": "zh-hans-dark-800x2200/settings.png",
+      "format": "PNG",
+      "width": 1600,
+      "height": 4400,
+      "sha256": "ab3355f907719446c5d2b2de9616a2dea8011660da029dc02b3a1113e55dbee4"
+    },
+    {
+      "path": "zh-hans-dark-800x650/panel.png",
+      "format": "PNG",
+      "width": 960,
+      "height": 660,
+      "sha256": "52ea99121ba94939220e4b57eea778c71224a6603edd50430e8fb7aa5b023ec4"
+    },
+    {
+      "path": "zh-hans-dark-800x650/settings.png",
+      "format": "PNG",
+      "width": 1600,
+      "height": 1300,
+      "sha256": "cdc1031e1969bac261701dae4e0d975ba343ad564dc5ef2f1f39b6df75596837"
+    },
+    {
+      "path": "zh-hans-light-1020x772/panel.png",
+      "format": "PNG",
+      "width": 960,
+      "height": 660,
+      "sha256": "26edfc33653832d9216b033e9a7a81a52303b0e027ba99161c87f5795ac958a6"
+    },
+    {
+      "path": "zh-hans-light-1020x772/settings.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "1739552cdfc696a5d12faed02ab26ae457127d7c2ea113011e327b7abcf69f4d"
+    },
+    {
+      "path": "zh-hans-light-800x2200/settings.png",
+      "format": "PNG",
+      "width": 1600,
+      "height": 4400,
+      "sha256": "ffeeac4536db594184d3cfe430a571636664d0e94f005a0c20f99cbc75ff13b0"
+    },
+    {
+      "path": "zh-hans-light-800x650/panel.png",
+      "format": "PNG",
+      "width": 960,
+      "height": 660,
+      "sha256": "26edfc33653832d9216b033e9a7a81a52303b0e027ba99161c87f5795ac958a6"
+    },
+    {
+      "path": "zh-hans-light-800x650/settings.png",
+      "format": "PNG",
+      "width": 1600,
+      "height": 1300,
+      "sha256": "255479e6301558bfefb9d08e1f7e2cdf28837e457e667d814caa17dd1176b5d4"
+    }
+  ]
+}

@@ -1,0 +1,119 @@
+{
+  "sourceCommit": "c2c4ae7c757dc4be1a529f786ccc63ab03e13ce9",
+  "sourceDirty": true,
+  "mode": "Production view offscreen renderer, isolated defaults; 800x650 is pressure only",
+  "assets": [
+    {
+      "file": "zh-hans-light-1020x772/common-phrases-panel.png",
+      "format": "PNG",
+      "width": 880,
+      "height": 1040,
+      "sha256": "cef1df1e67c638928ae4899b95a936e1e80058e5844acbfeb2f92a9c5b12ab9e"
+    },
+    {
+      "file": "zh-hans-light-1020x772/commonPhrases-1020x772.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "223f8520354c83c1e8d43f88176f9989fa41a81614a0663fa5bfb4af64af94d8"
+    },
+    {
+      "file": "zh-hans-dark-1020x772/common-phrases-panel.png",
+      "format": "PNG",
+      "width": 880,
+      "height": 1040,
+      "sha256": "cef1df1e67c638928ae4899b95a936e1e80058e5844acbfeb2f92a9c5b12ab9e"
+    },
+    {
+      "file": "zh-hans-dark-1020x772/commonPhrases-1020x772.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "706300984942d4627e9e81827bffa185c20050c15494f02b691f7a7fd183dc8c"
+    },
+    {
+      "file": "en-light-1020x772/common-phrases-panel.png",
+      "format": "PNG",
+      "width": 880,
+      "height": 1040,
+      "sha256": "aadf8f4317c11f0032799d6d844b79ea6d7a0530f4f209f527fffa3bbcf409c7"
+    },
+    {
+      "file": "en-light-1020x772/commonPhrases-1020x772.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "27ba202dbb5d6611360ca7362a6dbb137c782c183f561a81c98d795c3d4a89f0"
+    },
+    {
+      "file": "en-dark-1020x772/common-phrases-panel.png",
+      "format": "PNG",
+      "width": 880,
+      "height": 1040,
+      "sha256": "aadf8f4317c11f0032799d6d844b79ea6d7a0530f4f209f527fffa3bbcf409c7"
+    },
+    {
+      "file": "en-dark-1020x772/commonPhrases-1020x772.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "c72071b40c1917d7004c2be57dfdf5a99b067cfb5199ed8863a407a884e832d3"
+    },
+    {
+      "file": "zh-hans-light-800x650/common-phrases-panel.png",
+      "format": "PNG",
+      "width": 880,
+      "height": 1040,
+      "sha256": "cef1df1e67c638928ae4899b95a936e1e80058e5844acbfeb2f92a9c5b12ab9e"
+    },
+    {
+      "file": "zh-hans-light-800x650/commonPhrases-800x650.png",
+      "format": "PNG",
+      "width": 1600,
+      "height": 1300,
+      "sha256": "2d1c415613ea4ce20ec9608270dec0a240511c2e6626039a9b93b5e5b48a5e9d"
+    },
+    {
+      "file": "zh-hans-dark-800x650/common-phrases-panel.png",
+      "format": "PNG",
+      "width": 880,
+      "height": 1040,
+      "sha256": "cef1df1e67c638928ae4899b95a936e1e80058e5844acbfeb2f92a9c5b12ab9e"
+    },
+    {
+      "file": "zh-hans-dark-800x650/commonPhrases-800x650.png",
+      "format": "PNG",
+      "width": 1600,
+      "height": 1300,
+      "sha256": "c0cabe8c30eb3420ca5c659995403253cc4e239e53cb6c755ba22c65df141976"
+    },
+    {
+      "file": "en-light-800x650/common-phrases-panel.png",
+      "format": "PNG",
+      "width": 880,
+      "height": 1040,
+      "sha256": "aadf8f4317c11f0032799d6d844b79ea6d7a0530f4f209f527fffa3bbcf409c7"
+    },
+    {
+      "file": "en-light-800x650/commonPhrases-800x650.png",
+      "format": "PNG",
+      "width": 1600,
+      "height": 1300,
+      "sha256": "3371766a643013cb5b5a99d63e0b45593e9984778c51a23df8aac9d650d94633"
+    },
+    {
+      "file": "en-dark-800x650/common-phrases-panel.png",
+      "format": "PNG",
+      "width": 880,
+      "height": 1040,
+      "sha256": "aadf8f4317c11f0032799d6d844b79ea6d7a0530f4f209f527fffa3bbcf409c7"
+    },
+    {
+      "file": "en-dark-800x650/commonPhrases-800x650.png",
+      "format": "PNG",
+      "width": 1600,
+      "height": 1300,
+      "sha256": "16b41f47d947a48f90f98c81607c8db2f452d9a2bcf0b4851f019d875a09b2ed"
+    }
+  ]
+}
