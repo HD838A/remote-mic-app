@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="zh-CN"><meta charset="utf-8"><title>Issue #485：切换器左右键重复移动</title>
+<h1>Issue #485：切换器左右键重复移动</h1>
+<h2>复现</h2>
+<p>基线：69b42dff52a8d15d5d416cbacbee1fbf120ecb0c。启用自定义映射，保持默认左右方向键，无双击或长按动作。使用非独占 HID 监听，启动 Command-Tab 会话，再回放左右键完整按下和释放。</p>
+<p>修复前新增回归用例失败两次：左右键的原生 keyDown 未被过滤。独占模式通过。期望每次只提交一组导航，并过滤非独占模式的原生 down/up。</p>
+<h2>日志与代码结论</h2>
+<p>回放通过现有 HID APP SWITCHER 导航与确认日志检查生命周期。原生事件过滤调用返回 false，证明系统事件仍会放行；合成事件序列同时包含左右方向键。用户现场日志未提供。回放只确认双路事件条件，不能证明真实 WindowServer 的最终高亮。</p>
+<p>shouldUseNativePassthrough 未排除活动中的切换会话，导致先跳过按下事件抑制，随后仍执行 handleAppSwitcherControlPress。只增加会话活动门禁。思路来自 PR #409 的 zjding；不引入其连发改造。</p>
+<h2>验证与边界</h2>
+<p>验证命令：swift test --disable-keychain --filter RemoteButtonsTests。同一回归用例覆盖独占与非独占模式、单次导航、原生按下/释放过滤、确认释放 Command 与清理计时器。现有取消和超时用例保持。</p>
+<p>未修改 UI、持久化、共享协议、语音或音频。TODO.md 没有对应未完成条目。真实 RC003、系统切换器、多显示器和全屏空间尚未验收。验收步骤见 Testing/AppSwitcherRemoteControl.md。</p>
+</html>

@@ -1181,7 +1181,8 @@ struct RemoteButtonsTests {
         #expect(AppleRemoteCircularNavigationAccumulator.movesLeft(for: 1))
     }
 
-    @Test func appSwitcherRemoteControlsNavigateConfirmAndReportFinalFrontmostApp() throws {
+    @Test(arguments: [true, false])
+    func appSwitcherRemoteControlsNavigateConfirmAndReportFinalFrontmostApp(isSeized: Bool) throws {
         let suiteName = "RemoteButtonsTests.appSwitcherControls.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
@@ -1193,9 +1194,11 @@ struct RemoteButtonsTests {
         var frontmost = PresetApplication.codex.bundleIdentifier
         var posted: [(CGKeyCode, Bool, CGEventFlags)] = []
         var diagnostics: [String] = []
+        let suppressor = KeyboardEventSuppressor()
         let monitor = HIDRemoteMonitor(
             settings: settings,
             profileID: profileID,
+            eventSuppressor: suppressor,
             ownsEventSuppressor: false,
             scheduler: scheduler,
             runtimePermissions: { true },
@@ -1206,18 +1209,38 @@ struct RemoteButtonsTests {
                 return true
             }
         )
-        monitor.connectSimulatedDevice(fingerprint: "app-switcher-controls", profileID: profileID)
+        monitor.connectSimulatedDevice(
+            fingerprint: "app-switcher-controls", profileID: profileID, isSeized: isSeized
+        )
 
-        func press(_ button: RemoteButton) {
+        func press(_ button: RemoteButton) throws {
             let report = Data([UInt8(button.hidUsage), 0, 0, 0, 0, 0])
             monitor.handleSimulatedReport(reportID: 1, data: report)
+            if button == .left || button == .right {
+                let nativeDown = try #require(CGEvent(
+                    keyboardEventSource: nil,
+                    virtualKey: button == .left ? 123 : 124,
+                    keyDown: true
+                ))
+                nativeDown.setIntegerValueField(.keyboardEventKeyboardType, value: 40)
+                #expect(suppressor.handle(type: .keyDown, event: nativeDown) == !isSeized)
+            }
             monitor.handleSimulatedReport(reportID: 1, data: Data(repeating: 0, count: 6))
+            if button == .left || button == .right {
+                let nativeUp = try #require(CGEvent(
+                    keyboardEventSource: nil,
+                    virtualKey: button == .left ? 123 : 124,
+                    keyDown: false
+                ))
+                nativeUp.setIntegerValueField(.keyboardEventKeyboardType, value: 40)
+                #expect(suppressor.handle(type: .keyUp, event: nativeUp) == !isSeized)
+            }
         }
 
-        press(.menu)
-        press(.right)
-        press(.left)
-        press(.ok)
+        try press(.menu)
+        try press(.right)
+        try press(.left)
+        try press(.ok)
         frontmost = PresetApplication.safari.bundleIdentifier
         scheduler.advance(
             toMilliseconds: HIDRemoteTiming.appSwitcherConfirmationProbeMilliseconds
