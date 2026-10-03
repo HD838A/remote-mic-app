@@ -28,6 +28,7 @@ enum SettingsScreenshotRenderer {
 
     private static let sections: [SettingsSection] = [
         .mapping,
+        .commonPhrases,
         .macros,
         .buttonProfiles,
         .membership,
@@ -68,6 +69,8 @@ enum SettingsScreenshotRenderer {
         let showsRemoteCards = ProcessInfo.processInfo.environment[
             "REMOTE_MIC_SETTINGS_SCREENSHOT_REMOTE_CARDS"
         ] == "1"
+        let onlySection = ProcessInfo.processInfo.environment["REMOTE_MIC_SETTINGS_SCREENSHOT_SECTION"]
+        let interactive = ProcessInfo.processInfo.environment["REMOTE_MIC_SETTINGS_SCREENSHOT_INTERACTIVE"] == "1"
         try FileManager.default.createDirectory(
             at: outputDirectory,
             withIntermediateDirectories: true
@@ -145,6 +148,7 @@ enum SettingsScreenshotRenderer {
         let historyDirectory = outputDirectory.appendingPathComponent(UUID().uuidString)
         let model = BridgeAppModel(
             settings: settings,
+            commonPhraseStore: CommonPhraseStore(defaults: defaults),
             transcriptArchiveStore: TranscriptArchiveStore(
                 rootDirectoryURL: historyDirectory.appendingPathComponent("transcripts")
             ),
@@ -176,12 +180,22 @@ enum SettingsScreenshotRenderer {
         let previousAppearance = NSApp.appearance
         NSApp.appearance = appearance
         defer { NSApp.appearance = previousAppearance }
+        if interactive {
+            NSApp.setActivationPolicy(.regular)
+            NSApp.finishLaunching()
+        }
 
         // Interactive review uses the production view, navigation and window geometry,
         // with the same isolated fixture settings as the offscreen renderer.
         if ProcessInfo.processInfo.environment["REMOTE_MIC_SETTINGS_SCREENSHOT_INTERACTIVE"] == "1" {
+            let section = sections.first { $0.rawValue == onlySection } ?? .mapping
             let controller = NSHostingController(rootView: SettingsView(
-                model: model, updateInformation: updateInformation, initialSection: .mapping
+                model: model,
+                updateInformation: updateInformation,
+                initialSection: section,
+                initialShareSection: section == .statistics && expandsShare ? section : nil,
+                initialMappingEditingButton: section == .mapping && opensMappingEditor ? .ok : nil,
+                initialShortcutPickerShowsKeyboard: showsStandardKeyboard
             ).environmentObject(localization))
             let window = NSWindow(contentRect: NSRect(origin: .zero, size: size),
                 styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
@@ -204,7 +218,7 @@ enum SettingsScreenshotRenderer {
             return
         }
 
-        for section in sections {
+        for section in sections where onlySection == nil || onlySection == section.rawValue {
             let rootView = SettingsView(
                 model: model,
                 updateInformation: updateInformation,
@@ -221,13 +235,25 @@ enum SettingsScreenshotRenderer {
             let hostingController = NSHostingController(rootView: rootView)
             let window = NSWindow(
                 contentRect: NSRect(origin: .zero, size: size),
-                styleMask: [.borderless],
+                styleMask: interactive ? [.titled, .closable, .resizable] : [.borderless],
                 backing: .buffered,
                 defer: false
             )
             window.contentViewController = hostingController
+            window.title = "SayAll — UI check"
             window.setContentSize(size)
             window.orderFront(nil)
+            if interactive {
+                // The production settings view uses isolated screenshot data;
+                // this bounded mode permits clicks without starting hardware.
+                window.center()
+                window.makeKeyAndOrderFront(nil)
+                NSApp.activate(ignoringOtherApps: true)
+                let deadline = Date().addingTimeInterval(300)
+                while window.isVisible && Date() < deadline {
+                    RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+                }
+            }
             RunLoop.current.run(until: Date().addingTimeInterval(0.2))
             window.contentView?.layoutSubtreeIfNeeded()
             window.contentView?.displayIfNeeded()
@@ -254,6 +280,25 @@ enum SettingsScreenshotRenderer {
             window.orderOut(nil)
             window.contentViewController = nil
         }
+
+        // Capture the same nonactivating panel view used for real input. This
+        // hidden renderer neither opens a remote session nor posts text.
+        let panelSize = CommonPhrasePanelView.size
+        let phrasePanel = NSPanel(contentRect: NSRect(origin: .zero, size: panelSize),
+            styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        phrasePanel.contentView = NSHostingView(rootView:
+            CommonPhrasePanelView(controller: model.commonPhrases).environmentObject(localization))
+        phrasePanel.orderFront(nil)
+        RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+        guard let view = phrasePanel.contentView,
+              let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds)
+        else { throw RenderingError.bitmapCreationFailed }
+        view.cacheDisplay(in: view.bounds, to: bitmap)
+        guard let panelPNG = bitmap.representation(using: .png, properties: [:])
+        else { throw RenderingError.pngCreationFailed }
+        try panelPNG.write(to: outputDirectory.appendingPathComponent("common-phrases-panel.png"))
+        phrasePanel.orderOut(nil)
+        phrasePanel.contentView = nil
     }
 
     private static func seedAvailableUpdate(

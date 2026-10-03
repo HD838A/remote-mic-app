@@ -10,7 +10,7 @@
 | [关于页版本中心](./about-update-center/) | 验证中 | 集中展示版本、更新内容、版本历史与正式/预发布更新通道。 |
 | [Apple Watch 直连遥控与收音](./apple-watch-direct-remote/) | 候选代码完成，等待真机验收 | Mac 提供独立 Watch 入口，并复用按需开启的附近连接、现有按键映射与移动语音链路。 |
 | [常用 macOS 快捷键](./common-mac-shortcuts/) | 已完成 | 常用固定快捷键与无线麦标准退出、关窗行为。 |
-| [常用语按键直发](./common-phrases/) | 规划中，等待规范批准 | 免费基础能力，随公开构建交付；按键打开非激活面板，默认五键各插入一条预置常用语、返回关闭，不切换前台 App、不修改用户原有按键配置。 |
+| [常用语按键直发](./common-phrases/PRODUCT_SPEC.md) | macOS 已完成，用户真机验收通过 | 已实现免费公开构建、非激活面板、五键插入、剪贴板恢复及本机编辑导入导出；自动化与用户验收来源、各平台和硬件验证边界见 [测试手册](../Testing/CommonPhrases.md)。 |
 | [Mac 下载 Cloudflare CDN](./cloudflare-download-cdn/) | 候选修复完成，等待发布验收 | 官网固定入口与版本化资产继续走 Cloudflare；新增 stable/preview 双架构 appcast 通道，客户端不再直接请求 GitHub Releases API。 |
 | [私有功能组件集成](./private-feature-integration/) | 已完成 | 公开 App 只保留可选适配层；私有实现、资源、测试和内部文档由独立私有组件维护。 |
 | [组合动作私有模块集成](./quick-commands-private-integration/) | 代码完成，等待人工验收 | 通过可选私有 Swift Package 提供组合动作页面与遥控器绑定；模块存在时无需邀请码直接使用，公开构建保持独立。 |
