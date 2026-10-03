@@ -1005,9 +1005,8 @@ struct SettingsView: View {
                             ) {
                                 model.togglePhoneRemoteConnection()
                             }
-                            .compatibilityButtonStyle(
-                                model.isPhoneRemoteConnectionEnabled ? .standard : .prominent
-                            )
+                            .compatibilityButtonStyle(.standard)
+                            .controlSize(.regular)
                         } else {
                             connectionMembershipRequiredView
                         }
@@ -1083,6 +1082,7 @@ struct SettingsView: View {
                             model.toggleWatchRemoteConnection()
                         }
                         .compatibilityButtonStyle(.standard)
+                        .controlSize(.regular)
                     } else {
                         connectionMembershipRequiredView
                     }
@@ -1118,6 +1118,7 @@ struct SettingsView: View {
                             requestWebRemoteSession()
                         }
                         .compatibilityButtonStyle(.standard)
+                        .controlSize(.regular)
                     } else {
                         connectionMembershipRequiredView
                     }
