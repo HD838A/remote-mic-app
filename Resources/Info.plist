@@ -18,6 +18,8 @@
 	<string>SayAll</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>2.0.0</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -31,10 +33,8 @@
 			</array>
 		</dict>
 	</array>
-	<key>CFBundleShortVersionString</key>
-	<string>2.0.0</string>
 	<key>CFBundleVersion</key>
-	<string>232</string>
+	<string>233</string>
 	<key>HardwareAnnouncementURL</key>
 	<string>https://download.sayall.app/mac/announcements/hardware.json</string>
 	<key>LSMinimumSystemVersion</key>
