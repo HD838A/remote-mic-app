@@ -6083,7 +6083,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         )
         if configured.action == .openCustomApplication {
             guard let profile = applicationProfile,
-                !settings.portablePendingApplications.contains(profile.id.uuidString),
+                !settings.portableApplicationRequiresVerification(profile),
                 NSWorkspace.shared.urlForApplication(withBundleIdentifier: profile.bundleIdentifier) != nil
             else { return false }
         }

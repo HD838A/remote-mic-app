@@ -214,6 +214,30 @@ struct PortableConfigurationCompatibilityTests {
         let text = String(decoding: bytes,as: UTF8.self)
         #expect(!text.contains("private-compose")); #expect(!text.contains("synthetic/path"))
     }
+    @Test @MainActor func importedAppVerificationFollowsCurrentFocusStrategy() throws {
+        let (current, cleanup) = try settings(); defer { cleanup() }
+        let adapter = current.portableHostAdapter(beforeApply: { _ in })
+        let focus = PortableFocusTarget(id: "transfer.focus.test", displayName: "Composer", bundleIdentifier: "com.example.synthetic")
+        let app = PortableApplication(id: "transfer.app.test", displayName: "Synthetic", bundleIdentifier: focus.bundleIdentifier,
+            focusStrategy: .recordedAccessibility, focusTargetID: focus.id)
+        let package = PortableTransferPackage(minimumRemoteMicVersion: "1.9.21",
+            roots: [.init(kind: .application, id: app.id)], focusTargets: [focus], applications: [app])
+        try adapter.apply(adapter.prepare(package, .init()).after)
+        var local = try #require(current.customApplicationProfiles.first)
+        #expect(current.portableApplicationRequiresVerification(local))
+        for strategy in [CustomApplicationFocusStrategy.none, .keyboardShortcut] {
+            local.focusStrategy = strategy
+            local.focusShortcut = .init(keyCode: 36, modifierFlags: .command, keyLabel: "Return")
+            current.updateCustomApplicationProfile(local)
+            #expect(!current.portableApplicationRequiresVerification(local))
+            #expect(current.portablePendingApplications.contains(local.id.uuidString))
+        }
+        local.focusStrategy = .recordedAccessibility
+        current.updateCustomApplicationProfile(local)
+        #expect(current.portableApplicationRequiresVerification(local))
+        current.markPortableApplicationVerified(local.id)
+        #expect(!current.portableApplicationRequiresVerification(local))
+    }
 #endif
 }
 

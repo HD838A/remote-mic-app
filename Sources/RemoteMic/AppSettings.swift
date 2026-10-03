@@ -2088,6 +2088,11 @@ final class AppSettings: ObservableObject {
         Set(defaults.stringArray(forKey: "portableTransferPendingApplications") ?? [])
     }
 
+    func portableApplicationRequiresVerification(_ profile: CustomApplicationProfile) -> Bool {
+        profile.focusStrategy == .recordedAccessibility
+            && portablePendingApplications.contains(profile.id.uuidString)
+    }
+
     func markPortableApplicationVerified(_ id: UUID) {
         var pending = portablePendingApplications
         pending.remove(id.uuidString)
