@@ -387,7 +387,7 @@
 "audio.compatibility.help" = "Some voice tools may not recognize ordinary virtual audio devices. Install the separate compatible microphone MiRemoteV 2ch and select it here; existing audio devices are not changed or replaced.";
 "audio.compatibility.help_plain" = "If your preferred voice tool cannot hear audio, choose the compatible microphone included with the installer. Existing audio devices are not replaced.";
 "button_mapping.page.title" = "Button Mapping";
-"button_mapping.page.subtitle" = "Click a button to configure its action";
+"button_mapping.page.subtitle" = "Click a button to change its settings";
 "button_mapping.toggle.enabled" = "Custom Buttons";
 "button_mapping.permission_prompt.title" = "Button Permissions Required";
 "button_mapping.permission_prompt.message" = "Custom button controls require Input Monitoring and Accessibility. Open the Permissions page to finish setup.";

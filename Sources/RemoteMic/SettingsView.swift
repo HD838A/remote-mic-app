@@ -442,6 +442,7 @@ struct SettingsView: View {
     @State private var returnsToMappingFromLibrary = false
     @State private var editingMappingProfileID: UUID?
     @State private var mappingMacroSearch = ""
+    @State private var mappingVoiceSettingsRequest = 0
 
     @ObservedObject private var macroFeature: MacroFeatureIntegration
     @ObservedObject private var membershipFeature: MembershipFeatureIntegration
@@ -1375,7 +1376,8 @@ struct SettingsView: View {
                         button: button,
                         trigger: trigger
                     )
-                }
+                },
+                onVoiceSettings: { mappingVoiceSettingsRequest += 1 }
             )
         }
     }
@@ -1458,7 +1460,8 @@ struct SettingsView: View {
                 systemReservedControlIDs: ChromecastRemoteControl.canvasReservedControlIDs(
                     allowSystemReservedKeys: settings.chromecastAllowSystemReservedKeys,
                     exceptions: settings.chromecastSystemReservedExceptions
-                )
+                ),
+                onVoiceSettings: { mappingVoiceSettingsRequest += 1 }
             )
         }
     }
@@ -1616,7 +1619,10 @@ struct SettingsView: View {
 
     private var mappingPageHeader: some View {
         VStack(alignment: .leading, spacing: 6) {
-            PageHeader(title: localization.text("button_mapping.page.title"))
+            HStack(alignment: .center, spacing: 14) {
+                PageHeader(title: localization.text("button_mapping.page.title"))
+                mappingHeaderToggle
+            }
             Text(localization.text("button_mapping.page.subtitle"))
                 .font(.system(size: 13))
                 .foregroundStyle(.secondary)
@@ -1638,7 +1644,8 @@ struct SettingsView: View {
                         button: button,
                         trigger: trigger
                     )
-                }
+                },
+                onVoiceSettings: { mappingVoiceSettingsRequest += 1 }
             )
             .onReceive(model.$activeRemoteButtons) { buttons in
                 selectedRemoteButton = MappingSelectionPolicy.selection(
@@ -1659,17 +1666,13 @@ struct SettingsView: View {
                 HStack(alignment: .center, spacing: 14) {
                     mappingPageHeader
                         .fixedSize(horizontal: true, vertical: false)
-                    mappingHeaderToggle
                     remoteDeviceSelector()
                         .frame(maxWidth: .infinity, alignment: .trailing)
                 }
 
-                HStack(alignment: .center, spacing: 14) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        mappingPageHeader
-                            .fixedSize(horizontal: true, vertical: false)
-                        mappingHeaderToggle
-                    }
+                VStack(alignment: .leading, spacing: 8) {
+                    mappingPageHeader
+                        .fixedSize(horizontal: true, vertical: false)
                     remoteDeviceSelector()
                         .frame(maxWidth: .infinity, alignment: .trailing)
                 }
@@ -1717,6 +1720,7 @@ struct SettingsView: View {
                             #endif
 
                             mappingFooter(includeSiriScrollArrow: includeSiriScrollArrow)
+                            Color.clear.frame(height: 1).id("mapping-page-bottom")
                         }
                         .padding(22)
                         .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -1745,6 +1749,11 @@ struct SettingsView: View {
                         withAnimation(.easeInOut(duration: 0.25)) {
                             proxy.scrollTo("mapping-action-editor", anchor: .top)
                         }
+                    }
+                }
+                .onChange(of: mappingVoiceSettingsRequest) { _ in
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        proxy.scrollTo("mapping-page-bottom", anchor: .bottom)
                     }
                 }
             }
@@ -1987,15 +1996,6 @@ struct SettingsView: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(3)
             if settings.voiceKeyMode != .function {
-                Label {
-                    Text("connection.voice_key_mode.unverified")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(.orange)
-                        .fixedSize(horizontal: false, vertical: true)
-                } icon: {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.orange)
-                }
                 Text("connection.voice_key_mode.unverified_detail")
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)

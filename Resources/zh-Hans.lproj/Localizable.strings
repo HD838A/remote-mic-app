@@ -387,7 +387,7 @@
 "audio.compatibility.help" = "某些语音工具可能无法识别普通虚拟音频设备。安装独立的兼容麦克风 MiRemoteV 2ch 后在这里选中；已有音频设备不会被修改或替换。";
 "audio.compatibility.help_plain" = "如果常用的语音工具收不到声音，可选择随安装包提供的兼容麦克风；已有音频设备不会被替换。";
 "button_mapping.page.title" = "按键映射";
-"button_mapping.page.subtitle" = "点击按键配置设置动作";
+"button_mapping.page.subtitle" = "点击按键进行设置";
 "button_mapping.toggle.enabled" = "自定义按键";
 "button_mapping.permission_prompt.title" = "需要开启按键权限";
 "button_mapping.permission_prompt.message" = "自定义按键需要“输入监控”和“辅助功能”权限，请前往权限页面完成设置。";
