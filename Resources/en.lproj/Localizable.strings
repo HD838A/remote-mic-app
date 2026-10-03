@@ -349,6 +349,8 @@
 "connection.web.pairing_code" = "Verification Code";
 "connection.web.pairing_code_accessibility" = "Verification code %1$@";
 "connection.web.qr_accessibility" = "Mobile Web connection QR code";
+"connection.web.mini_program_loading" = "Generating mini program code…";
+"connection.web.mini_program_failed" = "Mini program code could not be loaded";
 "connection.web.mini_program_scan" = "Scan with WeChat to open the mini program";
 "connection.web.mini_program_accessibility" = "WeChat mini program connection code";
 "connection.web.browser_scan" = "Connecting the web version in a browser? Scan this smaller code";

@@ -34,7 +34,7 @@
 	<key>CFBundleShortVersionString</key>
 	<string>2.0.0</string>
 	<key>CFBundleVersion</key>
-	<string>230</string>
+	<string>231</string>
 	<key>HardwareAnnouncementURL</key>
 	<string>https://download.sayall.app/mac/announcements/hardware.json</string>
 	<key>LSMinimumSystemVersion</key>

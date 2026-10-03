@@ -349,6 +349,8 @@
 "connection.web.pairing_code" = "校验码";
 "connection.web.pairing_code_accessibility" = "校验码 %1$@";
 "connection.web.qr_accessibility" = "手机网页版连接二维码";
+"connection.web.mini_program_loading" = "正在生成小程序码…";
+"connection.web.mini_program_failed" = "小程序码暂时无法加载";
 "connection.web.mini_program_scan" = "使用微信扫描，打开小程序";
 "connection.web.mini_program_accessibility" = "微信小程序连接码";
 "connection.web.browser_scan" = "要在浏览器中连接网页版？请扫描这个较小的二维码";
