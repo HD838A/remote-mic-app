@@ -128,8 +128,8 @@ enum SettingsPageBehavior {
         .macros,
         .buttonProfiles,
         .membership,
-        .transcripts,
         .connection,
+        .transcripts,
         .privateFeature,
         .about,
         .statistics,
@@ -1662,20 +1662,11 @@ struct SettingsView: View {
         @ViewBuilder hardwareCanvas: @escaping () -> HardwareCanvas
     ) -> some View {
         VStack(spacing: 0) {
-            ViewThatFits(in: .horizontal) {
-                HStack(alignment: .center, spacing: 14) {
-                    mappingPageHeader
-                        .fixedSize(horizontal: true, vertical: false)
-                    remoteDeviceSelector()
-                        .frame(maxWidth: .infinity, alignment: .trailing)
-                }
-
-                VStack(alignment: .leading, spacing: 8) {
-                    mappingPageHeader
-                        .fixedSize(horizontal: true, vertical: false)
-                    remoteDeviceSelector()
-                        .frame(maxWidth: .infinity, alignment: .trailing)
-                }
+            HStack(alignment: .center, spacing: 14) {
+                mappingPageHeader
+                    .fixedSize(horizontal: true, vertical: false)
+                remoteDeviceSelector()
+                    .frame(maxWidth: .infinity, alignment: .trailing)
             }
             .padding(.horizontal, 22)
             .padding(.top, 18)
@@ -2052,13 +2043,6 @@ struct SettingsView: View {
                     remoteDeviceCard(profile, fillsWidth: true)
                 }
             }
-        } else if connectedProfiles.count <= 2 {
-            HStack(spacing: 8) {
-                ForEach(connectedProfiles) { profile in
-                    remoteDeviceCard(profile)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .trailing)
         } else {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {

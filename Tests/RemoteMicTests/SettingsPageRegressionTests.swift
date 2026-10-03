@@ -534,7 +534,7 @@ struct SettingsPageRegressionTests {
         ))
         let mappingSource = settingsSource[sharedPage.lowerBound..<editorPanel.lowerBound]
 
-        #expect(mappingSource.contains("ViewThatFits(in: .horizontal)"))
+        #expect(!mappingSource.contains("ViewThatFits(in: .horizontal)"))
         #expect(mappingSource.contains("private var mappingHeaderToggle"))
         #expect(!mappingSource.contains(".frame(width: 400)"))
         #expect(!mappingSource.contains(".frame(width: 320)"))
@@ -1252,7 +1252,6 @@ struct SettingsPageRegressionTests {
         #expect(selectorSource.contains("systemName: { model.systemDeviceName(for: $0) }"))
         #expect(selectorSource.contains("ForEach(connectedProfiles)"))
         #expect(selectorSource.contains("remoteDeviceEmptyState(vertical: vertical)"))
-        #expect(selectorSource.contains("connectedProfiles.count <= 2"))
         #expect(!selectorSource.contains("fillsWidth: connectedProfiles.count == 2"))
         #expect(selectorSource.contains("ScrollView(.horizontal, showsIndicators: false)"))
         #expect(!selectorSource.contains("ScrollView(.horizontal, showsIndicators: true)"))
@@ -1457,8 +1456,8 @@ struct SettingsPageRegressionTests {
             .macros,
             .buttonProfiles,
             .membership,
-            .transcripts,
             .connection,
+            .transcripts,
             .privateFeature,
             .about,
             .statistics,
