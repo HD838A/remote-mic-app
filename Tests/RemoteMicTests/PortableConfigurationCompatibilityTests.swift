@@ -43,7 +43,58 @@ struct PortableConfigurationCompatibilityTests {
         try current.applyPortableLocalSnapshot(before)
         #expect(try current.portableLocalSnapshot() == before)
     }
+    @Test func versionTwoSnapshotRestoresBindingsForEveryDeviceExactly() throws {
+        let (current, cleanup) = try settings(); defer { cleanup() }
+        let first = current.selectedRemoteProfileID, second = UUID()
+        current.setBaseBinding(.init(action: .combinationAction, shortcut: nil, macroID: "macro.saved"),
+            for: .home, trigger: .doubleClick, profileID: first)
+        current.setBaseBinding(.init(action: .commandCopy, shortcut: nil),
+            for: .menu, trigger: .longPress, profileID: second)
+        let before = try current.portableLocalSnapshot()
+        current.unifiedBaseBindings = []
+        try current.applyPortableLocalSnapshot(before)
+        #expect(try current.portableLocalSnapshot() == before)
+        #expect(current.configuredBaseAction(for: .home, trigger: .doubleClick).macroID == "macro.saved")
+    }
 #if canImport(SayAllMacroRemoteMic)
+    @Test @MainActor func unifiedMacroMappingExportsItsGraphAndImportsIntoOnlySelectedDevice() throws {
+        let (current, cleanup) = try settings(); defer { cleanup() }
+        let first = current.selectedRemoteProfileID, second = UUID()
+        current.setBaseBinding(.init(action: .combinationAction, shortcut: nil, macroID: "macro.parent"),
+            for: .home, trigger: .doubleClick, profileID: first)
+        current.setBaseBinding(.init(action: .commandCopy, shortcut: nil),
+            for: .menu, trigger: .longPress, profileID: second)
+        current.configuredActionOverride = { _, _, _ in .disabled }
+        let root = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("SayAllTransferTests/\(UUID().uuidString)")
+        defer { if FileManager.default.fileExists(atPath: root.path) { try? FileManager.default.trashItem(at: root, resultingItemURL: nil) } }
+        let child = MacroDefinition(macroID: "macro.child", version: "1.0.0", name: "Child", steps: [])
+        let parent = MacroDefinition(macroID: "macro.parent", version: "1.0.0", name: "Parent", steps: [
+            .init(stepID: "child", action: .runMacro, parameters: .init(nestedMacroID: child.macroID, nestedMacroName: child.name))])
+        try PortableTransferTransaction.commit(root: root, changes: [.init(relativePath: "library/library.json", before: nil,
+            after: PortableTransferTransaction.encode(MacroLibraryDocument(definitions: [parent, child])))])
+        let controller = RemoteMicPortableTransferController(rootURL: root)
+        controller.hostAdapter = current.portableHostAdapter(beforeApply: { _ in })
+        let candidates = try controller.exportCandidates(remoteProfileID: first, remoteModel: "xiaomi-remote-2-pro")
+        let selected = Set(candidates.filter { $0.root.kind == .hostSettings }.map(\.root))
+        let data = try controller.export(candidates, selected: selected, remoteProfileID: first, remoteModel: "xiaomi-remote-2-pro",
+            purpose: .personalBackup, includeFocusInformation: false, settingsGroups: ["mappings"])
+        let package = try PortableTransferCodec.decode(data)
+        #expect(package.macros.count == 2 && package.macros.allSatisfy { $0.schemaVersion == "1.0" })
+        let binding = try #require(package.hostSettings?.mappings?.bindings.first { $0.controlID == "home" && $0.gesture == "doublePress" })
+        #expect(binding.target.kind == .macro)
+        #expect(package.macros.contains { $0.macroID == binding.target.referenceID })
+        let before = try current.portableLocalSnapshot()
+        let preview = try controller.preview(package, selected: Set(package.roots), remoteProfileID: first, remoteModel: "xiaomi-remote-2-pro")
+        #expect(try current.portableLocalSnapshot() == before)
+        try controller.save(preview)
+        let configured = current.configuredBaseAction(for: .home, trigger: .doubleClick)
+        #expect(configured.action == .combinationAction && configured.macroID != nil)
+        #expect(current.unifiedBaseBindings.first { $0.remoteProfileID == second }?.configured.action == .commandCopy)
+        #expect(!FileManager.default.fileExists(atPath: root.appendingPathComponent("button-bindings.json").path))
+        try current.applyPortableLocalSnapshot(before)
+        #expect(try current.portableLocalSnapshot() == before)
+    }
     @Test @MainActor func clearedUnrelatedShortcutDoesNotBlockImportOrCandidateSelection() throws {
         let (current,cleanup) = try settings(); defer { cleanup() }
         current.setAction(.customShortcut,for: .menu,trigger: .doubleClick)
@@ -52,7 +103,7 @@ struct PortableConfigurationCompatibilityTests {
             .appendingPathComponent("SayAllTransferTests/\(UUID().uuidString)")
         let controller = RemoteMicPortableTransferController(rootURL: root)
         controller.hostAdapter = current.portableHostAdapter(beforeApply: { _ in })
-        let macro = MacroDefinition(macroID: "test.import",version: "1.0.0",name: "Escape",steps: [])
+        let macro = MacroDefinition(schemaVersion: PortableTransferPackage.schemaVersion, macroID: "test.import",version: "1.0.0",name: "Escape",steps: [])
         let p = PortableTransferPackage(minimumRemoteMicVersion: "1.9.21",roots: [.init(kind: .macro,id: macro.macroID)],macros: [macro])
         let before = try current.portableLocalSnapshot()
         #expect((try? controller.preview(p,selected: Set(p.roots),remoteProfileID: nil,remoteModel: "xiaomi-remote-2-pro")) != nil)
@@ -129,6 +180,8 @@ struct PortableConfigurationCompatibilityTests {
         current.addCustomApplicationProfile(existing)
         current.setAction(.openCustomApplication,for: .menu,trigger: .doubleClick)
         current.setApplicationProfileID(existing.id,for: .menu,trigger: .doubleClick)
+        current.setBaseBinding(.init(action: .openCustomApplication, shortcut: nil, applicationProfileID: existing.id),
+            for: .home, trigger: .longPress, profileID: UUID())
         let adapter = current.portableHostAdapter(beforeApply: { _ in })
         let focus = PortableFocusTarget(id: "transfer.focus.test",displayName: "Composer",bundleIdentifier: "com.example.new",target: .init(role: "AXTextArea",identifier: "compose"))
         let app = PortableApplication(id: "transfer.app.test",displayName: "New",bundleIdentifier: focus.bundleIdentifier,focusStrategy: .recordedAccessibility,focusTargetID: focus.id)
@@ -137,6 +190,7 @@ struct PortableConfigurationCompatibilityTests {
         let prepared = try adapter.prepare(p,options)
         #expect(prepared.newApplicationCount == 0)
         #expect(prepared.affectedBindings.contains { $0.contains("menu") })
+        #expect(prepared.affectedBindings.contains { $0.contains("home") && $0.contains("longPress") })
         try adapter.apply(prepared.after)
         #expect(current.portablePendingApplications.contains(existing.id.uuidString))
         #expect(current.configuredAction(for: .menu,trigger: .doubleClick).applicationProfileID == existing.id)

@@ -67,6 +67,9 @@ extension AppSettings {
         case .customShortcut:
             guard let s = c.shortcut else { throw PortableTransferError.missingDependency("快捷键") }
             return .init(kind: .shortcut, referenceID: Self.shortcutID(s))
+        case .combinationAction:
+            guard let id = c.macroID else { throw PortableTransferError.missingDependency("组合动作") }
+            return .init(kind: .macro, referenceID: id)
         case .openCustomApplication:
             guard let id = c.applicationProfileID, customApplicationProfile(id: id) != nil else { throw PortableTransferError.missingDependency("App 配置") }
             return .init(kind: .application, referenceID: id.uuidString)
@@ -87,7 +90,9 @@ extension AppSettings {
         case .application:
             guard let value = a.referenceID, let id = UUID(uuidString: value), package.applications.contains(where: { $0.id == value }) else { throw PortableTransferError.missingDependency("App 配置") }
             return .init(action: .openCustomApplication, shortcut: nil, applicationProfileID: id)
-        case .macro: throw PortableTransferError.invalid("组合动作由动作库保存")
+        case .macro:
+            guard let id = a.referenceID, package.macros.contains(where: { $0.macroID == id }) else { throw PortableTransferError.missingDependency("组合动作") }
+            return .init(action: .combinationAction, shortcut: nil, macroID: id)
         }
     }
     private func portableObjects(applicationIDs: Set<String>, groups: Set<String>, hostActions: [Data]) throws -> PortableTransferPackage {
@@ -98,7 +103,7 @@ extension AppSettings {
         if groups.contains("mappings") {
             for button in RemoteButton.allCases {
                 for trigger in ButtonTrigger.allCases {
-                    let c = configuredAction(for: button,trigger: trigger)
+                    let c = configuredBaseAction(for: button,trigger: trigger)
                     actions.append(c)
                     let gesture = trigger == .singleClick ? "singlePress" : trigger == .doubleClick ? "doublePress" : "longPress"
                     bindings.append(.init(controlID: button.rawValue.replacingOccurrences(of: "_",with: "-"),gesture: gesture,target: try portableAction(c)))
@@ -163,6 +168,10 @@ extension AppSettings {
                 profile = CustomApplicationProfile(id: id,displayName: profile.displayName,bundleIdentifier: profile.bundleIdentifier,
                     applicationPath: "",focusStrategy: profile.focusStrategy,focusShortcut: profile.focusShortcut,accessibilityTarget: profile.accessibilityTarget)
                 affected.append("App: \(profiles[index].displayName) → \(profile.displayName)")
+                for binding in unifiedBaseBindings where binding.configured.applicationProfileID == id {
+                    let device = remoteDeviceProfiles.first { $0.id == binding.remoteProfileID }
+                    affected.append("\(device?.customName.isEmpty == false ? device!.customName : device?.model.rawValue ?? "default"): \(binding.button.rawValue) · \(binding.trigger.rawValue)")
+                }
                 for device in remoteDeviceProfiles {
                     for (key, value) in (device.mappings.buttonApplicationProfileIDs ?? [:]) where value == id {
                         affected.append("\(device.customName.isEmpty ? device.model.rawValue : device.customName): \(key) · singlePress")
@@ -205,6 +214,7 @@ extension AppSettings {
         if let a = p.hostSettings?.audio { c["gainDB"] = a.gainDB }
         if let v = p.hostSettings?.voice { c["voiceKeyMode"] = v.voiceKeyMode; c["voiceFnTapModeEnabled"] = v.voiceFnTapModeEnabled }
         if let m = p.hostSettings?.mappings {
+            var unified = unifiedBaseBindings
             var actions = c["buttonBindings"] as? [String:Any] ?? [:]
             var shortcuts = c["buttonShortcuts"] as? [String:Any] ?? [:]
             var apps = c["buttonApplicationProfileIDs"] as? [String:Any] ?? [:]
@@ -212,13 +222,17 @@ extension AppSettings {
             for b in m.bindings where b.target.kind != .inherit {
                 let key = b.controlID.replacingOccurrences(of: "-",with: "_")
                 let trigger = b.gesture == "singlePress" ? "singleClick" : b.gesture == "doublePress" ? "doubleClick" : "longPress"
-                let configured = b.target.kind == .macro ? ConfiguredButtonAction.disabled : try Self.configuredPortableAction(b.target, package: p)
+                let configured = try Self.configuredPortableAction(b.target, package: p)
+                guard let button = RemoteButton(rawValue: key), let gesture = ButtonTrigger(rawValue: trigger) else { throw PortableTransferError.invalid("按键绑定") }
+                unified.removeAll { $0.remoteProfileID == selectedRemoteProfileID && $0.button == button && $0.trigger == gesture }
+                unified.append(.init(remoteProfileID: selectedRemoteProfileID, button: button, trigger: gesture, configured: configured))
                 if trigger == "singleClick" {
                     actions[key] = configured.action.rawValue
                     shortcuts[key] = try configured.shortcut.map(Self.json)
                     apps[key] = configured.applicationProfileID?.uuidString
                 } else { secondary[key,default: [:]][trigger] = try Self.json(configured) }
             }
+            c["formatVersion"] = 2; c["unifiedBaseBindings"] = try Self.json(unified)
             c["customMappingEnabled"] = m.customMappingEnabled; c["buttonBindings"] = actions
             c["buttonShortcuts"] = shortcuts; c["buttonApplicationProfileIDs"] = apps; c["secondaryButtonBindings"] = secondary
             c["buttonRapidPressEnabled"] = Dictionary(uniqueKeysWithValues: m.rapidPressControls.map { ($0.replacingOccurrences(of: "-",with: "_"),true) })

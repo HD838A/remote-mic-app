@@ -387,7 +387,7 @@
 "audio.compatibility.help" = "Some voice tools may not recognize ordinary virtual audio devices. Install the separate compatible microphone MiRemoteV 2ch and select it here; existing audio devices are not changed or replaced.";
 "audio.compatibility.help_plain" = "If your preferred voice tool cannot hear audio, choose the compatible microphone included with the installer. Existing audio devices are not replaced.";
 "button_mapping.page.title" = "Button Mapping";
-"button_mapping.page.subtitle" = "Customize remote button actions while preserving voice input and Fn functions";
+"button_mapping.page.subtitle" = "Click a button to change its settings";
 "button_mapping.toggle.enabled" = "Custom Buttons";
 "button_mapping.permission_prompt.title" = "Button Permissions Required";
 "button_mapping.permission_prompt.message" = "Custom button controls require Input Monitoring and Accessibility. Open the Permissions page to finish setup.";
@@ -1137,6 +1137,28 @@
 "settings.corrupted.item.remote_device" = "remote device profiles";
 "settings.corrupted.item.statistics" = "usage statistics";
 "settings.corrupted.item.other" = "other settings";
+
+"action.combination_action" = "Combination action";
+
+"button_mapping.editing_profile" = "Editing";
+
+"button_mapping.active_profile" = "Active";
+
+"button_mapping.base_profile" = "Base mapping";
+
+"button_mapping.inherit_base" = "Inherit base mapping";
+
+"button_mapping.inherited" = "Inherited";
+
+"button_mapping.search_macros" = "Search combination actions";
+
+"button_mapping.manage_macros" = "Manage combination actions";
+
+"button_mapping.macro_unavailable" = "Action unavailable. Choose another action.";
+
+"button_mapping.return_choose_macro" = "Return to buttons and choose an action";
+
+"button_mapping.macro_step_count" = "%d steps";
 
 /* Common phrases */
 "action.open_common_phrases" = "Open Common Phrases";

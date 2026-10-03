@@ -731,6 +731,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private var appleRemoteAppSwitcherOriginBundleIdentifier: String?
     private var appleRemoteAppSwitcherOperationCounter: UInt64 = 0
     private var appleRemoteAppSwitcherOperationID: UInt64?
+    private var appleRemoteAppSwitcherProfileID: UUID?
     private var appleRemoteAppSwitcherStartedUptime: TimeInterval?
     private var appleRemoteAppSwitcherTabCount = 0
     private var appleRemoteAppSwitcherTouchNavigationSteps = 0
@@ -884,6 +885,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                     "operation_id=\(self?.appleRemoteAppSwitcherOperationLabel ?? "none") " +
                     message
             )
+        }
+        macroFeature.attachBindings(to: settings) { [weak self] device in
+            self?.cancelButtonMappingInteractions(device: device)
         }
         membershipAccessCancellable = membershipFeature.$buttonProfilesAccessDecision
             .removeDuplicates()
@@ -2961,6 +2965,36 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         startHIDDiscoveryIfNeeded(allowBackOnly: backOnlyMode)
     }
 
+    private func cancelButtonMappingInteractions(device: UUID?) {
+        hidMonitors.values.filter { $0.profileID == device }.forEach { $0.cancelMappingInteractions() }
+        if discoveryHIDMonitor?.profileID == device { discoveryHIDMonitor?.cancelMappingInteractions() }
+        if settings.selectedRemoteProfileID == device {
+            resetMobileButtonGestures(source: .nearbyPhone)
+            resetMobileButtonGestures(source: .webRemote)
+        }
+        #if SAYALL_CHROMECAST_ENABLED
+        if chromecastProfileID == device { resetChromecastButtonState(reason: "mapping_changed") }
+        #endif
+        #if SAYALL_SIRI_REMOTE_ENABLED
+        let devices = appleRemoteProfileIDs.filter { $0.value == device }.map(\.key)
+        if appleRemoteAppSwitcherProfileID == device, appleRemoteAppSwitcherSession.isActive {
+            finishAppleRemoteAppSwitcher(reason: "mapping_changed", confirmed: false)
+        }
+        for siriDevice in devices {
+            let doubleKeys = appleRemoteDoubleClickTimers.keys.filter { $0.device == siriDevice }
+            doubleKeys.forEach { appleRemoteDoubleClickTimers.removeValue(forKey: $0)?.cancel() }
+            let longKeys = appleRemoteLongPressTimers.keys.filter { $0.device == siriDevice }
+            longKeys.forEach { appleRemoteLongPressTimers.removeValue(forKey: $0)?.cancel() }
+            let repeatKeys = appleRemoteRepeatTimers.keys.filter { $0.device == siriDevice }
+            repeatKeys.forEach { cancelAppleRemoteRepeat(for: $0.button, device: siriDevice, reason: "mapping_changed") }
+            appleRemoteGestureRecognizers.removeValue(forKey: siriDevice)
+            appleRemoteActiveButtons.removeValue(forKey: siriDevice)
+        }
+        refreshAppleRemoteActiveButtons()
+        #endif
+        AppLogger.shared.write("BUTTON CONFIGURATION phase=completed result=interactions_cancelled")
+    }
+
     private func stopHIDMonitors() {
         hidMonitors.values.forEach { $0.stop() }
         discoveryHIDMonitor?.stop()
@@ -4239,7 +4273,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             profileID: profileID
         )
         if configured.action == .appSwitcher {
-            return performAppleRemoteAppSwitcher(for: button, trigger: trigger)
+            return performAppleRemoteAppSwitcher(for: button, trigger: trigger, profileID: profileID)
         }
         let handled: Bool
         if configured.action.isAppInternal {
@@ -4271,10 +4305,12 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
 
     private func performAppleRemoteAppSwitcher(
         for button: RemoteButton,
-        trigger: ButtonTrigger
+        trigger: ButtonTrigger,
+        profileID: UUID? = nil
     ) -> Bool {
         let wasActive = appleRemoteAppSwitcherSession.isActive
         if !wasActive {
+            appleRemoteAppSwitcherProfileID = profileID
             beginAppleRemoteAppSwitcherDiagnostics()
         }
         let phase = wasActive ? "tab" : "start"
@@ -4479,6 +4515,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     }
 
     private func resetAppleRemoteAppSwitcherDiagnostics() {
+        appleRemoteAppSwitcherProfileID = nil
         appleRemoteAppSwitcherOperationID = nil
         appleRemoteAppSwitcherStartedUptime = nil
         appleRemoteAppSwitcherOriginBundleIdentifier = nil
@@ -6038,6 +6075,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
 
     private func performExternalConfiguredAction(_ configured: ConfiguredButtonAction) -> Bool {
         guard !macroFeature.hasPendingPortableImport else { return false }
+        if configured.action == .combinationAction {
+            return macroFeature.executeMacro(id: configured.macroID)
+        }
         let applicationProfile = settings.customApplicationProfile(
             id: configured.applicationProfileID
         )

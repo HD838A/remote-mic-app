@@ -972,6 +972,7 @@ final class HIDRemoteMonitor {
         recognizesLongPress: Bool
     ) -> Bool {
         guard !activeDeviceIsSeized,
+              !appSwitcherSession.isActive,
               !recognizesDoubleClick,
               !recognizesLongPress,
               frontmostBundleIdentifier() != PresetApplication.remoteMic.bundleIdentifier
@@ -1030,9 +1031,8 @@ final class HIDRemoteMonitor {
                 self.releaseForRevokedPermissions()
                 return
             }
-            let configured = ConfiguredButtonAction(
-                action: action,
-                shortcut: self.settings.shortcut(for: button, profileID: self.profileID)
+            let configured = self.settings.configuredAction(
+                for: button, trigger: .singleClick, profileID: self.profileID
             )
             if !self.actionPerformer(button, .singleClick, configured) {
                 self.releaseForRevokedPermissions()
@@ -1133,6 +1133,9 @@ final class HIDRemoteMonitor {
                 "HID ACTION failed button=\(button.rawValue) trigger=\(trigger.rawValue) " +
                     "action=\(configured.action.rawValue)"
             )
+            // A library rejection is not evidence of revoked Accessibility permission.
+            // Preserve the held edge so duplicate reports cannot restart the action.
+            if configured.action == .combinationAction { return false }
             stop()
             updateStatus(LocalizedMessage("button_mapping.permission.accessibility_expired"))
             return false
@@ -1267,6 +1270,8 @@ final class HIDRemoteMonitor {
         longPressTimers.removeAll()
         gestureRecognizer.reset()
     }
+
+    func cancelMappingInteractions() { resetInputState() }
 
     func cancelPendingButtonActions() {
         repeatTimers.values.forEach { $0.cancel() }
