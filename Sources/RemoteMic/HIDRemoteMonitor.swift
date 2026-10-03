@@ -972,6 +972,7 @@ final class HIDRemoteMonitor {
         recognizesLongPress: Bool
     ) -> Bool {
         guard !activeDeviceIsSeized,
+              !appSwitcherSession.isActive,
               !recognizesDoubleClick,
               !recognizesLongPress,
               frontmostBundleIdentifier() != PresetApplication.remoteMic.bundleIdentifier
