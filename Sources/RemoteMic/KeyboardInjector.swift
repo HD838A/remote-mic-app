@@ -631,6 +631,20 @@ enum KeyboardInjector {
         }
     }
 
+    static func testCustomApplicationInput(_ profile: CustomApplicationProfile, completion: @escaping (Bool) -> Void) {
+        guard isAccessibilityTrusted, let target = profile.accessibilityTarget,
+            let url = resolveCustomApplicationURL(profile) else { completion(false); return }
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = true
+        NSWorkspace.shared.openApplication(at: url, configuration: configuration) { application, error in
+            guard error == nil, let application else { completion(false); return }
+            focusQueue.asyncAfter(deadline: .now() + .milliseconds(500)) {
+                let success = focusRecordedAccessibilityTarget(target, processIdentifier: application.processIdentifier)
+                DispatchQueue.main.async { completion(success) }
+            }
+        }
+    }
+
     @discardableResult
     static func focusFrontmostComposer(completion: @escaping (Bool) -> Void) -> Bool {
         guard isAccessibilityTrusted,

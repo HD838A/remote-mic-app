@@ -2408,6 +2408,8 @@ struct SettingsView: View {
         configured: ConfiguredButtonAction
     ) -> some View {
         VStack(alignment: .leading, spacing: 14) {
+            model.macroFeature.portableTransferView(profileID: settings.selectedRemoteProfileID,
+                model: settings.selectedRemoteProfile?.model, applicationsOnly: true)
             Text("custom_application.target")
                 .font(.system(size: 14, weight: .semibold))
 
@@ -2660,8 +2662,20 @@ struct SettingsView: View {
                 .compatibilityButtonStyle(.prominent)
                 .disabled(customApplicationLearningStates[profile.id] == .recording)
 
+                Button(localization.text("custom_application.accessibility.test")) {
+                    KeyboardInjector.testCustomApplicationInput(profile) { success in
+                        DispatchQueue.main.async {
+                            if success { settings.markPortableApplicationVerified(profile.id) }
+                            customApplicationLearningStates[profile.id] = success ? .succeeded : .failed
+                        }
+                    }
+                }
+                .compatibilityButtonStyle(.standard)
+                .disabled(profile.accessibilityTarget == nil)
                 Text(
-                    profile.accessibilityTarget == nil
+                    settings.portablePendingApplications.contains(profile.id.uuidString)
+                        ? localization.text("custom_application.accessibility.needs_verification")
+                        : profile.accessibilityTarget == nil
                         ? localization.text("custom_application.accessibility.not_recorded")
                         : localization.text("custom_application.accessibility.recorded")
                 )
@@ -2756,6 +2770,7 @@ struct SettingsView: View {
                     updated.accessibilityTarget = target
                     updated.focusStrategy = .recordedAccessibility
                     settings.updateCustomApplicationProfile(updated)
+                    settings.markPortableApplicationVerified(updated.id)
                 }
                 customApplicationLearningStates[profileID] = target == nil ? .failed : .succeeded
                 NSApp.activate(ignoringOtherApps: true)
@@ -3455,6 +3470,12 @@ struct SettingsView: View {
                                     .frame(width: 92)
                             }
                             .padding(.vertical, 8)
+                            if macroFeature.isFeatureVisible {
+                                Text(localization.text("settings.portable_configuration.title"))
+                                    .font(.system(size: 12, weight: .medium))
+                                macroFeature.portableTransferView(profileID: settings.selectedRemoteProfileID,
+                                    model: settings.selectedRemoteProfile?.model)
+                            }
 
                             if let configurationStatus {
                                 Divider()

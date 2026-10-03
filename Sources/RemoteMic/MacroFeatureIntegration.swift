@@ -33,6 +33,8 @@ final class MacroFeatureIntegration: ObservableObject {
     @Published private(set) var isEditorActive = false
     private var subscriptions = Set<AnyCancellable>()
     private var enrollmentRevealRequested = false
+    private var isPortableEditorActive = false
+    private var isBindingEditorActive = false
 
 #if canImport(SayAllMacroRemoteMic)
     private let feature: SayAllMacroRemoteMicFeature
@@ -71,6 +73,40 @@ final class MacroFeatureIntegration: ObservableObject {
             }
             .store(in: &subscriptions)
 #endif
+    }
+
+    var hasPendingPortableImport: Bool {
+        #if canImport(SayAllMacroRemoteMic)
+        return feature.portableTransfer.hasPendingImport
+        #else
+        return false
+        #endif
+    }
+
+    func configurePortableTransfer(settings: AppSettings, beforeApply: @escaping (Data) throws -> Void) {
+        #if canImport(SayAllMacroRemoteMic)
+        feature.portableTransfer.hostAdapter = settings.portableHostAdapter(beforeApply: beforeApply)
+        feature.portableTransfer.$isPresenting.sink { [weak self] active in
+            guard let self else { return }
+            self.isPortableEditorActive = active
+            self.isEditorActive = active || self.isBindingEditorActive
+        }.store(in: &subscriptions)
+        feature.portableTransfer.logEvent = { AppLogger.shared.write($0) }
+        #if canImport(SayAllButtonProfiles)
+        buttonProfilesFeature.configurePortableTransfer(feature.portableTransfer)
+        #endif
+        do { try feature.portableTransfer.recover() }
+        catch { AppLogger.shared.write("TRANSFER RECOVERY phase=failed result=recovery_required") }
+        #endif
+    }
+
+    func portableTransferView(profileID: UUID?, model: XiaomiRemoteModel?, applicationsOnly: Bool = false) -> AnyView {
+        #if canImport(SayAllMacroRemoteMic)
+        return feature.portableTransferView(selectedRemoteProfileID: profileID,
+            remoteModel: AppSettings.portableRemoteModel(model), applicationsOnly: applicationsOnly)
+        #else
+        return AnyView(EmptyView())
+        #endif
     }
 
     var sectionTitle: String {
@@ -149,7 +185,8 @@ final class MacroFeatureIntegration: ObservableObject {
     }
 
     func setEditorActive(_ active: Bool) {
-        isEditorActive = active && (isFeatureVisible || isButtonProfilesVisible)
+        isBindingEditorActive = active && (isFeatureVisible || isButtonProfilesVisible)
+        isEditorActive = isBindingEditorActive || isPortableEditorActive
     }
 
     func revealEnrollment() {
@@ -402,7 +439,8 @@ final class MacroFeatureIntegration: ObservableObject {
         button: RemoteButton,
         trigger: ButtonTrigger,
         hostActionPerformer: (Data) -> Bool,
-        shortcutPerformer: (UInt16, [String]) -> Bool
+        shortcutPerformer: (UInt16, [String]) -> Bool,
+        exactShortcutPerformer: ((UInt16,[String],UInt64) -> Bool)? = nil
     ) -> Bool {
         #if canImport(SayAllButtonProfiles)
         if buttonProfilesFeature.executeBoundAction(
@@ -410,7 +448,7 @@ final class MacroFeatureIntegration: ObservableObject {
             button: button.rawValue,
             trigger: trigger.rawValue,
             hostActionPerformer: hostActionPerformer,
-            shortcutPerformer: shortcutPerformer
+            shortcutPerformer: shortcutPerformer, exactShortcutPerformer: exactShortcutPerformer
         ) {
             return true
         }

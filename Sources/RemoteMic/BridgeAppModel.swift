@@ -865,6 +865,16 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         self.rc003VoiceExtensionTestEnabled = rc003VoiceExtensionTestEnabled
         self.recordingAssetStore = recordingAssetStore
         self.diagnosticLogUploader = diagnosticLogUploader
+        macroFeature.configurePortableTransfer(settings: settings) { [weak self] snapshot in
+            guard let self else { throw AppConfigurationError.invalidValues }
+            guard let envelope = try JSONSerialization.jsonObject(with: snapshot) as? [String:Any],
+                  let configuration = envelope["configuration"] else { throw AppConfigurationError.invalidValues }
+            let data = try JSONSerialization.data(withJSONObject: configuration)
+            let voice = try self.settings.voiceKeyConfigurationState(in: data)
+            if voice != self.settings.voiceKeyConfigurationState {
+                guard !self.isStreaming, self.releaseVoiceKeyIfNeeded() else { throw AppConfigurationError.unsafeVoiceKeyChange }
+            }
+        }
         commonPhrases.onWillOpen = { [weak self] in self?.cancelPendingCommonPhraseButtonActions() }
         self.diagnosticLogUploader.setPrivateEventProvider(membershipFeature)
         audioDevices = initialAudioDevices
@@ -5976,11 +5986,14 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             },
             shortcutPerformer: { [weak self] keyCode, modifiers in
                 self?.performButtonProfileShortcut(keyCode: keyCode, modifiers: modifiers) ?? false
+            }, exactShortcutPerformer: { [weak self] keyCode, modifiers, flags in
+                self?.performButtonProfileShortcut(keyCode: keyCode, modifiers: modifiers, deviceModifierFlags: flags) ?? false
             }
         )
     }
 
     private func performButtonProfileHostAction(_ payload: Data, source: String) -> Bool {
+        guard !macroFeature.hasPendingPortableImport else { return false }
         guard let configured = try? JSONDecoder().decode(ConfiguredButtonAction.self, from: payload)
         else { return false }
         if configured.action.isAppInternal {
@@ -5995,9 +6008,10 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
 
     private func performButtonProfileShortcut(
         keyCode: UInt16,
-        modifiers: [String]
+        modifiers: [String], deviceModifierFlags: UInt64 = 0
     ) -> Bool {
-        var modifierFlags: NSEvent.ModifierFlags = []
+        guard deviceModifierFlags & ~UInt64(0x207f) == 0 else { return false }
+        var modifierFlags = NSEvent.ModifierFlags(rawValue: UInt(deviceModifierFlags))
         for modifier in modifiers {
             switch modifier {
             case "command": modifierFlags.insert(.command)
@@ -6023,9 +6037,16 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     }
 
     private func performExternalConfiguredAction(_ configured: ConfiguredButtonAction) -> Bool {
+        guard !macroFeature.hasPendingPortableImport else { return false }
         let applicationProfile = settings.customApplicationProfile(
             id: configured.applicationProfileID
         )
+        if configured.action == .openCustomApplication {
+            guard let profile = applicationProfile,
+                !settings.portablePendingApplications.contains(profile.id.uuidString),
+                NSWorkspace.shared.urlForApplication(withBundleIdentifier: profile.bundleIdentifier) != nil
+            else { return false }
+        }
         let requestID = settings.voiceFnTapModeEnabled
             ? VoiceInputDestinationIntent.resolve(
                 configured: configured,

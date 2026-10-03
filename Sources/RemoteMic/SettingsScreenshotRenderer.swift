@@ -171,7 +171,7 @@ enum SettingsScreenshotRenderer {
         ] == "1" {
             updateInformation.markAvailableUpdateSeen()
         }
-        let localization = LocalizationStore(settings: settings)
+        let localization = LocalizationStore(settings: settings, resourceBundle: RemoteMicResourceBundle.mainOrDevelopment)
         model.privateFeature.updateLocaleIdentifier(localization.locale.identifier)
         model.macroFeature.updateLocaleIdentifier(localization.locale.identifier)
         model.membershipFeature.updateLocaleIdentifier(localization.locale.identifier)

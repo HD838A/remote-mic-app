@@ -1,0 +1,29 @@
+<!doctype html><html lang="zh-Hans"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>配置导入导出验证</title><style>body{max-width:1000px;margin:40px auto;padding:0 24px;font:16px/1.7 system-ui}table{border-collapse:collapse;width:100%}th,td{border:1px solid #bbc6d2;padding:9px;text-align:left;vertical-align:top}code{background:#eef2f6;padding:2px 5px}h2{margin-top:32px}</style></head><body><main>
+<h1>配置导入导出验证</h1>
+<p>2026-10-03。此手册验证统一配置包的宿主适配。标准来自 sayall-market 的 docs/portable-transfer-standard.html。文件格式为 sayall-transfer / 0.2-draft。旧个人配置 formatVersion: 1 的入口保持可用。</p>
+<h2>准备</h2>
+<p>使用隔离测试账号和合成数据。记录宏库、自动化库、方案库、普通绑定及宿主个人设置摘要。准备含嵌套动作、实际快捷键、App 配置、输入框依赖及多个方案的包。另准备个人备份、未知字段、内部引用缺失、循环及型号不匹配的文件。</p>
+<h2>必测场景</h2>
+<table><thead><tr><th>操作</th><th>通过条件</th></tr></thead><tbody>
+<tr><td>三个对象入口和个人配置入口</td><td>导入、导出并排。单对象、多选、全选均可用。免费用户可操作组合动作及 App 配置。</td></tr>
+<tr><td>预览并取消；取消文件面板</td><td>配置文件和宿主设置摘要不变。没有安装、启动 App、执行动作或自动选择方案。</td></tr>
+<tr><td>分享导出后重新导入</td><td>实际快捷键及完整嵌套依赖重连。保留聚焦意图，不含个人 AX 指纹、原机路径、设备身份和宿主设置。</td></tr>
+<tr><td>个人备份选择输入框定位信息</td><td>默认关闭。打开后说明隐私范围。导入后为待验证；明确测试或学习成功后解锁。</td></tr>
+<tr><td>重复导入；独立副本</td><td>默认复用相同内容。独立副本生成新本机 ID。已有动作不可变版本不被覆盖。</td></tr>
+<tr><td>替换 App/方案</td><td>替换目标必须明确选择。预览列出受影响绑定。只改变选定对象及其引用。当前方案和其他设备不受影响。</td></tr>
+<tr><td>缺 App、快捷指令、待学习输入框</td><td>可以保存为待配置。相关动作在首个步骤前被阻止。不能按同名 App/快捷指令猜测执行。</td></tr>
+<tr><td>混合 Free/Plus 包</td><td>免费用户可只选择免费根对象。不能保存选中的收费方案。预览后权益失效也必须阻止收费保存。</td></tr>
+<tr><td>个人设置分组</td><td>撤销映射组后裁掉仅该组依赖。只导入 App 配置不能改变语言、音频或语音键。录音期间不允许危险语音键变更。</td></tr>
+<tr><td>并发编辑、写入错误及重启</td><td>旧预览不覆盖新配置。失败恢复原状态。未知并发状态阻断恢复并保留现场。取消零写入。</td></tr>
+<tr><td>1.9.21 个人配置</td><td>旧 formatVersion: 1 文件可导入。旧普通映射、快捷键、自定义 App、音频与语音键保留。空 App 路径保留为待安装。</td></tr>
+<tr><td>最小生产窗口</td><td>在 1020 × 772 逐一进入组合动作、键位方案、App 编辑和设置。检查中英文、浅深色、展开预览、滚动和取消。中文至少 12pt。</td></tr>
+</tbody></table>
+<h2>自动化与构建</h2>
+<ul><li>冻结正式版本：v1.9.21@d291e0761ca08e2ea6003e8ef63f42a684111ca9。Testing/Fixtures/PersonalConfiguration-1.9.21.json 全部为合成数据。测试冻结旧模型，并检查当前旧格式导出可由该结构读取。</li><li>私有源码集成宿主完整 805 项测试通过。旧配置及按键专项共 146 项通过。</li><li>公开宿主使用独立构建目录并清空私有路径，完整 802 项测试通过。旧私有缓存可能使 canImport 误命中，因此不能共用原构建输出验证公开边界。</li><li>公开宿主、仅免费组合动作宿主及收费源码集成宿主完成 arm64/x86_64 Release 构建。两种架构的最低系统版本为 macOS 13。</li><li>本地 SwiftPM 命令均使用 --disable-keychain；macOS 13 双架构使用仓库已有 RELEASE_VARIANT=intel。源码集成仅作为开发验证。</li></ul>
+<h2>页面交互实测</h2>
+<ul><li>使用隔离 UserDefaults 和合成库，进入生产 SettingsView。选择组合动作和 App，预览两层动作及实际快捷键。取消前后配置文件摘要均为空，没有新增配置文件。</li><li>再次导入并确认保存。两条组合动作及一个 App 配置保存成功。免费导入导出入口在 Plus 锁定时仍可使用。</li><li>通过系统保存面板导出分享文件。实际文件含三个根对象、两条组合动作、一个 App 配置及两条快捷键。市场 Ajv Schema 和 transferIssues 语义校验通过。</li><li>交互预览已检查中文浅色。组合动作、键位方案和设置首屏完成中英文、浅色/深色共 12 张生产视图截图；画布为 1020 × 772，PNG 为 2040 × 1544。实际交互预览保留工具返回的原始 JPEG，尺寸为 2040 × 1600。图片格式、尺寸和 SHA-256 已核验。App 编辑流程及展开预览的其他外观仍待人工复验。</li></ul>
+<h2>页面、最终包与真实验收边界</h2>
+<p>页面验证使用生产 SettingsView 和隔离 UserDefaults、合成宏库。开发截图工具明确加载开发资源 Bundle。这些结果不能替代最终二进制 App 校验。</p>
+<p>本次未生成可交付的统一二进制 App。任务私有分支的构件生成器缺少当前宿主要求的诊断模块及会员资源。最终 verify-app、签名及启动烟测尚未执行。没有部署或发布。</p>
+<p>真实遥控器、目标 App 输入结果、Accessibility 权限、不同键盘布局、1.9.21 安装升级及旧 App 回滚仍须人工验收。降级前先恢复未完成导入事务；旧 App 不理解新输入框就绪元数据，应恢复导入前备份。</p>
+</main></body></html>
