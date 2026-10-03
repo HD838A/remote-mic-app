@@ -44,6 +44,63 @@ struct PortableConfigurationCompatibilityTests {
         #expect(try current.portableLocalSnapshot() == before)
     }
 #if canImport(SayAllMacroRemoteMic)
+    @Test @MainActor func clearedUnrelatedShortcutDoesNotBlockImportOrCandidateSelection() throws {
+        let (current,cleanup) = try settings(); defer { cleanup() }
+        current.setAction(.customShortcut,for: .menu,trigger: .doubleClick)
+        current.setShortcut(nil,for: .menu,trigger: .doubleClick)
+        let root = FileManager.default.urls(for: .applicationSupportDirectory,in: .userDomainMask)[0]
+            .appendingPathComponent("SayAllTransferTests/\(UUID().uuidString)")
+        let controller = RemoteMicPortableTransferController(rootURL: root)
+        controller.hostAdapter = current.portableHostAdapter(beforeApply: { _ in })
+        let macro = MacroDefinition(macroID: "test.import",version: "1.0.0",name: "Escape",steps: [])
+        let p = PortableTransferPackage(minimumRemoteMicVersion: "1.9.21",roots: [.init(kind: .macro,id: macro.macroID)],macros: [macro])
+        let before = try current.portableLocalSnapshot()
+        #expect((try? controller.preview(p,selected: Set(p.roots),remoteProfileID: nil,remoteModel: "xiaomi-remote-2-pro")) != nil)
+        #expect((try? controller.exportCandidates(remoteProfileID: nil,remoteModel: "xiaomi-remote-2-pro")) != nil)
+        #expect(try current.portableLocalSnapshot() == before)
+        #expect(!FileManager.default.fileExists(atPath: root.path))
+        let good = CustomApplicationProfile(displayName: "Good",bundleIdentifier: "com.example.good",applicationPath: "")
+        current.addCustomApplicationProfile(good)
+        current.addCustomApplicationProfile(.init(displayName: "Pending",bundleIdentifier: "com.example.pending",applicationPath: "",focusStrategy: .keyboardShortcut))
+        #expect(try controller.existingObjects(remoteProfileID: nil).count == 2)
+        let candidates = try controller.exportCandidates(remoteProfileID: nil,remoteModel: "xiaomi-remote-2-pro")
+        let appRoot = PortableRoot(kind: .application,id: good.id.uuidString)
+        let exported = try PortableTransferCodec.decode(controller.export(candidates,selected: [appRoot],remoteProfileID: nil,remoteModel: "xiaomi-remote-2-pro",names: [appRoot:"Renamed"],purpose: .share,includeFocusInformation: false,settingsGroups: []))
+        #expect(exported.applications.map(\.displayName) == ["Renamed"])
+        #expect(exported.hostSettings == nil)
+        let settingsRoot = PortableRoot(kind: .hostSettings,id: "host.settings")
+        let general = try PortableTransferCodec.decode(controller.export(candidates,selected: [settingsRoot],remoteProfileID: nil,remoteModel: "xiaomi-remote-2-pro",purpose: .personalBackup,includeFocusInformation: false,settingsGroups: ["general"]))
+        #expect(general.hostSettings?.general != nil && general.hostSettings?.mappings == nil)
+        #expect(general.applications.isEmpty)
+        #expect(throws: (any Error).self) {
+            try controller.export(candidates,selected: [settingsRoot],remoteProfileID: nil,remoteModel: "xiaomi-remote-2-pro",purpose: .personalBackup,includeFocusInformation: false,settingsGroups: ["mappings"])
+        }
+        #expect(throws: (any Error).self) {
+            try controller.export(candidates,selected: Set(candidates.filter { $0.name == "Pending" }.map(\.root)),remoteProfileID: nil,remoteModel: "xiaomi-remote-2-pro",purpose: .share,includeFocusInformation: false,settingsGroups: [])
+        }
+        #expect(!FileManager.default.fileExists(atPath: root.path))
+    }
+    @Test @MainActor func selectedProfileHostActionsCarryInlineShortcutAndAppDependencies() throws {
+        let (current,cleanup) = try settings(); defer { cleanup() }
+        current.setAction(.customShortcut,for: .menu,trigger: .doubleClick)
+        let app = CustomApplicationProfile(displayName: "Synthetic",bundleIdentifier: "com.example.synthetic",applicationPath: "")
+        current.addCustomApplicationProfile(app)
+        let adapter = current.portableHostAdapter(beforeApply: { _ in })
+        let shortcut = CustomKeyboardShortcut(keyCode: 36,modifierFlags: .command,keyLabel: "Return")
+        let actions = try [
+            ConfiguredButtonAction(action: .customShortcut,shortcut: shortcut),
+            ConfiguredButtonAction(action: .openCustomApplication,shortcut: nil,applicationProfileID: app.id)
+        ].map { try JSONEncoder().encode($0) }
+        let objects = try adapter.exportObjects([],[],actions)
+        #expect(objects.shortcuts.count == 1 && objects.shortcuts[0].keyCode == 36)
+        #expect(objects.applications.map(\.bundleIdentifier) == [app.bundleIdentifier])
+        #expect(objects.hostSettings == nil)
+        for action in actions {
+            let portable = try adapter.exportAction(action)
+            if portable.kind == .shortcut { #expect(objects.shortcuts.contains { $0.id == portable.referenceID }) }
+            if portable.kind == .application { #expect(objects.applications.contains { $0.id == portable.referenceID }) }
+        }
+    }
     @Test @MainActor func appOnlyMergeRemapsReferencesAndDoesNotChangeUnselectedSettings() throws {
         let (current,cleanup) = try settings(); defer { cleanup() }
         current.gainDB = 8
@@ -94,7 +151,7 @@ struct PortableConfigurationCompatibilityTests {
         let app = CustomApplicationProfile(displayName: "Synthetic",bundleIdentifier: "com.example.synthetic",applicationPath: "/synthetic/path.app",focusStrategy: .recordedAccessibility,accessibilityTarget: target)
         current.addCustomApplicationProfile(app)
         let adapter = current.portableHostAdapter(beforeApply: { _ in })
-        var p = try adapter.exportObjects()
+        var p = try adapter.exportObjects([app.id.uuidString],[],[])
         p.exportPurpose = .share; p.hostSettings = nil; p.roots = p.roots.filter { $0.kind == .application }
         let share = try PortableTransferGraph.exporting(p,allDefinitions: [],keyboardShortcuts: [],focusProfiles: [])
         let bytes = try PortableTransferCodec.encode(share)

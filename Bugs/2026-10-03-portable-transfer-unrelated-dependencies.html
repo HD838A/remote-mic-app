@@ -1,0 +1,15 @@
+<!doctype html><html lang="zh-Hans"><head><meta charset="utf-8"><title>无关待配置依赖阻断导入导出</title></head><body><main>
+<h1>无关待配置依赖阻断导入导出</h1>
+<p>状态：软件修复与自动化验证完成；完整最终 App 与真实环境验收待执行。适用：统一配置包开发分支，非正式发布。</p>
+<h2>复现与证据</h2>
+<p>普通按键选择自定义快捷键，再清除快捷键。随后导入无关组合动作或打开导出候选。修复前 PortableConfigurationCompatibilityTests 的 clearedUnrelatedShortcutDoesNotBlockImportOrCandidateSelection 对导入预览和候选读取均失败。数据与 UserDefaults 全部隔离，不使用真实用户库。</p>
+<p>原调用链：文件解码 → exportCandidates → 宿主 portableObjects → 遍历普通映射 → portableAction 对 customShortcut + nil 抛缺依赖错误。导入预览的最低版本检查也调用整库导出。旧链路没有产生成功保存日志；自动化异常是复现证据。</p>
+<h2>修复</h2>
+<p>替换列表与导出候选只读身份和名称摘要；导入版本检查读取宿主版本。最终导出才读取所选对象、设置分组及依赖。所选方案的宿主快捷键和 App 依赖通过原窄适配传递，不进入任意 payload 文件格式。已有待配置记录保持。</p>
+<p>code review 修复：替换影响列表跳过无法解析的无关待配置动作；展开状态由各页面持有；撤销全部设置分组时保留可读的空设置对象。保持并发检查、整包提交、恢复与隐私边界。</p>
+<h2>验证</h2>
+<p>本轮结果：免费 Package 81 项、收费 Package 65 项、源码集成宿主 807 项、公开宿主 802 项、Market 14 项、项目自检 48 项均通过。三个版本的 Release 均包含 arm64/x86_64，最低系统为 macOS 13.0。隔离页面实测完成导入、保存和导出；实际导出文件通过合同校验。导出候选取消前后四个配置文件摘要不变。测试壳部分侧栏文字未正确显示，本轮页面外观仍待最终 App 复验。</p>
+<p>命令：源码集成宿主 swift test --disable-keychain；私有免费/收费 Package 使用同一 SwiftPM 参数；公开宿主以独立 scratch path 清空私有路径；Market npm run validate。专项覆盖清除快捷键、未选待配置 App/方案、所选缺依赖拒绝、实际快捷键依赖、名称、并发、旧 1.9.21 配置及只读取消。</p>
+<p>脱敏日志沿用 TRANSFER：候选 phase=candidates result=no_write；导入 phase=previewed result=no_write；导出 phase=prepared；最终保存 operation_id、stored/restored/recovery_required。解析、预览、取消不能记为第三方 App 已执行。</p>
+<p>人工步骤和判定见 <a href="../Testing/PortableConfigurationTransfer.html">配置导入导出验证</a>。本次不改变第三方 App 集成、语音键、HID、蓝牙或音频行为，不发布兼容声明。</p>
+</main></body></html>

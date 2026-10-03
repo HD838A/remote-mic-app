@@ -6,7 +6,11 @@ import SayAllMacroRemoteMic
 
 extension AppSettings {
     func portableHostAdapter(beforeApply: @escaping (Data) throws -> Void) -> RemoteMicPortableHostAdapter {
-        RemoteMicPortableHostAdapter(exportObjects: { [unowned self] in try portableObjects() },
+        RemoteMicPortableHostAdapter(currentVersion: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.9.21",
+            objectSummaries: { [unowned self] in customApplicationProfiles.map {
+                .init(root: .init(kind: .application,id: $0.id.uuidString),name: $0.displayName)
+            } },
+            exportObjects: { [unowned self] in try portableObjects(applicationIDs: $0,groups: $1,hostActions: $2) },
             prepare: { [unowned self] in try preparePortable($0, options: $1) },
             snapshot: { [unowned self] in try portableLocalSnapshot() },
             apply: { [unowned self] data in
@@ -86,9 +90,27 @@ extension AppSettings {
         case .macro: throw PortableTransferError.invalid("组合动作由动作库保存")
         }
     }
-    private func portableObjects() throws -> PortableTransferPackage {
+    private func portableObjects(applicationIDs: Set<String>, groups: Set<String>, hostActions: [Data]) throws -> PortableTransferPackage {
         var p = PortableTransferPackage(minimumRemoteMicVersion: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.9.21", exportPurpose: .personalBackup)
-        for a in customApplicationProfiles {
+        var requiredApplications = applicationIDs
+        var bindings: [PortableButtonBinding] = []
+        var actions = try hostActions.map { try JSONDecoder().decode(ConfiguredButtonAction.self,from: $0) }
+        if groups.contains("mappings") {
+            for button in RemoteButton.allCases {
+                for trigger in ButtonTrigger.allCases {
+                    let c = configuredAction(for: button,trigger: trigger)
+                    actions.append(c)
+                    let gesture = trigger == .singleClick ? "singlePress" : trigger == .doubleClick ? "doublePress" : "longPress"
+                    bindings.append(.init(controlID: button.rawValue.replacingOccurrences(of: "_",with: "-"),gesture: gesture,target: try portableAction(c)))
+                }
+            }
+        }
+        for c in actions {
+            _ = try portableAction(c)
+            if c.action == .customShortcut, let s = c.shortcut { p.shortcuts.append(Self.portableShortcut(s,name: s.keyLabel)) }
+            if c.action == .openCustomApplication, let id = c.applicationProfileID { requiredApplications.insert(id.uuidString) }
+        }
+        for a in customApplicationProfiles where requiredApplications.contains(a.id.uuidString) {
             let id = a.id.uuidString
             var app = PortableApplication(id: id, displayName: a.displayName, bundleIdentifier: a.bundleIdentifier,
                 focusStrategy: .init(rawValue: a.focusStrategy.rawValue)!)
@@ -102,23 +124,17 @@ extension AppSettings {
             }
             p.applications.append(app); p.roots.append(.init(kind: .application,id: id))
         }
-        var bindings: [PortableButtonBinding] = []
-        for button in RemoteButton.allCases {
-            for trigger in ButtonTrigger.allCases {
-                let c = configuredAction(for: button, trigger: trigger)
-                if let s = c.shortcut { p.shortcuts.append(Self.portableShortcut(s,name: s.keyLabel)) }
-                let gesture = trigger == .singleClick ? "singlePress" : trigger == .doubleClick ? "doublePress" : "longPress"
-                bindings.append(.init(controlID: button.rawValue.replacingOccurrences(of: "_",with: "-"), gesture: gesture,target: try portableAction(c)))
-            }
-        }
         p.shortcuts = Dictionary(grouping: p.shortcuts, by: \.id).values.compactMap(\.first).sorted { $0.id < $1.id }
-        p.hostSettings = .init(general: .init(applicationLanguage: applicationLanguage.rawValue, appIconIdentifier: appIconIdentifier.rawValue,
-            showDockIcon: showDockIcon,showStatusBarIcon: showStatusBarIcon,openMainWindowAtLaunch: openMainWindowAtLaunch,
-            checksForPreReleaseUpdates: checksForPreReleaseUpdates), audio: .init(gainDB: gainDB),
-            voice: .init(voiceKeyMode: voiceKeyMode.rawValue,voiceFnTapModeEnabled: voiceFnTapModeEnabled),
-            mappings: .init(remoteModel: Self.portableRemoteModel(selectedRemoteProfile?.model),customMappingEnabled: customMappingEnabled,
-                bindings: bindings,rapidPressControls: buttonRapidPressEnabled.filter(\.value).keys.map { $0.rawValue.replacingOccurrences(of: "_",with: "-") }.sorted()))
-        p.roots.append(.init(kind: .hostSettings,id: p.hostSettings!.id))
+        if !groups.isEmpty {
+            p.hostSettings = .init(general: groups.contains("general") ? .init(applicationLanguage: applicationLanguage.rawValue, appIconIdentifier: appIconIdentifier.rawValue,
+                showDockIcon: showDockIcon,showStatusBarIcon: showStatusBarIcon,openMainWindowAtLaunch: openMainWindowAtLaunch,
+                checksForPreReleaseUpdates: checksForPreReleaseUpdates) : nil,
+                audio: groups.contains("audio") ? .init(gainDB: gainDB) : nil,
+                voice: groups.contains("voice") ? .init(voiceKeyMode: voiceKeyMode.rawValue,voiceFnTapModeEnabled: voiceFnTapModeEnabled) : nil,
+                mappings: groups.contains("mappings") ? .init(remoteModel: Self.portableRemoteModel(selectedRemoteProfile?.model),customMappingEnabled: customMappingEnabled,
+                    bindings: bindings,rapidPressControls: buttonRapidPressEnabled.filter(\.value).keys.map { $0.rawValue.replacingOccurrences(of: "_",with: "-") }.sorted()) : nil)
+            p.roots.append(.init(kind: .hostSettings,id: p.hostSettings!.id))
+        }
         return p
     }
 
