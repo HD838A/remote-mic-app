@@ -311,14 +311,14 @@
 "connection.trusted_devices.help" = "iPhone and Apple Watch controls are optional backups. Use a connection entry after each launch to enable nearby connections. Clearing this list requires every device to be approved again.";
 "connection.trusted_devices.count" = "%1$@ trusted";
 "connection.trusted_devices.count_long" = "%1$@ trusted devices";
-"connection.phone.connect" = "Connect Phone";
+"connection.phone.connect" = "Connect";
 "connection.phone.enabled" = "Waiting for Phone";
 "connection.phone.connected" = "Connected";
 "connection.phone.disconnect" = "Disconnect";
 "connection.phone.cancel_waiting" = "Stop Waiting";
 "connection.watch.title" = "Apple Watch";
 "connection.watch.help" = "The Watch connects directly to this Mac for tap-to-record and optional raise-to-talk.";
-"connection.watch.connect" = "Connect Apple Watch";
+"connection.watch.connect" = "Connect";
 "connection.watch.enabled" = "Waiting for Watch";
 "connection.watch.connected" = "Connected";
 "connection.watch.disconnect" = "Disconnect";
@@ -331,7 +331,7 @@
 "connection.web.help_short" = "One entry for the WeChat mini program or phone browser. No invite code required.";
 "connection.web.invite.testflight_open" = "Open TestFlight";
 "connection.web.sheet_help" = "Scan the mini program code with WeChat, or use the web QR code. The phone and Mac may use different networks.";
-"connection.web.connect" = "Connect Phone Remote";
+"connection.web.connect" = "Connect";
 "connection.web.show_qr" = "Show QR Code";
 "connection.web.disconnect" = "Disconnect Phone Remote";
 "connection.web.retry" = "Reconnect";

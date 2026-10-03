@@ -311,14 +311,14 @@
 "connection.trusted_devices.help" = "iPhone 和 Apple Watch 遥控是备用功能。每次启动后需主动点击对应连接入口，才会开启附近连接；清除记录后，所有设备都需要重新确认授权。";
 "connection.trusted_devices.count" = "%1$@ 台";
 "connection.trusted_devices.count_long" = "%1$@ 台受信任设备";
-"connection.phone.connect" = "连接手机";
+"connection.phone.connect" = "连接";
 "connection.phone.enabled" = "正在等待手机";
 "connection.phone.connected" = "已连接";
 "connection.phone.disconnect" = "取消连接";
 "connection.phone.cancel_waiting" = "取消等待";
 "connection.watch.title" = "Apple Watch";
 "connection.watch.help" = "Watch 直接连接这台 Mac，可点按持续收音，也可主动开启抬腕收音。";
-"connection.watch.connect" = "连接 Apple Watch";
+"connection.watch.connect" = "连接";
 "connection.watch.enabled" = "正在等待 Watch";
 "connection.watch.connected" = "已连接";
 "connection.watch.disconnect" = "取消连接";
@@ -331,7 +331,7 @@
 "connection.web.help_short" = "同一入口支持微信小程序和手机浏览器，无需邀请码。";
 "connection.web.invite.testflight_open" = "打开 TestFlight 公测";
 "connection.web.sheet_help" = "优先使用微信扫描小程序码，也可扫描网页版二维码；手机和 Mac 可以使用不同网络。";
-"connection.web.connect" = "连接手机遥控";
+"connection.web.connect" = "连接";
 "connection.web.show_qr" = "显示二维码";
 "connection.web.disconnect" = "断开手机遥控";
 "connection.web.retry" = "重新连接";
