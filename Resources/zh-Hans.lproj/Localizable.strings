@@ -301,11 +301,11 @@
 "connection.phone.ios_title" = "iOS App（推荐）";
 "connection.phone.no_invite_badge" = "无需邀请码";
 "connection.phone.qr_badge" = "扫码优先";
-"connection.phone.qr_title" = "使用 iPhone App 扫码连接";
-"connection.phone.qr_help" = "在 iPhone 无线麦的 Mac 页面点按“扫描二维码”，可直接连接这台 Mac；自动发现仍会保留作为备用。";
+"connection.phone.qr_title" = "备用方式：使用 iPhone App 扫码连接";
+"connection.phone.qr_help" = "打开 iOS App 会优先自动连接，无需扫码。如果未找到这台 Mac，可在 App 的 Mac 页面点按“扫描二维码”。";
 "connection.phone.qr_refresh" = "二维码短时有效并会自动更新；停止等待或重新开启后，需要扫描新的二维码。";
 "connection.phone.qr_accessibility" = "iPhone 连接二维码";
-"connection.phone.ios_help" = "先连接手机开始等待，再从 TestFlight 安装并打开 iOS App。";
+"connection.phone.ios_help" = "开启连接后，打开 iOS App 会优先自动连接，无需扫码。";
 "connection.phone.not_enabled" = "尚未开启";
 "connection.trusted_devices.title" = "受信任的移动设备";
 "connection.trusted_devices.help" = "iPhone 和 Apple Watch 遥控是备用功能。每次启动后需主动点击对应连接入口，才会开启附近连接；清除记录后，所有设备都需要重新确认授权。";

@@ -989,7 +989,7 @@ struct SettingsView: View {
                                     ? "connection.phone.enabled"
                                     : "connection.phone.not_enabled"
                         ))
-                        .font(.system(size: 12))
+                        .font(.caption)
                         .foregroundStyle(model.isPhoneRemoteConnected
                             ? Color.green
                             : model.isPhoneRemoteConnectionEnabled ? .orange : .secondary)
@@ -1066,7 +1066,7 @@ struct SettingsView: View {
                                 ? "connection.watch.enabled"
                                 : "connection.phone.not_enabled"
                     ))
-                    .font(.system(size: 12))
+                    .font(.caption)
                     .foregroundStyle(model.isWatchRemoteConnected
                         ? Color.green
                         : model.isWatchRemoteConnectionEnabled ? .orange : .secondary)

@@ -5666,6 +5666,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             }
             NSApp.activate(ignoringOtherApps: true)
             let alert = NSAlert()
+            alert.icon = NSApp.applicationIconImage
             alert.messageText = "允许“\(deviceName)”连接无线麦？"
             if Self.isAppleWatchDeviceName(deviceName) {
                 alert.informativeText = "这块 Apple Watch 将与无线麦通信，代替实体遥控器发送按键和麦克风声音。请确认 Apple Watch 上显示的 2 位校验码与下方一致。允许后，本次安装会成为受信任设备。"
@@ -5721,6 +5722,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         DispatchQueue.main.async {
             NSApp.activate(ignoringOtherApps: true)
             let alert = NSAlert()
+            alert.icon = NSApp.applicationIconImage
             alert.messageText = "允许“\(deviceName)”连接网页版？"
             alert.informativeText = "手机浏览器将通过一次性会话控制无线麦。请确认手机上显示的 4 位校验码与下方一致。本次允许不会保存为长期受信任设备。"
             let codeLabel = NSTextField(
