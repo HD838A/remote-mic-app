@@ -1079,14 +1079,18 @@
 "onboarding.recovery.audio.output_not_ready.detail" = "重新连接所选设备，再重试音频设置。";
 "onboarding.recovery.audio.output_not_ready.action" = "重试音频设置";
 "onboarding.recovery.voice.session_not_started.title" = "语音键还没有开始收音";
-"onboarding.recovery.voice.session_not_started.detail" = "先点一下输入框，再按住语音键重新说话。";
+"onboarding.recovery.voice.session_not_started.detail" = "先点一下输入框，再%@。";
 "onboarding.recovery.voice.session_not_started.action" = "重新测试语音";
 "onboarding.recovery.voice.no_samples.title" = "没有收到语音声音";
-"onboarding.recovery.voice.no_samples.detail" = "重试所选语音输出后，再按住语音键重新说话。";
+"onboarding.recovery.voice.no_samples.detail" = "重试所选音频输出后，再%@。";
 "onboarding.recovery.voice.no_samples.action" = "重试语音音频";
 "onboarding.recovery.voice.session_not_ended.title" = "松开语音键才能完成";
-"onboarding.recovery.voice.session_not_ended.detail" = "需要完整按下并松开一次语音键，才能检查结果。";
+"onboarding.recovery.voice.session_not_ended.detail" = "%@，才能检查结果。";
 "onboarding.recovery.voice.session_not_ended.action" = "重新开始本次检查";
+"onboarding.recovery.voice.gesture.hold" = "按住语音键说话，说完松开";
+"onboarding.recovery.voice.gesture.toggle" = "按一下语音键开始，再按一下结束";
+"onboarding.recovery.voice.finish.hold" = "松开语音键";
+"onboarding.recovery.voice.finish.toggle" = "再按一下语音键";
 "onboarding.recovery.voice.manual_input.title" = "键盘输入不能完成语音检查";
 "onboarding.recovery.voice.manual_input.detail" = "重新开始后，只使用所选控制方式的语音键说话，文字由语音工具写入。";
 "onboarding.recovery.voice.manual_input.action" = "重新测试语音输入";
@@ -1209,9 +1213,26 @@
 "common_phrases.error.clipboard_restore_failed" = "粘贴后未能恢复剪贴板，请检查剪贴板内容。";
 "common_phrases.error.paste_failed" = "无法执行粘贴，请检查辅助功能权限后重试。";
 "common_phrases.error.cancelled" = "插入已取消。";
-
 "custom_application.accessibility.test" = "测试输入框";
 
 "custom_application.accessibility.needs_verification" = "待学习或验证";
 
 "settings.portable_configuration.title" = "组合动作、App 配置与键位方案";
+"connection.approval.title" = "允许“%1$@”连接无线麦？";
+"connection.approval.watch_body" = "这块 Apple Watch 将与无线麦通信，代替实体遥控器发送按键和麦克风声音。请确认 Apple Watch 上显示的 2 位校验码与下方一致。允许后，本次安装会成为受信任设备。";
+"connection.approval.phone_body" = "这台 iPhone 将与无线麦通信，代替实体遥控器发送按键和麦克风声音。请确认 iPhone 上显示的 2 位校验码与下方一致。允许后，本次安装会成为受信任设备。";
+"connection.approval.web_title" = "允许“%1$@”连接网页版？";
+"connection.approval.web_body" = "手机浏览器将通过一次性会话控制无线麦。请确认手机上显示的 4 位校验码与下方一致。本次允许不会保存为长期受信任设备。";
+"connection.approval.code_accessibility" = "校验码 %1$@";
+"connection.approval.allow" = "允许连接";
+"connection.approval.deny" = "拒绝";
+"statistics.transcripts.entry_count_one" = "%@ 条";
+"statistics.recordings.export_filename" = "回眸-%@.m4a";
+"onboarding.voice_tool.guide.screenshot.doubao_menu" = "在输入法菜单中选择豆包输入法，再打开设置。";
+"onboarding.voice_tool.guide.screenshot.doubao_settings" = "在语音输入中，将匹配模式的快捷键设为 Fn。图中为长按模式。开启全局唤起语音，并在麦克风选择中选择 MiRemoteV 2ch。";
+"onboarding.voice_tool.guide.screenshot.weixin_input_menu" = "在输入法菜单中选择微信输入法，再打开设置。";
+"onboarding.voice_tool.guide.screenshot.weixin_input_settings" = "在语音输入中开启按住说话，并将快捷键设为 Fn。";
+"onboarding.voice_tool.guide.screenshot.weixin_app_shortcuts" = "在微信设置的快捷键中，清除语音输入文字下按住和按下开始模式占用的 Fn 快捷键。";
+"onboarding.voice_tool.guide.screenshot.system_fn" = "在系统设置的键盘中，将按下🌐键时设为不执行任何操作。";
+"onboarding.voice_tool.guide.screenshot.vokie_step_1" = "在 Vokie 首页，将普通输入快捷键设为 Fn。";
+"onboarding.voice_tool.guide.screenshot.vokie_step_2" = "在 Vokie 的通用设置中，确认麦克风使用 MiRemoteV 2ch。";

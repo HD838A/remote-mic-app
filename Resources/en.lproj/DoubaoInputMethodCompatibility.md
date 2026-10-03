@@ -1,6 +1,6 @@
 # Doubao Input Method Compatible Virtual Microphone
 
-MiRemoteV 2ch is Remote Mic's standalone stereo loopback device. It allows Doubao to recognize voice sent from the remote. It can coexist with BlackHole 2ch and never modifies, removes, or replaces BlackHole.
+MiRemoteV 2ch is SayAll's standalone stereo loopback device. It allows Doubao to recognize voice sent from the remote. It can coexist with BlackHole 2ch and never modifies, removes, or replaces BlackHole.
 
 ## Install
 
@@ -8,9 +8,9 @@ You do not need Xcode, Git, or Terminal.
 
 1. Double-click `Install SayAll.pkg` at the root of the DMG.
 2. Enter an administrator password when macOS Installer asks.
-3. The installer adds Remote Mic and MiRemoteV 2ch, restarts Core Audio, and launches Remote Mic.
-4. Left-click the menu bar icon, then select **Refresh Audio Devices** in **Connection & Voice**.
-5. Choose **Select MiRemoteV 2ch**.
+3. The installer adds SayAll and MiRemoteV 2ch, restarts Core Audio, and launches SayAll.
+4. Left-click the menu bar icon, then select **Refresh Devices** in **Connection & Voice**.
+5. In **Audio Output**, choose **MiRemoteV 2ch** as the output device.
 6. Quit Doubao completely, reopen it, and test again.
 
 ## Verify
