@@ -444,7 +444,7 @@ struct SettingsPageRegressionTests {
         #expect(source.contains("func togglePhoneRemoteConnection()"))
         #expect(source.contains("LocalizedMessage(\"connection.phone.cancel_waiting\")"))
         #expect(source.contains("response == .alertThirdButtonReturn"))
-        #expect(source.contains("guard let self, self.isPhoneRemoteConnectionEnabled else"))
+        #expect(source.contains("guard let self, self.isPhoneRemoteConnectionEnabled,"))
         #expect(source.contains("guard self.isPhoneRemoteConnectionEnabled else"))
         #expect(source.contains("phoneRemoteServer.onInvitationChange"))
         #expect(source.contains("@Published private(set) var phoneRemoteInvitation"))
@@ -493,12 +493,7 @@ struct SettingsPageRegressionTests {
             encoding: .utf8
         )
 
-        let noInvite = try #require(settingsSource.range(
-            of: "Text(\"connection.phone.qr_badge\")"
-        ))
-        let noInviteBlock = settingsSource[noInvite.lowerBound...]
-            .prefix(180)
-        #expect(noInviteBlock.contains(".font(.system(size: 12, weight: .semibold))"))
+        #expect(!settingsSource.contains("Text(\"connection.phone.qr_badge\")"))
 
         let statusPill = try #require(settingsSource.range(of: "private struct StatusPill"))
         let statusPillBlock = settingsSource[statusPill.lowerBound...]
@@ -978,9 +973,9 @@ struct SettingsPageRegressionTests {
         #expect(!mobileEntrySource.contains(".disabled(model.isPhoneRemoteConnectionEnabled)"))
         #expect(!mobileEntrySource.contains(".disabled(model.isWatchRemoteConnectionEnabled)"))
         #expect(!mobileEntrySource.contains(".foregroundStyle(.green)"))
-        #expect(mobileEntrySource.contains("tint: model.isPhoneRemoteConnected"))
-        #expect(mobileEntrySource.contains("tint: model.isWatchRemoteConnected"))
-        #expect(mobileEntrySource.contains("? .green"))
+        #expect(mobileEntrySource.contains(".foregroundStyle(model.isPhoneRemoteConnected"))
+        #expect(mobileEntrySource.contains(".foregroundStyle(model.isWatchRemoteConnected"))
+        #expect(mobileEntrySource.contains("? Color.green"))
         #expect(mobileEntrySource.contains("model.isPhoneRemoteConnectionEnabled ? .orange"))
         #expect(mobileEntrySource.contains("model.isWatchRemoteConnectionEnabled ? .orange"))
         #expect(bridgeSource.contains("@Published private(set) var isPhoneRemoteConnected = false"))

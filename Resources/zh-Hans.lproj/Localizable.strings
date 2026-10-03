@@ -297,7 +297,7 @@
 "connection.voice_key_mode.unverified_detail" = "请在目标语音工具中同步配置相同的触发键（左/右 Command 或右 Option）并实际说一句确认文字上屏。无线麦无法读取第三方工具的内部设置；如果没有文字，请改回 Fn/地球键。";
 "connection.voice_key_mode.command_permission" = "修饰键模式需要辅助功能权限";
 "connection.action.reconnect" = "立即重新连接";
-"connection.phone.section_title" = "iPhone、Apple Watch 与网页版";
+"connection.phone.section_title" = "无线麦SayAll移动端";
 "connection.phone.ios_title" = "iOS App（推荐）";
 "connection.phone.no_invite_badge" = "无需邀请码";
 "connection.phone.qr_badge" = "扫码优先";

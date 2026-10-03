@@ -785,7 +785,7 @@ struct SettingsView: View {
             }
         case .buttonProfiles:
             if macroFeature.isButtonProfilesVisible {
-                VStack(spacing: 12) {
+                VStack(spacing: 0) {
                     membershipFeature.membershipRequiredView(forButtonProfiles: true) {
                         selectedSection = .membership
                         membershipFeature.refreshIfNeeded()
@@ -871,11 +871,11 @@ struct SettingsView: View {
                     connectionDevicePanel
                         .frame(width: 230)
                     VStack(spacing: 14) {
+                        phoneConnectionsPanel
                         audioSettingsPanel
                         audioCompatibilityPanel
                         // Chromecast 连接卡片已按产品要求移除：启用开关默认常开，
                         // 语音键模式在按键页底部，状态见侧边栏「连接」的设备列表。
-                        phoneConnectionsPanel
                     }
                     .frame(maxWidth: .infinity, alignment: .topLeading)
                 }
@@ -965,20 +965,15 @@ struct SettingsView: View {
                     .font(.headline)
 
                 VStack(alignment: .leading, spacing: 10) {
-                    HStack(alignment: .top, spacing: 12) {
+                    HStack(alignment: .center, spacing: 12) {
                         Image(systemName: "iphone")
                             .font(.system(size: 22, weight: .semibold))
                             .foregroundStyle(Color.accentColor)
                             .frame(width: 34)
 
                         VStack(alignment: .leading, spacing: 3) {
-                            HStack(spacing: 6) {
-                                Text("connection.phone.ios_title")
-                                    .font(.subheadline.weight(.semibold))
-                                Text("connection.phone.qr_badge")
-                                    .font(.system(size: 12, weight: .semibold))
-                                    .foregroundStyle(.secondary)
-                            }
+                            Text("connection.phone.ios_title")
+                                .font(.subheadline.weight(.semibold))
                             Text("connection.phone.ios_help")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
@@ -987,21 +982,19 @@ struct SettingsView: View {
 
                         Spacer(minLength: 8)
 
-                        StatusPill(
-                            text: localization.text(
-                                model.isPhoneRemoteConnected
-                                    ? "connection.phone.connected"
-                                    : model.isPhoneRemoteConnectionEnabled
-                                        ? "connection.phone.enabled"
-                                        : "connection.phone.not_enabled"
-                            ),
-                            tint: model.isPhoneRemoteConnected
-                                ? .green
-                                : model.isPhoneRemoteConnectionEnabled ? .orange : .secondary
-                        )
-                    }
+                        Text(localization.text(
+                            model.isPhoneRemoteConnected
+                                ? "connection.phone.connected"
+                                : model.isPhoneRemoteConnectionEnabled
+                                    ? "connection.phone.enabled"
+                                    : "connection.phone.not_enabled"
+                        ))
+                        .font(.system(size: 12))
+                        .foregroundStyle(model.isPhoneRemoteConnected
+                            ? Color.green
+                            : model.isPhoneRemoteConnectionEnabled ? .orange : .secondary)
+                        .lineLimit(1)
 
-                    HStack(spacing: 8) {
                         if membershipFeature.canStartCompanionConnection {
                             Button(
                                 model.isPhoneRemoteConnected
@@ -1018,7 +1011,9 @@ struct SettingsView: View {
                         } else {
                             connectionMembershipRequiredView
                         }
+                    }
 
+                    HStack(spacing: 8) {
                         Link(destination: AppLinks.testFlightPublicBeta) {
                             Label("connection.web.invite.testflight_open", systemImage: "arrow.up.right.square")
                         }
@@ -1064,18 +1059,18 @@ struct SettingsView: View {
 
                     Spacer(minLength: 8)
 
-                    StatusPill(
-                        text: localization.text(
-                            model.isWatchRemoteConnected
-                                ? "connection.watch.connected"
-                                : model.isWatchRemoteConnectionEnabled
-                                    ? "connection.watch.enabled"
-                                    : "connection.phone.not_enabled"
-                        ),
-                        tint: model.isWatchRemoteConnected
-                            ? .green
-                            : model.isWatchRemoteConnectionEnabled ? .orange : .secondary
-                    )
+                    Text(localization.text(
+                        model.isWatchRemoteConnected
+                            ? "connection.watch.connected"
+                            : model.isWatchRemoteConnectionEnabled
+                                ? "connection.watch.enabled"
+                                : "connection.phone.not_enabled"
+                    ))
+                    .font(.system(size: 12))
+                    .foregroundStyle(model.isWatchRemoteConnected
+                        ? Color.green
+                        : model.isWatchRemoteConnectionEnabled ? .orange : .secondary)
+                    .lineLimit(1)
 
                     if membershipFeature.canStartCompanionConnection {
                         Button(

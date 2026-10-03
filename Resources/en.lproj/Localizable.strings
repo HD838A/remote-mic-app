@@ -297,7 +297,7 @@
 "connection.voice_key_mode.unverified_detail" = "Configure the same trigger key (Left/Right Command or Right Option) in the target voice tool and confirm a real dictated phrase. SayAll cannot read the tool's internal settings; switch back to Fn/Globe if no text appears.";
 "connection.voice_key_mode.command_permission" = "Modifier-key mode requires Accessibility permission";
 "connection.action.reconnect" = "Reconnect Now";
-"connection.phone.section_title" = "iPhone, Apple Watch, and Web";
+"connection.phone.section_title" = "SayAll Mobile";
 "connection.phone.ios_title" = "iOS App (Recommended)";
 "connection.phone.no_invite_badge" = "No invite code";
 "connection.phone.qr_badge" = "Scan first";
