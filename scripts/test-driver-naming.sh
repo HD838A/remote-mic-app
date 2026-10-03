@@ -44,10 +44,10 @@ functions[driver_naming_safe_directory]=$functions[fixture_original_safe_directo
 # Execute the shipped preservation/replacement/rollback block on a fake volume.
 # Only chown is stubbed: no administrator rights or system installation.
 python3 - "$ROOT" "$RELEASE_OUTPUT_DIR" "$WORK" "$RELEASE_ARCH" <<'PY'
-import hashlib, pathlib, subprocess, sys
+import hashlib, pathlib, plistlib, subprocess, sys
 root, output, work = map(pathlib.Path, sys.argv[1:4]); arch = sys.argv[4]
 source = (root/'packaging/doubao-driver/install/postinstall').read_text()
-health = source[source.index('driver_is_healthy_and_current() {'):source.index('test -f "$RELEASE_CONFIG"')]
+health = source[source.index('driver_architecture() {'):source.index('test -f "$RELEASE_CONFIG"')]
 block = source[source.index('restore_previous_driver() {'):source.index('STAGED_DRIVER_TRASH_ROOT=')]
 block = block.replace('/usr/sbin/chown', 'fixture_chown')
 for scenario in ['preserve', 'repair', 'wrong_variant', 'bad_signature', 'permission_failure', 'state_failure', 'fresh', 'brand_restore']:
@@ -61,6 +61,7 @@ for scenario in ['preserve', 'repair', 'wrong_variant', 'bad_signature', 'permis
             subprocess.run(['plutil','-replace','CFBundleVersion','-string','0',str(destination/'Contents/Info.plist')], check=True)
         before = hashlib.sha256((destination/'Contents/MacOS/MiRemoteV2ch').read_bytes()).hexdigest()
         before_plist = (destination/'Contents/Info.plist').read_bytes()
+        before_inode = destination.stat().st_ino
     staged = volume/'staged/MiRemoteV2ch.driver'
     subprocess.run(['ditto', str(output/'MiRemoteV2ch.driver' if scenario == 'wrong_variant' else driver), str(staged)], check=True)
     if scenario == 'bad_signature':
@@ -87,14 +88,95 @@ fixture_chown() { [[ "$SCENARIO" != permission_failure ]]; }
 commit_driver_naming_record() { [[ "$SCENARIO" != state_failure ]]; }
 ''' + health + block)
     result = subprocess.run(['/bin/zsh',str(script),str(root),str(volume),arch,scenario,variant], capture_output=True, text=True)
+    (volume/'result.log').write_text(result.stdout + result.stderr)
     failed = scenario in ['wrong_variant','bad_signature','permission_failure','state_failure']
     assert (result.returncode != 0) == failed, (scenario, result.stdout, result.stderr)
     if failed or scenario == 'preserve':
         assert hashlib.sha256((destination/'Contents/MacOS/MiRemoteV2ch').read_bytes()).hexdigest() == before
         assert (destination/'Contents/Info.plist').read_bytes() == before_plist
-    else:
+    if scenario == 'preserve':
+        assert destination.stat().st_ino == before_inode, result.stdout
+        assert 'changed=0' in result.stdout and 'command not found' not in result.stderr
+        assert not (volume/'var/root/.Trash').exists()
+    if not failed:
         subprocess.run(['codesign','--verify','--deep','--strict',str(destination)], check=True)
     print('scenario='+scenario+' result=passed')
+# Run the complete preinstall, payload residue, failing postinstall checks and
+# a new Installer attempt. Keep real marker IO, mode checks and classification;
+# emulate only root ownership, hardware selection, receipts and process stop.
+helper = (root/'packaging/doubao-driver/install/driver-naming.zsh').read_text()
+helper = helper.replace('/usr/bin/stat', 'fixture_stat').replace('/usr/sbin/pkgutil', 'fixture_pkgutil')
+stubs = '''fixture_stat() {
+ if [[ "$1" == -f && "$2" == %u ]]; then print 0; else /usr/bin/stat "$@"; fi
+}
+fixture_pkgutil() { [[ -f "$TARGET_VOLUME/fixture-receipt" ]]; }
+fixture_pkill() { return 0; }
+fixture_chown() { return 0; }
+fixture_sysctl() { [[ "$FIXTURE_ARCH" == arm64 ]] && print 1 || print 0; }
+'''
+pre = (root/'packaging/doubao-driver/install/preinstall').read_text()
+pre = pre.replace('/usr/bin/pkill', 'fixture_pkill').replace('/usr/sbin/sysctl', 'fixture_sysctl')
+post = source[:source.index('test -f "$LEGACY_APP_TRASH_HELPER"')]
+post = post.replace('/usr/bin/stat', 'fixture_stat')
+post += '\nEXPECTED_ARCHITECTURE="$FIXTURE_ARCH"\nDRIVER_CHANGED=0\nDRIVER_BACKUP=""\n' + health + block
+for scenario in ['fresh_retry', 'history_retry', 'legacy_driver_retry', 'record_failure', 'invalid_record']:
+    volume = work/('pkg-'+scenario)
+    (volume/'Library/Application Support').mkdir(parents=True)
+    destination = volume/'Library/Audio/Plug-Ins/HAL/MiRemoteV2ch.driver'
+    naming = volume/'Library/Application Support/RemoteMic/DriverNaming'
+    expected = 'legacy' if scenario in ['history_retry','legacy_driver_retry'] else 'brand'
+    if scenario == 'history_retry': (volume/'fixture-receipt').write_text('owned-product-receipt')
+    if scenario == 'legacy_driver_retry':
+        subprocess.run(['ditto',str(output/'legacy/MiRemoteV2ch.driver'),str(destination)],check=True)
+        original = (destination/'Contents/MacOS/MiRemoteV2ch').read_bytes()
+        original_inode = destination.stat().st_ino
+    if scenario in ['record_failure','invalid_record']:
+        naming.mkdir(parents=True)
+        if scenario == 'record_failure': naming.chmod(0o555)
+        else:
+            (naming/'brand').write_text('invalid')
+            (naming/'brand').chmod(0o600)
+    for attempt in [1,2]:
+        scripts = volume/f'scripts-{attempt}'; scripts.mkdir()
+        (scripts/'driver-naming.zsh').write_text(f'FIXTURE_ARCH={arch}\n' + stubs + helper)
+        (scripts/'preinstall').write_text(pre)
+        (scripts/'postinstall').write_text(post)
+        (scripts/'release-variant.plist').write_bytes(plistlib.dumps({
+            'ExpectedArchitecture':arch,'MinimumSystemMajor':13,'PackageBuild':'999999'}))
+        result = subprocess.run(['/bin/zsh',str(scripts/'preinstall'),'fixture','fixture',str(volume)],capture_output=True,text=True)
+        (scripts/'preinstall.log').write_text(result.stdout + result.stderr)
+        if scenario in ['record_failure','invalid_record']:
+            reason = 'state_commit_failed' if scenario == 'record_failure' else 'invalid_state'
+            assert result.returncode != 0 and f'reason={reason}' in result.stderr, (scenario,result.stdout,result.stderr)
+            assert not (volume/'Applications').exists() and not destination.exists()
+            assert 'Stopped the running' not in result.stdout
+            break
+        assert result.returncode == 0, (scenario,result.stdout,result.stderr)
+        assert plistlib.loads((scripts/'driver-naming-selection.plist').read_bytes())['Variant'] == expected, result.stdout
+        assert (naming/expected).read_text().strip() == f'SayAllDriverNaming:1:{expected}'
+        assert (naming/expected).stat().st_mode & 0o777 == 0o600
+        app = volume/'Applications/SayAll.app/Contents'; app.mkdir(parents=True,exist_ok=True)
+        (app/'Info.plist').write_bytes(plistlib.dumps({'CFBundleIdentifier':'com.hd838a.RemoteMic','CFBundleVersion':'999999'}))
+        (volume/'fixture-receipt').write_text('owned-product-receipt')
+        staging = volume/'Library/Application Support/RemoteMic/Installer'
+        for variant in ['brand','legacy']:
+            suffix = '' if variant == 'brand' else 'legacy'
+            subprocess.run(['ditto',str(output/suffix/'MiRemoteV2ch.driver'),str(staging/suffix/'MiRemoteV2ch.driver')],check=True)
+        if attempt == 1:
+            staged = staging/('' if expected == 'brand' else 'legacy')/'MiRemoteV2ch.driver/Contents/MacOS/MiRemoteV2ch'
+            with staged.open('ab') as stream: stream.write(b'tampered')
+        result = subprocess.run(['/bin/zsh',str(scripts/'postinstall'),'fixture','fixture',str(volume)],capture_output=True,text=True)
+        (scripts/'postinstall.log').write_text(result.stdout + result.stderr)
+        if attempt == 1:
+            assert result.returncode != 0 and 'reason=invalid_payload' in result.stderr, (scenario,result.stdout,result.stderr)
+            if scenario == 'legacy_driver_retry':
+                assert (destination/'Contents/MacOS/MiRemoteV2ch').read_bytes() == original
+            else: assert not destination.exists()
+        else:
+            assert result.returncode == 0 and f'variant={expected}' in result.stdout, (scenario,result.stdout,result.stderr)
+            if scenario == 'legacy_driver_retry':
+                assert destination.stat().st_ino == original_inode and 'changed=0' in result.stdout
+    print('pkg_scenario='+scenario+' result=passed')
 # The developer entry point must use the same resolver and preserve restoration.
 direct = (root/'scripts/install-doubao-driver.sh').read_text()
 direct = direct[direct.index('installer_message() {'):direct.index('# The driver is already in place;')]

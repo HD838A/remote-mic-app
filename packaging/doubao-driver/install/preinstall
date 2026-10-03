@@ -165,7 +165,11 @@ NAMING_SELECTION="$SCRIPT_DIR/driver-naming-selection.plist"
 (umask 077; set -o noclobber; print -r -- '<?xml version="1.0"?><plist version="1.0"><dict/></plist>' > "$NAMING_SELECTION")
 /usr/bin/plutil -insert Variant -string "$SELECTED_NAMING" "$NAMING_SELECTION"
 /usr/bin/plutil -insert PackageBuild -string "$PACKAGE_BUILD" "$NAMING_SELECTION"
-print "DRIVER_NAMING phase=selected result=ready variant=$SELECTED_NAMING history=$HISTORICAL_INSTALL"
+# Preserve this decision before Installer writes the App/receipt. If payload
+# deployment fails or is cancelled, a retry must not treat its residue as a
+# historical legacy installation. This records a choice, not a loaded driver.
+commit_driver_naming_record "$SELECTED_NAMING" || { driver_naming_failure state_commit_failed; exit 2; }
+print "DRIVER_NAMING phase=selected result=ready variant=$SELECTED_NAMING history=$HISTORICAL_INSTALL record=verified"
 
 if [[ "$OWNED_APP_FOUND" -eq 1 ]]; then
   /usr/bin/pkill -x RemoteMic 2>/dev/null || true

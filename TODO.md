@@ -201,6 +201,7 @@
 - [ ] 将虚拟麦克风新安装名称设为 `SayAll`，保留旧用户名称
   - 新安装显示 `SayAll`；已有 `MiRemoteV 2ch` 保持旧名，修复和更新也使用旧名称负载。主 UID、Box UID、Model UID、Bundle ID、安装路径、包 ID 和已保存选择不变。同一系统仅部署一个驱动实例。
   - 已实现两种预签名负载、安装前名称决策、名称形态记录、重复实例与未知证据阻断、失败回滚，以及 App 真实名称显示。BlackHole 兼容能力保留。
+  - 2026-10-03 review 修复首次安装失败后残留 App/receipt 导致重试改选旧名的问题：负载写入前保存名称选择；补齐健康旧驱动不被替换的验证与失败重试回归。双架构各 19 个副本场景和 74 项 Swift 定向测试通过；真实安装验收仍待完成。
   - 自动化与实机边界见 [测试手册](Testing/VirtualMicrophoneNaming.md)。Apple Silicon / Intel 的最终签名包、旧用户升级和第三方语音验收未完成，暂不勾选。
 
 - [x] 设计并实现完整的首次 Onboarding、权限设置流程，并重新布局“连接”和“按键映射”页面 <!-- workshop:status=已完成;priority=P1 -->

@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="zh-CN"><meta charset="utf-8"><title>首次安装失败后重试误选旧麦克风名称</title>
+<body>
+<h1>首次安装失败后重试误选旧麦克风名称</h1>
+<p>级别：P2。状态：候选代码已修复；最终签名包实机验收未完成。</p>
+<h2>复现</h2>
+<ol><li>在无本产品 App、receipt、驱动和名称记录的目标卷副本运行生产 preinstall。</li>
+<li>确认首次选择 brand。模拟 Installer 写入本产品 App 与 receipt；在驱动安装完成前停止。</li>
+<li>使用新的 Scripts 目录再次运行 preinstall。</li></ol>
+<p>修复前第二次选择 legacy。预期为继续使用 brand。该问题影响首次安装失败后的重试；已有健康驱动仍由实际驱动形态决定名称。</p>
+<h2>日志与根因</h2>
+<pre>attempt=1 variant=brand history=no
+attempt=2 variant=legacy history=yes
+retry_preserves_brand=false</pre>
+<p>候选提交 698522aa68dfcc310f38b9b5dfcb574ac053c65a 仅在 postinstall 完成驱动部署后写入长期名称记录。失败发生在此前时，重试会将本轮残留 App/receipt 当作旧安装证据。Scripts 目录中的选择文件不能跨安装尝试保留该决定。</p>
+<h2>修复</h2>
+<p>preinstall 在完成安全目录、冲突和名称选择检查后，调用已有的不可覆盖记录写入函数。写入发生在负载部署和停止旧 App 之前。写入失败立即阻断。postinstall 继续复核记录和驱动形态。保留历史 UID、Bundle ID、安装路径、用户设置和旧用户名称。</p>
+<p>名称记录只表示选择。它不证明驱动加载成功。安装取消后保留记录，后续安装沿用该选择。</p>
+<h2>验证</h2>
+<pre>attempt=1 variant=brand history=no record=verified
+attempt=2 variant=brand history=yes record=verified
+retry_preserves_brand=true
+
+scripts/test-driver-naming.sh
+RELEASE_VARIANT=intel scripts/test-driver-naming.sh
+swift test --disable-keychain --filter 'DriverNamingTests|DoubaoAudioDeviceTests|OnboardingFlowTests|BuildSigningTests/(ordinaryDmgHasOneInstallerAndKeepsHealthyDriver|releaseBundleNameMatchesBrandingAndInstallerPaths|intelVenturaReleaseLineStaysIsolatedFromAppleSilicon)'</pre>
+<p>原始复现从失败变为通过。新增回归覆盖 fresh_retry、history_retry、legacy_driver_retry、record_failure、invalid_record。两架构各 19 个副本场景通过，Swift 定向测试 74 项通过。</p>
+<h2>边界</h2>
+<p>副本执行完整 preinstall 和生产 postinstall 的名称检查、保留、替换及回滚代码。root 所有者、硬件架构、receipt 查询、停止进程和 chown 被替代；记录内容、权限与文件写入实际执行。App/receipt 残留被模拟。未运行系统 Installer、真实取消、HAL 安装、系统服务重启、App 启动或第三方语音流程。Intel 原生探针因本机无法执行 x86_64 而跳过。</p>
+<p>后续实机矩阵见 <a href="../Testing/VirtualMicrophoneNaming.md">测试手册</a>。</p>
+</body></html>
