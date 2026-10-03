@@ -442,7 +442,7 @@ struct SettingsPageRegressionTests {
         #expect(source.contains("watchBluetoothServer.stop()"))
         #expect(source.contains("watchBluetoothServer.updateButtonTitles(titles)"))
         #expect(source.contains("func togglePhoneRemoteConnection()"))
-        #expect(source.contains("LocalizedMessage(\"connection.phone.cancel_waiting\")"))
+        #expect(source.contains("localization.text(\"connection.phone.cancel_waiting\")"))
         #expect(source.contains("response == .alertThirdButtonReturn"))
         #expect(source.contains("guard let self, self.isPhoneRemoteConnectionEnabled,"))
         #expect(source.contains("guard self.isPhoneRemoteConnectionEnabled else"))
@@ -529,7 +529,7 @@ struct SettingsPageRegressionTests {
         ))
         let mappingSource = settingsSource[sharedPage.lowerBound..<editorPanel.lowerBound]
 
-        #expect(mappingSource.contains("ViewThatFits(in: .horizontal)"))
+        #expect(!mappingSource.contains("ViewThatFits(in: .horizontal)"))
         #expect(mappingSource.contains("private var mappingHeaderToggle"))
         #expect(!mappingSource.contains(".frame(width: 400)"))
         #expect(!mappingSource.contains(".frame(width: 320)"))
@@ -589,7 +589,7 @@ struct SettingsPageRegressionTests {
         #expect(footerSource.contains("VStack(alignment: .leading, spacing: 12)"))
         #expect(!footerSource.contains("HStack(spacing: 16)"))
         #expect(footerSource.contains("mappingVoiceKeyModeControl"))
-        #expect(footerSource.contains("connection.voice_key_mode.unverified"))
+        #expect(!footerSource.contains("\"connection.voice_key_mode.unverified\""))
         #expect(footerSource.contains("connection.voice_key_mode.unverified_detail"))
         #expect(footerSource.contains("mappingVoiceFnTapControl"))
         #expect(!footerSource.contains("mappingVoiceShortTapFocusControl"))
@@ -941,11 +941,11 @@ struct SettingsPageRegressionTests {
             "copyTestFlightPublicBetaLink()",
             "requestWebRemoteSession()",
             "settings.clearTrustedPhoneIdentities()",
-            "settings.setAction(action, for: button, trigger: trigger)",
-            "settings.setShortcut(",
+            "setMappingAction(action, for: button, trigger: trigger)",
+            "setMappingShortcut(",
             "chooseCustomApplication(for:",
             "recordCustomApplicationInput(profileID:",
-            "settings.setApplicationProfileID(",
+            "setMappingApplicationProfileID(",
             ".openCustomApplication",
             "settings.resetBindings()",
         ] {
@@ -1025,7 +1025,7 @@ struct SettingsPageRegressionTests {
         #expect(source.contains(".accessibilityAddTraits(isSelected ? .isSelected : [])"))
         #expect(source.contains("LazyVGrid("))
         #expect(source.contains("button_mapping.action.disable_switch"))
-        #expect(source.contains(").filter { $0 != .disabled }"))
+        #expect(source.contains(").filter { $0 != .disabled && $0 != .combinationAction }"))
         #expect(!source.contains("DisclosureGroup(isExpanded: $isPresetApplicationActionsExpanded)"))
         #expect(!source.contains("isPresetApplicationActionsExpanded"))
         #expect(source.contains("custom_application.accessibility.learn_help"))
@@ -1247,7 +1247,6 @@ struct SettingsPageRegressionTests {
         #expect(selectorSource.contains("systemName: { model.systemDeviceName(for: $0) }"))
         #expect(selectorSource.contains("ForEach(connectedProfiles)"))
         #expect(selectorSource.contains("remoteDeviceEmptyState(vertical: vertical)"))
-        #expect(selectorSource.contains("connectedProfiles.count <= 2"))
         #expect(!selectorSource.contains("fillsWidth: connectedProfiles.count == 2"))
         #expect(selectorSource.contains("ScrollView(.horizontal, showsIndicators: false)"))
         #expect(!selectorSource.contains("ScrollView(.horizontal, showsIndicators: true)"))
@@ -1426,7 +1425,7 @@ struct SettingsPageRegressionTests {
         #expect(integration.contains("onBindingEditorActivityChanged"))
         #expect(integration.contains("@Published private(set) var isEditorActive"))
         #expect(settings.contains("macroFeature.settingsView"))
-        #expect(settings.contains("macro.integration.focus_mcp_boundary"))
+        #expect(!settings.contains("macro.integration.focus_mcp_boundary"))
         #expect(settings.contains(".font(.system(size: 12))"))
         #expect(settings.contains("macroFeature.enrollmentView"))
         #expect(settings.contains("macroFeature.setEditorActive(false)"))
@@ -1435,8 +1434,8 @@ struct SettingsPageRegressionTests {
         #expect(model.contains("if macroFeature.isEditorActive"))
         #expect(chinese.contains("输入框"))
         #expect(chinese.contains("MCP / TOML"))
-        #expect(english.contains("Learn Input Field"))
-        #expect(english.contains("MCP / TOML"))
+        #expect(english.contains("Select Input Field"))
+        #expect(english.contains("MCP settings"))
         #expect(!settings.contains("macro_buttons"))
         #expect(!settings.contains("EarlyAccessController"))
     }
@@ -1452,8 +1451,8 @@ struct SettingsPageRegressionTests {
             .macros,
             .buttonProfiles,
             .membership,
-            .transcripts,
             .connection,
+            .transcripts,
             .privateFeature,
             .about,
             .statistics,

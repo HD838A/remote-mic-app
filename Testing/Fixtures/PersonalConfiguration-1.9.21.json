@@ -1,0 +1,56 @@
+{
+  "formatVersion": 1,
+  "gainDB": 7,
+  "selectedAudioDeviceUID": "synthetic-audio-device",
+  "customMappingEnabled": true,
+  "buttonBindings": {
+    "power": "customShortcut",
+    "menu": "openCustomApplication"
+  },
+  "buttonShortcuts": {
+    "power": {
+      "keyCode": 55,
+      "modifierFlagsRawValue": 1048584,
+      "keyLabel": "Command"
+    }
+  },
+  "buttonApplicationProfileIDs": {
+    "menu": "11111111-2222-3333-4444-555555555555"
+  },
+  "secondaryButtonBindings": {
+    "tv": {
+      "doubleClick": {
+        "action": "customShortcut",
+        "shortcut": {
+          "keyCode": 36,
+          "modifierFlagsRawValue": 1048576,
+          "keyLabel": "Return"
+        }
+      }
+    }
+  },
+  "buttonRapidPressEnabled": {
+    "up": true
+  },
+  "customApplicationProfiles": [
+    {
+      "id": "11111111-2222-3333-4444-555555555555",
+      "displayName": "Synthetic App",
+      "bundleIdentifier": "com.example.synthetic-app",
+      "applicationPath": "",
+      "focusStrategy": "keyboardShortcut",
+      "focusShortcut": {
+        "keyCode": 43,
+        "modifierFlagsRawValue": 1048576,
+        "keyLabel": ","
+      }
+    }
+  ],
+  "applicationLanguage": "zh-Hans",
+  "showDockIcon": true,
+  "openMainWindowAtLaunch": false,
+  "checksForPreReleaseUpdates": false,
+  "experimentalContinuousRecordingEnabled": false,
+  "voiceFnTapModeEnabled": false,
+  "voiceKeyMode": "left_command"
+}

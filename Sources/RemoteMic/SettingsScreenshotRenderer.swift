@@ -171,7 +171,7 @@ enum SettingsScreenshotRenderer {
         ] == "1" {
             updateInformation.markAvailableUpdateSeen()
         }
-        let localization = LocalizationStore(settings: settings)
+        let localization = LocalizationStore(settings: settings, resourceBundle: RemoteMicResourceBundle.mainOrDevelopment)
         model.privateFeature.updateLocaleIdentifier(localization.locale.identifier)
         model.macroFeature.updateLocaleIdentifier(localization.locale.identifier)
         model.membershipFeature.updateLocaleIdentifier(localization.locale.identifier)
@@ -183,6 +183,39 @@ enum SettingsScreenshotRenderer {
         if interactive {
             NSApp.setActivationPolicy(.regular)
             NSApp.finishLaunching()
+        }
+
+        // Interactive review uses the production view, navigation and window geometry,
+        // with the same isolated fixture settings as the offscreen renderer.
+        if ProcessInfo.processInfo.environment["REMOTE_MIC_SETTINGS_SCREENSHOT_INTERACTIVE"] == "1" {
+            let section = sections.first { $0.rawValue == onlySection } ?? .mapping
+            let controller = NSHostingController(rootView: SettingsView(
+                model: model,
+                updateInformation: updateInformation,
+                initialSection: section,
+                initialShareSection: section == .statistics && expandsShare ? section : nil,
+                initialMappingEditingButton: section == .mapping && opensMappingEditor ? .ok : nil,
+                initialShortcutPickerShowsKeyboard: showsStandardKeyboard
+            ).environmentObject(localization))
+            let window = NSWindow(contentRect: NSRect(origin: .zero, size: size),
+                styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+                backing: .buffered, defer: false)
+            window.title = "SayAll — Settings Review"
+            window.titleVisibility = .hidden
+            window.titlebarAppearsTransparent = true
+            window.titlebarSeparatorStyle = .none
+            window.isMovableByWindowBackground = false
+            window.hidesOnDeactivate = false
+            window.isReleasedWhenClosed = false
+            window.minSize = NSSize(width: 1020, height: 772)
+            window.contentViewController = controller
+            window.setContentSize(size)
+            window.center()
+            NSApp.setActivationPolicy(.regular)
+            window.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            NSApp.run()
+            return
         }
 
         for section in sections where onlySection == nil || onlySection == section.rawValue {

@@ -42,6 +42,7 @@ private struct PersonalizedConfiguration: Codable {
     let customMappingEnabled: Bool
     let buttonBindings: [String: ButtonAction]
     let buttonShortcuts: [String: CustomKeyboardShortcut]
+    let unifiedBaseBindings: [UnifiedButtonBinding]?
     let buttonApplicationProfileIDs: [String: UUID]?
     let secondaryButtonBindings: [String: [String: ConfiguredButtonAction]]
     let buttonRapidPressEnabled: [String: Bool]?
@@ -376,6 +377,40 @@ final class AppSettings: ObservableObject {
 
     @Published var customMappingEnabled: Bool {
         didSet { defaults.set(customMappingEnabled, forKey: Keys.customMappingEnabled) }
+    }
+
+    var configuredActionOverride: ((UUID?, RemoteButton, ButtonTrigger) -> ConfiguredButtonAction?)?
+    @Published var unifiedBaseBindings: [UnifiedButtonBinding] = [] {
+        didSet {
+            if let data = try? JSONEncoder().encode(unifiedBaseBindings) {
+                defaults.set(data, forKey: "unifiedBaseBindings")
+            }
+        }
+    }
+
+    func setBaseBinding(_ configured: ConfiguredButtonAction, for button: RemoteButton,
+                        trigger: ButtonTrigger, profileID: UUID?) {
+        unifiedBaseBindings.removeAll { $0.remoteProfileID == profileID && $0.button == button && $0.trigger == trigger }
+        unifiedBaseBindings.append(UnifiedButtonBinding(remoteProfileID: profileID, button: button,
+                                                        trigger: trigger, configured: configured))
+    }
+
+    func migrateLegacyMacroBindings(_ bindings: [UnifiedButtonBinding]) throws {
+        guard !defaults.bool(forKey: "unifiedBaseBindingsMigrated") else { return }
+        guard !corruptedSettingKeys.contains("unifiedBaseBindings") else { throw AppConfigurationError.invalidValues }
+        // Keep the exact pre-migration host data, including per-device mappings.
+        let backup = try exportedConfigurationData()
+        defaults.set(backup, forKey: "unifiedBaseBindingsMigrationBackup")
+        if let profiles = defaults.data(forKey: "remoteDeviceProfiles") {
+            defaults.set(profiles, forKey: "unifiedRemoteProfilesMigrationBackup")
+        }
+        for binding in bindings where !unifiedBaseBindings.contains(where: {
+            $0.remoteProfileID == binding.remoteProfileID && $0.button == binding.button && $0.trigger == binding.trigger
+        }) {
+            unifiedBaseBindings.append(binding)
+        }
+        defaults.set(true, forKey: "unifiedBaseBindingsMigrated")
+        AppLogger.shared.write("BUTTON CONFIGURATION phase=completed result=migrated bindings=\(bindings.count)")
     }
 
     @Published var buttonBindings: [RemoteButton: ButtonAction] {
@@ -996,6 +1031,10 @@ final class AppSettings: ObservableObject {
             enabled: experimentalContinuousRecordingEnabled,
             backup: continuousRecordingPowerBindingBackup
         )
+        if let data = defaults.data(forKey: "unifiedBaseBindings") {
+            do { unifiedBaseBindings = try JSONDecoder().decode([UnifiedButtonBinding].self, from: data) }
+            catch { corruptedKeys.append("unifiedBaseBindings") }
+        }
         corruptedSettingKeys = corruptedKeys
     }
 
@@ -1269,14 +1308,11 @@ final class AppSettings: ObservableObject {
     }
 
     func action(for button: RemoteButton) -> ButtonAction {
-        buttonBindings[button] ?? .disabled
+        configuredAction(for: button, trigger: .singleClick).action
     }
 
     func action(for button: RemoteButton, profileID: UUID?) -> ButtonAction {
-        guard let profileID, profileID != selectedRemoteProfileID,
-              let profile = remoteDeviceProfiles.first(where: { $0.id == profileID })
-        else { return action(for: button) }
-        return profile.mappings.parsedButtonBindings[button] ?? Self.defaultBindings[button] ?? .disabled
+        configuredAction(for: button, trigger: .singleClick, profileID: profileID).action
     }
 
     func setAction(_ action: ButtonAction, for button: RemoteButton) {
@@ -1343,31 +1379,47 @@ final class AppSettings: ObservableObject {
         guard let index = customApplicationProfiles.firstIndex(where: { $0.id == profile.id }) else {
             return
         }
+        let previous = customApplicationProfiles[index]
         customApplicationProfiles[index] = profile
+        if profile.accessibilityTarget != nil && profile.accessibilityTarget != previous.accessibilityTarget {
+            markPortableApplicationVerified(profile.id)
+        }
     }
 
-    func configuredAction(
+    func configuredBaseAction(
         for button: RemoteButton,
         trigger: ButtonTrigger
     ) -> ConfiguredButtonAction {
+        if let binding = unifiedBaseBindings.first(where: {
+            $0.remoteProfileID == selectedRemoteProfileID && $0.button == button && $0.trigger == trigger
+        }) { return binding.configured }
+        if let binding = unifiedBaseBindings.first(where: {
+            $0.remoteProfileID == nil && $0.button == button && $0.trigger == trigger
+        }) { return binding.configured }
         if trigger == .singleClick {
             return ConfiguredButtonAction(
-                action: action(for: button),
-                shortcut: shortcut(for: button),
+                action: buttonBindings[button] ?? .disabled,
+                shortcut: buttonShortcuts[button],
                 applicationProfileID: applicationProfileID(for: button)
             )
         }
         return secondaryButtonBindings[button]?[trigger] ?? .disabled
     }
 
-    func configuredAction(
+    func configuredBaseAction(
         for button: RemoteButton,
         trigger: ButtonTrigger,
         profileID: UUID?
     ) -> ConfiguredButtonAction {
+        if let binding = unifiedBaseBindings.first(where: {
+            $0.remoteProfileID == profileID && $0.button == button && $0.trigger == trigger
+        }) { return binding.configured }
+        if let binding = unifiedBaseBindings.first(where: {
+            $0.remoteProfileID == nil && $0.button == button && $0.trigger == trigger
+        }) { return binding.configured }
         guard let profileID, profileID != selectedRemoteProfileID,
               let profile = remoteDeviceProfiles.first(where: { $0.id == profileID })
-        else { return configuredAction(for: button, trigger: trigger) }
+        else { return configuredBaseAction(for: button, trigger: trigger) }
         let bindings = profile.mappings.parsedButtonBindings
         let shortcuts = profile.mappings.parsedButtonShortcuts
         if trigger == .singleClick {
@@ -1378,6 +1430,16 @@ final class AppSettings: ObservableObject {
             )
         }
         return profile.mappings.parsedSecondaryButtonBindings[button]?[trigger] ?? .disabled
+    }
+
+    func configuredAction(for button: RemoteButton, trigger: ButtonTrigger) -> ConfiguredButtonAction {
+        configuredAction(for: button, trigger: trigger, profileID: selectedRemoteProfileID)
+    }
+
+    func configuredAction(for button: RemoteButton, trigger: ButtonTrigger,
+                          profileID: UUID?) -> ConfiguredButtonAction {
+        configuredActionOverride?(profileID, button, trigger)
+            ?? configuredBaseAction(for: button, trigger: trigger, profileID: profileID)
     }
 
     var selectedRemoteProfile: RemoteDeviceProfile? {
@@ -1639,6 +1701,15 @@ final class AppSettings: ObservableObject {
     func resetBindings() {
         buttonBindings = Self.defaultBindings
         buttonShortcuts = [:]
+        unifiedBaseBindings.removeAll { $0.remoteProfileID == selectedRemoteProfileID }
+        // Legacy unscoped macros remain available on other devices after this reset.
+        if let device = selectedRemoteProfileID {
+            for inherited in unifiedBaseBindings.filter({ $0.remoteProfileID == nil }) {
+                setBaseBinding(ConfiguredButtonAction(
+                    action: inherited.trigger == .singleClick ? Self.defaultBindings[inherited.button] ?? .disabled : .disabled,
+                    shortcut: nil), for: inherited.button, trigger: inherited.trigger, profileID: device)
+            }
+        }
         buttonApplicationProfileIDs = [:]
         secondaryButtonBindings = [:]
         buttonRapidPressEnabled = [:]
@@ -1960,7 +2031,7 @@ final class AppSettings: ObservableObject {
 
     func exportedConfigurationData() throws -> Data {
         let configuration = PersonalizedConfiguration(
-            formatVersion: 1,
+            formatVersion: unifiedBaseBindings.isEmpty ? 1 : 2,
             gainDB: gainDB,
             selectedAudioDeviceUID: selectedAudioDeviceUID,
             customMappingEnabled: customMappingEnabled,
@@ -1970,6 +2041,7 @@ final class AppSettings: ObservableObject {
             buttonShortcuts: Dictionary(
                 uniqueKeysWithValues: buttonShortcuts.map { ($0.key.rawValue, $0.value) }
             ),
+            unifiedBaseBindings: unifiedBaseBindings,
             buttonApplicationProfileIDs: Dictionary(
                 uniqueKeysWithValues: buttonApplicationProfileIDs.map { ($0.key.rawValue, $0.value) }
             ),
@@ -2001,6 +2073,67 @@ final class AppSettings: ObservableObject {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         return try encoder.encode(configuration)
+    }
+
+    // Internal recovery snapshots are never emitted as portable exchange files.
+    func portableLocalSnapshot() throws -> Data {
+        let configuration = try JSONSerialization.jsonObject(with: exportedConfigurationData())
+        let envelope: [String: Any] = ["configuration": configuration,
+            "selectedRemoteProfileID": selectedRemoteProfileID?.uuidString ?? "",
+            "pendingApplications": portablePendingApplications.sorted()]
+        return try JSONSerialization.data(withJSONObject: envelope, options: [.sortedKeys])
+    }
+
+    var portablePendingApplications: Set<String> {
+        Set(defaults.stringArray(forKey: "portableTransferPendingApplications") ?? [])
+    }
+
+    func portableApplicationRequiresVerification(_ profile: CustomApplicationProfile) -> Bool {
+        profile.focusStrategy == .recordedAccessibility
+            && portablePendingApplications.contains(profile.id.uuidString)
+    }
+
+    func markPortableApplicationVerified(_ id: UUID) {
+        var pending = portablePendingApplications
+        pending.remove(id.uuidString)
+        defaults.set(pending.sorted(), forKey: "portableTransferPendingApplications")
+        objectWillChange.send()
+    }
+
+    func applyPortableLocalSnapshot(_ data: Data) throws {
+        guard let envelope = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let configuration = envelope["configuration"],
+              envelope["selectedRemoteProfileID"] as? String == (selectedRemoteProfileID?.uuidString ?? ""),
+              let pending = envelope["pendingApplications"] as? [String]
+        else { throw AppConfigurationError.invalidValues }
+        // This path accepts only our validated in-memory preparation or 0600 recovery journal.
+        // Do not call the external legacy importer: it filters and replaces records.
+        let c = try JSONDecoder().decode(PersonalizedConfiguration.self,
+            from: JSONSerialization.data(withJSONObject: configuration))
+        guard [1, 2].contains(c.formatVersion) else { throw AppConfigurationError.invalidValues }
+        if gainDB != c.gainDB { gainDB = c.gainDB }
+        if selectedAudioDeviceUID != c.selectedAudioDeviceUID { selectedAudioDeviceUID = c.selectedAudioDeviceUID }
+        if customMappingEnabled != c.customMappingEnabled { customMappingEnabled = c.customMappingEnabled }
+        unifiedBaseBindings = c.unifiedBaseBindings ?? []
+        buttonBindings = Dictionary(uniqueKeysWithValues: c.buttonBindings.compactMap { key,value in RemoteButton(rawValue: key).map { ($0,value) } })
+        buttonShortcuts = Dictionary(uniqueKeysWithValues: c.buttonShortcuts.compactMap { key,value in RemoteButton(rawValue: key).map { ($0,value) } })
+        buttonApplicationProfileIDs = Dictionary(uniqueKeysWithValues: (c.buttonApplicationProfileIDs ?? [:]).compactMap { key,value in RemoteButton(rawValue: key).map { ($0,value) } })
+        secondaryButtonBindings = Dictionary(uniqueKeysWithValues: c.secondaryButtonBindings.compactMap { key,values in
+            RemoteButton(rawValue: key).map { button in (button, Dictionary(uniqueKeysWithValues: values.compactMap { k,v in ButtonTrigger(rawValue: k).map { ($0,v) } })) }
+        })
+        buttonRapidPressEnabled = Dictionary(uniqueKeysWithValues: (c.buttonRapidPressEnabled ?? [:]).compactMap { key,value in RemoteButton(rawValue: key).map { ($0,value) } })
+        customApplicationProfiles = c.customApplicationProfiles ?? []
+        applicationLanguage = c.applicationLanguage
+        if let value = c.appIconIdentifier { appIconIdentifier = value }
+        showDockIcon = c.showDockIcon
+        if let value = c.showStatusBarIcon { showStatusBarIcon = value }
+        if let value = c.openMainWindowAtLaunch { openMainWindowAtLaunch = value }
+        if let value = c.checksForPreReleaseUpdates { checksForPreReleaseUpdates = value }
+        voiceKeyMode = c.voiceKeyMode ?? .function
+        voiceFnTapModeEnabled = c.voiceFnTapModeEnabled ?? false
+        applyContinuousRecordingExperimentState(enabled: c.experimentalContinuousRecordingEnabled ?? false,
+            backup: c.continuousRecordingPowerBindingBackup)
+        defaults.set(pending, forKey: "portableTransferPendingApplications")
     }
 
     var voiceKeyConfigurationState: VoiceKeyConfigurationState {
@@ -2143,6 +2276,14 @@ final class AppSettings: ObservableObject {
         customMappingEnabled = configuration.customMappingEnabled
         buttonBindings = Self.defaultBindings.merging(importedBindings) { _, imported in imported }
         buttonShortcuts = importedShortcuts
+        unifiedBaseBindings = (configuration.unifiedBaseBindings ?? []).map { binding in
+            let configured = Self.validatedConfiguredAction(binding.configured)
+            if configured == nil { rejected.insert("unifiedBaseBindings") }
+            var result = binding
+            // Invalid explicit entries must not expose an older binding underneath.
+            result.configured = configured ?? .disabled
+            return result
+        }
         buttonApplicationProfileIDs = importedApplicationProfileIDs
         secondaryButtonBindings = importedSecondaryBindings
         buttonRapidPressEnabled = importedRapidPressEnabled
@@ -2211,6 +2352,9 @@ final class AppSettings: ObservableObject {
     private static func validatedConfiguredAction(
         _ binding: ConfiguredButtonAction
     ) -> ConfiguredButtonAction? {
+        if binding.action == .combinationAction {
+            guard let id = binding.macroID, id.range(of: "^[A-Za-z0-9][A-Za-z0-9._-]{7,127}$", options: .regularExpression) != nil else { return nil }
+        }
         guard let shortcut = binding.shortcut else { return binding }
         guard let validated = validatedShortcut(shortcut) else { return nil }
         var result = binding
@@ -2237,7 +2381,7 @@ final class AppSettings: ObservableObject {
     ) -> ImportedApplicationProfile {
         guard profile.displayName.count <= maximumImportedIdentifierLength,
               isWellFormedBundleIdentifier(profile.bundleIdentifier),
-              isWellFormedApplicationBundlePath(profile.applicationPath)
+              profile.applicationPath.isEmpty || isWellFormedApplicationBundlePath(profile.applicationPath)
         else { return .rejected }
 
         var sanitized = profile
@@ -2247,6 +2391,7 @@ final class AppSettings: ObservableObject {
         sanitized.accessibilityTarget = profile.accessibilityTarget
             .flatMap(validatedAccessibilityTarget)
 
+        guard !sanitized.applicationPath.isEmpty else { return .notInstalledOnThisMac(sanitized) }
         let url = URL(fileURLWithPath: sanitized.applicationPath)
         guard FileManager.default.fileExists(atPath: url.path) else {
             return .notInstalledOnThisMac(sanitized)
@@ -2301,7 +2446,7 @@ final class AppSettings: ObservableObject {
 
     private static func validatedConfiguration(from data: Data) throws -> PersonalizedConfiguration {
         let configuration = try JSONDecoder().decode(PersonalizedConfiguration.self, from: data)
-        guard configuration.formatVersion == 1 else {
+        guard [1, 2].contains(configuration.formatVersion) else {
             throw AppConfigurationError.unsupportedVersion
         }
         guard configuration.gainDB.isFinite, (0...24).contains(configuration.gainDB) else {

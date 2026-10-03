@@ -1,0 +1,9 @@
+<!doctype html><html lang="zh-Hans"><meta charset="utf-8"><title>导入 App 后切换聚焦方式仍被拦截</title><body><main>
+<h1>导入 App 后切换聚焦方式仍被拦截</h1>
+<p>状态：软件修复和自动化验证通过；真实遥控器及目标 App 验收待执行。</p>
+<h2>复现、日志与根因</h2>
+<p>导入输入框聚焦配置，再改为仅打开或聚焦快捷键。隔离 AppSettings 探针显示策略为 none，但 pending 标记仍为 true；执行门禁无条件拒绝该标记。自动化 importedAppVerificationFollowsCurrentFocusStrategy 在修复前出现两次失败。已有动作执行结果只能证明请求被拒绝，不能证明目标 App 响应。</p>
+<h2>修复与验证</h2>
+<p>执行层使用 AppSettings 的当前聚焦策略判断是否需要输入框验证。保留待验证标记，切回输入框聚焦后仍阻断，直到明确验证成功。安装检查、KeyboardInjector、旧配置及输入框数据保持原有行为。</p>
+<p>回归用例通过真实导入适配器创建待验证 App，覆盖三种策略切换及验证后的解锁。验证命令：源码集成 swift test --disable-keychain --no-parallel --filter PortableConfigurationCompatibilityTests。完整测试、构建及真实验收分别记录在 <a href="../Testing/PortableConfigurationTransfer.html">配置导入导出验证</a>。未读取第三方 App 私有文件。</p>
+</main></body></html>

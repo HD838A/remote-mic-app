@@ -1,0 +1,30 @@
+[
+  {
+    "file": "final-mapping-en-dark.jpg",
+    "format": "JPEG",
+    "width": 2040,
+    "height": 1544,
+    "sha256": "52b5596a93a7eac956eb8ab51aa2b47da9f4c6e959f8ea334391f30cd3fb23dc"
+  },
+  {
+    "file": "final-mapping-en-light.jpg",
+    "format": "JPEG",
+    "width": 2040,
+    "height": 1544,
+    "sha256": "9f421b28322262e3ff36f171fa35ad73e1e13f958fd6ca8e3d772ff87448d863"
+  },
+  {
+    "file": "final-mapping-zh-hans-dark.jpg",
+    "format": "JPEG",
+    "width": 2040,
+    "height": 1544,
+    "sha256": "2157313045da2210db24c5cf1a526ee1927af8faa497b4aefe309d8847d27d44"
+  },
+  {
+    "file": "final-mapping-zh-hans-light.jpg",
+    "format": "JPEG",
+    "width": 2040,
+    "height": 1544,
+    "sha256": "40a3bffa8ab940227c04944484c03d08eb4b4317d7869e1843645df64731f0d1"
+  }
+]

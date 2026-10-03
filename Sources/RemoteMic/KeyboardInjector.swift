@@ -380,6 +380,8 @@ enum KeyboardInjector {
             systemKeyPoster(18)
         case .nextCommandRight:
             systemKeyPoster(17)
+        case .combinationAction:
+            return false // The host action-library adapter owns execution.
         case .customShortcut:
             if let shortcut {
                 let eventFlags = shortcut.cgEventFlags
@@ -628,6 +630,20 @@ enum KeyboardInjector {
                 requestID: requestID,
                 attempt: 0
             )
+        }
+    }
+
+    static func testCustomApplicationInput(_ profile: CustomApplicationProfile, completion: @escaping (Bool) -> Void) {
+        guard isAccessibilityTrusted, let target = profile.accessibilityTarget,
+            let url = resolveCustomApplicationURL(profile) else { completion(false); return }
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = true
+        NSWorkspace.shared.openApplication(at: url, configuration: configuration) { application, error in
+            guard error == nil, let application else { completion(false); return }
+            focusQueue.asyncAfter(deadline: .now() + .milliseconds(500)) {
+                let success = focusRecordedAccessibilityTarget(target, processIdentifier: application.processIdentifier)
+                DispatchQueue.main.async { completion(success) }
+            }
         }
     }
 
