@@ -49,6 +49,7 @@ struct PhoneRemoteInvitationCard: View {
                 Text("connection.phone.qr_refresh")
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)
         }

@@ -80,6 +80,8 @@ final class OnboardingInteractionProbe {
 
 struct OnboardingView: View {
     @ObservedObject var model: BridgeAppModel
+    @ObservedObject private var membershipFeature: MembershipFeatureIntegration
+    @State private var isMembershipPresented = false
     @ObservedObject private var settings: AppSettings
     @EnvironmentObject private var localization: LocalizationStore
     @Environment(\.colorScheme) private var colorScheme
@@ -151,6 +153,7 @@ struct OnboardingView: View {
         interactionProbe: OnboardingInteractionProbe? = nil
     ) {
         self.model = model
+        membershipFeature = model.membershipFeature
         settings = model.settings
         self.completeRuntimeReadyOverride = completeRuntimeReadyOverride
         self.allowsInputSourceSwitching = allowsInputSourceSwitching
@@ -186,6 +189,12 @@ struct OnboardingView: View {
         .background(Color(nsColor: .windowBackgroundColor).ignoresSafeArea())
         .environment(\.locale, localization.locale)
         .frame(minWidth: 980, minHeight: 732)
+        .sheet(isPresented: $isMembershipPresented) {
+            VStack(alignment: .trailing) {
+                Button(localization.text("common.action.close")) { isMembershipPresented = false }
+                membershipFeature.settingsView()
+            }.padding(20)
+        }
         .onAppear {
             refreshPermissionStates()
             refreshVoiceToolAvailability()
@@ -2517,6 +2526,8 @@ struct OnboardingView: View {
                 Text(verbatim: localization.text("onboarding.iphone_remote.scan"))
                     .font(.system(size: 15, weight: .semibold))
                     .multilineTextAlignment(.center)
+            } else if !membershipFeature.canStartCompanionConnection {
+                companionMembershipRequiredView
             } else {
                 Image(systemName: model.isPhoneRemoteConnected
                     ? "iphone.gen3.radiowaves.left.and.right"
@@ -2531,13 +2542,19 @@ struct OnboardingView: View {
         .padding(28)
     }
 
+    private var companionMembershipRequiredView: some View {
+        membershipFeature.membershipRequiredView(remoteAuthorizationDenied: true) {
+            isMembershipPresented = true
+            membershipFeature.refreshIfNeeded()
+        }
+    }
+
     @ViewBuilder
     private var webRemoteIllustration: some View {
         VStack(spacing: 16) {
             switch model.webRemoteState {
             case let .waitingForPhone(joinURL, _, _),
-                 let .awaitingApproval(joinURL, _, _),
-                 let .plusRequired(joinURL, _, _):
+                 let .awaitingApproval(joinURL, _, _):
                 if let qrCode = webRemoteQRCode(for: joinURL) {
                     Image(nsImage: qrCode)
                         .interpolation(.none)
@@ -2548,11 +2565,8 @@ struct OnboardingView: View {
                 }
                 Text(verbatim: localization.text("onboarding.web_remote.scan"))
                     .font(.system(size: 15, weight: .semibold))
-                if case .plusRequired = model.webRemoteState {
-                    Text(verbatim: localization.text("connection.web.plus_required_title"))
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Color.orange)
-                }
+            case .membershipRequired, .plusRequired:
+                companionMembershipRequiredView
             case let .connected(deviceName):
                 Image(systemName: "checkmark.circle.fill")
                     .font(.system(size: 96))
@@ -3057,7 +3071,7 @@ struct OnboardingView: View {
         switch model.webRemoteState {
         case .connected:
             return localization.text("onboarding.web_remote.connected")
-        case .plusRequired:
+        case .membershipRequired, .plusRequired:
             return localization.text("connection.web.plus_required_title")
         case .unavailable, .failed:
             return localization.text("onboarding.web_remote.unavailable")

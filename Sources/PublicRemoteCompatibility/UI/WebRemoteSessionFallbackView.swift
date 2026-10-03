@@ -36,11 +36,13 @@ public struct WebRemoteSessionView<Model: WebRemoteSessionModel>: View {
     public init(
         model: Model,
         localization: WebRemoteSessionLocalization,
-        onOpenPlus: (() -> Void)? = nil
+        onOpenPlus: (() -> Void)? = nil,
+        membershipRequiredView: AnyView? = nil
     ) {
         _model = ObservedObject(wrappedValue: model)
         self.localization = localization
         _ = onOpenPlus
+        _ = membershipRequiredView
     }
 
     public var body: some View {

@@ -26,6 +26,7 @@ public enum RemoteVoiceStartResult: Equatable, Sendable {
     case started
     case busy
     case unavailable
+    case membershipRequired
 }
 
 public struct PhoneRemoteInvitation: Equatable, Sendable {
@@ -170,6 +171,7 @@ public enum WebRemoteConfiguration {
 public enum WebRemoteSessionState: Equatable, Sendable {
     case disabled
     case unavailable
+    case membershipRequired
     case connecting
     case waitingForPhone(joinURL: URL, pairingCode: String, expiresAt: Date?)
     case plusRequired(joinURL: URL, pairingCode: String, expiresAt: Date?)
@@ -179,7 +181,7 @@ public enum WebRemoteSessionState: Equatable, Sendable {
 
     public var isEnabled: Bool {
         switch self {
-        case .disabled, .unavailable, .plusRequired, .failed:
+        case .disabled, .unavailable, .membershipRequired, .plusRequired, .failed:
             return false
         default:
             return true

@@ -59,12 +59,13 @@ final class MembershipFeatureIntegration: ObservableObject, @unchecked Sendable 
     @Published private(set) var isFeatureVisible = false
     @Published private(set) var isEnvironmentSettingsVisible = false
     @Published private(set) var buttonProfilesAccessDecision: HostButtonProfilesAccessDecision = .unavailable
+    @Published private(set) var canUseCompanionConnections = false
     @Published private(set) var accountDisplayName: String? = nil
     @Published private(set) var serviceEnvironmentForDiagnostics = "unavailable"
 
     private var localeIdentifier: String
     #if SAYALL_MEMBERSHIP_ENABLED && canImport(SayAllMembershipHostAdapter)
-    @MainActor private var adapter: MembershipHostAdapter?
+    private var adapter: MembershipHostAdapter?
     private var subscriptions = Set<AnyCancellable>()
     #endif
 
@@ -117,6 +118,31 @@ final class MembershipFeatureIntegration: ObservableObject, @unchecked Sendable 
         adapter?.settingsView() ?? AnyView(EmptyView())
         #else
         AnyView(EmptyView())
+        #endif
+    }
+
+    @MainActor
+    func membershipRequiredView(forButtonProfiles: Bool = false, remoteAuthorizationDenied: Bool = false, onOpenMembership: @escaping () -> Void) -> AnyView {
+        #if SAYALL_MEMBERSHIP_ENABLED && canImport(SayAllMembershipHostAdapter)
+        adapter?.membershipRequiredView(forButtonProfiles: forButtonProfiles, remoteAuthorizationDenied: remoteAuthorizationDenied, onOpenMembership: onOpenMembership) ?? AnyView(EmptyView())
+        #else
+        AnyView(EmptyView())
+        #endif
+    }
+
+    var canStartCompanionConnection: Bool {
+        #if SAYALL_MEMBERSHIP_ENABLED && canImport(SayAllMembershipHostAdapter)
+        adapter?.canStartCompanionConnection ?? false
+        #else
+        false
+        #endif
+    }
+
+    var remoteSessionMembershipBypassEnabled: Bool {
+        #if SAYALL_MEMBERSHIP_ENABLED && canImport(SayAllMembershipHostAdapter)
+        adapter?.remoteSessionMembershipBypassEnabled ?? false
+        #else
+        false
         #endif
     }
 
@@ -187,6 +213,8 @@ final class MembershipFeatureIntegration: ObservableObject, @unchecked Sendable 
         adapter.$buttonProfilesAccessDecision.map(Self.mapAccessDecision).removeDuplicates()
             .receive(on: RunLoop.main)
             .sink { [weak self] in self?.buttonProfilesAccessDecision = $0 }.store(in: &subscriptions)
+        adapter.$canUseCompanionConnections.removeDuplicates().receive(on: RunLoop.main)
+            .sink { [weak self] in self?.canUseCompanionConnections = $0 }.store(in: &subscriptions)
         adapter.$accountDisplayName.removeDuplicates().receive(on: RunLoop.main)
             .sink { [weak self] in self?.accountDisplayName = $0 }.store(in: &subscriptions)
         adapter.$serviceEnvironmentForDiagnostics.removeDuplicates().receive(on: RunLoop.main)
