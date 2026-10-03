@@ -216,3 +216,12 @@ Siri Remote/Chromecast 属于已实现适配的源码候选，不能宣称真机
 - 1020×772 生产窗口中文浅色跑通新建/返回/编排/保存、按键选择组合动作及常用语返回上下文；中文浅深色六导航均逐一点击。英文深色补充动作库/三步编辑/保存及方案摘要。22张原始JPEG已核验，见[本轮截图记录](../Screenshots/unified-button-configuration/main-sync-20261003/README.md)。
 - 隐藏入口运行时切换语言未刷新私有入口名称，本轮采用分别启动初始化语言，不能视为动态语言切换验收；生产路径是否受影响尚未确认。
 - 本轮内部 ad-hoc App 不可交付；此前公证测试包不包含本次主线同步。真实遥控器、首次权限、第三方最终执行结果及首次/连续语音与尾音完整性仍缺记录，两个 PR 保持 Draft，TODO 不标完成。
+
+## 2026-10-03 最新主线同步本地重测包
+
+- 用户要求停止 PR 监控并重新提供本地包；自动跟进已暂停。本轮不合入、上传或发布。
+- 本地入口：`dist/local-tests/unified-main-sync-b8dc7499-20261003/SayAll.app`；操作步骤见同目录 `test-notes.md`，源码身份、公证提交及摘要见 `package.json`、`bundle-sha256.txt` 和 `bundle-symlinks.json`。旧测试包保留。
+- 版本 1.9.21（228），arm64 / macOS 14+；宿主冻结源码 `b8dc74990c493607a23af2a8ea0f9dd37474a7f5`，私有源码 `87d7c7783297051c7f17a3d52f96a7bd478ba329`。包含常用语主线同步、组合动作、键位方案专用测试权益、Siri Remote 与 Chromecast；AI 关闭，不含会员服务器二进制。
+- 原生 Release 构建及最终副本 verify-app 通过；SwiftPM 保留 `--disable-keychain`。Developer ID / Team L3QHLDRPAY / Hardened Runtime / deep-strict、公证 Accepted（`deb4958c-a47f-46af-971c-74d62199b0bc`）、stapler validate 及 Gatekeeper accepted / Notarized Developer ID 通过。
+- 最终签名副本使用隔离 UserDefaults 和宏目录打开生产设置窗口，核验精确可执行路径与进程；只停止本轮烟测进程。正常用户配置迁移、首次权限、真实遥控器、第三方最终可见执行和语音首尾完整性仍待用户重测。
+- 测试前退出其他版本并导出旧配置；重点执行本文旧动作加载、新建/编辑/保存/取消、按键绑定与常用语返回上下文，以及真实设备和语音基线。未实现“发送常用语”宏步骤及后续讨论的布局调整。
