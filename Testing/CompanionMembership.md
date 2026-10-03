@@ -15,3 +15,7 @@ iOS、Apple Watch、小程序与 Web 使用连接的 Mac 的 Plus，手机和手
 7. Onboarding 的 Phone/Web 入口同样使用私有会员按钮，可打开会员界面后返回向导。
 
 自动化/构建与真实设备分别记录。待验收：iPhone/Watch 真机蓝牙、实际退出对端断线、线上 scene 失败日志、部署后的扫码。
+
+## 2026-10-04：固定依赖合同复核
+
+宿主 PR #566 的私有组合 CI 使用旧遥控镜像，缺少当前会员状态和会员入口注入接口。兼容镜像同步 PR：GetSayAll/sayall-mac-remote#7；宿主固定到同步后的不可变提交。镜像47项测试、Intel macOS13 Release构建通过；宿主与新镜像/私有方案源码的798项测试（63 suites）通过。完整双架构CI、UI/Onboarding截图及真实支付验收分别记录，当前不把这些未完成项标为通过。

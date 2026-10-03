@@ -11,7 +11,7 @@
     },
     "sayAllMacRemote": {
       "repository": "GetSayAll/sayall-mac-remote",
-      "commit": "010c0baddb04461f090263c98ce42a77aafe5ccd"
+      "commit": "b7d12b2672a321051065a0f9417d74c78974b005"
     }
   }
 }
