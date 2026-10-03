@@ -1,0 +1,184 @@
+{
+  "sourceHead": "c2c4ae7c757dc4be1a529f786ccc63ab03e13ce9",
+  "sourceDirty": true,
+  "productionView": true,
+  "hardwareStarted": false,
+  "files": [
+    {
+      "path": "en/dark/1020x772/common-phrases-panel.png",
+      "format": "PNG",
+      "width": 880,
+      "height": 1040,
+      "sha256": "aadf8f4317c11f0032799d6d844b79ea6d7a0530f4f209f527fffa3bbcf409c7",
+      "bytes": 302217
+    },
+    {
+      "path": "en/dark/1020x772/commonPhrases-1020x772.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "c72071b40c1917d7004c2be57dfdf5a99b067cfb5199ed8863a407a884e832d3",
+      "bytes": 401723
+    },
+    {
+      "path": "en/dark/800x650/common-phrases-panel.png",
+      "format": "PNG",
+      "width": 880,
+      "height": 1040,
+      "sha256": "aadf8f4317c11f0032799d6d844b79ea6d7a0530f4f209f527fffa3bbcf409c7",
+      "bytes": 302217
+    },
+    {
+      "path": "en/dark/800x650/commonPhrases-800x650.png",
+      "format": "PNG",
+      "width": 1600,
+      "height": 1300,
+      "sha256": "58abdaeb8ce6e3935964083afcb8d1ef44fa72f5281b01a3204f7d1704d3b86d",
+      "bytes": 310862
+    },
+    {
+      "path": "en/light/1020x772/common-phrases-panel.png",
+      "format": "PNG",
+      "width": 880,
+      "height": 1040,
+      "sha256": "aadf8f4317c11f0032799d6d844b79ea6d7a0530f4f209f527fffa3bbcf409c7",
+      "bytes": 302217
+    },
+    {
+      "path": "en/light/1020x772/commonPhrases-1020x772.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "27ba202dbb5d6611360ca7362a6dbb137c782c183f561a81c98d795c3d4a89f0",
+      "bytes": 410712
+    },
+    {
+      "path": "en/light/800x650/common-phrases-panel.png",
+      "format": "PNG",
+      "width": 880,
+      "height": 1040,
+      "sha256": "aadf8f4317c11f0032799d6d844b79ea6d7a0530f4f209f527fffa3bbcf409c7",
+      "bytes": 302217
+    },
+    {
+      "path": "en/light/800x650/commonPhrases-800x650.png",
+      "format": "PNG",
+      "width": 1600,
+      "height": 1300,
+      "sha256": "0b7432e2d1d81c89aacafb7a7a84f304890f113bda5fd4e08c2926526a5d71ac",
+      "bytes": 318034
+    },
+    {
+      "path": "position-assignment.jpg",
+      "format": "JPEG",
+      "width": 2040,
+      "height": 1600,
+      "sha256": "56d7e065cd7b4e365b73804b974bcb44015b6cda7bf5724ac6e5bb88003e15ae",
+      "bytes": 261905
+    },
+    {
+      "path": "pressure-connection.jpg",
+      "format": "JPEG",
+      "width": 1600,
+      "height": 1356,
+      "sha256": "43d7e0a0e41ec98bf82c7e6bb04294e8b2ffc8c3b6a32c18f1c0de7fdbec9cb6",
+      "bytes": 231907
+    },
+    {
+      "path": "pressure-settings.jpg",
+      "format": "JPEG",
+      "width": 1600,
+      "height": 1356,
+      "sha256": "d20c8c231bdd4f58f34831e6a5541584c5d57ee0cede9a0ab7a534c9c8093020",
+      "bytes": 197038
+    },
+    {
+      "path": "pressure-transcripts.jpg",
+      "format": "JPEG",
+      "width": 1600,
+      "height": 1356,
+      "sha256": "d2830f10420d2e68be92e4a8e6280c10ce121518e374b303139d2653e9bce68c",
+      "bytes": 174898
+    },
+    {
+      "path": "pressure-window.jpg",
+      "format": "JPEG",
+      "width": 1600,
+      "height": 1356,
+      "sha256": "aaa81b0c6ac237df9d3892bd749bc311c5d37a1a5d973e18a50c15507b70b392",
+      "bytes": 194136
+    },
+    {
+      "path": "return-context.jpg",
+      "format": "JPEG",
+      "width": 2040,
+      "height": 1600,
+      "sha256": "ab2b541b62e86374d2437a0e2239d4830881d7d88bad380a63180f9c1628c562",
+      "bytes": 302126
+    },
+    {
+      "path": "zh-hans/dark/1020x772/common-phrases-panel.png",
+      "format": "PNG",
+      "width": 880,
+      "height": 1040,
+      "sha256": "cef1df1e67c638928ae4899b95a936e1e80058e5844acbfeb2f92a9c5b12ab9e",
+      "bytes": 300274
+    },
+    {
+      "path": "zh-hans/dark/1020x772/commonPhrases-1020x772.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "706300984942d4627e9e81827bffa185c20050c15494f02b691f7a7fd183dc8c",
+      "bytes": 399782
+    },
+    {
+      "path": "zh-hans/dark/800x650/common-phrases-panel.png",
+      "format": "PNG",
+      "width": 880,
+      "height": 1040,
+      "sha256": "cef1df1e67c638928ae4899b95a936e1e80058e5844acbfeb2f92a9c5b12ab9e",
+      "bytes": 300274
+    },
+    {
+      "path": "zh-hans/dark/800x650/commonPhrases-800x650.png",
+      "format": "PNG",
+      "width": 1600,
+      "height": 1300,
+      "sha256": "c0cabe8c30eb3420ca5c659995403253cc4e239e53cb6c755ba22c65df141976",
+      "bytes": 300262
+    },
+    {
+      "path": "zh-hans/light/1020x772/common-phrases-panel.png",
+      "format": "PNG",
+      "width": 880,
+      "height": 1040,
+      "sha256": "cef1df1e67c638928ae4899b95a936e1e80058e5844acbfeb2f92a9c5b12ab9e",
+      "bytes": 300274
+    },
+    {
+      "path": "zh-hans/light/1020x772/commonPhrases-1020x772.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "223f8520354c83c1e8d43f88176f9989fa41a81614a0663fa5bfb4af64af94d8",
+      "bytes": 408124
+    },
+    {
+      "path": "zh-hans/light/800x650/common-phrases-panel.png",
+      "format": "PNG",
+      "width": 880,
+      "height": 1040,
+      "sha256": "cef1df1e67c638928ae4899b95a936e1e80058e5844acbfeb2f92a9c5b12ab9e",
+      "bytes": 300274
+    },
+    {
+      "path": "zh-hans/light/800x650/commonPhrases-800x650.png",
+      "format": "PNG",
+      "width": 1600,
+      "height": 1300,
+      "sha256": "2d1c415613ea4ce20ec9608270dec0a240511c2e6626039a9b93b5e5b48a5e9d",
+      "bytes": 308039
+    }
+  ]
+}

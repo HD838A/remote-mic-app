@@ -387,6 +387,8 @@ BUILD_SCRATCH_PATH="${REMOTE_MIC_BUILD_SCRATCH_PATH:-$DEFAULT_SCRATCH_PATH}"
 BUILD_CACHE_PATH="${REMOTE_MIC_BUILD_CACHE_PATH:-$DEFAULT_CACHE_PATH}"
 SPARKLE_FRAMEWORK="$BUILD_SCRATCH_PATH/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework"
 
+COMMON_PHRASES_JSON="$(/usr/bin/python3 "$ROOT/scripts/generate-common-phrases.py" "$ROOT/Resources/CommonPhrases/built-in.md")"
+
 run_release_stage app-swift-build "$RELEASE_SWIFT_BUILD_TIMEOUT_SECONDS" \
   xcrun swift build \
   --disable-keychain \
@@ -427,6 +429,7 @@ if [[ -e "$APP_DIR" ]]; then
   print "PREVIOUS APP MOVED TO TRASH: $TRASH_DESTINATION"
 fi
 mkdir -p "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Helpers" "$APP_DIR/Contents/Resources"
+print -r -- "$COMMON_PHRASES_JSON" > "$APP_DIR/Contents/Resources/CommonPhrases.json"
 test -d "$SPARKLE_FRAMEWORK"
 test -x "$MCP_HELPER_PATH"
 if [[ "$SAYALL_SIRI_REMOTE_INCLUDED" == "true" ]]; then

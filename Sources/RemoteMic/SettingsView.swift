@@ -22,6 +22,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
     case mapping
     case statistics
     case transcripts
+    case commonPhrases
     case permissions
     case about
 
@@ -36,6 +37,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .membership: return ""
         case .mapping: return "settings.section.buttons"
         case .statistics: return "settings.section.statistics"
+        case .commonPhrases: return "common_phrases.title"
         case .transcripts: return "settings.section.transcripts"
         case .permissions: return "settings.section.permissions"
         case .about: return "settings.section.settings"
@@ -51,6 +53,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .membership: return "crown.fill"
         case .mapping: return "keyboard"
         case .statistics: return "person.crop.circle"
+        case .commonPhrases: return "text.quote"
         case .transcripts: return "text.bubble.fill"
         case .permissions: return "shield.lefthalf.filled"
         case .about: return "gearshape"
@@ -76,11 +79,6 @@ enum SettingsPermissionAction: Equatable {
             "permission.action.open_settings"
         }
     }
-}
-
-struct SettingsNavigationState: Equatable {
-    let selectedSection: SettingsSection
-    let expandedShareSection: SettingsSection?
 }
 
 struct SettingsDiagnosticSnapshot: Equatable {
@@ -183,11 +181,6 @@ enum SettingsPageBehavior {
     static func marksUpdateAsSeen(whenSelecting section: SettingsSection) -> Bool {
         section == .about
     }
-
-    static let shareNavigationState = SettingsNavigationState(
-        selectedSection: .about,
-        expandedShareSection: .about
-    )
 
     static func permissionAction(
         for permission: SettingsPermissionKind,
@@ -317,11 +310,13 @@ private enum MappingActionFilter: String, CaseIterable, Identifiable {
     case basicKeys
     case systemAndMedia
     case custom
+    case commonPhrases
+    case applications
 
     var id: String { rawValue }
 
     static var visibleCases: [Self] {
-        [.basicKeys, .systemAndMedia, .custom]
+        [.basicKeys, .systemAndMedia, .custom, .commonPhrases, .applications]
     }
 
     var localizationKey: String {
@@ -330,6 +325,8 @@ private enum MappingActionFilter: String, CaseIterable, Identifiable {
         case .basicKeys: return ButtonActionCategory.basicKeys.localizationKey
         case .systemAndMedia: return ButtonActionCategory.systemAndMedia.localizationKey
         case .custom: return ButtonActionCategory.custom.localizationKey
+        case .commonPhrases: return ButtonActionCategory.commonPhrases.localizationKey
+        case .applications: return ButtonActionCategory.applications.localizationKey
         }
     }
 
@@ -342,7 +339,11 @@ private enum MappingActionFilter: String, CaseIterable, Identifiable {
         case .systemAndMedia:
             return category == .systemAndMedia
         case .custom:
-            return category == .custom || category == .applications
+            return category == .custom
+        case .commonPhrases:
+            return category == .commonPhrases
+        case .applications:
+            return category == .applications
         }
     }
 }
@@ -461,7 +462,6 @@ struct SettingsView: View {
     @State private var selectedStatisticsDate: Date?
     @State private var mappingEditingTarget: ShortcutEditingTarget?
     @State private var mappingActionFilter: MappingActionFilter = .all
-    @State private var isPresetApplicationActionsExpanded = false
     @State private var shortcutCaptureTarget: ShortcutEditingTarget?
     @State private var applicationShortcutCaptureProfileID: UUID?
     @State private var shortcutCaptureFeedback: ShortcutCaptureFeedback?
@@ -662,25 +662,6 @@ struct SettingsView: View {
                     }
                 }
             }
-            Button {
-                let navigation = SettingsPageBehavior.shareNavigationState
-                selectedSection = navigation.selectedSection
-                expandedShareSection = navigation.expandedShareSection
-            } label: {
-                VStack(spacing: 7) {
-                    Image(systemName: "square.and.arrow.up")
-                        .font(.system(size: 21, weight: .semibold))
-                    Text("share.action")
-                        .font(.system(size: 13, weight: .semibold))
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .compatibilityFocusEffectDisabled()
-            .foregroundStyle(Color.secondary)
-            .accessibilityLabel(Text("share.sidebar.accessibility_label"))
             if visibleSections.contains(.statistics) {
                 sidebarButton(.statistics)
             }
@@ -698,7 +679,8 @@ struct SettingsView: View {
     }
 
     private func sidebarButton(_ section: SettingsSection) -> some View {
-        Button {
+        let isSelected = (selectedSection == .commonPhrases ? .mapping : selectedSection) == section
+        return Button {
             selectSidebarSection(section)
         } label: {
             VStack(spacing: 7) {
@@ -744,9 +726,9 @@ struct SettingsView: View {
         }
         .buttonStyle(.plain)
         .compatibilityFocusEffectDisabled()
-        .foregroundStyle(selectedSection == section ? Color.accentColor : Color.secondary)
-        .background(selectedSection == section ? Color.accentColor.opacity(0.10) : Color.clear)
-        .accessibilityAddTraits(selectedSection == section ? .isSelected : [])
+        .foregroundStyle(isSelected ? Color.accentColor : Color.secondary)
+        .background(isSelected ? Color.accentColor.opacity(0.10) : Color.clear)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
         .accessibilityValue(
             SettingsPageBehavior.showsUpdateBadge(
                 for: section,
@@ -841,6 +823,10 @@ struct SettingsView: View {
             }
         case .statistics:
             statisticsPage
+        case .commonPhrases:
+            CommonPhraseSettingsView(store: model.commonPhraseStore) {
+                selectedSection = .mapping
+            }
         case .transcripts:
             transcriptHistoryPage
         case .permissions:
@@ -864,28 +850,12 @@ struct SettingsView: View {
 
             Divider()
 
-            ScrollViewReader { proxy in
-                ScrollView(.vertical, showsIndicators: false) {
-                    content()
-                        .padding(contentPadding)
-                        .frame(maxWidth: .infinity, alignment: .topLeading)
-                }
-                .compatibilityScrollEdgeEffect()
-                .onChange(of: expandedShareSection) { section in
-                    guard let section else { return }
-                    DispatchQueue.main.async {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            proxy.scrollTo(shareAnchor(for: section), anchor: .bottom)
-                        }
-                    }
-                }
-                .onAppear {
-                    guard let section = expandedShareSection else { return }
-                    DispatchQueue.main.async {
-                        proxy.scrollTo(shareAnchor(for: section), anchor: .bottom)
-                    }
-                }
+            ScrollView(.vertical, showsIndicators: false) {
+                content()
+                    .padding(contentPadding)
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
             }
+            .compatibilityScrollEdgeEffect()
         }
     }
 
@@ -1407,7 +1377,6 @@ struct SettingsView: View {
                     selectedSiriRemoteControlID = controlID
                     selectedRemoteButton = button
                     mappingActionFilter = .all
-                    isPresetApplicationActionsExpanded = false
                     mappingEditingTarget = ShortcutEditingTarget(
                         button: button,
                         trigger: trigger
@@ -1486,7 +1455,6 @@ struct SettingsView: View {
                     selectedChromecastControlID = controlID
                     selectedRemoteButton = button
                     mappingActionFilter = .all
-                    isPresetApplicationActionsExpanded = false
                     mappingEditingTarget = ShortcutEditingTarget(
                         button: button,
                         trigger: trigger
@@ -1516,7 +1484,6 @@ struct SettingsView: View {
                 onEdit: { button, trigger in
                     selectedRemoteButton = button
                     mappingActionFilter = .all
-                    isPresetApplicationActionsExpanded = false
                     mappingEditingTarget = ShortcutEditingTarget(
                         button: button,
                         trigger: trigger
@@ -2208,7 +2175,6 @@ struct SettingsView: View {
                 Button {
                     guard mappingActionFilter != filter else { return }
                     mappingActionFilter = filter
-                    isPresetApplicationActionsExpanded = filter == .custom
                 } label: {
                     Text(localization.text(filter.localizationKey))
                         .font(.system(size: 14, weight: isSelected ? .semibold : .medium))
@@ -2230,6 +2196,7 @@ struct SettingsView: View {
                                     lineWidth: 1
                                 )
                         }
+                        .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
                 .accessibilityAddTraits(isSelected ? .isSelected : [])
@@ -2266,33 +2233,17 @@ struct SettingsView: View {
         isManagedPowerAction: Bool,
         onSelect: @escaping (ButtonAction) -> Void
     ) -> some View {
-        if category == .applications {
-            DisclosureGroup(isExpanded: $isPresetApplicationActionsExpanded) {
-                mappingActionGrid(
-                    actions: actions,
-                    selectedAction: selectedAction,
-                    installedBundleIdentifiers: installedBundleIdentifiers,
-                    isManagedPowerAction: isManagedPowerAction,
-                    onSelect: onSelect
-                )
-                .padding(.top, 8)
-            } label: {
-                Text(localization.text(category.localizationKey))
-                    .font(.system(size: 14, weight: .semibold))
-            }
-        } else {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(localization.text(category.localizationKey))
-                    .font(.system(size: 14, weight: .semibold))
+        VStack(alignment: .leading, spacing: 8) {
+            Text(localization.text(category.localizationKey))
+                .font(.system(size: 14, weight: .semibold))
 
-                mappingActionGrid(
-                    actions: actions,
-                    selectedAction: selectedAction,
-                    installedBundleIdentifiers: installedBundleIdentifiers,
-                    isManagedPowerAction: isManagedPowerAction,
-                    onSelect: onSelect
-                )
-            }
+            mappingActionGrid(
+                actions: actions,
+                selectedAction: selectedAction,
+                installedBundleIdentifiers: installedBundleIdentifiers,
+                isManagedPowerAction: isManagedPowerAction,
+                onSelect: onSelect
+            )
         }
     }
 
@@ -2303,57 +2254,71 @@ struct SettingsView: View {
         isManagedPowerAction: Bool,
         onSelect: @escaping (ButtonAction) -> Void
     ) -> some View {
-        LazyVGrid(
-            columns: [GridItem(.adaptive(minimum: 148), spacing: 8)],
-            alignment: .leading,
-            spacing: 8
-        ) {
-            ForEach(actions) { action in
-                let unavailableApplication = action.presetApplication.map {
-                    !installedBundleIdentifiers.contains($0.bundleIdentifier)
-                } ?? false
-                let unavailableExperiment = action == .toggleLongRecording &&
-                    !settings.experimentalContinuousRecordingEnabled
-                Button {
-                    onSelect(action)
-                } label: {
-                    HStack(spacing: 7) {
-                        Image(systemName: selectedAction == action ? "checkmark.circle.fill" : "circle")
-                            .foregroundStyle(selectedAction == action ? Color.accentColor : Color.secondary)
-                        Text(
-                            action.displayName(using: localization) +
+        VStack(alignment: .leading, spacing: 8) {
+            LazyVGrid(
+                columns: [GridItem(.adaptive(minimum: 148), spacing: 8)],
+                alignment: .leading,
+                spacing: 8
+            ) {
+                ForEach(actions) { action in
+                    let unavailableApplication = action.presetApplication.map {
+                        !installedBundleIdentifiers.contains($0.bundleIdentifier)
+                    } ?? false
+                    let unavailableExperiment = action == .toggleLongRecording &&
+                        !settings.experimentalContinuousRecordingEnabled
+                    Button {
+                        onSelect(action)
+                    } label: {
+                        mappingActionLabel(
+                            title: action.displayName(using: localization) +
                                 (unavailableApplication
                                     ? localization.text("common.suffix.not_installed")
                                     : unavailableExperiment
                                         ? localization.text("common.suffix.experimental_disabled")
-                                        : "")
+                                        : ""),
+                            isSelected: selectedAction == action,
+                            systemImage: selectedAction == action ? "checkmark.circle.fill" : "circle"
                         )
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                        Spacer(minLength: 0)
                     }
-                    .font(.system(size: 13, weight: selectedAction == action ? .semibold : .regular))
-                    .padding(.horizontal, 10)
-                    .frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
-                    .background(
-                        selectedAction == action
-                            ? Color.accentColor.opacity(0.13)
-                            : Color.primary.opacity(0.045),
-                        in: RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    )
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .stroke(
-                                selectedAction == action
-                                    ? Color.accentColor.opacity(0.55)
-                                    : Color.secondary.opacity(0.16)
-                            )
-                    }
+                    .buttonStyle(.plain)
+                    .disabled(isManagedPowerAction || unavailableApplication || unavailableExperiment)
                 }
-                .buttonStyle(.plain)
-                .disabled(isManagedPowerAction || unavailableApplication || unavailableExperiment)
+                if actions.contains(.openCommonPhrases) {
+                    Button {
+                        selectedSection = .commonPhrases
+                    } label: {
+                        mappingActionLabel(
+                            title: localization.text("common_phrases.adjust"),
+                            isSelected: false,
+                            systemImage: "slider.horizontal.3"
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("common-phrases-adjust")
+                }
             }
         }
+    }
+
+    private func mappingActionLabel(title: String, isSelected: Bool, systemImage: String) -> some View {
+        HStack(spacing: 7) {
+            Image(systemName: systemImage)
+                .foregroundStyle(isSelected ? Color.accentColor : Color.secondary)
+            Text(title).lineLimit(1).truncationMode(.tail)
+            Spacer(minLength: 0)
+        }
+        .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
+        .padding(.horizontal, 10)
+        .frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
+        .background(
+            isSelected ? Color.accentColor.opacity(0.13) : Color.primary.opacity(0.045),
+            in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(isSelected ? Color.accentColor.opacity(0.55) : Color.secondary.opacity(0.16))
+        }
+        .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 
     @ViewBuilder
@@ -2886,6 +2851,7 @@ struct SettingsView: View {
     private func buttonProfileSystemImage(for action: ButtonAction) -> String {
         if action.presetApplication != nil { return "app" }
         switch action {
+        case .openCommonPhrases: return "text.quote"
         case .focusInput: return "scope"
         case .showDesktop: return "macwindow"
         case .appSwitcher: return "command"
@@ -2907,21 +2873,19 @@ struct SettingsView: View {
             HStack(spacing: 14) {
                 PageHeader(title: localization.text("statistics.page.title"))
                 Spacer(minLength: 20)
-                StatusPill(
-                    text: localization.text("about.privacy.local_only"),
-                    tint: .green
-                )
+                Label(localization.text("about.privacy.local_only"), systemImage: "lock")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.secondary)
             }
         } content: {
-            CompatibilityGlassContainer(spacing: 14) {
-                VStack(spacing: 14) {
-                    statisticsSummaryGrid
-                    StatisticsColumnsLayout {
-                        statisticsRankingPanel
-                        VStack(spacing: 14) {
-                            statisticsCalendarPanel
-                            statisticsVoiceSessionRankingPanel
-                        }
+            VStack(spacing: 14) {
+                sharePanel(for: .statistics)
+                statisticsSummaryGrid
+                StatisticsColumnsLayout {
+                    statisticsRankingPanel
+                    VStack(spacing: 14) {
+                        statisticsCalendarPanel
+                        statisticsVoiceSessionRankingPanel
                     }
                 }
             }
@@ -2986,7 +2950,7 @@ struct SettingsView: View {
     }
 
     private var statisticsRankingPanel: some View {
-        GlassPanel {
+        ProfilePanel {
             VStack(alignment: .leading, spacing: 12) {
                 Text("statistics.ranking.title")
                     .font(.title3.weight(.semibold))
@@ -3057,7 +3021,7 @@ struct SettingsView: View {
     }
 
     private var statisticsCalendarPanel: some View {
-        GlassPanel {
+        ProfilePanel {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(alignment: .firstTextBaseline) {
                     Text("statistics.calendar.title")
@@ -3107,7 +3071,7 @@ struct SettingsView: View {
     }
 
     private var statisticsVoiceSessionRankingPanel: some View {
-        GlassPanel {
+        ProfilePanel {
             VStack(alignment: .leading, spacing: 7) {
                 Label(
                     localization.text("statistics.ranking.voice_sessions"),
@@ -3723,9 +3687,6 @@ struct SettingsView: View {
                     }
 
                     settingsSupportSection
-
-                    sharePanel(for: .about)
-                        .padding(.top, 14)
                 }
             }
         }
@@ -3801,7 +3762,7 @@ struct SettingsView: View {
         let isExpanded = expandedShareSection == section
         let shareURL = AppShareLink.url(for: localization.locale)
 
-        return GlassPanel {
+        return ProfilePanel {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(spacing: 14) {
                     Image(systemName: "square.and.arrow.up")
@@ -3824,7 +3785,7 @@ struct SettingsView: View {
                             systemImage: isExpanded ? "chevron.up" : "qrcode"
                         )
                     }
-                    .compatibilityButtonStyle(.standard)
+                    .buttonStyle(.bordered)
                 }
 
                 if isExpanded {
@@ -3834,11 +3795,6 @@ struct SettingsView: View {
                 }
             }
         }
-        .id(shareAnchor(for: section))
-    }
-
-    private func shareAnchor(for section: SettingsSection) -> String {
-        "settings-share-\(section.rawValue)"
     }
 
     private func sectionTitle(_ section: SettingsSection) -> String {
@@ -4702,6 +4658,20 @@ struct GlassPanel<Content: View>: View {
     }
 }
 
+private struct ProfilePanel<Content: View>: View {
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        content
+            .padding(16)
+            .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(Color.secondary.opacity(0.18))
+            }
+    }
+}
+
 private struct ShareCard: View {
     let url: URL
     @State private var copySucceeded: Bool?
@@ -4744,7 +4714,7 @@ private struct ShareCard: View {
                 } label: {
                     Label("share.copy_action", systemImage: "doc.on.doc")
                 }
-                .compatibilityButtonStyle(.prominent)
+                .buttonStyle(.borderedProminent)
                 .accessibilityHint(Text("share.copy.accessibility_hint"))
 
                 if let copySucceeded {
@@ -4809,7 +4779,7 @@ private struct ProfileMetricCard: View {
                 .font(.system(size: 20, weight: .semibold))
                 .foregroundStyle(tint)
                 .frame(width: 42, height: 42)
-                .compatibilityTintedGlass(tint: tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+                .background(tint.opacity(0.10), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
                     .font(.system(size: 12))
@@ -4832,10 +4802,11 @@ private struct ProfileMetricCard: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity, minHeight: 88, alignment: .leading)
-        .compatibilityTintedGlass(
-            tint: tint.opacity(0.06),
-            in: RoundedRectangle(cornerRadius: 16, style: .continuous)
-        )
+        .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(Color.secondary.opacity(0.18))
+        }
     }
 }
 
