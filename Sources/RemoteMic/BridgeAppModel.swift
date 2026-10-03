@@ -1868,11 +1868,16 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             webRemoteState = .membershipRequired
             return
         }
-        if case let .plusRequired(_, _, expiresAt) = webRemoteState,
-           let expiresAt,
-           expiresAt <= Date()
-        {
+        switch webRemoteState {
+        case .failed:
             webRemoteSessionIdempotencyKey = nil
+        case let .waitingForPhone(_, _, expiresAt),
+             let .plusRequired(_, _, expiresAt):
+            if let expiresAt, expiresAt <= Date() {
+                webRemoteSessionIdempotencyKey = nil
+            }
+        default:
+            break
         }
         webRemoteSessionGeneration &+= 1
         webRemoteSessionOperationCounter &+= 1
