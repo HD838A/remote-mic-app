@@ -79,6 +79,10 @@ let sourceMacroCapabilitiesAvailable = combinationActionsPackagePath.map {
             .path
     )
 } ?? false
+let unifiedButtonConfigurationAvailable = combinationActionsPackagePath.map {
+    FileManager.default.fileExists(atPath: URL(fileURLWithPath: $0)
+        .appendingPathComponent("Sources/SayAllMacroRemoteMic/UnifiedButtonConfiguration.swift").path)
+} ?? false
 let privateArtifactsAvailable = !(privateArtifactPackagePath ?? "").isEmpty
 let macroCapabilitiesAvailable = sourceMacroCapabilitiesAvailable || privateArtifactsAvailable
 let buttonProfilesTestAccessEnabled = ProcessInfo.processInfo.environment[
@@ -113,7 +117,13 @@ if macroCapabilitiesAvailable {
 if buttonProfilesTestAccessEnabled {
     remoteMicSwiftSettings.append(.define("SAYALL_TEST_BUTTON_PROFILES_FREE"))
 }
+if unifiedButtonConfigurationAvailable {
+    remoteMicSwiftSettings.append(.define("SAYALL_UNIFIED_BUTTON_CONFIGURATION"))
+}
 var remoteMicTestSwiftSettings: [SwiftSetting] = []
+if unifiedButtonConfigurationAvailable {
+    remoteMicTestSwiftSettings.append(.define("SAYALL_UNIFIED_BUTTON_CONFIGURATION"))
+}
 if siriRemoteEnabled {
     remoteMicTestSwiftSettings.append(.define("SAYALL_SIRI_REMOTE_ENABLED"))
 }

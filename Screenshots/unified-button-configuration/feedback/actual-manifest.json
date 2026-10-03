@@ -1,0 +1,182 @@
+[
+  {
+    "file": "actual-basic-selected-dark.jpg",
+    "format": "jpeg",
+    "size": [
+      2040,
+      1544
+    ],
+    "sha256": "0b64ab7b459260da70f5f27137ea3900be096f5c74eeab31cb32746f48d91f6a"
+  },
+  {
+    "file": "actual-basic-selected-light.jpg",
+    "format": "jpeg",
+    "size": [
+      2040,
+      1544
+    ],
+    "sha256": "7cda295e71f84d9965164db784c5c022f9141fd1c204e5a3c5d069511638f0a9"
+  },
+  {
+    "file": "actual-navigation-0-dark.jpg",
+    "format": "jpeg",
+    "size": [
+      2040,
+      1544
+    ],
+    "sha256": "eefc7e4f1852c50ba1cd247f327e0e57dfeb940157ab819464f2f6e6f4751b14"
+  },
+  {
+    "file": "actual-navigation-0-light.jpg",
+    "format": "jpeg",
+    "size": [
+      2040,
+      1544
+    ],
+    "sha256": "5d70d3a02b17ef7c8312a907937da99ab408949a703e80b7166a5852a29470fa"
+  },
+  {
+    "file": "actual-navigation-1-dark.jpg",
+    "format": "jpeg",
+    "size": [
+      2040,
+      1544
+    ],
+    "sha256": "dedde96da8028fc5075c1ee48c1d82a5ced6d9d915078ebcda8db812b3f7197b"
+  },
+  {
+    "file": "actual-navigation-1-light.jpg",
+    "format": "jpeg",
+    "size": [
+      2040,
+      1544
+    ],
+    "sha256": "2bcaed3b02a85bd765786d88b5cf2951580f28afc38619d99f75545f2e35ee47"
+  },
+  {
+    "file": "actual-navigation-2-dark.jpg",
+    "format": "jpeg",
+    "size": [
+      2040,
+      1544
+    ],
+    "sha256": "347d629836c69dedfd1401e009701536534d4e28b2f4820fb47f9d62953d15d9"
+  },
+  {
+    "file": "actual-navigation-2-light.jpg",
+    "format": "jpeg",
+    "size": [
+      2040,
+      1544
+    ],
+    "sha256": "b40252e028f87ba707ad8d7a7e365c78ca9c85311eff25f3a3152687425171da"
+  },
+  {
+    "file": "actual-navigation-3-dark.jpg",
+    "format": "jpeg",
+    "size": [
+      2040,
+      1544
+    ],
+    "sha256": "cd6289832ba283a75f850556b057a4bea55e0ff52e8989da51709510879438a5"
+  },
+  {
+    "file": "actual-navigation-3-light.jpg",
+    "format": "jpeg",
+    "size": [
+      2040,
+      1544
+    ],
+    "sha256": "70cb947f56aecb51f388e121ccdfa54512693a1ff045b3bc94e641478c3ab63b"
+  },
+  {
+    "file": "actual-navigation-4-dark.jpg",
+    "format": "jpeg",
+    "size": [
+      2040,
+      1544
+    ],
+    "sha256": "0c60c8792f96f6fee3ff570d7338635138cc5762b37772f8bc85a243ba380d1d"
+  },
+  {
+    "file": "actual-navigation-4-light.jpg",
+    "format": "jpeg",
+    "size": [
+      2040,
+      1544
+    ],
+    "sha256": "5d8f07f91661620a366d1c633ca1885065fce7955b26ee26ee9a965b4ce89e89"
+  },
+  {
+    "file": "actual-navigation-5-dark.jpg",
+    "format": "jpeg",
+    "size": [
+      2040,
+      1544
+    ],
+    "sha256": "57325ae19c6ab9031725b1242bde11ce81675acda6afb68cd88430baba46cba9"
+  },
+  {
+    "file": "actual-navigation-5-light.jpg",
+    "format": "jpeg",
+    "size": [
+      2040,
+      1544
+    ],
+    "sha256": "8d3e9b6d1e221a90280ed1a6e9e17e858bbf67a16207ae8d6cf8d2df084f22b1"
+  },
+  {
+    "file": "actual-review-dark.jpg",
+    "format": "jpeg",
+    "size": [
+      2040,
+      1544
+    ],
+    "sha256": "13134a0beb24fe932d8adf2c2e383797f7e0bb5a6fd5cbe72f9a0680553c1217"
+  },
+  {
+    "file": "actual-review-light.jpg",
+    "format": "jpeg",
+    "size": [
+      2040,
+      1544
+    ],
+    "sha256": "20e76c345cee7f2638ef9ee8a6d5ff5606efea456446977d2124eee39459cddb"
+  },
+  {
+    "file": "actual-saved-dark.jpg",
+    "format": "jpeg",
+    "size": [
+      2040,
+      1544
+    ],
+    "sha256": "8c29b875755a1ff58e1662be9c765e914fa2808375177cc22823215b150c8e7a"
+  },
+  {
+    "file": "actual-saved-light.jpg",
+    "format": "jpeg",
+    "size": [
+      2040,
+      1544
+    ],
+    "sha256": "4278086b468e097c821e993deaefdb34c6e4548face4c4175351ca57d6731f46"
+  },
+  {
+    "file": "actual-steps-dark.jpg",
+    "format": "jpeg",
+    "size": [
+      2040,
+      1544
+    ],
+    "sha256": "39116a64241711b6f558727019eff624fa31c57df5419d790c4509c204fb9cfb"
+  },
+  {
+    "file": "actual-steps-light.jpg",
+    "format": "jpeg",
+    "size": [
+      2040,
+      1544
+    ],
+    "sha256": "a93a16e804f314968ba25e40dd3c999d0116ac6df647b062b37479951b8cfe24"
+  }
+]

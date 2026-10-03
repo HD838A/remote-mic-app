@@ -387,7 +387,7 @@
 "audio.compatibility.help" = "某些语音工具可能无法识别普通虚拟音频设备。安装独立的兼容麦克风 MiRemoteV 2ch 后在这里选中；已有音频设备不会被修改或替换。";
 "audio.compatibility.help_plain" = "如果常用的语音工具收不到声音，可选择随安装包提供的兼容麦克风；已有音频设备不会被替换。";
 "button_mapping.page.title" = "按键映射";
-"button_mapping.page.subtitle" = "自定义遥控器按键功能，并保留语音输入与 Fn 功能";
+"button_mapping.page.subtitle" = "点击按键进行设置";
 "button_mapping.toggle.enabled" = "自定义按键";
 "button_mapping.permission_prompt.title" = "需要开启按键权限";
 "button_mapping.permission_prompt.message" = "自定义按键需要“输入监控”和“辅助功能”权限，请前往权限页面完成设置。";
@@ -1137,6 +1137,28 @@
 "settings.corrupted.item.remote_device" = "遥控器设备配置";
 "settings.corrupted.item.statistics" = "使用统计记录";
 "settings.corrupted.item.other" = "其他设置";
+
+"action.combination_action" = "组合动作";
+
+"button_mapping.editing_profile" = "正在编辑";
+
+"button_mapping.active_profile" = "正在使用";
+
+"button_mapping.base_profile" = "基础映射";
+
+"button_mapping.inherit_base" = "继承基础映射";
+
+"button_mapping.inherited" = "继承";
+
+"button_mapping.search_macros" = "搜索组合动作";
+
+"button_mapping.manage_macros" = "管理组合动作";
+
+"button_mapping.macro_unavailable" = "组合动作不可用，请重新选择";
+
+"button_mapping.return_choose_macro" = "返回原按键并选择组合动作";
+
+"button_mapping.macro_step_count" = "%d 个步骤";
 
 /* Common phrases */
 "action.open_common_phrases" = "打开常用语";
