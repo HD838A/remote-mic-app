@@ -9,6 +9,7 @@ WORK_ROOT="$ROOT/.build/doubao-driver$RELEASE_WORK_SUFFIX"
 SOURCE_ROOT="$WORK_ROOT/BlackHole"
 PATCH="$ROOT/third_party/blackhole/blackhole-device-usb.patch"
 OUTPUT="$RELEASE_OUTPUT_DIR/MiRemoteV2ch.driver"
+LEGACY_OUTPUT="$RELEASE_OUTPUT_DIR/legacy/MiRemoteV2ch.driver"
 PRODUCT_NAME="MiRemoteV2ch"
 BUNDLE_ID="com.hd838a.MiRemoteV2ch"
 DEFINITIONS='$GCC_PREPROCESSOR_DEFINITIONS kDriver_Name=\"MiRemoteV\" kPlugIn_BundleID=\"com.hd838a.MiRemoteV2ch\" kNumber_Of_Channels=2'
@@ -90,6 +91,7 @@ esac
 
 move_existing_path_to_trash "$WORK_ROOT" "sayall-driver-build"
 move_existing_path_to_trash "$OUTPUT" "MiRemoteV2ch.driver"
+move_existing_path_to_trash "$LEGACY_OUTPUT" "MiRemoteV2ch-legacy.driver"
 mkdir -p "${WORK_ROOT:h}" "${OUTPUT:h}"
 run_release_stage driver-source-clone 60 git clone --depth 1 --branch "$BLACKHOLE_TAG" \
   https://github.com/ExistentialAudio/BlackHole.git "$SOURCE_ROOT"
@@ -103,37 +105,50 @@ git -C "$SOURCE_ROOT" apply "$PATCH"
 rg -U -q 'case kAudioDevicePropertyTransportType:(?s:.*?)kAudioDeviceTransportTypeUSB' \
   "$SOURCE_ROOT/BlackHole/BlackHole.c"
 
-run_release_stage driver-xcodebuild "$RELEASE_DRIVER_BUILD_TIMEOUT_SECONDS" xcodebuild \
-  -project "$SOURCE_ROOT/BlackHole.xcodeproj" \
-  -target BlackHole \
-  -configuration Release \
-  -sdk macosx \
-  ARCHS="$RELEASE_ARCH" \
-  ONLY_ACTIVE_ARCH=NO \
-  MACOSX_DEPLOYMENT_TARGET="$RELEASE_MIN_SYSTEM_VERSION" \
-  CODE_SIGNING_ALLOWED=NO \
-  PRODUCT_NAME="$PRODUCT_NAME" \
-  PRODUCT_BUNDLE_IDENTIFIER="$BUNDLE_ID" \
-  GCC_PREPROCESSOR_DEFINITIONS="$DEFINITIONS" \
-  build
+# kDriver_Name defines the historical Box/Device/Model UIDs. Override only
+# kDevice_Name; both signed payloads keep the same identity and endpoint count.
+for naming_variant in brand legacy; do
+  variant_definitions="$DEFINITIONS"
+  variant_output="$LEGACY_OUTPUT"
+  if [[ "$naming_variant" == "brand" ]]; then
+    variant_definitions+=' kDevice_Name=\"SayAll\"'
+    variant_output="$OUTPUT"
+  fi
+  run_release_stage "driver-$naming_variant-xcodebuild" "$RELEASE_DRIVER_BUILD_TIMEOUT_SECONDS" xcodebuild \
+    -project "$SOURCE_ROOT/BlackHole.xcodeproj" \
+    -target BlackHole \
+    -configuration Release \
+    -sdk macosx \
+    ARCHS="$RELEASE_ARCH" \
+    ONLY_ACTIVE_ARCH=NO \
+    MACOSX_DEPLOYMENT_TARGET="$RELEASE_MIN_SYSTEM_VERSION" \
+    CODE_SIGNING_ALLOWED=NO \
+    PRODUCT_NAME="$PRODUCT_NAME" \
+    PRODUCT_BUNDLE_IDENTIFIER="$BUNDLE_ID" \
+    GCC_PREPROCESSOR_DEFINITIONS="$variant_definitions" \
+    build
 
-ditto --norsrc --noextattr --noqtn --noacl \
-  "$SOURCE_ROOT/build/Release/$PRODUCT_NAME.driver" "$OUTPUT"
-/usr/bin/strip -S "$OUTPUT/Contents/MacOS/$PRODUCT_NAME"
-if [[ "$SIGNING_IDENTITY" == "-" ]]; then
-  codesign --force --deep --sign - --timestamp=none "$OUTPUT"
-else
-  run_release_stage driver-codesign "$RELEASE_CODESIGN_TIMEOUT_SECONDS" codesign \
-    --force \
-    --deep \
-    --options runtime \
-    --timestamp \
-    --sign "$SIGNING_IDENTITY" \
-    "$OUTPUT"
-fi
-"$ROOT/scripts/verify-doubao-driver.sh" "$OUTPUT"
+  ditto --norsrc --noextattr --noqtn --noacl \
+    "$SOURCE_ROOT/build/Release/$PRODUCT_NAME.driver" "$variant_output"
+  /usr/bin/plutil -insert SayAllNamingVariant -string "$naming_variant" "$variant_output/Contents/Info.plist"
+  /usr/bin/strip -S "$variant_output/Contents/MacOS/$PRODUCT_NAME"
+  if [[ "$SIGNING_IDENTITY" == "-" ]]; then
+    codesign --force --deep --sign - --timestamp=none "$variant_output"
+  else
+    run_release_stage "driver-$naming_variant-codesign" "$RELEASE_CODESIGN_TIMEOUT_SECONDS" codesign \
+      --force \
+      --deep \
+      --options runtime \
+      --timestamp \
+      --sign "$SIGNING_IDENTITY" \
+      "$variant_output"
+  fi
+  "$ROOT/scripts/verify-doubao-driver.sh" "$variant_output" "$naming_variant"
+
+done
 
 print "Built: $OUTPUT"
+print "Built: $LEGACY_OUTPUT"
 print "RELEASE VARIANT: $RELEASE_VARIANT"
 print "SIGNING IDENTITY: $SIGNING_IDENTITY"
 print "Next: $ROOT/scripts/build-doubao-driver-pkg.sh"

@@ -30,7 +30,7 @@ This guide explains names that may appear during installation, device selection,
 
 **When you may see it:** Selecting voice output or installing the input-method compatibility driver.
 
-### MiRemoteV 2ch
+### SayAll / MiRemoteV 2ch
 
 **Plain-language explanation:** The compatible microphone's actual name in the macOS audio device list.
 

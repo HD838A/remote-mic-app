@@ -188,8 +188,8 @@ queue_owned_hci_service
 
 if [[ "${#ITEM_SOURCES[@]}" -eq 0 ]]; then
   installer_message \
-    "未发现可安全卸载的无线麦SayAll.app 或 MiRemoteV 2ch。" \
-    "No SayAll app or MiRemoteV 2ch installation that could be safely uninstalled was found."
+    "未发现可安全卸载的无线麦SayAll.app 或兼容麦克风。" \
+    "No SayAll app or compatible microphone installation that could be safely uninstalled was found."
   exit 0
 fi
 

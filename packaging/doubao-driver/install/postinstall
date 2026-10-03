@@ -8,9 +8,7 @@ LEGACY_APP_TRASH_HELPER="$SCRIPT_DIR/trash-legacy-app.zsh"
 DESTINATION="${TARGET_VOLUME%/}/Library/Audio/Plug-Ins/HAL/MiRemoteV2ch.driver"
 PLIST="$DESTINATION/Contents/Info.plist"
 BINARY="$DESTINATION/Contents/MacOS/MiRemoteV2ch"
-STAGED_DRIVER="${TARGET_VOLUME%/}/Library/Application Support/RemoteMic/Installer/MiRemoteV2ch.driver"
-STAGED_PLIST="$STAGED_DRIVER/Contents/Info.plist"
-STAGED_BINARY="$STAGED_DRIVER/Contents/MacOS/MiRemoteV2ch"
+
 APP_DESTINATION="${TARGET_VOLUME%/}/Applications/SayAll.app"
 APP_PLIST="$APP_DESTINATION/Contents/Info.plist"
 APP_BINARY="$APP_DESTINATION/Contents/MacOS/RemoteMic"
@@ -47,6 +45,40 @@ installer_message() {
   fi
 }
 
+source "$SCRIPT_DIR/driver-naming.zsh"
+NAMING_SELECTION="$SCRIPT_DIR/driver-naming-selection.plist"
+[[ -f "$NAMING_SELECTION" && ! -L "$NAMING_SELECTION" && "$(/usr/bin/stat -f %u "$NAMING_SELECTION")" == 0 ]] || { driver_naming_failure missing_selection; exit 2; }
+SELECTED_NAMING="$(/usr/bin/plutil -extract Variant raw -o - "$NAMING_SELECTION" 2>/dev/null || true)"
+case "$SELECTED_NAMING" in
+  brand) DRIVER_DISPLAY_NAME="SayAll"; STAGED_SUFFIX="" ;;
+  legacy) DRIVER_DISPLAY_NAME="MiRemoteV 2ch"; STAGED_SUFFIX="/legacy" ;;
+  *) driver_naming_failure unknown_selection; exit 2 ;;
+esac
+SELECTION_BUILD="$(/usr/bin/plutil -extract PackageBuild raw -o - "$NAMING_SELECTION" 2>/dev/null || true)"
+EXPECTED_BUILD="$(/usr/bin/plutil -extract PackageBuild raw -o - "$RELEASE_CONFIG")"
+[[ "$SELECTION_BUILD" == "$EXPECTED_BUILD" ]] || { driver_naming_failure mismatched_selection; exit 2; }
+prepare_driver_naming_directory "$TARGET_VOLUME" || { driver_naming_failure unsafe_state_directory; exit 2; }
+check_driver_naming_duplicates "$TARGET_VOLUME" "$DESTINATION" || { driver_naming_failure duplicate_driver; exit 2; }
+STAGING_ROOT="${TARGET_VOLUME%/}/Library/Application Support/RemoteMic/Installer"
+[[ ! -L "$STAGING_ROOT" && ! -L "$STAGING_ROOT/legacy" ]] || { driver_naming_failure unsafe_payload; exit 2; }
+STAGED_DRIVER="$STAGING_ROOT$STAGED_SUFFIX/MiRemoteV2ch.driver"
+[[ "$(driver_naming_variant "$STAGED_DRIVER")" == "$SELECTED_NAMING" ]] || { driver_naming_failure invalid_payload; exit 2; }
+# Recheck evidence after payload deployment; never use the just-written receipt.
+CURRENT_NAMING=none
+if [[ -e "$DESTINATION" || -L "$DESTINATION" ]]; then
+  driver_naming_identity "$DESTINATION" || { driver_naming_failure unknown_identity; exit 2; }
+  CURRENT_NAMING="$(driver_naming_variant "$DESTINATION" || print unknown)"
+fi
+RECORDED_NAMING="$(driver_naming_record)" || { driver_naming_failure invalid_state; exit 2; }
+POST_HISTORY=no
+if [[ "$SELECTED_NAMING" == legacy ]]; then POST_HISTORY=yes; fi
+[[ "$(resolve_driver_naming "$CURRENT_NAMING" "$RECORDED_NAMING" "$POST_HISTORY")" == "$SELECTED_NAMING" ]] || {
+  driver_naming_failure changed_evidence; exit 2
+}
+
+STAGED_PLIST="$STAGED_DRIVER/Contents/Info.plist"
+STAGED_BINARY="$STAGED_DRIVER/Contents/MacOS/MiRemoteV2ch"
+
 test -f "$LEGACY_APP_TRASH_HELPER"
 source "$LEGACY_APP_TRASH_HELPER"
 
@@ -73,6 +105,7 @@ driver_is_healthy_and_current() {
     test -f "$PLIST" &&
     test -x "$BINARY" &&
     test -f "$STAGED_PLIST" &&
+    test "$(driver_naming_variant "$DESTINATION")" = "$SELECTED_NAMING" &&
     test "$(/usr/bin/plutil -extract CFBundleIdentifier raw -o - "$PLIST" 2>/dev/null || true)" = \
       "com.hd838a.MiRemoteV2ch" &&
     test "$(/usr/bin/plutil -extract CFBundleName raw -o - "$PLIST" 2>/dev/null || true)" = \
@@ -119,15 +152,15 @@ restore_previous_driver() {
   if [[ -n "$DRIVER_BACKUP" && -e "$DRIVER_BACKUP" ]]; then
     /bin/mv -n -- "$DRIVER_BACKUP" "$DESTINATION" || \
       installer_message \
-        "MiRemoteV 2ch 更新失败，且无法自动恢复旧驱动；旧驱动仍保留在 $DRIVER_BACKUP。" \
-        "MiRemoteV 2ch update failed and the previous driver could not be restored automatically. It remains at $DRIVER_BACKUP." >&2
+        "$DRIVER_DISPLAY_NAME 更新失败，且无法自动恢复旧驱动；旧驱动仍保留在 $DRIVER_BACKUP。" \
+        "$DRIVER_DISPLAY_NAME update failed and the previous driver could not be restored automatically. It remains at $DRIVER_BACKUP." >&2
   fi
 }
 
 if driver_is_healthy_and_current; then
   installer_message \
-    "已保留现有的 MiRemoteV 2ch，无需重复安装。" \
-    "The existing MiRemoteV 2ch is healthy and was kept in place."
+    "已保留现有的 $DRIVER_DISPLAY_NAME，无需重复安装。" \
+    "The existing $DRIVER_DISPLAY_NAME is healthy and was kept in place."
 else
   DRIVER_CHANGED=1
   if [[ -e "$DESTINATION" || -L "$DESTINATION" ]]; then
@@ -140,15 +173,18 @@ else
      ! /usr/bin/find "$DESTINATION" -type d -exec /bin/chmod 755 {} \; || \
      ! /usr/bin/find "$DESTINATION" -type f -exec /bin/chmod 644 {} \; || \
      ! /bin/chmod 755 "$BINARY" || \
-     ! /usr/bin/codesign --verify --deep --strict "$DESTINATION"; then
+     ! /usr/bin/codesign --verify --deep --strict "$DESTINATION" || \
+     [[ "$(driver_naming_variant "$DESTINATION")" != "$SELECTED_NAMING" ]] || \
+     ! commit_driver_naming_record "$SELECTED_NAMING"; then
     if [[ -e "$DESTINATION" || -L "$DESTINATION" ]]; then
       FAILED_DRIVER="${DESTINATION:h}/.MiRemoteV2ch.driver.failed-$(/bin/date -u +%Y%m%dT%H%M%SZ)-$$"
       /bin/mv -n -- "$DESTINATION" "$FAILED_DRIVER" 2>/dev/null || true
     fi
     restore_previous_driver
+    print "DRIVER_NAMING phase=failed result=failed reason=driver_replacement_failed variant=$SELECTED_NAMING rollback=unknown"
     installer_message \
-      "MiRemoteV 2ch 更新失败，安装已停止。" \
-      "MiRemoteV 2ch update failed and installation has stopped." >&2
+      "$DRIVER_DISPLAY_NAME 更新失败，安装已停止。" \
+      "$DRIVER_DISPLAY_NAME update failed and installation has stopped." >&2
     exit 2
   fi
   if [[ -n "$DRIVER_BACKUP" ]]; then
@@ -161,23 +197,25 @@ else
       DRIVER_BACKUP=""
     else
       installer_message \
-        "MiRemoteV 2ch 已更新，但旧驱动无法移入废纸篓，已保留在 $DRIVER_BACKUP。" \
-        "MiRemoteV 2ch was updated, but the previous driver could not be moved to Trash and remains at $DRIVER_BACKUP." >&2
+        "$DRIVER_DISPLAY_NAME 已更新，但旧驱动无法移入废纸篓，已保留在 $DRIVER_BACKUP。" \
+        "$DRIVER_DISPLAY_NAME was updated, but the previous driver could not be moved to Trash and remains at $DRIVER_BACKUP." >&2
     fi
   fi
   installer_message \
-    "已安装或更新 MiRemoteV 2ch。" \
-    "MiRemoteV 2ch was installed or updated."
+    "已安装或更新 $DRIVER_DISPLAY_NAME。" \
+    "$DRIVER_DISPLAY_NAME was installed or updated."
 fi
+commit_driver_naming_record "$SELECTED_NAMING" || { driver_naming_failure state_commit_failed; exit 2; }
+print "DRIVER_NAMING phase=installed result=verified variant=$SELECTED_NAMING changed=$DRIVER_CHANGED audio_loaded=unknown"
 STAGED_DRIVER_TRASH_ROOT="${TARGET_VOLUME%/}/var/root/.Trash"
 STAGED_DRIVER_TRASH_DESTINATION="$STAGED_DRIVER_TRASH_ROOT/RemoteMic Installer Staging $(/bin/date -u +%Y%m%dT%H%M%SZ)-$$"
 if ! /bin/mkdir -p -- "$STAGED_DRIVER_TRASH_ROOT" || \
    ! /usr/sbin/chown root:wheel "$STAGED_DRIVER_TRASH_ROOT" || \
    ! /bin/chmod 700 "$STAGED_DRIVER_TRASH_ROOT" || \
-   ! /bin/mv -n -- "${STAGED_DRIVER:h}" "$STAGED_DRIVER_TRASH_DESTINATION"; then
+   ! /bin/mv -n -- "$STAGING_ROOT" "$STAGED_DRIVER_TRASH_DESTINATION"; then
   installer_message \
-    "安装已完成，但临时驱动目录无法移入废纸篓，已保留在 ${STAGED_DRIVER:h}。" \
-    "Installation completed, but the staged driver directory could not be moved to Trash and remains at ${STAGED_DRIVER:h}." >&2
+    "安装已完成，但临时驱动目录无法移入废纸篓，已保留在 $STAGING_ROOT。" \
+    "Installation completed, but the staged driver directory could not be moved to Trash and remains at $STAGING_ROOT." >&2
 fi
 /usr/sbin/chown -R root:wheel "$APP_DESTINATION"
 /usr/bin/find "$APP_DESTINATION" -type d -exec /bin/chmod 755 {} \;
@@ -255,8 +293,8 @@ elif [[ "$CONSOLE_USER" != "root" && "$CONSOLE_USER" != "loginwindow" ]]; then
   if /bin/launchctl asuser "$CONSOLE_UID" \
     /usr/bin/sudo -u "$CONSOLE_USER" /usr/bin/open "$APP_DESTINATION"; then
     installer_message \
-      "已安装并启动无线麦SayAll.app；请在状态栏打开设置并选择 MiRemoteV 2ch。" \
-      "SayAll is installed and running. Open its menu bar settings and select MiRemoteV 2ch."
+      "已安装并启动无线麦SayAll.app；请在状态栏打开设置并选择 $DRIVER_DISPLAY_NAME。" \
+      "SayAll is installed and running. Open its menu bar settings and select $DRIVER_DISPLAY_NAME."
   else
     installer_message \
       "已完成安装，但未能自动启动应用；请从“应用程序”手动打开无线麦SayAll.app。" \

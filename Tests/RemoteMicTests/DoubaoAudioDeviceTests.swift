@@ -17,11 +17,30 @@ struct DoubaoAudioDeviceTests {
         let device = AudioDeviceInfo(
             id: 2,
             uid: "unknown",
-            name: DoubaoAudioDevicePolicy.deviceName
+            name: DoubaoAudioDevicePolicy.legacyDeviceName
         )
 
         #expect(DoubaoAudioDevicePolicy.device(in: [device])?.id == device.id)
         #expect(DoubaoAudioDevicePolicy.status(in: [device]).key == "audio.compatibility.device_detected")
+    }
+
+    @Test func brandNameRequiresStableUIDAndReportsActualName() {
+        let unrelated = AudioDeviceInfo(id: 4, uid: "physical", name: "SayAll")
+        let brand = AudioDeviceInfo(id: 5, uid: DoubaoAudioDevicePolicy.deviceUID, name: "SayAll")
+        let legacy = AudioDeviceInfo(id: 6, uid: "unknown", name: "MiRemoteV 2ch")
+        #expect(DoubaoAudioDevicePolicy.device(in: [unrelated]) == nil)
+        #expect(DoubaoAudioDevicePolicy.device(in: [legacy, unrelated, brand]) == brand)
+        #expect(DoubaoAudioDevicePolicy.status(in: [brand]).arguments == ["SayAll"])
+        #expect(DoubaoAudioDevicePolicy.status(in: [legacy]).arguments == ["MiRemoteV 2ch"])
+        #expect(OnboardingAudioSelectionPolicy.isSupportedDevice(uid: brand.uid, name: brand.name))
+        #expect(!OnboardingAudioSelectionPolicy.isSupportedDevice(uid: unrelated.uid, name: unrelated.name))
+        #expect(VirtualAudioDeviceDiagnosticKind.classify(brand) == .miRemoteV2ch)
+        let recovered = VirtualAudioSelectionRecoveryPolicy.resolve(
+            selectedUID: brand.uid, rememberedUID: "", availableDevices: [brand],
+            hasHistoricalConfiguration: true
+        )
+        #expect(recovered.uid == brand.uid)
+        #expect(recovered.source == .currentSelection)
     }
 
     @Test func reportsWhenTheCompatibilityDriverIsMissing() {

@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT="${0:A:h:h}"
 source "$ROOT/scripts/release-variant.sh"
 DRIVER="${1:-$RELEASE_OUTPUT_DIR/MiRemoteV2ch.driver}"
+NAMING_VARIANT="${2:-brand}"
 PLIST="$DRIVER/Contents/Info.plist"
 BINARY="$DRIVER/Contents/MacOS/MiRemoteV2ch"
 EXPECTED_DEVELOPER_TEAM_ID="${EXPECTED_DEVELOPER_TEAM_ID:-}"
@@ -33,8 +34,16 @@ fi
 ARCHS="$(lipo -archs "$BINARY")"
 test "$ARCHS" = "$RELEASE_ARCH"
 xcrun vtool -show-build "$BINARY" | rg -Fq "minos $RELEASE_MIN_SYSTEM_VERSION"
-strings "$BINARY" | rg -qx 'MiRemoteV %ich'
+case "$NAMING_VARIANT" in
+  brand) DEVICE_NAME="SayAll" ;;
+  legacy) DEVICE_NAME="MiRemoteV %ich" ;;
+  *) print -u2 "unknown driver naming variant"; exit 1 ;;
+esac
+test "$(plutil -extract SayAllNamingVariant raw -o - "$PLIST")" = "$NAMING_VARIANT"
+strings "$BINARY" | rg -Fxq "$DEVICE_NAME"
 strings "$BINARY" | rg -qx 'MiRemoteV%ich_UID'
+strings "$BINARY" | rg -qx 'MiRemoteV%ich_ModelUID'
+strings "$BINARY" | rg -qx 'MiRemoteV%ich_2_UID'
 
 print "DOUBAO DRIVER VERIFY PASS: $DRIVER"
 print "RELEASE VARIANT: $RELEASE_VARIANT"
