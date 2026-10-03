@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="zh-CN"><meta charset="utf-8"><title>Mac 英文本地化修正</title>
+<body><h1>Mac 英文本地化修正</h1>
+<p>日期：2026-10-03。范围：当前公开 Mac 源码中的英文界面、连接批准弹窗、系统用途说明与内置帮助。保留 Profile 和 Reflections 产品名称。未改变语音、音频、权限和可信设备规则。</p>
+<h2>复现和证据</h2>
+<p>在英文资源中，历史删除按钮显示 Delete Current App，实际处理函数只删除当前应用的转写历史。语音恢复提示固定要求按住后松开，但现有产品也支持按一次开始、再次结束。连接批准函数将标题、正文、按钮和校验码辅助功能标签写死为中文。向导按外观加载中文截图，英文页面没有选项对照。</p>
+<p>静态复现位置：Resources/en.lproj/Localizable.strings；Sources/RemoteMic/TranscriptHistorySection.swift；Sources/RemoteMic/BridgeAppModel.swift 的 requestPhoneApproval / requestWebApproval；Sources/RemoteMic/OnboardingView.swift 的 onboardingGuideScreenshot。运行日志不包含界面翻译，不能证明这些语言错误。本次先用资源和调用位置确认，再用生产截图验证显示。</p>
+<h2>根因和修正</h2>
+<p>部分英文沿用中文字面结构或内部术语；部分界面绕过本地化入口。统一 voice button、voice typing app、箭头键与物理按键术语。修正统计、设置导入和 MCP 提示。连接批准改用现有 LocalizationStore；导出文件名和单条历史数量使用对应语言资源。原始中文截图不变，只在英文页面补充中英选项说明。</p>
+<p>系统用途说明跟随系统选择的 Bundle 语言；Apple Remote 系统授权说明跟随执行进程的首选语言，不声称它跟随 App 内手动语言选择。</p>
+<h2>验证</h2>
+<p>验证结果：<code>swift test --disable-keychain</code> 通过，808 个测试全部通过；<code>git diff --check</code> 通过。已检查英文浅色、深色 Onboarding 与设置截图，并确认英文语音恢复提示按 Hold/Toggle 模式生成。</p>
+<h2>边界</h2>
+<p>离屏截图使用隔离偏好和模拟状态，只证明生产 UI 的文案与布局。没有执行真实遥控器、Nearby、Web、系统权限授权或第三方语音工具验收。私有组件独立资源不在本次修改范围内。未构建或交付正式安装包，未发布版本。</p>
+</body></html>

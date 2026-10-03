@@ -1226,12 +1226,12 @@ struct OnboardingView: View {
     }
 
     private func onboardingGuideScreenshot(resourceName: String) -> some View {
-        Group {
+        VStack(alignment: .leading, spacing: 8) {
             if let image = onboardingGuideImage(resourceName: resourceName) {
                 Image(nsImage: image)
                     .resizable()
                     .scaledToFit()
-                    .frame(maxWidth: .infinity, maxHeight: 300)
+                    .frame(maxWidth: .infinity, maxHeight: 220)
                     .clipShape(RoundedRectangle(cornerRadius: 10))
                     .overlay {
                         RoundedRectangle(cornerRadius: 10)
@@ -1243,6 +1243,15 @@ struct OnboardingView: View {
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, minHeight: 120)
                     .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 10))
+            }
+            if localization.locale.language.languageCode?.identifier == "en" {
+                Text(verbatim: localization.text(
+                    "onboarding.voice_tool.guide.screenshot." +
+                        resourceName.replacingOccurrences(of: "-", with: "_")
+                ))
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
@@ -2235,7 +2244,7 @@ struct OnboardingView: View {
                     Text(localization.text("onboarding.recovery.\(failure.rawValue).title"))
                         .font(.system(size: 14, weight: .semibold))
                         .fixedSize(horizontal: false, vertical: true)
-                    Text(localization.text(recoveryDetailKey(for: failure)))
+                    Text(recoveryDetailText(for: failure))
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -2281,6 +2290,46 @@ struct OnboardingView: View {
             return "onboarding.recovery.\(failure.rawValue).detail"
         }
         return Self.remoteNotFoundRecoveryDetailKey(for: settings.onboardingControlSource)
+    }
+
+    private func recoveryDetailText(for failure: FirstUseFailureReason) -> String {
+        switch failure {
+        case .voiceSessionNotStarted:
+            return LocalizedMessage(
+                "onboarding.recovery.voice.session_not_started.detail",
+                arguments: [recoveryVoiceGestureInstruction]
+            ).text(using: localization)
+        case .voiceNoSamples:
+            return LocalizedMessage(
+                "onboarding.recovery.voice.no_samples.detail",
+                arguments: [recoveryVoiceGestureInstruction]
+            ).text(using: localization)
+        case .voiceSessionNotEnded:
+            return LocalizedMessage(
+                "onboarding.recovery.voice.session_not_ended.detail",
+                arguments: [recoveryVoiceFinishInstruction]
+            ).text(using: localization)
+        default:
+            return localization.text(recoveryDetailKey(for: failure))
+        }
+    }
+
+    private var recoveryVoiceGestureInstruction: String {
+        switch effectivePreferredGesture {
+        case .hold:
+            return localization.text("onboarding.recovery.voice.gesture.hold")
+        case .toggle:
+            return localization.text("onboarding.recovery.voice.gesture.toggle")
+        }
+    }
+
+    private var recoveryVoiceFinishInstruction: String {
+        switch effectivePreferredGesture {
+        case .hold:
+            return localization.text("onboarding.recovery.voice.finish.hold")
+        case .toggle:
+            return localization.text("onboarding.recovery.voice.finish.toggle")
+        }
     }
 
     static func remoteNotFoundRecoveryDetailKey(for source: OnboardingControlSource) -> String {

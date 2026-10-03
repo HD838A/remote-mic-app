@@ -559,7 +559,7 @@ struct ConfigurationImportValidationTests {
             ),
             (
                 "en",
-                "Skipped as untrusted: custom application actions.",
+                "These settings did not pass validation: custom application actions.",
                 "These applications are not installed on this Mac, so buttons pointing to them will not work yet: Absent Agent."
             ),
         ]
