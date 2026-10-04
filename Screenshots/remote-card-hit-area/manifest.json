@@ -1,0 +1,95 @@
+{
+  "baseline": "8816bfd478388fe40b1c0f81cd095d63f0a114f9",
+  "source_sha256": "4b758623605a75b6fb385639b059ea2c4785bd5757ee04e0b76ce17beb3c1d0e",
+  "version": "2.0.0",
+  "build": "233",
+  "window_points": [
+    1020,
+    772
+  ],
+  "private_source_commit": "527e16ed0e12701a0fc22de945052e160c4c7e62",
+  "fixtures": "isolated remote-card settings; no hardware",
+  "files": [
+    {
+      "file": "connection-en-dark.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "bytes": 401649,
+      "sha256": "b383f47f2b249c6ed43eeec1fb83048b4a26ef46029e3cc8e4917d884c814236",
+      "capture": "production-offscreen"
+    },
+    {
+      "file": "connection-en-light.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "bytes": 396123,
+      "sha256": "1b7ab0b8c23ada7e3ea9d909446458acd821808e9709344a0c028e3e9f070915",
+      "capture": "production-offscreen"
+    },
+    {
+      "file": "connection-zh-hans-dark.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "bytes": 423325,
+      "sha256": "d7e0f9cb7aef3531ab812aefe69a7c2d490da6765aa43d2fa08cd68ea6cdbdbf",
+      "capture": "production-offscreen"
+    },
+    {
+      "file": "connection-zh-hans-light.jpg",
+      "format": "JPEG",
+      "width": 2040,
+      "height": 1544,
+      "bytes": 316417,
+      "sha256": "54a8ce0e683e070b56263c38c97a1b20f76c55134b9d1edb5e6d46a5f655f889",
+      "capture": "native-window"
+    },
+    {
+      "file": "mapping-apple-selected-zh-hans-light.jpg",
+      "format": "JPEG",
+      "width": 2040,
+      "height": 1544,
+      "bytes": 332830,
+      "sha256": "e01b5b733fc0de19c737e699f2da59d136bd803d635bdce8bb991c488b5caeca",
+      "capture": "native-window"
+    },
+    {
+      "file": "mapping-en-dark.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "bytes": 813933,
+      "sha256": "ffe127e59622a2f20e1d7001f30362197d986890a5976bd9d0bf16a4085fbce7",
+      "capture": "production-offscreen"
+    },
+    {
+      "file": "mapping-en-light.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "bytes": 822132,
+      "sha256": "b4fc88e6c2206a40d023d2de081f5684ed7b8bc946b480cd9c8783e34801fafc",
+      "capture": "production-offscreen"
+    },
+    {
+      "file": "mapping-zh-hans-dark.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "bytes": 785793,
+      "sha256": "c9479495a73aeb2ab67b6c3de4c6705597937547cf7f493b5eddfdc5ec4b5fb8",
+      "capture": "production-offscreen"
+    },
+    {
+      "file": "mapping-zh-hans-light.jpg",
+      "format": "JPEG",
+      "width": 2040,
+      "height": 1544,
+      "bytes": 359786,
+      "sha256": "9575a894f4b74bdb5690d539956dc2513633b1a368c03465b33a86476ff8c03e",
+      "capture": "native-window"
+    }
+  ]
+}
