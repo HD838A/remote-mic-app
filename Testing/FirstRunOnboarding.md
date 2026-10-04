@@ -423,10 +423,10 @@ Cloudflare 遥控合同接入：网页连接新增 Plus 权益状态仍展示 QR
 
 - [ ] 中文与英文在 `1020 × 772` 下逐页检查，无文字或按钮裁切，无意外窗口尺寸变化。
 - [ ] 英文输入工具卡固定显示 `Doubao`、`WeType`、`Vokie`、`Typeless`、`Other Voice App`；页面不得出现 `Doubao Input Method`、`WeChat Input Method`、`Another Voice Tool` 或普通用户含义不清的 `voice tool`。
-- [ ] 使用生产离屏入口分别设置 `REMOTE_MIC_ONBOARDING_SCREENSHOT_LANGUAGE=zh-Hans` 与 `en`，两种语言均生成浅色、深色完整页面；重点检查连接页恢复操作、输入工具卡与四个步骤、语音测试确认卡、输入框、增益滑块和底部导航全部可见。
+- [ ] 使用生产离屏入口分别设置 `REMOTE_MIC_ONBOARDING_SCREENSHOT_LANGUAGE=zh-Hans` 与 `en`，两种语言均生成浅色、深色的适用页面集合；重点检查连接页恢复操作、输入工具卡与四个步骤、语音测试确认卡、输入框、增益滑块和底部导航全部可见。
 - [ ] 逐页检查普通用户可见的标题、正文、状态卡、按钮、提示、错误信息和帮助文案，只描述当前状态、实际影响与下一步操作，不出现“待真机验证”“需要兼容性验收”“待回归”“自动化/CI 已通过”“候选实现”“开发中”“验证中”等研发、测试或内部验收用语。
 - [ ] 未完成真实环境验收的能力未显示为支持、推荐或可正常使用；已经公开但当前不可用的能力只显示用户能理解的“暂不支持”“暂时无法使用”及可执行的替代方案或后续操作，技术原因码和验收状态仅保留在日志、复制诊断和内部验证证据中。
-- [ ] 当前流程每个控制来源均为 9 页；公开构建小米分支浅/深色共 18 张，完整包小米、苹果第 6 代、苹果第 7 代、Chromecast、Apple companion、Web 六个来源浅/深色共 108 张。正常状态页面在 `1020 × 772` 下完整可见；右栏视觉内容统一下移，底部提示、继续按钮和主要修复动作不得裁切。
+- [ ] 按下方生产页面与场景清单检查本次适用的完整或定向集合，确认没有遗漏、重复或多余文件。正常状态页面在 `1020 × 772` 下完整可见；右栏视觉内容统一下移，底部提示、继续按钮和主要修复动作不得裁切。
 - [ ] 所有中文文字最终显示字号不低于 12pt。
 - [ ] 浅色、深色、降低透明度和增强对比度下内容可读。
 - [ ] 语音测试输入框在浅色、深色下的占位符字体、光标和正文起点对齐，中文字号不低于 12pt。
@@ -452,17 +452,45 @@ Cloudflare 遥控合同接入：网页连接新增 Plus 权益状态仍展示 QR
 
 本次改动只修正文案及语言选择。离屏入口使用隔离偏好；其截图和流程自动化不证明真实连接、音频或第三方工具文字上屏成功。
 
+## 生产页面与场景清单
+
+页面以 `Sources/RemoteMic/OnboardingScreenshotRenderer.swift` 的 `pages(for:)` 为来源。执行前从该函数提取步骤和输出名称，按当前 Commit 自动计数并与实际 PNG 文件名集合核对；不能只比较总数。当前页面对应如下，代码增删时同步此表。
+
+| 页面步骤 | 输出文件 |
+| --- | --- |
+| welcome | `01-welcome.png` |
+| remoteAvailability | `02-control-source.png` |
+| permissions | `03-permissions.png` |
+| remote | `04-remote.png` |
+| audio | `05-audio.png` |
+| voiceTool | `06-voice-tool.png` |
+| voiceTest | `07-voice-test.png` |
+| controls | `08-controls.png` |
+| complete | `09-complete.png` |
+
+| 矩阵维度 | 适用集合 |
+| --- | --- |
+| 来源 | 公开包：xiaomi_remote；完整包另含 siri_remote 的 generation_6 / generation_7、chromecast_remote、apple_companion、web_remote；以实际 Package 能力为准 |
+| 语言 | zh-Hans、en |
+| 外观 | light、dark |
+| 工具附加状态 | 五种工具、右栏四步、可观察的安装/运行状态、Fn 占用、Vokie partial/failed；只用生产入口支持的状态注入，不能把不支持的注入写为通过 |
+| 来源附加状态 | 更多方式折叠/展开、连接恢复、误按语音键及当前变更影响的状态 |
+
+基础数量为各启用来源的页面数总和 × 语言数 × 外观数。附加状态单独列出并去重，不混入基础数量。完整验证覆盖整张矩阵；定向验证在 PR 列出受影响单元和排除理由，并核对完整清单未改变。逐文件记录格式、像素尺寸、SHA-256、Commit、来源、语言、外观和状态。
+
+规则调整本身不代表重新完成产品验收。下方带日期的截图记录只证明当时 Commit 和环境。
+
 ## 用例 9：锁屏离屏截图隐藏入口
 
 1. 保持 Mac 锁屏或不依赖当前屏幕读取权限。
 2. 使用生产隐藏入口构建一次 App，并通过 `REMOTE_MIC_ONBOARDING_SCREENSHOT_DIR`、`REMOTE_MIC_ONBOARDING_SCREENSHOT_APPEARANCE=light|dark` 生成截图；第 2 页为 `02-control-source.png`，第 6 页为 `06-voice-tool.png`。
-3. 公开构建设置 `REMOTE_MIC_ONBOARDING_SCREENSHOT_CONTROL_SOURCE=xiaomi_remote`，浅色和深色各生成 9 张。
-4. 完整 Package 构建分别设置 `REMOTE_MIC_ONBOARDING_SCREENSHOT_CONTROL_SOURCE=xiaomi_remote|siri_remote|chromecast_remote|apple_companion|web_remote`；Apple 来源再用 `REMOTE_MIC_ONBOARDING_SCREENSHOT_APPLE_REMOTE_GENERATION=generation_6|generation_7` 分开生成。六个来源浅色和深色各 9 张，共 108 张。
+3. 公开构建设置 `REMOTE_MIC_ONBOARDING_SCREENSHOT_CONTROL_SOURCE=xiaomi_remote`，按生产页面清单生成适用语言和外观集合。
+4. 完整 Package 构建分别设置 `REMOTE_MIC_ONBOARDING_SCREENSHOT_CONTROL_SOURCE=xiaomi_remote|siri_remote|chromecast_remote|apple_companion|web_remote`；Apple 来源再用 `REMOTE_MIC_ONBOARDING_SCREENSHOT_APPLE_REMOTE_GENERATION=generation_6|generation_7` 分开生成。按本次构建实际支持的来源、语言和外观生成完整集合，数量由清单推导。
 5. 对输入工具页额外覆盖豆包、微信、Typeless、Vokie、其他工具，以及 available/not-installed/unknown；每个工具用 `REMOTE_MIC_ONBOARDING_SCREENSHOT_GUIDE_STEP=0...3` 覆盖右栏四项步骤，Vokie 必须分别生成浅色/深色步骤截图。语音测试页另覆盖 Vokie/Typeless 未运行与运行中状态。
 6. 分别覆盖五个输入工具，确认固定排序、单行卡片标题、Fn staged 配置和右栏步骤无裁切。对 Vokie 额外覆盖 `partial`、`failed` 回流提示。
 7. 对旧正式配置设置 `REMOTE_MIC_ONBOARDING_SCREENSHOT_VOICE_KEY_MODE=left_command|right_command|right_option`，确认重新运行不会在欢迎或工具选择时立即覆盖；旧 Fn-only 迁移提示不得再被当作现行配置规则。
 8. 逐张用图像查看工具检查窗口 chrome、标题、导航、状态卡、右栏、裁切、对比度和中文字号，并在执行前后核对用户正式 Onboarding 进度未变化。
-   - 连接失败卡必须完整显示在底部导航上方；重点检查 Chromecast 浅色/深色 `05-remote.png`。
+   - 连接失败卡必须完整显示在底部导航上方；重点检查 Chromecast 浅色/深色 `04-remote.png`。
    - 连接失败说明必须只指向当前来源；实体遥控器、Apple 设备和网页版不得互相混写。
    - 实体遥控器按键卡只显示用户可执行的操作，不显示“监听状态”或“按键映射未启用”等内部状态。
 9. 不设置截图环境变量正常启动 App，确认不会显示截图入口、额外窗口或调试菜单。

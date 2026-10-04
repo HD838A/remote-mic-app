@@ -9,92 +9,8 @@ fail() {
   exit 1
 }
 
-require_heading() {
-  local file="$1"
-  local heading="$2"
-  grep -Fqx -- "$heading" "$file" || fail "$file is missing $heading"
-}
-
-require_text() {
-  local file="$1"
-  local text="$2"
-  grep -Fq -- "$text" "$file" || fail "$file is missing required rule: $text"
-}
-
-[[ -f BRANCH_MANAGEMENT.md ]] || fail 'BRANCH_MANAGEMENT.md is missing'
-[[ -f AGENTS.md ]] || fail 'AGENTS.md is missing'
-[[ -f DOCUMENTATION.md ]] || fail 'DOCUMENTATION.md is missing'
-[[ -f RELEASING.md ]] || fail 'RELEASING.md is missing'
-
-for heading in \
-  '## 标准功能与 Bug 流程' \
-  '## PR 创建门禁' \
-  '## 工作区状态审计' \
-  '## TODO-only 工作流程' \
-  '## 独立工作项提交边界' \
-  '## 规范变更隔离与防护'; do
-  require_heading BRANCH_MANAGEMENT.md "$heading"
-done
-
-require_text BRANCH_MANAGEMENT.md '所有 TODO-only 记录统一使用长期分支 `codex/todo_list`'
-require_text BRANCH_MANAGEMENT.md '立即 Push 并创建只包含该 TODO commit、目标为 `main` 的 PR'
-require_text BRANCH_MANAGEMENT.md '每个 PR 必须且只能对应一项独立、可审查的功能'
-require_text BRANCH_MANAGEMENT.md '发现 `ahead/behind`、未跟踪文件、未提交改动或已合入但仍保留的旧 worktree 时'
-require_text BRANCH_MANAGEMENT.md '任何单个待提交文件超过 5 MB 时'
-require_text BRANCH_MANAGEMENT.md '相关提交信息中包含 `[governance-change]`'
-require_text BRANCH_MANAGEMENT.md '`Repository governance` 必须配置为 `main` 的 Required status check'
-require_text BRANCH_MANAGEMENT.md 'PR 默认使用 GitHub 的普通 Merge（保留合并提交）'
-require_text BRANCH_MANAGEMENT.md '确认后必须在 PR 正文记录明确的批准来源'
-require_text BRANCH_MANAGEMENT.md '自动化 Agent 不得在缺少该确认时自行将其标记 Ready、批准或合入'
-require_heading BRANCH_MANAGEMENT.md '## 用户明确授权的 CI 例外'
-require_text BRANCH_MANAGEMENT.md '默认必须等待必需 CI 通过'
-require_text BRANCH_MANAGEMENT.md '不得伪造通过状态'
-require_text BRANCH_MANAGEMENT.md '核心治理人工确认'
-require_text BRANCH_MANAGEMENT.md '`pull_request` 模式的 Ruleset bypass'
-require_text AGENTS.md '用户明确授权的 CI 例外'
-require_text FEATURE_DEVELOPMENT.md '用户明确授权的 CI 例外'
-require_text DOCUMENTATION.md '用户明确授权的 CI 例外'
-for waiver_field in 'CI 例外授权：' 'CI 例外范围：' 'CI 未验证项：'; do
-  require_text .github/PULL_REQUEST_TEMPLATE.md "$waiver_field"
-done
-require_heading AGENTS.md '## 规范层级与文档边界'
-require_heading AGENTS.md '## 任务范围与等待治理'
-require_heading AGENTS.md '## 临时测试工具入库边界'
-require_text AGENTS.md '不得新增、恢复或改名后进入版本控制'
-require_text AGENTS.md '不得新增或恢复可执行辅助文件'
-require_text .github/PULL_REQUEST_TEMPLATE.md '新增或恢复的工程辅助文件不含临时探针、手工 trace、一次性采集、实验包构建或启动器。'
-require_text AGENTS.md '分析、审查、诊断或状态查询默认只做只读检查并给出证据和结论'
-require_text AGENTS.md '当前任务之外的优化、重构、规范调整或历史清理必须拆成独立工作项'
-require_text AGENTS.md '禁止使用无法可靠收回控制权的交互式 CI 等待命令'
-require_text RELEASING.md '只记录普通用户能够看到或受益的功能、体验、兼容性和可靠性变化。'
-require_text RELEASING.md '已撤回、删除或从未公开的版本不进入 App 内版本历史。'
-require_heading DOCUMENTATION.md '# 项目文档导航'
-require_text DOCUMENTATION.md "rg --files -g '*.md' | sort"
-require_text AGENTS.md '[`DOCUMENTATION.md`](DOCUMENTATION.md)'
-require_text README.md '[项目文档导航](DOCUMENTATION.md)'
-[[ "$(grep -Foc -- '[项目文档导航](DOCUMENTATION.md)' README.md)" == 1 ]] || \
-  fail 'README must contain exactly one stable documentation navigation link'
-if grep -Fq -- '## 规范文件索引' README.md; then
-  fail 'README must not embed the full specification index'
-fi
-while IFS= read -r document_path; do
-  [[ -n "$document_path" ]] || continue
-  require_text DOCUMENTATION.md "$document_path"
-done < <(find feature -type f \( -name PRODUCT_SPEC.md -o -name 'platform-*.md' \) -print | sort)
-while IFS= read -r document_path; do
-  [[ -n "$document_path" ]] || continue
-  require_text DOCUMENTATION.md "$document_path"
-done < <(find Testing -maxdepth 1 -type f -name '*Contract.md' -print | sort)
-
-if [[ "${GITHUB_EVENT_NAME:-}" == pull_request ]] && \
-    grep -Fq -- '[x] 用户明确要求本 PR 不等待或跳过 CI，其他适用门禁仍已满足。' <<< "${GOVERNANCE_PR_BODY:-}"; then
-  for waiver_field in 'CI 例外授权' 'CI 例外范围' 'CI 未验证项'; do
-    waiver_value="$(sed -n "s/^${waiver_field}：[[:space:]]*//p" <<< "${GOVERNANCE_PR_BODY:-}" | tail -n 1)"
-    [[ -n "$waiver_value" && "$waiver_value" != N/A && "$waiver_value" != N/A\ /\ * ]] || \
-      fail "CI exception is missing a concrete $waiver_field"
-  done
-fi
-
+governance_changed=false
+new_engineering_helper=false
 base_ref="${1:-}"
 if [[ -n "$base_ref" && "$base_ref" != 0000000000000000000000000000000000000000 ]]; then
   git rev-parse --verify "$base_ref^{commit}" >/dev/null 2>&1 || fail "base commit is unavailable: $base_ref"
@@ -123,11 +39,6 @@ if [[ -n "$base_ref" && "$base_ref" != 0000000000000000000000000000000000000000 
     esac
   done < <(git diff --no-renames --diff-filter=A --name-only -z "$base_ref...HEAD")
 
-  if [[ "$new_engineering_helper" == true && "${GITHUB_EVENT_NAME:-}" == pull_request ]]; then
-    grep -Fq -- '[x] 新增或恢复的工程辅助文件不含临时探针、手工 trace、一次性采集、实验包构建或启动器。' <<< "${GOVERNANCE_PR_BODY:-}" || \
-      fail 'new engineering helpers require the manual-tooling scope confirmation in the PR body'
-  fi
-
   governance_changed=false
   scope_violation=false
   while IFS= read -r path; do
@@ -142,43 +53,6 @@ if [[ -n "$base_ref" && "$base_ref" != 0000000000000000000000000000000000000000 
   if [[ "$governance_changed" == true ]]; then
     git log --format=%B "$base_ref..HEAD" | grep -Fq -- '[governance-change]' || \
       fail 'governance files changed without [governance-change]'
-
-    if [[ "${GITHUB_EVENT_NAME:-}" == pull_request ]]; then
-      pr_body="${GOVERNANCE_PR_BODY:-}"
-      [[ -n "$pr_body" ]] || fail 'governance PR body is empty'
-      for required_pr_text in \
-        '## 规范变更对照' \
-        '变更前规则：' \
-        '变更后规则：' \
-        '保留或迁移到的规范文件：' \
-        '影响范围：' \
-        '迁移方式：' \
-        '明确不做事项：' \
-        '功能源码、可执行功能测试代码、产品配置或依赖是否变化：' \
-        '文档导航及 README 稳定入口是否同步：' \
-        '核心治理 PR 是否保持 Draft 等待维护者或用户逐项确认：' \
-        '转为 Ready 或合入的明确批准来源：'; do
-        grep -Fq -- "$required_pr_text" <<< "$pr_body" || \
-          fail "governance PR body is missing: $required_pr_text"
-      done
-
-      grep -Eq -- '^功能源码、可执行功能测试代码、产品配置或依赖是否变化：否[[:space:]]*$' <<< "$pr_body" || \
-        fail 'governance PR must explicitly confirm that product files do not change'
-      grep -Eq -- '^文档导航及 README 稳定入口是否同步：是[[:space:]]*$' <<< "$pr_body" || \
-        fail 'governance PR must explicitly confirm the documentation entry points are synchronized'
-      grep -Eq -- '^核心治理 PR 是否保持 Draft 等待维护者或用户逐项确认：是[[:space:]]*$' <<< "$pr_body" || \
-        fail 'governance PR must remain Draft for explicit maintainer or user review'
-
-      if [[ "${GOVERNANCE_PR_IS_DRAFT:-}" != true ]]; then
-        approval_source="$(sed -n 's/^转为 Ready 或合入的明确批准来源：[[:space:]]*//p' <<< "$pr_body" | tail -n 1)"
-        [[ -n "$approval_source" ]] || \
-          fail 'ready governance PR is missing an explicit approval source'
-        [[ "$approval_source" != N/A ]] || \
-          fail 'ready governance PR cannot use N/A as its approval source'
-        [[ "$approval_source" != '确认渠道、日期与明确指令' ]] || \
-          fail 'ready governance PR must replace the approval-source placeholder'
-      fi
-    fi
 
     while IFS= read -r path; do
       [[ -n "$path" ]] || continue
@@ -197,5 +71,190 @@ if [[ -n "$base_ref" && "$base_ref" != 0000000000000000000000000000000000000000 
     fi
   fi
 fi
+
+export GOVERNANCE_CHANGED="$governance_changed"
+export GOVERNANCE_NEW_HELPER="$new_engineering_helper"
+
+# Stable declarations and typed PR fields allow prose edits without weakening scope gates.
+python3 - <<'PY_GOVERNANCE'
+import os
+import re
+from pathlib import Path
+
+
+def fail(message):
+    raise SystemExit(f"repository governance check failed: {message}")
+
+
+def fields(text, language, required=False):
+    blocks = re.findall(rf"^```{re.escape(language)}[ \t]*\n(.*?)^```[ \t]*$", text, re.M | re.S)
+    if required and len(blocks) != 1:
+        fail(f"expected one {language} block, found {len(blocks)}")
+    result = {}
+    for block in blocks:
+        for line in block.splitlines():
+            if not line.strip():
+                continue
+            match = re.fullmatch(r"([A-Za-z][A-Za-z0-9_.-]*)=(.+)", line)
+            if not match:
+                fail(f"invalid {language} field: {line}")
+            key, value = match.groups()
+            if key in result:
+                fail(f"duplicate {language} field: {key}")
+            result[key] = value.strip()
+    return result
+
+
+policies = {
+    "BRANCH_MANAGEMENT.md": {
+        "G-MAIN.start": "latest-origin-main", "G-MAIN.sync": "impact-based",
+        "G-MAIN.release": "exact-approved-main", "G-WORK.pr": "single",
+        "G-DUP.scan": "all-open-titles-labels", "G-DUP.inspect": "relevant-description-files-diff",
+        "G-AUDIT.inventory": "required", "G-AUDIT.cleanup": "separate-authorization",
+        "G-TODO.branch": "codex/todo_list", "G-TODO.delivery": "batch-or-draft",
+        "G-TODO.product": "forbidden", "G-WORK.commit": "single",
+        "G-ASSET.threshold": "5MB", "G-ASSET.authorization": "file-or-bounded-budget",
+        "G-ASSET.host-limit": "required", "G-GOV.scope": "dedicated-allowlist",
+        "G-GOV.commit-marker": "[governance-change]", "G-GOV.approval": "concrete-plan-or-result",
+        "G-GOV.validation": "local-required", "G-GOV.required-check": "Repository governance",
+        "G-CI.default": "wait-pass", "G-CI.exception": "explicit-current-pr",
+        "G-CI.bypass": "pull_request", "G-CI.status": "truthful",
+        "G-CI.other-gates": "retained", "G-MERGE.default": "merge",
+    },
+    "AGENTS.md": {
+        "G-DOC.entry": "DOCUMENTATION.md", "G-DOC.authority": "chinese",
+        "G-TOOL.temporary": "forbidden", "G-TOOL.testing-executable": "forbidden",
+        "G-TOOL.permanent-helper": "declared-purpose", "G-SCOPE.query": "read-only",
+        "G-SCOPE.unrelated": "separate", "G-WAIT.mode": "bounded",
+        "G-CI.reference": "BRANCH_MANAGEMENT.md", "G-ONBOARD.validation": "risk-based",
+        "G-ONBOARD.manifest": "production", "G-ONBOARD.real-acceptance": "retained",
+        "G-BUG.investigation": "evidence-driven", "G-BUG.fix": "confirmed-cause",
+        "G-BUG.real-acceptance": "retained",
+    },
+    "FEATURE_DEVELOPMENT.md": {
+        "G-MAIN.reference": "BRANCH_MANAGEMENT.md", "G-CI.reference": "BRANCH_MANAGEMENT.md",
+    },
+    "RELEASING.md": {"G-NOTES.content": "user-visible", "G-NOTES.unpublished": "excluded"},
+}
+for filename, expected in policies.items():
+    text = Path(filename).read_text()
+    actual = fields(text, "governance-policy")
+    if actual != expected:
+        fail(f"{filename} stable policy declarations differ: "
+             f"{sorted(key for key in actual.keys() | expected.keys() if actual.get(key) != expected.get(key))}")
+    # Each declaration belongs to a real normative section, with explanatory prose.
+    for section in re.split(r"(?m)^## ", text)[1:]:
+        if "```governance-policy" not in section:
+            continue
+        prose = re.sub(r"(?ms)^```governance-policy.*?^```", "", section)
+        if not re.search(r"(?m)^(?:- |[0-9]+\. ).+", prose):
+            fail(f"{filename} policy section lacks normative prose")
+
+navigation = Path("DOCUMENTATION.md").read_text()
+readme = Path("README.md").read_text()
+links = re.findall(r"\[[^\]]*\]\(([^)]+)\)", navigation)
+required_docs = list(Path("feature").rglob("PRODUCT_SPEC.md"))
+required_docs += list(Path("feature").rglob("platform-*.md"))
+required_docs += list(Path("Testing").glob("*Contract.md"))
+required_docs += [Path(name) for name in policies]
+for path in required_docs:
+    if path.as_posix() not in links:
+        fail(f"documentation navigation is missing {path}")
+if "DOCUMENTATION.md" not in re.findall(r"\[[^\]]*\]\(([^)]+)\)", Path("AGENTS.md").read_text()):
+    fail("AGENTS must link to the stable documentation entry")
+if len(re.findall(r"\[[^\]]*\]\(DOCUMENTATION\.md\)", readme)) != 1:
+    fail("README must contain exactly one stable documentation navigation link")
+if re.search(r"(?m)^## 规范文件索引\s*$", readme) or "```governance-policy" in readme:
+    fail("README must not embed the specification index")
+
+# Derive filenames from the production list; counts alone cannot detect missing pages.
+renderer = Path("Sources/RemoteMic/OnboardingScreenshotRenderer.swift").read_text()
+page_function = re.search(r"private static func pages\(.*?return steps\.enumerated", renderer, re.S)
+filename_function = re.search(r"private static func filenameComponent\(.*?\n    }", renderer, re.S)
+if not page_function or not filename_function:
+    fail("production screenshot list cannot be read; update the manifest parser with the renderer")
+steps = re.findall(r"(?m)^\s*\.([A-Za-z]+),\s*$", page_function.group())
+components = dict(re.findall(r'case \.([A-Za-z]+): return "([a-z-]+)"', filename_function.group()))
+if not steps or len(steps) != len(set(steps)) or any(step not in components for step in steps):
+    fail("production screenshot list is empty, duplicated, or lacks filename mappings")
+expected_pages = [(step, f"{index:02d}-{components[step]}.png") for index, step in enumerate(steps, 1)]
+manual = Path("Testing/FirstRunOnboarding.md").read_text()
+manifest = re.search(r"(?m)^## 生产页面与场景清单\n(.*?)(?=^## |\Z)", manual, re.S)
+if not manifest:
+    fail("Onboarding test manual lacks the production scenario manifest")
+actual_pages = re.findall(r"(?m)^\| ([A-Za-z]+) \| `([0-9]+-[a-z-]+\.png)` \|$", manifest.group(1))
+if actual_pages != expected_pages:
+    fail("Onboarding screenshot manifest differs from production filenames or order")
+
+schema = {
+    "kind", "before", "after", "files", "scope", "migration", "excluded", "product_files",
+    "documentation_synced", "approval_basis", "approval", "approval_scope", "plan_changed",
+    "validation", "validation_result", "ci_mode", "ci_authorization", "ci_scope", "ci_unverified",
+    "helper_scope", "helper_purpose",
+}
+template = fields(Path(".github/PULL_REQUEST_TEMPLATE.md").read_text(), "governance", required=True)
+if template.keys() != schema:
+    fail("PR template stable fields do not match the schema")
+
+
+def concrete(value):
+    value = value.strip()
+    return bool(value) and not (
+        re.match(r"(?i)^(?:n/?a|none|null|tbd|todo|pending|placeholder)(?:\b|[ /：:])", value)
+        or re.match(r"^(?:待填写|待确认|未填写|不适用|确认渠道|用户原话|在这里|填写)", value)
+        or value in {"...", "…", "-"}
+    )
+
+
+if os.environ.get("GITHUB_EVENT_NAME") == "pull_request":
+    body = os.environ.get("GOVERNANCE_PR_BODY", "")
+    governance = os.environ["GOVERNANCE_CHANGED"] == "true"
+    helper = os.environ["GOVERNANCE_NEW_HELPER"] == "true"
+    metadata = fields(body, "governance", required=governance or helper)
+    if metadata:
+        if metadata.keys() != schema:
+            fail("PR stable fields do not match the schema")
+        for key, allowed in {
+            "kind": {"governance", "product", "maintenance"},
+            "product_files": {"true", "false"}, "documentation_synced": {"true", "false"},
+            "plan_changed": {"true", "false"},
+            "approval_basis": {"pending", "approved-plan", "reviewed-result"},
+            "validation_result": {"pass", "pending", "fail"},
+            "ci_mode": {"default", "no-wait", "skip", "allow-failure"},
+            "helper_scope": {"N/A", "permanent"},
+        }.items():
+            if metadata[key] not in allowed:
+                fail(f"invalid PR field {key}: {metadata[key]}")
+        if metadata["ci_mode"] != "default":
+            for key in ("ci_authorization", "ci_scope", "ci_unverified"):
+                if not concrete(metadata[key]):
+                    fail(f"CI exception lacks concrete {key}")
+        if governance:
+            if metadata["kind"] != "governance" or metadata["product_files"] != "false":
+                fail("governance PR must declare its kind and absence of product files")
+            if metadata["documentation_synced"] != "true":
+                fail("governance PR must synchronize documentation entry points")
+            for key in ("before", "after", "files", "scope", "migration", "excluded", "validation"):
+                if not concrete(metadata[key]):
+                    fail(f"governance PR lacks concrete {key}")
+            if os.environ.get("GOVERNANCE_PR_IS_DRAFT") != "true":
+                if metadata["validation_result"] != "pass":
+                    fail("Ready governance PR requires successful local checks")
+                basis = metadata["approval_basis"]
+                if basis == "pending" or (basis == "approved-plan" and metadata["plan_changed"] != "false"):
+                    fail("Ready governance PR needs approval covering the current plan or reviewed changes")
+                for key in ("approval", "approval_scope"):
+                    if not concrete(metadata[key]):
+                        fail(f"Ready governance PR lacks concrete {key}")
+        if helper and (metadata["helper_scope"] != "permanent" or not concrete(metadata["helper_purpose"])):
+            fail("new engineering helper requires permanent scope and a concrete purpose")
+    # During migration, existing product PRs may retain the previous CI checkbox.
+    # Keep its authorization checks; it cannot bypass structured governance/helper checks.
+    if re.search(r"(?mi)^\s*-?\s*\[x\] 用户明确要求本 PR 不等待或跳过 CI", body):
+        for label in ("CI 例外授权", "CI 例外范围", "CI 未验证项"):
+            values = re.findall(rf"(?m)^{label}：[ \t]*(.*)$", body)
+            if len(values) != 1 or not concrete(values[0]):
+                fail(f"legacy CI exception lacks concrete {label}")
+PY_GOVERNANCE
 
 printf 'repository governance check passed\n'

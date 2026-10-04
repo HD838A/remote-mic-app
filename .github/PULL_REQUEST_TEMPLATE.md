@@ -14,8 +14,8 @@
 
 - [ ] 不适用：此 PR 不是新功能。
 - [ ] 已执行 `git fetch origin main`，并从最新 `origin/main` 创建本功能的独立分支和持久化 worktree。
-- [ ] 已在提交 PR 前再次同步最新 `origin/main`，重新运行受影响验证。
-- [ ] 已遍历全部 Open PR，检查描述、文件和必要 Diff，确认没有重复实现。
+- [ ] 已在提交 PR 前检查最新 `origin/main`，记录影响判断，并按需同步和验证。
+- [ ] 已扫描全部 Open PR 标题和标签，详细检查相关候选的描述、文件和必要 Diff。
 
 开发起点 `origin/main` SHA：
 
@@ -55,38 +55,48 @@ Open PR 查重日期、查询结果及相关链接：
 - [ ] PR 只包含本功能和直接必要的修改，没有无关重构或其他功能。
 - [ ] 新增或恢复的工程辅助文件不含临时探针、手工 trace、一次性采集、实验包构建或启动器。
 
-新增工程辅助文件的长期职责、复用现有入口的评估及维护方式（没有新增时写 N/A）：
+新增工程辅助文件的长期职责、复用现有入口的评估及维护方式（同时填写 helper_purpose，没有新增时写 N/A）：
 
 ## 核心治理文件变更
 
 - [ ] 本 PR 未修改 `AGENTS.md`、`BRANCH_MANAGEMENT.md`、`FEATURE_DEVELOPMENT.md` 或 `.github/PULL_REQUEST_TEMPLATE.md`。
 - [ ] 本 PR 确需修改核心治理文件，已在提交信息中加入 `[governance-change]`，并在变更摘要中列出变更前后规则、影响范围、迁移方式和明确不做事项；该变更不与无关产品或发布工作混合。
 
-## 规范变更对照
+## 规范变更对照与 CI 授权
 
-仅在修改核心治理规范、治理守护实现、专项规范、产品合同或测试合同时填写；不适用时写 N/A。
+下方稳定字段供检查脚本读取。每个字段只填写一次。普通 PR 使用 `kind=product` 或 `maintenance`；独立治理 PR 使用 `kind=governance`，并填写具体前后规则、文件范围、迁移及不做事项。正文可以使用表格补充逐项对照。
 
-- 变更前规则：
-- 变更后规则：
-- 保留或迁移到的规范文件：
-- 影响范围：
-- 迁移方式：
-- 明确不做事项：
-- 功能源码、可执行功能测试代码、产品配置或依赖是否变化：否 / 是（若为“是”，本 PR 不能作为独立治理 PR）
-- 文档导航及 README 稳定入口是否同步：是 / 不适用
-- 核心治理 PR 是否保持 Draft 等待维护者或用户逐项确认：是 / 不适用
-- 转为 Ready 或合入的明确批准来源：N/A / 确认渠道、日期与明确指令
+治理本地检查结果填写 `validation_result=pass|pending|fail`；Ready 必须为 pass。治理批准使用 `approval_basis=approved-plan` 或 `reviewed-result`，填写批准来源和批准范围。已批准具体方案且实施一致时，无须再次确认；未获具体批准时使用 `pending` 并保持 Draft。`plan_changed` 必须反映批准后是否新增范围或风险；变化后仅原方案批准不足以 Ready。
+
+CI 默认使用 `ci_mode=default`。仅有当前 PR 的明确用户指令时，使用 `no-wait`、`skip` 或 `allow-failure`，并填写授权、范围和真实未验证项。例外不免除其他门禁，也不取消已运行 CI。大文件预授权在正文记录类型、路径、用途、总预算及余额。
+
+```governance
+kind=maintenance
+before=N/A
+after=N/A
+files=N/A
+scope=N/A
+migration=N/A
+excluded=N/A
+product_files=false
+documentation_synced=true
+approval_basis=pending
+approval=N/A
+approval_scope=N/A
+plan_changed=false
+validation=N/A
+validation_result=pending
+ci_mode=default
+ci_authorization=N/A
+ci_scope=N/A
+ci_unverified=N/A
+helper_scope=N/A
+helper_purpose=N/A
+```
+
+新增工程辅助文件时，填写 `helper_scope=permanent` 和具体 `helper_purpose`。没有新增时保留 N/A。字段中不得填写凭据或用户数据。
 
 兼容性、迁移、回滚和已知风险：
-
-## CI 例外（仅在用户明确授权时填写）
-
-- [ ] 默认等待必需 CI；本 PR 未使用 CI 例外。
-- [ ] 用户明确要求本 PR 不等待或跳过 CI，其他适用门禁仍已满足。
-
-CI 例外授权：N/A / 用户原话、日期与来源
-CI 例外范围：N/A / 当前 PR 及不等待、跳过或不要求通过的检查
-CI 未验证项：N/A / 未运行、运行中或失败的检查、本地验证结果与剩余风险
 
 ## PR 状态
 
