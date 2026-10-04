@@ -560,7 +560,7 @@
 "about.preferences.show_status_bar_icon_help" = "如果 Dock 和菜单栏图标都已关闭，可再次启动无线麦来打开设置。";
 "about.preferences.app_icon" = "应用图标";
 "about.preferences.app_icon_help" = "选择在 Dock、应用切换器和设置窗口中显示的图标。";
-"about.preferences.app_icon_standard" = "默认";
+"about.preferences.app_icon_standard" = "经典鸭";
 "about.preferences.app_icon_faceted_duck" = "几何鸭";
 "about.preferences.language" = "应用语言";
 "about.page.hero_subtitle" = "集中查看无线语音工作台的版本、偏好与支持信息";

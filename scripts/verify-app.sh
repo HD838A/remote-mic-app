@@ -142,6 +142,7 @@ for onboarding_image in "$ROOT"/Resources/Onboarding/*.png(N); do
   test -f "$APP/Contents/Resources/Onboarding/${onboarding_image:t}"
 done
 test -f "$APP_ICON"
+cmp -s "$ROOT/Resources/AppIcon.icns" "$APP_ICON"
 ICON_CHECK_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/sayall-app-icon.XXXXXX")"
 ICONSET="$ICON_CHECK_ROOT/AppIcon.iconset"
 /usr/bin/iconutil --convert iconset --output "$ICONSET" "$APP_ICON"
