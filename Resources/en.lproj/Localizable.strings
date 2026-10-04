@@ -1236,3 +1236,9 @@
 "onboarding.voice_tool.guide.screenshot.system_fn" = "In System Settings → Keyboard (键盘), set Press Globe key to (按下🌐键时) to Do Nothing (不执行任何操作).";
 "onboarding.voice_tool.guide.screenshot.vokie_step_1" = "On Vokie’s Home page (首页), set Standard Input (普通输入) to Fn.";
 "onboarding.voice_tool.guide.screenshot.vokie_step_2" = "In Vokie’s General settings (通用), check that Microphone (麦克风) uses MiRemoteV 2ch.";
+"siri_remote.activation.enable" = "Enable Apple Remote";
+"siri_remote.activation.detail" = "macOS may ask for permission when enabling or updating voice support. If you cancel, click Prepare Voice Again to retry.";
+"siri_remote.activation.retry" = "Prepare Voice Again";
+"siri_remote.activation.ready" = "Voice support is ready.";
+"siri_remote.activation.action_required" = "Voice is unavailable. Prepare voice again and allow the required permissions.";
+"siri_remote.activation.preparing" = "Preparing voice support…";

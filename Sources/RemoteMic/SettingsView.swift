@@ -1341,6 +1341,7 @@ struct SettingsView: View {
     #if SAYALL_SIRI_REMOTE_ENABLED && canImport(SayAllSiriRemote)
     private var siriRemoteMappingPage: some View {
         hardwareMappingPage(includeSiriScrollArrow: true) {
+            siriRemoteActivationControls
             SiriRemoteMappingCanvas(
                 selectedControlID: $selectedSiriRemoteControlID,
                 activeControlIDs: model.activeAppleRemoteControlIDs,
@@ -1380,6 +1381,46 @@ struct SettingsView: View {
                 onVoiceSettings: { mappingVoiceSettingsRequest += 1 }
             )
         }
+    }
+
+    private var siriRemoteActivationControls: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Toggle(localization.text("siri_remote.activation.enable"), isOn: Binding(
+                get: { settings.siriRemoteEnabled },
+                set: { model.setSiriRemoteEnabled($0) }
+            ))
+            .disabled(model.isStreaming || model.activePhysicalVoiceControlSource == .siriRemote)
+            Text(localization.text("siri_remote.activation.detail"))
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            if settings.siriRemoteEnabled {
+                HStack(spacing: 12) {
+                    Text(localization.text(siriRemoteActivationStatusKey))
+                        .font(.system(size: 12))
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer()
+                    Button(localization.text("siri_remote.activation.retry")) {
+                        model.prepareSiriRemoteFromUserAction()
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(model.isStreaming || model.activePhysicalVoiceControlSource == .siriRemote ||
+                        model.siriRemoteAudioStatus == "ready" ||
+                        !model.siriRemoteAudioStatus.hasPrefix("unavailable:"))
+                }
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.secondary.opacity(0.06), in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    private var siriRemoteActivationStatusKey: String {
+        if model.siriRemoteAudioStatus == "ready" { return "siri_remote.activation.ready" }
+        if model.siriRemoteAudioStatus.hasPrefix("unavailable:") {
+            return "siri_remote.activation.action_required"
+        }
+        return "siri_remote.activation.preparing"
     }
 
     private func siriRemoteButton(for controlID: String) -> RemoteButton? {
