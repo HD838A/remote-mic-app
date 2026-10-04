@@ -125,6 +125,7 @@ swift build --disable-keychain --scratch-path .build-button-profiles-test -c rel
 
 ## 验证边界
 
+- 最终包路径检查只放行 Sentry SDK 的公开 CI 源码路径。限定目录层级和 C/C++/Objective-C/Swift 文件扩展名；本机用户路径、其他 CI 路径、路径穿越和示例设备地址仍须拒绝。
 - 自动化：验证可选 Package、会员服务配置的私有边界、页面显隐、三类入口接线、宿主 payload 只解码公开动作，以及无私有 Package 时返回公开回退。
 - 构建：分别验证无额外 Package、仅免费组合动作、免费组合动作加付费键位方案与会员 Package 的 Debug / Release 编译链接，并验证仅设置付费路径时失败关闭。
 - 内部免费测试：验证 `SAYALL_TEST_BUTTON_PROFILES_FREE=1` 必须同时提供两个源码 Package，并拒绝统一私有构件；`scripts/verify-app.sh` 必须检查免费测试标记和会员资源缺失。

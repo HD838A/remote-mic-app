@@ -566,7 +566,10 @@ for source_localization_dir in "$ROOT"/Resources/*.lproj(N); do
   done < <(find "$source_localization_dir" -type f | LC_ALL=C sort)
 done
 
-if rg -a -q '/Users/[^/[:space:]]+|/tmp/remote-bridge|AA:BB:CC:DD:EE:FF' "$APP/Contents"; then
+# Sentry's pinned SDK contains public CI __FILE__ paths, not local user paths.
+# Read the full pipeline so pipefail cannot hide a match through SIGPIPE.
+if rg -a -o --no-filename '/Users/[^[:space:]\x00]+|/tmp/remote-bridge|AA:BB:CC:DD:EE:FF' "$APP/Contents" \
+    | rg -v '^/Users/runner/work/sentry-cocoa/sentry-cocoa/Sources/([A-Za-z0-9_-]+/)+[A-Za-z0-9_+-]+\.(m|mm|c|cpp|h|swift)$' >/dev/null; then
   print -u2 "bundle contains a forbidden local path or example device address"
   exit 1
 fi

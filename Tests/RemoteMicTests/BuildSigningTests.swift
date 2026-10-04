@@ -119,6 +119,46 @@ struct BuildSigningTests {
         #expect(source.contains("plutil -insert SayAllBuildChannel -string \"$SAYALL_BUILD_CHANNEL\""))
     }
 
+    @Test func publicSentryBuildPathsDoNotAllowLocalPathsOrTraversal() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("scripts/verify-app.sh"),
+            encoding: .utf8
+        )
+        let scanPattern = #"/Users/[^[:space:]\x00]+|/tmp/remote-bridge|AA:BB:CC:DD:EE:FF"#
+        let publicPathPattern = #"^/Users/runner/work/sentry-cocoa/sentry-cocoa/Sources/([A-Za-z0-9_-]+/)+[A-Za-z0-9_+-]+\.(m|mm|c|cpp|h|swift)$"#
+        #expect(source.contains(scanPattern))
+        #expect(source.contains(publicPathPattern))
+        #expect(source.contains("rg -a -o --no-filename"))
+        #expect(source.contains("| rg -v '"))
+        #expect(!source.contains("| rg -q -v"))
+        let scan = try NSRegularExpression(pattern: scanPattern)
+        let publicPath = try NSRegularExpression(pattern: publicPathPattern)
+        let vendorPath = "/Users/runner/work/sentry-cocoa/sentry-cocoa/Sources/Sentry/SentryClient.m"
+        for (input, shouldReject) in [
+            (vendorPath + "\0", false),
+            (vendorPath + "\n", false),
+            ("/Users/runner/work/sentry-cocoa/sentry-cocoa/Sources/Swift/Core/Swizzling/SentryTypedSwizzle+URLSessionTask.swift", false),
+            ("/Users/example/private/source.swift", true),
+            ("/Users/runner/work/other/project/source.m", true),
+            (vendorPath + "/../../private.m", true),
+            (vendorPath.replacingOccurrences(of: "/Sentry/", with: "/../"), true),
+            (vendorPath.replacingOccurrences(of: ".m", with: ".json"), true),
+            (vendorPath + "\0/Users/example/private/source.swift", true),
+            ("/tmp/remote-bridge/example", true),
+            ("AA:BB:CC:DD:EE:FF", true),
+        ] {
+            let rejected = scan.matches(in: input, range: NSRange(input.startIndex..., in: input)).contains { match in
+                let candidate = (input as NSString).substring(with: match.range)
+                return publicPath.firstMatch(in: candidate, range: NSRange(candidate.startIndex..., in: candidate)) == nil
+            }
+            #expect(rejected == shouldReject)
+        }
+    }
+
     @Test func internalBuildsCanRequireUsableDiagnosticLogging() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
