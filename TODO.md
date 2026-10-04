@@ -5,6 +5,7 @@
   - 用户主动发送时，Sentry 只接收公开白名单事件和可选私有 provider 的类型化安全事件；不读取本地日志，不上传身份、真实订单/支付标识、用户内容、设备身份或第三方 App 私有状态。
   - 自动化测试和 DSN 为空路径已完成；私有业务事件可跨重启保留并仅在成功发送后标记。2026-09-27 已完成内部解密工具和受控 Sentry 测试项目验收，包含真实网络发送、敏感字段零命中、重复发送去重、密文权限与内部解密。生产公钥轮换/保管和真实用户现场日志支持流程完成后再勾选。
   - 2026-10-01：内部包构建与最终 App 校验已支持强制要求有效的 32 字节 Curve25519 公钥，避免再次分发签名公证通过但无法生成 `.rmlog` 的包；生产密钥保管和轮换仍未完成。
+  - 2026-10-04：修复可选公钥缺失时的 App 校验误判；六个真实脚本回归用例通过，强制模式仍拒绝缺失或非法公钥。签名与公证结果单独记录。
   - 详见 [`feature/encrypted-diagnostic-logs/README.md`](feature/encrypted-diagnostic-logs/README.md) 与 [`Testing/EncryptedDiagnosticLogs.md`](Testing/EncryptedDiagnosticLogs.md)。
 
 - [ ] 蓝牙遥控器系统自定义名称（[#406](https://github.com/HD838A/remote-mic-app/issues/406)）
