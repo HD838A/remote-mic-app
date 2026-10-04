@@ -1157,7 +1157,7 @@ struct SettingsPageRegressionTests {
             range: cardStart.upperBound..<settingsSource.endIndex
         ))
         let cardSource = settingsSource[cardStart.lowerBound..<cardEnd.lowerBound]
-        #expect(cardSource.contains("ViewThatFits(in: .horizontal)"))
+        #expect(cardSource.contains("return HStack(alignment: .center, spacing: 10)"))
         #expect(cardSource.contains("fillsWidth ? nil : 232"))
         #expect(cardSource.contains("let modelName = remoteModelName(profile)"))
         #expect(cardSource.contains("let systemName = remoteSystemName(profile)"))
@@ -1229,7 +1229,7 @@ struct SettingsPageRegressionTests {
         ))
     }
 
-    @Test func remoteSelectorsOnlyShowConnectedProfilesAndKeepDiscoveryFallback() throws {
+    @Test func remoteSelectorsKeepAppleActivationCardsAndDiscoveryFallback() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -1246,13 +1246,14 @@ struct SettingsPageRegressionTests {
         ))
         let selectorSource = source[selectorStart.lowerBound..<selectorEnd.lowerBound]
 
-        #expect(selectorSource.contains("model.isRemoteConnected($0.id)"))
+        #expect(selectorSource.contains("model.isRemoteConnected(profile.id)"))
+        #expect(selectorSource.contains("model.isRemoteConnected(profile.id) || profile.model.isAppleSiriRemote"))
         #expect(selectorSource.contains("RemoteDeviceNamePolicy.sortedForCards("))
         #expect(selectorSource.contains("modelName: remoteModelName"))
         #expect(selectorSource.contains("systemName: { model.systemDeviceName(for: $0) }"))
-        #expect(selectorSource.contains("ForEach(connectedProfiles)"))
+        #expect(selectorSource.contains("ForEach(visibleProfiles)"))
         #expect(selectorSource.contains("remoteDeviceEmptyState(vertical: vertical)"))
-        #expect(!selectorSource.contains("fillsWidth: connectedProfiles.count == 2"))
+        #expect(!selectorSource.contains("fillsWidth: visibleProfiles.count == 2"))
         #expect(selectorSource.contains("ScrollView(.horizontal, showsIndicators: false)"))
         #expect(!selectorSource.contains("ScrollView(.horizontal, showsIndicators: true)"))
         #expect(!selectorSource.contains("ForEach(settings.remoteDeviceProfiles)"))

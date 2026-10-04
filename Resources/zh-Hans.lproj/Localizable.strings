@@ -1236,3 +1236,7 @@
 "onboarding.voice_tool.guide.screenshot.system_fn" = "在系统设置的键盘中，将按下🌐键时设为不执行任何操作。";
 "onboarding.voice_tool.guide.screenshot.vokie_step_1" = "在 Vokie 首页，将普通输入快捷键设为 Fn。";
 "onboarding.voice_tool.guide.screenshot.vokie_step_2" = "在 Vokie 的通用设置中，确认麦克风使用 MiRemoteV 2ch。";
+"siri_remote.activation.enable" = "启用";
+"siri_remote.activation.disable" = "停用";
+"siri_remote.activation.retry" = "重试";
+"siri_remote.activation.preparing" = "准备中…";

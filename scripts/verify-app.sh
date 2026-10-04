@@ -13,6 +13,7 @@ BINARY="$APP/Contents/MacOS/RemoteMic"
 MCP_HELPER="$APP/Contents/Helpers/SayAllMCP"
 APPLE_REMOTE_AUDIO_HELPER="$APP/Contents/Helpers/SayAllAppleRemoteAudioCapture"
 APPLE_REMOTE_HCI_SERVICE="$APP/Contents/Helpers/SayAllAppleRemoteHCIService"
+APPLE_REMOTE_HCI_UPGRADE_SERVICE="$APP/Contents/Library/LaunchServices/com.hd838a.SayAll.AppleRemoteHCIService"
 OPUS_DYLIB="$APP/Contents/Frameworks/libopus.0.dylib"
 SPARKLE_FRAMEWORK="$APP/Contents/Frameworks/Sparkle.framework"
 APP_ICON="$APP/Contents/Resources/AppIcon.icns"
@@ -436,6 +437,12 @@ codesign --verify --strict "$MCP_HELPER"
 if [[ "$SAYALL_SIRI_REMOTE_INCLUDED" == "true" ]]; then
   codesign --verify --strict "$APPLE_REMOTE_AUDIO_HELPER"
   codesign --verify --strict "$APPLE_REMOTE_HCI_SERVICE"
+  codesign --verify --strict "$APPLE_REMOTE_HCI_UPGRADE_SERVICE"
+  cmp -s "$APPLE_REMOTE_HCI_SERVICE" "$APPLE_REMOTE_HCI_UPGRADE_SERVICE"
+  test "$(/usr/libexec/PlistBuddy -c 'Print :SMPrivilegedExecutables:com.hd838a.SayAll.AppleRemoteHCIService' "$PLIST")" = \
+    'identifier "com.hd838a.SayAll.AppleRemoteHCIService" and anchor apple generic and certificate leaf[subject.OU] = "L3QHLDRPAY"'
+  otool -l "$APPLE_REMOTE_HCI_UPGRADE_SERVICE" | rg -q 'sectname __info_plist'
+  otool -l "$APPLE_REMOTE_HCI_UPGRADE_SERVICE" | rg -q 'sectname __launchd_plist'
   test "$(codesign -dvv "$APPLE_REMOTE_AUDIO_HELPER" 2>&1 | \
     sed -n 's/^Identifier=//p')" = "com.hd838a.RemoteMic.apple-remote-audio"
   test "$(codesign -dvv "$APPLE_REMOTE_HCI_SERVICE" 2>&1 | \
@@ -534,7 +541,7 @@ fi
 
 EXPECTED_APP_FILES=$'Contents/Helpers/SayAllMCP\nContents/Info.plist\nContents/MacOS/RemoteMic\nContents/Resources/AppIcon.icns\nContents/Resources/COPYRIGHT.md\nContents/Resources/CommonPhrases.json\nContents/Resources/FirstInstallGuide.md\nContents/Resources/LICENSE.md\nContents/Resources/LOGO-LICENSE.md\nContents/Resources/RC003-remote-photo.png\nContents/Resources/README.md\nContents/Resources/StatusIconActiveTemplate.png\nContents/Resources/StatusIconActiveTemplate@2x.png\nContents/Resources/StatusIconTemplate.png\nContents/Resources/StatusIconTemplate@2x.png\nContents/Resources/TECHNICAL.md\nContents/Resources/THIRD_PARTY_NOTICES.md\nContents/Resources/TROUBLESHOOTING.md\nContents/_CodeSignature/CodeResources'
 if [[ "$SAYALL_SIRI_REMOTE_INCLUDED" == "true" ]]; then
-  EXPECTED_APP_FILES=$'Contents/Frameworks/libopus.0.dylib\nContents/Helpers/SayAllAppleRemoteAudioCapture\nContents/Helpers/SayAllAppleRemoteHCIService\n'"$EXPECTED_APP_FILES"
+  EXPECTED_APP_FILES=$'Contents/Frameworks/libopus.0.dylib\nContents/Helpers/SayAllAppleRemoteAudioCapture\nContents/Helpers/SayAllAppleRemoteHCIService\nContents/Library/LaunchServices/com.hd838a.SayAll.AppleRemoteHCIService\n'"$EXPECTED_APP_FILES"
 fi
 while IFS= read -r expected_file; do
   test -f "$APP/$expected_file"

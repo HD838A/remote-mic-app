@@ -1236,3 +1236,7 @@
 "onboarding.voice_tool.guide.screenshot.system_fn" = "In System Settings → Keyboard (键盘), set Press Globe key to (按下🌐键时) to Do Nothing (不执行任何操作).";
 "onboarding.voice_tool.guide.screenshot.vokie_step_1" = "On Vokie’s Home page (首页), set Standard Input (普通输入) to Fn.";
 "onboarding.voice_tool.guide.screenshot.vokie_step_2" = "In Vokie’s General settings (通用), check that Microphone (麦克风) uses MiRemoteV 2ch.";
+"siri_remote.activation.enable" = "Enable";
+"siri_remote.activation.disable" = "Disable";
+"siri_remote.activation.retry" = "Retry";
+"siri_remote.activation.preparing" = "Preparing…";
