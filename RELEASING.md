@@ -21,6 +21,8 @@
 4. 检查 `config/release-dependencies.json` 与受保护 workflow 使用相同的私有依赖完整 SHA，同时确认公开 `Package.swift`、`Package.resolved` 不解析私有仓库；运行 `scripts/verify-release-dependency-pins.sh`。
 5. 运行 `scripts/verify-release-ready-main-ci.sh`，确认 Apple Silicon 与 Intel Ventura 的源码分支 push CI 都完成无私有权限也可执行的 Swift tests、项目 self-test 和 Release build。官方 CI 探测到私有 deploy key 可用时，还必须完成固定私有 Commit 的集成测试和双架构 Release build；脚本名为历史兼容名称，发布控制面 fixture 不得冒充产品 CI。
 
+Mac Remote 与其他 macOS 私有组件使用同一次私有平台 checkout。CI 和发布通过显式本地路径加载 `packages/macos-remote`，共享私有平台固定 Commit；不再检出独立 Remote 镜像，也不再使用其专属 deploy key。无私有路径的公开构建继续使用现有兼容层。回退发布流程时须同时回退清单、workflow 和验证脚本；历史版本的固定镜像 Commit 仍可只读获取。
+
 ### Hotfix 准备
 
 只有用户明确要求紧急修复时才使用 Hotfix：读取 GitHub 当前 `releases/latest`，从该 Tag 的精确 Commit 创建 `hotfix/vX.Y.Z`。版本必须是同一 major/minor 的更高 patch；分支只包含该修复、直接相关测试和版本元数据，并保持线性历史。Hotfix 发布完成后必须把修复通过普通 PR 同步回 `main`。不得用 Hotfix 承载一般功能、积压 Bug、依赖升级或发布流程重构。
