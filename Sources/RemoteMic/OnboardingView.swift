@@ -3516,6 +3516,7 @@ struct OnboardingView: View {
     private func selectAppleRemote(_ generation: OnboardingAppleRemoteGeneration) {
         settings.setOnboardingAppleRemoteGeneration(generation)
         selectControlSource(.siriRemote)
+        model.setSiriRemoteEnabled(true)
     }
 
     private func handleLearnedShortcut(_ shortcut: CustomKeyboardShortcut) {
@@ -3784,6 +3785,14 @@ struct OnboardingView: View {
             step: settings.onboardingStep,
             failureReason: failure
         )
+        if settings.onboardingControlSource == .siriRemote {
+            switch failure {
+            case .voiceSessionNotStarted, .voiceNoSamples, .voiceAudioDeliveryFailed:
+                model.setSiriRemoteEnabled(true)
+            default:
+                break
+            }
+        }
         switch failure {
         case .bluetoothPermissionDenied:
             requestBluetoothPermission()
@@ -3835,7 +3844,10 @@ struct OnboardingView: View {
         case .webRemote:
             model.disableWebRemoteConnection()
             model.enableWebRemoteConnection()
-        case .xiaomiRemote, .siriRemote, .chromecastRemote, .unselected:
+        case .siriRemote:
+            model.setSiriRemoteEnabled(true)
+            prepareSelectedControlConnection()
+        case .xiaomiRemote, .chromecastRemote, .unselected:
             prepareSelectedControlConnection()
         }
     }

@@ -562,7 +562,7 @@
 "about.preferences.show_status_bar_icon_help" = "If both Dock and menu bar icons are hidden, launch SayAll again to open Settings.";
 "about.preferences.app_icon" = "App Icon";
 "about.preferences.app_icon_help" = "Choose the icon shown in the Dock, app switcher, and Settings.";
-"about.preferences.app_icon_standard" = "Default";
+"about.preferences.app_icon_standard" = "Classic Duck";
 "about.preferences.app_icon_faceted_duck" = "Faceted Duck";
 "about.preferences.language" = "App Language";
 "about.page.hero_subtitle" = "Version, preferences, and support for your wireless voice workspace";
@@ -1238,3 +1238,7 @@
 "onboarding.voice_tool.guide.screenshot.system_fn" = "In System Settings → Keyboard (键盘), set Press Globe key to (按下🌐键时) to Do Nothing (不执行任何操作).";
 "onboarding.voice_tool.guide.screenshot.vokie_step_1" = "On Vokie’s Home page (首页), set Standard Input (普通输入) to Fn.";
 "onboarding.voice_tool.guide.screenshot.vokie_step_2" = "In Vokie’s General settings (通用), check that Microphone (麦克风) uses MiRemoteV 2ch.";
+"siri_remote.activation.enable" = "Enable";
+"siri_remote.activation.disable" = "Disable";
+"siri_remote.activation.retry" = "Retry";
+"siri_remote.activation.preparing" = "Preparing…";

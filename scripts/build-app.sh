@@ -28,7 +28,6 @@ SAYALL_MAC_REMOTE_PACKAGE_PATH="${SAYALL_MAC_REMOTE_PACKAGE_PATH:-}"
 SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH="${SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH:-}"
 SAYALL_SIRI_REMOTE_PACKAGE_PATH="${SAYALL_SIRI_REMOTE_PACKAGE_PATH:-}"
 SAYALL_CHROMECAST_PACKAGE_PATH="${SAYALL_CHROMECAST_PACKAGE_PATH:-}"
-SAYALL_MEMBERSHIP_API_BASE_URL="${SAYALL_MEMBERSHIP_API_BASE_URL:-}"
 SAYALL_DIAGNOSTIC_PUBLIC_KEY_BASE64="${SAYALL_DIAGNOSTIC_PUBLIC_KEY_BASE64:-}"
 SAYALL_TEST_BUTTON_PROFILES_FREE="${SAYALL_TEST_BUTTON_PROFILES_FREE:-0}"
 SAYALL_BUILD_CHANNEL="${SAYALL_BUILD_CHANNEL:-}"
@@ -328,11 +327,6 @@ if [[ "$SAYALL_TEST_BUTTON_PROFILES_FREE" == "1" &&
   print -u2 "free button profile test access excludes private membership artifacts"
   exit 1
 fi
-if [[ -n "$SAYALL_MEMBERSHIP_API_BASE_URL" ]] && ! print -r -- "$SAYALL_MEMBERSHIP_API_BASE_URL" | \
-    rg -q '^(https://[^[:space:]]+|http://127\.0\.0\.1(:[0-9]+)?(/[^[:space:]]*)?)$'; then
-  print -u2 "SAYALL_MEMBERSHIP_API_BASE_URL must use HTTPS or local http://127.0.0.1"
-  exit 1
-fi
 if [[ "$SAYALL_BUTTON_PROFILES_INCLUDED" == "true" &&
       "$SAYALL_PRIVATE_ARTIFACT_INCLUDED" == "true" ]]; then
   SAYALL_MEMBERSHIP_RESOURCE_BUNDLE="$SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH/Resources/SayAllMembership_SayAllMembershipUI.bundle"
@@ -414,6 +408,20 @@ BIN_PATH="$BIN_DIR/$APP_NAME"
 MCP_HELPER_PATH="$BIN_DIR/SayAllMCP"
 APPLE_REMOTE_AUDIO_HELPER_PATH="$BIN_DIR/AppleRemoteAudioCapture"
 APPLE_REMOTE_HCI_SERVICE_PATH="$BIN_DIR/AppleRemoteHCIService"
+if [[ "$SAYALL_SIRI_REMOTE_INCLUDED" == "true" ]]; then
+  SIRI_HCI_SCRATCH_PATH="$BUILD_SCRATCH_PATH/siri-hci-helper"
+  run_release_stage app-siri-hci-helper-build "$RELEASE_SWIFT_BUILD_TIMEOUT_SECONDS" \
+    xcrun swift build --disable-keychain \
+    --package-path "$SAYALL_SIRI_REMOTE_PACKAGE_PATH" \
+    --scratch-path "$SIRI_HCI_SCRATCH_PATH" --cache-path "$BUILD_CACHE_PATH" \
+    -c "$CONFIGURATION" --triple "$RELEASE_TRIPLE" --product AppleRemoteHCIService
+  SIRI_HCI_BIN_DIR="$(run_release_stage app-siri-hci-helper-bin-path 30 \
+    xcrun swift build --disable-keychain \
+    --package-path "$SAYALL_SIRI_REMOTE_PACKAGE_PATH" \
+    --scratch-path "$SIRI_HCI_SCRATCH_PATH" --cache-path "$BUILD_CACHE_PATH" \
+    -c "$CONFIGURATION" --triple "$RELEASE_TRIPLE" --show-bin-path)"
+  APPLE_REMOTE_HCI_SERVICE_PATH="$SIRI_HCI_BIN_DIR/AppleRemoteHCIService"
+fi
 if [[ "$SAYALL_SIRI_REMOTE_INCLUDED" == "true" ]]; then
   SIRI_REMOTE_RESOURCE_BUNDLE="$BIN_DIR/SayAllSiriRemote_SayAllSiriRemote.bundle"
 fi
@@ -498,11 +506,6 @@ plutil -insert SayAllButtonProfilesTestAccess -bool "$SAYALL_BUTTON_PROFILES_TES
 plutil -remove SayAllPrivateArtifactsIncluded "$APP_DIR/Contents/Info.plist" 2>/dev/null || true
 plutil -insert SayAllPrivateArtifactsIncluded -bool "$SAYALL_PRIVATE_ARTIFACT_INCLUDED" \
   "$APP_DIR/Contents/Info.plist"
-if [[ -n "$SAYALL_MEMBERSHIP_API_BASE_URL" ]]; then
-  plutil -remove SayAllMembershipAPIBaseURL "$APP_DIR/Contents/Info.plist" 2>/dev/null || true
-  plutil -insert SayAllMembershipAPIBaseURL -string "$SAYALL_MEMBERSHIP_API_BASE_URL" \
-    "$APP_DIR/Contents/Info.plist"
-fi
 plutil -remove SayAllDiagnosticPublicKey "$APP_DIR/Contents/Info.plist" 2>/dev/null || true
 if [[ -n "$SAYALL_DIAGNOSTIC_PUBLIC_KEY_BASE64" ]]; then
   plutil -insert SayAllDiagnosticPublicKey -string "$SAYALL_DIAGNOSTIC_PUBLIC_KEY_BASE64" \
@@ -511,6 +514,12 @@ fi
 plutil -remove SayAllSiriRemoteIncluded "$APP_DIR/Contents/Info.plist" 2>/dev/null || true
 plutil -insert SayAllSiriRemoteIncluded -bool "$SAYALL_SIRI_REMOTE_INCLUDED" \
   "$APP_DIR/Contents/Info.plist"
+plutil -remove SMPrivilegedExecutables "$APP_DIR/Contents/Info.plist" 2>/dev/null || true
+if [[ "$SAYALL_SIRI_REMOTE_INCLUDED" == "true" ]]; then
+  plutil -insert SMPrivilegedExecutables -json \
+    '{"com.hd838a.SayAll.AppleRemoteHCIService":"identifier \"com.hd838a.SayAll.AppleRemoteHCIService\" and anchor apple generic and certificate leaf[subject.OU] = \"L3QHLDRPAY\""}' \
+    "$APP_DIR/Contents/Info.plist"
+fi
 plutil -remove SayAllChromecastIncluded "$APP_DIR/Contents/Info.plist" 2>/dev/null || true
 plutil -insert SayAllChromecastIncluded -bool "$SAYALL_CHROMECAST_INCLUDED" \
   "$APP_DIR/Contents/Info.plist"
@@ -703,6 +712,10 @@ if [[ "$SIGNING_IDENTITY" != "-" ]]; then
       --identifier "com.hd838a.SayAll.AppleRemoteHCIService" \
       --sign "$SIGNING_IDENTITY" \
       "$APP_DIR/Contents/Helpers/SayAllAppleRemoteHCIService"
+    mkdir -p "$APP_DIR/Contents/Library/LaunchServices"
+    ditto --norsrc --noextattr --noqtn --noacl \
+      "$APP_DIR/Contents/Helpers/SayAllAppleRemoteHCIService" \
+      "$APP_DIR/Contents/Library/LaunchServices/com.hd838a.SayAll.AppleRemoteHCIService"
     codesign \
       --force \
       --options runtime \
@@ -773,6 +786,10 @@ if [[ "$SIGNING_IDENTITY" == "-" ]]; then
       --identifier "com.hd838a.SayAll.AppleRemoteHCIService" \
       --sign - \
       "$APP_DIR/Contents/Helpers/SayAllAppleRemoteHCIService"
+    mkdir -p "$APP_DIR/Contents/Library/LaunchServices"
+    ditto --norsrc --noextattr --noqtn --noacl \
+      "$APP_DIR/Contents/Helpers/SayAllAppleRemoteHCIService" \
+      "$APP_DIR/Contents/Library/LaunchServices/com.hd838a.SayAll.AppleRemoteHCIService"
     codesign \
       --force \
       --timestamp=none \

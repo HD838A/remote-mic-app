@@ -708,6 +708,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private lazy var siriRemoteFeature = SiriRemoteFeatureIntegration(
         logger: { AppLogger.shared.write($0) }
     )
+    @Published private(set) var siriRemoteAudioStatus = "disabled"
     private let siriRemoteCursorFeedback = SiriRemoteCursorFeedbackController(
         logger: { AppLogger.shared.write($0) }
     )
@@ -868,6 +869,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         self.rc003VoiceExtensionTestEnabled = rc003VoiceExtensionTestEnabled
         self.recordingAssetStore = recordingAssetStore
         self.diagnosticLogUploader = diagnosticLogUploader
+        if settings.siriRemoteEnabled, settings.siriRemoteNeedsUserAction {
+            siriRemoteAudioStatus = "unavailable:authorization_user_action_required"
+        }
         macroFeature.configurePortableTransfer(settings: settings) { [weak self] snapshot in
             guard let self else { throw AppConfigurationError.invalidValues }
             guard let envelope = try JSONSerialization.jsonObject(with: snapshot) as? [String:Any],
@@ -946,7 +950,14 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         siriRemoteFeature.onSamples = { [weak self] samples in
             self?.receiveAppleRemoteAudio(samples)
         }
-        siriRemoteFeature.onStatus = { _ in }
+        siriRemoteFeature.onStatus = { [weak self] status in
+            guard let self, self.settings.siriRemoteEnabled,
+                  !["ipc_ready", "capturing", "stopped"].contains(status) else { return }
+            if status.hasPrefix("unavailable:"), status.contains("authorization_") {
+                self.settings.siriRemoteNeedsUserAction = true
+            }
+            self.siriRemoteAudioStatus = status
+        }
         siriRemoteFeature.onTouchFeedback = { [weak self] feedback in
             guard let self else { return }
             if case .clicked = feedback {
@@ -1281,7 +1292,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         started = true
         startAudioSubsystem()
 #if SAYALL_SIRI_REMOTE_ENABLED
-        siriRemoteFeature.start()
+        if settings.siriRemoteEnabled, !settings.siriRemoteNeedsUserAction {
+            siriRemoteFeature.start()
+        }
 #endif
         applyHIDSettings()
         refreshRemoteDeviceNames(reason: .startup)
@@ -2874,9 +2887,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         }
         startHIDMonitors(powerKeySuppressed: powerKeySuppressed)
 #if SAYALL_SIRI_REMOTE_ENABLED
-        if started, restartSiriRemote {
+        if started, restartSiriRemote, settings.siriRemoteEnabled {
             siriRemoteFeature.restart(customMappingEnabled: settings.customMappingEnabled)
-        } else if started {
+        } else if started, settings.siriRemoteEnabled {
             AppLogger.shared.write(
                 "SIRI REMOTE SETTINGS phase=completed result=preserved " +
                     "reason=voice_key_configuration_change"
@@ -2889,6 +2902,35 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
 #endif
         completeHIDMappingRecoveryIfNeeded()
         refreshVoiceKeyCompatibilityWarning()
+    }
+
+    func setSiriRemoteEnabled(_ enabled: Bool) {
+        guard enabled || activePhysicalVoiceControlSource != .siriRemote else { return }
+        settings.siriRemoteEnabled = enabled
+#if SAYALL_SIRI_REMOTE_ENABLED
+        if enabled {
+            prepareSiriRemoteFromUserAction()
+        } else {
+            siriRemoteFeature.stop()
+            siriRemoteCursorFeedback.stop()
+            resetAllAppleRemoteState(reason: "feature_disabled")
+            siriRemoteAudioStatus = "disabled"
+        }
+#endif
+        AppLogger.shared.write("SIRI REMOTE ACTIVATION phase=changed enabled=\(enabled)")
+    }
+
+    /// Call only from enable/retry controls, never from startup or device discovery.
+    func prepareSiriRemoteFromUserAction() {
+#if SAYALL_SIRI_REMOTE_ENABLED
+        guard settings.siriRemoteEnabled else { return }
+        guard activePhysicalVoiceControlSource != .siriRemote else { return }
+        settings.siriRemoteNeedsUserAction = false
+        if siriRemoteAudioStatus == "disabled" { siriRemoteAudioStatus = "preparing_hci" }
+        AppLogger.shared.write("SIRI REMOTE ACTIVATION phase=requested source=user_action")
+        siriRemoteFeature.start(userInitiated: true)
+        siriRemoteFeature.restart(customMappingEnabled: settings.customMappingEnabled)
+#endif
     }
 
     private func scheduleHIDMappingRecoveryIfNeeded(

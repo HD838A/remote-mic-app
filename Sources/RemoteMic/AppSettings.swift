@@ -320,6 +320,8 @@ final class AppSettings: ObservableObject {
         static let chromecastSystemReservedExceptions = "chromecast.systemReservedExceptions"
         static let voiceKeyMode = "voiceKeyMode"
         static let siriRemoteScrollArrowReversed = "siriRemote.scrollArrowReversed"
+        static let siriRemoteEnabled = "siriRemote.enabled"
+        static let siriRemoteNeedsUserAction = "siriRemote.needsUserAction"
         static let chromecastEnabled = "chromecast.enabled"
         static let chromecastVoiceMode = "chromecast.voiceMode"
         static let localTranscriptHistoryEnabled = "localTranscriptHistoryEnabled"
@@ -547,6 +549,15 @@ final class AppSettings: ObservableObject {
                 forKey: Keys.siriRemoteScrollArrowReversed
             )
         }
+    }
+
+    /// Only an explicit user action enables Apple Remote runtime services.
+    @Published var siriRemoteEnabled: Bool {
+        didSet { defaults.set(siriRemoteEnabled, forKey: Keys.siriRemoteEnabled) }
+    }
+
+    @Published var siriRemoteNeedsUserAction: Bool {
+        didSet { defaults.set(siriRemoteNeedsUserAction, forKey: Keys.siriRemoteNeedsUserAction) }
     }
 
     /// Chromecast 遥控器总开关。私有包缺失时该设置无副作用，设置页也不会展示。
@@ -852,7 +863,8 @@ final class AppSettings: ObservableObject {
             rawValue: defaults.string(forKey: Keys.applicationLanguage) ?? ""
         ) ?? .system
         appIconIdentifier = AppIconIdentifier(
-            rawValue: defaults.string(forKey: Keys.appIconIdentifier) ?? "standard"
+            rawValue: defaults.string(forKey: Keys.appIconIdentifier)
+                ?? AppIconIdentifier.facetedDuck.rawValue
         )
         showDockIcon = defaults.object(forKey: Keys.showDockIcon) == nil
             ? true
@@ -882,6 +894,8 @@ final class AppSettings: ObservableObject {
         siriRemoteScrollArrowReversed = defaults.bool(
             forKey: Keys.siriRemoteScrollArrowReversed
         )
+        siriRemoteEnabled = defaults.bool(forKey: Keys.siriRemoteEnabled)
+        siriRemoteNeedsUserAction = defaults.bool(forKey: Keys.siriRemoteNeedsUserAction)
         // 首次运行默认开启：私有包只会被编入有该硬件的构建，让用户先找开关再测试没有意义。
         chromecastEnabled = defaults.object(forKey: Keys.chromecastEnabled) == nil
             ? true

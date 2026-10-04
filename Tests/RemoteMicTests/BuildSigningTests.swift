@@ -1,9 +1,25 @@
 import AppKit
 import Foundation
 import Testing
+@testable import RemoteMic
 
 @Suite("Build signing")
 struct BuildSigningTests {
+    @Test func membershipServiceEnvironmentStaysBehindOptionalAdapter() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        for path in [
+            "Package.swift", "scripts/build-app.sh", "scripts/verify-app.sh",
+            "Sources/RemoteMic/MembershipFeatureIntegration.swift",
+        ] {
+            let source = try String(contentsOf: root.appendingPathComponent(path), encoding: .utf8)
+            #expect(!source.contains("SAYALL_MEMBERSHIP_API_BASE_URL"))
+            #expect(!source.contains("SayAllMembershipAPIBaseURL"))
+        }
+    }
+
     @Test func appIconUsesTransparentMacOSAsset() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -36,6 +52,21 @@ struct BuildSigningTests {
             y: representation.pixelsHigh / 2
         )?.alphaComponent ?? 0
         #expect(centerAlpha >= 0.5)
+
+        let source = try #require(NSImage(contentsOf: root.appendingPathComponent(
+            "Resources/AppIcons/faceted-duck.png"
+        )))
+        let expectedIcon = AppIconCatalog.applicationIconImage(source, contentScale: 0.92)
+        let expectedData = try #require(expectedIcon.tiffRepresentation)
+        let expectedBitmap = try #require(NSBitmapImageRep(data: expectedData))
+        for (x, y) in [(50, 512), (256, 256), (512, 512), (768, 512), (512, 900)] {
+            let actual = try #require(representation.colorAt(x: x, y: y))
+            let expected = try #require(expectedBitmap.colorAt(x: x, y: y))
+            #expect(abs(actual.redComponent - expected.redComponent) <= 1.0 / 255.0)
+            #expect(abs(actual.greenComponent - expected.greenComponent) <= 1.0 / 255.0)
+            #expect(abs(actual.blueComponent - expected.blueComponent) <= 1.0 / 255.0)
+            #expect(abs(actual.alphaComponent - expected.alphaComponent) <= 1.0 / 255.0)
+        }
         #expect(verifySource.contains("/usr/bin/iconutil --convert iconset"))
         #expect(verifySource.contains("app icon corner is not transparent"))
     }
@@ -109,6 +140,68 @@ struct BuildSigningTests {
         }
         #expect(buildSource.contains("SAYALL_DIAGNOSTIC_PUBLIC_KEY_BASE64 is required for this build"))
         #expect(verifySource.contains("App is missing the required diagnostic public key"))
+
+        // Execute the production verifier block. Missing-key plutil errors go to
+        // stdout on macOS, so exit status, not output content, defines presence.
+        let start = try #require(verifySource.range(of:
+            "test -n \"$(plutil -extract SUPublicEDKey raw -o - \"$PLIST\")\"\n"
+        )).upperBound
+        let end = try #require(verifySource.range(of: "SAYALL_AI_INCLUDED=\"")).lowerBound
+        let block = String(verifySource[start..<end])
+        let validKey = Data(repeating: 7, count: 32).base64EncodedString()
+        let cases: [(String, Any?, String, Int32)] = [
+            ("missing optional", nil, "0", 0),
+            ("missing required", nil, "1", 1),
+            ("invalid optional", "invalid-base64", "0", 1),
+            ("valid optional", validKey, "0", 0),
+            ("valid required", validKey, "1", 0),
+            ("invalid optional type", ["not-a-key"], "0", 1),
+        ]
+        // Reproduce macOS CI plutil's stdout error even on systems that use stderr.
+        let plutilWrapper = """
+        plutil() {
+          if /usr/bin/plutil "$@"; then
+            return 0
+          else
+            print -r -- "Could not extract value: unavailable key or type"
+            return 1
+          fi
+        }
+
+        """
+        let fixtureDirectory = root.appendingPathComponent(
+            ".build/diagnostic-key-verifier-\(UUID().uuidString)"
+        )
+        try FileManager.default.createDirectory(
+            at: fixtureDirectory, withIntermediateDirectories: true
+        )
+        for (index, item) in cases.enumerated() {
+            let (name, key, required, expectedStatus) = item
+            let plist: [String: Any] = key.map { ["SayAllDiagnosticPublicKey": $0] } ?? [:]
+            let input = try PropertyListSerialization.data(
+                fromPropertyList: plist, format: .xml, options: 0
+            )
+            let plistURL = fixtureDirectory.appendingPathComponent("\(index).plist")
+            try input.write(to: plistURL)
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/bin/zsh")
+            process.arguments = ["-c", "set -euo pipefail\n" + plutilWrapper + block]
+            process.environment = ProcessInfo.processInfo.environment.merging(
+                ["REQUIRE_DIAGNOSTIC_PUBLIC_KEY": required, "PLIST": plistURL.path]
+            ) { _, value in value }
+            let errorPipe = Pipe()
+            process.standardOutput = FileHandle.nullDevice
+            process.standardError = errorPipe
+            try process.run()
+            process.waitUntilExit()
+            let error = String(
+                data: errorPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8
+            ) ?? ""
+            #expect(process.terminationStatus == expectedStatus, "\(name): \(error)")
+            if name == "missing required" {
+                #expect(error.contains("App is missing the required diagnostic public key"))
+            }
+        }
     }
 
     @Test func siriRemoteIsOptInForCommunityBuilds() throws {
@@ -195,7 +288,7 @@ struct BuildSigningTests {
         #expect(buildSource.contains("REQUIRE_SAYALL_MAC_REMOTE_PACKAGE"))
         #expect(buildSource.contains("A SayAll Mac remote package is required for this build"))
         #expect(workflowSource.contains(
-            "SAYALL_MAC_REMOTE_PACKAGE_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-mac-remote"
+            "SAYALL_MAC_REMOTE_PACKAGE_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-private-platform/packages/macos-remote"
         ))
         #expect(workflowSource.contains("REQUIRE_SAYALL_MAC_REMOTE_PACKAGE=1"))
     }
@@ -942,9 +1035,10 @@ struct BuildSigningTests {
         #expect(workflowSource.contains("APPLE_SIGNING_MATCH_DEPLOY_KEY"))
         #expect(workflowSource.contains("RELEASE_AGE_IDENTITY"))
         #expect(workflowSource.contains(
-            "steps.release-dependencies.outputs.sayall_mac_remote_repository"
+            "steps.release-dependencies.outputs.sayall_private_platform_repository"
         ))
-        #expect(workflowSource.contains("SAYALL_MAC_REMOTE_DEPLOY_KEY"))
+        #expect(!workflowSource.contains("SAYALL_MAC_REMOTE_DEPLOY_KEY"))
+        #expect(!workflowSource.contains("steps.release-dependencies.outputs.sayall_mac_remote_commit"))
         #expect(workflowSource.contains("SAYALL_MAC_REMOTE_PACKAGE_PATH"))
         #expect(workflowSource.contains("HD838A/remotemic-notary-secrets"))
         #expect(workflowSource.contains("HD838A/apple-signing-match"))
