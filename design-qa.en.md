@@ -48,8 +48,9 @@ This file is a convenience translation of the current mandatory design rules. Th
 - Avoid drop-down lists whenever practical, especially a single long list that mixes basic keys, system actions, custom actions, and individual apps. Group larger option sets semantically and prefer in-page button grids, segmented choices, or clearly separated lists.
 - At the `800 × 650` offscreen stress size, the five action-filter capsules must remain on one line in Chinese and English, use 12pt-or-larger text, and avoid horizontal scrolling or clipped hit areas in light and dark appearances. Long labels may truncate while accessibility retains the full name. Real window interaction is validated at the production minimum of `1020 × 772`.
 - Physical-keyboard shortcut recording accepts an unmodified single key, a key combination, or one standalone left/right Command, Option, Control, Shift, or Fn key. A modifier press remains pending until either a main key completes the combination or the modifier is released alone.
-- Flatten flows into the main page instead of relying on popovers, sheets, or consecutive confirmation dialogs. Related configuration should share one large surface where the current target, available actions, secondary settings, learning state, and test action remain visible together.
-- Keep system dialogs only for file selection, required permission authorization, and irreversible destructive actions. Ordinary instructions, learning progress, success, and failure feedback should appear inline.
+- Prefer in-page controls for primary tasks and related settings. Keep frequent workflows, the current target, required actions, and critical status visible. Show routine instructions, progress, and results beside the related controls.
+- Popovers and sheets may serve brief choices, secondary edits, and native system tasks. They must support cancel, keyboard access, and accessibility, preserve context, and provide a clear return path. Do not hide required steps or critical errors behind consecutive overlays.
+- Use suitable system interactions for file selection, permissions, and irreversible actions. Product specs that require a specific flow to remain inline still apply.
 
 ## Code locations
 
@@ -60,3 +61,7 @@ This file is a convenience translation of the current mandatory design rules. Th
 ## Conclusion
 
 The repository screenshots show the macOS 26 Liquid Glass appearance; the same page structure automatically uses compatibility styling on macOS 14/15. No review reference depends on a local temporary directory.
+
+## Onboarding validation scope
+
+Use the production page and scenario list in [Testing/FirstRunOnboarding.md](Testing/FirstRunOnboarding.md). Derive counts from enabled sources, pages, languages, appearances, and extra states. Do not maintain another fixed count here. Flow and shared-layout changes require full checks. Text-only and local changes use the targeted checks in `AGENTS.md`. Save evidence in persistent storage and inspect every image. Screenshots do not prove real permissions, devices, audio, or text delivery.

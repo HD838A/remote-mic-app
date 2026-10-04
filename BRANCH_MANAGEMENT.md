@@ -2,7 +2,17 @@
 
 本文件规定产品开发、版本元数据、macOS 预览发布和正式晋升的最小分支边界。发布实现细节和流程设计见 RELEASING.md。
 
+`governance-policy` 块是对应章节的稳定不变量声明。编号、字段和值与正文共同生效；规则变化必须在同一治理 PR 同步声明和检查。文字润色不需要修改编号。静态检查验证声明、结构、授权字段和实际 Git 范围，不能证明产品行为或代替 GitHub 配置回读。
+
+PR 的 `governance` 块使用稳定字段。每个字段只出现一次；填写具体值，禁止保留占位内容。`approval_basis=approved-plan` 表示用户已批准具体对照、文件范围和验证计划，且 `plan_changed=false`；`reviewed-result` 表示用户已确认本次结果及新增差异；核心治理的 `pending` 只能用于 Draft；Ready 的 `validation_result` 必须为 `pass`。批准来源必须来自维护者或用户，Agent 自述和 CI 结果不能替代。
+
 ## main 不变量
+
+```governance-policy
+G-MAIN.start=latest-origin-main
+G-MAIN.sync=impact-based
+G-MAIN.release=exact-approved-main
+```
 
 - 开始任何操作前执行 git fetch origin main，并记录 origin/main 的完整 SHA。
 - main 工作区只用于同步已合入的远端主线，不直接开发、保存临时改动或准备版本元数据。
@@ -16,18 +26,26 @@
 
 1. **同步基线**：开始工作前执行 `git fetch origin main`，确认本地 `origin/main` 是最新远端主线。
 2. **创建分支**：从该 SHA 创建独立分支和持久化 worktree；分支创建后不得再把其他功能、Bug、发布或规范改动混入其中。纯 TODO-only 记录按下方专用流程处理。
-3. **开发与验证**：在独立 worktree 中开发。功能必须完成必要的自动化验证和对应测试手册；Bug 必须按复现、日志、代码、修复、验证顺序处理，并记录到 `Bugs/`。
-4. **提交**：验证通过后创建只包含当前工作项的 commit；提交前检查 diff、敏感信息和单文件大小，超过 5 MB 的文件必须先获得用户批准。
+3. **开发与验证**：在独立 worktree 中开发。功能必须完成必要的自动化验证和对应测试手册；Bug 按 `AGENTS.md` 的证据驱动流程调查和验证，并记录到 `Bugs/`。
+4. **提交**：验证通过后创建只包含当前工作项的 commit；提交前检查 diff、敏感信息和单文件大小，超过 5 MB 的文件按下方大文件授权规则执行。
 5. **创建 PR**：通过下方“PR 创建门禁”后 Push 分支并创建目标为远端 `main` 的 PR。可以提前创建 Draft PR 供审查。默认须完成本地验证、必要文档和必需 CI 才能 Ready 或合入；用户明确授权的 CI 例外见下方“用户明确授权的 CI 例外”，其他验收门禁仍适用。
-6. **更新基线**：PR 准备 Ready 前重新 fetch `origin/main`。如果主线已前进，先把当前分支同步到最新 `origin/main`，解决冲突并重新执行受影响的验证；不得用过期基线直接请求合入。
+6. **更新基线**：PR 准备 Ready 前重新 fetch `origin/main`。主线前进时检查新增 diff 和合并冲突。存在冲突、共享依赖或相关行为变化时，先同步主线并重跑受影响验证；仅有无关变化时可保留分支基线，在 PR 记录最新主线 SHA、无冲突检查及影响判断。发布仍使用精确的最新已批准主线。
 7. **合入**：功能和 Bug 工作默认在 PR 审查完成且所有必需检查通过后合入 `main`；用户明确授权的 CI 例外按下节执行，合并方式遵守本文件的 PR 合并策略。
 8. **合入后收尾**：合入完成后 fetch 远端，将本地 `main` 快进到 `origin/main`，确认两者 SHA 一致并记录合入 commit。已合入分支和 worktree 先标记为已完成，清理或删除必须单独确认，不能借整理之名删除未核对的工作。
 
 ## 用户明确授权的 CI 例外
 
+```governance-policy
+G-CI.default=wait-pass
+G-CI.exception=explicit-current-pr
+G-CI.bypass=pull_request
+G-CI.status=truthful
+G-CI.other-gates=retained
+```
+
 - 默认必须等待必需 CI 通过。只有用户明确要求“不用等 CI”“跳过 CI”或“无需 CI 即合入”时，才允许当前指定 PR 不等待或不要求 CI 结果；不得把催进度、普通合入请求或历史任务的授权视为本次授权。
 - “不用等 CI”只免除合并等待，不自动取消已经运行的 CI；“跳过 CI”允许当前 PR 不执行 CI。没有明确要求停止运行时，不主动取消既有 Run。
-- PR 正文必须记录“CI 例外授权：”“CI 例外范围：”“CI 未验证项：”三项。授权记录必须包含用户原话、日期与来源；范围须指明当前 PR，未运行、运行中或失败的检查须如实标注，不得伪造通过状态。
+- PR 正文的 `governance` 块必须记录 `ci_mode`、`ci_authorization`、`ci_scope` 和 `ci_unverified`。授权包含用户原话、日期与来源；范围指明当前 PR，检查状态如实标注，不得伪造通过状态。迁移期已有产品 PR 可以保留旧版“CI 例外授权、范围、未验证项”字段，检查脚本继续验证它们。
 - CI 例外只豁免 GitHub CI 的运行、结果或等待。最小本地检查、隐私边界、UI 证据、真实硬件验收、核心治理人工确认和发布签名、公证、来源及更新链路仍按其适用规范执行。
 - GitHub 默认保留所有 Required status checks；为 Repository Admin 配置 `pull_request` 模式的 Ruleset bypass，仅允许通过 PR 使用例外。平台只能检查角色和 PR，不能识别聊天授权；操作者仍须先核对上述授权记录。不得为单个 PR 临时删除检查、关闭 Ruleset 或改为直接 Push。
 - 例外仍使用普通 Merge 并绑定核对过的 PR Head SHA。权限不足或远端规则仍拒绝时，立即报告具体阻挡，保留 PR；不得无限等待或擅自扩大仓库权限。
@@ -35,14 +53,25 @@
 
 ## PR 创建门禁
 
+```governance-policy
+G-WORK.pr=single
+G-DUP.scan=all-open-titles-labels
+G-DUP.inspect=relevant-description-files-diff
+```
+
 - 每个 PR 必须且只能对应一项独立、可审查的功能、新增需求、Bug 修复或明确的规范变更；禁止把多个互不相关的工作项放入同一个 PR。
 - 创建任何 PR（包括 Draft PR）前，必须重新 fetch 并检查最新 `origin/main` 的相关代码和 commit 历史，确认主线尚未实现同类功能或修复相同、类似的问题；如果主线已经解决，不得创建重复 PR。
-- 创建 PR 前还必须检索远端仓库已有的 Open、Draft、Merged 和 Closed PR，确认是否存在内容相同或高度重叠的 PR。已有活动 PR 覆盖相同工作项时，不得重复创建；只有部分重叠或此前 PR 已关闭时，必须先确认范围差异，并在新 PR 中明确说明关联、差异及重新创建的原因。
+- 创建 PR 前先扫描全部 Open（含 Draft）PR 的标题和标签，再按关键词、模块和路径筛选候选；相关候选必须查看描述、文件和必要 diff。对 Merged、Closed PR 使用同范围检索。筛选不足以确认无重复时，扩大检查。已有活动 PR 覆盖相同工作项时，不得重复创建；只有部分重叠或此前 PR 已关闭时，必须先确认范围差异，并在新 PR 中明确说明关联、差异及重新创建的原因。
 - 创建任何 PR（包括 Draft PR）前，必须检查相对目标分支的完整 diff 和 commit 列表。只要发现包含两个或更多互不相关的工作项，就必须停止创建 PR，先将其拆分到各自独立的分支、commit 和 PR；拆分完成前不允许创建该 PR。
 - PR 包含 UI 变更时，必须在 PR 描述中附上清晰的功能截图，展示本次修改后的实际界面和功能效果；截图缺失时，该 PR 只能保持 Draft，不得标记为 Ready 或合入。
 - 当前工作项直接必需的测试、测试手册、简短文档、配置和兼容性调整可以随同提交，但必须服务于同一工作项，不得以“配套修改”为由夹带可独立交付的其他功能。
 
 ## 工作区状态审计
+
+```governance-policy
+G-AUDIT.inventory=required
+G-AUDIT.cleanup=separate-authorization
+```
 
 - worktree 数量多、分支落后或存在未合入分支，不等于当前功能代码未提交；但每次开始新任务前必须识别当前 worktree、分支、基线和未提交改动，不能把历史 worktree 当作当前任务的干净基线。
 - 规则文档不能自动修复历史分支和 worktree。发现 `ahead/behind`、未跟踪文件、未提交改动或已合入但仍保留的旧 worktree 时，先建立清单和归属，再按用户批准的方案逐项处理。
@@ -50,28 +79,55 @@
 
 ## TODO-only 工作流程
 
+```governance-policy
+G-TODO.branch=codex/todo_list
+G-TODO.delivery=batch-or-draft
+G-TODO.product=forbidden
+```
+
 - 本流程只适用于新增或更新 `TODO.md`（以及同一次记录所需的简短公开文档引用），且不修改业务代码、测试、配置、依赖、发布资产或用户可观察行为。
-- 所有 TODO-only 记录统一使用长期分支 `codex/todo_list`，不为每一条 TODO 新建分支或 worktree。每次记录仍创建独立 commit，commit 只能包含当前 TODO 记录及其必要的文档改动。
-- 开始记录前先 fetch `origin/main`，确认 `codex/todo_list` 已同步到最新主线；记录完成并通过 `git diff --check`、文件范围、敏感信息和文件大小检查后，立即 Push 并创建只包含该 TODO commit、目标为 `main` 的 PR。PR 仍受 `main` 的 Pull Request 和 Required status checks 保护；macOS CI 对 docs-only 变更只运行文档级步骤并返回既有 required contexts，不执行产品构建、测试、签名或发布。
+- 所有 TODO-only 记录统一使用长期分支 `codex/todo_list`，不为每一条 TODO 新建分支或 worktree。独立记录可以按批次创建 commit，commit 只能包含该批 TODO 及必要文档引用；已在开发的功能条目随对应功能 PR 更新。
+- 开始记录前先 fetch `origin/main`，确认 `codex/todo_list` 已同步到最新主线；记录通过 `git diff --check`、文件范围、敏感信息和文件大小检查后，可以批次 Push，或继续更新同一个目标为 `main` 的 Draft PR；不要求每条记录立即创建 PR。批次只包含 TODO 记录及必要引用，在开始产品开发或声明主线已更新前合入。PR 仍受 `main` 的 Pull Request 和 Required status checks 保护；macOS CI 对 docs-only 变更只运行文档级步骤并返回既有 required contexts，不执行产品构建、测试、签名或发布。
 - 合入后 fetch 远端并确认本地 `main == origin/main`，再把 `codex/todo_list` 同步到最新主线，继续承载下一条 TODO。该长期分支不因单条 TODO 删除；任何清理仍需单独确认。
 - 如果一次 TODO 记录实际需要修改代码、测试、配置、依赖或发布行为，立即退出本流程，改按标准功能或 Bug 流程创建独立分支和 worktree，并执行相应 CI 与验收。
 
 ## 独立工作项提交边界
 
+```governance-policy
+G-WORK.commit=single
+G-ASSET.threshold=5MB
+G-ASSET.authorization=file-or-bounded-budget
+G-ASSET.host-limit=required
+```
+
 - 每个独立功能、新增需求、Bug 修复或规范变更完成必要验证后，必须先创建一个仅包含该工作项的 commit，才能继续开发下一个工作项，避免多个已完成工作堆叠在同一未提交工作区中。
 - commit 不得夹带其他工作项或用户已有的无关改动。工作失败、尚未完成或未达到必要验证要求时，不得伪装成已完成提交。
 - 交付时必须回报 commit SHA，并明确说明该提交是否尚未 Push。
-- 任何单个待提交文件超过 5 MB 时，必须在创建 commit 前暂停并等待用户明确批准；未获批准不得通过 commit、合并或 Push 方式提交该文件。
+- 单个待提交文件超过 5 MB 时，必须有用户批准。批准可以指定精确文件，也可以预先限定素材类型、用途、路径范围和总大小预算；文件处于已批准范围及剩余预算内时，不重复请求批准。超出范围、预算或来源变化时，先取得新的批准。
+- 提交前记录大文件清单、总大小、授权来源和预算余额，检查秘密、版权、来源和托管限额。大资产优先使用 Git LFS 或仓库外持久留存；未配置 LFS 时不得仅改扩展名规避限额。超过托管硬限制的文件不得直接提交 Git。
 
 ## 规范变更隔离与防护
 
+```governance-policy
+G-GOV.scope=dedicated-allowlist
+G-GOV.commit-marker=[governance-change]
+G-GOV.approval=concrete-plan-or-result
+G-GOV.validation=local-required
+G-GOV.required-check=Repository governance
+```
+
 - `AGENTS.md`、`BRANCH_MANAGEMENT.md`、`FEATURE_DEVELOPMENT.md` 和 `.github/PULL_REQUEST_TEMPLATE.md` 属于核心治理规范；`scripts/verify-repository-governance.sh` 与 `.github/workflows/repository-governance.yml` 属于治理守护实现。除恢复缺失规则、修复明确治理缺陷或同步专项规范边界外，产品功能、Bug、发布流程和普通测试手册 PR 不得修改这些文件。
 - 核心治理文件确需修改时，必须使用独立 PR；PR 描述必须列出变更前后规则、影响范围、迁移方式和明确不做事项，并在相关提交信息中包含 `[governance-change]`。
-- 核心治理 PR 必须保持 Draft，直到仓库维护者或用户逐项确认规范覆盖对照、无功能文件改动和静态检查结果；确认后必须在 PR 正文记录明确的批准来源，才能转为 Ready 并按正常门禁合入。自动化 Agent 不得在缺少该确认时自行将其标记 Ready、批准或合入。该人工确认不能由 required check、零审批 ruleset 或机器人 bypass 替代。
+- 核心治理变更必须有维护者或用户的明确批准，并在 PR 记录来源、日期、具体规则对照、文件范围及验证要求。已批准具体方案，且实现未超出该方案、本地静态检查通过、没有产品文件改动时，可以直接 Ready，无须重复确认。
+- 只有笼统的“修改规则”请求、方案尚未展示、范围或风险变化、必要检查失败时，PR 保持 Draft；先提供具体结果和差异，再取得批准。自动化 Agent 不得在缺少适用批准时自行 Ready、批准或合入。CI、零审批 ruleset 和机器人 bypass 均不能替代此批准。
 - 发布流程可以更新 `RELEASING.md` 及其直接测试手册，但不得借发布流程重构删除或弱化核心治理规则；发布 PR 若同时修改核心治理文件，必须通过治理变更门禁并单独说明原因。
 - `scripts/verify-repository-governance.sh` 和 `.github/workflows/repository-governance.yml` 是本文件关键规则的静态守护检查。`Repository governance` 必须配置为 `main` 的 Required status check；用户明确授权的 CI 例外只通过上述 PR bypass 使用，不移除默认检查；规则增删必须与该检查、PR 模板和迁移说明在同一个独立治理 PR 中同步更新，不得只改规范文本而不更新守护检查。治理 PR 可以同时修改 `DOCUMENTATION.md`、README 的稳定文档入口和与本次规则直接冲突的专项规范、产品合同或测试合同，但必须使用静态 allowlist，且不得包含 `Sources/`、`Tests/` 下的可执行功能测试代码、产品配置、依赖或发布资产。
 
 ## PR 合并策略
+
+```governance-policy
+G-MERGE.default=merge
+```
 
 - PR 默认使用 GitHub 的普通 Merge（保留合并提交），保留 PR 分支中的独立提交、作者、时间顺序和完整 Git history；即使 PR 只有一个提交，也不自动改用 squash。
 - 只有用户明确要求，或仓库维护者在该 PR/项目规范中明确记录了具体例外时，才允许使用 squash merge 或 rebase merge。执行前必须在交付说明中写明合并方式及其影响。
