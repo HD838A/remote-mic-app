@@ -2334,16 +2334,19 @@ struct OnboardingFlowTests {
         if remoteSource.probe.actions["control-source.more"] != nil {
             invoke("control-source.more", on: remoteSource)
         }
+        #expect(!remoteSource.settings.siriRemoteEnabled)
         for source in OnboardingBuildCapabilities.availableControlSources where source != .siriRemote {
             let id = "control-source.\(source.rawValue)"
             invoke(id, on: remoteSource)
             #expect(remoteSource.settings.onboardingControlSource == source)
+            #expect(!remoteSource.settings.siriRemoteEnabled)
         }
         #if SAYALL_SIRI_REMOTE_ENABLED
         for generation in OnboardingAppleRemoteGeneration.allCases {
             let id = "control-source.siri_remote.\(generation.rawValue)"
             invoke(id, on: remoteSource)
             #expect(remoteSource.settings.onboardingAppleRemoteGeneration == generation)
+            #expect(remoteSource.settings.siriRemoteEnabled)
         }
         #endif
         invoke("control-source.xiaomi_remote", on: remoteSource)

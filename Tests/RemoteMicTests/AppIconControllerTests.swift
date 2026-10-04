@@ -45,6 +45,9 @@ struct AppIconControllerTests {
         #expect(complete.options.map(\.id) == [.standard, .facetedDuck])
         #expect(complete.resolvedIdentifier(for: .facetedDuck) == .facetedDuck)
         #expect(complete.image(for: .facetedDuck) === facetedDuck)
+        #expect(complete.resolvedIdentifier(for: missingIdentifier) == .facetedDuck)
+        #expect(complete.image(for: missingIdentifier) === facetedDuck)
+        #expect(complete.image(for: .standard) === standard)
     }
 
     @Test @MainActor
@@ -68,11 +71,14 @@ struct AppIconControllerTests {
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
         let settings = AppSettings(defaults: defaults)
-        #expect(settings.appIconIdentifier == .standard)
+        #expect(settings.appIconIdentifier == .facetedDuck)
 
         settings.appIconIdentifier = .facetedDuck
         let reloaded = AppSettings(defaults: defaults)
         #expect(reloaded.appIconIdentifier == .facetedDuck)
+
+        settings.appIconIdentifier = .standard
+        #expect(AppSettings(defaults: defaults).appIconIdentifier == .standard)
     }
 
     @Test

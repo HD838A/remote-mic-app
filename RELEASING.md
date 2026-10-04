@@ -155,6 +155,11 @@ publication 失败时先查询远端状态。若 Tag、Release、资产和摘要
 
 ## Release Notes
 
+```governance-policy
+G-NOTES.content=user-visible
+G-NOTES.unpublished=excluded
+```
+
 - 只记录普通用户能够看到或受益的功能、体验、兼容性和可靠性变化。
 - 不写提交标题、哈希、CI、文档维护、测试数量、签名、公证、分支规范或发布流程。
 - 已撤回、删除或从未公开的版本不进入 App 内版本历史。

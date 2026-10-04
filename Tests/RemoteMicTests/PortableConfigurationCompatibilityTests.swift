@@ -57,6 +57,27 @@ struct PortableConfigurationCompatibilityTests {
         #expect(current.configuredBaseAction(for: .home, trigger: .doubleClick).macroID == "macro.saved")
     }
 #if canImport(SayAllMacroRemoteMic)
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["SAYALL_MARKET_CONTRACT_PATH"] != nil))
+    func marketFullKeyboardAccessDecodesInTheLinkedHost() throws {
+        let path = try #require(ProcessInfo.processInfo.environment["SAYALL_MARKET_CONTRACT_PATH"])
+        let data = try Data(contentsOf: URL(fileURLWithPath: path)
+            .appendingPathComponent("examples/transfers/full-keyboard-access.json"))
+        let package = try PortableTransferCodec.decode(data)
+        #expect(package.shortcuts.map(\.keyCode) == [48, 48, 123, 124, 49, 53])
+        #expect(package.buttonProfiles.count == 1)
+        #expect(package.buttonProfiles[0].bindings.count == 6)
+        #expect(package.shortcuts[0].modifiers == [.shift])
+        #expect(package.shortcuts.dropFirst().allSatisfy { $0.modifiers.isEmpty })
+        #expect(try PortableTransferCodec.decode(PortableTransferCodec.encode(package)) == package)
+        for control in ["\u{0}", "\u{a}", "\u{7f}", "\u{85}", "\u{9f}"] {
+            var invalid = package
+            invalid.shortcuts[0].keyLabel += control
+            #expect(throws: PortableTransferError.invalid("shortcuts")) {
+                try PortableTransferCodec.decode(JSONEncoder().encode(invalid))
+            }
+        }
+    }
+
     @Test @MainActor func unifiedMacroMappingExportsItsGraphAndImportsIntoOnlySelectedDevice() throws {
         let (current, cleanup) = try settings(); defer { cleanup() }
         let first = current.selectedRemoteProfileID, second = UUID()
