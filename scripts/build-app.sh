@@ -415,6 +415,20 @@ MCP_HELPER_PATH="$BIN_DIR/SayAllMCP"
 APPLE_REMOTE_AUDIO_HELPER_PATH="$BIN_DIR/AppleRemoteAudioCapture"
 APPLE_REMOTE_HCI_SERVICE_PATH="$BIN_DIR/AppleRemoteHCIService"
 if [[ "$SAYALL_SIRI_REMOTE_INCLUDED" == "true" ]]; then
+  SIRI_HCI_SCRATCH_PATH="$BUILD_SCRATCH_PATH/siri-hci-helper"
+  run_release_stage app-siri-hci-helper-build "$RELEASE_SWIFT_BUILD_TIMEOUT_SECONDS" \
+    xcrun swift build --disable-keychain \
+    --package-path "$SAYALL_SIRI_REMOTE_PACKAGE_PATH" \
+    --scratch-path "$SIRI_HCI_SCRATCH_PATH" --cache-path "$BUILD_CACHE_PATH" \
+    -c "$CONFIGURATION" --triple "$RELEASE_TRIPLE" --product AppleRemoteHCIService
+  SIRI_HCI_BIN_DIR="$(run_release_stage app-siri-hci-helper-bin-path 30 \
+    xcrun swift build --disable-keychain \
+    --package-path "$SAYALL_SIRI_REMOTE_PACKAGE_PATH" \
+    --scratch-path "$SIRI_HCI_SCRATCH_PATH" --cache-path "$BUILD_CACHE_PATH" \
+    -c "$CONFIGURATION" --triple "$RELEASE_TRIPLE" --show-bin-path)"
+  APPLE_REMOTE_HCI_SERVICE_PATH="$SIRI_HCI_BIN_DIR/AppleRemoteHCIService"
+fi
+if [[ "$SAYALL_SIRI_REMOTE_INCLUDED" == "true" ]]; then
   SIRI_REMOTE_RESOURCE_BUNDLE="$BIN_DIR/SayAllSiriRemote_SayAllSiriRemote.bundle"
 fi
 if [[ "$SAYALL_CHROMECAST_INCLUDED" == "true" ]]; then
@@ -511,6 +525,12 @@ fi
 plutil -remove SayAllSiriRemoteIncluded "$APP_DIR/Contents/Info.plist" 2>/dev/null || true
 plutil -insert SayAllSiriRemoteIncluded -bool "$SAYALL_SIRI_REMOTE_INCLUDED" \
   "$APP_DIR/Contents/Info.plist"
+plutil -remove SMPrivilegedExecutables "$APP_DIR/Contents/Info.plist" 2>/dev/null || true
+if [[ "$SAYALL_SIRI_REMOTE_INCLUDED" == "true" ]]; then
+  plutil -insert SMPrivilegedExecutables -json \
+    '{"com.hd838a.SayAll.AppleRemoteHCIService":"identifier \"com.hd838a.SayAll.AppleRemoteHCIService\" and anchor apple generic and certificate leaf[subject.OU] = \"L3QHLDRPAY\""}' \
+    "$APP_DIR/Contents/Info.plist"
+fi
 plutil -remove SayAllChromecastIncluded "$APP_DIR/Contents/Info.plist" 2>/dev/null || true
 plutil -insert SayAllChromecastIncluded -bool "$SAYALL_CHROMECAST_INCLUDED" \
   "$APP_DIR/Contents/Info.plist"
@@ -703,6 +723,10 @@ if [[ "$SIGNING_IDENTITY" != "-" ]]; then
       --identifier "com.hd838a.SayAll.AppleRemoteHCIService" \
       --sign "$SIGNING_IDENTITY" \
       "$APP_DIR/Contents/Helpers/SayAllAppleRemoteHCIService"
+    mkdir -p "$APP_DIR/Contents/Library/LaunchServices"
+    ditto --norsrc --noextattr --noqtn --noacl \
+      "$APP_DIR/Contents/Helpers/SayAllAppleRemoteHCIService" \
+      "$APP_DIR/Contents/Library/LaunchServices/com.hd838a.SayAll.AppleRemoteHCIService"
     codesign \
       --force \
       --options runtime \
@@ -773,6 +797,10 @@ if [[ "$SIGNING_IDENTITY" == "-" ]]; then
       --identifier "com.hd838a.SayAll.AppleRemoteHCIService" \
       --sign - \
       "$APP_DIR/Contents/Helpers/SayAllAppleRemoteHCIService"
+    mkdir -p "$APP_DIR/Contents/Library/LaunchServices"
+    ditto --norsrc --noextattr --noqtn --noacl \
+      "$APP_DIR/Contents/Helpers/SayAllAppleRemoteHCIService" \
+      "$APP_DIR/Contents/Library/LaunchServices/com.hd838a.SayAll.AppleRemoteHCIService"
     codesign \
       --force \
       --timestamp=none \
