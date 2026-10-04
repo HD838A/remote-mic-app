@@ -46,6 +46,17 @@ require_text BRANCH_MANAGEMENT.md '`Repository governance` 必须配置为 `main
 require_text BRANCH_MANAGEMENT.md 'PR 默认使用 GitHub 的普通 Merge（保留合并提交）'
 require_text BRANCH_MANAGEMENT.md '确认后必须在 PR 正文记录明确的批准来源'
 require_text BRANCH_MANAGEMENT.md '自动化 Agent 不得在缺少该确认时自行将其标记 Ready、批准或合入'
+require_heading BRANCH_MANAGEMENT.md '## 用户明确授权的 CI 例外'
+require_text BRANCH_MANAGEMENT.md '默认必须等待必需 CI 通过'
+require_text BRANCH_MANAGEMENT.md '不得伪造通过状态'
+require_text BRANCH_MANAGEMENT.md '核心治理人工确认'
+require_text BRANCH_MANAGEMENT.md '`pull_request` 模式的 Ruleset bypass'
+require_text AGENTS.md '用户明确授权的 CI 例外'
+require_text FEATURE_DEVELOPMENT.md '用户明确授权的 CI 例外'
+require_text DOCUMENTATION.md '用户明确授权的 CI 例外'
+for waiver_field in 'CI 例外授权：' 'CI 例外范围：' 'CI 未验证项：'; do
+  require_text .github/PULL_REQUEST_TEMPLATE.md "$waiver_field"
+done
 require_heading AGENTS.md '## 规范层级与文档边界'
 require_heading AGENTS.md '## 任务范围与等待治理'
 require_heading AGENTS.md '## 临时测试工具入库边界'
@@ -74,6 +85,15 @@ while IFS= read -r document_path; do
   [[ -n "$document_path" ]] || continue
   require_text DOCUMENTATION.md "$document_path"
 done < <(find Testing -maxdepth 1 -type f -name '*Contract.md' -print | sort)
+
+if [[ "${GITHUB_EVENT_NAME:-}" == pull_request ]] && \
+    grep -Fq -- '[x] 用户明确要求本 PR 不等待或跳过 CI，其他适用门禁仍已满足。' <<< "${GOVERNANCE_PR_BODY:-}"; then
+  for waiver_field in 'CI 例外授权' 'CI 例外范围' 'CI 未验证项'; do
+    waiver_value="$(sed -n "s/^${waiver_field}：[[:space:]]*//p" <<< "${GOVERNANCE_PR_BODY:-}" | tail -n 1)"
+    [[ -n "$waiver_value" && "$waiver_value" != N/A && "$waiver_value" != N/A\ /\ * ]] || \
+      fail "CI exception is missing a concrete $waiver_field"
+  done
+fi
 
 base_ref="${1:-}"
 if [[ -n "$base_ref" && "$base_ref" != 0000000000000000000000000000000000000000 ]]; then
