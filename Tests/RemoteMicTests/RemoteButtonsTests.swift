@@ -3309,6 +3309,73 @@ struct RemoteButtonsTests {
         #expect(diagnostics.contains { $0.contains("HID NATIVE PASSTHROUGH") })
     }
 
+    @Test(arguments: [RemoteButton.left, .right], [true, false])
+    func discoveredProfileSingleClickDoesNotStartBaseRepeat(button: RemoteButton, unified: Bool) throws {
+        let suiteName = "RemoteButtonsTests.discoveryArrow.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = AppSettings(defaults: defaults)
+        settings.customMappingEnabled = true
+        let profileID = try #require(settings.selectedRemoteProfileID)
+        let configured = ConfiguredButtonAction(
+            action: button == .left ? .arrowLeft : .arrowRight, shortcut: nil
+        )
+        settings.configuredActionOverride = { device, key, trigger in
+            unified && device == profileID && key == button && trigger == .singleClick
+                ? configured : nil
+        }
+        let scheduler = RemoteButtonsTestScheduler()
+        let suppressor = KeyboardEventSuppressor()
+        var performed: [ConfiguredButtonAction] = []
+        var legacyTriggers: [ButtonTrigger] = []
+        var diagnostics: [String] = []
+        let monitor = HIDRemoteMonitor(settings: settings,
+            eventSuppressor: suppressor, ownsEventSuppressor: false,
+            scheduler: scheduler, runtimePermissions: { true },
+            actionPerformer: { _, _, action in performed.append(action); return true },
+            overrideActionPerformer: { device, key, trigger in
+                guard !unified, device == profileID, key == button,
+                      trigger == .singleClick else { return false }
+                legacyTriggers.append(trigger)
+                return true
+            },
+            hasOverrideBinding: { device, key, trigger in
+                !unified && device == profileID && key == button && trigger == .singleClick
+            },
+            frontmostBundleIdentifier: { PresetApplication.safari.bundleIdentifier },
+            diagnosticLogger: { diagnostics.append($0) })
+        // Match discovery: the first physical press binds the selected unbound device.
+        monitor.onButtonPressed = { device, fingerprint, _ in
+            #expect(device == nil)
+            return (settings.registerHIDRemote(fingerprint: fingerprint), true)
+        }
+        monitor.connectSimulatedDevice(fingerprint: "discovery-arrow", profileID: nil, isSeized: false)
+        defer { monitor.disconnectSimulatedDevice() }
+        let report = Data([UInt8(button.hidUsage), 0, 0, 0, 0, 0])
+        monitor.handleSimulatedReport(reportID: 1, data: report)
+        monitor.handleSimulatedReport(reportID: 1, data: report)
+        #expect(monitor.profileID == profileID)
+        let down = try #require(CGEvent(keyboardEventSource: nil,
+            virtualKey: button == .left ? 123 : 124, keyDown: true))
+        down.setIntegerValueField(.keyboardEventKeyboardType, value: 40)
+        #expect(suppressor.handle(type: .keyDown, event: down))
+        scheduler.advance(toMilliseconds: HIDRemoteTiming.repeatStartMilliseconds + 200)
+        down.setIntegerValueField(.keyboardEventAutorepeat, value: 1)
+        #expect(suppressor.handle(type: .keyDown, event: down))
+        monitor.handleSimulatedReport(reportID: 1, data: Data(repeating: 0, count: 6))
+        let up = try #require(CGEvent(keyboardEventSource: nil,
+            virtualKey: button == .left ? 123 : 124, keyDown: false))
+        up.setIntegerValueField(.keyboardEventKeyboardType, value: 40)
+        #expect(suppressor.handle(type: .keyUp, event: up))
+        #expect(performed == (unified ? [configured] : []))
+        #expect(legacyTriggers == (unified ? [] : [.singleClick]))
+        #expect(scheduler.pendingTaskCount == 0)
+        #expect(diagnostics.contains {
+            $0.contains("HID ROUTE") && $0.contains("reason=single_click_override")
+        })
+        #expect(!diagnostics.contains { $0.contains("HID NATIVE PASSTHROUGH") })
+    }
+
     @Test(arguments: [RemoteButton.left, .right])
     func unrelatedProfileBindingKeepsMonitoredArrowNative(button: RemoteButton) throws {
         let suiteName = "RemoteButtonsTests.unboundArrow.\(UUID().uuidString)"

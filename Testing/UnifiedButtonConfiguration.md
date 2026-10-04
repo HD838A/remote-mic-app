@@ -105,6 +105,8 @@ swift test --disable-keychain --scratch-path .build/unified-paid
 5. 如测试 Full Keyboard Access，用户手动开启系统“全键盘控制”。上下用 Shift-Tab/Tab，OK 用 Space，返回用 Escape。
    先用物理键盘在支持方向导航的列表或网格中确认左右可用，再用遥控器比较。不把普通按钮之间不能左右移动直接判为路由失败。
 6. 回归 App 切换器前进/后退、确定/返回、双击/长按、按住松开、断连重连，以及首次与连续语音、首尾字完整性。
+7. 在独立测试数据中，为尚未关联 HID 的设备配置左右单击覆盖。首次连接后，以左键或右键开始按住两秒。
+   首次登记后应只执行一次方案动作，不能启动基础方向连发。分别检查统一接口与旧接口候选环境。
 
 失败判定：显式方案仍走透传、没有执行配置、一次点击执行两次、禁用后仍有动作、取消覆盖后普通左右键失效、
 串设备、遗留按住状态或稳定功能退化。目标 App 没有可见结果也必须记录为失败，不能用动作提交日志替代。
@@ -113,9 +115,13 @@ swift test --disable-keychain --scratch-path .build/unified-paid
 已绑定时核对 `HID ROUTE ... reason=single_click_override external_result=unknown`、`HID GESTURE` 与动作结果；
 无绑定的 monitored 基线核对 `HID NATIVE PASSTHROUGH`。代理尚未执行本节真实硬件与第三方流程。
 
-本轮自动化：公开814项、私有源码集成821项、方案Package 66项通过；私有组合动作完整运行无失败，一项外部样本缺失而跳过。
-自检48项、边界、治理与diff检查通过。Apple Silicon公开Release及私有集成内部App构建、verify-app结构检查通过；
-内部App为ad-hoc签名，不交付。未执行公证、Intel构建或真实设备验收；父项保持未完成。
+初始候选自动化：公开814项、私有源码集成821项、方案Package 66项通过；私有组合动作完整运行无失败，一项外部样本缺失而跳过。
+PR 569 审查补测：首次登记的左右键与新旧接口共四个参数用例，修复前重复执行或夹带三次基础动作。
+修复后按键套件126项、公开815项、私有源码集成822项通过。自检48项、边界和治理检查通过。
+审查后Apple Silicon公开和私有源码集成Release构建、diff检查通过。
+初始候选的私有集成内部App构建和verify-app结构检查通过；
+上述App为初始候选的ad-hoc构建，不交付。审查修复后未重建App包。
+未执行公证、Intel本地构建或真实设备验收；父项保持未完成。
 
 ## 迁移、备份与回滚
 

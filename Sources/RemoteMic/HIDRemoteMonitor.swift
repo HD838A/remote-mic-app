@@ -564,7 +564,7 @@ final class HIDRemoteMonitor {
 
     func connectSimulatedDevice(
         fingerprint: String,
-        profileID: UUID,
+        profileID: UUID?,
         isSeized: Bool = true
     ) {
         resetInputState()
@@ -668,11 +668,11 @@ final class HIDRemoteMonitor {
             )
             let preflightAction = settings.action(for: button, profileID: preflightProfileID)
             // An explicit binding owns the click even when it resolves to the same arrow.
-            let hasSingleClickOverride = settings.configuredActionOverride?(
+            let preflightHasSingleClickOverride = settings.configuredActionOverride?(
                 preflightProfileID, button, .singleClick
             ) != nil || hasOverrideBinding(preflightProfileID, button, .singleClick)
             let usesNativePassthrough = preflightProfileID != nil &&
-                !hasSingleClickOverride &&
+                !preflightHasSingleClickOverride &&
                 claimsRuntimeButton?(preflightProfileID, button) != true && shouldUseNativePassthrough(
                 button: button,
                 action: preflightAction,
@@ -696,6 +696,11 @@ final class HIDRemoteMonitor {
                 }
                 continue
             }
+
+            // Discovery may associate an existing configured device during the callback.
+            let hasSingleClickOverride = settings.configuredActionOverride?(
+                profileID, button, .singleClick
+            ) != nil || hasOverrideBinding(profileID, button, .singleClick)
 
             if onRuntimeButton?(profileID, button, .press) == true {
                 if !activeDeviceIsSeized, usesNativePassthrough { eventSuppressor.arm(button: button, edge: .down) }
