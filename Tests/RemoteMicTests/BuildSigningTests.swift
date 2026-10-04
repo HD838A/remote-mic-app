@@ -5,6 +5,21 @@ import Testing
 
 @Suite("Build signing")
 struct BuildSigningTests {
+    @Test func membershipServiceEnvironmentStaysBehindOptionalAdapter() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        for path in [
+            "Package.swift", "scripts/build-app.sh", "scripts/verify-app.sh",
+            "Sources/RemoteMic/MembershipFeatureIntegration.swift",
+        ] {
+            let source = try String(contentsOf: root.appendingPathComponent(path), encoding: .utf8)
+            #expect(!source.contains("SAYALL_MEMBERSHIP_API_BASE_URL"))
+            #expect(!source.contains("SayAllMembershipAPIBaseURL"))
+        }
+    }
+
     @Test func appIconUsesTransparentMacOSAsset() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

@@ -28,7 +28,6 @@ SAYALL_MAC_REMOTE_PACKAGE_PATH="${SAYALL_MAC_REMOTE_PACKAGE_PATH:-}"
 SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH="${SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH:-}"
 SAYALL_SIRI_REMOTE_PACKAGE_PATH="${SAYALL_SIRI_REMOTE_PACKAGE_PATH:-}"
 SAYALL_CHROMECAST_PACKAGE_PATH="${SAYALL_CHROMECAST_PACKAGE_PATH:-}"
-SAYALL_MEMBERSHIP_API_BASE_URL="${SAYALL_MEMBERSHIP_API_BASE_URL:-}"
 SAYALL_DIAGNOSTIC_PUBLIC_KEY_BASE64="${SAYALL_DIAGNOSTIC_PUBLIC_KEY_BASE64:-}"
 SAYALL_TEST_BUTTON_PROFILES_FREE="${SAYALL_TEST_BUTTON_PROFILES_FREE:-0}"
 SAYALL_BUILD_CHANNEL="${SAYALL_BUILD_CHANNEL:-}"
@@ -328,11 +327,6 @@ if [[ "$SAYALL_TEST_BUTTON_PROFILES_FREE" == "1" &&
   print -u2 "free button profile test access excludes private membership artifacts"
   exit 1
 fi
-if [[ -n "$SAYALL_MEMBERSHIP_API_BASE_URL" ]] && ! print -r -- "$SAYALL_MEMBERSHIP_API_BASE_URL" | \
-    rg -q '^(https://[^[:space:]]+|http://127\.0\.0\.1(:[0-9]+)?(/[^[:space:]]*)?)$'; then
-  print -u2 "SAYALL_MEMBERSHIP_API_BASE_URL must use HTTPS or local http://127.0.0.1"
-  exit 1
-fi
 if [[ "$SAYALL_BUTTON_PROFILES_INCLUDED" == "true" &&
       "$SAYALL_PRIVATE_ARTIFACT_INCLUDED" == "true" ]]; then
   SAYALL_MEMBERSHIP_RESOURCE_BUNDLE="$SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH/Resources/SayAllMembership_SayAllMembershipUI.bundle"
@@ -512,11 +506,6 @@ plutil -insert SayAllButtonProfilesTestAccess -bool "$SAYALL_BUTTON_PROFILES_TES
 plutil -remove SayAllPrivateArtifactsIncluded "$APP_DIR/Contents/Info.plist" 2>/dev/null || true
 plutil -insert SayAllPrivateArtifactsIncluded -bool "$SAYALL_PRIVATE_ARTIFACT_INCLUDED" \
   "$APP_DIR/Contents/Info.plist"
-if [[ -n "$SAYALL_MEMBERSHIP_API_BASE_URL" ]]; then
-  plutil -remove SayAllMembershipAPIBaseURL "$APP_DIR/Contents/Info.plist" 2>/dev/null || true
-  plutil -insert SayAllMembershipAPIBaseURL -string "$SAYALL_MEMBERSHIP_API_BASE_URL" \
-    "$APP_DIR/Contents/Info.plist"
-fi
 plutil -remove SayAllDiagnosticPublicKey "$APP_DIR/Contents/Info.plist" 2>/dev/null || true
 if [[ -n "$SAYALL_DIAGNOSTIC_PUBLIC_KEY_BASE64" ]]; then
   plutil -insert SayAllDiagnosticPublicKey -string "$SAYALL_DIAGNOSTIC_PUBLIC_KEY_BASE64" \

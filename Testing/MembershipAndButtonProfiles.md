@@ -10,7 +10,7 @@
 
 1. 准备不注入任何私有 Package 的公开构建。
 2. 准备注入统一私有二进制构件 Package 的内部构建；不把私有源码、二进制构件或本机绝对路径提交到本仓库。
-3. 内部构建只通过 `SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH` 注入会员、组合动作和付费键位方案，并通过 `SAYALL_MEMBERSHIP_API_BASE_URL` 提供测试服务地址。生产或远程测试只允许 `https`；`http://127.0.0.1:<port>` 仅用于本机开发。
+3. 内部构建只通过 `SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH` 注入会员、组合动作和付费键位方案。服务环境由私有 `SayAllMembershipHostAdapter` 管理。本地包设置 `SAYALL_BUILD_CHANNEL=local`，不向公开宿主传入会员服务地址。
 4. 准备 Free、Plus、会员刚过期、网络断开但租约仍有效、租约已过期五种脱敏测试状态。
 5. 准备真实实体遥控器、Nearby iPhone 或 Apple Watch，以及 Web Remote；分别记录当前公开按键映射作为回退基线。
 
@@ -61,11 +61,11 @@ swift build --disable-keychain --scratch-path .build-button-profiles-test -c rel
 
 ## 用例二：会员服务配置边界
 
-步骤：分别使用无服务地址、有效 `https` 地址、远程 `http` 地址、`http://localhost` 和 `http://127.0.0.1:<port>` 启动内部构建。
+步骤：检查构建脚本和最终 `Info.plist`，再启动内部构建。在通用设置中检查服务环境选择器，并分别选择测试和生产环境。
 
-预期：无地址时会员页隐藏；有效 `https` 显示会员页；只有 `127.0.0.1` 的 HTTP 可用于本机开发；其他明文 HTTP 配置被拒绝且不发起请求。
+预期：公开宿主没有会员服务地址配置入口。最终包不含 `SayAllMembershipAPIBaseURL`。私有适配器管理环境、凭据命名空间和会员页面。切换环境不改变会员权益规则。
 
-失败判定：无配置时出现不可用页面，远程明文 HTTP 被接受，或配置值、Token、邮箱出现在公开日志中。
+失败判定：公开宿主重新写入会员服务地址、不同环境混用凭据，或 Token、邮箱出现在公开日志中。
 
 ## 用例三：账号与会员页面
 
@@ -127,7 +127,7 @@ swift build --disable-keychain --scratch-path .build-button-profiles-test -c rel
 
 ## 验证边界
 
-- 自动化：验证可选 Package、服务 URL 安全边界、页面显隐、三类入口接线、宿主 payload 只解码公开动作，以及无私有 Package 时返回公开回退。
+- 自动化：验证可选 Package、会员服务配置的私有边界、页面显隐、三类入口接线、宿主 payload 只解码公开动作，以及无私有 Package 时返回公开回退。
 - 构建：分别验证无额外 Package、仅免费组合动作、免费组合动作加付费键位方案与会员 Package 的 Debug / Release 编译链接，并验证仅设置付费路径时失败关闭。
 - 内部免费测试：验证 `SAYALL_TEST_BUTTON_PROFILES_FREE=1` 必须同时提供两个源码 Package，并拒绝统一私有构件；`scripts/verify-app.sh` 必须检查免费测试标记和会员资源缺失。
 - 尚不能由自动化替代：真实会员服务、真实支付、签名与公证安装包、RC001 / RC003、iPhone、Apple Watch、Web Remote、双设备、第三方 App、7 天真实时间跨度、升级与回滚现场。
