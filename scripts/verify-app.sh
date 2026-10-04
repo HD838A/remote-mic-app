@@ -289,9 +289,13 @@ test "$(plutil -extract SUScheduledCheckInterval raw -o - "$PLIST")" = "86400"
 test "$(plutil -extract SUAutomaticallyUpdate raw -o - "$PLIST")" = "false"
 test "$(plutil -extract SUAllowsAutomaticUpdates raw -o - "$PLIST")" = "false"
 test -n "$(plutil -extract SUPublicEDKey raw -o - "$PLIST")"
-SAYALL_DIAGNOSTIC_PUBLIC_KEY_BASE64="$(
-  plutil -extract SayAllDiagnosticPublicKey raw -o - "$PLIST" 2>/dev/null || true
-)"
+if plutil -type SayAllDiagnosticPublicKey "$PLIST" >/dev/null 2>&1; then
+  SAYALL_DIAGNOSTIC_PUBLIC_KEY_BASE64="$(
+    plutil -extract SayAllDiagnosticPublicKey raw -expect string -o - "$PLIST"
+  )"
+else
+  SAYALL_DIAGNOSTIC_PUBLIC_KEY_BASE64=""
+fi
 if [[ "$REQUIRE_DIAGNOSTIC_PUBLIC_KEY" == "1" && -z "$SAYALL_DIAGNOSTIC_PUBLIC_KEY_BASE64" ]]; then
   print -u2 "App is missing the required diagnostic public key"
   exit 1

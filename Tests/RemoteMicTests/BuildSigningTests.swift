@@ -109,6 +109,68 @@ struct BuildSigningTests {
         }
         #expect(buildSource.contains("SAYALL_DIAGNOSTIC_PUBLIC_KEY_BASE64 is required for this build"))
         #expect(verifySource.contains("App is missing the required diagnostic public key"))
+
+        // Execute the production verifier block. Missing-key plutil errors go to
+        // stdout on macOS, so exit status, not output content, defines presence.
+        let start = try #require(verifySource.range(of:
+            "test -n \"$(plutil -extract SUPublicEDKey raw -o - \"$PLIST\")\"\n"
+        )).upperBound
+        let end = try #require(verifySource.range(of: "SAYALL_AI_INCLUDED=\"")).lowerBound
+        let block = String(verifySource[start..<end])
+        let validKey = Data(repeating: 7, count: 32).base64EncodedString()
+        let cases: [(String, Any?, String, Int32)] = [
+            ("missing optional", nil, "0", 0),
+            ("missing required", nil, "1", 1),
+            ("invalid optional", "invalid-base64", "0", 1),
+            ("valid optional", validKey, "0", 0),
+            ("valid required", validKey, "1", 0),
+            ("invalid optional type", ["not-a-key"], "0", 1),
+        ]
+        // Reproduce macOS CI plutil's stdout error even on systems that use stderr.
+        let plutilWrapper = """
+        plutil() {
+          if /usr/bin/plutil "$@"; then
+            return 0
+          else
+            print -r -- "Could not extract value: unavailable key or type"
+            return 1
+          fi
+        }
+
+        """
+        let fixtureDirectory = root.appendingPathComponent(
+            ".build/diagnostic-key-verifier-\(UUID().uuidString)"
+        )
+        try FileManager.default.createDirectory(
+            at: fixtureDirectory, withIntermediateDirectories: true
+        )
+        for (index, item) in cases.enumerated() {
+            let (name, key, required, expectedStatus) = item
+            let plist: [String: Any] = key.map { ["SayAllDiagnosticPublicKey": $0] } ?? [:]
+            let input = try PropertyListSerialization.data(
+                fromPropertyList: plist, format: .xml, options: 0
+            )
+            let plistURL = fixtureDirectory.appendingPathComponent("\(index).plist")
+            try input.write(to: plistURL)
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/bin/zsh")
+            process.arguments = ["-c", "set -euo pipefail\n" + plutilWrapper + block]
+            process.environment = ProcessInfo.processInfo.environment.merging(
+                ["REQUIRE_DIAGNOSTIC_PUBLIC_KEY": required, "PLIST": plistURL.path]
+            ) { _, value in value }
+            let errorPipe = Pipe()
+            process.standardOutput = FileHandle.nullDevice
+            process.standardError = errorPipe
+            try process.run()
+            process.waitUntilExit()
+            let error = String(
+                data: errorPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8
+            ) ?? ""
+            #expect(process.terminationStatus == expectedStatus, "\(name): \(error)")
+            if name == "missing required" {
+                #expect(error.contains("App is missing the required diagnostic public key"))
+            }
+        }
     }
 
     @Test func siriRemoteIsOptInForCommunityBuilds() throws {
