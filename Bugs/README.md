@@ -1,5 +1,6 @@
 # Bug 记录
 
+- [移动端连接状态、说明与授权图标显示问题](./2026-10-03-mobile-connection-presentation.md)
 - [全键盘控制导入误报 shortcuts](./2026-10-05-full-keyboard-access-shortcuts.html)
 - [常用语列表阻断 CI Release 构建](./2026-10-03-common-phrase-library-type-check.md)
 - [蓝牙遥控器电量长时间停留在旧值](./2026-10-03-bluetooth-battery-level-stale.md)
