@@ -14,7 +14,7 @@
 | 领域 | 权威入口 |
 | --- | --- |
 | 仓库硬门禁和规范层级 | [`AGENTS.md`](AGENTS.md) |
-| 分支、worktree、提交、PR 和合并 | [`BRANCH_MANAGEMENT.md`](BRANCH_MANAGEMENT.md) |
+| 分支、worktree、提交、PR、合并和用户明确授权的 CI 例外 | [`BRANCH_MANAGEMENT.md`](BRANCH_MANAGEMENT.md) |
 | 新功能开发流程 | [`FEATURE_DEVELOPMENT.md`](FEATURE_DEVELOPMENT.md) |
 | 文件命名 | [`FILE_NAMING.md`](FILE_NAMING.md) |
 | 运行日志和复制诊断 | [`LOGGING.md`](LOGGING.md) |
