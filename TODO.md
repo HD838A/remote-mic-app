@@ -199,7 +199,7 @@
   - 2026-09-06 安装器发行品牌统一为 SayAll：Apple Silicon 使用 `Install SayAll.pkg` / `Uninstall SayAll.pkg`，Intel 使用带 `Intel` 后缀的对应名称，Installer.app 标题同步为 SayAll；未来公开独立 PKG 使用 `SayAll-VERSION-Installer.pkg` / `SayAll-VERSION-Uninstaller.pkg`。历史 Bundle ID、Package ID、receipt、DMG/ZIP 名称和旧 App 路径保持不变，避免破坏升级兼容。
   - 2026-08-29 修复 Issue #101：`Uninstall Remote Mic.pkg` 不再只删除兼容麦克风，而是在 Bundle ID 校验后把 canonical/历史 App 与 `MiRemoteV 2ch` 一起移入可恢复的 macOS 废纸篓；废纸篓或移动失败时停止并回滚本轮已移动项。安装器替换旧驱动时也保留备份，失败即恢复，成功后才移入 root 废纸篓。本地设置和 BlackHole 明确保留。代码与伪目标卷验证完成；由于仍需最终 Developer ID 候选在 Apple Silicon/Intel 上完成管理员授权、真实废纸篓和取消/失败矩阵，本总任务暂不勾选。
   - 2026-09-06 安装、升级与卸载流程已纳入 Apple Remote HCI 系统服务；安装前会核验既有 Helper 签名标识与 LaunchDaemon 的 Label、可执行路径，无法确认归属时停止覆盖。静态门禁覆盖服务恢复、加载、卸载移入废纸篓和状态目录回滚；真实管理员授权与覆盖升级仍随最终测试包验收。
-  - 2026-10-04 已增加 App 更新同步升级 helper 的源码候选：App 携带系统安装副本及签名声明，准备音频前检查已安装和运行版本，同版本不请求安装。已补主动启用门禁：默认关闭，后台禁止交互授权，Cancel 后的等待状态跨重启保留；用户主动启用或重试才请求授权。完整私有集成 868 项与社区 818 项全部通过；上一轮发布 fixture 的 SIGPIPE 失败保留为历史记录。真实旧 PKG 迁移、Sparkle、管理员授权、回滚与实体语音仍待验收，父项保持未完成。启用、停用和重试入口已移入遥控器卡片；卡片不增加说明文字，遥控器图上方不增加元素。步骤见 `Testing/AppleRemoteHelperUpgrade.html`。
+  - 2026-10-04 已增加 App 更新同步升级 helper 的源码候选：App 携带系统安装副本及签名声明，准备音频前检查已安装和运行版本，同版本不请求安装。已补主动启用门禁：默认关闭，后台禁止交互授权，Cancel 后的等待状态跨重启保留；用户主动启用或重试才请求授权。完整私有集成 868 项与社区 818 项全部通过；上一轮发布 fixture 的 SIGPIPE 失败保留为历史记录。真实旧 PKG 迁移、Sparkle、管理员授权、回滚与实体语音仍待验收，父项保持未完成。启用、停用和重试入口已移入遥控器卡片；卡片最多三行，无对勾，启用按钮位于右侧垂直居中；卡片不增加说明文字，遥控器图上方不增加元素。步骤见 `Testing/AppleRemoteHelperUpgrade.html`。
 - [ ] 建立专用的 `SayAllMic 2ch` 虚拟麦克风并兼容旧驱动
   - 将现有 `MiRemoteV 2ch` 产品化为专用的 `SayAllMic 2ch`；新安装用户只看到并使用新名称，App、Onboarding 和排障流程不再默认提示用户安装或选择 `BlackHole 2ch`。
   - 升级必须继续识别并支持已经安装或正在使用的 `MiRemoteV 2ch`。安装器需要处理旧驱动升级、设备名称或 UID 变化、第三方 App 已保存的输入设备选择、重复设备、卸载和失败回滚，不能让升级后的用户突然无声或被迫手动重装。

@@ -1157,7 +1157,7 @@ struct SettingsPageRegressionTests {
             range: cardStart.upperBound..<settingsSource.endIndex
         ))
         let cardSource = settingsSource[cardStart.lowerBound..<cardEnd.lowerBound]
-        #expect(cardSource.contains("ViewThatFits(in: .horizontal)"))
+        #expect(cardSource.contains("return HStack(alignment: .center, spacing: 10)"))
         #expect(cardSource.contains("fillsWidth ? nil : 232"))
         #expect(cardSource.contains("let modelName = remoteModelName(profile)"))
         #expect(cardSource.contains("let systemName = remoteSystemName(profile)"))

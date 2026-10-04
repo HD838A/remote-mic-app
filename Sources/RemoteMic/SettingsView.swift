@@ -2109,45 +2109,28 @@ struct SettingsView: View {
             level: batteryLevel,
             powerState: powerState
         )
-        return VStack(alignment: .leading, spacing: 8) {
+        return HStack(alignment: .center, spacing: 10) {
             Button {
                 model.selectRemoteProfile(profile.id)
             } label: {
                 VStack(alignment: .leading, spacing: 5) {
-                    HStack(spacing: 6) {
-                        Text(modelName)
-                            .help(modelName)
-                            .font(.system(size: 13, weight: .semibold))
-                            .lineLimit(1)
-                        Spacer(minLength: 0)
-                        if selected {
-                            Image(systemName: "checkmark.circle.fill")
-                                .foregroundStyle(Color.accentColor)
-                                .help(localization.text("remote.device.current"))
-                        }
-                    }
+                    Text(modelName)
+                        .help(modelName)
+                        .font(.system(size: 13, weight: .semibold))
+                        .lineLimit(1)
                     Text(systemName)
                         .help(systemName)
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
-                    ViewThatFits(in: .horizontal) {
-                        HStack(spacing: 7) {
-                            remoteConnectionLabel(connected: connected)
-                            if showsBattery {
-                                remoteBatteryLabel(level: batteryLevel, powerState: powerState)
-                            }
-                        }
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack(spacing: 7) {
-                                remoteConnectionLabel(connected: connected)
-                                if showsBattery {
-                                    remoteBatteryLabel(level: batteryLevel, powerState: powerState)
-                                }
-                            }
+                    HStack(spacing: 7) {
+                        remoteConnectionLabel(connected: connected)
+                        if showsBattery {
+                            remoteBatteryLabel(level: batteryLevel, powerState: powerState)
                         }
                     }
                     .font(.system(size: 12))
+                    .lineLimit(1)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -2157,6 +2140,7 @@ struct SettingsView: View {
             #if SAYALL_SIRI_REMOTE_ENABLED && canImport(SayAllSiriRemote)
             if profile.model.isAppleSiriRemote {
                 siriRemoteCardActions(profile)
+                    .fixedSize()
             }
             #endif
         }
@@ -2176,7 +2160,7 @@ struct SettingsView: View {
 
     #if SAYALL_SIRI_REMOTE_ENABLED && canImport(SayAllSiriRemote)
     private func siriRemoteCardActions(_ profile: RemoteDeviceProfile) -> some View {
-        HStack(spacing: 8) {
+        VStack(spacing: 4) {
             if !settings.siriRemoteEnabled {
                 Button(localization.text("siri_remote.activation.enable")) {
                     model.selectRemoteProfile(profile.id)
