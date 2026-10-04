@@ -545,6 +545,13 @@ struct SettingsView: View {
         }
         .background(Color(nsColor: .controlBackgroundColor).ignoresSafeArea())
         .environment(\.locale, localization.locale)
+        .environment(\.openURL, OpenURLAction { url in
+            guard url == URL(string: "sayall://membership") else { return .systemAction }
+            guard membershipFeature.isFeatureVisible else { return .discarded }
+            selectedSection = .membership
+            membershipFeature.refreshIfNeeded()
+            return .handled
+        })
         .frame(
             minWidth: minimumContentSize.width,
             minHeight: minimumContentSize.height
