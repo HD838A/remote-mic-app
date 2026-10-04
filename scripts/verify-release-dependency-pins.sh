@@ -19,10 +19,9 @@ case "${1:-pins}" in
 
     jq -e '
       .schemaVersion == 1 and
-      (.dependencies | keys | sort) == ["sayAllAI", "sayAllMacRemote", "sayAllPrivatePlatform"] and
+      (.dependencies | keys | sort) == ["sayAllAI", "sayAllPrivatePlatform"] and
       .dependencies.sayAllAI.repository == "GetSayAll/sayall-ai" and
       .dependencies.sayAllPrivatePlatform.repository == "GetSayAll/sayall-private-platform" and
-      .dependencies.sayAllMacRemote.repository == "GetSayAll/sayall-mac-remote" and
       ([.dependencies[] | .commit] | all(.[]; type == "string" and test("^[0-9a-f]{40}$")))
     ' "$MANIFEST" >/dev/null || {
       print -u2 "release dependency manifest has an invalid schema, repository, or commit"
@@ -40,8 +39,6 @@ case "${1:-pins}" in
           print "sayall_ai_commit=$(jq -r '.dependencies.sayAllAI.commit' "$MANIFEST")"
           print "sayall_private_platform_repository=$(jq -r '.dependencies.sayAllPrivatePlatform.repository' "$MANIFEST")"
           print "sayall_private_platform_commit=$(jq -r '.dependencies.sayAllPrivatePlatform.commit' "$MANIFEST")"
-          print "sayall_mac_remote_repository=$(jq -r '.dependencies.sayAllMacRemote.repository' "$MANIFEST")"
-          print "sayall_mac_remote_commit=$(jq -r '.dependencies.sayAllMacRemote.commit' "$MANIFEST")"
         } >> "$GITHUB_OUTPUT"
         ;;
       *)
@@ -170,14 +167,13 @@ test -x "$ROOT/scripts/verify-release-dependency-pins.sh"
 dependencies_json="$(REPOSITORY_ROOT="$ROOT" "$ROOT/scripts/verify-release-dependency-pins.sh" resolve json)"
 sayall_ai_commit="$(print -r -- "$dependencies_json" | jq -r '.sayAllAI.commit')"
 sayall_private_platform_commit="$(print -r -- "$dependencies_json" | jq -r '.sayAllPrivatePlatform.commit')"
-sayall_mac_remote_commit="$(print -r -- "$dependencies_json" | jq -r '.sayAllMacRemote.commit')"
 
 for workflow in "${WORKFLOWS[@]}"; do
   grep -Fq 'verify-release-dependency-pins.sh resolve' "$workflow" || {
     print -u2 "${workflow:t} must resolve the versioned release dependency manifest"
     exit 1
   }
-  for commit in "$sayall_ai_commit" "$sayall_private_platform_commit" "$sayall_mac_remote_commit"; do
+  for commit in "$sayall_ai_commit" "$sayall_private_platform_commit"; do
     if grep -Fq "$commit" "$workflow"; then
       print -u2 "${workflow:t} must not duplicate a product dependency commit outside the versioned manifest"
       exit 1
@@ -187,14 +183,17 @@ done
 
 grep -Fq '${{ steps.release-dependencies.outputs.sayall_ai_commit }}' "$CONTROL_ROOT/.github/workflows/mac-ci.yml"
 grep -Fq '${{ steps.release-dependencies.outputs.sayall_private_platform_commit }}' "$CONTROL_ROOT/.github/workflows/mac-ci.yml"
-grep -Fq '${{ steps.release-dependencies.outputs.sayall_mac_remote_commit }}' "$CONTROL_ROOT/.github/workflows/mac-ci.yml"
 grep -Fq '${{ steps.release-dependencies.outputs.sayall_ai_commit }}' "$CONTROL_ROOT/.github/workflows/mac-release-package.yml"
 grep -Fq '${{ steps.release-dependencies.outputs.sayall_private_platform_commit }}' "$CONTROL_ROOT/.github/workflows/mac-release-package.yml"
-grep -Fq '${{ steps.release-dependencies.outputs.sayall_mac_remote_commit }}' "$CONTROL_ROOT/.github/workflows/mac-release-package.yml"
 
 grep -Fq 'SAYALL_MAC_REMOTE_PACKAGE_PATH' "$PACKAGE_MANIFEST"
-grep -Fq 'SAYALL_MAC_REMOTE_PACKAGE_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-mac-remote' \
-  "$CONTROL_ROOT/.github/workflows/mac-release-package.yml"
+for workflow in "${WORKFLOWS[@]}"; do
+  grep -Fq 'SAYALL_MAC_REMOTE_PACKAGE_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-private-platform/packages/macos-remote' "$workflow"
+  if grep -Eq 'sayall_mac_remote_(repository|commit)|SAYALL_MAC_REMOTE_DEPLOY_KEY|\.private-dependencies/sayall-mac-remote' "$workflow"; then
+    print -u2 "${workflow:t} must load Mac Remote from the pinned private platform checkout"
+    exit 1
+  fi
+done
 if grep -Fq 'https://github.com/GetSayAll/sayall-mac-remote.git' "$PACKAGE_MANIFEST" || \
    grep -Fq '"identity" : "sayall-mac-remote"' "$PACKAGE_RESOLVED"; then
   print -u2 "public SwiftPM metadata must not resolve the private SayAllMacRemote repository"
@@ -203,7 +202,7 @@ fi
 
 print "SayAllAI: $sayall_ai_commit"
 print "SayAllPrivatePlatform: $sayall_private_platform_commit"
-print "SayAllMacRemote: $sayall_mac_remote_commit"
+print "SayAllMacRemote: packages/macos-remote at $sayall_private_platform_commit"
 
 for credential_repository in "${CREDENTIAL_REPOSITORIES[@]}"; do
   label="${credential_repository%%|*}"

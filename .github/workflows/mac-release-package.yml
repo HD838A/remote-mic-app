@@ -251,15 +251,6 @@ jobs:
           ssh-key: ${{ secrets.SAYALL_PRIVATE_PLATFORM_DEPLOY_KEY }}
           persist-credentials: false
 
-      - name: Check out shared Mac remote package
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
-        with:
-          repository: ${{ steps.release-dependencies.outputs.sayall_mac_remote_repository }}
-          ref: ${{ steps.release-dependencies.outputs.sayall_mac_remote_commit }}
-          path: .private-dependencies/sayall-mac-remote
-          ssh-key: ${{ secrets.SAYALL_MAC_REMOTE_DEPLOY_KEY }}
-          persist-credentials: false
-
       - name: Check out readonly release credentials
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
@@ -282,13 +273,12 @@ jobs:
         env:
           SAYALL_AI_COMMIT: ${{ steps.release-dependencies.outputs.sayall_ai_commit }}
           SAYALL_PRIVATE_PLATFORM_COMMIT: ${{ steps.release-dependencies.outputs.sayall_private_platform_commit }}
-          SAYALL_MAC_REMOTE_COMMIT: ${{ steps.release-dependencies.outputs.sayall_mac_remote_commit }}
         run: |
           if [[ "$INCLUDE_SAYALL_AI" == 1 ]]; then
             test "$(git -C .private-dependencies/sayall-ai rev-parse HEAD)" = "$SAYALL_AI_COMMIT"
           fi
           test "$(git -C .private-dependencies/sayall-private-platform rev-parse HEAD)" = "$SAYALL_PRIVATE_PLATFORM_COMMIT"
-          test "$(git -C .private-dependencies/sayall-mac-remote rev-parse HEAD)" = "$SAYALL_MAC_REMOTE_COMMIT"
+          test -f .private-dependencies/sayall-private-platform/packages/macos-remote/Package.swift
           test -f .private-dependencies/sayall-private-platform/packages/audio-input-kit/siri-remote/Package.swift
           test "$(git -C .private-release/remotemic-notary-secrets rev-parse HEAD)" = 5baaeaf56f6cd5fbd0fb0e08c9290077ba8b5b5d
           match_repo="$GITHUB_WORKSPACE/.private-release/apple-signing-match"
@@ -309,7 +299,7 @@ jobs:
             fi
             echo "SAYALL_COMBINATION_ACTIONS_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-private-platform/packages/macos-combination-actions"
             echo "SAYALL_SIRI_REMOTE_PACKAGE_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-private-platform/packages/audio-input-kit/siri-remote"
-            echo "SAYALL_MAC_REMOTE_PACKAGE_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-mac-remote"
+            echo "SAYALL_MAC_REMOTE_PACKAGE_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-private-platform/packages/macos-remote"
             echo "REQUIRE_SAYALL_COMBINATION_ACTIONS=1"
             echo "REQUIRE_SAYALL_BUTTON_PROFILES=0"
             echo "REQUIRE_SAYALL_MAC_REMOTE_PACKAGE=1"
