@@ -1,0 +1,175 @@
+{
+  "productCommit": "aaf780ed9f947ba6b95c57bdc049599e18ff9fe2",
+  "renderer": "production SettingsView hidden offscreen renderer",
+  "hardwareValidation": false,
+  "screenshots": [
+    {
+      "path": "mapping-zh-hans-light-disabled.png",
+      "format": "PNG",
+      "pixelSize": [
+        2040,
+        1544
+      ],
+      "logicalWindowSize": [
+        1020,
+        772
+      ],
+      "sha256": "71a9d6020a3306139dfd96d82a852526ac8fe917ade3d0fd0f947b752e08b49d",
+      "bytes": 724238
+    },
+    {
+      "path": "mapping-zh-hans-light-retry.png",
+      "format": "PNG",
+      "pixelSize": [
+        2040,
+        1544
+      ],
+      "logicalWindowSize": [
+        1020,
+        772
+      ],
+      "sha256": "3419c2c1e6e6220640333aa72f1dd37be4a6ee41db59174a47e151cb7f814eb9",
+      "bytes": 726458
+    },
+    {
+      "path": "mapping-zh-hans-light-multi.png",
+      "format": "PNG",
+      "pixelSize": [
+        2040,
+        1544
+      ],
+      "logicalWindowSize": [
+        1020,
+        772
+      ],
+      "sha256": "88c12eca154b59bed2309086a0ec3fa9dd3d9b69c8bb3074a055fe633826e16e",
+      "bytes": 792256
+    },
+    {
+      "path": "mapping-zh-hans-dark-disabled.png",
+      "format": "PNG",
+      "pixelSize": [
+        2040,
+        1544
+      ],
+      "logicalWindowSize": [
+        1020,
+        772
+      ],
+      "sha256": "3a520acfe55f9345176de7bc8227b42cb5ae13cb353aedb4901ed3652308d3b5",
+      "bytes": 723268
+    },
+    {
+      "path": "mapping-zh-hans-dark-retry.png",
+      "format": "PNG",
+      "pixelSize": [
+        2040,
+        1544
+      ],
+      "logicalWindowSize": [
+        1020,
+        772
+      ],
+      "sha256": "d5e997bf837435a7912fa08a87332428fbeb58ef34a0aeddd7c8685ba3b83d51",
+      "bytes": 725579
+    },
+    {
+      "path": "mapping-zh-hans-dark-multi.png",
+      "format": "PNG",
+      "pixelSize": [
+        2040,
+        1544
+      ],
+      "logicalWindowSize": [
+        1020,
+        772
+      ],
+      "sha256": "b6bf9379080bff3490cb72574bf799ab7f21b321c4741fbe6f0c08c1f1e938f3",
+      "bytes": 783784
+    },
+    {
+      "path": "mapping-en-light-disabled.png",
+      "format": "PNG",
+      "pixelSize": [
+        2040,
+        1544
+      ],
+      "logicalWindowSize": [
+        1020,
+        772
+      ],
+      "sha256": "8636263fa698d3a185bb226198a202f5405db490bc29357af152422d31a8d71d",
+      "bytes": 740884
+    },
+    {
+      "path": "mapping-en-light-retry.png",
+      "format": "PNG",
+      "pixelSize": [
+        2040,
+        1544
+      ],
+      "logicalWindowSize": [
+        1020,
+        772
+      ],
+      "sha256": "af0c518bde95d05fec4187f02ff25e718b58a6c379e5602710bc3b5a685b4981",
+      "bytes": 743408
+    },
+    {
+      "path": "mapping-en-light-multi.png",
+      "format": "PNG",
+      "pixelSize": [
+        2040,
+        1544
+      ],
+      "logicalWindowSize": [
+        1020,
+        772
+      ],
+      "sha256": "8c16d9fe42556e5338c6294017ca63b04273bb9272a1271a23cf4b4e025de79a",
+      "bytes": 822726
+    },
+    {
+      "path": "mapping-en-dark-disabled.png",
+      "format": "PNG",
+      "pixelSize": [
+        2040,
+        1544
+      ],
+      "logicalWindowSize": [
+        1020,
+        772
+      ],
+      "sha256": "44ac7ee13c535e143eff55e2cdfc0ef3a048bbceec5fe555977c0af6a42acff3",
+      "bytes": 740508
+    },
+    {
+      "path": "mapping-en-dark-retry.png",
+      "format": "PNG",
+      "pixelSize": [
+        2040,
+        1544
+      ],
+      "logicalWindowSize": [
+        1020,
+        772
+      ],
+      "sha256": "bff650f261476d4ecbfa5c74f2064e6fd721728c6b7d121f4dbfe963b6210ee0",
+      "bytes": 743653
+    },
+    {
+      "path": "mapping-en-dark-multi.png",
+      "format": "PNG",
+      "pixelSize": [
+        2040,
+        1544
+      ],
+      "logicalWindowSize": [
+        1020,
+        772
+      ],
+      "sha256": "e901195fef29e81d425c94685ccefc73f2fc47fc8bebe03812276dcd5f226d5e",
+      "bytes": 815056
+    }
+  ]
+}
