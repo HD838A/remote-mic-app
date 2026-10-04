@@ -1,0 +1,70 @@
+{
+  "host_base": "6ee894df86033d7485e0e048b7c75853e5745ed8",
+  "private_artifact_source": "5b4a3f9536c7e00f97dce79984f128caeb5ba6df",
+  "images": [
+    {
+      "file": "connection-zh-hans-light.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "b32508ed17e7739d60de4beaa517a6df12b313ade689887af15d19ebd20579a8",
+      "bytes": 368234
+    },
+    {
+      "file": "onboarding-apple-zh-hans-light.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1600,
+      "sha256": "c9295860612ba934347885285d8cdd76bc53d6ce4831c77a5e19983c97f0814e",
+      "bytes": 987809
+    },
+    {
+      "file": "connection-zh-hans-dark.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "427e422c656da6c68299073ae7da3d71e88fc992fb86b87268880065ebbb9c7a",
+      "bytes": 372671
+    },
+    {
+      "file": "onboarding-apple-zh-hans-dark.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1600,
+      "sha256": "233cc9bb80b605bf17718e4d41c7f8e70efb469e9bce3c632001c8bda8dbf502",
+      "bytes": 1098229
+    },
+    {
+      "file": "connection-en-light.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "e0b34db9029b19e8168069be7bcf1c628a642a2699dcf029f0529a433bdafaa2",
+      "bytes": 344606
+    },
+    {
+      "file": "onboarding-apple-en-light.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1600,
+      "sha256": "e309b4db104d5f7ee7fb4a79b51212c66087bb621e89c45a75eecf4da4b27f85",
+      "bytes": 961500
+    },
+    {
+      "file": "connection-en-dark.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "00c0fed54988330fd6c9794b156188ddc242a6f27023724b591476ed387b0252",
+      "bytes": 349283
+    },
+    {
+      "file": "onboarding-apple-en-dark.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1600,
+      "sha256": "5a213cb02f9a3842929d29be770195775377769b18350dbebf0ea312cb0389e0",
+      "bytes": 1074618
+    }
+  ]
+}

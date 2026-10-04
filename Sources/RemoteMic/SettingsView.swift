@@ -645,7 +645,7 @@ struct SettingsView: View {
                 locale: localization.locale,
                 text: localization.text
             ),
-            onOpenPlus: {
+            membershipRequiredView: membershipFeature.membershipRequiredView(remoteAuthorizationDenied: true) {
                 isWebRemoteSessionPresented = false
                 selectedSection = .membership
                 membershipFeature.refreshIfNeeded()
@@ -806,17 +806,23 @@ struct SettingsView: View {
             }
         case .buttonProfiles:
             if macroFeature.isButtonProfilesVisible {
-                macroFeature.buttonProfilesView(
-                    selectedRemoteProfileID: settings.selectedRemoteProfileID,
-                    remoteModel: settings.selectedRemoteProfile?.model,
-                    hostActionSections: buttonProfileHostActionSections,
-                    onEditKeys: { profile in
-                        preservesMappingContextOnNavigation = true
-                        editingMappingProfileID = profile
-                        selectedSection = .mapping
-                    },
-                    chromecastReservedControlIDs: buttonProfilesChromecastReservedControls
-                )
+                VStack(spacing: 0) {
+                    membershipFeature.membershipRequiredView(forButtonProfiles: true) {
+                        selectedSection = .membership
+                        membershipFeature.refreshIfNeeded()
+                    }
+                    macroFeature.buttonProfilesView(
+                        selectedRemoteProfileID: settings.selectedRemoteProfileID,
+                        remoteModel: settings.selectedRemoteProfile?.model,
+                        hostActionSections: buttonProfileHostActionSections,
+                        onEditKeys: { profile in
+                            preservesMappingContextOnNavigation = true
+                            editingMappingProfileID = profile
+                            selectedSection = .mapping
+                        },
+                        chromecastReservedControlIDs: buttonProfilesChromecastReservedControls
+                    )
+                }
             } else {
                 aboutPage
             }
@@ -892,11 +898,11 @@ struct SettingsView: View {
                     connectionDevicePanel
                         .frame(width: 230)
                     VStack(spacing: 14) {
+                        phoneConnectionsPanel
                         audioSettingsPanel
                         audioCompatibilityPanel
                         // Chromecast 连接卡片已按产品要求移除：启用开关默认常开，
                         // 语音键模式在按键页底部，状态见侧边栏「连接」的设备列表。
-                        phoneConnectionsPanel
                     }
                     .frame(maxWidth: .infinity, alignment: .topLeading)
                 }
@@ -972,6 +978,13 @@ struct SettingsView: View {
 
     #endif
 
+    private var connectionMembershipRequiredView: some View {
+        membershipFeature.membershipRequiredView {
+            selectedSection = .membership
+            membershipFeature.refreshIfNeeded()
+        }
+    }
+
     private var phoneConnectionsPanel: some View {
         GlassPanel {
             VStack(alignment: .leading, spacing: 14) {
@@ -979,20 +992,15 @@ struct SettingsView: View {
                     .font(.headline)
 
                 VStack(alignment: .leading, spacing: 10) {
-                    HStack(alignment: .top, spacing: 12) {
+                    HStack(alignment: .center, spacing: 12) {
                         Image(systemName: "iphone")
                             .font(.system(size: 22, weight: .semibold))
                             .foregroundStyle(Color.accentColor)
                             .frame(width: 34)
 
                         VStack(alignment: .leading, spacing: 3) {
-                            HStack(spacing: 6) {
-                                Text("connection.phone.ios_title")
-                                    .font(.subheadline.weight(.semibold))
-                                Text("connection.phone.qr_badge")
-                                    .font(.system(size: 12, weight: .semibold))
-                                    .foregroundStyle(.secondary)
-                            }
+                            Text("connection.phone.ios_title")
+                                .font(.subheadline.weight(.semibold))
                             Text("connection.phone.ios_help")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
@@ -1001,34 +1009,37 @@ struct SettingsView: View {
 
                         Spacer(minLength: 8)
 
-                        StatusPill(
-                            text: localization.text(
+                        Text(localization.text(
+                            model.isPhoneRemoteConnected
+                                ? "connection.phone.connected"
+                                : model.isPhoneRemoteConnectionEnabled
+                                    ? "connection.phone.enabled"
+                                    : "connection.phone.not_enabled"
+                        ))
+                        .font(.caption)
+                        .foregroundStyle(model.isPhoneRemoteConnected
+                            ? Color.green
+                            : model.isPhoneRemoteConnectionEnabled ? .orange : .secondary)
+                        .lineLimit(1)
+
+                        if membershipFeature.canStartCompanionConnection {
+                            Button(
                                 model.isPhoneRemoteConnected
-                                    ? "connection.phone.connected"
+                                    ? "connection.phone.disconnect"
                                     : model.isPhoneRemoteConnectionEnabled
-                                        ? "connection.phone.enabled"
-                                        : "connection.phone.not_enabled"
-                            ),
-                            tint: model.isPhoneRemoteConnected
-                                ? .green
-                                : model.isPhoneRemoteConnectionEnabled ? .orange : .secondary
-                        )
+                                        ? "connection.phone.cancel_waiting"
+                                        : "connection.phone.connect"
+                            ) {
+                                model.togglePhoneRemoteConnection()
+                            }
+                            .compatibilityButtonStyle(.standard)
+                            .controlSize(.regular)
+                        } else {
+                            connectionMembershipRequiredView
+                        }
                     }
 
                     HStack(spacing: 8) {
-                        Button(
-                            model.isPhoneRemoteConnected
-                                ? "connection.phone.disconnect"
-                                : model.isPhoneRemoteConnectionEnabled
-                                    ? "connection.phone.cancel_waiting"
-                                    : "connection.phone.connect"
-                        ) {
-                            model.togglePhoneRemoteConnection()
-                        }
-                        .compatibilityButtonStyle(
-                            model.isPhoneRemoteConnectionEnabled ? .standard : .prominent
-                        )
-
                         Link(destination: AppLinks.testFlightPublicBeta) {
                             Label("connection.web.invite.testflight_open", systemImage: "arrow.up.right.square")
                         }
@@ -1049,7 +1060,7 @@ struct SettingsView: View {
                         .compatibilityButtonStyle(.standard)
                     }
 
-                    if let invitation = model.phoneRemoteInvitation {
+                    if membershipFeature.canStartCompanionConnection, let invitation = model.phoneRemoteInvitation {
                         Divider()
                         PhoneRemoteInvitationCard(invitation: invitation)
                     }
@@ -1074,29 +1085,34 @@ struct SettingsView: View {
 
                     Spacer(minLength: 8)
 
-                    StatusPill(
-                        text: localization.text(
-                            model.isWatchRemoteConnected
-                                ? "connection.watch.connected"
-                                : model.isWatchRemoteConnectionEnabled
-                                    ? "connection.watch.enabled"
-                                    : "connection.phone.not_enabled"
-                        ),
-                        tint: model.isWatchRemoteConnected
-                            ? .green
-                            : model.isWatchRemoteConnectionEnabled ? .orange : .secondary
-                    )
-
-                    Button(
+                    Text(localization.text(
                         model.isWatchRemoteConnected
-                            ? "connection.watch.disconnect"
+                            ? "connection.watch.connected"
                             : model.isWatchRemoteConnectionEnabled
-                                ? "connection.watch.cancel_waiting"
-                                : "connection.watch.connect"
-                    ) {
-                        model.toggleWatchRemoteConnection()
+                                ? "connection.watch.enabled"
+                                : "connection.phone.not_enabled"
+                    ))
+                    .font(.caption)
+                    .foregroundStyle(model.isWatchRemoteConnected
+                        ? Color.green
+                        : model.isWatchRemoteConnectionEnabled ? .orange : .secondary)
+                    .lineLimit(1)
+
+                    if membershipFeature.canStartCompanionConnection {
+                        Button(
+                            model.isWatchRemoteConnected
+                                ? "connection.watch.disconnect"
+                                : model.isWatchRemoteConnectionEnabled
+                                    ? "connection.watch.cancel_waiting"
+                                    : "connection.watch.connect"
+                        ) {
+                            model.toggleWatchRemoteConnection()
+                        }
+                        .compatibilityButtonStyle(.standard)
+                        .controlSize(.regular)
+                    } else {
+                        connectionMembershipRequiredView
                     }
-                    .compatibilityButtonStyle(.standard)
                 }
 
                 Divider()
@@ -1120,14 +1136,19 @@ struct SettingsView: View {
                         .font(.caption)
                         .foregroundStyle(webRemoteStatusTint)
                         .lineLimit(1)
-                    Button(
-                        model.webRemoteState.isEnabled
-                            ? "connection.web.show_qr"
-                            : "connection.web.connect"
-                    ) {
-                        requestWebRemoteSession()
+                    if membershipFeature.canStartCompanionConnection || model.webRemoteState.isEnabled {
+                        Button(
+                            model.webRemoteState.isEnabled
+                                ? "connection.web.show_qr"
+                                : "connection.web.connect"
+                        ) {
+                            requestWebRemoteSession()
+                        }
+                        .compatibilityButtonStyle(.standard)
+                        .controlSize(.regular)
+                    } else {
+                        connectionMembershipRequiredView
                     }
-                    .compatibilityButtonStyle(.standard)
                 }
 
                 Divider()
@@ -4470,7 +4491,7 @@ struct SettingsView: View {
             return localization.text("connection.web.connecting")
         case .waitingForPhone:
             return localization.text("connection.web.waiting_scan")
-        case .plusRequired:
+        case .membershipRequired, .plusRequired:
             return localization.text("connection.web.plus_required_title")
         case .awaitingApproval:
             return localization.text("connection.web.waiting_approval")
@@ -4485,7 +4506,7 @@ struct SettingsView: View {
         switch model.webRemoteState {
         case .connected:
             return .green
-        case .failed, .unavailable, .plusRequired:
+        case .failed, .unavailable, .membershipRequired, .plusRequired:
             return .orange
         default:
             return .secondary
