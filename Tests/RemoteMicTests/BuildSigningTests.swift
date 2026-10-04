@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import Testing
+@testable import RemoteMic
 
 @Suite("Build signing")
 struct BuildSigningTests {
@@ -36,6 +37,21 @@ struct BuildSigningTests {
             y: representation.pixelsHigh / 2
         )?.alphaComponent ?? 0
         #expect(centerAlpha >= 0.5)
+
+        let source = try #require(NSImage(contentsOf: root.appendingPathComponent(
+            "Resources/AppIcons/faceted-duck.png"
+        )))
+        let expectedIcon = AppIconCatalog.applicationIconImage(source, contentScale: 0.92)
+        let expectedData = try #require(expectedIcon.tiffRepresentation)
+        let expectedBitmap = try #require(NSBitmapImageRep(data: expectedData))
+        for (x, y) in [(50, 512), (256, 256), (512, 512), (768, 512), (512, 900)] {
+            let actual = try #require(representation.colorAt(x: x, y: y))
+            let expected = try #require(expectedBitmap.colorAt(x: x, y: y))
+            #expect(abs(actual.redComponent - expected.redComponent) <= 1.0 / 255.0)
+            #expect(abs(actual.greenComponent - expected.greenComponent) <= 1.0 / 255.0)
+            #expect(abs(actual.blueComponent - expected.blueComponent) <= 1.0 / 255.0)
+            #expect(abs(actual.alphaComponent - expected.alphaComponent) <= 1.0 / 255.0)
+        }
         #expect(verifySource.contains("/usr/bin/iconutil --convert iconset"))
         #expect(verifySource.contains("app icon corner is not transparent"))
     }

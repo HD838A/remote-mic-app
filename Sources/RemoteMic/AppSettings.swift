@@ -863,7 +863,8 @@ final class AppSettings: ObservableObject {
             rawValue: defaults.string(forKey: Keys.applicationLanguage) ?? ""
         ) ?? .system
         appIconIdentifier = AppIconIdentifier(
-            rawValue: defaults.string(forKey: Keys.appIconIdentifier) ?? "standard"
+            rawValue: defaults.string(forKey: Keys.appIconIdentifier)
+                ?? AppIconIdentifier.facetedDuck.rawValue
         )
         showDockIcon = defaults.object(forKey: Keys.showDockIcon) == nil
             ? true
