@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>键位方案左右键被原生透传绕过</title>
+</head>
+<body>
+<main>
+  <h1>键位方案左右键被原生透传绕过</h1>
+  <p>状态：候选修复。自动化结果见下文。真实 RC003 与目标 App 待验收。</p>
+  <h2>基线与范围</h2>
+  <p>宿主基线：<code>4fb8140c6276cf556fc8380e6a9ad2941a6baee2</code>。
+    私有源码验证基线：<code>3a39299402667a9a021f6aca9a2733aaaec8d29f</code>。
+    本次只修改公开宿主的 HID 路由。不修改私有实现、会员门禁、交换格式或发布依赖 pin。</p>
+  <h2>复现</h2>
+  <ol>
+    <li>开启自定义映射。设备使用 monitored 模式。第三方 App 在前台。</li>
+    <li>不配置双击与长按。为左键或右键设置有效的单击方案覆盖。</li>
+    <li>统一接口的覆盖明确指定 arrowLeft 或 arrowRight；旧接口则报告存在单击绑定。</li>
+    <li>回放一次 HID 按下、重复报告与释放。</li>
+  </ol>
+  <p>错误：不调用统一动作执行器或旧方案执行器，原生方向键事件未被抑制。
+    正常：已有绑定时先执行配置并抑制原生副作用；没有绑定时保留原生方向键。</p>
+  <p>最新主线已把方案快捷键解析为 customShortcut。因此，不能把旧包中全部左右键故障
+    直接归为最新主线同一个问题。本次复现的是相同方向动作的显式覆盖与旧接口分支。</p>
+  <h2>日志证据与边界</h2>
+  <p>此前用户现场诊断摘要显示左右键走 <code>HID NATIVE PASSTHROUGH</code>，
+    而上下和 OK 进入方案执行。该证据来自旧包，不是本轮真机复现。
+    本轮正式修复前核对了该摘要和模拟测试输出，没有解密或重新读取最新用户现场日志。</p>
+  <p>原始复现测试在修改前失败：新旧接口、左右两键共四个参数用例均未调用绑定执行器，
+    原生按下与释放也未被抑制。先修透传后补测按住，四个参数用例再次失败：
+    统一接口重复执行方向动作；旧接口单击后夹带三次基础方向动作。
+    该结果来自虚拟计时器，不是真实固件验证。修复后的诊断入口保留透传记录，并增加以下脱敏路由记录：</p>
+  <pre>HID ROUTE button=left trigger=singleClick path=configured reason=single_click_override external_result=unknown</pre>
+  <p>该记录只证明进入配置路由。后续 <code>HID GESTURE</code>、动作结果或
+    <code>HID ACTION failed</code> 分别证明手势分发和执行器结果。
+    它们都不能证明第三方 App 已响应。日志不记录方案正文、设备标识或快捷键内容。</p>
+  <h2>根因与修复</h2>
+  <p>透传预检只比较最终动作是否等于物理方向键，没有判断单击是否由方案拥有。
+    透传分支先于配置动作执行。统一源码接口停用旧 hasActiveBinding，
+    因此只检查旧接口也不能覆盖新接口。</p>
+  <p>预检同时读取 configuredActionOverride 和旧 hasOverrideBinding。
+    任一接口存在当前设备、当前按键的有效单击覆盖时，禁止原生透传。
+    同时不启动基础按键连发，避免单击覆盖后重复执行或夹带旧动作；
+    没有覆盖时原生/宿主方向连发保持原规则。
+    无绑定或继承返回 nil 时继续使用原策略。App 切换器、常用语、编辑捕获与权限边界保持不变。</p>
+  <h2>验证</h2>
+  <ul>
+    <li>宿主公开完整测试：814 项、63 套件通过。</li>
+    <li>宿主组合动作与键位方案源码集成：821 项、63 套件通过。</li>
+    <li>新增三项参数化回归，共十个参数用例；原始路由复现与按住复现均从失败变为通过。</li>
+    <li>私有键位方案完整测试：66 项、7 套件通过。</li>
+    <li>私有组合动作：核心 64 项（其中一项市场外部 fixture 缺失而跳过）、macOS 7 项、
+      宿主接口 24 项、脚本 8 项，无失败。跳过项不是通过记录。</li>
+    <li>项目自检 48 项通过；仓库边界、治理与 diff 检查通过。</li>
+    <li>公开 Apple Silicon Release 与最终私有集成 Release App 构建通过；
+      <code>scripts/verify-app.sh</code> 的结构、资源、测试权益与签名一致性检查通过。</li>
+  </ul>
+  <p>内部 App 仅使用 ad-hoc 签名，不提供给用户安装，不上传或发布。
+    本轮未执行 Developer ID 签名、Apple 公证、Gatekeeper 安装或 Intel 构建。
+    发布 pin 没有改变，源码集成结果不能替代旧二进制发布构件的实际验收。</p>
+  <p>回归覆盖新旧接口、左右两键、重复报告、按住超过连发阈值、原生 down/up 与自动重复抑制、移除覆盖后恢复透传、
+    另一设备的覆盖不接管当前设备、显式快捷键与不执行、App 切换器两种监听模式。</p>
+  <pre>swift test --disable-keychain --filter 'RemoteButtonsTests/profileSingleClickOwnsMonitoredArrow'
+swift test --disable-keychain
+SAYALL_COMBINATION_ACTIONS_PATH=/path/to/private/packages/macos-combination-actions \
+SAYALL_BUTTON_PROFILES_PACKAGE_PATH=/path/to/private/packages/macos-button-profiles \
+SAYALL_TEST_BUTTON_PROFILES_FREE=1 \
+swift test --disable-keychain --scratch-path .build/integrated
+swift test --disable-keychain --package-path /path/to/private/packages/macos-combination-actions
+swift test --disable-keychain --package-path /path/to/private/packages/macos-button-profiles
+swift build --disable-keychain -c release</pre>
+  <p>公开命令清除私有 Package 与测试权益变量；私有集成只使用上述两个源码 Package。
+    本地 SwiftPM 命令均使用 <code>--disable-keychain</code>。
+    宿主公开与私有集成执行完整 <code>swift test</code>；
+    私有组合动作与键位方案 Package 分别执行完整测试。
+    同时执行项目自检、仓库边界、治理检查、Release 构建及 App 结构验证。</p>
+  <h2>修改文件</h2>
+  <ul>
+    <li><code>Sources/RemoteMic/HIDRemoteMonitor.swift</code>：补充单击覆盖所有权检查，
+      阻止透传与基础连发绕过覆盖，并记录脱敏路由。</li>
+    <li><code>Tests/RemoteMicTests/RemoteButtonsTests.swift</code>：增加 HID 报告、虚拟计时器和原生事件抑制回归。</li>
+    <li>本 Bug 文档：记录两次修复前失败、日志边界、根因和验证结果。</li>
+    <li><code>Testing/UnifiedButtonConfiguration.md</code>：增加真实左右键、按住和 Full Keyboard Access 对照步骤。</li>
+    <li><code>TODO.md</code>：同步候选状态，保留真实验收待办。</li>
+  </ul>
+  <h2>真实验收</h2>
+  <p>按<a href="../Testing/UnifiedButtonConfiguration.md">统一按键测试手册</a>的左右键用例验收。
+    必须确认当前方案已生效、目标 App 有可观察结果，并回归普通透传、物理键盘、语音与异常恢复。
+    Full Keyboard Access 的方向键只在支持的 group 内导航；普通按钮之间不一定能左右移动。
+    自动化、构建与结构验证不能代替真实硬件、权限历史、macOS 焦点系统或第三方控件验收。</p>
+</main>
+</body>
+</html>

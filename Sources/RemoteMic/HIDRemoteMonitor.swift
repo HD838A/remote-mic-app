@@ -667,7 +667,13 @@ final class HIDRemoteMonitor {
                 .longPress
             )
             let preflightAction = settings.action(for: button, profileID: preflightProfileID)
-            let usesNativePassthrough = preflightProfileID != nil && claimsRuntimeButton?(preflightProfileID, button) != true && shouldUseNativePassthrough(
+            // An explicit binding owns the click even when it resolves to the same arrow.
+            let hasSingleClickOverride = settings.configuredActionOverride?(
+                preflightProfileID, button, .singleClick
+            ) != nil || hasOverrideBinding(preflightProfileID, button, .singleClick)
+            let usesNativePassthrough = preflightProfileID != nil &&
+                !hasSingleClickOverride &&
+                claimsRuntimeButton?(preflightProfileID, button) != true && shouldUseNativePassthrough(
                 button: button,
                 action: preflightAction,
                 recognizesDoubleClick: preflightRecognizesDoubleClick,
@@ -738,10 +744,16 @@ final class HIDRemoteMonitor {
             }
             if usesNativePassthrough {
                 nativePassthroughUsages.insert(usage)
-                AppLogger.shared.write(
+                diagnosticLogger(
                     "HID NATIVE PASSTHROUGH button=\(button.rawValue) action=\(action.rawValue)"
                 )
                 continue
+            }
+            if hasSingleClickOverride {
+                diagnosticLogger(
+                    "HID ROUTE button=\(button.rawValue) trigger=singleClick " +
+                        "path=configured reason=single_click_override external_result=unknown"
+                )
             }
             if recognizesDoubleClick || recognizesLongPress || gestureRecognizer.isTracking(button) {
                 let commands = gestureRecognizer.press(
@@ -771,11 +783,13 @@ final class HIDRemoteMonitor {
                     "HID GESTURE button=\(button.rawValue) trigger=singleClick path=raw"
                 )
                 guard performConfiguredAction(for: button, trigger: .singleClick) else { return }
-                startRepeatIfNeeded(
-                    usage: usage,
-                    button: button,
-                    action: action
-                )
+                if !hasSingleClickOverride {
+                    startRepeatIfNeeded(
+                        usage: usage,
+                        button: button,
+                        action: action
+                    )
+                }
             }
         }
 
