@@ -1341,7 +1341,6 @@ struct SettingsView: View {
     #if SAYALL_SIRI_REMOTE_ENABLED && canImport(SayAllSiriRemote)
     private var siriRemoteMappingPage: some View {
         hardwareMappingPage(includeSiriScrollArrow: true) {
-            siriRemoteActivationControls
             SiriRemoteMappingCanvas(
                 selectedControlID: $selectedSiriRemoteControlID,
                 activeControlIDs: model.activeAppleRemoteControlIDs,
@@ -1381,46 +1380,6 @@ struct SettingsView: View {
                 onVoiceSettings: { mappingVoiceSettingsRequest += 1 }
             )
         }
-    }
-
-    private var siriRemoteActivationControls: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Toggle(localization.text("siri_remote.activation.enable"), isOn: Binding(
-                get: { settings.siriRemoteEnabled },
-                set: { model.setSiriRemoteEnabled($0) }
-            ))
-            .disabled(model.isStreaming || model.activePhysicalVoiceControlSource == .siriRemote)
-            Text(localization.text("siri_remote.activation.detail"))
-                .font(.system(size: 12))
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            if settings.siriRemoteEnabled {
-                HStack(spacing: 12) {
-                    Text(localization.text(siriRemoteActivationStatusKey))
-                        .font(.system(size: 12))
-                        .fixedSize(horizontal: false, vertical: true)
-                    Spacer()
-                    Button(localization.text("siri_remote.activation.retry")) {
-                        model.prepareSiriRemoteFromUserAction()
-                    }
-                    .buttonStyle(.bordered)
-                    .disabled(model.isStreaming || model.activePhysicalVoiceControlSource == .siriRemote ||
-                        model.siriRemoteAudioStatus == "ready" ||
-                        !model.siriRemoteAudioStatus.hasPrefix("unavailable:"))
-                }
-            }
-        }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.secondary.opacity(0.06), in: RoundedRectangle(cornerRadius: 12))
-    }
-
-    private var siriRemoteActivationStatusKey: String {
-        if model.siriRemoteAudioStatus == "ready" { return "siri_remote.activation.ready" }
-        if model.siriRemoteAudioStatus.hasPrefix("unavailable:") {
-            return "siri_remote.activation.action_required"
-        }
-        return "siri_remote.activation.preparing"
     }
 
     private func siriRemoteButton(for controlID: String) -> RemoteButton? {
@@ -2071,23 +2030,30 @@ struct SettingsView: View {
 
     @ViewBuilder
     private func remoteDeviceSelector(vertical: Bool = false) -> some View {
-        let connectedProfiles = RemoteDeviceNamePolicy.sortedForCards(
-            settings.remoteDeviceProfiles.filter { model.isRemoteConnected($0.id) },
+        let visibleProfiles = RemoteDeviceNamePolicy.sortedForCards(
+            settings.remoteDeviceProfiles.filter { profile in
+                #if SAYALL_SIRI_REMOTE_ENABLED && canImport(SayAllSiriRemote)
+                // Keep the activation entry available while the Apple adapter is stopped.
+                model.isRemoteConnected(profile.id) || profile.model.isAppleSiriRemote
+                #else
+                model.isRemoteConnected(profile.id)
+                #endif
+            },
             modelName: remoteModelName,
             systemName: { model.systemDeviceName(for: $0) }
         )
-        if connectedProfiles.isEmpty {
+        if visibleProfiles.isEmpty {
             remoteDeviceEmptyState(vertical: vertical)
         } else if vertical {
             VStack(spacing: 8) {
-                ForEach(connectedProfiles) { profile in
+                ForEach(visibleProfiles) { profile in
                     remoteDeviceCard(profile, fillsWidth: true)
                 }
             }
         } else {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
-                    ForEach(connectedProfiles) { profile in
+                    ForEach(visibleProfiles) { profile in
                         remoteDeviceCard(profile)
                     }
                 }
@@ -2143,62 +2109,99 @@ struct SettingsView: View {
             level: batteryLevel,
             powerState: powerState
         )
-        return Button {
-            model.selectRemoteProfile(profile.id)
-        } label: {
-            VStack(alignment: .leading, spacing: 5) {
-                HStack(spacing: 6) {
-                    Text(modelName)
-                        .help(modelName)
-                        .font(.system(size: 13, weight: .semibold))
-                        .lineLimit(1)
-                    Spacer(minLength: 0)
-                    if selected {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundStyle(Color.accentColor)
-                            .help(localization.text("remote.device.current"))
-                    }
-                }
-                Text(systemName)
-                    .help(systemName)
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                ViewThatFits(in: .horizontal) {
-                    HStack(spacing: 7) {
-                        remoteConnectionLabel(connected: connected)
-                        if showsBattery {
-                            remoteBatteryLabel(level: batteryLevel, powerState: powerState)
+        return VStack(alignment: .leading, spacing: 8) {
+            Button {
+                model.selectRemoteProfile(profile.id)
+            } label: {
+                VStack(alignment: .leading, spacing: 5) {
+                    HStack(spacing: 6) {
+                        Text(modelName)
+                            .help(modelName)
+                            .font(.system(size: 13, weight: .semibold))
+                            .lineLimit(1)
+                        Spacer(minLength: 0)
+                        if selected {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundStyle(Color.accentColor)
+                                .help(localization.text("remote.device.current"))
                         }
                     }
-                    VStack(alignment: .leading, spacing: 4) {
+                    Text(systemName)
+                        .help(systemName)
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                    ViewThatFits(in: .horizontal) {
                         HStack(spacing: 7) {
                             remoteConnectionLabel(connected: connected)
                             if showsBattery {
                                 remoteBatteryLabel(level: batteryLevel, powerState: powerState)
                             }
                         }
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack(spacing: 7) {
+                                remoteConnectionLabel(connected: connected)
+                                if showsBattery {
+                                    remoteBatteryLabel(level: batteryLevel, powerState: powerState)
+                                }
+                            }
+                        }
                     }
+                    .font(.system(size: 12))
                 }
-                .font(.system(size: 12))
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            .frame(width: fillsWidth ? nil : 232, alignment: .leading)
-            .frame(maxWidth: fillsWidth ? .infinity : nil, alignment: .leading)
-            .background(
-                selected ? Color.accentColor.opacity(0.13) : Color.primary.opacity(0.045),
-                in: RoundedRectangle(cornerRadius: 10, style: .continuous)
-            )
-            .overlay {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .stroke(selected ? Color.accentColor.opacity(0.65) : Color.secondary.opacity(0.18))
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text("\(modelName), \(systemName)"))
+            .accessibilityAddTraits(selected ? .isSelected : [])
+            #if SAYALL_SIRI_REMOTE_ENABLED && canImport(SayAllSiriRemote)
+            if profile.model.isAppleSiriRemote {
+                siriRemoteCardActions(profile)
+            }
+            #endif
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .frame(width: fillsWidth ? nil : 232, alignment: .leading)
+        .frame(maxWidth: fillsWidth ? .infinity : nil, alignment: .leading)
+        .background(
+            selected ? Color.accentColor.opacity(0.13) : Color.primary.opacity(0.045),
+            in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(selected ? Color.accentColor.opacity(0.65) : Color.secondary.opacity(0.18))
+        }
+    }
+
+    #if SAYALL_SIRI_REMOTE_ENABLED && canImport(SayAllSiriRemote)
+    private func siriRemoteCardActions(_ profile: RemoteDeviceProfile) -> some View {
+        HStack(spacing: 8) {
+            if !settings.siriRemoteEnabled {
+                Button(localization.text("siri_remote.activation.enable")) {
+                    model.selectRemoteProfile(profile.id)
+                    model.setSiriRemoteEnabled(true)
+                }
+            } else {
+                if model.siriRemoteAudioStatus.hasPrefix("unavailable:") {
+                    Button(localization.text("siri_remote.activation.retry")) {
+                        model.selectRemoteProfile(profile.id)
+                        model.prepareSiriRemoteFromUserAction()
+                    }
+                } else if model.siriRemoteAudioStatus != "ready" {
+                    Button(localization.text("siri_remote.activation.preparing")) {}
+                        .disabled(true)
+                }
+                Button(localization.text("siri_remote.activation.disable")) {
+                    model.setSiriRemoteEnabled(false)
+                }
             }
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(Text("\(modelName), \(systemName)"))
-        .accessibilityAddTraits(selected ? .isSelected : [])
+        .font(.system(size: 12))
+        .buttonStyle(.bordered)
+        .disabled(model.isStreaming || model.activePhysicalVoiceControlSource == .siriRemote)
     }
+    #endif
 
     private func remoteConnectionLabel(connected: Bool) -> some View {
         Label(

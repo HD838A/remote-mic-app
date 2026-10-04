@@ -123,6 +123,12 @@ enum SettingsScreenshotRenderer {
                 fingerprint: "settings-screenshot-siri-remote"
             )
             settings.selectRemoteProfile(profileID)
+            if ProcessInfo.processInfo.environment[
+                "REMOTE_MIC_SETTINGS_SCREENSHOT_SIRI_REMOTE_STATE"
+            ] == "retry" {
+                settings.siriRemoteEnabled = true
+                settings.siriRemoteNeedsUserAction = true
+            }
         }
 #else
         _ = usesSiriRemote
