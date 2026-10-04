@@ -7,11 +7,7 @@
     },
     "sayAllPrivatePlatform": {
       "repository": "GetSayAll/sayall-private-platform",
-      "commit": "7324f1972ee4d1bead2eca08f387f994d1dd1196"
-    },
-    "sayAllMacRemote": {
-      "repository": "GetSayAll/sayall-mac-remote",
-      "commit": "010c0baddb04461f090263c98ce42a77aafe5ccd"
+      "commit": "d037a7d499231ffda5c7e2e006fa67c434410313"
     }
   }
 }

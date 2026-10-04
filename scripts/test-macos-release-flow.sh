@@ -533,6 +533,7 @@ for ai_mode in 0 1; do
   ai_env="$WORK_DIR/ai-config-$ai_mode.env"
   INCLUDE_SAYALL_AI="$ai_mode" GITHUB_WORKSPACE="$WORK_DIR" GITHUB_ENV="$ai_env" \
     /bin/bash -e -c "$configure_features"
+  /usr/bin/grep -Fxq "SAYALL_MAC_REMOTE_PACKAGE_PATH=$WORK_DIR/.private-dependencies/sayall-private-platform/packages/macos-remote" "$ai_env"
   /usr/bin/grep -Fxq "REQUIRE_SAYALL_AI_PACKAGE=$ai_mode" "$ai_env"
   if [[ "$ai_mode" == 0 ]]; then
     /usr/bin/grep -Fxq 'SAYALL_AI_PACKAGE_PATH=' "$ai_env"

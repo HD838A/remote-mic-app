@@ -195,7 +195,7 @@ struct BuildSigningTests {
         #expect(buildSource.contains("REQUIRE_SAYALL_MAC_REMOTE_PACKAGE"))
         #expect(buildSource.contains("A SayAll Mac remote package is required for this build"))
         #expect(workflowSource.contains(
-            "SAYALL_MAC_REMOTE_PACKAGE_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-mac-remote"
+            "SAYALL_MAC_REMOTE_PACKAGE_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-private-platform/packages/macos-remote"
         ))
         #expect(workflowSource.contains("REQUIRE_SAYALL_MAC_REMOTE_PACKAGE=1"))
     }
@@ -942,9 +942,10 @@ struct BuildSigningTests {
         #expect(workflowSource.contains("APPLE_SIGNING_MATCH_DEPLOY_KEY"))
         #expect(workflowSource.contains("RELEASE_AGE_IDENTITY"))
         #expect(workflowSource.contains(
-            "steps.release-dependencies.outputs.sayall_mac_remote_repository"
+            "steps.release-dependencies.outputs.sayall_private_platform_repository"
         ))
-        #expect(workflowSource.contains("SAYALL_MAC_REMOTE_DEPLOY_KEY"))
+        #expect(!workflowSource.contains("SAYALL_MAC_REMOTE_DEPLOY_KEY"))
+        #expect(!workflowSource.contains("steps.release-dependencies.outputs.sayall_mac_remote_commit"))
         #expect(workflowSource.contains("SAYALL_MAC_REMOTE_PACKAGE_PATH"))
         #expect(workflowSource.contains("HD838A/remotemic-notary-secrets"))
         #expect(workflowSource.contains("HD838A/apple-signing-match"))
