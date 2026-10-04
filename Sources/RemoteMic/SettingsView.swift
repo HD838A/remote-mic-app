@@ -128,8 +128,8 @@ enum SettingsPageBehavior {
         .macros,
         .buttonProfiles,
         .membership,
-        .transcripts,
         .connection,
+        .transcripts,
         .privateFeature,
         .about,
         .statistics,
@@ -438,6 +438,12 @@ struct SettingsView: View {
     @ObservedObject var model: BridgeAppModel
     @ObservedObject var settings: AppSettings
     @ObservedObject private var privateFeature: PrivateFeatureIntegration
+    @State private var preservesMappingContextOnNavigation = false
+    @State private var returnsToMappingFromLibrary = false
+    @State private var editingMappingProfileID: UUID?
+    @State private var mappingMacroSearch = ""
+    @State private var mappingVoiceSettingsRequest = 0
+
     @ObservedObject private var macroFeature: MacroFeatureIntegration
     @ObservedObject private var membershipFeature: MembershipFeatureIntegration
     @ObservedObject private var loginItemService: LoginItemService
@@ -555,7 +561,8 @@ struct SettingsView: View {
         }
         .onChange(of: selectedSection) { section in
             if section == .mapping {
-                model.selectDefaultMappingRemoteIfAvailable()
+                if preservesMappingContextOnNavigation { preservesMappingContextOnNavigation = false }
+                else { model.selectDefaultMappingRemoteIfAvailable() }
             }
             if section == .connection || section == .mapping {
                 model.refreshRemoteDeviceNames(reason: .page)
@@ -631,7 +638,7 @@ struct SettingsView: View {
                 locale: localization.locale,
                 text: localization.text
             ),
-            onOpenPlus: {
+            membershipRequiredView: membershipFeature.membershipRequiredView(remoteAuthorizationDenied: true) {
                 isWebRemoteSessionPresented = false
                 selectedSection = .membership
                 membershipFeature.refreshIfNeeded()
@@ -766,30 +773,49 @@ struct SettingsView: View {
                                   let trigger = ButtonTrigger(rawValue: triggerValue)
                             else { return nil }
                             return mappingActionSummary(for: button, trigger: trigger)
+                        },
+                        settings: settings,
+                        onEditBinding: { device, profile, button, trigger in
+                            preservesMappingContextOnNavigation = true
+                            if let device { settings.selectRemoteProfile(device) }
+                            editingMappingProfileID = profile
+                            mappingEditingTarget = ShortcutEditingTarget(button: button, trigger: trigger)
+                            selectedSection = .mapping
                         }
                     )
-                    Divider()
-                    Label(
-                        localization.text("macro.integration.focus_mcp_boundary"),
-                        systemImage: "info.circle"
-                    )
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 22)
-                    .padding(.vertical, 10)
+                    if returnsToMappingFromLibrary {
+                        Divider()
+                        Button(localization.text("button_mapping.return_choose_macro")) {
+                            returnsToMappingFromLibrary = false
+                            preservesMappingContextOnNavigation = true
+                            selectedSection = .mapping
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .padding(10)
+                    }
                 }
             } else {
                 aboutPage
             }
         case .buttonProfiles:
             if macroFeature.isButtonProfilesVisible {
-                macroFeature.buttonProfilesView(
-                    selectedRemoteProfileID: settings.selectedRemoteProfileID,
-                    remoteModel: settings.selectedRemoteProfile?.model,
-                    hostActionSections: buttonProfileHostActionSections
-                )
+                VStack(spacing: 0) {
+                    membershipFeature.membershipRequiredView(forButtonProfiles: true) {
+                        selectedSection = .membership
+                        membershipFeature.refreshIfNeeded()
+                    }
+                    macroFeature.buttonProfilesView(
+                        selectedRemoteProfileID: settings.selectedRemoteProfileID,
+                        remoteModel: settings.selectedRemoteProfile?.model,
+                        hostActionSections: buttonProfileHostActionSections,
+                        onEditKeys: { profile in
+                            preservesMappingContextOnNavigation = true
+                            editingMappingProfileID = profile
+                            selectedSection = .mapping
+                        },
+                        chromecastReservedControlIDs: buttonProfilesChromecastReservedControls
+                    )
+                }
             } else {
                 aboutPage
             }
@@ -865,11 +891,11 @@ struct SettingsView: View {
                     connectionDevicePanel
                         .frame(width: 230)
                     VStack(spacing: 14) {
+                        phoneConnectionsPanel
                         audioSettingsPanel
                         audioCompatibilityPanel
                         // Chromecast 连接卡片已按产品要求移除：启用开关默认常开，
                         // 语音键模式在按键页底部，状态见侧边栏「连接」的设备列表。
-                        phoneConnectionsPanel
                     }
                     .frame(maxWidth: .infinity, alignment: .topLeading)
                 }
@@ -945,6 +971,13 @@ struct SettingsView: View {
 
     #endif
 
+    private var connectionMembershipRequiredView: some View {
+        membershipFeature.membershipRequiredView {
+            selectedSection = .membership
+            membershipFeature.refreshIfNeeded()
+        }
+    }
+
     private var phoneConnectionsPanel: some View {
         GlassPanel {
             VStack(alignment: .leading, spacing: 14) {
@@ -952,20 +985,15 @@ struct SettingsView: View {
                     .font(.headline)
 
                 VStack(alignment: .leading, spacing: 10) {
-                    HStack(alignment: .top, spacing: 12) {
+                    HStack(alignment: .center, spacing: 12) {
                         Image(systemName: "iphone")
                             .font(.system(size: 22, weight: .semibold))
                             .foregroundStyle(Color.accentColor)
                             .frame(width: 34)
 
                         VStack(alignment: .leading, spacing: 3) {
-                            HStack(spacing: 6) {
-                                Text("connection.phone.ios_title")
-                                    .font(.subheadline.weight(.semibold))
-                                Text("connection.phone.qr_badge")
-                                    .font(.system(size: 12, weight: .semibold))
-                                    .foregroundStyle(.secondary)
-                            }
+                            Text("connection.phone.ios_title")
+                                .font(.subheadline.weight(.semibold))
                             Text("connection.phone.ios_help")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
@@ -974,34 +1002,37 @@ struct SettingsView: View {
 
                         Spacer(minLength: 8)
 
-                        StatusPill(
-                            text: localization.text(
+                        Text(localization.text(
+                            model.isPhoneRemoteConnected
+                                ? "connection.phone.connected"
+                                : model.isPhoneRemoteConnectionEnabled
+                                    ? "connection.phone.enabled"
+                                    : "connection.phone.not_enabled"
+                        ))
+                        .font(.caption)
+                        .foregroundStyle(model.isPhoneRemoteConnected
+                            ? Color.green
+                            : model.isPhoneRemoteConnectionEnabled ? .orange : .secondary)
+                        .lineLimit(1)
+
+                        if membershipFeature.canStartCompanionConnection {
+                            Button(
                                 model.isPhoneRemoteConnected
-                                    ? "connection.phone.connected"
+                                    ? "connection.phone.disconnect"
                                     : model.isPhoneRemoteConnectionEnabled
-                                        ? "connection.phone.enabled"
-                                        : "connection.phone.not_enabled"
-                            ),
-                            tint: model.isPhoneRemoteConnected
-                                ? .green
-                                : model.isPhoneRemoteConnectionEnabled ? .orange : .secondary
-                        )
+                                        ? "connection.phone.cancel_waiting"
+                                        : "connection.phone.connect"
+                            ) {
+                                model.togglePhoneRemoteConnection()
+                            }
+                            .compatibilityButtonStyle(.standard)
+                            .controlSize(.regular)
+                        } else {
+                            connectionMembershipRequiredView
+                        }
                     }
 
                     HStack(spacing: 8) {
-                        Button(
-                            model.isPhoneRemoteConnected
-                                ? "connection.phone.disconnect"
-                                : model.isPhoneRemoteConnectionEnabled
-                                    ? "connection.phone.cancel_waiting"
-                                    : "connection.phone.connect"
-                        ) {
-                            model.togglePhoneRemoteConnection()
-                        }
-                        .compatibilityButtonStyle(
-                            model.isPhoneRemoteConnectionEnabled ? .standard : .prominent
-                        )
-
                         Link(destination: AppLinks.testFlightPublicBeta) {
                             Label("connection.web.invite.testflight_open", systemImage: "arrow.up.right.square")
                         }
@@ -1022,7 +1053,7 @@ struct SettingsView: View {
                         .compatibilityButtonStyle(.standard)
                     }
 
-                    if let invitation = model.phoneRemoteInvitation {
+                    if membershipFeature.canStartCompanionConnection, let invitation = model.phoneRemoteInvitation {
                         Divider()
                         PhoneRemoteInvitationCard(invitation: invitation)
                     }
@@ -1047,29 +1078,34 @@ struct SettingsView: View {
 
                     Spacer(minLength: 8)
 
-                    StatusPill(
-                        text: localization.text(
-                            model.isWatchRemoteConnected
-                                ? "connection.watch.connected"
-                                : model.isWatchRemoteConnectionEnabled
-                                    ? "connection.watch.enabled"
-                                    : "connection.phone.not_enabled"
-                        ),
-                        tint: model.isWatchRemoteConnected
-                            ? .green
-                            : model.isWatchRemoteConnectionEnabled ? .orange : .secondary
-                    )
-
-                    Button(
+                    Text(localization.text(
                         model.isWatchRemoteConnected
-                            ? "connection.watch.disconnect"
+                            ? "connection.watch.connected"
                             : model.isWatchRemoteConnectionEnabled
-                                ? "connection.watch.cancel_waiting"
-                                : "connection.watch.connect"
-                    ) {
-                        model.toggleWatchRemoteConnection()
+                                ? "connection.watch.enabled"
+                                : "connection.phone.not_enabled"
+                    ))
+                    .font(.caption)
+                    .foregroundStyle(model.isWatchRemoteConnected
+                        ? Color.green
+                        : model.isWatchRemoteConnectionEnabled ? .orange : .secondary)
+                    .lineLimit(1)
+
+                    if membershipFeature.canStartCompanionConnection {
+                        Button(
+                            model.isWatchRemoteConnected
+                                ? "connection.watch.disconnect"
+                                : model.isWatchRemoteConnectionEnabled
+                                    ? "connection.watch.cancel_waiting"
+                                    : "connection.watch.connect"
+                        ) {
+                            model.toggleWatchRemoteConnection()
+                        }
+                        .compatibilityButtonStyle(.standard)
+                        .controlSize(.regular)
+                    } else {
+                        connectionMembershipRequiredView
                     }
-                    .compatibilityButtonStyle(.standard)
                 }
 
                 Divider()
@@ -1093,14 +1129,19 @@ struct SettingsView: View {
                         .font(.caption)
                         .foregroundStyle(webRemoteStatusTint)
                         .lineLimit(1)
-                    Button(
-                        model.webRemoteState.isEnabled
-                            ? "connection.web.show_qr"
-                            : "connection.web.connect"
-                    ) {
-                        requestWebRemoteSession()
+                    if membershipFeature.canStartCompanionConnection || model.webRemoteState.isEnabled {
+                        Button(
+                            model.webRemoteState.isEnabled
+                                ? "connection.web.show_qr"
+                                : "connection.web.connect"
+                        ) {
+                            requestWebRemoteSession()
+                        }
+                        .compatibilityButtonStyle(.standard)
+                        .controlSize(.regular)
+                    } else {
+                        connectionMembershipRequiredView
                     }
-                    .compatibilityButtonStyle(.standard)
                 }
 
                 Divider()
@@ -1360,7 +1401,8 @@ struct SettingsView: View {
                         button: button,
                         trigger: trigger
                     )
-                }
+                },
+                onVoiceSettings: { mappingVoiceSettingsRequest += 1 }
             )
         }
     }
@@ -1443,7 +1485,8 @@ struct SettingsView: View {
                 systemReservedControlIDs: ChromecastRemoteControl.canvasReservedControlIDs(
                     allowSystemReservedKeys: settings.chromecastAllowSystemReservedKeys,
                     exceptions: settings.chromecastSystemReservedExceptions
-                )
+                ),
+                onVoiceSettings: { mappingVoiceSettingsRequest += 1 }
             )
         }
     }
@@ -1453,13 +1496,172 @@ struct SettingsView: View {
     }
     #endif
 
+    private var buttonProfilesChromecastReservedControls: Set<String> {
+        #if SAYALL_CHROMECAST_ENABLED && canImport(SayAllChromecast)
+        ChromecastRemoteControl.canvasReservedControlIDs(
+            allowSystemReservedKeys: settings.chromecastAllowSystemReservedKeys,
+            exceptions: settings.chromecastSystemReservedExceptions)
+        #else
+        ["left", "right", "select"]
+        #endif
+    }
+
+    private func mappingConfiguration(for button: RemoteButton, trigger: ButtonTrigger) -> ConfiguredButtonAction {
+        if let profile = editingMappingProfileID {
+            return macroFeature.profileBinding(device: settings.selectedRemoteProfileID, profile: profile,
+                button: button, trigger: trigger)
+                ?? settings.configuredBaseAction(for: button, trigger: trigger)
+        }
+        return settings.configuredBaseAction(for: button, trigger: trigger)
+    }
+
+    private func saveMappingBinding(_ configured: ConfiguredButtonAction, button: RemoteButton, trigger: ButtonTrigger) {
+        if let profile = editingMappingProfileID {
+            macroFeature.setProfileBinding(configured, profile: profile, button: button, trigger: trigger,
+                displayName: configured.action == .customShortcut
+                    ? configured.shortcut?.visualDisplayName(using: localization) ?? configured.action.displayName(using: localization)
+                    : configured.action.displayName(using: localization))
+        } else {
+            settings.setBaseBinding(configured, for: button, trigger: trigger, profileID: settings.selectedRemoteProfileID)
+        }
+    }
+
+    private func setMappingAction(_ action: ButtonAction, for button: RemoteButton, trigger: ButtonTrigger) {
+        var configured = mappingConfiguration(for: button, trigger: trigger)
+        configured.action = action
+        saveMappingBinding(configured, button: button, trigger: trigger)
+    }
+
+    private func setMappingShortcut(_ shortcut: CustomKeyboardShortcut?, for button: RemoteButton, trigger: ButtonTrigger) {
+        var configured = mappingConfiguration(for: button, trigger: trigger)
+        configured.shortcut = shortcut
+        saveMappingBinding(configured, button: button, trigger: trigger)
+    }
+
+    private func setMappingApplicationProfileID(_ id: UUID?, for button: RemoteButton, trigger: ButtonTrigger) {
+        var configured = mappingConfiguration(for: button, trigger: trigger)
+        configured.applicationProfileID = id
+        saveMappingBinding(configured, button: button, trigger: trigger)
+    }
+
+    private var mappingProfileSelector: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(localization.text("button_mapping.editing_profile")).font(.system(size: 13, weight: .semibold))
+                Spacer()
+                if let active = macroFeature.activeMappingProfileID(device: settings.selectedRemoteProfileID),
+                   let profile = macroFeature.mappingProfiles(device: settings.selectedRemoteProfileID).first(where: { $0.id == active }) {
+                    Text(localization.text("button_mapping.active_profile") + "：" + profile.name)
+                        .font(.system(size: 12)).foregroundStyle(.secondary)
+                } else {
+                    Text(localization.text("button_mapping.active_profile") + "：" + localization.text("button_mapping.base_profile"))
+                        .font(.system(size: 12)).foregroundStyle(.secondary)
+                }
+            }
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack {
+                    Button(localization.text("button_mapping.base_profile")) { editingMappingProfileID = nil }
+                        .tint(editingMappingProfileID == nil ? .accentColor : .secondary)
+                    ForEach(macroFeature.mappingProfiles(device: settings.selectedRemoteProfileID)) { profile in
+                        Button(profile.name) { editingMappingProfileID = profile.id; shortcutCaptureTarget = nil }
+                            .tint(editingMappingProfileID == profile.id ? .accentColor : .secondary)
+                    }
+                }.buttonStyle(.bordered)
+            }
+        }
+        .onAppear { macroFeature.prepareMappingDevice(settings.selectedRemoteProfileID) }
+        .onChange(of: macroFeature.mappingProfiles(device: settings.selectedRemoteProfileID).map(\.id)) { ids in
+            if let profile = editingMappingProfileID, !ids.contains(profile) {
+                editingMappingProfileID = nil
+                shortcutCaptureTarget = nil
+            }
+        }
+        .onChange(of: settings.selectedRemoteProfileID) { _ in
+            macroFeature.prepareMappingDevice(settings.selectedRemoteProfileID)
+            if let profile = editingMappingProfileID,
+               !macroFeature.mappingProfiles(device: settings.selectedRemoteProfileID).contains(where: { $0.id == profile }) {
+                editingMappingProfileID = nil
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func mappingInheritanceControl(button: RemoteButton, trigger: ButtonTrigger) -> some View {
+            if let profile = editingMappingProfileID {
+                Button(localization.text("button_mapping.inherit_base")) {
+                    macroFeature.setProfileBinding(nil, profile: profile, button: button, trigger: trigger)
+                }.buttonStyle(.bordered)
+                if macroFeature.profileBinding(device: settings.selectedRemoteProfileID, profile: profile,
+                    button: button, trigger: trigger) == nil {
+                    Text(localization.text("button_mapping.inherited") + "：" + mappingActionSummary(for: button, trigger: trigger))
+                        .font(.system(size: 12)).foregroundStyle(.secondary)
+                }
+            }
+    }
+
+    private func mappingMacroChoices(button: RemoteButton, trigger: ButtonTrigger,
+                                     configured: ConfiguredButtonAction) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(localization.text("action.combination_action")).font(.system(size: 14, weight: .semibold))
+            TextField(localization.text("button_mapping.search_macros"), text: $mappingMacroSearch)
+                .textFieldStyle(.roundedBorder).font(.system(size: 13))
+            VStack(spacing: 6) {
+                ForEach(macroFeature.libraryActions.filter {
+                    mappingMacroSearch.isEmpty || $0.name.localizedCaseInsensitiveContains(mappingMacroSearch)
+                }) { action in
+                    Button {
+                        var binding = configured
+                        binding.action = .combinationAction
+                        binding.macroID = action.id
+                        saveMappingBinding(binding, button: button, trigger: trigger)
+                    } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: "square.stack.3d.up")
+                            Text(action.name).font(.system(size: 13, weight: .medium))
+                            Spacer()
+                            Text(String(format: localization.text("button_mapping.macro_step_count"), action.stepCount))
+                                .font(.system(size: 12)).foregroundStyle(.secondary)
+                            if configured.action == .combinationAction && configured.macroID == action.id {
+                                Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.accentColor)
+                            }
+                        }.padding(10).frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+                    }.buttonStyle(.plain)
+                        .background(configured.action == .combinationAction && configured.macroID == action.id
+                            ? Color.accentColor.opacity(0.10) : Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 8))
+                }
+            }
+            if configured.action == .combinationAction,
+               !macroFeature.libraryActions.contains(where: { $0.id == configured.macroID }) {
+                Text(localization.text("button_mapping.macro_unavailable")).font(.system(size: 13)).foregroundStyle(.orange)
+            }
+            Button(localization.text("button_mapping.manage_macros")) {
+                returnsToMappingFromLibrary = true
+                selectedSection = .macros
+            }
+                .buttonStyle(.bordered)
+        }
+    }
+
+    private var mappingPageHeader: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .center, spacing: 14) {
+                PageHeader(title: localization.text("button_mapping.page.title"))
+                mappingHeaderToggle
+            }
+            Text(localization.text("button_mapping.page.subtitle"))
+                .font(.system(size: 13))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
     private var mappingPage: some View {
         hardwareMappingPage {
             RemoteMappingCanvas(
                 selectedButton: $selectedRemoteButton,
                 activeButtons: model.activeRemoteButtons,
                 voiceActive: model.isStreaming,
-                actionSummary: mappingActionSummary,
+                actionSummary: { button, trigger in mappingActionSummary(for: button, trigger: trigger) },
                 onEdit: { button, trigger in
                     selectedRemoteButton = button
                     mappingActionFilter = .all
@@ -1467,7 +1669,8 @@ struct SettingsView: View {
                         button: button,
                         trigger: trigger
                     )
-                }
+                },
+                onVoiceSettings: { mappingVoiceSettingsRequest += 1 }
             )
             .onReceive(model.$activeRemoteButtons) { buttons in
                 selectedRemoteButton = MappingSelectionPolicy.selection(
@@ -1484,24 +1687,11 @@ struct SettingsView: View {
         @ViewBuilder hardwareCanvas: @escaping () -> HardwareCanvas
     ) -> some View {
         VStack(spacing: 0) {
-            ViewThatFits(in: .horizontal) {
-                HStack(alignment: .center, spacing: 14) {
-                    PageHeader(title: localization.text("button_mapping.page.title"))
-                        .fixedSize(horizontal: true, vertical: false)
-                    mappingHeaderToggle
-                    remoteDeviceSelector()
-                        .frame(maxWidth: .infinity, alignment: .trailing)
-                }
-
-                HStack(alignment: .center, spacing: 14) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        PageHeader(title: localization.text("button_mapping.page.title"))
-                            .fixedSize(horizontal: true, vertical: false)
-                        mappingHeaderToggle
-                    }
-                    remoteDeviceSelector()
-                        .frame(maxWidth: .infinity, alignment: .trailing)
-                }
+            HStack(alignment: .center, spacing: 14) {
+                mappingPageHeader
+                    .fixedSize(horizontal: true, vertical: false)
+                remoteDeviceSelector()
+                    .frame(maxWidth: .infinity, alignment: .trailing)
             }
             .padding(.horizontal, 22)
             .padding(.top, 18)
@@ -1517,6 +1707,16 @@ struct SettingsView: View {
                             Color.clear
                                 .frame(height: 0)
                                 .id("mapping-page-top")
+                            if let profileID = editingMappingProfileID,
+                               let profile = macroFeature.mappingProfiles(device: settings.selectedRemoteProfileID).first(where: { $0.id == profileID }) {
+                                HStack {
+                                    Text(localization.text("button_mapping.editing_profile") + "：" + profile.name)
+                                        .font(.system(size: 13, weight: .medium))
+                                    Spacer()
+                                    Button(localization.text("button_mapping.base_profile")) { editingMappingProfileID = nil }
+                                        .buttonStyle(.bordered)
+                                }
+                            }
                             configurationImportBanner
                             corruptedSettingsBanner
 
@@ -1536,6 +1736,7 @@ struct SettingsView: View {
                             #endif
 
                             mappingFooter(includeSiriScrollArrow: includeSiriScrollArrow)
+                            Color.clear.frame(height: 1).id("mapping-page-bottom")
                         }
                         .padding(22)
                         .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -1564,6 +1765,11 @@ struct SettingsView: View {
                         withAnimation(.easeInOut(duration: 0.25)) {
                             proxy.scrollTo("mapping-action-editor", anchor: .top)
                         }
+                    }
+                }
+                .onChange(of: mappingVoiceSettingsRequest) { _ in
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        proxy.scrollTo("mapping-page-bottom", anchor: .bottom)
                     }
                 }
             }
@@ -1674,13 +1880,13 @@ struct SettingsView: View {
                         "button_mapping.action.disable_switch",
                         isOn: Binding(
                             get: {
-                                settings.configuredAction(
+                                mappingConfiguration(
                                     for: target.button,
                                     trigger: target.trigger
                                 ).action == .disabled
                             },
                             set: { disabled in
-                                settings.setAction(
+                                setMappingAction(
                                     disabled ? .disabled : .escape,
                                     for: target.button,
                                     trigger: target.trigger
@@ -1806,15 +2012,6 @@ struct SettingsView: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(3)
             if settings.voiceKeyMode != .function {
-                Label {
-                    Text("connection.voice_key_mode.unverified")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(.orange)
-                        .fixedSize(horizontal: false, vertical: true)
-                } icon: {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.orange)
-                }
                 Text("connection.voice_key_mode.unverified_detail")
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
@@ -1844,7 +2041,13 @@ struct SettingsView: View {
 
     private var mappingRestoreDefaultsButton: some View {
         Button("common.action.restore_defaults") {
-            settings.resetBindings()
+            if let profile = editingMappingProfileID {
+                for button in RemoteButton.allCases {
+                    for trigger in ButtonTrigger.allCases {
+                        macroFeature.setProfileBinding(nil, profile: profile, button: button, trigger: trigger)
+                    }
+                }
+            } else { settings.resetBindings() }
             selectedRemoteButton = .ok
         }
         .compatibilityButtonStyle(.standard)
@@ -1852,30 +2055,30 @@ struct SettingsView: View {
 
     @ViewBuilder
     private func remoteDeviceSelector(vertical: Bool = false) -> some View {
-        let connectedProfiles = RemoteDeviceNamePolicy.sortedForCards(
-            settings.remoteDeviceProfiles.filter { model.isRemoteConnected($0.id) },
+        let visibleProfiles = RemoteDeviceNamePolicy.sortedForCards(
+            settings.remoteDeviceProfiles.filter { profile in
+                #if SAYALL_SIRI_REMOTE_ENABLED && canImport(SayAllSiriRemote)
+                // Keep the activation entry available while the Apple adapter is stopped.
+                model.isRemoteConnected(profile.id) || profile.model.isAppleSiriRemote
+                #else
+                model.isRemoteConnected(profile.id)
+                #endif
+            },
             modelName: remoteModelName,
             systemName: { model.systemDeviceName(for: $0) }
         )
-        if connectedProfiles.isEmpty {
+        if visibleProfiles.isEmpty {
             remoteDeviceEmptyState(vertical: vertical)
         } else if vertical {
             VStack(spacing: 8) {
-                ForEach(connectedProfiles) { profile in
+                ForEach(visibleProfiles) { profile in
                     remoteDeviceCard(profile, fillsWidth: true)
                 }
             }
-        } else if connectedProfiles.count <= 2 {
-            HStack(spacing: 8) {
-                ForEach(connectedProfiles) { profile in
-                    remoteDeviceCard(profile)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .trailing)
         } else {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
-                    ForEach(connectedProfiles) { profile in
+                    ForEach(visibleProfiles) { profile in
                         remoteDeviceCard(profile)
                     }
                 }
@@ -1931,62 +2134,91 @@ struct SettingsView: View {
             level: batteryLevel,
             powerState: powerState
         )
-        return Button {
-            model.selectRemoteProfile(profile.id)
-        } label: {
-            VStack(alignment: .leading, spacing: 5) {
-                HStack(spacing: 6) {
+        return HStack(alignment: .center, spacing: 10) {
+            Button {
+                model.selectRemoteProfile(profile.id)
+            } label: {
+                VStack(alignment: .leading, spacing: 5) {
                     Text(modelName)
                         .help(modelName)
                         .font(.system(size: 13, weight: .semibold))
                         .lineLimit(1)
-                    Spacer(minLength: 0)
-                    if selected {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundStyle(Color.accentColor)
-                            .help(localization.text("remote.device.current"))
-                    }
-                }
-                Text(systemName)
-                    .help(systemName)
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                ViewThatFits(in: .horizontal) {
+                    Text(systemName)
+                        .help(systemName)
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
                     HStack(spacing: 7) {
                         remoteConnectionLabel(connected: connected)
                         if showsBattery {
                             remoteBatteryLabel(level: batteryLevel, powerState: powerState)
                         }
                     }
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack(spacing: 7) {
-                            remoteConnectionLabel(connected: connected)
-                            if showsBattery {
-                                remoteBatteryLabel(level: batteryLevel, powerState: powerState)
-                            }
-                        }
-                    }
+                    .font(.system(size: 12))
+                    .lineLimit(1)
                 }
-                .font(.system(size: 12))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            .frame(width: fillsWidth ? nil : 232, alignment: .leading)
-            .frame(maxWidth: fillsWidth ? .infinity : nil, alignment: .leading)
-            .background(
-                selected ? Color.accentColor.opacity(0.13) : Color.primary.opacity(0.045),
-                in: RoundedRectangle(cornerRadius: 10, style: .continuous)
-            )
-            .overlay {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .stroke(selected ? Color.accentColor.opacity(0.65) : Color.secondary.opacity(0.18))
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text("\(modelName), \(systemName)"))
+            .accessibilityAddTraits(selected ? .isSelected : [])
+            #if SAYALL_SIRI_REMOTE_ENABLED && canImport(SayAllSiriRemote)
+            if profile.model.isAppleSiriRemote {
+                siriRemoteCardActions(profile)
+                    .fixedSize()
+            }
+            #endif
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .frame(width: fillsWidth ? nil : 232, alignment: .leading)
+        .frame(maxWidth: fillsWidth ? .infinity : nil, alignment: .leading)
+        .background {
+            // The background handles padding; foreground buttons keep their own actions.
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(selected ? Color.accentColor.opacity(0.13) : Color.primary.opacity(0.045))
+                .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .onTapGesture {
+                    model.selectRemoteProfile(profile.id)
+                }
+                .accessibilityHidden(true)
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(selected ? Color.accentColor.opacity(0.65) : Color.secondary.opacity(0.18))
+                .allowsHitTesting(false)
+        }
+    }
+
+    #if SAYALL_SIRI_REMOTE_ENABLED && canImport(SayAllSiriRemote)
+    private func siriRemoteCardActions(_ profile: RemoteDeviceProfile) -> some View {
+        VStack(spacing: 4) {
+            if !settings.siriRemoteEnabled {
+                Button(localization.text("siri_remote.activation.enable")) {
+                    model.selectRemoteProfile(profile.id)
+                    model.setSiriRemoteEnabled(true)
+                }
+            } else {
+                if model.siriRemoteAudioStatus.hasPrefix("unavailable:") {
+                    Button(localization.text("siri_remote.activation.retry")) {
+                        model.selectRemoteProfile(profile.id)
+                        model.prepareSiriRemoteFromUserAction()
+                    }
+                } else if model.siriRemoteAudioStatus != "ready" {
+                    Button(localization.text("siri_remote.activation.preparing")) {}
+                        .disabled(true)
+                }
+                Button(localization.text("siri_remote.activation.disable")) {
+                    model.setSiriRemoteEnabled(false)
+                }
             }
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(Text("\(modelName), \(systemName)"))
-        .accessibilityAddTraits(selected ? .isSelected : [])
+        .font(.system(size: 12))
+        .buttonStyle(.bordered)
+        .disabled(model.isStreaming || model.activePhysicalVoiceControlSource == .siriRemote)
     }
+    #endif
 
     private func remoteConnectionLabel(connected: Bool) -> some View {
         Label(
@@ -2074,17 +2306,18 @@ struct SettingsView: View {
         _ button: RemoteButton,
         trigger: ButtonTrigger
     ) -> some View {
-        let configured = settings.configuredAction(for: button, trigger: trigger)
+        let configured = mappingConfiguration(for: button, trigger: trigger)
         let installedBundleIdentifiers = PresetApplication.installedBundleIdentifiers
         let actions = ButtonAction.pickerActions(
             installedBundleIdentifiers: installedBundleIdentifiers,
             current: configured.action,
             experimentalContinuousRecordingEnabled: settings.experimentalContinuousRecordingEnabled
-        ).filter { $0 != .disabled }
+        ).filter { $0 != .disabled && $0 != .combinationAction }
         let isManagedPowerAction = button == .power &&
             trigger == .singleClick &&
             settings.experimentalContinuousRecordingEnabled
         return VStack(alignment: .leading, spacing: 16) {
+            mappingInheritanceControl(button: button, trigger: trigger)
             mappingActionFilterControl
 
             ForEach(ButtonActionCategory.allCases.filter(mappingActionFilter.includes)) { category in
@@ -2097,7 +2330,7 @@ struct SettingsView: View {
                         installedBundleIdentifiers: installedBundleIdentifiers,
                         isManagedPowerAction: isManagedPowerAction,
                         onSelect: { action in
-                            settings.setAction(action, for: button, trigger: trigger)
+                            setMappingAction(action, for: button, trigger: trigger)
                             shortcutCaptureTarget = nil
                             applicationShortcutCaptureProfileID = nil
                         }
@@ -2105,6 +2338,9 @@ struct SettingsView: View {
                 }
             }
 
+            if mappingActionFilter.includes(.custom), macroFeature.isFeatureVisible {
+                mappingMacroChoices(button: button, trigger: trigger, configured: configured)
+            }
             if configured.action == .customShortcut {
                 inlineShortcutEditor(
                     button: button,
@@ -2332,7 +2568,7 @@ struct SettingsView: View {
 
                 ShortcutCaptureView(
                     onCapture: { shortcut in
-                        settings.setShortcut(shortcut, for: button, trigger: trigger)
+                        setMappingShortcut(shortcut, for: button, trigger: trigger)
                         AppLogger.shared.write("SHORTCUT CAPTURE completed target=button")
                         shortcutCaptureFeedback = ShortcutCaptureFeedback(
                             contextID: contextID,
@@ -2380,7 +2616,7 @@ struct SettingsView: View {
                         .compatibilityButtonStyle(.standard)
 
                         Button("common.action.clear") {
-                            settings.setShortcut(nil, for: button, trigger: trigger)
+                            setMappingShortcut(nil, for: button, trigger: trigger)
                             shortcutCaptureFeedback = nil
                         }
                         .compatibilityButtonStyle(.standard)
@@ -2393,7 +2629,7 @@ struct SettingsView: View {
                         shortcut: configured.shortcut,
                         showsStandardKeyboardInitially: initialShortcutPickerShowsKeyboard,
                         onSelect: { shortcut in
-                            settings.setShortcut(shortcut, for: button, trigger: trigger)
+                            setMappingShortcut(shortcut, for: button, trigger: trigger)
                             shortcutCaptureFeedback = nil
                         }
                     )
@@ -2412,6 +2648,8 @@ struct SettingsView: View {
         configured: ConfiguredButtonAction
     ) -> some View {
         VStack(alignment: .leading, spacing: 14) {
+            model.macroFeature.portableTransferView(profileID: settings.selectedRemoteProfileID,
+                model: settings.selectedRemoteProfile?.model, applicationsOnly: true)
             Text("custom_application.target")
                 .font(.system(size: 14, weight: .semibold))
 
@@ -2425,7 +2663,7 @@ struct SettingsView: View {
                         profile,
                         selected: configured.applicationProfileID == profile.id
                     ) {
-                        settings.setApplicationProfileID(profile.id, for: button, trigger: trigger)
+                        setMappingApplicationProfileID(profile.id, for: button, trigger: trigger)
                     }
                 }
 
@@ -2664,8 +2902,20 @@ struct SettingsView: View {
                 .compatibilityButtonStyle(.prominent)
                 .disabled(customApplicationLearningStates[profile.id] == .recording)
 
+                Button(localization.text("custom_application.accessibility.test")) {
+                    KeyboardInjector.testCustomApplicationInput(profile) { success in
+                        DispatchQueue.main.async {
+                            if success { settings.markPortableApplicationVerified(profile.id) }
+                            customApplicationLearningStates[profile.id] = success ? .succeeded : .failed
+                        }
+                    }
+                }
+                .compatibilityButtonStyle(.standard)
+                .disabled(profile.accessibilityTarget == nil)
                 Text(
-                    profile.accessibilityTarget == nil
+                    settings.portablePendingApplications.contains(profile.id.uuidString)
+                        ? localization.text("custom_application.accessibility.needs_verification")
+                        : profile.accessibilityTarget == nil
                         ? localization.text("custom_application.accessibility.not_recorded")
                         : localization.text("custom_application.accessibility.recorded")
                 )
@@ -2723,7 +2973,7 @@ struct SettingsView: View {
                 )
             )
         }
-        settings.setApplicationProfileID(profileID, for: button, trigger: trigger)
+        setMappingApplicationProfileID(profileID, for: button, trigger: trigger)
     }
 
     private func recordCustomApplicationInput(profileID: UUID) {
@@ -2760,6 +3010,7 @@ struct SettingsView: View {
                     updated.accessibilityTarget = target
                     updated.focusStrategy = .recordedAccessibility
                     settings.updateCustomApplicationProfile(updated)
+                    settings.markPortableApplicationVerified(updated.id)
                 }
                 customApplicationLearningStates[profileID] = target == nil ? .failed : .succeeded
                 NSApp.activate(ignoringOtherApps: true)
@@ -2767,10 +3018,15 @@ struct SettingsView: View {
         }
     }
 
-    private func mappingActionSummary(for button: RemoteButton, trigger: ButtonTrigger) -> String {
-        let configured = settings.configuredAction(for: button, trigger: trigger)
+    private func mappingActionSummary(for button: RemoteButton, trigger: ButtonTrigger,
+                                      configuredAction: ConfiguredButtonAction? = nil) -> String {
+        let configured = configuredAction ?? mappingConfiguration(for: button, trigger: trigger)
         guard configured.action != .disabled else {
             return localization.text("button_mapping.action.not_set")
+        }
+        if configured.action == .combinationAction {
+            return macroFeature.libraryActions.first { $0.id == configured.macroID }?.name
+                ?? localization.text("button_mapping.macro_unavailable")
         }
         if configured.action == .customShortcut, let shortcut = configured.shortcut {
             return shortcut.visualDisplayName(using: localization)
@@ -2799,7 +3055,7 @@ struct SettingsView: View {
             current: .disabled,
             experimentalContinuousRecordingEnabled: settings.experimentalContinuousRecordingEnabled
         ).filter {
-            $0 != .disabled && $0 != .customShortcut && $0 != .openCustomApplication
+            $0 != .disabled && $0 != .customShortcut && $0 != .openCustomApplication && $0 != .combinationAction
         }
         return ButtonActionCategory.allCases.compactMap { category in
             let actions: [ButtonProfileHostAction] = availableActions
@@ -3459,6 +3715,12 @@ struct SettingsView: View {
                                     .frame(width: 92)
                             }
                             .padding(.vertical, 8)
+                            if macroFeature.isFeatureVisible {
+                                Text(localization.text("settings.portable_configuration.title"))
+                                    .font(.system(size: 12, weight: .medium))
+                                macroFeature.portableTransferView(profileID: settings.selectedRemoteProfileID,
+                                    model: settings.selectedRemoteProfile?.model)
+                            }
 
                             if let configurationStatus {
                                 Divider()
@@ -4025,7 +4287,7 @@ struct SettingsView: View {
             guard count > 0 else { continue }
             let action = settings.configuredAction(for: button, trigger: .singleClick)
             guard action.action != .disabled else { continue }
-            let title = mappingActionSummary(for: button, trigger: .singleClick)
+            let title = mappingActionSummary(for: button, trigger: .singleClick, configuredAction: action)
             counts[title, default: 0] += count
         }
         return counts.map { StatisticsRankingEntry(title: $0.key, count: $0.value) }
@@ -4234,7 +4496,7 @@ struct SettingsView: View {
             return localization.text("connection.web.connecting")
         case .waitingForPhone:
             return localization.text("connection.web.waiting_scan")
-        case .plusRequired:
+        case .membershipRequired, .plusRequired:
             return localization.text("connection.web.plus_required_title")
         case .awaitingApproval:
             return localization.text("connection.web.waiting_approval")
@@ -4249,7 +4511,7 @@ struct SettingsView: View {
         switch model.webRemoteState {
         case .connected:
             return .green
-        case .failed, .unavailable, .plusRequired:
+        case .failed, .unavailable, .membershipRequired, .plusRequired:
             return .orange
         default:
             return .secondary

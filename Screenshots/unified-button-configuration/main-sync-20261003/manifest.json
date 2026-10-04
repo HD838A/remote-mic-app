@@ -1,0 +1,188 @@
+{
+  "source": "Production SettingsView interactive review, isolated defaults and macro data; internal ad-hoc app",
+  "hostParent": "6fe4e3755925fb1940c5c8898aae9c4176d46e72",
+  "mergedMain": "69b42dff52a8d15d5d416cbacbee1fbf120ecb0c",
+  "privateSource": "87d7c7783297051c7f17a3d52f96a7bd478ba329",
+  "windowPoints": [
+    1020,
+    772
+  ],
+  "images": [
+    {
+      "file": "common-phrases-return-context-zh-hans-light.jpg",
+      "format": "JPEG",
+      "width": 2040,
+      "height": 1544,
+      "bytes": 261784,
+      "sha256": "964d3fa3cf6fcb35ba7bdffed637f80856a65c3bf5455c3a14ebcc1b9d4da684"
+    },
+    {
+      "file": "connection-zh-hans-dark.jpg",
+      "format": "JPEG",
+      "width": 2040,
+      "height": 1544,
+      "bytes": 299494,
+      "sha256": "3c437837be4f9f9b890f876fe576cfc73963fc72e39d2a53fcd63791d93b1104"
+    },
+    {
+      "file": "connection-zh-hans-light.jpg",
+      "format": "JPEG",
+      "width": 2040,
+      "height": 1544,
+      "bytes": 298560,
+      "sha256": "4a9906aa59dad90f9de7bc7cfe61a8896808778d4bfa0738676ef054121c9ff5"
+    },
+    {
+      "file": "macro-basic-en-dark.jpg",
+      "format": "JPEG",
+      "width": 2040,
+      "height": 1544,
+      "bytes": 138386,
+      "sha256": "be8f33dbe1237da54b0243b7566da30167b0c53fa1c32e9098233a16987437e8"
+    },
+    {
+      "file": "macro-basic-zh-hans-light.jpg",
+      "format": "JPEG",
+      "width": 2040,
+      "height": 1544,
+      "bytes": 214042,
+      "sha256": "13c72b507b7b79f2e6ad14360240c24c967a62025c6d6d89c6c8f25b181b27bb"
+    },
+    {
+      "file": "macro-library-en-dark.jpg",
+      "format": "JPEG",
+      "width": 2040,
+      "height": 1544,
+      "bytes": 137291,
+      "sha256": "5f49e1b7a1d6b2d92479c92503ab3e7631aaf770ee0400f4ff898ffd9e314abe"
+    },
+    {
+      "file": "macro-library-zh-hans-dark.jpg",
+      "format": "JPEG",
+      "width": 2040,
+      "height": 1544,
+      "bytes": 137208,
+      "sha256": "9cd117925e8c701455f00a1863de79894a1641bbda6c221e4276ff23ca795699"
+    },
+    {
+      "file": "macro-review-en-dark.jpg",
+      "format": "JPEG",
+      "width": 2040,
+      "height": 1544,
+      "bytes": 148362,
+      "sha256": "4bec56d1c35147a673957cfd012e1e8013ce057302e6c8499224412f33044435"
+    },
+    {
+      "file": "macro-review-zh-hans-light.jpg",
+      "format": "JPEG",
+      "width": 2040,
+      "height": 1544,
+      "bytes": 144616,
+      "sha256": "a511406b0b32812557aa11cb2ef0008e17f76a37d997207c288b09b83a4cba17"
+    },
+    {
+      "file": "macro-steps-en-dark.jpg",
+      "format": "JPEG",
+      "width": 2040,
+      "height": 1544,
+      "bytes": 228363,
+      "sha256": "6fdc4ad8cc4bc0ce74b67fa6ba09628dbf026bba783019031c1ebe8fbab8ed9c"
+    },
+    {
+      "file": "macro-steps-zh-hans-light.jpg",
+      "format": "JPEG",
+      "width": 2040,
+      "height": 1544,
+      "bytes": 222383,
+      "sha256": "f594cd6c18d1bce1229f728a87e1f4df89c1975542378c24028368056c41c0f8"
+    },
+    {
+      "file": "mapping-en-dark.jpg",
+      "format": "JPEG",
+      "width": 2040,
+      "height": 1544,
+      "bytes": 391646,
+      "sha256": "52b5596a93a7eac956eb8ab51aa2b47da9f4c6e959f8ea334391f30cd3fb23dc"
+    },
+    {
+      "file": "mapping-macro-selected-zh-hans-light.jpg",
+      "format": "JPEG",
+      "width": 2040,
+      "height": 1544,
+      "bytes": 275838,
+      "sha256": "f42ca4d2ca929669c90b53edc926e223261aa0d45303afd2b3cf08140e6457dd"
+    },
+    {
+      "file": "mapping-zh-hans-dark.jpg",
+      "format": "JPEG",
+      "width": 2040,
+      "height": 1544,
+      "bytes": 335487,
+      "sha256": "2157313045da2210db24c5cf1a526ee1927af8faa497b4aefe309d8847d27d44"
+    },
+    {
+      "file": "mapping-zh-hans-light.jpg",
+      "format": "JPEG",
+      "width": 2040,
+      "height": 1544,
+      "bytes": 340912,
+      "sha256": "40a3bffa8ab940227c04944484c03d08eb4b4317d7869e1843645df64731f0d1"
+    },
+    {
+      "file": "profiles-en-dark.jpg",
+      "format": "JPEG",
+      "width": 2040,
+      "height": 1544,
+      "bytes": 221596,
+      "sha256": "64cfbd229dc20e33032eb90d8c61c5399c8f9564dca2fefd68ce4e92af1c7307"
+    },
+    {
+      "file": "profiles-zh-hans-dark.jpg",
+      "format": "JPEG",
+      "width": 2040,
+      "height": 1544,
+      "bytes": 196715,
+      "sha256": "8df8c1ffa7b869d3955911a303705e61033013f6ec802028372a4a88c8512f59"
+    },
+    {
+      "file": "profiles-zh-hans-light.jpg",
+      "format": "JPEG",
+      "width": 2040,
+      "height": 1544,
+      "bytes": 193046,
+      "sha256": "d4656afc0eeb0a601661c6bf67568c1fff0177b44771e27dea88d3f56adb1060"
+    },
+    {
+      "file": "reflections-zh-hans-dark.jpg",
+      "format": "JPEG",
+      "width": 2040,
+      "height": 1544,
+      "bytes": 196794,
+      "sha256": "42783e1b72c97e3b8d3ad99e564e533c427b75f94086f19952114fb1b22f45c3"
+    },
+    {
+      "file": "reflections-zh-hans-light.jpg",
+      "format": "JPEG",
+      "width": 2040,
+      "height": 1544,
+      "bytes": 196323,
+      "sha256": "6169d19ffb113e537aeb6f85f3fbf7550f8a5bea3445bbd2408f2fb4147630a5"
+    },
+    {
+      "file": "settings-zh-hans-dark.jpg",
+      "format": "JPEG",
+      "width": 2040,
+      "height": 1544,
+      "bytes": 249269,
+      "sha256": "8500a0bb0f593b88d6ac3c91215b10c032dd9ea8597210c59a3bdd2111c552b5"
+    },
+    {
+      "file": "settings-zh-hans-light.jpg",
+      "format": "JPEG",
+      "width": 2040,
+      "height": 1544,
+      "bytes": 249594,
+      "sha256": "6443103f11d7c3d518b29addc5bdebbd42e6b89345593d528f0ea0d767250b61"
+    }
+  ]
+}

@@ -9,7 +9,7 @@ You do not need Xcode, Git, or Terminal.
 1. Double-click `Install SayAll.pkg` at the root of the DMG.
 2. Enter an administrator password when macOS Installer asks.
 3. The installer adds SayAll and the compatible microphone, restarts Core Audio, and launches SayAll.
-4. Left-click the menu bar icon, then select **Refresh Audio Devices** in **Connection & Voice**.
+4. Left-click the menu bar icon, then select **Refresh Devices** in **Connection & Voice**.
 5. Select the microphone shown by the system: SayAll for a new installation, or MiRemoteV 2ch for an existing installation.
 6. Quit Doubao completely, reopen it, and test again.
 

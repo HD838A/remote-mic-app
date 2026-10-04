@@ -636,6 +636,8 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private var transcriptHistoryToggleCancellable: AnyCancellable?
     private var recordingToggleCancellable: AnyCancellable?
     private var membershipAccessCancellable: AnyCancellable?
+    private var membershipCompanionAccessCancellable: AnyCancellable?
+    private var membershipAccountCancellable: AnyCancellable?
     private var membershipEnvironmentCancellable: AnyCancellable?
     private var testToneGeneration = 0
     private var voiceKeyLatch = VoiceFunctionKeyLatch()
@@ -706,6 +708,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private lazy var siriRemoteFeature = SiriRemoteFeatureIntegration(
         logger: { AppLogger.shared.write($0) }
     )
+    @Published private(set) var siriRemoteAudioStatus = "disabled"
     private let siriRemoteCursorFeedback = SiriRemoteCursorFeedbackController(
         logger: { AppLogger.shared.write($0) }
     )
@@ -731,6 +734,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private var appleRemoteAppSwitcherOriginBundleIdentifier: String?
     private var appleRemoteAppSwitcherOperationCounter: UInt64 = 0
     private var appleRemoteAppSwitcherOperationID: UInt64?
+    private var appleRemoteAppSwitcherProfileID: UUID?
     private var appleRemoteAppSwitcherStartedUptime: TimeInterval?
     private var appleRemoteAppSwitcherTabCount = 0
     private var appleRemoteAppSwitcherTouchNavigationSteps = 0
@@ -865,6 +869,19 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         self.rc003VoiceExtensionTestEnabled = rc003VoiceExtensionTestEnabled
         self.recordingAssetStore = recordingAssetStore
         self.diagnosticLogUploader = diagnosticLogUploader
+        if settings.siriRemoteEnabled, settings.siriRemoteNeedsUserAction {
+            siriRemoteAudioStatus = "unavailable:authorization_user_action_required"
+        }
+        macroFeature.configurePortableTransfer(settings: settings) { [weak self] snapshot in
+            guard let self else { throw AppConfigurationError.invalidValues }
+            guard let envelope = try JSONSerialization.jsonObject(with: snapshot) as? [String:Any],
+                  let configuration = envelope["configuration"] else { throw AppConfigurationError.invalidValues }
+            let data = try JSONSerialization.data(withJSONObject: configuration)
+            let voice = try self.settings.voiceKeyConfigurationState(in: data)
+            if voice != self.settings.voiceKeyConfigurationState {
+                guard !self.isStreaming, self.releaseVoiceKeyIfNeeded() else { throw AppConfigurationError.unsafeVoiceKeyChange }
+            }
+        }
         commonPhrases.onWillOpen = { [weak self] in self?.cancelPendingCommonPhraseButtonActions() }
         self.diagnosticLogUploader.setPrivateEventProvider(membershipFeature)
         audioDevices = initialAudioDevices
@@ -875,15 +892,32 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                     message
             )
         }
+        macroFeature.attachBindings(to: settings) { [weak self] device in
+            self?.cancelButtonMappingInteractions(device: device)
+        }
         membershipAccessCancellable = membershipFeature.$buttonProfilesAccessDecision
             .removeDuplicates()
             .sink { [weak macroFeature] decision in
                 macroFeature?.updateButtonProfilesAccess(decision)
             }
+        membershipCompanionAccessCancellable = membershipFeature.$canUseCompanionConnections
+            .removeDuplicates()
+            .sink { [weak self] allowed in
+                if !allowed { self?.disablePhoneRemoteConnection() }
+            }
+        membershipAccountCancellable = membershipFeature.$accountDisplayName
+            .removeDuplicates()
+            .sink { [weak self] account in
+                guard let self, account == nil else { return }
+                self.disablePhoneRemoteConnection()
+                self.disableWebRemoteConnection()
+                self.webRemoteState = .disabled
+            }
         membershipEnvironmentCancellable = membershipFeature.$serviceEnvironmentForDiagnostics
             .removeDuplicates()
             .sink { [weak self] environment in
                 guard let self else { return }
+                self.disablePhoneRemoteConnection()
                 self.webRemoteSessionGeneration &+= 1
                 self.webRemoteSessionIdempotencyKey = nil
                 self.webRemoteClient.stop()
@@ -891,7 +925,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 AppLogger.shared.write(
                     "WEB REMOTE SESSION phase=cancelled result=cancelled " +
                         "reason=service_environment_changed " +
-                        "membership_check=\(environment == "staging" ? "bypassed" : "required")"
+                        "membership_check=required"
                 )
                 self.objectWillChange.send()
             }
@@ -916,7 +950,14 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         siriRemoteFeature.onSamples = { [weak self] samples in
             self?.receiveAppleRemoteAudio(samples)
         }
-        siriRemoteFeature.onStatus = { _ in }
+        siriRemoteFeature.onStatus = { [weak self] status in
+            guard let self, self.settings.siriRemoteEnabled,
+                  !["ipc_ready", "capturing", "stopped"].contains(status) else { return }
+            if status.hasPrefix("unavailable:"), status.contains("authorization_") {
+                self.settings.siriRemoteNeedsUserAction = true
+            }
+            self.siriRemoteAudioStatus = status
+        }
         siriRemoteFeature.onTouchFeedback = { [weak self] feedback in
             guard let self else { return }
             if case .clicked = feedback {
@@ -988,11 +1029,17 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         }
 #endif
         phoneRemoteServer.isIdentityTrusted = { [weak self] fingerprint in
-            self?.settings.isPhoneIdentityTrusted(fingerprint) ?? false
+            guard let self, self.membershipFeature.canStartCompanionConnection else { return false }
+            return self.settings.isPhoneIdentityTrusted(fingerprint)
         }
         phoneRemoteServer.onConnectionStateChange = { [weak self] connected in
             DispatchQueue.main.async {
-                self?.isPhoneRemoteConnected = connected
+                guard let self else { return }
+                if connected && !self.membershipFeature.canStartCompanionConnection {
+                    self.disablePhoneRemoteConnection()
+                    return
+                }
+                self.isPhoneRemoteConnected = connected
             }
         }
         phoneRemoteServer.onInvitationChange = { [weak self] invitation in
@@ -1004,7 +1051,8 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             self?.cancelPhoneApproval()
         }
         phoneRemoteServer.onApprovalRequested = { [weak self] deviceName, pairingCode, fingerprint, completion in
-            guard let self, self.isPhoneRemoteConnectionEnabled else {
+            guard let self, self.isPhoneRemoteConnectionEnabled,
+                  self.membershipFeature.canStartCompanionConnection else {
                 completion(false)
                 return
             }
@@ -1071,18 +1119,25 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             }
         }
         watchBluetoothServer.isIdentityTrusted = { [weak self] fingerprint in
-            self?.settings.isPhoneIdentityTrusted(fingerprint) ?? false
+            guard let self, self.membershipFeature.canStartCompanionConnection else { return false }
+            return self.settings.isPhoneIdentityTrusted(fingerprint)
         }
         watchBluetoothServer.onConnectionStateChange = { [weak self] connected in
             DispatchQueue.main.async {
-                self?.isWatchRemoteConnected = connected
+                guard let self else { return }
+                if connected && !self.membershipFeature.canStartCompanionConnection {
+                    self.disablePhoneRemoteConnection()
+                    return
+                }
+                self.isWatchRemoteConnected = connected
             }
         }
         watchBluetoothServer.onApprovalCancelled = { [weak self] in
             self?.cancelPhoneApproval()
         }
         watchBluetoothServer.onApprovalRequested = { [weak self] deviceName, pairingCode, fingerprint, completion in
-            guard let self, self.isPhoneRemoteConnectionEnabled else {
+            guard let self, self.isPhoneRemoteConnectionEnabled,
+                  self.membershipFeature.canStartCompanionConnection else {
                 completion(false)
                 return
             }
@@ -1237,7 +1292,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         started = true
         startAudioSubsystem()
 #if SAYALL_SIRI_REMOTE_ENABLED
-        siriRemoteFeature.start()
+        if settings.siriRemoteEnabled, !settings.siriRemoteNeedsUserAction {
+            siriRemoteFeature.start()
+        }
 #endif
         applyHIDSettings()
         refreshRemoteDeviceNames(reason: .startup)
@@ -1491,7 +1548,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     func exportRecording(_ asset: RecordingAssetManifest) {
         guard let sourceURL = try? recordingAssetStore.mediaURL(for: asset) else { return }
         let panel = NSSavePanel()
-        panel.nameFieldStringValue = "回眸-\(asset.localDateKey).m4a"
+        panel.nameFieldStringValue = LocalizedMessage(
+            "statistics.recordings.export_filename", arguments: [asset.localDateKey]
+        ).text(using: LocalizationStore(settings: settings))
         panel.allowedFileTypes = ["m4a"]
         panel.begin { response in
             guard response == .OK, let destinationURL = panel.url else { return }
@@ -1791,6 +1850,10 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
 
     func enablePhoneRemoteConnection() {
         guard started, !isPhoneRemoteConnectionEnabled else { return }
+        guard membershipFeature.canStartCompanionConnection else {
+            objectWillChange.send()
+            return
+        }
         isPhoneRemoteConnectionEnabled = true
         phoneRemoteServer.start()
         watchBluetoothServer.start()
@@ -1830,11 +1893,20 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
 
     func enableWebRemoteConnection() {
         guard started else { return }
-        if case let .plusRequired(_, _, expiresAt) = webRemoteState,
-           let expiresAt,
-           expiresAt <= Date()
-        {
+        guard membershipFeature.canStartCompanionConnection else {
+            webRemoteState = .membershipRequired
+            return
+        }
+        switch webRemoteState {
+        case .failed:
             webRemoteSessionIdempotencyKey = nil
+        case let .waitingForPhone(_, _, expiresAt),
+             let .plusRequired(_, _, expiresAt):
+            if let expiresAt, expiresAt <= Date() {
+                webRemoteSessionIdempotencyKey = nil
+            }
+        default:
+            break
         }
         webRemoteSessionGeneration &+= 1
         webRemoteSessionOperationCounter &+= 1
@@ -1932,11 +2004,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                     throw HostRemoteSessionFailure.invalidResponse
                 }
                 if authorization.access == .plusRequired {
-                    webRemoteState = .plusRequired(
-                        joinURL: joinURL,
-                        pairingCode: pairingCode,
-                        expiresAt: authorization.expiresAt
-                    )
+                    webRemoteState = .membershipRequired
                     AppLogger.shared.write(
                         "WEB REMOTE SESSION operation_id=\(operationID) " +
                             "phase=previewed result=rejected reason=plus_required " +
@@ -1969,7 +2037,11 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 return
             } catch let failure as HostRemoteSessionFailure {
                 guard generation == webRemoteSessionGeneration else { return }
-                webRemoteState = .failed(webRemoteFailureMessage(failure))
+                if failure == .signInRequired || failure == .plusRequired {
+                    webRemoteState = .membershipRequired
+                } else {
+                    webRemoteState = .failed(webRemoteFailureMessage(failure))
+                }
                 AppLogger.shared.write(
                     "WEB REMOTE SESSION operation_id=\(operationID) " +
                         "phase=failed result=failed reason=\(webRemoteFailureReason(failure))"
@@ -2001,8 +2073,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     }
 
     var isWebRemoteMembershipBypassEnabled: Bool {
-        webRemoteServiceEnvironment == "staging"
-            && membershipFeature.supportsRemoteSessionAuthorization
+        membershipFeature.remoteSessionMembershipBypassEnabled
     }
 
     // 兼容现有固定镜像的旧 UI 合同；不显示或恢复独立免检开关。
@@ -2816,9 +2887,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         }
         startHIDMonitors(powerKeySuppressed: powerKeySuppressed)
 #if SAYALL_SIRI_REMOTE_ENABLED
-        if started, restartSiriRemote {
+        if started, restartSiriRemote, settings.siriRemoteEnabled {
             siriRemoteFeature.restart(customMappingEnabled: settings.customMappingEnabled)
-        } else if started {
+        } else if started, settings.siriRemoteEnabled {
             AppLogger.shared.write(
                 "SIRI REMOTE SETTINGS phase=completed result=preserved " +
                     "reason=voice_key_configuration_change"
@@ -2831,6 +2902,35 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
 #endif
         completeHIDMappingRecoveryIfNeeded()
         refreshVoiceKeyCompatibilityWarning()
+    }
+
+    func setSiriRemoteEnabled(_ enabled: Bool) {
+        guard enabled || activePhysicalVoiceControlSource != .siriRemote else { return }
+        settings.siriRemoteEnabled = enabled
+#if SAYALL_SIRI_REMOTE_ENABLED
+        if enabled {
+            prepareSiriRemoteFromUserAction()
+        } else {
+            siriRemoteFeature.stop()
+            siriRemoteCursorFeedback.stop()
+            resetAllAppleRemoteState(reason: "feature_disabled")
+            siriRemoteAudioStatus = "disabled"
+        }
+#endif
+        AppLogger.shared.write("SIRI REMOTE ACTIVATION phase=changed enabled=\(enabled)")
+    }
+
+    /// Call only from enable/retry controls, never from startup or device discovery.
+    func prepareSiriRemoteFromUserAction() {
+#if SAYALL_SIRI_REMOTE_ENABLED
+        guard settings.siriRemoteEnabled else { return }
+        guard activePhysicalVoiceControlSource != .siriRemote else { return }
+        settings.siriRemoteNeedsUserAction = false
+        if siriRemoteAudioStatus == "disabled" { siriRemoteAudioStatus = "preparing_hci" }
+        AppLogger.shared.write("SIRI REMOTE ACTIVATION phase=requested source=user_action")
+        siriRemoteFeature.start(userInitiated: true)
+        siriRemoteFeature.restart(customMappingEnabled: settings.customMappingEnabled)
+#endif
     }
 
     private func scheduleHIDMappingRecoveryIfNeeded(
@@ -2949,6 +3049,36 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             )
         }
         startHIDDiscoveryIfNeeded(allowBackOnly: backOnlyMode)
+    }
+
+    private func cancelButtonMappingInteractions(device: UUID?) {
+        hidMonitors.values.filter { $0.profileID == device }.forEach { $0.cancelMappingInteractions() }
+        if discoveryHIDMonitor?.profileID == device { discoveryHIDMonitor?.cancelMappingInteractions() }
+        if settings.selectedRemoteProfileID == device {
+            resetMobileButtonGestures(source: .nearbyPhone)
+            resetMobileButtonGestures(source: .webRemote)
+        }
+        #if SAYALL_CHROMECAST_ENABLED
+        if chromecastProfileID == device { resetChromecastButtonState(reason: "mapping_changed") }
+        #endif
+        #if SAYALL_SIRI_REMOTE_ENABLED
+        let devices = appleRemoteProfileIDs.filter { $0.value == device }.map(\.key)
+        if appleRemoteAppSwitcherProfileID == device, appleRemoteAppSwitcherSession.isActive {
+            finishAppleRemoteAppSwitcher(reason: "mapping_changed", confirmed: false)
+        }
+        for siriDevice in devices {
+            let doubleKeys = appleRemoteDoubleClickTimers.keys.filter { $0.device == siriDevice }
+            doubleKeys.forEach { appleRemoteDoubleClickTimers.removeValue(forKey: $0)?.cancel() }
+            let longKeys = appleRemoteLongPressTimers.keys.filter { $0.device == siriDevice }
+            longKeys.forEach { appleRemoteLongPressTimers.removeValue(forKey: $0)?.cancel() }
+            let repeatKeys = appleRemoteRepeatTimers.keys.filter { $0.device == siriDevice }
+            repeatKeys.forEach { cancelAppleRemoteRepeat(for: $0.button, device: siriDevice, reason: "mapping_changed") }
+            appleRemoteGestureRecognizers.removeValue(forKey: siriDevice)
+            appleRemoteActiveButtons.removeValue(forKey: siriDevice)
+        }
+        refreshAppleRemoteActiveButtons()
+        #endif
+        AppLogger.shared.write("BUTTON CONFIGURATION phase=completed result=interactions_cancelled")
     }
 
     private func stopHIDMonitors() {
@@ -4229,7 +4359,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             profileID: profileID
         )
         if configured.action == .appSwitcher {
-            return performAppleRemoteAppSwitcher(for: button, trigger: trigger)
+            return performAppleRemoteAppSwitcher(for: button, trigger: trigger, profileID: profileID)
         }
         let handled: Bool
         if configured.action.isAppInternal {
@@ -4261,10 +4391,12 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
 
     private func performAppleRemoteAppSwitcher(
         for button: RemoteButton,
-        trigger: ButtonTrigger
+        trigger: ButtonTrigger,
+        profileID: UUID? = nil
     ) -> Bool {
         let wasActive = appleRemoteAppSwitcherSession.isActive
         if !wasActive {
+            appleRemoteAppSwitcherProfileID = profileID
             beginAppleRemoteAppSwitcherDiagnostics()
         }
         let phase = wasActive ? "tab" : "start"
@@ -4469,6 +4601,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     }
 
     private func resetAppleRemoteAppSwitcherDiagnostics() {
+        appleRemoteAppSwitcherProfileID = nil
         appleRemoteAppSwitcherOperationID = nil
         appleRemoteAppSwitcherStartedUptime = nil
         appleRemoteAppSwitcherOriginBundleIdentifier = nil
@@ -5628,25 +5761,29 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 return
             }
             NSApp.activate(ignoringOtherApps: true)
+            let localization = LocalizationStore(settings: self.settings)
             let alert = NSAlert()
-            alert.messageText = "允许“\(deviceName)”连接无线麦？"
+            alert.messageText = LocalizedMessage(
+                "connection.approval.title", arguments: [deviceName]
+            ).text(using: localization)
+            alert.icon = NSApp.applicationIconImage
             if Self.isAppleWatchDeviceName(deviceName) {
-                alert.informativeText = "这块 Apple Watch 将与无线麦通信，代替实体遥控器发送按键和麦克风声音。请确认 Apple Watch 上显示的 2 位校验码与下方一致。允许后，本次安装会成为受信任设备。"
+                alert.informativeText = localization.text("connection.approval.watch_body")
             } else {
-                alert.informativeText = "这台 iPhone 将与无线麦通信，代替实体遥控器发送按键和麦克风声音。请确认 iPhone 上显示的 2 位校验码与下方一致。允许后，本次安装会成为受信任设备。"
+                alert.informativeText = localization.text("connection.approval.phone_body")
             }
             let codeLabel = NSTextField(labelWithString: pairingCode.map(String.init).joined(separator: " "))
             codeLabel.frame = NSRect(x: 0, y: 0, width: 300, height: 44)
             codeLabel.alignment = .center
             codeLabel.font = .monospacedDigitSystemFont(ofSize: 30, weight: .bold)
             codeLabel.textColor = .controlAccentColor
-            codeLabel.setAccessibilityLabel("校验码 \(pairingCode)")
+            codeLabel.setAccessibilityLabel(LocalizedMessage(
+                "connection.approval.code_accessibility", arguments: [pairingCode]
+            ).text(using: localization))
             alert.accessoryView = codeLabel
-            alert.addButton(withTitle: "允许连接")
-            alert.addButton(withTitle: "拒绝")
-            alert.addButton(withTitle: LocalizedMessage("connection.phone.cancel_waiting").text(
-                using: LocalizationStore(settings: self.settings)
-            ))
+            alert.addButton(withTitle: localization.text("connection.approval.allow"))
+            alert.addButton(withTitle: localization.text("connection.approval.deny"))
+            alert.addButton(withTitle: localization.text("connection.phone.cancel_waiting"))
             self.phoneApprovalAlert = alert
             let response = alert.runModal()
             guard self.phoneApprovalAlert === alert else {
@@ -5683,9 +5820,13 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     ) {
         DispatchQueue.main.async {
             NSApp.activate(ignoringOtherApps: true)
+            let localization = LocalizationStore(settings: self.settings)
             let alert = NSAlert()
-            alert.messageText = "允许“\(deviceName)”连接网页版？"
-            alert.informativeText = "手机浏览器将通过一次性会话控制无线麦。请确认手机上显示的 4 位校验码与下方一致。本次允许不会保存为长期受信任设备。"
+            alert.messageText = LocalizedMessage(
+                "connection.approval.web_title", arguments: [deviceName]
+            ).text(using: localization)
+            alert.informativeText = localization.text("connection.approval.web_body")
+            alert.icon = NSApp.applicationIconImage
             let codeLabel = NSTextField(
                 labelWithString: pairingCode.map(String.init).joined(separator: " ")
             )
@@ -5693,10 +5834,12 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             codeLabel.alignment = .center
             codeLabel.font = .monospacedDigitSystemFont(ofSize: 30, weight: .bold)
             codeLabel.textColor = .controlAccentColor
-            codeLabel.setAccessibilityLabel("校验码 \(pairingCode)")
+            codeLabel.setAccessibilityLabel(LocalizedMessage(
+                "connection.approval.code_accessibility", arguments: [pairingCode]
+            ).text(using: localization))
             alert.accessoryView = codeLabel
-            alert.addButton(withTitle: "允许连接")
-            alert.addButton(withTitle: "拒绝")
+            alert.addButton(withTitle: localization.text("connection.approval.allow"))
+            alert.addButton(withTitle: localization.text("connection.approval.deny"))
             self.webApprovalAlert = alert
             let allowed = alert.runModal() == .alertFirstButtonReturn
             guard self.webApprovalAlert === alert else {
@@ -5734,6 +5877,10 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         source: UsageEventSource,
         phraseSource: String? = nil
     ) -> Bool {
+        guard source != .nearbyPhone || membershipFeature.canStartCompanionConnection else {
+            disablePhoneRemoteConnection()
+            return false
+        }
         if OnboardingControlValidationPolicy.suppressConfiguredActions(
             at: settings.onboardingStep,
             source: settings.onboardingControlSource
@@ -5765,6 +5912,10 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         source: UsageEventSource,
         phraseSource: String? = nil
     ) -> Bool {
+        if phase == .press && source == .nearbyPhone && !membershipFeature.canStartCompanionConnection {
+            disablePhoneRemoteConnection()
+            return false
+        }
         if OnboardingControlValidationPolicy.suppressConfiguredActions(
             at: settings.onboardingStep,
             source: settings.onboardingControlSource
@@ -5976,11 +6127,14 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             },
             shortcutPerformer: { [weak self] keyCode, modifiers in
                 self?.performButtonProfileShortcut(keyCode: keyCode, modifiers: modifiers) ?? false
+            }, exactShortcutPerformer: { [weak self] keyCode, modifiers, flags in
+                self?.performButtonProfileShortcut(keyCode: keyCode, modifiers: modifiers, deviceModifierFlags: flags) ?? false
             }
         )
     }
 
     private func performButtonProfileHostAction(_ payload: Data, source: String) -> Bool {
+        guard !macroFeature.hasPendingPortableImport else { return false }
         guard let configured = try? JSONDecoder().decode(ConfiguredButtonAction.self, from: payload)
         else { return false }
         if configured.action.isAppInternal {
@@ -5995,9 +6149,10 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
 
     private func performButtonProfileShortcut(
         keyCode: UInt16,
-        modifiers: [String]
+        modifiers: [String], deviceModifierFlags: UInt64 = 0
     ) -> Bool {
-        var modifierFlags: NSEvent.ModifierFlags = []
+        guard deviceModifierFlags & ~UInt64(0x207f) == 0 else { return false }
+        var modifierFlags = NSEvent.ModifierFlags(rawValue: UInt(deviceModifierFlags))
         for modifier in modifiers {
             switch modifier {
             case "command": modifierFlags.insert(.command)
@@ -6023,9 +6178,19 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     }
 
     private func performExternalConfiguredAction(_ configured: ConfiguredButtonAction) -> Bool {
+        guard !macroFeature.hasPendingPortableImport else { return false }
+        if configured.action == .combinationAction {
+            return macroFeature.executeMacro(id: configured.macroID)
+        }
         let applicationProfile = settings.customApplicationProfile(
             id: configured.applicationProfileID
         )
+        if configured.action == .openCustomApplication {
+            guard let profile = applicationProfile,
+                !settings.portableApplicationRequiresVerification(profile),
+                NSWorkspace.shared.urlForApplication(withBundleIdentifier: profile.bundleIdentifier) != nil
+            else { return false }
+        }
         let requestID = settings.voiceFnTapModeEnabled
             ? VoiceInputDestinationIntent.resolve(
                 configured: configured,
@@ -6371,6 +6536,11 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         source: MobileVoiceSource,
         completion: @escaping (RemoteVoiceStartResult) -> Void
     ) {
+        guard source == .web || membershipFeature.canStartCompanionConnection else {
+            disablePhoneRemoteConnection()
+            completion(.unavailable)
+            return
+        }
         switch mobileVoiceLifecycle.requestStart(source) {
         case .startNow:
             completion(startPhoneVoice(source: source))
@@ -6719,6 +6889,10 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     }
 
     private func receivePhoneAudio(_ samples: [Int16], source: MobileVoiceSource) {
+        guard source == .web || membershipFeature.canStartCompanionConnection else {
+            disablePhoneRemoteConnection()
+            return
+        }
         guard activeMobileVoiceSource == source else {
             mobileVoiceAudioSourceMismatchCount += 1
             if mobileVoiceAudioSourceMismatchCount == 1 ||

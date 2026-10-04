@@ -80,6 +80,8 @@ final class OnboardingInteractionProbe {
 
 struct OnboardingView: View {
     @ObservedObject var model: BridgeAppModel
+    @ObservedObject private var membershipFeature: MembershipFeatureIntegration
+    @State private var isMembershipPresented = false
     @ObservedObject private var settings: AppSettings
     @EnvironmentObject private var localization: LocalizationStore
     @Environment(\.colorScheme) private var colorScheme
@@ -151,6 +153,7 @@ struct OnboardingView: View {
         interactionProbe: OnboardingInteractionProbe? = nil
     ) {
         self.model = model
+        membershipFeature = model.membershipFeature
         settings = model.settings
         self.completeRuntimeReadyOverride = completeRuntimeReadyOverride
         self.allowsInputSourceSwitching = allowsInputSourceSwitching
@@ -186,6 +189,12 @@ struct OnboardingView: View {
         .background(Color(nsColor: .windowBackgroundColor).ignoresSafeArea())
         .environment(\.locale, localization.locale)
         .frame(minWidth: 980, minHeight: 732)
+        .sheet(isPresented: $isMembershipPresented) {
+            VStack(alignment: .trailing) {
+                Button(localization.text("common.action.close")) { isMembershipPresented = false }
+                membershipFeature.settingsView()
+            }.padding(20)
+        }
         .onAppear {
             refreshPermissionStates()
             refreshVoiceToolAvailability()
@@ -1226,12 +1235,12 @@ struct OnboardingView: View {
     }
 
     private func onboardingGuideScreenshot(resourceName: String) -> some View {
-        Group {
+        VStack(alignment: .leading, spacing: 8) {
             if let image = onboardingGuideImage(resourceName: resourceName) {
                 Image(nsImage: image)
                     .resizable()
                     .scaledToFit()
-                    .frame(maxWidth: .infinity, maxHeight: 300)
+                    .frame(maxWidth: .infinity, maxHeight: 220)
                     .clipShape(RoundedRectangle(cornerRadius: 10))
                     .overlay {
                         RoundedRectangle(cornerRadius: 10)
@@ -1243,6 +1252,15 @@ struct OnboardingView: View {
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, minHeight: 120)
                     .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 10))
+            }
+            if localization.locale.language.languageCode?.identifier == "en" {
+                Text(verbatim: localization.text(
+                    "onboarding.voice_tool.guide.screenshot." +
+                        resourceName.replacingOccurrences(of: "-", with: "_")
+                ))
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
@@ -2235,7 +2253,7 @@ struct OnboardingView: View {
                     Text(localization.text("onboarding.recovery.\(failure.rawValue).title"))
                         .font(.system(size: 14, weight: .semibold))
                         .fixedSize(horizontal: false, vertical: true)
-                    Text(localization.text(recoveryDetailKey(for: failure)))
+                    Text(recoveryDetailText(for: failure))
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -2281,6 +2299,46 @@ struct OnboardingView: View {
             return "onboarding.recovery.\(failure.rawValue).detail"
         }
         return Self.remoteNotFoundRecoveryDetailKey(for: settings.onboardingControlSource)
+    }
+
+    private func recoveryDetailText(for failure: FirstUseFailureReason) -> String {
+        switch failure {
+        case .voiceSessionNotStarted:
+            return LocalizedMessage(
+                "onboarding.recovery.voice.session_not_started.detail",
+                arguments: [recoveryVoiceGestureInstruction]
+            ).text(using: localization)
+        case .voiceNoSamples:
+            return LocalizedMessage(
+                "onboarding.recovery.voice.no_samples.detail",
+                arguments: [recoveryVoiceGestureInstruction]
+            ).text(using: localization)
+        case .voiceSessionNotEnded:
+            return LocalizedMessage(
+                "onboarding.recovery.voice.session_not_ended.detail",
+                arguments: [recoveryVoiceFinishInstruction]
+            ).text(using: localization)
+        default:
+            return localization.text(recoveryDetailKey(for: failure))
+        }
+    }
+
+    private var recoveryVoiceGestureInstruction: String {
+        switch effectivePreferredGesture {
+        case .hold:
+            return localization.text("onboarding.recovery.voice.gesture.hold")
+        case .toggle:
+            return localization.text("onboarding.recovery.voice.gesture.toggle")
+        }
+    }
+
+    private var recoveryVoiceFinishInstruction: String {
+        switch effectivePreferredGesture {
+        case .hold:
+            return localization.text("onboarding.recovery.voice.finish.hold")
+        case .toggle:
+            return localization.text("onboarding.recovery.voice.finish.toggle")
+        }
     }
 
     static func remoteNotFoundRecoveryDetailKey(for source: OnboardingControlSource) -> String {
@@ -2468,6 +2526,8 @@ struct OnboardingView: View {
                 Text(verbatim: localization.text("onboarding.iphone_remote.scan"))
                     .font(.system(size: 15, weight: .semibold))
                     .multilineTextAlignment(.center)
+            } else if !membershipFeature.canStartCompanionConnection {
+                companionMembershipRequiredView
             } else {
                 Image(systemName: model.isPhoneRemoteConnected
                     ? "iphone.gen3.radiowaves.left.and.right"
@@ -2482,13 +2542,19 @@ struct OnboardingView: View {
         .padding(28)
     }
 
+    private var companionMembershipRequiredView: some View {
+        membershipFeature.membershipRequiredView(remoteAuthorizationDenied: true) {
+            isMembershipPresented = true
+            membershipFeature.refreshIfNeeded()
+        }
+    }
+
     @ViewBuilder
     private var webRemoteIllustration: some View {
         VStack(spacing: 16) {
             switch model.webRemoteState {
             case let .waitingForPhone(joinURL, _, _),
-                 let .awaitingApproval(joinURL, _, _),
-                 let .plusRequired(joinURL, _, _):
+                 let .awaitingApproval(joinURL, _, _):
                 if let qrCode = webRemoteQRCode(for: joinURL) {
                     Image(nsImage: qrCode)
                         .interpolation(.none)
@@ -2499,11 +2565,8 @@ struct OnboardingView: View {
                 }
                 Text(verbatim: localization.text("onboarding.web_remote.scan"))
                     .font(.system(size: 15, weight: .semibold))
-                if case .plusRequired = model.webRemoteState {
-                    Text(verbatim: localization.text("connection.web.plus_required_title"))
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Color.orange)
-                }
+            case .membershipRequired, .plusRequired:
+                companionMembershipRequiredView
             case let .connected(deviceName):
                 Image(systemName: "checkmark.circle.fill")
                     .font(.system(size: 96))
@@ -3008,7 +3071,7 @@ struct OnboardingView: View {
         switch model.webRemoteState {
         case .connected:
             return localization.text("onboarding.web_remote.connected")
-        case .plusRequired:
+        case .membershipRequired, .plusRequired:
             return localization.text("connection.web.plus_required_title")
         case .unavailable, .failed:
             return localization.text("onboarding.web_remote.unavailable")
@@ -3453,6 +3516,7 @@ struct OnboardingView: View {
     private func selectAppleRemote(_ generation: OnboardingAppleRemoteGeneration) {
         settings.setOnboardingAppleRemoteGeneration(generation)
         selectControlSource(.siriRemote)
+        model.setSiriRemoteEnabled(true)
     }
 
     private func handleLearnedShortcut(_ shortcut: CustomKeyboardShortcut) {
@@ -3721,6 +3785,14 @@ struct OnboardingView: View {
             step: settings.onboardingStep,
             failureReason: failure
         )
+        if settings.onboardingControlSource == .siriRemote {
+            switch failure {
+            case .voiceSessionNotStarted, .voiceNoSamples, .voiceAudioDeliveryFailed:
+                model.setSiriRemoteEnabled(true)
+            default:
+                break
+            }
+        }
         switch failure {
         case .bluetoothPermissionDenied:
             requestBluetoothPermission()
@@ -3772,7 +3844,10 @@ struct OnboardingView: View {
         case .webRemote:
             model.disableWebRemoteConnection()
             model.enableWebRemoteConnection()
-        case .xiaomiRemote, .siriRemote, .chromecastRemote, .unselected:
+        case .siriRemote:
+            model.setSiriRemoteEnabled(true)
+            prepareSelectedControlConnection()
+        case .xiaomiRemote, .chromecastRemote, .unselected:
             prepareSelectedControlConnection()
         }
     }

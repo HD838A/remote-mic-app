@@ -995,7 +995,9 @@ struct TranscriptHistorySection: View {
 
     private func localizedEntryCount(_ count: Int) -> String {
         String(
-            format: localization.text("statistics.transcripts.entry_count"),
+            format: localization.text(count == 1
+                ? "statistics.transcripts.entry_count_one"
+                : "statistics.transcripts.entry_count"),
             locale: localization.locale,
             localizedCount(count)
         )

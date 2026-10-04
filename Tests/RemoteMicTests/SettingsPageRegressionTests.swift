@@ -442,9 +442,9 @@ struct SettingsPageRegressionTests {
         #expect(source.contains("watchBluetoothServer.stop()"))
         #expect(source.contains("watchBluetoothServer.updateButtonTitles(titles)"))
         #expect(source.contains("func togglePhoneRemoteConnection()"))
-        #expect(source.contains("LocalizedMessage(\"connection.phone.cancel_waiting\")"))
+        #expect(source.contains("localization.text(\"connection.phone.cancel_waiting\")"))
         #expect(source.contains("response == .alertThirdButtonReturn"))
-        #expect(source.contains("guard let self, self.isPhoneRemoteConnectionEnabled else"))
+        #expect(source.contains("guard let self, self.isPhoneRemoteConnectionEnabled,"))
         #expect(source.contains("guard self.isPhoneRemoteConnectionEnabled else"))
         #expect(source.contains("phoneRemoteServer.onInvitationChange"))
         #expect(source.contains("@Published private(set) var phoneRemoteInvitation"))
@@ -493,12 +493,7 @@ struct SettingsPageRegressionTests {
             encoding: .utf8
         )
 
-        let noInvite = try #require(settingsSource.range(
-            of: "Text(\"connection.phone.qr_badge\")"
-        ))
-        let noInviteBlock = settingsSource[noInvite.lowerBound...]
-            .prefix(180)
-        #expect(noInviteBlock.contains(".font(.system(size: 12, weight: .semibold))"))
+        #expect(!settingsSource.contains("Text(\"connection.phone.qr_badge\")"))
 
         let statusPill = try #require(settingsSource.range(of: "private struct StatusPill"))
         let statusPillBlock = settingsSource[statusPill.lowerBound...]
@@ -534,7 +529,7 @@ struct SettingsPageRegressionTests {
         ))
         let mappingSource = settingsSource[sharedPage.lowerBound..<editorPanel.lowerBound]
 
-        #expect(mappingSource.contains("ViewThatFits(in: .horizontal)"))
+        #expect(!mappingSource.contains("ViewThatFits(in: .horizontal)"))
         #expect(mappingSource.contains("private var mappingHeaderToggle"))
         #expect(!mappingSource.contains(".frame(width: 400)"))
         #expect(!mappingSource.contains(".frame(width: 320)"))
@@ -594,7 +589,7 @@ struct SettingsPageRegressionTests {
         #expect(footerSource.contains("VStack(alignment: .leading, spacing: 12)"))
         #expect(!footerSource.contains("HStack(spacing: 16)"))
         #expect(footerSource.contains("mappingVoiceKeyModeControl"))
-        #expect(footerSource.contains("connection.voice_key_mode.unverified"))
+        #expect(!footerSource.contains("\"connection.voice_key_mode.unverified\""))
         #expect(footerSource.contains("connection.voice_key_mode.unverified_detail"))
         #expect(footerSource.contains("mappingVoiceFnTapControl"))
         #expect(!footerSource.contains("mappingVoiceShortTapFocusControl"))
@@ -946,11 +941,11 @@ struct SettingsPageRegressionTests {
             "copyTestFlightPublicBetaLink()",
             "requestWebRemoteSession()",
             "settings.clearTrustedPhoneIdentities()",
-            "settings.setAction(action, for: button, trigger: trigger)",
-            "settings.setShortcut(",
+            "setMappingAction(action, for: button, trigger: trigger)",
+            "setMappingShortcut(",
             "chooseCustomApplication(for:",
             "recordCustomApplicationInput(profileID:",
-            "settings.setApplicationProfileID(",
+            "setMappingApplicationProfileID(",
             ".openCustomApplication",
             "settings.resetBindings()",
         ] {
@@ -978,9 +973,9 @@ struct SettingsPageRegressionTests {
         #expect(!mobileEntrySource.contains(".disabled(model.isPhoneRemoteConnectionEnabled)"))
         #expect(!mobileEntrySource.contains(".disabled(model.isWatchRemoteConnectionEnabled)"))
         #expect(!mobileEntrySource.contains(".foregroundStyle(.green)"))
-        #expect(mobileEntrySource.contains("tint: model.isPhoneRemoteConnected"))
-        #expect(mobileEntrySource.contains("tint: model.isWatchRemoteConnected"))
-        #expect(mobileEntrySource.contains("? .green"))
+        #expect(mobileEntrySource.contains(".foregroundStyle(model.isPhoneRemoteConnected"))
+        #expect(mobileEntrySource.contains(".foregroundStyle(model.isWatchRemoteConnected"))
+        #expect(mobileEntrySource.contains("? Color.green"))
         #expect(mobileEntrySource.contains("model.isPhoneRemoteConnectionEnabled ? .orange"))
         #expect(mobileEntrySource.contains("model.isWatchRemoteConnectionEnabled ? .orange"))
         #expect(bridgeSource.contains("@Published private(set) var isPhoneRemoteConnected = false"))
@@ -1030,7 +1025,7 @@ struct SettingsPageRegressionTests {
         #expect(source.contains(".accessibilityAddTraits(isSelected ? .isSelected : [])"))
         #expect(source.contains("LazyVGrid("))
         #expect(source.contains("button_mapping.action.disable_switch"))
-        #expect(source.contains(").filter { $0 != .disabled }"))
+        #expect(source.contains(").filter { $0 != .disabled && $0 != .combinationAction }"))
         #expect(!source.contains("DisclosureGroup(isExpanded: $isPresetApplicationActionsExpanded)"))
         #expect(!source.contains("isPresetApplicationActionsExpanded"))
         #expect(source.contains("custom_application.accessibility.learn_help"))
@@ -1090,18 +1085,18 @@ struct SettingsPageRegressionTests {
         #expect(membershipSource.contains("supportsRemoteSessionAuthorization"))
         #expect(bridgeSource.contains(".createRemoteSessionAuthorization("))
         #expect(bridgeSource.contains("idempotencyKey: idempotencyKey"))
-        #expect(bridgeSource.contains("webRemoteState = .plusRequired("))
+        #expect(bridgeSource.contains("webRemoteState = .membershipRequired"))
         #expect(bridgeSource.contains("membership_check=bypassed"))
         #expect(bridgeSource.contains("/__local-test/remote-session"))
         #expect(!bridgeSource.contains("webRemoteBuildChannel"))
-        #expect(bridgeSource.contains("webRemoteServiceEnvironment == \"staging\""))
+        #expect(!bridgeSource.contains("webRemoteServiceEnvironment == \"staging\""))
         #expect(bridgeSource.contains("Self.isLoopbackRelayURL(relayURL)"))
         #expect(!bridgeSource.contains("webRemoteMembershipBypassRequested"))
         #expect(bridgeSource.contains("var isWebRemoteMembershipBypassAvailable: Bool { false }"))
         #expect(bridgeSource.contains("func setWebRemoteMembershipBypassEnabled(_ enabled: Bool) {}"))
         let bypassPolicy = bridgeSource.components(separatedBy: "var isWebRemoteMembershipBypassEnabled: Bool {")[1]
             .components(separatedBy: "private static func isLoopbackRelayURL")[0]
-        #expect(bypassPolicy.contains("membershipFeature.supportsRemoteSessionAuthorization"))
+        #expect(bypassPolicy.contains("membershipFeature.remoteSessionMembershipBypassEnabled"))
         #expect(!bypassPolicy.contains("WebRemoteConfiguration.relayURL()"))
         #expect(bridgeSource.contains("testMembershipBypass: isWebRemoteMembershipBypassEnabled"))
         let environmentSubscription = bridgeSource.components(
@@ -1157,7 +1152,7 @@ struct SettingsPageRegressionTests {
             range: cardStart.upperBound..<settingsSource.endIndex
         ))
         let cardSource = settingsSource[cardStart.lowerBound..<cardEnd.lowerBound]
-        #expect(cardSource.contains("ViewThatFits(in: .horizontal)"))
+        #expect(cardSource.contains("return HStack(alignment: .center, spacing: 10)"))
         #expect(cardSource.contains("fillsWidth ? nil : 232"))
         #expect(cardSource.contains("let modelName = remoteModelName(profile)"))
         #expect(cardSource.contains("let systemName = remoteSystemName(profile)"))
@@ -1229,7 +1224,7 @@ struct SettingsPageRegressionTests {
         ))
     }
 
-    @Test func remoteSelectorsOnlyShowConnectedProfilesAndKeepDiscoveryFallback() throws {
+    @Test func remoteSelectorsKeepAppleActivationCardsAndDiscoveryFallback() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -1246,14 +1241,14 @@ struct SettingsPageRegressionTests {
         ))
         let selectorSource = source[selectorStart.lowerBound..<selectorEnd.lowerBound]
 
-        #expect(selectorSource.contains("model.isRemoteConnected($0.id)"))
+        #expect(selectorSource.contains("model.isRemoteConnected(profile.id)"))
+        #expect(selectorSource.contains("model.isRemoteConnected(profile.id) || profile.model.isAppleSiriRemote"))
         #expect(selectorSource.contains("RemoteDeviceNamePolicy.sortedForCards("))
         #expect(selectorSource.contains("modelName: remoteModelName"))
         #expect(selectorSource.contains("systemName: { model.systemDeviceName(for: $0) }"))
-        #expect(selectorSource.contains("ForEach(connectedProfiles)"))
+        #expect(selectorSource.contains("ForEach(visibleProfiles)"))
         #expect(selectorSource.contains("remoteDeviceEmptyState(vertical: vertical)"))
-        #expect(selectorSource.contains("connectedProfiles.count <= 2"))
-        #expect(!selectorSource.contains("fillsWidth: connectedProfiles.count == 2"))
+        #expect(!selectorSource.contains("fillsWidth: visibleProfiles.count == 2"))
         #expect(selectorSource.contains("ScrollView(.horizontal, showsIndicators: false)"))
         #expect(!selectorSource.contains("ScrollView(.horizontal, showsIndicators: true)"))
         #expect(!selectorSource.contains("ForEach(settings.remoteDeviceProfiles)"))
@@ -1431,7 +1426,7 @@ struct SettingsPageRegressionTests {
         #expect(integration.contains("onBindingEditorActivityChanged"))
         #expect(integration.contains("@Published private(set) var isEditorActive"))
         #expect(settings.contains("macroFeature.settingsView"))
-        #expect(settings.contains("macro.integration.focus_mcp_boundary"))
+        #expect(!settings.contains("macro.integration.focus_mcp_boundary"))
         #expect(settings.contains(".font(.system(size: 12))"))
         #expect(settings.contains("macroFeature.enrollmentView"))
         #expect(settings.contains("macroFeature.setEditorActive(false)"))
@@ -1440,8 +1435,8 @@ struct SettingsPageRegressionTests {
         #expect(model.contains("if macroFeature.isEditorActive"))
         #expect(chinese.contains("输入框"))
         #expect(chinese.contains("MCP / TOML"))
-        #expect(english.contains("Learn Input Field"))
-        #expect(english.contains("MCP / TOML"))
+        #expect(english.contains("Select Input Field"))
+        #expect(english.contains("MCP settings"))
         #expect(!settings.contains("macro_buttons"))
         #expect(!settings.contains("EarlyAccessController"))
     }
@@ -1457,8 +1452,8 @@ struct SettingsPageRegressionTests {
             .macros,
             .buttonProfiles,
             .membership,
-            .transcripts,
             .connection,
+            .transcripts,
             .privateFeature,
             .about,
             .statistics,

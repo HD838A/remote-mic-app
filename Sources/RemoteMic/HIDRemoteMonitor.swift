@@ -564,7 +564,7 @@ final class HIDRemoteMonitor {
 
     func connectSimulatedDevice(
         fingerprint: String,
-        profileID: UUID,
+        profileID: UUID?,
         isSeized: Bool = true
     ) {
         resetInputState()
@@ -667,7 +667,13 @@ final class HIDRemoteMonitor {
                 .longPress
             )
             let preflightAction = settings.action(for: button, profileID: preflightProfileID)
-            let usesNativePassthrough = preflightProfileID != nil && claimsRuntimeButton?(preflightProfileID, button) != true && shouldUseNativePassthrough(
+            // An explicit binding owns the click even when it resolves to the same arrow.
+            let preflightHasSingleClickOverride = settings.configuredActionOverride?(
+                preflightProfileID, button, .singleClick
+            ) != nil || hasOverrideBinding(preflightProfileID, button, .singleClick)
+            let usesNativePassthrough = preflightProfileID != nil &&
+                !preflightHasSingleClickOverride &&
+                claimsRuntimeButton?(preflightProfileID, button) != true && shouldUseNativePassthrough(
                 button: button,
                 action: preflightAction,
                 recognizesDoubleClick: preflightRecognizesDoubleClick,
@@ -690,6 +696,11 @@ final class HIDRemoteMonitor {
                 }
                 continue
             }
+
+            // Discovery may associate an existing configured device during the callback.
+            let hasSingleClickOverride = settings.configuredActionOverride?(
+                profileID, button, .singleClick
+            ) != nil || hasOverrideBinding(profileID, button, .singleClick)
 
             if onRuntimeButton?(profileID, button, .press) == true {
                 if !activeDeviceIsSeized, usesNativePassthrough { eventSuppressor.arm(button: button, edge: .down) }
@@ -738,10 +749,16 @@ final class HIDRemoteMonitor {
             }
             if usesNativePassthrough {
                 nativePassthroughUsages.insert(usage)
-                AppLogger.shared.write(
+                diagnosticLogger(
                     "HID NATIVE PASSTHROUGH button=\(button.rawValue) action=\(action.rawValue)"
                 )
                 continue
+            }
+            if hasSingleClickOverride {
+                diagnosticLogger(
+                    "HID ROUTE button=\(button.rawValue) trigger=singleClick " +
+                        "path=configured reason=single_click_override external_result=unknown"
+                )
             }
             if recognizesDoubleClick || recognizesLongPress || gestureRecognizer.isTracking(button) {
                 let commands = gestureRecognizer.press(
@@ -771,11 +788,13 @@ final class HIDRemoteMonitor {
                     "HID GESTURE button=\(button.rawValue) trigger=singleClick path=raw"
                 )
                 guard performConfiguredAction(for: button, trigger: .singleClick) else { return }
-                startRepeatIfNeeded(
-                    usage: usage,
-                    button: button,
-                    action: action
-                )
+                if !hasSingleClickOverride {
+                    startRepeatIfNeeded(
+                        usage: usage,
+                        button: button,
+                        action: action
+                    )
+                }
             }
         }
 
@@ -972,6 +991,7 @@ final class HIDRemoteMonitor {
         recognizesLongPress: Bool
     ) -> Bool {
         guard !activeDeviceIsSeized,
+              !appSwitcherSession.isActive,
               !recognizesDoubleClick,
               !recognizesLongPress,
               frontmostBundleIdentifier() != PresetApplication.remoteMic.bundleIdentifier
@@ -1030,9 +1050,8 @@ final class HIDRemoteMonitor {
                 self.releaseForRevokedPermissions()
                 return
             }
-            let configured = ConfiguredButtonAction(
-                action: action,
-                shortcut: self.settings.shortcut(for: button, profileID: self.profileID)
+            let configured = self.settings.configuredAction(
+                for: button, trigger: .singleClick, profileID: self.profileID
             )
             if !self.actionPerformer(button, .singleClick, configured) {
                 self.releaseForRevokedPermissions()
@@ -1133,6 +1152,9 @@ final class HIDRemoteMonitor {
                 "HID ACTION failed button=\(button.rawValue) trigger=\(trigger.rawValue) " +
                     "action=\(configured.action.rawValue)"
             )
+            // A library rejection is not evidence of revoked Accessibility permission.
+            // Preserve the held edge so duplicate reports cannot restart the action.
+            if configured.action == .combinationAction { return false }
             stop()
             updateStatus(LocalizedMessage("button_mapping.permission.accessibility_expired"))
             return false
@@ -1267,6 +1289,8 @@ final class HIDRemoteMonitor {
         longPressTimers.removeAll()
         gestureRecognizer.reset()
     }
+
+    func cancelMappingInteractions() { resetInputState() }
 
     func cancelPendingButtonActions() {
         repeatTimers.values.forEach { $0.cancel() }

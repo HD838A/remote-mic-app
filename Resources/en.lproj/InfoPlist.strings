@@ -1,3 +1,4 @@
 "CFBundleDisplayName" = "SayAll";
 "CFBundleName" = "SayAll";
-"NSBluetoothAlwaysUsageDescription" = "Connect to the Xiaomi Bluetooth Remote 2 Pro to receive button and voice data.";
+"NSBluetoothAlwaysUsageDescription" = "Connect to supported remotes and Apple Watch devices to receive button presses and microphone audio.";
+"NSLocalNetworkUsageDescription" = "Connect to SayAll on a nearby iPhone, iPad, or Apple Watch to receive button presses and microphone audio.";

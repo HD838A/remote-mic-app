@@ -66,8 +66,9 @@ struct AppIconCatalog {
         resourceBundle: Bundle = RemoteMicResourceBundle.mainOrDevelopment
     ) -> AppIconCatalog {
         let standardImage = image(
-            named: "AppIcon",
-            extension: "icns",
+            named: "standard",
+            extension: "png",
+            subdirectory: "AppIcons",
             in: resourceBundle
         ) ?? NSApplication.shared.applicationIconImage ?? NSImage(
             size: NSSize(width: 512, height: 512)
@@ -96,7 +97,10 @@ struct AppIconCatalog {
     }
 
     func resolvedIdentifier(for requestedIdentifier: AppIconIdentifier) -> AppIconIdentifier {
-        options.contains { $0.id == requestedIdentifier } ? requestedIdentifier : .standard
+        if options.contains(where: { $0.id == requestedIdentifier }) {
+            return requestedIdentifier
+        }
+        return options.contains { $0.id == .facetedDuck } ? .facetedDuck : .standard
     }
 
     func image(for requestedIdentifier: AppIconIdentifier) -> NSImage {
@@ -104,7 +108,8 @@ struct AppIconCatalog {
     }
 
     private func option(for requestedIdentifier: AppIconIdentifier) -> AppIconOption {
-        options.first { $0.id == requestedIdentifier } ?? options[0]
+        let identifier = resolvedIdentifier(for: requestedIdentifier)
+        return options.first { $0.id == identifier } ?? options[0]
     }
 
     static func applicationIconImage(

@@ -1181,7 +1181,8 @@ struct RemoteButtonsTests {
         #expect(AppleRemoteCircularNavigationAccumulator.movesLeft(for: 1))
     }
 
-    @Test func appSwitcherRemoteControlsNavigateConfirmAndReportFinalFrontmostApp() throws {
+    @Test(arguments: [true, false])
+    func appSwitcherRemoteControlsNavigateConfirmAndReportFinalFrontmostApp(isSeized: Bool) throws {
         let suiteName = "RemoteButtonsTests.appSwitcherControls.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
@@ -1193,9 +1194,11 @@ struct RemoteButtonsTests {
         var frontmost = PresetApplication.codex.bundleIdentifier
         var posted: [(CGKeyCode, Bool, CGEventFlags)] = []
         var diagnostics: [String] = []
+        let suppressor = KeyboardEventSuppressor()
         let monitor = HIDRemoteMonitor(
             settings: settings,
             profileID: profileID,
+            eventSuppressor: suppressor,
             ownsEventSuppressor: false,
             scheduler: scheduler,
             runtimePermissions: { true },
@@ -1206,18 +1209,38 @@ struct RemoteButtonsTests {
                 return true
             }
         )
-        monitor.connectSimulatedDevice(fingerprint: "app-switcher-controls", profileID: profileID)
+        monitor.connectSimulatedDevice(
+            fingerprint: "app-switcher-controls", profileID: profileID, isSeized: isSeized
+        )
 
-        func press(_ button: RemoteButton) {
+        func press(_ button: RemoteButton) throws {
             let report = Data([UInt8(button.hidUsage), 0, 0, 0, 0, 0])
             monitor.handleSimulatedReport(reportID: 1, data: report)
+            if button == .left || button == .right {
+                let nativeDown = try #require(CGEvent(
+                    keyboardEventSource: nil,
+                    virtualKey: button == .left ? 123 : 124,
+                    keyDown: true
+                ))
+                nativeDown.setIntegerValueField(.keyboardEventKeyboardType, value: 40)
+                #expect(suppressor.handle(type: .keyDown, event: nativeDown) == !isSeized)
+            }
             monitor.handleSimulatedReport(reportID: 1, data: Data(repeating: 0, count: 6))
+            if button == .left || button == .right {
+                let nativeUp = try #require(CGEvent(
+                    keyboardEventSource: nil,
+                    virtualKey: button == .left ? 123 : 124,
+                    keyDown: false
+                ))
+                nativeUp.setIntegerValueField(.keyboardEventKeyboardType, value: 40)
+                #expect(suppressor.handle(type: .keyUp, event: nativeUp) == !isSeized)
+            }
         }
 
-        press(.menu)
-        press(.right)
-        press(.left)
-        press(.ok)
+        try press(.menu)
+        try press(.right)
+        try press(.left)
+        try press(.ok)
         frontmost = PresetApplication.safari.bundleIdentifier
         scheduler.advance(
             toMilliseconds: HIDRemoteTiming.appSwitcherConfirmationProbeMilliseconds
@@ -3199,6 +3222,233 @@ struct RemoteButtonsTests {
         #expect(RemoteButton.menu.nativeEvent == .keyboard(keyCode: KeyboardInjector.contextualMenuKeyCode))
         #expect(RemoteButton.volumeUp.nativeEvent == .systemKey(type: 0))
         #expect(RemoteButton.back.nativeEvent == nil)
+    }
+
+    @Test(arguments: [RemoteButton.left, .right], [true, false])
+    func profileSingleClickOwnsMonitoredArrow(button: RemoteButton, unified: Bool) throws {
+        let suiteName = "RemoteButtonsTests.profileArrow.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = AppSettings(defaults: defaults)
+        settings.customMappingEnabled = true
+        let profileID = try #require(settings.selectedRemoteProfileID)
+        let configured = ConfiguredButtonAction(
+            action: button == .left ? .arrowLeft : .arrowRight, shortcut: nil
+        )
+        var bindingActive = true
+        settings.configuredActionOverride = { device, key, trigger in
+            guard unified, bindingActive, device == profileID,
+                  key == button, trigger == .singleClick else { return nil }
+            return configured
+        }
+        let scheduler = RemoteButtonsTestScheduler()
+        let suppressor = KeyboardEventSuppressor()
+        var performed: [ConfiguredButtonAction] = []
+        var legacyTriggers: [ButtonTrigger] = []
+        var diagnostics: [String] = []
+        let monitor = HIDRemoteMonitor(
+            settings: settings, profileID: profileID,
+            eventSuppressor: suppressor, ownsEventSuppressor: false,
+            scheduler: scheduler, runtimePermissions: { true },
+            actionPerformer: { _, _, action in performed.append(action); return true },
+            overrideActionPerformer: { device, key, trigger in
+                guard !unified, bindingActive, device == profileID,
+                      key == button, trigger == .singleClick else { return false }
+                legacyTriggers.append(trigger)
+                return true
+            },
+            hasOverrideBinding: { device, key, trigger in
+                !unified && bindingActive && device == profileID &&
+                    key == button && trigger == .singleClick
+            },
+            frontmostBundleIdentifier: { PresetApplication.safari.bundleIdentifier },
+            diagnosticLogger: { diagnostics.append($0) }
+        )
+        monitor.connectSimulatedDevice(
+            fingerprint: "profile-arrow", profileID: profileID, isSeized: false
+        )
+        defer { monitor.disconnectSimulatedDevice() }
+
+        func click(expectSuppression: Bool) throws {
+            let report = Data([UInt8(button.hidUsage), 0, 0, 0, 0, 0])
+            monitor.handleSimulatedReport(reportID: 1, data: report)
+            // Duplicate HID reports must not execute the binding twice.
+            monitor.handleSimulatedReport(reportID: 1, data: report)
+            let down = try #require(CGEvent(keyboardEventSource: nil,
+                virtualKey: button == .left ? 123 : 124, keyDown: true))
+            down.setIntegerValueField(.keyboardEventKeyboardType, value: 40)
+            #expect(suppressor.handle(type: .keyDown, event: down) == expectSuppression)
+            if expectSuppression {
+                scheduler.advance(toMilliseconds: HIDRemoteTiming.repeatStartMilliseconds + 200)
+                down.setIntegerValueField(.keyboardEventAutorepeat, value: 1)
+                #expect(suppressor.handle(type: .keyDown, event: down))
+            }
+            monitor.handleSimulatedReport(reportID: 1, data: Data(repeating: 0, count: 6))
+            let up = try #require(CGEvent(keyboardEventSource: nil,
+                virtualKey: button == .left ? 123 : 124, keyDown: false))
+            up.setIntegerValueField(.keyboardEventKeyboardType, value: 40)
+            #expect(suppressor.handle(type: .keyUp, event: up) == expectSuppression)
+        }
+
+        try click(expectSuppression: true)
+        #expect(performed == (unified ? [configured] : []))
+        #expect(legacyTriggers == (unified ? [] : [.singleClick]))
+        #expect(diagnostics.contains { $0.contains("HID GESTURE") && $0.contains("path=raw") })
+        #expect(diagnostics.contains {
+            $0 == "HID ROUTE button=\(button.rawValue) trigger=singleClick " +
+                "path=configured reason=single_click_override external_result=unknown"
+        })
+        #expect(!diagnostics.contains { $0.contains("HID NATIVE PASSTHROUGH") })
+        #expect(scheduler.pendingTaskCount == 0)
+
+        // Removing the active binding restores ordinary native arrows immediately.
+        bindingActive = false
+        try click(expectSuppression: false)
+        #expect(performed == (unified ? [configured] : []))
+        #expect(legacyTriggers == (unified ? [] : [.singleClick]))
+        #expect(diagnostics.contains { $0.contains("HID NATIVE PASSTHROUGH") })
+    }
+
+    @Test(arguments: [RemoteButton.left, .right], [true, false])
+    func discoveredProfileSingleClickDoesNotStartBaseRepeat(button: RemoteButton, unified: Bool) throws {
+        let suiteName = "RemoteButtonsTests.discoveryArrow.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = AppSettings(defaults: defaults)
+        settings.customMappingEnabled = true
+        let profileID = try #require(settings.selectedRemoteProfileID)
+        let configured = ConfiguredButtonAction(
+            action: button == .left ? .arrowLeft : .arrowRight, shortcut: nil
+        )
+        settings.configuredActionOverride = { device, key, trigger in
+            unified && device == profileID && key == button && trigger == .singleClick
+                ? configured : nil
+        }
+        let scheduler = RemoteButtonsTestScheduler()
+        let suppressor = KeyboardEventSuppressor()
+        var performed: [ConfiguredButtonAction] = []
+        var legacyTriggers: [ButtonTrigger] = []
+        var diagnostics: [String] = []
+        let monitor = HIDRemoteMonitor(settings: settings,
+            eventSuppressor: suppressor, ownsEventSuppressor: false,
+            scheduler: scheduler, runtimePermissions: { true },
+            actionPerformer: { _, _, action in performed.append(action); return true },
+            overrideActionPerformer: { device, key, trigger in
+                guard !unified, device == profileID, key == button,
+                      trigger == .singleClick else { return false }
+                legacyTriggers.append(trigger)
+                return true
+            },
+            hasOverrideBinding: { device, key, trigger in
+                !unified && device == profileID && key == button && trigger == .singleClick
+            },
+            frontmostBundleIdentifier: { PresetApplication.safari.bundleIdentifier },
+            diagnosticLogger: { diagnostics.append($0) })
+        // Match discovery: the first physical press binds the selected unbound device.
+        monitor.onButtonPressed = { device, fingerprint, _ in
+            #expect(device == nil)
+            return (settings.registerHIDRemote(fingerprint: fingerprint), true)
+        }
+        monitor.connectSimulatedDevice(fingerprint: "discovery-arrow", profileID: nil, isSeized: false)
+        defer { monitor.disconnectSimulatedDevice() }
+        let report = Data([UInt8(button.hidUsage), 0, 0, 0, 0, 0])
+        monitor.handleSimulatedReport(reportID: 1, data: report)
+        monitor.handleSimulatedReport(reportID: 1, data: report)
+        #expect(monitor.profileID == profileID)
+        let down = try #require(CGEvent(keyboardEventSource: nil,
+            virtualKey: button == .left ? 123 : 124, keyDown: true))
+        down.setIntegerValueField(.keyboardEventKeyboardType, value: 40)
+        #expect(suppressor.handle(type: .keyDown, event: down))
+        scheduler.advance(toMilliseconds: HIDRemoteTiming.repeatStartMilliseconds + 200)
+        down.setIntegerValueField(.keyboardEventAutorepeat, value: 1)
+        #expect(suppressor.handle(type: .keyDown, event: down))
+        monitor.handleSimulatedReport(reportID: 1, data: Data(repeating: 0, count: 6))
+        let up = try #require(CGEvent(keyboardEventSource: nil,
+            virtualKey: button == .left ? 123 : 124, keyDown: false))
+        up.setIntegerValueField(.keyboardEventKeyboardType, value: 40)
+        #expect(suppressor.handle(type: .keyUp, event: up))
+        #expect(performed == (unified ? [configured] : []))
+        #expect(legacyTriggers == (unified ? [] : [.singleClick]))
+        #expect(scheduler.pendingTaskCount == 0)
+        #expect(diagnostics.contains {
+            $0.contains("HID ROUTE") && $0.contains("reason=single_click_override")
+        })
+        #expect(!diagnostics.contains { $0.contains("HID NATIVE PASSTHROUGH") })
+    }
+
+    @Test(arguments: [RemoteButton.left, .right])
+    func unrelatedProfileBindingKeepsMonitoredArrowNative(button: RemoteButton) throws {
+        let suiteName = "RemoteButtonsTests.unboundArrow.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = AppSettings(defaults: defaults)
+        settings.customMappingEnabled = true
+        let profileID = try #require(settings.selectedRemoteProfileID)
+        let otherDevice = UUID()
+        settings.configuredActionOverride = { device, _, _ in
+            device == otherDevice ? .disabled : nil
+        }
+        let suppressor = KeyboardEventSuppressor()
+        var attempts = 0
+        let monitor = HIDRemoteMonitor(settings: settings, profileID: profileID,
+            eventSuppressor: suppressor, ownsEventSuppressor: false,
+            scheduler: RemoteButtonsTestScheduler(), runtimePermissions: { true },
+            actionPerformer: { _, _, _ in attempts += 1; return true },
+            frontmostBundleIdentifier: { PresetApplication.safari.bundleIdentifier })
+        monitor.connectSimulatedDevice(fingerprint: "unbound-arrow", profileID: profileID, isSeized: false)
+        defer { monitor.disconnectSimulatedDevice() }
+        monitor.handleSimulatedReport(reportID: 1,
+            data: Data([UInt8(button.hidUsage), 0, 0, 0, 0, 0]))
+        let down = try #require(CGEvent(keyboardEventSource: nil,
+            virtualKey: button == .left ? 123 : 124, keyDown: true))
+        down.setIntegerValueField(.keyboardEventKeyboardType, value: 40)
+        #expect(!suppressor.handle(type: .keyDown, event: down))
+        down.setIntegerValueField(.keyboardEventAutorepeat, value: 1)
+        #expect(!suppressor.handle(type: .keyDown, event: down))
+        monitor.handleSimulatedReport(reportID: 1, data: Data(repeating: 0, count: 6))
+        let up = try #require(CGEvent(keyboardEventSource: nil,
+            virtualKey: button == .left ? 123 : 124, keyDown: false))
+        up.setIntegerValueField(.keyboardEventKeyboardType, value: 40)
+        #expect(!suppressor.handle(type: .keyUp, event: up))
+        #expect(attempts == 0)
+    }
+
+    @Test(arguments: [RemoteButton.left, .right], [ButtonAction.customShortcut, .disabled])
+    func explicitArrowShortcutOrDisabledNeverInherits(button: RemoteButton, action: ButtonAction) throws {
+        let suiteName = "RemoteButtonsTests.explicitArrow.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = AppSettings(defaults: defaults)
+        settings.customMappingEnabled = true
+        let profileID = try #require(settings.selectedRemoteProfileID)
+        let configured = ConfiguredButtonAction(action: action,
+            shortcut: action == .customShortcut ? CustomKeyboardShortcut(
+                keyCode: button == .left ? 123 : 124, modifierFlags: [], keyLabel: ""
+            ) : nil)
+        settings.configuredActionOverride = { device, key, trigger in
+            device == profileID && key == button && trigger == .singleClick ? configured : nil
+        }
+        let suppressor = KeyboardEventSuppressor()
+        var performed: [ConfiguredButtonAction] = []
+        let monitor = HIDRemoteMonitor(settings: settings, profileID: profileID,
+            eventSuppressor: suppressor, ownsEventSuppressor: false,
+            scheduler: RemoteButtonsTestScheduler(), runtimePermissions: { true },
+            actionPerformer: { _, _, binding in performed.append(binding); return true },
+            frontmostBundleIdentifier: { PresetApplication.safari.bundleIdentifier })
+        monitor.connectSimulatedDevice(fingerprint: "explicit-arrow", profileID: profileID, isSeized: false)
+        defer { monitor.disconnectSimulatedDevice() }
+        monitor.handleSimulatedReport(reportID: 1,
+            data: Data([UInt8(button.hidUsage), 0, 0, 0, 0, 0]))
+        let down = try #require(CGEvent(keyboardEventSource: nil,
+            virtualKey: button == .left ? 123 : 124, keyDown: true))
+        down.setIntegerValueField(.keyboardEventKeyboardType, value: 40)
+        #expect(suppressor.handle(type: .keyDown, event: down))
+        monitor.handleSimulatedReport(reportID: 1, data: Data(repeating: 0, count: 6))
+        let up = try #require(CGEvent(keyboardEventSource: nil,
+            virtualKey: button == .left ? 123 : 124, keyDown: false))
+        up.setIntegerValueField(.keyboardEventKeyboardType, value: 40)
+        #expect(suppressor.handle(type: .keyUp, event: up))
+        #expect(performed == [configured])
     }
 
     @Test func disabledMappingBackIgnoresStoredMappingsOverridesAndOtherButtons() throws {

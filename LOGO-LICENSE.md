@@ -10,6 +10,7 @@ Copyright (C) 2026 HD838A. All rights reserved.
 
 - `Resources/AppIcon.png`；
 - `Resources/AppIcon.icns`；
+- `Resources/AppIcons/standard.png`；
 - `Resources/AppIcons/faceted-duck.png`。
 
 上述品牌资产不适用 macOS 软件代码的 `GPL-3.0-only` 许可。菜单栏状态图标、程序代码和其他未在本节列出的资源不属于本许可的保护范围。

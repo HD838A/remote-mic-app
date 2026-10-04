@@ -223,9 +223,9 @@ final class SiriRemoteFeatureIntegration {
         #endif
     }
 
-    func start() {
+    func start(userInitiated: Bool = false) {
         #if SAYALL_SIRI_REMOTE_ENABLED && canImport(SayAllSiriRemote)
-        feature.start()
+        feature.start(userInitiated: userInitiated)
         #endif
     }
 

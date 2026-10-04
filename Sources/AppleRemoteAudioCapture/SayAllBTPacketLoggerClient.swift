@@ -458,12 +458,15 @@ public final class AppleRemotePacketLoggerClient: @unchecked Sendable {
             let rule: CFDictionary = [
                 "class" as CFString: "allow" as CFString,
             ] as CFDictionary
+            let description = (Locale.preferredLanguages.first ?? "en").hasPrefix("zh")
+                ? "允许无线麦接收 Apple Remote 蓝牙音频。"
+                : "Allow SayAll to receive Bluetooth audio from your Apple Remote."
             let registrationStatus = authorizationRight.withCString {
                 AuthorizationRightSet(
                     authorization,
                     $0,
                     rule,
-                    "允许无线麦接收 Apple Remote 蓝牙音频。" as CFString,
+                    description as CFString,
                     nil,
                     nil
                 )

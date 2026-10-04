@@ -155,7 +155,7 @@ struct LocalizationTests {
         #expect(english["onboarding.remote.first_pairing.pair"] == "Then hold Home + Menu together to enter Bluetooth pairing mode.")
         #expect(english["onboarding.remote.button_waiting_detail"] == "Press the center OK button or an arrow button. Do not press the microphone/voice button.")
         #expect(english["onboarding.remote.voice_button_mistake.title"] == "That was the voice button")
-        #expect(english["onboarding.remote.voice_button_mistake.detail"] == "This step checks a normal control button. Press the center OK button or an arrow button instead.")
+        #expect(english["onboarding.remote.voice_button_mistake.detail"] == "This step checks button controls. Press the center OK button or an arrow button instead.")
         #expect(english["onboarding.voice_tool.doubao.title"] == "Doubao")
         #expect(english["onboarding.voice_tool.weixin.title"] == "WeType")
         #expect(english["onboarding.voice_tool.other.title"] == "Other Voice App")
@@ -170,9 +170,9 @@ struct LocalizationTests {
             entry.key.hasPrefix("onboarding.") &&
                 entry.value.localizedCaseInsensitiveContains("voice tool")
         } == false)
-        #expect(english["onboarding.voice_tool.system_fn.conflict"] == "macOS is still using Fn")
-        #expect(english["remote.device.model.apple_siri_remote_a2854"] == "Apple Remote generation 7")
-        #expect(english["remote.device.model.apple_siri_remote_a2540"] == "Apple Remote generation 6")
+        #expect(english["onboarding.voice_tool.system_fn.conflict"] == "The macOS Fn action needs to be changed")
+        #expect(english["remote.device.model.apple_siri_remote_a2854"] == "Apple Remote (7th Generation)")
+        #expect(english["remote.device.model.apple_siri_remote_a2540"] == "Apple Remote (6th Generation)")
         #expect(english["remote.button.full.play_pause"] == "Play/Pause")
         #expect(english["connection.web.title"] == "WeChat Mini Program & Web")
         #expect(

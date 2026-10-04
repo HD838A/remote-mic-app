@@ -204,10 +204,10 @@ enum OnboardingAIAssistantPrompt {
        [ -x "$APP_PATH/Contents/MacOS/RemoteMic" ] || APP_PATH="/Applications/无线麦SayAll.app"
        "$APP_PATH/Contents/MacOS/RemoteMic" --agent-configure --auto --json
     2. Select the currently connected remote automatically; ask me at most once if multiple candidates cannot be distinguished.
-    3. Select an installed and available voice tool: Doubao, WeChat Input, Vokie, Typeless, or Other; ask me at most once if multiple candidates cannot be distinguished.
-    4. Use Fn for this onboarding run and apply the hold-or-toggle behavior matched to the selected remote and voice tool.
+    3. Select an installed and available voice typing app: Doubao, WeType, Vokie, Typeless, or Other; ask me at most once if multiple candidates cannot be distinguished.
+    4. Use Fn for this onboarding run and apply the hold-or-toggle behavior matched to the selected remote and voice typing app.
     5. Select an available SayAll audio device for voice input and keep the current gain; adjust it only if needed for a quiet or breathy voice.
-    6. Modify only SayAll’s own configuration. Do not read or modify private files, databases, sandboxes, or undocumented protocols of third-party voice tools.
+    6. Modify only SayAll’s own configuration. Do not read or modify private files, databases, sandboxes, or undocumented protocols of third-party voice typing apps.
     7. After configuration, leave SayAll at the real voice-test step. Do not skip voice, audio, button, or text-on-screen verification, and do not treat a written configuration as proof of success.
     8. If macOS permissions, a user choice, or a real spoken test is still required, tell me exactly what remains; otherwise report that configuration is prepared.
 
@@ -225,8 +225,8 @@ enum OnboardingVoiceGesturePrompt {
         switch (isChinese, mode) {
         case (true, .hold): return "按住语音键说话，说完松开。"
         case (true, .toggle): return "按一下语音键开始说话，再按一下结束。"
-        case (false, .hold): return "Hold the voice key while speaking, then release it."
-        case (false, .toggle): return "Press the voice key once to start, then once more to finish."
+        case (false, .hold): return "Hold the voice button while speaking, then release it."
+        case (false, .toggle): return "Press the voice button once to start, then once more to finish."
         }
     }
 }

@@ -37,7 +37,7 @@ This file is a convenience translation of the current mandatory design rules. Th
 ## Mandatory interaction, layout, and typography rules
 
 - Secondary-page headers place the Back button on the left and the page title immediately to its right, on one vertically centered row. Use only “Back” as the label, with a hit area at least 72pt wide and 44pt high; the entire button area must respond to clicks.
-- Buttons with a background or border must respond across their full bordered shape, including padding around the label; clicks must not be limited to the icon or text.
+- Card buttons and buttons with a background or border must respond across the entire card or bordered shape, including text, icons, and empty space. Clicking any of these areas must run the same button action. Separate secondary buttons within a card must run only their own actions; disabled buttons must not respond. During acceptance, click the text, icons, empty space, and inside edge of the border separately.
 
 - User-facing screens must use product language and describe only the current state, actual impact, and actions the user can take. They must not expose engineering, testing, or internal acceptance status such as “pending device validation,” “compatibility acceptance required,” “regression pending,” “automation/CI passed,” “candidate implementation,” “in development,” or “under validation.” Capabilities that have not completed acceptance must remain hidden, unreleased, or absent from supported and recommended lists. If a published capability is currently unavailable, present a user-understandable conclusion such as “not supported” or “temporarily unavailable” together with the next step. Technical reason codes and acceptance status belong only in redacted logs, diagnostics explicitly copied by the user, and internal documentation.
 - Hovering over a toggle, button, or feature entry may show a system help tag or equivalent tooltip with a supplementary explanation. Tooltip copy must use product language that ordinary users can understand and describe only the purpose, effect, or usage. It must not expose technical terminology, internal mechanisms, protocols, implementation details, or debugging information. Critical status, errors, risks, and instructions required to complete a task must remain directly visible and must not depend on hover alone.
@@ -48,8 +48,9 @@ This file is a convenience translation of the current mandatory design rules. Th
 - Avoid drop-down lists whenever practical, especially a single long list that mixes basic keys, system actions, custom actions, and individual apps. Group larger option sets semantically and prefer in-page button grids, segmented choices, or clearly separated lists.
 - At the `800 × 650` offscreen stress size, the five action-filter capsules must remain on one line in Chinese and English, use 12pt-or-larger text, and avoid horizontal scrolling or clipped hit areas in light and dark appearances. Long labels may truncate while accessibility retains the full name. Real window interaction is validated at the production minimum of `1020 × 772`.
 - Physical-keyboard shortcut recording accepts an unmodified single key, a key combination, or one standalone left/right Command, Option, Control, Shift, or Fn key. A modifier press remains pending until either a main key completes the combination or the modifier is released alone.
-- Flatten flows into the main page instead of relying on popovers, sheets, or consecutive confirmation dialogs. Related configuration should share one large surface where the current target, available actions, secondary settings, learning state, and test action remain visible together.
-- Keep system dialogs only for file selection, required permission authorization, and irreversible destructive actions. Ordinary instructions, learning progress, success, and failure feedback should appear inline.
+- Prefer in-page controls for primary tasks and related settings. Keep frequent workflows, the current target, required actions, and critical status visible. Show routine instructions, progress, and results beside the related controls.
+- Popovers and sheets may serve brief choices, secondary edits, and native system tasks. They must support cancel, keyboard access, and accessibility, preserve context, and provide a clear return path. Do not hide required steps or critical errors behind consecutive overlays.
+- Use suitable system interactions for file selection, permissions, and irreversible actions. Product specs that require a specific flow to remain inline still apply.
 
 ## Code locations
 
@@ -60,3 +61,7 @@ This file is a convenience translation of the current mandatory design rules. Th
 ## Conclusion
 
 The repository screenshots show the macOS 26 Liquid Glass appearance; the same page structure automatically uses compatibility styling on macOS 14/15. No review reference depends on a local temporary directory.
+
+## Onboarding validation scope
+
+Use the production page and scenario list in [Testing/FirstRunOnboarding.md](Testing/FirstRunOnboarding.md). Derive counts from enabled sources, pages, languages, appearances, and extra states. Do not maintain another fixed count here. Flow and shared-layout changes require full checks. Text-only and local changes use the targeted checks in `AGENTS.md`. Save evidence in persistent storage and inspect every image. Screenshots do not prove real permissions, devices, audio, or text delivery.

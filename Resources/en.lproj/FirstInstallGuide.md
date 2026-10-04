@@ -1,4 +1,4 @@
-# Remote Mic First-Install Guide
+# SayAll First-Install Guide
 
 ## Requirements
 
@@ -10,4 +10,4 @@ After opening `Remote-Mic-<version>.dmg`, double-click the only `Install SayAll.
 
 Advanced users who need only the app and already use another loopback device such as BlackHole 2ch can download the app-only ZIP from the same Release.
 
-Allow Bluetooth access when Remote Mic first launches. To customize normal buttons, also grant Input Monitoring and Accessibility in the **Permissions** page.
+Allow Bluetooth access when SayAll first launches. To customize remote buttons, also grant Input Monitoring and Accessibility in the **Permissions** page.
