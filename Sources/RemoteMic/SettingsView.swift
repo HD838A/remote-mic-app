@@ -2154,6 +2154,7 @@ struct SettingsView: View {
                     .lineLimit(1)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel(Text("\(modelName), \(systemName)"))
@@ -2169,13 +2170,20 @@ struct SettingsView: View {
         .padding(.vertical, 8)
         .frame(width: fillsWidth ? nil : 232, alignment: .leading)
         .frame(maxWidth: fillsWidth ? .infinity : nil, alignment: .leading)
-        .background(
-            selected ? Color.accentColor.opacity(0.13) : Color.primary.opacity(0.045),
-            in: RoundedRectangle(cornerRadius: 10, style: .continuous)
-        )
+        .background {
+            // The background handles padding; foreground buttons keep their own actions.
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(selected ? Color.accentColor.opacity(0.13) : Color.primary.opacity(0.045))
+                .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .onTapGesture {
+                    model.selectRemoteProfile(profile.id)
+                }
+                .accessibilityHidden(true)
+        }
         .overlay {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .stroke(selected ? Color.accentColor.opacity(0.65) : Color.secondary.opacity(0.18))
+                .allowsHitTesting(false)
         }
     }
 
