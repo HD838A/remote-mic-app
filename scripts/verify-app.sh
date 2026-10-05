@@ -78,6 +78,19 @@ test -d "$APP"
 test -f "$PLIST"
 test -x "$BINARY"
 test -x "$MCP_HELPER"
+if /usr/bin/plutil -extract CFBundleIconName raw -o - "$PLIST" >/dev/null 2>&1; then
+  print -u2 "App must not declare CFBundleIconName; use the legacy ICNS path"
+  exit 1
+fi
+if [[ -e "$APP/Contents/Resources/Assets.car" ]]; then
+  print -u2 "App must not package Assets.car for the legacy ICNS path"
+  exit 1
+fi
+FORBIDDEN_ICON_RESOURCES=("$APP/Contents/Resources"/*.icon(N))
+if (( ${#FORBIDDEN_ICON_RESOURCES} > 0 )); then
+  print -u2 "App must not package .icon resources for the legacy ICNS path"
+  exit 1
+fi
 SAYALL_SIRI_REMOTE_INCLUDED="$(plutil -extract SayAllSiriRemoteIncluded raw -o - "$PLIST" 2>/dev/null || true)"
 SAYALL_SIRI_REMOTE_RESOURCE_BUNDLE="$APP/Contents/Resources/SayAllSiriRemote_SayAllSiriRemote.bundle"
 SAYALL_CHROMECAST_RESOURCE_BUNDLE="$APP/Contents/Resources/SayAllChromecast_SayAllChromecast.bundle"

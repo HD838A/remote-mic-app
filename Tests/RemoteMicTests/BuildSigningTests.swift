@@ -65,6 +65,9 @@ struct BuildSigningTests {
         #expect(intelPackagedIcon == applePackagedIcon)
         #expect(verifySource.contains("/usr/bin/iconutil --convert iconset"))
         #expect(verifySource.contains("packaged app icon corner is not opaque"))
+        #expect(verifySource.contains("CFBundleIconName"))
+        #expect(verifySource.contains("Assets.car"))
+        #expect(verifySource.contains("*.icon(N)"))
     }
 
     @Test func buildDefaultsToStableAdHocSigning() throws {
