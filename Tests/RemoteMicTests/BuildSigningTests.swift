@@ -44,11 +44,20 @@ struct BuildSigningTests {
         )?.alphaComponent ?? 0
         #expect(centerAlpha >= 0.5)
 
-        let bundledSource = try Data(contentsOf: root.appendingPathComponent(
-            "Resources/AppIcons/faceted-duck.png"
-        ))
-        let appIconSource = try Data(contentsOf: iconURL)
-        #expect(bundledSource == appIconSource)
+        let bundledSource = try #require(NSBitmapImageRep(data: Data(contentsOf:
+            root.appendingPathComponent("Resources/AppIcons/faceted-duck.png")
+        )))
+        #expect(bundledSource.pixelsWide == 1024)
+        #expect(bundledSource.pixelsHigh == 1024)
+        #expect(bundledSource.hasAlpha)
+        for (x, y) in [
+            (0, 0),
+            (bundledSource.pixelsWide - 1, 0),
+            (0, bundledSource.pixelsHigh - 1),
+            (bundledSource.pixelsWide - 1, bundledSource.pixelsHigh - 1),
+        ] {
+            #expect(bundledSource.colorAt(x: x, y: y)?.alphaComponent ?? 1 <= 1.0 / 255.0)
+        }
         let intelSource = try #require(NSBitmapImageRep(data: Data(contentsOf:
             root.appendingPathComponent("Resources/AppIcon-intel.png")
         )))
