@@ -572,8 +572,7 @@ if [[ -d "$ROOT/Resources/AppIcons" ]]; then
     bundled_icon="$APP/Contents/Resources/AppIcons/$relative_icon_path"
     expected_source="$source_icon"
     if [[ "$RELEASE_VARIANT" == "intel" &&
-          ( "$relative_icon_path" == "standard.png" ||
-            "$relative_icon_path" == "faceted-duck.png" ) ]]; then
+          "$relative_icon_path" == "faceted-duck.png" ]]; then
       expected_source="$ROOT/Resources/AppIcon-intel.png"
     fi
     test -f "$bundled_icon"
