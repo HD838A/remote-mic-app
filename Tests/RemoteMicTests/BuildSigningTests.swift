@@ -33,6 +33,10 @@ struct BuildSigningTests {
             contentsOf: root.appendingPathComponent("scripts/verify-app.sh"),
             encoding: .utf8
         )
+        let buildSource = try String(
+            contentsOf: root.appendingPathComponent("scripts/build-app.sh"),
+            encoding: .utf8
+        )
 
         #expect(representation.pixelsWide == 1024)
         #expect(representation.pixelsHigh == 1024)
@@ -77,6 +81,8 @@ struct BuildSigningTests {
         #expect(verifySource.contains("CFBundleIconName"))
         #expect(verifySource.contains("Assets.car"))
         #expect(verifySource.contains("*.icon(N)"))
+        #expect(buildSource.contains("Resources/AppIcons/faceted-duck.png"))
+        #expect(!buildSource.contains("for app_icon_name in standard faceted-duck"))
     }
 
     @Test func buildDefaultsToStableAdHocSigning() throws {

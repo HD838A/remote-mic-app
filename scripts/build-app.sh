@@ -640,11 +640,9 @@ if [[ -d "$ROOT/Resources/AppIcons" ]]; then
     "$ROOT/Resources/AppIcons" \
     "$APP_DIR/Contents/Resources/AppIcons"
   if [[ "$RELEASE_VARIANT" == "intel" ]]; then
-    for app_icon_name in standard faceted-duck; do
-      ditto --norsrc --noextattr --noqtn --noacl \
-        "$ROOT/Resources/AppIcon-intel.png" \
-        "$APP_DIR/Contents/Resources/AppIcons/$app_icon_name.png"
-    done
+    ditto --norsrc --noextattr --noqtn --noacl \
+      "$ROOT/Resources/AppIcon-intel.png" \
+      "$APP_DIR/Contents/Resources/AppIcons/faceted-duck.png"
   fi
 fi
 LOCALIZATION_DIRS=("$ROOT"/Resources/*.lproj(N))
