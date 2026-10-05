@@ -1,5 +1,6 @@
 # Bug 记录
 
+- [macOS Finder 与 Launchpad 图标出现银白色外框](./2026-10-05-macos-app-icon-system-wrapper.html)
 - [遥控器卡片空白区域点击失效](./2026-10-05-remote-card-hit-area.html)
 - [移动端连接状态、说明与授权图标显示问题](./2026-10-03-mobile-connection-presentation.md)
 - [全键盘控制导入误报 shortcuts](./2026-10-05-full-keyboard-access-shortcuts.html)

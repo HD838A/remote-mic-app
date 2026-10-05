@@ -36,6 +36,11 @@ RELEASE_SWIFT_BUILD_TIMEOUT_SECONDS="${RELEASE_SWIFT_BUILD_TIMEOUT_SECONDS:-300}
 RELEASE_CODESIGN_TIMEOUT_SECONDS="${RELEASE_CODESIGN_TIMEOUT_SECONDS:-45}"
 RELEASE_STAGE_RUNNER="$ROOT/scripts/run-release-stage.sh"
 
+ICON_ICNS_RESOURCE="AppIcon.icns"
+if [[ "$RELEASE_VARIANT" == "intel" ]]; then
+  ICON_ICNS_RESOURCE="AppIcon-intel.icns"
+fi
+
 if [[ "$#" -ne 0 ]]; then
   print -u2 "usage: $0"
   exit 1
@@ -618,8 +623,10 @@ ditto --norsrc --noextattr --noqtn --noacl \
 ditto --norsrc --noextattr --noqtn --noacl \
   "$ROOT/Resources/Onboarding" \
   "$APP_DIR/Contents/Resources/Onboarding"
+ditto --norsrc --noextattr --noqtn --noacl \
+  "$ROOT/Resources/$ICON_ICNS_RESOURCE" \
+  "$APP_DIR/Contents/Resources/AppIcon.icns"
 for icon_resource in \
-  AppIcon.icns \
   StatusIconTemplate.png \
   StatusIconTemplate@2x.png \
   StatusIconActiveTemplate.png \
@@ -632,6 +639,13 @@ if [[ -d "$ROOT/Resources/AppIcons" ]]; then
   ditto --norsrc --noextattr --noqtn --noacl \
     "$ROOT/Resources/AppIcons" \
     "$APP_DIR/Contents/Resources/AppIcons"
+  if [[ "$RELEASE_VARIANT" == "intel" ]]; then
+    for app_icon_name in standard faceted-duck; do
+      ditto --norsrc --noextattr --noqtn --noacl \
+        "$ROOT/Resources/AppIcon-intel.png" \
+        "$APP_DIR/Contents/Resources/AppIcons/$app_icon_name.png"
+    done
+  fi
 fi
 LOCALIZATION_DIRS=("$ROOT"/Resources/*.lproj(N))
 if (( ${#LOCALIZATION_DIRS} == 0 )); then

@@ -20,7 +20,7 @@ struct BuildSigningTests {
         }
     }
 
-    @Test func appIconUsesTransparentMacOSAsset() throws {
+    @Test func appIconUsesThePlatformSourceAsset() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -37,38 +37,27 @@ struct BuildSigningTests {
         #expect(representation.pixelsWide == 1024)
         #expect(representation.pixelsHigh == 1024)
         #expect(representation.hasAlpha)
-        let corners: [(Int, Int)] = [
-            (0, 0),
-            (representation.pixelsWide - 1, 0),
-            (0, representation.pixelsHigh - 1),
-            (representation.pixelsWide - 1, representation.pixelsHigh - 1),
-        ]
-        for (x, y) in corners {
-            let alpha = representation.colorAt(x: x, y: y)?.alphaComponent ?? 1
-            #expect(alpha <= (1.0 / 255.0))
-        }
+        #expect(representation.colorAt(x: 0, y: 0)?.alphaComponent ?? 0 >= 0.5)
         let centerAlpha = representation.colorAt(
             x: representation.pixelsWide / 2,
             y: representation.pixelsHigh / 2
         )?.alphaComponent ?? 0
         #expect(centerAlpha >= 0.5)
 
-        let source = try #require(NSImage(contentsOf: root.appendingPathComponent(
+        let bundledSource = try Data(contentsOf: root.appendingPathComponent(
             "Resources/AppIcons/faceted-duck.png"
+        ))
+        let appIconSource = try Data(contentsOf: iconURL)
+        #expect(bundledSource == appIconSource)
+        let intelSource = try #require(NSBitmapImageRep(data: Data(contentsOf:
+            root.appendingPathComponent("Resources/AppIcon-intel.png")
         )))
-        let expectedIcon = AppIconCatalog.applicationIconImage(source, contentScale: 0.92)
-        let expectedData = try #require(expectedIcon.tiffRepresentation)
-        let expectedBitmap = try #require(NSBitmapImageRep(data: expectedData))
-        for (x, y) in [(50, 512), (256, 256), (512, 512), (768, 512), (512, 900)] {
-            let actual = try #require(representation.colorAt(x: x, y: y))
-            let expected = try #require(expectedBitmap.colorAt(x: x, y: y))
-            #expect(abs(actual.redComponent - expected.redComponent) <= 1.0 / 255.0)
-            #expect(abs(actual.greenComponent - expected.greenComponent) <= 1.0 / 255.0)
-            #expect(abs(actual.blueComponent - expected.blueComponent) <= 1.0 / 255.0)
-            #expect(abs(actual.alphaComponent - expected.alphaComponent) <= 1.0 / 255.0)
-        }
+        #expect(intelSource.pixelsWide == 1024)
+        #expect(intelSource.pixelsHigh == 1024)
+        #expect(intelSource.hasAlpha)
+        #expect(intelSource.colorAt(x: 0, y: 0)?.alphaComponent ?? 1 <= 1.0 / 255.0)
         #expect(verifySource.contains("/usr/bin/iconutil --convert iconset"))
-        #expect(verifySource.contains("app icon corner is not transparent"))
+        #expect(verifySource.contains("Intel app icon corner is not transparent"))
     }
 
     @Test func buildDefaultsToStableAdHocSigning() throws {

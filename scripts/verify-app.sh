@@ -17,6 +17,13 @@ APPLE_REMOTE_HCI_UPGRADE_SERVICE="$APP/Contents/Library/LaunchServices/com.hd838
 OPUS_DYLIB="$APP/Contents/Frameworks/libopus.0.dylib"
 SPARKLE_FRAMEWORK="$APP/Contents/Frameworks/Sparkle.framework"
 APP_ICON="$APP/Contents/Resources/AppIcon.icns"
+ICON_SOURCE="$ROOT/Resources/AppIcon.png"
+EXPECTED_ICON_ICNS="$ROOT/Resources/AppIcon.icns"
+if [[ "$RELEASE_VARIANT" == "intel" ]]; then
+  APP_ICON="$APP/Contents/Resources/AppIcon.icns"
+  ICON_SOURCE="$ROOT/Resources/AppIcon-intel.png"
+  EXPECTED_ICON_ICNS="$ROOT/Resources/AppIcon-intel.icns"
+fi
 EXPECTED_DEVELOPER_TEAM_ID="${EXPECTED_DEVELOPER_TEAM_ID:-}"
 REQUIRE_DEVELOPER_ID_SIGNING="${REQUIRE_DEVELOPER_ID_SIGNING:-0}"
 REQUIRE_NOTARIZATION="${REQUIRE_NOTARIZATION:-0}"
@@ -143,7 +150,7 @@ for onboarding_image in "$ROOT"/Resources/Onboarding/*.png(N); do
   test -f "$APP/Contents/Resources/Onboarding/${onboarding_image:t}"
 done
 test -f "$APP_ICON"
-cmp -s "$ROOT/Resources/AppIcon.icns" "$APP_ICON"
+cmp -s "$EXPECTED_ICON_ICNS" "$APP_ICON"
 ICON_CHECK_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/sayall-app-icon.XXXXXX")"
 ICONSET="$ICON_CHECK_ROOT/AppIcon.iconset"
 /usr/bin/iconutil --convert iconset --output "$ICONSET" "$APP_ICON"
@@ -163,7 +170,7 @@ for icon_name in "${EXPECTED_ICON_NAMES[@]}"; do
   test -f "$ICONSET/$icon_name"
 done
 ICON_IMAGES=("$ICONSET"/*.png(N))
-/usr/bin/xcrun swift - "$ROOT/Resources/AppIcon.png" "${ICON_IMAGES[@]}" <<'SWIFT'
+/usr/bin/xcrun swift - "$ICON_SOURCE" "${ICON_IMAGES[@]}" <<'SWIFT'
 import AppKit
 import Darwin
 import Foundation
@@ -190,10 +197,13 @@ for (index, path) in CommandLine.arguments.dropFirst().enumerated() {
         (0, representation.pixelsHigh - 1),
         (representation.pixelsWide - 1, representation.pixelsHigh - 1),
     ]
-    for (x, y) in corners {
-        let alpha = representation.colorAt(x: x, y: y)?.alphaComponent ?? 1
-        if alpha > (1.0 / 255.0) {
-            fail("app icon corner is not transparent: \(path) (\(x),\(y))")
+    let requiresTransparentCorners = path.contains("AppIcon-intel")
+    if requiresTransparentCorners {
+        for (x, y) in corners {
+            let alpha = representation.colorAt(x: x, y: y)?.alphaComponent ?? 1
+            if alpha > (1.0 / 255.0) {
+                fail("Intel app icon corner is not transparent: \(path) (\(x),\(y))")
+            }
         }
     }
     let centerAlpha = representation.colorAt(
@@ -551,8 +561,14 @@ if [[ -d "$ROOT/Resources/AppIcons" ]]; then
   while IFS= read -r source_icon; do
     relative_icon_path="${source_icon#$ROOT/Resources/AppIcons/}"
     bundled_icon="$APP/Contents/Resources/AppIcons/$relative_icon_path"
+    expected_source="$source_icon"
+    if [[ "$RELEASE_VARIANT" == "intel" &&
+          ( "$relative_icon_path" == "standard.png" ||
+            "$relative_icon_path" == "faceted-duck.png" ) ]]; then
+      expected_source="$ROOT/Resources/AppIcon-intel.png"
+    fi
     test -f "$bundled_icon"
-    /usr/bin/cmp -s "$source_icon" "$bundled_icon"
+    /usr/bin/cmp -s "$expected_source" "$bundled_icon"
   done < <(find "$ROOT/Resources/AppIcons" -type f | LC_ALL=C sort)
 fi
 for onboarding_image in "$ROOT"/Resources/Onboarding/*.png(N); do
