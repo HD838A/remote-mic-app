@@ -56,8 +56,15 @@ struct BuildSigningTests {
         #expect(intelSource.pixelsHigh == 1024)
         #expect(intelSource.hasAlpha)
         #expect(intelSource.colorAt(x: 0, y: 0)?.alphaComponent ?? 1 <= 1.0 / 255.0)
+        let intelPackagedIcon = try Data(contentsOf: root.appendingPathComponent(
+            "Resources/AppIcon-intel.icns"
+        ))
+        let applePackagedIcon = try Data(contentsOf: root.appendingPathComponent(
+            "Resources/AppIcon.icns"
+        ))
+        #expect(intelPackagedIcon == applePackagedIcon)
         #expect(verifySource.contains("/usr/bin/iconutil --convert iconset"))
-        #expect(verifySource.contains("Intel app icon corner is not transparent"))
+        #expect(verifySource.contains("packaged app icon corner is not opaque"))
     }
 
     @Test func buildDefaultsToStableAdHocSigning() throws {

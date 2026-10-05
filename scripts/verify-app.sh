@@ -21,7 +21,6 @@ ICON_SOURCE="$ROOT/Resources/AppIcon.png"
 EXPECTED_ICON_ICNS="$ROOT/Resources/AppIcon.icns"
 if [[ "$RELEASE_VARIANT" == "intel" ]]; then
   APP_ICON="$APP/Contents/Resources/AppIcon.icns"
-  ICON_SOURCE="$ROOT/Resources/AppIcon-intel.png"
   EXPECTED_ICON_ICNS="$ROOT/Resources/AppIcon-intel.icns"
 fi
 EXPECTED_DEVELOPER_TEAM_ID="${EXPECTED_DEVELOPER_TEAM_ID:-}"
@@ -197,13 +196,10 @@ for (index, path) in CommandLine.arguments.dropFirst().enumerated() {
         (0, representation.pixelsHigh - 1),
         (representation.pixelsWide - 1, representation.pixelsHigh - 1),
     ]
-    let requiresTransparentCorners = path.contains("AppIcon-intel")
-    if requiresTransparentCorners {
-        for (x, y) in corners {
-            let alpha = representation.colorAt(x: x, y: y)?.alphaComponent ?? 1
-            if alpha > (1.0 / 255.0) {
-                fail("Intel app icon corner is not transparent: \(path) (\(x),\(y))")
-            }
+    for (x, y) in corners {
+        let alpha = representation.colorAt(x: x, y: y)?.alphaComponent ?? 1
+        if alpha < (1.0 - 1.0 / 255.0) {
+            fail("packaged app icon corner is not opaque: \(path) (\(x),\(y))")
         }
     }
     let centerAlpha = representation.colorAt(
