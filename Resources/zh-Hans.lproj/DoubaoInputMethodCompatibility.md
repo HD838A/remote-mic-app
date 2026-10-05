@@ -1,6 +1,6 @@
 # 豆包输入法兼容虚拟麦克风
 
-MiRemoteV 2ch 是 Remote Mic 提供的独立双声道回环设备，用于让豆包能够识别遥控器语音。它可与 BlackHole 2ch 并存，不会修改、删除或覆盖 BlackHole。
+SayAll 是无线麦提供的独立双声道回环设备。旧安装继续使用 MiRemoteV 2ch，设备身份和已有选择保持不变。该设备用于让豆包能够识别遥控器语音。它可与 BlackHole 2ch 并存，不会修改、删除或覆盖 BlackHole。
 
 ## 安装
 
@@ -8,23 +8,23 @@ MiRemoteV 2ch 是 Remote Mic 提供的独立双声道回环设备，用于让豆
 
 1. 在 DMG 根目录双击 `Install SayAll.pkg`。
 2. 在系统安装器中按提示输入管理员密码。
-3. 安装器会同时安装无线麦SayAll.app 和 MiRemoteV 2ch，重启 CoreAudio，并自动启动 SayAll。
+3. 安装器会同时安装无线麦SayAll.app 和兼容麦克风，重启 CoreAudio，并自动启动 SayAll。
 4. 左键单击菜单栏图标，在“连接与语音”中点击“刷新音频设备”。
-5. 点击“选择 MiRemoteV 2ch”。
+5. 选择系统显示的兼容麦克风。新安装为 SayAll；旧安装为 MiRemoteV 2ch。
 6. 完全退出并重新打开豆包后再次测试。
 
 ## 验证
 
-在 QuickTime Player 中选择“文件 → 新建音频录制”，把输入设备设为 MiRemoteV 2ch。按住遥控器语音键说话时，输入电平应发生变化。
+在 QuickTime Player 中选择“文件 → 新建音频录制”，把输入设备设为 SayAll（旧安装为 MiRemoteV 2ch）。按住遥控器语音键说话时，输入电平应发生变化。
 
 如果 QuickTime 有电平但豆包没有反应，请重新单击可编辑输入框，确认插入光标已经出现，再按住语音键。
 
 ## 卸载
 
-从同一 Release 下载并双击 `SayAll-<版本>-Uninstaller.pkg`。它会校验并将无线麦SayAll.app、已识别的历史 App 与 MiRemoteV 2ch 移到 macOS 废纸篓，然后重启 CoreAudio；不会修改 BlackHole 或无线麦的本地设置。
+从同一 Release 下载并双击 `SayAll-<版本>-Uninstaller.pkg`。它会校验并将无线麦SayAll.app、已识别的历史 App 与兼容麦克风 移到 macOS 废纸篓，然后重启 CoreAudio；不会修改 BlackHole 或无线麦的本地设置。
 
 ## 技术与许可
 
-该驱动由固定的 BlackHole v0.7.1 源码、项目补丁和发布构建参数生成。实际 Audio Device 报告为 USB transport，设备名为 MiRemoteV 2ch。
+该驱动由固定的 BlackHole v0.7.1 源码、项目补丁和发布构建参数生成。实际 Audio Device 报告为 USB transport，新安装设备名为 SayAll，旧安装保留 MiRemoteV 2ch。
 
 BlackHole 采用 GPL-3.0 许可。详情见应用包内的 THIRD_PARTY_NOTICES.md。

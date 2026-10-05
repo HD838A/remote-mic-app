@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="zh-CN"><meta charset="utf-8"><title>健康驱动保留测试误报通过</title>
+<body>
+<h1>健康驱动保留测试误报通过</h1>
+<p>级别：P2。状态：测试已修复。这是验证缺口，未确认生产健康驱动检查存在相同问题。</p>
+<h2>复现与日志</h2>
+<p>在候选提交 698522aa68dfcc310f38b9b5dfcb574ac053c65a 运行 scripts/test-driver-naming.sh。preserve 报告通过，但副本 root Trash 中出现被替换的原驱动。重跑该副本脚本得到：</p>
+<pre>driver_is_healthy_and_current:10: command not found: driver_architecture
+DRIVER_NAMING phase=installed result=verified variant=legacy changed=1 audio_loaded=unknown
+scenario=preserve result=passed</pre>
+<p>预期为原目录保持不动，changed=0，不产生替换备份。</p>
+<h2>根因与修复</h2>
+<p>测试只提取 driver_is_healthy_and_current，未提取它调用的 driver_architecture。检查失败后进入替换分支；旧驱动被换成相同字节。测试只比较二进制摘要和 Info.plist，未检查替换行为。</p>
+<p>扩大提取范围，包含生产架构检测函数。增加原目录 inode 不变、changed=0、无 command not found 和无替换备份的检查。保存每个副本用例的输出。生产安装器本身已有架构检测函数，无需改动。</p>
+<h2>验证与边界</h2>
+<pre>scripts/test-driver-naming.sh
+RELEASE_VARIANT=intel scripts/test-driver-naming.sh
+
+scenario=preserve result=passed
+pkg_scenario=legacy_driver_retry result=passed</pre>
+<p>两架构各 19 个副本场景通过。健康旧驱动目录身份保持，日志为 changed=0，未产生替换备份。测试不安装真实 HAL，不重启 CoreAudio；结果不能证明真实升级、音频加载或第三方文字上屏。</p>
+<p>实机要求见 <a href="../Testing/VirtualMicrophoneNaming.md">测试手册</a>。</p>
+</body></html>

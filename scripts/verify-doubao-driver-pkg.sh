@@ -175,7 +175,13 @@ case "$MODE" in
     test -f "$PACKAGE_INFO"
     /usr/bin/grep -Fq 'identifier="com.hd838a.RemoteMic.installer"' "$PACKAGE_INFO"
     /usr/bin/grep -Fq '<payload ' "$PACKAGE_INFO"
+    test "$(/usr/bin/xmllint --xpath 'count(/pkg-info/relocate/bundle[@id="com.hd838a.MiRemoteV2ch"])' "$PACKAGE_INFO")" = 0
+    test "$(/usr/bin/xmllint --xpath 'count(/pkg-info/bundle-version/bundle[@id="com.hd838a.MiRemoteV2ch"])' "$PACKAGE_INFO")" = 0
     /usr/bin/lsbom -s "$COMPONENT_PACKAGE/Bom" > "$PAYLOAD_FILES"
+    if /usr/bin/grep -q '^./Library/Audio/Plug-Ins/HAL/' "$PAYLOAD_FILES"; then
+      print -u2 "Installer payload must stage candidates, never deploy both to HAL"
+      exit 1
+    fi
     /usr/bin/grep -qx './Applications/SayAll.app/Contents/Info.plist' "$PAYLOAD_FILES"
     /usr/bin/grep -qx './Applications/SayAll.app/Contents/MacOS/RemoteMic' "$PAYLOAD_FILES"
     if /usr/bin/grep -Eq '^\./Library/(LaunchDaemons/com\.hd838a\.SayAll\.AppleRemoteHCIService\.plist|PrivilegedHelperTools/com\.hd838a\.SayAll\.AppleRemoteHCIService)$' "$PAYLOAD_FILES"; then
@@ -186,6 +192,15 @@ case "$MODE" in
     /usr/bin/grep -qx './Library/Application Support/RemoteMic/Installer/MiRemoteV2ch.driver/Contents/MacOS/MiRemoteV2ch' "$PAYLOAD_FILES"
     test -x "$SCRIPTS_DIR/preinstall"
     test -x "$SCRIPTS_DIR/postinstall"
+    test -f "$SCRIPTS_DIR/driver-naming.zsh"
+    for naming_script in preinstall postinstall driver-naming.zsh; do
+      /bin/zsh -n "$SCRIPTS_DIR/$naming_script"
+    done
+    /usr/bin/grep -Fq 'resolve_driver_naming' "$SCRIPTS_DIR/preinstall"
+    /usr/bin/grep -Fq 'commit_driver_naming_record' "$SCRIPTS_DIR/postinstall"
+    /usr/bin/grep -Fq 'check_driver_naming_duplicates' "$SCRIPTS_DIR/preinstall"
+    /usr/bin/grep -qx './Library/Application Support/RemoteMic/Installer/legacy/MiRemoteV2ch.driver/Contents/Info.plist' "$PAYLOAD_FILES"
+    /usr/bin/grep -qx './Library/Application Support/RemoteMic/Installer/legacy/MiRemoteV2ch.driver/Contents/MacOS/MiRemoteV2ch' "$PAYLOAD_FILES"
     test -f "$SCRIPTS_DIR/trash-legacy-app.zsh"
     test -f "$SCRIPTS_DIR/release-variant.plist"
     test "$(/usr/bin/plutil -extract ExpectedArchitecture raw -o - \
@@ -218,7 +233,7 @@ case "$MODE" in
     /usr/bin/grep -Fq 'before updating the audio driver' "$SCRIPTS_DIR/preinstall"
     /usr/bin/grep -Fq 'driver_is_healthy_and_current()' "$SCRIPTS_DIR/postinstall"
     /usr/bin/grep -Fq '/usr/bin/file -b "$1"' "$SCRIPTS_DIR/postinstall"
-    /usr/bin/grep -Fq 'The existing MiRemoteV 2ch is healthy and was kept in place.' "$SCRIPTS_DIR/postinstall"
+    /usr/bin/grep -Fq 'The existing $DRIVER_DISPLAY_NAME is healthy and was kept in place.' "$SCRIPTS_DIR/postinstall"
     /usr/bin/grep -Fq '/usr/bin/codesign --verify --deep --strict "$DESTINATION"' "$SCRIPTS_DIR/postinstall"
     /usr/bin/grep -Fq 'DRIVER_BACKUP=' "$SCRIPTS_DIR/postinstall"
     /usr/bin/grep -Fq 'restore_previous_driver' "$SCRIPTS_DIR/postinstall"
@@ -228,7 +243,7 @@ case "$MODE" in
       "$SCRIPTS_DIR/postinstall"
     /usr/bin/grep -Fq 'STAGED_DRIVER_TRASH_ROOT="${TARGET_VOLUME%/}/var/root/.Trash"' \
       "$SCRIPTS_DIR/postinstall"
-    /usr/bin/grep -Fq '/bin/mv -n -- "${STAGED_DRIVER:h}" "$STAGED_DRIVER_TRASH_DESTINATION"' \
+    /usr/bin/grep -Fq '/bin/mv -n -- "$STAGING_ROOT" "$STAGED_DRIVER_TRASH_DESTINATION"' \
       "$SCRIPTS_DIR/postinstall"
     if /usr/bin/grep -Fq '/bin/rm -rf -- "$DESTINATION"' "$SCRIPTS_DIR/postinstall"; then
       print -u2 "installer must preserve the previous driver for rollback"
@@ -312,6 +327,9 @@ case "$MODE" in
     /usr/sbin/pkgutil --expand-full "$PACKAGE" "$FULL_EXPANDED"
     PAYLOAD_APP="$(/usr/bin/find "$FULL_EXPANDED" -type d -path '*/Applications/SayAll.app' -print -quit)"
     PAYLOAD_DRIVER="$(/usr/bin/find "$FULL_EXPANDED" -type d -path '*/Library/Application Support/RemoteMic/Installer/MiRemoteV2ch.driver' -print -quit)"
+    PAYLOAD_LEGACY_DRIVER="$(/usr/bin/find "$FULL_EXPANDED" -type d -path '*/Library/Application Support/RemoteMic/Installer/legacy/MiRemoteV2ch.driver' -print -quit)"
+    "$ROOT/scripts/verify-doubao-driver.sh" "$PAYLOAD_DRIVER" brand
+    "$ROOT/scripts/verify-doubao-driver.sh" "$PAYLOAD_LEGACY_DRIVER" legacy
     PAYLOAD_HCI_SERVICE="$(/usr/bin/find "$FULL_EXPANDED" -type f -path '*/Library/PrivilegedHelperTools/com.hd838a.SayAll.AppleRemoteHCIService' -print -quit)"
     PAYLOAD_HCI_PLIST="$(/usr/bin/find "$FULL_EXPANDED" -type f -path '*/Library/LaunchDaemons/com.hd838a.SayAll.AppleRemoteHCIService.plist' -print -quit)"
     test -n "$PAYLOAD_APP"

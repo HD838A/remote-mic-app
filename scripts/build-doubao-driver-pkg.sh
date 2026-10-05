@@ -5,6 +5,7 @@ ROOT="${0:A:h:h}"
 source "$ROOT/scripts/release-variant.sh"
 OUTPUT_DIR="$RELEASE_OUTPUT_DIR"
 DRIVER="$OUTPUT_DIR/MiRemoteV2ch.driver"
+LEGACY_DRIVER="$OUTPUT_DIR/legacy/MiRemoteV2ch.driver"
 APP="$OUTPUT_DIR/SayAll.app"
 APPLE_REMOTE_HCI_SERVICE="$APP/Contents/Helpers/SayAllAppleRemoteHCIService"
 APPLE_REMOTE_HCI_PLIST="$ROOT/packaging/apple-remote-hci/com.hd838a.SayAll.AppleRemoteHCIService.plist"
@@ -136,7 +137,8 @@ if [[ "$REQUIRE_DEVELOPER_ID_SIGNING" == "1" && "$INSTALLER_SIGNING_IDENTITY" ==
   print -u2 "Developer ID Installer signing is required"
   exit 1
 fi
-"$ROOT/scripts/verify-doubao-driver.sh" "$DRIVER"
+"$ROOT/scripts/verify-doubao-driver.sh" "$DRIVER" brand
+"$ROOT/scripts/verify-doubao-driver.sh" "$LEGACY_DRIVER" legacy
 "$ROOT/scripts/verify-app.sh" "$APP"
 if [[ ! -x "$APPLE_REMOTE_HCI_SERVICE" ]]; then
   print -u2 "Siri Remote helper is missing from the release App; configure SAYALL_SIRI_REMOTE_PACKAGE_PATH before building the Installer package"
@@ -159,6 +161,9 @@ move_existing_path_to_trash "$LEGACY_UNINSTALL_PACKAGE" "${LEGACY_UNINSTALL_PACK
 /usr/bin/ditto --norsrc --noextattr --noqtn --noacl \
   "$DRIVER" \
   "$PAYLOAD_ROOT/Library/Application Support/RemoteMic/Installer/MiRemoteV2ch.driver"
+/usr/bin/ditto --norsrc --noextattr --noqtn --noacl \
+  "$LEGACY_DRIVER" \
+  "$PAYLOAD_ROOT/Library/Application Support/RemoteMic/Installer/legacy/MiRemoteV2ch.driver"
 /usr/bin/ditto --norsrc --noextattr --noqtn --noacl \
   "$ROOT/packaging/doubao-driver/install" "$INSTALL_SCRIPTS"
 /usr/bin/ditto --norsrc --noextattr --noqtn --noacl \
@@ -185,13 +190,16 @@ run_release_stage installer-component-analysis "$RELEASE_PKGBUILD_TIMEOUT_SECOND
   "$COMPONENT_PLIST"
 
 APP_COMPONENT_INDEX=-1
+DRIVER_COMPONENT_COUNT=0
 component_index=0
 while true; do
   bundle_path="$(/usr/libexec/PlistBuddy \
     -c "Print :$component_index:RootRelativeBundlePath" \
     "$COMPONENT_PLIST" 2>/dev/null || true)"
   [[ -z "$bundle_path" ]] && break
-  if [[ "$bundle_path" == "Applications/SayAll.app" ]]; then
+  if [[ "$bundle_path" == "Applications/SayAll.app" ||
+        "$bundle_path" == "Library/Application Support/RemoteMic/Installer/MiRemoteV2ch.driver" ||
+        "$bundle_path" == "Library/Application Support/RemoteMic/Installer/legacy/MiRemoteV2ch.driver" ]]; then
     if ! /usr/libexec/PlistBuddy \
       -c "Set :$component_index:BundleIsRelocatable false" \
       "$COMPONENT_PLIST" 2>/dev/null; then
@@ -199,13 +207,19 @@ while true; do
         -c "Add :$component_index:BundleIsRelocatable bool false" \
         "$COMPONENT_PLIST"
     fi
-    APP_COMPONENT_INDEX="$component_index"
-    break
+    if [[ "$bundle_path" == "Applications/SayAll.app" ]]; then
+      APP_COMPONENT_INDEX="$component_index"
+    else
+      # HAL selection belongs to postinstall. Installer must neither relocate
+      # these same-identity candidates nor skip one on bundle version checks.
+      /usr/libexec/PlistBuddy -c "Set :$component_index:BundleIsVersionChecked false" "$COMPONENT_PLIST"
+      DRIVER_COMPONENT_COUNT=$((DRIVER_COMPONENT_COUNT + 1))
+    fi
   fi
   component_index=$((component_index + 1))
 done
-if [[ "$APP_COMPONENT_INDEX" -lt 0 ]]; then
-  print -u2 "unable to identify the SayAll.app component in the generated plist"
+if [[ "$APP_COMPONENT_INDEX" -lt 0 || "$DRIVER_COMPONENT_COUNT" -ne 2 ]]; then
+  print -u2 "unable to identify the App and both driver candidates in the generated plist"
   exit 1
 fi
 

@@ -321,7 +321,7 @@ enum AgentConfigurationCommand {
         let devices = CoreAudioDeviceCatalog.outputDevices()
         return devices.first { device in
             device.uid == DoubaoAudioDevicePolicy.deviceUID ||
-                device.name == DoubaoAudioDevicePolicy.deviceName ||
+                device.name == DoubaoAudioDevicePolicy.legacyDeviceName ||
                 device.name.localizedCaseInsensitiveContains("BlackHole 2ch")
         }
     }

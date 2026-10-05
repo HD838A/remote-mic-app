@@ -13,6 +13,7 @@ LEGACY_REMOTE_MIC_APP_PLIST="$LEGACY_REMOTE_MIC_APP_DESTINATION/Contents/Info.pl
 LEGACY_CHINESE_APP_DESTINATION="${TARGET_VOLUME%/}/Applications/无线麦.app"
 LEGACY_CHINESE_APP_PLIST="$LEGACY_CHINESE_APP_DESTINATION/Contents/Info.plist"
 OWNED_APP_FOUND=0
+source "$SCRIPT_DIR/driver-naming.zsh"
 
 uses_chinese_locale() {
   local locale="${LC_ALL:-${LC_MESSAGES:-${LANG:-}}}"
@@ -73,8 +74,8 @@ if [[ -e "$DESTINATION" ]]; then
     exit 2
   fi
   installer_message \
-    "检测到已有 MiRemoteV 2ch；安装后会检查它是否需要更新。" \
-    "An existing MiRemoteV 2ch was found and will be checked before any update."
+    "检测到已有兼容麦克风；安装后会检查它是否需要更新。" \
+    "An existing compatible microphone was found and will be checked before any update."
 fi
 
 if [[ -e "$APP_DESTINATION" || -L "$APP_DESTINATION" ]]; then
@@ -143,6 +144,32 @@ check_legacy_app \
   "$LEGACY_CHINESE_APP_DESTINATION" \
   "$LEGACY_CHINESE_APP_PLIST" \
   "无线麦.app"
+
+# Decide before pkgbuild writes the new App or receipt. Pending selection lives
+# beside the extracted scripts, never in a payload path replaced by Installer.
+prepare_driver_naming_directory "$TARGET_VOLUME" || { driver_naming_failure unsafe_state_directory; exit 2; }
+check_driver_naming_duplicates "$TARGET_VOLUME" "$DESTINATION" || { driver_naming_failure duplicate_driver; exit 2; }
+RECORDED_NAMING="$(driver_naming_record)" || { driver_naming_failure invalid_state; exit 2; }
+INSTALLED_NAMING=none
+if [[ -e "$DESTINATION" || -L "$DESTINATION" ]]; then
+  driver_naming_identity "$DESTINATION" || { driver_naming_failure unknown_identity; exit 2; }
+  INSTALLED_NAMING="$(driver_naming_variant "$DESTINATION" || print unknown)"
+fi
+HISTORICAL_INSTALL=no
+if has_driver_naming_history "$TARGET_VOLUME"; then HISTORICAL_INSTALL=yes; fi
+SELECTED_NAMING="$(resolve_driver_naming "$INSTALLED_NAMING" "$RECORDED_NAMING" "$HISTORICAL_INSTALL")" || {
+  driver_naming_failure conflicting_evidence; exit 2
+}
+NAMING_SELECTION="$SCRIPT_DIR/driver-naming-selection.plist"
+[[ ! -e "$NAMING_SELECTION" && ! -L "$NAMING_SELECTION" ]] || { driver_naming_failure stale_selection; exit 2; }
+(umask 077; set -o noclobber; print -r -- '<?xml version="1.0"?><plist version="1.0"><dict/></plist>' > "$NAMING_SELECTION")
+/usr/bin/plutil -insert Variant -string "$SELECTED_NAMING" "$NAMING_SELECTION"
+/usr/bin/plutil -insert PackageBuild -string "$PACKAGE_BUILD" "$NAMING_SELECTION"
+# Preserve this decision before Installer writes the App/receipt. If payload
+# deployment fails or is cancelled, a retry must not treat its residue as a
+# historical legacy installation. This records a choice, not a loaded driver.
+commit_driver_naming_record "$SELECTED_NAMING" || { driver_naming_failure state_commit_failed; exit 2; }
+print "DRIVER_NAMING phase=selected result=ready variant=$SELECTED_NAMING history=$HISTORICAL_INSTALL record=verified"
 
 if [[ "$OWNED_APP_FOUND" -eq 1 ]]; then
   /usr/bin/pkill -x RemoteMic 2>/dev/null || true

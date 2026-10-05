@@ -1342,7 +1342,11 @@ struct SettingsView: View {
                 }
 
                 HStack(spacing: 10) {
-                    Button("audio.compatibility.select_microphone") { model.selectDoubaoAudioDevice() }
+                    Button(LocalizedMessage(
+                        "audio.compatibility.select_microphone", arguments: [
+                            DoubaoAudioDevicePolicy.device(in: model.audioDevices)?.name ?? DoubaoAudioDevicePolicy.deviceName
+                        ]
+                    ).text(using: localization)) { model.selectDoubaoAudioDevice() }
                         .compatibilityButtonStyle(.prominent)
                         .disabled(!model.hasDoubaoAudioDevice)
                     Button("audio.compatibility.open_install_guide") {
