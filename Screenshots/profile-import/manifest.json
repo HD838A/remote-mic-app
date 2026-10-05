@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "window_points": "1020x772",
+  "renderer": "Production SettingsView in an isolated native review app",
+  "access": "Free; no simulated entitlement in these screenshots",
+  "host_code_commit": "bbc2c96b8cd2c31edcff0e8f22ff2acd2552ba69",
+  "private_artifact_commit": "68f089773bc6c947f01026fea9a78b63f14aeedc",
+  "approved_design_sha256": "5999044be1680d1c21c2988ef300698579daac097695e52287f6d48e766d419f",
+  "input_file": "full-keyboard-access.json",
+  "input_sha256": "872a64b51eb0520510588525530ccad9c8ce159cafed5faa96ac90aec9efe1b3",
+  "screenshots": [
+    {
+      "file": "confirm-zh-hans-light.jpg",
+      "format": "JPEG",
+      "width": 2040,
+      "height": 1544,
+      "bytes": 231464,
+      "sha256": "378c05dad0e857cfc0c6f70c99b87c4f00c4cc79652ae89e39a1e611e29671b0"
+    },
+    {
+      "file": "confirm-zh-hans-dark.jpg",
+      "format": "JPEG",
+      "width": 2040,
+      "height": 1544,
+      "bytes": 225309,
+      "sha256": "2284b320ce1ea61bb8691c75af52cfb6294e82047c419be9b06af13fe9e0b447"
+    },
+    {
+      "file": "confirm-en-light.jpg",
+      "format": "JPEG",
+      "width": 2040,
+      "height": 1544,
+      "bytes": 258651,
+      "sha256": "4c20489bbebd6bd95fe823d9d39e2a3e12d84aac83c649bc249279157d1e2deb"
+    },
+    {
+      "file": "confirm-en-dark.jpg",
+      "format": "JPEG",
+      "width": 2040,
+      "height": 1544,
+      "bytes": 254154,
+      "sha256": "dc3eeb658f9945860a88ba12a0ce44b15b23ca6c9a2508852a73c763d819288c"
+    }
+  ]
+}
