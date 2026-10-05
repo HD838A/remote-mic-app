@@ -807,10 +807,6 @@ struct SettingsView: View {
         case .buttonProfiles:
             if macroFeature.isButtonProfilesVisible {
                 VStack(spacing: 0) {
-                    membershipFeature.membershipRequiredView(forButtonProfiles: true) {
-                        selectedSection = .membership
-                        membershipFeature.refreshIfNeeded()
-                    }
                     macroFeature.buttonProfilesView(
                         selectedRemoteProfileID: settings.selectedRemoteProfileID,
                         remoteModel: settings.selectedRemoteProfile?.model,
@@ -820,7 +816,11 @@ struct SettingsView: View {
                             editingMappingProfileID = profile
                             selectedSection = .mapping
                         },
-                        chromecastReservedControlIDs: buttonProfilesChromecastReservedControls
+                        chromecastReservedControlIDs: buttonProfilesChromecastReservedControls,
+                        membershipNotice: membershipFeature.membershipRequiredView(forButtonProfiles: true) {
+                            selectedSection = .membership
+                            membershipFeature.refreshIfNeeded()
+                        }
                     )
                 }
             } else {

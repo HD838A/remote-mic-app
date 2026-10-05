@@ -1,0 +1,30 @@
+{
+  "hostCommit": "7986c4fa",
+  "privateCommit": "1aa201c",
+  "windowPoints": [
+    1020,
+    772
+  ],
+  "language": "zh-Hans",
+  "appearance": "light",
+  "files": [
+    {
+      "file": "profiles-after-fix-zh-light.jpg",
+      "sha256": "4db02bc0d08942799483e7b05632d1d211fc26c66f9963b7b950e1054e01fb0a",
+      "pixels": [
+        2040,
+        1544
+      ],
+      "format": "JPEG"
+    },
+    {
+      "file": "profile-return-after-fix-zh-light.jpg",
+      "sha256": "92b4cdafad434a6c1c31aec14a5d1c7747abc4dab80cb2b6dbcf6e17dea9e7b7",
+      "pixels": [
+        2040,
+        1544
+      ],
+      "format": "JPEG"
+    }
+  ]
+}

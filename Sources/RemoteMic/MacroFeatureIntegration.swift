@@ -437,7 +437,8 @@ final class MacroFeatureIntegration: ObservableObject {
         remoteModel: XiaomiRemoteModel?,
         hostActionSections: [ButtonProfileHostActionSection],
         onEditKeys: @escaping (UUID) -> Void = { _ in },
-        chromecastReservedControlIDs: Set<String> = ["left", "right", "select"]
+        chromecastReservedControlIDs: Set<String> = ["left", "right", "select"],
+        membershipNotice: AnyView = AnyView(EmptyView())
     ) -> AnyView {
         #if canImport(SayAllButtonProfiles)
         #if SAYALL_MACRO_REMOTE_CAPABILITIES
@@ -461,7 +462,8 @@ final class MacroFeatureIntegration: ObservableObject {
                         )
                     }
                 )
-            }
+            },
+            membershipNotice: membershipNotice
         )
         #else
         return buttonProfilesFeature.buttonProfilesView(
