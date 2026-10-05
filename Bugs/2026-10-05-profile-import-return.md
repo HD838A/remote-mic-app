@@ -39,7 +39,20 @@ theme: shadcn
 只检查中文 Light 模式，窗口为 1020 × 772。
 公开宿主测试和私有组件测试分别记录。
 构建后从已合入的 origin/main 重新打包。
-实际截图与最终验证结果在完成后补入本节。
+公开宿主 822 项测试通过，候选 App 包校验通过。
+同一 Codex 文件连续两次会员往返均通过。
+取消后方案数量不变，Free 可直接导出 `.sayall`。
+导出文件使用格式 1.0，最低读取版本为 1.0。
+
+| 状态 | 实际运行截图 |
+| --- | --- |
+| 标题位于会员提示之前 | [查看](../Screenshots/profile-import-return/profiles-after-fix-zh-light.jpg) |
+| 第二次返回保留完整预览 | [查看](../Screenshots/profile-import-return/profile-return-after-fix-zh-light.jpg) |
+
+[截图来源和摘要](../Screenshots/profile-import-return/manifest.json)。
+候选宿主为 `7986c4fa`，私有组件为 `1aa201c`。
+宿主集成检查原先固定了不含界面参数的旧依赖。
+现固定到已合入的私有修复 `e6c60a8`，再运行 CI。
 
 ## E 边界
 
