@@ -202,7 +202,7 @@
   - 2026-09-06 安装器发行品牌统一为 SayAll：Apple Silicon 使用 `Install SayAll.pkg` / `Uninstall SayAll.pkg`，Intel 使用带 `Intel` 后缀的对应名称，Installer.app 标题同步为 SayAll；未来公开独立 PKG 使用 `SayAll-VERSION-Installer.pkg` / `SayAll-VERSION-Uninstaller.pkg`。历史 Bundle ID、Package ID、receipt、DMG/ZIP 名称和旧 App 路径保持不变，避免破坏升级兼容。
   - 2026-08-29 修复 Issue #101：`Uninstall Remote Mic.pkg` 不再只删除兼容麦克风，而是在 Bundle ID 校验后把 canonical/历史 App 与 `MiRemoteV 2ch` 一起移入可恢复的 macOS 废纸篓；废纸篓或移动失败时停止并回滚本轮已移动项。安装器替换旧驱动时也保留备份，失败即恢复，成功后才移入 root 废纸篓。本地设置和 BlackHole 明确保留。代码与伪目标卷验证完成；由于仍需最终 Developer ID 候选在 Apple Silicon/Intel 上完成管理员授权、真实废纸篓和取消/失败矩阵，本总任务暂不勾选。
   - 2026-09-06 安装、升级与卸载流程已纳入 Apple Remote HCI 系统服务；安装前会核验既有 Helper 签名标识与 LaunchDaemon 的 Label、可执行路径，无法确认归属时停止覆盖。静态门禁覆盖服务恢复、加载、卸载移入废纸篓和状态目录回滚；真实管理员授权与覆盖升级仍随最终测试包验收。
-  - 2026-10-04 已增加 App 更新同步升级 helper 的源码候选：App 携带系统安装副本及签名声明，准备音频前检查已安装和运行版本，同版本不请求安装。已补主动启用门禁：默认关闭，后台禁止交互授权，Cancel 后的等待状态跨重启保留；用户主动启用或重试才请求授权。完整私有集成 868 项与社区 818 项全部通过；上一轮发布 fixture 的 SIGPIPE 失败保留为历史记录。真实旧 PKG 迁移、Sparkle、管理员授权、回滚与实体语音仍待验收，父项保持未完成。启用、停用和重试入口已移入遥控器卡片；卡片最多三行，无对勾，启用按钮位于右侧垂直居中；卡片不增加说明文字，遥控器图上方不增加元素。步骤见 `Testing/AppleRemoteHelperUpgrade.html`。
+  - 2026-10-04 已增加 App 更新同步升级 helper 的源码候选：App 携带系统安装副本及签名声明，准备音频前检查已安装和运行版本，同版本不请求安装。已补主动启用门禁：默认关闭，后台禁止交互授权，Cancel 后的等待状态跨重启保留；用户主动启用或重试才请求授权。完整私有集成 868 项与社区 818 项全部通过；上一轮发布 fixture 的 SIGPIPE 失败保留为历史记录。真实旧 PKG 迁移、Sparkle、管理员授权、回滚与实体语音仍待验收，父项保持未完成。启用和重试入口已移入遥控器卡片；启用后不提供停用入口；卡片最多三行，无对勾，启用按钮位于右侧垂直居中；卡片不增加说明文字，遥控器图上方不增加元素。步骤见 `Testing/AppleRemoteHelperUpgrade.html`。
 - [ ] 将虚拟麦克风新安装名称设为 `SayAll`，保留旧用户名称
   - 新安装显示 `SayAll`；已有 `MiRemoteV 2ch` 保持旧名，修复和更新也使用旧名称负载。主 UID、Box UID、Model UID、Bundle ID、安装路径、包 ID 和已保存选择不变。同一系统仅部署一个驱动实例。
   - 已实现两种预签名负载、安装前名称决策、名称形态记录、重复实例与未知证据阻断、失败回滚，以及 App 真实名称显示。BlackHole 兼容能力保留。
@@ -343,12 +343,13 @@
   - 已完成辅助功能权限门、全目标 HID neutralize 与失败回滚、generation 会话状态、开头 pre-roll、结尾排空、配置兼容及自动化测试；新增跨组件首次语音门禁，覆盖目标延迟 0～3 秒、5 秒缓存、提前松开、超时、目标切换、敏感字段以及 RC001/RC003 模拟 `STREAM_START → AUDIO → STREAM_STOP`，不再把第三次成功视为通过。待实体遥控器复验默认豆包路径、Typeless 路径、录音中关闭开关、断连恢复和唤起目标后的第一次文字上屏，再标记完成。
   - `1.7.6` 预览版已因 macOS 26 启动阶段的 HID 服务生命周期崩溃撤回；修复后服务对象会在映射读取和写入期间持续持有所属 HID 客户端，并由生命周期回归测试覆盖。`1.7.7` 已在 RC003 连接和代表性持久化设置下通过最终 ZIP App 的首次启动、正常退出、二次启动、四种功能状态及无新增崩溃报告门禁；PKG 内嵌 App 与已启动验证的 App 完全一致，已发布为 Pre-release。Typeless 等实验路径仍按本条后续真机范围继续验证。
   - 2026-09-01 修复 1.9.18 中启动、唤醒或手动开启时 HID service 暂未枚举导致 Fn 点按偏好被持久化关闭：`matched=0` 现在保持用户开关并进入有限恢复，已枚举目标后的真实写入失败仍按安全策略关闭并回退硬件 Fn；自动化通过，仍待 RC003 休眠后先启 App、再唤醒遥控器并完成 Typeless 第一次语音真机验收。
-- [ ] 语音键支持 Fn/左 Command/右 Command/Right Option 长按模式
-  - 默认保持 Fn/地球键；可在“按键映射”页选择左 Command 或右 Command 长按。Command 模式需要辅助功能权限，并覆盖 RC003、iPhone、Apple Watch 和网页版语音入口。
-  - Command 模式不得通过全局 Command flagsChanged 监听普通键盘；只在真实语音会话开始/结束时发送成对 keyDown/keyUp。Fn 点按模式仅在 Fn/地球键模式有效。
+- [ ] 语音键支持 Fn/左 Command/右 Command/左 Option/右 Option 长按模式
+  - 默认保持 Fn/地球键；可在“按键映射”页选择左 Command、右 Command、左 Option 或右 Option 长按。修饰键模式需要辅助功能权限，并覆盖 RC003、iPhone、Apple Watch 和网页版语音入口。
+  - 修饰键模式不得通过全局 flagsChanged 监听普通键盘；只在真实语音会话开始/结束时发送成对 keyDown/keyUp。Fn 点按模式仅在 Fn/地球键模式有效。
   - 组件和策略自动化已覆盖配置迁移与原子导入门禁、左右键码、跨来源 owner latch、输入源多 owner、每个 Bridge Ready 策略、F5 映射事务和设置页紧凑布局；部分 BridgeAppModel 接线仍由源码范围断言保护，未启用硬件模拟依赖，不能替代回调级事件回放。待 RC003、iPhone、Apple Watch、网页版、系统权限及目标第三方语音应用真实环境验收后再标记完成。详细测试步骤见 [`Testing/VoiceKeyModes.md`](Testing/VoiceKeyModes.md)。
   - 2026-08-29 补充 RC003 HID service 晚于 BLE Ready 时的有限恢复：重试完整读取当前 `voiceKeyMode` 的映射流程，不把模式写死为 Fn；Fn 真机已命中 `matched=0 → recovery completed`，Fn 点按与左/右 Command 的恢复自动化已覆盖，真实硬件和第三方 App 仍按测试手册验收。
   - 2026-10-03 清理陈旧标题：主线已支持 Right Option，并重新通过模式持久化、权限门、左右侧注入、Right Option 释放、跨来源 owner 与恢复路径自动化；RC003、移动端入口和第三方语音工具真机矩阵仍未完成，因此父项继续保持未完成。
+  - 2026-10-06 增加 Left Option 模式，沿用专用左侧键码与辅助功能权限门；真实遥控器和第三方语音工具矩阵仍待验收。
 - [x] 语音键短按定位当前 App 聊天输入框
   - 默认关闭，与 Fn 点按模式互斥；短按取消该次短音频并聚焦当前 App，长按继续使用已选语音触发键。
   - Accessibility 通用路径已覆盖 Electron / Chromium 建树重试和安全候选排名；微信仅对精确 Bundle ID 使用有尺寸门禁的窗口相对降级。Lark/飞书、Telegram 和微信已完成 RC003 真机验收。

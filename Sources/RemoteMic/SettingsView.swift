@@ -2014,6 +2014,7 @@ struct SettingsView: View {
             .pickerStyle(.segmented)
             .labelsHidden()
             .controlSize(.small)
+            .tint(Color.accentColor)
             Text("connection.voice_key_mode.help")
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
@@ -2215,9 +2216,6 @@ struct SettingsView: View {
                 } else if model.siriRemoteAudioStatus != "ready" {
                     Button(localization.text("siri_remote.activation.preparing")) {}
                         .disabled(true)
-                }
-                Button(localization.text("siri_remote.activation.disable")) {
-                    model.setSiriRemoteEnabled(false)
                 }
             }
         }
