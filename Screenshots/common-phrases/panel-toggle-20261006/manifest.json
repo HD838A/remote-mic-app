@@ -1,0 +1,22 @@
+{
+  "commit": "b66ceae9",
+  "generated_from": "dist/SayAll.app",
+  "items": [
+    {
+      "path": "Screenshots/common-phrases/panel-toggle-20261006/common-phrases-panel.png",
+      "format": "PNG",
+      "width": 600,
+      "height": 720,
+      "bytes": 177980,
+      "sha256": "193877cdfa6be844584e60d6807f465e42b15950013f6fa61ce76bab0ca73cd7"
+    },
+    {
+      "path": "Screenshots/common-phrases/panel-toggle-20261006/commonPhrases-1020x772.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "bytes": 417318,
+      "sha256": "02e5947e0b9537a850f2cf93d5fafbd37cbadc2ee174896566090927b62ff6dd"
+    }
+  ]
+}
