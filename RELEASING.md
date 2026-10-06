@@ -64,7 +64,7 @@ AI 整理默认不进入发布包：本地构建未显式提供 `SAYALL_AI_PACKA
 - 上传不可变 payload artifact 与 stage record；
 - 不创建 Tag、GitHub Release、appcast 公开地址或任何产品分支。
 
-签名阶段内部 supervisor 540 秒，GitHub step 硬上限 600 秒。超时只终止本次阶段并保留第一份错误日志；不静默重打或以升版本掩盖基础设施故障。
+签名阶段内部 supervisor 900 秒，单个架构变体预算为 840 秒，GitHub step 硬上限 1200 秒。超时只终止本次阶段并保留第一份错误日志；不静默重打或以升版本掩盖基础设施故障。
 
 ## 真实 Sparkle UI 验收
 
