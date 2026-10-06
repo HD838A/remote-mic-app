@@ -141,7 +141,7 @@ jobs:
       PARALLEL_RELEASE_VARIANTS: 1
       PARALLEL_PACKAGE_NOTARIZATION: 1
       RELEASE_STAGE_TIMEOUTS: 1
-      SIGNED_RELEASE_TIMEOUT_SECONDS: 900
+      SIGNED_RELEASE_TIMEOUT_SECONDS: 1200
       RELEASE_MODE: ${{ inputs.mode }}
       INCLUDE_SAYALL_AI: ${{ inputs.include_ai && '1' || '0' }}
 
@@ -364,7 +364,7 @@ jobs:
           ./scripts/verify-release-dependency-pins.sh
 
       - name: Sign, notarize, staple, and verify both variants
-        timeout-minutes: 20
+        timeout-minutes: 30
         env:
           REMOTE_WEB_RELAY_URL: ${{ secrets.REMOTE_WEB_RELAY_URL }}
           EARLY_ACCESS_SERVICE_URL: ${{ secrets.EARLY_ACCESS_SERVICE_URL }}
