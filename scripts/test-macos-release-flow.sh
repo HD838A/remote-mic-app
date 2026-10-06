@@ -519,6 +519,19 @@ fi
 /usr/bin/grep -Fq 'INCLUDE_SAYALL_AI: ${{ inputs.include_ai && '\''1'\'' || '\''0'\'' }}' "$package_workflow"
 /usr/bin/grep -Fq 'INCLUDE_SAYALL_AI="${INCLUDE_SAYALL_AI:-0}"' "$ROOT/scripts/stage-macos-preview.sh"
 /usr/bin/grep -Fq -- 'include_ai=$include_ai' "$ROOT/scripts/stage-macos-preview.sh"
+/usr/bin/grep -Fq 'Build and prepare private feature artifacts' "$package_workflow"
+/usr/bin/grep -Fq 'build-private-xcframeworks.sh' "$package_workflow"
+/usr/bin/grep -Fq 'prepare-private-artifact-package.sh' "$package_workflow"
+/usr/bin/grep -Fq 'SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH=$PRIVATE_ARTIFACT_PACKAGE' "$package_workflow"
+/usr/bin/grep -Fq 'REQUIRE_SAYALL_PRIVATE_ARTIFACT_PACKAGE=1' "$package_workflow"
+/usr/bin/grep -Fq 'REQUIRE_SAYALL_BUTTON_PROFILES=1' "$package_workflow"
+/usr/bin/grep -Fq 'SAYALL_BUILD_CHANNEL=release' "$package_workflow"
+/usr/bin/grep -Fq 'SAYALL_CHROMECAST_PACKAGE_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-private-platform/packages/audio-input-kit/chromecast' "$package_workflow"
+/usr/bin/grep -Fq 'REQUIRE_SAYALL_CHROMECAST=1' "$package_workflow"
+/usr/bin/grep -Fq 'SAYALL_COMBINATION_ACTIONS_PATH=' "$package_workflow" && {
+  print -u2 "protected release must use the verified private artifact package for combination actions"
+  exit 1
+}
 # Execute the actual workflow configuration body without checkout or credentials.
 ai_input="$(/usr/bin/awk '/^      include_ai:/ { capture=1; next } capture && /^concurrency:/ { exit } capture { print }' "$package_workflow")"
 print -r -- "$ai_input" | /usr/bin/grep -Fq 'default: false'

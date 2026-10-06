@@ -280,12 +280,35 @@ jobs:
           test "$(git -C .private-dependencies/sayall-private-platform rev-parse HEAD)" = "$SAYALL_PRIVATE_PLATFORM_COMMIT"
           test -f .private-dependencies/sayall-private-platform/packages/macos-remote/Package.swift
           test -f .private-dependencies/sayall-private-platform/packages/audio-input-kit/siri-remote/Package.swift
+          test -f .private-dependencies/sayall-private-platform/packages/audio-input-kit/chromecast/Package.swift
+          test -x .private-dependencies/sayall-private-platform/tools/release/build-private-xcframeworks.sh
           test "$(git -C .private-release/remotemic-notary-secrets rev-parse HEAD)" = 5baaeaf56f6cd5fbd0fb0e08c9290077ba8b5b5d
           match_repo="$GITHUB_WORKSPACE/.private-release/apple-signing-match"
           match_commit=2e271768593821611c54f3d1b376f39e503f53be
           test "$(git -C "$match_repo" rev-parse HEAD)" = "$match_commit"
           git -C "$match_repo" update-ref refs/heads/main "$match_commit"
           test "$(git -C "$match_repo" rev-parse refs/heads/main)" = "$match_commit"
+
+      - name: Build and prepare private feature artifacts
+        env:
+          PRIVATE_ARTIFACT_OUTPUT: ${{ runner.temp }}/sayall-private-xcframeworks
+          PRIVATE_ARTIFACT_PACKAGE: ${{ runner.temp }}/sayall-private-artifact-package
+        run: |
+          private_root="$GITHUB_WORKSPACE/.private-dependencies/sayall-private-platform"
+          "$private_root/tools/release/build-private-xcframeworks.sh" "$PRIVATE_ARTIFACT_OUTPUT"
+          release_directory="$PRIVATE_ARTIFACT_OUTPUT/release"
+          trusted_manifest_sha256="$(shasum -a 256 "$release_directory/SHA256SUMS" | awk '{print $1}')"
+          ./scripts/prepare-private-artifact-package.sh \
+            "$release_directory" \
+            "$PRIVATE_ARTIFACT_PACKAGE" \
+            "$trusted_manifest_sha256"
+          {
+            echo "SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH=$PRIVATE_ARTIFACT_PACKAGE"
+            echo "REQUIRE_SAYALL_PRIVATE_ARTIFACT_PACKAGE=1"
+            echo "REQUIRE_SAYALL_BUTTON_PROFILES=1"
+            echo "REQUIRE_SAYALL_COMBINATION_ACTIONS=1"
+            echo "SAYALL_BUILD_CHANNEL=release"
+          } >> "$GITHUB_ENV"
 
       - name: Configure private feature package
         run: |
@@ -297,11 +320,10 @@ jobs:
               echo "SAYALL_AI_PACKAGE_PATH="
               echo "REQUIRE_SAYALL_AI_PACKAGE=0"
             fi
-            echo "SAYALL_COMBINATION_ACTIONS_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-private-platform/packages/macos-combination-actions"
             echo "SAYALL_SIRI_REMOTE_PACKAGE_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-private-platform/packages/audio-input-kit/siri-remote"
+            echo "SAYALL_CHROMECAST_PACKAGE_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-private-platform/packages/audio-input-kit/chromecast"
             echo "SAYALL_MAC_REMOTE_PACKAGE_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-private-platform/packages/macos-remote"
-            echo "REQUIRE_SAYALL_COMBINATION_ACTIONS=1"
-            echo "REQUIRE_SAYALL_BUTTON_PROFILES=0"
+            echo "REQUIRE_SAYALL_CHROMECAST=1"
             echo "REQUIRE_SAYALL_MAC_REMOTE_PACKAGE=1"
           } >> "$GITHUB_ENV"
 
