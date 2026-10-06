@@ -1213,7 +1213,7 @@
 "common_phrases.error.edit_failed" = "无法保存。请检查内容或导入文件格式；原有数据未被修改。";
 "common_phrases.error.no_phrase" = "这个按键尚未分配常用语，请在常用语页面设置。";
 "common_phrases.error.accessibility_required" = "请在系统设置中允许无线麦使用辅助功能。";
-"common_phrases.error.input_unavailable" = "当前输入框不可用。请将光标放在可编辑的普通输入框中，取消选中文字后重试。";
+"common_phrases.error.input_unavailable" = "光标不在输入框中，请将光标放入输入框后再试";
 "common_phrases.error.target_changed" = "输入目标已改变，请重新打开常用语。";
 "common_phrases.error.clipboard_write_failed" = "无法写入剪贴板，请重试。";
 "common_phrases.error.clipboard_restore_failed" = "粘贴后未能恢复剪贴板，请检查剪贴板内容。";

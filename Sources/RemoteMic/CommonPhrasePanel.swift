@@ -60,6 +60,10 @@ final class CommonPhraseController: ObservableObject {
             AppLogger.shared.write("COMMON_PHRASES PANEL phase=failed reason=resource_unavailable")
             return false
         }
+        if isVisible, routing.owner == source {
+            close(reason: "toggle_button")
+            return true
+        }
         close(reason: "superseded")
         onWillOpen?()
         self.localization = localization
@@ -161,7 +165,8 @@ final class CommonPhraseController: ObservableObject {
         window.orderFrontRegardless()
         AppLogger.shared.write("COMMON_PHRASES FEEDBACK operation_id=\(generation) phase=shown result=visible reason=insertion_failed")
         let current = generation
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+        let duration: TimeInterval = key == "common_phrases.error.input_unavailable" ? 5 : 3
+        DispatchQueue.main.asyncAfter(deadline: .now() + duration) { [weak self] in
             guard let self, self.generation == current else { return }
             self.close(reason: "failure_hint_timeout")
         }
@@ -181,18 +186,20 @@ struct CommonPhrasePanelView: View {
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, minHeight: 48, alignment: .top)
-                .overlay(alignment: .bottomTrailing) {
-                    Button { controller.close(reason: "close_button") } label: {
-                        Image(systemName: "xmark").font(.system(size: 16, weight: .semibold))
-                            .frame(width: 30, height: 30)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(localization.text("common_phrases.close"))
-                }
             CommonPhrasePad(store: controller.store, diameter: 272, onSelect: controller.insert)
         }
-        .padding(14).frame(width: Self.size.width, height: Self.size.height)
+        .padding(14)
+        .frame(width: Self.size.width, height: Self.size.height)
+        .overlay(alignment: .topTrailing) {
+            Button { controller.close(reason: "close_button") } label: {
+                Image(systemName: "xmark").font(.system(size: 16, weight: .semibold))
+                    .frame(width: 30, height: 30)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .padding(14)
+            .accessibilityLabel(localization.text("common_phrases.close"))
+        }
         .foregroundStyle(.white)
         .background(Color(white: 0.075), in: RoundedRectangle(cornerRadius: 22))
         .opacity(0.8)
