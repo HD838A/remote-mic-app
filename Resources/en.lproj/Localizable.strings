@@ -1213,7 +1213,7 @@
 "common_phrases.error.edit_failed" = "Could not save. Check the content or imported format. Existing data was kept.";
 "common_phrases.error.no_phrase" = "No phrase is assigned to this button. Assign one in Common Phrases.";
 "common_phrases.error.accessibility_required" = "Allow SayAll in System Settings → Accessibility.";
-"common_phrases.error.input_unavailable" = "This input is unavailable. Place the caret in a regular editable field, clear any selection, and try again.";
+"common_phrases.error.input_unavailable" = "The caret is not in an input field. Place it in the input field and try again.";
 "common_phrases.error.target_changed" = "The input target changed. Open Common Phrases again.";
 "common_phrases.error.clipboard_write_failed" = "Could not write to the clipboard. Try again.";
 "common_phrases.error.clipboard_restore_failed" = "Could not restore the clipboard after pasting. Check your clipboard.";

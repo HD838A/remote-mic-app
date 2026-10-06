@@ -112,6 +112,23 @@ struct CommonPhraseTests {
         #expect(importedReload.phrase(for: .left)?.chineseText == "更新后的内置内容")
     }
 
+    @Test func exportIncludesCommonPhraseSourceMetadataAndImportPreservesIt() throws {
+        let suite = "CommonPhraseTests." + UUID().uuidString
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = CommonPhraseStore(defaults: defaults, builtInData: try builtIns())
+        let exported = try store.exportData()
+        let archive = try JSONDecoder().decode(CommonPhraseArchive.self, from: exported)
+        #expect(archive.website == CommonPhraseStore.exportWebsite)
+        #expect(archive.github == CommonPhraseStore.exportGitHub)
+
+        let importedDefaults = try #require(UserDefaults(suiteName: suite + ".import"))
+        defer { importedDefaults.removePersistentDomain(forName: suite + ".import") }
+        let imported = CommonPhraseStore(defaults: importedDefaults, builtInData: try builtIns())
+        try imported.importData(exported)
+        #expect(try JSONDecoder().decode(CommonPhraseArchive.self, from: imported.exportData()).website == CommonPhraseStore.exportWebsite)
+    }
+
     @Test func routingIsImmediateNonRepeatingIsolatedAndConsumesBackRelease() {
         var routing = CommonPhraseRouting()
         #expect(routing.handle(.up, phase: .press, source: "phone") == .unhandled)
@@ -177,6 +194,20 @@ struct CommonPhraseTests {
         #expect(controller.messageKey == "common_phrases.error.input_unavailable")
         #expect(posts == 2)
         #expect(pasteboard.string(forType: .string) == "prior fixture")
+    }
+
+    @MainActor @Test func pressingTheOpeningSourceAgainClosesThePanel() throws {
+        _ = NSApplication.shared
+        let suite = "CommonPhraseTests." + UUID().uuidString
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = CommonPhraseStore(defaults: defaults, builtInData: try builtIns())
+        let localization = LocalizationStore(settings: AppSettings(defaults: defaults))
+        let controller = CommonPhraseController(store: store, frontmostProcessID: { 1 })
+        #expect(controller.open(source: "test", localization: localization))
+        #expect(controller.isVisible)
+        #expect(controller.open(source: "test", localization: localization))
+        #expect(!controller.isVisible)
     }
 
     @MainActor @Test func clipboardRestoresAllTypesPreservesNewUserCopyAndSerializes() throws {

@@ -20,9 +20,27 @@ struct CommonPhrase: Codable, Equatable, Identifiable {
 
 struct CommonPhraseArchive: Codable, Equatable {
     var schemaVersion = 1
+    var website: String?
+    var github: String?
     var entries: [CommonPhrase]
     var bindings: [String: String]
     var builtInIDs: [String]?
+
+    init(
+        schemaVersion: Int = 1,
+        website: String? = nil,
+        github: String? = nil,
+        entries: [CommonPhrase],
+        bindings: [String: String],
+        builtInIDs: [String]? = nil
+    ) {
+        self.schemaVersion = schemaVersion
+        self.website = website
+        self.github = github
+        self.entries = entries
+        self.bindings = bindings
+        self.builtInIDs = builtInIDs
+    }
 
     func validate() throws {
         guard schemaVersion == 1, entries.count <= 500,
@@ -36,6 +54,8 @@ struct CommonPhraseArchive: Codable, Equatable {
 final class CommonPhraseStore: ObservableObject {
     enum StoreError: Error { case invalidData, unavailable }
     static let buttons: [RemoteButton] = [.ok, .left, .up, .right, .down]
+    static let exportWebsite = "https://sayall.app"
+    static let exportGitHub = "https://github.com/sayall-market/common-phrases"
     private static let defaultsKey = "commonPhrases.archive.v1"
     @Published private(set) var archive = CommonPhraseArchive(entries: [], bindings: [:])
     @Published private(set) var isAvailable = false
@@ -149,7 +169,12 @@ final class CommonPhraseStore: ObservableObject {
         loadFailed = false
     }
 
-    func exportData() throws -> Data { try JSONEncoder().encode(archive) }
+    func exportData() throws -> Data {
+        var exported = archive
+        exported.website = Self.exportWebsite
+        exported.github = Self.exportGitHub
+        return try JSONEncoder().encode(exported)
+    }
 
     private func persist(action: String, candidate: () throws -> CommonPhraseArchive) throws {
         operation &+= 1
