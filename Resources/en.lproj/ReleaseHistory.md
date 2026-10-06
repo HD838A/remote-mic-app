@@ -1,5 +1,12 @@
 # Version History
 
+## 2.0.0 (Pre-release)
+
+- Adds Combination Actions and Button Profiles for saving, binding, and use.
+- Adds membership resources with more content to use.
+- Adds support for Siri Remote, Chromecast, and Mac Remote.
+- Improves the remote settings and voice-trigger-key experience.
+
 ## 1.9.21 (Pre-release)
 
 - Improves update check reliability and reduces intermittent failures to retrieve update information.
