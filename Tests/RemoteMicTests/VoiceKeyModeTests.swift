@@ -12,15 +12,50 @@ struct VoiceKeyModeTests {
         #expect(VoiceKeyMode.function.keyCode == 63)
         #expect(VoiceKeyMode.leftCommand.keyCode == 55)
         #expect(VoiceKeyMode.rightCommand.keyCode == 54)
+        #expect(VoiceKeyMode.leftOption.rawValue == "left_option")
+        #expect(VoiceKeyMode.leftOption.keyCode == 58)
         #expect(VoiceKeyMode.rightOption.rawValue == "right_option")
         #expect(VoiceKeyMode.rightOption.keyCode == 61)
         #expect(!VoiceKeyMode.function.requiresAccessibility)
         #expect(VoiceKeyMode.leftCommand.requiresAccessibility)
         #expect(VoiceKeyMode.rightCommand.requiresAccessibility)
+        #expect(VoiceKeyMode.leftOption.requiresAccessibility)
         #expect(VoiceKeyMode.rightOption.requiresAccessibility)
         #expect(VoiceKeyMode.function.usesHardwareMapping)
         #expect(!VoiceKeyMode.leftCommand.usesHardwareMapping)
         #expect(VoiceKeyMode.function.localizationKey == "connection.voice_key.mode.fn")
+        #expect(VoiceKeyMode(standaloneModifier: .leftOption) == .leftOption)
+    }
+
+    @Test func leftOptionVoiceKeyInjectionPreservesModifierSideAndReleasesCleanly() {
+        var posted: [(CGKeyCode, Bool, CGEventFlags)] = []
+        let poster: KeyboardInjector.KeyStatePoster = { code, isDown, flags in
+            posted.append((code, isDown, flags))
+            return true
+        }
+
+        #expect(KeyboardInjector.setVoiceKeyPressed(
+            .leftOption,
+            isPressed: true,
+            accessibilityTrusted: { true },
+            keyStatePoster: poster
+        ))
+        #expect(KeyboardInjector.setVoiceKeyPressed(
+            .leftOption,
+            isPressed: false,
+            accessibilityTrusted: { true },
+            keyStatePoster: poster
+        ))
+
+        let leftDeviceMask = CGEventFlags(rawValue: UInt64(NX_DEVICELALTKEYMASK))
+        #expect(posted.count == 2)
+        #expect(posted[0].0 == VoiceKeyMode.leftOption.keyCode)
+        #expect(posted[0].1)
+        #expect(posted[0].2.contains(.maskAlternate))
+        #expect(posted[0].2.contains(leftDeviceMask))
+        #expect(posted[1].0 == VoiceKeyMode.leftOption.keyCode)
+        #expect(!posted[1].1)
+        #expect(posted[1].2.isEmpty)
     }
 
     @Test func rightOptionVoiceKeyInjectionPreservesModifierSideAndReleasesCleanly() {

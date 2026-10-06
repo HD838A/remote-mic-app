@@ -1041,6 +1041,8 @@ struct SettingsPageRegressionTests {
         #expect(source.contains("StandardKeyboardKey.mainRows"))
         #expect(source.contains("StandaloneKeyboardModifier.allCases"))
         #expect(source.contains(".pickerStyle(.segmented)"))
+        #expect(source.contains(".tint(Color.accentColor)"))
+        #expect(!source.contains("siri_remote.activation.disable"))
         #expect(!source.contains("NSEvent.addLocalMonitorForEvents(matching: .keyDown)"))
         #expect(!mappingCanvasSource.contains("size: 8"))
         #expect(!mappingCanvasSource.contains("size: 9"))

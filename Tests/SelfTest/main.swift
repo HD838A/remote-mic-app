@@ -304,12 +304,15 @@ check(
         VoiceKeyMode.function.keyCode == 63 &&
         VoiceKeyMode.leftCommand.keyCode == 55 &&
         VoiceKeyMode.rightCommand.keyCode == 54 &&
+        VoiceKeyMode.leftOption.keyCode == 58 &&
         VoiceKeyMode.rightOption.keyCode == 61 &&
         VoiceKeyMode.function.eventFlags == .maskSecondaryFn &&
         VoiceKeyMode.leftCommand.eventFlags.contains(.maskCommand) &&
         VoiceKeyMode.leftCommand.eventFlags.contains(CGEventFlags(rawValue: UInt64(NX_DEVICELCMDKEYMASK))) &&
         VoiceKeyMode.rightCommand.eventFlags.contains(.maskCommand) &&
         VoiceKeyMode.rightCommand.eventFlags.contains(CGEventFlags(rawValue: UInt64(NX_DEVICERCMDKEYMASK))) &&
+        VoiceKeyMode.leftOption.eventFlags.contains(.maskAlternate) &&
+        VoiceKeyMode.leftOption.eventFlags.contains(CGEventFlags(rawValue: UInt64(NX_DEVICELALTKEYMASK))) &&
         VoiceKeyMode.rightOption.eventFlags.contains(.maskAlternate) &&
         VoiceKeyMode.rightOption.eventFlags.contains(CGEventFlags(rawValue: UInt64(NX_DEVICERALTKEYMASK))) &&
         HIDPermissionGate.nextPermissionRequest(
@@ -318,7 +321,7 @@ check(
             inputMonitoringGranted: false,
             accessibilityGranted: false
         ) == .accessibility,
-    "voice key modes keep Fn default and gate Command on Accessibility"
+    "voice key modes keep Fn default and gate modifier modes on Accessibility"
 )
 
 var voiceFunctionKeyLatch = VoiceFunctionKeyLatch()
