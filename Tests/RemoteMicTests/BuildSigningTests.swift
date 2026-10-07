@@ -373,6 +373,7 @@ struct BuildSigningTests {
         #expect(notarizeSource.contains("SAYALL_PRIVATE_PLATFORM_ROOT"))
         #expect(notarizeSource.contains("inject-private-diagnostics-config.sh"))
         #expect(notarizeSource.contains("REMOTE_MIC_SENTRY_DSN is required for protected releases"))
+        #expect(notarizeSource.contains("RELEASE_CODESIGN_TIMEOUT_SECONDS=\"${RELEASE_CODESIGN_TIMEOUT_SECONDS:-45}\""))
         #expect(notarizeSource.contains("app-codesign-diagnostics"))
         let diagnosticsInjection = try #require(notarizeSource.range(of: "run_release_stage diagnostics-config"))
         let diagnosticsResigning = try #require(notarizeSource.range(of: "run_release_stage app-codesign-diagnostics"))
