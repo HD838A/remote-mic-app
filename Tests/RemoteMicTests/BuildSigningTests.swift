@@ -370,6 +370,9 @@ struct BuildSigningTests {
         #expect(notarizeSource.contains("Apps/MobileWeb/.private/production.env"))
         #expect(notarizeSource.contains("export REQUIRE_WEB_REMOTE_CONFIGURATION=1"))
         #expect(notarizeSource.contains("export REMOTE_WEB_RELAY_URL"))
+        #expect(notarizeSource.contains("SAYALL_PRIVATE_PLATFORM_ROOT"))
+        #expect(notarizeSource.contains("inject-private-diagnostics-config.sh"))
+        #expect(notarizeSource.contains("REMOTE_MIC_SENTRY_DSN is required for protected releases"))
         #expect(verifySource.contains("Developer ID app is missing a production Web Remote relay URL"))
     }
 
@@ -1097,6 +1100,12 @@ struct BuildSigningTests {
         #expect(workflowSource.contains("HD838A/remotemic-notary-secrets"))
         #expect(workflowSource.contains("HD838A/apple-signing-match"))
         #expect(workflowSource.contains("package-macos-release-in-actions.sh"))
+        #expect(workflowSource.contains("REMOTE_MIC_SENTRY_DSN: ${{ secrets.REMOTE_MIC_SENTRY_DSN }}"))
+        #expect(workflowSource.contains(
+            "SAYALL_DIAGNOSTIC_PUBLIC_KEY_BASE64: ${{ secrets.SAYALL_DIAGNOSTIC_PUBLIC_KEY_BASE64 }}"
+        ))
+        #expect(workflowSource.contains("Validate protected diagnostics configuration"))
+        #expect(workflowSource.contains("SAYALL_PRIVATE_PLATFORM_ROOT"))
         #expect(workflowSource.contains("mode:"))
         #expect(workflowSource.contains("expected_commit:"))
         #expect(workflowSource.contains("prepare-public-release-assets.sh"))
