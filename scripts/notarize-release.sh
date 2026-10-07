@@ -417,6 +417,13 @@ if [[ -z "${REMOTE_MIC_SENTRY_DSN:-}" ]]; then
 fi
 run_release_stage diagnostics-config 30 \
   "$DIAGNOSTICS_INJECTOR" "$APP" >/dev/null
+run_release_stage app-codesign-diagnostics "$RELEASE_CODESIGN_TIMEOUT_SECONDS" \
+  codesign \
+    --force \
+    --options runtime \
+    --timestamp \
+    --sign "$CODE_SIGN_IDENTITY" \
+    "$APP"
 run_release_stage app-verify-pre-notary "$RELEASE_VERIFY_TIMEOUT_SECONDS" \
   "$ROOT/scripts/verify-app.sh" "$APP"
 if [[ "$GENERATE_SPARKLE_UPDATE" == "1" ]]; then
