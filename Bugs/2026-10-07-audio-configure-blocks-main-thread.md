@@ -124,7 +124,7 @@ engine.connect(player, to: engine.mainMixerNode, format: sourceFormat)   // ← 
 
 ### 与空闲重绑循环的关系
 
-`2026-09-05-idle-audio-rebind-loop.md` 的修复（`bb35d95b` 等，2026-09-29）只切断重绑循环的**触发**，
+`2026-09-05-idle-audio-rebind-loop.md` 的修复（PR #362，`bb35d95b` 等，2026-09-29）只切断重绑循环的**触发**，
 没有切断「一旦触发就阻塞主线程」。该文档的「未覆盖」已写明：
 真实 CoreAudio 接线（需要真实 `AVAudioEngine`）从未验证。
 
