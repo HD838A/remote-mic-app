@@ -327,6 +327,16 @@ jobs:
             echo "REQUIRE_SAYALL_MAC_REMOTE_PACKAGE=1"
           } >> "$GITHUB_ENV"
 
+      - name: Validate protected diagnostics configuration
+        env:
+          REMOTE_MIC_SENTRY_DSN: ${{ secrets.REMOTE_MIC_SENTRY_DSN }}
+          SAYALL_DIAGNOSTIC_PUBLIC_KEY_BASE64: ${{ secrets.SAYALL_DIAGNOSTIC_PUBLIC_KEY_BASE64 }}
+        run: |
+          test -n "$REMOTE_MIC_SENTRY_DSN"
+          test -n "$SAYALL_DIAGNOSTIC_PUBLIC_KEY_BASE64"
+          printf '%s' "$SAYALL_DIAGNOSTIC_PUBLIC_KEY_BASE64" | base64 --decode >/dev/null
+          test "$(printf '%s' "$SAYALL_DIAGNOSTIC_PUBLIC_KEY_BASE64" | base64 --decode | wc -c | tr -d '[:space:]')" = 32
+
       - name: Build architecture-specific Siri Remote Opus dependencies
         timeout-minutes: 5
         run: |
@@ -368,6 +378,9 @@ jobs:
         env:
           REMOTE_WEB_RELAY_URL: ${{ secrets.REMOTE_WEB_RELAY_URL }}
           EARLY_ACCESS_SERVICE_URL: ${{ secrets.EARLY_ACCESS_SERVICE_URL }}
+          REMOTE_MIC_SENTRY_DSN: ${{ secrets.REMOTE_MIC_SENTRY_DSN }}
+          SAYALL_DIAGNOSTIC_PUBLIC_KEY_BASE64: ${{ secrets.SAYALL_DIAGNOSTIC_PUBLIC_KEY_BASE64 }}
+          SAYALL_PRIVATE_PLATFORM_ROOT: ${{ github.workspace }}/.private-dependencies/sayall-private-platform
         run: |
           ./scripts/run-release-stage.sh \
             all signed-release "$SIGNED_RELEASE_TIMEOUT_SECONDS" -- \
