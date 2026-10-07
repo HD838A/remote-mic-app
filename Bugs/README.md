@@ -1,5 +1,6 @@
 # Bug 记录
 
+- [音频重配在主线程访问 mainMixerNode 导致 App 长时间无响应](./2026-10-07-audio-configure-blocks-main-thread.md)
 - [macOS Finder 与 Launchpad 图标出现银白色外框](./2026-10-05-macos-app-icon-system-wrapper.html)
 - [遥控器卡片空白区域点击失效](./2026-10-05-remote-card-hit-area.html)
 - [移动端连接状态、说明与授权图标显示问题](./2026-10-03-mobile-connection-presentation.md)
@@ -104,6 +105,7 @@
 
 | 时间 | Bug | 状态 |
 | --- | --- | --- |
+| 2026-10-07 | [音频重配在主线程访问 mainMixerNode 导致 App 长时间无响应](./2026-10-07-audio-configure-blocks-main-thread.md) | 官方 hang 采样已确认阻塞点与引擎递归锁互等；仅完成只读调查，修复未实施，待真实拔插与真机验收 |
 | 2026-10-03 | [蓝牙遥控器电量长时间停留在旧值](./2026-10-03-bluetooth-battery-level-stale.md)（Issue #463） | 候选修复与自动化完成，等待 RC001 / RC003 真机电量变化验收 |
 | 2026-09-13 | [Dock 偏好、系统媒体动作、音量摘要与窗口菜单回归](./2026-09-13-dock-media-window-actions.md)（Issues #386、#407、#412、#413） | 最小候选修复与 754 项自动化通过，等待真实 Dock、播放器与窗口菜单验收 |
 | 2026-09-29 | [休眠期间仍持续蓝牙扫描和重连](./2026-09-29-sleeping-ble-scan-and-reconnect.md)（Issue #441） | 候选修复与定向自动化通过，等待真实整夜休眠、实体遥控器和 `pmset` 验收 |
