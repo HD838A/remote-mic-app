@@ -749,9 +749,37 @@ final class AppSettings: ObservableObject {
             defaults.set(data, forKey: "\(key).corrupt")
             corrupted.append(key)
             AppLogger.shared.write(
-                "SETTINGS decode_failed key=\(key) bytes=\(data.count) error=\(error)"
+                "SETTINGS decode_failed category=\(diagnosticSettingCategory(key)) " +
+                "bytes=\(data.count) reason=\(diagnosticDecodeReason(error))"
             )
+            if let event = PublicDiagnosticEvent(
+                component: "settings", action: "load", phase: "failed", result: "defaults_applied",
+                reason: "\(diagnosticSettingCategory(key))_\(diagnosticDecodeReason(error))", source: "app"
+            ) { AppLogger.shared.record(event) }
             return nil
+        }
+    }
+
+    static func diagnosticSettingCategory(_ key: String) -> String {
+        switch key {
+        case "remoteDeviceProfiles": "remote_profiles"
+        case "buttonBindings", "buttonShortcuts", "buttonApplicationProfileIDs",
+             "secondaryButtonBindings", "buttonRapidPressEnabled", "continuousRecordingPowerBindingBackup":
+            "button_mapping"
+        case "customApplicationProfiles": "custom_apps"
+        case "usage.dailyStatistics", "usage.voiceSessionRanking": "usage"
+        case "onboardingStagedVoiceBinding": "onboarding"
+        default: "other"
+        }
+    }
+
+    static func diagnosticDecodeReason(_ error: Error) -> String {
+        switch error {
+        case DecodingError.dataCorrupted: "data_corrupted"
+        case DecodingError.keyNotFound: "key_missing"
+        case DecodingError.typeMismatch: "type_mismatch"
+        case DecodingError.valueNotFound: "value_missing"
+        default: "unknown"
         }
     }
 
@@ -1019,6 +1047,10 @@ final class AppSettings: ObservableObject {
             !decoded.isEmpty
         {
             remoteDeviceProfiles = decoded
+            if let event = PublicDiagnosticEvent(
+                component: "settings", action: "load", phase: "completed", result: "loaded",
+                reason: "remote_profiles", source: "app"
+            ) { AppLogger.shared.record(event) }
             let savedID = defaults.string(forKey: Keys.selectedRemoteProfileID).flatMap(UUID.init(uuidString:))
             selectedRemoteProfileID = decoded.contains(where: { $0.id == savedID })
                 ? savedID

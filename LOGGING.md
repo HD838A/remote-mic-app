@@ -25,15 +25,18 @@ Sentry 只在用户明确点击“发送诊断信息”后启动一次。未点�
 
 公开宿主可发送两类已经类型化的安全记录：
 
-1. 当前进程内存中的 `PublicDiagnosticEvent`；
+1. 批准的 `PublicDiagnosticEvent`；宿主最多保留最近 7 天的 256 条待发送事件，并跨重启持久化。
 2. 可选私有模块通过 `PrivateDiagnosticUploadProvider` 提供的独立安全记录。
 
 私有模块的原始日志、数据库、响应正文和内部对象不得通过 `AppLogger.shared.write`、本地日志文件或自由文本穿透到 Sentry。公开宿主不维护私有业务事件目录或状态机，只验证通用的 `PRIVATE_EVENT` 信封、字段数量、单行 token、保留字段和敏感字段红线。私有 provider 负责在自己的仓库中定义业务枚举、最多保留 256 条、默认保留 7 天并跨重启持久化；公开宿主单次最多接收 256 条并按记录 ID 去重。
+
+公开事件保存在宿主自己的安全事件存储中。目录权限为 `0700`，文件权限为 `0600`；只写入白名单批准的 canonical 字段。过期或超出容量的事件不再上传。存储失败时只保留当前进程内存中的事件，系统日志记录稳定失败码。该存储不读取或解密 `.rmlog`。
 
 公开安全事件当前只允许以下产品级消息：
 
 | 事件 | 诊断用途 | 允许的主要内容 |
 | --- | --- | --- |
+| `settings.load` | 定位配置解码失败与回退 | 稳定设置分类、解码错误分类及 `defaults_applied`；不含原始数据、原始键或错误正文 |
 | `environment.snapshot` | 确认版本和最小运行环境 | App 版本/Build、系统主版本、CPU 架构、语言、稳定设备类别、输入工具枚举、构建通道、不可逆能力摘要 |
 | `permission.input_monitoring` / `permission.accessibility` | 定位权限阻断 | `granted` / `denied` 和稳定阶段 |
 | `remote.connection` | 还原连接状态转换 | 来源、设备家族、阶段、结果和稳定原因码 |
@@ -55,14 +58,14 @@ PRIVATE_EVENT schema_version=1 record_id=pe_abcdefghijklmnopqrstuv occurred_at_m
 ```text
 用户点击发送
   → 检查私有传输适配器是否已配置
-  → 读取公开内存事件和可选私有安全记录
+  → 读取公开待发送事件和可选私有安全记录
   → 丢弃无法按各自 schema 完整重建的记录
   → 将 canonical 安全事件交给私有传输适配器
   → 私有适配器校验 DSN 并启动一次性 Sentry 实例
   → beforeSendLog 再次解析并重建 canonical 正文
   → 清空 User、Tags 和 Contexts，关闭自动采集
   → flush 并确认没有待发送 envelope
-  → 仅在发送成功后按记录 ID 通知私有 provider 标记已上传
+  → 仅在发送成功后确认移除本次公开事件，并按记录 ID 通知私有 provider 标记已上传
   → 关闭 Sentry 并移除临时缓存
 ```
 

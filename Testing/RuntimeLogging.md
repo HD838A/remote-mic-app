@@ -85,11 +85,11 @@ swift test --disable-keychain --filter DiagnosticLogUploaderTests
 
 只有在私有 Package 和私有受控构建环境提供测试 DSN 后执行；不使用生产账号或真实用户数据。公开仓库本身不执行该用例。
 
-1. 在内存中放入一个批准的环境快照、一个未批准的公开事件，以及可选私有 provider 的安全记录。
+1. 在安全事件存储中放入一个批准的环境快照、一个未批准的公开事件，以及可选私有 provider 的安全记录。
 2. 点击“发送诊断信息”或调用上传器测试入口。
 3. 在 Sentry 测试项目检查事件。
 
-预期只产生批准的 `PUBLIC_EVENT` 和通过独立 schema 校验的 `PRIVATE_EVENT`。公开字段限于 `LOGGING.md` 白名单；私有事件只包含通用信封、稳定业务阶段、粗粒度状态、原因码、重试、耗时和短生命周期关联号。无 User、Tags、Contexts、附件、崩溃、Session、性能、网络、Breadcrumb、IP、Bundle ID、路径、身份或真实业务对象标识。
+预期只产生批准的 `PUBLIC_EVENT` 和通过独立 schema 校验的 `PRIVATE_EVENT`。公开字段限于 `LOGGING.md` 白名单；公开事件跨重启测试见 [加密诊断验收用例 H](EncryptedDiagnosticLogs.md#用例-h公开事件跨重启与发送确认)；私有事件只包含通用信封、稳定业务阶段、粗粒度状态、原因码、重试、耗时和短生命周期关联号。无 User、Tags、Contexts、附件、崩溃、Session、性能、网络、Breadcrumb、IP、Bundle ID、路径、身份或真实业务对象标识。
 
 以下情况必须被拒绝：公开事件未知字段、重复保留字段、换行、URL、路径、自由文本、邮箱、Token、验证码、原始订单/支付标识、checkout URL、价格、精确权益到期时间、Bundle/Package 名称、BLE 名称和 `localizedDescription`。发送失败不得把私有记录标记为已上传。
 

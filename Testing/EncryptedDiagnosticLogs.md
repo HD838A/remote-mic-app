@@ -10,7 +10,7 @@
 2. 文件密钥只存在于当前进程内存，并由构建公钥包裹；解密私钥不在 App、本地 `.env` 或公开仓库中。
 3. Sentry 不读取 `.rmlog`，不解密本地日志，不上传整份日志。
 4. 未点击发送时不初始化 Sentry、不产生网络请求。
-5. 当前批准的公开事件是环境、权限、连接、音频配置、语音会话和 Onboarding 语音测试；语音会话覆盖小米、苹果遥控器、Chromecast、iPhone、Apple Watch 和 Web 来源的开始、拒绝、结束/失败时序，并携带聚合音频完整性指标。
+5. 当前批准的公开事件是设置读取、环境、权限、连接、音频配置、语音会话和 Onboarding 语音测试；语音会话覆盖小米、苹果遥控器、Chromecast、iPhone、Apple Watch 和 Web 来源的开始、拒绝、结束/失败时序，并携带聚合音频完整性指标。
 6. 可选私有模块只能通过独立 provider 提供类型化 `PRIVATE_EVENT`；公开宿主不读取私有原始日志或维护私有业务事件目录。私有记录最多保留 256 条、默认 7 天、跨重启持久化，只有发送成功后才按记录 ID 标记已上传。
 7. 不上传用户内容、账号身份、邮箱、Token、验证码、原始订单/支付标识、checkout URL、价格、精确权益到期时间、路径、设备身份、第三方 App 私有状态或凭据。允许上传不关联身份的稳定业务阶段、粗粒度状态、原因码和短生命周期关联号。
 
@@ -77,7 +77,7 @@ swift test --disable-keychain --filter DiagnosticLogUploaderTests
 2. 触发上传。
 3. 检查 Sentry 测试项目中收到的日志正文和属性。
 
-预期只收到批准的 `PUBLIC_EVENT` 环境/语音事件和通过独立 schema 校验的 `PRIVATE_EVENT`。公开正文字段必须来自白名单；私有记录只允许通用信封和最多 32 个单行 token 属性。应用写入的自定义属性只允许 `diagnostic.user_initiated=true`、`diagnostic.schema_version=1` 和非负的 `diagnostic.sequence`；Sentry 平台仍可附加时间、severity、trace、payload size 和 SDK 版本等非用户元数据。同一个 `operation_id` 的 started/completed（或 failed/rejected）事件应能还原一次语音会话，并可按 `source` 与 `remote_model_family` 区分硬件或移动来源。
+预期只收到批准的 `PUBLIC_EVENT` 环境/语音事件和通过独立 schema 校验的 `PRIVATE_EVENT`。公开正文字段必须来自白名单；设置错误只显示稳定分类，例如 `remote_profiles_data_corrupted`，不包含解码错误正文或原始型号值；私有记录只允许通用信封和最多 32 个单行 token 属性。应用写入的自定义属性只允许 `diagnostic.user_initiated=true`、`diagnostic.schema_version=1` 和非负的 `diagnostic.sequence`；Sentry 平台仍可附加时间、severity、trace、payload size 和 SDK 版本等非用户元数据。同一个 `operation_id` 的 started/completed（或 failed/rejected）事件应能还原一次语音会话，并可按 `source` 与 `remote_model_family` 区分硬件或移动来源。
 
 下面的内容必须被拒绝或永不生成：
 
@@ -106,6 +106,26 @@ swift test --disable-keychain --filter DiagnosticLogUploaderTests
 4. 模拟一次发送失败，再模拟一次发送成功。
 
 预期：跨重启只保留未上传且未过期的记录；容量保持 256 条；失败后记录仍在；成功后仅对应记录 ID 被标记。Sentry 正文可以看到稳定业务阶段、粗粒度状态、原因码、重试和耗时，但不能看到身份、真实订单/支付对象、URL、价格或错误正文。
+
+## 用例 H：公开事件跨重启与发送确认
+
+使用隔离配置及合成数据，保留现有用户设置。
+
+1. 写入无法解码的合成遥控器配置，启动候选 App。
+2. 退出 App，再启动，点击“发送诊断信息”。
+3. 在受控测试 Sentry 中检查 `settings.load` 失败事件。
+4. 断网后发送新的安全事件，再恢复网络重试。
+5. 成功后重复发送，确认上一批事件不再出现。
+6. 检查安全事件存储的文件权限与目录权限。
+
+预期：重启后可发送此前的配置错误；失败保留待发送事件。
+成功后只移除本批事件。文件权限为 `0600`，目录权限为 `0700`。
+最多保留 256 条、7 天，普通 `.rmlog` 不读取、不上传、不删除。
+丢失未过期事件、失败后清空、重复上传已确认事件或上传原始错误正文均判定失败。
+
+自动化：`swift test --disable-keychain --filter PublicDiagnosticEventStoreTests`。
+覆盖重启、容量、过期、权限、白名单、发送失败保留与成功确认。
+此次实际 App 重启与 Sentry 网络验收仍待完成。
 
 ## 证据与边界
 
