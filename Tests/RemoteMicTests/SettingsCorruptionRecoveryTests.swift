@@ -9,6 +9,47 @@ import Testing
 struct SettingsCorruptionRecoveryTests {
     private static let garbage = Data("not json".utf8)
 
+    @Test func legacyChromecastProfilesRetainEveryDeviceAndMappingOnUpgrade() throws {
+        let suiteName = "SettingsCorruptionRecoveryTests.legacyChromecast.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let mappings = RemoteDeviceMappings(
+            buttonBindings: AppSettings.defaultBindings.merging([.up: .commandCopy]) { _, saved in saved },
+            buttonShortcuts: [:],
+            secondaryButtonBindings: [.down: [.doubleClick: .disabled]]
+        )
+        let profiles = [
+            RemoteDeviceProfile(model: .rc003, mappings: mappings),
+            RemoteDeviceProfile(model: .chromecastVoiceRemote, mappings: mappings),
+        ]
+        let encoded = try JSONEncoder().encode(profiles)
+        let legacy = try #require(String(data: encoded, encoding: .utf8))
+            .replacingOccurrences(of: "chromecast_voice_remote", with: "chromecase_voice_remote")
+        defaults.set(Data(legacy.utf8), forKey: "remoteDeviceProfiles")
+        defaults.set(profiles[1].id.uuidString, forKey: "selectedRemoteProfileID")
+
+        let upgraded = AppSettings(defaults: defaults)
+
+        #expect(upgraded.corruptedSettingKeys.isEmpty)
+        #expect(upgraded.remoteDeviceProfiles == profiles)
+        #expect(upgraded.selectedRemoteProfileID == profiles[1].id)
+        #expect(upgraded.buttonBindings[.up] == .commandCopy)
+        #expect(defaults.data(forKey: "remoteDeviceProfiles.corrupt") == nil)
+        let resaved = try JSONEncoder().encode(upgraded.remoteDeviceProfiles)
+        #expect(String(data: resaved, encoding: .utf8)?.contains("chromecase_voice_remote") == false)
+        #expect(try JSONDecoder().decode([RemoteDeviceProfile].self, from: resaved) == profiles)
+    }
+
+    @Test func unknownRemoteModelStillFailsWithoutIncludingItsValueInTheError() throws {
+        let payload = Data(#""unrecognized-user-value""#.utf8)
+        do {
+            _ = try JSONDecoder().decode(XiaomiRemoteModel.self, from: payload)
+            Issue.record("Unknown models must not be silently adopted")
+        } catch DecodingError.dataCorrupted(let context) {
+            #expect(context.debugDescription == "Unsupported remote model")
+        }
+    }
+
     private func isolatedDefaults(
         _ label: String,
         suiteName: inout String
