@@ -82,14 +82,42 @@ for distribution in \
   /usr/bin/grep -Fq '<installation-check script="installationCheck()"/>' "$distribution"
   /usr/bin/grep -Fq '>RemoteMicComponent.pkg</pkg-ref>' "$distribution"
   /usr/bin/grep -Fq '>SiriRemoteComponent.pkg</pkg-ref>' "$distribution"
-  /usr/bin/grep -Fq '<options customize="always"' "$distribution"
+  /usr/bin/grep -Fq 'customize="always"' "$distribution"
   /usr/bin/grep -Fq 'id="siri-remote"' "$distribution"
   /usr/bin/grep -Fq 'function siriRemoteSupportWasPreviouslyInstalled()' "$distribution"
-  /usr/bin/grep -Fq 'com.hd838a.RemoteMic.siri-remote.plist' "$distribution"
-  /usr/bin/grep -Fq 'com.hd838a.RemoteMic.siri-remote.bom' "$distribution"
-  /usr/bin/grep -Fq '/Library/PrivilegedHelperTools/com.hd838a.SayAll.AppleRemoteHCIService' "$distribution"
+  /usr/bin/grep -Fq "my.target.receiptForIdentifier('com.hd838a.RemoteMic.siri-remote')" "$distribution"
+  if /usr/bin/grep -Eq 'system\.files\.|allow-external-scripts="true"' "$distribution"; then
+    print -u2 "Siri Remote detection must use Installer receipts without external-script access"
+    exit 1
+  fi
   /usr/bin/grep -Fq 'start_selected="siriRemoteSupportWasPreviouslyInstalled()"' "$distribution"
 done
+
+python3 - "$ROOT" <<'PY_SIRI_RECEIPT'
+import pathlib, subprocess, sys, xml.etree.ElementTree as ET
+root = pathlib.Path(sys.argv[1])
+runner = r"""
+const assert = require('node:assert/strict');
+const vm = require('node:vm');
+for (const [scenario, receipt, expected] of [
+  ['fresh', null, false], ['installed', {version:'1.9.21'}, true],
+  ['missing', undefined, false], ['no_target', null, false]]) {
+  const context = { my: { target: scenario === 'no_target' ? null : {
+    receiptForIdentifier(identifier) {
+      assert.equal(identifier, 'com.hd838a.RemoteMic.siri-remote');
+      return receipt;
+    }
+  } } };
+  vm.createContext(context);
+  vm.runInContext(process.argv[1], context);
+  assert.equal(vm.runInContext('siriRemoteSupportWasPreviouslyInstalled()', context), expected);
+}
+"""
+for variant in ['apple-silicon','intel']:
+    script = ET.parse(root/'packaging/doubao-driver/distribution'/f'{variant}.xml').findtext('script')
+    subprocess.run(['node','-e',runner,script],check=True)
+    print(f'SIRI RECEIPT PREDICATE PASS: {variant}')
+PY_SIRI_RECEIPT
 
 for strings_file in "$RESOURCES"/*.lproj/Localizable.strings; do
   /usr/bin/plutil -lint "$strings_file"
