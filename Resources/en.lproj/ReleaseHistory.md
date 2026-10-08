@@ -9,6 +9,8 @@
 - Fixes an upgrade issue that prevented some remote settings from loading.
 - Improves account and membership recovery without requesting a keychain password.
 - Keeps unsent diagnostic records across app restarts to improve troubleshooting.
+- Fixes installer and upgrade failures with older virtual microphone states while keeping the existing name and settings.
+- Improves the Apple Remote Siri Remote installer option and existing-component detection.
 
 ## 1.9.21 (Pre-release)
 
