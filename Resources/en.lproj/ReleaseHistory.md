@@ -12,6 +12,8 @@
 - Fixes installer and upgrade failures with older virtual microphone states while keeping the existing name and settings.
 - Improves the Apple Remote Siri Remote installer option and existing-component detection.
 
+- Fixes a time-precision issue when revoking MCP authorization immediately.
+- Fixes virtual microphone naming conflicts that could incorrectly block installation or upgrade.
 ## 1.9.21 (Pre-release)
 
 - Improves update check reliability and reduces intermittent failures to retrieve update information.
