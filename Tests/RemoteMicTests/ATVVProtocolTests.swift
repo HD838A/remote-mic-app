@@ -104,6 +104,116 @@ struct ATVVProtocolTests {
         #expect(sessionStart.lowerBound < flush.lowerBound)
     }
 
+    @Test func asyncAudioConfigurationPreservesBluetoothStartStopAndFirstAudioOrder() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
+            encoding: .utf8
+        )
+        let start = try #require(source.range(of: "func bluetoothBridgeDidStartVoice"))
+        let stop = try #require(source.range(
+            of: "func bluetoothBridgeDidStopVoice",
+            range: start.upperBound..<source.endIndex
+        ))
+        let decode = try #require(source.range(
+            of: "func bluetoothBridge(_ bridge: XiaomiBluetoothBridge, didDecode samples: [Int16])",
+            range: stop.upperBound..<source.endIndex
+        ))
+        let startSource = source[start.lowerBound..<stop.lowerBound]
+        let stopSource = source[stop.lowerBound..<decode.lowerBound]
+        let decodeSource = source[decode.lowerBound...]
+
+        #expect(startSource.contains("pendingBluetoothVoiceStartIdentifier"))
+        #expect(startSource.contains("pendingBluetoothVoiceAudio.drain()"))
+        #expect(startSource.contains("flush_after_configuration"))
+        #expect(startSource.contains("voiceFnTapSession.startVoice()"))
+        #expect(startSource.contains("SYSTEM AUDIO voice_start_recovery configured=pending"))
+        let voiceStart = try #require(startSource.range(of: "voiceFnTapSession.startVoice()"))
+        let asyncConfiguration = try #require(startSource.range(
+            of: "ensureVirtualAudioOutputReady(reason: \"bluetooth_voice_start\")",
+            range: voiceStart.upperBound..<startSource.endIndex
+        ))
+        #expect(voiceStart.lowerBound < asyncConfiguration.lowerBound)
+        #expect(stopSource.contains("stop_before_audio_ready"))
+        #expect(stopSource.contains("stop_deferred_until_audio_ready"))
+        #expect(decodeSource.contains("buffered_during_configuration"))
+    }
+
+    @Test func asyncAudioConfigurationCancelsPendingVoiceStartsOnRelease() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
+            encoding: .utf8
+        )
+
+        #expect(source.contains("cancelled_before_audio_ready"))
+        #expect(source.contains("pendingAppleRemoteVoiceStarts.remove(device)"))
+        #expect(source.contains("pendingChromecastVoiceStart = false"))
+        #expect(source.contains("start_pending_audio_configuration"))
+    }
+
+    @Test func everyVoiceInputPathStartsBeforeAudioConfigurationAndPreservesPendingTail() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
+            encoding: .utf8
+        )
+
+        let appleStart = try #require(source.range(of: "private func beginAppleRemoteVoice"))
+        let appleStop = try #require(source.range(
+            of: "private func endAppleRemoteVoice",
+            range: appleStart.upperBound..<source.endIndex
+        ))
+        let apple = source[appleStart.lowerBound..<appleStop.lowerBound]
+        let appleCapture = try #require(apple.range(of: "siriRemoteFeature.beginCapture()"))
+        let appleConfigure = try #require(apple.range(of: "ensureVirtualAudioOutputReady(reason: \"apple_remote_voice_start\")"))
+        #expect(appleCapture.lowerBound < appleConfigure.lowerBound)
+        #expect(source.contains("pendingAppleRemoteVoiceAudio.appendIfWaiting(samples)"))
+        #expect(apple.contains("flush_after_configuration"))
+        #expect(source.contains("APPLE REMOTE VOICE phase=deferred result=pending_tail"))
+
+        let chromecastStart = try #require(source.range(of: "private func beginChromecastVoice"))
+        let chromecastStop = try #require(source.range(
+            of: "private func endChromecastVoice",
+            range: chromecastStart.upperBound..<source.endIndex
+        ))
+        let chromecast = source[chromecastStart.lowerBound..<chromecastStop.lowerBound]
+        let chromecastKey = try #require(chromecast.range(of: "beginChromecastFunctionKeyDrive()"))
+        let chromecastConfigure = try #require(chromecast.range(
+            of: "ensureVirtualAudioOutputReady(reason: \"chromecast_voice_start\")",
+            range: chromecastKey.upperBound..<chromecast.endIndex
+        ))
+        #expect(chromecastKey.lowerBound < chromecastConfigure.lowerBound)
+        #expect(source.contains("pendingChromecastVoiceAudio.appendIfWaiting(samples)"))
+        #expect(chromecast.contains("flush_after_configuration"))
+        #expect(source.contains("CHROMECAST VOICE phase=deferred result=pending_tail"))
+        #expect(source.contains(
+            "chromecastVoiceActive || chromecastVoiceStopping || pendingChromecastVoiceStart"
+        ))
+
+        let mobileStart = try #require(source.range(of: "private func startPhoneVoiceAfterAudioReady"))
+        let mobileStop = try #require(source.range(
+            of: "private func stopPhoneVoice",
+            range: mobileStart.upperBound..<source.endIndex
+        ))
+        let mobile = source[mobileStart.lowerBound..<mobileStop.lowerBound]
+        let mobileSession = try #require(mobile.range(of: "startPhoneVoice(source: source)"))
+        let mobileConfigure = try #require(mobile.range(of: "ensureVirtualAudioOutputReady(reason: \"mobile_voice_start\")"))
+        #expect(mobileSession.lowerBound < mobileConfigure.lowerBound)
+        #expect(source.contains("pendingMobileVoiceAudio.appendIfWaiting(samples)"))
+        #expect(mobile.contains("flush_after_configuration"))
+        #expect(source.contains("stop_deferred_until_audio_ready"))
+    }
+
     @Test func commandVoiceJourneyFlushesPreRollBeforeRemainingAudioAndClearsOnStop() {
         var buffer = CommandVoiceActivationAudioBuffer(maximumSampleCount: 4)
         var routedSamples: [Int16] = []
