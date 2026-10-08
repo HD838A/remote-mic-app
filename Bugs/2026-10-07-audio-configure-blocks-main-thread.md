@@ -1,6 +1,6 @@
 ---
 title: 音频重配在主线程访问 mainMixerNode 导致 App 长时间无响应
-subtitle: 官方 hang 采样锁定 HAL 查询与引擎递归锁互等
+subtitle: 两次官方 hang 采样锁定 HAL 查询与引擎递归锁互等
 lang: zh
 template: doc
 theme: shadcn
@@ -14,6 +14,10 @@ App 在音频重配过程中于**主线程**访问惰性属性 `AVAudioEngine.ma
 
 同时，音频引擎的 I/O 绑定变更线程持有等待方指向主线程的引擎内部递归互斥锁。
 即使 HAL 查询返回，引擎也可能无法自行解开，**卡死不限于单次查询耗时**。
+
+本 Bug 已有**两份独立现场**，分别发生在 2026-09-13 与 2026-10-07，
+跨两台 Mac、跨 `macOS 26.6` 与 `27.0` 两个大版本，**主线程栈逐帧一致**。
+因此不是某个系统版本的偶发缺陷，而是代码路径本身的问题。
 
 用户运行版本为 `1.9.21 (174)`。该版本的空闲重绑循环修复尚未包含在发布版本中，
 因此用户现场存在「高频重绑 → 高频访问 HAL → 命中驱动无响应」的放大条件。
@@ -103,6 +107,54 @@ invocation function for block in AVAudioEngineImpl::IOBindingChanged
 
 该形态与 `2026-09-05-idle-audio-rebind-loop.md` 记载的闭环逐字段吻合。
 
+### 第二次现场：2026-09-13（早 24 天）
+
+同一用户在更早时间提交过第二份官方 hang 报告，跨机器、跨 macOS 大版本：
+
+| 项 | 2026-09-13 | 2026-10-07 |
+| --- | --- | --- |
+| 系统 | `macOS 26.6.2 (25G83)` | `macOS 27.0.1 (26A434)` |
+| 硬件 | `Mac15,10`，14 核，36 GB | `Mac16,10`，10 核，16 GB |
+| 版本 | `1.9.21 (174)` | `1.9.21 (174)` |
+| 无响应时长 | 66 秒 | 772 秒 |
+| 采样点 | 43 | 41 |
+| 进程存活 | 76783 秒（约 21.3 小时） | 18588 秒（约 5.2 小时） |
+| 线程数 | 10 | 7 |
+| `Total CPU Time` | 10.829s | 9.873s |
+| `ThermalPressure` | 0 | 0 |
+
+主线程阻塞栈与上节**逐帧一致**，从 `-[AVAudioEngine mainMixerNode]` 到
+`HALC_ProxyObject::HasProperty` → `mach_msg`，本次 43 个采样点中 23 个停在此处。
+引擎锁互等同样成立，43 个采样点全部停在
+`recursive_mutex::lock` → `__psynch_mutexwait` → `psynch_mtxcontinue`
+→ `blocked by turnstile waiting for RemoteMic`。
+
+跨 `macOS` 大版本复现说明这不是某个系统版本的偶发缺陷。
+
+### 第二次现场的新增信息
+
+**一、卡住的是「枚举子设备并读取控制信息」，不只是查询格式。**
+采样中出现 `AVAEHalUtil::GetSubDevices` 经 `CADeprecated::GetTotalNumberChannels`
+读取通道数，以及 `HALC_ShellDevice::GetControlInfoByControlAddress`
+→ `HALC_ShellDevice::_HasProperty` 枚举设备控制信息。
+
+**二、主线程在多个子设备/属性分支之间反复切换。**
+`_GetHWFormat` 出现四个不同偏移 `+548`、`+1300`、`+1392`、`+4996`，
+分别占 10、5、10、1 帧。说明主线程并非停在单一查询上等待，
+而是在 HAL 内部持续推进多个属性读取。
+
+**三、偶见 HAL 内部全局锁被牵涉。**
+个别采样点出现 `HALC_ShellObjectMap::ReleaseObject`、`HALObjectMap::CopyObjectByObjectID`、
+`HALB_Mutex::Lock`、`HALB_CommandGate::ExecuteCommand`。
+这些帧数量极少（各 1 帧），**只能说明 HAL 内部互斥量参与了本次阻塞**，
+不足以断言存在跨进程串行化。
+
+### 第二次现场的无关进程
+
+该报告头部另有 `Deadlock:` 段，涉及同机第三方进程的两个线程互相等待，
+`Blocked by Deadlock` 指向同一第三方进程。**该死锁与本 Bug 无因果关系**，
+目标进程的镜像列表只加载 `CoreAudio` 与 `AVFAudio`，未加载任何第三方音频插件。
+
 ## C 根因
 
 `Sources/RemoteMic/AudioOutput.swift` 的 `configureVirtualAudioOutput` 在主线程构造并配置引擎：
@@ -164,9 +216,8 @@ hang 报告的 `Binary Images` 显示该进程只加载 `CoreAudio`、`AVFAudio`
   采样窗口本身仅 4.1 秒，不足以断言永不返回。
 - `runtime.log` 中 4 次 `AUDIO CONFIGURE failed reason=set_current_device error_code=1852797029`
   （`0x6E6F7065`，ASCII `nope`）与本次 HAL 无响应是否同源，未确认。
-- 两份材料不能按同一进程对齐。hang 报告 `Time Since Fork: 18588s`（约 5.2 小时）与
-  `runtime.log` 中最后一个实例的存活时长（约 4.8 小时）不匹配，
-  采样的可能是更早启动的实例，或运行日志存在轮转丢段。
+- 两份 hang 报告与 `runtime.log` 的**日期不同**（09-13 与 10-07），
+  第二次 hang 现场没有配套运行日志，因此该次事件**缺少运行日志交叉验证**。
 - hang 报告原文在 300,000 字节处被截断，尾部不完整。
 - 未取得崩溃报告；本次事件是 hang，不是 crash。
 
@@ -177,9 +228,13 @@ hang 报告的 `Binary Images` 显示该进程只加载 `CoreAudio`、`AVFAudio`
 | 位置 | 待办变化 |
 | --- | --- |
 | `Sources/RemoteMic/AudioOutput.swift` | 把 `mainMixerNode` 惰性访问、`outputNode.audioUnit`、`AudioUnitSetProperty`、`prepare()`、`start()` 移出主线程 |
+| `Sources/RemoteMic/AudioOutput.swift` | 为 HAL 枚举与属性查询路径设计超时与降级，避免在驱动无响应时无限期占用调用线程 |
 | `Sources/RemoteMic/BridgeAppModel.swift` | 确认重绑入口的队列归属，并记录切换前后的线程标识 |
 | `LOGGING.md` | 为音频重配增加线程标识与耗时字段，使阻塞可从日志直接识别 |
 | `Testing/AudioConfigurationChangeRecovery.md` | 增加真实 `AVAudioEngine` 主线程阻塞用例 |
+
+超时与降级不能替代移出主线程：移出主线程解决「App 不响应」，
+超时解决「驱动不返回时如何收场」，两者覆盖不同失效模式。
 
 任何修复都必须先让「同一用例从失败变为通过」，并覆盖真实设备拔插与语音会话期间配置变化。
 
@@ -187,8 +242,10 @@ hang 报告的 `Binary Images` 显示该进程只加载 `CoreAudio`、`AVFAudio`
 
 - 本次只做只读调查，未修改产品代码、测试、配置或依赖版本。
 - 未运行构建、测试或发布脚本。
-- 未取得用户现场设备的实时复现，本 Bug 依据官方 hang 采样与运行日志确认。
+- 未取得用户现场设备的实时复现，本 Bug 依据两份官方 hang 采样与运行日志确认。
 - 未定位具体 HAL 代理，也未验证修复后行为；修复尚未实现，因此无回归验证。
 - 未做真机长时间运行、真实拔插与语音会话期间配置变化的现场验收。
 - 未验证修复发布后用户现场条件消失；用户需升级到包含修复的版本后复测。
 - 本文档不声称已完成真机验收。
+- 第二次现场（09-13）的原始报告未脱敏，含 UUID、PID、UID、安装路径与同机其他进程名，
+  **未纳入本仓库**；本文只保留与本 Bug 相关的脱敏后结论。
