@@ -98,3 +98,16 @@
 自动化可验证脚本语法、伪目标卷移动/碰撞/未知内容保护、PKG/DMG 结构、架构门禁和不含永久删除命令。代理可构建无签名包并在伪卷执行脚本，但不能替代真实管理员授权、用户废纸篓、Developer ID 签名/公证/Gatekeeper、Intel Ventura 和 CoreAudio 设备刷新。这些项必须由最终候选包完成用户实测。
 
 2026-09-06 已使用最终 Developer ID、公证并 staple 的 Apple Silicon 1.9.21 (174) 资产执行 Siri Remote 可选组件 E2E。默认不安装、主动选择安装、已有 Helper 覆盖升级不选择、卸载原路径、无管理员权限拒绝、GUI 默认值/勾选交互、App 启动和 CoreAudio 枚举均通过；Finder 废纸篓恢复、Installer.app secure UI 授权、无历史 receipt 新机和 Intel Ventura 仍待人工实机。计划见 `Testing/SiriRemoteOptionalPKGE2EPlan.md`，结果见 `Testing/SiriRemoteOptionalPKGE2EReport-2026-09-06.md`。
+
+## 2026-10-08 Siri 可选组件检测回归
+
+安装器使用目标卷的 Siri 组件安装收据判断初始选中状态。它不直接查询系统文件路径，也不启用已弃用的外部脚本选项。
+
+| 状态 | 操作 | 预期结果 |
+| --- | --- | --- |
+| 未安装 Siri 组件，没有对应收据 | 打开自定安装页 | 苹果遥控器 Siri Remote 不选中 |
+| 已通过 PKG 安装 Siri 组件，有对应收据 | 打开自定安装页 | 苹果遥控器 Siri Remote 自动选中 |
+| 只有手工安装的 Helper，没有组件收据 | 打开自定安装页 | 不自动选中；已有 Helper 保留，需要更新时手动选中 |
+| 上述任一状态 | 分别选择或不选择该组件，完成安装 | 安装成功；无 IFJS 外部路径访问错误 |
+
+两种架构分别验收。收据断言和 UI 检查不代替最终签名包安装。

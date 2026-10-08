@@ -12,10 +12,10 @@ function currentSystemMajorVersion() {
 }
 
 function siriRemoteSupportWasPreviouslyInstalled() {
-    return system.files.fileExistsAtPath('/var/db/receipts/com.hd838a.RemoteMic.siri-remote.plist') ||
-        system.files.fileExistsAtPath('/var/db/receipts/com.hd838a.RemoteMic.siri-remote.bom') ||
-        system.files.fileExistsAtPath('/Library/PrivilegedHelperTools/com.hd838a.SayAll.AppleRemoteHCIService') ||
-        system.files.fileExistsAtPath('/Library/LaunchDaemons/com.hd838a.SayAll.AppleRemoteHCIService.plist');
+    if (!my.target) {
+        return false;
+    }
+    return Boolean(my.target.receiptForIdentifier('com.hd838a.RemoteMic.siri-remote'));
 }
 
 function installationCheck() {
