@@ -54,8 +54,9 @@
 
 1. 使用 prepare-staged-preview-ui-test.sh 恢复指定 Run/attempt/artifact。
 2. 从当前 `releases/latest` 下载并验证稳定基线。
-3. 启动脚本输出的本地 feed，并使用输出的 `REMOTE_MIC_UI_TEST_MODE=1`、`REMOTE_MIC_UI_TEST_FEED_URL` 和 `REMOTE_MIC_UI_TEST_VERSION` 环境变量直接运行稳定 App；稳定 App 真实执行 check、download、install、首次启动、退出、二次启动。该环境变量只接受 `127.0.0.1` 的 HTTP appcast，生产默认路径使用 Cloudflare stable/preview 通道。
-4. 使用 record-preview-ui-attestation.sh record 生成证明，再用同一入口的 verify 子命令独立验证。
+3. 将输出目录放在持久目录中。该目录必须是绝对路径，不能位于 Git worktree、`/tmp`、`/private/tmp` 或 `$TMPDIR`。测试期间不要移动或清理该目录。
+4. 启动脚本输出的本地 feed，并使用输出的 `REMOTE_MIC_UI_TEST_MODE=1`、`REMOTE_MIC_UI_TEST_FEED_URL` 和 `REMOTE_MIC_UI_TEST_VERSION` 环境变量直接运行稳定 App；稳定 App 真实执行 check、download、install、首次启动、退出、二次启动。该环境变量只接受 `127.0.0.1` 的 HTTP appcast，生产默认路径使用 Cloudflare stable/preview 通道。
+5. 使用 record-preview-ui-attestation.sh record 生成证明，再用同一入口的 verify 子命令独立验证。确认所有 App 进程已退出后，才可以把测试目录移入废纸篓。
 
 预期：attestation 绑定 source branch/kind/SHA、Hotfix 稳定基线、main workflow SHA、artifact ID/digest、manifest、两份 appcast、候选 ZIP、安装后版本/Build、Team ID、公证、Gatekeeper、Sparkle helper 0755/链接和无新增崩溃。只运行 probe 或单元测试不能通过。
 

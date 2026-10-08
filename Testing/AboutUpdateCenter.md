@@ -10,7 +10,7 @@
 1. 使用已签名、公证并从最终 Sparkle ZIP 解压的 `1.9.21` App 检查界面。
 2. 跨版本用例准备当前稳定版 `1.9.18` 和上一预览版 `1.9.20`，且每次放在独立可写目录，避免相互覆盖测试状态。
 3. 退出其他 `com.hd838a.RemoteMic` 进程；不要清空用户偏好来改变测试结果。
-4. App 内置 stable feed 为 `https://download.sayall.app/mac/channels/stable/appcast.xml`；开启预发布检查后同时解析同架构 stable 与 preview 通道并选择语义版本更高者。真实 UI 候选验收仍只通过本地 `127.0.0.1` feed 注入固定候选字节。
+4. App 内置 stable feed 为 `https://download.sayall.app/mac/channels/stable/appcast.xml`；开启预发布检查后同时解析同架构 stable 与 preview 通道并选择语义版本更高者。真实 UI 候选验收仍只通过本地 `127.0.0.1` feed 注入固定候选字节。UI 测试输出目录必须位于持久目录，不能位于 Git worktree、`/tmp`、`/private/tmp` 或 `$TMPDIR`；完成 Sparkle 首次启动、退出、二次启动和 attestation 前不得清理。
 
 ## 用例 1：设置页结构与最小窗口
 
