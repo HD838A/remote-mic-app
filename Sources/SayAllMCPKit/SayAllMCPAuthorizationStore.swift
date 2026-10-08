@@ -159,7 +159,8 @@ public final class SayAllMCPAuthorizationStore: @unchecked Sendable {
                 throw SayAllMCPAuthorizationError.authorizationNotFound
             }
             guard state.authorizations[index].revokedAt == nil else { return }
-            state.authorizations[index].revokedAt = Date()
+            // Persisted millisecond rounding and wall-clock changes must not prevent revocation.
+            state.authorizations[index].revokedAt = max(Date(), state.authorizations[index].createdAt)
             try saveState(state)
         }
     }
