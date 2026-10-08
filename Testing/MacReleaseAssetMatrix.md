@@ -23,7 +23,7 @@ Install PKG 既内嵌于对应 DMG，也作为 SayAll 品牌的公开独立资�
 2. 运行 scripts/verify-staged-release-assets.sh。
 3. 检查 staged-assets.json。
 
-预期：manifest schemaVersion 为 1，版本/tag/sourceCommit/build 合法，payload 恰好 13 项、名称唯一、无路径分隔符、无 symlink/非普通文件；每项 size 和 SHA-256 与文件完全一致。
+预期：新 manifest schemaVersion 为 2，版本/tag/sourceCommit/build 合法，payload 恰好 13 项、名称唯一、无路径分隔符、无 symlink/非普通文件；每项 size 和 SHA-256 与文件完全一致。
 
 失败判定：缺少任一架构、缺少独立 Install/Uninstall PKG、额外文件、重复名称、空 manifest 或摘要不一致。
 
@@ -33,7 +33,11 @@ Install PKG 既内嵌于对应 DMG，也作为 SayAll 品牌的公开独立资�
 2. 检查两份 appcast 都使用固定 Tag 的 CDN URL，并包含版本、Build 和 Ed25519 签名。
 3. 检查共享中英文说明的 URL 和文件名。
 
-预期：不使用 latest-release enclosure URL；两个 appcast 的版本/Build 相同且不会交叉下载错误架构。
+预期：Appcast XML 可以解析。两个 Appcast 的版本、Build、ZIP 长度和签名格式符合 manifest。下载地址使用固定 Tag 和对应架构的 `SayAll-*` ZIP。两份说明地址使用共享的 `SayAll-*` 文件。
+
+失败判定：旧名称、错误架构、错误域名、错误长度、错误版本、缺失签名或无效 XML。注释中出现正确名称不能代替正确下载地址。
+
+历史兼容：manifest schema 1 和 provenance schema 5 保留旧的混合命名；provenance schema 4 保留旧的 11 项资产。新 manifest 使用 schema 2，新 provenance 使用 schema 6。历史候选的文件和摘要保持原值。
 
 ## 用例 3：DMG/PKG 静态信任链
 

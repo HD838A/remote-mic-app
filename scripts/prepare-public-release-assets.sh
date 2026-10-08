@@ -115,7 +115,7 @@ jq -s -S \
   --arg sourceCommit "$source_commit" \
   --arg version "$version" \
   --arg build "$build" \
-  '{schemaVersion:1,repository:$repository,tag:$tag,sourceCommit:$sourceCommit,version:$version,build:$build,assets:(sort_by(.name))}' \
+  '{schemaVersion:2,repository:$repository,tag:$tag,sourceCommit:$sourceCommit,version:$version,build:$build,assets:(sort_by(.name))}' \
   "$asset_jsonl" > "$BUNDLE/staged-assets.json"
 
 # The line-oriented generator input is deliberately outside the staged bundle.
@@ -123,7 +123,7 @@ jq -s -S \
 /bin/mv "$asset_jsonl" "/private/tmp/sayall-release-assets-consumed.$$.jsonl"
 
 jq -e '
-  .schemaVersion == 1 and
+  .schemaVersion == 2 and
   .repository == "HD838A/remote-mic-app" and
   (.tag | test("^v[0-9]+[.][0-9]+[.][0-9]+$")) and
   (.sourceCommit | test("^[0-9a-f]{40}$")) and
