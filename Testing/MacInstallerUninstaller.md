@@ -20,7 +20,7 @@
 
 1. 挂载对应架构 DMG。
 2. 确认 Apple Silicon DMG 根目录只有 `Install SayAll.pkg`，Intel DMG 根目录只有 `Install SayAll Intel.pkg`；没有并列 App、Applications 快捷方式或 Uninstall PKG。
-3. 运行 Install PKG；进入“安装类型/自定安装”页面后，确认 `Siri Remote 支持` 默认未勾选。
+3. 运行 Install PKG；进入“安装类型/自定安装”页面后，确认 `苹果遥控器 Siri Remote` 默认未勾选。
 4. 不勾选 Siri Remote，继续安装并完成管理员授权。
 
 预期：`/Applications/SayAll.app` 与 `MiRemoteV 2ch` 安装完成，App 自动启动；`/Library/PrivilegedHelperTools/com.hd838a.SayAll.AppleRemoteHCIService` 和对应 LaunchDaemon 不被新安装创建；签名、公证、Gatekeeper、架构、最低系统与权限全部正确。
@@ -30,7 +30,7 @@
 ### 2. 按需安装 Siri Remote 支持
 
 1. 重新运行同一 Install PKG，进入“自定安装”。
-2. 勾选 `Siri Remote 支持 / Siri Remote support`，继续安装并完成管理员授权。
+2. 勾选 `苹果遥控器 Siri Remote`，继续安装并完成管理员授权。
 
 预期：除默认组件外，安装器才写入 Apple Remote HCI helper 与 LaunchDaemon；helper 签名标识、Mach 服务名、权限和 `launchctl` 状态正确，App 可以进入 Apple Remote 音频准备流程。
 
