@@ -914,18 +914,18 @@ version=9.9.9
 for name in \
   "SayAll-$version-Intel-Uninstaller.pkg" \
   "SayAll-$version-Intel-Installer.pkg" \
-  "Remote-Mic-$version-Intel.dmg" \
-  "Remote-Mic-$version-Intel.zip" \
+  "SayAll-$version-Intel.dmg" \
+  "SayAll-$version-Intel.zip" \
   "SayAll-$version-Uninstaller.pkg" \
   "SayAll-$version-Installer.pkg" \
-  "Remote-Mic-$version.dmg" \
-  "Remote-Mic-$version.en.txt" \
-  "Remote-Mic-$version.zh.txt" \
-  "Remote-Mic-$version.zip" \
+  "SayAll-$version.dmg" \
+  "SayAll-$version.en.txt" \
+  "SayAll-$version.zh.txt" \
+  "SayAll-$version.zip" \
   appcast-intel.xml appcast.xml; do
   print -rn -- "fixture:$name" > "$public_dir/$name"
 done
-( cd "$public_dir" && /usr/bin/shasum -a 256 "Remote-Mic-$version.dmg" "Remote-Mic-$version-Intel.dmg" > "Remote-Mic-$version.dmg.sha256" )
+( cd "$public_dir" && /usr/bin/shasum -a 256 "SayAll-$version.dmg" "SayAll-$version-Intel.dmg" > "SayAll-$version.dmg.sha256" )
 
 manifest="$WORK_DIR/staged-assets.json"
 {
@@ -943,12 +943,12 @@ manifest="$WORK_DIR/staged-assets.json"
 } | jq -S . > "$manifest"
 
 "$ROOT/scripts/verify-staged-release-assets.sh" "$manifest" "$public_dir" >/dev/null
-print -rn -- tampered >> "$public_dir/Remote-Mic-$version.zip"
+print -rn -- tampered >> "$public_dir/SayAll-$version.zip"
 if "$ROOT/scripts/verify-staged-release-assets.sh" "$manifest" "$public_dir" >/dev/null 2>&1; then
   print -u2 "manifest accepted tampered payload"
   exit 1
 fi
-print -rn -- fixture > "$public_dir/Remote-Mic-$version.zip"
+print -rn -- fixture > "$public_dir/SayAll-$version.zip"
 if [[ ! -e "$public_dir/extra.txt" ]]; then
   print -rn -- extra > "$public_dir/extra.txt"
 fi

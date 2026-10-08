@@ -46,15 +46,15 @@ version="$(jq -r '.version' "$MANIFEST")"
 expected_names="$(printf '%s\n' \
   "SayAll-$version-Intel-Uninstaller.pkg" \
   "SayAll-$version-Intel-Installer.pkg" \
-  "Remote-Mic-$version-Intel.dmg" \
-  "Remote-Mic-$version-Intel.zip" \
+  "SayAll-$version-Intel.dmg" \
+  "SayAll-$version-Intel.zip" \
   "SayAll-$version-Uninstaller.pkg" \
   "SayAll-$version-Installer.pkg" \
-  "Remote-Mic-$version.dmg" \
-  "Remote-Mic-$version.dmg.sha256" \
-  "Remote-Mic-$version.en.txt" \
-  "Remote-Mic-$version.zh.txt" \
-  "Remote-Mic-$version.zip" \
+  "SayAll-$version.dmg" \
+  "SayAll-$version.dmg.sha256" \
+  "SayAll-$version.en.txt" \
+  "SayAll-$version.zh.txt" \
+  "SayAll-$version.zip" \
   "appcast-intel.xml" \
   "appcast.xml" | LC_ALL=C /usr/bin/sort)"
 manifest_names="$(jq -r '.assets[].name' "$MANIFEST" | LC_ALL=C /usr/bin/sort)"

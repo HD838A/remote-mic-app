@@ -10,9 +10,9 @@
 
 | 类别 | 文件 |
 | --- | --- |
-| Apple Silicon | Remote-Mic-VERSION.zip、Remote-Mic-VERSION.dmg、SayAll-VERSION-Installer.pkg、SayAll-VERSION-Uninstaller.pkg、appcast.xml |
-| Intel Ventura | Remote-Mic-VERSION-Intel.zip、Remote-Mic-VERSION-Intel.dmg、SayAll-VERSION-Intel-Installer.pkg、SayAll-VERSION-Intel-Uninstaller.pkg、appcast-intel.xml |
-| 共享 | Remote-Mic-VERSION.zh.txt、Remote-Mic-VERSION.en.txt、Remote-Mic-VERSION.dmg.sha256 |
+| Apple Silicon | SayAll-VERSION.zip、SayAll-VERSION.dmg、SayAll-VERSION-Installer.pkg、SayAll-VERSION-Uninstaller.pkg、appcast.xml |
+| Intel Ventura | SayAll-VERSION-Intel.zip、SayAll-VERSION-Intel.dmg、SayAll-VERSION-Intel-Installer.pkg、SayAll-VERSION-Intel-Uninstaller.pkg、appcast-intel.xml |
+| 共享 | SayAll-VERSION.zh.txt、SayAll-VERSION.en.txt、SayAll-VERSION.dmg.sha256 |
 | 来源证明 | candidate-provenance.json |
 
 Install PKG 既内嵌于对应 DMG，也作为 SayAll 品牌的公开独立资产上传，供硬件支持公告直接下载。

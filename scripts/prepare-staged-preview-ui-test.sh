@@ -108,14 +108,14 @@ if [[ "$(jq -r '.sourceKind' "$stage_record")" == hotfix ]]; then
 fi
 version="$(jq -r '.version' "$manifest")"
 tag="$(jq -r '.tag' "$manifest")"
-archive="Remote-Mic-$version.zip"
+archive="SayAll-$version.zip"
 manifest_sha="$(shasum -a 256 "$manifest" | awk '{print $1}')"
 production_prefix="https://download.sayall.app/mac/releases/$tag/"
 test_prefix="http://127.0.0.1:$FEED_PORT/"
-for file_name in appcast.xml "$archive" "Remote-Mic-$version.zh.txt" "Remote-Mic-$version.en.txt"; do
+for file_name in appcast.xml "$archive" "SayAll-$version.zh.txt" "SayAll-$version.en.txt"; do
   [[ -f "$public_dir/$file_name" ]] || { echo "staged UI-test asset is missing: $file_name" >&2; exit 1; }
 done
-for file_name in "$archive" "Remote-Mic-$version.zh.txt" "Remote-Mic-$version.en.txt"; do
+for file_name in "$archive" "SayAll-$version.zh.txt" "SayAll-$version.en.txt"; do
   ditto --norsrc --noqtn --noacl "$public_dir/$file_name" "$OUTPUT_DIR/feed/$file_name"
 done
 sed "s#$production_prefix#$test_prefix#g" "$public_dir/appcast.xml" > "$OUTPUT_DIR/feed/appcast.xml"
@@ -125,14 +125,16 @@ printf '%s\n' "$baseline_release" | jq -e --arg tag "$BASELINE_TAG" '.tag_name =
 baseline_version="$(printf '%s' "$BASELINE_TAG" | sed 's/^v//')"
 jq -n -e --arg baseline "$baseline_version" --arg candidate "$version" \
   '($baseline | split(".") | map(tonumber)) < ($candidate | split(".") | map(tonumber))' >/dev/null
-baseline_asset_id="$(printf '%s\n' "$baseline_release" | jq -r --arg name "Remote-Mic-$baseline_version.zip" '[.assets[] | select(.name == $name)] | if length == 1 then .[0].id else empty end')"
-baseline_asset_digest="$(printf '%s\n' "$baseline_release" | jq -r --arg name "Remote-Mic-$baseline_version.zip" '[.assets[] | select(.name == $name)] | if length == 1 then .[0].digest else empty end')"
-baseline_asset_url="$(printf '%s\n' "$baseline_release" | jq -r --arg name "Remote-Mic-$baseline_version.zip" '[.assets[] | select(.name == $name)] | if length == 1 then .[0].browser_download_url else empty end')"
-expected_baseline_asset_url="https://github.com/$REPOSITORY/releases/download/$BASELINE_TAG/Remote-Mic-$baseline_version.zip"
-[[ "$baseline_asset_id" =~ ^[1-9][0-9]*$ &&
+baseline_asset_name="$(printf '%s\n' "$baseline_release" | jq -r --arg version "$baseline_version" '[.assets[] | select(.name == ("SayAll-" + $version + ".zip") or .name == ("Remote-Mic-" + $version + ".zip"))] | sort_by(.name | startswith("Remote-Mic-")) | if length == 1 then .[0].name else empty end')"
+baseline_asset_id="$(printf '%s\n' "$baseline_release" | jq -r --arg name "$baseline_asset_name" '[.assets[] | select(.name == $name)] | if length == 1 then .[0].id else empty end')"
+baseline_asset_digest="$(printf '%s\n' "$baseline_release" | jq -r --arg name "$baseline_asset_name" '[.assets[] | select(.name == $name)] | if length == 1 then .[0].digest else empty end')"
+baseline_asset_url="$(printf '%s\n' "$baseline_release" | jq -r --arg name "$baseline_asset_name" '[.assets[] | select(.name == $name)] | if length == 1 then .[0].browser_download_url else empty end')"
+expected_baseline_asset_url="https://github.com/$REPOSITORY/releases/download/$BASELINE_TAG/$baseline_asset_name"
+[[ "$baseline_asset_name" =~ ^(SayAll|Remote-Mic)-$baseline_version\.zip$ &&
+   "$baseline_asset_id" =~ ^[1-9][0-9]*$ &&
    "$baseline_asset_digest" =~ ^sha256:[0-9a-f]{64}$ &&
    "$baseline_asset_url" == "$expected_baseline_asset_url" ]] || exit 1
-baseline_zip="$OUTPUT_DIR/baseline/Remote-Mic-$baseline_version.zip"
+baseline_zip="$OUTPUT_DIR/baseline/$baseline_asset_name"
 curl --fail --silent --show-error --location "$baseline_asset_url" --output "$baseline_zip"
 [[ "sha256:$(shasum -a 256 "$baseline_zip" | awk '{print $1}')" == "$baseline_asset_digest" ]] || exit 1
 ditto -x -k "$baseline_zip" "$OUTPUT_DIR/baseline"
