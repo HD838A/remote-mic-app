@@ -703,6 +703,20 @@ if /usr/bin/grep -Fq 'application/octet-stream' "$ui_prep_source"; then
   print -u2 "Preview UI preparation still relies on an unsupported gh API media type"
   exit 1
 fi
+unsafe_ui_output="$WORK_DIR/unsafe-ui-output"
+if REPOSITORY_ROOT="$ROOT" GITHUB_REPOSITORY=HD838A/remote-mic-app GH_BIN="$WORK_DIR/unavailable-gh" \
+    "$ui_prep_source" 1 "$unsafe_ui_output" >"$WORK_DIR/unsafe-ui-output.log" 2>&1; then
+  print -u2 "Preview UI preparation accepted a temporary output directory"
+  exit 1
+fi
+/usr/bin/grep -Fq 'outside temporary directories' "$WORK_DIR/unsafe-ui-output.log"
+unsafe_worktree_output="$ROOT/.preview-ui-test-output"
+if REPOSITORY_ROOT="$ROOT" GITHUB_REPOSITORY=HD838A/remote-mic-app GH_BIN="$WORK_DIR/unavailable-gh" \
+    "$ui_prep_source" 1 "$unsafe_worktree_output" >"$WORK_DIR/unsafe-worktree-output.log" 2>&1; then
+  print -u2 "Preview UI preparation accepted a Git worktree output directory"
+  exit 1
+fi
+/usr/bin/grep -Fq 'outside a Git worktree' "$WORK_DIR/unsafe-worktree-output.log"
 if /usr/bin/grep -Eq '\$\(\)/bin/date|date -u' "$publication_source"; then
   print -u2 "publication provenance must not use the current clock"
   exit 1

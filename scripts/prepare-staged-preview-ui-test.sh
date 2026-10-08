@@ -21,8 +21,36 @@ if [[ "$#" -ne 2 || ! "$RUN_ID" =~ ^[1-9][0-9]*$ || -z "$OUTPUT_DIR" ]]; then
   exit 2
 fi
 [[ "$FEED_PORT" =~ ^[1-9][0-9]*$ && "$FEED_PORT" -le 65535 ]] || exit 2
+[[ "$OUTPUT_DIR" == /* ]] || {
+  echo "output directory must be an absolute path outside temporary directories and Git worktrees" >&2
+  exit 1
+}
+output_parent="${OUTPUT_DIR%/*}"
+[[ -n "$output_parent" ]] || output_parent="/"
+output_parent="$(cd "$output_parent" 2>/dev/null && pwd -P)" || {
+  echo "output directory parent must already exist" >&2
+  exit 1
+}
+case "$output_parent/" in
+  /tmp/*|/private/tmp/*)
+    echo "output directory must be outside temporary directories" >&2
+    exit 1
+    ;;
+esac
+if [[ -n "${TMPDIR:-}" ]]; then
+  case "$output_parent/" in
+    "${TMPDIR%/}"/*)
+      echo "output directory must be outside temporary directories" >&2
+      exit 1
+      ;;
+  esac
+fi
+if git -C "$output_parent" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  echo "output directory must be outside a Git worktree; keep the App until UI attestation is complete" >&2
+  exit 1
+fi
 [[ ! -e "$OUTPUT_DIR" ]] || { echo "output directory already exists" >&2; exit 1; }
-for command_name in "$GH_BIN" jq shasum unzip curl plutil codesign spctl xcrun ditto; do
+for command_name in "$GH_BIN" git jq shasum unzip curl plutil codesign spctl xcrun ditto; do
   command -v "$command_name" >/dev/null 2>&1 || { echo "Missing required command: $command_name" >&2; exit 1; }
 done
 mkdir -p "$OUTPUT_DIR/feed" "$OUTPUT_DIR/baseline"
