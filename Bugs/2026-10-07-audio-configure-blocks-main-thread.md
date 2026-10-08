@@ -237,10 +237,11 @@ hang 报告的 `Binary Images` 显示该进程只加载 `CoreAudio`、`AVFAudio`
 
 ## G 验证边界
 
-- 已完成本机自动化构建和 837 项测试，使用 `swift test --disable-keychain`。
+- 已完成本机自动化构建和 841 项测试，使用 `swift test --disable-keychain`。
 - 已完成定向音频测试和源级回归检查；排空终态的一次性语义保持通过。
 - 已完成主线程排空请求在后台停止后的回调线程回归测试；回调只执行一次且运行在主线程。
 - 已完成源级回归确认异步配置期间语音启动保留首批音频，并在配置完成前收到松键时取消待启动会话。
+- 已完成源级回归确认 Bluetooth、Apple Remote、Chromecast 和移动端均先启动语音路径，再异步配置音频出口；配置期间 PCM 暂存，松键后先投递暂存尾包。
 - 补充源级回归确认不存在同步 `configure` 入口，启动和重配均调用 `configureAsync`；配置各终态日志包含 `queue=audio_output` 与 `elapsed_ms`。
 - 未取得用户现场设备的实时复现，未确认具体 HAL 代理类型。
 - 未完成真实 `coreaudiod` 无响应、外接音频设备拔插、语音中重配和长时间运行验收。
@@ -257,12 +258,12 @@ hang 报告的 `Binary Images` 显示该进程只加载 `CoreAudio`、`AVFAudio`
 - 引擎健康状态、绑定设备和路由诊断改为缓存快照。主线程诊断不会再次读取 `AVAudioEngine.outputNode.audioUnit` 或 HAL 属性。
 - `stop()` 在主线程异步执行，在音频队列和测试线程保持同步完成，保留排空终态的一次性语义。
 - 主线程发起的排空请求在后台停止或重配后仍派回主线程完成，避免语音停止、Fn 释放和 UI 状态更新运行在音频队列。
-- 音频未就绪时的 Bluetooth `STREAM_START`、Apple Remote、Chromecast 和移动端语音启动保留待启动状态；Bluetooth 首批音频暂存，松键会取消待启动状态，配置完成后按原顺序启动和投递。
+- 音频未就绪时的 Bluetooth `STREAM_START`、Apple Remote、Chromecast 和移动端语音启动保留待启动状态；语音会话先启动，配置期间的首批 PCM 暂存，松键会保留尾包，配置完成后按原顺序投递并自然排空。
 
 ### 自动化验证
 
 - `swift test --disable-keychain --filter 'AudioConfigurationChangeRecoveryTests|VirtualAudioConnectionLifecycleTests'`：47 项通过。
-- `swift test --disable-keychain`：837 项通过。
+- `swift test --disable-keychain`：841 项通过。
 - `./scripts/test.sh`：48 项工程自检通过。
 - `scripts/verify-repository-governance.sh origin/main`：通过。
 - `git diff --check`：通过。
