@@ -100,7 +100,7 @@ commit_driver_naming_record() { [[ "$SCENARIO" != state_failure ]]; }
         assert not (volume/'var/root/.Trash').exists()
     if not failed:
         subprocess.run(['codesign','--verify','--deep','--strict',str(destination)], check=True)
-    print('scenario='+scenario+' result=passed')
+    print('scenario='+scenario+(' protection=verified install=failed' if failed else ' install=passed'))
 # Run the complete preinstall, payload residue, failing postinstall checks and
 # a new Installer attempt. Keep real marker IO, mode checks and classification;
 # emulate only root ownership, hardware selection, receipts and process stop.
@@ -176,7 +176,139 @@ for scenario in ['fresh_retry', 'history_retry', 'legacy_driver_retry', 'record_
             assert result.returncode == 0 and f'variant={expected}' in result.stdout, (scenario,result.stdout,result.stderr)
             if scenario == 'legacy_driver_retry':
                 assert destination.stat().st_ino == original_inode and 'changed=0' in result.stdout
-    print('pkg_scenario='+scenario+' result=passed')
+    print('pkg_scenario='+scenario+(' protection=verified install=failed' if scenario in ['record_failure','invalid_record'] else ' driver_install=passed retry=passed'))
+# Recovery acceptance executes the complete shipped pre/post scripts, including
+# final App permissions/signature verification and the completion message.
+# This isolated volume cannot prove native Installer UI or CoreAudio loading.
+full_post = source.replace('/usr/bin/stat', 'fixture_stat').replace('/usr/sbin/sysctl', 'fixture_sysctl')
+full_post = full_post.replace('/usr/sbin/chown', 'fixture_chown').replace('/usr/bin/pgrep', 'fixture_pgrep')
+full_post = full_post.replace('/usr/bin/killall', 'fixture_killall')
+full_stubs = stubs.replace('then print 0;', 'then print 0;') + '''fixture_pgrep() { return 1; }
+fixture_killall() { return 1; }
+'''
+# Console identity is fixed to root so no real user's home is queried.
+full_stubs = full_stubs.replace('if [[ "$1" == -f && "$2" == %u ]];',
+    'if [[ "$1" == -f && "$2" == %Su ]]; then print root; return 0; fi\n if [[ "$1" == -f && "$2" == %u ]];')
+fixture_executable = work/'fixture-app-executable'
+subprocess.run(['xcrun','clang','-arch',arch,'-x','c','-o',str(fixture_executable),'-'],input='int main(void) { return 0; }',text=True,check=True)
+for scenario in ['legacy_stale_brand', 'brand_stale_legacy', 'legacy_two_records', 'brand_two_records',
+                 'legacy_no_exec', 'brand_no_exec', 'legacy_bad_signature', 'brand_bad_signature',
+                 'legacy_unreadable_binary', 'brand_missing_marker', 'legacy_record_write_retry', 'brand_record_write_retry', 'legacy_unreadable_two_records', 'legacy_missing_driver_two_records']:
+    volume = work/('recovery-'+scenario)
+    (volume/'Library/Application Support').mkdir(parents=True)
+    destination = volume/'Library/Audio/Plug-Ins/HAL/MiRemoteV2ch.driver'
+    expected = scenario.split('_')[0]
+    driver = output/('' if expected == 'brand' else 'legacy')/'MiRemoteV2ch.driver'
+    if 'missing_driver' not in scenario:
+        subprocess.run(['ditto',str(driver),str(destination)],check=True)
+    binary = destination/'Contents/MacOS/MiRemoteV2ch'
+    if scenario.endswith('no_exec'): binary.chmod(0o644)
+    if scenario.endswith('bad_signature'):
+        with binary.open('ab') as stream: stream.write(b'tampered')
+    if 'unreadable' in scenario: binary.write_bytes(b'damaged')
+    if scenario.endswith('missing_marker'):
+        subprocess.run(['plutil','-remove','SayAllNamingVariant',str(destination/'Contents/Info.plist')],check=True)
+    before_binary = binary.read_bytes() if binary.exists() else None
+    naming = volume/'Library/Application Support/RemoteMic/DriverNaming'; naming.mkdir(parents=True)
+    old_records = {}
+    if 'stale' in scenario or 'two_records' in scenario or 'record_write_retry' in scenario:
+        variants = ['brand','legacy'] if 'two_records' in scenario else ['brand' if expected == 'legacy' else 'legacy']
+        for variant in variants:
+            marker = naming/variant; marker.write_text(f'SayAllDriverNaming:1:{variant}\n'); marker.chmod(0o600)
+            old_records[variant] = marker.read_bytes()
+    settings = volume/'Users/fixture/Library/Preferences/com.hd838a.RemoteMic.plist'
+    settings.parent.mkdir(parents=True)
+    settings.write_bytes(plistlib.dumps({'selectedAudioDeviceUID':'MiRemoteV2ch_UID','fixtureSetting':'preserve'}))
+    before_settings = settings.read_bytes()
+    scripts = volume/'scripts'; scripts.mkdir()
+    (scripts/'driver-naming.zsh').write_text(f'FIXTURE_ARCH={arch}\n' + full_stubs + helper)
+    (scripts/'preinstall').write_text(pre)
+    (scripts/'postinstall').write_text(full_post)
+    (scripts/'trash-legacy-app.zsh').write_bytes((root/'packaging/doubao-driver/install/trash-legacy-app.zsh').read_bytes())
+    (scripts/'release-variant.plist').write_bytes(plistlib.dumps({
+        'ExpectedArchitecture':arch,'MinimumSystemMajor':13,'MinimumSystemVersion':'13.0','PackageBuild':'999999'}))
+    if scenario.endswith('record_write_retry'):
+        real_helper = (scripts/'driver-naming.zsh').read_text()
+        # Emulate a failed marker write after file creation. The next real
+        # attempt must restore/reconcile the record and complete installation.
+        failing_helper = real_helper.replace('print -r -- "SayAllDriverNaming:1:$variant" >',
+            'false >')
+        (scripts/'driver-naming.zsh').write_text(failing_helper)
+        failed_result = subprocess.run(['/bin/zsh',str(scripts/'preinstall'),'fixture','fixture',str(volume)],capture_output=True,text=True)
+        (scripts/'failed-preinstall.log').write_text(failed_result.stdout+failed_result.stderr)
+        assert failed_result.returncode != 0 and 'reason=state_commit_failed' in failed_result.stderr
+        assert binary.read_bytes() == before_binary and settings.read_bytes() == before_settings
+        assert {p.name:p.read_bytes() for p in naming.iterdir()} == old_records
+        assert not (volume/'Applications').exists()
+        (scripts/'driver-naming.zsh').write_text(real_helper)
+        retry = volume/'successful-scripts'; retry.mkdir()
+        for name in ['driver-naming.zsh','preinstall','postinstall','trash-legacy-app.zsh','release-variant.plist']:
+            (retry/name).write_bytes((scripts/name).read_bytes())
+        scripts = retry
+    result = subprocess.run(['/bin/zsh',str(scripts/'preinstall'),'fixture','fixture',str(volume)],capture_output=True,text=True)
+    (scripts/'preinstall.log').write_text(result.stdout+result.stderr)
+    assert result.returncode == 0,(scenario,result.stdout,result.stderr)
+    assert plistlib.loads((scripts/'driver-naming-selection.plist').read_bytes())['Variant'] == expected
+    assert list(p.name for p in naming.iterdir()) == [expected]
+    trash = volume/'private/var/root/.Trash'
+    if old_records:
+        backups = list(trash.glob('SayAllDriverNaming-*'))
+        assert all(p.read_bytes() in old_records.values() for p in backups if '-failed-' not in p.name)
+        assert all(any(p.read_bytes() == contents for p in backups) for contents in old_records.values())
+        assert 'phase=reconciled result=verified' in result.stderr
+    app = volume/'Applications/SayAll.app/Contents'; app.mkdir(parents=True)
+    (app/'Info.plist').write_bytes(plistlib.dumps({'CFBundleIdentifier':'com.hd838a.RemoteMic',
+        'CFBundleExecutable':'RemoteMic','CFBundleVersion':'999999','LSMinimumSystemVersion':'13.0'}))
+    # Small signed fixture App; no real App or user process is run by these tests.
+    executables = ['MacOS/RemoteMic','Helpers/SayAllMCP','Helpers/SayAllAppleRemoteAudioCapture',
+        'Helpers/SayAllAppleRemoteHCIService','Frameworks/Sparkle.framework/Versions/B/Sparkle',
+        'Frameworks/Sparkle.framework/Versions/B/Autoupdate',
+        'Frameworks/Sparkle.framework/Versions/B/Updater.app/Contents/MacOS/Updater',
+        'Frameworks/Sparkle.framework/Versions/B/XPCServices/Installer.xpc/Contents/MacOS/Installer',
+        'Frameworks/Sparkle.framework/Versions/B/XPCServices/Downloader.xpc/Contents/MacOS/Downloader']
+    for executable in executables:
+        target = app/executable; target.parent.mkdir(parents=True,exist_ok=True)
+        target.write_bytes(fixture_executable.read_bytes()); target.chmod(0o755)
+    for relative, executable in [('Updater.app','Updater'),('XPCServices/Installer.xpc','Installer'),('XPCServices/Downloader.xpc','Downloader')]:
+        info = app/'Frameworks/Sparkle.framework/Versions/B'/relative/'Contents/Info.plist'
+        info.write_bytes(plistlib.dumps({'CFBundleIdentifier':'test.'+executable,'CFBundleExecutable':executable,'CFBundlePackageType':'APPL' if executable == 'Updater' else 'XPC!'}))
+    framework = app/'Frameworks/Sparkle.framework'
+    resources = framework/'Versions/B/Resources'; resources.mkdir()
+    (resources/'Info.plist').write_bytes(plistlib.dumps({'CFBundleIdentifier':'test.Sparkle',
+        'CFBundleExecutable':'Sparkle','CFBundlePackageType':'FMWK'}))
+    (framework/'Versions/Current').symlink_to('B')
+    (framework/'Resources').symlink_to('Versions/Current/Resources')
+    (framework/'Sparkle').symlink_to('Versions/Current/Sparkle')
+    subprocess.run(['codesign','--force','--deep','--sign','-','--timestamp=none',str(app.parent)],check=True)
+    staging = volume/'Library/Application Support/RemoteMic/Installer'
+    for variant in ['brand','legacy']:
+        suffix = '' if variant == 'brand' else 'legacy'
+        subprocess.run(['ditto',str(output/suffix/'MiRemoteV2ch.driver'),str(staging/suffix/'MiRemoteV2ch.driver')],check=True)
+    for attempt in [1,2]:
+        if attempt == 2:
+            retry = volume/'retry-scripts'; retry.mkdir()
+            for name in ['driver-naming.zsh','preinstall','postinstall','trash-legacy-app.zsh','release-variant.plist']:
+                (retry/name).write_bytes((scripts/name).read_bytes())
+            scripts = retry
+            result = subprocess.run(['/bin/zsh',str(scripts/'preinstall'),'fixture','fixture',str(volume)],capture_output=True,text=True)
+            assert result.returncode == 0,(scenario,result.stdout,result.stderr)
+            for variant in ['brand','legacy']:
+                suffix = '' if variant == 'brand' else 'legacy'
+                subprocess.run(['ditto',str(output/suffix/'MiRemoteV2ch.driver'),str(staging/suffix/'MiRemoteV2ch.driver')],check=True)
+        result = subprocess.run(['/bin/zsh',str(scripts/'postinstall'),'fixture','fixture',str(volume)],capture_output=True,text=True)
+        (scripts/'postinstall.log').write_text(result.stdout+result.stderr)
+        assert result.returncode == 0 and 'Installation is complete.' in result.stdout,(scenario,result.stdout,result.stderr)
+        assert f'phase=installed result=verified variant={expected}' in result.stdout
+        subprocess.run(['codesign','--verify','--deep','--strict',str(destination)],check=True)
+        subprocess.run(['codesign','--verify','--deep','--strict',str(app.parent)],check=True)
+        assert settings.read_bytes() == before_settings
+        assert (naming/expected).read_text().strip() == f'SayAllDriverNaming:1:{expected}'
+        assert (naming/expected).stat().st_mode & 0o777 == 0o600
+        if attempt == 2: assert 'changed=0' in result.stdout
+    if scenario.endswith(('no_exec','bad_signature','unreadable_binary','unreadable_two_records','missing_marker')):
+        backups = list((volume/'var/root/.Trash').glob('*.driver'))
+        assert len(backups) == 1 and (backups[0]/'Contents/MacOS/MiRemoteV2ch').read_bytes() == before_binary
+    print('recovery_scenario='+scenario+' install=passed retry=passed settings=preserved')
 # The developer entry point must use the same resolver and preserve restoration.
 direct = (root/'scripts/install-doubao-driver.sh').read_text()
 direct = direct[direct.index('installer_message() {'):direct.index('# The driver is already in place;')]

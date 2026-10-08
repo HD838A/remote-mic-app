@@ -67,7 +67,7 @@ STAGED_DRIVER="$STAGING_ROOT$STAGED_SUFFIX/MiRemoteV2ch.driver"
 CURRENT_NAMING=none
 if [[ -e "$DESTINATION" || -L "$DESTINATION" ]]; then
   driver_naming_identity "$DESTINATION" || { driver_naming_failure unknown_identity; exit 2; }
-  CURRENT_NAMING="$(driver_naming_variant "$DESTINATION" || print unknown)"
+  CURRENT_NAMING="$(driver_naming_observed_variant "$DESTINATION" || print unknown)"
 fi
 RECORDED_NAMING="$(driver_naming_record)" || { driver_naming_failure invalid_state; exit 2; }
 POST_HISTORY=no
