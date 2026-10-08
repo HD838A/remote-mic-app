@@ -923,7 +923,17 @@ for name in \
   "SayAll-$version.zh.txt" \
   "SayAll-$version.zip" \
   appcast-intel.xml appcast.xml; do
-  print -rn -- "fixture:$name" > "$public_dir/$name"
+  case "$name" in
+    appcast.xml)
+      print -r -- '<item><enclosure url="https://download.sayall.app/mac/releases/v9.9.9/SayAll-9.9.9.zip" /><sparkle:releaseNotesLink>https://download.sayall.app/mac/releases/v9.9.9/SayAll-9.9.9.zh.txt</sparkle:releaseNotesLink><sparkle:releaseNotesLink>https://download.sayall.app/mac/releases/v9.9.9/SayAll-9.9.9.en.txt</sparkle:releaseNotesLink></item>' > "$public_dir/$name"
+      ;;
+    appcast-intel.xml)
+      print -r -- '<item><enclosure url="https://download.sayall.app/mac/releases/v9.9.9/SayAll-9.9.9-Intel.zip" /><sparkle:releaseNotesLink>https://download.sayall.app/mac/releases/v9.9.9/SayAll-9.9.9.zh.txt</sparkle:releaseNotesLink><sparkle:releaseNotesLink>https://download.sayall.app/mac/releases/v9.9.9/SayAll-9.9.9.en.txt</sparkle:releaseNotesLink></item>' > "$public_dir/$name"
+      ;;
+    *)
+      print -rn -- "fixture:$name" > "$public_dir/$name"
+      ;;
+  esac
 done
 ( cd "$public_dir" && /usr/bin/shasum -a 256 "SayAll-$version.dmg" "SayAll-$version-Intel.dmg" > "SayAll-$version.dmg.sha256" )
 

@@ -87,4 +87,21 @@ while IFS=$'\t' read -r name expected_size expected_sha; do
   }
 done < <(jq -r '.assets[] | [.name, (.size | tostring), .sha256] | @tsv' "$MANIFEST")
 
+for appcast_name in appcast.xml appcast-intel.xml; do
+  appcast_path="$PUBLIC_DIR/$appcast_name"
+  if grep -Fq 'Remote-Mic-' "$appcast_path"; then
+    echo "Sparkle appcast contains a legacy Remote-Mic asset name: $appcast_name" >&2
+    exit 1
+  fi
+done
+if ! grep -Fq "SayAll-$version.zip" "$PUBLIC_DIR/appcast.xml" ||
+   ! grep -Fq "SayAll-$version-Intel.zip" "$PUBLIC_DIR/appcast-intel.xml" ||
+   ! grep -Fq "SayAll-$version.zh.txt" "$PUBLIC_DIR/appcast.xml" ||
+   ! grep -Fq "SayAll-$version.en.txt" "$PUBLIC_DIR/appcast.xml" ||
+   ! grep -Fq "SayAll-$version.zh.txt" "$PUBLIC_DIR/appcast-intel.xml" ||
+   ! grep -Fq "SayAll-$version.en.txt" "$PUBLIC_DIR/appcast-intel.xml"; then
+  echo "Sparkle appcast does not reference the canonical SayAll assets" >&2
+  exit 1
+fi
+
 echo "STAGED RELEASE ASSETS PASS"

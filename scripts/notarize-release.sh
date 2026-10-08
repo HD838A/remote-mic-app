@@ -536,6 +536,14 @@ if [[ "$GENERATE_SPARKLE_UPDATE" == "1" ]]; then
     --maximum-versions 1 \
     -o "$APPCAST" \
     "$SPARKLE_ARCHIVES"
+  if rg -Fq 'Remote-Mic-' "$APPCAST"; then
+    print -u2 "generated Sparkle appcast contains a legacy Remote-Mic asset name"
+    exit 1
+  fi
+  if ! rg -Fq "url=\"$CDN_DOWNLOAD_PREFIX$ZIP_BASENAME\"" "$APPCAST"; then
+    print -u2 "generated Sparkle appcast does not reference the canonical SayAll archive"
+    exit 1
+  fi
   if [[ "$RELEASE_VARIANT" == "intel" ]]; then
     APPCAST_WITH_SHARED_NOTES="$WORK_DIR/appcast-intel-shared-notes.xml"
     /usr/bin/sed \
@@ -549,6 +557,10 @@ if [[ "$GENERATE_SPARKLE_UPDATE" == "1" ]]; then
   /usr/bin/ditto --norsrc --noqtn --noacl \
     "$SPARKLE_ARCHIVES/$EN_NOTES_BASENAME" "$EN_RELEASE_NOTES"
 
+  if rg -Fq 'Remote-Mic-' "$APPCAST"; then
+    print -u2 "final Sparkle appcast contains a legacy Remote-Mic asset name"
+    exit 1
+  fi
   ENCLOSURE_SIGNATURE="$(sed -n 's/.*sparkle:edSignature="\([^"]*\)".*/\1/p' "$APPCAST" | head -n 1)"
   test -n "$ENCLOSURE_SIGNATURE"
   rg -Fq "url=\"$CDN_DOWNLOAD_PREFIX$ZIP_BASENAME\"" "$APPCAST"
