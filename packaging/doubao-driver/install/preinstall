@@ -151,12 +151,21 @@ prepare_driver_naming_directory "$TARGET_VOLUME" || { driver_naming_failure unsa
 check_driver_naming_duplicates "$TARGET_VOLUME" "$DESTINATION" || { driver_naming_failure duplicate_driver; exit 2; }
 RECORDED_NAMING="$(driver_naming_record)" || { driver_naming_failure invalid_state; exit 2; }
 INSTALLED_NAMING=none
+INSTALLED_HEALTH=none
 if [[ -e "$DESTINATION" || -L "$DESTINATION" ]]; then
   driver_naming_identity "$DESTINATION" || { driver_naming_failure unknown_identity; exit 2; }
-  INSTALLED_NAMING="$(driver_naming_variant "$DESTINATION" || print unknown)"
+  INSTALLED_NAMING="$(driver_naming_observed_variant "$DESTINATION" || print unknown)"
+  if [[ ! -x "$DESTINATION/Contents/MacOS/MiRemoteV2ch" ]]; then
+    INSTALLED_HEALTH=not_executable
+  elif /usr/bin/codesign --verify --deep --strict "$DESTINATION" >/dev/null 2>&1; then
+    INSTALLED_HEALTH=signature_verified
+  else
+    INSTALLED_HEALTH=signature_invalid
+  fi
 fi
 HISTORICAL_INSTALL=no
-if has_driver_naming_history "$TARGET_VOLUME"; then HISTORICAL_INSTALL=yes; fi
+if [[ "$INSTALLED_NAMING" != none ]] || has_driver_naming_history "$TARGET_VOLUME"; then HISTORICAL_INSTALL=yes; fi
+print "DRIVER_NAMING phase=observed result=ready installed=$INSTALLED_NAMING health=$INSTALLED_HEALTH recorded=$RECORDED_NAMING history=$HISTORICAL_INSTALL"
 SELECTED_NAMING="$(resolve_driver_naming "$INSTALLED_NAMING" "$RECORDED_NAMING" "$HISTORICAL_INSTALL")" || {
   driver_naming_failure conflicting_evidence; exit 2
 }
