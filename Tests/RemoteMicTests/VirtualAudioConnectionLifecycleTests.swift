@@ -639,6 +639,28 @@ struct VirtualAudioConnectionLifecycleTests {
         #expect(!source.contains("isAudioOutputReady || configureVirtualAudioOutput"))
     }
 
+    @Test func audioEngineConfigurationRunsOffTheMainThread() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let outputSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/AudioOutput.swift"),
+            encoding: .utf8
+        )
+        let modelSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
+            encoding: .utf8
+        )
+
+        #expect(outputSource.contains("label: \"RemoteMic.audioOutput.engine\""))
+        #expect(outputSource.contains("func configureAsync(deviceUID: String"))
+        #expect(outputSource.contains("configureOnEngineQueue(deviceUID: deviceUID)"))
+        #expect(outputSource.contains("engine.connect(player, to: engine.mainMixerNode"))
+        #expect(modelSource.contains("audioOutput.configureAsync(deviceUID: deviceUID)"))
+        #expect(!modelSource.contains("let configured = audioOutput.configure(deviceUID:"))
+    }
+
     @Test func lastReadyBluetoothBridgeDisconnectsAndReleasesAudio() {
         #expect(!VirtualAudioConnectionLifecyclePolicy.shouldBeActive(
             readyBluetoothBridgeCount: 0,
