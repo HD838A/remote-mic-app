@@ -113,6 +113,44 @@ struct SayAllMCPAuthorizationStoreTests {
         #expect(try store.listAuthorizations().count == 2)
     }
 
+    @Test func persistedCreationAheadOfClockStillRevokesCredentials() throws {
+        let root = temporaryDirectory("authorization-clock-skew")
+        let store = SayAllMCPAuthorizationStore(accessRoot: root)
+        try store.setEnabled(true)
+        let first = try store.createAuthorization(displayName: "Codex")
+        let second = try store.createAuthorization(displayName: "Cursor")
+        let stateFile = root.appendingPathComponent("access.json")
+        var state = try #require(
+            JSONSerialization.jsonObject(with: Data(contentsOf: stateFile)) as? [String: Any]
+        )
+        var records = try #require(state["authorizations"] as? [[String: Any]])
+        let index = try #require(records.firstIndex {
+            ($0["clientId"] as? String)?.lowercased() == first.clientId.uuidString.lowercased()
+        })
+        // Persisted millisecond rounding or a clock adjustment can put creation ahead of now.
+        let futureCreation = Date().addingTimeInterval(60)
+        records[index]["createdAt"] = SayAllMCPISO8601.string(from: futureCreation)
+        state["authorizations"] = records
+        try JSONSerialization.data(withJSONObject: state).write(to: stateFile)
+
+        try store.revokeAuthorization(clientId: first.clientId)
+        let restored = SayAllMCPAuthorizationStore(accessRoot: root)
+        let revoked = try #require(restored.listAuthorizations().first {
+            $0.clientId == first.clientId
+        })
+        #expect(try #require(revoked.revokedAt) >= revoked.createdAt)
+        #expect(throws: SayAllMCPAccessDeniedError.self) {
+            try restored.requireAuthorized(clientId: first.clientId.uuidString, token: first.token)
+        }
+        #expect(try restored.requireAuthorized(
+            clientId: second.clientId.uuidString, token: second.token
+        ).clientId == second.clientId)
+        try restored.revokeAuthorization(clientId: first.clientId)
+        #expect(try restored.listAuthorizations().first {
+            $0.clientId == first.clientId
+        }?.revokedAt == revoked.revokedAt)
+    }
+
     @Test func readsVersionOneAccessStateAndRejectsFutureSchemas() throws {
         let root = temporaryDirectory("authorization-v1")
         try FileManager.default.createDirectory(
