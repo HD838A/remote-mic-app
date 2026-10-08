@@ -30,9 +30,17 @@ struct DriverNamingTests {
           assert_variant none brand "$evidence" brand
           assert_variant unknown legacy "$evidence" legacy
           assert_variant unknown brand "$evidence" brand
-          assert_blocked legacy brand "$evidence"
-          assert_blocked brand legacy "$evidence"
-          assert_blocked unknown none "$evidence"
+          assert_variant legacy brand "$evidence" legacy
+          assert_variant brand legacy "$evidence" brand
+          assert_variant legacy conflict "$evidence" legacy
+          assert_variant brand conflict "$evidence" brand
+          assert_variant none conflict "$evidence" legacy
+          assert_variant unknown conflict "$evidence" legacy
+          if [[ "$evidence" == yes ]]; then
+            assert_variant unknown none "$evidence" legacy
+          else
+            assert_blocked unknown none "$evidence"
+          fi
           assert_blocked none unknown "$evidence"
           assert_blocked other none "$evidence"
         done

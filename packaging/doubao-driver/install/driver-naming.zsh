@@ -15,43 +15,56 @@ driver_naming_identity() {
     [[ "$(/usr/bin/plutil -extract CFBundleName raw -o - "$plist" 2>/dev/null)" == "MiRemoteV2ch" ]]
 }
 
-driver_naming_variant() {
-  local driver="$1" variant binary="$1/Contents/MacOS/MiRemoteV2ch"
+# Existing product files can retain their name despite damaged permissions or
+# signatures. This observes naming only; it never approves a payload for loading.
+driver_naming_observed_variant() {
+  local driver="$1" binary="$1/Contents/MacOS/MiRemoteV2ch"
   driver_naming_identity "$driver" || return 1
-  [[ -x "$binary" && ! -L "$driver/Contents/MacOS" && ! -L "$binary" ]] || return 1
-  /usr/bin/codesign --verify --deep --strict "$driver" >/dev/null 2>&1 || return 1
-  /usr/bin/grep -aFq 'MiRemoteV%ich_UID' "$binary" || return 1
-  variant="$(/usr/bin/plutil -extract SayAllNamingVariant raw -o - "$driver/Contents/Info.plist" 2>/dev/null || true)"
-  case "$variant" in
-    brand)
-      /usr/bin/grep -aEq 'SayAll[[:cntrl:]]' "$binary" || return 1
-      print brand ;;
-    legacy|'')
-      # Require the complete name constant. The hidden mirror contains
-      # "MiRemoteV %ich 2" in both variants and must not identify legacy.
-      /usr/bin/grep -aEq 'MiRemoteV %ich[[:cntrl:]]' "$binary" || return 1
-      print legacy ;;
-    *) return 1 ;;
-  esac
+  [[ -f "$binary" && ! -L "$driver/Contents/MacOS" && ! -L "$binary" ]] || return 1
+  LC_ALL=C /usr/bin/grep -aFq 'MiRemoteV%ich_UID' "$binary" || return 1
+  # The hidden mirror "MiRemoteV %ich 2" exists in both variants; require the
+  # complete main name constant. Missing/damaged metadata must not rename it.
+  if LC_ALL=C /usr/bin/grep -aEq 'SayAll[[:cntrl:]]' "$binary"; then
+    ! LC_ALL=C /usr/bin/grep -aEq 'MiRemoteV %ich[[:cntrl:]]' "$binary" || return 1
+    print brand
+  elif LC_ALL=C /usr/bin/grep -aEq 'MiRemoteV %ich[[:cntrl:]]' "$binary"; then
+    print legacy
+  else
+    return 1
+  fi
 }
 
-# unknown can be repaired only with a trusted, previously committed record.
-# An actual recognized driver always wins over historical App/receipt evidence.
+# Payload and healthy-driver validation must retain executable/signature checks.
+driver_naming_variant() {
+  local driver="$1" observed marker
+  [[ -x "$driver/Contents/MacOS/MiRemoteV2ch" ]] || return 1
+  /usr/bin/codesign --verify --deep --strict "$driver" >/dev/null 2>&1 || return 1
+  observed="$(driver_naming_observed_variant "$driver")" || return 1
+  marker="$(/usr/bin/plutil -extract SayAllNamingVariant raw -o - "$driver/Contents/Info.plist" 2>/dev/null || true)"
+  case "$observed:$marker" in brand:brand|legacy:legacy|legacy:) print -r -- "$observed" ;; *) return 1 ;; esac
+}
+
+# The installed product name wins over stale records. An unreadable product
+# driver can be repaired from its committed record or legacy installation history.
 resolve_driver_naming() {
   local installed="$1" recorded="$2" history_evidence="$3"
   case "$installed" in brand|legacy|none|unknown) ;; *) return 1 ;; esac
-  case "$recorded" in brand|legacy|none) ;; *) return 1 ;; esac
+  case "$recorded" in brand|legacy|none|conflict) ;; *) return 1 ;; esac
   case "$history_evidence" in yes|no) ;; *) return 1 ;; esac
   case "$installed" in
     brand|legacy)
-      [[ "$recorded" == none || "$recorded" == "$installed" ]] || return 1
       print -r -- "$installed" ;;
     unknown)
-      [[ "$recorded" == brand || "$recorded" == legacy ]] || return 1
-      print -r -- "$recorded" ;;
+      case "$recorded" in
+        brand|legacy) print -r -- "$recorded" ;;
+        none) [[ "$history_evidence" == yes ]] || return 1; print legacy ;;
+        conflict) print legacy ;;
+        *) return 1 ;;
+      esac ;;
     none)
       case "$recorded" in
         brand|legacy) print -r -- "$recorded" ;;
+        conflict) print legacy ;;
         none)
           case "$history_evidence" in
             yes) print legacy ;;
@@ -75,6 +88,7 @@ driver_naming_safe_directory() {
 
 prepare_driver_naming_directory() {
   local volume="$1" directory
+  NAMING_VOLUME="$volume"
   NAMING_DIRECTORY="${volume%/}/Library/Application Support/RemoteMic/DriverNaming"
   for directory in "${volume%/}/Library" "${volume%/}/Library/Application Support"; do
     driver_naming_safe_directory "$directory" || return 1
@@ -98,20 +112,69 @@ driver_naming_record() {
       [[ -f "$marker" && ! -L "$marker" && "$(/usr/bin/stat -f %u "$marker")" == 0 ]] || return 1
       mode="$(/usr/bin/stat -f %Lp "$marker")"
       (( (8#$mode & 8#022) == 0 )) || return 1
-      [[ "$(<"$marker")" == "SayAllDriverNaming:1:$variant" && "$recorded" == none ]] || return 1
-      recorded="$variant"
+      [[ "$(<"$marker")" == "SayAllDriverNaming:1:$variant" ]] || return 1
+      if [[ "$recorded" == none ]]; then recorded="$variant"; else recorded=conflict; fi
     fi
   done
   print -r -- "$recorded"
 }
 
 commit_driver_naming_record() {
-  local variant="$1" recorded
+  local variant="$1" recorded directory trash_root token counter=0 marker backup
+  local -a previous_markers backups
+  case "$variant" in brand|legacy) ;; *) return 1 ;; esac
   recorded="$(driver_naming_record)" || return 1
   [[ "$recorded" == "$variant" ]] && return 0
-  [[ "$recorded" == none && ( "$variant" == brand || "$variant" == legacy ) ]] || return 1
-  # Immutable marker: a retry reuses it; no prior state is overwritten/deleted.
-  (umask 077; set -o noclobber; print -r -- "SayAllDriverNaming:1:$variant" > "$NAMING_DIRECTORY/$variant")
+  if [[ "$recorded" != none ]]; then
+    # Preserve stale, validated records in root's Trash before reconciliation.
+    # The actual driver is unchanged; a failed write restores all old records.
+    trash_root="${NAMING_VOLUME%/}/private/var/root/.Trash"
+    for directory in "${NAMING_VOLUME%/}/private" "${NAMING_VOLUME%/}/private/var" \
+      "${NAMING_VOLUME%/}/private/var/root" "$trash_root"; do
+      if [[ ! -e "$directory" && ! -L "$directory" ]]; then
+        /bin/mkdir -m 700 -- "$directory" || return 1
+      fi
+      driver_naming_safe_directory "$directory" || return 1
+    done
+    token="$(/bin/date -u +%Y%m%dT%H%M%SZ)-$$"
+    for marker in "$NAMING_DIRECTORY"/{brand,legacy}; do
+      [[ -f "$marker" ]] || continue
+      backup="$trash_root/SayAllDriverNaming-${marker:t}-$token-$counter"
+      while [[ -e "$backup" || -L "$backup" ]]; do
+        counter=$((counter + 1))
+        backup="$trash_root/SayAllDriverNaming-${marker:t}-$token-$counter"
+      done
+      if ! /bin/mv -n -- "$marker" "$backup" || [[ -e "$marker" || ! -f "$backup" ]]; then
+        for (( counter=1; counter<=${#backups}; counter++ )); do
+          /bin/mv -n -- "$backups[$counter]" "$previous_markers[$counter]" || return 1
+        done
+        return 1
+      fi
+      previous_markers+=("$marker")
+      backups+=("$backup")
+    done
+  fi
+  if (umask 077; set -o noclobber; print -r -- "SayAllDriverNaming:1:$variant" > "$NAMING_DIRECTORY/$variant"); then
+    if [[ "$recorded" != none ]]; then
+      print -u2 "DRIVER_NAMING phase=reconciled result=verified previous=$recorded variant=$variant backup=trash"
+    fi
+    return 0
+  fi
+  if (( ${#backups} > 0 )) && [[ -e "$NAMING_DIRECTORY/$variant" ]]; then
+    # A failed write may leave a partial marker. Keep it recoverable so it
+    # cannot obstruct restoring the original record or the next retry.
+    backup="$trash_root/SayAllDriverNaming-failed-$token-$counter"
+    while [[ -e "$backup" || -L "$backup" ]]; do
+      counter=$((counter + 1))
+      backup="$trash_root/SayAllDriverNaming-failed-$token-$counter"
+    done
+    /bin/mv -n -- "$NAMING_DIRECTORY/$variant" "$backup" || return 1
+    [[ ! -e "$NAMING_DIRECTORY/$variant" ]] || return 1
+  fi
+  for (( counter=1; counter<=${#backups}; counter++ )); do
+    /bin/mv -n -- "$backups[$counter]" "$previous_markers[$counter]" || return 1
+  done
+  return 1
 }
 
 check_driver_naming_duplicates() {
