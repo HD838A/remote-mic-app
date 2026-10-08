@@ -40,7 +40,7 @@ function installationCheck() {
     <choice id="remote-mic" visible="false" start_selected="true">
         <pkg-ref id="com.hd838a.RemoteMic.installer"/>
     </choice>
-    <choice id="siri-remote" title="Siri Remote 支持 / Siri Remote support"
+    <choice id="siri-remote" title="苹果遥控器 Siri Remote"
             description="首次安装默认不选；检测到已有 Siri Remote 支持时自动选中。 / Off for first install; selected automatically when existing Siri Remote support is detected."
             start_selected="siriRemoteSupportWasPreviouslyInstalled()">
         <pkg-ref id="com.hd838a.RemoteMic.siri-remote"/>
