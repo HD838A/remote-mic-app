@@ -208,7 +208,8 @@ final class AppLogger: PublicDiagnosticEventSink {
         return queue.sync {
             guard let publicEventStore else { return publicEvents }
             let stored = publicEventStore.pending()
-            return stored + publicEvents.filter { $0.isApprovedForUpload && !stored.contains($0) }
+            let pending = stored + publicEvents.filter { $0.isApprovedForUpload && !stored.contains($0) }
+            return Array(pending.suffix(Self.maximumPublicEvents))
         }
     }
 
