@@ -64,6 +64,7 @@ final class AppLogger: PublicDiagnosticEventSink {
         let sessionName = UUID().uuidString.replacingOccurrences(of: "-", with: "")
             .prefix(8)
         let day = Self.dayIdentifier(Date())
+        let loggingEnabled = Self.shouldEnableSharedLogging()
         self.init(
             logURL: base.appendingPathComponent(
                 "sayall.app-\(day)-session-\(sessionName).rmlog"
@@ -71,11 +72,11 @@ final class AppLogger: PublicDiagnosticEventSink {
             metadata: .current(),
             fileManager: fileManager,
             publicKeyDataProvider: { DiagnosticLogPublicKeyConfiguration.current() },
-            publicEventStore: PublicDiagnosticEventStore(fileURL:
+            publicEventStore: loggingEnabled ? PublicDiagnosticEventStore(fileURL:
                 fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
                     .appendingPathComponent("SayAll/Diagnostics/public-events.json")
-            ),
-            isEnabled: Self.shouldEnableSharedLogging()
+            ) : nil,
+            isEnabled: loggingEnabled
         )
     }
 
