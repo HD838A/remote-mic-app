@@ -54,6 +54,7 @@ final class AppLogger: PublicDiagnosticEventSink {
     private var fileKey: SymmetricKey?
     private var nextSequence: UInt64 = 0
     private var publicEvents: [PublicDiagnosticEvent] = []
+    private let publicEventStore: PublicDiagnosticEventStore?
 
     private convenience init() {
         let fileManager = FileManager.default
@@ -70,6 +71,10 @@ final class AppLogger: PublicDiagnosticEventSink {
             metadata: .current(),
             fileManager: fileManager,
             publicKeyDataProvider: { DiagnosticLogPublicKeyConfiguration.current() },
+            publicEventStore: PublicDiagnosticEventStore(fileURL:
+                fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+                    .appendingPathComponent("SayAll/Diagnostics/public-events.json")
+            ),
             isEnabled: Self.shouldEnableSharedLogging()
         )
     }
@@ -86,6 +91,7 @@ final class AppLogger: PublicDiagnosticEventSink {
         publicKeyDataProvider: @escaping () -> Data? = {
             DiagnosticLogPublicKeyConfiguration.current()
         },
+        publicEventStore: PublicDiagnosticEventStore? = nil,
         isEnabled: Bool = true
     ) {
         self.logURL = logURL
@@ -102,6 +108,7 @@ final class AppLogger: PublicDiagnosticEventSink {
             Self.systemLogger.error("\(message, privacy: .public)")
         }
         self.sessionID = DiagnosticLogEnvelope.sessionID()
+        self.publicEventStore = publicEventStore
 
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -170,13 +177,21 @@ final class AppLogger: PublicDiagnosticEventSink {
         }
     }
 
-    /// Adds a typed event to the in-memory diagnostic buffer and to the
-    /// encrypted local file. The private transport never reads the local file.
+    /// Retains upload-approved events across launches and writes the encrypted
+    /// local file. The private transport never reads the local file.
     func record(_ event: PublicDiagnosticEvent) {
         guard isEnabled else { return }
         queue.async { [weak self] in
             guard let self else { return }
-            self.publicEvents.append(event)
+            if let publicEventStore = self.publicEventStore, event.isApprovedForUpload {
+                do { try publicEventStore.append(event) }
+                catch {
+                    self.publicEvents.append(event)
+                    self.diagnose("public_event_store_write_failed", error: error)
+                }
+            } else {
+                self.publicEvents.append(event)
+            }
             if self.publicEvents.count > Self.maximumPublicEvents {
                 self.publicEvents.removeFirst(self.publicEvents.count - Self.maximumPublicEvents)
             }
@@ -190,12 +205,18 @@ final class AppLogger: PublicDiagnosticEventSink {
 
     func publicDiagnosticEvents() -> [PublicDiagnosticEvent] {
         guard isEnabled else { return [] }
-        return queue.sync { publicEvents }
+        return queue.sync {
+            guard let publicEventStore else { return publicEvents }
+            let stored = publicEventStore.pending()
+            return stored + publicEvents.filter { $0.isApprovedForUpload && !stored.contains($0) }
+        }
     }
 
     func markPublicDiagnosticEventsUploaded(_ uploadedEvents: [PublicDiagnosticEvent]) {
         guard isEnabled, !uploadedEvents.isEmpty else { return }
         queue.sync {
+            do { try publicEventStore?.acknowledge(uploadedEvents) }
+            catch { diagnose("public_event_store_acknowledge_failed", error: error) }
             for uploadedEvent in uploadedEvents {
                 guard let index = publicEvents.firstIndex(of: uploadedEvent) else { continue }
                 publicEvents.remove(at: index)

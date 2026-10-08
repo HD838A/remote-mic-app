@@ -177,6 +177,16 @@ struct PublicDiagnosticEvent: Equatable {
 
         let transition = "\(phase)|\(result)|\(reason)"
         switch (component, action) {
+        case ("settings", "load"):
+            let categories = ["remote_profiles", "button_mapping", "custom_apps", "usage", "onboarding", "other"]
+            let failures = ["data_corrupted", "key_missing", "type_mismatch", "value_missing", "unknown"]
+            let approvedFailure = categories.contains { category in
+                failures.contains { reason == "\(category)_\($0)" }
+            }
+            return source == "app" && remoteModelFamily == nil && audioDeviceKind == nil &&
+                voiceTool == nil && !hasEnvironmentFields && !hasOperationalMetrics &&
+                ((phase == "failed" && result == "defaults_applied" && approvedFailure) ||
+                 (phase == "completed" && result == "loaded" && categories.contains(reason)))
         case ("environment", "snapshot"):
             return transition == "completed|observed|app_launch" &&
                 source == nil && remoteModelFamily == nil &&
