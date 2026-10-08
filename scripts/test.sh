@@ -33,6 +33,7 @@ xcrun swiftc \
   "$ROOT/Sources/RemoteMic/VoiceFnTapSessionController.swift" \
   "$ROOT/Sources/RemoteMic/RemoteVoiceFunctionMapper.swift" \
   "$ROOT/Sources/RemoteMic/PublicDiagnosticEvent.swift" \
+  "$ROOT/Sources/RemoteMic/PublicDiagnosticEventStore.swift" \
   "$ROOT/Sources/RemoteMic/DiagnosticLogEnvelope.swift" \
   "$ROOT/Sources/RemoteMic/AppLogger.swift" \
   "$ROOT/Sources/RemoteMic/TestTone.swift" \
