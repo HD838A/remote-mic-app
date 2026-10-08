@@ -6,6 +6,9 @@
 - Adds membership resources with more content to use.
 - Adds support for Siri Remote, Chromecast, and Mac Remote.
 - Improves the remote settings and voice-trigger-key experience.
+- Fixes an upgrade issue that prevented some remote settings from loading.
+- Improves account and membership recovery without requesting a keychain password.
+- Keeps unsent diagnostic records across app restarts to improve troubleshooting.
 
 ## 1.9.21 (Pre-release)
 
