@@ -789,6 +789,7 @@ final class VirtualAudioOutput {
         let source: String
         let operationID: UInt64
         let startedAtUptime: TimeInterval
+        let requestedOnMainThread: Bool
         let completion: (VirtualAudioDrainOutcome) -> Void
     }
 
@@ -1192,6 +1193,7 @@ final class VirtualAudioOutput {
             source: source,
             operationID: resolvedOperationID,
             startedAtUptime: uptime(),
+            requestedOnMainThread: Thread.isMainThread,
             completion: completion
         )
         let shouldCompleteImmediately = pendingVoiceBufferCount == 0
@@ -1519,7 +1521,15 @@ final class VirtualAudioOutput {
             interruptedBuffers: interruptedBuffers,
             interruptedSamples: interruptedSamples
         )
-        requests.forEach { $0.completion(outcome) }
+        requests.forEach { request in
+            guard request.requestedOnMainThread, !Thread.isMainThread else {
+                request.completion(outcome)
+                return
+            }
+            DispatchQueue.main.async {
+                request.completion(outcome)
+            }
+        }
     }
 
     private func logDrainRequests(

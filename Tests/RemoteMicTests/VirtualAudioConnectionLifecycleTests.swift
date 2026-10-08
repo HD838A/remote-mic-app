@@ -291,6 +291,23 @@ struct VirtualAudioConnectionLifecycleTests {
         #expect(outcome == .forced)
     }
 
+    @Test @MainActor func mainThreadDrainRequestsCompleteOnMainAfterBackgroundStop() async {
+        let output = VirtualAudioOutput()
+        output.registerPendingVoiceBuffer()
+
+        let result = await withCheckedContinuation { continuation in
+            output.endSessionAfterDraining(maximumDelay: 60) { outcome in
+                continuation.resume(returning: (outcome, Thread.isMainThread))
+            }
+            DispatchQueue.global(qos: .userInitiated).async {
+                output.stop()
+            }
+        }
+
+        #expect(result.0 == .forced)
+        #expect(result.1)
+    }
+
     @Test func anAlreadyEmptyDrainReportsNormalOutcome() {
         let output = VirtualAudioOutput()
         var outcome: VirtualAudioDrainOutcome?
