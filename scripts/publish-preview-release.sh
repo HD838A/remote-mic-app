@@ -168,7 +168,7 @@ jq -S \
   --arg stagedAt "$staged_at" \
   --slurpfile manifest "$manifest" '
     {
-      schemaVersion:5,
+      schemaVersion:(if $manifest[0].schemaVersion == 2 then 6 else 5 end),
       repository:$repository,
       tag:$tag,
       tagCommit:$sourceCommit,

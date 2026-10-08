@@ -914,22 +914,38 @@ version=9.9.9
 for name in \
   "SayAll-$version-Intel-Uninstaller.pkg" \
   "SayAll-$version-Intel-Installer.pkg" \
-  "Remote-Mic-$version-Intel.dmg" \
-  "Remote-Mic-$version-Intel.zip" \
+  "SayAll-$version-Intel.dmg" \
+  "SayAll-$version-Intel.zip" \
   "SayAll-$version-Uninstaller.pkg" \
   "SayAll-$version-Installer.pkg" \
-  "Remote-Mic-$version.dmg" \
-  "Remote-Mic-$version.en.txt" \
-  "Remote-Mic-$version.zh.txt" \
-  "Remote-Mic-$version.zip" \
+  "SayAll-$version.dmg" \
+  "SayAll-$version.en.txt" \
+  "SayAll-$version.zh.txt" \
+  "SayAll-$version.zip" \
   appcast-intel.xml appcast.xml; do
   print -rn -- "fixture:$name" > "$public_dir/$name"
 done
-( cd "$public_dir" && /usr/bin/shasum -a 256 "Remote-Mic-$version.dmg" "Remote-Mic-$version-Intel.dmg" > "Remote-Mic-$version.dmg.sha256" )
+python3 - "$public_dir" <<'PYTHON'
+from pathlib import Path
+import sys
+public = Path(sys.argv[1])
+for feed, suffix in [("appcast.xml", ""), ("appcast-intel.xml", "-Intel")]:
+    archive = f"SayAll-9.9.9{suffix}.zip"
+    length = (public / archive).stat().st_size
+    (public / feed).write_text(f'''<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle"><channel><item>
+<sparkle:version>999</sparkle:version><sparkle:shortVersionString>9.9.9</sparkle:shortVersionString>
+<enclosure url="https://download.sayall.app/mac/releases/v9.9.9/{archive}" length="{length}" type="application/octet-stream" sparkle:edSignature="{'A' * 86}==" />
+<sparkle:releaseNotesLink>https://download.sayall.app/mac/releases/v9.9.9/SayAll-9.9.9.en.txt</sparkle:releaseNotesLink>
+<sparkle:releaseNotesLink>https://download.sayall.app/mac/releases/v9.9.9/SayAll-9.9.9.zh.txt</sparkle:releaseNotesLink>
+</item></channel></rss>''')
+PYTHON
+
+( cd "$public_dir" && /usr/bin/shasum -a 256 "SayAll-$version.dmg" "SayAll-$version-Intel.dmg" > "SayAll-$version.dmg.sha256" )
 
 manifest="$WORK_DIR/staged-assets.json"
+write_fixture_manifest() {
 {
-  print -r -- '{"schemaVersion":1,"repository":"HD838A/remote-mic-app","tag":"v9.9.9","sourceCommit":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","version":"9.9.9","build":"999","assets":['
+  print -r -- '{"schemaVersion":2,"repository":"HD838A/remote-mic-app","tag":"v9.9.9","sourceCommit":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","version":"9.9.9","build":"999","assets":['
   first=true
   for file_path in "$public_dir"/*; do
     [[ "$first" == true ]] || print -rn -- ','
@@ -941,14 +957,47 @@ manifest="$WORK_DIR/staged-assets.json"
   done
   print -r -- ']}'
 } | jq -S . > "$manifest"
+}
+write_fixture_manifest
 
 "$ROOT/scripts/verify-staged-release-assets.sh" "$manifest" "$public_dir" >/dev/null
-print -rn -- tampered >> "$public_dir/Remote-Mic-$version.zip"
+# Update digests too, so each rejection proves URL/metadata validation.
+cp "$public_dir/appcast.xml" "$WORK_DIR/canonical-appcast.xml"
+for mutation in legacy architecture host length version signature malformed; do
+  python3 - "$WORK_DIR/canonical-appcast.xml" "$public_dir/appcast.xml" "$mutation" <<'PYTHON'
+from pathlib import Path
+import sys
+source, destination, mutation = sys.argv[1:]
+text = Path(source).read_text()
+changes = {
+    "legacy": ("SayAll-", "Remote-Mic-"),
+    "architecture": ("SayAll-9.9.9.zip", "SayAll-9.9.9-Intel.zip"),
+    "host": ("https://download.sayall.app/", "https://example.com/"),
+    "length": ('length="', 'length="0'),
+    "version": (">999<", ">998<"),
+    "signature": ("A" * 86 + "==", ""),
+    "malformed": ("</rss>", ""),
+}
+old, new = changes[mutation]
+Path(destination).write_text(text.replace(old, new))
+PYTHON
+  write_fixture_manifest
+  if "$ROOT/scripts/verify-staged-release-assets.sh" "$manifest" "$public_dir" >"$WORK_DIR/invalid-appcast.log" 2>&1; then
+    print -u2 "manifest accepted invalid Sparkle appcast: $mutation"
+    exit 1
+  fi
+  grep -Fq 'Sparkle appcast validation failed:' "$WORK_DIR/invalid-appcast.log"
+done
+cp "$WORK_DIR/canonical-appcast.xml" "$public_dir/appcast.xml"
+write_fixture_manifest
+"$ROOT/scripts/verify-staged-release-assets.sh" "$manifest" "$public_dir" >/dev/null
+print "SPARKLE SAYALL URL AND METADATA FIXTURE PASS"
+print -rn -- tampered >> "$public_dir/SayAll-$version.zip"
 if "$ROOT/scripts/verify-staged-release-assets.sh" "$manifest" "$public_dir" >/dev/null 2>&1; then
   print -u2 "manifest accepted tampered payload"
   exit 1
 fi
-print -rn -- fixture > "$public_dir/Remote-Mic-$version.zip"
+print -rn -- fixture > "$public_dir/SayAll-$version.zip"
 if [[ ! -e "$public_dir/extra.txt" ]]; then
   print -rn -- extra > "$public_dir/extra.txt"
 fi

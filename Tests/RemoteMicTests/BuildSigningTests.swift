@@ -1066,8 +1066,8 @@ struct BuildSigningTests {
             contentsOf: root.appendingPathComponent("scripts/prepare-public-release-assets.sh"),
             encoding: .utf8
         )
-        #expect(assetSource.contains("Remote-Mic-$version.zh.txt"))
-        #expect(assetSource.contains("Remote-Mic-$version.en.txt"))
+        #expect(assetSource.contains("SayAll-$version.zh.txt"))
+        #expect(assetSource.contains("SayAll-$version.en.txt"))
         #expect(assetSource.contains("production_prefix"))
         #expect(assetSource.contains("staged-assets.json"))
         #expect(assetSource.contains("verify-staged-release-assets.sh"))

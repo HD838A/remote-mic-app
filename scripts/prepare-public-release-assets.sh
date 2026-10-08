@@ -49,24 +49,24 @@ copy_asset() {
 
 copy_asset "$DIST/Uninstall SayAll.pkg" "SayAll-$version-Uninstaller.pkg"
 copy_asset "$DIST/Install SayAll.pkg" "SayAll-$version-Installer.pkg"
-copy_asset "$DIST/Remote-Mic-$version.dmg" "Remote-Mic-$version.dmg"
-copy_asset "$DIST/Remote-Mic-$version.zip" "Remote-Mic-$version.zip"
+copy_asset "$DIST/SayAll-$version.dmg" "SayAll-$version.dmg"
+copy_asset "$DIST/SayAll-$version.zip" "SayAll-$version.zip"
 copy_asset "$DIST/appcast.xml" appcast.xml
-copy_asset "$DIST/Remote-Mic-$version.zh.txt" "Remote-Mic-$version.zh.txt"
-copy_asset "$DIST/Remote-Mic-$version.en.txt" "Remote-Mic-$version.en.txt"
+copy_asset "$DIST/SayAll-$version.zh.txt" "SayAll-$version.zh.txt"
+copy_asset "$DIST/SayAll-$version.en.txt" "SayAll-$version.en.txt"
 copy_asset "$DIST/intel/Uninstall SayAll Intel.pkg" "SayAll-$version-Intel-Uninstaller.pkg"
 copy_asset "$DIST/intel/Install SayAll Intel.pkg" "SayAll-$version-Intel-Installer.pkg"
-copy_asset "$DIST/intel/Remote-Mic-$version-Intel.dmg" "Remote-Mic-$version-Intel.dmg"
-copy_asset "$DIST/intel/Remote-Mic-$version-Intel.zip" "Remote-Mic-$version-Intel.zip"
+copy_asset "$DIST/intel/SayAll-$version-Intel.dmg" "SayAll-$version-Intel.dmg"
+copy_asset "$DIST/intel/SayAll-$version-Intel.zip" "SayAll-$version-Intel.zip"
 copy_asset "$DIST/intel/appcast-intel.xml" appcast-intel.xml
 
 (
   cd "$public_dir"
   /usr/bin/shasum -a 256 \
-    "Remote-Mic-$version.dmg" \
-    "Remote-Mic-$version-Intel.dmg" \
-    > "Remote-Mic-$version.dmg.sha256"
-  /usr/bin/shasum -a 256 -c "Remote-Mic-$version.dmg.sha256"
+    "SayAll-$version.dmg" \
+    "SayAll-$version-Intel.dmg" \
+    > "SayAll-$version.dmg.sha256"
+  /usr/bin/shasum -a 256 -c "SayAll-$version.dmg.sha256"
 )
 
 production_prefix="https://download.sayall.app/mac/releases/$tag/"
@@ -115,7 +115,7 @@ jq -s -S \
   --arg sourceCommit "$source_commit" \
   --arg version "$version" \
   --arg build "$build" \
-  '{schemaVersion:1,repository:$repository,tag:$tag,sourceCommit:$sourceCommit,version:$version,build:$build,assets:(sort_by(.name))}' \
+  '{schemaVersion:2,repository:$repository,tag:$tag,sourceCommit:$sourceCommit,version:$version,build:$build,assets:(sort_by(.name))}' \
   "$asset_jsonl" > "$BUNDLE/staged-assets.json"
 
 # The line-oriented generator input is deliberately outside the staged bundle.
@@ -123,7 +123,7 @@ jq -s -S \
 /bin/mv "$asset_jsonl" "/private/tmp/sayall-release-assets-consumed.$$.jsonl"
 
 jq -e '
-  .schemaVersion == 1 and
+  .schemaVersion == 2 and
   .repository == "HD838A/remote-mic-app" and
   (.tag | test("^v[0-9]+[.][0-9]+[.][0-9]+$")) and
   (.sourceCommit | test("^[0-9a-f]{40}$")) and

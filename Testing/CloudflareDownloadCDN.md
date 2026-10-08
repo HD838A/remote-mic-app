@@ -19,7 +19,7 @@
 2. 记录状态码和 `Location`。
 3. 对 Location 再发起 `HEAD`。
 
-预期结果：首次响应为 `302` 且 `Cache-Control: no-store`；Location 为同域名 `/mac/releases/vX.Y.Z/Remote-Mic-X.Y.Z.dmg`，其中版本等于 GitHub latest full release，不等于任何 Pre-release；最终响应为 200、文件名正确，并包含 `x-remote-mic-cdn: cloudflare`。
+预期结果：首次响应为 `302` 且 `Cache-Control: no-store`；Location 为同域名 `/mac/releases/vX.Y.Z/SayAll-X.Y.Z.dmg`，其中版本等于 GitHub latest full release，不等于任何 Pre-release；最终响应为 200、文件名正确，并包含 `x-remote-mic-cdn: cloudflare`。
 
 失败判定：跳到 GitHub 页面、跳到预览版、循环跳转、文件名错误、状态码不是 302/200，或返回 HTML 错误页。
 

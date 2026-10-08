@@ -90,10 +90,10 @@ $GH_BIN release download "$TAG" --repo "$REPOSITORY" \
 provenance="$work_dir/candidate-provenance.json"
 provenance_schema="$(jq -r '.schemaVersion // empty' "$provenance")"
 case "$provenance_schema" in
-  5)
+  5|6)
     jq -e \
-      --arg repository "$REPOSITORY" --arg tag "$TAG" '
-        .schemaVersion == 5 and .repository == $repository and .tag == $tag and
+      --arg repository "$REPOSITORY" --arg tag "$TAG" --argjson schema "$provenance_schema" '
+        .schemaVersion == $schema and .repository == $repository and .tag == $tag and
         .tagCommit == .sourceCommit and
         (.sourceBranch == "main" or (.sourceBranch | test("^hotfix/v[0-9]+[.][0-9]+[.][0-9]+$"))) and
         (.sourceKind == "main" or .sourceKind == "hotfix") and
@@ -123,15 +123,15 @@ case "$provenance_schema" in
         ([
           "SayAll-" + .version + "-Intel-Uninstaller.pkg",
           "SayAll-" + .version + "-Intel-Installer.pkg",
-          "Remote-Mic-" + .version + "-Intel.dmg",
-          "Remote-Mic-" + .version + "-Intel.zip",
+          (if $schema == 6 then "SayAll-" else "Remote-Mic-" end) + .version + "-Intel.dmg",
+          (if $schema == 6 then "SayAll-" else "Remote-Mic-" end) + .version + "-Intel.zip",
           "SayAll-" + .version + "-Uninstaller.pkg",
           "SayAll-" + .version + "-Installer.pkg",
-          "Remote-Mic-" + .version + ".dmg",
-          "Remote-Mic-" + .version + ".dmg.sha256",
-          "Remote-Mic-" + .version + ".en.txt",
-          "Remote-Mic-" + .version + ".zh.txt",
-          "Remote-Mic-" + .version + ".zip",
+          (if $schema == 6 then "SayAll-" else "Remote-Mic-" end) + .version + ".dmg",
+          (if $schema == 6 then "SayAll-" else "Remote-Mic-" end) + .version + ".dmg.sha256",
+          (if $schema == 6 then "SayAll-" else "Remote-Mic-" end) + .version + ".en.txt",
+          (if $schema == 6 then "SayAll-" else "Remote-Mic-" end) + .version + ".zh.txt",
+          (if $schema == 6 then "SayAll-" else "Remote-Mic-" end) + .version + ".zip",
           "appcast-intel.xml",
           "appcast.xml"
         ] | sort) == ([.payloadAssets[].name] | sort)
@@ -333,7 +333,7 @@ done < <(/usr/bin/find "$stage_record_root" -name preview-stage-record.json -typ
 }
 stage_record="${stage_record_candidates[0]}"
 case "$provenance_schema" in
-  5)
+  5|6)
     jq -e \
       --arg tag "$TAG" --arg version "$version" --arg commit "$source_commit" \
       --arg sourceBranch "$source_branch" --arg sourceKind "$source_kind" \

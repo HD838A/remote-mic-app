@@ -125,20 +125,20 @@ if [[ "${1:-}" == --all ]]; then
     VERSION="$(/usr/bin/plutil -extract CFBundleShortVersionString raw -o - \
       "$ROOT/Resources/Info.plist")"
     /usr/bin/cmp -s \
-      "$ROOT/dist/Remote-Mic-$VERSION.zh.txt" \
-      "$ROOT/dist/intel/Remote-Mic-$VERSION-Intel.zh.txt"
+      "$ROOT/dist/SayAll-$VERSION.zh.txt" \
+      "$ROOT/dist/intel/SayAll-$VERSION-Intel.zh.txt"
     /usr/bin/cmp -s \
-      "$ROOT/dist/Remote-Mic-$VERSION.en.txt" \
-      "$ROOT/dist/intel/Remote-Mic-$VERSION-Intel.en.txt"
+      "$ROOT/dist/SayAll-$VERSION.en.txt" \
+      "$ROOT/dist/intel/SayAll-$VERSION-Intel.en.txt"
     /usr/bin/grep -Fq \
-      "Remote-Mic-$VERSION.zh.txt" \
+      "SayAll-$VERSION.zh.txt" \
       "$ROOT/dist/intel/appcast-intel.xml"
     /usr/bin/grep -Fq \
-      "Remote-Mic-$VERSION.en.txt" \
+      "SayAll-$VERSION.en.txt" \
       "$ROOT/dist/intel/appcast-intel.xml"
-    if /usr/bin/grep -Fq "Remote-Mic-$VERSION-Intel.zh.txt" \
+    if /usr/bin/grep -Fq "SayAll-$VERSION-Intel.zh.txt" \
         "$ROOT/dist/intel/appcast-intel.xml" || \
-       /usr/bin/grep -Fq "Remote-Mic-$VERSION-Intel.en.txt" \
+       /usr/bin/grep -Fq "SayAll-$VERSION-Intel.en.txt" \
         "$ROOT/dist/intel/appcast-intel.xml"; then
       print -u2 "Intel appcast must reuse the shared localized release notes"
       exit 1
@@ -159,13 +159,13 @@ RELEASE_TAG="${RELEASE_TAG:-v$VERSION}"
 APP="$OUTPUT_DIR/$DISPLAY_NAME.app"
 INSTALL_PACKAGE="$OUTPUT_DIR/$RELEASE_INSTALL_PACKAGE_NAME"
 UNINSTALL_PACKAGE="$OUTPUT_DIR/$RELEASE_UNINSTALL_PACKAGE_NAME"
-DMG="$OUTPUT_DIR/Remote-Mic-$VERSION$RELEASE_ASSET_SUFFIX.dmg"
-UPDATE_ZIP="$OUTPUT_DIR/Remote-Mic-$VERSION$RELEASE_ASSET_SUFFIX.zip"
+DMG="$OUTPUT_DIR/SayAll-$VERSION$RELEASE_ASSET_SUFFIX.dmg"
+UPDATE_ZIP="$OUTPUT_DIR/SayAll-$VERSION$RELEASE_ASSET_SUFFIX.zip"
 APPCAST="$OUTPUT_DIR/$RELEASE_APPCAST_NAME"
-ZH_RELEASE_NOTES="$OUTPUT_DIR/Remote-Mic-$VERSION$RELEASE_ASSET_SUFFIX.zh.txt"
-EN_RELEASE_NOTES="$OUTPUT_DIR/Remote-Mic-$VERSION$RELEASE_ASSET_SUFFIX.en.txt"
-PUBLISHED_ZH_NOTES_BASENAME="Remote-Mic-$VERSION.zh.txt"
-PUBLISHED_EN_NOTES_BASENAME="Remote-Mic-$VERSION.en.txt"
+ZH_RELEASE_NOTES="$OUTPUT_DIR/SayAll-$VERSION$RELEASE_ASSET_SUFFIX.zh.txt"
+EN_RELEASE_NOTES="$OUTPUT_DIR/SayAll-$VERSION$RELEASE_ASSET_SUFFIX.en.txt"
+PUBLISHED_ZH_NOTES_BASENAME="SayAll-$VERSION.zh.txt"
+PUBLISHED_EN_NOTES_BASENAME="SayAll-$VERSION.en.txt"
 ZIP_BASENAME="${UPDATE_ZIP:t}"
 CODE_SIGN_IDENTITY="${CODE_SIGN_IDENTITY:?Set CODE_SIGN_IDENTITY to a Developer ID Application identity}"
 INSTALLER_SIGNING_IDENTITY="${INSTALLER_SIGNING_IDENTITY:?Set INSTALLER_SIGNING_IDENTITY to a Developer ID Installer identity}"
@@ -273,7 +273,7 @@ if ! security find-identity -v -p basic | rg -Fq "\"$INSTALLER_SIGNING_IDENTITY\
 fi
 
 WORK_DIR="$(/usr/bin/mktemp -d /private/tmp/remotemic-notarize-release.XXXXXX)"
-APP_NOTARY_ZIP="$WORK_DIR/Remote-Mic-$VERSION$RELEASE_ASSET_SUFFIX-notarization.zip"
+APP_NOTARY_ZIP="$WORK_DIR/SayAll-$VERSION$RELEASE_ASSET_SUFFIX-notarization.zip"
 SPARKLE_ARCHIVES="$WORK_DIR/sparkle-archives"
 ZH_NOTES_BASENAME="${ZH_RELEASE_NOTES:t}"
 EN_NOTES_BASENAME="${EN_RELEASE_NOTES:t}"
@@ -499,7 +499,7 @@ run_release_stage dmg-verify "$RELEASE_VERIFY_TIMEOUT_SECONDS" \
 
 if [[ "$GENERATE_SPARKLE_UPDATE" == "1" ]]; then
   case "$UPDATE_ZIP" in
-    "$OUTPUT_DIR"/Remote-Mic-*.zip) ;;
+    "$OUTPUT_DIR"/SayAll-*.zip) ;;
     *) print -u2 "refusing to replace unexpected Sparkle archive: $UPDATE_ZIP"; exit 1 ;;
   esac
   case "$APPCAST" in
@@ -549,6 +549,10 @@ if [[ "$GENERATE_SPARKLE_UPDATE" == "1" ]]; then
   /usr/bin/ditto --norsrc --noqtn --noacl \
     "$SPARKLE_ARCHIVES/$EN_NOTES_BASENAME" "$EN_RELEASE_NOTES"
 
+  if rg -Fq 'Remote-Mic-' "$APPCAST"; then
+    print -u2 "final Sparkle appcast contains a legacy Remote-Mic asset name"
+    exit 1
+  fi
   ENCLOSURE_SIGNATURE="$(sed -n 's/.*sparkle:edSignature="\([^"]*\)".*/\1/p' "$APPCAST" | head -n 1)"
   test -n "$ENCLOSURE_SIGNATURE"
   rg -Fq "url=\"$CDN_DOWNLOAD_PREFIX$ZIP_BASENAME\"" "$APPCAST"
