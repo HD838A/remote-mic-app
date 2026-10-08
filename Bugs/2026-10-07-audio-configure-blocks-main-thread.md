@@ -226,8 +226,8 @@ hang 报告的 `Binary Images` 显示该进程只加载 `CoreAudio`、`AVFAudio`
 | 位置 | 待办变化 |
 | --- | --- |
 | `Sources/RemoteMic/AudioOutput.swift` | 已完成。引擎构造、`mainMixerNode` 连接、`outputNode.audioUnit`、`AudioUnitSetProperty`、`prepare()` 和 `start()` 均在串行音频队列执行。 |
-| `Sources/RemoteMic/AudioOutput.swift` | 已完成。主线程不再同步等待引擎配置；`AUDIO CONFIGURE` 与 `AUDIO READY` 记录 `queue=audio_output` 和耗时。 |
-| `Sources/RemoteMic/BridgeAppModel.swift` | 已完成。重配、恢复、试音和各语音入口在音频未就绪时异步等待配置完成。 |
+| `Sources/RemoteMic/AudioOutput.swift` | 已完成。移除同步 `configure` 入口；`AUDIO CONFIGURE` 的跳过、开始、失败和 `AUDIO READY` 记录 `queue=audio_output` 和耗时。 |
+| `Sources/RemoteMic/BridgeAppModel.swift` | 已完成。启动、重配、恢复、试音和各语音入口在音频未就绪时异步等待配置完成。 |
 | `Tests/RemoteMicTests/VirtualAudioConnectionLifecycleTests.swift` | 已完成。增加源级回归检查，确认重配使用音频队列。 |
 
 超时与降级不能替代移出主线程：移出主线程解决「App 不响应」，
@@ -237,8 +237,9 @@ hang 报告的 `Binary Images` 显示该进程只加载 `CoreAudio`、`AVFAudio`
 
 ## G 验证边界
 
-- 已完成本机自动化构建和 834 项测试，使用 `swift test --disable-keychain`。
+- 已完成本机自动化构建和 837 项测试，使用 `swift test --disable-keychain`。
 - 已完成定向音频测试和源级回归检查；排空终态的一次性语义保持通过。
+- 补充源级回归确认不存在同步 `configure` 入口，启动和重配均调用 `configureAsync`；配置各终态日志包含 `queue=audio_output` 与 `elapsed_ms`。
 - 未取得用户现场设备的实时复现，未确认具体 HAL 代理类型。
 - 未完成真实 `coreaudiod` 无响应、外接音频设备拔插、语音中重配和长时间运行验收。
 - 第二次现场（09-13）的原始报告未脱敏，含 UUID、PID、UID、安装路径与同机其他进程名，
@@ -249,14 +250,16 @@ hang 报告的 `Binary Images` 显示该进程只加载 `CoreAudio`、`AVFAudio`
 ### 修复
 
 - `VirtualAudioOutput` 增加串行引擎队列。引擎构造、`mainMixerNode` 连接、输出单元查询、当前设备设置、`prepare()` 和 `start()` 均在该队列执行。
-- `BridgeAppModel` 的重配入口改为异步提交。主线程只更新状态和日志，不等待 Core Audio HAL 返回。
+- `BridgeAppModel` 的启动和重配入口改为异步提交。主线程只更新状态和日志，不等待 Core Audio HAL 返回。
 - 引擎健康状态、绑定设备和路由诊断改为缓存快照。主线程诊断不会再次读取 `AVAudioEngine.outputNode.audioUnit` 或 HAL 属性。
 - `stop()` 在主线程异步执行，在音频队列和测试线程保持同步完成，保留排空终态的一次性语义。
 
 ### 自动化验证
 
-- `swift test --disable-keychain --filter 'AudioConfigurationChangeRecoveryTests|VirtualAudioConnectionLifecycleTests'`：44 项通过。
-- `swift test --disable-keychain`：834 项通过。
+- `swift test --disable-keychain --filter 'AudioConfigurationChangeRecoveryTests|VirtualAudioConnectionLifecycleTests'`：47 项通过。
+- `swift test --disable-keychain`：837 项通过。
+- `./scripts/test.sh`：48 项工程自检通过。
+- `scripts/verify-repository-governance.sh origin/main`：通过。
 - `git diff --check`：通过。
 
 ### 验证边界

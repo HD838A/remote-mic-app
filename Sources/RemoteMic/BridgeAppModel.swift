@@ -2258,55 +2258,57 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             AppLogger.shared.write(
                 "AUDIO REBIND begin reason=startup state={\(self.audioOutput.diagnosticState())}"
             )
-            let configured = self.audioOutput.configure(deviceUID: selection.uid ?? "")
-            let audioStatus = self.audioOutput.status
-            let isAudioOutputReady = self.audioOutput.isReadyForTestTone
-            let testToneStatus = isAudioOutputReady
-                ? LocalizedMessage("audio.test_tone.ready")
-                : LocalizedMessage("audio.output.none_or_unavailable")
-            let outputState = self.audioOutput.diagnosticState()
-            DispatchQueue.main.async { [weak self] in
+            self.audioOutput.configureAsync(deviceUID: selection.uid ?? "") { [weak self] configured in
                 guard let self else { return }
-                guard self.started, self.audioStartupGeneration == generation else {
-                    self.audioPreparationQueue.async { [weak self] in
-                        self?.audioOutput.stop()
+                let audioStatus = self.audioOutput.status
+                let isAudioOutputReady = self.audioOutput.isReadyForTestTone
+                let testToneStatus = isAudioOutputReady
+                    ? LocalizedMessage("audio.test_tone.ready")
+                    : LocalizedMessage("audio.output.none_or_unavailable")
+                let outputState = self.audioOutput.diagnosticState()
+                DispatchQueue.main.async { [weak self] in
+                    guard let self else { return }
+                    guard self.started, self.audioStartupGeneration == generation else {
+                        self.audioPreparationQueue.async { [weak self] in
+                            self?.audioOutput.stop()
+                        }
+                        return
                     }
-                    return
-                }
-                if configured,
-                   selection.source != .currentSelection,
-                   let recoveredUID = selection.uid,
-                   self.settings.selectedAudioDeviceUID.isEmpty {
-                    self.settings.selectedAudioDeviceUID = recoveredUID
+                    if configured,
+                       selection.source != .currentSelection,
+                       let recoveredUID = selection.uid,
+                       self.settings.selectedAudioDeviceUID.isEmpty {
+                        self.settings.selectedAudioDeviceUID = recoveredUID
+                        AppLogger.shared.write(
+                            "AUDIO SELECTION RECOVERY phase=completed result=restored " +
+                            "source=\(selection.source.rawValue) kind=\(selection.kind.rawValue)"
+                        )
+                    } else if !configured, selection.source != .currentSelection {
+                        AppLogger.shared.write(
+                            "AUDIO SELECTION RECOVERY phase=failed result=not_restored " +
+                                "source=\(selection.source.rawValue) reason=configure_failed " +
+                                "kind=\(selection.kind.rawValue)"
+                        )
+                    }
+                    self.audioStartupPending = false
+                    self.publishAudioDevices(devices)
+                    self.audioStatus = audioStatus
+                    self.isAudioOutputReady = isAudioOutputReady
+                    self.testToneStatus = testToneStatus
+                    self.startObservingAudioHardware()
+                    if self.systemAudioSuspensionState.isSuspended {
+                        AppLogger.shared.write(
+                            "SYSTEM AUDIO startup_release reasons=\(self.systemAudioSuspensionState.diagnostic) " +
+                                "state={\(outputState)}"
+                        )
+                        self.releaseVirtualAudioOutputIfUnused(reason: "startup_system_suspended")
+                    }
+                    self.startBluetoothConnections()
                     AppLogger.shared.write(
-                        "AUDIO SELECTION RECOVERY phase=completed result=restored " +
-                        "source=\(selection.source.rawValue) kind=\(selection.kind.rawValue)"
-                    )
-                } else if !configured, selection.source != .currentSelection {
-                    AppLogger.shared.write(
-                        "AUDIO SELECTION RECOVERY phase=failed result=not_restored " +
-                            "source=\(selection.source.rawValue) reason=configure_failed " +
-                            "kind=\(selection.kind.rawValue)"
-                    )
-                }
-                self.audioStartupPending = false
-                self.publishAudioDevices(devices)
-                self.audioStatus = audioStatus
-                self.isAudioOutputReady = isAudioOutputReady
-                self.testToneStatus = testToneStatus
-                self.startObservingAudioHardware()
-                if self.systemAudioSuspensionState.isSuspended {
-                    AppLogger.shared.write(
-                        "SYSTEM AUDIO startup_release reasons=\(self.systemAudioSuspensionState.diagnostic) " +
+                        "AUDIO REBIND finished reason=startup success=\(configured) status=\(audioStatus.key) " +
                             "state={\(outputState)}"
                     )
-                    self.releaseVirtualAudioOutputIfUnused(reason: "startup_system_suspended")
                 }
-                self.startBluetoothConnections()
-                AppLogger.shared.write(
-                    "AUDIO REBIND finished reason=startup success=\(configured) status=\(audioStatus.key) " +
-                        "state={\(outputState)}"
-                )
             }
         }
     }

@@ -654,11 +654,218 @@ struct VirtualAudioConnectionLifecycleTests {
         )
 
         #expect(outputSource.contains("label: \"RemoteMic.audioOutput.engine\""))
+        #expect(!outputSource.contains("func configure(deviceUID: String)"))
         #expect(outputSource.contains("func configureAsync(deviceUID: String"))
-        #expect(outputSource.contains("configureOnEngineQueue(deviceUID: deviceUID)"))
+        #expect(outputSource.contains("engineQueue.async { [weak self] in"))
+        #expect(outputSource.contains("configureOnEngineQueue(deviceUID: deviceUID, operationID: operationID)"))
+        #expect(outputSource.contains("dispatchPrecondition(condition: .onQueue(engineQueue))"))
         #expect(outputSource.contains("engine.connect(player, to: engine.mainMixerNode"))
         #expect(modelSource.contains("audioOutput.configureAsync(deviceUID: deviceUID)"))
-        #expect(!modelSource.contains("let configured = audioOutput.configure(deviceUID:"))
+        #expect(modelSource.contains("self.audioOutput.configureAsync(deviceUID: selection.uid ?? \"\")"))
+        #expect(!modelSource.contains("audioOutput.configure(deviceUID:"))
+    }
+
+    @Test @MainActor func blockedAudioQueueDoesNotBlockMainThreadConfigurationStopOrDiagnostics() async {
+        let queue = DispatchQueue(label: "test.blocked_audio_engine")
+        let gate = DispatchSemaphore(value: 0)
+        let logs = ConfigurationLogRecorder()
+        let output = VirtualAudioOutput(logger: logs.append, engineQueue: queue)
+        await withCheckedContinuation { continuation in
+            queue.async {
+                continuation.resume()
+                _ = gate.wait(timeout: .now() + 30)
+            }
+        }
+        defer { gate.signal() }
+        let response = AsyncStream<(Bool, Bool)>.makeStream()
+        let startedAt = ProcessInfo.processInfo.systemUptime
+        output.configureAsync(deviceUID: "") { configured in
+            response.continuation.yield((configured, Thread.isMainThread))
+            response.continuation.finish()
+        }
+        output.stop()
+        output.endSession()
+        #expect(!output.isReadyForTestTone)
+        #expect(!output.isConfigurationHealthyForDiagnostics)
+        #expect(output.diagnosticSnapshot().pendingSamples == 0)
+        #expect(output.diagnosticState().contains("bound_to_selected=unknown"))
+        #expect(ProcessInfo.processInfo.systemUptime - startedAt < 0.5)
+        // A main-queue event must run while the audio queue is still blocked.
+        await withCheckedContinuation { continuation in
+            DispatchQueue.main.async { continuation.resume() }
+        }
+        #expect(logs.values.filter { $0.contains("phase=started") }.isEmpty)
+        #expect(logs.values.filter { $0.contains("phase=completed") }.isEmpty)
+        gate.signal()
+        var responses: [(Bool, Bool)] = []
+        for await value in response.stream { responses.append(value) }
+        #expect(responses.count == 1)
+        #expect(responses.first?.0 == false)
+        #expect(responses.first?.1 == false)
+    }
+
+    @Test @MainActor func consecutiveConfigurationsHaveOrderedUniqueCompletionLogs() async {
+        let logs = ConfigurationLogRecorder()
+        let output = VirtualAudioOutput(logger: logs.append)
+        let first = AsyncStream<Bool>.makeStream()
+        let second = AsyncStream<Bool>.makeStream()
+        output.configureAsync(deviceUID: "") {
+            first.continuation.yield($0)
+            first.continuation.finish()
+        }
+        output.configureAsync(deviceUID: "") {
+            second.continuation.yield($0)
+            second.continuation.finish()
+        }
+        var firstResponses: [Bool] = []
+        var secondResponses: [Bool] = []
+        for await value in first.stream { firstResponses.append(value) }
+        for await value in second.stream { secondResponses.append(value) }
+        #expect(firstResponses == [false])
+        #expect(secondResponses == [false])
+        let phases = logs.values.filter {
+            $0.contains("operation_id=") && ($0.contains("phase=started") || $0.contains("phase=completed"))
+        }
+        #expect(phases.count == 4)
+        #expect(phases[0].contains("operation_id=1 phase=started result=pending"))
+        #expect(phases[1].contains("operation_id=1 phase=completed result=failed"))
+        #expect(phases[2].contains("operation_id=2 phase=started result=pending"))
+        #expect(phases[3].contains("operation_id=2 phase=completed result=failed"))
+        #expect(phases.allSatisfy { $0.contains("queue=audio_output") })
+        #expect(phases.filter { $0.contains("phase=completed") }.allSatisfy {
+            $0.contains("reason=configure_failed") &&
+                $0.contains("status_key=audio.output.none_selected") &&
+                $0.contains("elapsed_ms=")
+        })
+        #expect(phases.filter { $0.contains("phase=started") }.allSatisfy { $0.contains("queue_wait_ms=") })
+        #expect(!logs.values.contains { $0.contains("AUDIO READY") })
+    }
+
+    @Test @MainActor func installedVirtualOutputPreservesFirstPlaybackAfterQueuedPlayerRestart() async throws {
+        guard ProcessInfo.processInfo.environment["SAYALL_TEST_VIRTUAL_AUDIO_CONFIGURATION"] == "1"
+        else { return }
+        let device = try #require(await Task.detached {
+            CoreAudioDeviceCatalog.outputDevices().first { $0.uid == "MiRemoteV2ch_UID" }
+        }.value)
+        let queue = DispatchQueue(label: "test.virtual_audio_restart")
+        let logs = ConfigurationLogRecorder()
+        let output = VirtualAudioOutput(logger: logs.append, engineQueue: queue)
+        defer { output.stop() }
+        let configured = await withCheckedContinuation { continuation in
+            output.configureAsync(deviceUID: device.uid) { continuation.resume(returning: $0) }
+        }
+        try #require(configured)
+        let loopback = try VirtualLoopbackObservation(deviceID: device.id)
+        defer { loopback.stop() }
+
+        for generation in 1...3 {
+            let gate = DispatchSemaphore(value: 0)
+            await withCheckedContinuation { continuation in
+                queue.async {
+                    continuation.resume()
+                    _ = gate.wait(timeout: .now() + 3)
+                }
+            }
+            let signalFramesBefore = loopback.signalFrames
+            // Force the restart to stay queued while the first voice buffer is submitted.
+            // Both operations must later reach AVAudioPlayerNode in the caller's order.
+            output.endSession()
+            #expect(output.enqueue(samples: Array(repeating: 1_000, count: 1_600), deliveryGeneration: generation))
+            let drained = AsyncStream<VirtualAudioDrainOutcome>.makeStream()
+            output.endSessionAfterDraining(source: "configuration_regression", operationID: UInt64(generation), maximumDelay: 2) {
+                drained.continuation.yield($0)
+                drained.continuation.finish()
+            }
+            try await Task.sleep(for: .milliseconds(150))
+            #expect(output.diagnosticSnapshot(deliveryGeneration: generation).counters.playedSamples == 0)
+            #expect(loopback.signalFrames == signalFramesBefore)
+            gate.signal()
+            var outcomes: [VirtualAudioDrainOutcome] = []
+            for await outcome in drained.stream { outcomes.append(outcome) }
+            #expect(outcomes == [.normal])
+            let snapshot = output.diagnosticSnapshot(deliveryGeneration: generation)
+            #expect(snapshot.counters.playedSamples == 1_600)
+            #expect(snapshot.counters.interruptedSamples == 0)
+            #expect(snapshot.pendingSamples == 0)
+            try await Task.sleep(for: .milliseconds(100))
+            #expect(loopback.signalFrames - signalFramesBefore >= Int(loopback.sampleRate * 0.095))
+        }
+    }
+
+    /// Counts synthetic signal frames on the explicitly selected virtual loopback only.
+    /// No PCM or user content is retained or written to disk.
+    private final class VirtualLoopbackObservation: @unchecked Sendable {
+        private let deviceID: AudioDeviceID
+        private var ioProcID: AudioDeviceIOProcID?
+        private let lock = NSLock()
+        private var observedSignalFrames = 0
+        let sampleRate: Double
+
+        init(deviceID: AudioDeviceID) throws {
+            self.deviceID = deviceID
+            var format = AudioStreamBasicDescription()
+            var size = UInt32(MemoryLayout<AudioStreamBasicDescription>.size)
+            var address = AudioObjectPropertyAddress(
+                mSelector: kAudioDevicePropertyStreamFormat,
+                mScope: kAudioDevicePropertyScopeInput,
+                mElement: kAudioObjectPropertyElementMain
+            )
+            try #require(AudioObjectGetPropertyData(deviceID, &address, 0, nil, &size, &format) == noErr)
+            try #require(format.mFormatID == kAudioFormatLinearPCM)
+            try #require(format.mFormatFlags & kAudioFormatFlagIsFloat != 0 && format.mBitsPerChannel == 32)
+            sampleRate = format.mSampleRate
+            let creationResult = AudioDeviceCreateIOProcIDWithBlock(&ioProcID, deviceID, nil) { [weak self] _, input, _, _, _ in
+                guard let self,
+                      let buffer = UnsafeMutableAudioBufferListPointer(UnsafeMutablePointer(mutating: input)).first,
+                      let data = buffer.mData
+                else { return }
+                let channelCount = max(1, Int(buffer.mNumberChannels))
+                let samples = data.assumingMemoryBound(to: Float.self)
+                let count = Int(buffer.mDataByteSize) / MemoryLayout<Float>.size
+                var signalFrames = 0
+                for index in stride(from: 0, to: count, by: channelCount) {
+                    if abs(samples[index]) > 0.005 { signalFrames += 1 }
+                }
+                self.lock.lock()
+                self.observedSignalFrames += signalFrames
+                self.lock.unlock()
+            }
+            try #require(creationResult == noErr)
+            if AudioDeviceStart(deviceID, ioProcID) != noErr {
+                stop()
+                throw NSError(domain: "virtual_loopback_test", code: 1)
+            }
+        }
+
+        var signalFrames: Int {
+            lock.lock()
+            defer { lock.unlock() }
+            return observedSignalFrames
+        }
+
+        func stop() {
+            guard let ioProcID else { return }
+            AudioDeviceStop(deviceID, ioProcID)
+            AudioDeviceDestroyIOProcID(deviceID, ioProcID)
+            self.ioProcID = nil
+        }
+    }
+
+    private final class ConfigurationLogRecorder: @unchecked Sendable {
+        private let lock = NSLock()
+        private var storage: [String] = []
+
+        func append(_ message: String) {
+            lock.lock()
+            storage.append(message)
+            lock.unlock()
+        }
+
+        var values: [String] {
+            lock.lock()
+            defer { lock.unlock() }
+            return storage
+        }
     }
 
     @Test func lastReadyBluetoothBridgeDisconnectsAndReleasesAudio() {
