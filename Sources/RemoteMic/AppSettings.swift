@@ -508,12 +508,7 @@ final class AppSettings: ObservableObject {
         }
     }
 
-    /// 放开 Chromecast「系统占用键」（left/right/select）的接管限制。
-    ///
-    /// 默认关闭：这三颗键在旧款遥控器上被 macOS 配件服务（BT-AACP）在 CGEvent 之外直接消费成
-    /// 媒体控制，接管只会双执行。新款遥控器是否真的被系统占用只能真机验证——打开此开关后
-    /// 画布不再置灰、运行时不再跳过，若系统仍在消费则会出现「双执行」，这本身就是判据。
-    /// 不进入导入/导出配置：这是针对具体遥控器硬件的临时豁免，不是用户偏好。
+    /// 历史系统占用键豁免。保留读取兼容；当前普通键不受此值限制。
     @Published var chromecastAllowSystemReservedKeys: Bool {
         didSet {
             defaults.set(
@@ -523,10 +518,7 @@ final class AppSettings: ObservableObject {
         }
     }
 
-    /// 按键级豁免：逐颗放开「系统占用键」（CSV，如 "left,right"）。
-    ///
-    /// 三颗键的系统代价不同（左/右=播放时切歌；OK=任何时候拉起音乐 App），全有全无的开关
-    /// 无法表达这种取舍。与主开关相加生效：任一途径放开的键都由 App 接管。
+    /// 历史逐键豁免，保留旧配置的读取兼容。
     @Published var chromecastSystemReservedExceptions: Set<String> {
         didSet {
             defaults.set(
