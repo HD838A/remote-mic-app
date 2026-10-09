@@ -321,7 +321,7 @@
 "connection.phone.disconnect" = "取消连接";
 "connection.phone.cancel_waiting" = "取消等待";
 "connection.watch.title" = "Apple Watch";
-"connection.watch.help" = "Watch 直接连接这台 Mac，可点按持续收音，也可主动开启抬腕收音。";
+"connection.watch.help" = "Watch 直接连接这台 Mac，可点按持续收音。";
 "connection.watch.connect" = "连接";
 "connection.watch.enabled" = "正在等待 Watch";
 "connection.watch.connected" = "已连接";

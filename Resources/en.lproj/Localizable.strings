@@ -321,7 +321,7 @@
 "connection.phone.disconnect" = "Disconnect";
 "connection.phone.cancel_waiting" = "Stop Waiting";
 "connection.watch.title" = "Apple Watch";
-"connection.watch.help" = "The Watch connects directly to this Mac for tap-to-record and optional raise-to-talk.";
+"connection.watch.help" = "The Watch connects directly to this Mac for tap-to-record.";
 "connection.watch.connect" = "Connect";
 "connection.watch.enabled" = "Waiting for Watch";
 "connection.watch.connected" = "Connected";
