@@ -8158,9 +8158,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             return
         }
 
-        // 系统占用键（left/right/select）：报告 usage 在系统眼里是 Menu Up/Down/Left，macOS 配件服务
-        // 直接消费成媒体控制且**不经 CGEvent**（真机实测：事件 tap 两层与 hidutil 都无法拦截）。
-        // 按产品决策完全不接管：不武装抑制（无效）、不执行自定义动作，按键归系统。
+        // 使用与画布、键位方案相同的保留策略；当前全部普通键可配置。
         if ChromecastRemoteControl.isSystemManaged(
             event.control,
             allowSystemReservedKeys: settings.chromecastAllowSystemReservedKeys,

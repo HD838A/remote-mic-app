@@ -155,14 +155,9 @@ enum ChromecastRemoteControl: String, CaseIterable, Equatable {
     /// 画布用的控制 ID。与 `ChromecastMappingCanvas.configurableControlIDs` 同值。
     var canvasControlID: String { rawValue }
 
-    /// 系统占用、宿主不接管的按键。与私有包 `ChromecastControl.systemReservedControls` 对称。
-    ///
-    /// 真机实测（2026-09-16）：这三颗键的 HID 报告 usage 在系统眼里是 Menu Up / Menu Down /
-    /// Menu Left，macOS 配件服务（BT-AACP）直接消费成媒体控制（上一首/下一首/播放暂停），
-    /// **不经过 CGEvent**——事件抑制器与设备属性都无法拦截。接管只会造成双执行，
-    /// 因此按产品决策完全交给系统（画布置灰、运行时跳过）。详见
-    /// `Testing/ChromecastVoicePitfalls.md`。
-    static let systemReservedControls: Set<ChromecastRemoteControl> = [.left, .right, .select]
+    /// 当前产品允许全部普通键配置，包含左、确定、右。
+    /// 历史豁免设置继续可读，但不得再次限制这三键。
+    static let systemReservedControls: Set<ChromecastRemoteControl> = []
 
     /// 该键此刻是否仍交给系统。主开关全放开；`exceptions` 逐颗放开（两者相加生效）。
     static func isSystemManaged(
