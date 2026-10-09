@@ -53,7 +53,7 @@ You are welcome to try it. In principle, the Windows version of SayAll should no
 
 [Download the Windows preview](https://github.com/GetSayAll/remote-mic-app-windows/releases/)
 
-iOS app beta: [Join the TestFlight public beta](https://testflight.apple.com/join/J8k8fb7v)
+iOS release: [SayAll on the App Store](https://apps.apple.com/app/sayall/id6797208067)
 
 The Mac app continues to be distributed directly. Mac App Store submission is paused, while the current App Store launch focus is the iOS app and its Apple Watch app.
 
@@ -239,7 +239,7 @@ For development, build, protocol, test, and release details, see the [Technical 
 
 ## License and sources
 
-The macOS app, driver, and related software code in this repository are GPL-3.0-only. The iOS app is now maintained in a separate private repository and continues to be distributed through the TestFlight beta link above. The macOS app logo and app icon are proprietary brand assets that require a separate grant; see [LOGO-LICENSE.en.md](LOGO-LICENSE.en.md). Full copyright and third-party information is available in [COPYRIGHT.en.md](COPYRIGHT.en.md) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+The macOS app, driver, and related software code in this repository are GPL-3.0-only. The iOS app is now maintained in a separate private repository and continues to be distributed through the App Store link above. The macOS app logo and app icon are proprietary brand assets that require a separate grant; see [LOGO-LICENSE.en.md](LOGO-LICENSE.en.md). Full copyright and third-party information is available in [COPYRIGHT.en.md](COPYRIGHT.en.md) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 The project was originally forked from [nijez/open-voice-bridge](https://github.com/nijez/open-voice-bridge) and is now maintained independently in this repository.
 

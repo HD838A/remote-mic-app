@@ -2381,7 +2381,7 @@ struct OnboardingFlowTests {
         )
         defer { iPhone.close() }
         invoke("iphone.install", on: iPhone)
-        #expect(iPhone.probe.openedURLs.last == AppLinks.testFlightPublicBeta)
+        #expect(iPhone.probe.openedURLs.last == AppLinks.iOSAppStore(for: Locale(identifier: "zh-Hans")))
         invokeIfPresent("recovery.remote.not_found", on: iPhone)
         invokeIfPresent("diagnostics.copy", on: iPhone)
         invoke("back", on: iPhone)

@@ -37,12 +37,14 @@ public struct WebRemoteSessionView<Model: WebRemoteSessionModel>: View {
         model: Model,
         localization: WebRemoteSessionLocalization,
         onOpenPlus: (() -> Void)? = nil,
-        membershipRequiredView: AnyView? = nil
+        membershipRequiredView: AnyView? = nil,
+        onDiagnostic: @escaping (String) -> Void = { _ in }
     ) {
         _model = ObservedObject(wrappedValue: model)
         self.localization = localization
         _ = onOpenPlus
         _ = membershipRequiredView
+        _ = onDiagnostic
     }
 
     public var body: some View {
@@ -58,5 +60,26 @@ public struct WebRemoteSessionView<Model: WebRemoteSessionModel>: View {
         }
         .padding(28)
         .frame(width: 440, height: 320)
+    }
+}
+
+/// 公开构建只保留界面契约；动态小程序码由可选私有模块提供。
+public struct WebRemoteMiniProgramCodeView<Model: WebRemoteSessionModel>: View {
+    private let localization: WebRemoteSessionLocalization
+
+    public init(
+        model: Model,
+        localization: WebRemoteSessionLocalization,
+        size: CGFloat = 224,
+        onDiagnostic: @escaping (String) -> Void = { _ in }
+    ) {
+        self.localization = localization
+    }
+
+    public var body: some View {
+        Text(localization.text("connection.web.unavailable_help"))
+            .font(.system(size: 14))
+            .foregroundStyle(.secondary)
+            .multilineTextAlignment(.center)
     }
 }

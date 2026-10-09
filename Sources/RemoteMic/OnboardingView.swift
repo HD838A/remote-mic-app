@@ -1,8 +1,7 @@
 import AppKit
 import Combine
 import CoreBluetooth
-import CoreImage
-import CoreImage.CIFilterBuiltins
+import SayAllMacRemoteUI
 import SayAllMacRemoteCore
 import SwiftUI
 
@@ -1623,7 +1622,7 @@ struct OnboardingView: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
-            onboardingLink(id: "iphone.install", destination: AppLinks.testFlightPublicBeta) {
+            onboardingLink(id: "iphone.install", destination: AppLinks.iOSAppStore(for: localization.locale)) {
                 Label {
                     Text(verbatim: localization.text("onboarding.apple_companion.install"))
                 } icon: {
@@ -2553,18 +2552,16 @@ struct OnboardingView: View {
     private var webRemoteIllustration: some View {
         VStack(spacing: 16) {
             switch model.webRemoteState {
-            case let .waitingForPhone(joinURL, _, _),
-                 let .awaitingApproval(joinURL, _, _):
-                if let qrCode = webRemoteQRCode(for: joinURL) {
-                    Image(nsImage: qrCode)
-                        .interpolation(.none)
-                        .resizable()
-                        .frame(width: 250, height: 250)
-                        .padding(14)
-                        .background(Color.white, in: RoundedRectangle(cornerRadius: 16))
-                }
-                Text(verbatim: localization.text("onboarding.web_remote.scan"))
-                    .font(.system(size: 15, weight: .semibold))
+            case .waitingForPhone, .awaitingApproval:
+                WebRemoteMiniProgramCodeView(
+                    model: model,
+                    localization: WebRemoteSessionLocalization(
+                        locale: localization.locale,
+                        text: localization.text
+                    ),
+                    size: 250,
+                    onDiagnostic: { AppLogger.shared.write($0) }
+                )
             case .membershipRequired, .plusRequired:
                 companionMembershipRequiredView
             case let .connected(deviceName):
@@ -4372,20 +4369,6 @@ struct OnboardingView: View {
         case .appleCompanion, .webRemote, .unselected:
             return false
         }
-    }
-
-    private func webRemoteQRCode(for url: URL) -> NSImage? {
-        let filter = CIFilter.qrCodeGenerator()
-        filter.message = Data(url.absoluteString.utf8)
-        filter.correctionLevel = "M"
-        guard let output = filter.outputImage?.transformed(
-            by: CGAffineTransform(scaleX: 10, y: 10)
-        ), let cgImage = CIContext().createCGImage(output, from: output.extent)
-        else { return nil }
-        return NSImage(
-            cgImage: cgImage,
-            size: NSSize(width: cgImage.width, height: cgImage.height)
-        )
     }
 
     private func continueFlow() {
