@@ -831,11 +831,11 @@
 "onboarding.remote_availability.has_remote.title" = "I Have a Remote";
 "onboarding.remote_availability.has_remote.detail" = "Connect a Xiaomi Bluetooth remote and use its physical buttons and microphone.";
 "onboarding.remote_availability.no_remote.title" = "No Remote Right Now";
-"onboarding.remote_availability.no_remote.detail" = "Next, choose the iPhone app or the mobile web remote.";
+"onboarding.remote_availability.no_remote.detail" = "Choose the iPhone app or WeChat mini program next.";
 "onboarding.remote_availability.recommended" = "Preferred";
 "onboarding.remote_availability.illustration" = "Use a physical remote when available";
 "onboarding.control_method.title" = "Choose a phone option without a remote";
-"onboarding.control_method.detail" = "Use the recommended iPhone app when available, or the mobile web remote without an iPhone.";
+"onboarding.control_method.detail" = "Use the iPhone app, or scan with WeChat to connect to SayAll.";
 "onboarding.control_method.physical_remote.title" = "Physical Remote";
 "onboarding.control_method.physical_remote.detail" = "Connect a Xiaomi Bluetooth remote and use its physical buttons and microphone.";
 "onboarding.control_method.iphone_app.title" = "iPhone App";
@@ -851,7 +851,7 @@
 "onboarding.permissions.input.detail" = "Read physical button events and support voice input";
 "onboarding.permissions.accessibility.detail" = "Run voice shortcuts and custom button actions";
 "onboarding.permissions.mobile_network.title" = "Phone connection is checked on the next page";
-"onboarding.permissions.mobile_network.detail" = "After all three system permissions are enabled, the next page verifies the local-network connection through a real iPhone app or web session.";
+"onboarding.permissions.mobile_network.detail" = "After all three system permissions are enabled, the next page checks the real iPhone app or mini program connection.";
 "onboarding.permissions.apple_companion.title" = "The iPhone or Apple Watch connection is checked next";
 "onboarding.permissions.apple_companion.detail" = "After all three system permissions are enabled, the next page verifies a real iPhone or Apple Watch app connection on your local network.";
 "onboarding.permissions.web_remote.title" = "The mini program connection is checked next";
@@ -1044,7 +1044,7 @@
 "onboarding.side.controls" = "Button Check";
 "onboarding.side.remote_connected" = "Remote connected";
 "onboarding.side.iphone_connected" = "iPhone / Apple Watch connected";
-"onboarding.side.web_connected" = "Web remote connected";
+"onboarding.side.web_connected" = "Mini program connected";
 "onboarding.side.control_selected" = "Control method selected";
 "onboarding.side.button_received" = "Button Press Detected";
 "onboarding.side.device_found" = "Supported virtual audio device detected";
@@ -1067,7 +1067,7 @@
 "onboarding.recovery.permission.accessibility_denied.detail" = "Allow Accessibility so SayAll can run your configured voice and button actions.";
 "onboarding.recovery.permission.accessibility_denied.action" = "Allow Actions";
 "onboarding.recovery.remote.not_found.title" = "The selected control method is not connected yet";
-"onboarding.recovery.remote.not_found.detail" = "Follow the current page to reconnect the physical remote, iPhone, or web remote.";
+"onboarding.recovery.remote.not_found.detail" = "Follow this page to reconnect the physical remote, iPhone, or mini program.";
 "onboarding.recovery.remote.not_found.physical_detail" = "Reconnect the selected remote on this page, then press any button except the voice button.";
 "onboarding.recovery.remote.not_found.apple_companion_detail" = "Reopen and connect the iPhone or Apple Watch app.";
 "onboarding.recovery.remote.not_found.web_remote_detail" = "Generate a new mini program code and scan with WeChat to connect.";

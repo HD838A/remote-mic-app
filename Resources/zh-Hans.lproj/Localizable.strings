@@ -831,11 +831,11 @@
 "onboarding.remote_availability.has_remote.title" = "有遥控器";
 "onboarding.remote_availability.has_remote.detail" = "连接小米蓝牙遥控器，使用实体按键和遥控器麦克风。";
 "onboarding.remote_availability.no_remote.title" = "当前没有遥控器";
-"onboarding.remote_availability.no_remote.detail" = "下一步选择 iPhone App 或手机网页版完成体验。";
+"onboarding.remote_availability.no_remote.detail" = "下一步选择 iPhone App 或微信小程序完成体验。";
 "onboarding.remote_availability.recommended" = "优先推荐";
 "onboarding.remote_availability.illustration" = "优先使用实体遥控器";
 "onboarding.control_method.title" = "没有遥控器时，选择手机控制方式";
-"onboarding.control_method.detail" = "有 iPhone 推荐使用 App；没有 iPhone 时，可以直接使用手机网页版。";
+"onboarding.control_method.detail" = "有 iPhone 推荐使用 App；也可以用微信扫码连接 SayAll。";
 "onboarding.control_method.physical_remote.title" = "使用实体遥控器";
 "onboarding.control_method.physical_remote.detail" = "连接小米蓝牙遥控器，使用实体按键和遥控器麦克风。";
 "onboarding.control_method.iphone_app.title" = "使用 iPhone App";
@@ -851,7 +851,7 @@
 "onboarding.permissions.input.detail" = "读取实体按键并支持语音输入";
 "onboarding.permissions.accessibility.detail" = "执行语音快捷键和自定义按键";
 "onboarding.permissions.mobile_network.title" = "手机连接将在下一页检查";
-"onboarding.permissions.mobile_network.detail" = "三项系统权限开启后，下一页会通过 iPhone App 或网页版的真实连接验证本地网络。";
+"onboarding.permissions.mobile_network.detail" = "三项系统权限开启后，下一页检查 iPhone App 或小程序的真实连接。";
 "onboarding.permissions.apple_companion.title" = "iPhone 或 Apple Watch 连接将在下一页检查";
 "onboarding.permissions.apple_companion.detail" = "三项系统权限开启后，下一页会通过 iPhone 或 Apple Watch App 的真实连接验证本地网络。";
 "onboarding.permissions.web_remote.title" = "小程序连接将在下一页检查";
@@ -1044,7 +1044,7 @@
 "onboarding.side.controls" = "按键检查";
 "onboarding.side.remote_connected" = "遥控器已连接";
 "onboarding.side.iphone_connected" = "iPhone / Apple Watch 已连接";
-"onboarding.side.web_connected" = "网页版已连接";
+"onboarding.side.web_connected" = "小程序已连接";
 "onboarding.side.control_selected" = "控制方式已选择";
 "onboarding.side.button_received" = "控制按键已收到";
 "onboarding.side.device_found" = "支持的虚拟音频设备已检测";
@@ -1067,7 +1067,7 @@
 "onboarding.recovery.permission.accessibility_denied.detail" = "允许辅助功能后，才能执行你设置的语音和按键操作。";
 "onboarding.recovery.permission.accessibility_denied.action" = "允许执行操作";
 "onboarding.recovery.remote.not_found.title" = "所选控制方式还没有连接";
-"onboarding.recovery.remote.not_found.detail" = "按照当前页面重新连接实体遥控器、iPhone 或网页版。";
+"onboarding.recovery.remote.not_found.detail" = "按照当前页面重新连接实体遥控器、iPhone 或小程序。";
 "onboarding.recovery.remote.not_found.physical_detail" = "按照当前页面重新连接所选遥控器，然后按一个普通按键。";
 "onboarding.recovery.remote.not_found.apple_companion_detail" = "重新打开并连接 iPhone 或 Apple Watch App。";
 "onboarding.recovery.remote.not_found.web_remote_detail" = "重新生成小程序码，并用微信扫码连接。";
