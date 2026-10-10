@@ -64,6 +64,42 @@ struct AppIconControllerTests {
         #expect(appliedImage === standard)
     }
 
+    @Test @MainActor
+    func nativeAlertsFollowTheSelectedRoundedIconAfterLaunchAndSwitching() throws {
+        let app = NSApplication.shared
+        let originalDockIcon = app.applicationIconImage
+        let originalNamedIcon = NSImage(named: NSImage.applicationIconName)
+        defer {
+            NSImage(named: NSImage.applicationIconName)?.setName(nil)
+            originalNamedIcon?.setName(NSImage.applicationIconName)
+            app.applicationIconImage = originalDockIcon
+        }
+
+        // Reproduce the bundle's opaque icon being cached before the runtime icon applies.
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let square = try #require(NSImage(contentsOf: root.appendingPathComponent("Resources/AppIcon.png")))
+        NSImage(named: NSImage.applicationIconName)?.setName(nil)
+        #expect(square.setName(NSImage.applicationIconName))
+        app.applicationIconImage = square
+        let initial = try #require(NSAlert().icon?.tiffRepresentation.flatMap(NSBitmapImageRep.init(data:)))
+        #expect(initial.colorAt(x: 0, y: 0)?.alphaComponent == 1)
+
+        let controller = AppIconController()
+        for identifier in [AppIconIdentifier.facetedDuck, .standard, .facetedDuck] {
+            controller.apply(identifier, source: "test")
+            let expected = try #require(controller.catalog.image(for: identifier).tiffRepresentation)
+            let alertImage = try #require(NSAlert().icon?.tiffRepresentation)
+            #expect(alertImage == expected)
+            #expect(NSImage(named: NSImage.applicationIconName)?.tiffRepresentation == expected)
+            let bitmap = try #require(NSBitmapImageRep(data: alertImage))
+            for (x, y) in [(0, 0), (bitmap.pixelsWide - 1, 0),
+                           (0, bitmap.pixelsHigh - 1), (bitmap.pixelsWide - 1, bitmap.pixelsHigh - 1)] {
+                #expect(bitmap.colorAt(x: x, y: y)?.alphaComponent ?? 1 <= 1.0 / 255.0)
+            }
+        }
+    }
+
     @Test
     func appSettingsPersistTheSelectedIcon() throws {
         let suiteName = "RemoteMic.AppIconControllerTests.\(UUID().uuidString)"
