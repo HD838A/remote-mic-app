@@ -152,15 +152,20 @@ enum SettingsScreenshotRenderer {
         }
         seedStatisticsForScreenshot(settings)
         let historyDirectory = outputDirectory.appendingPathComponent(UUID().uuidString)
+        let transcriptStore = TranscriptArchiveStore(
+            rootDirectoryURL: historyDirectory.appendingPathComponent("transcripts")
+        )
+        let recordingStore = RecordingAssetStore(
+            rootDirectoryURL: historyDirectory.appendingPathComponent("recordings")
+        )
+        if ProcessInfo.processInfo.environment["REMOTE_MIC_SETTINGS_SCREENSHOT_MIXED_HISTORY"] == "1" {
+            try seedMixedHistory(transcriptStore: transcriptStore, recordingStore: recordingStore)
+        }
         let model = BridgeAppModel(
             settings: settings,
             commonPhraseStore: CommonPhraseStore(defaults: defaults),
-            transcriptArchiveStore: TranscriptArchiveStore(
-                rootDirectoryURL: historyDirectory.appendingPathComponent("transcripts")
-            ),
-            recordingAssetStore: RecordingAssetStore(
-                rootDirectoryURL: historyDirectory.appendingPathComponent("recordings")
-            )
+            transcriptArchiveStore: transcriptStore,
+            recordingAssetStore: recordingStore
         )
         if showsRemoteCards {
             model.configureRemoteCardsForSettingsScreenshot(
@@ -305,6 +310,42 @@ enum SettingsScreenshotRenderer {
         try panelPNG.write(to: outputDirectory.appendingPathComponent("common-phrases-panel.png"))
         phrasePanel.orderOut(nil)
         phrasePanel.contentView = nil
+    }
+
+    private static func seedMixedHistory(
+        transcriptStore: TranscriptArchiveStore,
+        recordingStore: RecordingAssetStore
+    ) throws {
+        let calendar = Calendar.current
+        let now = Date()
+        for day in 0..<4 {
+            guard let date = calendar.date(byAdding: .day, value: -day, to: now) else { continue }
+            let sessionID = UUID()
+            if day != 2 {
+                try transcriptStore.append(TranscriptRecord(
+                    sessionID: sessionID,
+                    startedAt: date.addingTimeInterval(-120),
+                    endedAt: date.addingTimeInterval(-60),
+                    applicationName: "Notes", bundleIdentifier: "com.apple.Notes",
+                    source: .bluetoothRemote, originalTranscript: "日期排序测试 / Date order fixture",
+                    calendar: calendar
+                ))
+            }
+            for audioSessionID in day == 0 ? [sessionID, UUID()] : [UUID()] {
+                let draft = try recordingStore.begin(sessionID: audioSessionID,
+                    startedAt: date.addingTimeInterval(-30), source: .bluetoothRemote, calendar: calendar)
+                let writer = try VoiceRecordingWriter(url: draft.temporaryMediaURL)
+                writer.append(samples: Array(repeating: Int16(0), count: 16_000))
+                let finished = DispatchSemaphore(value: 0)
+                writer.finish { _ in finished.signal() }
+                guard finished.wait(timeout: .now() + 3) == .success else {
+                    throw RecordingAssetStoreError.invalidAsset
+                }
+                _ = try recordingStore.commit(draft: draft, endedAt: date.addingTimeInterval(-29),
+                    mediaURL: draft.temporaryMediaURL,
+                    applicationName: "Notes", bundleIdentifier: "com.apple.Notes")
+            }
+        }
     }
 
     private static func seedAvailableUpdate(
