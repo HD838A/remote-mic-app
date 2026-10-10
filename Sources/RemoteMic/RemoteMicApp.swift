@@ -794,9 +794,17 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
             .removeDuplicates()
             .receive(on: RunLoop.main)
             .sink { [weak self] identifier in
-                self?.appIconController.apply(identifier, source: "preference")
+                self?.applyAppIcon(identifier, source: "preference")
             }
             .store(in: &subscriptions)
+    }
+
+    private func applyAppIcon(_ identifier: AppIconIdentifier, source: String) {
+        appIconController.apply(identifier, source: source)
+    }
+
+    private func reapplyCurrentAppIcon(source: String) {
+        applyAppIcon(model.settings.appIconIdentifier, source: source)
     }
 
     private func configureUpdater() {
@@ -955,6 +963,24 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         model.macroFeature.setEditorActive(false)
         isSettingsWindowOpen = false
         updateDockActivationPolicy()
+    }
+
+    func windowDidMiniaturize(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow,
+              window === settingsWindowController?.window
+        else { return }
+        DispatchQueue.main.async { [weak self] in
+            self?.reapplyCurrentAppIcon(source: "window_miniaturized")
+        }
+    }
+
+    func windowDidDeminiaturize(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow,
+              window === settingsWindowController?.window
+        else { return }
+        DispatchQueue.main.async { [weak self] in
+            self?.reapplyCurrentAppIcon(source: "window_deminiaturized")
+        }
     }
 
     func applicationDidHide(_ notification: Notification) {
@@ -1178,6 +1204,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
             showDockIcon: model.settings.showDockIcon,
             isSettingsWindowOpen: isSettingsWindowOpen
         ))
+        reapplyCurrentAppIcon(source: "activation_policy")
     }
 
     @objc private func openGitHub() {

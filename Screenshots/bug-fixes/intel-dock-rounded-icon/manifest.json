@@ -1,0 +1,15 @@
+{
+  "source": "Apple Silicon Release App from this commit",
+  "commit": "codex/fix-intel-dock-rounded-icon PR head",
+  "platform": "Apple Silicon macOS",
+  "window": "production Settings window, 1020 × 772 pt",
+  "files": [
+    {
+      "path": "apple-silicon-settings-window.png",
+      "format": "PNG",
+      "pixels": "2040 × 1544",
+      "sha256": "44b810d87ed6cb37fe4e9016473494492abf990d634a095ee761ffe7a5675107"
+    }
+  ],
+  "boundary": "This screenshot proves the Apple Silicon production window starts. It does not prove Intel Dock appearance."
+}
