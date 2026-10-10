@@ -6,16 +6,16 @@
 
 ## Canonical 资产集合
 
-每个公开 Preview 必须有以下 13 项 payload，另加 1 项 candidate-provenance.json：
+每个公开 Preview 必须有以下 10 项 payload，另加 1 项 candidate-provenance.json：
 
 | 类别 | 文件 |
 | --- | --- |
-| Apple Silicon | SayAll-VERSION.zip、SayAll-VERSION.dmg、SayAll-VERSION-Installer.pkg、SayAll-VERSION-Uninstaller.pkg、appcast.xml |
-| Intel Ventura | SayAll-VERSION-Intel.zip、SayAll-VERSION-Intel.dmg、SayAll-VERSION-Intel-Installer.pkg、SayAll-VERSION-Intel-Uninstaller.pkg、appcast-intel.xml |
-| 共享 | SayAll-VERSION.zh.txt、SayAll-VERSION.en.txt、SayAll-VERSION.dmg.sha256 |
+| Apple Silicon | SayAll-VERSION.zip、SayAll-VERSION-Installer.pkg、SayAll-VERSION-Uninstaller.pkg、appcast.xml |
+| Intel Ventura | SayAll-VERSION-Intel.zip、SayAll-VERSION-Intel-Installer.pkg、SayAll-VERSION-Intel-Uninstaller.pkg、appcast-intel.xml |
+| 共享 | SayAll-VERSION.zh.txt、SayAll-VERSION.en.txt |
 | 来源证明 | candidate-provenance.json |
 
-Install PKG 既内嵌于对应 DMG，也作为 SayAll 品牌的公开独立资产上传，供硬件支持公告直接下载。
+Install PKG 作为 SayAll 品牌的公开独立资产上传。公开下载不再提供 DMG。
 
 ## 用例 1：生成与 manifest
 
@@ -23,9 +23,9 @@ Install PKG 既内嵌于对应 DMG，也作为 SayAll 品牌的公开独立资�
 2. 运行 scripts/verify-staged-release-assets.sh。
 3. 检查 staged-assets.json。
 
-预期：新 manifest schemaVersion 为 2，版本/tag/sourceCommit/build 合法，payload 恰好 13 项、名称唯一、无路径分隔符、无 symlink/非普通文件；每项 size 和 SHA-256 与文件完全一致。
+预期：新 manifest schemaVersion 为 2，版本/tag/sourceCommit/build 合法，payload 恰好 10 项、名称唯一、无路径分隔符、无 symlink/非普通文件；每项 size 和 SHA-256 与文件完全一致。
 
-失败判定：缺少任一架构、缺少独立 Install/Uninstall PKG、额外文件、重复名称、空 manifest 或摘要不一致。
+失败判定：缺少任一架构、缺少独立 Install/Uninstall PKG、出现 DMG、额外文件、重复名称、空 manifest 或摘要不一致。
 
 ## 用例 2：appcast 与说明
 
@@ -39,20 +39,18 @@ Install PKG 既内嵌于对应 DMG，也作为 SayAll 品牌的公开独立资�
 
 历史兼容：manifest schema 1 和 provenance schema 5 保留旧的混合命名；provenance schema 4 保留旧的 11 项资产。新 manifest 使用 schema 2，新 provenance 使用 schema 6。历史候选的文件和摘要保持原值。
 
-## 用例 3：DMG/PKG 静态信任链
+## 用例 3：PKG 静态信任链
 
 对两个架构分别执行：
 
-1. hdiutil verify 和只读挂载。
-2. 确认 Apple Silicon DMG 根目录只有 `Install SayAll.pkg`，Intel DMG 根目录只有 `Install SayAll Intel.pkg`。
-3. 验证外层 Developer ID Installer、staple、spctl -t install 和内嵌 App/driver 结构。
-4. 解压 ZIP，验证 Developer ID Application、Hardened Runtime、Sparkle helper 0755、Versions/Current 符号链接、最低系统和架构。
+1. 验证 Installer PKG 的 Developer ID Installer、staple、spctl -t install 和内嵌 App/driver 结构。
+2. 解压 ZIP，验证 Developer ID Application、Hardened Runtime、Sparkle helper 0755、Versions/Current 符号链接、最低系统和架构。
 
-预期：Apple Silicon 为 arm64/macOS 14，Intel 为 x86_64/macOS 13；安装 PKG 和 DMG 不含不匹配架构或开发机绝对路径。
+预期：Apple Silicon 为 arm64/macOS 14，Intel 为 x86_64/macOS 13；安装 PKG 不含不匹配架构或开发机绝对路径。
 
 ## 用例 4：GitHub、CDN 和 appcast 字节
 
-1. 从 GitHub fixed-tag URL 下载 13 项 payload。
+1. 从 GitHub fixed-tag URL 下载 10 项 payload。
 2. 从 download.sayall.app/mac/releases/TAG/ 下载同名 payload。
 3. 对每项执行 SHA-256 和 cmp；对 appcast 再检查 enclosure URL。
 4. 检查 releases/latest 仍为发布前动态记录的同一正式稳定版本。
@@ -61,7 +59,7 @@ Install PKG 既内嵌于对应 DMG，也作为 SayAll 品牌的公开独立资�
 
 失败判定：只抽样下载、CDN 缺少新文件、缓存代理返回不同内容、appcast 指向 latest 或 latest 被改动。
 
-版本首次占用检查还必须对上述 13 个 CDN 固定路径执行 HEAD（必要时 Range GET）探测：只有 HTTP 404 算可用，2xx/3xx 算已占用，认证/权限/5xx/超时或未知响应必须 fail closed。
+版本首次占用检查还必须对上述 10 个 CDN 固定路径执行 HEAD（必要时 Range GET）探测：只有 HTTP 404 算可用，2xx/3xx 算已占用，认证/权限/5xx/超时或未知响应必须 fail closed。
 
 ## 用例 5：publication 重试
 
@@ -73,7 +71,7 @@ Install PKG 既内嵌于对应 DMG，也作为 SayAll 品牌的公开独立资�
 ## 稳定功能回归
 
 - candidate-provenance.json 不参与自身 digest 计算，上传后单独校验。
-- 下载后的 ZIP/DMG/PKG 必须再次执行签名、公证、权限和结构检查。
+- 下载后的 ZIP/PKG 必须再次执行签名、公证、权限和结构检查。
 - Stable promotion 前后所有资产摘要保持一致。
 - Stable promotion 还要从 GitHub API 核对 provenance 绑定的成功 staging Run/attempt、payload artifact 和唯一未过期 Preview stage-record artifact；stage record 必须为 `mode=preview` 并与 Tag、SHA、manifest 和时间戳一致。
 - 不合法名称、路径遍历、未知扩展名和缺失架构名称必须被 verifier 拒绝。

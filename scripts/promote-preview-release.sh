@@ -114,7 +114,7 @@ case "$provenance_schema" in
         .publishedAt == .stagedAt and
         (.assetManifestSHA256 | test("^[0-9a-f]{64}$")) and
         (.uiAttestationSHA256 | test("^[0-9a-f]{64}$")) and
-        (.payloadAssets | type == "array" and length == 13) and
+        (.payloadAssets | type == "array" and length == 10) and
         ([.payloadAssets[].name] | length == (unique | length)) and
         all(.payloadAssets[];
           (.name | test("^[A-Za-z0-9][A-Za-z0-9._-]*$")) and
@@ -123,12 +123,9 @@ case "$provenance_schema" in
         ([
           "SayAll-" + .version + "-Intel-Uninstaller.pkg",
           "SayAll-" + .version + "-Intel-Installer.pkg",
-          (if $schema == 6 then "SayAll-" else "Remote-Mic-" end) + .version + "-Intel.dmg",
           (if $schema == 6 then "SayAll-" else "Remote-Mic-" end) + .version + "-Intel.zip",
           "SayAll-" + .version + "-Uninstaller.pkg",
           "SayAll-" + .version + "-Installer.pkg",
-          (if $schema == 6 then "SayAll-" else "Remote-Mic-" end) + .version + ".dmg",
-          (if $schema == 6 then "SayAll-" else "Remote-Mic-" end) + .version + ".dmg.sha256",
           (if $schema == 6 then "SayAll-" else "Remote-Mic-" end) + .version + ".en.txt",
           (if $schema == 6 then "SayAll-" else "Remote-Mic-" end) + .version + ".zh.txt",
           (if $schema == 6 then "SayAll-" else "Remote-Mic-" end) + .version + ".zip",
@@ -144,7 +141,7 @@ case "$provenance_schema" in
     source_workflow_commit="$(jq -r '.sourceWorkflowCommit' "$provenance")"
     expected_run_branch="main"
     expected_run_sha="$source_workflow_commit"
-    expected_asset_count=14
+    expected_asset_count=11
     ;;
   4)
     jq -e \
