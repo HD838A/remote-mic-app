@@ -4,6 +4,50 @@ import Testing
 
 @Suite("Local transcript archive")
 struct TranscriptArchiveStoreTests {
+    @Test func mixedHistoryHasUniqueDescendingDaysAndInterleavedEntries() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try #require(TimeZone(secondsFromGMT: 0))
+        let today = try #require(calendar.date(from: DateComponents(year: 2026, month: 10, day: 10)))
+        func record(day: Int, hour: Int) -> TranscriptRecord {
+            let end = today.addingTimeInterval(Double(day * 86_400 + hour * 3_600))
+            return TranscriptRecord(sessionID: UUID(), startedAt: end, endedAt: end,
+                applicationName: "Notes", bundleIdentifier: "com.apple.Notes",
+                source: .bluetoothRemote, originalTranscript: "fixture", calendar: calendar)
+        }
+        func asset(day: Int, hour: Int, sessionID: UUID = UUID()) -> RecordingAssetManifest {
+            let reference = record(day: day, hour: hour)
+            return RecordingAssetManifest(schemaVersion: 1, id: UUID(), sessionID: sessionID,
+                startedAt: reference.startedAt, endedAt: reference.endedAt,
+                localDateKey: reference.localDateKey, timeZoneIdentifier: reference.timeZoneIdentifier,
+                source: .bluetoothRemote, applicationKey: reference.applicationKey,
+                applicationName: reference.applicationName, bundleIdentifier: reference.bundleIdentifier,
+                relativeMediaPath: "fixture.m4a", durationMilliseconds: 1_000,
+                byteCount: 0, sha256: "", format: "m4a")
+        }
+        let text = record(day: 0, hour: 12)
+        let olderText = record(day: -2, hour: 12)
+        let oldText = record(day: -8, hour: 12)
+        let newestAudio = asset(day: 0, hour: 13)
+        let earlierAudio = asset(day: 0, hour: 11)
+        let yesterdayAudio = asset(day: -1, hour: 12)
+        let oldAudio = asset(day: -8, hour: 13)
+        let linkedAudio = asset(day: 0, hour: 12, sessionID: text.sessionID)
+        let records = [olderText, oldText, text]
+        let assets = [earlierAudio, linkedAudio, oldAudio, yesterdayAudio, newestAudio]
+        let now = today.addingTimeInterval(14 * 3_600)
+        let groups = TranscriptHistoryPresentationPolicy.dayGroups(
+            records: records, assets: assets, applicationKey: nil, now: now)
+        #expect(groups.map(\.id) == ["2026-10-10", "2026-10-09", "2026-10-08"])
+        #expect(groups[0].entries.map(\.id) == [newestAudio.sessionID, text.sessionID, earlierAudio.sessionID])
+        #expect(groups.flatMap(\.entries).count == 5)
+        let appGroups = TranscriptHistoryPresentationPolicy.dayGroups(
+            records: records, assets: assets, applicationKey: text.applicationKey, now: now)
+        #expect(appGroups.last?.id == "2026-10-02")
+        #expect(appGroups.last?.entries.map(\.id) == [oldAudio.sessionID, oldText.sessionID])
+        #expect(TranscriptHistoryPresentationPolicy.dayGroups(
+            records: records, assets: assets, applicationKey: "missing", now: now).isEmpty)
+    }
+
     @Test func malformedDayFileIsSkippedAndLoggedWithoutTranscriptBody() throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent(
