@@ -1924,7 +1924,7 @@ struct SettingsPageRegressionTests {
         #expect(source.contains("Group {\n                    ScrollView(.vertical, showsIndicators: false)"))
     }
 
-    @Test func macroLibraryReturnRestoresOriginalButtonAndSearchContext() throws {
+    @Test func macroLibraryNavigationKeepsSelectionAndClearsOnlySearch() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -1934,11 +1934,18 @@ struct SettingsPageRegressionTests {
             encoding: .utf8
         )
 
-        #expect(source.contains("let searchQuery = mappingMacroSearch.trimmingCharacters(in: .whitespacesAndNewlines)"))
-        #expect(source.contains("searchQuery.isEmpty || $0.name.localizedCaseInsensitiveContains(searchQuery)"))
-        #expect(source.contains("mappingEditingTarget = ShortcutEditingTarget(button: button, trigger: trigger)"))
-        #expect(source.contains("mappingActionFilter = .custom"))
-        #expect(source.contains("mappingMacroSearch = \"\""))
-        #expect(source.contains("button_mapping.return_choose_macro"))
+        let choices = try #require(source.components(separatedBy: "private func mappingMacroChoices(").last)
+            .components(separatedBy: "private var mappingPageHeader")[0]
+        #expect(choices.contains("let searchQuery = mappingMacroSearch.trimmingCharacters(in: .whitespacesAndNewlines)"))
+        #expect(choices.contains("searchQuery.isEmpty || $0.name.localizedCaseInsensitiveContains(searchQuery)"))
+        let manage = try #require(choices.components(separatedBy: "button_mapping.manage_macros\")) {").last)
+        #expect(manage.contains("mappingEditingTarget = ShortcutEditingTarget(button: button, trigger: trigger)"))
+        #expect(manage.contains("mappingMacroSearch = \"\""))
+        let returnAction = try #require(source.components(separatedBy: "button_mapping.return_choose_macro\")) {").last)
+            .components(separatedBy: ".buttonStyle(.borderedProminent)")[0]
+        #expect(returnAction.contains("preservesMappingContextOnNavigation = true"))
+        #expect(returnAction.contains("mappingActionFilter = .custom"))
+        #expect(returnAction.contains("mappingMacroSearch = \"\""))
+        #expect(!returnAction.contains("saveMappingBinding"))
     }
 }

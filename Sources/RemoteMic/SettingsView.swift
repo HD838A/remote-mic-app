@@ -1526,6 +1526,10 @@ struct SettingsView: View {
     }
 
     private func saveMappingBinding(_ configured: ConfiguredButtonAction, button: RemoteButton, trigger: ButtonTrigger) {
+        let operationID = UUID().uuidString
+        if configured.action == .combinationAction {
+            AppLogger.shared.write("BUTTON CONFIGURATION operation_id=\(operationID) action=select_combination phase=started result=requested")
+        }
         if let profile = editingMappingProfileID {
             macroFeature.setProfileBinding(configured, profile: profile, button: button, trigger: trigger,
                 displayName: configured.action == .customShortcut
@@ -1533,6 +1537,10 @@ struct SettingsView: View {
                     : configured.action.displayName(using: localization))
         } else {
             settings.setBaseBinding(configured, for: button, trigger: trigger, profileID: settings.selectedRemoteProfileID)
+        }
+        if configured.action == .combinationAction {
+            let matches = mappingConfiguration(for: button, trigger: trigger) == configured
+            AppLogger.shared.write("BUTTON CONFIGURATION operation_id=\(operationID) action=select_combination phase=completed result=\(matches ? "stored" : "not_stored") scope=\(editingMappingProfileID == nil ? "base" : "profile")")
         }
     }
 
