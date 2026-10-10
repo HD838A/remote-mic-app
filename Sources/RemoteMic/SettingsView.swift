@@ -4317,19 +4317,7 @@ struct SettingsView: View {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(identifier: "Asia/Shanghai") ?? .current
         calendar.locale = localization.locale
-        // Keep the heatmap to the latest 26 weeks so each day remains readable.
-        let buckets = settings.dailyUsageStatistics(days: 26 * 7, calendar: calendar)
-        guard let first = buckets.first else { return [] }
-        let leading = (calendar.component(.weekday, from: first.startDate) - calendar.firstWeekday + 7) % 7
-        let padded = Array(repeating: StatisticsCalendarDay.empty, count: leading) + buckets.map {
-            StatisticsCalendarDay(
-                date: $0.startDate,
-                buttonPressCount: $0.statistics.buttonPressCount,
-                voiceDuration: $0.statistics.voiceDuration
-            )
-        }
-        let cellCount = ((padded.count + 6) / 7) * 7
-        return padded + Array(repeating: StatisticsCalendarDay.empty, count: cellCount - padded.count)
+        return StatisticsCalendarDay.recentDays(settings: settings, calendar: calendar)
     }
 
     private func usagePeriodLocalizationKey(_ period: UsageStatisticsPeriod) -> String {
@@ -4987,12 +4975,37 @@ private struct StatisticsRankingEntry: Identifiable {
     var id: String { "\(title)-\(count)" }
 }
 
-private struct StatisticsCalendarDay: Identifiable {
+struct StatisticsCalendarDay: Identifiable {
     let date: Date?
     let buttonPressCount: UInt64
     let voiceDuration: TimeInterval
 
-    static let empty = StatisticsCalendarDay(date: nil, buttonPressCount: 0, voiceDuration: 0)
+    static func recentDays(
+        settings: AppSettings,
+        endingAt date: Date = Date(),
+        calendar: Calendar
+    ) -> [StatisticsCalendarDay] {
+        // Keep the heatmap to the latest 26 weeks so each day remains readable.
+        let buckets = settings.dailyUsageStatistics(endingAt: date, days: 26 * 7, calendar: calendar)
+        return buckets.map {
+            StatisticsCalendarDay(
+                date: $0.startDate,
+                buttonPressCount: $0.statistics.buttonPressCount,
+                voiceDuration: $0.statistics.voiceDuration
+            )
+        }
+    }
+
+    static func weekdaySymbols(firstDate: Date?, calendar: Calendar, locale: Locale) -> [String] {
+        let formatter = DateFormatter()
+        formatter.locale = locale
+        formatter.calendar = calendar
+        formatter.timeZone = calendar.timeZone
+        let symbols = formatter.shortWeekdaySymbols ?? []
+        guard let firstDate, symbols.count == 7 else { return symbols }
+        let firstWeekday = calendar.component(.weekday, from: firstDate) - 1
+        return (0..<7).map { symbols[(firstWeekday + $0) % 7] }
+    }
 
     var id: String {
         date.map { String($0.timeIntervalSinceReferenceDate) } ?? UUID().uuidString
@@ -5073,9 +5086,18 @@ private struct StatisticsHeatmap: View {
     private let cellSpacing: CGFloat = 3
     private let weekdayLabelWidth: CGFloat = 30
 
+    private var calendar: Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Asia/Shanghai") ?? .current
+        calendar.locale = localization.locale
+        return calendar
+    }
+
     private var monthMarkers: [(column: Int, label: String)] {
         let formatter = DateFormatter()
         formatter.locale = localization.locale
+        formatter.calendar = calendar
+        formatter.timeZone = calendar.timeZone
         formatter.setLocalizedDateFormatFromTemplate("MMM")
         var markers: [(column: Int, label: String)] = []
         var seen = Set<String>()
@@ -5093,11 +5115,9 @@ private struct StatisticsHeatmap: View {
     }
 
     private var weekdayLabels: [String] {
-        let formatter = DateFormatter()
-        formatter.locale = localization.locale
-        let symbols = formatter.shortWeekdaySymbols ?? []
-        guard symbols.count == 7 else { return [] }
-        return symbols
+        return StatisticsCalendarDay.weekdaySymbols(
+            firstDate: days.first?.date, calendar: calendar, locale: localization.locale
+        )
     }
 
     var body: some View {
@@ -5129,6 +5149,7 @@ private struct StatisticsHeatmap: View {
                         }
                     }
                     .frame(width: gridWidth, height: 18, alignment: .leading)
+                    .padding(.leading, weekdayLabelWidth + 8)
 
                     HStack(alignment: .top, spacing: 8) {
                         VStack(alignment: .leading, spacing: cellSpacing) {
@@ -5138,7 +5159,7 @@ private struct StatisticsHeatmap: View {
                                     .foregroundStyle(.secondary)
                                     .frame(
                                         width: weekdayLabelWidth,
-                                        height: max(cellSize, 16),
+                                        height: cellSize,
                                         alignment: .leading
                                     )
                             }
@@ -5158,7 +5179,7 @@ private struct StatisticsHeatmap: View {
                                                 .fill(fillColor(for: day))
                                                 .overlay {
                                                     if let date = day.date,
-                                                       Calendar.current.isDateInToday(date) {
+                                                       calendar.isDateInToday(date) {
                                                         RoundedRectangle(cornerRadius: 2, style: .continuous)
                                                             .stroke(Color.accentColor, lineWidth: 1)
                                                     }
@@ -5191,6 +5212,8 @@ private struct StatisticsHeatmap: View {
     private func dateText(_ date: Date) -> String {
         let formatter = DateFormatter()
         formatter.locale = localization.locale
+        formatter.calendar = calendar
+        formatter.timeZone = calendar.timeZone
         formatter.dateStyle = .medium
         return formatter.string(from: date)
     }

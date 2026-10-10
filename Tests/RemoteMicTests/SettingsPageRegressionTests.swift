@@ -1772,6 +1772,41 @@ struct SettingsPageRegressionTests {
         #expect(sharePosition.lowerBound < metricsPosition.lowerBound)
     }
 
+    @MainActor
+    @Test(arguments: 0..<7)
+    func calendarEndsAtBottomRightForEveryWeekday(offset: Int) throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try #require(TimeZone(identifier: "Asia/Shanghai"))
+        let reference = try #require(calendar.date(from: DateComponents(year: 2026, month: 10, day: 10)))
+        let today = try #require(calendar.date(byAdding: .day, value: offset, to: reference))
+        let suite = "RemoteMicTests.Calendar.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let settings = AppSettings(defaults: defaults)
+        settings.recordButtonPress(at: today, calendar: calendar)
+        let days = StatisticsCalendarDay.recentDays(settings: settings, endingAt: today, calendar: calendar)
+        #expect(days.count == 26 * 7)
+        let dates = try days.map { try #require($0.date) }
+        #expect(dates.first == calendar.date(byAdding: .day, value: -181, to: today))
+        #expect(dates.last == today)
+        #expect(days.last?.buttonPressCount == 1)
+        for index in 1..<dates.count {
+            #expect(calendar.date(byAdding: .day, value: 1, to: dates[index - 1]) == dates[index])
+        }
+        for locale in [Locale(identifier: "zh_Hans"), Locale(identifier: "en")] {
+            let labels = StatisticsCalendarDay.weekdaySymbols(firstDate: dates.first, calendar: calendar, locale: locale)
+            let formatter = DateFormatter()
+            formatter.locale = locale
+            formatter.calendar = calendar
+            formatter.timeZone = calendar.timeZone
+            for row in 0..<7 {
+                let weekday = calendar.component(.weekday, from: dates[row]) - 1
+                #expect(labels[row] == formatter.shortWeekdaySymbols[weekday])
+                #expect(calendar.component(.weekday, from: dates[25 * 7 + row]) - 1 == weekday)
+            }
+        }
+    }
+
     @Test func profileMetricsKeepApprovedWideSingleRowLayout() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -1800,11 +1835,12 @@ struct SettingsPageRegressionTests {
         #expect(heatmapSource.contains("let cellSize = max("))
         #expect(heatmapSource.contains("min(\n                    28"))
         #expect(heatmapSource.contains("14,"))
-        #expect(heatmapSource.contains("height: max(cellSize, 16)"))
+        #expect(heatmapSource.contains("height: cellSize"))
         #expect(heatmapSource.contains("let index = column * 7 + row"))
-        #expect(heatmapSource.contains("return symbols"))
+        #expect(heatmapSource.contains("StatisticsCalendarDay.weekdaySymbols("))
         #expect(!heatmapSource.contains("Array(symbols.dropFirst()) + [symbols[0]]"))
-        #expect(source.contains("dailyUsageStatistics(days: 26 * 7, calendar: calendar)"))
+        #expect(source.contains("dailyUsageStatistics(endingAt: date, days: 26 * 7, calendar: calendar)"))
+        #expect(!source.contains("Array(repeating: StatisticsCalendarDay.empty"))
         #expect(source.contains("let rankingWidth = max(360, availableWidth * 0.42)"))
         #expect(source.contains("ProposedViewSize(width: rankingWidth, height: nil)"))
         #expect(source.contains("statisticsVoiceSessionRankingPanel"))
