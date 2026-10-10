@@ -1,5 +1,6 @@
 # Bug 记录
 
+- [Intel Mac 最小化后 Dock 图标回退为方形](./2026-10-10-intel-dock-rounded-app-icon.html)
 - [组合动作搜索与返回按键页](./2026-10-10-combination-action-search-and-return.html)
 
 - [回眸日期重复与倒序错乱](./2026-10-10-reflections-date-order.html)
@@ -109,6 +110,7 @@
 
 | 时间 | Bug | 状态 |
 | --- | --- | --- |
+| 2026-10-10 | [Intel Mac 最小化后 Dock 图标回退为方形](./2026-10-10-intel-dock-rounded-app-icon.html) | 最小修复与自动化通过；Apple Silicon 本机运行通过，真实 Intel Dock 仍待验收 |
 | 2026-10-08 | [音频重配在主线程访问 `AVAudioEngine.mainMixerNode` 导致 App 长时间无响应](./2026-10-07-audio-configure-blocks-main-thread.md)（Issue #596） | 候选修复；音频引擎重配已移出主线程，自动化通过，等待真实音频设备验收 |
 | 2026-10-03 | [蓝牙遥控器电量长时间停留在旧值](./2026-10-03-bluetooth-battery-level-stale.md)（Issue #463） | 候选修复与自动化完成，等待 RC001 / RC003 真机电量变化验收 |
 | 2026-09-13 | [Dock 偏好、系统媒体动作、音量摘要与窗口菜单回归](./2026-09-13-dock-media-window-actions.md)（Issues #386、#407、#412、#413） | 最小候选修复与 754 项自动化通过，等待真实 Dock、播放器与窗口菜单验收 |
