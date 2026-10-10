@@ -107,13 +107,13 @@ After you enable Revisit, SayAll keeps only final text entered through SayAll an
 - Setup tutorial: [Open the website tutorial](https://sayall.app/en/tutorial/).
 
 - Latest stable release (Apple Silicon): download it through the permanent [Cloudflare CDN entry](https://download.sayall.app/mac). The current stable entry provides only the Apple Silicon package and does not change between versions.
-- Latest pre-release (Apple Silicon / Intel): open [GitHub Releases](https://github.com/HD838A/remote-mic-app/releases), find the newest macOS candidate marked **Pre-release** in the release list, and download the DMG for your Mac architecture. Until a release containing the Intel package is promoted to stable, Intel users should download the latest pre-release DMG whose name includes `Intel`.
+- Latest pre-release (Apple Silicon / Intel): open [GitHub Releases](https://github.com/HD838A/remote-mic-app/releases), find the newest macOS candidate marked **Pre-release** in the release list, and download the Installer PKG for your Mac architecture.
 
-The Apple Silicon installer is named `Remote-Mic-<version>.dmg`; the Intel installer is named `Remote-Mic-<version>-Intel.dmg`. They are not interchangeable.
+The Apple Silicon installer is named `SayAll-<version>-Installer.pkg`; the Intel installer is named `SayAll-<version>-Intel-Installer.pkg`. They are not interchangeable.
 
-The DMG has one ordinary installation entry: double-click **Install SayAll.pkg** on Apple Silicon, or **Install SayAll Intel.pkg** on Intel Macs. It installs **SayAll.app** and checks the existing MiRemoteV 2ch. A healthy compatible driver is kept in place; a missing or unusable driver is installed or updated. Advanced users who need only the app can download the app-only ZIP from the same Release.
+Run the matching Installer PKG. It installs **SayAll.app** and checks the existing MiRemoteV 2ch. A healthy compatible driver is kept in place; a missing or unusable driver is installed or updated. Advanced users who need only the app can download the app-only ZIP from the same Release.
 
-Starting with v1.3.0, official release packages are signed with an Apple Developer ID and notarized by Apple. Download only through the official Cloudflare CDN entry or this project's GitHub Releases. To verify a DMG, use `Remote-Mic-<version>.dmg.sha256` from the same GitHub Release; it lists both architecture-specific DMGs by filename.
+Starting with v1.3.0, official release packages are signed with an Apple Developer ID and notarized by Apple. Download only through the official Cloudflare CDN entry or this project's GitHub Releases. Verify the GitHub asset digest or the PKG signature.
 
 ## First use
 
@@ -137,7 +137,7 @@ SayAll opens its main window by default on ordinary launches. The **About** page
 
 **App Language** displays **System Default**, **简体中文**, and **English** together. The settings window, status text, menu, and built-in help follow the selection. System permission prompts and third-party panels continue to use the language selected by macOS when they are next opened.
 
-The app checks for updates once per day and asks before installing a newer version; it does not silently download or install updates. **Check for Updates…** is available from both the About page and the right-click menu. **Check for pre-release updates** on the About page is off by default; when enabled, automatic and manual checks also include the latest GitHub pre-release candidate. Sparkle updates the app bundle only; the compatible microphone driver is managed by the installer in the DMG. If an older installation still uses the Remote Mic.app or 无线麦.app path, an in-app update keeps that existing path. Run the installer PKG from a new DMG once to migrate it to the canonical SayAll.app filename.
+The app checks for updates once per day and asks before installing a newer version; it does not silently download or install updates. **Check for Updates…** is available from both the About page and the right-click menu. **Check for pre-release updates** on the About page is off by default; when enabled, automatic and manual checks also include the latest GitHub pre-release candidate. Sparkle updates the app bundle only; the compatible microphone driver is managed by the standalone Installer PKG. If an older installation still uses the Remote Mic.app or 无线麦.app path, an in-app update keeps that existing path. Run a new Installer PKG once to migrate it to the canonical SayAll.app filename.
 
 ## Use voice input
 

@@ -107,13 +107,13 @@ Mac App 继续采用官网下载方式分发，Mac App Store 上架暂时暂停�
 - 配置教程：[打开官网配置教程](https://sayall.app/tutorial/)。
 
 - 最新正式版（Apple Silicon）：通过 [Cloudflare CDN 固定入口](https://download.sayall.app/mac) 下载。当前正式版入口仅提供 Apple Silicon 安装包，且不需要随版本更新。
-- 最新预览版（Apple Silicon / Intel）：前往 [GitHub Releases](https://github.com/HD838A/remote-mic-app/releases)，在发布列表中寻找最新标记为 **Pre-release** 的 macOS 候选版本，并按 Mac 芯片下载对应 DMG。在包含 Intel 安装包的版本晋升为正式版前，Intel 用户请下载名称带 `Intel` 的最新预览版 DMG。
+- 最新预览版（Apple Silicon / Intel）：前往 [GitHub Releases](https://github.com/HD838A/remote-mic-app/releases)，在发布列表中寻找最新标记为 **Pre-release** 的 macOS 候选版本，并按 Mac 芯片下载对应的 Installer PKG。
 
-Apple Silicon 安装包名为 `Remote-Mic-<版本>.dmg`，Intel 安装包名为 `Remote-Mic-<版本>-Intel.dmg`，两者不能混用。
+Apple Silicon 安装包名为 `SayAll-<版本>-Installer.pkg`，Intel 安装包名为 `SayAll-<版本>-Intel-Installer.pkg`，两者不能混用。
 
-打开 DMG 后只需双击唯一的 `Install SayAll.pkg`；Intel Mac 使用 `Install SayAll Intel.pkg`。安装器会把无线麦SayAll.app 安装为 `/Applications/SayAll.app`，并检查现有 `MiRemoteV 2ch`：健康且兼容时原样保留，缺失或不可用时才安装或更新。只需要 App、已经使用其他回环音频设备的高级用户，可从同一 Release 下载 App-only ZIP。
+运行对应的 Installer PKG。安装器会把无线麦SayAll.app 安装为 `/Applications/SayAll.app`，并检查现有 `MiRemoteV 2ch`：健康且兼容时原样保留，缺失或不可用时才安装或更新。只需要 App、已经使用其他回环音频设备的高级用户，可从同一 Release 下载 App-only ZIP。
 
-自 v1.3.0 起，正式发布包使用 Apple Developer ID 签名并已完成 Apple 公证。请只从官网 Cloudflare CDN 固定入口或本项目 GitHub Releases 下载；如需核验，请使用同一 GitHub Release 中的 `Remote-Mic-<版本>.dmg.sha256`，它会按文件名列出两种架构的 DMG。
+自 v1.3.0 起，正式发布包使用 Apple Developer ID 签名并已完成 Apple 公证。请只从官网 Cloudflare CDN 固定入口或本项目 GitHub Releases 下载，并按 GitHub 资产摘要或 PKG 签名完成核验。
 
 ## 首次使用
 
@@ -139,7 +139,7 @@ Apple Silicon 安装包名为 `Remote-Mic-<版本>.dmg`，Intel 安装包名为 
 
 “应用语言”会完整展示“跟随系统”“简体中文”和“English”三个选项。设置窗口、状态、菜单和内置帮助会随选择刷新；系统权限提示和第三方界面仍会在下次打开时按 macOS 自身的语言显示。
 
-应用每天自动检查一次更新，发现新版本后由用户确认是否安装；不会静默下载或自动安装。“关于”页面和右键菜单中的“检查更新…”均可随时手动检查。“关于”页的“检查预发布版本”默认关闭；开启后，自动检查和手动检查都会包含 GitHub 上最新的 pre-release 候选版本。Sparkle 仅更新应用本体，兼容麦克风驱动仍由 DMG 中的安装包管理。旧版如果仍安装在 `Remote Mic.app` 或 `无线麦.app` 路径，应用内更新会沿用原路径；要迁移到标准 `SayAll.app` 文件名，请运行一次新版 DMG 中的安装 PKG。
+应用每天自动检查一次更新，发现新版本后由用户确认是否安装；不会静默下载或自动安装。“关于”页面和右键菜单中的“检查更新…”均可随时手动检查。“关于”页的“检查预发布版本”默认关闭；开启后，自动检查和手动检查都会包含 GitHub 上最新的 pre-release 候选版本。Sparkle 仅更新应用本体，兼容麦克风驱动仍由独立 Installer PKG 管理。旧版如果仍安装在 `Remote Mic.app` 或 `无线麦.app` 路径，应用内更新会沿用原路径；要迁移到标准 `SayAll.app` 文件名，请运行一次新版 Installer PKG。
 
 ## 使用语音输入
 
@@ -163,7 +163,7 @@ Typeless 等点按 Fn 开始、再次点按结束的语音工具，与小米蓝�
 
 该模式仍然要求**按住小米蓝牙遥控器 2 或 2 Pro 语音键说话、松开结束**；这两款遥控器的固件在松开语音键后都不会继续发送麦克风音频，因此这不是持续录音或免按键模式。开关默认关闭；豆包输入法等使用 Fn 长按的工具应保持关闭。权限或遥控器 HID 映射不完整时，模式会自动关闭并恢复默认 Fn 长按映射。
 
-豆包输入法找不到普通虚拟麦克风时，请使用 DMG 中的 `Install SayAll.pkg`，然后在 SayAll.app 中选择 `MiRemoteV 2ch`。详细步骤见[豆包输入法兼容说明](Resources/豆包输入法兼容说明.md)。
+豆包输入法找不到普通虚拟麦克风时，请运行对应架构的 Installer PKG，然后在 SayAll.app 中选择 `MiRemoteV 2ch`。详细步骤见[豆包输入法兼容说明](Resources/豆包输入法兼容说明.md)。
 
 ![豆包输入法 Mac 版选择 MiRemoteV 2ch 麦克风](Screenshots/doubao-input-method-macos.png)
 
