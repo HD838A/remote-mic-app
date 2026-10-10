@@ -43,55 +43,13 @@ struct LocalizationTests {
         #expect(AppSettings(defaults: defaults).applicationLanguage == .simplifiedChinese)
     }
 
-    @Test func appLinksProvideThePublicTestFlightBetaEverywhere() throws {
-        let expectedURL = "https://testflight.apple.com/join/J8k8fb7v"
-        #expect(AppLinks.testFlightPublicBeta.absoluteString == expectedURL)
-
-        for readmeName in ["README.md", "README.en.md"] {
-            let readme = try String(
-                contentsOf: repositoryRoot.appendingPathComponent(readmeName),
-                encoding: .utf8
-            )
-            #expect(readme.contains(expectedURL))
-        }
-
-        let expression = try NSRegularExpression(
-            pattern: #"https://testflight\.apple\.com/join/[A-Za-z0-9]+"#
-        )
-        let allowedExtensions = Set([
-            "json", "md", "plist", "sh", "strings", "swift", "ts", "tsx", "yaml", "yml"
-        ])
-        let ignoredDirectories = Set([".build", ".git", ".swiftpm", "dist"])
-        let enumerator = try #require(
-            FileManager.default.enumerator(
-                at: repositoryRoot,
-                includingPropertiesForKeys: [.isDirectoryKey],
-                options: [.skipsHiddenFiles]
-            )
-        )
-        var referencedURLs: Set<String> = []
-
-        while let fileURL = enumerator.nextObject() as? URL {
-            let resourceValues = try fileURL.resourceValues(forKeys: [.isDirectoryKey])
-            if resourceValues.isDirectory == true {
-                if ignoredDirectories.contains(fileURL.lastPathComponent) {
-                    enumerator.skipDescendants()
-                }
-                continue
-            }
-            guard allowedExtensions.contains(fileURL.pathExtension.lowercased()),
-                  let contents = try? String(contentsOf: fileURL, encoding: .utf8)
-            else {
-                continue
-            }
-            let range = NSRange(contents.startIndex..., in: contents)
-            for match in expression.matches(in: contents, range: range) {
-                guard let matchRange = Range(match.range, in: contents) else { continue }
-                referencedURLs.insert(String(contents[matchRange]))
-            }
-        }
-
-        #expect(referencedURLs == [expectedURL])
+    @Test func appStoreLinksFollowTheSelectedLanguage() {
+        #expect(AppLinks.iOSAppStore(for: Locale(identifier: "zh-Hans")).absoluteString ==
+            "https://apps.apple.com/app/%E6%97%A0%E7%BA%BF%E9%BA%A6/id6797208067")
+        #expect(AppLinks.iOSAppStore(for: Locale(identifier: "zh-Hant")).absoluteString ==
+            AppLinks.chineseIOSAppStore.absoluteString)
+        #expect(AppLinks.iOSAppStore(for: Locale(identifier: "en")).absoluteString ==
+            "https://apps.apple.com/app/sayall/id6797208067")
     }
 
     @Test func readmesUseVersionIndependentMacDownloadEntries() throws {
@@ -174,9 +132,9 @@ struct LocalizationTests {
         #expect(english["remote.device.model.apple_siri_remote_a2854"] == "Apple Remote (7th Generation)")
         #expect(english["remote.device.model.apple_siri_remote_a2540"] == "Apple Remote (6th Generation)")
         #expect(english["remote.button.full.play_pause"] == "Play/Pause")
-        #expect(english["connection.web.title"] == "WeChat Mini Program & Web")
+        #expect(english["connection.web.title"] == "WeChat Mini Program SayAll")
         #expect(
-            english["connection.web.help_short"]?.contains("mini program") == true
+            english["connection.web.help_short"]?.contains("WeChat") == true
         )
 
         #expect(!english.isEmpty)
@@ -206,8 +164,8 @@ struct LocalizationTests {
                 #expect(localized["onboarding.voice_tool.system_fn.conflict"] == "系统仍在使用 Fn")
                 #expect(localized["remote.device.model.apple_siri_remote_a2854"] == "苹果遥控器第 7 代")
                 #expect(localized["remote.device.model.apple_siri_remote_a2540"] == "苹果遥控器第 6 代")
-                #expect(localized["connection.web.title"] == "微信小程序与网页版")
-                #expect(localized["connection.web.help_short"]?.contains("微信小程序") == true)
+                #expect(localized["connection.web.title"] == "微信小程序 SayAll")
+                #expect(localized["connection.web.help_short"]?.contains("微信小程序") == false)
             }
             #expect(Set(localized.keys) == Set(english.keys))
             #expect(Set(localizedInfo.keys) == Set(englishInfo.keys))

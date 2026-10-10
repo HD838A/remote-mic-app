@@ -478,7 +478,7 @@ struct SettingsView: View {
     @State private var configurationStatus: ConfigurationStatus?
     @State private var isClearTrustedPhonesConfirmationPresented = false
     @State private var isWebRemoteSessionPresented = false
-    @State private var isTestFlightLinkCopied = false
+    @State private var isAppStoreLinkCopied = false
     @State private var isMappingPermissionAlertPresented = false
     @State private var isWaitingForMappingPermissions = false
     @State private var expandedShareSection: SettingsSection?
@@ -649,7 +649,8 @@ struct SettingsView: View {
                 isWebRemoteSessionPresented = false
                 selectedSection = .membership
                 membershipFeature.refreshIfNeeded()
-            }
+            },
+            onDiagnostic: { AppLogger.shared.write($0) }
         )
     }
 
@@ -1005,6 +1006,27 @@ struct SettingsView: View {
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
+
+                            HStack(spacing: 8) {
+                                Link(destination: AppLinks.iOSAppStore(for: localization.locale)) {
+                                    Label("connection.phone.app_store_open", systemImage: "arrow.up.right.square")
+                                }
+                                .compatibilityButtonStyle(.standard)
+
+                                Button {
+                                    copyIOSAppStoreLink()
+                                } label: {
+                                    Label(
+                                        localization.text(
+                                            isAppStoreLinkCopied
+                                                ? "common.status.copied"
+                                                : "common.action.copy_link"
+                                        ),
+                                        systemImage: isAppStoreLinkCopied ? "checkmark" : "doc.on.doc"
+                                    )
+                                }
+                                .compatibilityButtonStyle(.standard)
+                            }
                         }
 
                         Spacer(minLength: 8)
@@ -1037,27 +1059,6 @@ struct SettingsView: View {
                         } else {
                             connectionMembershipRequiredView
                         }
-                    }
-
-                    HStack(spacing: 8) {
-                        Link(destination: AppLinks.testFlightPublicBeta) {
-                            Label("connection.web.invite.testflight_open", systemImage: "arrow.up.right.square")
-                        }
-                        .compatibilityButtonStyle(.standard)
-
-                        Button {
-                            copyTestFlightPublicBetaLink()
-                        } label: {
-                            Label(
-                                localization.text(
-                                    isTestFlightLinkCopied
-                                        ? "common.status.copied"
-                                        : "common.action.copy_link"
-                                ),
-                                systemImage: isTestFlightLinkCopied ? "checkmark" : "doc.on.doc"
-                            )
-                        }
-                        .compatibilityButtonStyle(.standard)
                     }
 
                     if membershipFeature.canStartCompanionConnection, let invitation = model.phoneRemoteInvitation {
@@ -4527,11 +4528,11 @@ struct SettingsView: View {
         openWebRemoteSession()
     }
 
-    private func copyTestFlightPublicBetaLink() {
+    private func copyIOSAppStoreLink() {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
-        isTestFlightLinkCopied = pasteboard.writeObjects([
-            AppLinks.testFlightPublicBeta.absoluteString as NSString
+        isAppStoreLinkCopied = pasteboard.writeObjects([
+            AppLinks.iOSAppStore(for: localization.locale).absoluteString as NSString
         ])
     }
 

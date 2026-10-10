@@ -94,3 +94,11 @@
 - 完整测试手册：[`Testing/FirstRunOnboarding.md`](../../Testing/FirstRunOnboarding.md)
 - 界面规范：[`design-qa.md`](../../design-qa.md)
 - 日志规范：[`LOGGING.md`](../../LOGGING.md)
+
+## 正式移动端入口
+
+- iPhone 安装入口使用 App Store 正式版；中英文分别显示无线麦和 SayAll。
+- 云端连接入口显示微信小程序 SayAll。设置弹窗和向导共用动态小程序码，取码失败只能重试。
+- 用户微信扫码一次后，小程序自动连接。动态码凭据只授权当前会话，不需数字验证或 Mac 再次批准。
+- 旧浏览器协议保持兼容，但当前 Mac 不显示浏览器或固定小程序码入口。
+- 真实连接、普通按键、音频和文字门禁不变；静态码或截图不得满足完成条件。

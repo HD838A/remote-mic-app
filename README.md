@@ -53,7 +53,7 @@
 
 [下载 Windows 预览版](https://github.com/GetSayAll/remote-mic-app-windows/releases/)
 
-iOS App 公测：[加入 TestFlight 公测](https://testflight.apple.com/join/J8k8fb7v)
+iOS 正式版：[无线麦](https://apps.apple.com/app/%E6%97%A0%E7%BA%BF%E9%BA%A6/id6797208067)
 
 Mac App 继续采用官网下载方式分发，Mac App Store 上架暂时暂停；当前 App Store 上架重点只包含 iOS App 与其内嵌的 Apple Watch App。
 
@@ -263,7 +263,7 @@ Typeless 等点按 Fn 开始、再次点按结束的语音工具，与小米蓝�
 
 ## 许可与来源
 
-本仓库中的 macOS App、驱动及相关软件代码采用 `GPL-3.0-only` 许可。iOS App 已由独立私有仓库维护，并继续通过上方 TestFlight 公测入口分发。macOS App 的 Logo 和 App Icon 是需要单独授权的专有品牌资产，详情见 [LOGO-LICENSE.md](LOGO-LICENSE.md)。完整版权和第三方信息见 [COPYRIGHT.md](COPYRIGHT.md) 与 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+本仓库中的 macOS App、驱动及相关软件代码采用 `GPL-3.0-only` 许可。iOS App 已由独立私有仓库维护，并继续通过上方 App Store 入口分发。macOS App 的 Logo 和 App Icon 是需要单独授权的专有品牌资产，详情见 [LOGO-LICENSE.md](LOGO-LICENSE.md)。完整版权和第三方信息见 [COPYRIGHT.md](COPYRIGHT.md) 与 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 
 项目最初 fork 自 [nijez/open-voice-bridge](https://github.com/nijez/open-voice-bridge)，现由本仓库独立维护。
 
