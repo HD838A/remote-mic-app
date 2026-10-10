@@ -796,6 +796,8 @@ struct SettingsView: View {
                         Button(localization.text("button_mapping.return_choose_macro")) {
                             returnsToMappingFromLibrary = false
                             preservesMappingContextOnNavigation = true
+                            mappingActionFilter = .custom
+                            mappingMacroSearch = ""
                             selectedSection = .mapping
                         }
                         .buttonStyle(.borderedProminent)
@@ -1609,13 +1611,14 @@ struct SettingsView: View {
 
     private func mappingMacroChoices(button: RemoteButton, trigger: ButtonTrigger,
                                      configured: ConfiguredButtonAction) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+        let searchQuery = mappingMacroSearch.trimmingCharacters(in: .whitespacesAndNewlines)
+        return VStack(alignment: .leading, spacing: 10) {
             Text(localization.text("action.combination_action")).font(.system(size: 14, weight: .semibold))
             TextField(localization.text("button_mapping.search_macros"), text: $mappingMacroSearch)
                 .textFieldStyle(.roundedBorder).font(.system(size: 13))
             VStack(spacing: 6) {
                 ForEach(macroFeature.libraryActions.filter {
-                    mappingMacroSearch.isEmpty || $0.name.localizedCaseInsensitiveContains(mappingMacroSearch)
+                    searchQuery.isEmpty || $0.name.localizedCaseInsensitiveContains(searchQuery)
                 }) { action in
                     Button {
                         var binding = configured
@@ -1643,6 +1646,9 @@ struct SettingsView: View {
                 Text(localization.text("button_mapping.macro_unavailable")).font(.system(size: 13)).foregroundStyle(.orange)
             }
             Button(localization.text("button_mapping.manage_macros")) {
+                mappingEditingTarget = ShortcutEditingTarget(button: button, trigger: trigger)
+                mappingActionFilter = .custom
+                mappingMacroSearch = ""
                 returnsToMappingFromLibrary = true
                 selectedSection = .macros
             }

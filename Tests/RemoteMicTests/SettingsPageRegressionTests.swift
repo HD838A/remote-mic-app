@@ -1923,4 +1923,22 @@ struct SettingsPageRegressionTests {
         #expect(source.contains("proxy.scrollTo(\"mapping-page-top\", anchor: .top)"))
         #expect(source.contains("Group {\n                    ScrollView(.vertical, showsIndicators: false)"))
     }
+
+    @Test func macroLibraryReturnRestoresOriginalButtonAndSearchContext() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+
+        #expect(source.contains("let searchQuery = mappingMacroSearch.trimmingCharacters(in: .whitespacesAndNewlines)"))
+        #expect(source.contains("searchQuery.isEmpty || $0.name.localizedCaseInsensitiveContains(searchQuery)"))
+        #expect(source.contains("mappingEditingTarget = ShortcutEditingTarget(button: button, trigger: trigger)"))
+        #expect(source.contains("mappingActionFilter = .custom"))
+        #expect(source.contains("mappingMacroSearch = \"\""))
+        #expect(source.contains("button_mapping.return_choose_macro"))
+    }
 }
