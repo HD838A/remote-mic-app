@@ -1,5 +1,6 @@
 #!/bin/zsh
 set -euo pipefail
+source "${0:A:h}/driver-naming.zsh"
 
 TARGET_VOLUME="${3:-/}"
 DRIVER_DESTINATION="${TARGET_VOLUME%/}/Library/Audio/Plug-Ins/HAL/MiRemoteV2ch.driver"
@@ -24,6 +25,7 @@ ITEM_DESTINATIONS=()
 MOVED_COUNT=0
 DRIVER_MOVED=0
 HCI_SERVICE_OWNED=0
+NAMING_QUEUED=0
 
 uses_chinese_locale() {
   local locale="${LC_ALL:-${LC_MESSAGES:-${LANG:-}}}"
@@ -76,6 +78,35 @@ queue_owned_driver() {
   ITEM_SOURCES+=("$DRIVER_DESTINATION")
   ITEM_LABELS+=("MiRemoteV2ch.driver")
   ITEM_KINDS+=("driver")
+}
+
+queue_owned_driver_naming() {
+  local directory recorded
+  NAMING_DIRECTORY="${TARGET_VOLUME%/}/Library/Application Support/RemoteMic/DriverNaming"
+  if [[ ! -e "$NAMING_DIRECTORY" && ! -L "$NAMING_DIRECTORY" ]]; then
+    print 'DRIVER_NAMING phase=uninstall_observed recorded=none'
+    return
+  fi
+  for directory in "${TARGET_VOLUME%/}/Library" \
+    "${TARGET_VOLUME%/}/Library/Application Support" "${NAMING_DIRECTORY:h}" "$NAMING_DIRECTORY"; do
+    if ! driver_naming_safe_directory "$directory"; then
+      print -u2 'DRIVER_NAMING phase=uninstall_blocked result=failed reason=unsafe_state_directory'
+      installer_message "卸载已停止：麦克风名称记录目录不可信。现有安装项已保留。" \
+        "Uninstallation stopped: the microphone naming directory is unsafe. Existing installation items were kept." >&2
+      return 2
+    fi
+  done
+  if ! recorded="$(driver_naming_record)"; then
+    print -u2 'DRIVER_NAMING phase=uninstall_blocked result=failed reason=invalid_state'
+    installer_message "卸载已停止：麦克风名称记录无法确认归属。现有安装项已保留。" \
+      "Uninstallation stopped: the microphone naming records could not be verified. Existing installation items were kept." >&2
+    return 2
+  fi
+  print -r -- "DRIVER_NAMING phase=uninstall_observed recorded=$recorded"
+  ITEM_SOURCES+=("$NAMING_DIRECTORY")
+  ITEM_LABELS+=("SayAllDriverNaming.state")
+  ITEM_KINDS+=("driver_naming")
+  NAMING_QUEUED=1
 }
 
 queue_owned_hci_service() {
@@ -185,6 +216,7 @@ for (( index=1; index<=${#APP_DESTINATIONS[@]}; index++ )); do
 done
 queue_owned_driver
 queue_owned_hci_service
+queue_owned_driver_naming
 
 if [[ "${#ITEM_SOURCES[@]}" -eq 0 ]]; then
   installer_message \
@@ -194,6 +226,7 @@ if [[ "${#ITEM_SOURCES[@]}" -eq 0 ]]; then
 fi
 
 if ! prepare_trash_root; then
+  print -u2 'DRIVER_NAMING phase=uninstall_blocked result=failed reason=trash_unavailable'
   installer_message \
     "卸载已停止：无法安全使用废纸篓，现有 App 和兼容麦克风均已保留。" \
     "Uninstallation stopped because Trash could not be used safely. The existing app and compatibility microphone were left intact." >&2
@@ -226,9 +259,14 @@ for (( index=1; index<=${#ITEM_SOURCES[@]}; index++ )); do
       "卸载 ${ITEM_LABELS[$index]} 失败；正在恢复本次已移动的项目。" \
       "Failed to uninstall ${ITEM_LABELS[$index]}; restoring items moved during this run." >&2
     rollback_moved_items
+    print -u2 'DRIVER_NAMING phase=uninstall_rollback result=failed reason=move_failed'
     exit 2
   fi
 done
+
+if [[ "$NAMING_QUEUED" -eq 1 ]]; then
+  print 'DRIVER_NAMING phase=uninstall_completed result=verified records=trashed'
+fi
 
 # The recognized items are already in Trash, so a failed audio-service restart
 # must not turn a successful uninstall into an installer error, and a real

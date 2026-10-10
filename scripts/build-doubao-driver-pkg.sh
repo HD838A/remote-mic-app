@@ -182,6 +182,8 @@ write_package_build_metadata "$INSTALL_SCRIPTS/release-variant.plist"
 write_package_build_metadata "$SIRI_REMOTE_INSTALL_SCRIPTS/release-variant.plist"
 /usr/bin/ditto --norsrc --noextattr --noqtn --noacl \
   "$ROOT/packaging/doubao-driver/uninstall" "$UNINSTALL_SCRIPTS"
+/usr/bin/ditto --norsrc --noextattr --noqtn --noacl \
+  "$ROOT/packaging/doubao-driver/install/driver-naming.zsh" "$UNINSTALL_SCRIPTS/driver-naming.zsh"
 
 run_release_stage installer-component-analysis "$RELEASE_PKGBUILD_TIMEOUT_SECONDS" \
   /usr/bin/pkgbuild \

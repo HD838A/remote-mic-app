@@ -124,7 +124,7 @@ for scenario in ['fresh_retry', 'history_retry', 'legacy_driver_retry', 'record_
     (volume/'Library/Application Support').mkdir(parents=True)
     destination = volume/'Library/Audio/Plug-Ins/HAL/MiRemoteV2ch.driver'
     naming = volume/'Library/Application Support/RemoteMic/DriverNaming'
-    expected = 'legacy' if scenario in ['history_retry','legacy_driver_retry'] else 'brand'
+    expected = 'legacy' if scenario == 'legacy_driver_retry' else 'brand'
     if scenario == 'history_retry': (volume/'fixture-receipt').write_text('owned-product-receipt')
     if scenario == 'legacy_driver_retry':
         subprocess.run(['ditto',str(output/'legacy/MiRemoteV2ch.driver'),str(destination)],check=True)
@@ -216,6 +216,7 @@ for scenario in ['legacy_stale_brand', 'brand_stale_legacy', 'legacy_two_records
         for variant in variants:
             marker = naming/variant; marker.write_text(f'SayAllDriverNaming:1:{variant}\n'); marker.chmod(0o600)
             old_records[variant] = marker.read_bytes()
+    if 'missing_driver' in scenario: expected = 'brand'
     settings = volume/'Users/fixture/Library/Preferences/com.hd838a.RemoteMic.plist'
     settings.parent.mkdir(parents=True)
     settings.write_bytes(plistlib.dumps({'selectedAudioDeviceUID':'MiRemoteV2ch_UID','fixtureSetting':'preserve'}))
@@ -309,6 +310,109 @@ for scenario in ['legacy_stale_brand', 'brand_stale_legacy', 'legacy_two_records
         backups = list((volume/'var/root/.Trash').glob('*.driver'))
         assert len(backups) == 1 and (backups[0]/'Contents/MacOS/MiRemoteV2ch').read_bytes() == before_binary
     print('recovery_scenario='+scenario+' install=passed retry=passed settings=preserved')
+# Execute production uninstall/preinstall/postinstall on isolated volumes.
+# These fixtures never start an App, access a real user home or modify system HAL.
+uninstall = (root/'packaging/doubao-driver/uninstall/postinstall').read_text()
+uninstall = uninstall.replace('/usr/bin/stat', 'fixture_stat').replace('/usr/sbin/chown', 'fixture_chown')
+uninstall = uninstall.replace('/bin/mv', 'fixture_mv')
+uninstall_stubs = full_stubs + '\n' + r'''fixture_mv() {
+ if [[ -f "$TARGET_VOLUME/fixture-move-failure" && "$3" == "$NAMING_DIRECTORY" ]]; then return 1; fi
+ /bin/mv "$@"
+}
+'''
+for scenario in ['legacy_uninstall', 'brand_uninstall', 'conflict_uninstall', 'names_only',
+                 'empty_state', 'move_retry', 'unsafe_retry', 'symlink_retry', 'foreign_entry_retry', 'old_uninstaller_residue']:
+    volume = work/('reinstall-'+scenario)
+    (volume/'Library/Application Support').mkdir(parents=True)
+    destination = volume/'Library/Audio/Plug-Ins/HAL/MiRemoteV2ch.driver'
+    naming = volume/'Library/Application Support/RemoteMic/DriverNaming'; naming.mkdir(parents=True)
+    variant = 'brand' if scenario == 'brand_uninstall' else 'legacy'
+    variants = ['brand','legacy'] if scenario == 'conflict_uninstall' else [variant]
+    if scenario == 'empty_state': variants = []
+    for name in variants:
+        marker = naming/name; marker.write_text(f'SayAllDriverNaming:1:{name}\n'); marker.chmod(0o600)
+    records = {p.name:p.read_bytes() for p in naming.iterdir()}
+    settings = volume/'Users/fixture/Library/Preferences/com.hd838a.RemoteMic.plist'
+    settings.parent.mkdir(parents=True)
+    settings.write_bytes(plistlib.dumps({'selectedAudioDeviceUID':'MiRemoteV2ch_UID','fixtureSetting':'preserve'}))
+    before_settings = settings.read_bytes()
+    (volume/'fixture-receipt').write_text('owned-product-receipt')
+    app = volume/'Applications/SayAll.app'
+    has_driver = scenario not in ['names_only','empty_state','old_uninstaller_residue']
+    if has_driver:
+        subprocess.run(['ditto',str(output/('' if variant == 'brand' else 'legacy')/'MiRemoteV2ch.driver'),str(destination)],check=True)
+        before_binary = (destination/'Contents/MacOS/MiRemoteV2ch').read_bytes()
+        subprocess.run(['ditto',str(work/'recovery-legacy_stale_brand/Applications/SayAll.app'),str(app)],check=True)
+    scripts = volume/'scripts'; scripts.mkdir()
+    (scripts/'driver-naming.zsh').write_text(f'FIXTURE_ARCH={arch}\n'+uninstall_stubs+helper)
+    (scripts/'uninstall').write_text(uninstall)
+    def run_uninstall(label):
+        result = subprocess.run(['/bin/zsh',str(scripts/'uninstall'),'fixture','fixture',str(volume)],capture_output=True,text=True)
+        (scripts/(label+'.log')).write_text(result.stdout+result.stderr)
+        return result
+    if scenario in ['move_retry','unsafe_retry','symlink_retry','foreign_entry_retry']:
+        if scenario == 'move_retry': (volume/'fixture-move-failure').write_text('injected')
+        elif scenario == 'unsafe_retry': (naming/'legacy').chmod(0o666)
+        elif scenario == 'symlink_retry':
+            (naming/'legacy').rename(volume/'original-marker')
+            (naming/'legacy').symlink_to(volume/'original-marker')
+        else: (naming/'foreign').write_text('unowned')
+        failed = run_uninstall('failed-uninstall')
+        assert failed.returncode != 0,(scenario,failed.stdout,failed.stderr)
+        reason = 'move_failed' if scenario == 'move_retry' else 'invalid_state'
+        assert f'reason={reason}' in failed.stderr
+        assert app.exists() and destination.exists() and naming.exists()
+        assert (destination/'Contents/MacOS/MiRemoteV2ch').read_bytes() == before_binary
+        assert settings.read_bytes() == before_settings
+        if scenario == 'move_retry':
+            assert {p.name:p.read_bytes() for p in naming.iterdir()} == records
+            (volume/'fixture-move-failure').rename(volume/'resolved-move-failure')
+        elif scenario == 'unsafe_retry': (naming/'legacy').chmod(0o600)
+        elif scenario == 'symlink_retry':
+            (naming/'legacy').rename(volume/'rejected-symlink')
+            (volume/'original-marker').rename(naming/'legacy')
+        else: (naming/'foreign').rename(volume/'preserved-foreign')
+    if scenario != 'old_uninstaller_residue':
+        result = run_uninstall('uninstall')
+        assert result.returncode == 0,(scenario,result.stdout,result.stderr)
+        assert 'phase=uninstall_completed result=verified records=trashed' in result.stdout
+        assert not naming.exists() and not destination.exists() and not app.exists()
+        backups = list((volume/'.Trashes/0').glob('SayAllDriverNaming*.state'))
+        assert len(backups) == 1
+        assert {p.name:p.read_bytes() for p in backups[0].iterdir()} == records
+    # The old 1.9.21 uninstaller leaves records/receipts/preferences with no HAL
+    # driver. Reproduce that final state without an external/network fixture.
+    assert settings.read_bytes() == before_settings
+    assert (volume/'fixture-receipt').read_text() == 'owned-product-receipt'
+    for attempt in [1,2]:
+        install_scripts = volume/f'install-scripts-{attempt}'; install_scripts.mkdir()
+        (install_scripts/'driver-naming.zsh').write_text(f'FIXTURE_ARCH={arch}\n'+full_stubs+helper)
+        (install_scripts/'preinstall').write_text(pre)
+        (install_scripts/'postinstall').write_text(full_post)
+        (install_scripts/'trash-legacy-app.zsh').write_bytes((root/'packaging/doubao-driver/install/trash-legacy-app.zsh').read_bytes())
+        (install_scripts/'release-variant.plist').write_bytes(plistlib.dumps({
+            'ExpectedArchitecture':arch,'MinimumSystemMajor':13,'MinimumSystemVersion':'13.0','PackageBuild':'999999'}))
+        result = subprocess.run(['/bin/zsh',str(install_scripts/'preinstall'),'fixture','fixture',str(volume)],capture_output=True,text=True)
+        (install_scripts/'preinstall.log').write_text(result.stdout+result.stderr)
+        assert result.returncode == 0,(scenario,result.stdout,result.stderr)
+        assert plistlib.loads((install_scripts/'driver-naming-selection.plist').read_bytes())['Variant'] == 'brand'
+        subprocess.run(['ditto',str(work/'recovery-legacy_stale_brand/Applications/SayAll.app'),str(app)],check=True)
+        staging = volume/'Library/Application Support/RemoteMic/Installer'
+        for name in ['brand','legacy']:
+            suffix = '' if name == 'brand' else 'legacy'
+            subprocess.run(['ditto',str(output/suffix/'MiRemoteV2ch.driver'),str(staging/suffix/'MiRemoteV2ch.driver')],check=True)
+        result = subprocess.run(['/bin/zsh',str(install_scripts/'postinstall'),'fixture','fixture',str(volume)],capture_output=True,text=True)
+        (install_scripts/'postinstall.log').write_text(result.stdout+result.stderr)
+        assert result.returncode == 0 and 'Installation is complete.' in result.stdout,(scenario,result.stdout,result.stderr)
+        assert 'phase=installed result=verified variant=brand' in result.stdout
+        if attempt == 2: assert 'changed=0' in result.stdout
+        subprocess.run(['codesign','--verify','--deep','--strict',str(destination)],check=True)
+        assert (destination/'Contents/MacOS/MiRemoteV2ch').read_bytes() == (output/'MiRemoteV2ch.driver/Contents/MacOS/MiRemoteV2ch').read_bytes()
+        assert len(list(destination.parent.glob('*.driver'))) == 1
+        assert list(p.name for p in naming.iterdir()) == ['brand']
+        assert settings.read_bytes() == before_settings
+    print('reinstall_scenario='+scenario+' uninstall=passed install=passed retry=passed settings=preserved'
+        if scenario != 'old_uninstaller_residue' else 'reinstall_scenario='+scenario+' install=passed retry=passed settings=preserved')
 # The developer entry point must use the same resolver and preserve restoration.
 direct = (root/'scripts/install-doubao-driver.sh').read_text()
 direct = direct[direct.index('installer_message() {'):direct.index('# The driver is already in place;')]
@@ -346,7 +450,7 @@ chown() { return 0; }
         assert not destination.exists()
         assert len(list((volume/'Trash').glob('*.driver')))==1
     else:
-        expected='legacy' if scenario in ['history','legacy_record'] else 'brand'
+        expected='brand'
         result = subprocess.run(['/bin/zsh','-c','source "$1"; driver_naming_variant "$2"','fixture',str(root/'packaging/doubao-driver/install/driver-naming.zsh'),str(destination)],capture_output=True,text=True,check=True)
         assert result.stdout.strip()==expected,(scenario,result.stdout)
     print('direct_scenario='+scenario+' result=passed')
