@@ -1,5 +1,6 @@
 # Bug 记录
 
+- [小程序连接码超时（-1101）](./2026-10-11-mini-program-code-timeout.md)
 - [Intel Mac 最小化后 Dock 图标回退为方形](./2026-10-10-intel-dock-rounded-app-icon.html)
 - [组合动作搜索与返回按键页](./2026-10-10-combination-action-search-and-return.html)
 
