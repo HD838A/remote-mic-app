@@ -101,7 +101,7 @@ final class HardwareAnnouncementStore: ObservableObject {
         logger("HARDWARE ANNOUNCEMENT request_started")
         var request = URLRequest(url: sourceURL())
         request.cachePolicy = .reloadIgnoringLocalCacheData
-        request.timeoutInterval = 12
+        request.timeoutInterval = 30
         let task = session.dataTask(with: request) { [weak self] data, response, error in
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }

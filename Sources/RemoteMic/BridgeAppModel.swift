@@ -2136,7 +2136,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         }
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
-        request.timeoutInterval = 10
+        request.timeoutInterval = 30
         request.setValue(idempotencyKey, forHTTPHeaderField: "Idempotency-Key")
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse,

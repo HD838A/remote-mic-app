@@ -100,7 +100,7 @@ enum UpdateFeedResolver {
     private static func loadFeedData(from url: URL) async throws -> Data {
         var request = URLRequest(url: url)
         request.cachePolicy = .reloadIgnoringLocalCacheData
-        request.timeoutInterval = 15
+        request.timeoutInterval = 30
         request.setValue("RemoteMic", forHTTPHeaderField: "User-Agent")
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let response = response as? HTTPURLResponse,
@@ -202,7 +202,7 @@ enum UpdateReleaseNotes {
     static func load(from url: URL) async throws -> String {
         var request = URLRequest(url: url)
         request.cachePolicy = .reloadIgnoringLocalCacheData
-        request.timeoutInterval = 15
+        request.timeoutInterval = 30
         request.setValue("RemoteMic", forHTTPHeaderField: "User-Agent")
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let response = response as? HTTPURLResponse,
