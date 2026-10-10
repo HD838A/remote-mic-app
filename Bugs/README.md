@@ -1,5 +1,7 @@
 # Bug 记录
 
+- [组合动作搜索与返回按键页](./2026-10-10-combination-action-search-and-return.html)
+
 - [回眸日期重复与倒序错乱](./2026-10-10-reflections-date-order.html)
 
 - [macOS Finder 与 Launchpad 图标出现银白色外框](./2026-10-05-macos-app-icon-system-wrapper.html)
