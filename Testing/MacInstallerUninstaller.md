@@ -4,7 +4,7 @@
 
 - 基线：`origin/main` `18b42243710ac80f27ec2d16c41741e8ba0d99e5`
 - 目标：macOS Apple Silicon 14+ 和 Intel Ventura 13
-- 安装资产：最终 Developer ID 签名、Apple 公证并 staple 的 DMG、`Install SayAll*.pkg` 和 standalone `Uninstall SayAll*.pkg`
+- 安装资产：最终 Developer ID 签名、Apple 公证并 staple 的 `SayAll-*-Installer.pkg` 和 standalone `SayAll-*-Uninstaller.pkg`
 - Siri Remote 系统服务是 Install PKG 中的可选组件，默认不选择；MiRemoteV 2ch 与无线麦SayAll.app仍是默认组件。
 
 ## 测试前准备
@@ -16,16 +16,15 @@
 
 ## 安装用例
 
-### 1. DMG 单入口与全新安装
+### 1. PKG 全新安装
 
-1. 挂载对应架构 DMG。
-2. 确认 Apple Silicon DMG 根目录只有 `Install SayAll.pkg`，Intel DMG 根目录只有 `Install SayAll Intel.pkg`；没有并列 App、Applications 快捷方式或 Uninstall PKG。
-3. 运行 Install PKG；进入“安装类型/自定安装”页面后，确认 `苹果遥控器 Siri Remote` 默认未勾选。
-4. 不勾选 Siri Remote，继续安装并完成管理员授权。
+1. 下载并运行对应架构的 Installer PKG。
+2. 进入“安装类型/自定安装”页面，确认 `苹果遥控器 Siri Remote` 默认未勾选。
+3. 不勾选 Siri Remote，继续安装并完成管理员授权。
 
 预期：`/Applications/SayAll.app` 与 `MiRemoteV 2ch` 安装完成，App 自动启动；`/Library/PrivilegedHelperTools/com.hd838a.SayAll.AppleRemoteHCIService` 和对应 LaunchDaemon 不被新安装创建；签名、公证、Gatekeeper、架构、最低系统与权限全部正确。
 
-失败判定：DMG 出现多个普通安装入口，或 App/driver 只安装其一，或未勾选时仍新建 Siri Remote 系统服务。
+失败判定：Installer PKG 缺少 App 或驱动，或未勾选时仍新建 Siri Remote 系统服务。
 
 ### 2. 按需安装 Siri Remote 支持
 
@@ -80,7 +79,7 @@
 
 ## 稳定功能回归
 
-- App-only ZIP 仍作为高级资产，不进入 DMG 根目录。
+- App-only ZIP 仍作为高级资产单独下载。
 - Sparkle 只更新 App，不隐式更改或卸载驱动。
 - 安装包不要求 Xcode 或 Command Line Tools。
 - Apple Silicon/Intel 错包会在 Installer.app 中显示可操作的错误提示。
@@ -95,7 +94,7 @@
 
 ## 自动化、代理实测与用户实测边界
 
-自动化可验证脚本语法、伪目标卷移动/碰撞/未知内容保护、PKG/DMG 结构、架构门禁和不含永久删除命令。代理可构建无签名包并在伪卷执行脚本，但不能替代真实管理员授权、用户废纸篓、Developer ID 签名/公证/Gatekeeper、Intel Ventura 和 CoreAudio 设备刷新。这些项必须由最终候选包完成用户实测。
+自动化可验证脚本语法、伪目标卷移动/碰撞/未知内容保护、PKG 结构、架构门禁和不含永久删除命令。代理可构建无签名包并在伪卷执行脚本，但不能替代真实管理员授权、用户废纸篓、Developer ID 签名/公证/Gatekeeper、Intel Ventura 和 CoreAudio 设备刷新。这些项必须由最终候选包完成用户实测。
 
 2026-09-06 已使用最终 Developer ID、公证并 staple 的 Apple Silicon 1.9.21 (174) 资产执行 Siri Remote 可选组件 E2E。默认不安装、主动选择安装、已有 Helper 覆盖升级不选择、卸载原路径、无管理员权限拒绝、GUI 默认值/勾选交互、App 启动和 CoreAudio 枚举均通过；Finder 废纸篓恢复、Installer.app secure UI 授权、无历史 receipt 新机和 Intel Ventura 仍待人工实机。计划见 `Testing/SiriRemoteOptionalPKGE2EPlan.md`，结果见 `Testing/SiriRemoteOptionalPKGE2EReport-2026-09-06.md`。
 
