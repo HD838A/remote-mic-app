@@ -168,6 +168,10 @@ final class AppIconController {
     init() {
         catalog = .live()
         applyImage = { image in
+            // Native AppKit and SwiftUI alerts read this named image, not the Dock override.
+            // Keep the bundle's opaque ICNS separate from the selected rounded runtime logo.
+            NSImage(named: NSImage.applicationIconName)?.setName(nil)
+            image.setName(NSImage.applicationIconName)
             NSApplication.shared.applicationIconImage = image
         }
     }

@@ -161,6 +161,14 @@ enum SettingsScreenshotRenderer {
         if ProcessInfo.processInfo.environment["REMOTE_MIC_SETTINGS_SCREENSHOT_MIXED_HISTORY"] == "1" {
             try seedMixedHistory(transcriptStore: transcriptStore, recordingStore: recordingStore)
         }
+        if interactive && onlySection == SettingsSection.transcripts.rawValue {
+            // Give interactive review a disposable record without accessing user history.
+            try transcriptStore.append(TranscriptRecord(
+                sessionID: UUID(), startedAt: Date().addingTimeInterval(-2), endedAt: Date(),
+                applicationName: "SayAll", bundleIdentifier: "com.sayall.screenshot",
+                source: .unknown, originalTranscript: "SayAll UI review"
+            ))
+        }
         let model = BridgeAppModel(
             settings: settings,
             commonPhraseStore: CommonPhraseStore(defaults: defaults),
@@ -188,6 +196,7 @@ enum SettingsScreenshotRenderer {
         model.membershipFeature.updateLocaleIdentifier(localization.locale.identifier)
 
         _ = NSApplication.shared
+        AppIconController().apply(settings.appIconIdentifier, source: "screenshot")
         let previousAppearance = NSApp.appearance
         NSApp.appearance = appearance
         defer { NSApp.appearance = previousAppearance }
