@@ -44,6 +44,24 @@ struct ButtonBindingConfigurationTests {
         #expect(settings.configuredAction(for: .home, trigger: .doubleClick, profileID: first) == .disabled)
     }
 
+    @Test func chosenCombinationActionPersistsForOnlyOriginalButton() throws {
+        let suite = "UnifiedButtons.MacroReturn.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let settings = AppSettings(defaults: defaults)
+        let originalDevice = settings.registerHIDRemote(fingerprint: "macro-return-original-device")
+        let otherDevice = settings.registerHIDRemote(fingerprint: "macro-return-other-device")
+        let baseline = settings.configuredBaseAction(for: .ok, trigger: .doubleClick, profileID: originalDevice)
+        let otherBaseline = settings.configuredBaseAction(for: .ok, trigger: .singleClick, profileID: otherDevice)
+        let chosen = ConfiguredButtonAction(action: .combinationAction, shortcut: nil, macroID: "local.return-choice")
+        settings.setBaseBinding(chosen, for: .ok, trigger: .singleClick, profileID: originalDevice)
+
+        let reopened = AppSettings(defaults: defaults)
+        #expect(reopened.configuredBaseAction(for: .ok, trigger: .singleClick, profileID: originalDevice) == chosen)
+        #expect(reopened.configuredBaseAction(for: .ok, trigger: .doubleClick, profileID: originalDevice) == baseline)
+        #expect(reopened.configuredBaseAction(for: .ok, trigger: .singleClick, profileID: otherDevice) == otherBaseline)
+    }
+
     @Test func versionTwoBackupRetainsMacroAndShortcutParameters() throws {
         let source = settings(), target = settings()
         let shortcut = CustomKeyboardShortcut(keyCode: 0, modifierFlags: .command, keyLabel: "A")

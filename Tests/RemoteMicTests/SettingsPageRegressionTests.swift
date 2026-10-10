@@ -1923,4 +1923,29 @@ struct SettingsPageRegressionTests {
         #expect(source.contains("proxy.scrollTo(\"mapping-page-top\", anchor: .top)"))
         #expect(source.contains("Group {\n                    ScrollView(.vertical, showsIndicators: false)"))
     }
+
+    @Test func macroLibraryNavigationKeepsSelectionAndClearsOnlySearch() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+
+        let choices = try #require(source.components(separatedBy: "private func mappingMacroChoices(").last)
+            .components(separatedBy: "private var mappingPageHeader")[0]
+        #expect(choices.contains("let searchQuery = mappingMacroSearch.trimmingCharacters(in: .whitespacesAndNewlines)"))
+        #expect(choices.contains("searchQuery.isEmpty || $0.name.localizedCaseInsensitiveContains(searchQuery)"))
+        let manage = try #require(choices.components(separatedBy: "button_mapping.manage_macros\")) {").last)
+        #expect(manage.contains("mappingEditingTarget = ShortcutEditingTarget(button: button, trigger: trigger)"))
+        #expect(manage.contains("mappingMacroSearch = \"\""))
+        let returnAction = try #require(source.components(separatedBy: "button_mapping.return_choose_macro\")) {").last)
+            .components(separatedBy: ".buttonStyle(.borderedProminent)")[0]
+        #expect(returnAction.contains("preservesMappingContextOnNavigation = true"))
+        #expect(returnAction.contains("mappingActionFilter = .custom"))
+        #expect(returnAction.contains("mappingMacroSearch = \"\""))
+        #expect(!returnAction.contains("saveMappingBinding"))
+    }
 }

@@ -1,0 +1,31 @@
+{
+  "window": "1020x772",
+  "privateCodeCommit": "b1637ef1",
+  "privateMergedCommit": "46989d0e352959234c9b9cf8a4a0a830d56c12ab",
+  "screenshots": [
+    {
+      "file": "returned-binding-zh-light.jpg",
+      "format": "JPEG",
+      "pixels": "2040x1544",
+      "bytes": 276718,
+      "sha256": "751bbb742b3b879d1cff1321c8ec4b049fc73c1bfcf384abed03aa4313515d76",
+      "source": "production NSWindow via CUA"
+    },
+    {
+      "file": "review-step-en-dark.jpg",
+      "format": "JPEG",
+      "pixels": "2040x1544",
+      "bytes": 173998,
+      "sha256": "9addab3db7a696739fbaa7d6510015a9bc69e9449b4370a07e140192ee742a9a",
+      "source": "production NSWindow via CUA"
+    },
+    {
+      "file": "review-step-zh-light.jpg",
+      "format": "JPEG",
+      "pixels": "2040x1544",
+      "bytes": 171775,
+      "sha256": "bca61e4c78556958045080164111d0423271fd729b38a20712a214cc784f64d1",
+      "source": "production NSWindow via CUA"
+    }
+  ]
+}
