@@ -9,19 +9,68 @@ private struct TranscriptApplicationSummary: Identifiable {
     let latestEndedAt: Date
 }
 
-private struct TranscriptDayGroup: Identifiable {
+struct TranscriptDayGroup: Identifiable {
     let id: String
-    let records: [TranscriptRecord]
+    let entries: [TranscriptHistoryEntry]
 }
 
-private struct RecordingDayGroup: Identifiable {
-    let id: String
-    let dateKey: String
-    let assets: [RecordingAssetManifest]
+enum TranscriptHistoryEntry: Identifiable {
+    case transcript(TranscriptRecord)
+    case recording(RecordingAssetManifest)
+
+    var id: UUID {
+        switch self {
+        case let .transcript(record): return record.sessionID
+        case let .recording(asset): return asset.sessionID
+        }
+    }
+
+    var endedAt: Date {
+        switch self {
+        case let .transcript(record): return record.endedAt
+        case let .recording(asset): return asset.endedAt
+        }
+    }
+
+    var localDateKey: String {
+        switch self {
+        case let .transcript(record): return record.localDateKey
+        case let .recording(asset): return asset.localDateKey
+        }
+    }
+
+    var timeZoneIdentifier: String {
+        switch self {
+        case let .transcript(record): return record.timeZoneIdentifier
+        case let .recording(asset): return asset.timeZoneIdentifier
+        }
+    }
 }
 
 enum TranscriptHistoryPresentationPolicy {
     static let recentWindow: TimeInterval = 7 * 24 * 60 * 60
+
+    static func dayGroups(
+        records: [TranscriptRecord],
+        assets: [RecordingAssetManifest],
+        applicationKey: String?,
+        now: Date
+    ) -> [TranscriptDayGroup] {
+        let transcriptSessionIDs = Set(records.map(\.sessionID))
+        let entries = visibleRecords(records, applicationKey: applicationKey, now: now)
+            .map(TranscriptHistoryEntry.transcript)
+            + visibleAssets(assets, applicationKey: applicationKey, now: now)
+                .filter { !transcriptSessionIDs.contains($0.sessionID) }
+                .map(TranscriptHistoryEntry.recording)
+        return Dictionary(grouping: entries, by: \.localDateKey)
+            .map { key, entries in
+                TranscriptDayGroup(id: key, entries: entries.sorted {
+                    if $0.endedAt == $1.endedAt { return $0.id.uuidString < $1.id.uuidString }
+                    return $0.endedAt > $1.endedAt
+                })
+            }
+            .sorted { $0.id > $1.id }
+    }
 
     static func visibleRecords(
         _ records: [TranscriptRecord],
@@ -129,45 +178,12 @@ struct TranscriptHistorySection: View {
     }
 
     private var dayGroups: [TranscriptDayGroup] {
-        let records = TranscriptHistoryPresentationPolicy.visibleRecords(
-            model.transcriptRecords,
+        TranscriptHistoryPresentationPolicy.dayGroups(
+            records: model.transcriptRecords,
+            assets: model.recordingAssets,
             applicationKey: activeApplicationKey,
             now: presentationNow
         )
-        return Dictionary(grouping: records, by: \.localDateKey)
-            .map { key, records in
-                TranscriptDayGroup(
-                    id: key,
-                    records: records.sorted { $0.endedAt > $1.endedAt }
-                )
-            }
-            .sorted {
-                ($0.records.first?.endedAt ?? .distantPast) >
-                    ($1.records.first?.endedAt ?? .distantPast)
-            }
-    }
-
-    private var recordingDayGroups: [RecordingDayGroup] {
-        let assets = TranscriptHistoryPresentationPolicy.visibleAssets(
-            model.recordingAssets,
-            applicationKey: activeApplicationKey,
-            now: presentationNow
-        )
-        let transcriptSessionIDs = Set(model.transcriptRecords.map(\.sessionID))
-        return Dictionary(grouping: assets, by: \.localDateKey)
-            .map { key, assets in
-                RecordingDayGroup(
-                    id: "recording-\(key)",
-                    dateKey: key,
-                    assets: assets
-                        .filter { !transcriptSessionIDs.contains($0.sessionID) }
-                        .sorted { $0.endedAt > $1.endedAt }
-                )
-            }
-            .filter { !$0.assets.isEmpty }
-            .sorted {
-                ($0.assets.first?.endedAt ?? .distantPast) > ($1.assets.first?.endedAt ?? .distantPast)
-            }
     }
 
     private var totalEntryCount: Int {
@@ -226,10 +242,6 @@ struct TranscriptHistorySection: View {
             logDisplayDiagnostics()
         }
         .onChange(of: dayGroups.map(\.id)) { _ in
-            normalizeExpandedDays()
-            logDisplayDiagnostics()
-        }
-        .onChange(of: recordingDayGroups.map(\.id)) { _ in
             normalizeExpandedDays()
             logDisplayDiagnostics()
         }
@@ -346,7 +358,7 @@ struct TranscriptHistorySection: View {
                 .padding(.horizontal, 8)
             }
 
-            if dayGroups.isEmpty && recordingDayGroups.isEmpty {
+            if dayGroups.isEmpty {
                 GlassPanel {
                     Text("statistics.transcripts.no_recent_records")
                         .font(.system(size: 13))
@@ -358,9 +370,6 @@ struct TranscriptHistorySection: View {
                 LazyVStack(alignment: .leading, spacing: 12) {
                     ForEach(dayGroups) { group in
                         dayGroupView(group)
-                    }
-                    ForEach(recordingDayGroups) { group in
-                        recordingDayGroupView(group)
                     }
                 }
             }
@@ -518,11 +527,11 @@ struct TranscriptHistorySection: View {
                     Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
                         .font(.system(size: 12, weight: .semibold))
                         .frame(width: 14)
-                    Text(dayTitle(for: group))
+                    Text(dayTitle(for: group.id, timeZoneIdentifier: group.entries.first?.timeZoneIdentifier))
                         .font(.system(size: 14, weight: .semibold))
                     Text("·")
                         .foregroundStyle(.tertiary)
-                    Text(localizedEntryCount(group.records.count))
+                    Text(localizedEntryCount(group.entries.count))
                         .font(.system(size: 12, weight: .medium))
                     Spacer(minLength: 12)
                 }
@@ -532,60 +541,22 @@ struct TranscriptHistorySection: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityValue(localizedEntryCount(group.records.count))
+            .accessibilityValue(localizedEntryCount(group.entries.count))
 
             Divider()
 
             if isExpanded {
                 VStack(alignment: .leading, spacing: 0) {
-                    ForEach(Array(group.records.enumerated()), id: \.element.id) {
-                        index, record in
-                        timelineRecordRow(
-                            record,
-                            isLast: index == group.records.count - 1
-                        )
+                    ForEach(Array(group.entries.enumerated()), id: \.element.id) { index, entry in
+                        switch entry {
+                        case let .transcript(record):
+                            timelineRecordRow(record, isLast: index == group.entries.count - 1)
+                        case let .recording(asset):
+                            recordingRow(asset, isLast: index == group.entries.count - 1)
+                        }
                     }
                 }
                 .transition(.opacity.combined(with: .move(edge: .top)))
-            }
-        }
-    }
-
-    private func recordingDayGroupView(_ group: RecordingDayGroup) -> some View {
-        let isExpanded = expandedDayKeys.contains(group.id)
-        return VStack(alignment: .leading, spacing: 0) {
-            Button {
-                withAnimation(.easeInOut(duration: 0.18)) {
-                    let key = group.id
-                    if expandedDayKeys.contains(key) { expandedDayKeys.remove(key) }
-                    else { expandedDayKeys.insert(key) }
-                }
-            } label: {
-                HStack(spacing: 9) {
-                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                        .font(.system(size: 12, weight: .semibold))
-                        .frame(width: 14)
-                        Text(dayTitle(for: group.dateKey, timeZoneIdentifier: group.assets.first?.timeZoneIdentifier))
-                        .font(.system(size: 14, weight: .semibold))
-                    Text("·")
-                        .foregroundStyle(.tertiary)
-                    Text(localizedEntryCount(group.assets.count))
-                        .font(.system(size: 12, weight: .medium))
-                    Spacer(minLength: 12)
-                }
-                .foregroundStyle(isExpanded ? Color.accentColor : Color.secondary)
-                .padding(.horizontal, 4)
-                .padding(.vertical, 9)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            Divider()
-            if isExpanded {
-                VStack(alignment: .leading, spacing: 0) {
-                    ForEach(Array(group.assets.enumerated()), id: \.element.id) { index, asset in
-                        recordingRow(asset, isLast: index == group.assets.count - 1)
-                    }
-                }
             }
         }
     }
@@ -811,9 +782,9 @@ struct TranscriptHistorySection: View {
             return
         }
 
-        let eligibleCount = dayGroups.reduce(0) { $0 + $1.records.count }
+        let eligibleCount = dayGroups.reduce(0) { $0 + transcriptCount(in: $1) }
         let displayedCount = dayGroups.reduce(0) { count, group in
-            count + (expandedDayKeys.contains(group.id) ? group.records.count : 0)
+            count + (expandedDayKeys.contains(group.id) ? transcriptCount(in: group) : 0)
         }
         guard displayedCount == 0 else {
             lastDisplayDiagnosticSignature = nil
@@ -851,7 +822,7 @@ struct TranscriptHistorySection: View {
     }
 
     private func normalizeExpandedDays() {
-        let validKeys = Set(dayGroups.map(\.id) + recordingDayGroups.map(\.id))
+        let validKeys = Set(dayGroups.map(\.id))
         expandedDayKeys.formIntersection(validKeys)
         if expandedDayKeys.isEmpty {
             expandedDayKeys.formUnion(newestExpandableDayKeys)
@@ -863,19 +834,14 @@ struct TranscriptHistorySection: View {
     }
 
     private var newestExpandableDayKeys: Set<String> {
-        var keys = Set<String>()
-        let newestTranscriptDate = dayGroups.first?.id
-        let newestRecordingDate = recordingDayGroups.first?.dateKey
-        let newestDate = [newestTranscriptDate, newestRecordingDate]
-            .compactMap { $0 }
-            .max()
-        if let newestTranscriptDate, newestTranscriptDate == newestDate {
-            keys.insert(newestTranscriptDate)
+        Set(dayGroups.prefix(1).map(\.id))
+    }
+
+    private func transcriptCount(in group: TranscriptDayGroup) -> Int {
+        group.entries.reduce(0) { count, entry in
+            if case .transcript = entry { return count + 1 }
+            return count
         }
-        if let newestRecordingDate, newestRecordingDate == newestDate {
-            keys.insert("recording-\(newestRecordingDate)")
-        }
-        return keys
     }
 
     private func toggleDay(_ dayKey: String) {
@@ -930,24 +896,6 @@ struct TranscriptHistorySection: View {
             model.deleteAllTranscripts()
             model.deleteAllRecordings()
         }
-    }
-
-    private func dayTitle(for group: TranscriptDayGroup) -> String {
-        guard let record = group.records.first,
-              let timeZone = TimeZone(identifier: record.timeZoneIdentifier)
-        else { return group.id }
-        let parser = DateFormatter()
-        parser.locale = Locale(identifier: "en_US_POSIX")
-        parser.calendar = Calendar(identifier: .gregorian)
-        parser.timeZone = timeZone
-        parser.dateFormat = "yyyy-MM-dd"
-        guard let date = parser.date(from: group.id) else { return group.id }
-        let formatter = DateFormatter()
-        formatter.locale = localization.locale
-        formatter.timeZone = timeZone
-        formatter.dateStyle = .long
-        formatter.timeStyle = .none
-        return formatter.string(from: date)
     }
 
     private func dayTitle(for dayKey: String, timeZoneIdentifier: String?) -> String {
