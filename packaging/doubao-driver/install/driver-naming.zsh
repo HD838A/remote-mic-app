@@ -1,4 +1,4 @@
-# Shared by preinstall and postinstall. No user preference is written here.
+# Shared by install and uninstall scripts. No user preference is written here.
 # All values written to installer diagnostics are fixed enums.
 driver_naming_failure() {
   print -u2 'DRIVER_NAMING phase=blocked result=failed reason='"$1"
@@ -62,17 +62,9 @@ resolve_driver_naming() {
         *) return 1 ;;
       esac ;;
     none)
-      case "$recorded" in
-        brand|legacy) print -r -- "$recorded" ;;
-        conflict) print legacy ;;
-        none)
-          case "$history_evidence" in
-            yes) print legacy ;;
-            no) print brand ;;
-            *) return 1 ;;
-          esac ;;
-        *) return 1 ;;
-      esac ;;
+      # Older uninstallers leave records, receipts and preferences behind.
+      # With no product driver to preserve, install the current SayAll name.
+      print brand ;;
     *) return 1 ;;
   esac
 }

@@ -375,6 +375,12 @@ case "$MODE" in
       "$PAYLOAD_APP/Contents/Resources/zh-Hans.lproj/InfoPlist.strings"
     ;;
   uninstall)
+    test -f "$EXPANDED/Scripts/driver-naming.zsh"
+    /usr/bin/cmp "$ROOT/packaging/doubao-driver/install/driver-naming.zsh" "$EXPANDED/Scripts/driver-naming.zsh"
+    /usr/bin/grep -Fq 'source "${0:A:h}/driver-naming.zsh"' "$EXPANDED/Scripts/postinstall"
+    /usr/bin/grep -Fq 'queue_owned_driver_naming' "$EXPANDED/Scripts/postinstall"
+    /usr/bin/grep -Fq 'ITEM_KINDS+=("driver_naming")' "$EXPANDED/Scripts/postinstall"
+    /usr/bin/grep -Fq 'phase=uninstall_completed result=verified records=trashed' "$EXPANDED/Scripts/postinstall"
     test -f "$PACKAGE_INFO"
     /usr/bin/grep -Fq 'identifier="com.hd838a.MiRemoteV2ch.uninstaller"' "$PACKAGE_INFO"
     if /usr/bin/grep -Fq '<payload ' "$PACKAGE_INFO"; then
