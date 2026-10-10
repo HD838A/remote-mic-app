@@ -15,6 +15,7 @@
 - [Dock 偏好、系统媒体动作、音量摘要与窗口菜单回归](./2026-09-13-dock-media-window-actions.md)
 - [休眠期间仍持续蓝牙扫描和重连](./2026-09-29-sleeping-ble-scan-and-reconnect.md)
 - [个人中心日历按行读取连续日期，导致星期标签与日期错位](./2026-09-29-profile-calendar-weekday-layout.md)
+- [使用日历最后一格未锚定当天](./2026-10-10-calendar-ending-today.html)
 - [自定义组合快捷键缺少修饰键释放](./2026-09-16-custom-shortcut-missing-modifier-release.md)
 - [后台长时间运行后累积大量 event tap，导致全系统界面卡顿](./2026-09-27-event-tap-port-not-invalidated.md)
 - [同机多账户切回自己账户后遥控器按键可用但麦克风不拾音](./2026-09-26-multi-user-session-switch-mic-no-audio.md)
@@ -113,6 +114,7 @@
 | 2026-09-13 | [Dock 偏好、系统媒体动作、音量摘要与窗口菜单回归](./2026-09-13-dock-media-window-actions.md)（Issues #386、#407、#412、#413） | 最小候选修复与 754 项自动化通过，等待真实 Dock、播放器与窗口菜单验收 |
 | 2026-09-29 | [休眠期间仍持续蓝牙扫描和重连](./2026-09-29-sleeping-ble-scan-and-reconnect.md)（Issue #441） | 候选修复与定向自动化通过，等待真实整夜休眠、实体遥控器和 `pmset` 验收 |
 | 2026-09-29 | [个人中心日历按行读取连续日期，导致星期标签与日期错位](./2026-09-29-profile-calendar-weekday-layout.md)（Issue #444） | 最小修复、自动化、Release App 与生产截图验证通过，等待真实页面点击验收 |
+| 2026-10-10 | [使用日历最后一格未锚定当天](./2026-10-10-calendar-ending-today.html) | 连续日期修复、自动化、生产截图与本机页面点击通过，用户真实统计待复验 |
 | 2026-09-27 | [后台长时间运行后累积大量 event tap，导致全系统界面卡顿](./2026-09-27-event-tap-port-not-invalidated.md) | 修复完成；构建、定向回归与修复前后对照通过，等待真机长时间运行与遥控器反复重连验收 |
 | 2026-09-26 | [同机多账户切回自己账户后遥控器按键可用但麦克风不拾音](./2026-09-26-multi-user-session-switch-mic-no-audio.md)（Issue #497） | 未复现、根因未确认；已补针对性日志与受门控的会话恢复，等待双账户真机复现验收 |
 | 2026-09-21 | [Onboarding 语音文字在松键后消失](./2026-09-21-onboarding-voice-text-disappears-on-release.md) | 修复已实现，等待微信输入法、豆包、Typeless 与实体遥控器真实验收 |
