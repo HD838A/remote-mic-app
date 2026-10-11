@@ -2,9 +2,9 @@
 
 ## 范围与准备
 
-- 宿主和私有平台分支：`codex/unified-button-configuration`，源码候选；产品行为见[按键规范](../feature/button-mapping/PRODUCT_SPEC.md)。
+- 当前主线的源码集成与固定私有二进制集成均适用；产品行为见[按键规范](../feature/button-mapping/PRODUCT_SPEC.md)。下方带日期的候选记录保留为历史证据。
 - 免费 `macos-combination-actions` 与付费 `macos-button-profiles` 必须来自同一候选私有 checkout。
-  当前发布用固定二进制仍使用兼容接口，未由本轮升级或发布。
+  固定私有二进制集成也必须启用统一按键配置，不得退回缺少动作列表和引用位置的兼容路径。
 - 使用独立测试账户/数据目录，先导出旧配置并保留原免费模块绑定文件。不得用测试导入覆盖日常配置。
 - 准备两台可配置遥控器、两个目标 App、本机辅助功能/输入监控权限，以及具备 Plus 权益的方案环境。
   测试脚本只使用 `printf`、`sleep` 和简单 AppleScript 返回值，不读取第三方 App 私有数据。
@@ -12,7 +12,7 @@
 
 ## 自动化入口
 
-本地命令全部保留 `--disable-keychain`。三种宿主配置使用不同 scratch，避免旧模块产物影响 `canImport`：
+本地命令全部保留 `--disable-keychain`。各宿主配置使用不同 scratch，避免旧模块产物影响 `canImport`：
 
 ```sh
 SAYALL_COMBINATION_ACTIONS_PATH='' SAYALL_BUTTON_PROFILES_PACKAGE_PATH='' \
@@ -26,10 +26,16 @@ SAYALL_COMBINATION_ACTIONS_PATH=/path/to/private/packages/macos-combination-acti
 SAYALL_BUTTON_PROFILES_PACKAGE_PATH=/path/to/private/packages/macos-button-profiles \
 SAYALL_TEST_BUTTON_PROFILES_FREE=1 \
 swift test --disable-keychain --scratch-path .build/unified-paid
+
+SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH=/path/to/prepared-private-artifacts \
+SAYALL_COMBINATION_ACTIONS_PATH='' SAYALL_BUTTON_PROFILES_PACKAGE_PATH='' \
+swift build --disable-keychain --scratch-path .build/unified-binary -c release
 ```
 
 测试权益变量仅用于源码自动化和隔离 UI 数据，不得进入发布包。私有两 Package 分别执行完整 `swift test --disable-keychain`。
 宿主继续执行 `scripts/test.sh`、`scripts/check-repository-boundaries.sh`、`scripts/verify-repository-governance.sh` 和 `git diff --check`。
+
+`BuildSigningTests.binaryArtifactsEnableUnifiedButtonConfiguration` 实际求值 SwiftPM 清单：公开配置不启用统一接口，私有二进制配置同时为宿主和测试目标启用该接口。最终签名包必须再完成下方真实点击；源码配置通过不能替代二进制包验收。
 
 ## 页面和绑定
 
@@ -43,7 +49,7 @@ swift test --disable-keychain --scratch-path .build/unified-paid
 | 在按键编辑区打开组合动作 | 搜索框较短；未输入搜索词时显示前 10 个动作；点击动作即可绑定 | 搜索框不能输入、动作列表为空或点击后未绑定 |
 | 在按键页搜索组合动作，输入前后空格、改变大小写、清空 | 按名称或 ID 匹配；首尾空格不影响结果；清空恢复前 10 个动作 | 已有动作因空格或大小写无法找到，或清空后列表不恢复 |
 | 在组合动作详情查看绑定位置 | “使用此动作的位置”下显示全部绑定按键；没有绑定时显示“绑定到按键” | 只显示一个位置、显示“尚未绑定按键”或缺少按钮 |
-| 从组合动作详情点击“绑定到按键” | 返回按键页并显示组合动作选择区 | 仍停留在组合动作页或显示底部旧返回按钮 |
+| 从组合动作详情点击“绑定到按键” | 返回按键页；选择目标按键后，可选择组合动作；不自动绑定 | 仍停留在组合动作页或显示底部旧返回按钮 |
 | 编辑被多个位置引用的动作 | 引用位置均使用最新保存内容 | 只影响其中一处或按名称猜测 |
 | 在动作页查看引用，点击引用 | 跳到对应设备/方案/按键/触发方式 | 串到默认小米设备或生效方案 |
 | 删除动作前查看影响范围，再删除 | 引用保留并提示不可用；触发安全停止 | 自动执行基础、其他宏或默认动作 |
@@ -321,3 +327,14 @@ Siri Remote/Chromecast 属于已实现适配的源码候选，不能宣称真机
 本地结果：公开配置842项、免费组件集成850项、自检48项、组件115项（2项既有市场路径跳过）、边界及治理通过。SwiftPM命令均带 `--disable-keychain`。生产1020×772隔离窗口完成创建、保存、库搜索、返回、按键页搜索、选择和重开；未执行真实遥控器或第三方动作。截图和摘要见 `Screenshots/combination-action-pr-review-20261010/manifest.json`。
 
 原现场日志缺失；未确认原报告是持久化失败。真实设备触发、旧用户数据迁移和付费方案仍待现场验证。此次为源码修复，不交付安装包。
+
+
+## 2026-10-11 私有二进制统一接口修复
+
+Build 245 的实际窗口发现：动作库有数据，按键页列表为空。根因和清单失败实验见[独立修复记录](../Bugs/2026-10-11-binary-button-integration.md)。
+
+修复后，公开完整测试848项、BuildSigningTests 27项、自检48项通过。固定私有二进制的Apple Silicon和Intel Release编译通过。SwiftPM命令均带 `--disable-keychain`。边界、治理、依赖pin和diff检查通过。
+
+使用修复代码及固定私有二进制，实际点击内部Developer ID App。生产窗口为1020×772，测试数据为12个QA动作。空查询只显示前十项；首尾空格、大小写和ID搜索通过。点击保存、重开及正常重启保留绑定。同一动作绑定两个按键后，详情显示两个使用位置。未绑定动作显示“绑定到按键”；点击后返回按键页，须重新选择目标按键。
+
+三张原始JPEG的格式、尺寸和SHA-256见[截图清单](../Screenshots/binary-button-integration/manifest.json)。测试结束后恢复原用户配置。该内部App未公证，不用于分发，也不替代最终公证包及真实Sparkle验收。实体遥控器、第三方最终执行及语音首尾完整性仍待现场验证。

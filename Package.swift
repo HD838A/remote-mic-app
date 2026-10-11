@@ -79,11 +79,11 @@ let sourceMacroCapabilitiesAvailable = combinationActionsPackagePath.map {
             .path
     )
 } ?? false
-let unifiedButtonConfigurationAvailable = combinationActionsPackagePath.map {
+let privateArtifactsAvailable = !(privateArtifactPackagePath ?? "").isEmpty
+let unifiedButtonConfigurationAvailable = privateArtifactsAvailable || (combinationActionsPackagePath.map {
     FileManager.default.fileExists(atPath: URL(fileURLWithPath: $0)
         .appendingPathComponent("Sources/SayAllMacroRemoteMic/UnifiedButtonConfiguration.swift").path)
-} ?? false
-let privateArtifactsAvailable = !(privateArtifactPackagePath ?? "").isEmpty
+} ?? false)
 let macroCapabilitiesAvailable = sourceMacroCapabilitiesAvailable || privateArtifactsAvailable
 let buttonProfilesTestAccessEnabled = ProcessInfo.processInfo.environment[
     "SAYALL_TEST_BUTTON_PROFILES_FREE"
