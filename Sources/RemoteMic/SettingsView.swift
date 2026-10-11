@@ -3736,6 +3736,8 @@ struct SettingsView: View {
                             if macroFeature.isFeatureVisible {
                                 Text(localization.text("settings.portable_configuration.title"))
                                     .font(.system(size: 12, weight: .medium))
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.top, 8)
                                 macroFeature.portableTransferView(profileID: settings.selectedRemoteProfileID,
                                     model: settings.selectedRemoteProfile?.model)
                             }
