@@ -60,6 +60,7 @@ final class MembershipFeatureIntegration: ObservableObject, @unchecked Sendable 
     @Published private(set) var isEnvironmentSettingsVisible = false
     @Published private(set) var buttonProfilesAccessDecision: HostButtonProfilesAccessDecision = .unavailable
     @Published private(set) var canUseCompanionConnections = false
+    @Published private(set) var canUseCommonPhrases = false
     @Published private(set) var accountDisplayName: String? = nil
     @Published private(set) var serviceEnvironmentForDiagnostics = "unavailable"
 
@@ -116,6 +117,54 @@ final class MembershipFeatureIntegration: ObservableObject, @unchecked Sendable 
     func settingsView() -> AnyView {
         #if SAYALL_MEMBERSHIP_ENABLED && canImport(SayAllMembershipHostAdapter)
         adapter?.settingsView() ?? AnyView(EmptyView())
+        #else
+        AnyView(EmptyView())
+        #endif
+    }
+
+    func openCommonPhrases(source: String = "host_action") -> Bool {
+        #if SAYALL_MEMBERSHIP_ENABLED && canImport(SayAllMembershipHostAdapter)
+        MainActor.assumeIsolated { adapter?.openCommonPhrases(source: source) ?? false }
+        #else
+        false
+        #endif
+    }
+
+    func claimsCommonPhrase(button: String, source: String) -> Bool {
+        #if SAYALL_MEMBERSHIP_ENABLED && canImport(SayAllMembershipHostAdapter)
+        MainActor.assumeIsolated { adapter?.claimsCommonPhrase(button: button, source: source) ?? false }
+        #else
+        false
+        #endif
+    }
+
+    func handleCommonPhrase(button: String, phase: String, source: String) -> Bool {
+        #if SAYALL_MEMBERSHIP_ENABLED && canImport(SayAllMembershipHostAdapter)
+        MainActor.assumeIsolated { adapter?.handleCommonPhrase(button: button, phase: phase, source: source) ?? false }
+        #else
+        false
+        #endif
+    }
+
+    func resetCommonPhrases(source: String) {
+        #if SAYALL_MEMBERSHIP_ENABLED && canImport(SayAllMembershipHostAdapter)
+        MainActor.assumeIsolated { adapter?.resetCommonPhrases(source: source) }
+        #endif
+    }
+
+    func closeCommonPhrases(reason: String = "host_close") {
+        #if SAYALL_MEMBERSHIP_ENABLED && canImport(SayAllMembershipHostAdapter)
+        MainActor.assumeIsolated { adapter?.closeCommonPhrases(reason: reason) }
+        #endif
+    }
+
+    @MainActor
+    func commonPhrasesSettingsView(
+        onOpenMembership: @escaping () -> Void = {},
+        onReturn: @escaping () -> Void = {}
+    ) -> AnyView {
+        #if SAYALL_MEMBERSHIP_ENABLED && canImport(SayAllMembershipHostAdapter)
+        adapter?.commonPhrasesSettingsView(onReturn: onReturn, onOpenMembership: onOpenMembership) ?? AnyView(EmptyView())
         #else
         AnyView(EmptyView())
         #endif
@@ -215,6 +264,8 @@ final class MembershipFeatureIntegration: ObservableObject, @unchecked Sendable 
             .sink { [weak self] in self?.buttonProfilesAccessDecision = $0 }.store(in: &subscriptions)
         adapter.$canUseCompanionConnections.removeDuplicates().receive(on: RunLoop.main)
             .sink { [weak self] in self?.canUseCompanionConnections = $0 }.store(in: &subscriptions)
+        adapter.$canUseCommonPhrases.removeDuplicates().receive(on: RunLoop.main)
+            .sink { [weak self] in self?.canUseCommonPhrases = $0 }.store(in: &subscriptions)
         adapter.$accountDisplayName.removeDuplicates().receive(on: RunLoop.main)
             .sink { [weak self] in self?.accountDisplayName = $0 }.store(in: &subscriptions)
         adapter.$serviceEnvironmentForDiagnostics.removeDuplicates().receive(on: RunLoop.main)

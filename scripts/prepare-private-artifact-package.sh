@@ -49,6 +49,8 @@ EXPECTED_ARCHIVES=(
   SayAllMembership_SayAllMembershipUI.bundle.zip
   SayAllCombinationActions_SayAllMacroRemoteMic.bundle.zip
   SayAllButtonProfiles_SayAllButtonProfiles.bundle.zip
+  SayAllCommonPhrases.xcframework.zip
+  SayAllCommonPhrases_SayAllCommonPhrases.bundle.zip
 )
 EXPECTED_CHECKSUM_PATHS="$(printf './%s\n' "${EXPECTED_ARCHIVES[@]}" | LC_ALL=C sort)"
 ACTUAL_CHECKSUM_PATHS="$(awk '{print $2}' "$RELEASE_DIRECTORY/SHA256SUMS" | LC_ALL=C sort)"
@@ -76,12 +78,14 @@ if ! jq -e '
     "SayAllMacroCore",
     "SayAllMacroMacOS",
     "SayAllMacroRemoteMic",
-    "SayAllButtonProfiles"
+    "SayAllButtonProfiles",
+    "SayAllCommonPhrases"
   ] and
   .resource_bundles == [
     "SayAllMembership_SayAllMembershipUI.bundle",
     "SayAllCombinationActions_SayAllMacroRemoteMic.bundle",
-    "SayAllButtonProfiles_SayAllButtonProfiles.bundle"
+    "SayAllButtonProfiles_SayAllButtonProfiles.bundle",
+    "SayAllCommonPhrases_SayAllCommonPhrases.bundle"
   ]
 ' "$RELEASE_DIRECTORY/provenance.json" >/dev/null; then
   print -u2 "private artifact provenance is invalid, dirty, or incompatible"
@@ -135,7 +139,8 @@ for module_name in \
   SayAllMacroCore \
   SayAllMacroMacOS \
   SayAllMacroRemoteMic \
-  SayAllButtonProfiles; do
+  SayAllButtonProfiles \
+  SayAllCommonPhrases; do
   unzip -q "$RELEASE_DIRECTORY/$module_name.xcframework.zip" \
     -d "$STAGING_DIRECTORY/Artifacts"
   framework="$STAGING_DIRECTORY/Artifacts/$module_name.xcframework/macos-arm64_x86_64/$module_name.framework"
@@ -174,6 +179,9 @@ unzip -q "$RELEASE_DIRECTORY/SayAllButtonProfiles_SayAllButtonProfiles.bundle.zi
   -d "$STAGING_DIRECTORY/Resources"
 test -f "$STAGING_DIRECTORY/Resources/SayAllButtonProfiles_SayAllButtonProfiles.bundle/Contents/Resources/en.lproj/Localizable.strings"
 test -f "$STAGING_DIRECTORY/Resources/SayAllButtonProfiles_SayAllButtonProfiles.bundle/Contents/Resources/zh-Hans.lproj/Localizable.strings"
+unzip -q "$RELEASE_DIRECTORY/SayAllCommonPhrases_SayAllCommonPhrases.bundle.zip" \
+  -d "$STAGING_DIRECTORY/Resources"
+test -f "$STAGING_DIRECTORY/Resources/SayAllCommonPhrases_SayAllCommonPhrases.bundle/Contents/Resources/CommonPhrases.json"
 
 cat > "$STAGING_DIRECTORY/Package.swift" <<'SWIFT'
 // swift-tools-version: 6.2
@@ -189,6 +197,7 @@ let package = Package(
                 "SayAllMembershipCore",
                 "SayAllMembershipUI",
                 "SayAllMembershipHostAdapter",
+                "SayAllCommonPhrases",
             ]
         ),
         .library(
@@ -223,6 +232,7 @@ let package = Package(
         .binaryTarget(name: "SayAllMacroMacOS", path: "Artifacts/SayAllMacroMacOS.xcframework"),
         .binaryTarget(name: "SayAllMacroRemoteMic", path: "Artifacts/SayAllMacroRemoteMic.xcframework"),
         .binaryTarget(name: "SayAllButtonProfiles", path: "Artifacts/SayAllButtonProfiles.xcframework"),
+        .binaryTarget(name: "SayAllCommonPhrases", path: "Artifacts/SayAllCommonPhrases.xcframework"),
     ]
 )
 SWIFT

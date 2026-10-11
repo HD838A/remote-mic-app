@@ -146,8 +146,6 @@ if [[ -n "$(find "$APP" -type f ! -perm 0644 ! -perm 0755 -print -quit)" ]]; the
   print -u2 "app bundle contains a file without 0644 or 0755 permissions"
   exit 1
 fi
-test -f "$APP/Contents/Resources/CommonPhrases.json"
-/usr/bin/python3 "$ROOT/scripts/generate-common-phrases.py" "$ROOT/Resources/CommonPhrases/built-in.md" | cmp -s - "$APP/Contents/Resources/CommonPhrases.json"
 test ! -e "$APP/Contents/Resources/CommonPhrases/built-in.md"
 test -f "$APP/Contents/Resources/LICENSE.md"
 test -f "$APP/Contents/Resources/README.md"
@@ -379,6 +377,7 @@ SAYALL_PRIVATE_ARTIFACT_INCLUDED="$(plutil -extract SayAllPrivateArtifactsInclud
 SAYALL_BUTTON_PROFILES_INCLUDED="$(plutil -extract SayAllButtonProfilesIncluded raw -o - "$PLIST" 2>/dev/null || true)"
 SAYALL_BUTTON_PROFILES_RESOURCE_BUNDLE="$APP/Contents/Resources/SayAllButtonProfiles_SayAllButtonProfiles.bundle"
 SAYALL_MEMBERSHIP_RESOURCE_BUNDLE="$APP/Contents/Resources/SayAllMembership_SayAllMembershipUI.bundle"
+SAYALL_COMMON_PHRASES_RESOURCE_BUNDLE="$APP/Contents/Resources/SayAllCommonPhrases_SayAllCommonPhrases.bundle"
 if [[ "$SAYALL_BUTTON_PROFILES_INCLUDED" == "true" ]]; then
   test -d "$SAYALL_BUTTON_PROFILES_RESOURCE_BUNDLE"
   if [[ -d "$SAYALL_BUTTON_PROFILES_RESOURCE_BUNDLE/Contents/Resources" ]]; then
@@ -405,6 +404,13 @@ if [[ "$SAYALL_BUTTON_PROFILES_INCLUDED" == "true" ]]; then
     fi
     test -f "$SAYALL_MEMBERSHIP_RESOURCE_ROOT/MembershipCenterCopy.json"
     test -f "$SAYALL_MEMBERSHIP_RESOURCE_ROOT/AppIcon.png"
+    test -d "$SAYALL_COMMON_PHRASES_RESOURCE_BUNDLE"
+    if [[ -d "$SAYALL_COMMON_PHRASES_RESOURCE_BUNDLE/Contents/Resources" ]]; then
+      SAYALL_COMMON_PHRASES_RESOURCE_ROOT="$SAYALL_COMMON_PHRASES_RESOURCE_BUNDLE/Contents/Resources"
+    else
+      SAYALL_COMMON_PHRASES_RESOURCE_ROOT="$SAYALL_COMMON_PHRASES_RESOURCE_BUNDLE"
+    fi
+    test -f "$SAYALL_COMMON_PHRASES_RESOURCE_ROOT/CommonPhrases.json"
   else
     test ! -e "$SAYALL_MEMBERSHIP_RESOURCE_BUNDLE"
   fi
@@ -413,6 +419,9 @@ elif [[ -e "$SAYALL_BUTTON_PROFILES_RESOURCE_BUNDLE" ]]; then
   exit 1
 elif [[ -e "$SAYALL_MEMBERSHIP_RESOURCE_BUNDLE" ]]; then
   print -u2 "SayAll membership resource bundle exists without the button profiles marker"
+  exit 1
+elif [[ -e "$SAYALL_COMMON_PHRASES_RESOURCE_BUNDLE" ]]; then
+  print -u2 "SayAll common phrases resource bundle exists without the private artifact marker"
   exit 1
 fi
 if [[ "$REQUIRE_SAYALL_BUTTON_PROFILES" == "1" && \
@@ -559,7 +568,7 @@ if [[ "$RELEASE_VARIANT" == "intel" ]]; then
   done
 fi
 
-EXPECTED_APP_FILES=$'Contents/Helpers/SayAllMCP\nContents/Info.plist\nContents/MacOS/RemoteMic\nContents/Resources/AppIcon.icns\nContents/Resources/COPYRIGHT.md\nContents/Resources/CommonPhrases.json\nContents/Resources/FirstInstallGuide.md\nContents/Resources/LICENSE.md\nContents/Resources/LOGO-LICENSE.md\nContents/Resources/RC003-remote-photo.png\nContents/Resources/README.md\nContents/Resources/StatusIconActiveTemplate.png\nContents/Resources/StatusIconActiveTemplate@2x.png\nContents/Resources/StatusIconTemplate.png\nContents/Resources/StatusIconTemplate@2x.png\nContents/Resources/TECHNICAL.md\nContents/Resources/THIRD_PARTY_NOTICES.md\nContents/Resources/TROUBLESHOOTING.md\nContents/_CodeSignature/CodeResources'
+EXPECTED_APP_FILES=$'Contents/Helpers/SayAllMCP\nContents/Info.plist\nContents/MacOS/RemoteMic\nContents/Resources/AppIcon.icns\nContents/Resources/COPYRIGHT.md\nContents/Resources/FirstInstallGuide.md\nContents/Resources/LICENSE.md\nContents/Resources/LOGO-LICENSE.md\nContents/Resources/RC003-remote-photo.png\nContents/Resources/README.md\nContents/Resources/StatusIconActiveTemplate.png\nContents/Resources/StatusIconActiveTemplate@2x.png\nContents/Resources/StatusIconTemplate.png\nContents/Resources/StatusIconTemplate@2x.png\nContents/Resources/TECHNICAL.md\nContents/Resources/THIRD_PARTY_NOTICES.md\nContents/Resources/TROUBLESHOOTING.md\nContents/_CodeSignature/CodeResources'
 if [[ "$SAYALL_SIRI_REMOTE_INCLUDED" == "true" ]]; then
   EXPECTED_APP_FILES=$'Contents/Frameworks/libopus.0.dylib\nContents/Helpers/SayAllAppleRemoteAudioCapture\nContents/Helpers/SayAllAppleRemoteHCIService\nContents/Library/LaunchServices/com.hd838a.SayAll.AppleRemoteHCIService\n'"$EXPECTED_APP_FILES"
 fi

@@ -848,9 +848,13 @@ struct SettingsView: View {
         case .statistics:
             statisticsPage
         case .commonPhrases:
-            CommonPhraseSettingsView(store: model.commonPhraseStore) {
-                selectedSection = .mapping
-            }
+            model.membershipFeature.commonPhrasesSettingsView(
+                onOpenMembership: {
+                    selectedSection = .membership
+                    model.membershipFeature.refreshIfNeeded()
+                },
+                onReturn: { selectedSection = .mapping }
+            )
         case .transcripts:
             transcriptHistoryPage
         case .permissions:
