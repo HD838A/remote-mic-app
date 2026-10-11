@@ -886,21 +886,21 @@ case "$mode" in
 esac' > "$fake_bin/curl"
 /bin/chmod 755 "$fake_bin/curl"
 PATH="$fake_bin:$PATH" CDN_FIXTURE_MODE=404 \
-  "$ROOT/scripts/verify-preview-cdn-availability.sh" v9.9.9 >/dev/null
+  "$ROOT/scripts/verify-preview-cdn-availability.sh" v9.9.9 999 >/dev/null
 if PATH="$fake_bin:$PATH" CDN_FIXTURE_MODE=200 \
-  "$ROOT/scripts/verify-preview-cdn-availability.sh" v9.9.9 >/dev/null 2>&1; then
+  "$ROOT/scripts/verify-preview-cdn-availability.sh" v9.9.9 999 >/dev/null 2>&1; then
   print -u2 "CDN occupancy gate accepted an existing 200 path"
   exit 1
 else
   test "$?" -eq 42
 fi
 if PATH="$fake_bin:$PATH" CDN_FIXTURE_MODE=503 \
-  "$ROOT/scripts/verify-preview-cdn-availability.sh" v9.9.9 >/dev/null 2>&1; then
+  "$ROOT/scripts/verify-preview-cdn-availability.sh" v9.9.9 999 >/dev/null 2>&1; then
   print -u2 "CDN occupancy gate accepted an indeterminate 503 path"
   exit 1
 fi
 if PATH="$fake_bin:$PATH" CDN_FIXTURE_MODE=fallback \
-  "$ROOT/scripts/verify-preview-cdn-availability.sh" v9.9.9 >/dev/null 2>&1; then
+  "$ROOT/scripts/verify-preview-cdn-availability.sh" v9.9.9 999 >/dev/null 2>&1; then
   :
 else
   print -u2 "CDN occupancy gate did not use the GET fallback after HEAD 405"
@@ -911,15 +911,17 @@ fi
 public_dir="$WORK_DIR/public"
 /bin/mkdir -p "$public_dir"
 version=9.9.9
+build=999
+published_prefix="SayAll-$version-$build"
 for name in \
-  "SayAll-Intel-uninstall.pkg" \
-  "SayAll-Intel-install.pkg" \
-  "SayAll-$version-Intel.zip" \
-  "SayAll-AppleSilicon-uninstall.pkg" \
-  "SayAll-AppleSilicon-install.pkg" \
-  "SayAll-$version.en.txt" \
-  "SayAll-$version.zh.txt" \
-  "SayAll-$version.zip" \
+  "$published_prefix-Intel-uninstall.pkg" \
+  "$published_prefix-Intel-install.pkg" \
+  "$published_prefix-Intel.zip" \
+  "$published_prefix-AppleSilicon-uninstall.pkg" \
+  "$published_prefix-AppleSilicon-install.pkg" \
+  "$published_prefix.en.txt" \
+  "$published_prefix.zh.txt" \
+  "$published_prefix.zip" \
   appcast-intel.xml appcast.xml; do
   print -rn -- "fixture:$name" > "$public_dir/$name"
 done
@@ -928,13 +930,13 @@ from pathlib import Path
 import sys
 public = Path(sys.argv[1])
 for feed, suffix in [("appcast.xml", ""), ("appcast-intel.xml", "-Intel")]:
-    archive = f"SayAll-9.9.9{suffix}.zip"
+    archive = f"SayAll-9.9.9-999{suffix}.zip"
     length = (public / archive).stat().st_size
     (public / feed).write_text(f'''<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle"><channel><item>
 <sparkle:version>999</sparkle:version><sparkle:shortVersionString>9.9.9</sparkle:shortVersionString>
 <enclosure url="https://download.sayall.app/mac/releases/v9.9.9/{archive}" length="{length}" type="application/octet-stream" sparkle:edSignature="{'A' * 86}==" />
-<sparkle:releaseNotesLink>https://download.sayall.app/mac/releases/v9.9.9/SayAll-9.9.9.en.txt</sparkle:releaseNotesLink>
-<sparkle:releaseNotesLink>https://download.sayall.app/mac/releases/v9.9.9/SayAll-9.9.9.zh.txt</sparkle:releaseNotesLink>
+<sparkle:releaseNotesLink>https://download.sayall.app/mac/releases/v9.9.9/SayAll-9.9.9-999.en.txt</sparkle:releaseNotesLink>
+<sparkle:releaseNotesLink>https://download.sayall.app/mac/releases/v9.9.9/SayAll-9.9.9-999.zh.txt</sparkle:releaseNotesLink>
 </item></channel></rss>''')
 PYTHON
 
@@ -967,7 +969,7 @@ source, destination, mutation = sys.argv[1:]
 text = Path(source).read_text()
 changes = {
     "legacy": ("SayAll-", "Remote-Mic-"),
-    "architecture": ("SayAll-9.9.9.zip", "SayAll-9.9.9-Intel.zip"),
+    "architecture": ("SayAll-9.9.9-999.zip", "SayAll-9.9.9-999-Intel.zip"),
     "host": ("https://download.sayall.app/", "https://example.com/"),
     "length": ('length="', 'length="0'),
     "version": (">999<", ">998<"),
@@ -988,12 +990,12 @@ cp "$WORK_DIR/canonical-appcast.xml" "$public_dir/appcast.xml"
 write_fixture_manifest
 "$ROOT/scripts/verify-staged-release-assets.sh" "$manifest" "$public_dir" >/dev/null
 print "SPARKLE SAYALL URL AND METADATA FIXTURE PASS"
-print -rn -- tampered >> "$public_dir/SayAll-$version.zip"
+print -rn -- tampered >> "$public_dir/$published_prefix.zip"
 if "$ROOT/scripts/verify-staged-release-assets.sh" "$manifest" "$public_dir" >/dev/null 2>&1; then
   print -u2 "manifest accepted tampered payload"
   exit 1
 fi
-print -rn -- fixture > "$public_dir/SayAll-$version.zip"
+print -rn -- fixture > "$public_dir/$published_prefix.zip"
 if [[ ! -e "$public_dir/extra.txt" ]]; then
   print -rn -- extra > "$public_dir/extra.txt"
 fi

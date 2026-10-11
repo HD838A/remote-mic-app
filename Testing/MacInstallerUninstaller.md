@@ -4,7 +4,7 @@
 
 - 基线：`origin/main` `18b42243710ac80f27ec2d16c41741e8ba0d99e5`
 - 目标：macOS Apple Silicon 14+ 和 Intel Ventura 13
-- 安装资产：最终 Developer ID 签名、Apple 公证并 staple 的 `SayAll-AppleSilicon-install.pkg`、`SayAll-Intel-install.pkg` 和对应的 standalone uninstall PKG
+- 安装资产：最终 Developer ID 签名、Apple 公证并 staple 的 `SayAll-VERSION-BUILD-AppleSilicon-install.pkg`、`SayAll-VERSION-BUILD-Intel-install.pkg` 和对应的 standalone uninstall PKG
 - Siri Remote 系统服务是 Install PKG 中的可选组件，默认不选择；MiRemoteV 2ch 与无线麦SayAll.app仍是默认组件。
 
 ## 测试前准备
@@ -50,7 +50,7 @@
 
 ### 4. 完整卸载与可恢复性
 
-1. 退出 App，运行对应架构的 standalone `SayAll-AppleSilicon-uninstall.pkg` 或 `SayAll-Intel-uninstall.pkg`。
+1. 退出 App，运行文件名包含当前 `VERSION-BUILD` 的对应架构 standalone 卸载包。
 2. 分别验证 canonical App+驱动、历史 App+驱动、仅 App 和仅驱动。
 3. 在废纸篓中找到名称带 `uninstalled` 时间标记的项目，执行“放回原处”或手动恢复。
 

@@ -107,19 +107,29 @@ if [[ "$(jq -r '.sourceKind' "$stage_record")" == hotfix ]]; then
   }
 fi
 version="$(jq -r '.version' "$manifest")"
+build="$(jq -r '.build' "$manifest")"
 tag="$(jq -r '.tag' "$manifest")"
+schema_version="$(jq -r '.schemaVersion' "$manifest")"
 asset_prefix=SayAll
-if [[ "$(jq -r '.schemaVersion' "$manifest")" == 1 ]]; then
+if [[ "$schema_version" == 1 ]]; then
   asset_prefix=Remote-Mic
 fi
-archive="$asset_prefix-$version.zip"
+if [[ "$schema_version" == 2 ]]; then
+  archive="$asset_prefix-$version-$build.zip"
+  notes_zh="$asset_prefix-$version-$build.zh.txt"
+  notes_en="$asset_prefix-$version-$build.en.txt"
+else
+  archive="$asset_prefix-$version.zip"
+  notes_zh="$asset_prefix-$version.zh.txt"
+  notes_en="$asset_prefix-$version.en.txt"
+fi
 manifest_sha="$(shasum -a 256 "$manifest" | awk '{print $1}')"
 production_prefix="https://download.sayall.app/mac/releases/$tag/"
 test_prefix="http://127.0.0.1:$FEED_PORT/"
-for file_name in appcast.xml "$archive" "$asset_prefix-$version.zh.txt" "$asset_prefix-$version.en.txt"; do
+for file_name in appcast.xml "$archive" "$notes_zh" "$notes_en"; do
   [[ -f "$public_dir/$file_name" ]] || { echo "staged UI-test asset is missing: $file_name" >&2; exit 1; }
 done
-for file_name in "$archive" "$asset_prefix-$version.zh.txt" "$asset_prefix-$version.en.txt"; do
+for file_name in "$archive" "$notes_zh" "$notes_en"; do
   ditto --norsrc --noqtn --noacl "$public_dir/$file_name" "$OUTPUT_DIR/feed/$file_name"
 done
 sed "s#$production_prefix#$test_prefix#g" "$public_dir/appcast.xml" > "$OUTPUT_DIR/feed/appcast.xml"
@@ -129,7 +139,7 @@ printf '%s\n' "$baseline_release" | jq -e --arg tag "$BASELINE_TAG" '.tag_name =
 baseline_version="$(printf '%s' "$BASELINE_TAG" | sed 's/^v//')"
 jq -n -e --arg baseline "$baseline_version" --arg candidate "$version" \
   '($baseline | split(".") | map(tonumber)) < ($candidate | split(".") | map(tonumber))' >/dev/null
-baseline_asset_name="$(printf '%s\n' "$baseline_release" | jq -r --arg version "$baseline_version" '[.assets[] | select(.name == ("SayAll-" + $version + ".zip") or .name == ("Remote-Mic-" + $version + ".zip"))] | if length == 1 then .[0].name else empty end')"
+baseline_asset_name="$(printf '%s\n' "$baseline_release" | jq -r --arg version "$baseline_version" '[.assets[] | select((.name | test("^(SayAll|Remote-Mic)-" + $version + "(-[0-9]+)?\\.zip$")))] | if length == 1 then .[0].name else empty end')"
 baseline_asset_id="$(printf '%s\n' "$baseline_release" | jq -r --arg name "$baseline_asset_name" '[.assets[] | select(.name == $name)] | if length == 1 then .[0].id else empty end')"
 baseline_asset_digest="$(printf '%s\n' "$baseline_release" | jq -r --arg name "$baseline_asset_name" '[.assets[] | select(.name == $name)] | if length == 1 then .[0].digest else empty end')"
 baseline_asset_url="$(printf '%s\n' "$baseline_release" | jq -r --arg name "$baseline_asset_name" '[.assets[] | select(.name == $name)] | if length == 1 then .[0].browser_download_url else empty end')"

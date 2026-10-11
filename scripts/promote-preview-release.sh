@@ -122,14 +122,14 @@ case "$provenance_schema" in
           (.sha256 | test("^[0-9a-f]{64}$"))) and
         (if $schema == 6 then
           ([
-            "SayAll-Intel-uninstall.pkg",
-            "SayAll-Intel-install.pkg",
-            "SayAll-" + .version + "-Intel.zip",
-            "SayAll-AppleSilicon-uninstall.pkg",
-            "SayAll-AppleSilicon-install.pkg",
-            "SayAll-" + .version + ".en.txt",
-            "SayAll-" + .version + ".zh.txt",
-            "SayAll-" + .version + ".zip",
+            "SayAll-" + .version + "-" + .build + "-Intel-uninstall.pkg",
+            "SayAll-" + .version + "-" + .build + "-Intel-install.pkg",
+            "SayAll-" + .version + "-" + .build + "-Intel.zip",
+            "SayAll-" + .version + "-" + .build + "-AppleSilicon-uninstall.pkg",
+            "SayAll-" + .version + "-" + .build + "-AppleSilicon-install.pkg",
+            "SayAll-" + .version + "-" + .build + ".en.txt",
+            "SayAll-" + .version + "-" + .build + ".zh.txt",
+            "SayAll-" + .version + "-" + .build + ".zip",
             "appcast-intel.xml",
             "appcast.xml"
           ] | sort)

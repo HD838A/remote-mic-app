@@ -10,9 +10,9 @@
 
 | 类别 | 文件 |
 | --- | --- |
-| Apple Silicon | SayAll-VERSION.zip、SayAll-AppleSilicon-install.pkg、SayAll-AppleSilicon-uninstall.pkg、appcast.xml |
-| Intel Ventura | SayAll-VERSION-Intel.zip、SayAll-Intel-install.pkg、SayAll-Intel-uninstall.pkg、appcast-intel.xml |
-| 共享 | SayAll-VERSION.zh.txt、SayAll-VERSION.en.txt |
+| Apple Silicon | SayAll-VERSION-BUILD.zip、SayAll-VERSION-BUILD-AppleSilicon-install.pkg、SayAll-VERSION-BUILD-AppleSilicon-uninstall.pkg、appcast.xml |
+| Intel Ventura | SayAll-VERSION-BUILD-Intel.zip、SayAll-VERSION-BUILD-Intel-install.pkg、SayAll-VERSION-BUILD-Intel-uninstall.pkg、appcast-intel.xml |
+| 共享 | SayAll-VERSION-BUILD.zh.txt、SayAll-VERSION-BUILD.en.txt |
 | 来源证明 | candidate-provenance.json |
 
 Install PKG 作为 SayAll 品牌的公开独立资产上传。公开下载不再提供 DMG。

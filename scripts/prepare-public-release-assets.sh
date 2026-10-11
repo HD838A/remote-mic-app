@@ -47,15 +47,16 @@ copy_asset() {
   /usr/bin/cmp -s "$source_file" "$public_dir/$published_name"
 }
 
-copy_asset "$DIST/Uninstall SayAll.pkg" "SayAll-AppleSilicon-uninstall.pkg"
-copy_asset "$DIST/Install SayAll.pkg" "SayAll-AppleSilicon-install.pkg"
-copy_asset "$DIST/SayAll-$version.zip" "SayAll-$version.zip"
+published_prefix="SayAll-$version-$build"
+copy_asset "$DIST/Uninstall SayAll.pkg" "$published_prefix-AppleSilicon-uninstall.pkg"
+copy_asset "$DIST/Install SayAll.pkg" "$published_prefix-AppleSilicon-install.pkg"
+copy_asset "$DIST/$published_prefix.zip" "$published_prefix.zip"
 copy_asset "$DIST/appcast.xml" appcast.xml
-copy_asset "$DIST/SayAll-$version.zh.txt" "SayAll-$version.zh.txt"
-copy_asset "$DIST/SayAll-$version.en.txt" "SayAll-$version.en.txt"
-copy_asset "$DIST/intel/Uninstall SayAll Intel.pkg" "SayAll-Intel-uninstall.pkg"
-copy_asset "$DIST/intel/Install SayAll Intel.pkg" "SayAll-Intel-install.pkg"
-copy_asset "$DIST/intel/SayAll-$version-Intel.zip" "SayAll-$version-Intel.zip"
+copy_asset "$DIST/$published_prefix.zh.txt" "$published_prefix.zh.txt"
+copy_asset "$DIST/$published_prefix.en.txt" "$published_prefix.en.txt"
+copy_asset "$DIST/intel/Uninstall SayAll Intel.pkg" "$published_prefix-Intel-uninstall.pkg"
+copy_asset "$DIST/intel/Install SayAll Intel.pkg" "$published_prefix-Intel-install.pkg"
+copy_asset "$DIST/intel/$published_prefix-Intel.zip" "$published_prefix-Intel.zip"
 copy_asset "$DIST/intel/appcast-intel.xml" appcast-intel.xml
 
 production_prefix="https://download.sayall.app/mac/releases/$tag/"
