@@ -130,6 +130,10 @@ version="$REQUESTED_VERSION"
 if version_is_less "$version" "$base_version"; then
   version="$base_version"
 fi
+build="$REQUESTED_BUILD"
+if (( build <= base_build )); then
+  build=$(( base_build + 1 ))
+fi
 while true; do
   tag="v$version"
   if remote_tag_is_occupied "$tag" || public_release_is_occupied "$tag"; then
@@ -137,7 +141,7 @@ while true; do
     continue
   fi
   cdn_status=0
-  "$CDN_PROBE_BIN" "$tag" >/dev/null || cdn_status=$?
+  "$CDN_PROBE_BIN" "$tag" "$build" >/dev/null || cdn_status=$?
   case "$cdn_status" in
     0)
       break
@@ -151,11 +155,6 @@ while true; do
       ;;
   esac
 done
-
-build="$REQUESTED_BUILD"
-if (( build <= base_build )); then
-  build=$(( base_build + 1 ))
-fi
 
 python3 - Resources/Info.plist "$version" "$build" <<'PY'
 from pathlib import Path

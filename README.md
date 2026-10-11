@@ -109,7 +109,7 @@ Mac App 继续采用官网下载方式分发，Mac App Store 上架暂时暂停�
 - 最新正式版（Apple Silicon）：通过 [Cloudflare CDN 固定入口](https://download.sayall.app/mac) 下载。当前正式版入口仅提供 Apple Silicon 安装包，且不需要随版本更新。
 - 最新预览版（Apple Silicon / Intel）：前往 [GitHub Releases](https://github.com/HD838A/remote-mic-app/releases)，在发布列表中寻找最新标记为 **Pre-release** 的 macOS 候选版本，并按 Mac 芯片下载对应的 Installer PKG。
 
-Apple Silicon 安装包名为 `SayAll-AppleSilicon-install.pkg`，Intel 安装包名为 `SayAll-Intel-install.pkg`，两者不能混用。卸载包名分别为 `SayAll-AppleSilicon-uninstall.pkg` 和 `SayAll-Intel-uninstall.pkg`。
+Release 中的 Apple Silicon 安装包名为 `SayAll-VERSION-BUILD-AppleSilicon-install.pkg`，Intel 安装包名为 `SayAll-VERSION-BUILD-Intel-install.pkg`，两者不能混用。卸载包名分别为 `SayAll-VERSION-BUILD-AppleSilicon-uninstall.pkg` 和 `SayAll-VERSION-BUILD-Intel-uninstall.pkg`。
 
 运行对应的 Installer PKG。安装器会把无线麦SayAll.app 安装为 `/Applications/SayAll.app`，并检查现有 `MiRemoteV 2ch`：健康且兼容时原样保留，缺失或不可用时才安装或更新。只需要 App、已经使用其他回环音频设备的高级用户，可从同一 Release 下载 App-only ZIP。
 
@@ -219,7 +219,7 @@ Typeless 等点按 Fn 开始、再次点按结束的语音工具，与小米蓝�
 ## 卸载
 
 1. 退出无线麦。
-2. 从同一 GitHub Release 下载并运行对应架构的 `SayAll-AppleSilicon-uninstall.pkg` 或 `SayAll-Intel-uninstall.pkg`。
+2. 从同一 GitHub Release 下载并运行文件名包含当前 `VERSION-BUILD` 的对应架构卸载包。
 
 卸载器会核对 Bundle ID，然后把已识别的 `SayAll.app`、历史 `Remote Mic.app` / `无线麦.app` 和 `MiRemoteV 2ch` 移到 macOS 废纸篓，需要时可恢复。它不会修改 BlackHole 或无线麦的本地设置；同名但无法确认归属的内容会保留在原位。
 

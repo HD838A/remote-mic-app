@@ -1117,16 +1117,17 @@ struct BuildSigningTests {
             contentsOf: root.appendingPathComponent("scripts/prepare-public-release-assets.sh"),
             encoding: .utf8
         )
-        #expect(assetSource.contains("SayAll-$version.zh.txt"))
-        #expect(assetSource.contains("SayAll-$version.en.txt"))
+        #expect(assetSource.contains("published_prefix=\"SayAll-$version-$build\""))
+        #expect(assetSource.contains("$published_prefix.zh.txt"))
+        #expect(assetSource.contains("$published_prefix.en.txt"))
         #expect(assetSource.contains("production_prefix"))
         #expect(assetSource.contains("staged-assets.json"))
         #expect(assetSource.contains("verify-staged-release-assets.sh"))
         #expect(assetSource.contains("ASSET_COUNT: 10"))
-        #expect(assetSource.contains("SayAll-AppleSilicon-install.pkg"))
-        #expect(assetSource.contains("SayAll-Intel-install.pkg"))
-        #expect(assetSource.contains("SayAll-AppleSilicon-uninstall.pkg"))
-        #expect(assetSource.contains("SayAll-Intel-uninstall.pkg"))
+        #expect(assetSource.contains("$published_prefix-AppleSilicon-install.pkg"))
+        #expect(assetSource.contains("$published_prefix-Intel-install.pkg"))
+        #expect(assetSource.contains("$published_prefix-AppleSilicon-uninstall.pkg"))
+        #expect(assetSource.contains("$published_prefix-Intel-uninstall.pkg"))
         #expect(!assetSource.contains("candidate-provenance.json"))
     }
 

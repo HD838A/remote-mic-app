@@ -95,7 +95,7 @@ if [[ "$MODE" == preview ]]; then
   fi
 
   cdn_status=0
-  "$CDN_PROBE_BIN" "$tag" >/dev/null || cdn_status=$?
+  "$CDN_PROBE_BIN" "$tag" "$build" >/dev/null || cdn_status=$?
   case "$cdn_status" in
     0)
       ;;

@@ -3,10 +3,11 @@ set -euo pipefail
 umask 077
 
 TAG="${1:-}"
+BUILD="${2:-}"
 CDN_BASE_URL="https://download.sayall.app/mac/releases"
 
-if [[ "$#" -ne 1 || ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-  echo "usage: $0 <preview-tag>" >&2
+if [[ "$#" -ne 2 || ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ || ! "$BUILD" =~ ^[1-9][0-9]*$ ]]; then
+  echo "usage: $0 <preview-tag> <build>" >&2
   exit 2
 fi
 command -v curl >/dev/null 2>&1 || {
@@ -15,15 +16,16 @@ command -v curl >/dev/null 2>&1 || {
 }
 
 version="${TAG#v}"
+published_prefix="SayAll-$version-$BUILD"
 payload_names=(
-  "SayAll-Intel-uninstall.pkg"
-  "SayAll-Intel-install.pkg"
-  "SayAll-$version-Intel.zip"
-  "SayAll-AppleSilicon-uninstall.pkg"
-  "SayAll-AppleSilicon-install.pkg"
-  "SayAll-$version.en.txt"
-  "SayAll-$version.zh.txt"
-  "SayAll-$version.zip"
+  "$published_prefix-Intel-uninstall.pkg"
+  "$published_prefix-Intel-install.pkg"
+  "$published_prefix-Intel.zip"
+  "$published_prefix-AppleSilicon-uninstall.pkg"
+  "$published_prefix-AppleSilicon-install.pkg"
+  "$published_prefix.en.txt"
+  "$published_prefix.zh.txt"
+  "$published_prefix.zip"
   "appcast-intel.xml"
   "appcast.xml"
 )
