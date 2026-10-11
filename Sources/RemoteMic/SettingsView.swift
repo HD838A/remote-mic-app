@@ -1626,27 +1626,37 @@ struct SettingsView: View {
                 .textFieldStyle(.roundedBorder)
                 .font(.system(size: 13))
                 .frame(maxWidth: 280)
-            VStack(spacing: 6) {
-                ForEach(visibleActions) { action in
-                    Button {
-                        var binding = configured
-                        binding.action = .combinationAction
-                        binding.macroID = action.id
-                        saveMappingBinding(binding, button: button, trigger: trigger)
-                    } label: {
-                        HStack(spacing: 10) {
-                            Image(systemName: "square.stack.3d.up")
-                            Text(action.name).font(.system(size: 13, weight: .medium))
-                            Spacer()
-                            Text(String(format: localization.text("button_mapping.macro_step_count"), action.stepCount))
-                                .font(.system(size: 12)).foregroundStyle(.secondary)
-                            if configured.action == .combinationAction && configured.macroID == action.id {
-                                Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.accentColor)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(alignment: .top, spacing: 8) {
+                    ForEach(visibleActions) { action in
+                        Button {
+                            var binding = configured
+                            binding.action = .combinationAction
+                            binding.macroID = action.id
+                            saveMappingBinding(binding, button: button, trigger: trigger)
+                        } label: {
+                            VStack(alignment: .leading, spacing: 6) {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "square.stack.3d.up")
+                                    Text(action.name)
+                                        .font(.system(size: 13, weight: .medium))
+                                        .lineLimit(2)
+                                        .multilineTextAlignment(.leading)
+                                    Spacer()
+                                    if configured.action == .combinationAction && configured.macroID == action.id {
+                                        Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.accentColor)
+                                    }
+                                }
+                                Text(String(format: localization.text("button_mapping.macro_step_count"), action.stepCount))
+                                    .font(.system(size: 12)).foregroundStyle(.secondary)
                             }
-                        }.padding(10).frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
-                    }.buttonStyle(.plain)
-                        .background(configured.action == .combinationAction && configured.macroID == action.id
-                            ? Color.accentColor.opacity(0.10) : Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 8))
+                            .padding(10)
+                            .frame(width: 180, alignment: .leading)
+                            .contentShape(Rectangle())
+                        }.buttonStyle(.plain)
+                            .background(configured.action == .combinationAction && configured.macroID == action.id
+                                ? Color.accentColor.opacity(0.10) : Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 8))
+                    }
                 }
             }
             if configured.action == .combinationAction,
