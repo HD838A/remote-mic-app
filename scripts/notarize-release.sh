@@ -124,21 +124,23 @@ if [[ "${1:-}" == --all ]]; then
   if [[ "$GENERATE_SPARKLE_UPDATE" == "1" ]]; then
     VERSION="$(/usr/bin/plutil -extract CFBundleShortVersionString raw -o - \
       "$ROOT/Resources/Info.plist")"
+    BUILD="$(/usr/bin/plutil -extract CFBundleVersion raw -o - \
+      "$ROOT/Resources/Info.plist")"
     /usr/bin/cmp -s \
-      "$ROOT/dist/SayAll-$VERSION.zh.txt" \
-      "$ROOT/dist/intel/SayAll-$VERSION-Intel.zh.txt"
+      "$ROOT/dist/SayAll-$VERSION-$BUILD.zh.txt" \
+      "$ROOT/dist/intel/SayAll-$VERSION-$BUILD-Intel.zh.txt"
     /usr/bin/cmp -s \
-      "$ROOT/dist/SayAll-$VERSION.en.txt" \
-      "$ROOT/dist/intel/SayAll-$VERSION-Intel.en.txt"
+      "$ROOT/dist/SayAll-$VERSION-$BUILD.en.txt" \
+      "$ROOT/dist/intel/SayAll-$VERSION-$BUILD-Intel.en.txt"
     /usr/bin/grep -Fq \
-      "SayAll-$VERSION.zh.txt" \
+      "SayAll-$VERSION-$BUILD.zh.txt" \
       "$ROOT/dist/intel/appcast-intel.xml"
     /usr/bin/grep -Fq \
-      "SayAll-$VERSION.en.txt" \
+      "SayAll-$VERSION-$BUILD.en.txt" \
       "$ROOT/dist/intel/appcast-intel.xml"
-    if /usr/bin/grep -Fq "SayAll-$VERSION-Intel.zh.txt" \
+    if /usr/bin/grep -Fq "SayAll-$VERSION-$BUILD-Intel.zh.txt" \
         "$ROOT/dist/intel/appcast-intel.xml" || \
-       /usr/bin/grep -Fq "SayAll-$VERSION-Intel.en.txt" \
+       /usr/bin/grep -Fq "SayAll-$VERSION-$BUILD-Intel.en.txt" \
         "$ROOT/dist/intel/appcast-intel.xml"; then
       print -u2 "Intel appcast must reuse the shared localized release notes"
       exit 1
@@ -159,13 +161,13 @@ RELEASE_TAG="${RELEASE_TAG:-v$VERSION}"
 APP="$OUTPUT_DIR/$DISPLAY_NAME.app"
 INSTALL_PACKAGE="$OUTPUT_DIR/$RELEASE_INSTALL_PACKAGE_NAME"
 UNINSTALL_PACKAGE="$OUTPUT_DIR/$RELEASE_UNINSTALL_PACKAGE_NAME"
-DMG="$OUTPUT_DIR/SayAll-$VERSION$RELEASE_ASSET_SUFFIX.dmg"
-UPDATE_ZIP="$OUTPUT_DIR/SayAll-$VERSION$RELEASE_ASSET_SUFFIX.zip"
+DMG="$OUTPUT_DIR/SayAll-$VERSION-$BUILD$RELEASE_ASSET_SUFFIX.dmg"
+UPDATE_ZIP="$OUTPUT_DIR/SayAll-$VERSION-$BUILD$RELEASE_ASSET_SUFFIX.zip"
 APPCAST="$OUTPUT_DIR/$RELEASE_APPCAST_NAME"
-ZH_RELEASE_NOTES="$OUTPUT_DIR/SayAll-$VERSION$RELEASE_ASSET_SUFFIX.zh.txt"
-EN_RELEASE_NOTES="$OUTPUT_DIR/SayAll-$VERSION$RELEASE_ASSET_SUFFIX.en.txt"
-PUBLISHED_ZH_NOTES_BASENAME="SayAll-$VERSION.zh.txt"
-PUBLISHED_EN_NOTES_BASENAME="SayAll-$VERSION.en.txt"
+ZH_RELEASE_NOTES="$OUTPUT_DIR/SayAll-$VERSION-$BUILD$RELEASE_ASSET_SUFFIX.zh.txt"
+EN_RELEASE_NOTES="$OUTPUT_DIR/SayAll-$VERSION-$BUILD$RELEASE_ASSET_SUFFIX.en.txt"
+PUBLISHED_ZH_NOTES_BASENAME="SayAll-$VERSION-$BUILD.zh.txt"
+PUBLISHED_EN_NOTES_BASENAME="SayAll-$VERSION-$BUILD.en.txt"
 ZIP_BASENAME="${UPDATE_ZIP:t}"
 CODE_SIGN_IDENTITY="${CODE_SIGN_IDENTITY:?Set CODE_SIGN_IDENTITY to a Developer ID Application identity}"
 INSTALLER_SIGNING_IDENTITY="${INSTALLER_SIGNING_IDENTITY:?Set INSTALLER_SIGNING_IDENTITY to a Developer ID Installer identity}"
@@ -273,7 +275,7 @@ if ! security find-identity -v -p basic | rg -Fq "\"$INSTALLER_SIGNING_IDENTITY\
 fi
 
 WORK_DIR="$(/usr/bin/mktemp -d /private/tmp/remotemic-notarize-release.XXXXXX)"
-APP_NOTARY_ZIP="$WORK_DIR/SayAll-$VERSION$RELEASE_ASSET_SUFFIX-notarization.zip"
+APP_NOTARY_ZIP="$WORK_DIR/SayAll-$VERSION-$BUILD$RELEASE_ASSET_SUFFIX-notarization.zip"
 SPARKLE_ARCHIVES="$WORK_DIR/sparkle-archives"
 ZH_NOTES_BASENAME="${ZH_RELEASE_NOTES:t}"
 EN_NOTES_BASENAME="${EN_RELEASE_NOTES:t}"

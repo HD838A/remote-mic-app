@@ -44,17 +44,19 @@ jq -e '
 }
 
 version="$(jq -r '.version' "$MANIFEST")"
+build="$(jq -r '.build' "$MANIFEST")"
 schema_version="$(jq -r '.schemaVersion' "$MANIFEST")"
 if [[ "$schema_version" == 2 ]]; then
+  published_prefix="SayAll-$version-$build"
   expected_names="$(printf '%s\n' \
-    "SayAll-Intel-uninstall.pkg" \
-    "SayAll-Intel-install.pkg" \
-    "SayAll-$version-Intel.zip" \
-    "SayAll-AppleSilicon-uninstall.pkg" \
-    "SayAll-AppleSilicon-install.pkg" \
-    "SayAll-$version.en.txt" \
-    "SayAll-$version.zh.txt" \
-    "SayAll-$version.zip" \
+    "$published_prefix-Intel-uninstall.pkg" \
+    "$published_prefix-Intel-install.pkg" \
+    "$published_prefix-Intel.zip" \
+    "$published_prefix-AppleSilicon-uninstall.pkg" \
+    "$published_prefix-AppleSilicon-install.pkg" \
+    "$published_prefix.en.txt" \
+    "$published_prefix.zh.txt" \
+    "$published_prefix.zip" \
     "appcast-intel.xml" \
     "appcast.xml" | LC_ALL=C /usr/bin/sort)"
 else
@@ -117,6 +119,7 @@ manifest = json.loads(Path(sys.argv[1]).read_text())
 public = Path(sys.argv[2])
 prefix = sys.argv[3]
 version, build = manifest["version"], manifest["build"]
+asset_version = f"{version}-{build}" if manifest["schemaVersion"] == 2 else version
 url_prefix = f"https://download.sayall.app/mac/releases/{manifest['tag']}/"
 ns = "{http://www.andymatuschak.org/xml-namespaces/sparkle}"
 try:
@@ -130,7 +133,7 @@ try:
         enclosures = item.findall("enclosure")
         assert len(enclosures) == 1, "expected one enclosure"
         enclosure = enclosures[0]
-        archive = f"{prefix}-{version}{suffix}.zip"
+        archive = f"{prefix}-{asset_version}{suffix}.zip"
         assert enclosure.get("url") == url_prefix + archive, "wrong archive URL or architecture"
         assert enclosure.get("length") == str((public / archive).stat().st_size), "wrong archive length"
         assert enclosure.get("type") == "application/octet-stream", "wrong archive type"
@@ -138,8 +141,8 @@ try:
         notes = item.findall(ns + "releaseNotesLink")
         assert len(notes) == 2, "expected shared English and Chinese notes"
         assert {note.text for note in notes} == {
-            url_prefix + f"{prefix}-{version}.en.txt",
-            url_prefix + f"{prefix}-{version}.zh.txt",
+            url_prefix + f"{prefix}-{asset_version}.en.txt",
+            url_prefix + f"{prefix}-{asset_version}.zh.txt",
         }, "wrong release notes URLs"
         if manifest["schemaVersion"] == 2:
             assert "Remote-Mic-" not in (public / feed).read_text(), "legacy asset name in new feed"
