@@ -363,6 +363,67 @@ struct BluetoothLifecycleTests {
         ) == 3)
     }
 
+    @Test func systemConnectedCandidatesAreQueriedWhenTheSavedIdentityCannotBeUsedDirectly() {
+        // 没有已保存身份：必须查系统当前已连接的候选。
+        #expect(VoiceRemoteDiscoveryPolicy.shouldQuerySystemConnectedCandidates(
+            hasSavedTarget: false,
+            allowsCachedTargetRetrieval: true
+        ))
+        // 有已保存身份且缓存直连可用：retrievePeripherals 已覆盖，不重复查。
+        #expect(!VoiceRemoteDiscoveryPolicy.shouldQuerySystemConnectedCandidates(
+            hasSavedTarget: true,
+            allowsCachedTargetRetrieval: true
+        ))
+        // 有已保存身份、但缓存直连已被禁用：必须查。否则只剩广播扫描，
+        // 而仍处于系统连接态的外设不广播（现场日志：卡死 16–75 分钟）。
+        #expect(VoiceRemoteDiscoveryPolicy.shouldQuerySystemConnectedCandidates(
+            hasSavedTarget: true,
+            allowsCachedTargetRetrieval: false
+        ))
+        #expect(VoiceRemoteDiscoveryPolicy.shouldQuerySystemConnectedCandidates(
+            hasSavedTarget: false,
+            allowsCachedTargetRetrieval: false
+        ))
+    }
+
+    @Test func scanWindowExpiresOnlyTheCurrentScanningAttempt() {
+        let generation: UInt64 = 11
+        #expect(BluetoothScanRecoveryPolicy.scanWindow > 0)
+        #expect(BluetoothScanRecoveryPolicy.shouldExpireScan(
+            lifecycle: .scanning(generation),
+            generation: generation,
+            shouldRun: true,
+            isSystemSuspended: false
+        ))
+        // 已经连上（进入 discovering）时窗口作废。
+        #expect(!BluetoothScanRecoveryPolicy.shouldExpireScan(
+            lifecycle: .discovering(generation),
+            generation: generation,
+            shouldRun: true,
+            isSystemSuspended: false
+        ))
+        // 旧 generation 的窗口不能终结新一轮 attempt。
+        #expect(!BluetoothScanRecoveryPolicy.shouldExpireScan(
+            lifecycle: .scanning(generation + 1),
+            generation: generation,
+            shouldRun: true,
+            isSystemSuspended: false
+        ))
+        #expect(!BluetoothScanRecoveryPolicy.shouldExpireScan(
+            lifecycle: .scanning(generation),
+            generation: generation,
+            shouldRun: false,
+            isSystemSuspended: false
+        ))
+        // 系统挂起期间不结束 attempt（休眠期间暂停扫描与重连）。
+        #expect(!BluetoothScanRecoveryPolicy.shouldExpireScan(
+            lifecycle: .scanning(generation),
+            generation: generation,
+            shouldRun: true,
+            isSystemSuspended: true
+        ))
+    }
+
     @Test func poweredOffCancelsWaitingReconnectUntilBluetoothReturns() {
         let generation: UInt64 = 7
         let poweredOff = BluetoothCentralRecoveryPolicy.transition(
