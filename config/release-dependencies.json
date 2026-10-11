@@ -7,7 +7,7 @@
     },
     "sayAllPrivatePlatform": {
       "repository": "GetSayAll/sayall-private-platform",
-      "commit": "46989d0e352959234c9b9cf8a4a0a830d56c12ab"
+      "commit": "0140bce65986928e353313d13c1c8d4297f84055"
     }
   }
 }

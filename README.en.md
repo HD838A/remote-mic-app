@@ -109,7 +109,7 @@ After you enable Revisit, SayAll keeps only final text entered through SayAll an
 - Latest stable release (Apple Silicon): download it through the permanent [Cloudflare CDN entry](https://download.sayall.app/mac). The current stable entry provides only the Apple Silicon package and does not change between versions.
 - Latest pre-release (Apple Silicon / Intel): open [GitHub Releases](https://github.com/HD838A/remote-mic-app/releases), find the newest macOS candidate marked **Pre-release** in the release list, and download the Installer PKG for your Mac architecture.
 
-The Apple Silicon installer is named `SayAll-<version>-Installer.pkg`; the Intel installer is named `SayAll-<version>-Intel-Installer.pkg`. They are not interchangeable.
+The Apple Silicon installer is named `SayAll-AppleSilicon-install.pkg`; the Intel installer is named `SayAll-Intel-install.pkg`. They are not interchangeable. The matching uninstallers are `SayAll-AppleSilicon-uninstall.pkg` and `SayAll-Intel-uninstall.pkg`.
 
 Run the matching Installer PKG. It installs **SayAll.app** and checks the existing MiRemoteV 2ch. A healthy compatible driver is kept in place; a missing or unusable driver is installed or updated. Advanced users who need only the app can download the app-only ZIP from the same Release.
 
@@ -215,7 +215,7 @@ SayAll does not upload or store voice, does not change the system default input 
 ## Uninstall
 
 1. Quit SayAll.
-2. Download and run `SayAll-<version>-Uninstaller.pkg` from the same GitHub Release to remove SayAll and MiRemoteV 2ch.
+2. Download and run the matching `SayAll-AppleSilicon-uninstall.pkg` or `SayAll-Intel-uninstall.pkg` from the same GitHub Release to remove SayAll and MiRemoteV 2ch.
 
 Uninstalling the compatible microphone does not change or remove BlackHole.
 

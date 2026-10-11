@@ -31,7 +31,8 @@ jq -e '
   (.version | test("^[0-9]+[.][0-9]+[.][0-9]+$")) and
   .tag == ("v" + .version) and
   (.build | test("^[1-9][0-9]*$")) and
-  (.assets | type == "array" and length == 10) and
+  (.assets | type == "array") and
+  (if .schemaVersion == 2 then (.assets | length == 10) else (.assets | length == 13) end) and
   ([.assets[].name] | length == (unique | length)) and
   all(.assets[];
     (.name | test("^[A-Za-z0-9][A-Za-z0-9._-]*$")) and
@@ -43,24 +44,38 @@ jq -e '
 }
 
 version="$(jq -r '.version' "$MANIFEST")"
-asset_prefix=SayAll
-if [[ "$(jq -r '.schemaVersion' "$MANIFEST")" == 1 ]]; then
-  asset_prefix=Remote-Mic
+schema_version="$(jq -r '.schemaVersion' "$MANIFEST")"
+if [[ "$schema_version" == 2 ]]; then
+  expected_names="$(printf '%s\n' \
+    "SayAll-Intel-uninstall.pkg" \
+    "SayAll-Intel-install.pkg" \
+    "SayAll-$version-Intel.zip" \
+    "SayAll-AppleSilicon-uninstall.pkg" \
+    "SayAll-AppleSilicon-install.pkg" \
+    "SayAll-$version.en.txt" \
+    "SayAll-$version.zh.txt" \
+    "SayAll-$version.zip" \
+    "appcast-intel.xml" \
+    "appcast.xml" | LC_ALL=C /usr/bin/sort)"
+else
+  expected_names="$(printf '%s\n' \
+    "SayAll-$version-Intel-Uninstaller.pkg" \
+    "SayAll-$version-Intel-Installer.pkg" \
+    "Remote-Mic-$version-Intel.dmg" \
+    "Remote-Mic-$version-Intel.zip" \
+    "SayAll-$version-Uninstaller.pkg" \
+    "SayAll-$version-Installer.pkg" \
+    "Remote-Mic-$version.dmg" \
+    "Remote-Mic-$version.dmg.sha256" \
+    "Remote-Mic-$version.en.txt" \
+    "Remote-Mic-$version.zh.txt" \
+    "Remote-Mic-$version.zip" \
+    "appcast-intel.xml" \
+    "appcast.xml" | LC_ALL=C /usr/bin/sort)"
 fi
-expected_names="$(printf '%s\n' \
-  "SayAll-$version-Intel-Uninstaller.pkg" \
-  "SayAll-$version-Intel-Installer.pkg" \
-  "$asset_prefix-$version-Intel.zip" \
-  "SayAll-$version-Uninstaller.pkg" \
-  "SayAll-$version-Installer.pkg" \
-  "$asset_prefix-$version.en.txt" \
-  "$asset_prefix-$version.zh.txt" \
-  "$asset_prefix-$version.zip" \
-  "appcast-intel.xml" \
-  "appcast.xml" | LC_ALL=C /usr/bin/sort)"
 manifest_names="$(jq -r '.assets[].name' "$MANIFEST" | LC_ALL=C /usr/bin/sort)"
 [[ "$manifest_names" == "$expected_names" ]] || {
-  echo "staged asset manifest does not contain the canonical 13 public payload assets" >&2
+  echo "staged asset manifest does not contain the canonical public payload assets" >&2
   exit 1
 }
 actual_names=""
@@ -89,6 +104,8 @@ while IFS=$'\t' read -r name expected_size expected_sha; do
 done < <(jq -r '.assets[] | [.name, (.size | tostring), .sha256] | @tsv' "$MANIFEST")
 
 # Check parsed URLs and metadata, not text that can also occur in comments.
+asset_prefix=SayAll
+[[ "$schema_version" == 1 ]] && asset_prefix=Remote-Mic
 python3 - "$MANIFEST" "$PUBLIC_DIR" "$asset_prefix" <<'PYTHON'
 import json
 from pathlib import Path

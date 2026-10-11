@@ -439,7 +439,6 @@ struct SettingsView: View {
     @ObservedObject var settings: AppSettings
     @ObservedObject private var privateFeature: PrivateFeatureIntegration
     @State private var preservesMappingContextOnNavigation = false
-    @State private var returnsToMappingFromLibrary = false
     @State private var editingMappingProfileID: UUID?
     @State private var mappingMacroSearch = ""
     @State private var mappingVoiceSettingsRequest = 0
@@ -789,20 +788,15 @@ struct SettingsView: View {
                             editingMappingProfileID = profile
                             mappingEditingTarget = ShortcutEditingTarget(button: button, trigger: trigger)
                             selectedSection = .mapping
-                        }
-                    )
-                    if returnsToMappingFromLibrary {
-                        Divider()
-                        Button(localization.text("button_mapping.return_choose_macro")) {
-                            returnsToMappingFromLibrary = false
+                        },
+                        onBindToButton: {
                             preservesMappingContextOnNavigation = true
+                            mappingEditingTarget = nil
                             mappingActionFilter = .custom
                             mappingMacroSearch = ""
                             selectedSection = .mapping
                         }
-                        .buttonStyle(.borderedProminent)
-                        .padding(10)
-                    }
+                    )
                 }
             } else {
                 aboutPage
@@ -1074,7 +1068,7 @@ struct SettingsView: View {
                 HStack(alignment: .center, spacing: 12) {
                     Image(systemName: "applewatch")
                         .font(.system(size: 22, weight: .semibold))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.accentColor)
                         .frame(width: 34)
 
                     VStack(alignment: .leading, spacing: 3) {
@@ -1123,7 +1117,7 @@ struct SettingsView: View {
                 HStack(alignment: .center, spacing: 12) {
                     Image(systemName: "globe")
                         .font(.system(size: 21, weight: .semibold))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.accentColor)
                         .frame(width: 34)
 
                     VStack(alignment: .leading, spacing: 3) {
@@ -1620,14 +1614,20 @@ struct SettingsView: View {
     private func mappingMacroChoices(button: RemoteButton, trigger: ButtonTrigger,
                                      configured: ConfiguredButtonAction) -> some View {
         let searchQuery = mappingMacroSearch.trimmingCharacters(in: .whitespacesAndNewlines)
+        let matchingActions = macroFeature.libraryActions.filter {
+            searchQuery.isEmpty ||
+                $0.name.localizedCaseInsensitiveContains(searchQuery) ||
+                $0.id.localizedCaseInsensitiveContains(searchQuery)
+        }
+        let visibleActions = searchQuery.isEmpty ? Array(matchingActions.prefix(10)) : matchingActions
         return VStack(alignment: .leading, spacing: 10) {
             Text(localization.text("action.combination_action")).font(.system(size: 14, weight: .semibold))
             TextField(localization.text("button_mapping.search_macros"), text: $mappingMacroSearch)
-                .textFieldStyle(.roundedBorder).font(.system(size: 13))
+                .textFieldStyle(.roundedBorder)
+                .font(.system(size: 13))
+                .frame(maxWidth: 280)
             VStack(spacing: 6) {
-                ForEach(macroFeature.libraryActions.filter {
-                    searchQuery.isEmpty || $0.name.localizedCaseInsensitiveContains(searchQuery)
-                }) { action in
+                ForEach(visibleActions) { action in
                     Button {
                         var binding = configured
                         binding.action = .combinationAction
@@ -1654,10 +1654,8 @@ struct SettingsView: View {
                 Text(localization.text("button_mapping.macro_unavailable")).font(.system(size: 13)).foregroundStyle(.orange)
             }
             Button(localization.text("button_mapping.manage_macros")) {
-                mappingEditingTarget = ShortcutEditingTarget(button: button, trigger: trigger)
                 mappingActionFilter = .custom
                 mappingMacroSearch = ""
-                returnsToMappingFromLibrary = true
                 selectedSection = .macros
             }
                 .buttonStyle(.bordered)

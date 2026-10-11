@@ -10,8 +10,8 @@
 
 | 类别 | 文件 |
 | --- | --- |
-| Apple Silicon | SayAll-VERSION.zip、SayAll-VERSION-Installer.pkg、SayAll-VERSION-Uninstaller.pkg、appcast.xml |
-| Intel Ventura | SayAll-VERSION-Intel.zip、SayAll-VERSION-Intel-Installer.pkg、SayAll-VERSION-Intel-Uninstaller.pkg、appcast-intel.xml |
+| Apple Silicon | SayAll-VERSION.zip、SayAll-AppleSilicon-install.pkg、SayAll-AppleSilicon-uninstall.pkg、appcast.xml |
+| Intel Ventura | SayAll-VERSION-Intel.zip、SayAll-Intel-install.pkg、SayAll-Intel-uninstall.pkg、appcast-intel.xml |
 | 共享 | SayAll-VERSION.zh.txt、SayAll-VERSION.en.txt |
 | 来源证明 | candidate-provenance.json |
 

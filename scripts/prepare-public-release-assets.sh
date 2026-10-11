@@ -47,14 +47,14 @@ copy_asset() {
   /usr/bin/cmp -s "$source_file" "$public_dir/$published_name"
 }
 
-copy_asset "$DIST/Uninstall SayAll.pkg" "SayAll-$version-Uninstaller.pkg"
-copy_asset "$DIST/Install SayAll.pkg" "SayAll-$version-Installer.pkg"
+copy_asset "$DIST/Uninstall SayAll.pkg" "SayAll-AppleSilicon-uninstall.pkg"
+copy_asset "$DIST/Install SayAll.pkg" "SayAll-AppleSilicon-install.pkg"
 copy_asset "$DIST/SayAll-$version.zip" "SayAll-$version.zip"
 copy_asset "$DIST/appcast.xml" appcast.xml
 copy_asset "$DIST/SayAll-$version.zh.txt" "SayAll-$version.zh.txt"
 copy_asset "$DIST/SayAll-$version.en.txt" "SayAll-$version.en.txt"
-copy_asset "$DIST/intel/Uninstall SayAll Intel.pkg" "SayAll-$version-Intel-Uninstaller.pkg"
-copy_asset "$DIST/intel/Install SayAll Intel.pkg" "SayAll-$version-Intel-Installer.pkg"
+copy_asset "$DIST/intel/Uninstall SayAll Intel.pkg" "SayAll-Intel-uninstall.pkg"
+copy_asset "$DIST/intel/Install SayAll Intel.pkg" "SayAll-Intel-install.pkg"
 copy_asset "$DIST/intel/SayAll-$version-Intel.zip" "SayAll-$version-Intel.zip"
 copy_asset "$DIST/intel/appcast-intel.xml" appcast-intel.xml
 

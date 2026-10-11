@@ -384,7 +384,8 @@ final class MacroFeatureIntegration: ObservableObject {
         remoteModel: XiaomiRemoteModel?,
         configuredActionTitle: @escaping (String, String) -> String?,
         settings: AppSettings? = nil,
-        onEditBinding: @escaping (UUID?, UUID?, RemoteButton, ButtonTrigger) -> Void = { _, _, _, _ in }
+        onEditBinding: @escaping (UUID?, UUID?, RemoteButton, ButtonTrigger) -> Void = { _, _, _, _ in },
+        onBindToButton: @escaping () -> Void = {}
     ) -> AnyView {
         #if SAYALL_UNIFIED_BUTTON_CONFIGURATION && canImport(SayAllMacroRemoteMic)
         return feature.settingsView(
@@ -396,7 +397,8 @@ final class MacroFeatureIntegration: ObservableObject {
                 guard let button = RemoteButton(rawValue: usage.button),
                       let trigger = ButtonTrigger(rawValue: usage.trigger) else { return }
                 onEditBinding(usage.device, usage.profile, button, trigger)
-            })
+            },
+            onBindToButton: onBindToButton)
         #else
 
         #if canImport(SayAllMacroRemoteMic)

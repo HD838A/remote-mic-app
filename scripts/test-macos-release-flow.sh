@@ -912,11 +912,11 @@ public_dir="$WORK_DIR/public"
 /bin/mkdir -p "$public_dir"
 version=9.9.9
 for name in \
-  "SayAll-$version-Intel-Uninstaller.pkg" \
-  "SayAll-$version-Intel-Installer.pkg" \
+  "SayAll-Intel-uninstall.pkg" \
+  "SayAll-Intel-install.pkg" \
   "SayAll-$version-Intel.zip" \
-  "SayAll-$version-Uninstaller.pkg" \
-  "SayAll-$version-Installer.pkg" \
+  "SayAll-AppleSilicon-uninstall.pkg" \
+  "SayAll-AppleSilicon-install.pkg" \
   "SayAll-$version.en.txt" \
   "SayAll-$version.zh.txt" \
   "SayAll-$version.zip" \
