@@ -1978,15 +1978,14 @@ struct SettingsPageRegressionTests {
         let choices = try #require(source.components(separatedBy: "private func mappingMacroChoices(").last)
             .components(separatedBy: "private var mappingPageHeader")[0]
         #expect(choices.contains("let searchQuery = mappingMacroSearch.trimmingCharacters(in: .whitespacesAndNewlines)"))
-        #expect(choices.contains("searchQuery.isEmpty || $0.name.localizedCaseInsensitiveContains(searchQuery)"))
+        #expect(choices.contains("$0.name.localizedCaseInsensitiveContains(searchQuery)"))
+        #expect(choices.contains("$0.id.localizedCaseInsensitiveContains(searchQuery)"))
+        #expect(choices.contains("Array(matchingActions.prefix(10))"))
+        #expect(choices.contains("frame(maxWidth: 280)"))
         let manage = try #require(choices.components(separatedBy: "button_mapping.manage_macros\")) {").last)
-        #expect(manage.contains("mappingEditingTarget = ShortcutEditingTarget(button: button, trigger: trigger)"))
         #expect(manage.contains("mappingMacroSearch = \"\""))
-        let returnAction = try #require(source.components(separatedBy: "button_mapping.return_choose_macro\")) {").last)
-            .components(separatedBy: ".buttonStyle(.borderedProminent)")[0]
-        #expect(returnAction.contains("preservesMappingContextOnNavigation = true"))
-        #expect(returnAction.contains("mappingActionFilter = .custom"))
-        #expect(returnAction.contains("mappingMacroSearch = \"\""))
-        #expect(!returnAction.contains("saveMappingBinding"))
+        #expect(!source.contains("button_mapping.return_choose_macro"))
+        #expect(source.contains("onBindToButton: {"))
+        #expect(source.contains("mappingEditingTarget = nil"))
     }
 }

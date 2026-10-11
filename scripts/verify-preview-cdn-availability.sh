@@ -16,14 +16,11 @@ command -v curl >/dev/null 2>&1 || {
 
 version="${TAG#v}"
 payload_names=(
-  "SayAll-$version-Intel-Uninstaller.pkg"
-  "SayAll-$version-Intel-Installer.pkg"
-  "SayAll-$version-Intel.dmg"
+  "SayAll-Intel-uninstall.pkg"
+  "SayAll-Intel-install.pkg"
   "SayAll-$version-Intel.zip"
-  "SayAll-$version-Uninstaller.pkg"
-  "SayAll-$version-Installer.pkg"
-  "SayAll-$version.dmg"
-  "SayAll-$version.dmg.sha256"
+  "SayAll-AppleSilicon-uninstall.pkg"
+  "SayAll-AppleSilicon-install.pkg"
   "SayAll-$version.en.txt"
   "SayAll-$version.zh.txt"
   "SayAll-$version.zip"

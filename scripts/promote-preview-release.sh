@@ -114,27 +114,42 @@ case "$provenance_schema" in
         .publishedAt == .stagedAt and
         (.assetManifestSHA256 | test("^[0-9a-f]{64}$")) and
         (.uiAttestationSHA256 | test("^[0-9a-f]{64}$")) and
-        (.payloadAssets | type == "array" and length == 13) and
+        (.payloadAssets | type == "array" and length == (if $schema == 6 then 10 else 13 end)) and
         ([.payloadAssets[].name] | length == (unique | length)) and
         all(.payloadAssets[];
           (.name | test("^[A-Za-z0-9][A-Za-z0-9._-]*$")) and
           (.size | type == "number" and . >= 0 and floor == .) and
           (.sha256 | test("^[0-9a-f]{64}$"))) and
-        ([
-          "SayAll-" + .version + "-Intel-Uninstaller.pkg",
-          "SayAll-" + .version + "-Intel-Installer.pkg",
-          (if $schema == 6 then "SayAll-" else "Remote-Mic-" end) + .version + "-Intel.dmg",
-          (if $schema == 6 then "SayAll-" else "Remote-Mic-" end) + .version + "-Intel.zip",
-          "SayAll-" + .version + "-Uninstaller.pkg",
-          "SayAll-" + .version + "-Installer.pkg",
-          (if $schema == 6 then "SayAll-" else "Remote-Mic-" end) + .version + ".dmg",
-          (if $schema == 6 then "SayAll-" else "Remote-Mic-" end) + .version + ".dmg.sha256",
-          (if $schema == 6 then "SayAll-" else "Remote-Mic-" end) + .version + ".en.txt",
-          (if $schema == 6 then "SayAll-" else "Remote-Mic-" end) + .version + ".zh.txt",
-          (if $schema == 6 then "SayAll-" else "Remote-Mic-" end) + .version + ".zip",
-          "appcast-intel.xml",
-          "appcast.xml"
-        ] | sort) == ([.payloadAssets[].name] | sort)
+        (if $schema == 6 then
+          ([
+            "SayAll-Intel-uninstall.pkg",
+            "SayAll-Intel-install.pkg",
+            "SayAll-" + .version + "-Intel.zip",
+            "SayAll-AppleSilicon-uninstall.pkg",
+            "SayAll-AppleSilicon-install.pkg",
+            "SayAll-" + .version + ".en.txt",
+            "SayAll-" + .version + ".zh.txt",
+            "SayAll-" + .version + ".zip",
+            "appcast-intel.xml",
+            "appcast.xml"
+          ] | sort)
+        else
+          ([
+            "SayAll-" + .version + "-Intel-Uninstaller.pkg",
+            "SayAll-" + .version + "-Intel-Installer.pkg",
+            "Remote-Mic-" + .version + "-Intel.dmg",
+            "Remote-Mic-" + .version + "-Intel.zip",
+            "SayAll-" + .version + "-Uninstaller.pkg",
+            "SayAll-" + .version + "-Installer.pkg",
+            "Remote-Mic-" + .version + ".dmg",
+            "Remote-Mic-" + .version + ".dmg.sha256",
+            "Remote-Mic-" + .version + ".en.txt",
+            "Remote-Mic-" + .version + ".zh.txt",
+            "Remote-Mic-" + .version + ".zip",
+            "appcast-intel.xml",
+            "appcast.xml"
+          ] | sort)
+        end) == ([.payloadAssets[].name] | sort)
       ' "$provenance" >/dev/null || { echo "Candidate provenance is invalid" >&2; exit 1; }
     source_commit="$(jq -r '.sourceCommit' "$provenance")"
     source_branch="$(jq -r '.sourceBranch' "$provenance")"
@@ -144,7 +159,11 @@ case "$provenance_schema" in
     source_workflow_commit="$(jq -r '.sourceWorkflowCommit' "$provenance")"
     expected_run_branch="main"
     expected_run_sha="$source_workflow_commit"
-    expected_asset_count=14
+    if [[ "$provenance_schema" == 6 ]]; then
+      expected_asset_count=11
+    else
+      expected_asset_count=14
+    fi
     ;;
   4)
     jq -e \

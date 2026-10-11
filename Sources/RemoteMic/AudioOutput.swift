@@ -259,8 +259,16 @@ enum CoreAudioDeviceCatalog {
             guard channelCount(for: deviceID, scope: scope) > 0 else { return nil }
             return deviceInfo(for: deviceID)
         }
+        .filter(shouldPresentToUser)
         .filter { seenUIDs.insert($0.uid).inserted }
         .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    }
+
+    /// AVAudioEngine can publish a process-private aggregate while an engine is
+    /// alive. It is a routing implementation detail, not a user-selectable
+    /// device. Keep it out of settings and onboarding lists.
+    static func shouldPresentToUser(_ device: AudioDeviceInfo) -> Bool {
+        !device.uid.hasPrefix("CADefaultDeviceAggregate-")
     }
 
     static func deviceInfo(for deviceID: AudioDeviceID) -> AudioDeviceInfo? {

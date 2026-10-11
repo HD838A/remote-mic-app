@@ -1166,7 +1166,6 @@
 
 "button_mapping.macro_unavailable" = "Action unavailable. Choose another action.";
 
-"button_mapping.return_choose_macro" = "Return to buttons and choose an action";
 
 "button_mapping.macro_step_count" = "%d-step sequence";
 

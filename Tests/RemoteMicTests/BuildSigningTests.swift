@@ -1071,9 +1071,11 @@ struct BuildSigningTests {
         #expect(assetSource.contains("production_prefix"))
         #expect(assetSource.contains("staged-assets.json"))
         #expect(assetSource.contains("verify-staged-release-assets.sh"))
-        #expect(assetSource.contains("ASSET_COUNT: 13"))
-        #expect(assetSource.contains("SayAll-$version-Installer.pkg"))
-        #expect(assetSource.contains("SayAll-$version-Intel-Installer.pkg"))
+        #expect(assetSource.contains("ASSET_COUNT: 10"))
+        #expect(assetSource.contains("SayAll-AppleSilicon-install.pkg"))
+        #expect(assetSource.contains("SayAll-Intel-install.pkg"))
+        #expect(assetSource.contains("SayAll-AppleSilicon-uninstall.pkg"))
+        #expect(assetSource.contains("SayAll-Intel-uninstall.pkg"))
         #expect(!assetSource.contains("candidate-provenance.json"))
     }
 
