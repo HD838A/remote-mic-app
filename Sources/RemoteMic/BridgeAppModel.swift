@@ -45,6 +45,19 @@ enum MobileVoiceRestartPolicy {
     }
 }
 
+enum MobileVoiceWatchRecoveryPolicy {
+    static let noAudioTimeout: TimeInterval = 5
+
+    static func shouldRecover(
+        startedAt: Date,
+        now: Date,
+        receivedBatchCount: Int
+    ) -> Bool {
+        receivedBatchCount == 0 &&
+            now.timeIntervalSince(startedAt) >= noAudioTimeout
+    }
+}
+
 struct HIDPermissionSnapshot: Equatable {
     let inputMonitoringGranted: Bool
     let accessibilityGranted: Bool
@@ -659,6 +672,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     )
     private var pendingMobileVoiceStopRequested = false
     private var pendingMobileVoiceRestartCompletion: ((RemoteVoiceStartResult) -> Void)?
+    private var mobileVoiceNoAudioRecoveryTimer: DispatchSourceTimer?
     private var activeMobileVoiceSource: MobileVoiceSource? {
         mobileVoiceLifecycle.activeSource
     }
@@ -666,6 +680,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         mobileVoiceLifecycle.stoppingSource
     }
     private var mobileVoiceAudioBatchCount = 0
+    private var mobileVoiceAudioReceivedBatchCount = 0
     private var mobileVoiceAudioEnqueueFailureCount = 0
     private var mobileVoiceAudioSourceMismatchCount = 0
     private var mobileVoiceAudioSignalMetrics = WatchBluetoothAudioSignalMetrics()
@@ -1417,6 +1432,8 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         activeAppleRemoteVoiceStartedAt = nil
 #endif
         let cancelledPendingRestart = mobileVoiceLifecycle.reset()
+        cancelMobileVoiceNoAudioRecoveryTimer()
+        mobileVoiceAudioReceivedBatchCount = 0
         activeMobileVoiceOperationID = nil
         activeMobileVoiceStartedAt = nil
         let completion = pendingMobileVoiceRestartCompletion
@@ -6763,12 +6780,14 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         resetCurrentVoiceSampleReceipt()
         mobileVoiceLifecycle.markStarted(source)
         mobileVoiceAudioBatchCount = 0
+        mobileVoiceAudioReceivedBatchCount = 0
         mobileVoiceAudioEnqueueFailureCount = 0
         mobileVoiceAudioSourceMismatchCount = 0
         mobileVoiceAudioSignalMetrics = WatchBluetoothAudioSignalMetrics()
         beginVoiceSessionIfNeeded()
         activeMobileVoiceOperationID = operationID
         activeMobileVoiceStartedAt = Date()
+        scheduleMobileVoiceNoAudioRecoveryIfNeeded(source: source)
         recordPublicDiagnosticEvent(
             operationID: operationID,
             component: "voice",
@@ -6862,6 +6881,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     }
 
     private func stopPhoneVoice(source: MobileVoiceSource) {
+        if source == .nearbyWatch {
+            cancelMobileVoiceNoAudioRecoveryTimer()
+        }
         if pendingMobileVoiceStartSource == source {
             if activeMobileVoiceSource == source {
                 pendingMobileVoiceStopRequested = true
@@ -6872,6 +6894,8 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 pendingMobileVoiceStartSource = nil
                 pendingMobileVoiceAudio.cancel()
                 pendingMobileVoiceStopRequested = false
+                cancelMobileVoiceNoAudioRecoveryTimer()
+                mobileVoiceAudioReceivedBatchCount = 0
                 AppLogger.shared.write(
                     "MOBILE VOICE stop_ignored reason=start_pending_audio_configuration source=\(source.logName)"
                 )
@@ -6922,6 +6946,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 case .ignored:
                     return
                 case .stopped:
+                    self.cancelMobileVoiceNoAudioRecoveryTimer()
                     self.releaseVoiceKeyIfNeeded(owner: .mobile, forceSoftware: true)
                     self.endVoiceSessionIfNeeded()
                     if let operationID = self.activeMobileVoiceOperationID {
@@ -6942,6 +6967,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                     AppLogger.shared.write("MOBILE VOICE stopped source=\(source.logName)")
                     self.releaseVirtualAudioOutputIfUnused(reason: "mobile_voice_stopped")
                 case let .restart(restartSource):
+                    self.cancelMobileVoiceNoAudioRecoveryTimer()
                     self.releaseVoiceKeyIfNeeded(owner: .mobile, forceSoftware: true)
                     self.endVoiceSessionIfNeeded()
                     if let operationID = self.activeMobileVoiceOperationID {
@@ -7228,6 +7254,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             }
             return
         }
+        mobileVoiceAudioReceivedBatchCount += 1
         if pendingMobileVoiceStartSource == source,
            pendingMobileVoiceAudio.appendIfWaiting(samples) {
             AppLogger.shared.write(
@@ -7264,6 +7291,36 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                     "pending_buffers=\(audioOutput.pendingVoiceBufferCountForDiagnostics)"
             )
         }
+    }
+
+    private func scheduleMobileVoiceNoAudioRecoveryIfNeeded(source: MobileVoiceSource) {
+        cancelMobileVoiceNoAudioRecoveryTimer()
+        guard source == .nearbyWatch else { return }
+        let timer = DispatchSource.makeTimerSource(queue: .main)
+        timer.schedule(deadline: .now() + .seconds(Int(MobileVoiceWatchRecoveryPolicy.noAudioTimeout)))
+        timer.setEventHandler { [weak self] in
+            guard let self,
+                  let startedAt = self.activeMobileVoiceStartedAt,
+                  self.activeMobileVoiceSource == .nearbyWatch,
+                  MobileVoiceWatchRecoveryPolicy.shouldRecover(
+                      startedAt: startedAt,
+                      now: Date(),
+                      receivedBatchCount: self.mobileVoiceAudioReceivedBatchCount
+                  )
+            else { return }
+            AppLogger.shared.write(
+                "MOBILE VOICE recovery reason=watch_no_audio timeout_s=" +
+                    "\(Int(MobileVoiceWatchRecoveryPolicy.noAudioTimeout))"
+            )
+            self.stopPhoneVoice(source: .nearbyWatch)
+        }
+        mobileVoiceNoAudioRecoveryTimer = timer
+        timer.resume()
+    }
+
+    private func cancelMobileVoiceNoAudioRecoveryTimer() {
+        mobileVoiceNoAudioRecoveryTimer?.cancel()
+        mobileVoiceNoAudioRecoveryTimer = nil
     }
 
     private func logMobileVoiceAudioSummary(source: MobileVoiceSource, reason: String) {
