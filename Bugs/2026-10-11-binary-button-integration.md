@@ -39,3 +39,12 @@ Package.swift 只通过源码目录中的 UnifiedButtonConfiguration.swift 判�
 此修复恢复既有统一绑定日志。最终点击须核对 select_combination 的请求及 stored 回读阶段。stored 不表示实体遥控器或第三方工具已执行。
 
 构建条件没有运行时取消、超时或重试。日志不得记录搜索内容、动作名称、动作 ID 或设备身份。真实硬件与文字上屏仍待现场验证。
+
+
+## 修复后实际窗口
+
+公开完整测试848项、BuildSigningTests 27项、自检48项通过。Apple Silicon及Intel私有二进制Release编译通过。
+
+内部Developer ID App在1020×772生产窗口完成实际点击。前十项显示、名称/ID搜索、选择保存、两个使用位置、未绑定入口及正常重启保留通过。使用12个合成QA动作；退出后恢复原用户配置。原始截图及摘要见[清单](../Screenshots/binary-button-integration/manifest.json)。
+
+内部App未公证，不用于分发。最终公证包与真实Sparkle安装仍待验证。实体遥控器与第三方结果未验收。

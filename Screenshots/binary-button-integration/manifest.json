@@ -1,0 +1,53 @@
+{
+  "sourceCommit": "3da467f76856aa0a7476a15ff6e17cd61b084f4e",
+  "appVersion": "2.0.0",
+  "appBuild": "244",
+  "windowPoints": [
+    1020,
+    772
+  ],
+  "method": "actual CUA interactions; internal Developer ID app, not a notarized distribution package",
+  "fixture": "12 synthetic QA actions, no user action content",
+  "screenshots": [
+    {
+      "file": "bind-entry-zh-light.jpg",
+      "format": "JPEG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "613d94d6696445a0dfb3b1f7fa95813a669f4a7c52b36052c4c2dc0cef39cc98",
+      "bytes": 183360
+    },
+    {
+      "file": "multiple-usages-zh-light.jpg",
+      "format": "JPEG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "534c7c5559342564c281425f80a507840025e470437653ff0dc3f723f0291411",
+      "bytes": 196164
+    },
+    {
+      "file": "search-zh-light.jpg",
+      "format": "JPEG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "059031f977fdafae28b738e9af5d60085ba10b1546ed5967f93c505f6781d11d",
+      "bytes": 295444
+    }
+  ],
+  "tested": [
+    "empty query shows first 10",
+    "padded case-insensitive name query",
+    "ID query",
+    "click saves binding",
+    "all usage locations",
+    "unbound bind entry",
+    "normal restart persistence"
+  ],
+  "notTested": [
+    "physical remote actions",
+    "third party speech input",
+    "final notarized package",
+    "Sparkle installation"
+  ],
+  "userSettingsRestored": true
+}
