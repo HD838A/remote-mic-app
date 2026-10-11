@@ -209,21 +209,37 @@ private struct AppleRemoteButtonGestureKey: Hashable {
 enum AppleRemoteInteractionPolicy {
     static func repeatIntervalMilliseconds(
         for button: RemoteButton,
-        action: ButtonAction,
+        configured: ConfiguredButtonAction,
         hasSecondaryAction: Bool,
         hasSingleActionOverride: Bool,
         frontmostBundleIdentifier: String?
     ) -> UInt64? {
         guard !hasSecondaryAction,
               !hasSingleActionOverride,
-              action != .disabled,
-              action != .appSwitcher,
+              configured.action != .disabled,
+              configured.action != .appSwitcher,
               HIDRemoteMonitor.shouldRepeat(
-                  action: action,
+                  configured: configured,
                   frontmostBundleIdentifier: frontmostBundleIdentifier
               )
         else { return nil }
         return HIDRemoteTiming.repeatIntervalMilliseconds(for: button)
+    }
+
+    static func repeatIntervalMilliseconds(
+        for button: RemoteButton,
+        action: ButtonAction,
+        hasSecondaryAction: Bool,
+        hasSingleActionOverride: Bool,
+        frontmostBundleIdentifier: String?
+    ) -> UInt64? {
+        repeatIntervalMilliseconds(
+            for: button,
+            configured: ConfiguredButtonAction(action: action, shortcut: nil),
+            hasSecondaryAction: hasSecondaryAction,
+            hasSingleActionOverride: hasSingleActionOverride,
+            frontmostBundleIdentifier: frontmostBundleIdentifier
+        )
     }
 
     static func blocksTouch(activeVoiceDeviceCount: Int, voiceStopping: Bool) -> Bool {
@@ -4224,7 +4240,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         )
         guard let interval = AppleRemoteInteractionPolicy.repeatIntervalMilliseconds(
             for: button,
-            action: configured.action,
+            configured: configured,
             hasSecondaryAction: hasSecondaryAction,
             hasSingleActionOverride: macroFeature.hasActiveBinding(
                 profileID: profileID,
@@ -4263,7 +4279,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             guard current == configured,
                   AppleRemoteInteractionPolicy.repeatIntervalMilliseconds(
                       for: button,
-                      action: current.action,
+                      configured: current,
                       hasSecondaryAction: self.appleRemoteHasSecondaryAction(
                           for: button,
                           profileID: profileID

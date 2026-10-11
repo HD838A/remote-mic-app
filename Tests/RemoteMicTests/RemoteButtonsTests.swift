@@ -301,7 +301,7 @@ struct RemoteButtonsTests {
         #expect(Set(ButtonAction.allCases.map(\.category)) == Set(ButtonActionCategory.allCases))
     }
 
-    @Test func customShortcutsNeverRepeatWhileNavigationActionsStillCan() {
+    @Test func customShortcutsRepeatOnlyForUnmodifiedBackspaceAndDirections() {
         #expect(!ButtonAction.customShortcut.allowsRepeat)
         #expect(!ButtonAction.commandReturn.allowsRepeat)
         #expect(!ButtonAction.shiftReturn.allowsRepeat)
@@ -321,6 +321,12 @@ struct RemoteButtonsTests {
         #expect(ButtonAction.arrowUp.allowsRepeat)
         #expect(ButtonAction.volumeDown.allowsRepeat)
         #expect(ButtonAction.deleteBackward.allowsRepeat)
+        let backspace = CustomKeyboardShortcut(keyCode: 51, modifierFlags: [], keyLabel: "")
+        let left = CustomKeyboardShortcut(keyCode: 123, modifierFlags: [], keyLabel: "")
+        let commandBackspace = CustomKeyboardShortcut(keyCode: 51, modifierFlags: [.command], keyLabel: "")
+        #expect(ConfiguredButtonAction(action: .customShortcut, shortcut: backspace).allowsSingleClickRepeat)
+        #expect(ConfiguredButtonAction(action: .customShortcut, shortcut: left).allowsSingleClickRepeat)
+        #expect(!ConfiguredButtonAction(action: .customShortcut, shortcut: commandBackspace).allowsSingleClickRepeat)
     }
 
     @Test func electronComposerFocusWaitsLongEnoughForTheManualAccessibilityTree() {
@@ -3209,6 +3215,62 @@ struct RemoteButtonsTests {
         #expect(settings.customMappingEnabled)
     }
 
+    @Test func basicKeyHoldRepeatsFinalActionAndStopsOnRelease() throws {
+        let cases: [(RemoteButton, Bool, Bool)] = [
+            (.back, false, false), (.back, false, true), (.back, true, false), (.back, true, true),
+            (.up, false, false), (.up, false, true), (.up, true, false), (.up, true, true),
+            (.down, false, false), (.down, false, true), (.down, true, false), (.down, true, true),
+            (.left, false, false), (.left, false, true), (.left, true, false), (.left, true, true),
+            (.right, false, false), (.right, false, true), (.right, true, false), (.right, true, true),
+        ]
+        for (button, shortcut, profileOverride) in cases {
+            let suite = "RemoteButtonsTests.finalRepeat.\(UUID().uuidString)"
+            let defaults = try #require(UserDefaults(suiteName: suite))
+            defer { defaults.removePersistentDomain(forName: suite) }
+            let settings = AppSettings(defaults: defaults)
+            settings.customMappingEnabled = true
+            let device = try #require(settings.selectedRemoteProfileID)
+            let actions: [RemoteButton: ButtonAction] = [
+                .back: .deleteBackward, .up: .arrowUp, .down: .arrowDown,
+                .left: .arrowLeft, .right: .arrowRight,
+            ]
+            let codes: [RemoteButton: UInt16] = [.back: 51, .up: 126, .down: 125, .left: 123, .right: 124]
+            let key = CustomKeyboardShortcut(keyCode: try #require(codes[button]), modifierFlags: [], keyLabel: "")
+            let configured = ConfiguredButtonAction(
+                action: shortcut ? .customShortcut : try #require(actions[button]),
+                shortcut: shortcut ? key : nil
+            )
+            settings.setAction(configured.action, for: button)
+            if shortcut { settings.setShortcut(key, for: button) }
+            settings.setAction(.disabled, for: button, trigger: .doubleClick)
+            settings.setAction(.disabled, for: button, trigger: .longPress)
+            settings.configuredActionOverride = { id, input, trigger in
+                profileOverride && id == device && input == button && trigger == .singleClick ? configured : nil
+            }
+            let scheduler = RemoteButtonsTestScheduler()
+            var performed: [ConfiguredButtonAction] = []
+            let monitor = HIDRemoteMonitor(settings: settings, profileID: device,
+                ownsEventSuppressor: false, scheduler: scheduler, runtimePermissions: { true },
+                actionPerformer: { _, _, value in performed.append(value); return true },
+                frontmostBundleIdentifier: { PresetApplication.safari.bundleIdentifier })
+            monitor.connectSimulatedDevice(fingerprint: "repeat-test", profileID: device, isSeized: true)
+            defer { monitor.disconnectSimulatedDevice() }
+            let down = Data([UInt8(button.hidUsage), 0, 0, 0, 0, 0])
+            monitor.handleSimulatedReport(reportID: 1, data: down)
+            monitor.handleSimulatedReport(reportID: 1, data: down)
+            #expect(performed == [configured])
+            scheduler.advance(toMilliseconds: HIDRemoteTiming.repeatStartMilliseconds - 1)
+            #expect(performed.count == 1)
+            let interval: UInt64 = button == .back ? 50 : 100
+            scheduler.advance(toMilliseconds: HIDRemoteTiming.repeatStartMilliseconds + 2 * interval)
+            #expect(performed == Array(repeating: configured, count: 4))
+            monitor.handleSimulatedReport(reportID: 1, data: Data(repeating: 0, count: 6))
+            let releasedCount = performed.count
+            scheduler.advance(toMilliseconds: 2_000)
+            #expect(performed.count == releasedCount)
+        }
+    }
+
     @Test func nativeEventDescriptorsCoverPotentialDuplicateEvents() {
         #expect(RemoteButton.up.nativeEvent == .keyboard(keyCode: 126))
         #expect(RemoteButton.ok.nativeEvent == .keyboard(keyCode: 36))
@@ -3291,7 +3353,7 @@ struct RemoteButtonsTests {
         }
 
         try click(expectSuppression: true)
-        #expect(performed == (unified ? [configured] : []))
+        #expect(performed == (unified ? Array(repeating: configured, count: 4) : []))
         #expect(legacyTriggers == (unified ? [] : [.singleClick]))
         #expect(diagnostics.contains { $0.contains("HID GESTURE") && $0.contains("path=raw") })
         #expect(diagnostics.contains {
@@ -3304,13 +3366,13 @@ struct RemoteButtonsTests {
         // Removing the active binding restores ordinary native arrows immediately.
         bindingActive = false
         try click(expectSuppression: false)
-        #expect(performed == (unified ? [configured] : []))
+        #expect(performed == (unified ? Array(repeating: configured, count: 4) : []))
         #expect(legacyTriggers == (unified ? [] : [.singleClick]))
         #expect(diagnostics.contains { $0.contains("HID NATIVE PASSTHROUGH") })
     }
 
     @Test(arguments: [RemoteButton.left, .right], [true, false])
-    func discoveredProfileSingleClickDoesNotStartBaseRepeat(button: RemoteButton, unified: Bool) throws {
+    func discoveredProfileSingleClickRepeatsFinalAction(button: RemoteButton, unified: Bool) throws {
         let suiteName = "RemoteButtonsTests.discoveryArrow.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
@@ -3367,7 +3429,7 @@ struct RemoteButtonsTests {
             virtualKey: button == .left ? 123 : 124, keyDown: false))
         up.setIntegerValueField(.keyboardEventKeyboardType, value: 40)
         #expect(suppressor.handle(type: .keyUp, event: up))
-        #expect(performed == (unified ? [configured] : []))
+        #expect(performed == (unified ? Array(repeating: configured, count: 4) : []))
         #expect(legacyTriggers == (unified ? [] : [.singleClick]))
         #expect(scheduler.pendingTaskCount == 0)
         #expect(diagnostics.contains {

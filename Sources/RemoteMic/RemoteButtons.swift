@@ -225,6 +225,10 @@ struct CustomKeyboardShortcut: Codable, Equatable {
         StandaloneKeyboardModifier.matching(self)
     }
 
+    var isRepeatableNavigationKey: Bool {
+        modifierFlags.isEmpty && ([51, 123, 124, 125, 126] as [UInt16]).contains(keyCode)
+    }
+
     private static func normalizedModifierFlags(
         keyCode: UInt16,
         modifierFlags: NSEvent.ModifierFlags
@@ -526,6 +530,15 @@ struct ConfiguredButtonAction: Codable, Equatable {
     }
 
     static let disabled = ConfiguredButtonAction(action: .disabled, shortcut: nil)
+
+    var allowsSingleClickRepeat: Bool {
+        action.allowsRepeat || (action == .customShortcut && shortcut?.isRepeatableNavigationKey == true)
+    }
+
+    var isDirectionalOrDeleteBackward: Bool {
+        action.isDirectionalOrDeleteBackward ||
+            (action == .customShortcut && shortcut?.isRepeatableNavigationKey == true)
+    }
 }
 
 enum CustomApplicationFocusStrategy: String, Codable, CaseIterable, Identifiable {
@@ -863,6 +876,10 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
             .previousCommandLeft,
             .nextCommandRight,
         ].contains(self) && presetApplication == nil && !isAppInternal
+    }
+
+    var isDirectionalOrDeleteBackward: Bool {
+        [.arrowUp, .arrowDown, .arrowLeft, .arrowRight, .deleteBackward].contains(self)
     }
 
     var isAppInternal: Bool {
