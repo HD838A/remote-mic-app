@@ -5,6 +5,26 @@ import Testing
 
 @Suite("Apple Watch BLE voice journey")
 struct WatchBluetoothVoiceJourneyTests {
+    @Test func watchNoAudioRecoveryWaitsForTheConfiguredTimeout() {
+        let startedAt = Date(timeIntervalSinceReferenceDate: 100)
+
+        #expect(!MobileVoiceWatchRecoveryPolicy.shouldRecover(
+            startedAt: startedAt,
+            now: Date(timeIntervalSinceReferenceDate: 104.9),
+            receivedBatchCount: 0
+        ))
+        #expect(MobileVoiceWatchRecoveryPolicy.shouldRecover(
+            startedAt: startedAt,
+            now: Date(timeIntervalSinceReferenceDate: 105),
+            receivedBatchCount: 0
+        ))
+        #expect(!MobileVoiceWatchRecoveryPolicy.shouldRecover(
+            startedAt: startedAt,
+            now: Date(timeIntervalSinceReferenceDate: 105),
+            receivedBatchCount: 1
+        ))
+    }
+
     @Test func firstVoiceAttemptWaitsForMacPreparationBeforeVoiceReady() throws {
         let server = WatchBluetoothRemoteServer()
         var macVoicePrepared = false
