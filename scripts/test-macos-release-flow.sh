@@ -914,11 +914,9 @@ version=9.9.9
 for name in \
   "SayAll-$version-Intel-Uninstaller.pkg" \
   "SayAll-$version-Intel-Installer.pkg" \
-  "SayAll-$version-Intel.dmg" \
   "SayAll-$version-Intel.zip" \
   "SayAll-$version-Uninstaller.pkg" \
   "SayAll-$version-Installer.pkg" \
-  "SayAll-$version.dmg" \
   "SayAll-$version.en.txt" \
   "SayAll-$version.zh.txt" \
   "SayAll-$version.zip" \
@@ -939,8 +937,6 @@ for feed, suffix in [("appcast.xml", ""), ("appcast-intel.xml", "-Intel")]:
 <sparkle:releaseNotesLink>https://download.sayall.app/mac/releases/v9.9.9/SayAll-9.9.9.zh.txt</sparkle:releaseNotesLink>
 </item></channel></rss>''')
 PYTHON
-
-( cd "$public_dir" && /usr/bin/shasum -a 256 "SayAll-$version.dmg" "SayAll-$version-Intel.dmg" > "SayAll-$version.dmg.sha256" )
 
 manifest="$WORK_DIR/staged-assets.json"
 write_fixture_manifest() {

@@ -31,7 +31,7 @@ jq -e '
   (.version | test("^[0-9]+[.][0-9]+[.][0-9]+$")) and
   .tag == ("v" + .version) and
   (.build | test("^[1-9][0-9]*$")) and
-  (.assets | type == "array" and length == 13) and
+  (.assets | type == "array" and length == 10) and
   ([.assets[].name] | length == (unique | length)) and
   all(.assets[];
     (.name | test("^[A-Za-z0-9][A-Za-z0-9._-]*$")) and
@@ -50,12 +50,9 @@ fi
 expected_names="$(printf '%s\n' \
   "SayAll-$version-Intel-Uninstaller.pkg" \
   "SayAll-$version-Intel-Installer.pkg" \
-  "$asset_prefix-$version-Intel.dmg" \
   "$asset_prefix-$version-Intel.zip" \
   "SayAll-$version-Uninstaller.pkg" \
   "SayAll-$version-Installer.pkg" \
-  "$asset_prefix-$version.dmg" \
-  "$asset_prefix-$version.dmg.sha256" \
   "$asset_prefix-$version.en.txt" \
   "$asset_prefix-$version.zh.txt" \
   "$asset_prefix-$version.zip" \

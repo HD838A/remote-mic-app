@@ -49,25 +49,14 @@ copy_asset() {
 
 copy_asset "$DIST/Uninstall SayAll.pkg" "SayAll-$version-Uninstaller.pkg"
 copy_asset "$DIST/Install SayAll.pkg" "SayAll-$version-Installer.pkg"
-copy_asset "$DIST/SayAll-$version.dmg" "SayAll-$version.dmg"
 copy_asset "$DIST/SayAll-$version.zip" "SayAll-$version.zip"
 copy_asset "$DIST/appcast.xml" appcast.xml
 copy_asset "$DIST/SayAll-$version.zh.txt" "SayAll-$version.zh.txt"
 copy_asset "$DIST/SayAll-$version.en.txt" "SayAll-$version.en.txt"
 copy_asset "$DIST/intel/Uninstall SayAll Intel.pkg" "SayAll-$version-Intel-Uninstaller.pkg"
 copy_asset "$DIST/intel/Install SayAll Intel.pkg" "SayAll-$version-Intel-Installer.pkg"
-copy_asset "$DIST/intel/SayAll-$version-Intel.dmg" "SayAll-$version-Intel.dmg"
 copy_asset "$DIST/intel/SayAll-$version-Intel.zip" "SayAll-$version-Intel.zip"
 copy_asset "$DIST/intel/appcast-intel.xml" appcast-intel.xml
-
-(
-  cd "$public_dir"
-  /usr/bin/shasum -a 256 \
-    "SayAll-$version.dmg" \
-    "SayAll-$version-Intel.dmg" \
-    > "SayAll-$version.dmg.sha256"
-  /usr/bin/shasum -a 256 -c "SayAll-$version.dmg.sha256"
-)
 
 production_prefix="https://download.sayall.app/mac/releases/$tag/"
 /usr/bin/grep -Fq "url=\"$production_prefix" "$public_dir/appcast.xml"
@@ -130,7 +119,7 @@ jq -e '
   (.version | test("^[0-9]+[.][0-9]+[.][0-9]+$")) and
   .tag == ("v" + .version) and
   (.build | test("^[1-9][0-9]*$")) and
-  (.assets | length == 13) and
+  (.assets | length == 10) and
   ([.assets[].name] | length == (unique | length)) and
   all(.assets[];
     (.name | test("^[A-Za-z0-9][A-Za-z0-9._-]*$")) and
@@ -144,5 +133,5 @@ jq -e '
 print "PUBLIC RELEASE ASSET BUNDLE PASS"
 print "TAG: $tag"
 print "SOURCE_COMMIT: $source_commit"
-print "ASSET_COUNT: 13"
+print "ASSET_COUNT: 10"
 print "BUNDLE: $BUNDLE"
