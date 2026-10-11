@@ -220,7 +220,7 @@ if [[ "$release_preflight_state" == exists && -z "$remote_tag_commit" ]]; then
 fi
 if [[ -z "$remote_tag_commit" ]]; then
   cdn_status=0
-  "$CDN_PROBE_BIN" "$tag" >/dev/null || cdn_status=$?
+  "$CDN_PROBE_BIN" "$tag" "$(jq -r '.target.build' "$ATTESTATION")" >/dev/null || cdn_status=$?
   case "$cdn_status" in
     0)
       ;;
