@@ -1026,6 +1026,8 @@ struct SettingsPageRegressionTests {
         #expect(source.contains("category == .commonPhrases"))
         #expect(source.contains("category == .applications"))
         #expect(source.contains("button_mapping.action_filter.all"))
+        #expect(source.contains("settings.portable_configuration.title"))
+        #expect(source.contains(".frame(maxWidth: .infinity, alignment: .leading)"))
         #expect(source.contains("in: Capsule()"))
         #expect(source.contains(".accessibilityAddTraits(isSelected ? .isSelected : [])"))
         #expect(source.contains("LazyVGrid("))
