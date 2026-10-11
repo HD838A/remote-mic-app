@@ -788,11 +788,16 @@ final class HIDRemoteMonitor {
                     "HID GESTURE button=\(button.rawValue) trigger=singleClick path=raw"
                 )
                 guard performConfiguredAction(for: button, trigger: .singleClick) else { return }
-                if !hasSingleClickOverride {
+                let configured = settings.configuredAction(
+                    for: button, trigger: .singleClick, profileID: profileID
+                )
+                let hasOpaqueSingleClickOverride = hasSingleClickOverride &&
+                    settings.configuredActionOverride?(profileID, button, .singleClick) == nil
+                if !hasOpaqueSingleClickOverride {
                     startRepeatIfNeeded(
                         usage: usage,
                         button: button,
-                        action: action
+                        configured: configured
                     )
                 }
             }
@@ -984,6 +989,17 @@ final class HIDRemoteMonitor {
         return ![.arrowUp, .arrowDown, .arrowLeft, .arrowRight, .deleteBackward].contains(action)
     }
 
+    static func shouldRepeat(
+        configured: ConfiguredButtonAction,
+        frontmostBundleIdentifier: String?
+    ) -> Bool {
+        guard configured.allowsSingleClickRepeat else { return false }
+        guard frontmostBundleIdentifier == PresetApplication.remoteMic.bundleIdentifier else {
+            return true
+        }
+        return !configured.isDirectionalOrDeleteBackward
+    }
+
     private func shouldUseNativePassthrough(
         button: RemoteButton,
         action: ButtonAction,
@@ -1020,15 +1036,15 @@ final class HIDRemoteMonitor {
     private func startRepeatIfNeeded(
         usage: UInt16,
         button: RemoteButton,
-        action: ButtonAction
+        configured: ConfiguredButtonAction
     ) {
         guard let interval = HIDRemoteTiming.repeatIntervalMilliseconds(for: button) else { return }
         guard
             !settings.hasSecondaryAction(for: button, profileID: profileID),
-            action != .disabled,
-            action != .appSwitcher,
+            configured.action != .disabled,
+            configured.action != .appSwitcher,
             Self.shouldRepeat(
-                action: action,
+                configured: configured,
                 frontmostBundleIdentifier: frontmostBundleIdentifier()
             )
         else { return }
@@ -1040,7 +1056,7 @@ final class HIDRemoteMonitor {
             guard let self, self.activeUsages.contains(usage) else { return }
             if self.settings.hasSecondaryAction(for: button, profileID: self.profileID) ||
                 !Self.shouldRepeat(
-                    action: action,
+                    configured: configured,
                     frontmostBundleIdentifier: self.frontmostBundleIdentifier()
                 ) {
                 self.repeatTimers.removeValue(forKey: usage)?.cancel()
@@ -1050,10 +1066,19 @@ final class HIDRemoteMonitor {
                 self.releaseForRevokedPermissions()
                 return
             }
-            let configured = self.settings.configuredAction(
+            let current = self.settings.configuredAction(
                 for: button, trigger: .singleClick, profileID: self.profileID
             )
-            if !self.actionPerformer(button, .singleClick, configured) {
+            let hasOpaqueOverride = self.hasOverrideBinding(
+                self.profileID, button, .singleClick
+            ) && self.settings.configuredActionOverride?(
+                self.profileID, button, .singleClick
+            ) == nil
+            guard current == configured, !hasOpaqueOverride else {
+                self.repeatTimers.removeValue(forKey: usage)?.cancel()
+                return
+            }
+            if !self.actionPerformer(button, .singleClick, current) {
                 self.releaseForRevokedPermissions()
             }
         }

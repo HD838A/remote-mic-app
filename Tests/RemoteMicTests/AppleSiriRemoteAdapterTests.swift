@@ -334,6 +334,22 @@ struct AppleSiriRemoteAdapterTests {
             hasSingleActionOverride: false,
             frontmostBundleIdentifier: otherApp
         ) == nil)
+        let backspaceShortcut = CustomKeyboardShortcut(keyCode: 51, modifierFlags: [], keyLabel: "")
+        #expect(AppleRemoteInteractionPolicy.repeatIntervalMilliseconds(
+            for: .back,
+            configured: ConfiguredButtonAction(action: .customShortcut, shortcut: backspaceShortcut),
+            hasSecondaryAction: false,
+            hasSingleActionOverride: false,
+            frontmostBundleIdentifier: otherApp
+        ) == 50)
+        let commandBackspace = CustomKeyboardShortcut(keyCode: 51, modifierFlags: [.command], keyLabel: "")
+        #expect(AppleRemoteInteractionPolicy.repeatIntervalMilliseconds(
+            for: .back,
+            configured: ConfiguredButtonAction(action: .customShortcut, shortcut: commandBackspace),
+            hasSecondaryAction: false,
+            hasSingleActionOverride: false,
+            frontmostBundleIdentifier: otherApp
+        ) == nil)
         #expect(AppleRemoteInteractionPolicy.repeatIntervalMilliseconds(
             for: .back,
             action: .customShortcut,
