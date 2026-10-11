@@ -2,9 +2,9 @@
 
 ## 范围与准备
 
-- 宿主和私有平台分支：`codex/unified-button-configuration`，源码候选；产品行为见[按键规范](../feature/button-mapping/PRODUCT_SPEC.md)。
+- 当前主线的源码集成与固定私有二进制集成均适用；产品行为见[按键规范](../feature/button-mapping/PRODUCT_SPEC.md)。下方带日期的候选记录保留为历史证据。
 - 免费 `macos-combination-actions` 与付费 `macos-button-profiles` 必须来自同一候选私有 checkout。
-  当前发布用固定二进制仍使用兼容接口，未由本轮升级或发布。
+  固定私有二进制集成也必须启用统一按键配置，不得退回缺少动作列表和引用位置的兼容路径。
 - 使用独立测试账户/数据目录，先导出旧配置并保留原免费模块绑定文件。不得用测试导入覆盖日常配置。
 - 准备两台可配置遥控器、两个目标 App、本机辅助功能/输入监控权限，以及具备 Plus 权益的方案环境。
   测试脚本只使用 `printf`、`sleep` 和简单 AppleScript 返回值，不读取第三方 App 私有数据。
@@ -12,7 +12,7 @@
 
 ## 自动化入口
 
-本地命令全部保留 `--disable-keychain`。三种宿主配置使用不同 scratch，避免旧模块产物影响 `canImport`：
+本地命令全部保留 `--disable-keychain`。各宿主配置使用不同 scratch，避免旧模块产物影响 `canImport`：
 
 ```sh
 SAYALL_COMBINATION_ACTIONS_PATH='' SAYALL_BUTTON_PROFILES_PACKAGE_PATH='' \
@@ -26,10 +26,16 @@ SAYALL_COMBINATION_ACTIONS_PATH=/path/to/private/packages/macos-combination-acti
 SAYALL_BUTTON_PROFILES_PACKAGE_PATH=/path/to/private/packages/macos-button-profiles \
 SAYALL_TEST_BUTTON_PROFILES_FREE=1 \
 swift test --disable-keychain --scratch-path .build/unified-paid
+
+SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH=/path/to/prepared-private-artifacts \
+SAYALL_COMBINATION_ACTIONS_PATH='' SAYALL_BUTTON_PROFILES_PACKAGE_PATH='' \
+swift build --disable-keychain --scratch-path .build/unified-binary -c release
 ```
 
 测试权益变量仅用于源码自动化和隔离 UI 数据，不得进入发布包。私有两 Package 分别执行完整 `swift test --disable-keychain`。
 宿主继续执行 `scripts/test.sh`、`scripts/check-repository-boundaries.sh`、`scripts/verify-repository-governance.sh` 和 `git diff --check`。
+
+`BuildSigningTests.binaryArtifactsEnableUnifiedButtonConfiguration` 实际求值 SwiftPM 清单：公开配置不启用统一接口，私有二进制配置同时为宿主和测试目标启用该接口。最终签名包必须再完成下方真实点击；源码配置通过不能替代二进制包验收。
 
 ## 页面和绑定
 

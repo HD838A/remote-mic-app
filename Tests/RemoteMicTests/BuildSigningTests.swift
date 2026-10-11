@@ -494,6 +494,57 @@ struct BuildSigningTests {
         #expect(verifySource.contains("button profile test access must not include private membership artifacts"))
     }
 
+    @Test func binaryArtifactsEnableUnifiedButtonConfiguration() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        for includesArtifacts in [false, true] {
+            var environment = ProcessInfo.processInfo.environment
+            for key in environment.keys where
+                (key.hasPrefix("SAYALL_") &&
+                    (key.hasSuffix("_PATH") || key.hasSuffix("_ROOT") ||
+                     key.hasPrefix("SAYALL_ENABLE") || key.hasPrefix("SAYALL_TEST"))) ||
+                    key == "REMOTE_MIC_HARDWARE_SIMULATION_PATH" {
+                environment.removeValue(forKey: key)
+            }
+            if includesArtifacts {
+                // dump-package evaluates build settings without resolving this fixture dependency.
+                environment["SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH"] =
+                    "/sayall-private-artifact-manifest-fixture"
+            }
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+            process.arguments = [
+                "swift", "package", "--disable-keychain", "--scratch-path",
+                root.appendingPathComponent(".build/manifest-\(includesArtifacts ? "binary" : "public")").path,
+                "dump-package",
+            ]
+            process.currentDirectoryURL = root
+            process.environment = environment
+            let output = Pipe()
+            process.standardOutput = output
+            process.standardError = FileHandle.nullDevice
+            try process.run()
+            let data = output.fileHandleForReading.readDataToEndOfFile()
+            process.waitUntilExit()
+            try #require(process.terminationStatus == 0)
+            let manifest = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+            let targets = try #require(manifest["targets"] as? [[String: Any]])
+            for name in ["RemoteMic", "RemoteMicTests"] {
+                let target = try #require(targets.first { $0["name"] as? String == name })
+                let settings = target["settings"] as? [[String: Any]] ?? []
+                let defines = settings.compactMap { setting -> String? in
+                    guard setting["tool"] as? String == "swift",
+                          let kind = setting["kind"] as? [String: Any],
+                          let define = kind["define"] as? [String: Any] else { return nil }
+                    return define["_0"] as? String
+                }
+                #expect(defines.contains("SAYALL_UNIFIED_BUTTON_CONFIGURATION") == includesArtifacts)
+            }
+        }
+    }
+
     @Test func preparedPrivateArtifactsAreOptionalAndFailClosed() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
