@@ -5219,56 +5219,67 @@ private struct StatisticsHeatmap: View {
                     }
                     .padding(.top, 26)
 
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        VStack(alignment: .leading, spacing: 8) {
-                            ZStack(alignment: .topLeading) {
-                                ForEach(Array(monthMarkers.enumerated()), id: \.offset) { _, marker in
-                                    Text(marker.label)
-                                        .font(.system(size: 12))
-                                        .foregroundStyle(.secondary)
-                                        .lineLimit(1)
-                                        .fixedSize(horizontal: true, vertical: false)
-                                        .frame(width: 36, alignment: .leading)
-                                        .offset(x: min(
-                                            CGFloat(marker.column) * (cellSize + cellSpacing),
-                                            metrics.gridWidth - 36
-                                        ))
+                    ScrollViewReader { scrollProxy in
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            VStack(alignment: .leading, spacing: 8) {
+                                ZStack(alignment: .topLeading) {
+                                    ForEach(Array(monthMarkers.enumerated()), id: \.offset) { _, marker in
+                                        Text(marker.label)
+                                            .font(.system(size: 12))
+                                            .foregroundStyle(.secondary)
+                                            .lineLimit(1)
+                                            .fixedSize(horizontal: true, vertical: false)
+                                            .frame(width: 36, alignment: .leading)
+                                            .offset(x: min(
+                                                CGFloat(marker.column) * (cellSize + cellSpacing),
+                                                metrics.gridWidth - 36
+                                            ))
+                                    }
                                 }
-                            }
-                            .frame(width: metrics.gridWidth, height: 18, alignment: .leading)
+                                .frame(width: metrics.gridWidth, height: 18, alignment: .leading)
 
-                            VStack(alignment: .leading, spacing: cellSpacing) {
-                                ForEach(0..<7, id: \.self) { row in
-                                    HStack(spacing: cellSpacing) {
-                                        ForEach(0..<columnCount, id: \.self) { column in
-                                            let index = column * 7 + row
-                                            let day = days[index]
-                                            Button {
-                                                guard let date = day.date else { return }
-                                                selectedDate = date
-                                            } label: {
-                                                RoundedRectangle(cornerRadius: 2, style: .continuous)
-                                                    .fill(fillColor(for: day))
-                                                    .overlay {
-                                                        if let date = day.date,
-                                                           calendar.isDateInToday(date) {
-                                                            RoundedRectangle(cornerRadius: 2, style: .continuous)
-                                                                .stroke(Color.accentColor, lineWidth: 1)
+                                VStack(alignment: .leading, spacing: cellSpacing) {
+                                    ForEach(0..<7, id: \.self) { row in
+                                        HStack(spacing: cellSpacing) {
+                                            ForEach(0..<columnCount, id: \.self) { column in
+                                                let index = column * 7 + row
+                                                let day = days[index]
+                                                Button {
+                                                    guard let date = day.date else { return }
+                                                    selectedDate = date
+                                                } label: {
+                                                    RoundedRectangle(cornerRadius: 2, style: .continuous)
+                                                        .fill(fillColor(for: day))
+                                                        .overlay {
+                                                            if let date = day.date,
+                                                               calendar.isDateInToday(date) {
+                                                                RoundedRectangle(cornerRadius: 2, style: .continuous)
+                                                                    .stroke(Color.accentColor, lineWidth: 1)
+                                                            }
                                                         }
-                                                    }
-                                                    .frame(width: cellSize, height: cellSize)
+                                                        .frame(width: cellSize, height: cellSize)
+                                                }
+                                                .buttonStyle(.plain)
+                                                .help(summary(for: day))
+                                                .accessibilityLabel(summary(for: day))
                                             }
-                                            .buttonStyle(.plain)
-                                            .help(summary(for: day))
-                                            .accessibilityLabel(summary(for: day))
                                         }
                                     }
                                 }
                             }
+                            .padding(.trailing, 6)
+                            .id("calendar-trailing")
                         }
-                        .padding(.trailing, 6)
+                        .onAppear {
+                            scrollProxy.scrollTo("calendar-trailing", anchor: .trailing)
+                        }
+                        .onChange(of: proxy.size.width) { _ in
+                            scrollProxy.scrollTo("calendar-trailing", anchor: .trailing)
+                        }
+                        .onChange(of: days.last?.id) { _ in
+                            scrollProxy.scrollTo("calendar-trailing", anchor: .trailing)
+                        }
                     }
-                    .defaultScrollAnchor(.trailing)
                 }
             }
         }

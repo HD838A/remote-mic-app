@@ -1888,7 +1888,7 @@ struct SettingsPageRegressionTests {
         #expect(heatmapSource.contains("ScrollView(.horizontal, showsIndicators: false)"))
         #expect(heatmapSource.contains("weekdayLabels"))
         #expect(heatmapSource.contains("StatisticsHeatmapMetrics(width: proxy.size.width"))
-        #expect(heatmapSource.contains(".defaultScrollAnchor(.trailing)"))
+        #expect(heatmapSource.contains("scrollProxy.scrollTo(\"calendar-trailing\", anchor: .trailing)"))
         #expect(heatmapSource.contains(".help(summary(for: day))"))
         #expect(source.contains("TimelineView(.everyMinute)"))
         #expect(heatmapSource.contains("height: cellSize"))
