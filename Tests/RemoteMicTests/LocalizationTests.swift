@@ -131,6 +131,7 @@ struct LocalizationTests {
         #expect(english["onboarding.voice_tool.system_fn.conflict"] == "The macOS Fn action needs to be changed")
         #expect(english["remote.device.model.apple_siri_remote_a2854"] == "Apple Remote (7th Generation)")
         #expect(english["remote.device.model.apple_siri_remote_a2540"] == "Apple Remote (6th Generation)")
+        #expect(english["siri_remote.activation.open_membership"] == "Unlock membership feature")
         #expect(english["remote.button.full.play_pause"] == "Play/Pause")
         #expect(english["connection.web.title"] == "WeChat Mini Program SayAll")
         #expect(
@@ -164,6 +165,7 @@ struct LocalizationTests {
                 #expect(localized["onboarding.voice_tool.system_fn.conflict"] == "系统仍在使用 Fn")
                 #expect(localized["remote.device.model.apple_siri_remote_a2854"] == "苹果遥控器第 7 代")
                 #expect(localized["remote.device.model.apple_siri_remote_a2540"] == "苹果遥控器第 6 代")
+                #expect(localized["siri_remote.activation.open_membership"] == "点击开通会员功能")
                 #expect(localized["connection.web.title"] == "微信小程序 SayAll")
                 #expect(localized["connection.web.help_short"]?.contains("微信小程序") == false)
             }

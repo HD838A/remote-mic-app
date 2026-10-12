@@ -2169,37 +2169,49 @@ struct SettingsView: View {
             level: batteryLevel,
             powerState: powerState
         )
+        let siriRemoteMembershipRequired = requiresSiriRemoteMembership(for: profile)
         return HStack(alignment: .center, spacing: 10) {
-            Button {
-                model.selectRemoteProfile(profile.id)
-            } label: {
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(modelName)
-                        .help(modelName)
-                        .font(.system(size: 13, weight: .semibold))
-                        .lineLimit(1)
-                    Text(systemName)
-                        .help(systemName)
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                    HStack(spacing: 7) {
-                        remoteConnectionLabel(connected: connected)
-                        if showsBattery {
-                            remoteBatteryLabel(level: batteryLevel, powerState: powerState)
-                        }
+            VStack(alignment: .leading, spacing: 5) {
+                Button {
+                    model.selectRemoteProfile(profile.id)
+                } label: {
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(modelName)
+                            .help(modelName)
+                            .font(.system(size: 13, weight: .semibold))
+                            .lineLimit(1)
+                        Text(systemName)
+                            .help(systemName)
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
                     }
-                    .font(.system(size: 12))
-                    .lineLimit(1)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(Rectangle())
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text("\(modelName), \(systemName)"))
+                .accessibilityAddTraits(selected ? .isSelected : [])
+                HStack(spacing: 7) {
+                    if siriRemoteMembershipRequired {
+                        Button(localization.text("siri_remote.activation.open_membership")) {
+                            model.selectRemoteProfile(profile.id)
+                            selectedSection = .membership
+                            membershipFeature.refreshIfNeeded()
+                        }
+                        .buttonStyle(.borderless)
+                        .foregroundStyle(Color.accentColor)
+                    } else {
+                        remoteConnectionLabel(connected: connected)
+                    }
+                    if showsBattery {
+                        remoteBatteryLabel(level: batteryLevel, powerState: powerState)
+                    }
+                }
+                .font(.system(size: 12))
+                .lineLimit(1)
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(Text("\(modelName), \(systemName)"))
-            .accessibilityAddTraits(selected ? .isSelected : [])
+            .frame(maxWidth: .infinity, alignment: .leading)
             #if SAYALL_SIRI_REMOTE_ENABLED && canImport(SayAllSiriRemote)
-            if profile.model.isAppleSiriRemote {
+            if profile.model.isAppleSiriRemote && !siriRemoteMembershipRequired {
                 siriRemoteCardActions(profile)
                     .fixedSize()
             }
@@ -2223,6 +2235,16 @@ struct SettingsView: View {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .stroke(selected ? Color.accentColor.opacity(0.65) : Color.secondary.opacity(0.18))
                 .allowsHitTesting(false)
+        }
+    }
+
+    private func requiresSiriRemoteMembership(for profile: RemoteDeviceProfile) -> Bool {
+        guard profile.model.isAppleSiriRemote else { return false }
+        switch membershipFeature.buttonProfilesAccessDecision {
+        case .allowed, .temporarilyOffline:
+            return false
+        case .requiresPlus, .unavailable:
+            return true
         }
     }
 
