@@ -601,6 +601,7 @@
 "statistics.ranking.view_all" = "查看全部回眸";
 "statistics.calendar.title" = "使用日历";
 "statistics.calendar.hint" = "点击日期或记录跳转回眸";
+"statistics.calendar.summary" = "%@\n回眸：%@ 条\n按键：%@ 次\n语音：%@";
 "statistics.calendar.open_reflections" = "在回眸中查看";
 "about.configuration.title" = "个性化配置";
 "about.configuration.description" = "迁移增益、音频设备、按键映射、快捷键、语言、Dock 显示、启动与更新通道设置。";

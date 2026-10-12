@@ -3302,11 +3302,13 @@ struct SettingsView: View {
                         .frame(maxWidth: 160, alignment: .trailing)
                 }
 
-                StatisticsHeatmap(
-                    days: statisticsCalendarDays,
-                    selectedDate: $selectedStatisticsDate,
-                    localization: localization
-                )
+                TimelineView(.everyMinute) { context in
+                    StatisticsHeatmap(
+                        days: statisticsCalendarDays(endingAt: context.date),
+                        selectedDate: $selectedStatisticsDate,
+                        localization: localization
+                    )
+                }
 
                 if let selectedStatisticsDate {
                     HStack {
@@ -3335,6 +3337,7 @@ struct SettingsView: View {
             }
             .frame(maxWidth: .infinity, alignment: .top)
         }
+        .onAppear { model.refreshTranscriptRecords() }
     }
 
     private var statisticsVoiceSessionRankingPanel: some View {
@@ -4341,11 +4344,14 @@ struct SettingsView: View {
         .sorted { $0.count == $1.count ? $0.title < $1.title : $0.count > $1.count }
     }
 
-    private var statisticsCalendarDays: [StatisticsCalendarDay] {
+    private func statisticsCalendarDays(endingAt date: Date) -> [StatisticsCalendarDay] {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(identifier: "Asia/Shanghai") ?? .current
         calendar.locale = localization.locale
-        return StatisticsCalendarDay.recentDays(settings: settings, calendar: calendar)
+        return StatisticsCalendarDay.recentDays(
+            settings: settings, endingAt: date, calendar: calendar,
+            records: model.transcriptRecords, assets: model.recordingAssets
+        )
     }
 
     private func usagePeriodLocalizationKey(_ period: UsageStatisticsPeriod) -> String {
@@ -5007,19 +5013,34 @@ struct StatisticsCalendarDay: Identifiable {
     let date: Date?
     let buttonPressCount: UInt64
     let voiceDuration: TimeInterval
+    let reflectionCount: Int
 
     static func recentDays(
         settings: AppSettings,
         endingAt date: Date = Date(),
-        calendar: Calendar
+        calendar: Calendar,
+        records: [TranscriptRecord] = [],
+        assets: [RecordingAssetManifest] = []
     ) -> [StatisticsCalendarDay] {
+        // Use the same saved date keys and session deduplication as Reflections.
+        let transcriptSessions = Set(records.map(\.sessionID))
+        let entries = records.map(TranscriptHistoryEntry.transcript)
+            + assets.filter { !transcriptSessions.contains($0.sessionID) }
+                .map(TranscriptHistoryEntry.recording)
+        let counts = Dictionary(grouping: entries, by: \.localDateKey).mapValues(\.count)
+        let formatter = DateFormatter()
+        formatter.calendar = calendar
+        formatter.timeZone = calendar.timeZone
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd"
         // Keep the heatmap to the latest 26 weeks so each day remains readable.
         let buckets = settings.dailyUsageStatistics(endingAt: date, days: 26 * 7, calendar: calendar)
         return buckets.map {
             StatisticsCalendarDay(
                 date: $0.startDate,
                 buttonPressCount: $0.statistics.buttonPressCount,
-                voiceDuration: $0.statistics.voiceDuration
+                voiceDuration: $0.statistics.voiceDuration,
+                reflectionCount: counts[formatter.string(from: $0.startDate), default: 0]
             )
         }
     }
@@ -5106,13 +5127,44 @@ private struct ProfileMetric: Identifiable {
     let unit: String?
 }
 
+struct StatisticsHeatmapMetrics {
+    static let spacing: CGFloat = 3
+    static let weekdayLabelWidth: CGFloat = 30
+    let cellSize: CGFloat
+    let gridWidth: CGFloat
+    let height: CGFloat
+
+    init(width: CGFloat, columns: Int) {
+        let columnCount = max(1, columns)
+        let gaps = CGFloat(columnCount - 1) * Self.spacing
+        let availableWidth = max(0, width - Self.weekdayLabelWidth - 8 - 6)
+        cellSize = max(14, min(28, (availableWidth - gaps) / CGFloat(columnCount)))
+        gridWidth = CGFloat(columnCount) * cellSize + gaps
+        height = 18 + 8 + 7 * cellSize + 6 * Self.spacing
+    }
+}
+
+private struct StatisticsHeatmapLayout: Layout {
+    let columns: Int
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = proposal.width ?? 500
+        return CGSize(width: width, height: StatisticsHeatmapMetrics(width: width, columns: columns).height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        subviews.first?.place(at: bounds.origin, anchor: .topLeading,
+                             proposal: ProposedViewSize(bounds.size))
+    }
+}
+
 private struct StatisticsHeatmap: View {
     let days: [StatisticsCalendarDay]
     @Binding var selectedDate: Date?
     let localization: LocalizationStore
 
-    private let cellSpacing: CGFloat = 3
-    private let weekdayLabelWidth: CGFloat = 30
+    private let cellSpacing = StatisticsHeatmapMetrics.spacing
+    private let weekdayLabelWidth = StatisticsHeatmapMetrics.weekdayLabelWidth
 
     private var calendar: Calendar {
         var calendar = Calendar(identifier: .gregorian)
@@ -5149,86 +5201,87 @@ private struct StatisticsHeatmap: View {
     }
 
     var body: some View {
-        GeometryReader { proxy in
-            let columnCount = max(1, days.count / 7)
-            let availableWidth = max(0, proxy.size.width - weekdayLabelWidth - 8)
-            let cellSize = max(
-                14,
-                min(
-                    28,
-                    (availableWidth - CGFloat(max(0, columnCount - 1)) * cellSpacing)
-                        / CGFloat(columnCount)
-                )
-            )
-            let gridWidth = CGFloat(columnCount) * cellSize
-                + CGFloat(max(0, columnCount - 1)) * cellSpacing
+        StatisticsHeatmapLayout(columns: max(1, days.count / 7)) {
+            GeometryReader { proxy in
+                let columnCount = max(1, days.count / 7)
+                let metrics = StatisticsHeatmapMetrics(width: proxy.size.width, columns: columnCount)
+                let cellSize = metrics.cellSize
 
-            ScrollView(.horizontal, showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 8) {
-                    ZStack(alignment: .topLeading) {
-                        ForEach(Array(monthMarkers.enumerated()), id: \.offset) { _, marker in
-                            Text(marker.label)
+                HStack(alignment: .top, spacing: 8) {
+                    // Keep weekday labels visible when earlier columns scroll offscreen.
+                    VStack(alignment: .leading, spacing: cellSpacing) {
+                        ForEach(Array(weekdayLabels.enumerated()), id: \.offset) { _, label in
+                            Text(label)
                                 .font(.system(size: 12))
                                 .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                                .fixedSize(horizontal: true, vertical: false)
-                                .frame(width: 36, alignment: .leading)
-                                .offset(x: CGFloat(marker.column) * (cellSize + cellSpacing))
+                                .frame(width: weekdayLabelWidth, height: cellSize, alignment: .leading)
                         }
                     }
-                    .frame(width: gridWidth, height: 18, alignment: .leading)
-                    .padding(.leading, weekdayLabelWidth + 8)
+                    .padding(.top, 26)
 
-                    HStack(alignment: .top, spacing: 8) {
-                        VStack(alignment: .leading, spacing: cellSpacing) {
-                            ForEach(Array(weekdayLabels.enumerated()), id: \.offset) { _, label in
-                                Text(label)
-                                    .font(.system(size: 12))
-                                    .foregroundStyle(.secondary)
-                                    .frame(
-                                        width: weekdayLabelWidth,
-                                        height: cellSize,
-                                        alignment: .leading
-                                    )
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            ZStack(alignment: .topLeading) {
+                                ForEach(Array(monthMarkers.enumerated()), id: \.offset) { _, marker in
+                                    Text(marker.label)
+                                        .font(.system(size: 12))
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(1)
+                                        .fixedSize(horizontal: true, vertical: false)
+                                        .frame(width: 36, alignment: .leading)
+                                        .offset(x: min(
+                                            CGFloat(marker.column) * (cellSize + cellSpacing),
+                                            metrics.gridWidth - 36
+                                        ))
+                                }
                             }
-                        }
+                            .frame(width: metrics.gridWidth, height: 18, alignment: .leading)
 
-                        VStack(alignment: .leading, spacing: cellSpacing) {
-                            ForEach(0..<7, id: \.self) { row in
-                                HStack(spacing: cellSpacing) {
-                                    ForEach(0..<columnCount, id: \.self) { column in
-                                        let index = column * 7 + row
-                                        let day = days[index]
-                                        Button {
-                                            guard let date = day.date else { return }
-                                            selectedDate = date
-                                        } label: {
-                                            RoundedRectangle(cornerRadius: 2, style: .continuous)
-                                                .fill(fillColor(for: day))
-                                                .overlay {
-                                                    if let date = day.date,
-                                                       calendar.isDateInToday(date) {
-                                                        RoundedRectangle(cornerRadius: 2, style: .continuous)
-                                                            .stroke(Color.accentColor, lineWidth: 1)
+                            VStack(alignment: .leading, spacing: cellSpacing) {
+                                ForEach(0..<7, id: \.self) { row in
+                                    HStack(spacing: cellSpacing) {
+                                        ForEach(0..<columnCount, id: \.self) { column in
+                                            let index = column * 7 + row
+                                            let day = days[index]
+                                            Button {
+                                                guard let date = day.date else { return }
+                                                selectedDate = date
+                                            } label: {
+                                                RoundedRectangle(cornerRadius: 2, style: .continuous)
+                                                    .fill(fillColor(for: day))
+                                                    .overlay {
+                                                        if let date = day.date,
+                                                           calendar.isDateInToday(date) {
+                                                            RoundedRectangle(cornerRadius: 2, style: .continuous)
+                                                                .stroke(Color.accentColor, lineWidth: 1)
+                                                        }
                                                     }
-                                                }
-                                                .frame(width: cellSize, height: cellSize)
+                                                    .frame(width: cellSize, height: cellSize)
+                                            }
+                                            .buttonStyle(.plain)
+                                            .help(summary(for: day))
+                                            .accessibilityLabel(summary(for: day))
                                         }
-                                        .buttonStyle(.plain)
-                                        .help(day.date.map { dateText($0) } ?? "")
                                     }
                                 }
                             }
                         }
+                        .padding(.trailing, 6)
                     }
+                    .defaultScrollAnchor(.trailing)
                 }
-                .padding(.trailing, 6)
             }
         }
-        // Reserve enough vertical space for all seven weekday rows, including
-        // the largest square cells and the month-label gutter. Without this
-        // explicit height the GeometryReader can collapse and clip rows.
-        .frame(height: 250, alignment: .top)
+    }
+
+    private func summary(for day: StatisticsCalendarDay) -> String {
+        guard let date = day.date else { return "" }
+        let seconds = UsageStatisticsPresentation.wholeSeconds(day.voiceDuration)
+        let duration = String(format: "%d:%02d:%02d", seconds / 3600, (seconds / 60) % 60, seconds % 60)
+        return String(
+            format: localization.text("statistics.calendar.summary"),
+            dateText(date), String(day.reflectionCount), String(day.buttonPressCount), duration
+        )
     }
 
     private func fillColor(for day: StatisticsCalendarDay) -> Color {
