@@ -2,18 +2,14 @@
 
 ## 2.0.0 (Pre-release)
 
-- Adds Combination Actions and Button Profiles for saving, binding, and use.
-- Adds membership resources with more content to use.
-- Adds support for Siri Remote, Chromecast, and Mac Remote.
-- Improves the remote settings and voice-trigger-key experience.
-- Fixes an upgrade issue that prevented some remote settings from loading.
-- Improves account and membership recovery without requesting a keychain password.
-- Keeps unsent diagnostic records across app restarts to improve troubleshooting.
-- Fixes installer and upgrade failures with older virtual microphone states while keeping the existing name and settings.
-- Improves the Apple Remote Siri Remote installer option and existing-component detection.
+- Adds Common Phrases for quick insertion, editing, import, and export.
+- Adds support for Apple Siri Remote.
+- Adds WeChat mini program connections by scanning a code.
+- Adds Button Profiles for saving and switching button settings.
+- Adds membership resources with more actions and profiles.
+- Improves Combination Action setup with easier search and selection.
+- Supports more voice-trigger shortcuts.
 
-- Fixes a time-precision issue when revoking MCP authorization immediately.
-- Fixes virtual microphone naming conflicts that could incorrectly block installation or upgrade.
 ## 1.9.21 (Pre-release)
 
 - Improves update check reliability and reduces intermittent failures to retrieve update information.
