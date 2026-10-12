@@ -335,10 +335,16 @@ fi
 if [[ "$SAYALL_BUTTON_PROFILES_INCLUDED" == "true" &&
       "$SAYALL_PRIVATE_ARTIFACT_INCLUDED" == "true" ]]; then
   SAYALL_MEMBERSHIP_RESOURCE_BUNDLE="$SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH/Resources/SayAllMembership_SayAllMembershipUI.bundle"
+  SAYALL_COMMON_PHRASES_RESOURCE_BUNDLE="$SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH/Resources/SayAllCommonPhrases_SayAllCommonPhrases.bundle"
   if [[ ! -d "$SAYALL_MEMBERSHIP_RESOURCE_BUNDLE" ||
         ! -f "$SAYALL_MEMBERSHIP_RESOURCE_BUNDLE/Contents/Resources/MembershipCenterCopy.json" ||
         ! -f "$SAYALL_MEMBERSHIP_RESOURCE_BUNDLE/Contents/Resources/AppIcon.png" ]]; then
     print -u2 "Prepared private artifacts are missing the SayAll membership resource bundle"
+    exit 1
+  fi
+  if [[ ! -d "$SAYALL_COMMON_PHRASES_RESOURCE_BUNDLE" ||
+        ! -f "$SAYALL_COMMON_PHRASES_RESOURCE_BUNDLE/Contents/Resources/CommonPhrases.json" ]]; then
+    print -u2 "Prepared private artifacts are missing the SayAll common phrases resource bundle"
     exit 1
   fi
 fi
@@ -391,8 +397,6 @@ DEFAULT_CACHE_PATH="/private/tmp/remote-mic-swiftpm-cache/$VERSION-$BUILD/$RELEA
 BUILD_SCRATCH_PATH="${REMOTE_MIC_BUILD_SCRATCH_PATH:-$DEFAULT_SCRATCH_PATH}"
 BUILD_CACHE_PATH="${REMOTE_MIC_BUILD_CACHE_PATH:-$DEFAULT_CACHE_PATH}"
 SPARKLE_FRAMEWORK="$BUILD_SCRATCH_PATH/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework"
-
-COMMON_PHRASES_JSON="$(/usr/bin/python3 "$ROOT/scripts/generate-common-phrases.py" "$ROOT/Resources/CommonPhrases/built-in.md")"
 
 run_release_stage app-swift-build "$RELEASE_SWIFT_BUILD_TIMEOUT_SECONDS" \
   xcrun swift build \
@@ -448,7 +452,6 @@ if [[ -e "$APP_DIR" ]]; then
   print "PREVIOUS APP MOVED TO TRASH: $TRASH_DESTINATION"
 fi
 mkdir -p "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Helpers" "$APP_DIR/Contents/Resources"
-print -r -- "$COMMON_PHRASES_JSON" > "$APP_DIR/Contents/Resources/CommonPhrases.json"
 test -d "$SPARKLE_FRAMEWORK"
 test -x "$MCP_HELPER_PATH"
 if [[ "$SAYALL_SIRI_REMOTE_INCLUDED" == "true" ]]; then
@@ -699,6 +702,9 @@ if [[ "$SAYALL_BUTTON_PROFILES_INCLUDED" == "true" &&
   ditto --norsrc --noextattr --noqtn --noacl \
     "$SAYALL_MEMBERSHIP_RESOURCE_BUNDLE" \
     "$APP_DIR/Contents/Resources/SayAllMembership_SayAllMembershipUI.bundle"
+  ditto --norsrc --noextattr --noqtn --noacl \
+    "$SAYALL_COMMON_PHRASES_RESOURCE_BUNDLE" \
+    "$APP_DIR/Contents/Resources/SayAllCommonPhrases_SayAllCommonPhrases.bundle"
 fi
 SPARKLE_VERSION_DIR="$APP_DIR/Contents/Frameworks/Sparkle.framework/Versions/B"
 if [[ "$SIGNING_IDENTITY" != "-" ]]; then
