@@ -2,7 +2,7 @@
 
 [English](README.en.md)
 
-[官网](https://sayall.app/) · [配置教程](https://sayall.app/tutorial/)
+[官网](https://sayall.app/) · [配置教程](https://sayall.app/tutorial/) · [微博](https://weibo.com/getSayAll)
 
 <p>
   <a href="https://github.com/HD838A/remote-mic-app/stargazers">
@@ -13,9 +13,9 @@
 <table>
   <tr>
     <td align="center">
-      <img src="Screenshots/wechat-group-qrcode.jpg" alt="无线麦 APP 微信群二维码" width="220"><br>
-      <strong>微信群二维码</strong><br>
-      微信扫码加入交流群
+      <a href="Screenshots/douyin-sayall.jpg"><img src="Screenshots/douyin-sayall.jpg" alt="无线麦 SayAll.App 抖音二维码" width="220"></a><br>
+      <strong>抖音 · GetSayAll</strong><br>
+      保存图片后，在抖音扫一扫
     </td>
     <td align="center">
       <a href="Screenshots/xhs-sayall.jpg"><img src="Screenshots/xhs-sayall.jpg" alt="无线麦小红书二维码" width="220"></a><br>
@@ -104,6 +104,8 @@ Mac App 继续采用官网下载方式分发，Mac App Store 上架暂时暂停�
 
 ## 下载与安装
 
+- 备用下载：[百度网盘](https://pan.baidu.com/s/1yuBRBCDEWnnwfzbxye5rnQ?pwd=9qhx)，提取码：`9qhx`。
+
 - 配置教程：[打开官网配置教程](https://sayall.app/tutorial/)。
 
 - 最新正式版（Apple Silicon）：通过 [Cloudflare CDN 固定入口](https://download.sayall.app/mac) 下载。当前正式版入口仅提供 Apple Silicon 安装包，且不需要随版本更新。
@@ -113,7 +115,7 @@ Release 中的 Apple Silicon 安装包名为 `SayAll-VERSION-BUILD-AppleSilicon-
 
 运行对应的 Installer PKG。安装器会把无线麦SayAll.app 安装为 `/Applications/SayAll.app`，并检查现有 `MiRemoteV 2ch`：健康且兼容时原样保留，缺失或不可用时才安装或更新。只需要 App、已经使用其他回环音频设备的高级用户，可从同一 Release 下载 App-only ZIP。
 
-自 v1.3.0 起，正式发布包使用 Apple Developer ID 签名并已完成 Apple 公证。请只从官网 Cloudflare CDN 固定入口或本项目 GitHub Releases 下载，并按 GitHub 资产摘要或 PKG 签名完成核验。
+自 v1.3.0 起，正式发布包使用 Apple Developer ID 签名并已完成 Apple 公证。请从官网 Cloudflare CDN 固定入口、本项目 GitHub Releases 或上方百度网盘备用入口下载，并按 GitHub 资产摘要或 PKG 签名完成核验。
 
 ## 首次使用
 

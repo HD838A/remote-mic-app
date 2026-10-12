@@ -2,7 +2,7 @@
 
 [简体中文](README.md)
 
-[Website](https://sayall.app/en/) · [Setup tutorial](https://sayall.app/en/tutorial/)
+[Website](https://sayall.app/en/) · [Setup tutorial](https://sayall.app/en/tutorial/) · [Weibo](https://weibo.com/getSayAll)
 
 <p>
   <a href="https://github.com/HD838A/remote-mic-app/stargazers">
@@ -13,9 +13,9 @@
 <table>
   <tr>
     <td align="center">
-      <img src="Screenshots/wechat-group-qrcode.jpg" alt="SayAll WeChat group QR code" width="220"><br>
-      <strong>WeChat group</strong><br>
-      Scan in WeChat to join
+      <a href="Screenshots/douyin-sayall.jpg"><img src="Screenshots/douyin-sayall.jpg" alt="SayAll.App Douyin QR code for GetSayAll" width="220"></a><br>
+      <strong>Douyin · GetSayAll</strong><br>
+      Save this image, then scan it in Douyin
     </td>
     <td align="center">
       <a href="Screenshots/xhs-sayall.jpg"><img src="Screenshots/xhs-sayall.jpg" alt="SayAll Xiaohongshu QR code" width="220"></a><br>
@@ -104,6 +104,8 @@ After you enable Revisit, SayAll keeps only final text entered through SayAll an
 
 ## Download and install
 
+- Backup download: [Baidu Netdisk](https://pan.baidu.com/s/1yuBRBCDEWnnwfzbxye5rnQ?pwd=9qhx). Access code: `9qhx`.
+
 - Setup tutorial: [Open the website tutorial](https://sayall.app/en/tutorial/).
 
 - Latest stable release (Apple Silicon): download it through the permanent [Cloudflare CDN entry](https://download.sayall.app/mac). The current stable entry provides only the Apple Silicon package and does not change between versions.
@@ -113,7 +115,7 @@ Release assets use the version and Build in their names: `SayAll-VERSION-BUILD-A
 
 Run the matching Installer PKG. It installs **SayAll.app** and checks the existing MiRemoteV 2ch. A healthy compatible driver is kept in place; a missing or unusable driver is installed or updated. Advanced users who need only the app can download the app-only ZIP from the same Release.
 
-Starting with v1.3.0, official release packages are signed with an Apple Developer ID and notarized by Apple. Download only through the official Cloudflare CDN entry or this project's GitHub Releases. Verify the GitHub asset digest or the PKG signature.
+Starting with v1.3.0, official release packages are signed with an Apple Developer ID and notarized by Apple. Download through the official Cloudflare CDN entry, this project's GitHub Releases, or the Baidu Netdisk backup link above. Verify the GitHub asset digest or the PKG signature.
 
 ## First use
 
