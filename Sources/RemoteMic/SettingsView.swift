@@ -848,13 +848,20 @@ struct SettingsView: View {
         case .statistics:
             statisticsPage
         case .commonPhrases:
-            model.membershipFeature.commonPhrasesSettingsView(
-                onOpenMembership: {
+            if membershipFeature.canUseCommonPhrases {
+                membershipFeature.commonPhrasesSettingsView(
+                    onOpenMembership: {
+                        selectedSection = .membership
+                        membershipFeature.refreshIfNeeded()
+                    },
+                    onReturn: { selectedSection = .mapping }
+                )
+            } else {
+                membershipFeature.membershipRequiredView {
                     selectedSection = .membership
-                    model.membershipFeature.refreshIfNeeded()
-                },
-                onReturn: { selectedSection = .mapping }
-            )
+                    membershipFeature.refreshIfNeeded()
+                }
+            }
         case .transcripts:
             transcriptHistoryPage
         case .permissions:
@@ -2507,7 +2514,7 @@ struct SettingsView: View {
                 alignment: .leading,
                 spacing: 8
             ) {
-                ForEach(actions) { action in
+                ForEach(actions.filter { $0 != .openCommonPhrases }) { action in
                     let unavailableApplication = action.presetApplication.map {
                         !installedBundleIdentifiers.contains($0.bundleIdentifier)
                     } ?? false
@@ -2531,27 +2538,105 @@ struct SettingsView: View {
                     .disabled(isManagedPowerAction || unavailableApplication || unavailableExperiment)
                 }
                 if actions.contains(.openCommonPhrases) {
-                    Button {
-                        selectedSection = .commonPhrases
-                    } label: {
-                        mappingActionLabel(
-                            title: localization.text("common_phrases.adjust"),
-                            isSelected: false,
-                            systemImage: "slider.horizontal.3"
-                        )
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("common-phrases-adjust")
+                    commonPhrasesActionControls(
+                        selectedAction: selectedAction,
+                        isManagedPowerAction: isManagedPowerAction,
+                        onSelect: onSelect
+                    )
                 }
             }
         }
     }
 
-    private func mappingActionLabel(title: String, isSelected: Bool, systemImage: String) -> some View {
+    private func commonPhrasesActionControls(
+        selectedAction: ButtonAction,
+        isManagedPowerAction: Bool,
+        onSelect: @escaping (ButtonAction) -> Void
+    ) -> some View {
+        HStack(spacing: 8) {
+            Button {
+                guard membershipFeature.canUseCommonPhrases else { return }
+                onSelect(.openCommonPhrases)
+            } label: {
+                mappingActionLabel(
+                    title: localization.text("action.open_common_phrases"),
+                    isSelected: selectedAction == .openCommonPhrases,
+                    systemImage: selectedAction == .openCommonPhrases
+                        ? "checkmark.circle.fill"
+                        : "circle",
+                    badge: membershipFeature.canUseCommonPhrases
+                        ? localization.text("membership.badge")
+                        : nil
+                )
+            }
+            .buttonStyle(.plain)
+            .disabled(isManagedPowerAction || !membershipFeature.canUseCommonPhrases)
+            .accessibilityIdentifier("common-phrases-open")
+
+            if !membershipFeature.canUseCommonPhrases {
+                membershipFeature.membershipRequiredView {
+                    selectedSection = .membership
+                    membershipFeature.refreshIfNeeded()
+                }
+                .frame(minWidth: 170)
+                .accessibilityIdentifier("common-phrases-membership")
+            }
+
+            Button {
+                if membershipFeature.canUseCommonPhrases {
+                    selectedSection = .commonPhrases
+                } else {
+                    selectedSection = .membership
+                    membershipFeature.refreshIfNeeded()
+                }
+            } label: {
+                mappingActionLabel(
+                    title: localization.text("common_phrases.adjust"),
+                    isSelected: false,
+                    systemImage: "slider.horizontal.3"
+                )
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("common-phrases-adjust")
+
+            Button {
+                if membershipFeature.canUseCommonPhrases {
+                    _ = membershipFeature.openCommonPhrases(source: "settings_example")
+                } else {
+                    selectedSection = .membership
+                    membershipFeature.refreshIfNeeded()
+                }
+            } label: {
+                mappingActionLabel(
+                    title: localization.text("common_phrases.example"),
+                    isSelected: false,
+                    systemImage: "text.quote"
+                )
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("common-phrases-example")
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func mappingActionLabel(
+        title: String,
+        isSelected: Bool,
+        systemImage: String,
+        badge: String? = nil
+    ) -> some View {
         HStack(spacing: 7) {
             Image(systemName: systemImage)
                 .foregroundStyle(isSelected ? Color.accentColor : Color.secondary)
             Text(title).lineLimit(1).truncationMode(.tail)
+            if let badge {
+                Text(badge)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(Color.accentColor)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Color.accentColor.opacity(0.12), in: Capsule())
+            }
             Spacer(minLength: 0)
         }
         .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
