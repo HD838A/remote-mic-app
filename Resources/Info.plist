@@ -34,7 +34,7 @@
 		</dict>
 	</array>
 	<key>CFBundleVersion</key>
-	<string>247</string>
+	<string>248</string>
 	<key>HardwareAnnouncementURL</key>
 	<string>https://download.sayall.app/mac/announcements/hardware.json</string>
 	<key>LSMinimumSystemVersion</key>
