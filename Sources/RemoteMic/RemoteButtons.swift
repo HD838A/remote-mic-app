@@ -405,6 +405,10 @@ struct CustomKeyboardShortcut: Codable, Equatable {
         case 53: return "⎋"
         case 76: return "⌤"
         case 117: return "⌦"
+        case 123: return "←"
+        case 124: return "→"
+        case 125: return "↓"
+        case 126: return "↑"
         default: return keyLabel
         }
     }
@@ -808,6 +812,70 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
         case .openChrome: return localization.text("action.open_chrome")
         case .openSafari: return localization.text("action.open_safari")
         case .openZed: return localization.text("action.open_zed")
+        }
+    }
+
+    /// Compact macOS notation used in the button mapping page.
+    ///
+    /// The action's full name remains available for accessibility and hover
+    /// help. This method only changes the resting visual label.
+    func visualDisplayName(using localization: LocalizationStore) -> String {
+        compactShortcut?.visualDisplayName(using: localization) ?? displayName(using: localization)
+    }
+
+    /// Full shortcut wording used by the button mapping tooltip.
+    func detailedDisplayName(using localization: LocalizationStore) -> String {
+        compactShortcut?.detailedDisplayName(using: localization) ?? displayName(using: localization)
+    }
+
+    private var compactShortcut: CustomKeyboardShortcut? {
+        switch self {
+        case .escape:
+            return CustomKeyboardShortcut(keyCode: 53, modifierFlags: [], keyLabel: "Esc")
+        case .returnKey:
+            return CustomKeyboardShortcut(keyCode: 36, modifierFlags: [], keyLabel: "Return")
+        case .commandReturn:
+            return CustomKeyboardShortcut(keyCode: 36, modifierFlags: .command, keyLabel: "Return")
+        case .shiftReturn:
+            return CustomKeyboardShortcut(keyCode: 36, modifierFlags: .shift, keyLabel: "Return")
+        case .commandCopy:
+            return CustomKeyboardShortcut(keyCode: 8, modifierFlags: .command, keyLabel: "C")
+        case .commandPaste:
+            return CustomKeyboardShortcut(keyCode: 9, modifierFlags: .command, keyLabel: "V")
+        case .commandClose:
+            return CustomKeyboardShortcut(keyCode: 13, modifierFlags: .command, keyLabel: "W")
+        case .commandQuit:
+            return CustomKeyboardShortcut(keyCode: 12, modifierFlags: .command, keyLabel: "Q")
+        case .commandCut:
+            return CustomKeyboardShortcut(keyCode: 7, modifierFlags: .command, keyLabel: "X")
+        case .commandSelectAll:
+            return CustomKeyboardShortcut(keyCode: 0, modifierFlags: .command, keyLabel: "A")
+        case .commandUndo:
+            return CustomKeyboardShortcut(keyCode: 6, modifierFlags: .command, keyLabel: "Z")
+        case .commandRedo:
+            return CustomKeyboardShortcut(keyCode: 6, modifierFlags: [.shift, .command], keyLabel: "Z")
+        case .commandFind:
+            return CustomKeyboardShortcut(keyCode: 3, modifierFlags: .command, keyLabel: "F")
+        case .commandSave:
+            return CustomKeyboardShortcut(keyCode: 1, modifierFlags: .command, keyLabel: "S")
+        case .commandDelete:
+            return CustomKeyboardShortcut(keyCode: 51, modifierFlags: .command, keyLabel: "Delete")
+        case .arrowUp:
+            return CustomKeyboardShortcut(keyCode: 126, modifierFlags: [], keyLabel: "Up")
+        case .arrowDown:
+            return CustomKeyboardShortcut(keyCode: 125, modifierFlags: [], keyLabel: "Down")
+        case .arrowLeft:
+            return CustomKeyboardShortcut(keyCode: 123, modifierFlags: [], keyLabel: "Left")
+        case .arrowRight:
+            return CustomKeyboardShortcut(keyCode: 124, modifierFlags: [], keyLabel: "Right")
+        case .deleteBackward:
+            return CustomKeyboardShortcut(keyCode: 51, modifierFlags: [], keyLabel: "Delete")
+        case .showDesktop:
+            return CustomKeyboardShortcut(keyCode: 103, modifierFlags: .function, keyLabel: "F11")
+        case .appSwitcher:
+            return CustomKeyboardShortcut(keyCode: 48, modifierFlags: .command, keyLabel: "Tab")
+        default:
+            return nil
         }
     }
 

@@ -2524,7 +2524,7 @@ struct SettingsView: View {
                         onSelect(action)
                     } label: {
                         mappingActionLabel(
-                            title: action.displayName(using: localization) +
+                            title: action.visualDisplayName(using: localization) +
                                 (unavailableApplication
                                     ? localization.text("common.suffix.not_installed")
                                     : unavailableExperiment
@@ -2535,6 +2535,8 @@ struct SettingsView: View {
                         )
                     }
                     .buttonStyle(.plain)
+                    .help(action.detailedDisplayName(using: localization))
+                    .accessibilityLabel(Text(action.detailedDisplayName(using: localization)))
                     .disabled(isManagedPowerAction || unavailableApplication || unavailableExperiment)
                 }
                 if actions.contains(.openCommonPhrases) {

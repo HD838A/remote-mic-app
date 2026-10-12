@@ -962,6 +962,22 @@ struct RemoteButtonsTests {
         ) == shortcut)
     }
 
+    @Test func buttonMappingUsesCompactShortcutSymbolsWithFullTooltipNames() {
+        let localization = LocalizationStore(
+            settings: AppSettings(defaults: .standard),
+            resourceBundle: RemoteMicResourceBundle.mainOrDevelopment
+        )
+        localization.select(.english)
+
+        #expect(ButtonAction.commandRedo.visualDisplayName(using: localization) == "⇧⌘Z")
+        #expect(ButtonAction.commandRedo.detailedDisplayName(using: localization) == "Shift + Command + Z")
+        #expect(ButtonAction.commandDelete.visualDisplayName(using: localization) == "⌘⌫")
+        #expect(ButtonAction.commandDelete.detailedDisplayName(using: localization) == "Command + Delete")
+        #expect(ButtonAction.arrowLeft.visualDisplayName(using: localization) == "←")
+        #expect(ButtonAction.arrowLeft.detailedDisplayName(using: localization) == "Left")
+        #expect(ButtonAction.volumeUp.visualDisplayName(using: localization) == "Increase System Volume")
+    }
+
     @Test func customShortcutPreservesRightCommandDeviceSide() {
         let localization = LocalizationStore(
             settings: AppSettings(defaults: .standard),
