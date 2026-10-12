@@ -601,6 +601,7 @@
 "statistics.ranking.view_all" = "View all Reflections";
 "statistics.calendar.title" = "Usage Calendar";
 "statistics.calendar.hint" = "Click a day or record to open Reflections";
+"statistics.calendar.summary" = "%@\nReflections: %@\nButton presses: %@\nSpeaking time: %@";
 "statistics.calendar.open_reflections" = "Open in Reflections";
 "about.configuration.title" = "Your Settings";
 "about.configuration.description" = "Transfer audio, button, shortcut, language, appearance, startup, and update settings to another Mac.";

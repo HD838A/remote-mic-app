@@ -1814,6 +1814,53 @@ struct SettingsPageRegressionTests {
         }
     }
 
+    @Test(arguments: [CGFloat(260), 320, 500, 900])
+    func calendarHeightFitsAllRowsWithoutReservedBlankSpace(width: CGFloat) {
+        let metrics = StatisticsHeatmapMetrics(width: width, columns: 26)
+        #expect(metrics.cellSize >= 14 && metrics.cellSize <= 28)
+        #expect(metrics.height == 18 + 8 + 7 * metrics.cellSize + 6 * 3)
+        #expect(metrics.gridWidth == 26 * metrics.cellSize + 25 * 3)
+        if width < 400 {
+            #expect(metrics.height == 142)
+            #expect(metrics.gridWidth > width) // End anchoring is required here.
+        }
+    }
+
+    @MainActor
+    @Test func calendarCountsReflectionsOnceAndAdvancesAcrossMidnight() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try #require(TimeZone(identifier: "Asia/Shanghai"))
+        let today = try #require(calendar.date(from: DateComponents(year: 2026, month: 10, day: 12)))
+        let yesterday = today.addingTimeInterval(-60)
+        let record = TranscriptRecord(sessionID: UUID(), startedAt: yesterday, endedAt: yesterday,
+            applicationName: "Fixture", bundleIdentifier: "com.sayall.fixture", source: .unknown,
+            originalTranscript: "fixture", calendar: calendar)
+        func asset(sessionID: UUID) -> RecordingAssetManifest {
+            RecordingAssetManifest(schemaVersion: 1, id: UUID(), sessionID: sessionID,
+                startedAt: record.startedAt, endedAt: record.endedAt,
+                localDateKey: record.localDateKey, timeZoneIdentifier: record.timeZoneIdentifier,
+                source: .unknown, applicationKey: record.applicationKey,
+                applicationName: record.applicationName, bundleIdentifier: record.bundleIdentifier,
+                relativeMediaPath: "fixture.m4a", durationMilliseconds: 1_000,
+                byteCount: 0, sha256: "", format: "m4a")
+        }
+        let suite = "RemoteMicTests.CalendarCounts.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let settings = AppSettings(defaults: defaults)
+        let assets = [asset(sessionID: record.sessionID), asset(sessionID: UUID())]
+        let before = StatisticsCalendarDay.recentDays(settings: settings, endingAt: yesterday,
+            calendar: calendar, records: [record], assets: assets)
+        let after = StatisticsCalendarDay.recentDays(settings: settings, endingAt: today,
+            calendar: calendar, records: [record], assets: assets)
+        #expect(before.last?.date == calendar.startOfDay(for: yesterday))
+        #expect(before.last?.reflectionCount == 2)
+        #expect(after.last?.date == today)
+        #expect(after.last?.reflectionCount == 0)
+        #expect(after[180].reflectionCount == 2)
+        #expect(after.reduce(0) { $0 + $1.reflectionCount } == 2)
+    }
+
     @Test func profileMetricsKeepApprovedWideSingleRowLayout() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -1835,13 +1882,15 @@ struct SettingsPageRegressionTests {
         #expect(summarySource.contains("GridItem(.flexible()), GridItem(.flexible())"))
         #expect(source.contains("approved layout as one row at the default width"))
 
-        let heatmap = try #require(source.range(of: "private struct StatisticsHeatmap"))
-        let heatmapSource = source[heatmap.lowerBound...]
+        let heatmap = try #require(source.range(of: "private struct StatisticsHeatmap: View"))
+        let heatmapEnd = try #require(source.range(of: "private struct UsageStatisticCard", range: heatmap.upperBound..<source.endIndex))
+        let heatmapSource = source[heatmap.lowerBound..<heatmapEnd.lowerBound]
         #expect(heatmapSource.contains("ScrollView(.horizontal, showsIndicators: false)"))
         #expect(heatmapSource.contains("weekdayLabels"))
-        #expect(heatmapSource.contains("let cellSize = max("))
-        #expect(heatmapSource.contains("min(\n                    28"))
-        #expect(heatmapSource.contains("14,"))
+        #expect(heatmapSource.contains("StatisticsHeatmapMetrics(width: proxy.size.width"))
+        #expect(heatmapSource.contains("scrollProxy.scrollTo(\"calendar-trailing\", anchor: .trailing)"))
+        #expect(heatmapSource.contains(".help(summary(for: day))"))
+        #expect(source.contains("TimelineView(.everyMinute)"))
         #expect(heatmapSource.contains("height: cellSize"))
         #expect(heatmapSource.contains("let index = column * 7 + row"))
         #expect(heatmapSource.contains("StatisticsCalendarDay.weekdaySymbols("))
@@ -1855,7 +1904,7 @@ struct SettingsPageRegressionTests {
         #expect(source.contains("entries.prefix(10)"))
         #expect(source.contains("settings.voiceSessionRanking.prefix(10)"))
         #expect(source.contains(".frame(maxWidth: .infinity, alignment: .top)"))
-        #expect(source.contains(".frame(height: 250, alignment: .top)"))
+        #expect(!heatmapSource.contains(".frame(height: 250"))
         #expect(source.contains("ForEach(0..<7, id: \\.self)"))
     }
 
