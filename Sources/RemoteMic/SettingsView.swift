@@ -2600,12 +2600,9 @@ struct SettingsView: View {
             .accessibilityIdentifier("common-phrases-adjust")
 
             Button {
-                if membershipFeature.canUseCommonPhrases {
-                    _ = membershipFeature.openCommonPhrases(source: "settings_example")
-                } else {
-                    selectedSection = .membership
-                    membershipFeature.refreshIfNeeded()
-                }
+                _ = membershipFeature.canUseCommonPhrases
+                    ? membershipFeature.openCommonPhrases(source: "settings_example")
+                    : membershipFeature.openCommonPhrasesPreview(source: "settings_preview")
             } label: {
                 mappingActionLabel(
                     title: localization.text("common_phrases.example"),
