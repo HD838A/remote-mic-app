@@ -1174,6 +1174,8 @@
 "action.open_common_phrases" = "Open Common Phrases";
 "common_phrases.title" = "Common Phrases";
 "common_phrases.adjust" = "Edit Common Phrases";
+"common_phrases.example" = "Common Phrases Example";
+"membership.badge" = "Member";
 "common_phrases.return_to_buttons" = "Back";
 "common_phrases.library" = "Phrase Library";
 "common_phrases.editor" = "Edit Content";

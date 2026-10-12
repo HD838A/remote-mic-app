@@ -130,6 +130,14 @@ final class MembershipFeatureIntegration: ObservableObject, @unchecked Sendable 
         #endif
     }
 
+    func openCommonPhrasesPreview(source: String = "host_preview") -> Bool {
+        #if SAYALL_MEMBERSHIP_ENABLED && canImport(SayAllMembershipHostAdapter)
+        MainActor.assumeIsolated { adapter?.openCommonPhrasesPreview(source: source) ?? false }
+        #else
+        false
+        #endif
+    }
+
     func claimsCommonPhrase(button: String, source: String) -> Bool {
         #if SAYALL_MEMBERSHIP_ENABLED && canImport(SayAllMembershipHostAdapter)
         MainActor.assumeIsolated { adapter?.claimsCommonPhrase(button: button, source: source) ?? false }

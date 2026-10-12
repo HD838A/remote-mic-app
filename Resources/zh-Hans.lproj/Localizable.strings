@@ -1174,6 +1174,8 @@
 "action.open_common_phrases" = "打开常用语";
 "common_phrases.title" = "常用语";
 "common_phrases.adjust" = "调整常用语";
+"common_phrases.example" = "常用语示例";
+"membership.badge" = "会员";
 "common_phrases.return_to_buttons" = "返回";
 "common_phrases.library" = "常用语库";
 "common_phrases.editor" = "编辑内容";
