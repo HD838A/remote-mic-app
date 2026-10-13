@@ -33,4 +33,3 @@ Free 账号不能保存收费方案。
 完整结果见 Testing/UnifiedConfigurationEntries.html。
 
 没有验证真实遥控器动作、旧版本安装升级及回滚。
-
