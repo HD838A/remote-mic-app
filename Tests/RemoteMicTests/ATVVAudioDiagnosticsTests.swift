@@ -330,4 +330,141 @@ struct ATVVAudioDiagnosticsTests {
         #expect(!diagnostic.contains("flushPlayer("))
         #expect(!diagnostic.contains("setVoiceKeyPressed("))
     }
+
+    @Test func missingCallbacksWithoutStopAreObservedOnceAndNeverEndTheBusinessSession() throws {
+        let clock = Clock()
+        let diagnostic = clock.make()
+        diagnostic.start(frameSamples: 240, origin: "remote_initiated")
+        clock.advance(2)
+        clock.advance(8)
+        #expect(clock.lines.filter { $0.contains("phase=receive_stalled") }.count == 1)
+        #expect(clock.finals.isEmpty)
+        #expect(!diagnostic.hasStopped)
+        #expect(clock.lines.last?.contains("business_action=none terminal_result=pending") == true)
+        diagnostic.receive(bytes: 120, frameSize: 120, at: clock.now)
+        clock.advance(2)
+        diagnostic.receive(bytes: 120, frameSize: 120, at: clock.now)
+        #expect(clock.lines.filter { $0.contains("phase=receive_resumed") }.count == 1)
+        diagnostic.stop(reason: "session_reset")
+        clock.advance(0.4)
+        #expect(try #require(clock.finals.first).contains("silence_episodes=2"))
+        let lineCount = clock.lines.count
+        clock.advance(30)
+        #expect(clock.lines.count == lineCount)
+    }
+
+    @Test func delayedObserverMeasuresItsOwnQueueLagWithoutClaimingBLEArrival() throws {
+        let clock = Clock()
+        let diagnostic = clock.make()
+        diagnostic.start(frameSamples: 240, origin: "remote_initiated")
+        clock.advance(5) // The two-second observation runs three seconds late.
+        let stalled = try #require(clock.lines.first { $0.contains("phase=receive_stalled") })
+        #expect(stalled.contains("observation_lag_ms=3000"))
+        #expect(stalled.contains("transport_arrival=unknown"))
+        diagnostic.stop(reason: "session_reset")
+        clock.advance(0.4)
+        #expect(try #require(clock.finals.first).contains("observation_max_lag_ms=3000"))
+    }
+
+    @Test func softwareReleaseRetryKeepsOneEdgeLogAndItsActualSubmissionTime() throws {
+        let clock = Clock()
+        let diagnostic = clock.make()
+        var output = VirtualAudioOutputDiagnosticSnapshot()
+        output.boundToSelectedDevice = true
+        diagnostic.start(frameSamples: 240, origin: "remote_initiated")
+        diagnostic.bindOutput(generation: 4, snapshot: {
+            .init(output: output, lastPlayedAt: 100.135)
+        }, fn: { (nil, nil) })
+        diagnostic.softwareKey(edge: "down", mode: "right_command", result: "event_submitted")
+        clock.advance(0.02)
+        diagnostic.decoded(bytes: 120, samples: 240)
+        diagnostic.routed(samples: 240, enqueued: true)
+        clock.advance(0.08)
+        diagnostic.softwareKey(edge: "up", mode: "right_command", result: "event_submit_failed")
+        diagnostic.softwareKey(edge: "up", mode: "right_command", result: "event_submitted")
+        output.counters.scheduledSamples = 240
+        output.counters.playedSamples = 240
+        diagnostic.stop(reason: "remote_stop")
+        clock.advance(0.4)
+        let final = try #require(clock.finals.first)
+        #expect(final.contains("completion=normal"))
+        #expect(final.contains("software_up_result=event_submitted software_submit_failures=1"))
+        #expect(final.contains("software_down_to_first_pcm_ms=20 software_up_to_last_playback_ms=35"))
+        #expect(final.contains("trigger_down_to_first_pcm_ms=unknown"))
+        #expect(clock.lines.filter { $0.contains("phase=software_trigger") }.count == 2)
+    }
+
+    @Test func unreleasedSoftwareKeyCannotProduceANormalAudioFinal() throws {
+        let clock = Clock()
+        let diagnostic = clock.make()
+        var output = VirtualAudioOutputDiagnosticSnapshot()
+        output.boundToSelectedDevice = true
+        diagnostic.start(frameSamples: 240, origin: "remote_initiated")
+        diagnostic.bindOutput(generation: 4, snapshot: { .init(output: output) }, fn: { (nil, nil) })
+        diagnostic.decoded(bytes: 120, samples: 240)
+        diagnostic.routed(samples: 240, enqueued: true)
+        output.counters.scheduledSamples = 240
+        output.counters.playedSamples = 240
+        diagnostic.softwareKey(edge: "up", mode: "right_command", result: "event_submit_failed")
+        diagnostic.stop(reason: "remote_stop")
+        clock.advance(0.4)
+        #expect(try #require(clock.finals.first).contains("completion=forced observed_result=local_delivery_failed"))
+    }
+
+    @Test func cappedBuffersAccountForOverflowAndCancellationAgainstDecodedSamples() throws {
+        let clock = Clock()
+        let diagnostic = clock.make()
+        diagnostic.start(frameSamples: 240, origin: "remote_initiated")
+        var buffer = CommandVoiceActivationAudioBuffer(maximumSampleCount: 32_000)
+        buffer.begin()
+        for _ in 0..<400 {
+            let samples = Array(repeating: Int16(10), count: 240)
+            diagnostic.decoded(bytes: 120, samples: samples.count)
+            let before = buffer.bufferedSampleCount
+            let accepted = buffer.appendIfWaiting(samples)
+            #expect(accepted)
+            diagnostic.buffered(samples: samples.count)
+            diagnostic.bufferLost(samples: before + samples.count - buffer.bufferedSampleCount,
+                                  stage: "configuration", reason: "overflow")
+        }
+        #expect(buffer.bufferedSampleCount == 32_000)
+        diagnostic.bufferLost(samples: buffer.bufferedSampleCount, stage: "configuration",
+                              reason: "cancelled", cause: "stop_before_audio_ready")
+        buffer.cancel()
+        diagnostic.stop(reason: "remote_stop")
+        clock.advance(0.4)
+        let final = try #require(clock.finals.first)
+        #expect(final.contains("decoded_samples=96000"))
+        #expect(final.contains("dropped_samples=96000"))
+        #expect(final.contains("buffer_configuration_overflow_samples=64000 buffer_configuration_cancelled_samples=32000"))
+        #expect(final.contains("last_buffer_loss_cause=stop_before_audio_ready"))
+        #expect(final.contains("completion=forced"))
+        #expect(buffer.bufferedSampleCount == 0)
+    }
+
+    @Test func allNewObservationsRemainWithinTwentyLinesAcrossRepeatedStallsAndTwentyThousandPackets() throws {
+        let clock = Clock()
+        let diagnostic = clock.make()
+        diagnostic.start(frameSamples: 240, origin: "remote_initiated")
+        diagnostic.softwareKey(edge: "down", mode: "right_command", result: "event_submitted")
+        clock.advance(2)
+        for index in 0..<20_000 {
+            clock.now = 102 + Double(index) * 0.015
+            diagnostic.receive(bytes: 120, frameSize: 120, at: clock.now)
+            diagnostic.accept(bytes: 120)
+            diagnostic.decoded(bytes: 120, samples: 240)
+            diagnostic.routed(samples: 240, enqueued: true)
+            diagnostic.handlerFinished(since: clock.now)
+        }
+        clock.advance(3)
+        diagnostic.receive(bytes: 0, frameSize: 120, at: clock.now)
+        diagnostic.softwareKey(edge: "up", mode: "right_command", result: "event_submit_failed")
+        diagnostic.softwareKey(edge: "up", mode: "right_command", result: "event_submitted")
+        diagnostic.stop(reason: "session_reset")
+        clock.advance(0.4)
+        #expect(clock.lines.count == 20)
+        #expect(clock.lines.reduce(0) { $0 + $1.utf8.count } < 20_000)
+        #expect(try #require(clock.finals.first).contains("decoded_samples=4800000 routed_samples=4800000"))
+        #expect(clock.finals.count == 1)
+    }
 }

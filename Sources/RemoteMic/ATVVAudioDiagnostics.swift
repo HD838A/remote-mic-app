@@ -21,6 +21,7 @@ final class ATVVAudioDiagnostics {
     static let maximumProgressLines = 12
     static let tailObservationDelay: TimeInterval = 0.35
     static let maximumOutputObservation: TimeInterval = 10
+    static let silenceObservationInterval: TimeInterval = 2
     private static var nextOperationID: UInt64 = 0 // All callers are on the original main queue.
 
     let operationID: UInt64
@@ -61,7 +62,22 @@ final class ATVVAudioDiagnostics {
     private var drops: [Drop: Int] = [:]
     private var droppedBytes = 0
     private var droppedSamples = 0
-        private var firstErrorFields = "error_domain=none error_code=0"
+    private var firstErrorFields = "error_domain=none error_code=0"
+    private var bufferLosses: [String: Int] = [:]
+    private var lastBufferLossReason = "none"
+    private var lastBufferLossCause = "none"
+    private var softwareDownAt: TimeInterval?
+    private var softwareUpAt: TimeInterval?
+    private var softwareKeyMode = "unknown"
+    private var softwareDownResult = "unobserved"
+    private var softwareUpResult = "unobserved"
+    private var softwareSubmitFailures = 0
+    private var silenceEpisodes = 0
+    private var silenceActive = false
+    private var silenceLogged = false
+    private var recoveryLogged = false
+    private var maxSilenceMilliseconds = 0
+    private var maxObservationLagMilliseconds = 0
     private var lastReceivedBytes = 0
     private var playback: (() -> Playback?)?
     private var fnObservation: (() -> (down: TimeInterval?, up: TimeInterval?))?
@@ -112,6 +128,14 @@ final class ATVVAudioDiagnostics {
             }
         }
         lastCallbackAt = time
+        if silenceActive, !hasStopped {
+            silenceActive = false
+            if !recoveryLogged {
+                recoveryLogged = true
+                log("ATVV AUDIO diagnostic operation_id=\(operationID) phase=receive_resumed " +
+                    "result=callback_observed silence_episodes=\(silenceEpisodes) transport_arrival=unknown")
+            }
+        }
         // One bounded idle aggregate even when every notification is rejected before START.
         if callbacks == 1 {
             schedule(Self.progressInterval) { [self] in
@@ -124,9 +148,62 @@ final class ATVVAudioDiagnostics {
         guard !hasStarted else { duplicateStarts += 1; return }
         startedAt = uptime()
         lastProgressAt = startedAt!
-                streamOrigin = origin
+        streamOrigin = origin
         log("ATVV AUDIO diagnostic operation_id=\(operationID) phase=started " +
             "callback_queue=main callback_wait_ms=unknown transport_arrival=unknown stream_origin=\(origin) frame_samples=\(frameSamples)")
+        observeSilence()
+    }
+
+    private func observeSilence() {
+        let dueAt = uptime() + Self.silenceObservationInterval
+        schedule(Self.silenceObservationInterval) { [weak self] in
+            guard let self, !self.hasStopped else { return }
+            let now = self.uptime()
+            self.maxObservationLagMilliseconds = max(self.maxObservationLagMilliseconds, self.milliseconds(now - dueAt))
+            let age = self.milliseconds(now - (self.lastCallbackAt ?? self.startedAt ?? self.createdAt))
+            self.maxSilenceMilliseconds = max(self.maxSilenceMilliseconds, age)
+            if age >= self.milliseconds(Self.silenceObservationInterval), !self.silenceActive {
+                self.silenceActive = true
+                self.silenceEpisodes += 1
+                if !self.silenceLogged {
+                    self.silenceLogged = true
+                    self.log("ATVV AUDIO diagnostic operation_id=\(self.operationID) phase=receive_stalled " +
+                        "result=observation_only reason=no_audio_callback callback_age_ms=\(age) " +
+                        "threshold_ms=\(self.milliseconds(Self.silenceObservationInterval)) " +
+                        "observation_lag_ms=\(self.maxObservationLagMilliseconds) " +
+                        "decoded_samples=\(self.decodedSamples) business_action=none terminal_result=pending transport_arrival=unknown")
+                }
+            }
+            self.observeSilence()
+        }
+    }
+
+    /// Records submission to the public keyboard API, never physical hardware or target acceptance.
+    func softwareKey(edge: String, mode: String, result: String) {
+        guard !isFinalized else { return }
+        softwareKeyMode = mode
+        if result == "event_submit_failed" { softwareSubmitFailures += 1 }
+        if edge == "down" {
+            let first = softwareDownResult == "unobserved"
+            if softwareDownAt == nil || result == "event_submitted" { softwareDownResult = result }
+            if result == "event_submitted", softwareDownAt == nil { softwareDownAt = uptime() }
+            if !first { return }
+        } else {
+            let first = softwareUpResult == "unobserved"
+            if softwareUpAt == nil || result == "event_submitted" { softwareUpResult = result }
+            if result == "event_submitted", softwareUpAt == nil { softwareUpAt = uptime() }
+            if !first { return }
+        }
+        log("ATVV AUDIO diagnostic operation_id=\(operationID) phase=software_trigger edge=\(edge) " +
+            "mode=\(mode) result=\(result) target_response=unknown physical_trigger=unobserved")
+    }
+
+    func bufferLost(samples: Int, stage: String, reason: String, cause: String? = nil) {
+        guard samples > 0 else { return }
+        bufferLosses["\(stage)_\(reason)", default: 0] += samples
+        droppedSamples += samples
+        lastBufferLossReason = reason
+        lastBufferLossCause = cause ?? reason
     }
 
     func bindOutput(
@@ -220,7 +297,7 @@ final class ATVVAudioDiagnostics {
         let interrupted = output.map { max(0, $0.counters.interruptedSamples - countersAtStart.interruptedSamples) }
         let attributionKnown = observed?.sessionIsolated == true
         let locallyFailed = (interrupted ?? 0) > 0 || enqueueFailures > 0 || droppedSamples > 0 ||
-            startRejectionReason != "none"
+            startRejectionReason != "none" || softwareUpResult == "event_submit_failed"
         // An empty player queue does not include configuration, command or FnTap buffers.
         let unaccountedSamples = max(0, decodedSamples - droppedSamples - (scheduled ?? 0))
         let fullyPlayed = attributionKnown && output != nil && decodedSamples > 0 &&
@@ -274,6 +351,10 @@ final class ATVVAudioDiagnostics {
         fields.append("output_queue_max_wait_ms=\(observed.map { String($0.maxQueueWaitMilliseconds) } ?? "unknown")")
         fields.append("observed_fn_down_to_first_pcm_ms=\(interval(observedFnDownAt, firstPCMAt))")
         fields.append("observed_fn_up_to_last_playback_ms=\(interval(fnUp, observed?.lastPlayedAt))")
+        fields.append("software_key_mode=\(softwareKeyMode) software_down_result=\(softwareDownResult) software_up_result=\(softwareUpResult) software_submit_failures=\(softwareSubmitFailures)")
+        fields.append("software_down_to_first_pcm_ms=\(interval(softwareDownAt, firstPCMAt)) software_up_to_last_playback_ms=\(interval(softwareUpAt, observed?.lastPlayedAt))")
+        fields.append("silence_episodes=\(silenceEpisodes) receive_stalled_at_stop=\(silenceActive) max_silence_ms=\(maxSilenceMilliseconds) observation_max_lag_ms=\(maxObservationLagMilliseconds)")
+        fields.append("last_buffer_loss_reason=\(lastBufferLossReason) last_buffer_loss_cause=\(lastBufferLossCause)")
         fields.append("fn_source=global_unattributed trigger_down_to_first_pcm_ms=unknown")
         fields.append("transcript_commit=unknown external_capture=unknown")
         fields.append("diagnostic_boundary=transport_and_external_tool_unobservable")
@@ -284,10 +365,16 @@ final class ATVVAudioDiagnostics {
 
     private func counts() -> String {
         let reasons = Drop.allCases.map { "drop_\($0.rawValue)=\(drops[$0, default: 0])" }.joined(separator: " ")
+        let losses = ["configuration", "command"].flatMap { stage in
+            ["overflow", "cancelled", "configuration_failed"].map { reason in
+                let key = "\(stage)_\(reason)"
+                return "buffer_\(key)_samples=\(bufferLosses[key, default: 0])"
+            }
+        }.joined(separator: " ")
         return "callbacks=\(callbacks) callback_bytes=\(callbackBytes) accepted_notifications=\(acceptedNotifications) " +
             "accepted_bytes=\(acceptedBytes) frames=\(frames) decoded_bytes=\(decodedBytes) " +
             "decoded_samples=\(decodedSamples) routed_samples=\(routedSamples) buffered_samples=\(bufferedSamples) " +
-            "enqueue_failures=\(enqueueFailures) dropped_bytes=\(droppedBytes) dropped_samples=\(droppedSamples) " + reasons
+            "enqueue_failures=\(enqueueFailures) dropped_bytes=\(droppedBytes) dropped_samples=\(droppedSamples) " + reasons + " " + losses
     }
 
     private func milliseconds(_ seconds: TimeInterval) -> Int { max(0, Int((seconds * 1_000).rounded())) }
