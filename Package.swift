@@ -120,6 +120,9 @@ if buttonProfilesTestAccessEnabled {
 if unifiedButtonConfigurationAvailable {
     remoteMicSwiftSettings.append(.define("SAYALL_UNIFIED_BUTTON_CONFIGURATION"))
 }
+var remoteMicLinkerSettings: [LinkerSetting] = []
+if privateArtifactsAvailable { remoteMicLinkerSettings.append(.unsafeFlags(["-ObjC"])) }
+
 var remoteMicTestSwiftSettings: [SwiftSetting] = []
 if unifiedButtonConfigurationAvailable {
     remoteMicTestSwiftSettings.append(.define("SAYALL_UNIFIED_BUTTON_CONFIGURATION"))
@@ -279,7 +282,7 @@ let package = Package(
             dependencies: remoteMicDependencies,
             path: "Sources/RemoteMic",
             swiftSettings: remoteMicSwiftSettings,
-            linkerSettings: [
+            linkerSettings: remoteMicLinkerSettings + [
                 .linkedFramework("Network"),
             ]
         ),

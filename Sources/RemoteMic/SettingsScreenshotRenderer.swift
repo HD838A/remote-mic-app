@@ -207,7 +207,7 @@ enum SettingsScreenshotRenderer {
         // Interactive review uses the production view, navigation and window geometry,
         // with the same isolated fixture settings as the offscreen renderer.
         if ProcessInfo.processInfo.environment["REMOTE_MIC_SETTINGS_SCREENSHOT_INTERACTIVE"] == "1" {
-            let section = sections.first { $0.rawValue == onlySection } ?? .mapping
+            let section = sections.first { $0.rawValue == onlySection } ?? onlySection.map { SettingsSection(rawValue: $0) } ?? .mapping
             let controller = NSHostingController(rootView: SettingsView(
                 model: model,
                 updateInformation: updateInformation,

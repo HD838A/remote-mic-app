@@ -13,19 +13,23 @@ import SayAllSiriRemote
 import SwiftUI
 import UniformTypeIdentifiers
 
-enum SettingsSection: String, CaseIterable, Identifiable {
-    case connection
-    case privateFeature
-    case macros
-    case buttonProfiles
-    case membership
-    case mapping
-    case statistics
-    case transcripts
-    case commonPhrases
-    case permissions
-    case about
-
+struct SettingsSection: RawRepresentable, Hashable, CaseIterable, Identifiable {
+    let rawValue: String
+    init(rawValue: String) { self.rawValue = rawValue }
+    static let connection = SettingsSection(rawValue: "connection")
+    static let privateFeature = SettingsSection(rawValue: "privateFeature")
+    static let macros = SettingsSection(rawValue: "macros")
+    static let buttonProfiles = SettingsSection(rawValue: "buttonProfiles")
+    static let membership = SettingsSection(rawValue: "membership")
+    static let mapping = SettingsSection(rawValue: "mapping")
+    static let statistics = SettingsSection(rawValue: "statistics")
+    static let transcripts = SettingsSection(rawValue: "transcripts")
+    static let commonPhrases = SettingsSection(rawValue: "commonPhrases")
+    static let permissions = SettingsSection(rawValue: "permissions")
+    static let about = SettingsSection(rawValue: "about")
+    static let allCases: [SettingsSection] = [.connection, .privateFeature, .macros, .buttonProfiles, .membership, .mapping, .statistics, .transcripts, .commonPhrases, .permissions, .about]
+    static func supplemental(_ id: String) -> SettingsSection { SettingsSection(rawValue: "supplemental:" + id) }
+    var supplementalID: String? { rawValue.hasPrefix("supplemental:") ? String(rawValue.dropFirst(13)) : nil }
     var id: String { rawValue }
 
     var title: LocalizedStringKey {
@@ -41,6 +45,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .transcripts: return "settings.section.transcripts"
         case .permissions: return "settings.section.permissions"
         case .about: return "settings.section.settings"
+        default: return ""
         }
     }
 
@@ -57,6 +62,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .transcripts: return "text.bubble.fill"
         case .permissions: return "shield.lefthalf.filled"
         case .about: return "gearshape"
+        default: return "square"
         }
     }
 }
@@ -139,9 +145,11 @@ enum SettingsPageBehavior {
         privateFeatureVisible: Bool,
         macroFeatureVisible: Bool,
         buttonProfilesVisible: Bool,
-        membershipVisible: Bool
+        membershipVisible: Bool,
+        supplementalPageIDs: [String] = []
     ) -> [SettingsSection] {
-        sidebarSectionOrder.filter {
+        let sections = Array(sidebarSectionOrder.prefix(4)) + supplementalPageIDs.map(SettingsSection.supplemental) + Array(sidebarSectionOrder.dropFirst(4))
+        return sections.filter {
             switch $0 {
             case .privateFeature: privateFeatureVisible
             case .macros: macroFeatureVisible
@@ -459,6 +467,7 @@ struct SettingsView: View {
     private let minimumContentSize: CGSize
     private let initialShortcutPickerShowsKeyboard: Bool
 
+    private let supplementalSettings = SupplementalSettingsIntegration()
     @State private var selectedSection: SettingsSection
     @State private var selectedRemoteButton: RemoteButton = .ok
     @State private var selectedSiriRemoteControlID = "select"
@@ -683,12 +692,17 @@ struct SettingsView: View {
         .background(Color(nsColor: .controlBackgroundColor))
     }
 
+    private var supplementalPages: [SupplementalSettingsPage] {
+        supplementalSettings.pages(localeIdentifier: localization.locale.identifier)
+    }
+
     private var visibleSections: [SettingsSection] {
         SettingsPageBehavior.sidebarSections(
             privateFeatureVisible: privateFeature.isFeatureVisible,
             macroFeatureVisible: macroFeature.isFeatureVisible,
             buttonProfilesVisible: macroFeature.isButtonProfilesVisible,
-            membershipVisible: membershipFeature.isFeatureVisible
+            membershipVisible: membershipFeature.isFeatureVisible,
+            supplementalPageIDs: supplementalPages.map(\.id)
         )
     }
 
@@ -723,7 +737,8 @@ struct SettingsView: View {
                 if section == .privateFeature
                     || section == .macros
                     || section == .buttonProfiles
-                    || section == .membership {
+                    || section == .membership
+                    || section.supplementalID != nil {
                     Text(sectionTitle(section))
                         .font(.system(size: 13, weight: .semibold))
                 } else if section == .statistics {
@@ -868,6 +883,12 @@ struct SettingsView: View {
             aboutPage
         case .about:
             aboutPage
+        default:
+            if let pageID = selectedSection.supplementalID,
+               let content = supplementalSettings.view(pageID: pageID, localeIdentifier: localization.locale.identifier) {
+                content
+            } else { aboutPage }
+
         }
     }
 
@@ -4185,7 +4206,7 @@ struct SettingsView: View {
         case .macros: macroFeature.sectionTitle
         case .buttonProfiles: macroFeature.buttonProfilesSectionTitle
         case .membership: membershipFeature.sectionTitle
-        default: ""
+        default: supplementalPages.first { SettingsSection.supplemental($0.id) == section }?.title ?? ""
         }
     }
 
@@ -4195,7 +4216,7 @@ struct SettingsView: View {
         case .macros: macroFeature.sectionSystemImage
         case .buttonProfiles: macroFeature.buttonProfilesSectionSystemImage
         case .membership: membershipFeature.sectionSystemImage
-        default: section.systemImage
+        default: supplementalPages.first { SettingsSection.supplemental($0.id) == section }?.systemImage ?? section.systemImage
         }
     }
 
