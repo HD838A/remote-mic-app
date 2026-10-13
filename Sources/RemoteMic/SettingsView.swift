@@ -2561,13 +2561,13 @@ struct SettingsView: View {
                     .accessibilityLabel(Text(action.detailedDisplayName(using: localization)))
                     .disabled(isManagedPowerAction || unavailableApplication || unavailableExperiment)
                 }
-                if actions.contains(.openCommonPhrases) {
-                    commonPhrasesActionControls(
-                        selectedAction: selectedAction,
-                        isManagedPowerAction: isManagedPowerAction,
-                        onSelect: onSelect
-                    )
-                }
+            }
+            if actions.contains(.openCommonPhrases) {
+                commonPhrasesActionControls(
+                    selectedAction: selectedAction,
+                    isManagedPowerAction: isManagedPowerAction,
+                    onSelect: onSelect
+                )
             }
         }
     }
@@ -2652,7 +2652,7 @@ struct SettingsView: View {
             Text(title).lineLimit(1).truncationMode(.tail)
             if let badge {
                 Text(badge)
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(Color.accentColor)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
