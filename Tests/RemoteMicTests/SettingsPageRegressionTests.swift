@@ -302,7 +302,7 @@ struct SettingsPageRegressionTests {
         )
         #expect(!settingsSource.contains("case serviceEnvironment"))
         #expect(!settingsSource.contains("case .serviceEnvironment:"))
-        #expect(settingsSource.contains("case membership"))
+        #expect(settingsSource.contains("static let membership = SettingsSection"))
         #expect(settingsSource.contains("case .membership:"))
         #expect(settingsSource.contains("if membershipFeature.isEnvironmentSettingsVisible"))
         #expect(settingsSource.contains("membershipFeature.serviceEnvironmentSettingsView()"))
@@ -1661,7 +1661,7 @@ struct SettingsPageRegressionTests {
                 .components(separatedBy: "private var voiceSessionRankingCard").first
         )
         #expect(!statisticsPage.contains("TranscriptHistorySection(model: model, settings: settings)"))
-        #expect(settingsSource.contains("case transcripts"))
+        #expect(settingsSource.contains("static let transcripts = SettingsSection"))
         #expect(settingsSource.contains("case .transcripts: return \"settings.section.transcripts\""))
         #expect(transcriptPage.contains("TranscriptHistorySection(model: model, settings: settings)"))
         #expect(transcriptPage.contains(
