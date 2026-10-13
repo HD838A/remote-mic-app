@@ -38,6 +38,29 @@ enum HostRemoteSessionFailure: Error, Equatable {
     case invalidResponse
 }
 
+struct HostRemoteSessionError: Error, Equatable {
+    let failure: HostRemoteSessionFailure
+    let reasonCode: String
+    let supportCode: Int
+    let requestID: String?
+
+    init(failure: HostRemoteSessionFailure, reasonCode: String = "internal_error",
+         supportCode: Int = -1900, requestID: String? = nil) {
+        self.failure = failure
+        self.reasonCode = reasonCode.range(of: #"^[a-z][a-z0-9_]{0,63}$"#,
+                                          options: .regularExpression) != nil
+            ? reasonCode : "internal_error"
+        self.supportCode = (-1999 ... -1000).contains(supportCode) ? supportCode : -1900
+        self.requestID = requestID.flatMap {
+            $0.range(of: #"^rq_[A-Za-z0-9_-]{20,64}$"#, options: .regularExpression) != nil ? $0 : nil
+        }
+    }
+
+    var diagnosticFields: String {
+        "reason_code=\(reasonCode) support_code=\(supportCode) request_id=\(requestID ?? "none")"
+    }
+}
+
 struct MembershipFeatureConfiguration: Equatable {
     let appVersion: String
 
@@ -221,7 +244,7 @@ final class MembershipFeatureIntegration: ObservableObject, @unchecked Sendable 
         #if SAYALL_MEMBERSHIP_ENABLED && canImport(SayAllMembershipHostAdapter)
         guard let adapter else { throw HostRemoteSessionFailure.unavailable }
         do {
-            let authorization = try await adapter.createRemoteSession(
+            let authorization = try await adapter.createRemoteSessionWithDiagnostics(
                 idempotencyKey: idempotencyKey,
                 clientContractVersion: clientContractVersion,
                 testMembershipBypass: testMembershipBypass
@@ -237,19 +260,16 @@ final class MembershipFeatureIntegration: ObservableObject, @unchecked Sendable 
                 pairingCode: authorization.pairingCode,
                 expiresAt: authorization.expiresAt
             )
+        } catch let error as MembershipHostRemoteSessionError {
+            throw HostRemoteSessionError(
+                failure: Self.mapRemoteSessionFailure(error.failure),
+                reasonCode: error.reasonCode, supportCode: error.supportCode,
+                requestID: error.requestID
+            )
         } catch let failure as MembershipHostRemoteSessionFailure {
-            switch failure {
-            case .signInRequired: throw HostRemoteSessionFailure.signInRequired
-            case .deviceBindingRequired: throw HostRemoteSessionFailure.deviceBindingRequired
-            case .plusRequired: throw HostRemoteSessionFailure.plusRequired
-            case .upgradeRequired: throw HostRemoteSessionFailure.upgradeRequired
-            case .unavailable: throw HostRemoteSessionFailure.unavailable
-            case .networkUnavailable: throw HostRemoteSessionFailure.networkUnavailable
-            case .invalidResponse: throw HostRemoteSessionFailure.invalidResponse
-            @unknown default: throw HostRemoteSessionFailure.invalidResponse
-            }
+            throw HostRemoteSessionError(failure: Self.mapRemoteSessionFailure(failure))
         } catch {
-            throw HostRemoteSessionFailure.invalidResponse
+            throw HostRemoteSessionError(failure: .invalidResponse)
         }
         #else
         throw HostRemoteSessionFailure.unavailable
@@ -257,6 +277,21 @@ final class MembershipFeatureIntegration: ObservableObject, @unchecked Sendable 
     }
 
     #if SAYALL_MEMBERSHIP_ENABLED && canImport(SayAllMembershipHostAdapter)
+    private static func mapRemoteSessionFailure(
+        _ failure: MembershipHostRemoteSessionFailure
+    ) -> HostRemoteSessionFailure {
+        switch failure {
+        case .signInRequired: .signInRequired
+        case .deviceBindingRequired: .deviceBindingRequired
+        case .plusRequired: .plusRequired
+        case .upgradeRequired: .upgradeRequired
+        case .unavailable: .unavailable
+        case .networkUnavailable: .networkUnavailable
+        case .invalidResponse: .invalidResponse
+        @unknown default: .invalidResponse
+        }
+    }
+
     @MainActor
     private func configure(_ configuration: MembershipFeatureConfiguration) {
         guard adapter == nil else { return }

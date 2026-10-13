@@ -1094,7 +1094,7 @@ struct SettingsPageRegressionTests {
             encoding: .utf8
         )
 
-        #expect(membershipSource.contains("adapter.createRemoteSession("))
+        #expect(membershipSource.contains("adapter.createRemoteSessionWithDiagnostics("))
         #expect(membershipSource.contains("supportsRemoteSessionAuthorization"))
         #expect(bridgeSource.contains(".createRemoteSessionAuthorization("))
         #expect(bridgeSource.contains("idempotencyKey: idempotencyKey"))
