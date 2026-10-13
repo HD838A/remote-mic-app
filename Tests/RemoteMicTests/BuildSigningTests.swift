@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import ImageIO
 import Testing
 @testable import RemoteMic
 
@@ -69,19 +70,40 @@ struct BuildSigningTests {
         #expect(intelSource.pixelsHigh == 1024)
         #expect(intelSource.hasAlpha)
         #expect(intelSource.colorAt(x: 0, y: 0)?.alphaComponent ?? 1 <= 1.0 / 255.0)
+        #expect(try Data(contentsOf: root.appendingPathComponent("Resources/AppIcon-intel.png")) ==
+            Data(contentsOf: root.appendingPathComponent("Resources/AppIcons/faceted-duck.png")))
         let intelPackagedIcon = try Data(contentsOf: root.appendingPathComponent(
             "Resources/AppIcon-intel.icns"
         ))
         let applePackagedIcon = try Data(contentsOf: root.appendingPathComponent(
             "Resources/AppIcon.icns"
         ))
-        #expect(intelPackagedIcon == applePackagedIcon)
+        #expect(intelPackagedIcon != applePackagedIcon)
+        let intelIconSource = try #require(CGImageSourceCreateWithData(
+            intelPackagedIcon as CFData, nil
+        ))
+        var iconSizes = Set<Int>()
+        for index in 0..<CGImageSourceGetCount(intelIconSource) {
+            let image = try #require(CGImageSourceCreateImageAtIndex(intelIconSource, index, nil))
+            let layer = NSBitmapImageRep(cgImage: image)
+            #expect(layer.pixelsWide == layer.pixelsHigh)
+            iconSizes.insert(layer.pixelsWide)
+            for (x, y) in [
+                (0, 0), (layer.pixelsWide - 1, 0),
+                (0, layer.pixelsHigh - 1), (layer.pixelsWide - 1, layer.pixelsHigh - 1),
+            ] {
+                #expect(layer.colorAt(x: x, y: y)?.alphaComponent ?? 1 <= 1.0 / 255.0)
+            }
+            #expect(layer.colorAt(x: layer.pixelsWide / 2, y: layer.pixelsHigh / 2)?.alphaComponent ?? 0 >= 0.5)
+        }
+        #expect(iconSizes == Set([16, 32, 64, 128, 256, 512, 1024]))
         #expect(verifySource.contains("/usr/bin/iconutil --convert iconset"))
         #expect(verifySource.contains("packaged app icon corner is not opaque"))
         #expect(verifySource.contains("CFBundleIconName"))
         #expect(verifySource.contains("Assets.car"))
         #expect(verifySource.contains("*.icon(N)"))
-        #expect(buildSource.contains("Resources/AppIcons/faceted-duck.png"))
+        #expect(buildSource.contains("\"$ROOT/Resources/AppIcons\""))
+        #expect(!buildSource.contains("\"$ROOT/Resources/AppIcon-intel.png\""))
         #expect(!buildSource.contains("for app_icon_name in standard faceted-duck"))
     }
 

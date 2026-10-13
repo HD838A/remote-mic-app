@@ -642,11 +642,6 @@ if [[ -d "$ROOT/Resources/AppIcons" ]]; then
   ditto --norsrc --noextattr --noqtn --noacl \
     "$ROOT/Resources/AppIcons" \
     "$APP_DIR/Contents/Resources/AppIcons"
-  if [[ "$RELEASE_VARIANT" == "intel" ]]; then
-    ditto --norsrc --noextattr --noqtn --noacl \
-      "$ROOT/Resources/AppIcon-intel.png" \
-      "$APP_DIR/Contents/Resources/AppIcons/faceted-duck.png"
-  fi
 fi
 LOCALIZATION_DIRS=("$ROOT"/Resources/*.lproj(N))
 if (( ${#LOCALIZATION_DIRS} == 0 )); then
