@@ -36,6 +36,23 @@ protocol XiaomiBluetoothBridgeDelegate: AnyObject {
     func bluetoothBridgeDeviceNameDidChange(_ bridge: XiaomiBluetoothBridge)
 }
 
+/// CoreBluetooth 的回调统一切回主线程执行。
+///
+/// 蓝牙栈只有在回调队列被及时排空时才释放接收缓冲。此前回调直接投到 `.main`，
+/// 而 ATVV 音频在会话中约 66.7 个通知/秒；主线程一旦忙着 SwiftUI、HID 事件或
+/// 辅助功能查询，栈侧缓冲排不空就会丢通知，丢多少与主线程忙碌时长成正比，
+/// 在用户侧表现为「说的时间越长、尾部缺得越多」，而单用第三方工具驱动遥控器时
+/// 没有这份负载，所以只有开着无线麦才会出现。
+/// 因此接收队列与业务状态解耦：队列只负责尽快接住回调，业务状态仍在主线程串行变更。
+@inline(__always)
+private func onMain(_ body: @escaping () -> Void) {
+    if Thread.isMainThread {
+        body()
+    } else {
+        DispatchQueue.main.async(execute: body)
+    }
+}
+
 private final class XiaomiPeripheralDelegateProxy: NSObject, CBPeripheralDelegate {
     let generation: UInt64
     weak var owner: XiaomiBluetoothBridge?
@@ -46,15 +63,20 @@ private final class XiaomiPeripheralDelegateProxy: NSObject, CBPeripheralDelegat
     }
 
     func peripheralDidUpdateName(_ peripheral: CBPeripheral) {
-        owner?.handleNameUpdate(peripheral: peripheral, generation: generation)
+        onMain { [weak self] in
+            self?.owner?.handleNameUpdate(peripheral: peripheral, generation: self?.generation ?? 0)
+        }
     }
 
     func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
-        owner?.handleDiscoveredServices(
-            peripheral: peripheral,
-            generation: generation,
-            error: error
-        )
+        onMain { [weak self] in
+            guard let self else { return }
+            self.owner?.handleDiscoveredServices(
+                peripheral: peripheral,
+                generation: self.generation,
+                error: error
+            )
+        }
     }
 
     func peripheral(
@@ -62,12 +84,15 @@ private final class XiaomiPeripheralDelegateProxy: NSObject, CBPeripheralDelegat
         didDiscoverCharacteristicsFor service: CBService,
         error: Error?
     ) {
-        owner?.handleDiscoveredCharacteristics(
-            peripheral: peripheral,
-            generation: generation,
-            service: service,
-            error: error
-        )
+        onMain { [weak self] in
+            guard let self else { return }
+            self.owner?.handleDiscoveredCharacteristics(
+                peripheral: peripheral,
+                generation: self.generation,
+                service: service,
+                error: error
+            )
+        }
     }
 
     func peripheral(
@@ -75,12 +100,15 @@ private final class XiaomiPeripheralDelegateProxy: NSObject, CBPeripheralDelegat
         didUpdateNotificationStateFor characteristic: CBCharacteristic,
         error: Error?
     ) {
-        owner?.handleNotificationState(
-            peripheral: peripheral,
-            generation: generation,
-            characteristic: characteristic,
-            error: error
-        )
+        onMain { [weak self] in
+            guard let self else { return }
+            self.owner?.handleNotificationState(
+                peripheral: peripheral,
+                generation: self.generation,
+                characteristic: characteristic,
+                error: error
+            )
+        }
     }
 
     func peripheral(
@@ -88,12 +116,107 @@ private final class XiaomiPeripheralDelegateProxy: NSObject, CBPeripheralDelegat
         didUpdateValueFor characteristic: CBCharacteristic,
         error: Error?
     ) {
-        owner?.handleCharacteristicValue(
-            peripheral: peripheral,
-            generation: generation,
-            characteristic: characteristic,
-            error: error
+        // `characteristic.value` 是可变的「最新值」属性：必须在回调线程上先把本次
+        // 真正携带的字节取出来，否则切线程排队期间会被后续回调覆盖 —— 表现为同一条
+        // 音频被重复解码、更早的字节直接消失。音频通知正是走这条路径。
+        let generation = self.generation
+        let value = characteristic.value
+        onMain { [weak self] in
+            self?.owner?.handleCharacteristicValue(
+                peripheral: peripheral,
+                generation: generation,
+                characteristic: characteristic,
+                value: value,
+                error: error
+            )
+        }
+    }
+}
+
+/// 单次 ATVV 语音会话的音频到达账目。
+///
+/// 存在的理由：远端音频长期低于实时（或本地静默丢弃）时，用户只看到「尾部截断」，
+/// 而旧实现既不记到达量、也不记丢弃量，无法区分「远端没发」和「本地没收」。
+///
+/// 缺口分两类，必须分开计数才能定性：
+/// - **连续低速率**：每次会话都少同一比例，间隔均匀 → 远端或链路本身达不到实时；
+/// - **成段停顿**：少数几次几帧到上百帧的大间隔 → 本地或链路的突发丢包。
+struct ATVVAudioReceiveStats: Equatable {
+    /// 已解码的处理批次总数（与 `ATVV STREAM summary` 的 batches 一致）。
+    var frames = 0
+    /// 收到的音频通知次数；一次通知可能携带多帧，两者必须分开记。
+    var notifications = 0
+    /// 已收到的音频特征字节数。
+    var bytes = 0
+    /// 本次会话内两次音频通知之间的最大间隔；明显大于 15 ms 说明到达被拖延或丢帧。
+    var maxGapMilliseconds = 0
+    /// 最大间隔出现的时刻（相对会话开始的毫秒数），用于判断缺口落在开头、中段还是结尾。
+    var maxGapAtMilliseconds = 0
+    /// 间隔 ≥ 20 / 50 / 100 / 250 ms 的次数（累计区间，互不排斥）。
+    var gapsOver20Milliseconds = 0
+    var gapsOver50Milliseconds = 0
+    var gapsOver100Milliseconds = 0
+    var gapsOver250Milliseconds = 0
+    /// 单次音频通知的最小/最大字节数；不等于声明帧长的整数倍说明分包或重组异常。
+    var smallestNotificationBytes: Int?
+    var largestNotificationBytes = 0
+    /// 字节数不是声明帧长整数倍的通知次数。
+    var notificationsNotFrameMultiple = 0
+    /// 因为蓝牙生命周期不在 ready 阶段而被静默丢掉的音频通知数。
+    var gateDrops = 0
+    /// 松手后仍然到达、但被旧策略直接丢弃的通知数。
+    var lateStopDrops = 0
+
+    var isEmpty: Bool {
+        frames == 0 && bytes == 0 && maxGapMilliseconds == 0
+            && smallestNotificationBytes == nil && notificationsNotFrameMultiple == 0
+            && gateDrops == 0 && lateStopDrops == 0
+    }
+
+    mutating func recordNotification(bytes byteCount: Int, frameSize: Int, frames frameCount: Int) {
+        bytes += byteCount
+        frames += frameCount
+        notifications += 1
+        if byteCount > 0 {
+            smallestNotificationBytes = min(smallestNotificationBytes ?? byteCount, byteCount)
+            largestNotificationBytes = max(largestNotificationBytes, byteCount)
+        }
+        if frameSize > 0, byteCount > 0, byteCount % frameSize != 0 {
+            notificationsNotFrameMultiple += 1
+        }
+    }
+
+    mutating func recordGap(_ gapMilliseconds: Int, atElapsedMilliseconds elapsedMilliseconds: Int) {
+        if gapMilliseconds > maxGapMilliseconds {
+            maxGapMilliseconds = gapMilliseconds
+            maxGapAtMilliseconds = elapsedMilliseconds
+        }
+        if gapMilliseconds >= 20 { gapsOver20Milliseconds += 1 }
+        if gapMilliseconds >= 50 { gapsOver50Milliseconds += 1 }
+        if gapMilliseconds >= 100 { gapsOver100Milliseconds += 1 }
+        if gapMilliseconds >= 250 { gapsOver250Milliseconds += 1 }
+    }
+
+    /// 供日志与测试使用的一行摘要（不含任何用户内容）。
+    func diagnosticSummary(frameSamples: Int, elapsedMilliseconds: Int) -> String {
+        let coverage = ATVVProtocol.audioCoveragePercent(
+            receivedSamples: frames * frameSamples,
+            durationMilliseconds: elapsedMilliseconds
         )
+        let expectedFrames = ATVVProtocol.expectedFrameCount(
+            durationMilliseconds: elapsedMilliseconds,
+            frameSamples: frameSamples
+        )
+        let smallestBytes = smallestNotificationBytes.map(String.init) ?? "none"
+        return "frames=\(frames) notifications=\(notifications) bytes=\(bytes) " +
+            "expected_frames=\(expectedFrames) " +
+            "coverage_pct=\(String(format: "%.1f", coverage)) " +
+            "max_gap_ms=\(maxGapMilliseconds) max_gap_at_ms=\(maxGapAtMilliseconds) " +
+            "gaps_ge_20ms=\(gapsOver20Milliseconds) gaps_ge_50ms=\(gapsOver50Milliseconds) " +
+            "gaps_ge_100ms=\(gapsOver100Milliseconds) gaps_ge_250ms=\(gapsOver250Milliseconds) " +
+            "notify_bytes=\(smallestBytes)..\(largestNotificationBytes) " +
+            "not_frame_multiple=\(notificationsNotFrameMultiple) " +
+            "gate_drops=\(gateDrops) late_stop_drops=\(lateStopDrops)"
     }
 }
 
@@ -153,6 +276,14 @@ final class XiaomiBluetoothBridge: NSObject {
     private var generationCounter: UInt64 = 0
     private var lifecycle: BluetoothLifecyclePhase = .stopped
     private var shouldRun = false
+    /// CoreBluetooth 回调队列。
+    ///
+    /// 不能用 `.main`：ATVV 音频在会话中约 66.7 个通知/秒，主线程一旦忙于
+    /// SwiftUI、HID 事件或辅助功能查询，蓝牙栈的接收缓冲就排不空，通知会在
+    /// 控制器/系统侧被丢弃，且丢多少与忙碌时长成正比 —— 用户看到的就是
+    /// 「说的时间越长、尾部缺得越多」。接收与主线程解耦后，主线程再忙也只会让
+    /// 音频晚一点到，不会丢；业务状态仍由 `onMain` 保证只在主线程变更。
+    private let bluetoothQueue = DispatchQueue(label: "RemoteMic.bluetooth")
     private var systemSuspension = BluetoothSystemSuspensionState()
     private var capabilities = XiaomiBluetoothBridge.defaultCapabilities
     private var decoder = IMAADPCMDecoder()
@@ -163,6 +294,19 @@ final class XiaomiBluetoothBridge: NSObject {
     private var cancelledMicrophoneOpenAt: Date?
     private var sessionID: UInt8 = 0
     private var lastStopAt: Date?
+    private var lastAudioNotificationAt: Date?
+    private var audioStatsStartedAt: Date?
+    private var lastAudioProgressLoggedAt: Date?
+    private var progressWindowFrameCount = 0
+    private var progressWindowElapsedMilliseconds = 0
+    /// 会话进行中的到达账目节奏；只在会话里生效，不进入空闲路径。
+    private static let audioProgressLogInterval: TimeInterval = 5
+
+    /// 本次会话的音频到达账目，供 `ATVV STREAM summary` 归因使用。
+    private(set) var audioReceiveStats = ATVVAudioReceiveStats()
+
+    /// 每帧携带的 PCM 样本数（ATVV 的 `frame` 字段是字节数，4 bit ADPCM 每字节 2 个样本）。
+    var audioFrameSampleCount: Int { max(0, capabilities.frameSize * 2) }
 
     private let serviceUUID = CBUUID(string: ATVVProtocol.serviceUUID)
     private let transmitUUID = CBUUID(string: ATVVProtocol.transmitUUID)
@@ -367,7 +511,7 @@ final class XiaomiBluetoothBridge: NSObject {
         lifecycle = .scanning(generation)
         let manager = CBCentralManager(
             delegate: self,
-            queue: .main,
+            queue: bluetoothQueue,
             options: [CBCentralManagerOptionShowPowerAlertKey: true]
         )
         central = manager
@@ -983,6 +1127,12 @@ final class XiaomiBluetoothBridge: NSObject {
         pendingSync = nil
         decoder.reset()
         lastStopAt = nil
+        lastAudioNotificationAt = nil
+        lastAudioProgressLoggedAt = nil
+        progressWindowFrameCount = 0
+        progressWindowElapsedMilliseconds = 0
+        audioStatsStartedAt = Date()
+        audioReceiveStats = ATVVAudioReceiveStats()
         guard !streaming else { return }
         streaming = true
         delegate?.bluetoothBridgeDidStartVoice(self)
@@ -992,13 +1142,28 @@ final class XiaomiBluetoothBridge: NSObject {
     private func stopStreaming() {
         guard streaming else { return }
         streaming = false
+        let wasHostRequested = microphoneOpened
         microphoneOpened = false
         let partialFrameBytes = accumulator.pending.count
         accumulator.reset()
         pendingSync = nil
-        lastStopAt = Date()
+        let stoppedAt = Date()
+        lastStopAt = stoppedAt
         AppLogger.shared.write(
             "ATVV STREAM STOP session=\(sessionID) partial_frame_bytes=\(partialFrameBytes)"
+        )
+        // 会话总账：把「远端发不满」和「本地没收」分开归因。
+        // host_requested=false 说明流由遥控器发起、由遥控器结束，宿主没有也无法延长它。
+        let elapsedMilliseconds = audioStatsStartedAt.map {
+            max(0, Int(stoppedAt.timeIntervalSince($0) * 1_000))
+        } ?? 0
+        AppLogger.shared.write(
+            "ATVV AUDIO receive session=\(sessionID) " +
+                "stream_origin=\(wasHostRequested ? "host_requested" : "remote_initiated") " +
+                audioReceiveStats.diagnosticSummary(
+                    frameSamples: audioFrameSampleCount,
+                    elapsedMilliseconds: elapsedMilliseconds
+                )
         )
         delegate?.bluetoothBridgeDidStopVoice(self)
     }
@@ -1033,6 +1198,7 @@ final class XiaomiBluetoothBridge: NSObject {
                     "ATVV AUDIO ignored_after_stop session=\(sessionID) " +
                         "delay_ms=\(delayMilliseconds) bytes=\(data.count)"
                 )
+                audioReceiveStats.lateStopDrops += 1
                 return
             }
             startStreaming()
@@ -1040,6 +1206,7 @@ final class XiaomiBluetoothBridge: NSObject {
         }
 
         let frames = accumulator.append(data, frameSize: capabilities.frameSize)
+        noteAudioNotificationArrival(bytes: data.count, frames: frames.count)
         for frame in frames {
             if let pendingSync {
                 decoder.reset(
@@ -1052,6 +1219,49 @@ final class XiaomiBluetoothBridge: NSObject {
             let samples = PCMPostprocessor.process(decoded, gainDB: settings.gainDB)
             delegate?.bluetoothBridge(self, didDecode: samples)
         }
+    }
+
+    /// 记录一次音频通知的到达，并按 5 秒节奏输出一次进度账目。
+    ///
+    /// 进度账目是区分「远端一开始就发不满」和「会话中途开始丢」的唯一手段：
+    /// 只在会话结束时汇总，无法判断缺口落在开头、中段还是结尾。
+    private func noteAudioNotificationArrival(bytes: Int, frames frameCount: Int) {
+        let now = Date()
+        let elapsedMilliseconds = audioStatsStartedAt.map {
+            max(0, Int(now.timeIntervalSince($0) * 1_000))
+        } ?? 0
+        if let lastAudioNotificationAt {
+            let gap = Int((now.timeIntervalSince(lastAudioNotificationAt) * 1_000).rounded())
+            audioReceiveStats.recordGap(gap, atElapsedMilliseconds: elapsedMilliseconds)
+        }
+        lastAudioNotificationAt = now
+        audioReceiveStats.recordNotification(
+            bytes: bytes,
+            frameSize: capabilities.frameSize,
+            frames: frameCount
+        )
+
+        let progressAnchor = lastAudioProgressLoggedAt ?? audioStatsStartedAt ?? now
+        guard now.timeIntervalSince(progressAnchor) >= Self.audioProgressLogInterval else { return }
+        let intervalFrames = audioReceiveStats.frames - progressWindowFrameCount
+        let intervalMilliseconds = elapsedMilliseconds - progressWindowElapsedMilliseconds
+        progressWindowFrameCount = audioReceiveStats.frames
+        progressWindowElapsedMilliseconds = elapsedMilliseconds
+        lastAudioProgressLoggedAt = now
+        let frameSamples = audioFrameSampleCount
+        let intervalCoverage = ATVVProtocol.audioCoveragePercent(
+            receivedSamples: intervalFrames * frameSamples,
+            durationMilliseconds: intervalMilliseconds
+        )
+        AppLogger.shared.write(
+            "ATVV STREAM progress session=\(sessionID) elapsed_ms=\(elapsedMilliseconds) " +
+                audioReceiveStats.diagnosticSummary(
+                    frameSamples: frameSamples,
+                    elapsedMilliseconds: elapsedMilliseconds
+                ) +
+                " interval_frames=\(intervalFrames) " +
+                "interval_coverage_pct=\(String(format: "%.1f", intervalCoverage))"
+        )
     }
 
     private func rejectUnsupportedAudio(_ message: LocalizedMessage) {
@@ -1078,6 +1288,12 @@ final class XiaomiBluetoothBridge: NSObject {
 
 extension XiaomiBluetoothBridge: CBCentralManagerDelegate {
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { [weak self] in
+                self?.centralManagerDidUpdateState(central)
+            }
+            return
+        }
         guard self.central === central, let generation = centralGeneration else { return }
         AppLogger.shared.write(
             "BLE CENTRAL state=\(central.state.rawValue) " +
@@ -1190,6 +1406,17 @@ extension XiaomiBluetoothBridge: CBCentralManagerDelegate {
         advertisementData: [String: Any],
         rssi RSSI: NSNumber
     ) {
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { [weak self] in
+                self?.centralManager(
+                    central,
+                    didDiscover: peripheral,
+                    advertisementData: advertisementData,
+                    rssi: RSSI
+                )
+            }
+            return
+        }
         guard !systemSuspension.isSuspended, self.central === central else { return }
         let advertisedName = advertisementData[CBAdvertisementDataLocalNameKey] as? String
         let serviceMatch = (advertisementData[CBAdvertisementDataServiceUUIDsKey] as? [CBUUID])?
@@ -1211,6 +1438,12 @@ extension XiaomiBluetoothBridge: CBCentralManagerDelegate {
     }
 
     func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { [weak self] in
+                self?.centralManager(central, didConnect: peripheral)
+            }
+            return
+        }
         guard self.central === central else { return }
         guard shouldRun else {
             central.cancelPeripheralConnection(peripheral)
@@ -1252,6 +1485,16 @@ extension XiaomiBluetoothBridge: CBCentralManagerDelegate {
         didFailToConnect peripheral: CBPeripheral,
         error: Error?
     ) {
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { [weak self] in
+                self?.centralManager(
+                    central,
+                    didFailToConnect: peripheral,
+                    error: error
+                )
+            }
+            return
+        }
         guard self.central === central,
               isCurrent(peripheral),
               let generation = centralGeneration,
@@ -1272,6 +1515,16 @@ extension XiaomiBluetoothBridge: CBCentralManagerDelegate {
         didDisconnectPeripheral peripheral: CBPeripheral,
         error: Error?
     ) {
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { [weak self] in
+                self?.centralManager(
+                    central,
+                    didDisconnectPeripheral: peripheral,
+                    error: error
+                )
+            }
+            return
+        }
         guard self.central === central,
               isCurrent(peripheral),
               let generation = centralGeneration,
@@ -1287,6 +1540,18 @@ extension XiaomiBluetoothBridge: CBCentralManagerDelegate {
         isReconnecting: Bool,
         error: Error?
     ) {
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { [weak self] in
+                self?.centralManager(
+                    central,
+                    didDisconnectPeripheral: peripheral,
+                    timestamp: timestamp,
+                    isReconnecting: isReconnecting,
+                    error: error
+                )
+            }
+            return
+        }
         guard self.central === central,
               isCurrent(peripheral),
               let generation = centralGeneration,
@@ -1532,6 +1797,7 @@ extension XiaomiBluetoothBridge {
         peripheral: CBPeripheral,
         generation: UInt64,
         characteristic: CBCharacteristic,
+        value: Data?,
         error: Error?
     ) {
         guard shouldRun,
@@ -1560,7 +1826,7 @@ extension XiaomiBluetoothBridge {
             }
             return
         }
-        guard let data = characteristic.value else { return }
+        guard let data = value else { return }
         if characteristic.uuid == batteryLevelUUID {
             let level = data.first.map(Int.init)
             guard !hasObservedBatteryLevel || lastObservedBatteryLevel != level else { return }
@@ -1611,7 +1877,11 @@ extension XiaomiBluetoothBridge {
             else { return }
             handleControl(data)
         } else if characteristic.uuid == audioUUID {
-            guard lifecycle.acceptsProtocolData(generation: generation) else { return }
+            guard lifecycle.acceptsProtocolData(generation: generation) else {
+                // 这里过去是静默 return：音频通知会被无声丢掉，日志里查不到任何痕迹。
+                audioReceiveStats.gateDrops += 1
+                return
+            }
             handleAudio(data)
         }
     }

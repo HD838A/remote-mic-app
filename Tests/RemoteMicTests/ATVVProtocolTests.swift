@@ -273,6 +273,189 @@ struct ATVVProtocolTests {
 
 @Suite("Bluetooth voice tail diagnostics")
 struct BluetoothVoiceTailDiagnosticsTests {
+    @Test func realTimeFrameBudgetFollowsTheDeclaredFrameSize() {
+        // frame=120 字节 = 240 个 16 kHz 样本 = 15 ms/帧
+        #expect(ATVVProtocol.expectedFrameCount(durationMilliseconds: 15_000, frameSamples: 240) == 1_000)
+        #expect(ATVVProtocol.expectedFrameCount(durationMilliseconds: 24_715, frameSamples: 240) == 1_648)
+        #expect(ATVVProtocol.expectedFrameCount(durationMilliseconds: 1_464, frameSamples: 240) == 98)
+        #expect(ATVVProtocol.expectedFrameCount(durationMilliseconds: 0, frameSamples: 240) == 0)
+        #expect(ATVVProtocol.expectedFrameCount(durationMilliseconds: 15_000, frameSamples: 0) == 0)
+    }
+
+    @Test func audioCoverageExposesADeliveryRateShortfall() {
+        // 现场最差的一次：24.715 s 会话只收到 1391 帧，覆盖率必须显著低于 100。
+        let shortfall = ATVVProtocol.audioCoveragePercent(
+            receivedSamples: 1_391 * 240,
+            durationMilliseconds: 24_715
+        )
+        #expect(abs(shortfall - 84.4) < 0.1)
+
+        let realTime = ATVVProtocol.audioCoveragePercent(
+            receivedSamples: 16_000 * 10,
+            durationMilliseconds: 10_000
+        )
+        #expect(realTime == 100)
+        #expect(ATVVProtocol.audioCoveragePercent(
+            receivedSamples: 16_000,
+            durationMilliseconds: 0
+        ) == 0)
+    }
+
+    @Test func audioReceiveStatsDistinguishRemoteShortfallFromLocalDrops() {
+        var stats = ATVVAudioReceiveStats()
+        #expect(stats.isEmpty)
+
+        stats.frames += 1
+        stats.bytes += 120
+        stats.maxGapMilliseconds = 15
+        #expect(stats.isEmpty == false)
+
+        var silentLosses = ATVVAudioReceiveStats()
+        silentLosses.gateDrops += 1
+        #expect(silentLosses.isEmpty == false)
+
+        var lateLosses = ATVVAudioReceiveStats()
+        lateLosses.lateStopDrops += 1
+        #expect(lateLosses.isEmpty == false)
+    }
+
+    @Test func sessionSummaryAccountsForCoverageAndSilentDrops() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
+            encoding: .utf8
+        )
+        let summary = try #require(source.range(of: "\"ATVV STREAM summary trace="))
+        let tail = try #require(source.range(
+            of: "\"ATVV STREAM tail trace=",
+            range: summary.upperBound..<source.endIndex
+        ))
+        let summarySource = source[summary.lowerBound..<tail.lowerBound]
+        #expect(summarySource.contains("expected_batches="))
+        #expect(summarySource.contains("coverage_pct="))
+        #expect(summarySource.contains("max_gap_ms="))
+        #expect(summarySource.contains("gate_drops="))
+        #expect(summarySource.contains("late_stop_drops="))
+    }
+
+    @Test func audioGateNeverDropsFramesWithoutAccounting() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/XiaomiBluetoothBridge.swift"),
+            encoding: .utf8
+        )
+        let gate = try #require(source.range(
+            of: "guard lifecycle.acceptsProtocolData(generation: generation) else {"
+        ))
+        let handle = try #require(source.range(
+            of: "handleAudio(data)",
+            range: gate.upperBound..<source.endIndex
+        ))
+        let gateSource = source[gate.lowerBound..<handle.lowerBound]
+        #expect(gateSource.contains("gateDrops += 1"))
+    }
+
+    @Test func receiveStatsSeparateSteadyShortfallFromBurstStalls() {
+        var stats = ATVVAudioReceiveStats()
+        // 均匀低速率：间隔稳定略大于 15 ms，没有任何大缺口。
+        for index in 0..<100 {
+            stats.recordNotification(bytes: 120, frameSize: 120, frames: 1)
+            stats.recordGap(17, atElapsedMilliseconds: index * 17)
+        }
+        #expect(stats.gapsOver20Milliseconds == 0)
+        #expect(stats.gapsOver250Milliseconds == 0)
+        #expect(stats.maxGapMilliseconds == 17)
+        #expect(stats.bytes == 12_000)
+        #expect(stats.notificationsNotFrameMultiple == 0)
+
+        // 成段停顿：一次 300 ms 的缺口，必须能和上面的低速率区分开。
+        stats.recordGap(300, atElapsedMilliseconds: 1_700)
+        #expect(stats.gapsOver20Milliseconds == 1)
+        #expect(stats.gapsOver100Milliseconds == 1)
+        #expect(stats.gapsOver250Milliseconds == 1)
+        #expect(stats.maxGapMilliseconds == 300)
+        #expect(stats.maxGapAtMilliseconds == 1_700)
+
+        // 分包异常：通知字节数不是声明帧长的整数倍。
+        stats.recordNotification(bytes: 121, frameSize: 120, frames: 1)
+        #expect(stats.notificationsNotFrameMultiple == 1)
+        #expect(stats.smallestNotificationBytes == 120)
+        #expect(stats.largestNotificationBytes == 121)
+    }
+
+    @Test func receiveSummaryCarriesBothAttributionSides() {
+        var stats = ATVVAudioReceiveStats()
+        for index in 0..<1_391 {
+            stats.recordNotification(bytes: 120, frameSize: 120, frames: 1)
+            stats.recordGap(17, atElapsedMilliseconds: index * 17)
+        }
+        stats.gateDrops = 2
+        stats.lateStopDrops = 3
+        let summary = stats.diagnosticSummary(frameSamples: 240, elapsedMilliseconds: 24_715)
+        #expect(summary.contains("frames=1391"))
+        #expect(summary.contains("expected_frames=1648"))
+        #expect(summary.contains("coverage_pct=84.4"))
+        #expect(summary.contains("gate_drops=2"))
+        #expect(summary.contains("late_stop_drops=3"))
+    }
+
+    @Test func sessionProgressReportsEachIntervalSeparately() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/XiaomiBluetoothBridge.swift"),
+            encoding: .utf8
+        )
+        // 只靠会话末尾的汇总无法判断缺口落在开头、中段还是结尾。
+        #expect(source.contains("\"ATVV STREAM progress session="))
+        #expect(source.contains("interval_coverage_pct="))
+        #expect(source.contains("max_gap_at_ms="))
+        // 会话总账必须写明流是谁发起的，才能判定宿主有没有能力延长它。
+        #expect(source.contains("\"ATVV AUDIO receive session="))
+        #expect(source.contains("stream_origin="))
+    }
+
+    @Test func recordingsReportTheirAudioLengthNotJustWallTime() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/RecordingAssetStore.swift"),
+            encoding: .utf8
+        )
+        // 清单里的 duration_ms 是墙上时间，不能证明录音内容长度；必须单独记样本数。
+        #expect(source.contains("activeSampleCount += samples.count"))
+        #expect(source.contains("audio_samples=\\(recordedSamples)"))
+    }
+
+    @Test func audioReceptionIsDecoupledFromTheMainThread() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/XiaomiBluetoothBridge.swift"),
+            encoding: .utf8
+        )
+        // 会话中约 66.7 个音频通知/秒；投到主线程时，主线程一忙就会在蓝牙栈侧丢通知。
+        #expect(source.contains("queue: bluetoothQueue"))
+        #expect(source.contains("queue: .main") == false)
+        // 业务状态仍然只在主线程变更。
+        #expect(source.contains("private func onMain("))
+        // `CBCharacteristic.value` 是可变的「最新值」，必须在回调线程上先取出再切线程。
+        #expect(source.contains("let value = characteristic.value"))
+        #expect(source.contains("value: Data?,"))
+    }
+
     @Test func keepsOnlyTheLatestThreeHundredMillisecondsWithoutAudioContentLogging() {
         var diagnostics = BluetoothVoiceTailDiagnostics()
         diagnostics.append(Array(repeating: 1, count: 4_000), at: 10)

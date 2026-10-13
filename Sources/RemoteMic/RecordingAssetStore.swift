@@ -517,6 +517,9 @@ final class RecordingAssetCoordinator {
     private let onCommit: CommitHandler
     private let log: Logger
     private var activeSession: ActiveSession?
+    /// 本次会话实际写入录音的样本数。用于证明「录音变短」是否与接收流同步，
+    /// 因为清单里的 duration_ms 是墙上时间，不能反映音频内容长度。
+    private var activeSampleCount = 0
     private var pendingApplicationMetadata: [UUID: (name: String, bundleIdentifier: String)] = [:]
 
     init(
@@ -549,6 +552,7 @@ final class RecordingAssetCoordinator {
                 throw error
             }
             activeSession = ActiveSession(draft: draft, writer: writer)
+            activeSampleCount = 0
             if let applicationMetadata {
                 pendingApplicationMetadata[sessionID] = (
                     name: applicationMetadata.applicationName,
@@ -563,12 +567,15 @@ final class RecordingAssetCoordinator {
 
     func append(samples: [Int16]) {
         guard isEnabled(), let activeSession else { return }
+        activeSampleCount += samples.count
         activeSession.writer.append(samples: samples)
     }
 
     func finish(endedAt: Date, reason: String = "session_end") {
         guard let activeSession else { return }
         self.activeSession = nil
+        let recordedSamples = activeSampleCount
+        activeSampleCount = 0
         activeSession.writer.finish { [weak self] succeeded in
             guard let self else { return }
             guard succeeded else {
@@ -586,7 +593,9 @@ final class RecordingAssetCoordinator {
                 )
                 self.log(
                     "RECORDING ASSET saved reason=\(reason) " +
-                        "duration_ms=\(manifest.durationMilliseconds) bytes=\(manifest.byteCount)"
+                        "duration_ms=\(manifest.durationMilliseconds) " +
+                        "audio_ms=\(recordedSamples * 1_000 / 16_000) " +
+                        "audio_samples=\(recordedSamples) bytes=\(manifest.byteCount)"
                 )
                 self.onCommit(manifest)
             } catch {
@@ -602,6 +611,7 @@ final class RecordingAssetCoordinator {
     func cancel(reason: String = "external") {
         guard let activeSession else { return }
         self.activeSession = nil
+        activeSampleCount = 0
         pendingApplicationMetadata.removeValue(forKey: activeSession.draft.sessionID)
         let store = self.store
         let log = self.log

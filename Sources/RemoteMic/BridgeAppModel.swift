@@ -741,6 +741,8 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     private var bluetoothVoiceDecodedBatchCount = 0
     private var bluetoothVoiceDecodedSampleCount = 0
     private var bluetoothVoiceEnqueueFailureCount = 0
+    /// 因为活动设备标识不匹配而被静默丢掉的蓝牙音频批次；过去这条路径没有任何记录。
+    private var bluetoothVoiceIdentifierDropCount = 0
     private var bluetoothVoiceTraceRoute = "none"
     private var bluetoothVoiceTailDiagnostics = BluetoothVoiceTailDiagnostics()
     private let hidEventSuppressor = KeyboardEventSuppressor()
@@ -5643,6 +5645,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         bluetoothVoiceDecodedSampleCount = 0
         resetCurrentVoiceSampleReceipt()
         bluetoothVoiceEnqueueFailureCount = 0
+        bluetoothVoiceIdentifierDropCount = 0
         bluetoothVoiceTraceRoute = "none"
         bluetoothVoiceTailDiagnostics.reset()
         AppLogger.shared.write(
@@ -5808,6 +5811,16 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         let tailSnapshot = bluetoothVoiceTailDiagnostics.snapshot(
             at: ProcessInfo.processInfo.systemUptime
         )
+        let receiveStats = bridge.audioReceiveStats
+        let frameSamples = bridge.audioFrameSampleCount
+        let expectedBatches = ATVVProtocol.expectedFrameCount(
+            durationMilliseconds: durationMilliseconds,
+            frameSamples: frameSamples
+        )
+        let coveragePercent = ATVVProtocol.audioCoveragePercent(
+            receivedSamples: bluetoothVoiceDecodedSampleCount,
+            durationMilliseconds: durationMilliseconds
+        )
         AppLogger.shared.write(
             "ATVV STREAM summary trace=\(traceID) model=\(bluetoothVoiceTraceModel.rawValue) " +
                 "duration_ms=\(durationMilliseconds) batches=\(bluetoothVoiceDecodedBatchCount) " +
@@ -5815,6 +5828,12 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                 "enqueue_failures=\(bluetoothVoiceEnqueueFailureCount) " +
                 "route=\(bluetoothVoiceTraceRoute) pending_buffers=\(pendingBuffers) " +
                 "flush=\(shouldFlushAudio) audio_ready=\(audioOutput.isReadyForTestTone) " +
+                "expected_batches=\(expectedBatches) " +
+                "coverage_pct=\(String(format: "%.1f", coveragePercent)) " +
+                "max_gap_ms=\(receiveStats.maxGapMilliseconds) " +
+                "gate_drops=\(receiveStats.gateDrops) " +
+                "late_stop_drops=\(receiveStats.lateStopDrops) " +
+                "identifier_drops=\(bluetoothVoiceIdentifierDropCount) " +
                 "audio_state={\(audioOutput.diagnosticState())}"
         )
         AppLogger.shared.write(
@@ -5878,7 +5897,10 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             )
             return
         }
-        guard identifier == activeBluetoothVoiceDeviceIdentifier else { return }
+        guard identifier == activeBluetoothVoiceDeviceIdentifier else {
+            bluetoothVoiceIdentifierDropCount += 1
+            return
+        }
         if pendingCommandVoiceAudio.appendIfWaiting(samples) {
             AppLogger.shared.write(
                 "ATVV AUDIO buffered_before_command samples=\(samples.count) " +
@@ -5901,7 +5923,10 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         from bridge: XiaomiBluetoothBridge,
         identifier: UUID
     ) {
-        guard identifier == activeBluetoothVoiceDeviceIdentifier else { return }
+        guard identifier == activeBluetoothVoiceDeviceIdentifier else {
+            bluetoothVoiceIdentifierDropCount += 1
+            return
+        }
         recordingAssetCoordinator.append(samples: samples)
         let deliveryGeneration = voiceAudioDeliveryDiagnostic.generation
         let handledByFnTapMode = voiceFnTapSession.receive(samples)

@@ -10,6 +10,13 @@
   - 2026-10-08 候选：公开安全事件新增 7 天、256 条跨重启留存；配置解码错误仅发送稳定分类。自动化覆盖重启、白名单、容量、过期和发送确认，实际 App 与 Sentry 网络验收仍待完成。
   - 详见 [`feature/encrypted-diagnostic-logs/README.md`](feature/encrypted-diagnostic-logs/README.md) 与 [`Testing/EncryptedDiagnosticLogs.md`](Testing/EncryptedDiagnosticLogs.md)。
 
+- [ ] 修复 RC003 长会话音频到达率不足导致的尾部缺失
+  - 现场结论：每次会话实际收到的音频只覆盖会话时长的 84%～96%，缺口按会话长度累积；音频内容因此始终落后于说话进度，松手时最后一段话还没送到、遥控器已停流。本地录音是接收流的副本，所以同步变短；SayAll 侧所有丢弃计数均为 0，不是「松手时被 flush」。
+  - 2026-10-13 已补账目（不改业务行为）：`ATVV STREAM progress` 每 5 秒输出累计与本区间的 `coverage_pct` / `max_gap_ms`；`ATVV AUDIO receive` 输出会话总账，含 `max_gap_at_ms`、`gaps_ge_20/50/100/250ms` 直方图、`notify_bytes` 与 `not_frame_multiple`、`stream_origin`；`ATVV STREAM summary` 增加 `expected_batches` / `coverage_pct` / `max_gap_ms` / `gate_drops` / `late_stop_drops` / `identifier_drops`；`RECORDING ASSET saved` 增加 `audio_ms` / `audio_samples`。`acceptsProtocolData` 门、停流后丢弃与 identifier 不匹配三处不再静默。定向自动化 34 项 / 3 套通过。
+  - 2026-10-13 候选修复：`CBCentralManager` 从 `.main` 改为专用串行队列 `RemoteMic.bluetooth`，新增 `onMain` 保证业务状态仍只在主线程变更，`handleCharacteristicValue` 改为显式接收 `value: Data?`（`CBCharacteristic.value` 是可变「最新值」，必须先取再切线程）。定向自动化 35 项 / 3 套通过。**尚未在真实 RC003 + 真实第三方工具上验收，不得据此判定已修复。**
+  - 待办：真机验证尾部是否恢复完整；若仍缺，用 PacketLogger 空口抓包一次长会话区分「远端发不满」与「本地仍丢」，再决定是否由宿主持有麦克风流（有界 `MIC_OPEN` / `MIC_EXTEND` / `MIC_CLOSE`）让遥控器把积压尾部推完再关流。
+  - 记录见 [`Bugs/2026-10-13-rc003-audio-delivery-rate-shortfall.md`](Bugs/2026-10-13-rc003-audio-delivery-rate-shortfall.md)。
+
 - [ ] 蓝牙遥控器系统自定义名称（[#406](https://github.com/HD838A/remote-mic-app/issues/406)）
 	- 已接入按设备身份读取名称、历史编号和事件刷新；A2854 独立 API 实验已验证改名读取和重连身份稳定，并补充序列号默认名识别；候选程序实际运行、截图及端到端验收待完成，保持 Draft。
 	- 2026-09-20：已按跨平台合同把已连接遥控器卡片统一为“通用型号 / 系统蓝牙名称 / 连接与电池状态”三行，并按通用型号的拼音/拉丁化结果稳定排序；当前连接的完整系统名只在内存显示，仍待生产窗口与多型号真机验收。
