@@ -105,3 +105,44 @@ swift test --disable-keychain
 swift build --disable-keychain
 git diff --check
 ```
+
+## 用例 9：RC003 音频链路诊断与日志预算
+
+适用范围：PR 653 的日志补全候选。蓝牙回调仍在主线程。原尾部缺失问题未修复。
+
+自动化命令：
+
+```bash
+swift test --disable-keychain --disable-sandbox --filter ATVVAudioDiagnosticsTests
+```
+
+预期：接受和拒绝计数完整，停流后尾包进入唯一终态。配置或 Fn 缓冲未排程时，不得因播放器 pending 为零而宣称成功。输出超时与共享 generation 标为未知。诊断不发送协议命令，不 flush，不修改 Fn。
+
+日志预算：新 ATVV 诊断每 10 秒最多一条 progress，每段最多 12 条 progress；started、first_pcm、stopping、completed 各最多一次。software_trigger 的 down/up 各最多一次；receive_stalled、receive_resumed 各最多一次。该模块每段最多 20 条；其他组件沿用既有事件行并补关联字段。20,000 个拒绝包及有效 PCM 包回放，各自总诊断文本小于 16 KB。含软件键、重复静默和恢复的完整 20,000 包回放小于 20 KB。上述数字不代表整个 App 的日志大小上限。
+
+补充自动化预期：
+
+- 不发送 STOP 且不再投递音频时，两秒观察器输出一次 receive_stalled，终态保持 pending。它不关闭麦克风、不松键、不清缓存。
+- 回调恢复时输出一次 receive_resumed；再次停收只累计 silence_episodes。停止后观察器不继续写日志。
+- 主线程观察任务迟到时，observation_max_lag_ms 记录该任务自身迟到。callback_wait_ms 与 transport_arrival 仍为 unknown。
+- 软件键按会话关联 down/up。software_down_to_first_pcm_ms 和 software_up_to_last_playback_ms 使用单调时钟。后一个值为正，表示尾音播放晚于软件键提交。
+- 按键提交失败后重试成功时，最终字段记录成功和失败次数，边沿日志不重复。始终标记 target_response=unknown。
+- 配置缓冲上限 32,000 样本、Command 缓冲上限 8,000 样本沿用主线。超过上限时分别累计 buffer_configuration_overflow_samples 和 buffer_command_overflow_samples。
+- 缓冲取消和配置失败分别计数。dropped_samples 必须包含这些损失；确认丢失时不得写 completion=normal。
+
+真实环境步骤：
+
+1. 使用真实 RC003 与目标语音工具，记录版本、Build 和测试时段。
+2. 分别说短句、10 秒和 30 秒长句；正常松键后等候 10 秒。
+3. 快速连续录制三段，核对每段首字和尾字。
+4. 在录音中断开遥控器，再连接并录制一段。
+5. 分别测试输出已就绪与冷启动配置、录音启用与禁用、Fn 模式启用与关闭，以及左右 Command 和 Right Option。
+6. 使用现有诊断入口收集加密 rmlog，由内部支持环境按 seq 解密。
+
+每步预期：用户行为与主线相同；每段可沿 operation_id 关联入口、拒绝、解码、路由、播放和录音结果。断连有异常原因，恢复使用新的关联号。正常结果只证明已收到的样本完整播放，外部工具结果仍须人工核对。
+
+失败判定：逐音频包输出、同段多个终态、尾包丢弃未入账、缓冲被记为播放成功、下一段样本被计为上一段成功，或日志出现文字、音频、设备身份、路径和凭据。
+
+未知边界：主线程回调前排队、无线到达、真实硬件按下和外部工具收音不可观察。Fn 只记录全局可见事件时间。现有公开转写捕获只记录 text_present，不记录正文，也不自动启用捕获。
+
+2026-10-13 初版：定向 101 项 / 6 套及全量 857 项 / 67 套通过，构建通过。补充日志版：定向 99 项 / 5 套通过；本次全量 863 项 / 67 套和构建通过。本轮自动化覆盖上述账目与体积规则；真实设备、首字延迟、尾字完整、第三方工具文字和加密现场采集尚未验收。Bug 记录见 [RC003 诊断](../Bugs/2026-10-13-rc003-audio-delivery-rate-shortfall.md)。

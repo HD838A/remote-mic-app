@@ -25,6 +25,8 @@ final class PreferredInputSourceMonitor {
 
     private var monitor: Any?
     private var functionKeyIsPressed = false
+    private(set) var lastFunctionKeyDownAtForDiagnostics: TimeInterval?
+    private(set) var lastFunctionKeyUpAtForDiagnostics: TimeInterval?
     private var explicitVoiceSessionActivationPending = false
     private var managedInputSourceSession: ManagedInputSourceSession?
     private static let activationTimeout: TimeInterval = 0.5
@@ -104,6 +106,12 @@ final class PreferredInputSourceMonitor {
     func handleFunctionKeyPressed(_ pressed: Bool) {
         guard pressed != functionKeyIsPressed else { return }
         functionKeyIsPressed = pressed
+        if pressed {
+            lastFunctionKeyDownAtForDiagnostics = ProcessInfo.processInfo.systemUptime
+            lastFunctionKeyUpAtForDiagnostics = nil
+        } else {
+            lastFunctionKeyUpAtForDiagnostics = ProcessInfo.processInfo.systemUptime
+        }
         if !pressed {
             let selectedVoiceTool = voiceTool()
             if selectedVoiceTool.preferredInputSourceID != nil || managedInputSourceSession != nil {

@@ -12,6 +12,27 @@ enum ATVVProtocol {
         sampleRate == 16_000
     }
 
+    /// 会话实时基线：16 kHz 单声道，即每毫秒 16 个样本。
+    static let realTimeSamplesPerMillisecond = 16.0
+
+    /// 一次会话按实时应当收到的音频帧数。
+    ///
+    /// RC003 声明 `frame=120`（每帧 120 字节 = 240 个 16 kHz 样本 = 15 ms），因此
+    /// 「按实时应有的帧数」= 主线程处理所见的会话时长 ÷ 15 ms。
+    /// 该比值不能独立证明无线到达率、丢包位置或尾部缺失的根因。
+    static func expectedFrameCount(durationMilliseconds: Int, frameSamples: Int) -> Int {
+        guard durationMilliseconds > 0, frameSamples > 0 else { return 0 }
+        let millisecondsPerFrame = Double(frameSamples) / realTimeSamplesPerMillisecond
+        return Int((Double(durationMilliseconds) / millisecondsPerFrame).rounded())
+    }
+
+    /// 实际收到的样本数占会话时长（按 16 kHz 实时）的百分比。
+    static func audioCoveragePercent(receivedSamples: Int, durationMilliseconds: Int) -> Double {
+        guard durationMilliseconds > 0 else { return 0 }
+        return Double(receivedSamples) / realTimeSamplesPerMillisecond
+            / Double(durationMilliseconds) * 100
+    }
+
     static func microphoneOpen(version: UInt16, codec: UInt8) -> Data {
         if version >= 0x0100 {
             return Data([0x0C, 0x00])

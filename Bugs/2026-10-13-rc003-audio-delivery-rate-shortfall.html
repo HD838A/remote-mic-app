@@ -1,0 +1,1003 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="blueprint" data-mode="auto">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="generator" content="Answer me with HTML 0.4.6">
+<title>RC003 长会话尾部缺失：日志诊断记录</title>
+<style>
+html[data-theme="blueprint"], html[data-theme="blueprint"][data-mode="light"] {
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --radius: 0px;
+  --shadow: none;
+  --bw: 1.5px;
+  --head-font: var(--font-sans);
+  --bg: #f6f6f3;
+  --paper: #ffffff;
+  --ink: #16181d;
+  --ink-2: #4b5260;
+  --ink-3: #8b929e;
+  --line: #1d2026;
+  --line-2: #d6dae1;
+  --fill: #f3f5f8;
+  --accent: #1d5fbf;
+  --accent-bg: #e4ecf8;
+  --ok: #1d5fbf;
+  --ok-bg: #e4ecf8;
+  --err: #c62828;
+  --err-bg: #fbeaea;
+  --warn: #a8620a;
+  --warn-bg: #fdf3e2;
+  --head-bg: #16181d;
+  --head-fg: #ffffff;
+}
+html[data-theme="blueprint"][data-mode="dark"] {
+  --bg: #081322;
+  --paper: #0d1c31;
+  --ink: #e6edf7;
+  --ink-2: #a9b8cc;
+  --ink-3: #6b7f99;
+  --line: #c9d6e8;
+  --line-2: #23385a;
+  --fill: #12253f;
+  --accent: #6ea8ff;
+  --accent-bg: #16305a;
+  --ok: #6ea8ff;
+  --ok-bg: #16305a;
+  --err: #ff7070;
+  --err-bg: #3b1620;
+  --warn: #f0b14a;
+  --warn-bg: #3a2a10;
+  --head-bg: #e6edf7;
+  --head-fg: #081322;
+}
+@media (prefers-color-scheme: dark) {
+html[data-theme="blueprint"][data-mode="auto"] {
+  --bg: #081322;
+  --paper: #0d1c31;
+  --ink: #e6edf7;
+  --ink-2: #a9b8cc;
+  --ink-3: #6b7f99;
+  --line: #c9d6e8;
+  --line-2: #23385a;
+  --fill: #12253f;
+  --accent: #6ea8ff;
+  --accent-bg: #16305a;
+  --ok: #6ea8ff;
+  --ok-bg: #16305a;
+  --err: #ff7070;
+  --err-bg: #3b1620;
+  --warn: #f0b14a;
+  --warn-bg: #3a2a10;
+  --head-bg: #e6edf7;
+  --head-fg: #081322;
+}
+}
+
+html[data-theme="shadcn"], html[data-theme="shadcn"][data-mode="light"] {
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --radius: 8px;
+  --shadow: 0 1px 2px 0 rgba(0,0,0,0.05);
+  --bw: 1px;
+  --head-font: var(--font-sans);
+  --bg: #fafafa;
+  --paper: #ffffff;
+  --ink: #09090b;
+  --ink-2: #71717a;
+  --ink-3: #a1a1aa;
+  --line: #e4e4e7;
+  --line-2: #f0f0f2;
+  --fill: #f4f4f5;
+  --accent: #2563eb;
+  --accent-bg: #eff6ff;
+  --ok: #16a34a;
+  --ok-bg: #f0fdf4;
+  --err: #dc2626;
+  --err-bg: #fef2f2;
+  --warn: #d97706;
+  --warn-bg: #fffbeb;
+  --head-bg: #18181b;
+  --head-fg: #fafafa;
+}
+html[data-theme="shadcn"][data-mode="dark"] {
+  --bg: #09090b;
+  --paper: #121215;
+  --ink: #fafafa;
+  --ink-2: #a1a1aa;
+  --ink-3: #71717a;
+  --line: #27272a;
+  --line-2: #1c1c1f;
+  --fill: #18181b;
+  --accent: #60a5fa;
+  --accent-bg: #172554;
+  --ok: #4ade80;
+  --ok-bg: #052e16;
+  --err: #f87171;
+  --err-bg: #450a0a;
+  --warn: #fbbf24;
+  --warn-bg: #451a03;
+  --head-bg: #fafafa;
+  --head-fg: #18181b;
+}
+@media (prefers-color-scheme: dark) {
+html[data-theme="shadcn"][data-mode="auto"] {
+  --bg: #09090b;
+  --paper: #121215;
+  --ink: #fafafa;
+  --ink-2: #a1a1aa;
+  --ink-3: #71717a;
+  --line: #27272a;
+  --line-2: #1c1c1f;
+  --fill: #18181b;
+  --accent: #60a5fa;
+  --accent-bg: #172554;
+  --ok: #4ade80;
+  --ok-bg: #052e16;
+  --err: #f87171;
+  --err-bg: #450a0a;
+  --warn: #fbbf24;
+  --warn-bg: #451a03;
+  --head-bg: #fafafa;
+  --head-fg: #18181b;
+}
+}
+
+html[lang="ja"][data-theme][data-mode] {
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Yu Gothic", Meiryo, "Noto Sans CJK JP", "Noto Sans JP", "PingFang SC", "Microsoft YaHei", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+html[lang="ja"][data-theme="3b1b"][data-mode] {
+  --v-title-font: "CMU Serif", "Latin Modern Roman", "Iowan Old Style", "Palatino", "Hiragino Mincho ProN", "Yu Mincho", "Noto Serif CJK JP", "Noto Serif JP", "Songti SC", serif;
+}
+
+/* Answer me with HTML base — 只引用主题变量，禁止写死颜色（主题 token 见 themes/index.js） */
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--bg); color: var(--ink);
+  font-family: var(--font-sans); font-size: 14px; line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+code, pre, kbd { font-family: var(--font-mono); }
+
+/* ── 工具栏 ─────────────────────────────── */
+.am-toolbar {
+  position: fixed; top: 12px; right: 12px; z-index: 10; display: flex; gap: 6px;
+}
+.am-btn {
+  font: 12px/1 var(--font-sans); color: var(--ink); background: var(--paper);
+  border: 1px solid var(--line-2); border-radius: var(--radius); padding: 7px 10px; cursor: pointer;
+}
+.am-btn:hover { border-color: var(--ink-3); }
+.am-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ── 页头 ───────────────────────────────── */
+.am-head { margin: 0 0 20px; padding-right: 260px; }
+.am-head h1 { margin: 0; font-size: 24px; line-height: 1.25; letter-spacing: -0.01em; }
+.am-sub { margin: 4px 0 0; color: var(--ink-2); }
+.am-head-meta { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; font-size: 12px; color: var(--ink-2); }
+.am-head-meta b { font-family: var(--font-mono); font-weight: 400; color: var(--ink-3); margin-right: 6px; }
+.am-intro { margin-top: 12px; max-width: 80ch; }
+
+/* ── sheet 图纸板 ────────────────────────── */
+.am-sheet { max-width: 1680px; margin: 0 auto; padding: 32px 28px 40px; }
+.am-frame { position: relative; }
+.am-grid {
+  display: grid; grid-template-columns: repeat(var(--cols, 3), minmax(0, 1fr));
+  gap: 20px; align-items: start;
+}
+.am-ruler { display: none; }
+html[data-theme="blueprint"] .am-frame { border: 1px solid var(--line); padding: 30px; }
+html[data-theme="blueprint"] .am-frame::before {
+  content: ""; position: absolute; inset: 18px; border: 1px solid var(--line); pointer-events: none;
+}
+html[data-theme="blueprint"] .am-ruler {
+  display: flex; position: absolute; font: 10px/1 var(--font-mono); color: var(--ink-3);
+}
+.am-ruler span { flex: 1; display: flex; align-items: center; justify-content: center; }
+.am-ruler--top, .am-ruler--bottom { left: 18px; right: 18px; height: 18px; }
+.am-ruler--top { top: 0; }
+.am-ruler--bottom { bottom: 0; }
+.am-ruler--left, .am-ruler--right { top: 18px; bottom: 18px; width: 18px; flex-direction: column; }
+.am-ruler--left { left: 0; }
+.am-ruler--right { right: 0; }
+.am-ruler--top span + span, .am-ruler--bottom span + span { border-left: 1px solid var(--line); }
+.am-ruler--left span + span, .am-ruler--right span + span { border-top: 1px solid var(--line); }
+
+/* ── 面板 ───────────────────────────────── */
+.am-panel {
+  background: var(--paper); border: var(--bw) solid var(--line); border-radius: var(--radius);
+  box-shadow: var(--shadow); min-width: 0; overflow: hidden;
+}
+.am-panel-head {
+  display: flex; align-items: stretch; gap: 0; border-bottom: var(--bw) solid var(--line); min-height: 34px;
+}
+.am-panel-id {
+  display: flex; align-items: center; justify-content: center; min-width: 34px; padding: 0 8px;
+  background: var(--head-bg); color: var(--head-fg); font-weight: 600; font-size: 14px;
+}
+html[data-theme="shadcn"] .am-panel-id { border-radius: 6px; min-width: 24px; height: 24px; margin: 9px 0 9px 14px; font-size: 12px; }
+html[data-theme="shadcn"] .am-panel-head { border-bottom-width: 1px; }
+.am-panel-head h2 { margin: 0; padding: 7px 12px; font-size: 15px; font-weight: 600; flex: 1; display: flex; align-items: center; }
+.am-panel-meta { align-self: center; padding: 0 12px; font: 11px/1.3 var(--font-mono); color: var(--ink-2); text-align: right; }
+.am-panel-body { padding: 14px 16px 16px; }
+.am-panel-body > * + * { margin-top: 12px; }
+
+/* ── Markdown 正文 ───────────────────────── */
+.am-md > :first-child { margin-top: 0; }
+.am-md > :last-child { margin-bottom: 0; }
+.am-md p { margin: 0 0 8px; }
+.am-md ul, .am-md ol { margin: 0 0 8px; padding-left: 20px; }
+.am-md li + li { margin-top: 3px; }
+.am-md h3, .am-md h4 { margin: 14px 0 6px; font-size: 13px; }
+.am-md a { color: var(--accent); }
+.am-md blockquote { margin: 0 0 8px; padding: 2px 12px; border-left: 3px solid var(--line-2); color: var(--ink-2); }
+.am-md :not(pre) > code { font-size: 0.9em; background: var(--fill); padding: 1px 5px; border-radius: 4px; }
+.am-md hr { border: 0; border-top: 1px solid var(--line-2); margin: 12px 0; }
+.am-md img, .am-intro img, .am-panel-body img {
+  display: block; width: auto; max-width: 100%; height: auto; max-height: min(72vh, 760px);
+  object-fit: contain; margin: 10px auto; cursor: zoom-in; border-radius: var(--radius);
+}
+.am-md img:focus-visible, .am-intro img:focus-visible, .am-panel-body img:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 3px;
+}
+.am-md table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.am-md th {
+  text-align: left; font: 11px/1.3 var(--font-mono); color: var(--ink-2); font-weight: 400;
+  padding: 6px 10px; border-bottom: 1px solid var(--line-2);
+}
+.am-md td { padding: 7px 10px; border-bottom: 1px solid var(--line-2); vertical-align: top; }
+.am-md tbody tr:nth-child(even) td { background: var(--fill); }
+.am-table-wrap { overflow-x: auto; }
+.am-code {
+  margin: 0; padding: 12px 14px; background: var(--fill); border: 1px solid var(--line-2);
+  border-radius: var(--radius); overflow-x: auto; font-size: 12.5px; line-height: 1.5;
+}
+
+/* ── 状态徽章 ok / no / warn ──────────────── */
+.am-status { white-space: nowrap; font-weight: 500; }
+.am-status--ok { color: var(--ok); }
+.am-status--no { color: var(--err); }
+.am-status--warn { color: var(--warn); }
+.am-status-icon { display: inline-block; width: 1.1em; font-weight: 700; }
+
+/* ── callout ─────────────────────────────── */
+.am-callout {
+  border: 1px solid var(--line-2); border-left: 3px solid var(--accent); background: var(--accent-bg);
+  padding: 10px 14px; border-radius: var(--radius);
+}
+.am-callout--ok { border-left-color: var(--ok); background: var(--ok-bg); }
+.am-callout--warn { border-left-color: var(--warn); background: var(--warn-bg); }
+.am-callout--err { border-left-color: var(--err); background: var(--err-bg); }
+.am-callout-title { font-weight: 600; margin-bottom: 4px; }
+
+/* ── kv 标题栏格 ─────────────────────────── */
+.am-kv {
+  display: grid; grid-template-columns: repeat(var(--kv-cols, 2), minmax(0, 1fr)); margin: 0;
+  border-top: var(--bw) solid var(--line); border-left: var(--bw) solid var(--line);
+}
+.am-kv-cell { border-right: var(--bw) solid var(--line); border-bottom: var(--bw) solid var(--line); padding: 6px 10px 8px; min-width: 0; }
+.am-kv-cell--wide { grid-column: 1 / -1; }
+.am-kv dt { font: 11px/1.4 var(--font-mono); color: var(--ink-2); }
+.am-kv dd { margin: 2px 0 0; font-size: 14px; font-weight: 500; overflow-wrap: anywhere; }
+.am-kv-cell--wide dd { font-size: 17px; font-weight: 600; }
+html[data-theme="shadcn"] .am-kv { border-color: var(--line); border-radius: var(--radius); overflow: hidden; }
+
+/* ── timeline ────────────────────────────── */
+.am-timeline { list-style: none; margin: 0; padding: 0; }
+.am-timeline--h { display: grid; grid-template-columns: repeat(var(--n, 1), minmax(0, 1fr)); padding-top: 4px; }
+.am-timeline--h li { position: relative; text-align: center; padding: 0 6px; }
+.am-timeline--h li::before {
+  content: ""; position: absolute; top: 31px; left: 0; right: 0; border-top: var(--bw) solid var(--line);
+}
+.am-timeline--h li:first-child::before { left: 50%; }
+.am-timeline--h li:last-child::before { right: 50%; }
+.am-tl-when { display: block; font-size: 15px; font-weight: 500; height: 24px; }
+.am-tl-dot {
+  position: relative; display: block; width: 11px; height: 11px; margin: 2px auto 8px;
+  border: var(--bw) solid var(--line); border-radius: 50%; background: var(--paper);
+}
+.am-tl-item--hi .am-tl-dot { background: var(--accent); border-color: var(--accent); }
+.am-tl-title { display: block; font-size: 12.5px; font-weight: 500; }
+.am-tl-text { display: block; font-size: 12px; color: var(--ink-2); line-height: 1.45; }
+.am-timeline--v li { position: relative; padding: 0 0 14px 22px; }
+.am-timeline--v li::before { content: ""; position: absolute; left: 5px; top: 6px; bottom: -6px; border-left: var(--bw) solid var(--line-2); }
+.am-timeline--v li:last-child::before { display: none; }
+.am-timeline--v .am-tl-dot { position: absolute; left: 0; top: 4px; margin: 0; }
+.am-timeline--v .am-tl-when { display: inline; height: auto; font: 12px var(--font-mono); color: var(--ink-2); margin-right: 8px; }
+.am-timeline--v .am-tl-title { display: inline; font-size: 14px; }
+.am-timeline--v .am-tl-text { margin-top: 2px; }
+
+/* ── annot 句子标注 ──────────────────────── */
+.am-annot + .am-annot { border-top: 1px solid var(--line-2); padding-top: 12px; }
+.am-annot-head { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; font-weight: 600; margin-bottom: 8px; }
+.am-annot-meta { font: 11px var(--font-mono); font-weight: 400; color: var(--ink-2); }
+.am-annot-scroll { overflow-x: auto; }
+.am-annot-line {
+  position: relative; display: inline-block; white-space: pre; font: 14px/1.6 var(--font-mono);
+  padding-bottom: calc(var(--rows, 0) * 17px + 14px);
+}
+.am-annot-line--wrap { display: block; white-space: normal; padding-bottom: 10px; }
+.am-annot-line--wrap .am-seg { white-space: nowrap; }
+.am-seg { position: relative; }
+.am-seg::after {
+  content: ""; position: absolute; left: 1px; right: 1px; top: calc(100% + 1px); height: 5px;
+  border: 1px solid var(--accent); border-top: 0;
+}
+.am-seg-n {
+  position: absolute; left: 0; top: calc(100% + 8px + var(--row, 0) * 17px);
+  font: 11px/16px var(--font-sans); color: var(--accent); white-space: nowrap;
+}
+.am-seg--err { color: var(--err); }
+.am-seg--err::after { border-color: var(--err); }
+.am-seg--err .am-seg-n { color: var(--err); }
+.am-annot-caption { font-size: 12px; color: var(--ink-2); }
+
+/* ── limits 限值条 ───────────────────────── */
+.am-lim + .am-lim { margin-top: 14px; }
+.am-lim-head { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; margin-bottom: 4px; }
+.am-lim-val { font: 12px var(--font-mono); color: var(--accent); white-space: nowrap; }
+.am-lim-track { position: relative; height: 12px; border: 1px solid var(--line-2); background: var(--fill); border-radius: calc(var(--radius) / 2); }
+.am-lim-fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent-bg); border-right: 1px solid var(--accent); }
+.am-lim-mark { position: absolute; top: -4px; bottom: -4px; border-left: 2px solid var(--accent); }
+.am-lim.is-over .am-lim-fill { background: var(--err-bg); border-right-color: var(--err); }
+.am-lim.is-over .am-lim-val { color: var(--err); }
+.am-lim-ticks { position: relative; height: 16px; font: 10px/16px var(--font-mono); color: var(--ink-3); }
+.am-lim-ticks span { position: absolute; transform: translateX(-50%); }
+.am-lim-ticks span:first-child { transform: none; }
+.am-lim-note { font-size: 11px; color: var(--ink-2); margin-left: 6px; }
+
+/* ── tree 结构树 ─────────────────────────── */
+.am-tree { font-size: 13px; }
+.am-tree-root { display: flex; justify-content: center; position: relative; padding-bottom: 18px; }
+.am-tree-root::after { content: ""; position: absolute; bottom: 0; left: 50%; height: 18px; border-left: var(--bw) solid var(--line); }
+.am-tree-root--solo { padding-bottom: 12px; }
+.am-tree-root--solo::after { display: none; }
+.am-tree-box {
+  border: var(--bw) solid var(--line); background: var(--paper); padding: 6px 14px; text-align: center;
+  border-radius: var(--radius); font-weight: 600;
+}
+.am-tree-box small { display: block; font-weight: 400; color: var(--ink-2); font-size: 12px; }
+.am-tree-box--root { background: var(--accent-bg); font-size: 15px; padding: 8px 28px; }
+.am-tree-cols { display: grid; grid-template-columns: repeat(var(--n, 1), minmax(0, 1fr)); }
+.am-tree-col { position: relative; padding: 18px 8px 0; min-width: 0; }
+.am-tree-col::before { content: ""; position: absolute; top: 0; left: 0; right: 0; border-top: var(--bw) solid var(--line); }
+.am-tree-col:first-child::before { left: 50%; }
+.am-tree-col:last-child::before { right: 50%; }
+.am-tree-col::after { content: ""; position: absolute; top: 0; left: 50%; height: 18px; border-left: var(--bw) solid var(--line); }
+.am-tree-list, .am-tree-list ul { list-style: none; margin: 0; padding: 0; }
+.am-tree-col > .am-tree-list { margin: 8px 0 0 14px; }
+.am-tree-list ul { margin-left: 16px; }
+.am-tree-list li { position: relative; padding: 3px 0 3px 18px; }
+.am-tree-list li::before { content: ""; position: absolute; left: 0; top: 0.95em; width: 12px; border-top: 1px solid var(--ink-3); }
+.am-tree-list li::after { content: ""; position: absolute; left: 0; top: 0; bottom: 0; border-left: 1px solid var(--ink-3); }
+.am-tree-list li:last-child::after { bottom: auto; height: 0.95em; }
+.am-tree-tag { font: 11px var(--font-mono); color: var(--ink-3); margin-right: 4px; }
+.am-tree code { font: 12px var(--font-mono); }
+.am-tree-sub { display: block; font-size: 11.5px; color: var(--ink-2); }
+.am-tree-hi > .am-tree-label { color: var(--accent); font-weight: 600; }
+
+/* ── 图（flow / sequence）───────────────── */
+.am-diagram { margin: 0; overflow-x: auto; text-align: center; }
+.am-diagram svg { max-width: 100%; height: auto; font-family: var(--font-sans); }
+.am-diagram text { fill: var(--ink); font-size: 13px; }
+.am-node-shape { fill: var(--paper); stroke: var(--line); stroke-width: var(--bw); }
+.am-node--hi .am-node-shape { fill: var(--accent-bg); stroke: var(--accent); }
+.am-node--hi text { fill: var(--accent); font-weight: 600; }
+.am-edge { fill: none; stroke: var(--ink-2); stroke-width: 1.3; }
+.am-edge--dashed { stroke-dasharray: 5 4; }
+.am-arrow { fill: var(--ink-2); }
+.am-edge-label rect { fill: var(--paper); }
+.am-diagram .am-edge-label text { fill: var(--accent); font-size: 11.5px; }
+.am-cluster { fill: var(--fill); stroke: var(--line-2); stroke-width: 1; stroke-dasharray: 4 3; }
+.am-diagram .am-cluster-label { fill: var(--ink-2); font: 11px var(--font-mono); }
+.am-lifeline { stroke: var(--ink-3); stroke-width: 1; stroke-dasharray: 4 4; }
+.am-actor { fill: var(--paper); stroke: var(--line); stroke-width: var(--bw); }
+.am-note { fill: var(--warn-bg); stroke: var(--warn); stroke-width: 1; }
+.am-diagram .am-step { fill: var(--ink-3); font: 10px var(--font-mono); }
+
+/* ── doc 线性讲解 ────────────────────────── */
+.am-doc { max-width: 1120px; margin: 0 auto; padding: 40px 28px 64px; }
+.am-doc-layout { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 32px; align-items: start; }
+.am-doc-layout--notoc { grid-template-columns: minmax(0, 1fr); max-width: 860px; }
+.am-toc { position: sticky; top: 24px; font-size: 13px; }
+.am-toc a { display: block; color: var(--ink-2); text-decoration: none; padding: 4px 0 4px 10px; border-left: 2px solid var(--line-2); }
+.am-toc a:hover { color: var(--ink); border-left-color: var(--accent); }
+.am-doc-body > .am-panel + .am-panel { margin-top: 20px; }
+
+/* ── 响应式与打印 ─────────────────────────── */
+@media (max-width: 1100px) {
+  .am-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .am-grid > .am-panel { grid-column: auto !important; }
+  .am-grid > .am-panel.am-span-wide { grid-column: 1 / -1 !important; }
+}
+@media (max-width: 760px) {
+  .am-sheet, .am-doc { padding: 56px 12px 24px; }
+  .am-head { padding-right: 0; }
+  .am-grid { grid-template-columns: minmax(0, 1fr); }
+  .am-grid > .am-panel.am-span-wide { grid-column: auto !important; }
+  html[data-theme="blueprint"] .am-frame { padding: 0; border: 0; }
+  html[data-theme="blueprint"] .am-frame::before, html[data-theme="blueprint"] .am-ruler { display: none; }
+  .am-doc-layout { grid-template-columns: minmax(0, 1fr); }
+  .am-toc { position: static; }
+  .am-timeline--h { grid-template-columns: minmax(0, 1fr); }
+  .am-tree-cols { grid-template-columns: minmax(0, 1fr); }
+}
+.am-colophon { text-align: center; padding: 0 0 28px; font: 11px var(--font-mono); color: var(--ink-3); }
+
+@media print {
+  .am-toolbar { display: none; }
+  body { background: var(--paper); }
+  .am-panel { break-inside: avoid; box-shadow: none; }
+}
+.am-panel--bare { border: 0; background: transparent; box-shadow: none; }
+.am-panel--bare > .am-panel-body { padding: 0; }
+.am-panel--bare .am-kv { background: var(--paper); }
+
+/* ── 图片大图预览 ────────────────────────── */
+.am-lightbox[hidden] { display: none; }
+.am-lightbox {
+  position: fixed; inset: 0; z-index: 100; display: grid; place-items: center;
+  padding: clamp(16px, 4vw, 48px); background: rgba(0, 0, 0, 0.78); backdrop-filter: blur(4px);
+}
+.am-lightbox img {
+  display: block; width: auto; max-width: 100%; max-height: 100%; height: auto;
+  object-fit: contain; cursor: zoom-out; box-shadow: 0 12px 48px rgba(0, 0, 0, 0.35);
+}
+.am-lightbox-close {
+  position: absolute; top: 14px; right: 14px; width: 36px; height: 36px; padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.45); border-radius: 50%; background: rgba(0, 0, 0, 0.35);
+  color: #fff; font: 24px/1 var(--font-sans); cursor: pointer;
+}
+.am-lightbox-close:hover { background: rgba(0, 0, 0, 0.6); }
+.am-lightbox-close:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+body.am-lightbox-open { overflow: hidden; }
+
+</style>
+</head>
+<body>
+<div class="am-toolbar">
+<button class="am-btn" type="button" data-am="theme" data-labels="{&quot;blueprint&quot;:&quot;主题：图纸&quot;,&quot;shadcn&quot;:&quot;主题：卡片&quot;}">主题：图纸</button>
+<button class="am-btn" type="button" data-am="mode" data-labels="{&quot;auto&quot;:&quot;明暗：跟随系统&quot;,&quot;light&quot;:&quot;明暗：亮&quot;,&quot;dark&quot;:&quot;明暗：暗&quot;}">明暗：跟随系统</button>
+<button class="am-btn" type="button" data-am="copy" data-done="已复制 ✓">复制源稿</button>
+</div>
+<main class="am-doc">
+<header class="am-head"><h1>RC003 长会话尾部缺失：日志诊断记录</h1><p class="am-sub">PR 653 仅补诊断；功能修复已撤回</p></header>
+<div class="am-doc-layout">
+<nav class="am-toc" aria-label="目录"><a href="#panel-A">A · 当前结论</a><a href="#panel-B">B · 现场证据与复现边界</a><a href="#panel-C">C · 可关联的观察链路</a><a href="#panel-D">D · 字段与失败归因</a><a href="#panel-E">E · 唯一终态与未知边界</a><a href="#panel-F">F · 日志量与隐私</a><a href="#panel-G">G · 验证与后续取证</a></nav><div class="am-doc-body">
+<section class="am-panel" id="panel-A">
+<header class="am-panel-head"><span class="am-panel-id">A</span><h2>当前结论</h2></header>
+<div class="am-panel-body"><div class="am-md"><p>RC003 长会话尾部缺失仍待定位。
+PR 653 撤回独立蓝牙回调队列与跨线程取值改动。
+本轮只增加计数、时间观察和脱敏日志。</p>
+<p>蓝牙回调、解码和路由继续使用主线程。
+协议命令、Fn、门控和音频排空沿用主线行为。</p>
+</div></div>
+</section>
+<section class="am-panel" id="panel-B">
+<header class="am-panel-head"><span class="am-panel-id">B</span><h2>现场证据与复现边界</h2></header>
+<div class="am-panel-body"><div class="am-md"><p>原 PR 记录了 29 次现场会话。
+记录称音频样本时长约占会话时长的 84%～96%。
+用户报告长句尾部缺失，本地录音也变短。
+这些数字来自原 PR 的现场分析。
+本轮没有重新读取原始现场日志，也没有执行真机复现。</p>
+<p>原日志只能覆盖已记录的显式丢弃路径。
+缺少日志不能证明所有本地丢弃均为零。
+主线程处理时间不能证明通知在无线链路上的到达时间。</p>
+<div class="am-table-wrap"><table>
+<thead>
+<tr>
+<th>判断</th>
+<th>当前证据</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>用户报告的尾部缺失</td>
+<td>待相同条件真机复现</td>
+</tr>
+<tr>
+<td>主线程忙导致系统丢包</td>
+<td>未确认假设</td>
+</tr>
+<tr>
+<td>遥控器发送速率不足</td>
+<td>未确认假设</td>
+</tr>
+<tr>
+<td>独立队列可修复问题</td>
+<td>未验证，本轮撤回</td>
+</tr>
+<tr>
+<td>本轮诊断不改变业务决策</td>
+<td>代码对照及自动化检查</td>
+</tr>
+</tbody></table></div>
+<p>复现条件：真实 RC003、相同 Mac 与目标语音工具。
+分别测试短句、10 秒、30 秒和快速连续会话。
+正常边界：首字及时出现，正常松键保留尾字。
+记录失败现象与新会话日志，不能只记录“已入队”。</p>
+</div></div>
+</section>
+<section class="am-panel" id="panel-C">
+<header class="am-panel-head"><span class="am-panel-id">C</span><h2>可关联的观察链路</h2></header>
+<div class="am-panel-body"><figure class="am-diagram am-flow"><svg viewBox="0 0 221 954" width="221" height="954" role="img" aria-label="流程图：STREAM_START、前置检查、音频回调、门控、解码、缓冲、路由、输出" xmlns="http://www.w3.org/2000/svg"><defs><marker id="am1-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="am-arrow" d="M0,0 L10,5 L0,10 z"/></marker></defs><g></g><g><g data-step="0"><path class="am-edge" d="M104.5,49 L104.5,65 Q104.5,81 104.5,97 L104.5,113" marker-end="url(#am1-arrow)"/><g class="am-edge-label"><rect x="70.8" y="72" width="67.5" height="18" rx="3"/><text x="104.5" y="81" text-anchor="middle" dominant-baseline="central">接受或拒绝</text></g></g><g data-step="1"><path class="am-edge" d="M104.5,148 L104.5,164 Q104.5,180 104.5,196 L104.5,212" marker-end="url(#am1-arrow)"/><g class="am-edge-label"><rect x="70.8" y="171" width="67.5" height="18" rx="3"/><text x="104.5" y="180" text-anchor="middle" dominant-baseline="central">主线程处理</text></g></g><g data-step="2"><path class="am-edge" d="M104.5,247 L104.5,263 Q104.5,279 104.5,295 L104.5,311" marker-end="url(#am1-arrow)"/><g class="am-edge-label"><rect x="76.5" y="270" width="56" height="18" rx="3"/><text x="104.5" y="279" text-anchor="middle" dominant-baseline="central">累计原因</text></g></g><g data-step="3"><path class="am-edge" d="M104.5,346 L104.5,362 Q104.5,378 104.5,394 L104.5,410" marker-end="url(#am1-arrow)"/><g class="am-edge-label"><rect x="76.5" y="369" width="56" height="18" rx="3"/><text x="104.5" y="378" text-anchor="middle" dominant-baseline="central">帧与样本</text></g></g><g data-step="4"><path class="am-edge" d="M104.5,445 L104.5,461 Q104.5,477 104.5,493 L104.5,509" marker-end="url(#am1-arrow)"/><g class="am-edge-label"><rect x="59.3" y="468" width="90.5" height="18" rx="3"/><text x="104.5" y="477" text-anchor="middle" dominant-baseline="central">配置或命令等待</text></g></g><g data-step="5"><path class="am-edge" d="M104.5,544 L104.5,560 Q104.5,576 104.5,592 L104.5,608" marker-end="url(#am1-arrow)"/><g class="am-edge-label"><rect x="76.5" y="567" width="56" height="18" rx="3"/><text x="104.5" y="576" text-anchor="middle" dominant-baseline="central">累计样本</text></g></g><g data-step="6"><path class="am-edge" d="M122.2,643 L138.3,659 Q154.5,675 154.5,691 L154.5,707" marker-end="url(#am1-arrow)"/><g class="am-edge-label"><rect x="120.8" y="666" width="67.5" height="18" rx="3"/><text x="154.5" y="675" text-anchor="middle" dominant-baseline="central">排程与播放</text></g></g><g data-step="7"><path class="am-edge" d="M86.8,643 L70.7,659 Q54.5,675 54.5,691 L54.5,707" marker-end="url(#am1-arrow)"/><g class="am-edge-label"><rect x="20.8" y="666" width="67.5" height="18" rx="3"/><text x="54.5" y="675" text-anchor="middle" dominant-baseline="central">提交与写入</text></g></g><g data-step="8"><path class="am-edge" d="M154.5,742 L154.5,758 Q154.5,774 154.5,790 L154.5,806" marker-end="url(#am1-arrow)"/><g class="am-edge-label"><rect x="126.5" y="765" width="56" height="18" rx="3"/><text x="154.5" y="774" text-anchor="middle" dominant-baseline="central">单次结果</text></g></g><g data-step="9"><path class="am-edge" d="M54.5,742 L54.5,758 Q54.5,774 54.5,790 L54.5,806" marker-end="url(#am1-arrow)"/><g class="am-edge-label"><rect x="15" y="765" width="79" height="18" rx="3"/><text x="54.5" y="774" text-anchor="middle" dominant-baseline="central">独立存储结果</text></g></g><g data-step="10"><path class="am-edge am-edge--dashed" d="M154.5,841 L154.5,857 Q154.5,873 154.5,889 L154.5,905" marker-end="url(#am1-arrow)"/><g class="am-edge-label"><rect x="103.5" y="864" width="102" height="18" rx="3"/><text x="154.5" y="873" text-anchor="middle" dominant-baseline="central">现有公开捕获结果</text></g></g></g><g><g class="am-node am-node--rect" data-key="STREAM_START" data-step="0"><rect class="am-node-shape" x="37.1" y="14" width="134.9" height="35" rx="3"/><text x="104.5" y="31.5" text-anchor="middle" dominant-baseline="central">STREAM_START</text></g><g class="am-node am-node--rect" data-key="前置检查" data-step="0"><rect class="am-node-shape" x="64.5" y="113" width="80" height="35" rx="3"/><text x="104.5" y="130.5" text-anchor="middle" dominant-baseline="central">前置检查</text></g><g class="am-node am-node--rect" data-key="音频回调" data-step="1"><rect class="am-node-shape" x="64.5" y="212" width="80" height="35" rx="3"/><text x="104.5" y="229.5" text-anchor="middle" dominant-baseline="central">音频回调</text></g><g class="am-node am-node--rect" data-key="门控" data-step="2"><rect class="am-node-shape" x="72.5" y="311" width="64" height="35" rx="3"/><text x="104.5" y="328.5" text-anchor="middle" dominant-baseline="central">门控</text></g><g class="am-node am-node--rect" data-key="解码" data-step="3"><rect class="am-node-shape" x="72.5" y="410" width="64" height="35" rx="3"/><text x="104.5" y="427.5" text-anchor="middle" dominant-baseline="central">解码</text></g><g class="am-node am-node--rect" data-key="缓冲" data-step="4"><rect class="am-node-shape" x="72.5" y="509" width="64" height="35" rx="3"/><text x="104.5" y="526.5" text-anchor="middle" dominant-baseline="central">缓冲</text></g><g class="am-node am-node--rect" data-key="路由" data-step="5"><rect class="am-node-shape" x="72.5" y="608" width="64" height="35" rx="3"/><text x="104.5" y="625.5" text-anchor="middle" dominant-baseline="central">路由</text></g><g class="am-node am-node--rect" data-key="输出" data-step="6"><rect class="am-node-shape" x="122.5" y="707" width="64" height="35" rx="3"/><text x="154.5" y="724.5" text-anchor="middle" dominant-baseline="central">输出</text></g><g class="am-node am-node--rect" data-key="录音" data-step="7"><rect class="am-node-shape" x="22.5" y="707" width="64" height="35" rx="3"/><text x="54.5" y="724.5" text-anchor="middle" dominant-baseline="central">录音</text></g><g class="am-node am-node--rect" data-key="终态" data-step="8"><rect class="am-node-shape" x="122.5" y="806" width="64" height="35" rx="3"/><text x="154.5" y="823.5" text-anchor="middle" dominant-baseline="central">终态</text></g><g class="am-node am-node--rect" data-key="保存" data-step="9"><rect class="am-node-shape" x="22.5" y="806" width="64" height="35" rx="3"/><text x="54.5" y="823.5" text-anchor="middle" dominant-baseline="central">保存</text></g><g class="am-node am-node--rect" data-key="转写观察" data-step="10"><rect class="am-node-shape" x="114.5" y="905" width="80" height="35" rx="3"/><text x="154.5" y="922.5" text-anchor="middle" dominant-baseline="central">转写观察</text></g></g></svg></figure>
+<div class="am-md"><p>各段使用进程内 operation_id 关联。
+输出同时记录现有 audio_generation。
+录音保存与转写观察各自描述本组件结果。
+音频终态不能代替外部工具文字成功。</p>
+</div></div>
+</section>
+<section class="am-panel" id="panel-D">
+<header class="am-panel-head"><span class="am-panel-id">D</span><h2>字段与失败归因</h2></header>
+<div class="am-panel-body"><div class="am-md"><div class="am-table-wrap"><table>
+<thead>
+<tr>
+<th>边界</th>
+<th>记录字段或含义</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>启动拒绝</td>
+<td>start_rejection：未就绪、取消、忙、输出不可用、语音键失败</td>
+</tr>
+<tr>
+<td>回调入口</td>
+<td>callbacks、callback_bytes、accepted_notifications、accepted_bytes</td>
+</tr>
+<tr>
+<td>提前返回</td>
+<td>stopped、stale_peripheral、stale_generation、callback_error、missing_value、lifecycle</td>
+</tr>
+<tr>
+<td>音频门控</td>
+<td>not_ready、cancelled_open、after_stop</td>
+</tr>
+<tr>
+<td>会话路由</td>
+<td>identifier 丢弃、dropped_samples、routed_samples、buffered_samples、enqueue_failures</td>
+</tr>
+<tr>
+<td>等待缓冲损失</td>
+<td>configuration/command 的 overflow、cancelled、configuration_failed 样本；最后损失原因</td>
+</tr>
+<tr>
+<td>软件按键</td>
+<td>会话内 down/up 提交结果、提交失败计数、首 PCM 和尾音时序</td>
+</tr>
+<tr>
+<td>停收与恢复</td>
+<td>silence_episodes、callback_age_ms、max_silence_ms；观察调度自身延迟</td>
+</tr>
+<tr>
+<td>解码与帧重组</td>
+<td>frames、decoded_bytes、decoded_samples、partial_discarded_bytes、duplicate_starts</td>
+</tr>
+<tr>
+<td>通知尺寸</td>
+<td>notify_bytes_min/max、not_frame_multiple</td>
+</tr>
+<tr>
+<td>主线程处理</td>
+<td>最大间隔及位置；20/50/100/250 毫秒累计桶；max_handler_ms</td>
+</tr>
+<tr>
+<td>输出</td>
+<td>scheduled/played/interrupted/pending_samples；设备分类和绑定观察</td>
+</tr>
+<tr>
+<td>输出队列</td>
+<td>output_queue_max_wait_ms；全属既有输出 generation</td>
+</tr>
+<tr>
+<td>录音</td>
+<td>writer 提交样本、成功 write 样本、拒绝样本、失败次数、保存或取消结果</td>
+</tr>
+<tr>
+<td>转写</td>
+<td>仅利用现有公开捕获结果记录 text_present，不输出文字</td>
+</tr>
+<tr>
+<td>错误</td>
+<td>首个可用 error_domain/code；音频错误累计，不逐包输出</td>
+</tr>
+</tbody></table></div>
+<p>buffered_samples 是累计缓冲量，不是当前待投递量。
+缓冲溢出、取消和配置失败的样本计入 dropped_samples。
+configuration_failed 包括已从缓冲取出后因配置失败而丢弃的样本。
+software_up_to_last_playback_ms 为正时，播放完成晚于软件键提交。</p>
+<p>软件键 event_submitted 不证明第三方工具已经接受事件。
+硬件 Fn 路径写 hardware_path_unobserved，不伪造物理时间。
+录音 write 成功不证明用户尾字完整。
+同段停收恢复沿用 operation_id。
+断连恢复由新 operation_id 与既有连接状态记录证明。</p>
+</div></div>
+</section>
+<section class="am-panel" id="panel-E">
+<header class="am-panel-head"><span class="am-panel-id">E</span><h2>唯一终态与未知边界</h2></header>
+<div class="am-panel-body"><div class="am-md"><p>诊断在停止后等待 350 毫秒观察尾包。
+有待播放或未投递样本时，每 500 毫秒只查询快照。
+观察上限为 10 秒；这些查询不输出进度。
+诊断不等待业务操作，也不触发 flush 或关闭麦克风。</p>
+<p>完整播放要求解码、路由、排程和播放样本一致。
+输出还须无中断、无 pending，且绑定观察为真。
+共享 generation 或账目不全时写 unknown。
+后续会话不能把旧会话的输出误记为成功。</p>
+<div class="am-table-wrap"><table>
+<thead>
+<tr>
+<th>终态</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>normal</td>
+<td>本进程已收到的样本完整播放；不证明原始语音完整</td>
+</tr>
+<tr>
+<td>forced</td>
+<td>已观察取消、重置、拒绝或本地投递失败</td>
+</tr>
+<tr>
+<td>unknown</td>
+<td>输出归属、绑定、计数或截止结果不足</td>
+</tr>
+<tr>
+<td>no_session</td>
+<td>门控拒绝或孤立通知，没有已开始的流</td>
+</tr>
+</tbody></table></div>
+<p>独立观察器每 2 秒检查一次回调静默。
+无音频回调时写 receive_stalled；恢复时写 receive_resumed。
+每段分别最多一条，多次静默只累计次数。
+观察器只读时间，不结束业务会话。
+观察器迟到时记录 observation_max_lag_ms。</p>
+<p>该值只表示观察任务自身迟到，不代表 BLE 回调等待。</p>
+<p>无 STREAM_START 的孤立通知在 10 秒后聚合。
+所有终态保留停流后的丢弃量，只输出一次。</p>
+<p>以下值明确写 unknown：系统回调前等待、无线到达时间、硬件真实按下时间、外部工具收音与文字提交。
+Fn 时间来自全局可见事件，标记为 global_unattributed。
+该时间不能代替遥控器物理按下时间。
+现有转写捕获只证明观察到了结果，不读取外部工具内部数据。</p>
+</div></div>
+</section>
+<section class="am-panel" id="panel-F">
+<header class="am-panel-head"><span class="am-panel-id">F</span><h2>日志量与隐私</h2></header>
+<div class="am-panel-body"><div class="am-md"><p>新 ATVV 诊断每 10 秒最多输出一次 progress。
+每段最多 12 条 progress。
+started、first_pcm、stopping、completed 各最多一次。
+software_trigger 的 down/up 各最多一次。
+receive_stalled、receive_resumed 各最多一次。
+因此每段 ATVV 诊断最多 20 条。</p>
+<p>这是新诊断模块的上限，不是整个 App 的日志上限。</p>
+<p>20,000 个通知回放覆盖拒绝流与有效 PCM 流。
+纯通知计数场景的文本合计仍小于 16 KB。
+包含按键、重复静默和恢复的完整回放小于 20 KB。
+这不是所有运行条件的字节硬上限。</p>
+<p>包数增大不会增加单段诊断行数。
+原逐包门控与缓冲日志改为累计计数。
+录音在既有结果行补字段，转写每个关联结果最多一条。</p>
+<p>不记录音频、转写文字、路径、设备身份或凭据。
+转写关联表最多保留 32 个进程内关联项。
+输出时间表沿用既有 generation 清理规则。</p>
+</div></div>
+</section>
+<section class="am-panel" id="panel-G">
+<header class="am-panel-head"><span class="am-panel-id">G</span><h2>验证与后续取证</h2></header>
+<div class="am-panel-body"><div class="am-md"><p>初版验证：定向 101 项及全量 857 项通过。
+本次补充验证：定向 99 项测试、5 套，通过。
+新增回归覆盖无 STOP 停收、恢复、观察器迟到、按键重试和缓冲损失。
+本次全量验证：863 项测试、67 套，通过。
+本次构建通过。
+构建、治理检查及 diff 检查通过。</p>
+<p>首次 CI 的较旧 Swift 编译器拒绝过长日志表达式。
+已按该错误拆分表达式，保持字段和单行预算。
+CI 复验结果以 PR 检查为准。</p>
+<p>验证命令：</p>
+</div>
+<pre class="am-code"><code data-lang="bash">swift test --disable-keychain --disable-sandbox
+swift build --disable-keychain --disable-sandbox
+scripts/verify-repository-governance.sh origin/main
+git diff --check</code></pre>
+<div class="am-md"><p>自动化覆盖计数守恒、尾包、唯一终态、缓冲等待、观察超时、共享输出、强制结束、拒绝原因及日志预算。
+录音测试核对真实 writer 写入数量与关联号。
+源级检查只证明队列和调用结构，不能证明真机体验。
+本轮没有安装包、RC003 实机或第三方工具验收。</p>
+<p>下一次现场需收集当前版本的加密 rmlog。
+沿 operation_id 核对入口、丢弃、解码、路由、播放和保存。
+若本地账目完整而尾字仍缺，再检查无线与外部工具边界。
+不得把覆盖率单独用于判定根因。
+测试步骤见 Testing/RuntimeLogging.md。</p>
+</div></div>
+</section>
+</div>
+</div>
+</main>
+<footer class="am-colophon">Generated by Answer me with HTML 0.4.6 · 2026-10-13 20:49</footer>
+<textarea id="am-source" hidden readonly aria-hidden="true">---
+title: RC003 长会话尾部缺失：日志诊断记录
+template: doc
+subtitle: PR 653 仅补诊断；功能修复已撤回
+lang: zh
+---
+## A 当前结论
+
+RC003 长会话尾部缺失仍待定位。
+PR 653 撤回独立蓝牙回调队列与跨线程取值改动。
+本轮只增加计数、时间观察和脱敏日志。
+
+蓝牙回调、解码和路由继续使用主线程。
+协议命令、Fn、门控和音频排空沿用主线行为。
+
+## B 现场证据与复现边界
+
+原 PR 记录了 29 次现场会话。
+记录称音频样本时长约占会话时长的 84%～96%。
+用户报告长句尾部缺失，本地录音也变短。
+这些数字来自原 PR 的现场分析。
+本轮没有重新读取原始现场日志，也没有执行真机复现。
+
+原日志只能覆盖已记录的显式丢弃路径。
+缺少日志不能证明所有本地丢弃均为零。
+主线程处理时间不能证明通知在无线链路上的到达时间。
+
+| 判断 | 当前证据 |
+| --- | --- |
+| 用户报告的尾部缺失 | 待相同条件真机复现 |
+| 主线程忙导致系统丢包 | 未确认假设 |
+| 遥控器发送速率不足 | 未确认假设 |
+| 独立队列可修复问题 | 未验证，本轮撤回 |
+| 本轮诊断不改变业务决策 | 代码对照及自动化检查 |
+
+复现条件：真实 RC003、相同 Mac 与目标语音工具。
+分别测试短句、10 秒、30 秒和快速连续会话。
+正常边界：首字及时出现，正常松键保留尾字。
+记录失败现象与新会话日志，不能只记录“已入队”。
+
+## C 可关联的观察链路
+
+```flow
+STREAM_START -&gt; 前置检查: 接受或拒绝
+前置检查 -&gt; 音频回调: 主线程处理
+音频回调 -&gt; 门控: 累计原因
+门控 -&gt; 解码: 帧与样本
+解码 -&gt; 缓冲: 配置或命令等待
+缓冲 -&gt; 路由: 累计样本
+路由 -&gt; 输出: 排程与播放
+路由 -&gt; 录音: 提交与写入
+输出 -&gt; 终态: 单次结果
+录音 -&gt; 保存: 独立存储结果
+终态 --&gt; 转写观察: 现有公开捕获结果
+```
+
+各段使用进程内 operation_id 关联。
+输出同时记录现有 audio_generation。
+录音保存与转写观察各自描述本组件结果。
+音频终态不能代替外部工具文字成功。
+
+## D 字段与失败归因
+
+| 边界 | 记录字段或含义 |
+| --- | --- |
+| 启动拒绝 | start_rejection：未就绪、取消、忙、输出不可用、语音键失败 |
+| 回调入口 | callbacks、callback_bytes、accepted_notifications、accepted_bytes |
+| 提前返回 | stopped、stale_peripheral、stale_generation、callback_error、missing_value、lifecycle |
+| 音频门控 | not_ready、cancelled_open、after_stop |
+| 会话路由 | identifier 丢弃、dropped_samples、routed_samples、buffered_samples、enqueue_failures |
+| 等待缓冲损失 | configuration/command 的 overflow、cancelled、configuration_failed 样本；最后损失原因 |
+| 软件按键 | 会话内 down/up 提交结果、提交失败计数、首 PCM 和尾音时序 |
+| 停收与恢复 | silence_episodes、callback_age_ms、max_silence_ms；观察调度自身延迟 |
+| 解码与帧重组 | frames、decoded_bytes、decoded_samples、partial_discarded_bytes、duplicate_starts |
+| 通知尺寸 | notify_bytes_min/max、not_frame_multiple |
+| 主线程处理 | 最大间隔及位置；20/50/100/250 毫秒累计桶；max_handler_ms |
+| 输出 | scheduled/played/interrupted/pending_samples；设备分类和绑定观察 |
+| 输出队列 | output_queue_max_wait_ms；全属既有输出 generation |
+| 录音 | writer 提交样本、成功 write 样本、拒绝样本、失败次数、保存或取消结果 |
+| 转写 | 仅利用现有公开捕获结果记录 text_present，不输出文字 |
+| 错误 | 首个可用 error_domain/code；音频错误累计，不逐包输出 |
+
+buffered_samples 是累计缓冲量，不是当前待投递量。
+缓冲溢出、取消和配置失败的样本计入 dropped_samples。
+configuration_failed 包括已从缓冲取出后因配置失败而丢弃的样本。
+software_up_to_last_playback_ms 为正时，播放完成晚于软件键提交。
+
+软件键 event_submitted 不证明第三方工具已经接受事件。
+硬件 Fn 路径写 hardware_path_unobserved，不伪造物理时间。
+录音 write 成功不证明用户尾字完整。
+同段停收恢复沿用 operation_id。
+断连恢复由新 operation_id 与既有连接状态记录证明。
+
+## E 唯一终态与未知边界
+
+诊断在停止后等待 350 毫秒观察尾包。
+有待播放或未投递样本时，每 500 毫秒只查询快照。
+观察上限为 10 秒；这些查询不输出进度。
+诊断不等待业务操作，也不触发 flush 或关闭麦克风。
+
+完整播放要求解码、路由、排程和播放样本一致。
+输出还须无中断、无 pending，且绑定观察为真。
+共享 generation 或账目不全时写 unknown。
+后续会话不能把旧会话的输出误记为成功。
+
+| 终态 | 含义 |
+| --- | --- |
+| normal | 本进程已收到的样本完整播放；不证明原始语音完整 |
+| forced | 已观察取消、重置、拒绝或本地投递失败 |
+| unknown | 输出归属、绑定、计数或截止结果不足 |
+| no_session | 门控拒绝或孤立通知，没有已开始的流 |
+
+独立观察器每 2 秒检查一次回调静默。
+无音频回调时写 receive_stalled；恢复时写 receive_resumed。
+每段分别最多一条，多次静默只累计次数。
+观察器只读时间，不结束业务会话。
+观察器迟到时记录 observation_max_lag_ms。
+
+该值只表示观察任务自身迟到，不代表 BLE 回调等待。
+
+无 STREAM_START 的孤立通知在 10 秒后聚合。
+所有终态保留停流后的丢弃量，只输出一次。
+
+以下值明确写 unknown：系统回调前等待、无线到达时间、硬件真实按下时间、外部工具收音与文字提交。
+Fn 时间来自全局可见事件，标记为 global_unattributed。
+该时间不能代替遥控器物理按下时间。
+现有转写捕获只证明观察到了结果，不读取外部工具内部数据。
+
+## F 日志量与隐私
+
+新 ATVV 诊断每 10 秒最多输出一次 progress。
+每段最多 12 条 progress。
+started、first_pcm、stopping、completed 各最多一次。
+software_trigger 的 down/up 各最多一次。
+receive_stalled、receive_resumed 各最多一次。
+因此每段 ATVV 诊断最多 20 条。
+
+这是新诊断模块的上限，不是整个 App 的日志上限。
+
+20,000 个通知回放覆盖拒绝流与有效 PCM 流。
+纯通知计数场景的文本合计仍小于 16 KB。
+包含按键、重复静默和恢复的完整回放小于 20 KB。
+这不是所有运行条件的字节硬上限。
+
+包数增大不会增加单段诊断行数。
+原逐包门控与缓冲日志改为累计计数。
+录音在既有结果行补字段，转写每个关联结果最多一条。
+
+不记录音频、转写文字、路径、设备身份或凭据。
+转写关联表最多保留 32 个进程内关联项。
+输出时间表沿用既有 generation 清理规则。
+
+## G 验证与后续取证
+
+初版验证：定向 101 项及全量 857 项通过。
+本次补充验证：定向 99 项测试、5 套，通过。
+新增回归覆盖无 STOP 停收、恢复、观察器迟到、按键重试和缓冲损失。
+本次全量验证：863 项测试、67 套，通过。
+本次构建通过。
+构建、治理检查及 diff 检查通过。
+
+首次 CI 的较旧 Swift 编译器拒绝过长日志表达式。
+已按该错误拆分表达式，保持字段和单行预算。
+CI 复验结果以 PR 检查为准。
+
+验证命令：
+
+```bash
+swift test --disable-keychain --disable-sandbox
+swift build --disable-keychain --disable-sandbox
+scripts/verify-repository-governance.sh origin/main
+git diff --check
+```
+
+自动化覆盖计数守恒、尾包、唯一终态、缓冲等待、观察超时、共享输出、强制结束、拒绝原因及日志预算。
+录音测试核对真实 writer 写入数量与关联号。
+源级检查只证明队列和调用结构，不能证明真机体验。
+本轮没有安装包、RC003 实机或第三方工具验收。
+
+下一次现场需收集当前版本的加密 rmlog。
+沿 operation_id 核对入口、丢弃、解码、路由、播放和保存。
+若本地账目完整而尾字仍缺，再检查无线与外部工具边界。
+不得把覆盖率单独用于判定根因。
+测试步骤见 Testing/RuntimeLogging.md。
+</textarea>
+<script>
+(() => {
+  const root = document.documentElement;
+  const cycle = (list, cur) => list[(list.indexOf(cur) + 1) % list.length];
+  const label = (btn, value) => {
+    const map = JSON.parse(btn.dataset.labels || '{}');
+    btn.textContent = map[value] || value;
+  };
+  const bind = (name, attr, values) => {
+    const btn = document.querySelector(`[data-am="${name}"]`);
+    if (!btn) return;
+    label(btn, root.getAttribute(attr));
+    btn.addEventListener('click', () => {
+      const next = cycle(values, root.getAttribute(attr));
+      root.setAttribute(attr, next);
+      label(btn, next);
+    });
+  };
+  bind('theme', 'data-theme', ['blueprint', 'shadcn']);
+  bind('mode', 'data-mode', ['auto', 'light', 'dark']);
+
+  const copyBtn = document.querySelector('[data-am="copy"]');
+  copyBtn?.addEventListener('click', async () => {
+    const nodes = document.querySelectorAll('#am-source');
+    const text = nodes[nodes.length - 1]?.value ?? '';
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const ta = Object.assign(document.createElement('textarea'), { value: text });
+      document.body.append(ta);
+      ta.select();
+      document.execCommand('copy');
+      ta.remove();
+    }
+    const original = copyBtn.textContent;
+    copyBtn.textContent = copyBtn.dataset.done;
+    setTimeout(() => { copyBtn.textContent = original; }, 1400);
+  });
+
+  // Markdown / HTML 中的图片按内容区和视口缩放；点击后在遮罩层中查看大图。
+  const images = [...document.querySelectorAll('.am-md img, .am-intro img, .am-panel-body img[src]')];
+  if (images.length && document.body) {
+    const lang = (root.getAttribute('lang') || '').toLowerCase();
+    const closeLabel = lang.startsWith('zh') ? '关闭大图' : lang.startsWith('ja') ? '大きな画像を閉じる' : 'Close image';
+    const openLabel = lang.startsWith('zh') ? '点击查看大图' : lang.startsWith('ja') ? 'クリックして拡大表示' : 'Open image';
+    const labelSeparator = lang.startsWith('zh') ? '，' : ': ';
+    const lightbox = document.createElement('div');
+    lightbox.className = 'am-lightbox';
+    lightbox.hidden = true;
+    lightbox.setAttribute('role', 'dialog');
+    lightbox.setAttribute('aria-modal', 'true');
+    lightbox.setAttribute('aria-label', closeLabel);
+    lightbox.innerHTML = '<button class="am-lightbox-close" type="button" aria-label="' + closeLabel + '">×</button><img alt="">';
+    document.body.append(lightbox);
+    const large = lightbox.querySelector('img');
+    const close = lightbox.querySelector('.am-lightbox-close');
+    let active = null;
+
+    const hide = () => {
+      if (lightbox.hidden) return;
+      lightbox.hidden = true;
+      document.body.classList.remove('am-lightbox-open');
+      active?.focus();
+      active = null;
+    };
+    const show = (image) => {
+      active = image;
+      large.src = image.currentSrc || image.src;
+      large.alt = image.alt || '';
+      lightbox.hidden = false;
+      document.body.classList.add('am-lightbox-open');
+      close.focus();
+    };
+
+    for (const image of images) {
+      image.loading ||= 'lazy';
+      image.decoding ||= 'async';
+      image.tabIndex = 0;
+      image.setAttribute('role', 'button');
+      image.setAttribute('aria-label', image.alt ? `${image.alt}${labelSeparator}${openLabel}` : openLabel);
+      image.addEventListener('click', (event) => {
+        event.preventDefault();
+        show(image);
+      });
+      image.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        show(image);
+      });
+    }
+    close.addEventListener('click', hide);
+    lightbox.addEventListener('click', (event) => {
+      if (event.target === lightbox || event.target === large) hide();
+    });
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') hide();
+    });
+  }
+})();
+</script>
+</body>
+</html>
