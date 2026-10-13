@@ -251,28 +251,35 @@ final class ATVVAudioDiagnostics {
             : "received_audio_playback_observed"
         let duration = milliseconds(stoppedAt - (startedAt ?? createdAt))
         let coverage = ATVVProtocol.audioCoveragePercent(receivedSamples: decodedSamples, durationMilliseconds: duration)
-        log("ATVV AUDIO diagnostic operation_id=\(operationID) phase=completed completion=\(completion) observed_result=\(result) " +
-            "reason=\(stopReason) audio_generation=\(audioGeneration) " + counts() +
-            " duration_ms=\(duration) coverage_pct=\(String(format: "%.1f", coverage)) " +
-            "coverage_basis=main_callback_processing callback_wait_ms=unknown transport_arrival=unknown " +
-            "max_callback_gap_ms=\(maxGapMilliseconds) max_gap_at_ms=\(maxGapAtMilliseconds) " +
-            [20, 50, 100, 250].map { "gaps_ge_\($0)ms=\(gapBuckets[$0, default: 0])" }.joined(separator: " ") + " " +
-            "max_handler_ms=\(maxHandlerMilliseconds) notify_bytes_min=\(minNotificationBytes ?? 0) " +
-            "notify_bytes_max=\(maxNotificationBytes) not_frame_multiple=\(nonFrameMultipleNotifications) " +
-            "partial_discarded_bytes=\(partialDiscardedBytes) duplicate_starts=\(duplicateStarts) " +
-            "start_rejection=\(startRejectionReason) output_attribution=\(attributionKnown ? "isolated" : "unknown_shared_generation") " +
-            "unaccounted_samples=\(unaccountedSamples) scheduled_samples=\(token(scheduled)) played_samples=\(token(played)) " +
-            "interrupted_samples=\(token(interrupted)) pending_samples=\(token(output?.pendingSamples)) " +
-            "output_bound=\(output?.boundToSelectedDevice.map(String.init) ?? "unknown") " +
-            "output_selected=\(output?.selectedDeviceKind.rawValue ?? "unknown") " +
-            "output_actual=\(output?.actualDeviceKind.rawValue ?? "unknown") " +
-            "output_queue_max_wait_ms=\(observed.map { String($0.maxQueueWaitMilliseconds) } ?? "unknown") " +
-            "observed_fn_down_to_first_pcm_ms=\(interval(observedFnDownAt, firstPCMAt)) " +
-            "observed_fn_up_to_last_playback_ms=\(interval(fnUp, observed?.lastPlayedAt)) " +
-            "fn_source=global_unattributed trigger_down_to_first_pcm_ms=unknown " +
-            "transcript_commit=unknown external_capture=unknown " +
-            "diagnostic_boundary=transport_and_external_tool_unobservable " +
-            "observation_ms=\(milliseconds(elapsed)) progress_lines=\(progressLines) " + firstErrorFields)
+        // Keep each expression small for the older Swift compiler used by CI.
+        var fields: [String] = []
+        fields.append("ATVV AUDIO diagnostic operation_id=\(operationID) phase=completed completion=\(completion) observed_result=\(result)")
+        fields.append("reason=\(stopReason) audio_generation=\(audioGeneration)")
+        fields.append(counts())
+        fields.append("duration_ms=\(duration) coverage_pct=\(String(format: "%.1f", coverage))")
+        fields.append("coverage_basis=main_callback_processing callback_wait_ms=unknown transport_arrival=unknown")
+        fields.append("max_callback_gap_ms=\(maxGapMilliseconds) max_gap_at_ms=\(maxGapAtMilliseconds)")
+        for threshold in [20, 50, 100, 250] {
+            fields.append("gaps_ge_\(threshold)ms=\(gapBuckets[threshold, default: 0])")
+        }
+        fields.append("max_handler_ms=\(maxHandlerMilliseconds) notify_bytes_min=\(minNotificationBytes ?? 0)")
+        fields.append("notify_bytes_max=\(maxNotificationBytes) not_frame_multiple=\(nonFrameMultipleNotifications)")
+        fields.append("partial_discarded_bytes=\(partialDiscardedBytes) duplicate_starts=\(duplicateStarts)")
+        fields.append("start_rejection=\(startRejectionReason) output_attribution=\(attributionKnown ? "isolated" : "unknown_shared_generation")")
+        fields.append("unaccounted_samples=\(unaccountedSamples) scheduled_samples=\(token(scheduled)) played_samples=\(token(played))")
+        fields.append("interrupted_samples=\(token(interrupted)) pending_samples=\(token(output?.pendingSamples))")
+        fields.append("output_bound=\(output?.boundToSelectedDevice.map(String.init) ?? "unknown")")
+        fields.append("output_selected=\(output?.selectedDeviceKind.rawValue ?? "unknown")")
+        fields.append("output_actual=\(output?.actualDeviceKind.rawValue ?? "unknown")")
+        fields.append("output_queue_max_wait_ms=\(observed.map { String($0.maxQueueWaitMilliseconds) } ?? "unknown")")
+        fields.append("observed_fn_down_to_first_pcm_ms=\(interval(observedFnDownAt, firstPCMAt))")
+        fields.append("observed_fn_up_to_last_playback_ms=\(interval(fnUp, observed?.lastPlayedAt))")
+        fields.append("fn_source=global_unattributed trigger_down_to_first_pcm_ms=unknown")
+        fields.append("transcript_commit=unknown external_capture=unknown")
+        fields.append("diagnostic_boundary=transport_and_external_tool_unobservable")
+        fields.append("observation_ms=\(milliseconds(elapsed)) progress_lines=\(progressLines)")
+        fields.append(firstErrorFields)
+        log(fields.joined(separator: " "))
     }
 
     private func counts() -> String {
