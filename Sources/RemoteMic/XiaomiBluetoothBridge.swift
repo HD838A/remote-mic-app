@@ -163,6 +163,19 @@ final class XiaomiBluetoothBridge: NSObject {
     private var cancelledMicrophoneOpenAt: Date?
     private var sessionID: UInt8 = 0
     private var lastStopAt: Date?
+    private(set) var audioDiagnostics: ATVVAudioDiagnostics?
+    var audioFrameSampleCount: Int { capabilities.frameSize * 2 }
+
+    private func diagnosticForAudio() -> ATVVAudioDiagnostics {
+        if audioDiagnostics?.hasStopped == true,
+           lastStopAt.map({ Date().timeIntervalSince($0) >= 0.3 }) ?? true {
+            audioDiagnostics = nil
+        }
+        if audioDiagnostics == nil || audioDiagnostics?.isFinalized == true {
+            audioDiagnostics = ATVVAudioDiagnostics()
+        }
+        return audioDiagnostics!
+    }
 
     private let serviceUUID = CBUUID(string: ATVVProtocol.serviceUUID)
     private let transmitUUID = CBUUID(string: ATVVProtocol.transmitUUID)
@@ -659,6 +672,8 @@ final class XiaomiBluetoothBridge: NSObject {
     }
 
     private func resetSession() {
+        audioDiagnostics?.discardPartial(bytes: accumulator.pending.count)
+        audioDiagnostics?.stop(reason: "session_reset")
         if streaming {
             streaming = false
             delegate?.bluetoothBridgeDidStopVoice(self)
@@ -915,6 +930,7 @@ final class XiaomiBluetoothBridge: NSObject {
                 capabilitiesConfirmed: capabilitiesConfirmed,
                 sampleRate: capabilities.sampleRate
             ) else {
+                diagnosticForAudio().rejectStart(reason: "protocol_not_ready")
                 AppLogger.shared.write("ATVV STREAM_START ignored_not_ready")
                 return
             }
@@ -941,6 +957,7 @@ final class XiaomiBluetoothBridge: NSObject {
                     version: capabilities.version,
                     sessionID: receivedSessionID
                 ))
+                diagnosticForAudio().rejectStart(reason: "cancelled_open")
                 AppLogger.shared.write(
                     "ATVV STREAM_START ignored_cancelled session=\(receivedSessionID)"
                 )
@@ -965,6 +982,7 @@ final class XiaomiBluetoothBridge: NSObject {
                         "partial_frame_bytes=\(partialFrameBytes)"
                 )
             }
+            audioDiagnostics?.discardPartial(bytes: partialFrameBytes)
             accumulator.reset()
         default:
             break
@@ -972,6 +990,11 @@ final class XiaomiBluetoothBridge: NSObject {
     }
 
     private func startStreaming() {
+        if audioDiagnostics?.hasStopped == true { audioDiagnostics = nil }
+        diagnosticForAudio().start(
+            frameSamples: capabilities.frameSize * 2,
+            origin: microphoneOpened ? "host_requested" : "remote_initiated"
+        )
         let partialFrameBytes = accumulator.pending.count
         if partialFrameBytes > 0 {
             AppLogger.shared.write(
@@ -979,6 +1002,7 @@ final class XiaomiBluetoothBridge: NSObject {
                     "streaming_before=\(streaming) partial_frame_bytes=\(partialFrameBytes)"
             )
         }
+        audioDiagnostics?.discardPartial(bytes: partialFrameBytes)
         accumulator.reset()
         pendingSync = nil
         decoder.reset()
@@ -992,8 +1016,10 @@ final class XiaomiBluetoothBridge: NSObject {
     private func stopStreaming() {
         guard streaming else { return }
         streaming = false
+        audioDiagnostics?.stop(reason: "remote_stop")
         microphoneOpened = false
         let partialFrameBytes = accumulator.pending.count
+        audioDiagnostics?.discardPartial(bytes: partialFrameBytes)
         accumulator.reset()
         pendingSync = nil
         lastStopAt = Date()
@@ -1012,33 +1038,27 @@ final class XiaomiBluetoothBridge: NSObject {
                 sampleRate: capabilities.sampleRate
               )
         else {
-            AppLogger.shared.write("ATVV AUDIO ignored_not_ready")
+            audioDiagnostics?.reject(.notReady)
             return
         }
         if ATVVSessionGate.shouldIgnoreStreamAfterCancelledOpen(
             cancelledAt: cancelledMicrophoneOpenAt
         ) {
-            AppLogger.shared.write("ATVV AUDIO ignored_cancelled_open")
+            audioDiagnostics?.reject(.cancelledOpen)
             return
         }
         cancelledMicrophoneOpenAt = nil
         if !streaming {
             let receivedAt = Date()
             if let lastStopAt, receivedAt.timeIntervalSince(lastStopAt) < 0.3 {
-                let delayMilliseconds = max(
-                    0,
-                    Int((receivedAt.timeIntervalSince(lastStopAt) * 1_000).rounded())
-                )
-                AppLogger.shared.write(
-                    "ATVV AUDIO ignored_after_stop session=\(sessionID) " +
-                        "delay_ms=\(delayMilliseconds) bytes=\(data.count)"
-                )
+                audioDiagnostics?.reject(.afterStop)
                 return
             }
             startStreaming()
             AppLogger.shared.write("ATVV STREAM implicit_audio_race")
         }
 
+        audioDiagnostics?.accept(bytes: data.count)
         let frames = accumulator.append(data, frameSize: capabilities.frameSize)
         for frame in frames {
             if let pendingSync {
@@ -1050,11 +1070,13 @@ final class XiaomiBluetoothBridge: NSObject {
             }
             let decoded = decoder.decode(frame)
             let samples = PCMPostprocessor.process(decoded, gainDB: settings.gainDB)
+            audioDiagnostics?.decoded(bytes: frame.count, samples: samples.count)
             delegate?.bluetoothBridge(self, didDecode: samples)
         }
     }
 
     private func rejectUnsupportedAudio(_ message: LocalizedMessage) {
+        diagnosticForAudio().rejectStart(reason: "unsupported_audio")
         state = .failed(message)
         closeMicrophoneIfNeeded()
         if streaming {
@@ -1534,11 +1556,23 @@ extension XiaomiBluetoothBridge {
         characteristic: CBCharacteristic,
         error: Error?
     ) {
+        let callbackAt = ProcessInfo.processInfo.systemUptime
+        let diagnostic = characteristic.uuid == audioUUID ? diagnosticForAudio() : nil
+        diagnostic?.receive(
+            bytes: error == nil ? (characteristic.value?.count ?? 0) : 0,
+            frameSize: capabilities.frameSize,
+            at: callbackAt
+        )
+        defer { diagnostic?.handlerFinished(since: callbackAt) }
         guard shouldRun,
               isCurrent(peripheral),
               currentGeneration() == generation
-        else { return }
+        else {
+            diagnostic?.reject(!shouldRun ? .stopped : (isCurrent(peripheral) ? .staleGeneration : .stalePeripheral))
+            return
+        }
         if let error {
+            diagnostic?.reject(.callbackError, errorFields: AppLogger.errorFields(error))
             if characteristic.uuid == batteryLevelUUID {
                 AppLogger.shared.write(
                     "BLE BATTERY read_failed " + AppLogger.errorFields(error)
@@ -1560,7 +1594,10 @@ extension XiaomiBluetoothBridge {
             }
             return
         }
-        guard let data = characteristic.value else { return }
+        guard let data = characteristic.value else {
+            diagnostic?.reject(.missingValue)
+            return
+        }
         if characteristic.uuid == batteryLevelUUID {
             let level = data.first.map(Int.init)
             guard !hasObservedBatteryLevel || lastObservedBatteryLevel != level else { return }
@@ -1611,7 +1648,10 @@ extension XiaomiBluetoothBridge {
             else { return }
             handleControl(data)
         } else if characteristic.uuid == audioUUID {
-            guard lifecycle.acceptsProtocolData(generation: generation) else { return }
+            guard lifecycle.acceptsProtocolData(generation: generation) else {
+                diagnostic?.reject(.lifecycle)
+                return
+            }
             handleAudio(data)
         }
     }

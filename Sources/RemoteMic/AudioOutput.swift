@@ -812,6 +812,12 @@ final class VirtualAudioOutput {
     private var pendingVoiceSampleCount = 0
     private var playbackGeneration: UInt64 = 0
     private var playbackCounters = VirtualAudioPlaybackCounters()
+    private struct ATVVPlaybackTiming {
+        var firstPlayedAt: TimeInterval?
+        var lastPlayedAt: TimeInterval?
+        var maxQueueWaitMilliseconds = 0
+    }
+    private var atvvPlaybackTimings: [Int: ATVVPlaybackTiming] = [:]
     private var playbackCountersByDeliveryGeneration: [Int: VirtualAudioPlaybackCounters] = [:]
     private var pendingByDeliveryGeneration: [Int: PendingDeliveryCounters] = [:]
     private var pendingDrainLogContexts: [String] = []
@@ -1146,9 +1152,15 @@ final class VirtualAudioOutput {
         pendingByDeliveryGeneration[deliveryGeneration, default: .init()].buffers += 1
         pendingByDeliveryGeneration[deliveryGeneration, default: .init()].samples += sampleCount
         playbackLock.unlock()
+        let submittedAt = uptime()
         engineQueue.async { [weak self] in
             guard let self else { return }
             self.playbackLock.lock()
+            let wait = max(0, Int((self.uptime() - submittedAt) * 1_000))
+            self.atvvPlaybackTimings[deliveryGeneration, default: .init()].maxQueueWaitMilliseconds = max(
+                self.atvvPlaybackTimings[deliveryGeneration, default: .init()].maxQueueWaitMilliseconds,
+                wait
+            )
             let isCurrent = generation == self.playbackGeneration
             self.playbackLock.unlock()
             // A preceding stop or explicit flush already accounted for an interrupted buffer.
@@ -1427,6 +1439,11 @@ final class VirtualAudioOutput {
         }
         pendingVoiceBufferCount = max(0, pendingVoiceBufferCount - 1)
         pendingVoiceSampleCount = max(0, pendingVoiceSampleCount - sampleCount)
+        let playedAt = uptime()
+        if atvvPlaybackTimings[deliveryGeneration, default: .init()].firstPlayedAt == nil {
+            atvvPlaybackTimings[deliveryGeneration, default: .init()].firstPlayedAt = playedAt
+        }
+        atvvPlaybackTimings[deliveryGeneration, default: .init()].lastPlayedAt = playedAt
         playbackCounters.playedBuffers += 1
         playbackCounters.playedSamples += sampleCount
         playbackCountersByDeliveryGeneration[deliveryGeneration, default: .init()].playedBuffers += 1
@@ -1658,9 +1675,25 @@ final class VirtualAudioOutput {
         pendingByDeliveryGeneration.removeAll(keepingCapacity: true)
     }
 
+    func atvvPlaybackObservation(deliveryGeneration: Int) -> ATVVAudioDiagnostics.Playback {
+        let output = diagnosticSnapshot(deliveryGeneration: deliveryGeneration)
+        playbackLock.lock()
+        let timing = atvvPlaybackTimings[deliveryGeneration]
+        playbackLock.unlock()
+        return .init(
+            output: output,
+            firstPlayedAt: timing?.firstPlayedAt,
+            lastPlayedAt: timing?.lastPlayedAt,
+            maxQueueWaitMilliseconds: timing?.maxQueueWaitMilliseconds ?? 0
+        )
+    }
+
     private func pruneDeliveryDiagnostics(keeping generation: Int) {
         guard playbackCountersByDeliveryGeneration.count > 32 else { return }
         let minimumGeneration = max(0, generation - 16)
+        atvvPlaybackTimings = atvvPlaybackTimings.filter {
+            $0.key >= minimumGeneration || pendingByDeliveryGeneration[$0.key] != nil
+        }
         playbackCountersByDeliveryGeneration = playbackCountersByDeliveryGeneration.filter {
             $0.key >= minimumGeneration || pendingByDeliveryGeneration[$0.key] != nil
         }
