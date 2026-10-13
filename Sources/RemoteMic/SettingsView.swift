@@ -3843,7 +3843,9 @@ struct SettingsView: View {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text("about.configuration.title")
                                         .font(.subheadline.weight(.semibold))
-                                    Text("about.configuration.export_description")
+                                    Text(LocalizedStringKey(macroFeature.isFeatureVisible
+                                        ? "about.configuration.backup_description"
+                                        : "about.configuration.export_description"))
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                 }
@@ -3857,11 +3859,7 @@ struct SettingsView: View {
                             }
                             .padding(.vertical, 8)
                             if macroFeature.isFeatureVisible {
-                                Text(localization.text("settings.portable_configuration.title"))
-                                    .font(.system(size: 12, weight: .medium))
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(.top, 8)
-                                macroFeature.portableTransferView(profileID: settings.selectedRemoteProfileID,
+                                macroFeature.configurationTransferView(profileID: settings.selectedRemoteProfileID,
                                     model: settings.selectedRemoteProfile?.model)
                             }
 
@@ -4477,6 +4475,7 @@ struct SettingsView: View {
 
     private func exportConfiguration() {
         configurationStatus = nil
+        if macroFeature.requestConfigurationExport() { return }
         guard let url = ConfigurationFilePanel.exportURL(
             title: localization.text("configuration.export.panel_title"),
             prompt: localization.text("configuration.export.prompt")
@@ -4502,8 +4501,10 @@ struct SettingsView: View {
         configurationStatus = nil
         guard let url = ConfigurationFilePanel.importURL(
             title: localization.text("configuration.import.panel_title"),
-            prompt: localization.text("configuration.import.prompt")
+            prompt: localization.text("configuration.import.prompt"),
+            includesPortableConfiguration: macroFeature.isFeatureVisible
         ) else { return }
+        if macroFeature.requestConfigurationImport(from: url) { return }
         do {
             try model.importConfiguration(from: Data(contentsOf: url))
             localization.select(settings.applicationLanguage)
@@ -5547,11 +5548,15 @@ private enum ConfigurationFilePanel {
         return panel.runModal() == .OK ? panel.url : nil
     }
 
-    static func importURL(title: String, prompt: String) -> URL? {
+    static func importURL(title: String, prompt: String, includesPortableConfiguration: Bool) -> URL? {
         let panel = NSOpenPanel()
         panel.title = title
         panel.prompt = prompt
-        panel.allowedContentTypes = [.json]
+        if includesPortableConfiguration {
+            panel.allowedFileTypes = ["sayall", "json"]
+        } else {
+            panel.allowedContentTypes = [.json]
+        }
         panel.canChooseFiles = true
         panel.canChooseDirectories = false
         panel.allowsMultipleSelection = false

@@ -61,7 +61,7 @@ struct PortableConfigurationCompatibilityTests {
     func marketFullKeyboardAccessDecodesInTheLinkedHost() throws {
         let path = try #require(ProcessInfo.processInfo.environment["SAYALL_MARKET_CONTRACT_PATH"])
         let data = try Data(contentsOf: URL(fileURLWithPath: path)
-            .appendingPathComponent("examples/transfers/full-keyboard-access.json"))
+            .appendingPathComponent("examples/profiles/full-keyboard-access-mac.sayall"))
         let package = try PortableTransferCodec.decode(data)
         #expect(package.shortcuts.map(\.keyCode) == [48, 48, 123, 124, 49, 53])
         #expect(package.buttonProfiles.count == 1)

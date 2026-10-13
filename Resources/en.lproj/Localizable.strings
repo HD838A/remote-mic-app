@@ -607,6 +607,7 @@
 "about.configuration.description" = "Transfer audio, button, shortcut, language, appearance, startup, and update settings to another Mac.";
 "about.configuration.export" = "Export Configuration…";
 "about.configuration.export_description" = "Save the current settings to a file.";
+"about.configuration.backup_description" = "Back up settings, combination actions, app configurations and button profiles.";
 "about.configuration.import" = "Import Configuration…";
 "about.configuration.import_description" = "Restore settings from a previously exported file.";
 "about.preferences.title" = "App Preferences";
