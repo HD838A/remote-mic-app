@@ -2,6 +2,10 @@
 
 ## 当前实现状态
 
+2026-10-13：常用语实现已移入私有会员 Package。公开宿主只保留稳定动作 ID、入口和可选适配接口。会员服务通过 `canUseCommonPhrases` 决定使用权限；入口展示和会员提示由私有适配器提供。公开构建不承诺包含常用语实现，不得复制私有实现补齐。
+
+以下 2026-10-02 至 2026-10-03 的记录属于迁移前验收，不证明迁移后构建已完成真机验收。
+
 2026-10-02 本地候选实现基线：`origin/main`，Commit `cfa5553b563748c94d57f655e907b2111305e917`。实现位于 `codex/common-phrases-docs-alignment-20261002`，通过 PR #558 集成 main。
 
 **macOS 常用语已实现；2026-10-03 用户确认“真机测试通过，合入吧”，本轮功能验收完成。** 下文保留完整产品要求与未来增强；该确认未附逐设备、逐目标 App 或逐用例结果，不扩展为全部硬件与平台兼容认证，验证边界见测试手册。
@@ -16,12 +20,12 @@
 
 | 项目 | 当前状态 | 核对依据 |
 | --- | --- | --- |
-| 产品规范、内置内容与默认键位 | 已入库；12 条内容，OK/左/上/右/下对应编号 1–5 | 本文与 [`built-in.md`](../../Resources/CommonPhrases/built-in.md) |
-| 构建期 JSON 生成、校验与打包 | 已实现；Markdown 不进入 Bundle | `scripts/generate-common-phrases.py`、`scripts/build-app.sh`、`scripts/verify-app.sh` |
-| “打开常用语”动作与宿主入口 | 已实现；公开构建可用，复用普通按键配置 | `RemoteButtons.swift`、`BridgeAppModel.swift` |
-| 面板、运行时认领与插入 | 已实现；来源隔离、即时非重复、剪贴板事务与失败提示 | `CommonPhrasePanel.swift`、`CommonPhraseStore.swift`、`CommonPhraseInserter.swift`、`HIDRemoteMonitor.swift` |
-| 用户编辑、持久化与导入导出 | 已实现；内置编辑成为用户副本，未修改的内置内容随资源刷新 | `CommonPhraseSettingsView.swift`、`CommonPhraseStore.swift` |
-| 自动化、测试手册与静态截图 | 已建立；公开宿主及私有遥控适配器集成测试通过 | [`测试手册`](../../Testing/CommonPhrases.md)、`CommonPhraseTests.swift`、`Screenshots/common-phrases/` |
+| 产品规范、内置内容与默认键位 | 产品行为由本文定义；内容与默认键位由私有 Package 维护 | `packages/macos-common-phrases/Content/CommonPhrases/built-in.md`（私有仓库） |
+| 构建期资源与打包 | 私有 Package 维护并随私有构件分发 | `packages/macos-common-phrases/`；公开构建不要求该实现 |
+| “打开常用语”动作与宿主入口 | 稳定动作 ID 与可选适配；权限由会员服务提供 | `RemoteButtons.swift`、`MembershipFeatureIntegration.swift`、`BridgeAppModel.swift` |
+| 面板、运行时认领与插入 | 实现位于私有 Package；宿主转发按键事件 | 私有 `SayAllCommonPhrases`、`MembershipHostAdapter` |
+| 用户编辑、持久化与导入导出 | 实现位于私有 Package | 私有 `SayAllCommonPhrases` |
+| 自动化、测试手册与静态截图 | 公开测试验证适配边界；实现测试在私有 Package | [测试手册](../../Testing/CommonPhrases.md)；旧截图属于历史证据 |
 | 用户真机验收 | 用户确认本轮测试通过；未提供逐设备/目标 App/用例矩阵 | 测试手册“用户真机验收确认”；自动化与代理证据独立保留 |
 | Windows、云同步、Unicode/AX 直插增强 | 未实现；本期不做，保留后续边界 | 下文范围与备选增强 |
 
@@ -29,7 +33,7 @@
 
 ## 定位与适用范围
 
-- 常用语是无线麦SayAll.app 的会员能力。会员可以打开、调整和预览常用语；非会员不能使用这些功能，点击入口后进入会员页面。会员状态由私有会员组件提供，公开宿主不实现会员事实源。
+- 常用语是无线麦SayAll.app 的会员能力。会员可以打开和调整常用语。非会员的使用入口进入会员页面，只读示例按下文门禁提供。会员状态由私有会员组件提供，公开宿主不实现会员事实源。
 - 首发平台为 macOS。本文描述跨平台共同语义；Windows 实现时须补充同目录的 `platform-windows.md`（当前尚未建立），只映射平台差异，不得降低本文门禁。
 - 本文是常用语产品行为的唯一权威入口。实现、构建接线、本地化文案、测试手册和截图清单都必须与本文一致。
 
@@ -51,7 +55,7 @@
 
 ### 内置常用语源
 
-- `Resources/CommonPhrases/built-in.md` 是内置常用语的**唯一人工编辑源**。
+- 私有仓库的 `packages/macos-common-phrases/Content/CommonPhrases/built-in.md` 是内置常用语的**唯一人工编辑源**。公开宿主不维护该内容。
 - 该文件只作为构建输入，**不直接进 App Bundle**。
 - 构建期由脚本读取表格数据行生成 App 实际读取的 JSON 资源；App 运行时不解析该 Markdown 的散文段落。
 - 不得在 Swift 代码里另存一份硬编码列表，也不得在生成失败时静默回退到旧数据或代码内置列表。
@@ -163,8 +167,8 @@
 
 ## 明确不做
 
-- **本轮不做插件化封装。** 插件注册、启用状态、生命周期和统一按键动作入口属于尚未建立的抽象。常用语先按宿主公开实现落地，只在动作目录中预留稳定动作 ID，便于将来平移而不返工。
-- **不放进任何私有 Swift Package。** 公开构建必须包含常用语。
+- **本轮不做插件化封装。** 插件注册、启用状态、生命周期和统一按键动作入口属于尚未建立的抽象。公开宿主只保留稳定动作 ID 和可选适配接口，常用语实现由私有会员 Package 提供。
+- 不把私有常用语实现复制回公开仓库。公开构建缺少私有组件时明确报告能力不可用，稳定按键和音频功能仍可运行。
 - 不做语音朗读、不做自动发送、不做跨设备同步、不做云备份。
 - 不做常用语内容的自动生成或 AI 改写。
 - 不提供常驻的“常用语模式”开关，面板不长期接管按键。
@@ -197,7 +201,7 @@
 - **数据管线**：四类非法输入各一个失败用例；五个键位与标注的对应关系；常用语正文不出现在日志与诊断输出。
 - **剪贴板**：插入后原剪贴板内容恢复；期间用户新复制内容时**不**回滚；插入失败也要恢复。
 - **时延**：为某个方向键配置双击或长按后，面板内按下该键仍即时插入，不等待手势判定。
-- **构建**：无私有包路径与含私有包路径均可构建；公开构建必须包含常用语。
+- **构建**：无私有包路径与含私有包路径均可构建。公开构建只验证可选适配和不可用状态；私有集成验证会员门禁及完整常用语功能。
 - **自动化**：关闭面板后原映射逐键一致；未绑定按键时按键行为与改动前完全一致。
 - **截图**：面板与设置页在生产 UI 的真实运行截图，覆盖中文浅色与中文深色。
 - **真机**：真实遥控器逐键插入、反复打开并连续多次插入、无可用输入框、只读与密码输入框、前台 App 切换、面板开关后原映射完整恢复；实体遥控器、手机遥控、网页版三条来源各验一遍；微信、豆包等真实第三方输入框的文字上屏。
@@ -205,12 +209,10 @@
 
 ## 涉及文件
 
-- `Resources/CommonPhrases/built-in.md`：内容与默认键位标注已入库；后续生成脚本以该文件为唯一人工编辑源。
-- `scripts/build-app.sh`、`scripts/verify-app.sh`：生成、打包与校验接线。
-- `Sources/RemoteMic/RemoteButtons.swift`：新增“打开常用语”动作及其分类、重复策略。
-- `Sources/RemoteMic/SettingsView.swift`、`Sources/RemoteMic/BridgeAppModel.swift`：动作目录、运行时认领（含绕过手势识别）与插入。
-- `Sources/RemoteMic/KeyboardInjector.swift`：剪贴板快照与 `Cmd+V` 插入入口（或与既有注入层协作的新入口）。
-- `CommonPhrasePanel.swift`：共用黑色圆盘与非激活浮层；`CommonPhraseStore.swift`：数据与运行时认领；`CommonPhraseInserter.swift`：剪贴板事务；`CommonPhraseSettingsView.swift`：页面内编辑与先选键位的分配流程。
-- `Tests/RemoteMicTests/`：数据管线校验、认领回归、剪贴板恢复。
-- `Testing/`：新增常用语测试手册。
-- `TODO.md`：同步该功能的完成状态。
+- `Sources/RemoteMic/RemoteButtons.swift`：稳定动作 ID、分类与非重复语义。
+- `Sources/RemoteMic/MembershipFeatureIntegration.swift`：会员能力和可选常用语接口。
+- `Sources/RemoteMic/SettingsView.swift`、`Sources/RemoteMic/BridgeAppModel.swift`、`Sources/RemoteMic/HIDRemoteMonitor.swift`：入口与按键适配，不包含常用语实现。
+- 私有 `packages/macos-common-phrases/`：内置内容、面板、编辑、持久化和插入实现及对应测试。
+- 私有 `packages/macos-membership/`：会员状态和常用语 Host Adapter。
+- `Tests/RemoteMicTests/`：公开可选适配与稳定基线回归。
+- `Testing/CommonPhrases.md`、`TODO.md`：测试边界和状态。
