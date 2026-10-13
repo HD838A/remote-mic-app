@@ -1,6 +1,10 @@
 # 常用语本地测试
 
-适用分支：`codex/common-phrases-docs-alignment-20261002`（PR #558 集成至 main）；产品行为以 [`PRODUCT_SPEC.md`](../feature/common-phrases/PRODUCT_SPEC.md) 为准。2026-10-03 用户确认本轮真机测试通过；具体来源与验证边界见下方最新验收记录。
+适用于集成私有会员 Package 的 macOS 构建。产品行为以 [PRODUCT_SPEC.md](../feature/common-phrases/PRODUCT_SPEC.md) 为准。
+
+2026-10-13 边界：常用语实现在私有 `packages/macos-common-phrases/`，公开宿主只保留动作和可选适配。使用权限由会员服务的 `canUseCommonPhrases` 提供。公开构建不承诺包含实现；未注入私有构件时应报告不可用，并验证普通按键与音频基线。
+
+下方带日期的验收记录属于迁移前版本。2026-10-03 用户确认不代表迁移后的会员集成和所有硬件已完成验收。
 
 ## 准备
 
@@ -75,7 +79,9 @@
 - `EDITOR` / `POSITION`：编辑页打开/关闭；进程内 position operation_id、键位选择请求与完成。仅选择位置不应出现 `EDIT action=assign`；从库选择内容后才出现分配保存，失败时保持原分配并提示。
 - `result=submitted` 和 `diagnostic_boundary=external_text_unobserved` 只证明提交了粘贴；请另行确认目标输入框真实上屏。不要把日志中的“入队”或“提交”作为验收成功。
 
-自动化：`CommonPhraseTests` 已覆盖资源四类非法输入、默认键位、用户副本与重启、资源更新、错误导入、来源隔离、快速按与松键消费、HID 手势前认领、剪贴板多类型恢复、新复制保护、粘贴失败、取消与恢复。公开宿主全部 796 项、注入全部遥控适配器的 852 项测试已通过；自动化使用模拟按键与测试剪贴板，不能替代真机。
+当前 `CommonPhraseTests` 在私有 Package 执行；公开宿主验证可选适配。以下为迁移前的自动化结果。
+
+历史自动化：`CommonPhraseTests` 已覆盖资源四类非法输入、默认键位、用户副本与重启、资源更新、错误导入、来源隔离、快速按与松键消费、HID 手势前认领、剪贴板多类型恢复、新复制保护、粘贴失败、取消与恢复。公开宿主全部 796 项、注入全部遥控适配器的 852 项测试已通过；自动化使用模拟按键与测试剪贴板，不能替代真机。
 
 2026-10-03 圆盘与位置优先交互验证：公开全量 796 项、私有遥控适配器集成全量 852 项通过；最终按钮宽度适配及交互入口调整后，相关 62 项测试再次通过。日志分别为 `dist/common-phrases-circle-full-tests.log`、`dist/common-phrases-circle-integrated-tests.log` 和 `dist/common-phrases-circle-tests-final.log`。
 
