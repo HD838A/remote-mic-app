@@ -607,6 +607,7 @@
 "about.configuration.description" = "迁移增益、音频设备、按键映射、快捷键、语言、Dock 显示、启动与更新通道设置。";
 "about.configuration.export" = "导出配置…";
 "about.configuration.export_description" = "将当前设置导出到文件。";
+"about.configuration.backup_description" = "备份设置、组合动作、App 配置和键位方案。";
 "about.configuration.import" = "导入配置…";
 "about.configuration.import_description" = "从之前导出的文件恢复设置。";
 "about.preferences.title" = "应用偏好";

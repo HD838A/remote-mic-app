@@ -208,6 +208,38 @@ final class MacroFeatureIntegration: ObservableObject {
         #endif
     }
 
+    func configurationTransferView(profileID: UUID?, model: XiaomiRemoteModel?) -> AnyView {
+        #if canImport(SayAllMacroRemoteMic)
+        return AnyView(RemoteMicPortableTransferView(controller: feature.portableTransfer,
+            remoteProfileID: profileID, remoteModel: AppSettings.portableRemoteModel(model),
+            defaultKinds: [.macro, .application, .buttonProfile, .hostSettings],
+            showsEntryButtons: false, defaultExportPurpose: .personalBackup))
+        #else
+        return AnyView(EmptyView())
+        #endif
+    }
+
+    func requestConfigurationExport() -> Bool {
+        #if canImport(SayAllMacroRemoteMic)
+        feature.portableTransfer.requestedOperation = .exportFile(
+            scope: [.macro, .application, .buttonProfile, .hostSettings])
+        return true
+        #else
+        return false
+        #endif
+    }
+
+    func requestConfigurationImport(from url: URL) -> Bool {
+        #if canImport(SayAllMacroRemoteMic)
+        guard url.pathExtension.lowercased() == "sayall" else { return false }
+        feature.portableTransfer.requestedOperation = .importFile(url,
+            scope: [.macro, .application, .buttonProfile, .hostSettings])
+        return true
+        #else
+        return false
+        #endif
+    }
+
     func attachBindings(to settings: AppSettings, onProfileChange: @escaping (UUID?) -> Void) {
         settings.configuredActionOverride = { [weak self, weak settings] device, button, trigger in
             guard let settings, settings.customMappingEnabled else { return nil }
