@@ -19,9 +19,12 @@ SPARKLE_FRAMEWORK="$APP/Contents/Frameworks/Sparkle.framework"
 APP_ICON="$APP/Contents/Resources/AppIcon.icns"
 ICON_SOURCE="$ROOT/Resources/AppIcon.png"
 EXPECTED_ICON_ICNS="$ROOT/Resources/AppIcon.icns"
+ICON_CORNER_STYLE="opaque"
 if [[ "$RELEASE_VARIANT" == "intel" ]]; then
   APP_ICON="$APP/Contents/Resources/AppIcon.icns"
+  ICON_SOURCE="$ROOT/Resources/AppIcons/faceted-duck.png"
   EXPECTED_ICON_ICNS="$ROOT/Resources/AppIcon-intel.icns"
+  ICON_CORNER_STYLE="transparent"
 fi
 EXPECTED_DEVELOPER_TEAM_ID="${EXPECTED_DEVELOPER_TEAM_ID:-}"
 REQUIRE_DEVELOPER_ID_SIGNING="${REQUIRE_DEVELOPER_ID_SIGNING:-0}"
@@ -180,7 +183,7 @@ for icon_name in "${EXPECTED_ICON_NAMES[@]}"; do
   test -f "$ICONSET/$icon_name"
 done
 ICON_IMAGES=("$ICONSET"/*.png(N))
-/usr/bin/xcrun swift - "$ICON_SOURCE" "${ICON_IMAGES[@]}" <<'SWIFT'
+/usr/bin/xcrun swift - "$ICON_CORNER_STYLE" "$ICON_SOURCE" "${ICON_IMAGES[@]}" <<'SWIFT'
 import AppKit
 import Darwin
 import Foundation
@@ -190,7 +193,8 @@ func fail(_ message: String) -> Never {
     exit(1)
 }
 
-for (index, path) in CommandLine.arguments.dropFirst().enumerated() {
+let transparentCorners = CommandLine.arguments[1] == "transparent"
+for (index, path) in CommandLine.arguments.dropFirst(2).enumerated() {
     let url = URL(fileURLWithPath: path)
     guard let representation = try? NSBitmapImageRep(data: Data(contentsOf: url)) else {
         fail("unable to decode app icon image: \(path)")
@@ -209,7 +213,10 @@ for (index, path) in CommandLine.arguments.dropFirst().enumerated() {
     ]
     for (x, y) in corners {
         let alpha = representation.colorAt(x: x, y: y)?.alphaComponent ?? 1
-        if alpha < (1.0 - 1.0 / 255.0) {
+        if transparentCorners && alpha > (1.0 / 255.0) {
+            fail("packaged Intel app icon corner is not transparent: \(path) (\(x),\(y))")
+        }
+        if !transparentCorners && alpha < (1.0 - 1.0 / 255.0) {
             fail("packaged app icon corner is not opaque: \(path) (\(x),\(y))")
         }
     }
@@ -580,10 +587,6 @@ if [[ -d "$ROOT/Resources/AppIcons" ]]; then
     relative_icon_path="${source_icon#$ROOT/Resources/AppIcons/}"
     bundled_icon="$APP/Contents/Resources/AppIcons/$relative_icon_path"
     expected_source="$source_icon"
-    if [[ "$RELEASE_VARIANT" == "intel" &&
-          "$relative_icon_path" == "faceted-duck.png" ]]; then
-      expected_source="$ROOT/Resources/AppIcon-intel.png"
-    fi
     test -f "$bundled_icon"
     /usr/bin/cmp -s "$expected_source" "$bundled_icon"
   done < <(find "$ROOT/Resources/AppIcons" -type f | LC_ALL=C sort)
