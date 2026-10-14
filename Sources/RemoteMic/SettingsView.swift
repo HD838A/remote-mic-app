@@ -679,7 +679,7 @@ struct SettingsView: View {
             VStack(spacing: 4) {
                 Text(verbatim: "SayAll")
                     .font(.system(size: 16, weight: .semibold))
-                Text(currentVersion)
+                Text(currentVersionWithBuild)
                     .font(.system(size: 12))
                     .monospacedDigit()
                     .foregroundStyle(.secondary)
@@ -3797,7 +3797,7 @@ struct SettingsView: View {
                                         .font(.system(size: 12))
                                         .foregroundStyle(.secondary)
                                     Button(action: revealPrivateEnrollmentIfNeeded) {
-                                        Text(currentVersion)
+                                        Text(currentVersionWithBuild)
                                             .font(.system(size: 13, weight: .medium))
                                             .monospacedDigit()
                                     }
@@ -4301,6 +4301,18 @@ struct SettingsView: View {
         Bundle.main.object(
             forInfoDictionaryKey: "CFBundleShortVersionString"
         ) as? String ?? localization.text("common.value.unknown")
+    }
+
+    private var currentVersionWithBuild: String {
+        guard let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String,
+              !build.isEmpty else {
+            return currentVersion
+        }
+        return String(
+            format: localization.text("app.version_with_build"),
+            locale: localization.locale,
+            arguments: [currentVersion, build]
+        )
     }
 
     private func revealPrivateEnrollmentIfNeeded() {

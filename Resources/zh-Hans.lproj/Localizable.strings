@@ -532,7 +532,7 @@
 "menu.language" = "语言";
 "language.system" = "跟随系统";
 "common.value.unknown" = "未知";
-"app.version_with_build" = "版本 %1$@ (%2$@)";
+"app.version_with_build" = "版本 %1$@（Build %2$@）";
 "app.version" = "版本 %1$@";
 "status_item.voice_active_accessibility" = "小米蓝牙遥控器 2 Pro 正在传输语音";
 "status_item.accessibility_label" = "小米蓝牙遥控器 2 Pro";

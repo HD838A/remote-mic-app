@@ -1402,11 +1402,40 @@ struct SettingsPageRegressionTests {
         #expect(!source.contains("postDictation"))
 
         let versionSummary = try #require(
-            source.components(separatedBy: "Text(currentVersion)").last?
+            source.components(separatedBy: "Text(currentVersionWithBuild)").last?
                 .components(separatedBy: "if case let .available(update)").first
         )
         #expect(!versionSummary.contains(".onTapGesture"))
         #expect(!versionSummary.contains(".gesture"))
+    }
+
+    @Test func settingsPageDisplaysBuildAfterTheVersion() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let settingsSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+        let englishLocalization = try String(
+            contentsOf: root.appendingPathComponent("Resources/en.lproj/Localizable.strings"),
+            encoding: .utf8
+        )
+        let chineseLocalization = try String(
+            contentsOf: root.appendingPathComponent("Resources/zh-Hans.lproj/Localizable.strings"),
+            encoding: .utf8
+        )
+
+        #expect(settingsSource.contains("Text(currentVersionWithBuild)"))
+        #expect(settingsSource.contains("private var currentVersionWithBuild: String"))
+        #expect(settingsSource.contains("CFBundleVersion"))
+        #expect(englishLocalization.contains(
+            "app.version_with_build\" = \"Version %1$@ (Build %2$@)\""
+        ))
+        #expect(chineseLocalization.contains(
+            "app.version_with_build\" = \"版本 %1$@（Build %2$@）\""
+        ))
     }
 
     @Test func macroFeatureUIIsDelegatedWithoutPublishingItsImplementation() throws {
