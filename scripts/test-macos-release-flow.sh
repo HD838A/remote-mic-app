@@ -569,6 +569,16 @@ ai_requirement="$(/usr/bin/grep '^export REQUIRE_SAYALL_AI_PACKAGE=' "$notarize_
 /usr/bin/grep -Fq 'RELEASE_SWIFT_BUILD_TIMEOUT_SECONDS="${RELEASE_SWIFT_BUILD_TIMEOUT_SECONDS:-420}"' "$notarize_release"
 /usr/bin/grep -Fq 'RELEASE_APP_BUILD_TIMEOUT_SECONDS="${RELEASE_APP_BUILD_TIMEOUT_SECONDS:-450}"' "$notarize_release"
 /usr/bin/grep -Fq 'export RELEASE_SWIFT_BUILD_TIMEOUT_SECONDS' "$notarize_release"
+for release_dependency in \
+  SAYALL_AI_PACKAGE_PATH \
+  SAYALL_COMBINATION_ACTIONS_PATH \
+  SAYALL_BUTTON_PROFILES_PACKAGE_PATH \
+  SAYALL_MAC_REMOTE_PACKAGE_PATH \
+  SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH \
+  SAYALL_SIRI_REMOTE_PACKAGE_PATH \
+  SAYALL_CHROMECAST_PACKAGE_PATH; do
+  /usr/bin/grep -Fq "export $release_dependency" "$notarize_release"
+done
 if [[ "$(/usr/bin/grep -c -- 'REPOSITORY_ROOT: \${{ github.workspace }}' "$package_workflow")" -lt 1 ]]; then
   print -u2 "protected package verification must point the verifier at the checked-out repository"
   exit 1
