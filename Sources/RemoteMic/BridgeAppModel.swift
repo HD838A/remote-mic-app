@@ -651,6 +651,12 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             self?.archiveCapturedTranscript(capture)
         }
     )
+    private lazy var voiceTargetActivityMonitor = VoiceTargetActivityMonitor(
+        onInterruption: { [weak self] interruption in
+            self?.handleVoiceTargetInterruption(interruption)
+        },
+        log: { AppLogger.shared.write($0) }
+    )
     private lazy var recordingAssetCoordinator = RecordingAssetCoordinator(
         store: recordingAssetStore,
         isEnabled: { [weak self] in
@@ -1376,6 +1382,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         privateFeature.stop()
         macroFeature.stop()
         preferredInputSourceMonitor.stop()
+        voiceTargetActivityMonitor.stop()
         transcriptCaptureCoordinator.cancel()
         recordingAssetCoordinator.cancel(reason: "app_stop")
         stopRecordingPlayback()
@@ -6629,6 +6636,27 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         }
     }
 
+    private func handleVoiceTargetInterruption(
+        _ interruption: VoiceTargetActivityInterruption
+    ) {
+        guard let source = activeMobileVoiceSource else { return }
+        let detail = "Mac 的语音输入目标已结束，请重新开始"
+        AppLogger.shared.write(
+            "MOBILE VOICE target_interrupted source=\(source.logName) " +
+                "reason=\(interruption.rawValue)"
+        )
+        switch source {
+        case .web:
+            webRemoteClient.notifyVoiceEnded(detail: detail)
+        case .nearbyPhone, .nearbyWatch:
+            // Watch can use the BLE server or the nearby TCP server. Notify both
+            // remote endpoints. Only the active endpoint has a voice session.
+            phoneRemoteServer.notifyVoiceEnded(detail: detail)
+            watchBluetoothServer.notifyVoiceEnded(detail: detail)
+        }
+        stopPhoneVoice(source: source, reason: "target_\(interruption.rawValue)")
+    }
+
     private static func commonPhraseHIDSource(_ profileID: UUID?) -> String {
         "hid:\(profileID?.uuidString ?? "unassigned")"
     }
@@ -7014,7 +7042,10 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         }
     }
 
-    private func stopPhoneVoice(source: MobileVoiceSource) {
+    private func stopPhoneVoice(
+        source: MobileVoiceSource,
+        reason: String = "voice_stop"
+    ) {
         if source == .nearbyWatch {
             cancelMobileVoiceNoAudioRecoveryTimer()
         }
@@ -7063,7 +7094,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             AppLogger.shared.write("MOBILE VOICE stop_ignored reason=already_stopping source=\(source.logName)")
             return
         case let .begin(stopGeneration):
-            logMobileVoiceAudioSummary(source: source, reason: "voice_stop")
+            logMobileVoiceAudioSummary(source: source, reason: reason)
             audioOutput.endSessionAfterDraining(
                 source: source.logName,
                 operationID: stopGeneration
@@ -7093,7 +7124,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                             failureCount: self.mobileVoiceAudioEnqueueFailureCount +
                                 self.mobileVoiceAudioSourceMismatchCount +
                                 (outcome == .forced ? 1 : 0),
-                            stopReason: "voice_stop"
+                            stopReason: reason
                         )
                     }
                     self.activeMobileVoiceOperationID = nil
@@ -7113,7 +7144,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
                             receivedSamples: self.mobileVoiceAudioSignalMetrics.sampleCount,
                             failureCount: self.mobileVoiceAudioEnqueueFailureCount +
                                 self.mobileVoiceAudioSourceMismatchCount,
-                            stopReason: "voice_stop"
+                            stopReason: reason
                         )
                     }
                     self.activeMobileVoiceOperationID = nil
@@ -7629,6 +7660,9 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         }
         transcriptCaptureCoordinator.startSession(sessionID: sessionID, startedAt: startedAt, source: source)
         isStreaming = true
+        if activeMobileVoiceSource != nil {
+            voiceTargetActivityMonitor.start()
+        }
     }
 
     private func endVoiceSessionIfNeeded(flushAudio: Bool = true) {
@@ -7640,6 +7674,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
               activeMobileVoiceSource == nil,
               isStreaming
         else { return }
+        voiceTargetActivityMonitor.stop()
         let endedAt = Date()
         if let voiceSessionStartedAt {
             settings.recordVoiceDuration(

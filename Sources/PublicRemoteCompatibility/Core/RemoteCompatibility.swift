@@ -95,6 +95,8 @@ public final class PhoneRemoteServer: @unchecked Sendable {
     }
 
     public func updateButtonTitles(_: [String: String]) {}
+
+    public func notifyVoiceEnded(detail _: String = "") {}
 }
 
 public final class WatchBluetoothRemoteServer: @unchecked Sendable {
@@ -133,6 +135,8 @@ public final class WatchBluetoothRemoteServer: @unchecked Sendable {
     }
 
     public func updateButtonTitles(_: [String: String]) {}
+
+    public func notifyVoiceEnded(detail _: String = "") {}
 }
 
 public struct WatchBluetoothAudioSignalMetrics: Equatable, Sendable {
@@ -231,4 +235,6 @@ public final class WebRemoteRelayClient: @unchecked Sendable {
     }
 
     public func updateButtonTitles(_: [String: String]) {}
+
+    public func notifyVoiceEnded(detail _: String = "") {}
 }
