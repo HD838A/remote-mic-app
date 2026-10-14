@@ -2,6 +2,8 @@
 
 - [RC003 长会话尾部缺失诊断（问题待定位）](./2026-10-13-rc003-audio-delivery-rate-shortfall.md)
 
+- [回眸播放、应用识别和删除入口问题](./2026-10-15-reflections-playback-and-capture.md)
+
 - [使用日历末列、悬停摘要与底部留白](./2026-10-12-calendar-details.html)
 
 - [小程序连接码超时（-1101）](./2026-10-11-mini-program-code-timeout.md)

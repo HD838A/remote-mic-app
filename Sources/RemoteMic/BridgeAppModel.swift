@@ -499,7 +499,7 @@ enum VoiceKeyCompatibilityWarning: Equatable {
     }
 }
 
-final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
+final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDelegate, AVAudioPlayerDelegate {
     private static let longRecordingOpenTimeout: TimeInterval = 5
     private static let longRecordingCloseTimeout: TimeInterval = 2
     private static let rc003VoiceExtensionOpenTimeout: TimeInterval = 5
@@ -550,6 +550,8 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     @Published private(set) var transcriptRecords: [TranscriptRecord] = []
     @Published private(set) var recordingAssets: [RecordingAssetManifest] = []
     @Published private(set) var recordingPlaybackError: RecordingPlaybackFailure?
+    @Published private(set) var recordingPlaybackAssetID: UUID?
+    @Published private(set) var isRecordingPlaybackPlaying = false
 
     private let transcriptArchiveStore: TranscriptArchiveStore
     private let recordingAssetStore: RecordingAssetStore
@@ -643,9 +645,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     )
     private lazy var transcriptCaptureCoordinator = TranscriptCaptureCoordinator(
         isEnabled: { [weak self] in
-            guard let self else { return false }
-            return self.settings.localTranscriptHistoryEnabled
-                || self.settings.localOriginalAudioRecordingEnabled
+            self?.settings.localTranscriptHistoryEnabled ?? false
         },
         onCapture: { [weak self] capture in
             self?.archiveCapturedTranscript(capture)
@@ -934,6 +934,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         self.rc003VoiceExtensionTestEnabled = rc003VoiceExtensionTestEnabled
         self.recordingAssetStore = recordingAssetStore
         self.diagnosticLogUploader = diagnosticLogUploader
+        super.init()
         if settings.siriRemoteEnabled, settings.siriRemoteNeedsUserAction {
             siriRemoteAudioStatus = "unavailable:authorization_user_action_required"
         }
@@ -1540,20 +1541,46 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
 
     func playRecording(_ asset: RecordingAssetManifest) {
         recordingPlaybackError = nil
+        if recordingPlaybackAssetID == asset.id, let player = recordingPlayback {
+            if player.isPlaying {
+                player.pause()
+                isRecordingPlaybackPlaying = false
+                AppLogger.shared.write(
+                    "RECORDING ASSET playback_paused record_id=\(asset.id.uuidString)"
+                )
+            } else {
+                guard player.play() else {
+                    stopRecordingPlayback()
+                    recordingPlaybackError = .playerUnavailable
+                    AppLogger.shared.write(
+                        "RECORDING ASSET playback_resume_failed " +
+                            "record_id=\(asset.id.uuidString)"
+                    )
+                    return
+                }
+                isRecordingPlaybackPlaying = true
+                AppLogger.shared.write(
+                    "RECORDING ASSET playback_resumed record_id=\(asset.id.uuidString)"
+                )
+            }
+            return
+        }
         var stage = RecordingPlaybackStage.resolveAsset
         var prepareResult: Bool?
         do {
             let url = try recordingAssetStore.mediaURL(for: asset)
-            recordingPlayback?.stop()
-            recordingPlayback = nil
+            stopRecordingPlayback(reason: "superseded")
             stage = .initializePlayer
             recordingPlayback = try AVAudioPlayer(contentsOf: url)
+            recordingPlayback?.delegate = self
             stage = .preparePlayer
             prepareResult = recordingPlayback?.prepareToPlay()
+            recordingPlaybackAssetID = asset.id
             stage = .startPlayback
             guard recordingPlayback?.play() == true else {
                 throw RecordingPlaybackOperationError.playerRejected
             }
+            isRecordingPlaybackPlaying = true
         } catch {
             let playerDurationMilliseconds = recordingPlayback.map {
                 Int(($0.duration * 1_000).rounded())
@@ -1562,8 +1589,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             let playerSampleRate = recordingPlayback.map {
                 Int($0.format.sampleRate.rounded())
             } ?? -1
-            recordingPlayback?.stop()
-            recordingPlayback = nil
+            stopRecordingPlayback()
             let failure: RecordingPlaybackFailure = error is RecordingPlaybackOperationError
                 ? .playerUnavailable
                 : .classify(error)
@@ -1619,9 +1645,29 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         recordingPlaybackError = nil
     }
 
-    func stopRecordingPlayback() {
+    func stopRecordingPlayback(reason: String = "user") {
+        let hadPlayback = recordingPlayback != nil || recordingPlaybackAssetID != nil
         recordingPlayback?.stop()
         recordingPlayback = nil
+        recordingPlaybackAssetID = nil
+        isRecordingPlaybackPlaying = false
+        if hadPlayback {
+            AppLogger.shared.write(
+                "RECORDING ASSET playback_stopped reason=\(reason)"
+            )
+        }
+    }
+
+    func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self, player === self.recordingPlayback else { return }
+            self.recordingPlayback = nil
+            self.recordingPlaybackAssetID = nil
+            self.isRecordingPlaybackPlaying = false
+            AppLogger.shared.write(
+                "RECORDING ASSET playback_finished success=\(flag)"
+            )
+        }
     }
 
     func exportRecording(_ asset: RecordingAssetManifest) {
@@ -1645,7 +1691,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     }
 
     func deleteRecording(_ asset: RecordingAssetManifest) {
-        stopRecordingPlayback()
+        stopRecordingPlayback(reason: "deleted")
         DispatchQueue.global(qos: .utility).async { [weak self] in
             guard let self else { return }
             do {
@@ -1658,7 +1704,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     }
 
     func deleteRecordingApplication(applicationKey: String) {
-        stopRecordingPlayback()
+        stopRecordingPlayback(reason: "application_deleted")
         DispatchQueue.global(qos: .utility).async { [weak self] in
             guard let self else { return }
             do {
@@ -1671,7 +1717,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
     }
 
     func deleteAllRecordings() {
-        stopRecordingPlayback()
+        stopRecordingPlayback(reason: "all_deleted")
         DispatchQueue.global(qos: .utility).async { [weak self] in
             guard let self else { return }
             do {
@@ -1694,6 +1740,14 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         updateTranscriptArchive {
             try self.transcriptArchiveStore.deleteRecord(id: record.id)
         }
+    }
+
+    func deleteTranscriptRecordAndRecording(
+        _ record: TranscriptRecord,
+        recording: RecordingAssetManifest
+    ) {
+        deleteTranscriptRecord(record)
+        deleteRecording(recording)
     }
 
     func deleteTranscriptApplication(applicationKey: String) {
@@ -7639,9 +7693,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
             if transcriptDiagnosticOperations.count > 32 { transcriptDiagnosticOperations.removeFirst() }
         }
         voiceSessionUsageSource = source
-        let frontmostApplication = FrontmostApplicationMetadata.current(
-            excludingBundleIdentifier: Bundle.main.bundleIdentifier
-        )
+        let frontmostApplication = FrontmostApplicationMetadata.current()
         voiceSessionApplicationName = frontmostApplication?.applicationName
         recordingAssetCoordinator.start(
             sessionID: sessionID,
@@ -7653,6 +7705,7 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         if let frontmostApplication {
             AppLogger.shared.write(
                 "RECORDING ASSET application_fallback " +
+                    "name_present=\(!frontmostApplication.applicationName.isEmpty) " +
                     "bundle=\(frontmostApplication.bundleIdentifier)"
             )
         } else {

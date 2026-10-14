@@ -971,6 +971,9 @@
 "statistics.transcripts.recording_description" = "把每次语音会话的本地 AAC 录音保存下来，并与回眸文字关联。";
 "statistics.transcripts.recording_duration" = "%d 秒";
 "statistics.transcripts.recording_play" = "播放录音";
+"statistics.transcripts.recording_pause" = "暂停播放";
+"statistics.transcripts.recording_resume" = "继续播放";
+"statistics.transcripts.recording_stop" = "停止播放";
 "statistics.transcripts.recording_playback_error.missing" = "找不到这条录音文件，可能已被移动或删除。";
 "statistics.transcripts.recording_playback_error.invalid" = "这条录音文件无法播放，可能已损坏或格式不受支持。";
 "statistics.transcripts.recording_playback_error.unavailable" = "这条录音暂时无法播放，请稍后重试。";
@@ -993,6 +996,9 @@
 "statistics.transcripts.delete_all" = "全部删除";
 "statistics.transcripts.delete_record_confirm.title" = "删除这条语音记录？";
 "statistics.transcripts.delete_record_confirm.message" = "记录将移到废纸篓，不会影响已经输入到目标应用中的文字。";
+"statistics.transcripts.delete_entry" = "删除记录和录音";
+"statistics.transcripts.delete_entry_confirm.title" = "删除这条语音记录和录音？";
+"statistics.transcripts.delete_entry_confirm.message" = "文字记录和关联录音都会移到废纸篓，不会影响已经输入到目标应用中的文字。";
 "statistics.transcripts.delete_application_confirm.title" = "删除这个应用的全部记录？";
 "statistics.transcripts.delete_application_confirm.message" = "“%@”的全部语音记录将移到废纸篓。";
 "statistics.transcripts.delete_all_confirm.title" = "删除全部语音记录？";
