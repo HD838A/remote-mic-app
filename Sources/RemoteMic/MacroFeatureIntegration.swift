@@ -404,6 +404,30 @@ final class MacroFeatureIntegration: ObservableObject {
         isEditorActive = isBindingEditorActive || isPortableEditorActive
     }
 
+    func activeButtonProfileTitle(
+        remoteProfileID: UUID?,
+        button: String,
+        trigger: String
+    ) -> String? {
+        #if canImport(SayAllButtonProfiles)
+        return buttonProfilesFeature.activeBindingDisplayName(
+            remoteProfileID: remoteProfileID,
+            button: button,
+            trigger: trigger
+        )
+        #else
+        return nil
+        #endif
+    }
+
+    var buttonProfileChanges: AnyPublisher<Void, Never> {
+        #if canImport(SayAllButtonProfiles)
+        return buttonProfilesFeature.changes
+        #else
+        return Empty().eraseToAnyPublisher()
+        #endif
+    }
+
     func revealEnrollment() {
 #if canImport(SayAllMacroRemoteMic)
         enrollmentRevealRequested = true
