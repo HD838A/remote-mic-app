@@ -190,6 +190,15 @@ enum SettingsPageBehavior {
         section == .about
     }
 
+    static func sidebarAccountTitle(accountDisplayName: String?, loginTitle: String) -> String {
+        guard let accountDisplayName else { return loginTitle }
+        let characters = Array(accountDisplayName.trimmingCharacters(in: .whitespacesAndNewlines))
+        guard !characters.isEmpty else { return loginTitle }
+        return stride(from: 0, to: characters.count, by: 8)
+            .map { String(characters[$0..<min($0 + 8, characters.count)]) }
+            .joined(separator: "\n")
+    }
+
     static func permissionAction(
         for permission: SettingsPermissionKind,
         isGranted: Bool
@@ -742,8 +751,15 @@ struct SettingsView: View {
                     Text(sectionTitle(section))
                         .font(.system(size: 13, weight: .semibold))
                 } else if section == .statistics {
-                    Text(membershipFeature.accountDisplayName ?? localization.text("settings.section.login"))
+                    Text(SettingsPageBehavior.sidebarAccountTitle(
+                        accountDisplayName: membershipFeature.accountDisplayName,
+                        loginTitle: localization.text("settings.section.login")
+                    ))
                         .font(.system(size: 13, weight: .semibold))
+                        .multilineTextAlignment(.center)
+                        .lineLimit(nil)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityLabel(membershipFeature.accountDisplayName ?? localization.text("settings.section.login"))
                 } else {
                     Text(section.title)
                         .font(.system(size: 13, weight: .semibold))

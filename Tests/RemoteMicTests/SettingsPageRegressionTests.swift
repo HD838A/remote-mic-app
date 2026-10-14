@@ -5,6 +5,14 @@ import Testing
 
 @Suite("Settings page regression")
 struct SettingsPageRegressionTests {
+    @Test func sidebarAccountTitleKeepsEveryCharacterAndWrapsAfterEight() {
+        #expect(SettingsPageBehavior.sidebarAccountTitle(accountDisplayName: nil, loginTitle: "登录") == "登录")
+        #expect(SettingsPageBehavior.sidebarAccountTitle(accountDisplayName: "  ", loginTitle: "Login") == "Login")
+        #expect(SettingsPageBehavior.sidebarAccountTitle(accountDisplayName: "abcdefgh", loginTitle: "Login") == "abcdefgh")
+        #expect(SettingsPageBehavior.sidebarAccountTitle(accountDisplayName: "abcdefghijklmnopq", loginTitle: "Login") == "abcdefgh\nijklmnop\nq")
+        #expect(SettingsPageBehavior.sidebarAccountTitle(accountDisplayName: "一二三四五六七八九", loginTitle: "登录") == "一二三四五六七八\n九")
+    }
+
     @Test func webRemoteEntryDoesNotRequireAnInviteCode() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
