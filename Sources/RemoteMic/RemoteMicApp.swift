@@ -753,16 +753,36 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         .receive(on: RunLoop.main)
         .sink { [weak self] values, _ in
             guard let self else { return }
-            let (bindings, shortcuts, applicationProfileIDs, customApplicationProfiles) = values
-            model.updatePhoneRemoteButtonTitles(
-                bindings: bindings,
-                shortcuts: shortcuts,
-                applicationProfileIDs: applicationProfileIDs,
-                customApplicationProfiles: customApplicationProfiles,
-                localization: localization
+            self.refreshPhoneRemoteButtonTitles(
+                bindings: values.0,
+                shortcuts: values.1,
+                applicationProfileIDs: values.2,
+                customApplicationProfiles: values.3
             )
         }
         .store(in: &subscriptions)
+
+        model.macroFeature.buttonProfileChanges
+            .receive(on: RunLoop.main)
+            .sink { [weak self] in
+                self?.refreshPhoneRemoteButtonTitles()
+            }
+            .store(in: &subscriptions)
+    }
+
+    private func refreshPhoneRemoteButtonTitles(
+        bindings: [RemoteButton: ButtonAction]? = nil,
+        shortcuts: [RemoteButton: CustomKeyboardShortcut]? = nil,
+        applicationProfileIDs: [RemoteButton: UUID]? = nil,
+        customApplicationProfiles: [CustomApplicationProfile]? = nil
+    ) {
+        model.updatePhoneRemoteButtonTitles(
+            bindings: bindings ?? model.settings.buttonBindings,
+            shortcuts: shortcuts ?? model.settings.buttonShortcuts,
+            applicationProfileIDs: applicationProfileIDs ?? model.settings.buttonApplicationProfileIDs,
+            customApplicationProfiles: customApplicationProfiles ?? model.settings.customApplicationProfiles,
+            localization: localization
+        )
     }
 
     private func observeUpdatePreferences() {

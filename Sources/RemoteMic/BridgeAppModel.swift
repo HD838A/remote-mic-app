@@ -2258,9 +2258,18 @@ final class BridgeAppModel: ObservableObject, XiaomiBluetoothBridgeDelegate {
         var titles: [String: String] = [:]
         for button in RemoteButton.allCases {
             let action = bindings[button] ?? .disabled
-            guard action != AppSettings.defaultBindings[button] else { continue }
+            let buttonProfileTitle = macroFeature.activeButtonProfileTitle(
+                remoteProfileID: settings.selectedRemoteProfileID,
+                button: button.rawValue,
+                trigger: ButtonTrigger.singleClick.rawValue
+            )
+            guard buttonProfileTitle != nil || action != AppSettings.defaultBindings[button] else {
+                continue
+            }
             let fullTitle: String
-            if action == .customShortcut {
+            if let buttonProfileTitle {
+                fullTitle = buttonProfileTitle
+            } else if action == .customShortcut {
                 fullTitle = shortcuts[button]?.displayName(using: localization)
                     ?? action.displayName(using: localization)
             } else if action == .openCustomApplication,
