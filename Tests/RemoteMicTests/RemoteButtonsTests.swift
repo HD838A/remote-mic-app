@@ -3602,6 +3602,46 @@ struct RemoteButtonsTests {
         #expect(!suppressor.handle(type: .keyDown, event: down))
     }
 
+    @Test func seizedTVConfiguredActionSuppressesNativePunctuationEvent() throws {
+        let suiteName = "RemoteButtonsTests.tvSeizedSuppression.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = AppSettings(defaults: defaults)
+        settings.customMappingEnabled = true
+        let profileID = try #require(settings.selectedRemoteProfileID)
+        settings.setAction(.openCustomApplication, for: .tv)
+
+        let suppressor = KeyboardEventSuppressor()
+        var performed: [ConfiguredButtonAction] = []
+        let monitor = HIDRemoteMonitor(
+            settings: settings,
+            profileID: profileID,
+            eventSuppressor: suppressor,
+            ownsEventSuppressor: false,
+            scheduler: RemoteButtonsTestScheduler(),
+            runtimePermissions: { true },
+            actionPerformer: { _, _, configured in
+                performed.append(configured)
+                return true
+            },
+            frontmostBundleIdentifier: { "com.tencent.xinWeChat" }
+        )
+        monitor.connectSimulatedDevice(fingerprint: "tv-seized", profileID: profileID, isSeized: true)
+        defer { monitor.disconnectSimulatedDevice() }
+
+        monitor.handleSimulatedReport(
+            reportID: 1,
+            data: Data([UInt8(RemoteButton.tv.hidUsage), 0, 0, 0, 0, 0])
+        )
+        let down = try #require(CGEvent(keyboardEventSource: nil, virtualKey: 10, keyDown: true))
+        #expect(suppressor.handle(type: .keyDown, event: down))
+        #expect(performed == [ConfiguredButtonAction(action: .openCustomApplication, shortcut: nil)])
+
+        monitor.handleSimulatedReport(reportID: 1, data: Data(repeating: 0, count: 6))
+        let up = try #require(CGEvent(keyboardEventSource: nil, virtualKey: 10, keyDown: false))
+        #expect(suppressor.handle(type: .keyUp, event: up))
+    }
+
     @Test func nativeKeyAutoRepeatIsSuppressedUntilEveryRemoteReleases() throws {
         let suppressor = KeyboardEventSuppressor()
         let down = try #require(CGEvent(
