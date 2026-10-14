@@ -1427,14 +1427,22 @@ struct SettingsPageRegressionTests {
             encoding: .utf8
         )
 
-        #expect(settingsSource.contains("Text(currentVersionWithBuild)"))
+        let sidebar = try #require(
+            settingsSource.components(separatedBy: "private var sidebar").last?
+                .components(separatedBy: "private var aboutPage").first
+        )
+        let aboutPage = try #require(settingsSource.components(separatedBy: "private var aboutPage").last)
+        #expect(sidebar.contains("Text(currentVersion)"))
+        #expect(!sidebar.contains("Text(currentVersionWithBuild)"))
+        #expect(aboutPage.contains("Text(currentVersionWithBuild)"))
         #expect(settingsSource.contains("private var currentVersionWithBuild: String"))
+        #expect(aboutPage.contains("about.version.current_with_build"))
         #expect(settingsSource.contains("CFBundleVersion"))
         #expect(englishLocalization.contains(
-            "app.version_with_build\" = \"Version %1$@ (Build %2$@)\""
+            "about.version.current_with_build\" = \"Version %1$@ (Build %2$@)\""
         ))
         #expect(chineseLocalization.contains(
-            "app.version_with_build\" = \"版本 %1$@（Build %2$@）\""
+            "about.version.current_with_build\" = \"版本 %1$@（Build %2$@）\""
         ))
     }
 

@@ -614,6 +614,7 @@
 "about.support.title" = "Updates & Support";
 "about.version.title" = "Version & Updates";
 "about.version.current" = "Current Version";
+"about.version.current_with_build" = "Version %1$@ (Build %2$@)";
 "about.version.latest" = "Latest Version";
 "about.version.available" = "Update Available";
 "about.version.update_to" = "Update to %1$@";

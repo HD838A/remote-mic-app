@@ -614,6 +614,7 @@
 "about.support.title" = "更新与支持";
 "about.version.title" = "版本与更新";
 "about.version.current" = "当前版本";
+"about.version.current_with_build" = "版本 %1$@（Build %2$@）";
 "about.version.latest" = "最新版本";
 "about.version.available" = "可更新";
 "about.version.update_to" = "更新到 %1$@";

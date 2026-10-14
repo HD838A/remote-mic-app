@@ -679,7 +679,7 @@ struct SettingsView: View {
             VStack(spacing: 4) {
                 Text(verbatim: "SayAll")
                     .font(.system(size: 16, weight: .semibold))
-                Text(currentVersionWithBuild)
+                Text(currentVersion)
                     .font(.system(size: 12))
                     .monospacedDigit()
                     .foregroundStyle(.secondary)
@@ -4309,7 +4309,7 @@ struct SettingsView: View {
             return currentVersion
         }
         return String(
-            format: localization.text("app.version_with_build"),
+            format: localization.text("about.version.current_with_build"),
             locale: localization.locale,
             arguments: [currentVersion, build]
         )
