@@ -36,7 +36,9 @@ final class SupplementalSettingsIntegration {
     func view(pageID: String, localeIdentifier: String) -> AnyView? {
         let selector = NSSelectorFromString("viewForPageID:localeIdentifier:")
         guard let provider, provider.responds(to: selector) else { return nil }
-        return AnyView(SupplementalSettingsHostView(provider: provider, pageID: pageID, localeIdentifier: localeIdentifier).id(pageID + ":" + localeIdentifier))
+        return AnyView(SupplementalSettingsHostView(provider: provider, pageID: pageID, localeIdentifier: localeIdentifier)
+            .id(pageID + ":" + localeIdentifier)
+            .ignoresSafeArea(.container, edges: .top))
     }
 }
 
