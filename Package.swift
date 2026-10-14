@@ -121,7 +121,7 @@ if unifiedButtonConfigurationAvailable {
     remoteMicSwiftSettings.append(.define("SAYALL_UNIFIED_BUTTON_CONFIGURATION"))
 }
 var remoteMicLinkerSettings: [LinkerSetting] = []
-if privateArtifactsAvailable { remoteMicLinkerSettings.append(.unsafeFlags(["-ObjC"])) }
+if privateArtifactsAvailable { remoteMicLinkerSettings.append(.unsafeFlags(["-Xlinker", "-ObjC"])) }
 
 var remoteMicTestSwiftSettings: [SwiftSetting] = []
 if unifiedButtonConfigurationAvailable {
