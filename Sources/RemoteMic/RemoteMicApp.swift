@@ -969,6 +969,9 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         window.delegate = self
         window.contentViewController = hostingController
         window.isReleasedWhenClosed = false
+        window.miniwindowImage = appIconController.catalog.image(
+            for: model.settings.appIconIdentifier
+        )
         window.minSize = NSSize(width: 1020, height: 772)
         window.setContentSize(NSSize(width: 1020, height: 772))
         window.setFrameAutosaveName("RemoteMicSettings")

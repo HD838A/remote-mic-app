@@ -172,7 +172,16 @@ final class AppIconController {
             // Keep the bundle's opaque ICNS separate from the selected rounded runtime logo.
             NSImage(named: NSImage.applicationIconName)?.setName(nil)
             image.setName(NSImage.applicationIconName)
-            NSApplication.shared.applicationIconImage = image
+            let application = NSApplication.shared
+            application.applicationIconImage = image
+            Self.updateMiniwindowImages(image, in: application.windows)
+            application.dockTile.display()
+        }
+    }
+
+    static func updateMiniwindowImages(_ image: NSImage, in windows: [NSWindow]) {
+        for window in windows {
+            window.miniwindowImage = image
         }
     }
 

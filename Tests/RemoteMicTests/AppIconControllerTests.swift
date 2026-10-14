@@ -179,4 +179,26 @@ struct AppIconControllerTests {
         #expect(representation.colorAt(x: 0, y: 0)?.alphaComponent == 0)
         #expect(representation.colorAt(x: 50, y: 50)?.alphaComponent == 1)
     }
+
+    @Test @MainActor
+    func selectedIconIsUsedForMiniaturizedWindows() {
+        let image = NSImage(size: NSSize(width: 64, height: 64))
+        let firstWindow = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 320, height: 200),
+            styleMask: [.titled, .miniaturizable],
+            backing: .buffered,
+            defer: true
+        )
+        let secondWindow = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 320, height: 200),
+            styleMask: [.titled, .miniaturizable],
+            backing: .buffered,
+            defer: true
+        )
+
+        AppIconController.updateMiniwindowImages(image, in: [firstWindow, secondWindow])
+
+        #expect(firstWindow.miniwindowImage === image)
+        #expect(secondWindow.miniwindowImage === image)
+    }
 }
