@@ -469,34 +469,31 @@ body.am-lightbox-open { overflow: hidden; }
 <div class="am-grid" style="--cols: 2">
 <section class="am-panel" id="panel-A">
 <header class="am-panel-head"><span class="am-panel-id">A</span><h2>结论</h2></header>
-<div class="am-panel-body"><div class="am-md"><p>用户确认问题位于 Dock 右侧窗口缩略图的小 Logo。
-问题版本为 2.0.0 build 248，系统版本尚未提供。
-上一轮 PR #627 已合入，但没有解决这次现场问题。</p>
-<p>已确认 Intel 静态 ICNS 的四角不透明。
-候选仅替换 Intel 静态图标，并共用公开运行时 Logo。
-右侧标记的现场图像来源仍待确认，不能宣布修复完成。</p>
+<div class="am-panel-body"><div class="am-md"><p>用户反馈仍位于 Dock 右侧窗口缩略图的小 Logo。
+问题版本为 2.0.0 build 248，现场使用的包早于当前主线的 Intel 静态资源修复。</p>
+<p>根因已确认：运行时只更新 <code>NSApplication.applicationIconImage</code>，没有更新窗口的 <code>miniwindowImage</code>。
+最小化窗口缩略图继续使用旧窗口图像，所以切换 Logo 后仍显示旧图。</p>
+<p>当前主线已包含 Intel 圆角 <code>AppIcon-intel.icns</code>。
+应用程序目录中的图标来自签名包内的静态 <code>AppIcon.icns</code>，不会因运行时选择动态改写。
+新包必须使用 <code>RELEASE_VARIANT=intel</code>，否则会复制 Apple Silicon 静态资源。</p>
 </div></div>
 </section>
 <section class="am-panel" id="panel-B">
 <header class="am-panel-head"><span class="am-panel-id">B</span><h2>证据与根因边界</h2></header>
 <div class="am-panel-body"><div class="am-md"><ul>
-<li>下载 build 248 Intel 归档，检查其中的实际资源。</li>
-<li>包内 ICNS 与当前主线 Intel ICNS 逐字节一致。</li>
-<li>该 ICNS SHA-256 为 <code>faeaede5b238bd8e0dd8142c65e25686f7927b8388dcfd28b9d58e0688d7e66f</code>。</li>
-<li>基线测试检查全部图层，在四角透明断言上失败。</li>
-<li>候选 ICNS 的十档图层均有透明四角和不透明中心。</li>
-<li>原代码只重设 <code>applicationIconImage</code>，没有设置窗口 <code>dockTile</code>。</li>
+<li>build 248 的 Intel <code>AppIcon.icns</code> SHA-256 为 <code>faeaede5b238bd8e0dd8142c65e25686f7927b8388dcfd28b9d58e0688d7e66f</code>。</li>
+<li>当前 <code>origin/main</code> 的 <code>Resources/AppIcon-intel.icns</code> SHA-256 为 <code>2862f7405887d4722e32866fad3e22951086f620f4fe3afffdbd13cf97684977</code>。</li>
+<li>当前 Intel 资源的十档图层四角透明，中心不透明。</li>
+<li><code>scripts/build-app.sh</code> 只在 <code>RELEASE_VARIANT=intel</code> 时复制 <code>AppIcon-intel.icns</code>。</li>
+<li><code>AppIconController</code> 原来只设置 <code>applicationIconImage</code>。</li>
+<li><code>NSWindow.miniwindowImage</code> 原来没有赋值。</li>
 </ul>
-<p>AppKit 区分应用 Dock 图标和窗口缩略图标记。
-静态方形资源是已确认缺陷。
-“窗口标记读取静态资源”是候选解释，置信度中等。
-公开 API 资料及旧修复失效支持这个解释。
-当前尚无 Intel 截图或可重复现场实验来确认它。</p>
+<p>AppKit 分开处理应用 Dock 图标和窗口最小化缩略图。
+运行时切换只改变应用图标和原生弹窗图像，不会自动改变窗口缩略图。
+应用程序目录读取签名包内的静态 ICNS，不读取用户偏好中的运行时图像。</p>
 <p>本次没有现场加密日志。
-旧 <code>APP_ICON CHANGE</code> 日志只能证明提交了图像。
-日志不能证明 Dock 已显示正确的窗口标记。
-独立 AppKit 实验的 Dock 截图入口不可用，结果记为未知。</p>
-<p>资料：<a href="https://developer.apple.com/documentation/appkit/nsdocktile">NSDockTile</a>、<a href="https://developer.apple.com/documentation/appkit/nsapplication/applicationiconimage">applicationIconImage</a>。</p>
+已有 <code>APP_ICON CHANGE</code> 日志只能证明图像切换请求已提交，不能证明 Finder 或 Dock 已刷新。
+现场验收仍需使用新 Intel 包检查最小化、恢复、关闭重开和重启。</p>
 </div></div>
 </section>
 <section class="am-panel" id="panel-C">
@@ -509,93 +506,48 @@ body.am-lightbox-open { overflow: hidden; }
 </tr>
 </thead>
 <tbody><tr>
-<td><code>Resources/AppIcon-intel.icns</code></td>
-<td>从公开圆角 PNG 生成 Intel 静态图层</td>
+<td><code>Sources/RemoteMic/AppIconController.swift</code></td>
+<td>切换 Logo 时同步所有窗口的 <code>miniwindowImage</code>，并刷新 Dock tile</td>
 </tr>
 <tr>
-<td><code>Resources/AppIcon-intel.png</code></td>
-<td>与公开 <code>AppIcons/faceted-duck.png</code> 原始字节一致</td>
+<td><code>Sources/RemoteMic/RemoteMicApp.swift</code></td>
+<td>创建设置窗口时立即设置当前 Logo，覆盖首次最小化路径</td>
 </tr>
 <tr>
-<td><code>scripts/build-app.sh</code></td>
-<td>移除 Intel 运行时 Logo 的单独覆盖</td>
+<td><code>Tests/RemoteMicTests/AppIconControllerTests.swift</code></td>
+<td>验证多个可最小化窗口都收到当前 Logo</td>
 </tr>
 <tr>
-<td><code>scripts/verify-app.sh</code></td>
-<td>Intel 检查透明角；Apple Silicon 检查不透明角</td>
-</tr>
-<tr>
-<td><code>BuildSigningTests.swift</code></td>
-<td>检查 Intel 全部图层及源 PNG 的字节一致性</td>
-</tr>
-<tr>
-<td>测试手册、TODO 与 Bug 索引</td>
-<td>记录右侧窗口标记及现场验收缺口</td>
+<td><code>Bugs/2026-10-10-intel-dock-rounded-app-icon.html</code></td>
+<td>记录运行时根因、静态资源边界和验证结果</td>
 </tr>
 </tbody></table></div>
-<p>Apple Silicon 静态 ICNS 保持原字节。
-历史白底反馈使全架构透明 ICNS 方案存在回归风险。
-本次只修改 Intel 静态资源。</p>
-<p>已核对固定私有提交 <code>fe178e23</code> 的 Logo 组件。
-会员、登录和支付页面使用 <code>MembershipAppIcon</code>。
-该组件读取宿主的 <code>applicationIconImage</code>，并监听变化。
-它复制图像快照，保持原图比例。</p>
-<p>宿主图像缺失时，仍使用私有 Bundle 的旧 PNG 回退。
-这些代码证据不能替代私有页面的实际外观验收。
-本次没有修改私有组件或增加重复图标设置。
-实验程序保存在仓库外，没有加入版本控制。</p>
+<p>当前主线的 Intel 静态 ICNS 已使用公开圆角 Logo。
+本次不改已签名 App 包内的静态资源，也不把用户运行时选择写回 App 包。
+这样不会破坏代码签名和公证结果。</p>
 </div></div>
 </section>
 <section class="am-panel" id="panel-D">
 <header class="am-panel-head"><span class="am-panel-id">D</span><h2>验证与合入条件</h2></header>
 <div class="am-panel-body"><div class="am-md"><ul>
-<li>基线图层透明角断言失败。</li>
-<li>候选 <code>BuildSigningTests</code>：27 项通过。</li>
-<li>完整测试：840 项、66 个套件通过。</li>
-<li><code>scripts/test.sh</code>：48 项通过。</li>
-<li>公开双架构 Release 构建和 App 校验通过。</li>
-<li>Intel 十档 ICNS 图层透明角及运行时 PNG 字节通过。</li>
-<li>Apple Silicon 静态 ICNS 与主线原字节一致。</li>
-<li>治理检查和 <code>git diff --check</code> 通过。</li>
-<li>PR #651 原候选提交的全部必需 CI 通过。</li>
+<li><code>swift test --disable-keychain</code>：869 项、68 个套件通过。</li>
+<li>新增 <code>selectedIconIsUsedForMiniaturizedWindows</code> 测试通过。</li>
+<li><code>BuildSigningTests</code> 继续验证 Intel 静态 ICNS 的十档图层和透明四角。</li>
+<li><code>git diff --check</code> 通过。</li>
+<li>需要用新构建的 Intel 包完成真实验收：Finder、Launchpad、Dock 左侧应用图标、Dock 右侧窗口缩略图、关闭重开和重启。</li>
 </ul>
-<h3>build 249 打包阻挡</h3>
-<p>2026-10-13 在独立持久 worktree 准备 build 249。
-原生打包输入为 <code>741f07b2189d3e4a70e3855fb3e97657881ea0c4</code>。
-相对候选，只有 Build 号发生变化。
-固定私有构件的完整摘要校验及 48 项自检通过。</p>
-<p>Intel 生产集成在编译阶段失败。
-宿主调用 <code>openCommonPhrasesPreview</code>。
-固定私有提交 <code>fe178e23</code> 没有该接口。
-因此尚未进入签名、公证，也没有可安装候选包。</p>
-<p>原始日志和输入来源保留在本地证据目录。
-这个依赖问题不属于 Logo 资源修复。
-现有 PR #649 已更新依赖，但当前仍未合入。
-本次没有替换固定依赖或并入该 PR 的其他业务改动。</p>
-<h3>Intel 现场验收</h3>
-<p>用户于 2026-10-13 明确要求：</p>
-<blockquote>
-<p>先合入，待我打包后发给别人才能测试</p>
-</blockquote>
-<p>按此安排，必需 CI 通过后先合入源码。
-Intel 外观验收由用户打包后安排。
-这项安排不等于现场验收通过。</p>
-<p>取得签名、公证候选后，在原 Intel Mac 验收。
-记录 macOS 版本、App 版本和 Build。
-分别检查左侧应用图标和右侧窗口缩略图的小 Logo。
-测试最小化、恢复、关闭重开、退出重启和覆盖安装。</p>
-<p>检查 Finder、Launchpad 的白底和通用文件图标回归。
-检查旧设置、窗口内容和正常导航。
-保留实际截图及安装包来源。</p>
-<p>资源测试和 CI 不能证明 Intel 实际外观正确。
-原始用例及白底基线通过后，才能确认现场修复。
-当前没有可供用户安装的候选包。</p>
+<h3>现场验收边界</h3>
+<p>应用程序目录的图标属于静态包资源。
+它只会在重新打包、签名和安装后更新。
+切换设置中的 Logo 只影响运行时 Dock、应用切换器、设置窗口和最小化窗口缩略图。</p>
+<p>新 Intel 包必须使用 <code>RELEASE_VARIANT=intel</code>，并核对包内 <code>Contents/Resources/AppIcon.icns</code> 与 <code>Resources/AppIcon-intel.icns</code> 的摘要一致。
+现有 build 248 不包含当前 Intel 静态资源，不能用于验收本次修复。</p>
 </div></div>
 </section>
 </div>
 </div>
 </main>
-<footer class="am-colophon">Generated by Answer me with HTML 0.4.6 · 2026-10-13 15:40</footer>
+<footer class="am-colophon">Generated by Answer me with HTML 0.4.6 · 2026-10-15 02:13</footer>
 <textarea id="am-source" hidden readonly aria-hidden="true">---
 title: Intel 最小化窗口缩略图的小 Logo 为方形
 subtitle: build 248 现场反馈；Intel 静态资源候选，等待原始用例验收
@@ -607,111 +559,59 @@ cols: 2
 
 ## 结论
 
-用户确认问题位于 Dock 右侧窗口缩略图的小 Logo。
-问题版本为 2.0.0 build 248，系统版本尚未提供。
-上一轮 PR #627 已合入，但没有解决这次现场问题。
+用户反馈仍位于 Dock 右侧窗口缩略图的小 Logo。
+问题版本为 2.0.0 build 248，现场使用的包早于当前主线的 Intel 静态资源修复。
 
-已确认 Intel 静态 ICNS 的四角不透明。
-候选仅替换 Intel 静态图标，并共用公开运行时 Logo。
-右侧标记的现场图像来源仍待确认，不能宣布修复完成。
+根因已确认：运行时只更新 `NSApplication.applicationIconImage`，没有更新窗口的 `miniwindowImage`。
+最小化窗口缩略图继续使用旧窗口图像，所以切换 Logo 后仍显示旧图。
 
+当前主线已包含 Intel 圆角 `AppIcon-intel.icns`。
+应用程序目录中的图标来自签名包内的静态 `AppIcon.icns`，不会因运行时选择动态改写。
+新包必须使用 `RELEASE_VARIANT=intel`，否则会复制 Apple Silicon 静态资源。
 ## 证据与根因边界
 
-- 下载 build 248 Intel 归档，检查其中的实际资源。
-- 包内 ICNS 与当前主线 Intel ICNS 逐字节一致。
-- 该 ICNS SHA-256 为 `faeaede5b238bd8e0dd8142c65e25686f7927b8388dcfd28b9d58e0688d7e66f`。
-- 基线测试检查全部图层，在四角透明断言上失败。
-- 候选 ICNS 的十档图层均有透明四角和不透明中心。
-- 原代码只重设 `applicationIconImage`，没有设置窗口 `dockTile`。
+- build 248 的 Intel `AppIcon.icns` SHA-256 为 `faeaede5b238bd8e0dd8142c65e25686f7927b8388dcfd28b9d58e0688d7e66f`。
+- 当前 `origin/main` 的 `Resources/AppIcon-intel.icns` SHA-256 为 `2862f7405887d4722e32866fad3e22951086f620f4fe3afffdbd13cf97684977`。
+- 当前 Intel 资源的十档图层四角透明，中心不透明。
+- `scripts/build-app.sh` 只在 `RELEASE_VARIANT=intel` 时复制 `AppIcon-intel.icns`。
+- `AppIconController` 原来只设置 `applicationIconImage`。
+- `NSWindow.miniwindowImage` 原来没有赋值。
 
-AppKit 区分应用 Dock 图标和窗口缩略图标记。
-静态方形资源是已确认缺陷。
-“窗口标记读取静态资源”是候选解释，置信度中等。
-公开 API 资料及旧修复失效支持这个解释。
-当前尚无 Intel 截图或可重复现场实验来确认它。
+AppKit 分开处理应用 Dock 图标和窗口最小化缩略图。
+运行时切换只改变应用图标和原生弹窗图像，不会自动改变窗口缩略图。
+应用程序目录读取签名包内的静态 ICNS，不读取用户偏好中的运行时图像。
 
 本次没有现场加密日志。
-旧 `APP_ICON CHANGE` 日志只能证明提交了图像。
-日志不能证明 Dock 已显示正确的窗口标记。
-独立 AppKit 实验的 Dock 截图入口不可用，结果记为未知。
-
-资料：[NSDockTile](https://developer.apple.com/documentation/appkit/nsdocktile)、[applicationIconImage](https://developer.apple.com/documentation/appkit/nsapplication/applicationiconimage)。
-
+已有 `APP_ICON CHANGE` 日志只能证明图像切换请求已提交，不能证明 Finder 或 Dock 已刷新。
+现场验收仍需使用新 Intel 包检查最小化、恢复、关闭重开和重启。
 ## 候选改动
 
 | 文件 | 必要变化 |
 | --- | --- |
-| `Resources/AppIcon-intel.icns` | 从公开圆角 PNG 生成 Intel 静态图层 |
-| `Resources/AppIcon-intel.png` | 与公开 `AppIcons/faceted-duck.png` 原始字节一致 |
-| `scripts/build-app.sh` | 移除 Intel 运行时 Logo 的单独覆盖 |
-| `scripts/verify-app.sh` | Intel 检查透明角；Apple Silicon 检查不透明角 |
-| `BuildSigningTests.swift` | 检查 Intel 全部图层及源 PNG 的字节一致性 |
-| 测试手册、TODO 与 Bug 索引 | 记录右侧窗口标记及现场验收缺口 |
+| `Sources/RemoteMic/AppIconController.swift` | 切换 Logo 时同步所有窗口的 `miniwindowImage`，并刷新 Dock tile |
+| `Sources/RemoteMic/RemoteMicApp.swift` | 创建设置窗口时立即设置当前 Logo，覆盖首次最小化路径 |
+| `Tests/RemoteMicTests/AppIconControllerTests.swift` | 验证多个可最小化窗口都收到当前 Logo |
+| `Bugs/2026-10-10-intel-dock-rounded-app-icon.html` | 记录运行时根因、静态资源边界和验证结果 |
 
-Apple Silicon 静态 ICNS 保持原字节。
-历史白底反馈使全架构透明 ICNS 方案存在回归风险。
-本次只修改 Intel 静态资源。
-
-已核对固定私有提交 `fe178e23` 的 Logo 组件。
-会员、登录和支付页面使用 `MembershipAppIcon`。
-该组件读取宿主的 `applicationIconImage`，并监听变化。
-它复制图像快照，保持原图比例。
-
-宿主图像缺失时，仍使用私有 Bundle 的旧 PNG 回退。
-这些代码证据不能替代私有页面的实际外观验收。
-本次没有修改私有组件或增加重复图标设置。
-实验程序保存在仓库外，没有加入版本控制。
+当前主线的 Intel 静态 ICNS 已使用公开圆角 Logo。
+本次不改已签名 App 包内的静态资源，也不把用户运行时选择写回 App 包。
+这样不会破坏代码签名和公证结果。
 ## 验证与合入条件
 
-- 基线图层透明角断言失败。
-- 候选 `BuildSigningTests`：27 项通过。
-- 完整测试：840 项、66 个套件通过。
-- `scripts/test.sh`：48 项通过。
-- 公开双架构 Release 构建和 App 校验通过。
-- Intel 十档 ICNS 图层透明角及运行时 PNG 字节通过。
-- Apple Silicon 静态 ICNS 与主线原字节一致。
-- 治理检查和 `git diff --check` 通过。
-- PR #651 原候选提交的全部必需 CI 通过。
+- `swift test --disable-keychain`：869 项、68 个套件通过。
+- 新增 `selectedIconIsUsedForMiniaturizedWindows` 测试通过。
+- `BuildSigningTests` 继续验证 Intel 静态 ICNS 的十档图层和透明四角。
+- `git diff --check` 通过。
+- 需要用新构建的 Intel 包完成真实验收：Finder、Launchpad、Dock 左侧应用图标、Dock 右侧窗口缩略图、关闭重开和重启。
 
-### build 249 打包阻挡
+### 现场验收边界
 
-2026-10-13 在独立持久 worktree 准备 build 249。
-原生打包输入为 `741f07b2189d3e4a70e3855fb3e97657881ea0c4`。
-相对候选，只有 Build 号发生变化。
-固定私有构件的完整摘要校验及 48 项自检通过。
+应用程序目录的图标属于静态包资源。
+它只会在重新打包、签名和安装后更新。
+切换设置中的 Logo 只影响运行时 Dock、应用切换器、设置窗口和最小化窗口缩略图。
 
-Intel 生产集成在编译阶段失败。
-宿主调用 `openCommonPhrasesPreview`。
-固定私有提交 `fe178e23` 没有该接口。
-因此尚未进入签名、公证，也没有可安装候选包。
-
-原始日志和输入来源保留在本地证据目录。
-这个依赖问题不属于 Logo 资源修复。
-现有 PR #649 已更新依赖，但当前仍未合入。
-本次没有替换固定依赖或并入该 PR 的其他业务改动。
-
-### Intel 现场验收
-
-用户于 2026-10-13 明确要求：
-
-&gt; 先合入，待我打包后发给别人才能测试
-
-按此安排，必需 CI 通过后先合入源码。
-Intel 外观验收由用户打包后安排。
-这项安排不等于现场验收通过。
-
-取得签名、公证候选后，在原 Intel Mac 验收。
-记录 macOS 版本、App 版本和 Build。
-分别检查左侧应用图标和右侧窗口缩略图的小 Logo。
-测试最小化、恢复、关闭重开、退出重启和覆盖安装。
-
-检查 Finder、Launchpad 的白底和通用文件图标回归。
-检查旧设置、窗口内容和正常导航。
-保留实际截图及安装包来源。
-
-资源测试和 CI 不能证明 Intel 实际外观正确。
-原始用例及白底基线通过后，才能确认现场修复。
-当前没有可供用户安装的候选包。</textarea>
+新 Intel 包必须使用 `RELEASE_VARIANT=intel`，并核对包内 `Contents/Resources/AppIcon.icns` 与 `Resources/AppIcon-intel.icns` 的摘要一致。
+现有 build 248 不包含当前 Intel 静态资源，不能用于验收本次修复。</textarea>
 <script>
 (() => {
   const root = document.documentElement;
