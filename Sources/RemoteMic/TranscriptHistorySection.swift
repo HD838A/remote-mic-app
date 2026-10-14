@@ -97,6 +97,7 @@ enum TranscriptHistoryPresentationPolicy {
 
 private enum TranscriptDeletionRequest: Identifiable {
     case record(TranscriptRecord)
+    case entry(TranscriptRecord, recording: RecordingAssetManifest)
     case recording(RecordingAssetManifest)
     case application(key: String, name: String)
     case all
@@ -104,6 +105,7 @@ private enum TranscriptDeletionRequest: Identifiable {
     var id: String {
         switch self {
         case let .record(record): return "record-\(record.id.uuidString)"
+        case let .entry(record, _): return "entry-\(record.id.uuidString)"
         case let .recording(asset): return "recording-\(asset.id.uuidString)"
         case let .application(key, _): return "application-\(key)"
         case .all: return "all"
@@ -144,9 +146,12 @@ struct TranscriptHistorySection: View {
                 }
                 return TranscriptApplicationSummary(
                     id: key,
-                    name: records.first?.applicationName.nilIfBlank
-                        ?? assets.first?.applicationName.flatMap { $0.nilIfBlank }
-                        ?? localization.text("statistics.transcripts.unknown_application"),
+                    name: applicationDisplayName(
+                        name: records.first?.applicationName.nilIfBlank
+                            ?? assets.first?.applicationName.flatMap { $0.nilIfBlank },
+                        bundleIdentifier: records.first?.bundleIdentifier
+                            ?? assets.first?.bundleIdentifier
+                    ),
                     bundleIdentifier: records.first?.bundleIdentifier
                         ?? assets.first?.bundleIdentifier
                         ?? "",
@@ -583,8 +588,10 @@ struct TranscriptHistorySection: View {
                         .frame(width: 54, alignment: .leading)
                     HStack(spacing: 8) {
                         applicationIcon(bundleIdentifier: asset.bundleIdentifier ?? "", size: 24)
-                        Text(asset.applicationName.flatMap { $0.nilIfBlank }
-                            ?? localization.text("statistics.transcripts.unknown_application"))
+                        Text(applicationDisplayName(
+                            name: asset.applicationName.flatMap { $0.nilIfBlank },
+                            bundleIdentifier: asset.bundleIdentifier
+                        ))
                             .font(.system(size: 12, weight: .medium))
                             .lineLimit(1)
                     }
@@ -597,13 +604,10 @@ struct TranscriptHistorySection: View {
                     .font(.system(size: 13))
                     .foregroundStyle(.secondary)
                     Spacer(minLength: 8)
-                    Button {
-                        model.playRecording(asset)
-                    } label: {
-                        Image(systemName: "play.fill")
+                    recordingPlaybackButton(asset)
+                    if model.recordingPlaybackAssetID == asset.id {
+                        recordingStopButton(asset)
                     }
-                    .buttonStyle(.borderless)
-                    .help(localization.text("statistics.transcripts.recording_play"))
                     Button { model.exportRecording(asset) } label: {
                         Image(systemName: "square.and.arrow.up")
                     }
@@ -646,6 +650,24 @@ struct TranscriptHistorySection: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+    }
+
+    private func applicationDisplayName(name: String?, bundleIdentifier: String?) -> String {
+        if let name = name?.nilIfBlank {
+            return name
+        }
+        if let bundleIdentifier = bundleIdentifier?.nilIfBlank,
+           let applicationURL = NSWorkspace.shared.urlForApplication(
+               withBundleIdentifier: bundleIdentifier
+           ),
+           let bundle = Bundle(url: applicationURL),
+           let displayName = (
+               bundle.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String
+           )?.nilIfBlank
+                ?? (bundle.object(forInfoDictionaryKey: "CFBundleName") as? String)?.nilIfBlank {
+            return displayName
+        }
+        return localization.text("statistics.transcripts.unknown_application")
     }
 
     private func applicationIcon(
@@ -700,7 +722,8 @@ struct TranscriptHistorySection: View {
     }
 
     private func transcriptRow(_ record: TranscriptRecord) -> some View {
-        HStack(alignment: .top, spacing: 12) {
+        let linkedAsset = recordingAssetsBySessionID[record.sessionID]
+        return HStack(alignment: .top, spacing: 12) {
             Text(timeText(record))
                 .font(.system(size: 12, design: .rounded))
                 .foregroundStyle(.secondary)
@@ -709,8 +732,10 @@ struct TranscriptHistorySection: View {
 
             HStack(spacing: 8) {
                 applicationIcon(bundleIdentifier: record.bundleIdentifier, size: 24)
-                Text(record.applicationName.nilIfBlank
-                    ?? localization.text("statistics.transcripts.unknown_application"))
+                Text(applicationDisplayName(
+                    name: record.applicationName.nilIfBlank,
+                    bundleIdentifier: record.bundleIdentifier
+                ))
                     .font(.system(size: 12, weight: .medium))
                     .lineLimit(1)
             }
@@ -737,34 +762,62 @@ struct TranscriptHistorySection: View {
             .help(localization.text("statistics.transcripts.copy"))
 
             Button(role: .destructive) {
-                deletionRequest = .record(record)
+                if let linkedAsset {
+                    deletionRequest = .entry(record, recording: linkedAsset)
+                } else {
+                    deletionRequest = .record(record)
+                }
             } label: {
                 Image(systemName: "trash")
             }
             .buttonStyle(.borderless)
-            .help(localization.text("statistics.transcripts.delete_record"))
+            .help(localization.text(
+                linkedAsset == nil
+                    ? "statistics.transcripts.delete_record"
+                    : "statistics.transcripts.delete_entry"
+            ))
 
-            if let asset = recordingAssetsBySessionID[record.sessionID] {
-                Button { model.playRecording(asset) } label: {
-                    Image(systemName: "play.fill")
-                }
-                .buttonStyle(.borderless)
-                .help(localization.text("statistics.transcripts.recording_play"))
+            if let asset = linkedAsset {
+                recordingPlaybackButton(asset)
                 Button { model.exportRecording(asset) } label: {
                     Image(systemName: "waveform.and.arrow.up")
                 }
                 .buttonStyle(.borderless)
                 .help(localization.text("statistics.transcripts.recording_export"))
-                Button(role: .destructive) {
-                    deletionRequest = .recording(asset)
-                } label: {
-                    Image(systemName: "waveform.badge.minus")
+                if model.recordingPlaybackAssetID == asset.id {
+                    recordingStopButton(asset)
                 }
-                .buttonStyle(.borderless)
-                .help(localization.text("statistics.transcripts.recording_delete"))
             }
         }
         .padding(.vertical, 9)
+    }
+
+    private func recordingPlaybackButton(_ asset: RecordingAssetManifest) -> some View {
+        Button {
+            model.playRecording(asset)
+        } label: {
+            Image(systemName: model.recordingPlaybackAssetID == asset.id &&
+                model.isRecordingPlaybackPlaying ? "pause.fill" : "play.fill")
+        }
+        .buttonStyle(.borderless)
+        .help(localization.text(
+            model.recordingPlaybackAssetID == asset.id
+                ? (model.isRecordingPlaybackPlaying
+                    ? "statistics.transcripts.recording_pause"
+                    : "statistics.transcripts.recording_resume")
+                : "statistics.transcripts.recording_play"
+        ))
+    }
+
+    private func recordingStopButton(_ asset: RecordingAssetManifest) -> some View {
+        Button {
+            model.stopRecordingPlayback()
+        } label: {
+            Image(systemName: "stop.fill")
+        }
+        .buttonStyle(.borderless)
+        .help(localization.text("statistics.transcripts.recording_stop"))
+        .accessibilityLabel(localization.text("statistics.transcripts.recording_stop"))
     }
 
     private func normalizeSelection() {
@@ -859,6 +912,9 @@ struct TranscriptHistorySection: View {
         case .record:
             titleKey = "statistics.transcripts.delete_record_confirm.title"
             message = localization.text("statistics.transcripts.delete_record_confirm.message")
+        case .entry:
+            titleKey = "statistics.transcripts.delete_entry_confirm.title"
+            message = localization.text("statistics.transcripts.delete_entry_confirm.message")
         case .recording:
             titleKey = "statistics.transcripts.recording_delete_confirm.title"
             message = localization.text("statistics.transcripts.recording_delete_confirm.message")
@@ -887,6 +943,8 @@ struct TranscriptHistorySection: View {
         switch request {
         case let .record(record):
             model.deleteTranscriptRecord(record)
+        case let .entry(record, recording):
+            model.deleteTranscriptRecordAndRecording(record, recording: recording)
         case let .recording(asset):
             model.deleteRecording(asset)
         case let .application(key, _):

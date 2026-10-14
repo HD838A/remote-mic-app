@@ -971,6 +971,9 @@
 "statistics.transcripts.recording_description" = "Keep a local AAC recording of each voice session and link it to Reflections.";
 "statistics.transcripts.recording_duration" = "%d sec";
 "statistics.transcripts.recording_play" = "Play recording";
+"statistics.transcripts.recording_pause" = "Pause playback";
+"statistics.transcripts.recording_resume" = "Resume playback";
+"statistics.transcripts.recording_stop" = "Stop playback";
 "statistics.transcripts.recording_playback_error.missing" = "This recording file could not be found. It may have been moved or deleted.";
 "statistics.transcripts.recording_playback_error.invalid" = "This recording cannot be played because it may be damaged or unsupported.";
 "statistics.transcripts.recording_playback_error.unavailable" = "This recording could not be played right now. Please try again later.";
@@ -993,6 +996,9 @@
 "statistics.transcripts.delete_all" = "Delete All";
 "statistics.transcripts.delete_record_confirm.title" = "Delete this voice entry?";
 "statistics.transcripts.delete_record_confirm.message" = "The entry will be moved to the Trash. Text already inserted into the target app is not affected.";
+"statistics.transcripts.delete_entry" = "Delete entry and recording";
+"statistics.transcripts.delete_entry_confirm.title" = "Delete this voice entry and recording?";
+"statistics.transcripts.delete_entry_confirm.message" = "The text entry and linked recording will be moved to the Trash. Text already inserted into the target app is not affected.";
 "statistics.transcripts.delete_application_confirm.title" = "Delete all history for this app?";
 "statistics.transcripts.delete_application_confirm.message" = "All voice history for “%@” will be moved to the Trash.";
 "statistics.transcripts.delete_all_confirm.title" = "Delete all voice history?";
