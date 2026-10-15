@@ -85,6 +85,19 @@ let unifiedButtonConfigurationAvailable = privateArtifactsAvailable || (combinat
         .appendingPathComponent("Sources/SayAllMacroRemoteMic/UnifiedButtonConfiguration.swift").path)
 } ?? false)
 let macroCapabilitiesAvailable = sourceMacroCapabilitiesAvailable || privateArtifactsAvailable
+let sourceMacroInputFocusAvailable = combinationActionsPackagePath.map {
+    FileManager.default.fileExists(atPath: URL(fileURLWithPath: $0)
+        .appendingPathComponent("Sources/SayAllMacroRemoteMic/RemoteMicInputFocuser.swift").path)
+} ?? false
+let artifactMacroInputFocusAvailable = privateArtifactPackagePath.map { path in
+    ["arm64", "x86_64"].allSatisfy { architecture in
+        let interface = URL(fileURLWithPath: path)
+            .appendingPathComponent("Artifacts/SayAllMacroRemoteMic.xcframework/macos-arm64_x86_64/SayAllMacroRemoteMic.framework/Modules/SayAllMacroRemoteMic.swiftmodule/\(architecture)-apple-macos.swiftinterface")
+        return (try? String(contentsOf: interface, encoding: .utf8))?
+            .contains("public typealias RemoteMicInputFocuser =") == true
+    }
+} ?? false
+let macroInputFocusAvailable = sourceMacroInputFocusAvailable || artifactMacroInputFocusAvailable
 let buttonProfilesTestAccessEnabled = ProcessInfo.processInfo.environment[
     "SAYALL_TEST_BUTTON_PROFILES_FREE"
 ] == "1"
@@ -113,6 +126,9 @@ if macRemoteEnabled {
 }
 if macroCapabilitiesAvailable {
     remoteMicSwiftSettings.append(.define("SAYALL_MACRO_REMOTE_CAPABILITIES"))
+}
+if macroInputFocusAvailable {
+    remoteMicSwiftSettings.append(.define("SAYALL_MACRO_INPUT_FOCUS"))
 }
 if buttonProfilesTestAccessEnabled {
     remoteMicSwiftSettings.append(.define("SAYALL_TEST_BUTTON_PROFILES_FREE"))
