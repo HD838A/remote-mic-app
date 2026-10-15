@@ -40,17 +40,34 @@ final class AppLogger: PublicDiagnosticEventSink {
         subsystem: Bundle.main.bundleIdentifier ?? "SayAll",
         category: "AppLogger"
     )
-    private static let defaultMaximumFileSize: UInt64 = 10 * 1_024 * 1_024
+    private static let defaultMaximumFileSize: UInt64 = 2 * 1_024 * 1_024
     private static let maximumPublicEvents = 256
 
     private let queue = DispatchQueue(label: "RemoteMic.logger")
+    private let queueKey = DispatchSpecificKey<UInt8>()
     private let formatter: ISO8601DateFormatter
     private let metadata: Metadata
     private let maximumFileSize: UInt64
     private let fileManager: FileManager
     private let now: () -> Date
     private let reportFailure: (String) -> Void
-    private let sessionID: Data
+    private var sessionID: Data
+    private var activeLogURL: URL
+    private var activeDescriptor: Int32 = -1
+    private var segment = 0
+    private var headerSize: UInt64 = 0
+    private var needsFreshSegment = false
+    private let publicKeyDataProvider: () -> Data?
+    private let maximumFileCount: Int
+    private let maximumDirectorySize: UInt64
+    private let retentionInterval: TimeInterval
+    private let retirementHandler: RetirementHandler
+    private var lastMessage: String?
+    private var repeatCount = 0
+    private var firstRepeatDate: Date?
+    private var lastRepeatDate: Date?
+    private var pendingWriteFailures = 0
+    private var retentionSummary: String?
     private var fileKey: SymmetricKey?
     private var nextSequence: UInt64 = 0
     private var publicEvents: [PublicDiagnosticEvent] = []
@@ -84,9 +101,11 @@ final class AppLogger: PublicDiagnosticEventSink {
         logURL: URL,
         metadata: Metadata = .current(),
         maximumFileSize: UInt64 = AppLogger.defaultMaximumFileSize,
-        archiveCount _: Int = 0,
+        archiveCount: Int = 15,
         fileManager: FileManager = .default,
-        retirementHandler _: RetirementHandler? = nil,
+        retirementHandler: RetirementHandler? = nil,
+        maximumDirectorySize: UInt64 = 32 * 1_024 * 1_024,
+        retentionInterval: TimeInterval = 7 * 24 * 60 * 60,
         now: @escaping () -> Date = Date.init,
         reportFailure: ((String) -> Void)? = nil,
         publicKeyDataProvider: @escaping () -> Data? = {
@@ -95,7 +114,16 @@ final class AppLogger: PublicDiagnosticEventSink {
         publicEventStore: PublicDiagnosticEventStore? = nil,
         isEnabled: Bool = true
     ) {
+        queue.setSpecific(key: queueKey, value: 1)
         self.logURL = logURL
+        self.activeLogURL = logURL
+        self.publicKeyDataProvider = publicKeyDataProvider
+        self.maximumFileCount = max(1, archiveCount + 1)
+        self.maximumDirectorySize = max(maximumFileSize, maximumDirectorySize)
+        self.retentionInterval = max(1, retentionInterval)
+        self.retirementHandler = retirementHandler ?? { url in
+            _ = try fileManager.trashItem(at: url, resultingItemURL: nil)
+        }
         self.isEnabled = isEnabled
         self.metadata = Metadata(
             processID: metadata.processID,
@@ -128,20 +156,14 @@ final class AppLogger: PublicDiagnosticEventSink {
                 ofItemAtPath: logDirectoryURL.path
             )
 
-            guard let publicKeyData = publicKeyDataProvider() else {
+            guard publicKeyDataProvider() != nil else {
                 diagnose("encryption_public_key_missing")
                 return
             }
-            let session = try DiagnosticLogEnvelope.makeSession(
-                publicKeyData: publicKeyData,
-                sessionID: sessionID
-            )
-            try session.header.write(to: logURL, options: .atomic)
-            try fileManager.setAttributes(
-                [.posixPermissions: 0o600],
-                ofItemAtPath: logURL.path
-            )
-            self.fileKey = session.fileKey
+            try withExclusiveLogLock {
+                try createSegment()
+                applyRetention()
+            }
         } catch {
             diagnose("session_file_create_failed", error: error)
         }
@@ -151,7 +173,21 @@ final class AppLogger: PublicDiagnosticEventSink {
         guard isEnabled else { return }
         queue.async { [weak self] in
             guard let self else { return }
-            self.appendRecord(message: message, date: self.now())
+            let date = self.now()
+            let normalized = Self.singleLine(message)
+            if self.lastMessage == normalized && Self.isCoalescibleState(normalized) {
+                self.repeatCount += 1
+                self.firstRepeatDate = self.firstRepeatDate ?? date
+                self.lastRepeatDate = date
+                // Emit a bounded heartbeat even if this state never changes.
+                if self.repeatCount >= 100 || date.timeIntervalSince(self.firstRepeatDate ?? date) >= 30 {
+                    self.flushRepeats()
+                }
+                return
+            }
+            self.flushRepeats()
+            self.lastMessage = normalized
+            self.appendRecord(message: normalized, date: date)
         }
     }
 
@@ -166,6 +202,8 @@ final class AppLogger: PublicDiagnosticEventSink {
             .map { Self.singleLine(String($0)) }
         queue.async { [weak self] in
             guard let self else { return }
+            self.flushRepeats()
+            self.lastMessage = nil
             let eventDate = self.now()
             self.appendRecord(message: "\(normalizedEvent) BEGIN", date: eventDate)
             for line in lines {
@@ -184,6 +222,8 @@ final class AppLogger: PublicDiagnosticEventSink {
         guard isEnabled else { return }
         queue.async { [weak self] in
             guard let self else { return }
+            self.flushRepeats()
+            self.lastMessage = nil
             if let publicEventStore = self.publicEventStore, event.isApprovedForUpload {
                 do { try publicEventStore.append(event) }
                 catch {
@@ -228,13 +268,37 @@ final class AppLogger: PublicDiagnosticEventSink {
 
     func flush() {
         guard isEnabled else { return }
-        queue.sync {}
+        queue.sync { flushRepeats() }
+    }
+
+    deinit {
+        if DispatchQueue.getSpecific(key: queueKey) != nil { flushRepeats() }
+        else { queue.sync { flushRepeats() } }
+        if activeDescriptor >= 0 { _ = Darwin.close(activeDescriptor) }
+    }
+
+    private static func isCoalescibleState(_ message: String) -> Bool {
+        // Only stable observations, never requests, errors, or terminal results.
+        ["HID PERMISSIONS ", "HID FILTER ", "AUDIO HEALTH ready "].contains { message.hasPrefix($0) }
+    }
+
+    private func flushRepeats() {
+        guard repeatCount > 0, let message = lastMessage,
+              let first = firstRepeatDate, let last = lastRepeatDate else { return }
+        appendRecord(message: "LOG REPEAT repeat_count=\(repeatCount) " +
+            "first_at_ms=\(Int64(first.timeIntervalSince1970 * 1000)) " +
+            "last_at_ms=\(Int64(last.timeIntervalSince1970 * 1000)) state=\(message)", date: last)
+        repeatCount = 0
+        firstRepeatDate = nil
+        lastRepeatDate = nil
     }
 
     /// Test-only style entry point that still writes encrypted data.
     func writeSynchronously(_ message: String, at date: Date) {
         guard isEnabled else { return }
         queue.sync {
+            flushRepeats()
+            lastMessage = nil
             appendRecord(message: message, date: date)
         }
     }
@@ -285,46 +349,140 @@ final class AppLogger: PublicDiagnosticEventSink {
 
     private func appendRecord(message: String, date: Date) {
         do {
-            guard let fileKey else { throw DiagnosticLogEnvelope.Error.invalidRecord }
-            let sequence = nextSequence
-            let line = "\(formatter.string(from: date)) pid=\(metadata.processID) " +
-                "ver=\(metadata.version) build=\(metadata.build) seq=\(sequence) " +
-                "\(Self.singleLine(message))\n"
-            let sealed = try AES.GCM.seal(
-                Data(line.utf8),
-                using: fileKey,
-                authenticating: DiagnosticLogEnvelope.associatedData(
-                    sessionID: sessionID,
-                    sequence: sequence
-                )
-            )
-            guard let combined = sealed.combined,
-                  combined.count <= Int(UInt32.max)
-            else { throw DiagnosticLogEnvelope.Error.invalidRecord }
-
-            var length = UInt32(combined.count).bigEndian
-            var record = withUnsafeBytes(of: &length) { Data($0) }
-            record.append(combined)
-            let appended = try withExclusiveLogLock {
-                let existingSize = fileSize(at: logURL)
-                guard existingSize + UInt64(record.count) <= maximumFileSize else {
-                    reportFailure("encrypted_log_size_limit_reached")
-                    return false
+            // Size includes framing and AES-GCM overhead. Reject one oversized event,
+            // rather than creating empty segments or silently breaking the size budget.
+            func encryptedRecord() throws -> Data {
+                guard let fileKey else { throw DiagnosticLogEnvelope.Error.invalidRecord }
+                let line = "\(formatter.string(from: date)) pid=\(metadata.processID) " +
+                    "ver=\(metadata.version) build=\(metadata.build) seq=\(nextSequence) " +
+                    "\(Self.singleLine(message))\n"
+                let sealed = try AES.GCM.seal(Data(line.utf8), using: fileKey,
+                    authenticating: DiagnosticLogEnvelope.associatedData(sessionID: sessionID, sequence: nextSequence))
+                guard let combined = sealed.combined, combined.count <= Int(UInt32.max)
+                else { throw DiagnosticLogEnvelope.Error.invalidRecord }
+                var length = UInt32(combined.count).bigEndian
+                var record = withUnsafeBytes(of: &length) { Data($0) }
+                record.append(combined)
+                return record
+            }
+            var appended = false
+            try withExclusiveLogLock {
+                if needsFreshSegment { try rotateSegment() }
+                var record = try encryptedRecord()
+                guard UInt64(record.count) + headerSize <= maximumFileSize else {
+                    pendingWriteFailures += 1
+                    reportFailure("encrypted_log_record_too_large")
+                    return
+                }
+                if fileSize(at: activeLogURL) + UInt64(record.count) > maximumFileSize {
+                    try rotateSegment()
+                    record = try encryptedRecord()
                 }
                 try appendAtomically(record)
-                return true
-            }
-            if appended {
                 nextSequence += 1
+                appended = true
+            }
+            guard appended else { return }
+            if let summary = retentionSummary {
+                retentionSummary = nil
+                appendRecord(message: summary, date: date)
+            }
+            if pendingWriteFailures > 0 {
+                let count = pendingWriteFailures
+                pendingWriteFailures = 0
+                appendRecord(message: "LOG GAP phase=recovered lost_record_count=\(count)", date: date)
             }
         } catch {
+            pendingWriteFailures += 1
+            needsFreshSegment = fileKey != nil
             diagnose("encrypted_log_write_failed", error: error)
+        }
+    }
+
+    private func createSegment() throws {
+        guard let publicKeyData = publicKeyDataProvider() else {
+            throw DiagnosticLogEnvelope.Error.invalidPublicKey
+        }
+        let session = try DiagnosticLogEnvelope.makeSession(publicKeyData: publicKeyData)
+        try session.header.write(to: activeLogURL, options: .withoutOverwriting)
+        try fileManager.setAttributes([.posixPermissions: 0o600], ofItemAtPath: activeLogURL.path)
+        let descriptor = Darwin.open(activeLogURL.path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW)
+        guard descriptor >= 0 else { throw POSIXError(.EIO) }
+        guard flock(descriptor, LOCK_SH | LOCK_NB) == 0 else {
+            _ = Darwin.close(descriptor)
+            throw POSIXError(.EIO)
+        }
+        if activeDescriptor >= 0 { _ = Darwin.close(activeDescriptor) }
+        activeDescriptor = descriptor
+        headerSize = UInt64(session.header.count)
+        sessionID = session.sessionID
+        fileKey = session.fileKey
+        nextSequence = 0
+    }
+
+    private func rotateSegment() throws {
+        let previousURL = activeLogURL
+        segment += 1
+        activeLogURL = logURL.deletingPathExtension().appendingPathExtension("part-\(segment).rmlog")
+        do { try createSegment() }
+        catch { activeLogURL = previousURL; throw error }
+        needsFreshSegment = false
+        applyRetention()
+    }
+
+    private func applyRetention() {
+        do { try retireOldSegments() }
+        catch {
+            diagnose("encrypted_log_retirement_failed", error: error)
+            retentionSummary = "LOG RETENTION phase=failed \(Self.errorFields(error))"
+        }
+    }
+
+    private func retireOldSegments() throws {
+        let urls = try fileManager.contentsOfDirectory(at: logDirectoryURL,
+            includingPropertiesForKeys: [.isRegularFileKey, .isSymbolicLinkKey, .contentModificationDateKey, .fileSizeKey])
+        var files: [(url: URL, date: Date, size: UInt64)] = []
+        for url in urls {
+            guard url.lastPathComponent.range(of:
+                #"^sayall\.app-\d{4}-\d{2}-\d{2}-session-[A-Fa-f0-9]{8}(\.part-\d+)?\.rmlog$"#,
+                options: .regularExpression) != nil else { continue }
+            let values = try url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey,
+                .contentModificationDateKey, .fileSizeKey])
+            guard values.isRegularFile == true, values.isSymbolicLink != true else { continue }
+            files.append((url, values.contentModificationDate ?? now(), UInt64(max(0, values.fileSize ?? 0))))
+        }
+        files.sort { $0.date < $1.date }
+        var total = files.reduce(UInt64(0)) { $0 + $1.size }
+        let target = maximumDirectorySize > maximumFileSize ? maximumDirectorySize - maximumFileSize : maximumDirectorySize
+        let cutoff = now().addingTimeInterval(-retentionInterval)
+        var count = 0
+        var remainingFileCount = files.count
+        var bytes: UInt64 = 0
+        var blocked = 0
+        for file in files where file.url != activeLogURL && (file.date < cutoff || total > target || remainingFileCount > maximumFileCount) {
+            let descriptor = Darwin.open(file.url.path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW)
+            guard descriptor >= 0 else { blocked += 1; continue }
+            defer { _ = Darwin.close(descriptor) }
+            // A live process keeps a shared lock. Never retire its active segment.
+            guard flock(descriptor, LOCK_EX | LOCK_NB) == 0 else { blocked += 1; continue }
+            do {
+                try retirementHandler(file.url)
+                count += 1
+                remainingFileCount -= 1
+                bytes += file.size
+                total -= file.size
+            } catch { blocked += 1; diagnose("encrypted_log_retirement_failed", error: error) }
+        }
+        if count > 0 || blocked > 0 {
+            // Do not recurse through appendRecord while holding the directory lock.
+            reportFailure("encrypted_log_retention retired_count=\(count) retired_bytes=\(bytes) blocked_count=\(blocked)")
+            retentionSummary = "LOG RETENTION retired_count=\(count) retired_bytes=\(bytes) blocked_count=\(blocked)"
         }
     }
 
     private func appendAtomically(_ data: Data) throws {
         let descriptor = Darwin.open(
-            logURL.path,
+            activeLogURL.path,
             O_CREAT | O_WRONLY | O_APPEND | O_CLOEXEC | O_NOFOLLOW,
             mode_t(S_IRUSR | S_IWUSR)
         )

@@ -261,7 +261,13 @@ final class MembershipFeatureIntegration: ObservableObject, @unchecked Sendable 
     private func configure(_ configuration: MembershipFeatureConfiguration) {
         guard adapter == nil else { return }
         let adapter = MembershipHostAdapter(appVersion: configuration.appVersion,
-            localeIdentifier: localeIdentifier)
+            localeIdentifier: localeIdentifier,
+            localDiagnosticRecorder: { record in
+                guard let safeRecord = PrivateDiagnosticUploadRecord(recordID: record.recordID,
+                    occurredAt: record.occurredAt, category: record.category, fields: record.fields)
+                else { return }
+                AppLogger.shared.write(safeRecord.canonicalLine)
+            })
         self.adapter = adapter
         adapter.$isFeatureVisible.removeDuplicates().receive(on: RunLoop.main)
             .sink { [weak self] in self?.isFeatureVisible = $0 }.store(in: &subscriptions)
@@ -319,11 +325,14 @@ extension MembershipFeatureIntegration: PrivateDiagnosticUploadProvider {
         #endif
     }
 
-    func markPrivateDiagnosticRecordsUploaded(_ recordIDs: Set<String>) async {
+    func markPrivateDiagnosticRecordsUploaded(_ recordIDs: Set<String>) async -> Bool {
         #if SAYALL_MEMBERSHIP_ENABLED && canImport(SayAllMembershipHostAdapter)
-        await Task { @MainActor [weak self] in
-            await self?.adapter?.markPrivateDiagnosticRecordsUploaded(recordIDs)
+        return await Task { @MainActor [weak self] in
+            guard let adapter = self?.adapter else { return false }
+            return await adapter.markPrivateDiagnosticRecordsUploaded(recordIDs)
         }.value
+        #else
+        return false
         #endif
     }
 }
