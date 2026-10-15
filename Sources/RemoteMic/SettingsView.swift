@@ -476,7 +476,7 @@ struct SettingsView: View {
     private let minimumContentSize: CGSize
     private let initialShortcutPickerShowsKeyboard: Bool
 
-    private let supplementalSettings = SupplementalSettingsIntegration()
+    @State private var supplementalSettings = SupplementalSettingsIntegration()
     @State private var selectedSection: SettingsSection
     @State private var selectedRemoteButton: RemoteButton = .ok
     @State private var selectedSiriRemoteControlID = "select"
