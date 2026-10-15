@@ -98,6 +98,8 @@ After you enable Revisit, SayAll keeps only final text entered through SayAll an
 
 ## Requirements
 
+Common Phrases and Apple Siri Remote support require membership. For Siri Remote, install its component through the PKG first. Then enable it in the app with valid membership access. Installing the component does not enable it automatically.
+
 - Apple Silicon Mac with macOS 14 or later, or Intel Mac with macOS 13 or later
 - Xiaomi Bluetooth Remote 2 or 2 Pro
 - For voice input, install the compatible microphone included with the installer, or use an existing loopback device such as BlackHole 2ch.
