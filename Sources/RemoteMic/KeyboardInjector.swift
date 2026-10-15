@@ -649,10 +649,38 @@ enum KeyboardInjector {
 
     @discardableResult
     static func focusFrontmostComposer(completion: @escaping (Bool) -> Void) -> Bool {
+        focusFrontmostComposer(requestGate: frontmostFocusRequests,
+                              requestID: frontmostFocusRequests.begin(), completion: completion)
+    }
+
+    static func focusFrontmostComposerForMacro() async throws -> Bool {
+        let operationID = UUID().uuidString
+        let startedAt = ContinuousClock.now
+        AppLogger.shared.write("MACRO FOCUS operation_id=\(operationID) phase=started result=requested")
+        do {
+            let focused = try await ComposerFocusRequest.perform { gate, requestID, completion in
+                focusFrontmostComposer(requestGate: gate, requestID: requestID, completion: completion)
+            }
+            let elapsed = startedAt.duration(to: .now).components
+            let milliseconds = elapsed.seconds * 1_000 + elapsed.attoseconds / 1_000_000_000_000_000
+            AppLogger.shared.write("MACRO FOCUS operation_id=\(operationID) phase=completed result=\(focused ? "focused" : "not_focused") elapsed_ms=\(milliseconds)")
+            return focused
+        } catch {
+            let reason = error is CancellationError ? "cancelled" : "timed_out"
+            AppLogger.shared.write("MACRO FOCUS operation_id=\(operationID) phase=completed result=\(reason)")
+            throw error
+        }
+    }
+
+    private static func focusFrontmostComposer(
+        requestGate: ApplicationFocusRequestGate,
+        requestID: UInt64,
+        completion: @escaping (Bool) -> Void
+    ) -> Bool {
+        guard requestGate.isCurrent(requestID) else { return false }
         guard isAccessibilityTrusted,
               let application = NSWorkspace.shared.frontmostApplication
         else { return false }
-        let requestID = frontmostFocusRequests.begin()
         if application.bundleIdentifier == PresetApplication.cmux.bundleIdentifier,
            let applicationURL = NSWorkspace.shared.urlForApplication(
                withBundleIdentifier: PresetApplication.cmux.bundleIdentifier
@@ -663,7 +691,7 @@ enum KeyboardInjector {
                 processIdentifier: application.processIdentifier,
                 requestID: requestID,
                 attempt: 0,
-                requestGate: frontmostFocusRequests,
+                requestGate: requestGate,
                 completion: completion
             )
             return true
@@ -672,7 +700,7 @@ enum KeyboardInjector {
             bundleIdentifier: application.bundleIdentifier ?? "unknown",
             processIdentifier: application.processIdentifier,
             requestID: requestID,
-            requestGate: frontmostFocusRequests,
+            requestGate: requestGate,
             attempt: 0,
             completion: completion
         )

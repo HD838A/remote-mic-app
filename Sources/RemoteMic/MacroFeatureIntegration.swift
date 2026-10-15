@@ -49,7 +49,13 @@ final class MacroFeatureIntegration: ObservableObject {
 
     init(localeIdentifier: String = Locale.current.identifier) {
         #if canImport(SayAllMacroRemoteMic)
+        #if SAYALL_MACRO_INPUT_FOCUS
+        feature = SayAllMacroRemoteMicFeature(localeIdentifier: localeIdentifier, inputFocuser: {
+            try await KeyboardInjector.focusFrontmostComposerForMacro()
+        })
+        #else
         feature = SayAllMacroRemoteMicFeature(localeIdentifier: localeIdentifier)
+        #endif
         #endif
 #if canImport(SayAllButtonProfiles)
         buttonProfilesFeature = SayAllButtonProfilesFeature(
