@@ -750,11 +750,6 @@ struct TranscriptHistorySection: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             HStack(spacing: 10) {
-                if let asset = linkedAsset {
-                    recordingPlaybackButton(asset)
-                    recordingStopButton(asset)
-                }
-
                 Button {
                     guard model.copyTranscript(record) else { return }
                     copiedRecordID = record.id
@@ -771,6 +766,9 @@ struct TranscriptHistorySection: View {
                 .help(localization.text("statistics.transcripts.copy"))
 
                 if let asset = linkedAsset {
+                    recordingPlaybackButton(asset)
+                    recordingStopButton(asset)
+
                     Button { model.exportRecording(asset) } label: {
                         Image(systemName: "square.and.arrow.up")
                             .frame(width: 20, height: 24)
