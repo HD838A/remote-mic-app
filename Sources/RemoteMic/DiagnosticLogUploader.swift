@@ -23,6 +23,7 @@ final class DiagnosticLogUploader: @unchecked Sendable {
     private let configurationStateProvider: ConfigurationStateProvider
     private let sender: Sender
     private let queue = DispatchQueue(label: "RemoteMic.diagnosticUpload", qos: .userInitiated)
+    private var uploadInProgress = false
     private weak var privateEventProvider: (any PrivateDiagnosticUploadProvider)?
 
     init(
@@ -60,6 +61,11 @@ final class DiagnosticLogUploader: @unchecked Sendable {
                 DispatchQueue.main.async { completion(result) }
                 return
             }
+            guard !self.uploadInProgress else {
+                DispatchQueue.main.async { completion(.failure(.uploadFailed)) }
+                return
+            }
+            self.uploadInProgress = true
             let approvedPublicEvents = self.approvedPublicEvents()
             let publicEntries = Self.publicEntries(approvedPublicEvents)
             let provider = self.privateEventProvider
@@ -73,23 +79,49 @@ final class DiagnosticLogUploader: @unchecked Sendable {
                     )
                     let entries = publicEntries + privateEntries
                     guard !entries.isEmpty else {
-                        DispatchQueue.main.async { completion(.failure(.noLogs)) }
+                        self.finish(.failure(.noLogs), completion: completion)
                         return
                     }
-                    do {
-                        try self.sender(entries)
-                    } catch {
-                        DispatchQueue.main.async { completion(.failure(.uploadFailed)) }
-                        return
-                    }
-                    self.publicEventAcknowledger(approvedPublicEvents)
-                    let uploadedRecordIDs = Set(approvedPrivateRecords.map(\.recordID))
+                    // Bound each transport call, not the history snapshot. A later
+                    // failed batch leaves exactly that batch and its successors pending.
                     Task {
-                        await provider?.markPrivateDiagnosticRecordsUploaded(uploadedRecordIDs)
-                        DispatchQueue.main.async { completion(.success(entries.count)) }
+                        var sent = 0
+                        for offset in stride(from: 0, to: entries.count, by: 256) {
+                            let end = min(offset + 256, entries.count)
+                            let batch = Array(entries[offset..<end])
+                            do { try self.sender(batch) }
+                            catch {
+                                self.finish(.failure(.uploadFailed), completion: completion)
+                                return
+                            }
+                            let publicStart = min(offset, approvedPublicEvents.count)
+                            let publicEnd = min(end, approvedPublicEvents.count)
+                            self.publicEventAcknowledger(Array(approvedPublicEvents[publicStart..<publicEnd]))
+                            let privateStart = max(0, offset - publicEntries.count)
+                            let privateEnd = max(0, end - publicEntries.count)
+                            if privateEnd > privateStart {
+                                guard await provider?.markPrivateDiagnosticRecordsUploaded(Set(
+                                    approvedPrivateRecords[privateStart..<privateEnd].map(\.recordID))) == true else {
+                                    self.finish(.failure(.uploadFailed), completion: completion)
+                                    return
+                                }
+                            }
+                            sent += batch.count
+                        }
+                        let count = sent
+                        self.finish(approvedPrivateRecords.contains { $0.fields["collection_state"] == "failed" }
+                            ? .failure(.uploadFailed) : .success(count), completion: completion)
                     }
                 }
             }
+        }
+    }
+
+    private func finish(_ result: Result<Int, DiagnosticLogUploadError>,
+        completion: @escaping (Result<Int, DiagnosticLogUploadError>) -> Void) {
+        queue.async {
+            self.uploadInProgress = false
+            DispatchQueue.main.async { completion(result) }
         }
     }
 
@@ -112,9 +144,12 @@ final class DiagnosticLogUploader: @unchecked Sendable {
         guard !entries.isEmpty else { return .failure(.noLogs) }
 
         do {
-            try sender(entries)
+            for offset in stride(from: 0, to: entries.count, by: 256) {
+                try sender(Array(entries[offset..<min(offset + 256, entries.count)]))
+            }
             publicEventAcknowledger(approvedPublicEvents)
-            return .success(entries.count)
+            return privateRecords.contains { $0.fields["collection_state"] == "failed" }
+                ? .failure(.uploadFailed) : .success(entries.count)
         } catch {
             return .failure(.uploadFailed)
         }
@@ -162,7 +197,7 @@ final class DiagnosticLogUploader: @unchecked Sendable {
     ) -> [PrivateDiagnosticUploadRecord] {
         var approved: [PrivateDiagnosticUploadRecord] = []
         var seenRecordIDs = Set<String>()
-        for record in records.prefix(256) {
+        for record in records {
             guard seenRecordIDs.insert(record.recordID).inserted,
                   PrivateDiagnosticUploadRecord.parse(record.canonicalLine) == record
             else { continue }

@@ -113,5 +113,5 @@ struct PrivateDiagnosticUploadRecord: Equatable, Sendable {
 
 protocol PrivateDiagnosticUploadProvider: AnyObject, Sendable {
     func pendingPrivateDiagnosticRecords() async -> [PrivateDiagnosticUploadRecord]
-    func markPrivateDiagnosticRecordsUploaded(_ recordIDs: Set<String>) async
+    func markPrivateDiagnosticRecordsUploaded(_ recordIDs: Set<String>) async -> Bool
 }

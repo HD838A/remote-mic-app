@@ -153,9 +153,97 @@ struct AppLoggerTests {
         harness.logger.flush()
 
         let lines = try harness.decryptLines()
-        #expect(lines.count == 1)
+        #expect(lines.count == 2)
         #expect(lines[0].contains("seq=0 small_record_after_rejection"))
-        #expect(harness.failures.contains("encrypted_log_size_limit_reached"))
+        #expect(lines[1].contains("LOG GAP phase=recovered lost_record_count=1"))
+        #expect(harness.failures.contains("encrypted_log_record_too_large"))
+    }
+
+    @Test func rotatesWithoutLosingRecordsAndEverySegmentDecrypts() throws {
+        let harness = try LoggerHarness(maximumFileSize: 1024)
+        for index in 0..<40 { harness.logger.write("FLOW step=\(index)") }
+        harness.logger.flush()
+        let urls = try harness.segmentURLs()
+        #expect(urls.count > 1)
+        for url in urls { #expect(try Data(contentsOf: url).count <= 1024) }
+        let lines = try harness.decryptAllLines()
+        #expect(lines.count == 40)
+        for index in 0..<40 { #expect(lines.filter { $0.hasSuffix("FLOW step=\(index)\n") }.count == 1) }
+        #expect(harness.failures.isEmpty)
+    }
+
+    @Test func repeatedStateKeepsExactCountAndTypedBoundaryOrder() throws {
+        let harness = try LoggerHarness()
+        for _ in 0..<81 { harness.logger.write("HID FILTER ready=true") }
+        harness.logger.writeSynchronously("FLOW phase=failed", at: Date())
+        harness.logger.flush()
+        let lines = try harness.decryptAllLines()
+        #expect(lines.count == 3)
+        #expect(lines[0].contains("HID FILTER ready=true"))
+        #expect(lines[1].contains("LOG REPEAT repeat_count=80"))
+        #expect(lines[2].contains("FLOW phase=failed"))
+    }
+
+    @Test func retentionMovesOnlyVerifiedInactiveLogsAndReportsBoundary() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let stale = root.appendingPathComponent("sayall.app-2026-01-01-session-ABCDEF01.rmlog")
+        let unrelated = root.appendingPathComponent("unrelated.rmlog")
+        let active = root.appendingPathComponent("sayall.app-2026-01-02-session-ABCDEF02.rmlog")
+        let key = Curve25519.KeyAgreement.PrivateKey().publicKey.rawRepresentation
+        let live = AppLogger(logURL: active, publicKeyDataProvider: { key })
+        live.write("ALIVE"); live.flush()
+        try Data(repeating: 1, count: 1500).write(to: stale)
+        try Data(repeating: 2, count: 1500).write(to: unrelated)
+        let retired = root.appendingPathComponent("recoverable", isDirectory: true)
+        try FileManager.default.createDirectory(at: retired, withIntermediateDirectories: true)
+        let newLog = root.appendingPathComponent("sayall.app-2026-01-03-session-ABCDEF03.rmlog")
+        let logger = AppLogger(logURL: newLog, maximumFileSize: 1024,
+            retirementHandler: { url in try FileManager.default.moveItem(at: url,
+                to: retired.appendingPathComponent(url.lastPathComponent)) },
+            maximumDirectorySize: 1800, publicKeyDataProvider: { key })
+        logger.write("NEW"); logger.flush()
+        #expect(FileManager.default.fileExists(atPath: retired.appendingPathComponent(stale.lastPathComponent).path))
+        #expect(FileManager.default.fileExists(atPath: unrelated.path))
+        #expect(FileManager.default.fileExists(atPath: active.path))
+        live.write("STILL_ALIVE"); live.flush()
+        #expect(try Data(contentsOf: active).count > 118)
+    }
+
+    @Test func failedWriteRecoversInNewDecryptableSegmentAndReportsGap() throws {
+        let harness = try LoggerHarness()
+        let saved = harness.logURL.appendingPathExtension("saved")
+        try FileManager.default.moveItem(at: harness.logURL, to: saved)
+        try FileManager.default.createDirectory(at: harness.logURL, withIntermediateDirectories: false)
+        harness.logger.write("FLOW phase=failed_write")
+        harness.logger.flush()
+        harness.logger.write("FLOW phase=recovered")
+        harness.logger.flush()
+        let newSegment = harness.logURL.deletingPathExtension().appendingPathExtension("part-1.rmlog")
+        let lines = try harness.decryptLines(at: newSegment)
+        #expect(lines.contains { $0.contains("seq=0 FLOW phase=recovered") })
+        #expect(lines.contains { $0.contains("LOG GAP phase=recovered lost_record_count=1") })
+        #expect(harness.failures.contains { $0.contains("encrypted_log_write_failed") })
+    }
+
+    @Test func smallFilesAreAlsoBoundedByFileCount() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let retired = root.appendingPathComponent("recoverable", isDirectory: true)
+        try FileManager.default.createDirectory(at: retired, withIntermediateDirectories: true)
+        for index in 0..<6 {
+            let name = String(format: "sayall.app-2026-10-15-session-%08X.rmlog", index)
+            try Data([1]).write(to: root.appendingPathComponent(name))
+        }
+        let key = Curve25519.KeyAgreement.PrivateKey().publicKey.rawRepresentation
+        let logger = AppLogger(logURL: root.appendingPathComponent("sayall.app-2026-10-15-session-ABCDEF99.rmlog"),
+            archiveCount: 1, retirementHandler: { url in
+                try FileManager.default.moveItem(at: url, to: retired.appendingPathComponent(url.lastPathComponent))
+            }, publicKeyDataProvider: { key })
+        logger.write("START"); logger.flush()
+        let remaining = try FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil)
+            .filter { $0.pathExtension == "rmlog" }
+        #expect(remaining.count == 2)
+        #expect(try FileManager.default.contentsOfDirectory(at: retired, includingPropertiesForKeys: nil).count == 5)
     }
 
     @Test func errorFieldsUseStableDomainAndNumericCode() {
@@ -212,8 +300,17 @@ private final class LoggerHarness {
         )
     }
 
-    func decryptLines() throws -> [String] {
-        let data = try Data(contentsOf: logURL)
+    func segmentURLs() throws -> [URL] {
+        try FileManager.default.contentsOfDirectory(at: logURL.deletingLastPathComponent(),
+            includingPropertiesForKeys: nil).filter { $0.pathExtension == "rmlog" }.sorted { $0.path < $1.path }
+    }
+
+    func decryptAllLines() throws -> [String] {
+        try segmentURLs().flatMap { try decryptLines(at: $0) }
+    }
+
+    func decryptLines(at url: URL? = nil) throws -> [String] {
+        let data = try Data(contentsOf: url ?? logURL)
         var offset = DiagnosticLogEnvelope.magic.count
         #expect(data.starts(with: DiagnosticLogEnvelope.magic))
 

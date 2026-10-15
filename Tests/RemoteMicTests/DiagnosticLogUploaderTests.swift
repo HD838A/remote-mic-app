@@ -300,6 +300,73 @@ struct DiagnosticLogUploaderTests {
         #expect(await provider.uploadedRecordIDs().isEmpty)
     }
 
+    @Test func uploadsMoreThan256RecordsInBoundedBatches() async throws {
+        let records = try (0..<600).map { index in
+            try #require(PrivateDiagnosticUploadRecord(recordID: "pe_" + String(format: "%024d", index),
+                occurredAt: Date(timeIntervalSince1970: 2_000_000_000), category: "PRIVATE_FLOW",
+                fields: ["sequence": String(index), "phase": "completed"]))
+        }
+        let provider = RecordingPrivateDiagnosticProvider(records: records)
+        let batches = DiagnosticBatchBox()
+        let uploader = DiagnosticLogUploader(eventProvider: { [] },
+            configurationStateProvider: { .configured }, sender: { batches.append($0) })
+        uploader.setPrivateEventProvider(provider)
+        let result = await withCheckedContinuation { continuation in
+            uploader.upload { continuation.resume(returning: $0) }
+        }
+        #expect(result == .success(600))
+        #expect(batches.values.map(\.count) == [256, 256, 88])
+        #expect(await provider.uploadedRecordIDs() == Set(records.map(\.recordID)))
+    }
+
+    @Test func secondBatchFailurePreservesUnsentHistoryForRetry() async throws {
+        let records = try (0..<300).map { index in
+            try #require(PrivateDiagnosticUploadRecord(recordID: "pe_" + String(format: "%024d", index),
+                occurredAt: Date(timeIntervalSince1970: 2_000_000_000), category: "PRIVATE_FLOW",
+                fields: ["sequence": String(index), "phase": "completed"]))
+        }
+        let provider = RecordingPrivateDiagnosticProvider(records: records)
+        let batches = DiagnosticBatchBox()
+        let uploader = DiagnosticLogUploader(eventProvider: { [] },
+            configurationStateProvider: { .configured }, sender: { entries in
+                batches.append(entries)
+                if batches.values.count == 2 { throw DiagnosticLogUploadError.uploadFailed }
+            })
+        uploader.setPrivateEventProvider(provider)
+        let first = await withCheckedContinuation { continuation in
+            uploader.upload { continuation.resume(returning: $0) }
+        }
+        #expect(first == .failure(.uploadFailed))
+        #expect(await provider.uploadedRecordIDs() == Set(records.prefix(256).map(\.recordID)))
+        let second = await withCheckedContinuation { continuation in
+            uploader.upload { continuation.resume(returning: $0) }
+        }
+        #expect(second == .success(44))
+        #expect(await provider.uploadedRecordIDs() == Set(records.map(\.recordID)))
+    }
+
+    @Test func acknowledgementFailureIsNotReportedAsSuccessfulUpload() async throws {
+        let record = try #require(Self.privateRecord())
+        let provider = RecordingPrivateDiagnosticProvider(records: [record], acknowledgementSucceeds: false)
+        let uploader = DiagnosticLogUploader(eventProvider: { [] },
+            configurationStateProvider: { .configured }, sender: { _ in })
+        uploader.setPrivateEventProvider(provider)
+        let result = await withCheckedContinuation { continuation in
+            uploader.upload { continuation.resume(returning: $0) }
+        }
+        #expect(result == .failure(.uploadFailed))
+        #expect(await provider.uploadedRecordIDs().isEmpty)
+    }
+
+    @Test func storageFailureReportCannotBeReportedAsCompleteUpload() throws {
+        let record = try #require(PrivateDiagnosticUploadRecord(recordID: "pe_abcdefghijklmnopqrstuv",
+            occurredAt: Date(timeIntervalSince1970: 2_000_000_000), category: "PRIVATE_FLOW",
+            fields: ["phase": "failed", "collection_state": "failed"]))
+        let uploader = DiagnosticLogUploader(eventProvider: { [] },
+            configurationStateProvider: { .configured }, sender: { _ in })
+        #expect(uploader.uploadSynchronously(privateRecords: [record]) == .failure(.uploadFailed))
+    }
+
     private static func environmentEvent() -> PublicDiagnosticEvent? {
         PublicDiagnosticEvent(
             operationID: "abc123",
@@ -349,20 +416,31 @@ private actor RecordingPrivateDiagnosticProvider: PrivateDiagnosticUploadProvide
     private let records: [PrivateDiagnosticUploadRecord]
     private var readCount = 0
     private var uploadedIDs = Set<String>()
+    private let acknowledgementSucceeds: Bool
 
-    init(records: [PrivateDiagnosticUploadRecord]) {
+    init(records: [PrivateDiagnosticUploadRecord], acknowledgementSucceeds: Bool = true) {
         self.records = records
+        self.acknowledgementSucceeds = acknowledgementSucceeds
     }
 
     func pendingPrivateDiagnosticRecords() -> [PrivateDiagnosticUploadRecord] {
         readCount += 1
-        return records
+        return records.filter { !uploadedIDs.contains($0.recordID) }
     }
 
-    func markPrivateDiagnosticRecordsUploaded(_ recordIDs: Set<String>) {
+    func markPrivateDiagnosticRecordsUploaded(_ recordIDs: Set<String>) -> Bool {
+        guard acknowledgementSucceeds else { return false }
         uploadedIDs.formUnion(recordIDs)
+        return true
     }
 
     func pendingReadCount() -> Int { readCount }
     func uploadedRecordIDs() -> Set<String> { uploadedIDs }
+}
+
+private final class DiagnosticBatchBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var batches: [[DiagnosticLogEntry]] = []
+    var values: [[DiagnosticLogEntry]] { lock.lock(); defer { lock.unlock() }; return batches }
+    func append(_ value: [DiagnosticLogEntry]) { lock.lock(); defer { lock.unlock() }; batches.append(value) }
 }
