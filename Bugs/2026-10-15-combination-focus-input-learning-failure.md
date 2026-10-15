@@ -25,11 +25,14 @@
 
 ## 验证
 
-- 私有 Package：`swift test --disable-keychain`，127 项测试通过。
+- 私有组合动作 Package：`swift test --disable-keychain`，128 项中 126 项通过、2 项跳过。
+- 收费按键方案 Package：`swift test --disable-keychain --package-path packages/macos-button-profiles`，80 项通过。
 - 公开宿主：无私有组件 `swift test --disable-keychain`，884 项测试通过。
 - 公开宿主接入当前私有源码：`SAYALL_COMBINATION_ACTIONS_PATH=... swift test --disable-keychain`，892 项测试通过。
 - 本地 `.app` 使用 1020×772 窗口验证中文浅色、中文深色和英文浅色页面。截图保存在本次交付的持久化证据目录。
 - 本地空白输入框 App 验证“打开 App → 聚焦输入框”。执行后 Accessibility 焦点进入文本输入区，组合动作显示成功。
+
+2026-10-16，公开 PR #676 的收费集成 CI 发现旧执行器遗漏 `.focusInput`，编译报错 `switch must be exhaustive`。旧执行器没有宿主聚焦回调，因此明确返回缺少依赖。当前宿主仍通过统一组合动作执行新步骤。公开依赖清单固定到私有提交 `efa9fdb6e85b88ad578efcb3740ebafe4188c8e7`，覆盖该修复。
 
 ## 未覆盖边界
 
