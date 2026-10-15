@@ -1,5 +1,7 @@
 # Bug 记录
 
+- [回眸操作顺序与删除对齐](./2026-10-15-reflections-action-alignment.html)
+
 - [RC003 长会话尾部缺失诊断（问题待定位）](./2026-10-13-rc003-audio-delivery-rate-shortfall.md)
 
 - [回眸播放、应用识别和删除入口问题](./2026-10-15-reflections-playback-and-capture.md)

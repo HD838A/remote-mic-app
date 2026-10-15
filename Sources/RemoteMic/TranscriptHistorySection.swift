@@ -290,18 +290,6 @@ struct TranscriptHistorySection: View {
 
                 Spacer(minLength: 16)
 
-                if let selectedApplication {
-                    Button("statistics.transcripts.delete_application", role: .destructive) {
-                        deletionRequest = .application(
-                            key: selectedApplication.id,
-                            name: selectedApplication.name
-                        )
-                    }
-                    .font(.system(size: 12, weight: .medium))
-                    .buttonStyle(.borderless)
-                    .fixedSize()
-                }
-
                 Button {
                     withAnimation(.easeInOut(duration: 0.18)) {
                         isApplicationSwitcherExpanded.toggle()
@@ -320,6 +308,18 @@ struct TranscriptHistorySection: View {
                 .buttonStyle(.plain)
                 .foregroundStyle(Color.accentColor)
                 .fixedSize()
+
+                if let selectedApplication {
+                    Button("statistics.transcripts.delete_application", role: .destructive) {
+                        deletionRequest = .application(
+                            key: selectedApplication.id,
+                            name: selectedApplication.name
+                        )
+                    }
+                    .font(.system(size: 12, weight: .medium))
+                    .buttonStyle(.borderless)
+                    .fixedSize()
+                }
             }
 
             applicationSwitcher
@@ -604,22 +604,25 @@ struct TranscriptHistorySection: View {
                     .font(.system(size: 13))
                     .foregroundStyle(.secondary)
                     Spacer(minLength: 8)
-                    recordingPlaybackButton(asset)
-                    if model.recordingPlaybackAssetID == asset.id {
+                    HStack(spacing: 10) {
+                        recordingPlaybackButton(asset)
                         recordingStopButton(asset)
+                        Button { model.exportRecording(asset) } label: {
+                            Image(systemName: "square.and.arrow.up")
+                                .frame(width: 20, height: 24)
+                        }
+                        .buttonStyle(.borderless)
+                        .help(localization.text("statistics.transcripts.recording_export"))
+                        Button(role: .destructive) {
+                            deletionRequest = .recording(asset)
+                        } label: {
+                            Image(systemName: "trash")
+                                .frame(width: 20, height: 24)
+                        }
+                        .buttonStyle(.borderless)
+                        .help(localization.text("statistics.transcripts.recording_delete"))
                     }
-                    Button { model.exportRecording(asset) } label: {
-                        Image(systemName: "square.and.arrow.up")
-                    }
-                    .buttonStyle(.borderless)
-                    .help(localization.text("statistics.transcripts.recording_export"))
-                    Button(role: .destructive) {
-                        deletionRequest = .recording(asset)
-                    } label: {
-                        Image(systemName: "trash")
-                    }
-                    .buttonStyle(.borderless)
-                    .help(localization.text("statistics.transcripts.recording_delete"))
+                    .fixedSize()
                 }
                 .padding(.vertical, 9)
                 if !isLast { Divider() }
@@ -717,7 +720,6 @@ struct TranscriptHistorySection: View {
                 .buttonStyle(.borderless)
             }
         }
-        .padding(.horizontal, 8)
         .padding(.vertical, 4)
     }
 
@@ -747,47 +749,52 @@ struct TranscriptHistorySection: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-            Button {
-                guard model.copyTranscript(record) else { return }
-                copiedRecordID = record.id
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                    if copiedRecordID == record.id {
-                        copiedRecordID = nil
+            HStack(spacing: 10) {
+                Button {
+                    guard model.copyTranscript(record) else { return }
+                    copiedRecordID = record.id
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                        if copiedRecordID == record.id {
+                            copiedRecordID = nil
+                        }
                     }
-                }
-            } label: {
-                Image(systemName: copiedRecordID == record.id ? "checkmark" : "doc.on.doc")
-            }
-            .buttonStyle(.borderless)
-            .help(localization.text("statistics.transcripts.copy"))
-
-            Button(role: .destructive) {
-                if let linkedAsset {
-                    deletionRequest = .entry(record, recording: linkedAsset)
-                } else {
-                    deletionRequest = .record(record)
-                }
-            } label: {
-                Image(systemName: "trash")
-            }
-            .buttonStyle(.borderless)
-            .help(localization.text(
-                linkedAsset == nil
-                    ? "statistics.transcripts.delete_record"
-                    : "statistics.transcripts.delete_entry"
-            ))
-
-            if let asset = linkedAsset {
-                recordingPlaybackButton(asset)
-                Button { model.exportRecording(asset) } label: {
-                    Image(systemName: "waveform.and.arrow.up")
+                } label: {
+                    Image(systemName: copiedRecordID == record.id ? "checkmark" : "doc.on.doc")
+                        .frame(width: 20, height: 24)
                 }
                 .buttonStyle(.borderless)
-                .help(localization.text("statistics.transcripts.recording_export"))
-                if model.recordingPlaybackAssetID == asset.id {
+                .help(localization.text("statistics.transcripts.copy"))
+
+                if let asset = linkedAsset {
+                    recordingPlaybackButton(asset)
                     recordingStopButton(asset)
+
+                    Button { model.exportRecording(asset) } label: {
+                        Image(systemName: "square.and.arrow.up")
+                            .frame(width: 20, height: 24)
+                    }
+                    .buttonStyle(.borderless)
+                    .help(localization.text("statistics.transcripts.recording_export"))
                 }
+
+                Button(role: .destructive) {
+                    if let linkedAsset {
+                        deletionRequest = .entry(record, recording: linkedAsset)
+                    } else {
+                        deletionRequest = .record(record)
+                    }
+                } label: {
+                    Image(systemName: "trash")
+                        .frame(width: 20, height: 24)
+                }
+                .buttonStyle(.borderless)
+                .help(localization.text(
+                    linkedAsset == nil
+                        ? "statistics.transcripts.delete_record"
+                        : "statistics.transcripts.delete_entry"
+                ))
             }
+            .fixedSize()
         }
         .padding(.vertical, 9)
     }
@@ -798,6 +805,7 @@ struct TranscriptHistorySection: View {
         } label: {
             Image(systemName: model.recordingPlaybackAssetID == asset.id &&
                 model.isRecordingPlaybackPlaying ? "pause.fill" : "play.fill")
+                .frame(width: 20, height: 24)
         }
         .buttonStyle(.borderless)
         .help(localization.text(
@@ -814,8 +822,10 @@ struct TranscriptHistorySection: View {
             model.stopRecordingPlayback()
         } label: {
             Image(systemName: "stop.fill")
+                .frame(width: 20, height: 24)
         }
         .buttonStyle(.borderless)
+        .disabled(model.recordingPlaybackAssetID != asset.id)
         .help(localization.text("statistics.transcripts.recording_stop"))
         .accessibilityLabel(localization.text("statistics.transcripts.recording_stop"))
     }
