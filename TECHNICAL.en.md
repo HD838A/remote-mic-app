@@ -140,6 +140,8 @@ Development verification:
 
 The default checkout is the complete public build path. `Package.swift` does not resolve private Git URLs, so contributors with public-repository access only can run the tests above, produce `dist/SayAll.app`, and launch the public functionality. Official CI always runs that public path first. After checking out the pinned dependencies, it supplies `SAYALL_AI_PACKAGE_PATH`, `SAYALL_COMBINATION_ACTIONS_PATH`, and `SAYALL_MAC_REMOTE_PACKAGE_PATH`; the free combination-actions feature is included in official builds by default. Paid button profiles remain disabled unless `SAYALL_BUTTON_PROFILES_PACKAGE_PATH` is set explicitly. Protected release builds require the free combination-actions package and the other official dependencies, but do not include paid button profiles by default.
 
+Common Phrases and Siri Remote support require membership. The private membership package provides Common Phrases; `canUseCommonPhrases` controls access. Siri Remote requires its optional PKG component, valid membership access, and user activation in the app. A successful public build, private package integration, or component installation does not grant membership access.
+
 Build and launch:
 
     ./script/build_and_run.sh

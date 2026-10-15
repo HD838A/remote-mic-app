@@ -2,6 +2,12 @@
 
 适用版本：当前待验证 PR 或已合入 `main` 的精确 Commit；原功能分支 `codex/community-siri-optional` 只作为历史审计来源。
 
+## 会员使用条件
+
+Siri Remote 是会员功能。下文的构建开关只控制编译和资源集成，不授予使用权限。使用时需要通过 PKG 安装 Siri Remote 可选组件，并在有效会员权益下由用户在 App 中启用；仅安装组件不会自动启用。非会员的按键卡片显示“点击开通会员功能”，点击进入会员页面。
+
+会员门禁验证见 [会员与键位方案测试手册](MembershipAndButtonProfiles.md#用例八siri-remote-双层启用门禁)。构建、安装和真实硬件验证各自保留独立边界。
+
 ## 目标
 
 `remote-mic-app` 在没有私有仓库访问权限时必须可以直接构建。社区构建默认不启用 Siri Remote，不显示 Siri Remote 专属设置，不启动 Apple Remote 适配器，也不要求 Siri Remote resource bundle、helper 或 Opus 动态库。

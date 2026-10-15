@@ -6,6 +6,7 @@
 - 目标：macOS Apple Silicon 14+ 和 Intel Ventura 13
 - 安装资产：最终 Developer ID 签名、Apple 公证并 staple 的 `SayAll-VERSION-BUILD-AppleSilicon-install.pkg`、`SayAll-VERSION-BUILD-Intel-install.pkg` 和对应的 standalone uninstall PKG
 - Siri Remote 系统服务是 Install PKG 中的可选组件，默认不选择；MiRemoteV 2ch 与无线麦SayAll.app仍是默认组件。
+- Siri Remote 是会员功能。安装组件与会员权益是两个独立条件；仅安装组件不会自动启用。App 内启用门禁按 [会员测试手册](MembershipAndButtonProfiles.md#用例八siri-remote-双层启用门禁) 验证。
 
 ## 测试前准备
 
@@ -31,7 +32,7 @@
 1. 重新运行同一 Install PKG，进入“自定安装”。
 2. 勾选 `苹果遥控器 Siri Remote`，继续安装并完成管理员授权。
 
-预期：除默认组件外，安装器才写入 Apple Remote HCI helper 与 LaunchDaemon；helper 签名标识、Mach 服务名、权限和 `launchctl` 状态正确，App 可以进入 Apple Remote 音频准备流程。
+预期：除默认组件外，安装器才写入 Apple Remote HCI helper 与 LaunchDaemon；helper 签名标识、Mach 服务名、权限和 `launchctl` 状态正确。有效会员在 App 中主动启用后，才进入 Apple Remote 音频准备流程；非会员仍显示开通会员入口。
 
 失败判定：未勾选也安装 helper，勾选后 helper 或 LaunchDaemon 缺失，或安装器覆盖无法确认归属的同名服务。
 

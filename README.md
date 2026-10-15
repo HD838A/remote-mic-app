@@ -98,6 +98,8 @@ Mac App 继续采用官网下载方式分发，Mac App Store 上架暂时暂停�
 
 ## 使用要求
 
+常用语和苹果遥控器 Siri Remote 均为会员功能。使用 Siri Remote 时，需先通过安装包安装对应组件，再以有效会员权益在 App 中启用。仅安装组件不会自动启用。
+
 - Apple Silicon Mac（macOS 14 或更高版本），或 Intel Mac（macOS 13 或更高版本）；
 - 小米蓝牙遥控器 2 或 2 Pro；
 - 使用语音输入时，需要安装随安装包提供的兼容麦克风，或在 Mac 上已有 BlackHole 2ch 等回环音频设备。

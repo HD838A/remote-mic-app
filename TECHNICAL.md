@@ -143,6 +143,8 @@ xcrun swift test --disable-keychain
 
 默认 checkout 是完整的公开构建路径：`Package.swift` 不解析私有 Git URL，没有私有仓库权限也可以执行上述测试、生成 `dist/SayAll.app` 并启动公开功能。官方 CI 会先强制执行同一公开路径；访问固定依赖后，通过 `SAYALL_AI_PACKAGE_PATH`、`SAYALL_COMBINATION_ACTIONS_PATH` 和 `SAYALL_MAC_REMOTE_PACKAGE_PATH` 验证官方构建，其中免费的组合动作默认集成。付费键位方案保持默认关闭，只有显式设置 `SAYALL_BUTTON_PROFILES_PACKAGE_PATH` 才加入依赖图。受保护发布构建强制要求免费组合动作及其他官方依赖，但默认不包含付费键位方案。
 
+常用语和 Siri Remote 均为会员功能。常用语实现由私有会员 Package 提供，使用权限由 `canUseCommonPhrases` 控制。Siri Remote 需要安装 PKG 可选组件，并在会员权益有效时由用户启用。公开构建成功、私有组件已集成或 PKG 组件已安装，都不等于获得会员使用权限。
+
 构建并启动应用：
 
 ```bash
