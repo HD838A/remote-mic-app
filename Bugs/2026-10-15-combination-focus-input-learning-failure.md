@@ -24,7 +24,7 @@
 - 私有 Package：`swift test --disable-keychain`，892 项测试通过。
 - 公开宿主：无私有组件 `swift test --disable-keychain`，884 项测试通过。
 - 公开宿主接入当前私有源码：`SAYALL_COMBINATION_ACTIONS_PATH=... swift test --disable-keychain`，884 项测试通过。
-- 本地 `.app` 使用 1020×772 窗口验证中文浅色、中文深色和英文浅色页面。截图保存在 `/Users/andy/.codex/visualizations/2026/10/15/routine-focus-input/ui/`。
+- 本地 `.app` 使用 1020×772 窗口验证中文浅色、中文深色和英文浅色页面。截图保存在本次交付的持久化证据目录。
 - 本地空白输入框 App 验证“打开 App → 聚焦输入框”。执行后 Accessibility 焦点进入文本输入区，组合动作显示成功。
 
 ## 未覆盖边界
