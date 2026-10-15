@@ -4,6 +4,23 @@ import Testing
 
 @Suite("Application localization")
 struct LocalizationTests {
+    @Test func onboardingCopyExplainsMembershipTrialAndActualMicrophoneNames() throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        for language in ["zh-Hans", "en"] {
+            let url = root.appendingPathComponent("Resources/\(language).lproj/Localizable.strings")
+            let copy = try #require(PropertyListSerialization.propertyList(
+                from: Data(contentsOf: url), format: nil
+            ) as? [String: String])
+            #expect(copy["onboarding.control_source.siri_remote.detail"]?.contains(language == "en" ? "membership" : "会员") == true)
+            #expect(copy["onboarding.complete.siri_membership"]?.isEmpty == false)
+            for key in ["onboarding.voice_tool.guide.screenshot.doubao_settings", "onboarding.voice_tool.guide.screenshot.vokie_step_2"] {
+                #expect(copy[key]?.contains("SayAll") == true)
+                #expect(copy[key]?.contains("MiRemoteV 2ch") == true)
+            }
+        }
+    }
+
     @Test func screenshotResourceFallbackLoadsRepositoryLocalizations() throws {
         let suiteName = "RemoteMicTests.Localization.ScreenshotFallback.(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))

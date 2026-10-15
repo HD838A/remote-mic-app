@@ -156,6 +156,12 @@ enum OnboardingScreenshotRenderer {
             AudioDeviceInfo(id: 1, uid: DoubaoAudioDevicePolicy.deviceUID, name: screenshotAudioName),
             AudioDeviceInfo(id: 2, uid: "BlackHole2ch_UID", name: "BlackHole 2ch"),
         ]
+        if ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_ONBOARDING_SCREENSHOT_SIRI_REMOTE_TRIAL"
+        ] == "1" {
+            settings.beginOnboardingSiriRemoteTrial()
+            settings.siriRemoteEnabled = true
+        }
         let model = BridgeAppModel(
             settings: settings,
             initialAudioDevices: screenshotAudioDevices
@@ -193,7 +199,10 @@ enum OnboardingScreenshotRenderer {
                     .other: .unknown,
                 ],
                 initialInputMethodGuideStep: requestedGuideStep,
-                remoteInputDiagnosticOverride: remoteInputDiagnostic
+                remoteInputDiagnosticOverride: remoteInputDiagnostic,
+                siriRemotePackageInstalledOverride: ProcessInfo.processInfo.environment[
+                    "REMOTE_MIC_ONBOARDING_SCREENSHOT_SIRI_REMOTE_INSTALLED"
+                ].map { $0 == "1" }
             )
                 .environmentObject(localization)
                 .frame(width: 1020, height: 772)

@@ -2,6 +2,28 @@
 
 > 执行本手册或修改 Onboarding 前，先完整阅读跨平台产品规范 [`feature/first-run-onboarding/PRODUCT_SPEC.md`](../feature/first-run-onboarding/PRODUCT_SPEC.md) 和 [macOS 平台适配](../feature/first-run-onboarding/platform-macos.md)。未来 Windows 测试应从同一产品规范出发，并使用 [Windows 平台适配](../feature/first-run-onboarding/platform-windows.md) 建立独立测试手册。
 
+## 2026-10-16 会员与安装状态回归
+
+适用分支：`codex/onboarding-membership-siri-audio-20261015`。本次包含来源门禁和持久化变化，按流程类验证；纯截图与单元测试不能替代真实旅程。
+
+- 准备：保留原音频选择与 Siri Remote 开关；分别使用不含 Siri Package 的公开构建、包含 Package 且有/无 Installer 收据的构建。
+- 无收据：欢迎后不显示两代苹果遥控器。旧流程保存 Siri 来源时恢复到选择页，不临时开启服务。
+- 有收据：两代入口可选；会员、非会员和有效离线租约均需完成相同的真实连接、PCM、正常结束、文字上屏和普通按键门禁。
+- 临时启用：进入前关闭，选择后开启；退出后续接、切换来源、返回和重试都不改写进入前快照。非会员完成后关闭；会员与有效离线租约保留开启。完成动作不得中断活动语音。
+- 原已启用：重跑向导，三种会员状态均保留原开关。未选择苹果遥控器时不得新增启用。
+- 音频：分别枚举 SayAll、MiRemoteV 2ch 和 BlackHole 2ch，核对选择行、已选状态、工具核对卡和重新进入后的 UID。新旧 SayAll 使用原稳定 UID；同名物理设备不能通过。不重装驱动，不覆盖旧选择。
+- 页面：对当前构建全部来源生成中英文、浅色/深色完整九页；另覆盖 PKG 缺失、旧设备名、会员试用完成提示。按下方生产清单逐张检查 `1020 × 772` 内容尺寸和窗口 chrome，记录 PNG 尺寸及 SHA-256。
+- 现场：分别执行首次进入、退出续接、关于页重跑、真实 Siri 语音、极速按下/释放、连续会话、异常恢复和完成后设置开关检查。记录首字耗时、尾音完整及 `interrupted_samples=0`；RC003 稳定语音基线仍需回归。
+
+本轮自动化结果：公开仓库 `swift test --disable-keychain --disable-sandbox` 通过 885 项、68 个 suite；包含 Siri Package 的定向 Onboarding、Localization 和音频设备测试通过 97 项、8 个 suite。`git diff --check` 与仓库治理检查通过。Release `SayAll.app` 已通过 `scripts/verify-app.sh` 和 `codesign --verify --deep --strict`。
+
+本轮离屏结果：生产隐藏入口生成 108 张基础 PNG（小米来源、Siri 第 6/7 代、中文/英文、浅色/深色），另生成 PKG 缺失旧设备名和 Siri 临时试用状态 72 张。每张为 2040 × 1600 PNG。证据目录为 `/Users/andy/.codex/worktrees/03ed/onboarding-evidence-20261016`，清单为 `manifest.sha256.json`。已逐张检查窗口 chrome、标题、导航、状态卡、右栏、裁切、对比度和中文字号。静态截图不证明真实权限、蓝牙、音频、Siri Remote 或第三方文字上屏。
+- 日志：检查 `ONBOARDING SIRI_REMOTE` 的 availability、started、temporarily_enabled、completed，以及停用的 `membership_required` 或保留原因；不含收据正文、设备身份或用户文字。
+
+失败判定：无收据仍有入口、非会员绕过真实语音门禁、完成后遗漏临时开关清理、关闭老用户开关、覆盖音频选择、提前截断语音或状态日志与实际结果不一致。
+
+自动化与截图结果在本次 PR 中记录。真实 Installer、权限、蓝牙、音频、第三方文字及候选包旅程尚待实机验收；不沿用历史验收结论。
+
 ## 适用范围
 
 会员连接授权：Phone/Web 入口在未登录、非会员或授权过期时显示私有组件提供的会员按钮，不展示可用连接码。登录有效 Plus 后才进入原配对、批准和连接流程。会员弹窗关闭后返回向导。验证退出、租约过期和切换服务环境时旧入口失效，详见 [CompanionMembership](CompanionMembership.md)。必须覆盖完整生产流程截图及中英/明暗；当前拆分 PR 的自动化通过，完整截图和真机验收仍待补充，不能由 QR 静态截图代替。
@@ -496,11 +518,11 @@
 
 | 矩阵维度 | 适用集合 |
 | --- | --- |
-| 来源 | 公开包：xiaomi_remote；完整包另含 siri_remote 的 generation_6 / generation_7、chromecast_remote、apple_companion、web_remote；以实际 Package 能力为准 |
+| 来源 | 公开包：xiaomi_remote；完整包另含 siri_remote 的 generation_6 / generation_7、chromecast_remote、apple_companion、web_remote；以实际 Package 能力为准；Siri 另需 Installer 收据 |
 | 语言 | zh-Hans、en |
 | 外观 | light、dark |
 | 工具附加状态 | 五种工具、右栏四步、可观察的安装/运行状态、Fn 占用、Vokie partial/failed；只用生产入口支持的状态注入，不能把不支持的注入写为通过 |
-| 来源附加状态 | 更多方式折叠/展开、连接恢复、误按语音键及当前变更影响的状态 |
+| 来源附加状态 | 更多方式折叠/展开、连接恢复、误按语音键、Siri 收据有/无、会员试用完成提示及当前变更影响的状态 |
 
 基础数量为各启用来源的页面数总和 × 语言数 × 外观数。附加状态单独列出并去重，不混入基础数量。完整验证覆盖整张矩阵；定向验证在 PR 列出受影响单元和排除理由，并核对完整清单未改变。逐文件记录格式、像素尺寸、SHA-256、Commit、来源、语言、外观和状态。
 
@@ -511,7 +533,7 @@
 1. 保持 Mac 锁屏或不依赖当前屏幕读取权限。
 2. 使用生产隐藏入口构建一次 App，并通过 `REMOTE_MIC_ONBOARDING_SCREENSHOT_DIR`、`REMOTE_MIC_ONBOARDING_SCREENSHOT_APPEARANCE=light|dark` 生成截图；第 2 页为 `02-control-source.png`，第 6 页为 `06-voice-tool.png`。
 3. 公开构建设置 `REMOTE_MIC_ONBOARDING_SCREENSHOT_CONTROL_SOURCE=xiaomi_remote`，按生产页面清单生成适用语言和外观集合。
-4. 完整 Package 构建分别设置 `REMOTE_MIC_ONBOARDING_SCREENSHOT_CONTROL_SOURCE=xiaomi_remote|siri_remote|chromecast_remote|apple_companion|web_remote`；Apple 来源再用 `REMOTE_MIC_ONBOARDING_SCREENSHOT_APPLE_REMOTE_GENERATION=generation_6|generation_7` 分开生成。按本次构建实际支持的来源、语言和外观生成完整集合，数量由清单推导。
+4. 包含 Siri 的截图构建可用 `REMOTE_MIC_ONBOARDING_SCREENSHOT_SIRI_REMOTE_INSTALLED=1|0` 注入收据存在/缺失；可用 `REMOTE_MIC_ONBOARDING_SCREENSHOT_SIRI_REMOTE_TRIAL=1` 渲染非会员临时启用的完成提示；这些值仅用于隔离截图，不写入系统。完整 Package 构建分别设置 `REMOTE_MIC_ONBOARDING_SCREENSHOT_CONTROL_SOURCE=xiaomi_remote|siri_remote|chromecast_remote|apple_companion|web_remote`；Apple 来源再用 `REMOTE_MIC_ONBOARDING_SCREENSHOT_APPLE_REMOTE_GENERATION=generation_6|generation_7` 分开生成。按本次构建实际支持的来源、语言和外观生成完整集合，数量由清单推导。
 5. 对输入工具页额外覆盖豆包、微信、Typeless、Vokie、其他工具，以及 available/not-installed/unknown；每个工具用 `REMOTE_MIC_ONBOARDING_SCREENSHOT_GUIDE_STEP=0...3` 覆盖右栏四项步骤，Vokie 必须分别生成浅色/深色步骤截图。语音测试页另覆盖 Vokie/Typeless 未运行与运行中状态。
 6. 分别覆盖五个输入工具，确认固定排序、单行卡片标题、Fn staged 配置和右栏步骤无裁切。对 Vokie 额外覆盖 `partial`、`failed` 回流提示。
 7. 对旧正式配置设置 `REMOTE_MIC_ONBOARDING_SCREENSHOT_VOICE_KEY_MODE=left_command|right_command|right_option`，确认重新运行不会在欢迎或工具选择时立即覆盖；旧 Fn-only 迁移提示不得再被当作现行配置规则。

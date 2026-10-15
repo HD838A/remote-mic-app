@@ -787,7 +787,7 @@
 "onboarding.control_source.xiaomi_remote.title" = "Xiaomi Bluetooth Remote 2 / 2 Pro";
 "onboarding.control_source.xiaomi_remote.detail" = "Hold the physical voice button and release it to stop.";
 "onboarding.control_source.siri_remote.title" = "Apple Remote (6th / 7th Generation)";
-"onboarding.control_source.siri_remote.detail" = "Use the physical voice button: hold to speak and release to stop.";
+"onboarding.control_source.siri_remote.detail" = "Hold to speak, release to stop. Try voice during setup; membership is required for daily use.";
 "onboarding.control_source.apple_remote.generation_6.title" = "Apple Remote (6th Generation)";
 "onboarding.control_source.apple_remote.generation_7.title" = "Apple Remote (7th Generation)";
 "onboarding.control_source.chromecast_remote.title" = "Chromecast Voice Remote";
@@ -951,6 +951,7 @@
 "onboarding.secure_input.detail" = "Quit apps that are asking for a password or using a secure keyboard, then check again.";
 "onboarding.secure_input.recheck" = "Check again";
 "onboarding.secure_input.help" = "If it still does not work, lock your Mac, unlock it with your password, and check again.";
+"onboarding.complete.siri_membership" = "The voice test passed. Finishing setup will turn off the Apple Remote voice feature enabled here. Activate membership to enable it in Settings.";
 "onboarding.complete.title" = "SayAll is ready";
 "onboarding.complete.detail" = "You can now dictate with the selected control method and adjust connection, voice, and button settings from the main panel.";
 "onboarding.complete.runtime_changed" = "Your current setup has changed";
@@ -1245,13 +1246,13 @@
 "statistics.transcripts.entry_count_one" = "%@ entry";
 "statistics.recordings.export_filename" = "Reflections-%@.m4a";
 "onboarding.voice_tool.guide.screenshot.doubao_menu" = "In the input menu, choose Doubao (豆包输入法), then Settings (设置).";
-"onboarding.voice_tool.guide.screenshot.doubao_settings" = "In Voice Input (语音输入), set the matching mode’s shortcut to Fn. The image shows Hold mode (长按模式). Enable global voice input (全局唤起语音) and select MiRemoteV 2ch as the microphone (麦克风选择).";
+"onboarding.voice_tool.guide.screenshot.doubao_settings" = "In Voice Input (语音输入), set the matching mode’s shortcut to Fn. The image shows Hold mode (长按模式). Enable global voice input (全局唤起语音) and choose the same microphone (麦克风选择) as on SayAll’s audio page. The image shows the older MiRemoteV 2ch name; new installations show SayAll.";
 "onboarding.voice_tool.guide.screenshot.weixin_input_menu" = "In the input menu, choose WeType (微信输入法), then Settings (设置).";
 "onboarding.voice_tool.guide.screenshot.weixin_input_settings" = "In Voice Input (语音输入), enable Hold to Talk (按住说话) and set its shortcut to Fn.";
 "onboarding.voice_tool.guide.screenshot.weixin_app_shortcuts" = "In WeChat Settings → Shortcuts (快捷键), clear any Fn shortcut under Voice Typing (语音输入文字), for both hold and press-to-start modes.";
 "onboarding.voice_tool.guide.screenshot.system_fn" = "In System Settings → Keyboard (键盘), set Press Globe key to (按下🌐键时) to Do Nothing (不执行任何操作).";
 "onboarding.voice_tool.guide.screenshot.vokie_step_1" = "On Vokie’s Home page (首页), set Standard Input (普通输入) to Fn.";
-"onboarding.voice_tool.guide.screenshot.vokie_step_2" = "In Vokie’s General settings (通用), check that Microphone (麦克风) uses MiRemoteV 2ch.";
+"onboarding.voice_tool.guide.screenshot.vokie_step_2" = "In Vokie’s General settings (通用), choose the same Microphone (麦克风) as on SayAll’s audio page. The image shows the older MiRemoteV 2ch name; new installations show SayAll.";
 "siri_remote.activation.enable" = "Enable";
 "siri_remote.activation.open_membership" = "Unlock membership feature";
 "siri_remote.activation.disable" = "Disable";

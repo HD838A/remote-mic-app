@@ -475,9 +475,22 @@ enum OnboardingAppleRemoteGeneration: String, Codable, CaseIterable, Identifiabl
 
 enum OnboardingBuildCapabilities {
     static var availableControlSources: [OnboardingControlSource] {
+        availableControlSources(siriRemotePackageInstalled: isSiriRemotePackageInstalled())
+    }
+
+    /// Installer receipts are public installation metadata owned by SayAll.
+    static func isSiriRemotePackageInstalled(
+        receiptExists: (String) -> Bool = { FileManager.default.fileExists(atPath: $0) }
+    ) -> Bool {
+        receiptExists("/var/db/receipts/com.hd838a.RemoteMic.siri-remote.plist")
+    }
+
+    static func availableControlSources(
+        siriRemotePackageInstalled: Bool
+    ) -> [OnboardingControlSource] {
         var sources: [OnboardingControlSource] = [.xiaomiRemote]
         #if SAYALL_SIRI_REMOTE_ENABLED
-        sources.append(.siriRemote)
+        if siriRemotePackageInstalled { sources.append(.siriRemote) }
         #endif
         #if SAYALL_CHROMECAST_ENABLED
         sources.append(.chromecastRemote)

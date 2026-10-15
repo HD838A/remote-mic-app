@@ -3096,6 +3096,37 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         refreshVoiceKeyCompatibilityWarning()
     }
 
+    func enableSiriRemoteForOnboarding() {
+        settings.beginOnboardingSiriRemoteTrial()
+        let wasEnabled = settings.siriRemoteEnabled
+        setSiriRemoteEnabled(true)
+        if !wasEnabled {
+            AppLogger.shared.write(
+                "ONBOARDING SIRI_REMOTE phase=changed result=temporarily_enabled"
+            )
+        }
+    }
+
+    func completeOnboarding() {
+        let shouldDisable = settings.shouldDisableOnboardingSiriRemote(
+            accessDecision: membershipFeature.buttonProfilesAccessDecision
+        )
+        if shouldDisable {
+            setSiriRemoteEnabled(false)
+            guard !settings.siriRemoteEnabled else {
+                AppLogger.shared.write(
+                    "ONBOARDING SIRI_REMOTE phase=blocked reason=voice_session_active"
+                )
+                return
+            }
+        }
+        AppLogger.shared.write(
+            "ONBOARDING SIRI_REMOTE phase=completed result=\(shouldDisable ? "disabled" : "preserved") " +
+                "reason=\(shouldDisable ? "membership_required" : "existing_state_or_access")"
+        )
+        settings.completeOnboarding()
+    }
+
     func setSiriRemoteEnabled(_ enabled: Bool) {
         guard enabled || activePhysicalVoiceControlSource != .siriRemote else { return }
         settings.siriRemoteEnabled = enabled
