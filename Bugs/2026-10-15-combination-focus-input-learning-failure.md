@@ -16,7 +16,7 @@
 - 学习前对目标 App 设置 `AXManualAccessibility`；不支持时降级到 `AXEnhancedUserInterface`。
 - 优先从目标 App 自身读取焦点，避免 system-wide 焦点短暂落在无线麦页面。
 - 在有限重试窗口内等待 Accessibility 树和可编辑控件出现。
-- 支持 `AXTextField`、`AXTextArea` 和 `AXComboBox`；仍拒绝密码、Token、搜索、设置等敏感输入框。
+- 支持 `AXTextField`、`AXTextArea` 和 `AXComboBox`；地址栏和搜索框可以学习，仍拒绝密码、Token、密钥、银行卡等敏感输入框。
 - 增加独立“聚焦输入框”组合动作步骤。它不保存学习记录。
 - 宿主复用公开聚焦能力，并等待最终聚焦回调。
 - 聚焦失败、取消或超时停止后续步骤。
