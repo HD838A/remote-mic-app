@@ -20,6 +20,8 @@
 ### 权限
 
 - 苹果遥控器服务默认关闭。仅在用户选择苹果遥控器或主动启用时开启。
+- Onboarding 使用公开 Installer 收据判断组件安装状态，不以会员状态隐藏已安装来源。收据缺失时隐藏卡片，保存的 Siri Remote 来源返回选择页。
+- 进入流程时持久保存 `siriRemoteEnabled`。选择、重试可临时启用以完成真实语音测试；完成前只有本次从关闭改为开启且权益为 `requiresPlus` / `unavailable` 时，调用现有停用接口。已有启用、`allowed` 和 `temporarilyOffline` 保持。语音尚在活动时不得提前结束流程或截断音频。
 - App 启动、设备发现、回到前台和自动重试不得请求 Siri helper 安装或音频交互授权。
 - 取消授权后保存等待状态，重启不得自动准备音频或再弹窗。
 - 用户点击重新连接、语音失败恢复或遥控器卡片内的重试后，才可重试授权。
@@ -61,7 +63,7 @@
 
 ### 控制来源
 
-- 控制来源在欢迎页后的单页中按 Package 门禁显示：公开构建只有小米遥控器；Apple Package 增加苹果遥控器第 6 / 7 代两个入口，Chromecast 和 Mac Remote Package 分别增加对应入口。
+- 控制来源在欢迎页后的单页中按 Package 门禁显示：公开构建只有小米遥控器；Apple Package 且存在 `com.hd838a.RemoteMic.siri-remote` Installer 收据时增加苹果遥控器第 6 / 7 代两个入口，Chromecast 和 Mac Remote Package 分别增加对应入口。
 - 小米与两代苹果遥控器显著展示；Chromecast、iPhone / Apple Watch 和 Web 收入默认折叠的“更多控制方式”。实体卡片和右栏使用所选设备真实图片。
 - 苹果遥控器配对说明不得使用 “Siri Remote” 用户文案，并提示蓝牙名称可能不同，应关注重置后新出现的设备。
 - iPhone、Apple Watch 和 Web App 均支持 hold/toggle；旧版未上报实际模式时按 hold 兼容并要求用户确认。

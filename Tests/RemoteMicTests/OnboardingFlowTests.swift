@@ -6,6 +6,103 @@ import SwiftUI
 
 @Suite("First-run onboarding")
 struct OnboardingFlowTests {
+    @Test func siriRemoteRequiresBothBuildSupportAndInstallerReceipt() {
+        #expect(OnboardingBuildCapabilities.isSiriRemotePackageInstalled { path in
+            path == "/var/db/receipts/com.hd838a.RemoteMic.siri-remote.plist"
+        })
+        #expect(!OnboardingBuildCapabilities.isSiriRemotePackageInstalled { _ in false })
+        #expect(!OnboardingBuildCapabilities.availableControlSources(
+            siriRemotePackageInstalled: false
+        ).contains(.siriRemote))
+        #if SAYALL_SIRI_REMOTE_ENABLED
+        #expect(OnboardingBuildCapabilities.availableControlSources(
+            siriRemotePackageInstalled: true
+        ).contains(.siriRemote))
+        #else
+        #expect(!OnboardingBuildCapabilities.availableControlSources(
+            siriRemotePackageInstalled: true
+        ).contains(.siriRemote))
+        #endif
+    }
+
+    @Test @MainActor func siriRemoteTrialPreservesEntryStateAndMembershipAccessAcrossResume() throws {
+        for initiallyEnabled in [false, true] {
+            let suite = "RemoteMicTests.Onboarding.SiriTrial.\(UUID().uuidString)"
+            let defaults = try #require(UserDefaults(suiteName: suite))
+            defer { defaults.removePersistentDomain(forName: suite) }
+            let settings = AppSettings(defaults: defaults)
+            settings.siriRemoteEnabled = initiallyEnabled
+            settings.beginOnboardingSiriRemoteTrial()
+            settings.siriRemoteEnabled = true
+            let resumed = AppSettings(defaults: defaults)
+            resumed.beginOnboardingSiriRemoteTrial()
+            #expect(resumed.onboardingSiriRemoteInitiallyEnabled == initiallyEnabled)
+            for decision in [HostButtonProfilesAccessDecision.requiresPlus, .unavailable] {
+                #expect(resumed.shouldDisableOnboardingSiriRemote(accessDecision: decision) == !initiallyEnabled)
+            }
+            for decision in [HostButtonProfilesAccessDecision.allowed(validUntil: .distantFuture),
+                             .temporarilyOffline(validUntil: .distantFuture)] {
+                #expect(!resumed.shouldDisableOnboardingSiriRemote(accessDecision: decision))
+            }
+            // Changing the selected source must not lose ownership of a temporary enable.
+            resumed.setOnboardingControlSource(.xiaomiRemote)
+            let model = BridgeAppModel(settings: resumed)
+            model.completeOnboarding()
+            #expect(resumed.siriRemoteEnabled == initiallyEnabled)
+            #expect(resumed.isOnboardingComplete)
+            #expect(resumed.onboardingSiriRemoteInitiallyEnabled == nil)
+        }
+    }
+
+    @Test @MainActor func missingSiriRemotePackageRemovesCardsAndRepairsSavedSelection() throws {
+        let fixture = try OnboardingOffscreenFixture(
+            step: .remote,
+            controlSource: .siriRemote,
+            siriRemotePackageInstalled: false
+        )
+        defer { fixture.close() }
+        #expect(fixture.settings.onboardingStep == .remoteAvailability)
+        #expect(fixture.settings.onboardingControlSource == .unselected)
+        #expect(!fixture.settings.siriRemoteEnabled)
+        for generation in OnboardingAppleRemoteGeneration.allCases {
+            #expect(fixture.probe.actions["control-source.siri_remote.\(generation.rawValue)"] == nil)
+        }
+    }
+
+    @Test @MainActor func completingProductionViewOnlyDisablesNewSiriRemoteTrials() throws {
+        for initiallyEnabled in [false, true] {
+            let fixture = try OnboardingOffscreenFixture(
+                step: .complete,
+                controlSource: .xiaomiRemote,
+                siriRemoteInitiallyEnabled: initiallyEnabled
+            )
+            defer { fixture.close() }
+            fixture.model.enableSiriRemoteForOnboarding()
+            fixture.probe.invoke("continue")
+            #expect(fixture.settings.isOnboardingComplete)
+            #expect(fixture.settings.siriRemoteEnabled == initiallyEnabled)
+        }
+    }
+
+    @Test func allAudioNamesKeepTheSavedSelectionAcrossResumeAndRerun() throws {
+        for name in ["SayAll", "MiRemoteV 2ch", "BlackHole 2ch"] {
+            let suite = "RemoteMicTests.Onboarding.AudioName.\(UUID().uuidString)"
+            let defaults = try #require(UserDefaults(suiteName: suite))
+            defer { defaults.removePersistentDomain(forName: suite) }
+            let settings = AppSettings(defaults: defaults)
+            let uid = name == "BlackHole 2ch" ? "BlackHole2ch_UID" : DoubaoAudioDevicePolicy.deviceUID
+            settings.selectedAudioDeviceUID = uid
+            settings.restartOnboarding()
+            let resumed = AppSettings(defaults: defaults)
+            #expect(resumed.selectedAudioDeviceUID == uid)
+            #expect(OnboardingAudioSelectionPolicy.isSupportedDevice(uid: resumed.selectedAudioDeviceUID, name: name))
+            #expect(OnboardingAudioSelectionPolicy.isSupportedDeviceSelected(
+                selectedUID: resumed.selectedAudioDeviceUID,
+                availableSupportedUIDs: [uid]
+            ))
+        }
+    }
+
     @Test @MainActor func offscreenProductionViewCanBeHostedWithoutUnlockingMac() throws {
         let suiteName = "RemoteMicTests.Onboarding.Offscreen.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))
@@ -31,7 +128,8 @@ struct OnboardingFlowTests {
                 .vokie: .available,
                 .other: .unknown,
             ],
-            interactionProbe: probe
+            interactionProbe: probe,
+            siriRemotePackageInstalledOverride: true
         )
         .environmentObject(localization)
         .frame(width: 1020, height: 772)
@@ -1475,7 +1573,8 @@ struct OnboardingFlowTests {
         #expect(viewSource.contains("onboarding.side.audio_on_demand"))
     }
 
-    @Test func onlyMiRemoteAndBlackHoleCanSatisfyTheAudioSelectionGate() {
+    @Test func onlySayAllLegacyMiRemoteAndBlackHoleCanSatisfyTheAudioSelectionGate() {
+        #expect(OnboardingAudioSelectionPolicy.isSupportedDevice(uid: DoubaoAudioDevicePolicy.deviceUID, name: "SayAll"))
         #expect(OnboardingAudioSelectionPolicy.isSupportedDevice(
             uid: "MiRemoteV2ch_UID",
             name: "MiRemoteV 2ch"
@@ -2551,7 +2650,9 @@ private final class OnboardingOffscreenFixture {
         systemFunctionKeyAvailable: Bool = true,
         initialInputMethodGuideStep: Int? = nil,
         controlSource: OnboardingControlSource? = nil,
-        voiceToolAvailability: [OnboardingVoiceTool: OnboardingVoiceToolAvailability]? = nil
+        voiceToolAvailability: [OnboardingVoiceTool: OnboardingVoiceToolAvailability]? = nil,
+        siriRemotePackageInstalled: Bool = true,
+        siriRemoteInitiallyEnabled: Bool = false
     ) throws {
         let suiteName = "RemoteMicTests.Onboarding.Fixture.\(UUID().uuidString)"
         guard let defaults = UserDefaults(suiteName: suiteName) else {
@@ -2561,6 +2662,7 @@ private final class OnboardingOffscreenFixture {
         self.defaults = defaults
         settings = AppSettings(defaults: defaults)
         settings.applicationLanguage = .simplifiedChinese
+        settings.siriRemoteEnabled = siriRemoteInitiallyEnabled
         settings.setOnboardingVoiceTool(voiceTool)
         settings.setOnboardingVoiceBindingPreference(bindingPreference)
         settings.setOnboardingRemoteAvailability(remoteAvailability)
@@ -2592,7 +2694,8 @@ private final class OnboardingOffscreenFixture {
                 .other: .unknown,
             ],
             initialInputMethodGuideStep: initialInputMethodGuideStep,
-            interactionProbe: probe
+            interactionProbe: probe,
+            siriRemotePackageInstalledOverride: siriRemotePackageInstalled
         )
         .environmentObject(localization)
         .frame(width: 1020, height: 772)

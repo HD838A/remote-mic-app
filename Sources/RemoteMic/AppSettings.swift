@@ -345,6 +345,7 @@ final class AppSettings: ObservableObject {
         static let onboardingVerifiedVoiceBinding = "onboarding.verifiedVoiceBinding"
         static let onboardingStagedVoiceBinding = "onboarding.stagedVoiceBinding"
         static let onboardingTrialSnapshot = "onboarding.trialSnapshot"
+        static let onboardingSiriRemoteInitiallyEnabled = "onboarding.siriRemoteInitiallyEnabled"
         static let onboardingAgentConfigurationPending = "onboarding.agentConfigurationPending"
         static let onboardingMigrationVersion = "onboarding.migrationVersion"
         static let onboardingInstallStateMigrationVersion = "onboarding.installStateMigrationVersion"
@@ -1287,11 +1288,35 @@ final class AppSettings: ObservableObject {
         onboardingRemoteAvailability = availability
     }
 
+    /// Keep the entry state across view recreation and interrupted onboarding runs.
+    var onboardingSiriRemoteInitiallyEnabled: Bool? {
+        defaults.object(forKey: Keys.onboardingSiriRemoteInitiallyEnabled) as? Bool
+    }
+
+    func beginOnboardingSiriRemoteTrial() {
+        guard onboardingSiriRemoteInitiallyEnabled == nil else { return }
+        defaults.set(siriRemoteEnabled, forKey: Keys.onboardingSiriRemoteInitiallyEnabled)
+        AppLogger.shared.write(
+            "ONBOARDING SIRI_REMOTE phase=started initially_enabled=\(siriRemoteEnabled)"
+        )
+    }
+
+    func shouldDisableOnboardingSiriRemote(
+        accessDecision: HostButtonProfilesAccessDecision
+    ) -> Bool {
+        guard onboardingSiriRemoteInitiallyEnabled == false, siriRemoteEnabled else { return false }
+        switch accessDecision {
+        case .allowed, .temporarilyOffline: return false
+        case .requiresPlus, .unavailable: return true
+        }
+    }
+
     func completeOnboarding() {
         recordFirstUseEvent(.completed, step: .complete)
         onboardingStep = .complete
         onboardingCompletedVersion = Self.currentOnboardingVersion
         pendingOnboardingVoiceKeyMigration = nil
+        defaults.removeObject(forKey: Keys.onboardingSiriRemoteInitiallyEnabled)
     }
 
     func restartOnboarding() {

@@ -787,7 +787,7 @@
 "onboarding.control_source.xiaomi_remote.title" = "小米蓝牙遥控器 2 / 2 Pro";
 "onboarding.control_source.xiaomi_remote.detail" = "实体语音键，按住说话、松开结束。";
 "onboarding.control_source.siri_remote.title" = "苹果遥控器第 6 代 / 第 7 代";
-"onboarding.control_source.siri_remote.detail" = "使用实体语音键，按住说话、松开结束。";
+"onboarding.control_source.siri_remote.detail" = "按住语音键说话，松开结束。设置期间可试用，日常语音需会员。";
 "onboarding.control_source.apple_remote.generation_6.title" = "苹果遥控器第 6 代";
 "onboarding.control_source.apple_remote.generation_7.title" = "苹果遥控器第 7 代";
 "onboarding.control_source.chromecast_remote.title" = "Chromecast 语音遥控器";
@@ -951,6 +951,7 @@
 "onboarding.secure_input.detail" = "请退出正在输入密码或使用安全键盘输入的应用，然后重新检测。";
 "onboarding.secure_input.recheck" = "重新检测";
 "onboarding.secure_input.help" = "如果仍未恢复，请锁定 Mac 后使用密码重新解锁，再重新检测。";
+"onboarding.complete.siri_membership" = "语音测试已通过。完成后将关闭本次开启的苹果遥控器语音；开通会员后可在设置中启用。";
 "onboarding.complete.title" = "无线麦已经准备好了";
 "onboarding.complete.detail" = "现在可以用所选控制方式说话输入，也可以在主面板中调整连接、语音和按键设置。";
 "onboarding.complete.runtime_changed" = "当前环境状态发生了变化";
@@ -1245,13 +1246,13 @@
 "statistics.transcripts.entry_count_one" = "%@ 条";
 "statistics.recordings.export_filename" = "回眸-%@.m4a";
 "onboarding.voice_tool.guide.screenshot.doubao_menu" = "在输入法菜单中选择豆包输入法，再打开设置。";
-"onboarding.voice_tool.guide.screenshot.doubao_settings" = "在语音输入中，将匹配模式的快捷键设为 Fn。图中为长按模式。开启全局唤起语音，并在麦克风选择中选择 MiRemoteV 2ch。";
+"onboarding.voice_tool.guide.screenshot.doubao_settings" = "在语音输入中，将匹配模式的快捷键设为 Fn。图中为长按模式。开启全局唤起语音，并在麦克风选择中选择无线麦音频页所选的设备。图中旧设备名为 MiRemoteV 2ch，新安装显示 SayAll。";
 "onboarding.voice_tool.guide.screenshot.weixin_input_menu" = "在输入法菜单中选择微信输入法，再打开设置。";
 "onboarding.voice_tool.guide.screenshot.weixin_input_settings" = "在语音输入中开启按住说话，并将快捷键设为 Fn。";
 "onboarding.voice_tool.guide.screenshot.weixin_app_shortcuts" = "在微信设置的快捷键中，清除语音输入文字下按住和按下开始模式占用的 Fn 快捷键。";
 "onboarding.voice_tool.guide.screenshot.system_fn" = "在系统设置的键盘中，将按下🌐键时设为不执行任何操作。";
 "onboarding.voice_tool.guide.screenshot.vokie_step_1" = "在 Vokie 首页，将普通输入快捷键设为 Fn。";
-"onboarding.voice_tool.guide.screenshot.vokie_step_2" = "在 Vokie 的通用设置中，确认麦克风使用 MiRemoteV 2ch。";
+"onboarding.voice_tool.guide.screenshot.vokie_step_2" = "在 Vokie 的通用设置中，选择无线麦音频页所选的麦克风。图中旧设备名为 MiRemoteV 2ch，新安装显示 SayAll。";
 "siri_remote.activation.enable" = "启用";
 "siri_remote.activation.open_membership" = "点击开通会员功能";
 "siri_remote.activation.disable" = "停用";

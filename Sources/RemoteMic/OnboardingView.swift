@@ -90,6 +90,7 @@ struct OnboardingView: View {
     private let voiceToolAvailabilityOverride: [OnboardingVoiceTool: OnboardingVoiceToolAvailability]?
     private let remoteInputDiagnosticOverride: FirstUseRemoteInputDiagnostic?
     private let interactionProbe: OnboardingInteractionProbe?
+    private let siriRemotePackageInstalled: Bool
 
     @State private var bluetoothAuthorization = CBManager.authorization
     @State private var inputMonitoringGranted = HIDRemoteMonitor.isInputMonitoringGranted
@@ -149,7 +150,8 @@ struct OnboardingView: View {
         voiceToolAvailabilityOverride: [OnboardingVoiceTool: OnboardingVoiceToolAvailability]? = nil,
         initialInputMethodGuideStep: Int? = nil,
         remoteInputDiagnosticOverride: FirstUseRemoteInputDiagnostic? = nil,
-        interactionProbe: OnboardingInteractionProbe? = nil
+        interactionProbe: OnboardingInteractionProbe? = nil,
+        siriRemotePackageInstalledOverride: Bool? = nil
     ) {
         self.model = model
         membershipFeature = model.membershipFeature
@@ -160,6 +162,8 @@ struct OnboardingView: View {
         self.voiceToolAvailabilityOverride = voiceToolAvailabilityOverride
         self.remoteInputDiagnosticOverride = remoteInputDiagnosticOverride
         self.interactionProbe = interactionProbe
+        siriRemotePackageInstalled = siriRemotePackageInstalledOverride ??
+            OnboardingBuildCapabilities.isSiriRemotePackageInstalled()
         _voiceToolAvailability = State(
             initialValue: voiceToolAvailabilityOverride ?? Self.detectVoiceToolAvailability()
         )
@@ -195,6 +199,11 @@ struct OnboardingView: View {
             }.padding(20)
         }
         .onAppear {
+            settings.beginOnboardingSiriRemoteTrial()
+            AppLogger.shared.write(
+                "ONBOARDING SIRI_REMOTE phase=availability installed=\(siriRemotePackageInstalled) " +
+                    "available=\(availableControlSources.contains(.siriRemote))"
+            )
             refreshPermissionStates()
             refreshVoiceToolAvailability()
             prepareForStep(settings.onboardingStep)
@@ -743,14 +752,20 @@ struct OnboardingView: View {
         }
     }
 
+    private var availableControlSources: [OnboardingControlSource] {
+        OnboardingBuildCapabilities.availableControlSources(
+            siriRemotePackageInstalled: siriRemotePackageInstalled
+        )
+    }
+
     private var availablePhysicalControlSources: [OnboardingControlSource] {
-        OnboardingBuildCapabilities.availableControlSources.filter {
+        availableControlSources.filter {
             [.xiaomiRemote, .siriRemote].contains($0)
         }
     }
 
     private var availableAlternativeControlSources: [OnboardingControlSource] {
-        OnboardingBuildCapabilities.availableControlSources.filter {
+        availableControlSources.filter {
             [.chromecastRemote, .appleCompanion, .webRemote].contains($0)
         }
     }
@@ -2217,7 +2232,11 @@ struct OnboardingView: View {
                 .font(.system(size: 46))
                 .foregroundStyle(Color.green)
             onboardingTitle("onboarding.complete.title")
-            Text(verbatim: localization.text("onboarding.complete.detail"))
+            Text(verbatim: localization.text(
+                settings.shouldDisableOnboardingSiriRemote(
+                    accessDecision: membershipFeature.buttonProfilesAccessDecision
+                ) ? "onboarding.complete.siri_membership" : "onboarding.complete.detail"
+            ))
                 .font(.system(size: 15))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -2894,7 +2913,7 @@ struct OnboardingView: View {
                 selectedVoiceToolRuntimeReady
         }
         if settings.onboardingStep == .remoteAvailability {
-            return settings.onboardingControlSource != .unselected
+            return availableControlSources.contains(settings.onboardingControlSource)
         }
         return policyAllowsContinue &&
             (settings.onboardingStep != .voiceTool ||
@@ -3511,9 +3530,10 @@ struct OnboardingView: View {
     }
 
     private func selectAppleRemote(_ generation: OnboardingAppleRemoteGeneration) {
+        guard availableControlSources.contains(.siriRemote) else { return }
         settings.setOnboardingAppleRemoteGeneration(generation)
         selectControlSource(.siriRemote)
-        model.setSiriRemoteEnabled(true)
+        model.enableSiriRemoteForOnboarding()
     }
 
     private func handleLearnedShortcut(_ shortcut: CustomKeyboardShortcut) {
@@ -3698,6 +3718,12 @@ struct OnboardingView: View {
 
     private func prepareForStep(_ step: OnboardingStep) {
         refreshPermissionStates()
+        if settings.onboardingControlSource == .siriRemote,
+           !availableControlSources.contains(.siriRemote) {
+            selectControlSource(.unselected)
+            settings.setOnboardingStep(.remoteAvailability)
+            return
+        }
         switch step {
         case .voiceTool:
             // The current flow always uses the documented Fn-based path. Keep
@@ -3785,7 +3811,7 @@ struct OnboardingView: View {
         if settings.onboardingControlSource == .siriRemote {
             switch failure {
             case .voiceSessionNotStarted, .voiceNoSamples, .voiceAudioDeliveryFailed:
-                model.setSiriRemoteEnabled(true)
+                model.enableSiriRemoteForOnboarding()
             default:
                 break
             }
@@ -3842,7 +3868,7 @@ struct OnboardingView: View {
             model.disableWebRemoteConnection()
             model.enableWebRemoteConnection()
         case .siriRemote:
-            model.setSiriRemoteEnabled(true)
+            model.enableSiriRemoteForOnboarding()
             prepareSelectedControlConnection()
         case .xiaomiRemote, .chromecastRemote, .unselected:
             prepareSelectedControlConnection()
@@ -4392,7 +4418,7 @@ struct OnboardingView: View {
             }
         }
         if settings.onboardingStep == .complete {
-            settings.completeOnboarding()
+            model.completeOnboarding()
             return
         }
         if let next = settings.onboardingStep.next {
