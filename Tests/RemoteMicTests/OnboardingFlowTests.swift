@@ -6,6 +6,50 @@ import SwiftUI
 
 @Suite("First-run onboarding")
 struct OnboardingFlowTests {
+    @Test func onboardingSourceVisibilityHidesChromecastButKeepsOtherSources() {
+        let visible = OnboardingControlSourceVisibilityPolicy.visibleSources(
+            OnboardingControlSource.allCases
+        )
+        #expect(!visible.contains(.chromecastRemote))
+        #expect(visible.contains(.xiaomiRemote))
+        #expect(visible.contains(.appleCompanion))
+        #expect(visible.contains(.webRemote))
+        #expect(visible.contains(.unselected))
+    }
+
+    @Test func onboardingRightPaneAndSourceScrollerUseTheApprovedLayoutRules() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/OnboardingView.swift"),
+            encoding: .utf8
+        )
+        #expect(source.contains(".scrollIndicators(.hidden)"))
+        #expect(source.contains("minHeight: max(0, proxy.size.height - 56)"))
+        #expect(source.contains("alignment: .center"))
+    }
+
+    @Test func webRemotePreparationCopyDescribesTheNextStep() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let chinese = try String(
+            contentsOf: root.appendingPathComponent("Resources/zh-Hans.lproj/Localizable.strings"),
+            encoding: .utf8
+        )
+        let english = try String(
+            contentsOf: root.appendingPathComponent("Resources/en.lproj/Localizable.strings"),
+            encoding: .utf8
+        )
+        #expect(chinese.contains("\"onboarding.web_remote.preparing\" = \"下一步生成二维码\";"))
+        #expect(english.contains("\"onboarding.web_remote.preparing\" = \"Next, generate a QR code\";"))
+        #expect(!chinese.contains("\"onboarding.web_remote.preparing\" = \"正在生成二维码\";"))
+        #expect(!english.contains("\"onboarding.web_remote.preparing\" = \"Generating a QR code\";"))
+    }
+
     @Test func siriRemoteRequiresBothBuildSupportAndInstallerReceipt() {
         #expect(OnboardingBuildCapabilities.isSiriRemotePackageInstalled { path in
             path == "/var/db/receipts/com.hd838a.RemoteMic.siri-remote.plist"
@@ -52,6 +96,17 @@ struct OnboardingFlowTests {
             #expect(resumed.isOnboardingComplete)
             #expect(resumed.onboardingSiriRemoteInitiallyEnabled == nil)
         }
+    }
+
+    @Test @MainActor func hiddenChromecastSelectionReturnsToTheSourcePage() throws {
+        let fixture = try OnboardingOffscreenFixture(
+            step: .remoteAvailability,
+            controlSource: .chromecastRemote
+        )
+        defer { fixture.close() }
+        #expect(fixture.settings.onboardingStep == .remoteAvailability)
+        #expect(fixture.settings.onboardingControlSource == .unselected)
+        #expect(fixture.probe.actions["control-source.chromecast_remote"] == nil)
     }
 
     @Test @MainActor func missingSiriRemotePackageRemovesCardsAndRepairsSavedSelection() throws {

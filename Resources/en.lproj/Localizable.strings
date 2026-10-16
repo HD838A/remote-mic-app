@@ -900,7 +900,7 @@
 "onboarding.web_remote.connected" = "Mini program connected";
 "onboarding.web_remote.unavailable" = "Mini program is unavailable";
 "onboarding.web_remote.connecting" = "Preparing a secure connection";
-"onboarding.web_remote.preparing" = "Generating a QR code";
+"onboarding.web_remote.preparing" = "Next, generate a QR code";
 "onboarding.web_remote.waiting" = "Waiting for the phone to scan";
 "onboarding.web_remote.scan" = "Scan with WeChat";
 "onboarding.web_remote.retry" = "Generate a New QR Code";
