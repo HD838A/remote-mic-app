@@ -274,7 +274,15 @@ struct OnboardingFlowTests {
         #expect(prompt.contains("--json"))
         #expect(prompt.contains("不要操作屏幕"))
         #expect(prompt.contains("停在真实语音测试步骤"))
+        #expect(prompt.contains("音频输出设备"))
+        #expect(prompt.contains("同一设备选择为麦克风"))
+        #expect(prompt.contains("staged 配置已准备"))
         #expect(!prompt.contains("/Users/"))
+
+        let english = OnboardingAIAssistantPrompt.english
+        #expect(english.contains("audio output device"))
+        #expect(english.contains("same device as its microphone"))
+        #expect(english.contains("staged configuration is prepared"))
     }
 
     @Test func agentConfigurationCommandIsHeadlessAndKeepsVerificationAsASeparateStep() throws {
