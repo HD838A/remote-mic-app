@@ -46,10 +46,11 @@ final class ATVVAudioDiagnostics {
         let played: Int?
         var coverage: Double { Double(pcm) / Double(max(1, end - start)) }
         var encoded: String {
-            [index, start, end, rx, accepted, pcm, routed, dropped, partial, mainLag, gap]
-                .map(String.init).joined(separator: ",") + "," +
-                (scheduled.map(String.init) ?? "unknown") + "," +
-                (played.map(String.init) ?? "unknown")
+            let counters = [index, start, end, rx, accepted, pcm, routed, dropped, partial, mainLag, gap]
+            let counterText = counters.map { String($0) }.joined(separator: ",")
+            let scheduledText = scheduled.map { String($0) } ?? "unknown"
+            let playedText = played.map { String($0) } ?? "unknown"
+            return "\(counterText),\(scheduledText),\(playedText)"
         }
     }
     private var windowStartAt: TimeInterval?
