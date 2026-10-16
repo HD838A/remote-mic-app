@@ -2,6 +2,31 @@
 
 > 执行本手册或修改 Onboarding 前，先完整阅读跨平台产品规范 [`feature/first-run-onboarding/PRODUCT_SPEC.md`](../feature/first-run-onboarding/PRODUCT_SPEC.md) 和 [macOS 平台适配](../feature/first-run-onboarding/platform-macos.md)。未来 Windows 测试应从同一产品规范出发，并使用 [Windows 平台适配](../feature/first-run-onboarding/platform-windows.md) 建立独立测试手册。
 
+## 2026-10-17 Onboarding 布局与来源显示回归
+
+适用范围：右栏布局、控制来源选择页和微信小程序连接页。该变更属于流程共享布局与用户可见文案变化，必须执行离屏生产截图、自动化测试和真实窗口检查。
+
+### 自动化检查
+
+- 使用 `swift test --disable-keychain --filter OnboardingFlowTests`。
+- 确认来源可见性策略隐藏 Chromecast，但保留其他来源和运行时枚举。
+- 确认右栏使用可用高度居中布局，左栏滚动使用隐藏指示器。
+- 确认中文显示“下一步生成二维码”，英文显示“Next, generate a QR code”。
+
+### 生产页面检查
+
+1. 在 `1020 × 772` 窗口打开控制来源页。
+2. 展开“更多控制方式”，确认内容可以滚动访问，页面不显示滚动条或滚动轨道。
+3. 确认列表中没有 Chromecast 卡片；确认小米、已安装的 Siri Remote、iPhone 和微信小程序来源仍按当前构建能力显示。
+4. 进入欢迎页、权限页、连接页和完成页，确认右栏主图、说明和状态卡在可用高度内整体居中。内容较高时可以滚动，初始位置不能贴在顶部。
+5. 进入“允许无线麦连接和控制 Mac”页，在二维码尚未生成状态确认右侧文案为“下一步生成二维码”；英文确认文案为“Next, generate a QR code”。
+6. 切换浅色和深色外观，并重复第 2 至第 5 步。中文字号不得小于 12pt，右栏不得裁切。
+
+### 失败判定与边界
+
+- 出现 Chromecast 卡片、滚动条、右栏内容贴顶或旧二维码文案，均判定失败。
+- 自动化测试和离屏截图只能证明页面结构、可见性和文案。真实微信扫码、真实控制设备连接和系统权限仍需现场验证。
+
 ## 2026-10-16 会员与安装状态回归
 
 适用分支：`codex/onboarding-membership-siri-audio-20261015`。本次包含来源门禁和持久化变化，按流程类验证；纯截图与单元测试不能替代真实旅程。

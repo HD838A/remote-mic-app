@@ -900,7 +900,7 @@
 "onboarding.web_remote.connected" = "小程序已连接";
 "onboarding.web_remote.unavailable" = "小程序暂时不可用";
 "onboarding.web_remote.connecting" = "正在准备安全连接";
-"onboarding.web_remote.preparing" = "正在生成二维码";
+"onboarding.web_remote.preparing" = "下一步生成二维码";
 "onboarding.web_remote.waiting" = "等待手机扫码连接";
 "onboarding.web_remote.scan" = "用微信扫描小程序码";
 "onboarding.web_remote.retry" = "重新生成二维码";

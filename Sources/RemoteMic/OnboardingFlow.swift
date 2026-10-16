@@ -502,6 +502,16 @@ enum OnboardingBuildCapabilities {
     }
 }
 
+/// Onboarding may hide a source while keeping its runtime implementation and
+/// persisted compatibility values available to the rest of the app.
+enum OnboardingControlSourceVisibilityPolicy {
+    static func visibleSources(
+        _ sources: [OnboardingControlSource]
+    ) -> [OnboardingControlSource] {
+        sources.filter { $0 != .chromecastRemote }
+    }
+}
+
 struct OnboardingVoicePairingPlan: Equatable {
     let binding: VoiceToolUserBinding
     let controlSource: OnboardingControlSource
