@@ -98,6 +98,17 @@ struct OnboardingFlowTests {
         }
     }
 
+    @Test @MainActor func hiddenChromecastSelectionReturnsToTheSourcePage() throws {
+        let fixture = try OnboardingOffscreenFixture(
+            step: .remoteAvailability,
+            controlSource: .chromecastRemote
+        )
+        defer { fixture.close() }
+        #expect(fixture.settings.onboardingStep == .remoteAvailability)
+        #expect(fixture.settings.onboardingControlSource == .unselected)
+        #expect(fixture.probe.actions["control-source.chromecast_remote"] == nil)
+    }
+
     @Test @MainActor func missingSiriRemotePackageRemovesCardsAndRepairsSavedSelection() throws {
         let fixture = try OnboardingOffscreenFixture(
             step: .remote,

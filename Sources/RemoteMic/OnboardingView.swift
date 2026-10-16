@@ -2379,46 +2379,46 @@ struct OnboardingView: View {
     private var rightPane: some View {
         GeometryReader { proxy in
             ZStack {
-            LinearGradient(
-                colors: rightPaneGradientColors,
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
-
-            Circle()
-                .fill(rightPaneHighlightColor)
-                .frame(width: 360, height: 360)
-                .blur(radius: 10)
-                .offset(x: 110, y: -110)
-
-            ScrollView(.vertical, showsIndicators: false) {
-                Group {
-                    if settings.onboardingStep == .voiceTool,
-                       settings.onboardingVoiceTool != .unselected {
-                        inputMethodGuide(for: settings.onboardingVoiceTool)
-                            .frame(maxWidth: 440)
-                            .padding(.horizontal, 28)
-                    } else if settings.onboardingStep == .welcome || settings.onboardingStep == .voiceTool {
-                        welcomeIllustration
-                    } else if settings.onboardingStep == .remoteAvailability {
-                        selectedControlSourceIllustration
-                    } else if settings.onboardingStep == .controlMethod {
-                        controlMethodIllustration
-                    } else if settings.onboardingStep == .complete {
-                        completeIllustration
-                    } else {
-                        selectedControlIllustration
-                    }
-                }
-                .frame(
-                    maxWidth: .infinity,
-                    minHeight: max(0, proxy.size.height - 56),
-                    alignment: .center
+                LinearGradient(
+                    colors: rightPaneGradientColors,
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
                 )
-                .padding(.vertical, 28)
+                .ignoresSafeArea()
+
+                Circle()
+                    .fill(rightPaneHighlightColor)
+                    .frame(width: 360, height: 360)
+                    .blur(radius: 10)
+                    .offset(x: 110, y: -110)
+
+                ScrollView(.vertical, showsIndicators: false) {
+                    Group {
+                        if settings.onboardingStep == .voiceTool,
+                           settings.onboardingVoiceTool != .unselected {
+                            inputMethodGuide(for: settings.onboardingVoiceTool)
+                                .frame(maxWidth: 440)
+                                .padding(.horizontal, 28)
+                        } else if settings.onboardingStep == .welcome || settings.onboardingStep == .voiceTool {
+                            welcomeIllustration
+                        } else if settings.onboardingStep == .remoteAvailability {
+                            selectedControlSourceIllustration
+                        } else if settings.onboardingStep == .controlMethod {
+                            controlMethodIllustration
+                        } else if settings.onboardingStep == .complete {
+                            completeIllustration
+                        } else {
+                            selectedControlIllustration
+                        }
+                    }
+                    .frame(
+                        maxWidth: .infinity,
+                        minHeight: max(0, proxy.size.height - 56),
+                        alignment: .center
+                    )
+                    .padding(.vertical, 28)
+                }
             }
-        }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -3726,6 +3726,11 @@ struct OnboardingView: View {
 
     private func prepareForStep(_ step: OnboardingStep) {
         refreshPermissionStates()
+        if settings.onboardingControlSource == .chromecastRemote {
+            selectControlSource(.unselected)
+            settings.setOnboardingStep(.remoteAvailability)
+            return
+        }
         if settings.onboardingControlSource == .siriRemote,
            !availableControlSources.contains(.siriRemote) {
             selectControlSource(.unselected)
