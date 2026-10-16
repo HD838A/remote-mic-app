@@ -186,10 +186,10 @@ enum OnboardingAIAssistantPrompt {
     2. 自动选择当前已连接的遥控器；如果有多个候选且无法判断，只向我询问一次。
     3. 自动选择已安装且可用的语音工具：豆包、微信输入法、Vokie、Typeless 或其他工具；如果有多个候选且无法判断，只询问我一次。
     4. 让本次 Onboarding 使用 Fn，并按控制设备与语音工具匹配的“按住”或“按一次”方式配置。
-    5. 选择可用的无线麦音频设备作为语音输入路线，并保留当前增益；如果需要，可把增益调整到适合小声或气声的范围。
+    5. 选择可用的无线麦音频输出设备，并保留当前增益。第三方语音工具必须把同一设备选择为麦克风；需要调整增益时，在无线麦真实语音测试页调整。
     6. 只修改无线麦自己的配置，不读取或修改第三方语音工具的私有文件、数据库、沙盒或未公开协议。
     7. 配置成功后，将无线麦向导停在真实语音测试步骤，不要跳过语音、音频、按键和文字上屏验证，也不要把写入配置当成验证成功。
-    8. 如果需要 macOS 权限、用户选择或真实说话测试，明确告诉我还缺哪一步；否则告诉我配置已准备完成。
+    8. 如果需要 macOS 权限、用户选择或真实说话测试，明确告诉我还缺哪一步；JSON 返回 configured 或 permission_required 只表示 staged 配置已准备，不能表示真实语音验证已完成。
 
     请使用命令返回的 JSON 结果判断成功或失败，并在失败时说明具体原因。不要伪造完成状态。
     """
@@ -206,10 +206,10 @@ enum OnboardingAIAssistantPrompt {
     2. Select the currently connected remote automatically; ask me at most once if multiple candidates cannot be distinguished.
     3. Select an installed and available voice typing app: Doubao, WeType, Vokie, Typeless, or Other; ask me at most once if multiple candidates cannot be distinguished.
     4. Use Fn for this onboarding run and apply the hold-or-toggle behavior matched to the selected remote and voice typing app.
-    5. Select an available SayAll audio device for voice input and keep the current gain; adjust it only if needed for a quiet or breathy voice.
+    5. Select an available SayAll audio output device and keep the current gain. The third-party voice typing app must select the same device as its microphone; adjust the gain only on SayAll’s real voice-test page if needed.
     6. Modify only SayAll’s own configuration. Do not read or modify private files, databases, sandboxes, or undocumented protocols of third-party voice typing apps.
     7. After configuration, leave SayAll at the real voice-test step. Do not skip voice, audio, button, or text-on-screen verification, and do not treat a written configuration as proof of success.
-    8. If macOS permissions, a user choice, or a real spoken test is still required, tell me exactly what remains; otherwise report that configuration is prepared.
+    8. If macOS permissions, a user choice, or a real spoken test is still required, tell me exactly what remains. A JSON status of configured or permission_required means only that staged configuration is prepared; it does not mean real voice verification is complete.
 
     Use the command’s JSON result to determine success or failure, and explain the concrete reason if it fails. Never fabricate completion.
     """
