@@ -316,6 +316,32 @@ struct ATVVAudioDiagnosticsTests {
         #expect(final.contains("trigger_down_to_first_pcm_ms=unknown"))
     }
 
+    @Test func finalCorrelatesControlTailAndPerWindowDeliveryWithoutPayloads() throws {
+        let clock = Clock()
+        let diagnostic = clock.make(42)
+        diagnostic.configure(generation: 9, version: 0x0100, codec: 2, frameBytes: 120, sampleRate: 16_000)
+        diagnostic.start(frameSamples: 240, origin: "remote_initiated")
+        diagnostic.control(.start, at: clock.now)
+        for index in 0..<80 {
+            clock.now = 100 + Double(index) * 0.015
+            diagnostic.receive(bytes: 120, frameSize: 120, at: clock.now)
+            diagnostic.accept(bytes: 120)
+            diagnostic.decoded(bytes: 120, samples: 240)
+            diagnostic.routed(samples: 240, enqueued: true)
+            diagnostic.handlerFinished(since: clock.now)
+        }
+        diagnostic.control(.stop, at: clock.now)
+        diagnostic.stop(reason: "remote_stop")
+        clock.advance(0.4)
+        let final = try #require(clock.finals.first)
+        #expect(final.contains("ble_generation=9 protocol_version=256 codec=2 frame_bytes=120 sample_rate=16000"))
+        #expect(final.contains("control_tail_schema=kind,offset_ms,callbacks,pcm_samples"))
+        #expect(final.contains("control_tail=start:"))
+        #expect(final.contains("timeline_schema=v1"))
+        #expect(final.contains("capture_samples=unknown radio_sequence=unknown"))
+        #expect(!final.contains("pcm="))
+    }
+
     @Test func callbackQueueAndVoiceBusinessPathRemainAtTheStableBaseline() throws {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()

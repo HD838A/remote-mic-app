@@ -29,6 +29,52 @@ final class ATVVAudioDiagnostics {
     private let log: (String) -> Void
     private let uptime: () -> TimeInterval
     private let schedule: (TimeInterval, @escaping () -> Void) -> Void
+    // Bounded metadata only. No PCM, packet payload, device identity or transcript.
+    private struct Window {
+        let index: Int
+        let start: Int
+        let end: Int
+        let rx: Int
+        let accepted: Int
+        let pcm: Int
+        let routed: Int
+        let dropped: Int
+        let partial: Int
+        let mainLag: Int
+        let gap: Int
+        let scheduled: Int?
+        let played: Int?
+        var coverage: Double { Double(pcm) / Double(max(1, end - start)) }
+        var encoded: String {
+            [index, start, end, rx, accepted, pcm, routed, dropped, partial, mainLag, gap]
+                .map(String.init).joined(separator: ",") + "," +
+                (scheduled.map(String.init) ?? "unknown") + "," +
+                (played.map(String.init) ?? "unknown")
+        }
+    }
+    private var windowStartAt: TimeInterval?
+    private var windowBaseline = [0, 0, 0, 0, 0, 0]
+    private var windowCount = 0
+    private var firstWindows: [Window] = []
+    private var tailWindows: [Window] = []
+    private var lowCoverageWindows: [Window] = []
+    private var windowMainLag = 0
+    private var windowCallbackGap = 0
+    private var mainProbeMaxLag = 0
+    private var firstCallbackAt: TimeInterval?
+    private var firstPostStopCallbackAt: TimeInterval?
+    private var lastCallbackAtStop: TimeInterval?
+    private var lastPCMAtStop: TimeInterval?
+    private var callbacksAfterStop = 0
+    private var bytesAfterStop = 0
+    private var controlEvents: [String] = []
+    private var controlEventCount = 0
+    private var precedingOperationID: UInt64?
+    private var precedingStopAt: TimeInterval?
+    private var closeRequests = 0
+    private var closeWriteFailures = 0
+    private var firstCloseAt: TimeInterval?
+    private var streamConfiguration = "ble_generation=unknown protocol_version=unknown codec=unknown frame_bytes=unknown sample_rate=unknown"
     private var startedAt: TimeInterval?
     private var stoppedAt: TimeInterval?
     private var stopReason = "none"
@@ -111,6 +157,12 @@ final class ATVVAudioDiagnostics {
     }
 
     func receive(bytes: Int, frameSize: Int, at time: TimeInterval) {
+        if firstCallbackAt == nil { firstCallbackAt = time }
+        if hasStopped {
+            callbacksAfterStop += 1
+            bytesAfterStop += bytes
+            if firstPostStopCallbackAt == nil { firstPostStopCallbackAt = time }
+        }
         callbacks += 1
         lastReceivedBytes = bytes
         callbackBytes += bytes
@@ -119,6 +171,7 @@ final class ATVVAudioDiagnostics {
         if frameSize > 0, bytes > 0, bytes % frameSize != 0 { nonFrameMultipleNotifications += 1 }
         if let previous = lastCallbackAt {
             let gap = milliseconds(time - previous)
+            windowCallbackGap = max(windowCallbackGap, gap)
             if gap > maxGapMilliseconds {
                 maxGapMilliseconds = gap
                 maxGapAtMilliseconds = milliseconds(time - (startedAt ?? createdAt))
@@ -149,9 +202,85 @@ final class ATVVAudioDiagnostics {
         startedAt = uptime()
         lastProgressAt = startedAt!
         streamOrigin = origin
+        windowStartAt = startedAt
+        observeMainQueue()
         log("ATVV AUDIO diagnostic operation_id=\(operationID) phase=started " +
             "callback_queue=main callback_wait_ms=unknown transport_arrival=unknown stream_origin=\(origin) frame_samples=\(frameSamples)")
         observeSilence()
+    }
+
+    func precededBy(_ previous: ATVVAudioDiagnostics) {
+        precedingOperationID = previous.operationID
+        precedingStopAt = previous.stoppedAt
+    }
+
+    func configure(generation: UInt64, version: UInt16, codec: UInt8, frameBytes: Int, sampleRate: Double) {
+        streamConfiguration = "ble_generation=\(generation) protocol_version=\(version) codec=\(codec) " +
+            "frame_bytes=\(frameBytes) sample_rate=\(Int(sampleRate))"
+    }
+
+    enum Control: String { case start, stop, sync }
+
+    func control(_ event: Control, at time: TimeInterval) {
+        controlEventCount += 1
+        if controlEvents.count == 8 { controlEvents.removeFirst() }
+        controlEvents.append("\(event.rawValue):\(milliseconds(time - (startedAt ?? createdAt))):\(callbacks):\(decodedSamples)")
+    }
+
+    func microphoneCloseRequested(written: Bool) {
+        closeRequests += 1
+        if !written { closeWriteFailures += 1 }
+        if firstCloseAt == nil { firstCloseAt = uptime() }
+    }
+
+    /// Measures main-queue scheduling delay, not Bluetooth transport arrival or callback wait.
+    private func observeMainQueue() {
+        let due = uptime() + 0.1
+        schedule(0.1) { [weak self] in
+            guard let self, !self.hasStopped else { return }
+            let now = self.uptime()
+            let lag = self.milliseconds(now - due)
+            self.mainProbeMaxLag = max(self.mainProbeMaxLag, lag)
+            self.windowMainLag = max(self.windowMainLag, lag)
+            self.checkpoint(at: now)
+            self.observeMainQueue()
+        }
+    }
+
+    private func checkpoint(at now: TimeInterval, force: Bool = false) {
+        guard let start = windowStartAt, let origin = startedAt,
+              now > start, force || now - start >= 1 else { return }
+        let totals = [callbackBytes, acceptedBytes, decodedSamples, routedSamples, droppedBytes, partialDiscardedBytes]
+        let delta = zip(totals, windowBaseline).map { $0.0 - $0.1 }
+        let observed = playback?()
+        let isolated = observed?.sessionIsolated == true
+        let window = Window(index: windowCount, start: milliseconds(start - origin), end: milliseconds(now - origin),
+                            rx: delta[0], accepted: delta[1], pcm: delta[2], routed: delta[3],
+                            dropped: delta[4], partial: delta[5], mainLag: windowMainLag, gap: windowCallbackGap,
+                            scheduled: isolated ? observed.map { max(0, $0.output.counters.scheduledSamples - countersAtStart.scheduledSamples) } : nil,
+                            played: isolated ? observed.map { max(0, $0.output.counters.playedSamples - countersAtStart.playedSamples) } : nil)
+        windowCount += 1
+        if firstWindows.count < 3 { firstWindows.append(window) }
+        if tailWindows.count == 8 { tailWindows.removeFirst() }
+        tailWindows.append(window)
+        if window.end - window.start >= 500 {
+            lowCoverageWindows.append(window)
+            lowCoverageWindows.sort { $0.coverage == $1.coverage ? $0.index < $1.index : $0.coverage < $1.coverage }
+            if lowCoverageWindows.count > 3 { lowCoverageWindows.removeLast() }
+        }
+        windowBaseline = totals
+        windowStartAt = now
+        windowMainLag = 0
+        windowCallbackGap = 0
+    }
+
+    private func timelineFields() -> String {
+        var selected: [Int: Window] = [:]
+        for window in firstWindows + tailWindows + lowCoverageWindows { selected[window.index] = window }
+        let windows = selected.values.sorted { $0.index < $1.index }.map(\.encoded).joined(separator: ";")
+        return "timeline_schema=v1 timeline_columns=index,start_ms,end_ms,rx_bytes,accepted_bytes,pcm_samples,routed_samples,drop_bytes,partial_bytes,main_lag_ms,callback_gap_ms,scheduled_total,played_total " +
+            "timeline_windows=\(windowCount) timeline_omitted=\(windowCount - selected.count) " +
+            "timeline_selection=first3_last8_lowest3 timeline_basis=main_observed windows=\(windows.isEmpty ? "none" : windows)"
     }
 
     private func observeSilence() {
@@ -256,6 +385,7 @@ final class ATVVAudioDiagnostics {
 
     func handlerFinished(since time: TimeInterval) {
         maxHandlerMilliseconds = max(maxHandlerMilliseconds, milliseconds(uptime() - time))
+        if !hasStopped { checkpoint(at: uptime()) }
         guard !hasStopped, uptime() - lastProgressAt >= Self.progressInterval,
               progressLines < Self.maximumProgressLines else { return }
         let interval = uptime() - lastProgressAt
@@ -279,6 +409,9 @@ final class ATVVAudioDiagnostics {
     func stop(reason: String) {
         guard !hasStopped else { return }
         stoppedAt = uptime()
+        lastCallbackAtStop = lastCallbackAt
+        lastPCMAtStop = lastPCMAt
+        checkpoint(at: stoppedAt!, force: true)
         fnDownAtStop = fnObservation?().down
         stopReason = reason
         log("ATVV AUDIO diagnostic operation_id=\(operationID) phase=stopping reason=\(reason) " +
@@ -333,6 +466,15 @@ final class ATVVAudioDiagnostics {
         fields.append("ATVV AUDIO diagnostic operation_id=\(operationID) phase=completed completion=\(completion) observed_result=\(result)")
         fields.append("reason=\(stopReason) audio_generation=\(audioGeneration)")
         fields.append(counts())
+        fields.append(streamConfiguration)
+        fields.append("preceding_operation_id=\(precedingOperationID.map(String.init) ?? "none") previous_stop_to_start_ms=\(interval(precedingStopAt, startedAt)) stream_origin=\(streamOrigin)")
+        fields.append("stream_start_uptime_ms=\(startedAt.map { String(milliseconds($0)) } ?? "unknown") stream_stop_uptime_ms=\(milliseconds(stoppedAt))")
+        fields.append("first_callback_offset_ms=\(interval(startedAt, firstCallbackAt)) last_callback_to_stop_ms=\(interval(lastCallbackAtStop, stoppedAt)) last_pcm_to_stop_ms=\(interval(lastPCMAtStop, stoppedAt))")
+        fields.append("callbacks_after_stop=\(callbacksAfterStop) bytes_after_stop=\(bytesAfterStop) stop_to_first_late_callback_ms=\(interval(stoppedAt, firstPostStopCallbackAt))")
+        fields.append("host_close_requests=\(closeRequests) host_close_write_failures=\(closeWriteFailures) host_close_to_stop_ms=\(interval(firstCloseAt, stoppedAt)) host_write_basis=submitted_not_remote_ack")
+        fields.append("control_events=\(controlEventCount) control_tail_schema=kind,offset_ms,callbacks,pcm_samples control_tail=\(controlEvents.isEmpty ? "none" : controlEvents.joined(separator: ";"))")
+        fields.append("main_probe_interval_ms=100 main_probe_max_lag_ms=\(mainProbeMaxLag) capture_samples=unknown radio_sequence=unknown")
+        fields.append(timelineFields())
         fields.append("duration_ms=\(duration) coverage_pct=\(String(format: "%.1f", coverage))")
         fields.append("coverage_basis=main_callback_processing callback_wait_ms=unknown transport_arrival=unknown")
         fields.append("max_callback_gap_ms=\(maxGapMilliseconds) max_gap_at_ms=\(maxGapAtMilliseconds)")

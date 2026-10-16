@@ -452,6 +452,11 @@ final class VoiceRecordingWriter {
     private let pcmFormat: AVAudioFormat
     private var audioFile: AVAudioFile?
     private var isFinished = false
+    private var diagnosticQueueMaxWaitMilliseconds = 0
+    private var diagnosticWriteMaxMilliseconds = 0
+    private var diagnosticFirstWriteAt: TimeInterval?
+    private var diagnosticLastWriteAt: TimeInterval?
+    private var diagnosticFinishAt: TimeInterval?
     private var diagnosticWrittenSamples = 0
     private var diagnosticRejectedSamples = 0
     private var diagnosticWriteFailures = 0
@@ -462,7 +467,14 @@ final class VoiceRecordingWriter {
         "audio_written_samples=\(diagnosticWrittenSamples) " +
             "audio_written_ms=\(diagnosticWrittenSamples * 1_000 / 16_000) " +
             "writer_rejected_samples=\(diagnosticRejectedSamples) " +
-            "writer_failures=\(diagnosticWriteFailures) " + diagnosticErrorFields
+            "writer_failures=\(diagnosticWriteFailures) " +
+            "writer_queue_max_wait_ms=\(diagnosticQueueMaxWaitMilliseconds) writer_max_write_ms=\(diagnosticWriteMaxMilliseconds) " +
+            "writer_first_write_uptime_ms=\(diagnosticUptime(diagnosticFirstWriteAt)) writer_last_write_uptime_ms=\(diagnosticUptime(diagnosticLastWriteAt)) " +
+            "writer_finish_uptime_ms=\(diagnosticUptime(diagnosticFinishAt)) writer_basis=av_audio_file_write_returned " + diagnosticErrorFields
+    }
+
+    private func diagnosticUptime(_ value: TimeInterval?) -> String {
+        value.map { String(Int(($0 * 1_000).rounded())) } ?? "unknown"
     }
 
     init(url: URL) throws {
@@ -481,8 +493,11 @@ final class VoiceRecordingWriter {
 
     func append(samples: [Int16]) {
         guard !samples.isEmpty else { return }
+        let submittedAt = ProcessInfo.processInfo.systemUptime
         queue.async { [weak self] in
             guard let self else { return }
+            let beganAt = ProcessInfo.processInfo.systemUptime
+            self.diagnosticQueueMaxWaitMilliseconds = max(self.diagnosticQueueMaxWaitMilliseconds, Int(max(0, beganAt - submittedAt) * 1_000))
             guard !self.isFinished, let audioFile = self.audioFile else {
                 self.diagnosticRejectedSamples += samples.count
                 return
@@ -499,6 +514,10 @@ final class VoiceRecordingWriter {
                 buffer.frameLength = AVAudioFrameCount(samples.count)
                 try audioFile.write(from: buffer)
                 self.diagnosticWrittenSamples += samples.count
+                let finishedAt = ProcessInfo.processInfo.systemUptime
+                if self.diagnosticFirstWriteAt == nil { self.diagnosticFirstWriteAt = finishedAt }
+                self.diagnosticLastWriteAt = finishedAt
+                self.diagnosticWriteMaxMilliseconds = max(self.diagnosticWriteMaxMilliseconds, Int(max(0, finishedAt - beganAt) * 1_000))
             } catch {
                 self.diagnosticWriteFailures += 1
                 self.diagnosticRejectedSamples += samples.count
@@ -515,6 +534,7 @@ final class VoiceRecordingWriter {
                 completion(false)
                 return
             }
+            self.diagnosticFinishAt = ProcessInfo.processInfo.systemUptime
             let succeeded = !self.isFinished && self.audioFile != nil
             self.isFinished = true
             self.audioFile = nil
@@ -541,6 +561,7 @@ final class RecordingAssetCoordinator {
     /// 本次会话提交给录音 writer 的样本数。不能证明每个样本写盘成功。
     /// 因为清单里的 duration_ms 是墙上时间，不能反映音频内容长度。
     private var activeSampleCount = 0
+    private var activeDisabledSamples = 0
     private var pendingApplicationMetadata: [UUID: (name: String, bundleIdentifier: String)] = [:]
 
     init(
@@ -578,6 +599,7 @@ final class RecordingAssetCoordinator {
             }
             activeSession = ActiveSession(draft: draft, writer: writer, diagnosticOperationID: diagnosticOperationID)
             activeSampleCount = 0
+            activeDisabledSamples = 0
             if let applicationMetadata {
                 pendingApplicationMetadata[sessionID] = (
                     name: applicationMetadata.applicationName,
@@ -591,7 +613,8 @@ final class RecordingAssetCoordinator {
     }
 
     func append(samples: [Int16]) {
-        guard isEnabled(), let activeSession else { return }
+        guard let activeSession else { return }
+        guard isEnabled() else { activeDisabledSamples += samples.count; return }
         activeSampleCount += samples.count
         activeSession.writer.append(samples: samples)
     }
@@ -600,11 +623,15 @@ final class RecordingAssetCoordinator {
         guard let activeSession else { return }
         self.activeSession = nil
         let recordedSamples = activeSampleCount
+        let disabledSamples = activeDisabledSamples
+        let finishRequestedAt = Int((ProcessInfo.processInfo.systemUptime * 1_000).rounded())
+        let finishContext = " writer_submitted_samples=\(recordedSamples) recorder_disabled_samples=\(disabledSamples) recorder_finish_requested_uptime_ms=\(finishRequestedAt)"
         activeSampleCount = 0
+        activeDisabledSamples = 0
         activeSession.writer.finish { [weak self] succeeded in
             guard let self else { return }
             guard succeeded else {
-                self.log("RECORDING ASSET finalize_failed reason=writer" + self.diagnosticContext(activeSession.diagnosticOperationID) + " " + activeSession.writer.diagnosticSummary)
+                self.log("RECORDING ASSET finalize_failed reason=writer" + self.diagnosticContext(activeSession.diagnosticOperationID) + " " + activeSession.writer.diagnosticSummary + finishContext)
                 return
             }
             do {
@@ -621,11 +648,11 @@ final class RecordingAssetCoordinator {
                         "duration_ms=\(manifest.durationMilliseconds) " +
                         "audio_ms=\(recordedSamples * 1_000 / 16_000) " +
                         "audio_samples=\(recordedSamples) audio_samples_basis=writer_submitted bytes=\(manifest.byteCount)" +
-                        self.diagnosticContext(activeSession.diagnosticOperationID) + " " + activeSession.writer.diagnosticSummary
+                        self.diagnosticContext(activeSession.diagnosticOperationID) + " " + activeSession.writer.diagnosticSummary + finishContext
                 )
                 self.onCommit(manifest)
             } catch {
-                self.log("RECORDING ASSET finalize_failed reason=store" + self.diagnosticContext(activeSession.diagnosticOperationID) + self.diagnosticError(activeSession.diagnosticOperationID, error))
+                self.log("RECORDING ASSET finalize_failed reason=store" + self.diagnosticContext(activeSession.diagnosticOperationID) + self.diagnosticError(activeSession.diagnosticOperationID, error) + finishContext + " " + activeSession.writer.diagnosticSummary)
             }
         }
     }

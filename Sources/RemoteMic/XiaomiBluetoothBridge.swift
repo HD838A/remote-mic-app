@@ -167,12 +167,14 @@ final class XiaomiBluetoothBridge: NSObject {
     var audioFrameSampleCount: Int { capabilities.frameSize * 2 }
 
     private func diagnosticForAudio() -> ATVVAudioDiagnostics {
+        let previous = audioDiagnostics
         if audioDiagnostics?.hasStopped == true,
            lastStopAt.map({ Date().timeIntervalSince($0) >= 0.3 }) ?? true {
             audioDiagnostics = nil
         }
         if audioDiagnostics == nil || audioDiagnostics?.isFinalized == true {
             audioDiagnostics = ATVVAudioDiagnostics()
+            if let previous { audioDiagnostics?.precededBy(previous) }
         }
         return audioDiagnostics!
     }
@@ -446,6 +448,7 @@ final class XiaomiBluetoothBridge: NSObject {
             version: capabilities.version,
             sessionID: sessionID
         ))
+        audioDiagnostics?.microphoneCloseRequested(written: didWrite)
         microphoneOpened = false
         cancelledMicrophoneOpenAt = cancelledOpenAt
         AppLogger.shared.write(
@@ -884,6 +887,7 @@ final class XiaomiBluetoothBridge: NSObject {
     }
 
     private func handleControl(_ data: Data) {
+        let controlAt = ProcessInfo.processInfo.systemUptime
         let bytes = Array(data)
         guard let opcode = bytes.first,
               let generation = currentGeneration()
@@ -966,12 +970,15 @@ final class XiaomiBluetoothBridge: NSObject {
             cancelledMicrophoneOpenAt = nil
             sessionID = receivedSessionID
             startStreaming()
+            audioDiagnostics?.control(.start, at: controlAt)
         case 0x00:
             guard lifecycle.acceptsProtocolData(generation: generation) else { return }
+            audioDiagnostics?.control(.stop, at: controlAt)
             stopStreaming()
         case 0x0A:
             guard lifecycle.acceptsProtocolData(generation: generation) else { return }
             guard bytes.count >= 7 else { return }
+            audioDiagnostics?.control(.sync, at: controlAt)
             let predictorBits = UInt16(bytes[4]) << 8 | UInt16(bytes[5])
             let predictor = Int(Int16(bitPattern: predictorBits))
             pendingSync = (predictor, Int(bytes[6]))
@@ -989,11 +996,17 @@ final class XiaomiBluetoothBridge: NSObject {
         }
     }
 
-    private func startStreaming() {
+    private func startStreaming(implicit: Bool = false) {
+        let previous = audioDiagnostics
         if audioDiagnostics?.hasStopped == true { audioDiagnostics = nil }
-        diagnosticForAudio().start(
+        let diagnostic = diagnosticForAudio()
+        if let previous, previous !== diagnostic { diagnostic.precededBy(previous) }
+        diagnostic.configure(generation: currentGeneration() ?? 0, version: capabilities.version,
+                             codec: capabilities.selectedCodec, frameBytes: capabilities.frameSize,
+                             sampleRate: capabilities.sampleRate)
+        diagnostic.start(
             frameSamples: capabilities.frameSize * 2,
-            origin: microphoneOpened ? "host_requested" : "remote_initiated"
+            origin: implicit ? "implicit_audio" : (microphoneOpened ? "host_requested" : "remote_initiated")
         )
         let partialFrameBytes = accumulator.pending.count
         if partialFrameBytes > 0 {
@@ -1054,7 +1067,7 @@ final class XiaomiBluetoothBridge: NSObject {
                 audioDiagnostics?.reject(.afterStop)
                 return
             }
-            startStreaming()
+            startStreaming(implicit: true)
             AppLogger.shared.write("ATVV STREAM implicit_audio_race")
         }
 
