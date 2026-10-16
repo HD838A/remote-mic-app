@@ -6,13 +6,6 @@ import SwiftUI
 import SayAllMembershipHostAdapter
 #endif
 
-enum HostButtonProfilesAccessDecision: Equatable {
-    case allowed(validUntil: Date)
-    case temporarilyOffline(validUntil: Date)
-    case requiresPlus
-    case unavailable
-}
-
 enum HostRemoteSessionAccess: Equatable {
     case authorized
     case plusRequired

@@ -38,6 +38,11 @@ completion=normal
 同时记录 `trigger_down_to_first_pcm_ms`；能够观察目标工具文字时，再记录
 `trigger_down_to_first_transcript_observation_ms`。只看到“收到音频”“已入队”或“已排空”不能单独判定用户输入完整。
 
+Build 300 及以后还应检查 `timeline_schema=v1`。该时间线只记录有界计数。
+它帮助区分接收前缺口、解码缺口、路由缺口、输出缺口和写入缺口。
+`capture_samples=unknown` 与 `radio_sequence=unknown` 是正常边界。
+它们不能由 Mac App 推断。需要区分遥控器采集与无线传输时，必须补充受支持的蓝牙抓包或设备端计数。
+
 ## 验收边界
 
 单元测试、协议回放、硬件模拟、构建和签名只能证明各自边界；每种硬件仍必须在真实设备、真实虚拟音频设备和目标语音工具上完成首字低延迟与尾字完整验收。一个平台的通过结果不能推导另一个平台通过。
