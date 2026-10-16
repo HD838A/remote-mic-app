@@ -87,6 +87,7 @@
 - 主设置“连接”页只保留主要音频设备、增益、状态和刷新操作，不显示豆包兼容专用卡片、BlackHole 获取入口或测试音按钮。
 - 用户可见文案必须遵守 [`PRODUCT_SPEC.md`](PRODUCT_SPEC.md) 的“用户可见文案必须使用产品语言”不变量；平台实现不得把研发、测试或内部验收状态引入页面。
 - macOS 页面或流程变化必须按 [`design-qa.md`](../../design-qa.md) 和 [`Testing/FirstRunOnboarding.md`](../../Testing/FirstRunOnboarding.md) 完成检查。
+- Onboarding 控制来源页隐藏 Chromecast 卡片，但保留 Chromecast 运行时和兼容代码。右栏内容在正常窗口高度内垂直居中；控制来源页允许滚动但不显示滚动指示器。微信小程序连接页在尚未生成二维码时显示“下一步生成二维码”。
 
 ## 实现与测试入口
 
