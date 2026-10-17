@@ -844,6 +844,11 @@ struct SettingsView: View {
                             editingMappingProfileID = profile
                             selectedSection = .mapping
                         },
+                        onChooseCustomApplication: { completion in
+                            chooseCustomApplicationForButtonProfile { id, displayName, payload in
+                                completion(id, displayName, payload)
+                            }
+                        },
                         chromecastReservedControlIDs: buttonProfilesChromecastReservedControls,
                         membershipNotice: membershipFeature.membershipRequiredView(forButtonProfiles: true) {
                             selectedSection = .membership
@@ -3149,6 +3154,62 @@ struct SettingsView: View {
             )
         }
         setMappingApplicationProfileID(profileID, for: button, trigger: trigger)
+    }
+
+    private func chooseCustomApplicationForButtonProfile(
+        _ completion: @escaping (String, String, Data) -> Void
+    ) {
+        let panel = NSOpenPanel()
+        panel.title = localization.text("custom_application.picker.title")
+        panel.prompt = localization.text("common.action.choose")
+        panel.allowedContentTypes = [.application]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.resolvesAliases = true
+        guard panel.runModal() == .OK,
+              let url = panel.url,
+              let bundle = Bundle(url: url),
+              let bundleIdentifier = bundle.bundleIdentifier,
+              !bundleIdentifier.isEmpty
+        else { return }
+
+        let existing = settings.customApplicationProfiles.first {
+            $0.bundleIdentifier == bundleIdentifier
+        }
+        let profileID: UUID
+        let displayName: String
+        if let existing {
+            var updated = existing
+            updated.applicationPath = url.path
+            settings.updateCustomApplicationProfile(updated)
+            profileID = existing.id
+            displayName = existing.displayName
+        } else {
+            displayName = (bundle.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String)
+                ?? (bundle.object(forInfoDictionaryKey: "CFBundleName") as? String)
+                ?? url.deletingPathExtension().lastPathComponent
+            profileID = settings.addCustomApplicationProfile(
+                CustomApplicationProfile(
+                    displayName: displayName,
+                    bundleIdentifier: bundleIdentifier,
+                    applicationPath: url.path
+                )
+            )
+        }
+
+        guard let payload = try? JSONEncoder().encode(
+            ConfiguredButtonAction(
+                action: .openCustomApplication,
+                shortcut: nil,
+                applicationProfileID: profileID
+            )
+        ) else { return }
+
+        completion(
+            "host.customApplication.\(profileID.uuidString.lowercased())",
+            displayName,
+            payload
+        )
     }
 
     private func recordCustomApplicationInput(profileID: UUID) {
