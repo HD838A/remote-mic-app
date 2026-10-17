@@ -340,10 +340,17 @@ SAYALL_AI_INCLUDED="$(plutil -extract SayAllAIIncluded raw -o - "$PLIST" 2>/dev/
 if [[ "$SAYALL_AI_INCLUDED" == "true" ]]; then
   SAYALL_AI_RESOURCE_BUNDLE="$APP/Contents/Resources/SayAllAI_SayAllAI.bundle"
   test -d "$SAYALL_AI_RESOURCE_BUNDLE"
-  test -f "$SAYALL_AI_RESOURCE_BUNDLE/en.lproj/Localizable.strings"
-  test -f "$SAYALL_AI_RESOURCE_BUNDLE/zh-Hans.lproj/Localizable.strings"
+  if [[ -d "$SAYALL_AI_RESOURCE_BUNDLE/Contents/Resources" ]]; then
+    SAYALL_AI_RESOURCE_ROOT="$SAYALL_AI_RESOURCE_BUNDLE/Contents/Resources"
+    SAYALL_AI_RESOURCE_PLIST="$SAYALL_AI_RESOURCE_BUNDLE/Contents/Info.plist"
+  else
+    SAYALL_AI_RESOURCE_ROOT="$SAYALL_AI_RESOURCE_BUNDLE"
+    SAYALL_AI_RESOURCE_PLIST="$SAYALL_AI_RESOURCE_BUNDLE/Info.plist"
+  fi
+  test -f "$SAYALL_AI_RESOURCE_ROOT/en.lproj/Localizable.strings"
+  test -f "$SAYALL_AI_RESOURCE_ROOT/zh-Hans.lproj/Localizable.strings"
   test -n "$(plutil -extract CFBundleDevelopmentRegion raw -o - \
-    "$SAYALL_AI_RESOURCE_BUNDLE/Info.plist")"
+    "$SAYALL_AI_RESOURCE_PLIST")"
 elif [[ -e "$APP/Contents/Resources/SayAllAI_SayAllAI.bundle" ]]; then
   print -u2 "SayAllAI resource bundle exists without the inclusion marker"
   exit 1
