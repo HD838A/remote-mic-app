@@ -261,18 +261,13 @@ final class MacroFeatureIntegration: ObservableObject {
         feature.changes.receive(on: DispatchQueue.main).sink { [weak self, weak settings] in
             guard let self, let settings else { return }
             DispatchQueue.main.async {
-                guard self.feature.hasLoadedLibrary else { return }
-                let legacy = self.feature.legacyBindings.compactMap { value -> UnifiedButtonBinding? in
-                    guard let button = RemoteButton(rawValue: value.button),
-                          let trigger = ButtonTrigger(rawValue: value.trigger) else { return nil }
-                    return UnifiedButtonBinding(remoteProfileID: value.device, button: button, trigger: trigger,
-                        configured: ConfiguredButtonAction(action: .combinationAction, shortcut: nil, macroID: value.macroID))
-                }
-                do { try settings.migrateLegacyMacroBindings(legacy) }
-                catch { AppLogger.shared.write("BUTTON CONFIGURATION phase=failed result=migration_backup_failed") }
+                self.migrateLegacyBindingsIfLoaded(to: settings)
                 self.objectWillChange.send()
             }
         }.store(in: &subscriptions)
+        // The controller can finish its initial read before this subscription is installed.
+        // Check the already-loaded state so migration does not depend on timing.
+        migrateLegacyBindingsIfLoaded(to: settings)
         #endif
         #if canImport(SayAllButtonProfiles) && SAYALL_UNIFIED_BUTTON_CONFIGURATION
         var lastActiveProfiles: [UUID?: UUID] = [:]
@@ -293,6 +288,28 @@ final class MacroFeatureIntegration: ObservableObject {
         }.store(in: &subscriptions)
         #endif
     }
+
+    #if canImport(SayAllMacroRemoteMic) && SAYALL_UNIFIED_BUTTON_CONFIGURATION
+    private func migrateLegacyBindingsIfLoaded(to settings: AppSettings) {
+        guard feature.hasLoadedLibrary else { return }
+        let legacy = feature.legacyBindings.compactMap { value -> UnifiedButtonBinding? in
+            guard let button = RemoteButton(rawValue: value.button),
+                  let trigger = ButtonTrigger(rawValue: value.trigger) else { return nil }
+            return UnifiedButtonBinding(
+                remoteProfileID: value.device,
+                button: button,
+                trigger: trigger,
+                configured: ConfiguredButtonAction(
+                    action: .combinationAction,
+                    shortcut: nil,
+                    macroID: value.macroID
+                )
+            )
+        }
+        do { try settings.migrateLegacyMacroBindings(legacy) }
+        catch { AppLogger.shared.write("BUTTON CONFIGURATION phase=failed result=migration_backup_failed") }
+    }
+    #endif
 
     #if canImport(SayAllMacroRemoteMic) && SAYALL_UNIFIED_BUTTON_CONFIGURATION
     private func bindingUsages(_ settings: AppSettings) -> [RemoteMicBindingUsage] {
