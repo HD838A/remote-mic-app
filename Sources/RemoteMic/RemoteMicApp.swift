@@ -446,7 +446,8 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
             phoneConnected: model.isPhoneRemoteConnected,
             watchConnected: model.isWatchRemoteConnected,
             webState: model.webRemoteState,
-            isStreaming: model.isStreaming
+            isStreaming: model.isStreaming,
+            voiceWarningLevel: model.voiceSessionWarningLevel
         )
         refreshStatusItemPresentation()
         rebuildStatusMenu()
@@ -678,7 +679,8 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
             phoneConnected: model.$isPhoneRemoteConnected.eraseToAnyPublisher(),
             watchConnected: model.$isWatchRemoteConnected.eraseToAnyPublisher(),
             webState: model.$webRemoteState.eraseToAnyPublisher(),
-            isStreaming: model.$isStreaming.eraseToAnyPublisher()
+            isStreaming: model.$isStreaming.eraseToAnyPublisher(),
+            voiceWarningLevel: model.$voiceSessionWarningLevel.eraseToAnyPublisher()
         )
         .receive(on: RunLoop.main)
         .sink { [weak self] presentation in

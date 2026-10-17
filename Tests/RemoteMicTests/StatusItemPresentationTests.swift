@@ -13,6 +13,7 @@ struct StatusItemPresentationTests {
         @Published var watch = false
         @Published var web: WebRemoteSessionState = .disabled
         @Published var streaming = false
+        @Published var warning: VoiceSessionWarningLevel = .none
 
         var presentation: AnyPublisher<StatusItemPresentation, Never> {
             StatusItemPresentation.publisher(
@@ -20,7 +21,8 @@ struct StatusItemPresentationTests {
                 phoneConnected: $phone.eraseToAnyPublisher(),
                 watchConnected: $watch.eraseToAnyPublisher(),
                 webState: $web.eraseToAnyPublisher(),
-                isStreaming: $streaming.eraseToAnyPublisher()
+                isStreaming: $streaming.eraseToAnyPublisher(),
+                voiceWarningLevel: $warning.eraseToAnyPublisher()
             )
         }
 
@@ -128,6 +130,27 @@ struct StatusItemPresentationTests {
         #expect(observed == [.connected, .streaming])
     }
 
+    @Test func warningLevelUsesOnlyRC001AndRC003Thresholds() {
+        #expect(VoiceSessionWarningLevel.resolve(elapsed: 49.9, model: .rc001) == .none)
+        #expect(VoiceSessionWarningLevel.resolve(elapsed: 50, model: .rc001) == .warning)
+        #expect(VoiceSessionWarningLevel.resolve(elapsed: 54.9, model: .rc003) == .warning)
+        #expect(VoiceSessionWarningLevel.resolve(elapsed: 55, model: .rc003) == .critical)
+        #expect(VoiceSessionWarningLevel.resolve(elapsed: 90, model: .appleSiriRemoteA2854) == .none)
+    }
+
+    @Test func warningPresentationOnlyAppliesWhileStreaming() {
+        let fixture = ConnectionFixture()
+        var observed: [StatusItemPresentation] = []
+        let subscription = fixture.presentation.sink { observed.append($0) }
+        defer { subscription.cancel() }
+
+        fixture.warning = .warning
+        fixture.streaming = true
+        fixture.warning = .critical
+        fixture.streaming = false
+        #expect(observed == [.disconnected, .streamingWarning, .streamingCritical, .disconnected])
+    }
+
     @MainActor
     @Test func nativeDimmingPreservesActionsAndUpdatesAccessibleDescription() throws {
         let button = NSStatusBarButton(frame: NSRect(x: 0, y: 0, width: 24, height: 22))
@@ -135,7 +158,9 @@ struct StatusItemPresentationTests {
         let action = NSSelectorFromString("openSettings:")
         button.target = target
         button.action = action
-        for state: StatusItemPresentation in [.disconnected, .connected, .streaming, .disconnected] {
+        for state: StatusItemPresentation in [
+            .disconnected, .connected, .streaming, .streamingWarning, .streamingCritical, .disconnected
+        ] {
             state.apply(to: button, description: "SayAll: \(state.rawValue)")
             #expect(button.appearsDisabled == (state == .disconnected))
             #expect(button.isEnabled)
@@ -144,6 +169,13 @@ struct StatusItemPresentationTests {
             #expect(button.alphaValue == 1)
             #expect(button.toolTip == "SayAll: \(state.rawValue)")
             #expect(button.accessibilityLabel() == button.toolTip)
+            if state == .streamingWarning {
+                #expect(button.contentTintColor == .systemYellow)
+            } else if state == .streamingCritical {
+                #expect(button.contentTintColor == .systemRed)
+            } else {
+                #expect(button.contentTintColor == nil)
+            }
             let image = try #require(button.image)
             #expect(image.isTemplate)
             #expect(image.size == NSSize(width: 18, height: 18))
@@ -164,7 +196,9 @@ struct StatusItemPresentationTests {
             let strings = try #require(
                 PropertyListSerialization.propertyList(from: data, format: nil) as? [String: String]
             )
-            for state: StatusItemPresentation in [.disconnected, .connected, .streaming] {
+            for state: StatusItemPresentation in [
+                .disconnected, .connected, .streaming, .streamingWarning, .streamingCritical
+            ] {
                 let template = try #require(strings[state.descriptionKey])
                 #expect(template.components(separatedBy: "%@").count == 2)
                 #expect(!template.contains("Xiaomi"))
