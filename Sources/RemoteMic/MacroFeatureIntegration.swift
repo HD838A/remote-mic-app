@@ -150,6 +150,8 @@ final class MacroFeatureIntegration: ObservableObject {
             }
             return ConfiguredButtonAction(action: .customShortcut,
                 shortcut: CustomKeyboardShortcut(keyCode: shortcut.keyCode, modifierFlags: flags, keyLabel: ""))
+        case .focus:
+            return ConfiguredButtonAction(action: .focusInput, shortcut: nil)
         }
         #else
         return nil
@@ -318,7 +320,7 @@ final class MacroFeatureIntegration: ObservableObject {
                 case let .host(reference):
                     let configured = try? JSONDecoder().decode(ConfiguredButtonAction.self, from: reference.payload)
                     id = configured?.action == .combinationAction ? configured?.macroID : nil
-                case .shortcut: id = nil
+                case .shortcut, .focus: id = nil
                 }
                 guard let id else { continue }
                 usages.append(RemoteMicBindingUsage(id: "\(profile.id).\(key.button.rawValue).\(key.trigger.rawValue)",
