@@ -131,10 +131,10 @@ struct StatusItemPresentationTests {
     }
 
     @Test func warningLevelUsesOnlyRC001AndRC003Thresholds() {
-        #expect(VoiceSessionWarningLevel.resolve(elapsed: 49.9, model: .rc001) == .none)
-        #expect(VoiceSessionWarningLevel.resolve(elapsed: 50, model: .rc001) == .warning)
-        #expect(VoiceSessionWarningLevel.resolve(elapsed: 54.9, model: .rc003) == .warning)
-        #expect(VoiceSessionWarningLevel.resolve(elapsed: 55, model: .rc003) == .critical)
+        #expect(VoiceSessionWarningLevel.resolve(elapsed: 52.9, model: .rc001) == .none)
+        #expect(VoiceSessionWarningLevel.resolve(elapsed: 53, model: .rc001) == .warning)
+        #expect(VoiceSessionWarningLevel.resolve(elapsed: 56.9, model: .rc003) == .warning)
+        #expect(VoiceSessionWarningLevel.resolve(elapsed: 57, model: .rc003) == .critical)
         #expect(VoiceSessionWarningLevel.resolve(elapsed: 90, model: .appleSiriRemoteA2854) == .none)
     }
 
@@ -169,15 +169,13 @@ struct StatusItemPresentationTests {
             #expect(button.alphaValue == 1)
             #expect(button.toolTip == "SayAll: \(state.rawValue)")
             #expect(button.accessibilityLabel() == button.toolTip)
-            if state == .streamingWarning {
-                #expect(button.contentTintColor == .systemYellow)
-            } else if state == .streamingCritical {
-                #expect(button.contentTintColor == .systemRed)
-            } else {
-                #expect(button.contentTintColor == nil)
-            }
+            #expect(button.contentTintColor == nil)
             let image = try #require(button.image)
-            #expect(image.isTemplate)
+            if state == .streamingWarning || state == .streamingCritical {
+                #expect(!image.isTemplate)
+            } else {
+                #expect(image.isTemplate)
+            }
             #expect(image.size == NSSize(width: 18, height: 18))
         }
         StatusItemPresentation.disconnected.apply(to: button, description: "无线麦：未连接设备")

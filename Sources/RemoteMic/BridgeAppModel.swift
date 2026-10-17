@@ -7714,8 +7714,8 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         let generation = voiceSessionWarningGeneration
         let startedAt = Date()
         let thresholds: [(TimeInterval, VoiceSessionWarningLevel)] = [
-            (50, .warning),
-            (55, .critical),
+            (53, .warning),
+            (57, .critical),
         ]
         for (delay, _) in thresholds {
             let task = DispatchWorkItem { [weak self] in
@@ -7729,6 +7729,13 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
                 )
                 guard level != .none, level != self.voiceSessionWarningLevel else { return }
                 self.voiceSessionWarningLevel = level
+                if level == .warning {
+                    NSSound.beep()
+                    AppLogger.shared.write(
+                        "UI VOICE_WARNING phase=completed result=system_alert_sound " +
+                            "model=\(model.rawValue) level=\(level.rawValue)"
+                    )
+                }
                 AppLogger.shared.write(
                     "UI VOICE_WARNING phase=completed result=applied " +
                         "model=\(model.rawValue) level=\(level.rawValue)"

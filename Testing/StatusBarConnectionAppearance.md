@@ -2,7 +2,7 @@
 
 ## 适用范围与准备
 
-- 适用分支：`codex/status-bar-connection-437`，对应 [Issue #437](https://github.com/HD838A/remote-mic-app/issues/437)；验收时记录精确 Commit、App 版本和 Build。
+- 适用分支：`codex/rc001-rc003-voice-warning`；验收时记录精确 Commit、App 版本和 Build。本手册覆盖 RC001/RC003 会话边界提醒。
 - 重点系统为 macOS 15；兼顾 Apple Silicon 最低 macOS 14、Intel 最低 macOS 13 及当前主版本。
 - 使用对应 Commit 的生产 App，退出其他实例。记录系统版本、语言、外观及每个用例的时间段。
 - 分别准备小米遥控器、Siri Remote、iPhone、Apple Watch 和手机网页版；移动来源与 Siri Remote 需要具备相应组件的集成构建。公开兼容层无法代替这些来源的真实连接。
@@ -62,13 +62,14 @@
 
 对于 RC001 和 RC003 追加以下步骤：
 
-1. 连续保持一次语音会话，观察达到约 50 秒时活动图标变为黄色。
-2. 继续保持同一会话，观察达到约 55 秒时活动图标变为红色。
-3. 松开语音键或让遥控器结束会话，确认图标恢复为当前连接状态；重新开始下一次会话时从普通活动图标开始。
+1. 连续保持一次语音会话，观察达到约 53 秒时活动图标变为黄色，并听到一次 macOS 系统提示音。
+2. 继续保持同一会话，观察达到约 57 秒时活动图标变为红色。
+3. 松开语音键或让遥控器结束会话，确认图标恢复为当前连接状态。
+4. 重新开始下一次会话，确认从普通活动图标开始。
 
-预期：颜色只表示当前 RC001/RC003 语音会话接近遥控器时限，不显示精确倒计时，不影响音频接收、松键收尾或下一次会话。
+预期：颜色只表示当前 RC001/RC003 语音会话接近遥控器时限，不显示精确倒计时。黄色开始时只播放一次 macOS 系统提示音。不新增本地 60 秒限制，也不改变会话停止方式。
 
-失败判定：其他型号出现黄色或红色、RC001/RC003 未达到阈值就变色、停止后颜色残留，或颜色状态改变语音生命周期。
+失败判定：其他型号出现黄色或红色、RC001/RC003 未达到阈值就变色、黄色开始没有提示音或重复提示音、停止后颜色残留，或颜色状态改变正常语音生命周期。
 
 
 
@@ -111,8 +112,9 @@ swift test --disable-keychain --filter LocalizationTests
 git diff --check
 ```
 
-- 自动化覆盖各来源独立变化、Web 非连接状态、部分断开、收音优先、RC001/RC003 的 50 秒和 55 秒阈值、其他型号不变色、会话结束复位、重复事件去重、初始快照、发布值早于属性写入、原生按钮属性及双语资源。
+- 自动化覆盖各来源独立变化、Web 非连接状态、部分断开、收音优先、RC001/RC003 的 53 秒和 57 秒阈值、其他型号不变色、会话结束复位、重复事件去重、初始快照、发布值早于属性写入、原生按钮属性及双语资源。
 - 按钮属性测试不能证明真实状态栏左右键路由、系统菜单选中态或最终像素；这些必须按上述步骤实测。
+- 自动化测试不能证明 RC001/RC003 固件在 60 秒时的实际行为，也不能证明豆包输入法最终提交文字；必须用真实遥控器和目标输入法执行长会话用例。
 - 本地依赖由用户准备，不自动安装；按当前任务约束不额外运行构建脚本。
 - 已完成 Apple Silicon 本地 Debug 构建的实际菜单栏与 Tooltip 截图，覆盖中文浅色下的未连接、已连接和语音活动三态；截图证明状态栏展示行为，不等同于完整的生产发布验收。
 - 英文、深色、VoiceOver、增强对比度、全部真实来源连接和完整语音流程仍需后续矩阵验收；这些是发布级完整性检查，不改变本 PR 已完成的局部实测结论。
@@ -126,3 +128,13 @@ git diff --check
 - `swift test --disable-keychain --disable-automatic-resolution --filter 'StatusItemPresentationTests|LocalizationTests'`：14 个测试、2 个 suite 通过，其中来源切换测试包含 4 个参数用例。
 - Swift 语法解析、两份 `.strings` 的 `plutil -lint`、变更 Markdown 相对链接检查和 `git diff --check` 通过。
 - 已完成用户提供的 Apple Silicon 本地 Debug 构建实际截图（菜单栏、Tooltip，中文浅色）；未运行额外 App 构建脚本，未生成或分发安装包。真实左右键交互、各系统外观矩阵与全部真实设备验收仍未完成，本记录不将局部截图表述为完整发布级真机验收。
+
+### Build 248 RC003 真机长会话
+
+- 日期：2026-10-18；设备：真实 RC003；App：本地 Build 248；日志：无加密公钥配置时写入 `~/Library/Logs/RemoteMic/runtime.log`。
+- 会话：`operation_id=8`、`session=37`。`STREAM START` 为 `01:16:54.773 +0800`；首个 PCM 延迟 `10 ms`。
+- 53 秒：`01:17:47.756` 记录 `result=system_alert_sound level=warning`，随后 `01:17:47.757` 记录 `result=applied level=warning`。真机观察到黄色活动图标开始闪烁，并听到一次系统提示音。
+- 57 秒：`01:17:51.759` 记录 `result=applied level=critical`。真机观察到活动图标变红并继续闪烁。
+- 约 60 秒：`01:17:54.805` 记录 `reason=remote_stop`，`01:17:54.807` 收到一次 `ATVV STREAM STOP session=37`。本次没有 `MIC_CLOSE`，符合“遥控器发送 `STREAM_STOP`，Mac 不替代发送”的协议边界。
+- 音频收尾：`01:17:55.025` 保存录音资产，`duration_ms=60063`、`audio_samples=924960`、`writer_failures=0`；`01:17:55.167` 完成播放，`completion=normal`、`callbacks_after_stop=0`、`bytes_after_stop=0`、`enqueue_failures=0`、`dropped_samples=0`、`pending_samples=0`、`receive_stalled_at_stop=false`、`host_close_requests=0`。
+- 结论：本次日志包含完整的开始、首包、53 秒提示音、53/57 秒状态变化、遥控器停止和本地音频收尾信号。日志不能证明豆包内部最终文字提交，因此该项保持未知。样本音频时长约为会话时长的 96.2%，与其他 RC003 长会话样本的观察范围相同；本记录不把该比例直接判定为无线丢包或产品失败。

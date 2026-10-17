@@ -9,8 +9,8 @@ enum VoiceSessionWarningLevel: String, Equatable {
 
     static func resolve(elapsed: TimeInterval, model: XiaomiRemoteModel) -> Self {
         guard model == .rc001 || model == .rc003 else { return .none }
-        if elapsed >= 55 { return .critical }
-        if elapsed >= 50 { return .warning }
+        if elapsed >= 57 { return .critical }
+        if elapsed >= 53 { return .warning }
         return .none
     }
 }
@@ -85,20 +85,38 @@ enum StatusItemPresentation: String, Equatable {
         let resourceName = isStreaming ? "StatusIconActiveTemplate" : "StatusIconTemplate"
         let fallbackSymbol = isStreaming ? "mic.fill" : "dot.radiowaves.left.and.right"
         // Named images are shared. Keep localized descriptions local to this status item.
-        let image = (NSImage(named: NSImage.Name(resourceName))?.copy() as? NSImage)
+        let templateImage = (NSImage(named: NSImage.Name(resourceName))?.copy() as? NSImage)
             ?? NSImage(systemSymbolName: fallbackSymbol, accessibilityDescription: description)
-        image?.isTemplate = true
+        let image: NSImage?
+        switch self {
+        case .streamingWarning:
+            image = Self.coloredImage(templateImage, color: .systemYellow)
+        case .streamingCritical:
+            image = Self.coloredImage(templateImage, color: .systemRed)
+        default:
+            image = templateImage
+            image?.isTemplate = true
+        }
         image?.size = NSSize(width: 18, height: 18)
         image?.accessibilityDescription = description
         button.image = image
         button.title = image == nil ? description : ""
-        button.contentTintColor = switch self {
-        case .streamingWarning: .systemYellow
-        case .streamingCritical: .systemRed
-        default: nil
-        }
+        button.contentTintColor = nil
         button.appearsDisabled = self == .disconnected
         button.toolTip = description
         button.setAccessibilityLabel(description)
+    }
+
+    private static func coloredImage(_ source: NSImage?, color: NSColor) -> NSImage? {
+        guard let source else { return nil }
+        let image = NSImage(size: source.size)
+        image.lockFocus()
+        defer { image.unlockFocus() }
+        let rect = NSRect(origin: .zero, size: source.size)
+        source.draw(in: rect, from: .zero, operation: .sourceOver, fraction: 1)
+        color.set()
+        rect.fill(using: .sourceIn)
+        image.isTemplate = false
+        return image
     }
 }

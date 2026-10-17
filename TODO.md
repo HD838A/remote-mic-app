@@ -11,6 +11,7 @@
   - 详见 [`feature/encrypted-diagnostic-logs/README.md`](feature/encrypted-diagnostic-logs/README.md) 与 [`Testing/EncryptedDiagnosticLogs.md`](Testing/EncryptedDiagnosticLogs.md)。
 
 - [ ] 定位并修复 RC003 长会话尾部缺失
+  - 2026-10-18：已交付 RC001/RC003 接近 60 秒的菜单栏提醒：53 秒黄色闪烁并播放一次系统提示音，57 秒红色闪烁；Build 248 的 RC003 真机记录见 [`Testing/StatusBarConnectionAppearance.md`](Testing/StatusBarConnectionAppearance.md)。该提醒不延长或强制结束会话，长会话尾部完整性问题仍保持未完成。
   - 现有现场分析记录样本时长约占会话时长的 84%～96%；该比例不能证明无线到达率或系统丢包根因。
   - 2026-10-13：PR 653 撤回独立蓝牙队列与跨线程取值改动。只补入口、拒绝、解码、缓冲、路由、输出、录音和现有转写结果的关联日志。
   - 高频通知只累计；新 ATVV 诊断每 10 秒一次进度、每段最多 12 条进度、最多 20 条诊断行。输出未排完或归属不明时不宣称成功。
