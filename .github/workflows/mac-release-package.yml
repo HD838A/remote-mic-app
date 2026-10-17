@@ -237,7 +237,7 @@ jobs:
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           repository: ${{ steps.release-dependencies.outputs.sayall_ai_repository }}
-          ref: ${{ steps.release-dependencies.outputs.sayall_ai_commit }}
+          ref: ${{ steps.release-dependencies.outputs.sayall_ai_version }}
           path: .private-dependencies/sayall-ai
           ssh-key: ${{ secrets.SAYALL_AI_DEPLOY_KEY }}
           persist-credentials: false
@@ -246,7 +246,7 @@ jobs:
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           repository: ${{ steps.release-dependencies.outputs.sayall_private_platform_repository }}
-          ref: ${{ steps.release-dependencies.outputs.sayall_private_platform_commit }}
+          ref: ${{ steps.release-dependencies.outputs.sayall_private_platform_version }}
           path: .private-dependencies/sayall-private-platform
           ssh-key: ${{ secrets.SAYALL_PRIVATE_PLATFORM_DEPLOY_KEY }}
           persist-credentials: false
@@ -271,13 +271,13 @@ jobs:
 
       - name: Verify immutable private dependency checkouts
         env:
-          SAYALL_AI_COMMIT: ${{ steps.release-dependencies.outputs.sayall_ai_commit }}
-          SAYALL_PRIVATE_PLATFORM_COMMIT: ${{ steps.release-dependencies.outputs.sayall_private_platform_commit }}
+          SAYALL_AI_VERSION: ${{ steps.release-dependencies.outputs.sayall_ai_version }}
+          SAYALL_PRIVATE_PLATFORM_VERSION: ${{ steps.release-dependencies.outputs.sayall_private_platform_version }}
         run: |
           if [[ "$INCLUDE_SAYALL_AI" == 1 ]]; then
-            test "$(git -C .private-dependencies/sayall-ai rev-parse HEAD)" = "$SAYALL_AI_COMMIT"
+            test "$(git -C .private-dependencies/sayall-ai describe --tags --exact-match)" = "$SAYALL_AI_VERSION"
           fi
-          test "$(git -C .private-dependencies/sayall-private-platform rev-parse HEAD)" = "$SAYALL_PRIVATE_PLATFORM_COMMIT"
+          test "$(git -C .private-dependencies/sayall-private-platform describe --tags --exact-match)" = "$SAYALL_PRIVATE_PLATFORM_VERSION"
           test -f .private-dependencies/sayall-private-platform/packages/macos-remote/Package.swift
           test -f .private-dependencies/sayall-private-platform/packages/audio-input-kit/siri-remote/Package.swift
           test -f .private-dependencies/sayall-private-platform/packages/audio-input-kit/chromecast/Package.swift

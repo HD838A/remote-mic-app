@@ -17,66 +17,51 @@
 
 组合动作历史开放与按键捕获修复来自已弃用的 `sayall-macro-platform`；当前免费组合动作事实源已迁移到
 `GetSayAll/sayall-private-platform/packages/macos-combination-actions`，付费键位方案则独立位于
-`packages/macos-button-profiles`。下方历史 PR 链接仅供审计，不得从旧仓库取代码。宿主验证固定使用当前平台仓库的完整 commit：
+`packages/macos-button-profiles`。下方历史 PR 链接仅供审计，不得从旧仓库取代码。宿主验证使用当前平台仓库的统一版本标签：
 
 ```text
-999c39c5a47f0b1ab370c3940f3aca6750c24c8e
+2.1.0
 ```
 
-本地开发或验证时，将私有包 checkout 到该 commit（不得使用浮动的 `main`）：
+本地开发或验证时，使用不可变的 SwiftPM 版本标签（不得使用浮动的 `main`）：
 
 ```bash
-git -C /path/to/sayall-private-platform fetch origin main
-git -C /path/to/sayall-private-platform checkout --detach 999c39c5a47f0b1ab370c3940f3aca6750c24c8e
+git -C /path/to/sayall-private-platform fetch origin tag 2.1.0
+git -C /path/to/sayall-private-platform checkout --detach 2.1.0
 ```
 
-宿主通过 `Package.swift` 的 `SAYALL_COMBINATION_ACTIONS_PATH` 注入免费 Package；最小测试命令为：
+宿主通过标准 SwiftPM 依赖私有平台根 Package。私有 AI Package 仍单独作为 SwiftPM 依赖。公开宿主不会复制私有源码，也不会在公开构建中解析私有仓库。最小测试命令为：
 
 ```bash
-SAYALL_COMBINATION_ACTIONS_PATH=/path/to/sayall-private-platform/packages/macos-combination-actions \
+SAYALL_ENABLE_PRIVATE_SWIFTPM=1 \
+SAYALL_PRIVATE_PLATFORM_PACKAGE_PATH=/path/to/sayall-private-platform \
+SAYALL_AI_PACKAGE_PATH=/path/to/sayall-ai \
 swift test --disable-keychain --scratch-path .build-combination-actions
 ```
 
-构建 App 时继续使用 `./scripts/build-app.sh`，并同时设置 `SAYALL_COMBINATION_ACTIONS_PATH` 与 `REQUIRE_SAYALL_COMBINATION_ACTIONS=1`；构建后运行 `REQUIRE_SAYALL_COMBINATION_ACTIONS=1 ./scripts/verify-app.sh "dist/SayAll.app"` 检查免费 Package 确实被打包。官方 CI 和签名发布默认集成组合动作，但不设置 `SAYALL_BUTTON_PROFILES_PACKAGE_PATH`，因此不会带入付费键位方案。CI、Preview staging 和签名发布 workflow 都必须使用同一个 40 位 SHA；修改 pin 后在宿主仓库执行：
+需要测试付费键位方案时，增加 `SAYALL_ENABLE_BUTTON_PROFILES=1`。需要测试 Chromecast 时，增加 `SAYALL_ENABLE_CHROMECAST=1`。这些开关只在私有 SwiftPM 模式生效。
+
+构建 App 时使用项目原生的受保护发布流程。本地源码验证不生成交付 App。不要把私有源码目录复制到公开宿主。不要把私有 Swift 接口、日志或构建产物提交到公开仓库。CI、Preview staging 和签名发布 workflow 使用同一个统一版本标签；修改 pin 后在宿主仓库执行：
 
 ```bash
 ./scripts/verify-release-dependency-pins.sh
 ```
 
-该脚本会确认 macOS CI、预览和正式发布三条 workflow 的平台仓库 revision 一致且为完整 SHA。免费 Package 缺失时，兼容构建仍应保持组合动作入口隐藏并回退到原按键行为；本手册中的自动化验证不能替代最终签名包、真实遥控器、Intel Mac 和不同前后台状态的人工验收。
+该脚本会确认两个私有仓库使用同一个版本，并确认 workflow 使用版本标签。私有 Package 缺失时，公开兼容构建仍应保持入口隐藏并回退到原按键行为。本手册的自动化验证不能替代最终签名包、真实遥控器、Intel Mac 和不同前后台状态的人工验收。
 
 ## 测试前准备
 
-1. 本机存在 `sayall-private-platform/packages/macos-combination-actions`，并通过 `SAYALL_COMBINATION_ACTIONS_PATH` 注入构建。
+1. 本机存在 `/path/to/sayall-private-platform` 和 `/path/to/sayall-ai`。两个目录都必须来自已确认的私有版本标签。
 2. 无线麦已获得输入监控和辅助功能权限。
 3. 准备一个没有组合动作资格数据的新 macOS 测试账户，以及一个保留旧组合动作资格数据的升级测试账户。
 4. 准备真实遥控器；另准备 iOS 或 Web Remote 检查同一绑定入口。
 5. 至少安装 Codex、Claude 或 Chrome 中一个目标 App。
 
-本地构建命令：
-
-```bash
-SAYALL_COMBINATION_ACTIONS_PATH=/path/to/sayall-private-platform/packages/macos-combination-actions \
-EARLY_ACCESS_SERVICE_URL=https://config.sayall.app \
-REQUIRE_SAYALL_COMBINATION_ACTIONS=1 \
-REQUIRE_EARLY_ACCESS_CONFIGURATION=1 \
-./scripts/build-app.sh
-```
-
-`EARLY_ACCESS_SERVICE_URL` 仍可能供同一 App 中的其他私有功能使用，不是组合动作的访问条件。组合动作不得因为该配置存在而发起资格请求。
-
-构建结果位于 `dist/SayAll.app`。使用以下命令检查资源包、包含标记和签名结构：
-
-```bash
-REQUIRE_SAYALL_COMBINATION_ACTIONS=1 \
-./scripts/verify-app.sh "dist/SayAll.app"
-```
-
-验证最终 ZIP 时必须先临时挪开同版本 `/private/tmp/remote-mic-swiftpm/<版本>-<Build>` 构建缓存，再从全新目录解压并打开设置窗口；否则 SwiftPM 生成的绝对构建路径可能掩盖安装包资源错误。验证结束后恢复原缓存目录。
+`EARLY_ACCESS_SERVICE_URL` 仍可能供同一 App 中的其他私有功能使用。它不是组合动作的访问条件。组合动作不得因为该配置存在而发起资格请求。
 
 ## 用例一：公开构建回归
 
-步骤：清除 `SAYALL_COMBINATION_ACTIONS_PATH` 与 `SAYALL_BUTTON_PROFILES_PACKAGE_PATH`，构建并启动兼容 App。
+步骤：清除 `SAYALL_ENABLE_PRIVATE_SWIFTPM`、`SAYALL_PRIVATE_PLATFORM_PACKAGE_PATH`、`SAYALL_AI_PACKAGE_PATH` 和所有私有 Package 路径，构建并启动兼容 App。
 
 预期：关于页没有组合动作邀请码入口，侧边栏没有“组合动作”；普通单击、双击、长按映射全部维持原行为。
 

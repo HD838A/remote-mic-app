@@ -18,13 +18,15 @@
 SAYALL_COMBINATION_ACTIONS_PATH='' SAYALL_BUTTON_PROFILES_PACKAGE_PATH='' \
 swift test --disable-keychain --scratch-path .build/unified-public
 
-SAYALL_COMBINATION_ACTIONS_PATH=/path/to/private/packages/macos-combination-actions \
-SAYALL_BUTTON_PROFILES_PACKAGE_PATH='' \
+SAYALL_ENABLE_PRIVATE_SWIFTPM=1 \
+SAYALL_PRIVATE_PLATFORM_PACKAGE_PATH=/path/to/sayall-private-platform \
+SAYALL_AI_PACKAGE_PATH=/path/to/sayall-ai \
 swift test --disable-keychain --scratch-path .build/unified-free
 
-SAYALL_COMBINATION_ACTIONS_PATH=/path/to/private/packages/macos-combination-actions \
-SAYALL_BUTTON_PROFILES_PACKAGE_PATH=/path/to/private/packages/macos-button-profiles \
-SAYALL_TEST_BUTTON_PROFILES_FREE=1 \
+SAYALL_ENABLE_PRIVATE_SWIFTPM=1 \
+SAYALL_ENABLE_BUTTON_PROFILES=1 \
+SAYALL_PRIVATE_PLATFORM_PACKAGE_PATH=/path/to/sayall-private-platform \
+SAYALL_AI_PACKAGE_PATH=/path/to/sayall-ai \
 swift test --disable-keychain --scratch-path .build/unified-paid
 
 SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH=/path/to/prepared-private-artifacts \
@@ -32,7 +34,7 @@ SAYALL_COMBINATION_ACTIONS_PATH='' SAYALL_BUTTON_PROFILES_PACKAGE_PATH='' \
 swift build --disable-keychain --scratch-path .build/unified-binary -c release
 ```
 
-测试权益变量仅用于源码自动化和隔离 UI 数据，不得进入发布包。私有两 Package 分别执行完整 `swift test --disable-keychain`。
+测试权益变量仅用于源码自动化和隔离 UI 数据，不得进入发布包。私有平台根 Package 和私有 AI Package 分别执行完整 `swift test --disable-keychain`。
 宿主继续执行 `scripts/test.sh`、`scripts/check-repository-boundaries.sh`、`scripts/verify-repository-governance.sh` 和 `git diff --check`。
 
 `BuildSigningTests.binaryArtifactsEnableUnifiedButtonConfiguration` 实际求值 SwiftPM 清单：公开配置不启用统一接口，私有二进制配置同时为宿主和测试目标启用该接口。最终签名包必须再完成下方真实点击；源码配置通过不能替代二进制包验收。

@@ -1177,6 +1177,9 @@ struct BuildSigningTests {
         #expect(workflowSource.contains(
             "steps.release-dependencies.outputs.sayall_private_platform_repository"
         ))
+        #expect(workflowSource.contains(
+            "steps.release-dependencies.outputs.sayall_private_platform_version"
+        ))
         #expect(!workflowSource.contains("SAYALL_MAC_REMOTE_DEPLOY_KEY"))
         #expect(!workflowSource.contains("steps.release-dependencies.outputs.sayall_mac_remote_commit"))
         #expect(workflowSource.contains("SAYALL_MAC_REMOTE_PACKAGE_PATH"))

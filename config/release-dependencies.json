@@ -3,11 +3,11 @@
   "dependencies": {
     "sayAllAI": {
       "repository": "GetSayAll/sayall-ai",
-      "commit": "01beeceac9c4091e7e8e122ad1e840ac5e5cee1c"
+      "version": "2.1.0"
     },
     "sayAllPrivatePlatform": {
       "repository": "GetSayAll/sayall-private-platform",
-      "commit": "09cdeeb2f6ea75e58ca795a8241fff1ab1188e6e"
+      "version": "2.1.0"
     }
   }
 }

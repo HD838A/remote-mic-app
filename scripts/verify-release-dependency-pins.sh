@@ -22,9 +22,10 @@ case "${1:-pins}" in
       (.dependencies | keys | sort) == ["sayAllAI", "sayAllPrivatePlatform"] and
       .dependencies.sayAllAI.repository == "GetSayAll/sayall-ai" and
       .dependencies.sayAllPrivatePlatform.repository == "GetSayAll/sayall-private-platform" and
-      ([.dependencies[] | .commit] | all(.[]; type == "string" and test("^[0-9a-f]{40}$")))
+      .dependencies.sayAllAI.version == .dependencies.sayAllPrivatePlatform.version and
+      ([.dependencies[] | .version] | all(.[]; type == "string" and test("^[0-9]+\\.[0-9]+\\.[0-9]+$")))
     ' "$MANIFEST" >/dev/null || {
-      print -u2 "release dependency manifest has an invalid schema, repository, or commit"
+      print -u2 "release dependency manifest has an invalid schema, repository, version, or unified version"
       exit 1
     }
 
@@ -36,9 +37,9 @@ case "${1:-pins}" in
         [[ -n "${GITHUB_OUTPUT:-}" ]] || { print -u2 "GITHUB_OUTPUT is required"; exit 2; }
         {
           print "sayall_ai_repository=$(jq -r '.dependencies.sayAllAI.repository' "$MANIFEST")"
-          print "sayall_ai_commit=$(jq -r '.dependencies.sayAllAI.commit' "$MANIFEST")"
+          print "sayall_ai_version=$(jq -r '.dependencies.sayAllAI.version' "$MANIFEST")"
           print "sayall_private_platform_repository=$(jq -r '.dependencies.sayAllPrivatePlatform.repository' "$MANIFEST")"
-          print "sayall_private_platform_commit=$(jq -r '.dependencies.sayAllPrivatePlatform.commit' "$MANIFEST")"
+          print "sayall_private_platform_version=$(jq -r '.dependencies.sayAllPrivatePlatform.version' "$MANIFEST")"
         } >> "$GITHUB_OUTPUT"
         ;;
       *)
@@ -165,44 +166,45 @@ test -f "$PACKAGE_RESOLVED"
 test -f "$DEPENDENCY_MANIFEST"
 test -x "$ROOT/scripts/verify-release-dependency-pins.sh"
 dependencies_json="$(REPOSITORY_ROOT="$ROOT" "$ROOT/scripts/verify-release-dependency-pins.sh" resolve json)"
-sayall_ai_commit="$(print -r -- "$dependencies_json" | jq -r '.sayAllAI.commit')"
-sayall_private_platform_commit="$(print -r -- "$dependencies_json" | jq -r '.sayAllPrivatePlatform.commit')"
+sayall_ai_version="$(print -r -- "$dependencies_json" | jq -r '.sayAllAI.version')"
+sayall_private_platform_version="$(print -r -- "$dependencies_json" | jq -r '.sayAllPrivatePlatform.version')"
 
 for workflow in "${WORKFLOWS[@]}"; do
   grep -Fq 'verify-release-dependency-pins.sh resolve' "$workflow" || {
     print -u2 "${workflow:t} must resolve the versioned release dependency manifest"
     exit 1
   }
-  for commit in "$sayall_ai_commit" "$sayall_private_platform_commit"; do
-    if grep -Fq "$commit" "$workflow"; then
-      print -u2 "${workflow:t} must not duplicate a product dependency commit outside the versioned manifest"
+  for version in "$sayall_ai_version" "$sayall_private_platform_version"; do
+    if grep -Fq "$version" "$workflow"; then
+      print -u2 "${workflow:t} must not duplicate a product dependency version outside the versioned manifest"
       exit 1
     fi
   done
 done
 
-grep -Fq '${{ steps.release-dependencies.outputs.sayall_ai_commit }}' "$CONTROL_ROOT/.github/workflows/mac-ci.yml"
-grep -Fq '${{ steps.release-dependencies.outputs.sayall_private_platform_commit }}' "$CONTROL_ROOT/.github/workflows/mac-ci.yml"
-grep -Fq '${{ steps.release-dependencies.outputs.sayall_ai_commit }}' "$CONTROL_ROOT/.github/workflows/mac-release-package.yml"
-grep -Fq '${{ steps.release-dependencies.outputs.sayall_private_platform_commit }}' "$CONTROL_ROOT/.github/workflows/mac-release-package.yml"
+grep -Fq '${{ steps.release-dependencies.outputs.sayall_ai_version }}' "$CONTROL_ROOT/.github/workflows/mac-ci.yml"
+grep -Fq '${{ steps.release-dependencies.outputs.sayall_private_platform_version }}' "$CONTROL_ROOT/.github/workflows/mac-ci.yml"
+grep -Fq '${{ steps.release-dependencies.outputs.sayall_ai_version }}' "$CONTROL_ROOT/.github/workflows/mac-release-package.yml"
+grep -Fq '${{ steps.release-dependencies.outputs.sayall_private_platform_version }}' "$CONTROL_ROOT/.github/workflows/mac-release-package.yml"
 
-grep -Fq 'SAYALL_MAC_REMOTE_PACKAGE_PATH' "$PACKAGE_MANIFEST"
-for workflow in "${WORKFLOWS[@]}"; do
-  grep -Fq 'SAYALL_MAC_REMOTE_PACKAGE_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-private-platform/packages/macos-remote' "$workflow"
-  if grep -Eq 'sayall_mac_remote_(repository|commit)|SAYALL_MAC_REMOTE_DEPLOY_KEY|\.private-dependencies/sayall-mac-remote' "$workflow"; then
-    print -u2 "${workflow:t} must load Mac Remote from the pinned private platform checkout"
-    exit 1
-  fi
-done
+grep -Fq 'SAYALL_PRIVATE_PLATFORM_PACKAGE_PATH' "$PACKAGE_MANIFEST"
+grep -Fq 'SAYALL_ENABLE_PRIVATE_SWIFTPM' "$CONTROL_ROOT/.github/workflows/mac-ci.yml"
+grep -Fq 'SAYALL_PRIVATE_PLATFORM_PACKAGE_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-private-platform' \
+  "$CONTROL_ROOT/.github/workflows/mac-ci.yml"
+if grep -Eq 'sayall_mac_remote_(repository|commit)|SAYALL_MAC_REMOTE_DEPLOY_KEY|\.private-dependencies/sayall-mac-remote' \
+  "$CONTROL_ROOT/.github/workflows/mac-ci.yml" "$CONTROL_ROOT/.github/workflows/mac-release-package.yml"; then
+  print -u2 "release workflows must use the unified private platform package"
+  exit 1
+fi
 if grep -Fq 'https://github.com/GetSayAll/sayall-mac-remote.git' "$PACKAGE_MANIFEST" || \
    grep -Fq '"identity" : "sayall-mac-remote"' "$PACKAGE_RESOLVED"; then
   print -u2 "public SwiftPM metadata must not resolve the private SayAllMacRemote repository"
   exit 1
 fi
 
-print "SayAllAI: $sayall_ai_commit"
-print "SayAllPrivatePlatform: $sayall_private_platform_commit"
-print "SayAllMacRemote: packages/macos-remote at $sayall_private_platform_commit"
+print "SayAllAI: $sayall_ai_version"
+print "SayAllPrivatePlatform: $sayall_private_platform_version"
+print "SayAllMacRemote: packages/macos-remote at $sayall_private_platform_version"
 
 for credential_repository in "${CREDENTIAL_REPOSITORIES[@]}"; do
   label="${credential_repository%%|*}"

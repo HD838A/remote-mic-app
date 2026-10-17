@@ -9,7 +9,7 @@
 1. 在隔离 worktree 执行 `git fetch origin main --tags`。
 2. 确认发布控制 worktree 为 `main`、工作区干净、HEAD 与 `origin/main` 完全相同。
 3. 动态读取 `releases/latest`，确认其为正式稳定版（非 Draft、非 Pre-release）。
-4. 确认 config/release-dependencies.json、Package.swift、Package.resolved 和两个受保护 workflow 的依赖 SHA 一致。
+4. 确认 config/release-dependencies.json、Package.swift、Package.resolved 和两个受保护 workflow 的私有依赖版本标签一致。
 5. 准备临时 fixture；不得读取或打印 Apple、Match、Notary、Sparkle 私钥。
 
 ## 用例 1：版本元数据 PR
@@ -28,7 +28,7 @@
 2. 在干净、与 `origin/main` 一致的 main worktree 运行 scripts/stage-macos-preview.sh smoke。
 3. 检查 workflow 输入和 Run 标题。
 
-预期：源码只使用 `main` 的精确 SHA，Workflow 也以精确 main HEAD 触发；前置检查包括源码分支 CI、依赖 pin、稳定 latest、13 个 CDN 固定路径全为 HTTP 404 和 GH_TOKEN 静态门禁。Run 标题包含 mode、source branch 和 source commit，不创建 Tag/Release。
+预期：源码只使用 `main` 的精确 SHA，Workflow 也以精确 main HEAD 触发；前置检查包括源码分支 CI、私有依赖版本标签、稳定 latest、13 个 CDN 固定路径全为 HTTP 404 和 GH_TOKEN 静态门禁。Run 标题包含 mode、source branch 和 source commit，不创建 Tag/Release。
 
 失败判定：接受 detached/旧 SHA、未推送提交、`release-main`、功能分支、找不到 main CI 仍进入 Environment，或 Run 使用隐式 GH_TOKEN。
 

@@ -14,7 +14,7 @@
 4. 准备 Free、Plus、会员刚过期、网络断开但租约仍有效、租约已过期五种脱敏测试状态。
 5. 准备真实实体遥控器、Nearby iPhone 或 Apple Watch，以及 Web Remote；分别记录当前公开按键映射作为回退基线。
 
-仅验证内部键位方案而不测试会员时，改用组合动作与键位方案两个源码 Package，并显式设置 `SAYALL_TEST_BUTTON_PROFILES_FREE=1`。该模式不得设置 `SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH`、会员服务地址或 AI Package；构建脚本会拒绝混入统一私有构件，以保证安装包不包含会员资源。
+仅验证内部键位方案而不测试会员时，使用私有 SwiftPM 根 Package，并显式设置 `SAYALL_ENABLE_BUTTON_PROFILES=1`。该模式不得设置 `SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH`。公开宿主不复制私有源码。
 
 ## 自动化与构建命令
 
@@ -38,14 +38,16 @@ swift build --disable-keychain --scratch-path .build-free-paid -c release
 内部免费测试构建：
 
 ```bash
-SAYALL_COMBINATION_ACTIONS_PATH=/path/to/macos-combination-actions \
-SAYALL_BUTTON_PROFILES_PACKAGE_PATH=/path/to/macos-button-profiles \
-SAYALL_TEST_BUTTON_PROFILES_FREE=1 \
+SAYALL_ENABLE_PRIVATE_SWIFTPM=1 \
+SAYALL_ENABLE_BUTTON_PROFILES=1 \
+SAYALL_PRIVATE_PLATFORM_PACKAGE_PATH=/path/to/sayall-private-platform \
+SAYALL_AI_PACKAGE_PATH=/path/to/sayall-ai \
 swift test --disable-keychain --scratch-path .build-button-profiles-test
 
-SAYALL_COMBINATION_ACTIONS_PATH=/path/to/macos-combination-actions \
-SAYALL_BUTTON_PROFILES_PACKAGE_PATH=/path/to/macos-button-profiles \
-SAYALL_TEST_BUTTON_PROFILES_FREE=1 \
+SAYALL_ENABLE_PRIVATE_SWIFTPM=1 \
+SAYALL_ENABLE_BUTTON_PROFILES=1 \
+SAYALL_PRIVATE_PLATFORM_PACKAGE_PATH=/path/to/sayall-private-platform \
+SAYALL_AI_PACKAGE_PATH=/path/to/sayall-ai \
 swift build --disable-keychain --scratch-path .build-button-profiles-test -c release
 ```
 
