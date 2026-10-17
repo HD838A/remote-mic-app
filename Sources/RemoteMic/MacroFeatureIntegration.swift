@@ -503,6 +503,7 @@ final class MacroFeatureIntegration: ObservableObject {
         selectedRemoteProfileID: UUID?,
         remoteModel: XiaomiRemoteModel?,
         hostActionSections: [ButtonProfileHostActionSection],
+        settings: AppSettings? = nil,
         onEditKeys: @escaping (UUID) -> Void = { _ in },
         onChooseCustomApplication: ((@escaping (String, String, Data) -> Void) -> Void)? = nil,
         chromecastReservedControlIDs: Set<String> = ["left", "right", "select"],
@@ -531,6 +532,7 @@ final class MacroFeatureIntegration: ObservableObject {
                     }
                 )
             },
+            baseBindingSummaries: settings.map { baseBindingSummaries($0, remoteProfileID: selectedRemoteProfileID) } ?? [],
             membershipNotice: membershipNotice,
             onChooseCustomApplication: onChooseCustomApplication.map { callback in
                 { completion in
@@ -565,6 +567,7 @@ final class MacroFeatureIntegration: ObservableObject {
                     }
                 )
             },
+            baseBindingSummaries: settings.map { baseBindingSummaries($0, remoteProfileID: selectedRemoteProfileID) } ?? [],
             onChooseCustomApplication: onChooseCustomApplication.map { callback in
                 { completion in
                     callback { id, displayName, payload in
@@ -582,6 +585,66 @@ final class MacroFeatureIntegration: ObservableObject {
         return AnyView(EmptyView())
         #endif
     }
+
+    #if canImport(SayAllButtonProfiles) && canImport(SayAllMacroRemoteMic)
+    private func baseBindingSummaries(
+        _ settings: AppSettings,
+        remoteProfileID: UUID?
+    ) -> [SayAllButtonProfiles.RemoteMicBaseBindingSummary] {
+        let localization = LocalizationStore(settings: settings)
+        return SayAllButtonProfiles.RemoteMicButtonProfileContract.commonButtons.flatMap { profileButton in
+            guard let button = RemoteButton(rawValue: profileButton.rawValue) else {
+                return [SayAllButtonProfiles.RemoteMicBaseBindingSummary]()
+            }
+            return ButtonTrigger.allCases.compactMap { trigger in
+                let configured = settings.configuredBaseAction(
+                    for: button,
+                    trigger: trigger,
+                    profileID: remoteProfileID
+                )
+                guard configured.action != .disabled else { return nil }
+                return SayAllButtonProfiles.RemoteMicBaseBindingSummary(
+                    button: profileButton.rawValue,
+                    trigger: trigger.rawValue,
+                    displayName: baseBindingTitle(
+                        settings: settings,
+                        localization: localization,
+                        configured: configured
+                    )
+                )
+            }
+        }
+    }
+
+    private func baseBindingTitle(
+        settings: AppSettings,
+        localization: LocalizationStore,
+        configured: ConfiguredButtonAction
+    ) -> String {
+        if configured.action == .combinationAction {
+            return feature.libraryActions.first { $0.id == configured.macroID }?.name
+                ?? localization.text("button_mapping.macro_unavailable")
+        }
+        if configured.action == .customShortcut, let shortcut = configured.shortcut {
+            return shortcut.visualDisplayName(using: localization)
+        }
+        if configured.action == .openCustomApplication {
+            return settings.customApplicationProfile(id: configured.applicationProfileID)?.displayName
+                ?? localization.text("custom_application.not_configured")
+        }
+        switch configured.action {
+        case .arrowUp: return "↑"
+        case .arrowDown: return "↓"
+        case .arrowLeft: return "←"
+        case .arrowRight: return "→"
+        case .deleteBackward: return "⌫"
+        case .volumeUp: return localization.text("action.system_volume_up_short")
+        case .volumeDown: return localization.text("action.system_volume_down_short")
+        case .volumeMute: return "Mute"
+        default: return configured.action.displayName(using: localization)
+        }
+    }
+    #endif
 
     #if SAYALL_MACRO_REMOTE_CAPABILITIES && canImport(SayAllMacroRemoteMic)
     private func combinationActionsRemotePresentation(
