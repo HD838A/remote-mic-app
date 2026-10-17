@@ -197,6 +197,8 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     private var statusItemPresentation: StatusItemPresentation = .disconnected
     private var appliedStatusItemPresentation: StatusItemPresentation?
     private var statusItemOperationID: UInt = 0
+    private var statusItemWarningBlinkTimer: Timer?
+    private var statusItemWarningBlinkVisible = true
     private var entryPointOperationID: UInt = 0
     private var statusMenu: NSMenu?
     private var settingsWindowController: NSWindowController?
@@ -446,7 +448,8 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
             phoneConnected: model.isPhoneRemoteConnected,
             watchConnected: model.isWatchRemoteConnected,
             webState: model.webRemoteState,
-            isStreaming: model.isStreaming
+            isStreaming: model.isStreaming,
+            voiceWarningLevel: model.voiceSessionWarningLevel
         )
         refreshStatusItemPresentation()
         rebuildStatusMenu()
@@ -456,6 +459,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     @discardableResult
     private func removeStatusItem() -> Bool {
         guard let statusItem else { return false }
+        stopStatusItemWarningBlinking()
         statusMenu?.removeItem(connectionItem)
         statusMenu?.removeItem(audioItem)
         statusMenu?.removeItem(hidItem)
@@ -678,7 +682,8 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
             phoneConnected: model.$isPhoneRemoteConnected.eraseToAnyPublisher(),
             watchConnected: model.$isWatchRemoteConnected.eraseToAnyPublisher(),
             webState: model.$webRemoteState.eraseToAnyPublisher(),
-            isStreaming: model.$isStreaming.eraseToAnyPublisher()
+            isStreaming: model.$isStreaming.eraseToAnyPublisher(),
+            voiceWarningLevel: model.$voiceSessionWarningLevel.eraseToAnyPublisher()
         )
         .receive(on: RunLoop.main)
         .sink { [weak self] presentation in
@@ -877,6 +882,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
             arguments: [localization.text("app.name")]
         ).text(using: localization)
         statusItemPresentation.apply(to: button, description: description)
+        updateStatusItemWarningBlinking(button: button)
         guard appliedStatusItemPresentation != statusItemPresentation else { return }
         statusItemOperationID &+= 1
         AppLogger.shared.write(
@@ -886,6 +892,43 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
                 "rendering=\(button.image == nil ? "text" : "image")"
         )
         appliedStatusItemPresentation = statusItemPresentation
+    }
+
+    private func updateStatusItemWarningBlinking(button: NSStatusBarButton) {
+        guard statusItemPresentation == .streamingWarning else {
+            stopStatusItemWarningBlinking()
+            button.alphaValue = 1
+            return
+        }
+        guard statusItemWarningBlinkTimer == nil else { return }
+        statusItemWarningBlinkVisible = true
+        button.alphaValue = 1
+        let timer = Timer(
+            timeInterval: 0.55,
+            target: self,
+            selector: #selector(handleStatusItemWarningBlink(_:)),
+            userInfo: button,
+            repeats: true
+        )
+        statusItemWarningBlinkTimer = timer
+        RunLoop.main.add(timer, forMode: .common)
+    }
+
+    @objc private func handleStatusItemWarningBlink(_ timer: Timer) {
+        guard statusItemPresentation == .streamingWarning,
+              let button = timer.userInfo as? NSStatusBarButton
+        else {
+            stopStatusItemWarningBlinking()
+            return
+        }
+        statusItemWarningBlinkVisible.toggle()
+        button.alphaValue = statusItemWarningBlinkVisible ? 1 : 0.35
+    }
+
+    private func stopStatusItemWarningBlinking() {
+        statusItemWarningBlinkTimer?.invalidate()
+        statusItemWarningBlinkTimer = nil
+        statusItemWarningBlinkVisible = true
     }
 
     @objc private func handleStatusItemClick(_ sender: NSStatusBarButton) {
