@@ -1,4 +1,5 @@
 import Combine
+import Foundation
 #if SAYALL_CHROMECAST_ENABLED && canImport(SayAllChromecast)
 import SayAllChromecast
 #endif
@@ -501,6 +502,7 @@ final class MacroFeatureIntegration: ObservableObject {
         remoteModel: XiaomiRemoteModel?,
         hostActionSections: [ButtonProfileHostActionSection],
         onEditKeys: @escaping (UUID) -> Void = { _ in },
+        onChooseCustomApplication: ((@escaping (String, String, Data) -> Void) -> Void)? = nil,
         chromecastReservedControlIDs: Set<String> = ["left", "right", "select"],
         membershipNotice: AnyView = AnyView(EmptyView())
     ) -> AnyView {
@@ -527,7 +529,18 @@ final class MacroFeatureIntegration: ObservableObject {
                     }
                 )
             },
-            membershipNotice: membershipNotice
+            membershipNotice: membershipNotice,
+            onChooseCustomApplication: onChooseCustomApplication.map { callback in
+                { completion in
+                    callback { id, displayName, payload in
+                        completion(RemoteMicHostActionReference(
+                            id: id,
+                            displayName: displayName,
+                            payload: payload
+                        ))
+                    }
+                }
+            }
         )
         #else
         return buttonProfilesFeature.buttonProfilesView(
@@ -549,6 +562,17 @@ final class MacroFeatureIntegration: ObservableObject {
                         )
                     }
                 )
+            },
+            onChooseCustomApplication: onChooseCustomApplication.map { callback in
+                { completion in
+                    callback { id, displayName, payload in
+                        completion(RemoteMicHostActionReference(
+                            id: id,
+                            displayName: displayName,
+                            payload: payload
+                        ))
+                    }
+                }
             }
         )
         #endif
