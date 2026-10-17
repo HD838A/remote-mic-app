@@ -72,6 +72,8 @@ final class AppLogger: PublicDiagnosticEventSink {
     private var nextSequence: UInt64 = 0
     private var publicEvents: [PublicDiagnosticEvent] = []
     private let publicEventStore: PublicDiagnosticEventStore?
+    private let plaintextLogURL: URL
+    private var usesPlaintextFallback = false
 
     private convenience init() {
         let fileManager = FileManager.default
@@ -117,6 +119,7 @@ final class AppLogger: PublicDiagnosticEventSink {
         queue.setSpecific(key: queueKey, value: 1)
         self.logURL = logURL
         self.activeLogURL = logURL
+        self.plaintextLogURL = Self.plaintextLogURL(for: logURL)
         self.publicKeyDataProvider = publicKeyDataProvider
         self.maximumFileCount = max(1, archiveCount + 1)
         self.maximumDirectorySize = max(maximumFileSize, maximumDirectorySize)
@@ -157,7 +160,13 @@ final class AppLogger: PublicDiagnosticEventSink {
             )
 
             guard publicKeyDataProvider() != nil else {
+                usesPlaintextFallback = true
+                try preparePlaintextLog()
                 diagnose("encryption_public_key_missing")
+                appendPlaintextRecord(
+                    message: "LOGGING mode=plaintext reason=encryption_public_key_missing",
+                    date: now()
+                )
                 return
             }
             try withExclusiveLogLock {
@@ -348,6 +357,10 @@ final class AppLogger: PublicDiagnosticEventSink {
     }
 
     private func appendRecord(message: String, date: Date) {
+        if usesPlaintextFallback {
+            appendPlaintextRecord(message: message, date: date)
+            return
+        }
         do {
             // Size includes framing and AES-GCM overhead. Reject one oversized event,
             // rather than creating empty segments or silently breaking the size budget.
@@ -481,8 +494,12 @@ final class AppLogger: PublicDiagnosticEventSink {
     }
 
     private func appendAtomically(_ data: Data) throws {
+        try appendAtomically(data, to: activeLogURL)
+    }
+
+    private func appendAtomically(_ data: Data, to url: URL) throws {
         let descriptor = Darwin.open(
-            activeLogURL.path,
+            url.path,
             O_CREAT | O_WRONLY | O_APPEND | O_CLOEXEC | O_NOFOLLOW,
             mode_t(S_IRUSR | S_IWUSR)
         )
@@ -508,6 +525,37 @@ final class AppLogger: PublicDiagnosticEventSink {
                 if errorCode == EINTR { continue }
                 throw POSIXError(POSIXErrorCode(rawValue: errorCode) ?? .EIO)
             }
+        }
+    }
+
+    private func preparePlaintextLog() throws {
+        if !fileManager.fileExists(atPath: plaintextLogURL.path) {
+            guard fileManager.createFile(
+                atPath: plaintextLogURL.path,
+                contents: nil,
+                attributes: [.posixPermissions: 0o600]
+            ) else {
+                throw POSIXError(.EIO)
+            }
+        }
+        try fileManager.setAttributes(
+            [.posixPermissions: 0o600],
+            ofItemAtPath: plaintextLogURL.path
+        )
+    }
+
+    private func appendPlaintextRecord(message: String, date: Date) {
+        do {
+            let line = "\(formatter.string(from: date)) pid=\(metadata.processID) " +
+                "ver=\(metadata.version) build=\(metadata.build) seq=\(nextSequence) " +
+                "\(Self.singleLine(message))\n"
+            try withExclusiveLogLock {
+                try appendAtomically(Data(line.utf8), to: plaintextLogURL)
+            }
+            nextSequence += 1
+        } catch {
+            pendingWriteFailures += 1
+            diagnose("plaintext_log_write_failed", error: error)
         }
     }
 
@@ -566,5 +614,13 @@ final class AppLogger: PublicDiagnosticEventSink {
         formatter.timeZone = TimeZone(secondsFromGMT: 0)
         formatter.dateFormat = "yyyy-MM-dd"
         return formatter.string(from: date)
+    }
+
+    private static func plaintextLogURL(for encryptedURL: URL) -> URL {
+        if encryptedURL.lastPathComponent.hasPrefix("sayall.app-") {
+            return encryptedURL.deletingLastPathComponent()
+                .appendingPathComponent("runtime.log")
+        }
+        return encryptedURL.deletingPathExtension().appendingPathExtension("log")
     }
 }

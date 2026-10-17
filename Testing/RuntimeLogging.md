@@ -22,13 +22,13 @@
 
 失败判定：出现明文回退、权限过宽、第二次启动覆盖旧文件、记录缺少 `seq`，或日志目录出现用户目录之外的路径/身份信息。
 
-## 用例 2：公钥缺失必须闭锁
+## 用例 2：公钥缺失使用普通日志
 
 1. 使用未注入 `SAYALL_DIAGNOSTIC_PUBLIC_KEY_BASE64` 且 Bundle 没有 `SayAllDiagnosticPublicKey` 的本地包启动。
 2. 触发普通日志和一次类型化环境事件。
 3. 检查日志目录与系统开发日志。
 
-预期：不创建明文或伪装成加密的日志文件；系统开发日志最多记录 `encryption_public_key_missing` 等稳定原因。App 不崩溃，Sentry 仍不会因为缺少本地公钥而自动启动。
+预期：不创建 `.rmlog`；日志写入 `~/Library/Logs/RemoteMic/runtime.log`。普通日志仍只包含脱敏的稳定字段，目录权限为 `0700`、文件权限为 `0600`。系统开发日志最多记录 `encryption_public_key_missing` 等稳定原因。App 不崩溃，Sentry 仍不会因为缺少本地公钥而自动启动。
 
 ## 用例 3：内部包必须拒绝缺失或无效公钥
 
@@ -47,7 +47,7 @@
 swift test --disable-keychain --filter AppLoggerTests
 ```
 
-预期测试覆盖：加密记录、内部测试解密、`seq` 顺序、控制字符归一化、诊断摘要的 BEGIN/FIELD/END 顺序、公钥缺失 fail closed、文件大小上限和 XCTest 进程禁用共享日志。
+预期测试覆盖：加密记录、普通日志回退、内部测试解密、`seq` 顺序、控制字符归一化、诊断摘要的 BEGIN/FIELD/END 顺序、文件大小上限和 XCTest 进程禁用共享日志。
 
 失败判定：任何测试失败，或为了测试读取了生产用户文件。
 

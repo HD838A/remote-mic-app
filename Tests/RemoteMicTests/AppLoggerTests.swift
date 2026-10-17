@@ -113,10 +113,11 @@ struct AppLoggerTests {
         #expect(harness.logger.publicDiagnosticEvents() == [second])
     }
 
-    @Test func missingPublicKeyFailsClosedWithoutCreatingPlaintext() throws {
+    @Test func missingPublicKeyUsesPlaintextLogWithoutCreatingEncryptedFile() throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("SayAllAppLoggerMissingKey-\(UUID().uuidString)")
         let logURL = root.appendingPathComponent("runtime.rmlog")
+        let plaintextLogURL = root.appendingPathComponent("runtime.log")
         var failures: [String] = []
         let logger = AppLogger(
             logURL: logURL,
@@ -129,6 +130,12 @@ struct AppLoggerTests {
         logger.flush()
 
         #expect(!FileManager.default.fileExists(atPath: logURL.path))
+        #expect(FileManager.default.fileExists(atPath: plaintextLogURL.path))
+        let attributes = try FileManager.default.attributesOfItem(atPath: plaintextLogURL.path)
+        #expect((attributes[.posixPermissions] as? NSNumber)?.uint16Value == 0o600)
+        let plaintext = try String(contentsOf: plaintextLogURL, encoding: .utf8)
+        #expect(plaintext.contains("LOGGING mode=plaintext reason=encryption_public_key_missing"))
+        #expect(plaintext.contains("secret"))
         #expect(failures.contains { $0.contains("encryption_public_key_missing") })
     }
 
