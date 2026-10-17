@@ -9,7 +9,7 @@ let privateSwiftPMEnabled = ProcessInfo.processInfo.environment[
     "SAYALL_ENABLE_PRIVATE_SWIFTPM"
 ] == "1"
 let privateReleaseVersion = Version(2, 1, 0)
-let privatePlatformVersion = privateReleaseVersion
+let privatePlatformVersion = Version(2, 2, 0)
 let privatePlatformPackage = "sayall-private-platform"
 let sayAllAIVersion = privateReleaseVersion
 let sayAllAIPackage = "sayall-ai"
