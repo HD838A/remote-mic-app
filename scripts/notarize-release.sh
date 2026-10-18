@@ -399,6 +399,9 @@ export REQUIRE_EARLY_ACCESS_CONFIGURATION=1
 export REQUIRE_SAYALL_AI_PACKAGE="${REQUIRE_SAYALL_AI_PACKAGE:-0}"
 export REQUIRE_SAYALL_COMBINATION_ACTIONS=1
 export REQUIRE_SAYALL_BUTTON_PROFILES="${REQUIRE_SAYALL_BUTTON_PROFILES:-0}"
+export SAYALL_BUILD_CHANNEL=release
+export REQUIRE_RELEASE_BUILD_CHANNEL=1
+export REQUIRE_DIAGNOSTIC_PUBLIC_KEY=1
 # Keep all protected dependency inputs in the environment passed to the
 # bounded release-stage runner.  The runner starts a child process, so values
 # held only as non-exported shell variables would otherwise disappear and the

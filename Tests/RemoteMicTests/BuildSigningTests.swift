@@ -392,6 +392,9 @@ struct BuildSigningTests {
         #expect(notarizeSource.contains("Apps/MobileWeb/.private/production.env"))
         #expect(notarizeSource.contains("export REQUIRE_WEB_REMOTE_CONFIGURATION=1"))
         #expect(notarizeSource.contains("export REMOTE_WEB_RELAY_URL"))
+        #expect(notarizeSource.contains("export SAYALL_BUILD_CHANNEL=release"))
+        #expect(notarizeSource.contains("export REQUIRE_RELEASE_BUILD_CHANNEL=1"))
+        #expect(notarizeSource.contains("export REQUIRE_DIAGNOSTIC_PUBLIC_KEY=1"))
         #expect(notarizeSource.contains("SAYALL_PRIVATE_PLATFORM_ROOT"))
         #expect(notarizeSource.contains("inject-private-diagnostics-config.sh"))
         #expect(notarizeSource.contains("REMOTE_MIC_SENTRY_DSN is required for protected releases"))
@@ -403,6 +406,7 @@ struct BuildSigningTests {
         #expect(diagnosticsInjection.lowerBound < diagnosticsResigning.lowerBound)
         #expect(diagnosticsResigning.lowerBound < diagnosticsVerification.lowerBound)
         #expect(verifySource.contains("Developer ID app is missing a production Web Remote relay URL"))
+        #expect(verifySource.contains("Protected release App must declare SayAllBuildChannel=release"))
     }
 
     @Test func productionReleaseAIIsOptInAndVerifiedWhenRequired() throws {
