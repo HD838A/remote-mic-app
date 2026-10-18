@@ -251,7 +251,7 @@ final class MacroFeatureIntegration: ObservableObject {
 
     func requestButtonProfileImport(from url: URL) -> Bool {
         #if canImport(SayAllMacroRemoteMic) && canImport(SayAllButtonProfiles)
-        guard url.pathExtension.lowercased() == "sayall" else { return false }
+        guard url.isFileURL, url.pathExtension.lowercased() == "sayall" else { return false }
         feature.portableTransfer.requestedOperation = .importFile(url, scope: [.buttonProfile])
         return true
         #else

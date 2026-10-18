@@ -1,9 +1,59 @@
 import Foundation
+import AppKit
+import SwiftUI
 import Testing
 @testable import RemoteMic
 
-@Suite("Button profile file opening")
+@Suite("Button profile file opening", .serialized)
 struct ButtonProfileFileOpeningTests {
+    @MainActor
+    @Test(arguments: [false, true])
+    func consumesFinderRequestsBeforeAndAfterMounting(queuedBeforeMount: Bool) throws {
+        let suite = "RemoteMic.ButtonProfileFileOpening.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let settings = AppSettings(defaults: defaults)
+        settings.completeOnboarding()
+        let model = BridgeAppModel(settings: settings)
+        let requests = ButtonProfileImportRequestStore()
+        let marketRoot = ProcessInfo.processInfo.environment["SAYALL_MARKET_CONTRACT_PATH"]
+        let url = marketRoot.map {
+            URL(fileURLWithPath: $0).appendingPathComponent("examples/profiles/full-keyboard-access-mac.sayall")
+        } ?? URL(fileURLWithPath: "/Users/test/profile.sayall")
+        if queuedBeforeMount { requests.enqueue(url: url) }
+        let controller = NSHostingController(rootView: SettingsView(
+            model: model,
+            buttonProfileImportRequests: requests,
+            updateInformation: UpdateInformationStore(userDefaults: defaults),
+            initialSection: .connection
+        ).environmentObject(LocalizationStore(settings: settings)))
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1020, height: 772),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentViewController = controller
+        defer { window.close() }
+        window.contentView?.layoutSubtreeIfNeeded()
+        RunLoop.main.run(until: Date().addingTimeInterval(0.2))
+
+        if !queuedBeforeMount { requests.enqueue(url: url) }
+        RunLoop.main.run(until: Date().addingTimeInterval(0.3))
+
+        #expect(requests.pendingRequest == nil)
+        #expect(!settings.customMappingEnabled)
+        if marketRoot != nil, model.macroFeature.isButtonProfilesVisible {
+            #expect(model.macroFeature.isEditorActive)
+        }
+
+        // A new request for the same file must also be consumed.
+        requests.enqueue(url: url)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.3))
+        #expect(requests.pendingRequest == nil)
+        #expect(!settings.customMappingEnabled)
+        if marketRoot != nil, model.macroFeature.isButtonProfilesVisible {
+            #expect(model.macroFeature.isEditorActive)
+        }
+    }
+
     @Test func queuesAndClearsFinderButtonProfileRequests() throws {
         let store = ButtonProfileImportRequestStore()
         let url = URL(fileURLWithPath: "/Users/test/keyboard-profile.SAYALL")
@@ -19,23 +69,43 @@ struct ButtonProfileFileOpeningTests {
         #expect(store.pendingRequest == nil)
     }
 
-    @Test func finderImportUsesTheButtonProfileRoute() throws {
-        let root = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-        let integrationSource = try String(
-            contentsOf: root.appendingPathComponent("Sources/RemoteMic/MacroFeatureIntegration.swift"),
-            encoding: .utf8
-        )
-        let settingsSource = try String(
-            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
-            encoding: .utf8
-        )
-        #expect(integrationSource.contains("func requestButtonProfileImport(from url: URL) -> Bool"))
-        #expect(integrationSource.contains("scope: [.buttonProfile]"))
-        #expect(settingsSource.contains("selectedSection = .buttonProfiles"))
-        #expect(settingsSource.contains("macroFeature.requestButtonProfileImport(from: request.url)"))
+    @MainActor
+    @Test func retainsFinderRequestDuringOnboarding() throws {
+        let suite = "RemoteMic.ButtonProfileFileOpening.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let settings = AppSettings(defaults: defaults)
+        let model = BridgeAppModel(settings: settings)
+        let requests = ButtonProfileImportRequestStore()
+        let request = requests.enqueue(url: URL(fileURLWithPath: "/Users/test/profile.sayall"))
+        let controller = NSHostingController(rootView: RemoteMicRootView(
+            model: model,
+            buttonProfileImportRequests: requests,
+            updateInformation: UpdateInformationStore(userDefaults: defaults),
+            checkForUpdates: {}, refreshUpdateInformation: {},
+            setDockIconVisible: { _ in }, setStatusBarIconVisible: { _ in },
+            syncEntryPointVisibility: {}
+        ).environmentObject(LocalizationStore(settings: settings)))
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1020, height: 772),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentViewController = controller
+        defer { window.close() }
+        window.contentView?.layoutSubtreeIfNeeded()
+        RunLoop.main.run(until: Date().addingTimeInterval(0.3))
+
+        #expect(!settings.isOnboardingComplete)
+        #expect(requests.pendingRequest == request)
+        #expect(!model.macroFeature.isEditorActive)
+        #expect(!settings.customMappingEnabled)
+    }
+
+    @Test func rejectsDeepLinksAndOtherFileTypes() throws {
+        let feature = MacroFeatureIntegration()
+        #expect(!feature.requestButtonProfileImport(from: try #require(
+            URL(string: "sayall://launch/profile.sayall")
+        )))
+        #expect(!feature.requestButtonProfileImport(from: URL(fileURLWithPath: "/Users/test/profile.json")))
     }
 
     @Test func appInfoRegistersTheSayAllDocumentType() throws {

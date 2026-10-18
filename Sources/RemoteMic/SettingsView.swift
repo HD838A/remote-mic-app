@@ -585,7 +585,7 @@ struct SettingsView: View {
             loginItemService.refresh()
             macroFeature.setEditorActive(false)
             membershipFeature.refreshIfNeeded()
-            consumePendingButtonProfileImportIfNeeded()
+            routePendingButtonProfileImportIfNeeded()
         }
         .onChange(of: selectedSection) { section in
             if section == .mapping {
@@ -615,7 +615,8 @@ struct SettingsView: View {
         }
         .onReceive(macroFeature.$isFeatureVisible.removeDuplicates()) { isVisible in
             if !isVisible,
-               (selectedSection == .macros || selectedSection == .buttonProfiles) {
+               (selectedSection == .macros ||
+                (selectedSection == .buttonProfiles && !macroFeature.isButtonProfilesVisible)) {
                 selectedSection = .about
             }
         }
@@ -624,8 +625,8 @@ struct SettingsView: View {
                 selectedSection = .about
             }
         }
-        .onReceive(buttonProfileImportRequests.$pendingRequest.compactMap { $0 }) { _ in
-            consumePendingButtonProfileImportIfNeeded()
+        .onChange(of: buttonProfileImportRequests.pendingRequest) { _ in
+            routePendingButtonProfileImportIfNeeded()
         }
         .sheet(isPresented: $isWebRemoteSessionPresented) {
             webRemoteSessionView
@@ -840,32 +841,38 @@ struct SettingsView: View {
                 aboutPage
             }
         case .buttonProfiles:
-            if macroFeature.isButtonProfilesVisible {
-                VStack(spacing: 0) {
-                    macroFeature.buttonProfilesView(
-                        selectedRemoteProfileID: settings.selectedRemoteProfileID,
-                        remoteModel: settings.selectedRemoteProfile?.model,
-                        hostActionSections: buttonProfileHostActionSections,
-                        settings: settings,
-                        onEditKeys: { profile in
-                            preservesMappingContextOnNavigation = true
-                            editingMappingProfileID = profile
-                            selectedSection = .mapping
-                        },
-                        onChooseCustomApplication: { completion in
-                            chooseCustomApplicationForButtonProfile { id, displayName, payload in
-                                completion(id, displayName, payload)
+            Group {
+                if macroFeature.isButtonProfilesVisible {
+                    VStack(spacing: 0) {
+                        macroFeature.buttonProfilesView(
+                            selectedRemoteProfileID: settings.selectedRemoteProfileID,
+                            remoteModel: settings.selectedRemoteProfile?.model,
+                            hostActionSections: buttonProfileHostActionSections,
+                            settings: settings,
+                            onEditKeys: { profile in
+                                preservesMappingContextOnNavigation = true
+                                editingMappingProfileID = profile
+                                selectedSection = .mapping
+                            },
+                            onChooseCustomApplication: { completion in
+                                chooseCustomApplicationForButtonProfile { id, displayName, payload in
+                                    completion(id, displayName, payload)
+                                }
+                            },
+                            chromecastReservedControlIDs: buttonProfilesChromecastReservedControls,
+                            membershipNotice: membershipFeature.membershipRequiredView(forButtonProfiles: true) {
+                                selectedSection = .membership
+                                membershipFeature.refreshIfNeeded()
                             }
-                        },
-                        chromecastReservedControlIDs: buttonProfilesChromecastReservedControls,
-                        membershipNotice: membershipFeature.membershipRequiredView(forButtonProfiles: true) {
-                            selectedSection = .membership
-                            membershipFeature.refreshIfNeeded()
-                        }
-                    )
+                        )
+                    }
+                } else {
+                    aboutPage
                 }
-            } else {
-                aboutPage
+            }
+            .task(id: buttonProfileImportRequests.pendingRequest?.operationID) {
+                // Submit only after this page has mounted its import observer.
+                consumePendingButtonProfileImportIfNeeded()
             }
         case .membership:
             if membershipFeature.isFeatureVisible {
@@ -4661,9 +4668,18 @@ struct SettingsView: View {
         }
     }
 
+    private func routePendingButtonProfileImportIfNeeded() {
+        guard buttonProfileImportRequests.pendingRequest != nil else { return }
+        if macroFeature.isButtonProfilesVisible {
+            selectedSection = .buttonProfiles
+        } else {
+            selectedSection = .about
+            consumePendingButtonProfileImportIfNeeded()
+        }
+    }
+
     private func consumePendingButtonProfileImportIfNeeded() {
         guard let request = buttonProfileImportRequests.pendingRequest else { return }
-        selectedSection = .buttonProfiles
         if macroFeature.requestButtonProfileImport(from: request.url) {
             buttonProfileImportRequests.clear()
             AppLogger.shared.write(

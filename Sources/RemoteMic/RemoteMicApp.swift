@@ -383,7 +383,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
 
     func application(_ application: NSApplication, open urls: [URL]) {
         if let buttonProfileURL = urls.first(where: {
-            $0.pathExtension.caseInsensitiveCompare("sayall") == .orderedSame
+            $0.isFileURL && $0.pathExtension.caseInsensitiveCompare("sayall") == .orderedSame
         }) {
             let request = buttonProfileImportRequests.enqueue(url: buttonProfileURL)
             AppLogger.shared.write(
