@@ -2497,7 +2497,11 @@ struct OnboardingFlowTests {
             invoke("control-source.more", on: remoteSource)
         }
         #expect(!remoteSource.settings.siriRemoteEnabled)
-        for source in OnboardingBuildCapabilities.availableControlSources where source != .siriRemote {
+        #expect(remoteSource.probe.actions["control-source.chromecast_remote"] == nil)
+        let visibleSources = OnboardingControlSourceVisibilityPolicy.visibleSources(
+            OnboardingBuildCapabilities.availableControlSources
+        )
+        for source in visibleSources where source != .siriRemote {
             let id = "control-source.\(source.rawValue)"
             invoke(id, on: remoteSource)
             #expect(remoteSource.settings.onboardingControlSource == source)
