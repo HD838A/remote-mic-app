@@ -2,6 +2,21 @@
 
 > 执行本手册或修改 Onboarding 前，先完整阅读跨平台产品规范 [`feature/first-run-onboarding/PRODUCT_SPEC.md`](../feature/first-run-onboarding/PRODUCT_SPEC.md) 和 [macOS 平台适配](../feature/first-run-onboarding/platform-macos.md)。未来 Windows 测试应从同一产品规范出发，并使用 [Windows 平台适配](../feature/first-run-onboarding/platform-windows.md) 建立独立测试手册。
 
+## `.sayall` 文件打开与首次 Onboarding
+
+适用范围：用户首次安装 SayAll 后，从 Finder 双击键位方案 `.sayall` 文件。
+
+1. 准备一个有效的 `.sayall` 文件，并确认 SayAll 尚未完成 Onboarding。
+2. 双击文件。预期：SayAll 启动并显示 Onboarding；文件请求不会立即写入配置。
+3. 完成 Onboarding。预期：向导结束后自动进入设置页的配置导入预览，并显示该文件的内容。
+4. 取消导入。预期：方案不写入，用户回到设置页。
+5. 确认导入。预期：方案写入当前配置，并显示导入结果。
+6. 在 SayAll 已运行且 Onboarding 已完成时再次双击文件。预期：直接进入配置导入预览。
+
+失败判定：Finder 不能把 `.sayall` 交给 SayAll、Onboarding 完成后文件请求丢失、未完成 Onboarding 时绕过向导写入配置、取消后仍写入方案，或重复打开造成重复导入，均判定失败。
+
+自动化可以验证文件类型声明、请求暂存和清理。真实 Finder 双击、首次安装 Onboarding、导入预览和保存仍需在签名安装包上完成。
+
 ## 2026-10-19 无屏配置应用定位回归
 
 适用分支：`codex/fix-agent-app-location`。本次只修改欢迎页复制的终端命令。页面、权限、连接、语音与持久化实现没有变化。

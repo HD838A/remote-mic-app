@@ -461,6 +461,7 @@ struct SettingsView: View {
     @State private var mappingVoiceSettingsRequest = 0
 
     @ObservedObject private var macroFeature: MacroFeatureIntegration
+    @ObservedObject private var configurationImportRequests: ConfigurationImportRequestStore
     @ObservedObject private var membershipFeature: MembershipFeatureIntegration
     @ObservedObject private var loginItemService: LoginItemService
     @ObservedObject private var updateInformation: UpdateInformationStore
@@ -503,6 +504,7 @@ struct SettingsView: View {
 
     init(
         model: BridgeAppModel,
+        configurationImportRequests: ConfigurationImportRequestStore = ConfigurationImportRequestStore(),
         updateInformation: UpdateInformationStore,
         hardwareAnnouncements: HardwareAnnouncementStore = HardwareAnnouncementStore(),
         checkForUpdates: @escaping () -> Void = {},
@@ -519,6 +521,7 @@ struct SettingsView: View {
         minimumContentSize: CGSize = CGSize(width: 980, height: 732)
     ) {
         self.model = model
+        self.configurationImportRequests = configurationImportRequests
         settings = model.settings
         privateFeature = model.privateFeature
         macroFeature = model.macroFeature
@@ -582,6 +585,7 @@ struct SettingsView: View {
             loginItemService.refresh()
             macroFeature.setEditorActive(false)
             membershipFeature.refreshIfNeeded()
+            consumePendingConfigurationImportIfNeeded()
         }
         .onChange(of: selectedSection) { section in
             if section == .mapping {
@@ -619,6 +623,9 @@ struct SettingsView: View {
             if !isVisible, selectedSection == .membership {
                 selectedSection = .about
             }
+        }
+        .onReceive(configurationImportRequests.$pendingRequest.compactMap { $0 }) { _ in
+            consumePendingConfigurationImportIfNeeded()
         }
         .sheet(isPresented: $isWebRemoteSessionPresented) {
             webRemoteSessionView
@@ -4650,6 +4657,30 @@ struct SettingsView: View {
                 message: LocalizedMessage("configuration.import.invalid_file"),
                 tint: .red,
                 systemImage: "exclamationmark.triangle.fill"
+            )
+        }
+    }
+
+    private func consumePendingConfigurationImportIfNeeded() {
+        guard let request = configurationImportRequests.pendingRequest else { return }
+        selectedSection = .about
+        if macroFeature.requestConfigurationImport(from: request.url) {
+            configurationImportRequests.clear()
+            AppLogger.shared.write(
+                "CONFIGURATION_IMPORT phase=started result=accepted " +
+                    "source=finder_file operation_id=configuration_import_\(request.operationID)"
+            )
+        } else {
+            configurationImportRequests.clear()
+            configurationStatus = ConfigurationStatus(
+                message: LocalizedMessage("configuration.import.feature_unavailable"),
+                tint: .red,
+                systemImage: "exclamationmark.triangle.fill"
+            )
+            AppLogger.shared.write(
+                "CONFIGURATION_IMPORT phase=completed result=rejected " +
+                    "source=finder_file reason=feature_unavailable " +
+                    "operation_id=configuration_import_\(request.operationID)"
             )
         }
     }
