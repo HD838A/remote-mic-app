@@ -29,7 +29,7 @@ G-DOC.authority=chinese
 
 - 英文产品名统一为 `SayAll`，不得使用 `Remote Mic`、`Wireless Mic` 或 `SayAll Wireless Mic` 作为产品名。
 - 中文产品名统一为「无线麦 SayAll」，保留“无线麦”和“SayAll”之间的半角空格。
-- 中文宣传文案中的产品称呼统一为「无线麦 SayAll App」；英文宣传文案使用 `SayAll`。
+- 中文宣传文案中的产品称呼统一为「无线麦 SayAll App」；英文宣传文案使用 `SayAll App`。
 - 上述规则适用于普通用户可见的页面、按钮、提示、错误、权限说明、辅助功能标签、帮助、版本说明和宣传内容；完整规则见 [`design-qa.md` 的产品命名与宣传文案](design-qa.md#产品命名与宣传文案)。
 - 历史路径、代码标识符、Bundle ID、可执行文件、协议、数据键、安装器和发布资产保持兼容；引用 `Remote Mic.app` 等真实旧名称时必须保留准确字面值，不得因文案统一改动这些技术边界。
 

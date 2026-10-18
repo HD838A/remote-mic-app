@@ -8,7 +8,8 @@ This file is a convenience translation of the current mandatory design rules. Th
 
 | Context | Required name |
 | --- | --- |
-| English product name and promotional copy | `SayAll` |
+| English product name | `SayAll` |
+| Product reference in English promotional copy | `SayAll App` |
 | Chinese product name | 无线麦 SayAll |
 | Product reference in Chinese promotional copy | 无线麦 SayAll App |
 
