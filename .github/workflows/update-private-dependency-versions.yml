@@ -55,8 +55,7 @@ jobs:
           fi
           next_ai="$(jq -r '.dependencies.sayAllAI.version' config/release-dependencies.json)"
           next_platform="$(jq -r '.dependencies.sayAllPrivatePlatform.version' config/release-dependencies.json)"
-          test "$next_ai" = "$next_platform"
-          branch="automation/private-dependencies-${next_ai}"
+          branch="automation/private-dependencies-platform-${next_platform}-ai-${next_ai}"
           if gh pr list --state open --head "$branch" --json number --jq 'length' | grep -q '^0$'; then
             git switch -c "$branch"
             git config user.name "github-actions[bot]"
@@ -68,7 +67,8 @@ jobs:
             cat > "$body_file" <<EOF
           自动更新私有依赖版本。
 
-          - 私有统一版本：$CURRENT_AI/$CURRENT_PLATFORM -> $next_ai
+          - 私有平台版本：$CURRENT_PLATFORM -> $next_platform
+          - 可选 AI 版本：$CURRENT_AI -> $next_ai
 
           该 PR 必须通过公共、免费组合动作和付费键位方案 CI。
           EOF

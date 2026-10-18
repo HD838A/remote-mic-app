@@ -402,6 +402,7 @@ export REQUIRE_SAYALL_BUTTON_PROFILES="${REQUIRE_SAYALL_BUTTON_PROFILES:-0}"
 export SAYALL_BUILD_CHANNEL=release
 export REQUIRE_RELEASE_BUILD_CHANNEL=1
 export REQUIRE_DIAGNOSTIC_PUBLIC_KEY=1
+export REQUIRE_DIAGNOSTIC_SERVICE=1
 # Keep all protected dependency inputs in the environment passed to the
 # bounded release-stage runner.  The runner starts a child process, so values
 # held only as non-exported shell variables would otherwise disappear and the
@@ -430,24 +431,10 @@ export RELEASE_SWIFT_BUILD_TIMEOUT_SECONDS
 
 run_release_stage app-build "$RELEASE_APP_BUILD_TIMEOUT_SECONDS" \
   "$ROOT/scripts/build-app.sh"
-DIAGNOSTICS_INJECTOR="${SAYALL_PRIVATE_PLATFORM_ROOT:-}/tools/release/inject-private-diagnostics-config.sh"
-if [[ ! -x "$DIAGNOSTICS_INJECTOR" ]]; then
-  print -u2 "protected diagnostics injector is unavailable"
-  exit 1
-fi
 if [[ -z "${REMOTE_MIC_SENTRY_DSN:-}" ]]; then
   print -u2 "REMOTE_MIC_SENTRY_DSN is required for protected releases"
   exit 1
 fi
-run_release_stage diagnostics-config 30 \
-  "$DIAGNOSTICS_INJECTOR" "$APP" >/dev/null
-run_release_stage app-codesign-diagnostics "$RELEASE_CODESIGN_TIMEOUT_SECONDS" \
-  codesign \
-    --force \
-    --options runtime \
-    --timestamp \
-    --sign "$CODE_SIGN_IDENTITY" \
-    "$APP"
 run_release_stage app-verify-pre-notary "$RELEASE_VERIFY_TIMEOUT_SECONDS" \
   "$ROOT/scripts/verify-app.sh" "$APP"
 if [[ "$GENERATE_SPARKLE_UPDATE" == "1" ]]; then

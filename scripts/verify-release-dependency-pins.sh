@@ -18,14 +18,15 @@ case "${1:-pins}" in
     [[ -r "$MANIFEST" ]] || { print -u2 "release dependency manifest is unreadable: $MANIFEST"; exit 1; }
 
     jq -e '
-      .schemaVersion == 1 and
+      .schemaVersion == 2 and
       (.dependencies | keys | sort) == ["sayAllAI", "sayAllPrivatePlatform"] and
       .dependencies.sayAllAI.repository == "GetSayAll/sayall-ai" and
       .dependencies.sayAllPrivatePlatform.repository == "GetSayAll/sayall-private-platform" and
-      .dependencies.sayAllAI.version == .dependencies.sayAllPrivatePlatform.version and
+      .dependencies.sayAllAI.optional == true and
+      .dependencies.sayAllPrivatePlatform.required == true and
       ([.dependencies[] | .version] | all(.[]; type == "string" and test("^[0-9]+\\.[0-9]+\\.[0-9]+$")))
     ' "$MANIFEST" >/dev/null || {
-      print -u2 "release dependency manifest has an invalid schema, repository, version, or unified version"
+      print -u2 "release dependency manifest has an invalid schema, repository, version, or dependency role"
       exit 1
     }
 
@@ -96,12 +97,13 @@ PACKAGE_MANIFEST="$ROOT/Package.swift"
 PACKAGE_RESOLVED="$ROOT/Package.resolved"
 DEPENDENCY_MANIFEST="$ROOT/config/release-dependencies.json"
 WORKFLOWS=(
-  "$CONTROL_ROOT/.github/workflows/mac-ci.yml"
   "$CONTROL_ROOT/.github/workflows/mac-release-package.yml"
+  "$CONTROL_ROOT/.github/workflows/mac-private-ci.yml"
 )
 RELEASE_CRITICAL_WORKFLOWS=(
   "$CONTROL_ROOT/.github/workflows/mac-ci.yml"
   "$CONTROL_ROOT/.github/workflows/mac-release-package.yml"
+  "$CONTROL_ROOT/.github/workflows/mac-private-ci.yml"
   "$CONTROL_ROOT/.github/workflows/mac-preview-publication.yml"
   "$CONTROL_ROOT/.github/workflows/mac-stable-promote.yml"
 )
@@ -182,15 +184,13 @@ for workflow in "${WORKFLOWS[@]}"; do
   done
 done
 
-grep -Fq '${{ steps.release-dependencies.outputs.sayall_ai_version }}' "$CONTROL_ROOT/.github/workflows/mac-ci.yml"
-grep -Fq '${{ steps.release-dependencies.outputs.sayall_private_platform_version }}' "$CONTROL_ROOT/.github/workflows/mac-ci.yml"
 grep -Fq '${{ steps.release-dependencies.outputs.sayall_ai_version }}' "$CONTROL_ROOT/.github/workflows/mac-release-package.yml"
 grep -Fq '${{ steps.release-dependencies.outputs.sayall_private_platform_version }}' "$CONTROL_ROOT/.github/workflows/mac-release-package.yml"
 
 grep -Fq 'SAYALL_PRIVATE_PLATFORM_PACKAGE_PATH' "$PACKAGE_MANIFEST"
-grep -Fq 'SAYALL_ENABLE_PRIVATE_SWIFTPM' "$CONTROL_ROOT/.github/workflows/mac-ci.yml"
+grep -Fq 'SAYALL_ENABLE_PRIVATE_SWIFTPM' "$CONTROL_ROOT/.github/workflows/mac-private-ci.yml"
 grep -Fq 'SAYALL_PRIVATE_PLATFORM_PACKAGE_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-private-platform' \
-  "$CONTROL_ROOT/.github/workflows/mac-ci.yml"
+  "$CONTROL_ROOT/.github/workflows/mac-private-ci.yml"
 if grep -Eq 'sayall_mac_remote_(repository|commit)|SAYALL_MAC_REMOTE_DEPLOY_KEY|\.private-dependencies/sayall-mac-remote' \
   "$CONTROL_ROOT/.github/workflows/mac-ci.yml" "$CONTROL_ROOT/.github/workflows/mac-release-package.yml"; then
   print -u2 "release workflows must use the unified private platform package"

@@ -36,25 +36,27 @@ latest_tag() {
 
 current_ai="$(jq -r '.dependencies.sayAllAI.version' "$MANIFEST")"
 current_private_platform="$(jq -r '.dependencies.sayAllPrivatePlatform.version' "$MANIFEST")"
-latest_ai="$(latest_tag "$(jq -r '.dependencies.sayAllAI.repository' "$MANIFEST")" "$sayall_ai_key")"
 latest_private_platform="$(latest_tag "$(jq -r '.dependencies.sayAllPrivatePlatform.repository' "$MANIFEST")" "$private_platform_key")"
-
-[[ "$latest_ai" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { print -u2 "No valid SayAllAI SwiftPM version tag found"; exit 1; }
 [[ "$latest_private_platform" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { print -u2 "No valid private platform SwiftPM version tag found"; exit 1; }
-[[ "$latest_ai" == "$latest_private_platform" ]] || {
-  print -u2 "Private repositories must publish the same SwiftPM version: SayAllAI=$latest_ai, SayAllPrivatePlatform=$latest_private_platform"
-  exit 1
-}
 
-if [[ "$latest_ai" == "$current_ai" && "$latest_ai" == "$current_private_platform" ]]; then
-  print "Private dependency version is current: $current_ai"
+latest_ai="$current_ai"
+if [[ -n "$sayall_ai_key" ]]; then
+  latest_ai="$(latest_tag "$(jq -r '.dependencies.sayAllAI.repository' "$MANIFEST")" "$sayall_ai_key")"
+  [[ "$latest_ai" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { print -u2 "No valid SayAllAI SwiftPM version tag found"; exit 1; }
+else
+  print "SayAllAI deploy key unavailable; keeping the optional AI version at $current_ai"
+fi
+
+if [[ "$latest_ai" == "$current_ai" && "$latest_private_platform" == "$current_private_platform" ]]; then
+  print "Private dependency versions are current: platform=$current_private_platform, ai=$current_ai"
   exit 0
 fi
 
 next_manifest="$MANIFEST.next"
-jq --arg version "$latest_ai" \
-  '.dependencies.sayAllAI.version = $version |
-   .dependencies.sayAllPrivatePlatform.version = $version' \
+jq --arg ai_version "$latest_ai" \
+  --arg platform_version "$latest_private_platform" \
+  '.dependencies.sayAllAI.version = $ai_version |
+   .dependencies.sayAllPrivatePlatform.version = $platform_version' \
   "$MANIFEST" > "$next_manifest"
 mv -f "$next_manifest" "$MANIFEST"
-print "Private dependency version: $current_ai/$current_private_platform -> $latest_ai"
+print "Private dependency versions: platform=$current_private_platform -> $latest_private_platform, ai=$current_ai -> $latest_ai"

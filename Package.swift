@@ -8,11 +8,7 @@ var packageDependencies: [Package.Dependency] = [
 let privateSwiftPMEnabled = ProcessInfo.processInfo.environment[
     "SAYALL_ENABLE_PRIVATE_SWIFTPM"
 ] == "1"
-let privateReleaseVersion = Version(2, 1, 0)
-let privatePlatformVersion = Version(2, 2, 0)
 let privatePlatformPackage = "sayall-private-platform"
-let sayAllAIVersion = privateReleaseVersion
-let sayAllAIPackage = "sayall-ai"
 let privatePlatformPackagePath = ProcessInfo.processInfo.environment[
     "SAYALL_PRIVATE_PLATFORM_PACKAGE_PATH"
 ]
@@ -38,11 +34,8 @@ if privateSwiftPMEnabled {
     if let privatePlatformPackagePath, !privatePlatformPackagePath.isEmpty {
         packageDependencies.append(.package(path: privatePlatformPackagePath))
     } else {
-        packageDependencies.append(
-            .package(
-                url: "ssh://git@github.com/GetSayAll/sayall-private-platform.git",
-                from: privatePlatformVersion
-            )
+        fatalError(
+            "SAYALL_ENABLE_PRIVATE_SWIFTPM requires SAYALL_PRIVATE_PLATFORM_PACKAGE_PATH"
         )
     }
     remoteMicDependencies.append(
@@ -252,19 +245,6 @@ if privateSwiftPMEnabled {
             .product(name: "SayAllChromecast", package: privatePlatformPackage)
         )
     }
-}
-
-if privateSwiftPMEnabled &&
-    (ProcessInfo.processInfo.environment["SAYALL_AI_PACKAGE_PATH"] ?? "").isEmpty {
-    packageDependencies.append(
-        .package(
-            url: "ssh://git@github.com/GetSayAll/sayall-ai.git",
-            from: sayAllAIVersion
-        )
-    )
-    remoteMicDependencies.append(
-        .product(name: "SayAllAI", package: sayAllAIPackage)
-    )
 }
 
 if let siriRemotePath = siriRemotePackagePath, !siriRemotePath.isEmpty {

@@ -380,7 +380,6 @@ jobs:
           EARLY_ACCESS_SERVICE_URL: ${{ secrets.EARLY_ACCESS_SERVICE_URL }}
           REMOTE_MIC_SENTRY_DSN: ${{ secrets.REMOTE_MIC_SENTRY_DSN }}
           SAYALL_DIAGNOSTIC_PUBLIC_KEY_BASE64: ${{ secrets.SAYALL_DIAGNOSTIC_PUBLIC_KEY_BASE64 }}
-          SAYALL_PRIVATE_PLATFORM_ROOT: ${{ github.workspace }}/.private-dependencies/sayall-private-platform
         run: |
           ./scripts/run-release-stage.sh \
             all signed-release "$SIGNED_RELEASE_TIMEOUT_SECONDS" -- \

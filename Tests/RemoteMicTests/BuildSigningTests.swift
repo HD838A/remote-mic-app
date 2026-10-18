@@ -216,6 +216,12 @@ struct BuildSigningTests {
         }
         #expect(buildSource.contains("SAYALL_DIAGNOSTIC_PUBLIC_KEY_BASE64 is required for this build"))
         #expect(verifySource.contains("App is missing the required diagnostic public key"))
+        #expect(buildSource.contains("REQUIRE_DIAGNOSTIC_SERVICE=\"${REQUIRE_DIAGNOSTIC_SERVICE:-0}\""))
+        #expect(verifySource.contains("REQUIRE_DIAGNOSTIC_SERVICE=\"${REQUIRE_DIAGNOSTIC_SERVICE:-0}\""))
+        #expect(buildSource.contains("REMOTE_MIC_SENTRY_DSN is required for internal diagnostic builds"))
+        #expect(verifySource.contains("App is missing the required diagnostic service DSN"))
+        #expect(buildSource.contains("SayAllSentryDSN"))
+        #expect(verifySource.contains("SayAllSentryDSN"))
 
         // Execute the production verifier block. Missing-key plutil errors go to
         // stdout on macOS, so exit status, not output content, defines presence.
@@ -263,7 +269,12 @@ struct BuildSigningTests {
             process.executableURL = URL(fileURLWithPath: "/bin/zsh")
             process.arguments = ["-c", "set -euo pipefail\n" + plutilWrapper + block]
             process.environment = ProcessInfo.processInfo.environment.merging(
-                ["REQUIRE_DIAGNOSTIC_PUBLIC_KEY": required, "PLIST": plistURL.path]
+                [
+                    "REQUIRE_DIAGNOSTIC_PUBLIC_KEY": required,
+                    "REQUIRE_DIAGNOSTIC_SERVICE": "0",
+                    "REMOTE_MIC_SENTRY_DSN": "",
+                    "PLIST": plistURL.path,
+                ]
             ) { _, value in value }
             let errorPipe = Pipe()
             process.standardOutput = FileHandle.nullDevice
@@ -359,6 +370,11 @@ struct BuildSigningTests {
         #expect(packageSource.contains("SAYALL_MAC_REMOTE_PACKAGE_PATH"))
         #expect(packageSource.contains("Sources/PublicRemoteCompatibility/Core"))
         #expect(packageSource.contains("Sources/PublicRemoteCompatibility/UI"))
+        #expect(packageSource.contains(
+            "SAYALL_ENABLE_PRIVATE_SWIFTPM requires SAYALL_PRIVATE_PLATFORM_PACKAGE_PATH"
+        ))
+        #expect(!packageSource.contains("ssh://git@github.com/GetSayAll/sayall-private-platform.git"))
+        #expect(!packageSource.contains("ssh://git@github.com/GetSayAll/sayall-ai.git"))
         #expect(!packageSource.contains("https://github.com/GetSayAll/sayall-mac-remote.git"))
         #expect(!resolvedSource.contains("sayall-mac-remote"))
         #expect(buildSource.contains("REQUIRE_SAYALL_MAC_REMOTE_PACKAGE"))
@@ -395,16 +411,12 @@ struct BuildSigningTests {
         #expect(notarizeSource.contains("export SAYALL_BUILD_CHANNEL=release"))
         #expect(notarizeSource.contains("export REQUIRE_RELEASE_BUILD_CHANNEL=1"))
         #expect(notarizeSource.contains("export REQUIRE_DIAGNOSTIC_PUBLIC_KEY=1"))
-        #expect(notarizeSource.contains("SAYALL_PRIVATE_PLATFORM_ROOT"))
-        #expect(notarizeSource.contains("inject-private-diagnostics-config.sh"))
+        #expect(notarizeSource.contains("export REQUIRE_DIAGNOSTIC_SERVICE=1"))
         #expect(notarizeSource.contains("REMOTE_MIC_SENTRY_DSN is required for protected releases"))
         #expect(notarizeSource.contains("RELEASE_CODESIGN_TIMEOUT_SECONDS=\"${RELEASE_CODESIGN_TIMEOUT_SECONDS:-45}\""))
-        #expect(notarizeSource.contains("app-codesign-diagnostics"))
-        let diagnosticsInjection = try #require(notarizeSource.range(of: "run_release_stage diagnostics-config"))
-        let diagnosticsResigning = try #require(notarizeSource.range(of: "run_release_stage app-codesign-diagnostics"))
-        let diagnosticsVerification = try #require(notarizeSource.range(of: "run_release_stage app-verify-pre-notary"))
-        #expect(diagnosticsInjection.lowerBound < diagnosticsResigning.lowerBound)
-        #expect(diagnosticsResigning.lowerBound < diagnosticsVerification.lowerBound)
+        #expect(!notarizeSource.contains("inject-private-diagnostics-config.sh"))
+        #expect(!notarizeSource.contains("app-codesign-diagnostics"))
+        #expect(notarizeSource.contains("run_release_stage app-verify-pre-notary"))
         #expect(verifySource.contains("Developer ID app is missing a production Web Remote relay URL"))
         #expect(verifySource.contains("Protected release App must declare SayAllBuildChannel=release"))
     }
@@ -803,6 +815,7 @@ struct BuildSigningTests {
             .deletingLastPathComponent()
         let workflowPaths = [
             ".github/workflows/mac-ci.yml",
+            ".github/workflows/mac-private-ci.yml",
             ".github/workflows/mac-release-package.yml",
             ".github/workflows/mac-preview-publication.yml",
             ".github/workflows/mac-stable-promote.yml",
@@ -1195,7 +1208,6 @@ struct BuildSigningTests {
             "SAYALL_DIAGNOSTIC_PUBLIC_KEY_BASE64: ${{ secrets.SAYALL_DIAGNOSTIC_PUBLIC_KEY_BASE64 }}"
         ))
         #expect(workflowSource.contains("Validate protected diagnostics configuration"))
-        #expect(workflowSource.contains("SAYALL_PRIVATE_PLATFORM_ROOT"))
         #expect(workflowSource.contains("mode:"))
         #expect(workflowSource.contains("expected_commit:"))
         #expect(workflowSource.contains("prepare-public-release-assets.sh"))

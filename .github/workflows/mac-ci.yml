@@ -27,7 +27,6 @@ jobs:
       tooling_only: ${{ steps.changes.outputs.tooling_only }}
       repository_only: ${{ steps.changes.outputs.repository_only }}
       release_checks: ${{ steps.changes.outputs.release_checks }}
-      private_available: ${{ steps.private-access.outputs.available }}
     steps:
       - name: Check out repository
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
@@ -63,46 +62,6 @@ jobs:
           base_sha="${diff_range%%.*}"
           ./scripts/verify-release-control-plane-diff.sh --classify "$base_sha" HEAD >> "$GITHUB_OUTPUT"
 
-      - name: Resolve versioned release dependencies
-        if: steps.changes.outputs.product_change == 'true'
-        id: release-dependencies
-        run: |
-          command -v zsh >/dev/null || { sudo apt-get update && sudo apt-get install -y zsh; }
-          ./scripts/verify-release-dependency-pins.sh resolve github-output
-
-      - name: Detect private dependency access
-        if: steps.changes.outputs.product_change == 'true'
-        id: private-access
-        shell: bash
-        env:
-          SAYALL_AI_DEPLOY_KEY: ${{ secrets.SAYALL_AI_DEPLOY_KEY }}
-          SAYALL_PRIVATE_PLATFORM_DEPLOY_KEY: ${{ secrets.SAYALL_PRIVATE_PLATFORM_DEPLOY_KEY }}
-        run: |
-          available=true
-          check_access() {
-            local repository="$1"
-            local key="$2"
-            if [[ -z "$key" ]]; then
-              available=false
-              return
-            fi
-            eval "$(ssh-agent -s)" >/dev/null
-            if ! printf '%s\n' "$key" | ssh-add - >/dev/null 2>&1 || \
-               ! GIT_SSH_COMMAND='ssh -o StrictHostKeyChecking=accept-new' \
-                 git ls-remote "git@github.com:$repository.git" HEAD >/dev/null 2>&1; then
-              available=false
-            fi
-            ssh-agent -k >/dev/null
-          }
-          check_access "${{ steps.release-dependencies.outputs.sayall_ai_repository }}" "$SAYALL_AI_DEPLOY_KEY"
-          check_access "${{ steps.release-dependencies.outputs.sayall_private_platform_repository }}" "$SAYALL_PRIVATE_PLATFORM_DEPLOY_KEY"
-          echo "available=$available" >> "$GITHUB_OUTPUT"
-          if [[ "$available" == true ]]; then
-            echo "Private dependency access is available; private integration checks will run."
-          else
-            echo "Private dependency access is unavailable; public build remains required and private integration checks are skipped."
-          fi
-
   public_test:
     name: Public Swift tests and dual-architecture build
     needs: classify_changes
@@ -114,6 +73,8 @@ jobs:
       # Retain the lower deployment target; Release builds still cover both targets.
       RELEASE_VARIANT: intel
       SAYALL_AI_PACKAGE_PATH: ""
+      SAYALL_ENABLE_PRIVATE_SWIFTPM: "0"
+      SAYALL_PRIVATE_PLATFORM_PACKAGE_PATH: ""
       SAYALL_COMBINATION_ACTIONS_PATH: ""
       SAYALL_BUTTON_PROFILES_PACKAGE_PATH: ""
       SAYALL_MAC_REMOTE_PACKAGE_PATH: ""
@@ -168,9 +129,7 @@ jobs:
 
       - name: Verify release configuration
         if: needs.classify_changes.outputs.release_checks == 'true'
-        run: |
-          ./scripts/verify-release-dependency-pins.sh
-          ./scripts/verify-release-dependency-pins.sh tokens
+        run: ./scripts/verify-release-dependency-pins.sh tokens
 
       - name: Run Swift tests
         if: needs.classify_changes.outputs.product_change == 'true'
@@ -211,71 +170,9 @@ jobs:
           RELEASE_VARIANT: intel
         run: swift build --disable-keychain -c release --triple x86_64-apple-macosx13.0
 
-  private_test:
-    name: Private ${{ matrix.configuration }} tests and dual-architecture build
-    needs: classify_changes
-    if: needs.classify_changes.outputs.product_change == 'true' && needs.classify_changes.outputs.private_available == 'true'
-    runs-on: macos-15
-    timeout-minutes: 45
-    strategy:
-      fail-fast: false
-      matrix:
-        configuration: [free-combination-actions, paid-button-profiles]
-    env:
-      DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
-      RELEASE_VARIANT: intel
-      SAYALL_ENABLE_PRIVATE_SWIFTPM: "1"
-      SAYALL_ENABLE_BUTTON_PROFILES: ${{ matrix.configuration == 'paid-button-profiles' && '1' || '0' }}
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
-
-      - name: Resolve versioned release dependencies
-        id: release-dependencies
-        run: ./scripts/verify-release-dependency-pins.sh resolve github-output
-
-      - name: Check out private feature package
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
-        with:
-          repository: ${{ steps.release-dependencies.outputs.sayall_ai_repository }}
-          ref: ${{ steps.release-dependencies.outputs.sayall_ai_version }}
-          path: .private-dependencies/sayall-ai
-          ssh-key: ${{ secrets.SAYALL_AI_DEPLOY_KEY }}
-          persist-credentials: false
-
-      - name: Check out private macOS feature packages
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
-        with:
-          repository: ${{ steps.release-dependencies.outputs.sayall_private_platform_repository }}
-          ref: ${{ steps.release-dependencies.outputs.sayall_private_platform_version }}
-          path: .private-dependencies/sayall-private-platform
-          ssh-key: ${{ secrets.SAYALL_PRIVATE_PLATFORM_DEPLOY_KEY }}
-          persist-credentials: false
-
-      - name: Configure private packages
-        run: |
-          {
-            echo "SAYALL_AI_PACKAGE_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-ai"
-            echo "SAYALL_PRIVATE_PLATFORM_PACKAGE_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-private-platform"
-          } >> "$GITHUB_ENV"
-
-      - name: Run private integration tests
-        run: swift test --disable-keychain --skip BuildSigningTests --scratch-path ".build-private/${{ matrix.configuration }}"
-
-      - name: Build release configuration (Apple Silicon)
-        env:
-          RELEASE_VARIANT: apple-silicon
-        run: swift build --disable-keychain --scratch-path ".build-private/${{ matrix.configuration }}" -c release --triple arm64-apple-macosx14.0
-
-      - name: Build release configuration (Intel Ventura)
-        env:
-          RELEASE_VARIANT: intel
-        run: swift build --disable-keychain --scratch-path ".build-private/${{ matrix.configuration }}" -c release --triple x86_64-apple-macosx13.0
-
   test:
     name: Swift tests and build (${{ matrix.label }})
-    needs: [classify_changes, public_test, private_test]
+    needs: [classify_changes, public_test]
     if: always()
     runs-on: ubuntu-latest
     strategy:
@@ -288,23 +185,10 @@ jobs:
         env:
           CLASSIFY_RESULT: ${{ needs.classify_changes.result }}
           PUBLIC_RESULT: ${{ needs.public_test.result }}
-          PRIVATE_TEST_RESULT: ${{ needs.private_test.result }}
           RELEASE_CHECKS_REQUIRED: ${{ needs.classify_changes.outputs.release_checks }}
           PRODUCT_CHANGE: ${{ needs.classify_changes.outputs.product_change }}
-          PRIVATE_AVAILABLE: ${{ needs.classify_changes.outputs.private_available }}
         run: |
           test "$CLASSIFY_RESULT" = success
           test "$PUBLIC_RESULT" = success
           [[ "$PRODUCT_CHANGE" == true || "$PRODUCT_CHANGE" == false ]] || exit 1
           [[ "$RELEASE_CHECKS_REQUIRED" == true || "$RELEASE_CHECKS_REQUIRED" == false ]] || exit 1
-          if [[ "$PRODUCT_CHANGE" == true ]]; then
-            [[ "$PRIVATE_AVAILABLE" == true || "$PRIVATE_AVAILABLE" == false ]] || exit 1
-            if [[ "$PRIVATE_AVAILABLE" == true ]]; then
-              test "$PRIVATE_TEST_RESULT" = success
-            else
-              test "$PRIVATE_TEST_RESULT" = skipped
-            fi
-          else
-            test -z "$PRIVATE_AVAILABLE"
-            test "$PRIVATE_TEST_RESULT" = skipped
-          fi
