@@ -2,7 +2,7 @@ import SwiftUI
 
 struct RemoteMicRootView: View {
     let model: BridgeAppModel
-    @ObservedObject private var configurationImportRequests: ConfigurationImportRequestStore
+    @ObservedObject private var buttonProfileImportRequests: ButtonProfileImportRequestStore
     @ObservedObject private var settings: AppSettings
     @ObservedObject private var updateInformation: UpdateInformationStore
     @ObservedObject private var hardwareAnnouncements: HardwareAnnouncementStore
@@ -15,7 +15,7 @@ struct RemoteMicRootView: View {
 
     init(
         model: BridgeAppModel,
-        configurationImportRequests: ConfigurationImportRequestStore = ConfigurationImportRequestStore(),
+        buttonProfileImportRequests: ButtonProfileImportRequestStore = ButtonProfileImportRequestStore(),
         updateInformation: UpdateInformationStore,
         hardwareAnnouncements: HardwareAnnouncementStore = HardwareAnnouncementStore(),
         checkForUpdates: @escaping () -> Void,
@@ -26,7 +26,7 @@ struct RemoteMicRootView: View {
         initialSettingsSection: SettingsSection? = nil
     ) {
         self.model = model
-        self.configurationImportRequests = configurationImportRequests
+        self.buttonProfileImportRequests = buttonProfileImportRequests
         settings = model.settings
         self.updateInformation = updateInformation
         self.hardwareAnnouncements = hardwareAnnouncements
@@ -43,7 +43,7 @@ struct RemoteMicRootView: View {
             if settings.isOnboardingComplete {
                 SettingsView(
                     model: model,
-                    configurationImportRequests: configurationImportRequests,
+                    buttonProfileImportRequests: buttonProfileImportRequests,
                     updateInformation: updateInformation,
                     hardwareAnnouncements: hardwareAnnouncements,
                     checkForUpdates: checkForUpdates,

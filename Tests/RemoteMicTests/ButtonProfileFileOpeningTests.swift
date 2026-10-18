@@ -2,10 +2,10 @@ import Foundation
 import Testing
 @testable import RemoteMic
 
-@Suite("Configuration file opening")
-struct ConfigurationFileOpeningTests {
-    @Test func queuesAndClearsFinderConfigurationRequests() throws {
-        let store = ConfigurationImportRequestStore()
+@Suite("Button profile file opening")
+struct ButtonProfileFileOpeningTests {
+    @Test func queuesAndClearsFinderButtonProfileRequests() throws {
+        let store = ButtonProfileImportRequestStore()
         let url = URL(fileURLWithPath: "/Users/test/keyboard-profile.SAYALL")
 
         let request = store.enqueue(url: url)
@@ -17,6 +17,25 @@ struct ConfigurationFileOpeningTests {
         store.clear()
 
         #expect(store.pendingRequest == nil)
+    }
+
+    @Test func finderImportUsesTheButtonProfileRoute() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let integrationSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/MacroFeatureIntegration.swift"),
+            encoding: .utf8
+        )
+        let settingsSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+        #expect(integrationSource.contains("func requestButtonProfileImport(from url: URL) -> Bool"))
+        #expect(integrationSource.contains("scope: [.buttonProfile]"))
+        #expect(settingsSource.contains("selectedSection = .buttonProfiles"))
+        #expect(settingsSource.contains("macroFeature.requestButtonProfileImport(from: request.url)"))
     }
 
     @Test func appInfoRegistersTheSayAllDocumentType() throws {

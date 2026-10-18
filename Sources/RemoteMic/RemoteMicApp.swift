@@ -94,19 +94,19 @@ enum AppEntryPointVisibilityPolicy {
     }
 }
 
-struct ConfigurationImportRequest: Equatable {
+struct ButtonProfileImportRequest: Equatable {
     let url: URL
     let operationID: UInt
 }
 
-final class ConfigurationImportRequestStore: ObservableObject {
-    @Published private(set) var pendingRequest: ConfigurationImportRequest?
+final class ButtonProfileImportRequestStore: ObservableObject {
+    @Published private(set) var pendingRequest: ButtonProfileImportRequest?
     private var nextOperationID: UInt = 0
 
     @discardableResult
-    func enqueue(url: URL) -> ConfigurationImportRequest {
+    func enqueue(url: URL) -> ButtonProfileImportRequest {
         nextOperationID += 1
-        let request = ConfigurationImportRequest(url: url, operationID: nextOperationID)
+        let request = ButtonProfileImportRequest(url: url, operationID: nextOperationID)
         pendingRequest = request
         return request
     }
@@ -233,7 +233,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         stableFeedURLString: Bundle.main.object(forInfoDictionaryKey: "SUFeedURL") as? String
     )
     private var updateCheckTask: Task<Void, Never>?
-    private let configurationImportRequests = ConfigurationImportRequestStore()
+    private let buttonProfileImportRequests = ButtonProfileImportRequestStore()
     private var resolvedUpdateFeedURLString: String?
     private var updaterStarted = false
     private lazy var updaterController = SPUStandardUpdaterController(
@@ -385,10 +385,10 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         if let configurationURL = urls.first(where: {
             $0.pathExtension.caseInsensitiveCompare("sayall") == .orderedSame
         }) {
-            let request = configurationImportRequests.enqueue(url: configurationURL)
+            let request = buttonProfileImportRequests.enqueue(url: configurationURL)
             AppLogger.shared.write(
-                "CONFIGURATION_IMPORT phase=requested result=accepted " +
-                    "source=finder_file operation_id=configuration_import_\(request.operationID)"
+                "BUTTON_PROFILE_IMPORT phase=requested result=accepted " +
+                    "source=finder_file operation_id=button_profile_import_\(request.operationID)"
             )
             showSettings()
         }
@@ -1010,7 +1010,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         let hostingController = NSHostingController(
             rootView: RemoteMicRootView(
                 model: model,
-                configurationImportRequests: configurationImportRequests,
+                buttonProfileImportRequests: buttonProfileImportRequests,
                 updateInformation: updateInformation,
                 hardwareAnnouncements: hardwareAnnouncements,
                 checkForUpdates: { [weak self] in self?.checkForUpdates() },
