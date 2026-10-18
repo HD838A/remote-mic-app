@@ -175,20 +175,20 @@ enum OnboardingVoiceTool: String, CaseIterable, Codable, Identifiable {
 
 enum OnboardingAIAssistantPrompt {
     static let chinese = """
-    请在这台 Mac 上直接完成“无线麦SayAll.app”的配置。我的遥控器已经通过蓝牙连接。
+    请在这台 Mac 上直接完成“无线麦 SayAll”的配置。我的遥控器已经通过蓝牙连接。
 
-    不要操作屏幕、不要点击窗口，也不要只给我操作建议。请使用无线麦提供的本机配置命令，通过终端完成配置并验证结果：
+    不要操作屏幕、不要点击窗口，也不要只给我操作建议。请使用无线麦 SayAll 提供的本机配置命令，通过终端完成配置并验证结果：
 
-    1. 先在终端定位已安装的无线麦SayAll.app：
+    1. 先在终端定位已安装的无线麦 SayAll：
        APP_PATH="$(mdfind 'kMDItemCFBundleIdentifier == \"com.hd838a.RemoteMic\"' | head -n 1)"; [ -n "$APP_PATH" ] || APP_PATH="/Applications/SayAll.app"
        [ -x "$APP_PATH/Contents/MacOS/RemoteMic" ] || APP_PATH="/Applications/无线麦SayAll.app"
        "$APP_PATH/Contents/MacOS/RemoteMic" --agent-configure --auto --json
     2. 自动选择当前已连接的遥控器；如果有多个候选且无法判断，只向我询问一次。
     3. 自动选择已安装且可用的语音工具：豆包、微信输入法、Vokie、Typeless 或其他工具；如果有多个候选且无法判断，只询问我一次。
     4. 让本次 Onboarding 使用 Fn，并按控制设备与语音工具匹配的“按住”或“按一次”方式配置。
-    5. 选择可用的无线麦音频输出设备，并保留当前增益。第三方语音工具必须把同一设备选择为麦克风；需要调整增益时，在无线麦真实语音测试页调整。
-    6. 只修改无线麦自己的配置，不读取或修改第三方语音工具的私有文件、数据库、沙盒或未公开协议。
-    7. 配置成功后，将无线麦向导停在真实语音测试步骤，不要跳过语音、音频、按键和文字上屏验证，也不要把写入配置当成验证成功。
+    5. 选择可用的无线麦 SayAll 音频输出设备，并保留当前增益。第三方语音工具必须把同一设备选择为麦克风；需要调整增益时，在无线麦 SayAll 真实语音测试页调整。
+    6. 只修改无线麦 SayAll 自己的配置，不读取或修改第三方语音工具的私有文件、数据库、沙盒或未公开协议。
+    7. 配置成功后，将无线麦 SayAll 向导停在真实语音测试步骤，不要跳过语音、音频、按键和文字上屏验证，也不要把写入配置当成验证成功。
     8. 如果需要 macOS 权限、用户选择或真实说话测试，明确告诉我还缺哪一步；JSON 返回 configured 或 permission_required 只表示 staged 配置已准备，不能表示真实语音验证已完成。
 
     请使用命令返回的 JSON 结果判断成功或失败，并在失败时说明具体原因。不要伪造完成状态。

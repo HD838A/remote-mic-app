@@ -1,4 +1,4 @@
-# Remote Mic Troubleshooting Guide
+# SayAll Troubleshooting Guide
 
 [简体中文](TROUBLESHOOTING.md)
 
@@ -9,8 +9,8 @@ Confirm that your Mac is Apple Silicon and runs macOS 14 or later.
 1. Confirm that the remote is paired in **System Settings → Bluetooth**.
 2. Hold the remote Home and Menu buttons together to put it back in pairing mode.
 3. Confirm that its name is MI RC, Xiaomi Bluetooth Remote 2 Pro, or 小米蓝牙语音遥控器.
-4. Left-click the Remote Mic menu bar icon and choose **Reconnect Now**.
-5. If the status does not change, quit and relaunch Remote Mic, then confirm that Bluetooth access is still granted.
+4. Left-click the SayAll menu bar icon and choose **Reconnect Now**.
+5. If the status does not change, quit and relaunch SayAll, then confirm that Bluetooth access is still granted.
 
 The app connects only to the supported Xiaomi Bluetooth remote. It does not fuzzy-match other Xiaomi Bluetooth devices.
 
@@ -22,7 +22,7 @@ The app connects only to the supported Xiaomi Bluetooth remote. It does not fuzz
 4. In QuickTime Player, create a new audio recording with the same device and hold the remote voice button while watching the input level.
 5. Confirm that the target app also uses the same device as its microphone.
 
-Remote Mic never changes system default input or output, so it and the target app must use the same device.
+SayAll never changes system default input or output, so it and the target app must use the same device.
 
 ## QuickTime has input level but Doubao does not react
 
@@ -30,7 +30,7 @@ This usually means the remote and audio path work, but Doubao is not using an or
 
 1. Install MiRemoteV 2ch from **Install SayAll.pkg** in the DMG.
 2. Quit Doubao completely and reopen it.
-3. In Remote Mic, choose **Refresh Audio Devices** and select MiRemoteV 2ch.
+3. In SayAll, choose **Refresh Audio Devices** and select MiRemoteV 2ch.
 4. Click an editable text field so that its insertion cursor is visible, then hold the remote voice button.
 
 For details, read the [Doubao Input Method Compatibility Guide](Resources/豆包输入法兼容说明.en.md).
@@ -39,14 +39,14 @@ For details, read the [Doubao Input Method Compatibility Guide](Resources/豆包
 
 1. Open **Button Mapping** and enable **Custom Button Controls**.
 2. Grant Input Monitoring and Accessibility from the **Permissions** page in that order.
-3. Quit and reopen Remote Mic so macOS applies newly granted permissions.
+3. Quit and reopen SayAll so macOS applies newly granted permissions.
 4. Return to Button Mapping and press a physical button. Its matching button should highlight and its mapping row should be selected.
 
-When custom mapping is disabled, macOS may still handle some remote buttons as a regular Bluetooth keyboard, but Remote Mic mappings do not run.
+When custom mapping is disabled, macOS may still handle some remote buttons as a regular Bluetooth keyboard, but SayAll mappings do not run.
 
 ## Buttons repeat or make a system alert sound
 
-Remote Mic uses the button connection method allowed by the current system and reduces duplicate original system actions where possible.
+SayAll uses the button connection method allowed by the current system and reduces duplicate original system actions where possible.
 
 Try the following:
 
@@ -55,18 +55,18 @@ Try the following:
 3. Quit other utilities that rewrite keyboard or media keys.
 4. Right-click the menu bar icon, choose **Show Logs**, and record the button and state at the time of the issue.
 
-The Menu action uses the native macOS context-menu key rather than Shift-F10. If an alert sound remains, report the physical button, current mapping, foreground app, and the button status shown by Remote Mic.
+The Menu action uses the native macOS context-menu key rather than Shift-F10. If an alert sound remains, report the physical button, current mapping, foreground app, and the button status shown by SayAll.
 
 ## The voice button does not trigger Fn
 
 The Fn function applies only to the supported Xiaomi Bluetooth remote; it never changes a MacBook keyboard or other devices.
 
 1. Confirm that Bluetooth status shows a successful connection.
-2. Quit and relaunch Remote Mic so the device mapping can be applied again.
+2. Quit and relaunch SayAll so the device mapping can be applied again.
 3. Confirm that the remote is a Xiaomi Bluetooth Remote 2 Pro.
 4. Inspect **Voice Trigger** under **Connection & Voice**.
 
-Remote Mic restores the remote voice-button setting that existed before launch when it quits.
+SayAll restores the remote voice-button setting that existed before launch when it quits.
 
 ## macOS blocks the installer
 

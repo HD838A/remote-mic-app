@@ -1,6 +1,6 @@
 # 豆包输入法兼容虚拟麦克风
 
-SayAll 是无线麦提供的独立双声道回环设备。旧安装继续使用 MiRemoteV 2ch，设备身份和已有选择保持不变。该设备用于让豆包能够识别遥控器语音。它可与 BlackHole 2ch 并存，不会修改、删除或覆盖 BlackHole。
+SayAll 是无线麦 SayAll 提供的独立双声道回环设备。旧安装继续使用 MiRemoteV 2ch，设备身份和已有选择保持不变。该设备用于让豆包能够识别遥控器语音。它可与 BlackHole 2ch 并存，不会修改、删除或覆盖 BlackHole。
 
 ## 安装
 
@@ -8,7 +8,7 @@ SayAll 是无线麦提供的独立双声道回环设备。旧安装继续使用 
 
 1. 在 DMG 根目录双击 `Install SayAll.pkg`。
 2. 在系统安装器中按提示输入管理员密码。
-3. 安装器会同时安装无线麦SayAll.app 和兼容麦克风，重启 CoreAudio，并自动启动 SayAll。
+3. 安装器会同时安装无线麦 SayAll 和兼容麦克风，重启 CoreAudio，并自动启动 SayAll。
 4. 左键单击菜单栏图标，在“连接与语音”中点击“刷新音频设备”。
 5. 选择系统显示的兼容麦克风。新安装为 SayAll；旧安装为 MiRemoteV 2ch。
 6. 完全退出并重新打开豆包后再次测试。
@@ -21,7 +21,7 @@ SayAll 是无线麦提供的独立双声道回环设备。旧安装继续使用 
 
 ## 卸载
 
-从同一 Release 下载并双击 `SayAll-<版本>-Uninstaller.pkg`。它会校验并将无线麦SayAll.app、已识别的历史 App 与兼容麦克风 移到 macOS 废纸篓，然后重启 CoreAudio；不会修改 BlackHole 或无线麦的本地设置。
+从同一 Release 下载并双击 `SayAll-<版本>-Uninstaller.pkg`。它会校验并将无线麦 SayAll、已识别的历史 App 与兼容麦克风 移到 macOS 废纸篓，然后重启 CoreAudio；不会修改 BlackHole 或无线麦 SayAll 的本地设置。
 
 ## 技术与许可
 

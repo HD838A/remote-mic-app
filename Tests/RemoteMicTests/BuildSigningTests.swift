@@ -1091,8 +1091,8 @@ struct BuildSigningTests {
         #expect(infoPlist["CFBundleIdentifier"] as? String == "com.hd838a.RemoteMic")
         #expect(englishInfo.contains("\"CFBundleDisplayName\" = \"SayAll\";"))
         #expect(englishInfo.contains("\"CFBundleName\" = \"SayAll\";"))
-        #expect(chineseInfo.contains("\"CFBundleDisplayName\" = \"无线麦\";"))
-        #expect(chineseInfo.contains("\"CFBundleName\" = \"无线麦\";"))
+        #expect(chineseInfo.contains("\"CFBundleDisplayName\" = \"无线麦 SayAll\";"))
+        #expect(chineseInfo.contains("\"CFBundleName\" = \"无线麦 SayAll\";"))
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/zsh")

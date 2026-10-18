@@ -1,4 +1,4 @@
-"CFBundleDisplayName" = "无线麦";
-"CFBundleName" = "无线麦";
+"CFBundleDisplayName" = "无线麦 SayAll";
+"CFBundleName" = "无线麦 SayAll";
 "NSBluetoothAlwaysUsageDescription" = "连接支持的遥控器和 Apple Watch，接收按键与麦克风声音。";
-"NSLocalNetworkUsageDescription" = "连接附近 iPhone、iPad 或 Apple Watch 上的无线麦，接收按键与麦克风声音。";
+"NSLocalNetworkUsageDescription" = "连接附近 iPhone、iPad 或 Apple Watch 上的无线麦 SayAll，接收按键与麦克风声音。";

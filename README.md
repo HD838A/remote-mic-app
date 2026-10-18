@@ -1,4 +1,4 @@
-# 无线麦
+# 无线麦 SayAll
 
 [English](README.en.md)
 
@@ -13,21 +13,21 @@
 <table>
   <tr>
     <td align="center">
-      <a href="Screenshots/douyin-sayall.jpg"><img src="Screenshots/douyin-sayall.jpg" alt="无线麦 SayAll.App 抖音二维码" width="220"></a><br>
+      <a href="Screenshots/douyin-sayall.jpg"><img src="Screenshots/douyin-sayall.jpg" alt="无线麦 SayAll App 抖音二维码" width="220"></a><br>
       <strong>抖音 · GetSayAll</strong><br>
       保存图片后，在抖音扫一扫
     </td>
     <td align="center">
-      <a href="Screenshots/xhs-sayall.jpg"><img src="Screenshots/xhs-sayall.jpg" alt="无线麦小红书二维码" width="220"></a><br>
+      <a href="Screenshots/xhs-sayall.jpg"><img src="Screenshots/xhs-sayall.jpg" alt="无线麦 SayAll App 小红书二维码" width="220"></a><br>
       <strong>小红书</strong><br>
-      扫码关注无线麦
+      扫码关注无线麦 SayAll App
     </td>
   </tr>
 </table>
 
 ## 视频介绍
 
-《可能是我最近用过最不像工具的工具》展示了无线麦如何把蓝牙语音遥控器变成随手表达、控制 Mac 和与 AI 协作的新入口。
+《可能是我最近用过最不像工具的工具》展示了无线麦 SayAll App 如何把蓝牙语音遥控器变成随手表达、控制 Mac 和与 AI 协作的新入口。
 
 <p align="center">
   <a href="https://www.bilibili.com/video/BV13Pep6BEXe">
@@ -43,40 +43,40 @@
 
 ## Windows 版本
 
-无线麦 App Windows 版本的第一个预览版已经发布，当前以基本功能为主：
+无线麦 SayAll App Windows 版本的第一个预览版已经发布，当前以基本功能为主：
 
 - 支持小米蓝牙遥控器 2 和 2 Pro；
 - 语音输入目前仅支持微信输入法；
 - 语音输入快捷键为 `Ctrl + Win`。
 
-欢迎下载体验。无线麦 App Windows 版本理论上不会被游戏反作弊或杀毒软件警告；如有顾虑，建议先使用 AI 扫描源码，再安装试用。
+欢迎下载体验。无线麦 SayAll App Windows 版本理论上不会被游戏反作弊或杀毒软件警告；如有顾虑，建议先使用 AI 扫描源码，再安装试用。
 
 [下载 Windows 预览版](https://github.com/GetSayAll/remote-mic-app-windows/releases/)
 
-iOS 正式版：[无线麦](https://apps.apple.com/app/%E6%97%A0%E7%BA%BF%E9%BA%A6/id6797208067)
+iOS 正式版：[无线麦 SayAll](https://apps.apple.com/app/%E6%97%A0%E7%BA%BF%E9%BA%A6/id6797208067)
 
 Mac App 继续采用官网下载方式分发，Mac App Store 上架暂时暂停；当前 App Store 上架重点只包含 iOS App 与其内嵌的 Apple Watch App。
 
-![无线麦——为 Vibe Coding 而生的语音遥控器](Screenshots/Remote-Mic-Introduce-1.png)
+![无线麦 SayAll App——为 Vibe Coding 而生的语音遥控器](Screenshots/Remote-Mic-Introduce-1.png)
 
-**无线麦，不只听你说。还能替你做，帮你记。**
+**无线麦 SayAll App，不只听你说。还能替你做，帮你记。**
 
 **开口就输入，一键做更多，说过有回眸。**
 
-无线麦 SayAll 是一款 macOS 应用，可以把兼容的蓝牙语音遥控器变成 Mac 的无线麦。它先让语音输入随手可得，再把常用操作、不同 App 的键位方案和你主动保存的表达连接起来。
+无线麦 SayAll App 是一款 macOS 应用，可以把兼容的蓝牙语音遥控器变成 Mac 的无线麦克风。它先让语音输入随手可得，再把常用操作、不同 App 的键位方案和你主动保存的表达连接起来。
 
-无线麦使用 SwiftUI 原生开发，常驻运行时 CPU 占用率低于 0.5%，内存占用约 50 MB，比一个 Chrome 标签页还要轻量。
+无线麦 SayAll App 使用 SwiftUI 原生开发，常驻运行时 CPU 占用率低于 0.5%，内存占用约 50 MB，比一个 Chrome 标签页还要轻量。
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="Screenshots/connection-and-voice-dark-zh.png">
   <img alt="连接与语音设置页" src="Screenshots/connection-and-voice-zh.png">
 </picture>
 
-## 无线麦，不只听你说
+## 无线麦 SayAll App，不只听你说
 
 ### 开口就输入
 
-按住说，松开停。开会不发言、听歌不暂停，也能把文字送进正在使用的 App。无线麦不会为了语音输入自动修改 Mac 的默认输入或输出设备。
+按住说，松开停。开会不发言、听歌不暂停，也能把文字送进正在使用的 App。无线麦 SayAll 不会为了语音输入自动修改 Mac 的默认输入或输出设备。
 
 ### 一键做更多（新增能力，真实环境验证中）
 
@@ -88,13 +88,13 @@ Mac App 继续采用官网下载方式分发，Mac App Store 上架暂时暂停�
 
 ### 说过有回眸（候选能力，等待完整真实语音验收）
 
-主动开启“记录回眸”后，无线麦只保存通过 SayAll 输入并最终稳定出现的文字，按 App 和日期整理在当前 Mac。开启“本地 Agent 访问”后，可以为每个 AI 客户端创建独立、可撤销的只读 MCP 授权。
+主动开启“记录回眸”后，无线麦 SayAll 只保存通过 SayAll 输入并最终稳定出现的文字，按 App 和日期整理在当前 Mac。开启“本地 Agent 访问”后，可以为每个 AI 客户端创建独立、可撤销的只读 MCP 授权。
 
 - 回眸和本地 Agent 访问默认关闭；
 - 不保存音频，不读取完整聊天、其他人的回复或输入框前后文；
 - 不提供云同步或跨设备同步；
 - MCP 通过本机 `stdio` 工作，不监听 HTTP/TCP；
-- 无线麦不会主动上传回眸记录，但第三方 AI 客户端可能把读取结果发送给其云端模型。
+- 无线麦 SayAll 不会主动上传回眸记录，但第三方 AI 客户端可能把读取结果发送给其云端模型。
 
 ## 使用要求
 
@@ -115,7 +115,7 @@ Mac App 继续采用官网下载方式分发，Mac App Store 上架暂时暂停�
 
 Release 中的 Apple Silicon 安装包名为 `SayAll-VERSION-BUILD-AppleSilicon-install.pkg`，Intel 安装包名为 `SayAll-VERSION-BUILD-Intel-install.pkg`，两者不能混用。卸载包名分别为 `SayAll-VERSION-BUILD-AppleSilicon-uninstall.pkg` 和 `SayAll-VERSION-BUILD-Intel-uninstall.pkg`。
 
-运行对应的 Installer PKG。安装器会把无线麦SayAll.app 安装为 `/Applications/SayAll.app`，并检查现有 `MiRemoteV 2ch`：健康且兼容时原样保留，缺失或不可用时才安装或更新。只需要 App、已经使用其他回环音频设备的高级用户，可从同一 Release 下载 App-only ZIP。
+运行对应的 Installer PKG。安装器会把无线麦 SayAll 安装为 `/Applications/SayAll.app`，并检查现有 `MiRemoteV 2ch`：健康且兼容时原样保留，缺失或不可用时才安装或更新。只需要 App、已经使用其他回环音频设备的高级用户，可从同一 Release 下载 App-only ZIP。
 
 自 v1.3.0 起，正式发布包使用 Apple Developer ID 签名并已完成 Apple 公证。请从官网 Cloudflare CDN 固定入口、本项目 GitHub Releases 或上方百度网盘备用入口下载，并按 GitHub 资产摘要或 PKG 签名完成核验。
 
@@ -129,7 +129,7 @@ Release 中的 Apple Silicon 安装包名为 `SayAll-VERSION-BUILD-AppleSilicon-
 4. 启动 SayAll.app，按提示允许蓝牙权限。
 5. 如果需要自定义普通按键，再允许“输入监控”和“辅助功能”。授权后请完全退出并重新打开应用。
 
-“连接与语音”和“按键映射”的设备卡片优先显示系统蓝牙设置中的自定义名称；同名设备从 1 开始编号，未改名设备保留原有型号编号。修改名称后，返回无线麦或重新打开相关页面即可刷新；离线设备保留上次读到的名称。当前系统名称同步覆盖小米遥控器和苹果遥控器，A2854 的独立系统 API 读取已验证，候选 App 的完整兼容性仍待验收。
+“连接与语音”和“按键映射”的设备卡片优先显示系统蓝牙设置中的自定义名称；同名设备从 1 开始编号，未改名设备保留原有型号编号。修改名称后，返回无线麦 SayAll 或重新打开相关页面即可刷新；离线设备保留上次读到的名称。当前系统名称同步覆盖小米遥控器和苹果遥控器，A2854 的独立系统 API 读取已验证，候选 App 的完整兼容性仍待验收。
 
 未连接任何设备时，菜单栏图标呈灰化外观，仍可点击。实体遥控器、iPhone、Apple Watch 或网页版任一有效连接后恢复正常显示；传输语音时显示活动图标。悬停可查看当前状态，已连接不代表音频或输入权限已就绪。
 
@@ -153,7 +153,7 @@ Release 中的 Apple Silicon 安装包名为 `SayAll-VERSION-BUILD-AppleSilicon-
 4. 在需要听写或语音输入的应用中选择同一个设备作为麦克风。
 5. 单击目标输入框，按住遥控器语音键说话，松开后结束。
 
-在“按键映射”页的“语音键”区域可以选择语音触发方式：默认的 Fn/地球键、左 Command 长按、右 Command 长按、左 Option 长按或右 Option 长按。Fn/地球键保持旧版本行为；修饰键模式需要无线麦的“辅助功能”权限，并会在语音开始时按下所选按键、结束时释放。目标语音应用必须支持对应的单独按键长按；许多应用会把左右同侧按键合并为通用修饰键，需在目标应用中实际测试。长按期间同时按其他键可能触发修饰键快捷键。
+在“按键映射”页的“语音键”区域可以选择语音触发方式：默认的 Fn/地球键、左 Command 长按、右 Command 长按、左 Option 长按或右 Option 长按。Fn/地球键保持旧版本行为；修饰键模式需要无线麦 SayAll 的“辅助功能”权限，并会在语音开始时按下所选按键、结束时释放。目标语音应用必须支持对应的单独按键长按；许多应用会把左右同侧按键合并为通用修饰键，需在目标应用中实际测试。长按期间同时按其他键可能触发修饰键快捷键。
 
 默认使用 Fn，是为了直接兼容豆包、微信等 Fn 长按语音入口和 Typeless 的 Fn 点按入口，同时让遥控器“按住采音、松开停止”的生命周期与快捷键一致。技术上可以继续扩展 F18、F19、F20 等低频键，但当前版本不支持任意自定义语音键：目标语音应用也必须配置同一个键，而且 RC003、iPhone、Apple Watch、网页版、权限与输入源切换都要共享同一套成对按下/释放逻辑。普通遥控器按键仍可单独配置 F1–F20。
 
@@ -163,7 +163,7 @@ Release 中的 Apple Silicon 安装包名为 `SayAll-VERSION-BUILD-AppleSilicon-
 
 ### Typeless 兼容
 
-Typeless 等点按 Fn 开始、再次点按结束的语音工具，与小米蓝牙遥控器 2 和 2 Pro 默认的 Fn 长按行为不兼容。在“按键映射”的语音键区域开启“语音键模拟 Fn 点按”后，无线麦会在语音流开始和排空结束时各发送一次 Fn 点按。Typeless 和无线麦仍需选择同一个回环设备，并需授予无线麦“辅助功能”权限。
+Typeless 等点按 Fn 开始、再次点按结束的语音工具，与小米蓝牙遥控器 2 和 2 Pro 默认的 Fn 长按行为不兼容。在“按键映射”的语音键区域开启“语音键模拟 Fn 点按”后，无线麦 SayAll 会在语音流开始和排空结束时各发送一次 Fn 点按。Typeless 和无线麦 SayAll 仍需选择同一个回环设备，并需授予无线麦 SayAll“辅助功能”权限。
 
 该模式仍然要求**按住小米蓝牙遥控器 2 或 2 Pro 语音键说话、松开结束**；这两款遥控器的固件在松开语音键后都不会继续发送麦克风音频，因此这不是持续录音或免按键模式。开关默认关闭；豆包输入法等使用 Fn 长按的工具应保持关闭。权限或遥控器 HID 映射不完整时，模式会自动关闭并恢复默认 Fn 长按映射。
 
@@ -188,7 +188,7 @@ Typeless 等点按 Fn 开始、再次点按结束的语音工具，与小米蓝�
 
 每个普通按键都可以设置单击动作，并可额外设置双击和长按动作。动作支持键盘操作、系统音量、播放控制、打开当前 Mac 已安装的常用应用、聚焦前台输入框，以及任意自定义键盘快捷键。自定义快捷键既可以直接选择复制、粘贴、聚焦搜索等常用组合，也可以在页面内的标准键盘选择组合键、主键、F1–F20、导航键、数字键盘或单独的左右修饰键；仍保留真实键盘录入入口。
 
-“打开自定义 APP”可以从本机选择任意 `.app`，并选择只打开应用、激活后发送该应用的聚焦快捷键，或记录一次目标输入框后自动聚焦。目标应用升级后如果输入框结构变化，请重新记录；无线麦不会使用固定屏幕坐标，也不会记录输入框中的文字。
+“打开自定义 APP”可以从本机选择任意 `.app`，并选择只打开应用、激活后发送该应用的聚焦快捷键，或记录一次目标输入框后自动聚焦。目标应用升级后如果输入框结构变化，请重新记录；无线麦 SayAll 不会使用固定屏幕坐标，也不会记录输入框中的文字。
 
 - 没有设置双击或长按时，单击保持原有的即时响应和按住重复；
 - 设置双击后，应用会等待约 0.3 秒区分单击和双击；
@@ -203,12 +203,12 @@ Typeless 等点按 Fn 开始、再次点按结束的语音工具，与小米蓝�
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="Screenshots/statistics-dark-zh.png">
-  <img alt="无线麦使用统计页" src="Screenshots/statistics-zh.png">
+  <img alt="无线麦 SayAll 使用统计页" src="Screenshots/statistics-zh.png">
 </picture>
 
 ## AI / Agent 本地配置
 
-无线麦SayAll.app 可以在用户明确授权后，通过随 App 安装的 Swift MCP Helper，让 Codex、Claude Code、Cursor、OpenCode 等客户端只读访问本机“回眸”历史。用户无需安装 Node.js 或其他开发依赖。
+无线麦 SayAll 可以在用户明确授权后，通过随 App 安装的 Swift MCP Helper，让 Codex、Claude Code、Cursor、OpenCode 等客户端只读访问本机“回眸”历史。用户无需安装 Node.js 或其他开发依赖。
 
 需要由 AI 协助完成安装、授权、客户端连接和验证时，请让 AI 阅读：[AI 安装与 MCP 配置指南](AI_SETUP.md)。
 
@@ -218,14 +218,14 @@ Typeless 等点按 Fn 开始、再次点按结束的语音工具，与小米蓝�
 - 输入监控：识别遥控器普通按键；
 - 辅助功能：把按键动作发送给当前应用。
 
-无线麦不会上传或保存语音，不会自动修改系统默认输入、输出设备，也不会在日志中记录语音内容、蓝牙地址或外设标识。
+无线麦 SayAll 不会上传或保存语音，不会自动修改系统默认输入、输出设备，也不会在日志中记录语音内容、蓝牙地址或外设标识。
 
 ## 卸载
 
-1. 退出无线麦。
+1. 退出无线麦 SayAll。
 2. 从同一 GitHub Release 下载并运行文件名包含当前 `VERSION-BUILD` 的对应架构卸载包。
 
-卸载器会核对 Bundle ID，然后把已识别的 `SayAll.app`、历史 `Remote Mic.app` / `无线麦.app` 和 `MiRemoteV 2ch` 移到 macOS 废纸篓，需要时可恢复。它不会修改 BlackHole 或无线麦的本地设置；同名但无法确认归属的内容会保留在原位。
+卸载器会核对 Bundle ID，然后把已识别的 `SayAll.app`、历史 `Remote Mic.app` / `无线麦.app` 和 `MiRemoteV 2ch` 移到 macOS 废纸篓，需要时可恢复。它不会修改 BlackHole 或无线麦 SayAll 的本地设置；同名但无法确认归属的内容会保留在原位。
 
 ## 遇到问题
 

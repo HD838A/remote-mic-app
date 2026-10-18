@@ -1,4 +1,4 @@
-# Remote Mic Technical Documentation
+# SayAll Technical Documentation
 
 [简体中文](TECHNICAL.md)
 
