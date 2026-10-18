@@ -382,10 +382,10 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     }
 
     func application(_ application: NSApplication, open urls: [URL]) {
-        if let configurationURL = urls.first(where: {
+        if let buttonProfileURL = urls.first(where: {
             $0.pathExtension.caseInsensitiveCompare("sayall") == .orderedSame
         }) {
-            let request = buttonProfileImportRequests.enqueue(url: configurationURL)
+            let request = buttonProfileImportRequests.enqueue(url: buttonProfileURL)
             AppLogger.shared.write(
                 "BUTTON_PROFILE_IMPORT phase=requested result=accepted " +
                     "source=finder_file operation_id=button_profile_import_\(request.operationID)"

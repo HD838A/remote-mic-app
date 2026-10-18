@@ -52,12 +52,14 @@ struct ButtonProfileFileOpeningTests {
         let sayAllDocument = try #require(documentTypes.first {
             ($0["LSItemContentTypes"] as? [String])?.contains("com.hd838a.RemoteMic.sayall") == true
         })
+        #expect(sayAllDocument["CFBundleTypeName"] as? String == "SayAll Button Profile")
         #expect(sayAllDocument["CFBundleTypeRole"] as? String == "Viewer")
 
         let declarations = try #require(plist["UTExportedTypeDeclarations"] as? [[String: Any]])
         let sayAllType = try #require(declarations.first {
             $0["UTTypeIdentifier"] as? String == "com.hd838a.RemoteMic.sayall"
         })
+        #expect(sayAllType["UTTypeDescription"] as? String == "SayAll Button Profile")
         let tags = try #require(sayAllType["UTTypeTagSpecification"] as? [String: Any])
         #expect((tags["public.filename-extension"] as? [String]) == ["sayall"])
     }
