@@ -461,6 +461,7 @@ struct SettingsView: View {
     @State private var mappingVoiceSettingsRequest = 0
 
     @ObservedObject private var macroFeature: MacroFeatureIntegration
+    @ObservedObject private var buttonProfileImportRequests: ButtonProfileImportRequestStore
     @ObservedObject private var membershipFeature: MembershipFeatureIntegration
     @ObservedObject private var loginItemService: LoginItemService
     @ObservedObject private var updateInformation: UpdateInformationStore
@@ -503,6 +504,7 @@ struct SettingsView: View {
 
     init(
         model: BridgeAppModel,
+        buttonProfileImportRequests: ButtonProfileImportRequestStore = ButtonProfileImportRequestStore(),
         updateInformation: UpdateInformationStore,
         hardwareAnnouncements: HardwareAnnouncementStore = HardwareAnnouncementStore(),
         checkForUpdates: @escaping () -> Void = {},
@@ -519,6 +521,7 @@ struct SettingsView: View {
         minimumContentSize: CGSize = CGSize(width: 980, height: 732)
     ) {
         self.model = model
+        self.buttonProfileImportRequests = buttonProfileImportRequests
         settings = model.settings
         privateFeature = model.privateFeature
         macroFeature = model.macroFeature
@@ -582,6 +585,7 @@ struct SettingsView: View {
             loginItemService.refresh()
             macroFeature.setEditorActive(false)
             membershipFeature.refreshIfNeeded()
+            routePendingButtonProfileImportIfNeeded()
         }
         .onChange(of: selectedSection) { section in
             if section == .mapping {
@@ -611,7 +615,8 @@ struct SettingsView: View {
         }
         .onReceive(macroFeature.$isFeatureVisible.removeDuplicates()) { isVisible in
             if !isVisible,
-               (selectedSection == .macros || selectedSection == .buttonProfiles) {
+               (selectedSection == .macros ||
+                (selectedSection == .buttonProfiles && !macroFeature.isButtonProfilesVisible)) {
                 selectedSection = .about
             }
         }
@@ -619,6 +624,9 @@ struct SettingsView: View {
             if !isVisible, selectedSection == .membership {
                 selectedSection = .about
             }
+        }
+        .onChange(of: buttonProfileImportRequests.pendingRequest) { _ in
+            routePendingButtonProfileImportIfNeeded()
         }
         .sheet(isPresented: $isWebRemoteSessionPresented) {
             webRemoteSessionView
@@ -833,32 +841,38 @@ struct SettingsView: View {
                 aboutPage
             }
         case .buttonProfiles:
-            if macroFeature.isButtonProfilesVisible {
-                VStack(spacing: 0) {
-                    macroFeature.buttonProfilesView(
-                        selectedRemoteProfileID: settings.selectedRemoteProfileID,
-                        remoteModel: settings.selectedRemoteProfile?.model,
-                        hostActionSections: buttonProfileHostActionSections,
-                        settings: settings,
-                        onEditKeys: { profile in
-                            preservesMappingContextOnNavigation = true
-                            editingMappingProfileID = profile
-                            selectedSection = .mapping
-                        },
-                        onChooseCustomApplication: { completion in
-                            chooseCustomApplicationForButtonProfile { id, displayName, payload in
-                                completion(id, displayName, payload)
+            Group {
+                if macroFeature.isButtonProfilesVisible {
+                    VStack(spacing: 0) {
+                        macroFeature.buttonProfilesView(
+                            selectedRemoteProfileID: settings.selectedRemoteProfileID,
+                            remoteModel: settings.selectedRemoteProfile?.model,
+                            hostActionSections: buttonProfileHostActionSections,
+                            settings: settings,
+                            onEditKeys: { profile in
+                                preservesMappingContextOnNavigation = true
+                                editingMappingProfileID = profile
+                                selectedSection = .mapping
+                            },
+                            onChooseCustomApplication: { completion in
+                                chooseCustomApplicationForButtonProfile { id, displayName, payload in
+                                    completion(id, displayName, payload)
+                                }
+                            },
+                            chromecastReservedControlIDs: buttonProfilesChromecastReservedControls,
+                            membershipNotice: membershipFeature.membershipRequiredView(forButtonProfiles: true) {
+                                selectedSection = .membership
+                                membershipFeature.refreshIfNeeded()
                             }
-                        },
-                        chromecastReservedControlIDs: buttonProfilesChromecastReservedControls,
-                        membershipNotice: membershipFeature.membershipRequiredView(forButtonProfiles: true) {
-                            selectedSection = .membership
-                            membershipFeature.refreshIfNeeded()
-                        }
-                    )
+                        )
+                    }
+                } else {
+                    aboutPage
                 }
-            } else {
-                aboutPage
+            }
+            .task(id: buttonProfileImportRequests.pendingRequest?.operationID) {
+                // Submit only after this page has mounted its import observer.
+                consumePendingButtonProfileImportIfNeeded()
             }
         case .membership:
             if membershipFeature.isFeatureVisible {
@@ -4650,6 +4664,39 @@ struct SettingsView: View {
                 message: LocalizedMessage("configuration.import.invalid_file"),
                 tint: .red,
                 systemImage: "exclamationmark.triangle.fill"
+            )
+        }
+    }
+
+    private func routePendingButtonProfileImportIfNeeded() {
+        guard buttonProfileImportRequests.pendingRequest != nil else { return }
+        if macroFeature.isButtonProfilesVisible {
+            selectedSection = .buttonProfiles
+        } else {
+            selectedSection = .about
+            consumePendingButtonProfileImportIfNeeded()
+        }
+    }
+
+    private func consumePendingButtonProfileImportIfNeeded() {
+        guard let request = buttonProfileImportRequests.pendingRequest else { return }
+        if macroFeature.requestButtonProfileImport(from: request.url) {
+            buttonProfileImportRequests.clear()
+            AppLogger.shared.write(
+                "BUTTON_PROFILE_IMPORT phase=started result=accepted " +
+                    "source=finder_file operation_id=button_profile_import_\(request.operationID)"
+            )
+        } else {
+            buttonProfileImportRequests.clear()
+            configurationStatus = ConfigurationStatus(
+                message: LocalizedMessage("configuration.import.feature_unavailable"),
+                tint: .red,
+                systemImage: "exclamationmark.triangle.fill"
+            )
+            AppLogger.shared.write(
+                "BUTTON_PROFILE_IMPORT phase=completed result=rejected " +
+                    "source=finder_file reason=feature_unavailable " +
+                    "operation_id=button_profile_import_\(request.operationID)"
             )
         }
     }

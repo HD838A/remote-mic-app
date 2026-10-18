@@ -249,6 +249,16 @@ final class MacroFeatureIntegration: ObservableObject {
         #endif
     }
 
+    func requestButtonProfileImport(from url: URL) -> Bool {
+        #if canImport(SayAllMacroRemoteMic) && canImport(SayAllButtonProfiles)
+        guard url.isFileURL, url.pathExtension.lowercased() == "sayall" else { return false }
+        feature.portableTransfer.requestedOperation = .importFile(url, scope: [.buttonProfile])
+        return true
+        #else
+        return false
+        #endif
+    }
+
     func attachBindings(to settings: AppSettings, onProfileChange: @escaping (UUID?) -> Void) {
         settings.configuredActionOverride = { [weak self, weak settings] device, button, trigger in
             guard let settings, settings.customMappingEnabled else { return nil }

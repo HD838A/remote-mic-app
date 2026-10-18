@@ -690,6 +690,7 @@
 "configuration.import.unsupported_version" = "Import failed: this configuration version is not supported";
 "configuration.import.voice_key_busy" = "Import failed: the voice button is active or could not be released safely. End voice input and try again.";
 "configuration.import.invalid_file" = "Import failed: the configuration file is invalid";
+"configuration.import.feature_unavailable" = "Import failed: this version does not support button profile files";
 "onboarding.phase.prepare" = "Prepare";
 "onboarding.phase.setup" = "Set Up";
 "onboarding.phase.try_it" = "Try It";
