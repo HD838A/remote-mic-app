@@ -27,7 +27,7 @@
 
 ## Video introduction
 
-“Possibly the least tool-like tool I have used lately” shows how SayAll turns a Bluetooth voice remote into a new way to express ideas, control your Mac, and work with AI. The video is in Chinese.
+“Possibly the least tool-like tool I have used lately” shows how SayAll App turns a Bluetooth voice remote into a new way to express ideas, control your Mac, and work with AI. The video is in Chinese.
 
 <p align="center">
   <a href="https://www.bilibili.com/video/BV13Pep6BEXe">

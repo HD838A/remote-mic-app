@@ -254,9 +254,9 @@ rg -q '^"CFBundleDisplayName" = "SayAll";$' \
   "$APP/Contents/Resources/en.lproj/InfoPlist.strings"
 rg -q '^"CFBundleName" = "SayAll";$' \
   "$APP/Contents/Resources/en.lproj/InfoPlist.strings"
-rg -q '^"CFBundleDisplayName" = "无线麦";$' \
+rg -q '^"CFBundleDisplayName" = "无线麦 SayAll";$' \
   "$APP/Contents/Resources/zh-Hans.lproj/InfoPlist.strings"
-rg -q '^"CFBundleName" = "无线麦";$' \
+rg -q '^"CFBundleName" = "无线麦 SayAll";$' \
   "$APP/Contents/Resources/zh-Hans.lproj/InfoPlist.strings"
 for RESOURCE_DIR in "${LOCALIZATION_DIRS[@]}"; do
   test -f "$RESOURCE_DIR/InfoPlist.strings"
