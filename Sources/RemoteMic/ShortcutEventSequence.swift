@@ -1,8 +1,8 @@
 import CoreGraphics
 import Foundation
 
-/// One synchronous shortcut transaction. A private source keeps our injected flags
-/// out of the HID hardware snapshot used to preserve keys the user is holding.
+/// One synchronous shortcut transaction. Capture hardware flags before posting:
+/// HID state can echo our injected flags even when the source is private.
 enum ShortcutEventSequence {
     private struct ModifierFamily {
         let flag: CGEventFlags
@@ -59,6 +59,11 @@ enum ShortcutEventSequence {
             rightDeviceBit: []
         )
     ]
+
+    // Event-state flags also contain attributes that are not held modifiers.
+    private static let hardwareModifierMask = modifierFamilies.reduce(
+        CGEventFlags([.maskAlphaShift, .maskHelp])
+    ) { $0.union($1.flag).union($1.leftDeviceBit).union($1.rightDeviceBit) }
 
     private static func selectedModifiers(for requested: CGEventFlags) -> [SelectedModifier] {
         modifierFamilies.compactMap { family in
@@ -121,7 +126,7 @@ enum ShortcutEventSequence {
             reason = "source_unavailable"
             return false
         }
-        let physicalAtStart = hardwareFlags()
+        let physicalAtStart = hardwareFlags().intersection(hardwareModifierMask)
         let owned = selectedModifiers.filter { modifier in
             if modifier.sideSpecific {
                 return !physicalAtStart.contains(modifier.deviceBit)
@@ -135,8 +140,9 @@ enum ShortcutEventSequence {
             guard let event = CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: down)
             else { return false }
             if modifier { event.type = .flagsChanged }
-            // Read again on release: do not clear a physical key pressed mid-sequence.
-            event.flags = synthetic.union(hardwareFlags())
+            // Keep one physical snapshot for this synchronous transaction. Reading
+            // HID state after posting can retain our own modifiers and prevent release.
+            event.flags = synthetic.union(physicalAtStart)
             event.setIntegerValueField(.eventSourceUserData, value: KeyboardInjector.syntheticEventMarker)
             let accepted = eventPoster(event)
             if accepted { submitted += 1 }

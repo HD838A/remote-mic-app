@@ -156,17 +156,32 @@ struct ShortcutLifecycleTests {
         #expect(events.last?.flags == physical)
     }
 
-    @Test func physicalPressDuringSequenceSurvivesSyntheticRelease() {
+    @Test func syntheticFeedbackDoesNotKeepModifiersPressed() {
         var events: [Edge] = []
-        var physical: CGEventFlags = []
+        let physical: CGEventFlags = [.maskShift, CGEventFlags(rawValue: 0x02)]
+        var systemSnapshot = physical.union(CGEventFlags(rawValue: 0x2000_0100))
         #expect(ShortcutEventSequence.send(
-            keyCode: 48, modifiers: .maskControl, hardwareFlags: { physical },
+            keyCode: 37, modifiers: [.maskCommand, .maskAlternate],
+            hardwareFlags: { systemSnapshot },
             eventPoster: { event in
                 events.append(Edge(event))
-                if event.type == .keyDown { physical = CGEventFlags(rawValue: CGEventFlags.maskControl.rawValue | 1) }
+                // HID state can echo a posted event even with a private CGEventSource.
+                systemSnapshot = event.flags
                 return true
             }
         ))
+        #expect(events.map(\.code) == [58, 55, 37, 37, 55, 58])
+        #expect(events[4].flags.contains(.maskAlternate))
+        #expect(!events[4].flags.contains(.maskCommand))
+        #expect(events.last?.flags == physical)
+        #expect(events.allSatisfy { $0.flags.contains(physical) })
+        // A second shortcut must own and release Command again.
+        events.removeAll()
+        #expect(ShortcutEventSequence.send(
+            keyCode: 37, modifiers: .maskCommand, hardwareFlags: { systemSnapshot },
+            eventPoster: { events.append(Edge($0)); systemSnapshot = $0.flags; return true }
+        ))
+        #expect(events.map(\.code) == [55, 37, 37, 55])
         #expect(events.last?.flags == physical)
     }
 
