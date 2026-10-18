@@ -19,6 +19,7 @@
 | 文件命名 | [`FILE_NAMING.md`](FILE_NAMING.md) |
 | 运行日志和复制诊断 | [`LOGGING.md`](LOGGING.md) |
 | macOS 发布 | [`RELEASING.md`](RELEASING.md) |
+| 产品命名与宣传文案 | [`design-qa.md` 的产品命名与宣传文案](design-qa.md#产品命名与宣传文案) |
 | macOS 界面设计与验收 | 中文 [`design-qa.md`](design-qa.md)；[`design-qa.en.md`](design-qa.en.md) 仅为翻译 |
 | PR 填写与检查项 | [`.github/PULL_REQUEST_TEMPLATE.md`](.github/PULL_REQUEST_TEMPLATE.md) |
 

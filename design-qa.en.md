@@ -4,6 +4,21 @@
 
 This file is a convenience translation of the current mandatory design rules. The Chinese `design-qa.md` is authoritative and historical dated QA records in that file are audit evidence, not independent product rules. If this translation differs from the Chinese source, follow the Chinese source and update this file.
 
+## Product names and promotional copy
+
+| Context | Required name |
+| --- | --- |
+| English product name | `SayAll` |
+| Product reference in English promotional copy | `SayAll App` |
+| Chinese product name | 无线麦 SayAll |
+| Product reference in Chinese promotional copy | 无线麦 SayAll App |
+
+- Do not use `Remote Mic`, `Wireless Mic`, or `SayAll Wireless Mic` as the English product name.
+- Keep one ASCII space between the Chinese and English parts. Do not use the old joined name, the `.app` suffix, or the Chinese-only short name for the current product.
+- Apply these names to pages, buttons, errors, permission text, accessibility labels, help, and release notes.
+- These rules change text only. Keep layout, behavior, filenames, paths, bundle identifiers, protocols, data keys, and compatibility identifiers unchanged.
+- Keep exact legacy filenames when explaining installation migration. Generic microphone descriptions are not product names.
+
 ## Review scope
 
 - Settings window: default and minimum content size 1020×772, freely resizable above that minimum. An 800×650 offscreen render is only a narrow-width stress check, not a supported production window size.
