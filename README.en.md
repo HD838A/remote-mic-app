@@ -27,7 +27,7 @@
 
 ## Video introduction
 
-“Possibly the least tool-like tool I have used lately” shows how SayAll turns a Bluetooth voice remote into a new way to express ideas, control your Mac, and work with AI. The video is in Chinese.
+“Possibly the least tool-like tool I have used lately” shows how SayAll App turns a Bluetooth voice remote into a new way to express ideas, control your Mac, and work with AI. The video is in Chinese.
 
 <p align="center">
   <a href="https://www.bilibili.com/video/BV13Pep6BEXe">
@@ -204,7 +204,7 @@ The **Statistics** page shows remote button presses, voice duration, and the lon
 
 ## Local AI / Agent setup
 
-After explicit user consent, 无线麦SayAll.app can expose local Reflections history as read-only data to Codex, Claude Code, Cursor, OpenCode, and other clients through the bundled Swift MCP Helper. No Node.js or development runtime is required.
+After explicit user consent, SayAll can expose local Reflections history as read-only data to Codex, Claude Code, Cursor, OpenCode, and other clients through the bundled Swift MCP Helper. No Node.js or development runtime is required.
 
 For AI-assisted installation, consent, client connection, and verification, give the agent the [AI Installation and MCP Setup Guide](AI_SETUP.en.md).
 

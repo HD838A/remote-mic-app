@@ -220,7 +220,7 @@ private final class HCIConfigurationStore {
             "requirement" as CFString: requirement as CFString,
         ] as CFDictionary
         let description = (Locale.preferredLanguages.first ?? "en").hasPrefix("zh")
-            ? "允许无线麦接收 Apple Remote 蓝牙音频。"
+            ? "允许无线麦 SayAll 接收 Apple Remote 蓝牙音频。"
             : "Allow SayAll to receive Bluetooth audio from your Apple Remote."
         try writeAuthorizationRight(
             definition,

@@ -371,7 +371,7 @@ case "$MODE" in
       "$PAYLOAD_APP/Contents/Info.plist")" = "SayAll"
     /usr/bin/grep -Fq '"CFBundleName" = "SayAll";' \
       "$PAYLOAD_APP/Contents/Resources/en.lproj/InfoPlist.strings"
-    /usr/bin/grep -Fq '"CFBundleName" = "无线麦";' \
+    /usr/bin/grep -Fq '"CFBundleName" = "无线麦 SayAll";' \
       "$PAYLOAD_APP/Contents/Resources/zh-Hans.lproj/InfoPlist.strings"
     ;;
   uninstall)

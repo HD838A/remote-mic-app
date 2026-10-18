@@ -81,7 +81,7 @@
 
 ## 1.9.8 (Pre-release)
 
-- Improved upgrades from older Remote Mic installations: the previous app now stops before the audio driver is updated, and the new SayAll.app stays at its canonical Applications location so audio setup can continue reliably after the upgrade.
+- Improved upgrades from older 无线麦 SayAll installations: the previous app now stops before the audio driver is updated, and the new SayAll.app stays at its canonical Applications location so audio setup can continue reliably after the upgrade.
 
 ## 1.9.7 (Pre-release)
 
@@ -129,7 +129,7 @@
 
 ## 1.8.23 (Pre-release)
 
-- Fixed an issue that could cause Remote Mic to quit when opening Quick Commands from the sidebar.
+- Fixed an issue that could cause 无线麦 SayAll to quit when opening Quick Commands from the sidebar.
 - Improved Quick Commands resource loading in installed builds so the page opens reliably after a fresh install or upgrade.
 
 ## 1.8.22 (Pre-release)
@@ -160,9 +160,9 @@
 
 ## 1.8.11 (Pre-release)
 
-- Fixed newly paired remotes appearing connected in macOS while the setup guide kept searching until Remote Mic was restarted. Returning from Bluetooth Settings now restarts discovery and connects the new device automatically.
+- Fixed newly paired remotes appearing connected in macOS while the setup guide kept searching until 无线麦 SayAll was restarted. Returning from Bluetooth Settings now restarts discovery and connects the new device automatically.
 - Fixed ordinary remote buttons sometimes doing nothing while macOS system actions such as volume still worked. When only some low-level button services are usable, remotes that passed the safety checks can continue working.
-- The setup guide now shows the real button-monitoring status and provides a retry action, refreshes audio devices after returning to Remote Mic, and rechecks permissions, the remote, and audio output before opening the main panel.
+- The setup guide now shows the real button-monitoring status and provides a retry action, refreshes audio devices after returning to 无线麦 SayAll, and rechecks permissions, the remote, and audio output before opening the main panel.
 - Remote cards show the full Xiaomi Bluetooth Remote 2 and Xiaomi Bluetooth Remote 2 Pro names with clearer battery and charging icons. The File menu can now open the log folder directly.
 
 ## 1.8.10 (Pre-release)
@@ -175,7 +175,7 @@
 
 ## 1.8.9 (Pre-release)
 
-- Fixed the first Fn voice input sometimes doing nothing after a remote button launched or switched to an app. Remote Mic now waits for the target's editable input to be ready and preserves the beginning of speech during that wait.
+- Fixed the first Fn voice input sometimes doing nothing after a remote button launched or switched to an app. 无线麦 SayAll now waits for the target's editable input to be ready and preserves the beginning of speech during that wait.
 - If the target app closes, changes, takes too long, or focuses a sensitive field, the pending voice input is cancelled instead of being sent to the wrong window.
 
 ## 1.8.8 (Pre-release)
@@ -199,12 +199,12 @@
 ## 1.8.5 (Pre-release)
 
 - Physical remote voice sessions are now renewed periodically to try to continue beyond the roughly one-minute limit, with an initial maximum of three minutes.
-- Remote Mic for iPhone now supports tap to start and tap again to stop, while retaining hold-to-talk and release-to-stop.
+- 无线麦 SayAll for iPhone now supports tap to start and tap again to stop, while retaining hold-to-talk and release-to-stop.
 
 ## 1.8.4 (Pre-release)
 
 - Added Command-W, Command-X, Command-A, Command-Z, Command-Shift-Z, Command-F, and Command-S to Basic Keys, so common window, editing, search, and save actions can be mapped directly to remote buttons.
-- Remote Mic now supports the standard Command-Q shortcut to quit and Command-W to close the Settings window while keeping the menu-bar app running.
+- 无线麦 SayAll now supports the standard Command-Q shortcut to quit and Command-W to close the Settings window while keeping the menu-bar app running.
 
 ## 1.8.3 (Stable)
 

@@ -183,7 +183,7 @@ struct LocalizationTests {
                 #expect(localized["remote.device.model.apple_siri_remote_a2854"] == "苹果遥控器第 7 代")
                 #expect(localized["remote.device.model.apple_siri_remote_a2540"] == "苹果遥控器第 6 代")
                 #expect(localized["siri_remote.activation.open_membership"] == "点击开通会员功能")
-                #expect(localized["connection.web.title"] == "微信小程序 SayAll")
+                #expect(localized["connection.web.title"] == "无线麦 SayAll 微信小程序")
                 #expect(localized["connection.web.help_short"]?.contains("微信小程序") == false)
             }
             #expect(Set(localized.keys) == Set(english.keys))
