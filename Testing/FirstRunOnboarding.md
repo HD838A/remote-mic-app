@@ -2,6 +2,21 @@
 
 > 执行本手册或修改 Onboarding 前，先完整阅读跨平台产品规范 [`feature/first-run-onboarding/PRODUCT_SPEC.md`](../feature/first-run-onboarding/PRODUCT_SPEC.md) 和 [macOS 平台适配](../feature/first-run-onboarding/platform-macos.md)。未来 Windows 测试应从同一产品规范出发，并使用 [Windows 平台适配](../feature/first-run-onboarding/platform-windows.md) 建立独立测试手册。
 
+## 2026-10-19 无屏配置应用定位回归
+
+适用分支：`codex/fix-agent-app-location`。本次只修改欢迎页复制的终端命令。页面、权限、连接、语音与持久化实现没有变化。
+
+1. 准备标准安装目录中的 SayAll，同时保留标准目录外的旧测试副本。
+2. 分别检查中文和英文复制内容。命令只检查系统和当前用户的 Applications 目录，不调用 Spotlight。
+3. 运行 `swift test --disable-keychain --filter OnboardingFlowTests`。应用定位用例执行复制内容中的 shell，模拟文件可执行状态，不启动 App、不修改配置。
+4. 核对选择顺序：系统 SayAll.app、系统无线麦SayAll.app、当前用户 SayAll.app、当前用户无线麦SayAll.app。不可执行的候选必须被跳过。
+5. 标准目录没有可执行候选时，命令必须退出 1，并返回 status=not_found、reason=installed_app。Agent 应确认安装位置，不得改用测试副本或下载归档。
+6. 现场配置时，确认执行的是安装副本。继续核对 `--agent-configure --verify --json`，并完成真实权限、按键、音频和文字上屏；不得把 configured 当作真实语音通过。
+
+失败判定：选择标准目录外的副本、忽略可执行性、两种语言行为不同、缺失安装时仍尝试启动，或把配置准备报告为真实验证完成。
+
+验证结果和边界：旧命令在新增回归用例中失败；修复后的测试、构建及本机只读定位结果见 [Bug 记录](../Bugs/2026-10-19-agent-app-location.html)。复制命令不受界面语言以外的外观状态影响；本次不改生产页面清单或渲染。自动化不替代真实语音验收，也不证明运行中的 App 已重新加载配置。
+
 ## 2026-10-17 Onboarding 布局与来源显示回归
 
 适用范围：右栏布局、控制来源选择页和微信小程序连接页。该变更属于流程共享布局与用户可见文案变化，必须执行离屏生产截图、自动化测试和真实窗口检查。

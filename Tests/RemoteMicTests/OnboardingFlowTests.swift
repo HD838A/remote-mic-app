@@ -285,6 +285,74 @@ struct OnboardingFlowTests {
         #expect(english.contains("staged configuration is prepared"))
     }
 
+    @Test func welcomePromptSelectsOnlyInstalledApplicationCopies() throws {
+        let userApplications = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Applications").path
+        let installations = [
+            "/Applications/SayAll.app",
+            "/Applications/无线麦SayAll.app",
+            "\(userApplications)/SayAll.app",
+            "\(userApplications)/无线麦SayAll.app",
+        ]
+        let scenarios: [(available: [String], expected: String?)] = [
+            (installations, installations[0]),
+            (Array(installations.dropFirst()), installations[1]),
+            (Array(installations.suffix(2)), installations[2]),
+            ([installations[3]], installations[3]),
+            ([], nil),
+        ]
+        for prompt in [OnboardingAIAssistantPrompt.chinese, OnboardingAIAssistantPrompt.english] {
+            let lines = prompt.components(separatedBy: .newlines)
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+            let start = try #require(lines.firstIndex { $0.hasPrefix("APP_PATH=") })
+            let end = try #require(lines.firstIndex {
+                $0 == #""$APP_PATH/Contents/MacOS/RemoteMic" --agent-configure --auto --json"#
+            })
+            // Print the selected path instead of starting an App or changing settings.
+            let locator = lines[start..<end].joined(separator: "\n") +
+                "\n" + #"printf '%s\n' "$APP_PATH""#
+            for scenario in scenarios {
+                let process = Process()
+                process.executableURL = URL(fileURLWithPath: "/bin/sh")
+                process.arguments = ["-c", """
+                test() {
+                    if /bin/test "$1" = "-x"; then
+                        case ":$SAYALL_TEST_EXECUTABLES:" in
+                            *":$2:"*) return 0 ;;
+                            *) return 1 ;;
+                        esac
+                    fi
+                    /bin/test "$@"
+                }
+                mdfind() { printf '%s\\n' '/developer-artifacts/old-build/SayAll.app'; }
+                \(locator)
+                """]
+                var environment = ProcessInfo.processInfo.environment
+                environment["SAYALL_TEST_EXECUTABLES"] = scenario.available
+                    .map { "\($0)/Contents/MacOS/RemoteMic" }.joined(separator: ":")
+                process.environment = environment
+                let pipe = Pipe()
+                process.standardOutput = pipe
+                try process.run()
+                let output = pipe.fileHandleForReading.readDataToEndOfFile()
+                process.waitUntilExit()
+                let text = String(decoding: output, as: UTF8.self)
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                if let expected = scenario.expected {
+                    #expect(process.terminationStatus == 0)
+                    #expect(text == expected)
+                } else {
+                    #expect(process.terminationStatus == 1)
+                    let json = try #require(
+                        try JSONSerialization.jsonObject(with: output) as? [String: Any]
+                    )
+                    #expect(json["status"] as? String == "not_found")
+                    #expect(json["reason"] as? String == "installed_app")
+                }
+            }
+        }
+    }
+
     @Test func agentConfigurationCommandIsHeadlessAndKeepsVerificationAsASeparateStep() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
