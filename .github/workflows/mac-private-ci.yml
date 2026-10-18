@@ -1,0 +1,61 @@
+name: macOS private integration CI
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: mac-private-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  private_test:
+    name: Private ${{ matrix.configuration }} tests and dual-architecture build
+    runs-on: macos-15
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        configuration: [free-combination-actions, paid-button-profiles]
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
+      RELEASE_VARIANT: intel
+      SAYALL_ENABLE_PRIVATE_SWIFTPM: "1"
+      SAYALL_AI_PACKAGE_PATH: ""
+      SAYALL_ENABLE_BUTTON_PROFILES: ${{ matrix.configuration == 'paid-button-profiles' && '1' || '0' }}
+
+    steps:
+      - name: Check out public host
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: Resolve private platform version
+        id: release-dependencies
+        run: ./scripts/verify-release-dependency-pins.sh resolve github-output
+
+      - name: Check out private macOS feature packages
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          repository: ${{ steps.release-dependencies.outputs.sayall_private_platform_repository }}
+          ref: ${{ steps.release-dependencies.outputs.sayall_private_platform_version }}
+          path: .private-dependencies/sayall-private-platform
+          ssh-key: ${{ secrets.SAYALL_PRIVATE_PLATFORM_DEPLOY_KEY }}
+          persist-credentials: false
+
+      - name: Configure private package path
+        run: echo "SAYALL_PRIVATE_PLATFORM_PACKAGE_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-private-platform" >> "$GITHUB_ENV"
+
+      - name: Run private integration tests
+        run: swift test --disable-keychain --skip BuildSigningTests --scratch-path ".build-private/${{ matrix.configuration }}"
+
+      - name: Build release configuration (Apple Silicon)
+        env:
+          RELEASE_VARIANT: apple-silicon
+        run: swift build --disable-keychain --scratch-path ".build-private/${{ matrix.configuration }}" -c release --triple arm64-apple-macosx14.0
+
+      - name: Build release configuration (Intel Ventura)
+        env:
+          RELEASE_VARIANT: intel
+        run: swift build --disable-keychain --scratch-path ".build-private/${{ matrix.configuration }}" -c release --triple x86_64-apple-macosx13.0

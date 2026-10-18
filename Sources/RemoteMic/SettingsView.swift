@@ -839,6 +839,7 @@ struct SettingsView: View {
                         selectedRemoteProfileID: settings.selectedRemoteProfileID,
                         remoteModel: settings.selectedRemoteProfile?.model,
                         hostActionSections: buttonProfileHostActionSections,
+                        settings: settings,
                         onEditKeys: { profile in
                             preservesMappingContextOnNavigation = true
                             editingMappingProfileID = profile

@@ -35,6 +35,8 @@ REQUIRE_SAYALL_BUTTON_PROFILES="${REQUIRE_SAYALL_BUTTON_PROFILES:-0}"
 REQUIRE_SAYALL_PRIVATE_ARTIFACT_PACKAGE="${REQUIRE_SAYALL_PRIVATE_ARTIFACT_PACKAGE:-0}"
 REQUIRE_SAYALL_BUTTON_PROFILES_TEST_ACCESS="${REQUIRE_SAYALL_BUTTON_PROFILES_TEST_ACCESS:-0}"
 REQUIRE_DIAGNOSTIC_PUBLIC_KEY="${REQUIRE_DIAGNOSTIC_PUBLIC_KEY:-0}"
+REQUIRE_DIAGNOSTIC_SERVICE="${REQUIRE_DIAGNOSTIC_SERVICE:-0}"
+REQUIRE_RELEASE_BUILD_CHANNEL="${REQUIRE_RELEASE_BUILD_CHANNEL:-0}"
 
 case "$REQUIRE_DEVELOPER_ID_SIGNING" in
   0|1) ;;
@@ -67,6 +69,14 @@ esac
 case "$REQUIRE_DIAGNOSTIC_PUBLIC_KEY" in
   0|1) ;;
   *) print -u2 "REQUIRE_DIAGNOSTIC_PUBLIC_KEY must be 0 or 1"; exit 1 ;;
+esac
+case "$REQUIRE_DIAGNOSTIC_SERVICE" in
+  0|1) ;;
+  *) print -u2 "REQUIRE_DIAGNOSTIC_SERVICE must be 0 or 1"; exit 1 ;;
+esac
+case "$REQUIRE_RELEASE_BUILD_CHANNEL" in
+  0|1) ;;
+  *) print -u2 "REQUIRE_RELEASE_BUILD_CHANNEL must be 0 or 1"; exit 1 ;;
 esac
 if [[ "$REQUIRE_DEVELOPER_ID_SIGNING" == "1" && -z "$EXPECTED_DEVELOPER_TEAM_ID" ]]; then
   print -u2 "EXPECTED_DEVELOPER_TEAM_ID is required for Developer ID verification"
@@ -307,6 +317,14 @@ test "$(plutil -extract CFBundleDisplayName raw -o - "$PLIST")" = "SayAll"
 test "$(plutil -extract CFBundleName raw -o - "$PLIST")" = "SayAll"
 test "$(plutil -extract CFBundleExecutable raw -o - "$PLIST")" = "RemoteMic"
 test "$(plutil -extract CFBundleIconFile raw -o - "$PLIST")" = "AppIcon"
+SAYALL_BUILD_CHANNEL="$(plutil -extract SayAllBuildChannel raw -o - "$PLIST" 2>/dev/null || true)"
+if [[ "$REQUIRE_RELEASE_BUILD_CHANNEL" == "1" && "$SAYALL_BUILD_CHANNEL" != "release" ]]; then
+  print -u2 "Protected release App must declare SayAllBuildChannel=release"
+  exit 1
+fi
+if [[ "$SAYALL_BUILD_CHANNEL" == "local" || "$SAYALL_BUILD_CHANNEL" == "release" ]]; then
+  REQUIRE_DIAGNOSTIC_SERVICE=1
+fi
 test -n "$(plutil -extract NSBluetoothAlwaysUsageDescription raw -o - "$PLIST")"
 test "$(plutil -extract SUFeedURL raw -o - "$PLIST")" = "$RELEASE_FEED_URL"
 test "$(plutil -extract SUEnableAutomaticChecks raw -o - "$PLIST")" = "true"
@@ -336,14 +354,50 @@ if [[ -n "$SAYALL_DIAGNOSTIC_PUBLIC_KEY_BASE64" ]]; then
     exit 1
   fi
 fi
+if plutil -type SayAllSentryDSN "$PLIST" >/dev/null 2>&1; then
+  SAYALL_SENTRY_DSN="$(plutil -extract SayAllSentryDSN raw -expect string -o - "$PLIST")"
+else
+  SAYALL_SENTRY_DSN=""
+fi
+if [[ "$REQUIRE_DIAGNOSTIC_SERVICE" == "1" && -z "$SAYALL_SENTRY_DSN" ]]; then
+  print -u2 "App is missing the required diagnostic service DSN"
+  exit 1
+fi
+if [[ -n "$SAYALL_SENTRY_DSN" ]]; then
+  python3 - "$SAYALL_SENTRY_DSN" <<'PY'
+import sys
+from urllib.parse import urlparse
+
+value = sys.argv[1].strip()
+parsed = urlparse(value)
+if (
+    parsed.scheme != "https"
+    or not parsed.hostname
+    or not parsed.username
+    or parsed.password
+    or parsed.port is not None
+    or parsed.query
+    or parsed.fragment
+    or not parsed.path.strip("/")
+):
+    raise SystemExit("SayAllSentryDSN is not a valid protected Sentry DSN")
+PY
+fi
 SAYALL_AI_INCLUDED="$(plutil -extract SayAllAIIncluded raw -o - "$PLIST" 2>/dev/null || true)"
 if [[ "$SAYALL_AI_INCLUDED" == "true" ]]; then
   SAYALL_AI_RESOURCE_BUNDLE="$APP/Contents/Resources/SayAllAI_SayAllAI.bundle"
   test -d "$SAYALL_AI_RESOURCE_BUNDLE"
-  test -f "$SAYALL_AI_RESOURCE_BUNDLE/en.lproj/Localizable.strings"
-  test -f "$SAYALL_AI_RESOURCE_BUNDLE/zh-Hans.lproj/Localizable.strings"
+  if [[ -d "$SAYALL_AI_RESOURCE_BUNDLE/Contents/Resources" ]]; then
+    SAYALL_AI_RESOURCE_ROOT="$SAYALL_AI_RESOURCE_BUNDLE/Contents/Resources"
+    SAYALL_AI_RESOURCE_PLIST="$SAYALL_AI_RESOURCE_BUNDLE/Contents/Info.plist"
+  else
+    SAYALL_AI_RESOURCE_ROOT="$SAYALL_AI_RESOURCE_BUNDLE"
+    SAYALL_AI_RESOURCE_PLIST="$SAYALL_AI_RESOURCE_BUNDLE/Info.plist"
+  fi
+  test -f "$SAYALL_AI_RESOURCE_ROOT/en.lproj/Localizable.strings"
+  test -f "$SAYALL_AI_RESOURCE_ROOT/zh-Hans.lproj/Localizable.strings"
   test -n "$(plutil -extract CFBundleDevelopmentRegion raw -o - \
-    "$SAYALL_AI_RESOURCE_BUNDLE/Info.plist")"
+    "$SAYALL_AI_RESOURCE_PLIST")"
 elif [[ -e "$APP/Contents/Resources/SayAllAI_SayAllAI.bundle" ]]; then
   print -u2 "SayAllAI resource bundle exists without the inclusion marker"
   exit 1

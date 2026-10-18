@@ -150,6 +150,8 @@ final class MacroFeatureIntegration: ObservableObject {
             }
             return ConfiguredButtonAction(action: .customShortcut,
                 shortcut: CustomKeyboardShortcut(keyCode: shortcut.keyCode, modifierFlags: flags, keyLabel: ""))
+        case .focus:
+            return ConfiguredButtonAction(action: .focusInput, shortcut: nil)
         }
         #else
         return nil
@@ -259,18 +261,13 @@ final class MacroFeatureIntegration: ObservableObject {
         feature.changes.receive(on: DispatchQueue.main).sink { [weak self, weak settings] in
             guard let self, let settings else { return }
             DispatchQueue.main.async {
-                guard self.feature.hasLoadedLibrary else { return }
-                let legacy = self.feature.legacyBindings.compactMap { value -> UnifiedButtonBinding? in
-                    guard let button = RemoteButton(rawValue: value.button),
-                          let trigger = ButtonTrigger(rawValue: value.trigger) else { return nil }
-                    return UnifiedButtonBinding(remoteProfileID: value.device, button: button, trigger: trigger,
-                        configured: ConfiguredButtonAction(action: .combinationAction, shortcut: nil, macroID: value.macroID))
-                }
-                do { try settings.migrateLegacyMacroBindings(legacy) }
-                catch { AppLogger.shared.write("BUTTON CONFIGURATION phase=failed result=migration_backup_failed") }
+                self.migrateLegacyBindingsIfLoaded(to: settings)
                 self.objectWillChange.send()
             }
         }.store(in: &subscriptions)
+        // The controller can finish its initial read before this subscription is installed.
+        // Check the already-loaded state so migration does not depend on timing.
+        migrateLegacyBindingsIfLoaded(to: settings)
         #endif
         #if canImport(SayAllButtonProfiles) && SAYALL_UNIFIED_BUTTON_CONFIGURATION
         var lastActiveProfiles: [UUID?: UUID] = [:]
@@ -291,6 +288,28 @@ final class MacroFeatureIntegration: ObservableObject {
         }.store(in: &subscriptions)
         #endif
     }
+
+    #if canImport(SayAllMacroRemoteMic) && SAYALL_UNIFIED_BUTTON_CONFIGURATION
+    private func migrateLegacyBindingsIfLoaded(to settings: AppSettings) {
+        guard feature.hasLoadedLibrary else { return }
+        let legacy = feature.legacyBindings.compactMap { value -> UnifiedButtonBinding? in
+            guard let button = RemoteButton(rawValue: value.button),
+                  let trigger = ButtonTrigger(rawValue: value.trigger) else { return nil }
+            return UnifiedButtonBinding(
+                remoteProfileID: value.device,
+                button: button,
+                trigger: trigger,
+                configured: ConfiguredButtonAction(
+                    action: .combinationAction,
+                    shortcut: nil,
+                    macroID: value.macroID
+                )
+            )
+        }
+        do { try settings.migrateLegacyMacroBindings(legacy) }
+        catch { AppLogger.shared.write("BUTTON CONFIGURATION phase=failed result=migration_backup_failed") }
+    }
+    #endif
 
     #if canImport(SayAllMacroRemoteMic) && SAYALL_UNIFIED_BUTTON_CONFIGURATION
     private func bindingUsages(_ settings: AppSettings) -> [RemoteMicBindingUsage] {
@@ -318,7 +337,7 @@ final class MacroFeatureIntegration: ObservableObject {
                 case let .host(reference):
                     let configured = try? JSONDecoder().decode(ConfiguredButtonAction.self, from: reference.payload)
                     id = configured?.action == .combinationAction ? configured?.macroID : nil
-                case .shortcut: id = nil
+                case .shortcut, .focus: id = nil
                 }
                 guard let id else { continue }
                 usages.append(RemoteMicBindingUsage(id: "\(profile.id).\(key.button.rawValue).\(key.trigger.rawValue)",
@@ -501,6 +520,7 @@ final class MacroFeatureIntegration: ObservableObject {
         selectedRemoteProfileID: UUID?,
         remoteModel: XiaomiRemoteModel?,
         hostActionSections: [ButtonProfileHostActionSection],
+        settings: AppSettings? = nil,
         onEditKeys: @escaping (UUID) -> Void = { _ in },
         onChooseCustomApplication: ((@escaping (String, String, Data) -> Void) -> Void)? = nil,
         chromecastReservedControlIDs: Set<String> = ["left", "right", "select"],
@@ -529,6 +549,7 @@ final class MacroFeatureIntegration: ObservableObject {
                     }
                 )
             },
+            baseBindingSummaries: settings.map { baseBindingSummaries($0, remoteProfileID: selectedRemoteProfileID) } ?? [],
             membershipNotice: membershipNotice,
             onChooseCustomApplication: onChooseCustomApplication.map { callback in
                 { completion in
@@ -563,6 +584,7 @@ final class MacroFeatureIntegration: ObservableObject {
                     }
                 )
             },
+            baseBindingSummaries: settings.map { baseBindingSummaries($0, remoteProfileID: selectedRemoteProfileID) } ?? [],
             onChooseCustomApplication: onChooseCustomApplication.map { callback in
                 { completion in
                     callback { id, displayName, payload in
@@ -580,6 +602,66 @@ final class MacroFeatureIntegration: ObservableObject {
         return AnyView(EmptyView())
         #endif
     }
+
+    #if canImport(SayAllButtonProfiles) && canImport(SayAllMacroRemoteMic)
+    private func baseBindingSummaries(
+        _ settings: AppSettings,
+        remoteProfileID: UUID?
+    ) -> [SayAllButtonProfiles.RemoteMicBaseBindingSummary] {
+        let localization = LocalizationStore(settings: settings)
+        return SayAllButtonProfiles.RemoteMicButtonProfileContract.commonButtons.flatMap { profileButton in
+            guard let button = RemoteButton(rawValue: profileButton.rawValue) else {
+                return [SayAllButtonProfiles.RemoteMicBaseBindingSummary]()
+            }
+            return ButtonTrigger.allCases.compactMap { trigger in
+                let configured = settings.configuredBaseAction(
+                    for: button,
+                    trigger: trigger,
+                    profileID: remoteProfileID
+                )
+                guard configured.action != .disabled else { return nil }
+                return SayAllButtonProfiles.RemoteMicBaseBindingSummary(
+                    button: profileButton.rawValue,
+                    trigger: trigger.rawValue,
+                    displayName: baseBindingTitle(
+                        settings: settings,
+                        localization: localization,
+                        configured: configured
+                    )
+                )
+            }
+        }
+    }
+
+    private func baseBindingTitle(
+        settings: AppSettings,
+        localization: LocalizationStore,
+        configured: ConfiguredButtonAction
+    ) -> String {
+        if configured.action == .combinationAction {
+            return feature.libraryActions.first { $0.id == configured.macroID }?.name
+                ?? localization.text("button_mapping.macro_unavailable")
+        }
+        if configured.action == .customShortcut, let shortcut = configured.shortcut {
+            return shortcut.visualDisplayName(using: localization)
+        }
+        if configured.action == .openCustomApplication {
+            return settings.customApplicationProfile(id: configured.applicationProfileID)?.displayName
+                ?? localization.text("custom_application.not_configured")
+        }
+        switch configured.action {
+        case .arrowUp: return "↑"
+        case .arrowDown: return "↓"
+        case .arrowLeft: return "←"
+        case .arrowRight: return "→"
+        case .deleteBackward: return "⌫"
+        case .volumeUp: return localization.text("action.system_volume_up_short")
+        case .volumeDown: return localization.text("action.system_volume_down_short")
+        case .volumeMute: return "Mute"
+        default: return configured.action.displayName(using: localization)
+        }
+    }
+    #endif
 
     #if SAYALL_MACRO_REMOTE_CAPABILITIES && canImport(SayAllMacroRemoteMic)
     private func combinationActionsRemotePresentation(

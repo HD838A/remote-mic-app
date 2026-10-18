@@ -1,0 +1,82 @@
+name: Update private dependency versions
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 3 * * 1"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: update-private-dependency-versions
+  cancel-in-progress: true
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out main
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - name: Install jq
+        run: |
+          if ! command -v jq >/dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y jq
+          fi
+
+      - name: Read current dependency versions
+        id: current
+        run: |
+          echo "ai=$(jq -r '.dependencies.sayAllAI.version' config/release-dependencies.json)" >> "$GITHUB_OUTPUT"
+          echo "platform=$(jq -r '.dependencies.sayAllPrivatePlatform.version' config/release-dependencies.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Update dependency versions
+        env:
+          SAYALL_AI_DEPLOY_KEY: ${{ secrets.SAYALL_AI_DEPLOY_KEY }}
+          SAYALL_PRIVATE_PLATFORM_DEPLOY_KEY: ${{ secrets.SAYALL_PRIVATE_PLATFORM_DEPLOY_KEY }}
+        run: ./scripts/update-private-dependency-versions.sh
+
+      - name: Create upgrade pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CURRENT_AI: ${{ steps.current.outputs.ai }}
+          CURRENT_PLATFORM: ${{ steps.current.outputs.platform }}
+        run: |
+          if git diff --quiet -- config/release-dependencies.json; then
+            echo "Private dependency versions are current."
+            exit 0
+          fi
+          next_ai="$(jq -r '.dependencies.sayAllAI.version' config/release-dependencies.json)"
+          next_platform="$(jq -r '.dependencies.sayAllPrivatePlatform.version' config/release-dependencies.json)"
+          branch="automation/private-dependencies-platform-${next_platform}-ai-${next_ai}"
+          if gh pr list --state open --head "$branch" --json number --jq 'length' | grep -q '^0$'; then
+            git switch -c "$branch"
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add config/release-dependencies.json
+            git commit -m "chore: update private dependency versions"
+            git push origin "$branch"
+            body_file="$RUNNER_TEMP/private-dependency-upgrade-body.md"
+            cat > "$body_file" <<EOF
+          自动更新私有依赖版本。
+
+          - 私有平台版本：$CURRENT_PLATFORM -> $next_platform
+          - 可选 AI 版本：$CURRENT_AI -> $next_ai
+
+          该 PR 必须通过公共、免费组合动作和付费键位方案 CI。
+          EOF
+            gh pr create \
+              --base main \
+              --head "$branch" \
+              --title "chore: update private dependency versions" \
+              --body-file "$body_file"
+          else
+            echo "An upgrade PR already exists for $branch."
+          fi

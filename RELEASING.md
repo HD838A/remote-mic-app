@@ -18,10 +18,10 @@
 1. 记录用户请求时间 request_started_at 和 request_id。T_ready 表示源码已进入精确 `main` 或已批准 Hotfix 分支、源码分支 CI 和依赖 pin 已通过、版本/Build/Release Notes 已冻结的时刻；Preview 和 Stable 从 T_ready 起均以 30 分钟为纯发布目标。重试不重置时间，也不以时间目标替代签名、公证、staple 或 UI 验收。
 2. fetch `origin main --tags`，确认发布控制 worktree 干净、HEAD 与 `origin/main` 精确一致。普通源码必须是同一 `main` SHA；Hotfix 源码必须是 `origin/hotfix/vX.Y.Z` 的精确 HEAD，并由脚本验证当前稳定 Tag、版本和线性历史。
 3. 检查产品 Commit 已经通过普通 PR 合入 main。若用户指定 Commit 尚未合入，先在独立集成分支重放指定改动，逐个解决机械冲突，完成普通 PR、双架构 CI 后再继续；冲突涉及产品取舍时报告并暂停该取舍，不接触 Apple 凭据。
-4. 检查 `config/release-dependencies.json` 与受保护 workflow 使用相同的私有依赖完整 SHA，同时确认公开 `Package.swift`、`Package.resolved` 不解析私有仓库；运行 `scripts/verify-release-dependency-pins.sh`。
-5. 运行 `scripts/verify-release-ready-main-ci.sh`，确认 Apple Silicon 与 Intel Ventura 的源码分支 push CI 都完成无私有权限也可执行的 Swift tests、项目 self-test 和 Release build。官方 CI 探测到私有 deploy key 可用时，还必须完成固定私有 Commit 的集成测试和双架构 Release build；脚本名为历史兼容名称，发布控制面 fixture 不得冒充产品 CI。
+4. 检查 `config/release-dependencies.json` 与受保护 workflow 使用相同的私有依赖版本标签，同时确认公开 `Package.swift`、`Package.resolved` 不解析私有仓库；运行 `scripts/verify-release-dependency-pins.sh`。
+5. 运行 `scripts/verify-release-ready-main-ci.sh`，确认 Apple Silicon 与 Intel Ventura 的源码分支 push CI 都完成无私有权限也可执行的 Swift tests、项目 self-test 和 Release build。官方 CI 探测到私有 deploy key 可用时，还必须完成版本化私有依赖的集成测试和双架构 Release build；脚本名为历史兼容名称，发布控制面 fixture 不得冒充产品 CI。
 
-Mac Remote 与其他 macOS 私有组件使用同一次私有平台 checkout。CI 和发布通过显式本地路径加载 `packages/macos-remote`，共享私有平台固定 Commit；不再检出独立 Remote 镜像，也不再使用其专属 deploy key。无私有路径的公开构建继续使用现有兼容层。回退发布流程时须同时回退清单、workflow 和验证脚本；历史版本的固定镜像 Commit 仍可只读获取。
+Mac Remote 与其他 macOS 私有组件使用同一个私有 Swift Package。CI 和发布通过私有平台的统一 SemVer 标签解析包；不再把平台子目录伪装成独立远程 Package。无私有依赖的公开构建继续使用现有兼容层。私有平台版本必须从 `main` 发布，并由 `VERSION` 文件和 `X.Y.Z` 标签校验。回退发布流程时须同时回退清单、workflow 和验证脚本；旧版本通过对应的不可变标签回退。
 
 ### Hotfix 准备
 
@@ -45,18 +45,18 @@ ReleaseHistory 的版本标题由 `scripts/sync-release-history-labels.mjs` 按 
 
 ## Preview staging：受保护的唯一签名入口
 
-AI 整理默认不进入发布包：本地构建未显式提供 `SAYALL_AI_PACKAGE_PATH` 时不链接 AI；公证入口默认 `REQUIRE_SAYALL_AI_PACKAGE=0`，不要求 AI 组件。受保护 staging 默认 `include_ai=false`，不 checkout 或注入 AI Package。需要 AI 的特定候选必须显式使用 `INCLUDE_SAYALL_AI=1 scripts/stage-macos-preview.sh preview`（或手动 dispatch 选择 `include_ai=true`）；此时按固定 Commit checkout，并要求构建和最终 App 验证 AI 组件。其他发布所需组件与 Developer ID、Apple 公证、staple、Gatekeeper 门禁不变。
+ AI 整理默认不进入发布包：本地构建未显式提供 `SAYALL_AI_PACKAGE_PATH` 时不链接 AI；公证入口默认 `REQUIRE_SAYALL_AI_PACKAGE=0`，不要求 AI 组件。受保护 staging 默认 `include_ai=false`，不 checkout 或注入 AI Package。需要 AI 的特定候选必须显式使用 `INCLUDE_SAYALL_AI=1 scripts/stage-macos-preview.sh preview`（或手动 dispatch 选择 `include_ai=true`）；此时按版本标签 checkout，并要求构建和最终 App 验证 AI 组件。其他发布所需组件与 Developer ID、Apple 公证、staple、Gatekeeper 门禁不变。
 
 普通版本从与 `origin/main` 相同的 main worktree 执行；Hotfix 从与远端完全一致的 `hotfix/vX.Y.Z` worktree 执行：
 
     scripts/stage-macos-preview.sh preview
 
-脚本先做无秘密检查：合法源码分支与精确 SHA、Hotfix 稳定基线、版本/build、stable latest、源码分支 CI、依赖 pin、目标仓库、显式 GH_TOKEN 静态门禁和 10 个 CDN 固定路径全部为 HTTP 404。随后始终以 `--ref main` dispatch .github/workflows/mac-release-package.yml，输入 mode、source_branch 和 expected_commit；Workflow 再次独立验证。smoke 只用于受保护流程检查，不创建公开身份。
+脚本先做无秘密检查：合法源码分支与精确 SHA、Hotfix 稳定基线、版本/build、stable latest、源码分支 CI、依赖版本、目标仓库、显式 GH_TOKEN 静态门禁和 10 个 CDN 固定路径全部为 HTTP 404。随后始终以 `--ref main` dispatch .github/workflows/mac-release-package.yml，输入 mode、source_branch 和 expected_commit；Workflow 再次独立验证。smoke 只用于受保护流程检查，不创建公开身份。
 
 受保护 workflow 的 package job 才能读取 Apple/Match/Notary/Sparkle 凭据，并且必须：
 
 - 在 mac-release Environment 内使用只读 Match、隔离临时 Keychain 和最小权限；
-- 按 `config/release-dependencies.json` checkout 并验证全部发布所需私有 Package；缺少权限、路径、固定 Commit 或组件时立即失败，不得降级为公开兼容层发布；
+- 按 `config/release-dependencies.json` checkout 并验证全部发布所需私有 Package；缺少权限、版本标签、路径或组件时立即失败，不得降级为公开兼容层发布；
 - 独立构建 Apple Silicon/macOS 14 与 Intel Ventura/macOS 13 两条 lane；
 - 对 App、Framework、XPC、Helper、Installer、PKG 和 ZIP 完成 Developer ID 签名、Apple 公证、staple、Gatekeeper 和权限/符号链接校验；DMG 可以作为内部构建中间产物，但不进入公开下载资产。
 - 使用独立 SwiftPM scratch/output，独立提交可并行的 PKG 公证；

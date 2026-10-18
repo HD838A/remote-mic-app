@@ -91,20 +91,11 @@ is_full_product_run() {
         step_passed("Run Swift tests") and step_passed("Run project self-test") and
         step_passed("Run core first-voice journey gate") and dual_build)] | length) == 1 and
       ([.jobs[] | select(.name == "Classify changed files" and
-        .conclusion == "success" and step_passed("Detect private dependency access"))] | length) == 1 and
+        .conclusion == "success")] | length) == 1 and
       all(["Apple Silicon", "Intel Ventura"][]; . as $lane |
         ([ $root.jobs[] | select(.name == ("Swift tests and build (" + $lane + ")") and
           .status == "completed" and .conclusion == "success" and
-          step_passed("Require every applicable macOS CI lane"))] | length) == 1) and
-      ([.jobs[] | select(.name | startswith("Private "))] as $private |
-        ($private | length) > 0 and
-        (all($private[]; .conclusion == "skipped") or
-          (($private | length) == 2 and
-           all(["free-combination-actions", "paid-button-profiles"][]; . as $configuration |
-             ([$private[] | select(
-               .name == ("Private " + $configuration + " tests and dual-architecture build") and
-               .status == "completed" and .conclusion == "success" and
-               step_passed("Run private integration tests") and dual_build)] | length) == 1))));
+          step_passed("Require every applicable macOS CI lane"))] | length) == 1);
     def product_lane($lane):
       ([.jobs[] | select(
         (.name == ("Public Swift tests and build (" + $lane + ")") or
@@ -119,9 +110,7 @@ is_full_product_run() {
      ($headBranch != "main" and (.event == "push" or .event == "workflow_dispatch"))) and
     .status == "completed" and .conclusion == "success" and
     .headBranch == $headBranch and .headSha == $headSha and
-    (consolidated_product or (product_lane("Apple Silicon") and product_lane("Intel Ventura"))) and
-    all(.jobs[] | select(.name | startswith("Private "));
-      .conclusion == "success" or .conclusion == "skipped")
+    (consolidated_product or (product_lane("Apple Silicon") and product_lane("Intel Ventura")))
   ' >/dev/null
 }
 

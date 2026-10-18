@@ -17,8 +17,8 @@
 
 ## 关键设计
 
-- 官方构建通过 `SAYALL_COMBINATION_ACTIONS_PATH` 加载 `SayAllMacroRemoteMic`；公开源码 checkout 缺少该路径时仍可完成兼容构建。
-- 只有显式设置 `SAYALL_BUTTON_PROFILES_PACKAGE_PATH` 时才加载付费 `SayAllButtonProfiles`，且该变量要求同时存在免费组合动作路径。
+- 私有构建通过 `SAYALL_ENABLE_PRIVATE_SWIFTPM=1` 加载统一版本的私有平台根 Package；公开源码 checkout 不解析私有依赖，仍可完成兼容构建。
+- 只有显式设置 `SAYALL_ENABLE_BUTTON_PROFILES=1` 时才加载付费 `SayAllButtonProfiles`。私有源码只在私有 checkout 和受保护构建中使用。
 - 组合动作运行时不检查邀请码资格；免费 Package 存在时入口和本机执行直接可用。
 - 组合动作启动不会显示兑换入口，不会因为打开页面创建设备身份或请求资格服务。
 - 未注入组合动作 Package 时使用安全 no-op 适配器，保持 SwiftPM 构建和稳定功能不变。
