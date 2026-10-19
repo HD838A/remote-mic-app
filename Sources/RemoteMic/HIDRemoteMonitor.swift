@@ -771,10 +771,17 @@ final class HIDRemoteMonitor {
                 )
                 guard processGestureCommands(commands) else { return }
             } else {
+                // A profile with only single click must accept each complete edge pair,
+                // including an inherited single with explicit disabled secondary gestures.
+                let hasGestureOverride = hasSingleClickOverride ||
+                    settings.configuredActionOverride?(profileID, button, .doubleClick) != nil ||
+                    settings.configuredActionOverride?(profileID, button, .longPress) != nil
                 guard shouldAcceptRawPress(
                     button: button,
                     action: action,
-                    allowsRapidPress: settings.allowsRapidPress(
+                    allowsRapidPress: hasGestureOverride || settings.configuredAction(
+                        for: button, trigger: .singleClick, profileID: profileID
+                    ).allowsSingleClickRepeat || settings.allowsRapidPress(
                         for: button,
                         profileID: profileID
                     ),

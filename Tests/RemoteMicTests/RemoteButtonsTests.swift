@@ -3287,6 +3287,55 @@ struct RemoteButtonsTests {
         }
     }
 
+    @Test(arguments: 0..<8)
+    func singleClickProfileAcceptsEveryCompleteRapidPress(_ variant: Int) throws {
+        let inHost = variant & 1 != 0
+        let inherited = variant & 2 != 0
+        let command = variant & 4 != 0
+        let suite = "RemoteButtonsTests.rapidProfile.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let settings = AppSettings(defaults: defaults)
+        settings.customMappingEnabled = true
+        let device = try #require(settings.selectedRemoteProfileID)
+        let shortcut = CustomKeyboardShortcut(keyCode: command ? 37 : 51,
+            modifierFlags: command ? .command : [], keyLabel: "")
+        let configured = ConfiguredButtonAction(action: .customShortcut, shortcut: shortcut)
+        settings.setAction(.customShortcut, for: .back)
+        settings.setShortcut(shortcut, for: .back)
+        // The active profile disables base secondary gestures, including inherited singles.
+        settings.setAction(.openXcode, for: .back, trigger: .doubleClick)
+        settings.setAction(.openXcode, for: .back, trigger: .longPress)
+        settings.configuredActionOverride = { _, button, trigger in
+            guard button == .back else { return nil }
+            return trigger == .singleClick ? (inherited ? nil : configured) : .disabled
+        }
+        let scheduler = RemoteButtonsTestScheduler()
+        var performed: [ConfiguredButtonAction] = []
+        let monitor = HIDRemoteMonitor(settings: settings, profileID: device,
+            ownsEventSuppressor: false, scheduler: scheduler, runtimePermissions: { true },
+            actionPerformer: { _, _, value in performed.append(value); return true },
+            frontmostBundleIdentifier: {
+                inHost ? PresetApplication.remoteMic.bundleIdentifier : PresetApplication.safari.bundleIdentifier
+            })
+        monitor.connectSimulatedDevice(fingerprint: "rapid-profile", profileID: device, isSeized: true)
+        defer { monitor.disconnectSimulatedDevice() }
+        for index in 0..<4 {
+            scheduler.advance(toMilliseconds: UInt64(index * 100))
+            monitor.handleSimulatedReport(reportID: 1, data: Data([UInt8(RemoteButton.back.hidUsage), 0, 0, 0, 0, 0]))
+            #expect(performed.count == index + 1)
+            monitor.handleSimulatedReport(reportID: 1, data: Data(repeating: 0, count: 6))
+        }
+        #expect(performed == Array(repeating: configured, count: 4))
+        // A non-repeatable Command shortcut must not become a held repeat.
+        if command {
+            monitor.handleSimulatedReport(reportID: 1, data: Data([UInt8(RemoteButton.back.hidUsage), 0, 0, 0, 0, 0]))
+            let initial = performed.count
+            scheduler.advance(toMilliseconds: 2_000)
+            #expect(performed.count == initial)
+        }
+    }
+
     @Test func nativeEventDescriptorsCoverPotentialDuplicateEvents() {
         #expect(RemoteButton.up.nativeEvent == .keyboard(keyCode: 126))
         #expect(RemoteButton.ok.nativeEvent == .keyboard(keyCode: 36))
