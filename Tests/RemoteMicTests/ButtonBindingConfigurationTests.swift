@@ -31,6 +31,16 @@ struct ButtonBindingConfigurationTests {
         #expect(settings.configuredAction(for: .home, trigger: .singleClick).macroID == "macro.example")
     }
 
+    @Test func deletingMacroReferencesClearsUnifiedAndSecondaryBindings() {
+        let settings = settings()
+        let macro = ConfiguredButtonAction(action: .combinationAction, shortcut: nil, macroID: "macro.deleted")
+        settings.setBaseBinding(macro, for: .home, trigger: .singleClick, profileID: nil)
+        settings.secondaryButtonBindings = [.ok: [.doubleClick: macro]]
+        settings.removeMacroReferences(to: "macro.deleted")
+        #expect(settings.unifiedBaseBindings.isEmpty)
+        #expect(settings.secondaryButtonBindings.isEmpty)
+    }
+
     @Test func devicesAndTriggersRemainIndependent() {
         let settings = settings()
         let first = UUID(), second = UUID()

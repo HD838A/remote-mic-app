@@ -398,6 +398,37 @@ final class AppSettings: ObservableObject {
                                                         trigger: trigger, configured: configured))
     }
 
+    /// Remove every persisted reference to a deleted combination action.
+    /// This covers the current unified store and the legacy per-device stores.
+    func removeMacroReferences(to macroID: String) {
+        unifiedBaseBindings.removeAll {
+            $0.configured.action == .combinationAction && $0.configured.macroID == macroID
+        }
+        secondaryButtonBindings = secondaryButtonBindings.reduce(into: [:]) { result, entry in
+            let filtered = entry.value.filter {
+                !($0.value.action == .combinationAction && $0.value.macroID == macroID)
+            }
+            if !filtered.isEmpty { result[entry.key] = filtered }
+        }
+        if buttonBindings.values.contains(.combinationAction) {
+            buttonBindings = buttonBindings.mapValues { $0 == .combinationAction ? .disabled : $0 }
+        }
+        remoteDeviceProfiles = remoteDeviceProfiles.map { profile in
+            var updated = profile
+            updated.mappings.buttonBindings = updated.mappings.buttonBindings.mapValues {
+                $0 == .combinationAction ? .disabled : $0
+            }
+            updated.mappings.secondaryButtonBindings = updated.mappings.secondaryButtonBindings.reduce(into: [:]) {
+                result, entry in
+                let filtered = entry.value.filter {
+                    !($0.value.action == .combinationAction && $0.value.macroID == macroID)
+                }
+                if !filtered.isEmpty { result[entry.key] = filtered }
+            }
+            return updated
+        }
+    }
+
     func migrateLegacyMacroBindings(_ bindings: [UnifiedButtonBinding]) throws {
         guard !defaults.bool(forKey: "unifiedBaseBindingsMigrated") else { return }
         guard !corruptedSettingKeys.contains("unifiedBaseBindings") else { throw AppConfigurationError.invalidValues }
