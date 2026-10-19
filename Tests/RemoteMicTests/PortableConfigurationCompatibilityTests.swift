@@ -57,6 +57,47 @@ struct PortableConfigurationCompatibilityTests {
         #expect(current.configuredBaseAction(for: .home, trigger: .doubleClick).macroID == "macro.saved")
     }
 #if canImport(SayAllMacroRemoteMic)
+    @Test @MainActor func settingsBackupIncludesAllObjectsAndSettingsWithoutChangingStores() throws {
+        let (current, cleanup) = try settings(); defer { cleanup() }
+        let root = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("SayAllTransferTests/\(UUID().uuidString)")
+        defer { if FileManager.default.fileExists(atPath: root.path) { try? FileManager.default.trashItem(at: root, resultingItemURL: nil) } }
+        let controller = RemoteMicPortableTransferController(rootURL: root)
+        controller.hostAdapter = current.portableHostAdapter(beforeApply: { _ in })
+        current.addCustomApplicationProfile(.init(displayName: "Synthetic", bundleIdentifier: "com.example.synthetic", applicationPath: ""))
+        current.gainDB = 8
+        let macro = MacroDefinition(schemaVersion: PortableTransferPackage.schemaVersion,
+            macroID: "test.backup", version: "1.0.0", name: "Backup action", steps: [])
+        let encoder = JSONEncoder(); encoder.dateEncodingStrategy = .iso8601
+        let library = try encoder.encode(MacroLibraryDocument(definitions: [macro]))
+        try PortableTransferTransaction.commit(root: root, changes: [
+            .init(relativePath: "library/library.json", before: nil, after: library)
+        ])
+        let profile = PortableButtonProfile(id: "test.profile", name: "Backup profile",
+            remoteModel: "xiaomi-remote-2-pro", bindings: [])
+        controller.profileSummaries = { _ in [.init(root: .init(kind: .buttonProfile, id: profile.id), name: profile.name)] }
+        controller.exportProfiles = { _, _, ids in
+            #expect(ids == [profile.id])
+            return .init(package: .init(minimumRemoteMicVersion: "1.9.21", buttonProfiles: [profile]))
+        }
+        let before = try current.portableLocalSnapshot()
+        let data = try controller.exportPersonalConfigurationData(profileID: current.selectedRemoteProfileID,
+            remoteModel: profile.remoteModel)
+        let backup = try PortableTransferCodec.decode(data)
+        #expect(backup.exportPurpose == .personalBackup)
+        #expect(Set(backup.roots.map(\.kind)) == [.macro, .application, .buttonProfile, .hostSettings])
+        #expect(backup.macros.map(\.name) == [macro.name])
+        #expect(backup.applications.map(\.displayName) == ["Synthetic"])
+        #expect(backup.buttonProfiles.map(\.name) == [profile.name])
+        #expect(backup.hostSettings?.general != nil)
+        #expect(backup.hostSettings?.audio != nil)
+        #expect(backup.hostSettings?.voice != nil)
+        #expect(backup.hostSettings?.mappings != nil)
+        #expect(backup.focusTargets.allSatisfy { $0.target == nil })
+        #expect(try current.portableLocalSnapshot() == before)
+        #expect(try Data(contentsOf: root.appendingPathComponent("library/library.json")) == library)
+    }
+
     @Test(.enabled(if: ProcessInfo.processInfo.environment["SAYALL_MARKET_CONTRACT_PATH"] != nil))
     func marketFullKeyboardAccessDecodesInTheLinkedHost() throws {
         let path = try #require(ProcessInfo.processInfo.environment["SAYALL_MARKET_CONTRACT_PATH"])

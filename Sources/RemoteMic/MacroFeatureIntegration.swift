@@ -249,13 +249,12 @@ final class MacroFeatureIntegration: ObservableObject {
         #endif
     }
 
-    func requestConfigurationExport() -> Bool {
+    func exportedConfigurationData(profileID: UUID?, model: XiaomiRemoteModel?) throws -> Data? {
         #if canImport(SayAllMacroRemoteMic)
-        feature.portableTransfer.requestedOperation = .exportFile(
-            scope: [.macro, .application, .buttonProfile, .hostSettings])
-        return true
+        return try feature.portableTransfer.exportPersonalConfigurationData(
+            profileID: profileID, remoteModel: AppSettings.portableRemoteModel(model))
         #else
-        return false
+        return nil
         #endif
     }
 
