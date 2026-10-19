@@ -178,6 +178,50 @@ if [[ -n "$SAYALL_DIAGNOSTIC_PUBLIC_KEY_BASE64" ]]; then
   fi
 fi
 
+# Default packaging prepares a versioned private checkout when it is readable.
+# Explicit paths (protected CI and development) are checked below instead.
+SAYALL_PRIVATE_PLATFORM_MODE="${SAYALL_PRIVATE_PLATFORM_MODE:-auto}"
+case "$SAYALL_PRIVATE_PLATFORM_MODE" in
+  auto|public|required) ;;
+  *) print -u2 "SAYALL_PRIVATE_PLATFORM_MODE must be auto, public, or required"; exit 1 ;;
+esac
+PRIVATE_PATHS_PROVIDED=false
+for private_input in \
+  SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH SAYALL_COMBINATION_ACTIONS_PATH \
+  SAYALL_BUTTON_PROFILES_PACKAGE_PATH SAYALL_MAC_REMOTE_PACKAGE_PATH \
+  SAYALL_SIRI_REMOTE_PACKAGE_PATH SAYALL_CHROMECAST_PACKAGE_PATH \
+  SAYALL_PRIVATE_PLATFORM_PACKAGE_PATH; do
+  [[ -z "${(P)private_input:-}" ]] || PRIVATE_PATHS_PROVIDED=true
+done
+if [[ "$SAYALL_PRIVATE_PLATFORM_MODE" == public && "$PRIVATE_PATHS_PROVIDED" == true ]]; then
+  print -u2 "Public packaging excludes private platform inputs; unset the private package paths"
+  exit 1
+fi
+if [[ "$PRIVATE_PATHS_PROVIDED" == false ]]; then
+  PRIVATE_PREPARATION="$(python3 "$ROOT/scripts/prepare-private-platform.py" package \
+    --mode "$SAYALL_PRIVATE_PLATFORM_MODE")"
+  PRIVATE_MODE="$(print -r -- "$PRIVATE_PREPARATION" | python3 -c 'import json,sys; print(json.load(sys.stdin)["mode"])')"
+  if [[ "$PRIVATE_MODE" == private ]]; then
+    PRIVATE_CHECKOUT="$(print -r -- "$PRIVATE_PREPARATION" | python3 -c 'import json,sys; print(json.load(sys.stdin)["checkout"])')"
+    export SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH="$(print -r -- "$PRIVATE_PREPARATION" | python3 -c 'import json,sys; print(json.load(sys.stdin)["artifacts"])')"
+    export SAYALL_MAC_REMOTE_PACKAGE_PATH="$PRIVATE_CHECKOUT/packages/macos-remote"
+    export SAYALL_SIRI_REMOTE_PACKAGE_PATH="$PRIVATE_CHECKOUT/packages/audio-input-kit/siri-remote"
+    export SAYALL_CHROMECAST_PACKAGE_PATH="$PRIVATE_CHECKOUT/packages/audio-input-kit/chromecast"
+    REQUIRE_SAYALL_PRIVATE_ARTIFACT_PACKAGE=1
+    REQUIRE_SAYALL_COMBINATION_ACTIONS=1
+    REQUIRE_SAYALL_BUTTON_PROFILES=1
+    REQUIRE_SAYALL_MAC_REMOTE_PACKAGE=1
+    REQUIRE_SAYALL_CHROMECAST=1
+    print "PRIVATE PLATFORM integrated from manifest tag"
+  else
+    print "PRIVATE PLATFORM public compatibility build (private components unavailable or explicitly disabled)"
+  fi
+fi
+if [[ "${SAYALL_ENABLE_PRIVATE_SWIFTPM:-0}" == 1 || -n "${SAYALL_PRIVATE_PLATFORM_PACKAGE_PATH:-}" ]]; then
+  print -u2 "App packaging requires tag-pinned prepared artifacts; use SAYALL_PRIVATE_PLATFORM_MODE=required"
+  exit 1
+fi
+
 if [[ -n "$SAYALL_AI_PACKAGE_PATH" ]]; then
   if [[ ! -f "$SAYALL_AI_PACKAGE_PATH/Package.swift" ]]; then
     print -u2 "SAYALL_AI_PACKAGE_PATH must contain Package.swift"
@@ -404,6 +448,27 @@ fi
 if [[ "$REQUIRE_SAYALL_MAC_REMOTE_PACKAGE" == "1" && "$SAYALL_MAC_REMOTE_INCLUDED" != "true" ]]; then
   print -u2 "A SayAll Mac remote package is required for this build"
   exit 1
+fi
+
+# Source inputs must all belong to the fixed private monorepo tag.
+PRIVATE_SOURCE_ROOT=""
+for private_source in "$SAYALL_COMBINATION_ACTIONS_PATH" "$SAYALL_BUTTON_PROFILES_PACKAGE_PATH" \
+  "$SAYALL_MAC_REMOTE_PACKAGE_PATH" "$SAYALL_SIRI_REMOTE_PACKAGE_PATH" "$SAYALL_CHROMECAST_PACKAGE_PATH"; do
+  [[ -n "$private_source" ]] || continue
+  source_root="$(git -C "$private_source" rev-parse --show-toplevel)"
+  if [[ -n "$PRIVATE_SOURCE_ROOT" && "$source_root" != "$PRIVATE_SOURCE_ROOT" ]]; then
+    print -u2 "Private source packages must use the same tag checkout"
+    exit 1
+  fi
+  PRIVATE_SOURCE_ROOT="$source_root"
+done
+if [[ -n "$PRIVATE_SOURCE_ROOT" ]]; then
+  python3 "$ROOT/scripts/prepare-private-platform.py" check-checkout --checkout "$PRIVATE_SOURCE_ROOT"
+  if [[ -n "$SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH" && \
+        "$(jq -r '.sourceCommit' "$SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH/private-artifact-package.json")" != "$(git -C "$PRIVATE_SOURCE_ROOT" rev-parse HEAD)" ]]; then
+    print -u2 "Prepared artifacts and private source packages must use the same tag commit"
+    exit 1
+  fi
 fi
 
 VERSION="$(plutil -extract CFBundleShortVersionString raw -o - "$ROOT/Resources/Info.plist")"

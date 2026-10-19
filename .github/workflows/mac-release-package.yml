@@ -248,6 +248,7 @@ jobs:
           repository: ${{ steps.release-dependencies.outputs.sayall_private_platform_repository }}
           ref: ${{ steps.release-dependencies.outputs.sayall_private_platform_version }}
           path: .private-dependencies/sayall-private-platform
+          fetch-depth: 0
           ssh-key: ${{ secrets.SAYALL_PRIVATE_PLATFORM_DEPLOY_KEY }}
           persist-credentials: false
 
@@ -278,6 +279,7 @@ jobs:
             test "$(git -C .private-dependencies/sayall-ai describe --tags --exact-match)" = "$SAYALL_AI_VERSION"
           fi
           test "$(git -C .private-dependencies/sayall-private-platform describe --tags --exact-match)" = "$SAYALL_PRIVATE_PLATFORM_VERSION"
+          python3 scripts/prepare-private-platform.py check-checkout --checkout .private-dependencies/sayall-private-platform
           test -f .private-dependencies/sayall-private-platform/packages/macos-remote/Package.swift
           test -f .private-dependencies/sayall-private-platform/packages/audio-input-kit/siri-remote/Package.swift
           test -f .private-dependencies/sayall-private-platform/packages/audio-input-kit/chromecast/Package.swift

@@ -66,6 +66,7 @@
   - 2026-09-27 补充会话切回按需恢复（同机多账户反馈）：挂起原因全部解除后，若所有已配置的桥都没就绪且没有活跃语音，则主动重建蓝牙语音链路，等价于用户手动点「立即重新连接」；任一桥就绪或有活跃语音时与改动前完全等价（空操作）。同时把该链路补齐日志：`SYSTEM AUDIO` 新增 `configured_bridges` / `discovery_bridge`，恢复决策写 `SYSTEM AUDIO voice_link_recovery`，蓝牙恢复统一为 `BLE RECOVERY phase=... trigger=system_wake|session_activated`。策略真值表与接线回归已自动化；**未复现、未真机验收**，真机流程见 `Testing/MacIdleSleepAudioRelease.md` 用例七，调查状态见 `Bugs/2026-09-26-multi-user-session-switch-mic-no-audio.md`。
 
 - [x] 建立可选私有功能组件集成边界
+  - 2026-10-19：打包前检查私有 Mac 代码的标准 SwiftPM Tag。私有版本与宿主 pin 分别通过 PR 更新；无读取权限的本地打包使用公开兼容层，完整官方发布继续要求全部组件。
   - 私有功能的源码、测试、资源和内部文档由独立私有组件维护；本仓库只保留稳定的可选适配层和语音会话生命周期契约。
   - 未提供私有组件时，公开源码仍可完整构建且不展示私有入口；正式发布流程必须显式提供并验证私有组件，禁止静默生成缺少私有能力的安装包。
   - 2026-09-09：公开 SwiftPM 元数据不再解析私有 Mac Remote 仓库；macOS CI 始终先执行零私有权限的完整测试和双架构构建，有权限时再按固定 Commit 追加私有集成检查，受保护发布仍要求全部私有组件并在缺失时失败。
