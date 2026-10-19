@@ -69,6 +69,9 @@ lang: zh
 | 导出文件重新导入 | 内容选择及确认预览通过，取消后不保存 |
 
 本轮使用生产 SettingsView 和隔离配置。
+[实际系统保存窗口](../Screenshots/settings-export/save-panel-zh-hans-light.jpg)。
+图片格式、尺寸和摘要见对应 manifest.json。
+
 本地 App 使用 ad hoc 签名，仅用于本机验证。
 未发布安装包，未测试安装、升级和遥控器。
 写入失败状态已保留，未模拟真实磁盘写入失败。
