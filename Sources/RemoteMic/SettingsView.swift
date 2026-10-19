@@ -4671,7 +4671,16 @@ struct SettingsView: View {
     private func routePendingButtonProfileImportIfNeeded() {
         guard buttonProfileImportRequests.pendingRequest != nil else { return }
         if macroFeature.isButtonProfilesVisible {
+            let wasAlreadyOnButtonProfiles = selectedSection == .buttonProfiles
             selectedSection = .buttonProfiles
+            if wasAlreadyOnButtonProfiles {
+                // The page is already mounted. Consume a later Finder request on the
+                // next main-actor turn instead of waiting for `.task(id:)` to restart.
+                Task { @MainActor in
+                    await Task.yield()
+                    consumePendingButtonProfileImportIfNeeded()
+                }
+            }
         } else {
             selectedSection = .about
             consumePendingButtonProfileImportIfNeeded()
