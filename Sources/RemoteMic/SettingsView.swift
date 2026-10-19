@@ -494,6 +494,7 @@ struct SettingsView: View {
     @State private var inputMonitoringGranted = HIDRemoteMonitor.isInputMonitoringGranted
     @State private var accessibilityGranted = KeyboardInjector.isAccessibilityTrusted
     @State private var configurationExportSequence = 0
+    @State private var configurationImportSequence = 0
     @State private var configurationStatus: ConfigurationStatus?
     @State private var isClearTrustedPhonesConfirmationPresented = false
     @State private var isWebRemoteSessionPresented = false
@@ -920,6 +921,9 @@ struct SettingsView: View {
             aboutPage
         case .about:
             aboutPage
+                .task(id: buttonProfileImportRequests.pendingRequest?.operationID) {
+                    consumePendingButtonProfileImportIfNeeded()
+                }
         default:
             if let pageID = selectedSection.supplementalID,
                let content = supplementalSettings.view(pageID: pageID, localeIdentifier: localization.locale.identifier) {
@@ -4606,14 +4610,12 @@ struct SettingsView: View {
         var phase = "prepare"
         AppLogger.shared.write("CONFIGURATION EXPORT operation_id=\(operationID) phase=requested")
         do {
-            let portableData = try macroFeature.exportedConfigurationData(
-                profileID: settings.selectedRemoteProfileID, model: settings.selectedRemoteProfile?.model)
-            let data = try portableData ?? settings.exportedConfigurationData()
+            let data = try macroFeature.exportedCompleteConfigurationData(settings: settings)
             phase = "file_panel"
             guard let url = ConfigurationFilePanel.exportURL(
                 title: localization.text("configuration.export.panel_title"),
                 prompt: localization.text("configuration.export.prompt"),
-                includesPortableConfiguration: portableData != nil
+                includesPortableConfiguration: true
             ) else {
                 AppLogger.shared.write("CONFIGURATION EXPORT operation_id=\(operationID) phase=cancelled result=no_write")
                 return
@@ -4641,11 +4643,40 @@ struct SettingsView: View {
         guard let url = ConfigurationFilePanel.importURL(
             title: localization.text("configuration.import.panel_title"),
             prompt: localization.text("configuration.import.prompt"),
-            includesPortableConfiguration: macroFeature.isFeatureVisible
+            includesPortableConfiguration: true
         ) else { return }
-        if macroFeature.requestConfigurationImport(from: url) { return }
+        importConfiguration(from: url)
+    }
+
+    private func importConfiguration(from url: URL) {
+        configurationImportSequence += 1
+        let operationID = configurationImportSequence
+        AppLogger.shared.write("CONFIGURATION IMPORT operation_id=\(operationID) phase=requested source=settings_or_finder")
         do {
-            try model.importConfiguration(from: Data(contentsOf: url))
+            let data = try MacConfigurationBackup.read(url)
+            let object = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+            if object?["format"] as? String == MacConfigurationBackup.format {
+                let backup = try MacConfigurationBackup.decode(data, version: currentVersion)
+                _ = try settings.validatedCompleteConfigurationSnapshot(backup.host)
+                try macroFeature.validateConfigurationArchive(backup.components)
+                let alert = NSAlert()
+                alert.messageText = localization.text("configuration.import.restore_title")
+                alert.informativeText = localization.text("configuration.import.restore_detail")
+                alert.addButton(withTitle: localization.text("configuration.import.prompt"))
+                alert.addButton(withTitle: localization.text("configuration.import.cancel"))
+                guard alert.runModal() == .alertFirstButtonReturn else {
+                    AppLogger.shared.write("CONFIGURATION IMPORT operation_id=\(operationID) phase=cancelled result=no_write")
+                    return
+                }
+                try model.restoreCompleteConfiguration(backup)
+            } else if object?["format"] as? String == "sayall-transfer" {
+                guard macroFeature.requestConfigurationImport(from: url) else { throw AppConfigurationError.unsupportedVersion }
+                AppLogger.shared.write("CONFIGURATION IMPORT operation_id=\(operationID) phase=submitted result=awaiting_review")
+                return
+            } else {
+                try model.importConfiguration(from: data)
+            }
+            AppLogger.shared.write("CONFIGURATION IMPORT operation_id=\(operationID) phase=completed result=stored")
             localization.select(settings.applicationLanguage)
             syncEntryPointVisibility()
             if settings.configurationImportNotice != nil {
@@ -4662,18 +4693,21 @@ struct SettingsView: View {
                 )
             }
         } catch AppConfigurationError.unsupportedVersion {
+            AppLogger.shared.write("CONFIGURATION IMPORT operation_id=\(operationID) phase=failed result=no_write reason=unsupported_format_or_platform")
             configurationStatus = ConfigurationStatus(
                 message: LocalizedMessage("configuration.import.unsupported_version"),
                 tint: .red,
                 systemImage: "exclamationmark.triangle.fill"
             )
         } catch AppConfigurationError.unsafeVoiceKeyChange {
+            AppLogger.shared.write("CONFIGURATION IMPORT operation_id=\(operationID) phase=failed result=no_write reason=voice_busy")
             configurationStatus = ConfigurationStatus(
                 message: LocalizedMessage("configuration.import.voice_key_busy"),
                 tint: .red,
                 systemImage: "exclamationmark.triangle.fill"
             )
         } catch {
+            AppLogger.shared.write("CONFIGURATION IMPORT operation_id=\(operationID) phase=failed result=not_completed reason=invalid_or_storage_failure")
             configurationStatus = ConfigurationStatus(
                 message: LocalizedMessage("configuration.import.invalid_file"),
                 tint: .red,
@@ -4683,41 +4717,42 @@ struct SettingsView: View {
     }
 
     private func routePendingButtonProfileImportIfNeeded() {
-        guard buttonProfileImportRequests.pendingRequest != nil else { return }
-        if macroFeature.isButtonProfilesVisible {
-            let wasAlreadyOnButtonProfiles = selectedSection == .buttonProfiles
-            selectedSection = .buttonProfiles
-            if wasAlreadyOnButtonProfiles {
-                // The page is already mounted. Consume a later Finder request now;
-                // relying on SwiftUI `.task(id:)` to restart is not a stable boundary.
-                consumePendingButtonProfileImportIfNeeded()
-            }
-        } else {
+        guard let request = buttonProfileImportRequests.pendingRequest else { return }
+        do {
+            let destination = try ConfigurationImportDestination.detect(MacConfigurationBackup.read(request.url))
+            let section: SettingsSection = destination == .buttonProfiles && macroFeature.isButtonProfilesVisible
+                ? .buttonProfiles : .about
+            let alreadyMounted = selectedSection == section
+            selectedSection = section
+            if alreadyMounted { consumePendingButtonProfileImportIfNeeded() }
+        } catch {
             selectedSection = .about
-            consumePendingButtonProfileImportIfNeeded()
+            buttonProfileImportRequests.clear()
+            configurationStatus = ConfigurationStatus(message: LocalizedMessage("configuration.import.invalid_file"),
+                tint: .red, systemImage: "exclamationmark.triangle.fill")
+            AppLogger.shared.write("CONFIGURATION IMPORT phase=failed result=no_write reason=unreadable_or_unknown_type")
         }
     }
 
     private func consumePendingButtonProfileImportIfNeeded() {
         guard let request = buttonProfileImportRequests.pendingRequest else { return }
-        if macroFeature.requestButtonProfileImport(from: request.url) {
+        do {
+            let destination = try ConfigurationImportDestination.detect(MacConfigurationBackup.read(request.url))
             buttonProfileImportRequests.clear()
-            AppLogger.shared.write(
-                "BUTTON_PROFILE_IMPORT phase=started result=accepted " +
-                    "source=finder_file operation_id=button_profile_import_\(request.operationID)"
-            )
-        } else {
+            if destination == .settings {
+                importConfiguration(from: request.url)
+            } else if macroFeature.requestButtonProfileImport(from: request.url) {
+                AppLogger.shared.write("BUTTON_PROFILE_IMPORT phase=started result=accepted source=finder_file operation_id=button_profile_import_\(request.operationID)")
+            } else {
+                configurationStatus = ConfigurationStatus(message: LocalizedMessage("configuration.import.feature_unavailable"),
+                    tint: .red, systemImage: "exclamationmark.triangle.fill")
+                AppLogger.shared.write("BUTTON_PROFILE_IMPORT phase=completed result=rejected source=finder_file reason=feature_unavailable operation_id=button_profile_import_\(request.operationID)")
+            }
+        } catch {
             buttonProfileImportRequests.clear()
-            configurationStatus = ConfigurationStatus(
-                message: LocalizedMessage("configuration.import.feature_unavailable"),
-                tint: .red,
-                systemImage: "exclamationmark.triangle.fill"
-            )
-            AppLogger.shared.write(
-                "BUTTON_PROFILE_IMPORT phase=completed result=rejected " +
-                    "source=finder_file reason=feature_unavailable " +
-                    "operation_id=button_profile_import_\(request.operationID)"
-            )
+            configurationStatus = ConfigurationStatus(message: LocalizedMessage("configuration.import.invalid_file"),
+                tint: .red, systemImage: "exclamationmark.triangle.fill")
+            AppLogger.shared.write("CONFIGURATION IMPORT phase=failed result=no_write reason=unreadable_or_unknown_type")
         }
     }
 
@@ -5735,11 +5770,7 @@ private enum ConfigurationFilePanel {
         let panel = NSOpenPanel()
         panel.title = title
         panel.prompt = prompt
-        if includesPortableConfiguration {
-            panel.allowedFileTypes = ["sayall", "json"]
-        } else {
-            panel.allowedContentTypes = [.json]
-        }
+        panel.allowedFileTypes = ["sayall", "json"]
         panel.canChooseFiles = true
         panel.canChooseDirectories = false
         panel.allowsMultipleSelection = false

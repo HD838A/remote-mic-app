@@ -942,6 +942,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         if settings.siriRemoteEnabled, settings.siriRemoteNeedsUserAction {
             siriRemoteAudioStatus = "unavailable:authorization_user_action_required"
         }
+        membershipFeature.configureConfigurationBackup(settings: settings)
         macroFeature.configurePortableTransfer(settings: settings) { [weak self] snapshot in
             guard let self else { throw AppConfigurationError.invalidValues }
             guard let envelope = try JSONSerialization.jsonObject(with: snapshot) as? [String:Any],
@@ -3473,6 +3474,23 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         voiceFnTapSession.setEnabled(false) { [weak self] in
             self?.applyHIDSettings(restartSiriRemote: false)
         }
+    }
+
+    func restoreCompleteConfiguration(_ backup: MacConfigurationBackup) throws {
+        let host = try settings.validatedCompleteConfigurationSnapshot(backup.host)
+        try macroFeature.validateConfigurationArchive(backup.components)
+        guard !isStreaming, releaseVoiceKeyIfNeeded() else { throw AppConfigurationError.unsafeVoiceKeyChange }
+        if try !macroFeature.restoreConfigurationArchive(backup.components, hostAfter: host) {
+            let before = try settings.portableLocalSnapshot()
+            do { try settings.applyPortableLocalSnapshot(host) }
+            catch {
+                try settings.applyPortableLocalSnapshot(before)
+                throw error
+            }
+        }
+        preferredInputSourceMonitor.endVoiceSession()
+        applyAudioSettings(reason: "configuration_import")
+        applyHIDSettings()
     }
 
     func importConfiguration(from data: Data) throws {

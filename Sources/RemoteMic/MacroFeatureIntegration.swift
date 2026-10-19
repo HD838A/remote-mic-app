@@ -211,6 +211,7 @@ final class MacroFeatureIntegration: ObservableObject {
         }
         #endif
         feature.portableTransfer.hostAdapter = settings.portableHostAdapter(beforeApply: beforeApply)
+        feature.portableTransfer.validateConfigurationHostAction = AppSettings.validateConfigurationAction
         #if SAYALL_UNIFIED_BUTTON_CONFIGURATION
         feature.portableTransfer.exportMacroBindings = nil
         feature.portableTransfer.prepareMacroBindings = nil
@@ -249,12 +250,34 @@ final class MacroFeatureIntegration: ObservableObject {
         #endif
     }
 
-    func exportedConfigurationData(profileID: UUID?, model: XiaomiRemoteModel?) throws -> Data? {
+    func exportedCompleteConfigurationData(settings: AppSettings) throws -> Data {
         #if canImport(SayAllMacroRemoteMic)
-        return try feature.portableTransfer.exportPersonalConfigurationData(
-            profileID: profileID, remoteModel: AppSettings.portableRemoteModel(model))
+        let components = try feature.portableTransfer.exportConfigurationArchive()
         #else
-        return nil
+        let components: Data? = nil
+        #endif
+        return try MacConfigurationBackup(host: settings.completeConfigurationSnapshot(), components: components)
+            .encoded(version: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "2.0.0",
+                build: Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "development")
+    }
+
+    func validateConfigurationArchive(_ data: Data?) throws {
+        guard let data else { return }
+        #if canImport(SayAllMacroRemoteMic)
+        try feature.portableTransfer.validateConfigurationArchive(data)
+        #else
+        throw AppConfigurationError.unsupportedVersion
+        #endif
+    }
+
+    func restoreConfigurationArchive(_ data: Data?, hostAfter: Data) throws -> Bool {
+        #if canImport(SayAllMacroRemoteMic)
+        // A backup without private modules must not leave unrelated existing actions active.
+        try feature.portableTransfer.restoreConfigurationArchive(data ?? Data("{}".utf8), hostAfter: hostAfter)
+        return true
+        #else
+        guard data == nil else { throw AppConfigurationError.unsupportedVersion }
+        return false
         #endif
     }
 

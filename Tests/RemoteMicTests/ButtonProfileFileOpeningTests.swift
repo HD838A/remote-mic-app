@@ -3,12 +3,15 @@ import AppKit
 import SwiftUI
 import Testing
 @testable import RemoteMic
+#if canImport(SayAllMacroCore)
+import SayAllMacroCore
+#endif
 
 @Suite("Button profile file opening", .serialized)
 struct ButtonProfileFileOpeningTests {
     @MainActor
-    @Test(arguments: [false, true])
-    func consumesFinderRequestsBeforeAndAfterMounting(queuedBeforeMount: Bool) async throws {
+    @Test(arguments: [false, true], ["buttonProfile", "personalBackup"])
+    func consumesFinderRequestsBeforeAndAfterMounting(queuedBeforeMount: Bool, fileType: String) async throws {
         let suite = "RemoteMic.ButtonProfileFileOpening.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
@@ -16,10 +19,32 @@ struct ButtonProfileFileOpeningTests {
         settings.completeOnboarding()
         let model = BridgeAppModel(settings: settings)
         let requests = ButtonProfileImportRequestStore()
-        let marketRoot = ProcessInfo.processInfo.environment["SAYALL_MARKET_CONTRACT_PATH"]
-        let url = marketRoot.map {
-            URL(fileURLWithPath: $0).appendingPathComponent("examples/profiles/full-keyboard-access-mac.sayall")
-        } ?? URL(fileURLWithPath: "/Users/test/profile.sayall")
+        let directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("SayAllFileOpeningTests/\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.trashItem(at: directory, resultingItemURL: nil) }
+        let url = directory.appendingPathComponent("configuration.sayall")
+        let profile: [String: Any] = ["id": "test.finder.profile", "name": "Finder profile",
+            "remoteModel": "xiaomi-remote-2-pro", "mode": "manual",
+            "applicationBundleIdentifiers": [String](), "bindings": [[String: Any]]()]
+        var document: [String: Any] = ["format": "sayall-transfer", "schemaVersion": "1.0",
+            "packageID": "test.finder.package", "version": "1.0.0", "type": fileType,
+            "exportPurpose": fileType == "personalBackup" ? "personalBackup" : "share",
+            "requirements": ["minimumRemoteMicVersion": "1.9.21", "minimumReaderVersion": "1.0", "capabilities": [String]()]]
+        if fileType == "personalBackup" {
+            document["backup"] = ["roots": [["kind": "buttonProfile", "id": "test.finder.profile"]],
+                "buttonProfiles": [profile], "macros": [], "shortcuts": [], "focusTargets": [], "applications": []]
+        } else {
+            document["profile"] = profile
+            document["dependencies"] = ["macros": [], "shortcuts": [], "focusTargets": [], "applications": []]
+        }
+        let data = try JSONSerialization.data(withJSONObject: document)
+        #if canImport(SayAllMacroCore)
+        _ = try PortableTransferCodec.decode(data)
+        #endif
+        try data.write(to: url)
+        #expect(try ConfigurationImportDestination.detect(MacConfigurationBackup.read(url))
+            == (fileType == "personalBackup" ? .settings : .buttonProfiles))
         if queuedBeforeMount { requests.enqueue(url: url) }
         var viewDidAppear = false
         let controller = NSHostingController(rootView: SettingsView(
@@ -43,7 +68,7 @@ struct ButtonProfileFileOpeningTests {
 
         try #require(requests.pendingRequest == nil)
         #expect(!settings.customMappingEnabled)
-        if marketRoot != nil, model.macroFeature.isButtonProfilesVisible {
+        if model.macroFeature.isButtonProfilesVisible {
             _ = try await waitForUIUpdate { model.macroFeature.isEditorActive }
             #expect(model.macroFeature.isEditorActive)
         }
@@ -53,7 +78,7 @@ struct ButtonProfileFileOpeningTests {
         _ = try await waitForUIUpdate { requests.pendingRequest == nil }
         #expect(requests.pendingRequest == nil)
         #expect(!settings.customMappingEnabled)
-        if marketRoot != nil, model.macroFeature.isButtonProfilesVisible {
+        if model.macroFeature.isButtonProfilesVisible {
             _ = try await waitForUIUpdate { model.macroFeature.isEditorActive }
             #expect(model.macroFeature.isEditorActive)
         }
@@ -141,14 +166,14 @@ struct ButtonProfileFileOpeningTests {
         let sayAllDocument = try #require(documentTypes.first {
             ($0["LSItemContentTypes"] as? [String])?.contains("com.hd838a.RemoteMic.sayall") == true
         })
-        #expect(sayAllDocument["CFBundleTypeName"] as? String == "SayAll Button Profile")
+        #expect(sayAllDocument["CFBundleTypeName"] as? String == "SayAll Configuration")
         #expect(sayAllDocument["CFBundleTypeRole"] as? String == "Viewer")
 
         let declarations = try #require(plist["UTExportedTypeDeclarations"] as? [[String: Any]])
         let sayAllType = try #require(declarations.first {
             $0["UTTypeIdentifier"] as? String == "com.hd838a.RemoteMic.sayall"
         })
-        #expect(sayAllType["UTTypeDescription"] as? String == "SayAll Button Profile")
+        #expect(sayAllType["UTTypeDescription"] as? String == "SayAll Configuration")
         let tags = try #require(sayAllType["UTTypeTagSpecification"] as? [String: Any])
         #expect((tags["public.filename-extension"] as? [String]) == ["sayall"])
     }

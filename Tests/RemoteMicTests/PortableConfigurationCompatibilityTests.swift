@@ -57,7 +57,7 @@ struct PortableConfigurationCompatibilityTests {
         #expect(current.configuredBaseAction(for: .home, trigger: .doubleClick).macroID == "macro.saved")
     }
 #if canImport(SayAllMacroRemoteMic)
-    @Test @MainActor func settingsBackupIncludesAllObjectsAndSettingsWithoutChangingStores() throws {
+    @Test @MainActor func explicitSharingPackageIncludesSelectedRootsWithoutChangingStores() throws {
         let (current, cleanup) = try settings(); defer { cleanup() }
         let root = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("SayAllTransferTests/\(UUID().uuidString)")
@@ -81,8 +81,11 @@ struct PortableConfigurationCompatibilityTests {
             return .init(package: .init(minimumRemoteMicVersion: "1.9.21", buttonProfiles: [profile]))
         }
         let before = try current.portableLocalSnapshot()
-        let data = try controller.exportPersonalConfigurationData(profileID: current.selectedRemoteProfileID,
-            remoteModel: profile.remoteModel)
+        let candidates = try controller.exportCandidates(remoteProfileID: current.selectedRemoteProfileID, remoteModel: profile.remoteModel)
+        let data = try controller.export(candidates, selected: Set(candidates.map(\.root)),
+            remoteProfileID: current.selectedRemoteProfileID, remoteModel: profile.remoteModel,
+            purpose: .personalBackup, includeFocusInformation: false,
+            settingsGroups: ["general", "audio", "voice", "mappings"])
         let backup = try PortableTransferCodec.decode(data)
         #expect(backup.exportPurpose == .personalBackup)
         #expect(Set(backup.roots.map(\.kind)) == [.macro, .application, .buttonProfile, .hostSettings])

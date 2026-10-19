@@ -37,7 +37,7 @@
 	<array>
 		<dict>
 			<key>CFBundleTypeName</key>
-			<string>SayAll Button Profile</string>
+			<string>SayAll Configuration</string>
 			<key>CFBundleTypeRole</key>
 			<string>Viewer</string>
 			<key>LSHandlerRank</key>
@@ -56,7 +56,7 @@
 				<string>public.data</string>
 			</array>
 			<key>UTTypeDescription</key>
-			<string>SayAll Button Profile</string>
+			<string>SayAll Configuration</string>
 			<key>UTTypeIdentifier</key>
 			<string>com.hd838a.RemoteMic.sayall</string>
 			<key>UTTypeTagSpecification</key>

@@ -4,16 +4,6 @@ import Foundation
 import SayAllMacroCore
 import SayAllMacroRemoteMic
 
-extension RemoteMicPortableTransferController {
-    func exportPersonalConfigurationData(profileID: UUID?, remoteModel: String) throws -> Data {
-        let candidates = try exportCandidates(remoteProfileID: profileID, remoteModel: remoteModel)
-        return try export(candidates, selected: Set(candidates.map(\.root)),
-            remoteProfileID: profileID, remoteModel: remoteModel,
-            purpose: .personalBackup, includeFocusInformation: false,
-            settingsGroups: ["general", "audio", "voice", "mappings"])
-    }
-}
-
 extension AppSettings {
     func portableHostAdapter(beforeApply: @escaping (Data) throws -> Void) -> RemoteMicPortableHostAdapter {
         RemoteMicPortableHostAdapter(currentVersion: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.9.21",
