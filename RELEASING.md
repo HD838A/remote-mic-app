@@ -23,6 +23,22 @@
 
 Mac Remote 与其他 macOS 私有组件使用同一个私有 Swift Package。CI 和发布通过私有平台的统一 SemVer 标签解析包；不再把平台子目录伪装成独立远程 Package。无私有依赖的公开构建继续使用现有兼容层。私有平台版本必须从 `main` 发布，并由 `VERSION` 文件和 `X.Y.Z` 标签校验。回退发布流程时须同时回退清单、workflow 和验证脚本；旧版本通过对应的不可变标签回退。
 
+### 打包前发布私有 Mac 包
+
+`build-app.sh` 默认使用 `SAYALL_PRIVATE_PLATFORM_MODE=auto`。脚本先探测私有仓库读取权限。缺少权限时，它使用公开兼容层完成本地 App 打包。`SAYALL_PRIVATE_PLATFORM_MODE=public` 可显式选择公开打包，并跳过私有仓库探测。公开 CI 固定使用此模式。公开包不包含私有能力，不作为完整官方发布包。
+
+有读取权限时，按以下顺序准备：
+
+1. 将 Mac 私有改动通过私有 PR 合入 `GetSayAll/sayall-private-platform` 的 `main`。只比较根 SwiftPM 清单、Mac Remote、组合动作、键位方案、常用语、会员与诊断、Siri Remote、Chromecast 和私有构建工具。网页、服务端和纯 Markdown/HTML 文档变化不触发 Mac 包升级。新增 Mac 模块时同步 `scripts/prepare-private-platform.py` 的路径范围。
+2. 若上述内容相对最新数字 Tag 有变化，先通过私有 PR 升级根 `VERSION`。默认升 patch；破坏性接口按 SemVer 升 major。不得给未合入源码或脏工作区打发布 Tag。
+3. 运行 `python3 scripts/prepare-private-platform.py release`。脚本获取最新私有 `main`，运行根包 Release 测试与构建，再发布与 `VERSION` 相同的标准 SwiftPM Tag `X.Y.Z`。全部本地 SwiftPM 命令使用 `--disable-keychain`。脚本在推送前复核远端 main，并在推送后复核 Tag Commit。没有 Mac 变化时复用原 Tag；不创建 `private-vX.Y.Z`，不移动已有 Tag。
+4. 运行 `scripts/update-private-dependency-versions.sh --publish` 可合并执行上一步与宿主清单升级。该命令在宿主普通 PR 分支执行。私有 Tag 发布成功后，再更新 `config/release-dependencies.json`，验证并通过宿主 PR 合入。Tag 写权限与只读权限不同；无写权限时请有发布权限的维护者完成私有发布。
+5. 再运行宿主打包。自动模式只从清单 Tag 的精确 Commit 准备私有二进制和源码路径，校验两者来源相同，再集成到 App。私有源码路径也必须属于同一干净 Tag checkout。不得直接集成本地未提交内容、可变分支或未发布 main。
+
+自动模式会执行私有发布前置检查。`VERSION` 尚未升级、私有发布失败或宿主清单尚未合入时，打包停止并提示下一步。它不会替用户合并版本 PR，也不会在精确 main 上修改宿主清单。读取成功后的网络、测试、Tag、构件、资源或签名错误必须报错；不能将这些错误伪装为无权限并生成公开包。私有 Siri Remote 集成继续要求 Developer ID 签名。
+
+`SAYALL_PRIVATE_PLATFORM_MODE=required` 强制要求私有组件。显式设置 `REQUIRE_*` 的完整发布仍在缺少组件时失败；签名、公证及公开发布门禁保持不变。受保护 staging 只检查私有 Mac 代码已被清单 Tag 覆盖，不在签名阶段发布私有 Tag 或修改版本。受保护 runner 再次检查完整历史中的 Tag、main 和 checkout，拒绝过期 pin。
+
 ### Hotfix 准备
 
 只有用户明确要求紧急修复时才使用 Hotfix：读取 GitHub 当前 `releases/latest`，从该 Tag 的精确 Commit 创建 `hotfix/vX.Y.Z`。版本必须是同一 major/minor 的更高 patch；分支只包含该修复、直接相关测试和版本元数据，并保持线性历史。Hotfix 发布完成后必须把修复通过普通 PR 同步回 `main`。不得用 Hotfix 承载一般功能、积压 Bug、依赖升级或发布流程重构。

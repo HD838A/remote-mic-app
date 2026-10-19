@@ -73,6 +73,7 @@ jobs:
       # Retain the lower deployment target; Release builds still cover both targets.
       RELEASE_VARIANT: intel
       SAYALL_AI_PACKAGE_PATH: ""
+      SAYALL_PRIVATE_PLATFORM_MODE: public
       SAYALL_ENABLE_PRIVATE_SWIFTPM: "0"
       SAYALL_PRIVATE_PLATFORM_PACKAGE_PATH: ""
       SAYALL_COMBINATION_ACTIONS_PATH: ""

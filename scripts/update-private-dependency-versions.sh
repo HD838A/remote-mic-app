@@ -8,13 +8,31 @@ command -v jq >/dev/null 2>&1 || { print -u2 "Missing required command: jq"; exi
 command -v git >/dev/null 2>&1 || { print -u2 "Missing required command: git"; exit 1; }
 [[ -r "$MANIFEST" ]] || { print -u2 "release dependency manifest is unreadable: $MANIFEST"; exit 1; }
 
+if [[ "${1:-}" == --publish ]]; then
+  [[ "$#" == 1 ]] || { print -u2 "usage: $0 [--publish]"; exit 2; }
+  branch="$(git -C "$ROOT" symbolic-ref --quiet --short HEAD)" || {
+    print -u2 "Create a host PR branch before publishing and updating its dependency pin"; exit 1
+  }
+  [[ "$branch" != main ]] || {
+    print -u2 "Do not update dependency pins on main; create a host PR branch"; exit 1
+  }
+  # Release only an already reviewed VERSION on private main. It never pushes main.
+  python3 "$ROOT/scripts/prepare-private-platform.py" release >/dev/null
+elif [[ "$#" != 0 ]]; then
+  print -u2 "usage: $0 [--publish]"; exit 2
+fi
+
 private_platform_key="${SAYALL_PRIVATE_PLATFORM_DEPLOY_KEY:-}"
 sayall_ai_key="${SAYALL_AI_DEPLOY_KEY:-}"
 
 latest_tag() {
   local repository="$1"
   local key="$2"
-  [[ -n "$key" ]] || { print -u2 "Missing deploy key for $repository"; exit 1; }
+  if [[ -z "$key" ]]; then
+    git ls-remote --tags "https://github.com/$repository.git" 'refs/tags/[0-9]*' |
+      awk -F/ '/refs\/tags\/[0-9]+\.[0-9]+\.[0-9]+$/ { print $NF }' | sort -V | tail -n 1
+    return
+  fi
 
   local agent_pid
   eval "$(ssh-agent -s)" >/dev/null

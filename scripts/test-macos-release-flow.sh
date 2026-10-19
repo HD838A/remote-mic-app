@@ -441,6 +441,7 @@ print "PREVIEW RELEASE PREPARATION FIXTURE PASS"
 )
 
 test_flow() (
+export SAYALL_PRIVATE_PLATFORM_MODE=public
 ROOT="$SCRIPT_ROOT"
 WORK_DIR="$(/usr/bin/mktemp -d /private/tmp/sayall-macos-release-flow-test.XXXXXX)"
 
@@ -481,6 +482,7 @@ for script in \
 done
 
 test_ready_ci
+python3 "$ROOT/scripts/test-private-platform.py"
 
 package_workflow="$ROOT/.github/workflows/mac-release-package.yml"
 publication_workflow="$ROOT/.github/workflows/mac-preview-publication.yml"

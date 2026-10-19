@@ -124,6 +124,8 @@ fi
 
 GITHUB_REPOSITORY="$REPOSITORY" GH_BIN="$GH_BIN" \
   "$ROOT/scripts/verify-release-ready-main-ci.sh" "$commit" "$source_branch"
+# Exact-main staging only verifies; private releases and pin PRs precede it.
+python3 "$ROOT/scripts/prepare-private-platform.py" check --root "$ROOT"
 REPOSITORY_ROOT="$ROOT" "$ROOT/scripts/verify-release-dependency-pins.sh" tokens >/dev/null
 GITHUB_REPOSITORY="$REPOSITORY" \
   "$ROOT/scripts/verify-release-dependency-pins.sh" >/dev/null
