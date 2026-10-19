@@ -493,6 +493,7 @@ struct SettingsView: View {
     @State private var bluetoothAuthorization = CBManager.authorization
     @State private var inputMonitoringGranted = HIDRemoteMonitor.isInputMonitoringGranted
     @State private var accessibilityGranted = KeyboardInjector.isAccessibilityTrusted
+    @State private var configurationExportSequence = 0
     @State private var configurationStatus: ConfigurationStatus?
     @State private var isClearTrustedPhonesConfirmationPresented = false
     @State private var isWebRemoteSessionPresented = false
@@ -4600,20 +4601,33 @@ struct SettingsView: View {
 
     private func exportConfiguration() {
         configurationStatus = nil
-        if macroFeature.requestConfigurationExport() { return }
-        guard let url = ConfigurationFilePanel.exportURL(
-            title: localization.text("configuration.export.panel_title"),
-            prompt: localization.text("configuration.export.prompt")
-        ) else { return }
+        configurationExportSequence += 1
+        let operationID = configurationExportSequence
+        var phase = "prepare"
+        AppLogger.shared.write("CONFIGURATION EXPORT operation_id=\(operationID) phase=requested")
         do {
-            let data = try settings.exportedConfigurationData()
+            let portableData = try macroFeature.exportedConfigurationData(
+                profileID: settings.selectedRemoteProfileID, model: settings.selectedRemoteProfile?.model)
+            let data = try portableData ?? settings.exportedConfigurationData()
+            phase = "file_panel"
+            guard let url = ConfigurationFilePanel.exportURL(
+                title: localization.text("configuration.export.panel_title"),
+                prompt: localization.text("configuration.export.prompt"),
+                includesPortableConfiguration: portableData != nil
+            ) else {
+                AppLogger.shared.write("CONFIGURATION EXPORT operation_id=\(operationID) phase=cancelled result=no_write")
+                return
+            }
+            phase = "write"
             try data.write(to: url, options: .atomic)
+            AppLogger.shared.write("CONFIGURATION EXPORT operation_id=\(operationID) phase=completed result=file_saved")
             configurationStatus = ConfigurationStatus(
                 message: LocalizedMessage("configuration.export.success"),
                 tint: .green,
                 systemImage: "checkmark.circle.fill"
             )
         } catch {
+            AppLogger.shared.write("CONFIGURATION EXPORT operation_id=\(operationID) phase=failed stage=\(phase) result=no_file_saved")
             configurationStatus = ConfigurationStatus(
                 message: LocalizedMessage("configuration.export.write_failed"),
                 tint: .red,
@@ -5702,12 +5716,17 @@ private struct UsageBarChart: View {
 
 @MainActor
 private enum ConfigurationFilePanel {
-    static func exportURL(title: String, prompt: String) -> URL? {
+    static func exportURL(title: String, prompt: String, includesPortableConfiguration: Bool) -> URL? {
         let panel = NSSavePanel()
         panel.title = title
         panel.prompt = prompt
-        panel.allowedContentTypes = [.json]
-        panel.nameFieldStringValue = "Remote-Mic-Settings.json"
+        if includesPortableConfiguration {
+            panel.allowedFileTypes = ["sayall"]
+            panel.nameFieldStringValue = "sayall-configurations.sayall"
+        } else {
+            panel.allowedContentTypes = [.json]
+            panel.nameFieldStringValue = "Remote-Mic-Settings.json"
+        }
         panel.canCreateDirectories = true
         return panel.runModal() == .OK ? panel.url : nil
     }
