@@ -189,6 +189,27 @@ final class MacroFeatureIntegration: ObservableObject {
 
     func configurePortableTransfer(settings: AppSettings, beforeApply: @escaping (Data) throws -> Void) {
         #if canImport(SayAllMacroRemoteMic)
+        feature.onMacroDeleted = { [weak self, weak settings] macroID in
+            settings?.removeMacroReferences(to: macroID)
+            #if canImport(SayAllButtonProfiles)
+            _ = self?.buttonProfilesFeature.removeMacroReferences(to: macroID) { [weak settings] payload in
+                guard let settings,
+                      let configured = try? JSONDecoder().decode(ConfiguredButtonAction.self, from: payload)
+                else { return false }
+                return configured.action == .combinationAction && configured.macroID == macroID
+            }
+            #endif
+        }
+        #if canImport(SayAllButtonProfiles)
+        buttonProfilesFeature.onMacroDeleted = { [weak self, weak settings] macroID in
+            settings?.removeMacroReferences(to: macroID)
+            _ = self?.buttonProfilesFeature.removeMacroReferences(to: macroID) { payload in
+                guard let configured = try? JSONDecoder().decode(ConfiguredButtonAction.self, from: payload)
+                else { return false }
+                return configured.action == .combinationAction && configured.macroID == macroID
+            }
+        }
+        #endif
         feature.portableTransfer.hostAdapter = settings.portableHostAdapter(beforeApply: beforeApply)
         #if SAYALL_UNIFIED_BUTTON_CONFIGURATION
         feature.portableTransfer.exportMacroBindings = nil
