@@ -4674,12 +4674,9 @@ struct SettingsView: View {
             let wasAlreadyOnButtonProfiles = selectedSection == .buttonProfiles
             selectedSection = .buttonProfiles
             if wasAlreadyOnButtonProfiles {
-                // The page is already mounted. Consume a later Finder request on the
-                // next main-actor turn instead of waiting for `.task(id:)` to restart.
-                Task { @MainActor in
-                    await Task.yield()
-                    consumePendingButtonProfileImportIfNeeded()
-                }
+                // The page is already mounted. Consume a later Finder request now;
+                // relying on SwiftUI `.task(id:)` to restart is not a stable boundary.
+                consumePendingButtonProfileImportIfNeeded()
             }
         } else {
             selectedSection = .about
