@@ -679,10 +679,10 @@ final class HIDRemoteMonitor {
                 recognizesDoubleClick: preflightRecognizesDoubleClick,
                 recognizesLongPress: preflightRecognizesLongPress
             )
-            // Some TV firmware paths still emit the native keyboard event after
-            // the HID interface is seized. Keep that event inside the tap while
-            // the configured TV action runs, so it cannot reach a focused field.
-            if (!activeDeviceIsSeized || button == .tv), !usesNativePassthrough {
+            // Some firmware paths still emit TV or volume events after the HID
+            // interface is seized. Suppress those native events while the
+            // configured action runs; synthetic host events retain their marker.
+            if (!activeDeviceIsSeized || button == .tv || button == .volumeUp || button == .volumeDown), !usesNativePassthrough {
                 eventSuppressor.arm(button: button, edge: .down)
             }
             var shouldPerformAction = true
@@ -816,7 +816,7 @@ final class HIDRemoteMonitor {
         for usage in released {
             let usedNativePassthrough = nativePassthroughUsages.remove(usage) != nil
             if let button = RemoteButton.usageMap[usage],
-               (!activeDeviceIsSeized || button == .tv), !usedNativePassthrough {
+               (!activeDeviceIsSeized || button == .tv || button == .volumeUp || button == .volumeDown), !usedNativePassthrough {
                 eventSuppressor.arm(button: button, edge: .up)
             }
             repeatTimers.removeValue(forKey: usage)?.cancel()
