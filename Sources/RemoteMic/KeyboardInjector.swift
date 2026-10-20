@@ -1147,7 +1147,8 @@ enum KeyboardInjector {
             ancestorCount += 1
         }
 
-        let context = String(contextParts.joined(separator: " ").suffix(512))
+        let context = recordedAccessibilityContext(ancestorParts: contextParts,
+            windowSemanticText: window.map(axSemanticText) ?? "")
         let target = AccessibilityFocusTarget(
             role: role,
             identifier: axString(focusedElement, attribute: kAXIdentifierAttribute),
@@ -1174,6 +1175,12 @@ enum KeyboardInjector {
               !semanticText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         else { return nil }
         return target
+    }
+
+    static func recordedAccessibilityContext(ancestorParts: [String], windowSemanticText: String) -> String {
+        let context = ancestorParts.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+        // Deep anonymous editors may reach the ancestor limit before their window.
+        return String((context.isEmpty ? windowSemanticText : context).suffix(512))
     }
 
     private static func focusRecordedAccessibilityTarget(

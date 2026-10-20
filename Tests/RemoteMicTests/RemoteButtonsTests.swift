@@ -1532,6 +1532,25 @@ struct RemoteButtonsTests {
         #expect(focusedPID == 4_242)
     }
 
+    @Test func anonymousComposerLearningRetainsItsKnownWindowContext() {
+        let context = KeyboardInjector.recordedAccessibilityContext(
+            ancestorParts: [], windowSemanticText: "WorkBuddy")
+        let target = AccessibilityFocusTarget(role: "AXTextArea", identifier: "", title: "",
+            description: "", help: "", placeholder: "", context: context, windowTitle: "WorkBuddy",
+            normalizedFrame: .init(x: 0.2, y: 0.7, width: 0.7, height: 0.15))
+        let candidate = KeyboardInjector.AccessibilityTextCandidate(role: "AXTextArea",
+            identifier: "", title: "", description: "", help: "", placeholder: "",
+            context: "WorkBuddy WorkBuddy", frame: CGRect(x: 200, y: 560, width: 700, height: 120),
+            enabled: true)
+        #expect(!context.isEmpty)
+        #expect(KeyboardInjector.recordedAccessibilityCandidateScore(candidate, target: target,
+            windowTitle: "WorkBuddy", windowFrame: CGRect(x: 0, y: 0, width: 1000, height: 800)) != nil)
+        #expect(KeyboardInjector.recordedAccessibilityContext(
+            ancestorParts: ["conversation composer"], windowSemanticText: "WorkBuddy") == "conversation composer")
+        #expect(KeyboardInjector.recordedAccessibilityContext(
+            ancestorParts: [], windowSemanticText: "").isEmpty)
+    }
+
     @Test func recordedAccessibilityMatchingPrefersRecordedSemanticsAndRejectsSensitiveFields() {
         let target = AccessibilityFocusTarget(
             role: "AXTextArea",
