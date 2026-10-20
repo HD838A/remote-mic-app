@@ -1338,7 +1338,7 @@ final class AppSettings: ObservableObject {
     ) -> Bool {
         guard onboardingSiriRemoteInitiallyEnabled == false, siriRemoteEnabled else { return false }
         switch accessDecision {
-        case .allowed, .temporarilyOffline: return false
+        case .allowed, .temporarilyOffline, .allowedWithHistoryContinuation, .continuedFromVerifiedHistory: return false
         case .requiresPlus, .unavailable: return true
         }
     }

@@ -501,6 +501,10 @@ final class MacroFeatureIntegration: ObservableObject {
             packageDecision = .allowed(validUntil: validUntil)
         case let .temporarilyOffline(validUntil):
             packageDecision = .temporarilyOffline(validUntil: validUntil)
+        case let .allowedWithHistoryContinuation(verifiedUntil):
+            packageDecision = .allowedWithHistoryContinuation(verifiedUntil: verifiedUntil)
+        case .continuedFromVerifiedHistory:
+            packageDecision = .continuedFromVerifiedHistory
         case .requiresPlus:
             packageDecision = .requiresPlus
         case .unavailable:

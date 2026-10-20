@@ -2314,7 +2314,7 @@ struct SettingsView: View {
     private func requiresSiriRemoteMembership(for profile: RemoteDeviceProfile) -> Bool {
         guard profile.model.isAppleSiriRemote else { return false }
         switch membershipFeature.buttonProfilesAccessDecision {
-        case .allowed, .temporarilyOffline:
+        case .allowed, .temporarilyOffline, .allowedWithHistoryContinuation, .continuedFromVerifiedHistory:
             return false
         case .requiresPlus, .unavailable:
             return true
