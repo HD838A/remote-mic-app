@@ -679,10 +679,10 @@ final class HIDRemoteMonitor {
                 recognizesDoubleClick: preflightRecognizesDoubleClick,
                 recognizesLongPress: preflightRecognizesLongPress
             )
-            // Some TV firmware paths still emit the native keyboard event after
-            // the HID interface is seized. Keep that event inside the tap while
-            // the configured TV action runs, so it cannot reach a focused field.
-            if (!activeDeviceIsSeized || button == .tv), !usesNativePassthrough {
+            // Seizing one HID interface does not guarantee that sibling interfaces
+            // stop emitting native events. Every managed press owns its native
+            // descriptors; intentional passthrough and marked host events remain free.
+            if !usesNativePassthrough {
                 eventSuppressor.arm(button: button, edge: .down)
             }
             var shouldPerformAction = true
@@ -816,7 +816,7 @@ final class HIDRemoteMonitor {
         for usage in released {
             let usedNativePassthrough = nativePassthroughUsages.remove(usage) != nil
             if let button = RemoteButton.usageMap[usage],
-               (!activeDeviceIsSeized || button == .tv), !usedNativePassthrough {
+               !usedNativePassthrough {
                 eventSuppressor.arm(button: button, edge: .up)
             }
             repeatTimers.removeValue(forKey: usage)?.cancel()
@@ -1350,11 +1350,9 @@ final class HIDRemoteMonitor {
         appSwitcherConfirmationProbe?.cancel()
         appSwitcherConfirmationProbe = nil
         appSwitcherOriginBundleIdentifier = nil
-        if !activeDeviceIsSeized || activeUsages.contains(RemoteButton.tv.hidUsage) {
-            for usage in activeUsages {
-                if let button = RemoteButton.usageMap[usage] {
-                    eventSuppressor.arm(button: button, edge: .up)
-                }
+        for usage in activeUsages.subtracting(nativePassthroughUsages) {
+            if let button = RemoteButton.usageMap[usage] {
+                eventSuppressor.arm(button: button, edge: .up)
             }
         }
         repeatTimers.values.forEach { $0.cancel() }
