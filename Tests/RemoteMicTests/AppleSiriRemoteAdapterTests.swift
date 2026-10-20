@@ -370,7 +370,7 @@ struct AppleSiriRemoteAdapterTests {
             hasSecondaryAction: false,
             hasSingleActionOverride: false,
             frontmostBundleIdentifier: PresetApplication.remoteMic.bundleIdentifier
-        ) == nil)
+        ) == 50)
     }
 
     @Test func cancellationResetsTouchState() {
