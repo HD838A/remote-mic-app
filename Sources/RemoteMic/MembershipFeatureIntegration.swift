@@ -312,10 +312,10 @@ final class MembershipFeatureIntegration: ObservableObject, @unchecked Sendable 
             return .allowed(validUntil: validUntil)
         case let .temporarilyOffline(validUntil):
             return .temporarilyOffline(validUntil: validUntil)
-        case let .allowedWithHistoryContinuation(verifiedUntil):
-            return .allowedWithHistoryContinuation(verifiedUntil: verifiedUntil)
-        case .continuedFromVerifiedHistory:
-            return .continuedFromVerifiedHistory
+        #if SAYALL_MEMBERSHIP_AUTHORIZED_ACCESS
+        case .authorized:
+            return .authorized
+        #endif
         case .requiresPlus:
             return .requiresPlus
         case .unavailable:
