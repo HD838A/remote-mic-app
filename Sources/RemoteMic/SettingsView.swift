@@ -2180,11 +2180,15 @@ struct SettingsView: View {
                 }
             }
         } else {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(visibleProfiles) { profile in
-                        remoteDeviceCard(profile)
-                    }
+            let cards = HStack(spacing: 8) {
+                ForEach(visibleProfiles) { profile in
+                    remoteDeviceCard(profile)
+                }
+            }
+            ViewThatFits(in: .horizontal) {
+                cards.fixedSize(horizontal: true, vertical: false)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    cards
                 }
             }
             .frame(maxWidth: .infinity, alignment: .trailing)

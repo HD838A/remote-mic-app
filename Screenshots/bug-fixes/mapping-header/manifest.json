@@ -2,12 +2,12 @@
   "version": "2.0.0 (251)",
   "source_baseline": "cef59993ebc50d7243145debea82b27f9ae9e8f6",
   "source_files_sha256": {
-    "Sources/RemoteMic/SettingsView.swift": "7f0586c126ea9495c533d0209843e0921a0df3936a1bdd043db5a380186e86ce"
+    "Sources/RemoteMic/SettingsView.swift": "26d4aae29ea370d361bbc457133edb2fa6a45178f1555dd1a9672618a6467343"
   },
   "environment": "macOS 27.0.1 (26A434), Apple Swift 6.4, arm64, public Debug app",
-  "runtime": "CUA original JPEG, isolated production SettingsView interactive window, 1020x772 content",
+  "runtime": "CUA original JPEG, final production SettingsView interactive window, isolated fixture, 1020x772 content; local review copy has unique Bundle ID and ad-hoc signature only",
   "offscreen": "production SettingsView, 1020x772; 800x650 header stress only",
-  "total_bytes": 7479903,
+  "total_bytes": 7823372,
   "files": [
     {
       "file": "before-zh-hans-dark.png",
@@ -54,8 +54,8 @@
       "format": "PNG",
       "width": 2040,
       "height": 1544,
-      "bytes": 786058,
-      "sha256": "0fb90a5e3bc6269e728d36adc54c1e802915e0e9701d73835159e41244c48b30"
+      "bytes": 786411,
+      "sha256": "c498a8521809101ef7f8fd252fc40bf7cff6d456332bb2ad23d638e49638bde7"
     },
     {
       "file": "mapping-zh-hans-light-800x650.png",
@@ -70,24 +70,32 @@
       "format": "PNG",
       "width": 2040,
       "height": 1544,
-      "bytes": 796193,
-      "sha256": "4e5c8563bee47e68ed717a0c5c5291f2e05de8e6f8f83edbb7e8f93ae2724168"
+      "bytes": 796653,
+      "sha256": "5c1373cbb5375a681ee405d26f9964f1180ccbe599c09b55c61df30b50d28864"
+    },
+    {
+      "file": "runtime-scrolled-zh-hans-light.jpg",
+      "format": "JPEG",
+      "width": 2040,
+      "height": 1544,
+      "bytes": 340824,
+      "sha256": "9bdb1e2a3224af89c95e067d4c2158f887bed56b9e2f67a1cba2771dd5a9784d"
     },
     {
       "file": "runtime-settings-zh-hans-light.jpg",
       "format": "JPEG",
       "width": 2040,
       "height": 1544,
-      "bytes": 252463,
-      "sha256": "901e889e58e3df47a92c8917fe83b4c7c81c04a78937ffb3af3f3f080354932c"
+      "bytes": 255020,
+      "sha256": "788b149d4ccc85afab473399785b9249614f0453bd63103b3ee149d753ded0f1"
     },
     {
       "file": "runtime-zh-hans-light.jpg",
       "format": "JPEG",
       "width": 2040,
       "height": 1544,
-      "bytes": 360387,
-      "sha256": "472cd168b455b253f4f20c6ba0d4aeeb10d3146e15c7c6e84b76c21d5a78f012"
+      "bytes": 359662,
+      "sha256": "4611115358ac90870bf825e43287030ef5eb334579df1c6c12a5e60aafefe6ba"
     },
     {
       "file": "settings-zh-hans-dark.png",
