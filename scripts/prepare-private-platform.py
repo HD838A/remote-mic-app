@@ -102,7 +102,8 @@ def release(repo):
     print(f"PRIVATE PLATFORM validating version={version} commit={main}", file=sys.stderr)
     for command in ("test", "build"):
         run("swift", command, "--disable-keychain", "--package-path", str(repo),
-            "--scratch-path", str(repo.parent / f".build-release-{main}"), "-c", "release",
+            "--scratch-path", str(repo.parent / f".build-release-{main}"),
+            "-c", "debug" if command == "test" else "release",
             timeout=1800, capture=False)
     remote_main = run("git", "ls-remote", "origin", "refs/heads/main", cwd=repo).split()[0]
     if remote_main != main:
