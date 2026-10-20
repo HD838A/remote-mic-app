@@ -103,6 +103,8 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual(self.command("git", "--git-dir", str(self.remote), "rev-parse", "2.2.1^{commit}"), sha)
         self.assertEqual([call[1] for call in self.swift_calls], ["test", "build"])
         self.assertTrue(all("--disable-keychain" in call for call in self.swift_calls))
+        self.assertEqual([call[call.index("-c") + 1] for call in self.swift_calls],
+                         ["debug", "release"])
         self.swift_calls.clear()
         self.assertEqual(self.publish(), "2.2.1")
         self.assertEqual(self.swift_calls, [])
