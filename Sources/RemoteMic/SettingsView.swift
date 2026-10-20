@@ -1749,14 +1749,12 @@ struct SettingsView: View {
 
     private var mappingPageHeader: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .center, spacing: 14) {
-                PageHeader(title: localization.text("button_mapping.page.title"))
-                mappingHeaderToggle
-            }
+            PageHeader(title: localization.text("button_mapping.page.title"))
             Text(localization.text("button_mapping.page.subtitle"))
                 .font(.system(size: 13))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+            mappingHeaderToggle
         }
     }
 
@@ -1792,7 +1790,7 @@ struct SettingsView: View {
         @ViewBuilder hardwareCanvas: @escaping () -> HardwareCanvas
     ) -> some View {
         VStack(spacing: 0) {
-            HStack(alignment: .center, spacing: 14) {
+            HStack(alignment: .top, spacing: 14) {
                 mappingPageHeader
                     .fixedSize(horizontal: true, vertical: false)
                 remoteDeviceSelector()
@@ -2182,11 +2180,15 @@ struct SettingsView: View {
                 }
             }
         } else {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(visibleProfiles) { profile in
-                        remoteDeviceCard(profile)
-                    }
+            let cards = HStack(spacing: 8) {
+                ForEach(visibleProfiles) { profile in
+                    remoteDeviceCard(profile)
+                }
+            }
+            ViewThatFits(in: .horizontal) {
+                cards.fixedSize(horizontal: true, vertical: false)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    cards
                 }
             }
             .frame(maxWidth: .infinity, alignment: .trailing)
