@@ -858,7 +858,7 @@ struct RemoteButtonsTests {
     @Test func navigationRepeatStopsOnlyWhileRemoteMicIsFrontmost() throws {
         let remoteMic = PresetApplication.remoteMic.bundleIdentifier
         for action in [
-            ButtonAction.arrowUp, .arrowDown, .arrowLeft, .arrowRight, .deleteBackward,
+            ButtonAction.arrowUp, .arrowDown, .arrowLeft, .arrowRight,
         ] {
             #expect(!HIDRemoteMonitor.shouldRepeat(
                 action: action,
@@ -873,6 +873,17 @@ struct RemoteButtonsTests {
             action: .volumeDown,
             frontmostBundleIdentifier: remoteMic
         ))
+
+        #expect(HIDRemoteMonitor.shouldRepeat(action: .deleteBackward,
+            frontmostBundleIdentifier: remoteMic))
+        for configured in [
+            ConfiguredButtonAction(action: .deleteBackward, shortcut: nil),
+            ConfiguredButtonAction(action: .customShortcut,
+                shortcut: CustomKeyboardShortcut(keyCode: 51, modifierFlags: [], keyLabel: "Delete")),
+        ] {
+            #expect(HIDRemoteMonitor.shouldRepeat(configured: configured,
+                frontmostBundleIdentifier: remoteMic))
+        }
 
         let suiteName = "RemoteButtonsTests.frontmostRepeat.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))
@@ -3231,7 +3242,8 @@ struct RemoteButtonsTests {
         #expect(settings.customMappingEnabled)
     }
 
-    @Test func basicKeyHoldRepeatsFinalActionAndStopsOnRelease() throws {
+    @Test(arguments: [false, true])
+    func basicKeyHoldRepeatsFinalActionAndStopsOnRelease(sayAllFrontmost: Bool) throws {
         let cases: [(RemoteButton, Bool, Bool)] = [
             (.back, false, false), (.back, false, true), (.back, true, false), (.back, true, true),
             (.up, false, false), (.up, false, true), (.up, true, false), (.up, true, true),
@@ -3239,7 +3251,7 @@ struct RemoteButtonsTests {
             (.left, false, false), (.left, false, true), (.left, true, false), (.left, true, true),
             (.right, false, false), (.right, false, true), (.right, true, false), (.right, true, true),
         ]
-        for (button, shortcut, profileOverride) in cases {
+        for (button, shortcut, profileOverride) in cases where !sayAllFrontmost || button == .back {
             let suite = "RemoteButtonsTests.finalRepeat.\(UUID().uuidString)"
             let defaults = try #require(UserDefaults(suiteName: suite))
             defer { defaults.removePersistentDomain(forName: suite) }
@@ -3268,7 +3280,8 @@ struct RemoteButtonsTests {
             let monitor = HIDRemoteMonitor(settings: settings, profileID: device,
                 ownsEventSuppressor: false, scheduler: scheduler, runtimePermissions: { true },
                 actionPerformer: { _, _, value in performed.append(value); return true },
-                frontmostBundleIdentifier: { PresetApplication.safari.bundleIdentifier })
+                frontmostBundleIdentifier: { sayAllFrontmost ? PresetApplication.remoteMic.bundleIdentifier
+                    : PresetApplication.safari.bundleIdentifier })
             monitor.connectSimulatedDevice(fingerprint: "repeat-test", profileID: device, isSeized: true)
             defer { monitor.disconnectSimulatedDevice() }
             let down = Data([UInt8(button.hidUsage), 0, 0, 0, 0, 0])
