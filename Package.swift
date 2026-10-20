@@ -24,6 +24,7 @@ var remoteMicDependencies: [Target.Dependency] = [
 var remoteMicTestDependencies: [Target.Dependency] = [
     "RemoteMic",
     "AppleRemoteAudioCore",
+    "AppleRemotePacketLogger",
 ]
 var packageTargets: [Target] = []
 let macRemotePackagePath = ProcessInfo.processInfo.environment[

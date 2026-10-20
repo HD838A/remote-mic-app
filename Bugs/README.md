@@ -1,5 +1,7 @@
 # Bug 记录
 
+- [苹果遥控器数据流释放时崩溃](./2026-10-20-apple-remote-packet-logger-deinit.html)
+
 - [回眸操作顺序与删除对齐](./2026-10-15-reflections-action-alignment.html)
 
 - [RC003 长会话尾部缺失诊断（问题待定位）](./2026-10-13-rc003-audio-delivery-rate-shortfall.md)
