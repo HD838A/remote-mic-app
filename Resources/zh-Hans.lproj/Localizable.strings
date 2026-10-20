@@ -1259,3 +1259,9 @@
 "siri_remote.activation.disable" = "停用";
 "siri_remote.activation.retry" = "重试";
 "siri_remote.activation.preparing" = "准备中…";
+
+"configuration.import.restore_title" = "导入全部配置？";
+
+"configuration.import.restore_detail" = "这会替换当前的按键、键位方案、组合动作、App 配置、快捷键、常用语和用户设置。账号与系统权限保持不变。输入框定位需要重新确认。";
+
+"configuration.import.cancel" = "取消";

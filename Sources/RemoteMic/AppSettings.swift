@@ -357,6 +357,7 @@ final class AppSettings: ObservableObject {
     static let agentConfigurationPendingKey = Keys.onboardingAgentConfigurationPending
 
     private let defaults: UserDefaults
+    var configurationDefaults: UserDefaults { defaults }
 
     @Published var gainDB: Double {
         didSet { defaults.set(gainDB, forKey: Keys.gainDB) }
@@ -2169,12 +2170,137 @@ final class AppSettings: ObservableObject {
         return try encoder.encode(configuration)
     }
 
+    // Private modules own their configuration models. These callbacks never carry credentials.
+    var configurationSupplementSnapshot: (() throws -> Data?)?
+    var configurationSupplementValidate: ((Data) throws -> Void)?
+    var configurationSupplementApply: ((Data) throws -> Void)?
+
+    func completeConfigurationSnapshot() throws -> Data {
+        var envelope = try JSONSerialization.jsonObject(with: portableLocalSnapshot()) as! [String: Any]
+        var configuration = envelope["configuration"] as! [String: Any]
+        var applications = configuration["customApplicationProfiles"] as? [[String: Any]] ?? []
+        for index in applications.indices {
+            applications[index]["applicationPath"] = ""
+            applications[index].removeValue(forKey: "accessibilityTarget")
+        }
+        configuration["customApplicationProfiles"] = applications
+        // Physical device identities and learned third-party UI fingerprints are local only.
+        envelope["configuration"] = configuration
+        var preferences = completeConfigurationPreferences
+        preferences.remoteDeviceProfiles = preferences.remoteDeviceProfiles.map {
+            var profile = $0
+            profile.bluetoothIdentifier = nil
+            profile.hidFingerprint = nil
+            return profile
+        }
+        envelope["preferences"] = try JSONSerialization.jsonObject(with: JSONEncoder().encode(preferences))
+        envelope["pendingApplications"] = customApplicationProfiles
+            .filter { $0.focusStrategy == .recordedAccessibility }.map { $0.id.uuidString }.sorted()
+        if let supplement = envelope.removeValue(forKey: "supplement") as? String,
+           let data = Data(base64Encoded: supplement) {
+            envelope["commonPhrases"] = try JSONSerialization.jsonObject(with: data)
+        }
+        return try JSONSerialization.data(withJSONObject: envelope, options: [.sortedKeys])
+    }
+
+    /// Validate the external complete backup before any store is written.
+    func validatedCompleteConfigurationSnapshot(_ data: Data) throws -> Data {
+        guard data.count <= MacConfigurationBackup.maximumBytes,
+              var envelope = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let raw = envelope["configuration"], let preferencesRaw = envelope["preferences"],
+              let pending = envelope["pendingApplications"] as? [String]
+        else { throw AppConfigurationError.invalidValues }
+        let configuration = try Self.validatedConfiguration(from: JSONSerialization.data(withJSONObject: raw))
+        var preferences = try JSONDecoder().decode(CompleteConfigurationPreferences.self,
+            from: JSONSerialization.data(withJSONObject: preferencesRaw))
+        let appIDs = (configuration.customApplicationProfiles ?? []).map(\.id)
+        guard configuration.selectedAudioDeviceUID.count <= Self.maximumImportedIdentifierLength,
+              Set(appIDs).count == appIDs.count,
+              pending.allSatisfy({ UUID(uuidString: $0).map(Set(appIDs).contains) == true }),
+              Set(preferences.remoteDeviceProfiles.map(\.id)).count == preferences.remoteDeviceProfiles.count,
+              preferences.selectedRemoteProfileID == nil || preferences.remoteDeviceProfiles.contains(where: { $0.id == preferences.selectedRemoteProfileID }),
+              preferences.remoteDeviceProfiles.count <= 256,
+              preferences.chromecastSystemReservedExceptions.count <= 64
+        else { throw AppConfigurationError.invalidValues }
+        func validate(_ bindings: [String: ButtonAction], _ shortcuts: [String: CustomKeyboardShortcut],
+                      _ apps: [String: UUID], _ secondary: [String: [String: ConfiguredButtonAction]]) throws {
+            guard bindings.keys.allSatisfy({ RemoteButton(rawValue: $0) != nil }),
+                  shortcuts.allSatisfy({ RemoteButton(rawValue: $0.key) != nil && Self.validatedShortcut($0.value) == $0.value }),
+                  apps.allSatisfy({ RemoteButton(rawValue: $0.key) != nil && appIDs.contains($0.value) }),
+                  secondary.allSatisfy({ RemoteButton(rawValue: $0.key) != nil && $0.value.allSatisfy {
+                      ButtonTrigger(rawValue: $0.key) != nil && Self.validatedConfiguredAction($0.value) == $0.value
+                  } }) else { throw AppConfigurationError.invalidValues }
+        }
+        try validate(configuration.buttonBindings, configuration.buttonShortcuts,
+            configuration.buttonApplicationProfileIDs ?? [:], configuration.secondaryButtonBindings)
+        for binding in configuration.unifiedBaseBindings ?? [] {
+            guard Self.validatedConfiguredAction(binding.configured) == binding.configured,
+                  binding.configured.applicationProfileID.map(appIDs.contains) ?? true
+            else { throw AppConfigurationError.invalidValues }
+        }
+        for application in configuration.customApplicationProfiles ?? [] {
+            switch Self.validatedApplicationProfile(application) {
+            case .rejected: throw AppConfigurationError.invalidValues
+            case .usable, .notInstalledOnThisMac: break
+            }
+            guard application.accessibilityTarget == nil, application.applicationPath.isEmpty,
+                  application.focusShortcut.map({ Self.validatedShortcut($0) == $0 }) ?? true
+            else { throw AppConfigurationError.invalidValues }
+        }
+        for profile in preferences.remoteDeviceProfiles {
+            guard profile.bluetoothIdentifier == nil, profile.hidFingerprint == nil, profile.customName.count <= 256
+            else { throw AppConfigurationError.invalidValues }
+            let mappings = profile.mappings
+            try validate(mappings.buttonBindings, mappings.buttonShortcuts,
+                mappings.buttonApplicationProfileIDs ?? [:], mappings.secondaryButtonBindings)
+        }
+        // Reuse local pairing only for an existing configuration ID. Never import pairing identities.
+        preferences.remoteDeviceProfiles = preferences.remoteDeviceProfiles.map { value in
+            var profile = value
+            if let local = remoteDeviceProfiles.first(where: { $0.id == value.id && $0.model == value.model }) {
+                profile.bluetoothIdentifier = local.bluetoothIdentifier
+                profile.hidFingerprint = local.hidFingerprint
+            }
+            return profile
+        }
+        envelope["preferences"] = try JSONSerialization.jsonObject(with: JSONEncoder().encode(preferences))
+        envelope["selectedRemoteProfileID"] = preferences.selectedRemoteProfileID?.uuidString ?? ""
+        if let phrases = envelope.removeValue(forKey: "commonPhrases") {
+            envelope["supplement"] = try JSONSerialization.data(withJSONObject: phrases, options: [.sortedKeys]).base64EncodedString()
+        }
+        if let supplement = envelope["supplement"] as? String {
+            guard let bytes = Data(base64Encoded: supplement), let validate = configurationSupplementValidate
+            else { throw AppConfigurationError.unsupportedVersion }
+            try validate(bytes)
+        } else if envelope["supplement"] != nil { throw AppConfigurationError.invalidValues }
+        return try JSONSerialization.data(withJSONObject: envelope, options: [.sortedKeys])
+    }
+
+    private var completeConfigurationPreferences: CompleteConfigurationPreferences {
+        .init(remoteDeviceProfiles: remoteDeviceProfiles, selectedRemoteProfileID: selectedRemoteProfileID,
+            chromecastAllowSystemReservedKeys: chromecastAllowSystemReservedKeys,
+            chromecastSystemReservedExceptions: chromecastSystemReservedExceptions.sorted(),
+            chromecastEnabled: chromecastEnabled, chromecastVoiceMode: chromecastVoiceMode,
+            siriRemoteScrollArrowReversed: siriRemoteScrollArrowReversed,
+            siriRemoteEnabled: siriRemoteEnabled, siriRemoteNeedsUserAction: siriRemoteNeedsUserAction,
+            localTranscriptHistoryEnabled: localTranscriptHistoryEnabled,
+            localOriginalAudioRecordingEnabled: localOriginalAudioRecordingEnabled,
+            voiceTool: onboardingVoiceTool)
+    }
+
+    static func validateConfigurationAction(_ data: Data) throws {
+        let action = try JSONDecoder().decode(ConfiguredButtonAction.self, from: data)
+        guard validatedConfiguredAction(action) == action else { throw AppConfigurationError.invalidValues }
+    }
+
     // Internal recovery snapshots are never emitted as portable exchange files.
     func portableLocalSnapshot() throws -> Data {
         let configuration = try JSONSerialization.jsonObject(with: exportedConfigurationData())
-        let envelope: [String: Any] = ["configuration": configuration,
+        var envelope: [String: Any] = ["configuration": configuration,
             "selectedRemoteProfileID": selectedRemoteProfileID?.uuidString ?? "",
-            "pendingApplications": portablePendingApplications.sorted()]
+            "pendingApplications": portablePendingApplications.sorted(),
+            "preferences": try JSONSerialization.jsonObject(with: JSONEncoder().encode(completeConfigurationPreferences))]
+        if let supplement = try configurationSupplementSnapshot?() { envelope["supplement"] = supplement.base64EncodedString() }
         return try JSONSerialization.data(withJSONObject: envelope, options: [.sortedKeys])
     }
 
@@ -2197,14 +2323,34 @@ final class AppSettings: ObservableObject {
     func applyPortableLocalSnapshot(_ data: Data) throws {
         guard let envelope = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let configuration = envelope["configuration"],
-              envelope["selectedRemoteProfileID"] as? String == (selectedRemoteProfileID?.uuidString ?? ""),
               let pending = envelope["pendingApplications"] as? [String]
         else { throw AppConfigurationError.invalidValues }
+        let preferences = try envelope["preferences"].map {
+            try JSONDecoder().decode(CompleteConfigurationPreferences.self,
+                from: JSONSerialization.data(withJSONObject: $0))
+        }
+        guard preferences != nil
+            || envelope["selectedRemoteProfileID"] as? String == (selectedRemoteProfileID?.uuidString ?? "")
+        else { throw AppConfigurationError.invalidValues }
+        let supplement = (envelope["supplement"] as? String).flatMap { Data(base64Encoded: $0) }
+        if let supplement {
+            guard let validate = configurationSupplementValidate, configurationSupplementApply != nil
+            else { throw AppConfigurationError.unsupportedVersion }
+            try validate(supplement)
+        }
         // This path accepts only our validated in-memory preparation or 0600 recovery journal.
         // Do not call the external legacy importer: it filters and replaces records.
         let c = try JSONDecoder().decode(PersonalizedConfiguration.self,
             from: JSONSerialization.data(withJSONObject: configuration))
         guard [1, 2].contains(c.formatVersion) else { throw AppConfigurationError.invalidValues }
+        // Set the destination scope before applying mappings. Otherwise a regular
+        // portable import can be overwritten by its pre-import device snapshot.
+        if let preferences {
+            isLoadingRemoteProfile = true
+            remoteDeviceProfiles = preferences.remoteDeviceProfiles
+            selectedRemoteProfileID = preferences.selectedRemoteProfileID
+            isLoadingRemoteProfile = false
+        }
         if gainDB != c.gainDB { gainDB = c.gainDB }
         if selectedAudioDeviceUID != c.selectedAudioDeviceUID { selectedAudioDeviceUID = c.selectedAudioDeviceUID }
         if customMappingEnabled != c.customMappingEnabled { customMappingEnabled = c.customMappingEnabled }
@@ -2227,7 +2373,23 @@ final class AppSettings: ObservableObject {
         voiceFnTapModeEnabled = c.voiceFnTapModeEnabled ?? false
         applyContinuousRecordingExperimentState(enabled: c.experimentalContinuousRecordingEnabled ?? false,
             backup: c.continuousRecordingPowerBindingBackup)
+        if let preferences {
+            chromecastAllowSystemReservedKeys = preferences.chromecastAllowSystemReservedKeys
+            chromecastSystemReservedExceptions = Set(preferences.chromecastSystemReservedExceptions)
+            chromecastEnabled = preferences.chromecastEnabled
+            chromecastVoiceMode = preferences.chromecastVoiceMode
+            siriRemoteScrollArrowReversed = preferences.siriRemoteScrollArrowReversed
+            siriRemoteEnabled = preferences.siriRemoteEnabled
+            siriRemoteNeedsUserAction = preferences.siriRemoteNeedsUserAction
+            localTranscriptHistoryEnabled = preferences.localTranscriptHistoryEnabled
+            localOriginalAudioRecordingEnabled = preferences.localOriginalAudioRecordingEnabled
+            if let voiceTool = preferences.voiceTool { onboardingVoiceTool = voiceTool }
+        }
+        if let supplement, try configurationSupplementSnapshot?() != supplement {
+            try configurationSupplementApply?(supplement)
+        }
         defaults.set(pending, forKey: "portableTransferPendingApplications")
+        configurationImportNotice = nil
     }
 
     var voiceKeyConfigurationState: VoiceKeyConfigurationState {

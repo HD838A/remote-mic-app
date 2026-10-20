@@ -1259,3 +1259,9 @@
 "siri_remote.activation.disable" = "Disable";
 "siri_remote.activation.retry" = "Retry";
 "siri_remote.activation.preparing" = "Preparing…";
+
+"configuration.import.restore_title" = "Import all settings?";
+
+"configuration.import.restore_detail" = "This replaces your buttons, key profiles, combination actions, app settings, shortcuts, common phrases and preferences. Your account and system permissions stay unchanged. Verify recorded input fields again.";
+
+"configuration.import.cancel" = "Cancel";

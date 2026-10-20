@@ -115,6 +115,30 @@ final class MembershipFeatureIntegration: ObservableObject, @unchecked Sendable 
         #endif
     }
 
+    func configureConfigurationBackup(settings: AppSettings) {
+        #if SAYALL_MEMBERSHIP_ENABLED && canImport(SayAllMembershipHostAdapter)
+        let defaults = settings.configurationDefaults
+        settings.configurationSupplementSnapshot = { [weak self] in
+            try MainActor.assumeIsolated {
+                if defaults === UserDefaults.standard, let adapter = self?.adapter {
+                    return try adapter.configurationCommonPhrasesSnapshot()
+                }
+                return try MembershipHostAdapter.exportCommonPhrasesConfiguration(defaults: defaults)
+            }
+        }
+        settings.configurationSupplementValidate = { data in
+            try MembershipHostAdapter.validateConfigurationCommonPhrases(data)
+        }
+        settings.configurationSupplementApply = { [weak self] data in
+            try MainActor.assumeIsolated {
+                if defaults === UserDefaults.standard, let adapter = self?.adapter {
+                    try adapter.restoreConfigurationCommonPhrases(data)
+                } else { try MembershipHostAdapter.restoreCommonPhrasesConfiguration(data, defaults: defaults) }
+            }
+        }
+        #endif
+    }
+
     func openCommonPhrases(source: String = "host_action") -> Bool {
         #if SAYALL_MEMBERSHIP_ENABLED && canImport(SayAllMembershipHostAdapter)
         MainActor.assumeIsolated { adapter?.openCommonPhrases(source: source) ?? false }
