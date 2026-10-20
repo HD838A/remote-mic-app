@@ -627,7 +627,9 @@ struct SettingsView: View {
                 selectedSection = .about
             }
         }
-        .onChange(of: buttonProfileImportRequests.pendingRequest) { _ in
+        // Finder requests are events. Receive them after @Published has stored
+        // the value, even when SwiftUI coalesces the first page updates.
+        .onReceive(buttonProfileImportRequests.$pendingRequest.receive(on: RunLoop.main)) { _ in
             routePendingButtonProfileImportIfNeeded()
         }
         .sheet(isPresented: $isWebRemoteSessionPresented) {
@@ -4724,7 +4726,9 @@ struct SettingsView: View {
                 ? .buttonProfiles : .about
             let alreadyMounted = selectedSection == section
             selectedSection = section
-            if alreadyMounted { consumePendingButtonProfileImportIfNeeded() }
+            if alreadyMounted || !macroFeature.isFeatureVisible {
+                consumePendingButtonProfileImportIfNeeded()
+            }
         } catch {
             selectedSection = .about
             buttonProfileImportRequests.clear()

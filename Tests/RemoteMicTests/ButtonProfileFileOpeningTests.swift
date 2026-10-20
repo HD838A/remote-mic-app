@@ -53,7 +53,10 @@ struct ButtonProfileFileOpeningTests {
             updateInformation: UpdateInformationStore(userDefaults: defaults),
             initialSection: .connection
         ).environmentObject(LocalizationStore(settings: settings))
-            .onAppear { viewDidAppear = true })
+            .onAppear {
+                if !queuedBeforeMount { requests.enqueue(url: url) }
+                viewDidAppear = true
+            })
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1020, height: 772),
                               styleMask: [.titled], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
@@ -63,7 +66,6 @@ struct ButtonProfileFileOpeningTests {
         let mounted = try await waitForUIUpdate { viewDidAppear }
         try #require(mounted, "SettingsView must mount before testing later Finder requests")
 
-        if !queuedBeforeMount { requests.enqueue(url: url) }
         _ = try await waitForUIUpdate { requests.pendingRequest == nil }
 
         try #require(requests.pendingRequest == nil)
