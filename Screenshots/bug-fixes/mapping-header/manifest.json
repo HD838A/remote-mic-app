@@ -1,0 +1,109 @@
+{
+  "version": "2.0.0 (251)",
+  "source_baseline": "cef59993ebc50d7243145debea82b27f9ae9e8f6",
+  "source_files_sha256": {
+    "Sources/RemoteMic/SettingsView.swift": "7f0586c126ea9495c533d0209843e0921a0df3936a1bdd043db5a380186e86ce"
+  },
+  "environment": "macOS 27.0.1 (26A434), Apple Swift 6.4, arm64, public Debug app",
+  "runtime": "CUA original JPEG, isolated production SettingsView interactive window, 1020x772 content",
+  "offscreen": "production SettingsView, 1020x772; 800x650 header stress only",
+  "total_bytes": 7479903,
+  "files": [
+    {
+      "file": "before-zh-hans-dark.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "bytes": 784549,
+      "sha256": "8c6a02fac1c672f4432ceb365f26c2c3dc6a1520a33d99396a903b73eb79e67d"
+    },
+    {
+      "file": "before-zh-hans-light.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "bytes": 793871,
+      "sha256": "8fb07cf72addbf429e11929636981f64b2fdab6d7bd0231ee05c2ab89913cafd"
+    },
+    {
+      "file": "mapping-en-dark-800x650.png",
+      "format": "PNG",
+      "width": 1600,
+      "height": 1300,
+      "bytes": 695317,
+      "sha256": "ecc56d55a945f9f912964c3eb84c54de66dda390ef7349b036036a2768c47542"
+    },
+    {
+      "file": "mapping-en-dark.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "bytes": 817512,
+      "sha256": "8ba65c838c3983996c6653cbe7054dc31884555193aa2be44c7a18b477253ae7"
+    },
+    {
+      "file": "mapping-en-light.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "bytes": 827261,
+      "sha256": "4dac2ee36a6cbc31c9b52fe71d6abd311b859e0702a03fb7ae1e0dc548e33dc3"
+    },
+    {
+      "file": "mapping-zh-hans-dark.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "bytes": 786058,
+      "sha256": "0fb90a5e3bc6269e728d36adc54c1e802915e0e9701d73835159e41244c48b30"
+    },
+    {
+      "file": "mapping-zh-hans-light-800x650.png",
+      "format": "PNG",
+      "width": 1600,
+      "height": 1300,
+      "bytes": 675215,
+      "sha256": "2008d77c901c7918cb6e50a648e05c6587dfbeba1c059b022b59735dfdacc658"
+    },
+    {
+      "file": "mapping-zh-hans-light.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "bytes": 796193,
+      "sha256": "4e5c8563bee47e68ed717a0c5c5291f2e05de8e6f8f83edbb7e8f93ae2724168"
+    },
+    {
+      "file": "runtime-settings-zh-hans-light.jpg",
+      "format": "JPEG",
+      "width": 2040,
+      "height": 1544,
+      "bytes": 252463,
+      "sha256": "901e889e58e3df47a92c8917fe83b4c7c81c04a78937ffb3af3f3f080354932c"
+    },
+    {
+      "file": "runtime-zh-hans-light.jpg",
+      "format": "JPEG",
+      "width": 2040,
+      "height": 1544,
+      "bytes": 360387,
+      "sha256": "472cd168b455b253f4f20c6ba0d4aeeb10d3146e15c7c6e84b76c21d5a78f012"
+    },
+    {
+      "file": "settings-zh-hans-dark.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "bytes": 342020,
+      "sha256": "2bbab7b585578894b0a68af9387e6f1c3b0ddc5acc9706a845686c786a94c28b"
+    },
+    {
+      "file": "settings-zh-hans-light.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "bytes": 349057,
+      "sha256": "a4658c2e9193d93b21a9ce55887fa02c70b3d40448205730045e9fc388e338a7"
+    }
+  ]
+}

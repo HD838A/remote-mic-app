@@ -526,7 +526,7 @@ struct SettingsPageRegressionTests {
             encoding: .utf8
         )
 
-        let mappingPage = try #require(settingsSource.range(of: "private var mappingPage"))
+        let mappingPage = try #require(settingsSource.range(of: "private var mappingPage: some View"))
         let sharedPage = try #require(settingsSource.range(
             of: "private func hardwareMappingPage<HardwareCanvas: View>",
             range: mappingPage.upperBound..<settingsSource.endIndex
@@ -536,6 +536,18 @@ struct SettingsPageRegressionTests {
             range: sharedPage.upperBound..<settingsSource.endIndex
         ))
         let mappingSource = settingsSource[sharedPage.lowerBound..<editorPanel.lowerBound]
+
+        let headerStart = try #require(settingsSource.range(of: "private var mappingPageHeader"))
+        let headerSource = settingsSource[headerStart.lowerBound..<mappingPage.lowerBound]
+        let title = try #require(headerSource.range(of: "PageHeader(title:"))
+        let subtitle = try #require(headerSource.range(of: "Text(localization.text(\"button_mapping.page.subtitle\"))"))
+        let toggle = try #require(headerSource.range(of: "mappingHeaderToggle"))
+        #expect(title.lowerBound < subtitle.lowerBound)
+        #expect(subtitle.lowerBound < toggle.lowerBound)
+        #expect(headerSource.contains("VStack(alignment: .leading, spacing: 6)"))
+        #expect(!headerSource.contains("HStack"))
+        #expect(mappingSource.contains("HStack(alignment: .top, spacing: 14)"))
+        #expect(mappingSource.contains(".padding(.top, 18)"))
 
         #expect(!mappingSource.contains("ViewThatFits(in: .horizontal)"))
         #expect(mappingSource.contains("private var mappingHeaderToggle"))
