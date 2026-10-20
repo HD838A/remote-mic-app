@@ -211,4 +211,104 @@ struct ShortcutLifecycleTests {
         #expect(logs[1].contains("user_visible_result=unknown"))
         #expect(!logs.joined().contains("key_code"))
     }
+    @Test(arguments: [false, true])
+    func remoteArrowSnapshotDoesNotAddFunctionToConfiguredShortcut(_ withOption: Bool) {
+        var events: [Edge] = []
+        #expect(ShortcutEventSequence.send(
+            keyCode: withOption ? 11 : 37,
+            modifiers: withOption ? [.maskCommand, .maskAlternate] : .maskCommand,
+            hardwareFlags: { CGEventFlags(rawValue: 0x00A0_0100) },
+            eventPoster: { events.append(Edge($0)); return true }
+        ))
+        #expect(events.allSatisfy { !$0.flags.contains(.maskSecondaryFn) })
+        #expect(events.last?.flags.isEmpty == true)
+    }
+
+    @Test func configuredFunctionKeyIsSynthesizedDespiteArrowSnapshot() {
+        var events: [Edge] = []
+        #expect(ShortcutEventSequence.send(
+            keyCode: 37, modifiers: [.maskCommand, .maskSecondaryFn],
+            hardwareFlags: { CGEventFlags(rawValue: 0x00A0_0100) },
+            eventPoster: { events.append(Edge($0)); return true }
+        ))
+        #expect(events.map(\.code) == [55, 63, 37, 37, 63, 55])
+        #expect(events.last?.flags.isEmpty == true)
+    }
+
+    @Test func physicalFunctionEdgesPreserveHeldFunctionAndClearReleasedFunction() {
+        let state = ShortcutHardwareModifierState()
+        let suppressor = KeyboardEventSuppressor(hardwareModifierState: state)
+        let functionEvent = CGEvent(keyboardEventSource: nil, virtualKey: 63, keyDown: true)!
+        functionEvent.type = .flagsChanged
+        functionEvent.flags = .maskSecondaryFn
+        #expect(!suppressor.handle(type: .flagsChanged, event: functionEvent))
+        var events: [Edge] = []
+        let arrowFlags = CGEventFlags(rawValue: 0x00A0_0100)
+        #expect(ShortcutEventSequence.send(
+            keyCode: 37, modifiers: .maskCommand,
+            hardwareFlags: { arrowFlags }, modifierState: state,
+            eventPoster: { events.append(Edge($0)); return true }
+        ))
+        #expect(events.map(\.code) == [55, 37, 37, 55])
+        #expect(events.allSatisfy { $0.flags.contains(.maskSecondaryFn) })
+        #expect(events.last?.flags == .maskSecondaryFn)
+        functionEvent.flags = []
+        #expect(!suppressor.handle(type: .flagsChanged, event: functionEvent))
+        events.removeAll()
+        #expect(ShortcutEventSequence.send(
+            keyCode: 37, modifiers: .maskCommand,
+            hardwareFlags: { arrowFlags }, modifierState: state,
+            eventPoster: { events.append(Edge($0)); return true }
+        ))
+        #expect(events.allSatisfy { !$0.flags.contains(.maskSecondaryFn) })
+        #expect(events.last?.flags.isEmpty == true)
+    }
+
+    @Test func synthesizedFunctionAndArrowEventsDoNotSetPhysicalFunctionState() {
+        let state = ShortcutHardwareModifierState()
+        let suppressor = KeyboardEventSuppressor(hardwareModifierState: state)
+        let event = CGEvent(keyboardEventSource: nil, virtualKey: 63, keyDown: true)!
+        event.type = .flagsChanged
+        event.flags = .maskSecondaryFn
+        event.setIntegerValueField(.eventSourceUserData, value: KeyboardInjector.syntheticEventMarker)
+        #expect(!suppressor.handle(type: .flagsChanged, event: event))
+        event.setIntegerValueField(.eventSourceUserData, value: 0)
+        event.setIntegerValueField(.keyboardEventKeycode, value: 125)
+        #expect(!suppressor.handle(type: .flagsChanged, event: event))
+        let snapshot = state.snapshot([.maskSecondaryFn, .maskNumericPad])
+        #expect(snapshot.functionState == "unobserved")
+        #expect(snapshot.removedFunctionFlag)
+    }
+
+    @Test func functionStateResetsWhenExistingListenerStops() {
+        let state = ShortcutHardwareModifierState()
+        let suppressor = KeyboardEventSuppressor(hardwareModifierState: state)
+        let event = CGEvent(keyboardEventSource: nil, virtualKey: 63, keyDown: true)!
+        event.type = .flagsChanged
+        event.flags = .maskSecondaryFn
+        #expect(!suppressor.handle(type: .flagsChanged, event: event))
+        #expect(state.snapshot([]).functionState == "pressed")
+        suppressor.stop()
+        let snapshot = state.snapshot([.maskSecondaryFn, .maskNumericPad])
+        #expect(snapshot.functionState == "unobserved")
+        #expect(snapshot.removedFunctionFlag)
+        // A held Fn seen before the first navigation event remains compatible.
+        #expect(state.snapshot(.maskSecondaryFn).flags.contains(.maskSecondaryFn))
+    }
+
+    @Test func navigationFunctionFilteringHasCorrelatedContentFreeDiagnostic() {
+        var logs: [String] = []
+        let state = ShortcutHardwareModifierState()
+        #expect(ShortcutEventSequence.send(
+            keyCode: 37, modifiers: .maskCommand,
+            hardwareFlags: { CGEventFlags(rawValue: 0x00A0_0100) }, modifierState: state,
+            eventPoster: { _ in true }, logger: { logs.append($0) }
+        ))
+        #expect(logs.count == 2)
+        #expect(logs[0].contains("hardware_function_filtered=true"))
+        #expect(logs[0].contains("hardware_function_state=unobserved"))
+        #expect(!logs.joined().contains("key_code"))
+        #expect(logs.last?.contains("user_visible_result=unknown") == true)
+    }
+
 }

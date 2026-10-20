@@ -26,6 +26,7 @@ final class KeyboardEventSuppressor {
         let expiresAt: TimeInterval
     }
 
+    private let hardwareModifierState: ShortcutHardwareModifierState
     private let lock = NSLock()
     private var pendingEvents: [PendingEvent] = []
     private var heldEventCounts: [RemoteNativeEvent: Int] = [:]
@@ -37,12 +38,17 @@ final class KeyboardEventSuppressor {
 
     private(set) var isRunning = false
 
+    init(hardwareModifierState: ShortcutHardwareModifierState = ShortcutEventSequence.hardwareModifierState) {
+        self.hardwareModifierState = hardwareModifierState
+    }
+
     @discardableResult
     func start() -> Bool {
         if isRunning { return true }
 
         let eventMask = CGEventMask(1 << CGEventType.keyDown.rawValue) |
             CGEventMask(1 << CGEventType.keyUp.rawValue) |
+            CGEventMask(1 << CGEventType.flagsChanged.rawValue) |
             CGEventMask(1 << Self.systemDefinedEventTypeRawValue)
         let context = Unmanaged.passUnretained(self).toOpaque()
         guard let eventTap = CGEvent.tapCreate(
@@ -66,6 +72,7 @@ final class KeyboardEventSuppressor {
             return false
         }
 
+        hardwareModifierState.reset()
         self.eventTap = eventTap
         self.runLoopSource = runLoopSource
         EventTapPort.activate(port: eventTap, source: runLoopSource)
@@ -74,6 +81,7 @@ final class KeyboardEventSuppressor {
     }
 
     func stop() {
+        hardwareModifierState.reset()
         lock.lock()
         pendingEvents.removeAll()
         heldEventCounts.removeAll()
@@ -146,6 +154,7 @@ final class KeyboardEventSuppressor {
         if event.getIntegerValueField(.eventSourceUserData) == KeyboardInjector.syntheticEventMarker {
             return false
         }
+        hardwareModifierState.observe(type: type, event: event)
         guard let descriptor = descriptor(type: type, event: event) else { return false }
 
         let now = ProcessInfo.processInfo.systemUptime
