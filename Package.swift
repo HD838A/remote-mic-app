@@ -145,6 +145,21 @@ let artifactMacroInputFocusAvailable = privateArtifactPackagePath.map { path in
     }
 } ?? false
 let macroInputFocusAvailable = sourceMacroInputFocusAvailable || artifactMacroInputFocusAvailable
+let sourceMacroHostShortcutsAvailable = [combinationActionsPackagePath, privateSwiftPMEnabled ? privatePlatformPackagePath.map {
+    URL(fileURLWithPath: $0).appendingPathComponent("packages/macos-combination-actions").path
+} : nil]
+    .compactMap { $0 }.contains { path in
+        FileManager.default.fileExists(atPath: URL(fileURLWithPath: path)
+            .appendingPathComponent("Sources/SayAllMacroRemoteMic/RemoteMicKeyboardShortcutPerformer.swift").path)
+    }
+let artifactMacroHostShortcutsAvailable = privateArtifactPackagePath.map { path in
+    ["arm64", "x86_64"].allSatisfy { architecture in
+        let interface = URL(fileURLWithPath: path)
+            .appendingPathComponent("Artifacts/SayAllMacroRemoteMic.xcframework/macos-arm64_x86_64/SayAllMacroRemoteMic.framework/Modules/SayAllMacroRemoteMic.swiftmodule/\(architecture)-apple-macos.swiftinterface")
+        return (try? String(contentsOf: interface, encoding: .utf8))?
+            .contains("public typealias RemoteMicKeyboardShortcutPerformer =") == true
+    }
+} ?? false
 let buttonProfilesTestAccessEnabled = ProcessInfo.processInfo.environment[
     "SAYALL_TEST_BUTTON_PROFILES_FREE"
 ] == "1"
@@ -174,6 +189,9 @@ if macroCapabilitiesAvailable {
 if macroInputFocusAvailable {
     remoteMicSwiftSettings.append(.define("SAYALL_MACRO_INPUT_FOCUS"))
 }
+if sourceMacroHostShortcutsAvailable || artifactMacroHostShortcutsAvailable {
+    remoteMicSwiftSettings.append(.define("SAYALL_MACRO_HOST_SHORTCUTS"))
+}
 if buttonProfilesTestAccessEnabled {
     remoteMicSwiftSettings.append(.define("SAYALL_TEST_BUTTON_PROFILES_FREE"))
 }
@@ -184,6 +202,9 @@ var remoteMicLinkerSettings: [LinkerSetting] = []
 if privateArtifactsAvailable { remoteMicLinkerSettings.append(.unsafeFlags(["-Xlinker", "-ObjC"])) }
 
 var remoteMicTestSwiftSettings: [SwiftSetting] = []
+if sourceMacroHostShortcutsAvailable || artifactMacroHostShortcutsAvailable {
+    remoteMicTestSwiftSettings.append(.define("SAYALL_MACRO_HOST_SHORTCUTS"))
+}
 if unifiedButtonConfigurationAvailable {
     remoteMicTestSwiftSettings.append(.define("SAYALL_UNIFIED_BUTTON_CONFIGURATION"))
 }

@@ -187,6 +187,9 @@ enum ShortcutEventSequence {
             // Keep one physical snapshot for this synchronous transaction. Reading
             // HID state after posting can retain our own modifiers and prevent release.
             event.flags = synthetic.union(physicalAtStart)
+            if !modifier, (123...126).contains(code) {
+                event.flags.insert(.maskNumericPad)
+            }
             event.setIntegerValueField(.eventSourceUserData, value: KeyboardInjector.syntheticEventMarker)
             let accepted = eventPoster(event)
             if accepted { submitted += 1 }

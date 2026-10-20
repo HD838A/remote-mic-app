@@ -1386,7 +1386,14 @@ struct RemoteButtonsTests {
             .customShortcut,
             shortcut: singleKey,
             accessibilityTrusted: { true },
-            keyPoster: { posted = ($0, $1) }
+            keyPoster: { _, _ in Issue.record("Bare shortcut must use the shared transaction") },
+            shortcutEventPoster: { event in
+                if event.type == .keyDown {
+                    posted = (CGKeyCode(event.getIntegerValueField(.keyboardEventKeycode)), event.flags)
+                }
+                return true
+            },
+            shortcutHardwareFlags: { [] }
         ))
         #expect(posted?.0 == 49)
         #expect(posted?.1.isEmpty == true)

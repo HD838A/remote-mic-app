@@ -311,4 +311,43 @@ struct ShortcutLifecycleTests {
         #expect(logs.last?.contains("user_visible_result=unknown") == true)
     }
 
+    @Test(arguments: [UInt16(0), 11, 36, 37, 48, 49, 51, 53, 96, 123, 124, 125, 126])
+    func recordedShortcutMatrixUsesCompleteSharedTransactions(_ keyCode: UInt16) throws {
+        let families: [(String, UInt64, UInt64)] = [
+            ("control", 0x1, 0x2000), ("option", 0x20, 0x40),
+            ("shift", 0x2, 0x4), ("command", 0x8, 0x10), ("function", 0, 0)
+        ]
+        for mask in 0..<32 {
+            let selected = families.enumerated().filter { mask & (1 << $0.offset) != 0 }.map(\.element)
+            for side in 0..<3 {
+                let bits = selected.reduce(UInt64(0)) { $0 | (side == 1 ? $1.1 : side == 2 ? $1.2 : 0) }
+                let shortcut = try #require(KeyboardInjector.recordedShortcut(
+                    keyCode: keyCode, modifiers: selected.map(\.0), deviceModifierFlags: bits))
+                var events: [Edge] = []
+                #expect(KeyboardInjector.send(.customShortcut, shortcut: shortcut,
+                    accessibilityTrusted: { true },
+                    keyPoster: { _, _ in Issue.record("Shortcut bypassed shared transaction") },
+                    shortcutEventPoster: { events.append(Edge($0)); return true },
+                    shortcutHardwareFlags: { CGEventFlags(rawValue: 0x00A0_0100) }))
+                let primary = events.filter { $0.type == .keyDown || $0.type == .keyUp }
+                let expectedFlags = side == 0
+                    ? selected.reduce(shortcut.cgEventFlags) { $0.union(CGEventFlags(rawValue: $1.1)) }
+                    : shortcut.cgEventFlags
+                #expect(primary.map(\.code) == [keyCode, keyCode])
+                #expect(primary.first?.type == .keyDown && primary.last?.type == .keyUp)
+                for event in primary {
+                    #expect(event.flags.contains(.maskNumericPad) == (123...126).contains(keyCode))
+                    #expect(event.flags.subtracting(.maskNumericPad) == expectedFlags)
+                }
+                #expect(events.filter { $0.type == .flagsChanged }.last?.flags.isEmpty ?? true)
+            }
+        }
+    }
+
+    @Test func recordedShortcutRejectsUnknownModifiersAndDeviceBits() {
+        #expect(KeyboardInjector.recordedShortcut(keyCode: 37, modifiers: ["unknown"], deviceModifierFlags: 0) == nil)
+        #expect(KeyboardInjector.recordedShortcut(keyCode: 37, modifiers: ["command"], deviceModifierFlags: 0x800000) == nil)
+        #expect(KeyboardInjector.recordedShortcut(keyCode: 128, modifiers: [], deviceModifierFlags: 0) == nil)
+    }
+
 }

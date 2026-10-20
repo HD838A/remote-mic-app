@@ -50,7 +50,13 @@ final class MacroFeatureIntegration: ObservableObject {
 
     init(localeIdentifier: String = Locale.current.identifier) {
         #if canImport(SayAllMacroRemoteMic)
-        #if SAYALL_MACRO_INPUT_FOCUS
+        #if SAYALL_MACRO_HOST_SHORTCUTS
+        feature = SayAllMacroRemoteMicFeature(localeIdentifier: localeIdentifier, inputFocuser: {
+            try await KeyboardInjector.focusFrontmostComposerForMacro()
+        }, keyboardShortcutPerformer: {
+            Self.performKeyboardShortcut(keyCode: $0, modifiers: $1, deviceModifierFlags: $2)
+        })
+        #elseif SAYALL_MACRO_INPUT_FOCUS
         feature = SayAllMacroRemoteMicFeature(localeIdentifier: localeIdentifier, inputFocuser: {
             try await KeyboardInjector.focusFrontmostComposerForMacro()
         })
@@ -59,9 +65,17 @@ final class MacroFeatureIntegration: ObservableObject {
         #endif
         #endif
 #if canImport(SayAllButtonProfiles)
+        #if SAYALL_MACRO_HOST_SHORTCUTS
+        buttonProfilesFeature = SayAllButtonProfilesFeature(
+            localeIdentifier: localeIdentifier, keyboardShortcutPerformer: {
+                Self.performKeyboardShortcut(keyCode: $0, modifiers: $1, deviceModifierFlags: $2)
+            }
+        )
+        #else
         buttonProfilesFeature = SayAllButtonProfilesFeature(
             localeIdentifier: localeIdentifier
         )
+        #endif
 #endif
         #if canImport(SayAllMacroRemoteMic)
         feature.$isFeatureVisible
@@ -85,6 +99,25 @@ final class MacroFeatureIntegration: ObservableObject {
             .store(in: &subscriptions)
 #endif
     }
+
+    #if canImport(SayAllMacroRemoteMic) && SAYALL_MACRO_HOST_SHORTCUTS
+    static func performKeyboardShortcut(
+        keyCode: UInt16, modifiers: [String], deviceModifierFlags: UInt64,
+        accessibilityTrusted: () -> Bool = { KeyboardInjector.isAccessibilityTrusted },
+        shortcutSender: (CustomKeyboardShortcut) -> Bool = {
+            KeyboardInjector.send(.customShortcut, shortcut: $0)
+        }
+    ) -> MacroActionExecutionOutcome {
+        guard let shortcut = KeyboardInjector.recordedShortcut(
+            keyCode: keyCode, modifiers: modifiers, deviceModifierFlags: deviceModifierFlags
+        ) else { return .failed("快捷键配置无效") }
+        guard accessibilityTrusted() else {
+            return .permissionDenied("需要辅助功能权限")
+        }
+        return shortcutSender(shortcut)
+            ? .userResultUnknown("快捷键已提交，目标App结果未知") : .failed("快捷键投递失败")
+    }
+    #endif
 
     var hasPendingPortableImport: Bool {
         #if canImport(SayAllMacroRemoteMic)
