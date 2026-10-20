@@ -6680,29 +6680,16 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         keyCode: UInt16,
         modifiers: [String], deviceModifierFlags: UInt64 = 0
     ) -> Bool {
-        guard deviceModifierFlags & ~UInt64(0x207f) == 0 else { return false }
-        var modifierFlags = NSEvent.ModifierFlags(rawValue: UInt(deviceModifierFlags))
-        for modifier in modifiers {
-            switch modifier {
-            case "command": modifierFlags.insert(.command)
-            case "shift": modifierFlags.insert(.shift)
-            case "option": modifierFlags.insert(.option)
-            case "control": modifierFlags.insert(.control)
-            case "function": modifierFlags.insert(.function)
-            default: return false
-            }
-        }
+        guard let shortcut = KeyboardInjector.recordedShortcut(
+            keyCode: keyCode, modifiers: modifiers, deviceModifierFlags: deviceModifierFlags
+        ) else { return false }
         guard KeyboardInjector.isAccessibilityTrusted else {
             _ = KeyboardInjector.requestAccessibilityAccess()
             return false
         }
         return performExternalConfiguredAction(ConfiguredButtonAction(
             action: .customShortcut,
-            shortcut: CustomKeyboardShortcut(
-                keyCode: keyCode,
-                modifierFlags: modifierFlags,
-                keyLabel: "Key Code \(keyCode)"
-            )
+            shortcut: shortcut
         ))
     }
 

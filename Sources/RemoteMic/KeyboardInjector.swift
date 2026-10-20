@@ -249,6 +249,24 @@ enum KeyboardInjector {
         )
     }
 
+    static func recordedShortcut(
+        keyCode: UInt16, modifiers: [String], deviceModifierFlags: UInt64
+    ) -> CustomKeyboardShortcut? {
+        guard keyCode <= 127, deviceModifierFlags & ~UInt64(0x207f) == 0 else { return nil }
+        var flags = NSEvent.ModifierFlags(rawValue: UInt(deviceModifierFlags))
+        for modifier in modifiers {
+            switch modifier {
+            case "command": flags.insert(.command)
+            case "shift": flags.insert(.shift)
+            case "option": flags.insert(.option)
+            case "control": flags.insert(.control)
+            case "function": flags.insert(.function)
+            default: return nil
+            }
+        }
+        return CustomKeyboardShortcut(keyCode: keyCode, modifierFlags: flags, keyLabel: "")
+    }
+
     @discardableResult
     static func send(
         _ action: ButtonAction,
@@ -400,18 +418,11 @@ enum KeyboardInjector {
                     )
                     return submitted
                 }
-                if !eventFlags.isEmpty {
-                    return ShortcutEventSequence.send(
-                        keyCode: CGKeyCode(shortcut.keyCode),
-                        modifiers: eventFlags,
-                        hardwareFlags: shortcutHardwareFlags,
-                        eventPoster: shortcutEventPoster
-                    )
-                }
-                keyPoster(CGKeyCode(shortcut.keyCode), eventFlags)
-                AppLogger.shared.write(
-                    "SHORTCUT ACTION submitted key_code=\(shortcut.keyCode) " +
-                        "modifier_flags=\(eventFlags.rawValue) standalone=false"
+                return ShortcutEventSequence.send(
+                    keyCode: CGKeyCode(shortcut.keyCode),
+                    modifiers: eventFlags,
+                    hardwareFlags: shortcutHardwareFlags,
+                    eventPoster: shortcutEventPoster
                 )
             }
         case .focusInput:

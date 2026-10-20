@@ -1,6 +1,45 @@
 import CoreGraphics
 import Foundation
 
+/// HID flags and keyState both treat a navigation key's extended-key Fn bit as
+/// a held Fn. Only a real Fn flagsChanged edge can disambiguate that snapshot.
+final class ShortcutHardwareModifierState {
+    private let lock = NSLock()
+    private var functionKeyPressed: Bool?
+
+    func observe(type: CGEventType, event: CGEvent) {
+        guard type == .flagsChanged,
+              event.getIntegerValueField(.keyboardEventKeycode) == 63,
+              event.getIntegerValueField(.eventSourceUserData) != KeyboardInjector.syntheticEventMarker
+        else { return }
+        lock.lock()
+        functionKeyPressed = event.flags.contains(.maskSecondaryFn)
+        lock.unlock()
+    }
+
+    func reset() {
+        lock.lock()
+        functionKeyPressed = nil
+        lock.unlock()
+    }
+
+    func snapshot(_ raw: CGEventFlags) -> (
+        flags: CGEventFlags, functionState: String, removedFunctionFlag: Bool
+    ) {
+        lock.lock()
+        let pressed = functionKeyPressed
+        lock.unlock()
+        var flags = raw
+        if pressed == true {
+            flags.insert(.maskSecondaryFn)
+        } else if pressed == false || raw.contains(.maskNumericPad) {
+            flags.remove(.maskSecondaryFn)
+        }
+        let state = pressed.map { $0 ? "pressed" : "released" } ?? "unobserved"
+        return (flags, state, raw.contains(.maskSecondaryFn) && !flags.contains(.maskSecondaryFn))
+    }
+}
+
 /// One synchronous shortcut transaction. Capture hardware flags before posting:
 /// HID state can echo our injected flags even when the source is private.
 enum ShortcutEventSequence {
@@ -19,6 +58,7 @@ enum ShortcutEventSequence {
         let sideSpecific: Bool
     }
 
+    static let hardwareModifierState = ShortcutHardwareModifierState()
     private static let lock = NSLock()
     // Existing saved combinations have no modifier side. Use left keys without
     // changing their persisted representation; standalone modifiers keep their path.
@@ -98,6 +138,7 @@ enum ShortcutEventSequence {
         keyCode: CGKeyCode,
         modifiers requested: CGEventFlags,
         hardwareFlags: () -> CGEventFlags,
+        modifierState: ShortcutHardwareModifierState = hardwareModifierState,
         eventPoster: (CGEvent) -> Bool,
         logger: (String) -> Void = { AppLogger.shared.write($0) }
     ) -> Bool {
@@ -111,9 +152,13 @@ enum ShortcutEventSequence {
         var submitted = 0
         var cleanupFailed = false
         let selectedModifiers = selectedModifiers(for: requested)
+        let hardwareSnapshot = modifierState.snapshot(hardwareFlags())
+        let physicalAtStart = hardwareSnapshot.flags.intersection(hardwareModifierMask)
         logger(
             "\(prefix) phase=requested modifier_count=\(selectedModifiers.count) " +
-                "side_specific=\(selectedModifiers.contains { $0.sideSpecific })"
+                "side_specific=\(selectedModifiers.contains { $0.sideSpecific }) " +
+                "hardware_function_state=\(hardwareSnapshot.functionState) " +
+                "hardware_function_filtered=\(hardwareSnapshot.removedFunctionFlag)"
         )
         defer {
             let elapsed = Int((ProcessInfo.processInfo.systemUptime - started) * 1_000)
@@ -126,7 +171,6 @@ enum ShortcutEventSequence {
             reason = "source_unavailable"
             return false
         }
-        let physicalAtStart = hardwareFlags().intersection(hardwareModifierMask)
         let owned = selectedModifiers.filter { modifier in
             if modifier.sideSpecific {
                 return !physicalAtStart.contains(modifier.deviceBit)
@@ -143,6 +187,9 @@ enum ShortcutEventSequence {
             // Keep one physical snapshot for this synchronous transaction. Reading
             // HID state after posting can retain our own modifiers and prevent release.
             event.flags = synthetic.union(physicalAtStart)
+            if !modifier, (123...126).contains(code) {
+                event.flags.insert(.maskNumericPad)
+            }
             event.setIntegerValueField(.eventSourceUserData, value: KeyboardInjector.syntheticEventMarker)
             let accepted = eventPoster(event)
             if accepted { submitted += 1 }

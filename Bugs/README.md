@@ -1,5 +1,7 @@
 # Bug 记录
 
+- [原生方向键把伪Fn带入自定义快捷键](./2026-10-20-shortcut-inherits-navigation-function.html)
+
 - [苹果遥控器数据流释放时崩溃](./2026-10-20-apple-remote-packet-logger-deinit.html)
 
 - [回眸操作顺序与删除对齐](./2026-10-15-reflections-action-alignment.html)
