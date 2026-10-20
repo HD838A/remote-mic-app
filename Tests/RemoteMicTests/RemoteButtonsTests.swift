@@ -1245,7 +1245,7 @@ struct RemoteButtonsTests {
                     keyDown: true
                 ))
                 nativeDown.setIntegerValueField(.keyboardEventKeyboardType, value: 40)
-                #expect(suppressor.handle(type: .keyDown, event: nativeDown) == !isSeized)
+                #expect(suppressor.handle(type: .keyDown, event: nativeDown))
             }
             monitor.handleSimulatedReport(reportID: 1, data: Data(repeating: 0, count: 6))
             if button == .left || button == .right {
@@ -1255,7 +1255,7 @@ struct RemoteButtonsTests {
                     keyDown: false
                 ))
                 nativeUp.setIntegerValueField(.keyboardEventKeyboardType, value: 40)
-                #expect(suppressor.handle(type: .keyUp, event: nativeUp) == !isSeized)
+                #expect(suppressor.handle(type: .keyUp, event: nativeUp))
             }
         }
 
@@ -3351,17 +3351,17 @@ struct RemoteButtonsTests {
         #expect(RemoteButton.back.nativeEvent == nil)
     }
 
-    @Test(arguments: [RemoteButton.volumeUp, .volumeDown], [true, false])
-    func profilePageShortcutSuppressesNativeVolume(button: RemoteButton, seized: Bool) throws {
-        let suiteName = "RemoteButtonsTests.profileVolume.\(UUID().uuidString)"
+    @Test(arguments: RemoteButton.xiaomiCases.filter { $0.nativeEvent != nil }, [true, false])
+    func profileShortcutSuppressesNativeEvent(button: RemoteButton, seized: Bool) throws {
+        let suiteName = "RemoteButtonsTests.profileNative.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let settings = AppSettings(defaults: defaults)
         settings.customMappingEnabled = true
         let profileID = try #require(settings.selectedRemoteProfileID)
         let configured = ConfiguredButtonAction(action: .customShortcut,
-            shortcut: CustomKeyboardShortcut(keyCode: button == .volumeUp ? 116 : 121,
-                modifierFlags: [], keyLabel: button == .volumeUp ? "Page Up" : "Page Down"))
+            shortcut: CustomKeyboardShortcut(keyCode: button == .volumeDown ? 121 : 116,
+                modifierFlags: [], keyLabel: button == .volumeDown ? "Page Down" : "Page Up"))
         settings.configuredActionOverride = { device, key, trigger in
             device == profileID && key == button && trigger == .singleClick ? configured : nil
         }
@@ -3371,27 +3371,51 @@ struct RemoteButtonsTests {
             eventSuppressor: suppressor, ownsEventSuppressor: false,
             scheduler: RemoteButtonsTestScheduler(), runtimePermissions: { true },
             actionPerformer: { _, _, action in performed.append(action); return true })
-        monitor.connectSimulatedDevice(fingerprint: "profile-volume", profileID: profileID, isSeized: seized)
+        monitor.connectSimulatedDevice(fingerprint: "profile-native", profileID: profileID, isSeized: seized)
         defer { monitor.disconnectSimulatedDevice() }
-        func nativeVolume(down: Bool) throws -> CGEvent {
-            let type = button == .volumeUp ? 0 : 1
-            return try #require(NSEvent.otherEvent(with: .systemDefined, location: .zero,
-                modifierFlags: [], timestamp: 0, windowNumber: 0, context: nil, subtype: 8,
-                data1: (type << 16) | ((down ? 0xA : 0xB) << 8), data2: -1)?.cgEvent)
+        func nativeEvent(_ descriptor: RemoteNativeEvent, down: Bool, repeating: Bool = false) throws -> CGEvent {
+            switch descriptor {
+            case .keyboard(let keyCode):
+                let event = try #require(CGEvent(keyboardEventSource: nil, virtualKey: keyCode, keyDown: down))
+                event.setIntegerValueField(.keyboardEventAutorepeat, value: repeating ? 1 : 0)
+                return event
+            case .systemKey(let type):
+                return try #require(NSEvent.otherEvent(with: .systemDefined, location: .zero,
+                    modifierFlags: [], timestamp: 0, windowNumber: 0, context: nil, subtype: 8,
+                    data1: (Int(type) << 16) | ((down ? 0xA : 0xB) << 8), data2: -1)?.cgEvent)
+            }
         }
-        let eventType = try #require(CGEventType(rawValue: 14))
         let report = Data([UInt8(button.hidUsage), 0, 0, 0, 0, 0])
         monitor.handleSimulatedReport(reportID: 1, data: report)
         monitor.handleSimulatedReport(reportID: 1, data: report)
         #expect(performed == [configured])
-        #expect(suppressor.handle(type: eventType, event: try nativeVolume(down: true)))
-        #expect(suppressor.handle(type: eventType, event: try nativeVolume(down: true)))
-        let synthetic = try nativeVolume(down: true)
-        synthetic.setIntegerValueField(.eventSourceUserData, value: KeyboardInjector.syntheticEventMarker)
-        #expect(!suppressor.handle(type: eventType, event: synthetic))
+        for descriptor in button.nativeEvents {
+            let down = try nativeEvent(descriptor, down: true)
+            #expect(suppressor.handle(type: down.type, event: down))
+            let repeated = try nativeEvent(descriptor, down: true, repeating: true)
+            #expect(suppressor.handle(type: repeated.type, event: repeated))
+            let synthetic = try nativeEvent(descriptor, down: true)
+            synthetic.setIntegerValueField(.eventSourceUserData, value: KeyboardInjector.syntheticEventMarker)
+            #expect(!suppressor.handle(type: synthetic.type, event: synthetic))
+        }
         monitor.handleSimulatedReport(reportID: 1, data: Data(repeating: 0, count: 6))
-        #expect(suppressor.handle(type: eventType, event: try nativeVolume(down: false)))
-        #expect(!suppressor.handle(type: eventType, event: try nativeVolume(down: true)))
+        for descriptor in button.nativeEvents {
+            let up = try nativeEvent(descriptor, down: false)
+            #expect(suppressor.handle(type: up.type, event: up))
+            let down = try nativeEvent(descriptor, down: true)
+            #expect(!suppressor.handle(type: down.type, event: down))
+        }
+        // Disconnect while held must release every armed descriptor, including media keys.
+        monitor.handleSimulatedReport(reportID: 1, data: report)
+        for descriptor in button.nativeEvents {
+            let down = try nativeEvent(descriptor, down: true)
+            #expect(suppressor.handle(type: down.type, event: down))
+        }
+        monitor.disconnectSimulatedDevice()
+        for descriptor in button.nativeEvents {
+            let down = try nativeEvent(descriptor, down: true, repeating: true)
+            #expect(!suppressor.handle(type: down.type, event: down))
+        }
     }
 
     @Test(arguments: [RemoteButton.left, .right], [true, false])
