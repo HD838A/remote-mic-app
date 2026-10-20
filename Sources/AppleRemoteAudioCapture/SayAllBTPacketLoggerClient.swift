@@ -89,6 +89,7 @@ public final class AppleRemotePacketLoggerClient: @unchecked Sendable {
     private static let maximumPacketsPerSecond = 20_000
 
     private let stateQueue: DispatchQueue
+    private let stateQueueKey = DispatchSpecificKey<Void>()
     private let authorizationQueue = DispatchQueue(
         label: "com.hd838a.RemoteMic.appleRemote.packetLogger.authorization",
         qos: .userInitiated
@@ -126,10 +127,12 @@ public final class AppleRemotePacketLoggerClient: @unchecked Sendable {
         self.sealAuthorizationRight = sealAuthorizationRight
         self.onPacket = onPacket
         self.onEvent = onEvent
+        stateQueue.setSpecific(key: stateQueueKey, value: ())
     }
 
     deinit {
         stopSynchronously(emitEvent: false)
+        stateQueue.setSpecific(key: stateQueueKey, value: nil)
     }
 
     public func start() {
@@ -393,8 +396,13 @@ public final class AppleRemotePacketLoggerClient: @unchecked Sendable {
     }
 
     private func stopSynchronously(emitEvent: Bool) {
-        stateQueue.sync {
+        // The last callback reference can be released on stateQueue itself.
+        if DispatchQueue.getSpecific(key: stateQueueKey) != nil {
             stopOnQueue(emitEvent: emitEvent)
+        } else {
+            stateQueue.sync {
+                stopOnQueue(emitEvent: emitEvent)
+            }
         }
     }
 
