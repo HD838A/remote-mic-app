@@ -996,7 +996,7 @@ final class HIDRemoteMonitor {
         guard frontmostBundleIdentifier == PresetApplication.remoteMic.bundleIdentifier else {
             return true
         }
-        return ![.arrowUp, .arrowDown, .arrowLeft, .arrowRight, .deleteBackward].contains(action)
+        return ![.arrowUp, .arrowDown, .arrowLeft, .arrowRight].contains(action)
     }
 
     static func shouldRepeat(
@@ -1005,6 +1005,10 @@ final class HIDRemoteMonitor {
     ) -> Bool {
         guard configured.allowsSingleClickRepeat else { return false }
         guard frontmostBundleIdentifier == PresetApplication.remoteMic.bundleIdentifier else {
+            return true
+        }
+        if configured.action == .deleteBackward ||
+            (configured.action == .customShortcut && configured.shortcut?.keyCode == 51) {
             return true
         }
         return !configured.isDirectionalOrDeleteBackward
