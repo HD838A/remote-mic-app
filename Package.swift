@@ -173,6 +173,16 @@ func artifactSupportsAuthorizedAccess(module: String, decision: String) -> Bool 
     }
 }
 let membershipAuthorizedAccessAvailable = artifactSupportsAuthorizedAccess(module: "SayAllMembershipHostAdapter", decision: "MembershipHostButtonProfilesAccessDecision")
+let sourceMembershipAuthorizedAccessAvailable = [
+    privateSwiftPMEnabled ? privatePlatformPackagePath.map {
+        URL(fileURLWithPath: $0).appendingPathComponent("packages/macos-membership").path
+    } : nil,
+].compactMap { $0 }.contains { path in
+    let source = URL(fileURLWithPath: path)
+        .appendingPathComponent("Sources/SayAllMembershipHostAdapter/MembershipHostAdapter.swift")
+    return (try? String(contentsOf: source, encoding: .utf8))?.contains("case authorized") == true
+}
+let membershipAuthorizedAccess = membershipAuthorizedAccessAvailable || sourceMembershipAuthorizedAccessAvailable
 let profilesAuthorizedAccessAvailable = artifactSupportsAuthorizedAccess(module: "SayAllButtonProfiles", decision: "ButtonProfilesAccessDecision") ||
     [buttonProfilesPackagePath, privateSwiftPMEnabled ? privatePlatformPackagePath.map {
         URL(fileURLWithPath: $0).appendingPathComponent("packages/macos-button-profiles").path
@@ -195,7 +205,7 @@ let macOSPlatform: SupportedPlatform = ProcessInfo.processInfo.environment["RELE
     ? .macOS(.v13)
     : .macOS(.v14)
 var remoteMicSwiftSettings: [SwiftSetting] = []
-if membershipAuthorizedAccessAvailable {
+if membershipAuthorizedAccess {
     remoteMicSwiftSettings.append(.define("SAYALL_MEMBERSHIP_AUTHORIZED_ACCESS"))
 }
 if profilesAuthorizedAccessAvailable {
