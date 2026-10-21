@@ -144,6 +144,26 @@ class ReleaseTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "clean checkout"):
             platform.verify_checkout(self.repo, "2.2.0")
 
+    def test_local_checkout_accepts_only_an_explicit_clean_commit(self):
+        self.advance()
+        sha = self.git("rev-parse", "HEAD")
+        self.assertEqual(platform.verify_checkout(self.repo, "2.2.0", "local", sha), sha)
+        for channel in ("release", "internalQA"):
+            with self.assertRaisesRegex(RuntimeError, "only allowed for the local"):
+                platform.verify_checkout(self.repo, "2.2.0", channel, sha)
+        with self.assertRaisesRegex(RuntimeError, "full commit SHA"):
+            platform.verify_checkout(self.repo, "2.2.0", "local", sha[:8])
+        with self.assertRaisesRegex(RuntimeError, "clean checkout"):
+            platform.verify_checkout(self.repo, "2.2.0", "local", self.baseline)
+        self.write("untracked.swift", "unreviewed\n")
+        with self.assertRaisesRegex(RuntimeError, "clean checkout"):
+            platform.verify_checkout(self.repo, "2.2.0", "local", sha)
+
+    def test_local_channel_without_explicit_commit_still_requires_the_tag(self):
+        self.advance()
+        with self.assertRaisesRegex(RuntimeError, "clean checkout"):
+            platform.verify_checkout(self.repo, "2.2.0", "local")
+
     def test_move_out_of_mac_scope_is_detected(self):
         self.git("mv", "packages/macos-remote/Sources/runtime.swift", "runtime.swift")
         self.commit()

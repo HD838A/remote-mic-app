@@ -39,6 +39,8 @@ Mac Remote 与其他 macOS 私有组件使用同一个私有 Swift Package。CI 
 
 `SAYALL_PRIVATE_PLATFORM_MODE=required` 强制要求私有组件。显式设置 `REQUIRE_*` 的完整发布仍在缺少组件时失败；签名、公证及公开发布门禁保持不变。受保护 staging 只检查私有 Mac 代码已被清单 Tag 覆盖，不在签名阶段发布私有 Tag 或修改版本。受保护 runner 再次检查完整历史中的 Tag、main 和 checkout，拒绝过期 pin。
 
+本机测试未发布的私有修复时，显式设置 `SAYALL_BUILD_CHANNEL=local` 和 `SAYALL_LOCAL_PRIVATE_SOURCE_COMMIT=<完整 SHA>`。手动提供同一干净提交的私有源码路径与 prepared artifacts；构建脚本继续校验二者的 SHA 相同。此入口不创建 Tag，不修改版本清单；`release` 和 `internalQA` 渠道拒绝该提交覆盖。未指定完整 SHA 时，本地渠道仍执行原有 Tag 校验。
+
 ### Hotfix 准备
 
 只有用户明确要求紧急修复时才使用 Hotfix：读取 GitHub 当前 `releases/latest`，从该 Tag 的精确 Commit 创建 `hotfix/vX.Y.Z`。版本必须是同一 major/minor 的更高 patch；分支只包含该修复、直接相关测试和版本元数据，并保持线性历史。Hotfix 发布完成后必须把修复通过普通 PR 同步回 `main`。不得用 Hotfix 承载一般功能、积压 Bug、依赖升级或发布流程重构。
