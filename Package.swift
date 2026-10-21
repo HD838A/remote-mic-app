@@ -160,6 +160,27 @@ let artifactMacroHostShortcutsAvailable = privateArtifactPackagePath.map { path 
             .contains("public typealias RemoteMicKeyboardShortcutPerformer =") == true
     }
 } ?? false
+// Probe optional interfaces so older local packages remain buildable.
+func artifactSupportsAuthorizedAccess(module: String, decision: String) -> Bool {
+    guard let privateArtifactPackagePath, !privateArtifactPackagePath.isEmpty else { return false }
+    return ["arm64", "x86_64"].allSatisfy { architecture in
+        let interface = URL(fileURLWithPath: privateArtifactPackagePath)
+            .appendingPathComponent("Artifacts/\(module).xcframework/macos-arm64_x86_64/\(module).framework/Modules/\(module).swiftmodule/\(architecture)-apple-macos.swiftinterface")
+        guard let source = try? String(contentsOf: interface, encoding: .utf8),
+              let declaration = source.range(of: "public enum \(decision) "),
+              let end = source.range(of: "\n}", range: declaration.upperBound..<source.endIndex) else { return false }
+        return source[declaration.upperBound..<end.lowerBound].contains("case authorized")
+    }
+}
+let membershipAuthorizedAccessAvailable = artifactSupportsAuthorizedAccess(module: "SayAllMembershipHostAdapter", decision: "MembershipHostButtonProfilesAccessDecision")
+let profilesAuthorizedAccessAvailable = artifactSupportsAuthorizedAccess(module: "SayAllButtonProfiles", decision: "ButtonProfilesAccessDecision") ||
+    [buttonProfilesPackagePath, privateSwiftPMEnabled ? privatePlatformPackagePath.map {
+        URL(fileURLWithPath: $0).appendingPathComponent("packages/macos-button-profiles").path
+    } : nil].compactMap { $0 }.contains { path in
+        let source = URL(fileURLWithPath: path)
+            .appendingPathComponent("Sources/SayAllButtonProfiles/ButtonProfilesAccessDecision.swift")
+        return (try? String(contentsOf: source, encoding: .utf8))?.contains("case authorized") == true
+    }
 let buttonProfilesTestAccessEnabled = ProcessInfo.processInfo.environment[
     "SAYALL_TEST_BUTTON_PROFILES_FREE"
 ] == "1"
@@ -174,6 +195,12 @@ let macOSPlatform: SupportedPlatform = ProcessInfo.processInfo.environment["RELE
     ? .macOS(.v13)
     : .macOS(.v14)
 var remoteMicSwiftSettings: [SwiftSetting] = []
+if membershipAuthorizedAccessAvailable {
+    remoteMicSwiftSettings.append(.define("SAYALL_MEMBERSHIP_AUTHORIZED_ACCESS"))
+}
+if profilesAuthorizedAccessAvailable {
+    remoteMicSwiftSettings.append(.define("SAYALL_PROFILES_AUTHORIZED_ACCESS"))
+}
 if siriRemoteEnabled {
     remoteMicSwiftSettings.append(.define("SAYALL_SIRI_REMOTE_ENABLED"))
 }

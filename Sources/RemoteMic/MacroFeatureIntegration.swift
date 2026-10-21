@@ -501,6 +501,12 @@ final class MacroFeatureIntegration: ObservableObject {
             packageDecision = .allowed(validUntil: validUntil)
         case let .temporarilyOffline(validUntil):
             packageDecision = .temporarilyOffline(validUntil: validUntil)
+        case .authorized:
+            #if SAYALL_PROFILES_AUTHORIZED_ACCESS
+            packageDecision = .authorized
+            #else
+            packageDecision = .unavailable
+            #endif
         case .requiresPlus:
             packageDecision = .requiresPlus
         case .unavailable:
