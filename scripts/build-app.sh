@@ -463,7 +463,8 @@ for private_source in "$SAYALL_COMBINATION_ACTIONS_PATH" "$SAYALL_BUTTON_PROFILE
   PRIVATE_SOURCE_ROOT="$source_root"
 done
 if [[ -n "$PRIVATE_SOURCE_ROOT" ]]; then
-  python3 "$ROOT/scripts/prepare-private-platform.py" check-checkout --checkout "$PRIVATE_SOURCE_ROOT"
+  python3 "$ROOT/scripts/prepare-private-platform.py" check-checkout --checkout "$PRIVATE_SOURCE_ROOT" \
+    --channel "$SAYALL_BUILD_CHANNEL" --local-commit "${SAYALL_LOCAL_PRIVATE_SOURCE_COMMIT:-}"
   if [[ -n "$SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH" && \
         "$(jq -r '.sourceCommit' "$SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH/private-artifact-package.json")" != "$(git -C "$PRIVATE_SOURCE_ROOT" rev-parse HEAD)" ]]; then
     print -u2 "Prepared artifacts and private source packages must use the same tag commit"

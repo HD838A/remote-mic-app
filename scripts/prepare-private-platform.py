@@ -66,7 +66,16 @@ def verify_tag(repo, tag, main="origin/main"):
     return sha
 
 
-def verify_checkout(repo, tag):
+def verify_checkout(repo, tag, channel="release", local_commit=None):
+    if local_commit:
+        if channel != "local":
+            raise RuntimeError("An explicit private commit is only allowed for the local build channel")
+        if not re.fullmatch(r"[0-9a-f]{40}", local_commit):
+            raise RuntimeError("Local private source requires a full commit SHA")
+        if git(repo, "rev-parse", "HEAD") != local_commit or git(repo, "status", "--porcelain", "--untracked-files=all"):
+            raise RuntimeError("Local private packaging requires a clean checkout of the explicit commit")
+        git(repo, "cat-file", "-e", f"{local_commit}:Package.swift")
+        return local_commit
     sha = verify_tag(repo, tag)
     if git(repo, "rev-parse", "HEAD") != sha or git(repo, "status", "--porcelain", "--untracked-files=all"):
         raise RuntimeError("Private packaging requires a clean checkout of the manifest tag")
@@ -194,6 +203,8 @@ def main():
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parent.parent)
     parser.add_argument("--checkout", type=Path)
     parser.add_argument("--tag")
+    parser.add_argument("--channel", choices=("local", "internalQA", "release"), default="release")
+    parser.add_argument("--local-commit")
     parser.add_argument("--mode", choices=("auto", "public", "required"), default="auto")
     args = parser.parse_args()
     manifest = json.loads((args.root / "config/release-dependencies.json").read_text())
@@ -219,8 +230,8 @@ def main():
         if args.action == "release":
             print(release(repo))
         elif args.action == "check-checkout":
-            sha = verify_checkout(repo, tag)
-            print(f"PRIVATE PLATFORM verified tag={tag} commit={sha}")
+            sha = verify_checkout(repo, tag, args.channel, args.local_commit)
+            print(f"PRIVATE PLATFORM verified channel={args.channel} commit={sha}")
         else:
             sha = verify_tag(repo, tag)
             if mac_changes(repo, sha, "origin/main"):
