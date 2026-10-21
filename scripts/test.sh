@@ -25,6 +25,7 @@ xcrun swiftc \
   "$ROOT/Sources/RemoteMic/VoiceKeyMode.swift" \
   "$ROOT/Sources/RemoteMic/AppIconController.swift" \
   "$ROOT/Sources/RemoteMic/AppSettings.swift" \
+  "$ROOT/Sources/RemoteMic/LocalUsageLedger.swift" \
   "$ROOT/Sources/RemoteMic/MacConfigurationBackup.swift" \
   "$ROOT/Sources/RemoteMic/MembershipFeatureTypes.swift" \
   "$ROOT/Sources/RemoteMic/ChromecastFeatureIntegration.swift" \
