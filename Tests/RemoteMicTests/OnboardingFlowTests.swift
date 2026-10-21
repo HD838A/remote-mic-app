@@ -85,7 +85,8 @@ struct OnboardingFlowTests {
                 #expect(resumed.shouldDisableOnboardingSiriRemote(accessDecision: decision) == !initiallyEnabled)
             }
             for decision in [HostButtonProfilesAccessDecision.allowed(validUntil: .distantFuture),
-                             .temporarilyOffline(validUntil: .distantFuture)] {
+                             .temporarilyOffline(validUntil: .distantFuture),
+                             .authorized] {
                 #expect(!resumed.shouldDisableOnboardingSiriRemote(accessDecision: decision))
             }
             // Changing the selected source must not lose ownership of a temporary enable.
