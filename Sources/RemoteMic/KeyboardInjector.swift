@@ -683,15 +683,25 @@ enum KeyboardInjector {
         }
     }
 
-    private static func focusFrontmostComposer(
+    static func focusFrontmostComposer(
         requestGate: ApplicationFocusRequestGate,
         requestID: UInt64,
+        accessibilityTrusted: () -> Bool = { isAccessibilityTrusted },
+        frontmostApplication: () -> NSRunningApplication? = { NSWorkspace.shared.frontmostApplication },
         completion: @escaping (Bool) -> Void
     ) -> Bool {
         guard requestGate.isCurrent(requestID) else { return false }
-        guard isAccessibilityTrusted,
-              let application = NSWorkspace.shared.frontmostApplication
+        guard accessibilityTrusted(),
+              let application = frontmostApplication()
         else { return false }
+        // In-process AX queries can enter SwiftUI off-main and deadlock its view graph.
+        if application.processIdentifier == ProcessInfo.processInfo.processIdentifier {
+            AppLogger.shared.write(
+                "APP FOCUS operation_id=\(requestID) phase=completed result=skipped reason=self_frontmost"
+            )
+            completeComposerFocus(false, requestID: requestID, requestGate: requestGate, completion: completion)
+            return true
+        }
         if application.bundleIdentifier == PresetApplication.cmux.bundleIdentifier,
            let applicationURL = NSWorkspace.shared.urlForApplication(
                withBundleIdentifier: PresetApplication.cmux.bundleIdentifier
