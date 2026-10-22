@@ -2051,6 +2051,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         webRemoteSessionOperationCounter &+= 1
         let generation = webRemoteSessionGeneration
         let operationID = "web_remote_\(webRemoteSessionOperationCounter)"
+        lastRemoteSessionError = nil
         webRemoteState = .connecting
         AppLogger.shared.write(
             "WEB REMOTE SESSION operation_id=\(operationID) " +
@@ -2174,27 +2175,17 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
                         "membership_check=\(isWebRemoteMembershipBypassEnabled ? "bypassed" : "required")"
                 )
                 return
+            } catch let error as HostRemoteSessionError {
+                guard generation == webRemoteSessionGeneration else { return }
+                recordRemoteSessionFailure(error, operationID: operationID)
+                return
             } catch let failure as HostRemoteSessionFailure {
                 guard generation == webRemoteSessionGeneration else { return }
-                if failure == .signInRequired || failure == .plusRequired {
-                    webRemoteState = .membershipRequired
-                } else {
-                    webRemoteState = .failed(webRemoteFailureMessage(failure))
-                }
-                AppLogger.shared.write(
-                    "WEB REMOTE SESSION operation_id=\(operationID) " +
-                        "phase=failed result=failed reason=\(webRemoteFailureReason(failure))"
-                )
+                recordRemoteSessionFailure(HostRemoteSessionError(failure: failure), operationID: operationID)
                 return
             } catch {
                 guard generation == webRemoteSessionGeneration else { return }
-                webRemoteState = .failed(
-                    webRemoteFailureMessage(.invalidResponse)
-                )
-                AppLogger.shared.write(
-                    "WEB REMOTE SESSION operation_id=\(operationID) " +
-                        "phase=failed result=failed reason=invalid_response"
-                )
+                recordRemoteSessionFailure(HostRemoteSessionError(failure: .invalidResponse), operationID: operationID)
                 return
             }
         }
@@ -2206,6 +2197,22 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
                 "phase=failed result=failed reason=membership_component_unavailable"
         )
     }
+
+    private func recordRemoteSessionFailure(_ error: HostRemoteSessionError, operationID: String) {
+        lastRemoteSessionError = error
+        if error.failure == .signInRequired || error.failure == .plusRequired {
+            webRemoteState = .membershipRequired
+        } else {
+            webRemoteState = .failed(webRemoteFailureMessage(error.failure))
+        }
+        AppLogger.shared.write(
+            "WEB REMOTE SESSION operation_id=\(operationID) " +
+                "phase=failed result=failed reason=\(webRemoteFailureReason(error.failure)) " +
+                error.diagnosticFields
+        )
+    }
+
+    private(set) var lastRemoteSessionError: HostRemoteSessionError?
 
     var webRemoteServiceEnvironment: String {
         membershipFeature.serviceEnvironmentForDiagnostics

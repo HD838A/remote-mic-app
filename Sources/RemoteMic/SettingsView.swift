@@ -93,6 +93,7 @@ struct SettingsDiagnosticSnapshot: Equatable {
     let inputMonitoringGranted: Bool
     let accessibilityGranted: Bool
     let runtimeLogAvailable: Bool
+    var remoteSessionError: HostRemoteSessionError? = nil
 
     var summary: String {
         [
@@ -102,7 +103,9 @@ struct SettingsDiagnosticSnapshot: Equatable {
             "permission_input_monitoring=\(inputMonitoringGranted)",
             "permission_accessibility=\(accessibilityGranted)",
             "runtime_log_available=\(runtimeLogAvailable)",
-        ].joined(separator: "\n")
+        ].joined(separator: "\n") + (remoteSessionError.map {
+            "\nremote_session " + $0.diagnosticFields
+        } ?? "")
     }
 
     var auditLog: String {
@@ -4824,7 +4827,8 @@ struct SettingsView: View {
             bluetoothGranted: bluetoothPermissionState == .granted,
             inputMonitoringGranted: inputMonitoringGranted,
             accessibilityGranted: accessibilityGranted,
-            runtimeLogAvailable: FileManager.default.fileExists(atPath: AppLogger.shared.logURL.path)
+            runtimeLogAvailable: FileManager.default.fileExists(atPath: AppLogger.shared.logURL.path),
+            remoteSessionError: model.lastRemoteSessionError
         )
         SettingsPageBehavior.copyDiagnosticSummary(
             snapshot,
