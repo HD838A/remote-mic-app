@@ -414,6 +414,23 @@ final class MacroFeatureIntegration: ObservableObject {
                 macroID: id, title: deviceName(binding.remoteProfileID) + " · " + localization.text("button_mapping.base_profile") + " · " + binding.button.displayName(using: localization) + " · " + binding.trigger.displayName(using: localization),
                 device: binding.remoteProfileID, profile: nil, button: binding.button.rawValue, trigger: binding.trigger.rawValue)
         }
+        func appendLegacy(_ bindings: [RemoteButton: [ButtonTrigger: ConfiguredButtonAction]], device: UUID?) {
+            for (button, triggers) in bindings {
+                for (trigger, configured) in triggers {
+                    guard configured.action == .combinationAction, let id = configured.macroID,
+                          !usages.contains(where: { $0.device == device && $0.profile == nil && $0.button == button.rawValue && $0.trigger == trigger.rawValue && $0.macroID == id })
+                    else { continue }
+                    usages.append(RemoteMicBindingUsage(
+                        id: "secondary.\(device?.uuidString ?? "default").\(button.rawValue).\(trigger.rawValue).\(id)",
+                        macroID: id, title: deviceName(device) + " · " + localization.text("button_mapping.base_profile") + " · " + button.displayName(using: localization) + " · " + trigger.displayName(using: localization),
+                        device: device, profile: nil, button: button.rawValue, trigger: trigger.rawValue))
+                }
+            }
+        }
+        appendLegacy(settings.secondaryButtonBindings, device: settings.selectedRemoteProfileID)
+        for profile in settings.remoteDeviceProfiles {
+            appendLegacy(profile.mappings.parsedSecondaryButtonBindings, device: profile.id)
+        }
         #if canImport(SayAllButtonProfiles)
         for profile in buttonProfilesFeature.allProfiles {
             for (key, binding) in profile.bindings {
@@ -432,7 +449,21 @@ final class MacroFeatureIntegration: ObservableObject {
             }
         }
         #endif
-        return usages
+        // Keep legacy private-package bindings visible until they are migrated or cleaned.
+        // Unified bindings with the same physical key already represent the active entry.
+        let unifiedKeys = Set(usages.filter { $0.profile == nil }.map { "\($0.device?.uuidString ?? "default")|\($0.button)|\($0.trigger)|\($0.macroID)" })
+        for legacy in feature.legacyBindings {
+            let key = "\(legacy.device?.uuidString ?? "default")|\(legacy.button)|\(legacy.trigger)|\(legacy.macroID)"
+            guard !unifiedKeys.contains(key) else { continue }
+            let buttonTitle = RemoteButton(rawValue: legacy.button)?.displayName(using: localization) ?? legacy.button
+            let triggerTitle = ButtonTrigger(rawValue: legacy.trigger)?.displayName(using: localization) ?? legacy.trigger
+            usages.append(RemoteMicBindingUsage(
+                id: "legacy.\(legacy.device?.uuidString ?? "default").\(legacy.button).\(legacy.trigger)",
+                macroID: legacy.macroID,
+                title: localization.text("settings.section.macros") + " · " + deviceName(legacy.device) + " · " + buttonTitle + " · " + triggerTitle,
+                device: legacy.device, profile: nil, button: legacy.button, trigger: legacy.trigger))
+        }
+        return usages.sorted { $0.id < $1.id }
     }
     #endif
 
@@ -562,6 +593,41 @@ final class MacroFeatureIntegration: ObservableObject {
         onBindToButton: @escaping () -> Void = {}
     ) -> AnyView {
         #if SAYALL_UNIFIED_BUTTON_CONFIGURATION && canImport(SayAllMacroRemoteMic)
+        #if SAYALL_MACRO_MISSING_BINDING_CLEANUP
+        return feature.settingsView(
+            selectedRemoteProfileID: selectedRemoteProfileID,
+            remotePresentation: combinationActionsRemotePresentation(for: remoteModel),
+            configuredActionTitle: configuredActionTitle,
+            usages: settings.map(bindingUsages) ?? [],
+            onEditBinding: { usage in
+                guard let button = RemoteButton(rawValue: usage.button),
+                      let trigger = ButtonTrigger(rawValue: usage.trigger) else { return }
+                onEditBinding(usage.device, usage.profile, button, trigger)
+            },
+            onBindToButton: onBindToButton,
+            onRemoveMissingBindings: { [weak self] usages in
+                guard let self, let settings else { return false }
+                #if canImport(SayAllButtonProfiles)
+                guard self.buttonProfilesFeature.canCleanMacroReferences else { return false }
+                #endif
+                guard !settings.corruptedSettingKeys.contains("unifiedBaseBindings") else { return false }
+                let macroIDs = Set(usages.map(\.macroID))
+                for macroID in macroIDs {
+                    settings.removeMacroReferences(to: macroID)
+                    _ = self.feature.removeMacroReferences(to: macroID)
+                    #if canImport(SayAllButtonProfiles)
+                    _ = self.buttonProfilesFeature.removeMacroReferences(to: macroID) { payload in
+                        guard let configured = try? JSONDecoder().decode(ConfiguredButtonAction.self, from: payload)
+                        else { return false }
+                        return configured.action == .combinationAction && configured.macroID == macroID
+                    }
+                    #endif
+                }
+                let remaining = self.bindingUsages(settings).contains { macroIDs.contains($0.macroID) }
+                    || self.feature.legacyBindings.contains { macroIDs.contains($0.macroID) }
+                return !remaining
+            })
+        #else
         return feature.settingsView(
             selectedRemoteProfileID: selectedRemoteProfileID,
             remotePresentation: combinationActionsRemotePresentation(for: remoteModel),
@@ -573,6 +639,7 @@ final class MacroFeatureIntegration: ObservableObject {
                 onEditBinding(usage.device, usage.profile, button, trigger)
             },
             onBindToButton: onBindToButton)
+        #endif
         #else
 
         #if canImport(SayAllMacroRemoteMic)

@@ -41,6 +41,42 @@ struct ButtonBindingConfigurationTests {
         #expect(settings.secondaryButtonBindings.isEmpty)
     }
 
+    @Test func historicalMissingReferencesAreRemovedAcrossDevicesAndSurviveRestart() throws {
+        let suite = "UnifiedButtons.HistoricalCleanup.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let settings = AppSettings(defaults: defaults)
+        let first = settings.registerHIDRemote(fingerprint: "cleanup-first")
+        let second = settings.registerHIDRemote(fingerprint: "cleanup-second")
+        let missing = ConfiguredButtonAction(action: .combinationAction, shortcut: nil, macroID: "local.missing")
+        let valid = ConfiguredButtonAction(action: .combinationAction, shortcut: nil, macroID: "local.valid")
+        settings.setBaseBinding(missing, for: .home, trigger: .singleClick, profileID: first)
+        settings.setBaseBinding(valid, for: .up, trigger: .singleClick, profileID: second)
+        settings.setBaseBinding(.disabled, for: .down, trigger: .singleClick, profileID: second)
+        settings.secondaryButtonBindings = [.ok: [.doubleClick: missing, .longPress: valid]]
+        let deviceProfiles = settings.remoteDeviceProfiles.map { profile in
+            var updated = profile
+            updated.mappings.secondaryButtonBindings["home"] = ["doubleClick": missing, "longPress": valid]
+            return updated
+        }
+        defaults.set(try JSONEncoder().encode(deviceProfiles), forKey: "remoteDeviceProfiles")
+        let cleanup = AppSettings(defaults: defaults)
+        cleanup.removeMacroReferences(to: "local.missing")
+        cleanup.removeMacroReferences(to: "local.missing")
+        let reopened = AppSettings(defaults: defaults)
+        #expect(!reopened.unifiedBaseBindings.contains { $0.configured.macroID == "local.missing" })
+        #expect(reopened.unifiedBaseBindings.contains { $0.configured == valid })
+        #expect(reopened.unifiedBaseBindings.contains { $0.configured == .disabled })
+        #expect(reopened.remoteDeviceProfiles.allSatisfy { profile in
+            profile.mappings.secondaryButtonBindings.values.allSatisfy {
+                !$0.values.contains { $0.macroID == "local.missing" }
+            }
+        })
+        #expect(reopened.remoteDeviceProfiles.contains { profile in
+            profile.mappings.secondaryButtonBindings.values.contains { $0.values.contains(valid) }
+        })
+    }
+
     @Test func devicesAndTriggersRemainIndependent() {
         let settings = settings()
         let first = UUID(), second = UUID()

@@ -160,6 +160,30 @@ let artifactMacroHostShortcutsAvailable = privateArtifactPackagePath.map { path 
             .contains("public typealias RemoteMicKeyboardShortcutPerformer =") == true
     }
 } ?? false
+// Keep hosts buildable with packages from before missing-reference cleanup.
+let profileMissingBindingCleanupAvailable = [buttonProfilesPackagePath, privateSwiftPMEnabled ? privatePlatformPackagePath.map {
+    URL(fileURLWithPath: $0).appendingPathComponent("packages/macos-button-profiles").path
+} : nil].compactMap { $0 }.contains { path in
+    let url = URL(fileURLWithPath: path).appendingPathComponent("Sources/SayAllButtonProfiles/SayAllButtonProfilesFeature.swift")
+    return (try? String(contentsOf: url, encoding: .utf8))?.contains("canCleanMacroReferences") == true
+} || (privateArtifactPackagePath.map { path in
+    ["arm64", "x86_64"].allSatisfy { architecture in
+        let url = URL(fileURLWithPath: path).appendingPathComponent("Artifacts/SayAllButtonProfiles.xcframework/macos-arm64_x86_64/SayAllButtonProfiles.framework/Modules/SayAllButtonProfiles.swiftmodule/\(architecture)-apple-macos.swiftinterface")
+        return (try? String(contentsOf: url, encoding: .utf8))?.contains("canCleanMacroReferences") == true
+    }
+} ?? false)
+let profilesPackageIncluded = privateButtonProfilesEnabled || privateArtifactsAvailable || !(buttonProfilesPackagePath ?? "").isEmpty
+let macroMissingBindingCleanupAvailable = (!profilesPackageIncluded || profileMissingBindingCleanupAvailable) && ([combinationActionsPackagePath, privateSwiftPMEnabled ? privatePlatformPackagePath.map {
+    URL(fileURLWithPath: $0).appendingPathComponent("packages/macos-combination-actions").path
+} : nil].compactMap { $0 }.contains { path in
+    let url = URL(fileURLWithPath: path).appendingPathComponent("Sources/SayAllMacroRemoteMic/SayAllMacroRemoteMicFeature.swift")
+    return (try? String(contentsOf: url, encoding: .utf8))?.contains("onRemoveMissingBindings:") == true
+} || (privateArtifactPackagePath.map { path in
+    ["arm64", "x86_64"].allSatisfy { architecture in
+        let url = URL(fileURLWithPath: path).appendingPathComponent("Artifacts/SayAllMacroRemoteMic.xcframework/macos-arm64_x86_64/SayAllMacroRemoteMic.framework/Modules/SayAllMacroRemoteMic.swiftmodule/\(architecture)-apple-macos.swiftinterface")
+        return (try? String(contentsOf: url, encoding: .utf8))?.contains("onRemoveMissingBindings:") == true
+    }
+} ?? false))
 // Probe optional interfaces so older local packages remain buildable.
 func artifactSupportsAuthorizedAccess(module: String, decision: String) -> Bool {
     guard let privateArtifactPackagePath, !privateArtifactPackagePath.isEmpty else { return false }
@@ -218,6 +242,9 @@ if macroInputFocusAvailable {
 }
 if sourceMacroHostShortcutsAvailable || artifactMacroHostShortcutsAvailable {
     remoteMicSwiftSettings.append(.define("SAYALL_MACRO_HOST_SHORTCUTS"))
+}
+if macroMissingBindingCleanupAvailable {
+    remoteMicSwiftSettings.append(.define("SAYALL_MACRO_MISSING_BINDING_CLEANUP"))
 }
 if buttonProfilesTestAccessEnabled {
     remoteMicSwiftSettings.append(.define("SAYALL_TEST_BUTTON_PROFILES_FREE"))
