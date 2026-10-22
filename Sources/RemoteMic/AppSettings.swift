@@ -357,6 +357,9 @@ final class AppSettings: ObservableObject {
     static let agentConfigurationPendingKey = Keys.onboardingAgentConfigurationPending
 
     private let defaults: UserDefaults
+    private lazy var localUsageLedger = LocalUsageLedger(defaults: defaults,
+        buttonCount: totalButtonPressCount, voiceDuration: totalVoiceDuration,
+        longestVoice: voiceSessionRanking.map(\.duration).max() ?? 0)
     var configurationDefaults: UserDefaults { defaults }
 
     @Published var gainDB: Double {
@@ -1107,6 +1110,7 @@ final class AppSettings: ObservableObject {
             catch { corruptedKeys.append("unifiedBaseBindings") }
         }
         corruptedSettingKeys = corruptedKeys
+        _ = localUsageLedger
     }
 
     func setOnboardingStep(_ step: OnboardingStep) {
@@ -1823,6 +1827,7 @@ final class AppSettings: ObservableObject {
         at date: Date = Date(),
         calendar: Calendar = .current
     ) {
+        localUsageLedger.recordButton(at: date)
         if totalButtonPressCount < .max {
             totalButtonPressCount += 1
         }
@@ -1854,6 +1859,14 @@ final class AppSettings: ObservableObject {
         dailyStatistics[key] = statistics
     }
 
+    func beginLocalVoiceUsage(at date: Date) {
+        localUsageLedger.beginVoice(at: date)
+    }
+
+    func recordLocalVoiceSamples(_ count: Int, endingAt date: Date = Date()) {
+        localUsageLedger.recordSamples(count, endingAt: date)
+    }
+
     func recordVoiceDuration(
         _ duration: TimeInterval,
         startedAt: Date? = nil,
@@ -1862,6 +1875,8 @@ final class AppSettings: ObservableObject {
         at date: Date = Date(),
         calendar: Calendar = .current
     ) {
+        let duration = localUsageLedger.finishVoice(fallbackDuration: duration,
+            startedAt: startedAt, endedAt: date)
         guard duration.isFinite, duration > 0 else { return }
         totalVoiceDuration = Self.addingDuration(duration, to: totalVoiceDuration)
 
