@@ -7629,6 +7629,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         route: VoiceAudioDeliveryRoute
     ) {
         guard !samples.isEmpty, voiceAudioDeliveryDiagnostic.generation > 0 else { return }
+        settings.recordLocalVoiceSamples(samples.count)
         voiceAudioDeliveryDiagnostic.route = route
         voiceAudioDeliveryDiagnostic.receivedBatches += 1
         voiceAudioDeliveryDiagnostic.receivedSamples += samples.count
@@ -7789,6 +7790,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         activeVoiceSource = source
         settings.recordButtonPress(control: .voice, source: source, at: startedAt)
         voiceSessionStartedAt = startedAt
+        settings.beginLocalVoiceUsage(at: startedAt)
         voiceSessionID = sessionID
         if let audioDiagnosticOperationID {
             transcriptDiagnosticOperations.append((sessionID, audioDiagnosticOperationID))
@@ -8910,6 +8912,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         let deliveryGeneration = voiceAudioDeliveryDiagnostic.generation
         var failures = 0
         for batch in batches {
+            recordVoiceAudioReceipt(samples: batch, route: .virtualAudioDirect)
             if !audioOutput.enqueue(samples: batch, deliveryGeneration: deliveryGeneration) {
                 failures += 1
             }
