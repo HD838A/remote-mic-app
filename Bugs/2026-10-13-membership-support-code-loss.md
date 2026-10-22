@@ -31,3 +31,12 @@
 - 补充控制字符和越界错误码测试。确认非法字段回退，不输出原始响应。
 - 现有 `2.2.0` 二进制构件因缺少主线所需的 `RemoteMicBaseBindingSummary` 未通过集成编译。须使用当前版本的完整构件重跑，不能以旧构件或公开测试代替。
 - 真实扫码失败、实际 Sentry 接收及安装升级仍未验收。候选保持 Draft。
+
+## 2026-10-23：2.2.9 二进制宿主集成
+
+- 用户指定使用私有 Swift Package `2.2.9`。从干净的 tag 提交 `d76f635ed6368d7f3d2021d2a6c187c54f5d19fa` 构建双架构 XCFramework，再通过 `SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH` 注入。仓库依赖清单仍固定 `2.2.7`，本次不升级清单。
+- 私有四个 Package 的完整测试通过，保留 2 项既有跳过。双架构构建、消费端编译、资源归档、来源和摘要校验通过。
+- 宿主验证提交：`6e7f13f03af373d6601865daf8e01f34b8a8dbf0`。`scripts/build-app.sh` 的 Apple Silicon Release App 构建通过。App 包含真实会员模块、诊断接口和资源，`codesign --verify --deep --strict` 通过。
+- `swift test --disable-keychain -j 4 --scratch-path .build/pr649-private-2.2.9` 首次因测试包缺少私有资源 bundle 中断。将准备后的四个资源 bundle 复制到本地 XCTest 包的 `Contents/Resources`，再加 `--skip-build` 重跑：939 项 Swift Testing、74 个套件，以及 4 项 XCTest 全部通过。会员错误码、复制摘要和诊断上传测试通过。没有修改产品源码或测试断言。
+- 最新主线 `807b71dba39fdab9e9a5d0c22c1cb5a403cc1f1e` 的新增改动不改变会员失败映射；`git merge-tree --write-tree HEAD origin/main` 无冲突。本次验证仍针对上述 PR 提交，不是合入后主线验证。
+- 当前版本二进制的宿主集成编译阻挡已解除。App 仅用于本地编译验证，采用 ad-hoc 签名，未启动、未公证、未分发。真实扫码失败、Sentry 实际接收和安装升级仍未验收；PR 保持 Draft。

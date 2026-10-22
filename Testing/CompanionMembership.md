@@ -43,3 +43,7 @@ iOS、Apple Watch、小程序与 Web 使用连接的 Mac 的 Plus，手机和手
 自动化覆盖 API 错误解析、宿主错误详情、复制摘要和发送过滤器。线上失败复现和 Sentry 实际接收仍需集成包验收。设备上限由后端控制，宿主不新增本地计数。
 
 2026-10-22 复核：公开全量 928 项、自检 48 项、私有源码组合定向 63 项通过。私有 2.2.7 会员包定向 34 项通过。当前完整会员二进制宿主集成尚未完成；旧 2.2.0 构件缺少主线接口，不能作为验收依据。保持上述真实服务验收边界。
+
+2026-10-23 更新：用户指定的私有 `2.2.9` 二进制已完成宿主集成。PR 提交 `6e7f13f03af373d6601865daf8e01f34b8a8dbf0` 的 Apple Silicon Release App 构建及本地签名校验通过。宿主 939 项 Swift Testing 和 4 项 XCTest 通过，覆盖会员支持码、复制摘要和诊断上传。测试首次缺少私有资源 bundle；仅在本地 XCTest 包中补齐四个资源 bundle 后，以 `swift test --disable-keychain -j 4 --scratch-path .build/pr649-private-2.2.9 --skip-build` 重跑通过。产品 App 已由原构建脚本打入这些资源。
+
+本次只通过 `SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH` 注入 `2.2.9`，仓库依赖清单仍为 `2.2.7`。本地 App 为 ad-hoc 签名，未启动、未公证、未分发。真实扫码失败、Sentry 实际接收和安装升级仍待验收。来源提交及私有构件验证见 [Bug 记录](../Bugs/2026-10-13-membership-support-code-loss.md#2026-10-23229-二进制宿主集成)。
