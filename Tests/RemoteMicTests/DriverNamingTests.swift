@@ -20,13 +20,13 @@ struct DriverNamingTests {
           if resolve_driver_naming "$1" "$2" "$3"; then exit 1; fi
         }
         assert_variant none none no brand
-        assert_variant none none yes legacy
+        assert_variant none none yes brand
         for evidence in yes no; do
           assert_variant legacy none "$evidence" legacy
           assert_variant brand none "$evidence" brand
           assert_variant legacy legacy "$evidence" legacy
           assert_variant brand brand "$evidence" brand
-          assert_variant none legacy "$evidence" legacy
+          assert_variant none legacy "$evidence" brand
           assert_variant none brand "$evidence" brand
           assert_variant unknown legacy "$evidence" legacy
           assert_variant unknown brand "$evidence" brand
@@ -34,7 +34,7 @@ struct DriverNamingTests {
           assert_variant brand legacy "$evidence" brand
           assert_variant legacy conflict "$evidence" legacy
           assert_variant brand conflict "$evidence" brand
-          assert_variant none conflict "$evidence" legacy
+          assert_variant none conflict "$evidence" brand
           assert_variant unknown conflict "$evidence" legacy
           if [[ "$evidence" == yes ]]; then
             assert_variant unknown none "$evidence" legacy
