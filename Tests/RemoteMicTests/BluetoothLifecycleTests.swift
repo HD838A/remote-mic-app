@@ -386,6 +386,17 @@ struct BluetoothLifecycleTests {
         ))
     }
 
+    @Test func scanTimeoutOnlyStartsForSavedTargetRecovery() {
+        for hasSavedTarget in [false, true] {
+            for allowsCachedTargetRetrieval in [false, true] {
+                #expect(BluetoothScanRecoveryPolicy.shouldStartScanTimeout(
+                    hasSavedTarget: hasSavedTarget,
+                    allowsCachedTargetRetrieval: allowsCachedTargetRetrieval
+                ) == (hasSavedTarget && !allowsCachedTargetRetrieval))
+            }
+        }
+    }
+
     @Test func scanWindowExpiresOnlyTheCurrentScanningAttempt() {
         let generation: UInt64 = 11
         #expect(BluetoothScanRecoveryPolicy.scanWindow > 0)

@@ -35,7 +35,7 @@
 ```
 
 - 静默期内 `HID REPORT accepted` 仍在持续：按键走独立 HID 链路，遥控器就在旁边、电量 81%，**不是**「设备不在场」。
-- 恢复动作来自用户手动「立即重新连接」（`reconnectNow()` → `reconnectPolicy.reset()`），因此 generation 25 才重新走回 `source=target_identifier`；24 ms 的连接耗时说明该外设**一直处于系统连接态**。
+- 恢复动作来自用户手动「立即重新连接」（`reconnectNow()` → `reconnectPolicy.reset()`），因此 generation 25 才重新走回 `source=target_identifier`。24 ms 连接支持当时设备可连接，但不能证明静默期始终处于系统连接态。
 - 静默期内没有 `BLE RECONNECT scheduled`：说明退避循环已经不再产生下一次尝试，而不是「重试了但失败」。
 
 对照组（同机日志）：
@@ -49,7 +49,7 @@
 2. **系统已连接候选只在没有已保存身份时查询**：`discoverOrScan` 中 `retrieveConnectedPeripherals(withServices:)` 被 `if targetIdentifier == nil` 挡住（旧 `XiaomiBluetoothBridge.swift:472`）。用户机器上有已保存 profile，所以这条唯一能发现「系统已连接但不广播」设备的路永远不走。
 3. **扫描没有窗口**：`scanForPeripherals` 之后没有任何超时。广播扫描不会因为「找不到」回调，于是 attempt 永远停在 `.scanning`：`finishAttempt` 不再执行，退避计数不再增长，日志里也不会再出现 `BLE RECONNECT scheduled`。
 
-三者叠加 = 「第一次重连失败后必然需要人工介入」，与用户反馈「偶尔掉线，要手动点重新连接」完全一致。
+三者叠加后，如果没有匹配的广播回调，自动重连会停在扫描，直到用户或其他恢复入口介入。不是每次重连失败都会卡死。
 
 ## 假设与否证
 
@@ -60,7 +60,7 @@
 ## 最小修复
 
 1. `VoiceRemoteDiscoveryPolicy.shouldQuerySystemConnectedCandidates(hasSavedTarget:allowsCachedTargetRetrieval:)`：缓存直连被禁用时，也查询系统当前已连接的 ATVV 候选。身份判定仍走 `VoiceRemoteAdmission.decide`，有已保存身份时非目标 UUID 一律 `.ignore`，不会误收别的遥控器。
-2. `BluetoothScanRecoveryPolicy`：扫描窗口 20 秒；到期且仍停留在本轮 `.scanning` 时记录 `BLE SCAN TIMEOUT` 并调用 `scheduleReconnect()`，让退避循环继续推进（不改变退避语义，也不重置缓存绕过状态）。
+2. `BluetoothScanRecoveryPolicy`：仅在有已保存设备且缓存直连已被禁用时启用 20 秒扫描窗口。到期且仍停留在本轮 `.scanning` 时记录 `BLE SCAN TIMEOUT` 并调用 `scheduleReconnect()`。首次发现和缓存直连可用时保持持续扫描；不改变退避语义，也不重置缓存绕过状态。
 3. 窗口在 `resetPeripheral()` / `connect()` / `stop()` / 系统挂起时取消，避免旧 generation 的定时器误伤新 attempt。
 
 明确不做：不改动退避时长与抖动、不删除或改写 profile 与按键映射、不改 ATVV 协议、不引入主动探测风暴（缓存绕过状态仍由既有策略控制）。
@@ -79,3 +79,12 @@
 - 掉线后第一次重连失败 → 后续周期是否在扫描窗口内通过系统已连接候选恢复；
 - 遥控器真的离开房间（不广播、也不在系统连接态）时，循环是否按 20 秒窗口 + 退避继续、且不产生连接风暴；
 - 睡眠唤醒、蓝牙关闭再开启后与 #356 / #438 / #522 的既有恢复路径不冲突。
+
+## 2026-10-23 最小范围修正
+
+- 从主线 `0ea11c11b3aab52df50e149cd05671d6409c16b1` 集成原 PR #632。保留 xain 的原提交 `d096e8dc3d3dfa3888c6f4bfcf25b4039083a9e6`，未重写作者或原始历史。
+- 新增扫描窗口启动条件的四种组合测试。定向 `swift test --disable-keychain -j 4 --filter BluetoothLifecycleTests`：27 项通过。
+- 同一构建的 `swift test --disable-keychain -j 4 --skip-build`：942 项 Swift Testing、74 个套件，以及 4 项 XCTest 通过。仓库治理及 `git diff --check` 通过。
+- 超时日志增加 generation、阶段、结果和稳定原因码。候选查询只记录数量，不记录设备名称；后续连接结果仍由既有日志确认。
+- 原现场日志支持扫描停滞根因；当前自动化只验证策略及构建，不能证明真实 CoreBluetooth 的设备返回时机或最终恢复结果。
+- 真机步骤与稳定回归见 [蓝牙断连测试](../Testing/BluetoothDisconnectAudioRelease.md#用例-9异常重连扫描窗口)。未完成真实 RC003 验收前保持候选，不合入或发布。

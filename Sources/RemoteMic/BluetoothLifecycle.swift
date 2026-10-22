@@ -280,9 +280,9 @@ enum VoiceRemoteDiscoveryPolicy {
     ///
     /// - 没有已保存身份：必须查——遥控器可能早已在系统设置里配对连接。
     /// - 有已保存身份、但缓存直连已被禁用：也要查。此时设备通常仍以 HID 连着系统，
-    ///   而**处于连接中的 BLE 外设不再广播**，只靠扫描永远发现不了它。
+    ///   如果外设没有广播，只靠扫描无法发现它。
     ///   现场日志（2026-10-11 rc003）：卡死 16–75 分钟，手动「立即重新连接」后
-    ///   按已保存 UUID 20–30 ms 就连上，证明设备一直在系统连接态。
+    ///   按已保存 UUID 20–30 ms 恢复；静默期的系统连接状态仍不可确定。
     /// - 有已保存身份且缓存直连可用：`retrievePeripherals` 已经覆盖，不重复查。
     static func shouldQuerySystemConnectedCandidates(
         hasSavedTarget: Bool,
@@ -301,6 +301,13 @@ enum BluetoothScanRecoveryPolicy {
     /// 单个扫描窗口。取 20 秒：覆盖遥控器从省电态恢复广播的时间，又明显小于 60 秒退避上限，
     /// 保证「扫描 → 未命中 → 退避 → 再试」这条循环始终在推进。
     static let scanWindow: TimeInterval = 20
+
+    static func shouldStartScanTimeout(
+        hasSavedTarget: Bool,
+        allowsCachedTargetRetrieval: Bool
+    ) -> Bool {
+        hasSavedTarget && !allowsCachedTargetRetrieval
+    }
 
     /// 窗口到期时是否真的结束本次 attempt（状态已变化时作废，例如已经连上进入 discovering）。
     static func shouldExpireScan(
