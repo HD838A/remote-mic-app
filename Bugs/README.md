@@ -12,6 +12,7 @@
 
 - [使用日历末列、悬停摘要与底部留白](./2026-10-12-calendar-details.html)
 
+- [BLE 重连在缓存直连被绕过后退化为「只扫描」，卡死到用户手动重连](./2026-10-11-ble-scan-stall-after-cached-target-bypass.md)
 - [小程序连接码超时（-1101）](./2026-10-11-mini-program-code-timeout.md)
 - [Intel Mac 最小化后 Dock 图标回退为方形](./2026-10-10-intel-dock-rounded-app-icon.html)
 - [组合动作搜索与返回按键页](./2026-10-10-combination-action-search-and-return.html)
@@ -124,6 +125,7 @@
 
 | 时间 | Bug | 状态 |
 | --- | --- | --- |
+| 2026-10-11 | [BLE 重连在缓存直连被绕过后退化为「只扫描」，卡死到用户手动重连](./2026-10-11-ble-scan-stall-after-cached-target-bypass.md)（Issue #438 相关） | 候选修复与定向自动化通过，等待真实 RC003 掉线复验 |
 | 2026-10-10 | [Intel 最小化窗口缩略图的小 Logo 为方形](./2026-10-10-intel-dock-rounded-app-icon.html) | 运行时缩略图同步已修复；等待新 Intel 包完成现场与白底回归验收 |
 | 2026-10-08 | [音频重配在主线程访问 `AVAudioEngine.mainMixerNode` 导致 App 长时间无响应](./2026-10-07-audio-configure-blocks-main-thread.md)（Issue #596） | 候选修复；音频引擎重配已移出主线程，自动化通过，等待真实音频设备验收 |
 | 2026-10-03 | [蓝牙遥控器电量长时间停留在旧值](./2026-10-03-bluetooth-battery-level-stale.md)（Issue #463） | 候选修复与自动化完成，等待 RC001 / RC003 真机电量变化验收 |
