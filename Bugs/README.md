@@ -36,6 +36,7 @@
 - [Onboarding 输入工具未运行、配对状态残留与语音测试页裁切](./2026-09-22-onboarding-tool-runtime-and-voice-test-gates.md)
 - [Onboarding 语音测试页失控循环：`removeDuplicates()` 重订阅反复触发语音 attempt](./2026-09-20-onboarding-voice-attempt-runaway-loop.md)
 - [虚拟设备被静音时仍判定「送达成功」，并把失败归因为第三方工具配置](./2026-09-20-miremotev-muted-misreported-as-third-party.md)
+- [Onboarding 重新运行后无法可靠完成并进入可用主页面](./2026-09-20-onboarding-rerun-cannot-complete.md)
 - [配置解码失败被静默重置（用户配置无声丢失且无线索）](./2026-09-05-settings-decode-failure-silently-resets-configuration.md)
 - [未完成语音握手的外设留下无法删除的幽灵遥控器卡片](./2026-09-05-ghost-remote-profile-from-unready-peripheral.md)
 - [关闭原始录音开关仍保存当前音频](./2026-08-27-original-recording-cancel-commits-audio.md)
@@ -135,6 +136,7 @@
 | 2026-09-21 | [Onboarding 语音文字在松键后消失](./2026-09-21-onboarding-voice-text-disappears-on-release.md) | 修复已实现，等待微信输入法、豆包、Typeless 与实体遥控器真实验收 |
 | 2026-09-20 | [Onboarding 语音测试页失控循环：`removeDuplicates()` 重订阅反复触发语音 attempt](./2026-09-20-onboarding-voice-attempt-runaway-loop.md) | 已修复（候选）；`OnboardingFlowTests` 50 项与本机真机语音测试通过，等待合入与发布后验证 |
 | 2026-09-20 | [虚拟设备被静音或音量过低时仍判定「送达成功」，并把失败归因为第三方工具配置](./2026-09-20-miremotev-muted-misreported-as-third-party.md) | 自动解除静音与低于 0.2 的音量保护完成；MiRemoteV 2ch 属性自愈实测通过，等待 BlackHole 与完整语音链路验收 |
+| 2026-09-20 | [Onboarding 重新运行后无法可靠完成并进入可用主页面](./2026-09-20-onboarding-rerun-cannot-complete.md)（Issue #456） | 调查中；产品边界已确认，#468 的语音 attempt 失控循环是最强根因候选但证据版本不一致，等待最新主线复现与日志定位 |
 | 2026-09-11 | [苹果遥控器 Command 语音键再次无法唤醒目标输入法](./2026-09-11-siri-remote-command-voice-regression.md) | 候选修复与失败门禁完成，等待真实遥控器和目标输入法验收 |
 | 2026-09-05 | [排空尾音期间音频重配置导致语音会话永久卡死](./2026-09-05-voice-session-wedges-when-audio-reconfigures-mid-drain.md) | 修复已实现，自动化覆盖多等待方与 normal/forced 结果；等待真实 RC003 + Typeless/豆包在排空间隙切换设备、睡眠唤醒与断连重连验收 |
 | 2026-09-05 | [未完成语音握手的外设留下无法删除的幽灵遥控器卡片](./2026-09-05-ghost-remote-profile-from-unready-peripheral.md)（PR #359） | 当前主线已复现；758 项 Swift 测试、48 项项目自检、Release 构建与仓库边界通过，等待双架构 CI 和真实双设备蓝牙验收 |
