@@ -145,6 +145,7 @@ final class XiaomiBluetoothBridge: NSObject {
     private var reconnectWorkItem: DispatchWorkItem?
     private var connectionTimeoutWorkItem: DispatchWorkItem?
     private var initializationTimeoutWorkItem: DispatchWorkItem?
+    private var scanTimeoutWorkItem: DispatchWorkItem?
     private var capabilitiesRequested = false
     private var capabilitiesConfirmed = false
     private var requestedReconnectDelay: TimeInterval?
@@ -259,6 +260,7 @@ final class XiaomiBluetoothBridge: NSObject {
     func stop() {
         shouldRun = false
         reconnectWorkItem?.cancel()
+        cancelScanTimeout()
         stopBatteryPolling(reason: "bridge_stopped")
         reconnectPolicy.reset()
         central?.stopScan()
@@ -338,6 +340,7 @@ final class XiaomiBluetoothBridge: NSObject {
             }
             reconnectWorkItem?.cancel()
             reconnectWorkItem = nil
+            cancelScanTimeout()
             connectionTimeoutWorkItem?.cancel()
             connectionTimeoutWorkItem = nil
             initializationTimeoutWorkItem?.cancel()
@@ -485,15 +488,15 @@ final class XiaomiBluetoothBridge: NSObject {
             }
         }
 
-        if targetIdentifier == nil {
-            // ATVV 服务是通用服务，可能同时命中多台遥控器。这里把候选连名字一起记一行：
-            // 否则「取回了候选但名字不符」与「根本没取回候选」在日志里完全一样，无法二分。
+        if VoiceRemoteDiscoveryPolicy.shouldQuerySystemConnectedCandidates(
+            hasSavedTarget: targetIdentifier != nil,
+            allowsCachedTargetRetrieval: reconnectPolicy.allowsCachedTargetRetrieval
+        ) {
+            // ATVV 服务可能命中多台遥控器；只记录数量，不记录系统设备名称。
             let connectedCandidates = central.retrieveConnectedPeripherals(withServices: [serviceUUID])
             if !connectedCandidates.isEmpty {
                 AppLogger.shared.write(
-                    "BLE SYSTEM CONNECTED CANDIDATES count=\(connectedCandidates.count) "
-                        + "names="
-                        + connectedCandidates.map { $0.name ?? "unknown" }.joined(separator: ",")
+                    "BLE SYSTEM CONNECTED CANDIDATES count=\(connectedCandidates.count)"
                 )
             }
             // 逐个过准入：第一台被拒绝（别的产品）时继续看下一台，而不是整批放弃。
@@ -519,6 +522,46 @@ final class XiaomiBluetoothBridge: NSObject {
             options: [CBCentralManagerScanOptionAllowDuplicatesKey: false]
         )
         AppLogger.shared.write("BLE SCANNING")
+        startScanTimeout(generation: generation)
+    }
+
+    /// 扫描窗口到期：结束本次 attempt，让退避策略继续排下一次重试。
+    ///
+    /// 广播扫描没有「找不到」回调：不设窗口时，一次没有命中的 attempt 会永远停在
+    /// `.scanning`，`finishAttempt` 不再执行，连 `BLE RECONNECT scheduled` 都不会再出现。
+    /// 现场日志（2026-10-11）里这种静默可以持续 16–75 分钟，直到用户手动点「立即重新连接」。
+    private func startScanTimeout(generation: UInt64) {
+        cancelScanTimeout()
+        guard BluetoothScanRecoveryPolicy.shouldStartScanTimeout(
+            hasSavedTarget: targetIdentifier != nil,
+            allowsCachedTargetRetrieval: reconnectPolicy.allowsCachedTargetRetrieval
+        ) else { return }
+        let work = DispatchWorkItem { [weak self] in
+            guard let self,
+                  BluetoothScanRecoveryPolicy.shouldExpireScan(
+                      lifecycle: self.lifecycle,
+                      generation: generation,
+                      shouldRun: self.shouldRun,
+                      isSystemSuspended: self.systemSuspension.isSuspended
+                  )
+            else { return }
+            AppLogger.shared.write(
+                "BLE SCAN TIMEOUT generation=\(generation) phase=timed_out "
+                    + "result=retrying reason=scan_window_expired window_ms="
+                    + "\(Int((BluetoothScanRecoveryPolicy.scanWindow * 1_000).rounded()))"
+            )
+            self.scheduleReconnect()
+        }
+        scanTimeoutWorkItem = work
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + BluetoothScanRecoveryPolicy.scanWindow,
+            execute: work
+        )
+    }
+
+    private func cancelScanTimeout() {
+        scanTimeoutWorkItem?.cancel()
+        scanTimeoutWorkItem = nil
     }
 
     /// 三条发现路径——已保存标识、系统已连接设备、扫描广播——**必须共用这一份判定**。
@@ -583,6 +626,7 @@ final class XiaomiBluetoothBridge: NSObject {
               lifecycle == .scanning(generation)
         else { return }
         central.stopScan()
+        cancelScanTimeout()
         peripheral = candidate
         currentAttemptUsesCachedTarget = usesCachedTarget
         let proxy = XiaomiPeripheralDelegateProxy(generation: generation, owner: self)
@@ -613,6 +657,7 @@ final class XiaomiBluetoothBridge: NSObject {
         hasObservedPowerState = false
         lastObservedPowerState = nil
         subscribedUUIDs.removeAll()
+        cancelScanTimeout()
         connectionTimeoutWorkItem?.cancel()
         connectionTimeoutWorkItem = nil
         initializationTimeoutWorkItem?.cancel()

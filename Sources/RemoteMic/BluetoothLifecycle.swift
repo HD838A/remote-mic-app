@@ -273,6 +273,54 @@ struct BluetoothReconnectPolicy {
     }
 }
 
+/// 发现路径选择：三条路径各有前提，把「系统当前已连接的候选」写死成
+/// `targetIdentifier == nil` 会让「有已保存身份 + 缓存直连已被禁用」这一组合只剩广播扫描。
+enum VoiceRemoteDiscoveryPolicy {
+    /// 是否要查询系统当前已连接的 ATVV 候选（`retrieveConnectedPeripherals`）。
+    ///
+    /// - 没有已保存身份：必须查——遥控器可能早已在系统设置里配对连接。
+    /// - 有已保存身份、但缓存直连已被禁用：也要查。此时设备通常仍以 HID 连着系统，
+    ///   如果外设没有广播，只靠扫描无法发现它。
+    ///   现场日志（2026-10-11 rc003）：卡死 16–75 分钟，手动「立即重新连接」后
+    ///   按已保存 UUID 20–30 ms 恢复；静默期的系统连接状态仍不可确定。
+    /// - 有已保存身份且缓存直连可用：`retrievePeripherals` 已经覆盖，不重复查。
+    static func shouldQuerySystemConnectedCandidates(
+        hasSavedTarget: Bool,
+        allowsCachedTargetRetrieval: Bool
+    ) -> Bool {
+        !hasSavedTarget || !allowsCachedTargetRetrieval
+    }
+}
+
+/// 广播扫描的窗口策略。
+///
+/// `scanForPeripherals` 不会因为「找不到」回调，所以没有窗口时一次未命中的 attempt
+/// 会永远停在 `.scanning`：退避计数不再增长，`finishAttempt` 不再执行，
+/// 重连循环静默终止（现场日志里持续 16–75 分钟，直到用户手动重连）。
+enum BluetoothScanRecoveryPolicy {
+    /// 单个扫描窗口。取 20 秒：覆盖遥控器从省电态恢复广播的时间，又明显小于 60 秒退避上限，
+    /// 保证「扫描 → 未命中 → 退避 → 再试」这条循环始终在推进。
+    static let scanWindow: TimeInterval = 20
+
+    static func shouldStartScanTimeout(
+        hasSavedTarget: Bool,
+        allowsCachedTargetRetrieval: Bool
+    ) -> Bool {
+        hasSavedTarget && !allowsCachedTargetRetrieval
+    }
+
+    /// 窗口到期时是否真的结束本次 attempt（状态已变化时作废，例如已经连上进入 discovering）。
+    static func shouldExpireScan(
+        lifecycle: BluetoothLifecyclePhase,
+        generation: UInt64,
+        shouldRun: Bool,
+        isSystemSuspended: Bool
+    ) -> Bool {
+        guard shouldRun, !isSystemSuspended else { return false }
+        return lifecycle == .scanning(generation)
+    }
+}
+
 enum BluetoothCentralRecoveryEvent {
     case poweredOn
     case poweredOff
