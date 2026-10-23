@@ -26,6 +26,42 @@
 
 本轮公开完整测试 902 项、私有完整测试 910 项通过。最终定向测试公开和私有各 5 项通过，另覆盖未完成向导时保留请求，以及拒绝非文件 URL 和其他后缀。市场校验、Apple Silicon Release 构建和 `verify-app.sh` 通过。生产交互入口使用隔离数据，实际查看全部绑定并取消，列表仍只有默认方案。中文浅色截图为 [导入预览](../Screenshots/design-drafts/sayall-file-import/import-preview-macos-zh-light.jpg)，JPEG、2040 × 1544，SHA-256 为 `fc89e381433628332c618ac932c2939d23ec4a1e2211bd2d2588a600630c76e8`。缺少深色和完整向导截图，以及签名安装、真实完整向导、确认保存、重启重读和会员状态验收；PR 保持 Draft。详见 [审查记录](../Bugs/2026-10-19-sayall-file-import.html)。
 
+## 2026-10-24 引导页权限轮询降频回归
+
+适用分支：`codex/onboarding-permission-poll-interval-20261024`。本次把引导页的周期权限查询从 1 Hz 降到 2 s，并且只在 App 处于前台时查询；不改变权限项、门禁判定、页面顺序、连接、音频、持久化和遥控器动作语义。
+
+变更分类：权限刷新时机变化。权限的判定逻辑与门禁规则都没有变，改的只是「多久查一次」和「App 在后台时查不查」，因此按权限行为变化验证，覆盖首次进入、退出续接和关于页重跑三条路径。
+
+周期刷新退到后台：App 在后台时不再做周期权限查询，用户从系统设置改完权限回到 App 时 `NSApplication.didBecomeActiveNotification` 会立即触发一次刷新，权限状态不会漏。离屏截图渲染没有前台会话，由宿主显式开启周期刷新，渲染结果与生产一致。
+
+### 自动化与构建
+
+- `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift build --build-tests --disable-keychain --disable-sandbox`：构建通过。
+- 定向 `swift test --disable-keychain --disable-sandbox --filter OnboardingFlowTests`：78 项通过，其中 2 项为本次新增的轮询间隔与后台跳过断言。
+- 修复前对照：新用例在旧实现（1 Hz、无后台判定）下失败 5 条断言，恢复修复后全部通过。
+- 全量 `swift test --disable-keychain --disable-sandbox`：950 项 / 74 个套件，949 项通过，1 项失败。失败项为 `releaseControlPlaneFixtureHasExecutableRegressionCoverage()`，报错 `Missing required command: rg`——本机未安装 ripgrep 的环境缺件。该用例断言 `scripts/` 下发布控制面的可执行回归覆盖，本次改动的文件清单不含 `scripts/`，与本次改动零重叠，属于环境缺件而非回归。
+
+### 生产页面检查
+
+1. 进入权限页。预期：界面持续可交互，权限项显示真实状态。
+2. 停留在权限页约 5 秒。预期：权限状态保持刷新，不会因为间隔变长而出现停滞。
+3. 切到系统设置改一项权限，再切回 SayAll。预期：回到前台的瞬间权限状态立刻更新，不必等满一个轮询周期。
+4. 切到其他 App 停留一分钟，再切回 SayAll。预期：权限状态与切走之前一致；App 在后台期间不做周期查询是预期行为。
+5. 退出并续接，再从关于页重跑。预期：步骤与配置符合产品规范，旧配置保留。
+
+### 失败判定与边界
+
+- 回到前台后权限状态没有立即更新、停留页面时权限状态不再刷新、缺失权限被放行，均判定失败。
+- 退出续接丢配置、关于页重跑步数不对，均判定失败。
+- 轮询间隔从 1 s 变成 2 s 后，用户可见的权限状态感知延迟上限相应变大；引导页已经订阅 `didBecomeActiveNotification`，实际场景的感知延迟不受影响。
+- 本轮未做真实系统权限撤销/恢复与完整续接旅程的真机验收。离屏截图与自动化不能替代这些验收。
+
+### 截图证据
+
+离屏入口：`REMOTE_MIC_ONBOARDING_SCREENSHOT_DIR`、`REMOTE_MIC_ONBOARDING_SCREENSHOT_LANGUAGE=zh-Hans|en`、`REMOTE_MIC_ONBOARDING_SCREENSHOT_APPEARANCE=light|dark`，来源为 `Sources/RemoteMic/OnboardingScreenshotRenderer.swift` 的生产 `OnboardingView`。生产 `pages(for:)` 输出 9 页；中英文 × 浅色/深色共 4 组，合计 36 张 PNG，均为 2040 × 1600（Retina 2x）。
+
+本分支渲染结果与 `origin/main` 基线**逐字节一致**（9/9 页，差异 0 张），证明本次改动不影响引导页任何页面的渲染。渲染机的裸调试可执行文件没有 app bundle identifier，系统无法为它解析蓝牙授权，因此权限页的蓝牙行显示为未授权；这是渲染环境的状态，不是渲染缺陷。
+
 ## 2026-10-23 iPhone 右栏 App Store 下载二维码回归
 
 适用分支：`codex/onboarding-appstore-qr`。本次把 iPhone 连接页右栏的占位内容替换为随包交付的 App Store 下载二维码，二维码下方加入 Apple 官方 App Store 徽章，并补充对应中英文说明文案；不改动流程、能力门禁、权限、连接、音频、持久化和左栏 App Store 入口。

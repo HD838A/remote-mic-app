@@ -1,5 +1,7 @@
 # Bug 记录
 
+- [引导页权限轮询 1 Hz 过密，且 SayAll 在后台仍然查询](./2026-10-24-onboarding-permission-poll-interval.md)
+
 - [自身前台输入框聚焦导致死锁](./2026-10-23-self-composer-focus-deadlock.html)
 
 - [原生方向键把伪Fn带入自定义快捷键](./2026-10-20-shortcut-inherits-navigation-function.html)
@@ -127,6 +129,7 @@
 
 | 时间 | Bug | 状态 |
 | --- | --- | --- |
+| 2026-10-24 | [引导页权限轮询 1 Hz 过密，且 SayAll 在后台仍然查询](./2026-10-24-onboarding-permission-poll-interval.md) | 候选修复已实现（周期降到 2 s、App 在后台不做周期查询）；构建、定向回归与渲染对照通过，等待真实权限切换与续接旅程验收 |
 | 2026-10-11 | [BLE 重连在缓存直连被绕过后退化为「只扫描」，卡死到用户手动重连](./2026-10-11-ble-scan-stall-after-cached-target-bypass.md)（Issue #438 相关） | 候选修复与定向自动化通过，等待真实 RC003 掉线复验 |
 | 2026-10-10 | [Intel 最小化窗口缩略图的小 Logo 为方形](./2026-10-10-intel-dock-rounded-app-icon.html) | 运行时缩略图同步已修复；等待新 Intel 包完成现场与白底回归验收 |
 | 2026-10-08 | [音频重配在主线程访问 `AVAudioEngine.mainMixerNode` 导致 App 长时间无响应](./2026-10-07-audio-configure-blocks-main-thread.md)（Issue #596） | 候选修复；音频引擎重配已移出主线程，自动化通过，等待真实音频设备验收 |
