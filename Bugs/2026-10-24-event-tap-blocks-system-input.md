@@ -1,7 +1,7 @@
 # 主线程同步查权限 + event tap 挂在主 RunLoop，导致整机输入停摆
 
 - 时间：2026-10-24
-- 状态：根治已实现（事件 tap 迁到专用线程、权限查询移出主线程、权限撤销时释放 tap）；构建、定向回归与三组修复前后对照通过，等待真机按键链路与真实权限切换场景验收
+- 状态：候选修复已实现（事件 tap 迁到专用线程、权限查询移出主线程、权限撤销时释放 tap）；构建、定向回归与三组修复前后对照通过，等待真机按键链路与真实权限切换场景验收
 - 影响范围：macOS；所有把自定义映射（`customMappingEnabled`）或 `ShortcutCaptureMonitor` 开启的用户；触发条件是「主线程出现秒级阻塞」×「阻塞期间有输入事件到达」。用户在系统设置里改本 app 权限、或 tccd 抖动时最容易命中
 - 功能点：HID 按键抑制（`KeyboardEventSuppressor`）、自定义快捷键录入（`ShortcutCaptureMonitor`）、event tap 接入点（`EventTapPort`）、开机引导页权限刷新（`OnboardingView`）、权限撤销释放路径（`HIDRemoteMonitor`）
 - 简单描述：两处 **active tap**（`.defaultTap`）的 RunLoop source 被挂在主 RunLoop 上，同时引导页用 1 Hz 定时器在主线程同步查询三项 TCC 权限。主线程一旦被 tccd 的同步 IPC 钉住，尚未返回的 tap 回调就会把整条系统输入队列一起卡住——光标能动、所有 app 不响应、进程不崩不重启，直到进程被杀
