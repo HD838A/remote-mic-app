@@ -895,6 +895,7 @@
 "onboarding.iphone_remote.waiting" = "正在等待 iPhone";
 "onboarding.iphone_remote.scan" = "在 iPhone 无线麦 SayAll 中扫描二维码，优先直接连接这台 Mac";
 "onboarding.iphone_remote.appstore_qr" = "扫描二维码下载 iPhone 无线麦 SayAll App";
+"onboarding.iphone_remote.app_already_installed" = "我已安装";
 "onboarding.iphone_remote.connection_detail" = "保持无线麦 SayAll iOS App 在前台，首次连接需要在 Mac 上允许。";
 "onboarding.iphone_remote.button_detail" = "连接后，在 iPhone 遥控器上按任意普通按键。";
 "onboarding.web_remote.title" = "用微信连接这台 Mac";

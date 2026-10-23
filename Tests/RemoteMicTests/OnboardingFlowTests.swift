@@ -31,6 +31,41 @@ struct OnboardingFlowTests {
         #expect(source.contains("alignment: .center"))
     }
 
+    @Test func iphoneRemoteOffersTheInstalledShortcutBeforeTheMembershipPrompt() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let chinese = try String(
+            contentsOf: root.appendingPathComponent("Resources/zh-Hans.lproj/Localizable.strings"),
+            encoding: .utf8
+        )
+        let english = try String(
+            contentsOf: root.appendingPathComponent("Resources/en.lproj/Localizable.strings"),
+            encoding: .utf8
+        )
+        #expect(chinese.contains("\"onboarding.iphone_remote.app_already_installed\" = \"我已安装\";"))
+        #expect(english.contains("\"onboarding.iphone_remote.app_already_installed\""))
+
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/OnboardingView.swift"),
+            encoding: .utf8
+        )
+        // 下载二维码分支排在会员提示分支前面，只要二维码可见就永远轮不到会员提示，
+        // 用户因此找不到开通入口。这个标记必须是本次向导内的临时状态，
+        // 用 @State 而不是 AppSettings，重新进入向导时仍然从下载二维码开始。
+        #expect(source.contains("@State private var didConfirmPhoneAppInstalled = false"))
+        #expect(source.contains("onboarding.iphone_remote.app_already_installed"))
+        // 标记只能出现在「下载二维码」这一分支的条件里：它提供的是越过二维码的入口，
+        // 不能改掉二维码本身或会员提示的判定条件。这里比较出现顺序而不是缩进文本，
+        // 避免断言被无关的格式调整打断。
+        let illustration = try #require(source.range(of: "private var iPhoneRemoteIllustration"))
+        let shortcut = try #require(source.range(of: "!didConfirmPhoneAppInstalled,"))
+        let storeQRCode = try #require(source.range(of: "let storeQRCode = appStoreDownloadQRCode"))
+        #expect(illustration.lowerBound < shortcut.lowerBound)
+        #expect(shortcut.lowerBound < storeQRCode.lowerBound)
+    }
+
     @Test func webRemotePreparationCopyDescribesTheNextStep() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

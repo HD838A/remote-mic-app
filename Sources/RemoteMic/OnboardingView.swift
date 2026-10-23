@@ -81,6 +81,11 @@ struct OnboardingView: View {
     @ObservedObject var model: BridgeAppModel
     @ObservedObject private var membershipFeature: MembershipFeatureIntegration
     @State private var isMembershipPresented = false
+    /// 用户在本次设置向导里确认「手机 App 已经装好」。
+    ///
+    /// 刻意不做持久化：它只影响本次向导里右栏显示下载二维码还是开通会员提示。
+    /// 重新进入向导后仍然先从下载二维码开始，避免用户误点一次之后再也找不到下载入口。
+    @State private var didConfirmPhoneAppInstalled = false
     @ObservedObject private var settings: AppSettings
     @EnvironmentObject private var localization: LocalizationStore
     @Environment(\.colorScheme) private var colorScheme
@@ -2553,6 +2558,7 @@ struct OnboardingView: View {
                     .font(.system(size: 15, weight: .semibold))
                     .multilineTextAlignment(.center)
             } else if !model.isPhoneRemoteConnected,
+                      !didConfirmPhoneAppInstalled,
                       let storeQRCode = appStoreDownloadQRCode {
                 Image(nsImage: storeQRCode)
                     .interpolation(.none)
@@ -2570,6 +2576,22 @@ struct OnboardingView: View {
                 Text(verbatim: localization.text("onboarding.iphone_remote.appstore_qr"))
                     .font(.system(size: 15, weight: .semibold))
                     .multilineTextAlignment(.center)
+                // 已经装好 App 的人不需要反复看到下载码。点一下把右栏切到开通会员提示，
+                // 否则二维码会一直占住这个位置，会员入口永远显示不出来。
+                // 只在「能真正走到会员提示」时提供该按钮：公开构建没有会员能力、
+                // 或用户已是会员时，按钮会让二维码消失却换不来任何后续，所以不显示。
+                if membershipFeature.supportsRemoteSessionAuthorization,
+                   !membershipFeature.canStartCompanionConnection {
+                    onboardingActionButton(id: "iphone.app_already_installed") {
+                        didConfirmPhoneAppInstalled = true
+                    } label: {
+                        Text(verbatim: localization.text(
+                            "onboarding.iphone_remote.app_already_installed"
+                        ))
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
             } else if membershipFeature.supportsRemoteSessionAuthorization,
                       !membershipFeature.canStartCompanionConnection {
                 companionMembershipRequiredView
