@@ -28,28 +28,34 @@
 
 ## 2026-10-23 iPhone 右栏 App Store 下载二维码回归
 
-适用分支：`codex/onboarding-appstore-qr`。本次只把 iPhone 连接页右栏的占位内容替换为随包交付的 App Store 下载二维码，并补充对应中英文说明文案；不改动流程、能力门禁、权限、连接、音频、持久化和左栏 App Store 入口。
+适用分支：`codex/onboarding-appstore-qr`。本次把 iPhone 连接页右栏的占位内容替换为随包交付的 App Store 下载二维码，二维码下方加入 Apple 官方 App Store 徽章，并补充对应中英文说明文案；不改动流程、能力门禁、权限、连接、音频、持久化和左栏 App Store 入口。
 
 变更分类：局部截图渲染与文案变化，不改变用户旅程和门禁判定，因此按定向验证执行，覆盖受影响来源、语言和外观，并做构建与生产清单一致性检查。
+
+二维码静区为约 2 个模块（生成画布 440 × 440，模块整数倍缩放，余量平分到四周）。不要把静区调回 10 个模块以上：过大的白边会让 220pt 显示尺寸下的二维码明显缩小，这也是本次修复的原始问题。
 
 ### 自动化与构建
 
 - `swift build --disable-keychain --disable-sandbox` 公开构建通过。
 - `swift test --disable-keychain --disable-sandbox --filter OnboardingFlowTests`：76 项通过。
 - `swift test --disable-keychain --disable-sandbox --filter LocalizationTests`：8 项通过，中英文 key 集合一致。
-- 生产清单一致性：`scripts/build-app.sh` 以 `ditto` 整目录拷贝 `Resources/Onboarding`，`scripts/verify-app.sh` 逐个校验该目录下的 PNG 出现在 App bundle 中；新增两张 PNG 无需修改打包脚本。
+- 生产清单一致性：`scripts/build-app.sh` 以 `ditto` 整目录拷贝 `Resources/Onboarding`，`scripts/verify-app.sh` 逐个校验该目录下的 PNG 出现在 App bundle 中；本次新增 6 张 PNG 无需修改打包脚本。
 
 ### 生产页面检查
 
 1. 公开构建选择 iPhone 来源，进入连接页，确认右栏显示 App Store 下载二维码，白色衬底完整，图片不被裁切或拉伸。
-2. 中文确认二维码下方文案为“扫描二维码下载 iPhone 无线麦 SayAll App”，英文确认为“Scan this code to download SayAll for iPhone”。
-3. 用二维码扫描工具核对内容：中文指向 `https://apps.apple.com/app/%E6%97%A0%E7%BA%BF%E9%BA%A6/id6797208067`，英文指向 `https://apps.apple.com/app/sayall/id6797208067`，与左栏“从 App Store 安装”入口指向同一链接。
-4. 切换浅色和深色外观，确认深色下二维码仍有白色衬底且对比度足够，中文字号不小于 12pt，右栏内容整体居中不贴顶。
-5. 完整构建进入同一页面，确认右栏仍优先显示当前监听周期的动态配对二维码，静态下载二维码只作为无动态邀请码时的降级显示。
+2. 确认二维码四周白边紧凑：二维码图案与白色卡片边缘的距离应明显小于二维码宽度的十分之一，不能出现大片空白把二维码挤小。
+3. 确认二维码下方显示 Apple 官方 App Store 徽章：中文界面为 black 变体的“App Store 下载”，英文界面为 black 变体的“Download on the App Store”，徽章比例不变形、描边和圆角完整、未被裁切或重新着色。
+4. 中文确认说明文案为“扫描二维码下载 iPhone 无线麦 SayAll App”，英文确认为“Scan this code to download SayAll for iPhone”。
+5. 用二维码扫描工具核对内容：中文指向 `https://apps.apple.com/app/%E6%97%A0%E7%BA%BF%E9%BA%A6/id6797208067`，英文指向 `https://apps.apple.com/app/sayall/id6797208067`，与左栏“从 App Store 安装”入口指向同一链接。
+6. 切换浅色和深色外观，确认深色下二维码仍有白色衬底，徽章切换为 white 变体且文字可辨认，中文字号不小于 12pt，右栏内容整体居中不贴顶。
+7. 完整构建进入同一页面，确认右栏仍优先显示当前监听周期的动态配对二维码，静态下载二维码只作为无动态邀请码时的降级显示。
 
 ### 失败判定与边界
 
 - 右栏空白、没有二维码、显示成 iPhone 插画、二维码内容与语言不匹配、中文界面出现英文二维码或反之、深色下二维码缺少白色衬底且无法识别，均判定失败。
+- 二维码四周仍是大片白边、徽章缺失或显示成自绘图标、徽章被拉伸变形/改色/加边框、浅色外观用了 white 变体或深色外观用了 black 变体导致看不清，均判定失败。
+- 徽章必须使用 Apple 官方 Marketing 资源原样缩放，不得自行重绘或替换为 SF Symbols。
 - 离屏截图和二维码解码只能证明静态界面与链接内容，不能代替真实 App Store 跳转、真实 iPhone 安装与真实扫码连接验收。
 
 ### 截图证据
@@ -58,12 +64,23 @@
 
 | 语言 | 外观 | 文件 | SHA-256 |
 | --- | --- | --- | --- |
-| zh-Hans | light | `04-remote.png` | `e67f7eb3d2dbb8f0f5e825878030664ec18b316977b00f7f487b4d5dd31e03a1` |
-| zh-Hans | dark | `04-remote.png` | `e48a01649dcf647443524d07b46abe6d07d36ed4f3ed787007925f23a568d3c2` |
-| en | light | `04-remote.png` | `5b8670b00b280d3527d5fe119f3dec004105c3e6337fb4fd72f2891a621a6410` |
-| en | dark | `04-remote.png` | `b62cbe66e15269e40cf94e0495faa4c1a891e7d76fad4ad2992e82de17597bb0` |
+| zh-Hans | light | `04-remote.png` | `3e61e9388e9bfaa7f9275d8bf299e4b005eb0273902d5a6570192933fa8e86c4` |
+| zh-Hans | dark | `04-remote.png` | `18aecf812c3b161e3f03c9e786b1570b0943922e2534c5e27183781c766955bf` |
+| en | light | `04-remote.png` | `9b5e8721353811d95148d46b51956999504b3a8e7c722a2cfceb945103e5a1ac` |
+| en | dark | `04-remote.png` | `584d5e5fe1ea4704f504670b17307ae251ce99133830587241a125157eeaeeba` |
 
-随包交付的静态素材：`Resources/Onboarding/appstore-download-qr-zh-hans.png`（PNG，440 × 440，SHA-256 `29f089eefa7b4d21a1ac8f3cd1116dbd5b9d0fd3c9d14a4a94b0f2c821d6cf8a`）、`Resources/Onboarding/appstore-download-qr-en.png`（PNG，440 × 440，SHA-256 `4ae9425623b6f4ff291504ecafe2b309c1f2c0ec09d155ba580d750bf5bbeddb`）。两张二维码均在生成后用 `CIDetector` 回验内容。
+随包交付的静态素材（均位于 `Resources/Onboarding/`，PNG）：
+
+| 文件 | 尺寸 | SHA-256 |
+| --- | --- | --- |
+| `appstore-download-qr-zh-hans.png` | 440 × 440 | `f6025aaa0dfdf11f6cec71bde66a35ed90e5ac88298bfc7427c724939667e385` |
+| `appstore-download-qr-en.png` | 440 × 440 | `f59e0c08e1911a5652fac973a757409cd4ce5157046f0ae43845a83df04aab80` |
+| `appstore-badge-zh-hans-light.png` | 480 × 176 | `e71fe977f1565c66e4bf2fa137116a2052fe1ebcfe12ac5d13a030746604002e` |
+| `appstore-badge-zh-hans-dark.png` | 480 × 176 | `43213832f6f731cec3afb9bb433d81aa8d70b7e25942ee5d4f4e0d89809ad812` |
+| `appstore-badge-en-light.png` | 480 × 160 | `254e8909c0213b29961e775925f0829fe5b736dca4be41edd419e110ba9d9d16` |
+| `appstore-badge-en-dark.png` | 480 × 160 | `07193fd96b36ffdf46bc1cc008146f731b10747f1f8835a23c56aca50851cd00` |
+
+二维码由 CoreImage `qrCodeGenerator`（`correctionLevel M`）生成后用 `CIDetector` 回验内容；徽章取自 Apple Marketing Tools 官方 badge 服务（`tools.applemediaservices.com/api/badges/download-on-the-app-store/<black|white>/<en-us|zh-cn>`），SVG 原样栅格化为 480px 宽，不改色、不改比例。
 
 ## 2026-10-19 无屏配置应用定位回归
 

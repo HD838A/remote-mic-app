@@ -1,6 +1,6 @@
 {
   "version": "2.2.9 (public Debug)",
-  "source_baseline": "6d7e992a5eddac764e1112418efa9fec7ea2214c",
+  "source_baseline": "8689c98da7e0796d409bb81733d0eac20632fc62",
   "source_files_sha256": {
     "Sources/RemoteMic/OnboardingView.swift": "270f78bdf05103d3bcfa71d0f754eb4f6c4548ed7d6f5ba80071c58b591ccb6c",
     "Resources/zh-Hans.lproj/Localizable.strings": "52c3c1d4389df61006357759e5a6d647850206cd3e4a9446c26b25bd8be9c3e3",
