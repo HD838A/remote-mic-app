@@ -2552,7 +2552,19 @@ struct OnboardingView: View {
                 Text(verbatim: localization.text("onboarding.iphone_remote.scan"))
                     .font(.system(size: 15, weight: .semibold))
                     .multilineTextAlignment(.center)
-            } else if !membershipFeature.canStartCompanionConnection {
+            } else if !model.isPhoneRemoteConnected,
+                      let storeQRCode = appStoreDownloadQRCode {
+                Image(nsImage: storeQRCode)
+                    .interpolation(.none)
+                    .resizable()
+                    .frame(width: 220, height: 220)
+                    .padding(8)
+                    .background(Color.white, in: RoundedRectangle(cornerRadius: 16))
+                Text(verbatim: localization.text("onboarding.iphone_remote.appstore_qr"))
+                    .font(.system(size: 15, weight: .semibold))
+                    .multilineTextAlignment(.center)
+            } else if membershipFeature.supportsRemoteSessionAuthorization,
+                      !membershipFeature.canStartCompanionConnection {
                 companionMembershipRequiredView
             } else {
                 Image(systemName: model.isPhoneRemoteConnected
@@ -3449,6 +3461,20 @@ struct OnboardingView: View {
         let appearance = colorScheme == .dark ? "dark" : "light"
         guard let url = RemoteMicResourceBundle.mainOrDevelopment.url(
             forResource: "\(resourceName)-\(appearance)",
+            withExtension: "png",
+            subdirectory: "Onboarding"
+        ) else {
+            return nil
+        }
+        return NSImage(contentsOf: url)
+    }
+
+    /// 官方 App Store 下载二维码（随仓库交付，不在运行时生成）。
+    /// 语言判定与 `AppLinks.iOSAppStore(for:)` 保持一致，保证二维码内容与左栏下载入口指向同一链接。
+    private var appStoreDownloadQRCode: NSImage? {
+        let language = localization.locale.identifier.lowercased().hasPrefix("zh") ? "zh-hans" : "en"
+        guard let url = RemoteMicResourceBundle.mainOrDevelopment.url(
+            forResource: "appstore-download-qr-\(language)",
             withExtension: "png",
             subdirectory: "Onboarding"
         ) else {

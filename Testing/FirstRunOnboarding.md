@@ -26,6 +26,45 @@
 
 本轮公开完整测试 902 项、私有完整测试 910 项通过。最终定向测试公开和私有各 5 项通过，另覆盖未完成向导时保留请求，以及拒绝非文件 URL 和其他后缀。市场校验、Apple Silicon Release 构建和 `verify-app.sh` 通过。生产交互入口使用隔离数据，实际查看全部绑定并取消，列表仍只有默认方案。中文浅色截图为 [导入预览](../Screenshots/design-drafts/sayall-file-import/import-preview-macos-zh-light.jpg)，JPEG、2040 × 1544，SHA-256 为 `fc89e381433628332c618ac932c2939d23ec4a1e2211bd2d2588a600630c76e8`。缺少深色和完整向导截图，以及签名安装、真实完整向导、确认保存、重启重读和会员状态验收；PR 保持 Draft。详见 [审查记录](../Bugs/2026-10-19-sayall-file-import.html)。
 
+## 2026-10-23 iPhone 右栏 App Store 下载二维码回归
+
+适用分支：`codex/onboarding-appstore-qr`。本次只把 iPhone 连接页右栏的占位内容替换为随包交付的 App Store 下载二维码，并补充对应中英文说明文案；不改动流程、能力门禁、权限、连接、音频、持久化和左栏 App Store 入口。
+
+变更分类：局部截图渲染与文案变化，不改变用户旅程和门禁判定，因此按定向验证执行，覆盖受影响来源、语言和外观，并做构建与生产清单一致性检查。
+
+### 自动化与构建
+
+- `swift build --disable-keychain --disable-sandbox` 公开构建通过。
+- `swift test --disable-keychain --disable-sandbox --filter OnboardingFlowTests`：76 项通过。
+- `swift test --disable-keychain --disable-sandbox --filter LocalizationTests`：8 项通过，中英文 key 集合一致。
+- 生产清单一致性：`scripts/build-app.sh` 以 `ditto` 整目录拷贝 `Resources/Onboarding`，`scripts/verify-app.sh` 逐个校验该目录下的 PNG 出现在 App bundle 中；新增两张 PNG 无需修改打包脚本。
+
+### 生产页面检查
+
+1. 公开构建选择 iPhone 来源，进入连接页，确认右栏显示 App Store 下载二维码，白色衬底完整，图片不被裁切或拉伸。
+2. 中文确认二维码下方文案为“扫描二维码下载 iPhone 无线麦 SayAll App”，英文确认为“Scan this code to download SayAll for iPhone”。
+3. 用二维码扫描工具核对内容：中文指向 `https://apps.apple.com/app/%E6%97%A0%E7%BA%BF%E9%BA%A6/id6797208067`，英文指向 `https://apps.apple.com/app/sayall/id6797208067`，与左栏“从 App Store 安装”入口指向同一链接。
+4. 切换浅色和深色外观，确认深色下二维码仍有白色衬底且对比度足够，中文字号不小于 12pt，右栏内容整体居中不贴顶。
+5. 完整构建进入同一页面，确认右栏仍优先显示当前监听周期的动态配对二维码，静态下载二维码只作为无动态邀请码时的降级显示。
+
+### 失败判定与边界
+
+- 右栏空白、没有二维码、显示成 iPhone 插画、二维码内容与语言不匹配、中文界面出现英文二维码或反之、深色下二维码缺少白色衬底且无法识别，均判定失败。
+- 离屏截图和二维码解码只能证明静态界面与链接内容，不能代替真实 App Store 跳转、真实 iPhone 安装与真实扫码连接验收。
+
+### 截图证据
+
+离屏入口：`REMOTE_MIC_ONBOARDING_SCREENSHOT_DIR`、`REMOTE_MIC_ONBOARDING_SCREENSHOT_LANGUAGE=zh-Hans|en`、`REMOTE_MIC_ONBOARDING_SCREENSHOT_APPEARANCE=light|dark`、`REMOTE_MIC_ONBOARDING_SCREENSHOT_CONTROL_SOURCE=apple_companion`，来源为 `Sources/RemoteMic/OnboardingScreenshotRenderer.swift` 的生产 `OnboardingView`。受影响的 `04-remote.png` 记录如下（PNG，2040 × 1600，Retina 2x）：
+
+| 语言 | 外观 | 文件 | SHA-256 |
+| --- | --- | --- | --- |
+| zh-Hans | light | `04-remote.png` | `e67f7eb3d2dbb8f0f5e825878030664ec18b316977b00f7f487b4d5dd31e03a1` |
+| zh-Hans | dark | `04-remote.png` | `e48a01649dcf647443524d07b46abe6d07d36ed4f3ed787007925f23a568d3c2` |
+| en | light | `04-remote.png` | `5b8670b00b280d3527d5fe119f3dec004105c3e6337fb4fd72f2891a621a6410` |
+| en | dark | `04-remote.png` | `b62cbe66e15269e40cf94e0495faa4c1a891e7d76fad4ad2992e82de17597bb0` |
+
+随包交付的静态素材：`Resources/Onboarding/appstore-download-qr-zh-hans.png`（PNG，440 × 440，SHA-256 `29f089eefa7b4d21a1ac8f3cd1116dbd5b9d0fd3c9d14a4a94b0f2c821d6cf8a`）、`Resources/Onboarding/appstore-download-qr-en.png`（PNG，440 × 440，SHA-256 `4ae9425623b6f4ff291504ecafe2b309c1f2c0ec09d155ba580d750bf5bbeddb`）。两张二维码均在生成后用 `CIDetector` 回验内容。
+
 ## 2026-10-19 无屏配置应用定位回归
 
 适用分支：`codex/fix-agent-app-location`。本次只修改欢迎页复制的终端命令。页面、权限、连接、语音与持久化实现没有变化。
@@ -432,7 +471,7 @@
 ### iPhone App
 
 1. 选择“使用 iPhone App”，进入连接页并点击安装或打开 iOS App。
-2. 确认右栏显示当前监听周期的二维码；保持 iOS App 在前台并扫描二维码，核对校验码并在 Mac 批准首次连接。
+2. 完整构建确认右栏显示当前监听周期的动态配对二维码；公开构建确认右栏显示随包交付的 App Store 下载二维码（见“iPhone 右栏 App Store 下载二维码回归”）。保持 iOS App 在前台并扫描二维码，核对校验码并在 Mac 批准首次连接。
 3. 只连接不按键，确认不能继续；在 iPhone 遥控器按一个普通按键后才允许继续。
 4. 断开并重新连接，确认无需重启 Mac App；同时保持实体遥控器在线，确认实体按键不能代替 iPhone 通过。
 5. 拒绝 iPhone 相机权限或让二维码过期，确认 iPhone 仍自动使用 Nearby/Bonjour 发现，不要求开关 Wi-Fi 或重启手机。
