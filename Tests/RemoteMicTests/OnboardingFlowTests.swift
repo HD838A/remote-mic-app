@@ -31,6 +31,21 @@ struct OnboardingFlowTests {
         #expect(source.contains("alignment: .center"))
     }
 
+    @Test func membershipSheetGivesTheMembershipCenterAnExplicitSize() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/OnboardingView.swift"),
+            encoding: .utf8
+        )
+        // 会员中心以整页尺寸设计，内部用 GeometryReader 按可用宽度推算内容宽度
+        // （可用宽度不足 48pt 时内容宽度会算成 0）。sheet 不给尺寸时会塌缩成
+        // 一个只有「关闭」按钮的空弹窗，用户因此完全无法开通会员。
+        #expect(source.contains(".frame(minWidth: 900, minHeight: 620)"))
+    }
+
     @Test func webRemotePreparationCopyDescribesTheNextStep() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

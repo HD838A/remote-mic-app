@@ -193,9 +193,15 @@ struct OnboardingView: View {
         .environment(\.locale, localization.locale)
         .frame(minWidth: 980, minHeight: 732)
         .sheet(isPresented: $isMembershipPresented) {
-            VStack(alignment: .trailing) {
+            VStack(alignment: .trailing, spacing: 12) {
                 Button(localization.text("common.action.close")) { isMembershipPresented = false }
+                // 会员中心是按整页设计的（内部 GeometryReader 以可用宽度推算内容宽度，
+                // 可用宽度不足 48pt 时内容宽度会被算成 0）。sheet 不给尺寸时它会塌缩成
+                // 一个只有「关闭」按钮的空弹窗，用户因此无法开通会员。这里给足尺寸。
+                // 上界取 900 + 两侧 padding，保持小于窗口最小宽度 980，避免窗口缩小时
+                // sheet 溢出窗口、把位于最右侧的「关闭」按钮推到窗口之外。
                 membershipFeature.settingsView()
+                    .frame(minWidth: 900, minHeight: 620)
             }.padding(20)
         }
         .onAppear {

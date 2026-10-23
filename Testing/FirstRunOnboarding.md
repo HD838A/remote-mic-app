@@ -26,6 +26,38 @@
 
 本轮公开完整测试 902 项、私有完整测试 910 项通过。最终定向测试公开和私有各 5 项通过，另覆盖未完成向导时保留请求，以及拒绝非文件 URL 和其他后缀。市场校验、Apple Silicon Release 构建和 `verify-app.sh` 通过。生产交互入口使用隔离数据，实际查看全部绑定并取消，列表仍只有默认方案。中文浅色截图为 [导入预览](../Screenshots/design-drafts/sayall-file-import/import-preview-macos-zh-light.jpg)，JPEG、2040 × 1544，SHA-256 为 `fc89e381433628332c618ac932c2939d23ec4a1e2211bd2d2588a600630c76e8`。缺少深色和完整向导截图，以及签名安装、真实完整向导、确认保存、重启重读和会员状态验收；PR 保持 Draft。详见 [审查记录](../Bugs/2026-10-19-sayall-file-import.html)。
 
+## 2026-10-23 会员开通弹窗尺寸回归
+
+适用分支：`codex/onboarding-membership-sheet`。本次只修 Onboarding 里「点击开通会员功能」的呈现尺寸，不改会员判定、连接门禁、购买流程和任何文案。
+
+缺陷现象：在完整构建里点击 Onboarding 右栏的「点击开通会员功能」，弹出的窗口只有「关闭」按钮，会员中心和购买入口不可见，用户因此完全无法开通会员。
+
+根因：`.sheet` 里的内容为 `VStack { 关闭按钮; membershipFeature.settingsView() }`，没有给出任何尺寸约束；而会员中心以整页尺寸设计，内部 `GeometryReader` 用 `contentWidth = min(920, max(0, viewportWidth - 48))` 推算内容宽度，再 `.frame(width: contentWidth)`。可用宽度不足 48pt 时内容宽度被算成 0，整个会员中心被压成不可见。
+
+修复：给 `settingsView()` 加 `.frame(minWidth: 900, minHeight: 620)`。宽度上界刻意小于 Onboarding 窗口最小宽度 980（900 + 两侧 20pt padding = 940），否则窗口缩到最小时 sheet 会溢出窗口，把位于最右侧的「关闭」按钮推到窗口之外。
+
+尺寸证据（`NSHostingView.fittingSize` 实测）：修复前 97 × 82，与截图中那个只剩「关闭」按钮的小方块一致；修复后 940 × 696。对照组「`settingsView()` 返回 `EmptyView`」为 90 × 64，与本次实测的 97 × 82 不同，可据此区分「内容被压扁」和「会员模块未初始化」两种原因。
+
+### 自动化与构建
+
+- `swift build --disable-keychain --disable-sandbox` 公开构建通过。
+- `swift test --disable-keychain --disable-sandbox --filter OnboardingFlowTests`：77 项通过，其中新增 `membershipSheetGivesTheMembershipCenterAnExplicitSize()` 静态断言，防止再次移除尺寸约束。
+
+### 生产页面检查
+
+1. 完整构建走到权限页，右栏出现「点击开通会员功能」，点击后弹窗应为接近 940 × 696 的窗口。
+2. 弹窗内能看到会员中心内容：套餐、登录入口和购买按钮，且可滚动，不被裁切。
+3. 关闭按钮仍在弹窗右上角，始终可见，且不在滚动区域内；点击后回到 Onboarding 且不丢失当前步骤。
+4. 按 Esc 也能关闭弹窗。未设置 `interactiveDismissDisabled`，因此交互式关闭必须保留；如果加入了禁用逻辑，需同步本手册和失败判定。
+5. 把 Onboarding 窗口缩到最小宽度（980）后再打开弹窗，关闭按钮仍须完整落在窗口内，不能被推到窗口边缘之外。
+6. 在未登录状态点击购买，应弹出登录流程，而不是空白或直接关闭；登录弹窗的 Esc 只关闭登录弹窗，不应连带关闭会员中心。
+
+### 失败判定与边界
+
+- 弹窗仍为小方块、只有「关闭」按钮、会员内容不可见、内容被裁切成细条、点击购买没有任何反应，均判定失败。
+- 弹窗打开后无法关闭（关闭按钮不可见、Esc 无效、关闭后卡在空白页），属于阻塞级失败：用户会被困在 Onboarding 里出不来。
+- 只验证尺寸约束属于回归防护，不能证明真实购买成功。真实登录、支付和会员开通仍需在正式签名安装包上用真实账号验收；本机无法准备带签名的私有 artifacts，公共构建又不包含会员能力，因此本次未做真实购买验收。
+
 ## 2026-10-23 iPhone 右栏 App Store 下载二维码回归
 
 适用分支：`codex/onboarding-appstore-qr`。本次把 iPhone 连接页右栏的占位内容替换为随包交付的 App Store 下载二维码，二维码下方加入 Apple 官方 App Store 徽章，并补充对应中英文说明文案；不改动流程、能力门禁、权限、连接、音频、持久化和左栏 App Store 入口。
