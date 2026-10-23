@@ -156,7 +156,10 @@ active（非 listen-only）tap 的语义是「先给我看，我说放行才继�
 ### B. 权限查询移出主线程
 
 - 新增 `Sources/RemoteMic/PermissionStatusProbe.swift`：三项查询固定跑在一条串行队列上，结果回主线程交付；同一时刻只允许一次查询在飞，飞行期间到达的请求**合并成一次重跑**（否则 tccd 卡住时 1 Hz 定时器会堆出无限多个排队查询，恢复后还要逐条补跑）。
-- `OnboardingView.refreshPermissionStates()` 改为调用它，并且只在值真的变化时才写 `@State`，避免每秒无谓的视图失效。
+- `OnboardingView.refreshPermissionStates()` 改为调用它，并且只在值真的变化时才写 `@State`，避免每秒无谓的视图失效。`OnboardingView` 的三个 `@State` 初始值同时改为常量（`.notDetermined` / `false`）——原来它们在**每次构造视图**时都会同步查一次 TCC，截图渲染器（`OnboardingScreenshotRenderer`）依赖首帧拿到真实值，因此改为「构造视图不查询，后台快照返回前保持权限门禁关闭」。
+- `HIDPermissionPoll`（进程级共享的 HID 权限轮询，1 Hz）改为**只发起查询、不做判定**：原来的 `permissionEvaluator: () -> Bool` 在定时器线程上同步查 `isInputMonitoringGranted && isAccessibilityTrusted`，现在换成 `permissionQuery: (@escaping (Bool) -> Void) -> Void`，默认实现走同一个探针。结果回到主线程再交付给订阅者，订阅者才可以安全地释放 tap 并更新界面状态。交付时**重新读取订阅者表**，已在查询发出后取消的订阅不再收到通知。
+- `AppleSiriRemoteAdapter.startPermissionMonitor()`（Siri 遥控器的 1 Hz 权限监视器）同样改为走探针：定时器只发起查询，结果回主线程再决定是否 `stop(reason: .permissionRevoked)`。
+  - **边界**：开放仓库里这份 `AppleSiriRemoteAdapter` 是**不会被实例化的骨架**（真正驱动苹果遥控器的是私有包 `SayAllSiriRemote`）。本次改它没有运行时效果，目的是不让公开骨架继续示范「在主线程上同步查权限」这个反模式；真正运行的那份在私有仓库另行修复。
 
 ### C. 权限撤销时释放 active tap
 
@@ -167,32 +170,96 @@ active（非 listen-only）tap 的语义是「先给我看，我说放行才继�
 
 原实现是「加 source → 直接 enable」，没有任何失败分支。把 source 挪到另一条线程后，就多了一种「source 没接上」的可能。此时若仍然 enable，系统会把所有输入事件投进一个没人读的端口——**比本 Bug 的后果更严重**（本 Bug 还能靠杀进程恢复，那样会连恢复都很困难）。所以失败必须显式向上传，让两处 `start()` 按启动失败处理。
 
+## App 内的定时器清单
+
+全仓定时器只有三类来源：`Timer.publish`（1 处）、`DispatchSource.makeTimerSource`（17 处）、`Task.sleep` 循环（1 处）。另有 33 处 `asyncAfter`（一次性延迟，不是定时器），无 `Timer.scheduledTimer`、无 `CADisplayLink`。
+
+**周期性的（会自己反复触发）**
+
+| 位置 | 机制 | 周期 | 队列 | 用途 | 必要性判断 |
+| --- | --- | --- | --- | --- | --- |
+| `OnboardingView.swift:139` | `Timer.publish(every:on:in:)` | **1 s** | 主线程 | 引导页刷新权限、安全输入状态、语音工具可用性 | **冗余**。引导页已经订阅 `NSApplication.didBecomeActiveNotification`，用户从系统设置改完权限回到 App 会立即刷新一次；1 Hz 只是兜底，降到 2 s 感知无差别。`in: .common` 还让它在滚动/菜单跟踪期间照常触发。 |
+| `HIDPermissionPoll`（经 `HIDRemoteScheduler.swift:60`） | `DispatchSourceTimer` | **1 s** | 主线程（本次起判定改在后台探针） | 检测输入监控/辅助功能权限被撤销 → 释放 active tap | **必要**。这是「授权被收回后仍能监听输入」的唯一兜底，撤销检测不能取消；但 1 s 偏密，且它在订阅存在时**一直**在跑。 |
+| `AppleSiriRemoteAdapter.swift:657` | `DispatchSourceTimer` | **1 s** | 主线程（同上） | Siri 遥控器监听期间检测权限撤销 → 停止监听 | **必要**，同上。 |
+| `HIDRemoteMonitor.swift:1272` | `scheduler.schedule` | 500 ms（重复） | 主线程 | App 切换器会话期间轮询前台 App 是否已切换 | 必要，但只在会话进行中 |
+| `HIDRemoteMonitor.swift:1066` | `scheduler.schedule` | 350 ms 起，50/100 ms 重复 | 主线程 | 按住连发 | 必要 |
+| `HIDRemoteMonitor.swift:1036` | `scheduler.schedule` | 600 ms | 主线程 | 不可重复按键的稳定释放判定 | 必要 |
+| `HIDRemoteMonitor.swift:1127` / `1140` | `scheduler.schedule` | 300 ms / 550 ms | 主线程 | 双击、长按识别窗口 | 必要 |
+| `HIDRemoteMonitor.swift:1287` / `1309` | `scheduler.schedule` | 15 s / 300 ms | 主线程 | App 切换器超时、确认探测 | 必要 |
+| `BridgeAppModel.swift:6957` | `DispatchSourceTimer` | 8 s（重复） | 主线程 | RC003 语音扩展测试期间的周期采样 | 必要（仅测试态） |
+| `BridgeAppModel.swift:6936` / `6858` / `6888` / `7573` | `DispatchSourceTimer` | 120 s / 5 s / 2 s / 5 s | 主线程 | RC003 最长时长、长录音打开/关闭超时、手表语音无音频恢复 | 必要（事件驱动触发） |
+| `BridgeAppModel.swift:4403` / `4556` / `4581` / `4800` / `4814` / `6558` / `6579` / `8780` / `8797` | `DispatchSourceTimer` | 350 ms + 50/100 ms / 300 ms / 550 ms / 15 s / 500 ms / 300 ms / 550 ms / 300 ms / 550 ms | 主线程 | 遥控器与手机、Chromecast 的双击、长按、连发、App 切换器 | 必要 |
+
+**一次性延迟**：`BridgeAppModel.swift:4957` 的 App 切换器可见性探测 `[0, 150, 500, 1000] ms`；`Task.sleep` 循环只有 `RecordingAssetStore.swift:402` 一处；其余 33 处 `asyncAfter` 分布在 15 个文件，都是一次性延迟。
+
+**结论**：真正「一直在跑」的只有三条 1 Hz 轮询（引导页权限、HID 权限撤销、Siri 权限撤销），其余全部由具体事件触发、用完即销。三条 1 Hz 里有两条是**权限判定**，本次已把它们移出主线程；引导页那条的**频率**本身偏高（已有 `didBecomeActive` 即时刷新兜底），另立一项降到 2 s。
+
 ## 验证
 
 - **构建**：`DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift build --build-tests --disable-keychain --disable-sandbox` → `Build complete!`，无新增 warning（只有既有的 `onChange(of:perform:)` / `allowedFileTypes` 弃用警告）。
 - **定向回归**：`swift test --filter "EventTapPortTests|PermissionStatusProbeTests|HIDPermissionRevocationTests|OnboardingFlowTests"` → 全部通过（含 7 条 event tap、2 条权限探针、2 条权限撤销、76 条 onboarding）。
 - **修复前对照**：见「实验」第 4、7 条，两条新断言都在旧实现下失败、修复后通过。
-- **完整套件**：`swift test --disable-keychain --disable-sandbox` → **955 个用例、76 个套件，954 通过，1 个失败**。失败项是 `releaseControlPlaneFixtureHasExecutableRegressionCoverage()`，原因是本机 PATH 里没有 `rg`，`scripts/test-macos-release-flow.sh` 自带的守卫直接 `Missing required command: rg` 并退出 1。该脚本与本次改动零重叠（本次只改 Swift 源码与测试），属环境缺件，非回归。
+- **完整套件**：`swift test --disable-keychain --disable-sandbox` → **959 个用例、76 个套件，958 通过，1 个失败**。失败项是 `releaseControlPlaneFixtureHasExecutableRegressionCoverage()`，原因是本机 PATH 里没有 `rg`（`command -v rg` 无输出、`/opt/homebrew/bin/rg` 不存在），`scripts/test-macos-release-flow.sh` 自带的守卫直接 `Missing required command: rg` 并退出 1。该脚本与本次改动零重叠（`git diff --name-only origin/main..HEAD | grep '^scripts/'` 无输出，本次只改 Swift 源码、测试与本文档），属环境缺件，非回归。
+- **权限轮询迁移的定向回归**：`swift test --filter "HIDPermissionPollTests|PermissionStatusProbeTests|AppleSiriRemoteAdapterTests|HIDPermissionRevocationTests|EventTapPortTests"` → **23 个用例、4 个套件全部通过**。`HIDPermissionPollTests` 新增两条断言：`permissionQueryDoesNotBlockTheTimerThread()`（定时器只发起查询、结果异步交付，触发线程不被同步判定卡住）与 `cancelledSubscribersAreNotNotifiedWhenDeliveryIsDeferred()`（查询发出后取消的订阅不再收到通知）。
 
 ## 当前验证边界
 
 - **没有真机复现卡死**：复现等于再冻一次整机，不能做。因此「修复后不会再整机停摆」是**基于机制 + 解密日志**的结论（tap 不再依赖主线程），不是现场验证。
 - **没有主线程栈**：没有 spindump / hang 报告，进程已被 SIGKILL，无法事后取栈。所以「哪一次 TCC 查询卡在哪一帧」未确定；能确定的是阻塞发生在主线程（推理依据见「实验」第 2、3 条），且本进程是唯一的解除条件。
 - **真机按键链路未验收**：tap 回调现在跑在非主线程上，`KeyboardEventSuppressor.descriptor()` 与 `ShortcutCaptureMonitor.handle()` 里的 `NSEvent(cgEvent:)` 也随之在非主线程执行（这是 AppKit 的既有公开用法，但本次只做了进程内验证，没有拿实体遥控器连续按键长跑）。**需要真机验收**：自定义映射吞键、遥控器语音键、以及「打开系统设置改本 app 权限」这个原始触发场景。
-- **`HIDPermissionPoll` 的同类查询未改**：`DispatchHIDRemoteScheduler` 默认队列是 `.main`，所以「每 1 秒查一次 `isInputMonitoringGranted && isAccessibilityTrusted`」也跑在主线程上（订阅存在时）。**但它不是本次冻结的原因**：解密日志显示两个订阅在 01:56:24 就全部退订、轮询定时器随之停止（`timer_stopped=true`），比冻结窗口（02:02:24 起）早 6 分钟。修好 A 之后，主线程上的任何阻塞都只能让本 app 自己卡一下，不会再影响系统输入，因此它现在属于延迟/体验债而不是安全债。彻底修需要改这个轮询的线程模型与 `HIDRemoteMonitor` 回调的线程归属（HID 生命周期敏感、回归面大），建议单独立项。
+- **`HIDPermissionPoll` 与 Siri 权限监视器的判定已改，但轮询频率未改**：`DispatchHIDRemoteScheduler` 默认队列是 `.main`，原先「每 1 秒查一次 `isInputMonitoringGranted && isAccessibilityTrusted`」的**判定**在主线程上同步完成。本次把判定移到后台探针（定时器只负责发起查询），**周期仍是 1 s**。解密日志显示这两个订阅在 01:56:24 就全部退订、轮询定时器随之停止（`timer_stopped=true`），比冻结窗口（02:02:24 起）早 6 分钟——**它们不是本次冻结的原因**，但和 B 是同一类主线程隐患，所以一并修掉。
 - **`RemoteMicApp` 的同类查询未改**：`applicationDidFinishLaunching` 里一次读 6 次同步 TCC 权限（策略实参 3 次 + 日志 3 次）。它只在启动时跑一次，本次会话的启动（01:27:20）正常完成，不是冻结原因；仍属同类隐患。
 - **`SettingsView` 的同类查询未改**：`refreshPermissionStates()` 仍是同步版，但只在 `.onAppear` / `didBecomeActive` 触发（不是 1 Hz）；`setCustomMappingEnabled` 需要它的同步结果来决定是否弹授权提示。修掉 A 之后它已经不会拖累系统，只会让设置窗口自己卡一下。
-- **`OnboardingView` 的 `@State` 初始值仍会同步查询**：`OnboardingView.swift:95-97` 的三个属性初始值在**每次构造**时都会同步调一次 TCC。本次未改，因为截图渲染器（`OnboardingScreenshotRenderer`）依赖首帧就拿到真实值，改动需要先复核那条链路。
+- **`OnboardingView` 的 `@State` 初始值已改**：原先三个属性初始值在**每次构造视图**时都会同步调一次 TCC。本次改为常量（`.notDetermined` / `false`），构造视图不再查询 TCC；代价是后台快照回来之前权限门禁保持关闭——这与「首帧拿真实值」的旧行为不同，但对引导页是安全的方向（门禁默认关闭）。截图渲染器（`OnboardingScreenshotRenderer`）依赖生产页面清单，本次未新增/删除页面，截图数量与来源不变。
+- **`BridgeAppModel` 的事件驱动查询未改**：`HIDPermissionSnapshot.current`（`BridgeAppModel.swift:65`）在 `refreshHIDAfterPermissionChange()` 与 `applyHIDSettings()` 各读 2 次同步 TCC。都是事件驱动、不周期，且需要同步结果决定是否重新申请授权，本次未改。
+- **按键路径上的同步权限判定未改（重要）**：`HIDRemoteMonitor.runtimePermissionsAreValid()`（默认实现读 `isInputMonitoringGranted` + `isAccessibilityTrusted`，即 2 次同步 TCC IPC）在 `performConfiguredAction()`（`HIDRemoteMonitor.swift:1155`）里被调用。而 `IOHIDManagerScheduleWithRunLoop(..., CFRunLoopGetMain(), ...)`（`HIDRemoteMonitor.swift:241`）意味着**每次遥控器按键的输入值回调都跑在主 RunLoop 上**——也就是说，**每按一次键就有 2 次同步 TCC IPC 落在主线程上**，频率比 1 Hz 轮询更高（用户连续按键时）。
+  - 它**不是**本次冻结的原因（冻结时用户没有按遥控器），但它和 B 是同一类主线程隐患：用户在系统设置里改权限时 tccd 正忙于结算，这时按一次键就能把主线程钉住数秒。修好 A 之后这不再影响**系统**输入队列（本 app 的 tap 已经在自己的线程上），但仍会延迟本 app 的按键处理与界面响应。
+  - **本次不改**，因为它的语义是「权限被撤销后**立即**拒绝执行动作」，改成异步或读缓存都会把「立即」放宽成「最多一个轮询周期（1 秒）」，属于权限语义变更，应当单独立项并单独评估，而不是搭在本 Bug 的修复里。
 
 ## 附带发现（不属于本 Bug，单独跟进）
 
-- 同一段日志里，**会员权益刷新在持续失败**：355 条 `MEMBERSHIP_ENTITLEMENT` 事件中 248 条 `phase=failed`，其中 245 条 `reason_code=internal_error` + `http_status_class=5xx` + `support_code=-1900`，失败间隔 5–65 秒不等。这与本次冻结无关（冻结期间它还在继续失败并写日志），但是一个独立的服务连通性问题，应单独排查。
+### 会员权益刷新在持续失败
+
+同一段日志里，**会员权益刷新在持续失败**。把 `phase=failed` 按 `category` 对账：
+
+| category | failed 条数 |
+| --- | --- |
+| `MEMBERSHIP_ENTITLEMENT` | 235 |
+| `MEMBERSHIP_AUTH` | 12 |
+| `MEMBERSHIP_ORDER` | 1 |
+| **合计** | **248** |
+
+355 条 `MEMBERSHIP_ENTITLEMENT` 事件的 `phase` 分布是 `requested` 120 条、`failed` 235 条。**这不是 355 次失败，而是 120 次刷新尝试**——每次尝试固定写三条记录：
+
+1. `phase=requested`：`account_mode=account`、`entitlement_delivery=not_requested`、`retryable=unknown`、`elapsed_ms=0`；
+2. `phase=failed`：`account_mode=account`，带**真实** `elapsed_ms`（实测 0–435 ms）与服务端 `request_id`；
+3. `phase=failed`：`account_mode=unknown`，`elapsed_ms=0`、`operation_id` 另起一个，但 `request_id` 与第 2 条**完全相同**。
+
+按 `request_id` 分组可验证：116 个 `request_id` 分组，每组恰好 2 条（`account` + `unknown`），覆盖 232 条记录；另有 3 条 `http_status_class=network`（`reason_code=network_unavailable`）没有拿到 `request_id`。**同一次 HTTP 失败被记了两遍**，是日志量翻倍的第一层放大。
+
+第二层放大是刷新次数本身：
+
+- 120 次尝试分布在 17:27:22 → 18:14:30 UTC（北京时间 01:27:22 → 02:14:30），共 47.1 分钟，**平均 23.8 秒一次**；
+- 相邻间隔被量化成 5 / 10 / 15 / 20 / 30 / 45 / 55 / 60 / 130 / 200 秒；
+- 每次尝试的 `attempt` 字段**恒为 0**——不是就地重试，每一次都是一次全新的顶层刷新；
+- 失败特征完全一致：232 条 `http_status_class=5xx` + `reason_code=internal_error` + `support_code=-1900` + `retryable=true`，3 条网络级不可达。**第一次失败发生在启动后约 0.6 秒**，整个会话期间服务端一直返回 5xx，从未成功过；
+- **冻结期间（18:02:24 → 18:14:30 UTC）仍在继续尝试 31 次**——它跑在后台队列上，不受主线程阻塞影响，所以还能写日志；
+- 日志最后一行是 18:14:30 的 `phase=requested`、**没有配对的 `failed`**，与「进程被 SIGKILL」的时刻吻合。
+
+**刷新不是被用户操作触发的**：这 120 次尝试的 `seq` 每次正好 +3，中间**没有任何其它日志行**——App 当时完全空闲（用户停在引导页，没有点击、没有设备变化）。所以刷新是会员适配器自己驱动的。
+
+**问题定位**：观察到的间隔（最短 5 秒）明显短于任何合理的失败退避阶梯，说明存在一个能提前触发刷新的外部事件，而它把退避阶梯绕过去了——外部触发与退避计时互相踩踏时，退避就等于没有。**修复在私有仓库进行**（公开仓库只承载公开可见的实现与日志事实，不引用私有实现细节）。
+
+### 公开仓库侧的边界
+
+本 Bug 的修复只覆盖公开仓库。会员诊断记录重复、刷新退避被外部事件击穿这两点，根因都在会员适配器所在的私有包，公开仓库不复制、不镜像私有实现。
 
 ## 后续
 
 1. 真机验收：实体遥控器连续按键 + 原始触发场景（引导页开关蓝牙权限）。
-2. **单独立项**：把 `HIDPermissionPoll` 的权限评估移出主线程（连带调整 `HIDRemoteMonitor` 轮询回调的线程归属）。它不是本次冻结的原因，但与 B 是同一类问题。
+2. **单独立项**：把引导页的 1 Hz 权限轮询降到 2 s，并只在 App 处于前台时查询。引导页已经订阅 `NSApplication.didBecomeActiveNotification`，用户从系统设置改完权限回到 App 会立即刷新一次，1 Hz 只是兜底；频率优化不改变功能，也与本 Bug 的根因修复分开立项。
 3. 把 `SettingsView` 的权限查询也改成异步，并让 `setCustomMappingEnabled` 走「先查、再决定」的异步流程。
-4. 复核 `OnboardingScreenshotRenderer` 的首帧依赖后，把 `OnboardingView.swift:95-97` 的 `@State` 初始值改为常量，去掉「每次构造都同步查 TCC」的隐藏开销。
-5. 单独跟进上面「附带发现」里的会员权益 5xx 失败。
-6. 与 `Bugs/2026-09-27-event-tap-port-not-invalidated.md` 一并考虑：那条记录解决了「端口泄漏」，本条解决了「回调阻塞主线程导致系统输入停摆」，第三条（本记录 C）解决了「授权收回后 tap 仍存活」。三条都出在 `EventTapPort` / suppressor 生命周期这一带上，说明该职责边界值得再收一遍。
+4. `RemoteMicApp` 启动时那 6 次同步 TCC 读取改为复用同一个探针，避免启动阶段在主线程上连续 6 次同步 IPC。
+5. **单独立项**：`HIDRemoteMonitor` 按键路径上的同步权限判定（每按一次键 2 次主线程同步 TCC IPC）。语义是「撤销后立即拒绝执行动作」，改成异步或读缓存都会把「立即」放宽成「最多一个轮询周期」，属于权限语义变更，需要单独评估与验收。
+6. 单独跟进上面「附带发现」里的会员权益 5xx 失败：重复诊断记录与刷新退避被外部事件击穿两点，修复在私有仓库进行。
+7. 与 `Bugs/2026-09-27-event-tap-port-not-invalidated.md` 一并考虑：那条记录解决了「端口泄漏」，本条解决了「回调阻塞主线程导致系统输入停摆」，第三条（本记录 C）解决了「授权收回后 tap 仍存活」。三条都出在 `EventTapPort` / suppressor 生命周期这一带上，说明该职责边界值得再收一遍。
