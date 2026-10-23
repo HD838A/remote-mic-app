@@ -1,0 +1,51 @@
+{
+  "source_base_sha": "573c50fbd9cf3af0a11bade31157faa8c004bafc",
+  "source_files_sha256": {
+    "Sources/RemoteMic/RemoteButtons.swift": "25227f78ac4c1d340cf3b4037097a1b33f82dd964eca4024d613574c1ed7769e",
+    "Sources/RemoteMic/KeyboardInjector.swift": "ecb2e144734e537825686c6de0d6b3fc50b053b8b10fe944c34696fcef7320c9",
+    "Resources/zh-Hans.lproj/Localizable.strings": "ff1bdfcbf6edb048b3ba22fa2ba29284aeab80d345c759a2c9af853d9b85a05c",
+    "Resources/en.lproj/Localizable.strings": "1f1823e4b1d1dcfa92cc8089e6de561ec2e72f290fb2ccd111dcc48c06f8f268"
+  },
+  "app_version": "2.0.0",
+  "app_build": "251",
+  "build": "public debug, local review only",
+  "capture": "CUA native window capture of production SettingsView through existing isolated interactive screenshot entry",
+  "window_points": [
+    1020,
+    772
+  ],
+  "settings": "isolated fixture; real user configuration unchanged",
+  "date": "2026-10-23",
+  "screenshots": [
+    {
+      "file": "runtime-mapping-en-light.jpg",
+      "format": "JPEG",
+      "width": 2040,
+      "height": 1544,
+      "bytes": 329508,
+      "sha256": "1ca69092f4f9072c544142992ddb1d5403a98f598074ec0b0f40a39c8e93e015"
+    },
+    {
+      "file": "runtime-mapping-zh-hans-dark.jpg",
+      "format": "JPEG",
+      "width": 2040,
+      "height": 1544,
+      "bytes": 295663,
+      "sha256": "b3af3c2d5436d6db1a7734325e4fc57b4c74014502c9add8ab07143e004cb747"
+    },
+    {
+      "file": "runtime-mapping-zh-hans-light.jpg",
+      "format": "JPEG",
+      "width": 2040,
+      "height": 1544,
+      "bytes": 301541,
+      "sha256": "1a5a31f69bdf40f1fb95c22c2643e86d8dd70e4c79d32f5db6e8a3c4ba5219d4"
+    }
+  ],
+  "pending": [
+    "English dark screenshot: desktop locked before capture",
+    "Physical remote and first voice input",
+    "Accessibility permission revocation/recovery",
+    "Other WorkBuddy layouts and Intel Mac"
+  ]
+}

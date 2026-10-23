@@ -312,6 +312,7 @@
 - [x] ~~自动聚焦输入框~~（已完成：打开 Codex、Claude、cmux 后自动聚焦其输入区域；内置 App、自定义 App和自定义快捷键现统一等待 system-wide Accessibility 最终焦点成为安全可编辑位置，再允许第一次 Fn 语音启动）
   - 2026-10-23 更新 #722：修复 SayAll 自身处于前台时聚焦自身 composer 造成的死锁。宿主注入的焦点请求在目标为自身进程时跳过 AX 查询（`focusFrontmostComposer` 判定 `processIdentifier` 相同即返回 `result=skipped reason=self_frontmost`），不再进入自等待。定向测试与公开宿主回归通过；真实目标 App 与实体遥控器仍按测试手册验收。见 `Testing/CustomApplicationFocus.md`。
   - 2026-10-20：修复 WorkBuddy 匿名输入框无法学习的问题。祖先上下文为空时复用已知窗口语义，保留敏感字段和多候选拒绝规则。本机候选包已完成学习和测试输入框，辅助功能焦点最终落在文本输入区；搜索框干扰、冷启动、普通聚焦动作与实体遥控器仍待验收。见 `Testing/CustomApplicationFocus.md`。
+  - 2026-10-23：WorkBuddy 默认 App 入口与免学习聚焦候选，使用 `com.tencent.workbuddy.mac` 和现有公开 Accessibility 策略。安装后可直接选择“打开 WorkBuddy”；不改动旧自定义配置。948 项自动化、48 项自检及本机 V5.9.0 后台打开、搜索框干扰、冷启动通过；英文深色截图、独立运行日志、真实遥控器和首次语音输入仍待验收，见 `Testing/CustomApplicationFocus.md`。
   - 2026-08-22 真机发现该能力对 Claude Desktop 和 ChatGPT 稳定失效（`composer_not_found`）：web 内容的辅助功能树是懒加载的，必须由辅助技术客户端先声明自己。已在聚焦流程中设置 `AXManualAccessibility`，对不认该 Chromium 约定的外壳降级为标准的 `AXEnhancedUserInterface`，并把 composer 重试窗口放宽到 12 × 250ms。Claude Desktop 已真机验收通过；ChatGPT 的降级路径仍待复验。根因与步骤见 `Bugs/2026-08-22-electron-composer-focus-needs-manual-accessibility.md`。
 - [ ] 支持通过遥控器按键一键唤起 Codex 并启动其语音功能（仅记录，暂不开发）
   - 第一层“打开或切换到 Codex，并聚焦输入框”已经具备技术基础；目标是将其与“启动 Codex 自带语音输入”组合为一个可配置动作，用户按一次遥控器按键即可开始说话。
