@@ -21,7 +21,7 @@
 4. 检查 `config/release-dependencies.json` 与受保护 workflow 使用相同的私有依赖版本标签，同时确认公开 `Package.swift`、`Package.resolved` 不解析私有仓库；运行 `scripts/verify-release-dependency-pins.sh`。
 5. 运行 `scripts/verify-release-ready-main-ci.sh`，确认 Apple Silicon 与 Intel Ventura 的源码分支 push CI 都完成无私有权限也可执行的 Swift tests、项目 self-test 和 Release build。官方 CI 探测到私有 deploy key 可用时，还必须完成版本化私有依赖的集成测试和双架构 Release build；脚本名为历史兼容名称，发布控制面 fixture 不得冒充产品 CI。
 
-Mac Remote 与其他 macOS 私有组件使用同一个私有 Swift Package。CI 和发布通过私有平台的统一 SemVer 标签解析包；不再把平台子目录伪装成独立远程 Package。无私有依赖的公开构建继续使用现有兼容层。私有平台版本必须从 `main` 发布，并由 `VERSION` 文件和 `X.Y.Z` 标签校验。回退发布流程时须同时回退清单、workflow 和验证脚本；旧版本通过对应的不可变标签回退。
+Mac Remote 与其他 macOS 私有组件使用同一个私有 Swift Package。CI 和发布通过私有平台的统一 SemVer 标签解析包；不再把平台子目录伪装成独立远程 Package。无私有依赖的公开构建继续使用现有兼容层。私有平台版本必须从 `main` 发布。`2.3.0` 起以标准 `X.Y.Z` Tag、main 祖先关系和根 `Package.swift` 校验来源；私有仓库已停用根 `VERSION`。更早的不可变 Tag 保留历史 `VERSION` 一致性校验。回退发布流程时须同时回退清单、workflow 和验证脚本；旧版本通过对应的不可变标签回退。
 
 ### 打包前发布私有 Mac 包
 
@@ -30,12 +30,12 @@ Mac Remote 与其他 macOS 私有组件使用同一个私有 Swift Package。CI 
 有读取权限时，按以下顺序准备：
 
 1. 将 Mac 私有改动通过私有 PR 合入 `GetSayAll/sayall-private-platform` 的 `main`。只比较根 SwiftPM 清单、Mac Remote、组合动作、键位方案、常用语、会员与诊断、Siri Remote、Chromecast 和私有构建工具。网页、服务端和纯 Markdown/HTML 文档变化不触发 Mac 包升级。新增 Mac 模块时同步 `scripts/prepare-private-platform.py` 的路径范围。
-2. 若上述内容相对最新数字 Tag 有变化，先通过私有 PR 升级根 `VERSION`。默认升 patch；破坏性接口按 SemVer 升 major。不得给未合入源码或脏工作区打发布 Tag。
-3. 运行 `python3 scripts/prepare-private-platform.py release`。脚本获取最新私有 `main`，运行根包 Debug 完整测试与 Release 产品构建，再发布与 `VERSION` 相同的标准 SwiftPM Tag `X.Y.Z`。测试使用 Debug 模式以保留现有测试接口；正式构建保持 Release 模式。全部本地 SwiftPM 命令使用 `--disable-keychain`。脚本在推送前复核远端 main，并在推送后复核 Tag Commit。没有 Mac 变化时复用原 Tag；不创建 `private-vX.Y.Z`，不移动已有 Tag。
-4. 运行 `scripts/update-private-dependency-versions.sh --publish` 可合并执行上一步与宿主清单升级。该命令在宿主普通 PR 分支执行。私有 Tag 发布成功后，再更新 `config/release-dependencies.json`，验证并通过宿主 PR 合入。Tag 写权限与只读权限不同；无写权限时请有发布权限的维护者完成私有发布。
+2. 若上述内容相对最新数字 Tag 有变化，按私有仓库 `docs/release/tagging.md` 发布新的标准 SemVer Tag。`2.3.0` 起不再升级根 `VERSION`。默认升 patch；破坏性接口按 SemVer 升 major。不得给未合入源码或脏工作区打发布 Tag。
+3. 运行 `python3 scripts/prepare-private-platform.py release` 核对最新私有 `main`。`2.3.0` 起，存在未发布 Mac 变化时停止，并要求先由私有发布者完成测试、构建与新 Tag 发布；不从停用的 `VERSION` 推导新版本。更早版本保留历史发布兼容路径。测试使用 Debug 模式以保留现有测试接口；正式构建保持 Release 模式。全部本地 SwiftPM 命令使用 `--disable-keychain`。脚本在推送前复核远端 main，并在推送后复核 Tag Commit。没有 Mac 变化时复用原 Tag；不创建 `private-vX.Y.Z`，不移动已有 Tag。
+4. 私有 Tag 发布后，运行 `scripts/update-private-dependency-versions.sh --publish` 更新宿主清单；该命令不能替代 `2.3.0` 起的私有发布步骤。该命令在宿主普通 PR 分支执行。私有 Tag 发布成功后，再更新 `config/release-dependencies.json`，验证并通过宿主 PR 合入。Tag 写权限与只读权限不同；无写权限时请有发布权限的维护者完成私有发布。
 5. 再运行宿主打包。自动模式只从清单 Tag 的精确 Commit 准备私有二进制和源码路径，校验两者来源相同，再集成到 App。私有源码路径也必须属于同一干净 Tag checkout。不得直接集成本地未提交内容、可变分支或未发布 main。
 
-自动模式会执行私有发布前置检查。`VERSION` 尚未升级、私有发布失败或宿主清单尚未合入时，打包停止并提示下一步。它不会替用户合并版本 PR，也不会在精确 main 上修改宿主清单。读取成功后的网络、测试、Tag、构件、资源或签名错误必须报错；不能将这些错误伪装为无权限并生成公开包。私有 Siri Remote 集成继续要求 Developer ID 签名。
+自动模式会执行私有发布前置检查。私有 Mac 变化尚未发布、私有发布失败或宿主清单尚未合入时，打包停止并提示下一步。它不会替用户合并版本 PR，也不会在精确 main 上修改宿主清单。读取成功后的网络、测试、Tag、构件、资源或签名错误必须报错；不能将这些错误伪装为无权限并生成公开包。私有 Siri Remote 集成继续要求 Developer ID 签名。
 
 `SAYALL_PRIVATE_PLATFORM_MODE=required` 强制要求私有组件。显式设置 `REQUIRE_*` 的完整发布仍在缺少组件时失败；签名、公证及公开发布门禁保持不变。受保护 staging 只检查私有 Mac 代码已被清单 Tag 覆盖，不在签名阶段发布私有 Tag 或修改版本。受保护 runner 再次检查完整历史中的 Tag、main 和 checkout，拒绝过期 pin。
 

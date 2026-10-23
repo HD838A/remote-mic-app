@@ -186,6 +186,38 @@ class ReleaseTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "match VERSION"):
             platform.verify_tag(self.repo, "2.2.1")
 
+    def test_semver_230_consumes_tag_with_retired_version(self):
+        self.advance()
+        sha = self.git("rev-parse", "HEAD")
+        self.git("tag", "-a", "2.3.0", "-m", "VERSION retired")
+        self.git("push", "origin", "2.3.0")
+        self.assertEqual(platform.verify_checkout(self.repo, "2.3.0"), sha)
+        self.assertEqual(self.publish(), "2.3.0")
+        self.assertEqual(self.swift_calls, [])
+
+    def test_semver_230_mac_changes_require_private_publisher(self):
+        self.git("tag", "-a", "2.3.0", "-m", "VERSION retired")
+        self.git("push", "origin", "2.3.0")
+        self.advance("2.3.1")
+        with self.assertRaisesRegex(RuntimeError, "Publish a new standard tag in the private repository"):
+            self.publish()
+        self.assertNotIn("2.3.1", self.git("tag", "--list").splitlines())
+
+    def test_semver_230_still_requires_main_ancestry_and_root_manifest(self):
+        self.git("checkout", "-b", "unmerged")
+        self.write("unmerged.txt", "unmerged\n")
+        self.commit()
+        self.git("tag", "2.3.0")
+        with self.assertRaises(RuntimeError):
+            platform.verify_tag(self.repo, "2.3.0")
+        self.git("checkout", "main")
+        self.git("mv", "Package.swift", "Retired.swift")
+        self.commit()
+        self.git("push", "origin", "main")
+        self.git("tag", "2.3.1")
+        with self.assertRaises(RuntimeError):
+            platform.verify_tag(self.repo, "2.3.1")
+
     def test_origin_accepts_checkout_action_urls_and_rejects_other_repositories(self):
         for url in ("https://github.com/" + platform.REPOSITORY,
                     "git@github.com:" + platform.REPOSITORY + ".git"):
