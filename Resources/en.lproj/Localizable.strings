@@ -894,6 +894,7 @@
 "onboarding.iphone_remote.connected" = "iPhone / Apple Watch connected";
 "onboarding.iphone_remote.waiting" = "Waiting for iPhone";
 "onboarding.iphone_remote.scan" = "Scan this code in SayAll for iPhone to connect directly to this Mac";
+"onboarding.iphone_remote.appstore_qr" = "Scan this code to download SayAll for iPhone";
 "onboarding.iphone_remote.connection_detail" = "Keep the SayAll iOS app in the foreground. The first connection must be approved on your Mac.";
 "onboarding.iphone_remote.button_detail" = "After connecting, tap any button except the voice button in the iPhone remote.";
 "onboarding.web_remote.title" = "Connect to This Mac with WeChat";
