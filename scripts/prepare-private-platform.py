@@ -60,7 +60,9 @@ def verify_tag(repo, tag, main="origin/main"):
     version_key(tag)
     sha = git(repo, "rev-parse", "--verify", f"refs/tags/{tag}^{{commit}}")
     git(repo, "merge-base", "--is-ancestor", sha, main)
-    if git(repo, "show", f"{sha}:VERSION") != tag:
+    # The private publisher retired root VERSION starting with 2.3.0.
+    # Keep the historical contract for older immutable tags.
+    if version_key(tag) < (2, 3, 0) and git(repo, "show", f"{sha}:VERSION") != tag:
         raise RuntimeError("Private tag must match VERSION")
     git(repo, "cat-file", "-e", f"{sha}:Package.swift")
     return sha
@@ -100,6 +102,8 @@ def release(repo):
     if not mac_changes(repo, latest_sha, main):
         print(f"PRIVATE PLATFORM unchanged tag={latest} commit={latest_sha}", file=sys.stderr)
         return latest
+    if version_key(latest) >= (2, 3, 0):
+        raise RuntimeError("Mac code changed. Publish a new standard tag in the private repository, then upgrade the host manifest through a PR")
     version = git(repo, "show", f"{main}:VERSION")
     if version_key(version) <= version_key(latest):
         major, minor, patch = version_key(latest)
