@@ -30,6 +30,32 @@ final class EventTapRunLoop: @unchecked Sendable {
     /// 此时宁可放弃本次操作并留日志，也不要把调用方一起拖住——那正是本类型要避免的事。
     static let defaultTimeout: DispatchTimeInterval = .milliseconds(500)
 
+    /// 超时后取消尚未开始的操作，防止 RunLoop 恢复后挂入已释放的 source。
+    private final class PendingOperation {
+        private let lock = NSLock()
+        private var body: (() -> Void)?
+        let finished = DispatchSemaphore(value: 0)
+
+        init(_ body: @escaping () -> Void) {
+            self.body = body
+        }
+
+        func run() {
+            lock.lock()
+            let work = body
+            body = nil
+            lock.unlock()
+            work?()
+            finished.signal()
+        }
+
+        func cancel() {
+            lock.lock()
+            body = nil
+            lock.unlock()
+        }
+    }
+
     private let lock = NSLock()
     private var storedRunLoop: CFRunLoop?
 
@@ -87,12 +113,15 @@ final class EventTapRunLoop: @unchecked Sendable {
             return true
         }
 
-        let finished = DispatchSemaphore(value: 0)
+        let operation = PendingOperation(body)
         CFRunLoopPerformBlock(target, CFRunLoopMode.commonModes.rawValue) {
-            body()
-            finished.signal()
+            operation.run()
         }
         CFRunLoopWakeUp(target)
-        return finished.wait(timeout: .now() + timeout) == .success
+        guard operation.finished.wait(timeout: .now() + timeout) == .success else {
+            operation.cancel()
+            return false
+        }
+        return true
     }
 }

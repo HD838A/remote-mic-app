@@ -128,6 +128,29 @@ struct EventTapPortTests {
         #expect(observedOnMainThread == false)
     }
 
+    @Test
+    func timedOutOperationDoesNotRunAfterTheRunLoopRecovers() throws {
+        let target = try #require(EventTapRunLoop.shared.runLoop)
+        let entered = DispatchSemaphore(value: 0)
+        let resume = DispatchSemaphore(value: 0)
+        let probe = MachPortProbe()
+        CFRunLoopPerformBlock(target, CFRunLoopMode.commonModes.rawValue) {
+            entered.signal()
+            _ = resume.wait(timeout: .now() + 3)
+        }
+        CFRunLoopWakeUp(target)
+        defer { resume.signal() }
+        try #require(entered.wait(timeout: .now() + 3) == .success)
+
+        #expect(!EventTapRunLoop.shared.performAndWait(timeout: .milliseconds(20)) {
+            probe.record()
+        })
+        resume.signal()
+        // 同一队列上的屏障确保超时操作已经有机会执行。
+        try #require(EventTapRunLoop.shared.performAndWait {})
+        #expect(probe.callbackCount == 0)
+    }
+
     /// event tap 的投递本质上是「mach port source 被 RunLoop 服务」。
     ///
     /// 这里用 `CFMessagePort`（同为 mach port source）搭一条安全的替代链路：只在本进程内

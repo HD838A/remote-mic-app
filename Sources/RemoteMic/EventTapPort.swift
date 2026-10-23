@@ -22,12 +22,14 @@ enum EventTapPort {
     /// 彻底堵死，比不使用 tap 严重得多。调用方应当把这次启动当成失败处理。
     @discardableResult
     static func activate(port: CFMachPort, source: CFRunLoopSource) -> Bool {
+        // tapCreate 默认启用端口。等待 source 接入前先停投递。
+        CGEvent.tapEnable(tap: port, enable: false)
         let attached = EventTapRunLoop.shared.performAndWait {
             CFRunLoopAddSource(CFRunLoopGetCurrent(), source, .commonModes)
         }
         guard attached else {
             AppLogger.shared.write(
-                "EVENT TAP activate failed: run loop did not accept the source"
+                "EVENT TAP phase=failed action=activate result=failed reason=run_loop_timeout"
             )
             return false
         }
@@ -58,7 +60,12 @@ enum EventTapPort {
         // 兜底：tap 线程没有在预算内响应。端口必须 invalidate，否则会永久残留在
         // WindowServer 的 tap 列表里（本类型开头描述的那条泄漏路径）。宁可承担一次
         // 与回调并发的作废，也不要留下一个永不回收的端口。
-        AppLogger.shared.write("EVENT TAP release timed out: invalidating on the caller thread")
+        AppLogger.shared.write(
+            "EVENT TAP phase=timed_out action=release result=fallback reason=run_loop_timeout"
+        )
+        if let source {
+            CFRunLoopSourceInvalidate(source)
+        }
         if let port {
             CFMachPortInvalidate(port)
         }
