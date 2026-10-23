@@ -3711,10 +3711,22 @@ struct OnboardingView: View {
         systemFunctionKeyUsage = OnboardingSystemFunctionKeyUsage.current
     }
 
+    /// 权限状态改到后台查询，主线程只负责回填。
+    ///
+    /// 三个查询都是同步 IPC 到 tccd，用户在系统设置里改权限的瞬间可能卡住数秒。它们原先
+    /// 直接跑在每秒一次的定时器里（见 `permissionRefreshTimer`），把主线程钉死；主线程上
+    /// 还挂着两条 active event tap，于是整个系统的输入队列一起停摆。
+    /// 2026-10-24 已实际发生：`Bugs/2026-10-24-event-tap-blocks-system-input.md`。
     private func refreshPermissionStates() {
-        bluetoothAuthorization = CBManager.authorization
-        inputMonitoringGranted = HIDRemoteMonitor.isInputMonitoringGranted
-        accessibilityGranted = KeyboardInjector.isAccessibilityTrusted
+        PermissionStatusProbe.shared.fetch { snapshot in
+            guard snapshot.bluetooth != bluetoothAuthorization
+                || snapshot.inputMonitoring != inputMonitoringGranted
+                || snapshot.accessibility != accessibilityGranted
+            else { return }
+            bluetoothAuthorization = snapshot.bluetooth
+            inputMonitoringGranted = snapshot.inputMonitoring
+            accessibilityGranted = snapshot.accessibility
+        }
     }
 
     private func refreshSecureInputState() {
