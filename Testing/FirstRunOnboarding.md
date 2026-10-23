@@ -54,7 +54,7 @@
 
 ### 截图证据
 
-离屏入口：`REMOTE_MIC_ONBOARDING_SCREENSHOT_DIR`、`REMOTE_MIC_ONBOARDING_SCREENSHOT_LANGUAGE=zh-Hans|en`、`REMOTE_MIC_ONBOARDING_SCREENSHOT_APPEARANCE=light|dark`、`REMOTE_MIC_ONBOARDING_SCREENSHOT_CONTROL_SOURCE=apple_companion`，来源为 `Sources/RemoteMic/OnboardingScreenshotRenderer.swift` 的生产 `OnboardingView`。受影响的 `04-remote.png` 记录如下（PNG，2040 × 1600，Retina 2x）：
+离屏入口：`REMOTE_MIC_ONBOARDING_SCREENSHOT_DIR`、`REMOTE_MIC_ONBOARDING_SCREENSHOT_LANGUAGE=zh-Hans|en`、`REMOTE_MIC_ONBOARDING_SCREENSHOT_APPEARANCE=light|dark`、`REMOTE_MIC_ONBOARDING_SCREENSHOT_CONTROL_SOURCE=apple_companion`，来源为 `Sources/RemoteMic/OnboardingScreenshotRenderer.swift` 的生产 `OnboardingView`。受影响的 `04-remote.png` 记录如下（PNG，2040 × 1600，Retina 2x）。四张截图已随本次改动提交到 `Screenshots/onboarding-appstore-qr/`，并附 `manifest.json` 记录源文件与截图指纹：
 
 | 语言 | 外观 | 文件 | SHA-256 |
 | --- | --- | --- | --- |

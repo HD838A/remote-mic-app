@@ -1,0 +1,50 @@
+{
+  "version": "2.2.9 (public Debug)",
+  "source_baseline": "6d7e992a5eddac764e1112418efa9fec7ea2214c",
+  "source_files_sha256": {
+    "Sources/RemoteMic/OnboardingView.swift": "270f78bdf05103d3bcfa71d0f754eb4f6c4548ed7d6f5ba80071c58b591ccb6c",
+    "Resources/zh-Hans.lproj/Localizable.strings": "52c3c1d4389df61006357759e5a6d647850206cd3e4a9446c26b25bd8be9c3e3",
+    "Resources/en.lproj/Localizable.strings": "a6620080eacf10612944dfbb626aa76dff1d1db853de1a47e6f598e0c0a1d503",
+    "Resources/Onboarding/appstore-download-qr-zh-hans.png": "29f089eefa7b4d21a1ac8f3cd1116dbd5b9d0fd3c9d14a4a94b0f2c821d6cf8a",
+    "Resources/Onboarding/appstore-download-qr-en.png": "4ae9425623b6f4ff291504ecafe2b309c1f2c0ec09d155ba580d750bf5bbeddb"
+  },
+  "environment": "macOS 27.0, Apple Swift 6.4, arm64, public SwiftPM Debug build",
+  "runtime": "production OnboardingView hosted offscreen by Sources/RemoteMic/OnboardingScreenshotRenderer.swift, 1020x772 window, isolated preferences",
+  "offscreen": "REMOTE_MIC_ONBOARDING_SCREENSHOT_CONTROL_SOURCE=apple_companion, language and appearance injected per file, REMOTE_MIC_RESOURCE_ROOT pointing at the repository Resources directory",
+  "page": "OnboardingStep.remote, output 04-remote.png",
+  "total_bytes": 3698735,
+  "files": [
+    {
+      "file": "onboarding-iphone-qr-en-dark.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1600,
+      "bytes": 960334,
+      "sha256": "b62cbe66e15269e40cf94e0495faa4c1a891e7d76fad4ad2992e82de17597bb0"
+    },
+    {
+      "file": "onboarding-iphone-qr-en-light.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1600,
+      "bytes": 861203,
+      "sha256": "5b8670b00b280d3527d5fe119f3dec004105c3e6337fb4fd72f2891a621a6410"
+    },
+    {
+      "file": "onboarding-iphone-qr-zh-hans-dark.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1600,
+      "bytes": 986945,
+      "sha256": "e48a01649dcf647443524d07b46abe6d07d36ed4f3ed787007925f23a568d3c2"
+    },
+    {
+      "file": "onboarding-iphone-qr-zh-hans-light.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1600,
+      "bytes": 890253,
+      "sha256": "e67f7eb3d2dbb8f0f5e825878030664ec18b316977b00f7f487b4d5dd31e03a1"
+    }
+  ]
+}
