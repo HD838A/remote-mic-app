@@ -92,9 +92,10 @@ struct OnboardingView: View {
     private let interactionProbe: OnboardingInteractionProbe?
     private let siriRemotePackageInstalled: Bool
 
-    @State private var bluetoothAuthorization = CBManager.authorization
-    @State private var inputMonitoringGranted = HIDRemoteMonitor.isInputMonitoringGranted
-    @State private var accessibilityGranted = KeyboardInjector.isAccessibilityTrusted
+    // 构造视图时不查询 TCC；后台快照返回前保持权限门禁关闭。
+    @State private var bluetoothAuthorization = CBManagerAuthorization.notDetermined
+    @State private var inputMonitoringGranted = false
+    @State private var accessibilityGranted = false
     @State private var observedRemoteButtons = Set<RemoteButton>()
     @State private var remoteInputDiagnostic = FirstUseRemoteInputDiagnostic()
     @State private var requestedRemoteConnectionRecovery = false

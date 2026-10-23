@@ -6,7 +6,7 @@ import Testing
 ///
 /// 这两个不变量共同保证「1 Hz 刷新权限」不会把主线程钉死：查询必须在后台队列上跑，
 /// 结果才回主线程交付；tccd 卡住时到达的请求必须合并，不能在恢复后一次性补跑几十次。
-@Suite("Permission status probe")
+@Suite("Permission status probe", .timeLimit(.minutes(1)))
 struct PermissionStatusProbeTests {
     private final class Recorder: @unchecked Sendable {
         private let lock = NSLock()
@@ -75,6 +75,26 @@ struct PermissionStatusProbeTests {
     }
 
     @Test
+    func onboardingDoesNotQueryPermissionsDuringViewInitialization() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/OnboardingView.swift"),
+            encoding: .utf8
+        )
+        // SwiftUI 可在每次父视图刷新时重新构造值；初始化不能同步访问 TCC。
+        for query in [
+            "CBManager.authorization",
+            "HIDRemoteMonitor.isInputMonitoringGranted",
+            "KeyboardInjector.isAccessibilityTrusted"
+        ] {
+            #expect(!source.contains(query))
+        }
+    }
+
+    @Test
     func fetchQueriesOffTheMainThreadAndDeliversOnIt() async throws {
         let recorder = Recorder()
         let probe = PermissionStatusProbe(label: "test.permission-probe.threads") {
@@ -88,8 +108,13 @@ struct PermissionStatusProbeTests {
             )
         }
 
-        probe.fetch { recorder.recordDelivery($0) }
-        try await Self.waitUntil { recorder.deliveries == 1 }
+        // 等待真实回调；其他套件可能占用主线程超过 5 秒。
+        await withCheckedContinuation { continuation in
+            probe.fetch {
+                recorder.recordDelivery($0)
+                continuation.resume()
+            }
+        }
 
         #expect(recorder.queryRanOnMainThread == false)
         #expect(recorder.deliveryRanOnMainThread == true)
