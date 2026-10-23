@@ -625,6 +625,50 @@ struct OnboardingFlowTests {
         #expect(viewSource.contains("Privacy_Bluetooth"))
     }
 
+    @Test func permissionRefreshIntervalIsReducedAndBackgroundQueriesAreSkipped() {
+        #expect(OnboardingPermissionRefreshPolicy.permissionRefreshIntervalSeconds == 2)
+        #expect(OnboardingPermissionRefreshPolicy.shouldRefreshPermissions(isApplicationActive: true))
+        #expect(!OnboardingPermissionRefreshPolicy.shouldRefreshPermissions(isApplicationActive: false))
+    }
+
+    @Test func onboardingPermissionRefreshUsesThePolicyIntervalAndSkipsBackgroundQueries() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let viewSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/OnboardingView.swift"),
+            encoding: .utf8
+        )
+        let rendererSource = try String(
+            contentsOf: root.appendingPathComponent(
+                "Sources/RemoteMic/OnboardingScreenshotRenderer.swift"
+            ),
+            encoding: .utf8
+        )
+
+        // 周期必须走策略常量，避免再出现硬编码的 1 Hz。
+        #expect(viewSource.contains(
+            "every: OnboardingPermissionRefreshPolicy.permissionRefreshIntervalSeconds"
+        ))
+        #expect(!viewSource.contains("every: 1,"))
+        // 周期权限刷新必须以前台为前提。
+        #expect(viewSource.contains("if shouldRefreshPermissionStates {"))
+        #expect(viewSource.contains("isApplicationActive: NSApplication.shared.isActive"))
+        // 离屏渲染没有前台会话，宿主显式开启周期刷新。
+        #expect(rendererSource.contains("permissionRefreshInForegroundOverride: true"))
+        // 用户回到前台时必须立即刷新一次，不能被前台判定挡住。
+        let activeStart = try #require(viewSource.range(
+            of: "publisher(for: NSApplication.didBecomeActiveNotification)"
+        ))
+        let activeEnd = viewSource.range(
+            of: ".onReceive",
+            range: activeStart.upperBound..<viewSource.endIndex
+        )?.lowerBound ?? viewSource.endIndex
+        let activeHandler = String(viewSource[activeStart.upperBound..<activeEnd])
+        #expect(activeHandler.contains("refreshPermissionStates()"))
+    }
+
     @Test func everyProductionInteractiveControlUsesTheOffscreenProbe() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

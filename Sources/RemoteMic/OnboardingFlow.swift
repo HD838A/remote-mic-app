@@ -468,6 +468,23 @@ enum OnboardingSecureInputPolicy {
     }
 }
 
+enum OnboardingPermissionRefreshPolicy {
+    /// 引导页的周期权限查询间隔（秒）。
+    ///
+    /// 1 Hz 只是兜底：用户从系统设置改完权限回到 App 时，
+    /// `NSApplication.didBecomeActiveNotification` 会立即触发一次刷新，
+    /// 因此 2 s 已经足够感知权限变化。
+    static let permissionRefreshIntervalSeconds: TimeInterval = 2
+
+    /// App 在后台时不做周期权限查询。
+    ///
+    /// 权限查询要同步访问 tccd，而后台没有任何用户可见收益；
+    /// 用户回到前台时由 `didBecomeActive` 立即刷新一次，状态不会漏。
+    static func shouldRefreshPermissions(isApplicationActive: Bool) -> Bool {
+        isApplicationActive
+    }
+}
+
 enum OnboardingAppleRemoteGeneration: String, Codable, CaseIterable, Identifiable {
     case generation6 = "generation_6"
     case generation7 = "generation_7"

@@ -91,6 +91,9 @@ struct OnboardingView: View {
     private let remoteInputDiagnosticOverride: FirstUseRemoteInputDiagnostic?
     private let interactionProbe: OnboardingInteractionProbe?
     private let siriRemotePackageInstalled: Bool
+    /// 离屏渲染等没有前台会话的宿主显式指定周期权限刷新行为；
+    /// `nil` 表示跟随运行期的前后台状态。
+    private let permissionRefreshInForegroundOverride: Bool?
 
     @State private var bluetoothAuthorization = CBManager.authorization
     @State private var inputMonitoringGranted = HIDRemoteMonitor.isInputMonitoringGranted
@@ -137,7 +140,7 @@ struct OnboardingView: View {
     @State private var aiPromptCopyResult: Bool?
 
     private let permissionRefreshTimer = Timer.publish(
-        every: 1,
+        every: OnboardingPermissionRefreshPolicy.permissionRefreshIntervalSeconds,
         on: .main,
         in: .common
     ).autoconnect()
@@ -151,7 +154,8 @@ struct OnboardingView: View {
         initialInputMethodGuideStep: Int? = nil,
         remoteInputDiagnosticOverride: FirstUseRemoteInputDiagnostic? = nil,
         interactionProbe: OnboardingInteractionProbe? = nil,
-        siriRemotePackageInstalledOverride: Bool? = nil
+        siriRemotePackageInstalledOverride: Bool? = nil,
+        permissionRefreshInForegroundOverride: Bool? = nil
     ) {
         self.model = model
         membershipFeature = model.membershipFeature
@@ -162,6 +166,7 @@ struct OnboardingView: View {
         self.voiceToolAvailabilityOverride = voiceToolAvailabilityOverride
         self.remoteInputDiagnosticOverride = remoteInputDiagnosticOverride
         self.interactionProbe = interactionProbe
+        self.permissionRefreshInForegroundOverride = permissionRefreshInForegroundOverride
         siriRemotePackageInstalled = siriRemotePackageInstalledOverride ??
             OnboardingBuildCapabilities.isSiriRemotePackageInstalled()
         _voiceToolAvailability = State(
@@ -210,7 +215,11 @@ struct OnboardingView: View {
             refreshSecureInputState()
         }
         .onReceive(permissionRefreshTimer) { _ in
-            refreshPermissionStates()
+            // 权限查询要同步访问 tccd；App 在后台时没有任何用户可见收益，
+            // 用户从系统设置改完权限回到前台时 didBecomeActive 会立即刷新一次。
+            if shouldRefreshPermissionStates {
+                refreshPermissionStates()
+            }
             refreshSecureInputState()
             if settings.onboardingStep == .voiceTool {
                 refreshSystemFunctionKeyUsage()
@@ -3709,6 +3718,23 @@ struct OnboardingView: View {
     private func refreshSystemFunctionKeyUsage() {
         guard systemFunctionKeyAvailableOverride == nil else { return }
         systemFunctionKeyUsage = OnboardingSystemFunctionKeyUsage.current
+    }
+
+    /// 周期权限刷新是否应该执行。
+    ///
+    /// 默认跟随 App 的前后台状态：后台没有用户可见收益，却要付出同步 TCC IPC 的代价。
+    /// 离屏渲染没有前台会话，由宿主通过 `permissionRefreshInForegroundOverride` 显式开启。
+    private var shouldRefreshPermissionStates: Bool {
+        switch permissionRefreshInForegroundOverride {
+        case .some(true):
+            return true
+        case .some(false):
+            return false
+        case .none:
+            return OnboardingPermissionRefreshPolicy.shouldRefreshPermissions(
+                isApplicationActive: NSApplication.shared.isActive
+            )
+        }
     }
 
     private func refreshPermissionStates() {

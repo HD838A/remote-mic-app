@@ -202,7 +202,9 @@ enum OnboardingScreenshotRenderer {
                 remoteInputDiagnosticOverride: remoteInputDiagnostic,
                 siriRemotePackageInstalledOverride: ProcessInfo.processInfo.environment[
                     "REMOTE_MIC_ONBOARDING_SCREENSHOT_SIRI_REMOTE_INSTALLED"
-                ].map { $0 == "1" }
+                ].map { $0 == "1" },
+                // 离屏渲染没有前台会话，周期权限刷新照常执行，保持与生产一致的状态。
+                permissionRefreshInForegroundOverride: true
             )
                 .environmentObject(localization)
                 .frame(width: 1020, height: 772)
