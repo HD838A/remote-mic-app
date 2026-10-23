@@ -59,7 +59,9 @@
 
 离屏入口：`REMOTE_MIC_ONBOARDING_SCREENSHOT_DIR`、`REMOTE_MIC_ONBOARDING_SCREENSHOT_LANGUAGE=zh-Hans|en`、`REMOTE_MIC_ONBOARDING_SCREENSHOT_APPEARANCE=light|dark`，来源为 `Sources/RemoteMic/OnboardingScreenshotRenderer.swift` 的生产 `OnboardingView`。生产 `pages(for:)` 输出 9 页：欢迎、控制来源、权限、遥控器、音频、语音工具、语音测试、按键设置、完成；中英文 × 浅色/深色共 4 组，合计 36 张 PNG，均为 2040 × 1600（Retina 2x）。
 
-原图与 SHA-256 清单位于本地持久目录 `/Users/andy/.codex/worktrees/3d70/pr731-evidence/`，不随源码提交。
+原图与 SHA-256 清单位于本地持久目录 `/Users/andy/.codex/worktrees/3d70/pr731-evidence/`，不随源码提交。证据已在交付提交 `464572d3` 上重新生成。
+
+渲染机的裸调试可执行文件没有 app bundle identifier，系统无法为它解析蓝牙授权，因此权限页的蓝牙行显示为未授权、页面据此禁用「继续」；带 bundle id 的正式安装包不受此限制。本轮不证明正式包的蓝牙行状态。
 
 ## 2026-10-23 iPhone 右栏 App Store 下载二维码回归
 
