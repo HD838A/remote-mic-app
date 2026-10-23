@@ -194,6 +194,7 @@
 "action.toggle_long_recording" = "切换持续录音";
 "action.open_remote_mic" = "打开无线麦 SayAll";
 "action.open_codex" = "打开 Codex";
+"action.open_workbuddy" = "打开 WorkBuddy";
 "action.open_claude" = "打开 Claude";
 "action.open_cmux" = "打开 cmux";
 "action.open_wechat" = "打开微信";

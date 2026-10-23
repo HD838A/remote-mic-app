@@ -213,6 +213,7 @@ struct RemoteButtonsTests {
         #expect(mappings == [
             localization.text("app.name"): "com.hd838a.RemoteMic",
             "Codex": "com.openai.codex",
+            "WorkBuddy": "com.tencent.workbuddy.mac",
             "Claude": "com.anthropic.claudefordesktop",
             "cmux": "com.cmuxterm.app",
             localization.text("application.wechat"): "com.tencent.xinWeChat",
@@ -230,6 +231,7 @@ struct RemoteButtonsTests {
 
     @Test func onlySupportedApplicationsHaveAutomaticFocusStrategies() {
         #expect(PresetApplication.codex.focusStrategy == .accessibilityComposer)
+        #expect(PresetApplication.workBuddy.focusStrategy == .accessibilityComposer)
         #expect(PresetApplication.claude.focusStrategy == .accessibilityComposer)
         #expect(PresetApplication.cmux.focusStrategy == .cmuxSurfaceAPI)
         #expect(PresetApplication.allCases.filter { $0.focusStrategy == nil } == [
@@ -270,6 +272,23 @@ struct RemoteButtonsTests {
         )
         #expect(missingSelection.contains(.openClaude))
         #expect(!missingSelection.contains(.openXcode))
+    }
+
+    @Test func workBuddyIsSelectableWithoutACustomApplicationProfile() throws {
+        let actions = ButtonAction.pickerActions(
+            installedBundleIdentifiers: ["com.tencent.workbuddy.mac"],
+            current: .escape,
+            experimentalContinuousRecordingEnabled: false
+        )
+        #expect(actions.contains(.openWorkBuddy))
+        #expect(!actions.contains(.openCodex))
+        #expect(actions.firstIndex(of: .openWorkBuddy)! < actions.firstIndex(of: .openCustomApplication)!)
+        let configured = ConfiguredButtonAction(action: .openWorkBuddy, shortcut: nil)
+        let restored = try JSONDecoder().decode(
+            ConfiguredButtonAction.self, from: JSONEncoder().encode(configured)
+        )
+        #expect(restored == configured)
+        #expect(restored.applicationProfileID == nil)
     }
 
     @Test func applicationActionsNeverRepeat() {
@@ -1662,9 +1681,10 @@ struct RemoteButtonsTests {
         #expect(!focusAttempted)
     }
 
-    @Test func successfulCodexAndClaudeLaunchesPassURLApplicationAndPIDToFocuser() {
+    @Test func successfulComposerApplicationLaunchesPassURLApplicationAndPIDToFocuser() {
         let cases: [(ButtonAction, PresetApplication, pid_t)] = [
             (.openCodex, .codex, 4_242),
+            (.openWorkBuddy, .workBuddy, 4_244),
             (.openClaude, .claude, 4_243),
         ]
 
@@ -1793,6 +1813,29 @@ struct RemoteButtonsTests {
         #expect(KeyboardInjector.composerCandidateScore(settingsField, windowFrame: windowFrame) != nil)
     }
 
+    @Test func anonymousWorkBuddyComposerNeedsNoLearnedTarget() {
+        let windowFrame = CGRect(x: 0, y: 0, width: 1_000, height: 800)
+        let candidates = [
+            KeyboardInjector.AccessibilityTextCandidate(
+                role: "AXTextField", identifier: "", title: "", description: "",
+                help: "", placeholder: "搜索", context: "WorkBuddy",
+                frame: CGRect(x: 100, y: 60, width: 500, height: 36), enabled: true
+            ),
+            KeyboardInjector.AccessibilityTextCandidate(
+                role: "AXTextArea", identifier: "", title: "", description: "",
+                help: "", placeholder: "", context: "WorkBuddy WorkBuddy",
+                frame: CGRect(x: 200, y: 560, width: 700, height: 120), enabled: true
+            ),
+            KeyboardInjector.AccessibilityTextCandidate(
+                role: "AXTextArea", identifier: "", title: "", description: "",
+                help: "", placeholder: "API Key", context: "WorkBuddy",
+                frame: CGRect(x: 200, y: 560, width: 700, height: 120), enabled: true
+            ),
+        ]
+        #expect(KeyboardInjector.bestComposerCandidateIndex(candidates, windowFrame: windowFrame) == 1)
+        #expect(KeyboardInjector.composerCandidateScore(candidates[2], windowFrame: windowFrame) == nil)
+    }
+
     @Test func codexComposerSemanticsAndTraversalPriorityReachTheVisibleEditor() {
         let codexComposer = KeyboardInjector.AccessibilityTextCandidate(
             role: "AXTextArea",
@@ -1907,6 +1950,28 @@ struct RemoteButtonsTests {
         #expect(KeyboardInjector.cmuxTerminalIsApplicationFocused(
             processIdentifier: application.processIdentifier
         ))
+    }
+
+    @Test func liveWorkBuddyFocusUsesTheProductionOpenActionWithoutLearning() async throws {
+        guard ProcessInfo.processInfo.environment["REMOTEMIC_LIVE_WORKBUDDY_TEST"] == "1" else { return }
+        #expect(KeyboardInjector.send(.openWorkBuddy))
+        try await Task.sleep(for: .seconds(3))
+        let application = try #require(NSWorkspace.shared.frontmostApplication)
+        #expect(application.bundleIdentifier == PresetApplication.workBuddy.bundleIdentifier)
+        var focusedValue: CFTypeRef?
+        let result = AXUIElementCopyAttributeValue(
+            AXUIElementCreateApplication(application.processIdentifier),
+            kAXFocusedUIElementAttribute as CFString,
+            &focusedValue
+        )
+        #expect(result == .success)
+        let focused = try #require(focusedValue)
+        #expect(CFGetTypeID(focused) == AXUIElementGetTypeID())
+        var role: CFTypeRef?
+        #expect(AXUIElementCopyAttributeValue(
+            unsafeBitCast(focused, to: AXUIElement.self), kAXRoleAttribute as CFString, &role
+        ) == .success)
+        #expect(role as? String == kAXTextAreaRole as String)
     }
 
     @Test func cmuxFocusUsesCurrentTerminalSurfaceThenFocusesIt() throws {

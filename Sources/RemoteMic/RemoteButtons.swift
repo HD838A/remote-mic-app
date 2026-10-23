@@ -616,6 +616,7 @@ enum ApplicationFocusStrategy: Equatable {
 enum PresetApplication: String, CaseIterable, Identifiable {
     case remoteMic
     case codex
+    case workBuddy
     case claude
     case cmux
     case weChat
@@ -634,6 +635,7 @@ enum PresetApplication: String, CaseIterable, Identifiable {
         switch self {
         case .remoteMic: return localization.text("app.name")
         case .codex: return "Codex"
+        case .workBuddy: return "WorkBuddy"
         case .claude: return "Claude"
         case .cmux: return "cmux"
         case .weChat: return localization.text("application.wechat")
@@ -652,6 +654,7 @@ enum PresetApplication: String, CaseIterable, Identifiable {
         switch self {
         case .remoteMic: return "com.hd838a.RemoteMic"
         case .codex: return "com.openai.codex"
+        case .workBuddy: return "com.tencent.workbuddy.mac"
         case .claude: return "com.anthropic.claudefordesktop"
         case .cmux: return "com.cmuxterm.app"
         case .weChat: return "com.tencent.xinWeChat"
@@ -668,7 +671,7 @@ enum PresetApplication: String, CaseIterable, Identifiable {
 
     var focusStrategy: ApplicationFocusStrategy? {
         switch self {
-        case .codex, .claude: return .accessibilityComposer
+        case .codex, .workBuddy, .claude: return .accessibilityComposer
         case .cmux: return .cmuxSurfaceAPI
         default: return nil
         }
@@ -745,6 +748,7 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
     case openCommonPhrases
     case openRemoteMic
     case openCodex
+    case openWorkBuddy
     case openClaude
     case openCmux
     case openWeChat
@@ -801,6 +805,7 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
         case .toggleLongRecording: return localization.text("action.toggle_long_recording")
         case .openRemoteMic: return localization.text("action.open_remote_mic")
         case .openCodex: return localization.text("action.open_codex")
+        case .openWorkBuddy: return localization.text("action.open_workbuddy")
         case .openClaude: return localization.text("action.open_claude")
         case .openCmux: return localization.text("action.open_cmux")
         case .openWeChat: return localization.text("action.open_wechat")
@@ -883,6 +888,7 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
         switch self {
         case .openRemoteMic: return .remoteMic
         case .openCodex: return .codex
+        case .openWorkBuddy: return .workBuddy
         case .openClaude: return .claude
         case .openCmux: return .cmux
         case .openWeChat: return .weChat
@@ -916,7 +922,7 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
             return .commonPhrases
         case .openCustomApplication:
             return .applications
-        case .openRemoteMic, .openCodex, .openClaude, .openCmux, .openWeChat, .openCursor,
+        case .openRemoteMic, .openCodex, .openWorkBuddy, .openClaude, .openCmux, .openWeChat, .openCursor,
              .openXcode, .openSlack, .openWeCom, .openNeteaseMusic, .openChrome, .openSafari,
              .openZed:
             return .applications

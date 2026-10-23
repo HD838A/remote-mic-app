@@ -194,6 +194,7 @@
 "action.toggle_long_recording" = "Toggle Continuous Recording";
 "action.open_remote_mic" = "Open SayAll";
 "action.open_codex" = "Open Codex";
+"action.open_workbuddy" = "Open WorkBuddy";
 "action.open_claude" = "Open Claude";
 "action.open_cmux" = "Open cmux";
 "action.open_wechat" = "Open WeChat";
