@@ -42,7 +42,7 @@ final class HIDPermissionPoll {
     }
 
     private let scheduler: HIDRemoteScheduling
-    private let permissionEvaluator: () -> Bool
+    private let permissionQuery: (@escaping (Bool) -> Void) -> Void
     private let logger: (String) -> Void
     private let lock = NSLock()
     private var subscribers: [UUID: (Bool) -> Void] = [:]
@@ -50,13 +50,16 @@ final class HIDPermissionPoll {
 
     init(
         scheduler: HIDRemoteScheduling = DispatchHIDRemoteScheduler(),
-        permissionEvaluator: @escaping () -> Bool = {
-            HIDRemoteMonitor.isInputMonitoringGranted && KeyboardInjector.isAccessibilityTrusted
+        permissionQuery: @escaping (@escaping (Bool) -> Void) -> Void = { completion in
+            // 输入监控与辅助功能都是同步 IPC 到 tccd，不能在主线程上跑。
+            PermissionStatusProbe.shared.fetch { snapshot in
+                completion(snapshot.inputMonitoring && snapshot.accessibility)
+            }
         },
         logger: @escaping (String) -> Void = AppLogger.shared.write
     ) {
         self.scheduler = scheduler
-        self.permissionEvaluator = permissionEvaluator
+        self.permissionQuery = permissionQuery
         self.logger = logger
     }
 
@@ -136,12 +139,16 @@ final class HIDPermissionPoll {
     }
 
     private func notifySubscribers() {
-        let handlers: [(Bool) -> Void]
-        lock.lock()
-        handlers = Array(subscribers.values)
-        lock.unlock()
-        guard !handlers.isEmpty else { return }
-        let permissionsGranted = permissionEvaluator()
-        handlers.forEach { $0(permissionsGranted) }
+        // 权限查询是异步的：定时器只负责发起查询，tccd 的同步往返发生在后台队列上，
+        // 结果回到主线程再交付给订阅者，订阅者才可以安全地释放资源并更新界面状态。
+        permissionQuery { [weak self] permissionsGranted in
+            guard let self else { return }
+            // 交付时重新取订阅者，已经取消的订阅不再收到通知。
+            self.lock.lock()
+            let handlers = Array(self.subscribers.values)
+            self.lock.unlock()
+            guard !handlers.isEmpty else { return }
+            handlers.forEach { $0(permissionsGranted) }
+        }
     }
 }

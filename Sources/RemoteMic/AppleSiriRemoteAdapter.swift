@@ -194,6 +194,7 @@ final class AppleSiriRemoteAdapter {
 
     private let lifecycleRouter = RemoteHardwareControlLifecycleRouter()
     private let inputMonitoringGranted: () -> Bool
+    private let permissionStatusProbe: PermissionStatusProbe
     private let logger: (String) -> Void
     private var manager: IOHIDManager?
     private var interfaces: [UInt: Interface] = [:]
@@ -213,9 +214,11 @@ final class AppleSiriRemoteAdapter {
 
     init(
         inputMonitoringGranted: @escaping () -> Bool = { HIDRemoteMonitor.isInputMonitoringGranted },
+        permissionStatusProbe: PermissionStatusProbe = .shared,
         logger: @escaping (String) -> Void = AppLogger.shared.write
     ) {
         self.inputMonitoringGranted = inputMonitoringGranted
+        self.permissionStatusProbe = permissionStatusProbe
         self.logger = logger
     }
 
@@ -657,8 +660,14 @@ final class AppleSiriRemoteAdapter {
         let timer = DispatchSource.makeTimerSource(queue: .main)
         timer.schedule(deadline: .now() + 1, repeating: 1)
         timer.setEventHandler { [weak self] in
-            guard let self, self.manager != nil, !self.inputMonitoringGranted() else { return }
-            self.stop(reason: .permissionRevoked, suppressNextRelease: false)
+            guard let self, self.manager != nil else { return }
+            // 输入监控权限是同步 IPC 到 tccd，不能在主线程上判定：
+            // 用户在系统设置里撤销权限的那一瞬间，tccd 要先结算授权再回复。
+            // 查询交给后台探针，结果回到主线程再决定是否停止监听。
+            self.permissionStatusProbe.fetch { [weak self] snapshot in
+                guard let self, self.manager != nil, !snapshot.inputMonitoring else { return }
+                self.stop(reason: .permissionRevoked, suppressNextRelease: false)
+            }
         }
         permissionTimer = timer
         timer.resume()
