@@ -172,15 +172,15 @@ active（非 listen-only）tap 的语义是「先给我看，我说放行才继�
 
 ## App 内的定时器清单
 
-全仓定时器只有三类来源：`Timer.publish`（1 处）、`DispatchSource.makeTimerSource`（17 处）、`Task.sleep` 循环（1 处）。另有 33 处 `asyncAfter`（一次性延迟，不是定时器），无 `Timer.scheduledTimer`、无 `CADisplayLink`。
+全仓定时器只有三类来源：`Timer.publish`（1 处）、`DispatchSource.makeTimerSource`（17 处）、`Task.sleep` 循环（1 处）。另有 36 处 `asyncAfter`（一次性延迟，不是定时器），无 `Timer.scheduledTimer`、无 `CADisplayLink`。
 
 **周期性的（会自己反复触发）**
 
 | 位置 | 机制 | 周期 | 队列 | 用途 | 必要性判断 |
 | --- | --- | --- | --- | --- | --- |
-| `OnboardingView.swift:139` | `Timer.publish(every:on:in:)` | **1 s** | 主线程 | 引导页刷新权限、安全输入状态、语音工具可用性 | **冗余**。引导页已经订阅 `NSApplication.didBecomeActiveNotification`，用户从系统设置改完权限回到 App 会立即刷新一次；1 Hz 只是兜底，降到 2 s 感知无差别。`in: .common` 还让它在滚动/菜单跟踪期间照常触发。 |
+| `OnboardingView.swift:140` | `Timer.publish(every:on:in:)` | **1 s** | 主线程 | 引导页刷新权限、安全输入状态、语音工具可用性 | **冗余**。引导页已经订阅 `NSApplication.didBecomeActiveNotification`，用户从系统设置改完权限回到 App 会立即刷新一次；1 Hz 只是兜底，降到 2 s 感知无差别。`in: .common` 还让它在滚动/菜单跟踪期间照常触发。 |
 | `HIDPermissionPoll`（经 `HIDRemoteScheduler.swift:60`） | `DispatchSourceTimer` | **1 s** | 主线程（本次起判定改在后台探针） | 检测输入监控/辅助功能权限被撤销 → 释放 active tap | **必要**。这是「授权被收回后仍能监听输入」的唯一兜底，撤销检测不能取消；但 1 s 偏密，且它在订阅存在时**一直**在跑。 |
-| `AppleSiriRemoteAdapter.swift:657` | `DispatchSourceTimer` | **1 s** | 主线程（同上） | Siri 遥控器监听期间检测权限撤销 → 停止监听 | **必要**，同上。 |
+| `AppleSiriRemoteAdapter.swift:658` | `DispatchSourceTimer` | **1 s** | 主线程（同上） | Siri 遥控器监听期间检测权限撤销 → 停止监听 | **必要**，同上。 |
 | `HIDRemoteMonitor.swift:1272` | `scheduler.schedule` | 500 ms（重复） | 主线程 | App 切换器会话期间轮询前台 App 是否已切换 | 必要，但只在会话进行中 |
 | `HIDRemoteMonitor.swift:1066` | `scheduler.schedule` | 350 ms 起，50/100 ms 重复 | 主线程 | 按住连发 | 必要 |
 | `HIDRemoteMonitor.swift:1036` | `scheduler.schedule` | 600 ms | 主线程 | 不可重复按键的稳定释放判定 | 必要 |
@@ -190,7 +190,7 @@ active（非 listen-only）tap 的语义是「先给我看，我说放行才继�
 | `BridgeAppModel.swift:6936` / `6858` / `6888` / `7573` | `DispatchSourceTimer` | 120 s / 5 s / 2 s / 5 s | 主线程 | RC003 最长时长、长录音打开/关闭超时、手表语音无音频恢复 | 必要（事件驱动触发） |
 | `BridgeAppModel.swift:4403` / `4556` / `4581` / `4800` / `4814` / `6558` / `6579` / `8780` / `8797` | `DispatchSourceTimer` | 350 ms + 50/100 ms / 300 ms / 550 ms / 15 s / 500 ms / 300 ms / 550 ms / 300 ms / 550 ms | 主线程 | 遥控器与手机、Chromecast 的双击、长按、连发、App 切换器 | 必要 |
 
-**一次性延迟**：`BridgeAppModel.swift:4957` 的 App 切换器可见性探测 `[0, 150, 500, 1000] ms`；`Task.sleep` 循环只有 `RecordingAssetStore.swift:402` 一处；其余 33 处 `asyncAfter` 分布在 15 个文件，都是一次性延迟。
+**一次性延迟**：`BridgeAppModel.swift:4957` 的 App 切换器可见性探测 `[0, 150, 500, 1000] ms`；`Task.sleep` 循环只有 `RecordingAssetStore.swift:402` 一处；其余 36 处 `asyncAfter` 分布在 15 个文件，都是一次性延迟。
 
 **结论**：真正「一直在跑」的只有三条 1 Hz 轮询（引导页权限、HID 权限撤销、Siri 权限撤销），其余全部由具体事件触发、用完即销。三条 1 Hz 里有两条是**权限判定**，本次已把它们移出主线程；引导页那条的**频率**本身偏高（已有 `didBecomeActive` 即时刷新兜底），另立一项降到 2 s。
 
