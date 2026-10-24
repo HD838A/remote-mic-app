@@ -62,7 +62,9 @@
 
 适用分支：`codex/onboarding-membership-sheet`。本次在权限页左栏加一行必选勾选项，不改右栏二维码、会员提示、弹窗，也不改任何权限判定。
 
-位置：权限清单的第 4 项，**在三条系统权限之下、「iPhone 或 Apple Watch 连接将在下一页检查」提示卡之上**，与权限行同一列、同一 10pt 间距，读起来是清单里多出来的一项，而不是另一块卡片。
+位置：权限清单的第 4 项，**在三条系统权限之下**，与权限行同一列、同一 10pt 间距，读起来是清单里多出来的一项，而不是另一块卡片。
+
+同一轮还移除了原来紧跟其后的那张「iPhone 或 Apple Watch 连接将在下一页检查」提示卡（`statusCard(icon: "network", …)`）：它和勾选项的「已确认，下一页会用真实连接验证」说的是同一件事，留着等于同一句话讲两遍。卡片的 6 个文案键（`onboarding.permissions.apple_companion.*`、`onboarding.permissions.web_remote.*`、`onboarding.permissions.mobile_network.*`）一并删除，不留死键；`permissionsPageNoLongerShowsTheNextPageCheckCard()` 反向锁定，防止它长回来。
 
 形态（设计稿方案 C，两态）：
 
@@ -81,10 +83,11 @@
 ### 自动化与构建
 
 - `swift build --disable-keychain --disable-sandbox` 公开构建通过。
-- `swift test --disable-keychain --disable-sandbox --filter OnboardingFlowTests`：79 项通过，含本次新增两条：
+- `swift test --disable-keychain --disable-sandbox --filter OnboardingFlowTests`：80 项通过，含本次新增三条：
   - `iphoneAppConfirmationGatesThePermissionsStepOnlyOnTheIPhonePath()`：三项权限全开、只差勾选时 iPhone 路径不能继续；勾选后可以；实体遥控器与网页遥控不受影响；不传参数时保持原行为。
   - `iphoneAppConfirmationRowIsAToggleOnTheIPhonePathOnly()`：托管生产视图后，iPhone 路径注册了 `permission.iphone-app-installed` 开关、初值 false、`invoke` 后变 true；实体遥控器路径没有这个开关；`initialPhoneAppInstalled: true` 能预置已勾选。
-- `swift test --disable-keychain --disable-sandbox --filter LocalizationTests`：中英文 key 集合一致（本次新增 3 个键）。
+  - `permissionsPageNoLongerShowsTheNextPageCheckCard()`：权限段落里不再出现 `statusCard(`，视图与两份 strings 都不再引用被删的 6 个文案键。
+- `swift test --disable-keychain --disable-sandbox --filter LocalizationTests`：中英文 key 集合一致（本次新增 3 个键、删除 6 个键，两边同步）。
 
 ### 离屏渲染证据
 
@@ -92,16 +95,16 @@
 
 | 文件 | 外观 / 语言 / 状态 | SHA-256 |
 | --- | --- | --- |
-| [`installed-checkbox-zh-hans-light-pending.png`](../Screenshots/onboarding-installed-checkbox/installed-checkbox-zh-hans-light-pending.png) | 浅色 / 中文 / 未勾选 | `818bb13cb0c5bbb2e6b7f093462d5b83552708735a1ee444aa06d4dea19caa37` |
-| [`installed-checkbox-zh-hans-light-confirmed.png`](../Screenshots/onboarding-installed-checkbox/installed-checkbox-zh-hans-light-confirmed.png) | 浅色 / 中文 / 已勾选 | `e5968b5d9fb92eca80482095f0bf4f1d4cd2c872bd7b3ff97f27236499d0af11` |
-| [`installed-checkbox-zh-hans-dark-pending.png`](../Screenshots/onboarding-installed-checkbox/installed-checkbox-zh-hans-dark-pending.png) | 深色 / 中文 / 未勾选 | `b59df037363c3127fe3caa32244d606a01977d53613b8f67496b3b526b9460c2` |
-| [`installed-checkbox-en-light-pending.png`](../Screenshots/onboarding-installed-checkbox/installed-checkbox-en-light-pending.png) | 浅色 / 英文 / 未勾选 | `43a25121537bff6b4d0f15c2e8a6863a0c5f7cebebbcbfd62c1bd1973a0ccb8f` |
+| [`installed-checkbox-zh-hans-light-pending.png`](../Screenshots/onboarding-installed-checkbox/installed-checkbox-zh-hans-light-pending.png) | 浅色 / 中文 / 未勾选 | `d02a2cd750a52d62cac14500192d694a0f14338128e3eccd58d295b4e67ef8d7` |
+| [`installed-checkbox-zh-hans-light-confirmed.png`](../Screenshots/onboarding-installed-checkbox/installed-checkbox-zh-hans-light-confirmed.png) | 浅色 / 中文 / 已勾选 | `536045bc416572009f6202eaf9a1d1d57e2c81c138b5c890e2d411846b165625` |
+| [`installed-checkbox-zh-hans-dark-pending.png`](../Screenshots/onboarding-installed-checkbox/installed-checkbox-zh-hans-dark-pending.png) | 深色 / 中文 / 未勾选 | `4cb71288e2cddeffbd3397a9e6e42913bb96814d06347be338804bdf7b38273b` |
+| [`installed-checkbox-en-light-pending.png`](../Screenshots/onboarding-installed-checkbox/installed-checkbox-en-light-pending.png) | 浅色 / 英文 / 未勾选 | `4ac546ff438998c898fbb4b909db4453d11f4b089785b58bf791455ef3c639d1` |
 
-渲染环境没有蓝牙权限，所以四张图里「继续」都是禁用的；「勾选后解锁继续」由上面的纯函数用例证明，不由截图证明。
+渲染环境没有蓝牙权限，所以四张图里「继续」都是禁用的，且勾选项下方会出现橙色的「还需要蓝牙权限」运行期提示卡（这不是固定内容，权限开启后消失）；「勾选后解锁继续」由上面的纯函数用例证明，不由截图证明。
 
 ### 生产页面检查
 
-1. 完整构建、选择 iPhone 来源进入权限页，确认左栏清单是 4 项，第 4 项在「辅助功能」之下、提示卡之上，与上面三项左边线对齐、间距一致。
+1. 完整构建、选择 iPhone 来源进入权限页，确认左栏清单是 4 项，第 4 项在「辅助功能」之下、是清单的最后一项（它下面不应再有「iPhone 或 Apple Watch 连接将在下一页检查」那张卡），与上面三项左边线对齐、间距一致。
 2. 未勾选时该行底色明显比其余三行更亮/更染，且有一条细描边；右侧是空方框，说明文字为「还差这一步：勾选后才能继续」。
 3. 点这一行任意位置（图标、标题、空白处都要试），确认整行都能勾选，不是只有方框能点。
 4. 勾选后确认底色立刻褪回与权限行一致、图标变绿、方框变绿带白勾、说明变成「已确认，下一页会用真实连接验证」；再次点击可取消勾选。
@@ -113,6 +116,7 @@
 ### 失败判定与边界
 
 - 该行出现在三条权限之上、被挤进右栏、与权限行间距不一致或左边线参差，均判定失败。
+- 勾选项下面又冒出「iPhone 或 Apple Watch 连接将在下一页检查」那张卡（同一句话说两遍），判定失败。
 - 只有方框能点、点标题或行内空白没有反应，说明点击目标没覆盖整行，判定失败。
 - 勾选前后底色没有变化，或勾选后仍然保留强调底色与描边，判定失败。
 - 三项权限全开、未勾选时「继续」仍可点，或勾选后仍不可点，判定失败。

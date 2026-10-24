@@ -858,12 +858,6 @@
 "onboarding.permissions.iphone_app_installed.title" = "I already installed the iPhone app";
 "onboarding.permissions.iphone_app_installed.pending" = "One step left: check this box to continue";
 "onboarding.permissions.iphone_app_installed.confirmed" = "Confirmed. The next page verifies it with a real connection.";
-"onboarding.permissions.mobile_network.title" = "Phone connection is checked on the next page";
-"onboarding.permissions.mobile_network.detail" = "After all three system permissions are enabled, the next page checks the real iPhone app or mini program connection.";
-"onboarding.permissions.apple_companion.title" = "The iPhone or Apple Watch connection is checked next";
-"onboarding.permissions.apple_companion.detail" = "After all three system permissions are enabled, the next page verifies a real iPhone or Apple Watch app connection on your local network.";
-"onboarding.permissions.web_remote.title" = "The mini program connection is checked next";
-"onboarding.permissions.web_remote.detail" = "After all three system permissions are enabled, the next page checks the real connection to this Mac.";
 "onboarding.remote.title" = "Connect the remote, then press a physical button";
 "onboarding.remote.detail" = "For a first-time connection, follow the instructions below. After pairing, press any button except the voice button to check that your Mac receives button presses.";
 "onboarding.remote.first_pairing.title" = "Connect the remote for the first time";

@@ -1401,15 +1401,6 @@ struct OnboardingView: View {
                 }
             }
 
-            if settings.onboardingControlMethod.usesOnDemandAudioOutput {
-                statusCard(
-                    icon: "network",
-                    title: localization.text(mobilePermissionTitleKey),
-                    detail: localization.text(mobilePermissionDetailKey),
-                    isComplete: true
-                )
-            }
-
         }
     }
 
@@ -2152,18 +2143,6 @@ struct OnboardingView: View {
             }
             .padding(.top, 4)
         }
-    }
-
-    private var mobilePermissionTitleKey: String {
-        settings.onboardingControlSource == .appleCompanion
-            ? "onboarding.permissions.apple_companion.title"
-            : "onboarding.permissions.web_remote.title"
-    }
-
-    private var mobilePermissionDetailKey: String {
-        settings.onboardingControlSource == .appleCompanion
-            ? "onboarding.permissions.apple_companion.detail"
-            : "onboarding.permissions.web_remote.detail"
     }
 
     private var physicalRemotePairingKeys: (

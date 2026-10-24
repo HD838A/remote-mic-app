@@ -1814,6 +1814,49 @@ struct OnboardingFlowTests {
         #expect(rendererSource.contains("completeRuntimeReadyOverride: true"))
     }
 
+    @Test func permissionsPageNoLongerShowsTheNextPageCheckCard() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let viewSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/OnboardingView.swift"),
+            encoding: .utf8
+        )
+        let chinese = try String(
+            contentsOf: root.appendingPathComponent("Resources/zh-Hans.lproj/Localizable.strings"),
+            encoding: .utf8
+        )
+        let english = try String(
+            contentsOf: root.appendingPathComponent("Resources/en.lproj/Localizable.strings"),
+            encoding: .utf8
+        )
+
+        // 权限页原有一张「iPhone 或 Apple Watch 连接将在下一页检查」的提示卡，
+        // 和勾选项「已确认，下一页会用真实连接验证」说的是同一件事，2026-10-24 移除。
+        // 文案键也一并删掉，不留死键；这条用例防止它以任何形式长回来。
+        let permissionsStart = try #require(viewSource.range(of: "private var permissionsContent"))
+        let permissionsEnd = try #require(viewSource.range(
+            of: "private var shortcutLearningCard",
+            range: permissionsStart.upperBound..<viewSource.endIndex
+        ))
+        let permissionsSource = viewSource[permissionsStart.lowerBound..<permissionsEnd.lowerBound]
+        #expect(!permissionsSource.contains("statusCard("))
+
+        for key in [
+            "onboarding.permissions.apple_companion.title",
+            "onboarding.permissions.apple_companion.detail",
+            "onboarding.permissions.web_remote.title",
+            "onboarding.permissions.web_remote.detail",
+            "onboarding.permissions.mobile_network.title",
+            "onboarding.permissions.mobile_network.detail",
+        ] {
+            #expect(!viewSource.contains(key))
+            #expect(!chinese.contains("\"\(key)\""))
+            #expect(!english.contains("\"\(key)\""))
+        }
+    }
+
     @Test func audioStepOnlyOffersSupportedVirtualAudioDevices() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -1837,10 +1880,6 @@ struct OnboardingFlowTests {
         #expect(audioSource.contains("model.applyAudioSettings(reason: \"onboarding_audio_device_selected\")"))
         #expect(viewSource.contains("OnboardingAudioSelectionPolicy.isSupportedDevice"))
         #expect(viewSource.contains("onboarding.audio.on_demand_detail"))
-        #expect(viewSource.contains("onboarding.permissions.apple_companion.title"))
-        #expect(viewSource.contains("onboarding.permissions.apple_companion.detail"))
-        #expect(viewSource.contains("onboarding.permissions.web_remote.title"))
-        #expect(viewSource.contains("onboarding.permissions.web_remote.detail"))
         #expect(viewSource.contains("onboarding.side.audio_on_demand"))
     }
 
