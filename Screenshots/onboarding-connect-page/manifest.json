@@ -1,0 +1,22 @@
+{
+  "host_base": "1b621acca2688e3b1ad91d3ff3c856f90658d69e",
+  "window_points": [1020, 772],
+  "notes": [
+    "「连接 iPhone 或 Apple Watch」页（04-remote）在删掉左栏「从 App Store 安装无线麦 SayAll」按钮之后的形态。",
+    "入口：REMOTE_MIC_ONBOARDING_SCREENSHOT_* + _CONTROL_METHOD=iphone_app + _CONTROL_SOURCE=apple_companion + _VOICE_TOOL=doubao，由构建产物里的 OnboardingScreenshotRenderer 离屏托管生产 OnboardingView 生成，不是设计稿。",
+    "截图尺寸 2040×1600 是窗口 frame（含 28pt 标题栏），内容区 1020×772。",
+    "右栏仍是同一页的下载入口：App Store 二维码 + 官方徽章 + 「扫描二维码下载 iOS 无线麦 SayAll App」。左栏删按钮是因为一屏出现两个指向同一件事的入口。",
+    "渲染环境没有真实手机连接，所以左栏三张卡都是等待/失败态；本图只证明入口布局与文案，不证明真实连接。"
+  ],
+  "images": [
+    {
+      "file": "connect-page-zh-hans-light-iphone.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1600,
+      "sha256": "2f67b42b95dbac45d263772e7d93209e56fcfce5e0d9460b34bf7d478163e7f2",
+      "bytes": 874067,
+      "state": "waiting"
+    }
+  ]
+}

@@ -181,6 +181,9 @@ enum SettingsScreenshotRenderer {
             transcriptArchiveStore: transcriptStore,
             recordingAssetStore: recordingStore
         )
+        if let state = ProcessInfo.processInfo.environment["REMOTE_MIC_SETTINGS_SCREENSHOT_MAC_MICROPHONE"] {
+            model.configureMacMicrophoneForSettingsScreenshot(state)
+        }
         if showsRemoteCards {
             model.configureRemoteCardsForSettingsScreenshot(
                 profileIDs: Set(remoteCardSystemNames.keys),

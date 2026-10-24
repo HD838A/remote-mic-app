@@ -26,7 +26,248 @@
 
 本轮公开完整测试 902 项、私有完整测试 910 项通过。最终定向测试公开和私有各 5 项通过，另覆盖未完成向导时保留请求，以及拒绝非文件 URL 和其他后缀。市场校验、Apple Silicon Release 构建和 `verify-app.sh` 通过。生产交互入口使用隔离数据，实际查看全部绑定并取消，列表仍只有默认方案。中文浅色截图为 [导入预览](../Screenshots/design-drafts/sayall-file-import/import-preview-macos-zh-light.jpg)，JPEG、2040 × 1544，SHA-256 为 `fc89e381433628332c618ac932c2939d23ec4a1e2211bd2d2588a600630c76e8`。缺少深色和完整向导截图，以及签名安装、真实完整向导、确认保存、重启重读和会员状态验收；PR 保持 Draft。详见 [审查记录](../Bugs/2026-10-19-sayall-file-import.html)。
 
-## 2026-10-23 iPhone 右栏 App Store 下载二维码回归
+## 2026-10-24 连接页去掉重复下载入口、权限勾选项改统一样式、App 统一叫 iOS App
+
+适用分支：`codex/onboarding-membership-sheet`。三处都只动呈现与文案，不改 `OnboardingFlowPolicy`、不改权限判定、不改连接链路。
+
+1. **「连接 iPhone 或 Apple Watch」页删掉左栏的下载按钮。** 原来标题下面紧跟一个 `onboardingLink(id: "iphone.install")` 按钮「从 App Store 安装无线麦 SayAll」，而同一屏右栏已经是同一件事的入口（App Store 下载二维码 + 官方徽章）。左栏再去掉一层，正文下面直接接「等待 iPhone 或 Apple Watch」状态卡。文案键 `onboarding.apple_companion.install` 中英同步删除，不留死键；`remotePageDoesNotRepeatTheAppStoreInstallLink()` 反向锁定：`iPhoneRemoteContent` 段落里不得再出现 `onboardingLink` 或 `iOSAppStore`。
+2. **权限页第 4 项的状态标记改成和其余三项一样的圆形。** 原来是自绘的 20pt 圆角方框，和上面三个 19pt 圆勾并排时会被读成两类不同控件。现在统一用 `checkmark.circle.fill` / `circle`，19pt，绿色 / `secondary`。整行的强调底色、描边和「整行可点」都不变。`iphoneAppPermissionRowUsesTheSameStatusMarkAsOtherPermissions()` 锁定形状与尺寸，并禁止 `checkboxMark` 这个自绘函数再长回来。
+3. **同一个 App 统一叫 iOS App。** 文案里既有「iPhone App」又有「iOS App」，iPhone 只是它运行的其中一台设备，写死设备名会把 iPad 用户挡在门外。
+
+### 文案改动（中英同步，逐条）
+
+| 键 | 改前 | 改后 |
+| --- | --- | --- |
+| `onboarding.permissions.iphone_app_installed.title` | 我已安装 iPhone App | 我已安装 iOS App |
+| `onboarding.control_method.iphone_app.title` | 使用 iPhone App | 使用 iOS App |
+| `onboarding.remote_availability.no_remote.detail` | 下一步选择 iPhone App 或微信小程序完成体验。 | 下一步选择 iOS App 或微信小程序完成体验。 |
+| `onboarding.apple_companion.connection_detail` | 保持 iPhone App 或 Apple Watch App 打开… | 保持 iOS App 或 Apple Watch App 打开… |
+| `onboarding.control_source.apple_companion.title` | iPhone / Apple Watch App | iOS / watchOS App |
+| `onboarding.iphone_remote.scan` | 在 iPhone 无线麦 SayAll 中扫描二维码… | 在 iOS 无线麦 SayAll 中扫描二维码… |
+| `onboarding.iphone_remote.appstore_qr` | 扫描二维码下载 iPhone 无线麦 SayAll App | 扫描二维码下载 iOS 无线麦 SayAll App |
+| `connection.phone.qr_title` | 备用方式：使用 iPhone App 扫码连接 | 备用方式：使用 iOS App 扫码连接 |
+| `onboarding.apple_companion.install` | 从 App Store 安装无线麦 SayAll | （删除） |
+
+刻意**没改**的是指设备的那些：「连接 iPhone 或 Apple Watch」「请在已连接的 iPhone 或 Apple Watch 上按一个普通控制键」「iPhone / Apple Watch 已连接」「没有 iPhone 时」。它们说的是连接的是哪台设备，不是 App 的名字。`onboardingCallsTheCompanionAppIOSApp()` 断言两份 strings 里不再出现 `iPhone App` / `iPhone app`。
+
+### 自动化与构建
+
+- `swift build --disable-keychain --disable-sandbox` 公开构建通过。
+- `swift test --disable-keychain --disable-sandbox --filter OnboardingFlowTests`：90 项通过（本次新增 3 条、改写 1 条）。
+- `swift test --disable-keychain --disable-sandbox --filter LocalizationTests`：8 项通过（中英 key 集合一致，本次净删 1 个键）。
+- `plutil -lint` 两份 strings 均 OK。
+
+### 离屏渲染证据
+
+`Screenshots/onboarding-installed-checkbox/` 四张图按新实现重渲（浅色未勾选 / 浅色已勾选 / 深色未勾选 / 英文未勾选），SHA-256 与字节数见该目录 `manifest.json` 与上一节的表。连接页去按钮后的形态见 [`Screenshots/onboarding-connect-page/`](../Screenshots/onboarding-connect-page/connect-page-zh-hans-light-iphone.png)（同一份构建、`_CONTROL_METHOD=iphone_app`）：标题 → 说明 → 「等待 iPhone 或 Apple Watch」状态卡 → 「等待控制按键」→ 「所选控制方式还没有连接」，不再有安装按钮；右栏二维码、App Store 徽章与「扫描二维码下载 iOS 无线麦 SayAll App」都在。
+
+### 生产页面检查
+
+1. iPhone 路径走到连接页，确认左栏标题下直接是等待连接的状态卡，没有「从 App Store 安装」按钮；右栏二维码与 App Store 徽章仍在。
+2. 权限页第 4 项标题为「我已安装 iOS App」；右侧是圆圈，勾选前后与上面三项同形（空圆 → 绿色实心勾）。
+3. 切英文：该项为「I already installed the iOS app」，控制方式卡片为「iOS App」，连接页副标题为「iOS / watchOS App」。
+4. 通读一遍向导，确认没有残留「iPhone App」字样；指设备的「iPhone 或 Apple Watch」应保留。
+
+### 失败判定与边界
+
+- 连接页左栏又出现下载/安装按钮（同一屏两个下载入口），判定失败。
+- 权限页第 4 项右侧又变回方框或其他形状，或与上面三项不同尺寸，判定失败。
+- 任何页面仍出现「iPhone App」/「the iPhone app」，判定失败。
+- 把「iPhone 或 Apple Watch」这类设备指代也改成 iOS，导致用户不知道要拿哪台设备，判定失败。
+- 截图只证明静态形态，不能代替真机勾选、真实连接与下载跳转验收。
+
+## 2026-10-23 会员开通弹窗尺寸回归
+
+适用分支：`codex/onboarding-membership-sheet`。本次只修 Onboarding 里「点击开通会员功能」的呈现尺寸，不改会员判定、连接门禁、购买流程和任何文案。
+
+缺陷现象：在完整构建里点击 Onboarding 右栏的「点击开通会员功能」，弹出的窗口只有「关闭」按钮，会员中心和购买入口不可见，用户因此完全无法开通会员。
+
+根因：`.sheet` 里的内容为 `VStack { 关闭按钮; membershipFeature.settingsView() }`，没有给出任何尺寸约束；而会员中心以整页尺寸设计，内部 `GeometryReader` 用 `contentWidth = min(920, max(0, viewportWidth - 48))` 推算内容宽度，再 `.frame(width: contentWidth)`。可用宽度不足 48pt 时内容宽度被算成 0，整个会员中心被压成不可见。
+
+修复：给 `settingsView()` 加 `.frame(minWidth: 900, minHeight: 620)`。宽度上界刻意小于 Onboarding 窗口最小宽度 980（900 + 两侧 20pt padding = 940），否则窗口缩到最小时 sheet 会溢出窗口，把位于最右侧的「关闭」按钮推到窗口之外。
+
+尺寸证据（`NSHostingView.fittingSize` 实测）：修复前 97 × 82，与截图中那个只剩「关闭」按钮的小方块一致；修复后 940 × 696。对照组「`settingsView()` 返回 `EmptyView`」为 90 × 64，与本次实测的 97 × 82 不同，可据此区分「内容被压扁」和「会员模块未初始化」两种原因。
+
+### 自动化与构建
+
+- `swift build --disable-keychain --disable-sandbox` 公开构建通过。
+- `swift test --disable-keychain --disable-sandbox --filter OnboardingFlowTests`：77 项通过，其中新增 `membershipSheetGivesTheMembershipCenterAnExplicitSize()` 静态断言，防止再次移除尺寸约束。
+
+### 生产页面检查
+
+1. 完整构建走到权限页，右栏出现「点击开通会员功能」，点击后弹窗应为接近 940 × 696 的窗口。
+2. 弹窗内能看到会员中心内容：套餐、登录入口和购买按钮，且可滚动，不被裁切。
+3. 关闭按钮仍在弹窗右上角，始终可见，且不在滚动区域内；点击后回到 Onboarding 且不丢失当前步骤。
+4. 按 Esc 也能关闭弹窗。未设置 `interactiveDismissDisabled`，因此交互式关闭必须保留；如果加入了禁用逻辑，需同步本手册和失败判定。
+5. 把 Onboarding 窗口缩到最小宽度（980）后再打开弹窗，关闭按钮仍须完整落在窗口内，不能被推到窗口边缘之外。
+6. 在未登录状态点击购买，应弹出登录流程，而不是空白或直接关闭；登录弹窗的 Esc 只关闭登录弹窗，不应连带关闭会员中心。
+
+### 失败判定与边界
+
+- 弹窗仍为小方块、只有「关闭」按钮、会员内容不可见、内容被裁切成细条、点击购买没有任何反应，均判定失败。
+- 弹窗打开后无法关闭（关闭按钮不可见、Esc 无效、关闭后卡在空白页），属于阻塞级失败：用户会被困在 Onboarding 里出不来。
+- 只验证尺寸约束属于回归防护，不能证明真实购买成功。真实登录、支付和会员开通仍需在正式签名安装包上用真实账号验收；本机无法准备带签名的私有 artifacts，公共构建又不包含会员能力，因此本次未做真实购买验收。
+
+## 2026-10-23 权限页新增「我已安装 iOS App」勾选项
+
+适用分支：`codex/onboarding-membership-sheet`。本次在权限页左栏加一行必选勾选项，不改右栏二维码、会员提示、弹窗，也不改任何权限判定。
+
+位置：权限清单的第 4 项，**在三条系统权限之下**，与权限行同一列、同一 10pt 间距，读起来是清单里多出来的一项，而不是另一块卡片。
+
+同一轮还移除了原来紧跟其后的那张「iPhone 或 Apple Watch 连接将在下一页检查」提示卡（`statusCard(icon: "network", …)`）：它和勾选项的「已确认，下一页会用真实连接验证」说的是同一件事，留着等于同一句话讲两遍。卡片的 6 个文案键（`onboarding.permissions.apple_companion.*`、`onboarding.permissions.web_remote.*`、`onboarding.permissions.mobile_network.*`）一并删除，不留死键；`permissionsPageNoLongerShowsTheNextPageCheckCard()` 反向锁定，防止它长回来。
+
+形态（设计稿方案 C，两态）：
+
+- 未勾选：整块染 `accentColor` 6.5% 并加 1pt `accentColor` 18% 内描边，左侧 32pt 圆底 `iphone` 图标，标题「我已安装 iOS App」14pt semibold，说明「还差这一步：勾选后才能继续」12pt，右侧 19pt 空圆（`circle`，`secondary` 色）——与上面三项权限行同一形态。
+- 已勾选：底色褪回与权限行相同的 `primary` 3.5%，去掉描边，图标与右侧园形标记转绿（`#30b350` 量级，`checkmark.circle.fill`），说明改成「已确认，下一页会用真实连接验证」。
+- 强调块用的是 App 自己的 `accentColor`，不是设计稿里的系统蓝 `#007aff`：权限行图标本来就用 `accentColor`，固定蓝会和整页冲突。这台机器上的 accent 是珊瑚红，所以截图里偏红。
+
+只在 `onboardingControlMethod == .iPhoneApp` 时显示：实体遥控器和网页遥控路径不装这个 App，出现该行会被误读成第四项系统权限。
+
+勾选前「继续」禁用。判定放在 `OnboardingFlowPolicy.canContinue` 而不是视图里，条件为 `controlMethod != .iPhoneApp || phoneAppInstallConfirmed`；参数默认 `true`，所以 `FirstUseDiagnostics` 这类不关心勾选的调用方行为不变。
+
+勾选状态是 `@State`，不写 `AppSettings`：它确认的是「这台 iPhone 上装过 App」，重进向导重新确认更安全。为离屏截图能拍到第二种状态，`OnboardingView.init` 增加 `initialPhoneAppInstalled`（与 `initialInputMethodGuideStep` 同一套写法），渲染器入口是 `REMOTE_MIC_ONBOARDING_SCREENSHOT_PHONE_APP_INSTALLED=1`。
+
+实现细节：走 `onboardingToggle`（离屏探针读得到值、也能直接置值），配 `.toggleStyle(.button)` + `.buttonStyle(.plain)` 去掉系统 Switch 并让整行可点。右侧状态标记最初是自绘的 20pt 圆角方框（更像「复选框」、也更接近设计稿），但与上面三项的 19pt 圆形并排时会被读成两类不同控件，已改为与 `permissionRow` 完全相同的 `checkmark.circle.fill` / `circle`。
+
+### 自动化与构建
+
+- `swift build --disable-keychain --disable-sandbox` 公开构建通过。
+- `swift test --disable-keychain --disable-sandbox --filter OnboardingFlowTests`：80 项通过，含本次新增三条：
+  - `iphoneAppConfirmationGatesThePermissionsStepOnlyOnTheIPhonePath()`：三项权限全开、只差勾选时 iPhone 路径不能继续；勾选后可以；实体遥控器与网页遥控不受影响；不传参数时保持原行为。
+  - `iphoneAppConfirmationRowIsAToggleOnTheIPhonePathOnly()`：托管生产视图后，iPhone 路径注册了 `permission.iphone-app-installed` 开关、初值 false、`invoke` 后变 true；实体遥控器路径没有这个开关；`initialPhoneAppInstalled: true` 能预置已勾选。
+  - `permissionsPageNoLongerShowsTheNextPageCheckCard()`：权限段落里不再出现 `statusCard(`，视图与两份 strings 都不再引用被删的 6 个文案键。
+- `swift test --disable-keychain --disable-sandbox --filter LocalizationTests`：中英文 key 集合一致（本次新增 3 个键、删除 6 个键，两边同步）。
+
+### 离屏渲染证据
+
+四张图都取自权限页（`03-permissions.png`），用同一份构建产物、同一入口渲染（`_CONTROL_METHOD=iphone_app` + `_CONTROL_SOURCE=apple_companion`），尺寸 2040 × 1600（窗口 frame，内容区 1020 × 772）：
+
+| 文件 | 外观 / 语言 / 状态 | SHA-256 |
+| --- | --- | --- |
+| [`installed-checkbox-zh-hans-light-pending.png`](../Screenshots/onboarding-installed-checkbox/installed-checkbox-zh-hans-light-pending.png) | 浅色 / 中文 / 未勾选 | `5a4e5a6c3ce66659b519b92a411c0aeb19c26f4f39650b8ec9a078d064863fb6` |
+| [`installed-checkbox-zh-hans-light-confirmed.png`](../Screenshots/onboarding-installed-checkbox/installed-checkbox-zh-hans-light-confirmed.png) | 浅色 / 中文 / 已勾选 | `9aa054579cfebda400b01cb8748b3902866bfd43455b1df5d8ac647e534abd16` |
+| [`installed-checkbox-zh-hans-dark-pending.png`](../Screenshots/onboarding-installed-checkbox/installed-checkbox-zh-hans-dark-pending.png) | 深色 / 中文 / 未勾选 | `b68d522cf5fd646ec003b29d4a81e2e4faa6a632aeb90e18195338b9c2157494` |
+| [`installed-checkbox-en-light-pending.png`](../Screenshots/onboarding-installed-checkbox/installed-checkbox-en-light-pending.png) | 浅色 / 英文 / 未勾选 | `5c33f9e25a9c7085bced3666ef27f364a3e56ae50eca786cabb0e7fad300fae2` |
+
+渲染环境没有蓝牙权限，所以四张图里「继续」都是禁用的，且勾选项下方会出现橙色的「还需要蓝牙权限」运行期提示卡（这不是固定内容，权限开启后消失）；「勾选后解锁继续」由上面的纯函数用例证明，不由截图证明。
+
+### 生产页面检查
+
+1. 完整构建、选择 iPhone 来源进入权限页，确认左栏清单是 4 项，第 4 项在「辅助功能」之下、是清单的最后一项（它下面不应再有「iPhone 或 Apple Watch 连接将在下一页检查」那张卡），与上面三项左边线对齐、间距一致。
+2. 未勾选时该行底色明显比其余三行更亮/更染，且有一条细描边；右侧是空圆圈（与上面三项同形），说明文字为「还差这一步：勾选后才能继续」。
+3. 点这一行任意位置（图标、标题、空白处都要试），确认整行都能勾选，不是只有右侧圆圈能点。
+4. 勾选后确认底色立刻褪回与权限行一致、图标变绿、右侧圆圈变成绿色实心带白勾、说明变成「已确认，下一页会用真实连接验证」；再次点击可取消勾选。
+5. 三项权限都开、只差这一项时，确认「继续」是禁用的；勾选后立刻变成可点。
+6. 关闭向导重新进入，确认该行回到未勾选——这个状态不该落盘。
+7. 切到实体遥控器或网页遥控路径的权限页，确认这一行不出现。
+8. 切深色外观，确认未勾选态仍能与其余三行区分（靠底色与描边），勾选后与其余三行一致。
+
+### 失败判定与边界
+
+- 该行出现在三条权限之上、被挤进右栏、与权限行间距不一致或左边线参差，均判定失败。
+- 勾选项下面又冒出「iPhone 或 Apple Watch 连接将在下一页检查」那张卡（同一句话说两遍），判定失败。
+- 只有右侧圆圈能点、点标题或行内空白没有反应，说明点击目标没覆盖整行，判定失败。
+- 右侧标记与上面三项权限行不同形（矩形、方框、白底勾等），判定失败。
+- 勾选前后底色没有变化，或勾选后仍然保留强调底色与描边，判定失败。
+- 三项权限全开、未勾选时「继续」仍可点，或勾选后仍不可点，判定失败。
+- 实体遥控器/网页遥控路径出现该行，或该行出现后拦住这两条路径的「继续」，判定失败。
+- 重进向导后仍保持勾选，说明状态被持久化，判定失败。
+- 截图只能证明布局、配色与两态切换，不能代替真机勾选、（真实权限齐全时）继续按钮解锁和真实 iPhone 连接验证。
+
+## 2026-10-23 语音测试页核对卡改为按实际手势与工具能力生成
+
+适用分支：`codex/onboarding-membership-sheet`。只改语音测试页（`07-voice-test`）里那张橙色「测试前核对」卡，不改手势判定、不改 `OnboardingFlowPolicy`、不改音频与语音链路的任何行为。
+
+改的是三处会让用户对不上的地方：
+
+1. **标题里的「必须一致」是错的。** 原文「测试前核对：无线麦 SayAll 与%@必须一致」。遥控器只能按住、语音工具只能按一下时（Siri Remote / 小米遥控器 + Typeless），两侧手势本来就不一致，靠 `fnTapModeEnabled` 把长按换算成一次点按。这句话直接把正确配置说成了错误配置。现在标题只说明「在这一步核对」，不再断言两边相同。
+2. **第一条勾选是泛称。** 原文「我已确认语音工具使用上方显示的操作方式」，用户不知道要去工具里改哪个开关。现在按 `resolvedVoiceGestureMode`（配对计划 → 用户偏好 → 工具推荐值 → 按住）出两条文案之一，和上方的语音键提示条同源。
+3. **全局唤起被当成所有工具的共性。** 原文勾选写死「豆包已开启“全局唤起语音”」，失败提示也无条件说「全局唤起」。实际上只有豆包有这一项：微信输入法、Typeless、Vokie 没有，`.other` 未观察过。现在由 `VoiceToolAdapterProfile.globalActivationSupport`（`true` / `false` / `nil`）决定勾选是否出现、失败提示走哪条键，文案里的工具名走运行时插值。
+
+另外三处收尾：
+
+- 行标签「无线麦 SayAll 音频输出」是写死的，值却是运行时设备名，旧驱动用户会看到「标签写 SayAll、值写 MiRemoteV 2ch」。标签改成「音频输出设备」，设备名只从 `selectedAudioDevice?.name` 出。
+- 音频输出那一行移到核对卡外面：它讲的是这一侧把声音送到哪个设备，语音工具并不知道这行，挂在「在 X 里核对」的标题下会被读错归属（详见下面的「归属修正」）。
+- 设备名、工具名在勾选里全部走运行时参数，不再出现第二处写死的名字。
+
+死键处理（Sources 里 0 引用，逐条 `git grep` 确认）：删除 `onboarding.voice_test.configuration.binding_expected`、`onboarding.voice_test.microphone_confirmation.title`、`onboarding.voice_test.other_detail`、`onboarding.voice_test.configuration.voice_gesture_checkbox`（被两条按手势分流的键取代）。`microphone_confirmation.detail` 曾短暂复活，后按下面的「归属修正」一并删除。
+
+版式：核对卡外层间距 4 → 8、内边距 8 → 10、勾选包成 6pt 一组；语音测试页外层间距 8 → 12。
+
+### 文案二次压缩（同日）
+
+第一版说明写的是「上一步已经讲过怎么设置。下面三条都勾上，才能开始测试。」，麦克风小字写的是「选“SayAll”只是把遥控器声音送进系统，不会改动豆包输入法自己的麦克风设置，所以要在它里面再选一次“SayAll”。」两句都太长，而且第一句带出两个错：
+
+- **「三条」是错的。** 只有豆包有「全局唤起语音」那条勾选，微信输入法 / Typeless / Vokie 实际只有两条。标题「核对这三项」同样写死了三。现在标题改成「测试前在 %@ 里核对这几项」、说明改成「都勾上才能开始测试。」，**不再出现任何计数**，勾选条数由能力字段决定。
+- **「上一步已经讲过怎么设置」没有信息量。** 用户刚从上一步过来，这句只是交代向导自己的结构，删掉。
+
+麦克风小字压成一行「这里只决定遥控器声音往哪送，%@的麦克风要单独选一次。」：保留「这里是声音往哪送、不是工具用哪个麦克风」这个唯一有用的信息，去掉重复两次的设备名（勾选那一行刚说过）和「在它里面」这种模糊指代。参数个数从 3 个减到 1 个。
+
+压缩的副作用是好的：Typeless 未运行的异常态原先会多出两行红色运行时状态加一行桥接说明，把增益卡顶出 1020 × 772 的首屏；文字收紧后，异常态也完整放下了，`manifest.json` 里原先那条「需要滚动」的说明已随之删除。
+
+### 归属修正：音频输出行离开核对卡，麦克风小字删除（同日）
+
+两条都是「这句话不该在这里」的问题：
+
+- **「音频输出设备 ✓ SayAll」不属于核对卡。** 它上面就是「测试前在豆包输入法里核对这几项」，读起来像要去豆包输入法里核对一个叫「音频输出设备」的选项——但这一行讲的是我们这一侧把声音送到哪个设备，语音工具根本看不到它。现在它移到核对卡外、卡的上方，用喇叭图标 + 灰色标签单独成行，作为「先确认声音从哪出去」的前置状态；就绪绿勾、未就绪红叉（另一张 bridged 截图正好是红叉态）。
+- **麦克风小字删除。** 「这里只决定遥控器声音往哪送，%@的麦克风要单独选一次。」解释的是机制，而上面那条勾选本身已经是行动指令（「我已确认%@的麦克风是“%@”」），再解释一遍只是重复。机制说明属于上一步的图文引导（`onboarding.voice_tool.guide.screenshot.doubao_settings` 已经写了「在麦克风选择中选择…」）。因此 `onboarding.voice_test.microphone_confirmation.detail` 连同渲染点一起删除，不留死键。
+
+核对卡现在只剩三样东西：标题、一句说明、勾选。卡外的音频状态行与卡内勾选在版式上靠「有无背景」区分，不再靠间距猜测归属。
+
+### 自动化与构建
+
+- `swift build --disable-keychain --disable-sandbox` 公开构建通过。
+- `swift test --disable-keychain --disable-sandbox --filter OnboardingFlowTests`：87 项通过，含本次新增七条：
+  - `globalVoiceSupportIsUnknownForToolsWeNeverObserved()`：豆包 `true`，微信 / Typeless / Vokie `false`，其他与未选择为 `nil`。
+  - `holdOnlyRemoteAndToggleOnlyToolBridgeThroughFunctionTap()`：Typeless + Siri Remote 解析成按一下并开启 `fnTapModeEnabled`；豆包 + Siri Remote 仍是按住、不开换算。
+  - `voiceTestGestureCheckboxFollowsTheResolvedGesture()`：勾选项走 `resolvedVoiceGestureMode`，两条键都在，旧键不再被引用，桥接提示条件存在。
+  - `voiceTestFailureHintOnlyMentionsGlobalActivationWhenTheToolHasIt()`：失败提示分两条键，中文里那句写死「全局唤起」的旧文案已不存在。
+  - `voiceTestDropsKeysNoViewEverRendered()`：四个死键在两份 strings 里都已删除（含后来删掉的 `microphone_confirmation.detail`）。
+  - `voiceTestConfigurationCopyDoesNotPromiseAFixedNumberOfChecks()`：标题与说明里不出现固定计数（只查这两个键，「三项权限」这类准确描述不受影响）。
+  - `audioOutputStatusSitsOutsideTheToolChecklistCard()`：核对卡段落里不再出现 `sayall_audio_output` / `configurationStatusRow`，且音频行必须在卡之前渲染。
+- `swift test --disable-keychain --disable-sandbox --filter LocalizationTests`：8 项通过，中英文 key 集合与占位符个数一致。
+
+### 离屏渲染证据
+
+三张图都取自语音测试页（`07-voice-test.png`），用同一份构建产物、同一入口渲染，尺寸 2040 × 1600（窗口 frame，内容区 1020 × 772）：
+
+| 文件 | 组合 / 状态 | SHA-256 |
+| --- | --- | --- |
+| [`voice-test-zh-hans-light-hold.png`](../Screenshots/onboarding-voice-test-consistency/voice-test-zh-hans-light-hold.png) | 中文 / 豆包 / 按住 | `2e20b511d340dd47a1ce41b8988c9a3c8b738a7802d65895483dae59073f365b` |
+| [`voice-test-zh-hans-light-bridged.png`](../Screenshots/onboarding-voice-test-consistency/voice-test-zh-hans-light-bridged.png) | 中文 / Typeless + 小米遥控器 / 按一下 + 桥接说明 | `b960bf5361aa0db83ad6a3def0fd64c44066a86bfa9627bdbd75ec3b3d8a9ffe` |
+| [`voice-test-en-light-hold.png`](../Screenshots/onboarding-voice-test-consistency/voice-test-en-light-hold.png) | 英文 / 豆包 / 按住 | `33abdd7e19502e2c00cdfb221865358be3734a235a6515ba563ba333307931d1` |
+
+旧驱动设备名（`MiRemoteV 2ch`）未单独出图：设 `REMOTE_MIC_ONBOARDING_SCREENSHOT_AUDIO_NAME=legacy` 可复现，核对卡上方的音频行与第三条勾选会一起显示真实设备名。
+
+渲染环境没有真实的语音工具进程，勾选都是未勾选态；「全部勾选才允许继续」的逻辑由 `OnboardingFlowPolicy` 的既有用例覆盖，不由截图证明。
+
+### 生产页面检查
+
+1. 用豆包进入语音测试页，确认标题是「测试前在豆包输入法里核对这几项」、说明是「都勾上才能开始测试。」，不再出现「必须一致」，也不再出现「三条」「三项」这类计数。
+2. 确认「音频输出设备」这一行在橙卡**外面**、卡的上方，右侧是系统里真实的设备名（新装 `SayAll`，旧驱动 `MiRemoteV 2ch`）；这一行不该出现在橙卡的勾选清单里。
+3. 确认第一条勾选写的是「我已把豆包输入法设为“按住说话”」，与上方语音键提示条一致。
+4. 换 Typeless 并把控制方式设为实体遥控器：确认上方提示条变成「按一下语音键开始说话，再按一下结束」，第一条勾选同步变成「按一下开始，再按一下结束」，且下方多出一行带双向箭头的小字解释长按换算。
+5. 换成微信输入法 / Typeless / Vokie / 其他：确认没有「全局唤起语音」那条勾选（只剩两条），而标题和说明里的措辞不变、仍然读得通——这是「不写数量」的意义。
+6. 用豆包：确认第二条勾选是「我已确认豆包输入法开启了“全局唤起语音”」，点开豆包确实有这个开关。
+7. 确认麦克风勾选下方**没有**小字说明；橙卡里除标题、说明、勾选之外不应再有其他文字。
+8. 拨掉语音工具进程让它报「尚未运行」，再让某次测试收不到文字，确认红色失败提示里：豆包说「全局唤起语音」，其余工具说的是「正在运行并已开启语音输入」，不提全局唤起。
+9. 中英文在 1020 × 772 下逐条检查，增益滑杆和数值、底部「继续」都完整可见。
+
+### 失败判定与边界
+
+- 标题或说明里再次出现「必须一致」「与页面提示一致」这类无指向或错误的断言，判定失败。
+- 勾选项文案与上方语音键提示条说的不是同一个动作（提示条说按一下、勾选让你确认按住），判定失败。
+- 只能按住的控制方式配只支持按一下的工具时，页面没有解释换算，用户会以为自己设错了；缺这行小字判定失败。
+- 「音频输出设备」又回到橙卡里、被「在 X 里核对」的标题统辖，判定失败——它会让用户去语音工具里找一个并不存在的「音频输出设备」。
+- 麦克风勾选下方又出现解释性小字，判定失败：勾选本身已是行动指令，机制说明属于上一步。
+- 无全局唤起的工具上出现「全局唤起语音」勾选，或失败提示让它去找这个开关，判定失败。
+- 标签写 `SayAll`、值是 `MiRemoteV 2ch`（或反过来），判定失败。
+- 标题或说明里出现「三条」「三项」这类固定数量，导致只有两条勾选的工具上读起来对不上，判定失败。
+- 麦克风小字再次出现重复的设备名（勾选那一行已经说过）或「在它里面」这类无指向的指代，判定失败。
+- 截图只能证明文案、布局与条件分支，不能代替真机上的语音文字上屏、第三方工具设置核对和跨工具真实链路。
+
+
 
 适用分支：`codex/onboarding-appstore-qr`。本次把 iPhone 连接页右栏的占位内容替换为随包交付的 App Store 下载二维码，二维码下方加入 Apple 官方 App Store 徽章，并补充对应中英文说明文案；不改动流程、能力门禁、权限、连接、音频、持久化和左栏 App Store 入口。
 

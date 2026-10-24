@@ -1,0 +1,33 @@
+{
+  "host_base": "fcc21fbf229a77983101b3fb14ba3392632d3535",
+  "private_artifact_source": "6adb22c50b455d08c08c20c6b6449cc0b9c9c873",
+  "window_points": [1020, 772],
+  "language": "zh-Hans",
+  "appearance": "light",
+  "notes": [
+    "两张图拍自同一台机器、同一 onboarding 页面（权限页右栏的「点击开通会员功能」入口）。",
+    "before 图使用移除 .frame(minWidth: 900, minHeight: 620) 的本地构建；after 图为本次 PR 的提交内容。",
+    "为让右栏露出会员入口，拍照时临时移走了 Resources/Onboarding/appstore-* 图片（否则该栏优先显示 App Store 二维码）；该改动只存在于本地取证副本，未进入仓库。",
+    "弹窗尺寸为实测值：before 82×82（sheet 1 of window 1 的 AXSize），after 940×692。"
+  ],
+  "images": [
+    {
+      "file": "membership-sheet-before-fix-zh-hans-light.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "5261cbe1748493a58358ddf24743f064f32f1986d67e2680d816fb858b0ddae5",
+      "bytes": 772001,
+      "sheet_points": [82, 82]
+    },
+    {
+      "file": "membership-sheet-after-fix-zh-hans-light.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "2298a972c4432ee3f5b9c04618d387f15fdb81ca2228baed4960d04c39118679",
+      "bytes": 950887,
+      "sheet_points": [940, 692]
+    }
+  ]
+}
