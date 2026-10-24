@@ -272,6 +272,97 @@ struct HIDPermissionPollTests {
         subscription = nil
     }
 
+    /// 定时器只负责发起查询：权限判定本身是同步 IPC 到 tccd，不能占用触发线程。
+    @Test func permissionQueryDoesNotBlockTheTimerThread() {
+        let scheduler = HIDPermissionPollTestScheduler()
+        var pending: ((RuntimePermissionSnapshot) -> Void)?
+        let poll = HIDPermissionPoll(
+            scheduler: scheduler,
+            permissionQuery: { _, completion in pending = completion },
+            logger: { _ in }
+        )
+        var delivered = false
+        let subscription = poll.subscribe { _ in delivered = true }
+
+        scheduler.fire()
+
+        // 查询在本次 tick 内发起，结果还没回来：触发线程没有被同步判定卡住。
+        #expect(pending != nil)
+        #expect(delivered == false)
+
+        // 结果回来之后才交付给订阅者。
+        pending?(RuntimePermissionSnapshot(inputMonitoringGranted: false, accessibilityTrusted: false))
+        #expect(delivered == true)
+        subscription.cancel()
+    }
+
+    /// 结果延迟到达时，已经取消的订阅不应再收到通知。
+    @Test func cancelledSubscribersAreNotNotifiedWhenDeliveryIsDeferred() {
+        let scheduler = HIDPermissionPollTestScheduler()
+        var pending: ((RuntimePermissionSnapshot) -> Void)?
+        let poll = HIDPermissionPoll(
+            scheduler: scheduler,
+            permissionQuery: { _, completion in pending = completion },
+            logger: { _ in }
+        )
+        var firstCalls = 0
+        var secondCalls = 0
+        let first = poll.subscribe { _ in firstCalls += 1 }
+        let second = poll.subscribe { _ in secondCalls += 1 }
+
+        scheduler.fire()
+        first.cancel()
+        pending?(RuntimePermissionSnapshot(inputMonitoringGranted: false, accessibilityTrusted: false))
+
+        #expect(firstCalls == 0)
+        #expect(secondCalls == 1)
+        second.cancel()
+    }
+
+    @Test func delayedResultDoesNotReachAReplacementSubscription() {
+        let scheduler = HIDPermissionPollTestScheduler()
+        var pending: ((RuntimePermissionSnapshot) -> Void)?
+        let poll = HIDPermissionPoll(
+            scheduler: scheduler,
+            permissionQuery: { _, completion in pending = completion },
+            logger: { _ in }
+        )
+        let original = poll.subscribe { _ in }
+        scheduler.fire()
+        original.cancel()
+        var results: [Bool] = []
+        let replacement = poll.subscribe { results.append($0) }
+
+        pending?(RuntimePermissionSnapshot(inputMonitoringGranted: false, accessibilityTrusted: false))
+        #expect(results.isEmpty)
+        scheduler.fire()
+        pending?(RuntimePermissionSnapshot(inputMonitoringGranted: true, accessibilityTrusted: true))
+        #expect(results == [true])
+        replacement.cancel()
+    }
+
+    @Test func pendingQueryCoalescesTimerTicksAndResumesAfterDelivery() {
+        let scheduler = HIDPermissionPollTestScheduler()
+        var pending: ((RuntimePermissionSnapshot) -> Void)?
+        var queryCount = 0
+        let poll = HIDPermissionPoll(
+            scheduler: scheduler,
+            permissionQuery: { _, completion in queryCount += 1; pending = completion },
+            logger: { _ in }
+        )
+        var results: [Bool] = []
+        let subscription = poll.subscribe { results.append($0) }
+        for _ in 0..<100 { scheduler.fire() }
+        #expect(queryCount == 1)
+        pending?(RuntimePermissionSnapshot(inputMonitoringGranted: true, accessibilityTrusted: true))
+        #expect(results == [true])
+        scheduler.fire()
+        #expect(queryCount == 2)
+        pending?(RuntimePermissionSnapshot(inputMonitoringGranted: false, accessibilityTrusted: false))
+        #expect(results == [true, false])
+        subscription.cancel()
+    }
+
     @Test func lifecycleLogsContainOnlyCountsAndTimerTransitions() {
         let scheduler = HIDPermissionPollTestScheduler()
         var logs: [String] = []

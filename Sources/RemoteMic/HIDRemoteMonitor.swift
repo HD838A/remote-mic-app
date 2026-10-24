@@ -1384,8 +1384,21 @@ final class HIDRemoteMonitor {
         }
     }
 
-    private func releaseForRevokedPermissions() {
+    /// 权限被撤销后的释放路径。
+    ///
+    /// 这里**不受 `ownsEventSuppressor` 约束**：那个标记只针对「本监视器因设备移除等局部
+    /// 原因停止」——共享的 tap 还要服务其它监视器。但权限撤销是全局的，用户已经收回了
+    /// 授权，tap 就不该继续挂在系统输入路径上。留着它有两条代价：
+    ///
+    /// 1. 授权已收回却仍在拦截系统按键；
+    /// 2. 2026-10-24 那次整机卡死的前提条件（一条活着的 active event tap + 主线程
+    ///    被同步 TCC 查询钉住）依然成立。实测日志里权限撤销后 49 秒 tap 回调仍在执行。
+    ///
+    /// 释放后由既有的 `applyHIDSettings()` → `startHIDMonitors()` 路径重建，与 HID 设备
+    /// 监听的恢复时机完全一致，不会多出新的恢复要求。
+    func releaseForRevokedPermissions() {
         stop()
+        eventSuppressor.stop()
         updateStatus(LocalizedMessage("button_mapping.permission.system_expired"))
         AppLogger.shared.write("HID RELEASED permission_revoked")
     }
