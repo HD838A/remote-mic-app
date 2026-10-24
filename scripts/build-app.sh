@@ -890,6 +890,7 @@ if [[ "$SIGNING_IDENTITY" != "-" ]]; then
     --options runtime \
     --timestamp \
     --sign "$SIGNING_IDENTITY" \
+    --entitlements "$ROOT/packaging/app.entitlements" \
     "$APP_DIR"
 fi
 if [[ "$SIGNING_IDENTITY" == "-" ]]; then
@@ -953,6 +954,7 @@ if [[ "$SIGNING_IDENTITY" == "-" ]]; then
     --timestamp=none \
     --sign - \
     --requirements "=designated => identifier \"$BUNDLE_IDENTIFIER\"" \
+    --entitlements "$ROOT/packaging/app.entitlements" \
     "$APP_DIR"
 fi
 codesign --verify --deep --strict "$APP_DIR"

@@ -137,6 +137,9 @@ struct OnboardingView: View {
     @State private var lastLoggedSecureInputState: Bool?
     @State private var aiPromptCopyResult: Bool?
     @State private var isPermissionQueryPending = false
+    /// 「我已安装 iPhone App」勾选项。和 `selectedInputMethodGuideStep` 一样只在本次向导内有效，
+    /// 不写进 `AppSettings`：它确认的是「这台 iPhone 上装过 App」，重进向导时重新确认更安全。
+    @State private var didConfirmPhoneAppInstalled = false
 
     private let permissionRefreshTimer = Timer.publish(
         every: 1,
@@ -153,7 +156,8 @@ struct OnboardingView: View {
         initialInputMethodGuideStep: Int? = nil,
         remoteInputDiagnosticOverride: FirstUseRemoteInputDiagnostic? = nil,
         interactionProbe: OnboardingInteractionProbe? = nil,
-        siriRemotePackageInstalledOverride: Bool? = nil
+        siriRemotePackageInstalledOverride: Bool? = nil,
+        initialPhoneAppInstalled: Bool = false
     ) {
         self.model = model
         membershipFeature = model.membershipFeature
@@ -170,6 +174,7 @@ struct OnboardingView: View {
             initialValue: voiceToolAvailabilityOverride ?? Self.detectVoiceToolAvailability()
         )
         _selectedInputMethodGuideStep = State(initialValue: initialInputMethodGuideStep)
+        _didConfirmPhoneAppInstalled = State(initialValue: initialPhoneAppInstalled)
         _voiceKeyMigrationSource = State(
             initialValue: model.settings.pendingOnboardingVoiceKeyMigration
         )
@@ -195,9 +200,15 @@ struct OnboardingView: View {
         .environment(\.locale, localization.locale)
         .frame(minWidth: 980, minHeight: 732)
         .sheet(isPresented: $isMembershipPresented) {
-            VStack(alignment: .trailing) {
+            VStack(alignment: .trailing, spacing: 12) {
                 Button(localization.text("common.action.close")) { isMembershipPresented = false }
+                // 会员中心是按整页设计的（内部 GeometryReader 以可用宽度推算内容宽度，
+                // 可用宽度不足 48pt 时内容宽度会被算成 0）。sheet 不给尺寸时它会塌缩成
+                // 一个只有「关闭」按钮的空弹窗，用户因此无法开通会员。这里给足尺寸。
+                // 上界取 900 + 两侧 padding，保持小于窗口最小宽度 980，避免窗口缩小时
+                // sheet 溢出窗口、把位于最右侧的「关闭」按钮推到窗口之外。
                 membershipFeature.settingsView()
+                    .frame(minWidth: 900, minHeight: 620)
             }.padding(20)
         }
         .onAppear {
@@ -1382,15 +1393,14 @@ struct OnboardingView: View {
                     granted: accessibilityGranted,
                     action: requestAccessibilityPermission
                 )
-            }
 
-            if settings.onboardingControlMethod.usesOnDemandAudioOutput {
-                statusCard(
-                    icon: "network",
-                    title: localization.text(mobilePermissionTitleKey),
-                    detail: localization.text(mobilePermissionDetailKey),
-                    isComplete: true
-                )
+                // 清单的第 4 项。上面三条是系统能自动检测的权限，这一条只能由用户自己确认，
+                // 所以未勾选时整块染成 accent 6.5% 并加 1pt 描边，成为页面上唯一需要动手的一块；
+                // 勾选后底色褪回中性、图标转绿，避免一直喊。勾选前「继续」保持禁用，
+                // 行内文案已经写着「勾选后才能继续」。
+                if settings.onboardingControlMethod == .iPhoneApp {
+                    iphoneAppInstalledRow
+                }
             }
 
         }
@@ -1643,14 +1653,8 @@ struct OnboardingView: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
-            onboardingLink(id: "iphone.install", destination: AppLinks.iOSAppStore(for: localization.locale)) {
-                Label {
-                    Text(verbatim: localization.text("onboarding.apple_companion.install"))
-                } icon: {
-                    Image(systemName: "arrow.up.right.square")
-                }
-            }
-            .buttonStyle(.borderedProminent)
+            // 这里不再放「从 App Store 安装」按钮：右栏已经是同一页的下载入口
+            // （App Store 二维码 + 官方徽章），左栏再来一条是把同一件事说两遍。
 
             statusCard(
                 icon: selectedControlConnected
@@ -1811,7 +1815,11 @@ struct OnboardingView: View {
     }
 
     private var voiceTestContent: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        // 这一页是流程里块数最多的一页（标题、说明、语音键提示条、测试前核对卡、输入框、
+        // 等待行、增益卡），原先外层间距是 8，只有别的页的一半，六道缝隙叠起来就是「挤成一团」。
+        // 12 而不是更大：核对卡里的「语音工具尚未运行」行和桥接提示行都只在异常态出现，
+        // 叠加后会多出两行，间距再大就把增益卡顶到首屏之外。
+        VStack(alignment: .leading, spacing: 12) {
             onboardingTitle("onboarding.voice_test.title")
             Text(verbatim: localization.text("onboarding.voice_test.detail"))
                 .font(.system(size: 14))
@@ -1827,6 +1835,11 @@ struct OnboardingView: View {
             .padding(8)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color.accentColor.opacity(0.07), in: RoundedRectangle(cornerRadius: 10))
+
+            // 「音频输出设备」是这一侧的状态，不是在语音工具里要核对的东西。放在核对卡
+            // 外面单独一行：先说清声音从哪出去，再说对方要选哪个名字，两件事不要混在
+            // 一个「在 X 里核对」的标题下面。
+            externalToolAudioOutputRow
 
             externalToolConfigurationConfirmationCard
 
@@ -1938,7 +1951,9 @@ struct OnboardingView: View {
     }
 
     private var externalToolConfigurationConfirmationCard: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        // 卡内原先 spacing 4 + padding 8，标题、说明、音频输出行、分隔线、三条确认
+        // 全挤在一起；改成 8 / 10，并把三条确认包成一组（组内 6），让它们读起来是「一组勾选项」。
+        VStack(alignment: .leading, spacing: 8) {
             Label {
                 Text(
                     LocalizedMessage(
@@ -1952,21 +1967,10 @@ struct OnboardingView: View {
                     .foregroundStyle(Color.orange)
             }
 
-            Text(
-                LocalizedMessage(
-                    "onboarding.voice_test.configuration.detail",
-                    arguments: [localization.text(settings.onboardingVoiceTool.titleKey)]
-                ).text(using: localization)
-            )
+            Text(verbatim: localization.text("onboarding.voice_test.configuration.detail"))
             .font(.system(size: 12))
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
-
-            configurationStatusRow(
-                label: localization.text("onboarding.voice_test.configuration.sayall_audio_output"),
-                value: sayAllAudioOutputConfigurationText,
-                isComplete: onboardingAudioReady
-            )
 
             if let runtimeStatus = selectedVoiceToolRuntimeStatusText {
                 HStack(alignment: .top, spacing: 8) {
@@ -1990,40 +1994,66 @@ struct OnboardingView: View {
 
             Divider()
 
-            onboardingToggle(id: "voice-test.confirm.voice-key", isOn: $externalToolVoiceKeyConfirmed) {
-                Text(verbatim: localization.text("onboarding.voice_test.configuration.voice_gesture_checkbox"))
-                .font(.system(size: 12, weight: .medium))
-                .fixedSize(horizontal: false, vertical: true)
-            }
-            .toggleStyle(.checkbox)
+            VStack(alignment: .leading, spacing: 6) {
+                // 第一条勾选按当前手势出文案：遥控器和语音工具都可能是「按住说话」或
+                // 「按一下开始、再按一下结束」，泛称一句「使用上方显示的操作方式」等于让
+                // 用户自己去猜要去工具里改哪个开关。
+                onboardingToggle(id: "voice-test.confirm.voice-key", isOn: $externalToolVoiceKeyConfirmed) {
+                    Text(verbatim: voiceGestureConfirmationText)
+                    .font(.system(size: 12, weight: .medium))
+                    .fixedSize(horizontal: false, vertical: true)
+                }
+                .toggleStyle(.checkbox)
 
-            if externalToolGlobalVoiceConfirmationRequired {
-                onboardingToggle(id: "voice-test.confirm.global-voice", isOn: $externalToolGlobalVoiceConfirmed) {
-                Text(verbatim: localization.text("onboarding.voice_test.configuration.global_voice_checkbox"))
-                        .font(.system(size: 12, weight: .medium))
-                        .fixedSize(horizontal: false, vertical: true)
+                // 只有「遥控器只能按住、工具只能按一下」这组组合才会出现 fnTap 换算。
+                // 此时两侧动作看着不一致，用户会怀疑自己设错了，必须当场说清楚。
+                if bridgedGestureHintVisible {
+                    HStack(alignment: .top, spacing: 5) {
+                        Image(systemName: "arrow.triangle.swap")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                            .padding(.top, 1)
+                        Text(verbatim: localization.text("onboarding.voice_test.configuration.gesture_bridged_hint"))
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(.leading, 18)
+                }
+
+                if externalToolGlobalVoiceConfirmationRequired {
+                    onboardingToggle(id: "voice-test.confirm.global-voice", isOn: $externalToolGlobalVoiceConfirmed) {
+                    Text(
+                        LocalizedMessage(
+                            "onboarding.voice_test.configuration.global_voice_checkbox",
+                            arguments: [localization.text(settings.onboardingVoiceTool.titleKey)]
+                        ).text(using: localization)
+                    )
+                            .font(.system(size: 12, weight: .medium))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .toggleStyle(.checkbox)
+                }
+
+                onboardingToggle(id: "voice-test.confirm.microphone", isOn: $externalToolMicrophoneConfirmed) {
+                    Text(
+                        LocalizedMessage(
+                            "onboarding.voice_test.microphone_confirmation.checkbox",
+                            arguments: [
+                                localization.text(settings.onboardingVoiceTool.titleKey),
+                                selectedAudioDevice?.name ?? localization.text("onboarding.audio.select_required"),
+                            ]
+                        ).text(using: localization)
+                    )
+                    .font(.system(size: 12, weight: .medium))
+                    .fixedSize(horizontal: false, vertical: true)
                 }
                 .toggleStyle(.checkbox)
             }
 
-            onboardingToggle(id: "voice-test.confirm.microphone", isOn: $externalToolMicrophoneConfirmed) {
-                Text(
-                    LocalizedMessage(
-                        "onboarding.voice_test.microphone_confirmation.checkbox",
-                        arguments: [
-                            localization.text(settings.onboardingVoiceTool.titleKey),
-                            selectedAudioDevice?.name ?? localization.text("onboarding.audio.select_required"),
-                        ]
-                    ).text(using: localization)
-                )
-                .font(.system(size: 12, weight: .medium))
-                .fixedSize(horizontal: false, vertical: true)
-            }
-            .toggleStyle(.checkbox)
-
             if voiceAttempt.result == .externalToolNoCommit {
                 Label {
-                    Text(verbatim: localization.text("onboarding.voice_test.configuration.no_commit"))
+                    Text(verbatim: noCommitHintText)
                 } icon: {
                     Image(systemName: "xmark.circle.fill")
                 }
@@ -2032,7 +2062,7 @@ struct OnboardingView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .padding(8)
+        .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
         .overlay {
@@ -2041,21 +2071,28 @@ struct OnboardingView: View {
         }
     }
 
-    private func configurationStatusRow(
-        label: String,
-        value: String,
-        isComplete: Bool
-    ) -> some View {
+    /// 核对卡上方的一行：这一侧的音频输出状态。
+    ///
+    /// 它原来在卡内，和三条勾选排在一起，于是被「测试前在 X 里核对」的标题统辖，
+    /// 读起来像是要去语音工具里核对「音频输出设备」——但这一行讲的是我们自己把声音
+    /// 送到哪个设备，语音工具并不知道这行。移出卡片，作为前置状态单独一行。
+    private var externalToolAudioOutputRow: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Text(label)
-                .font(.system(size: 12, weight: .medium))
-                .fixedSize(horizontal: false, vertical: true)
+            Image(systemName: "speaker.wave.2.fill")
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+            Text(verbatim: localization.text("onboarding.voice_test.configuration.sayall_audio_output"))
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
             Spacer(minLength: 4)
-            Label(value, systemImage: isComplete ? "checkmark.circle.fill" : "xmark.circle.fill")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(isComplete ? Color.green : Color.red)
-                .multilineTextAlignment(.trailing)
-                .fixedSize(horizontal: false, vertical: true)
+            Label(
+                sayAllAudioOutputConfigurationText,
+                systemImage: onboardingAudioReady ? "checkmark.circle.fill" : "xmark.circle.fill"
+            )
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(onboardingAudioReady ? Color.green : Color.red)
+            .multilineTextAlignment(.trailing)
+            .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -2135,18 +2172,6 @@ struct OnboardingView: View {
             }
             .padding(.top, 4)
         }
-    }
-
-    private var mobilePermissionTitleKey: String {
-        settings.onboardingControlSource == .appleCompanion
-            ? "onboarding.permissions.apple_companion.title"
-            : "onboarding.permissions.web_remote.title"
-    }
-
-    private var mobilePermissionDetailKey: String {
-        settings.onboardingControlSource == .appleCompanion
-            ? "onboarding.permissions.apple_companion.detail"
-            : "onboarding.permissions.web_remote.detail"
     }
 
     private var physicalRemotePairingKeys: (
@@ -2868,6 +2893,65 @@ struct OnboardingView: View {
         .buttonStyle(.plain)
     }
 
+    /// 「我已安装 iOS App」勾选项：权限清单里的第 4 项。
+    ///
+    /// 走 `onboardingToggle` 而不是 `onboardingActionButton`，因为它的语义就是「勾选」：
+    /// 离屏探针能读到值、也能直接置值，回归时不用模拟点击。`.toggleStyle(.button)` 让整行
+    /// 都成为点击目标并去掉系统 Switch。
+    ///
+    /// 右侧状态标记必须和 `permissionRow` 完全一致（19pt 的 `checkmark.circle.fill` / `circle`）：
+    /// 同一份清单里两种勾选形态会让人以为是两类不同的控件。曾用过自绘的 20pt 圆角方框，
+    /// 视觉上更像「复选框」、也更符合原始设计稿，但和上面三项并排时不一致，已改回圆形。
+    private var iphoneAppInstalledRow: some View {
+        let confirmed = didConfirmPhoneAppInstalled
+        return onboardingToggle(
+            id: "permission.iphone-app-installed",
+            isOn: $didConfirmPhoneAppInstalled
+        ) {
+            HStack(spacing: 12) {
+                Image(systemName: "iphone")
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundStyle(confirmed ? Color.green : Color.accentColor)
+                    .frame(width: 32, height: 32)
+                    .background(
+                        (confirmed ? Color.green : Color.accentColor).opacity(0.10),
+                        in: Circle()
+                    )
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(verbatim: localization.text(
+                        "onboarding.permissions.iphone_app_installed.title"
+                    ))
+                    .font(.system(size: 14, weight: .semibold))
+                    Text(verbatim: localization.text(confirmed
+                        ? "onboarding.permissions.iphone_app_installed.confirmed"
+                        : "onboarding.permissions.iphone_app_installed.pending"))
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 10)
+                Image(systemName: confirmed ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 19))
+                    .foregroundStyle(confirmed ? Color.green : Color.secondary)
+            }
+            .padding(13)
+            .background(
+                confirmed ? Color.primary.opacity(0.035) : Color.accentColor.opacity(0.065),
+                in: RoundedRectangle(cornerRadius: 12)
+            )
+            .overlay {
+                if !confirmed {
+                    RoundedRectangle(cornerRadius: 12)
+                        .strokeBorder(Color.accentColor.opacity(0.18), lineWidth: 1)
+                }
+            }
+            .contentShape(RoundedRectangle(cornerRadius: 12))
+        }
+        .toggleStyle(.button)
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("onboarding.permissions.iphone_app_installed")
+    }
+
     private func statusCard(
         icon: String,
         title: String,
@@ -2934,7 +3018,8 @@ struct OnboardingView: View {
             remoteAvailability: settings.onboardingRemoteAvailability,
             controlMethod: settings.onboardingControlMethod,
             voiceKeyMode: settings.voiceKeyMode,
-            capabilities: capabilities
+            capabilities: capabilities,
+            phoneAppInstallConfirmed: didConfirmPhoneAppInstalled
         )
         if settings.onboardingStep == .voiceTest {
             return policyAllowsContinue &&
@@ -3205,6 +3290,47 @@ struct OnboardingView: View {
         OnboardingVoiceTestConfigurationPolicy.requiresGlobalVoiceConfirmation(
             for: settings.onboardingVoiceTool
         )
+    }
+
+    /// 第一条勾选：把「要在这个工具里设成什么动作」直接写出来。
+    ///
+    /// 不能简单回退 `.hold`：Typeless 只支持「按一下开始」，遥控器也只支持按住时还要靠
+    /// Fn 点按换算。配对计划尚未解析出来时，先按用户偏好、再按工具推荐值取，
+    /// 免得勾选项说的动作和这个工具实际能用的动作不一致。
+    private var resolvedVoiceGestureMode: VoiceGestureMode {
+        proposedPairingPlan?.binding.gestureMode
+            ?? settings.onboardingPreferredGesture
+            ?? VoiceToolAdapterProfile.profile(for: settings.onboardingVoiceTool).recommendedMode
+            ?? .hold
+    }
+
+    private var voiceGestureConfirmationText: String {
+        let key = resolvedVoiceGestureMode == .hold
+            ? "onboarding.voice_test.configuration.gesture_checkbox.hold"
+            : "onboarding.voice_test.configuration.gesture_checkbox.toggle"
+        return LocalizedMessage(
+            key,
+            arguments: [localization.text(settings.onboardingVoiceTool.titleKey)]
+        ).text(using: localization)
+    }
+
+    /// 遥控器只能按住、语音工具只能按一下时，两边动作本来就不一致，靠 Fn 点按换算桥接。
+    private var bridgedGestureHintVisible: Bool {
+        proposedPairingPlan?.fnTapModeEnabled == true
+    }
+
+    /// 失败提示按工具能力分叉：没有全局唤起的工具不该被指向一个不存在的开关。
+    private var noCommitHintText: String {
+        let key = externalToolGlobalVoiceConfirmationRequired
+            ? "onboarding.voice_test.configuration.no_commit"
+            : "onboarding.voice_test.configuration.no_commit.no_global"
+        return LocalizedMessage(
+            key,
+            arguments: [
+                localization.text(settings.onboardingVoiceTool.titleKey),
+                selectedAudioDevice?.name ?? localization.text("onboarding.audio.select_required"),
+            ]
+        ).text(using: localization)
     }
 
     private var externalToolConfigurationConfirmed: Bool {

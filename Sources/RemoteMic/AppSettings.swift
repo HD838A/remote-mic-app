@@ -39,6 +39,8 @@ private struct PersonalizedConfiguration: Codable {
     let formatVersion: Int
     let gainDB: Double
     let selectedAudioDeviceUID: String
+    let macMicrophoneInputUID: String?
+    let macMicrophoneShortcut: CustomKeyboardShortcut?
     let customMappingEnabled: Bool
     let buttonBindings: [String: ButtonAction]
     let buttonShortcuts: [String: CustomKeyboardShortcut]
@@ -373,6 +375,17 @@ final class AppSettings: ObservableObject {
                 lastKnownAudioDeviceUID = selectedAudioDeviceUID
                 defaults.set(selectedAudioDeviceUID, forKey: Keys.lastKnownAudioDeviceUID)
             }
+        }
+    }
+
+    @Published var macMicrophoneInputUID: String {
+        didSet { defaults.set(macMicrophoneInputUID, forKey: "macMicrophoneInputUID") }
+    }
+
+    @Published var macMicrophoneShortcut: CustomKeyboardShortcut? {
+        didSet {
+            defaults.set(macMicrophoneShortcut.flatMap { try? JSONEncoder().encode($0) },
+                forKey: "macMicrophoneShortcut")
         }
     }
 
@@ -821,6 +834,9 @@ final class AppSettings: ObservableObject {
             ? 10.0
             : defaults.double(forKey: Keys.gainDB)
         let persistedAudioDeviceUID = defaults.string(forKey: Keys.selectedAudioDeviceUID) ?? ""
+        macMicrophoneInputUID = defaults.string(forKey: "macMicrophoneInputUID") ?? ""
+        macMicrophoneShortcut = Self.decodeSetting(CustomKeyboardShortcut.self,
+            forKey: "macMicrophoneShortcut", from: defaults, corrupted: &corruptedKeys)
         selectedAudioDeviceUID = persistedAudioDeviceUID
         lastKnownAudioDeviceUID = defaults.string(forKey: Keys.lastKnownAudioDeviceUID) ?? persistedAudioDeviceUID
         if defaults.string(forKey: Keys.lastKnownAudioDeviceUID) == nil,
@@ -2144,6 +2160,8 @@ final class AppSettings: ObservableObject {
             formatVersion: unifiedBaseBindings.isEmpty ? 1 : 2,
             gainDB: gainDB,
             selectedAudioDeviceUID: selectedAudioDeviceUID,
+            macMicrophoneInputUID: macMicrophoneInputUID,
+            macMicrophoneShortcut: macMicrophoneShortcut,
             customMappingEnabled: customMappingEnabled,
             buttonBindings: Dictionary(
                 uniqueKeysWithValues: buttonBindings.map { ($0.key.rawValue, $0.value) }
@@ -2230,6 +2248,7 @@ final class AppSettings: ObservableObject {
             from: JSONSerialization.data(withJSONObject: preferencesRaw))
         let appIDs = (configuration.customApplicationProfiles ?? []).map(\.id)
         guard configuration.selectedAudioDeviceUID.count <= Self.maximumImportedIdentifierLength,
+              (configuration.macMicrophoneInputUID?.count ?? 0) <= Self.maximumImportedIdentifierLength,
               Set(appIDs).count == appIDs.count,
               pending.allSatisfy({ UUID(uuidString: $0).map(Set(appIDs).contains) == true }),
               Set(preferences.remoteDeviceProfiles.map(\.id)).count == preferences.remoteDeviceProfiles.count,
@@ -2368,6 +2387,8 @@ final class AppSettings: ObservableObject {
         }
         if gainDB != c.gainDB { gainDB = c.gainDB }
         if selectedAudioDeviceUID != c.selectedAudioDeviceUID { selectedAudioDeviceUID = c.selectedAudioDeviceUID }
+        macMicrophoneInputUID = c.macMicrophoneInputUID ?? ""
+        macMicrophoneShortcut = c.macMicrophoneShortcut.flatMap { $0.isMacMicrophoneCombination ? Self.validatedShortcut($0) : nil }
         if customMappingEnabled != c.customMappingEnabled { customMappingEnabled = c.customMappingEnabled }
         unifiedBaseBindings = c.unifiedBaseBindings ?? []
         buttonBindings = Dictionary(uniqueKeysWithValues: c.buttonBindings.compactMap { key,value in RemoteButton(rawValue: key).map { ($0,value) } })
@@ -2544,6 +2565,12 @@ final class AppSettings: ObservableObject {
 
         gainDB = configuration.gainDB
         selectedAudioDeviceUID = importedAudioDeviceUID
+        macMicrophoneInputUID = configuration.macMicrophoneInputUID.flatMap {
+            $0.count <= Self.maximumImportedIdentifierLength ? $0 : nil
+        } ?? ""
+        macMicrophoneShortcut = configuration.macMicrophoneShortcut.flatMap {
+            $0.isMacMicrophoneCombination ? Self.validatedShortcut($0) : nil
+        }
         customMappingEnabled = configuration.customMappingEnabled
         buttonBindings = Self.defaultBindings.merging(importedBindings) { _, imported in imported }
         buttonShortcuts = importedShortcuts
