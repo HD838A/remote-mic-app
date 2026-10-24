@@ -647,11 +647,20 @@ struct OnboardingFlowTests {
             encoding: .utf8
         )
 
+        // 权限降频不得改变安全输入、Fn 配置与工具存活检查的原有 1 秒周期。
+        let permissionTickStart = try #require(viewSource.range(of: ".onReceive(permissionRefreshTimer)"))
+        let nextHandler = try #require(viewSource.range(of: ".onReceive", range: permissionTickStart.upperBound..<viewSource.endIndex))
+        let permissionTick = String(viewSource[permissionTickStart.lowerBound..<nextHandler.lowerBound])
+        #expect(!permissionTick.contains("refreshSecureInputState()"))
+        #expect(!permissionTick.contains("refreshSystemFunctionKeyUsage()"))
+        #expect(!permissionTick.contains("refreshSelectedVoiceToolRuntimeState()"))
+        #expect(viewSource.contains(".onReceive(runtimeRefreshTimer)"))
+
         // 周期必须走策略常量，避免再出现硬编码的 1 Hz。
         #expect(viewSource.contains(
             "every: OnboardingPermissionRefreshPolicy.permissionRefreshIntervalSeconds"
         ))
-        #expect(!viewSource.contains("every: 1,"))
+        #expect(viewSource.contains("private let runtimeRefreshTimer = Timer.publish(every: 1, on: .main, in: .common)"))
         // 周期权限刷新必须以前台为前提。
         #expect(viewSource.contains("if shouldRefreshPermissionStates {"))
         #expect(viewSource.contains("isApplicationActive: NSApplication.shared.isActive"))

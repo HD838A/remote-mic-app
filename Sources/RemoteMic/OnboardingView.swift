@@ -139,6 +139,9 @@ struct OnboardingView: View {
     @State private var lastLoggedSecureInputState: Bool?
     @State private var aiPromptCopyResult: Bool?
 
+    // 权限轮询降频不改变运行状态检查的响应周期。
+    private let runtimeRefreshTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+
     private let permissionRefreshTimer = Timer.publish(
         every: OnboardingPermissionRefreshPolicy.permissionRefreshIntervalSeconds,
         on: .main,
@@ -220,6 +223,8 @@ struct OnboardingView: View {
             if shouldRefreshPermissionStates {
                 refreshPermissionStates()
             }
+        }
+        .onReceive(runtimeRefreshTimer) { _ in
             refreshSecureInputState()
             if settings.onboardingStep == .voiceTool {
                 refreshSystemFunctionKeyUsage()
