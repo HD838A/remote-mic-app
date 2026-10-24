@@ -490,6 +490,7 @@ struct SettingsView: View {
     @State private var mappingEditingTarget: ShortcutEditingTarget?
     @State private var mappingActionFilter: MappingActionFilter = .all
     @State private var isCapturingMacMicrophoneShortcut = false
+    @State private var isHoveringMacMicrophoneButton = false
     @State private var shortcutCaptureTarget: ShortcutEditingTarget?
     @State private var applicationShortcutCaptureProfileID: UUID?
     @State private var shortcutCaptureFeedback: ShortcutCaptureFeedback?
@@ -1454,7 +1455,26 @@ struct SettingsView: View {
                     Text(LocalizedStringKey(model.macMicrophoneButtonKey))
                 }
                 .compatibilityButtonStyle(.standard)
-                .help(Text("audio.mac_microphone.help"))
+                .accessibilityHint(Text("audio.mac_microphone.help"))
+                .onHover { isHoveringMacMicrophoneButton = $0 }
+                .overlay(alignment: .bottom) {
+                    if isHoveringMacMicrophoneButton {
+                        Text("audio.mac_microphone.help")
+                            .font(.system(size: 12))
+                            .foregroundStyle(Color.primary)
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 6)
+                            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .stroke(Color(nsColor: .separatorColor).opacity(0.55), lineWidth: 1)
+                            )
+                            .fixedSize()
+                            .offset(y: -34)
+                            .allowsHitTesting(false)
+                            .zIndex(1)
+                    }
+                }
                 .disabled(model.macMicrophoneState == .stopping)
                 .fixedSize()
             }
