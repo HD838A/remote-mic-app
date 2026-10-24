@@ -4,6 +4,8 @@
 - [历史来源值导致整日归档不可见](./2026-10-24-archive-source-decoding.html)
 - [HID 诊断窗口过期后仍记录普通按键](./2026-10-24-hid-filter-log-window.html)
 
+- [更新录音应用信息时扫描全部录音](./2026-10-24-recording-metadata-lookup.html)
+
 - [自身前台输入框聚焦导致死锁](./2026-10-23-self-composer-focus-deadlock.html)
 
 - [原生方向键把伪Fn带入自定义快捷键](./2026-10-20-shortcut-inherits-navigation-function.html)
