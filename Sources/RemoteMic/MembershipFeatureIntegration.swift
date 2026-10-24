@@ -327,13 +327,23 @@ final class MembershipFeatureIntegration: ObservableObject, @unchecked Sendable 
             .sink { [weak self] in self?.isEnvironmentSettingsVisible = $0 }.store(in: &subscriptions)
         adapter.$buttonProfilesAccessDecision.map(Self.mapAccessDecision).removeDuplicates()
             .receive(on: RunLoop.main)
-            .sink { [weak self] in self?.buttonProfilesAccessDecision = $0 }.store(in: &subscriptions)
+            .sink { [weak self] decision in
+                self?.buttonProfilesAccessDecision = decision
+                AppLogger.shared.write(
+                    "MEMBERSHIP ACCESS state=\(Self.accessDecisionName(decision))"
+                )
+            }.store(in: &subscriptions)
         adapter.$canUseCompanionConnections.removeDuplicates().receive(on: RunLoop.main)
             .sink { [weak self] in self?.canUseCompanionConnections = $0 }.store(in: &subscriptions)
         adapter.$canUseCommonPhrases.removeDuplicates().receive(on: RunLoop.main)
             .sink { [weak self] in self?.canUseCommonPhrases = $0 }.store(in: &subscriptions)
         adapter.$accountDisplayName.removeDuplicates().receive(on: RunLoop.main)
-            .sink { [weak self] in self?.accountDisplayName = $0 }.store(in: &subscriptions)
+            .sink { [weak self] account in
+                self?.accountDisplayName = account
+                AppLogger.shared.write(
+                    "MEMBERSHIP ACCOUNT state=\(account == nil ? "signed_out" : "signed_in")"
+                )
+            }.store(in: &subscriptions)
         adapter.$serviceEnvironmentForDiagnostics.removeDuplicates().receive(on: RunLoop.main)
             .sink { [weak self] in self?.serviceEnvironmentForDiagnostics = $0 }
             .store(in: &subscriptions)
@@ -357,6 +367,16 @@ final class MembershipFeatureIntegration: ObservableObject, @unchecked Sendable 
             return .unavailable
         @unknown default:
             return .unavailable
+        }
+    }
+
+    private static func accessDecisionName(_ decision: HostButtonProfilesAccessDecision) -> String {
+        switch decision {
+        case .allowed: return "allowed"
+        case .temporarilyOffline: return "temporarily_offline"
+        case .authorized: return "authorized"
+        case .requiresPlus: return "requires_plus"
+        case .unavailable: return "unavailable"
         }
     }
     #endif
