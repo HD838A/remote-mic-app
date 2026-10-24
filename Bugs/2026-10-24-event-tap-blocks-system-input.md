@@ -273,3 +273,12 @@ active（非 listen-only）tap 的语义是「先给我看，我说放行才继�
 - 自动化：`swift test --disable-keychain --filter 'HIDPermissionPollTests|PermissionStatusProbeTests|AppleSiriRemoteAdapterTests|HIDPermissionRevocationTests|EventTapPortTests'`：25 项通过；`swift test --disable-keychain`：961 项通过。
 - 构建：Apple Silicon macOS 14 与 Intel macOS 13 Release 均通过，所有本地 SwiftPM 命令均使用 `--disable-keychain`。
 - 边界：不证明真实 TCC 撤销/恢复、私有 Siri 实现、实体遥控器按键、Fn 快速连续会话及首尾音频完整性已验收。PR 保持 Draft 候选。
+
+
+## 2026-10-24 合入前：event tap 回归的串行边界
+
+- 错误证据：主线 #736 组合后的五套件并行定向运行有 1 项失败。`repeatedActivateReleaseCyclesDoNotAccumulateTaps` 的进程级计数从 1 变为 0，并非端口增加。同一组加 `--no-parallel` 后 30 项通过。
+- 根因：`EventTapPortTests` 的 `.serialized` 只覆盖本套件。相邻 `HIDPermissionRevocationTests` 会创建并释放真实 tap，可改变进程级计数基线。源码扫描确认这两套件拥有实际创建 tap 的测试路径；快捷键权限拒绝测试在创建前退出。
+- 最小修复：把权限撤销套件嵌套到已有串行套件。保留全部端口计数、端口有效性和撤销断言。不改生产逻辑，不放宽期望值。
+- 验证命令：`swift test --disable-keychain --disable-sandbox --filter 'EventTapPortTests|KeyboardEventSuppressorTests|HIDPermissionRevocationTests|HIDPermissionPollTests|PermissionStatusProbeTests'`。默认并行连续 20 轮均为 30 项通过；公开全量 995 项 / 78 套件通过。
+- 边界：这是自动化之间的全进程资源干扰，不证明真实 TCC 撤销/恢复及系统输入冻结场景已通过。
