@@ -1,6 +1,7 @@
 # Bug 记录
 
 - [引导页权限轮询 1 Hz 过密，且 SayAll 在后台仍然查询](./2026-10-24-onboarding-permission-poll-interval.md)
+- [HID 诊断窗口过期后仍记录普通按键](./2026-10-24-hid-filter-log-window.html)
 
 - [自身前台输入框聚焦导致死锁](./2026-10-23-self-composer-focus-deadlock.html)
 
