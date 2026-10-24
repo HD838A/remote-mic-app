@@ -202,7 +202,7 @@ enum RemoteMicApp {
 }
 
 @MainActor
-private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate,
+private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenuItemValidation,
     NSWindowDelegate, SPUUpdaterDelegate, @preconcurrency SPUStandardUserDriverDelegate
 {
     private enum UpdateCheckPurpose {
@@ -245,6 +245,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     private let connectionItem = NSMenuItem()
     private let audioItem = NSMenuItem()
     private let hidItem = NSMenuItem()
+    private let macMicrophoneItem = NSMenuItem()
 
     var activationPolicy: NSApplication.ActivationPolicy {
         SettingsWindowActivationPolicy.value(
@@ -452,6 +453,10 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         )
     }
 
+    func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        menuItem !== macMicrophoneItem || model.macMicrophoneState != .stopping
+    }
+
     func menuWillOpen(_ menu: NSMenu) {
         refreshMenuStatus()
     }
@@ -497,6 +502,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         statusMenu?.removeItem(connectionItem)
         statusMenu?.removeItem(audioItem)
         statusMenu?.removeItem(hidItem)
+        statusMenu?.removeItem(macMicrophoneItem)
         NSStatusBar.system.removeStatusItem(statusItem)
         self.statusItem = nil
         statusMenu = nil
@@ -525,6 +531,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         statusMenu?.removeItem(connectionItem)
         statusMenu?.removeItem(audioItem)
         statusMenu?.removeItem(hidItem)
+        statusMenu?.removeItem(macMicrophoneItem)
 
         let menu = NSMenu()
         menu.delegate = self
@@ -532,6 +539,9 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         menu.addItem(audioItem)
         menu.addItem(hidItem)
         menu.addItem(.separator())
+        macMicrophoneItem.target = self
+        macMicrophoneItem.action = #selector(toggleMacMicrophone)
+        menu.addItem(macMicrophoneItem)
         menu.addItem(menuItem("connection.action.reconnect", action: #selector(reconnect)))
         menu.addItem(menuItem("menu.open_settings", action: #selector(showSettings)))
         menu.addItem(menuItem("menu.show_logs", action: #selector(showLog)))
@@ -711,6 +721,9 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     }
 
     private func observeModel() {
+        model.$macMicrophoneState.receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.refreshMenuStatus() }
+            .store(in: &subscriptions)
         StatusItemPresentation.publisher(
             physicalConnected: model.$isConnected.eraseToAnyPublisher(),
             phoneConnected: model.$isPhoneRemoteConnected.eraseToAnyPublisher(),
@@ -907,6 +920,10 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
             ? localization.text("connection.status.voice_active")
             : model.audioStatus.text(using: localization)
         hidItem.title = model.hidStatus.text(using: localization)
+        macMicrophoneItem.title = localization.text(model.macMicrophoneButtonKey)
+        macMicrophoneItem.toolTip = localization.text("audio.mac_microphone.help")
+        macMicrophoneItem.state = model.macMicrophoneState.isActive ? .on : .off
+        macMicrophoneItem.isEnabled = model.macMicrophoneState != .stopping
     }
 
     private func refreshStatusItemPresentation() {
@@ -981,6 +998,11 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         statusItem.menu = nil
     }
 
+    @objc private func toggleMacMicrophone() {
+        guard model.macMicrophoneState != .stopping else { return }
+        model.toggleMacMicrophone(from: .statusMenu)
+    }
+
     @objc private func reconnect() {
         model.reconnect()
     }
@@ -990,6 +1012,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     }
 
     private func showSettingsWindow(initialSection: SettingsSection? = nil) {
+        if !model.macMicrophoneState.isActive { model.macMicrophoneInputTarget.remember() }
         if settingsWindowController == nil {
             settingsWindowController = makeSettingsWindowController(
                 initialSettingsSection: initialSection
