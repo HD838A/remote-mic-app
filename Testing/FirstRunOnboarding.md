@@ -59,7 +59,7 @@
 
 ### 离屏渲染证据
 
-`Screenshots/onboarding-installed-checkbox/` 四张图按新实现重渲（浅色未勾选 / 浅色已勾选 / 深色未勾选 / 英文未勾选），SHA-256 与字节数见该目录 `manifest.json` 与上一节的表。连接页去按钮后的形态用同一份构建渲染 `04-remote.png` 逐张核对：标题 → 说明 → 「等待 iPhone 或 Apple Watch」状态卡 → 「等待控制按键」→ 「所选控制方式还没有连接」，不再有安装按钮。
+`Screenshots/onboarding-installed-checkbox/` 四张图按新实现重渲（浅色未勾选 / 浅色已勾选 / 深色未勾选 / 英文未勾选），SHA-256 与字节数见该目录 `manifest.json` 与上一节的表。连接页去按钮后的形态见 [`Screenshots/onboarding-connect-page/`](../Screenshots/onboarding-connect-page/connect-page-zh-hans-light-iphone.png)（同一份构建、`_CONTROL_METHOD=iphone_app`）：标题 → 说明 → 「等待 iPhone 或 Apple Watch」状态卡 → 「等待控制按键」→ 「所选控制方式还没有连接」，不再有安装按钮；右栏二维码、App Store 徽章与「扫描二维码下载 iOS 无线麦 SayAll App」都在。
 
 ### 生产页面检查
 
