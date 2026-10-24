@@ -83,9 +83,17 @@ final class KeyboardEventSuppressor {
         }
 
         hardwareModifierState.reset()
+        guard EventTapPort.activate(port: eventTap, source: runLoopSource) else {
+            // 端口已在 WindowServer 侧登记，但没能接入 tap 线程：按启动失败处理并
+            // 走同一条清理路径。绝不能留下一个已 enable 却无人承接的 tap。
+            EventTapPort.release(port: eventTap, source: runLoopSource)
+            logger("HID FILTER phase=start_failed reason=tap_activation_failed tap=session")
+            return false
+        }
+        lock.lock()
         self.eventTap = eventTap
         self.runLoopSource = runLoopSource
-        EventTapPort.activate(port: eventTap, source: runLoopSource)
+        lock.unlock()
         isRunning = true
         logger("HID FILTER phase=started result=active tap=session")
         return true
@@ -94,14 +102,17 @@ final class KeyboardEventSuppressor {
     func stop() {
         let wasRunning = isRunning
         hardwareModifierState.reset()
+        // 回调跑在 tap 专用线程上，端口引用由主线程写入，必须加锁交接。
         lock.lock()
+        let port = eventTap
+        let source = runLoopSource
+        eventTap = nil
+        runLoopSource = nil
         pendingEvents.removeAll()
         heldEventCounts.removeAll()
         recentArmed.removeAll()
         lock.unlock()
-        EventTapPort.release(port: eventTap, source: runLoopSource)
-        runLoopSource = nil
-        eventTap = nil
+        EventTapPort.release(port: port, source: source)
         isRunning = false
         if wasRunning { logger("HID FILTER phase=stopped result=inactive tap=session") }
     }
@@ -161,8 +172,12 @@ final class KeyboardEventSuppressor {
     func handle(type: CGEventType, event: CGEvent) -> Bool {
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
             logger("HID FILTER phase=disabled reason=\(type == .tapDisabledByTimeout ? "timeout" : "user_input") tap=session")
-            if let eventTap {
-                CGEvent.tapEnable(tap: eventTap, enable: true)
+            // 本回调在 tap 专用线程上执行，端口引用由主线程写入，必须加锁读取。
+            lock.lock()
+            let tap = eventTap
+            lock.unlock()
+            if let tap {
+                CGEvent.tapEnable(tap: tap, enable: true)
                 logger("HID FILTER phase=reenable_requested result=submitted tap=session")
             } else {
                 logger("HID FILTER phase=reenable_requested result=unavailable tap=session")

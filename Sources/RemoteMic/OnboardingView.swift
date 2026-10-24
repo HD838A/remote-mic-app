@@ -92,9 +92,10 @@ struct OnboardingView: View {
     private let interactionProbe: OnboardingInteractionProbe?
     private let siriRemotePackageInstalled: Bool
 
-    @State private var bluetoothAuthorization = CBManager.authorization
-    @State private var inputMonitoringGranted = HIDRemoteMonitor.isInputMonitoringGranted
-    @State private var accessibilityGranted = KeyboardInjector.isAccessibilityTrusted
+    // 构造视图时不查询 TCC；后台快照返回前保持权限门禁关闭。
+    @State private var bluetoothAuthorization = CBManagerAuthorization.notDetermined
+    @State private var inputMonitoringGranted = false
+    @State private var accessibilityGranted = false
     @State private var observedRemoteButtons = Set<RemoteButton>()
     @State private var remoteInputDiagnostic = FirstUseRemoteInputDiagnostic()
     @State private var requestedRemoteConnectionRecovery = false
@@ -135,6 +136,7 @@ struct OnboardingView: View {
     @State private var secureInputWaitStartedAtUptime: TimeInterval?
     @State private var lastLoggedSecureInputState: Bool?
     @State private var aiPromptCopyResult: Bool?
+    @State private var isPermissionQueryPending = false
     /// 「我已安装 iPhone App」勾选项。和 `selectedInputMethodGuideStep` 一样只在本次向导内有效，
     /// 不写进 `AppSettings`：它确认的是「这台 iPhone 上装过 App」，重进向导时重新确认更安全。
     @State private var didConfirmPhoneAppInstalled = false
@@ -3837,10 +3839,25 @@ struct OnboardingView: View {
         systemFunctionKeyUsage = OnboardingSystemFunctionKeyUsage.current
     }
 
+    /// 权限状态改到后台查询，主线程只负责回填。
+    ///
+    /// 三个查询都是同步 IPC 到 tccd，用户在系统设置里改权限的瞬间可能卡住数秒。它们原先
+    /// 直接跑在每秒一次的定时器里（见 `permissionRefreshTimer`），把主线程钉死；主线程上
+    /// 还挂着两条 active event tap，于是整个系统的输入队列一起停摆。
+    /// 2026-10-24 已实际发生：`Bugs/2026-10-24-event-tap-blocks-system-input.md`。
     private func refreshPermissionStates() {
-        bluetoothAuthorization = CBManager.authorization
-        inputMonitoringGranted = HIDRemoteMonitor.isInputMonitoringGranted
-        accessibilityGranted = KeyboardInjector.isAccessibilityTrusted
+        guard !isPermissionQueryPending else { return }
+        isPermissionQueryPending = true
+        PermissionStatusProbe.shared.fetch { snapshot in
+            isPermissionQueryPending = false
+            guard snapshot.bluetooth != bluetoothAuthorization
+                || snapshot.inputMonitoring != inputMonitoringGranted
+                || snapshot.accessibility != accessibilityGranted
+            else { return }
+            bluetoothAuthorization = snapshot.bluetooth
+            inputMonitoringGranted = snapshot.inputMonitoring
+            accessibilityGranted = snapshot.accessibility
+        }
     }
 
     private func refreshSecureInputState() {
