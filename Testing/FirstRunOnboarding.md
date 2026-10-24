@@ -142,17 +142,29 @@
 
 死键处理（Sources 里 0 引用，逐条 `git grep` 确认）：删除 `onboarding.voice_test.configuration.binding_expected`、`onboarding.voice_test.microphone_confirmation.title`、`onboarding.voice_test.other_detail`；`onboarding.voice_test.microphone_confirmation.detail` 从死键改为渲染在麦克风勾选下方。
 
-版式：核对卡外层间距 4 → 8、内边距 8 → 10、三条勾选包成 6pt 一组；语音测试页外层间距 8 → 12。取 12 而不是更大：核对卡里的「语音工具尚未运行」行和桥接提示行都只在异常态出现，叠加后会多出两行，间距再大就把增益卡顶到首屏之外。
+版式：核对卡外层间距 4 → 8、内边距 8 → 10、勾选包成 6pt 一组；语音测试页外层间距 8 → 12。
+
+### 文案二次压缩（同日）
+
+第一版说明写的是「上一步已经讲过怎么设置。下面三条都勾上，才能开始测试。」，麦克风小字写的是「选“SayAll”只是把遥控器声音送进系统，不会改动豆包输入法自己的麦克风设置，所以要在它里面再选一次“SayAll”。」两句都太长，而且第一句带出两个错：
+
+- **「三条」是错的。** 只有豆包有「全局唤起语音」那条勾选，微信输入法 / Typeless / Vokie 实际只有两条。标题「核对这三项」同样写死了三。现在标题改成「测试前在 %@ 里核对这几项」、说明改成「都勾上才能开始测试。」，**不再出现任何计数**，勾选条数由能力字段决定。
+- **「上一步已经讲过怎么设置」没有信息量。** 用户刚从上一步过来，这句只是交代向导自己的结构，删掉。
+
+麦克风小字压成一行「这里只决定遥控器声音往哪送，%@的麦克风要单独选一次。」：保留「这里是声音往哪送、不是工具用哪个麦克风」这个唯一有用的信息，去掉重复两次的设备名（勾选那一行刚说过）和「在它里面」这种模糊指代。参数个数从 3 个减到 1 个。
+
+压缩的副作用是好的：Typeless 未运行的异常态原先会多出两行红色运行时状态加一行桥接说明，把增益卡顶出 1020 × 772 的首屏；文字收紧后，异常态也完整放下了，`manifest.json` 里原先那条「需要滚动」的说明已随之删除。
 
 ### 自动化与构建
 
 - `swift build --disable-keychain --disable-sandbox` 公开构建通过。
-- `swift test --disable-keychain --disable-sandbox --filter OnboardingFlowTests`：85 项通过，含本次新增五条：
+- `swift test --disable-keychain --disable-sandbox --filter OnboardingFlowTests`：86 项通过，含本次新增六条：
   - `globalVoiceSupportIsUnknownForToolsWeNeverObserved()`：豆包 `true`，微信 / Typeless / Vokie `false`，其他与未选择为 `nil`。
   - `holdOnlyRemoteAndToggleOnlyToolBridgeThroughFunctionTap()`：Typeless + Siri Remote 解析成按一下并开启 `fnTapModeEnabled`；豆包 + Siri Remote 仍是按住、不开换算。
   - `voiceTestGestureCheckboxFollowsTheResolvedGesture()`：勾选项走 `resolvedVoiceGestureMode`，两条键都在，旧键不再被引用，桥接提示条件存在。
   - `voiceTestFailureHintOnlyMentionsGlobalActivationWhenTheToolHasIt()`：失败提示分两条键，中文里那句写死「全局唤起」的旧文案已不存在。
   - `voiceTestDropsKeysNoViewEverRendered()`：三个死键在两份 strings 里都已删除，`microphone_confirmation.detail` 保留。
+  - `voiceTestConfigurationCopyDoesNotPromiseAFixedNumberOfChecks()`：标题与说明里不出现固定计数，麦克风小字只带一个占位符（只查这两个键，「三项权限」这类准确描述不受影响）。
 - `swift test --disable-keychain --disable-sandbox --filter LocalizationTests`：8 项通过，中英文 key 集合与占位符个数一致。
 
 ### 离屏渲染证据
@@ -161,23 +173,23 @@
 
 | 文件 | 组合 / 状态 | SHA-256 |
 | --- | --- | --- |
-| [`voice-test-zh-hans-light-hold.png`](../Screenshots/onboarding-voice-test-consistency/voice-test-zh-hans-light-hold.png) | 中文 / 豆包 / 按住 | `551316ab3f94d0f96bed3dc2d0a601938f22000859a9c5f07ba59701de8386a1` |
-| [`voice-test-zh-hans-light-bridged.png`](../Screenshots/onboarding-voice-test-consistency/voice-test-zh-hans-light-bridged.png) | 中文 / Typeless + 小米遥控器 / 按一下 + 桥接说明 | `ebe22d72829867a2f35afcae0efa427e276f70f72be54b871c48c6925a034edd` |
-| [`voice-test-en-light-hold.png`](../Screenshots/onboarding-voice-test-consistency/voice-test-en-light-hold.png) | 英文 / 豆包 / 按住 | `e228ed635d28f532790edc025918744ab385bed747552fcaa3fd9e31610bbc72` |
+| [`voice-test-zh-hans-light-hold.png`](../Screenshots/onboarding-voice-test-consistency/voice-test-zh-hans-light-hold.png) | 中文 / 豆包 / 按住 | `23daef3cff3aab87a8579146b41487e264977d9ce7c651381d5ce2506b1bef39` |
+| [`voice-test-zh-hans-light-bridged.png`](../Screenshots/onboarding-voice-test-consistency/voice-test-zh-hans-light-bridged.png) | 中文 / Typeless + 小米遥控器 / 按一下 + 桥接说明 | `8dd002154ee41d53d840f7365b5b56282ff20fcb4a91eee16240e25e5e8444b3` |
+| [`voice-test-en-light-hold.png`](../Screenshots/onboarding-voice-test-consistency/voice-test-en-light-hold.png) | 英文 / 豆包 / 按住 | `64b24120035066f580e7734627802ddd06f3944e3ebf6d11c517d026dc451878` |
 
 旧驱动设备名（`MiRemoteV 2ch`）未单独出图：设 `REMOTE_MIC_ONBOARDING_SCREENSHOT_AUDIO_NAME=legacy` 可复现，设备行、麦克风勾选和说明小字都会跟着显示真实设备名。
 
-渲染环境没有真实的语音工具进程，三条勾选都是未勾选态；「三条都勾选才允许继续」的逻辑由 `OnboardingFlowPolicy` 的既有用例覆盖，不由截图证明。
+渲染环境没有真实的语音工具进程，勾选都是未勾选态；「全部勾选才允许继续」的逻辑由 `OnboardingFlowPolicy` 的既有用例覆盖，不由截图证明。
 
 ### 生产页面检查
 
-1. 用豆包进入语音测试页，确认标题是「测试前在豆包输入法里核对这三项」，不再出现「必须一致」。
+1. 用豆包进入语音测试页，确认标题是「测试前在豆包输入法里核对这几项」、说明是「都勾上才能开始测试。」，不再出现「必须一致」，也不再出现「三条」「三项」这类计数。
 2. 确认第一行显示「音频输出设备」，右侧值是系统里真实的设备名（新装是 `SayAll`，旧驱动是 `MiRemoteV 2ch`），两者不再自相矛盾。
 3. 确认第一条勾选写的是「我已把豆包输入法设为“按住说话”」，与上方语音键提示条一致。
 4. 换 Typeless 并把控制方式设为实体遥控器：确认上方提示条变成「按一下语音键开始说话，再按一下结束」，第一条勾选同步变成「按一下开始，再按一下结束」，且下方多出一行带双向箭头的小字解释长按换算。
-5. 换成微信输入法 / Typeless / Vokie / 其他：确认没有「全局唤起语音」那条勾选，只有两条。
+5. 换成微信输入法 / Typeless / Vokie / 其他：确认没有「全局唤起语音」那条勾选（只剩两条），而标题和说明里的措辞不变、仍然读得通——这是「不写数量」的意义。
 6. 用豆包：确认第二条勾选是「我已确认豆包输入法开启了“全局唤起语音”」，点开豆包确实有这个开关。
-7. 三条勾选下方的小字确认在：麦克风那条要说清「选 SayAll 只负责输出，不会改工具自己的麦克风」。
+7. 麦克风勾选下方的小字确认在且只有一行：「这里只决定遥控器声音往哪送，%@的麦克风要单独选一次。」
 8. 拨掉语音工具进程让它报「尚未运行」，再让某次测试收不到文字，确认红色失败提示里：豆包说「全局唤起语音」，其余工具说的是「正在运行并已开启语音输入」，不提全局唤起。
 9. 中英文在 1020 × 772 下逐条检查，增益滑杆和数值、底部「继续」都完整可见。
 
@@ -188,6 +200,8 @@
 - 只能按住的控制方式配只支持按一下的工具时，页面没有解释换算，用户会以为自己设错了；缺这行小字判定失败。
 - 无全局唤起的工具上出现「全局唤起语音」勾选，或失败提示让它去找这个开关，判定失败。
 - 标签写 `SayAll`、值是 `MiRemoteV 2ch`（或反过来），判定失败。
+- 标题或说明里出现「三条」「三项」这类固定数量，导致只有两条勾选的工具上读起来对不上，判定失败。
+- 麦克风小字再次出现重复的设备名（勾选那一行已经说过）或「在它里面」这类无指向的指代，判定失败。
 - 截图只能证明文案、布局与条件分支，不能代替真机上的语音文字上屏、第三方工具设置核对和跨工具真实链路。
 
 

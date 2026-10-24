@@ -1474,6 +1474,48 @@ struct OnboardingFlowTests {
         #expect(english.contains("\"onboarding.voice_test.microphone_confirmation.detail\""))
     }
 
+    @Test func voiceTestConfigurationCopyDoesNotPromiseAFixedNumberOfChecks() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let chinese = try String(
+            contentsOf: root.appendingPathComponent("Resources/zh-Hans.lproj/Localizable.strings"),
+            encoding: .utf8
+        )
+        let english = try String(
+            contentsOf: root.appendingPathComponent("Resources/en.lproj/Localizable.strings"),
+            encoding: .utf8
+        )
+        // 勾选条数由能力字段决定：豆包三条，微信 / Typeless / Vokie 只有两条。
+        // 文案里写死数量会在多数工具上自相矛盾，所以标题和说明都不许出现计数。
+        // 只查这两个键：别的页面写「三项权限」是准确的事实描述，不该被这条规则波及。
+        for (strings, banned) in [
+            (chinese, ["核对这三项", "三条都勾上", "这三条"]),
+            (english, ["these three", "all three", "the three"]),
+        ] {
+            for key in [
+                "onboarding.voice_test.configuration.title",
+                "onboarding.voice_test.configuration.detail",
+            ] {
+                let line = try #require(strings.split(separator: "\n").first {
+                    $0.hasPrefix("\"\(key)\"")
+                })
+                for fragment in banned {
+                    #expect(!line.lowercased().contains(fragment.lowercased()))
+                }
+            }
+        }
+
+        // 麦克风小字只谈「这里决定声音往哪送」，设备名由上方勾选负责，参数只留工具名。
+        for strings in [chinese, english] {
+            let line = try #require(strings.split(separator: "\n").first {
+                $0.hasPrefix("\"onboarding.voice_test.microphone_confirmation.detail\"")
+            })
+            #expect(line.components(separatedBy: "%@").count - 1 == 1)
+        }
+    }
+
     @Test func selectingVoiceToolDoesNotChangeInputSourceOrReorderCards() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

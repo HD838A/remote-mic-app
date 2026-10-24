@@ -5,10 +5,10 @@
     "三张图都取自语音测试页（07-voice-test），由构建产物里的 OnboardingScreenshotRenderer 离屏渲染生产 OnboardingView 得到，不是设计稿。",
     "默认组合：_VOICE_TOOL=doubao + _CONTROL_METHOD=iphone_app + _CONTROL_SOURCE=apple_companion + _PHONE_APP_INSTALLED=1。",
     "bridged 那张用的是小米蓝牙遥控器（只支持按住）配 Typeless（只支持按一下）：_VOICE_TOOL=typeless + _CONTROL_SOURCE=xiaomi_remote。这一组是唯一会触发 Fn 点按换算的组合，用来证明勾选项和桥接说明会跟着实际手势走。",
-    "bridged 那张里 Typeless 没有运行，卡片多出一行两条红色的运行时状态，把增益卡推到首屏之下；窗口 minSize 是 1020×772 且内容在 ScrollView 里，滚轮可达，不是裁切丢失。这是既有行为，不是本次改动引入的。",
+    "bridged 那张里 Typeless 没有运行，卡片多出两行红色运行时状态，同时还多了桥接说明行；两者叠加后增益卡和底部「继续」仍完整落在 1020 × 772 首屏内，不需要滚动。",
     "截图尺寸 2040×1600 是窗口 frame（含 28pt 标题栏），内容区 1020×772。",
-    "渲染环境没有真实语音工具进程，三条勾选都是未勾选态；勾选解锁「继续」的逻辑由 OnboardingFlowTests 的纯函数用例断言，不由截图证明。",
-    "旧驱动设备名（MiRemoteV 2ch）未单独出图：把 _AUDIO_NAME 设为 legacy 即可复现，页面上的设备行、麦克风勾选和说明小字都会跟着显示真实设备名。"
+    "渲染环境没有真实语音工具进程，勾选都是未勾选态；勾选解锁「继续」的逻辑由 OnboardingFlowTests 的纯函数用例断言，不由截图证明。",
+    "旧驱动设备名（MiRemoteV 2ch）未单独出图：把 _AUDIO_NAME 设为 legacy 即可复现，页面上的设备行与麦克风勾选都会跟着显示真实设备名。"
   ],
   "images": [
     {
@@ -16,8 +16,8 @@
       "format": "PNG",
       "width": 2040,
       "height": 1600,
-      "sha256": "551316ab3f94d0f96bed3dc2d0a601938f22000859a9c5f07ba59701de8386a1",
-      "bytes": 901549,
+      "sha256": "23daef3cff3aab87a8579146b41487e264977d9ce7c651381d5ce2506b1bef39",
+      "bytes": 882825,
       "state": "hold"
     },
     {
@@ -25,8 +25,8 @@
       "format": "PNG",
       "width": 2040,
       "height": 1600,
-      "sha256": "ebe22d72829867a2f35afcae0efa427e276f70f72be54b871c48c6925a034edd",
-      "bytes": 1121528,
+      "sha256": "8dd002154ee41d53d840f7365b5b56282ff20fcb4a91eee16240e25e5e8444b3",
+      "bytes": 1106776,
       "state": "bridged"
     },
     {
@@ -34,8 +34,8 @@
       "format": "PNG",
       "width": 2040,
       "height": 1600,
-      "sha256": "e228ed635d28f532790edc025918744ab385bed747552fcaa3fd9e31610bbc72",
-      "bytes": 850053,
+      "sha256": "64b24120035066f580e7734627802ddd06f3944e3ebf6d11c517d026dc451878",
+      "bytes": 837491,
       "state": "hold"
     }
   ]

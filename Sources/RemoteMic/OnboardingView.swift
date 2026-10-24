@@ -3346,16 +3346,13 @@ struct OnboardingView: View {
     }
 
     /// 麦克风勾选下方的小字：说明 SayAll 改不了工具自己的麦克风设置。
+    ///
+    /// 压缩成一行的代价是去掉了重复出现的设备名——勾选那一行刚说过一次，小字再说两遍
+    /// 只会让人跳读。真正的信息只有一句：这里是「声音往哪送」，不是「工具用哪个麦克风」。
     private var microphoneIsolationHintText: String {
-        let deviceName = selectedAudioDevice?.name
-            ?? localization.text("onboarding.audio.select_required")
-        return LocalizedMessage(
+        LocalizedMessage(
             "onboarding.voice_test.microphone_confirmation.detail",
-            arguments: [
-                deviceName,
-                localization.text(settings.onboardingVoiceTool.titleKey),
-                deviceName,
-            ]
+            arguments: [localization.text(settings.onboardingVoiceTool.titleKey)]
         ).text(using: localization)
     }
 
