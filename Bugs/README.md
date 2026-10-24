@@ -1,6 +1,7 @@
 # Bug 记录
 
 - [遥控器 Control 方向键未触发系统动作（诊断中）](./2026-10-24-control-arrow-no-system-action.html)
+- [引导页权限轮询 1 Hz 过密，且 SayAll 在后台仍然查询](./2026-10-24-onboarding-permission-poll-interval.md)
 
 - [主线程同步查权限 + event tap 挂在主 RunLoop，导致整机输入停摆](./2026-10-24-event-tap-blocks-system-input.md)
 - [历史来源值导致整日归档不可见](./2026-10-24-archive-source-decoding.html)
@@ -135,6 +136,8 @@
 
 | 时间 | Bug | 状态 |
 | --- | --- | --- |
+| 2026-10-24 | [引导页权限轮询 1 Hz 过密，且 SayAll 在后台仍然查询](./2026-10-24-onboarding-permission-poll-interval.md) | 候选修复已实现（周期降到 2 s、App 在后台不做周期查询）；构建、定向回归与渲染对照通过，等待真实权限切换与续接旅程验收 |
+
 | 2026-10-24 | [主线程同步查权限 + event tap 挂在主 RunLoop，导致整机输入停摆](./2026-10-24-event-tap-blocks-system-input.md) | 候选修复已实现（tap 迁到专用线程、权限查询移出主线程、权限撤销时释放 tap）；构建、定向回归（99 项）与三组修复前后对照通过，全量 959 项中 958 项通过、1 项因本机缺 ripgrep 失败，等待真机按键链路与真实权限切换场景验收 |
 | 2026-10-11 | [BLE 重连在缓存直连被绕过后退化为「只扫描」，卡死到用户手动重连](./2026-10-11-ble-scan-stall-after-cached-target-bypass.md)（Issue #438 相关） | 候选修复与定向自动化通过，等待真实 RC003 掉线复验 |
 | 2026-10-10 | [Intel 最小化窗口缩略图的小 Logo 为方形](./2026-10-10-intel-dock-rounded-app-icon.html) | 运行时缩略图同步已修复；等待新 Intel 包完成现场与白底回归验收 |
