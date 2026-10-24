@@ -4,6 +4,46 @@ import Testing
 
 @Suite("Local transcript archive")
 struct TranscriptArchiveStoreTests {
+    @Test func sourceEncodingKeepsCurrentValuesAndRejectsWrongTypes() throws {
+        let decoder = JSONDecoder()
+        let encoder = JSONEncoder()
+        for source in UsageEventSource.allCases {
+            #expect(try decoder.decode(UsageEventSource.self, from: encoder.encode(source)) == source)
+            #expect(try decoder.decode(String.self, from: encoder.encode(source)) == source.rawValue)
+        }
+        #expect(throws: DecodingError.self) {
+            try decoder.decode(UsageEventSource.self, from: Data("42".utf8))
+        }
+        #expect(throws: DecodingError.self) {
+            try decoder.decode(UsageEventSource.self, from: Data("null".utf8))
+        }
+    }
+
+    @Test(arguments: ["apple_siri_remote", "future_remote_source"])
+    func historicalOrNewSourceDoesNotHideTheWholeDay(_ source: String) throws {
+        let harness = try ArchiveHarness()
+        let first = harness.record(id: UUID(), sessionID: UUID(), text: "synthetic first")
+        let second = harness.record(id: UUID(), sessionID: UUID(), text: "synthetic second")
+        try harness.store.append(first)
+        try harness.store.append(second)
+        let url = harness.dayFileURL(for: first)
+        var object = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
+        var records = try #require(object["records"] as? [[String: Any]])
+        records[0]["source"] = source
+        object["records"] = records
+        let original = try JSONSerialization.data(withJSONObject: object)
+        try original.write(to: url)
+
+        let loaded = try harness.store.loadAll()
+
+        #expect(Set(loaded.map(\.id)) == Set([first.id, second.id]))
+        #expect(loaded.first(where: { $0.id == first.id })?.source ==
+            (source == "apple_siri_remote" ? .bluetoothRemote : .unknown))
+        #expect(try Data(contentsOf: url) == original)
+        try harness.store.append(harness.record(id: UUID(), sessionID: UUID(), text: "synthetic third"))
+        #expect(try harness.store.loadAll().count == 3)
+    }
+
     @Test func mixedHistoryHasUniqueDescendingDaysAndInterleavedEntries() throws {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = try #require(TimeZone(secondsFromGMT: 0))

@@ -89,6 +89,12 @@ enum UsageEventSource: String, Codable, CaseIterable, Hashable {
     case nearbyPhone = "nearby_phone"
     case webRemote = "web_remote"
     case unknown
+
+    init(from decoder: Decoder) throws {
+        let value = try decoder.singleValueContainer().decode(String.self)
+        // Historical Siri Remote records predate the shared Bluetooth source.
+        self = value == "apple_siri_remote" ? .bluetoothRemote : Self(rawValue: value) ?? .unknown
+    }
 }
 
 enum UsageControl {
