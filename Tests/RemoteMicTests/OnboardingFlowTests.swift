@@ -31,6 +31,21 @@ struct OnboardingFlowTests {
         #expect(source.contains("alignment: .center"))
     }
 
+    @Test func membershipSheetGivesTheMembershipCenterAnExplicitSize() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/OnboardingView.swift"),
+            encoding: .utf8
+        )
+        // 会员中心以整页尺寸设计，内部用 GeometryReader 按可用宽度推算内容宽度
+        // （可用宽度不足 48pt 时内容宽度会算成 0）。sheet 不给尺寸时会塌缩成
+        // 一个只有「关闭」按钮的空弹窗，用户因此完全无法开通会员。
+        #expect(source.contains(".frame(minWidth: 900, minHeight: 620)"))
+    }
+
     @Test func webRemotePreparationCopyDescribesTheNextStep() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -603,6 +618,130 @@ struct OnboardingFlowTests {
             controlMethod: .physicalRemote,
             capabilities: capabilities
         ))
+    }
+
+    @Test func iphoneAppConfirmationGatesThePermissionsStepOnlyOnTheIPhonePath() {
+        let allGranted = OnboardingCapabilities(
+            bluetoothGranted: true,
+            inputMonitoringGranted: true,
+            accessibilityGranted: true,
+            remoteConnected: false,
+            remoteButtonObserved: false
+        )
+
+        func canContinue(_ method: OnboardingControlMethod, confirmed: Bool) -> Bool {
+            OnboardingFlowPolicy.canContinue(
+                from: .permissions,
+                voiceTool: .typeless,
+                remoteAvailability: method == .physicalRemote ? .hasRemote : .noRemote,
+                controlMethod: method,
+                capabilities: allGranted,
+                phoneAppInstallConfirmed: confirmed
+            )
+        }
+
+        // 三项权限全开、只差「我已安装 iPhone App」没勾：iPhone 路径必须被挡住。
+        #expect(!canContinue(.iPhoneApp, confirmed: false))
+        #expect(canContinue(.iPhoneApp, confirmed: true))
+        // 这一行只在 iPhone 路径上出现，其他控制方式不能被它拦住。
+        #expect(canContinue(.physicalRemote, confirmed: false))
+        #expect(canContinue(.webRemote, confirmed: false))
+        // 不关心勾选的调用方（FirstUseDiagnostics）靠默认值保持原行为。
+        #expect(OnboardingFlowPolicy.canContinue(
+            from: .permissions,
+            voiceTool: .typeless,
+            remoteAvailability: .noRemote,
+            controlMethod: .iPhoneApp,
+            capabilities: allGranted
+        ))
+    }
+
+    @Test @MainActor func iphoneAppConfirmationRowIsAToggleOnTheIPhonePathOnly() throws {
+        let iphone = try hostedOnboardingProbe(
+            suite: "RemoteMicTests.Onboarding.InstalledRow.iPhone",
+            method: .iPhoneApp,
+            installed: false
+        )
+        defer { iphone.teardown() }
+        // 未勾选时是一行真开关，探针读得到、也点得动。
+        #expect(iphone.probe.toggleValues["permission.iphone-app-installed"] == false)
+        iphone.probe.invoke("permission.iphone-app-installed")
+        RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+        #expect(iphone.probe.toggleValues["permission.iphone-app-installed"] == true)
+
+        // 实体遥控器路径不该出现这一行：那个 App 和它无关。
+        let physical = try hostedOnboardingProbe(
+            suite: "RemoteMicTests.Onboarding.InstalledRow.physical",
+            method: .physicalRemote,
+            installed: false
+        )
+        defer { physical.teardown() }
+        #expect(physical.probe.toggleValues["permission.iphone-app-installed"] == nil)
+
+        // 已勾选状态要能从外部预置，离屏截图才能拍到第二种状态。
+        let confirmed = try hostedOnboardingProbe(
+            suite: "RemoteMicTests.Onboarding.InstalledRow.confirmed",
+            method: .iPhoneApp,
+            installed: true
+        )
+        defer { confirmed.teardown() }
+        #expect(confirmed.probe.toggleValues["permission.iphone-app-installed"] == true)
+    }
+
+    @MainActor
+    private func hostedOnboardingProbe(
+        suite: String,
+        method: OnboardingControlMethod,
+        installed: Bool
+    ) throws -> (probe: OnboardingInteractionProbe, teardown: () -> Void) {
+        let suiteName = "\(suite).\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let settings = AppSettings(defaults: defaults)
+        settings.applicationLanguage = .simplifiedChinese
+        settings.setOnboardingControlMethod(method)
+        settings.setOnboardingStep(.permissions)
+        let model = BridgeAppModel(settings: settings)
+        let probe = OnboardingInteractionProbe()
+        let localization = LocalizationStore(
+            settings: settings,
+            resourceBundle: RemoteMicResourceBundle.mainOrDevelopment
+        )
+        let rootView = OnboardingView(
+            model: model,
+            completeRuntimeReadyOverride: true,
+            allowsInputSourceSwitching: false,
+            voiceToolAvailabilityOverride: [
+                .doubao: .available,
+                .weixin: .available,
+                .typeless: .available,
+                .vokie: .available,
+                .other: .unknown,
+            ],
+            interactionProbe: probe,
+            siriRemotePackageInstalledOverride: true,
+            initialPhoneAppInstalled: installed
+        )
+        .environmentObject(localization)
+        .frame(width: 1020, height: 772)
+
+        let hostingController = NSHostingController(rootView: rootView)
+        let window = NSWindow(
+            contentRect: NSRect(x: -20_000, y: -20_000, width: 1020, height: 772),
+            styleMask: [.titled],
+            backing: .buffered,
+            defer: true
+        )
+        window.contentViewController = hostingController
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.1))
+        window.contentView?.layoutSubtreeIfNeeded()
+
+        return (probe, {
+            window.contentViewController = nil
+            window.orderOut(nil)
+            defaults.removePersistentDomain(forName: suiteName)
+        })
     }
 
     @Test func permissionRowsRemainClickableAfterAuthorization() throws {
@@ -1197,7 +1336,8 @@ struct OnboardingFlowTests {
         #expect(viewSource.contains("externalToolConfigurationConfirmed"))
         #expect(viewSource.contains("sayAllVoiceKeyConfigurationReady"))
         #expect(viewSource.contains("sayAllAudioOutputConfigurationText"))
-        #expect(viewSource.contains(".foregroundStyle(isComplete ? Color.green : Color.red)"))
+        // 音频输出那一行现在独立在核对卡外，就绪时绿勾、未就绪时红叉。
+        #expect(viewSource.contains(".foregroundStyle(onboardingAudioReady ? Color.green : Color.red)"))
         #expect(viewSource.contains(".eventSourceStateID"))
         #expect(viewSource.contains(".eventSourceUnixProcessID"))
         #expect(viewSource.contains("manualTranscriptInputObserved = true"))
@@ -1282,6 +1422,245 @@ struct OnboardingFlowTests {
         #expect(!OnboardingVoiceTestConfigurationPolicy.requiresGlobalVoiceConfirmation(for: .typeless))
         #expect(!OnboardingVoiceTestConfigurationPolicy.requiresGlobalVoiceConfirmation(for: .vokie))
         #expect(!OnboardingVoiceTestConfigurationPolicy.requiresGlobalVoiceConfirmation(for: .other))
+    }
+
+    @Test func globalVoiceSupportIsUnknownForToolsWeNeverObserved() {
+        // `.other` / `.unselected` 没有观察过设置界面，标记为未知，页面就不追问——
+        // 否则会让用户去找一个自己工具里并不存在的开关。
+        #expect(VoiceToolAdapterProfile.profile(for: .doubao).globalActivationSupport == true)
+        #expect(VoiceToolAdapterProfile.profile(for: .weixin).globalActivationSupport == false)
+        #expect(VoiceToolAdapterProfile.profile(for: .typeless).globalActivationSupport == false)
+        #expect(VoiceToolAdapterProfile.profile(for: .vokie).globalActivationSupport == false)
+        #expect(VoiceToolAdapterProfile.profile(for: .other).globalActivationSupport == nil)
+        #expect(VoiceToolAdapterProfile.profile(for: .unselected).globalActivationSupport == nil)
+    }
+
+    @Test func holdOnlyRemoteAndToggleOnlyToolBridgeThroughFunctionTap() throws {
+        // Siri Remote / 小米遥控器 只有按住；Typeless 只有按一下。两边交集为空，
+        // 靠 Fn 点按把一次长按换算成「按一下开始、再按一下结束」。
+        let plan = try #require(OnboardingVoicePairingPlan.resolve(
+            tool: .typeless,
+            controlSource: .siriRemote,
+            forceFunctionKey: true
+        ))
+        #expect(plan.binding.gestureMode == .toggle)
+        #expect(plan.fnTapModeEnabled)
+
+        // 反过来：豆包两种手势都支持，配上只能按住的遥控器仍然保持按住，不需要换算。
+        let doubao = try #require(OnboardingVoicePairingPlan.resolve(
+            tool: .doubao,
+            controlSource: .siriRemote,
+            forceFunctionKey: true
+        ))
+        #expect(doubao.binding.gestureMode == .hold)
+        #expect(!doubao.fnTapModeEnabled)
+    }
+
+    @Test func voiceTestGestureCheckboxFollowsTheResolvedGesture() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/OnboardingView.swift"),
+            encoding: .utf8
+        )
+        // 遥控器可能只能按住，语音工具可能只能按一下。勾选项必须和提示条同源于
+        // plan.binding.gestureMode，否则会出现「上面说按一下、下面让你确认按住」。
+        #expect(source.contains("private var resolvedVoiceGestureMode: VoiceGestureMode"))
+        #expect(source.contains("proposedPairingPlan?.binding.gestureMode\n            ?? settings.onboardingPreferredGesture"))
+        #expect(source.contains("\"onboarding.voice_test.configuration.gesture_checkbox.hold\""))
+        #expect(source.contains("\"onboarding.voice_test.configuration.gesture_checkbox.toggle\""))
+        #expect(!source.contains("\"onboarding.voice_test.configuration.voice_gesture_checkbox\""))
+        #expect(source.contains("bridgedGestureHintVisible"))
+        #expect(source.contains("proposedPairingPlan?.fnTapModeEnabled == true"))
+    }
+
+    @Test func voiceTestFailureHintOnlyMentionsGlobalActivationWhenTheToolHasIt() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/OnboardingView.swift"),
+            encoding: .utf8
+        )
+        let chinese = try String(
+            contentsOf: root.appendingPathComponent("Resources/zh-Hans.lproj/Localizable.strings"),
+            encoding: .utf8
+        )
+        let english = try String(
+            contentsOf: root.appendingPathComponent("Resources/en.lproj/Localizable.strings"),
+            encoding: .utf8
+        )
+        // 微信输入法 / Typeless / Vokie 没有「全局唤起语音」，失败提示不能把它们指向那个开关。
+        #expect(source.contains("\"onboarding.voice_test.configuration.no_commit.no_global\""))
+        #expect(source.contains("let key = externalToolGlobalVoiceConfirmationRequired"))
+        #expect(chinese.contains("\"onboarding.voice_test.configuration.no_commit.no_global\""))
+        #expect(english.contains("\"onboarding.voice_test.configuration.no_commit.no_global\""))
+        // 中文那条通用提示原先写死了「全局唤起」，现在只剩豆包那条允许出现该词。
+        #expect(!chinese.contains("重新核对上面的语音输入方式、全局唤起和麦克风设置"))
+    }
+
+    @Test func voiceTestDropsKeysNoViewEverRendered() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let chinese = try String(
+            contentsOf: root.appendingPathComponent("Resources/zh-Hans.lproj/Localizable.strings"),
+            encoding: .utf8
+        )
+        let english = try String(
+            contentsOf: root.appendingPathComponent("Resources/en.lproj/Localizable.strings"),
+            encoding: .utf8
+        )
+        for key in [
+            "\"onboarding.voice_test.configuration.binding_expected\"",
+            "\"onboarding.voice_test.microphone_confirmation.title\"",
+            "\"onboarding.voice_test.microphone_confirmation.detail\"",
+            "\"onboarding.voice_test.other_detail\"",
+        ] {
+            #expect(!chinese.contains(key))
+            #expect(!english.contains(key))
+        }
+    }
+
+    @Test func audioOutputStatusSitsOutsideTheToolChecklistCard() throws {
+        // 「音频输出设备」讲的是这一侧把声音送到哪个设备，语音工具并不知道这一行。
+        // 它挂在「测试前在 X 里核对」的标题下面，会被读成「去语音工具里核对音频输出设备」。
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/OnboardingView.swift"),
+            encoding: .utf8
+        )
+        let cardStart = try #require(source.range(
+            of: "private var externalToolConfigurationConfirmationCard"
+        ))
+        let cardEnd = try #require(source.range(
+            of: "private var externalToolAudioOutputRow",
+            range: cardStart.upperBound..<source.endIndex
+        ))
+        let cardBody = String(source[cardStart.lowerBound..<cardEnd.lowerBound])
+        #expect(!cardBody.contains("sayall_audio_output"))
+        #expect(!cardBody.contains("configurationStatusRow"))
+        // 它必须在卡片之前出现——先确认声音从哪出去，再核对对方要用的名字。
+        #expect(source.contains("externalToolAudioOutputRow\n\n            externalToolConfigurationConfirmationCard"))
+        #expect(source.contains("private var externalToolAudioOutputRow: some View"))
+    }
+
+    @Test func iphoneAppPermissionRowUsesTheSameStatusMarkAsOtherPermissions() throws {
+        // 权限清单里第 4 项是唯一「勾选后自己变绿」的行，其余三项是「点进去授权、回来后变绿」。
+        // 语义不同，但右侧状态标记必须是同一种——同一份清单里出现圆勾和方勾两种形态，
+        // 用户会以为是两类不同的控件。曾自绘过 20pt 圆角方框，已改回圆形。
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/OnboardingView.swift"),
+            encoding: .utf8
+        )
+        let rowStart = try #require(source.range(of: "private var iphoneAppInstalledRow"))
+        let rowEnd = try #require(source.range(
+            of: "private func statusCard(",
+            range: rowStart.upperBound..<source.endIndex
+        ))
+        let rowBody = String(source[rowStart.lowerBound..<rowEnd.lowerBound])
+        #expect(rowBody.contains("Image(systemName: confirmed ? \"checkmark.circle.fill\" : \"circle\")"))
+        #expect(rowBody.contains(".font(.system(size: 19))"))
+        #expect(!rowBody.contains("checkboxMark"))
+        #expect(!source.contains("func checkboxMark"))
+    }
+
+    @Test func remotePageDoesNotRepeatTheAppStoreInstallLink() throws {
+        // 连接 iPhone 那一屏右侧已经有 App Store 二维码和官方徽章，
+        // 左栏再来一个「从 App Store 安装无线麦 SayAll」按钮是把同一件事说两遍。
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/OnboardingView.swift"),
+            encoding: .utf8
+        )
+        #expect(!source.contains("\"iphone.install\""))
+        #expect(!source.contains("onboarding.apple_companion.install"))
+
+        let contentStart = try #require(source.range(of: "private var iPhoneRemoteContent"))
+        let contentEnd = try #require(source.range(
+            of: "private var webRemoteContent",
+            range: contentStart.upperBound..<source.endIndex
+        ))
+        let contentBody = String(source[contentStart.lowerBound..<contentEnd.lowerBound])
+        #expect(!contentBody.contains("onboardingLink"))
+        #expect(!contentBody.contains("iOSAppStore"))
+    }
+
+    @Test func onboardingCallsTheCompanionAppIOSApp() throws {
+        // 同一个 App 在文案里不能既叫「iPhone App」又叫「iOS App」——
+        // iPhone 只是它运行的其中一台设备，叫 iOS App 才不会把 iPad 用户挡在门外。
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        for resource in ["zh-Hans", "en"] {
+            let text = try String(
+                contentsOf: root.appendingPathComponent(
+                    "Resources/\(resource).lproj/Localizable.strings"
+                ),
+                encoding: .utf8
+            )
+            #expect(!text.contains("iPhone App"))
+            #expect(!text.contains("iPhone app"))
+        }
+        let zh = try String(
+            contentsOf: root.appendingPathComponent("Resources/zh-Hans.lproj/Localizable.strings"),
+            encoding: .utf8
+        )
+        #expect(zh.contains("\"onboarding.permissions.iphone_app_installed.title\" = \"我已安装 iOS App\";"))
+        let en = try String(
+            contentsOf: root.appendingPathComponent("Resources/en.lproj/Localizable.strings"),
+            encoding: .utf8
+        )
+        #expect(en.contains("\"onboarding.permissions.iphone_app_installed.title\" = \"I already installed the iOS app\";"))
+    }
+
+    @Test func voiceTestConfigurationCopyDoesNotPromiseAFixedNumberOfChecks() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let chinese = try String(
+            contentsOf: root.appendingPathComponent("Resources/zh-Hans.lproj/Localizable.strings"),
+            encoding: .utf8
+        )
+        let english = try String(
+            contentsOf: root.appendingPathComponent("Resources/en.lproj/Localizable.strings"),
+            encoding: .utf8
+        )
+        // 勾选条数由能力字段决定：豆包三条，微信 / Typeless / Vokie 只有两条。
+        // 文案里写死数量会在多数工具上自相矛盾，所以标题和说明都不许出现计数。
+        // 只查这两个键：别的页面写「三项权限」是准确的事实描述，不该被这条规则波及。
+        for (strings, banned) in [
+            (chinese, ["核对这三项", "三条都勾上", "这三条"]),
+            (english, ["these three", "all three", "the three"]),
+        ] {
+            for key in [
+                "onboarding.voice_test.configuration.title",
+                "onboarding.voice_test.configuration.detail",
+            ] {
+                let line = try #require(strings.split(separator: "\n").first {
+                    $0.hasPrefix("\"\(key)\"")
+                })
+                for fragment in banned {
+                    #expect(!line.lowercased().contains(fragment.lowercased()))
+                }
+            }
+        }
     }
 
     @Test func selectingVoiceToolDoesNotChangeInputSourceOrReorderCards() throws {
@@ -1728,6 +2107,49 @@ struct OnboardingFlowTests {
         #expect(rendererSource.contains("completeRuntimeReadyOverride: true"))
     }
 
+    @Test func permissionsPageNoLongerShowsTheNextPageCheckCard() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let viewSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/OnboardingView.swift"),
+            encoding: .utf8
+        )
+        let chinese = try String(
+            contentsOf: root.appendingPathComponent("Resources/zh-Hans.lproj/Localizable.strings"),
+            encoding: .utf8
+        )
+        let english = try String(
+            contentsOf: root.appendingPathComponent("Resources/en.lproj/Localizable.strings"),
+            encoding: .utf8
+        )
+
+        // 权限页原有一张「iPhone 或 Apple Watch 连接将在下一页检查」的提示卡，
+        // 和勾选项「已确认，下一页会用真实连接验证」说的是同一件事，2026-10-24 移除。
+        // 文案键也一并删掉，不留死键；这条用例防止它以任何形式长回来。
+        let permissionsStart = try #require(viewSource.range(of: "private var permissionsContent"))
+        let permissionsEnd = try #require(viewSource.range(
+            of: "private var shortcutLearningCard",
+            range: permissionsStart.upperBound..<viewSource.endIndex
+        ))
+        let permissionsSource = viewSource[permissionsStart.lowerBound..<permissionsEnd.lowerBound]
+        #expect(!permissionsSource.contains("statusCard("))
+
+        for key in [
+            "onboarding.permissions.apple_companion.title",
+            "onboarding.permissions.apple_companion.detail",
+            "onboarding.permissions.web_remote.title",
+            "onboarding.permissions.web_remote.detail",
+            "onboarding.permissions.mobile_network.title",
+            "onboarding.permissions.mobile_network.detail",
+        ] {
+            #expect(!viewSource.contains(key))
+            #expect(!chinese.contains("\"\(key)\""))
+            #expect(!english.contains("\"\(key)\""))
+        }
+    }
+
     @Test func audioStepOnlyOffersSupportedVirtualAudioDevices() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -1751,10 +2173,6 @@ struct OnboardingFlowTests {
         #expect(audioSource.contains("model.applyAudioSettings(reason: \"onboarding_audio_device_selected\")"))
         #expect(viewSource.contains("OnboardingAudioSelectionPolicy.isSupportedDevice"))
         #expect(viewSource.contains("onboarding.audio.on_demand_detail"))
-        #expect(viewSource.contains("onboarding.permissions.apple_companion.title"))
-        #expect(viewSource.contains("onboarding.permissions.apple_companion.detail"))
-        #expect(viewSource.contains("onboarding.permissions.web_remote.title"))
-        #expect(viewSource.contains("onboarding.permissions.web_remote.detail"))
         #expect(viewSource.contains("onboarding.side.audio_on_demand"))
     }
 
@@ -2668,8 +3086,9 @@ struct OnboardingFlowTests {
             voiceTool: .doubao
         )
         defer { iPhone.close() }
-        invoke("iphone.install", on: iPhone)
-        #expect(iPhone.probe.openedURLs.last == AppLinks.iOSAppStore(for: Locale(identifier: "zh-Hans")))
+        // 下载入口只保留右栏那一个（App Store 二维码 + 官方徽章）。
+        // 左栏曾经还有一个「从 App Store 安装无线麦 SayAll」按钮，同一屏把同一件事说了两遍。
+        #expect(iPhone.probe.actions["iphone.install"] == nil)
         invokeIfPresent("recovery.remote.not_found", on: iPhone)
         invokeIfPresent("diagnostics.copy", on: iPhone)
         invoke("back", on: iPhone)
