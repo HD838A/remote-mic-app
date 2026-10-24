@@ -1,6 +1,7 @@
 # Bug 记录
 
-- [遥控器 Control 方向键未触发系统动作（诊断中）](./2026-10-24-control-arrow-no-system-action.html)
+- [遥控器松键后的原生按键延迟泄露](./2026-10-24-delayed-native-key-leak.html)
+
 - [HID 与 Siri Remote 共享运行时权限检查](./2026-10-24-shared-runtime-permissions.html)
 - [引导页权限轮询 1 Hz 过密，且 SayAll 在后台仍然查询](./2026-10-24-onboarding-permission-poll-interval.md)
 

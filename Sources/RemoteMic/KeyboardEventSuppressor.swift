@@ -19,10 +19,14 @@ private func keyboardEventSuppressorCallback(
 
 final class KeyboardEventSuppressor {
     private static let systemDefinedEventTypeRawValue: UInt32 = 14
+    // Native HID delivery can trail the raw report by over 300 ms, including
+    // arriving after release. Keep a bounded allowance for each expected edge.
+    private static let nativeDeliveryWindow: TimeInterval = 0.5
 
     private struct PendingEvent {
         let event: RemoteNativeEvent
         let edge: RemoteEventEdge
+        let armedAt: TimeInterval
         let expiresAt: TimeInterval
     }
 
@@ -142,14 +146,12 @@ final class KeyboardEventSuppressor {
                 pendingEvents.append(PendingEvent(
                     event: nativeEvent,
                     edge: edge,
-                    expiresAt: now + 0.18
+                    armedAt: now,
+                    expiresAt: now + Self.nativeDeliveryWindow
                 ))
             case .up:
-                if let pendingDownIndex = pendingEvents.firstIndex(where: {
-                    $0.event == nativeEvent && $0.edge == .down
-                }) {
-                    pendingEvents.remove(at: pendingDownIndex)
-                }
+                // The native down may still be in flight. Release held-repeat
+                // ownership without discarding that unconsumed expected edge.
                 let remaining = (heldEventCounts[nativeEvent] ?? 0) - 1
                 if remaining > 0 {
                     heldEventCounts[nativeEvent] = remaining
@@ -159,7 +161,8 @@ final class KeyboardEventSuppressor {
                 pendingEvents.append(PendingEvent(
                     event: nativeEvent,
                     edge: edge,
-                    expiresAt: now + 0.18
+                    armedAt: now,
+                    expiresAt: now + Self.nativeDeliveryWindow
                 ))
             }
         }
@@ -197,12 +200,13 @@ final class KeyboardEventSuppressor {
         if let matchIndex = pendingEvents.firstIndex(where: {
             $0.event == descriptor.event && $0.edge == descriptor.edge
         }) {
-            pendingEvents.remove(at: matchIndex)
+            let matched = pendingEvents.remove(at: matchIndex)
             lock.unlock()
             // 诊断：命中并吞掉——与 miss 日志对照即可判定「系统是否产生了该事件」。
             logger(
                 "HID FILTER suppressed event=\(Self.logToken(descriptor.event)) "
-                    + "edge=\(descriptor.edge == .down ? "down" : "up") type=\(type.rawValue)"
+                    + "edge=\(descriptor.edge == .down ? "down" : "up") type=\(type.rawValue) "
+                    + "latency_ms=\(Int((now - matched.armedAt) * 1_000))"
             )
             return true
         }
