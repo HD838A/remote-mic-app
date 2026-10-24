@@ -1096,17 +1096,24 @@ final class AppSettings: ObservableObject {
             ),
             !decoded.isEmpty
         {
-            remoteDeviceProfiles = decoded
+            let savedID = defaults.string(forKey: Keys.selectedRemoteProfileID).flatMap(UUID.init(uuidString:))
+            let deduplicated = Self.deduplicateRemoteProfiles(decoded, selectedProfileID: savedID)
+            remoteDeviceProfiles = deduplicated.profiles
+            if deduplicated.removedCount > 0 {
+                AppLogger.shared.write(
+                    "SETTINGS REMOTE_PROFILES phase=completed result=deduplicated " +
+                        "removed=\(deduplicated.removedCount) remaining=\(deduplicated.profiles.count)"
+                )
+            }
             if let event = PublicDiagnosticEvent(
                 component: "settings", action: "load", phase: "completed", result: "loaded",
                 reason: "remote_profiles", source: "app"
             ) { AppLogger.shared.record(event) }
-            let savedID = defaults.string(forKey: Keys.selectedRemoteProfileID).flatMap(UUID.init(uuidString:))
-            selectedRemoteProfileID = decoded.contains(where: { $0.id == savedID })
-                ? savedID
-                : decoded.first?.id
+            selectedRemoteProfileID = deduplicated.profiles.contains {
+                $0.id == deduplicated.selectedProfileID
+            } ? deduplicated.selectedProfileID : deduplicated.profiles.first?.id
             if let selectedRemoteProfileID,
-               let selected = decoded.first(where: { $0.id == selectedRemoteProfileID }) {
+               let selected = deduplicated.profiles.first(where: { $0.id == selectedRemoteProfileID }) {
                 buttonBindings = Self.defaultBindings.merging(selected.mappings.parsedButtonBindings) {
                     _, saved in saved
                 }
@@ -1712,6 +1719,91 @@ final class AppSettings: ObservableObject {
             secondaryButtonBindings: secondaryButtonBindings,
             buttonRapidPressEnabled: buttonRapidPressEnabled
         )
+    }
+
+    private struct RemoteProfileDeduplicationResult {
+        let profiles: [RemoteDeviceProfile]
+        let selectedProfileID: UUID?
+        let removedCount: Int
+    }
+
+    private static func deduplicateRemoteProfiles(
+        _ profiles: [RemoteDeviceProfile],
+        selectedProfileID: UUID?
+    ) -> RemoteProfileDeduplicationResult {
+        var result: [RemoteDeviceProfile] = []
+        var indicesByFingerprint: [String: Int] = [:]
+        var selected = selectedProfileID
+        var removedCount = 0
+
+        for profile in profiles {
+            guard let fingerprint = profile.hidFingerprint,
+                  !fingerprint.isEmpty,
+                  let existingIndex = indicesByFingerprint[fingerprint]
+            else {
+                if let fingerprint = profile.hidFingerprint, !fingerprint.isEmpty {
+                    indicesByFingerprint[fingerprint] = result.count
+                }
+                result.append(profile)
+                continue
+            }
+
+            let existing = result[existingIndex]
+            let keepExisting = Self.shouldKeepRemoteProfile(
+                existing,
+                over: profile,
+                selectedProfileID: selectedProfileID
+            )
+            let kept = keepExisting ? existing : profile
+            let discarded = keepExisting ? profile : existing
+            var merged = kept
+            if merged.model == .unknown, discarded.model != .unknown {
+                merged.model = discarded.model
+            }
+            if merged.customName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+               !discarded.customName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                merged.customName = discarded.customName
+            }
+            if Self.isDefaultRemoteMappings(merged.mappings),
+               !Self.isDefaultRemoteMappings(discarded.mappings) {
+                merged.mappings = discarded.mappings
+            }
+            result[existingIndex] = merged
+            if selected == existing.id || selected == profile.id {
+                selected = merged.id
+            }
+            removedCount += 1
+        }
+
+        return RemoteProfileDeduplicationResult(
+            profiles: result,
+            selectedProfileID: selected,
+            removedCount: removedCount
+        )
+    }
+
+    private static func shouldKeepRemoteProfile(
+        _ existing: RemoteDeviceProfile,
+        over candidate: RemoteDeviceProfile,
+        selectedProfileID: UUID?
+    ) -> Bool {
+        if selectedProfileID == existing.id { return true }
+        if selectedProfileID == candidate.id { return false }
+        return remoteProfileScore(existing) >= remoteProfileScore(candidate)
+    }
+
+    private static func remoteProfileScore(_ profile: RemoteDeviceProfile) -> Int {
+        (profile.model == .unknown ? 0 : 2) +
+            (profile.customName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0 : 1) +
+            (isDefaultRemoteMappings(profile.mappings) ? 0 : 2)
+    }
+
+    private static func isDefaultRemoteMappings(_ mappings: RemoteDeviceMappings) -> Bool {
+        mappings.parsedButtonBindings == defaultBindings &&
+            mappings.parsedButtonShortcuts.isEmpty &&
+            mappings.parsedButtonApplicationProfileIDs.isEmpty &&
+            mappings.parsedSecondaryButtonBindings.isEmpty &&
+            mappings.parsedButtonRapidPressEnabled.isEmpty
     }
 
     func updateRemoteProfile(
