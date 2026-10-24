@@ -2,3 +2,4 @@
 "CFBundleName" = "SayAll";
 "NSBluetoothAlwaysUsageDescription" = "Connect to supported remotes and Apple Watch devices to receive button presses and microphone audio.";
 "NSLocalNetworkUsageDescription" = "Connect to SayAll on a nearby iPhone, iPad, or Apple Watch to receive button presses and microphone audio.";
+"NSMicrophoneUsageDescription" = "Use the selected Mac microphone for voice input only when you enable it.";
