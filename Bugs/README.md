@@ -1,6 +1,7 @@
 # Bug 记录
 
 - [遥控器 Control 方向键未触发系统动作（诊断中）](./2026-10-24-control-arrow-no-system-action.html)
+- [HID 与 Siri Remote 共享运行时权限检查](./2026-10-24-shared-runtime-permissions.html)
 - [引导页权限轮询 1 Hz 过密，且 SayAll 在后台仍然查询](./2026-10-24-onboarding-permission-poll-interval.md)
 
 - [主线程同步查权限 + event tap 挂在主 RunLoop，导致整机输入停摆](./2026-10-24-event-tap-blocks-system-input.md)
