@@ -62,6 +62,43 @@
 
 本分支渲染结果与 `origin/main` 基线**逐字节一致**（9/9 页，差异 0 张），证明本次改动不影响引导页任何页面的渲染。渲染机的裸调试可执行文件没有 app bundle identifier，系统无法为它解析蓝牙授权，因此权限页的蓝牙行显示为未授权；这是渲染环境的状态，不是渲染缺陷。
 
+## 2026-10-24 权限查询线程与 event tap 挂载回归
+
+适用分支：`codex/fix-event-tap-main-thread-20261024`（PR #731，Draft）。本次把引导页的权限查询与两条 1 Hz 权限轮询的判定从主线程迁到后台串行队列，并把 event tap 的 Mach port source 挂到专用 RunLoop；不改变权限项、门禁判定、页面顺序、连接、音频、持久化和遥控器动作语义。
+
+变更分类：权限行为变化。权限的「来源」变了——引导页构造期不再同步查询，而是等后台快照回填；快照返回前权限门禁保持关闭，缺失权限仍阻止继续，流程、步数与产物不变。因此按权限行为变化验证，覆盖首次进入、退出续接和关于页重跑三条路径。
+
+### 自动化与构建
+
+- `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift build --build-tests --disable-keychain --disable-sandbox`：构建通过（`Build complete!`）。
+- 定向 `swift test --disable-keychain --disable-sandbox --filter 'HIDPermissionPollTests|PermissionStatusProbeTests|AppleSiriRemoteAdapterTests|HIDPermissionRevocationTests|EventTapPortTests'`：23 项 / 4 套件全部通过。
+- 全量 `swift test --disable-keychain --disable-sandbox`：959 项 / 76 套件，958 项通过，1 项失败。失败项为 `releaseControlPlaneFixtureHasExecutableRegressionCoverage()`，报错 `Missing required command: rg`——本机未安装 ripgrep 的环境缺件。该用例断言 `scripts/` 下发布控制面的可执行回归覆盖，本次改动的文件清单不含 `scripts/`，与本次改动零重叠，属于环境缺件而非回归。
+
+### 生产页面检查
+
+1. 进入权限页。预期：界面持续可交互，不因权限查询卡住；后台快照返回后三项权限显示真实状态。
+2. 在快照返回前尝试继续。预期：权限门禁仍关闭，缺失权限阻止继续——不得因为「尚未拿到快照」而放行。
+3. 撤销并恢复蓝牙、输入监控和辅助功能权限。预期：撤销后门禁关闭；恢复后重新检查可以放行。
+4. 退出并续接，再从关于页重跑。预期：步骤、步数与产物符合产品规范，旧配置保留。
+5. 连接真实遥控器，快速按下和释放语音键，再连续录音。预期：按放及时，首字和尾字完整，第三方语音工具正常显示文字。
+
+### 失败判定与边界
+
+- 权限快照未返回就放行、快照返回后状态不更新、引导页构造期卡顿，均判定失败。
+- 真实系统输入出现停顿（鼠标能动但键盘与点击不响应），判定失败——这是本次修复的原始问题。
+- 遥控器按键延迟、首尾字丢失、连续录音截断，均判定失败。
+- 退出续接丢配置、关于页重跑步数不对，均判定失败。
+- 本轮未做真实权限撤销/恢复验收、完整续接旅程、真机遥控器长跑与文字上屏验收。离屏截图与自动化不能替代这些验收，PR 保持 Draft。
+- 按键路径上的同步权限判定本次不改：遥控器每次按键仍会在主线程触发两次同步 TCC 查询，详见 [Bug 记录](../Bugs/2026-10-24-event-tap-blocks-system-input.md)。该项涉及「撤销后立即拒绝执行动作」的权限语义，另立工作项。
+
+### 截图证据
+
+离屏入口：`REMOTE_MIC_ONBOARDING_SCREENSHOT_DIR`、`REMOTE_MIC_ONBOARDING_SCREENSHOT_LANGUAGE=zh-Hans|en`、`REMOTE_MIC_ONBOARDING_SCREENSHOT_APPEARANCE=light|dark`，来源为 `Sources/RemoteMic/OnboardingScreenshotRenderer.swift` 的生产 `OnboardingView`。生产 `pages(for:)` 输出 9 页：欢迎、控制来源、权限、遥控器、音频、语音工具、语音测试、按键设置、完成；中英文 × 浅色/深色共 4 组，合计 36 张 PNG，均为 2040 × 1600（Retina 2x）。
+
+原图与 SHA-256 清单位于本地持久目录 `/Users/andy/.codex/worktrees/3d70/pr731-evidence/`，不随源码提交。证据在提交 `3ef42676` 上重新生成；其后的 `d0ad9999` 与 `a2701bdf` 只改文档与测试代码，未触及截图内容。
+
+渲染机的裸调试可执行文件没有 app bundle identifier，系统无法为它解析蓝牙授权，因此权限页的蓝牙行显示为未授权、页面据此禁用「继续」；带 bundle id 的正式安装包不受此限制。本轮不证明正式包的蓝牙行状态。
+
 ## 2026-10-24 连接页去掉重复下载入口、权限勾选项改统一样式、App 统一叫 iOS App
 
 适用分支：`codex/onboarding-membership-sheet`。三处都只动呈现与文案，不改 `OnboardingFlowPolicy`、不改权限判定、不改连接链路。
@@ -1033,3 +1070,10 @@
 - 当前公开构建生产清单为 9 页。中英文、浅深外观共 36 张 PNG 已重新生成，全部为 2040 × 1600，并保存 SHA-256 清单。已查看四张全页联系表，未见标题、导航、主要控件或右栏裁切。
 - 截图使用生产 `OnboardingView`；离屏状态不代表真实设备已连接、音频可用或文字已上屏。
 - 用户报告已测试快速按放、连续语音、首尾字。尚未确认测试包的精确来源；权限撤销/恢复、前后台变化及退出续接仍未验收。本项保持 Draft。
+
+### 2026-10-24 异步权限查询二次审查
+
+- 分类：权限查询调度变化。引导页每次查询完成后才允许再次查询，避免慢 TCC IPC 期间积累回调；页面清单和布局未改变。
+- 自动化：公开构建全量 961 项测试通过；双架构 Release 构建通过。延迟回调回归确认取消订阅后不通知替换订阅，且 100 次 tick 只保留一次在途查询。
+- 现场补验：停留权限页，撤销并恢复蓝牙、输入监控、辅助功能；返回前台后状态应恢复。查询变慢时 UI 应可操作，恢复后不得突发重复查询。仍须完成首次进入、退出续接、关于页重跑及真实按键/语音旅程。
+- 本轮没有重做完整页面截图或真实权限/设备验收。现有截图只证明此前静态布局；本轮不表示安装包或发布验收完成。

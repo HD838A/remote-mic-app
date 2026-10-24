@@ -51,7 +51,10 @@ final class ShortcutCaptureMonitor {
     }
 
     func start() -> Result<Void, ShortcutCaptureStartFailure> {
-        if eventTap != nil { return .success(()) }
+        lock.lock()
+        let alreadyStarted = eventTap != nil
+        lock.unlock()
+        if alreadyStarted { return .success(()) }
         guard accessibilityTrusted() else {
             return .failure(.accessibilityPermissionRequired)
         }
@@ -85,22 +88,38 @@ final class ShortcutCaptureMonitor {
             return .failure(.eventTapUnavailable)
         }
 
+        guard EventTapPort.activate(port: eventTap, source: runLoopSource) else {
+            // 端口已在 WindowServer 侧登记，但没能接入 tap 线程：按启动失败处理并
+            // 走同一条清理路径。绝不能留下一个已 enable 却无人承接的 tap。
+            EventTapPort.release(port: eventTap, source: runLoopSource)
+            return .failure(.eventTapUnavailable)
+        }
+        lock.lock()
         self.eventTap = eventTap
         self.runLoopSource = runLoopSource
-        EventTapPort.activate(port: eventTap, source: runLoopSource)
+        lock.unlock()
         return .success(())
     }
 
     func stop() {
-        EventTapPort.release(port: eventTap, source: runLoopSource)
-        runLoopSource = nil
+        // 回调跑在 tap 专用线程上，端口引用由主线程写入，必须加锁交接。
+        lock.lock()
+        let port = eventTap
+        let source = runLoopSource
         eventTap = nil
+        runLoopSource = nil
+        lock.unlock()
+        EventTapPort.release(port: port, source: source)
     }
 
     func handle(type: CGEventType, event: CGEvent) -> Bool {
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
-            if let eventTap {
-                CGEvent.tapEnable(tap: eventTap, enable: true)
+            // 本回调在 tap 专用线程上执行，端口引用由主线程写入，必须加锁读取。
+            lock.lock()
+            let tap = eventTap
+            lock.unlock()
+            if let tap {
+                CGEvent.tapEnable(tap: tap, enable: true)
             }
             return false
         }
