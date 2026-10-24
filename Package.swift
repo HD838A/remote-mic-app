@@ -219,6 +219,30 @@ let macOSPlatform: SupportedPlatform = ProcessInfo.processInfo.environment["RELE
     ? .macOS(.v13)
     : .macOS(.v14)
 var remoteMicSwiftSettings: [SwiftSetting] = []
+// Match the existing optional-interface probes: old private packages keep their
+// original initializer, while source and binary packages exposing this API share the host poll.
+let siriPermissionMonitorAvailable = [
+    siriRemotePackagePath,
+    privateSwiftPMEnabled ? privatePlatformPackagePath.map {
+        URL(fileURLWithPath: $0).appendingPathComponent("packages/audio-input-kit/siri-remote").path
+    } : nil,
+].compactMap { $0 }.contains { path in
+    let url = URL(fileURLWithPath: path)
+        .appendingPathComponent("Sources/SayAllSiriRemote/SayAllSiriRemotePermissionMonitoring.swift")
+    return (try? String(contentsOf: url, encoding: .utf8))?
+        .contains("public protocol SayAllSiriRemotePermissionMonitor:") == true
+} || (privateArtifactPackagePath.map { path in
+    ["arm64", "x86_64"].allSatisfy { architecture in
+        let url = URL(fileURLWithPath: path).appendingPathComponent(
+            "Artifacts/SayAllSiriRemote.xcframework/macos-arm64_x86_64/SayAllSiriRemote.framework/Modules/SayAllSiriRemote.swiftmodule/\(architecture)-apple-macos.swiftinterface"
+        )
+        return (try? String(contentsOf: url, encoding: .utf8))?
+            .contains("public protocol SayAllSiriRemotePermissionMonitor :") == true
+    }
+} ?? false)
+if siriPermissionMonitorAvailable {
+    remoteMicSwiftSettings.append(.define("SAYALL_SIRI_PERMISSION_MONITOR"))
+}
 if membershipAuthorizedAccessAvailable {
     remoteMicSwiftSettings.append(.define("SAYALL_MEMBERSHIP_AUTHORIZED_ACCESS"))
 }

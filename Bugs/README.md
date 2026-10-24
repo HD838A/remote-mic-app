@@ -1,5 +1,7 @@
 # Bug 记录
 
+- [HID 与 Siri Remote 共享运行时权限检查](./2026-10-24-shared-runtime-permissions.html)
+
 - [自身前台输入框聚焦导致死锁](./2026-10-23-self-composer-focus-deadlock.html)
 
 - [原生方向键把伪Fn带入自定义快捷键](./2026-10-20-shortcut-inherits-navigation-function.html)
