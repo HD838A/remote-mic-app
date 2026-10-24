@@ -1,6 +1,7 @@
 # Bug 记录
 
 - [主线程同步查权限 + event tap 挂在主 RunLoop，导致整机输入停摆](./2026-10-24-event-tap-blocks-system-input.md)
+- [HID 诊断窗口过期后仍记录普通按键](./2026-10-24-hid-filter-log-window.html)
 
 - [自身前台输入框聚焦导致死锁](./2026-10-23-self-composer-focus-deadlock.html)
 
