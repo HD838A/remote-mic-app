@@ -124,6 +124,72 @@
 - 重进向导后仍保持勾选，说明状态被持久化，判定失败。
 - 截图只能证明布局、配色与两态切换，不能代替真机勾选、（真实权限齐全时）继续按钮解锁和真实 iPhone 连接验证。
 
+## 2026-10-23 语音测试页核对卡改为按实际手势与工具能力生成
+
+适用分支：`codex/onboarding-membership-sheet`。只改语音测试页（`07-voice-test`）里那张橙色「测试前核对」卡，不改手势判定、不改 `OnboardingFlowPolicy`、不改音频与语音链路的任何行为。
+
+改的是三处会让用户对不上的地方：
+
+1. **标题里的「必须一致」是错的。** 原文「测试前核对：无线麦 SayAll 与%@必须一致」。遥控器只能按住、语音工具只能按一下时（Siri Remote / 小米遥控器 + Typeless），两侧手势本来就不一致，靠 `fnTapModeEnabled` 把长按换算成一次点按。这句话直接把正确配置说成了错误配置。现在标题只说明「在这一步核对」，不再断言两边相同。
+2. **第一条勾选是泛称。** 原文「我已确认语音工具使用上方显示的操作方式」，用户不知道要去工具里改哪个开关。现在按 `resolvedVoiceGestureMode`（配对计划 → 用户偏好 → 工具推荐值 → 按住）出两条文案之一，和上方的语音键提示条同源。
+3. **全局唤起被当成所有工具的共性。** 原文勾选写死「豆包已开启“全局唤起语音”」，失败提示也无条件说「全局唤起」。实际上只有豆包有这一项：微信输入法、Typeless、Vokie 没有，`.other` 未观察过。现在由 `VoiceToolAdapterProfile.globalActivationSupport`（`true` / `false` / `nil`）决定勾选是否出现、失败提示走哪条键，文案里的工具名走运行时插值。
+
+另外三处收尾：
+
+- 行标签「无线麦 SayAll 音频输出」是写死的，值却是运行时设备名，旧驱动用户会看到「标签写 SayAll、值写 MiRemoteV 2ch」。标签改成「音频输出设备」，设备名只从 `selectedAudioDevice?.name` 出。
+- 麦克风勾选下面补一行小字（复活 `onboarding.voice_test.microphone_confirmation.detail`）：在 SayAll 里选设备只决定遥控器声音往哪送，不会改工具自己的麦克风设置。这句话原先写在一条从未被渲染的键里。
+- 设备名、工具名在三条勾选和两条小字里全部走运行时参数，不再出现第二处写死的名字。
+
+死键处理（Sources 里 0 引用，逐条 `git grep` 确认）：删除 `onboarding.voice_test.configuration.binding_expected`、`onboarding.voice_test.microphone_confirmation.title`、`onboarding.voice_test.other_detail`；`onboarding.voice_test.microphone_confirmation.detail` 从死键改为渲染在麦克风勾选下方。
+
+版式：核对卡外层间距 4 → 8、内边距 8 → 10、三条勾选包成 6pt 一组；语音测试页外层间距 8 → 12。取 12 而不是更大：核对卡里的「语音工具尚未运行」行和桥接提示行都只在异常态出现，叠加后会多出两行，间距再大就把增益卡顶到首屏之外。
+
+### 自动化与构建
+
+- `swift build --disable-keychain --disable-sandbox` 公开构建通过。
+- `swift test --disable-keychain --disable-sandbox --filter OnboardingFlowTests`：85 项通过，含本次新增五条：
+  - `globalVoiceSupportIsUnknownForToolsWeNeverObserved()`：豆包 `true`，微信 / Typeless / Vokie `false`，其他与未选择为 `nil`。
+  - `holdOnlyRemoteAndToggleOnlyToolBridgeThroughFunctionTap()`：Typeless + Siri Remote 解析成按一下并开启 `fnTapModeEnabled`；豆包 + Siri Remote 仍是按住、不开换算。
+  - `voiceTestGestureCheckboxFollowsTheResolvedGesture()`：勾选项走 `resolvedVoiceGestureMode`，两条键都在，旧键不再被引用，桥接提示条件存在。
+  - `voiceTestFailureHintOnlyMentionsGlobalActivationWhenTheToolHasIt()`：失败提示分两条键，中文里那句写死「全局唤起」的旧文案已不存在。
+  - `voiceTestDropsKeysNoViewEverRendered()`：三个死键在两份 strings 里都已删除，`microphone_confirmation.detail` 保留。
+- `swift test --disable-keychain --disable-sandbox --filter LocalizationTests`：8 项通过，中英文 key 集合与占位符个数一致。
+
+### 离屏渲染证据
+
+三张图都取自语音测试页（`07-voice-test.png`），用同一份构建产物、同一入口渲染，尺寸 2040 × 1600（窗口 frame，内容区 1020 × 772）：
+
+| 文件 | 组合 / 状态 | SHA-256 |
+| --- | --- | --- |
+| [`voice-test-zh-hans-light-hold.png`](../Screenshots/onboarding-voice-test-consistency/voice-test-zh-hans-light-hold.png) | 中文 / 豆包 / 按住 | `551316ab3f94d0f96bed3dc2d0a601938f22000859a9c5f07ba59701de8386a1` |
+| [`voice-test-zh-hans-light-bridged.png`](../Screenshots/onboarding-voice-test-consistency/voice-test-zh-hans-light-bridged.png) | 中文 / Typeless + 小米遥控器 / 按一下 + 桥接说明 | `ebe22d72829867a2f35afcae0efa427e276f70f72be54b871c48c6925a034edd` |
+| [`voice-test-en-light-hold.png`](../Screenshots/onboarding-voice-test-consistency/voice-test-en-light-hold.png) | 英文 / 豆包 / 按住 | `e228ed635d28f532790edc025918744ab385bed747552fcaa3fd9e31610bbc72` |
+
+旧驱动设备名（`MiRemoteV 2ch`）未单独出图：设 `REMOTE_MIC_ONBOARDING_SCREENSHOT_AUDIO_NAME=legacy` 可复现，设备行、麦克风勾选和说明小字都会跟着显示真实设备名。
+
+渲染环境没有真实的语音工具进程，三条勾选都是未勾选态；「三条都勾选才允许继续」的逻辑由 `OnboardingFlowPolicy` 的既有用例覆盖，不由截图证明。
+
+### 生产页面检查
+
+1. 用豆包进入语音测试页，确认标题是「测试前在豆包输入法里核对这三项」，不再出现「必须一致」。
+2. 确认第一行显示「音频输出设备」，右侧值是系统里真实的设备名（新装是 `SayAll`，旧驱动是 `MiRemoteV 2ch`），两者不再自相矛盾。
+3. 确认第一条勾选写的是「我已把豆包输入法设为“按住说话”」，与上方语音键提示条一致。
+4. 换 Typeless 并把控制方式设为实体遥控器：确认上方提示条变成「按一下语音键开始说话，再按一下结束」，第一条勾选同步变成「按一下开始，再按一下结束」，且下方多出一行带双向箭头的小字解释长按换算。
+5. 换成微信输入法 / Typeless / Vokie / 其他：确认没有「全局唤起语音」那条勾选，只有两条。
+6. 用豆包：确认第二条勾选是「我已确认豆包输入法开启了“全局唤起语音”」，点开豆包确实有这个开关。
+7. 三条勾选下方的小字确认在：麦克风那条要说清「选 SayAll 只负责输出，不会改工具自己的麦克风」。
+8. 拨掉语音工具进程让它报「尚未运行」，再让某次测试收不到文字，确认红色失败提示里：豆包说「全局唤起语音」，其余工具说的是「正在运行并已开启语音输入」，不提全局唤起。
+9. 中英文在 1020 × 772 下逐条检查，增益滑杆和数值、底部「继续」都完整可见。
+
+### 失败判定与边界
+
+- 标题或说明里再次出现「必须一致」「与页面提示一致」这类无指向或错误的断言，判定失败。
+- 勾选项文案与上方语音键提示条说的不是同一个动作（提示条说按一下、勾选让你确认按住），判定失败。
+- 只能按住的控制方式配只支持按一下的工具时，页面没有解释换算，用户会以为自己设错了；缺这行小字判定失败。
+- 无全局唤起的工具上出现「全局唤起语音」勾选，或失败提示让它去找这个开关，判定失败。
+- 标签写 `SayAll`、值是 `MiRemoteV 2ch`（或反过来），判定失败。
+- 截图只能证明文案、布局与条件分支，不能代替真机上的语音文字上屏、第三方工具设置核对和跨工具真实链路。
+
 
 
 适用分支：`codex/onboarding-appstore-qr`。本次把 iPhone 连接页右栏的占位内容替换为随包交付的 App Store 下载二维码，二维码下方加入 Apple 官方 App Store 徽章，并补充对应中英文说明文案；不改动流程、能力门禁、权限、连接、音频、持久化和左栏 App Store 入口。
