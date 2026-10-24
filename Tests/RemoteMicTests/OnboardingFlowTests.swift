@@ -1499,6 +1499,83 @@ struct OnboardingFlowTests {
         #expect(source.contains("private var externalToolAudioOutputRow: some View"))
     }
 
+    @Test func iphoneAppPermissionRowUsesTheSameStatusMarkAsOtherPermissions() throws {
+        // 权限清单里第 4 项是唯一「勾选后自己变绿」的行，其余三项是「点进去授权、回来后变绿」。
+        // 语义不同，但右侧状态标记必须是同一种——同一份清单里出现圆勾和方勾两种形态，
+        // 用户会以为是两类不同的控件。曾自绘过 20pt 圆角方框，已改回圆形。
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/OnboardingView.swift"),
+            encoding: .utf8
+        )
+        let rowStart = try #require(source.range(of: "private var iphoneAppInstalledRow"))
+        let rowEnd = try #require(source.range(
+            of: "private func statusCard(",
+            range: rowStart.upperBound..<source.endIndex
+        ))
+        let rowBody = String(source[rowStart.lowerBound..<rowEnd.lowerBound])
+        #expect(rowBody.contains("Image(systemName: confirmed ? \"checkmark.circle.fill\" : \"circle\")"))
+        #expect(rowBody.contains(".font(.system(size: 19))"))
+        #expect(!rowBody.contains("checkboxMark"))
+        #expect(!source.contains("func checkboxMark"))
+    }
+
+    @Test func remotePageDoesNotRepeatTheAppStoreInstallLink() throws {
+        // 连接 iPhone 那一屏右侧已经有 App Store 二维码和官方徽章，
+        // 左栏再来一个「从 App Store 安装无线麦 SayAll」按钮是把同一件事说两遍。
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/OnboardingView.swift"),
+            encoding: .utf8
+        )
+        #expect(!source.contains("\"iphone.install\""))
+        #expect(!source.contains("onboarding.apple_companion.install"))
+
+        let contentStart = try #require(source.range(of: "private var iPhoneRemoteContent"))
+        let contentEnd = try #require(source.range(
+            of: "private var webRemoteContent",
+            range: contentStart.upperBound..<source.endIndex
+        ))
+        let contentBody = String(source[contentStart.lowerBound..<contentEnd.lowerBound])
+        #expect(!contentBody.contains("onboardingLink"))
+        #expect(!contentBody.contains("iOSAppStore"))
+    }
+
+    @Test func onboardingCallsTheCompanionAppIOSApp() throws {
+        // 同一个 App 在文案里不能既叫「iPhone App」又叫「iOS App」——
+        // iPhone 只是它运行的其中一台设备，叫 iOS App 才不会把 iPad 用户挡在门外。
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        for resource in ["zh-Hans", "en"] {
+            let text = try String(
+                contentsOf: root.appendingPathComponent(
+                    "Resources/\(resource).lproj/Localizable.strings"
+                ),
+                encoding: .utf8
+            )
+            #expect(!text.contains("iPhone App"))
+            #expect(!text.contains("iPhone app"))
+        }
+        let zh = try String(
+            contentsOf: root.appendingPathComponent("Resources/zh-Hans.lproj/Localizable.strings"),
+            encoding: .utf8
+        )
+        #expect(zh.contains("\"onboarding.permissions.iphone_app_installed.title\" = \"我已安装 iOS App\";"))
+        let en = try String(
+            contentsOf: root.appendingPathComponent("Resources/en.lproj/Localizable.strings"),
+            encoding: .utf8
+        )
+        #expect(en.contains("\"onboarding.permissions.iphone_app_installed.title\" = \"I already installed the iOS app\";"))
+    }
+
     @Test func voiceTestConfigurationCopyDoesNotPromiseAFixedNumberOfChecks() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -2956,8 +3033,9 @@ struct OnboardingFlowTests {
             voiceTool: .doubao
         )
         defer { iPhone.close() }
-        invoke("iphone.install", on: iPhone)
-        #expect(iPhone.probe.openedURLs.last == AppLinks.iOSAppStore(for: Locale(identifier: "zh-Hans")))
+        // 下载入口只保留右栏那一个（App Store 二维码 + 官方徽章）。
+        // 左栏曾经还有一个「从 App Store 安装无线麦 SayAll」按钮，同一屏把同一件事说了两遍。
+        #expect(iPhone.probe.actions["iphone.install"] == nil)
         invokeIfPresent("recovery.remote.not_found", on: iPhone)
         invokeIfPresent("diagnostics.copy", on: iPhone)
         invoke("back", on: iPhone)

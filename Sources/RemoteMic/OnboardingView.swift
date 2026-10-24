@@ -1651,14 +1651,8 @@ struct OnboardingView: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
-            onboardingLink(id: "iphone.install", destination: AppLinks.iOSAppStore(for: localization.locale)) {
-                Label {
-                    Text(verbatim: localization.text("onboarding.apple_companion.install"))
-                } icon: {
-                    Image(systemName: "arrow.up.right.square")
-                }
-            }
-            .buttonStyle(.borderedProminent)
+            // 这里不再放「从 App Store 安装」按钮：右栏已经是同一页的下载入口
+            // （App Store 二维码 + 官方徽章），左栏再来一条是把同一件事说两遍。
 
             statusCard(
                 icon: selectedControlConnected
@@ -2897,12 +2891,15 @@ struct OnboardingView: View {
         .buttonStyle(.plain)
     }
 
-    /// 「我已安装 iPhone App」勾选项：权限清单里的第 4 项。
+    /// 「我已安装 iOS App」勾选项：权限清单里的第 4 项。
     ///
     /// 走 `onboardingToggle` 而不是 `onboardingActionButton`，因为它的语义就是「勾选」：
     /// 离屏探针能读到值、也能直接置值，回归时不用模拟点击。`.toggleStyle(.button)` 让整行
-    /// 都成为点击目标并去掉系统 Switch——右侧那个方框是自己画的，才有设计稿里的圆角 6 与
-    /// 蓝/绿两态。
+    /// 都成为点击目标并去掉系统 Switch。
+    ///
+    /// 右侧状态标记必须和 `permissionRow` 完全一致（19pt 的 `checkmark.circle.fill` / `circle`）：
+    /// 同一份清单里两种勾选形态会让人以为是两类不同的控件。曾用过自绘的 20pt 圆角方框，
+    /// 视觉上更像「复选框」、也更符合原始设计稿，但和上面三项并排时不一致，已改回圆形。
     private var iphoneAppInstalledRow: some View {
         let confirmed = didConfirmPhoneAppInstalled
         return onboardingToggle(
@@ -2931,7 +2928,9 @@ struct OnboardingView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 10)
-                checkboxMark(confirmed: confirmed)
+                Image(systemName: confirmed ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 19))
+                    .foregroundStyle(confirmed ? Color.green : Color.secondary)
             }
             .padding(13)
             .background(
@@ -2949,24 +2948,6 @@ struct OnboardingView: View {
         .toggleStyle(.button)
         .buttonStyle(.plain)
         .accessibilityIdentifier("onboarding.permissions.iphone_app_installed")
-    }
-
-    /// 自己画的方形复选框：未勾选是 1.5pt 描边空框，勾选后填绿加白勾。
-    /// 不用 SF Symbol 的 `checkmark.square`，因为它的圆角与描边粗细跟设计稿对不上。
-    private func checkboxMark(confirmed: Bool) -> some View {
-        ZStack {
-            if confirmed {
-                RoundedRectangle(cornerRadius: 6.4)
-                    .fill(Color.green)
-                Image(systemName: "checkmark")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(.white)
-            } else {
-                RoundedRectangle(cornerRadius: 6)
-                    .strokeBorder(Color.primary.opacity(0.24), lineWidth: 1.5)
-            }
-        }
-        .frame(width: 20, height: 20)
     }
 
     private func statusCard(
