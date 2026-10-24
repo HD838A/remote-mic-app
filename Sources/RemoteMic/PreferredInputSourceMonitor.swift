@@ -57,7 +57,8 @@ final class PreferredInputSourceMonitor {
             let deadline = Date().addingTimeInterval(PreferredInputSourceMonitor.activationTimeout)
             while shouldContinue(), current() != target, Date() < deadline {
                 _ = RunLoop.main.run(
-                    mode: .common,
+                    // Common modes are a set; run a concrete mode to wait and dispatch events.
+                    mode: .default,
                     before: Date().addingTimeInterval(PreferredInputSourceMonitor.activationPollInterval)
                 )
             }
