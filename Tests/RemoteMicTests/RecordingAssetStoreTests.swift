@@ -5,6 +5,62 @@ import Testing
 
 @Suite("Local recording assets")
 struct RecordingAssetStoreTests {
+    @Test func metadataUpdateDoesNotEnumerateOtherSessionsOrDependOnCurrentTimeZone() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("RecordingLookup-\(UUID())")
+        defer { try? FileManager.default.trashItem(at: root, resultingItemURL: nil) }
+        let manager = RecordingDirectorySpy()
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try #require(TimeZone(secondsFromGMT: -12 * 3_600))
+        let sessionID = UUID()
+        let startedAt = Date(timeIntervalSince1970: 1_798_768_800)
+        let store = RecordingAssetStore(rootDirectoryURL: root)
+        let draft = try store.begin(sessionID: sessionID, startedAt: startedAt,
+                                    source: .bluetoothRemote, calendar: calendar)
+        try Data("synthetic audio".utf8).write(to: draft.temporaryMediaURL)
+        let original = try store.commit(draft: draft, endedAt: startedAt.addingTimeInterval(1),
+                                        mediaURL: draft.temporaryMediaURL,
+                                        applicationName: "Before", bundleIdentifier: "com.example.before")
+        // Other sessions include malformed manifests. They must not be read or rewritten.
+        let unrelated = root.appendingPathComponent(draft.localDateKey).appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: unrelated, withIntermediateDirectories: true)
+        let untouched = Data("invalid unrelated manifest".utf8)
+        try untouched.write(to: unrelated.appendingPathComponent("manifest.json"))
+        let reopened = RecordingAssetStore(rootDirectoryURL: root, fileManager: manager)
+        try reopened.updateApplication(sessionID: sessionID,
+                                       applicationName: "After", bundleIdentifier: "com.example.after")
+        #expect(manager.enumeratedDirectories == [root])
+        let updated = try #require(try reopened.loadAll().first)
+        #expect(updated.id == original.id)
+        #expect(updated.localDateKey == original.localDateKey)
+        #expect(updated.timeZoneIdentifier == original.timeZoneIdentifier)
+        #expect(updated.sha256 == original.sha256)
+        #expect(updated.applicationName == "After")
+        #expect(try Data(contentsOf: unrelated.appendingPathComponent("manifest.json")) == untouched)
+        try reopened.updateApplication(sessionID: UUID(), applicationName: "Absent", bundleIdentifier: "com.example.absent")
+        #expect(try reopened.loadAll().count == 1)
+    }
+
+    @Test func metadataLookupDoesNotFollowLinkedDateDirectory() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("RecordingLink-\(UUID())")
+        let external = FileManager.default.temporaryDirectory.appendingPathComponent("RecordingOutside-\(UUID())")
+        defer {
+            try? FileManager.default.trashItem(at: root, resultingItemURL: nil)
+            try? FileManager.default.trashItem(at: external, resultingItemURL: nil)
+        }
+        let sessionID = UUID()
+        let outsideStore = RecordingAssetStore(rootDirectoryURL: external)
+        let draft = try outsideStore.begin(sessionID: sessionID, startedAt: Date(), source: .bluetoothRemote)
+        try Data("fixture".utf8).write(to: draft.temporaryMediaURL)
+        let manifest = try outsideStore.commit(draft: draft, endedAt: Date(), mediaURL: draft.temporaryMediaURL,
+                                               applicationName: "Before", bundleIdentifier: "com.example.before")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        try FileManager.default.createSymbolicLink(at: root.appendingPathComponent(manifest.localDateKey),
+                                                   withDestinationURL: external.appendingPathComponent(manifest.localDateKey))
+        try RecordingAssetStore(rootDirectoryURL: root).updateApplication(sessionID: sessionID,
+            applicationName: "After", bundleIdentifier: "com.example.after")
+        #expect(try outsideStore.loadAll().first?.applicationName == "Before")
+    }
+
     @Test func playbackFailuresUseSafeUserMessagesAndStableReasons() {
         #expect(
             RecordingPlaybackFailure.classify(RecordingAssetStoreError.missingAsset) == .missingAsset
@@ -228,5 +284,18 @@ struct RecordingAssetStoreTests {
         #expect(committedManifest.applicationName == "Codex")
         #expect(committedManifest.bundleIdentifier == "com.openai.codex")
         try FileManager.default.trashItem(at: root, resultingItemURL: nil)
+    }
+}
+
+private final class RecordingDirectorySpy: FileManager, @unchecked Sendable {
+    var enumeratedDirectories: [URL] = []
+
+    override func contentsOfDirectory(
+        at url: URL,
+        includingPropertiesForKeys keys: [URLResourceKey]?,
+        options mask: FileManager.DirectoryEnumerationOptions = []
+    ) throws -> [URL] {
+        enumeratedDirectories.append(url)
+        return try super.contentsOfDirectory(at: url, includingPropertiesForKeys: keys, options: mask)
     }
 }
