@@ -1416,22 +1416,37 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 9) {
             HStack(spacing: 14) {
                 Text("audio.mac_microphone.input").frame(width: 92, alignment: .leading)
-                if model.macMicrophoneDevices.count > 1 ||
-                    !model.macMicrophoneDevices.contains(where: { $0.uid == settings.macMicrophoneInputUID }) {
-                    Picker("audio.mac_microphone.input", selection: $settings.macMicrophoneInputUID) {
-                        Text("audio.mac_microphone.choose").tag("")
-                        ForEach(model.macMicrophoneDevices, id: \.uid) { device in
-                            Text(device.name).tag(device.uid)
+                Group {
+                    if model.macMicrophoneDevices.count > 1 ||
+                        !model.macMicrophoneDevices.contains(where: { $0.uid == settings.macMicrophoneInputUID }) {
+                        Picker("audio.mac_microphone.input", selection: $settings.macMicrophoneInputUID) {
+                            Text("audio.mac_microphone.choose").tag("")
+                            ForEach(model.macMicrophoneDevices, id: \.uid) { device in
+                                Text(device.name).tag(device.uid)
+                            }
                         }
+                        .labelsHidden()
+                        .disabled(model.macMicrophoneState.isActive)
+                    } else {
+                        Text(model.macMicrophoneDevices.first?.name ?? "")
                     }
-                    .labelsHidden()
-                    .frame(maxWidth: 270)
-                    .disabled(model.macMicrophoneState.isActive)
-                } else {
-                    Text(model.macMicrophoneDevices.first?.name ?? "")
                 }
-            }
-            HStack(spacing: 10) {
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .frame(minWidth: 50, maxWidth: .infinity, alignment: .leading)
+                .layoutPriority(-1)
+                .help(model.macMicrophoneDevices.first(where: { $0.uid == settings.macMicrophoneInputUID })?.name ?? "")
+                HStack(spacing: 5) {
+                    Circle()
+                        .fill(model.macMicrophoneState == .recording ? Color.green : Color.secondary)
+                        .frame(width: 6, height: 6)
+                        .accessibilityHidden(true)
+                    Text(LocalizedStringKey(model.macMicrophoneState.isActive
+                        ? model.macMicrophoneState.statusKey : "audio.mac_microphone.idle"))
+                        .font(.system(size: 12))
+                        .foregroundStyle(model.macMicrophoneState == .recording ? Color.green : Color.secondary)
+                }
+                .fixedSize()
                 Button {
                     endMacMicrophoneShortcutCapture()
                     model.toggleMacMicrophone(from: .connectionPage)
@@ -1441,9 +1456,12 @@ struct SettingsView: View {
                 .compatibilityButtonStyle(.standard)
                 .help(Text("audio.mac_microphone.help"))
                 .disabled(model.macMicrophoneState == .stopping)
+                .fixedSize()
+            }
+            if case .failed = model.macMicrophoneState {
                 Text(LocalizedStringKey(model.macMicrophoneState.statusKey))
                     .font(.system(size: 12))
-                    .foregroundStyle(model.macMicrophoneState == .recording ? Color.green : Color.secondary)
+                    .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
             if model.macMicrophoneState == .failed(.permission) || model.macMicrophoneState == .failed(.accessibility) {
@@ -1454,8 +1472,10 @@ struct SettingsView: View {
                     }
                 }.compatibilityButtonStyle(.standard)
             }
-            HStack(spacing: 10) {
-                Text("audio.mac_microphone.shortcut").font(.system(size: 12))
+            HStack(spacing: 14) {
+                Text("audio.mac_microphone.shortcut")
+                    .font(.system(size: 12))
+                    .frame(width: 92, alignment: .leading)
                 Button {
                     shortcutCaptureFeedback = nil
                     isCapturingMacMicrophoneShortcut.toggle()
