@@ -1,6 +1,10 @@
 # Bug 记录
 
 - [Mac 麦克风会话启动后立即停止](./2026-10-24-mac-microphone-capture-immediate-stop.html)
+- [历史来源值导致整日归档不可见](./2026-10-24-archive-source-decoding.html)
+- [HID 诊断窗口过期后仍记录普通按键](./2026-10-24-hid-filter-log-window.html)
+
+- [更新录音应用信息时扫描全部录音](./2026-10-24-recording-metadata-lookup.html)
 
 - [自身前台输入框聚焦导致死锁](./2026-10-23-self-composer-focus-deadlock.html)
 

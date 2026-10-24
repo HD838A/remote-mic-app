@@ -28,6 +28,8 @@ final class KeyboardEventSuppressor {
 
     private let hardwareModifierState: ShortcutHardwareModifierState
     private let lock = NSLock()
+    private let uptime: () -> TimeInterval
+    private let logger: (String) -> Void
     private var pendingEvents: [PendingEvent] = []
     private var heldEventCounts: [RemoteNativeEvent: Int] = [:]
     private var eventTap: CFMachPort?
@@ -38,8 +40,14 @@ final class KeyboardEventSuppressor {
 
     private(set) var isRunning = false
 
-    init(hardwareModifierState: ShortcutHardwareModifierState = ShortcutEventSequence.hardwareModifierState) {
+    init(
+        hardwareModifierState: ShortcutHardwareModifierState = ShortcutEventSequence.hardwareModifierState,
+        uptime: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
+        logger: @escaping (String) -> Void = AppLogger.shared.write
+    ) {
         self.hardwareModifierState = hardwareModifierState
+        self.uptime = uptime
+        self.logger = logger
     }
 
     @discardableResult
@@ -85,6 +93,7 @@ final class KeyboardEventSuppressor {
         lock.lock()
         pendingEvents.removeAll()
         heldEventCounts.removeAll()
+        recentArmed.removeAll()
         lock.unlock()
         EventTapPort.release(port: eventTap, source: runLoopSource)
         runLoopSource = nil
@@ -99,11 +108,11 @@ final class KeyboardEventSuppressor {
     func arm(nativeEvents: Set<RemoteNativeEvent>, edge: RemoteEventEdge) {
         guard !nativeEvents.isEmpty else { return }
         // 诊断：留证「本次预定了什么」，便于与 miss 日志里系统真实事件对照。
-        AppLogger.shared.write(
+        logger(
             "HID FILTER arm events=\(nativeEvents.map(Self.logToken).sorted().joined(separator: "+")) "
                 + "edge=\(edge == .down ? "down" : "up")"
         )
-        let now = ProcessInfo.processInfo.systemUptime
+        let now = uptime()
         lock.lock()
         recentArmed.removeAll { $0.until <= now }
         for nativeEvent in nativeEvents {
@@ -157,7 +166,7 @@ final class KeyboardEventSuppressor {
         hardwareModifierState.observe(type: type, event: event)
         guard let descriptor = descriptor(type: type, event: event) else { return false }
 
-        let now = ProcessInfo.processInfo.systemUptime
+        let now = uptime()
         lock.lock()
         pendingEvents.removeAll { $0.expiresAt <= now }
         if let matchIndex = pendingEvents.firstIndex(where: {
@@ -166,7 +175,7 @@ final class KeyboardEventSuppressor {
             pendingEvents.remove(at: matchIndex)
             lock.unlock()
             // 诊断：命中并吞掉——与 miss 日志对照即可判定「系统是否产生了该事件」。
-            AppLogger.shared.write(
+            logger(
                 "HID FILTER suppressed event=\(Self.logToken(descriptor.event)) "
                     + "edge=\(descriptor.edge == .down ? "down" : "up") type=\(type.rawValue)"
             )
@@ -177,7 +186,7 @@ final class KeyboardEventSuppressor {
                event.getIntegerValueField(.keyboardEventAutorepeat) == 0 {
                 heldEventCounts.removeValue(forKey: descriptor.event)
                 lock.unlock()
-                AppLogger.shared.write(
+                logger(
                     "HID FILTER suppressed event=\(Self.logToken(descriptor.event)) "
                         + "edge=down type=\(type.rawValue) via=held"
                 )
@@ -193,16 +202,23 @@ final class KeyboardEventSuppressor {
         //   3) 最近 1 秒内曾 arm 过（覆盖「系统产生的键码与我们预定的不同」）。
         let armedExactly = recentArmed.contains { $0.event == descriptor.event && $0.until > now }
         let isSystemDefined = type.rawValue == Self.systemDefinedEventTypeRawValue
-        let withinArmedWindow = !recentArmed.isEmpty
+        let withinArmedWindow = Self.hasActiveArmedWindow(recentArmed, now: now)
         lock.unlock()
         if armedExactly || isSystemDefined || withinArmedWindow {
-            AppLogger.shared.write(
+            logger(
                 "HID FILTER miss type=\(type.rawValue) event=\(Self.logToken(descriptor.event)) "
                     + "edge=\(descriptor.edge == .down ? "down" : "up") "
                     + "armed=\(armedExactly) pending=\(pendingCount)"
             )
         }
         return false
+    }
+
+    static func hasActiveArmedWindow(
+        _ recentArmed: [(event: RemoteNativeEvent, until: TimeInterval)],
+        now: TimeInterval
+    ) -> Bool {
+        recentArmed.contains { $0.until > now }
     }
 
     private static func logToken(_ event: RemoteNativeEvent) -> String {
