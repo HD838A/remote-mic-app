@@ -1,5 +1,6 @@
 # Bug 记录
 
+- [HID 与 Siri Remote 共享运行时权限检查](./2026-10-24-shared-runtime-permissions.html)
 - [历史来源值导致整日归档不可见](./2026-10-24-archive-source-decoding.html)
 - [HID 诊断窗口过期后仍记录普通按键](./2026-10-24-hid-filter-log-window.html)
 
