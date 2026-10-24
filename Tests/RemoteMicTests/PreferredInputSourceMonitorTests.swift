@@ -552,4 +552,116 @@ struct PreferredInputSourceMonitorTests {
 
         #expect(preparationCount == 0)
     }
+
+    @Test @MainActor func productionWaiterProcessesDelayedActivationAcrossConsecutiveSessions() {
+        let state = ActivationState()
+        defer { state.monitor.stop(); state.monitor = nil }
+        var activationTimer: Timer?
+        defer { activationTimer?.invalidate() }
+        state.monitor = PreferredInputSourceMonitor(
+            voiceTool: { .doubao },
+            prepareInputSource: { _ in
+                activationTimer = Timer(timeInterval: 0.04, repeats: false) { _ in
+                    MainActor.assumeIsolated {
+                        // Physical Fn edges can arrive while the explicit owner is waiting.
+                        state.monitor.handleFunctionKeyPressed(true)
+                        state.monitor.handleFunctionKeyPressed(false)
+                        state.current = state.target
+                    }
+                }
+                RunLoop.main.add(activationTimer!, forMode: .common)
+                return .selected
+            },
+            currentInputSourceID: { state.queries += 1; return state.current },
+            restoreInputSource: {
+                state.restored.append($0)
+                state.current = $0
+                return .selected
+            },
+            installMonitor: { _ in "monitor" },
+            removeMonitor: { _ in },
+            logger: { _ in }
+        )
+
+        for _ in 0..<3 {
+            state.queries = 0
+            #expect(state.monitor.beginVoiceSession())
+            #expect(state.current == state.target)
+            // Check work, rather than CPU timing, so slower CI machines remain valid.
+            #expect(state.queries < 100)
+            #expect(!state.monitor.functionKeyIsPressedForDiagnostics)
+            state.monitor.endVoiceSession()
+            activationTimer?.invalidate()
+            #expect(state.current == state.original)
+        }
+        #expect(state.restored == Array(repeating: state.original, count: 3))
+    }
+
+    @Test(arguments: [false, true]) @MainActor
+    func productionWaiterProcessesCancellationWhileActivationIsPending(stopMonitor: Bool) {
+        let state = ActivationState()
+        defer { state.monitor.stop(); state.monitor = nil }
+        let timer = Timer(timeInterval: 0.04, repeats: false) { _ in
+            MainActor.assumeIsolated {
+                if stopMonitor { state.monitor.stop() } else { state.monitor.endVoiceSession() }
+            }
+        }
+        defer { timer.invalidate() }
+        state.monitor = PreferredInputSourceMonitor(
+            voiceTool: { .doubao },
+            prepareInputSource: { _ in
+                RunLoop.main.add(timer, forMode: .common)
+                return .selected
+            },
+            currentInputSourceID: { state.original },
+            restoreInputSource: { state.restored.append($0); return .selected },
+            installMonitor: { _ in "monitor" },
+            removeMonitor: { _ in },
+            logger: { state.logs.append($0) }
+        )
+        state.monitor.start()
+
+        #expect(!state.monitor.beginVoiceSession())
+        #expect(state.restored == [state.original])
+        #expect(state.logs.contains { $0.contains("result=activation_cancelled") })
+        #expect(!state.logs.contains { $0.contains("result=activation_timeout") })
+        state.monitor.endVoiceSession()
+        #expect(state.restored.count == 1)
+    }
+
+    @Test @MainActor func productionWaiterTimesOutWithoutBusyPollingAndRestoresOnce() {
+        var queries = 0
+        var restores = 0
+        var logs: [String] = []
+        let timer = Timer(timeInterval: 2, repeats: false) { _ in }
+        RunLoop.main.add(timer, forMode: .common)
+        defer { timer.invalidate() }
+        let monitor = PreferredInputSourceMonitor(
+            voiceTool: { .weixin },
+            prepareInputSource: { _ in .selected },
+            currentInputSourceID: { queries += 1; return "com.apple.keylayout.ABC" },
+            restoreInputSource: { _ in restores += 1; return .selected },
+            installMonitor: { _ in "monitor" },
+            removeMonitor: { _ in },
+            logger: { logs.append($0) }
+        )
+
+        let started = ProcessInfo.processInfo.systemUptime
+        #expect(!monitor.beginVoiceSession())
+        #expect(ProcessInfo.processInfo.systemUptime - started >= 0.5)
+        #expect(queries < 100)
+        #expect(logs.contains { $0.contains("result=activation_timeout") })
+        monitor.endVoiceSession()
+        #expect(restores == 1)
+    }
+}
+
+@MainActor private final class ActivationState {
+    let original = "com.apple.keylayout.ABC"
+    let target = "com.bytedance.inputmethod.doubaoime.pinyin"
+    var current = "com.apple.keylayout.ABC"
+    var queries = 0
+    var restored: [String] = []
+    var logs: [String] = []
+    var monitor: PreferredInputSourceMonitor!
 }
