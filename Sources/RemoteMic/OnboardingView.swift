@@ -1819,7 +1819,11 @@ struct OnboardingView: View {
     }
 
     private var voiceTestContent: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        // 这一页是流程里块数最多的一页（标题、说明、语音键提示条、测试前核对卡、输入框、
+        // 等待行、增益卡），原先外层间距是 8，只有别的页的一半，六道缝隙叠起来就是「挤成一团」。
+        // 12 而不是更大：核对卡里的「语音工具尚未运行」行和桥接提示行都只在异常态出现，
+        // 叠加后会多出两行，间距再大就把增益卡顶到首屏之外。
+        VStack(alignment: .leading, spacing: 12) {
             onboardingTitle("onboarding.voice_test.title")
             Text(verbatim: localization.text("onboarding.voice_test.detail"))
                 .font(.system(size: 14))
@@ -1946,7 +1950,9 @@ struct OnboardingView: View {
     }
 
     private var externalToolConfigurationConfirmationCard: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        // 卡内原先 spacing 4 + padding 8，标题、说明、音频输出行、分隔线、三条确认
+        // 全挤在一起；改成 8 / 10，并把三条确认包成一组（组内 6），让它们读起来是「一组勾选项」。
+        VStack(alignment: .leading, spacing: 8) {
             Label {
                 Text(
                     LocalizedMessage(
@@ -1998,40 +2004,76 @@ struct OnboardingView: View {
 
             Divider()
 
-            onboardingToggle(id: "voice-test.confirm.voice-key", isOn: $externalToolVoiceKeyConfirmed) {
-                Text(verbatim: localization.text("onboarding.voice_test.configuration.voice_gesture_checkbox"))
-                .font(.system(size: 12, weight: .medium))
-                .fixedSize(horizontal: false, vertical: true)
-            }
-            .toggleStyle(.checkbox)
-
-            if externalToolGlobalVoiceConfirmationRequired {
-                onboardingToggle(id: "voice-test.confirm.global-voice", isOn: $externalToolGlobalVoiceConfirmed) {
-                Text(verbatim: localization.text("onboarding.voice_test.configuration.global_voice_checkbox"))
-                        .font(.system(size: 12, weight: .medium))
-                        .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: 6) {
+                // 第一条勾选按当前手势出文案：遥控器和语音工具都可能是「按住说话」或
+                // 「按一下开始、再按一下结束」，泛称一句「使用上方显示的操作方式」等于让
+                // 用户自己去猜要去工具里改哪个开关。
+                onboardingToggle(id: "voice-test.confirm.voice-key", isOn: $externalToolVoiceKeyConfirmed) {
+                    Text(verbatim: voiceGestureConfirmationText)
+                    .font(.system(size: 12, weight: .medium))
+                    .fixedSize(horizontal: false, vertical: true)
                 }
                 .toggleStyle(.checkbox)
-            }
 
-            onboardingToggle(id: "voice-test.confirm.microphone", isOn: $externalToolMicrophoneConfirmed) {
-                Text(
-                    LocalizedMessage(
-                        "onboarding.voice_test.microphone_confirmation.checkbox",
-                        arguments: [
-                            localization.text(settings.onboardingVoiceTool.titleKey),
-                            selectedAudioDevice?.name ?? localization.text("onboarding.audio.select_required"),
-                        ]
-                    ).text(using: localization)
-                )
-                .font(.system(size: 12, weight: .medium))
-                .fixedSize(horizontal: false, vertical: true)
+                // 只有「遥控器只能按住、工具只能按一下」这组组合才会出现 fnTap 换算。
+                // 此时两侧动作看着不一致，用户会怀疑自己设错了，必须当场说清楚。
+                if bridgedGestureHintVisible {
+                    HStack(alignment: .top, spacing: 5) {
+                        Image(systemName: "arrow.triangle.swap")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                            .padding(.top, 1)
+                        Text(verbatim: localization.text("onboarding.voice_test.configuration.gesture_bridged_hint"))
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(.leading, 18)
+                }
+
+                if externalToolGlobalVoiceConfirmationRequired {
+                    onboardingToggle(id: "voice-test.confirm.global-voice", isOn: $externalToolGlobalVoiceConfirmed) {
+                    Text(
+                        LocalizedMessage(
+                            "onboarding.voice_test.configuration.global_voice_checkbox",
+                            arguments: [localization.text(settings.onboardingVoiceTool.titleKey)]
+                        ).text(using: localization)
+                    )
+                            .font(.system(size: 12, weight: .medium))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .toggleStyle(.checkbox)
+                }
+
+                VStack(alignment: .leading, spacing: 3) {
+                    onboardingToggle(id: "voice-test.confirm.microphone", isOn: $externalToolMicrophoneConfirmed) {
+                        Text(
+                            LocalizedMessage(
+                                "onboarding.voice_test.microphone_confirmation.checkbox",
+                                arguments: [
+                                    localization.text(settings.onboardingVoiceTool.titleKey),
+                                    selectedAudioDevice?.name ?? localization.text("onboarding.audio.select_required"),
+                                ]
+                            ).text(using: localization)
+                        )
+                        .font(.system(size: 12, weight: .medium))
+                        .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .toggleStyle(.checkbox)
+
+                    // 这一条最容易错：在 SayAll 里选设备只决定「遥控器声音往哪送」，
+                    // 并不会改语音工具自己的麦克风设置，用户以为选一次就够了。
+                    Text(verbatim: microphoneIsolationHintText)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.leading, 18)
+                }
             }
-            .toggleStyle(.checkbox)
 
             if voiceAttempt.result == .externalToolNoCommit {
                 Label {
-                    Text(verbatim: localization.text("onboarding.voice_test.configuration.no_commit"))
+                    Text(verbatim: noCommitHintText)
                 } icon: {
                     Image(systemName: "xmark.circle.fill")
                 }
@@ -2040,7 +2082,7 @@ struct OnboardingView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .padding(8)
+        .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
         .overlay {
@@ -3274,6 +3316,61 @@ struct OnboardingView: View {
         OnboardingVoiceTestConfigurationPolicy.requiresGlobalVoiceConfirmation(
             for: settings.onboardingVoiceTool
         )
+    }
+
+    /// 第一条勾选：把「要在这个工具里设成什么动作」直接写出来。
+    ///
+    /// 不能简单回退 `.hold`：Typeless 只支持「按一下开始」，遥控器也只支持按住时还要靠
+    /// Fn 点按换算。配对计划尚未解析出来时，先按用户偏好、再按工具推荐值取，
+    /// 免得勾选项说的动作和这个工具实际能用的动作不一致。
+    private var resolvedVoiceGestureMode: VoiceGestureMode {
+        proposedPairingPlan?.binding.gestureMode
+            ?? settings.onboardingPreferredGesture
+            ?? VoiceToolAdapterProfile.profile(for: settings.onboardingVoiceTool).recommendedMode
+            ?? .hold
+    }
+
+    private var voiceGestureConfirmationText: String {
+        let key = resolvedVoiceGestureMode == .hold
+            ? "onboarding.voice_test.configuration.gesture_checkbox.hold"
+            : "onboarding.voice_test.configuration.gesture_checkbox.toggle"
+        return LocalizedMessage(
+            key,
+            arguments: [localization.text(settings.onboardingVoiceTool.titleKey)]
+        ).text(using: localization)
+    }
+
+    /// 遥控器只能按住、语音工具只能按一下时，两边动作本来就不一致，靠 Fn 点按换算桥接。
+    private var bridgedGestureHintVisible: Bool {
+        proposedPairingPlan?.fnTapModeEnabled == true
+    }
+
+    /// 麦克风勾选下方的小字：说明 SayAll 改不了工具自己的麦克风设置。
+    private var microphoneIsolationHintText: String {
+        let deviceName = selectedAudioDevice?.name
+            ?? localization.text("onboarding.audio.select_required")
+        return LocalizedMessage(
+            "onboarding.voice_test.microphone_confirmation.detail",
+            arguments: [
+                deviceName,
+                localization.text(settings.onboardingVoiceTool.titleKey),
+                deviceName,
+            ]
+        ).text(using: localization)
+    }
+
+    /// 失败提示按工具能力分叉：没有全局唤起的工具不该被指向一个不存在的开关。
+    private var noCommitHintText: String {
+        let key = externalToolGlobalVoiceConfirmationRequired
+            ? "onboarding.voice_test.configuration.no_commit"
+            : "onboarding.voice_test.configuration.no_commit.no_global"
+        return LocalizedMessage(
+            key,
+            arguments: [
+                localization.text(settings.onboardingVoiceTool.titleKey),
+                selectedAudioDevice?.name ?? localization.text("onboarding.audio.select_required"),
+            ]
+        ).text(using: localization)
     }
 
     private var externalToolConfigurationConfirmed: Bool {

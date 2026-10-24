@@ -1370,6 +1370,110 @@ struct OnboardingFlowTests {
         #expect(!OnboardingVoiceTestConfigurationPolicy.requiresGlobalVoiceConfirmation(for: .other))
     }
 
+    @Test func globalVoiceSupportIsUnknownForToolsWeNeverObserved() {
+        // `.other` / `.unselected` 没有观察过设置界面，标记为未知，页面就不追问——
+        // 否则会让用户去找一个自己工具里并不存在的开关。
+        #expect(VoiceToolAdapterProfile.profile(for: .doubao).globalActivationSupport == true)
+        #expect(VoiceToolAdapterProfile.profile(for: .weixin).globalActivationSupport == false)
+        #expect(VoiceToolAdapterProfile.profile(for: .typeless).globalActivationSupport == false)
+        #expect(VoiceToolAdapterProfile.profile(for: .vokie).globalActivationSupport == false)
+        #expect(VoiceToolAdapterProfile.profile(for: .other).globalActivationSupport == nil)
+        #expect(VoiceToolAdapterProfile.profile(for: .unselected).globalActivationSupport == nil)
+    }
+
+    @Test func holdOnlyRemoteAndToggleOnlyToolBridgeThroughFunctionTap() throws {
+        // Siri Remote / 小米遥控器 只有按住；Typeless 只有按一下。两边交集为空，
+        // 靠 Fn 点按把一次长按换算成「按一下开始、再按一下结束」。
+        let plan = try #require(OnboardingVoicePairingPlan.resolve(
+            tool: .typeless,
+            controlSource: .siriRemote,
+            forceFunctionKey: true
+        ))
+        #expect(plan.binding.gestureMode == .toggle)
+        #expect(plan.fnTapModeEnabled)
+
+        // 反过来：豆包两种手势都支持，配上只能按住的遥控器仍然保持按住，不需要换算。
+        let doubao = try #require(OnboardingVoicePairingPlan.resolve(
+            tool: .doubao,
+            controlSource: .siriRemote,
+            forceFunctionKey: true
+        ))
+        #expect(doubao.binding.gestureMode == .hold)
+        #expect(!doubao.fnTapModeEnabled)
+    }
+
+    @Test func voiceTestGestureCheckboxFollowsTheResolvedGesture() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/OnboardingView.swift"),
+            encoding: .utf8
+        )
+        // 遥控器可能只能按住，语音工具可能只能按一下。勾选项必须和提示条同源于
+        // plan.binding.gestureMode，否则会出现「上面说按一下、下面让你确认按住」。
+        #expect(source.contains("private var resolvedVoiceGestureMode: VoiceGestureMode"))
+        #expect(source.contains("proposedPairingPlan?.binding.gestureMode\n            ?? settings.onboardingPreferredGesture"))
+        #expect(source.contains("\"onboarding.voice_test.configuration.gesture_checkbox.hold\""))
+        #expect(source.contains("\"onboarding.voice_test.configuration.gesture_checkbox.toggle\""))
+        #expect(!source.contains("\"onboarding.voice_test.configuration.voice_gesture_checkbox\""))
+        #expect(source.contains("bridgedGestureHintVisible"))
+        #expect(source.contains("proposedPairingPlan?.fnTapModeEnabled == true"))
+    }
+
+    @Test func voiceTestFailureHintOnlyMentionsGlobalActivationWhenTheToolHasIt() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/OnboardingView.swift"),
+            encoding: .utf8
+        )
+        let chinese = try String(
+            contentsOf: root.appendingPathComponent("Resources/zh-Hans.lproj/Localizable.strings"),
+            encoding: .utf8
+        )
+        let english = try String(
+            contentsOf: root.appendingPathComponent("Resources/en.lproj/Localizable.strings"),
+            encoding: .utf8
+        )
+        // 微信输入法 / Typeless / Vokie 没有「全局唤起语音」，失败提示不能把它们指向那个开关。
+        #expect(source.contains("\"onboarding.voice_test.configuration.no_commit.no_global\""))
+        #expect(source.contains("let key = externalToolGlobalVoiceConfirmationRequired"))
+        #expect(chinese.contains("\"onboarding.voice_test.configuration.no_commit.no_global\""))
+        #expect(english.contains("\"onboarding.voice_test.configuration.no_commit.no_global\""))
+        // 中文那条通用提示原先写死了「全局唤起」，现在只剩豆包那条允许出现该词。
+        #expect(!chinese.contains("重新核对上面的语音输入方式、全局唤起和麦克风设置"))
+    }
+
+    @Test func voiceTestDropsKeysNoViewEverRendered() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let chinese = try String(
+            contentsOf: root.appendingPathComponent("Resources/zh-Hans.lproj/Localizable.strings"),
+            encoding: .utf8
+        )
+        let english = try String(
+            contentsOf: root.appendingPathComponent("Resources/en.lproj/Localizable.strings"),
+            encoding: .utf8
+        )
+        for key in [
+            "\"onboarding.voice_test.configuration.binding_expected\"",
+            "\"onboarding.voice_test.microphone_confirmation.title\"",
+            "\"onboarding.voice_test.other_detail\"",
+        ] {
+            #expect(!chinese.contains(key))
+            #expect(!english.contains(key))
+        }
+        // 唯一解释「SayAll 改不了工具麦克风设置」的句子，原先从未渲染过，现在挂在勾选下方。
+        #expect(chinese.contains("\"onboarding.voice_test.microphone_confirmation.detail\""))
+        #expect(english.contains("\"onboarding.voice_test.microphone_confirmation.detail\""))
+    }
+
     @Test func selectingVoiceToolDoesNotChangeInputSourceOrReorderCards() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
