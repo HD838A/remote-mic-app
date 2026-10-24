@@ -58,7 +58,69 @@
 - 弹窗打开后无法关闭（关闭按钮不可见、Esc 无效、关闭后卡在空白页），属于阻塞级失败：用户会被困在 Onboarding 里出不来。
 - 只验证尺寸约束属于回归防护，不能证明真实购买成功。真实登录、支付和会员开通仍需在正式签名安装包上用真实账号验收；本机无法准备带签名的私有 artifacts，公共构建又不包含会员能力，因此本次未做真实购买验收。
 
-## 2026-10-23 iPhone 右栏 App Store 下载二维码回归
+## 2026-10-23 权限页新增「我已安装 iPhone App」勾选项
+
+适用分支：`codex/onboarding-membership-sheet`。本次在权限页左栏加一行必选勾选项，不改右栏二维码、会员提示、弹窗，也不改任何权限判定。
+
+位置：权限清单的第 4 项，**在三条系统权限之下、「iPhone 或 Apple Watch 连接将在下一页检查」提示卡之上**，与权限行同一列、同一 10pt 间距，读起来是清单里多出来的一项，而不是另一块卡片。
+
+形态（设计稿方案 C，两态）：
+
+- 未勾选：整块染 `accentColor` 6.5% 并加 1pt `accentColor` 18% 内描边，左侧 32pt 圆底 `iphone` 图标，标题「我已安装 iPhone App」14pt semibold，说明「还差这一步：勾选后才能继续」12pt，右侧 20pt 方形空框（圆角 6、1.5pt `primary` 24% 描边）。
+- 已勾选：底色褪回与权限行相同的 `primary` 3.5%，去掉描边，图标与勾选框转绿（`#30b350` 量级），说明改成「已确认，下一页会用真实连接验证」。
+- 强调块用的是 App 自己的 `accentColor`，不是设计稿里的系统蓝 `#007aff`：权限行图标本来就用 `accentColor`，固定蓝会和整页冲突。这台机器上的 accent 是珊瑚红，所以截图里偏红。
+
+只在 `onboardingControlMethod == .iPhoneApp` 时显示：实体遥控器和网页遥控路径不装这个 App，出现该行会被误读成第四项系统权限。
+
+勾选前「继续」禁用。判定放在 `OnboardingFlowPolicy.canContinue` 而不是视图里，条件为 `controlMethod != .iPhoneApp || phoneAppInstallConfirmed`；参数默认 `true`，所以 `FirstUseDiagnostics` 这类不关心勾选的调用方行为不变。
+
+勾选状态是 `@State`，不写 `AppSettings`：它确认的是「这台 iPhone 上装过 App」，重进向导重新确认更安全。为离屏截图能拍到第二种状态，`OnboardingView.init` 增加 `initialPhoneAppInstalled`（与 `initialInputMethodGuideStep` 同一套写法），渲染器入口是 `REMOTE_MIC_ONBOARDING_SCREENSHOT_PHONE_APP_INSTALLED=1`。
+
+实现细节：走 `onboardingToggle`（离屏探针读得到值、也能直接置值），配 `.toggleStyle(.button)` + `.buttonStyle(.plain)` 去掉系统 Switch 并让整行可点；右侧方框自己画，因为 `checkmark.square` 的圆角与描边粗细和设计稿对不上。
+
+### 自动化与构建
+
+- `swift build --disable-keychain --disable-sandbox` 公开构建通过。
+- `swift test --disable-keychain --disable-sandbox --filter OnboardingFlowTests`：79 项通过，含本次新增两条：
+  - `iphoneAppConfirmationGatesThePermissionsStepOnlyOnTheIPhonePath()`：三项权限全开、只差勾选时 iPhone 路径不能继续；勾选后可以；实体遥控器与网页遥控不受影响；不传参数时保持原行为。
+  - `iphoneAppConfirmationRowIsAToggleOnTheIPhonePathOnly()`：托管生产视图后，iPhone 路径注册了 `permission.iphone-app-installed` 开关、初值 false、`invoke` 后变 true；实体遥控器路径没有这个开关；`initialPhoneAppInstalled: true` 能预置已勾选。
+- `swift test --disable-keychain --disable-sandbox --filter LocalizationTests`：中英文 key 集合一致（本次新增 3 个键）。
+
+### 离屏渲染证据
+
+四张图都取自权限页（`03-permissions.png`），用同一份构建产物、同一入口渲染（`_CONTROL_METHOD=iphone_app` + `_CONTROL_SOURCE=apple_companion`），尺寸 2040 × 1600（窗口 frame，内容区 1020 × 772）：
+
+| 文件 | 外观 / 语言 / 状态 | SHA-256 |
+| --- | --- | --- |
+| [`installed-checkbox-zh-hans-light-pending.png`](../Screenshots/onboarding-installed-checkbox/installed-checkbox-zh-hans-light-pending.png) | 浅色 / 中文 / 未勾选 | `818bb13cb0c5bbb2e6b7f093462d5b83552708735a1ee444aa06d4dea19caa37` |
+| [`installed-checkbox-zh-hans-light-confirmed.png`](../Screenshots/onboarding-installed-checkbox/installed-checkbox-zh-hans-light-confirmed.png) | 浅色 / 中文 / 已勾选 | `e5968b5d9fb92eca80482095f0bf4f1d4cd2c872bd7b3ff97f27236499d0af11` |
+| [`installed-checkbox-zh-hans-dark-pending.png`](../Screenshots/onboarding-installed-checkbox/installed-checkbox-zh-hans-dark-pending.png) | 深色 / 中文 / 未勾选 | `b59df037363c3127fe3caa32244d606a01977d53613b8f67496b3b526b9460c2` |
+| [`installed-checkbox-en-light-pending.png`](../Screenshots/onboarding-installed-checkbox/installed-checkbox-en-light-pending.png) | 浅色 / 英文 / 未勾选 | `43a25121537bff6b4d0f15c2e8a6863a0c5f7cebebbcbfd62c1bd1973a0ccb8f` |
+
+渲染环境没有蓝牙权限，所以四张图里「继续」都是禁用的；「勾选后解锁继续」由上面的纯函数用例证明，不由截图证明。
+
+### 生产页面检查
+
+1. 完整构建、选择 iPhone 来源进入权限页，确认左栏清单是 4 项，第 4 项在「辅助功能」之下、提示卡之上，与上面三项左边线对齐、间距一致。
+2. 未勾选时该行底色明显比其余三行更亮/更染，且有一条细描边；右侧是空方框，说明文字为「还差这一步：勾选后才能继续」。
+3. 点这一行任意位置（图标、标题、空白处都要试），确认整行都能勾选，不是只有方框能点。
+4. 勾选后确认底色立刻褪回与权限行一致、图标变绿、方框变绿带白勾、说明变成「已确认，下一页会用真实连接验证」；再次点击可取消勾选。
+5. 三项权限都开、只差这一项时，确认「继续」是禁用的；勾选后立刻变成可点。
+6. 关闭向导重新进入，确认该行回到未勾选——这个状态不该落盘。
+7. 切到实体遥控器或网页遥控路径的权限页，确认这一行不出现。
+8. 切深色外观，确认未勾选态仍能与其余三行区分（靠底色与描边），勾选后与其余三行一致。
+
+### 失败判定与边界
+
+- 该行出现在三条权限之上、被挤进右栏、与权限行间距不一致或左边线参差，均判定失败。
+- 只有方框能点、点标题或行内空白没有反应，说明点击目标没覆盖整行，判定失败。
+- 勾选前后底色没有变化，或勾选后仍然保留强调底色与描边，判定失败。
+- 三项权限全开、未勾选时「继续」仍可点，或勾选后仍不可点，判定失败。
+- 实体遥控器/网页遥控路径出现该行，或该行出现后拦住这两条路径的「继续」，判定失败。
+- 重进向导后仍保持勾选，说明状态被持久化，判定失败。
+- 截图只能证明布局、配色与两态切换，不能代替真机勾选、（真实权限齐全时）继续按钮解锁和真实 iPhone 连接验证。
+
+
 
 适用分支：`codex/onboarding-appstore-qr`。本次把 iPhone 连接页右栏的占位内容替换为随包交付的 App Store 下载二维码，二维码下方加入 Apple 官方 App Store 徽章，并补充对应中英文说明文案；不改动流程、能力门禁、权限、连接、音频、持久化和左栏 App Store 入口。
 

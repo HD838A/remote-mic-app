@@ -1,0 +1,49 @@
+{
+  "host_base": "370999e3932fc2adc00c8e20eb4dd0dcabab361d",
+  "window_points": [1020, 772],
+  "notes": [
+    "四张图都取自权限页（03-permissions），由 dist 构建产物里的 OnboardingScreenshotRenderer 离屏渲染生产 OnboardingView 得到，不是设计稿。",
+    "入口：REMOTE_MIC_ONBOARDING_SCREENSHOT_* + _CONTROL_METHOD=iphone_app + _CONTROL_SOURCE=apple_companion；已勾选态用 _PHONE_APP_INSTALLED=1 预置。",
+    "截图尺寸 2040×1600 是窗口 frame（含 28pt 标题栏），内容区 1020×772。",
+    "渲染环境没有蓝牙权限，所以四种组合里底部「继续」都是禁用状态；勾选解锁「继续」由 OnboardingFlowTests 的纯函数用例断言，不由截图证明。",
+    "强调块用的是 App 自己的 accentColor（这台机器上是珊瑚红），不是设计稿里的系统蓝 #007aff：权限行图标本来就用 accentColor，换固定蓝会与整页冲突。"
+  ],
+  "images": [
+    {
+      "file": "installed-checkbox-zh-hans-light-pending.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1600,
+      "sha256": "818bb13cb0c5bbb2e6b7f093462d5b83552708735a1ee444aa06d4dea19caa37",
+      "bytes": 906962,
+      "state": "pending"
+    },
+    {
+      "file": "installed-checkbox-zh-hans-light-confirmed.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1600,
+      "sha256": "e5968b5d9fb92eca80482095f0bf4f1d4cd2c872bd7b3ff97f27236499d0af11",
+      "bytes": 903051,
+      "state": "confirmed"
+    },
+    {
+      "file": "installed-checkbox-zh-hans-dark-pending.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1600,
+      "sha256": "b59df037363c3127fe3caa32244d606a01977d53613b8f67496b3b526b9460c2",
+      "bytes": 1020881,
+      "state": "pending"
+    },
+    {
+      "file": "installed-checkbox-en-light-pending.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1600,
+      "sha256": "43a25121537bff6b4d0f15c2e8a6863a0c5f7cebebbcbfd62c1bd1973a0ccb8f",
+      "bytes": 860371,
+      "state": "pending"
+    }
+  ]
+}

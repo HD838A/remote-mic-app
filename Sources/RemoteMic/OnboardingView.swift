@@ -135,6 +135,9 @@ struct OnboardingView: View {
     @State private var secureInputWaitStartedAtUptime: TimeInterval?
     @State private var lastLoggedSecureInputState: Bool?
     @State private var aiPromptCopyResult: Bool?
+    /// 「我已安装 iPhone App」勾选项。和 `selectedInputMethodGuideStep` 一样只在本次向导内有效，
+    /// 不写进 `AppSettings`：它确认的是「这台 iPhone 上装过 App」，重进向导时重新确认更安全。
+    @State private var didConfirmPhoneAppInstalled = false
 
     private let permissionRefreshTimer = Timer.publish(
         every: 1,
@@ -151,7 +154,8 @@ struct OnboardingView: View {
         initialInputMethodGuideStep: Int? = nil,
         remoteInputDiagnosticOverride: FirstUseRemoteInputDiagnostic? = nil,
         interactionProbe: OnboardingInteractionProbe? = nil,
-        siriRemotePackageInstalledOverride: Bool? = nil
+        siriRemotePackageInstalledOverride: Bool? = nil,
+        initialPhoneAppInstalled: Bool = false
     ) {
         self.model = model
         membershipFeature = model.membershipFeature
@@ -168,6 +172,7 @@ struct OnboardingView: View {
             initialValue: voiceToolAvailabilityOverride ?? Self.detectVoiceToolAvailability()
         )
         _selectedInputMethodGuideStep = State(initialValue: initialInputMethodGuideStep)
+        _didConfirmPhoneAppInstalled = State(initialValue: initialPhoneAppInstalled)
         _voiceKeyMigrationSource = State(
             initialValue: model.settings.pendingOnboardingVoiceKeyMigration
         )
@@ -1386,6 +1391,14 @@ struct OnboardingView: View {
                     granted: accessibilityGranted,
                     action: requestAccessibilityPermission
                 )
+
+                // 清单的第 4 项。上面三条是系统能自动检测的权限，这一条只能由用户自己确认，
+                // 所以未勾选时整块染成 accent 6.5% 并加 1pt 描边，成为页面上唯一需要动手的一块；
+                // 勾选后底色褪回中性、图标转绿，避免一直喊。勾选前「继续」保持禁用，
+                // 行内文案已经写着「勾选后才能继续」。
+                if settings.onboardingControlMethod == .iPhoneApp {
+                    iphoneAppInstalledRow
+                }
             }
 
             if settings.onboardingControlMethod.usesOnDemandAudioOutput {
@@ -2872,6 +2885,78 @@ struct OnboardingView: View {
         .buttonStyle(.plain)
     }
 
+    /// 「我已安装 iPhone App」勾选项：权限清单里的第 4 项。
+    ///
+    /// 走 `onboardingToggle` 而不是 `onboardingActionButton`，因为它的语义就是「勾选」：
+    /// 离屏探针能读到值、也能直接置值，回归时不用模拟点击。`.toggleStyle(.button)` 让整行
+    /// 都成为点击目标并去掉系统 Switch——右侧那个方框是自己画的，才有设计稿里的圆角 6 与
+    /// 蓝/绿两态。
+    private var iphoneAppInstalledRow: some View {
+        let confirmed = didConfirmPhoneAppInstalled
+        return onboardingToggle(
+            id: "permission.iphone-app-installed",
+            isOn: $didConfirmPhoneAppInstalled
+        ) {
+            HStack(spacing: 12) {
+                Image(systemName: "iphone")
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundStyle(confirmed ? Color.green : Color.accentColor)
+                    .frame(width: 32, height: 32)
+                    .background(
+                        (confirmed ? Color.green : Color.accentColor).opacity(0.10),
+                        in: Circle()
+                    )
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(verbatim: localization.text(
+                        "onboarding.permissions.iphone_app_installed.title"
+                    ))
+                    .font(.system(size: 14, weight: .semibold))
+                    Text(verbatim: localization.text(confirmed
+                        ? "onboarding.permissions.iphone_app_installed.confirmed"
+                        : "onboarding.permissions.iphone_app_installed.pending"))
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 10)
+                checkboxMark(confirmed: confirmed)
+            }
+            .padding(13)
+            .background(
+                confirmed ? Color.primary.opacity(0.035) : Color.accentColor.opacity(0.065),
+                in: RoundedRectangle(cornerRadius: 12)
+            )
+            .overlay {
+                if !confirmed {
+                    RoundedRectangle(cornerRadius: 12)
+                        .strokeBorder(Color.accentColor.opacity(0.18), lineWidth: 1)
+                }
+            }
+            .contentShape(RoundedRectangle(cornerRadius: 12))
+        }
+        .toggleStyle(.button)
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("onboarding.permissions.iphone_app_installed")
+    }
+
+    /// 自己画的方形复选框：未勾选是 1.5pt 描边空框，勾选后填绿加白勾。
+    /// 不用 SF Symbol 的 `checkmark.square`，因为它的圆角与描边粗细跟设计稿对不上。
+    private func checkboxMark(confirmed: Bool) -> some View {
+        ZStack {
+            if confirmed {
+                RoundedRectangle(cornerRadius: 6.4)
+                    .fill(Color.green)
+                Image(systemName: "checkmark")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(.white)
+            } else {
+                RoundedRectangle(cornerRadius: 6)
+                    .strokeBorder(Color.primary.opacity(0.24), lineWidth: 1.5)
+            }
+        }
+        .frame(width: 20, height: 20)
+    }
+
     private func statusCard(
         icon: String,
         title: String,
@@ -2938,7 +3023,8 @@ struct OnboardingView: View {
             remoteAvailability: settings.onboardingRemoteAvailability,
             controlMethod: settings.onboardingControlMethod,
             voiceKeyMode: settings.voiceKeyMode,
-            capabilities: capabilities
+            capabilities: capabilities,
+            phoneAppInstallConfirmed: didConfirmPhoneAppInstalled
         )
         if settings.onboardingStep == .voiceTest {
             return policyAllowsContinue &&

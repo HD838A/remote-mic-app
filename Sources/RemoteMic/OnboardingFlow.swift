@@ -814,7 +814,8 @@ enum OnboardingFlowPolicy {
         remoteAvailability: OnboardingRemoteAvailability = .hasRemote,
         controlMethod: OnboardingControlMethod = .physicalRemote,
         voiceKeyMode: VoiceKeyMode = .function,
-        capabilities: OnboardingCapabilities
+        capabilities: OnboardingCapabilities,
+        phoneAppInstallConfirmed: Bool = true
     ) -> Bool {
         switch step {
         case .welcome:
@@ -831,6 +832,10 @@ enum OnboardingFlowPolicy {
                 remoteAvailability: remoteAvailability,
                 controlMethod: controlMethod
             ) &&
+                // iPhone 路径下「我已安装 iPhone App」是必选项，勾选前不让走。
+                // 其他控制方式不显示这一行，也就不该被它拦住——默认值 true 让
+                // 不关心这个勾选的调用方（例如 FirstUseDiagnostics）行为不变。
+                (controlMethod != .iPhoneApp || phoneAppInstallConfirmed) &&
                 (!controlMethod.requiresBluetoothPermission || capabilities.bluetoothGranted) &&
                 (!controlMethod.requiresInputMonitoringPermission ||
                     capabilities.inputMonitoringGranted) &&

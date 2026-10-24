@@ -855,6 +855,9 @@
 "onboarding.permissions.bluetooth.detail" = "发现并连接已配对的蓝牙遥控器";
 "onboarding.permissions.input.detail" = "读取实体按键并支持语音输入";
 "onboarding.permissions.accessibility.detail" = "执行语音快捷键和自定义按键";
+"onboarding.permissions.iphone_app_installed.title" = "我已安装 iPhone App";
+"onboarding.permissions.iphone_app_installed.pending" = "还差这一步：勾选后才能继续";
+"onboarding.permissions.iphone_app_installed.confirmed" = "已确认，下一页会用真实连接验证";
 "onboarding.permissions.mobile_network.title" = "手机连接将在下一页检查";
 "onboarding.permissions.mobile_network.detail" = "三项系统权限开启后，下一页检查 iPhone App 或小程序的真实连接。";
 "onboarding.permissions.apple_companion.title" = "iPhone 或 Apple Watch 连接将在下一页检查";

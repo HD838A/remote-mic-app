@@ -855,6 +855,9 @@
 "onboarding.permissions.bluetooth.detail" = "Discover and connect to your paired Bluetooth remote";
 "onboarding.permissions.input.detail" = "Read physical button events and support voice input";
 "onboarding.permissions.accessibility.detail" = "Run voice shortcuts and custom button actions";
+"onboarding.permissions.iphone_app_installed.title" = "I already installed the iPhone app";
+"onboarding.permissions.iphone_app_installed.pending" = "One step left: check this box to continue";
+"onboarding.permissions.iphone_app_installed.confirmed" = "Confirmed. The next page verifies it with a real connection.";
 "onboarding.permissions.mobile_network.title" = "Phone connection is checked on the next page";
 "onboarding.permissions.mobile_network.detail" = "After all three system permissions are enabled, the next page checks the real iPhone app or mini program connection.";
 "onboarding.permissions.apple_companion.title" = "The iPhone or Apple Watch connection is checked next";

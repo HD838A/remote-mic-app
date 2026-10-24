@@ -620,6 +620,130 @@ struct OnboardingFlowTests {
         ))
     }
 
+    @Test func iphoneAppConfirmationGatesThePermissionsStepOnlyOnTheIPhonePath() {
+        let allGranted = OnboardingCapabilities(
+            bluetoothGranted: true,
+            inputMonitoringGranted: true,
+            accessibilityGranted: true,
+            remoteConnected: false,
+            remoteButtonObserved: false
+        )
+
+        func canContinue(_ method: OnboardingControlMethod, confirmed: Bool) -> Bool {
+            OnboardingFlowPolicy.canContinue(
+                from: .permissions,
+                voiceTool: .typeless,
+                remoteAvailability: method == .physicalRemote ? .hasRemote : .noRemote,
+                controlMethod: method,
+                capabilities: allGranted,
+                phoneAppInstallConfirmed: confirmed
+            )
+        }
+
+        // 三项权限全开、只差「我已安装 iPhone App」没勾：iPhone 路径必须被挡住。
+        #expect(!canContinue(.iPhoneApp, confirmed: false))
+        #expect(canContinue(.iPhoneApp, confirmed: true))
+        // 这一行只在 iPhone 路径上出现，其他控制方式不能被它拦住。
+        #expect(canContinue(.physicalRemote, confirmed: false))
+        #expect(canContinue(.webRemote, confirmed: false))
+        // 不关心勾选的调用方（FirstUseDiagnostics）靠默认值保持原行为。
+        #expect(OnboardingFlowPolicy.canContinue(
+            from: .permissions,
+            voiceTool: .typeless,
+            remoteAvailability: .noRemote,
+            controlMethod: .iPhoneApp,
+            capabilities: allGranted
+        ))
+    }
+
+    @Test @MainActor func iphoneAppConfirmationRowIsAToggleOnTheIPhonePathOnly() throws {
+        let iphone = try hostedOnboardingProbe(
+            suite: "RemoteMicTests.Onboarding.InstalledRow.iPhone",
+            method: .iPhoneApp,
+            installed: false
+        )
+        defer { iphone.teardown() }
+        // 未勾选时是一行真开关，探针读得到、也点得动。
+        #expect(iphone.probe.toggleValues["permission.iphone-app-installed"] == false)
+        iphone.probe.invoke("permission.iphone-app-installed")
+        RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+        #expect(iphone.probe.toggleValues["permission.iphone-app-installed"] == true)
+
+        // 实体遥控器路径不该出现这一行：那个 App 和它无关。
+        let physical = try hostedOnboardingProbe(
+            suite: "RemoteMicTests.Onboarding.InstalledRow.physical",
+            method: .physicalRemote,
+            installed: false
+        )
+        defer { physical.teardown() }
+        #expect(physical.probe.toggleValues["permission.iphone-app-installed"] == nil)
+
+        // 已勾选状态要能从外部预置，离屏截图才能拍到第二种状态。
+        let confirmed = try hostedOnboardingProbe(
+            suite: "RemoteMicTests.Onboarding.InstalledRow.confirmed",
+            method: .iPhoneApp,
+            installed: true
+        )
+        defer { confirmed.teardown() }
+        #expect(confirmed.probe.toggleValues["permission.iphone-app-installed"] == true)
+    }
+
+    @MainActor
+    private func hostedOnboardingProbe(
+        suite: String,
+        method: OnboardingControlMethod,
+        installed: Bool
+    ) throws -> (probe: OnboardingInteractionProbe, teardown: () -> Void) {
+        let suiteName = "\(suite).\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let settings = AppSettings(defaults: defaults)
+        settings.applicationLanguage = .simplifiedChinese
+        settings.setOnboardingControlMethod(method)
+        settings.setOnboardingStep(.permissions)
+        let model = BridgeAppModel(settings: settings)
+        let probe = OnboardingInteractionProbe()
+        let localization = LocalizationStore(
+            settings: settings,
+            resourceBundle: RemoteMicResourceBundle.mainOrDevelopment
+        )
+        let rootView = OnboardingView(
+            model: model,
+            completeRuntimeReadyOverride: true,
+            allowsInputSourceSwitching: false,
+            voiceToolAvailabilityOverride: [
+                .doubao: .available,
+                .weixin: .available,
+                .typeless: .available,
+                .vokie: .available,
+                .other: .unknown,
+            ],
+            interactionProbe: probe,
+            siriRemotePackageInstalledOverride: true,
+            initialPhoneAppInstalled: installed
+        )
+        .environmentObject(localization)
+        .frame(width: 1020, height: 772)
+
+        let hostingController = NSHostingController(rootView: rootView)
+        let window = NSWindow(
+            contentRect: NSRect(x: -20_000, y: -20_000, width: 1020, height: 772),
+            styleMask: [.titled],
+            backing: .buffered,
+            defer: true
+        )
+        window.contentViewController = hostingController
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.1))
+        window.contentView?.layoutSubtreeIfNeeded()
+
+        return (probe, {
+            window.contentViewController = nil
+            window.orderOut(nil)
+            defaults.removePersistentDomain(forName: suiteName)
+        })
+    }
+
     @Test func permissionRowsRemainClickableAfterAuthorization() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
