@@ -1507,31 +1507,17 @@ struct OnboardingView: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             VStack(alignment: .leading, spacing: 10) {
-                Text(localization.text(physicalRemotePairingKeys.title))
+                Text(localization.text(physicalRemotePairingGuide.title))
                     .font(.system(size: 14, weight: .semibold))
 
-                Label {
-                    Text(localization.text(physicalRemotePairingKeys.firstStep))
-                        .fixedSize(horizontal: false, vertical: true)
-                } icon: {
-                    Image(systemName: "1.circle.fill")
-                        .foregroundStyle(Color.accentColor)
-                }
-
-                Label {
-                    Text(localization.text(physicalRemotePairingKeys.secondStep))
-                        .fixedSize(horizontal: false, vertical: true)
-                } icon: {
-                    Image(systemName: "2.circle.fill")
-                        .foregroundStyle(Color.accentColor)
-                }
-
-                if let thirdStep = physicalRemotePairingKeys.thirdStep {
+                // 步骤条数由来源决定：小米/Chromecast 两步，苹果遥控器五步。
+                // 不写死 1/2/3，避免「加一步就得改视图」。
+                ForEach(Array(physicalRemotePairingGuide.steps.enumerated()), id: \.offset) { index, key in
                     Label {
-                        Text(localization.text(thirdStep))
+                        Text(localization.text(key))
                             .fixedSize(horizontal: false, vertical: true)
                     } icon: {
-                        Image(systemName: "3.circle.fill")
+                        Image(systemName: "\(index + 1).circle.fill")
                             .foregroundStyle(Color.accentColor)
                     }
                 }
@@ -2238,39 +2224,49 @@ struct OnboardingView: View {
         }
     }
 
-    private var physicalRemotePairingKeys: (
-        title: String,
-        firstStep: String,
-        secondStep: String,
-        thirdStep: String?
-    ) {
-        Self.physicalRemotePairingKeys(for: settings.onboardingControlSource)
+    /// 连接页左栏那张「首次连接…」步骤卡的文案来源。
+    ///
+    /// 用数组而不是三个可选字段：苹果遥控器的配对流程需要五步（关 Apple TV、开蓝牙、
+    /// 忽略旧设备、重置遥控器、进配对模式），步骤数由来源决定，视图按数组渲染序号。
+    struct PhysicalRemotePairingGuide: Equatable {
+        let title: String
+        let steps: [String]
     }
 
-    static func physicalRemotePairingKeys(
+    private var physicalRemotePairingGuide: PhysicalRemotePairingGuide {
+        Self.physicalRemotePairingGuide(for: settings.onboardingControlSource)
+    }
+
+    static func physicalRemotePairingGuide(
         for source: OnboardingControlSource
-    ) -> (title: String, firstStep: String, secondStep: String, thirdStep: String?) {
+    ) -> PhysicalRemotePairingGuide {
         switch source {
         case .siriRemote:
-            return (
-                "onboarding.remote.siri_pairing.title",
-                "onboarding.remote.siri_pairing.first",
-                "onboarding.remote.siri_pairing.second",
-                "onboarding.remote.siri_pairing.third"
+            return PhysicalRemotePairingGuide(
+                title: "onboarding.remote.siri_pairing.title",
+                steps: [
+                    "onboarding.remote.siri_pairing.step1",
+                    "onboarding.remote.siri_pairing.step2",
+                    "onboarding.remote.siri_pairing.step3",
+                    "onboarding.remote.siri_pairing.step4",
+                    "onboarding.remote.siri_pairing.step5",
+                ]
             )
         case .chromecastRemote:
-            return (
-                "onboarding.remote.chromecast_pairing.title",
-                "onboarding.remote.chromecast_pairing.first",
-                "onboarding.remote.chromecast_pairing.second",
-                nil
+            return PhysicalRemotePairingGuide(
+                title: "onboarding.remote.chromecast_pairing.title",
+                steps: [
+                    "onboarding.remote.chromecast_pairing.first",
+                    "onboarding.remote.chromecast_pairing.second",
+                ]
             )
         case .xiaomiRemote, .appleCompanion, .webRemote, .unselected:
-            return (
-                "onboarding.remote.first_pairing.title",
-                "onboarding.remote.first_pairing.wake",
-                "onboarding.remote.first_pairing.pair",
-                nil
+            return PhysicalRemotePairingGuide(
+                title: "onboarding.remote.first_pairing.title",
+                steps: [
+                    "onboarding.remote.first_pairing.wake",
+                    "onboarding.remote.first_pairing.pair",
+                ]
             )
         }
     }

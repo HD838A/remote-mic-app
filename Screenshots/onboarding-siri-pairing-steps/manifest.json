@@ -1,0 +1,40 @@
+{
+  "host_base": "16f4cbb7",
+  "window_points": [1020, 772],
+  "notes": [
+    "「连接遥控器，再按一下实体键」页（04-remote）在苹果遥控器来源下补全为五步配对指引后的形态。",
+    "入口：REMOTE_MIC_ONBOARDING_SCREENSHOT_* + _CONTROL_SOURCE=siri_remote + _SIRI_REMOTE_INSTALLED=1，由构建产物里的 OnboardingScreenshotRenderer 离屏托管生产 OnboardingView 生成，不是设计稿。",
+    "苹果遥控器来源在公开构建里不参与编译（OnboardingFlow.swift 的 #if SAYALL_SIRI_REMOTE_ENABLED），所以这三张图用 -Xswiftc -DSAYALL_SIRI_REMOTE_ENABLED 构建后渲染；这只是构建配置差异，仓库代码没有为此改动。",
+    "截图尺寸 2040×1600 是窗口 frame（含 28pt 标题栏），内容区 1020×772。",
+    "渲染环境没有真实遥控器连接，所以状态卡都是等待态；本图只证明步骤卡文案、序号与版式，不证明真实配对。"
+  ],
+  "images": [
+    {
+      "file": "siri-pairing-zh-hans-light.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1600,
+      "sha256": "fbc11f63e896aa12822cae9f002f434c640bbc5e49c44305421fed9473e564a3",
+      "bytes": 1024375,
+      "state": "waiting"
+    },
+    {
+      "file": "siri-pairing-zh-hans-dark.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1600,
+      "sha256": "9bb9dc13b88e41ac059a25ebb2f79dacd9ba4a914ca73fe4a7f2994f09966db6",
+      "bytes": 1178099,
+      "state": "waiting"
+    },
+    {
+      "file": "siri-pairing-en-light.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1600,
+      "sha256": "864f7fd7724f8732052b699089aac8031c77a25fe0dadb0960d1e87814bd3570",
+      "bytes": 1000413,
+      "state": "waiting"
+    }
+  ]
+}
