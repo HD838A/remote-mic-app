@@ -5,6 +5,7 @@ import ApplicationServices
 final class MacMicrophoneInputTarget {
     private var application: NSRunningApplication?
     private var element: AXUIElement?
+    private var savedFocusIdentity: String?
     private var generation: UInt64 = 0
     private let frontmost: () -> NSRunningApplication?
     private let readFocus: (NSRunningApplication) -> AXUIElement?
@@ -16,7 +17,7 @@ final class MacMicrophoneInputTarget {
     init(
         frontmost: @escaping () -> NSRunningApplication? = { NSWorkspace.shared.frontmostApplication },
         readFocus: @escaping (NSRunningApplication) -> AXUIElement? = MacMicrophoneInputTarget.focusedElement,
-        activate: @escaping (NSRunningApplication) -> Void = { $0.activate(options: []) },
+        activate: @escaping (NSRunningApplication) -> Void = { $0.activate(options: [.activateAllWindows]) },
         snapshot: @escaping () -> VoiceInputDestinationSnapshot = VoiceInputDestinationSnapshot.system,
         ownProcessIdentifier: pid_t = ProcessInfo.processInfo.processIdentifier,
         isRunning: @escaping (NSRunningApplication) -> Bool = { !$0.isTerminated }
@@ -52,10 +53,22 @@ final class MacMicrophoneInputTarget {
               isRunning(candidate) else { return }
         // An app can temporarily lose AXFocusedUIElement as it deactivates.
         // Retain its identity, but never carry another app's field into it.
-        if application?.processIdentifier != candidate.processIdentifier { element = nil }
+        if application?.processIdentifier != candidate.processIdentifier {
+            element = nil
+            savedFocusIdentity = nil
+        }
         application = candidate
-        if let focused = readFocus(candidate) { element = focused }
-        AppLogger.shared.write("MAC MICROPHONE TARGET phase=remember result=remembered focused_element_saved=\(element != nil)")
+        if let focused = readFocus(candidate) {
+            element = focused
+            let current = snapshot()
+            if current.bundleIdentifier == candidate.bundleIdentifier, Self.isEligible(current) {
+                savedFocusIdentity = current.focusIdentity
+            }
+        }
+        AppLogger.shared.write(
+            "MAC MICROPHONE TARGET phase=remember result=remembered " +
+                "focused_element_saved=\(element != nil) focus_identity_saved=\(savedFocusIdentity != nil)"
+        )
     }
 
     func prepare(completion: @escaping (Bool) -> Void) {
@@ -109,16 +122,28 @@ final class MacMicrophoneInputTarget {
         guard generation == operation else { return }
         let snapshot = snapshot()
         let focused = readFocus(application)
+        if let element { _ = AXUIElementSetAttributeValue(element, kAXFocusedAttribute as CFString, kCFBooleanTrue) }
         if frontmost()?.processIdentifier == application.processIdentifier,
            snapshot.bundleIdentifier == application.bundleIdentifier,
            Self.isEligible(snapshot),
-           let focused, element == nil || CFEqual(focused, element!) {
+           let focused,
+           element == nil || CFEqual(focused, element!) || savedFocusIdentity == snapshot.focusIdentity {
             self.element = focused
-            AppLogger.shared.write("MAC MICROPHONE TARGET target_operation_id=\(operation) phase=completed result=ready focus_reacquired=\(element == nil)")
+            AppLogger.shared.write(
+                "MAC MICROPHONE TARGET target_operation_id=\(operation) phase=completed result=ready " +
+                    "focus_reacquired=\(element == nil) identity_match=\(savedFocusIdentity == snapshot.focusIdentity)"
+            )
             completion(true); return
         }
         guard isRunning(application), ProcessInfo.processInfo.systemUptime < deadline else {
-            AppLogger.shared.write("MAC MICROPHONE TARGET target_operation_id=\(operation) phase=completed result=failed reason=focus_not_restored eligible=\(Self.isEligible(snapshot)) focused_element_saved=\(element != nil)")
+            AppLogger.shared.write(
+                "MAC MICROPHONE TARGET target_operation_id=\(operation) phase=completed result=failed " +
+                    "reason=focus_not_restored frontmost_matches=\(frontmost()?.processIdentifier == application.processIdentifier) " +
+                    "bundle_matches=\(snapshot.bundleIdentifier == application.bundleIdentifier) " +
+                    "eligible=\(Self.isEligible(snapshot)) role=\(snapshot.role) subrole=\(snapshot.subrole) " +
+                    "editable=\(snapshot.editable) protected=\(snapshot.protectedContent) " +
+                    "focus_identity_saved=\(savedFocusIdentity != nil) identity_matches=\(savedFocusIdentity == snapshot.focusIdentity)"
+            )
             completion(false); return
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
