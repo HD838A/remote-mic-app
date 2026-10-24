@@ -297,7 +297,34 @@ final class RecordingAssetStore {
     }
 
     private func findManifest(sessionID: UUID) throws -> ManifestMatch? {
-        try findManifestsUnlocked().first { $0.manifest.sessionID == sessionID }
+        guard fileManager.fileExists(atPath: rootDirectoryURL.path) else { return nil }
+        var newest: ManifestMatch?
+        // The date belongs to the stored session, not the current time zone.
+        // Inspect only this UUID under each date; never enumerate other sessions.
+        for dateDirectory in try directoryContents(at: rootDirectoryURL) {
+            guard !isSymbolicLink(dateDirectory), isDirectory(dateDirectory),
+                  Self.isLocalDateKey(dateDirectory.lastPathComponent)
+            else { continue }
+            let sessionDirectory = dateDirectory.appendingPathComponent(
+                sessionID.uuidString.lowercased(), isDirectory: true
+            )
+            let manifestURL = sessionDirectory.appendingPathComponent("manifest.json")
+            guard !isSymbolicLink(sessionDirectory), isDirectory(sessionDirectory),
+                  !isSymbolicLink(manifestURL),
+                  let manifest = try? load(at: manifestURL),
+                  manifest.schemaVersion == RecordingAssetManifest.currentSchemaVersion,
+                  manifest.sessionID == sessionID,
+                  manifest.localDateKey == dateDirectory.lastPathComponent,
+                  Self.isSafePathComponent(manifest.relativeMediaPath),
+                  let mediaURL = try? mediaURLWithoutQueue(manifest),
+                  mediaURL.deletingLastPathComponent().standardizedFileURL == sessionDirectory.standardizedFileURL
+            else { continue }
+            if newest == nil || manifest.endedAt > newest!.manifest.endedAt {
+                newest = ManifestMatch(manifest: manifest, manifestURL: manifestURL,
+                                       sessionDirectory: sessionDirectory)
+            }
+        }
+        return newest
     }
 
     private func loadAllUnlocked() throws -> [RecordingAssetManifest] {
