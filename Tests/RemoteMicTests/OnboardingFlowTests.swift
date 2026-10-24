@@ -1283,7 +1283,8 @@ struct OnboardingFlowTests {
         #expect(viewSource.contains("externalToolConfigurationConfirmed"))
         #expect(viewSource.contains("sayAllVoiceKeyConfigurationReady"))
         #expect(viewSource.contains("sayAllAudioOutputConfigurationText"))
-        #expect(viewSource.contains(".foregroundStyle(isComplete ? Color.green : Color.red)"))
+        // 音频输出那一行现在独立在核对卡外，就绪时绿勾、未就绪时红叉。
+        #expect(viewSource.contains(".foregroundStyle(onboardingAudioReady ? Color.green : Color.red)"))
         #expect(viewSource.contains(".eventSourceStateID"))
         #expect(viewSource.contains(".eventSourceUnixProcessID"))
         #expect(viewSource.contains("manualTranscriptInputObserved = true"))
@@ -1464,14 +1465,38 @@ struct OnboardingFlowTests {
         for key in [
             "\"onboarding.voice_test.configuration.binding_expected\"",
             "\"onboarding.voice_test.microphone_confirmation.title\"",
+            "\"onboarding.voice_test.microphone_confirmation.detail\"",
             "\"onboarding.voice_test.other_detail\"",
         ] {
             #expect(!chinese.contains(key))
             #expect(!english.contains(key))
         }
-        // 唯一解释「SayAll 改不了工具麦克风设置」的句子，原先从未渲染过，现在挂在勾选下方。
-        #expect(chinese.contains("\"onboarding.voice_test.microphone_confirmation.detail\""))
-        #expect(english.contains("\"onboarding.voice_test.microphone_confirmation.detail\""))
+    }
+
+    @Test func audioOutputStatusSitsOutsideTheToolChecklistCard() throws {
+        // 「音频输出设备」讲的是这一侧把声音送到哪个设备，语音工具并不知道这一行。
+        // 它挂在「测试前在 X 里核对」的标题下面，会被读成「去语音工具里核对音频输出设备」。
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/OnboardingView.swift"),
+            encoding: .utf8
+        )
+        let cardStart = try #require(source.range(
+            of: "private var externalToolConfigurationConfirmationCard"
+        ))
+        let cardEnd = try #require(source.range(
+            of: "private var externalToolAudioOutputRow",
+            range: cardStart.upperBound..<source.endIndex
+        ))
+        let cardBody = String(source[cardStart.lowerBound..<cardEnd.lowerBound])
+        #expect(!cardBody.contains("sayall_audio_output"))
+        #expect(!cardBody.contains("configurationStatusRow"))
+        // 它必须在卡片之前出现——先确认声音从哪出去，再核对对方要用的名字。
+        #expect(source.contains("externalToolAudioOutputRow\n\n            externalToolConfigurationConfirmationCard"))
+        #expect(source.contains("private var externalToolAudioOutputRow: some View"))
     }
 
     @Test func voiceTestConfigurationCopyDoesNotPromiseAFixedNumberOfChecks() throws {
@@ -1505,14 +1530,6 @@ struct OnboardingFlowTests {
                     #expect(!line.lowercased().contains(fragment.lowercased()))
                 }
             }
-        }
-
-        // 麦克风小字只谈「这里决定声音往哪送」，设备名由上方勾选负责，参数只留工具名。
-        for strings in [chinese, english] {
-            let line = try #require(strings.split(separator: "\n").first {
-                $0.hasPrefix("\"onboarding.voice_test.microphone_confirmation.detail\"")
-            })
-            #expect(line.components(separatedBy: "%@").count - 1 == 1)
         }
     }
 

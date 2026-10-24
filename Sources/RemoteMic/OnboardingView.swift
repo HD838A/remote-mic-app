@@ -1840,6 +1840,11 @@ struct OnboardingView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color.accentColor.opacity(0.07), in: RoundedRectangle(cornerRadius: 10))
 
+            // 「音频输出设备」是这一侧的状态，不是在语音工具里要核对的东西。放在核对卡
+            // 外面单独一行：先说清声音从哪出去，再说对方要选哪个名字，两件事不要混在
+            // 一个「在 X 里核对」的标题下面。
+            externalToolAudioOutputRow
+
             externalToolConfigurationConfirmationCard
 
             ZStack(alignment: .topLeading) {
@@ -1966,21 +1971,10 @@ struct OnboardingView: View {
                     .foregroundStyle(Color.orange)
             }
 
-            Text(
-                LocalizedMessage(
-                    "onboarding.voice_test.configuration.detail",
-                    arguments: [localization.text(settings.onboardingVoiceTool.titleKey)]
-                ).text(using: localization)
-            )
+            Text(verbatim: localization.text("onboarding.voice_test.configuration.detail"))
             .font(.system(size: 12))
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
-
-            configurationStatusRow(
-                label: localization.text("onboarding.voice_test.configuration.sayall_audio_output"),
-                value: sayAllAudioOutputConfigurationText,
-                isComplete: onboardingAudioReady
-            )
 
             if let runtimeStatus = selectedVoiceToolRuntimeStatusText {
                 HStack(alignment: .top, spacing: 8) {
@@ -2045,30 +2039,20 @@ struct OnboardingView: View {
                     .toggleStyle(.checkbox)
                 }
 
-                VStack(alignment: .leading, spacing: 3) {
-                    onboardingToggle(id: "voice-test.confirm.microphone", isOn: $externalToolMicrophoneConfirmed) {
-                        Text(
-                            LocalizedMessage(
-                                "onboarding.voice_test.microphone_confirmation.checkbox",
-                                arguments: [
-                                    localization.text(settings.onboardingVoiceTool.titleKey),
-                                    selectedAudioDevice?.name ?? localization.text("onboarding.audio.select_required"),
-                                ]
-                            ).text(using: localization)
-                        )
-                        .font(.system(size: 12, weight: .medium))
-                        .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .toggleStyle(.checkbox)
-
-                    // 这一条最容易错：在 SayAll 里选设备只决定「遥控器声音往哪送」，
-                    // 并不会改语音工具自己的麦克风设置，用户以为选一次就够了。
-                    Text(verbatim: microphoneIsolationHintText)
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.leading, 18)
+                onboardingToggle(id: "voice-test.confirm.microphone", isOn: $externalToolMicrophoneConfirmed) {
+                    Text(
+                        LocalizedMessage(
+                            "onboarding.voice_test.microphone_confirmation.checkbox",
+                            arguments: [
+                                localization.text(settings.onboardingVoiceTool.titleKey),
+                                selectedAudioDevice?.name ?? localization.text("onboarding.audio.select_required"),
+                            ]
+                        ).text(using: localization)
+                    )
+                    .font(.system(size: 12, weight: .medium))
+                    .fixedSize(horizontal: false, vertical: true)
                 }
+                .toggleStyle(.checkbox)
             }
 
             if voiceAttempt.result == .externalToolNoCommit {
@@ -2091,21 +2075,28 @@ struct OnboardingView: View {
         }
     }
 
-    private func configurationStatusRow(
-        label: String,
-        value: String,
-        isComplete: Bool
-    ) -> some View {
+    /// 核对卡上方的一行：这一侧的音频输出状态。
+    ///
+    /// 它原来在卡内，和三条勾选排在一起，于是被「测试前在 X 里核对」的标题统辖，
+    /// 读起来像是要去语音工具里核对「音频输出设备」——但这一行讲的是我们自己把声音
+    /// 送到哪个设备，语音工具并不知道这行。移出卡片，作为前置状态单独一行。
+    private var externalToolAudioOutputRow: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Text(label)
-                .font(.system(size: 12, weight: .medium))
-                .fixedSize(horizontal: false, vertical: true)
+            Image(systemName: "speaker.wave.2.fill")
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+            Text(verbatim: localization.text("onboarding.voice_test.configuration.sayall_audio_output"))
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
             Spacer(minLength: 4)
-            Label(value, systemImage: isComplete ? "checkmark.circle.fill" : "xmark.circle.fill")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(isComplete ? Color.green : Color.red)
-                .multilineTextAlignment(.trailing)
-                .fixedSize(horizontal: false, vertical: true)
+            Label(
+                sayAllAudioOutputConfigurationText,
+                systemImage: onboardingAudioReady ? "checkmark.circle.fill" : "xmark.circle.fill"
+            )
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(onboardingAudioReady ? Color.green : Color.red)
+            .multilineTextAlignment(.trailing)
+            .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -3343,17 +3334,6 @@ struct OnboardingView: View {
     /// 遥控器只能按住、语音工具只能按一下时，两边动作本来就不一致，靠 Fn 点按换算桥接。
     private var bridgedGestureHintVisible: Bool {
         proposedPairingPlan?.fnTapModeEnabled == true
-    }
-
-    /// 麦克风勾选下方的小字：说明 SayAll 改不了工具自己的麦克风设置。
-    ///
-    /// 压缩成一行的代价是去掉了重复出现的设备名——勾选那一行刚说过一次，小字再说两遍
-    /// 只会让人跳读。真正的信息只有一句：这里是「声音往哪送」，不是「工具用哪个麦克风」。
-    private var microphoneIsolationHintText: String {
-        LocalizedMessage(
-            "onboarding.voice_test.microphone_confirmation.detail",
-            arguments: [localization.text(settings.onboardingVoiceTool.titleKey)]
-        ).text(using: localization)
     }
 
     /// 失败提示按工具能力分叉：没有全局唤起的工具不该被指向一个不存在的开关。

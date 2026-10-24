@@ -928,7 +928,6 @@
 "onboarding.voice_test.configuration.global_voice_checkbox" = "我已确认%@开启了“全局唤起语音”";
 "onboarding.voice_test.configuration.no_commit" = "没有收到文字。请检查三处：%@的“全局唤起语音”是否开着、语音键是否按上面的写法设好、麦克风是否选成“%@”。";
 "onboarding.voice_test.configuration.no_commit.no_global" = "没有收到文字。请检查三处：%@是否正在运行并已开启语音输入、语音键是否按上面的写法设好、麦克风是否选成“%@”。";
-"onboarding.voice_test.microphone_confirmation.detail" = "这里只决定遥控器声音往哪送，%@的麦克风要单独选一次。";
 "onboarding.voice_test.microphone_confirmation.checkbox" = "我已确认%@的麦克风是“%@”";
 "onboarding.voice_test.placeholder" = "试着说：无线麦 SayAll 已经连接成功";
 "onboarding.voice_test.waiting_voice" = "等待你按照上方提示使用语音键…";

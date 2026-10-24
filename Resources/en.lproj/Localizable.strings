@@ -928,7 +928,6 @@
 "onboarding.voice_test.configuration.global_voice_checkbox" = "I confirmed %@ has “global voice activation” turned on";
 "onboarding.voice_test.configuration.no_commit" = "No text appeared. Check three things: whether %@ has “global voice activation” on, whether the voice button is set as described above, and whether its microphone is “%@”.";
 "onboarding.voice_test.configuration.no_commit.no_global" = "No text appeared. Check three things: whether %@ is running with voice input enabled, whether the voice button is set as described above, and whether its microphone is “%@”.";
-"onboarding.voice_test.microphone_confirmation.detail" = "This only routes remote audio; set %@’s own microphone separately.";
 "onboarding.voice_test.microphone_confirmation.checkbox" = "I confirmed %@ uses “%@” as its microphone";
 "onboarding.voice_test.placeholder" = "Try saying: SayAll is connected";
 "onboarding.voice_test.waiting_voice" = "Waiting for you to use the voice button as described above…";
