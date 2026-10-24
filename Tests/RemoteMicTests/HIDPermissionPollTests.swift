@@ -4,14 +4,148 @@ import Testing
 
 @Suite("HID permission poll")
 struct HIDPermissionPollTests {
+    @Test @MainActor func sharedPollCallsActualPermissionAPIsOncePerTick() async {
+        let scheduler = HIDPermissionPollTestScheduler()
+        var inputCalls = 0
+        var accessibilityCalls = 0
+        let reader = RuntimePermissionReader(inputMonitoring: {
+            inputCalls += 1
+            return HIDRemoteMonitor.isInputMonitoringGranted
+        }, accessibility: {
+            accessibilityCalls += 1
+            return KeyboardInjector.isAccessibilityTrusted
+        })
+        var completed: (() -> Void)?
+        let poll = RuntimePermissionPoll(scheduler: scheduler, permissionQuery: { needsAX, completion in
+            reader.query(needsAccessibility: needsAX) { snapshot in
+                completion(snapshot)
+                completed?()
+            }
+        }, logger: { _ in })
+        let hid = poll.subscribe { _ in }
+        let siri = poll.subscribeInputMonitoring { _ in }
+        for _ in 0..<10 {
+            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                completed = { continuation.resume() }
+                scheduler.fire()
+            }
+        }
+        #expect(inputCalls == 10)
+        #expect(accessibilityCalls == 10)
+        #expect(scheduler.scheduleCount == 1)
+        hid.cancel()
+        siri.cancel()
+        #expect(scheduler.activeTaskCount == 0)
+    }
+
+    @Test @MainActor func systemQueriesRunOffMainAndOnlyReadRequestedPermissions() async {
+        var inputCalls = 0
+        var accessibilityCalls = 0
+        let reader = RuntimePermissionReader(inputMonitoring: {
+            #expect(!Thread.isMainThread)
+            inputCalls += 1
+            return true
+        }, accessibility: {
+            #expect(!Thread.isMainThread)
+            accessibilityCalls += 1
+            return false
+        })
+        for needsAccessibility in [false, true] {
+            let snapshot = await withCheckedContinuation { continuation in
+                reader.query(needsAccessibility: needsAccessibility) {
+                    #expect(Thread.isMainThread)
+                    continuation.resume(returning: $0)
+                }
+            }
+            #expect(snapshot.inputMonitoringGranted)
+            #expect(!snapshot.accessibilityTrusted)
+        }
+        #expect(inputCalls == 2)
+        #expect(accessibilityCalls == 1)
+    }
+
+    @Test func slowQueriesDoNotAccumulateOrDeliverOldResultsToNewSubscribers() {
+        let scheduler = HIDPermissionPollTestScheduler()
+        var completions: [(RuntimePermissionSnapshot) -> Void] = []
+        var queryNeedsAccessibility: [Bool] = []
+        let poll = RuntimePermissionPoll(scheduler: scheduler, permissionQuery: { needsAX, completion in
+            queryNeedsAccessibility.append(needsAX)
+            completions.append(completion)
+        }, logger: { _ in })
+        var inputResults: [Bool] = []
+        var hidResults: [Bool] = []
+        let input = poll.subscribeInputMonitoring { inputResults.append($0) }
+        scheduler.fire()
+        let hid = poll.subscribe { hidResults.append($0) }
+        for _ in 0..<100 { scheduler.fire() }
+        #expect(queryNeedsAccessibility == [false])
+        completions[0](RuntimePermissionSnapshot(inputMonitoringGranted: true, accessibilityTrusted: false))
+        #expect(inputResults == [true])
+        #expect(hidResults.isEmpty)
+        scheduler.fire()
+        #expect(queryNeedsAccessibility == [false, true])
+        completions[1](RuntimePermissionSnapshot(inputMonitoringGranted: true, accessibilityTrusted: true))
+        #expect(inputResults == [true])
+        #expect(hidResults == [true])
+        input.cancel()
+        hid.cancel()
+        #expect(scheduler.activeTaskCount == 0)
+    }
+
+    @Test func cancellationAndRestartIsolateInFlightQueries() {
+        let scheduler = HIDPermissionPollTestScheduler()
+        var completions: [(RuntimePermissionSnapshot) -> Void] = []
+        let poll = RuntimePermissionPoll(scheduler: scheduler, permissionQuery: { _, completion in
+            completions.append(completion)
+        }, logger: { _ in })
+        var oldResults: [Bool] = []
+        var newResults: [Bool] = []
+        let old = poll.subscribe { oldResults.append($0) }
+        scheduler.fire()
+        old.cancel()
+        let new = poll.subscribe { newResults.append($0) }
+        scheduler.fire()
+        #expect(completions.count == 1)
+        completions[0](RuntimePermissionSnapshot(inputMonitoringGranted: false, accessibilityTrusted: false))
+        #expect(oldResults.isEmpty)
+        #expect(newResults.isEmpty)
+        scheduler.fire()
+        #expect(completions.count == 2)
+        new.cancel()
+        completions[1](RuntimePermissionSnapshot(inputMonitoringGranted: true, accessibilityTrusted: true))
+        #expect(newResults.isEmpty)
+    }
+
+    @Test func observersReceiveOnlyTheirRelevantStateChanges() {
+        let scheduler = HIDPermissionPollTestScheduler()
+        var snapshot = RuntimePermissionSnapshot(inputMonitoringGranted: true, accessibilityTrusted: false)
+        let poll = RuntimePermissionPoll(scheduler: scheduler, permissionQuery: { _, completion in
+            completion(snapshot)
+        }, logger: { _ in })
+        var inputResults: [Bool] = []
+        var hidResults: [Bool] = []
+        let input = poll.subscribeInputMonitoring { inputResults.append($0) }
+        let hid = poll.subscribe { hidResults.append($0) }
+        scheduler.fire()
+        scheduler.fire()
+        snapshot = RuntimePermissionSnapshot(inputMonitoringGranted: true, accessibilityTrusted: true)
+        scheduler.fire()
+        snapshot = RuntimePermissionSnapshot(inputMonitoringGranted: false, accessibilityTrusted: true)
+        scheduler.fire()
+        #expect(inputResults == [true, false])
+        #expect(hidResults == [false, true, false])
+        input.cancel()
+        hid.cancel()
+    }
+
     @Test func multipleSubscribersEvaluatePermissionOncePerTick() {
         let scheduler = HIDPermissionPollTestScheduler()
         var permissionEvaluationCount = 0
         let poll = HIDPermissionPoll(
             scheduler: scheduler,
-            permissionQuery: { completion in
+            permissionEvaluator: {
                 permissionEvaluationCount += 1
-                completion(false)
+                return false
             },
             logger: { _ in }
         )
@@ -29,13 +163,30 @@ struct HIDPermissionPollTests {
         second.cancel()
     }
 
-    @Test func multipleSubscribersShareOneRepeatingTimer() {
+    @Test func inputMonitoringSubscribersReceiveOnlyInputMonitoringState() {
         let scheduler = HIDPermissionPollTestScheduler()
-        let poll = HIDPermissionPoll(
+        let poll = RuntimePermissionPoll(
             scheduler: scheduler,
-            permissionQuery: { completion in completion(true) },
+            permissionQuery: { _, completion in
+                completion(RuntimePermissionSnapshot(
+                    inputMonitoringGranted: true,
+                    accessibilityTrusted: false
+                ))
+            },
             logger: { _ in }
         )
+        var results: [Bool] = []
+        let subscription = poll.subscribeInputMonitoring { results.append($0) }
+
+        scheduler.fire()
+
+        #expect(results == [true])
+        subscription.cancel()
+    }
+
+    @Test func multipleSubscribersShareOneRepeatingTimer() {
+        let scheduler = HIDPermissionPollTestScheduler()
+        let poll = HIDPermissionPoll(scheduler: scheduler, permissionEvaluator: { true }, logger: { _ in })
         var firstCalls = 0
         var secondCalls = 0
         let first = poll.subscribe { _ in firstCalls += 1 }
@@ -53,11 +204,7 @@ struct HIDPermissionPollTests {
 
     @Test func partialCancellationKeepsTimerAndStopsCancelledCallback() {
         let scheduler = HIDPermissionPollTestScheduler()
-        let poll = HIDPermissionPoll(
-            scheduler: scheduler,
-            permissionQuery: { completion in completion(true) },
-            logger: { _ in }
-        )
+        let poll = HIDPermissionPoll(scheduler: scheduler, permissionEvaluator: { true }, logger: { _ in })
         var firstCalls = 0
         var secondCalls = 0
         let first = poll.subscribe { _ in firstCalls += 1 }
@@ -76,11 +223,7 @@ struct HIDPermissionPollTests {
 
     @Test func lastCancellationStopsTimerAndNextSubscriptionCreatesOneTimer() {
         let scheduler = HIDPermissionPollTestScheduler()
-        let poll = HIDPermissionPoll(
-            scheduler: scheduler,
-            permissionQuery: { completion in completion(true) },
-            logger: { _ in }
-        )
+        let poll = HIDPermissionPoll(scheduler: scheduler, permissionEvaluator: { true }, logger: { _ in })
         let first = poll.subscribe { _ in }
 
         first.cancel()
@@ -95,11 +238,7 @@ struct HIDPermissionPollTests {
 
     @Test func subscriptionDeinitAutomaticallyUnsubscribes() {
         let scheduler = HIDPermissionPollTestScheduler()
-        let poll = HIDPermissionPoll(
-            scheduler: scheduler,
-            permissionQuery: { completion in completion(true) },
-            logger: { _ in }
-        )
+        let poll = HIDPermissionPoll(scheduler: scheduler, permissionEvaluator: { true }, logger: { _ in })
         var subscription: HIDPermissionPoll.Subscription? = poll.subscribe { _ in }
         weak let weakSubscription = subscription
 
@@ -111,11 +250,7 @@ struct HIDPermissionPollTests {
 
     @Test func repeatedCancellationIsIdempotent() {
         let scheduler = HIDPermissionPollTestScheduler()
-        let poll = HIDPermissionPoll(
-            scheduler: scheduler,
-            permissionQuery: { completion in completion(true) },
-            logger: { _ in }
-        )
+        let poll = HIDPermissionPoll(scheduler: scheduler, permissionEvaluator: { true }, logger: { _ in })
         let subscription = poll.subscribe { _ in }
 
         subscription.cancel()
@@ -126,11 +261,7 @@ struct HIDPermissionPollTests {
 
     @Test func callbacksRunOutsideThePollLock() {
         let scheduler = HIDPermissionPollTestScheduler()
-        let poll = HIDPermissionPoll(
-            scheduler: scheduler,
-            permissionQuery: { completion in completion(true) },
-            logger: { _ in }
-        )
+        let poll = HIDPermissionPoll(scheduler: scheduler, permissionEvaluator: { true }, logger: { _ in })
         var subscription: HIDPermissionPoll.Subscription?
         subscription = poll.subscribe { _ in
             subscription?.cancel()
@@ -144,10 +275,10 @@ struct HIDPermissionPollTests {
     /// 定时器只负责发起查询：权限判定本身是同步 IPC 到 tccd，不能占用触发线程。
     @Test func permissionQueryDoesNotBlockTheTimerThread() {
         let scheduler = HIDPermissionPollTestScheduler()
-        var pending: ((Bool) -> Void)?
+        var pending: ((RuntimePermissionSnapshot) -> Void)?
         let poll = HIDPermissionPoll(
             scheduler: scheduler,
-            permissionQuery: { completion in pending = completion },
+            permissionQuery: { _, completion in pending = completion },
             logger: { _ in }
         )
         var delivered = false
@@ -160,7 +291,7 @@ struct HIDPermissionPollTests {
         #expect(delivered == false)
 
         // 结果回来之后才交付给订阅者。
-        pending?(false)
+        pending?(RuntimePermissionSnapshot(inputMonitoringGranted: false, accessibilityTrusted: false))
         #expect(delivered == true)
         subscription.cancel()
     }
@@ -168,10 +299,10 @@ struct HIDPermissionPollTests {
     /// 结果延迟到达时，已经取消的订阅不应再收到通知。
     @Test func cancelledSubscribersAreNotNotifiedWhenDeliveryIsDeferred() {
         let scheduler = HIDPermissionPollTestScheduler()
-        var pending: ((Bool) -> Void)?
+        var pending: ((RuntimePermissionSnapshot) -> Void)?
         let poll = HIDPermissionPoll(
             scheduler: scheduler,
-            permissionQuery: { completion in pending = completion },
+            permissionQuery: { _, completion in pending = completion },
             logger: { _ in }
         )
         var firstCalls = 0
@@ -181,7 +312,7 @@ struct HIDPermissionPollTests {
 
         scheduler.fire()
         first.cancel()
-        pending?(false)
+        pending?(RuntimePermissionSnapshot(inputMonitoringGranted: false, accessibilityTrusted: false))
 
         #expect(firstCalls == 0)
         #expect(secondCalls == 1)
@@ -190,10 +321,10 @@ struct HIDPermissionPollTests {
 
     @Test func delayedResultDoesNotReachAReplacementSubscription() {
         let scheduler = HIDPermissionPollTestScheduler()
-        var pending: ((Bool) -> Void)?
+        var pending: ((RuntimePermissionSnapshot) -> Void)?
         let poll = HIDPermissionPoll(
             scheduler: scheduler,
-            permissionQuery: { pending = $0 },
+            permissionQuery: { _, completion in pending = completion },
             logger: { _ in }
         )
         let original = poll.subscribe { _ in }
@@ -202,32 +333,32 @@ struct HIDPermissionPollTests {
         var results: [Bool] = []
         let replacement = poll.subscribe { results.append($0) }
 
-        pending?(false)
+        pending?(RuntimePermissionSnapshot(inputMonitoringGranted: false, accessibilityTrusted: false))
         #expect(results.isEmpty)
         scheduler.fire()
-        pending?(true)
+        pending?(RuntimePermissionSnapshot(inputMonitoringGranted: true, accessibilityTrusted: true))
         #expect(results == [true])
         replacement.cancel()
     }
 
     @Test func pendingQueryCoalescesTimerTicksAndResumesAfterDelivery() {
         let scheduler = HIDPermissionPollTestScheduler()
-        var pending: ((Bool) -> Void)?
+        var pending: ((RuntimePermissionSnapshot) -> Void)?
         var queryCount = 0
         let poll = HIDPermissionPoll(
             scheduler: scheduler,
-            permissionQuery: { queryCount += 1; pending = $0 },
+            permissionQuery: { _, completion in queryCount += 1; pending = completion },
             logger: { _ in }
         )
         var results: [Bool] = []
         let subscription = poll.subscribe { results.append($0) }
         for _ in 0..<100 { scheduler.fire() }
         #expect(queryCount == 1)
-        pending?(true)
+        pending?(RuntimePermissionSnapshot(inputMonitoringGranted: true, accessibilityTrusted: true))
         #expect(results == [true])
         scheduler.fire()
         #expect(queryCount == 2)
-        pending?(false)
+        pending?(RuntimePermissionSnapshot(inputMonitoringGranted: false, accessibilityTrusted: false))
         #expect(results == [true, false])
         subscription.cancel()
     }
@@ -235,11 +366,7 @@ struct HIDPermissionPollTests {
     @Test func lifecycleLogsContainOnlyCountsAndTimerTransitions() {
         let scheduler = HIDPermissionPollTestScheduler()
         var logs: [String] = []
-        let poll = HIDPermissionPoll(
-            scheduler: scheduler,
-            permissionQuery: { completion in completion(true) },
-            logger: { logs.append($0) }
-        )
+        let poll = HIDPermissionPoll(scheduler: scheduler, permissionEvaluator: { true }, logger: { logs.append($0) })
         let first = poll.subscribe { _ in }
         let second = poll.subscribe { _ in }
 
@@ -247,13 +374,13 @@ struct HIDPermissionPollTests {
         second.cancel()
 
         #expect(logs == [
-            "HID PERMISSION POLL phase=subscribed result=active " +
+            "RUNTIME PERMISSION POLL phase=subscribed result=active " +
                 "subscriber_count=1 timer_started=true",
-            "HID PERMISSION POLL phase=subscribed result=active " +
+            "RUNTIME PERMISSION POLL phase=subscribed result=active " +
                 "subscriber_count=2 timer_started=false",
-            "HID PERMISSION POLL phase=unsubscribed result=active " +
+            "RUNTIME PERMISSION POLL phase=unsubscribed result=active " +
                 "subscriber_count=1 timer_stopped=false",
-            "HID PERMISSION POLL phase=unsubscribed result=stopped " +
+            "RUNTIME PERMISSION POLL phase=unsubscribed result=stopped " +
                 "subscriber_count=0 timer_stopped=true",
         ])
     }

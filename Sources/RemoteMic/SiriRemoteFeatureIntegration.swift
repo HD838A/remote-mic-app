@@ -2,6 +2,38 @@ import Foundation
 
 #if SAYALL_SIRI_REMOTE_ENABLED && canImport(SayAllSiriRemote)
 import SayAllSiriRemote
+
+#if SAYALL_SIRI_PERMISSION_MONITOR
+private final class RuntimePermissionSubscriptionAdapter:
+    SayAllSiriRemotePermissionSubscription {
+    private let subscription: RuntimePermissionPoll.Subscription
+
+    init(subscription: RuntimePermissionPoll.Subscription) {
+        self.subscription = subscription
+    }
+
+    func cancel() {
+        subscription.cancel()
+    }
+}
+
+private final class RuntimePermissionMonitorAdapter: SayAllSiriRemotePermissionMonitor {
+    private let poll: RuntimePermissionPoll
+
+    init(poll: RuntimePermissionPoll = .shared) {
+        self.poll = poll
+    }
+
+    @discardableResult
+    func subscribeInputMonitoring(
+        _ handler: @escaping (Bool) -> Void
+    ) -> any SayAllSiriRemotePermissionSubscription {
+        RuntimePermissionSubscriptionAdapter(
+            subscription: poll.subscribeInputMonitoring(handler)
+        )
+    }
+}
+#endif
 #endif
 
 struct SiriRemoteDeviceIdentity: Hashable {
@@ -154,7 +186,14 @@ final class SiriRemoteFeatureIntegration {
 
     init(logger: @escaping (String) -> Void = { _ in }) {
         #if SAYALL_SIRI_REMOTE_ENABLED && canImport(SayAllSiriRemote)
+        #if SAYALL_SIRI_PERMISSION_MONITOR
+        feature = SayAllSiriRemoteFeature(
+            permissionMonitor: RuntimePermissionMonitorAdapter(),
+            logger: logger
+        )
+        #else
         feature = SayAllSiriRemoteFeature(logger: logger)
+        #endif
         feature.onConnection = { [weak self] connection in
             guard let model = Self.hostModel(connection.model) else { return }
             self?.onConnection?(SiriRemoteConnection(
