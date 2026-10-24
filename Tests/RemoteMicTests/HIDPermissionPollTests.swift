@@ -188,6 +188,50 @@ struct HIDPermissionPollTests {
         second.cancel()
     }
 
+    @Test func delayedResultDoesNotReachAReplacementSubscription() {
+        let scheduler = HIDPermissionPollTestScheduler()
+        var pending: ((Bool) -> Void)?
+        let poll = HIDPermissionPoll(
+            scheduler: scheduler,
+            permissionQuery: { pending = $0 },
+            logger: { _ in }
+        )
+        let original = poll.subscribe { _ in }
+        scheduler.fire()
+        original.cancel()
+        var results: [Bool] = []
+        let replacement = poll.subscribe { results.append($0) }
+
+        pending?(false)
+        #expect(results.isEmpty)
+        scheduler.fire()
+        pending?(true)
+        #expect(results == [true])
+        replacement.cancel()
+    }
+
+    @Test func pendingQueryCoalescesTimerTicksAndResumesAfterDelivery() {
+        let scheduler = HIDPermissionPollTestScheduler()
+        var pending: ((Bool) -> Void)?
+        var queryCount = 0
+        let poll = HIDPermissionPoll(
+            scheduler: scheduler,
+            permissionQuery: { queryCount += 1; pending = $0 },
+            logger: { _ in }
+        )
+        var results: [Bool] = []
+        let subscription = poll.subscribe { results.append($0) }
+        for _ in 0..<100 { scheduler.fire() }
+        #expect(queryCount == 1)
+        pending?(true)
+        #expect(results == [true])
+        scheduler.fire()
+        #expect(queryCount == 2)
+        pending?(false)
+        #expect(results == [true, false])
+        subscription.cancel()
+    }
+
     @Test func lifecycleLogsContainOnlyCountsAndTimerTransitions() {
         let scheduler = HIDPermissionPollTestScheduler()
         var logs: [String] = []

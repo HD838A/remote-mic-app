@@ -263,3 +263,13 @@ active（非 listen-only）tap 的语义是「先给我看，我说放行才继�
 5. **单独立项**：`HIDRemoteMonitor` 按键路径上的同步权限判定（每按一次键 2 次主线程同步 TCC IPC）。语义是「撤销后立即拒绝执行动作」，改成异步或读缓存都会把「立即」放宽成「最多一个轮询周期」，属于权限语义变更，需要单独评估与验收。
 6. 单独跟进上面「附带发现」里的会员权益 5xx 失败：重复诊断记录与刷新退避被外部事件击穿两点，修复在私有仓库进行。
 7. 与 `Bugs/2026-09-27-event-tap-port-not-invalidated.md` 一并考虑：那条记录解决了「端口泄漏」，本条解决了「回调阻塞主线程导致系统输入停摆」，第三条（本记录 C）解决了「授权收回后 tap 仍存活」。三条都出在 `EventTapPort` / suppressor 生命周期这一带上，说明该职责边界值得再收一遍。
+
+
+## 2026-10-24 二次审查：异步轮询隔离与积压
+
+- 可重复证据：延迟查询返回前，取消旧订阅并建立新订阅。原实现把旧的拒绝结果交给新订阅；对应回归出现 2 条断言失败。查询未返回时触发 100 次 tick，原实现注册 100 次查询回调；积压回归出现 2 条断言失败。
+- 根因：结果交付读取当前全部订阅；周期入口没有在途限制。无新增现场日志，本次证据来自可控延迟回调。
+- 修复：HID 每轮捕获订阅 token，交付时只保留仍有效的原订阅。HID、引导页与公开 Siri 适配器每个入口最多保留一次在途查询。Siri 结果还核对监听代次，避免停止新启动的监听。生命周期日志继续使用原有计数和停止原因，不逐 tick 增加日志。
+- 自动化：`swift test --disable-keychain --filter 'HIDPermissionPollTests|PermissionStatusProbeTests|AppleSiriRemoteAdapterTests|HIDPermissionRevocationTests|EventTapPortTests'`：25 项通过；`swift test --disable-keychain`：961 项通过。
+- 构建：Apple Silicon macOS 14 与 Intel macOS 13 Release 均通过，所有本地 SwiftPM 命令均使用 `--disable-keychain`。
+- 边界：不证明真实 TCC 撤销/恢复、私有 Siri 实现、实体遥控器按键、Fn 快速连续会话及首尾音频完整性已验收。PR 保持 Draft 候选。

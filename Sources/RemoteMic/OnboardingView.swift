@@ -136,6 +136,7 @@ struct OnboardingView: View {
     @State private var secureInputWaitStartedAtUptime: TimeInterval?
     @State private var lastLoggedSecureInputState: Bool?
     @State private var aiPromptCopyResult: Bool?
+    @State private var isPermissionQueryPending = false
 
     private let permissionRefreshTimer = Timer.publish(
         every: 1,
@@ -3719,7 +3720,10 @@ struct OnboardingView: View {
     /// 还挂着两条 active event tap，于是整个系统的输入队列一起停摆。
     /// 2026-10-24 已实际发生：`Bugs/2026-10-24-event-tap-blocks-system-input.md`。
     private func refreshPermissionStates() {
+        guard !isPermissionQueryPending else { return }
+        isPermissionQueryPending = true
         PermissionStatusProbe.shared.fetch { snapshot in
+            isPermissionQueryPending = false
             guard snapshot.bluetooth != bluetoothAuthorization
                 || snapshot.inputMonitoring != inputMonitoringGranted
                 || snapshot.accessibility != accessibilityGranted

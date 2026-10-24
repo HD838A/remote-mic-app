@@ -47,6 +47,7 @@ final class HIDPermissionPoll {
     private let lock = NSLock()
     private var subscribers: [UUID: (Bool) -> Void] = [:]
     private var taskState: TaskState = .idle
+    private var isQueryPending = false
 
     init(
         scheduler: HIDRemoteScheduling = DispatchHIDRemoteScheduler(),
@@ -139,15 +140,23 @@ final class HIDPermissionPoll {
     }
 
     private func notifySubscribers() {
-        // 权限查询是异步的：定时器只负责发起查询，tccd 的同步往返发生在后台队列上，
-        // 结果回到主线程再交付给订阅者，订阅者才可以安全地释放资源并更新界面状态。
+        // 查询未返回时跳过 tick，避免慢 TCC IPC 无限积累 completion。
+        lock.lock()
+        guard !isQueryPending, !subscribers.isEmpty else {
+            lock.unlock()
+            return
+        }
+        isQueryPending = true
+        let tokens = Array(subscribers.keys)
+        lock.unlock()
+
         permissionQuery { [weak self] permissionsGranted in
             guard let self else { return }
-            // 交付时重新取订阅者，已经取消的订阅不再收到通知。
             self.lock.lock()
-            let handlers = Array(self.subscribers.values)
+            self.isQueryPending = false
+            // 只交付给查询发出时仍存活的订阅，不把旧结果交给后来启动的监听。
+            let handlers = tokens.compactMap { self.subscribers[$0] }
             self.lock.unlock()
-            guard !handlers.isEmpty else { return }
             handlers.forEach { $0(permissionsGranted) }
         }
     }

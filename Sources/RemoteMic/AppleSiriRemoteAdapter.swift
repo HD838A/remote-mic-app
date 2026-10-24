@@ -202,6 +202,8 @@ final class AppleSiriRemoteAdapter {
     private var fingerprintByIdentity: [RemoteHardwareDeviceIdentity: String] = [:]
     private var customMappingEnabled = false
     private var permissionTimer: DispatchSourceTimer?
+    private var isPermissionQueryPending = false
+    private var permissionMonitorGeneration = UUID()
     private var touchSession: OpaquePointer?
     private var touchIsRunning = false
     private var preferredTouchDeviceIdentity: RemoteHardwareDeviceIdentity?
@@ -277,6 +279,7 @@ final class AppleSiriRemoteAdapter {
         reason: RemoteHardwareLifecycleCancellationReason,
         suppressNextRelease: Bool
     ) {
+        permissionMonitorGeneration = UUID()
         permissionTimer?.cancel()
         permissionTimer = nil
         emit(lifecycleRouter.cancelAll(
@@ -657,15 +660,21 @@ final class AppleSiriRemoteAdapter {
     }
 
     private func startPermissionMonitor() {
+        let generation = UUID()
+        permissionMonitorGeneration = generation
         let timer = DispatchSource.makeTimerSource(queue: .main)
         timer.schedule(deadline: .now() + 1, repeating: 1)
         timer.setEventHandler { [weak self] in
-            guard let self, self.manager != nil else { return }
+            guard let self, self.manager != nil, !self.isPermissionQueryPending else { return }
+            self.isPermissionQueryPending = true
             // 输入监控权限是同步 IPC 到 tccd，不能在主线程上判定：
             // 用户在系统设置里撤销权限的那一瞬间，tccd 要先结算授权再回复。
             // 查询交给后台探针，结果回到主线程再决定是否停止监听。
             self.permissionStatusProbe.fetch { [weak self] snapshot in
-                guard let self, self.manager != nil, !snapshot.inputMonitoring else { return }
+                guard let self else { return }
+                self.isPermissionQueryPending = false
+                guard self.permissionMonitorGeneration == generation,
+                      self.manager != nil, !snapshot.inputMonitoring else { return }
                 self.stop(reason: .permissionRevoked, suppressNextRelease: false)
             }
         }
