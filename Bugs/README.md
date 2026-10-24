@@ -1,7 +1,8 @@
 # Bug 记录
 
-- [更新录音应用信息时扫描全部录音](./2026-10-24-recording-metadata-lookup.html)
 - [HID 诊断窗口过期后仍记录普通按键](./2026-10-24-hid-filter-log-window.html)
+
+- [更新录音应用信息时扫描全部录音](./2026-10-24-recording-metadata-lookup.html)
 
 - [自身前台输入框聚焦导致死锁](./2026-10-23-self-composer-focus-deadlock.html)
 
