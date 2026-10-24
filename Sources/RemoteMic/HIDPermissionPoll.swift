@@ -42,21 +42,25 @@ final class HIDPermissionPoll {
     }
 
     private let scheduler: HIDRemoteScheduling
-    private let permissionEvaluator: () -> Bool
+    private let permissionQuery: (@escaping (Bool) -> Void) -> Void
     private let logger: (String) -> Void
     private let lock = NSLock()
     private var subscribers: [UUID: (Bool) -> Void] = [:]
     private var taskState: TaskState = .idle
+    private var isQueryPending = false
 
     init(
         scheduler: HIDRemoteScheduling = DispatchHIDRemoteScheduler(),
-        permissionEvaluator: @escaping () -> Bool = {
-            HIDRemoteMonitor.isInputMonitoringGranted && KeyboardInjector.isAccessibilityTrusted
+        permissionQuery: @escaping (@escaping (Bool) -> Void) -> Void = { completion in
+            // 输入监控与辅助功能都是同步 IPC 到 tccd，不能在主线程上跑。
+            PermissionStatusProbe.shared.fetch { snapshot in
+                completion(snapshot.inputMonitoring && snapshot.accessibility)
+            }
         },
         logger: @escaping (String) -> Void = AppLogger.shared.write
     ) {
         self.scheduler = scheduler
-        self.permissionEvaluator = permissionEvaluator
+        self.permissionQuery = permissionQuery
         self.logger = logger
     }
 
@@ -136,12 +140,24 @@ final class HIDPermissionPoll {
     }
 
     private func notifySubscribers() {
-        let handlers: [(Bool) -> Void]
+        // 查询未返回时跳过 tick，避免慢 TCC IPC 无限积累 completion。
         lock.lock()
-        handlers = Array(subscribers.values)
+        guard !isQueryPending, !subscribers.isEmpty else {
+            lock.unlock()
+            return
+        }
+        isQueryPending = true
+        let tokens = Array(subscribers.keys)
         lock.unlock()
-        guard !handlers.isEmpty else { return }
-        let permissionsGranted = permissionEvaluator()
-        handlers.forEach { $0(permissionsGranted) }
+
+        permissionQuery { [weak self] permissionsGranted in
+            guard let self else { return }
+            self.lock.lock()
+            self.isQueryPending = false
+            // 只交付给查询发出时仍存活的订阅，不把旧结果交给后来启动的监听。
+            let handlers = tokens.compactMap { self.subscribers[$0] }
+            self.lock.unlock()
+            handlers.forEach { $0(permissionsGranted) }
+        }
     }
 }
