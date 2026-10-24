@@ -26,6 +26,56 @@
 
 本轮公开完整测试 902 项、私有完整测试 910 项通过。最终定向测试公开和私有各 5 项通过，另覆盖未完成向导时保留请求，以及拒绝非文件 URL 和其他后缀。市场校验、Apple Silicon Release 构建和 `verify-app.sh` 通过。生产交互入口使用隔离数据，实际查看全部绑定并取消，列表仍只有默认方案。中文浅色截图为 [导入预览](../Screenshots/design-drafts/sayall-file-import/import-preview-macos-zh-light.jpg)，JPEG、2040 × 1544，SHA-256 为 `fc89e381433628332c618ac932c2939d23ec4a1e2211bd2d2588a600630c76e8`。缺少深色和完整向导截图，以及签名安装、真实完整向导、确认保存、重启重读和会员状态验收；PR 保持 Draft。详见 [审查记录](../Bugs/2026-10-19-sayall-file-import.html)。
 
+## 2026-10-24 连接页去掉重复下载入口、权限勾选项改统一样式、App 统一叫 iOS App
+
+适用分支：`codex/onboarding-membership-sheet`。三处都只动呈现与文案，不改 `OnboardingFlowPolicy`、不改权限判定、不改连接链路。
+
+1. **「连接 iPhone 或 Apple Watch」页删掉左栏的下载按钮。** 原来标题下面紧跟一个 `onboardingLink(id: "iphone.install")` 按钮「从 App Store 安装无线麦 SayAll」，而同一屏右栏已经是同一件事的入口（App Store 下载二维码 + 官方徽章）。左栏再去掉一层，正文下面直接接「等待 iPhone 或 Apple Watch」状态卡。文案键 `onboarding.apple_companion.install` 中英同步删除，不留死键；`remotePageDoesNotRepeatTheAppStoreInstallLink()` 反向锁定：`iPhoneRemoteContent` 段落里不得再出现 `onboardingLink` 或 `iOSAppStore`。
+2. **权限页第 4 项的状态标记改成和其余三项一样的圆形。** 原来是自绘的 20pt 圆角方框，和上面三个 19pt 圆勾并排时会被读成两类不同控件。现在统一用 `checkmark.circle.fill` / `circle`，19pt，绿色 / `secondary`。整行的强调底色、描边和「整行可点」都不变。`iphoneAppPermissionRowUsesTheSameStatusMarkAsOtherPermissions()` 锁定形状与尺寸，并禁止 `checkboxMark` 这个自绘函数再长回来。
+3. **同一个 App 统一叫 iOS App。** 文案里既有「iPhone App」又有「iOS App」，iPhone 只是它运行的其中一台设备，写死设备名会把 iPad 用户挡在门外。
+
+### 文案改动（中英同步，逐条）
+
+| 键 | 改前 | 改后 |
+| --- | --- | --- |
+| `onboarding.permissions.iphone_app_installed.title` | 我已安装 iPhone App | 我已安装 iOS App |
+| `onboarding.control_method.iphone_app.title` | 使用 iPhone App | 使用 iOS App |
+| `onboarding.remote_availability.no_remote.detail` | 下一步选择 iPhone App 或微信小程序完成体验。 | 下一步选择 iOS App 或微信小程序完成体验。 |
+| `onboarding.apple_companion.connection_detail` | 保持 iPhone App 或 Apple Watch App 打开… | 保持 iOS App 或 Apple Watch App 打开… |
+| `onboarding.control_source.apple_companion.title` | iPhone / Apple Watch App | iOS / watchOS App |
+| `onboarding.iphone_remote.scan` | 在 iPhone 无线麦 SayAll 中扫描二维码… | 在 iOS 无线麦 SayAll 中扫描二维码… |
+| `onboarding.iphone_remote.appstore_qr` | 扫描二维码下载 iPhone 无线麦 SayAll App | 扫描二维码下载 iOS 无线麦 SayAll App |
+| `connection.phone.qr_title` | 备用方式：使用 iPhone App 扫码连接 | 备用方式：使用 iOS App 扫码连接 |
+| `onboarding.apple_companion.install` | 从 App Store 安装无线麦 SayAll | （删除） |
+
+刻意**没改**的是指设备的那些：「连接 iPhone 或 Apple Watch」「请在已连接的 iPhone 或 Apple Watch 上按一个普通控制键」「iPhone / Apple Watch 已连接」「没有 iPhone 时」。它们说的是连接的是哪台设备，不是 App 的名字。`onboardingCallsTheCompanionAppIOSApp()` 断言两份 strings 里不再出现 `iPhone App` / `iPhone app`。
+
+### 自动化与构建
+
+- `swift build --disable-keychain --disable-sandbox` 公开构建通过。
+- `swift test --disable-keychain --disable-sandbox --filter OnboardingFlowTests`：90 项通过（本次新增 3 条、改写 1 条）。
+- `swift test --disable-keychain --disable-sandbox --filter LocalizationTests`：8 项通过（中英 key 集合一致，本次净删 1 个键）。
+- `plutil -lint` 两份 strings 均 OK。
+
+### 离屏渲染证据
+
+`Screenshots/onboarding-installed-checkbox/` 四张图按新实现重渲（浅色未勾选 / 浅色已勾选 / 深色未勾选 / 英文未勾选），SHA-256 与字节数见该目录 `manifest.json` 与上一节的表。连接页去按钮后的形态用同一份构建渲染 `04-remote.png` 逐张核对：标题 → 说明 → 「等待 iPhone 或 Apple Watch」状态卡 → 「等待控制按键」→ 「所选控制方式还没有连接」，不再有安装按钮。
+
+### 生产页面检查
+
+1. iPhone 路径走到连接页，确认左栏标题下直接是等待连接的状态卡，没有「从 App Store 安装」按钮；右栏二维码与 App Store 徽章仍在。
+2. 权限页第 4 项标题为「我已安装 iOS App」；右侧是圆圈，勾选前后与上面三项同形（空圆 → 绿色实心勾）。
+3. 切英文：该项为「I already installed the iOS app」，控制方式卡片为「iOS App」，连接页副标题为「iOS / watchOS App」。
+4. 通读一遍向导，确认没有残留「iPhone App」字样；指设备的「iPhone 或 Apple Watch」应保留。
+
+### 失败判定与边界
+
+- 连接页左栏又出现下载/安装按钮（同一屏两个下载入口），判定失败。
+- 权限页第 4 项右侧又变回方框或其他形状，或与上面三项不同尺寸，判定失败。
+- 任何页面仍出现「iPhone App」/「the iPhone app」，判定失败。
+- 把「iPhone 或 Apple Watch」这类设备指代也改成 iOS，导致用户不知道要拿哪台设备，判定失败。
+- 截图只证明静态形态，不能代替真机勾选、真实连接与下载跳转验收。
+
 ## 2026-10-23 会员开通弹窗尺寸回归
 
 适用分支：`codex/onboarding-membership-sheet`。本次只修 Onboarding 里「点击开通会员功能」的呈现尺寸，不改会员判定、连接门禁、购买流程和任何文案。
@@ -58,7 +108,7 @@
 - 弹窗打开后无法关闭（关闭按钮不可见、Esc 无效、关闭后卡在空白页），属于阻塞级失败：用户会被困在 Onboarding 里出不来。
 - 只验证尺寸约束属于回归防护，不能证明真实购买成功。真实登录、支付和会员开通仍需在正式签名安装包上用真实账号验收；本机无法准备带签名的私有 artifacts，公共构建又不包含会员能力，因此本次未做真实购买验收。
 
-## 2026-10-23 权限页新增「我已安装 iPhone App」勾选项
+## 2026-10-23 权限页新增「我已安装 iOS App」勾选项
 
 适用分支：`codex/onboarding-membership-sheet`。本次在权限页左栏加一行必选勾选项，不改右栏二维码、会员提示、弹窗，也不改任何权限判定。
 
@@ -68,8 +118,8 @@
 
 形态（设计稿方案 C，两态）：
 
-- 未勾选：整块染 `accentColor` 6.5% 并加 1pt `accentColor` 18% 内描边，左侧 32pt 圆底 `iphone` 图标，标题「我已安装 iPhone App」14pt semibold，说明「还差这一步：勾选后才能继续」12pt，右侧 20pt 方形空框（圆角 6、1.5pt `primary` 24% 描边）。
-- 已勾选：底色褪回与权限行相同的 `primary` 3.5%，去掉描边，图标与勾选框转绿（`#30b350` 量级），说明改成「已确认，下一页会用真实连接验证」。
+- 未勾选：整块染 `accentColor` 6.5% 并加 1pt `accentColor` 18% 内描边，左侧 32pt 圆底 `iphone` 图标，标题「我已安装 iOS App」14pt semibold，说明「还差这一步：勾选后才能继续」12pt，右侧 19pt 空圆（`circle`，`secondary` 色）——与上面三项权限行同一形态。
+- 已勾选：底色褪回与权限行相同的 `primary` 3.5%，去掉描边，图标与右侧园形标记转绿（`#30b350` 量级，`checkmark.circle.fill`），说明改成「已确认，下一页会用真实连接验证」。
 - 强调块用的是 App 自己的 `accentColor`，不是设计稿里的系统蓝 `#007aff`：权限行图标本来就用 `accentColor`，固定蓝会和整页冲突。这台机器上的 accent 是珊瑚红，所以截图里偏红。
 
 只在 `onboardingControlMethod == .iPhoneApp` 时显示：实体遥控器和网页遥控路径不装这个 App，出现该行会被误读成第四项系统权限。
@@ -78,7 +128,7 @@
 
 勾选状态是 `@State`，不写 `AppSettings`：它确认的是「这台 iPhone 上装过 App」，重进向导重新确认更安全。为离屏截图能拍到第二种状态，`OnboardingView.init` 增加 `initialPhoneAppInstalled`（与 `initialInputMethodGuideStep` 同一套写法），渲染器入口是 `REMOTE_MIC_ONBOARDING_SCREENSHOT_PHONE_APP_INSTALLED=1`。
 
-实现细节：走 `onboardingToggle`（离屏探针读得到值、也能直接置值），配 `.toggleStyle(.button)` + `.buttonStyle(.plain)` 去掉系统 Switch 并让整行可点；右侧方框自己画，因为 `checkmark.square` 的圆角与描边粗细和设计稿对不上。
+实现细节：走 `onboardingToggle`（离屏探针读得到值、也能直接置值），配 `.toggleStyle(.button)` + `.buttonStyle(.plain)` 去掉系统 Switch 并让整行可点。右侧状态标记最初是自绘的 20pt 圆角方框（更像「复选框」、也更接近设计稿），但与上面三项的 19pt 圆形并排时会被读成两类不同控件，已改为与 `permissionRow` 完全相同的 `checkmark.circle.fill` / `circle`。
 
 ### 自动化与构建
 
@@ -95,19 +145,19 @@
 
 | 文件 | 外观 / 语言 / 状态 | SHA-256 |
 | --- | --- | --- |
-| [`installed-checkbox-zh-hans-light-pending.png`](../Screenshots/onboarding-installed-checkbox/installed-checkbox-zh-hans-light-pending.png) | 浅色 / 中文 / 未勾选 | `d02a2cd750a52d62cac14500192d694a0f14338128e3eccd58d295b4e67ef8d7` |
-| [`installed-checkbox-zh-hans-light-confirmed.png`](../Screenshots/onboarding-installed-checkbox/installed-checkbox-zh-hans-light-confirmed.png) | 浅色 / 中文 / 已勾选 | `536045bc416572009f6202eaf9a1d1d57e2c81c138b5c890e2d411846b165625` |
-| [`installed-checkbox-zh-hans-dark-pending.png`](../Screenshots/onboarding-installed-checkbox/installed-checkbox-zh-hans-dark-pending.png) | 深色 / 中文 / 未勾选 | `4cb71288e2cddeffbd3397a9e6e42913bb96814d06347be338804bdf7b38273b` |
-| [`installed-checkbox-en-light-pending.png`](../Screenshots/onboarding-installed-checkbox/installed-checkbox-en-light-pending.png) | 浅色 / 英文 / 未勾选 | `4ac546ff438998c898fbb4b909db4453d11f4b089785b58bf791455ef3c639d1` |
+| [`installed-checkbox-zh-hans-light-pending.png`](../Screenshots/onboarding-installed-checkbox/installed-checkbox-zh-hans-light-pending.png) | 浅色 / 中文 / 未勾选 | `5a4e5a6c3ce66659b519b92a411c0aeb19c26f4f39650b8ec9a078d064863fb6` |
+| [`installed-checkbox-zh-hans-light-confirmed.png`](../Screenshots/onboarding-installed-checkbox/installed-checkbox-zh-hans-light-confirmed.png) | 浅色 / 中文 / 已勾选 | `9aa054579cfebda400b01cb8748b3902866bfd43455b1df5d8ac647e534abd16` |
+| [`installed-checkbox-zh-hans-dark-pending.png`](../Screenshots/onboarding-installed-checkbox/installed-checkbox-zh-hans-dark-pending.png) | 深色 / 中文 / 未勾选 | `b68d522cf5fd646ec003b29d4a81e2e4faa6a632aeb90e18195338b9c2157494` |
+| [`installed-checkbox-en-light-pending.png`](../Screenshots/onboarding-installed-checkbox/installed-checkbox-en-light-pending.png) | 浅色 / 英文 / 未勾选 | `5c33f9e25a9c7085bced3666ef27f364a3e56ae50eca786cabb0e7fad300fae2` |
 
 渲染环境没有蓝牙权限，所以四张图里「继续」都是禁用的，且勾选项下方会出现橙色的「还需要蓝牙权限」运行期提示卡（这不是固定内容，权限开启后消失）；「勾选后解锁继续」由上面的纯函数用例证明，不由截图证明。
 
 ### 生产页面检查
 
 1. 完整构建、选择 iPhone 来源进入权限页，确认左栏清单是 4 项，第 4 项在「辅助功能」之下、是清单的最后一项（它下面不应再有「iPhone 或 Apple Watch 连接将在下一页检查」那张卡），与上面三项左边线对齐、间距一致。
-2. 未勾选时该行底色明显比其余三行更亮/更染，且有一条细描边；右侧是空方框，说明文字为「还差这一步：勾选后才能继续」。
-3. 点这一行任意位置（图标、标题、空白处都要试），确认整行都能勾选，不是只有方框能点。
-4. 勾选后确认底色立刻褪回与权限行一致、图标变绿、方框变绿带白勾、说明变成「已确认，下一页会用真实连接验证」；再次点击可取消勾选。
+2. 未勾选时该行底色明显比其余三行更亮/更染，且有一条细描边；右侧是空圆圈（与上面三项同形），说明文字为「还差这一步：勾选后才能继续」。
+3. 点这一行任意位置（图标、标题、空白处都要试），确认整行都能勾选，不是只有右侧圆圈能点。
+4. 勾选后确认底色立刻褪回与权限行一致、图标变绿、右侧圆圈变成绿色实心带白勾、说明变成「已确认，下一页会用真实连接验证」；再次点击可取消勾选。
 5. 三项权限都开、只差这一项时，确认「继续」是禁用的；勾选后立刻变成可点。
 6. 关闭向导重新进入，确认该行回到未勾选——这个状态不该落盘。
 7. 切到实体遥控器或网页遥控路径的权限页，确认这一行不出现。
@@ -117,7 +167,8 @@
 
 - 该行出现在三条权限之上、被挤进右栏、与权限行间距不一致或左边线参差，均判定失败。
 - 勾选项下面又冒出「iPhone 或 Apple Watch 连接将在下一页检查」那张卡（同一句话说两遍），判定失败。
-- 只有方框能点、点标题或行内空白没有反应，说明点击目标没覆盖整行，判定失败。
+- 只有右侧圆圈能点、点标题或行内空白没有反应，说明点击目标没覆盖整行，判定失败。
+- 右侧标记与上面三项权限行不同形（矩形、方框、白底勾等），判定失败。
 - 勾选前后底色没有变化，或勾选后仍然保留强调底色与描边，判定失败。
 - 三项权限全开、未勾选时「继续」仍可点，或勾选后仍不可点，判定失败。
 - 实体遥控器/网页遥控路径出现该行，或该行出现后拦住这两条路径的「继续」，判定失败。
