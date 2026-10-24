@@ -67,6 +67,7 @@ final class KeyboardEventSuppressor {
             callback: keyboardEventSuppressorCallback,
             userInfo: context
         ) else {
+            logger("HID FILTER phase=start_failed reason=tap_create_failed tap=session")
             return false
         }
         guard let runLoopSource = CFMachPortCreateRunLoopSource(
@@ -77,6 +78,7 @@ final class KeyboardEventSuppressor {
             // tapCreate 成功即已在 WindowServer 侧登记端口；此处失败若不释放端口，
             // 该 tap 会残留到进程退出，必须与 stop() 走同一条清理路径。
             EventTapPort.release(port: eventTap, source: nil)
+            logger("HID FILTER phase=start_failed reason=run_loop_source_failed tap=session")
             return false
         }
 
@@ -85,6 +87,7 @@ final class KeyboardEventSuppressor {
             // 端口已在 WindowServer 侧登记，但没能接入 tap 线程：按启动失败处理并
             // 走同一条清理路径。绝不能留下一个已 enable 却无人承接的 tap。
             EventTapPort.release(port: eventTap, source: runLoopSource)
+            logger("HID FILTER phase=start_failed reason=tap_activation_failed tap=session")
             return false
         }
         lock.lock()
@@ -92,10 +95,12 @@ final class KeyboardEventSuppressor {
         self.runLoopSource = runLoopSource
         lock.unlock()
         isRunning = true
+        logger("HID FILTER phase=started result=active tap=session")
         return true
     }
 
     func stop() {
+        let wasRunning = isRunning
         hardwareModifierState.reset()
         // 回调跑在 tap 专用线程上，端口引用由主线程写入，必须加锁交接。
         lock.lock()
@@ -109,6 +114,7 @@ final class KeyboardEventSuppressor {
         lock.unlock()
         EventTapPort.release(port: port, source: source)
         isRunning = false
+        if wasRunning { logger("HID FILTER phase=stopped result=inactive tap=session") }
     }
 
     func arm(button: RemoteButton, edge: RemoteEventEdge) {
@@ -165,16 +171,21 @@ final class KeyboardEventSuppressor {
 
     func handle(type: CGEventType, event: CGEvent) -> Bool {
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+            logger("HID FILTER phase=disabled reason=\(type == .tapDisabledByTimeout ? "timeout" : "user_input") tap=session")
             // 本回调在 tap 专用线程上执行，端口引用由主线程写入，必须加锁读取。
             lock.lock()
             let tap = eventTap
             lock.unlock()
             if let tap {
                 CGEvent.tapEnable(tap: tap, enable: true)
+                logger("HID FILTER phase=reenable_requested result=submitted tap=session")
+            } else {
+                logger("HID FILTER phase=reenable_requested result=unavailable tap=session")
             }
             return false
         }
         if event.getIntegerValueField(.eventSourceUserData) == KeyboardInjector.syntheticEventMarker {
+            ShortcutSessionObservation.shared.observe(event, logger: logger)
             return false
         }
         hardwareModifierState.observe(type: type, event: event)
