@@ -44,8 +44,11 @@ struct OnboardingFlowTests {
             contentsOf: root.appendingPathComponent("Resources/en.lproj/Localizable.strings"),
             encoding: .utf8
         )
-        #expect(chinese.contains("\"onboarding.iphone_remote.app_already_installed\" = \"我已安装\";"))
-        #expect(english.contains("\"onboarding.iphone_remote.app_already_installed\""))
+        // 入口是一张两行文案的选项行：上行说明「已装好 App？」，下行是动作「去开通会员」。
+        #expect(chinese.contains("\"onboarding.iphone_remote.app_installed_lead\" = \"已装好 App？\";"))
+        #expect(chinese.contains("\"onboarding.iphone_remote.app_installed_action\" = \"去开通会员\";"))
+        #expect(english.contains("\"onboarding.iphone_remote.app_installed_lead\""))
+        #expect(english.contains("\"onboarding.iphone_remote.app_installed_action\""))
 
         let source = try String(
             contentsOf: root.appendingPathComponent("Sources/RemoteMic/OnboardingView.swift"),
@@ -55,7 +58,8 @@ struct OnboardingFlowTests {
         // 用户因此找不到开通入口。这个标记必须是本次向导内的临时状态，
         // 用 @State 而不是 AppSettings，重新进入向导时仍然从下载二维码开始。
         #expect(source.contains("@State private var didConfirmPhoneAppInstalled = false"))
-        #expect(source.contains("onboarding.iphone_remote.app_already_installed"))
+        #expect(source.contains("onboarding.iphone_remote.app_installed_lead"))
+        #expect(source.contains("onboarding.iphone_remote.app_installed_action"))
         // 标记只能出现在「下载二维码」这一分支的条件里：它提供的是越过二维码的入口，
         // 不能改掉二维码本身或会员提示的判定条件。这里比较出现顺序而不是缩进文本，
         // 避免断言被无关的格式调整打断。

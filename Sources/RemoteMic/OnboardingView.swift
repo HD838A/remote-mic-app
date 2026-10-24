@@ -2578,19 +2578,55 @@ struct OnboardingView: View {
                     .multilineTextAlignment(.center)
                 // 已经装好 App 的人不需要反复看到下载码。点一下把右栏切到开通会员提示，
                 // 否则二维码会一直占住这个位置，会员入口永远显示不出来。
-                // 只在「能真正走到会员提示」时提供该按钮：公开构建没有会员能力、
-                // 或用户已是会员时，按钮会让二维码消失却换不来任何后续，所以不显示。
+                // 只在「能真正走到会员提示」时提供该入口：公开构建没有会员能力、
+                // 或用户已是会员时，点了会让二维码消失却换不来任何后续，所以不显示。
+                // 做成一张 236×54 的选项行（图标 + 两行文案 + 箭头），和 macOS 设置里的
+                // 行同一套语言，比裸放一个小按钮更容易被认成「可以往下走」。
                 if membershipFeature.supportsRemoteSessionAuthorization,
                    !membershipFeature.canStartCompanionConnection {
                     onboardingActionButton(id: "iphone.app_already_installed") {
                         didConfirmPhoneAppInstalled = true
                     } label: {
-                        Text(verbatim: localization.text(
-                            "onboarding.iphone_remote.app_already_installed"
-                        ))
+                        HStack(spacing: 12) {
+                            Image(systemName: "iphone")
+                                .font(.system(size: 17, weight: .regular))
+                                .foregroundStyle(Color.accentColor)
+                                .frame(width: 32, height: 32)
+                                .background(
+                                    Color.accentColor.opacity(0.10),
+                                    in: RoundedRectangle(cornerRadius: 9)
+                                )
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(verbatim: localization.text(
+                                    "onboarding.iphone_remote.app_installed_lead"
+                                ))
+                                .font(.system(size: 12))
+                                .foregroundStyle(.secondary)
+                                Text(verbatim: localization.text(
+                                    "onboarding.iphone_remote.app_installed_action"
+                                ))
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(.primary)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(.tertiary)
+                        }
+                        .padding(.vertical, 11)
+                        .padding(.horizontal, 13)
+                        .frame(width: 236)
+                        .background(
+                            Color(nsColor: .controlBackgroundColor),
+                            in: RoundedRectangle(cornerRadius: 13)
+                        )
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 13)
+                                .stroke(Color.primary.opacity(0.075), lineWidth: 1)
+                        }
+                        .contentShape(RoundedRectangle(cornerRadius: 13))
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
+                    .buttonStyle(.plain)
                 }
             } else if membershipFeature.supportsRemoteSessionAuthorization,
                       !membershipFeature.canStartCompanionConnection {

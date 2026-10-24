@@ -26,11 +26,15 @@
 
 本轮公开完整测试 902 项、私有完整测试 910 项通过。最终定向测试公开和私有各 5 项通过，另覆盖未完成向导时保留请求，以及拒绝非文件 URL 和其他后缀。市场校验、Apple Silicon Release 构建和 `verify-app.sh` 通过。生产交互入口使用隔离数据，实际查看全部绑定并取消，列表仍只有默认方案。中文浅色截图为 [导入预览](../Screenshots/design-drafts/sayall-file-import/import-preview-macos-zh-light.jpg)，JPEG、2040 × 1544，SHA-256 为 `fc89e381433628332c618ac932c2939d23ec4a1e2211bd2d2588a600630c76e8`。缺少深色和完整向导截图，以及签名安装、真实完整向导、确认保存、重启重读和会员状态验收；PR 保持 Draft。详见 [审查记录](../Bugs/2026-10-19-sayall-file-import.html)。
 
-## 2026-10-23 iPhone 右栏「我已安装」入口回归
+## 2026-10-23 iPhone 右栏「已装好 App？」入口回归
 
 适用分支：`codex/onboarding-iphone-app-installed`。iPhone 连接页右栏的展示是一条互斥的 `if / else if` 链：动态配对二维码 → App Store 下载二维码 → 会员开通提示 → 兜底 iPhone 插画。下载二维码分支排在会员提示之前，只要二维码素材随包交付，非会员用户就只会看到下载码，`companionMembershipRequiredView` 永远不显示，开通会员的入口在 iPhone 路径下不可达。
 
-本次在下载二维码下方加一个「我已安装」按钮，点击后把右栏切到会员开通提示。按钮只在「能真正走到会员提示」时出现，即 `membershipFeature.supportsRemoteSessionAuthorization && !membershipFeature.canStartCompanionConnection`：公开构建没有会员能力、或用户已经是 Plus 会员时不显示，避免二维码消失却换不来任何后续界面。
+本次在下载二维码下方加一条「已装好 App？／去开通会员」的选项行，点击后把右栏切到会员开通提示。入口只在「能真正走到会员提示」时出现，即 `membershipFeature.supportsRemoteSessionAuthorization && !membershipFeature.canStartCompanionConnection`：公开构建没有会员能力、或用户已经是 Plus 会员时不显示，避免二维码消失却换不来任何后续界面。
+
+入口形态按设计稿方案 C 做成 236 × 54 的选项行（圆角 13，`controlBackgroundColor` 白底 + `Color.primary.opacity(0.075)` 1pt 描边，与 macOS 设置里的选项行同一套语言）：左侧 32 × 32 圆角 9 的 `iphone` 图标（`accentColor` 10% 底），中间两行文案，右侧 `chevron.right`。宽度取 236 是因为二维码白块本身就是 220 + 两侧 8 = 236，两者同宽同轴，右栏不会出现两个参差的左边线。裸放一个 `.bordered` 小按钮容易被当成说明文字而不是「可以往下走」，这是换形态的直接原因。
+
+文案拆成两个键：`onboarding.iphone_remote.app_installed_lead`（「已装好 App？」／“Already installed?”）是 12pt 次级行，`onboarding.iphone_remote.app_installed_action`（「去开通会员」／“Activate membership”）是 13pt semibold 主行。原先的单键 `onboarding.iphone_remote.app_already_installed`（「我已安装」／“I Already Installed It”）已删除，不保留兼容别名。
 
 确认标记 `didConfirmPhoneAppInstalled` 是 `@State`，刻意不写入 `AppSettings`/UserDefaults：它只影响本次设置向导里的右栏内容，重新进入向导仍然从下载二维码开始，防止用户误点一次之后再找不到下载入口。下载二维码和会员提示的原有判定条件均未改动，本次只新增一条越过二维码的入口。
 
@@ -39,26 +43,43 @@
 ### 自动化与构建
 
 - `swift build --disable-keychain --disable-sandbox` 构建通过（会员能力需 `SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH` 指向 prepared artifacts）。
-- `swift test --disable-keychain --disable-sandbox --filter OnboardingFlowTests`：通过，含新增的 `iphoneRemoteOffersTheInstalledShortcutBeforeTheMembershipPrompt()` 静态断言（校验「我已安装」文案键、`@State` 临时标记、标记只出现在下载二维码分支条件内）。
+- `swift test --disable-keychain --disable-sandbox --filter OnboardingFlowTests`：通过（77 项），含 `iphoneRemoteOffersTheInstalledShortcutBeforeTheMembershipPrompt()` 静态断言（校验两个新文案键的中文取值与英文存在性、`@State` 临时标记、标记只出现在下载二维码分支条件内）。
 - `swift test --disable-keychain --disable-sandbox --filter LocalizationTests`：中英文 key 集合一致。
 - `bash scripts/verify-repository-governance.sh origin/main` 通过。
 - 本次不新增图片素材，打包脚本无需改动。
 
 ### 生产页面检查
 
-1. 完整构建（含会员能力）选择 iPhone 来源进入连接页，确认右栏先显示 App Store 下载二维码，二维码下方多出「我已安装」按钮，英文界面为「I Already Installed It」。
-2. 点击「我已安装」，确认右栏在同一页面内切换为会员开通提示（「点击开通会员功能」），二维码不再显示，顶部标题和左侧步骤不跳动、不重新加载页面。
-3. 关闭设置向导再重新打开，确认右栏回到下载二维码并再次出现「我已安装」按钮，验证该标记没有落盘。
-4. 用已是 Plus 会员的账号进入同一页面，确认二维码下方没有「我已安装」按钮（此时点击换不来会员提示，不该出现）。
-5. 公开构建（无会员能力）进入同一页面，确认同样没有「我已安装」按钮，二维码保持原样。
-6. 手机连接成功后，确认右栏切换到已连接状态，不受该标记影响。
-7. 登录态下点击「我已安装」，确认右栏显示的是会员提示而不是空白；若该构建同时包含弹窗尺寸修复，弹窗应显示完整会员中心。
-8. 切浅色/深色外观，确认按钮在两种外观下都清晰可辨、不贴边、不与二维码徽章重叠。
+1. 完整构建（含会员能力）选择 iPhone 来源进入连接页，确认右栏先显示 App Store 下载二维码，二维码与「扫描二维码下载…」说明之间下方多出一条「已装好 App？／去开通会员」的选项行，英文界面为「Already installed? / Activate membership」。
+2. 量一下宽度对齐：卡片左右边缘应与上方二维码白块（220 + 两侧 8）齐平，不出现一侧凸出一侧缩进；英文文案不得截断成省略号或折行。
+3. 点击卡片任意位置（不只是文字区），确认右栏在同一页面内切换为会员开通提示（「点击开通会员功能」），二维码不再显示，顶部标题和左侧步骤不跳动、不重新加载页面。
+4. 关闭设置向导再重新打开，确认右栏回到下载二维码并再次出现该卡片，验证该标记没有落盘。
+5. 用已是 Plus 会员的账号进入同一页面，确认二维码下方没有该卡片（此时点击换不来会员提示，不该出现）。
+6. 公开构建（无会员能力）进入同一页面，确认同样没有该卡片，二维码保持原样。
+7. 手机连接成功后，确认右栏切换到已连接状态，不受该标记影响。
+8. 登录态下点击卡片，确认右栏显示的是会员提示而不是空白；若该构建同时包含弹窗尺寸修复，弹窗应显示完整会员中心。
+9. 切浅色/深色外观：浅色下卡片应比右栏浅蓝底更白，描边可见但不抢眼；深色下卡片应比右栏底色略亮、文字与箭头保持可读。两种外观都不得出现卡片与二维码白块左边线参差、图标底色过重、或箭头贴到右边缘。
+
+### 离屏渲染证据
+
+三个组合用同一份构建产物渲染，命令与截图入口一致（`REMOTE_MIC_ONBOARDING_SCREENSHOT_*` + `_CONTROL_METHOD=iphone_app` + `_CONTROL_SOURCE=apple_companion`），均取第 4 页（`04-remote.png`）：
+
+| 文件 | 外观 / 语言 | SHA-256 |
+| --- | --- | --- |
+| [`membership-entry-card-zh-hans-light.png`](../Screenshots/design-drafts/onboarding-iphone-app-installed/membership-entry-card-zh-hans-light.png) | 浅色 / 中文 | `37238d7dc7026745181964496023480be7eea47840d545b981a9a359b62aa995` |
+| [`membership-entry-card-zh-hans-dark.png`](../Screenshots/design-drafts/onboarding-iphone-app-installed/membership-entry-card-zh-hans-dark.png) | 深色 / 中文 | `81d00d4e6fe0442f50d805bbbd6d7e5cb4fe29eb831f9e5c70cf487a2fcd698c` |
+| [`membership-entry-card-en-light.png`](../Screenshots/design-drafts/onboarding-iphone-app-installed/membership-entry-card-en-light.png) | 浅色 / 英文 | `1a9d6bc6d608d53a8e7decdebbcfb527d4beae2acc07f694782988e4ce77a940` |
+
+宽度对齐是按像素量出来的，不是目测：二维码白块（220 + 两侧 8）落在 `x1325…1796` 共 472px，卡片落在 `x1326…1795` 共 470px 加 1pt 描边，各差 1pt 就是描边本身。底色对比：浅色下卡片 `255,255,255`、右栏 `236,245,254`；深色下卡片 `30,30,30`、右栏 `31,35,48`，深色下两者亮度接近，可辨性来自 `primary 7.5%` 描边（约 `46,46,46`）。英文主行 “Activate membership” 在 236 宽内单行显示，未截断。
+
+截图是离屏渲染，只能证明布局与配色，不算真机 / 真实账号验收。
 
 ### 失败判定与边界
 
-- 点击「我已安装」后右栏没有任何变化、二维码仍然占据原位、出现空白面板或直接跳到兜底 iPhone 插画却无法继续，均判定失败。
-- 二维码下方出现「我已安装」但没有会员提示可切换（公开构建或已是会员），说明按钮的显示条件写错，判定失败。
+- 点击卡片后右栏没有任何变化、二维码仍然占据原位、出现空白面板或直接跳到兜底 iPhone 插画却无法继续，均判定失败。
+- 只有文字区能点、图标两侧留白点不动，说明 `contentShape` 没覆盖整张卡片，判定失败。
+- 二维码下方出现该卡片但没有会员提示可切换（公开构建或已是会员），说明显示条件写错，判定失败。
+- 英文文案被截断、折行或撑破 236 宽的卡片，判定失败。
 - 重新进入向导后二维码消失、只能看到会员提示，说明标记被错误持久化，判定失败。
 - 自动化断言只能证明分支顺序、文案键和状态作用域，不能代替真实 iPhone 安装、真实会员购买和真实扫码连接验收。
 
