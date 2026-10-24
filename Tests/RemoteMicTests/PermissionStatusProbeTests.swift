@@ -6,7 +6,7 @@ import Testing
 ///
 /// 这两个不变量共同保证「1 Hz 刷新权限」不会把主线程钉死：查询必须在后台队列上跑，
 /// 结果才回主线程交付；tccd 卡住时到达的请求必须合并，不能在恢复后一次性补跑几十次。
-@Suite("Permission status probe", .timeLimit(.minutes(1)))
+@Suite("Permission status probe", .timeLimit(.minutes(3)))
 struct PermissionStatusProbeTests {
     private final class Recorder: @unchecked Sendable {
         private let lock = NSLock()
@@ -60,14 +60,18 @@ struct PermissionStatusProbeTests {
         }
     }
 
+    /// 交付固定走主线程，而 CI 上会同时跑几百个测试，主队列可能被别人的工作占住数秒。
+    /// 超时只用来兜住真正的死锁，不能短到把「主线程正忙」判成失败；
+    /// 2026-10-23 的 macOS CI 就是在这里用 5 秒超时误报过一次。
     private static func waitUntil(
-        timeout: TimeInterval = 5,
+        timeout: TimeInterval = 20,
+        _ description: String,
         _ condition: () -> Bool
     ) async throws {
         let deadline = Date().addingTimeInterval(timeout)
         while !condition() {
             guard Date() < deadline else {
-                Issue.record("timed out waiting for the permission probe")
+                Issue.record("timed out waiting for \(description)")
                 return
             }
             try await Task.sleep(nanoseconds: 5_000_000)
@@ -141,7 +145,7 @@ struct PermissionStatusProbeTests {
         }
 
         probe.fetch { recorder.recordDelivery($0) }
-        try await Self.waitUntil { recorder.runCount == 1 }
+        try await Self.waitUntil("the first in-flight query") { recorder.runCount == 1 }
 
         probe.fetch { recorder.recordDelivery($0) }
         probe.fetch { recorder.recordDelivery($0) }
@@ -151,10 +155,10 @@ struct PermissionStatusProbeTests {
         #expect(recorder.maxConcurrentQueries == 1)
 
         gate.signal()
-        try await Self.waitUntil { recorder.runCount == 2 }
+        try await Self.waitUntil("the coalesced rerun") { recorder.runCount == 2 }
         gate.signal()
         // 三个调用方的回调都要被交付，只是由两次查询共同完成。
-        try await Self.waitUntil { recorder.deliveries == 3 }
+        try await Self.waitUntil("all three deliveries") { recorder.deliveries == 3 }
         #expect(recorder.maxConcurrentQueries == 1)
     }
 }
