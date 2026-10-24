@@ -1629,6 +1629,220 @@ struct OnboardingFlowTests {
         #expect(en.contains("\"onboarding.permissions.iphone_app_installed.title\" = \"I already installed the iOS app\";"))
     }
 
+    @Test func phoneRemoteMembershipGateIsShownBeforeTheAppStoreQRCode() throws {
+        // 手机 / 手表这条连接是要会员的（和小程序路径一致）。
+        // 这一屏原来的分支顺序是：邀请二维码 → App Store 二维码 → 会员门禁 → 占位图标。
+        // App Store 二维码永远存在，会员分支永远轮不到；门禁那边还额外要求
+        // supportsRemoteSessionAuthorization（公开构建里恒为 false），
+        // 于是被会员挡住的用户只会看到一张永远扫不上的二维码。
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/OnboardingView.swift"),
+            encoding: .utf8
+        )
+        let illustrationStart = try #require(source.range(of: "private var iPhoneRemoteIllustration"))
+        let illustrationEnd = try #require(source.range(
+            of: "private func appStoreDownloadEntry",
+            range: illustrationStart.upperBound..<source.endIndex
+        ))
+        let body = String(source[illustrationStart.lowerBound..<illustrationEnd.lowerBound])
+        let gateIndex = try #require(body.range(of: "model.phoneRemoteState == .membershipRequired"))
+        let storeIndex = try #require(body.range(of: "appStoreDownloadQRCode != nil"))
+        #expect(gateIndex.lowerBound < storeIndex.lowerBound)
+        // 门禁视图不能再被「私有会员模块在不在」挡住。
+        #expect(!body.contains("supportsRemoteSessionAuthorization"))
+    }
+
+    @Test func phoneRemoteConnectionRecordsTheMembershipBlockInsteadOfFailingSilently() throws {
+        // 被门禁挡住时必须留下状态和日志：之前只是静默 return，
+        // 不写状态、不记日志，界面上什么变化都没有，用户只会一直等。
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let modelSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
+            encoding: .utf8
+        )
+        let start = try #require(modelSource.range(of: "func enablePhoneRemoteConnection()"))
+        let end = try #require(modelSource.range(
+            of: "func disablePhoneRemoteConnection()",
+            range: start.upperBound..<modelSource.endIndex
+        ))
+        let body = String(modelSource[start.lowerBound..<end.lowerBound])
+        #expect(body.contains("phoneRemoteState = .membershipRequired"))
+        #expect(body.contains("PHONE REMOTE blocked_by_membership"))
+        #expect(!body.contains("objectWillChange.send()"))
+        // 会员门禁要排在「运行时是否已启动」之前：门禁是产品结论，与运行时无关；
+        // 先判运行时的话状态永远记不下来，界面也就没有东西可显示。
+        let gateIndex = try #require(body.range(of: "canStartCompanionConnection"))
+        let startedIndex = try #require(body.range(of: "guard started"))
+        #expect(gateIndex.lowerBound < startedIndex.lowerBound)
+    }
+
+    @Test @MainActor func phoneRemoteConnectionIsBlockedByMembership() throws {
+        let suiteName = "RemoteMicTests.Onboarding.PhoneMembership.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = AppSettings(defaults: defaults)
+        let model = BridgeAppModel(settings: settings)
+        model.enablePhoneRemoteConnection()
+        if model.membershipFeature.canStartCompanionConnection {
+            // 有会员权益时不该进门禁状态。
+            #expect(model.phoneRemoteState != .membershipRequired)
+        } else {
+            #expect(model.phoneRemoteState == .membershipRequired)
+        }
+    }
+
+    @Test func theMembershipEntryIsTheOnlyOneInTheApp() throws {
+        // 会员按钮全 App 只有一个：私有会员模块提供的那个「会员功能，点击开通」。
+        // 仓库曾另画一个不依赖私有模块的「通用会员按钮」，那会变成两个入口，
+        // 而且两套文案会互相打架，已撤掉。
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/OnboardingView.swift"),
+            encoding: .utf8
+        )
+        #expect(!source.contains("genericMembershipRequiredView"))
+        #expect(!source.contains("onboarding.membership.open"))
+        #expect(!source.contains("iphone.membership.open"))
+        #expect(!source.contains("onboarding.membership.required_title"))
+        // 手机路径和小程序路径共用同一个入口。
+        #expect(source.contains("private var companionMembershipRequiredView"))
+        let illustrationStart = try #require(source.range(of: "private var iPhoneRemoteIllustration"))
+        let illustrationEnd = try #require(source.range(
+            of: "private func appStoreDownloadEntry",
+            range: illustrationStart.upperBound..<source.endIndex
+        ))
+        let body = String(source[illustrationStart.lowerBound..<illustrationEnd.lowerBound])
+        #expect(body.contains("companionMembershipRequiredView"))
+        #expect(!body.contains("membershipRequiredView("))
+    }
+
+    @Test @MainActor func iphoneRemotePageEntersTheMembershipState() throws {
+        let iPhone = try OnboardingOffscreenFixture(
+            step: .remote,
+            remoteAvailability: .noRemote,
+            controlMethod: .iPhoneApp,
+            voiceTool: .doubao
+        )
+        defer { iPhone.close() }
+        // 这一屏确实进入了会员门禁状态，右栏才会走会员那一行而不是二维码。
+        #expect(iPhone.model.phoneRemoteState == .membershipRequired)
+        // 仓库不另画会员按钮：这里不应出现任何仓库自有的会员动作。
+        #expect(iPhone.probe.actions["iphone.membership.open"] == nil)
+        #expect(iPhone.probe.actions["membership.open"] == nil)
+        // 橙色恢复卡在门禁态下不出现，它的「重新连接」动作也不该注册：
+        // 改动前这张卡是显示的（截图里能看到），现在右栏会员入口才是下一步。
+        #expect(iPhone.probe.actions["recovery.remoteNotFound"] == nil)
+    }
+
+    @Test func appleCompanionPageSaysItIsAMemberFeatureInTheLeftColumn() throws {
+        // 小程序页面在会员态会把左栏状态卡标题换成「此连接需要 Plus 会员」
+        // （webRemoteConnectionTitle → connection.web.plus_required_title）。
+        // iPhone / Apple Watch 页面要一致：被会员门禁挡住时，左栏也写明这是会员功能，
+        // 右栏再给出唯一的那个「点击开通会员功能」按钮。
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/OnboardingView.swift"),
+            encoding: .utf8
+        )
+        let contentStart = try #require(source.range(of: "private var iPhoneRemoteContent"))
+        let contentEnd = try #require(source.range(
+            of: "private var appleCompanionConnectionTitle",
+            range: contentStart.upperBound..<source.endIndex
+        ))
+        let content = String(source[contentStart.lowerBound..<contentEnd.lowerBound])
+        // 左栏状态卡标题改由会员态决定，不再直接写死「等待 iPhone 或 Apple Watch」。
+        #expect(content.contains("appleCompanionConnectionTitle"))
+        #expect(!content.contains("onboarding.apple_companion.waiting"))
+        // 说明文字同样随门禁切换：门禁下连接服务没启动，
+        // 「保持 App 打开并完成当前 Mac 的连接」是用户此刻做不到的事。
+        #expect(content.contains("appleCompanionConnectionDetail"))
+        #expect(!content.contains("onboarding.apple_companion.connection_detail"))
+        // 第二张卡（请在已连接的设备上按一个控制键）在门禁态下也是做不到的指引。
+        #expect(content.contains("model.phoneRemoteState != .membershipRequired"))
+
+        let titleStart = try #require(source.range(of: "private var appleCompanionConnectionTitle"))
+        let titleEnd = try #require(source.range(
+            of: "private var webRemoteContent",
+            range: titleStart.upperBound..<source.endIndex
+        ))
+        let title = String(source[titleStart.lowerBound..<titleEnd.lowerBound])
+        #expect(title.contains("onboarding.apple_companion.membership_title"))
+        let membershipIndex = try #require(title.range(of: ".membershipRequired"))
+        let waitingIndex = try #require(title.range(of: "onboarding.apple_companion.waiting"))
+        #expect(membershipIndex.lowerBound < waitingIndex.lowerBound)
+        // 说明文字：门禁下给下一步，其余保持原来的连接指引。
+        #expect(title.contains("onboarding.apple_companion.membership_detail"))
+        #expect(title.contains("onboarding.apple_companion.connection_detail"))
+
+        // 参考的小程序页面本身仍然是「会员态换标题」那套写法。
+        #expect(source.contains("connection.web.plus_required_title"))
+    }
+
+    @Test func membershipGateSuppressesTheRecoveryCard() throws {
+        // 门禁下橙色恢复卡给的补救办法（重开 App、重新连接）都不成立：
+        // 连接服务压根没启动，重连还是会被挡。真正的原因和下一步在右栏会员入口那里。
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/OnboardingView.swift"),
+            encoding: .utf8
+        )
+        let start = try #require(source.range(of: "private func shouldShowStandaloneRecoveryCard"))
+        let end = try #require(source.range(
+            of: "private func recoveryDetailKey",
+            range: start.upperBound..<source.endIndex
+        ))
+        let body = String(source[start.lowerBound..<end.lowerBound])
+        #expect(body.contains("onboardingControlMethod == .iPhoneApp"))
+        #expect(body.contains("model.phoneRemoteState == .membershipRequired"))
+        // 物理遥控器那条既有判断不能被顺手改掉。
+        #expect(body.contains("onboardingControlMethod == .physicalRemote"))
+    }
+
+    @Test func appleCompanionMembershipCopyExistsInBothLanguages() throws {
+        // 左栏那句「这是会员功能」和它下面的下一步说明，中英都要有，
+        // 且不能是空串或占位符。
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let chinese = try String(
+            contentsOf: root.appendingPathComponent("Resources/zh-Hans.lproj/Localizable.strings"),
+            encoding: .utf8
+        )
+        let english = try String(
+            contentsOf: root.appendingPathComponent("Resources/en.lproj/Localizable.strings"),
+            encoding: .utf8
+        )
+        #expect(chinese.contains(
+            "\"onboarding.apple_companion.membership_title\" = \"此连接是会员功能\";"
+        ))
+        #expect(chinese.contains(
+            "\"onboarding.apple_companion.membership_detail\" = \"开通会员后即可连接；右侧按钮可直接开通。\";"
+        ))
+        #expect(english.contains(
+            "\"onboarding.apple_companion.membership_title\" = \"This connection is a member feature\";"
+        ))
+        #expect(english.contains(
+            "\"onboarding.apple_companion.membership_detail\" = \"Open the membership to connect. Use the button on the right.\";"
+        ))
+    }
+
     @Test func voiceTestConfigurationCopyDoesNotPromiseAFixedNumberOfChecks() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

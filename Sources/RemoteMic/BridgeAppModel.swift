@@ -618,6 +618,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     @Published private(set) var isPhoneRemoteConnected = false
     @Published private(set) var isWatchRemoteConnected = false
     @Published private(set) var phoneRemoteInvitation: PhoneRemoteInvitation?
+    @Published private(set) var phoneRemoteState: PhoneRemoteSessionState = .idle
     @Published private(set) var webRemoteState: WebRemoteSessionState = .disabled
     @Published private(set) var voiceShortcutStatus = LocalizedMessage("voice_button.status.preparing")
     @Published private(set) var voiceKeyCompatibilityWarning: VoiceKeyCompatibilityWarning?
@@ -1552,6 +1553,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         isPhoneRemoteConnectionEnabled = false
         isPhoneRemoteConnected = false
         isWatchRemoteConnected = false
+        phoneRemoteState = .idle
         webRemoteState = .disabled
         cancelVoiceSessionWarningTracking()
         bluetoothVoiceActive = false
@@ -2088,11 +2090,16 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     }
 
     func enablePhoneRemoteConnection() {
-        guard started, !isPhoneRemoteConnectionEnabled else { return }
+        // 会员门禁要先判：手机与手表这条连接是要会员的（和小程序路径一致）。
+        // 之前这里被挡住时只是静默返回——不写状态、不记日志，界面继续显示一张
+        // 永远扫不上的二维码，用户既不知道为什么连不上，也没有下一步可走。
         guard membershipFeature.canStartCompanionConnection else {
-            objectWillChange.send()
+            phoneRemoteState = .membershipRequired
+            AppLogger.shared.write("PHONE REMOTE blocked_by_membership")
             return
         }
+        guard started, !isPhoneRemoteConnectionEnabled else { return }
+        phoneRemoteState = .idle
         isPhoneRemoteConnectionEnabled = true
         phoneRemoteServer.start()
         watchBluetoothServer.start()
@@ -2104,6 +2111,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         isPhoneRemoteConnectionEnabled = false
         isPhoneRemoteConnected = false
         isWatchRemoteConnected = false
+        phoneRemoteState = .idle
         cancelPhoneApproval()
         phoneRemoteServer.stop()
         watchBluetoothServer.stop()

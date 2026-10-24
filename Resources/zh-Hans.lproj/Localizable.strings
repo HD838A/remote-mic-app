@@ -800,6 +800,8 @@
 "onboarding.apple_companion.detail" = "打开 Apple 设备上的无线麦 SayAll 遥控器；iPhone 或 Apple Watch 任一真实连接都可以继续。";
 "onboarding.apple_companion.connected" = "Apple 设备已连接";
 "onboarding.apple_companion.waiting" = "等待 iPhone 或 Apple Watch";
+"onboarding.apple_companion.membership_title" = "此连接是会员功能";
+"onboarding.apple_companion.membership_detail" = "开通会员后即可连接；右侧按钮可直接开通。";
 "onboarding.apple_companion.connection_detail" = "保持 iOS App 或 Apple Watch App 打开，并完成当前 Mac 的连接。";
 "onboarding.apple_companion.button_detail" = "请在已连接的 iPhone 或 Apple Watch 上按一个普通控制键。";
 "onboarding.control_source.web_remote.title" = "无线麦 SayAll 微信小程序";

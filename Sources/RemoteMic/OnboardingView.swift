@@ -1674,19 +1674,43 @@ struct OnboardingView: View {
                 icon: selectedControlConnected
                     ? "checkmark.circle.fill"
                     : "iphone.and.arrow.forward",
-                title: localization.text(
-                    selectedControlConnected
-                        ? "onboarding.apple_companion.connected"
-                        : "onboarding.apple_companion.waiting"
-                ),
-                detail: localization.text("onboarding.apple_companion.connection_detail"),
+                title: appleCompanionConnectionTitle,
+                detail: appleCompanionConnectionDetail,
                 isComplete: selectedControlConnected
             )
 
-            controllerButtonStatusCard(
-                waitingDetailKey: "onboarding.apple_companion.button_detail"
-            )
+            // 被会员门禁挡住时这张卡也是做不到的指引：连接服务没启动，没有设备能按键。
+            if model.phoneRemoteState != .membershipRequired {
+                controllerButtonStatusCard(
+                    waitingDetailKey: "onboarding.apple_companion.button_detail"
+                )
+            }
         }
+    }
+
+    /// 左栏状态卡标题：被会员门禁挡住时写明「这是会员功能」。
+    ///
+    /// 与小程序页面同一做法——`webRemoteConnectionTitle` 在会员态会把状态卡标题
+    /// 换成会员提示，右栏再给出唯一的那个「点击开通会员功能」按钮。
+    private var appleCompanionConnectionTitle: String {
+        if selectedControlConnected {
+            return localization.text("onboarding.apple_companion.connected")
+        }
+        if model.phoneRemoteState == .membershipRequired {
+            return localization.text("onboarding.apple_companion.membership_title")
+        }
+        return localization.text("onboarding.apple_companion.waiting")
+    }
+
+    /// 左栏状态卡说明：被会员门禁挡住时换成「开通会员后即可连接」。
+    ///
+    /// 原来这里恒为「保持 iOS App 或 Apple Watch App 打开，并完成当前 Mac 的连接。」——
+    /// 门禁下连接服务并没有启动，这句指的是用户此刻做不到的事。
+    private var appleCompanionConnectionDetail: String {
+        if model.phoneRemoteState == .membershipRequired {
+            return localization.text("onboarding.apple_companion.membership_detail")
+        }
+        return localization.text("onboarding.apple_companion.connection_detail")
     }
 
     private var webRemoteContent: some View {
@@ -2354,6 +2378,13 @@ struct OnboardingView: View {
            failure == .remoteNotFound {
             return false
         }
+        // 手机 / 手表路径被会员门禁挡住时，这张卡的补救办法（重开 App、重新连接）
+        // 都不成立：连接服务压根没启动，真正的原因和下一步在右栏会员入口那里。
+        if settings.onboardingStep == .remote,
+           settings.onboardingControlMethod == .iPhoneApp,
+           model.phoneRemoteState == .membershipRequired {
+            return false
+        }
         return true
     }
 
@@ -2581,53 +2612,66 @@ struct OnboardingView: View {
 
     private var iPhoneRemoteIllustration: some View {
         VStack(spacing: 18) {
-            if !model.isPhoneRemoteConnected,
-               let invitation = model.phoneRemoteInvitation,
-               let qrCode = PhoneRemoteInvitationQRCode.image(for: invitation) {
+            if model.isPhoneRemoteConnected {
+                Image(systemName: "iphone.gen3.radiowaves.left.and.right")
+                    .font(.system(size: 150, weight: .light))
+                    .foregroundStyle(Color.green)
+            } else if model.phoneRemoteState == .membershipRequired {
+                // 会员判断要排在二维码前面。原来 App Store 二维码这个分支永远存在，
+                // 会员那一行永远轮不到，被会员挡住的用户只会看到一张扫不上的二维码。
+                // 会员入口全 App 只有这一个（私有会员模块提供的那个），仓库不再另画一个。
+                // App Store 下载入口同时保留，「先装 App、再开会员、最后重连」这条路是通的。
+                companionMembershipRequiredView
+                appStoreDownloadEntry()
+            } else if let invitation = model.phoneRemoteInvitation,
+                      let qrCode = PhoneRemoteInvitationQRCode.image(for: invitation) {
                 Image(nsImage: qrCode)
-                    .interpolation(.none)
-                    .resizable()
-                    .frame(width: 220, height: 220)
-        .padding(8)
-                    .background(Color.white, in: RoundedRectangle(cornerRadius: 16))
-                Text(verbatim: localization.text("onboarding.iphone_remote.scan"))
-                    .font(.system(size: 15, weight: .semibold))
-                    .multilineTextAlignment(.center)
-            } else if !model.isPhoneRemoteConnected,
-                      let storeQRCode = appStoreDownloadQRCode {
-                Image(nsImage: storeQRCode)
                     .interpolation(.none)
                     .resizable()
                     .frame(width: 220, height: 220)
                     .padding(8)
                     .background(Color.white, in: RoundedRectangle(cornerRadius: 16))
-                if let storeBadge = appStoreBadgeImage {
-                    Image(nsImage: storeBadge)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(height: 52)
-                        .accessibilityLabel(Text(verbatim: "App Store"))
-                }
-                Text(verbatim: localization.text("onboarding.iphone_remote.appstore_qr"))
+                Text(verbatim: localization.text("onboarding.iphone_remote.scan"))
                     .font(.system(size: 15, weight: .semibold))
                     .multilineTextAlignment(.center)
-            } else if membershipFeature.supportsRemoteSessionAuthorization,
-                      !membershipFeature.canStartCompanionConnection {
-                companionMembershipRequiredView
+            } else if appStoreDownloadQRCode != nil {
+                appStoreDownloadEntry()
             } else {
-                Image(systemName: model.isPhoneRemoteConnected
-                    ? "iphone.gen3.radiowaves.left.and.right"
-                    : "iphone.gen3")
+                Image(systemName: "iphone.gen3")
                     .font(.system(size: 150, weight: .light))
-                    .foregroundStyle(
-                        model.isPhoneRemoteConnected ? Color.green : Color.accentColor
-                    )
+                    .foregroundStyle(Color.accentColor)
             }
             sideStatusPanel
         }
         .padding(28)
     }
 
+    /// 官方 App Store 下载二维码与徽章。
+    @ViewBuilder
+    private func appStoreDownloadEntry() -> some View {
+        if let storeQRCode = appStoreDownloadQRCode {
+            Image(nsImage: storeQRCode)
+                .interpolation(.none)
+                .resizable()
+                .frame(width: 220, height: 220)
+                .padding(8)
+                .background(Color.white, in: RoundedRectangle(cornerRadius: 16))
+            if let storeBadge = appStoreBadgeImage {
+                Image(nsImage: storeBadge)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(height: 52)
+                    .accessibilityLabel(Text(verbatim: "App Store"))
+            }
+            Text(verbatim: localization.text("onboarding.iphone_remote.appstore_qr"))
+                .font(.system(size: 15, weight: .semibold))
+                .multilineTextAlignment(.center)
+        }
+    }
+
+    /// 全 App 唯一的会员入口：私有会员模块提供的那个「会员功能，点击开通」按钮。
+    ///
+    /// 手机 / 手表路径和小程序路径共用它，仓库不再另画一个会员按钮。
     private var companionMembershipRequiredView: some View {
         membershipFeature.membershipRequiredView(remoteAuthorizationDenied: true) {
             isMembershipPresented = true

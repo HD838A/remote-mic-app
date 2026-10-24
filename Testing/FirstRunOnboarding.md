@@ -1077,3 +1077,76 @@
 - 自动化：公开构建全量 961 项测试通过；双架构 Release 构建通过。延迟回调回归确认取消订阅后不通知替换订阅，且 100 次 tick 只保留一次在途查询。
 - 现场补验：停留权限页，撤销并恢复蓝牙、输入监控、辅助功能；返回前台后状态应恢复。查询变慢时 UI 应可操作，恢复后不得突发重复查询。仍须完成首次进入、退出续接、关于页重跑及真实按键/语音旅程。
 - 本轮没有重做完整页面截图或真实权限/设备验收。现有截图只证明此前静态布局；本轮不表示安装包或发布验收完成。
+
+## 2026-10-25 手机 / 手表连接改为要会员，并把会员入口提到二维码前面
+
+适用分支：`codex/companion-membership-gate`。只改「连接 iPhone 或 Apple Watch」这一屏的会员门禁呈现与连接前的门禁记录，不改连接协议、蓝牙发现、按键映射、语音链路、权限项或持久化。
+
+### 原来的问题：点了没反应
+
+手机与手表这条连接要走会员权益。原来被门禁挡住时，`enablePhoneRemoteConnection()` 只是静默 `return`：不写状态、不记日志、`phoneRemoteServer` 根本没启动。界面上却还是照旧显示 App Store 下载二维码，用户扫了、装了、也连不上——因为那张二维码是「下载 App」，而连接服务压根没起来。
+
+小程序（微信）路径早就有会员状态：`enableWebRemoteConnection()` 被挡住时置 `webRemoteState = .membershipRequired`，右栏改画会员提示。手机路径缺的正是这一段。
+
+还有一层：即使把状态补上，右栏的分支顺序是「邀请二维码 → App Store 二维码 → 会员门禁 → 占位图标」。App Store 二维码永远存在，会员分支永远轮不到；而那个分支当时还额外要求 `membershipFeature.supportsRemoteSessionAuthorization`（公开构建里没有私有会员模块，恒为 `false`），两重原因叠在一起，会员提示在任何构建里都显示不出来。
+
+### 产品结论与做法
+
+iPhone / Apple Watch 连接要会员（与小程序路径一致）。做法：
+
+1. **模型层记录门禁结果**。新增 `PhoneRemoteSessionState`（`idle` / `membershipRequired`），`enablePhoneRemoteConnection()` 先判会员权益：挡住就置 `.membershipRequired` 并写 `PHONE REMOTE blocked_by_membership` 日志，再返回。会员门禁排在 `guard started` 之前——门禁是产品结论，与运行时是否已启动无关；先判运行时的话状态永远记不下来，界面也就没有东西可显示。原来那条只发 `objectWillChange.send()` 的静默路径一并去掉。
+2. **右栏把门禁提到二维码前面**。`model.phoneRemoteState == .membershipRequired` 时先画会员入口，其下保留 App Store 下载二维码（这一屏同时回答「为什么连不上」和「App 去哪下」）。邀请二维码与占位图标的画法不变，App Store 那段抽成 `appStoreDownloadEntry()`，两个分支共用。
+3. **会员入口全 App 只有一个**。手机 / 手表路径复用私有会员模块提供的那一个「会员功能，点击开通」按钮（`companionMembershipRequiredView`，与小程序路径是同一个视图），仓库不再另画一个不依赖私有模块的通用会员按钮——两个入口会让用户不知道该点哪个，两套文案也会互相打架。私有模块画不出付费墙时（公开构建）该视图退化为空视图，这是既有行为，不额外兜底。
+4. **左栏也写明「这是会员功能」，并去掉两张做不到的指引**。与小程序页面同一做法：小程序路径的左栏状态卡标题在会员态会换成「此连接需要 Plus 会员」（`webRemoteConnectionTitle`），iPhone / Apple Watch 路径原先无论什么状态都写「等待 iPhone 或 Apple Watch」。现在：
+   - **标题**由 `appleCompanionConnectionTitle` 决定：已连接 →「Apple 设备已连接」；门禁 →「此连接是会员功能」；其余 →「等待 iPhone 或 Apple Watch」。
+   - **说明**由 `appleCompanionConnectionDetail` 决定：门禁 →「开通会员后即可连接；右侧按钮可直接开通。」；其余保持原来的「保持 iOS App 或 Apple Watch App 打开，并完成当前 Mac 的连接。」——原本这句在门禁下指的是用户做不到的事（连接服务没启动）。
+   - 第二张卡「请在已连接的 iPhone 或 Apple Watch 上按一个普通控制键」在门禁态隐掉，理由同上：没有设备能按键。
+   - 橙色恢复卡在门禁态隐掉：`shouldShowStandaloneRecoveryCard` 里加一条只命中「`.remote` + `.iPhoneApp` + `.membershipRequired`」的提前返回。它的补救办法是「重新打开 App 再连一次」，连接服务没启动时重连还是会被挡。
+
+   左栏说明与右栏按钮讲的是同一件事的两面，不是重复展示会员限制说明。
+
+这一轮只做呈现层修正：没有新增「重新连接」按钮，没有改会员弹窗文案。新增两个本地化键（`onboarding.apple_companion.membership_title` / `membership_detail`，中英各两条）。
+
+### 自动化与构建
+
+- `swift build --build-tests --disable-keychain --disable-sandbox` 公开构建通过。
+- `swift test --disable-keychain --disable-sandbox --filter OnboardingFlowTests`：100 项通过（基线 92 项 + 新增 8 项）：
+  - `phoneRemoteMembershipGateIsShownBeforeTheAppStoreQRCode()`：断言会员分支在源码里排在 App Store 二维码分支之前，且不再受 `supportsRemoteSessionAuthorization` 约束。
+  - `phoneRemoteConnectionRecordsTheMembershipBlockInsteadOfFailingSilently()`：断言 `enablePhoneRemoteConnection()` 会写 `.membershipRequired` 与日志、不再有 `objectWillChange.send()` 的静默路径，且门禁判定排在 `guard started` 之前。
+  - `phoneRemoteConnectionIsBlockedByMembership()`：模型级验证没有会员权益时连接请求确实被记为门禁状态。
+  - `theMembershipEntryIsTheOnlyOneInTheApp()`：断言仓库里不再有第二个会员按钮（无 `genericMembershipRequiredView`、无仓库自有的会员文案键），手机路径与小程序路径共用同一个入口。
+  - `iphoneRemotePageEntersTheMembershipState()`：离屏托管真实生产视图，断言这一屏确实进入 `.membershipRequired`、交互探针里没有任何仓库自有的会员动作，且恢复卡的 `recovery.remoteNotFound` 动作没有注册（即橙色卡确实没画出来）。
+  - `appleCompanionPageSaysItIsAMemberFeatureInTheLeftColumn()`：断言左栏标题与说明都改由门禁状态决定、不再写死「等待…」与「保持 App 打开并完成连接」，第二张卡由 `!= .membershipRequired` 条件包裹，小程序那套写法仍在。
+  - `membershipGateSuppressesTheRecoveryCard()`：断言 `shouldShowStandaloneRecoveryCard` 里有「`.iPhoneApp` + `.membershipRequired`」的提前返回，且物理遥控器那条既有判断没被改掉。
+  - `appleCompanionMembershipCopyExistsInBothLanguages()`：断言两个新键中英都在且是具体文案。
+- `swift test --disable-keychain --disable-sandbox --filter LocalizationTests`：8 项通过（中英键集合一致、无空值、无占位符）。
+
+### 离屏渲染证据
+
+四张图（中文浅色 / 中文深色 / 英文浅色 / 英文深色，`04-remote.png`，2040 × 1600）存放在 [Screenshots/onboarding-companion-membership-gate/](../Screenshots/onboarding-companion-membership-gate/)，逐张看过：左栏只有一张状态卡（标题「此连接是会员功能」，说明「开通会员后即可连接；右侧按钮可直接开通。」），第二张按键卡与橙色恢复卡都不在；右栏会员按钮、二维码、App Store 徽章、连接检查面板都完整落在 1020 × 772 内，没有裁切；深色下文字对比度正常；英文说明折成两行且完整可读。门禁态下左栏内容本来就少，下方留白是正常的。
+
+这四张是用私有构件构建（`SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH`）渲染的：公开构建没有私有会员模块，付费墙视图会退化成 `EmptyView`，右栏只会剩二维码，看不到会员按钮。
+
+同一套环境在基线 `16f4cbb7` 上渲染作对照：改动前右栏顶部没有会员按钮，只有 App Store 下载二维码——正是「分支顺序把会员那一行遮住」的样子。
+
+### 生产页面检查
+
+1. 完整构建选 iPhone / Apple Watch 进入连接页，确认右栏顶部出现「会员功能，点击开通」，而不是只有一张扫不上的二维码。
+2. 确认左栏状态卡标题是「此连接是会员功能」、说明是「开通会员后即可连接；右侧按钮可直接开通。」，而不是「等待 iPhone 或 Apple Watch」+「保持 App 打开并完成当前 Mac 的连接」。
+3. 确认左栏不再出现第二张「请按一个普通控制键」的卡，也没有橙色恢复卡（「重新打开并连接」+「重新连接」+「复制设置诊断」）。
+4. 点「开通会员」，确认会员中心能打开、能完成购买（真机验收）。
+5. 购买后回到引导页，确认连接服务能启动、右栏变成邀请二维码，左栏标题回到「等待 iPhone 或 Apple Watch」、说明回到「保持 App 打开并完成连接」，第二张按键卡与恢复卡按各自原有条件恢复显示。
+6. 确认 App Store 二维码仍在（没有把下载入口弄丢），且文案与右栏一致。
+7. 确认全 App 只有这一个会员入口：小程序路径与手机路径显示同一个按钮，界面上没有第二个「开通会员」。
+8. 切英文与深色，确认会员入口与左栏两句文案换行整齐、底部「连接检查」完整可见。
+
+### 失败判定与边界
+
+- 右栏看不到会员入口、或只看到二维码没有原因，判定失败（原问题没修好）。
+- 左栏状态卡仍写「等待 iPhone 或 Apple Watch」，或说明仍写「保持 App 打开并完成连接」，判定失败（没告诉用户这是会员功能、还指了一条做不到的路）。
+- 门禁态下仍能看到橙色恢复卡或第二张按键卡，判定失败。
+- 点「开通会员」没反应或弹出空窗，判定失败。
+- 界面上出现两个会员入口，判定失败。
+- 会员入口 + 二维码 + 连接检查面板有任何一项被挤出窗口，判定失败。
+- 开通会员后第二张按键卡与恢复卡没有按原条件回来，判定失败（抑制只应作用于门禁态）。
+- 截图只证明静态版式与按钮接线；真实购买、真实会员状态、真实 iPhone / Apple Watch 连接都仍需实机验收。

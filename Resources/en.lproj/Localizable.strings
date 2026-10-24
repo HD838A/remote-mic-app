@@ -800,6 +800,8 @@
 "onboarding.apple_companion.detail" = "Open SayAll on your iPhone or Apple Watch and connect to this Mac.";
 "onboarding.apple_companion.connected" = "Apple device connected";
 "onboarding.apple_companion.waiting" = "Waiting for iPhone or Apple Watch";
+"onboarding.apple_companion.membership_title" = "This connection is a member feature";
+"onboarding.apple_companion.membership_detail" = "Open the membership to connect. Use the button on the right.";
 "onboarding.apple_companion.connection_detail" = "Keep the iOS or watchOS app open and connect it to this Mac.";
 "onboarding.apple_companion.button_detail" = "Tap any button except the voice button on your connected iPhone or Apple Watch.";
 "onboarding.control_source.web_remote.title" = "WeChat Mini Program SayAll";
