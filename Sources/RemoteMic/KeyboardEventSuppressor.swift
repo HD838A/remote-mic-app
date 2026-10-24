@@ -67,6 +67,7 @@ final class KeyboardEventSuppressor {
             callback: keyboardEventSuppressorCallback,
             userInfo: context
         ) else {
+            logger("HID FILTER phase=start_failed reason=tap_create_failed tap=session")
             return false
         }
         guard let runLoopSource = CFMachPortCreateRunLoopSource(
@@ -77,6 +78,7 @@ final class KeyboardEventSuppressor {
             // tapCreate 成功即已在 WindowServer 侧登记端口；此处失败若不释放端口，
             // 该 tap 会残留到进程退出，必须与 stop() 走同一条清理路径。
             EventTapPort.release(port: eventTap, source: nil)
+            logger("HID FILTER phase=start_failed reason=run_loop_source_failed tap=session")
             return false
         }
 
@@ -85,10 +87,12 @@ final class KeyboardEventSuppressor {
         self.runLoopSource = runLoopSource
         EventTapPort.activate(port: eventTap, source: runLoopSource)
         isRunning = true
+        logger("HID FILTER phase=started result=active tap=session")
         return true
     }
 
     func stop() {
+        let wasRunning = isRunning
         hardwareModifierState.reset()
         lock.lock()
         pendingEvents.removeAll()
@@ -99,6 +103,7 @@ final class KeyboardEventSuppressor {
         runLoopSource = nil
         eventTap = nil
         isRunning = false
+        if wasRunning { logger("HID FILTER phase=stopped result=inactive tap=session") }
     }
 
     func arm(button: RemoteButton, edge: RemoteEventEdge) {
@@ -155,12 +160,17 @@ final class KeyboardEventSuppressor {
 
     func handle(type: CGEventType, event: CGEvent) -> Bool {
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+            logger("HID FILTER phase=disabled reason=\(type == .tapDisabledByTimeout ? "timeout" : "user_input") tap=session")
             if let eventTap {
                 CGEvent.tapEnable(tap: eventTap, enable: true)
+                logger("HID FILTER phase=reenable_requested result=submitted tap=session")
+            } else {
+                logger("HID FILTER phase=reenable_requested result=unavailable tap=session")
             }
             return false
         }
         if event.getIntegerValueField(.eventSourceUserData) == KeyboardInjector.syntheticEventMarker {
+            ShortcutSessionObservation.shared.observe(event, logger: logger)
             return false
         }
         hardwareModifierState.observe(type: type, event: event)

@@ -350,4 +350,144 @@ struct ShortcutLifecycleTests {
         #expect(KeyboardInjector.recordedShortcut(keyCode: 128, modifiers: [], deviceModifierFlags: 0) == nil)
     }
 
+    @Test func controlArrowDiagnosticsConnectConstructionToSessionObservation() throws {
+        var logs: [String] = []
+        let suppressor = KeyboardEventSuppressor(logger: { logs.append($0) })
+        var primaryTimestamps: [UInt64] = []
+        var filtered: [Bool] = []
+        #expect(ShortcutEventSequence.send(
+            keyCode: 126, modifiers: .maskControl,
+            hardwareFlags: { CGEventFlags(rawValue: 0x00A0_0100) },
+            modifierState: ShortcutHardwareModifierState(),
+            eventPoster: { event in
+                if event.type == .keyDown || event.type == .keyUp {
+                    primaryTimestamps.append(event.timestamp)
+                }
+                // Replay the existing session callback; this is not a real system post.
+                filtered.append(suppressor.handle(type: event.type, event: event))
+                return true
+            }, logger: { logs.append($0) }
+        ))
+        #expect(filtered == [false, false, false, false])
+        let request = try #require(logs.first { $0.contains("phase=requested") })
+        #expect(request.contains("primary_kind=arrow_up"))
+        #expect(request.contains("requested_flags=262144"))
+        #expect(request.contains("physical_flags=0"))
+        let events = logs.filter { $0.contains("phase=event_submission") }
+        try #require(events.count == 4)
+        #expect(events[0].contains("event_kind=modifier_down"))
+        #expect(events[1].contains("event_kind=key_down"))
+        #expect(events[1].contains("event_flags=2359297"))
+        #expect(events[1].contains("event_function=false"))
+        #expect(events[1].contains("event_numeric_pad=true"))
+        #expect(events[3].contains("event_kind=modifier_up"))
+        #expect(events[3].contains("event_flags=0"))
+        let observations = logs.filter { $0.contains("SHORTCUT OBSERVATION") }
+        #expect(observations.count == 2)
+        for timestamp in primaryTimestamps {
+            #expect(events.contains { $0.contains("event_timestamp_ns=\(timestamp) ") })
+            #expect(observations.contains { $0.contains("event_timestamp_ns=\(timestamp) ") })
+        }
+        #expect(observations.allSatisfy { $0.contains("result=passed_through") && $0.contains("user_visible_result=unknown") })
+        #expect(logs.filter { $0.contains("phase=completed") }.count == 1)
+        #expect(!logs.joined().contains("key_code"))
+    }
+
+    @Test(arguments: 0..<4)
+    func controlArrowDiagnosticFailuresKeepOneTerminalAndRecovery(_ failAt: Int) {
+        var logs: [String] = []
+        var index = 0
+        #expect(!ShortcutEventSequence.send(
+            keyCode: 126, modifiers: .maskControl, hardwareFlags: { [] },
+            eventPoster: { _ in defer { index += 1 }; return index != failAt },
+            logger: { logs.append($0) }
+        ))
+        #expect(logs.contains { $0.contains("phase=event_submission") && $0.contains("result=failed") })
+        #expect(logs.filter { $0.contains("phase=completed") }.count == 1)
+        #expect(logs.last?.contains("result=failed") == true)
+        logs.removeAll()
+        #expect(ShortcutEventSequence.send(
+            keyCode: 126, modifiers: .maskControl, hardwareFlags: { [] },
+            eventPoster: { _ in true }, logger: { logs.append($0) }
+        ))
+        #expect(logs.last?.contains("result=submitted") == true)
+    }
+
+    @Test func sessionObservationDoesNotLogPhysicalKeysOrOrdinarySyntheticContent() throws {
+        var logs: [String] = []
+        let suppressor = KeyboardEventSuppressor(logger: { logs.append($0) })
+        for (code, marked, flags) in [
+            (UInt16(126), false, CGEventFlags.maskControl),
+            (UInt16(0), true, CGEventFlags.maskControl),
+            (UInt16(126), true, CGEventFlags.maskCommand),
+        ] {
+            let event = try #require(CGEvent(keyboardEventSource: nil, virtualKey: code, keyDown: true))
+            event.flags = flags
+            if marked { event.setIntegerValueField(.eventSourceUserData, value: KeyboardInjector.syntheticEventMarker) }
+            #expect(!suppressor.handle(type: .keyDown, event: event))
+        }
+        #expect(logs.isEmpty)
+    }
+
+    @Test func sessionObservationReportsChangedFlagsOnlyOnce() throws {
+        let observation = ShortcutSessionObservation()
+        let event = try #require(CGEvent(keyboardEventSource: nil, virtualKey: 126, keyDown: true))
+        event.timestamp = 1
+        event.setIntegerValueField(.eventSourceUserData, value: KeyboardInjector.syntheticEventMarker)
+        event.flags = [.maskControl, .maskNumericPad]
+        observation.register(event, operationID: "test", eventIndex: 2, primaryKind: "arrow_up")
+        event.flags = .maskNumericPad
+        var logs: [String] = []
+        observation.observe(event, logger: { logs.append($0) })
+        observation.observe(event, logger: { logs.append($0) })
+        #expect(logs.count == 1)
+        #expect(logs.first?.contains("operation_id=test") == true)
+        #expect(logs.first?.contains("flags_match=false") == true)
+        #expect(logs.first?.contains("expected_flags=2359296 event_flags=2097152") == true)
+    }
+
+    @Test func sessionObservationDoesNotPairMissingOrDuplicateTimestamps() throws {
+        let observation = ShortcutSessionObservation()
+        let event = try #require(CGEvent(keyboardEventSource: nil, virtualKey: 126, keyDown: true))
+        event.setIntegerValueField(.eventSourceUserData, value: KeyboardInjector.syntheticEventMarker)
+        event.flags = [.maskControl, .maskNumericPad]
+        var logs: [String] = []
+        event.timestamp = 0
+        observation.register(event, operationID: "zero", eventIndex: 2, primaryKind: "arrow_up")
+        observation.observe(event, logger: { logs.append($0) })
+        event.timestamp = 1
+        observation.register(event, operationID: "first", eventIndex: 2, primaryKind: "arrow_up")
+        observation.register(event, operationID: "second", eventIndex: 2, primaryKind: "arrow_up")
+        observation.observe(event, logger: { logs.append($0) })
+        #expect(logs.count == 2)
+        #expect(logs.allSatisfy { $0.contains("operation_id=unknown") && $0.contains("correlation=unavailable") })
+        #expect(!logs.joined().contains("flags_match=true"))
+    }
+
+    @Test func sessionObservationBoundsMissingCallbacksAndExpiresWithoutFalseFailure() throws {
+        var now: TimeInterval = 10
+        let observation = ShortcutSessionObservation(uptime: { now })
+        var events: [CGEvent] = []
+        for index in 0..<65 {
+            let event = try #require(CGEvent(keyboardEventSource: nil, virtualKey: 126, keyDown: true))
+            event.timestamp = UInt64(index + 1)
+            event.setIntegerValueField(.eventSourceUserData, value: KeyboardInjector.syntheticEventMarker)
+            events.append(event)
+            observation.register(event, operationID: "test", eventIndex: index, primaryKind: "arrow_up")
+            now += 0.001
+        }
+        var logs: [String] = []
+        observation.observe(events[0], logger: { logs.append($0) })
+        #expect(logs.isEmpty)
+        observation.observe(events[64], logger: { logs.append($0) })
+        #expect(logs.count == 1)
+        now = 13
+        observation.observe(events[1], logger: { logs.append($0) })
+        #expect(logs.count == 1)
+        observation.register(events[0], operationID: "recovered", eventIndex: 0, primaryKind: "arrow_up")
+        observation.observe(events[0], logger: { logs.append($0) })
+        #expect(logs.last?.contains("operation_id=recovered") == true)
+        #expect(!logs.joined().contains("result=failed"))
+    }
+
 }
