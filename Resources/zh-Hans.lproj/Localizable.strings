@@ -376,8 +376,8 @@
 "connection.web.test_bypass_title" = "测试模式：跳过会员权益检查";
 "connection.web.test_bypass_detail" = "测试包默认开启，无需登录或 Plus 会员即可连接。正式环境仍检查会员权限。";
 "audio.section.title" = "音频设置";
-"audio.voice_output.section_title" = "语音输出";
-"audio.output.title" = "语音输出";
+"audio.voice_output.section_title" = "语音设备";
+"audio.output.title" = "输出设备";
 "audio.output.disabled" = "不输出语音";
 "audio.gain.title" = "增益";
 "audio.gain.help" = "0 dB 保持原始音量；数值越大声音越响，也会放大环境噪声。建议先从 6–12 dB 开始。";
@@ -385,7 +385,7 @@
 "audio.action.refresh_devices" = "刷新音频设备";
 "audio.action.learn_virtual_microphones" = "获取 BlackHole";
 "audio.action.send_test_tone" = "发送 1 秒测试音";
-"audio.output.privacy_help" = "应用只把遥控器语音写到所选设备。最后一只遥控器断开时，如果系统默认输入正是该虚拟设备，会临时回退到物理麦克风；重连时仅在用户没有手动改选的情况下恢复。系统默认输出不会被修改。";
+"audio.output.privacy_help" = "语音会写入所选设备。最后一只遥控器断开时，如果系统默认输入正是该虚拟设备，会临时回退到物理麦克风；重连时仅在用户没有手动改选的情况下恢复。系统默认输出不会被修改。";
 "audio.compatibility.title" = "兼容音频设备";
 "audio.compatibility.section_title" = "语音输入与兼容";
 "audio.compatibility.microphone_label" = "兼容虚拟麦克风";
@@ -1262,3 +1262,27 @@
 "configuration.import.restore_detail" = "这会替换当前的按键、键位方案、组合动作、App 配置、快捷键、常用语和用户设置。账号与系统权限保持不变。输入框定位需要重新确认。";
 
 "configuration.import.cancel" = "取消";
+
+/* Mac microphone: explicit, per-session capture. */
+"audio.mac_microphone.input" = "输入设备";
+"audio.mac_microphone.choose" = "选择 Mac 麦克风";
+"audio.mac_microphone.start" = "用 Mac 麦克风说话";
+"audio.mac_microphone.stop" = "停止用 Mac 麦克风说话";
+"audio.mac_microphone.help" = "仅在不使用遥控器时使用";
+"audio.mac_microphone.idle" = "未收音";
+"audio.mac_microphone.preparing" = "正在准备…";
+"audio.mac_microphone.recording" = "Mac 麦克风正在收音";
+"audio.mac_microphone.stopping" = "正在停止收音…";
+"audio.mac_microphone.shortcut" = "快捷键";
+"audio.mac_microphone.shortcut_set" = "设置快捷键";
+"audio.mac_microphone.shortcut_prompt" = "请按组合键，需包含 ⌘、⌃ 或 ⌥。不区分左右修饰键。";
+"audio.mac_microphone.shortcut_unavailable" = "该快捷键不可用。请使用包含 ⌘、⌃ 或 ⌥ 的其他组合键。";
+"audio.mac_microphone.error.busy" = "请先结束当前语音或音频测试。";
+"audio.mac_microphone.error.permission" = "请在系统设置中允许麦克风访问。";
+"audio.mac_microphone.error.input_unavailable" = "所选麦克风不可用。请连接或重新选择。";
+"audio.mac_microphone.error.output_unavailable" = "请先选择可用的 SayAll 或 BlackHole 虚拟麦克风。";
+"audio.mac_microphone.error.target_unavailable" = "输入位置已改变。请回到要输入文字的位置后重试。";
+"audio.mac_microphone.error.capture" = "收音或语音触发失败。请重试。";
+"audio.mac_microphone.error.interrupted" = "语音已中断。请重试。";
+"audio.mac_microphone.error.timed_out" = "准备超时。请重试。";
+"audio.mac_microphone.error.accessibility" = "请在系统设置中允许辅助功能访问。";

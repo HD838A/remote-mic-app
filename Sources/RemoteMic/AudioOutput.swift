@@ -604,7 +604,7 @@ enum CoreAudioDeviceCatalog {
         return bufferList.reduce(0) { $0 + Int($1.mNumberChannels) }
     }
 
-    private static func transportType(for deviceID: AudioDeviceID) -> AudioDevicePropertyID? {
+    static func transportType(for deviceID: AudioDeviceID) -> AudioDevicePropertyID? {
         var address = AudioObjectPropertyAddress(
             mSelector: kAudioDevicePropertyTransportType,
             mScope: kAudioObjectPropertyScopeGlobal,
