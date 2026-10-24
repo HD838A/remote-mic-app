@@ -284,6 +284,22 @@ struct VoiceToolAdapterProfile: Equatable {
     let installationProbe: VoiceToolInstallationProbe
     let evidenceState: VoiceToolEvidenceState
 
+    /// 该工具是否有「全局唤起语音」这类开关，需要在测试前单独确认。
+    ///
+    /// 之前这里是在策略里写死 `voiceTool == .doubao`：行为对，但语音测试页的勾选文案和
+    /// 失败提示都跟着把「豆包」和「全局唤起」当成了所有工具的共性。一旦新增一个带该开关
+    /// 的工具，或者给无该开关的工具加提示，就得同时改三处。改成能力字段后只改这一张表。
+    ///
+    /// `nil` 表示未观察到该工具的设置界面（`.other`），此时不追问，避免让用户去找一个
+    /// 自己工具里并不存在的开关。
+    var globalActivationSupport: Bool? {
+        switch tool {
+        case .doubao: return true
+        case .weixin, .typeless, .vokie: return false
+        case .unselected, .other: return nil
+        }
+    }
+
     static func profile(for tool: OnboardingVoiceTool) -> Self {
         switch tool {
         case .doubao:
@@ -779,7 +795,7 @@ enum OnboardingTranscriptInputPolicy {
 
 enum OnboardingVoiceTestConfigurationPolicy {
     static func requiresGlobalVoiceConfirmation(for voiceTool: OnboardingVoiceTool) -> Bool {
-        voiceTool == .doubao
+        VoiceToolAdapterProfile.profile(for: voiceTool).globalActivationSupport == true
     }
 }
 
@@ -814,7 +830,8 @@ enum OnboardingFlowPolicy {
         remoteAvailability: OnboardingRemoteAvailability = .hasRemote,
         controlMethod: OnboardingControlMethod = .physicalRemote,
         voiceKeyMode: VoiceKeyMode = .function,
-        capabilities: OnboardingCapabilities
+        capabilities: OnboardingCapabilities,
+        phoneAppInstallConfirmed: Bool = true
     ) -> Bool {
         switch step {
         case .welcome:
@@ -831,6 +848,10 @@ enum OnboardingFlowPolicy {
                 remoteAvailability: remoteAvailability,
                 controlMethod: controlMethod
             ) &&
+                // iPhone 路径下「我已安装 iPhone App」是必选项，勾选前不让走。
+                // 其他控制方式不显示这一行，也就不该被它拦住——默认值 true 让
+                // 不关心这个勾选的调用方（例如 FirstUseDiagnostics）行为不变。
+                (controlMethod != .iPhoneApp || phoneAppInstallConfirmed) &&
                 (!controlMethod.requiresBluetoothPermission || capabilities.bluetoothGranted) &&
                 (!controlMethod.requiresInputMonitoringPermission ||
                     capabilities.inputMonitoringGranted) &&

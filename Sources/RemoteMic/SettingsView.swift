@@ -489,6 +489,7 @@ struct SettingsView: View {
     @State private var selectedStatisticsDate: Date?
     @State private var mappingEditingTarget: ShortcutEditingTarget?
     @State private var mappingActionFilter: MappingActionFilter = .all
+    @State private var isCapturingMacMicrophoneShortcut = false
     @State private var shortcutCaptureTarget: ShortcutEditingTarget?
     @State private var applicationShortcutCaptureProfileID: UUID?
     @State private var shortcutCaptureFeedback: ShortcutCaptureFeedback?
@@ -593,6 +594,7 @@ struct SettingsView: View {
             routePendingButtonProfileImportIfNeeded()
         }
         .onChange(of: selectedSection) { section in
+            if isCapturingMacMicrophoneShortcut { endMacMicrophoneShortcutCapture() }
             if section == .mapping {
                 if preservesMappingContextOnNavigation { preservesMappingContextOnNavigation = false }
                 else { model.selectDefaultMappingRemoteIfAvailable() }
@@ -605,6 +607,7 @@ struct SettingsView: View {
             }
         }
         .onDisappear {
+            endMacMicrophoneShortcutCapture()
             macroFeature.setEditorActive(false)
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
@@ -1341,6 +1344,9 @@ struct SettingsView: View {
                 Text("audio.voice_output.section_title")
                     .font(.headline)
 
+                macMicrophoneControls
+                Divider()
+
                 HStack(spacing: 14) {
                     Text("audio.output.title")
                         .frame(width: 92, alignment: .leading)
@@ -1358,6 +1364,7 @@ struct SettingsView: View {
                     }
                     .labelsHidden()
                     .frame(maxWidth: 270)
+                    .disabled(model.macMicrophoneState.isActive)
                 }
 
                 VStack(alignment: .leading, spacing: 5) {
@@ -1403,6 +1410,118 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
         }
+    }
+
+    private var macMicrophoneControls: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            HStack(spacing: 14) {
+                Text("audio.mac_microphone.input").frame(width: 92, alignment: .leading)
+                Group {
+                    if model.macMicrophoneDevices.count > 1 ||
+                        !model.macMicrophoneDevices.contains(where: { $0.uid == settings.macMicrophoneInputUID }) {
+                        Picker("audio.mac_microphone.input", selection: $settings.macMicrophoneInputUID) {
+                            Text("audio.mac_microphone.choose").tag("")
+                            ForEach(model.macMicrophoneDevices, id: \.uid) { device in
+                                Text(device.name).tag(device.uid)
+                            }
+                        }
+                        .labelsHidden()
+                        .disabled(model.macMicrophoneState.isActive)
+                    } else {
+                        Text(model.macMicrophoneDevices.first?.name ?? "")
+                    }
+                }
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .frame(minWidth: 50, maxWidth: .infinity, alignment: .leading)
+                .layoutPriority(-1)
+                .help(model.macMicrophoneDevices.first(where: { $0.uid == settings.macMicrophoneInputUID })?.name ?? "")
+                HStack(spacing: 5) {
+                    Circle()
+                        .fill(model.macMicrophoneState == .recording ? Color.green : Color.secondary)
+                        .frame(width: 6, height: 6)
+                        .accessibilityHidden(true)
+                    Text(LocalizedStringKey(model.macMicrophoneState.isActive
+                        ? model.macMicrophoneState.statusKey : "audio.mac_microphone.idle"))
+                        .font(.system(size: 12))
+                        .foregroundStyle(model.macMicrophoneState == .recording ? Color.green : Color.secondary)
+                }
+                .fixedSize()
+                Button {
+                    endMacMicrophoneShortcutCapture()
+                    model.toggleMacMicrophone(from: .connectionPage)
+                } label: {
+                    Text(LocalizedStringKey(model.macMicrophoneButtonKey))
+                }
+                .compatibilityButtonStyle(.standard)
+                .help(Text("audio.mac_microphone.help"))
+                .disabled(model.macMicrophoneState == .stopping)
+                .fixedSize()
+            }
+            if case .failed = model.macMicrophoneState {
+                Text(LocalizedStringKey(model.macMicrophoneState.statusKey))
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if model.macMicrophoneState == .failed(.permission) || model.macMicrophoneState == .failed(.accessibility) {
+                Button("permission.action.open_settings") {
+                    let pane = model.macMicrophoneState == .failed(.permission) ? "Privacy_Microphone" : "Privacy_Accessibility"
+                    if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?\(pane)") {
+                        NSWorkspace.shared.open(url)
+                    }
+                }.compatibilityButtonStyle(.standard)
+            }
+            HStack(spacing: 14) {
+                Text("audio.mac_microphone.shortcut")
+                    .font(.system(size: 12))
+                    .frame(width: 92, alignment: .leading)
+                Button {
+                    shortcutCaptureFeedback = nil
+                    isCapturingMacMicrophoneShortcut.toggle()
+                    model.suspendMacMicrophoneShortcutCapture(isCapturingMacMicrophoneShortcut)
+                } label: {
+                    Text(isCapturingMacMicrophoneShortcut
+                        ? localization.text("common.action.cancel")
+                        : settings.macMicrophoneShortcut?.displayName(using: localization)
+                            ?? localization.text("audio.mac_microphone.shortcut_set"))
+                }
+                .compatibilityButtonStyle(.standard)
+                .disabled(model.macMicrophoneState.isActive)
+                if settings.macMicrophoneShortcut != nil {
+                    Button("common.action.clear") {
+                        endMacMicrophoneShortcutCapture()
+                        model.setMacMicrophoneShortcut(nil)
+                    }
+                    .compatibilityButtonStyle(.standard)
+                    .disabled(model.macMicrophoneState.isActive)
+                }
+            }
+            if isCapturingMacMicrophoneShortcut {
+                Text("audio.mac_microphone.shortcut_prompt").font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                ShortcutCaptureView(onCapture: { shortcut in
+                    endMacMicrophoneShortcutCapture()
+                    model.setMacMicrophoneShortcut(shortcut)
+                }, onFailure: { failure in
+                    endMacMicrophoneShortcutCapture()
+                    shortcutCaptureFeedback = ShortcutCaptureFeedback(contextID: "mac-microphone", result: .failed(failure))
+                    AppLogger.shared.write("MAC MICROPHONE SHORTCUT phase=failed reason=\(failure)")
+                }).frame(height: 1)
+            }
+            shortcutCaptureFeedbackView(contextID: "mac-microphone")
+            if !model.macMicrophoneShortcutAvailable {
+                Text("audio.mac_microphone.shortcut_unavailable")
+                    .font(.system(size: 12)).foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private func endMacMicrophoneShortcutCapture() {
+        guard isCapturingMacMicrophoneShortcut else { return }
+        isCapturingMacMicrophoneShortcut = false
+        model.suspendMacMicrophoneShortcutCapture(false)
     }
 
     private var audioCompatibilityPanel: some View {

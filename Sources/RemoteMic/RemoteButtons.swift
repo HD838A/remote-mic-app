@@ -225,6 +225,12 @@ struct CustomKeyboardShortcut: Codable, Equatable {
         StandaloneKeyboardModifier.matching(self)
     }
 
+    var isMacMicrophoneCombination: Bool {
+        keyCode <= 127 && !StandaloneKeyboardModifier.allCases.contains(where: { $0.keyCode == keyCode }) &&
+            !modifierFlags.intersection([.command, .control, .option]).isEmpty &&
+            !modifierFlags.contains(.function)
+    }
+
     var isRepeatableNavigationKey: Bool {
         modifierFlags.isEmpty && ([51, 123, 124, 125, 126] as [UInt16]).contains(keyCode)
     }
