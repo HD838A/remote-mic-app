@@ -831,12 +831,18 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
     /// The action's full name remains available for accessibility and hover
     /// help. This method only changes the resting visual label.
     func visualDisplayName(using localization: LocalizationStore) -> String {
-        compactShortcut?.visualDisplayName(using: localization) ?? displayName(using: localization)
+        if self == .showDesktop {
+            return displayName(using: localization)
+        }
+        return compactShortcut?.visualDisplayName(using: localization) ?? displayName(using: localization)
     }
 
     /// Full shortcut wording used by the button mapping tooltip.
     func detailedDisplayName(using localization: LocalizationStore) -> String {
-        compactShortcut?.detailedDisplayName(using: localization) ?? displayName(using: localization)
+        if self == .showDesktop {
+            return displayName(using: localization)
+        }
+        return compactShortcut?.detailedDisplayName(using: localization) ?? displayName(using: localization)
     }
 
     private var compactShortcut: CustomKeyboardShortcut? {

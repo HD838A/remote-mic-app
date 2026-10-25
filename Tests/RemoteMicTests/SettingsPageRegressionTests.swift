@@ -796,6 +796,10 @@ struct SettingsPageRegressionTests {
             ),
             encoding: .utf8
         )
+        let remoteButtonsSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/RemoteButtons.swift"),
+            encoding: .utf8
+        )
 
         #expect(settingsSource.contains("action.system_volume_up_short"))
         #expect(settingsSource.contains("action.system_volume_down_short"))
@@ -807,6 +811,7 @@ struct SettingsPageRegressionTests {
         #expect(english.contains("Previous Track (System Media)"))
         #expect(english.contains("Next Track (System Media)"))
         #expect(english.contains(#""action.show_desktop" = "Show Desktop (fn + F11)""#))
+        #expect(remoteButtonsSource.contains("if self == .showDesktop"))
     }
 
     @Test func mappingSelectionStaysOnTheEditedButtonWhileLocked() {
