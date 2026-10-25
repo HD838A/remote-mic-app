@@ -1102,6 +1102,9 @@
 "onboarding.recovery.voice.session_not_started.detail" = "Click the text field, then %@.";
 "onboarding.recovery.voice.session_not_started.action" = "Try Voice Again";
 "onboarding.recovery.voice.no_samples.title" = "No voice audio was received";
+"onboarding.recovery.voice.authorization_required.title" = "Allow voice access for your Apple remote";
+"onboarding.recovery.voice.authorization_required.detail" = "Click Allow Voice Access and approve any system request. Then try speaking again.";
+"onboarding.recovery.voice.authorization_required.action" = "Allow Voice Access";
 "onboarding.recovery.voice.no_samples.detail" = "Check the audio output device, then %@.";
 "onboarding.recovery.voice.no_samples.action" = "Retry Voice Audio";
 "onboarding.recovery.voice.session_not_ended.title" = "Finish the Voice Session";

@@ -1,5 +1,7 @@
 # Bug 记录
 
+- [苹果遥控器 Onboarding 语音授权恢复](./2026-10-25-siri-remote-authorization-recovery.html)
+
 - [Mac 麦克风按钮误触发语音与窗口切换](./2026-10-25-mac-microphone-unwanted-trigger.html)
 
 - [Mac 麦克风会话启动后立即停止](./2026-10-24-mac-microphone-capture-immediate-stop.html)

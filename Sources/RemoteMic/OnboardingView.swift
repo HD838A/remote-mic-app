@@ -1932,13 +1932,29 @@ struct OnboardingView: View {
             .frame(minHeight: 84, maxHeight: 92)
 
             HStack(spacing: 12) {
-                Image(systemName: voiceSamplesReceived ? "waveform.circle.fill" : "waveform")
+                Image(systemName: inlineVoiceRecoveryReason != nil
+                    ? "exclamationmark.triangle.fill"
+                    : (voiceSamplesReceived ? "waveform.circle.fill" : "waveform"))
                     .font(.system(size: 24))
-                    .foregroundStyle(voiceSamplesReceived ? Color.accentColor : Color.secondary)
+                    .foregroundStyle(inlineVoiceRecoveryReason != nil
+                        ? Color.orange
+                        : (voiceSamplesReceived ? Color.accentColor : Color.secondary))
                 Text(voiceTestStatusText)
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+                if let failure = inlineVoiceRecoveryReason {
+                    Spacer(minLength: 0)
+                    onboardingActionButton(id: "voice-test.audio-retry") {
+                        performRecovery(for: failure)
+                    } label: {
+                        Text(localization.text("onboarding.recovery.\(failure.rawValue).action"))
+                            .font(.system(size: 13, weight: .semibold))
+                            .fixedSize(horizontal: true, vertical: false)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(model.isStreaming)
+                }
             }
 
             onboardingGainCard
@@ -2395,6 +2411,9 @@ struct OnboardingView: View {
     }
 
     private func shouldShowStandaloneRecoveryCard(_ failure: FirstUseFailureReason) -> Bool {
+        if settings.onboardingStep == .voiceTest, inlineVoiceRecoveryReason == failure {
+            return false
+        }
         if settings.onboardingStep == .remote,
            settings.onboardingControlMethod == .physicalRemote,
            failure == .remoteNotFound {
@@ -3181,7 +3200,9 @@ struct OnboardingView: View {
             capabilities: capabilities,
             hasSelectedAudioUID: !settings.selectedAudioDeviceUID.isEmpty,
             voiceAttempt: settings.onboardingStep == .voiceTest ? voiceAttempt : nil,
-            remoteInput: remoteInputDiagnostic
+            remoteInput: remoteInputDiagnostic,
+            voiceAuthorizationRequired: settings.onboardingControlSource == .siriRemote &&
+                settings.siriRemoteNeedsUserAction
         )
     }
 
@@ -3513,7 +3534,19 @@ struct OnboardingView: View {
         }
     }
 
+    private var inlineVoiceRecoveryReason: FirstUseFailureReason? {
+        switch failureReason {
+        case .voiceAuthorizationRequired, .voiceNoSamples, .voiceAudioDeliveryFailed:
+            return failureReason
+        default:
+            return nil
+        }
+    }
+
     private var voiceTestStatusText: String {
+        if let failure = inlineVoiceRecoveryReason {
+            return localization.text("onboarding.recovery.\(failure.rawValue).title")
+        }
         if !selectedVoiceToolRuntimeReady {
             return localization.text("onboarding.voice_test.tool_not_running")
         }
@@ -4113,7 +4146,15 @@ struct OnboardingView: View {
     }
 
     private func recordFailureTransition(_ failure: FirstUseFailureReason?) {
-        guard settings.onboardingStep != .voiceTest else { return }
+        if settings.onboardingStep == .voiceTest {
+            guard failure != lastRecordedFailure else { return }
+            if failure == .voiceAuthorizationRequired {
+                settings.recordFirstUseEvent(.blocked, step: .voiceTest, failureReason: failure)
+            }
+            // 清除等待标志只表示用户已重试；音频 ready 和真实语音结果由各自链路记录。
+            lastRecordedFailure = failure
+            return
+        }
         if let failure {
             guard failure != lastRecordedFailure else { return }
             if let previousFailure = lastRecordedFailure {
@@ -4143,7 +4184,8 @@ struct OnboardingView: View {
         )
         if settings.onboardingControlSource == .siriRemote {
             switch failure {
-            case .voiceSessionNotStarted, .voiceNoSamples, .voiceAudioDeliveryFailed:
+            case .voiceSessionNotStarted, .voiceAuthorizationRequired,
+                 .voiceNoSamples, .voiceAudioDeliveryFailed:
                 model.enableSiriRemoteForOnboarding()
             default:
                 break
@@ -4169,6 +4211,7 @@ struct OnboardingView: View {
         case .audioOutputNotReady:
             model.applyAudioSettings(reason: "onboarding_recovery")
         case .voiceSessionNotStarted,
+             .voiceAuthorizationRequired,
              .voiceSessionNotEnded,
              .voiceManualInput,
              .voiceNoTranscript,
