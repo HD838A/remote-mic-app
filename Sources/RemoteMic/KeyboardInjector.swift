@@ -2073,28 +2073,65 @@ enum KeyboardInjector {
     }
 
     private static func postSystemKey(type: Int32) {
-        postSystemKey(type: type, isDown: true)
-        postSystemKey(type: type, isDown: false)
+        submitSystemKey(type: type)
     }
 
-    private static func postSystemKey(type: Int32, isDown: Bool) {
-        let keyState = isDown ? 0xA : 0xB
-        let data1 = Int((type << 16) | Int32(keyState << 8))
-        guard let event = NSEvent.otherEvent(
-            with: .systemDefined,
-            location: .zero,
-            modifierFlags: [],
-            timestamp: ProcessInfo.processInfo.systemUptime,
-            windowNumber: 0,
-            context: nil,
-            subtype: 8,
-            data1: data1,
-            data2: -1
-        ) else { return }
-        guard let cgEvent = event.cgEvent else { return }
-        cgEvent.setIntegerValueField(.eventSourceUserData, value: syntheticEventMarker)
-        cgEvent.post(tap: CGEventTapLocation.cghidEventTap)
+    @discardableResult
+    static func submitSystemKey(
+        type: Int32,
+        eventPoster: (CGEvent) -> Bool = ShortcutEventSequence.post,
+        logger: (String) -> Void = AppLogger.shared.write
+    ) -> Bool {
+        let operationID = UUID().uuidString
+        let kind: String?
+        switch type {
+        case 16: kind = "play_pause"
+        case 17: kind = "next_track"
+        case 18: kind = "previous_track"
+        default: kind = nil
+        }
+        // Keep volume repeats on their existing path without extra media logs.
+        func log(_ message: String) {
+            if kind != nil { logger(message) }
+        }
+        let prefix = "SYSTEM MEDIA operation_id=\(operationID) action=\(kind ?? "other") " +
+            "target=system_media_dispatch"
+        log("\(prefix) phase=requested post_tap=hid user_visible_result=unknown")
+        var submitted = 0
+        var reason = "none"
+        for (index, isDown) in [true, false].enumerated() {
+            let edge = isDown ? "down" : "up"
+            let keyState = isDown ? 0xA : 0xB
+            let data1 = Int((type << 16) | Int32(keyState << 8))
+            guard let event = NSEvent.otherEvent(
+                with: .systemDefined, location: .zero, modifierFlags: [],
+                timestamp: ProcessInfo.processInfo.systemUptime,
+                windowNumber: 0, context: nil, subtype: 8, data1: data1, data2: -1
+            ), let cgEvent = event.cgEvent else {
+                reason = "construction_failed"
+                log("\(prefix) phase=event_submission event_index=\(index + 1) edge=\(edge) result=construction_failed")
+                continue
+            }
+            cgEvent.setIntegerValueField(.eventSourceUserData, value: syntheticEventMarker)
+            if let kind {
+                ShortcutSessionObservation.shared.register(cgEvent, operationID: operationID,
+                    eventIndex: index + 1, primaryKind: "system_\(kind)")
+            }
+            let accepted = eventPoster(cgEvent)
+            if accepted { submitted += 1 }
+            else {
+                reason = "post_failed"
+                if kind != nil { ShortcutSessionObservation.shared.discard(operationID: operationID, eventIndex: index + 1) }
+            }
+            log("\(prefix) phase=event_submission event_index=\(index + 1) edge=\(edge) " +
+                "event_timestamp_ns=\(cgEvent.timestamp) result=\(accepted ? "submitted" : "failed")")
+        }
+        let succeeded = submitted == 2
+        log("\(prefix) phase=completed result=\(succeeded ? "submitted" : "failed") reason=\(reason) " +
+            "submitted_events=\(submitted) user_visible_result=unknown")
+        return succeeded
     }
+
 }
 
 final class ApplicationFocusRequestGate {
