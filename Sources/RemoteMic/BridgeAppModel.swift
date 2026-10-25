@@ -4297,7 +4297,8 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
 
     private func handleAppleRemoteConnection(_ connection: SiriRemoteConnection) {
         if connection.isConnected {
-            let profileID = settings.profileID(forHIDFingerprint: connection.fingerprint)
+            let existingProfileID = settings.profileID(forHIDFingerprint: connection.fingerprint)
+            let profileID = existingProfileID
                 ?? settings.registerAppleSiriRemote(
                     fingerprint: connection.fingerprint,
                     model: connection.model
@@ -4314,6 +4315,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             AppLogger.shared.write(
                 "APPLE REMOTE CONNECTION phase=completed result=connected " +
                     "model=\(connection.model.rawValue) " +
+                    "profile_resolution=\(existingProfileID == nil ? "created" : "reused") " +
                     "connected_devices=\(connectedAppleRemoteProfileIDs.count)"
             )
         } else {
