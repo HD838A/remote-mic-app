@@ -1077,6 +1077,13 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
                   !["ipc_ready", "capturing", "stopped"].contains(status) else { return }
             if status.hasPrefix("unavailable:"), status.contains("authorization_") {
                 self.settings.siriRemoteNeedsUserAction = true
+                AppLogger.shared.write(
+                    "SIRI REMOTE AUDIO phase=failed result=needs_user_action reason=authorization_failed"
+                )
+            } else if status == "ready" {
+                AppLogger.shared.write(
+                    "SIRI REMOTE AUDIO phase=ready result=capture_available"
+                )
             }
             self.siriRemoteAudioStatus = status
         }
@@ -3391,7 +3398,9 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         guard settings.siriRemoteEnabled else { return }
         guard activePhysicalVoiceControlSource != .siriRemote else { return }
         settings.siriRemoteNeedsUserAction = false
-        if siriRemoteAudioStatus == "disabled" { siriRemoteAudioStatus = "preparing_hci" }
+        if siriRemoteAudioStatus == "disabled" || siriRemoteAudioStatus.hasPrefix("unavailable:") {
+            siriRemoteAudioStatus = "preparing_hci"
+        }
         AppLogger.shared.write("SIRI REMOTE ACTIVATION phase=requested source=user_action")
         siriRemoteFeature.start(userInitiated: true)
         siriRemoteFeature.restart(customMappingEnabled: settings.customMappingEnabled)

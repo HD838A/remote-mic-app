@@ -51,6 +51,9 @@ struct SiriRemoteActivationTests {
         model.prepareSiriRemoteFromUserAction()
         #if SAYALL_SIRI_REMOTE_ENABLED
         #expect(!AppSettings(defaults: defaults).siriRemoteNeedsUserAction)
+        #if !canImport(SayAllSiriRemote)
+        #expect(model.siriRemoteAudioStatus == "preparing_hci")
+        #endif
         #else
         #expect(AppSettings(defaults: defaults).siriRemoteNeedsUserAction)
         #endif

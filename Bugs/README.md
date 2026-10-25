@@ -1,5 +1,7 @@
 # Bug 记录
 
+- [苹果遥控器 Onboarding 语音授权恢复](./2026-10-25-siri-remote-authorization-recovery.html)
+
 - [原生松开漏拦截与快捷键诊断](./2026-10-25-native-release-and-shortcut-diagnostics.html)
 
 - [Mac 麦克风按钮误触发语音与窗口切换](./2026-10-25-mac-microphone-unwanted-trigger.html)
