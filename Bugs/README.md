@@ -1,5 +1,7 @@
 # Bug 记录
 
+- [音量按一次后持续变化](./2026-10-26-volume-native-release-stuck.html)
+
 - [原生松开漏拦截与快捷键诊断](./2026-10-25-native-release-and-shortcut-diagnostics.html)
 
 - [Mac 麦克风按钮误触发语音与窗口切换](./2026-10-25-mac-microphone-unwanted-trigger.html)

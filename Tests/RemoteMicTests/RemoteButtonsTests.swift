@@ -3508,6 +3508,10 @@ struct RemoteButtonsTests {
             #expect(suppressor.handle(type: up.type, event: up))
             let down = try nativeEvent(descriptor, down: true)
             #expect(!suppressor.handle(type: down.type, event: down))
+            // Close the physical baseline pair before the next remote press.
+            // An escaped volume down must retain its up, including during a new raw press.
+            let physicalUp = try nativeEvent(descriptor, down: false)
+            #expect(!suppressor.handle(type: physicalUp.type, event: physicalUp))
         }
         // Disconnect while held must release every armed descriptor, including media keys.
         monitor.handleSimulatedReport(reportID: 1, data: report)

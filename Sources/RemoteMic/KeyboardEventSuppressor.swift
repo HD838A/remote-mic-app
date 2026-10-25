@@ -41,6 +41,11 @@ final class KeyboardEventSuppressor {
     private var earlyNativeUps: [RemoteNativeEvent: Int] = [:]
     // Diagnostic-only: bounded to the remote's known native descriptors.
     private var recentUnclaimedDowns: [RemoteNativeEvent: TimeInterval] = [:]
+    // An escaped volume down belongs to the system through its final release.
+    // Dropping only its up can leave the system repeating volume indefinitely.
+    private var passedVolumeDowns = Set<RemoteNativeEvent>()
+    private var passedVolumeRawReleases: [RemoteNativeEvent: Int] = [:]
+    private static let volumeEvents: Set<RemoteNativeEvent> = [.systemKey(type: 0), .systemKey(type: 1)]
     private static let knownNativeEvents = Set(RemoteButton.allCases.flatMap { $0.nativeEvents })
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
@@ -123,6 +128,8 @@ final class KeyboardEventSuppressor {
         nativeDownsAwaitingUp.removeAll()
         earlyNativeUps.removeAll()
         recentUnclaimedDowns.removeAll()
+        passedVolumeDowns.removeAll()
+        passedVolumeRawReleases.removeAll()
         recentArmed.removeAll()
         lock.unlock()
         EventTapPort.release(port: port, source: source)
@@ -136,16 +143,12 @@ final class KeyboardEventSuppressor {
 
     func arm(nativeEvents: Set<RemoteNativeEvent>, edge: RemoteEventEdge) {
         guard !nativeEvents.isEmpty else { return }
-        // 诊断：留证「本次预定了什么」，便于与 miss 日志里系统真实事件对照。
-        logger(
-            "HID FILTER arm events=\(nativeEvents.map(Self.logToken).sorted().joined(separator: "+")) "
-                + "edge=\(edge == .down ? "down" : "up")"
-        )
         let now = uptime()
         lock.lock()
         recentArmed.removeAll { $0.until <= now }
         recentUnclaimedDowns = recentUnclaimedDowns.filter { now - $0.value < Self.nativeDeliveryWindow }
         var precedingDownAges: [(RemoteNativeEvent, Int)] = []
+        var passedRawEvents: [RemoteNativeEvent] = []
         for nativeEvent in nativeEvents {
             recentArmed.append((event: nativeEvent, until: now + 1.0))
         }
@@ -153,8 +156,15 @@ final class KeyboardEventSuppressor {
         for nativeEvent in nativeEvents {
             switch edge {
             case .down:
-                if let unclaimed = recentUnclaimedDowns.removeValue(forKey: nativeEvent) {
+                let unclaimed = recentUnclaimedDowns.removeValue(forKey: nativeEvent)
+                if let unclaimed {
                     precedingDownAges.append((nativeEvent, Int((now - unclaimed) * 1_000)))
+                }
+                if passedVolumeDowns.contains(nativeEvent) {
+                    // Consume the raw pair without creating stale native credits.
+                    passedVolumeRawReleases[nativeEvent, default: 0] += 1
+                    passedRawEvents.append(nativeEvent)
+                    continue
                 }
                 heldEventCounts[nativeEvent, default: 0] += 1
                 if heldEventCounts[nativeEvent] != 1 { nativeDownsAwaitingUp.removeValue(forKey: nativeEvent) }
@@ -165,6 +175,11 @@ final class KeyboardEventSuppressor {
                     expiresAt: now + Self.nativeDeliveryWindow
                 ))
             case .up:
+                if let passed = passedVolumeRawReleases[nativeEvent], passed > 0 {
+                    passedVolumeRawReleases[nativeEvent] = passed > 1 ? passed - 1 : nil
+                    passedRawEvents.append(nativeEvent)
+                    continue
+                }
                 nativeDownsAwaitingUp.removeValue(forKey: nativeEvent)
                 // The native down may still be in flight. Release held-repeat
                 // ownership without discarding that unconsumed expected edge.
@@ -193,6 +208,15 @@ final class KeyboardEventSuppressor {
             pendingEvents.removeFirst(pendingEvents.count - 32)
         }
         lock.unlock()
+        // Log after registration so logging cannot delay ownership of native input.
+        logger(
+            "HID FILTER arm events=\(nativeEvents.map(Self.logToken).sorted().joined(separator: "+")) "
+                + "edge=\(edge == .down ? "down" : "up")"
+        )
+        for native in passedRawEvents {
+            logger("HID FILTER phase=arm result=passthrough event=\(Self.logToken(native)) " +
+                "edge=\(edge == .down ? "down" : "up") reason=escaped_native_pair source_correlation=timing_only")
+        }
         for (native, age) in precedingDownAges {
             logger("HID FILTER phase=arm_order event=\(Self.logToken(native)) edge=down preceding_unclaimed_ms=\(age) " +
                 "source_correlation=timing_only result=already_passed_through")
@@ -224,6 +248,15 @@ final class KeyboardEventSuppressor {
         let now = uptime()
         lock.lock()
         pendingEvents.removeAll { $0.expiresAt <= now }
+        if passedVolumeDowns.contains(descriptor.event) {
+            if descriptor.edge == .up {
+                passedVolumeDowns.remove(descriptor.event)
+            }
+            lock.unlock()
+            logger("HID FILTER passed_through event=\(Self.logToken(descriptor.event)) " +
+                "edge=\(descriptor.edge == .down ? "down" : "up") reason=escaped_native_pair")
+            return false
+        }
         if let matchIndex = pendingEvents.firstIndex(where: {
             $0.event == descriptor.event && $0.edge == descriptor.edge
         }) {
@@ -270,6 +303,9 @@ final class KeyboardEventSuppressor {
         }
         if descriptor.edge == .down, Self.knownNativeEvents.contains(descriptor.event) {
             recentUnclaimedDowns[descriptor.event] = now
+            if Self.volumeEvents.contains(descriptor.event) {
+                passedVolumeDowns.insert(descriptor.event)
+            }
         }
         let pendingCount = pendingEvents.count
         // 诊断范围（187 的教训：条件太窄会漏掉「系统事件与预定键码不同」的情况）：

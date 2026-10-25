@@ -149,6 +149,116 @@ struct KeyboardEventSuppressorTests {
         #expect(!logs.contains { $0.contains("phase=arm_order") })
     }
 
+    @Test(arguments: [Int32(0), Int32(1)], [false, true])
+    func escapedVolumeDownKeepsItsReleaseAndDoesNotStealTheNextPress(
+        _ keyType: Int32, _ nativeReleaseFirst: Bool
+    ) throws {
+        var now: TimeInterval = 10
+        let native: RemoteNativeEvent = .systemKey(type: keyType)
+        var logs: [String] = []
+        let suppressor = KeyboardEventSuppressor(uptime: { now }, logger: { logs.append($0) })
+        let down = try nativeEvent(native, down: true)
+        let up = try nativeEvent(native, down: false)
+        // Replay the recorded native down -> HID down -> HID up -> native up.
+        #expect(!suppressor.handle(type: down.type, event: down))
+        now += 0.011
+        suppressor.arm(nativeEvents: [native], edge: .down)
+        now += 0.15
+        if nativeReleaseFirst {
+            #expect(!suppressor.handle(type: up.type, event: up))
+            suppressor.arm(nativeEvents: [native], edge: .up)
+        } else {
+            suppressor.arm(nativeEvents: [native], edge: .up)
+            #expect(!suppressor.handle(type: up.type, event: up))
+        }
+        #expect(logs.filter { $0.contains("phase=arm result=passthrough") }.count == 2)
+        #expect(logs.contains { $0.contains("edge=up reason=escaped_native_pair") })
+        // No stale expected down may consume the following physical volume key.
+        now += 0.25
+        #expect(!suppressor.handle(type: down.type, event: down))
+        #expect(!suppressor.handle(type: up.type, event: up))
+    }
+
+    @Test(arguments: [Int32(0), Int32(1)])
+    func escapedVolumeHoldPassesRepeatsAndReleaseBeyondTheDeliveryWindow(_ keyType: Int32) throws {
+        var now: TimeInterval = 10
+        let native: RemoteNativeEvent = .systemKey(type: keyType)
+        let suppressor = KeyboardEventSuppressor(uptime: { now }, logger: { _ in })
+        let down = try nativeEvent(native, down: true)
+        let up = try nativeEvent(native, down: false)
+        #expect(!suppressor.handle(type: down.type, event: down))
+        now += 0.011
+        suppressor.arm(nativeEvents: [native], edge: .down)
+        for _ in 0..<5 {
+            now += 0.2
+            #expect(!suppressor.handle(type: down.type, event: down))
+        }
+        suppressor.arm(nativeEvents: [native], edge: .up)
+        #expect(!suppressor.handle(type: up.type, event: up))
+        // Once the escaped pair closes, normally ordered remote input is filtered.
+        suppressor.arm(nativeEvents: [native], edge: .down)
+        #expect(suppressor.handle(type: down.type, event: down))
+        suppressor.arm(nativeEvents: [native], edge: .up)
+        #expect(suppressor.handle(type: up.type, event: up))
+    }
+
+    @Test(arguments: [RemoteButton.volumeUp, .volumeDown], [false, true])
+    func volumeIsArmedBeforeReportDiagnosticsAndConfigurationCallbacks(
+        _ button: RemoteButton, _ isSeized: Bool
+    ) throws {
+        let suite = "KeyboardEventSuppressorTests.earlyVolume.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let settings = AppSettings(defaults: defaults)
+        settings.customMappingEnabled = true
+        settings.setAction(.customShortcut, for: button)
+        settings.setShortcut(CustomKeyboardShortcut(keyCode: 43, modifierFlags: [], keyLabel: ","), for: button)
+        settings.setAction(.disabled, for: button, trigger: .doubleClick)
+        settings.setAction(.disabled, for: button, trigger: .longPress)
+        let profile = try #require(settings.selectedRemoteProfileID)
+        let native = try #require(button.nativeEvents.first)
+        let down = try nativeEvent(native, down: true)
+        let up = try nativeEvent(native, down: false)
+        let suppressor = KeyboardEventSuppressor(logger: { _ in })
+        var deliveredNativeDown = false
+        var performed: [ButtonAction] = []
+        let monitor = HIDRemoteMonitor(
+            settings: settings, profileID: profile, eventSuppressor: suppressor,
+            ownsEventSuppressor: false, runtimePermissions: { true },
+            actionPerformer: { _, _, configured in performed.append(configured.action); return true },
+            diagnosticLogger: { message in
+                if message.contains("HID REPORT accepted"), !deliveredNativeDown {
+                    deliveredNativeDown = true
+                    #expect(suppressor.handle(type: down.type, event: down))
+                }
+            }
+        )
+        monitor.connectSimulatedDevice(fingerprint: "volume-early-arm", profileID: profile, isSeized: isSeized)
+        defer { monitor.disconnectSimulatedDevice() }
+        monitor.handleSimulatedReport(reportID: 1, data: Data([UInt8(button.hidUsage), 0, 0, 0, 0, 0]))
+        monitor.handleSimulatedReport(reportID: 1, data: Data(repeating: 0, count: 6))
+        #expect(deliveredNativeDown)
+        #expect(performed == [.customShortcut])
+        #expect(suppressor.handle(type: up.type, event: up))
+        #expect(!suppressor.handle(type: down.type, event: down))
+        #expect(!suppressor.handle(type: up.type, event: up))
+    }
+
+    @Test(arguments: [Int32(0), Int32(1)])
+    func stoppingClearsEscapedVolumeOwnership(_ keyType: Int32) throws {
+        let native: RemoteNativeEvent = .systemKey(type: keyType)
+        let suppressor = KeyboardEventSuppressor(logger: { _ in })
+        let down = try nativeEvent(native, down: true)
+        let up = try nativeEvent(native, down: false)
+        #expect(!suppressor.handle(type: down.type, event: down))
+        suppressor.arm(nativeEvents: [native], edge: .down)
+        suppressor.stop()
+        suppressor.arm(nativeEvents: [native], edge: .down)
+        #expect(suppressor.handle(type: down.type, event: down))
+        suppressor.arm(nativeEvents: [native], edge: .up)
+        #expect(suppressor.handle(type: up.type, event: up))
+    }
+
     private func nativeEvent(_ native: RemoteNativeEvent, down: Bool) throws -> CGEvent {
         switch native {
         case let .keyboard(keyCode):
