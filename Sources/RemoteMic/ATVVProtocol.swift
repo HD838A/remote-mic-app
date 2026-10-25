@@ -17,7 +17,7 @@ enum ATVVProtocol {
 
     /// 一次会话按实时应当收到的音频帧数。
     ///
-    /// RC003 声明 `frame=120`（每帧 120 字节 = 240 个 16 kHz 样本 = 15 ms），因此
+    /// RC001 和 RC003 声明 `frame=120`（每帧 120 字节 = 240 个 16 kHz 样本 = 15 ms），因此
     /// 「按实时应有的帧数」= 主线程处理所见的会话时长 ÷ 15 ms。
     /// 该比值不能独立证明无线到达率、丢包位置或尾部缺失的根因。
     static func expectedFrameCount(durationMilliseconds: Int, frameSamples: Int) -> Int {

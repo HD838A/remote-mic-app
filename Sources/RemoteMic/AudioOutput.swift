@@ -1101,7 +1101,7 @@ final class VirtualAudioOutput {
     }
 
     /// Flushes any buffer currently queued on the player node (including an in-flight test
-    /// tone) so real RC003 voice audio scheduled right after this call is not delayed behind it.
+    /// tone) so Xiaomi RC001/RC003 voice audio scheduled right after this call is not delayed behind it.
     func cancelTestTone() {
         flushPlayer()
     }

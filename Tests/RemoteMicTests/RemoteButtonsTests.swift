@@ -2127,7 +2127,7 @@ struct RemoteButtonsTests {
         #expect(map.lowerBound < start.lowerBound)
     }
 
-    @Test func parsesRC003ReportOneUsages() {
+    @Test func parsesXiaomiRC001RC003ReportOneUsages() {
         let data = Data([0xF1, 0x00, 0x80, 0x00, 0x00, 0x00])
         #expect(RemoteHIDReportParser.usages(reportID: 1, data: data) == Set([UInt16(0xF1), UInt16(0x80)]))
     }
@@ -2149,7 +2149,7 @@ struct RemoteButtonsTests {
         }
     }
 
-    @Test func usesVerifiedRC003UsageTable() {
+    @Test func usesVerifiedXiaomiRC001RC003UsageTable() {
         #expect(RemoteButton.usageMap == [
             0x28: .ok,
             0x35: .tv,
@@ -3443,7 +3443,7 @@ struct RemoteButtonsTests {
     @Test func nativeEventDescriptorsCoverPotentialDuplicateEvents() {
         #expect(RemoteButton.up.nativeEvent == .keyboard(keyCode: 126))
         #expect(RemoteButton.ok.nativeEvent == .keyboard(keyCode: 36))
-        // Real RC003 hardware emits keyCode 10 (ISO §) for the TV key.
+        // The shared Xiaomi RC001/RC003 keyboard interface emits keyCode 10 (ISO §) for the TV key.
         #expect(RemoteButton.tv.nativeEvent == .keyboard(keyCode: 10))
         #expect(RemoteButton.tv.nativeEvents == [
             .keyboard(keyCode: 10),
