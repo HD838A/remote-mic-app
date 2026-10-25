@@ -1032,7 +1032,6 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     }
 
     private func showSettingsWindow(initialSection: SettingsSection? = nil) {
-        if !model.macMicrophoneState.isActive { model.macMicrophoneInputTarget.remember() }
         if settingsWindowController == nil {
             settingsWindowController = makeSettingsWindowController(
                 initialSettingsSection: initialSection
