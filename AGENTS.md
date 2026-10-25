@@ -202,7 +202,7 @@ G-BUG.real-acceptance=retained
 
 ## 研究与计划文档存放
 
-- 本项目的详细 research、plan、竞品分析、产品调研、可行性研究和长期实施方案统一写入私有仓库 `HD838A/private-marketing-toolkit`，本地路径为 `/Users/andy/Develop/Src/AISrc/marketing`。
+- 本项目的详细 research、plan、竞品分析、产品调研、可行性研究和长期实施方案统一写入私有仓库 `HD838A/private-marketing-toolkit`，本地路径为 `/path/to/user-home/Develop/Src/AISrc/marketing`。
 - 文档存放到私有仓库 `projects/remote-mic-app/` 下的对应工作流和版本目录。目录结构以私有仓库的 `AGENTS.md` 为准；本仓库不重复定义主题与版本的顺序。
 - 公开源码仓库不得新增包含详细研究过程、内部判断、市场材料或完整开发计划的 `Research/`、`research/`、`Plan/`、`plan/` 目录或同类文档。
 - 公开源码仓库的 `TODO.md`、README、技术文档和代码注释只保留实现所需的简短结论、公开行为、兼容边界和验证状态；需要详细内容时引用私有仓库中的对应文档，不复制全文。
