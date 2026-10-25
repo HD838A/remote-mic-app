@@ -162,6 +162,13 @@ enum OnboardingScreenshotRenderer {
             settings.beginOnboardingSiriRemoteTrial()
             settings.siriRemoteEnabled = true
         }
+        if controlSource == .siriRemote,
+           ProcessInfo.processInfo.environment[
+               "REMOTE_MIC_ONBOARDING_SCREENSHOT_VOICE_AUTHORIZATION_REQUIRED"
+           ] == "1" {
+            settings.siriRemoteEnabled = true
+            settings.siriRemoteNeedsUserAction = true
+        }
         let model = BridgeAppModel(
             settings: settings,
             initialAudioDevices: screenshotAudioDevices

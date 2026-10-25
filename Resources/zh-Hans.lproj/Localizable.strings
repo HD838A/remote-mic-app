@@ -1102,6 +1102,9 @@
 "onboarding.recovery.voice.session_not_started.detail" = "先点一下输入框，再%@。";
 "onboarding.recovery.voice.session_not_started.action" = "重新测试语音";
 "onboarding.recovery.voice.no_samples.title" = "没有收到语音声音";
+"onboarding.recovery.voice.authorization_required.title" = "苹果遥控器语音需要授权";
+"onboarding.recovery.voice.authorization_required.detail" = "点击重新授权，并允许可能出现的系统请求。随后再测试一句话。";
+"onboarding.recovery.voice.authorization_required.action" = "重新授权";
 "onboarding.recovery.voice.no_samples.detail" = "重试所选音频输出后，再%@。";
 "onboarding.recovery.voice.no_samples.action" = "重试语音音频";
 "onboarding.recovery.voice.session_not_ended.title" = "松开语音键才能完成";

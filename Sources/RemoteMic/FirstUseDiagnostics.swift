@@ -134,6 +134,7 @@ enum FirstUseFailureReason: String, Codable, Equatable {
     case audioSelectedDeviceMissing = "audio.selected_device_missing"
     case audioOutputNotReady = "audio.output_not_ready"
     case voiceSessionNotStarted = "voice.session_not_started"
+    case voiceAuthorizationRequired = "voice.authorization_required"
     case voiceNoSamples = "voice.no_samples"
     case voiceSessionNotEnded = "voice.session_not_ended"
     case voiceManualInput = "voice.manual_input"
@@ -156,6 +157,7 @@ enum FirstUseFailureReason: String, Codable, Equatable {
         case .audioNoOutputDevice, .audioSelectedDeviceMissing, .audioOutputNotReady:
             return .audio
         case .voiceSessionNotStarted,
+             .voiceAuthorizationRequired,
              .voiceNoSamples,
              .voiceSessionNotEnded,
              .voiceManualInput,
@@ -349,6 +351,7 @@ struct FirstUseDiagnosticContext: Equatable {
     let hasSelectedAudioUID: Bool
     let voiceAttempt: FirstUseVoiceAttemptDiagnostic?
     let remoteInput: FirstUseRemoteInputDiagnostic
+    let voiceAuthorizationRequired: Bool
 
     init(
         step: OnboardingStep,
@@ -357,7 +360,8 @@ struct FirstUseDiagnosticContext: Equatable {
         capabilities: OnboardingCapabilities,
         hasSelectedAudioUID: Bool,
         voiceAttempt: FirstUseVoiceAttemptDiagnostic? = nil,
-        remoteInput: FirstUseRemoteInputDiagnostic = FirstUseRemoteInputDiagnostic()
+        remoteInput: FirstUseRemoteInputDiagnostic = FirstUseRemoteInputDiagnostic(),
+        voiceAuthorizationRequired: Bool = false
     ) {
         self.step = step
         self.remoteAvailability = remoteAvailability
@@ -366,6 +370,7 @@ struct FirstUseDiagnosticContext: Equatable {
         self.hasSelectedAudioUID = hasSelectedAudioUID
         self.voiceAttempt = voiceAttempt
         self.remoteInput = remoteInput
+        self.voiceAuthorizationRequired = voiceAuthorizationRequired
     }
 
     var failureReason: FirstUseFailureReason? {
@@ -393,6 +398,7 @@ struct FirstUseDiagnosticContext: Equatable {
                 return .audioOutputNotReady
             }
         case .voiceTest:
+            if voiceAuthorizationRequired { return .voiceAuthorizationRequired }
             if let voiceAttempt {
                 return voiceAttempt.failureReason
             }

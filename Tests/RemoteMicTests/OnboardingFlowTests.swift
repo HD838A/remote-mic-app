@@ -6,6 +6,45 @@ import SwiftUI
 
 @Suite("First-run onboarding")
 struct OnboardingFlowTests {
+    @Test func deferredVoiceAuthorizationIsVisibleBeforeAnotherVoiceAttempt() {
+        let context = FirstUseDiagnosticContext(
+            step: .voiceTest,
+            remoteAvailability: .hasRemote,
+            controlMethod: .physicalRemote,
+            capabilities: OnboardingCapabilities(),
+            hasSelectedAudioUID: true,
+            voiceAttempt: FirstUseVoiceAttemptDiagnostic(),
+            voiceAuthorizationRequired: true
+        )
+        #expect(context.failureReason == .voiceAuthorizationRequired)
+        #expect(context.failureReason?.recoveryStep == .voiceTest)
+    }
+
+    #if SAYALL_SIRI_REMOTE_ENABLED && !canImport(SayAllSiriRemote)
+    @Test @MainActor func resumedSiriVoiceTestExposesAuthorizationRetryWithoutRecording() throws {
+        let fixture = try OnboardingOffscreenFixture(
+            step: .voiceTest,
+            controlSource: .siriRemote,
+            siriRemoteInitiallyEnabled: true,
+            siriRemoteNeedsUserAction: true
+        )
+        defer { fixture.close() }
+        #expect(fixture.settings.onboardingStep == .voiceTest)
+        #expect(fixture.settings.siriRemoteNeedsUserAction)
+        #expect(fixture.probe.actions["voice-test.audio-retry"] != nil)
+        #expect(fixture.probe.actions["diagnostics.copy"] != nil)
+        fixture.probe.invoke("voice-test.audio-retry")
+        #expect(!fixture.settings.siriRemoteNeedsUserAction)
+        #expect(!fixture.settings.isOnboardingComplete)
+        #expect(!fixture.settings.firstUseEvents.contains {
+            $0.step == .voiceTest && ($0.kind == .passed || $0.kind == .recovered)
+        })
+        #expect(fixture.settings.firstUseEvents.contains {
+            $0.kind == .retry && $0.failureReason == .voiceAuthorizationRequired
+        })
+    }
+    #endif
+
     @Test func onboardingSourceVisibilityHidesChromecastButKeepsOtherSources() {
         let visible = OnboardingControlSourceVisibilityPolicy.visibleSources(
             OnboardingControlSource.allCases
@@ -3713,7 +3752,8 @@ private final class OnboardingOffscreenFixture {
         controlSource: OnboardingControlSource? = nil,
         voiceToolAvailability: [OnboardingVoiceTool: OnboardingVoiceToolAvailability]? = nil,
         siriRemotePackageInstalled: Bool = true,
-        siriRemoteInitiallyEnabled: Bool = false
+        siriRemoteInitiallyEnabled: Bool = false,
+        siriRemoteNeedsUserAction: Bool = false
     ) throws {
         let suiteName = "RemoteMicTests.Onboarding.Fixture.\(UUID().uuidString)"
         guard let defaults = UserDefaults(suiteName: suiteName) else {
@@ -3724,6 +3764,7 @@ private final class OnboardingOffscreenFixture {
         settings = AppSettings(defaults: defaults)
         settings.applicationLanguage = .simplifiedChinese
         settings.siriRemoteEnabled = siriRemoteInitiallyEnabled
+        settings.siriRemoteNeedsUserAction = siriRemoteNeedsUserAction
         settings.setOnboardingVoiceTool(voiceTool)
         settings.setOnboardingVoiceBindingPreference(bindingPreference)
         settings.setOnboardingRemoteAvailability(remoteAvailability)
