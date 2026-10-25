@@ -257,7 +257,7 @@ enum ShortcutEventSequence {
         let diagnosticKind = requested.contains(.maskControl) ? navigationKind(keyCode) : nil
         let diagnosticContext = diagnosticKind.map {
             " primary_kind=\($0) requested_flags=\(diagnosticFlags(requested)) " +
-                "physical_flags=\(diagnosticFlags(physicalAtStart)) source_state=private post_tap=hid"
+                "physical_flags=\(diagnosticFlags(physicalAtStart)) source_state=hid_system post_tap=hid"
         } ?? ""
         logger(
             "\(prefix) phase=requested modifier_count=\(selectedModifiers.count) " +
@@ -271,7 +271,12 @@ enum ShortcutEventSequence {
                 "reason=\(reason) submitted_events=\(submitted) cleanup_failed=\(cleanupFailed) " +
                 "elapsed_ms=\(elapsed) user_visible_result=unknown")
         }
-        guard let source = CGEventSource(stateID: .privateState) else {
+        // System shortcuts such as Control + Up are handled by WindowServer.
+        // Use the HID system source so those shortcuts receive the same source
+        // semantics as the other system key paths in KeyboardInjector.
+        // The physical modifier snapshot was captured before this transaction,
+        // so synthetic events cannot alter the modifiers we preserve.
+        guard let source = CGEventSource(stateID: .hidSystemState) else {
             result = false
             reason = "source_unavailable"
             return false
