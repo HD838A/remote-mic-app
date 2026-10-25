@@ -803,8 +803,10 @@ struct SettingsPageRegressionTests {
         #expect(chinese.contains(#""action.system_volume_down_short" = "Vol-""#))
         #expect(chinese.contains("上一首（系统媒体）"))
         #expect(chinese.contains("下一首（系统媒体）"))
+        #expect(chinese.contains(#""action.show_desktop" = "显示桌面（fn + F11）""#))
         #expect(english.contains("Previous Track (System Media)"))
         #expect(english.contains("Next Track (System Media)"))
+        #expect(english.contains(#""action.show_desktop" = "Show Desktop (fn + F11)""#))
     }
 
     @Test func mappingSelectionStaysOnTheEditedButtonWhileLocked() {
