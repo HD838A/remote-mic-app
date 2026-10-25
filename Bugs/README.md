@@ -1,6 +1,13 @@
 # Bug 记录
 
 - [Mac 麦克风会话启动后立即停止](./2026-10-24-mac-microphone-capture-immediate-stop.html)
+
+- [遥控器松键后的原生按键延迟泄露](./2026-10-24-delayed-native-key-leak.html)
+
+- [HID 与 Siri Remote 共享运行时权限检查](./2026-10-24-shared-runtime-permissions.html)
+- [引导页权限轮询 1 Hz 过密，且 SayAll 在后台仍然查询](./2026-10-24-onboarding-permission-poll-interval.md)
+
+- [主线程同步查权限 + event tap 挂在主 RunLoop，导致整机输入停摆](./2026-10-24-event-tap-blocks-system-input.md)
 - [历史来源值导致整日归档不可见](./2026-10-24-archive-source-decoding.html)
 - [HID 诊断窗口过期后仍记录普通按键](./2026-10-24-hid-filter-log-window.html)
 
@@ -133,6 +140,9 @@
 
 | 时间 | Bug | 状态 |
 | --- | --- | --- |
+| 2026-10-24 | [引导页权限轮询 1 Hz 过密，且 SayAll 在后台仍然查询](./2026-10-24-onboarding-permission-poll-interval.md) | 候选修复已实现（周期降到 2 s、App 在后台不做周期查询）；构建、定向回归与渲染对照通过，等待真实权限切换与续接旅程验收 |
+
+| 2026-10-24 | [主线程同步查权限 + event tap 挂在主 RunLoop，导致整机输入停摆](./2026-10-24-event-tap-blocks-system-input.md) | 候选修复已实现（tap 迁到专用线程、权限查询移出主线程、权限撤销时释放 tap）；构建、定向回归（99 项）与三组修复前后对照通过，全量 959 项中 958 项通过、1 项因本机缺 ripgrep 失败，等待真机按键链路与真实权限切换场景验收 |
 | 2026-10-11 | [BLE 重连在缓存直连被绕过后退化为「只扫描」，卡死到用户手动重连](./2026-10-11-ble-scan-stall-after-cached-target-bypass.md)（Issue #438 相关） | 候选修复与定向自动化通过，等待真实 RC003 掉线复验 |
 | 2026-10-10 | [Intel 最小化窗口缩略图的小 Logo 为方形](./2026-10-10-intel-dock-rounded-app-icon.html) | 运行时缩略图同步已修复；等待新 Intel 包完成现场与白底回归验收 |
 | 2026-10-08 | [音频重配在主线程访问 `AVAudioEngine.mainMixerNode` 导致 App 长时间无响应](./2026-10-07-audio-configure-blocks-main-thread.md)（Issue #596） | 候选修复；音频引擎重配已移出主线程，自动化通过，等待真实音频设备验收 |

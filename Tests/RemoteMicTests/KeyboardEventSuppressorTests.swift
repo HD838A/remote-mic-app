@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import CoreGraphics
 import Testing
@@ -5,6 +6,100 @@ import Testing
 
 @Suite("Keyboard event suppressor")
 struct KeyboardEventSuppressorTests {
+    @Test(arguments: [RemoteNativeEvent.systemKey(type: 0), .systemKey(type: 1), .systemKey(type: 16), .keyboard(keyCode: 115), .keyboard(keyCode: 36)])
+    func delayedNativePairRemainsOwnedAfterRemoteRelease(_ native: RemoteNativeEvent) throws {
+        var now: TimeInterval = 10
+        let suppressor = KeyboardEventSuppressor(uptime: { now }, logger: { _ in })
+        let down = try nativeEvent(native, down: true)
+        let up = try nativeEvent(native, down: false)
+        suppressor.arm(nativeEvents: [native], edge: .down)
+        now += 0.17
+        suppressor.arm(nativeEvents: [native], edge: .up)
+        now += 0.14
+        #expect(suppressor.handle(type: down.type, event: down))
+        now += 0.001
+        #expect(suppressor.handle(type: up.type, event: up))
+        #expect(!suppressor.handle(type: down.type, event: down))
+        #expect(!suppressor.handle(type: up.type, event: up))
+    }
+
+    @Test func releasingRemoteDoesNotDiscardAnUnconsumedEarlyDown() throws {
+        var now: TimeInterval = 10
+        let suppressor = KeyboardEventSuppressor(uptime: { now }, logger: { _ in })
+        let native: RemoteNativeEvent = .systemKey(type: 0)
+        let down = try nativeEvent(native, down: true)
+        suppressor.arm(nativeEvents: [native], edge: .down)
+        now += 0.08
+        suppressor.arm(nativeEvents: [native], edge: .up)
+        now += 0.01
+        #expect(suppressor.handle(type: down.type, event: down))
+    }
+
+    @Test func missingNativeEdgesExpireWithoutBlockingPhysicalInput() throws {
+        var now: TimeInterval = 10
+        let suppressor = KeyboardEventSuppressor(uptime: { now }, logger: { _ in })
+        let native: RemoteNativeEvent = .keyboard(keyCode: 115)
+        suppressor.arm(nativeEvents: [native], edge: .down)
+        now += 0.17
+        suppressor.arm(nativeEvents: [native], edge: .up)
+        now += 0.501
+        let down = try nativeEvent(native, down: true)
+        let up = try nativeEvent(native, down: false)
+        #expect(!suppressor.handle(type: down.type, event: down))
+        #expect(!suppressor.handle(type: up.type, event: up))
+    }
+
+    @Test func overlappingClicksConsumeOnlyTheirExpectedEdges() throws {
+        var now: TimeInterval = 10
+        let suppressor = KeyboardEventSuppressor(uptime: { now }, logger: { _ in })
+        let native: RemoteNativeEvent = .systemKey(type: 1)
+        let down = try nativeEvent(native, down: true)
+        let up = try nativeEvent(native, down: false)
+        suppressor.arm(nativeEvents: [native], edge: .down)
+        now = 10.17
+        suppressor.arm(nativeEvents: [native], edge: .up)
+        now = 10.29
+        suppressor.arm(nativeEvents: [native], edge: .down)
+        now = 10.30
+        #expect(suppressor.handle(type: down.type, event: down))
+        #expect(suppressor.handle(type: up.type, event: up))
+        now = 10.46
+        suppressor.arm(nativeEvents: [native], edge: .up)
+        now = 10.60
+        #expect(suppressor.handle(type: down.type, event: down))
+        #expect(suppressor.handle(type: up.type, event: up))
+        #expect(!suppressor.handle(type: down.type, event: down))
+    }
+
+    @Test func nativeUpCanArriveBeforeDelayedDown() throws {
+        var now: TimeInterval = 10
+        let suppressor = KeyboardEventSuppressor(uptime: { now }, logger: { _ in })
+        let native: RemoteNativeEvent = .keyboard(keyCode: 115)
+        let down = try nativeEvent(native, down: true)
+        let up = try nativeEvent(native, down: false)
+        suppressor.arm(nativeEvents: [native], edge: .down)
+        now += 0.17
+        suppressor.arm(nativeEvents: [native], edge: .up)
+        now += 0.14
+        #expect(suppressor.handle(type: up.type, event: up))
+        #expect(suppressor.handle(type: down.type, event: down))
+        #expect(!suppressor.handle(type: down.type, event: down))
+    }
+
+    private func nativeEvent(_ native: RemoteNativeEvent, down: Bool) throws -> CGEvent {
+        switch native {
+        case let .keyboard(keyCode):
+            return try #require(CGEvent(keyboardEventSource: nil, virtualKey: keyCode, keyDown: down))
+        case let .systemKey(type):
+            let data = Int((type << 16) | ((down ? 0xA : 0xB) << 8))
+            let event = try #require(NSEvent.otherEvent(
+                with: .systemDefined, location: .zero, modifierFlags: [], timestamp: 0,
+                windowNumber: 0, context: nil, subtype: 8, data1: data, data2: -1
+            ))
+            return try #require(event.cgEvent)
+        }
+    }
+
     @Test func expiredWindowStopsOrdinaryMissLogsWithoutSuppressingInput() throws {
         var now: TimeInterval = 10
         var logs: [String] = []

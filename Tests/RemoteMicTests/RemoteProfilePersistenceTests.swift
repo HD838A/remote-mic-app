@@ -29,6 +29,46 @@ struct RemoteProfilePersistenceTests {
         return Scope(settings: AppSettings(defaults: defaults), defaults: defaults, name: name)
     }
 
+    @Test func duplicateHIDProfilesAreCollapsedWithoutLosingSelectedMappings() throws {
+        let scope = try Self.scopedSettings("duplicate-hid")
+        defer { scope.tearDown() }
+        let fingerprint = "apple-siri-remote-test"
+        let selectedID = UUID()
+        let duplicateID = UUID()
+        var configuredBindings = AppSettings.defaultBindings
+        configuredBindings[.tv] = .disabled
+        let configuredMappings = RemoteDeviceMappings(
+            buttonBindings: configuredBindings,
+            buttonShortcuts: [:],
+            secondaryButtonBindings: [:]
+        )
+        let selected = RemoteDeviceProfile(
+            id: selectedID,
+            model: .appleSiriRemoteA2854,
+            hidFingerprint: fingerprint,
+            mappings: configuredMappings
+        )
+        let duplicate = RemoteDeviceProfile(
+            id: duplicateID,
+            model: .unknown,
+            hidFingerprint: fingerprint,
+            mappings: RemoteDeviceMappings(
+                buttonBindings: AppSettings.defaultBindings,
+                buttonShortcuts: [:],
+                secondaryButtonBindings: [:]
+            )
+        )
+        scope.defaults.set(try JSONEncoder().encode([selected, duplicate]), forKey: "remoteDeviceProfiles")
+        scope.defaults.set(selectedID.uuidString, forKey: "selectedRemoteProfileID")
+
+        let settings = AppSettings(defaults: scope.defaults)
+
+        #expect(settings.remoteDeviceProfiles.count == 1)
+        #expect(settings.remoteDeviceProfiles.first?.id == selectedID)
+        #expect(settings.selectedRemoteProfileID == selectedID)
+        #expect(settings.selectedRemoteProfile?.mappings == configuredMappings)
+    }
+
     /// A bridge whose `deviceIdentifier` is known without CoreBluetooth: with no peripheral
     /// attached it reports its target identifier, which is what the model keys profiles by.
     @MainActor

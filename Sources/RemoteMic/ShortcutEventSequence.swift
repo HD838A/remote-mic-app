@@ -40,6 +40,92 @@ final class ShortcutHardwareModifierState {
     }
 }
 
+/// Observe our Control-arrow events without changing fields or installing another tap.
+/// Missing/expired correlation is unknown, not a delivery failure.
+final class ShortcutSessionObservation {
+    static let shared = ShortcutSessionObservation()
+
+    private struct EventKey: Hashable {
+        let timestamp: CGEventTimestamp
+        let type: UInt32
+        let code: Int64
+
+        init(_ event: CGEvent) {
+            timestamp = event.timestamp
+            type = event.type.rawValue
+            code = event.getIntegerValueField(.keyboardEventKeycode)
+        }
+    }
+
+    private struct Pending {
+        let operationID: String
+        let eventIndex: Int
+        let primaryKind: String
+        let flags: UInt64
+        let expiresAt: TimeInterval
+        let ambiguous: Bool
+    }
+
+    private let lock = NSLock()
+    private let uptime: () -> TimeInterval
+    private var pending: [EventKey: Pending] = [:]
+
+    init(uptime: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }) {
+        self.uptime = uptime
+    }
+
+    func register(_ event: CGEvent, operationID: String, eventIndex: Int, primaryKind: String) {
+        // Constructed events can have no timestamp. Never pair unrelated events at zero.
+        guard event.timestamp != 0 else { return }
+        let now = uptime()
+        lock.lock()
+        defer { lock.unlock() }
+        pending = pending.filter { $0.value.expiresAt > now }
+        if pending.count >= 64, let oldest = pending.min(by: { $0.value.expiresAt < $1.value.expiresAt }) {
+            pending.removeValue(forKey: oldest.key)
+        }
+        let key = EventKey(event)
+        let ambiguous = pending[key] != nil
+        pending[key] = Pending(operationID: operationID, eventIndex: eventIndex,
+            primaryKind: primaryKind, flags: ShortcutEventSequence.diagnosticFlags(event.flags),
+            expiresAt: now + 2, ambiguous: ambiguous)
+    }
+
+    func discard(operationID: String, eventIndex: Int) {
+        lock.lock()
+        pending = pending.filter { $0.value.operationID != operationID || $0.value.eventIndex != eventIndex }
+        lock.unlock()
+    }
+
+    func observe(_ event: CGEvent, logger: (String) -> Void) {
+        guard event.getIntegerValueField(.eventSourceUserData) == KeyboardInjector.syntheticEventMarker else { return }
+        let now = uptime()
+        lock.lock()
+        let match = pending.removeValue(forKey: EventKey(event))
+        lock.unlock()
+        let actualFlags = ShortcutEventSequence.diagnosticFlags(event.flags)
+        let eventKind = event.type == .keyDown ? "key_down" : "key_up"
+        guard let match, match.expiresAt > now, !match.ambiguous else {
+            guard event.type == .keyDown || event.type == .keyUp,
+                  event.flags.contains(.maskControl),
+                  let code = CGKeyCode(exactly: event.getIntegerValueField(.keyboardEventKeycode)),
+                  let kind = ShortcutEventSequence.navigationKind(code)
+            else { return }
+            logger("SHORTCUT OBSERVATION operation_id=unknown phase=observed correlation=unavailable " +
+                "event_index=unknown event_timestamp_ns=\(event.timestamp) event_kind=\(eventKind) " +
+                "primary_kind=\(kind) source=session_event_tap event_flags=\(actualFlags) " +
+                "expected_flags=unknown flags_match=unknown " +
+                "result=passed_through user_visible_result=unknown")
+            return
+        }
+        logger("SHORTCUT OBSERVATION operation_id=\(match.operationID) phase=observed " +
+            "correlation=matched event_index=\(match.eventIndex) event_timestamp_ns=\(event.timestamp) event_kind=\(eventKind) " +
+            "primary_kind=\(match.primaryKind) source=session_event_tap " +
+            "expected_flags=\(match.flags) event_flags=\(actualFlags) " +
+            "flags_match=\(match.flags == actualFlags) result=passed_through user_visible_result=unknown")
+    }
+}
+
 /// One synchronous shortcut transaction. Capture hardware flags before posting:
 /// HID state can echo our injected flags even when the source is private.
 enum ShortcutEventSequence {
@@ -105,6 +191,20 @@ enum ShortcutEventSequence {
         CGEventFlags([.maskAlphaShift, .maskHelp])
     ) { $0.union($1.flag).union($1.leftDeviceBit).union($1.rightDeviceBit) }
 
+    static func diagnosticFlags(_ flags: CGEventFlags) -> UInt64 {
+        flags.intersection(hardwareModifierMask.union(.maskNumericPad)).rawValue
+    }
+
+    static func navigationKind(_ keyCode: CGKeyCode) -> String? {
+        switch keyCode {
+        case 123: return "arrow_left"
+        case 124: return "arrow_right"
+        case 125: return "arrow_down"
+        case 126: return "arrow_up"
+        default: return nil
+        }
+    }
+
     private static func selectedModifiers(for requested: CGEventFlags) -> [SelectedModifier] {
         modifierFamilies.compactMap { family in
             guard requested.contains(family.flag) else { return nil }
@@ -154,11 +254,16 @@ enum ShortcutEventSequence {
         let selectedModifiers = selectedModifiers(for: requested)
         let hardwareSnapshot = modifierState.snapshot(hardwareFlags())
         let physicalAtStart = hardwareSnapshot.flags.intersection(hardwareModifierMask)
+        let diagnosticKind = requested.contains(.maskControl) ? navigationKind(keyCode) : nil
+        let diagnosticContext = diagnosticKind.map {
+            " primary_kind=\($0) requested_flags=\(diagnosticFlags(requested)) " +
+                "physical_flags=\(diagnosticFlags(physicalAtStart)) source_state=private post_tap=hid"
+        } ?? ""
         logger(
             "\(prefix) phase=requested modifier_count=\(selectedModifiers.count) " +
                 "side_specific=\(selectedModifiers.contains { $0.sideSpecific }) " +
                 "hardware_function_state=\(hardwareSnapshot.functionState) " +
-                "hardware_function_filtered=\(hardwareSnapshot.removedFunctionFlag)"
+                "hardware_function_filtered=\(hardwareSnapshot.removedFunctionFlag)\(diagnosticContext)"
         )
         defer {
             let elapsed = Int((ProcessInfo.processInfo.systemUptime - started) * 1_000)
@@ -179,10 +284,21 @@ enum ShortcutEventSequence {
         }
         var synthetic: CGEventFlags = []
         var attemptedModifiers: [SelectedModifier] = []
+        var eventIndex = 0
 
         func emit(_ code: CGKeyCode, down: Bool, modifier: Bool) -> Bool {
+            eventIndex += 1
+            let eventKind = modifier ? (down ? "modifier_down" : "modifier_up") : (down ? "key_down" : "key_up")
             guard let event = CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: down)
-            else { return false }
+            else {
+                if diagnosticKind != nil {
+                    logger("\(prefix) phase=event_submission event_index=\(eventIndex) " +
+                        "event_kind=\(eventKind) result=construction_failed")
+                }
+                return false
+            }
+            let generatedFunction = event.flags.contains(.maskSecondaryFn)
+            let generatedNumericPad = event.flags.contains(.maskNumericPad)
             if modifier { event.type = .flagsChanged }
             // Keep one physical snapshot for this synchronous transaction. Reading
             // HID state after posting can retain our own modifiers and prevent release.
@@ -191,8 +307,24 @@ enum ShortcutEventSequence {
                 event.flags.insert(.maskNumericPad)
             }
             event.setIntegerValueField(.eventSourceUserData, value: KeyboardInjector.syntheticEventMarker)
+            let timestamp = event.timestamp
+            let flags = event.flags
+            if let diagnosticKind, !modifier {
+                ShortcutSessionObservation.shared.register(event, operationID: operationID,
+                    eventIndex: eventIndex, primaryKind: diagnosticKind)
+            }
             let accepted = eventPoster(event)
             if accepted { submitted += 1 }
+            if diagnosticKind != nil {
+                if !accepted { ShortcutSessionObservation.shared.discard(operationID: operationID, eventIndex: eventIndex) }
+                logger("\(prefix) phase=event_submission event_index=\(eventIndex) " +
+                    "event_timestamp_ns=\(timestamp) event_kind=\(eventKind) " +
+                    "generated_function=\(generatedFunction) generated_numeric_pad=\(generatedNumericPad) " +
+                    "event_flags=\(diagnosticFlags(flags)) " +
+                    "event_function=\(flags.contains(.maskSecondaryFn)) " +
+                    "event_numeric_pad=\(flags.contains(.maskNumericPad)) " +
+                    "result=\(accepted ? "submitted" : "failed")")
+            }
             return accepted
         }
 

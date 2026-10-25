@@ -1764,6 +1764,14 @@ struct SettingsView: View {
     private func setMappingShortcut(_ shortcut: CustomKeyboardShortcut?, for button: RemoteButton, trigger: ButtonTrigger) {
         var configured = mappingConfiguration(for: button, trigger: trigger)
         configured.shortcut = shortcut
+        if shortcut != nil {
+            // A recorded shortcut is an executable action in its own right.
+            // Keeping the previous preset action (for example arrowRight or
+            // volumeDown) would make runtime dispatch ignore this shortcut.
+            configured.action = .customShortcut
+        } else if configured.action == .customShortcut {
+            configured.action = .disabled
+        }
         saveMappingBinding(configured, button: button, trigger: trigger)
     }
 

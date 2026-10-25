@@ -1,5 +1,41 @@
 # 自定义快捷键修饰键生命周期测试
 
+## 2026-10-24 Control 方向键诊断
+
+适用分支：`codex/shortcut-system-diagnostics-20261024`。
+本次仅增加日志，不改变事件标志、顺序、防抖或按键映射。
+
+1. 使用包含本次提交的正式签名候选包，记录来源提交、版本、Build 和 macOS 版本。
+2. 确认输入监控与辅助功能权限已授权。连接 RC003，退出按键捕获模式。
+3. 用实体键盘 Control + Up 建立调度中心对照。关闭调度中心。
+4. 下键绑定同一组合，单次按下后至少等待 1 秒。重复 3 次，分别记录是否打开。
+5. 快速按下、松开 5 次。把 `awaiting_stable_release` 与实际投递分开统计。
+6. 普通按键、组合动作、键位方案三个入口分别执行第 4 步。
+7. 从 App 日志菜单保留该时间段日志。加密日志由受控支持流程读取。
+
+按 `SHORTCUT SEQUENCE operation_id` 查找请求、逐事件提交和唯一终态。
+请求的 `primary_kind=arrow_up`、`requested_flags` 与配置应一致。
+`event_kind` 应依次为 modifier_down、key_down、key_up、modifier_up。
+逐事件记录生成时的 Fn/NumericPad、实际 flags、提交结果和时间戳。
+`SHORTCUT OBSERVATION correlation=matched` 使用操作号、事件序号和时间戳关联主键。
+时间戳为零、变化或重复时，输出 `correlation=unavailable operation_id=unknown`。
+此时仅观察本进程标记的 Control 方向键，不按相邻顺序强行关联。
+观察只说明事件到达会话监听点且被本过滤器放行，不代表系统动作执行。
+`flags_match=false` 表示观察到的白名单属性与提交前不同。
+`HID FILTER phase=started|start_failed|disabled|reenable_requested|stopped` 说明监听边界。
+没有观察记录时，先检查监听状态；不得直接判定系统拒绝。
+超过 2 秒或超过 64 项的登记不保证关联；未观察不输出假超时失败。
+
+失败判定：无法配对请求和终态、主键缺少提交记录、Control 方向键正常回放缺观察记录、
+记录实体键盘内容、重复终态、修饰键残留，或把 submitted/observed 当作用户成功。
+Control + Left/Right/Down、Command + L、裸方向键、语音 Fn 和现有长按连发应保持原行为。
+自动化覆盖正反路径、属性差异、关联及日志隐私；实际系统事件与调度中心尚待真机验收。
+
+本轮 `swift test --disable-keychain --filter 'ShortcutLifecycleTests|KeyboardEventSuppressorTests|RemoteButtonsTests'`
+通过 164 项；`swift test --disable-keychain` 通过 988 项及另 4 项 XCTest。
+`SKIP_SWIFT_PACKAGE_BUILD=1 ./scripts/test.sh` 通过 48 项；公开 Debug 构建与仓库边界检查通过。
+这些结果不代表原始调度中心问题已修复。
+
 ## 范围与准备
 
 适用分支：`codex/integrate-pr361-modifier-side`。现有普通自定义组合无需重新录入；只有需要区分左右侧的组合需要在候选版重新录入一次。准备具有辅助功能权限的正式签名候选包、真实遥控器、实体键盘、至少两个 App 和两个 Codex 会话。不要用未签名本地构建替换用户安装版本。

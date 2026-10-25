@@ -1,8 +1,17 @@
 import Testing
 @testable import RemoteMic
 
-@Suite("RC003 hardware Fn mapping")
+@Suite("Xiaomi RC001/RC003 hardware Fn mapping")
 struct RemoteVoiceFunctionMapperTests {
+    @Test(arguments: [XiaomiRemoteModel.rc001, .rc003])
+    func bothXiaomiModelsUseTheSharedVoiceMappingPolicy(_ model: XiaomiRemoteModel) {
+        #expect(!model.usesPrivateAdapter)
+        #expect(!model.supportsToggleVoiceRecording)
+
+        let mapped = RemoteVoiceFunctionMappingPolicy.applying(to: [])
+        #expect(mapped == [RemoteVoiceFunctionMappingPolicy.remoteVoiceKey])
+    }
+
     @Test func commandBluetoothStreamRequiresCompleteCurrentNeutralization() {
         let original = [HIDUsageMapping(source: 0x0000_0007_0000_0004, destination: 5)]
         let first = MappingServiceBox(registryID: 1, mappings: original)

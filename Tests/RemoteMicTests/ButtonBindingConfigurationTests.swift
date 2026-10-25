@@ -90,6 +90,34 @@ struct ButtonBindingConfigurationTests {
         #expect(settings.configuredAction(for: .home, trigger: .doubleClick, profileID: first) == .disabled)
     }
 
+    @Test func selectedProfileKeepsShortcutMappingsAfterReload() throws {
+        let suite = "UnifiedButtons.SelectedProfile.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let settings = AppSettings(defaults: defaults)
+        let profileID = settings.registerHIDRemote(fingerprint: "rc001-mapping")
+        settings.selectRemoteProfile(profileID)
+        let shortcut = CustomKeyboardShortcut(keyCode: 48, modifierFlags: .command, keyLabel: "Tab")
+        let configured = ConfiguredButtonAction(action: .customShortcut, shortcut: shortcut)
+
+        for button in [RemoteButton.tv, .home, .menu, .volumeDown] {
+            settings.setBaseBinding(configured, for: button, trigger: .singleClick, profileID: profileID)
+        }
+
+        let profile = try #require(settings.remoteDeviceProfiles.first { $0.id == profileID })
+        #expect(profile.mappings.parsedButtonBindings[.tv] == .customShortcut)
+        #expect(profile.mappings.parsedButtonShortcuts[.tv] == shortcut)
+        #expect(profile.mappings.parsedButtonShortcuts[.home] == shortcut)
+        #expect(profile.mappings.parsedButtonShortcuts[.menu] == shortcut)
+        #expect(profile.mappings.parsedButtonShortcuts[.volumeDown] == shortcut)
+
+        let reopened = AppSettings(defaults: defaults)
+        reopened.selectRemoteProfile(profileID)
+        for button in [RemoteButton.tv, .home, .menu, .volumeDown] {
+            #expect(reopened.configuredAction(for: button, trigger: .singleClick, profileID: profileID) == configured)
+        }
+    }
+
     @Test func chosenCombinationActionPersistsForOnlyOriginalButton() throws {
         let suite = "UnifiedButtons.MacroReturn.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suite))
