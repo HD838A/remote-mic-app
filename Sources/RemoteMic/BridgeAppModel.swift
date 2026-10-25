@@ -749,6 +749,9 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     private var membershipCompanionAccessCancellable: AnyCancellable?
     private var membershipAccountCancellable: AnyCancellable?
     private var membershipEnvironmentCancellable: AnyCancellable?
+    /// 只在被会员门禁挡住时安装的一次性监听，权益放开即自动重试并断开。
+    private var phoneMembershipRetryCancellable: AnyCancellable?
+    private var webMembershipRetryCancellable: AnyCancellable?
     private var testToneGeneration = 0
     private var voiceKeyLatch = VoiceFunctionKeyLatch()
     private var heldVoiceKeyMode: VoiceKeyMode?
@@ -1066,6 +1069,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             .sink { [weak self] environment in
                 guard let self else { return }
                 self.disablePhoneRemoteConnection()
+                self.cancelWebRemoteMembershipRetry()
                 self.webRemoteSessionGeneration &+= 1
                 self.webRemoteSessionIdempotencyKey = nil
                 self.webRemoteClient.stop()
@@ -1555,6 +1559,8 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         isWatchRemoteConnected = false
         phoneRemoteState = .idle
         webRemoteState = .disabled
+        cancelPhoneRemoteMembershipRetry()
+        cancelWebRemoteMembershipRetry()
         cancelVoiceSessionWarningTracking()
         bluetoothVoiceActive = false
 #if SAYALL_SIRI_REMOTE_ENABLED
@@ -2096,9 +2102,11 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         guard membershipFeature.canStartCompanionConnection else {
             phoneRemoteState = .membershipRequired
             AppLogger.shared.write("PHONE REMOTE blocked_by_membership")
+            armPhoneRemoteMembershipRetry()
             return
         }
         guard started, !isPhoneRemoteConnectionEnabled else { return }
+        cancelPhoneRemoteMembershipRetry()
         phoneRemoteState = .idle
         isPhoneRemoteConnectionEnabled = true
         phoneRemoteServer.start()
@@ -2107,6 +2115,9 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     }
 
     func disablePhoneRemoteConnection() {
+        // 取消要放在 guard 前面：门禁态下 `isPhoneRemoteConnectionEnabled` 是 false，
+        // 被 guard 挡住就漏掉了一次性监听，它会在用户已经离开这条路径后还挂着。
+        cancelPhoneRemoteMembershipRetry()
         guard isPhoneRemoteConnectionEnabled else { return }
         isPhoneRemoteConnectionEnabled = false
         isPhoneRemoteConnected = false
@@ -2116,6 +2127,35 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         phoneRemoteServer.stop()
         watchBluetoothServer.stop()
         AppLogger.shared.write("PHONE REMOTE disabled_by_user")
+    }
+
+    /// 门禁挡住时挂一个「只等一次放开」的监听：权益一变真就自动重试连接，随即断开。
+    ///
+    /// 不做常驻监听——被挡住是少数情况，没必要让每个 App 生命周期都挂着一条订阅。
+    /// 权益此刻已经放开时不挂：`first(where:)` 会立刻命中当前值，重试若再被拒绝
+    /// （例如服务端仍判 plusRequired）就会重新挂上再重试一次，形成死循环。
+    private func armPhoneRemoteMembershipRetry() {
+        guard phoneMembershipRetryCancellable == nil,
+              !membershipFeature.canUseCompanionConnections else { return }
+        phoneMembershipRetryCancellable = membershipFeature.$canUseCompanionConnections
+            .removeDuplicates()
+            .first(where: { $0 })
+            .sink { [weak self] _ in
+                guard let self else { return }
+                self.phoneMembershipRetryCancellable = nil
+                AppLogger.shared.write("PHONE REMOTE membership_granted_auto_retry")
+                self.enablePhoneRemoteConnection()
+            }
+    }
+
+    private func cancelPhoneRemoteMembershipRetry() {
+        phoneMembershipRetryCancellable?.cancel()
+        phoneMembershipRetryCancellable = nil
+    }
+
+    /// 门禁态下是否真的挂着那条一次性监听（`disable` 后必须回到 `false`）。
+    var isPhoneMembershipRetryArmed: Bool {
+        phoneMembershipRetryCancellable != nil
     }
 
     func togglePhoneRemoteConnection() {
@@ -2142,8 +2182,10 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         guard started else { return }
         guard membershipFeature.canStartCompanionConnection else {
             webRemoteState = .membershipRequired
+            armWebRemoteMembershipRetry()
             return
         }
+        cancelWebRemoteMembershipRetry()
         switch webRemoteState {
         case .failed:
             webRemoteSessionIdempotencyKey = nil
@@ -2174,6 +2216,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     }
 
     func disableWebRemoteConnection() {
+        cancelWebRemoteMembershipRetry()
         webRemoteSessionGeneration &+= 1
         webRemoteSessionIdempotencyKey = nil
         webRemoteClient.stop()
@@ -2181,6 +2224,37 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             "WEB REMOTE SESSION phase=cancelled result=cancelled " +
                 "reason=cancelled_by_user"
         )
+    }
+
+    /// 小程序路径的一次性监听：被会员挡住时挂上，权益放开就自动重新申请会话。
+    ///
+    /// 与手机路径同一做法与同一理由：不常驻、只在需要时挂、命中即断；权益此刻
+    /// 已经放开时不挂，避免 `first(where:)` 立刻命中当前值造成反复重试。
+    private func armWebRemoteMembershipRetry() {
+        guard webMembershipRetryCancellable == nil,
+              !membershipFeature.canUseCompanionConnections else { return }
+        webMembershipRetryCancellable = membershipFeature.$canUseCompanionConnections
+            .removeDuplicates()
+            .first(where: { $0 })
+            .sink { [weak self] _ in
+                guard let self else { return }
+                self.webMembershipRetryCancellable = nil
+                AppLogger.shared.write(
+                    "WEB REMOTE SESSION phase=retried result=unknown " +
+                        "reason=membership_granted_auto_retry"
+                )
+                self.enableWebRemoteConnection()
+            }
+    }
+
+    private func cancelWebRemoteMembershipRetry() {
+        webMembershipRetryCancellable?.cancel()
+        webMembershipRetryCancellable = nil
+    }
+
+    /// 门禁态下是否挂着那条一次性监听（`disable` 后必须回到 `false`）。
+    var isWebMembershipRetryArmed: Bool {
+        webMembershipRetryCancellable != nil
     }
 
     @MainActor
@@ -2310,6 +2384,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         lastRemoteSessionError = error
         if error.failure == .signInRequired || error.failure == .plusRequired {
             webRemoteState = .membershipRequired
+            armWebRemoteMembershipRetry()
         } else {
             webRemoteState = .failed(webRemoteFailureMessage(error.failure))
         }

@@ -1105,29 +1105,82 @@ iPhone / Apple Watch 连接要会员（与小程序路径一致）。做法：
 
    左栏说明与右栏按钮讲的是同一件事的两面，不是重复展示会员限制说明。
 
-这一轮只做呈现层修正：没有新增「重新连接」按钮，没有改会员弹窗文案。新增两个本地化键（`onboarding.apple_companion.membership_title` / `membership_detail`，中英各两条）。
+这一轮只做呈现层修正：不改会员弹窗文案、不改连接协议。新增两个本地化键（`onboarding.apple_companion.membership_title` / `membership_detail`，中英各两条）。门禁态下的「重试连接」按钮是同一分支的后续补充，见下一节。
+
+### 门禁态下的重试入口（同一分支后续补充）
+
+**问题：开通会员后这一页没有下一步。** 原来的说明写「开通会员后即可连接；右侧按钮可直接开通」，但开通并关闭会员中心后，`phoneRemoteState` 会一直停在 `.membershipRequired`：
+
+- `enablePhoneRemoteConnection()` 只在 `prepareForStep` 里被调用，而 `prepareForStep` 只由 `.onAppear` 和 `.onChange(of: settings.onboardingStep)` 触发。
+- 关闭 `.sheet` 不会重跑 `.onAppear`，也不会触发 `didBecomeActive`——sheet 是同一个 App 的子窗口，App 全程处于 active。
+- `BridgeAppModel` 里对 `canUseCompanionConnections` 的订阅只处理反方向（`!allowed` 时 `disablePhoneRemoteConnection()`），权益变为可用时没有任何动作；`canStartCompanionConnection` 本身是 computed，不是 `@Published`。
+- 这一步的「下一步」按钮此时是灰的（`OnboardingFlowPolicy.canContinue` 要求 `remoteConnected && remoteButtonObserved`），页面上也没有重试按钮。
+
+所以用户只能切到别的 App 再回来、返回上一步再前进，或者重开 App 才会重试。若购买流程把 App 挤到后台（系统支付弹窗、跳浏览器），回到前台会碰巧被 `didBecomeActive` 救回来——但那是运气，不是设计。
+
+**对照小程序：它没有这个问题。** `webRemoteContent` 一直留着一个条件按钮（`OnboardingView.swift` 的 `id: "web.retry"`，文案「重新生成二维码」），条件是 `!model.webRemoteState.isEnabled`。而 `WebRemoteSessionState.isEnabled` 把 `.membershipRequired` / `.plusRequired` 都算作 `false`（`RemoteCompatibility.swift`），所以**会员态下这个按钮照样在**：用户开完会员回来点一下，`enableWebRemoteConnection()` 重新过门禁、这次放行、生成新二维码。设置页也是同一思路（`canStartCompanionConnection` 为真时按钮从会员入口换成「连接」）。
+
+**做法：照小程序的机制补。** 左栏在 `model.phoneRemoteState == .membershipRequired` 时显示一个 `id: "phone.retry"` 的按钮，动作为 `model.enablePhoneRemoteConnection()`——重新过门禁，不是新开一条连接路径，也不是第二个会员入口。
+
+文案同步按「状态 + 权益」两个输入判断，新增 `appleCompanionConnectionIsBlocked = model.phoneRemoteState == .membershipRequired && !membershipFeature.canStartCompanionConnection`：
+
+- 权益已放开、但状态还停在门禁（等着点重试）时，标题回到「等待 iPhone 或 Apple Watch」、说明回到「保持 iOS App 或 Apple Watch App 打开，并完成当前 Mac 的连接」。只看状态的话，开通成功回到这页仍会写「此连接是会员功能」，与事实矛盾。
+- 第二张按键卡仍按 `!= .membershipRequired` 隐藏：重试之前连接服务没有启动，按键依然做不到；重试成功后状态变成 `.idle`，这张卡与橙色恢复卡按各自原有条件回来。
+
+新增一个本地化键 `onboarding.apple_companion.retry`（中英各一条）。
+
+### 小程序那屏的文案也跟着权益走，并补一次性正向监听
+
+小程序页面原来的文案只看 `webRemoteState`：`.membershipRequired` / `.plusRequired` 一律写「此连接需要 Plus 会员」，说明恒为「二维码是临时的；连接成功前请保持此页面打开。」。开通会员后 `webRemoteState` 不会变，文案也就不会变——刚开完会员的人回来仍然看到「需要 Plus」，而说明里那句「二维码是临时的」在门禁态下指的是一个还不存在的二维码。
+
+现在两边都按「状态 + 权益」判断：
+
+- 新增 `webRemoteConnectionIsBlocked`。`.plusRequired` 是服务端判定，**一律算被挡**（本地权益显示可用也过不去，文案必须继续说清原因）；`.membershipRequired` 才看 `membershipFeature.canStartCompanionConnection`。
+- 标题：被挡 →「此连接需要 Plus 会员」；权益已放开、只差重新生成会话 →「下一步生成二维码」（复用 `onboarding.web_remote.preparing`）。原来标题这一格写死的 `return localization.text("connection.web.plus_required_title")` 已去掉。
+- 说明：被挡 → 新增的 `onboarding.web_remote.membership_detail`（「开通会员后即可连接；右侧按钮可直接开通。」）；其余仍是原来的二维码说明。状态卡的 detail 从写死改成 `webRemoteConnectionDetail`。
+- 设置页的同一处也一起修：`webRemoteStatusText` 把 `.membershipRequired` 从 `.plusRequired` 里拆出来，权益可用时写「尚未开启」而不是「此连接需要 Plus 会员」；`webRemoteStatusTint` 在权益可用时给次要色而不是橙色（那只是「还没建会话」，不是错误）。旁边的按钮本来就会在权益允许时变成「连接」。
+
+**正向监听：只在需要时挂一条，命中即断。** 新增 `armPhoneRemoteMembershipRetry()` / `armWebRemoteMembershipRetry()`：
+
+- 挂载点：`enablePhoneRemoteConnection()` / `enableWebRemoteConnection()` 被门禁挡住的分支，以及服务端把会话判成 `.membershipRequired` 的 `recordRemoteSessionFailure`。
+- 语义：`membershipFeature.$canUseCompanionConnections` → `removeDuplicates()` → `first(where: { $0 })`，只等「放开」这一个事件，命中后把 cancellable 置 nil 再调 `enable*` 重连，订阅随即结束。不是常驻订阅——没开会员的用户不会一直挂着一条监听。
+- 权益此刻已经放开时不挂：`first(where:)` 会立刻命中当前值，重试若再被拒绝（例如服务端仍判 plusRequired）就会重新挂上再重试一次，形成死循环。这条守卫是这套机制成立的前提。
+- 取消点：`disablePhoneRemoteConnection()`（放在 `guard isPhoneRemoteConnectionEnabled` **之前**——门禁态下这个值是 `false`，被 guard 挡住就漏掉了）、`disableWebRemoteConnection()`、App stop 的重置块、切换服务环境。同一个 target 重复 arm 不会叠加。
+- 保留 `web.retry` / `phone.retry` 两个手动按钮：自动重试被守卫拦下（权益已放开但服务端仍拒绝、或 `started` 还没置真）时，用户仍有可点的入口。
+
+净效果：开通会员后两条路径都会自己继续——`canUseCompanionConnections` 一变真，文案先跟着变（`OnboardingView` 是 `@ObservedObject`，`canUseCompanionConnections` 是 `@Published`），紧接着一次性监听命中、自动重连，二维码/邀请码直接出来；用户不需要点按钮、切后台或重开 App。
+
+新增一个本地化键 `onboarding.web_remote.membership_detail`（中英各一条）。
 
 ### 自动化与构建
 
 - `swift build --build-tests --disable-keychain --disable-sandbox` 公开构建通过。
-- `swift test --disable-keychain --disable-sandbox --filter OnboardingFlowTests`：100 项通过（基线 92 项 + 新增 8 项）：
+- `swift test --disable-keychain --disable-sandbox --filter OnboardingFlowTests`：106 项通过（基线 92 项 + 新增 14 项）：
   - `phoneRemoteMembershipGateIsShownBeforeTheAppStoreQRCode()`：断言会员分支在源码里排在 App Store 二维码分支之前，且不再受 `supportsRemoteSessionAuthorization` 约束。
   - `phoneRemoteConnectionRecordsTheMembershipBlockInsteadOfFailingSilently()`：断言 `enablePhoneRemoteConnection()` 会写 `.membershipRequired` 与日志、不再有 `objectWillChange.send()` 的静默路径，且门禁判定排在 `guard started` 之前。
   - `phoneRemoteConnectionIsBlockedByMembership()`：模型级验证没有会员权益时连接请求确实被记为门禁状态。
   - `theMembershipEntryIsTheOnlyOneInTheApp()`：断言仓库里不再有第二个会员按钮（无 `genericMembershipRequiredView`、无仓库自有的会员文案键），手机路径与小程序路径共用同一个入口。
   - `iphoneRemotePageEntersTheMembershipState()`：离屏托管真实生产视图，断言这一屏确实进入 `.membershipRequired`、交互探针里没有任何仓库自有的会员动作，且恢复卡的 `recovery.remoteNotFound` 动作没有注册（即橙色卡确实没画出来）。
-  - `appleCompanionPageSaysItIsAMemberFeatureInTheLeftColumn()`：断言左栏标题与说明都改由门禁状态决定、不再写死「等待…」与「保持 App 打开并完成连接」，第二张卡由 `!= .membershipRequired` 条件包裹，小程序那套写法仍在。
+  - `appleCompanionPageSaysItIsAMemberFeatureInTheLeftColumn()`：断言左栏标题与说明都改由门禁判断决定、不再写死「等待…」与「保持 App 打开并完成连接」，第二张卡由 `!= .membershipRequired` 条件包裹，左栏有 `phone.retry` 且动作为 `enablePhoneRemoteConnection()`，门禁文案同时看状态与权益，小程序那套写法仍在。
   - `membershipGateSuppressesTheRecoveryCard()`：断言 `shouldShowStandaloneRecoveryCard` 里有「`.iPhoneApp` + `.membershipRequired`」的提前返回，且物理遥控器那条既有判断没被改掉。
-  - `appleCompanionMembershipCopyExistsInBothLanguages()`：断言两个新键中英都在且是具体文案。
+  - `appleCompanionMembershipCopyExistsInBothLanguages()`：断言三个键（标题、说明、重试按钮）中英都在且是具体文案。
+  - `iphoneRemotePageOffersTheRetryThatTheMiniProgramPageHas()`：离屏托管两个真实页面，断言手机页在门禁态下注册了 `phone.retry`、小程序页注册了 `web.retry`——两边重试入口都在，这是「模仿小程序」的落点。
+  - `appleCompanionRetryGoesThroughTheMembershipGateAgain()`：模型级验证再调一次 `enablePhoneRemoteConnection()` 会重新过门禁（没有权益仍是门禁态；有权益则不再是），确认按钮不是空接线。
+  - `webRemotePageSwitchesItsCopyWithTheMembershipEntitlement()`：断言小程序那屏的标题与说明都改由 `webRemoteConnectionIsBlocked` 决定、状态卡 detail 不再写死、`web.retry` 条件照旧、`.plusRequired` 仍一律算被挡。
+  - `webRemoteMembershipCopyExistsInBothLanguages()`：断言小程序新增的开通说明与「下一步生成二维码」两句中英都在。
+  - `membershipRetryListensOnceAndIsDisarmedAfterwards()`：断言两个 arm 函数都用 `first(where:)` 只等一次、权益已放开时提前返回、命中后置 nil；并断言 `disablePhoneRemoteConnection()` 的取消在 `guard` 之前。
+  - `membershipRetryIsArmedOnlyWhileTheGateBlocks()`：模型级验证初始没有监听、门禁态下挂上、反复调用不叠加、`disable` 后断开。
 - `swift test --disable-keychain --disable-sandbox --filter LocalizationTests`：8 项通过（中英键集合一致、无空值、无占位符）。
 
 ### 离屏渲染证据
 
-四张图（中文浅色 / 中文深色 / 英文浅色 / 英文深色，`04-remote.png`，2040 × 1600）存放在 [Screenshots/onboarding-companion-membership-gate/](../Screenshots/onboarding-companion-membership-gate/)，逐张看过：左栏只有一张状态卡（标题「此连接是会员功能」，说明「开通会员后即可连接；右侧按钮可直接开通。」），第二张按键卡与橙色恢复卡都不在；右栏会员按钮、二维码、App Store 徽章、连接检查面板都完整落在 1020 × 772 内，没有裁切；深色下文字对比度正常；英文说明折成两行且完整可读。门禁态下左栏内容本来就少，下方留白是正常的。
+四张图（中文浅色 / 中文深色 / 英文浅色 / 英文深色，`04-remote.png`，2040 × 1600）存放在 [Screenshots/onboarding-companion-membership-gate/](../Screenshots/onboarding-companion-membership-gate/)，已按补上重试按钮后的实现重渲（SHA-256 与字节数见该目录 `manifest.json`）。逐张看过：左栏只有一张状态卡（标题「此连接是会员功能」，说明「开通会员后即可连接；右侧按钮可直接开通。」），卡下是「重试连接」按钮（英文 Retry connection，浅色深色都清晰、没被裁切），第二张按键卡与橙色恢复卡都不在；右栏会员按钮、二维码、App Store 徽章、连接检查面板都完整落在 1020 × 772 内，没有裁切；深色下文字对比度正常；英文说明折成两行且完整可读。门禁态下左栏内容本来就少，下方留白是正常的。
 
-这四张是用私有构件构建（`SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH`）渲染的：公开构建没有私有会员模块，付费墙视图会退化成 `EmptyView`，右栏只会剩二维码，看不到会员按钮。
+这四张是用私有构件构建（`SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH`）渲染的：公开构建没有私有会员模块，付费墙视图会退化成 `EmptyView`，右栏只会剩二维码，看不到会员按钮。左栏的重试按钮与两句文案是仓库自有代码，在公开构建里同样渲染，可用同一入口单独检查左栏版式。
 
 同一套环境在基线 `16f4cbb7` 上渲染作对照：改动前右栏顶部没有会员按钮，只有 App Store 下载二维码——正是「分支顺序把会员那一行遮住」的样子。
+
+未覆盖的中间态：权益已开通、`phoneRemoteState` 还停在门禁（左栏文案回到「等待 iPhone 或 Apple Watch」+ 重试按钮）。这一态要求 `canStartCompanionConnection == true`，需要真实会员权益，渲染环境里拿不到；它由 `appleCompanionRetryGoesThroughTheMembershipGateAgain()` 与上面的文案单测覆盖，没有截图。
 
 ### 生产页面检查
 
@@ -1135,7 +1188,11 @@ iPhone / Apple Watch 连接要会员（与小程序路径一致）。做法：
 2. 确认左栏状态卡标题是「此连接是会员功能」、说明是「开通会员后即可连接；右侧按钮可直接开通。」，而不是「等待 iPhone 或 Apple Watch」+「保持 App 打开并完成当前 Mac 的连接」。
 3. 确认左栏不再出现第二张「请按一个普通控制键」的卡，也没有橙色恢复卡（「重新打开并连接」+「重新连接」+「复制设置诊断」）。
 4. 点「开通会员」，确认会员中心能打开、能完成购买（真机验收）。
-5. 购买后回到引导页，确认连接服务能启动、右栏变成邀请二维码，左栏标题回到「等待 iPhone 或 Apple Watch」、说明回到「保持 App 打开并完成连接」，第二张按键卡与恢复卡按各自原有条件恢复显示。
+5. 购买后回到引导页，确认左栏标题/说明已经回到「等待 iPhone 或 Apple Watch」+「保持 App 打开并完成连接」，而且**不用点任何东西**连接服务就自己起来、右栏直接变成邀请二维码（一次性正向监听命中）；「重试连接」按钮仍在，作为手动兜底。第二张按键卡与恢复卡按各自原有条件恢复显示。
+5a. 不开会员、直接点「重试连接」，确认页面仍停在会员态（不闪出二维码、不报错），日志出现 `PHONE REMOTE blocked_by_membership`。
+5b. 小程序路径重复一遍：进入「用微信连接这台 Mac」页，会员态下左栏是「此连接需要 Plus 会员」+「开通会员后即可连接；右侧按钮可直接开通。」+「重新生成二维码」；开通后返回，确认文案自动变成「下一步生成二维码」+「二维码是临时的…」，并自动生成二维码（日志 `reason=membership_granted_auto_retry`），不需要再点按钮。
+5c. 设置页的小程序那一行：权益可用而会话还没建时应显示「尚未开启」（次要色），不是「此连接需要 Plus 会员」，按钮为「连接」。
+5d. 在门禁态下退出引导（返回上一步或关掉 App 窗口），确认没有残留的一次性监听（没有反复重试、没有重复日志）。
 6. 确认 App Store 二维码仍在（没有把下载入口弄丢），且文案与右栏一致。
 7. 确认全 App 只有这一个会员入口：小程序路径与手机路径显示同一个按钮，界面上没有第二个「开通会员」。
 8. 切英文与深色，确认会员入口与左栏两句文案换行整齐、底部「连接检查」完整可见。
@@ -1146,6 +1203,11 @@ iPhone / Apple Watch 连接要会员（与小程序路径一致）。做法：
 - 左栏状态卡仍写「等待 iPhone 或 Apple Watch」，或说明仍写「保持 App 打开并完成连接」，判定失败（没告诉用户这是会员功能、还指了一条做不到的路）。
 - 门禁态下仍能看到橙色恢复卡或第二张按键卡，判定失败。
 - 点「开通会员」没反应或弹出空窗，判定失败。
+- 门禁态下左栏没有「重试连接」按钮，判定失败（开通会员后这一页没有下一步）。
+- 开通会员回到这页仍写「此连接是会员功能」，判定失败（文案与事实矛盾）。
+- 开通会员后还要手动点按钮才连上，判定失败（一次性正向监听没生效）。
+- 小程序那屏开通后仍写「此连接需要 Plus 会员」，或设置页那一行仍写同一句，判定失败。
+- 日志里 `membership_granted_auto_retry` / `reason=membership_granted_auto_retry` 出现多次，或用户已经离开该路径后仍在重试，判定失败（监听没断开）。
 - 界面上出现两个会员入口，判定失败。
 - 会员入口 + 二维码 + 连接检查面板有任何一项被挤出窗口，判定失败。
 - 开通会员后第二张按键卡与恢复卡没有按原条件回来，判定失败（抑制只应作用于门禁态）。

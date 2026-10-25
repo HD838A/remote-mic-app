@@ -802,6 +802,7 @@
 "onboarding.apple_companion.waiting" = "等待 iPhone 或 Apple Watch";
 "onboarding.apple_companion.membership_title" = "此连接是会员功能";
 "onboarding.apple_companion.membership_detail" = "开通会员后即可连接；右侧按钮可直接开通。";
+"onboarding.apple_companion.retry" = "重试连接";
 "onboarding.apple_companion.connection_detail" = "保持 iOS App 或 Apple Watch App 打开，并完成当前 Mac 的连接。";
 "onboarding.apple_companion.button_detail" = "请在已连接的 iPhone 或 Apple Watch 上按一个普通控制键。";
 "onboarding.control_source.web_remote.title" = "无线麦 SayAll 微信小程序";
@@ -897,6 +898,7 @@
 "onboarding.web_remote.title" = "用微信连接这台 Mac";
 "onboarding.web_remote.detail" = "用微信扫描右侧小程序码，打开无线麦 SayAll 后自动连接，无需输入验证码。";
 "onboarding.web_remote.connection_detail" = "二维码是临时的；连接成功前请保持此页面打开。";
+"onboarding.web_remote.membership_detail" = "开通会员后即可连接；右侧按钮可直接开通。";
 "onboarding.web_remote.connected" = "小程序已连接";
 "onboarding.web_remote.unavailable" = "小程序暂时不可用";
 "onboarding.web_remote.connecting" = "正在准备安全连接";

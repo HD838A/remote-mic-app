@@ -1772,23 +1772,216 @@ struct OnboardingFlowTests {
         #expect(!content.contains("onboarding.apple_companion.connection_detail"))
         // 第二张卡（请在已连接的设备上按一个控制键）在门禁态下也是做不到的指引。
         #expect(content.contains("model.phoneRemoteState != .membershipRequired"))
+        // 门禁态下左栏留一个重新发起连接的按钮，做法与小程序页的 `web.retry` 一致。
+        #expect(content.contains("id: \"phone.retry\""))
+        #expect(content.contains("model.enablePhoneRemoteConnection()"))
 
-        let titleStart = try #require(source.range(of: "private var appleCompanionConnectionTitle"))
+        let titleStart = try #require(source.range(of: "private var appleCompanionAccessReady"))
         let titleEnd = try #require(source.range(
             of: "private var webRemoteContent",
             range: titleStart.upperBound..<source.endIndex
         ))
         let title = String(source[titleStart.lowerBound..<titleEnd.lowerBound])
         #expect(title.contains("onboarding.apple_companion.membership_title"))
-        let membershipIndex = try #require(title.range(of: ".membershipRequired"))
+        let membershipIndex = try #require(title.range(of: "onboarding.apple_companion.membership_title"))
         let waitingIndex = try #require(title.range(of: "onboarding.apple_companion.waiting"))
         #expect(membershipIndex.lowerBound < waitingIndex.lowerBound)
         // 说明文字：门禁下给下一步，其余保持原来的连接指引。
         #expect(title.contains("onboarding.apple_companion.membership_detail"))
         #expect(title.contains("onboarding.apple_companion.connection_detail"))
+        // 门禁文案要同时看「连接状态」和「会员权益」：只看状态的话，
+        // 权益开通后回到这页仍会写「此连接是会员功能」。
+        #expect(title.contains("appleCompanionConnectionIsBlocked"))
+        #expect(title.contains("model.phoneRemoteState == .membershipRequired && !appleCompanionAccessReady"))
 
         // 参考的小程序页面本身仍然是「会员态换标题」那套写法。
         #expect(source.contains("connection.web.plus_required_title"))
+    }
+
+    @Test @MainActor func iphoneRemotePageOffersTheRetryThatTheMiniProgramPageHas() throws {
+        // 小程序页在会员态下左栏一直有「重新生成二维码」（web.retry），会员开通回来
+        // 点一下就能重新过门禁；手机页原来没有任何重试入口，只能切后台、返回上一步
+        // 或重开 App 才会重试。这里补上同一个机制。
+        let iPhone = try OnboardingOffscreenFixture(
+            step: .remote,
+            remoteAvailability: .noRemote,
+            controlMethod: .iPhoneApp,
+            voiceTool: .doubao
+        )
+        defer { iPhone.close() }
+        #expect(iPhone.model.phoneRemoteState == .membershipRequired)
+        #expect(iPhone.probe.actions["phone.retry"] != nil)
+
+        let web = try OnboardingOffscreenFixture(
+            step: .remote,
+            remoteAvailability: .noRemote,
+            controlMethod: .webRemote,
+            voiceTool: .doubao
+        )
+        defer { web.close() }
+        #expect(web.probe.actions["web.retry"] != nil)
+    }
+
+    @Test @MainActor func appleCompanionRetryGoesThroughTheMembershipGateAgain() throws {
+        // 「重试连接」必须是真重跑门禁，不是空按钮：门禁没放开时仍是门禁态，
+        // 放开时才启动连接服务。这条同时锁住「不会再变成静默 return」。
+        let suiteName = "RemoteMicTests.Onboarding.PhoneRetry.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = AppSettings(defaults: defaults)
+        let model = BridgeAppModel(settings: settings)
+        model.enablePhoneRemoteConnection()
+        let afterFirstAttempt = model.phoneRemoteState
+        model.enablePhoneRemoteConnection()
+        if model.membershipFeature.canStartCompanionConnection {
+            #expect(model.phoneRemoteState != .membershipRequired)
+        } else {
+            #expect(model.phoneRemoteState == .membershipRequired)
+            #expect(afterFirstAttempt == .membershipRequired)
+        }
+    }
+
+    @Test func webRemotePageSwitchesItsCopyWithTheMembershipEntitlement() throws {
+        // 小程序这屏原来只看 `webRemoteState`：门禁态写死「此连接需要 Plus 会员」，
+        // 说明写死「二维码是临时的…」。开通会员后状态不会变，于是文案也不变——
+        // 刚开完会员的人回来看到的还是「需要 Plus」。
+        // 现在两边都随权益切换：真被挡 → Plus 标题 + 开通说明；
+        // 权益已放开、只差重新生成会话 → 「下一步生成二维码」。
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/OnboardingView.swift"),
+            encoding: .utf8
+        )
+        let contentStart = try #require(source.range(of: "private var webRemoteContent"))
+        let contentEnd = try #require(source.range(
+            of: "private func controllerButtonStatusCard",
+            range: contentStart.upperBound..<source.endIndex
+        ))
+        let content = String(source[contentStart.lowerBound..<contentEnd.lowerBound])
+        // 状态卡的说明不再写死。
+        #expect(content.contains("detail: webRemoteConnectionDetail"))
+        #expect(!content.contains("\"onboarding.web_remote.connection_detail\""))
+        // 重试入口照旧在（`web.retry`，条件仍是会话没起来）。
+        #expect(content.contains("id: \"web.retry\""))
+        #expect(content.contains("!model.webRemoteState.isEnabled"))
+
+        let titleStart = try #require(source.range(of: "private var webRemoteConnectionTitle"))
+        let titleEnd = try #require(source.range(
+            of: "private var webRemoteConnectionIsBlocked",
+            range: titleStart.upperBound..<source.endIndex
+        ))
+        let title = String(source[titleStart.lowerBound..<titleEnd.lowerBound])
+        #expect(title.contains("webRemoteConnectionIsBlocked"))
+        #expect(title.contains("connection.web.plus_required_title"))
+        #expect(title.contains("onboarding.web_remote.preparing"))
+        // 标题这一格不再写死「需要 Plus」。
+        #expect(!title.contains("return localization.text(\"connection.web.plus_required_title\")"))
+
+        let detailStart = try #require(source.range(of: "private var webRemoteConnectionIsBlocked"))
+        let detailEnd = try #require(source.range(
+            of: "private var selectedControlConnectedKey",
+            range: detailStart.upperBound..<source.endIndex
+        ))
+        let detail = String(source[detailStart.lowerBound..<detailEnd.lowerBound])
+        // 说明同样随权益切换：被挡给开通指引，其余给原来的二维码说明。
+        #expect(detail.contains("onboarding.web_remote.membership_detail"))
+        #expect(detail.contains("onboarding.web_remote.connection_detail"))
+        // 服务端判定（`.plusRequired`）要一直被算作被挡：本地权益对了也不该放过。
+        #expect(detail.contains("case .plusRequired:"))
+        #expect(detail.contains("return !membershipFeature.canStartCompanionConnection"))
+    }
+
+    @Test func webRemoteMembershipCopyExistsInBothLanguages() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let chinese = try String(
+            contentsOf: root.appendingPathComponent("Resources/zh-Hans.lproj/Localizable.strings"),
+            encoding: .utf8
+        )
+        let english = try String(
+            contentsOf: root.appendingPathComponent("Resources/en.lproj/Localizable.strings"),
+            encoding: .utf8
+        )
+        #expect(chinese.contains(
+            "\"onboarding.web_remote.membership_detail\" = \"开通会员后即可连接；右侧按钮可直接开通。\";"
+        ))
+        #expect(english.contains(
+            "\"onboarding.web_remote.membership_detail\" = \"Open the membership to connect. Use the button on the right.\";"
+        ))
+        // 权益放开后要用的那句「下一步生成二维码」也得在两边。
+        #expect(chinese.contains("\"onboarding.web_remote.preparing\" = \"下一步生成二维码\";"))
+        #expect(english.contains("\"onboarding.web_remote.preparing\" = \"Next, generate a QR code\";"))
+    }
+
+    @Test func membershipRetryListensOnceAndIsDisarmedAfterwards() throws {
+        // 正向监听不能是常驻订阅：只在门禁挡住时挂一条，命中「放开」立刻断开，
+        // 用户离开这条路径（disable / App stop / 切服务环境）也要断开。
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let modelSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
+            encoding: .utf8
+        )
+        for armName in ["armPhoneRemoteMembershipRetry", "armWebRemoteMembershipRetry"] {
+            let start = try #require(modelSource.range(of: "private func \(armName)"))
+            let end = try #require(modelSource.range(
+                of: armName == "armPhoneRemoteMembershipRetry"
+                    ? "private func cancelPhoneRemoteMembershipRetry"
+                    : "private func cancelWebRemoteMembershipRetry",
+                range: start.upperBound..<modelSource.endIndex
+            ))
+            let body = String(modelSource[start.lowerBound..<end.lowerBound])
+            // 只等第一个 true 就结束，而不是把每次变化都处理一遍。
+            #expect(body.contains(".first(where: { $0 })"))
+            // 权益已经放开时不挂，否则 first 会立刻命中当前值造成反复重试。
+            #expect(body.contains("!membershipFeature.canUseCompanionConnections"))
+            // 命中后自己断开。
+            #expect(body.contains("= nil"))
+        }
+        // disable 必须取消，而且要放在 guard 之前：门禁态下 isPhoneRemoteConnectionEnabled
+        // 是 false，被 guard 挡住就漏掉了这条监听。
+        let disableStart = try #require(modelSource.range(of: "func disablePhoneRemoteConnection()"))
+        let disableEnd = try #require(modelSource.range(
+            of: "func togglePhoneRemoteConnection()",
+            range: disableStart.upperBound..<modelSource.endIndex
+        ))
+        let disable = String(modelSource[disableStart.lowerBound..<disableEnd.lowerBound])
+        let cancelIndex = try #require(disable.range(of: "cancelPhoneRemoteMembershipRetry()"))
+        let guardIndex = try #require(disable.range(of: "guard isPhoneRemoteConnectionEnabled"))
+        #expect(cancelIndex.lowerBound < guardIndex.lowerBound)
+        // 小程序路径在外层也被统一取消（App stop、切服务环境）。
+        #expect(modelSource.contains("cancelWebRemoteMembershipRetry()"))
+    }
+
+    @Test @MainActor func membershipRetryIsArmedOnlyWhileTheGateBlocks() throws {
+        let suiteName = "RemoteMicTests.Onboarding.RetryArmed.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let model = BridgeAppModel(settings: AppSettings(defaults: defaults))
+        // 一开始没有任何监听挂着。
+        #expect(!model.isPhoneMembershipRetryArmed)
+        #expect(!model.isWebMembershipRetryArmed)
+        model.enablePhoneRemoteConnection()
+        if model.membershipFeature.canStartCompanionConnection {
+            // 权益可用时不装监听。
+            #expect(!model.isPhoneMembershipRetryArmed)
+        } else {
+            #expect(model.isPhoneMembershipRetryArmed)
+            // 反复调用只挂一条，不会叠加。
+            model.enablePhoneRemoteConnection()
+            model.enablePhoneRemoteConnection()
+            #expect(model.isPhoneMembershipRetryArmed)
+            // 离开这条路径就断开。
+            model.disablePhoneRemoteConnection()
+            #expect(!model.isPhoneMembershipRetryArmed)
+        }
     }
 
     @Test func membershipGateSuppressesTheRecoveryCard() throws {
@@ -1840,6 +2033,13 @@ struct OnboardingFlowTests {
         ))
         #expect(english.contains(
             "\"onboarding.apple_companion.membership_detail\" = \"Open the membership to connect. Use the button on the right.\";"
+        ))
+        // 门禁态下的重试按钮文案也要两边都有。
+        #expect(chinese.contains(
+            "\"onboarding.apple_companion.retry\" = \"重试连接\";"
+        ))
+        #expect(english.contains(
+            "\"onboarding.apple_companion.retry\" = \"Retry connection\";"
         ))
     }
 

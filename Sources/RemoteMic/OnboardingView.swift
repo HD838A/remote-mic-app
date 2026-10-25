@@ -1685,7 +1685,33 @@ struct OnboardingView: View {
                     waitingDetailKey: "onboarding.apple_companion.button_detail"
                 )
             }
+
+            // 与小程序页面同一做法：被门禁挡住时左栏留一个重新发起连接的按钮
+            // （小程序是 `web.retry` 的「重新生成二维码」）。会员权益一变，这里
+            // 点一下就重新过门禁并启动连接服务，不需要切后台、返回上一步或重开 App。
+            if model.phoneRemoteState == .membershipRequired {
+                onboardingActionButton(id: "phone.retry") {
+                    model.enablePhoneRemoteConnection()
+                } label: {
+                    Text(verbatim: localization.text("onboarding.apple_companion.retry"))
+                }
+                .buttonStyle(.bordered)
+            }
         }
+    }
+
+    /// 会员权益此刻是否已允许启动手机 / 手表连接。
+    ///
+    /// 权益可能在引导页停留期间由会员中心开通，而 `phoneRemoteState` 那时仍停在
+    /// `.membershipRequired`——没有任何监听者改写它。所以文案要同时看「状态」和
+    /// 「权益」：只看状态的话，开通成功回到这页仍会写「此连接是会员功能」。
+    private var appleCompanionAccessReady: Bool {
+        membershipFeature.canStartCompanionConnection
+    }
+
+    /// 状态仍停在门禁、而且权益也确实还没放开——这才是真正被挡住。
+    private var appleCompanionConnectionIsBlocked: Bool {
+        model.phoneRemoteState == .membershipRequired && !appleCompanionAccessReady
     }
 
     /// 左栏状态卡标题：被会员门禁挡住时写明「这是会员功能」。
@@ -1696,7 +1722,7 @@ struct OnboardingView: View {
         if selectedControlConnected {
             return localization.text("onboarding.apple_companion.connected")
         }
-        if model.phoneRemoteState == .membershipRequired {
+        if appleCompanionConnectionIsBlocked {
             return localization.text("onboarding.apple_companion.membership_title")
         }
         return localization.text("onboarding.apple_companion.waiting")
@@ -1707,7 +1733,7 @@ struct OnboardingView: View {
     /// 原来这里恒为「保持 iOS App 或 Apple Watch App 打开，并完成当前 Mac 的连接。」——
     /// 门禁下连接服务并没有启动，这句指的是用户此刻做不到的事。
     private var appleCompanionConnectionDetail: String {
-        if model.phoneRemoteState == .membershipRequired {
+        if appleCompanionConnectionIsBlocked {
             return localization.text("onboarding.apple_companion.membership_detail")
         }
         return localization.text("onboarding.apple_companion.connection_detail")
@@ -1726,7 +1752,7 @@ struct OnboardingView: View {
                     ? "checkmark.circle.fill"
                     : "qrcode.viewfinder",
                 title: webRemoteConnectionTitle,
-                detail: localization.text("onboarding.web_remote.connection_detail"),
+                detail: webRemoteConnectionDetail,
                 isComplete: webRemoteConnected
             )
 
@@ -3260,7 +3286,13 @@ struct OnboardingView: View {
         case .connected:
             return localization.text("onboarding.web_remote.connected")
         case .membershipRequired, .plusRequired:
-            return localization.text("connection.web.plus_required_title")
+            // 权益已经放开、只差重新生成一次会话时，不要再写「需要 Plus 会员」——
+            // 那会让刚开完会员的用户以为没生效。下一步就是生成二维码（重试按钮在旁边）。
+            return localization.text(
+                webRemoteConnectionIsBlocked
+                    ? "connection.web.plus_required_title"
+                    : "onboarding.web_remote.preparing"
+            )
         case .unavailable, .failed:
             return localization.text("onboarding.web_remote.unavailable")
         case .connecting:
@@ -3270,6 +3302,30 @@ struct OnboardingView: View {
         case .waitingForPhone, .awaitingApproval:
             return localization.text("onboarding.web_remote.waiting")
         }
+    }
+
+    /// 小程序这屏是否真的还被会员挡着。
+    ///
+    /// `.plusRequired` 是服务端判定，本地权益即使显示可用也算被挡——这种情况重试
+    /// 也过不去，文案必须继续说清楚原因。`.membershipRequired` 则要看本地权益：
+    /// 权益一变真，`webRemoteState` 仍停在这个值上（模型里没有监听者改写它），
+    /// 只看状态就会一直写「此连接需要 Plus 会员」。
+    private var webRemoteConnectionIsBlocked: Bool {
+        switch model.webRemoteState {
+        case .plusRequired:
+            return true
+        case .membershipRequired:
+            return !membershipFeature.canStartCompanionConnection
+        default:
+            return false
+        }
+    }
+
+    private var webRemoteConnectionDetail: String {
+        if webRemoteConnectionIsBlocked {
+            return localization.text("onboarding.web_remote.membership_detail")
+        }
+        return localization.text("onboarding.web_remote.connection_detail")
     }
 
     private var selectedControlConnectedKey: String {
