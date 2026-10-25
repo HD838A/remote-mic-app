@@ -65,3 +65,9 @@ HID路由 -> 合成事件: 请求及逐事件属性
 命令：`swift test --disable-keychain`。
 自检：`SKIP_SWIFT_PACKAGE_BUILD=1 ./scripts/test.sh`。
 以上测试回放合成事件，没有向系统投递本次问题组合。
+
+## 2026-10-25 追加修复
+
+日志已确认用户配置为 Control + Up，实体键盘组合正常。快捷键序列原来使用 private event source；本次改为 hidSystemState，保持一次性物理修饰键快照和原有事件顺序。原因是调度中心属于 WindowServer 系统级快捷键，需要系统 HID 事件源语义。
+
+自动化验证：Shortcut lifecycle、Keyboard event suppressor 和 Remote buttons 共 169 项通过。测试证明事件构造、修饰键释放、日志关联和隐私边界保持通过。真实 RC003 与调度中心仍需现场候选包验收，当前不能把单测结果写成系统动作已成功。
