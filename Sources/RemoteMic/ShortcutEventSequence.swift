@@ -1,3 +1,4 @@
+import AppKit
 import CoreGraphics
 import Foundation
 
@@ -40,7 +41,7 @@ final class ShortcutHardwareModifierState {
     }
 }
 
-/// Observe our Control-arrow events without changing fields or installing another tap.
+/// Observe configured shortcut and system-media events without changing them.
 /// Missing/expired correlation is unknown, not a delivery failure.
 final class ShortcutSessionObservation {
     static let shared = ShortcutSessionObservation()
@@ -53,7 +54,9 @@ final class ShortcutSessionObservation {
         init(_ event: CGEvent) {
             timestamp = event.timestamp
             type = event.type.rawValue
-            code = event.getIntegerValueField(.keyboardEventKeycode)
+            code = event.type.rawValue == 14
+                ? Int64(NSEvent(cgEvent: event)?.data1 ?? -1)
+                : event.getIntegerValueField(.keyboardEventKeycode)
         }
     }
 
@@ -104,12 +107,17 @@ final class ShortcutSessionObservation {
         let match = pending.removeValue(forKey: EventKey(event))
         lock.unlock()
         let actualFlags = ShortcutEventSequence.diagnosticFlags(event.flags)
-        let eventKind = event.type == .keyDown ? "key_down" : "key_up"
+        let eventKind: String
+        if event.type.rawValue == 14 {
+            let state = ((NSEvent(cgEvent: event)?.data1 ?? 0) >> 8) & 0xFF
+            eventKind = state == 0xA ? "system_key_down" : "system_key_up"
+        } else {
+            eventKind = event.type == .keyDown ? "key_down" : "key_up"
+        }
         guard let match, match.expiresAt > now, !match.ambiguous else {
             guard event.type == .keyDown || event.type == .keyUp,
-                  event.flags.contains(.maskControl),
                   let code = CGKeyCode(exactly: event.getIntegerValueField(.keyboardEventKeycode)),
-                  let kind = ShortcutEventSequence.navigationKind(code)
+                  let kind = ShortcutEventSequence.diagnosticKind(code, modifiers: event.flags)
             else { return }
             logger("SHORTCUT OBSERVATION operation_id=unknown phase=observed correlation=unavailable " +
                 "event_index=unknown event_timestamp_ns=\(event.timestamp) event_kind=\(eventKind) " +
@@ -205,6 +213,15 @@ enum ShortcutEventSequence {
         }
     }
 
+    // Log only stable action categories for our configured synthetic transactions.
+    // Never log the letter, raw key code, text, App identity or shortcut name.
+    static func diagnosticKind(_ keyCode: CGKeyCode, modifiers: CGEventFlags) -> String? {
+        if modifiers.contains(.maskControl), let kind = navigationKind(keyCode) { return kind }
+        if modifiers.contains(.maskCommand) { return "command_shortcut" }
+        if keyCode == 116 || keyCode == 121 { return "page_navigation" }
+        return nil
+    }
+
     private static func selectedModifiers(for requested: CGEventFlags) -> [SelectedModifier] {
         modifierFamilies.compactMap { family in
             guard requested.contains(family.flag) else { return nil }
@@ -252,12 +269,14 @@ enum ShortcutEventSequence {
         var submitted = 0
         var cleanupFailed = false
         let selectedModifiers = selectedModifiers(for: requested)
-        let hardwareSnapshot = modifierState.snapshot(hardwareFlags())
+        let rawHardwareFlags = hardwareFlags()
+        let hardwareSnapshot = modifierState.snapshot(rawHardwareFlags)
         let physicalAtStart = hardwareSnapshot.flags.intersection(hardwareModifierMask)
-        let diagnosticKind = requested.contains(.maskControl) ? navigationKind(keyCode) : nil
+        let diagnosticKind = diagnosticKind(keyCode, modifiers: requested)
         let diagnosticContext = diagnosticKind.map {
             " primary_kind=\($0) requested_flags=\(diagnosticFlags(requested)) " +
-                "physical_flags=\(diagnosticFlags(physicalAtStart)) source_state=hid_system post_tap=hid"
+                "physical_flags=\(diagnosticFlags(physicalAtStart)) hardware_flags=\(diagnosticFlags(rawHardwareFlags)) " +
+                "source_state=hid_system post_tap=hid"
         } ?? ""
         logger(
             "\(prefix) phase=requested modifier_count=\(selectedModifiers.count) " +
@@ -312,6 +331,9 @@ enum ShortcutEventSequence {
                 event.flags.insert(.maskNumericPad)
             }
             event.setIntegerValueField(.eventSourceUserData, value: KeyboardInjector.syntheticEventMarker)
+            // Newly constructed keyboard events can have timestamp zero. Give
+            // our diagnostic transaction a monotonic timestamp before posting.
+            if diagnosticKind != nil, event.timestamp == 0 { event.timestamp = DispatchTime.now().uptimeNanoseconds }
             let timestamp = event.timestamp
             let flags = event.flags
             if let diagnosticKind, !modifier {

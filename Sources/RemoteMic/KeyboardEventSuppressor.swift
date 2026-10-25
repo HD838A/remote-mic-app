@@ -36,6 +36,12 @@ final class KeyboardEventSuppressor {
     private let logger: (String) -> Void
     private var pendingEvents: [PendingEvent] = []
     private var heldEventCounts: [RemoteNativeEvent: Int] = [:]
+    // Only a native down actually consumed by this tap owns an early native up.
+    private var nativeDownsAwaitingUp: [RemoteNativeEvent: Int] = [:]
+    private var earlyNativeUps: [RemoteNativeEvent: Int] = [:]
+    // Diagnostic-only: bounded to the remote's known native descriptors.
+    private var recentUnclaimedDowns: [RemoteNativeEvent: TimeInterval] = [:]
+    private static let knownNativeEvents = Set(RemoteButton.allCases.flatMap { $0.nativeEvents })
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
     /// 最近 arm 过的事件（带过期时刻），仅用于诊断日志：只有与这些事件相关的
@@ -114,6 +120,9 @@ final class KeyboardEventSuppressor {
         runLoopSource = nil
         pendingEvents.removeAll()
         heldEventCounts.removeAll()
+        nativeDownsAwaitingUp.removeAll()
+        earlyNativeUps.removeAll()
+        recentUnclaimedDowns.removeAll()
         recentArmed.removeAll()
         lock.unlock()
         EventTapPort.release(port: port, source: source)
@@ -135,6 +144,8 @@ final class KeyboardEventSuppressor {
         let now = uptime()
         lock.lock()
         recentArmed.removeAll { $0.until <= now }
+        recentUnclaimedDowns = recentUnclaimedDowns.filter { now - $0.value < Self.nativeDeliveryWindow }
+        var precedingDownAges: [(RemoteNativeEvent, Int)] = []
         for nativeEvent in nativeEvents {
             recentArmed.append((event: nativeEvent, until: now + 1.0))
         }
@@ -142,7 +153,11 @@ final class KeyboardEventSuppressor {
         for nativeEvent in nativeEvents {
             switch edge {
             case .down:
+                if let unclaimed = recentUnclaimedDowns.removeValue(forKey: nativeEvent) {
+                    precedingDownAges.append((nativeEvent, Int((now - unclaimed) * 1_000)))
+                }
                 heldEventCounts[nativeEvent, default: 0] += 1
+                if heldEventCounts[nativeEvent] != 1 { nativeDownsAwaitingUp.removeValue(forKey: nativeEvent) }
                 pendingEvents.append(PendingEvent(
                     event: nativeEvent,
                     edge: edge,
@@ -150,6 +165,7 @@ final class KeyboardEventSuppressor {
                     expiresAt: now + Self.nativeDeliveryWindow
                 ))
             case .up:
+                nativeDownsAwaitingUp.removeValue(forKey: nativeEvent)
                 // The native down may still be in flight. Release held-repeat
                 // ownership without discarding that unconsumed expected edge.
                 let remaining = (heldEventCounts[nativeEvent] ?? 0) - 1
@@ -157,6 +173,13 @@ final class KeyboardEventSuppressor {
                     heldEventCounts[nativeEvent] = remaining
                 } else {
                     heldEventCounts.removeValue(forKey: nativeEvent)
+                }
+                if (earlyNativeUps[nativeEvent] ?? 0) > 0 {
+                    let remainingEarly = earlyNativeUps[nativeEvent, default: 0] - 1
+                    earlyNativeUps[nativeEvent] = remainingEarly > 0 ? remainingEarly : nil
+                    // Its native up already closed the pair. Do not arm a spare up
+                    // that could consume a later physical keyboard release.
+                    continue
                 }
                 pendingEvents.append(PendingEvent(
                     event: nativeEvent,
@@ -170,6 +193,10 @@ final class KeyboardEventSuppressor {
             pendingEvents.removeFirst(pendingEvents.count - 32)
         }
         lock.unlock()
+        for (native, age) in precedingDownAges {
+            logger("HID FILTER phase=arm_order event=\(Self.logToken(native)) edge=down preceding_unclaimed_ms=\(age) " +
+                "source_correlation=timing_only result=already_passed_through")
+        }
     }
 
     func handle(type: CGEventType, event: CGEvent) -> Bool {
@@ -201,6 +228,11 @@ final class KeyboardEventSuppressor {
             $0.event == descriptor.event && $0.edge == descriptor.edge
         }) {
             let matched = pendingEvents.remove(at: matchIndex)
+            if descriptor.edge == .down, heldEventCounts[descriptor.event] == 1,
+               !pendingEvents.contains(where: { $0.event == descriptor.event && $0.edge == .up }),
+               (earlyNativeUps[descriptor.event] ?? 0) == 0 {
+                nativeDownsAwaitingUp[descriptor.event] = 1
+            }
             lock.unlock()
             // 诊断：命中并吞掉——与 miss 日志对照即可判定「系统是否产生了该事件」。
             logger(
@@ -210,19 +242,34 @@ final class KeyboardEventSuppressor {
             )
             return true
         }
+        if descriptor.edge == .up,
+           heldEventCounts[descriptor.event] == 1,
+           (nativeDownsAwaitingUp[descriptor.event] ?? 0) > 0 {
+            let remaining = nativeDownsAwaitingUp[descriptor.event, default: 0] - 1
+            nativeDownsAwaitingUp[descriptor.event] = remaining > 0 ? remaining : nil
+            earlyNativeUps[descriptor.event, default: 0] += 1
+            lock.unlock()
+            logger("HID FILTER suppressed event=\(Self.logToken(descriptor.event)) edge=up " +
+                "type=\(type.rawValue) via=owned_native_pair raw_release=pending")
+            return true
+        }
         if descriptor.edge == .down, (heldEventCounts[descriptor.event] ?? 0) > 0 {
             if type == .keyDown,
                event.getIntegerValueField(.keyboardEventAutorepeat) == 0 {
                 heldEventCounts.removeValue(forKey: descriptor.event)
+                nativeDownsAwaitingUp.removeValue(forKey: descriptor.event)
                 lock.unlock()
                 logger(
-                    "HID FILTER suppressed event=\(Self.logToken(descriptor.event)) "
-                        + "edge=down type=\(type.rawValue) via=held"
+                    "HID FILTER passed_through event=\(Self.logToken(descriptor.event)) "
+                        + "edge=down type=\(type.rawValue) reason=new_keyboard_press"
                 )
                 return false
             }
             lock.unlock()
             return true
+        }
+        if descriptor.edge == .down, Self.knownNativeEvents.contains(descriptor.event) {
+            recentUnclaimedDowns[descriptor.event] = now
         }
         let pendingCount = pendingEvents.count
         // 诊断范围（187 的教训：条件太窄会漏掉「系统事件与预定键码不同」的情况）：
