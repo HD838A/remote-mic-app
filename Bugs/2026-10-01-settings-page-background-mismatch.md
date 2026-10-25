@@ -28,8 +28,8 @@
 - 修复前新增回归测试 `settingsSidebarAndPageUseTheSameBackgroundColor`，在主线代码上按预期失败。
 - 修复后定向测试与完整 `SettingsPageRegressionTests` 通过。
 - 使用生产 `SettingsView` 离屏入口生成 `1020 × 772` 中文浅色和深色截图，核对侧栏、右侧页面、分隔线、页头和滚动区域无整块色差与裁切。
-  - `Screenshots/bug-fixes/settings-background/mapping-light-1020x772.png`，Retina PNG `2040 × 1544`，SHA-256 `221d27d978fb85523b8be7c61e26ca7f01734f1d1921787cc107944f1f4c3c21`
-  - `Screenshots/bug-fixes/settings-background/mapping-dark-1020x772.png`，Retina PNG `2040 × 1544`，SHA-256 `b2e18ff9396cbecf5adf9213159489a1bb786192ff444c3ed4956b6f503735db`
+  - `历史截图证据已按仓库清理规则移出`，Retina PNG `2040 × 1544`，SHA-256 `221d27d978fb85523b8be7c61e26ca7f01734f1d1921787cc107944f1f4c3c21`
+  - `历史截图证据已按仓库清理规则移出`，Retina PNG `2040 × 1544`，SHA-256 `b2e18ff9396cbecf5adf9213159489a1bb786192ff444c3ed4956b6f503735db`
 - `swift build --disable-keychain -c release`、`git diff --check` 通过。
 
 ## 自动化与真实界面边界

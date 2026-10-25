@@ -69,7 +69,7 @@ lang: zh
 | 导出文件重新导入 | 内容选择及确认预览通过，取消后不保存 |
 
 本轮使用生产 SettingsView 和隔离配置。
-[实际系统保存窗口](../Screenshots/settings-export/save-panel-zh-hans-light.jpg)。
+实际系统保存窗口（历史截图证据已按仓库清理规则移出）。
 图片格式、尺寸和摘要见对应 manifest.json。
 
 本地 App 使用 ad hoc 签名，仅用于本机验证。

@@ -8,7 +8,7 @@
 
 ## 日志与证据
 
-- 现场窗口 AX 确认读取失败状态；用户原始 PNG 字节留存在 `Screenshots/unified-button-configuration/feedback/`（本地，不提交用户截图）。
+- 现场窗口 AX 确认读取失败状态；用户原始 PNG 字节留存在 `历史截图证据已按仓库清理规则移出`（本地，不提交用户截图）。
 - 原测试包未注入 `SayAllDiagnosticPublicKey`；加密日志 fail closed，无法取得本轮现场运行日志。不读取旧明文日志，不把不存在的日志说成已检查。
 - 只读检查本产品自己的配置结构，发现 `button-bindings.json` 格式 3 为历史方案预览结构，缺少免费组合动作的 `bindings` 字段；原格式 1 保存在 `button-bindings-v1-backup.json`。
 - 原始本产品数据已复制到本地隔离备份，未写回用户目录；回归用例只含合成内容。修复前格式 2/3 合成用例失败，动作库为空、旧引用无法解析、编辑后重载仍失败。

@@ -8532,7 +8532,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     //
     // 目标工具分两类，语音键的语义必须跟着分（见 `ChromecastFunctionKeyDrive`）：
     // 长按式（豆包「长按模式」）按住—松开；点按式（豆包「免按模式」、Typeless）只认按下，
-    // 必须「开始一次点按、结束再一次点按」。真机实测见 `Testing/VoiceKeyFnPanelProbe.swift`。
+    // 必须「开始一次点按、结束再一次点按」。依据来自历史外部现场 Fn 探针。
 
     /// 「开始那次点按」的延迟松开（仅点按式驱动使用）。
     private var chromecastFunctionKeyTapRelease: DispatchWorkItem?

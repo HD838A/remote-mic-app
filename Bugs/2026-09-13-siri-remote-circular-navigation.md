@@ -3,7 +3,7 @@
 ## 复现
 
 - 版本：1.9.21 (174)，现场进程 PID 71873。
-- 日志：`/Users/andy/Library/Logs/RemoteMic/runtime.log`，2026-09-13 03:26:14–03:26:50 UTC。
+- 日志：`/path/to/user-home/Library/Logs/RemoteMic/runtime.log`，2026-09-13 03:26:14–03:26:50 UTC。
 - 操作：TV 键启动 Cmd-Tab 后在触摸面外圈顺/逆时针旋转；随后在当前选项上静止轻点，不按实体确定键。
 - 实际：日志显示圆周事件不断提交，但无法确认系统实际切换；静止轻点没有进入 AppSwitcher 确认。
 

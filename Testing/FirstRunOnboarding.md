@@ -158,7 +158,7 @@
 
 离屏入口：`REMOTE_MIC_ONBOARDING_SCREENSHOT_DIR`、`REMOTE_MIC_ONBOARDING_SCREENSHOT_LANGUAGE=zh-Hans|en`、`REMOTE_MIC_ONBOARDING_SCREENSHOT_APPEARANCE=light|dark`，来源为 `Sources/RemoteMic/OnboardingScreenshotRenderer.swift` 的生产 `OnboardingView`。生产 `pages(for:)` 输出 9 页：欢迎、控制来源、权限、遥控器、音频、语音工具、语音测试、按键设置、完成；中英文 × 浅色/深色共 4 组，合计 36 张 PNG，均为 2040 × 1600（Retina 2x）。
 
-原图与 SHA-256 清单位于本地持久目录 `/Users/andy/.codex/worktrees/3d70/pr731-evidence/`，不随源码提交。证据在提交 `3ef42676` 上重新生成；其后的 `d0ad9999` 与 `a2701bdf` 只改文档与测试代码，未触及截图内容。
+原图与 SHA-256 清单位于本地持久目录 `/path/to/user-home/.codex/worktrees/3d70/pr731-evidence/`，不随源码提交。证据在提交 `3ef42676` 上重新生成；其后的 `d0ad9999` 与 `a2701bdf` 只改文档与测试代码，未触及截图内容。
 
 渲染机的裸调试可执行文件没有 app bundle identifier，系统无法为它解析蓝牙授权，因此权限页的蓝牙行显示为未授权、页面据此禁用「继续」；带 bundle id 的正式安装包不受此限制。本轮不证明正式包的蓝牙行状态。
 
@@ -195,7 +195,7 @@
 
 ### 离屏渲染证据
 
-`Screenshots/onboarding-installed-checkbox/` 四张图按新实现重渲（浅色未勾选 / 浅色已勾选 / 深色未勾选 / 英文未勾选），SHA-256 与字节数见该目录 `manifest.json` 与上一节的表。连接页去按钮后的形态见 [`Screenshots/onboarding-connect-page/`](../Screenshots/onboarding-connect-page/connect-page-zh-hans-light-iphone.png)（同一份构建、`_CONTROL_METHOD=iphone_app`）：标题 → 说明 → 「等待 iPhone 或 Apple Watch」状态卡 → 「等待控制按键」→ 「所选控制方式还没有连接」，不再有安装按钮；右栏二维码、App Store 徽章与「扫描二维码下载 iOS 无线麦 SayAll App」都在。
+`历史截图证据已按仓库清理规则移出` 四张图按新实现重渲（浅色未勾选 / 浅色已勾选 / 深色未勾选 / 英文未勾选）；SHA-256 与字节数已在当时记录。连接页去按钮后的形态见 `历史截图证据已按仓库清理规则移出`（历史截图证据已按仓库清理规则移出）（同一份构建、`_CONTROL_METHOD=iphone_app`）：标题 → 说明 → 「等待 iPhone 或 Apple Watch」状态卡 → 「等待控制按键」→ 「所选控制方式还没有连接」，不再有安装按钮；右栏二维码、App Store 徽章与「扫描二维码下载 iOS 无线麦 SayAll App」都在。
 
 ### 生产页面检查
 
@@ -281,10 +281,10 @@
 
 | 文件 | 外观 / 语言 / 状态 | SHA-256 |
 | --- | --- | --- |
-| [`installed-checkbox-zh-hans-light-pending.png`](../Screenshots/onboarding-installed-checkbox/installed-checkbox-zh-hans-light-pending.png) | 浅色 / 中文 / 未勾选 | `5a4e5a6c3ce66659b519b92a411c0aeb19c26f4f39650b8ec9a078d064863fb6` |
-| [`installed-checkbox-zh-hans-light-confirmed.png`](../Screenshots/onboarding-installed-checkbox/installed-checkbox-zh-hans-light-confirmed.png) | 浅色 / 中文 / 已勾选 | `9aa054579cfebda400b01cb8748b3902866bfd43455b1df5d8ac647e534abd16` |
-| [`installed-checkbox-zh-hans-dark-pending.png`](../Screenshots/onboarding-installed-checkbox/installed-checkbox-zh-hans-dark-pending.png) | 深色 / 中文 / 未勾选 | `b68d522cf5fd646ec003b29d4a81e2e4faa6a632aeb90e18195338b9c2157494` |
-| [`installed-checkbox-en-light-pending.png`](../Screenshots/onboarding-installed-checkbox/installed-checkbox-en-light-pending.png) | 浅色 / 英文 / 未勾选 | `5c33f9e25a9c7085bced3666ef27f364a3e56ae50eca786cabb0e7fad300fae2` |
+| `installed-checkbox-zh-hans-light-pending.png`（历史截图证据已按仓库清理规则移出） | 浅色 / 中文 / 未勾选 | `5a4e5a6c3ce66659b519b92a411c0aeb19c26f4f39650b8ec9a078d064863fb6` |
+| `installed-checkbox-zh-hans-light-confirmed.png`（历史截图证据已按仓库清理规则移出） | 浅色 / 中文 / 已勾选 | `9aa054579cfebda400b01cb8748b3902866bfd43455b1df5d8ac647e534abd16` |
+| `installed-checkbox-zh-hans-dark-pending.png`（历史截图证据已按仓库清理规则移出） | 深色 / 中文 / 未勾选 | `b68d522cf5fd646ec003b29d4a81e2e4faa6a632aeb90e18195338b9c2157494` |
+| `installed-checkbox-en-light-pending.png`（历史截图证据已按仓库清理规则移出） | 浅色 / 英文 / 未勾选 | `5c33f9e25a9c7085bced3666ef27f364a3e56ae50eca786cabb0e7fad300fae2` |
 
 渲染环境没有蓝牙权限，所以四张图里「继续」都是禁用的，且勾选项下方会出现橙色的「还需要蓝牙权限」运行期提示卡（这不是固定内容，权限开启后消失）；「勾选后解锁继续」由上面的纯函数用例证明，不由截图证明。
 
@@ -370,9 +370,9 @@
 
 | 文件 | 组合 / 状态 | SHA-256 |
 | --- | --- | --- |
-| [`voice-test-zh-hans-light-hold.png`](../Screenshots/onboarding-voice-test-consistency/voice-test-zh-hans-light-hold.png) | 中文 / 豆包 / 按住 | `2e20b511d340dd47a1ce41b8988c9a3c8b738a7802d65895483dae59073f365b` |
-| [`voice-test-zh-hans-light-bridged.png`](../Screenshots/onboarding-voice-test-consistency/voice-test-zh-hans-light-bridged.png) | 中文 / Typeless + 小米遥控器 / 按一下 + 桥接说明 | `b960bf5361aa0db83ad6a3def0fd64c44066a86bfa9627bdbd75ec3b3d8a9ffe` |
-| [`voice-test-en-light-hold.png`](../Screenshots/onboarding-voice-test-consistency/voice-test-en-light-hold.png) | 英文 / 豆包 / 按住 | `33abdd7e19502e2c00cdfb221865358be3734a235a6515ba563ba333307931d1` |
+| `voice-test-zh-hans-light-hold.png`（历史截图证据已按仓库清理规则移出） | 中文 / 豆包 / 按住 | `2e20b511d340dd47a1ce41b8988c9a3c8b738a7802d65895483dae59073f365b` |
+| `voice-test-zh-hans-light-bridged.png`（历史截图证据已按仓库清理规则移出） | 中文 / Typeless + 小米遥控器 / 按一下 + 桥接说明 | `b960bf5361aa0db83ad6a3def0fd64c44066a86bfa9627bdbd75ec3b3d8a9ffe` |
+| `voice-test-en-light-hold.png`（历史截图证据已按仓库清理规则移出） | 英文 / 豆包 / 按住 | `33abdd7e19502e2c00cdfb221865358be3734a235a6515ba563ba333307931d1` |
 
 旧驱动设备名（`MiRemoteV 2ch`）未单独出图：设 `REMOTE_MIC_ONBOARDING_SCREENSHOT_AUDIO_NAME=legacy` 可复现，核对卡上方的音频行与第三条勾选会一起显示真实设备名。
 
@@ -438,7 +438,7 @@
 
 ### 截图证据
 
-离屏入口：`REMOTE_MIC_ONBOARDING_SCREENSHOT_DIR`、`REMOTE_MIC_ONBOARDING_SCREENSHOT_LANGUAGE=zh-Hans|en`、`REMOTE_MIC_ONBOARDING_SCREENSHOT_APPEARANCE=light|dark`、`REMOTE_MIC_ONBOARDING_SCREENSHOT_CONTROL_SOURCE=apple_companion`，来源为 `Sources/RemoteMic/OnboardingScreenshotRenderer.swift` 的生产 `OnboardingView`。受影响的 `04-remote.png` 记录如下（PNG，2040 × 1600，Retina 2x）。四张截图已随本次改动提交到 `Screenshots/onboarding-appstore-qr/`，并附 `manifest.json` 记录源文件与截图指纹：
+离屏入口：`REMOTE_MIC_ONBOARDING_SCREENSHOT_DIR`、`REMOTE_MIC_ONBOARDING_SCREENSHOT_LANGUAGE=zh-Hans|en`、`REMOTE_MIC_ONBOARDING_SCREENSHOT_APPEARANCE=light|dark`、`REMOTE_MIC_ONBOARDING_SCREENSHOT_CONTROL_SOURCE=apple_companion`，来源为 `Sources/RemoteMic/OnboardingScreenshotRenderer.swift` 的生产 `OnboardingView`。受影响的 `04-remote.png` 记录如下（PNG，2040 × 1600，Retina 2x）。四张截图已随本次改动提交到 `历史截图证据已按仓库清理规则移出`；源文件与截图指纹已在当时核对：
 
 | 语言 | 外观 | 文件 | SHA-256 |
 | --- | --- | --- | --- |
@@ -515,7 +515,7 @@
 
 本轮自动化结果：公开仓库 `swift test --disable-keychain --disable-sandbox` 通过 885 项、68 个 suite；包含 Siri Package 的定向 Onboarding、Localization 和音频设备测试通过 97 项、8 个 suite。`git diff --check` 与仓库治理检查通过。Release `SayAll.app` 已通过 `scripts/verify-app.sh` 和 `codesign --verify --deep --strict`。
 
-本轮离屏结果：生产隐藏入口生成 108 张基础 PNG（小米来源、Siri 第 6/7 代、中文/英文、浅色/深色），另生成 PKG 缺失旧设备名和 Siri 临时试用状态 72 张。每张为 2040 × 1600 PNG。证据目录为 `/Users/andy/.codex/worktrees/03ed/onboarding-evidence-20261016`，清单为 `manifest.sha256.json`。已逐张检查窗口 chrome、标题、导航、状态卡、右栏、裁切、对比度和中文字号。静态截图不证明真实权限、蓝牙、音频、Siri Remote 或第三方文字上屏。
+本轮离屏结果：生产隐藏入口生成 108 张基础 PNG（小米来源、Siri 第 6/7 代、中文/英文、浅色/深色），另生成 PKG 缺失旧设备名和 Siri 临时试用状态 72 张。每张为 2040 × 1600 PNG。证据目录为 `/path/to/user-home/.codex/worktrees/03ed/onboarding-evidence-20261016`，清单为 `manifest.sha256.json`。已逐张检查窗口 chrome、标题、导航、状态卡、右栏、裁切、对比度和中文字号。静态截图不证明真实权限、蓝牙、音频、Siri Remote 或第三方文字上屏。
 - 日志：检查 `ONBOARDING SIRI_REMOTE` 的 availability、started、temporarily_enabled、completed，以及停用的 `membership_required` 或保留原因；不含收据正文、设备身份或用户文字。
 
 失败判定：无收据仍有入口、非会员绕过真实语音门禁、完成后遗漏临时开关清理、关闭老用户开关、覆盖音频选择、提前截断语音或状态日志与实际结果不一致。
@@ -1045,7 +1045,7 @@
 
 失败判定：依赖屏幕录制权限、输出设计稿或重绘图、缺少任一页面、左右黑白分栏、正式向导进度变化，或普通用户能在界面中发现截图入口。
 
-当前完整包截图记录（2026-09-23）：使用包含小米遥控器、Siri Remote、Chromecast 遥控器、iPhone / Apple Watch App 与 Web 遥控器入口的生产 `OnboardingView` 隐藏离屏入口，为五个来源分别生成浅色和深色各 9 张，共 90 张。输出目录为 `Screenshots/design-drafts/onboarding-tool-binding-fixes/full-package-90-fixed-20260923`；每张 PNG 均为 `2040 × 1608`，按文件名排序后对逐文件 SHA-256 清单再次计算得到组合 SHA-256 `53982846f8d396a8cb3ad6ff0987c2b43e4c736169bd8d65b6a6fc74c3a96938`。90 张图片已逐张查看窗口 chrome、标题、阶段导航、状态卡、右栏、底部导航、裁切、对比度和中文字号；同时重点复核 Chromecast 浅色/深色 `05-remote.png`、来源专属恢复文案、Apple Watch 状态、Web 二维码内容、权限说明和普通用户页面中的内部测试术语，静态页面检查通过。该记录只证明本次构建的静态布局、外观和文案，不替代 TCC 权限弹窗与恢复、真实遥控器、iPhone / Apple Watch Nearby、Web WSS、MiRemoteV / BlackHole 音频、第三方输入工具快捷键与运行状态，以及松开语音键后文字真实保留在输入框中的现场验收。
+当前完整包截图记录（2026-09-23）：使用包含小米遥控器、Siri Remote、Chromecast 遥控器、iPhone / Apple Watch App 与 Web 遥控器入口的生产 `OnboardingView` 隐藏离屏入口，为五个来源分别生成浅色和深色各 9 张，共 90 张。输出目录为 `历史截图证据已按仓库清理规则移出`；每张 PNG 均为 `2040 × 1608`，按文件名排序后对逐文件 SHA-256 清单再次计算得到组合 SHA-256 `53982846f8d396a8cb3ad6ff0987c2b43e4c736169bd8d65b6a6fc74c3a96938`。90 张图片已逐张查看窗口 chrome、标题、阶段导航、状态卡、右栏、底部导航、裁切、对比度和中文字号；同时重点复核 Chromecast 浅色/深色 `05-remote.png`、来源专属恢复文案、Apple Watch 状态、Web 二维码内容、权限说明和普通用户页面中的内部测试术语，静态页面检查通过。该记录只证明本次构建的静态布局、外观和文案，不替代 TCC 权限弹窗与恢复、真实遥控器、iPhone / Apple Watch Nearby、Web WSS、MiRemoteV / BlackHole 音频、第三方输入工具快捷键与运行状态，以及松开语音键后文字真实保留在输入框中的现场验收。
 
 当前公开构建增益布局复核记录（2026-09-24）：使用公开能力构建的生产 `OnboardingView` 隐藏离屏入口生成小米遥控器分支浅色/深色各 9 张，共 18 张。输出目录为 `Screenshots/design-drafts/onboarding-tool-binding-fixes/ui-audit-light-2` 与 `ui-audit-dark-2`；每张 PNG 均为 `2040 × 1608`，逐张检查了标题、阶段导航、左侧内容、右栏真实遥控器图片、继续按钮、底部提示、浅深色对比度和中文字号，重点确认语音测试页的输入框、增益说明、滑块、当前 dB 值及底部导航均未裁切；欢迎页中文标题也已调整为自然两行，避免孤立单字。按文件名排序后的 SHA-256 清单组合哈希为 `c169997869333b24884a282c59122c3f0e19e5a6a28f2b64a27516799f5e50f3`。该记录仍不替代真实遥控器、权限、音频和第三方输入工具文字上屏验收。
 

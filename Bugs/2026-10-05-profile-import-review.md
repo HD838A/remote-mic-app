@@ -74,14 +74,14 @@ Free 可查看全部按键，但不可保存。
 完整按键、返回选择、取消及会员导航通过。
 中英文和浅深色页面均已检查。
 截图保留原始字节，并核对尺寸和 SHA-256。
-图片及摘要见 [截图清单](../Screenshots/profile-import/manifest.json)。
+图片及摘要见 截图清单（历史截图证据已按仓库清理规则移出）。
 
 | 外观 | 实际运行截图 |
 | --- | --- |
-| 中文浅色 | [查看](../Screenshots/profile-import/confirm-zh-hans-light.jpg) |
-| 中文深色 | [查看](../Screenshots/profile-import/confirm-zh-hans-dark.jpg) |
-| 英文浅色 | [查看](../Screenshots/profile-import/confirm-en-light.jpg) |
-| 英文深色 | [查看](../Screenshots/profile-import/confirm-en-dark.jpg) |
+| 中文浅色 | 查看（历史截图证据已按仓库清理规则移出） |
+| 中文深色 | 查看（历史截图证据已按仓库清理规则移出） |
+| 英文浅色 | 查看（历史截图证据已按仓库清理规则移出） |
+| 英文深色 | 查看（历史截图证据已按仓库清理规则移出） |
 
 测试运行器曾缺少私有构件资源而崩溃。
 装配统一资源后完整测试通过。

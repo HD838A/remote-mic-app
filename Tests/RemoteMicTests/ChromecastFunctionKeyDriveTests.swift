@@ -25,7 +25,7 @@ struct ChromecastFunctionKeyDriveTests {
     }
 
     @Test func stopOfTapsDriveAlwaysPressesTheKey() {
-        // 真机实测（Testing/VoiceKeyFnPanelProbe.swift）：点按式工具对「松开」无反应，
+        // 真机实测（历史外部现场 Fn 探针）：点按式工具对「松开」无反应，
         // 结束必须再给一次「按下」，否则真机表现就是「按一下结束不生效、要再按一下」。
         #expect(ChromecastFunctionKeyDrive.taps.stopEvents.first == .press)
     }

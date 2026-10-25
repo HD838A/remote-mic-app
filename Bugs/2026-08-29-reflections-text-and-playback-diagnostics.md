@@ -4,7 +4,7 @@
 
 - 用户选择指定 App 后可以看到录音记录和播放按钮，但 App 内无法播放；同一份本地音频可由系统播放器播放。
 - 本地文字归档中存在文字，但回眸页面没有显示。
-- 现场没有 `/Users/andy/Library/Logs/RemoteMic/runtime.log`，也没有保留触发失败的原始运行时错误，因此不能确认该条录音在 App 内播放失败的底层原因。
+- 现场没有 `/path/to/user-home/Library/Logs/RemoteMic/runtime.log`，也没有保留触发失败的原始运行时错误，因此不能确认该条录音在 App 内播放失败的底层原因。
 - 代码级复现确认：`AVAudioPlayer` 初始化抛错或 `play()` 返回失败时，旧实现只写统一的 `RECORDING ASSET playback_failed`，页面没有提示；文字日期文件解码或校验失败时会被静默跳过；文字已加载但日期组折叠时没有显示状态日志。
 
 正常边界：有效文字归档仍按 App 和日期加载；可播放录音仍沿用原播放路径；日期组展开后文字正常显示。

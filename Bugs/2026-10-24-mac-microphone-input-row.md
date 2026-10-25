@@ -2,7 +2,7 @@
 
 ## 证据与根因
 
-- 用户指出实际页面与确认设计不符。原始证据为 [原生窗口截图](../Screenshots/mac-microphone-input/native-window-zh-light.jpg)。
+- 用户指出实际页面与确认设计不符。原始证据为 原生窗口截图（历史截图证据已按仓库清理规则移出）。
 - 触发条件：打开连接页，查看语音设备卡。设备名称在第一行，启停按钮和状态在第二行。
 - `SettingsView.macMicrophoneControls` 在纵向容器中使用两个独立横排。代码固定分行，与窗口宽度无关。
 - 本问题仅涉及布局，无需音频日志。代码与生产截图共同确认根因。
@@ -16,6 +16,6 @@
 ## 验证与边界
 
 - 构建：`SAYALL_PRIVATE_PLATFORM_MODE=public CONFIGURATION=debug scripts/build-app.sh`。
-- 生产页面证据见 [单行截图清单](../Screenshots/mac-microphone-input/single-row/manifest.json)。覆盖中英、明暗、开始/收音/准备/停止/权限错误/快捷键冲突。
+- 生产页面证据见 单行截图清单（历史截图证据已按仓库清理规则移出）。覆盖中英、明暗、开始/收音/准备/停止/权限错误/快捷键冲突。
 - 本次是局部布局修正，不新增映射布局结构的单元测试。检查生产页面、资源与 diff。
 - 截图夹具不启动真实麦克风。此前待验收的真实收音、首尾字、文字上屏和硬件互斥仍待验收。

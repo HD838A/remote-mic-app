@@ -80,9 +80,9 @@ Finder 请求只检查扩展名，统一送到键位方案导入。
 以下为生产设置页的隔离本地验证。
 内部验证 App 只用于页面检查，不作为安装包分发。
 
-![系统保存窗口](../Screenshots/configuration-backup/export-save-panel.jpg)
+系统保存窗口（历史截图证据已按仓库清理规则移出）
 
-![恢复确认](../Screenshots/configuration-backup/import-confirm.jpg)
+恢复确认（历史截图证据已按仓库清理规则移出）
 
 | 文件 | 格式与尺寸 | SHA-256 |
 | --- | --- | --- |

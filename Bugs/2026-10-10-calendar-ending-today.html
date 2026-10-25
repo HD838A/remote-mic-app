@@ -561,8 +561,8 @@ body.am-lightbox-open { overflow: hidden; }
 <p>生产最小窗口为 1020 × 772。800 × 650 仅用于离屏压力检查。宽窗口 1606 × 979 显示完整 26 列。窄窗口保留横向滚动。</p>
 <p>测试使用独立 UserDefaults 和测试统计。没有读取第三方 App 私有数据。没有修改用户真实归档。</p>
 </div>
-<pre class="am-code"><code data-lang="sh">swift test --disable-keychain --scratch-path /Users/andy/.codex/worktrees/8c39/calendar-build --filter SettingsPageRegressionTests
-CONFIGURATION=debug REMOTE_MIC_BUILD_SCRATCH_PATH=/Users/andy/.codex/worktrees/8c39/calendar-build REMOTE_MIC_BUILD_CACHE_PATH=/Users/andy/.codex/worktrees/8c39/calendar-cache zsh scripts/build-app.sh
+<pre class="am-code"><code data-lang="sh">swift test --disable-keychain --scratch-path /path/to/user-home/.codex/worktrees/8c39/calendar-build --filter SettingsPageRegressionTests
+CONFIGURATION=debug REMOTE_MIC_BUILD_SCRATCH_PATH=/path/to/user-home/.codex/worktrees/8c39/calendar-build REMOTE_MIC_BUILD_CACHE_PATH=/path/to/user-home/.codex/worktrees/8c39/calendar-cache zsh scripts/build-app.sh
 git diff --check
 bash scripts/verify-repository-governance.sh origin/main</code></pre>
 <div class="am-md"><p>本地日志保存在工作区外的持久目录。文件名为 <code>calendar-before.log</code>、<code>calendar-after.log</code> 和 <code>calendar-app-build.log</code>。</p>
@@ -572,9 +572,7 @@ bash scripts/verify-repository-governance.sh origin/main</code></pre>
 <section class="am-panel" id="panel-E">
 <header class="am-panel-head"><span class="am-panel-id">E</span><h2>截图证据</h2></header>
 <div class="am-panel-body"><div class="am-md"><p>生产 SettingsView，Debug 2.0.0。截图使用独立测试数据。以下路径均相对本记录。</p>
-<p><img src="../Testing/artifacts/calendar-ending-today/zh-light-1606x979/statistics-1606x979.png" alt="中文宽窗口浅色"></p>
-<p><img src="../Testing/artifacts/calendar-ending-today/zh-dark-1020/statistics-1020x772.png" alt="中文生产最小窗口深色"></p>
-<p>全部 PNG 位于 <code>Testing/artifacts/calendar-ending-today/</code>。</p>
+<p>历史 PNG 证据已按仓库清理规则移出；当时覆盖中文宽窗口浅色和生产最小窗口深色。</p>
 <div class="am-table-wrap"><table>
 <thead>
 <tr>
@@ -695,8 +693,8 @@ lang: zh
 测试使用独立 UserDefaults 和测试统计。没有读取第三方 App 私有数据。没有修改用户真实归档。
 
 ```sh
-swift test --disable-keychain --scratch-path /Users/andy/.codex/worktrees/8c39/calendar-build --filter SettingsPageRegressionTests
-CONFIGURATION=debug REMOTE_MIC_BUILD_SCRATCH_PATH=/Users/andy/.codex/worktrees/8c39/calendar-build REMOTE_MIC_BUILD_CACHE_PATH=/Users/andy/.codex/worktrees/8c39/calendar-cache zsh scripts/build-app.sh
+swift test --disable-keychain --scratch-path /path/to/user-home/.codex/worktrees/8c39/calendar-build --filter SettingsPageRegressionTests
+CONFIGURATION=debug REMOTE_MIC_BUILD_SCRATCH_PATH=/path/to/user-home/.codex/worktrees/8c39/calendar-build REMOTE_MIC_BUILD_CACHE_PATH=/path/to/user-home/.codex/worktrees/8c39/calendar-cache zsh scripts/build-app.sh
 git diff --check
 bash scripts/verify-repository-governance.sh origin/main
 ```
@@ -709,11 +707,7 @@ bash scripts/verify-repository-governance.sh origin/main
 
 生产 SettingsView，Debug 2.0.0。截图使用独立测试数据。以下路径均相对本记录。
 
-![中文宽窗口浅色](../Testing/artifacts/calendar-ending-today/zh-light-1606x979/statistics-1606x979.png)
-
-![中文生产最小窗口深色](../Testing/artifacts/calendar-ending-today/zh-dark-1020/statistics-1020x772.png)
-
-全部 PNG 位于 `Testing/artifacts/calendar-ending-today/`。
+历史 PNG 证据已按仓库清理规则移出；当时覆盖中文宽窗口浅色和生产最小窗口深色。
 
 | 子目录 | 像素尺寸 | SHA-256 |
 | --- | --- | --- |

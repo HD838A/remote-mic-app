@@ -62,5 +62,5 @@
 ## 验证边界
 
 - 自动化：检查窗口创建代码明确设置 `hidesOnDeactivate = false`，并通过 `windowWillClose` 把 Dock 图标偏好延后到设置窗口关闭后应用；最小化和恢复后重新应用当前圆角运行时 Logo；保留 `performClose` 的 `⌘W` 关闭路径。图层检查证明 Intel 候选 ICNS 四角透明，不能证明右侧窗口标记已刷新。
-- 代理实测：Apple Silicon Release App 已启动并显示生产设置窗口；截图和摘要见 `Screenshots/bug-fixes/intel-dock-rounded-icon/manifest.json`。该结果不替代 Intel Dock 外观验收。
+- 代理实测：Apple Silicon Release App 已启动并显示生产设置窗口；截图和摘要见 `历史截图证据已按仓库清理规则移出`。该结果不替代 Intel Dock 外观验收。
 - 用户实测：build 248 的右侧窗口缩略图标记仍为方形。需要在实际 Intel 系统运行用例 1–3，独立记录左侧应用图标与右侧窗口标记，并检查最小化、恢复、退出、重启及白底回归；通过后才能确认现场问题已经消除。

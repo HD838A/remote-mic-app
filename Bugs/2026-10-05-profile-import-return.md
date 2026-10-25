@@ -47,10 +47,10 @@ theme: shadcn
 
 | 状态 | 实际运行截图 |
 | --- | --- |
-| 标题位于会员提示之前 | [查看](../Screenshots/profile-import-return/profiles-after-fix-zh-light.jpg) |
-| 第二次返回保留完整预览 | [查看](../Screenshots/profile-import-return/profile-return-after-fix-zh-light.jpg) |
+| 标题位于会员提示之前 | 查看（历史截图证据已按仓库清理规则移出） |
+| 第二次返回保留完整预览 | 查看（历史截图证据已按仓库清理规则移出） |
 
-[截图来源和摘要](../Screenshots/profile-import-return/manifest.json)。
+截图来源和摘要（历史截图证据已按仓库清理规则移出）。
 候选宿主为 `7986c4fa`，私有组件为 `1aa201c`。
 宿主集成检查原先固定了不含界面参数的旧依赖。
 现固定到已合入的私有修复 `e6c60a8`，再运行 CI。

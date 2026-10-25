@@ -13,7 +13,7 @@
 
 | 项目 | 值 |
 | --- | --- |
-| App | `/Users/andy/.codex/worktrees/2f42/open-voice-bridge/dist/SayAll.app` |
+| App | `/path/to/user-home/.codex/worktrees/2f42/open-voice-bridge/dist/SayAll.app` |
 | 构建时间 | 2026-09-05 19:39（CST） |
 | 配置 | Release，Apple Silicon `arm64`，最低 macOS 14.0 |
 | 版本 | 1.9.19（172） |
@@ -27,7 +27,7 @@
 | 签名 | Developer ID Application `L3QHLDRPAY`；`codesign --verify --deep --strict` 已通过 |
 | 安装器签名 | 本次交付只重建了 App/ZIP；`dist/*.pkg` 未随本次交付重建 |
 | 公证/Gatekeeper | Apple 公证已接受；staple、`stapler validate`、`spctl --assess --type execute` 和 `codesign --deep --strict` 均通过 |
-| 可分发 ZIP | `/Users/andy/.codex/worktrees/2f42/open-voice-bridge/dist/SayAll-apple-remote-alignment-stapled-20260905-1944.zip`，SHA-256 `1d3d3975356513593e1b167d42f36ba5defd0ba5ac17891eab08f0b4162d7125` |
+| 可分发 ZIP | `/path/to/user-home/.codex/worktrees/2f42/open-voice-bridge/dist/SayAll-apple-remote-alignment-stapled-20260905-1944.zip`，SHA-256 `1d3d3975356513593e1b167d42f36ba5defd0ba5ac17891eab08f0b4162d7125` |
 
 此包只用于本机候选功能测试，不可作为正式发布包分发。Developer ID、Hardened Runtime、公证、staple 和解压后 Gatekeeper 校验已经通过，但这些产物检查不能证明私有 `MultitouchSupport` 的真实回调在目标系统上可用，仍需 A2854 实机验证。
 

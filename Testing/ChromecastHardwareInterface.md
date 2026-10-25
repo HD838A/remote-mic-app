@@ -13,7 +13,7 @@
 
 | 项目 | 值 |
 | --- | --- |
-| App | `/Users/andy/MySrc/remote-mic-app-chromecase/dist/SayAll.app` |
+| App | `/path/to/user-home/MySrc/remote-mic-app-chromecase/dist/SayAll.app` |
 | 构建时间 | 2026-09-16 19:17（CST） |
 | 配置 | Release，Apple Silicon `arm64`，最低 macOS 14.0 |
 | 版本 | 1.9.21（197） |
@@ -393,8 +393,8 @@ CHROMECAST VOICE phase=started result=triggered audio_source=chromecast_micropho
 ### 重新构建
 
 ```sh
-cd /Users/andy/MySrc/remote-mic-app-chromecase
-SAYALL_CHROMECAST_PACKAGE_PATH=/Users/andy/MySrc/sayall-private-platform/packages/audio-input-kit/chromecast \
+cd /path/to/user-home/MySrc/remote-mic-app-chromecase
+SAYALL_CHROMECAST_PACKAGE_PATH=/path/to/user-home/MySrc/sayall-private-platform/packages/audio-input-kit/chromecast \
 CODE_SIGN_IDENTITY="Developer ID Application: lei qian (L3QHLDRPAY)" \
   ./scripts/build-app.sh
 ```
@@ -409,9 +409,9 @@ CODE_SIGN_IDENTITY="Developer ID Application: lei qian (L3QHLDRPAY)" \
 `Bundle.module` 而 `Package.swift` 尚未声明 `resources:` 直接编译失败）。改用已提交的干净副本：
 
 ```sh
-cd /Users/andy/MySrc/sayall-private-platform
+cd /path/to/user-home/MySrc/sayall-private-platform
 git worktree add --detach /private/tmp/chromecast-<shortsha> <commit>
-cd /Users/andy/MySrc/remote-mic-app-chromecase
+cd /path/to/user-home/MySrc/remote-mic-app-chromecase
 SAYALL_CHROMECAST_PACKAGE_PATH=/private/tmp/chromecast-<shortsha>/packages/audio-input-kit/chromecast \
 CODE_SIGN_IDENTITY="Developer ID Application: lei qian (L3QHLDRPAY)" \
   ./scripts/build-app.sh
@@ -424,16 +424,13 @@ CODE_SIGN_IDENTITY="Developer ID Application: lei qian (L3QHLDRPAY)" \
 
 1. 退出其他无线麦SayAll.app 实例，只保留待测包。
    - 特别注意别打开 `/Applications/SayAll.app`（构建号更大但**不含 Chromecast**）。用
-     `open /Users/andy/MySrc/remote-mic-app-chromecase/dist/SayAll.app` 显式打开本表那份。
+     `open /path/to/user-home/MySrc/remote-mic-app-chromecase/dist/SayAll.app` 显式打开本表那份。
 2. 确认已安装 `MiRemoteV 2ch` 音频设备（侧边栏「连接」→「连接与语音」页的「音频输入与兼容」面板应显示已就绪）。本次不安装任何 helper。
 3. 在侧边栏「设置」页的「权限与隐私」区授予蓝牙、输入监控和辅助功能权限，然后完全退出并重新打开 App。
 4. 从 App“文件 → 打开日志所在文件夹”收集本次测试的 `.rmlog` 加密会话文件，保留既有日志，不清空、不覆盖。由受控支持环境解密后，按测试时间筛选 `CHROMECAST`、`ATVV` 和 `VOICE INTENT`；完整方法见 [运行日志测试手册](RuntimeLogging.md)。下文旧版 `runtime.log` 仅作为历史证据，不再依赖专用日志监听启动器。
 5. 进入侧边栏**「连接」**（链接图标，页面标题「连接与语音」）：**左列的设备面板**显示当前遥控器、照片与三行状态（连接状态 / 语音状态 / 语音快捷），**「重新连接」按钮也在这块面板上**。
    - ⚠️ 侧边栏**没有**单独的「Chromecast 遥控器」面板，也没有总开关：总开关已按产品要求移除，**恒为常开**；语音键模式**不在这一页**，在「按键映射」页底部（见用例 2）。
-   - 界面长相见 `Testing/artifacts/chromecast-layout/`（由 App 自带离屏渲染导出，非截图拼贴）：
-     `connection-zh-Hans-light-1400x2000.png` 是「连接与语音」页，
-     `mapping-zh-Hans-light-1400x2000.png` 是「按键映射」页——语音键模式在该页底部。两张图都按
-     `REMOTE_MIC_SETTINGS_SCREENSHOT_*`（light / zh-Hans / 1400x2000 / `CHROMECAST=1`）导出。
+   - 原离屏界面截图已按仓库清理规则移出；页面来源仍是 App 自带的生产离屏渲染入口。
 6. 确认遥控器可被 App 发现。**这里有两种情况，都必须能连上**：
 
    | 情况 | 遥控器状态 | App 应走的发现路径 |
@@ -628,7 +625,7 @@ CODE_SIGN_IDENTITY="Developer ID Application: lei qian (L3QHLDRPAY)" \
 或者先 `cp -R dist/SayAll.app /tmp/SayAll-chromecast.app` 留一份。
 
 ```sh
-cd /Users/andy/MySrc/remote-mic-app-chromecase
+cd /path/to/user-home/MySrc/remote-mic-app-chromecase
 env -u SAYALL_CHROMECAST_PACKAGE_PATH -u SAYALL_ENABLE_SIRI_REMOTE \
   SAYALL_CHROMECAST_PACKAGE_PATH= ./scripts/build-app.sh
 plutil -extract SayAllChromecastIncluded raw -o - "dist/SayAll.app/Contents/Info.plist"
@@ -719,7 +716,7 @@ resolve、测试与 Release 构建；本机已持有私有包路径，不能替�
 | 8 快速连续点按 | 未执行 | |
 | 9 与 Siri Remote 并存 | 未执行 | 本包不含 Siri Remote（`SayAllSiriRemoteIncluded=false`）。 |
 | 10 打包可选性回归 | 部分通过 | 不带私有包：`swift build` 通过、项目自检 44/44 通过。**未执行**的是完整 `build-app.sh` 无包出包与 `plutil` 读取 `SayAllChromecastIncluded=false`，以及无私有仓库权限账号的验证。 |
-| 11 普通按键与键位映射 | 未执行 | 离线渲染已确认按键页版式与连线锚点（见 `Testing/artifacts/chromecast-mapping/`）；**真机按下生效未验证**。 |
+| 11 普通按键与键位映射 | 未执行 | 离线渲染曾确认按键页版式与连线锚点；相关历史截图已按仓库清理规则移出。**真机按下生效未验证**。 |
 
 **结论必须分开记录**：自动化测试结论、真机结论、安装包验收结论不能互相替代。本手册只覆盖真机部分。
 本轮自动化结论（本次改动后）：包内 104 项 XCTest 全绿；宿主项目自检 44 项、SwiftPM 574 项全绿（带包与不带包两种配置）。
