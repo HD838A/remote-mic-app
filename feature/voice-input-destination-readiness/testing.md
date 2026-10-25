@@ -15,7 +15,7 @@
 swift test --disable-keychain --filter VoiceInputDestinationCoordinatorTests
 swift test --disable-keychain --filter CoreVoiceInputJourneyTests
 swift test --disable-keychain --filter VoiceFnTapSessionControllerTests
-/Users/andy/Develop/Src/AISrc/hardware-simulation/scripts/test-remote-mic.sh <仓库路径>
+/path/to/user-home/Develop/Src/AISrc/hardware-simulation/scripts/test-remote-mic.sh <仓库路径>
 swift test --disable-keychain
 ./scripts/test.sh
 swift build --disable-keychain -c release

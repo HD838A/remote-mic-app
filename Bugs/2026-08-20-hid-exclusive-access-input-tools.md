@@ -10,7 +10,7 @@
 
 - [Issue #95：Karabiner-Elements “Modify events” prevents SayAll from receiving remote HID events](https://github.com/HD838A/remote-mic-app/issues/95)
 - [Issue #105：Karabiner-Elements 独占遥控器 HID 设备](https://github.com/HD838A/remote-mic-app/issues/105)
-- 现场日志 `/Users/andy/Downloads/runtime.log` 的 SHA-256：
+- 现场日志 `/path/to/user-home/Downloads/runtime.log` 的 SHA-256：
 
 ```text
 00e9abe0c673848c69e4dc8a1a549a9264100d64716e20d83648ca9f262a08fe

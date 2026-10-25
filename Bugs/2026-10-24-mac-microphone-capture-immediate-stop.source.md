@@ -9,7 +9,7 @@ source: PR #739 后续 Bug 修复
 悬浮提示使用系统 `.help`，显示时间不稳定。
 
 ## B 现场日志证据
-现场日志来自 `/Users/andy/Library/Logs/RemoteMic/runtime.log`。
+现场日志来自 `/path/to/user-home/Library/Logs/RemoteMic/runtime.log`。
 两次操作都进入 `requested → route_ready → started`。
 每次启动后约 20–30 ms 进入 `stopping reason=capture`。
 采集结果为 `samples=0`，`conversion_failed=false`。

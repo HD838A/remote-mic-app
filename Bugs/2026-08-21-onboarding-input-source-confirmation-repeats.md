@@ -8,7 +8,7 @@
 
 ## 复现证据
 
-现场日志 `/Users/andy/Library/Logs/RemoteMic/runtime.log` 显示，在同一轮 Onboarding 中：
+现场日志 `/path/to/user-home/Library/Logs/RemoteMic/runtime.log` 显示，在同一轮 Onboarding 中：
 
 - `2026-08-16T17:56:33Z` 进入 `voiceTest` 后出现一次 `ONBOARDING INPUT SOURCE tool=weixin result=selected`；
 - `2026-08-16T17:57:02Z`、`17:57:09Z`、`17:57:19Z`、`17:57:36Z`、`17:57:44Z`、`17:57:48Z` 等离开 `voiceTool` 后仍反复出现 `tool=doubao result=selected`；

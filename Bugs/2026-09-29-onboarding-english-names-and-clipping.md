@@ -86,9 +86,9 @@
 
 最终验证：
 
-- `DEVELOPER_DIR=/Users/andy/Downloads/Xcode.app/Contents/Developer swift test --disable-keychain`：731 tests / 56 suites 全部通过。
+- `DEVELOPER_DIR=/path/to/user-home/Downloads/Xcode.app/Contents/Developer swift test --disable-keychain`：731 tests / 56 suites 全部通过。
 - 使用生产 `OnboardingView` 隐藏离屏入口生成并复核 184 张最终 PNG：公开包 36 张、完整 Package 控制来源 108 张、五种语音工具步骤 40 张；全部为 `2040 × 1600` PNG。
-- 截图证据目录：`Screenshots/design-drafts/onboarding-english-issue-492/`；最终清单 `SHA256SUMS-final.txt` 共 184 项，清单 SHA-256 为 `609227d8675602cb5fd09bbe161bb33ba2bda9405fb2af06a749836d0c8a1a30`。
+- 截图证据目录：`历史设计稿证据已按仓库清理规则移出`；最终清单 `SHA256SUMS-final.txt` 共 184 项，清单 SHA-256 为 `609227d8675602cb5fd09bbe161bb33ba2bda9405fb2af06a749836d0c8a1a30`。
 - 完整本地包：`dist/SayAll.app`。验证为 Developer ID Application、Team ID `L3QHLDRPAY`、Hardened Runtime；包含小米、Apple、Chromecast 和 Mac Remote 能力，不包含 AI、组合动作、键位方案或会员私有能力。
 - 启动烟测：从上述 `dist/SayAll.app` 启动后，其 `Contents/MacOS/RemoteMic` 进程保持运行。
 - 官网内容构建：12 pages；analytics 4/4；download proxy 14/14。官网只完成源码验证，没有部署生产。

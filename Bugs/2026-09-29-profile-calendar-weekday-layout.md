@@ -30,5 +30,5 @@
 - 修复前：`swift test --disable-keychain --filter SettingsPageRegressionTests/profileMetricsKeepApprovedWideSingleRowLayout` 失败，指出旧实现缺少正确的周列索引。
 - 修复后：同一回归通过；完整 `SettingsPageRegressionTests` 46/46 通过；`swift test --disable-keychain --parallel --num-workers 1` 共 731/731 通过；项目自检 48/48 通过。
 - Release App：使用仓库原生 `scripts/build-app.sh` 与独立持久构建缓存完成 Release 构建，`scripts/verify-app.sh dist/SayAll.app` 通过。
-- UI：从 Release App 的生产 `SettingsView` 生成并逐张检查 `1020 × 772`、`800 × 650` 浅色与深色截图，保存在 `Testing/artifacts/profile-statistics/bugfix-20260929/`。四张 PNG 均已验证格式、像素尺寸和 SHA-256；1020 宽度完整显示日历，800 宽度保留横向滚动，星期顺序均为星期日至星期六。
+- UI：从 Release App 的生产 `SettingsView` 生成并逐张检查 `1020 × 772`、`800 × 650` 浅色与深色截图。原始 PNG 证据已按仓库清理规则移出；当时已验证格式、像素尺寸和 SHA-256。1020 宽度完整显示日历，800 宽度保留横向滚动，星期顺序均为星期日至星期六。
 - 边界：离屏截图和自动化只能证明索引与静态布局；真实窗口点击日期并跳转回眸仍需人工验收。

@@ -12,7 +12,7 @@
 
 ## 日志与证据
 
-- 崩溃报告：`/Users/andy/Library/Logs/DiagnosticReports/RemoteMic-2026-09-08-222411.ips`。
+- 崩溃报告：`/path/to/user-home/Library/Logs/DiagnosticReports/RemoteMic-2026-09-08-222411.ips`。
 - 同时段运行日志显示 A2854 已连接，触摸已附着，`MiRemoteV 2ch` 已 ready；因此不是蓝牙连接或音频初始化导致的崩溃。
 - `packet_stream_authorization_rule_too_weak` 是 HCI 授权失败的独立已知状态，未出现在 SwiftUI 崩溃调用链中。
 - 私有包的 `SiriRemoteDeviceCapabilities`、`SiriRemoteConnectionPhoto` 和 `SiriRemoteMappingPage` 直接访问 `Bundle.module`。SwiftPM 访问器会把 `.app` 根目录和构建机绝对路径作为候选；发布脚本实际将资源放到 `.app/Contents/Resources/SayAllSiriRemote_SayAllSiriRemote.bundle`。

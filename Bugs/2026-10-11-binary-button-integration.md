@@ -45,6 +45,6 @@ Package.swift 只通过源码目录中的 UnifiedButtonConfiguration.swift 判�
 
 公开完整测试848项、BuildSigningTests 27项、自检48项通过。Apple Silicon及Intel私有二进制Release编译通过。
 
-内部Developer ID App在1020×772生产窗口完成实际点击。前十项显示、名称/ID搜索、选择保存、两个使用位置、未绑定入口及正常重启保留通过。使用12个合成QA动作；退出后恢复原用户配置。原始截图及摘要见[清单](../Screenshots/binary-button-integration/manifest.json)。
+内部Developer ID App在1020×772生产窗口完成实际点击。前十项显示、名称/ID搜索、选择保存、两个使用位置、未绑定入口及正常重启保留通过。使用12个合成QA动作；退出后恢复原用户配置。原始截图及摘要见清单（历史截图证据已按仓库清理规则移出）。
 
 内部App未公证，不用于分发。最终公证包与真实Sparkle安装仍待验证。实体遥控器与第三方结果未验收。

@@ -11,7 +11,7 @@
 
 截图证据目录（本地生成目录，因仓库二进制资产门禁不提交 PNG）：
 
-`/Users/andy/Develop/Src/AISrc/.worktrees/open-voice-bridge-onboarding-config-summary-20260905/.codex-screenshots/onboarding-config-summary-20260905-v2`
+`/path/to/user-home/Develop/Src/AISrc/.worktrees/open-voice-bridge-onboarding-config-summary-20260905/.codex-screenshots/onboarding-config-summary-20260905-v2`
 
 | 路径 | 浅色 | 深色 | 页面数 |
 | --- | ---: | ---: | ---: |

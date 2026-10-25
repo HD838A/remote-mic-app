@@ -61,7 +61,7 @@
 
 - 自动化：`swift test --disable-keychain --disable-sandbox`。
 - 页面回归：`swift test --disable-keychain --disable-sandbox --filter SettingsPageRegressionTests`。
-- 截图：使用 `SettingsScreenshotRenderer` 生成 `1606×979`、`1020×772`、`800×650` 的浅色 / 深色中文截图，输出到 `Screenshots/profile-share-card-style/`，另设置 `REMOTE_MIC_SETTINGS_SCREENSHOT_EXPAND_SHARE=1` 检查个人中心二维码展开状态。
+- 截图：使用 `SettingsScreenshotRenderer` 生成 `1606×979`、`1020×772`、`800×650` 的浅色 / 深色中文截图，输出到 `历史截图证据已按仓库清理规则移出`，另设置 `REMOTE_MIC_SETTINGS_SCREENSHOT_EXPAND_SHARE=1` 检查个人中心二维码展开状态。
 - 代理截图验证不能替代真实遥控器、蓝牙、目标 App 前台切换和真实语音输入；这些仍需在实际 macOS 环境人工验收。
 
 ## 日志收集

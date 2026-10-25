@@ -26,4 +26,4 @@ swift test --disable-keychain --filter SupplementalSettingsIntegrationTests
 
 中英文、浅色和深色下，账号名完整显示。推荐页没有顶部白条或可见滚动条。滚动值从 0 到 1。按键、推荐、连接、回眸、设置及个人中心均可进入。
 
-截图位于 Screenshots/supplemental-page-chrome/。该组合验证使用两项宿主修复与两项私有修复，不代表真实登录、签名包或发布验收。截图格式、尺寸和摘要见 manifest.json。
+截图位于 历史截图证据已按仓库清理规则移出。该组合验证使用两项宿主修复与两项私有修复，不代表真实登录、签名包或发布验收。截图格式、尺寸和摘要见 原始清单。

@@ -188,10 +188,10 @@ final result: passed（横向布局与静态字号；真实窗口交互和真实
 ## 2026-09-10 设置页设计稿一致性 QA
 
 - 视觉真值：`Screenshots/design-drafts/settings-page/option-1-revision-1.png`，PNG，`1442 × 1091`，SHA-256 `3aaaa7ff12f3fbb8a5546d5ac11477a60f11f32fb1c714a557367bd68293521f`。
-- 实现截图：`Screenshots/settings-page/actual-settings-zh-hans-light.png`，生产 App 资源包的隐藏离屏入口，窗口 `800 × 650`、Retina 输出 `1600 × 1300`，中文浅色，SHA-256 `6192b69d53de67c3ec828029f021efad59a88f5a29fde7e5b5f1643676f1c04b`。
-- 底部分享状态：`Screenshots/settings-page/actual-settings-share-bottom-zh-hans-light.png`，同窗口与密度，侧边栏分享入口触发展开并滚动到底部，SHA-256 `2a7205af09ab6d542817f363decf81875066414ba3a3a7a60d5181c69d7445cc`。
-- 完整同图对照：`Screenshots/settings-page/qa-comparisons/design-vs-actual-zh-hans-light.png`，把设计稿等比缩放并居中到 `1600 × 1300` 后与实现并排，SHA-256 `d8b352f9a9db36e927939c1f7613287c2aa32a4e7a3240d532afa4bef9c6319f`。
-- 顶部重点区域对照：`Screenshots/settings-page/qa-comparisons/design-vs-actual-top.png`，用于核对应用信息、版本检查、Release Notes、权限行和分隔线；没有对设计或实现内容做重绘，SHA-256 `974bb53aa7d328731e24d4f4a8db5f642a881c6a242d3b8a87145218272defeb`。
+- 实现截图：`历史截图证据已按仓库清理规则移出`，生产 App 资源包的隐藏离屏入口，窗口 `800 × 650`、Retina 输出 `1600 × 1300`，中文浅色，SHA-256 `6192b69d53de67c3ec828029f021efad59a88f5a29fde7e5b5f1643676f1c04b`。
+- 底部分享状态：`历史截图证据已按仓库清理规则移出`，同窗口与密度，侧边栏分享入口触发展开并滚动到底部，SHA-256 `2a7205af09ab6d542817f363decf81875066414ba3a3a7a60d5181c69d7445cc`。
+- 完整同图对照：`历史截图证据已按仓库清理规则移出`，把设计稿等比缩放并居中到 `1600 × 1300` 后与实现并排，SHA-256 `d8b352f9a9db36e927939c1f7613287c2aa32a4e7a3240d532afa4bef9c6319f`。
+- 顶部重点区域对照：`历史截图证据已按仓库清理规则移出`，用于核对应用信息、版本检查、Release Notes、权限行和分隔线；没有对设计或实现内容做重绘，SHA-256 `974bb53aa7d328731e24d4f4a8db5f642a881c6a242d3b8a87145218272defeb`。
 
 ### 比较历史
 

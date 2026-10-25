@@ -32,8 +32,8 @@
 - 自动化覆盖硬件家族顺序、未知型号后置、默认只选择真实 RC001/RC003，以及默认选择只挂在进入页面事件而不进入画布重绘。
 - `Testing/ConnectedRemoteCards.md` 增加默认画布、固定顺序和用户手动切换不回跳的真机步骤。
 - 使用生产 `SettingsView` 离屏入口和三类已连接设备数据生成 `1020 × 772` 中文浅色、深色截图，确认顶部为“小米、苹果、Chromecast”且小米卡片和画布默认选中：
-  - `Screenshots/bug-fixes/mapping-remote-order/mapping-light-1020x772.png`，Retina PNG `2040 × 1544`，SHA-256 `e7654c7f7967c16b9d95e0b2451941c327a9907b28ccc29afbe92ba0e7413c7f`
-  - `Screenshots/bug-fixes/mapping-remote-order/mapping-dark-1020x772.png`，Retina PNG `2040 × 1544`，SHA-256 `bd0aaf02ba6fad6a377f6e6e055f18e72f62e8910c2e9e30f56863a8bf4a5555`
+  - `历史截图证据已按仓库清理规则移出`，Retina PNG `2040 × 1544`，SHA-256 `e7654c7f7967c16b9d95e0b2451941c327a9907b28ccc29afbe92ba0e7413c7f`
+  - `历史截图证据已按仓库清理规则移出`，Retina PNG `2040 × 1544`，SHA-256 `bd0aaf02ba6fad6a377f6e6e055f18e72f62e8910c2e9e30f56863a8bf4a5555`
 - 执行定向测试、完整测试、Release 构建和 `git diff --check`。
 
 ## 自动化与真机边界

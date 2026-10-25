@@ -45,7 +45,7 @@ lang: zh
 | `Testing/ConnectedRemoteCards.md` | 增加整卡点击用例和验证边界 |
 | `TODO.md` | 同步既有设备卡任务的候选进度 |
 | 本文、HTML 与 `Bugs/README.md` | 保存根因、验证和文档入口 |
-| `Screenshots/remote-card-hit-area/` | 保存生产界面和图片摘要清单 |
+| `历史截图证据已按仓库清理规则移出` | 保存生产界面和图片摘要清单 |
 
 背景使用单独的点击手势，前景按钮保留自身动作。
 卡片没有嵌套按钮，也没有新增可访问选择项。
@@ -74,7 +74,7 @@ lang: zh
 
 ## 截图证据
 
-图片目录为 `Screenshots/remote-card-hit-area/`。
+图片目录为 `历史截图证据已按仓库清理规则移出`。
 `manifest.json` 记录原始格式、尺寸、SHA-256 和源码摘要。
 三张中文浅色图片来自原生窗口，原始格式为 JPEG。
 其他六张来自生产离屏入口，原始格式为 PNG。
