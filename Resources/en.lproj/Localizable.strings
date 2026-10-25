@@ -178,7 +178,7 @@
 "action.scroll_down" = "Scroll Down";
 "action.delete_backspace" = "Delete (Backspace)";
 "action.command_delete" = "Command-Delete";
-"action.show_desktop" = "Show Desktop";
+"action.show_desktop" = "Show Desktop (fn + F11)";
 "action.context_menu" = "Context Menu";
 "action.system_volume_up" = "Increase System Volume";
 "action.system_volume_down" = "Decrease System Volume";

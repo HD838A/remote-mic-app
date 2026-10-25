@@ -178,7 +178,7 @@
 "action.scroll_down" = "向下滚动";
 "action.delete_backspace" = "Delete（退格）";
 "action.command_delete" = "Command-Delete";
-"action.show_desktop" = "显示桌面";
+"action.show_desktop" = "显示桌面（fn + F11）";
 "action.context_menu" = "上下文菜单";
 "action.system_volume_up" = "系统音量 +";
 "action.system_volume_down" = "系统音量 -";
