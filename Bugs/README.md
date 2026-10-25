@@ -1,5 +1,7 @@
 # Bug 记录
 
+- [录入普通快捷键时崩溃](./2026-10-26-shortcut-capture-input-source-crash.html)
+
 - [苹果遥控器 Onboarding 语音授权恢复](./2026-10-25-siri-remote-authorization-recovery.html)
 
 - [原生松开漏拦截与快捷键诊断](./2026-10-25-native-release-and-shortcut-diagnostics.html)
