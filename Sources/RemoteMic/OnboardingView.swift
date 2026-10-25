@@ -1954,6 +1954,18 @@ struct OnboardingView: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .disabled(model.isStreaming)
+                    .help(recoveryDetailText(for: failure))
+
+                    onboardingActionButton(id: "diagnostics.copy") {
+                        copyDiagnosticSummary()
+                    } label: {
+                        Label(localization.text("onboarding.diagnostics.copy"), systemImage: "doc.on.doc")
+                            .labelStyle(.iconOnly)
+                            .font(.system(size: 13))
+                            .frame(width: 24, height: 28)
+                    }
+                    .buttonStyle(.borderless)
+                    .help(localization.text("onboarding.diagnostics.copy"))
                 }
             }
 

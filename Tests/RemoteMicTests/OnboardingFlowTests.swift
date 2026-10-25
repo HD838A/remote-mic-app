@@ -32,9 +32,13 @@ struct OnboardingFlowTests {
         #expect(fixture.settings.onboardingStep == .voiceTest)
         #expect(fixture.settings.siriRemoteNeedsUserAction)
         #expect(fixture.probe.actions["voice-test.audio-retry"] != nil)
+        #expect(fixture.probe.actions["diagnostics.copy"] != nil)
         fixture.probe.invoke("voice-test.audio-retry")
         #expect(!fixture.settings.siriRemoteNeedsUserAction)
         #expect(!fixture.settings.isOnboardingComplete)
+        #expect(!fixture.settings.firstUseEvents.contains {
+            $0.step == .voiceTest && ($0.kind == .passed || $0.kind == .recovered)
+        })
         #expect(fixture.settings.firstUseEvents.contains {
             $0.kind == .retry && $0.failureReason == .voiceAuthorizationRequired
         })
