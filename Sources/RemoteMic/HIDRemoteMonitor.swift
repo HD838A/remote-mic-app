@@ -273,7 +273,12 @@ final class HIDRemoteMonitor {
         self.manager = manager
         startPermissionMonitor()
         updateStatus(LocalizedMessage("button_mapping.status.waiting_for_device"))
-        AppLogger.shared.write("HID START mode=adaptive")
+        AppLogger.shared.write(
+            "HID START mode=adaptive back_only=\(backOnlyMode) " +
+                "allowlist_configured=\(allowedLocationIDs != nil) " +
+                "allowlist_count=\(allowedLocationIDs?.count ?? 0) " +
+                "target_bound=\(targetFingerprint != nil)"
+        )
     }
 
     func stop() {
@@ -311,7 +316,11 @@ final class HIDRemoteMonitor {
             locationID: Self.locationID(for: device),
             allowedLocationIDs: allowedLocationIDs
         ) else {
-            diagnosticLogger("HID DEVICE rejected reason=unsafe_location")
+            diagnosticLogger(
+                "HID DEVICE rejected reason=unsafe_location " +
+                    "has_location=\(Self.locationID(for: device) != nil) " +
+                    "allowlist_configured=\(allowedLocationIDs != nil)"
+            )
             return
         }
         switch Self.deviceMatchDecision(
@@ -489,7 +498,12 @@ final class HIDRemoteMonitor {
             locationID: Self.locationID(for: device),
             allowedLocationIDs: allowedLocationIDs
         ) else {
-            diagnosticLogger("HID REPORT rejected reason=unsafe_location")
+            diagnosticLogger(
+                "HID REPORT rejected reason=unsafe_location " +
+                    "report_id=\(reportID) bytes=\(data.count) " +
+                    "has_location=\(Self.locationID(for: device) != nil) " +
+                    "allowlist_configured=\(allowedLocationIDs != nil)"
+            )
             return
         }
         let routing = Self.reportRoutingDecision(

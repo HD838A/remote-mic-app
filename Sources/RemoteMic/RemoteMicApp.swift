@@ -164,20 +164,37 @@ enum RemoteMicApp {
         }
         let bundleIdentifier = Bundle.main.bundleIdentifier
             ?? ApplicationInstanceGuard.fallbackBundleIdentifier
+        let existingInstances = NSRunningApplication.runningApplications(
+            withBundleIdentifier: bundleIdentifier
+        ).count
+        AppLogger.shared.write(
+            "APP INSTANCE phase=launch bundle_id=\(bundleIdentifier) " +
+                "pid=\(ProcessInfo.processInfo.processIdentifier) " +
+                "existing_instances=\(existingInstances)"
+        )
         var instanceLock: ApplicationInstanceLock?
         if let lockURL = ApplicationInstanceGuard.defaultLockURL() {
             switch ApplicationInstanceLock.acquire(at: lockURL) {
             case let .acquired(lock):
                 instanceLock = lock
             case .alreadyLocked:
+                AppLogger.shared.write(
+                    "APP INSTANCE phase=blocked result=existing_instance reason=lock_held"
+                )
                 ApplicationInstanceGuard.existingApplication(
                     bundleIdentifier: bundleIdentifier
                 )?.activate(options: [.activateAllWindows])
                 return
             case let .failed(reason):
+                AppLogger.shared.write(
+                    "APP INSTANCE phase=warning result=lock_unavailable reason=\(reason)"
+                )
                 fputs("Single-instance lock unavailable: \(reason)\n", stderr)
             }
         } else {
+            AppLogger.shared.write(
+                "APP INSTANCE phase=warning result=lock_unavailable reason=application_support_missing"
+            )
             fputs("Single-instance lock unavailable: application_support_missing\n", stderr)
         }
 
@@ -185,6 +202,9 @@ enum RemoteMicApp {
             bundleIdentifier: bundleIdentifier,
             requiresFinishedLaunch: true
         ) {
+            AppLogger.shared.write(
+                "APP INSTANCE phase=blocked result=existing_instance reason=finished_launch"
+            )
             existingApplication.activate(options: [.activateAllWindows])
             return
         }

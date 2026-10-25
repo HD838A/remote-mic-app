@@ -601,9 +601,9 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             guard let self else { return }
             self.macMicrophoneState = state
             if state == .recording {
-                self.macMicrophoneInputTarget.monitor { [weak self] in
-                    self?.macMicrophoneSession.stop(failure: .targetUnavailable)
-                }
+                AppLogger.shared.write(
+                    "MAC MICROPHONE target_monitor=disabled reason=target_is_optional"
+                )
             }
         }
         return session
@@ -831,6 +831,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     private var bluetoothVoiceEnqueueFailureCount = 0
     /// 因为活动设备标识不匹配而被静默丢掉的蓝牙音频批次；过去这条路径没有任何记录。
     private var bluetoothVoiceIdentifierDropCount = 0
+    private var loggedBluetoothVoiceIdentifierDrop = false
     private var latestBluetoothAudioDiagnosticOperationID: UInt64?
     private var latestBluetoothAudioDiagnosticGeneration: Int?
     private var sharedBluetoothAudioDiagnosticGenerations: [Int] = []
@@ -919,6 +920,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     private var chromecastAudioBatchCount = 0
     private var chromecastAudioSampleCount = 0
     private var chromecastAudioEnqueueFailureCount = 0
+    private var loggedChromecastInactiveAudioDrop = false
     private var loggedChromecastAudioDevice = false
     /// 设置页展示用。私有包缺失时恒为 `.unavailable`，界面据此隐藏整块内容。
     @Published private(set) var chromecastStatus: ChromecastLinkStatus =
@@ -2663,7 +2665,12 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             self.macMicrophoneInputTarget.prepare { [weak self] ready in
                 guard let self, self.macMicrophoneSession.operationID == operation,
                       self.macMicrophoneState == .preparing else { return }
-                guard ready else { completion(.targetUnavailable); return }
+                if !ready {
+                    AppLogger.shared.write(
+                        "MAC MICROPHONE operation_id=\(operation) phase=target_prepare " +
+                            "result=unavailable action=continue_capture"
+                    )
+                }
                 self.ensureVirtualAudioOutputReady(reason: "mac_microphone_voice_start") { [weak self] ready in
                     guard let self, self.macMicrophoneSession.operationID == operation,
                           self.macMicrophoneState == .preparing else { return }
@@ -3451,9 +3458,14 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             settings.remoteDeviceProfiles.contains { $0.hidFingerprint != nil }
         )
         hidPowerKeySuppressed = powerKeySuppressed
-        hidAllowedLocationIDs = settings.customMappingEnabled
-            ? voiceFunctionMapper.powerSuppressedLocationIDs
-            : nil
+        // The power-key suppressor's location IDs describe native-event
+        // suppression. They are not an identity allowlist for the HID device
+        // or its reports. Reusing them here rejected valid RC001 devices after
+        // reconnect, so production HID routing must not apply that filter.
+        hidAllowedLocationIDs = nil
+        AppLogger.shared.write(
+            "HID LOCATION_GATING mode=disabled reason=power_suppression_ids_are_not_device_identity"
+        )
         guard settings.customMappingEnabled || backOnlyMode else {
             hidStatus = LocalizedMessage("button_mapping.status.system_managed")
             return
@@ -3472,7 +3484,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             hidMonitors[fingerprint] = monitor
             monitor.start(
                 powerKeySuppressed: powerKeySuppressed,
-                allowedLocationIDs: hidAllowedLocationIDs,
+                allowedLocationIDs: nil,
                 allowBackOnly: backOnlyMode
             )
         }
@@ -3531,7 +3543,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         discoveryHIDMonitor = monitor
         monitor.start(
             powerKeySuppressed: hidPowerKeySuppressed,
-            allowedLocationIDs: hidAllowedLocationIDs,
+            allowedLocationIDs: nil,
             allowBackOnly: allowBackOnly
         )
     }
@@ -5999,6 +6011,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         resetCurrentVoiceSampleReceipt()
         bluetoothVoiceEnqueueFailureCount = 0
         bluetoothVoiceIdentifierDropCount = 0
+        loggedBluetoothVoiceIdentifierDrop = false
         bluetoothVoiceTraceRoute = "none"
         bluetoothVoiceTailDiagnostics.reset()
         AppLogger.shared.write(
@@ -6288,6 +6301,14 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         guard identifier == activeBluetoothVoiceDeviceIdentifier else {
             bluetoothVoiceIdentifierDropCount += 1
             bridge.audioDiagnostics?.reject(.identifier, samples: samples.count)
+            if !loggedBluetoothVoiceIdentifierDrop {
+                loggedBluetoothVoiceIdentifierDrop = true
+                AppLogger.shared.write(
+                    "ATVV AUDIO dropped reason=identifier_mismatch " +
+                        "active_session=\(activeBluetoothVoiceDeviceIdentifier != nil) " +
+                        "samples=\(samples.count)"
+                )
+            }
             return
         }
         let commandSamplesBefore = pendingCommandVoiceAudio.bufferedSampleCount
@@ -8577,6 +8598,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         chromecastAudioBatchCount = 0
         chromecastAudioSampleCount = 0
         chromecastAudioEnqueueFailureCount = 0
+        loggedChromecastInactiveAudioDrop = false
         loggedChromecastAudioDevice = false
         chromecastAudioPrerollOpenedAt = ProcessInfo.processInfo.systemUptime
         chromecastAudioPrerollBatches = []
@@ -8598,7 +8620,18 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
                 return
             }
         }
+        // Mark the session active before scheduling the tap release. The
+        // delayed release checks this state; setting it afterwards leaves Fn
+        // pressed and the target voice tool never sees a complete tap.
+        chromecastVoiceActive = true
+        isChromecastVoiceActive = true
+        activeChromecastVoiceOperationID = operationID
+        activeChromecastVoiceStartedAt = Date()
         guard beginChromecastFunctionKeyDrive() else {
+            chromecastVoiceActive = false
+            isChromecastVoiceActive = false
+            activeChromecastVoiceOperationID = nil
+            activeChromecastVoiceStartedAt = nil
             if shouldStartConfiguration {
                 pendingChromecastVoiceStart = false
                 pendingChromecastVoiceAudio.cancel()
@@ -8618,11 +8651,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             )
             return
         }
-        chromecastVoiceActive = true
-        isChromecastVoiceActive = true
         beginVoiceSessionIfNeeded()
-        activeChromecastVoiceOperationID = operationID
-        activeChromecastVoiceStartedAt = Date()
         if shouldStartConfiguration {
             AppLogger.shared.write(
                 "SYSTEM AUDIO voice_start_recovery configured=pending " +
@@ -8886,7 +8915,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
 
     /// Chromecast 遥控器在 macOS 上产生的原生事件（2026-09-16 正品真机实测，`HID FILTER miss` 日志为证）。
     ///
-    /// 与小米 RC003 的通用表存在差异：**静音键在系统侧是 `systemKey(7)`**（通用表按 RC003 记录为 3），
+    /// 与小米 RC001/RC003 的通用表存在差异：**静音键在系统侧是 `systemKey(7)`**（通用表按小米记录为 3），
     /// 沿用通用表时抑制必然 miss、系统音量 HUD 照常出现。其余按键实测与通用表一致：
     /// 音量 = sys0/sys1（抑制命中）、方向/确认键系统侧不产生事件（tap 零记录，无副作用）。
     private func chromecastNativeEvents(for control: ChromecastRemoteControl) -> Set<RemoteNativeEvent> {
@@ -9111,9 +9140,16 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     }
 
     private func receiveChromecastAudio(_ samples: [Int16]) {
-        guard chromecastVoiceActive || chromecastVoiceStopping || pendingChromecastVoiceStart,
-              !samples.isEmpty
-        else { return }
+        guard !samples.isEmpty else { return }
+        guard chromecastVoiceActive || chromecastVoiceStopping || pendingChromecastVoiceStart else {
+            if !loggedChromecastInactiveAudioDrop {
+                loggedChromecastInactiveAudioDrop = true
+                AppLogger.shared.write(
+                    "CHROMECAST AUDIO dropped reason=no_active_session samples=\(samples.count)"
+                )
+            }
+            return
+        }
         if pendingChromecastVoiceStart,
            pendingChromecastVoiceAudio.appendIfWaiting(samples) {
             AppLogger.shared.write(

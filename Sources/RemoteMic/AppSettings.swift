@@ -419,6 +419,17 @@ final class AppSettings: ObservableObject {
         unifiedBaseBindings.removeAll { $0.remoteProfileID == profileID && $0.button == button && $0.trigger == trigger }
         unifiedBaseBindings.append(UnifiedButtonBinding(remoteProfileID: profileID, button: button,
                                                         trigger: trigger, configured: configured))
+        guard profileID == selectedRemoteProfileID else { return }
+        if trigger == .singleClick {
+            buttonBindings[button] = configured.action
+            buttonShortcuts[button] = configured.shortcut
+            buttonApplicationProfileIDs[button] = configured.applicationProfileID
+        } else {
+            var bindings = secondaryButtonBindings[button] ?? [:]
+            bindings[trigger] = configured
+            secondaryButtonBindings[button] = bindings
+        }
+        saveSelectedRemoteProfileMappings()
     }
 
     /// Remove every persisted reference to a deleted combination action.
