@@ -12,7 +12,7 @@ iOS、Apple Watch、小程序与 Web 使用连接的 Mac 的 Plus，手机和手
 4. 切换 staging / production：旧连接和二维码清除；新环境按权益判断，staging 不自动免检。
 5. 会员不足的 Web 会话显示会员按钮；小程序会员拒绝跳 Plus，过期码显示重新生成，失败后不可恢复另一个 Mac。
 6. 有效离线租约允许附近连接；过期、无效、撤销时停止附近连接，已信任设备、配对、按键与语音不能复用过期授权。退款的既有短期会话边界沿用支付产品文档。
-7. Onboarding 的 Phone/Web 入口同样使用私有会员按钮，可打开会员界面后返回向导。
+7. Onboarding 的 Phone/Web 入口同样使用私有会员按钮，可打开会员界面后返回向导。权益开通后两屏的标题与说明自动切换（不再写「这是会员功能 / 需要 Plus 会员」），连接由一次性正向监听自动重试，不需要再点按钮；`phone.retry` / `web.retry` 保留为手动兜底。
 
 自动化/构建与真实设备分别记录。待验收：iPhone/Watch 真机蓝牙、实际退出对端断线、线上 scene 失败日志、部署后的扫码。
 
@@ -47,3 +47,17 @@ iOS、Apple Watch、小程序与 Web 使用连接的 Mac 的 Plus，手机和手
 2026-10-23 更新：用户指定的私有 `2.2.9` 二进制已完成宿主集成。PR 提交 `6e7f13f03af373d6601865daf8e01f34b8a8dbf0` 的 Apple Silicon Release App 构建及本地签名校验通过。宿主 939 项 Swift Testing 和 4 项 XCTest 通过，覆盖会员支持码、复制摘要和诊断上传。测试首次缺少私有资源 bundle；仅在本地 XCTest 包中补齐四个资源 bundle 后，以 `swift test --disable-keychain -j 4 --scratch-path .build/pr649-private-2.2.9 --skip-build` 重跑通过。产品 App 已由原构建脚本打入这些资源。
 
 本次只通过 `SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH` 注入 `2.2.9`，仓库依赖清单仍为 `2.2.7`。本地 App 为 ad-hoc 签名，未启动、未公证、未分发。真实扫码失败、Sentry 实际接收和安装升级仍待验收。来源提交及私有构件验证见 [Bug 记录](../Bugs/2026-10-13-membership-support-code-loss.md#2026-10-23229-二进制宿主集成)。
+
+## 2026-10-25：权益开通后自动继续（手机与小程序两条路径）
+
+适用分支：`codex/companion-membership-gate`。只改门禁态的文案与「权益放开后怎么继续」，不改会员判定规则、会员入口数量、连接协议与会话接口。
+
+原来的问题：被门禁挡住后 `phoneRemoteState` / `webRemoteState` 停在 `.membershipRequired`，而权益变动没有任何监听者去改写这两个状态。用户在会员中心完成开通、回到引导页，文案仍写「这是会员功能 / 需要 Plus 会员」，连接服务也没启动；只有切后台回前台（`applicationDidBecomeActive` 会 `refreshIfNeeded()`）、返回上一步再前进、或重开 App 才会重试。
+
+现在的做法：
+
+1. **文案按「状态 + 权益」判断**。手机路径 `appleCompanionConnectionIsBlocked`、小程序路径 `webRemoteConnectionIsBlocked` 都是 `状态 == 门禁 && !canStartCompanionConnection`；小程序额外把服务端判定的 `.plusRequired` 一律算被挡。权益一变真，文案自动切回「等待…」/「下一步生成二维码」，说明也从「开通后即可连接」换回原来的连接说明。
+2. **一次性正向监听**。`armPhoneRemoteMembershipRetry()` / `armWebRemoteMembershipRetry()` 在门禁挡住时挂一条 `$canUseCompanionConnections` 订阅，`first(where: { $0 })` 只等「放开」这一个事件，命中即断开并重试；权益已经放开时不挂（否则会立刻命中当前值，形成反复重试）。取消点：`disable*`、App stop、切换服务环境。
+3. **会员入口仍然只有一个**。自动重试不是新入口；`phone.retry` / `web.retry` 是手动兜底按钮，只在门禁态出现。
+
+验收：真实购买 → 回到引导页/设置页，文案应已自动切换且连接自动建立（日志出现 `PHONE REMOTE membership_granted_auto_retry` 或 `WEB REMOTE SESSION ... reason=membership_granted_auto_retry`），全过程不需要点按钮；离开路径后日志不得再出现这两条。真实支付与真实设备连接仍需实机验收，自动化只覆盖状态与订阅的接线。

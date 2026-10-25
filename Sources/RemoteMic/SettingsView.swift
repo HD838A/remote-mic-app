@@ -5001,7 +5001,15 @@ struct SettingsView: View {
             return localization.text("connection.web.connecting")
         case .waitingForPhone:
             return localization.text("connection.web.waiting_scan")
-        case .membershipRequired, .plusRequired:
+        case .membershipRequired:
+            // 权益已经放开、只差建一次会话时，不要再写「此连接需要 Plus 会员」——
+            // 刚开完会员的人会以为没生效，而且旁边的按钮已经变成「连接」。
+            return localization.text(
+                membershipFeature.canStartCompanionConnection
+                    ? "connection.web.disabled"
+                    : "connection.web.plus_required_title"
+            )
+        case .plusRequired:
             return localization.text("connection.web.plus_required_title")
         case .awaitingApproval:
             return localization.text("connection.web.waiting_approval")
@@ -5016,8 +5024,11 @@ struct SettingsView: View {
         switch model.webRemoteState {
         case .connected:
             return .green
-        case .failed, .unavailable, .membershipRequired, .plusRequired:
+        case .failed, .unavailable, .plusRequired:
             return .orange
+        case .membershipRequired:
+            // 权益可用时这只是「还没建会话」，不是错误，别涂成橙色。
+            return membershipFeature.canStartCompanionConnection ? .secondary : .orange
         default:
             return .secondary
         }
