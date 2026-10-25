@@ -393,18 +393,20 @@ struct OnboardingFlowTests {
     }
 
     @Test func controlSourcePresentationUsesSourceSpecificPairingAndButtons() throws {
-        let xiaomiPairing = OnboardingView.physicalRemotePairingKeys(for: .xiaomiRemote)
-        #expect(xiaomiPairing.firstStep == "onboarding.remote.first_pairing.wake")
-        #expect(xiaomiPairing.secondStep == "onboarding.remote.first_pairing.pair")
+        let xiaomiPairing = OnboardingView.physicalRemotePairingGuide(for: .xiaomiRemote)
+        #expect(xiaomiPairing.steps == [
+            "onboarding.remote.first_pairing.wake",
+            "onboarding.remote.first_pairing.pair",
+        ])
 
-        let siriPairing = OnboardingView.physicalRemotePairingKeys(for: .siriRemote)
-        #expect(siriPairing.firstStep == "onboarding.remote.siri_pairing.first")
-        #expect(siriPairing.secondStep == "onboarding.remote.siri_pairing.second")
-        #expect(siriPairing.thirdStep == "onboarding.remote.siri_pairing.third")
+        let siriPairing = OnboardingView.physicalRemotePairingGuide(for: .siriRemote)
+        #expect(siriPairing.steps == (1...5).map { "onboarding.remote.siri_pairing.step\($0)" })
 
-        let chromecastPairing = OnboardingView.physicalRemotePairingKeys(for: .chromecastRemote)
-        #expect(chromecastPairing.firstStep == "onboarding.remote.chromecast_pairing.first")
-        #expect(chromecastPairing.secondStep == "onboarding.remote.chromecast_pairing.second")
+        let chromecastPairing = OnboardingView.physicalRemotePairingGuide(for: .chromecastRemote)
+        #expect(chromecastPairing.steps == [
+            "onboarding.remote.chromecast_pairing.first",
+            "onboarding.remote.chromecast_pairing.second",
+        ])
 
         #expect(OnboardingView.displayedControlButtons(for: .xiaomiRemote) == RemoteButton.xiaomiCases)
         #expect(Set(try #require(OnboardingView.displayedControlButtons(for: .siriRemote))) == [
@@ -432,6 +434,44 @@ struct OnboardingFlowTests {
             "onboarding.controls.apple_companion.detail")
         #expect(OnboardingView.controlsDetailKey(for: .webRemote) ==
             "onboarding.controls.web_remote.detail")
+    }
+
+    @Test func siriPairingGuideLandsEveryStepInBothLanguages() throws {
+        // 苹果遥控器的配对有两个坑，用户照着一句话版本做基本都会失败：
+        // 遥控器会自己连回原来的 Apple TV；这台 Mac 上的旧配对记录会让它连不上。
+        // 所以这张卡是五步，不是三步——每一步都必须真的翻译过，否则界面会直接吐出键名。
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let guide = OnboardingView.physicalRemotePairingGuide(for: .siriRemote)
+        #expect(guide.steps.count == 5)
+        for resource in ["zh-Hans", "en"] {
+            let text = try String(
+                contentsOf: root.appendingPathComponent(
+                    "Resources/\(resource).lproj/Localizable.strings"
+                ),
+                encoding: .utf8
+            )
+            for key in [guide.title] + guide.steps {
+                #expect(text.contains("\"\(key)\" = "), "缺少 \(resource) 文案：\(key)")
+            }
+            // 旧的三步键已改名，不能留在文件里当死键。
+            #expect(!text.contains("onboarding.remote.siri_pairing.first\""))
+            #expect(!text.contains("onboarding.remote.siri_pairing.second\""))
+            #expect(!text.contains("onboarding.remote.siri_pairing.third\""))
+        }
+        let zh = try String(
+            contentsOf: root.appendingPathComponent("Resources/zh-Hans.lproj/Localizable.strings"),
+            encoding: .utf8
+        )
+        // 「必须做」这一步不能被压成可选项：它是用户按下按键却连不上的最常见原因。
+        #expect(zh.contains("这一步必须做"))
+        // 遥控器在蓝牙列表里常常显示成序列号，不能再让用户只按名字找。
+        #expect(zh.contains("名称可能是一串序列号"))
+        // 页面说明不能再写死步数：小米两步、苹果遥控器五步，同一句话会自相矛盾。
+        #expect(!zh.contains("下面两步"))
+        #expect(zh.contains("首次连接请先按下面的步骤配对"))
     }
 
     @Test func navigationOrderIsStableAndGroupedIntoThreePhases() {
@@ -2458,9 +2498,8 @@ struct OnboardingFlowTests {
         let remoteSource = viewSource[remoteStart.lowerBound..<remoteEnd.lowerBound]
         #expect(!remoteSource.contains("model.hidStatus.text(using: localization)"))
         #expect(!remoteSource.contains("onboarding.remote.listener_status"))
-        #expect(remoteSource.contains("physicalRemotePairingKeys.title"))
-        #expect(remoteSource.contains("physicalRemotePairingKeys.firstStep"))
-        #expect(remoteSource.contains("physicalRemotePairingKeys.secondStep"))
+        #expect(remoteSource.contains("physicalRemotePairingGuide.title"))
+        #expect(remoteSource.contains("ForEach(Array(physicalRemotePairingGuide.steps.enumerated())"))
         #expect(!remoteSource.contains("ViewThatFits(in: .horizontal)"))
         let recoveryStart = try #require(viewSource.range(of: "private func performRecovery"))
         let recoveryEnd = try #require(viewSource.range(
