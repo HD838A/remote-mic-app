@@ -56,6 +56,8 @@
 
 通过 App 的日志入口收集本次测试日志。保留 `MAC MICROPHONE`、`MAC MICROPHONE CAPTURE`、`MAC MICROPHONE SHORTCUT`、相关 `MOBILE VOICE`、`VOICE FN TAP` 和 `AUDIO` 事件。按 operation_id 与 voice_operation_id 对齐请求、权限、开始、首 PCM、采集停止、输出排空、结束键和最终终态。不要在公开记录中附用户语音、文字、身份、路径或凭据。
 
+音频引擎在启动阶段可能产生配置通知。若当前输入设备仍是所选设备，日志应记录 `MAC MICROPHONE CAPTURE phase=configuration_changed result=ignored`，会话应继续等待首个 PCM。只有日志确认当前设备变更时，才允许记录 `result=failed` 并结束会话。
+
 - 自动化命令：`swift test --disable-keychain`，以及项目原生 `SKIP_SWIFT_PACKAGE_BUILD=1 scripts/test.sh`。
 - 自动化覆盖：三入口共享生命周期、忙碌、权限/设备/目标准备失败、取消与迟到回调、超时、重试、重复热键、配置迁移、44.1/48kHz立体声转换与EOS尾部、Fn点按连续旅程。
 - 生产页面截图仅证明布局和静态状态；夹具不访问真实麦克风，不证明权限或文字上屏。

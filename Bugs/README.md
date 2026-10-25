@@ -1,5 +1,7 @@
 # Bug 记录
 
+- [Mac 麦克风会话启动后立即停止](./2026-10-24-mac-microphone-capture-immediate-stop.html)
+
 - [遥控器松键后的原生按键延迟泄露](./2026-10-24-delayed-native-key-leak.html)
 
 - [HID 与 Siri Remote 共享运行时权限检查](./2026-10-24-shared-runtime-permissions.html)

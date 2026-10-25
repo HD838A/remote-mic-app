@@ -4,6 +4,16 @@ import AudioToolbox
 import CoreAudio
 import Foundation
 
+enum MacMicrophoneConfigurationChangePolicy {
+    static func shouldFail(
+        selectedDeviceID: AudioDeviceID,
+        currentDeviceID: AudioDeviceID?
+    ) -> Bool {
+        guard let currentDeviceID else { return false }
+        return currentDeviceID != selectedDeviceID
+    }
+}
+
 /// Captures only the selected input. PCM follows the existing 16 kHz voice path.
 final class MacMicrophoneCapture {
     private let queue = DispatchQueue(label: "SayAll.macMicrophone.capture", qos: .userInitiated)
@@ -77,7 +87,19 @@ final class MacMicrophoneCapture {
                     boundDevice == input.id else { throw MacMicrophoneFailure.inputUnavailable }
                 configurationObserver = NotificationCenter.default.addObserver(
                     forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main
-                ) { _ in onFailure() }
+                ) { [weak self, weak engine] _ in
+                    guard let self, let engine else { return }
+                    self.handleConfigurationChange(
+                        engine: engine,
+                        input: input,
+                        onFailure: onFailure
+                    )
+                }
+                AppLogger.shared.write(
+                    "MAC MICROPHONE CAPTURE operation_id=\(operationID) phase=started " +
+                        "result=engine_running input_device_id=\(input.id) " +
+                        "sample_rate_hz=\(Int(format.sampleRate)) channels=\(format.channelCount)"
+                )
                 DispatchQueue.main.async { completion(nil) }
             } catch {
                 ingressLock.lock()
@@ -94,6 +116,47 @@ final class MacMicrophoneCapture {
             }
         }
         ingressLock.unlock()
+    }
+
+    private func handleConfigurationChange(
+        engine: AVAudioEngine,
+        input: AudioDeviceInfo,
+        onFailure: @escaping () -> Void
+    ) {
+        queue.async { [weak self, weak engine] in
+            guard let self, let engine, self.engine === engine else { return }
+            let currentDeviceID = Self.currentInputDeviceID(for: engine)
+            let result: String
+            let shouldFail = MacMicrophoneConfigurationChangePolicy.shouldFail(
+                selectedDeviceID: input.id,
+                currentDeviceID: currentDeviceID
+            )
+            result = shouldFail ? "failed" : "ignored"
+            let currentDeviceDescription = currentDeviceID.map { String($0) } ?? "unknown"
+            AppLogger.shared.write(
+                "MAC MICROPHONE CAPTURE operation_id=\(self.operationID) " +
+                    "phase=configuration_changed result=\(result) " +
+                    "selected_device_id=\(input.id) " +
+                    "current_device_id=\(currentDeviceDescription)"
+            )
+            guard shouldFail else { return }
+            DispatchQueue.main.async { onFailure() }
+        }
+    }
+
+    private static func currentInputDeviceID(for engine: AVAudioEngine) -> AudioDeviceID? {
+        guard let unit = engine.inputNode.audioUnit else { return nil }
+        var deviceID = AudioDeviceID(kAudioObjectUnknown)
+        var size = UInt32(MemoryLayout<AudioDeviceID>.size)
+        guard AudioUnitGetProperty(
+            unit,
+            kAudioOutputUnitProperty_CurrentDevice,
+            kAudioUnitScope_Global,
+            0,
+            &deviceID,
+            &size
+        ) == noErr else { return nil }
+        return deviceID == kAudioObjectUnknown ? nil : deviceID
     }
 
     private func accept(_ buffer: AVAudioPCMBuffer) {

@@ -210,6 +210,21 @@ struct MacMicrophoneInputTests {
         #expect(!MacMicrophoneInputTarget.isEligible(snapshot(role: "AXButton")))
     }
 
+    @Test func inputConfigurationChangeOnlyFailsWhenTheDeviceActuallyChanged() {
+        #expect(!MacMicrophoneConfigurationChangePolicy.shouldFail(
+            selectedDeviceID: 118,
+            currentDeviceID: 118
+        ))
+        #expect(MacMicrophoneConfigurationChangePolicy.shouldFail(
+            selectedDeviceID: 118,
+            currentDeviceID: 119
+        ))
+        #expect(!MacMicrophoneConfigurationChangePolicy.shouldFail(
+            selectedDeviceID: 118,
+            currentDeviceID: nil
+        ))
+    }
+
     @Test func legacyConfigurationWithoutMacFieldsRemainsImportable() throws {
         let name = "MacMicrophoneInputTests.legacy.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: name))
