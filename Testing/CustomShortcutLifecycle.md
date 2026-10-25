@@ -134,3 +134,25 @@ SKIP_SWIFT_PACKAGE_BUILD=1 ./scripts/test.sh
 用户已确认：普通按键页下键右Command+L可聚焦Chrome地址栏，并切换网易云喜欢状态。
 待确认：组合动作单步/整组/嵌套、方案直接快捷键、Chrome书签页、实体Fn与并发边界。
 公开双架构CI通过。私有CI因GitHub账户账单问题未启动，不能按通过处理。
+
+## Build 264 后的配置快捷键诊断
+
+1. 用实体键盘建立 Chrome 主页 Command+Shift+H 的对照。
+2. 在普通按键页、组合动作和键位方案分别配置同一组合。
+3. 在目标 App 前台用小米遥控器触发。记录可见结果及时间。
+4. 对 Command+Option+B、Command+L、Page Up/Down 重复。
+5. 网易云的系统播放/暂停另行验证；不能把全局分发当作定向控制。
+6. 收集该时段的本机加密 rmlog。Sentry 不上传这些逐事件明细。
+
+筛选 SHORTCUT SEQUENCE 与 SHORTCUT OBSERVATION，按 operation_id 关联。
+核对 requested_flags、hardware_flags、physical_flags 和 event_flags。
+会话层 flags_match 只表示标志一致；user_visible_result 仍为 unknown。
+Command 主键不写入日志，诊断类别统一为 command_shortcut。
+
+系统播放筛选 SYSTEM MEDIA，并用同一操作编号查观察记录。
+按下和松开应各提交一次；完成日志应有 submitted_events=2。
+原生输入筛选 HID FILTER；via=owned_native_pair 表示提前松开已消费。
+phase=arm_order 仅报告登记前的同码事件，不能证明设备来源。
+
+原生事件时序回放必须覆盖：按下已拦截、原生松开先到、HID 松开后到。
+迟到的 HID 松开不得留下新的待消费松开，也不得吞掉后续实体键盘事件。
