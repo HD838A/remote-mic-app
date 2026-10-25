@@ -86,6 +86,69 @@ struct KeyboardEventSuppressorTests {
         #expect(!suppressor.handle(type: down.type, event: down))
     }
 
+    @Test(arguments: [RemoteNativeEvent.systemKey(type: 0), .systemKey(type: 1), .systemKey(type: 16), .keyboard(keyCode: 115)])
+    func nativeReleaseBeforeHIDReleaseClosesOnlyTheOwnedPair(_ native: RemoteNativeEvent) throws {
+        var now: TimeInterval = 10
+        let suppressor = KeyboardEventSuppressor(uptime: { now }, logger: { _ in })
+        let down = try nativeEvent(native, down: true)
+        let up = try nativeEvent(native, down: false)
+        suppressor.arm(nativeEvents: [native], edge: .down)
+        #expect(suppressor.handle(type: down.type, event: down))
+        now += 0.17
+        #expect(suppressor.handle(type: up.type, event: up))
+        #expect(!suppressor.handle(type: up.type, event: up))
+        now += 0.013
+        suppressor.arm(nativeEvents: [native], edge: .up)
+        // The late raw release must not leave another native-up allowance.
+        #expect(!suppressor.handle(type: down.type, event: down))
+        #expect(!suppressor.handle(type: up.type, event: up))
+        suppressor.arm(nativeEvents: [native], edge: .down)
+        #expect(suppressor.handle(type: down.type, event: down))
+        suppressor.arm(nativeEvents: [native], edge: .up)
+        #expect(suppressor.handle(type: up.type, event: up))
+    }
+
+    @Test func unownedNativeReleaseIsNeverClaimedByRawHoldAlone() throws {
+        let native: RemoteNativeEvent = .systemKey(type: 1)
+        let suppressor = KeyboardEventSuppressor(uptime: { 10 }, logger: { _ in })
+        suppressor.arm(nativeEvents: [native], edge: .down)
+        let up = try nativeEvent(native, down: false)
+        #expect(!suppressor.handle(type: up.type, event: up))
+        let down = try nativeEvent(native, down: true)
+        #expect(suppressor.handle(type: down.type, event: down))
+        suppressor.stop()
+        #expect(!suppressor.handle(type: up.type, event: up))
+    }
+
+    @Test func releasedOwnershipCannotClaimTheNextPressWithoutANativeDown() throws {
+        var now: TimeInterval = 10
+        let suppressor = KeyboardEventSuppressor(uptime: { now }, logger: { _ in })
+        let native: RemoteNativeEvent = .systemKey(type: 1)
+        let down = try nativeEvent(native, down: true)
+        let up = try nativeEvent(native, down: false)
+        suppressor.arm(nativeEvents: [native], edge: .down)
+        #expect(suppressor.handle(type: down.type, event: down))
+        suppressor.arm(nativeEvents: [native], edge: .up)
+        now += 0.501
+        suppressor.arm(nativeEvents: [native], edge: .down)
+        #expect(!suppressor.handle(type: up.type, event: up))
+    }
+
+    @Test func earlyDownDiagnosticDoesNotRetroactivelyConsumeInput() throws {
+        var now: TimeInterval = 10
+        var logs: [String] = []
+        let suppressor = KeyboardEventSuppressor(uptime: { now }, logger: { logs.append($0) })
+        let down = try nativeEvent(.keyboard(keyCode: 115), down: true)
+        #expect(!suppressor.handle(type: down.type, event: down))
+        now += 0.079
+        suppressor.arm(nativeEvents: [.keyboard(keyCode: 115)], edge: .down)
+        #expect(logs.contains { $0.contains("phase=arm_order") && $0.contains("source_correlation=timing_only") })
+        logs.removeAll()
+        now += 0.501
+        suppressor.arm(nativeEvents: [.keyboard(keyCode: 115)], edge: .down)
+        #expect(!logs.contains { $0.contains("phase=arm_order") })
+    }
+
     private func nativeEvent(_ native: RemoteNativeEvent, down: Bool) throws -> CGEvent {
         switch native {
         case let .keyboard(keyCode):

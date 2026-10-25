@@ -1,0 +1,30 @@
+[
+  {
+    "file": "apple-remote-authorization-zh-light.png",
+    "format": "PNG",
+    "width": 2040,
+    "height": 1600,
+    "sha256": "2b98f9f08525623485e75337a95ed1b6787723b5d23b94a19ab436822ba512d4"
+  },
+  {
+    "file": "apple-remote-authorization-zh-dark.png",
+    "format": "PNG",
+    "width": 2040,
+    "height": 1600,
+    "sha256": "1719d88a0e082db0c06cd5132af31a0287bfa2fe347b6a0dbb1d8e051f006846"
+  },
+  {
+    "file": "apple-remote-authorization-en-light.png",
+    "format": "PNG",
+    "width": 2040,
+    "height": 1600,
+    "sha256": "9d93603f8ec5ec20bc5a11522e996a9f604ecd885bf87dbae4440f52970213b7"
+  },
+  {
+    "file": "apple-remote-authorization-en-dark.png",
+    "format": "PNG",
+    "width": 2040,
+    "height": 1600,
+    "sha256": "283f3d7fcaab32b28b3a7783cab63a115959c2f13baf4d5008ded9cc5ff5d0cf"
+  }
+]

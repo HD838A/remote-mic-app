@@ -304,7 +304,8 @@ struct ShortcutLifecycleTests {
             hardwareFlags: { CGEventFlags(rawValue: 0x00A0_0100) }, modifierState: state,
             eventPoster: { _ in true }, logger: { logs.append($0) }
         ))
-        #expect(logs.count == 2)
+        #expect(logs.filter { $0.contains("phase=requested") || $0.contains("phase=completed") }.count == 2)
+        #expect(logs.filter { $0.contains("phase=event_submission") }.count == 4)
         #expect(logs[0].contains("hardware_function_filtered=true"))
         #expect(logs[0].contains("hardware_function_state=unobserved"))
         #expect(!logs.joined().contains("key_code"))
@@ -413,13 +414,92 @@ struct ShortcutLifecycleTests {
         #expect(logs.last?.contains("result=submitted") == true)
     }
 
+    @Test(arguments: [UInt16(4), 11, 37, 116, 121])
+    func configuredShortcutDiagnosticsPreserveEventsAndOmitInputContent(_ code: UInt16) throws {
+        var logs: [String] = []
+        let suppressor = KeyboardEventSuppressor(logger: { logs.append($0) })
+        let modifiers: CGEventFlags = code == 4 ? [.maskCommand, .maskShift]
+            : code == 11 ? [.maskCommand, .maskAlternate] : code == 37 ? .maskCommand : []
+        var keys: [UInt16] = []
+        let result = ShortcutEventSequence.send(keyCode: code, modifiers: modifiers,
+            hardwareFlags: { .maskSecondaryFn }, modifierState: ShortcutHardwareModifierState(),
+            eventPoster: { event in
+                if event.type == .keyDown || event.type == .keyUp {
+                    keys.append(UInt16(event.getIntegerValueField(.keyboardEventKeycode)))
+                    #expect(event.flags.contains(.maskSecondaryFn))
+                }
+                #expect(!suppressor.handle(type: event.type, event: event))
+                return true
+            }, logger: { logs.append($0) })
+        #expect(result)
+        #expect(keys == [code, code])
+        let request = try #require(logs.first { $0.contains("phase=requested") })
+        #expect(request.contains("primary_kind=command_shortcut") || request.contains("primary_kind=page_navigation"))
+        #expect(request.contains("hardware_function_state=unobserved"))
+        #expect(request.contains("physical_flags=8388608"))
+        let observations = logs.filter { $0.contains("SHORTCUT OBSERVATION") }
+        #expect(observations.count == 2)
+        #expect(observations.allSatisfy { $0.contains("correlation=matched") && $0.contains("flags_match=true") }, "\(observations)")
+        #expect(!logs.joined().contains("key_code"))
+        #expect(!logs.joined().contains("letter_"))
+        #expect(logs.filter { $0.contains("phase=completed") }.count == 1)
+    }
+
+    @Test(arguments: [true, false])
+    func systemMediaDiagnosticsCorrelateOnlyOurSubmittedEvents(_ accepted: Bool) throws {
+        var logs: [String] = []
+        let suppressor = KeyboardEventSuppressor(logger: { logs.append($0) })
+        var events: [CGEvent] = []
+        let result = KeyboardInjector.submitSystemKey(type: 16,
+            eventPoster: { event in
+                events.append(event)
+                if accepted { #expect(!suppressor.handle(type: event.type, event: event)) }
+                return accepted
+            }, logger: { logs.append($0) })
+        #expect(result == accepted)
+        #expect(events.count == 2)
+        #expect(events.allSatisfy { $0.getIntegerValueField(.eventSourceUserData) == KeyboardInjector.syntheticEventMarker })
+        let observations = logs.filter { $0.contains("SHORTCUT OBSERVATION") }
+        #expect(observations.count == (accepted ? 2 : 0))
+        #expect(observations.allSatisfy { $0.contains("primary_kind=system_play_pause") && $0.contains("correlation=matched") })
+        #expect(logs.filter { $0.contains("phase=completed") }.count == 1)
+        #expect(logs.filter { $0.contains("SYSTEM MEDIA") }.allSatisfy {
+            $0.contains("target=system_media_dispatch")
+        })
+        #expect(logs.filter { $0.contains("phase=completed") }.allSatisfy {
+            $0.contains("user_visible_result=unknown")
+        })
+        if !accepted {
+            logs.removeAll()
+            for event in events { #expect(!suppressor.handle(type: event.type, event: event)) }
+            #expect(logs.isEmpty)
+        }
+    }
+
+    @Test(arguments: 0..<2)
+    func mediaFailureStillAttemptsReleaseAndHasOneTerminal(_ failAt: Int) throws {
+        var events: [CGEvent] = []
+        var logs: [String] = []
+        let result = KeyboardInjector.submitSystemKey(type: 16, eventPoster: { event in
+            events.append(event)
+            return events.count - 1 != failAt
+        }, logger: { logs.append($0) })
+        #expect(!result)
+        try #require(events.count == 2)
+        #expect(NSEvent(cgEvent: events[0])?.data1 == (16 << 16) | (0xA << 8))
+        #expect(NSEvent(cgEvent: events[1])?.data1 == (16 << 16) | (0xB << 8))
+        #expect(events.allSatisfy { $0.flags.isEmpty })
+        #expect(logs.filter { $0.contains("phase=completed") }.count == 1)
+        #expect(logs.last?.contains("result=failed reason=post_failed submitted_events=1") == true)
+    }
+
     @Test func sessionObservationDoesNotLogPhysicalKeysOrOrdinarySyntheticContent() throws {
         var logs: [String] = []
         let suppressor = KeyboardEventSuppressor(logger: { logs.append($0) })
         for (code, marked, flags) in [
             (UInt16(126), false, CGEventFlags.maskControl),
             (UInt16(0), true, CGEventFlags.maskControl),
-            (UInt16(126), true, CGEventFlags.maskCommand),
+            (UInt16(126), true, CGEventFlags.maskShift),
         ] {
             let event = try #require(CGEvent(keyboardEventSource: nil, virtualKey: code, keyDown: true))
             event.flags = flags
