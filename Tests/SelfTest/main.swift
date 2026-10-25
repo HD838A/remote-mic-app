@@ -175,20 +175,20 @@ check(
         reportID: 1,
         data: Data([0xF1, 0x00, 0x80, 0x00, 0x00, 0x00])
     ) == Set([UInt16(0xF1), UInt16(0x80)]),
-    "RC003 raw HID report"
+    "Xiaomi RC001/RC003 raw HID report"
 )
 check(
     RemoteHIDReportParser.usages(
         reportID: 1,
         data: Data([0x01, 0x35, 0x00, 0x00, 0x00, 0x00, 0x00])
     ) == Set([UInt16(0x35)]),
-    "RC003 included report ID"
+    "Xiaomi RC001/RC003 included report ID"
 )
 check(
     RemoteHIDReportParser.usages(reportID: 2, data: Data([0, 0])) == nil &&
         RemoteHIDReportParser.usages(reportID: 1, data: Data()) == nil &&
         RemoteHIDReportParser.usages(reportID: 1, data: Data([1])) == nil,
-    "RC003 malformed report rejection"
+    "Xiaomi RC001/RC003 malformed report rejection"
 )
 check(
     Set(RemoteButton.usageMap.values).allSatisfy {
@@ -211,12 +211,12 @@ check(
         0x81: .volumeDown,
         0xF1: .back,
     ],
-    "verified RC003 usage table"
+    "verified Xiaomi RC001/RC003 usage table"
 )
 check(
     RemoteButton.up.nativeEvent == .keyboard(keyCode: 126) &&
         RemoteButton.ok.nativeEvent == .keyboard(keyCode: 36) &&
-        // Real RC003 hardware emits keyCode 10 (ISO §) for the TV key.
+        // The shared Xiaomi RC001/RC003 keyboard interface emits keyCode 10 (ISO §) for the TV key.
         RemoteButton.tv.nativeEvent == .keyboard(keyCode: 10) &&
         RemoteButton.tv.nativeEvents == [
             .keyboard(keyCode: 10),
@@ -268,7 +268,7 @@ check(
         RemoteVoiceFunctionMappingPolicy.remoteVoiceKey,
         RemoteVoiceFunctionMappingPolicy.suppressedRemotePowerKey,
     ],
-    "RC003 power is remapped to harmless F20"
+    "Xiaomi RC001/RC003 power is remapped to harmless F20"
 )
 
 check(
@@ -376,11 +376,11 @@ check(
         unrelatedMapping,
         RemoteVoiceFunctionMappingPolicy.remoteVoiceKey,
     ],
-    "RC003 hardware voice mapping replaces only F5 and preserves unrelated mappings"
+    "Xiaomi RC001/RC003 hardware voice mapping replaces only F5 and preserves unrelated mappings"
 )
 check(
     RemoteVoiceFunctionMappingPolicy.applying(to: hardwareVoiceMappings) == hardwareVoiceMappings,
-    "RC003 hardware voice mapping is idempotent"
+    "Xiaomi RC001/RC003 hardware voice mapping is idempotent"
 )
 check(
     RemoteVoiceFunctionMappingPolicy.applying(
@@ -390,7 +390,7 @@ check(
         unrelatedMapping,
         RemoteVoiceFunctionMappingPolicy.neutralRemoteVoiceKey,
     ],
-    "RC003 neutralized voice key drops the F5 event for tap-style voice tools"
+    "Xiaomi RC001/RC003 neutralized voice key drops the F5 event for tap-style voice tools"
 )
 var transactionalFirstMappings = [unrelatedMapping]
 var transactionalFirstWrites = 0
@@ -417,7 +417,7 @@ check(
         !transactionalMapper.isVoiceKeyNeutralized &&
         transactionalFirstMappings == [unrelatedMapping] &&
         transactionalFirstWrites == 2,
-    "RC003 neutralization rolls back partial HID mapping success"
+    "Xiaomi RC001/RC003 neutralization rolls back partial HID mapping success"
 )
 let changedUnrelatedMapping = HIDUsageMapping(
     source: unrelatedMapping.source,
@@ -434,12 +434,12 @@ check(
             originalPowerMapping: nil,
             in: [changedUnrelatedMapping, RemoteVoiceFunctionMappingPolicy.remoteVoiceKey]
         ) == [changedUnrelatedMapping],
-    "RC003 hardware voice mapping restore preserves unrelated runtime changes"
+    "Xiaomi RC001/RC003 hardware voice mapping restore preserves unrelated runtime changes"
 )
 check(
     HIDUsageMapping(property: RemoteVoiceFunctionMappingPolicy.remoteVoiceKey.property) ==
         RemoteVoiceFunctionMappingPolicy.remoteVoiceKey,
-    "RC003 hardware voice mapping property round-trips"
+    "Xiaomi RC001/RC003 hardware voice mapping property round-trips"
 )
 
 check(
@@ -476,7 +476,7 @@ check(
         !TestToneGate.canPlay(hasSelectedDevice: false, isStreaming: false, isPlaying: true) &&
         !TestToneGate.canPlay(hasSelectedDevice: false, isStreaming: true, isPlaying: true) &&
         TestToneGate.canPlay(hasSelectedDevice: true, isStreaming: false, isPlaying: false),
-    "test tone safety gate rejects missing device, active RC003 voice stream, or in-flight playback"
+    "test tone safety gate rejects missing device, active Xiaomi RC001/RC003 voice stream, or in-flight playback"
 )
 
 let suiteName = "RemoteMicSelfTest.\(UUID().uuidString)"

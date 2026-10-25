@@ -31,7 +31,7 @@ struct HIDUsageMapping: Equatable {
 }
 
 enum RemoteVoiceFunctionMappingPolicy {
-    // RC003 exposes its microphone button as keyboard F5 (usage page 7,
+    // Xiaomi RC001 and RC003 expose the microphone button as keyboard F5 (usage page 7,
     // usage 0x3e). macOS represents the laptop Fn/Globe key as the Apple
     // vendor top-case usage (usage page 0xff, usage 3).
     static let remoteVoiceKey = HIDUsageMapping(
@@ -46,7 +46,7 @@ enum RemoteVoiceFunctionMappingPolicy {
         destination: 0x0
     )
 
-    // RC003 exposes its power button as keyboard Power (usage 0x66).
+    // Xiaomi RC001 and RC003 expose the power button as keyboard Power (usage 0x66).
     // Remap it to harmless F20 before macOS can turn it into a sleep event.
     static let suppressedRemotePowerKey = HIDUsageMapping(
         source: 0x0000_0007_0000_0066,
