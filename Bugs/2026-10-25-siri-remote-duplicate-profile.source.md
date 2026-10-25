@@ -45,3 +45,13 @@ Build 262 截图显示同一指纹 `C08JV3H32330` 有两张卡片。
 `git diff --check` 通过。
 真实 Siri Remote 重连和旧安装数据迁移仍需在 Build 262 测试机验证。
 本次不修改蓝牙协议、私有适配器或按键执行语义。
+
+## 2026-10-25 追加证据与诊断日志
+
+当前运行日志显示两张相同 A2854 卡片对应两个不同的非空 fingerprint。现有持久化去重只按 fingerprint 复用，因此不能按型号或显示名称合并。
+
+本次增加脱敏诊断字段：私有 Siri 适配器记录 identity source、同一 identity 的接口计数和当前 active identity 数；宿主记录 profile_resolution=created 或 reused。日志不输出 fingerprint、序列号、地址或路径。
+
+下一次现场重连后，按时间顺序检查 identity_source 是否改变，以及 profile_resolution 是否连续为 created。只有确认同一物理遥控器在重连时身份来源不稳定，才进入身份算法修复。当前不按名称盲合并。
+
+自动化验证：私有 Siri Remote SwiftPM 测试 104 项通过；公开宿主定向测试待本分支构建后执行。真实 Siri Remote 重连验收未完成。
