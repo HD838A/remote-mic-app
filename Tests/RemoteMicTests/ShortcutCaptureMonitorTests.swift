@@ -5,6 +5,33 @@ import Testing
 
 @Suite("Shortcut capture monitor")
 struct ShortcutCaptureMonitorTests {
+    @Test @MainActor func resolvesCommaOnMainAfterReturningFromTheTapThread() throws {
+        var pending: [() -> Void] = []
+        var resolutionCount = 0
+        var captured: [CustomKeyboardShortcut] = []
+        let monitor = ShortcutCaptureMonitor(
+            onCapture: { captured.append($0) },
+            makeShortcut: { event in
+                #expect(Thread.isMainThread)
+                resolutionCount += 1
+                return CustomKeyboardShortcut(event: event)
+            },
+            dispatchCallback: { pending.append($0) }
+        )
+        let comma = try #require(keyEvent(keyCode: 43, flags: []))
+        let returned = EventTapRunLoop.shared.performAndWait {
+            #expect(monitor.handle(type: .keyDown, event: comma))
+        }
+        #expect(returned)
+        #expect(resolutionCount == 0)
+        #expect(captured.isEmpty)
+        try #require(pending.count == 1)
+        pending[0]()
+        #expect(resolutionCount == 1)
+        #expect(captured.map(\.keyCode) == [43])
+        #expect(captured.map(\.keyLabel) == [","])
+    }
+
     @Test func eventTapListensForMainKeysAndModifierChanges() {
         let keyDownMask = CGEventMask(1 << CGEventType.keyDown.rawValue)
         let flagsChangedMask = CGEventMask(1 << CGEventType.flagsChanged.rawValue)

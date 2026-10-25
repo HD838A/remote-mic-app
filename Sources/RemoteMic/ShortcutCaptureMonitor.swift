@@ -27,6 +27,7 @@ final class ShortcutCaptureMonitor {
     static let captureEventMask = CGEventMask(1 << CGEventType.keyDown.rawValue) |
         CGEventMask(1 << CGEventType.flagsChanged.rawValue)
 
+    private let makeShortcut: (NSEvent) -> CustomKeyboardShortcut
     private let onCapture: (CustomKeyboardShortcut) -> Void
     private let accessibilityTrusted: () -> Bool
     private let dispatchCallback: CallbackDispatcher
@@ -40,11 +41,13 @@ final class ShortcutCaptureMonitor {
 
     init(
         onCapture: @escaping (CustomKeyboardShortcut) -> Void,
+        makeShortcut: @escaping (NSEvent) -> CustomKeyboardShortcut = { CustomKeyboardShortcut(event: $0) },
         accessibilityTrusted: @escaping () -> Bool = { KeyboardInjector.isAccessibilityTrusted },
         dispatchCallback: @escaping CallbackDispatcher = {
             DispatchQueue.main.async(execute: $0)
         }
     ) {
+        self.makeShortcut = makeShortcut
         self.onCapture = onCapture
         self.accessibilityTrusted = accessibilityTrusted
         self.dispatchCallback = dispatchCallback
@@ -141,7 +144,7 @@ final class ShortcutCaptureMonitor {
             lock.unlock()
             return true
         }
-        guard let nsEvent = NSEvent(cgEvent: event) else {
+        guard let capturedEvent = event.copy() else {
             lock.unlock()
             return false
         }
@@ -151,9 +154,17 @@ final class ShortcutCaptureMonitor {
         modifierChordDetected = false
         lock.unlock()
 
-        let shortcut = CustomKeyboardShortcut(event: nsEvent)
+        let makeShortcut = self.makeShortcut
         let capture = onCapture
+        // Character lookup can enter HIToolbox's main-queue-only input-source APIs.
+        // Keep the tap nonblocking and resolve the captured snapshot in the UI callback.
         dispatchCallback {
+            guard let nsEvent = NSEvent(cgEvent: capturedEvent) else {
+                AppLogger.shared.write("SHORTCUT CAPTURE phase=failed reason=event_conversion_failed")
+                return
+            }
+            let shortcut = makeShortcut(nsEvent)
+            AppLogger.shared.write("SHORTCUT CAPTURE phase=resolved result=captured main_thread=\(Thread.isMainThread)")
             capture(shortcut)
         }
         return true
