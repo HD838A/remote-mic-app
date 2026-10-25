@@ -831,6 +831,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     private var bluetoothVoiceEnqueueFailureCount = 0
     /// 因为活动设备标识不匹配而被静默丢掉的蓝牙音频批次；过去这条路径没有任何记录。
     private var bluetoothVoiceIdentifierDropCount = 0
+    private var loggedBluetoothVoiceIdentifierDrop = false
     private var latestBluetoothAudioDiagnosticOperationID: UInt64?
     private var latestBluetoothAudioDiagnosticGeneration: Int?
     private var sharedBluetoothAudioDiagnosticGenerations: [Int] = []
@@ -919,6 +920,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     private var chromecastAudioBatchCount = 0
     private var chromecastAudioSampleCount = 0
     private var chromecastAudioEnqueueFailureCount = 0
+    private var loggedChromecastInactiveAudioDrop = false
     private var loggedChromecastAudioDevice = false
     /// 设置页展示用。私有包缺失时恒为 `.unavailable`，界面据此隐藏整块内容。
     @Published private(set) var chromecastStatus: ChromecastLinkStatus =
@@ -6009,6 +6011,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         resetCurrentVoiceSampleReceipt()
         bluetoothVoiceEnqueueFailureCount = 0
         bluetoothVoiceIdentifierDropCount = 0
+        loggedBluetoothVoiceIdentifierDrop = false
         bluetoothVoiceTraceRoute = "none"
         bluetoothVoiceTailDiagnostics.reset()
         AppLogger.shared.write(
@@ -6298,6 +6301,14 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         guard identifier == activeBluetoothVoiceDeviceIdentifier else {
             bluetoothVoiceIdentifierDropCount += 1
             bridge.audioDiagnostics?.reject(.identifier, samples: samples.count)
+            if !loggedBluetoothVoiceIdentifierDrop {
+                loggedBluetoothVoiceIdentifierDrop = true
+                AppLogger.shared.write(
+                    "ATVV AUDIO dropped reason=identifier_mismatch " +
+                        "active_session=\(activeBluetoothVoiceDeviceIdentifier != nil) " +
+                        "samples=\(samples.count)"
+                )
+            }
             return
         }
         let commandSamplesBefore = pendingCommandVoiceAudio.bufferedSampleCount
@@ -8587,6 +8598,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         chromecastAudioBatchCount = 0
         chromecastAudioSampleCount = 0
         chromecastAudioEnqueueFailureCount = 0
+        loggedChromecastInactiveAudioDrop = false
         loggedChromecastAudioDevice = false
         chromecastAudioPrerollOpenedAt = ProcessInfo.processInfo.systemUptime
         chromecastAudioPrerollBatches = []
@@ -9128,9 +9140,16 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     }
 
     private func receiveChromecastAudio(_ samples: [Int16]) {
-        guard chromecastVoiceActive || chromecastVoiceStopping || pendingChromecastVoiceStart,
-              !samples.isEmpty
-        else { return }
+        guard !samples.isEmpty else { return }
+        guard chromecastVoiceActive || chromecastVoiceStopping || pendingChromecastVoiceStart else {
+            if !loggedChromecastInactiveAudioDrop {
+                loggedChromecastInactiveAudioDrop = true
+                AppLogger.shared.write(
+                    "CHROMECAST AUDIO dropped reason=no_active_session samples=\(samples.count)"
+                )
+            }
+            return
+        }
         if pendingChromecastVoiceStart,
            pendingChromecastVoiceAudio.appendIfWaiting(samples) {
             AppLogger.shared.write(
