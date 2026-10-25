@@ -1,5 +1,7 @@
 # Bug 记录
 
+- [Mac 麦克风按钮误触发语音与窗口切换](./2026-10-25-mac-microphone-unwanted-trigger.html)
+
 - [Mac 麦克风会话启动后立即停止](./2026-10-24-mac-microphone-capture-immediate-stop.html)
 
 - [遥控器松键后的原生按键延迟泄露](./2026-10-24-delayed-native-key-leak.html)

@@ -199,17 +199,6 @@ struct MacMicrophoneInputTests {
         #expect(restored.macMicrophoneInputUID == settings.macMicrophoneInputUID)
     }
 
-    @Test func explicitSearchFieldIsAllowedAndProtectedFieldsAreRejected() {
-        func snapshot(role: String = "AXTextField", protected: Bool = false) -> VoiceInputDestinationSnapshot {
-            .init(bundleIdentifier: "com.example.editor", role: role, subrole: "", enabled: true,
-                editable: true, protectedContent: protected, semanticText: "Search 搜索")
-        }
-        #expect(MacMicrophoneInputTarget.isEligible(snapshot()))
-        #expect(!MacMicrophoneInputTarget.isEligible(snapshot(protected: true)))
-        #expect(!MacMicrophoneInputTarget.isEligible(snapshot(role: "AXSecureTextField")))
-        #expect(!MacMicrophoneInputTarget.isEligible(snapshot(role: "AXButton")))
-    }
-
     @Test func inputConfigurationChangeOnlyFailsWhenTheDeviceActuallyChanged() {
         #expect(!MacMicrophoneConfigurationChangePolicy.shouldFail(
             selectedDeviceID: 118,
@@ -240,75 +229,24 @@ struct MacMicrophoneInputTests {
         #expect(settings.macMicrophoneInputUID.isEmpty)
     }
 
-    @Test func fnTapJourneyKeepsTheFirstAndLastSamplesAndFinishesAfterTheStopTap() {
-        let scheduler = MacMicrophoneScheduler()
-        var keyEdges: [Bool] = []
-        var played: [Int16] = []
-        var captureTail: (() -> Void)?
-        var playerDrain: (() -> Void)?
-        var prepared: ((MacMicrophoneFailure?) -> Void)?
-        var finished = false
-        let tap = VoiceFnTapSessionController(schedule: scheduler.schedule,
-            setFunctionKeyPressed: { keyEdges.append($0); return true },
-            enqueueAudio: { played += $0 }, drainAudio: { _, done in playerDrain = done },
-            onFailure: { _ in Issue.record("Fn tap failed") })
-        tap.setEnabled(true)
-        let session = MacMicrophoneSessionController(isBusy: { false },
-            prepare: { prepared = $0 },
-            startCapture: { done in #expect(tap.startVoice()); done(nil) },
-            stopCapture: { captureTail = $0 },
-            drain: { done in tap.stopVoice { done(true) } },
-            finish: { finished = true }, schedule: scheduler.schedule, log: { _ in })
-        session.toggle(from: .connectionPage)
-        // Delayed audio/target preparation must not send an early Fn edge.
-        #expect(keyEdges.isEmpty)
-        prepared?(nil)
-        #expect(tap.receive([11, 12]))
-        session.toggle(from: .shortcut)
-        #expect(tap.receive([13, 14]))
-        captureTail?()
-        scheduler.advance(0.27)
-        #expect(played == [11, 12, 13, 14])
-        #expect(keyEdges == [true, false])
-        #expect(!finished)
-        playerDrain?()
-        #expect(!finished)
-        scheduler.advance(0.12)
-        #expect(keyEdges == [true, false, true, false])
-        #expect(finished)
-        #expect(session.state == .idle)
+    @Test(arguments: [MobileVoiceSource.macMicrophone, .nearbyPhone, .nearbyWatch, .web])
+    func onlyRemoteSourcesSendVoiceKeyEdges(_ source: MobileVoiceSource) {
+        var edges: [Bool] = []
+        #expect(source.updateVoiceTrigger { edges.append(true); return true })
+        #expect(source.updateVoiceTrigger { edges.append(false); return true })
+        #expect(edges == (source == .macMicrophone ? [] : [true, false]))
     }
 
-    @Test(arguments: [3, 4])
-    func failedStopTapReachesTheSessionBeforeItsCompletion(_ failedEdge: Int) {
-        let scheduler = MacMicrophoneScheduler()
-        var edgeCount = 0
-        var playerDrain: (() -> Void)?
-        var session: MacMicrophoneSessionController!
-        var logs: [String] = []
-        let tap = VoiceFnTapSessionController(schedule: scheduler.schedule,
-            setFunctionKeyPressed: { _ in
-                edgeCount += 1
-                return edgeCount != failedEdge
-            }, enqueueAudio: { _ in }, drainAudio: { _, done in playerDrain = done },
-            onFailure: { _ in session.stop(failure: .capture) })
-        tap.setEnabled(true)
-        session = MacMicrophoneSessionController(isBusy: { false },
-            prepare: { $0(nil) },
-            startCapture: { done in #expect(tap.startVoice()); done(nil) },
-            stopCapture: { $0() },
-            drain: { done in tap.stopVoice { done(true) } },
-            finish: {}, schedule: scheduler.schedule, log: { logs.append($0) })
-        session.toggle(from: .shortcut)
-        scheduler.advance(0.27)
-        session.toggle(from: .statusMenu)
-        playerDrain?()
-        scheduler.advance(0.12)
-        #expect(session.state == .failed(.capture))
-        #expect(logs.filter { $0.contains("phase=completed") }.count == 1)
-        #expect(logs.last?.contains("result=failed") == true)
-        #expect(logs.last?.contains("completion=forced") == true)
+    @Test func macMicrophoneDoesNotDependOnKeyboardInjectionPermission() {
+        var attempts = 0
+        #expect(MobileVoiceSource.macMicrophone.updateVoiceTrigger {
+            attempts += 1
+            return false
+        })
+        #expect(attempts == 0)
+        #expect(!MobileVoiceSource.nearbyPhone.updateVoiceTrigger { false })
     }
+
 }
 
 private final class MacMicrophoneHarness {
@@ -330,23 +268,4 @@ private final class MacMicrophoneHarness {
         schedule: { _, action in self.timeout = action; return VoiceFnTapScheduledTask {} },
         log: { self.logs.append($0) }
     )
-}
-
-private final class MacMicrophoneScheduler {
-    private var clock: TimeInterval = 0
-    private var work: [(id: UUID, deadline: TimeInterval, action: () -> Void)] = []
-    lazy var schedule: VoiceFnTapSessionController.Scheduler = { [unowned self] delay, action in
-        let id = UUID()
-        work.append((id, clock + delay, action))
-        return VoiceFnTapScheduledTask { [weak self] in self?.work.removeAll { $0.id == id } }
-    }
-    func advance(_ interval: TimeInterval) {
-        let end = clock + interval
-        while let next = work.filter({ $0.deadline <= end }).min(by: { $0.deadline < $1.deadline }) {
-            work.removeAll { $0.id == next.id }
-            clock = next.deadline
-            next.action()
-        }
-        clock = end
-    }
 }

@@ -43,7 +43,7 @@ enum MacMicrophoneSessionState: Equatable {
     }
 }
 
-/// One operation owns permission, target preparation, capture, and output drain.
+/// One operation owns microphone permission, capture, and output drain.
 /// All dependencies deliver their callbacks on the main queue.
 final class MacMicrophoneSessionController {
     typealias Preparation = (@escaping (MacMicrophoneFailure?) -> Void) -> Void
@@ -115,7 +115,7 @@ final class MacMicrophoneSessionController {
                     self.deadline?.cancel()
                     self.deadline = nil
                     self.state = .recording
-                    self.log("MAC MICROPHONE operation_id=\(operation) phase=started result=capturing target_response=unknown")
+                    self.log("MAC MICROPHONE operation_id=\(operation) phase=started result=capturing mode=audio_only voice_trigger=none target_activation=none target_response=unknown")
                 }
             }
         }
