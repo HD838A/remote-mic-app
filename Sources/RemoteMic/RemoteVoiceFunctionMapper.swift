@@ -2,7 +2,7 @@ import Foundation
 import IOKit.hid
 import IOKit.hidsystem
 
-struct HIDUsageMapping: Equatable {
+struct HIDUsageMapping: Equatable, Codable {
     static let sourceKey = "HIDKeyboardModifierMappingSrc"
     static let destinationKey = "HIDKeyboardModifierMappingDst"
 
@@ -56,11 +56,12 @@ enum RemoteVoiceFunctionMappingPolicy {
     static func applying(
         to existing: [HIDUsageMapping],
         voiceMapping: HIDUsageMapping = remoteVoiceKey,
-        powerMapping: HIDUsageMapping? = nil
+        powerMapping: HIDUsageMapping? = nil,
+        preservePowerKeyMapping: Bool = false
     ) -> [HIDUsageMapping] {
         var desired = existing.filter {
             $0.source != remoteVoiceKey.source &&
-                $0.source != suppressedRemotePowerKey.source
+                (preservePowerKeyMapping || $0.source != suppressedRemotePowerKey.source)
         } + [voiceMapping]
         if let powerMapping {
             desired.append(powerMapping)
@@ -71,16 +72,17 @@ enum RemoteVoiceFunctionMappingPolicy {
     static func restoring(
         originalVoiceMapping: HIDUsageMapping?,
         originalPowerMapping: HIDUsageMapping?,
-        in current: [HIDUsageMapping]
+        in current: [HIDUsageMapping],
+        preservePowerKeyMapping: Bool = false
     ) -> [HIDUsageMapping] {
         var restored = current.filter {
             $0.source != remoteVoiceKey.source &&
-                $0.source != suppressedRemotePowerKey.source
+                (preservePowerKeyMapping || $0.source != suppressedRemotePowerKey.source)
         }
         if let originalVoiceMapping {
             restored.append(originalVoiceMapping)
         }
-        if let originalPowerMapping {
+        if !preservePowerKeyMapping, let originalPowerMapping {
             restored.append(originalPowerMapping)
         }
         return restored
@@ -122,6 +124,7 @@ final class RemoteVoiceFunctionMapper {
     }
 
     private let serviceProvider: ServiceProvider
+    private var preservesPowerKeyMapping = false
     private var originalMappings: [UInt64: OriginalMappings] = [:]
     private(set) var isApplied = false
     private(set) var isPowerKeySuppressed = false
@@ -140,8 +143,10 @@ final class RemoteVoiceFunctionMapper {
     @discardableResult
     func apply(
         suppressPowerKey: Bool = false,
-        neutralizeVoiceKey: Bool = false
+        neutralizeVoiceKey: Bool = false,
+        preservePowerKeyMapping: Bool = false
     ) -> Bool {
+        preservesPowerKeyMapping = preservePowerKeyMapping
         let services = serviceProvider()
         let matchedCount = services.count
         matchedServiceCount = matchedCount
@@ -197,9 +202,10 @@ final class RemoteVoiceFunctionMapper {
                 voiceMapping: neutralizeVoiceKey
                     ? RemoteVoiceFunctionMappingPolicy.neutralRemoteVoiceKey
                     : RemoteVoiceFunctionMappingPolicy.remoteVoiceKey,
-                powerMapping: suppressPowerKey
+                powerMapping: preservePowerKeyMapping ? nil : (suppressPowerKey
                     ? RemoteVoiceFunctionMappingPolicy.suppressedRemotePowerKey
-                    : originalMappings[registryID]?.power
+                    : originalMappings[registryID]?.power),
+                preservePowerKeyMapping: preservePowerKeyMapping
             )
             guard service.setMappings(desired) else {
                 if neutralizeVoiceKey {
@@ -260,7 +266,8 @@ final class RemoteVoiceFunctionMapper {
             let restored = RemoteVoiceFunctionMappingPolicy.restoring(
                 originalVoiceMapping: original.voice,
                 originalPowerMapping: original.power,
-                in: service.readMappings()
+                in: service.readMappings(),
+                preservePowerKeyMapping: preservesPowerKeyMapping
             )
             if service.setMappings(restored) {
                 restoredCount += 1
@@ -306,10 +313,14 @@ final class RemoteVoiceFunctionMapper {
         isVoiceKeyNeutralized = false
     }
 
-    private static func systemServices() -> [RemoteVoiceMappingService] {
+    static func systemServices() -> [RemoteVoiceMappingService] {
+        systemServices(vendor: vendorID, products: [productID])
+    }
+
+    static func systemServices(vendor: Int, products: Set<Int>) -> [RemoteVoiceMappingService] {
         let client = IOHIDEventSystemClientCreateSimpleClient(kCFAllocatorDefault)
         let services = IOHIDEventSystemClientCopyServices(client) as? [IOHIDServiceClient] ?? []
-        return services.filter(isTarget).map { service in
+        return services.filter { isTarget($0, vendorID: vendor, productIDs: products) }.map { service in
             RemoteVoiceMappingService(
                 registryID: registryID(service),
                 locationID: locationID(service),
@@ -326,7 +337,7 @@ final class RemoteVoiceFunctionMapper {
         }
     }
 
-    private static func isTarget(_ service: IOHIDServiceClient) -> Bool {
+    private static func isTarget(_ service: IOHIDServiceClient, vendorID: Int, productIDs: Set<Int>) -> Bool {
         let vendor = IOHIDServiceClientCopyProperty(
             service,
             kIOHIDVendorIDKey as CFString
@@ -335,7 +346,7 @@ final class RemoteVoiceFunctionMapper {
             service,
             kIOHIDProductIDKey as CFString
         ) as? NSNumber
-        return vendor?.intValue == vendorID && product?.intValue == productID
+        return vendor?.intValue == vendorID && product.map { productIDs.contains($0.intValue) } == true
     }
 
     private static func registryID(_ service: IOHIDServiceClient) -> UInt64? {

@@ -651,6 +651,15 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     })
     private let webRemoteClient = WebRemoteRelayClient()
     private let voiceFunctionMapper = RemoteVoiceFunctionMapper()
+    private let remoteNativeKeyMapper = RemoteNativeKeyMapper()
+    private let siriNativeKeyMapper = RemoteNativeKeyMapper(
+        family: "siri_remote", mappings: [], recoveryKey: "sayall.native-key-mapping-recovery.siri.v1",
+        serviceProvider: { RemoteVoiceFunctionMapper.systemServices(vendor: 0x004c, products: SiriRemoteFeatureIntegration.nativeInputProductIDs) }
+    )
+    private let chromecastNativeKeyMapper = RemoteNativeKeyMapper(
+        family: "chromecast", mappings: [], recoveryKey: "sayall.native-key-mapping-recovery.chromecast.v1",
+        serviceProvider: { RemoteVoiceFunctionMapper.systemServices(vendor: 0x18d1, products: ChromecastFeatureIntegration.nativeInputProductIDs) }
+    )
     private lazy var preferredInputSourceMonitor = PreferredInputSourceMonitor(
         voiceTool: { [weak self] in
             self?.settings.onboardingVoiceTool ?? .unselected
@@ -1055,6 +1064,10 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             self?.scheduleAudioRecovery(reason: "engine_configuration_change")
         }
 #if SAYALL_SIRI_REMOTE_ENABLED
+        siriRemoteFeature.prepareNativeInput = { [weak self] sources in
+            self?.siriNativeKeyMapper.prepare(additionalSources: sources) == true
+        }
+        siriRemoteFeature.restoreNativeInput = { [weak self] in self?.siriNativeKeyMapper.restore() }
         siriRemoteFeature.onConnection = { [weak self] connection in
             self?.handleAppleRemoteConnection(connection)
         }
@@ -1147,6 +1160,10 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         chromecastFeature.onSamples = { [weak self] samples, _ in
             self?.receiveChromecastAudio(samples)
         }
+        chromecastFeature.prepareNativeInput = { [weak self] sources in
+            self?.chromecastNativeKeyMapper.prepare(additionalSources: sources) == true
+        }
+        chromecastFeature.restoreNativeInput = { [weak self] in self?.chromecastNativeKeyMapper.restore() }
         chromecastFeature.onControlEvent = { [weak self] event in
             self?.handleChromecastControlEvent(event)
         }
@@ -1567,6 +1584,9 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             audioOutput.stop()
         }
         voiceFunctionMapper.restore()
+        remoteNativeKeyMapper.restore()
+        siriNativeKeyMapper.restore()
+        chromecastNativeKeyMapper.restore()
         if let terminationObserver {
             NotificationCenter.default.removeObserver(terminationObserver)
             self.terminationObserver = nil
@@ -3199,6 +3219,12 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     ) {
         let permissionSnapshot = HIDPermissionSnapshot.current
         appliedHIDPermissionSnapshot = permissionSnapshot
+        if !settings.customMappingEnabled || !permissionSnapshot.accessibilityGranted ||
+            !permissionSnapshot.inputMonitoringGranted {
+            remoteNativeKeyMapper.restore()
+            siriNativeKeyMapper.restore()
+            chromecastNativeKeyMapper.restore()
+        }
         if !permissionSnapshot.accessibilityGranted {
             _ = releaseVoiceKeyIfNeeded()
         }
@@ -3616,7 +3642,9 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
                     button: button,
                     trigger: trigger
                 ) == true
-            }
+            },
+            prepareNativeKeys: { [weak self] in self?.remoteNativeKeyMapper.prepare() == true },
+            restoreNativeKeys: { [weak self] in self?.remoteNativeKeyMapper.restore() }
         )
         monitor.claimsRuntimeButton = { [weak self] profileID, button in
             self?.membershipFeature.claimsCommonPhrase(
@@ -4423,13 +4451,17 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             }
             return
         }
+        if settings.customMappingEnabled, !siriNativeKeyMapper.isPrepared {
+            AppLogger.shared.write("APPLE REMOTE ACTION rejected reason=native_input_not_verified")
+            return
+        }
         if control == .select {
             let nativeEdge: RemoteEventEdge = event.phase == .began ? .down : .up
             if !suppressConfiguredAction,
                event.phase == .began,
                siriRemoteCursorFeedback.activateHoveredElementIfAvailable() {
                 appleRemoteHoverClickDevices.insert(event.device)
-                hidEventSuppressor.arm(nativeEvents: control.nativeEvents, edge: nativeEdge)
+                if !siriNativeKeyMapper.isPrepared { hidEventSuppressor.arm(nativeEvents: control.nativeEvents, edge: nativeEdge) }
                 AppLogger.shared.write(
                     "APPLE REMOTE HOVER_CLICK phase=began result=activated action=ax_press"
                 )
@@ -4438,7 +4470,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             if !suppressConfiguredAction,
                event.phase == .ended,
                appleRemoteHoverClickDevices.remove(event.device) != nil {
-                hidEventSuppressor.arm(nativeEvents: control.nativeEvents, edge: nativeEdge)
+                if !siriNativeKeyMapper.isPrepared { hidEventSuppressor.arm(nativeEvents: control.nativeEvents, edge: nativeEdge) }
                 AppLogger.shared.write(
                     "APPLE REMOTE HOVER_CLICK phase=ended result=consumed"
                 )
@@ -4482,9 +4514,9 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             return
         }
         let nativeEdge: RemoteEventEdge = event.phase == .began ? .down : .up
-        hidEventSuppressor.arm(nativeEvents: control.nativeEvents, edge: nativeEdge)
+        if !siriNativeKeyMapper.isPrepared { hidEventSuppressor.arm(nativeEvents: control.nativeEvents, edge: nativeEdge) }
         AppLogger.shared.write(
-            "APPLE REMOTE NATIVE_EVENT phase=armed control=\(control.rawValue) " +
+            "APPLE REMOTE NATIVE_EVENT phase=\(siriNativeKeyMapper.isPrepared ? "source_mapped" : "armed") control=\(control.rawValue) " +
                 "edge=\(nativeEdge == .down ? "down" : "up") " +
                 "candidates=\(control.nativeEvents.count)"
         )
@@ -8184,8 +8216,9 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     @discardableResult
     private func applyVoiceFunctionMapping(neutralizeVoiceKey: Bool) -> Bool {
         let applied = voiceFunctionMapper.apply(
-            suppressPowerKey: settings.customMappingEnabled,
-            neutralizeVoiceKey: neutralizeVoiceKey
+            suppressPowerKey: false,
+            neutralizeVoiceKey: neutralizeVoiceKey,
+            preservePowerKeyMapping: true
         )
         if !isStreaming {
             isVoiceTriggerEnabled = applied
@@ -8195,7 +8228,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
                     : "voice_button.status.waiting"
             )
         }
-        return !settings.customMappingEnabled || voiceFunctionMapper.isPowerKeySuppressed
+        return !settings.customMappingEnabled || remoteNativeKeyMapper.prepare()
     }
 
     @discardableResult
@@ -8894,6 +8927,10 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             return
         }
 
+        guard chromecastNativeKeyMapper.isPrepared else {
+            AppLogger.shared.write("CHROMECAST ACTION rejected reason=native_input_not_verified")
+            return
+        }
         // 使用与画布、键位方案相同的保留策略；当前全部普通键可配置。
         if ChromecastRemoteControl.isSystemManaged(
             event.control,
@@ -8907,17 +8944,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             }
             return
         }
-        // 与小米/苹果链路一致的第二道保险：HID 独占（seize）只挡住 HID 层的报告分发，
-        // 系统仍会把部分 usage 解析成原生事件（实测：静音键产生 systemKey(7) → 系统音量 HUD）。
-        // 必须在每个边沿上武装事件抑制器，把随之到达的原生事件吞掉。
-        if !hidEventSuppressor.isRunning {
-            let ready = hidEventSuppressor.start()
-            AppLogger.shared.write("HID FILTER ready=\(ready) owner=chromecast")
-        }
-        hidEventSuppressor.arm(
-            nativeEvents: chromecastNativeEvents(for: event.control),
-            edge: isPress ? .down : .up
-        )
+        // 原生用法已在设备激活前屏蔽。不要留下会吞掉电脑键盘的延迟拦截次数。
         if isPress {
             selectRemoteProfile(profileID)
             chromecastPressedControls.insert(controlID)

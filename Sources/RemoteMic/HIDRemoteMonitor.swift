@@ -79,6 +79,8 @@ final class HIDRemoteMonitor {
     private let frontmostBundleIdentifier: () -> String?
     private let diagnosticLogger: (String) -> Void
     private let karabinerElementsInstalled: () -> Bool
+    private let prepareNativeKeys: (() -> Bool)?
+    private let restoreNativeKeys: () -> Void
     private let targetFingerprint: String?
     private let excludedFingerprints: () -> Set<String>
     private var allowedLocationIDs: Set<UInt32>?
@@ -89,6 +91,7 @@ final class HIDRemoteMonitor {
     private(set) var deviceFingerprint: String?
     private(set) var profileID: UUID?
     private var activeDeviceIsSeized = false
+    private var nativeKeysNeutralized = false
     private var activeUsages = Set<UInt16>()
     private var nativePassthroughUsages = Set<UInt16>()
     private var repeatTimers: [UInt16: HIDRemoteScheduledTask] = [:]
@@ -141,6 +144,8 @@ final class HIDRemoteMonitor {
         karabinerElementsInstalled: @escaping () -> Bool = {
             HIDRemoteMonitor.isKarabinerElementsInstalled()
         },
+        prepareNativeKeys: (() -> Bool)? = nil,
+        restoreNativeKeys: @escaping () -> Void = {},
         appSwitcherKeyStatePoster: @escaping KeyboardInjector.KeyStatePoster = KeyboardInjector.postKeyState
     ) {
         self.settings = settings
@@ -169,6 +174,8 @@ final class HIDRemoteMonitor {
         self.frontmostBundleIdentifier = frontmostBundleIdentifier
         self.diagnosticLogger = diagnosticLogger
         self.karabinerElementsInstalled = karabinerElementsInstalled
+        self.prepareNativeKeys = prepareNativeKeys
+        self.restoreNativeKeys = restoreNativeKeys
     }
 
     func assignProfileID(_ profileID: UUID) {
@@ -285,6 +292,7 @@ final class HIDRemoteMonitor {
         permissionPollSubscription?.cancel()
         permissionPollSubscription = nil
         resetInputState()
+        nativeKeysNeutralized = false
         if ownsEventSuppressor { eventSuppressor.stop() }
         probedDevices.forEach {
             IOHIDDeviceClose($0, IOOptionBits(kIOHIDOptionsTypeNone))
@@ -363,6 +371,10 @@ final class HIDRemoteMonitor {
             diagnosticLogger("HID DEVICE PROBE FAILED monitor=\(monitorResult)")
             return
         }
+        guard prepareNativeKeyMapping() else {
+            IOHIDDeviceClose(device, IOOptionBits(kIOHIDOptionsTypeNone))
+            return
+        }
         probedDevices.append(device)
         diagnosticLogger("HID DEVICE probing mode=monitored")
     }
@@ -371,6 +383,7 @@ final class HIDRemoteMonitor {
         guard let selectedIndex = probedDevices.firstIndex(where: { CFEqual($0, device) }) else {
             return false
         }
+        guard prepareNativeKeyMapping() else { return false }
         let selectedDevice = probedDevices.remove(at: selectedIndex)
         probedDevices.forEach {
             IOHIDDeviceClose($0, IOOptionBits(kIOHIDOptionsTypeNone))
@@ -399,6 +412,10 @@ final class HIDRemoteMonitor {
             IOOptionBits(kIOHIDOptionsTypeSeizeDevice)
         )
         if seizeResult == kIOReturnSuccess {
+            guard prepareNativeKeyMapping() else {
+                IOHIDDeviceClose(device, IOOptionBits(kIOHIDOptionsTypeNone))
+                return false
+            }
             activeDevice = device
             deviceFingerprint = fingerprint
             activeDeviceIsSeized = true
@@ -429,6 +446,12 @@ final class HIDRemoteMonitor {
             return false
         }
 
+        guard prepareNativeKeyMapping() else {
+            if monitorResult == kIOReturnSuccess {
+                IOHIDDeviceClose(device, IOOptionBits(kIOHIDOptionsTypeNone))
+            }
+            return false
+        }
         activeDevice = device
         deviceFingerprint = fingerprint
         activeDeviceIsSeized = false
@@ -472,6 +495,7 @@ final class HIDRemoteMonitor {
             self.activeDevice = nil
             deviceFingerprint = nil
             resetInputState()
+            nativeKeysNeutralized = false
             activeDeviceIsSeized = false
             updateStatus(LocalizedMessage("button_mapping.status.disconnected"))
             AppLogger.shared.write("HID DISCONNECTED")
@@ -576,15 +600,18 @@ final class HIDRemoteMonitor {
         )
     }
 
+    @discardableResult
     func connectSimulatedDevice(
         fingerprint: String,
         profileID: UUID?,
         isSeized: Bool = true
-    ) {
+    ) -> Bool {
         resetInputState()
+        guard prepareNativeKeyMapping() else { return false }
         deviceFingerprint = fingerprint
         self.profileID = profileID
         activeDeviceIsSeized = isSeized
+        return true
     }
 
     func handleSimulatedReport(reportID: UInt32, data: Data) {
@@ -630,12 +657,13 @@ final class HIDRemoteMonitor {
         source: String,
         usages: Set<UInt16>
     ) {
-        // Volume is always managed, unlike the intentional left/right passthrough.
+        // TV and volume are always managed, unlike intentional left/right passthrough.
         // Register before diagnostics, UI callbacks and configuration lookups.
         if !backOnlyMode {
             for usage in usages.subtracting(activeUsages) {
                 guard let button = RemoteButton.usageMap[usage],
-                      button == .volumeUp || button == .volumeDown else { continue }
+                      button == .volumeUp || button == .volumeDown || button == .tv,
+                      shouldArmNativeEvent(for: button) else { continue }
                 eventSuppressor.arm(button: button, edge: .down)
             }
         }
@@ -653,6 +681,7 @@ final class HIDRemoteMonitor {
     func disconnectSimulatedDevice() {
         deviceFingerprint = nil
         resetInputState()
+        nativeKeysNeutralized = false
         activeDeviceIsSeized = false
     }
 
@@ -705,7 +734,7 @@ final class HIDRemoteMonitor {
             // Seizing one HID interface does not guarantee that sibling interfaces
             // stop emitting native events. Every managed press owns its native
             // descriptors; intentional passthrough and marked host events remain free.
-            if !usesNativePassthrough, button != .volumeUp, button != .volumeDown {
+            if !usesNativePassthrough, shouldArmNativeEvent(for: button), button != .volumeUp, button != .volumeDown, button != .tv {
                 eventSuppressor.arm(button: button, edge: .down)
             }
             var shouldPerformAction = true
@@ -839,7 +868,7 @@ final class HIDRemoteMonitor {
         for usage in released {
             let usedNativePassthrough = nativePassthroughUsages.remove(usage) != nil
             if let button = RemoteButton.usageMap[usage],
-               !usedNativePassthrough {
+               !usedNativePassthrough, shouldArmNativeEvent(for: button) {
                 eventSuppressor.arm(button: button, edge: .up)
             }
             repeatTimers.removeValue(forKey: usage)?.cancel()
@@ -1043,7 +1072,7 @@ final class HIDRemoteMonitor {
         recognizesDoubleClick: Bool,
         recognizesLongPress: Bool
     ) -> Bool {
-        guard !activeDeviceIsSeized,
+        guard !nativeKeysNeutralized, !activeDeviceIsSeized,
               !appSwitcherSession.isActive,
               !recognizesDoubleClick,
               !recognizesLongPress,
@@ -1378,7 +1407,7 @@ final class HIDRemoteMonitor {
         appSwitcherConfirmationProbe = nil
         appSwitcherOriginBundleIdentifier = nil
         for usage in activeUsages.subtracting(nativePassthroughUsages) {
-            if let button = RemoteButton.usageMap[usage] {
+            if let button = RemoteButton.usageMap[usage], shouldArmNativeEvent(for: button) {
                 eventSuppressor.arm(button: button, edge: .up)
             }
         }
@@ -1395,6 +1424,22 @@ final class HIDRemoteMonitor {
 
     private func runtimePermissionsAreValid() -> Bool {
         runtimePermissions()
+    }
+
+    private func shouldArmNativeEvent(for button: RemoteButton) -> Bool {
+        !nativeKeysNeutralized
+    }
+
+    private func prepareNativeKeyMapping() -> Bool {
+        nativeKeysNeutralized = false
+        guard !backOnlyMode, let prepareNativeKeys else { return true }
+        guard prepareNativeKeys() else {
+            updateStatus(LocalizedMessage("button_mapping.error.native_mapping_failed"))
+            diagnosticLogger("HID DEVICE rejected reason=native_mapping_not_verified")
+            return false
+        }
+        nativeKeysNeutralized = true
+        return true
     }
 
     private func startPermissionMonitor() {
@@ -1422,6 +1467,7 @@ final class HIDRemoteMonitor {
     func releaseForRevokedPermissions() {
         stop()
         eventSuppressor.stop()
+        restoreNativeKeys()
         updateStatus(LocalizedMessage("button_mapping.permission.system_expired"))
         AppLogger.shared.write("HID RELEASED permission_revoked")
     }

@@ -169,6 +169,27 @@ enum SiriRemoteTouchRoutingMode: String, Equatable {
 }
 
 final class SiriRemoteFeatureIntegration {
+    static var nativeInputProductIDs: Set<Int> {
+        #if SAYALL_SIRI_REMOTE_ENABLED && canImport(SayAllSiriRemote)
+        return Set(SayAllSiriRemoteModel.allCases.map(\.productID))
+        #else
+        return []
+        #endif
+    }
+    var prepareNativeInput: (([UInt64]) -> Bool)? {
+        didSet {
+            #if SAYALL_SIRI_REMOTE_ENABLED && canImport(SayAllSiriRemote)
+            feature.prepareNativeInput = prepareNativeInput
+            #endif
+        }
+    }
+    var restoreNativeInput: (() -> Void)? {
+        didSet {
+            #if SAYALL_SIRI_REMOTE_ENABLED && canImport(SayAllSiriRemote)
+            feature.restoreNativeInput = restoreNativeInput
+            #endif
+        }
+    }
     var onConnection: ((SiriRemoteConnection) -> Void)?
     /// 遥控器自报的能力（连接可用时给出位域，链路不可用时给出空集合）。
     var onDeclaredCapabilitiesChange: ((SiriRemoteDeclaredCapabilities) -> Void)?

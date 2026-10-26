@@ -1,0 +1,1004 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="shadcn" data-mode="auto">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="generator" content="Answer me with HTML 0.4.6">
+<title>TV 与音量键原生事件泄露</title>
+<style>
+html[data-theme="blueprint"], html[data-theme="blueprint"][data-mode="light"] {
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --radius: 0px;
+  --shadow: none;
+  --bw: 1.5px;
+  --head-font: var(--font-sans);
+  --bg: #f6f6f3;
+  --paper: #ffffff;
+  --ink: #16181d;
+  --ink-2: #4b5260;
+  --ink-3: #8b929e;
+  --line: #1d2026;
+  --line-2: #d6dae1;
+  --fill: #f3f5f8;
+  --accent: #1d5fbf;
+  --accent-bg: #e4ecf8;
+  --ok: #1d5fbf;
+  --ok-bg: #e4ecf8;
+  --err: #c62828;
+  --err-bg: #fbeaea;
+  --warn: #a8620a;
+  --warn-bg: #fdf3e2;
+  --head-bg: #16181d;
+  --head-fg: #ffffff;
+}
+html[data-theme="blueprint"][data-mode="dark"] {
+  --bg: #081322;
+  --paper: #0d1c31;
+  --ink: #e6edf7;
+  --ink-2: #a9b8cc;
+  --ink-3: #6b7f99;
+  --line: #c9d6e8;
+  --line-2: #23385a;
+  --fill: #12253f;
+  --accent: #6ea8ff;
+  --accent-bg: #16305a;
+  --ok: #6ea8ff;
+  --ok-bg: #16305a;
+  --err: #ff7070;
+  --err-bg: #3b1620;
+  --warn: #f0b14a;
+  --warn-bg: #3a2a10;
+  --head-bg: #e6edf7;
+  --head-fg: #081322;
+}
+@media (prefers-color-scheme: dark) {
+html[data-theme="blueprint"][data-mode="auto"] {
+  --bg: #081322;
+  --paper: #0d1c31;
+  --ink: #e6edf7;
+  --ink-2: #a9b8cc;
+  --ink-3: #6b7f99;
+  --line: #c9d6e8;
+  --line-2: #23385a;
+  --fill: #12253f;
+  --accent: #6ea8ff;
+  --accent-bg: #16305a;
+  --ok: #6ea8ff;
+  --ok-bg: #16305a;
+  --err: #ff7070;
+  --err-bg: #3b1620;
+  --warn: #f0b14a;
+  --warn-bg: #3a2a10;
+  --head-bg: #e6edf7;
+  --head-fg: #081322;
+}
+}
+
+html[data-theme="shadcn"], html[data-theme="shadcn"][data-mode="light"] {
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --radius: 8px;
+  --shadow: 0 1px 2px 0 rgba(0,0,0,0.05);
+  --bw: 1px;
+  --head-font: var(--font-sans);
+  --bg: #fafafa;
+  --paper: #ffffff;
+  --ink: #09090b;
+  --ink-2: #71717a;
+  --ink-3: #a1a1aa;
+  --line: #e4e4e7;
+  --line-2: #f0f0f2;
+  --fill: #f4f4f5;
+  --accent: #2563eb;
+  --accent-bg: #eff6ff;
+  --ok: #16a34a;
+  --ok-bg: #f0fdf4;
+  --err: #dc2626;
+  --err-bg: #fef2f2;
+  --warn: #d97706;
+  --warn-bg: #fffbeb;
+  --head-bg: #18181b;
+  --head-fg: #fafafa;
+}
+html[data-theme="shadcn"][data-mode="dark"] {
+  --bg: #09090b;
+  --paper: #121215;
+  --ink: #fafafa;
+  --ink-2: #a1a1aa;
+  --ink-3: #71717a;
+  --line: #27272a;
+  --line-2: #1c1c1f;
+  --fill: #18181b;
+  --accent: #60a5fa;
+  --accent-bg: #172554;
+  --ok: #4ade80;
+  --ok-bg: #052e16;
+  --err: #f87171;
+  --err-bg: #450a0a;
+  --warn: #fbbf24;
+  --warn-bg: #451a03;
+  --head-bg: #fafafa;
+  --head-fg: #18181b;
+}
+@media (prefers-color-scheme: dark) {
+html[data-theme="shadcn"][data-mode="auto"] {
+  --bg: #09090b;
+  --paper: #121215;
+  --ink: #fafafa;
+  --ink-2: #a1a1aa;
+  --ink-3: #71717a;
+  --line: #27272a;
+  --line-2: #1c1c1f;
+  --fill: #18181b;
+  --accent: #60a5fa;
+  --accent-bg: #172554;
+  --ok: #4ade80;
+  --ok-bg: #052e16;
+  --err: #f87171;
+  --err-bg: #450a0a;
+  --warn: #fbbf24;
+  --warn-bg: #451a03;
+  --head-bg: #fafafa;
+  --head-fg: #18181b;
+}
+}
+
+html[lang="ja"][data-theme][data-mode] {
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Yu Gothic", Meiryo, "Noto Sans CJK JP", "Noto Sans JP", "PingFang SC", "Microsoft YaHei", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+html[lang="ja"][data-theme="3b1b"][data-mode] {
+  --v-title-font: "CMU Serif", "Latin Modern Roman", "Iowan Old Style", "Palatino", "Hiragino Mincho ProN", "Yu Mincho", "Noto Serif CJK JP", "Noto Serif JP", "Songti SC", serif;
+}
+
+/* Answer me with HTML base — 只引用主题变量，禁止写死颜色（主题 token 见 themes/index.js） */
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--bg); color: var(--ink);
+  font-family: var(--font-sans); font-size: 14px; line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+code, pre, kbd { font-family: var(--font-mono); }
+
+/* ── 工具栏 ─────────────────────────────── */
+.am-toolbar {
+  position: fixed; top: 12px; right: 12px; z-index: 10; display: flex; gap: 6px;
+}
+.am-btn {
+  font: 12px/1 var(--font-sans); color: var(--ink); background: var(--paper);
+  border: 1px solid var(--line-2); border-radius: var(--radius); padding: 7px 10px; cursor: pointer;
+}
+.am-btn:hover { border-color: var(--ink-3); }
+.am-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ── 页头 ───────────────────────────────── */
+.am-head { margin: 0 0 20px; padding-right: 260px; }
+.am-head h1 { margin: 0; font-size: 24px; line-height: 1.25; letter-spacing: -0.01em; }
+.am-sub { margin: 4px 0 0; color: var(--ink-2); }
+.am-head-meta { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; font-size: 12px; color: var(--ink-2); }
+.am-head-meta b { font-family: var(--font-mono); font-weight: 400; color: var(--ink-3); margin-right: 6px; }
+.am-intro { margin-top: 12px; max-width: 80ch; }
+
+/* ── sheet 图纸板 ────────────────────────── */
+.am-sheet { max-width: 1680px; margin: 0 auto; padding: 32px 28px 40px; }
+.am-frame { position: relative; }
+.am-grid {
+  display: grid; grid-template-columns: repeat(var(--cols, 3), minmax(0, 1fr));
+  gap: 20px; align-items: start;
+}
+.am-ruler { display: none; }
+html[data-theme="blueprint"] .am-frame { border: 1px solid var(--line); padding: 30px; }
+html[data-theme="blueprint"] .am-frame::before {
+  content: ""; position: absolute; inset: 18px; border: 1px solid var(--line); pointer-events: none;
+}
+html[data-theme="blueprint"] .am-ruler {
+  display: flex; position: absolute; font: 10px/1 var(--font-mono); color: var(--ink-3);
+}
+.am-ruler span { flex: 1; display: flex; align-items: center; justify-content: center; }
+.am-ruler--top, .am-ruler--bottom { left: 18px; right: 18px; height: 18px; }
+.am-ruler--top { top: 0; }
+.am-ruler--bottom { bottom: 0; }
+.am-ruler--left, .am-ruler--right { top: 18px; bottom: 18px; width: 18px; flex-direction: column; }
+.am-ruler--left { left: 0; }
+.am-ruler--right { right: 0; }
+.am-ruler--top span + span, .am-ruler--bottom span + span { border-left: 1px solid var(--line); }
+.am-ruler--left span + span, .am-ruler--right span + span { border-top: 1px solid var(--line); }
+
+/* ── 面板 ───────────────────────────────── */
+.am-panel {
+  background: var(--paper); border: var(--bw) solid var(--line); border-radius: var(--radius);
+  box-shadow: var(--shadow); min-width: 0; overflow: hidden;
+}
+.am-panel-head {
+  display: flex; align-items: stretch; gap: 0; border-bottom: var(--bw) solid var(--line); min-height: 34px;
+}
+.am-panel-id {
+  display: flex; align-items: center; justify-content: center; min-width: 34px; padding: 0 8px;
+  background: var(--head-bg); color: var(--head-fg); font-weight: 600; font-size: 14px;
+}
+html[data-theme="shadcn"] .am-panel-id { border-radius: 6px; min-width: 24px; height: 24px; margin: 9px 0 9px 14px; font-size: 12px; }
+html[data-theme="shadcn"] .am-panel-head { border-bottom-width: 1px; }
+.am-panel-head h2 { margin: 0; padding: 7px 12px; font-size: 15px; font-weight: 600; flex: 1; display: flex; align-items: center; }
+.am-panel-meta { align-self: center; padding: 0 12px; font: 11px/1.3 var(--font-mono); color: var(--ink-2); text-align: right; }
+.am-panel-body { padding: 14px 16px 16px; }
+.am-panel-body > * + * { margin-top: 12px; }
+
+/* ── Markdown 正文 ───────────────────────── */
+.am-md > :first-child { margin-top: 0; }
+.am-md > :last-child { margin-bottom: 0; }
+.am-md p { margin: 0 0 8px; }
+.am-md ul, .am-md ol { margin: 0 0 8px; padding-left: 20px; }
+.am-md li + li { margin-top: 3px; }
+.am-md h3, .am-md h4 { margin: 14px 0 6px; font-size: 13px; }
+.am-md a { color: var(--accent); }
+.am-md blockquote { margin: 0 0 8px; padding: 2px 12px; border-left: 3px solid var(--line-2); color: var(--ink-2); }
+.am-md :not(pre) > code { font-size: 0.9em; background: var(--fill); padding: 1px 5px; border-radius: 4px; }
+.am-md hr { border: 0; border-top: 1px solid var(--line-2); margin: 12px 0; }
+.am-md img, .am-intro img, .am-panel-body img {
+  display: block; width: auto; max-width: 100%; height: auto; max-height: min(72vh, 760px);
+  object-fit: contain; margin: 10px auto; cursor: zoom-in; border-radius: var(--radius);
+}
+.am-md img:focus-visible, .am-intro img:focus-visible, .am-panel-body img:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 3px;
+}
+.am-md table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.am-md th {
+  text-align: left; font: 11px/1.3 var(--font-mono); color: var(--ink-2); font-weight: 400;
+  padding: 6px 10px; border-bottom: 1px solid var(--line-2);
+}
+.am-md td { padding: 7px 10px; border-bottom: 1px solid var(--line-2); vertical-align: top; }
+.am-md tbody tr:nth-child(even) td { background: var(--fill); }
+.am-table-wrap { overflow-x: auto; }
+.am-code {
+  margin: 0; padding: 12px 14px; background: var(--fill); border: 1px solid var(--line-2);
+  border-radius: var(--radius); overflow-x: auto; font-size: 12.5px; line-height: 1.5;
+}
+
+/* ── 状态徽章 ok / no / warn ──────────────── */
+.am-status { white-space: nowrap; font-weight: 500; }
+.am-status--ok { color: var(--ok); }
+.am-status--no { color: var(--err); }
+.am-status--warn { color: var(--warn); }
+.am-status-icon { display: inline-block; width: 1.1em; font-weight: 700; }
+
+/* ── callout ─────────────────────────────── */
+.am-callout {
+  border: 1px solid var(--line-2); border-left: 3px solid var(--accent); background: var(--accent-bg);
+  padding: 10px 14px; border-radius: var(--radius);
+}
+.am-callout--ok { border-left-color: var(--ok); background: var(--ok-bg); }
+.am-callout--warn { border-left-color: var(--warn); background: var(--warn-bg); }
+.am-callout--err { border-left-color: var(--err); background: var(--err-bg); }
+.am-callout-title { font-weight: 600; margin-bottom: 4px; }
+
+/* ── kv 标题栏格 ─────────────────────────── */
+.am-kv {
+  display: grid; grid-template-columns: repeat(var(--kv-cols, 2), minmax(0, 1fr)); margin: 0;
+  border-top: var(--bw) solid var(--line); border-left: var(--bw) solid var(--line);
+}
+.am-kv-cell { border-right: var(--bw) solid var(--line); border-bottom: var(--bw) solid var(--line); padding: 6px 10px 8px; min-width: 0; }
+.am-kv-cell--wide { grid-column: 1 / -1; }
+.am-kv dt { font: 11px/1.4 var(--font-mono); color: var(--ink-2); }
+.am-kv dd { margin: 2px 0 0; font-size: 14px; font-weight: 500; overflow-wrap: anywhere; }
+.am-kv-cell--wide dd { font-size: 17px; font-weight: 600; }
+html[data-theme="shadcn"] .am-kv { border-color: var(--line); border-radius: var(--radius); overflow: hidden; }
+
+/* ── timeline ────────────────────────────── */
+.am-timeline { list-style: none; margin: 0; padding: 0; }
+.am-timeline--h { display: grid; grid-template-columns: repeat(var(--n, 1), minmax(0, 1fr)); padding-top: 4px; }
+.am-timeline--h li { position: relative; text-align: center; padding: 0 6px; }
+.am-timeline--h li::before {
+  content: ""; position: absolute; top: 31px; left: 0; right: 0; border-top: var(--bw) solid var(--line);
+}
+.am-timeline--h li:first-child::before { left: 50%; }
+.am-timeline--h li:last-child::before { right: 50%; }
+.am-tl-when { display: block; font-size: 15px; font-weight: 500; height: 24px; }
+.am-tl-dot {
+  position: relative; display: block; width: 11px; height: 11px; margin: 2px auto 8px;
+  border: var(--bw) solid var(--line); border-radius: 50%; background: var(--paper);
+}
+.am-tl-item--hi .am-tl-dot { background: var(--accent); border-color: var(--accent); }
+.am-tl-title { display: block; font-size: 12.5px; font-weight: 500; }
+.am-tl-text { display: block; font-size: 12px; color: var(--ink-2); line-height: 1.45; }
+.am-timeline--v li { position: relative; padding: 0 0 14px 22px; }
+.am-timeline--v li::before { content: ""; position: absolute; left: 5px; top: 6px; bottom: -6px; border-left: var(--bw) solid var(--line-2); }
+.am-timeline--v li:last-child::before { display: none; }
+.am-timeline--v .am-tl-dot { position: absolute; left: 0; top: 4px; margin: 0; }
+.am-timeline--v .am-tl-when { display: inline; height: auto; font: 12px var(--font-mono); color: var(--ink-2); margin-right: 8px; }
+.am-timeline--v .am-tl-title { display: inline; font-size: 14px; }
+.am-timeline--v .am-tl-text { margin-top: 2px; }
+
+/* ── annot 句子标注 ──────────────────────── */
+.am-annot + .am-annot { border-top: 1px solid var(--line-2); padding-top: 12px; }
+.am-annot-head { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; font-weight: 600; margin-bottom: 8px; }
+.am-annot-meta { font: 11px var(--font-mono); font-weight: 400; color: var(--ink-2); }
+.am-annot-scroll { overflow-x: auto; }
+.am-annot-line {
+  position: relative; display: inline-block; white-space: pre; font: 14px/1.6 var(--font-mono);
+  padding-bottom: calc(var(--rows, 0) * 17px + 14px);
+}
+.am-annot-line--wrap { display: block; white-space: normal; padding-bottom: 10px; }
+.am-annot-line--wrap .am-seg { white-space: nowrap; }
+.am-seg { position: relative; }
+.am-seg::after {
+  content: ""; position: absolute; left: 1px; right: 1px; top: calc(100% + 1px); height: 5px;
+  border: 1px solid var(--accent); border-top: 0;
+}
+.am-seg-n {
+  position: absolute; left: 0; top: calc(100% + 8px + var(--row, 0) * 17px);
+  font: 11px/16px var(--font-sans); color: var(--accent); white-space: nowrap;
+}
+.am-seg--err { color: var(--err); }
+.am-seg--err::after { border-color: var(--err); }
+.am-seg--err .am-seg-n { color: var(--err); }
+.am-annot-caption { font-size: 12px; color: var(--ink-2); }
+
+/* ── limits 限值条 ───────────────────────── */
+.am-lim + .am-lim { margin-top: 14px; }
+.am-lim-head { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; margin-bottom: 4px; }
+.am-lim-val { font: 12px var(--font-mono); color: var(--accent); white-space: nowrap; }
+.am-lim-track { position: relative; height: 12px; border: 1px solid var(--line-2); background: var(--fill); border-radius: calc(var(--radius) / 2); }
+.am-lim-fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent-bg); border-right: 1px solid var(--accent); }
+.am-lim-mark { position: absolute; top: -4px; bottom: -4px; border-left: 2px solid var(--accent); }
+.am-lim.is-over .am-lim-fill { background: var(--err-bg); border-right-color: var(--err); }
+.am-lim.is-over .am-lim-val { color: var(--err); }
+.am-lim-ticks { position: relative; height: 16px; font: 10px/16px var(--font-mono); color: var(--ink-3); }
+.am-lim-ticks span { position: absolute; transform: translateX(-50%); }
+.am-lim-ticks span:first-child { transform: none; }
+.am-lim-note { font-size: 11px; color: var(--ink-2); margin-left: 6px; }
+
+/* ── tree 结构树 ─────────────────────────── */
+.am-tree { font-size: 13px; }
+.am-tree-root { display: flex; justify-content: center; position: relative; padding-bottom: 18px; }
+.am-tree-root::after { content: ""; position: absolute; bottom: 0; left: 50%; height: 18px; border-left: var(--bw) solid var(--line); }
+.am-tree-root--solo { padding-bottom: 12px; }
+.am-tree-root--solo::after { display: none; }
+.am-tree-box {
+  border: var(--bw) solid var(--line); background: var(--paper); padding: 6px 14px; text-align: center;
+  border-radius: var(--radius); font-weight: 600;
+}
+.am-tree-box small { display: block; font-weight: 400; color: var(--ink-2); font-size: 12px; }
+.am-tree-box--root { background: var(--accent-bg); font-size: 15px; padding: 8px 28px; }
+.am-tree-cols { display: grid; grid-template-columns: repeat(var(--n, 1), minmax(0, 1fr)); }
+.am-tree-col { position: relative; padding: 18px 8px 0; min-width: 0; }
+.am-tree-col::before { content: ""; position: absolute; top: 0; left: 0; right: 0; border-top: var(--bw) solid var(--line); }
+.am-tree-col:first-child::before { left: 50%; }
+.am-tree-col:last-child::before { right: 50%; }
+.am-tree-col::after { content: ""; position: absolute; top: 0; left: 50%; height: 18px; border-left: var(--bw) solid var(--line); }
+.am-tree-list, .am-tree-list ul { list-style: none; margin: 0; padding: 0; }
+.am-tree-col > .am-tree-list { margin: 8px 0 0 14px; }
+.am-tree-list ul { margin-left: 16px; }
+.am-tree-list li { position: relative; padding: 3px 0 3px 18px; }
+.am-tree-list li::before { content: ""; position: absolute; left: 0; top: 0.95em; width: 12px; border-top: 1px solid var(--ink-3); }
+.am-tree-list li::after { content: ""; position: absolute; left: 0; top: 0; bottom: 0; border-left: 1px solid var(--ink-3); }
+.am-tree-list li:last-child::after { bottom: auto; height: 0.95em; }
+.am-tree-tag { font: 11px var(--font-mono); color: var(--ink-3); margin-right: 4px; }
+.am-tree code { font: 12px var(--font-mono); }
+.am-tree-sub { display: block; font-size: 11.5px; color: var(--ink-2); }
+.am-tree-hi > .am-tree-label { color: var(--accent); font-weight: 600; }
+
+/* ── 图（flow / sequence）───────────────── */
+.am-diagram { margin: 0; overflow-x: auto; text-align: center; }
+.am-diagram svg { max-width: 100%; height: auto; font-family: var(--font-sans); }
+.am-diagram text { fill: var(--ink); font-size: 13px; }
+.am-node-shape { fill: var(--paper); stroke: var(--line); stroke-width: var(--bw); }
+.am-node--hi .am-node-shape { fill: var(--accent-bg); stroke: var(--accent); }
+.am-node--hi text { fill: var(--accent); font-weight: 600; }
+.am-edge { fill: none; stroke: var(--ink-2); stroke-width: 1.3; }
+.am-edge--dashed { stroke-dasharray: 5 4; }
+.am-arrow { fill: var(--ink-2); }
+.am-edge-label rect { fill: var(--paper); }
+.am-diagram .am-edge-label text { fill: var(--accent); font-size: 11.5px; }
+.am-cluster { fill: var(--fill); stroke: var(--line-2); stroke-width: 1; stroke-dasharray: 4 3; }
+.am-diagram .am-cluster-label { fill: var(--ink-2); font: 11px var(--font-mono); }
+.am-lifeline { stroke: var(--ink-3); stroke-width: 1; stroke-dasharray: 4 4; }
+.am-actor { fill: var(--paper); stroke: var(--line); stroke-width: var(--bw); }
+.am-note { fill: var(--warn-bg); stroke: var(--warn); stroke-width: 1; }
+.am-diagram .am-step { fill: var(--ink-3); font: 10px var(--font-mono); }
+
+/* ── doc 线性讲解 ────────────────────────── */
+.am-doc { max-width: 1120px; margin: 0 auto; padding: 40px 28px 64px; }
+.am-doc-layout { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 32px; align-items: start; }
+.am-doc-layout--notoc { grid-template-columns: minmax(0, 1fr); max-width: 860px; }
+.am-toc { position: sticky; top: 24px; font-size: 13px; }
+.am-toc a { display: block; color: var(--ink-2); text-decoration: none; padding: 4px 0 4px 10px; border-left: 2px solid var(--line-2); }
+.am-toc a:hover { color: var(--ink); border-left-color: var(--accent); }
+.am-doc-body > .am-panel + .am-panel { margin-top: 20px; }
+
+/* ── 响应式与打印 ─────────────────────────── */
+@media (max-width: 1100px) {
+  .am-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .am-grid > .am-panel { grid-column: auto !important; }
+  .am-grid > .am-panel.am-span-wide { grid-column: 1 / -1 !important; }
+}
+@media (max-width: 760px) {
+  .am-sheet, .am-doc { padding: 56px 12px 24px; }
+  .am-head { padding-right: 0; }
+  .am-grid { grid-template-columns: minmax(0, 1fr); }
+  .am-grid > .am-panel.am-span-wide { grid-column: auto !important; }
+  html[data-theme="blueprint"] .am-frame { padding: 0; border: 0; }
+  html[data-theme="blueprint"] .am-frame::before, html[data-theme="blueprint"] .am-ruler { display: none; }
+  .am-doc-layout { grid-template-columns: minmax(0, 1fr); }
+  .am-toc { position: static; }
+  .am-timeline--h { grid-template-columns: minmax(0, 1fr); }
+  .am-tree-cols { grid-template-columns: minmax(0, 1fr); }
+}
+.am-colophon { text-align: center; padding: 0 0 28px; font: 11px var(--font-mono); color: var(--ink-3); }
+
+@media print {
+  .am-toolbar { display: none; }
+  body { background: var(--paper); }
+  .am-panel { break-inside: avoid; box-shadow: none; }
+}
+.am-panel--bare { border: 0; background: transparent; box-shadow: none; }
+.am-panel--bare > .am-panel-body { padding: 0; }
+.am-panel--bare .am-kv { background: var(--paper); }
+
+/* ── 图片大图预览 ────────────────────────── */
+.am-lightbox[hidden] { display: none; }
+.am-lightbox {
+  position: fixed; inset: 0; z-index: 100; display: grid; place-items: center;
+  padding: clamp(16px, 4vw, 48px); background: rgba(0, 0, 0, 0.78); backdrop-filter: blur(4px);
+}
+.am-lightbox img {
+  display: block; width: auto; max-width: 100%; max-height: 100%; height: auto;
+  object-fit: contain; cursor: zoom-out; box-shadow: 0 12px 48px rgba(0, 0, 0, 0.35);
+}
+.am-lightbox-close {
+  position: absolute; top: 14px; right: 14px; width: 36px; height: 36px; padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.45); border-radius: 50%; background: rgba(0, 0, 0, 0.35);
+  color: #fff; font: 24px/1 var(--font-sans); cursor: pointer;
+}
+.am-lightbox-close:hover { background: rgba(0, 0, 0, 0.6); }
+.am-lightbox-close:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+body.am-lightbox-open { overflow: hidden; }
+
+</style>
+</head>
+<body>
+<div class="am-toolbar">
+<button class="am-btn" type="button" data-am="theme" data-labels="{&quot;blueprint&quot;:&quot;主题：图纸&quot;,&quot;shadcn&quot;:&quot;主题：卡片&quot;}">主题：卡片</button>
+<button class="am-btn" type="button" data-am="mode" data-labels="{&quot;auto&quot;:&quot;明暗：跟随系统&quot;,&quot;light&quot;:&quot;明暗：亮&quot;,&quot;dark&quot;:&quot;明暗：暗&quot;}">明暗：跟随系统</button>
+<button class="am-btn" type="button" data-am="copy" data-done="已复制 ✓">复制源稿</button>
+</div>
+<main class="am-doc">
+<header class="am-head"><h1>TV 与音量键原生事件泄露</h1><p class="am-sub">Build 265 · 现场日志、提交对照与候选修复</p></header>
+<div class="am-doc-layout">
+<nav class="am-toc" aria-label="目录"><a href="#panel-A">A · 现象与证据</a><a href="#panel-B">B · 根因与提交对照</a><a href="#panel-C">C · 候选修复</a><a href="#panel-D">D · 恢复与失败边界</a><a href="#panel-E">E · 文件与日志</a><a href="#panel-F">F · 验证结果与限制</a><a href="#panel-G">G · 组件交付顺序</a></nav><div class="am-doc-body">
+<section class="am-panel" id="panel-A">
+<header class="am-panel-head"><span class="am-panel-id">A</span><h2>现象与证据</h2></header>
+<div class="am-panel-body"><div class="am-md"><p>Build 265 在另一台 Intel Mac 发生按键泄露。
+音量减配置为逗号时，系统音量也减少。
+快速按 TV 键时，输入框出现圆点。
+现场日志记录 macOS 主版本 14、x86_64 和 Xiaomi 设备家族。</p>
+<div class="am-table-wrap"><table>
+<thead>
+<tr>
+<th>观察</th>
+<th>原生按下</th>
+<th>HID 拦截登记</th>
+<th>差值</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>音量减 sys1</td>
+<td>01:11:52.762</td>
+<td>01:11:52.964</td>
+<td>约 200 ms</td>
+</tr>
+<tr>
+<td>TV key50</td>
+<td>01:14:17.828</td>
+<td>01:14:18.075</td>
+<td>约 246 ms</td>
+</tr>
+</tbody></table></div>
+<p>日志来自用户提供的会话 40E9F781。
+相关字段为 source_correlation=timing_only。
+时间相关不能替代同次事件的跨接口唯一标识。
+日志另有 result=already_passed_through。</p>
+<p>独占打开返回 0xe00002c1，即 kIOReturnNotPrivileged。
+随后 App 使用 monitored 模式。
+输入监控和辅助功能启动记录均为 true。
+此返回码不能直接解释为用户没有勾选权限。
+过滤器停用记录集中在重建周围。
+现有证据未证明它导致上述两次泄露。</p>
+</div></div>
+</section>
+<section class="am-panel" id="panel-B">
+<header class="am-panel-head"><span class="am-panel-id">B</span><h2>根因与提交对照</h2></header>
+<div class="am-panel-body"><div class="am-md"><p>系统原生事件可以先于主线程的 HID 报告到达。
+现有过滤器只在 HID 登记后拦截。
+因此，它不能追回已放行的按下。
+TV 原先还晚于报告日志和配置回调才登记。</p>
+<div class="am-table-wrap"><table>
+<thead>
+<tr>
+<th>提交</th>
+<th>改动与结论</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>#731，8e035785，合并 8483c6ed</td>
+<td>tap 改为专用线程，HID 仍在主线程；是主要回归候选</td>
+</tr>
+<tr>
+<td>#744，7a6fe541</td>
+<td>处理原生事件晚到，未覆盖首次原生按下先到</td>
+</tr>
+<tr>
+<td>#760，78a51763</td>
+<td>处理原生松开先到，未覆盖首次泄露</td>
+</tr>
+<tr>
+<td>#763，c1f6b1d2</td>
+<td>放行已泄露按下的重复和松开，防止持续调音量</td>
+</tr>
+<tr>
+<td>#764，48b87198</td>
+<td>固定私有组件版本，没有改变上述时序</td>
+</tr>
+</tbody></table></div>
+<p>七版原始过滤器共完成 56 个进程内观察。
+v1.9.21 至最新主线均会放行登记前的原生按下。
+这说明算法缺口早已存在。</p>
+<p>受控实验将主线程处理延后 250 ms。
+同线程安排先登记，分线程安排先放行。
+TV 和音量的四项观察均符合该机制。
+缺少现场前后版本 A/B，不能认定 #731 是唯一原因。
+不可将 tap 移回主线程，避免恢复系统输入停摆风险。</p>
+</div></div>
+</section>
+<section class="am-panel" id="panel-C">
+<header class="am-panel-head"><span class="am-panel-id">C</span><h2>候选修复</h2></header>
+<div class="am-panel-body"><div class="am-md"><p>接受遥控器报告前，先设置设备级 UserKeyMapping。
+映射只作用于精确 VID/PID 匹配的遥控器服务。
+普通电脑键盘不在匹配范围内。
+原始 HID 报告继续驱动用户配置的动作。</p>
+<div class="am-table-wrap"><table>
+<thead>
+<tr>
+<th>设备家族</th>
+<th>接管范围</th>
+<th>语音边界</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Xiaomi</td>
+<td>会产生原生事件的全部普通键，包括 TV、音量、方向和电源</td>
+<td>保留既有 Fn 映射</td>
+</tr>
+<tr>
+<td>Siri Remote</td>
+<td>已批准普通控件的标准别名和实际输入元素</td>
+<td>排除 Siri、语音和触摸输入</td>
+</tr>
+<tr>
+<td>Chromecast</td>
+<td>普通键的标准别名和实际输入元素</td>
+<td>排除独立语音入口</td>
+</tr>
+</tbody></table></div>
+<p>手机、手表、小程序和 Mac Remote 不通过此物理 HID 双路径。
+它们保留现有网络协议与动作语义。
+Windows 不使用本次 macOS 映射实现。</p>
+</div>
+<figure class="am-diagram am-flow"><svg viewBox="0 0 276 540" width="276" height="540" role="img" aria-label="流程图：匹配设备、保存恢复记录、写入普通键映射、回读核对、接受设备、回滚并报告失败、执行配置动作" xmlns="http://www.w3.org/2000/svg"><defs><marker id="am1-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="am-arrow" d="M0,0 L10,5 L0,10 z"/></marker></defs><g></g><g><g data-step="0"><path class="am-edge" d="M141.3,49 L141.3,65 Q141.3,81 141.3,97 L141.3,113" marker-end="url(#am1-arrow)"/><g class="am-edge-label"><rect x="96" y="72" width="90.5" height="18" rx="3"/><text x="141.3" y="81" text-anchor="middle" dominant-baseline="central">系统启动及服务</text></g></g><g data-step="1"><path class="am-edge" d="M141.3,148 L141.3,164 Q141.3,180 141.3,196 L141.3,212" marker-end="url(#am1-arrow)"/><g class="am-edge-label"><rect x="113.3" y="171" width="56" height="18" rx="3"/><text x="141.3" y="180" text-anchor="middle" dominant-baseline="central">保存成功</text></g></g><g data-step="2"><path class="am-edge" d="M141.3,247 L141.3,258.5 Q141.3,270 141.3,281.5 L141.3,293" marker-end="url(#am1-arrow)"/></g><g data-step="3"><path class="am-edge" d="M165.2,328 L187.1,344 Q209,360 209,376 L209,392" marker-end="url(#am1-arrow)"/><g class="am-edge-label"><rect x="192.5" y="351" width="33" height="18" rx="3"/><text x="209" y="360" text-anchor="middle" dominant-baseline="central">一致</text></g></g><g data-step="4"><path class="am-edge" d="M117.3,328 L95.4,344 Q73.5,360 73.5,376 L73.5,392" marker-end="url(#am1-arrow)"/><g class="am-edge-label"><rect x="51.3" y="351" width="44.5" height="18" rx="3"/><text x="73.5" y="360" text-anchor="middle" dominant-baseline="central">不一致</text></g></g><g data-step="5"><path class="am-edge" d="M209,427 L209,443 Q209,459 209,475 L209,491" marker-end="url(#am1-arrow)"/><g class="am-edge-label"><rect x="166.9" y="450" width="84.3" height="18" rx="3"/><text x="209" y="459" text-anchor="middle" dominant-baseline="central">原始 HID 报告</text></g></g></g><g><g class="am-node am-node--rect" data-key="匹配设备" data-step="0"><rect class="am-node-shape" x="101.3" y="14" width="80" height="35" rx="3"/><text x="141.3" y="31.5" text-anchor="middle" dominant-baseline="central">匹配设备</text></g><g class="am-node am-node--rect" data-key="保存恢复记录" data-step="0"><rect class="am-node-shape" x="88.3" y="113" width="106" height="35" rx="3"/><text x="141.3" y="130.5" text-anchor="middle" dominant-baseline="central">保存恢复记录</text></g><g class="am-node am-node--rect" data-key="写入普通键映射" data-step="1"><rect class="am-node-shape" x="81.8" y="212" width="119" height="35" rx="3"/><text x="141.3" y="229.5" text-anchor="middle" dominant-baseline="central">写入普通键映射</text></g><g class="am-node am-node--rect" data-key="回读核对" data-step="2"><rect class="am-node-shape" x="101.3" y="293" width="80" height="35" rx="3"/><text x="141.3" y="310.5" text-anchor="middle" dominant-baseline="central">回读核对</text></g><g class="am-node am-node--rect" data-key="接受设备" data-step="3"><rect class="am-node-shape" x="169" y="392" width="80" height="35" rx="3"/><text x="209" y="409.5" text-anchor="middle" dominant-baseline="central">接受设备</text></g><g class="am-node am-node--rect" data-key="回滚并报告失败" data-step="4"><rect class="am-node-shape" x="14" y="392" width="119" height="35" rx="3"/><text x="73.5" y="409.5" text-anchor="middle" dominant-baseline="central">回滚并报告失败</text></g><g class="am-node am-node--rect" data-key="执行配置动作" data-step="5"><rect class="am-node-shape" x="156" y="491" width="106" height="35" rx="3"/><text x="209" y="508.5" text-anchor="middle" dominant-baseline="central">执行配置动作</text></g></g></svg></figure>
+<div class="am-md"><p>每次激活都重新枚举并核对服务。
+不复用其他设备的成功状态。
+源头映射生效时，不再登记普通键的 tap 拦截次数。
+否则，残留次数可能误吞普通键盘的同码输入。
+默认左右动作由 App 执行，不能等待已被屏蔽的系统动作。
+TV 在旧过滤路径仍提前登记。</p>
+</div></div>
+</section>
+<section class="am-panel" id="panel-D">
+<header class="am-panel-head"><span class="am-panel-id">D</span><h2>恢复与失败边界</h2></header>
+<div class="am-panel-body"><div class="am-md"><p>修改系统服务前，先保存普通键的原始映射。
+三个设备家族使用独立的持久恢复记录。
+记录使用系统 boot session 和服务 Registry ID。
+不保存硬件地址、序列号或稳定硬件身份。
+新系统启动不能使用旧服务的恢复记录。</p>
+<p>退出 App、关闭自定义映射或撤销权限时恢复。
+崩溃后，下次启动可恢复同次系统启动内的记录。
+恢复只替换本功能仍持有的零映射。
+外部新改的映射和 Fn 映射均保留。
+电源普通键由本功能恢复，Fn 映射器不再覆盖它。</p>
+<p>旧三键恢复记录不能误认新增按键的外部零映射。
+恢复失败时保留记录，供后续重试。
+服务已消失时保留记录，不套用到另一个服务。</p>
+<p>写入失败或回读不一致时，回滚本次已尝试的服务。
+记录不可用、保存失败或服务身份不明时，拒绝修改。
+私有适配器的重新准备失败会取消已按住状态。
+后续普通键报告不会继续执行配置动作。
+恢复条件满足后，下次成功准备可以重新接管。</p>
+<p>早期内存恢复和 locationID 恢复原型已撤回。
+原型保存在仓库外，不进入产品。</p>
+</div></div>
+</section>
+<section class="am-panel" id="panel-E">
+<header class="am-panel-head"><span class="am-panel-id">E</span><h2>文件与日志</h2></header>
+<div class="am-panel-body"><div class="am-md"><div class="am-table-wrap"><table>
+<thead>
+<tr>
+<th>文件</th>
+<th>必要变化</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>RemoteNativeKeyMapper.swift</td>
+<td>普通键源头映射、分家族恢复、回读及回滚</td>
+</tr>
+<tr>
+<td>RemoteVoiceFunctionMapper.swift</td>
+<td>精确服务枚举；保留独立电源映射所有权</td>
+</tr>
+<tr>
+<td>HIDRemoteMonitor.swift</td>
+<td>激活前核对；停止留下普通键拦截次数；执行默认左右动作</td>
+</tr>
+<tr>
+<td>BridgeAppModel.swift</td>
+<td>接入三类硬件的准备、退出、关闭和权限恢复</td>
+</tr>
+<tr>
+<td>两份 FeatureIntegration.swift</td>
+<td>将源头映射准备和恢复回调传到私有组件</td>
+</tr>
+<tr>
+<td>Tests 下两份回归测试</td>
+<td>快速按、默认动作、普通键盘、恢复和失败路径</td>
+</tr>
+<tr>
+<td>Testing/HIDIntermittentButtonDiagnostics.md</td>
+<td>补充全部硬件的源头映射及恢复验收</td>
+</tr>
+</tbody></table></div>
+<p>新增日志为 HID NATIVE MAPPING。
+family 区分三个设备家族。
+phase 区分 prepare 和 restore。
+reason 区分记录、写入、回读及服务不可用。</p>
+<p>只记录阶段、结果和服务计数，不记录映射正文或设备身份。
+result=verified 只表示系统属性回读一致。
+native_delivery=unobserved 明确标记原生投递尚未实测。
+苹果普通键日志区分 source_mapped 和 armed，避免声称未执行的登记。</p>
+</div></div>
+</section>
+<section class="am-panel" id="panel-F">
+<header class="am-panel-head"><span class="am-panel-id">F</span><h2>验证结果与限制</h2></header>
+<div class="am-panel-body"><div class="am-md"><p>公开完整测试：1,069 项通过，覆盖 79 个测试套件。
+私有集成测试：1,136 项通过，覆盖 87 个测试套件。
+Siri Remote 组件：107 项通过。
+Chromecast 组件：117 项通过。
+集成测试中的发布脚本用例受父进程私有开关影响失败。
+该用例在公开完整测试中已通过。</p>
+<p>私有集成复跑只跳过此发布脚本用例，没有改动测试预期。
+公开宿主双架构 Release 构建均通过。
+私有集成双架构 Release 构建均通过。
+Intel 另以 RELEASE_VARIANT=intel 验证 macOS 13 编译目标。
+工程自检：48 项通过。治理检查通过。</p>
+<p>所有本地 SwiftPM 命令均带 --disable-keychain。</p>
+<p>回归实验暂时恢复旧拦截登记行为。
+原三键的六组普通键盘保护用例失败，共 164 项断言失败。
+恢复保护后，六组全部通过。
+当前保护矩阵扩大到小米十二键和两种独占状态。</p>
+<p>实验代码已恢复，没有改动系统设备映射。</p>
+<p>Chromecast 另执行失败取消的反证实验。
+撤回失败时的取消逻辑后，新回归用例出现两项断言失败。
+恢复候选代码后，同一用例通过。</p>
+<p>系统属性回读不能证明真实原生事件已经消失。
+模拟测试也不能证明原始 HID 报告仍完整到达。
+本次没有修改本机系统设备映射或已安装 App。</p>
+<p>反馈设备仍须执行测试手册用例 5。
+慢按、快按、长按和松开都须检查。
+任何额外圆点、系统音量变化或持续连发均判失败。
+普通键盘、默认音量、Fn 语音和多设备隔离也须通过。
+因此，当前为候选修复，不能声明真机验收完成。</p>
+<p>本次没有打包或替换 Draft 安装包。
+Build 265 不含此候选改动。</p>
+</div></div>
+</section>
+<section class="am-panel" id="panel-G">
+<header class="am-panel-head"><span class="am-panel-id">G</span><h2>组件交付顺序</h2></header>
+<div class="am-panel-body"><div class="am-md"><p>本次宿主新增回调需要配套的新私有组件。
+旧私有 Tag 2.3.5 不含此接口。
+私有修复须先单独交付，再通过独立版本 PR 发布新 Tag。
+宿主依赖升级使用独立 PR，不能覆盖旧 Tag。
+未完成该顺序前，宿主候选不得作为正式发布源码。</p>
+</div></div>
+</section>
+</div>
+</div>
+</main>
+<footer class="am-colophon">Generated by Answer me with HTML 0.4.6 · 2026-10-26 19:33</footer>
+<textarea id="am-source" hidden readonly aria-hidden="true">---
+template: doc
+theme: shadcn
+title: TV 与音量键原生事件泄露
+subtitle: Build 265 · 现场日志、提交对照与候选修复
+lang: zh
+---
+
+## 现象与证据
+
+Build 265 在另一台 Intel Mac 发生按键泄露。
+音量减配置为逗号时，系统音量也减少。
+快速按 TV 键时，输入框出现圆点。
+现场日志记录 macOS 主版本 14、x86_64 和 Xiaomi 设备家族。
+
+| 观察 | 原生按下 | HID 拦截登记 | 差值 |
+| --- | --- | --- | --- |
+| 音量减 sys1 | 01:11:52.762 | 01:11:52.964 | 约 200 ms |
+| TV key50 | 01:14:17.828 | 01:14:18.075 | 约 246 ms |
+
+日志来自用户提供的会话 40E9F781。
+相关字段为 source_correlation=timing_only。
+时间相关不能替代同次事件的跨接口唯一标识。
+日志另有 result=already_passed_through。
+
+独占打开返回 0xe00002c1，即 kIOReturnNotPrivileged。
+随后 App 使用 monitored 模式。
+输入监控和辅助功能启动记录均为 true。
+此返回码不能直接解释为用户没有勾选权限。
+过滤器停用记录集中在重建周围。
+现有证据未证明它导致上述两次泄露。
+
+## 根因与提交对照
+
+系统原生事件可以先于主线程的 HID 报告到达。
+现有过滤器只在 HID 登记后拦截。
+因此，它不能追回已放行的按下。
+TV 原先还晚于报告日志和配置回调才登记。
+
+| 提交 | 改动与结论 |
+| --- | --- |
+| #731，8e035785，合并 8483c6ed | tap 改为专用线程，HID 仍在主线程；是主要回归候选 |
+| #744，7a6fe541 | 处理原生事件晚到，未覆盖首次原生按下先到 |
+| #760，78a51763 | 处理原生松开先到，未覆盖首次泄露 |
+| #763，c1f6b1d2 | 放行已泄露按下的重复和松开，防止持续调音量 |
+| #764，48b87198 | 固定私有组件版本，没有改变上述时序 |
+
+七版原始过滤器共完成 56 个进程内观察。
+v1.9.21 至最新主线均会放行登记前的原生按下。
+这说明算法缺口早已存在。
+
+受控实验将主线程处理延后 250 ms。
+同线程安排先登记，分线程安排先放行。
+TV 和音量的四项观察均符合该机制。
+缺少现场前后版本 A/B，不能认定 #731 是唯一原因。
+不可将 tap 移回主线程，避免恢复系统输入停摆风险。
+
+## 候选修复
+
+接受遥控器报告前，先设置设备级 UserKeyMapping。
+映射只作用于精确 VID/PID 匹配的遥控器服务。
+普通电脑键盘不在匹配范围内。
+原始 HID 报告继续驱动用户配置的动作。
+
+| 设备家族 | 接管范围 | 语音边界 |
+| --- | --- | --- |
+| Xiaomi | 会产生原生事件的全部普通键，包括 TV、音量、方向和电源 | 保留既有 Fn 映射 |
+| Siri Remote | 已批准普通控件的标准别名和实际输入元素 | 排除 Siri、语音和触摸输入 |
+| Chromecast | 普通键的标准别名和实际输入元素 | 排除独立语音入口 |
+
+手机、手表、小程序和 Mac Remote 不通过此物理 HID 双路径。
+它们保留现有网络协议与动作语义。
+Windows 不使用本次 macOS 映射实现。
+
+```flow
+匹配设备 -&gt; 保存恢复记录: 系统启动及服务
+保存恢复记录 -&gt; 写入普通键映射: 保存成功
+写入普通键映射 -&gt; 回读核对
+回读核对 -&gt; 接受设备: 一致
+回读核对 -&gt; 回滚并报告失败: 不一致
+接受设备 -&gt; 执行配置动作: 原始 HID 报告
+```
+
+每次激活都重新枚举并核对服务。
+不复用其他设备的成功状态。
+源头映射生效时，不再登记普通键的 tap 拦截次数。
+否则，残留次数可能误吞普通键盘的同码输入。
+默认左右动作由 App 执行，不能等待已被屏蔽的系统动作。
+TV 在旧过滤路径仍提前登记。
+
+## 恢复与失败边界
+
+修改系统服务前，先保存普通键的原始映射。
+三个设备家族使用独立的持久恢复记录。
+记录使用系统 boot session 和服务 Registry ID。
+不保存硬件地址、序列号或稳定硬件身份。
+新系统启动不能使用旧服务的恢复记录。
+
+退出 App、关闭自定义映射或撤销权限时恢复。
+崩溃后，下次启动可恢复同次系统启动内的记录。
+恢复只替换本功能仍持有的零映射。
+外部新改的映射和 Fn 映射均保留。
+电源普通键由本功能恢复，Fn 映射器不再覆盖它。
+
+旧三键恢复记录不能误认新增按键的外部零映射。
+恢复失败时保留记录，供后续重试。
+服务已消失时保留记录，不套用到另一个服务。
+
+写入失败或回读不一致时，回滚本次已尝试的服务。
+记录不可用、保存失败或服务身份不明时，拒绝修改。
+私有适配器的重新准备失败会取消已按住状态。
+后续普通键报告不会继续执行配置动作。
+恢复条件满足后，下次成功准备可以重新接管。
+
+早期内存恢复和 locationID 恢复原型已撤回。
+原型保存在仓库外，不进入产品。
+
+## 文件与日志
+
+| 文件 | 必要变化 |
+| --- | --- |
+| RemoteNativeKeyMapper.swift | 普通键源头映射、分家族恢复、回读及回滚 |
+| RemoteVoiceFunctionMapper.swift | 精确服务枚举；保留独立电源映射所有权 |
+| HIDRemoteMonitor.swift | 激活前核对；停止留下普通键拦截次数；执行默认左右动作 |
+| BridgeAppModel.swift | 接入三类硬件的准备、退出、关闭和权限恢复 |
+| 两份 FeatureIntegration.swift | 将源头映射准备和恢复回调传到私有组件 |
+| Tests 下两份回归测试 | 快速按、默认动作、普通键盘、恢复和失败路径 |
+| Testing/HIDIntermittentButtonDiagnostics.md | 补充全部硬件的源头映射及恢复验收 |
+
+新增日志为 HID NATIVE MAPPING。
+family 区分三个设备家族。
+phase 区分 prepare 和 restore。
+reason 区分记录、写入、回读及服务不可用。
+
+只记录阶段、结果和服务计数，不记录映射正文或设备身份。
+result=verified 只表示系统属性回读一致。
+native_delivery=unobserved 明确标记原生投递尚未实测。
+苹果普通键日志区分 source_mapped 和 armed，避免声称未执行的登记。
+
+## 验证结果与限制
+
+公开完整测试：1,069 项通过，覆盖 79 个测试套件。
+私有集成测试：1,136 项通过，覆盖 87 个测试套件。
+Siri Remote 组件：107 项通过。
+Chromecast 组件：117 项通过。
+集成测试中的发布脚本用例受父进程私有开关影响失败。
+该用例在公开完整测试中已通过。
+
+私有集成复跑只跳过此发布脚本用例，没有改动测试预期。
+公开宿主双架构 Release 构建均通过。
+私有集成双架构 Release 构建均通过。
+Intel 另以 RELEASE_VARIANT=intel 验证 macOS 13 编译目标。
+工程自检：48 项通过。治理检查通过。
+
+所有本地 SwiftPM 命令均带 --disable-keychain。
+
+回归实验暂时恢复旧拦截登记行为。
+原三键的六组普通键盘保护用例失败，共 164 项断言失败。
+恢复保护后，六组全部通过。
+当前保护矩阵扩大到小米十二键和两种独占状态。
+
+实验代码已恢复，没有改动系统设备映射。
+
+Chromecast 另执行失败取消的反证实验。
+撤回失败时的取消逻辑后，新回归用例出现两项断言失败。
+恢复候选代码后，同一用例通过。
+
+系统属性回读不能证明真实原生事件已经消失。
+模拟测试也不能证明原始 HID 报告仍完整到达。
+本次没有修改本机系统设备映射或已安装 App。
+
+反馈设备仍须执行测试手册用例 5。
+慢按、快按、长按和松开都须检查。
+任何额外圆点、系统音量变化或持续连发均判失败。
+普通键盘、默认音量、Fn 语音和多设备隔离也须通过。
+因此，当前为候选修复，不能声明真机验收完成。
+
+本次没有打包或替换 Draft 安装包。
+Build 265 不含此候选改动。
+
+## 组件交付顺序
+
+本次宿主新增回调需要配套的新私有组件。
+旧私有 Tag 2.3.5 不含此接口。
+私有修复须先单独交付，再通过独立版本 PR 发布新 Tag。
+宿主依赖升级使用独立 PR，不能覆盖旧 Tag。
+未完成该顺序前，宿主候选不得作为正式发布源码。
+</textarea>
+<script>
+(() => {
+  const root = document.documentElement;
+  const cycle = (list, cur) => list[(list.indexOf(cur) + 1) % list.length];
+  const label = (btn, value) => {
+    const map = JSON.parse(btn.dataset.labels || '{}');
+    btn.textContent = map[value] || value;
+  };
+  const bind = (name, attr, values) => {
+    const btn = document.querySelector(`[data-am="${name}"]`);
+    if (!btn) return;
+    label(btn, root.getAttribute(attr));
+    btn.addEventListener('click', () => {
+      const next = cycle(values, root.getAttribute(attr));
+      root.setAttribute(attr, next);
+      label(btn, next);
+    });
+  };
+  bind('theme', 'data-theme', ['blueprint', 'shadcn']);
+  bind('mode', 'data-mode', ['auto', 'light', 'dark']);
+
+  const copyBtn = document.querySelector('[data-am="copy"]');
+  copyBtn?.addEventListener('click', async () => {
+    const nodes = document.querySelectorAll('#am-source');
+    const text = nodes[nodes.length - 1]?.value ?? '';
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const ta = Object.assign(document.createElement('textarea'), { value: text });
+      document.body.append(ta);
+      ta.select();
+      document.execCommand('copy');
+      ta.remove();
+    }
+    const original = copyBtn.textContent;
+    copyBtn.textContent = copyBtn.dataset.done;
+    setTimeout(() => { copyBtn.textContent = original; }, 1400);
+  });
+
+  // Markdown / HTML 中的图片按内容区和视口缩放；点击后在遮罩层中查看大图。
+  const images = [...document.querySelectorAll('.am-md img, .am-intro img, .am-panel-body img[src]')];
+  if (images.length && document.body) {
+    const lang = (root.getAttribute('lang') || '').toLowerCase();
+    const closeLabel = lang.startsWith('zh') ? '关闭大图' : lang.startsWith('ja') ? '大きな画像を閉じる' : 'Close image';
+    const openLabel = lang.startsWith('zh') ? '点击查看大图' : lang.startsWith('ja') ? 'クリックして拡大表示' : 'Open image';
+    const labelSeparator = lang.startsWith('zh') ? '，' : ': ';
+    const lightbox = document.createElement('div');
+    lightbox.className = 'am-lightbox';
+    lightbox.hidden = true;
+    lightbox.setAttribute('role', 'dialog');
+    lightbox.setAttribute('aria-modal', 'true');
+    lightbox.setAttribute('aria-label', closeLabel);
+    lightbox.innerHTML = '<button class="am-lightbox-close" type="button" aria-label="' + closeLabel + '">×</button><img alt="">';
+    document.body.append(lightbox);
+    const large = lightbox.querySelector('img');
+    const close = lightbox.querySelector('.am-lightbox-close');
+    let active = null;
+
+    const hide = () => {
+      if (lightbox.hidden) return;
+      lightbox.hidden = true;
+      document.body.classList.remove('am-lightbox-open');
+      active?.focus();
+      active = null;
+    };
+    const show = (image) => {
+      active = image;
+      large.src = image.currentSrc || image.src;
+      large.alt = image.alt || '';
+      lightbox.hidden = false;
+      document.body.classList.add('am-lightbox-open');
+      close.focus();
+    };
+
+    for (const image of images) {
+      image.loading ||= 'lazy';
+      image.decoding ||= 'async';
+      image.tabIndex = 0;
+      image.setAttribute('role', 'button');
+      image.setAttribute('aria-label', image.alt ? `${image.alt}${labelSeparator}${openLabel}` : openLabel);
+      image.addEventListener('click', (event) => {
+        event.preventDefault();
+        show(image);
+      });
+      image.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        show(image);
+      });
+    }
+    close.addEventListener('click', hide);
+    lightbox.addEventListener('click', (event) => {
+      if (event.target === lightbox || event.target === large) hide();
+    });
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') hide();
+    });
+  }
+})();
+</script>
+</body>
+</html>
