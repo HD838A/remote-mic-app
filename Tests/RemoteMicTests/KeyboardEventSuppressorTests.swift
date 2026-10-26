@@ -244,7 +244,7 @@ struct KeyboardEventSuppressorTests {
         #expect(!suppressor.handle(type: up.type, event: up))
     }
 
-    @Test(arguments: [RemoteButton.volumeUp, .volumeDown, .tv], [false, true])
+    @Test(arguments: RemoteButton.xiaomiCases, [false, true])
     func sourceNeutralizedKeysDoNotLeaveCreditsThatConsumePhysicalKeyboardInput(
         _ button: RemoteButton, _ disconnectWhileHeld: Bool
     ) throws {
@@ -289,6 +289,30 @@ struct KeyboardEventSuppressorTests {
             let up = try nativeEvent(native, down: false)
             #expect(!suppressor.handle(type: up.type, event: up))
         }
+    }
+
+    @Test(arguments: [RemoteButton.left, .right])
+    func sourceIsolatedDefaultArrowsAreExecutedInsteadOfWaitingForNativePassthrough(_ button: RemoteButton) throws {
+        let suite = "KeyboardEventSuppressorTests.defaultArrows.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let settings = AppSettings(defaults: defaults)
+        settings.customMappingEnabled = true
+        settings.setAction(button == .left ? .arrowLeft : .arrowRight, for: button)
+        settings.setAction(.disabled, for: button, trigger: .doubleClick)
+        settings.setAction(.disabled, for: button, trigger: .longPress)
+        var performed = 0
+        let monitor = HIDRemoteMonitor(
+            settings: settings, ownsEventSuppressor: false, runtimePermissions: { true },
+            actionPerformer: { _, _, _ in performed += 1; return true },
+            frontmostBundleIdentifier: { PresetApplication.safari.bundleIdentifier },
+            diagnosticLogger: { _ in }, prepareNativeKeys: { true }
+        )
+        #expect(monitor.connectSimulatedDevice(fingerprint: "mapped", profileID: settings.selectedRemoteProfileID, isSeized: false))
+        monitor.handleSimulatedReport(reportID: 1, data: Data([UInt8(button.hidUsage), 0, 0, 0, 0, 0]))
+        monitor.handleSimulatedReport(reportID: 1, data: Data(repeating: 0, count: 6))
+        #expect(performed == 1)
+        monitor.disconnectSimulatedDevice()
     }
 
     @Test(arguments: [Int32(0), Int32(1)])

@@ -6,7 +6,7 @@ import Testing
 struct RemoteNativeKeyMapperTests {
     private let unrelated = HIDUsageMapping(source: 0x0000_0007_0000_0004, destination: 5)
 
-    @Test func neutralizesOnlyNativeTVAndVolumeBeforeAnyReportAndIsIdempotent() throws {
+    @Test func neutralizesOrdinaryRemoteKeysBeforeAnyReportAndIsIdempotent() throws {
         let store = try testDefaults()
         defer { store.cleanup() }
         let defaults = store.defaults
@@ -17,11 +17,11 @@ struct RemoteNativeKeyMapperTests {
             serviceProvider: { [device.service] }, defaults: defaults, bootSession: "boot-a"
         )
         #expect(mapper.prepare())
-        #expect(device.mappings == original + RemoteNativeKeyMapper.mappings)
+        #expect(device.mappings == [unrelated, RemoteVoiceFunctionMappingPolicy.remoteVoiceKey] + RemoteNativeKeyMapper.mappings.sorted { $0.source < $1.source })
         #expect(mapper.prepare())
         #expect(device.writes == 1)
         mapper.restore()
-        #expect(device.mappings == original)
+        #expect(device.mappings.sorted { $0.source < $1.source } == original.sorted { $0.source < $1.source })
     }
 
     @Test func crashRecoveryRestoresOriginalNativeMappingsAndPreservesExternalChanges() throws {
@@ -169,7 +169,7 @@ struct RemoteNativeKeyMapperTests {
         let next = NativeServiceBox(id: 2, mappings: [unrelated])
         targets = [next.service]
         #expect(mapper.prepare())
-        #expect(next.mappings == [unrelated] + RemoteNativeKeyMapper.mappings)
+        #expect(next.mappings == [unrelated] + RemoteNativeKeyMapper.mappings.sorted { $0.source < $1.source })
         mapper.restore()
         #expect(next.mappings == [unrelated])
     }
@@ -237,6 +237,91 @@ struct RemoteNativeKeyMapperTests {
         monitor.disconnectSimulatedDevice()
         mapper.restore()
         #expect(next.mappings.isEmpty)
+    }
+
+    @Test func addingNewCollectionSourcesPreservesAnOriginalZeroMapping() throws {
+        let store = try testDefaults()
+        defer { store.cleanup() }
+        let source = UInt64(0x0000_000c_0000_00e9)
+        let external = HIDUsageMapping(source: source, destination: 0)
+        let device = NativeServiceBox(id: 1, mappings: [external, unrelated])
+        let mapper = RemoteNativeKeyMapper(
+            mappings: [], recoveryKey: "test.siri", serviceProvider: { [device.service] },
+            defaults: store.defaults, bootSession: "boot-a"
+        )
+        #expect(mapper.prepare(additionalSources: [0x0000_000c_0000_0060]))
+        #expect(mapper.prepare(additionalSources: [source]))
+        mapper.restore()
+        #expect(device.mappings == [unrelated, external])
+    }
+
+    @Test func hardwareFamiliesHaveIndependentRecoveryRecords() throws {
+        let store = try testDefaults()
+        defer { store.cleanup() }
+        let source = UInt64(0x0000_000c_0000_00ea)
+        let siri = NativeServiceBox(id: 1, mappings: [unrelated])
+        let chromecast = NativeServiceBox(id: 2, mappings: [])
+        let first = RemoteNativeKeyMapper(
+            mappings: [], recoveryKey: "test.siri", serviceProvider: { [siri.service] },
+            defaults: store.defaults, bootSession: "boot-a"
+        )
+        let second = RemoteNativeKeyMapper(
+            mappings: [], recoveryKey: "test.chromecast", serviceProvider: { [chromecast.service] },
+            defaults: store.defaults, bootSession: "boot-a"
+        )
+        #expect(first.prepare(additionalSources: [source]))
+        #expect(second.prepare(additionalSources: [source]))
+        first.restore()
+        #expect(!first.isPrepared)
+        #expect(second.isPrepared)
+        #expect(siri.mappings == [unrelated])
+        #expect(chromecast.mappings == [HIDUsageMapping(source: source, destination: 0)])
+        // A restarted owner restores the saved consumer mappings without knowing
+        // which HID collection appeared before the crash.
+        RemoteNativeKeyMapper(
+            mappings: [], recoveryKey: "test.chromecast", serviceProvider: { [chromecast.service] },
+            defaults: store.defaults, bootSession: "boot-a"
+        ).restore()
+        #expect(chromecast.mappings.isEmpty)
+    }
+
+    @Test func fnMappingCannotReplaceOrRestoreOverNativePowerOwnership() throws {
+        let store = try testDefaults()
+        defer { store.cleanup() }
+        let originalPower = HIDUsageMapping(source: 0x0000_0007_0000_0066, destination: 0x0000_0007_0000_006e)
+        let device = NativeServiceBox(id: 1, mappings: [unrelated, originalPower])
+        let native = RemoteNativeKeyMapper(serviceProvider: { [device.service] }, defaults: store.defaults, bootSession: "boot-a")
+        let voice = RemoteVoiceFunctionMapper(serviceProvider: { [device.service] })
+        #expect(voice.apply(preservePowerKeyMapping: true))
+        #expect(device.mappings.contains(originalPower))
+        #expect(native.prepare())
+        let blockedPower = HIDUsageMapping(source: originalPower.source, destination: 0)
+        #expect(device.mappings.contains(blockedPower))
+        #expect(voice.apply(neutralizeVoiceKey: true, preservePowerKeyMapping: true))
+        #expect(device.mappings.contains(blockedPower))
+        voice.restore()
+        #expect(device.mappings.contains(blockedPower))
+        native.restore()
+        #expect(device.mappings == [unrelated, originalPower])
+    }
+
+    @Test func expandingALegacyRecordDoesNotClaimPreviouslyUnmanagedZeroMappings() throws {
+        struct LegacyRecord: Encodable {
+            let bootSession: String
+            let originals: [UInt64: [HIDUsageMapping]]
+        }
+        let store = try testDefaults()
+        defer { store.cleanup() }
+        let tv = HIDUsageMapping(source: 0x0000_0007_0000_0035, destination: 8)
+        let external = HIDUsageMapping(source: 0x0000_0007_0000_0050, destination: 0)
+        let data = try JSONEncoder().encode(LegacyRecord(bootSession: "boot-a", originals: [1: [tv]]))
+        store.defaults.set(data, forKey: "sayall.native-key-mapping-recovery.v1")
+        let oldSources: [UInt64] = [0x0000_0007_0000_0035, 0x0000_0007_0000_0080, 0x0000_0007_0000_0081]
+        let device = NativeServiceBox(id: 1, mappings: oldSources.map { HIDUsageMapping(source: $0, destination: 0) } + [external])
+        let mapper = RemoteNativeKeyMapper(serviceProvider: { [device.service] }, defaults: store.defaults, bootSession: "boot-a")
+        #expect(mapper.prepare())
+        mapper.restore()
+        #expect(device.mappings == [tv, external])
     }
 
     private func testDefaults() throws -> (defaults: UserDefaults, cleanup: () -> Void) {

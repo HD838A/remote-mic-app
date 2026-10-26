@@ -734,7 +734,7 @@ final class HIDRemoteMonitor {
             // Seizing one HID interface does not guarantee that sibling interfaces
             // stop emitting native events. Every managed press owns its native
             // descriptors; intentional passthrough and marked host events remain free.
-            if !usesNativePassthrough, button != .volumeUp, button != .volumeDown, button != .tv {
+            if !usesNativePassthrough, shouldArmNativeEvent(for: button), button != .volumeUp, button != .volumeDown, button != .tv {
                 eventSuppressor.arm(button: button, edge: .down)
             }
             var shouldPerformAction = true
@@ -1072,7 +1072,7 @@ final class HIDRemoteMonitor {
         recognizesDoubleClick: Bool,
         recognizesLongPress: Bool
     ) -> Bool {
-        guard !activeDeviceIsSeized,
+        guard !nativeKeysNeutralized, !activeDeviceIsSeized,
               !appSwitcherSession.isActive,
               !recognizesDoubleClick,
               !recognizesLongPress,
@@ -1427,7 +1427,7 @@ final class HIDRemoteMonitor {
     }
 
     private func shouldArmNativeEvent(for button: RemoteButton) -> Bool {
-        !(nativeKeysNeutralized && (button == .tv || button == .volumeUp || button == .volumeDown))
+        !nativeKeysNeutralized
     }
 
     private func prepareNativeKeyMapping() -> Bool {

@@ -1,48 +1,63 @@
 import Darwin
 import Foundation
 
-/// Applies service-local TV/volume mappings before accepting raw HID input.
-/// Does not change the raw-report callback or the separate voice/power mappings.
+/// Neutralizes service-local ordinary keys before accepting raw HID input.
+/// Raw reports and the separate voice-key mapping retain their lifecycle.
 final class RemoteNativeKeyMapper {
     static let mappings = [
         HIDUsageMapping(source: 0x0000_0007_0000_0035, destination: 0),
         HIDUsageMapping(source: 0x0000_0007_0000_0080, destination: 0),
         HIDUsageMapping(source: 0x0000_0007_0000_0081, destination: 0),
-    ]
-    private static let sources = Set(mappings.map(\.source))
+    ] + [UInt64(0x28), 0x4a, 0x4f, 0x50, 0x51, 0x52, 0x65, 0x66].map {
+        HIDUsageMapping(source: UInt64(7) << 32 | $0, destination: 0)
+    }
     private static let recoveryKey = "sayall.native-key-mapping-recovery.v1"
 
     private struct RecoveryState: Codable {
         let bootSession: String
         var originals: [UInt64: [HIDUsageMapping]]
+        var sources: Set<UInt64>?
     }
 
+    private var sources: Set<UInt64>
+    private var recordedSources: Set<UInt64>
+    private var desiredMappings: [HIDUsageMapping] { sources.sorted().map { HIDUsageMapping(source: $0, destination: 0) } }
     private let services: RemoteVoiceFunctionMapper.ServiceProvider
     private let bootSession: String?
     private let writeState: (Data) -> Bool
     private let logger: (String) -> Void
     private var originals: [UInt64: [HIDUsageMapping]] = [:]
     private var recoveryAvailable = true
+    private(set) var isPrepared = false
 
     init(
+        family: String = "xiaomi",
+        mappings: [HIDUsageMapping] = RemoteNativeKeyMapper.mappings,
+        recoveryKey: String = RemoteNativeKeyMapper.recoveryKey,
         serviceProvider: @escaping RemoteVoiceFunctionMapper.ServiceProvider = RemoteVoiceFunctionMapper.systemServices,
         defaults: UserDefaults = .standard,
         bootSession: String? = RemoteNativeKeyMapper.systemBootSession(),
         writeState: ((Data) -> Bool)? = nil,
         logger: @escaping (String) -> Void = AppLogger.shared.write
     ) {
+        sources = Set(mappings.map(\.source))
+        recordedSources = sources
         services = serviceProvider
         self.bootSession = bootSession
-        self.logger = logger
+        self.logger = { logger("\($0) family=\(family)") }
         self.writeState = writeState ?? { data in
-            defaults.set(data, forKey: Self.recoveryKey)
+            defaults.set(data, forKey: recoveryKey)
             // Persist the recovery record before modifying the system service.
-            return defaults.synchronize() && defaults.data(forKey: Self.recoveryKey) == data
+            return defaults.synchronize() && defaults.data(forKey: recoveryKey) == data
         }
-        if let data = defaults.data(forKey: Self.recoveryKey) {
+        if let data = defaults.data(forKey: recoveryKey) {
             if let state = try? JSONDecoder().decode(RecoveryState.self, from: data) {
                 // Registry IDs identify services only within the same system boot.
-                if state.bootSession == bootSession { originals = state.originals }
+                if state.bootSession == bootSession {
+                    originals = state.originals
+                    recordedSources = state.sources ?? Set([UInt64(0x0000_0007_0000_0035), 0x0000_0007_0000_0080, 0x0000_0007_0000_0081])
+                    sources.formUnion(recordedSources)
+                }
             } else {
                 recoveryAvailable = false
             }
@@ -51,7 +66,9 @@ final class RemoteNativeKeyMapper {
 
     /// Re-enumerate for each device activation; never reuse a global readiness bit.
     @discardableResult
-    func prepare() -> Bool {
+    func prepare(additionalSources: [UInt64] = []) -> Bool {
+        isPrepared = false
+        sources.formUnion(additionalSources)
         guard recoveryAvailable, bootSession != nil else {
             log("prepare", result: "failed", reason: "recovery_unavailable")
             return false
@@ -71,9 +88,9 @@ final class RemoteNativeKeyMapper {
             before[id] = current
             if let previous = originals[id] {
                 // Preserve a new external mapping rather than restoring over it later.
-                originals[id] = Self.mappings.compactMap { mapping in
+                originals[id] = desiredMappings.compactMap { mapping in
                     let now = current.first { $0.source == mapping.source }
-                    return now == mapping
+                    return recordedSources.contains(mapping.source) && now == mapping
                         ? previous.first { $0.source == mapping.source }
                         : now
                 }
@@ -85,14 +102,15 @@ final class RemoteNativeKeyMapper {
             log("prepare", result: "failed", reason: "recovery_write_failed")
             return false
         }
+        recordedSources = sources
         var attempted: [RemoteVoiceMappingService] = []
         for service in targets {
             let current = service.readMappings()
-            if matches(nativeMappings(in: current), Self.mappings) { continue }
+            if matches(nativeMappings(in: current), desiredMappings) { continue }
             attempted.append(service)
-            let desired = replacingNativeMappings(in: current, with: Self.mappings)
+            let desired = replacingNativeMappings(in: current, with: desiredMappings)
             guard service.setMappings(desired),
-                  matches(nativeMappings(in: service.readMappings()), Self.mappings) else {
+                  matches(nativeMappings(in: service.readMappings()), desiredMappings) else {
                 var restored = 0
                 for target in attempted.reversed() {
                     guard let id = target.registryID, let snapshot = before[id] else { continue }
@@ -109,13 +127,15 @@ final class RemoteNativeKeyMapper {
                 return false
             }
         }
+        isPrepared = true
         log("prepare", result: "verified", reason: "mapping_readback",
             detail: "services=\(targets.count) native_delivery=unobserved")
         return true
     }
 
-    /// Restore only our three mappings, retaining voice/power and external edits.
+    /// Restore owned ordinary-key mappings, retaining voice and external edits.
     func restore() {
+        isPrepared = false
         guard recoveryAvailable, bootSession != nil else {
             log("restore", result: "failed", reason: "recovery_unavailable")
             return
@@ -148,25 +168,25 @@ final class RemoteNativeKeyMapper {
     private func persist() -> Bool {
         guard let bootSession,
               let data = try? JSONEncoder().encode(RecoveryState(
-                  bootSession: bootSession, originals: originals
+                  bootSession: bootSession, originals: originals, sources: sources
               )) else { return false }
         return writeState(data)
     }
 
     private func nativeMappings(in mappings: [HIDUsageMapping]) -> [HIDUsageMapping] {
-        mappings.filter { Self.sources.contains($0.source) }
+        mappings.filter { sources.contains($0.source) }
     }
 
     private func replacingNativeMappings(
         in current: [HIDUsageMapping], with replacement: [HIDUsageMapping]
     ) -> [HIDUsageMapping] {
-        current.filter { !Self.sources.contains($0.source) } + replacement
+        current.filter { !sources.contains($0.source) } + replacement
     }
 
     private func restoringOwnedMappings(
         in current: [HIDUsageMapping], original: [HIDUsageMapping]
     ) -> [HIDUsageMapping] {
-        Self.mappings.compactMap { mapping in
+        desiredMappings.compactMap { mapping in
             let now = current.first { $0.source == mapping.source }
             return now == mapping ? original.first { $0.source == mapping.source } : now
         }

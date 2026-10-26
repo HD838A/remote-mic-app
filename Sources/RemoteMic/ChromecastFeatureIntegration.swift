@@ -198,6 +198,27 @@ struct ChromecastRemoteControlEvent: Equatable {
 /// 隔离保证：本类型与 Siri Remote 接入层互不引用；私有包缺失时全部方法退化为 no-op，
 /// 宿主的编译、运行和打包都不受影响。
 final class ChromecastFeatureIntegration {
+    static var nativeInputProductIDs: Set<Int> {
+        #if SAYALL_CHROMECAST_ENABLED && canImport(SayAllChromecast)
+        return [0x9450]
+        #else
+        return []
+        #endif
+    }
+    var prepareNativeInput: (([UInt64]) -> Bool)? {
+        didSet {
+            #if SAYALL_CHROMECAST_ENABLED && canImport(SayAllChromecast)
+            feature.prepareNativeInput = prepareNativeInput
+            #endif
+        }
+    }
+    var restoreNativeInput: (() -> Void)? {
+        didSet {
+            #if SAYALL_CHROMECAST_ENABLED && canImport(SayAllChromecast)
+            feature.restoreNativeInput = restoreNativeInput
+            #endif
+        }
+    }
     /// 本次构建是否编入了私有包。
     static var isPackageIncluded: Bool {
         #if SAYALL_CHROMECAST_ENABLED && canImport(SayAllChromecast)

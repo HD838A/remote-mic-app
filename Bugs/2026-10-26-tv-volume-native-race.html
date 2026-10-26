@@ -465,7 +465,7 @@ body.am-lightbox-open { overflow: hidden; }
 <main class="am-doc">
 <header class="am-head"><h1>TV 与音量键原生事件泄露</h1><p class="am-sub">Build 265 · 现场日志、提交对照与候选修复</p></header>
 <div class="am-doc-layout">
-<nav class="am-toc" aria-label="目录"><a href="#panel-A">A · 现象与证据</a><a href="#panel-B">B · 根因与提交对照</a><a href="#panel-C">C · 候选修复</a><a href="#panel-D">D · 恢复与失败边界</a><a href="#panel-E">E · 文件与日志</a><a href="#panel-F">F · 验证结果与限制</a></nav><div class="am-doc-body">
+<nav class="am-toc" aria-label="目录"><a href="#panel-A">A · 现象与证据</a><a href="#panel-B">B · 根因与提交对照</a><a href="#panel-C">C · 候选修复</a><a href="#panel-D">D · 恢复与失败边界</a><a href="#panel-E">E · 文件与日志</a><a href="#panel-F">F · 验证结果与限制</a><a href="#panel-G">G · 组件交付顺序</a></nav><div class="am-doc-body">
 <section class="am-panel" id="panel-A">
 <header class="am-panel-head"><span class="am-panel-id">A</span><h2>现象与证据</h2></header>
 <div class="am-panel-body"><div class="am-md"><p>Build 265 在另一台 Intel Mac 发生按键泄露。
@@ -552,38 +552,69 @@ TV 和音量的四项观察均符合该机制。
 </section>
 <section class="am-panel" id="panel-C">
 <header class="am-panel-head"><span class="am-panel-id">C</span><h2>候选修复</h2></header>
-<div class="am-panel-body"><div class="am-md"><p>在接受遥控器报告前，设置设备级 UserKeyMapping。
-仅匹配 Xiaomi VID 0x2717、PID 0x32B8 的服务。
-把 TV、音量加和音量减的 keyboard usage 映射到 0。
-原始报告继续驱动用户配置的动作。
-不改变语音键、Fn、电源键或普通电脑键盘映射。</p>
+<div class="am-panel-body"><div class="am-md"><p>接受遥控器报告前，先设置设备级 UserKeyMapping。
+映射只作用于精确 VID/PID 匹配的遥控器服务。
+普通电脑键盘不在匹配范围内。
+原始 HID 报告继续驱动用户配置的动作。</p>
+<div class="am-table-wrap"><table>
+<thead>
+<tr>
+<th>设备家族</th>
+<th>接管范围</th>
+<th>语音边界</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Xiaomi</td>
+<td>会产生原生事件的全部普通键，包括 TV、音量、方向和电源</td>
+<td>保留既有 Fn 映射</td>
+</tr>
+<tr>
+<td>Siri Remote</td>
+<td>已批准普通控件的标准别名和实际输入元素</td>
+<td>排除 Siri、语音和触摸输入</td>
+</tr>
+<tr>
+<td>Chromecast</td>
+<td>普通键的标准别名和实际输入元素</td>
+<td>排除独立语音入口</td>
+</tr>
+</tbody></table></div>
+<p>手机、手表、小程序和 Mac Remote 不通过此物理 HID 双路径。
+它们保留现有网络协议与动作语义。
+Windows 不使用本次 macOS 映射实现。</p>
 </div>
-<figure class="am-diagram am-flow"><svg viewBox="0 0 276 540" width="276" height="540" role="img" aria-label="流程图：匹配设备、保存恢复记录、写入三键映射、回读核对、接受设备、回滚并报告失败、执行配置动作" xmlns="http://www.w3.org/2000/svg"><defs><marker id="am1-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="am-arrow" d="M0,0 L10,5 L0,10 z"/></marker></defs><g></g><g><g data-step="0"><path class="am-edge" d="M141.3,49 L141.3,65 Q141.3,81 141.3,97 L141.3,113" marker-end="url(#am1-arrow)"/><g class="am-edge-label"><rect x="84.5" y="72" width="113.5" height="18" rx="3"/><text x="141.3" y="81" text-anchor="middle" dominant-baseline="central">同次系统启动及服务</text></g></g><g data-step="1"><path class="am-edge" d="M141.3,148 L141.3,164 Q141.3,180 141.3,196 L141.3,212" marker-end="url(#am1-arrow)"/><g class="am-edge-label"><rect x="113.3" y="171" width="56" height="18" rx="3"/><text x="141.3" y="180" text-anchor="middle" dominant-baseline="central">保存成功</text></g></g><g data-step="2"><path class="am-edge" d="M141.3,247 L141.3,258.5 Q141.3,270 141.3,281.5 L141.3,293" marker-end="url(#am1-arrow)"/></g><g data-step="3"><path class="am-edge" d="M165.2,328 L187.1,344 Q209,360 209,376 L209,392" marker-end="url(#am1-arrow)"/><g class="am-edge-label"><rect x="192.5" y="351" width="33" height="18" rx="3"/><text x="209" y="360" text-anchor="middle" dominant-baseline="central">一致</text></g></g><g data-step="4"><path class="am-edge" d="M117.3,328 L95.4,344 Q73.5,360 73.5,376 L73.5,392" marker-end="url(#am1-arrow)"/><g class="am-edge-label"><rect x="51.3" y="351" width="44.5" height="18" rx="3"/><text x="73.5" y="360" text-anchor="middle" dominant-baseline="central">不一致</text></g></g><g data-step="5"><path class="am-edge" d="M209,427 L209,443 Q209,459 209,475 L209,491" marker-end="url(#am1-arrow)"/><g class="am-edge-label"><rect x="166.9" y="450" width="84.3" height="18" rx="3"/><text x="209" y="459" text-anchor="middle" dominant-baseline="central">原始 HID 报告</text></g></g></g><g><g class="am-node am-node--rect" data-key="匹配设备" data-step="0"><rect class="am-node-shape" x="101.3" y="14" width="80" height="35" rx="3"/><text x="141.3" y="31.5" text-anchor="middle" dominant-baseline="central">匹配设备</text></g><g class="am-node am-node--rect" data-key="保存恢复记录" data-step="0"><rect class="am-node-shape" x="88.3" y="113" width="106" height="35" rx="3"/><text x="141.3" y="130.5" text-anchor="middle" dominant-baseline="central">保存恢复记录</text></g><g class="am-node am-node--rect" data-key="写入三键映射" data-step="1"><rect class="am-node-shape" x="88.3" y="212" width="106" height="35" rx="3"/><text x="141.3" y="229.5" text-anchor="middle" dominant-baseline="central">写入三键映射</text></g><g class="am-node am-node--rect" data-key="回读核对" data-step="2"><rect class="am-node-shape" x="101.3" y="293" width="80" height="35" rx="3"/><text x="141.3" y="310.5" text-anchor="middle" dominant-baseline="central">回读核对</text></g><g class="am-node am-node--rect" data-key="接受设备" data-step="3"><rect class="am-node-shape" x="169" y="392" width="80" height="35" rx="3"/><text x="209" y="409.5" text-anchor="middle" dominant-baseline="central">接受设备</text></g><g class="am-node am-node--rect" data-key="回滚并报告失败" data-step="4"><rect class="am-node-shape" x="14" y="392" width="119" height="35" rx="3"/><text x="73.5" y="409.5" text-anchor="middle" dominant-baseline="central">回滚并报告失败</text></g><g class="am-node am-node--rect" data-key="执行配置动作" data-step="5"><rect class="am-node-shape" x="156" y="491" width="106" height="35" rx="3"/><text x="209" y="508.5" text-anchor="middle" dominant-baseline="central">执行配置动作</text></g></g></svg></figure>
+<figure class="am-diagram am-flow"><svg viewBox="0 0 276 540" width="276" height="540" role="img" aria-label="流程图：匹配设备、保存恢复记录、写入普通键映射、回读核对、接受设备、回滚并报告失败、执行配置动作" xmlns="http://www.w3.org/2000/svg"><defs><marker id="am1-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="am-arrow" d="M0,0 L10,5 L0,10 z"/></marker></defs><g></g><g><g data-step="0"><path class="am-edge" d="M141.3,49 L141.3,65 Q141.3,81 141.3,97 L141.3,113" marker-end="url(#am1-arrow)"/><g class="am-edge-label"><rect x="96" y="72" width="90.5" height="18" rx="3"/><text x="141.3" y="81" text-anchor="middle" dominant-baseline="central">系统启动及服务</text></g></g><g data-step="1"><path class="am-edge" d="M141.3,148 L141.3,164 Q141.3,180 141.3,196 L141.3,212" marker-end="url(#am1-arrow)"/><g class="am-edge-label"><rect x="113.3" y="171" width="56" height="18" rx="3"/><text x="141.3" y="180" text-anchor="middle" dominant-baseline="central">保存成功</text></g></g><g data-step="2"><path class="am-edge" d="M141.3,247 L141.3,258.5 Q141.3,270 141.3,281.5 L141.3,293" marker-end="url(#am1-arrow)"/></g><g data-step="3"><path class="am-edge" d="M165.2,328 L187.1,344 Q209,360 209,376 L209,392" marker-end="url(#am1-arrow)"/><g class="am-edge-label"><rect x="192.5" y="351" width="33" height="18" rx="3"/><text x="209" y="360" text-anchor="middle" dominant-baseline="central">一致</text></g></g><g data-step="4"><path class="am-edge" d="M117.3,328 L95.4,344 Q73.5,360 73.5,376 L73.5,392" marker-end="url(#am1-arrow)"/><g class="am-edge-label"><rect x="51.3" y="351" width="44.5" height="18" rx="3"/><text x="73.5" y="360" text-anchor="middle" dominant-baseline="central">不一致</text></g></g><g data-step="5"><path class="am-edge" d="M209,427 L209,443 Q209,459 209,475 L209,491" marker-end="url(#am1-arrow)"/><g class="am-edge-label"><rect x="166.9" y="450" width="84.3" height="18" rx="3"/><text x="209" y="459" text-anchor="middle" dominant-baseline="central">原始 HID 报告</text></g></g></g><g><g class="am-node am-node--rect" data-key="匹配设备" data-step="0"><rect class="am-node-shape" x="101.3" y="14" width="80" height="35" rx="3"/><text x="141.3" y="31.5" text-anchor="middle" dominant-baseline="central">匹配设备</text></g><g class="am-node am-node--rect" data-key="保存恢复记录" data-step="0"><rect class="am-node-shape" x="88.3" y="113" width="106" height="35" rx="3"/><text x="141.3" y="130.5" text-anchor="middle" dominant-baseline="central">保存恢复记录</text></g><g class="am-node am-node--rect" data-key="写入普通键映射" data-step="1"><rect class="am-node-shape" x="81.8" y="212" width="119" height="35" rx="3"/><text x="141.3" y="229.5" text-anchor="middle" dominant-baseline="central">写入普通键映射</text></g><g class="am-node am-node--rect" data-key="回读核对" data-step="2"><rect class="am-node-shape" x="101.3" y="293" width="80" height="35" rx="3"/><text x="141.3" y="310.5" text-anchor="middle" dominant-baseline="central">回读核对</text></g><g class="am-node am-node--rect" data-key="接受设备" data-step="3"><rect class="am-node-shape" x="169" y="392" width="80" height="35" rx="3"/><text x="209" y="409.5" text-anchor="middle" dominant-baseline="central">接受设备</text></g><g class="am-node am-node--rect" data-key="回滚并报告失败" data-step="4"><rect class="am-node-shape" x="14" y="392" width="119" height="35" rx="3"/><text x="73.5" y="409.5" text-anchor="middle" dominant-baseline="central">回滚并报告失败</text></g><g class="am-node am-node--rect" data-key="执行配置动作" data-step="5"><rect class="am-node-shape" x="156" y="491" width="106" height="35" rx="3"/><text x="209" y="508.5" text-anchor="middle" dominant-baseline="central">执行配置动作</text></g></g></svg></figure>
 <div class="am-md"><p>每次激活都重新枚举并核对服务。
 不复用其他设备的成功状态。
-源头映射生效时，不再登记三键的 tap 拦截次数。
+源头映射生效时，不再登记普通键的 tap 拦截次数。
 否则，残留次数可能误吞普通键盘的同码输入。
+默认左右动作由 App 执行，不能等待已被屏蔽的系统动作。
 TV 在旧过滤路径仍提前登记。</p>
 </div></div>
 </section>
 <section class="am-panel" id="panel-D">
 <header class="am-panel-head"><span class="am-panel-id">D</span><h2>恢复与失败边界</h2></header>
-<div class="am-panel-body"><div class="am-md"><p>修改系统服务前，先保存三键的原始映射。
+<div class="am-panel-body"><div class="am-md"><p>修改系统服务前，先保存普通键的原始映射。
+三个设备家族使用独立的持久恢复记录。
 记录使用系统 boot session 和服务 Registry ID。
 不保存硬件地址、序列号或稳定硬件身份。
 新系统启动不能使用旧服务的恢复记录。</p>
 <p>退出 App、关闭自定义映射或撤销权限时恢复。
 崩溃后，下次启动可恢复同次系统启动内的记录。
 恢复只替换本功能仍持有的零映射。
-外部新改的映射、Fn 和电源映射均保留。
+外部新改的映射和 Fn 映射均保留。
+电源普通键由本功能恢复，Fn 映射器不再覆盖它。</p>
+<p>旧三键恢复记录不能误认新增按键的外部零映射。
 恢复失败时保留记录，供后续重试。
 服务已消失时保留记录，不套用到另一个服务。</p>
 <p>写入失败或回读不一致时，回滚本次已尝试的服务。
 记录不可用、保存失败或服务身份不明时，拒绝修改。
-设备激活失败时显示可重连的错误提示。</p>
-<p>早期内存恢复方案已撤回，因为崩溃后会丢失记录。
-按 locationID 恢复的原型也已撤回，避免跨服务恢复。
-这些原型保存在仓库外，不进入产品。</p>
+私有适配器的重新准备失败会取消已按住状态。
+后续普通键报告不会继续执行配置动作。
+恢复条件满足后，下次成功准备可以重新接管。</p>
+<p>早期内存恢复和 locationID 恢复原型已撤回。
+原型保存在仓库外，不进入产品。</p>
 </div></div>
 </section>
 <section class="am-panel" id="panel-E">
@@ -596,54 +627,66 @@ TV 在旧过滤路径仍提前登记。</p>
 </tr>
 </thead>
 <tbody><tr>
-<td>Sources/RemoteMic/RemoteNativeKeyMapper.swift</td>
-<td>三键源头映射、持久恢复、回读及回滚</td>
+<td>RemoteNativeKeyMapper.swift</td>
+<td>普通键源头映射、分家族恢复、回读及回滚</td>
 </tr>
 <tr>
-<td>Sources/RemoteMic/RemoteVoiceFunctionMapper.swift</td>
-<td>复用服务枚举，映射值支持编码</td>
+<td>RemoteVoiceFunctionMapper.swift</td>
+<td>精确服务枚举；保留独立电源映射所有权</td>
 </tr>
 <tr>
-<td>Sources/RemoteMic/HIDRemoteMonitor.swift</td>
-<td>激活前核对，已中和时不登记三键拦截</td>
+<td>HIDRemoteMonitor.swift</td>
+<td>激活前核对；停止留下普通键拦截次数；执行默认左右动作</td>
 </tr>
 <tr>
-<td>Sources/RemoteMic/BridgeAppModel.swift</td>
-<td>接入准备、退出、关闭和权限恢复</td>
+<td>BridgeAppModel.swift</td>
+<td>接入三类硬件的准备、退出、关闭和权限恢复</td>
 </tr>
 <tr>
-<td>Resources 的中英文本地化</td>
-<td>设备映射失败提示</td>
+<td>两份 FeatureIntegration.swift</td>
+<td>将源头映射准备和恢复回调传到私有组件</td>
 </tr>
 <tr>
 <td>Tests 下两份回归测试</td>
-<td>快速按、普通键盘、恢复和失败路径</td>
+<td>快速按、默认动作、普通键盘、恢复和失败路径</td>
 </tr>
 <tr>
 <td>Testing/HIDIntermittentButtonDiagnostics.md</td>
-<td>增加现场源头映射及恢复验收</td>
+<td>补充全部硬件的源头映射及恢复验收</td>
 </tr>
 </tbody></table></div>
 <p>新增日志为 HID NATIVE MAPPING。
+family 区分三个设备家族。
 phase 区分 prepare 和 restore。
-reason 区分记录、写入、回读及服务不可用。
-只记录阶段、结果和服务计数，不记录映射正文或设备身份。
+reason 区分记录、写入、回读及服务不可用。</p>
+<p>只记录阶段、结果和服务计数，不记录映射正文或设备身份。
 result=verified 只表示系统属性回读一致。
-native_delivery=unobserved 明确标记原生投递尚未实测。</p>
+native_delivery=unobserved 明确标记原生投递尚未实测。
+苹果普通键日志区分 source_mapped 和 armed，避免声称未执行的登记。</p>
 </div></div>
 </section>
 <section class="am-panel" id="panel-F">
 <header class="am-panel-head"><span class="am-panel-id">F</span><h2>验证结果与限制</h2></header>
-<div class="am-panel-body"><div class="am-md"><p>最终完整测试：1,064 项通过，覆盖 79 个测试套件。
-其中包括十一项源头映射及恢复测试。
-Apple Silicon 和 Intel 的 Release 构建均通过。
-工程自检：48 项通过，零失败。
-仓库治理检查和 git diff --check 均通过。
-所有本地 SwiftPM 命令均带 --disable-keychain。</p>
+<div class="am-panel-body"><div class="am-md"><p>公开完整测试：1,069 项通过，覆盖 79 个测试套件。
+私有集成测试：1,136 项通过，覆盖 87 个测试套件。
+Siri Remote 组件：107 项通过。
+Chromecast 组件：117 项通过。
+集成测试中的发布脚本用例受父进程私有开关影响失败。
+该用例在公开完整测试中已通过。</p>
+<p>私有集成复跑只跳过此发布脚本用例，没有改动测试预期。
+公开宿主双架构 Release 构建均通过。
+私有集成双架构 Release 构建均通过。
+Intel 另以 RELEASE_VARIANT=intel 验证 macOS 13 编译目标。
+工程自检：48 项通过。治理检查通过。</p>
+<p>所有本地 SwiftPM 命令均带 --disable-keychain。</p>
 <p>回归实验暂时恢复旧拦截登记行为。
-六组普通键盘保护用例失败，记录了 164 项断言失败。
+原三键的六组普通键盘保护用例失败，共 164 项断言失败。
 恢复保护后，六组全部通过。
-实验代码已恢复，没有改动系统设备映射。</p>
+当前保护矩阵扩大到小米十二键和两种独占状态。</p>
+<p>实验代码已恢复，没有改动系统设备映射。</p>
+<p>Chromecast 另执行失败取消的反证实验。
+撤回失败时的取消逻辑后，新回归用例出现两项断言失败。
+恢复候选代码后，同一用例通过。</p>
 <p>系统属性回读不能证明真实原生事件已经消失。
 模拟测试也不能证明原始 HID 报告仍完整到达。
 本次没有修改本机系统设备映射或已安装 App。</p>
@@ -656,10 +699,19 @@ Apple Silicon 和 Intel 的 Release 构建均通过。
 Build 265 不含此候选改动。</p>
 </div></div>
 </section>
+<section class="am-panel" id="panel-G">
+<header class="am-panel-head"><span class="am-panel-id">G</span><h2>组件交付顺序</h2></header>
+<div class="am-panel-body"><div class="am-md"><p>本次宿主新增回调需要配套的新私有组件。
+旧私有 Tag 2.3.5 不含此接口。
+私有修复须先单独交付，再通过独立版本 PR 发布新 Tag。
+宿主依赖升级使用独立 PR，不能覆盖旧 Tag。
+未完成该顺序前，宿主候选不得作为正式发布源码。</p>
+</div></div>
+</section>
 </div>
 </div>
 </main>
-<footer class="am-colophon">Generated by Answer me with HTML 0.4.6 · 2026-10-26 18:39</footer>
+<footer class="am-colophon">Generated by Answer me with HTML 0.4.6 · 2026-10-26 19:33</footer>
 <textarea id="am-source" hidden readonly aria-hidden="true">---
 template: doc
 theme: shadcn
@@ -719,16 +771,25 @@ TV 和音量的四项观察均符合该机制。
 
 ## 候选修复
 
-在接受遥控器报告前，设置设备级 UserKeyMapping。
-仅匹配 Xiaomi VID 0x2717、PID 0x32B8 的服务。
-把 TV、音量加和音量减的 keyboard usage 映射到 0。
-原始报告继续驱动用户配置的动作。
-不改变语音键、Fn、电源键或普通电脑键盘映射。
+接受遥控器报告前，先设置设备级 UserKeyMapping。
+映射只作用于精确 VID/PID 匹配的遥控器服务。
+普通电脑键盘不在匹配范围内。
+原始 HID 报告继续驱动用户配置的动作。
+
+| 设备家族 | 接管范围 | 语音边界 |
+| --- | --- | --- |
+| Xiaomi | 会产生原生事件的全部普通键，包括 TV、音量、方向和电源 | 保留既有 Fn 映射 |
+| Siri Remote | 已批准普通控件的标准别名和实际输入元素 | 排除 Siri、语音和触摸输入 |
+| Chromecast | 普通键的标准别名和实际输入元素 | 排除独立语音入口 |
+
+手机、手表、小程序和 Mac Remote 不通过此物理 HID 双路径。
+它们保留现有网络协议与动作语义。
+Windows 不使用本次 macOS 映射实现。
 
 ```flow
-匹配设备 -&gt; 保存恢复记录: 同次系统启动及服务
-保存恢复记录 -&gt; 写入三键映射: 保存成功
-写入三键映射 -&gt; 回读核对
+匹配设备 -&gt; 保存恢复记录: 系统启动及服务
+保存恢复记录 -&gt; 写入普通键映射: 保存成功
+写入普通键映射 -&gt; 回读核对
 回读核对 -&gt; 接受设备: 一致
 回读核对 -&gt; 回滚并报告失败: 不一致
 接受设备 -&gt; 执行配置动作: 原始 HID 报告
@@ -736,13 +797,15 @@ TV 和音量的四项观察均符合该机制。
 
 每次激活都重新枚举并核对服务。
 不复用其他设备的成功状态。
-源头映射生效时，不再登记三键的 tap 拦截次数。
+源头映射生效时，不再登记普通键的 tap 拦截次数。
 否则，残留次数可能误吞普通键盘的同码输入。
+默认左右动作由 App 执行，不能等待已被屏蔽的系统动作。
 TV 在旧过滤路径仍提前登记。
 
 ## 恢复与失败边界
 
-修改系统服务前，先保存三键的原始映射。
+修改系统服务前，先保存普通键的原始映射。
+三个设备家族使用独立的持久恢复记录。
 记录使用系统 boot session 和服务 Registry ID。
 不保存硬件地址、序列号或稳定硬件身份。
 新系统启动不能使用旧服务的恢复记录。
@@ -750,50 +813,71 @@ TV 在旧过滤路径仍提前登记。
 退出 App、关闭自定义映射或撤销权限时恢复。
 崩溃后，下次启动可恢复同次系统启动内的记录。
 恢复只替换本功能仍持有的零映射。
-外部新改的映射、Fn 和电源映射均保留。
+外部新改的映射和 Fn 映射均保留。
+电源普通键由本功能恢复，Fn 映射器不再覆盖它。
+
+旧三键恢复记录不能误认新增按键的外部零映射。
 恢复失败时保留记录，供后续重试。
 服务已消失时保留记录，不套用到另一个服务。
 
 写入失败或回读不一致时，回滚本次已尝试的服务。
 记录不可用、保存失败或服务身份不明时，拒绝修改。
-设备激活失败时显示可重连的错误提示。
+私有适配器的重新准备失败会取消已按住状态。
+后续普通键报告不会继续执行配置动作。
+恢复条件满足后，下次成功准备可以重新接管。
 
-早期内存恢复方案已撤回，因为崩溃后会丢失记录。
-按 locationID 恢复的原型也已撤回，避免跨服务恢复。
-这些原型保存在仓库外，不进入产品。
+早期内存恢复和 locationID 恢复原型已撤回。
+原型保存在仓库外，不进入产品。
 
 ## 文件与日志
 
 | 文件 | 必要变化 |
 | --- | --- |
-| Sources/RemoteMic/RemoteNativeKeyMapper.swift | 三键源头映射、持久恢复、回读及回滚 |
-| Sources/RemoteMic/RemoteVoiceFunctionMapper.swift | 复用服务枚举，映射值支持编码 |
-| Sources/RemoteMic/HIDRemoteMonitor.swift | 激活前核对，已中和时不登记三键拦截 |
-| Sources/RemoteMic/BridgeAppModel.swift | 接入准备、退出、关闭和权限恢复 |
-| Resources 的中英文本地化 | 设备映射失败提示 |
-| Tests 下两份回归测试 | 快速按、普通键盘、恢复和失败路径 |
-| Testing/HIDIntermittentButtonDiagnostics.md | 增加现场源头映射及恢复验收 |
+| RemoteNativeKeyMapper.swift | 普通键源头映射、分家族恢复、回读及回滚 |
+| RemoteVoiceFunctionMapper.swift | 精确服务枚举；保留独立电源映射所有权 |
+| HIDRemoteMonitor.swift | 激活前核对；停止留下普通键拦截次数；执行默认左右动作 |
+| BridgeAppModel.swift | 接入三类硬件的准备、退出、关闭和权限恢复 |
+| 两份 FeatureIntegration.swift | 将源头映射准备和恢复回调传到私有组件 |
+| Tests 下两份回归测试 | 快速按、默认动作、普通键盘、恢复和失败路径 |
+| Testing/HIDIntermittentButtonDiagnostics.md | 补充全部硬件的源头映射及恢复验收 |
 
 新增日志为 HID NATIVE MAPPING。
+family 区分三个设备家族。
 phase 区分 prepare 和 restore。
 reason 区分记录、写入、回读及服务不可用。
+
 只记录阶段、结果和服务计数，不记录映射正文或设备身份。
 result=verified 只表示系统属性回读一致。
 native_delivery=unobserved 明确标记原生投递尚未实测。
+苹果普通键日志区分 source_mapped 和 armed，避免声称未执行的登记。
 
 ## 验证结果与限制
 
-最终完整测试：1,064 项通过，覆盖 79 个测试套件。
-其中包括十一项源头映射及恢复测试。
-Apple Silicon 和 Intel 的 Release 构建均通过。
-工程自检：48 项通过，零失败。
-仓库治理检查和 git diff --check 均通过。
+公开完整测试：1,069 项通过，覆盖 79 个测试套件。
+私有集成测试：1,136 项通过，覆盖 87 个测试套件。
+Siri Remote 组件：107 项通过。
+Chromecast 组件：117 项通过。
+集成测试中的发布脚本用例受父进程私有开关影响失败。
+该用例在公开完整测试中已通过。
+
+私有集成复跑只跳过此发布脚本用例，没有改动测试预期。
+公开宿主双架构 Release 构建均通过。
+私有集成双架构 Release 构建均通过。
+Intel 另以 RELEASE_VARIANT=intel 验证 macOS 13 编译目标。
+工程自检：48 项通过。治理检查通过。
+
 所有本地 SwiftPM 命令均带 --disable-keychain。
 
 回归实验暂时恢复旧拦截登记行为。
-六组普通键盘保护用例失败，记录了 164 项断言失败。
+原三键的六组普通键盘保护用例失败，共 164 项断言失败。
 恢复保护后，六组全部通过。
+当前保护矩阵扩大到小米十二键和两种独占状态。
+
 实验代码已恢复，没有改动系统设备映射。
+
+Chromecast 另执行失败取消的反证实验。
+撤回失败时的取消逻辑后，新回归用例出现两项断言失败。
+恢复候选代码后，同一用例通过。
 
 系统属性回读不能证明真实原生事件已经消失。
 模拟测试也不能证明原始 HID 报告仍完整到达。
@@ -807,6 +891,14 @@ Apple Silicon 和 Intel 的 Release 构建均通过。
 
 本次没有打包或替换 Draft 安装包。
 Build 265 不含此候选改动。
+
+## 组件交付顺序
+
+本次宿主新增回调需要配套的新私有组件。
+旧私有 Tag 2.3.5 不含此接口。
+私有修复须先单独交付，再通过独立版本 PR 发布新 Tag。
+宿主依赖升级使用独立 PR，不能覆盖旧 Tag。
+未完成该顺序前，宿主候选不得作为正式发布源码。
 </textarea>
 <script>
 (() => {
