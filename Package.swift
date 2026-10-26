@@ -30,7 +30,11 @@ var packageTargets: [Target] = []
 let macRemotePackagePath = ProcessInfo.processInfo.environment[
     "SAYALL_MAC_REMOTE_PACKAGE_PATH"
 ]
-let macRemoteEnabled = privateSwiftPMEnabled || !(macRemotePackagePath ?? "").isEmpty
+let privateArtifactPackagePath = ProcessInfo.processInfo.environment[
+    "SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH"
+]
+let macRemoteEnabled = privateSwiftPMEnabled || !(macRemotePackagePath ?? "").isEmpty ||
+    !(privateArtifactPackagePath ?? "").isEmpty
 if privateSwiftPMEnabled {
     if let privatePlatformPackagePath, !privatePlatformPackagePath.isEmpty {
         packageDependencies.append(.package(path: privatePlatformPackagePath))
@@ -62,7 +66,7 @@ if privateSwiftPMEnabled {
     remoteMicTestDependencies.append(
         .product(name: "SayAllMacRemoteCore", package: packageIdentity)
     )
-} else {
+} else if (privateArtifactPackagePath ?? "").isEmpty {
     remoteMicDependencies += ["SayAllMacRemoteCore", "SayAllMacRemoteUI"]
     remoteMicTestDependencies.append("SayAllMacRemoteCore")
     packageTargets += [
@@ -85,16 +89,14 @@ let siriRemoteExplicitlyEnabled = ProcessInfo.processInfo.environment[
 ] == "1"
 let siriRemoteEnabled = privateSwiftPMEnabled || siriRemoteExplicitlyEnabled ||
     !(siriRemotePackagePath ?? "").isEmpty
-if siriRemoteExplicitlyEnabled && (siriRemotePackagePath ?? "").isEmpty && !privateSwiftPMEnabled {
+if siriRemoteExplicitlyEnabled && (siriRemotePackagePath ?? "").isEmpty &&
+    !privateSwiftPMEnabled && (privateArtifactPackagePath ?? "").isEmpty {
     fatalError("SAYALL_ENABLE_SIRI_REMOTE=1 requires SAYALL_SIRI_REMOTE_PACKAGE_PATH")
 }
 let privateChromecastEnabled = privateSwiftPMEnabled &&
     ProcessInfo.processInfo.environment["SAYALL_ENABLE_CHROMECAST"] == "1"
 let privateButtonProfilesEnabled = privateSwiftPMEnabled &&
     ProcessInfo.processInfo.environment["SAYALL_ENABLE_BUTTON_PROFILES"] == "1"
-let privateArtifactPackagePath = ProcessInfo.processInfo.environment[
-    "SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH"
-]
 let chromecastPackagePath = ProcessInfo.processInfo.environment[
     "SAYALL_CHROMECAST_PACKAGE_PATH"
 ]
@@ -401,6 +403,30 @@ if let buttonProfilesPath = buttonProfilesPackagePath,
     remoteMicDependencies.append(
         .product(name: "SayAllButtonProfiles", package: packageIdentity)
     )
+    remoteMicDependencies.append(
+        .product(name: "SayAllMacRemoteCore", package: packageIdentity)
+    )
+    remoteMicDependencies.append(
+        .product(name: "SayAllMacRemoteUI", package: packageIdentity)
+    )
+    remoteMicDependencies.append(
+        .product(name: "SayAllSiriRemote", package: packageIdentity)
+    )
+    remoteMicDependencies.append(
+        .product(name: "SayAllChromecast", package: packageIdentity)
+    )
+    remoteMicTestDependencies.append(
+        .product(name: "SayAllSiriRemote", package: packageIdentity)
+    )
+    remoteMicTestDependencies.append(
+        .product(name: "SayAllChromecast", package: packageIdentity)
+    )
+    remoteMicSwiftSettings.append(.define("SAYALL_SIRI_REMOTE_ENABLED"))
+    remoteMicSwiftSettings.append(.define("SAYALL_CHROMECAST_ENABLED"))
+    remoteMicSwiftSettings.append(.define("SAYALL_MAC_REMOTE_ENABLED"))
+    remoteMicTestSwiftSettings.append(.define("SAYALL_SIRI_REMOTE_ENABLED"))
+    remoteMicTestSwiftSettings.append(.define("SAYALL_CHROMECAST_ENABLED"))
+    remoteMicTestSwiftSettings.append(.define("SAYALL_MAC_REMOTE_ENABLED"))
 }
 
 let unsupportedMembershipSourceVariables = [
@@ -442,6 +468,20 @@ if let privateArtifactPackagePath, !privateArtifactPackagePath.isEmpty {
     remoteMicDependencies.append(
         .product(name: "SayAllButtonProfiles", package: packageIdentity)
     )
+    remoteMicDependencies.append(.product(name: "SayAllMacRemoteCore", package: packageIdentity))
+    remoteMicDependencies.append(.product(name: "SayAllMacRemoteUI", package: packageIdentity))
+    remoteMicDependencies.append(.product(name: "SayAllSiriRemote", package: packageIdentity))
+    remoteMicDependencies.append(.product(name: "SayAllChromecast", package: packageIdentity))
+    remoteMicTestDependencies.append(.product(name: "SayAllSiriRemote", package: packageIdentity))
+    remoteMicTestDependencies.append(.product(name: "SayAllChromecast", package: packageIdentity))
+    remoteMicTestDependencies.append(.product(name: "SayAllMacRemoteCore", package: packageIdentity))
+    remoteMicTestDependencies.append(.product(name: "SayAllMacRemoteUI", package: packageIdentity))
+    remoteMicSwiftSettings.append(.define("SAYALL_SIRI_REMOTE_ENABLED"))
+    remoteMicSwiftSettings.append(.define("SAYALL_CHROMECAST_ENABLED"))
+    remoteMicSwiftSettings.append(.define("SAYALL_MAC_REMOTE_ENABLED"))
+    remoteMicTestSwiftSettings.append(.define("SAYALL_SIRI_REMOTE_ENABLED"))
+    remoteMicTestSwiftSettings.append(.define("SAYALL_CHROMECAST_ENABLED"))
+    remoteMicTestSwiftSettings.append(.define("SAYALL_MAC_REMOTE_ENABLED"))
 }
 
 if let hardwareSimulationPath = ProcessInfo.processInfo.environment[

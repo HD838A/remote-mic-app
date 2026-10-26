@@ -50,7 +50,21 @@ EXPECTED_ARCHIVES=(
   SayAllCombinationActions_SayAllMacroRemoteMic.bundle.zip
   SayAllButtonProfiles_SayAllButtonProfiles.bundle.zip
   SayAllCommonPhrases.xcframework.zip
+  SayAllMacRemoteCore.xcframework.zip
+  SayAllMacRemoteUI.xcframework.zip
+  SayAllSiriRemoteSupport.xcframework.zip
+  SayAllSiriRemoteAudioCore.xcframework.zip
+  SayAllSiriRemoteHCIProtocol.xcframework.zip
+  SayAllSiriRemotePacketLogger.xcframework.zip
+  SayAllSiriRemote.xcframework.zip
+  ChromecastAudioCore.xcframework.zip
+  ChromecastATVVProtocol.xcframework.zip
+  SayAllChromecast.xcframework.zip
   SayAllCommonPhrases_SayAllCommonPhrases.bundle.zip
+  SayAllSiriRemote_SayAllSiriRemote.bundle.zip
+  SayAllChromecast_SayAllChromecast.bundle.zip
+  Helpers/AppleRemoteHCIService
+  Helpers/AppleRemoteAudioCapture
 )
 EXPECTED_CHECKSUM_PATHS="$(printf './%s\n' "${EXPECTED_ARCHIVES[@]}" | LC_ALL=C sort)"
 ACTUAL_CHECKSUM_PATHS="$(awk '{print $2}' "$RELEASE_DIRECTORY/SHA256SUMS" | LC_ALL=C sort)"
@@ -79,14 +93,27 @@ if ! jq -e '
     "SayAllMacroMacOS",
     "SayAllMacroRemoteMic",
     "SayAllButtonProfiles",
-    "SayAllCommonPhrases"
+    "SayAllCommonPhrases",
+    "SayAllMacRemoteCore",
+    "SayAllMacRemoteUI",
+    "SayAllSiriRemoteSupport",
+    "SayAllSiriRemoteAudioCore",
+    "SayAllSiriRemoteHCIProtocol",
+    "SayAllSiriRemotePacketLogger",
+    "SayAllSiriRemote",
+    "ChromecastAudioCore",
+    "ChromecastATVVProtocol",
+    "SayAllChromecast"
   ] and
   .resource_bundles == [
     "SayAllMembership_SayAllMembershipUI.bundle",
     "SayAllCombinationActions_SayAllMacroRemoteMic.bundle",
     "SayAllButtonProfiles_SayAllButtonProfiles.bundle",
-    "SayAllCommonPhrases_SayAllCommonPhrases.bundle"
-  ]
+    "SayAllCommonPhrases_SayAllCommonPhrases.bundle",
+    "SayAllSiriRemote_SayAllSiriRemote.bundle",
+    "SayAllChromecast_SayAllChromecast.bundle"
+  ] and
+  .helpers == ["AppleRemoteHCIService", "AppleRemoteAudioCapture"]
 ' "$RELEASE_DIRECTORY/provenance.json" >/dev/null; then
   print -u2 "private artifact provenance is invalid, dirty, or incompatible"
   exit 1
@@ -100,6 +127,10 @@ fi
 for archive_name in "${EXPECTED_ARCHIVES[@]}"; do
   archive_path="$RELEASE_DIRECTORY/$archive_name"
   test -f "$archive_path"
+  if [[ "$archive_name" != *.zip ]]; then
+    test -x "$archive_path"
+    continue
+  fi
   if unzip -Z1 "$archive_path" | grep -Eq '(^/|(^|/)\.\.(/|$)|\\)'; then
     print -u2 "archive contains an unsafe path: $archive_name"
     exit 1
@@ -140,7 +171,17 @@ for module_name in \
   SayAllMacroMacOS \
   SayAllMacroRemoteMic \
   SayAllButtonProfiles \
-  SayAllCommonPhrases; do
+  SayAllCommonPhrases \
+  SayAllMacRemoteCore \
+  SayAllMacRemoteUI \
+  SayAllSiriRemoteSupport \
+  SayAllSiriRemoteAudioCore \
+  SayAllSiriRemoteHCIProtocol \
+  SayAllSiriRemotePacketLogger \
+  SayAllSiriRemote \
+  ChromecastAudioCore \
+  ChromecastATVVProtocol \
+  SayAllChromecast; do
   unzip -q "$RELEASE_DIRECTORY/$module_name.xcframework.zip" \
     -d "$STAGING_DIRECTORY/Artifacts"
   framework="$STAGING_DIRECTORY/Artifacts/$module_name.xcframework/macos-arm64_x86_64/$module_name.framework"
@@ -150,8 +191,8 @@ for module_name in \
   lipo "$binary" -verify_arch x86_64
   test "$(plutil -extract MinimumOSVersion raw -o - "$framework/Info.plist")" = "13.0"
 done
-unzip -q "$RELEASE_DIRECTORY/SayAllDiagnosticsTransport.xcframework.zip" \
-  -d "$STAGING_DIRECTORY/Artifacts"
+unzip -q "$RELEASE_DIRECTORY/SayAllDiagnosticsSentry.xcframework.zip" -d "$STAGING_DIRECTORY/Artifacts"
+unzip -q "$RELEASE_DIRECTORY/SayAllDiagnosticsTransport.xcframework.zip" -d "$STAGING_DIRECTORY/Artifacts"
 transport_framework="$STAGING_DIRECTORY/Artifacts/SayAllDiagnosticsTransport.xcframework/macos-arm64_x86_64/SayAllDiagnosticsTransport.framework"
 test -n "$transport_framework"
 transport_binary="$(find "$transport_framework" -maxdepth 1 -type f ! -name Info.plist -print -quit)"
@@ -159,8 +200,6 @@ test -f "$transport_binary"
 lipo "$transport_binary" -verify_arch arm64
 lipo "$transport_binary" -verify_arch x86_64
 test "$(plutil -extract MinimumOSVersion raw -o - "$transport_framework/Info.plist")" = "13.0"
-unzip -q "$RELEASE_DIRECTORY/SayAllDiagnosticsSentry.xcframework.zip" \
-  -d "$STAGING_DIRECTORY/Artifacts"
 sentry_framework="$STAGING_DIRECTORY/Artifacts/SayAllDiagnosticsSentry.xcframework/macos-arm64_arm64e_x86_64/Sentry.framework"
 test -f "$sentry_framework/Sentry"
 lipo "$sentry_framework/Sentry" -verify_arch arm64
@@ -182,6 +221,14 @@ test -f "$STAGING_DIRECTORY/Resources/SayAllButtonProfiles_SayAllButtonProfiles.
 unzip -q "$RELEASE_DIRECTORY/SayAllCommonPhrases_SayAllCommonPhrases.bundle.zip" \
   -d "$STAGING_DIRECTORY/Resources"
 test -f "$STAGING_DIRECTORY/Resources/SayAllCommonPhrases_SayAllCommonPhrases.bundle/Contents/Resources/CommonPhrases.json"
+unzip -q "$RELEASE_DIRECTORY/SayAllSiriRemote_SayAllSiriRemote.bundle.zip" -d "$STAGING_DIRECTORY/Resources"
+test -d "$STAGING_DIRECTORY/Resources/SayAllSiriRemote_SayAllSiriRemote.bundle"
+unzip -q "$RELEASE_DIRECTORY/SayAllChromecast_SayAllChromecast.bundle.zip" -d "$STAGING_DIRECTORY/Resources"
+test -d "$STAGING_DIRECTORY/Resources/SayAllChromecast_SayAllChromecast.bundle"
+mkdir -p "$STAGING_DIRECTORY/Helpers"
+cp "$RELEASE_DIRECTORY/Helpers/AppleRemoteHCIService" "$STAGING_DIRECTORY/Helpers/AppleRemoteHCIService"
+cp "$RELEASE_DIRECTORY/Helpers/AppleRemoteAudioCapture" "$STAGING_DIRECTORY/Helpers/AppleRemoteAudioCapture"
+chmod 0755 "$STAGING_DIRECTORY/Helpers/AppleRemoteHCIService" "$STAGING_DIRECTORY/Helpers/AppleRemoteAudioCapture"
 
 cat > "$STAGING_DIRECTORY/Package.swift" <<'SWIFT'
 // swift-tools-version: 6.2
@@ -212,6 +259,28 @@ let package = Package(
             name: "SayAllButtonProfiles",
             targets: ["SayAllMacroCore", "SayAllMacroMacOS", "SayAllMacroRemoteMic", "SayAllButtonProfiles"]
         ),
+        .library(
+            name: "SayAllMacRemoteCore",
+            targets: ["SayAllMacRemoteCore"]
+        ),
+        .library(
+            name: "SayAllMacRemoteUI",
+            targets: ["SayAllMacRemoteCore", "SayAllMacRemoteUI"]
+        ),
+        .library(
+            name: "SayAllSiriRemote",
+            targets: [
+                "SayAllSiriRemoteSupport",
+                "SayAllSiriRemoteAudioCore",
+                "SayAllSiriRemoteHCIProtocol",
+                "SayAllSiriRemotePacketLogger",
+                "SayAllSiriRemote",
+            ]
+        ),
+        .library(
+            name: "SayAllChromecast",
+            targets: ["ChromecastAudioCore", "ChromecastATVVProtocol", "SayAllChromecast"]
+        ),
     ],
     targets: [
         .binaryTarget(name: "SayAllMembershipCore", path: "Artifacts/SayAllMembershipCore.xcframework"),
@@ -233,6 +302,16 @@ let package = Package(
         .binaryTarget(name: "SayAllMacroRemoteMic", path: "Artifacts/SayAllMacroRemoteMic.xcframework"),
         .binaryTarget(name: "SayAllButtonProfiles", path: "Artifacts/SayAllButtonProfiles.xcframework"),
         .binaryTarget(name: "SayAllCommonPhrases", path: "Artifacts/SayAllCommonPhrases.xcframework"),
+        .binaryTarget(name: "SayAllMacRemoteCore", path: "Artifacts/SayAllMacRemoteCore.xcframework"),
+        .binaryTarget(name: "SayAllMacRemoteUI", path: "Artifacts/SayAllMacRemoteUI.xcframework"),
+        .binaryTarget(name: "SayAllSiriRemoteSupport", path: "Artifacts/SayAllSiriRemoteSupport.xcframework"),
+        .binaryTarget(name: "SayAllSiriRemoteAudioCore", path: "Artifacts/SayAllSiriRemoteAudioCore.xcframework"),
+        .binaryTarget(name: "SayAllSiriRemoteHCIProtocol", path: "Artifacts/SayAllSiriRemoteHCIProtocol.xcframework"),
+        .binaryTarget(name: "SayAllSiriRemotePacketLogger", path: "Artifacts/SayAllSiriRemotePacketLogger.xcframework"),
+        .binaryTarget(name: "SayAllSiriRemote", path: "Artifacts/SayAllSiriRemote.xcframework"),
+        .binaryTarget(name: "ChromecastAudioCore", path: "Artifacts/ChromecastAudioCore.xcframework"),
+        .binaryTarget(name: "ChromecastATVVProtocol", path: "Artifacts/ChromecastATVVProtocol.xcframework"),
+        .binaryTarget(name: "SayAllChromecast", path: "Artifacts/SayAllChromecast.xcframework"),
     ]
 )
 SWIFT
@@ -244,6 +323,7 @@ cp "$RELEASE_DIRECTORY/SHA256SUMS" "$STAGING_DIRECTORY/SHA256SUMS"
   {
     printf '%s\n' Package.swift provenance.json SHA256SUMS
     find Artifacts Resources -type f -print
+    find Helpers -type f -print
   } | LC_ALL=C sort | while IFS= read -r file; do
     shasum -a 256 "$file"
   done > PREPARED_SHA256SUMS
