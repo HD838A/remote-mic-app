@@ -244,6 +244,53 @@ struct KeyboardEventSuppressorTests {
         #expect(!suppressor.handle(type: up.type, event: up))
     }
 
+    @Test(arguments: [RemoteButton.volumeUp, .volumeDown, .tv], [false, true])
+    func sourceNeutralizedKeysDoNotLeaveCreditsThatConsumePhysicalKeyboardInput(
+        _ button: RemoteButton, _ disconnectWhileHeld: Bool
+    ) throws {
+        let suite = "KeyboardEventSuppressorTests.sourceNeutralized.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let settings = AppSettings(defaults: defaults)
+        settings.customMappingEnabled = true
+        settings.setAction(.customShortcut, for: button)
+        settings.setShortcut(CustomKeyboardShortcut(keyCode: 43, modifierFlags: [], keyLabel: ","), for: button)
+        settings.setAction(.disabled, for: button, trigger: .doubleClick)
+        settings.setAction(.disabled, for: button, trigger: .longPress)
+        settings.setAllowsRapidPress(true, for: button)
+        let suppressor = KeyboardEventSuppressor(logger: { _ in })
+        var performed = 0
+        let monitor = HIDRemoteMonitor(
+            settings: settings, eventSuppressor: suppressor, ownsEventSuppressor: false,
+            runtimePermissions: { true }, actionPerformer: { _, _, _ in performed += 1; return true },
+            diagnosticLogger: { _ in }, prepareNativeKeys: { true }
+        )
+        monitor.connectSimulatedDevice(
+            fingerprint: "neutralized-remote", profileID: settings.selectedRemoteProfileID
+        )
+        for _ in 0..<10 {
+            monitor.handleSimulatedReport(reportID: 1, data: Data([UInt8(button.hidUsage), 0, 0, 0, 0, 0]))
+            for native in button.nativeEvents {
+                let down = try nativeEvent(native, down: true)
+                #expect(!suppressor.handle(type: down.type, event: down))
+            }
+            monitor.handleSimulatedReport(reportID: 1, data: Data(repeating: 0, count: 6))
+            for native in button.nativeEvents {
+                let up = try nativeEvent(native, down: false)
+                #expect(!suppressor.handle(type: up.type, event: up))
+            }
+        }
+        #expect(performed == 10)
+        if disconnectWhileHeld {
+            monitor.handleSimulatedReport(reportID: 1, data: Data([UInt8(button.hidUsage), 0, 0, 0, 0, 0]))
+        }
+        monitor.disconnectSimulatedDevice()
+        for native in button.nativeEvents {
+            let up = try nativeEvent(native, down: false)
+            #expect(!suppressor.handle(type: up.type, event: up))
+        }
+    }
+
     @Test(arguments: [Int32(0), Int32(1)])
     func stoppingClearsEscapedVolumeOwnership(_ keyType: Int32) throws {
         let native: RemoteNativeEvent = .systemKey(type: keyType)

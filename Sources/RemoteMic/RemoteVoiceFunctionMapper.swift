@@ -2,7 +2,7 @@ import Foundation
 import IOKit.hid
 import IOKit.hidsystem
 
-struct HIDUsageMapping: Equatable {
+struct HIDUsageMapping: Equatable, Codable {
     static let sourceKey = "HIDKeyboardModifierMappingSrc"
     static let destinationKey = "HIDKeyboardModifierMappingDst"
 
@@ -306,7 +306,7 @@ final class RemoteVoiceFunctionMapper {
         isVoiceKeyNeutralized = false
     }
 
-    private static func systemServices() -> [RemoteVoiceMappingService] {
+    static func systemServices() -> [RemoteVoiceMappingService] {
         let client = IOHIDEventSystemClientCreateSimpleClient(kCFAllocatorDefault)
         let services = IOHIDEventSystemClientCopyServices(client) as? [IOHIDServiceClient] ?? []
         return services.filter(isTarget).map { service in

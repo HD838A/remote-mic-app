@@ -52,6 +52,7 @@
 "button_mapping.error.exclusive_access" = "Another input tool is using the remote. Quit or pause keyboard, mouse, or device remapping tools, then try again. Common examples include Karabiner-Elements, BetterTouchTool, USB Overdrive, and SteerMouse.";
 "button_mapping.error.exclusive_access.karabiner" = "Another input tool is using the remote. If you use Karabiner-Elements, open Devices, find the Xiaomi Bluetooth Voice Remote, turn off “Modify events” or set the device to “Ignore”, then try again.";
 "button_mapping.error.power_suppression_failed" = "Unable to safely override the remote power button";
+"button_mapping.error.native_mapping_failed" = "Could not take control of the remote buttons. Reconnect the remote and try again.";
 "button_mapping.status.connected_fallback" = "Button controls connected";
 "button_mapping.status.connected_system_actions_may_remain" = "Button controls connected; some original system actions may still occur";
 "button_mapping.status.disconnected" = "Remote buttons disconnected";

@@ -651,6 +651,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     })
     private let webRemoteClient = WebRemoteRelayClient()
     private let voiceFunctionMapper = RemoteVoiceFunctionMapper()
+    private let remoteNativeKeyMapper = RemoteNativeKeyMapper()
     private lazy var preferredInputSourceMonitor = PreferredInputSourceMonitor(
         voiceTool: { [weak self] in
             self?.settings.onboardingVoiceTool ?? .unselected
@@ -1567,6 +1568,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             audioOutput.stop()
         }
         voiceFunctionMapper.restore()
+        remoteNativeKeyMapper.restore()
         if let terminationObserver {
             NotificationCenter.default.removeObserver(terminationObserver)
             self.terminationObserver = nil
@@ -3199,6 +3201,10 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     ) {
         let permissionSnapshot = HIDPermissionSnapshot.current
         appliedHIDPermissionSnapshot = permissionSnapshot
+        if !settings.customMappingEnabled || !permissionSnapshot.accessibilityGranted ||
+            !permissionSnapshot.inputMonitoringGranted {
+            remoteNativeKeyMapper.restore()
+        }
         if !permissionSnapshot.accessibilityGranted {
             _ = releaseVoiceKeyIfNeeded()
         }
@@ -3616,7 +3622,9 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
                     button: button,
                     trigger: trigger
                 ) == true
-            }
+            },
+            prepareNativeKeys: { [weak self] in self?.remoteNativeKeyMapper.prepare() == true },
+            restoreNativeKeys: { [weak self] in self?.remoteNativeKeyMapper.restore() }
         )
         monitor.claimsRuntimeButton = { [weak self] profileID, button in
             self?.membershipFeature.claimsCommonPhrase(
