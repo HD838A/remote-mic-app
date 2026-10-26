@@ -630,12 +630,12 @@ final class HIDRemoteMonitor {
         source: String,
         usages: Set<UInt16>
     ) {
-        // Volume is always managed, unlike the intentional left/right passthrough.
+        // TV and volume are always managed, unlike intentional left/right passthrough.
         // Register before diagnostics, UI callbacks and configuration lookups.
         if !backOnlyMode {
             for usage in usages.subtracting(activeUsages) {
                 guard let button = RemoteButton.usageMap[usage],
-                      button == .volumeUp || button == .volumeDown else { continue }
+                      button == .volumeUp || button == .volumeDown || button == .tv else { continue }
                 eventSuppressor.arm(button: button, edge: .down)
             }
         }
@@ -705,7 +705,7 @@ final class HIDRemoteMonitor {
             // Seizing one HID interface does not guarantee that sibling interfaces
             // stop emitting native events. Every managed press owns its native
             // descriptors; intentional passthrough and marked host events remain free.
-            if !usesNativePassthrough, button != .volumeUp, button != .volumeDown {
+            if !usesNativePassthrough, button != .volumeUp, button != .volumeDown, button != .tv {
                 eventSuppressor.arm(button: button, edge: .down)
             }
             var shouldPerformAction = true

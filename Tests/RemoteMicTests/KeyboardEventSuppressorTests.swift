@@ -202,8 +202,8 @@ struct KeyboardEventSuppressorTests {
         #expect(suppressor.handle(type: up.type, event: up))
     }
 
-    @Test(arguments: [RemoteButton.volumeUp, .volumeDown], [false, true])
-    func volumeIsArmedBeforeReportDiagnosticsAndConfigurationCallbacks(
+    @Test(arguments: [RemoteButton.volumeUp, .volumeDown, .tv], [false, true])
+    func managedNativeKeysAreArmedBeforeReportDiagnosticsAndConfigurationCallbacks(
         _ button: RemoteButton, _ isSeized: Bool
     ) throws {
         let suite = "KeyboardEventSuppressorTests.earlyVolume.\(UUID().uuidString)"
