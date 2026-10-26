@@ -51,6 +51,8 @@ final class VoiceFnTapSessionController {
     private struct PendingVoice {
         var samples: [Int16] = []
         var ended = false
+        /// Measured from release, including time spent queued.
+        var continuationDeadline: TimeInterval?
     }
 
     /// Upper bound on `.draining`. Comfortably above the audio side's own drain fallback,
@@ -74,8 +76,12 @@ final class VoiceFnTapSessionController {
     private(set) var isSuspended = false
     private var generation: UInt64 = 0
     private var preRoll: [Int16] = []
+    private var continuationDeadline: TimeInterval?
     private var remoteEnded = false
-    private var pendingVoice: PendingVoice?
+    private var continuationTask: VoiceFnTapScheduledTask?
+    private var continuationGeneration: UInt64 = 0
+    /// Replay from the front; append incoming audio to the last segment.
+    private var pendingVoices: [PendingVoice] = []
     private var scheduledTasks: [VoiceFnTapScheduledTask] = []
     private var functionKeyIsPressed = false
     private var idleCompletions: [() -> Void] = []
@@ -85,6 +91,30 @@ final class VoiceFnTapSessionController {
 
     var requiresCleanupBeforeMapping: Bool {
         phase != .idle || functionKeyIsPressed || suppressAudioUntilRemoteStop
+    }
+
+    private var isWaitingForContinuation: Bool {
+        if let tail = pendingVoices.last { return tail.continuationDeadline != nil }
+        return continuationTask != nil
+    }
+
+
+    private var heldPendingIndex: Int? {
+        guard let index = pendingVoices.indices.last else { return nil }
+        let tail = pendingVoices[index]
+        return !tail.ended && tail.continuationDeadline == nil ? index : nil
+    }
+
+
+    private var currentSessionIsClosing: Bool {
+        switch phase {
+        case .starting, .active:
+            return remoteEnded
+        case .draining, .stopping:
+            return true
+        case .idle:
+            return false
+        }
     }
 
     init(
@@ -120,9 +150,12 @@ final class VoiceFnTapSessionController {
             return
         }
         let hasSession = phase != .idle
+        let remoteHasEnded = pendingVoices.last.map {
+            $0.ended || $0.continuationDeadline != nil
+        } ?? (remoteEnded || isWaitingForContinuation)
         terminateCurrentSession(
-            remoteHasEnded: remoteEnded,
-            suppressUntilRemoteStop: hasSession && !remoteEnded,
+            remoteHasEnded: remoteHasEnded,
+            suppressUntilRemoteStop: hasSession && !remoteHasEnded,
             completion: completion
         )
     }
@@ -143,15 +176,32 @@ final class VoiceFnTapSessionController {
     @discardableResult
     func startVoice() -> Bool {
         guard isEnabled, !isSuspended else { return false }
-        switch phase {
-        case .idle:
-            beginSession()
-        case .draining, .stopping:
-            if pendingVoice == nil {
-                pendingVoice = PendingVoice()
+        if let deadline = continuationDeadline, uptime() >= deadline {
+            _ = stopVoice()
+        }
+        if continuationTask != nil {
+            cancelContinuation()
+            remoteEnded = false
+            logger("VOICE FN TAP continuation operation_id=\(generation) phase=completed result=resumed")
+        }
+        if currentSessionIsClosing {
+            let now = uptime()
+            if let index = pendingVoices.indices.last {
+                let tail = pendingVoices[index]
+                if !tail.ended, tail.continuationDeadline.map({ $0 > now }) ?? true {
+                    pendingVoices[index].continuationDeadline = nil
+                } else {
+                    pendingVoices.append(PendingVoice())
+                    logger(
+                        "VOICE FN TAP continuation operation_id=\(generation) " +
+                            "phase=queued result=separate_segment"
+                    )
+                }
+            } else {
+                pendingVoices.append(PendingVoice())
             }
-        case .starting, .active:
-            break
+        } else if phase == .idle {
+            beginSession()
         }
         return true
     }
@@ -159,9 +209,9 @@ final class VoiceFnTapSessionController {
     @discardableResult
     func receive(_ samples: [Int16]) -> Bool {
         guard !samples.isEmpty else {
-            return phase != .idle || pendingVoice != nil || suppressAudioUntilRemoteStop
+            return phase != .idle || !pendingVoices.isEmpty || suppressAudioUntilRemoteStop
         }
-        if pendingVoice != nil {
+        if currentSessionIsClosing, !pendingVoices.isEmpty {
             appendPreRoll(samples, toPendingVoice: true)
             return true
         }
@@ -180,11 +230,35 @@ final class VoiceFnTapSessionController {
     }
 
     @discardableResult
-    func stopVoice(completion: (() -> Void)? = nil) -> Bool {
+    func stopVoice(continuationDelay: TimeInterval = 0, completion: (() -> Void)? = nil) -> Bool {
         if let completion { idleCompletions.append(completion) }
+        if continuationDelay > 0, isEnabled, !isSuspended {
+
+            if let index = heldPendingIndex {
+                pendingVoices[index].continuationDeadline = uptime() + continuationDelay
+                logger("VOICE FN TAP continuation operation_id=\(generation) phase=queued result=waiting")
+                return true
+            }
+            if !pendingVoices.isEmpty { return true }
+            switch phase {
+            case .starting, .active:
+                guard continuationTask == nil else { return true }
+                armContinuation(expiringAt: uptime() + continuationDelay)
+                logger("VOICE FN TAP continuation operation_id=\(generation) phase=started result=waiting")
+                return true
+            case .draining, .stopping:
+                break
+            case .idle:
+                break
+            }
+        }
+        cancelContinuation()
         suppressAudioUntilRemoteStop = false
-        if pendingVoice != nil {
-            pendingVoice?.ended = true
+        if let index = pendingVoices.indices.last {
+            if !pendingVoices[index].ended {
+                pendingVoices[index].ended = true
+                pendingVoices[index].continuationDeadline = nil
+            }
             return true
         }
         switch phase {
@@ -204,10 +278,18 @@ final class VoiceFnTapSessionController {
         }
     }
 
+    func finishContinuationIfWaiting() {
+        for index in pendingVoices.indices where pendingVoices[index].continuationDeadline != nil {
+            pendingVoices[index].continuationDeadline = nil
+            pendingVoices[index].ended = true
+        }
+        if continuationTask != nil { _ = stopVoice() }
+    }
+
     func shutdown() {
         isEnabled = false
         isSuspended = true
-        pendingVoice = nil
+        pendingVoices.removeAll()
         generation &+= 1
         cancelScheduledTasks()
         let completedInFlightTap = releaseFunctionKeyIfNeeded()
@@ -238,6 +320,16 @@ final class VoiceFnTapSessionController {
         phase = .starting(sessionGeneration)
         preRoll = preloaded?.samples ?? []
         remoteEnded = preloaded?.ended ?? false
+        if !remoteEnded, let deadline = preloaded?.continuationDeadline {
+            if deadline > uptime() {
+                armContinuation(expiringAt: deadline)
+                logger("VOICE FN TAP continuation operation_id=\(sessionGeneration) phase=handover result=waiting")
+            } else {
+
+                logger("VOICE FN TAP continuation operation_id=\(sessionGeneration) phase=handover result=expired")
+                remoteEnded = true
+            }
+        }
         switch destinationReadiness({ [weak self] result in
             self?.destinationReadinessCompleted(result, generation: sessionGeneration)
         }) {
@@ -272,7 +364,7 @@ final class VoiceFnTapSessionController {
 
     private func cancelSessionAwaitingDestination(generation sessionGeneration: UInt64) {
         guard phase == .starting(sessionGeneration), generation == sessionGeneration else { return }
-        let shouldSuppressAudioUntilRemoteStop = !remoteEnded
+        let shouldSuppressAudioUntilRemoteStop = !remoteEnded && !isWaitingForContinuation
         generation &+= 1
         resetSessionState()
         suppressAudioUntilRemoteStop = shouldSuppressAudioUntilRemoteStop
@@ -390,7 +482,8 @@ final class VoiceFnTapSessionController {
         if let completion {
             idleCompletions.append(completion)
         }
-        pendingVoice = nil
+        cancelContinuation()
+        pendingVoices.removeAll()
         suppressAudioUntilRemoteStop = suppressUntilRemoteStop
         switch phase {
         case .idle:
@@ -412,20 +505,31 @@ final class VoiceFnTapSessionController {
         }
     }
 
+    private func armContinuation(expiringAt deadline: TimeInterval) {
+        continuationDeadline = deadline
+        continuationGeneration &+= 1
+        let token = continuationGeneration
+        continuationTask = schedule(max(0, deadline - uptime())) { [weak self] in
+            guard let self, self.continuationGeneration == token else { return }
+            self.continuationTask = nil
+            self.logger("VOICE FN TAP continuation operation_id=\(self.generation) phase=completed result=expired")
+            _ = self.stopVoice()
+        }
+    }
+
     private func finishSession() {
         resetSessionState()
         runIdleCompletions()
-        guard isEnabled, !isSuspended, let pendingVoice else {
-            self.pendingVoice = nil
+        guard isEnabled, !isSuspended, !pendingVoices.isEmpty else {
+            pendingVoices.removeAll()
             return
         }
-        self.pendingVoice = nil
-        beginSession(preloaded: pendingVoice)
+        beginSession(preloaded: pendingVoices.removeFirst())
     }
 
     private func fail(_ failure: VoiceFnTapFailure) {
         isEnabled = false
-        pendingVoice = nil
+        pendingVoices.removeAll()
         generation &+= 1
         cancelScheduledTasks()
         releaseFunctionKeyIfNeeded()
@@ -445,7 +549,15 @@ final class VoiceFnTapSessionController {
         releaseFunctionKeyIfNeeded()
     }
 
+    private func cancelContinuation() {
+        continuationGeneration &+= 1
+        continuationTask?.cancel()
+        continuationTask = nil
+        continuationDeadline = nil
+    }
+
     private func cancelScheduledTasks() {
+        cancelContinuation()
         scheduledTasks.forEach { $0.cancel() }
         scheduledTasks.removeAll()
     }
@@ -480,9 +592,11 @@ final class VoiceFnTapSessionController {
 
     private func appendPreRoll(_ samples: [Int16], toPendingVoice: Bool) {
         if toPendingVoice {
-            pendingVoice?.samples.append(contentsOf: samples)
-            if let count = pendingVoice?.samples.count, count > maximumPreRollSampleCount {
-                pendingVoice?.samples.removeFirst(count - maximumPreRollSampleCount)
+            guard let index = pendingVoices.indices.last else { return }
+            pendingVoices[index].samples.append(contentsOf: samples)
+            let count = pendingVoices[index].samples.count
+            if count > maximumPreRollSampleCount {
+                pendingVoices[index].samples.removeFirst(count - maximumPreRollSampleCount)
             }
             return
         }
