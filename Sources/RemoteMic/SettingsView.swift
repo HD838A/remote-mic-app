@@ -454,6 +454,26 @@ private struct StatisticsColumnsLayout: Layout {
     }
 }
 
+private struct VoiceGlowPeriodControl: View, Equatable {
+    var fullSession: Bool
+    var select: (Bool) -> Void
+    var labels: [String]
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.fullSession == rhs.fullSession && lhs.labels == rhs.labels
+    }
+
+    var body: some View {
+        Picker("", selection: Binding(get: { fullSession }, set: select)) {
+            Text(labels[0]).tag(false)
+            Text(labels[1]).tag(true)
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .controlSize(.small)
+    }
+}
+
 struct SettingsView: View {
     @ObservedObject var model: BridgeAppModel
     @ObservedObject var settings: AppSettings
@@ -2190,6 +2210,48 @@ struct SettingsView: View {
                 if VoiceFunctionKeyTapApplicability.isApplicable(capabilities: capabilities) {
                     Divider()
                     mappingVoiceFnTapControl
+                    Divider()
+                    Toggle("connection.voice_glow.enabled", isOn: Binding(
+                        get: { settings.voiceGlowReminderEnabled },
+                        set: { model.setVoiceGlowReminderEnabled($0) }
+                    ))
+                    .font(.system(size: 12, weight: .medium))
+                    .toggleStyle(.switch)
+                    .help(localization.text("connection.voice_glow.hint"))
+                    if settings.voiceGlowReminderEnabled {
+                        HStack(spacing: 14) {
+                        Text("connection.voice_glow.period").frame(width: 92, alignment: .leading)
+                        VoiceGlowPeriodControl(
+                            fullSession: settings.voiceGlowFullSession,
+                            select: { model.setVoiceGlowFullSession($0) },
+                            labels: [localization.text("connection.voice_glow.last_ten"),
+                                     localization.text("connection.voice_glow.full_session")]
+                        )
+                        .equatable()
+                        .frame(width: 220, height: 24)
+                        }
+                        .transaction { $0.animation = nil }
+                        .help(localization.text("connection.voice_glow.period_hint"))
+                        HStack(spacing: 14) {
+                            Text("connection.voice_glow.width").frame(width: 92, alignment: .leading)
+                            Slider(value: Binding(
+                                get: { settings.voiceGlowWidth },
+                                set: { settings.voiceGlowWidth = $0; model.previewVoiceGlowAppearance() }
+                            ), in: 0.3...0.9, step: 0.02)
+                            Text(settings.voiceGlowWidth.formatted(.percent.precision(.fractionLength(0))))
+                                .monospacedDigit().frame(width: 54, alignment: .trailing)
+                        }
+                        HStack(spacing: 14) {
+                            Text("connection.voice_glow.intensity").frame(width: 92, alignment: .leading)
+                            Slider(value: Binding(
+                                get: { settings.voiceGlowIntensity },
+                                set: { settings.voiceGlowIntensity = $0; model.previewVoiceGlowAppearance() }
+                            ), in: 0.5...3, step: 0.1)
+                            Text(settings.voiceGlowIntensity.formatted(.percent.precision(.fractionLength(0))))
+                                .monospacedDigit().frame(width: 54, alignment: .trailing)
+                        }
+                        .font(.system(size: 12))
+                    }
                 }
                 // 触摸面（滑动箭头/光标）只有具备触摸面的遥控器才显示，页面请求之外再加一道能力门禁。
                 if TouchSurfaceControlApplicability.isApplicable(
@@ -2276,19 +2338,64 @@ struct SettingsView: View {
     }
 
     private var mappingVoiceFnTapControl: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Toggle("connection.voice_fn_tap.enabled", isOn: Binding(
-                get: { settings.voiceFnTapModeEnabled },
-                set: { model.setVoiceFnTapModeEnabled($0) }
-            ))
-            .font(.system(size: 12, weight: .medium))
-            .toggleStyle(.switch)
-            Text("connection.voice_fn_tap.hint_short")
-                .font(.system(size: 12))
-                .foregroundStyle(.secondary)
-                .lineLimit(2)
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Toggle("connection.voice_fn_tap.enabled", isOn: Binding(
+                    get: { settings.voiceFnTapModeEnabled },
+                    set: { model.setVoiceFnTapModeEnabled($0) }
+                ))
+                .font(.system(size: 12, weight: .medium))
+                .toggleStyle(.switch)
+                Text("connection.voice_fn_tap.hint_short")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+            .help(localization.text("connection.voice_fn_tap.hint"))
+            Divider()
+            VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Toggle("connection.voice_continuation.enabled", isOn: Binding(
+                        get: { settings.voiceContinuationEnabled },
+                        set: { model.setVoiceContinuationEnabled($0) }
+                    ))
+                    .font(.system(size: 12, weight: .medium))
+                    .toggleStyle(.switch)
+                    Text("connection.voice_continuation.subtitle")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if settings.voiceContinuationEnabled {
+                    HStack(spacing: 14) {
+                        Text("connection.voice_continuation.minimum").frame(width: 100, alignment: .leading)
+                        Slider(value: $settings.voiceContinuationMinimumDuration, in: 0...60, step: 1)
+                        Text(verbatim: String(
+                            format: localization.text("connection.voice_continuation.seconds"),
+                            String(Int(settings.voiceContinuationMinimumDuration))
+                        ))
+                        .monospacedDigit().frame(width: 60, alignment: .trailing)
+                    }
+                    .help(localization.text("connection.voice_continuation.minimum_hint"))
+                    HStack(spacing: 14) {
+                        Text("connection.voice_continuation.wait").frame(width: 100, alignment: .leading)
+                        Slider(value: Binding(
+                            get: { settings.voiceContinuationDelay },
+                            set: { settings.setVoiceContinuationDelay($0) }
+                        ), in: 0.5...3, step: 0.5)
+                        Text(verbatim: String(
+                            format: localization.text("connection.voice_continuation.seconds"),
+                            settings.voiceContinuationDelay.formatted(.number.precision(.fractionLength(0...1)))
+                        ))
+                        .monospacedDigit().frame(width: 60, alignment: .trailing)
+                    }
+                    .help(localization.text("connection.voice_continuation.wait_hint"))
+                }
+            }
+            .font(.system(size: 12))
+            .disabled(!settings.voiceFnTapModeEnabled)
+            .help(localization.text("connection.voice_continuation.hint"))
         }
-        .help(localization.text("connection.voice_fn_tap.hint"))
         .opacity(settings.voiceKeyMode == .function ? 1 : 0.55)
         .disabled(settings.voiceKeyMode != .function)
     }
