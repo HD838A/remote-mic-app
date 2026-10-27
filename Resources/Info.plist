@@ -73,7 +73,7 @@
 		</dict>
 	</array>
 	<key>CFBundleVersion</key>
-	<string>264</string>
+	<string>267</string>
 	<key>HardwareAnnouncementURL</key>
 	<string>https://download.sayall.app/mac/announcements/hardware.json</string>
 	<key>LSMinimumSystemVersion</key>
