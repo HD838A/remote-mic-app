@@ -6987,7 +6987,18 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         )
         let bindingResult = hasBinding ? "configured" : "missing"
         let executionResult = handled ? "handled" : "unhandled"
-        let sourceKind = source.hasPrefix("hid:") ? "hid" : "host"
+        let sourceKind: String
+        if source.hasPrefix("hid:") {
+            sourceKind = "hid"
+        } else if source.hasPrefix("mobile:") {
+            sourceKind = "mobile"
+        } else if source.hasPrefix("apple:") {
+            sourceKind = "apple_remote"
+        } else if source.hasPrefix("chromecast:") {
+            sourceKind = "chromecast"
+        } else {
+            sourceKind = "host"
+        }
         AppLogger.shared.write(
             "BUTTON PROFILE button=\(button.rawValue) trigger=\(trigger.rawValue) " +
                 "binding=\(bindingResult) result=\(executionResult) source=\(sourceKind)"
