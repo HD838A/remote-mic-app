@@ -456,7 +456,7 @@ if [[ -n "$SAYALL_MAC_REMOTE_PACKAGE_PATH" ]]; then
   SAYALL_MAC_REMOTE_PACKAGE_PATH="${SAYALL_MAC_REMOTE_PACKAGE_PATH:A}"
   export SAYALL_MAC_REMOTE_PACKAGE_PATH
   SAYALL_MAC_REMOTE_INCLUDED=true
-else
+elif [[ "$SAYALL_PRIVATE_ARTIFACT_INCLUDED" != "true" ]]; then
   SAYALL_MAC_REMOTE_INCLUDED=false
 fi
 if [[ "$REQUIRE_SAYALL_MAC_REMOTE_PACKAGE" == "1" && "$SAYALL_MAC_REMOTE_INCLUDED" != "true" ]]; then
@@ -537,8 +537,10 @@ BIN_DIR="$(run_release_stage app-swift-bin-path 30 \
   --show-bin-path)"
 BIN_PATH="$BIN_DIR/$APP_NAME"
 MCP_HELPER_PATH="$BIN_DIR/SayAllMCP"
-APPLE_REMOTE_AUDIO_HELPER_PATH="$BIN_DIR/AppleRemoteAudioCapture"
-APPLE_REMOTE_HCI_SERVICE_PATH="$BIN_DIR/AppleRemoteHCIService"
+if [[ "$SAYALL_PRIVATE_ARTIFACT_INCLUDED" != "true" ]]; then
+  APPLE_REMOTE_AUDIO_HELPER_PATH="$BIN_DIR/AppleRemoteAudioCapture"
+  APPLE_REMOTE_HCI_SERVICE_PATH="$BIN_DIR/AppleRemoteHCIService"
+fi
 if [[ "$SAYALL_SIRI_REMOTE_INCLUDED" == "true" && "$SAYALL_PRIVATE_ARTIFACT_INCLUDED" != "true" ]]; then
   SIRI_HCI_SCRATCH_PATH="$BUILD_SCRATCH_PATH/siri-hci-helper"
   run_release_stage app-siri-hci-helper-build "$RELEASE_SWIFT_BUILD_TIMEOUT_SECONDS" \
@@ -563,6 +565,21 @@ if [[ "$SAYALL_CHROMECAST_INCLUDED" == "true" ]]; then
     CHROMECAST_RESOURCE_BUNDLE="$BIN_DIR/SayAllChromecast_SayAllChromecast.bundle"
   fi
 fi
+
+thin_helper_to_release_arch() {
+  local helper_path="$1"
+  local helper_archs
+  helper_archs="$(/usr/bin/lipo -archs "$helper_path")"
+  if [[ "$helper_archs" == "$RELEASE_ARCH" ]]; then
+    return 0
+  fi
+  case " $helper_archs " in
+    *" $RELEASE_ARCH "*) ;;
+    *) return 0 ;;
+  esac
+  /usr/bin/lipo "$helper_path" -thin "$RELEASE_ARCH" -output "$helper_path.thin"
+  /bin/mv -f "$helper_path.thin" "$helper_path"
+}
 
 case "$APP_DIR" in
   "$ROOT/dist/"*.app|"$ROOT/dist/intel/"*.app) ;;
@@ -595,9 +612,11 @@ strip -S -x "$APP_DIR/Contents/Helpers/SayAllMCP"
 if [[ "$SAYALL_SIRI_REMOTE_INCLUDED" == "true" ]]; then
   ditto --norsrc --noextattr --noqtn --noacl \
     "$APPLE_REMOTE_AUDIO_HELPER_PATH" "$APP_DIR/Contents/Helpers/SayAllAppleRemoteAudioCapture"
+  thin_helper_to_release_arch "$APP_DIR/Contents/Helpers/SayAllAppleRemoteAudioCapture"
   strip -S -x "$APP_DIR/Contents/Helpers/SayAllAppleRemoteAudioCapture"
   ditto --norsrc --noextattr --noqtn --noacl \
     "$APPLE_REMOTE_HCI_SERVICE_PATH" "$APP_DIR/Contents/Helpers/SayAllAppleRemoteHCIService"
+  thin_helper_to_release_arch "$APP_DIR/Contents/Helpers/SayAllAppleRemoteHCIService"
   strip -S -x "$APP_DIR/Contents/Helpers/SayAllAppleRemoteHCIService"
   if [[ ! -d "$SIRI_REMOTE_RESOURCE_BUNDLE" ]]; then
     print -u2 "SayAllSiriRemote resource bundle is missing from the Swift build"
