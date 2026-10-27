@@ -74,7 +74,7 @@
 
 ## 用例 5：快速 TV、音量自定义与源头映射恢复
 
-适用：包含 2026-10-26 源头映射候选的 macOS 包；Build 265 不含修复。
+适用：包含 TV/音量事件级兜底修复的 macOS 包；现场 Build 267 不含本次改动。
 测试设备需包含反馈所用的 Intel Mac 和 Xiaomi 遥控器。
 Siri Remote 和 Chromecast 同时执行以下适用的普通按键用例。
 Windows 与网络控制入口未修改，保留稳定基线检查。
@@ -108,12 +108,14 @@ Windows 与网络控制入口未修改，保留稳定基线检查。
 检查 `HID NATIVE MAPPING phase=prepare result=verified` 早于设备激活。
 这里的 verified 只证明 UserKeyMapping 回读一致。
 `native_delivery=unobserved` 不代表真实系统事件已经被验证。
+源头映射回读成功时，TV 和音量仍必须登记事件级兜底。
+对应原生事件应记录 `HID FILTER suppressed`。
 退出、关闭映射和权限撤销后检查 `phase=restore` 的结果。
 失败时检查 `reason`、`attempted`、`restored`、`failed` 和 `pending`。
 同时保留 `HID REPORT`、`HID FILTER` 与 `HID BUTTON` 的先后关系。
 配置动作已提交，不能替代微信输入结果和系统音量的检查。
 
-自动化覆盖模拟服务映射、异常恢复及同码普通键盘保护。
+自动化覆盖模拟服务映射、异常恢复、TV/音量兜底拦截及同码普通键盘保护。
 代理尚未在反馈设备执行此流程，也未改动本机系统映射。
 真实原始报告、系统音量、微信文字和双设备隔离仍待现场验收。
 
