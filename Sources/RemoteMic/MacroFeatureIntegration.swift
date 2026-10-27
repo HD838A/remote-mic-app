@@ -55,13 +55,13 @@ final class MacroFeatureIntegration: ObservableObject {
             try await KeyboardInjector.focusFrontmostComposerForMacro()
         }, keyboardShortcutPerformer: {
             Self.performKeyboardShortcut(keyCode: $0, modifiers: $1, deviceModifierFlags: $2)
-        })
+        }, diagnosticLogger: AppLogger.shared.write)
         #elseif SAYALL_MACRO_INPUT_FOCUS
         feature = SayAllMacroRemoteMicFeature(localeIdentifier: localeIdentifier, inputFocuser: {
             try await KeyboardInjector.focusFrontmostComposerForMacro()
-        })
+        }, diagnosticLogger: AppLogger.shared.write)
         #else
-        feature = SayAllMacroRemoteMicFeature(localeIdentifier: localeIdentifier)
+        feature = SayAllMacroRemoteMicFeature(localeIdentifier: localeIdentifier, diagnosticLogger: AppLogger.shared.write)
         #endif
         #endif
 #if canImport(SayAllButtonProfiles)
@@ -69,11 +69,12 @@ final class MacroFeatureIntegration: ObservableObject {
         buttonProfilesFeature = SayAllButtonProfilesFeature(
             localeIdentifier: localeIdentifier, keyboardShortcutPerformer: {
                 Self.performKeyboardShortcut(keyCode: $0, modifiers: $1, deviceModifierFlags: $2)
-            }
+            }, diagnosticLogger: AppLogger.shared.write
         )
         #else
         buttonProfilesFeature = SayAllButtonProfilesFeature(
-            localeIdentifier: localeIdentifier
+            localeIdentifier: localeIdentifier,
+            diagnosticLogger: AppLogger.shared.write
         )
         #endif
 #endif

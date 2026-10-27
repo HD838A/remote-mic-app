@@ -6967,7 +6967,12 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         trigger: ButtonTrigger,
         source: String = "host_action"
     ) -> Bool {
-        macroFeature.executeBoundAction(
+        let hasBinding = macroFeature.hasActiveBinding(
+            profileID: profileID,
+            button: button,
+            trigger: trigger
+        )
+        let handled = macroFeature.executeBoundAction(
             profileID: profileID,
             button: button,
             trigger: trigger,
@@ -6980,6 +6985,25 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
                 self?.performButtonProfileShortcut(keyCode: keyCode, modifiers: modifiers, deviceModifierFlags: flags) ?? false
             }
         )
+        let bindingResult = hasBinding ? "configured" : "missing"
+        let executionResult = handled ? "handled" : "unhandled"
+        let sourceKind: String
+        if source.hasPrefix("hid:") {
+            sourceKind = "hid"
+        } else if source.hasPrefix("mobile:") {
+            sourceKind = "mobile"
+        } else if source.hasPrefix("apple:") {
+            sourceKind = "apple_remote"
+        } else if source.hasPrefix("chromecast:") {
+            sourceKind = "chromecast"
+        } else {
+            sourceKind = "host"
+        }
+        AppLogger.shared.write(
+            "BUTTON PROFILE button=\(button.rawValue) trigger=\(trigger.rawValue) " +
+                "binding=\(bindingResult) result=\(executionResult) source=\(sourceKind)"
+        )
+        return handled
     }
 
     private func performButtonProfileHostAction(_ payload: Data, source: String) -> Bool {
