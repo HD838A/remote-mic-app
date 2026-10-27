@@ -463,15 +463,16 @@ body.am-lightbox-open { overflow: hidden; }
 <button class="am-btn" type="button" data-am="copy" data-done="已复制 ✓">复制源稿</button>
 </div>
 <main class="am-doc">
-<header class="am-head"><h1>TV 与音量键原生事件泄露</h1><p class="am-sub">Build 265 · 现场日志、提交对照与候选修复</p></header>
+<header class="am-head"><h1>TV 与音量键原生事件泄露</h1><p class="am-sub">Build 267 · Intel 日志、根因与修复验证</p></header>
 <div class="am-doc-layout">
-<nav class="am-toc" aria-label="目录"><a href="#panel-A">A · 现象与证据</a><a href="#panel-B">B · 根因与提交对照</a><a href="#panel-C">C · 候选修复</a><a href="#panel-D">D · 恢复与失败边界</a><a href="#panel-E">E · 文件与日志</a><a href="#panel-F">F · 验证结果与限制</a><a href="#panel-G">G · 组件交付顺序</a></nav><div class="am-doc-body">
+<nav class="am-toc" aria-label="目录"><a href="#panel-A">A · 现象与证据</a><a href="#panel-B">B · 根因与提交对照</a><a href="#panel-C">C · 修复方案</a><a href="#panel-D">D · 恢复与失败边界</a><a href="#panel-E">E · 文件与日志</a><a href="#panel-F">F · 验证结果与限制</a><a href="#panel-G">G · 组件交付顺序</a></nav><div class="am-doc-body">
 <section class="am-panel" id="panel-A">
 <header class="am-panel-head"><span class="am-panel-id">A</span><h2>现象与证据</h2></header>
-<div class="am-panel-body"><div class="am-md"><p>Build 265 在另一台 Intel Mac 发生按键泄露。
+<div class="am-panel-body"><div class="am-md"><p>Build 267 在另一台 Intel Mac 发生按键泄露。
 音量减配置为逗号时，系统音量也减少。
 快速按 TV 键时，输入框出现圆点。
-现场日志记录 macOS 主版本 14、x86_64 和 Xiaomi 设备家族。</p>
+现场日志记录 macOS 主版本 14、x86_64 和 Xiaomi 设备家族。
+两份日志的 Build 字段均为 267。</p>
 <div class="am-table-wrap"><table>
 <thead>
 <tr>
@@ -494,7 +495,7 @@ body.am-lightbox-open { overflow: hidden; }
 <td>约 246 ms</td>
 </tr>
 </tbody></table></div>
-<p>日志来自用户提供的会话 40E9F781。
+<p>日志来自用户提供的会话 0EB0CD30。
 相关字段为 source_correlation=timing_only。
 时间相关不能替代同次事件的跨接口唯一标识。
 日志另有 result=already_passed_through。</p>
@@ -512,6 +513,11 @@ body.am-lightbox-open { overflow: hidden; }
 现有过滤器只在 HID 登记后拦截。
 因此，它不能追回已放行的按下。
 TV 原先还晚于报告日志和配置回调才登记。</p>
+<p>此前修复把 UserKeyMapping 回读成功当成了原生事件已停止。
+Intel 日志显示该假设不成立。
+映射结果为 verified，但音量事件仍出现 sys0 和 sys1。
+TV 也仍可能产生原生键事件。
+此前代码因此关闭了 TV 和音量的事件拦截，导致事件直接放行。</p>
 <div class="am-table-wrap"><table>
 <thead>
 <tr>
@@ -551,7 +557,7 @@ TV 和音量的四项观察均符合该机制。
 </div></div>
 </section>
 <section class="am-panel" id="panel-C">
-<header class="am-panel-head"><span class="am-panel-id">C</span><h2>候选修复</h2></header>
+<header class="am-panel-head"><span class="am-panel-id">C</span><h2>修复方案</h2></header>
 <div class="am-panel-body"><div class="am-md"><p>接受遥控器报告前，先设置设备级 UserKeyMapping。
 映射只作用于精确 VID/PID 匹配的遥控器服务。
 普通电脑键盘不在匹配范围内。
@@ -586,11 +592,14 @@ Windows 不使用本次 macOS 映射实现。</p>
 </div>
 <figure class="am-diagram am-flow"><svg viewBox="0 0 276 540" width="276" height="540" role="img" aria-label="流程图：匹配设备、保存恢复记录、写入普通键映射、回读核对、接受设备、回滚并报告失败、执行配置动作" xmlns="http://www.w3.org/2000/svg"><defs><marker id="am1-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="am-arrow" d="M0,0 L10,5 L0,10 z"/></marker></defs><g></g><g><g data-step="0"><path class="am-edge" d="M141.3,49 L141.3,65 Q141.3,81 141.3,97 L141.3,113" marker-end="url(#am1-arrow)"/><g class="am-edge-label"><rect x="96" y="72" width="90.5" height="18" rx="3"/><text x="141.3" y="81" text-anchor="middle" dominant-baseline="central">系统启动及服务</text></g></g><g data-step="1"><path class="am-edge" d="M141.3,148 L141.3,164 Q141.3,180 141.3,196 L141.3,212" marker-end="url(#am1-arrow)"/><g class="am-edge-label"><rect x="113.3" y="171" width="56" height="18" rx="3"/><text x="141.3" y="180" text-anchor="middle" dominant-baseline="central">保存成功</text></g></g><g data-step="2"><path class="am-edge" d="M141.3,247 L141.3,258.5 Q141.3,270 141.3,281.5 L141.3,293" marker-end="url(#am1-arrow)"/></g><g data-step="3"><path class="am-edge" d="M165.2,328 L187.1,344 Q209,360 209,376 L209,392" marker-end="url(#am1-arrow)"/><g class="am-edge-label"><rect x="192.5" y="351" width="33" height="18" rx="3"/><text x="209" y="360" text-anchor="middle" dominant-baseline="central">一致</text></g></g><g data-step="4"><path class="am-edge" d="M117.3,328 L95.4,344 Q73.5,360 73.5,376 L73.5,392" marker-end="url(#am1-arrow)"/><g class="am-edge-label"><rect x="51.3" y="351" width="44.5" height="18" rx="3"/><text x="73.5" y="360" text-anchor="middle" dominant-baseline="central">不一致</text></g></g><g data-step="5"><path class="am-edge" d="M209,427 L209,443 Q209,459 209,475 L209,491" marker-end="url(#am1-arrow)"/><g class="am-edge-label"><rect x="166.9" y="450" width="84.3" height="18" rx="3"/><text x="209" y="459" text-anchor="middle" dominant-baseline="central">原始 HID 报告</text></g></g></g><g><g class="am-node am-node--rect" data-key="匹配设备" data-step="0"><rect class="am-node-shape" x="101.3" y="14" width="80" height="35" rx="3"/><text x="141.3" y="31.5" text-anchor="middle" dominant-baseline="central">匹配设备</text></g><g class="am-node am-node--rect" data-key="保存恢复记录" data-step="0"><rect class="am-node-shape" x="88.3" y="113" width="106" height="35" rx="3"/><text x="141.3" y="130.5" text-anchor="middle" dominant-baseline="central">保存恢复记录</text></g><g class="am-node am-node--rect" data-key="写入普通键映射" data-step="1"><rect class="am-node-shape" x="81.8" y="212" width="119" height="35" rx="3"/><text x="141.3" y="229.5" text-anchor="middle" dominant-baseline="central">写入普通键映射</text></g><g class="am-node am-node--rect" data-key="回读核对" data-step="2"><rect class="am-node-shape" x="101.3" y="293" width="80" height="35" rx="3"/><text x="141.3" y="310.5" text-anchor="middle" dominant-baseline="central">回读核对</text></g><g class="am-node am-node--rect" data-key="接受设备" data-step="3"><rect class="am-node-shape" x="169" y="392" width="80" height="35" rx="3"/><text x="209" y="409.5" text-anchor="middle" dominant-baseline="central">接受设备</text></g><g class="am-node am-node--rect" data-key="回滚并报告失败" data-step="4"><rect class="am-node-shape" x="14" y="392" width="119" height="35" rx="3"/><text x="73.5" y="409.5" text-anchor="middle" dominant-baseline="central">回滚并报告失败</text></g><g class="am-node am-node--rect" data-key="执行配置动作" data-step="5"><rect class="am-node-shape" x="156" y="491" width="106" height="35" rx="3"/><text x="209" y="508.5" text-anchor="middle" dominant-baseline="central">执行配置动作</text></g></g></svg></figure>
 <div class="am-md"><p>每次激活都重新枚举并核对服务。
-不复用其他设备的成功状态。
-源头映射生效时，不再登记普通键的 tap 拦截次数。
-否则，残留次数可能误吞普通键盘的同码输入。
-默认左右动作由 App 执行，不能等待已被屏蔽的系统动作。
-TV 在旧过滤路径仍提前登记。</p>
+不复用其他设备的成功状态。</p>
+<p>UserKeyMapping 仍作为第一层隔离。
+回读成功不再关闭 TV 和音量的 tap 兜底。
+这三类按键继续在 HID 报告前登记原生事件。
+其它普通键仍不在源头映射成功时登记 tap 拦截。
+这样可以减少普通键盘同码输入被误吞的范围。</p>
+<p>默认左右动作由 App 执行，不能等待已被屏蔽的系统动作。
+TV 和音量在 monitored 模式仍提前登记。</p>
 </div></div>
 </section>
 <section class="am-panel" id="panel-D">
@@ -636,7 +645,7 @@ TV 在旧过滤路径仍提前登记。</p>
 </tr>
 <tr>
 <td>HIDRemoteMonitor.swift</td>
-<td>激活前核对；停止留下普通键拦截次数；执行默认左右动作</td>
+<td>激活前核对；TV/音量保留 tap 兜底；执行默认左右动作</td>
 </tr>
 <tr>
 <td>BridgeAppModel.swift</td>
@@ -662,16 +671,18 @@ reason 区分记录、写入、回读及服务不可用。</p>
 <p>只记录阶段、结果和服务计数，不记录映射正文或设备身份。
 result=verified 只表示系统属性回读一致。
 native_delivery=unobserved 明确标记原生投递尚未实测。
-苹果普通键日志区分 source_mapped 和 armed，避免声称未执行的登记。</p>
+苹果普通键日志区分 source_mapped 和 armed，避免声称未执行的登记。
+TV 和音量日志必须能看到 <code>HID FILTER arm</code> 与 <code>HID FILTER suppressed</code>。</p>
 </div></div>
 </section>
 <section class="am-panel" id="panel-F">
 <header class="am-panel-head"><span class="am-panel-id">F</span><h2>验证结果与限制</h2></header>
-<div class="am-panel-body"><div class="am-md"><p>公开完整测试：1,069 项通过，覆盖 79 个测试套件。
+<div class="am-panel-body"><div class="am-md"><p>本次定向测试：KeyboardEventSuppressorTests 21 个测试通过。
+其中新增源头映射成功后的 TV、音量原生事件拦截用例。
 私有集成测试：1,136 项通过，覆盖 87 个测试套件。
 Siri Remote 组件：107 项通过。
-Chromecast 组件：117 项通过。
-集成测试中的发布脚本用例受父进程私有开关影响失败。
+Chromecast 组件：117 项通过。</p>
+<p>集成测试中的发布脚本用例受父进程私有开关影响失败。
 该用例在公开完整测试中已通过。</p>
 <p>私有集成复跑只跳过此发布脚本用例，没有改动测试预期。
 公开宿主双架构 Release 构建均通过。
@@ -679,11 +690,9 @@ Chromecast 组件：117 项通过。
 Intel 另以 RELEASE_VARIANT=intel 验证 macOS 13 编译目标。
 工程自检：48 项通过。治理检查通过。</p>
 <p>所有本地 SwiftPM 命令均带 --disable-keychain。</p>
-<p>回归实验暂时恢复旧拦截登记行为。
-原三键的六组普通键盘保护用例失败，共 164 项断言失败。
-恢复保护后，六组全部通过。
-当前保护矩阵扩大到小米十二键和两种独占状态。</p>
-<p>实验代码已恢复，没有改动系统设备映射。</p>
+<p>当前代码只恢复 TV 和音量的兜底登记。
+方向、电源、菜单等其它按键仍使用源头映射的普通键盘保护。
+模拟测试覆盖小米十二键和两种独占状态。</p>
 <p>Chromecast 另执行失败取消的反证实验。
 撤回失败时的取消逻辑后，新回归用例出现两项断言失败。
 恢复候选代码后，同一用例通过。</p>
@@ -696,7 +705,7 @@ Intel 另以 RELEASE_VARIANT=intel 验证 macOS 13 编译目标。
 普通键盘、默认音量、Fn 语音和多设备隔离也须通过。
 因此，当前为候选修复，不能声明真机验收完成。</p>
 <p>本次没有打包或替换 Draft 安装包。
-Build 265 不含此候选改动。</p>
+现有 Build 267 日志不来自本次修复分支。</p>
 </div></div>
 </section>
 <section class="am-panel" id="panel-G">
@@ -711,28 +720,29 @@ Build 265 不含此候选改动。</p>
 </div>
 </div>
 </main>
-<footer class="am-colophon">Generated by Answer me with HTML 0.4.6 · 2026-10-26 19:33</footer>
+<footer class="am-colophon">Generated by Answer me with HTML 0.4.6 · 2026-10-28 02:10</footer>
 <textarea id="am-source" hidden readonly aria-hidden="true">---
 template: doc
 theme: shadcn
 title: TV 与音量键原生事件泄露
-subtitle: Build 265 · 现场日志、提交对照与候选修复
+subtitle: Build 267 · Intel 日志、根因与修复验证
 lang: zh
 ---
 
 ## 现象与证据
 
-Build 265 在另一台 Intel Mac 发生按键泄露。
+Build 267 在另一台 Intel Mac 发生按键泄露。
 音量减配置为逗号时，系统音量也减少。
 快速按 TV 键时，输入框出现圆点。
 现场日志记录 macOS 主版本 14、x86_64 和 Xiaomi 设备家族。
+两份日志的 Build 字段均为 267。
 
 | 观察 | 原生按下 | HID 拦截登记 | 差值 |
 | --- | --- | --- | --- |
 | 音量减 sys1 | 01:11:52.762 | 01:11:52.964 | 约 200 ms |
 | TV key50 | 01:14:17.828 | 01:14:18.075 | 约 246 ms |
 
-日志来自用户提供的会话 40E9F781。
+日志来自用户提供的会话 0EB0CD30。
 相关字段为 source_correlation=timing_only。
 时间相关不能替代同次事件的跨接口唯一标识。
 日志另有 result=already_passed_through。
@@ -750,6 +760,12 @@ Build 265 在另一台 Intel Mac 发生按键泄露。
 现有过滤器只在 HID 登记后拦截。
 因此，它不能追回已放行的按下。
 TV 原先还晚于报告日志和配置回调才登记。
+
+此前修复把 UserKeyMapping 回读成功当成了原生事件已停止。
+Intel 日志显示该假设不成立。
+映射结果为 verified，但音量事件仍出现 sys0 和 sys1。
+TV 也仍可能产生原生键事件。
+此前代码因此关闭了 TV 和音量的事件拦截，导致事件直接放行。
 
 | 提交 | 改动与结论 |
 | --- | --- |
@@ -769,7 +785,7 @@ TV 和音量的四项观察均符合该机制。
 缺少现场前后版本 A/B，不能认定 #731 是唯一原因。
 不可将 tap 移回主线程，避免恢复系统输入停摆风险。
 
-## 候选修复
+## 修复方案
 
 接受遥控器报告前，先设置设备级 UserKeyMapping。
 映射只作用于精确 VID/PID 匹配的遥控器服务。
@@ -797,10 +813,15 @@ Windows 不使用本次 macOS 映射实现。
 
 每次激活都重新枚举并核对服务。
 不复用其他设备的成功状态。
-源头映射生效时，不再登记普通键的 tap 拦截次数。
-否则，残留次数可能误吞普通键盘的同码输入。
+
+UserKeyMapping 仍作为第一层隔离。
+回读成功不再关闭 TV 和音量的 tap 兜底。
+这三类按键继续在 HID 报告前登记原生事件。
+其它普通键仍不在源头映射成功时登记 tap 拦截。
+这样可以减少普通键盘同码输入被误吞的范围。
+
 默认左右动作由 App 执行，不能等待已被屏蔽的系统动作。
-TV 在旧过滤路径仍提前登记。
+TV 和音量在 monitored 模式仍提前登记。
 
 ## 恢复与失败边界
 
@@ -835,7 +856,7 @@ TV 在旧过滤路径仍提前登记。
 | --- | --- |
 | RemoteNativeKeyMapper.swift | 普通键源头映射、分家族恢复、回读及回滚 |
 | RemoteVoiceFunctionMapper.swift | 精确服务枚举；保留独立电源映射所有权 |
-| HIDRemoteMonitor.swift | 激活前核对；停止留下普通键拦截次数；执行默认左右动作 |
+| HIDRemoteMonitor.swift | 激活前核对；TV/音量保留 tap 兜底；执行默认左右动作 |
 | BridgeAppModel.swift | 接入三类硬件的准备、退出、关闭和权限恢复 |
 | 两份 FeatureIntegration.swift | 将源头映射准备和恢复回调传到私有组件 |
 | Tests 下两份回归测试 | 快速按、默认动作、普通键盘、恢复和失败路径 |
@@ -850,13 +871,16 @@ reason 区分记录、写入、回读及服务不可用。
 result=verified 只表示系统属性回读一致。
 native_delivery=unobserved 明确标记原生投递尚未实测。
 苹果普通键日志区分 source_mapped 和 armed，避免声称未执行的登记。
+TV 和音量日志必须能看到 `HID FILTER arm` 与 `HID FILTER suppressed`。
 
 ## 验证结果与限制
 
-公开完整测试：1,069 项通过，覆盖 79 个测试套件。
+本次定向测试：KeyboardEventSuppressorTests 21 个测试通过。
+其中新增源头映射成功后的 TV、音量原生事件拦截用例。
 私有集成测试：1,136 项通过，覆盖 87 个测试套件。
 Siri Remote 组件：107 项通过。
 Chromecast 组件：117 项通过。
+
 集成测试中的发布脚本用例受父进程私有开关影响失败。
 该用例在公开完整测试中已通过。
 
@@ -868,12 +892,9 @@ Intel 另以 RELEASE_VARIANT=intel 验证 macOS 13 编译目标。
 
 所有本地 SwiftPM 命令均带 --disable-keychain。
 
-回归实验暂时恢复旧拦截登记行为。
-原三键的六组普通键盘保护用例失败，共 164 项断言失败。
-恢复保护后，六组全部通过。
-当前保护矩阵扩大到小米十二键和两种独占状态。
-
-实验代码已恢复，没有改动系统设备映射。
+当前代码只恢复 TV 和音量的兜底登记。
+方向、电源、菜单等其它按键仍使用源头映射的普通键盘保护。
+模拟测试覆盖小米十二键和两种独占状态。
 
 Chromecast 另执行失败取消的反证实验。
 撤回失败时的取消逻辑后，新回归用例出现两项断言失败。
@@ -890,7 +911,7 @@ Chromecast 另执行失败取消的反证实验。
 因此，当前为候选修复，不能声明真机验收完成。
 
 本次没有打包或替换 Draft 安装包。
-Build 265 不含此候选改动。
+现有 Build 267 日志不来自本次修复分支。
 
 ## 组件交付顺序
 

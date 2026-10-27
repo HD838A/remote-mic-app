@@ -1427,7 +1427,14 @@ final class HIDRemoteMonitor {
     }
 
     private func shouldArmNativeEvent(for button: RemoteButton) -> Bool {
-        !nativeKeysNeutralized
+        // UserKeyMapping readback only proves that the mapping was written. It
+        // does not prove that macOS stopped delivering the native event. Intel
+        // monitored mode can still deliver TV/volume events after a successful
+        // readback, so keep the event-tap fallback for those three controls.
+        if button == .tv || button == .volumeUp || button == .volumeDown {
+            return !activeDeviceIsSeized || !nativeKeysNeutralized
+        }
+        return !nativeKeysNeutralized
     }
 
     private func prepareNativeKeyMapping() -> Bool {

@@ -244,7 +244,9 @@ struct KeyboardEventSuppressorTests {
         #expect(!suppressor.handle(type: up.type, event: up))
     }
 
-    @Test(arguments: RemoteButton.xiaomiCases, [false, true])
+    @Test(arguments: [
+        RemoteButton.power, .up, .left, .ok, .right, .down, .back, .home, .menu,
+    ], [false, true])
     func sourceNeutralizedKeysDoNotLeaveCreditsThatConsumePhysicalKeyboardInput(
         _ button: RemoteButton, _ disconnectWhileHeld: Bool
     ) throws {
@@ -285,10 +287,44 @@ struct KeyboardEventSuppressorTests {
             monitor.handleSimulatedReport(reportID: 1, data: Data([UInt8(button.hidUsage), 0, 0, 0, 0, 0]))
         }
         monitor.disconnectSimulatedDevice()
+        suppressor.stop()
         for native in button.nativeEvents {
             let up = try nativeEvent(native, down: false)
             #expect(!suppressor.handle(type: up.type, event: up))
         }
+    }
+
+    @Test(arguments: [RemoteButton.volumeUp, .volumeDown, .tv])
+    func sourceMappingDoesNotDisableNativeSuppression(_ button: RemoteButton) throws {
+        let suite = "KeyboardEventSuppressorTests.sourceMappingFallback.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let settings = AppSettings(defaults: defaults)
+        settings.customMappingEnabled = true
+        settings.setAction(.customShortcut, for: button)
+        settings.setShortcut(CustomKeyboardShortcut(keyCode: 43, modifierFlags: [], keyLabel: ","), for: button)
+        settings.setAction(.disabled, for: button, trigger: .doubleClick)
+        settings.setAction(.disabled, for: button, trigger: .longPress)
+        let suppressor = KeyboardEventSuppressor(logger: { _ in })
+        let monitor = HIDRemoteMonitor(
+            settings: settings, eventSuppressor: suppressor, ownsEventSuppressor: false,
+            runtimePermissions: { true }, actionPerformer: { _, _, _ in true },
+            diagnosticLogger: { _ in }, prepareNativeKeys: { true }
+        )
+        #expect(monitor.connectSimulatedDevice(
+            fingerprint: "source-mapping-fallback", profileID: settings.selectedRemoteProfileID,
+            isSeized: false
+        ))
+        let native: RemoteNativeEvent = button == .tv
+            ? .keyboard(keyCode: 10)
+            : try #require(button.nativeEvent)
+        let down = try nativeEvent(native, down: true)
+        let up = try nativeEvent(native, down: false)
+        monitor.handleSimulatedReport(reportID: 1, data: Data([UInt8(button.hidUsage), 0, 0, 0, 0, 0]))
+        #expect(suppressor.handle(type: down.type, event: down))
+        monitor.handleSimulatedReport(reportID: 1, data: Data(repeating: 0, count: 6))
+        #expect(suppressor.handle(type: up.type, event: up))
+        monitor.disconnectSimulatedDevice()
     }
 
     @Test(arguments: [RemoteButton.left, .right])
