@@ -21,7 +21,8 @@ status: 候选修复，真实设备待验收
 
 - 常用语和键位方案的确定性根因位于私有 Package；公开宿主只负责路由和基础映射回退。
 - Chrome 的历史证据显示 Home 原生事件可能早于 HID 报告。公开宿主当前只能记录事件提交和观察结果，不能把提交成功当成 Chrome 已接受。
-- 网易云的等待逻辑已检查完成启动、激活和可见窗口。媒体键最终选择哪个播放器属于系统和第三方 App 的不可观察状态。
+- 网易云的等待逻辑已检查完成启动、激活和可见窗口。日志使用同一个 `operation_id` 记录 `requested`、`launch_submitted`、`launching`、`running_not_frontmost`、`frontmost_no_visible_window`、`matched` 和 `timed_out` 阶段。媒体键还记录 `system_media_submitted`，但最终选择哪个播放器属于系统和第三方 App 的不可观察状态。
+- `BUTTON PROFILE` 日志现在区分 `hid`、`mobile`、`apple_remote`、`chromecast` 和 `host` 来源，并记录 `configured` 或 `missing` 以及 `handled` 或 `unhandled`。
 - 本轮没有读取未由用户明确指定的加密 `.rmlog`，不读取第三方 App 私有数据。
 
 ## C 修复边界
