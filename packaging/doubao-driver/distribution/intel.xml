@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <installer-gui-script minSpecVersion="1">
     <title>SayAll</title>
-    <options customize="always" hostArchitectures="arm64,x86_64"/>
+    <options customize="always" hostArchitectures="arm64,x86_64" rootVolumeOnly="true"/>
+    <domains enable_localSystem="true" enable_currentUserHome="false" enable_anywhere="false"/>
     <script><![CDATA[
 function hardwareIsAppleSilicon() {
     return system.sysctl('hw.optional.arm64') == 1;
