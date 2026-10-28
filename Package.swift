@@ -52,7 +52,8 @@ if privateSwiftPMEnabled {
     remoteMicTestDependencies.append(
         .product(name: "SayAllMacRemoteCore", package: privatePlatformPackage)
     )
-} else if let macRemotePackagePath, !macRemotePackagePath.isEmpty {
+} else if let macRemotePackagePath, !macRemotePackagePath.isEmpty,
+          (privateArtifactPackagePath ?? "").isEmpty {
     let packageIdentity = URL(fileURLWithPath: macRemotePackagePath)
         .lastPathComponent
         .lowercased()
@@ -349,7 +350,8 @@ if privateSwiftPMEnabled {
     }
 }
 
-if let siriRemotePath = siriRemotePackagePath, !siriRemotePath.isEmpty {
+if let siriRemotePath = siriRemotePackagePath, !siriRemotePath.isEmpty,
+   !privateArtifactsAvailable {
     let packageIdentity = URL(fileURLWithPath: siriRemotePath)
         .lastPathComponent
         .lowercased()
@@ -364,7 +366,8 @@ if let siriRemotePath = siriRemotePackagePath, !siriRemotePath.isEmpty {
     )
 }
 
-if let chromecastPath = chromecastPackagePath, !chromecastPath.isEmpty {
+if let chromecastPath = chromecastPackagePath, !chromecastPath.isEmpty,
+   !privateArtifactsAvailable {
     let packageIdentity = URL(fileURLWithPath: chromecastPath)
         .lastPathComponent
         .lowercased()
