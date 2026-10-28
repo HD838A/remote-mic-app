@@ -328,7 +328,7 @@ enum ShortcutEventSequence {
             // HID state after posting can retain our own modifiers and prevent release.
             event.flags = synthetic.union(physicalAtStart)
             if !modifier, (123...126).contains(code) {
-                event.flags.insert(.maskNumericPad)
+                event.flags.formUnion([.maskSecondaryFn, .maskNumericPad])
             }
             event.setIntegerValueField(.eventSourceUserData, value: KeyboardInjector.syntheticEventMarker)
             // Newly constructed keyboard events can have timestamp zero. Give
