@@ -11,6 +11,7 @@
   - 详见 [`feature/encrypted-diagnostic-logs/README.md`](feature/encrypted-diagnostic-logs/README.md) 与 [`Testing/EncryptedDiagnosticLogs.md`](Testing/EncryptedDiagnosticLogs.md)。
 
 - [ ] 定位并修复 RC003 长会话尾部缺失
+  - 2026-10-28 本地候选：普通 Bluetooth 软件语音键改为播放排空后释放，覆盖快速再次按下和迟到回调。兼容 SDK 配置下完整公开源码构建及 103 项语音相关测试通过；全量 XCTest/UI 和真实遥控器尾字仍待验收，不把时长差全部归因于尾音。见 [记录](Bugs/2026-10-28-bluetooth-software-key-released-before-playback.md) 与 [测试手册](Testing/BluetoothSoftwareKeyTail.md)。
   - 2026-10-18：已交付 RC001/RC003 接近 60 秒的菜单栏提醒：53 秒黄色闪烁并播放一次系统提示音，57 秒红色闪烁；Build 248 的 RC003 真机记录见 [`Testing/StatusBarConnectionAppearance.md`](Testing/StatusBarConnectionAppearance.md)。该提醒不延长或强制结束会话，长会话尾部完整性问题仍保持未完成。
   - 现有现场分析记录样本时长约占会话时长的 84%～96%；该比例不能证明无线到达率或系统丢包根因。
   - 2026-10-13：PR 653 撤回独立蓝牙队列与跨线程取值改动。只补入口、拒绝、解码、缓冲、路由、输出、录音和现有转写结果的关联日志。
