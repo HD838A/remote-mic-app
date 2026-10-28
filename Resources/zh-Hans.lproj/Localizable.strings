@@ -1296,3 +1296,14 @@
 "audio.mac_microphone.error.interrupted" = "语音已中断。请重试。";
 "audio.mac_microphone.error.timed_out" = "准备超时。请重试。";
 "audio.mac_microphone.error.accessibility" = "请在系统设置中允许辅助功能访问。";
+
+// Experimental per-remote sleep connection isolation.
+"sleep_connection.enabled" = "系统睡眠时隔离此遥控器（实验性）";
+"sleep_connection.hint" = "保留配对，不影响其他蓝牙设备。隔离期间遥控器不能用于唤醒；系统恢复后重新连接，可能需要按一下遥控器。依赖未公开的 macOS 选项，尚不保证睡眠保护有效。";
+"sleep_connection.status.idle" = "等待系统睡眠";
+"sleep_connection.status.unavailable" = "当前系统不支持睡眠隔离";
+"sleep_connection.status.isolating" = "正在请求隔离遥控器";
+"sleep_connection.status.isolated" = "应用连接已断开，睡眠保护效果仍需验证";
+"sleep_connection.status.failed" = "未确认隔离成功，不能保证睡眠保护";
+"sleep_connection.status.recovering" = "已解除隔离，正在请求重新连接";
+"sleep_connection.status.connected" = "遥控器连接已恢复";

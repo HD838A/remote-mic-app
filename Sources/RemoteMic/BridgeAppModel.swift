@@ -964,6 +964,50 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     private var audioRecoveryCoalescingState = AudioRecoveryCoalescingState()
     private var virtualAudioReleaseGeneration: UInt64 = 0
     private var pendingVirtualAudioRelease: (generation: UInt64, reason: String)?
+    @Published private(set) var sleepConnectionStatus = "sleep_connection.status.idle"
+    private var sleepProtectedTarget: UUID?
+    private var sleepConnectionSubscription: AnyCancellable?
+    private lazy var sleepConnectionController: RemoteSleepConnectionController = {
+        let controller = RemoteSleepConnectionController()
+        controller.selectedTarget = { [weak self] in
+            guard let self, let target = self.settings.sleepConnectionIsolationTarget,
+                  self.settings.remoteDeviceProfiles.contains(where: {
+                      $0.bluetoothIdentifier == target && $0.model == .rc003
+                  }) else { return nil }
+            return target
+        }
+        controller.setProtectedTarget = { [weak self] target in
+            guard let self else { return }
+            let previous = self.sleepProtectedTarget
+            self.sleepProtectedTarget = target
+            if target == nil, let previous, self.started {
+                self.bluetoothBridges[previous]?.prepareSleepIsolationRecovery()
+            }
+            self.setBluetoothSystemSuspended(self.systemAudioSuspensionState.isSuspended,
+                reason: target == nil ? "sleep_isolation_release" : "sleep_isolation_start")
+            if target == nil, previous != nil, self.started {
+                self.resumeBluetoothConnectionCyclesIfNeeded(reason: "sleep_isolation_release")
+            }
+        }
+        controller.onStatus = { [weak self] key in self?.sleepConnectionStatus = key }
+        controller.log = { AppLogger.shared.write($0) }
+        return controller
+    }()
+
+    func setSleepConnectionIsolationEnabled(_ enabled: Bool) {
+        guard !enabled || RemoteSleepConnectionAdapter.isSupported else {
+            sleepConnectionStatus = "sleep_connection.status.unavailable"
+            return
+        }
+        if enabled {
+            guard let profile = settings.selectedRemoteProfile, profile.model == .rc003,
+                  let identifier = profile.bluetoothIdentifier else { return }
+            settings.sleepConnectionIsolationTarget = identifier
+        } else {
+            settings.sleepConnectionIsolationTarget = nil
+        }
+    }
+
     private var systemAudioSuspensionState = SystemAudioSuspensionState()
     private var managedDefaultInputTransition: ManagedDefaultInputTransition?
     private lazy var audioHardwareListener: AudioObjectPropertyListenerBlock = { [weak self] count, addresses in
@@ -1436,6 +1480,12 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     func startIfNeeded() {
         guard !started else { return }
         started = true
+        sleepConnectionController.start()
+        sleepConnectionController.configurationChanged()
+        sleepConnectionSubscription = settings.$sleepConnectionIsolationTarget
+            .combineLatest(settings.$remoteDeviceProfiles)
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.sleepConnectionController.configurationChanged() }
         startAudioSubsystem()
 #if SAYALL_SIRI_REMOTE_ENABLED
         if settings.siriRemoteEnabled, !settings.siriRemoteNeedsUserAction {
@@ -1481,6 +1531,9 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         stopRecordingPlayback()
         guard started else { return }
         started = false
+        sleepConnectionSubscription?.cancel()
+        sleepConnectionSubscription = nil
+        sleepConnectionController.stop()
         cancelHIDMappingRecovery(reason: "app_stop")
         completedUpdateHIDRecoveryWorkItem?.cancel()
         completedUpdateHIDRecoveryWorkItem = nil
@@ -2057,8 +2110,8 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     }
 
     private func setBluetoothSystemSuspended(_ suspended: Bool, reason: String) {
-        bluetoothBridges.values.forEach {
-            $0.setSystemSuspended(suspended, reason: reason)
+        bluetoothBridges.forEach { identifier, bridge in
+            bridge.setSystemSuspended(suspended || sleepProtectedTarget == identifier, reason: reason)
         }
         discoveryBluetoothBridge?.setSystemSuspended(suspended, reason: reason)
     }
@@ -4111,7 +4164,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             )
             bluetoothBridges[identifier] = bridge
             bridge.setSystemSuspended(
-                systemAudioSuspensionState.isSuspended,
+                systemAudioSuspensionState.isSuspended || sleepProtectedTarget == identifier,
                 reason: "bridge_start"
             )
             bridge.start()
@@ -5859,6 +5912,11 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         )
         bluetoothBridgeStates[bridgeObjectID] = state
         if case .ready = state {
+            if sleepProtectedTarget == nil,
+               let identifier = bluetoothIdentifier(for: bridge),
+               settings.sleepConnectionIsolationTarget == identifier {
+                sleepConnectionStatus = "sleep_connection.status.connected"
+            }
             _ = registerBluetoothBridgeIfNeeded(bridge)
             voiceFnTapSession.resume()
             if shouldReapplyHIDSettings {

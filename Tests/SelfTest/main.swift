@@ -15,6 +15,20 @@ private func check(_ condition: @autoclosure () -> Bool, _ name: String) {
     }
 }
 
+// Isolation opt-in is local to this Mac and must never be enabled by migration.
+let sleepDefaultsName = "SayAll.SleepConnection.SelfTest.\(UUID().uuidString)"
+let sleepDefaults = UserDefaults(suiteName: sleepDefaultsName)!
+let sleepSettings = AppSettings(defaults: sleepDefaults)
+check(sleepSettings.sleepConnectionIsolationTarget == nil, "sleep isolation defaults off")
+let sleepTarget = UUID()
+sleepSettings.sleepConnectionIsolationTarget = sleepTarget
+check(AppSettings(defaults: sleepDefaults).sleepConnectionIsolationTarget == sleepTarget,
+      "sleep isolation target persists locally")
+sleepSettings.sleepConnectionIsolationTarget = nil
+check(AppSettings(defaults: sleepDefaults).sleepConnectionIsolationTarget == nil,
+      "sleep isolation can be disabled")
+sleepDefaults.removePersistentDomain(forName: sleepDefaultsName)
+
 let versionOne = ATVVCapabilities.parse(Data([0x0B, 0x01, 0x00, 0x02, 0x03, 0x00, 0x78]))
 check(
     versionOne?.version == 0x0100 &&
