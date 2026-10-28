@@ -3560,7 +3560,7 @@ struct OnboardingFlowTests {
         #expect(vokieSource.probe.actions["voice-tool.vokie.website"] != nil)
         invoke("voice-tool.vokie.website", on: vokieSource)
         #expect(vokieSource.probe.openedURLs.last == AppLinks.vokieWebsite)
-        #expect(AppLinks.vokieWebsite.query == "from=sayall.app")
+        #expect(AppLinks.vokieWebsite.query == "utm_source=sayall.app")
         for index in 0...3 {
             #expect(vokieSource.probe.actions.keys.contains("input-guide.\(index)"))
         }
