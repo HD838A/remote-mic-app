@@ -645,6 +645,10 @@ if [[ -d "$ROOT/Resources/AppIcons" ]]; then
     /usr/bin/cmp -s "$expected_source" "$bundled_icon"
   done < <(find "$ROOT/Resources/AppIcons" -type f | LC_ALL=C sort)
 fi
+for font_resource in "$ROOT"/Resources/Fonts/*(N); do
+  test -f "$APP/Contents/Resources/Fonts/${font_resource:t}"
+  /usr/bin/cmp -s "$font_resource" "$APP/Contents/Resources/Fonts/${font_resource:t}"
+done
 for onboarding_image in "$ROOT"/Resources/Onboarding/*.png(N); do
   test -f "$APP/Contents/Resources/Onboarding/${onboarding_image:t}"
 done
