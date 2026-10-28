@@ -977,6 +977,7 @@ struct SettingsView: View {
                     connectionDevicePanel
                         .frame(width: 230)
                     VStack(spacing: 14) {
+                        sleepConnectionPanel
                         phoneConnectionsPanel
                         audioSettingsPanel
                         audioCompatibilityPanel
@@ -989,6 +990,32 @@ struct SettingsView: View {
         }
         .onAppear {
             model.refreshVoiceKeyCompatibilityWarning()
+        }
+    }
+
+    @ViewBuilder
+    private var sleepConnectionPanel: some View {
+        if settings.selectedRemoteProfile?.model == .rc003,
+           let identifier = settings.selectedRemoteProfile?.bluetoothIdentifier {
+            GlassPanel {
+                VStack(alignment: .leading, spacing: 6) {
+                    Toggle("sleep_connection.enabled", isOn: Binding(
+                        get: { settings.sleepConnectionIsolationTarget == identifier },
+                        set: { model.setSleepConnectionIsolationEnabled($0) }
+                    ))
+                    .toggleStyle(.switch)
+                    .disabled(settings.sleepConnectionIsolationTarget != identifier && !RemoteSleepConnectionAdapter.isSupported)
+                    Text("sleep_connection.hint")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if settings.sleepConnectionIsolationTarget == identifier {
+                        Text(LocalizedStringKey(model.sleepConnectionStatus))
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
         }
     }
 

@@ -524,6 +524,11 @@ final class AppSettings: ObservableObject {
         didSet { saveRemoteDeviceProfiles() }
     }
 
+    /// Machine-local opt-in; never exported with mappings or copied to another Mac.
+    @Published var sleepConnectionIsolationTarget: UUID? {
+        didSet { defaults.set(sleepConnectionIsolationTarget?.uuidString, forKey: "sleepConnectionIsolationTarget") }
+    }
+
     @Published private(set) var selectedRemoteProfileID: UUID? {
         didSet { defaults.set(selectedRemoteProfileID?.uuidString, forKey: Keys.selectedRemoteProfileID) }
     }
@@ -844,6 +849,7 @@ final class AppSettings: ObservableObject {
     init(defaults: UserDefaults = .standard) {
         var corruptedKeys: [String] = []
         self.defaults = defaults
+        sleepConnectionIsolationTarget = defaults.string(forKey: "sleepConnectionIsolationTarget").flatMap(UUID.init(uuidString:))
         Self.restoreInterruptedOnboardingTrial(in: defaults)
         remoteDeviceProfiles = []
         selectedRemoteProfileID = nil

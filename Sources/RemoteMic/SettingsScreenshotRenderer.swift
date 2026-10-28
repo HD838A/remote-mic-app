@@ -157,6 +157,13 @@ enum SettingsScreenshotRenderer {
                 trigger: .singleClick
             )
         }
+        if let state = ProcessInfo.processInfo.environment["REMOTE_MIC_SETTINGS_SCREENSHOT_SLEEP_CONNECTION"] {
+            let identifier = UUID(uuidString: "00000000-0000-0000-0000-000000000101")!
+            let profile = settings.registerBluetoothRemote(identifier: identifier)
+            settings.updateRemoteProfileModel(profile, model: .rc003)
+            settings.selectRemoteProfile(profile)
+            if state == "enabled" { settings.sleepConnectionIsolationTarget = identifier }
+        }
         seedStatisticsForScreenshot(settings)
         let historyDirectory = outputDirectory.appendingPathComponent(UUID().uuidString)
         let transcriptStore = TranscriptArchiveStore(
