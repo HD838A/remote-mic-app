@@ -793,6 +793,9 @@ if [[ -d "$ROOT/Resources/AppIcons" ]]; then
     "$ROOT/Resources/AppIcons" \
     "$APP_DIR/Contents/Resources/AppIcons"
 fi
+ditto --norsrc --noextattr --noqtn --noacl \
+  "$ROOT/Resources/Fonts" \
+  "$APP_DIR/Contents/Resources/Fonts"
 LOCALIZATION_DIRS=("$ROOT"/Resources/*.lproj(N))
 if (( ${#LOCALIZATION_DIRS} == 0 )); then
   print -u2 "no localization resources found"

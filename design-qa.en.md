@@ -34,7 +34,7 @@ This file is a convenience translation of the current mandatory design rules. Th
 
 - The settings UI uses a narrow sidebar, header, and layered content areas. Primary actions on every visible page remain available at the production minimum window size. Pages remain scrollable without showing scroll bars.
 - Sidebar and selected-button states use low-opacity semantic-blue interactive glass.
-- It uses system fonts, semantic type sizes, and system colors, following light/dark appearance, reduced transparency, and increased contrast.
+- The bottom Profile sidebar entry uses the system `person.crop.circle` icon. The sidebar and Settings brand names use Oxanium SemiBold 600; other text uses system fonts, semantic type sizes, and system colors, following light/dark appearance, reduced transparency, and increased contrast.
 - The window keeps native traffic-light controls and a meaningful logical title while hiding the visible title and titlebar separator. Page backgrounds extend to the top, only the dedicated blank titlebar region remains draggable, page content and controls do not move the whole window, and interactive content stays clear of the window controls.
 - Except for the flat Profile cards and sharing buttons, panels and buttons use native macOS 26 `glassEffect` and glass button styles; macOS 14/15 use system Material and standard buttons without a custom blur implementation.
 - The button-mapping page reuses Resources/RC003-remote-photo.png at its original 508×1030 aspect ratio.
