@@ -65,10 +65,10 @@ jobs:
   public_test:
     name: Public Swift tests and dual-architecture build
     needs: classify_changes
-    runs-on: ${{ (needs.classify_changes.outputs.product_change == 'true' || needs.classify_changes.outputs.release_checks == 'true') && 'macos-15' || 'ubuntu-latest' }}
+    runs-on: ${{ (needs.classify_changes.outputs.product_change == 'true' || needs.classify_changes.outputs.release_checks == 'true') && 'xcode-27' || 'ubuntu-latest' }}
     timeout-minutes: 45
     env:
-      DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
+      DEVELOPER_DIR: /Applications/Xcode_27.0.app/Contents/Developer
       # Native tests ran on the same ARM host in both old architecture lanes.
       # Retain the lower deployment target; Release builds still cover both targets.
       RELEASE_VARIANT: intel
