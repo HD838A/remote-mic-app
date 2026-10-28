@@ -248,17 +248,17 @@ enum SettingsPageBehavior {
     }
 }
 
-private enum SidebarBrandFont {
+private enum BrandFont {
     static let font: Font = {
         if let url = RemoteMicResourceBundle.mainOrDevelopment.url(
-            forResource: "oxanium-bold",
+            forResource: "oxanium-semibold",
             withExtension: "ttf",
             subdirectory: "Fonts"
         ) {
             CTFontManagerRegisterFontsForURL(url as CFURL, .process, nil)
         }
-        return NSFont(name: "Oxanium-Bold", size: 18).map(Font.init)
-            ?? .system(size: 18, weight: .bold)
+        return NSFont(name: "Oxanium-SemiBold", size: 18).map(Font.init)
+            ?? .system(size: 18, weight: .semibold)
     }()
 }
 
@@ -717,7 +717,7 @@ struct SettingsView: View {
                     .frame(width: 44, height: 44)
                     .accessibilityHidden(true)
                 Text(verbatim: "SayAll")
-                    .font(SidebarBrandFont.font)
+                    .font(BrandFont.font)
                 Text(currentVersion)
                     .font(.system(size: 12))
                     .monospacedDigit()
@@ -761,16 +761,8 @@ struct SettingsView: View {
         } label: {
             VStack(spacing: 7) {
                 ZStack(alignment: .topTrailing) {
-                    if section == .statistics {
-                        Image(nsImage: appIconCatalog.image(for: settings.appIconIdentifier))
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 28, height: 28)
-                            .accessibilityHidden(true)
-                    } else {
-                        Image(systemName: sectionSystemImage(section))
-                            .font(.system(size: 21, weight: .semibold))
-                    }
+                    Image(systemName: sectionSystemImage(section))
+                        .font(.system(size: 21, weight: .semibold))
                     if SettingsPageBehavior.showsUpdateBadge(
                         for: section,
                         hasUnseenUpdate: updateInformation.hasUnseenUpdate
@@ -4036,7 +4028,7 @@ struct SettingsView: View {
                                     .frame(width: 72, height: 72)
                                     .shadow(color: .black.opacity(0.12), radius: 6, y: 3)
                                 Text("app.name")
-                                    .font(.title3.weight(.semibold))
+                                    .font(BrandFont.font)
                                 Text("settings.application.tagline")
                                     .font(.system(size: 12))
                                     .foregroundStyle(.secondary)
