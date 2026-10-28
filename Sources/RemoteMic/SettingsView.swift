@@ -2,6 +2,7 @@ import AppKit
 import Charts
 import Combine
 import CoreBluetooth
+import CoreText
 import SayAllMacRemoteCore
 import SayAllMacRemoteUI
 #if SAYALL_CHROMECAST_ENABLED && canImport(SayAllChromecast)
@@ -245,6 +246,20 @@ enum SettingsPageBehavior {
         writeToPasteboard(snapshot.summary)
         writeAuditLog(snapshot.auditLog)
     }
+}
+
+private enum SidebarBrandFont {
+    static let font: Font = {
+        if let url = RemoteMicResourceBundle.mainOrDevelopment.url(
+            forResource: "oxanium-bold",
+            withExtension: "ttf",
+            subdirectory: "Fonts"
+        ) {
+            CTFontManagerRegisterFontsForURL(url as CFURL, .process, nil)
+        }
+        return NSFont(name: "Oxanium-Bold", size: 18).map(Font.init)
+            ?? .system(size: 18, weight: .bold)
+    }()
 }
 
 extension BridgeAppModel: WebRemoteSessionModel {}
@@ -696,8 +711,13 @@ struct SettingsView: View {
                 .frame(height: SettingsPageBehavior.sidebarTopDragHeight)
                 .accessibilityHidden(true)
             VStack(spacing: 4) {
+                Image(nsImage: appIconCatalog.image(for: settings.appIconIdentifier))
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 44, height: 44)
+                    .accessibilityHidden(true)
                 Text(verbatim: "SayAll")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(SidebarBrandFont.font)
                 Text(currentVersion)
                     .font(.system(size: 12))
                     .monospacedDigit()

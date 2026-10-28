@@ -1,5 +1,13 @@
 # Third-party notices
 
+## Oxanium
+
+- Project: Google Fonts Oxanium
+- Source: <https://github.com/google/fonts/tree/main/ofl/oxanium>
+- License: SIL Open Font License 1.1 (`OFL-1.1`)
+
+The sidebar brand name uses the bundled Oxanium Bold font. The license text is included in `Fonts/OFL.txt`.
+
 ## remote-bridge-hub
 
 - Project: `xxb26553663-star/remote-bridge-hub`
