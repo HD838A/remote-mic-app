@@ -19,8 +19,11 @@ enum AppShareLink {
         }
 
         var queryItems = components.queryItems ?? []
-        queryItems.removeAll { $0.name.caseInsensitiveCompare("from") == .orderedSame }
-        queryItems.append(URLQueryItem(name: "from", value: sourceName))
+        // 同时清掉旧的 `from`，避免同一链接同时带两个来源参数。
+        queryItems.removeAll { item in
+            ["from", "utm_source"].contains { $0.caseInsensitiveCompare(item.name) == .orderedSame }
+        }
+        queryItems.append(URLQueryItem(name: "utm_source", value: sourceName))
         components.queryItems = queryItems
         return components.url ?? baseURL
     }

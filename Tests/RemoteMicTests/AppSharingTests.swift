@@ -10,17 +10,17 @@ struct AppSharingTests {
         #expect(chinese.scheme == "https")
         #expect(chinese.host == "sayall.app")
         #expect(chinese.path == "/")
-        #expect(chinese.queryItems == [URLQueryItem(name: "from", value: "mac_share")])
+        #expect(chinese.queryItems == [URLQueryItem(name: "utm_source", value: "mac_share")])
 
         #expect(english.scheme == "https")
         #expect(english.host == "sayall.app")
         #expect(english.path == "/en/")
-        #expect(english.queryItems == [URLQueryItem(name: "from", value: "mac_share")])
+        #expect(english.queryItems == [URLQueryItem(name: "utm_source", value: "mac_share")])
     }
 
-    @Test func shareSourcePreservesOtherQueryItemsAndOverwritesExistingFrom() throws {
+    @Test func shareSourcePreservesOtherQueryItemsAndOverwritesExistingSource() throws {
         let baseURL = try #require(URL(
-            string: "https://sayall.app/en/?campaign=friend&from=old#download"
+            string: "https://sayall.app/en/?campaign=friend&from=old&utm_source=stale#download"
         ))
         let result = AppShareLink.url(byAddingSourceTo: baseURL)
         let resultComponents = try components(result)
@@ -29,7 +29,7 @@ struct AppSharingTests {
         #expect(resultComponents.fragment == "download")
         #expect(resultComponents.queryItems == [
             URLQueryItem(name: "campaign", value: "friend"),
-            URLQueryItem(name: "from", value: "mac_share"),
+            URLQueryItem(name: "utm_source", value: "mac_share"),
         ])
     }
 

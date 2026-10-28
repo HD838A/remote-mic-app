@@ -16,9 +16,9 @@ enum AppLinks {
         string: "https://my.sayall.app/api/guest-entry?source=mac"
     )!
     static let doubaoInputMethod = URL(
-        string: "https://shurufa.doubao.com/?from=sayall.app"
+        string: "https://shurufa.doubao.com/?utm_source=sayall.app"
     )!
-    static let vokieWebsite = URL(string: "https://vokie.com/?from=sayall.app")!
+    static let vokieWebsite = URL(string: "https://vokie.com/?utm_source=sayall.app")!
 
     static func iOSAppStore(for locale: Locale) -> URL {
         locale.identifier.lowercased().hasPrefix("zh")
