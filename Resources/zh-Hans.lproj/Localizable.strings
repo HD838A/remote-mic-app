@@ -1277,13 +1277,13 @@
 "audio.mac_microphone.input" = "输入设备";
 "audio.mac_microphone.choose" = "选择 Mac 麦克风";
 "audio.mac_microphone.start" = "用 Mac 麦克风说话";
-"audio.mac_microphone.stop" = "停止用 Mac 麦克风说话";
+"audio.mac_microphone.stop" = "停用 Mac 麦克风说话";
 "audio.mac_microphone.help" = "仅在不使用遥控器时使用";
 "audio.mac_microphone.idle" = "未收音";
 "audio.mac_microphone.preparing" = "正在准备…";
 "audio.mac_microphone.recording" = "Mac 麦克风正在收音";
 "audio.mac_microphone.stopping" = "正在停止收音…";
-"audio.mac_microphone.shortcut" = "快捷键";
+"audio.mac_microphone.shortcut" = "切换快捷键";
 "audio.mac_microphone.shortcut_set" = "设置快捷键";
 "audio.mac_microphone.shortcut_prompt" = "请按组合键，需包含 ⌘、⌃ 或 ⌥。不区分左右修饰键。";
 "audio.mac_microphone.shortcut_unavailable" = "该快捷键不可用。请使用包含 ⌘、⌃ 或 ⌥ 的其他组合键。";
@@ -1296,3 +1296,9 @@
 "audio.mac_microphone.error.interrupted" = "语音已中断。请重试。";
 "audio.mac_microphone.error.timed_out" = "准备超时。请重试。";
 "audio.mac_microphone.error.accessibility" = "请在系统设置中允许辅助功能访问。";
+
+"audio.mac_microphone.armed" = "待命";
+"audio.mac_microphone.voice_key" = "语音快捷键";
+"audio.mac_microphone.voice_hold" = "按住说话，松开结束";
+"audio.mac_microphone.voice_toggle" = "按一下开始，再按一下结束";
+"audio.mac_microphone.error.input_monitoring" = "无法监听语音快捷键。请在系统设置中允许输入监控后重试。";
