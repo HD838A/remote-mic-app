@@ -39,7 +39,7 @@ permissions:
 jobs:
   validate:
     name: Validate main-controlled release source
-    runs-on: macos-15
+    runs-on: xcode-27
     timeout-minutes: 15
     steps:
       - name: Validate dispatch identity
@@ -132,11 +132,11 @@ jobs:
     name: Sign and notarize Apple Silicon and Intel packages
     needs: validate
     if: ${{ success() }}
-    runs-on: macos-15
+    runs-on: xcode-27
     timeout-minutes: 180
     environment: mac-release
     env:
-      DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
+      DEVELOPER_DIR: /Applications/Xcode_27.0.app/Contents/Developer
       EXPECTED_DEVELOPER_TEAM_ID: L3QHLDRPAY
       PARALLEL_RELEASE_VARIANTS: 1
       PARALLEL_PACKAGE_NOTARIZATION: 1

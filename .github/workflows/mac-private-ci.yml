@@ -14,14 +14,14 @@ permissions:
 jobs:
   private_test:
     name: Private ${{ matrix.configuration }} tests and dual-architecture build
-    runs-on: macos-15
+    runs-on: xcode-27
     timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
         configuration: [free-combination-actions, paid-button-profiles]
     env:
-      DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
+      DEVELOPER_DIR: /Applications/Xcode_27.0.app/Contents/Developer
       RELEASE_VARIANT: intel
       SAYALL_ENABLE_PRIVATE_SWIFTPM: "1"
       SAYALL_AI_PACKAGE_PATH: ""

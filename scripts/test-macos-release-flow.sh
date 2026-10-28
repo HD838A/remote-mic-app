@@ -1082,7 +1082,7 @@ done
 ci_workflow="$ROOT/.github/workflows/mac-ci.yml"
 classifier_job="$(/usr/bin/awk '/^  classify_changes:/ { capture=1 } /^  public_test:/ { exit } capture { print }' "$ci_workflow")"
 print -r -- "$classifier_job" | /usr/bin/grep -Fq 'runs-on: ubuntu-latest'
-/usr/bin/grep -Fq 'runs-on: ${{ (needs.classify_changes.outputs.product_change == '\''true'\'' || needs.classify_changes.outputs.release_checks == '\''true'\'') && '\''macos-15'\'' || '\''ubuntu-latest'\'' }}' "$ci_workflow"
+/usr/bin/grep -Fq 'runs-on: ${{ (needs.classify_changes.outputs.product_change == '\''true'\'' || needs.classify_changes.outputs.release_checks == '\''true'\'') && '\''xcode-27'\'' || '\''ubuntu-latest'\'' }}' "$ci_workflow"
 if print -r -- "$classifier_job" | /usr/bin/grep -Eq 'private dependency|SAYALL_PRIVATE_PLATFORM_DEPLOY_KEY|verify-release-dependency-pins.sh resolve'; then
   print -u2 "public macOS CI classifier must not inspect private dependencies"
   exit 1
