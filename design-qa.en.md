@@ -49,6 +49,20 @@ This file is a convenience translation of the current mandatory design rules. Th
 - General uses inline icon buttons for the app-icon choice and only shows icon resources actually included in the installed build. A selection immediately updates the Dock, app switcher, and Settings branding and persists across launches; a missing resource falls back to the default icon without showing an unavailable placeholder.
 - All UI text uses stable semantic keys. Localized Markdown help falls back to English when the selected language has no matching document.
 
+## Approved sidebar design
+
+On 2026-10-29 the user approved the [version 8 HTML design](Screenshots/design-drafts/sidebar-compact/v8/review.html) for implementation. Its Markdown source, original PNGs and digest manifest are stored beside it without changing the reviewed bytes. Statements such as “not implemented” describe the review-time state.
+
+- Use a `136pt` sidebar. Place the icon to the left of the text for the brand, every navigation entry and the bottom account entry.
+- Use a `44 × 44pt` brand logo, `16pt` below the window control region and `12pt` from the sidebar edge. Keep an `8pt` horizontal gap to the brand text.
+- Use `16pt` Oxanium SemiBold 600 for sidebar SayAll. Move it `2pt` down from version 5. Keep the `12pt` system-font version closely below it and read the actual bundle version.
+- Use `18pt` navigation icons and `13pt` system Semibold labels. Set the icon column `15pt` from the left edge for optical alignment with the logo. Keep an `8pt` icon-to-text gap and left-align labels.
+- Navigation rows have a `44pt` minimum height. Keep the full `Button Profiles` name and wrap by available width instead of renaming it to `Profiles`. Center the icon vertically against the entire text block. Grow rows for additional lines without shrinking or clipping text.
+- Keep `person.crop.circle` for the account entry, with a `56pt` minimum account region and the same columns and centering. Wrap long names fully by available width, without forced breaks every eight characters or ellipses. Grow the account region when needed.
+- Use a rounded, low-opacity accent selection background. Put the Settings update dot at the row trailing edge and reserve room for it.
+- Keep the brand and account fixed and retain vertical scrolling for the middle navigation. Validate all enabled entries at the `1020 × 772` production minimum in Chinese/English and light/dark appearances. Do not hide entries or shrink Chinese text to remove scrolling.
+- Preserve existing names, ordering, visibility, account sources and behavior. Optional entries and the fictitious name in the draft are layout fixtures, not new features or real account state. Keep Oxanium 600 for the Settings brand too.
+
 ## Mandatory interaction, layout, and typography rules
 
 - Secondary-page headers place the Back button on the left and the page title immediately to its right, on one vertically centered row. Use only “Back” as the label, with a hit area at least 72pt wide and 44pt high; the entire button area must respond to clicks.
