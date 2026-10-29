@@ -158,6 +158,29 @@ final class MacroFeatureIntegration: ObservableObject {
         #endif
     }
 
+    var supportsProfileHoldModes: Bool {
+        #if canImport(SayAllButtonProfiles) && SAYALL_BUTTON_HOLD_MODES
+        true
+        #else
+        false
+        #endif
+    }
+
+    func profileHoldMode(profile: UUID? = nil, button: RemoteButton) -> String? {
+        #if canImport(SayAllButtonProfiles) && SAYALL_BUTTON_HOLD_MODES
+        buttonProfilesFeature.holdMode(profile: profile, button: button.rawValue)
+        #else
+        nil
+        #endif
+    }
+
+    func setProfileHoldMode(_ mode: RemoteButtonHoldMode, profile: UUID, button: RemoteButton) {
+        #if canImport(SayAllButtonProfiles) && SAYALL_BUTTON_HOLD_MODES
+        buttonProfilesFeature.setHoldMode(mode.rawValue, profile: profile, button: button.rawValue)
+        objectWillChange.send()
+        #endif
+    }
+
     func profileBinding(device: UUID?, profile: UUID? = nil, button: RemoteButton,
                         trigger: ButtonTrigger) -> ConfiguredButtonAction? {
         #if canImport(SayAllButtonProfiles) && SAYALL_UNIFIED_BUTTON_CONFIGURATION
@@ -337,6 +360,10 @@ final class MacroFeatureIntegration: ObservableObject {
     }
 
     func attachBindings(to settings: AppSettings, onProfileChange: @escaping (UUID?) -> Void) {
+        settings.interactionModeOverride = { [weak self, weak settings] _, button in
+            guard settings?.customMappingEnabled == true else { return nil }
+            return self?.profileHoldMode(button: button)
+        }
         settings.configuredActionOverride = { [weak self, weak settings] device, button, trigger in
             guard let settings, settings.customMappingEnabled else { return nil }
             return self?.profileBinding(device: device, button: button, trigger: trigger)
@@ -358,14 +385,17 @@ final class MacroFeatureIntegration: ObservableObject {
         #endif
         #if canImport(SayAllButtonProfiles) && SAYALL_UNIFIED_BUTTON_CONFIGURATION
         var lastActiveProfiles: [UUID?: UUID] = [:]
+        var lastProfileBindings: [UUID?: [RemoteMicButtonProfile]] = [:]
         buttonProfilesFeature.changes.receive(on: DispatchQueue.main).sink { [weak self, weak settings] in
             DispatchQueue.main.async {
                 guard let self, let settings else { return }
                 let devices: [UUID?] = [nil] + settings.remoteDeviceProfiles.map { Optional($0.id) }
                 for device in devices {
                     let active = self.activeMappingProfileID(device: device)
-                    if active != lastActiveProfiles[device] {
+                    let profiles = self.buttonProfilesFeature.profiles(for: device)
+                    if active != lastActiveProfiles[device] || profiles != lastProfileBindings[device] {
                         lastActiveProfiles[device] = active
+                        lastProfileBindings[device] = profiles
                         onProfileChange(device)
                     }
                 }

@@ -48,6 +48,7 @@ private struct PersonalizedConfiguration: Codable {
     let buttonApplicationProfileIDs: [String: UUID]?
     let secondaryButtonBindings: [String: [String: ConfiguredButtonAction]]
     let buttonRapidPressEnabled: [String: Bool]?
+    let interactionSettings: RemoteButtonInteractionSettings?
     let customApplicationProfiles: [CustomApplicationProfile]?
     let applicationLanguage: AppLanguage
     let appIconIdentifier: AppIconIdentifier?
@@ -408,6 +409,7 @@ final class AppSettings: ObservableObject {
     var configuredActionOverride: ((UUID?, RemoteButton, ButtonTrigger) -> ConfiguredButtonAction?)?
     @Published var unifiedBaseBindings: [UnifiedButtonBinding] = [] {
         didSet {
+            onInteractionModeChanged?(selectedRemoteProfileID)
             if let data = try? JSONEncoder().encode(unifiedBaseBindings) {
                 defaults.set(data, forKey: "unifiedBaseBindings")
             }
@@ -483,6 +485,7 @@ final class AppSettings: ObservableObject {
 
     @Published var buttonBindings: [RemoteButton: ButtonAction] {
         didSet {
+            onInteractionModeChanged?(selectedRemoteProfileID)
             saveBindings()
             saveSelectedRemoteProfileMappings()
         }
@@ -490,6 +493,7 @@ final class AppSettings: ObservableObject {
 
     @Published var buttonShortcuts: [RemoteButton: CustomKeyboardShortcut] {
         didSet {
+            onInteractionModeChanged?(selectedRemoteProfileID)
             saveShortcuts()
             saveSelectedRemoteProfileMappings()
         }
@@ -497,6 +501,7 @@ final class AppSettings: ObservableObject {
 
     @Published var buttonApplicationProfileIDs: [RemoteButton: UUID] {
         didSet {
+            onInteractionModeChanged?(selectedRemoteProfileID)
             saveButtonApplicationProfileIDs()
             saveSelectedRemoteProfileMappings()
         }
@@ -504,10 +509,26 @@ final class AppSettings: ObservableObject {
 
     @Published var secondaryButtonBindings: [RemoteButton: [ButtonTrigger: ConfiguredButtonAction]] {
         didSet {
+            onInteractionModeChanged?(selectedRemoteProfileID)
             saveSecondaryBindings()
             saveSelectedRemoteProfileMappings()
         }
     }
+
+    /// Timing edits affect the next interaction. Mode edits cancel through the binding hook.
+    @Published var interactionSettings = RemoteButtonInteractionSettings() {
+        didSet {
+            if oldValue.modes != interactionSettings.modes || oldValue.migratedRepeatButtons != interactionSettings.migratedRepeatButtons {
+                onInteractionModeChanged?(selectedRemoteProfileID)
+            }
+            if let data = try? JSONEncoder().encode(interactionSettings) {
+                defaults.set(data, forKey: "buttonInteractionSettings")
+            }
+            saveSelectedRemoteProfileMappings()
+        }
+    }
+    var onInteractionModeChanged: ((UUID?) -> Void)?
+    var interactionModeOverride: ((UUID?, RemoteButton) -> String?)?
 
     @Published var buttonRapidPressEnabled: [RemoteButton: Bool] {
         didSet {
@@ -525,7 +546,10 @@ final class AppSettings: ObservableObject {
     }
 
     @Published private(set) var selectedRemoteProfileID: UUID? {
-        didSet { defaults.set(selectedRemoteProfileID?.uuidString, forKey: Keys.selectedRemoteProfileID) }
+        didSet {
+            onInteractionModeChanged?(oldValue)
+            defaults.set(selectedRemoteProfileID?.uuidString, forKey: Keys.selectedRemoteProfileID)
+        }
     }
 
     @Published var applicationLanguage: AppLanguage {
@@ -1091,12 +1115,23 @@ final class AppSettings: ObservableObject {
             from: defaults,
             corrupted: &corruptedKeys
         )
+        let savedInteractionSettings = defaults.data(forKey: "buttonInteractionSettings")
+        if let savedInteractionSettings {
+            if let decoded = try? JSONDecoder().decode(RemoteButtonInteractionSettings.self, from: savedInteractionSettings) {
+                interactionSettings = decoded
+            } else {
+                defaults.set(savedInteractionSettings, forKey: "buttonInteractionSettings.corrupt")
+                corruptedKeys.append("buttonInteractionSettings")
+                interactionSettings = RemoteButtonInteractionSettings(doubleClickMilliseconds: 0)
+            }
+        }
         let legacyMappings = RemoteDeviceMappings(
             buttonBindings: buttonBindings,
             buttonShortcuts: buttonShortcuts,
             buttonApplicationProfileIDs: buttonApplicationProfileIDs,
             secondaryButtonBindings: secondaryButtonBindings,
-            buttonRapidPressEnabled: buttonRapidPressEnabled
+            buttonRapidPressEnabled: buttonRapidPressEnabled,
+            interactionSettings: interactionSettings
         )
         if
             let decoded = Self.decodeSetting(
@@ -1109,7 +1144,11 @@ final class AppSettings: ObservableObject {
         {
             let savedID = defaults.string(forKey: Keys.selectedRemoteProfileID).flatMap(UUID.init(uuidString:))
             let deduplicated = Self.deduplicateRemoteProfiles(decoded, selectedProfileID: savedID)
-            remoteDeviceProfiles = deduplicated.profiles
+            if defaults.data(forKey: "buttonInteractionMigrationBackup") == nil,
+               let original = defaults.data(forKey: Keys.remoteDeviceProfiles) {
+                defaults.set(original, forKey: "buttonInteractionMigrationBackup")
+            }
+            remoteDeviceProfiles = deduplicated.profiles.map(Self.migratingButtonInteraction)
             if deduplicated.removedCount > 0 {
                 AppLogger.shared.write(
                     "SETTINGS REMOTE_PROFILES phase=completed result=deduplicated " +
@@ -1124,7 +1163,7 @@ final class AppSettings: ObservableObject {
                 $0.id == deduplicated.selectedProfileID
             } ? deduplicated.selectedProfileID : deduplicated.profiles.first?.id
             if let selectedRemoteProfileID,
-               let selected = deduplicated.profiles.first(where: { $0.id == selectedRemoteProfileID }) {
+               let selected = remoteDeviceProfiles.first(where: { $0.id == selectedRemoteProfileID }) {
                 buttonBindings = Self.defaultBindings.merging(selected.mappings.parsedButtonBindings) {
                     _, saved in saved
                 }
@@ -1132,12 +1171,18 @@ final class AppSettings: ObservableObject {
                 buttonApplicationProfileIDs = selected.mappings.parsedButtonApplicationProfileIDs
                 secondaryButtonBindings = selected.mappings.parsedSecondaryButtonBindings
                 buttonRapidPressEnabled = selected.mappings.parsedButtonRapidPressEnabled
+                interactionSettings = selected.mappings.interactionSettings ?? RemoteButtonInteractionSettings()
             }
         } else {
-            let migrated = RemoteDeviceProfile(
+            var original = RemoteDeviceProfile(
                 bluetoothIdentifier: defaults.string(forKey: Keys.peripheralIdentifier).flatMap(UUID.init(uuidString:)),
                 mappings: legacyMappings
             )
+            if savedInteractionSettings == nil {
+                original.mappings.interactionSettings = nil
+            }
+            let migrated = Self.migratingButtonInteraction(original)
+            interactionSettings = migrated.mappings.interactionSettings ?? RemoteButtonInteractionSettings()
             remoteDeviceProfiles = [migrated]
             selectedRemoteProfileID = migrated.id
         }
@@ -1150,6 +1195,12 @@ final class AppSettings: ObservableObject {
             catch { corruptedKeys.append("unifiedBaseBindings") }
         }
         corruptedSettingKeys = corruptedKeys
+        if let data = try? JSONEncoder().encode(remoteDeviceProfiles) {
+            defaults.set(data, forKey: Keys.remoteDeviceProfiles)
+        }
+        if let data = try? JSONEncoder().encode(interactionSettings) {
+            defaults.set(data, forKey: "buttonInteractionSettings")
+        }
         _ = localUsageLedger
     }
 
@@ -1599,6 +1650,7 @@ final class AppSettings: ObservableObject {
         buttonApplicationProfileIDs = profile.mappings.parsedButtonApplicationProfileIDs
         secondaryButtonBindings = profile.mappings.parsedSecondaryButtonBindings
         buttonRapidPressEnabled = profile.mappings.parsedButtonRapidPressEnabled
+        interactionSettings = profile.mappings.interactionSettings ?? RemoteButtonInteractionSettings()
         isLoadingRemoteProfile = false
     }
 
@@ -1728,7 +1780,8 @@ final class AppSettings: ObservableObject {
             buttonShortcuts: buttonShortcuts,
             buttonApplicationProfileIDs: buttonApplicationProfileIDs,
             secondaryButtonBindings: secondaryButtonBindings,
-            buttonRapidPressEnabled: buttonRapidPressEnabled
+            buttonRapidPressEnabled: buttonRapidPressEnabled,
+            interactionSettings: interactionSettings
         )
     }
 
@@ -1814,7 +1867,8 @@ final class AppSettings: ObservableObject {
             mappings.parsedButtonShortcuts.isEmpty &&
             mappings.parsedButtonApplicationProfileIDs.isEmpty &&
             mappings.parsedSecondaryButtonBindings.isEmpty &&
-            mappings.parsedButtonRapidPressEnabled.isEmpty
+            mappings.parsedButtonRapidPressEnabled.isEmpty &&
+            (mappings.interactionSettings == nil || mappings.interactionSettings == RemoteButtonInteractionSettings())
     }
 
     func updateRemoteProfile(
@@ -2266,7 +2320,7 @@ final class AppSettings: ObservableObject {
 
     func exportedConfigurationData() throws -> Data {
         let configuration = PersonalizedConfiguration(
-            formatVersion: unifiedBaseBindings.isEmpty ? 1 : 2,
+            formatVersion: 2,
             gainDB: gainDB,
             selectedAudioDeviceUID: selectedAudioDeviceUID,
             macMicrophoneInputUID: macMicrophoneInputUID,
@@ -2295,6 +2349,7 @@ final class AppSettings: ObservableObject {
                 : Dictionary(
                     uniqueKeysWithValues: buttonRapidPressEnabled.map { ($0.key.rawValue, $0.value) }
                 ),
+            interactionSettings: interactionSettings,
             customApplicationProfiles: customApplicationProfiles,
             applicationLanguage: applicationLanguage,
             appIconIdentifier: appIconIdentifier,
@@ -2390,7 +2445,9 @@ final class AppSettings: ObservableObject {
                   application.focusShortcut.map({ Self.validatedShortcut($0) == $0 }) ?? true
             else { throw AppConfigurationError.invalidValues }
         }
+        guard configuration.interactionSettings?.isWellFormed ?? true else { throw AppConfigurationError.invalidValues }
         for profile in preferences.remoteDeviceProfiles {
+            guard profile.mappings.interactionSettings?.isWellFormed ?? true else { throw AppConfigurationError.invalidValues }
             guard profile.bluetoothIdentifier == nil, profile.hidFingerprint == nil, profile.customName.count <= 256
             else { throw AppConfigurationError.invalidValues }
             let mappings = profile.mappings
@@ -2507,6 +2564,7 @@ final class AppSettings: ObservableObject {
             RemoteButton(rawValue: key).map { button in (button, Dictionary(uniqueKeysWithValues: values.compactMap { k,v in ButtonTrigger(rawValue: k).map { ($0,v) } })) }
         })
         buttonRapidPressEnabled = Dictionary(uniqueKeysWithValues: (c.buttonRapidPressEnabled ?? [:]).compactMap { key,value in RemoteButton(rawValue: key).map { ($0,value) } })
+        interactionSettings = c.interactionSettings ?? RemoteButtonInteractionSettings()
         customApplicationProfiles = c.customApplicationProfiles ?? []
         applicationLanguage = c.applicationLanguage
         if let value = c.appIconIdentifier { appIconIdentifier = value }
@@ -2694,6 +2752,14 @@ final class AppSettings: ObservableObject {
         buttonApplicationProfileIDs = importedApplicationProfileIDs
         secondaryButtonBindings = importedSecondaryBindings
         buttonRapidPressEnabled = importedRapidPressEnabled
+        interactionSettings = configuration.interactionSettings ?? Self.migratingButtonInteraction(
+            RemoteDeviceProfile(model: selectedRemoteProfile?.model ?? .unknown, mappings: RemoteDeviceMappings(
+                buttonBindings: buttonBindings, buttonShortcuts: buttonShortcuts,
+                secondaryButtonBindings: secondaryButtonBindings))
+        ).mappings.interactionSettings ?? RemoteButtonInteractionSettings()
+        if !interactionSettings.isValid || interactionSettings.modes.contains(where: {
+            RemoteButton(rawValue: $0.key) == nil || RemoteButtonHoldMode(rawValue: $0.value) == nil
+        }) { rejected.insert("interactionSettings") }
         customApplicationProfiles = importedApplicationProfiles
         applicationLanguage = configuration.applicationLanguage
         if let appIconIdentifier = configuration.appIconIdentifier {
@@ -2906,6 +2972,59 @@ final class AppSettings: ObservableObject {
         }
     }
 
+    func buttonInteractionSettings(profileID: UUID? = nil) -> RemoteButtonInteractionSettings {
+        guard let profileID, profileID != selectedRemoteProfileID else { return interactionSettings }
+        return remoteDeviceProfiles.first { $0.id == profileID }?.mappings.interactionSettings
+            ?? RemoteButtonInteractionSettings()
+    }
+
+    func setHoldMode(_ mode: RemoteButtonHoldMode, for button: RemoteButton) {
+        onInteractionModeChanged?(selectedRemoteProfileID)
+        interactionSettings.migratedRepeatButtons?.removeAll { $0 == button.rawValue }
+        interactionSettings.modes[button.rawValue] = mode.rawValue
+    }
+
+    func interactionSnapshot(for button: RemoteButton, profileID: UUID? = nil,
+                             opaque: (ButtonTrigger) -> Bool = { _ in false }) -> RemoteButtonInteractionSnapshot {
+        let timing = buttonInteractionSettings(profileID: profileID)
+        var snapshot = RemoteButtonInteractionSnapshot(settings: timing, mode: interactionModeOverride?(profileID ?? selectedRemoteProfileID, button).map(RemoteButtonHoldMode.init(rawValue:)) ?? timing.mode(for: button),
+            single: configuredAction(for: button, trigger: .singleClick, profileID: profileID),
+            double: configuredAction(for: button, trigger: .doubleClick, profileID: profileID),
+            long: configuredAction(for: button, trigger: .longPress, profileID: profileID),
+            hasOpaqueBinding: ButtonTrigger.allCases.contains(where: opaque),
+            repeatInterval: HIDRemoteTiming.repeatIntervalMilliseconds(for: button) ?? 100,
+            opaqueDouble: opaque(.doubleClick), opaqueLong: opaque(.longPress))
+        if snapshot.mode == .repeatSingle,
+           interactionModeOverride?(profileID ?? selectedRemoteProfileID, button) == nil,
+           timing.migratedRepeatButtons?.contains(button.rawValue) == true,
+           snapshot.hasOpaqueBinding || snapshot.recognizesDouble || snapshot.recognizesLong ||
+            !snapshot.single.allowsHoldRepeat {
+            snapshot.mode = .once
+        }
+        return snapshot
+    }
+
+    private static func migratingButtonInteraction(_ original: RemoteDeviceProfile) -> RemoteDeviceProfile {
+        guard original.mappings.interactionSettings == nil else { return original }
+        var profile = original
+        var timing = RemoteButtonInteractionSettings()
+        // Match the old software repeat scope. Native left/right passthrough remains native.
+        if !profile.model.isChromecastRemote {
+            for button in RemoteButton.allCases where HIDRemoteTiming.repeatIntervalMilliseconds(for: button) != nil {
+                let single = profile.mappings.parsedButtonBindings[button] ?? Self.defaultBindings[button] ?? .disabled
+                let secondary = profile.mappings.parsedSecondaryButtonBindings[button] ?? [:]
+                let hasSecondary = secondary.values.contains { $0.action != .disabled }
+                let configured = ConfiguredButtonAction(action: single, shortcut: profile.mappings.parsedButtonShortcuts[button])
+                if configured.allowsHoldRepeat && !hasSecondary {
+                    timing.modes[button.rawValue] = RemoteButtonHoldMode.repeatSingle.rawValue
+                    timing.migratedRepeatButtons = (timing.migratedRepeatButtons ?? []) + [button.rawValue]
+                }
+            }
+        }
+        profile.mappings.interactionSettings = timing
+        return profile
+    }
+
     private func saveSelectedRemoteProfileMappings() {
         guard !isLoadingRemoteProfile,
               let selectedRemoteProfileID,
@@ -2916,7 +3035,8 @@ final class AppSettings: ObservableObject {
             buttonShortcuts: buttonShortcuts,
             buttonApplicationProfileIDs: buttonApplicationProfileIDs,
             secondaryButtonBindings: secondaryButtonBindings,
-            buttonRapidPressEnabled: buttonRapidPressEnabled
+            buttonRapidPressEnabled: buttonRapidPressEnabled,
+            interactionSettings: interactionSettings
         )
     }
 

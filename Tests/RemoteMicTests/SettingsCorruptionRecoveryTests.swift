@@ -31,13 +31,20 @@ struct SettingsCorruptionRecoveryTests {
         let upgraded = AppSettings(defaults: defaults)
 
         #expect(upgraded.corruptedSettingKeys.isEmpty)
-        #expect(upgraded.remoteDeviceProfiles == profiles)
+        let withoutInteraction = upgraded.remoteDeviceProfiles.map { profile in
+            var profile = profile
+            profile.mappings.interactionSettings = nil
+            return profile
+        }
+        #expect(withoutInteraction == profiles)
+        #expect(upgraded.remoteDeviceProfiles.allSatisfy { $0.mappings.interactionSettings != nil })
+        #expect(defaults.data(forKey: "buttonInteractionMigrationBackup") == Data(legacy.utf8))
         #expect(upgraded.selectedRemoteProfileID == profiles[1].id)
         #expect(upgraded.buttonBindings[.up] == .commandCopy)
         #expect(defaults.data(forKey: "remoteDeviceProfiles.corrupt") == nil)
         let resaved = try JSONEncoder().encode(upgraded.remoteDeviceProfiles)
         #expect(String(data: resaved, encoding: .utf8)?.contains("chromecase_voice_remote") == false)
-        #expect(try JSONDecoder().decode([RemoteDeviceProfile].self, from: resaved) == profiles)
+        #expect(try JSONDecoder().decode([RemoteDeviceProfile].self, from: resaved) == upgraded.remoteDeviceProfiles)
     }
 
     @Test func unknownRemoteModelStillFailsWithoutIncludingItsValueInTheError() throws {

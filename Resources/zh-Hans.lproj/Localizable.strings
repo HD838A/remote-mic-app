@@ -1296,3 +1296,21 @@
 "audio.mac_microphone.error.interrupted" = "语音已中断。请重试。";
 "audio.mac_microphone.error.timed_out" = "准备超时。请重试。";
 "audio.mac_microphone.error.accessibility" = "请在系统设置中允许辅助功能访问。";
+
+// Device gesture timing and hold behavior
+"button_mapping.hold_title" = "按住效果";
+"button_mapping.hold_mode.once" = "单次触发";
+"button_mapping.hold_mode.repeatlong" = "重复长按动作";
+"button_mapping.hold_mode.repeatsingle" = "重复单击动作";
+"button_mapping.hold_mode.holdsingle" = "保持单击按下";
+"button_mapping.hold_hint" = "单击与长按页面共享此设置。重复执行与保持按下是两种不同效果。";
+"button_mapping.hold_invalid" = "此配置无效。此按键已停用，请重新选择模式或恢复默认时间。";
+"button_mapping.hold_repeat_long_unavailable" = "长按动作不支持重复，或此按键由键位方案接管。此按键已停用。";
+"button_mapping.hold_repeat_single_unavailable" = "重复单击需要可重复的单击动作，并且不能配置长按动作。键位方案接管时不可用。此按键已停用。";
+"button_mapping.hold_key_unavailable" = "保持按下仅支持无修饰键的普通键盘按键。请清除双击和长按动作。键位方案接管时不可用。此按键已停用。";
+"button_mapping.timing_title" = "此设备的手势时间";
+"button_mapping.timing_double" = "双击等待时间";
+"button_mapping.timing_long" = "长按判定时间";
+"button_mapping.timing_hint" = "时间修改从下一次按下生效。语音键不使用这些时间。播放器按住效果需要在目标 App 中验证。";
+"button_mapping.timing_reset" = "恢复默认时间";
+"button_mapping.hold_profile_unavailable" = "此组件版本不能保存键位方案的按住效果。请更新组件。";

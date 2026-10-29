@@ -2607,6 +2607,10 @@ struct SettingsView: View {
             settings.experimentalContinuousRecordingEnabled
         return VStack(alignment: .leading, spacing: 16) {
             mappingInheritanceControl(button: button, trigger: trigger)
+            if trigger == .singleClick || trigger == .longPress {
+                mappingInteractionControl(button: button)
+            }
+
             mappingActionFilterControl
 
             ForEach(ButtonActionCategory.allCases.filter(mappingActionFilter.includes)) { category in
@@ -2708,6 +2712,71 @@ struct SettingsView: View {
         }
         .padding(8)
         .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    private func mappingInteractionControl(button: RemoteButton) -> some View {
+        var snapshot = RemoteButtonInteractionSnapshot(settings: settings.interactionSettings,
+            mode: settings.interactionSettings.mode(for: button),
+            single: mappingConfiguration(for: button, trigger: .singleClick),
+            double: mappingConfiguration(for: button, trigger: .doubleClick),
+            long: mappingConfiguration(for: button, trigger: .longPress))
+        if let profile = editingMappingProfileID,
+           let mode = macroFeature.profileHoldMode(profile: profile, button: button) {
+            snapshot.mode = RemoteButtonHoldMode(rawValue: mode)
+        }
+        let profileUnsupported = editingMappingProfileID != nil && !macroFeature.supportsProfileHoldModes
+        return VStack(alignment: .leading, spacing: 10) {
+            Text("button_mapping.hold_title").font(.system(size: 13, weight: .semibold))
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+                ForEach(RemoteButtonHoldMode.allCases) { mode in
+                    Button {
+                        if let profile = editingMappingProfileID {
+                            settings.onInteractionModeChanged?(settings.selectedRemoteProfileID)
+                            macroFeature.setProfileHoldMode(mode, profile: profile, button: button)
+                        } else {
+                            settings.setHoldMode(mode, for: button)
+                        }
+                    } label: {
+                        HStack {
+                            Image(systemName: snapshot.mode == mode ? "checkmark.circle.fill" : "circle")
+                            Text(localization.text(mode.localizationKey))
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .font(.system(size: 13))
+                        .padding(8)
+                        .background(snapshot.mode == mode ? Color.accentColor.opacity(0.12) : Color.primary.opacity(0.04),
+                                    in: RoundedRectangle(cornerRadius: 8))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(profileUnsupported)
+                    .accessibilityAddTraits(snapshot.mode == mode ? .isSelected : [])
+                }
+            }
+            if profileUnsupported {
+                Text("button_mapping.hold_profile_unavailable").foregroundStyle(.orange).font(.system(size: 12))
+            }
+            if let reason = snapshot.unavailableReason {
+                Text(localization.text(reason)).foregroundStyle(.orange).font(.system(size: 12))
+            }
+            Text("button_mapping.hold_hint").font(.system(size: 12)).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Divider()
+            Text("button_mapping.timing_title").font(.system(size: 13, weight: .semibold))
+            Stepper(value: $settings.interactionSettings.doubleClickMilliseconds, in: 150...500, step: 50) {
+                Text(localization.text("button_mapping.timing_double") + " \(settings.interactionSettings.doubleClickMilliseconds) ms")
+            }
+            Stepper(value: $settings.interactionSettings.longPressMilliseconds, in: 300...1000, step: 50) {
+                Text(localization.text("button_mapping.timing_long") + " \(settings.interactionSettings.longPressMilliseconds) ms")
+            }
+            Text("button_mapping.timing_hint").font(.system(size: 12)).foregroundStyle(.secondary)
+            Button("button_mapping.timing_reset") {
+                settings.interactionSettings.doubleClickMilliseconds = 300
+                settings.interactionSettings.longPressMilliseconds = 550
+            }
+        }
+        .font(.system(size: 13))
+        .padding(12)
+        .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 10))
     }
 
     private func mappingRapidPressControl(button: RemoteButton) -> some View {

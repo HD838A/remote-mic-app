@@ -948,6 +948,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     private var remoteDeviceNameRefreshOperation: UInt64 = 0
     private var appliedHIDPermissionSnapshot: HIDPermissionSnapshot?
     private var terminationObserver: NSObjectProtocol?
+    private var buttonLifecycleObservers: [NSObjectProtocol] = []
     private var completedUpdateHIDRecoveryWorkItem: DispatchWorkItem?
     private var hidMappingRecoveryWorkItem: DispatchWorkItem?
     private var hidMappingRecoveryAttempt = 0
@@ -1021,6 +1022,9 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
                     "operation_id=\(self?.appleRemoteAppSwitcherOperationLabel ?? "none") " +
                     message
             )
+        }
+        settings.onInteractionModeChanged = { [weak self] device in
+            self?.cancelButtonMappingInteractions(device: device)
         }
         macroFeature.attachBindings(to: settings) { [weak self] device in
             self?.cancelButtonMappingInteractions(device: device)
@@ -1451,6 +1455,17 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
                 guard let self else { return }
                 self.macMicrophoneShortcutAvailable = self.macMicrophoneHotKey.register(shortcut)
             }
+        for notification in [NSWorkspace.willSleepNotification, NSWorkspace.didActivateApplicationNotification,
+                             NSWorkspace.sessionDidResignActiveNotification] {
+            buttonLifecycleObservers.append(NSWorkspace.shared.notificationCenter.addObserver(
+                forName: notification, object: nil, queue: .main
+            ) { [weak self] _ in
+                guard let self else { return }
+                self.cancelConfiguredButtonInteractions(reason: "environment_changed")
+                self.hidMonitors.values.forEach { $0.cancelConfiguredInteractions(reason: "environment_changed") }
+                self.discoveryHIDMonitor?.cancelConfiguredInteractions(reason: "environment_changed")
+            })
+        }
         terminationObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.willTerminateNotification,
             object: nil,
@@ -1467,6 +1482,9 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     }
 
     func stop() {
+        cancelConfiguredButtonInteractions(reason: "app_stop")
+        buttonLifecycleObservers.forEach { NSWorkspace.shared.notificationCenter.removeObserver($0) }
+        buttonLifecycleObservers.removeAll()
         macMicrophoneShortcutSubscription?.cancel()
         macMicrophoneShortcutSubscription = nil
         macMicrophoneHotKey.stop()
@@ -3556,7 +3574,62 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         startHIDDiscoveryIfNeeded(allowBackOnly: backOnlyMode)
     }
 
+    // A controller per physical or companion source keeps simultaneous holds isolated.
+    private var configuredButtonInteractions: [String: RemoteButtonInteractionController] = [:]
+    private var configuredButtonInteractionOwners: [String: UUID] = [:]
+
+    private func buttonInteractionSnapshot(_ button: RemoteButton, profileID: UUID?) -> RemoteButtonInteractionSnapshot {
+        settings.interactionSnapshot(for: button, profileID: profileID) { [self] trigger in
+            macroFeature.hasActiveBinding(profileID: profileID, button: button, trigger: trigger) &&
+                settings.configuredActionOverride?(profileID, button, trigger) == nil
+        }
+    }
+
+    private func handleConfiguredButtonInteraction(_ phase: RemoteButtonPhase, button: RemoteButton,
+        profileID: UUID?, source: String,
+        perform: @escaping (ButtonTrigger, ConfiguredButtonAction) -> Bool) {
+        let controller = configuredButtonInteractions[source] ?? RemoteButtonInteractionController()
+        configuredButtonInteractions[source] = controller
+        configuredButtonInteractionOwners[source] = profileID
+        let bindingSnapshot = buttonInteractionSnapshot(button, profileID: profileID)
+        var snapshot = bindingSnapshot
+        if (source.hasPrefix("mobile:") || source == "watch"),
+           snapshot.settings.migratedRepeatButtons?.contains(button.rawValue) == true,
+           settings.interactionModeOverride?(profileID, button) == nil {
+            snapshot.mode = .once // Companion sources did not have implicit software repeat.
+        }
+        let repeated = snapshot.mode == .repeatLong ? snapshot.long : snapshot.single
+        snapshot.repeatAllowed = HIDRemoteMonitor.shouldRepeat(configured: repeated,
+            frontmostBundleIdentifier: NSWorkspace.shared.frontmostApplication?.bundleIdentifier)
+        let target = NSWorkspace.shared.frontmostApplication?.processIdentifier
+        let requiresAccessibility = snapshot.mode == .holdSingle ||
+            [snapshot.single, snapshot.double, snapshot.long].contains {
+                !$0.action.isAppInternal && $0.action != .disabled
+            }
+        controller.handle(phase, button: button, snapshot: snapshot,
+            valid: { [weak self] in
+                guard let self else { return false }
+                return (!requiresAccessibility || KeyboardInjector.isAccessibilityTrusted) && !self.macroFeature.isEditorActive &&
+                    NSWorkspace.shared.frontmostApplication?.processIdentifier == target &&
+                    bindingSnapshot.hasSameBinding(as: self.buttonInteractionSnapshot(button, profileID: profileID))
+            }, perform: perform)
+    }
+
+    private func cancelConfiguredButtonInteractions(source: String? = nil, reason: String) {
+        if let source {
+            configuredButtonInteractions.removeValue(forKey: source)?.cancelAll(reason: reason)
+            configuredButtonInteractionOwners.removeValue(forKey: source)
+        } else {
+            configuredButtonInteractions.values.forEach { $0.cancelAll(reason: reason) }
+            configuredButtonInteractions.removeAll()
+            configuredButtonInteractionOwners.removeAll()
+        }
+    }
+
     private func cancelButtonMappingInteractions(device: UUID?) {
+        for source in configuredButtonInteractions.keys.filter({ configuredButtonInteractionOwners[$0] == device }) {
+            cancelConfiguredButtonInteractions(source: source, reason: "mapping_changed")
+        }
         hidMonitors.values.filter { $0.profileID == device }.forEach { $0.cancelMappingInteractions() }
         if discoveryHIDMonitor?.profileID == device { discoveryHIDMonitor?.cancelMappingInteractions() }
         if settings.selectedRemoteProfileID == device {
@@ -4599,52 +4672,12 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             return
         }
 
-        let recognizesDoubleClick = settings.configuredAction(
-            for: button,
-            trigger: .doubleClick,
-            profileID: profileID
-        ).action != .disabled || macroFeature.hasActiveBinding(
-            profileID: profileID,
-            button: button,
-            trigger: .doubleClick
-        )
-        let recognizesLongPress = settings.configuredAction(
-            for: button,
-            trigger: .longPress,
-            profileID: profileID
-        ).action != .disabled || macroFeature.hasActiveBinding(
-            profileID: profileID,
-            button: button,
-            trigger: .longPress
-        )
-        var recognizer = appleRemoteGestureRecognizers[device]
-            ?? RemoteButtonGestureRecognizer()
-        if phase == .press,
-           !recognizesDoubleClick,
-           !recognizesLongPress,
-           !recognizer.isTracking(button) {
-            let handled = performAppleRemoteConfiguredAction(
-                for: button,
-                trigger: .singleClick,
-                profileID: profileID
-            )
-            if handled {
-                startAppleRemoteRepeatIfNeeded(
-                    for: button,
-                    device: device,
-                    profileID: profileID
-                )
+        handleConfiguredButtonInteraction(phase, button: button, profileID: profileID,
+            source: "apple:\(device)") { [weak self] trigger, configured in
+                self?.performAppleRemoteConfiguredAction(for: button, trigger: trigger,
+                    profileID: profileID, captured: configured) ?? false
             }
-            return
-        }
-        let commands = recognizer.handle(
-            phase,
-            button: button,
-            recognizesDoubleClick: recognizesDoubleClick,
-            recognizesLongPress: recognizesLongPress
-        )
-        appleRemoteGestureRecognizers[device] = recognizer
-        _ = processAppleRemoteGestureCommands(commands, device: device, profileID: profileID)
+
     }
 
     private func startAppleRemoteRepeatIfNeeded(
@@ -4876,7 +4909,8 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     private func performAppleRemoteConfiguredAction(
         for button: RemoteButton,
         trigger: ButtonTrigger,
-        profileID: UUID
+        profileID: UUID,
+        captured: ConfiguredButtonAction? = nil
     ) -> Bool {
         if performButtonProfileBoundAction(
             profileID: profileID,
@@ -4894,7 +4928,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             )
             return true
         }
-        let configured = settings.configuredAction(
+        let configured = captured ?? settings.configuredAction(
             for: button,
             trigger: trigger,
             profileID: profileID
@@ -5736,6 +5770,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         if appleRemoteAppSwitcherSession.isActive {
             finishAppleRemoteAppSwitcher(reason: "input_reset_\(reason)", confirmed: false)
         }
+        cancelConfiguredButtonInteractions(source: "apple:\(device)", reason: reason)
         let doubleClickKeys = appleRemoteDoubleClickTimers.keys.filter { $0.device == device }
         doubleClickKeys.forEach {
             appleRemoteDoubleClickTimers.removeValue(forKey: $0)?.cancel()
@@ -6788,44 +6823,12 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             source: phraseSource ?? "mobile:\(source.rawValue)"
         ) { return true }
         let profileID = settings.selectedRemoteProfileID
-        let recognizesDoubleClick = settings.configuredAction(
-            for: button,
-            trigger: .doubleClick
-        ).action != .disabled || macroFeature.hasActiveBinding(
-            profileID: profileID,
-            button: button,
-            trigger: .doubleClick
-        )
-        let recognizesLongPress = settings.configuredAction(
-            for: button,
-            trigger: .longPress
-        ).action != .disabled || macroFeature.hasActiveBinding(
-            profileID: profileID,
-            button: button,
-            trigger: .longPress
-        )
-
-        var recognizer = mobileButtonGestureRecognizers[source] ?? RemoteButtonGestureRecognizer()
-        if phase == .press,
-           !recognizesDoubleClick,
-           !recognizesLongPress,
-           !recognizer.isTracking(button) {
-            return performMobileConfiguredAction(
-                for: button,
-                trigger: .singleClick,
-                source: source,
-                phraseSource: phraseSource
-            )
-        }
-
-        let commands = recognizer.handle(
-            phase,
-            button: button,
-            recognizesDoubleClick: recognizesDoubleClick,
-            recognizesLongPress: recognizesLongPress
-        )
-        mobileButtonGestureRecognizers[source] = recognizer
-        return processMobileGestureCommands(commands, source: source, phraseSource: phraseSource)
+        handleConfiguredButtonInteraction(phase, button: button, profileID: profileID,
+            source: phraseSource ?? "mobile:\(source.rawValue)") { [weak self] trigger, configured in
+                self?.performMobileConfiguredAction(for: button, trigger: trigger, source: source,
+                    phraseSource: phraseSource, captured: configured) ?? false
+            }
+        return true
     }
 
     private func processMobileGestureCommands(
@@ -6904,6 +6907,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     }
 
     private func resetMobileButtonGestures(source: UsageEventSource, phraseSource: String? = nil) {
+        cancelConfiguredButtonInteractions(source: phraseSource ?? "mobile:\(source.rawValue)", reason: "source_reset")
         membershipFeature.resetCommonPhrases(source: phraseSource ?? "mobile:\(source.rawValue)")
         let doubleClickKeys = mobileDoubleClickTimers.keys.filter { $0.source == source }
         doubleClickKeys.forEach {
@@ -6920,7 +6924,8 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         for button: RemoteButton,
         trigger: ButtonTrigger,
         source: UsageEventSource,
-        phraseSource: String? = nil
+        phraseSource: String? = nil,
+        captured: ConfiguredButtonAction? = nil
     ) -> Bool {
         if performButtonProfileBoundAction(
             profileID: settings.selectedRemoteProfileID,
@@ -6934,7 +6939,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             )
             return true
         }
-        let configured = settings.configuredAction(for: button, trigger: trigger)
+        let configured = captured ?? settings.configuredAction(for: button, trigger: trigger)
         if configured.action.isAppInternal {
             let handled = performInternalAction(configured.action, source: phraseSource ?? "mobile:\(source.rawValue)")
             if handled {
@@ -7107,6 +7112,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     }
 
     private func cancelPendingCommonPhraseButtonActions() {
+        cancelConfiguredButtonInteractions(reason: "common_phrases_opened")
         hidMonitors.values.forEach { $0.cancelPendingButtonActions() }
         discoveryHIDMonitor?.cancelPendingButtonActions()
         mobileDoubleClickTimers.values.forEach { $0.cancel() }
@@ -9030,6 +9036,9 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     }
 
     private func resetChromecastButtonState(reason: String) {
+        if let chromecastProfileID {
+            cancelConfiguredButtonInteractions(source: "chromecast:\(chromecastProfileID.uuidString)", reason: reason)
+        }
         guard !chromecastPressedControls.isEmpty
             || !chromecastDoubleClickTimers.isEmpty
             || !chromecastLongPressTimers.isEmpty
@@ -9066,44 +9075,11 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             source: "chromecast:\(profileID.uuidString)"
         ) { return }
 
-        let recognizesDoubleClick = settings.configuredAction(
-            for: button,
-            trigger: .doubleClick,
-            profileID: profileID
-        ).action != .disabled || macroFeature.hasActiveBinding(
-            profileID: profileID,
-            button: button,
-            trigger: .doubleClick
-        )
-        let recognizesLongPress = settings.configuredAction(
-            for: button,
-            trigger: .longPress,
-            profileID: profileID
-        ).action != .disabled || macroFeature.hasActiveBinding(
-            profileID: profileID,
-            button: button,
-            trigger: .longPress
-        )
-
-        if phase == .press,
-           !recognizesDoubleClick,
-           !recognizesLongPress,
-           !chromecastButtonGestureRecognizer.isTracking(button) {
-            _ = performChromecastConfiguredAction(
-                for: button,
-                trigger: .singleClick,
-                profileID: profileID
-            )
-            return
-        }
-
-        let commands = chromecastButtonGestureRecognizer.handle(
-            phase,
-            button: button,
-            recognizesDoubleClick: recognizesDoubleClick,
-            recognizesLongPress: recognizesLongPress
-        )
-        _ = processChromecastGestureCommands(commands, profileID: profileID)
+        handleConfiguredButtonInteraction(phase, button: button, profileID: profileID,
+            source: "chromecast:\(profileID.uuidString)") { [weak self] trigger, configured in
+                self?.performChromecastConfiguredAction(for: button, trigger: trigger,
+                    profileID: profileID, captured: configured) ?? false
+            }
     }
 
     private func processChromecastGestureCommands(
@@ -9168,7 +9144,8 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     private func performChromecastConfiguredAction(
         for button: RemoteButton,
         trigger: ButtonTrigger,
-        profileID: UUID
+        profileID: UUID,
+        captured: ConfiguredButtonAction? = nil
     ) -> Bool {
         if performButtonProfileBoundAction(
             profileID: profileID,
@@ -9182,7 +9159,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             )
             return true
         }
-        let configured = settings.configuredAction(for: button, trigger: trigger, profileID: profileID)
+        let configured = captured ?? settings.configuredAction(for: button, trigger: trigger, profileID: profileID)
         if configured.action.isAppInternal {
             let handled = performInternalAction(configured.action, source: "chromecast:\(profileID.uuidString)")
             AppLogger.shared.write(
