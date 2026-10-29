@@ -112,6 +112,8 @@ RC003 的语音键以键盘 F5（usage page `0x07`、usage `0x3E`）出现。`Re
 
 普通按键的 `focusInput` 自定义动作调用 `KeyboardInjector.focusFrontmostComposer`，聚焦当前前台 App 的可编辑输入区域；该动作不重复执行，并且需要辅助功能权限。语音键路径不调用输入框聚焦逻辑，避免双击等待或长按判定影响首个语音响应。
 
+Fn 层键位清单、修饰键标志位含义和快捷键注入的日志判读口径见 [`MACOS_FUNCTION_LAYER.md`](MACOS_FUNCTION_LAYER.md)。
+
 ## 菜单栏与窗口
 
 应用以 `LSUIElement` accessory 模式运行，不显示 Dock 图标。状态栏按钮同时接收左右鼠标抬起事件：
