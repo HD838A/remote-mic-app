@@ -751,6 +751,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     private var voiceSessionUsageSource: UsageEventSource?
     private var voiceSessionApplicationName: String?
     private var bluetoothVoiceActive = false
+    private lazy var voiceContinuationGlow = MainActor.assumeIsolated { VoiceContinuationGlowController() }
     private var voiceSessionWarningTasks: [DispatchWorkItem] = []
     private var voiceSessionWarningGeneration: UInt64 = 0
     private var voiceSessionWarningStartedAt: Date?
@@ -3776,6 +3777,44 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         applyHIDSettings()
     }
 
+    func previewVoiceGlowAppearance() {
+        updateVoiceGlowAppearance()
+        guard !isStreaming else { return }
+        MainActor.assumeIsolated { voiceContinuationGlow.preview() }
+    }
+
+    func updateVoiceGlowAppearance() {
+        MainActor.assumeIsolated {
+            voiceContinuationGlow.setAppearance(width: settings.voiceGlowWidth, intensity: settings.voiceGlowIntensity)
+        }
+    }
+
+    func setVoiceGlowReminderEnabled(_ enabled: Bool) {
+        settings.voiceGlowReminderEnabled = enabled
+        updateVoiceGlowAppearance()
+        MainActor.assumeIsolated {
+            voiceContinuationGlow.stop()
+            if enabled, let startedAt = voiceSessionWarningStartedAt {
+                voiceContinuationGlow.start(elapsed: max(0, Date().timeIntervalSince(startedAt)), fullSession: settings.voiceGlowFullSession)
+            }
+        }
+        AppLogger.shared.write("VOICE GLOW setting phase=completed enabled=\(enabled)")
+    }
+
+    func setVoiceGlowFullSession(_ fullSession: Bool) {
+        settings.voiceGlowFullSession = fullSession
+        setVoiceGlowReminderEnabled(settings.voiceGlowReminderEnabled)
+    }
+
+    func setVoiceContinuationEnabled(_ enabled: Bool) {
+        settings.voiceContinuationEnabled = enabled
+        if !enabled {
+            voiceFnTapSession.finishContinuationIfWaiting()
+            MainActor.assumeIsolated { voiceContinuationGlow.finishIfWaiting() }
+        }
+        AppLogger.shared.write("VOICE CONTINUATION setting phase=completed enabled=\(enabled)")
+    }
+
     func setVoiceFnTapModeEnabled(_ enabled: Bool) {
         guard settings.voiceKeyMode == .function else {
             settings.voiceFnTapModeEnabled = false
@@ -3786,6 +3825,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             return
         }
         settings.voiceFnTapModeEnabled = false
+        MainActor.assumeIsolated { voiceContinuationGlow.finishIfWaiting() }
         voiceFnTapSession.setEnabled(false) { [weak self] in
             self?.applyHIDSettings(restartSiriRemote: false)
         }
@@ -6293,7 +6333,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         }
         activeBluetoothVoiceDeviceIdentifier = nil
         loggedBluetoothVoiceAudioDeviceIdentifier = nil
-        cancelVoiceSessionWarningTracking()
+        cancelVoiceSessionWarningTracking(stopGlow: false)
         bluetoothVoiceActive = false
         pendingBluetoothVoiceStartIdentifier = nil
         cancelPendingBluetoothVoiceAudio(reason: "remote_stop")
@@ -6307,7 +6347,12 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             longRecordingCloseTimer = nil
             AppLogger.shared.write("LONG RECORDING close_confirmed")
         }
-        let handledByFnTapMode = voiceFnTapSession.stopVoice()
+        let heldDuration = bluetoothVoiceTraceStartedAt.map { max(0, Date().timeIntervalSince($0)) } ?? 0
+        let continuationDelay = settings.continuationDelay(after: heldDuration)
+        let handledByFnTapMode = voiceFnTapSession.stopVoice(continuationDelay: continuationDelay)
+        MainActor.assumeIsolated {
+            voiceContinuationGlow.release(delay: handledByFnTapMode ? continuationDelay : 0)
+        }
         let traceID = activeBluetoothVoiceTraceID ?? 0
         let durationMilliseconds = bluetoothVoiceTraceStartedAt.map {
             max(0, Int(Date().timeIntervalSince($0) * 1_000))
@@ -8109,8 +8154,17 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     }
 
     private func startVoiceSessionWarningTracking(for model: XiaomiRemoteModel) {
-        cancelVoiceSessionWarningTracking()
-        guard model == .rc001 || model == .rc003 else { return }
+        cancelVoiceSessionWarningTracking(stopGlow: false)
+        guard model == .rc001 || model == .rc003 else {
+            MainActor.assumeIsolated { voiceContinuationGlow.stop() }
+            return
+        }
+        if settings.voiceGlowReminderEnabled {
+            updateVoiceGlowAppearance()
+            MainActor.assumeIsolated { voiceContinuationGlow.start(fullSession: settings.voiceGlowFullSession) }
+        } else {
+            MainActor.assumeIsolated { voiceContinuationGlow.stop() }
+        }
 
         voiceSessionWarningGeneration &+= 1
         let generation = voiceSessionWarningGeneration
@@ -8131,7 +8185,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
                 )
                 guard level != .none, level != self.voiceSessionWarningLevel else { return }
                 self.voiceSessionWarningLevel = level
-                if level == .warning {
+                if level == .warning && !self.settings.voiceGlowReminderEnabled {
                     NSSound.beep()
                     AppLogger.shared.write(
                         "UI VOICE_WARNING phase=completed result=system_alert_sound " +
@@ -8149,7 +8203,8 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         voiceSessionWarningStartedAt = startedAt
     }
 
-    private func cancelVoiceSessionWarningTracking() {
+    private func cancelVoiceSessionWarningTracking(stopGlow: Bool = true) {
+        if stopGlow { MainActor.assumeIsolated { voiceContinuationGlow.stop() } }
         voiceSessionWarningGeneration &+= 1
         voiceSessionWarningTasks.forEach { $0.cancel() }
         voiceSessionWarningTasks.removeAll()
