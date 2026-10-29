@@ -416,6 +416,36 @@ struct ShortcutLifecycleTests {
         #expect(events.allSatisfy { $0.flags.contains(.maskAlphaShift) })
     }
 
+    @Test(arguments: [
+        (UInt16(114), "help"), (115, "home"), (116, "page_navigation"),
+        (117, "forward_delete"), (119, "end"), (121, "page_navigation")
+    ])
+    func functionLayerKeysHaveStableDiagnosticKinds(_ sample: (UInt16, String)) {
+        #expect(ShortcutEventSequence.diagnosticKind(sample.0, modifiers: []) == sample.1)
+        // 带 Command 的快捷键仍归入既有分类，入口优先级不变。
+        #expect(ShortcutEventSequence.diagnosticKind(sample.0, modifiers: .maskCommand) == "command_shortcut")
+        #expect(ShortcutEventSequence.diagnosticKind(37, modifiers: []) == nil)
+    }
+
+    @Test func bareFunctionLayerShortcutGetsCorrelatedDiagnostics() {
+        var logs: [String] = []
+        let suppressor = KeyboardEventSuppressor(logger: { logs.append($0) })
+        let result = ShortcutEventSequence.send(
+            keyCode: 119, modifiers: [], hardwareFlags: { [] },
+            modifierState: ShortcutHardwareModifierState(),
+            eventPoster: { event in
+                #expect(!suppressor.handle(type: event.type, event: event))
+                return true
+            },
+            logger: { logs.append($0) }
+        )
+        #expect(result)
+        let request = logs.first { $0.contains("phase=requested") }
+        #expect(request?.contains("primary_kind=end") == true)
+        #expect(logs.filter { $0.contains("phase=event_submission") }.count == 2)
+        #expect(logs.filter { $0.contains("SHORTCUT OBSERVATION") }.count == 2)
+    }
+
     @Test(arguments: [UInt16(0), 11, 36, 37, 48, 49, 51, 53, 96, 123, 124, 125, 126])
     func recordedShortcutMatrixUsesCompleteSharedTransactions(_ keyCode: UInt16) throws {
         let families: [(String, UInt64, UInt64)] = [

@@ -230,12 +230,27 @@ enum ShortcutEventSequence {
         }
     }
 
+    // Fn-layer usages share the Fn-bit artifact with PageUp / PageDown. They are
+    // also the keys most likely to need that investigation, so every one of them
+    // needs a stable category; without it a shortcut recorded on a bare Home,
+    // End, Help or Forward Delete produced no event_submission lines at all.
+    static func functionLayerKind(_ keyCode: CGKeyCode) -> String? {
+        switch keyCode {
+        case 114: return "help"
+        case 115: return "home"
+        case 116, 121: return "page_navigation"
+        case 117: return "forward_delete"
+        case 119: return "end"
+        default: return nil
+        }
+    }
+
     // Log only stable action categories for our configured synthetic transactions.
     // Never log the letter, raw key code, text, App identity or shortcut name.
     static func diagnosticKind(_ keyCode: CGKeyCode, modifiers: CGEventFlags) -> String? {
         if modifiers.contains(.maskControl), let kind = navigationKind(keyCode) { return kind }
         if modifiers.contains(.maskCommand) { return "command_shortcut" }
-        if keyCode == 116 || keyCode == 121 { return "page_navigation" }
+        if let kind = functionLayerKind(keyCode) { return kind }
         return nil
     }
 
