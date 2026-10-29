@@ -1,5 +1,7 @@
 # Bug 记录
 
+- [选择 Mac 麦克风后过早收音](./2026-10-28-mac-microphone-capture-before-voice-key.html)
+
 - [音量按一次后持续变化](./2026-10-26-volume-native-release-stuck.html)
 
 - [录入普通快捷键时崩溃](./2026-10-26-shortcut-capture-input-source-crash.html)

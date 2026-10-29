@@ -1454,7 +1454,7 @@ struct SettingsView: View {
                         .fill(model.macMicrophoneState == .recording ? Color.green : Color.secondary)
                         .frame(width: 6, height: 6)
                         .accessibilityHidden(true)
-                    Text(LocalizedStringKey(model.macMicrophoneState.isActive
+                    Text(LocalizedStringKey(model.macMicrophoneState == .armed || model.macMicrophoneState.isActive
                         ? model.macMicrophoneState.statusKey : "audio.mac_microphone.idle"))
                         .font(.system(size: 12))
                         .foregroundStyle(model.macMicrophoneState == .recording ? Color.green : Color.secondary)
@@ -1496,9 +1496,10 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            if model.macMicrophoneState == .failed(.permission) || model.macMicrophoneState == .failed(.accessibility) {
+            if model.macMicrophoneState == .failed(.permission) || model.macMicrophoneState == .failed(.accessibility) || model.macMicrophoneState == .failed(.inputMonitoring) {
                 Button("permission.action.open_settings") {
-                    let pane = model.macMicrophoneState == .failed(.permission) ? "Privacy_Microphone" : "Privacy_Accessibility"
+                    let pane = model.macMicrophoneState == .failed(.permission) ? "Privacy_Microphone" :
+                        (model.macMicrophoneState == .failed(.inputMonitoring) ? "Privacy_ListenEvent" : "Privacy_Accessibility")
                     if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?\(pane)") {
                         NSWorkspace.shared.open(url)
                     }
@@ -1528,6 +1529,14 @@ struct SettingsView: View {
                     .compatibilityButtonStyle(.standard)
                     .disabled(model.macMicrophoneState.isActive)
                 }
+            }
+            HStack(spacing: 14) {
+                Text("audio.mac_microphone.voice_key").font(.system(size: 12))
+                    .frame(width: 92, alignment: .leading)
+                Text(LocalizedStringKey(settings.voiceKeyMode.localizationKey)).font(.system(size: 12))
+                Text(model.macMicrophoneVoiceGesture == .hold
+                    ? "audio.mac_microphone.voice_hold" : "audio.mac_microphone.voice_toggle")
+                    .font(.system(size: 12)).foregroundStyle(.secondary)
             }
             if isCapturingMacMicrophoneShortcut {
                 Text("audio.mac_microphone.shortcut_prompt").font(.system(size: 12))

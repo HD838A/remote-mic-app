@@ -1,0 +1,65 @@
+---
+title: 选择 Mac 麦克风后过早收音
+subtitle: 音源待命与真实语音键分离
+---
+## A 现象和目标
+用户选择 Mac 麦克风后，尚未按语音键就开始采集。
+用户要求继续使用键盘 Fn 等原有语音快捷键。
+音源选择只进入待命，实际语音键才控制收音。
+本次不重新发送语音键，不激活其他应用。
+
+## B 证据和根因
+基线为 `176c982bdaa260d40854635234b90ddd3687bc4e`。
+按钮、菜单和切换组合键直接调用同一个会话开关。
+准备完成后，控制器无条件调用 `startCapture`。
+旧行为回归在没有任何语音键的情况下得到 `prepare, start`。
+新增的“不应采集”断言在旧行为下失败。
+
+10 月 28 日旧包日志也确认：点击后立即采集。
+候选日志确认进入待命，capture_running=false。
+候选尚无物理 Fn 事件，不能判定真实语音验收通过。
+
+## C 最小修复
+控制器增加待命状态，分离选择音源和采集请求。
+三个入口只选择或停用音源。
+被动键盘监听观察当前配置的语音键。
+原事件继续传给输入工具，排除自身合成事件。
+按住与点按分别沿用当前的已确认或显示配置。
+输入监控缺失时显示错误，不报告已待命。
+
+停止仍保留采集尾部，按顺序排空虚拟输出。
+每次物理按下到首个非零 PCM 的耗时单独记录。
+日志不把收到音频或排空当作文字上屏。
+页面区分切换快捷键和语音快捷键。
+未选择时不安装本功能的键盘监听，不改变原语音路径。
+
+## D 自动化验证
+旧行为的失败回归已复现。
+完整测试 1077 项、79 个套件通过。
+项目自检 48 项通过。
+覆盖待命、按住、点按、重复边沿和连续会话。
+覆盖取消、迟到回调、超时、重试和强制排空。
+原有手机会话和 Fn 点按套件继续运行。
+
+## E 本机与截图
+本机候选源码为 `b67c9ac3378b215bda071666b02045e34181b9af`，版本为 `2.0.0 (268)`。
+`dist/SayAll.app` 使用 Developer ID Application `L3QHLDRPAY` 签名，Hardened Runtime 和 `codesign --verify --deep --strict` 检查通过。
+实际连接页已显示待命，窗口保持可见；候选日志确认监听已启动，且没有开始采集。
+
+生产窗口为 `1020×772`，离屏 PNG 原尺寸为 `2040×1544`。以下八张截图来自同一候选包，均为 PNG、RGBA、原尺寸正确，文件小于 5 MB，并已逐张查看：
+
+| 状态 | 浅色 | 深色 |
+| --- | --- | --- |
+| 中文待命 | `Screenshots/bug-fixes/mac-microphone-shortcut-gated/zh-hans-light-armed/connection-1020x772.png`<br>`SHA-256 fb48709dbccdc9df62a0eb793cfe26e6ff143ff48e7cdaa68265721bf9152edf` | `Screenshots/bug-fixes/mac-microphone-shortcut-gated/zh-hans-dark-armed/connection-1020x772.png`<br>`SHA-256 3d387b95a89c6dfcf0ca66729eede422cc10d8ca9612ebf3531c5ff3ba597f88` |
+| 中文收音 | `Screenshots/bug-fixes/mac-microphone-shortcut-gated/zh-hans-light-recording/connection-1020x772.png`<br>`SHA-256 5765582aa74ca39d41bb5377ae2f20467125e0820046e8e79e094701ed86e55c` | `Screenshots/bug-fixes/mac-microphone-shortcut-gated/zh-hans-dark-recording/connection-1020x772.png`<br>`SHA-256 a23ff20a0471bdf8fb1488f80fcb6bcda8a5a04d4cc61b9dc616c237b300a400` |
+| English standby | `Screenshots/bug-fixes/mac-microphone-shortcut-gated/en-light-armed/connection-1020x772.png`<br>`SHA-256 25e59bbada399b1ffd8799524fab8ad6327aa59aa93b0f684b9cdcc1ece51c7e` | `Screenshots/bug-fixes/mac-microphone-shortcut-gated/en-dark-armed/connection-1020x772.png`<br>`SHA-256 34eed771fb570a7494649e35ec8ded9927a9b697eb66bda37f4e3fd74057ec4b` |
+| English recording | `Screenshots/bug-fixes/mac-microphone-shortcut-gated/en-light-recording/connection-1020x772.png`<br>`SHA-256 c76ebb6618bdaa9eedede5fc940eae09fabaabfb693d8f708258da6f7d0ba349` | `Screenshots/bug-fixes/mac-microphone-shortcut-gated/en-dark-recording/connection-1020x772.png`<br>`SHA-256 1b500f23b7e80527a2bb640c669751f9e363ced0e11f37c07c9716ee3a005f42` |
+
+真实 Fn、实际声音和第三方首尾文字尚未验收。当前只作为本机候选，PR 保持 Draft。候选未公证，不用于远程分发。
+
+## F 兼容与边界
+已有输入设备和切换快捷键配置继续保留。
+待命选择不跨重启自动恢复。
+当前语音键和模式变化后需重新选择音源。
+不读取第三方工具的私有配置或内部识别状态。
+自动化和截图不能替代真实声音及第三方文字验收。
