@@ -1,7 +1,19 @@
 import Foundation
 import CoreGraphics
 
-/// Device timing and button behavior. Missing button entries mean one-shot execution.
+/// Gesture timing shared by every ordinary button on one remote model.
+struct RemoteButtonGestureTiming: Codable, Equatable {
+    var doubleClickMilliseconds: Int = 300
+    var longPressMilliseconds: Int = 550
+
+    var isValid: Bool {
+        (150...500).contains(doubleClickMilliseconds) && doubleClickMilliseconds % 50 == 0 &&
+        (300...1000).contains(longPressMilliseconds) && longPressMilliseconds % 50 == 0
+    }
+}
+
+/// Per-profile button behavior. The timing fields remain for format compatibility; runtime
+/// replaces them with the timing owned by the remote model.
 struct RemoteButtonInteractionSettings: Codable, Equatable {
     var doubleClickMilliseconds: Int = 300
     var longPressMilliseconds: Int = 550
@@ -9,8 +21,7 @@ struct RemoteButtonInteractionSettings: Codable, Equatable {
     var migratedRepeatButtons: [String]? = nil
 
     var isValid: Bool {
-        (150...500).contains(doubleClickMilliseconds) && doubleClickMilliseconds % 50 == 0 &&
-        (300...1000).contains(longPressMilliseconds) && longPressMilliseconds % 50 == 0
+        timing.isValid
     }
 
     var isWellFormed: Bool {
@@ -23,6 +34,19 @@ struct RemoteButtonInteractionSettings: Codable, Equatable {
             return .once
         }
         return RemoteButtonHoldMode(rawValue: value)
+    }
+
+    var timing: RemoteButtonGestureTiming {
+        get {
+            RemoteButtonGestureTiming(
+                doubleClickMilliseconds: doubleClickMilliseconds,
+                longPressMilliseconds: longPressMilliseconds
+            )
+        }
+        set {
+            doubleClickMilliseconds = newValue.doubleClickMilliseconds
+            longPressMilliseconds = newValue.longPressMilliseconds
+        }
     }
 }
 

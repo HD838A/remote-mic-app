@@ -54,6 +54,9 @@ enum SettingsScreenshotRenderer {
             "REMOTE_MIC_SETTINGS_SCREENSHOT_OPEN_ACTION_EDITOR"
         ] == "1"
         let opensMappingEditor = opensShortcutEditor || opensActionEditor
+        let showsGestureTiming = ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_SETTINGS_SCREENSHOT_GESTURE_TIMING"
+        ] == "1"
         let showsStandardKeyboard = ProcessInfo.processInfo.environment[
             "REMOTE_MIC_SETTINGS_SCREENSHOT_SHORTCUT_MODE"
         ] == "keyboard"
@@ -85,6 +88,9 @@ enum SettingsScreenshotRenderer {
         let settings = AppSettings(defaults: defaults)
         settings.applicationLanguage = language
         settings.completeOnboarding()
+        if showsGestureTiming, let profileID = settings.selectedRemoteProfileID {
+            settings.updateRemoteProfileModel(profileID, model: .rc003)
+        }
         if ProcessInfo.processInfo.environment["REMOTE_MIC_SETTINGS_SCREENSHOT_MISSING_ROUTINE"] == "1" {
             // Isolated upgrade fixture for the production cleanup page.
             let missing = ConfiguredButtonAction(action: .combinationAction, shortcut: nil,
@@ -224,7 +230,8 @@ enum SettingsScreenshotRenderer {
                 initialSection: section,
                 initialShareSection: section == .statistics && expandsShare ? section : nil,
                 initialMappingEditingButton: section == .mapping && opensMappingEditor ? .ok : nil,
-                initialShortcutPickerShowsKeyboard: showsStandardKeyboard
+                initialShortcutPickerShowsKeyboard: showsStandardKeyboard,
+                initialMappingScrollsToGestureTiming: section == .mapping && showsGestureTiming
             ).environmentObject(localization))
             let window = NSWindow(contentRect: NSRect(origin: .zero, size: size),
                 styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
@@ -257,6 +264,7 @@ enum SettingsScreenshotRenderer {
                     ? .ok
                     : nil,
                 initialShortcutPickerShowsKeyboard: showsStandardKeyboard,
+                initialMappingScrollsToGestureTiming: section == .mapping && showsGestureTiming,
                 minimumContentSize: .zero
             )
             .environmentObject(localization)

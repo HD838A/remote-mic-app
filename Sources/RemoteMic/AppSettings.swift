@@ -49,6 +49,7 @@ private struct PersonalizedConfiguration: Codable {
     let secondaryButtonBindings: [String: [String: ConfiguredButtonAction]]
     let buttonRapidPressEnabled: [String: Bool]?
     let interactionSettings: RemoteButtonInteractionSettings?
+    let buttonGestureTimingsByModel: [String: RemoteButtonGestureTiming]?
     let customApplicationProfiles: [CustomApplicationProfile]?
     let applicationLanguage: AppLanguage
     let appIconIdentifier: AppIconIdentifier?
@@ -313,6 +314,7 @@ final class AppSettings: ObservableObject {
         static let buttonApplicationProfileIDs = "buttonApplicationProfileIDs"
         static let secondaryButtonBindings = "secondaryButtonBindings"
         static let buttonRapidPressEnabled = "buttonRapidPressEnabled"
+        static let buttonGestureTimingsByModel = "buttonGestureTimingsByModel"
         static let customApplicationProfiles = "customApplicationProfiles"
         static let peripheralIdentifier = "peripheralIdentifier"
         static let remoteDeviceProfiles = "remoteDeviceProfiles"
@@ -529,6 +531,14 @@ final class AppSettings: ObservableObject {
     }
     var onInteractionModeChanged: ((UUID?) -> Void)?
     var interactionModeOverride: ((UUID?, RemoteButton) -> String?)?
+
+    @Published private(set) var buttonGestureTimingsByModel: [String: RemoteButtonGestureTiming] = [:] {
+        didSet {
+            if let data = try? JSONEncoder().encode(buttonGestureTimingsByModel) {
+                defaults.set(data, forKey: Keys.buttonGestureTimingsByModel)
+            }
+        }
+    }
 
     @Published var buttonRapidPressEnabled: [RemoteButton: Bool] {
         didSet {
@@ -1186,6 +1196,23 @@ final class AppSettings: ObservableObject {
             remoteDeviceProfiles = [migrated]
             selectedRemoteProfileID = migrated.id
         }
+        let storedGestureTimings = Self.decodeSetting(
+            [String: RemoteButtonGestureTiming].self,
+            forKey: Keys.buttonGestureTimingsByModel,
+            from: defaults,
+            corrupted: &corruptedKeys
+        ) ?? [:]
+        let validStoredGestureTimings = storedGestureTimings.filter {
+            XiaomiRemoteModel(rawValue: $0.key) != nil && $0.value.isValid
+        }
+        if validStoredGestureTimings.count != storedGestureTimings.count {
+            corruptedKeys.append(Keys.buttonGestureTimingsByModel)
+        }
+        buttonGestureTimingsByModel = Self.migratedGestureTimings(
+            validStoredGestureTimings,
+            profiles: remoteDeviceProfiles,
+            selectedProfileID: selectedRemoteProfileID
+        )
         applyContinuousRecordingExperimentState(
             enabled: experimentalContinuousRecordingEnabled,
             backup: continuousRecordingPowerBindingBackup
@@ -1722,6 +1749,7 @@ final class AppSettings: ObservableObject {
         }) {
             remoteDeviceProfiles[index].hidFingerprint = fingerprint
             remoteDeviceProfiles[index].model = model
+            ensureGestureTiming(for: model, profileID: remoteDeviceProfiles[index].id)
             return remoteDeviceProfiles[index].id
         }
         let profile = RemoteDeviceProfile(
@@ -1730,6 +1758,7 @@ final class AppSettings: ObservableObject {
             mappings: mappingsForNewRemote()
         )
         remoteDeviceProfiles.append(profile)
+        ensureGestureTiming(for: model, profileID: profile.id)
         return profile.id
 #endif
     }
@@ -1748,6 +1777,7 @@ final class AppSettings: ObservableObject {
             $0.bluetoothIdentifier == nil && $0.hidFingerprint == nil && $0.model == .unknown
         }) {
             remoteDeviceProfiles[index].model = .chromecastVoiceRemote
+            ensureGestureTiming(for: .chromecastVoiceRemote, profileID: remoteDeviceProfiles[index].id)
             return remoteDeviceProfiles[index].id
         }
         let profile = RemoteDeviceProfile(
@@ -1755,6 +1785,7 @@ final class AppSettings: ObservableObject {
             mappings: mappingsForNewRemote()
         )
         remoteDeviceProfiles.append(profile)
+        ensureGestureTiming(for: .chromecastVoiceRemote, profileID: profile.id)
         return profile.id
     }
 
@@ -1904,6 +1935,7 @@ final class AppSettings: ObservableObject {
               remoteDeviceProfiles[index].model != model
         else { return }
         remoteDeviceProfiles[index].model = model
+        ensureGestureTiming(for: model, profileID: profileID)
     }
 
     func setAction(_ action: ButtonAction, for button: RemoteButton, trigger: ButtonTrigger) {
@@ -2350,6 +2382,7 @@ final class AppSettings: ObservableObject {
                     uniqueKeysWithValues: buttonRapidPressEnabled.map { ($0.key.rawValue, $0.value) }
                 ),
             interactionSettings: interactionSettings,
+            buttonGestureTimingsByModel: buttonGestureTimingsByModel,
             customApplicationProfiles: customApplicationProfiles,
             applicationLanguage: applicationLanguage,
             appIconIdentifier: appIconIdentifier,
@@ -2446,6 +2479,8 @@ final class AppSettings: ObservableObject {
             else { throw AppConfigurationError.invalidValues }
         }
         guard configuration.interactionSettings?.isWellFormed ?? true else { throw AppConfigurationError.invalidValues }
+        guard Self.gestureTimingsAreWellFormed(configuration.buttonGestureTimingsByModel ?? [:])
+        else { throw AppConfigurationError.invalidValues }
         for profile in preferences.remoteDeviceProfiles {
             guard profile.mappings.interactionSettings?.isWellFormed ?? true else { throw AppConfigurationError.invalidValues }
             guard profile.bluetoothIdentifier == nil, profile.hidFingerprint == nil, profile.customName.count <= 256
@@ -2565,6 +2600,12 @@ final class AppSettings: ObservableObject {
         })
         buttonRapidPressEnabled = Dictionary(uniqueKeysWithValues: (c.buttonRapidPressEnabled ?? [:]).compactMap { key,value in RemoteButton(rawValue: key).map { ($0,value) } })
         interactionSettings = c.interactionSettings ?? RemoteButtonInteractionSettings()
+        if let importedGestureTimings = c.buttonGestureTimingsByModel {
+            buttonGestureTimingsByModel = importedGestureTimings
+        } else if let model = settingsModel(for: selectedRemoteProfileID), model != .unknown,
+                  let legacyTiming = c.interactionSettings?.timing, legacyTiming.isValid {
+            buttonGestureTimingsByModel[model.rawValue] = legacyTiming
+        }
         customApplicationProfiles = c.customApplicationProfiles ?? []
         applicationLanguage = c.applicationLanguage
         if let value = c.appIconIdentifier { appIconIdentifier = value }
@@ -2760,6 +2801,15 @@ final class AppSettings: ObservableObject {
         if !interactionSettings.isValid || interactionSettings.modes.contains(where: {
             RemoteButton(rawValue: $0.key) == nil || RemoteButtonHoldMode(rawValue: $0.value) == nil
         }) { rejected.insert("interactionSettings") }
+        if let importedGestureTimings = configuration.buttonGestureTimingsByModel,
+           Self.gestureTimingsAreWellFormed(importedGestureTimings) {
+            buttonGestureTimingsByModel = importedGestureTimings
+        } else if configuration.buttonGestureTimingsByModel != nil {
+            rejected.insert(Keys.buttonGestureTimingsByModel)
+        } else if let model = settingsModel(for: selectedRemoteProfileID), model != .unknown,
+                  interactionSettings.timing.isValid {
+            buttonGestureTimingsByModel[model.rawValue] = interactionSettings.timing
+        }
         customApplicationProfiles = importedApplicationProfiles
         applicationLanguage = configuration.applicationLanguage
         if let appIconIdentifier = configuration.appIconIdentifier {
@@ -2973,9 +3023,36 @@ final class AppSettings: ObservableObject {
     }
 
     func buttonInteractionSettings(profileID: UUID? = nil) -> RemoteButtonInteractionSettings {
-        guard let profileID, profileID != selectedRemoteProfileID else { return interactionSettings }
-        return remoteDeviceProfiles.first { $0.id == profileID }?.mappings.interactionSettings
-            ?? RemoteButtonInteractionSettings()
+        var result: RemoteButtonInteractionSettings
+        if let profileID, profileID != selectedRemoteProfileID {
+            result = remoteDeviceProfiles.first { $0.id == profileID }?.mappings.interactionSettings
+                ?? RemoteButtonInteractionSettings()
+        } else {
+            result = interactionSettings
+        }
+        if let model = settingsModel(for: profileID ?? selectedRemoteProfileID) {
+            result.timing = buttonGestureTiming(for: model)
+        }
+        return result
+    }
+
+    func buttonGestureTiming(for model: XiaomiRemoteModel) -> RemoteButtonGestureTiming {
+        buttonGestureTimingsByModel[model.rawValue] ?? RemoteButtonGestureTiming()
+    }
+
+    func setButtonGestureTiming(_ timing: RemoteButtonGestureTiming, for model: XiaomiRemoteModel) {
+        guard model != .unknown, timing.isValid else { return }
+        buttonGestureTimingsByModel[model.rawValue] = timing
+        AppLogger.shared.write(
+            "BUTTON GESTURE TIMING operation_id=\(UUID().uuidString) phase=completed result=saved " +
+                "model=\(model.rawValue) double_ms=\(timing.doubleClickMilliseconds) " +
+                "long_ms=\(timing.longPressMilliseconds)"
+        )
+    }
+
+    func settingsModel(for profileID: UUID?) -> XiaomiRemoteModel? {
+        guard let profileID else { return selectedRemoteProfile?.model }
+        return remoteDeviceProfiles.first(where: { $0.id == profileID })?.model
     }
 
     func setHoldMode(_ mode: RemoteButtonHoldMode, for button: RemoteButton) {
@@ -3023,6 +3100,44 @@ final class AppSettings: ObservableObject {
         }
         profile.mappings.interactionSettings = timing
         return profile
+    }
+
+    private static func migratedGestureTimings(
+        _ stored: [String: RemoteButtonGestureTiming],
+        profiles: [RemoteDeviceProfile],
+        selectedProfileID: UUID?
+    ) -> [String: RemoteButtonGestureTiming] {
+        var result = stored
+        var ordered = profiles
+        if let selectedProfileID,
+           let selectedIndex = ordered.firstIndex(where: { $0.id == selectedProfileID }) {
+            ordered.insert(ordered.remove(at: selectedIndex), at: 0)
+        }
+        for profile in ordered where profile.model != .unknown && result[profile.model.rawValue] == nil {
+            if let legacy = profile.mappings.interactionSettings?.timing, legacy.isValid {
+                result[profile.model.rawValue] = legacy
+            } else {
+                result[profile.model.rawValue] = RemoteButtonGestureTiming()
+            }
+        }
+        return result
+    }
+
+    private static func gestureTimingsAreWellFormed(
+        _ timings: [String: RemoteButtonGestureTiming]
+    ) -> Bool {
+        timings.allSatisfy { XiaomiRemoteModel(rawValue: $0.key) != nil && $0.value.isValid }
+    }
+
+    private func ensureGestureTiming(for model: XiaomiRemoteModel, profileID: UUID) {
+        guard model != .unknown, buttonGestureTimingsByModel[model.rawValue] == nil else { return }
+        let legacy = remoteDeviceProfiles.first(where: { $0.id == profileID })?
+            .mappings.interactionSettings?.timing
+        if let legacy, legacy.isValid {
+            buttonGestureTimingsByModel[model.rawValue] = legacy
+        } else {
+            buttonGestureTimingsByModel[model.rawValue] = RemoteButtonGestureTiming()
+        }
     }
 
     private func saveSelectedRemoteProfileMappings() {

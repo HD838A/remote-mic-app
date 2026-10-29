@@ -494,6 +494,7 @@ struct SettingsView: View {
     private let appIconCatalog: AppIconCatalog
     private let minimumContentSize: CGSize
     private let initialShortcutPickerShowsKeyboard: Bool
+    private let initialMappingScrollsToGestureTiming: Bool
 
     @State private var supplementalSettings = SupplementalSettingsIntegration()
     @State private var selectedSection: SettingsSection
@@ -504,6 +505,9 @@ struct SettingsView: View {
     @State private var selectedStatisticsDate: Date?
     @State private var mappingEditingTarget: ShortcutEditingTarget?
     @State private var mappingActionFilter: MappingActionFilter = .all
+    @State private var gestureTimingDraft = RemoteButtonGestureTiming()
+    @State private var gestureTimingDraftModel: XiaomiRemoteModel?
+    @State private var gestureTimingSaveConfirmed = false
     @State private var isCapturingMacMicrophoneShortcut = false
     @State private var isHoveringMacMicrophoneButton = false
     @State private var shortcutCaptureTarget: ShortcutEditingTarget?
@@ -540,6 +544,7 @@ struct SettingsView: View {
         initialMappingEditingButton: RemoteButton? = nil,
         initialMappingEditingTrigger: ButtonTrigger = .singleClick,
         initialShortcutPickerShowsKeyboard: Bool = false,
+        initialMappingScrollsToGestureTiming: Bool = false,
         minimumContentSize: CGSize = CGSize(width: 980, height: 732)
     ) {
         self.model = model
@@ -559,6 +564,7 @@ struct SettingsView: View {
         self.appIconCatalog = appIconCatalog ?? .live()
         self.minimumContentSize = minimumContentSize
         self.initialShortcutPickerShowsKeyboard = initialShortcutPickerShowsKeyboard
+        self.initialMappingScrollsToGestureTiming = initialMappingScrollsToGestureTiming
         _selectedSection = State(initialValue: SettingsPageBehavior.initialSection(
             requestedSection: initialSection,
             privateFeatureVisible: model.privateFeature.isFeatureVisible,
@@ -611,6 +617,9 @@ struct SettingsView: View {
         }
         .onChange(of: selectedSection) { section in
             if isCapturingMacMicrophoneShortcut { endMacMicrophoneShortcutCapture() }
+            if section != .mapping {
+                model.cancelButtonGestureLearning(reason: "left_mapping_page")
+            }
             if section == .mapping {
                 if preservesMappingContextOnNavigation { preservesMappingContextOnNavigation = false }
                 else { model.selectDefaultMappingRemoteIfAvailable() }
@@ -624,6 +633,7 @@ struct SettingsView: View {
         }
         .onDisappear {
             endMacMicrophoneShortcutCapture()
+            model.cancelButtonGestureLearning(reason: "settings_closed")
             macroFeature.setEditorActive(false)
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
@@ -2000,6 +2010,7 @@ struct SettingsView: View {
                             }
                             #endif
 
+                            mappingGestureTimingSection
                             mappingFooter(includeSiriScrollArrow: includeSiriScrollArrow)
                             Color.clear.frame(height: 1).id("mapping-page-bottom")
                         }
@@ -2010,6 +2021,8 @@ struct SettingsView: View {
                     .compatibilityScrollEdgeEffect()
                 }
                 .onChange(of: settings.selectedRemoteProfileID) { _ in
+                    model.cancelButtonGestureLearning(reason: "remote_changed")
+                    loadGestureTimingDraft()
                     // 编辑器属于上一只遥控器；切换设备后不得把旧编辑区带到新页面。
                     mappingEditingTarget = nil
                     shortcutCaptureTarget = nil
@@ -2018,7 +2031,17 @@ struct SettingsView: View {
                         proxy.scrollTo("mapping-page-top", anchor: .top)
                     }
                 }
+                .onChange(of: settings.selectedRemoteProfile?.model) { _ in
+                    model.cancelButtonGestureLearning(reason: "remote_model_changed")
+                    loadGestureTimingDraft()
+                }
                 .onAppear {
+                    loadGestureTimingDraft()
+                    if initialMappingScrollsToGestureTiming {
+                        DispatchQueue.main.async {
+                            proxy.scrollTo("mapping-gesture-timing", anchor: .top)
+                        }
+                    }
                     guard mappingEditingTarget != nil else { return }
                     DispatchQueue.main.async {
                         proxy.scrollTo("mapping-action-editor", anchor: .top)
@@ -2036,6 +2059,13 @@ struct SettingsView: View {
                     withAnimation(.easeInOut(duration: 0.25)) {
                         proxy.scrollTo("mapping-page-bottom", anchor: .bottom)
                     }
+                }
+                .onChange(of: model.buttonGestureLearningResult) { result in
+                    guard let result,
+                          model.buttonGestureLearningStatus.model == gestureTimingDraftModel
+                    else { return }
+                    gestureTimingDraft = result.suggestedTiming
+                    gestureTimingSaveConfirmed = false
                 }
             }
         }
@@ -2715,7 +2745,8 @@ struct SettingsView: View {
     }
 
     private func mappingInteractionControl(button: RemoteButton) -> some View {
-        var snapshot = RemoteButtonInteractionSnapshot(settings: settings.interactionSettings,
+        let currentInteractionSettings = settings.buttonInteractionSettings()
+        var snapshot = RemoteButtonInteractionSnapshot(settings: currentInteractionSettings,
             mode: settings.interactionSettings.mode(for: button),
             single: mappingConfiguration(for: button, trigger: .singleClick),
             double: mappingConfiguration(for: button, trigger: .doubleClick),
@@ -2760,23 +2791,238 @@ struct SettingsView: View {
             }
             Text("button_mapping.hold_hint").font(.system(size: 12)).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
-            Divider()
-            Text("button_mapping.timing_title").font(.system(size: 13, weight: .semibold))
-            Stepper(value: $settings.interactionSettings.doubleClickMilliseconds, in: 150...500, step: 50) {
-                Text(localization.text("button_mapping.timing_double") + " \(settings.interactionSettings.doubleClickMilliseconds) ms")
-            }
-            Stepper(value: $settings.interactionSettings.longPressMilliseconds, in: 300...1000, step: 50) {
-                Text(localization.text("button_mapping.timing_long") + " \(settings.interactionSettings.longPressMilliseconds) ms")
-            }
-            Text("button_mapping.timing_hint").font(.system(size: 12)).foregroundStyle(.secondary)
-            Button("button_mapping.timing_reset") {
-                settings.interactionSettings.doubleClickMilliseconds = 300
-                settings.interactionSettings.longPressMilliseconds = 550
-            }
         }
         .font(.system(size: 13))
         .padding(12)
         .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 10))
+    }
+
+    private var mappingGestureTimingSection: some View {
+        let selectedModel = settings.selectedRemoteProfile?.model
+        let learningStatus = model.buttonGestureLearningStatus
+        let learningMatchesModel = learningStatus.model == selectedModel
+        let canLearn = selectedModel != nil && selectedModel != .unknown
+        let persistedTiming = selectedModel.map { settings.buttonGestureTiming(for: $0) }
+            ?? RemoteButtonGestureTiming()
+        return GlassPanel {
+            VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("button_mapping.gesture.title")
+                        .font(.system(size: 20, weight: .bold))
+                    Text("button_mapping.gesture.subtitle")
+                        .font(.system(size: 13))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                VStack(alignment: .leading, spacing: 14) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("button_mapping.learning.title")
+                            .font(.system(size: 17, weight: .semibold))
+                        Spacer()
+                        Text(localization.text(learningStatusKey(
+                            status: learningStatus,
+                            matchesModel: learningMatchesModel
+                        )))
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Color.accentColor)
+                    }
+                    Text("button_mapping.learning.subtitle")
+                        .font(.system(size: 13))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    HStack(alignment: .top, spacing: 10) {
+                        learningMeasurementCard(
+                            number: 1,
+                            titleKey: "button_mapping.learning.single",
+                            detailKey: "button_mapping.learning.single_hint",
+                            value: learningMatchesModel ? learningStatus.singleClickMilliseconds : nil,
+                            isCurrent: learningMatchesModel && learningStatus.step == .singleClick
+                        )
+                        learningMeasurementCard(
+                            number: 2,
+                            titleKey: "button_mapping.learning.double",
+                            detailKey: "button_mapping.learning.double_hint",
+                            value: learningMatchesModel ? learningStatus.doubleClickMilliseconds : nil,
+                            isCurrent: learningMatchesModel && learningStatus.step == .doubleClick
+                        )
+                        learningMeasurementCard(
+                            number: 3,
+                            titleKey: "button_mapping.learning.long",
+                            detailKey: "button_mapping.learning.long_hint",
+                            value: learningMatchesModel ? learningStatus.longPressMilliseconds : nil,
+                            isCurrent: learningMatchesModel && learningStatus.step == .longPress
+                        )
+                    }
+
+                    if !canLearn {
+                        Text("button_mapping.learning.unavailable")
+                            .font(.system(size: 12))
+                            .foregroundStyle(.orange)
+                    } else if learningMatchesModel && learningStatus.adjustedToAllowedRange {
+                        Text("button_mapping.learning.adjusted")
+                            .font(.system(size: 12))
+                            .foregroundStyle(.orange)
+                    }
+
+                    HStack {
+                        Spacer()
+                        Button("button_mapping.learning.restart") {
+                            gestureTimingSaveConfirmed = false
+                            _ = model.startButtonGestureLearning()
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(!canLearn || (!learningMatchesModel || learningStatus.step == .idle))
+                        Button("button_mapping.learning.start") {
+                            gestureTimingSaveConfirmed = false
+                            _ = model.startButtonGestureLearning()
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(!canLearn || (learningMatchesModel && learningStatus.isActive))
+                    }
+                }
+                .padding(16)
+                .background(Color.accentColor.opacity(0.07), in: RoundedRectangle(cornerRadius: 12))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.accentColor.opacity(0.22), lineWidth: 1)
+                }
+
+                Divider()
+
+                VStack(alignment: .leading, spacing: 18) {
+                    Text("button_mapping.timing_title")
+                        .font(.system(size: 17, weight: .semibold))
+                    gestureTimingSlider(
+                        titleKey: "button_mapping.timing_double",
+                        value: Binding(
+                            get: { gestureTimingDraft.doubleClickMilliseconds },
+                            set: {
+                                gestureTimingDraft.doubleClickMilliseconds = $0
+                                gestureTimingSaveConfirmed = false
+                            }
+                        ),
+                        range: 150...500
+                    )
+                    gestureTimingSlider(
+                        titleKey: "button_mapping.timing_long",
+                        value: Binding(
+                            get: { gestureTimingDraft.longPressMilliseconds },
+                            set: {
+                                gestureTimingDraft.longPressMilliseconds = $0
+                                gestureTimingSaveConfirmed = false
+                            }
+                        ),
+                        range: 300...1000
+                    )
+                    HStack(spacing: 12) {
+                        Text(gestureTimingSaveConfirmed
+                            ? localization.text("button_mapping.timing_saved")
+                            : localization.text("button_mapping.timing_save_hint"))
+                            .font(.system(size: 12))
+                            .foregroundStyle(gestureTimingSaveConfirmed ? Color.green : Color.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer()
+                        Button("common.action.save") {
+                            guard let selectedModel, selectedModel != .unknown else { return }
+                            settings.setButtonGestureTiming(gestureTimingDraft, for: selectedModel)
+                            gestureTimingSaveConfirmed = true
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(!canLearn || !gestureTimingDraft.isValid ||
+                            (gestureTimingDraft == persistedTiming &&
+                                (model.buttonGestureLearningResult == nil || gestureTimingSaveConfirmed)))
+                    }
+                    .padding(12)
+                    .background(Color.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 9))
+                }
+            }
+        }
+        .id("mapping-gesture-timing")
+    }
+
+    private func gestureTimingSlider(
+        titleKey: String,
+        value: Binding<Int>,
+        range: ClosedRange<Int>
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(localization.text(titleKey))
+                    .font(.system(size: 14, weight: .semibold))
+                Spacer()
+                Text("\(value.wrappedValue) ms")
+                    .font(.system(size: 14, design: .monospaced))
+            }
+            HStack(spacing: 10) {
+                Text("\(range.lowerBound)")
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                Slider(
+                    value: Binding(
+                        get: { Double(value.wrappedValue) },
+                        set: { value.wrappedValue = Int($0.rounded()) }
+                    ),
+                    in: Double(range.lowerBound)...Double(range.upperBound),
+                    step: 50
+                )
+                Text("\(range.upperBound)")
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func learningMeasurementCard(
+        number: Int,
+        titleKey: String,
+        detailKey: String,
+        value: Int?,
+        isCurrent: Bool
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("\(number) · \(localization.text(titleKey))")
+                .font(.system(size: 13, weight: .semibold))
+            Text(localization.text(detailKey))
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+            Spacer(minLength: 4)
+            Text(value.map { "\($0) ms" } ?? localization.text("button_mapping.learning.waiting"))
+                .font(.system(size: 12, design: .monospaced))
+                .foregroundStyle(value == nil ? Color.secondary : Color.primary)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, minHeight: 96, alignment: .topLeading)
+        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10))
+        .overlay {
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(isCurrent ? Color.accentColor : Color.secondary.opacity(0.18), lineWidth: isCurrent ? 2 : 1)
+        }
+    }
+
+    private func learningStatusKey(
+        status: RemoteButtonGestureLearningStatus,
+        matchesModel: Bool
+    ) -> String {
+        guard matchesModel else { return "button_mapping.learning.not_started" }
+        switch status.step {
+        case .idle: return "button_mapping.learning.not_started"
+        case .complete: return "button_mapping.learning.complete"
+        case .singleClick, .doubleClick, .longPress: return "button_mapping.learning.in_progress"
+        }
+    }
+
+    private func loadGestureTimingDraft() {
+        guard let selectedModel = settings.selectedRemoteProfile?.model else {
+            gestureTimingDraftModel = nil
+            gestureTimingDraft = RemoteButtonGestureTiming()
+            gestureTimingSaveConfirmed = false
+            return
+        }
+        gestureTimingDraftModel = selectedModel
+        gestureTimingDraft = settings.buttonGestureTiming(for: selectedModel)
+        gestureTimingSaveConfirmed = false
     }
 
     private func mappingRapidPressControl(button: RemoteButton) -> some View {

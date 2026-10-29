@@ -530,6 +530,8 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     @Published private(set) var isConnected = false
     @Published private(set) var isVoiceTriggerEnabled = false
     @Published private(set) var activeRemoteButtons = Set<RemoteButton>()
+    @Published private(set) var buttonGestureLearningStatus = RemoteButtonGestureLearningStatus()
+    @Published private(set) var buttonGestureLearningResult: RemoteButtonGestureLearningResult?
     @Published private(set) var activeAppleRemoteControlIDs = Set<String>()
     /// Chromecast 画布的活动按键（控制 ID）。与苹果遥控器链路完全隔离，互不清除。
     @Published private(set) var activeChromecastControlIDs = Set<String>()
@@ -942,6 +944,9 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     private var chromecastButtonGestureRecognizer = RemoteButtonGestureRecognizer()
     private var chromecastDoubleClickTimers: [RemoteButton: DispatchSourceTimer] = [:]
     private var chromecastLongPressTimers: [RemoteButton: DispatchSourceTimer] = [:]
+    private var buttonGestureLearner = RemoteButtonGestureLearner()
+    private var buttonGestureLearningProfileID: UUID?
+    private var buttonGestureLearningOperationID: String?
     private var hidPowerKeySuppressed = false
     private var hidAllowedLocationIDs: Set<UInt32>?
     private var started = false
@@ -3720,19 +3725,28 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             restoreNativeKeys: { [weak self] in self?.remoteNativeKeyMapper.restore() }
         )
         monitor.claimsRuntimeButton = { [weak self] profileID, button in
+            self?.claimsButtonGestureLearning(profileID: profileID) == true ||
             self?.membershipFeature.claimsCommonPhrase(
                 button: button.rawValue,
                 source: Self.commonPhraseHIDSource(profileID)
             ) == true
         }
         monitor.onRuntimeButton = { [weak self] profileID, button, phase in
-            self?.membershipFeature.handleCommonPhrase(
+            if self?.handleButtonGestureLearning(
+                phase,
+                button: button,
+                profileID: profileID
+            ) == true { return true }
+            return self?.membershipFeature.handleCommonPhrase(
                 button: button.rawValue,
                 phase: phase.rawValue,
                 source: Self.commonPhraseHIDSource(profileID)
             ) == true
         }
         monitor.onInputReset = { [weak self] profileID in
+            if self?.buttonGestureLearningProfileID == profileID {
+                self?.cancelButtonGestureLearning(reason: "hid_input_reset")
+            }
             self?.membershipFeature.resetCommonPhrases(source: Self.commonPhraseHIDSource(profileID))
         }
         monitor.onStatus = { [weak self, weak monitor] value in
@@ -4261,9 +4275,83 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     }
 
     func selectRemoteProfile(_ profileID: UUID) {
+        if buttonGestureLearningProfileID != nil,
+           buttonGestureLearningProfileID != profileID {
+            cancelButtonGestureLearning(reason: "remote_changed")
+        }
         settings.selectRemoteProfile(profileID)
         refreshAppleRemoteHIDStatus()
         refreshBluetoothPresentation()
+    }
+
+    @discardableResult
+    func startButtonGestureLearning() -> Bool {
+        guard let profileID = settings.selectedRemoteProfileID,
+              let model = settings.selectedRemoteProfile?.model,
+              model != .unknown else { return false }
+        buttonGestureLearningProfileID = profileID
+        buttonGestureLearningOperationID = UUID().uuidString
+        buttonGestureLearningResult = nil
+        buttonGestureLearner.start(model: model)
+        buttonGestureLearningStatus = buttonGestureLearner.status
+        AppLogger.shared.write(
+            "BUTTON GESTURE LEARNING operation_id=\(buttonGestureLearningOperationID ?? "none") " +
+                "phase=started result=waiting model=\(model.rawValue)"
+        )
+        return true
+    }
+
+    func cancelButtonGestureLearning(reason: String = "user_cancelled") {
+        guard buttonGestureLearningStatus.isActive || buttonGestureLearningStatus.step == .complete
+        else { return }
+        AppLogger.shared.write(
+            "BUTTON GESTURE LEARNING operation_id=\(buttonGestureLearningOperationID ?? "none") " +
+                "phase=cancelled result=cancelled reason=\(reason)"
+        )
+        buttonGestureLearner.cancel()
+        buttonGestureLearningStatus = buttonGestureLearner.status
+        buttonGestureLearningResult = nil
+        buttonGestureLearningProfileID = nil
+        buttonGestureLearningOperationID = nil
+    }
+
+    private func claimsButtonGestureLearning(profileID: UUID?) -> Bool {
+        buttonGestureLearningStatus.isActive && profileID == buttonGestureLearningProfileID
+    }
+
+    @discardableResult
+    private func handleButtonGestureLearning(
+        _ phase: RemoteButtonPhase,
+        button: RemoteButton,
+        profileID: UUID?
+    ) -> Bool {
+        guard claimsButtonGestureLearning(profileID: profileID),
+              let model = settings.settingsModel(for: profileID) else { return false }
+        let previousStep = buttonGestureLearner.status.step
+        let result = buttonGestureLearner.handle(
+            phase,
+            button: button,
+            model: model,
+            timestampMilliseconds: Int(ProcessInfo.processInfo.systemUptime * 1_000)
+        )
+        buttonGestureLearningStatus = buttonGestureLearner.status
+        if previousStep != buttonGestureLearningStatus.step {
+            AppLogger.shared.write(
+                "BUTTON GESTURE LEARNING operation_id=\(buttonGestureLearningOperationID ?? "none") " +
+                    "phase=measured result=accepted step=\(previousStep.rawValue) " +
+                    "next=\(buttonGestureLearningStatus.step.rawValue)"
+            )
+        }
+        if let result {
+            buttonGestureLearningResult = result
+            AppLogger.shared.write(
+                "BUTTON GESTURE LEARNING operation_id=\(buttonGestureLearningOperationID ?? "none") " +
+                    "phase=completed result=measured single_ms=\(result.singleClickMilliseconds) " +
+                    "double_ms=\(result.doubleClickMilliseconds) long_ms=\(result.longPressMilliseconds) " +
+                    "adjusted=\(result.adjustedToAllowedRange)"
+            )
+        }
+        return true
     }
 
     func selectDefaultMappingRemoteIfAvailable() {
@@ -4635,6 +4723,12 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             }
             return
         }
+
+        if handleButtonGestureLearning(
+            phase,
+            button: button,
+            profileID: profileID
+        ) { return }
 
         if !macroFeature.isEditorActive,
            membershipFeature.handleCommonPhrase(
@@ -5767,6 +5861,9 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         for device: SiriRemoteDeviceIdentity,
         reason: String
     ) {
+        if appleRemoteProfileIDs[device] == buttonGestureLearningProfileID {
+            cancelButtonGestureLearning(reason: "apple_input_reset")
+        }
         if appleRemoteAppSwitcherSession.isActive {
             finishAppleRemoteAppSwitcher(reason: "input_reset_\(reason)", confirmed: false)
         }
@@ -9066,6 +9163,9 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     }
 
     private func resetChromecastButtonState(reason: String) {
+        if chromecastProfileID == buttonGestureLearningProfileID {
+            cancelButtonGestureLearning(reason: "chromecast_input_reset")
+        }
         if let chromecastProfileID {
             cancelConfiguredButtonInteractions(source: "chromecast:\(chromecastProfileID.uuidString)", reason: reason)
         }
@@ -9090,6 +9190,12 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         phase: RemoteButtonPhase,
         profileID: UUID
     ) {
+        if handleButtonGestureLearning(
+            phase,
+            button: button,
+            profileID: profileID
+        ) { return }
+
         if macroFeature.isEditorActive {
             if phase == .press { macroFeature.noteButtonInteraction(button: button) }
             AppLogger.shared.write(
