@@ -312,6 +312,60 @@ struct ShortcutLifecycleTests {
         #expect(logs.last?.contains("user_visible_result=unknown") == true)
     }
 
+    // 主页键（Home，键码 115）在 Intel 机器上让系统快照只带 Fn、不带数字键盘位。
+    // 该伪 Fn 曾进入已配置的 Command+Shift+H，目标 App 因多一个 Fn 而不匹配。
+    @Test func unverifiedFunctionFlagNeverJoinsShortcutWithoutFunction() {
+        var logs: [String] = []
+        var events: [Edge] = []
+        #expect(ShortcutEventSequence.send(
+            keyCode: 4, modifiers: [.maskCommand, .maskShift],
+            hardwareFlags: { CGEventFlags(rawValue: 0x0080_0000) },
+            modifierState: ShortcutHardwareModifierState(),
+            eventPoster: { events.append(Edge($0)); return true },
+            logger: { logs.append($0) }
+        ))
+        #expect(events.map(\.code) == [56, 55, 4, 4, 55, 56])
+        #expect(events.allSatisfy { !$0.flags.contains(.maskSecondaryFn) })
+        #expect(events.last?.flags.isEmpty == true)
+        let request = logs.first { $0.contains("phase=requested") }
+        #expect(request?.contains("hardware_function_filtered=true") == true)
+        #expect(request?.contains("hardware_function_state=unobserved") == true)
+        #expect(request?.contains("physical_flags=0") == true)
+        #expect(request?.contains("hardware_flags=8388608") == true)
+    }
+
+    @Test func explicitlyConfiguredFunctionKeepsUnverifiedFunctionFlag() {
+        var events: [Edge] = []
+        #expect(ShortcutEventSequence.send(
+            keyCode: 4, modifiers: [.maskCommand, .maskSecondaryFn],
+            hardwareFlags: { CGEventFlags(rawValue: 0x0080_0000) },
+            modifierState: ShortcutHardwareModifierState(),
+            eventPoster: { events.append(Edge($0)); return true }
+        ))
+        // 显式 Fn 已由硬件快照提供，不再重复按下 Fn 键，但事件必须保留 Fn。
+        #expect(events.map(\.code) == [55, 4, 4, 55])
+        #expect(events.allSatisfy { $0.flags.contains(.maskSecondaryFn) })
+        #expect(events.last?.flags == .maskSecondaryFn)
+    }
+
+    // 真实按住的 Fn（收到键码 63 的 flagsChanged）保持既有行为，Apple 芯片与 Intel 一致。
+    @Test func heldPhysicalFunctionStillJoinsShortcutWithoutFunction() {
+        let state = ShortcutHardwareModifierState()
+        let suppressor = KeyboardEventSuppressor(hardwareModifierState: state)
+        let functionEvent = CGEvent(keyboardEventSource: nil, virtualKey: 63, keyDown: true)!
+        functionEvent.type = .flagsChanged
+        functionEvent.flags = .maskSecondaryFn
+        #expect(!suppressor.handle(type: .flagsChanged, event: functionEvent))
+        var events: [Edge] = []
+        #expect(ShortcutEventSequence.send(
+            keyCode: 4, modifiers: [.maskCommand, .maskShift],
+            hardwareFlags: { CGEventFlags(rawValue: 0x0080_0000) }, modifierState: state,
+            eventPoster: { events.append(Edge($0)); return true }
+        ))
+        #expect(events.allSatisfy { $0.flags.contains(.maskSecondaryFn) })
+        #expect(events.last?.flags == .maskSecondaryFn)
+    }
+
     @Test(arguments: [UInt16(0), 11, 36, 37, 48, 49, 51, 53, 96, 123, 124, 125, 126])
     func recordedShortcutMatrixUsesCompleteSharedTransactions(_ keyCode: UInt16) throws {
         let families: [(String, UInt64, UInt64)] = [
@@ -426,7 +480,8 @@ struct ShortcutLifecycleTests {
             eventPoster: { event in
                 if event.type == .keyDown || event.type == .keyUp {
                     keys.append(UInt16(event.getIntegerValueField(.keyboardEventKeycode)))
-                    #expect(event.flags.contains(.maskSecondaryFn))
+                    // 未观察到真实 Fn 边沿时，快照里的 Fn 是来源按键的伪影，不能进入事件。
+                    #expect(!event.flags.contains(.maskSecondaryFn))
                 }
                 #expect(!suppressor.handle(type: event.type, event: event))
                 return true
@@ -436,7 +491,8 @@ struct ShortcutLifecycleTests {
         let request = try #require(logs.first { $0.contains("phase=requested") })
         #expect(request.contains("primary_kind=command_shortcut") || request.contains("primary_kind=page_navigation"))
         #expect(request.contains("hardware_function_state=unobserved"))
-        #expect(request.contains("physical_flags=8388608"))
+        #expect(request.contains("physical_flags=0"))
+        #expect(request.contains("hardware_function_filtered=true"))
         let observations = logs.filter { $0.contains("SHORTCUT OBSERVATION") }
         #expect(observations.count == 2)
         #expect(observations.allSatisfy { $0.contains("correlation=matched") && $0.contains("flags_match=true") }, "\(observations)")
