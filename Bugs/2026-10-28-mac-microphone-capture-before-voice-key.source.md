@@ -42,13 +42,20 @@ subtitle: 音源待命与真实语音键分离
 原有手机会话和 Fn 点按套件继续运行。
 
 ## E 本机与截图
-本机候选已构建，Developer ID 签名和包校验通过。
-实际连接页已显示待命，窗口保持可见。
-候选日志确认监听已启动，且没有开始采集。
+本机候选源码为 `b67c9ac3378b215bda071666b02045e34181b9af`，版本为 `2.0.0 (268)`。
+`dist/SayAll.app` 使用 Developer ID Application `L3QHLDRPAY` 签名，Hardened Runtime 和 `codesign --verify --deep --strict` 检查通过。
+实际连接页已显示待命，窗口保持可见；候选日志确认监听已启动，且没有开始采集。
 
-真实 Fn、实际声音和第三方首尾文字尚未验收。
-当前只作为本机候选，PR 保持 Draft。
-候选未公证，不用于远程分发。
+生产窗口为 `1020×772`，离屏 PNG 原尺寸为 `2040×1544`。以下八张截图来自同一候选包，均为 PNG、RGBA、原尺寸正确，文件小于 5 MB，并已逐张查看：
+
+| 状态 | 浅色 | 深色 |
+| --- | --- | --- |
+| 中文待命 | `Screenshots/bug-fixes/mac-microphone-shortcut-gated/zh-hans-light-armed/connection-1020x772.png`<br>`SHA-256 fb48709dbccdc9df62a0eb793cfe26e6ff143ff48e7cdaa68265721bf9152edf` | `Screenshots/bug-fixes/mac-microphone-shortcut-gated/zh-hans-dark-armed/connection-1020x772.png`<br>`SHA-256 3d387b95a89c6dfcf0ca66729eede422cc10d8ca9612ebf3531c5ff3ba597f88` |
+| 中文收音 | `Screenshots/bug-fixes/mac-microphone-shortcut-gated/zh-hans-light-recording/connection-1020x772.png`<br>`SHA-256 5765582aa74ca39d41bb5377ae2f20467125e0820046e8e79e094701ed86e55c` | `Screenshots/bug-fixes/mac-microphone-shortcut-gated/zh-hans-dark-recording/connection-1020x772.png`<br>`SHA-256 a23ff20a0471bdf8fb1488f80fcb6bcda8a5a04d4cc61b9dc616c237b300a400` |
+| English standby | `Screenshots/bug-fixes/mac-microphone-shortcut-gated/en-light-armed/connection-1020x772.png`<br>`SHA-256 25e59bbada399b1ffd8799524fab8ad6327aa59aa93b0f684b9cdcc1ece51c7e` | `Screenshots/bug-fixes/mac-microphone-shortcut-gated/en-dark-armed/connection-1020x772.png`<br>`SHA-256 34eed771fb570a7494649e35ec8ded9927a9b697eb66bda37f4e3fd74057ec4b` |
+| English recording | `Screenshots/bug-fixes/mac-microphone-shortcut-gated/en-light-recording/connection-1020x772.png`<br>`SHA-256 c76ebb6618bdaa9eedede5fc940eae09fabaabfb693d8f708258da6f7d0ba349` | `Screenshots/bug-fixes/mac-microphone-shortcut-gated/en-dark-recording/connection-1020x772.png`<br>`SHA-256 1b500f23b7e80527a2bb640c669751f9e363ced0e11f37c07c9716ee3a005f42` |
+
+真实 Fn、实际声音和第三方首尾文字尚未验收。当前只作为本机候选，PR 保持 Draft。候选未公证，不用于远程分发。
 
 ## F 兼容与边界
 已有输入设备和切换快捷键配置继续保留。
