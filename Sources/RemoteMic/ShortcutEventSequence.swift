@@ -209,6 +209,13 @@ enum ShortcutEventSequence {
         CGEventFlags([.maskAlphaShift, .maskHelp])
     ) { $0.union($1.flag).union($1.leftDeviceBit).union($1.rightDeviceBit) }
 
+    // The subset of hardwareModifierMask that may ride along into a synthesized
+    // event. Alpha shift is a real lock state, so a synthesized letter keeps its
+    // case. Help is key identity, not a modifier: the Help / Insert usage reports
+    // it the same way Fn-layer keys report the Fn bit, and no configured shortcut
+    // can ask for it, so carrying it only gives the target app an extra modifier.
+    private static let preservedModifierMask = hardwareModifierMask.subtracting(.maskHelp)
+
     static func diagnosticFlags(_ flags: CGEventFlags) -> UInt64 {
         flags.intersection(hardwareModifierMask.union(.maskNumericPad)).rawValue
     }
@@ -281,7 +288,7 @@ enum ShortcutEventSequence {
         let selectedModifiers = selectedModifiers(for: requested)
         let rawHardwareFlags = hardwareFlags()
         let hardwareSnapshot = modifierState.snapshot(rawHardwareFlags)
-        var physicalAtStart = hardwareSnapshot.flags.intersection(hardwareModifierMask)
+        var physicalAtStart = hardwareSnapshot.flags.intersection(preservedModifierMask)
         var functionFiltered = hardwareSnapshot.removedFunctionFlag
         // A Fn bit that only the raw HID snapshot reports must not enter a shortcut
         // that does not ask for Fn. Otherwise Command+Shift+H becomes
