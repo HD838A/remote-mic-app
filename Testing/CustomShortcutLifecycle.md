@@ -1,5 +1,41 @@
 # 自定义快捷键修饰键生命周期测试
 
+## 2026-10-29 主页键伪 Fn（Fn-only 快照）回归
+
+本次是 [2026-10-20 执行阶段伪 Fn](../Bugs/2026-10-20-shortcut-inherits-navigation-function.html) 的同类残留：既有过滤只处理“Fn + 数字键盘位”的方向键快照，主页键（Home，键码 115）在 Intel 机器上只带 Fn，因此 Fn 被并入已配置的快捷键。
+
+1. Intel 机器上把遥控器主页键和下键都配置为 `Command + Shift + H`，在 Chrome 前台分别触发。
+2. 下键应打开主页；主页键在修复后必须打开同一个主页，行为与下键一致。
+3. 从 App 日志菜单保留该时间段日志，按 `SHORTCUT SEQUENCE operation_id` 查请求行。
+   期望 `hardware_function_state=unobserved`、`hardware_function_filtered=true`、
+   `physical_flags=0`，且 `key_down` 事件的行为 `0x12000a`，不含 `.maskSecondaryFn`。
+   修复前同一请求记为 `hardware_function_filtered=false`、`physical_flags=8388608`、
+   `event_flags=9568266`，即 `Fn + Command + Shift + H`。
+4. 用 PageUp / PageDown（键码 116 / 121）、End、Forward Delete 重复第 1 步，均不得带 Fn。
+5. Apple 芯片机器上重复第 1、3 步，结果必须与 Intel 一致，且不得出现新的按键残留。
+6. 显式配置 Fn 组合（如 `Fn + Command + L`）：Fn 仍须随按下与松开发送，不因本次过滤消失。
+7. 实体键盘先按住 Fn 再触发遥控器快捷键：真实 Fn 继续保留，松开后再触发不得带 Fn。
+8. 语音键为 Fn 时按住不放，同时触发一个不含 Fn 的快捷键；该快捷键不得带 Fn。
+9. 快速连按主页键，把 `HID PRESS rejected reason=awaiting_stable_release` 与快捷键投递分开统计，
+   该项是 600 ms 稳定释放保护，不属于本次 Fn 修复范围。
+
+失败判定：`phase=requested` 里 `physical_flags` 出现 `8388608`、`key_down` 事件带 `event_function=true`、
+显式 Fn 组合丢失 Fn、真实按住的 Fn 被丢弃、或修饰键在 `phase=completed` 后仍残留。
+
+自动化：`swift test --disable-keychain --filter 'ShortcutLifecycleTests'` 通过 30 项；
+`swift test --disable-keychain` 通过 1073 项、79 个套件。
+覆盖 Fn-only 快照过滤、显式 Fn 保留、真实按住 Fn 保留、诊断字段和 1248 种配置矩阵。
+
+真机结果（2026-10-29，Intel 机器，本地候选包 build 271，用户自测通过）：
+`Command + Shift + H` 在主页键和下键上都打开了 Chrome 主页；该会话共 34 次快捷键请求全部
+`phase=completed`，68 条 `SHORTCUT OBSERVATION` 全部 `result=passed_through` 且 `flags_match=true`，
+204 个已投递事件全部 `event_function=false`、`physical_flags=0`。主页键有 24 次在
+`hardware_flags=8388608`（仅 Fn）的快照下触发，全部记为 `hardware_function_filtered=true`；
+其余 6 次快照为 `0`、1 次为 `0xA00000`，下键 2 次为 `8388608`，均未把 Fn 带进事件。
+
+仍未验证：Apple 芯片回归、实体键盘按住 Fn 的组合、语音键 Fn 注入期间触发快捷键，以及
+PageUp / PageDown、End、Forward Delete 四个同族键位。
+
 ## 2026-10-24 Control 方向键诊断
 
 适用分支：`codex/shortcut-system-diagnostics-20261024`。
