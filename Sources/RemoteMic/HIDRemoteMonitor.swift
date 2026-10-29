@@ -812,7 +812,7 @@ final class HIDRemoteMonitor {
             if hasSingleClickOverride {
                 diagnosticLogger(
                     "HID ROUTE button=\(button.rawValue) trigger=singleClick " +
-                        "path=configured reason=single_click_override external_result=unknown"
+                        "path=configured reason=single_click_override override_present=true"
                 )
             }
             if recognizesDoubleClick || recognizesLongPress || gestureRecognizer.isTracking(button) {
