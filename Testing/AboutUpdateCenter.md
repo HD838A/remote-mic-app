@@ -50,17 +50,22 @@
 
 ## 用例 1B：固定侧边栏品牌与个人中心图标
 
-1. 在生产最小窗口 `1020 × 772` 打开按键页，检查第一个导航项上方依次显示当前 App Logo、Oxanium SemiBold 600 的 `SayAll` 和当前安装包版本号；不与原生窗口按钮重叠。
+1. 在生产最小窗口 `1020 × 772` 打开按键页。侧边栏应宽 `136pt`；顶部 `44 × 44pt` Logo 在左，`16pt` Oxanium SemiBold 600 的 `SayAll` 及紧凑版本行在右。Logo 距窗口控制区下沿 `16pt`，不与原生窗口按钮重叠。
 2. 依次点击全部可见导航入口，包括连接、回眸、设置和个人中心；在页面中滚动，确认顶部品牌区和底部个人中心保持固定。安装包包含较多可选功能时，滚动侧边栏中间导航区并点击全部入口。
 3. 确认侧边栏没有独立分享按钮；最后一项个人中心保留原有账号名或“我的”，图标为 `person.crop.circle` 系统个人账户图标。
 4. 在设置页切换“经典鸭”和“几何鸭”，确认顶部 Logo 立即同步，底部个人账户图标保持不变；切换页面、退出并重启后仍显示所选图标。资源缺失回退按用例 1A 执行。
 5. 分别检查中文、English、浅色和深色；检查红黄绿按钮、顶栏拖动区域、导航选择态、中文字号和窗口尺寸。
+6. 在包含键位方案的构建中检查完整 `Button Profiles` 分两行显示；图标与整个文字块垂直居中。用两行、三行和无空格长用户名检查底部账户区：文字完整、按宽度换行，人物图标与文字块居中，区域按需增高。
 
-预期结果：顶部 Logo、品牌与版本号不随所选页面或滚动变化；侧边栏和设置页的 `SayAll` 均使用 Oxanium SemiBold 600，版本和导航仍使用系统字体；版本取自安装包 `CFBundleShortVersionString`，与设置页当前版本一致；分享只在个人中心顶部显示；顶部 Logo 使用与设置页同一图标选择及回退规则，个人中心保持系统个人账户图标，登录状态只影响原有文字；中间导航空间不足时可纵向滚动，所有入口可访问，顶部品牌区和底部入口不被挤出窗口。
+预期结果：顶部 Logo、品牌与版本号不随所选页面或滚动变化；侧边栏和设置页的 `SayAll` 均使用 Oxanium SemiBold 600，版本和导航仍使用系统字体；版本取自安装包 `CFBundleShortVersionString`，与设置页当前版本一致；分享只在个人中心顶部显示；顶部 Logo 使用与设置页同一图标选择及回退规则，个人中心保持系统个人账户图标，登录状态只影响原有文字；导航图标为 `18pt`，文字为 `13pt`，水平间距 `8pt`，图标左缘为 `15pt`；导航行最小高 `44pt`，账户区最小高 `56pt`，多行时随内容增高。文字左对齐，保留完整名称，不缩小字体、不省略用户名，也不按每 8 个字符插入换行。选中项为圆角淡强调色底，更新圆点在设置行右侧。中间导航空间不足时可纵向滚动，所有入口可访问，顶部品牌区和底部入口不被挤出窗口。
 
 失败判定：品牌只在某一页出现、顶部 Logo 缺失或未同步、品牌字体未生效、版本固定为设计稿示例、侧边栏残留分享按钮、个人中心仍显示 App Logo 或不可点击、账号文字丢失、导航入口无法到达、控件与窗口按钮重叠、窗口几何改变，或中文小于 12pt。
 
 离屏验证：使用生产 App 的 `REMOTE_MIC_SETTINGS_SCREENSHOT_DIR` 入口，并分别设置 `REMOTE_MIC_SETTINGS_SCREENSHOT_APP_ICON=standard`、`faceted-duck` 和不存在的标识；隔离的截图偏好、空历史及空授权目录不会改写用户配置或读取本机录音、转写记录和 Agent 授权。该入口证明生产视图的静态图标、回退与布局，实时切换、导航、个人中心分享与重启仍按上述真实窗口步骤验收。
+
+多入口与换行压力夹具：设置 `REMOTE_MIC_SETTINGS_SCREENSHOT_SIDEBAR_FIXTURE=1`，生产 `SettingsView` 使用合成扩展页元数据和虚构账号，不读取真实会话；`long` 模式使用三行英文名。四种语言/外观组合均需检查。夹具只验证公开宿主的实际导航布局，不证明私有页面内容、权益或真实账号登录。审核设计见[存档第八版 HTML](../Screenshots/design-drafts/sidebar-compact/v8/review.html)。
+
+本次是同步布局变更，无新增请求、取消、超时或重试分支；沿用既有导航与账户状态链路，不为排版写入用户名或高频日志。日志收集方法见 [RuntimeLogging.md](RuntimeLogging.md)。
 
 2026-10-28 定向验证：侧边栏和设置页名称统一为 Oxanium SemiBold 600；字体文件的 OS/2 字重值为 600。Apple Silicon Release 构建、`scripts/verify-app.sh` 和 60 项设置页回归测试通过。使用隔离数据，在 `1020 × 772` 交互窗口依次点击按键、连接、回眸、设置及个人中心，入口均可到达；两种 App 图标均可选择。中文、英文、浅色、深色及经典鸭共 5 张生产视图离屏截图已逐张检查，均为 `2040 × 1544` RGBA PNG。该结果只覆盖公开构建的界面，不代表私有可选页面、Intel 或真实硬件验收。
 
@@ -71,6 +76,19 @@
 | [standard-zh-Hans-light](../Screenshots/sidebar-brand-production/standard-zh-Hans-light/about-1020x772.png) | `65843c1e36ad323113b9af5610eaea6d67b6f4a712b962ff9bd7da787e537ccc` |
 | [zh-Hans-dark](../Screenshots/sidebar-brand-production/zh-Hans-dark/about-1020x772.png) | `e1f6d5cc3756834f47e33795c8d8ad6fe359cae61871a1bc7cb26b11ebcb0cbd` |
 | [zh-Hans-light](../Screenshots/sidebar-brand-production/zh-Hans-light/about-1020x772.png) | `67c7cf9d483dd0e1de00a263f1bfe8c513716c0b4f37cccc792ff26d7d94b50e` |
+
+2026-10-30 第八版设计实现验证：`swift test --disable-keychain --filter SettingsPageRegressionTests` 的 61 项测试通过；Apple Silicon Release 构建、`scripts/verify-app.sh`、仓库治理检查和 `1020 × 772` 实际窗口导航点击通过。生产 `SettingsView` 离屏入口生成中英文浅深色四种组合、键位方案夹具和三行英文账户名夹具；全部 PNG 为 `2040 × 1544`，截图逐张检查，SHA-256 如下：
+
+| 截图 | SHA-256 |
+| --- | --- |
+| [en-light](../Screenshots/sidebar-compact-production/en-light/about-1020x772.png) | `23ff6e0e4ebdc16f11bfa7e14f310b8dc371ef9587bbf6dfaa7ed6c1d2f3fc32` |
+| [en-dark](../Screenshots/sidebar-compact-production/en-dark/about-1020x772.png) | `27acf5e4841372881fa8c8b37343ab1f3778e86ec4c0500808387b99dc139b42` |
+| [zh-Hans-light](../Screenshots/sidebar-compact-production/zh-Hans-light/about-1020x772.png) | `ac8987f9e178a079de369cce270f607c81bd111fe5507c568750e36d972049d7` |
+| [zh-Hans-dark](../Screenshots/sidebar-compact-production/zh-Hans-dark/about-1020x772.png) | `f462ae5f5eab913ed3b4726581a2bde55f773b3cb6c329e430e9a22799ae258a` |
+| [fixture-en-light](../Screenshots/sidebar-compact-production/fixture-en-light/about-1020x772.png) | `e3b7040430495d7c7cfde9cd89a925ad79cf0bc4d423ba196a35ce4f051b04c6` |
+| [long-en-light](../Screenshots/sidebar-compact-production/long-en-light/about-1020x772.png) | `cbc3b31e38b82cc4ea80922bd9c731f37d3d540fe5ce3d87c7897438ce2b3af5` |
+
+实际窗口检查覆盖 Buttons、Macros、Button Profiles、Membership、Extra Page、AI Features、Connection、Reflections、Settings 和个人中心十个入口；夹具只证明公开宿主的布局，不证明可选模块行为或真实登录状态。
 
 ## 用例 2：无更新与更新信息不可用
 
