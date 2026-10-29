@@ -194,34 +194,51 @@ struct RemoteButtonInteractionTests {
         #expect(cancelled > 0)
     }
 
-    @Test func persistenceIsPerDeviceAndBackupRoundTripsTimingAndModes() throws {
+    @Test func timingIsPerModelWhileModesRemainPerDeviceAndBackupRoundTrips() throws {
         let name = "SayAll.Interaction.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: name))
         defer { defaults.removePersistentDomain(forName: name) }
         let settings = AppSettings(defaults: defaults)
         let first = settings.registerBluetoothRemote(identifier: UUID())
+        settings.updateRemoteProfileModel(first, model: .rc003)
         settings.selectRemoteProfile(first)
-        settings.interactionSettings.doubleClickMilliseconds = 150
-        settings.interactionSettings.longPressMilliseconds = 1000
+        settings.setButtonGestureTiming(.init(
+            doubleClickMilliseconds: 150,
+            longPressMilliseconds: 1000
+        ), for: .rc003)
         settings.setHoldMode(.holdSingle, for: .ok)
         let second = settings.registerBluetoothRemote(identifier: UUID())
+        settings.updateRemoteProfileModel(second, model: .rc003)
         settings.selectRemoteProfile(second)
-        settings.interactionSettings.doubleClickMilliseconds = 500
+        #expect(settings.buttonInteractionSettings().timing == .init(
+            doubleClickMilliseconds: 150,
+            longPressMilliseconds: 1000
+        ))
         settings.setHoldMode(.repeatLong, for: .menu)
+        let third = settings.registerBluetoothRemote(identifier: UUID())
+        settings.updateRemoteProfileModel(third, model: .rc001)
+        settings.selectRemoteProfile(third)
+        settings.setButtonGestureTiming(.init(
+            doubleClickMilliseconds: 500,
+            longPressMilliseconds: 600
+        ), for: .rc001)
         let restarted = AppSettings(defaults: defaults)
         restarted.selectRemoteProfile(first)
-        #expect(restarted.interactionSettings.doubleClickMilliseconds == 150)
-        #expect(restarted.interactionSettings.longPressMilliseconds == 1000)
+        #expect(restarted.buttonInteractionSettings().doubleClickMilliseconds == 150)
+        #expect(restarted.buttonInteractionSettings().longPressMilliseconds == 1000)
         #expect(restarted.interactionSettings.mode(for: .ok) == .holdSingle)
         restarted.selectRemoteProfile(second)
-        #expect(restarted.interactionSettings.doubleClickMilliseconds == 500)
+        #expect(restarted.buttonInteractionSettings().doubleClickMilliseconds == 150)
         #expect(restarted.interactionSettings.mode(for: .menu) == .repeatLong)
+        restarted.selectRemoteProfile(third)
+        #expect(restarted.buttonInteractionSettings().doubleClickMilliseconds == 500)
+        #expect(restarted.buttonInteractionSettings().longPressMilliseconds == 600)
         let data = try MacConfigurationBackup(host: restarted.completeConfigurationSnapshot(), components: nil).encoded(version: "2.0.0", build: "test")
         let backup = try MacConfigurationBackup.decode(data)
         let validated = try restarted.validatedCompleteConfigurationSnapshot(backup.host)
         try restarted.applyPortableLocalSnapshot(validated)
-        #expect(restarted.interactionSettings.mode(for: .menu) == .repeatLong)
-        #expect(restarted.interactionSettings.doubleClickMilliseconds == 500)
+        #expect(restarted.buttonGestureTiming(for: .rc003).doubleClickMilliseconds == 150)
+        #expect(restarted.buttonGestureTiming(for: .rc001).doubleClickMilliseconds == 500)
         var object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
         #expect(object["schemaVersion"] as? Int == 2)
         object["schemaVersion"] = 1
@@ -229,6 +246,47 @@ struct RemoteButtonInteractionTests {
         requirements["reader"] = "sayall-macos-configuration/1"
         object["requirements"] = requirements
         #expect(throws: Never.self) { _ = try MacConfigurationBackup.decode(JSONSerialization.data(withJSONObject: object)) }
+    }
+
+    @Test func learningMeasuresOneButtonAndSuggestsValidSliderValues() {
+        var learner = RemoteButtonGestureLearner()
+        learner.start(model: .rc003)
+        #expect(learner.status.step == .singleClick)
+        #expect(learner.handle(.press, button: .ok, model: .rc003, timestampMilliseconds: 1_000) == nil)
+        #expect(learner.handle(.release, button: .ok, model: .rc003, timestampMilliseconds: 1_080) == nil)
+        #expect(learner.status.singleClickMilliseconds == 80)
+        #expect(learner.status.step == .doubleClick)
+
+        _ = learner.handle(.press, button: .ok, model: .rc003, timestampMilliseconds: 2_000)
+        _ = learner.handle(.release, button: .ok, model: .rc003, timestampMilliseconds: 2_070)
+        _ = learner.handle(.press, button: .ok, model: .rc003, timestampMilliseconds: 2_286)
+        _ = learner.handle(.release, button: .ok, model: .rc003, timestampMilliseconds: 2_350)
+        #expect(learner.status.doubleClickMilliseconds == 216)
+        #expect(learner.status.step == .longPress)
+
+        _ = learner.handle(.press, button: .ok, model: .rc003, timestampMilliseconds: 3_000)
+        let result = learner.handle(.release, button: .ok, model: .rc003, timestampMilliseconds: 3_735)
+        #expect(result?.singleClickMilliseconds == 80)
+        #expect(result?.doubleClickMilliseconds == 216)
+        #expect(result?.longPressMilliseconds == 735)
+        #expect(result?.suggestedTiming == .init(
+            doubleClickMilliseconds: 250,
+            longPressMilliseconds: 700
+        ))
+        #expect(result?.suggestedTiming.isValid == true)
+        #expect(learner.status.step == .complete)
+    }
+
+    @Test func learningIgnoresOtherButtonsAndModelsWithoutAdvancing() {
+        var learner = RemoteButtonGestureLearner()
+        learner.start(model: .rc003)
+        _ = learner.handle(.press, button: .ok, model: .rc003, timestampMilliseconds: 100)
+        _ = learner.handle(.release, button: .back, model: .rc003, timestampMilliseconds: 150)
+        _ = learner.handle(.release, button: .ok, model: .rc001, timestampMilliseconds: 160)
+        #expect(learner.status.step == .singleClick)
+        #expect(learner.status.singleClickMilliseconds == nil)
+        _ = learner.handle(.release, button: .ok, model: .rc003, timestampMilliseconds: 170)
+        #expect(learner.status.singleClickMilliseconds == 70)
     }
 }
 
