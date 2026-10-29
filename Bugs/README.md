@@ -1,5 +1,7 @@
 # Bug 记录
 
+- [Intel 音量键原生泄露（原生事件早于拦截登记）](./2026-10-29-intel-volume-native-leak-before-arm.md)
+
 - [选择 Mac 麦克风后过早收音](./2026-10-28-mac-microphone-capture-before-voice-key.html)
 
 - [音量按一次后持续变化](./2026-10-26-volume-native-release-stuck.html)
@@ -152,6 +154,7 @@
 
 | 时间 | Bug | 状态 |
 | --- | --- | --- |
+| 2026-10-29 | [Intel 音量键原生泄露（原生事件早于拦截登记）](./2026-10-29-intel-volume-native-leak-before-arm.md) | 修复方式：HID 报告迁到专用线程并在报告回调内提前登记，与主线程共用同一套事件级拦截与权限判据。build 269 实测 223 次音量键动作按下边沿 0 泄露。范围已收窄：设备级映射与投递观察日志移出，观察器生命周期另立；门禁收紧后需 Intel 复验 |
 | 2026-10-24 | [引导页权限轮询 1 Hz 过密，且 SayAll 在后台仍然查询](./2026-10-24-onboarding-permission-poll-interval.md) | 候选修复已实现（周期降到 2 s、App 在后台不做周期查询）；构建、定向回归与渲染对照通过，等待真实权限切换与续接旅程验收 |
 
 | 2026-10-24 | [主线程同步查权限 + event tap 挂在主 RunLoop，导致整机输入停摆](./2026-10-24-event-tap-blocks-system-input.md) | 候选修复已实现（tap 迁到专用线程、权限查询移出主线程、权限撤销时释放 tap）；构建、定向回归（99 项）与三组修复前后对照通过，全量 959 项中 958 项通过、1 项因本机缺 ripgrep 失败，等待真机按键链路与真实权限切换场景验收 |
