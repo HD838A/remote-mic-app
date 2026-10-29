@@ -6823,12 +6823,44 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             source: phraseSource ?? "mobile:\(source.rawValue)"
         ) { return true }
         let profileID = settings.selectedRemoteProfileID
-        handleConfiguredButtonInteraction(phase, button: button, profileID: profileID,
-            source: phraseSource ?? "mobile:\(source.rawValue)") { [weak self] trigger, configured in
-                self?.performMobileConfiguredAction(for: button, trigger: trigger, source: source,
-                    phraseSource: phraseSource, captured: configured) ?? false
-            }
-        return true
+        let recognizesDoubleClick = settings.configuredAction(
+            for: button,
+            trigger: .doubleClick
+        ).action != .disabled || macroFeature.hasActiveBinding(
+            profileID: profileID,
+            button: button,
+            trigger: .doubleClick
+        )
+        let recognizesLongPress = settings.configuredAction(
+            for: button,
+            trigger: .longPress
+        ).action != .disabled || macroFeature.hasActiveBinding(
+            profileID: profileID,
+            button: button,
+            trigger: .longPress
+        )
+
+        var recognizer = mobileButtonGestureRecognizers[source] ?? RemoteButtonGestureRecognizer()
+        if phase == .press,
+           !recognizesDoubleClick,
+           !recognizesLongPress,
+           !recognizer.isTracking(button) {
+            return performMobileConfiguredAction(
+                for: button,
+                trigger: .singleClick,
+                source: source,
+                phraseSource: phraseSource
+            )
+        }
+
+        let commands = recognizer.handle(
+            phase,
+            button: button,
+            recognizesDoubleClick: recognizesDoubleClick,
+            recognizesLongPress: recognizesLongPress
+        )
+        mobileButtonGestureRecognizers[source] = recognizer
+        return processMobileGestureCommands(commands, source: source, phraseSource: phraseSource)
     }
 
     private func processMobileGestureCommands(
@@ -6907,7 +6939,6 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     }
 
     private func resetMobileButtonGestures(source: UsageEventSource, phraseSource: String? = nil) {
-        cancelConfiguredButtonInteractions(source: phraseSource ?? "mobile:\(source.rawValue)", reason: "source_reset")
         membershipFeature.resetCommonPhrases(source: phraseSource ?? "mobile:\(source.rawValue)")
         let doubleClickKeys = mobileDoubleClickTimers.keys.filter { $0.source == source }
         doubleClickKeys.forEach {
@@ -6924,8 +6955,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         for button: RemoteButton,
         trigger: ButtonTrigger,
         source: UsageEventSource,
-        phraseSource: String? = nil,
-        captured: ConfiguredButtonAction? = nil
+        phraseSource: String? = nil
     ) -> Bool {
         if performButtonProfileBoundAction(
             profileID: settings.selectedRemoteProfileID,
@@ -6939,7 +6969,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             )
             return true
         }
-        let configured = captured ?? settings.configuredAction(for: button, trigger: trigger)
+        let configured = settings.configuredAction(for: button, trigger: trigger)
         if configured.action.isAppInternal {
             let handled = performInternalAction(configured.action, source: phraseSource ?? "mobile:\(source.rawValue)")
             if handled {
