@@ -759,6 +759,62 @@ struct RemoteButtonsTests {
         ))
     }
 
+    @Test func stableReleaseDiagnosticsSeparateDeviceBounceFromSwallowedPress() throws {
+        final class Clock {
+            var milliseconds: UInt64 = 0
+        }
+
+        let suiteName = "RemoteButtonsTests.stableReleaseTiming.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = AppSettings(defaults: defaults)
+        settings.customMappingEnabled = true
+        settings.setAction(.customShortcut, for: .home)
+        let profileID = try #require(settings.selectedRemoteProfileID)
+        let clock = Clock()
+        var diagnostics: [String] = []
+        var performedActions: [ButtonAction] = []
+        let monitor = HIDRemoteMonitor(
+            settings: settings,
+            profileID: profileID,
+            ownsEventSuppressor: false,
+            runtimePermissions: { true },
+            actionPerformer: { _, _, configured in
+                performedActions.append(configured.action)
+                return true
+            },
+            diagnosticLogger: { diagnostics.append($0) },
+            monotonicNow: { clock.milliseconds * 1_000_000 }
+        )
+        #expect(monitor.connectSimulatedDevice(fingerprint: "stable-release", profileID: profileID))
+
+        // 主页键（usage 0x4A）：按住 412ms，松开 108ms 后再按一次又被松开 10ms。
+        let press = Data([0x4A, 0, 0, 0, 0, 0])
+        let release = Data(repeating: 0, count: press.count)
+        monitor.handleSimulatedReport(reportID: 1, data: press)
+        clock.milliseconds = 412
+        monitor.handleSimulatedReport(reportID: 1, data: release)
+        clock.milliseconds = 520
+        monitor.handleSimulatedReport(reportID: 1, data: press)
+        clock.milliseconds = 530
+        monitor.handleSimulatedReport(reportID: 1, data: release)
+
+        let edges = diagnostics.filter { $0.contains("HID EDGE") }
+        #expect(edges.count == 4)
+        #expect(edges[0].contains("pressed=home"))
+        #expect(!edges[0].contains("since_release_ms"))
+        #expect(edges[1].contains("hold_ms=home:412"))
+        #expect(edges[2].contains("since_release_ms=home:108"))
+        #expect(edges[3].contains("hold_ms=home:10"))
+
+        #expect(diagnostics.contains {
+            $0.contains("HID PRESS rejected button=home") &&
+                $0.contains("since_release_ms=108") &&
+                $0.contains("latch_remaining_ms=492")
+        })
+        #expect(performedActions == [.customShortcut])
+    }
+
     @Test func rapidPressOptInLetsNonRepeatableActionsFireOnEveryRawPress() throws {
         let suiteName = "RemoteButtonsTests.rapidPress.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))
