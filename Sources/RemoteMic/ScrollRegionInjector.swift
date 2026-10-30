@@ -338,18 +338,31 @@ enum ScrollRegionInjector {
         return String(parts.joined(separator: " ").suffix(256))
     }
 
+    /// Wheel chunks are posted from a serial queue: spacing them on the HID
+    /// thread blocked event delivery and Chromium coalesced them into almost
+    /// nothing, which is why a single press only moved a few lines.
+    private static let pageScrollQueue = DispatchQueue(label: "RemoteMic.scroll-page")
+
     private static func postPageWheel(
         direction: ScrollPageDirection,
         chunks: Int,
         at point: CGPoint
     ) -> Bool {
         guard chunks > 0 else { return false }
-        for index in 0..<chunks {
-            guard postLineWheel(direction: direction, lines: ScrollRegionRule.linesPerChunk, at: point) else {
-                return false
-            }
-            if index < chunks - 1 {
-                Thread.sleep(forTimeInterval: ScrollRegionRule.chunkInterval)
+        AppLogger.shared.write(
+            "SCROLL PAGE wheel chunks=\(chunks) lines_per_chunk=\(ScrollRegionRule.linesPerChunk) " +
+            "interval_ms=\(Int(ScrollRegionRule.chunkInterval * 1000))"
+        )
+        pageScrollQueue.async {
+            for index in 0..<chunks {
+                _ = postLineWheel(
+                    direction: direction,
+                    lines: ScrollRegionRule.linesPerChunk,
+                    at: point
+                )
+                if index < chunks - 1 {
+                    Thread.sleep(forTimeInterval: ScrollRegionRule.chunkInterval)
+                }
             }
         }
         return true

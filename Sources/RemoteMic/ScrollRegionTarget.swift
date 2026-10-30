@@ -92,10 +92,10 @@ enum ScrollRegionRule {
     /// ten lines moves content by roughly 120 pt on WorkBuddy, and more than six
     /// chunks typically runs past the end of the document.
     static let overlapRatio: Double = 0.10
-    static let linesPerChunk: Int32 = 10
-    static let chunkPoints: Double = 120
-    static let maximumPageChunks = 6
-    static let chunkInterval: TimeInterval = 0.015
+    static let linesPerChunk: Int32 = 30
+    static let chunkPoints: Double = 215
+    static let maximumPageChunks = 3
+    static let chunkInterval: TimeInterval = 0.060
 
     /// Number of wheel chunks that approximate one viewport.
     static func pageScrollChunks(regionHeight: Double) -> Int {

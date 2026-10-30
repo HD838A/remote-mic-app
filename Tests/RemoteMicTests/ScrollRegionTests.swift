@@ -41,10 +41,10 @@ struct ScrollRegionTests {
     }
 
     @Test func pageScrollUsesBoundedChunks() {
-        // 884 pt region: 884 * 0.9 / 120 ≈ 6.6 → clamped to 6 chunks.
-        #expect(ScrollRegionRule.pageScrollChunks(regionHeight: 884) == 6)
-        // 300 pt region: 300 * 0.9 / 120 ≈ 2.25 → 2 chunks.
-        #expect(ScrollRegionRule.pageScrollChunks(regionHeight: 300) == 2)
+        // 884 pt region: 884 * 0.9 / 215 ≈ 3.7 → clamped to 3 chunks.
+        #expect(ScrollRegionRule.pageScrollChunks(regionHeight: 884) == 3)
+        // 300 pt region: 300 * 0.9 / 215 ≈ 1.26 → 1 chunk.
+        #expect(ScrollRegionRule.pageScrollChunks(regionHeight: 300) == 1)
         #expect(ScrollRegionRule.pageScrollChunks(regionHeight: 10) == 1)
         #expect(ScrollRegionRule.pageScrollChunks(regionHeight: 0) == 1)
         #expect(ScrollRegionRule.pageScrollChunks(regionHeight: 100_000) == ScrollRegionRule.maximumPageChunks)
