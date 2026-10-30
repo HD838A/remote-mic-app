@@ -468,7 +468,7 @@ Release构建及48项项目自检通过。生产页面验证查看、取消、�
 
 ### 本轮自动化与截图证据（2026-10-30）
 
-公开宿主：1083 项 Swift Testing 通过。私有源码集成：本轮针对按键手势时间的过滤测试 13 项通过。
+公开宿主：1094 项 Swift Testing 和 4 项 XCTest 通过。私有源码集成：本轮针对按键手势时间的过滤测试 13 项通过。
 私有集成本轮先用源码配置构建，再清理构建环境变量运行同一测试二进制；本轮未重新执行完整私有测试套件，不把过滤测试结果写成完整套件结果。
 项目自检 48 项、仓库边界、治理检查和 diff 检查通过。
 
@@ -482,7 +482,7 @@ PR 保持 Draft，不能将这些截图或自动化写为实机兼容性通过�
 
 | 文件 | 格式及像素 | SHA-256 |
 | --- | --- | --- |
-| final-ui/en-dark/mapping-1020x772.png | PNG 2040×1544 | `fc30ae4b229bd1f2d187827003a657d3cb6fc3289b9f64eb3dcdb0a005c46abc` |
-| final-ui/en-light/mapping-1020x772.png | PNG 2040×1544 | `6a7af49075d57f4aeb8b9b7be22dc9893fc2c6e720b8236bd0ab243c0f4c4c8c` |
-| final-ui/zh-dark/mapping-1020x772.png | PNG 2040×1544 | `d487066c658b563aeb24c9ef171f36ff9811509485fd0d4d792b50ddc00c70d5` |
-| final-ui/zh-light/mapping-1020x772.png | PNG 2040×1544 | `c1f8d39e0e9cc914d23693a90aa2a9e9f1f00eb87d47bb1132849ef6ed996c5a` |
+| final-ui/en-dark/mapping-1020x772.png | PNG 2040×1544 | `3d3e2ec8af96c93830a6e393c1a6591757ac9cd7bb2905ce5dd9e8c2a51d1f0b` |
+| final-ui/en-light/mapping-1020x772.png | PNG 2040×1544 | `96414f81f1ff1a9b88755e1e0f7d8fda653a7fe9a6e3fac204d8372685a31cb5` |
+| final-ui/zh-dark/mapping-1020x772.png | PNG 2040×1544 | `81edbf65b8871a40d25fb555e5514bc41f3c75572ac6878206ae774430e8bd0f` |
+| final-ui/zh-light/mapping-1020x772.png | PNG 2040×1544 | `4468296e2c815f69890d33960bb9090019645202b383d9bc5ed77c531048b587` |

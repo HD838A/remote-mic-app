@@ -47,6 +47,18 @@ enum SettingsScreenshotRenderer {
         let size = try screenshotSize(from: sizeValue)
         let appearance = try screenshotAppearance(from: appearanceName)
         let language = try screenshotLanguage(from: languageName)
+        let sidebarFixture = ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_SETTINGS_SCREENSHOT_SIDEBAR_FIXTURE"
+        ]
+        let supplementalSettings = sidebarFixture == nil ? nil : SupplementalSettingsIntegration(
+            provider: SidebarScreenshotProvider()
+        )
+        let sidebarAccountDisplayName: String? = sidebarFixture.map { value in
+            if language == .english {
+                return value == "long" ? "Christopher Alexander Anderson" : "Christopher Anderson"
+            }
+            return "春风十里无线麦设计验证账户"
+        }
         let opensShortcutEditor = ProcessInfo.processInfo.environment[
             "REMOTE_MIC_SETTINGS_SCREENSHOT_OPEN_SHORTCUT_EDITOR"
         ] == "1"
@@ -231,7 +243,9 @@ enum SettingsScreenshotRenderer {
                 initialShareSection: section == .statistics && expandsShare ? section : nil,
                 initialMappingEditingButton: section == .mapping && opensMappingEditor ? .ok : nil,
                 initialShortcutPickerShowsKeyboard: showsStandardKeyboard,
-                initialMappingScrollsToGestureTiming: section == .mapping && showsGestureTiming
+                initialMappingScrollsToGestureTiming: section == .mapping && showsGestureTiming,
+                supplementalSettings: supplementalSettings,
+                sidebarAccountDisplayName: sidebarAccountDisplayName
             ).environmentObject(localization))
             let window = NSWindow(contentRect: NSRect(origin: .zero, size: size),
                 styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
@@ -265,6 +279,8 @@ enum SettingsScreenshotRenderer {
                     : nil,
                 initialShortcutPickerShowsKeyboard: showsStandardKeyboard,
                 initialMappingScrollsToGestureTiming: section == .mapping && showsGestureTiming,
+                supplementalSettings: supplementalSettings,
+                sidebarAccountDisplayName: sidebarAccountDisplayName,
                 minimumContentSize: .zero
             )
             .environmentObject(localization)
@@ -449,5 +465,29 @@ enum SettingsScreenshotRenderer {
         case "en", "english": return .english
         case let value: throw RenderingError.invalidLanguage(value)
         }
+    }
+}
+
+/// Layout-only metadata for the production sidebar, independent of private module availability.
+@MainActor
+private final class SidebarScreenshotProvider: NSObject {
+    @objc func pagesForLocaleIdentifier(_ identifier: String) -> [[String: String]] {
+        let chinese = identifier.lowercased().hasPrefix("zh")
+        return [
+            ["id": "layout-macros", "title": chinese ? "组合动作" : "Macros", "systemImage": "command.square"],
+            ["id": "layout-profiles", "title": chinese ? "键位方案" : "Button Profiles", "systemImage": "rectangle.3.group"],
+            ["id": "layout-membership", "title": chinese ? "会员" : "Membership", "systemImage": "crown.fill"],
+            ["id": "layout-extra", "title": chinese ? "扩展入口" : "Extra Page", "systemImage": "chart.bar"],
+            ["id": "layout-ai", "title": chinese ? "智能功能" : "AI Features", "systemImage": "sparkles"],
+        ]
+    }
+
+    @objc func viewForPageID(_ pageID: String, localeIdentifier: String) -> NSView {
+        // These pages exercise navigation geometry, not the optional modules' behavior.
+        let label = NSTextField(labelWithString: localeIdentifier.hasPrefix("zh") ? "布局验证" : "Layout fixture")
+        label.frame = NSRect(x: 28, y: 28, width: 300, height: 24)
+        let view = NSView()
+        view.addSubview(label)
+        return view
     }
 }

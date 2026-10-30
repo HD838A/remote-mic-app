@@ -50,6 +50,7 @@
 
 - 普通用户入口：[`README.md`](README.md)、[`TROUBLESHOOTING.md`](TROUBLESHOOTING.md)。
 - 技术架构：[`TECHNICAL.md`](TECHNICAL.md)。
+- macOS Fn 层键位、修饰键标志位与快捷键注入判读：[`MACOS_FUNCTION_LAYER.md`](MACOS_FUNCTION_LAYER.md)。
 - AI 环境配置：[`AI_SETUP.md`](AI_SETUP.md)。
 - 许可与归属：[`LICENSE.md`](LICENSE.md)、[`LOGO-LICENSE.md`](LOGO-LICENSE.md)、[`COPYRIGHT.md`](COPYRIGHT.md)、[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)。
 - App 内帮助、安装说明和版本历史位于 `Resources/<language>.lproj/` 及 `Resources/` 下对应的本地化 Markdown。

@@ -1283,7 +1283,7 @@
 "audio.mac_microphone.preparing" = "Preparing…";
 "audio.mac_microphone.recording" = "Mac microphone is recording";
 "audio.mac_microphone.stopping" = "Stopping recording…";
-"audio.mac_microphone.shortcut" = "Shortcut";
+"audio.mac_microphone.shortcut" = "Switch shortcut";
 "audio.mac_microphone.shortcut_set" = "Set shortcut";
 "audio.mac_microphone.shortcut_prompt" = "Press a combination with ⌘, ⌃ or ⌥. Left and right modifiers are equivalent.";
 "audio.mac_microphone.shortcut_unavailable" = "Shortcut unavailable. Choose another combination with ⌘, ⌃ or ⌥.";
@@ -1332,3 +1332,8 @@
 "button_mapping.timing_save_hint" = "Learning results fill the controls first. They take effect after you save.";
 "button_mapping.timing_saved" = "Saved. The new times apply from the next ordinary button press.";
 "button_mapping.hold_profile_unavailable" = "This component version cannot save hold modes in button profiles. Update the component.";
+"audio.mac_microphone.armed" = "Standby";
+"audio.mac_microphone.voice_key" = "Voice shortcut";
+"audio.mac_microphone.voice_hold" = "Hold to speak; release to finish";
+"audio.mac_microphone.voice_toggle" = "Press to start; press again to finish";
+"audio.mac_microphone.error.input_monitoring" = "Cannot observe the voice shortcut. Allow Input Monitoring in System Settings and retry.";

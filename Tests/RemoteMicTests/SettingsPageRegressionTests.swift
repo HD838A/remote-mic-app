@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import SwiftUI
 import Testing
@@ -5,12 +6,27 @@ import Testing
 
 @Suite("Settings page regression")
 struct SettingsPageRegressionTests {
-    @Test func sidebarAccountTitleKeepsEveryCharacterAndWrapsAfterEight() {
+    @Test func sidebarAccountTitleKeepsEveryCharacterForWidthBasedWrapping() {
         #expect(SettingsPageBehavior.sidebarAccountTitle(accountDisplayName: nil, loginTitle: "登录") == "登录")
         #expect(SettingsPageBehavior.sidebarAccountTitle(accountDisplayName: "  ", loginTitle: "Login") == "Login")
         #expect(SettingsPageBehavior.sidebarAccountTitle(accountDisplayName: "abcdefgh", loginTitle: "Login") == "abcdefgh")
-        #expect(SettingsPageBehavior.sidebarAccountTitle(accountDisplayName: "abcdefghijklmnopq", loginTitle: "Login") == "abcdefgh\nijklmnop\nq")
-        #expect(SettingsPageBehavior.sidebarAccountTitle(accountDisplayName: "一二三四五六七八九", loginTitle: "登录") == "一二三四五六七八\n九")
+        #expect(SettingsPageBehavior.sidebarAccountTitle(accountDisplayName: "abcdefghijklmnopq", loginTitle: "Login") == "abcdefghijklmnopq")
+        #expect(SettingsPageBehavior.sidebarAccountTitle(accountDisplayName: "一二三四五六七八九", loginTitle: "登录") == "一二三四五六七八九")
+        #expect(SettingsPageBehavior.sidebarAccountTitle(accountDisplayName: "  Christopher Anderson  ", loginTitle: "Me") == "Christopher Anderson")
+    }
+
+    @MainActor @Test func sidebarRowsGrowForLongNamesWithoutShrinkingText() {
+        func height(_ title: String, badge: Bool = false) -> CGFloat {
+            NSHostingView(rootView: SettingsSidebarRow(
+                title: Text(verbatim: title), systemImage: "person.crop.circle",
+                showsUpdateBadge: badge
+            ).frame(width: 124).fixedSize(horizontal: false, vertical: true)).fittingSize.height
+        }
+        #expect(height("Settings", badge: true) == 40)
+        #expect(height("Button Profiles") == 40)
+        #expect(height("Christopher Anderson") == 40)
+        #expect(height("Christopher Alexander Anderson") > 40)
+        #expect(height(String(repeating: "longusername", count: 6)) > 40)
     }
 
     @Test func webRemoteEntryDoesNotRequireAnInviteCode() throws {
@@ -1585,7 +1601,7 @@ struct SettingsPageRegressionTests {
         )
 
         #expect(source.contains(
-            "membershipFeature.accountDisplayName ?? localization.text(\"settings.section.login\")"
+            "accountDisplayName: membershipFeature.accountDisplayName"
         ))
         #expect(integration.contains("@Published private(set) var accountDisplayName: String?"))
         #expect(integration.contains("adapter.$accountDisplayName"))

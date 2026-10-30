@@ -111,6 +111,8 @@ The supported `voiceKeyMode` values are `fn` (default), `left_command`, and `rig
 
 The ordinary-button `focusInput` custom action calls `KeyboardInjector.focusFrontmostComposer` to focus an editable field in the current frontmost app. It is non-repeating and requires Accessibility permission. The voice-button path never invokes input focusing, so double-click windows and long-press thresholds cannot delay the first voice response.
 
+Fn-layer key usages, modifier flag bits, and the log-reading rules for shortcut injection are documented in [`MACOS_FUNCTION_LAYER.md`](MACOS_FUNCTION_LAYER.md) (Chinese; authoritative over this translation).
+
 ## Menu bar and window
 
 The app runs as an LSUIElement accessory and has no Dock icon. The status item receives left and right mouse-up events:

@@ -196,11 +196,8 @@ enum SettingsPageBehavior {
 
     static func sidebarAccountTitle(accountDisplayName: String?, loginTitle: String) -> String {
         guard let accountDisplayName else { return loginTitle }
-        let characters = Array(accountDisplayName.trimmingCharacters(in: .whitespacesAndNewlines))
-        guard !characters.isEmpty else { return loginTitle }
-        return stride(from: 0, to: characters.count, by: 8)
-            .map { String(characters[$0..<min($0 + 8, characters.count)]) }
-            .joined(separator: "\n")
+        let title = accountDisplayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return title.isEmpty ? loginTitle : title
     }
 
     static func permissionAction(
@@ -249,6 +246,12 @@ enum SettingsPageBehavior {
 }
 
 private enum BrandFont {
+    static let sidebarFont: Font = {
+        _ = font
+        return NSFont(name: "Oxanium-SemiBold", size: 16).map(Font.init)
+            ?? .system(size: 16, weight: .semibold)
+    }()
+
     static let font: Font = {
         if let url = RemoteMicResourceBundle.mainOrDevelopment.url(
             forResource: "oxanium-semibold",
@@ -495,6 +498,7 @@ struct SettingsView: View {
     private let minimumContentSize: CGSize
     private let initialShortcutPickerShowsKeyboard: Bool
     private let initialMappingScrollsToGestureTiming: Bool
+    private let sidebarAccountDisplayName: String?
 
     @State private var supplementalSettings = SupplementalSettingsIntegration()
     @State private var selectedSection: SettingsSection
@@ -545,6 +549,8 @@ struct SettingsView: View {
         initialMappingEditingTrigger: ButtonTrigger = .singleClick,
         initialShortcutPickerShowsKeyboard: Bool = false,
         initialMappingScrollsToGestureTiming: Bool = false,
+        supplementalSettings: SupplementalSettingsIntegration? = nil,
+        sidebarAccountDisplayName: String? = nil,
         minimumContentSize: CGSize = CGSize(width: 980, height: 732)
     ) {
         self.model = model
@@ -565,6 +571,8 @@ struct SettingsView: View {
         self.minimumContentSize = minimumContentSize
         self.initialShortcutPickerShowsKeyboard = initialShortcutPickerShowsKeyboard
         self.initialMappingScrollsToGestureTiming = initialMappingScrollsToGestureTiming
+        self.sidebarAccountDisplayName = sidebarAccountDisplayName
+        _supplementalSettings = State(initialValue: supplementalSettings ?? SupplementalSettingsIntegration())
         _selectedSection = State(initialValue: SettingsPageBehavior.initialSection(
             requestedSection: initialSection,
             privateFeatureVisible: model.privateFeature.isFeatureVisible,
@@ -584,7 +592,7 @@ struct SettingsView: View {
     var body: some View {
         HStack(spacing: 0) {
             sidebar
-                .frame(width: 108)
+                .frame(width: 136)
             Color(nsColor: .separatorColor)
                 .frame(width: 1)
                 .frame(maxHeight: .infinity)
@@ -720,21 +728,26 @@ struct SettingsView: View {
             WindowDragArea()
                 .frame(height: SettingsPageBehavior.sidebarTopDragHeight)
                 .accessibilityHidden(true)
-            VStack(spacing: 4) {
+            HStack(alignment: .top, spacing: 8) {
                 Image(nsImage: appIconCatalog.image(for: settings.appIconIdentifier))
                     .resizable()
                     .scaledToFit()
                     .frame(width: 44, height: 44)
                     .accessibilityHidden(true)
-                Text(verbatim: "SayAll")
-                    .font(BrandFont.font)
-                Text(currentVersion)
-                    .font(.system(size: 12))
-                    .monospacedDigit()
-                    .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: -2) {
+                    Text(verbatim: "SayAll")
+                        .font(BrandFont.sidebarFont)
+                    Text(currentVersion)
+                        .font(.system(size: 12))
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.top, 6)
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
+            .padding(.horizontal, 12)
+            .padding(.top, 11)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(height: 75, alignment: .topLeading)
             .accessibilityElement(children: .combine)
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(spacing: 0) {
@@ -745,6 +758,12 @@ struct SettingsView: View {
             }
             if visibleSections.contains(.statistics) {
                 sidebarButton(.statistics)
+                    .padding(.vertical, 6)
+                    .overlay(alignment: .top) {
+                        Color(nsColor: .separatorColor)
+                            .frame(height: 0.5)
+                            .padding(.horizontal, 12)
+                    }
             }
         }
         .background(Color(nsColor: .controlBackgroundColor))
@@ -769,51 +788,24 @@ struct SettingsView: View {
         return Button {
             selectSidebarSection(section)
         } label: {
-            VStack(spacing: 7) {
-                ZStack(alignment: .topTrailing) {
-                    Image(systemName: sectionSystemImage(section))
-                        .font(.system(size: 21, weight: .semibold))
-                    if SettingsPageBehavior.showsUpdateBadge(
-                        for: section,
-                        hasUnseenUpdate: updateInformation.hasUnseenUpdate
-                    ) {
-                        Circle()
-                            .fill(Color.red)
-                            .frame(width: 7, height: 7)
-                            .offset(x: 4, y: -3)
-                            .accessibilityHidden(true)
-                    }
-                }
-                if section == .privateFeature
-                    || section == .macros
-                    || section == .buttonProfiles
-                    || section == .membership
-                    || section.supplementalID != nil {
-                    Text(sectionTitle(section))
-                        .font(.system(size: 13, weight: .semibold))
-                } else if section == .statistics {
-                    Text(SettingsPageBehavior.sidebarAccountTitle(
-                        accountDisplayName: membershipFeature.accountDisplayName,
-                        loginTitle: localization.text("settings.section.login")
-                    ))
-                        .font(.system(size: 13, weight: .semibold))
-                        .multilineTextAlignment(.center)
-                        .lineLimit(nil)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .accessibilityLabel(membershipFeature.accountDisplayName ?? localization.text("settings.section.login"))
-                } else {
-                    Text(section.title)
-                        .font(.system(size: 13, weight: .semibold))
-                }
+            SettingsSidebarRow(
+                title: sidebarTitle(section),
+                systemImage: sectionSystemImage(section),
+                showsUpdateBadge: SettingsPageBehavior.showsUpdateBadge(
+                    for: section,
+                    hasUnseenUpdate: updateInformation.hasUnseenUpdate
+                )
+            )
+            .background {
+                RoundedRectangle(cornerRadius: 7)
+                    .fill(isSelected ? Color.accentColor.opacity(0.10) : Color.clear)
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
-            .contentShape(Rectangle())
+            .padding(.vertical, 2)
         }
         .buttonStyle(.plain)
         .compatibilityFocusEffectDisabled()
         .foregroundStyle(isSelected ? Color.accentColor : Color.secondary)
-        .background(isSelected ? Color.accentColor.opacity(0.10) : Color.clear)
+        .padding(.horizontal, 6)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
         .accessibilityValue(
             SettingsPageBehavior.showsUpdateBadge(
@@ -821,6 +813,20 @@ struct SettingsView: View {
                 hasUnseenUpdate: updateInformation.hasUnseenUpdate
             ) ? Text("settings.update_badge.accessibility_value") : Text("")
         )
+    }
+
+    private func sidebarTitle(_ section: SettingsSection) -> Text {
+        if section == .statistics {
+            return Text(SettingsPageBehavior.sidebarAccountTitle(
+                accountDisplayName: membershipFeature.accountDisplayName ?? sidebarAccountDisplayName,
+                loginTitle: localization.text("settings.section.login")
+            ))
+        }
+        if section == .privateFeature || section == .macros || section == .buttonProfiles
+            || section == .membership || section.supplementalID != nil {
+            return Text(sectionTitle(section))
+        }
+        return Text(section.title)
     }
 
     private func selectSidebarSection(_ section: SettingsSection) {
@@ -1464,7 +1470,7 @@ struct SettingsView: View {
                         .fill(model.macMicrophoneState == .recording ? Color.green : Color.secondary)
                         .frame(width: 6, height: 6)
                         .accessibilityHidden(true)
-                    Text(LocalizedStringKey(model.macMicrophoneState.isActive
+                    Text(LocalizedStringKey(model.macMicrophoneState == .armed || model.macMicrophoneState.isActive
                         ? model.macMicrophoneState.statusKey : "audio.mac_microphone.idle"))
                         .font(.system(size: 12))
                         .foregroundStyle(model.macMicrophoneState == .recording ? Color.green : Color.secondary)
@@ -1506,9 +1512,10 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            if model.macMicrophoneState == .failed(.permission) || model.macMicrophoneState == .failed(.accessibility) {
+            if model.macMicrophoneState == .failed(.permission) || model.macMicrophoneState == .failed(.accessibility) || model.macMicrophoneState == .failed(.inputMonitoring) {
                 Button("permission.action.open_settings") {
-                    let pane = model.macMicrophoneState == .failed(.permission) ? "Privacy_Microphone" : "Privacy_Accessibility"
+                    let pane = model.macMicrophoneState == .failed(.permission) ? "Privacy_Microphone" :
+                        (model.macMicrophoneState == .failed(.inputMonitoring) ? "Privacy_ListenEvent" : "Privacy_Accessibility")
                     if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?\(pane)") {
                         NSWorkspace.shared.open(url)
                     }
@@ -1538,6 +1545,14 @@ struct SettingsView: View {
                     .compatibilityButtonStyle(.standard)
                     .disabled(model.macMicrophoneState.isActive)
                 }
+            }
+            HStack(spacing: 14) {
+                Text("audio.mac_microphone.voice_key").font(.system(size: 12))
+                    .frame(width: 92, alignment: .leading)
+                Text(LocalizedStringKey(settings.voiceKeyMode.localizationKey)).font(.system(size: 12))
+                Text(model.macMicrophoneVoiceGesture == .hold
+                    ? "audio.mac_microphone.voice_hold" : "audio.mac_microphone.voice_toggle")
+                    .font(.system(size: 12)).foregroundStyle(.secondary)
             }
             if isCapturingMacMicrophoneShortcut {
                 Text("audio.mac_microphone.shortcut_prompt").font(.system(size: 12))
