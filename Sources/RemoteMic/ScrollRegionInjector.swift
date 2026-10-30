@@ -54,7 +54,7 @@ enum ScrollRegionInjector {
         return ScrollRegionTarget(
             role: axString(anchor, kAXRoleAttribute),
             identifier: axString(anchor, kAXIdentifierAttribute),
-            windowTitle: window.map { axString($0, kAXTitleAttribute) } ?? "",
+            windowTitle: "",
             context: ancestorContext(of: element, stoppingAt: window),
             normalizedFrame: ScrollRegionRule.normalizedFrame(
                 elementFrame: frame, windowFrame: windowFrame
@@ -105,10 +105,17 @@ enum ScrollRegionInjector {
         if let learnedTarget, !usesContainerMatching(role: learnedTarget.role) {
             return scrollRecordedRect(
                 learnedTarget, window: window, windowFrame: windowFrame,
-                direction: direction, verifyMovement: verifyMovement
+                direction: direction, verifyMovement: verifyMovement,
+                isValidTarget: makeTargetValidator(
+                    window: window, expectedFrame: windowFrame,
+                    processIdentifier: application.processIdentifier
+                )
             )
         }
 
+        let isValidTarget = makeTargetValidator(
+            window: window, expectedFrame: windowFrame, processIdentifier: application.processIdentifier
+        )
         let candidates = scrollCandidates(in: window, windowFrame: windowFrame)
 
         let candidate: Candidate
@@ -133,13 +140,14 @@ enum ScrollRegionInjector {
             }
             guard let found = ScrollRegionRule.presetCandidateIndex(in: containers.map(\.descriptor)) else {
                 return scrollRect(
-                    windowFrame, window: window, direction: direction, verifyMovement: verifyMovement
+                    windowFrame, window: window, direction: direction,
+                    verifyMovement: verifyMovement, isValidTarget: isValidTarget
                 )
             }
             candidate = containers[found]
         }
         let before = verifyMovement
-            ? textSignature(in: window, region: candidate.descriptor.frame)
+            ? structuralSignature(in: window, region: candidate.descriptor.frame)
             : [:]
 
         if axActions(candidate.element).contains("AXScrollUpByPage") {
@@ -157,7 +165,8 @@ enum ScrollRegionInjector {
         guard postPageWheel(
             direction: direction,
             chunks: ScrollRegionRule.pageScrollChunks(regionHeight: Double(candidate.descriptor.frame.height)),
-            at: center
+            at: center,
+            isValidTarget: isValidTarget
         ) else {
             return ScrollPageResult(outcome: .eventFailed, verifiedMovement: nil)
         }
@@ -174,9 +183,11 @@ enum ScrollRegionInjector {
         window: AXUIElement,
         windowFrame: CGRect,
         direction: ScrollPageDirection,
-        verifyMovement: Bool
+        verifyMovement: Bool,
+        isValidTarget: @escaping () -> Bool
     ) -> ScrollPageResult {
         guard let frame = target.normalizedFrame,
+              ScrollRegionRule.isValid(normalizedFrame: frame),
               windowFrame.width > 0, windowFrame.height > 0
         else { return ScrollPageResult(outcome: .regionUnavailable, verifiedMovement: nil) }
 
@@ -186,23 +197,28 @@ enum ScrollRegionInjector {
             width: frame.width * windowFrame.width,
             height: frame.height * windowFrame.height
         )
-        return scrollRect(rect, window: window, direction: direction, verifyMovement: verifyMovement)
+        return scrollRect(
+            rect, window: window, direction: direction,
+            verifyMovement: verifyMovement, isValidTarget: isValidTarget
+        )
     }
 
     private static func scrollRect(
         _ rect: CGRect,
         window: AXUIElement,
         direction: ScrollPageDirection,
-        verifyMovement: Bool
+        verifyMovement: Bool,
+        isValidTarget: @escaping () -> Bool
     ) -> ScrollPageResult {
         guard rect.width >= 8, rect.height >= 8 else {
             return ScrollPageResult(outcome: .regionUnavailable, verifiedMovement: nil)
         }
-        let before = verifyMovement ? textSignature(in: window, region: rect) : [:]
+        let before = verifyMovement ? structuralSignature(in: window, region: rect) : [:]
         guard postPageWheel(
             direction: direction,
             chunks: ScrollRegionRule.pageScrollChunks(regionHeight: Double(rect.height)),
-            at: CGPoint(x: rect.midX, y: rect.midY)
+            at: CGPoint(x: rect.midX, y: rect.midY),
+            isValidTarget: isValidTarget
         ) else {
             return ScrollPageResult(outcome: .eventFailed, verifiedMovement: nil)
         }
@@ -221,7 +237,7 @@ enum ScrollRegionInjector {
             return ScrollPageResult(outcome: outcome, verifiedMovement: nil)
         }
         Thread.sleep(forTimeInterval: 0.35)
-        let after = textSignature(in: window, region: region)
+        let after = structuralSignature(in: window, region: region)
         let moved = before.contains { key, y in
             guard let newY = after[key] else { return false }
             return abs(newY - y) > 1
@@ -279,19 +295,22 @@ enum ScrollRegionInjector {
 
     /// Fingerprint of visible text positions, used only to confirm that a page
     /// scroll actually moved content. Values are hashed and never persisted.
-    /// Visible text positions inside the scrolled region. Values are hashed and
-    /// only used to confirm the page actually moved; nothing is persisted.
-    private static func textSignature(in window: AXUIElement, region: CGRect?) -> [String: CGFloat] {
+    /// Structural signature inside the scrolled region: role, identifier and
+    /// size only. Never reads `AXValue` or any text, so a page can be confirmed
+    /// without touching content; nodes without an identifier are skipped and the
+    /// caller reports "unverified" instead of guessing.
+    private static func structuralSignature(in window: AXUIElement, region: CGRect?) -> [String: CGFloat] {
         var signature: [String: CGFloat] = [:]
         var stack = [window]
         var visited = 0
         while let element = stack.popLast(), visited < 4_000, signature.count < 600 {
             visited += 1
-            if axString(element, kAXRoleAttribute) == "AXStaticText" {
-                let value = axString(element, kAXValueAttribute)
-                if !value.isEmpty, let frame = axFrame(element),
+            let role = axString(element, kAXRoleAttribute)
+            if role == "AXStaticText" || role == "AXImage" || role == "AXButton" {
+                let identifier = axString(element, kAXIdentifierAttribute)
+                if !identifier.isEmpty, let frame = axFrame(element),
                    region.map({ $0.intersects(frame) }) ?? true {
-                    signature["\(value.hashValue)@\(Int(frame.width))x\(Int(frame.height))"] = frame.minY
+                    signature["\(role):\(identifier):\(Int(frame.width))x\(Int(frame.height))"] = frame.minY
                 }
             }
             stack.append(contentsOf: axChildren(element))
@@ -338,23 +357,60 @@ enum ScrollRegionInjector {
         return String(parts.joined(separator: " ").suffix(256))
     }
 
-    /// Wheel chunks are posted from a serial queue: spacing them on the HID
-    /// thread blocked event delivery and Chromium coalesced them into almost
-    /// nothing, which is why a single press only moved a few lines.
+    /// Wheel chunks are posted from a serial queue so the HID thread is never
+    /// blocked. Before every chunk the target app and window are re-checked and
+    /// a newer page request cancels the previous one, so switching apps or
+    /// pressing twice never delivers stale events to the wrong window.
     private static let pageScrollQueue = DispatchQueue(label: "RemoteMic.scroll-page")
+    private static let pageStateLock = NSLock()
+    private static var pageGeneration = 0
+
+    private static func makeTargetValidator(
+        window: AXUIElement,
+        expectedFrame: CGRect,
+        processIdentifier: pid_t
+    ) -> () -> Bool {
+        return {
+            guard let frontmost = NSWorkspace.shared.frontmostApplication,
+                  frontmost.processIdentifier == processIdentifier
+            else { return false }
+            guard let current = axFrame(window) else { return false }
+            return abs(current.minX - expectedFrame.minX) <= 2 &&
+                abs(current.minY - expectedFrame.minY) <= 2 &&
+                abs(current.width - expectedFrame.width) <= 2 &&
+                abs(current.height - expectedFrame.height) <= 2
+        }
+    }
 
     private static func postPageWheel(
         direction: ScrollPageDirection,
         chunks: Int,
-        at point: CGPoint
+        at point: CGPoint,
+        isValidTarget: @escaping () -> Bool
     ) -> Bool {
         guard chunks > 0 else { return false }
+        pageStateLock.lock()
+        pageGeneration += 1
+        let generation = pageGeneration
+        pageStateLock.unlock()
+
         AppLogger.shared.write(
             "SCROLL PAGE wheel chunks=\(chunks) lines_per_chunk=\(ScrollRegionRule.linesPerChunk) " +
-            "interval_ms=\(Int(ScrollRegionRule.chunkInterval * 1000))"
+            "interval_ms=\(Int(ScrollRegionRule.chunkInterval * 1000)) state=queued"
         )
         pageScrollQueue.async {
             for index in 0..<chunks {
+                pageStateLock.lock()
+                let current = pageGeneration
+                pageStateLock.unlock()
+                guard current == generation else {
+                    AppLogger.shared.write("SCROLL PAGE wheel aborted reason=superseded sent=\(index)")
+                    return
+                }
+                guard isValidTarget() else {
+                    AppLogger.shared.write("SCROLL PAGE wheel aborted reason=target_changed sent=\(index)")
+                    return
+                }
                 _ = postLineWheel(
                     direction: direction,
                     lines: ScrollRegionRule.linesPerChunk,
@@ -364,6 +420,7 @@ enum ScrollRegionInjector {
                     Thread.sleep(forTimeInterval: ScrollRegionRule.chunkInterval)
                 }
             }
+            AppLogger.shared.write("SCROLL PAGE wheel completed chunks=\(chunks)")
         }
         return true
     }

@@ -191,11 +191,24 @@ struct ScrollRegionTests {
         #expect(ScrollRegionInjector.usesContainerMatching(role: "") == false)
     }
 
-    @Test func everyPresetAppWorksWithoutLearning() {
-        for preset in PresetApplication.allCases {
-            #expect(ScrollRegionPreset.rule(for: preset.bundleIdentifier) != nil)
-        }
+    @Test func onlyVerifiedAppsHaveBuiltInRegions() {
+        #expect(ScrollRegionPreset.rule(for: "com.cmuxterm.app") != nil)
+        #expect(ScrollRegionPreset.rule(for: "com.tencent.workbuddy.mac") != nil)
+        #expect(ScrollRegionPreset.rule(for: "com.tencent.xinWeChat") == nil)
+        #expect(ScrollRegionPreset.rule(for: "com.apple.Safari") == nil)
         #expect(ScrollRegionPreset.rule(for: "com.example.unknown") == nil)
+    }
+
+    @Test func outOfRangeNormalizedFramesAreRejected() {
+        func frame(_ x: Double, _ y: Double, _ w: Double, _ h: Double) -> NormalizedAccessibilityFrame {
+            NormalizedAccessibilityFrame(x: x, y: y, width: w, height: h)
+        }
+        #expect(ScrollRegionRule.isValid(normalizedFrame: frame(0.1, 0.1, 0.5, 0.5)))
+        #expect(ScrollRegionRule.isValid(normalizedFrame: frame(-0.1, 0.1, 0.5, 0.5)) == false)
+        #expect(ScrollRegionRule.isValid(normalizedFrame: frame(0.1, 0.1, 0, 0.5)) == false)
+        #expect(ScrollRegionRule.isValid(normalizedFrame: frame(0.8, 0.1, 0.5, 0.5)) == false)
+        #expect(ScrollRegionRule.isValid(normalizedFrame: frame(0.1, 0.1, 0.5, 1.2)) == false)
+        #expect(ScrollRegionRule.isValid(normalizedFrame: frame(.nan, 0.1, 0.5, 0.5)) == false)
     }
 
     @Test func legacyPixelWheelRecordsStillDecode() throws {

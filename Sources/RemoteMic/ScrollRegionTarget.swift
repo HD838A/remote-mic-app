@@ -104,6 +104,15 @@ enum ScrollRegionRule {
         return min(maximumPageChunks, max(1, Int((target / chunkPoints).rounded())))
     }
 
+    /// Rejects records that would map outside the target window.
+    static func isValid(normalizedFrame frame: NormalizedAccessibilityFrame) -> Bool {
+        let values = [frame.x, frame.y, frame.width, frame.height]
+        guard values.allSatisfy(\.isFinite) else { return false }
+        guard frame.width > 0, frame.height > 0 else { return false }
+        guard (0...1).contains(frame.x), (0...1).contains(frame.y) else { return false }
+        return frame.x + frame.width <= 1.0001 && frame.y + frame.height <= 1.0001
+    }
+
     static func normalizedFrame(
         elementFrame: CGRect,
         windowFrame: CGRect
@@ -227,13 +236,22 @@ enum ScrollRegionPreset {
         let strategy: ScrollRegionTarget.Strategy
     }
 
-    /// Every app the product ships as a preset gets a built-in region rule:
-    /// a measured scroll container when one exists, otherwise the window
-    /// rectangle scrolled at its centre. Only custom apps need learning (S3).
+    /// Only apps whose region was verified on a real machine get a built-in
+    /// rule. Everything else must be learned; a Bundle ID alone is not evidence
+    /// that the largest container is the right one.
+    /// Verified: cmux (AX page action), 企业微信 conversation list (AX page
+    /// action), Chrome / Slack / Codex (content container), WorkBuddy (window
+    /// rect, confirmed by real scrolling).
+    static let verified: [Rule] = [
+        Rule(bundleIdentifier: "com.cmuxterm.app", strategy: .accessibilityPageAction),
+        Rule(bundleIdentifier: "com.tencent.WeWorkMac", strategy: .accessibilityPageAction),
+        Rule(bundleIdentifier: "com.google.Chrome", strategy: .lineWheel),
+        Rule(bundleIdentifier: "com.tinyspeck.slackmacgap", strategy: .lineWheel),
+        Rule(bundleIdentifier: "com.openai.codex", strategy: .lineWheel),
+        Rule(bundleIdentifier: "com.tencent.workbuddy.mac", strategy: .lineWheel),
+    ]
+
     static func rule(for bundleIdentifier: String) -> Rule? {
-        guard PresetApplication.allCases.contains(where: { $0.bundleIdentifier == bundleIdentifier }) else {
-            return nil
-        }
-        return Rule(bundleIdentifier: bundleIdentifier, strategy: .lineWheel)
+        verified.first { $0.bundleIdentifier == bundleIdentifier }
     }
 }

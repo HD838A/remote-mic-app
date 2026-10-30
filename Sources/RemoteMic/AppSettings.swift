@@ -2867,9 +2867,7 @@ final class AppSettings: ObservableObject {
             return nil
         }
         if let frame = target.normalizedFrame {
-            guard [frame.x, frame.y, frame.width, frame.height].allSatisfy(\.isFinite) else {
-                return nil
-            }
+            guard ScrollRegionRule.isValid(normalizedFrame: frame) else { return nil }
         }
         return target
     }

@@ -27,7 +27,7 @@
 1. 同一按键在 WorkBuddy 对话页执行一次向上、一次向下。
 2. 在 Claude 与 Codex 上重复。
 
-预期：不学习也能翻页——WorkBuddy / Claude / Codex 显示「预置可用」，以窗口中心为准，约移动 600 pt；自定义 App 未学习时显示「需学习」且不执行。
+预期：不学习也能翻页——WorkBuddy / Codex 显示「预置可用」，以窗口中心为准，一次约移动 644 pt；Claude、Cursor、微信、Safari、Xcode 等未验证 App 显示「需学习」且不执行。
 
 失败：翻错区域、翻到右侧面板、什么都不发生却没有提示。
 
@@ -38,7 +38,7 @@
 3. 点「测试向下翻页」。
 4. 点「恢复预置」，再观察状态。
 
-预期：学习后显示「已学习」；测试显示内容已移动；恢复预置后回到「预置可用」；全过程不读取对话内容。
+预期：学习后显示「已学习」；测试按钮报告已发送或已检测到结构位移；恢复预置后回到「预置可用」（仅验证过的 App 有预置）；全过程不读取任何文本内容。
 
 失败：学习成功但测试不动、把侧栏记成区域、恢复预置后仍按旧记录翻页。
 
@@ -96,7 +96,7 @@
 
 ## 日志
 
-重点查 `SCROLL PAGE`：`bundle`、`direction`、`strategy`、`result`、`verified`、`elapsed_ms`。`result=needsCalibration` 表示该 App 没有预置区域；`result=regionMismatch` 表示记录失效。
+重点查 `SCROLL PAGE`：`bundle`、`direction`、`strategy`、`result`、`verified`、`elapsed_ms`，以及 `SCROLL PAGE wheel ... state=queued` / `completed` / `aborted reason=target_changed|superseded`。`result=needsCalibration` 表示该 App 没有预置区域；`result=regionMismatch` 表示记录失效。
 
 ## 验证边界
 
