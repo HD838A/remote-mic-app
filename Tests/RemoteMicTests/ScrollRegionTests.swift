@@ -40,6 +40,13 @@ struct ScrollRegionTests {
         )
     }
 
+    @Test func queueAcknowledgementIsNotSuccess() {
+        #expect(ScrollPageOutcome.queued.wasHandled)
+        #expect(ScrollPageOutcome.queued.didScroll == false)
+        #expect(ScrollPageOutcome.cancelled.wasHandled == false)
+        #expect(ScrollPageOutcome.scrolledByPixelWheel.didScroll)
+    }
+
     @Test func pageScrollUsesBoundedChunks() {
         // 884 pt region: 884 * 0.9 / 215 ≈ 3.7 → clamped to 3 chunks.
         #expect(ScrollRegionRule.pageScrollChunks(regionHeight: 884) == 3)

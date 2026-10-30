@@ -59,6 +59,12 @@ enum ScrollRegionMatch {
 enum ScrollPageOutcome: String, Equatable {
     case scrolledByPageAction
     case scrolledByPixelWheel
+    /// Wheel chunks were accepted by the queue; the final result arrives in the
+    /// log as `completed` or `aborted`, never as a synchronous success.
+    case queued
+    /// Remaining chunks were cancelled because the target changed or a newer
+    /// page request superseded this one.
+    case cancelled
     case accessibilityUnavailable
     case noFrontmostApplication
     case needsCalibration
@@ -69,6 +75,10 @@ enum ScrollPageOutcome: String, Equatable {
 
     var didScroll: Bool {
         self == .scrolledByPageAction || self == .scrolledByPixelWheel
+    }
+
+    var wasHandled: Bool {
+        didScroll || self == .queued
     }
 }
 

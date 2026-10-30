@@ -389,9 +389,9 @@ enum KeyboardInjector {
         case .scrollDown:
             scrollPoster(-scrollLineCount)
         case .pageUp:
-            return scrollPagePoster(.up).didScroll
+            return scrollPagePoster(.up).wasHandled
         case .pageDown:
-            return scrollPagePoster(.down).didScroll
+            return scrollPagePoster(.down).wasHandled
         case .deleteBackward:
             keyPoster(51, [])
         case .showDesktop:

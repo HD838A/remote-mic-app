@@ -3519,6 +3519,8 @@ struct SettingsView: View {
             case false: return "scroll_region.test_unconfirmed"
             case nil: return "scroll_region.test_sent"
             }
+        case .queued:
+            return "scroll_region.test_sent"
         case .needsCalibration:
             return "scroll_region.test_needs_calibration"
         default:

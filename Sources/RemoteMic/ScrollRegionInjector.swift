@@ -168,16 +168,18 @@ enum ScrollRegionInjector {
         // No page action: scroll the recorded region by its visible height,
         // never by the window centre (S6).
         let center = CGPoint(x: candidate.descriptor.frame.midX, y: candidate.descriptor.frame.midY)
-        guard postPageWheel(
+        let outcome = runPageWheel(
             direction: direction,
             chunks: ScrollRegionRule.pageScrollChunks(regionHeight: Double(candidate.descriptor.frame.height)),
             at: center,
-            isValidTarget: isValidTarget
-        ) else {
-            return ScrollPageResult(outcome: .eventFailed, verifiedMovement: nil)
+            isValidTarget: isValidTarget,
+            waitForCompletion: verifyMovement
+        )
+        guard outcome == .scrolledByPixelWheel || outcome == .queued else {
+            return ScrollPageResult(outcome: outcome, verifiedMovement: nil)
         }
         return finish(window: window, region: candidate.descriptor.frame, before: before,
-                      outcome: .scrolledByPixelWheel, verifyMovement: verifyMovement)
+                      outcome: outcome, verifyMovement: verifyMovement)
     }
 
     static func usesContainerMatching(role: String) -> Bool {
@@ -220,16 +222,18 @@ enum ScrollRegionInjector {
             return ScrollPageResult(outcome: .regionUnavailable, verifiedMovement: nil)
         }
         let before = verifyMovement ? structuralSignature(in: window, region: rect) : [:]
-        guard postPageWheel(
+        let outcome = runPageWheel(
             direction: direction,
             chunks: ScrollRegionRule.pageScrollChunks(regionHeight: Double(rect.height)),
             at: CGPoint(x: rect.midX, y: rect.midY),
-            isValidTarget: isValidTarget
-        ) else {
-            return ScrollPageResult(outcome: .eventFailed, verifiedMovement: nil)
+            isValidTarget: isValidTarget,
+            waitForCompletion: verifyMovement
+        )
+        guard outcome == .scrolledByPixelWheel || outcome == .queued else {
+            return ScrollPageResult(outcome: outcome, verifiedMovement: nil)
         }
         return finish(window: window, region: rect, before: before,
-                      outcome: .scrolledByPixelWheel, verifyMovement: verifyMovement)
+                      outcome: outcome, verifyMovement: verifyMovement)
     }
 
     private static func finish(
@@ -363,6 +367,42 @@ enum ScrollRegionInjector {
         return String(parts.joined(separator: " ").suffix(256))
     }
 
+    /// Outcome of a wheel page: either the queued batch ran to completion, was
+    /// cancelled/superseded, or the caller only got a queue acknowledgement.
+    private static func runPageWheel(
+        direction: ScrollPageDirection,
+        chunks: Int,
+        at point: CGPoint,
+        isValidTarget: @escaping () -> Bool,
+        waitForCompletion: Bool
+    ) -> ScrollPageOutcome {
+        let semaphore = DispatchSemaphore(value: 0)
+        let delivered = LockedBool()
+        guard enqueuePageWheel(
+            direction: direction,
+            chunks: chunks,
+            at: point,
+            isValidTarget: isValidTarget,
+            completion: { success in
+                delivered.value = success
+                semaphore.signal()
+            }
+        ) else { return .eventFailed }
+
+        guard waitForCompletion else { return .queued }
+        guard semaphore.wait(timeout: .now() + 2) == .success else { return .cancelled }
+        return delivered.value ? .scrolledByPixelWheel : .cancelled
+    }
+
+    private final class LockedBool {
+        private let lock = NSLock()
+        private var storage = false
+        var value: Bool {
+            get { lock.lock(); defer { lock.unlock() }; return storage }
+            set { lock.lock(); storage = newValue; lock.unlock() }
+        }
+    }
+
     /// Wheel chunks are posted from a serial queue so the HID thread is never
     /// blocked. Before every chunk the target app and window are re-checked and
     /// a newer page request cancels the previous one, so switching apps or
@@ -376,10 +416,15 @@ enum ScrollRegionInjector {
         expectedFrame: CGRect,
         processIdentifier: pid_t
     ) -> () -> Bool {
+        let expectedNumber = windowNumber(of: window)
         return {
             guard let frontmost = NSWorkspace.shared.frontmostApplication,
                   frontmost.processIdentifier == processIdentifier
             else { return false }
+            // Two same-sized windows of one app are told apart by window number.
+            if let expectedNumber, let currentNumber = windowNumber(of: window), currentNumber != expectedNumber {
+                return false
+            }
             guard let current = axFrame(window) else { return false }
             return abs(current.minX - expectedFrame.minX) <= 2 &&
                 abs(current.minY - expectedFrame.minY) <= 2 &&
@@ -388,11 +433,20 @@ enum ScrollRegionInjector {
         }
     }
 
-    private static func postPageWheel(
+    private static func windowNumber(of window: AXUIElement) -> Int? {
+        var raw: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(window, "AXWindowNumber" as CFString, &raw) == .success,
+              let value = raw as? NSNumber
+        else { return nil }
+        return value.intValue
+    }
+
+    private static func enqueuePageWheel(
         direction: ScrollPageDirection,
         chunks: Int,
         at point: CGPoint,
-        isValidTarget: @escaping () -> Bool
+        isValidTarget: @escaping () -> Bool,
+        completion: @escaping (Bool) -> Void
     ) -> Bool {
         guard chunks > 0 else { return false }
         pageStateLock.lock()
@@ -411,22 +465,29 @@ enum ScrollRegionInjector {
                 pageStateLock.unlock()
                 guard current == generation else {
                     AppLogger.shared.write("SCROLL PAGE wheel aborted reason=superseded sent=\(index)")
+                    completion(false)
                     return
                 }
                 guard isValidTarget() else {
                     AppLogger.shared.write("SCROLL PAGE wheel aborted reason=target_changed sent=\(index)")
+                    completion(false)
                     return
                 }
-                _ = postLineWheel(
+                guard postLineWheel(
                     direction: direction,
                     lines: ScrollRegionRule.linesPerChunk,
                     at: point
-                )
+                ) else {
+                    AppLogger.shared.write("SCROLL PAGE wheel aborted reason=event_failed sent=\(index)")
+                    completion(false)
+                    return
+                }
                 if index < chunks - 1 {
                     Thread.sleep(forTimeInterval: ScrollRegionRule.chunkInterval)
                 }
             }
             AppLogger.shared.write("SCROLL PAGE wheel completed chunks=\(chunks)")
+            completion(true)
         }
         return true
     }
