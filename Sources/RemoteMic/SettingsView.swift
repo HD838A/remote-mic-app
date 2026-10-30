@@ -3777,13 +3777,7 @@ struct SettingsView: View {
 
     private var statisticsPage: some View {
         settingsPage {
-            HStack(spacing: 14) {
-                PageHeader(title: localization.text("statistics.page.title"))
-                Spacer(minLength: 20)
-                Label(localization.text("about.privacy.local_only"), systemImage: "lock")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.secondary)
-            }
+            PageHeader(title: localization.text("statistics.page.title"))
         } content: {
             VStack(spacing: 14) {
                 sharePanel(for: .statistics)
@@ -4835,16 +4829,18 @@ struct SettingsView: View {
         let hours = totalSeconds / 3_600
         let minutes = totalSeconds % 3_600 / 60
         let seconds = totalSeconds % 60
+        // The four KPI cards share one row, so hour-scale totals must use the compact
+        // wording to stay complete inside the narrowest card.
         if hours > 0 {
             return String(
-                format: localization.text("usage.duration.hours_minutes"),
+                format: localization.text("usage.duration.compact_hours_minutes"),
                 locale: localization.locale,
                 arguments: [localizedNumber(UInt64(hours)), localizedNumber(UInt64(minutes))]
             )
         }
         if minutes > 0 {
             return String(
-                format: localization.text("usage.duration.minutes_seconds"),
+                format: localization.text("usage.duration.compact_minutes_seconds"),
                 locale: localization.locale,
                 arguments: [localizedNumber(UInt64(minutes)), localizedNumber(UInt64(seconds))]
             )
@@ -5849,7 +5845,8 @@ private struct ProfileMetricCard: View {
                         .font(.system(size: 22, weight: .semibold, design: .rounded))
                         .monospacedDigit()
                         .lineLimit(1)
-                        .minimumScaleFactor(0.75)
+                        .minimumScaleFactor(0.7)
+                        .allowsTightening(true)
                     if let unit {
                         Text(unit)
                             .font(.system(size: 12, weight: .medium))

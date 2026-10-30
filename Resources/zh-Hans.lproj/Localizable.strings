@@ -593,7 +593,6 @@
 "about.preferences.language" = "应用语言";
 "about.page.hero_subtitle" = "集中查看无线语音工作台的版本、偏好与支持信息";
 "about.page.hero_description" = "让遥控器成为随手可用的 Mac 语音与快捷操作入口。";
-"about.privacy.local_only" = "数据仅存本机";
 "statistics.page.title" = "个人中心";
 "statistics.page.subtitle" = "查看你的本机使用概览";
 "statistics.summary.title" = "查看方式";
@@ -702,6 +701,8 @@
 "usage.duration.compact_hours" = "%1$@小时";
 "usage.duration.compact_minutes" = "%1$@分";
 "usage.duration.compact_seconds" = "%1$@秒";
+"usage.duration.compact_hours_minutes" = "%1$@小时%2$@分";
+"usage.duration.compact_minutes_seconds" = "%1$@分%2$@秒";
 "configuration.export.panel_title" = "导出个性化配置";
 "configuration.export.prompt" = "导出";
 "configuration.export.success" = "配置已导出";
