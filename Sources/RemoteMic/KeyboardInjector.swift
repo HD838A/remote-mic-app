@@ -1075,6 +1075,18 @@ enum KeyboardInjector {
         bundleIdentifier == weChatBundleIdentifier
     }
 
+    static func prepareCommonPhraseUnavailableTarget(processIdentifier: pid_t) -> Bool {
+        guard isAccessibilityTrusted,
+              applicationIsFrontmost(processIdentifier),
+              usesWeChatComposerFallback(
+                bundleIdentifier: NSRunningApplication(
+                    processIdentifier: processIdentifier
+                )?.bundleIdentifier
+              )
+        else { return false }
+        return focusWeChatComposer(processIdentifier: processIdentifier)
+    }
+
     static func weChatComposerWindowFrame(
         _ windows: [(title: String, frame: CGRect)]
     ) -> CGRect? {

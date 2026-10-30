@@ -319,6 +319,11 @@ final class MembershipFeatureIntegration: ObservableObject, @unchecked Sendable 
                     occurredAt: record.occurredAt, category: record.category, fields: record.fields)
                 else { return }
                 AppLogger.shared.write(safeRecord.canonicalLine)
+            },
+            commonPhraseUnavailableTargetFallback: { processIdentifier in
+                KeyboardInjector.prepareCommonPhraseUnavailableTarget(
+                    processIdentifier: processIdentifier
+                )
             })
         self.adapter = adapter
         adapter.$isFeatureVisible.removeDuplicates().receive(on: RunLoop.main)
