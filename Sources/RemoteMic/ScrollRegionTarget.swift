@@ -266,3 +266,26 @@ enum ScrollRegionPreset {
                 .map { _ in Rule(bundleIdentifier: bundleIdentifier, strategy: .lineWheel, placement: .windowRect) }
     }
 }
+
+/// Process-wide lookup so the action path does not need to reach into settings.
+final class ScrollRegionTargetStore: @unchecked Sendable {
+    static let shared = ScrollRegionTargetStore()
+
+    private let lock = NSLock()
+    private var targets: [String: ScrollRegionTarget] = [:]
+
+    func replace(with profiles: [CustomApplicationProfile]) {
+        lock.lock()
+        defer { lock.unlock() }
+        targets = profiles.reduce(into: [String: ScrollRegionTarget]()) { result, profile in
+            guard let target = profile.scrollRegionTarget else { return }
+            result[profile.bundleIdentifier] = target
+        }
+    }
+
+    func target(for bundleIdentifier: String) -> ScrollRegionTarget? {
+        lock.lock()
+        defer { lock.unlock() }
+        return targets[bundleIdentifier]
+    }
+}
