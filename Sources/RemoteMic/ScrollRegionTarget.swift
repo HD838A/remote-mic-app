@@ -15,7 +15,17 @@ struct ScrollRegionTarget: Codable, Equatable {
 
     enum Strategy: String, Codable {
         case accessibilityPageAction
-        case pixelWheel
+        case lineWheel
+
+        init(from decoder: Decoder) throws {
+            let raw = try decoder.singleValueContainer().decode(String.self)
+            switch raw {
+            case "accessibilityPageAction": self = .accessibilityPageAction
+            // `pixelWheel` was written by early builds; treat it as a line wheel.
+            case "lineWheel", "pixelWheel": self = .lineWheel
+            default: self = .lineWheel
+            }
+        }
     }
 
     var role: String
@@ -217,17 +227,13 @@ enum ScrollRegionPreset {
         let strategy: ScrollRegionTarget.Strategy
     }
 
-    /// Only apps whose accessibility structure was measured on this machine.
-    /// Everything else reports `needsCalibration` instead of guessing (S3).
-    static let calibrated: [Rule] = [
-        Rule(bundleIdentifier: "com.cmuxterm.app", strategy: .accessibilityPageAction),
-        Rule(bundleIdentifier: "com.openai.codex", strategy: .pixelWheel),
-        Rule(bundleIdentifier: "com.google.Chrome", strategy: .pixelWheel),
-        Rule(bundleIdentifier: "com.tinyspeck.slackmacgap", strategy: .pixelWheel),
-        Rule(bundleIdentifier: "com.tencent.WeWorkMac", strategy: .accessibilityPageAction),
-    ]
-
+    /// Every app the product ships as a preset gets a built-in region rule:
+    /// a measured scroll container when one exists, otherwise the window
+    /// rectangle scrolled at its centre. Only custom apps need learning (S3).
     static func rule(for bundleIdentifier: String) -> Rule? {
-        calibrated.first { $0.bundleIdentifier == bundleIdentifier }
+        guard PresetApplication.allCases.contains(where: { $0.bundleIdentifier == bundleIdentifier }) else {
+            return nil
+        }
+        return Rule(bundleIdentifier: bundleIdentifier, strategy: .lineWheel)
     }
 }

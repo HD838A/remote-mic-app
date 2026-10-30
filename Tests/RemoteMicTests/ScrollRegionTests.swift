@@ -36,7 +36,7 @@ struct ScrollRegionTests {
             context: context,
             normalizedFrame: frame,
             source: .learned,
-            strategy: .pixelWheel
+            strategy: .lineWheel
         )
     }
 
@@ -191,9 +191,19 @@ struct ScrollRegionTests {
         #expect(ScrollRegionInjector.usesContainerMatching(role: "") == false)
     }
 
-    @Test func calibrationIsRequiredForAppsWithoutMeasuredStructure() {
-        #expect(ScrollRegionPreset.rule(for: "com.cmuxterm.app") != nil)
-        #expect(ScrollRegionPreset.rule(for: "com.tencent.workbuddy.mac") == nil)
-        #expect(ScrollRegionPreset.rule(for: "com.tencent.xinWeChat") == nil)
+    @Test func everyPresetAppWorksWithoutLearning() {
+        for preset in PresetApplication.allCases {
+            #expect(ScrollRegionPreset.rule(for: preset.bundleIdentifier) != nil)
+        }
+        #expect(ScrollRegionPreset.rule(for: "com.example.unknown") == nil)
+    }
+
+    @Test func legacyPixelWheelRecordsStillDecode() throws {
+        let legacy = """
+        {"role":"AXScrollArea","identifier":"content","windowTitle":"cmux","context":"",
+         "source":"learned","strategy":"pixelWheel"}
+        """.data(using: .utf8)!
+        let target = try JSONDecoder().decode(ScrollRegionTarget.self, from: legacy)
+        #expect(target.strategy == .lineWheel)
     }
 }

@@ -60,7 +60,7 @@ enum ScrollRegionInjector {
                 elementFrame: frame, windowFrame: windowFrame
             ),
             source: .learned,
-            strategy: supportsPageAction ? .accessibilityPageAction : .pixelWheel
+            strategy: supportsPageAction ? .accessibilityPageAction : .lineWheel
         )
     }
 
@@ -111,10 +111,11 @@ enum ScrollRegionInjector {
 
         let candidates = scrollCandidates(in: window, windowFrame: windowFrame)
 
-        let index: Int
+        let candidate: Candidate
         if let learnedTarget {
             switch ScrollRegionRule.bestMatchIndex(in: candidates.map(\.descriptor), recorded: learnedTarget) {
-            case .matched(let found): index = found
+            case .matched(let found):
+                candidate = candidates[found]
             case .failed(let outcome):
                 return ScrollPageResult(outcome: outcome, verifiedMovement: nil)
             }
@@ -122,13 +123,21 @@ enum ScrollRegionInjector {
             guard ScrollRegionPreset.rule(for: bundleIdentifier) != nil else {
                 return ScrollPageResult(outcome: .needsCalibration, verifiedMovement: nil)
             }
-            guard let found = ScrollRegionRule.presetCandidateIndex(in: candidates.map(\.descriptor)) else {
-                return ScrollPageResult(outcome: .regionUnavailable, verifiedMovement: nil)
+            // Presets only accept containers that are smaller than the window;
+            // apps exposing one whole-window web area scroll by window rect.
+            let containers = candidates.filter {
+                ScrollRegionRule.acceptsContainer(
+                    containerArea: Double($0.descriptor.frame.width * $0.descriptor.frame.height),
+                    windowArea: Double(windowFrame.width * windowFrame.height)
+                )
             }
-            index = found
+            guard let found = ScrollRegionRule.presetCandidateIndex(in: containers.map(\.descriptor)) else {
+                return scrollRect(
+                    windowFrame, window: window, direction: direction, verifyMovement: verifyMovement
+                )
+            }
+            candidate = containers[found]
         }
-
-        let candidate = candidates[index]
         let before = verifyMovement
             ? textSignature(in: window, region: candidate.descriptor.frame)
             : [:]
@@ -177,10 +186,18 @@ enum ScrollRegionInjector {
             width: frame.width * windowFrame.width,
             height: frame.height * windowFrame.height
         )
+        return scrollRect(rect, window: window, direction: direction, verifyMovement: verifyMovement)
+    }
+
+    private static func scrollRect(
+        _ rect: CGRect,
+        window: AXUIElement,
+        direction: ScrollPageDirection,
+        verifyMovement: Bool
+    ) -> ScrollPageResult {
         guard rect.width >= 8, rect.height >= 8 else {
             return ScrollPageResult(outcome: .regionUnavailable, verifiedMovement: nil)
         }
-
         let before = verifyMovement ? textSignature(in: window, region: rect) : [:]
         guard postPageWheel(
             direction: direction,
