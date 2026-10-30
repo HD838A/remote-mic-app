@@ -191,6 +191,15 @@ enum KeyboardInjector {
     /// One scroll action moves the conversation by this many lines; the 100ms
     /// repeat interval turns a held D-pad key into a steady scroll.
     static let scrollLineCount: Int32 = 3
+
+    /// Page up / down scroll the recorded or preset region of the frontmost app.
+    /// Never falls back to the window centre (decision S6).
+    static let defaultScrollPagePoster: (ScrollPageDirection) -> ScrollPageOutcome = { direction in
+        let bundleIdentifier = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? ""
+        let learned = ScrollRegionTargetStore.shared.target(for: bundleIdentifier)
+        return ScrollRegionInjector.scrollPage(direction: direction, learnedTarget: learned).outcome
+    }
+
     private static let focusRequests = ApplicationFocusRequestGate()
     private static let frontmostFocusRequests = ApplicationFocusRequestGate()
     private static let manualAccessibilityLock = NSLock()
@@ -288,6 +297,7 @@ enum KeyboardInjector {
         keyPoster: KeyPoster = { postKey(code: $0, flags: $1) },
         keyStatePoster: KeyStatePoster = postKeyState,
         scrollPoster: ScrollPoster = { postScrollWheel(lines: $0) },
+        scrollPagePoster: (ScrollPageDirection) -> ScrollPageOutcome = defaultScrollPagePoster,
         systemKeyPoster: SystemKeyPoster = postSystemKey,
         shortcutEventPoster: (CGEvent) -> Bool = ShortcutEventSequence.post,
         shortcutHardwareFlags: () -> CGEventFlags = { CGEventSource.flagsState(.hidSystemState) }
@@ -378,6 +388,10 @@ enum KeyboardInjector {
             scrollPoster(scrollLineCount)
         case .scrollDown:
             scrollPoster(-scrollLineCount)
+        case .pageUp:
+            return scrollPagePoster(.up).didScroll
+        case .pageDown:
+            return scrollPagePoster(.down).didScroll
         case .deleteBackward:
             keyPoster(51, [])
         case .showDesktop:

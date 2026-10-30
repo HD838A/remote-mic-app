@@ -177,6 +177,26 @@
 "action.arrow_right" = "Right Arrow";
 "action.scroll_up" = "Scroll Up";
 "action.scroll_down" = "Scroll Down";
+"action.page_up" = "Page Up";
+"action.page_down" = "Page Down";
+"scroll_region.title" = "Scroll Region";
+"scroll_region.help" = "Page keys scroll this app's content area. Only the region structure is read; no content, focus or pointer is touched.";
+"scroll_region.learn" = "Learn Scroll Region";
+"scroll_region.countdown" = "Click the area to page (%d)";
+"scroll_region.status_preset" = "Built-in";
+"scroll_region.status_learned" = "Learned";
+"scroll_region.status_needs_calibration" = "Needs learning";
+"scroll_region.learn_succeeded" = "Scroll region recorded. You can test paging now.";
+"scroll_region.learn_failed" = "No scrollable area found. Click the content area (messages, document or terminal) and try again.";
+"scroll_region.test_up" = "Test Page Up";
+"scroll_region.test_down" = "Test Page Down";
+"scroll_region.test_moved" = "Content moved. This region pages correctly.";
+"scroll_region.test_unconfirmed" = "Page sent, but no movement was detected. Check that the app has scrollable content.";
+"scroll_region.test_sent" = "Page sent. Confirm visually that the content moved.";
+"scroll_region.test_needs_calibration" = "This app has no built-in region. Learn one first.";
+"scroll_region.test_failed" = "Paging failed. Make sure the app is frontmost and accessibility is granted.";
+"scroll_region.reset" = "Reset to Built-in";
+
 "action.delete_backspace" = "Delete (Backspace)";
 "action.command_delete" = "Command-Delete";
 "action.show_desktop" = "Show Desktop (fn + F11)";

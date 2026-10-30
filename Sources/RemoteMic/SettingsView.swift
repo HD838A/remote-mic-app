@@ -286,6 +286,16 @@ private enum PermissionVisualState {
     }
 }
 
+private final class ScrollRegionLearningSession {
+    var point: CGPoint?
+    var monitor: Any?
+
+    static func finish(_ session: ScrollRegionLearningSession) {
+        if let monitor = session.monitor { NSEvent.removeMonitor(monitor) }
+        session.monitor = nil
+    }
+}
+
 private struct ShortcutEditingTarget: Identifiable, Equatable {
     let button: RemoteButton
     let trigger: ButtonTrigger
@@ -514,6 +524,8 @@ struct SettingsView: View {
     @State private var applicationShortcutCaptureProfileID: UUID?
     @State private var shortcutCaptureFeedback: ShortcutCaptureFeedback?
     @State private var customApplicationLearningStates: [UUID: CustomApplicationLearningState] = [:]
+    @State private var scrollRegionCountdowns: [UUID: Int] = [:]
+    @State private var scrollRegionMessages: [UUID: String] = [:]
     @State private var bluetoothAuthorization = CBManager.authorization
     @State private var inputMonitoringGranted = HIDRemoteMonitor.isInputMonitoringGranted
     @State private var accessibilityGranted = KeyboardInjector.isAccessibilityTrusted
@@ -3107,6 +3119,10 @@ struct SettingsView: View {
                     accessibilityLearningEditor(profile)
                 }
 
+                Divider()
+
+                scrollRegionEditor(profile)
+
                 HStack {
                     Spacer()
                     Button("custom_application.test") {
@@ -3314,6 +3330,207 @@ struct SettingsView: View {
                 .fixedSize(horizontal: false, vertical: true)
             }
         }
+    }
+
+    @ViewBuilder
+    private func scrollRegionEditor(_ profile: CustomApplicationProfile) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Text("scroll_region.title")
+                    .font(.system(size: 14, weight: .semibold))
+                Text(scrollRegionStatusKey(profile))
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(scrollRegionStatusTint(profile))
+                Spacer()
+            }
+
+            Text("scroll_region.help")
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            HStack(spacing: 10) {
+                Button("scroll_region.learn") {
+                    learnScrollRegion(profile)
+                }
+                .compatibilityButtonStyle(.prominent)
+                .disabled(scrollRegionCountdowns[profile.id] != nil)
+
+                if let remaining = scrollRegionCountdowns[profile.id] {
+                    Text(String(format: localization.text("scroll_region.countdown"), remaining))
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Button("scroll_region.test_up") {
+                    testScrollRegion(profile, direction: .up)
+                }
+                .compatibilityButtonStyle(.standard)
+
+                Button("scroll_region.test_down") {
+                    testScrollRegion(profile, direction: .down)
+                }
+                .compatibilityButtonStyle(.standard)
+
+                if profile.scrollRegionTarget != nil {
+                    Button("scroll_region.reset") {
+                        resetScrollRegion(profile)
+                    }
+                    .compatibilityButtonStyle(.standard)
+                }
+            }
+
+            if let messageKey = scrollRegionMessages[profile.id] {
+                Text(LocalizedStringKey(messageKey))
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(
+                        messageKey.hasSuffix("failed") ||
+                            messageKey.hasSuffix("unconfirmed") ||
+                            messageKey.hasSuffix("needs_calibration")
+                            ? Color.orange : Color.green
+                    )
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private func scrollRegionStatusKey(_ profile: CustomApplicationProfile) -> LocalizedStringKey {
+        if profile.scrollRegionTarget != nil { return "scroll_region.status_learned" }
+        if ScrollRegionPreset.rule(for: profile.bundleIdentifier) != nil {
+            return "scroll_region.status_preset"
+        }
+        return "scroll_region.status_needs_calibration"
+    }
+
+    private func scrollRegionStatusTint(_ profile: CustomApplicationProfile) -> Color {
+        profile.scrollRegionTarget != nil ||
+            ScrollRegionPreset.rule(for: profile.bundleIdentifier) != nil ? .green : .orange
+    }
+
+    private func learnScrollRegion(_ profile: CustomApplicationProfile) {
+        guard KeyboardInjector.isAccessibilityTrusted else {
+            model.requestAccessibilityPermission()
+            return
+        }
+        let savedURL = URL(fileURLWithPath: profile.applicationPath)
+        let applicationURL = Bundle(url: savedURL)?.bundleIdentifier == profile.bundleIdentifier
+            ? savedURL
+            : NSWorkspace.shared.urlForApplication(withBundleIdentifier: profile.bundleIdentifier)
+        guard let applicationURL else {
+            scrollRegionMessages[profile.id] = "scroll_region.learn_failed"
+            return
+        }
+
+        scrollRegionMessages[profile.id] = nil
+        let session = ScrollRegionLearningSession()
+        session.monitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown]) { _ in
+            if session.point == nil { session.point = CGEvent(source: nil)?.location }
+        }
+
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = true
+        configuration.createsNewApplicationInstance = false
+        NSWorkspace.shared.openApplication(at: applicationURL, configuration: configuration) { _, error in
+            DispatchQueue.main.async {
+                guard error == nil else {
+                    ScrollRegionLearningSession.finish(session)
+                    scrollRegionCountdowns[profile.id] = nil
+                    scrollRegionMessages[profile.id] = "scroll_region.learn_failed"
+                    return
+                }
+                startScrollRegionCountdown(profile: profile, session: session)
+            }
+        }
+    }
+
+    private func startScrollRegionCountdown(
+        profile: CustomApplicationProfile,
+        session: ScrollRegionLearningSession
+    ) {
+        Task { @MainActor in
+            for remaining in stride(from: 3, through: 1, by: -1) {
+                scrollRegionCountdowns[profile.id] = remaining
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                if session.point != nil { break }
+            }
+            ScrollRegionLearningSession.finish(session)
+            scrollRegionCountdowns[profile.id] = nil
+
+            let point = session.point ?? CGEvent(source: nil)?.location
+            guard let point,
+                  let target = ScrollRegionInjector.captureTarget(
+                      bundleIdentifier: profile.bundleIdentifier,
+                      point: point
+                  ),
+                  var updated = settings.customApplicationProfile(id: profile.id)
+            else {
+                scrollRegionMessages[profile.id] = "scroll_region.learn_failed"
+                NSApp.activate(ignoringOtherApps: true)
+                return
+            }
+            updated.scrollRegionTarget = target
+            settings.updateCustomApplicationProfile(updated)
+            scrollRegionMessages[profile.id] = "scroll_region.learn_succeeded"
+            NSApp.activate(ignoringOtherApps: true)
+        }
+    }
+
+    private func testScrollRegion(_ profile: CustomApplicationProfile, direction: ScrollPageDirection) {
+        guard let applicationURL = NSWorkspace.shared.urlForApplication(
+            withBundleIdentifier: profile.bundleIdentifier
+        ) else {
+            scrollRegionMessages[profile.id] = "scroll_region.test_failed"
+            return
+        }
+        let learned = profile.scrollRegionTarget
+        scrollRegionMessages[profile.id] = nil
+
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = true
+        configuration.createsNewApplicationInstance = false
+        NSWorkspace.shared.openApplication(at: applicationURL, configuration: configuration) { _, error in
+            guard error == nil else {
+                DispatchQueue.main.async {
+                    scrollRegionMessages[profile.id] = "scroll_region.test_failed"
+                }
+                return
+            }
+            DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 0.6) {
+                let result = ScrollRegionInjector.scrollPage(
+                    direction: direction,
+                    learnedTarget: learned,
+                    verifyMovement: true
+                )
+                DispatchQueue.main.async {
+                    scrollRegionMessages[profile.id] = scrollRegionTestMessage(for: result)
+                    NSApp.activate(ignoringOtherApps: true)
+                }
+            }
+        }
+    }
+
+    private func scrollRegionTestMessage(for result: ScrollPageResult) -> String {
+        switch result.outcome {
+        case .scrolledByPageAction, .scrolledByPixelWheel:
+            switch result.verifiedMovement {
+            case true: return "scroll_region.test_moved"
+            case false: return "scroll_region.test_unconfirmed"
+            case nil: return "scroll_region.test_sent"
+            }
+        case .needsCalibration:
+            return "scroll_region.test_needs_calibration"
+        default:
+            return "scroll_region.test_failed"
+        }
+    }
+
+    private func resetScrollRegion(_ profile: CustomApplicationProfile) {
+        guard var updated = settings.customApplicationProfile(id: profile.id) else { return }
+        updated.scrollRegionTarget = nil
+        settings.updateCustomApplicationProfile(updated)
+        scrollRegionMessages[profile.id] = nil
     }
 
     private func chooseCustomApplication(
