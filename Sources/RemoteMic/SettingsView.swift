@@ -2025,8 +2025,9 @@ struct SettingsView: View {
                             }
                             #endif
 
-                            mappingGestureTimingSection
                             mappingFooter(includeSiriScrollArrow: includeSiriScrollArrow)
+                                .id("mapping-footer")
+                            mappingGestureTimingSection
                             Color.clear.frame(height: 1).id("mapping-page-bottom")
                         }
                         .padding(22)
@@ -2072,7 +2073,7 @@ struct SettingsView: View {
                 }
                 .onChange(of: mappingVoiceSettingsRequest) { _ in
                     withAnimation(.easeInOut(duration: 0.25)) {
-                        proxy.scrollTo("mapping-page-bottom", anchor: .bottom)
+                        proxy.scrollTo("mapping-footer", anchor: .bottom)
                     }
                 }
                 .onChange(of: model.buttonGestureLearningResult) { result in

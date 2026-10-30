@@ -482,7 +482,7 @@ PR 保持 Draft，不能将这些截图或自动化写为实机兼容性通过�
 
 | 文件 | 格式及像素 | SHA-256 |
 | --- | --- | --- |
-| final-ui/en-dark/mapping-1020x772.png | PNG 2040×1544 | `3d3e2ec8af96c93830a6e393c1a6591757ac9cd7bb2905ce5dd9e8c2a51d1f0b` |
-| final-ui/en-light/mapping-1020x772.png | PNG 2040×1544 | `96414f81f1ff1a9b88755e1e0f7d8fda653a7fe9a6e3fac204d8372685a31cb5` |
-| final-ui/zh-dark/mapping-1020x772.png | PNG 2040×1544 | `81edbf65b8871a40d25fb555e5514bc41f3c75572ac6878206ae774430e8bd0f` |
-| final-ui/zh-light/mapping-1020x772.png | PNG 2040×1544 | `4468296e2c815f69890d33960bb9090019645202b383d9bc5ed77c531048b587` |
+| final-ui/en-dark/mapping-1020x772.png | PNG 2040×1544 | `9b24018c009b4b89cca48b0ac43c6ea97b37545cc56e13265359b63ce5345406` |
+| final-ui/en-light/mapping-1020x772.png | PNG 2040×1544 | `912901bd27d642cfc2ee54e7e41581621d22b469da3432a452bd9b32385f52ca` |
+| final-ui/zh-dark/mapping-1020x772.png | PNG 2040×1544 | `bf444a6bf3893944ca71c6bd6a214676ad1a5185e3ee1ea0d88071c7d9942849` |
+| final-ui/zh-light/mapping-1020x772.png | PNG 2040×1544 | `e2589f9a74005759462f6ba664b2e31611eed47fc3419462789ee083e762b82b` |
