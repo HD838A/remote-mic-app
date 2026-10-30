@@ -129,14 +129,16 @@ enum ScrollRegionInjector {
         }
 
         let candidate = candidates[index]
-        let before = verifyMovement ? textSignature(in: window) : [:]
+        let before = verifyMovement
+            ? textSignature(in: window, region: candidate.descriptor.frame)
+            : [:]
 
         if axActions(candidate.element).contains("AXScrollUpByPage") {
             let action = direction == .up ? "AXScrollUpByPage" : "AXScrollDownByPage"
             guard AXUIElementPerformAction(candidate.element, action as CFString) == .success else {
                 return ScrollPageResult(outcome: .eventFailed, verifiedMovement: nil)
             }
-            return finish(window: window, before: before,
+            return finish(window: window, region: candidate.descriptor.frame, before: before,
                           outcome: .scrolledByPageAction, verifyMovement: verifyMovement)
         }
 
@@ -150,7 +152,7 @@ enum ScrollRegionInjector {
         ) else {
             return ScrollPageResult(outcome: .eventFailed, verifiedMovement: nil)
         }
-        return finish(window: window, before: before,
+        return finish(window: window, region: candidate.descriptor.frame, before: before,
                       outcome: .scrolledByPixelWheel, verifyMovement: verifyMovement)
     }
 
@@ -179,7 +181,7 @@ enum ScrollRegionInjector {
             return ScrollPageResult(outcome: .regionUnavailable, verifiedMovement: nil)
         }
 
-        let before = verifyMovement ? textSignature(in: window) : [:]
+        let before = verifyMovement ? textSignature(in: window, region: rect) : [:]
         guard postPageWheel(
             direction: direction,
             chunks: ScrollRegionRule.pageScrollChunks(regionHeight: Double(rect.height)),
@@ -187,12 +189,13 @@ enum ScrollRegionInjector {
         ) else {
             return ScrollPageResult(outcome: .eventFailed, verifiedMovement: nil)
         }
-        return finish(window: window, before: before,
+        return finish(window: window, region: rect, before: before,
                       outcome: .scrolledByPixelWheel, verifyMovement: verifyMovement)
     }
 
     private static func finish(
         window: AXUIElement,
+        region: CGRect?,
         before: [String: CGFloat],
         outcome: ScrollPageOutcome,
         verifyMovement: Bool
@@ -200,8 +203,8 @@ enum ScrollRegionInjector {
         guard verifyMovement, !before.isEmpty else {
             return ScrollPageResult(outcome: outcome, verifiedMovement: nil)
         }
-        Thread.sleep(forTimeInterval: 0.25)
-        let after = textSignature(in: window)
+        Thread.sleep(forTimeInterval: 0.35)
+        let after = textSignature(in: window, region: region)
         let moved = before.contains { key, y in
             guard let newY = after[key] else { return false }
             return abs(newY - y) > 1
@@ -259,15 +262,18 @@ enum ScrollRegionInjector {
 
     /// Fingerprint of visible text positions, used only to confirm that a page
     /// scroll actually moved content. Values are hashed and never persisted.
-    private static func textSignature(in window: AXUIElement) -> [String: CGFloat] {
+    /// Visible text positions inside the scrolled region. Values are hashed and
+    /// only used to confirm the page actually moved; nothing is persisted.
+    private static func textSignature(in window: AXUIElement, region: CGRect?) -> [String: CGFloat] {
         var signature: [String: CGFloat] = [:]
         var stack = [window]
         var visited = 0
-        while let element = stack.popLast(), visited < 800, signature.count < 200 {
+        while let element = stack.popLast(), visited < 4_000, signature.count < 600 {
             visited += 1
             if axString(element, kAXRoleAttribute) == "AXStaticText" {
                 let value = axString(element, kAXValueAttribute)
-                if !value.isEmpty, let frame = axFrame(element) {
+                if !value.isEmpty, let frame = axFrame(element),
+                   region.map({ $0.intersects(frame) }) ?? true {
                     signature["\(value.hashValue)@\(Int(frame.width))x\(Int(frame.height))"] = frame.minY
                 }
             }
