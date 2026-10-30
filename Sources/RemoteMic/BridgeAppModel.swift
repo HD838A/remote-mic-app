@@ -1071,7 +1071,17 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         }
 #if SAYALL_SIRI_REMOTE_ENABLED
         siriRemoteFeature.prepareNativeInput = { [weak self] sources in
-            self?.siriNativeKeyMapper.prepare(additionalSources: sources) == true
+            guard let self else { return false }
+            if self.siriNativeKeyMapper.prepare(additionalSources: sources) { return true }
+            // 苹果遥控器只上报消费类/厂商用途，没有键盘页，系统不接受
+            // `HIDKeyboardModifierMappingPairs` 写入，键位中和映射因此永远校验失败。
+            // 这种遥控器随后由适配器以独占方式打开，原生按键不会漏到系统，
+            // 所以不能因为映射未就绪就把整台设备拒掉——那样遥控器连设备卡片都不会出现。
+            AppLogger.shared.write(
+                "APPLE REMOTE NATIVE_INPUT phase=fallback reason=mapping_unavailable " +
+                    "isolation=exclusive_open"
+            )
+            return true
         }
         siriRemoteFeature.restoreNativeInput = { [weak self] in self?.siriNativeKeyMapper.restore() }
         siriRemoteFeature.onConnection = { [weak self] connection in
@@ -4488,9 +4498,13 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             }
             return
         }
-        if settings.customMappingEnabled, !siriNativeKeyMapper.isPrepared {
-            AppLogger.shared.write("APPLE REMOTE ACTION rejected reason=native_input_not_verified")
-            return
+        if settings.customMappingEnabled, !siriNativeKeyMapper.isPrepared, event.phase == .began {
+            // 键位中和映射不可用时设备已由适配器独占打开，原生事件不会漏到系统，
+            // 因此继续执行用户配置的动作，不再整键丢弃。
+            AppLogger.shared.write(
+                "APPLE REMOTE ACTION phase=continued result=exclusive_open_isolation " +
+                    "control=\(control.rawValue)"
+            )
         }
         if control == .select {
             let nativeEdge: RemoteEventEdge = event.phase == .began ? .down : .up
