@@ -177,6 +177,26 @@
 "action.arrow_right" = "方向右";
 "action.scroll_up" = "向上滚动";
 "action.scroll_down" = "向下滚动";
+"action.page_up" = "向上翻页";
+"action.page_down" = "向下翻页";
+"scroll_region.title" = "滚动区域";
+"scroll_region.help" = "翻页键会滚动这个 App 的内容区。只读取区域结构，不读取内容，也不移动焦点或鼠标。";
+"scroll_region.learn" = "学习滚动区域";
+"scroll_region.countdown" = "请点一下要翻页的区域（%d）";
+"scroll_region.status_preset" = "预置可用";
+"scroll_region.status_learned" = "已学习";
+"scroll_region.status_needs_calibration" = "需学习";
+"scroll_region.learn_succeeded" = "滚动区域已记录，可以直接测试翻页。";
+"scroll_region.learn_failed" = "没有识别到可滚动区域，请点内容区（消息列表、正文或终端）后重试。";
+"scroll_region.test_up" = "测试向上翻页";
+"scroll_region.test_down" = "测试向下翻页";
+"scroll_region.test_moved" = "内容已移动，这个区域可以翻页。";
+"scroll_region.test_unconfirmed" = "已发送翻页，但没有检测到内容移动；可能已在顶部或底部，或该区域不可滚动。";
+"scroll_region.test_sent" = "已发送翻页；请目视确认内容是否移动。";
+"scroll_region.test_needs_calibration" = "这个 App 没有可用的预置区域，请先学习。";
+"scroll_region.test_failed" = "翻页没有成功，请确认目标 App 在前台并已授予辅助功能权限。";
+"scroll_region.reset" = "恢复预置";
+
 "action.delete_backspace" = "Delete（退格）";
 "action.command_delete" = "Command-Delete";
 "action.show_desktop" = "显示桌面（fn + F11）";

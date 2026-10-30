@@ -517,7 +517,10 @@ final class AppSettings: ObservableObject {
     }
 
     @Published private(set) var customApplicationProfiles: [CustomApplicationProfile] {
-        didSet { saveCustomApplicationProfiles() }
+        didSet {
+            saveCustomApplicationProfiles()
+            ScrollRegionTargetStore.shared.replace(with: customApplicationProfiles)
+        }
     }
 
     @Published private(set) var remoteDeviceProfiles: [RemoteDeviceProfile] {
@@ -941,12 +944,14 @@ final class AppSettings: ObservableObject {
             secondaryButtonBindings = [:]
         }
 
-        customApplicationProfiles = Self.decodeSetting(
+        let restoredApplicationProfiles = Self.decodeSetting(
             [CustomApplicationProfile].self,
             forKey: Keys.customApplicationProfiles,
             from: defaults,
             corrupted: &corruptedKeys
         ) ?? []
+        customApplicationProfiles = restoredApplicationProfiles
+        ScrollRegionTargetStore.shared.replace(with: restoredApplicationProfiles)
 
         applicationLanguage = AppLanguage(
             rawValue: defaults.string(forKey: Keys.applicationLanguage) ?? ""
@@ -2324,6 +2329,7 @@ final class AppSettings: ObservableObject {
         for index in applications.indices {
             applications[index]["applicationPath"] = ""
             applications[index].removeValue(forKey: "accessibilityTarget")
+            applications[index].removeValue(forKey: "scrollRegionTarget")
         }
         configuration["customApplicationProfiles"] = applications
         // Physical device identities and learned third-party UI fingerprints are local only.
@@ -2797,6 +2803,8 @@ final class AppSettings: ObservableObject {
         sanitized.focusShortcut = profile.focusShortcut.flatMap(validatedShortcut)
         sanitized.accessibilityTarget = profile.accessibilityTarget
             .flatMap(validatedAccessibilityTarget)
+        sanitized.scrollRegionTarget = profile.scrollRegionTarget
+            .flatMap(validatedScrollRegionTarget)
 
         guard !sanitized.applicationPath.isEmpty else { return .notInstalledOnThisMac(sanitized) }
         let url = URL(fileURLWithPath: sanitized.applicationPath)
@@ -2847,6 +2855,19 @@ final class AppSettings: ObservableObject {
             guard [frame.x, frame.y, frame.width, frame.height].allSatisfy(\.isFinite) else {
                 return nil
             }
+        }
+        return target
+    }
+
+    private static func validatedScrollRegionTarget(
+        _ target: ScrollRegionTarget
+    ) -> ScrollRegionTarget? {
+        let fields = [target.role, target.identifier, target.windowTitle, target.context]
+        guard fields.allSatisfy({ $0.count <= maximumImportedIdentifierLength }) else {
+            return nil
+        }
+        if let frame = target.normalizedFrame {
+            guard ScrollRegionRule.isValid(normalizedFrame: frame) else { return nil }
         }
         return target
     }
