@@ -191,12 +191,19 @@ struct ScrollRegionTests {
         #expect(ScrollRegionInjector.usesContainerMatching(role: "") == false)
     }
 
-    @Test func onlyVerifiedAppsHaveBuiltInRegions() {
-        #expect(ScrollRegionPreset.rule(for: "com.cmuxterm.app") != nil)
-        #expect(ScrollRegionPreset.rule(for: "com.tencent.workbuddy.mac") != nil)
-        #expect(ScrollRegionPreset.rule(for: "com.tencent.xinWeChat") == nil)
-        #expect(ScrollRegionPreset.rule(for: "com.apple.Safari") == nil)
+    @Test func everyPresetAppHasBuiltInRegion() {
+        for preset in PresetApplication.allCases {
+            #expect(ScrollRegionPreset.rule(for: preset.bundleIdentifier) != nil)
+        }
         #expect(ScrollRegionPreset.rule(for: "com.example.unknown") == nil)
+    }
+
+    @Test func measuredContainersUseContainerPlacement() {
+        #expect(ScrollRegionPreset.rule(for: "com.cmuxterm.app")?.placement == .container)
+        #expect(ScrollRegionPreset.rule(for: "com.google.Chrome")?.placement == .container)
+        // Whole-window web areas fall back to the window rectangle.
+        #expect(ScrollRegionPreset.rule(for: "com.tencent.workbuddy.mac")?.placement == .windowRect)
+        #expect(ScrollRegionPreset.rule(for: "com.apple.Safari")?.placement == .windowRect)
     }
 
     @Test func outOfRangeNormalizedFramesAreRejected() {

@@ -27,7 +27,7 @@
 1. 同一按键在 WorkBuddy 对话页执行一次向上、一次向下。
 2. 在 Claude 与 Codex 上重复。
 
-预期：不学习也能翻页——WorkBuddy / Codex 显示「预置可用」，以窗口中心为准，一次约移动 644 pt；Claude、Cursor、微信、Safari、Xcode 等未验证 App 显示「需学习」且不执行。
+预期：所有预置 App 不学习也能翻页。cmux / Chrome 走内容容器；WorkBuddy 及未标定 App 以窗口中心为准，一次约移动 644 pt。只有自定义 App 显示「需学习」。
 
 失败：翻错区域、翻到右侧面板、什么都不发生却没有提示。
 

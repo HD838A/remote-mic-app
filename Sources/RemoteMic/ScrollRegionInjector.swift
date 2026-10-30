@@ -127,8 +127,14 @@ enum ScrollRegionInjector {
                 return ScrollPageResult(outcome: outcome, verifiedMovement: nil)
             }
         } else {
-            guard ScrollRegionPreset.rule(for: bundleIdentifier) != nil else {
+            guard let preset = ScrollRegionPreset.rule(for: bundleIdentifier) else {
                 return ScrollPageResult(outcome: .needsCalibration, verifiedMovement: nil)
+            }
+            if preset.placement == .windowRect {
+                return scrollRect(
+                    windowFrame, window: window, direction: direction,
+                    verifyMovement: verifyMovement, isValidTarget: isValidTarget
+                )
             }
             // Presets only accept containers that are smaller than the window;
             // apps exposing one whole-window web area scroll by window rect.

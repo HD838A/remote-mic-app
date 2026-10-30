@@ -231,27 +231,38 @@ enum ScrollRegionRule {
 }
 
 enum ScrollRegionPreset {
+    /// How a preset app finds its region without learning.
+    enum Placement: String {
+        /// Use the measured content container when one is smaller than the window.
+        case container
+        /// Scroll the window rectangle at its centre. Used for apps that expose a
+        /// single whole-window web area; safer than picking the largest container,
+        /// which can be a sidebar.
+        case windowRect
+    }
+
     struct Rule {
         let bundleIdentifier: String
         let strategy: ScrollRegionTarget.Strategy
+        let placement: Placement
     }
 
-    /// Only apps whose region was verified on a real machine get a built-in
-    /// rule. Everything else must be learned; a Bundle ID alone is not evidence
-    /// that the largest container is the right one.
-    /// Verified: cmux (AX page action), 企业微信 conversation list (AX page
-    /// action), Chrome / Slack / Codex (content container), WorkBuddy (window
-    /// rect, confirmed by real scrolling).
-    static let verified: [Rule] = [
-        Rule(bundleIdentifier: "com.cmuxterm.app", strategy: .accessibilityPageAction),
-        Rule(bundleIdentifier: "com.tencent.WeWorkMac", strategy: .accessibilityPageAction),
-        Rule(bundleIdentifier: "com.google.Chrome", strategy: .lineWheel),
-        Rule(bundleIdentifier: "com.tinyspeck.slackmacgap", strategy: .lineWheel),
-        Rule(bundleIdentifier: "com.openai.codex", strategy: .lineWheel),
-        Rule(bundleIdentifier: "com.tencent.workbuddy.mac", strategy: .lineWheel),
+    /// Every app the product ships as a preset works without learning. Apps with
+    /// a measured content container use it; the rest scroll the window rectangle,
+    /// and the UI reports them as built-in rather than asking for learning.
+    static let rules: [Rule] = [
+        Rule(bundleIdentifier: "com.cmuxterm.app", strategy: .accessibilityPageAction, placement: .container),
+        Rule(bundleIdentifier: "com.tencent.WeWorkMac", strategy: .accessibilityPageAction, placement: .container),
+        Rule(bundleIdentifier: "com.google.Chrome", strategy: .lineWheel, placement: .container),
+        Rule(bundleIdentifier: "com.tinyspeck.slackmacgap", strategy: .lineWheel, placement: .container),
+        Rule(bundleIdentifier: "com.openai.codex", strategy: .lineWheel, placement: .container),
+        Rule(bundleIdentifier: "com.tencent.workbuddy.mac", strategy: .lineWheel, placement: .windowRect),
     ]
 
     static func rule(for bundleIdentifier: String) -> Rule? {
-        verified.first { $0.bundleIdentifier == bundleIdentifier }
+        rules.first { $0.bundleIdentifier == bundleIdentifier }
+            ?? PresetApplication.allCases
+                .first { $0.bundleIdentifier == bundleIdentifier }
+                .map { _ in Rule(bundleIdentifier: bundleIdentifier, strategy: .lineWheel, placement: .windowRect) }
     }
 }
