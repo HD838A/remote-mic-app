@@ -9,9 +9,9 @@
 ## 用户功能
 
 - 「基础按键」组新增「向上翻页 / 向下翻页」两个动作，滚动当前前台 App 的内容区一屏。
-- 一屏 = 区域可见高度减 10% 重叠，且不小于 3 行；原生支持翻页动作的 App 由系统定义步长。
+- 原生支持翻页动作的 App 由系统定义一屏；其余 App 用分块行滚轮：每块 10 行（实测约 120 pt），块数按区域高度减 10% 计算并封顶 6 块，避免越过文末。
 - 预置区域可用时无需学习：cmux、Codex、Chrome、Slack、企业微信。
-- 其他 App 可以在按键映射页的自定义 App 区块里「学习滚动区域」：倒计时内点一下要翻页的区域（也可以不点，以指针位置为准），学完立即可以测试。
+- 其他 App 可以在按键映射页的自定义 App 区块里「学习滚动区域」：倒计时内点一下要翻页的区域（也可以不点，以指针位置为准），学完立即可以测试。覆盖整窗的 WebArea 不当作区域，这类 App 记录窗口矩形并按中心翻页。
 - 提供「测试向上翻页 / 测试向下翻页」和「恢复预置」；测试会真实翻一次，并报告内容是否移动。
 - 不支持定位的 App 明确显示「需学习」，不会退回窗口中心强行翻页。
 
@@ -26,7 +26,7 @@
 ## 实现
 
 - `Sources/RemoteMic/ScrollRegionTarget.swift`：区域记录模型、预置规则、页步长、方向语义、预置筛选与匹配评分（纯逻辑，可单测）。
-- `Sources/RemoteMic/ScrollRegionInjector.swift`：Accessibility 遍历、点击命中抓取、翻页执行（先试 `AXScrollUpByPage` / `AXScrollDownByPage`，否则向区域中心投递像素滚轮），以及滚动位移校验。
+- `Sources/RemoteMic/ScrollRegionInjector.swift`：Accessibility 遍历、点击命中抓取（窗口优先取 `AXWindow` 属性，父链遍历到 40 层）、翻页执行（先试 `AXScrollUpByPage` / `AXScrollDownByPage`，否则向区域中心分块投递行滚轮），以及滚动位移校验。
 - `Sources/RemoteMic/RemoteButtons.swift`：两个动作、独立的 `scrollRegionTarget` 字段、不参与按住连发。
 - `Sources/RemoteMic/KeyboardInjector.swift`：动作执行接入口。
 - `Sources/RemoteMic/AppSettings.swift`：配置持久化、便携配置校验、完整备份不迁移区域记录。

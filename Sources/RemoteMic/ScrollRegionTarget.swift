@@ -77,14 +77,21 @@ enum ScrollRegionRule {
     /// skipped when a wider content area exists.
     static let sidebarWidthRatio: Double = 0.45
 
-    /// Page step keeps a small overlap so the reader never loses the paragraph
-    /// they were looking at, and never drops below three text lines.
+    /// Chromium ignores synthetic pixel-unit wheel events and accelerates large
+    /// line deltas, so a page is posted as several equal chunks: one chunk of
+    /// ten lines moves content by roughly 120 pt on WorkBuddy, and more than six
+    /// chunks typically runs past the end of the document.
     static let overlapRatio: Double = 0.10
-    static let minimumPagePixels: Int32 = 36
+    static let linesPerChunk: Int32 = 10
+    static let chunkPoints: Double = 120
+    static let maximumPageChunks = 6
+    static let chunkInterval: TimeInterval = 0.015
 
-    static func pageScrollPixels(regionHeight: Double) -> Int32 {
-        let stepped = max(0, regionHeight) * (1 - overlapRatio)
-        return max(minimumPagePixels, Int32(stepped.rounded()))
+    /// Number of wheel chunks that approximate one viewport.
+    static func pageScrollChunks(regionHeight: Double) -> Int {
+        guard regionHeight > 0 else { return 1 }
+        let target = regionHeight * (1 - overlapRatio)
+        return min(maximumPageChunks, max(1, Int((target / chunkPoints).rounded())))
     }
 
     static func normalizedFrame(
@@ -103,6 +110,15 @@ enum ScrollRegionRule {
     /// Picks the content area of a window: the largest candidate that is wide
     /// enough to be content, falling back to the largest candidate when an app
     /// only exposes a narrow list (企业微信 only exposes its conversation list).
+    /// A container covering (almost) the whole window is not a useful region:
+    /// Chromium exposes the entire page as one `AXWebArea`, and scrolling its
+    /// centre says nothing about which column the user meant.
+    static func acceptsContainer(containerArea: Double, windowArea: Double) -> Bool {
+        guard windowArea > 0, containerArea > 0 else { return false }
+        let ratio = containerArea / windowArea
+        return ratio >= 0.02 && ratio <= 0.90
+    }
+
     static func presetCandidateIndex(in descriptors: [ScrollRegionDescriptor]) -> Int? {
         guard !descriptors.isEmpty else { return nil }
         let wide = descriptors.enumerated().filter { _, descriptor in

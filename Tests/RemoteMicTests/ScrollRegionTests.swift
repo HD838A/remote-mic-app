@@ -40,15 +40,14 @@ struct ScrollRegionTests {
         )
     }
 
-    @Test func pageScrollKeepsTenPercentOverlap() {
-        #expect(ScrollRegionRule.pageScrollPixels(regionHeight: 800) == 720)
-        #expect(ScrollRegionRule.pageScrollPixels(regionHeight: 1000) == 900)
-    }
-
-    @Test func pageScrollNeverGoesBelowThreeLines() {
-        #expect(ScrollRegionRule.pageScrollPixels(regionHeight: 10) == ScrollRegionRule.minimumPagePixels)
-        #expect(ScrollRegionRule.pageScrollPixels(regionHeight: 0) == ScrollRegionRule.minimumPagePixels)
-        #expect(ScrollRegionRule.pageScrollPixels(regionHeight: -100) == ScrollRegionRule.minimumPagePixels)
+    @Test func pageScrollUsesBoundedChunks() {
+        // 884 pt region: 884 * 0.9 / 120 ≈ 6.6 → clamped to 6 chunks.
+        #expect(ScrollRegionRule.pageScrollChunks(regionHeight: 884) == 6)
+        // 300 pt region: 300 * 0.9 / 120 ≈ 2.25 → 2 chunks.
+        #expect(ScrollRegionRule.pageScrollChunks(regionHeight: 300) == 2)
+        #expect(ScrollRegionRule.pageScrollChunks(regionHeight: 10) == 1)
+        #expect(ScrollRegionRule.pageScrollChunks(regionHeight: 0) == 1)
+        #expect(ScrollRegionRule.pageScrollChunks(regionHeight: 100_000) == ScrollRegionRule.maximumPageChunks)
     }
 
     @Test func wheelDirectionKeepsExistingLineScrollConvention() {
@@ -175,6 +174,14 @@ struct ScrollRegionTests {
         #expect(ButtonAction.pageDown.allowsRepeat == false)
         #expect(ButtonAction.pageUp.category == .basicKeys)
         #expect(ButtonAction.pageDown.category == .basicKeys)
+    }
+
+    @Test func fullWindowWebAreaIsNotTreatedAsARegion() {
+        #expect(ScrollRegionRule.acceptsContainer(containerArea: 1_000, windowArea: 1_000) == false)
+        #expect(ScrollRegionRule.acceptsContainer(containerArea: 950, windowArea: 1_000) == false)
+        #expect(ScrollRegionRule.acceptsContainer(containerArea: 660, windowArea: 1_000))
+        #expect(ScrollRegionRule.acceptsContainer(containerArea: 5, windowArea: 1_000) == false)
+        #expect(ScrollRegionRule.acceptsContainer(containerArea: 0, windowArea: 1_000) == false)
     }
 
     @Test func recordedAnonymousContainerFallsBackToRectangle() {

@@ -31,15 +31,26 @@ enum ScrollRegionInjector {
               NSRunningApplication(processIdentifier: processIdentifier)?.bundleIdentifier == bundleIdentifier
         else { return nil }
 
-        let window = ancestorWindow(of: element)
+        // Chromium nests web content ~20 levels deep, so read the window from the
+        // dedicated attribute first and only then walk parents.
+        let window = axElement(element, kAXWindowAttribute) ?? ancestorWindow(of: element)
         let windowFrame = window.flatMap(axFrame) ?? .zero
-        let anchor = scrollAncestor(of: element) ?? element
+        let container = scrollAncestor(of: element).flatMap { candidate -> AXUIElement? in
+            guard let containerFrame = axFrame(candidate),
+                  ScrollRegionRule.acceptsContainer(
+                      containerArea: Double(containerFrame.width * containerFrame.height),
+                      windowArea: Double(windowFrame.width * windowFrame.height)
+                  )
+            else { return nil }
+            return candidate
+        }
+        let anchor = container ?? window ?? element
         let frame = axFrame(anchor) ?? .zero
         guard windowFrame.width > 0, windowFrame.height > 0, frame.width > 0, frame.height > 0 else {
             return nil
         }
 
-        let supportsPageAction = axActions(anchor).contains("AXScrollUpByPage")
+        let supportsPageAction = container.map { axActions($0).contains("AXScrollUpByPage") } ?? false
         return ScrollRegionTarget(
             role: axString(anchor, kAXRoleAttribute),
             identifier: axString(anchor, kAXIdentifierAttribute),
@@ -132,8 +143,11 @@ enum ScrollRegionInjector {
         // No page action: scroll the recorded region by its visible height,
         // never by the window centre (S6).
         let center = CGPoint(x: candidate.descriptor.frame.midX, y: candidate.descriptor.frame.midY)
-        let pixels = ScrollRegionRule.pageScrollPixels(regionHeight: Double(candidate.descriptor.frame.height))
-        guard postPixelWheel(direction: direction, pixels: pixels, at: center) else {
+        guard postPageWheel(
+            direction: direction,
+            chunks: ScrollRegionRule.pageScrollChunks(regionHeight: Double(candidate.descriptor.frame.height)),
+            at: center
+        ) else {
             return ScrollPageResult(outcome: .eventFailed, verifiedMovement: nil)
         }
         return finish(window: window, before: before,
@@ -166,10 +180,9 @@ enum ScrollRegionInjector {
         }
 
         let before = verifyMovement ? textSignature(in: window) : [:]
-        let pixels = ScrollRegionRule.pageScrollPixels(regionHeight: Double(rect.height))
-        guard postPixelWheel(
+        guard postPageWheel(
             direction: direction,
-            pixels: pixels,
+            chunks: ScrollRegionRule.pageScrollChunks(regionHeight: Double(rect.height)),
             at: CGPoint(x: rect.midX, y: rect.midY)
         ) else {
             return ScrollPageResult(outcome: .eventFailed, verifiedMovement: nil)
@@ -235,7 +248,7 @@ enum ScrollRegionInjector {
                     )
                 ))
             }
-            if current.depth < 30 {
+            if current.depth < 40 {
                 for child in axChildren(current.element) {
                     stack.append((child, current.depth + 1, context))
                 }
@@ -266,7 +279,7 @@ enum ScrollRegionInjector {
     private static func scrollAncestor(of element: AXUIElement) -> AXUIElement? {
         var current: AXUIElement? = element
         var depth = 0
-        while let node = current, depth < 16 {
+        while let node = current, depth < 40 {
             let role = axString(node, kAXRoleAttribute)
             if role == "AXScrollArea" || role == "AXWebArea" { return node }
             current = axElement(node, kAXParentAttribute)
@@ -278,7 +291,7 @@ enum ScrollRegionInjector {
     private static func ancestorWindow(of element: AXUIElement) -> AXUIElement? {
         var current: AXUIElement? = element
         var depth = 0
-        while let node = current, depth < 16 {
+        while let node = current, depth < 40 {
             if axString(node, kAXRoleAttribute) == "AXWindow" { return node }
             current = axElement(node, kAXParentAttribute)
             depth += 1
@@ -302,13 +315,30 @@ enum ScrollRegionInjector {
         return String(parts.joined(separator: " ").suffix(256))
     }
 
-    private static func postPixelWheel(direction: ScrollPageDirection, pixels: Int32, at point: CGPoint) -> Bool {
+    private static func postPageWheel(
+        direction: ScrollPageDirection,
+        chunks: Int,
+        at point: CGPoint
+    ) -> Bool {
+        guard chunks > 0 else { return false }
+        for index in 0..<chunks {
+            guard postLineWheel(direction: direction, lines: ScrollRegionRule.linesPerChunk, at: point) else {
+                return false
+            }
+            if index < chunks - 1 {
+                Thread.sleep(forTimeInterval: ScrollRegionRule.chunkInterval)
+            }
+        }
+        return true
+    }
+
+    private static func postLineWheel(direction: ScrollPageDirection, lines: Int32, at point: CGPoint) -> Bool {
         guard let source = CGEventSource(stateID: .hidSystemState),
               let event = CGEvent(
                   scrollWheelEvent2Source: source,
-                  units: .pixel,
+                  units: .line,
                   wheelCount: 1,
-                  wheel1: direction.wheelSign * pixels,
+                  wheel1: direction.wheelSign * lines,
                   wheel2: 0,
                   wheel3: 0
               )
