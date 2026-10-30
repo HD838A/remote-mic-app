@@ -3430,21 +3430,11 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     }
 
     func completeOnboarding() {
-        let shouldDisable = settings.shouldDisableOnboardingSiriRemote(
-            accessDecision: membershipFeature.buttonProfilesAccessDecision
-        )
-        if shouldDisable {
-            setSiriRemoteEnabled(false)
-            guard !settings.siriRemoteEnabled else {
-                AppLogger.shared.write(
-                    "ONBOARDING SIRI_REMOTE phase=blocked reason=voice_session_active"
-                )
-                return
-            }
-        }
+        // 连接、按键与触摸不看会员，因此不再因为无权益把整个 Siri Remote 支持关掉；
+        // 语音是否可用改由按键入口的 `canStartAppleRemoteVoice` 判定。
         AppLogger.shared.write(
-            "ONBOARDING SIRI_REMOTE phase=completed result=\(shouldDisable ? "disabled" : "preserved") " +
-                "reason=\(shouldDisable ? "membership_required" : "existing_state_or_access")"
+            "ONBOARDING SIRI_REMOTE phase=completed result=preserved " +
+                "voice_entitlement=\(membershipFeature.canUseSiriRemoteVoice ? "granted" : "required")"
         )
         settings.completeOnboarding()
     }
@@ -4477,6 +4467,17 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
                 )
                 return
             }
+            // 苹果遥控器只有语音是会员功能；连接、按键与触摸此前已经放行。
+            // 无权益时按键不进入采集，也不唤醒输入法，避免出现「有反应但没字」。
+            guard canStartAppleRemoteVoice else {
+                if event.phase == .began {
+                    AppLogger.shared.write(
+                        "APPLE REMOTE VOICE phase=blocked result=membership_required " +
+                            "reason=siri_remote_voice_entitlement"
+                    )
+                }
+                return
+            }
             if event.phase == .began {
                 selectRemoteProfile(profileID)
             }
@@ -5369,6 +5370,14 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
 
     private func elapsedMilliseconds(since uptime: TimeInterval) -> Int {
         max(0, Int((ProcessInfo.processInfo.systemUptime - uptime) * 1_000))
+    }
+
+    /// 苹果遥控器语音的会员门槛：引导过程中允许试用，引导完成后按会员权益判定。
+    ///
+    /// 只作用于语音；连接、按键映射与触摸不受影响。
+    private var canStartAppleRemoteVoice: Bool {
+        if settings.onboardingStep != .complete { return true }
+        return membershipFeature.canUseSiriRemoteVoice
     }
 
     private func beginAppleRemoteVoice(for device: SiriRemoteDeviceIdentity) {

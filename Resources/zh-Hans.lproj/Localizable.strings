@@ -976,7 +976,7 @@
 "onboarding.secure_input.detail" = "请退出正在输入密码或使用安全键盘输入的应用，然后重新检测。";
 "onboarding.secure_input.recheck" = "重新检测";
 "onboarding.secure_input.help" = "如果仍未恢复，请锁定 Mac 后使用密码重新解锁，再重新检测。";
-"onboarding.complete.siri_membership" = "语音测试已通过。完成后将关闭本次开启的苹果遥控器语音；开通会员后可在设置中启用。";
+"onboarding.complete.siri_membership" = "语音测试已通过。苹果遥控器的连接和按键可以继续使用；语音是会员功能，开通后即可在设置中启用。";
 "onboarding.complete.title" = "无线麦 SayAll 已经准备好了";
 "onboarding.complete.detail" = "现在可以用所选控制方式说话输入，也可以在主面板中调整连接、语音和按键设置。";
 "onboarding.complete.runtime_changed" = "当前环境状态发生了变化";
