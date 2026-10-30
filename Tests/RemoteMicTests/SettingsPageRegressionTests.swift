@@ -1114,6 +1114,43 @@ struct SettingsPageRegressionTests {
         )
     }
 
+    @Test func mappingCardsKeepThreeActionColumnsAndUseASeparateHoldEditor() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let canvas = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/RemoteMappingCanvas.swift"),
+            encoding: .utf8
+        )
+        let settings = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+        let renderer = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsScreenshotRenderer.swift"),
+            encoding: .utf8
+        )
+        let chinese = try String(
+            contentsOf: root.appendingPathComponent("Resources/zh-Hans.lproj/Localizable.strings"),
+            encoding: .utf8
+        )
+
+        #expect(canvas.contains("ForEach(ButtonTrigger.allCases)"))
+        #expect(canvas.contains("Text(holdSummary(button))"))
+        #expect(canvas.contains("onEditHold(button)"))
+        #expect(canvas.contains("let cardHeight: CGFloat = 72"))
+        #expect(settings.contains("mappingHoldEditorPanel(button)"))
+        #expect(settings.contains("RemoteButtonHoldMode.selectableCases"))
+        #expect(settings.contains("profileUnsupported || candidate.unavailableReason != nil"))
+        #expect(!settings.contains("mappingInteractionControl"))
+        #expect(!settings.contains("holdSingle"))
+        #expect(renderer.contains("REMOTE_MIC_SETTINGS_SCREENSHOT_OPEN_HOLD_EDITOR"))
+        #expect(renderer.contains("REMOTE_MIC_SETTINGS_SCREENSHOT_HOLD_MODE"))
+        #expect(chinese.contains("\"button_mapping.hold.summary.repeat_single\" = \"按住：重复单击\""))
+        #expect(chinese.contains("\"button_mapping.hold.summary.repeat_long\" = \"按住：重复长按\""))
+    }
+
     @Test func cloudPhoneRemoteUsesOnlyTheCloudflareRelayContract() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

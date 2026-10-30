@@ -1,5 +1,4 @@
 import Foundation
-import CoreGraphics
 
 /// Gesture timing shared by every ordinary button on one remote model.
 struct RemoteButtonGestureTiming: Codable, Equatable {
@@ -19,6 +18,42 @@ struct RemoteButtonInteractionSettings: Codable, Equatable {
     var longPressMilliseconds: Int = 550
     var modes: [String: String] = [:]
     var migratedRepeatButtons: [String]? = nil
+
+    init(
+        doubleClickMilliseconds: Int = 300,
+        longPressMilliseconds: Int = 550,
+        modes: [String: String] = [:],
+        migratedRepeatButtons: [String]? = nil
+    ) {
+        self.doubleClickMilliseconds = doubleClickMilliseconds
+        self.longPressMilliseconds = longPressMilliseconds
+        self.modes = modes
+        self.migratedRepeatButtons = migratedRepeatButtons
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case doubleClickMilliseconds, longPressMilliseconds, modes, migratedRepeatButtons
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        doubleClickMilliseconds = try container.decodeIfPresent(
+            Int.self,
+            forKey: .doubleClickMilliseconds
+        ) ?? 300
+        longPressMilliseconds = try container.decodeIfPresent(
+            Int.self,
+            forKey: .longPressMilliseconds
+        ) ?? 550
+        modes = try container.decodeIfPresent([String: String].self, forKey: .modes) ?? [:]
+        migratedRepeatButtons = try container.decodeIfPresent(
+            [String].self,
+            forKey: .migratedRepeatButtons
+        )
+        // These values came from an unshipped candidate design. The approved design has
+        // no raw key-down mode, and an explicit "once" entry is equivalent to no hold.
+        modes = modes.filter { $0.value != "holdSingle" && $0.value != "once" }
+    }
 
     var isValid: Bool {
         timing.isValid
@@ -51,30 +86,14 @@ struct RemoteButtonInteractionSettings: Codable, Equatable {
 }
 
 enum RemoteButtonHoldMode: String, CaseIterable, Codable, Identifiable {
-    case once, repeatLong, repeatSingle, holdSingle
+    case once, repeatLong, repeatSingle
     var id: String { rawValue }
     var localizationKey: String { "button_mapping.hold_mode.\(rawValue.lowercased())" }
+
+    static let selectableCases: [Self] = [.repeatSingle, .repeatLong]
 }
 
 extension ConfiguredButtonAction {
-    /// Only ordinary keyboard keys have a balanced down/up lifecycle in this release.
-    var heldKeyboardKey: (code: CGKeyCode, flags: CGEventFlags)? {
-        switch action {
-        case .arrowUp: return (126, .maskNumericPad)
-        case .arrowDown: return (125, .maskNumericPad)
-        case .arrowLeft: return (123, .maskNumericPad)
-        case .arrowRight: return (124, .maskNumericPad)
-        case .deleteBackward: return (51, [])
-        case .returnKey: return (36, [])
-        case .escape: return (53, [])
-        case .customShortcut:
-            guard let shortcut, shortcut.standaloneModifier == nil,
-                  shortcut.modifierFlags.isEmpty else { return nil }
-            return (CGKeyCode(shortcut.keyCode), [123, 124, 125, 126].contains(Int(shortcut.keyCode)) ? .maskNumericPad : [])
-        default: return nil
-        }
-    }
-
     var allowsHoldRepeat: Bool {
         action != .disabled && action != .appSwitcher && allowsSingleClickRepeat
     }
@@ -108,10 +127,6 @@ struct RemoteButtonInteractionSnapshot {
         case .repeatSingle:
             return !hasOpaqueBinding && single.allowsHoldRepeat && !recognizesLong
                 ? nil : "button_mapping.hold_repeat_single_unavailable"
-        case .holdSingle:
-            return !hasOpaqueBinding && single.heldKeyboardKey != nil &&
-                !recognizesDouble && !recognizesLong
-                ? nil : "button_mapping.hold_key_unavailable"
         }
     }
 }

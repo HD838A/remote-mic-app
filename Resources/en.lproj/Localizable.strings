@@ -1298,16 +1298,22 @@
 "audio.mac_microphone.error.accessibility" = "Allow Accessibility access in System Settings.";
 
 // Device gesture timing and hold behavior
-"button_mapping.hold_title" = "While holding";
-"button_mapping.hold_mode.once" = "Trigger once";
+"button_mapping.hold.entry" = "Hold";
+"button_mapping.hold.summary.repeat_single" = "Hold: Repeat click";
+"button_mapping.hold.summary.repeat_long" = "Hold: Repeat long press";
+"button_mapping.hold.description" = "Keep this button held to repeat the selected behavior. Release it to stop.";
+"button_mapping.hold.target" = "Repeat target";
+"button_mapping.hold.clear" = "Clear hold";
+"button_mapping.hold.single_action" = "Single-click action";
+"button_mapping.hold.long_action" = "Long-press action";
+"button_mapping.hold.repeat_single.action_prefix" = "Repeat: ";
+"button_mapping.hold.repeat_long.action_prefix" = "After the long-press time, repeat: ";
+"button_mapping.hold_mode.once" = "No hold behavior";
 "button_mapping.hold_mode.repeatlong" = "Repeat long press";
-"button_mapping.hold_mode.repeatsingle" = "Repeat single click";
-"button_mapping.hold_mode.holdsingle" = "Hold single-click key down";
-"button_mapping.hold_hint" = "Single-click and long-press pages share this setting. Repeating an action and holding a key down produce different results.";
+"button_mapping.hold_mode.repeatsingle" = "Repeat click";
 "button_mapping.hold_invalid" = "Invalid configuration. This button is inactive. Select a mode or reset timing.";
 "button_mapping.hold_repeat_long_unavailable" = "The long-press action cannot repeat, or a button profile owns this button. This button is inactive.";
 "button_mapping.hold_repeat_single_unavailable" = "Repeat single click requires a repeatable single-click action and no long-press action. Unavailable for opaque profile bindings. This button is inactive.";
-"button_mapping.hold_key_unavailable" = "Hold requires an unmodified keyboard key and no double-click or long-press action. Unavailable for opaque profile bindings. This button is inactive.";
 "button_mapping.gesture.title" = "Button gestures";
 "button_mapping.gesture.subtitle" = "All ordinary buttons on this remote model share these recognition times.";
 "button_mapping.learning.title" = "Learn your single click, double click and long press";

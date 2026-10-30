@@ -95,7 +95,9 @@ struct RemoteMappingCanvas: View {
     let activeButtons: Set<RemoteButton>
     let voiceActive: Bool
     let actionSummary: (RemoteButton, ButtonTrigger) -> String
+    let holdSummary: (RemoteButton) -> String
     let onEdit: (RemoteButton, ButtonTrigger) -> Void
+    let onEditHold: (RemoteButton) -> Void
     var onVoiceSettings: () -> Void = {}
 
     var body: some View {
@@ -211,6 +213,19 @@ struct RemoteMappingCanvas: View {
                     .font(.system(size: 13, weight: .semibold))
                     .lineLimit(1)
                 Spacer(minLength: 0)
+                Button {
+                    selectedButton = button
+                    onEditHold(button)
+                } label: {
+                    Text(holdSummary(button))
+                        .font(.system(size: 12, weight: .semibold))
+                        .lineLimit(1)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.accentColor.opacity(0.10), in: RoundedRectangle(cornerRadius: 5))
+                }
+                .buttonStyle(.plain)
+                .help("\(button.displayName(using: localization)) · \(holdSummary(button))")
             }
 
             HStack(spacing: 4) {

@@ -1,32 +1,4 @@
 import Foundation
-import CoreGraphics
-
-/// All owners share key ownership. Releasing one remote must not release another remote's key.
-final class RemoteButtonKeyOwnership {
-    static let shared = RemoteButtonKeyOwnership()
-    private var owners: [UInt16: Set<UUID>] = [:]
-    private let post: (CGKeyCode, Bool, CGEventFlags) -> Bool
-
-    init(post: @escaping (CGKeyCode, Bool, CGEventFlags) -> Bool = KeyboardInjector.postKeyState) {
-        self.post = post
-    }
-
-    func press(owner: UUID, key: CGKeyCode, flags: CGEventFlags) -> Bool {
-        if owners[key]?.isEmpty != false, !post(key, true, flags) { return false }
-        owners[key, default: []].insert(owner)
-        return true
-    }
-
-    @discardableResult
-    func release(owner: UUID, key: CGKeyCode, flags: CGEventFlags) -> Bool {
-        guard owners[key]?.remove(owner) != nil else { return true }
-        if owners[key]?.isEmpty == true {
-            owners.removeValue(forKey: key)
-            return post(key, false, flags)
-        }
-        return true
-    }
-}
 
 /// This controller accepts ordinary remote buttons only. Voice session edges never enter it.
 final class RemoteButtonInteractionController {
@@ -39,7 +11,6 @@ final class RemoteButtonInteractionController {
         var second = false
         var waiting = false
         var consumed = false
-        var held = false
         var count = 0
         var timer: HIDRemoteScheduledTask?
         var longTimer: HIDRemoteScheduledTask?
@@ -53,13 +24,10 @@ final class RemoteButtonInteractionController {
     }
 
     private let scheduler: HIDRemoteScheduling
-    private let keys: RemoteButtonKeyOwnership
     private var interactions: [RemoteButton: Interaction] = [:]
 
-    init(scheduler: HIDRemoteScheduling = DispatchHIDRemoteScheduler(),
-         keys: RemoteButtonKeyOwnership = .shared) {
+    init(scheduler: HIDRemoteScheduling = DispatchHIDRemoteScheduler()) {
         self.scheduler = scheduler
-        self.keys = keys
     }
 
     func isTracking(_ button: RemoteButton) -> Bool { interactions[button] != nil }
@@ -90,11 +58,7 @@ final class RemoteButtonInteractionController {
             self.cancel(button, reason: "context_changed")
         }
         let mode = current.snapshot.mode!
-        if mode == .holdSingle, let key = current.snapshot.single.heldKeyboardKey {
-            current.held = keys.press(owner: current.id, key: key.code, flags: key.flags)
-            current.consumed = true
-            AppLogger.shared.write("BUTTON HOLD operation_id=\(current.id.uuidString) phase=down result=\(current.held ? "posted" : "failed") external_result=unknown")
-        } else if mode == .repeatSingle {
+        if mode == .repeatSingle {
             if !current.snapshot.recognizesDouble {
                 fire(button, current, .singleClick)
                 scheduleRepeat(button, current, .singleClick, delay: 350)
@@ -117,7 +81,7 @@ final class RemoteButtonInteractionController {
         current.pressed = false
         current.timer?.cancel()
         current.longTimer?.cancel()
-        if current.held || current.consumed { cancel(button, reason: "released"); return }
+        if current.consumed { cancel(button, reason: "released"); return }
         if current.second {
             fire(button, current, .doubleClick)
             cancel(button, reason: "double_completed")
@@ -179,11 +143,7 @@ final class RemoteButtonInteractionController {
         current.timer?.cancel()
         current.longTimer?.cancel()
         current.guardTimer?.cancel()
-        if current.held, let key = current.snapshot.single.heldKeyboardKey {
-            let released = keys.release(owner: current.id, key: key.code, flags: key.flags)
-            AppLogger.shared.write("BUTTON HOLD operation_id=\(current.id.uuidString) phase=up result=\(released ? "posted" : "failed") external_result=unknown")
-        }
-        AppLogger.shared.write("BUTTON HOLD operation_id=\(current.id.uuidString) phase=completed reason=\(reason) count=\(current.count) held=\(current.held) external_result=unknown")
+        AppLogger.shared.write("BUTTON HOLD operation_id=\(current.id.uuidString) phase=completed reason=\(reason) count=\(current.count) external_result=unknown")
     }
 
     func cancelAll(reason: String) {

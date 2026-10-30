@@ -3644,8 +3644,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         snapshot.repeatAllowed = HIDRemoteMonitor.shouldRepeat(configured: repeated,
             frontmostBundleIdentifier: NSWorkspace.shared.frontmostApplication?.bundleIdentifier)
         let target = NSWorkspace.shared.frontmostApplication?.processIdentifier
-        let requiresAccessibility = snapshot.mode == .holdSingle ||
-            [snapshot.single, snapshot.double, snapshot.long].contains {
+        let requiresAccessibility = [snapshot.single, snapshot.double, snapshot.long].contains {
                 !$0.action.isAppInternal && $0.action != .disabled
             }
         controller.handle(phase, button: button, snapshot: snapshot,

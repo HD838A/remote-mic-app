@@ -86,47 +86,19 @@ struct RemoteButtonInteractionTests {
         #expect(events == [.doubleClick])
     }
 
-    @Test func keyOwnershipBalancesDownUpAcrossDevicesAndCancellation() {
-        var keys: [(UInt16, Bool, CGEventFlags)] = []
-        let ownership = RemoteButtonKeyOwnership { code, down, flags in keys.append((code, down, flags)); return true }
+    @Test func learningStartCancellationStopsRepeats() {
         let clock = InteractionClock()
-        let first = RemoteButtonInteractionController(scheduler: clock, keys: ownership)
-        let second = RemoteButtonInteractionController(scheduler: clock, keys: ownership)
-        let config = snapshot(.holdSingle)
-        for controller in [first, second] {
-            controller.handle(.press, button: .ok, snapshot: config, valid: { true }, perform: { _, _ in false })
-        }
-        #expect(keys.map { $0.1 } == [true])
-        first.cancelAll(reason: "disconnect")
-        #expect(keys.map { $0.1 } == [true])
-        second.handle(.release, button: .ok, snapshot: config, valid: { false }, perform: { _, _ in false })
-        #expect(keys.map { $0.1 } == [true, false])
-        #expect(keys.map { $0.0 } == [51, 51])
-    }
-
-    @Test func learningStartCancellationStopsRepeatsAndReleasesHeldKeys() {
-        let clock = InteractionClock()
-        var keys: [(UInt16, Bool)] = []
-        let ownership = RemoteButtonKeyOwnership { code, down, _ in
-            keys.append((code, down))
-            return true
-        }
-        let held = RemoteButtonInteractionController(scheduler: clock, keys: ownership)
         let repeating = RemoteButtonInteractionController(scheduler: clock)
-        held.handle(.press, button: .ok, snapshot: snapshot(.holdSingle), valid: { true }) { _, _ in false }
         var repeatCount = 0
         repeating.handle(.press, button: .back, snapshot: snapshot(.repeatSingle), valid: { true }) { _, _ in
             repeatCount += 1
             return true
         }
 
-        held.cancelAll(reason: "learning_started")
         repeating.cancelAll(reason: "learning_started")
         let countAfterCancellation = repeatCount
         clock.advance(2_000)
 
-        #expect(keys.map(\.1) == [true, false])
-        #expect(keys.map(\.0) == [51, 51])
         #expect(repeatCount == countAfterCancellation)
     }
 
@@ -134,8 +106,8 @@ struct RemoteButtonInteractionTests {
         let clock = InteractionClock()
         let controller = RemoteButtonInteractionController(scheduler: clock)
         var count = 0
-        for config in [snapshot(.holdSingle, double: true), snapshot(.repeatSingle, long: true),
-                       snapshot(d: 149), RemoteButtonInteractionSnapshot(settings: .init(), mode: nil,
+        for config in [snapshot(.repeatSingle, long: true), snapshot(d: 149),
+                       RemoteButtonInteractionSnapshot(settings: .init(), mode: nil,
                             single: .disabled, double: .disabled, long: .disabled)] {
             controller.handle(.press, button: .ok, snapshot: config, valid: { true }) { _, _ in count += 1; return true }
             clock.advance(clock.now + 2000)
@@ -190,7 +162,8 @@ struct RemoteButtonInteractionTests {
         #expect(second.interactionSettings == first.interactionSettings)
         #expect(defaults.data(forKey: "buttonInteractionMigrationBackup") == original)
         second.interactionModeOverride = { _, _ in "holdSingle" }
-        #expect(second.interactionSnapshot(for: .back).mode == .holdSingle)
+        #expect(second.interactionSnapshot(for: .back).mode == nil)
+        #expect(second.interactionSnapshot(for: .back).unavailableReason != nil)
         second.interactionModeOverride = { _, _ in "unknown" }
         #expect(second.interactionSnapshot(for: .back).unavailableReason != nil)
         second.interactionModeOverride = nil
@@ -203,6 +176,22 @@ struct RemoteButtonInteractionTests {
         #expect(second.interactionSnapshot(for: .back).unavailableReason != nil)
     }
 
+    @Test func removedCandidateModesDecodeAsNoHoldBehavior() throws {
+        let data = try JSONSerialization.data(withJSONObject: [
+            "doubleClickMilliseconds": 300,
+            "longPressMilliseconds": 550,
+            "modes": [
+                "back": "holdSingle",
+                "right": "once",
+                "left": "repeatSingle",
+            ],
+        ])
+        let decoded = try JSONDecoder().decode(RemoteButtonInteractionSettings.self, from: data)
+        #expect(decoded.modes == ["left": "repeatSingle"])
+        #expect(decoded.mode(for: .back) == .once)
+        #expect(decoded.mode(for: .right) == .once)
+    }
+
     @Test func timingChangesDoNotCancelButModeAndMappingChangesDo() throws {
         let name = "SayAll.InteractionChanges.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: name))
@@ -213,7 +202,7 @@ struct RemoteButtonInteractionTests {
         settings.interactionSettings.doubleClickMilliseconds = 200
         settings.interactionSettings.longPressMilliseconds = 800
         #expect(cancelled == 0)
-        settings.setHoldMode(.holdSingle, for: .ok)
+        settings.setHoldMode(.repeatLong, for: .ok)
         #expect(cancelled > 0)
         cancelled = 0
         settings.setAction(.arrowLeft, for: .ok)
@@ -232,7 +221,7 @@ struct RemoteButtonInteractionTests {
             doubleClickMilliseconds: 150,
             longPressMilliseconds: 1000
         ), for: .rc003)
-        settings.setHoldMode(.holdSingle, for: .ok)
+        settings.setHoldMode(.repeatSingle, for: .ok)
         let second = settings.registerBluetoothRemote(identifier: UUID())
         settings.updateRemoteProfileModel(second, model: .rc003)
         settings.selectRemoteProfile(second)
@@ -252,7 +241,7 @@ struct RemoteButtonInteractionTests {
         restarted.selectRemoteProfile(first)
         #expect(restarted.buttonInteractionSettings().doubleClickMilliseconds == 150)
         #expect(restarted.buttonInteractionSettings().longPressMilliseconds == 1000)
-        #expect(restarted.interactionSettings.mode(for: .ok) == .holdSingle)
+        #expect(restarted.interactionSettings.mode(for: .ok) == .repeatSingle)
         restarted.selectRemoteProfile(second)
         #expect(restarted.buttonInteractionSettings().doubleClickMilliseconds == 150)
         #expect(restarted.interactionSettings.mode(for: .menu) == .repeatLong)
