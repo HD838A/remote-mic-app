@@ -916,6 +916,11 @@ enum KeyboardInjector {
         completion: ((Bool) -> Void)?
     ) {
         guard let completion else { return }
+        if Thread.isMainThread {
+            guard requestGate.isCurrent(requestID) else { return }
+            completion(focused)
+            return
+        }
         DispatchQueue.main.async {
             guard requestGate.isCurrent(requestID) else { return }
             completion(focused)
