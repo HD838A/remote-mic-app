@@ -385,14 +385,17 @@ struct ShortcutLifecycleTests {
                     shortcutEventPoster: { events.append(Edge($0)); return true },
                     shortcutHardwareFlags: { CGEventFlags(rawValue: 0x00A0_0100) }))
                 let primary = events.filter { $0.type == .keyDown || $0.type == .keyUp }
-                let expectedFlags = side == 0
+                var expectedFlags = side == 0
                     ? selected.reduce(shortcut.cgEventFlags) { $0.union(CGEventFlags(rawValue: $1.1)) }
                     : shortcut.cgEventFlags
+                if (123...126).contains(keyCode) {
+                    expectedFlags.formUnion([.maskSecondaryFn, .maskNumericPad])
+                }
                 #expect(primary.map(\.code) == [keyCode, keyCode])
                 #expect(primary.first?.type == .keyDown && primary.last?.type == .keyUp)
                 for event in primary {
                     #expect(event.flags.contains(.maskNumericPad) == (123...126).contains(keyCode))
-                    #expect(event.flags.subtracting(.maskNumericPad) == expectedFlags)
+                    #expect(event.flags == expectedFlags)
                 }
                 #expect(events.filter { $0.type == .flagsChanged }.last?.flags.isEmpty ?? true)
             }
@@ -432,8 +435,8 @@ struct ShortcutLifecycleTests {
         try #require(events.count == 4)
         #expect(events[0].contains("event_kind=modifier_down"))
         #expect(events[1].contains("event_kind=key_down"))
-        #expect(events[1].contains("event_flags=2359297"))
-        #expect(events[1].contains("event_function=false"))
+        #expect(events[1].contains("event_flags=10747905"))
+        #expect(events[1].contains("event_function=true"))
         #expect(events[1].contains("event_numeric_pad=true"))
         #expect(events[3].contains("event_kind=modifier_up"))
         #expect(events[3].contains("event_flags=0"))

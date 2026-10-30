@@ -930,6 +930,11 @@ enum KeyboardInjector {
         completion: ((Bool) -> Void)?
     ) {
         guard let completion else { return }
+        if Thread.isMainThread {
+            guard requestGate.isCurrent(requestID) else { return }
+            completion(focused)
+            return
+        }
         DispatchQueue.main.async {
             guard requestGate.isCurrent(requestID) else { return }
             completion(focused)
@@ -1087,6 +1092,18 @@ enum KeyboardInjector {
 
     static func usesWeChatComposerFallback(bundleIdentifier: String?) -> Bool {
         bundleIdentifier == weChatBundleIdentifier
+    }
+
+    static func prepareCommonPhraseUnavailableTarget(processIdentifier: pid_t) -> Bool {
+        guard isAccessibilityTrusted,
+              applicationIsFrontmost(processIdentifier),
+              usesWeChatComposerFallback(
+                bundleIdentifier: NSRunningApplication(
+                    processIdentifier: processIdentifier
+                )?.bundleIdentifier
+              )
+        else { return false }
+        return focusWeChatComposer(processIdentifier: processIdentifier)
     }
 
     static func weChatComposerWindowFrame(
