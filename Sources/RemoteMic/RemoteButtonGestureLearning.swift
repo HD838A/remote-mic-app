@@ -30,6 +30,16 @@ struct RemoteButtonGestureLearningStatus: Equatable {
     }
 }
 
+struct RemoteButtonGestureLearningAvailability: Equatable {
+    let canSaveTiming: Bool
+    let canLearn: Bool
+
+    init(model: XiaomiRemoteModel?, isConnected: Bool) {
+        canSaveTiming = model != nil && model != .unknown
+        canLearn = canSaveTiming && isConnected
+    }
+}
+
 /// Measures one single click, one double click and one long press on the same physical button.
 /// Timestamps use a monotonic clock supplied by the caller.
 struct RemoteButtonGestureLearner {

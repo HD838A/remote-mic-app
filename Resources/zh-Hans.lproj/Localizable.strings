@@ -1325,6 +1325,7 @@
 "button_mapping.learning.start" = "开始学习";
 "button_mapping.learning.restart" = "重新学习";
 "button_mapping.learning.unavailable" = "当前遥控器型号无法学习。识别型号后可手动调整识别时间。";
+"button_mapping.learning.disconnected" = "连接这台遥控器后才能学习。你仍可手动调整并保存识别时间。";
 "button_mapping.learning.adjusted" = "测量结果已按允许范围和 50 ms 步长调整。";
 "button_mapping.timing_title" = "识别时间";
 "button_mapping.timing_double" = "双击等待时间";

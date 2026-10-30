@@ -1203,7 +1203,8 @@ final class AppSettings: ObservableObject {
             corrupted: &corruptedKeys
         ) ?? [:]
         let validStoredGestureTimings = storedGestureTimings.filter {
-            XiaomiRemoteModel(rawValue: $0.key) != nil && $0.value.isValid
+            guard let model = XiaomiRemoteModel(rawValue: $0.key) else { return false }
+            return model != .unknown && $0.value.isValid
         }
         if validStoredGestureTimings.count != storedGestureTimings.count {
             corruptedKeys.append(Keys.buttonGestureTimingsByModel)
@@ -3037,7 +3038,8 @@ final class AppSettings: ObservableObject {
     }
 
     func buttonGestureTiming(for model: XiaomiRemoteModel) -> RemoteButtonGestureTiming {
-        buttonGestureTimingsByModel[model.rawValue] ?? RemoteButtonGestureTiming()
+        guard model != .unknown else { return RemoteButtonGestureTiming() }
+        return buttonGestureTimingsByModel[model.rawValue] ?? RemoteButtonGestureTiming()
     }
 
     func setButtonGestureTiming(_ timing: RemoteButtonGestureTiming, for model: XiaomiRemoteModel) {
@@ -3126,7 +3128,10 @@ final class AppSettings: ObservableObject {
     private static func gestureTimingsAreWellFormed(
         _ timings: [String: RemoteButtonGestureTiming]
     ) -> Bool {
-        timings.allSatisfy { XiaomiRemoteModel(rawValue: $0.key) != nil && $0.value.isValid }
+        timings.allSatisfy {
+            guard let model = XiaomiRemoteModel(rawValue: $0.key) else { return false }
+            return model != .unknown && $0.value.isValid
+        }
     }
 
     private func ensureGestureTiming(for model: XiaomiRemoteModel, profileID: UUID) {

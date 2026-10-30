@@ -3668,23 +3668,27 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         }
     }
 
-    private func cancelButtonMappingInteractions(device: UUID?) {
+    private func cancelButtonMappingInteractions(
+        device: UUID?,
+        includeCompanionSources: Bool = true,
+        reason: String = "mapping_changed"
+    ) {
         for source in configuredButtonInteractions.keys.filter({ configuredButtonInteractionOwners[$0] == device }) {
-            cancelConfiguredButtonInteractions(source: source, reason: "mapping_changed")
+            cancelConfiguredButtonInteractions(source: source, reason: reason)
         }
         hidMonitors.values.filter { $0.profileID == device }.forEach { $0.cancelMappingInteractions() }
         if discoveryHIDMonitor?.profileID == device { discoveryHIDMonitor?.cancelMappingInteractions() }
-        if settings.selectedRemoteProfileID == device {
+        if includeCompanionSources, settings.selectedRemoteProfileID == device {
             resetMobileButtonGestures(source: .nearbyPhone)
             resetMobileButtonGestures(source: .webRemote)
         }
         #if SAYALL_CHROMECAST_ENABLED
-        if chromecastProfileID == device { resetChromecastButtonState(reason: "mapping_changed") }
+        if chromecastProfileID == device { resetChromecastButtonState(reason: reason) }
         #endif
         #if SAYALL_SIRI_REMOTE_ENABLED
         let devices = appleRemoteProfileIDs.filter { $0.value == device }.map(\.key)
         if appleRemoteAppSwitcherProfileID == device, appleRemoteAppSwitcherSession.isActive {
-            finishAppleRemoteAppSwitcher(reason: "mapping_changed", confirmed: false)
+            finishAppleRemoteAppSwitcher(reason: reason, confirmed: false)
         }
         for siriDevice in devices {
             let doubleKeys = appleRemoteDoubleClickTimers.keys.filter { $0.device == siriDevice }
@@ -3692,13 +3696,16 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             let longKeys = appleRemoteLongPressTimers.keys.filter { $0.device == siriDevice }
             longKeys.forEach { appleRemoteLongPressTimers.removeValue(forKey: $0)?.cancel() }
             let repeatKeys = appleRemoteRepeatTimers.keys.filter { $0.device == siriDevice }
-            repeatKeys.forEach { cancelAppleRemoteRepeat(for: $0.button, device: siriDevice, reason: "mapping_changed") }
+            repeatKeys.forEach { cancelAppleRemoteRepeat(for: $0.button, device: siriDevice, reason: reason) }
             appleRemoteGestureRecognizers.removeValue(forKey: siriDevice)
             appleRemoteActiveButtons.removeValue(forKey: siriDevice)
         }
         refreshAppleRemoteActiveButtons()
         #endif
-        AppLogger.shared.write("BUTTON CONFIGURATION phase=completed result=interactions_cancelled")
+        AppLogger.shared.write(
+            "BUTTON CONFIGURATION phase=completed result=interactions_cancelled " +
+                "reason=\(reason) companion_sources=\(includeCompanionSources)"
+        )
     }
 
     private func stopHIDMonitors() {
@@ -4323,11 +4330,40 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
 
     @discardableResult
     func startButtonGestureLearning() -> Bool {
+        let operationID = UUID().uuidString
         guard let profileID = settings.selectedRemoteProfileID,
-              let model = settings.selectedRemoteProfile?.model,
-              model != .unknown else { return false }
+              let model = settings.selectedRemoteProfile?.model else {
+            AppLogger.shared.write(
+                "BUTTON GESTURE LEARNING operation_id=\(operationID) " +
+                    "phase=rejected result=unavailable reason=no_selected_remote"
+            )
+            return false
+        }
+        let availability = RemoteButtonGestureLearningAvailability(
+            model: model,
+            isConnected: isRemoteConnected(profileID)
+        )
+        guard availability.canSaveTiming else {
+            AppLogger.shared.write(
+                "BUTTON GESTURE LEARNING operation_id=\(operationID) " +
+                    "phase=rejected result=unavailable reason=unknown_model"
+            )
+            return false
+        }
+        guard availability.canLearn else {
+            AppLogger.shared.write(
+                "BUTTON GESTURE LEARNING operation_id=\(operationID) " +
+                    "phase=rejected result=unavailable reason=remote_disconnected"
+            )
+            return false
+        }
+        cancelButtonMappingInteractions(
+            device: profileID,
+            includeCompanionSources: false,
+            reason: "learning_started"
+        )
         buttonGestureLearningProfileID = profileID
-        buttonGestureLearningOperationID = UUID().uuidString
+        buttonGestureLearningOperationID = operationID
         buttonGestureLearningResult = nil
         buttonGestureLearner.start(model: model)
         buttonGestureLearningStatus = buttonGestureLearner.status

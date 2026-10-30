@@ -2815,9 +2815,13 @@ struct SettingsView: View {
 
     private var mappingGestureTimingSection: some View {
         let selectedModel = settings.selectedRemoteProfile?.model
+        let selectedProfileID = settings.selectedRemoteProfileID
         let learningStatus = model.buttonGestureLearningStatus
         let learningMatchesModel = learningStatus.model == selectedModel
-        let canLearn = selectedModel != nil && selectedModel != .unknown
+        let availability = RemoteButtonGestureLearningAvailability(
+            model: selectedModel,
+            isConnected: selectedProfileID.map(model.isRemoteConnected) ?? false
+        )
         let persistedTiming = selectedModel.map { settings.buttonGestureTiming(for: $0) }
             ?? RemoteButtonGestureTiming()
         return GlassPanel {
@@ -2872,8 +2876,10 @@ struct SettingsView: View {
                         )
                     }
 
-                    if !canLearn {
-                        Text("button_mapping.learning.unavailable")
+                    if !availability.canLearn {
+                        Text(localization.text(availability.canSaveTiming
+                            ? "button_mapping.learning.disconnected"
+                            : "button_mapping.learning.unavailable"))
                             .font(.system(size: 12))
                             .foregroundStyle(.orange)
                     } else if learningMatchesModel && learningStatus.adjustedToAllowedRange {
@@ -2889,13 +2895,15 @@ struct SettingsView: View {
                             _ = model.startButtonGestureLearning()
                         }
                         .buttonStyle(.bordered)
-                        .disabled(!canLearn || (!learningMatchesModel || learningStatus.step == .idle))
+                        .disabled(!availability.canLearn ||
+                            (!learningMatchesModel || learningStatus.step == .idle))
                         Button("button_mapping.learning.start") {
                             gestureTimingSaveConfirmed = false
                             _ = model.startButtonGestureLearning()
                         }
                         .buttonStyle(.borderedProminent)
-                        .disabled(!canLearn || (learningMatchesModel && learningStatus.isActive))
+                        .disabled(!availability.canLearn ||
+                            (learningMatchesModel && learningStatus.isActive))
                     }
                 }
                 .padding(16)
@@ -2946,7 +2954,7 @@ struct SettingsView: View {
                             gestureTimingSaveConfirmed = true
                         }
                         .buttonStyle(.borderedProminent)
-                        .disabled(!canLearn || !gestureTimingDraft.isValid ||
+                        .disabled(!availability.canSaveTiming || !gestureTimingDraft.isValid ||
                             (gestureTimingDraft == persistedTiming &&
                                 (model.buttonGestureLearningResult == nil || gestureTimingSaveConfirmed)))
                     }

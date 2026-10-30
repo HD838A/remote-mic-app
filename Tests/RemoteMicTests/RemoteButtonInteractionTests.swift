@@ -104,6 +104,32 @@ struct RemoteButtonInteractionTests {
         #expect(keys.map { $0.0 } == [51, 51])
     }
 
+    @Test func learningStartCancellationStopsRepeatsAndReleasesHeldKeys() {
+        let clock = InteractionClock()
+        var keys: [(UInt16, Bool)] = []
+        let ownership = RemoteButtonKeyOwnership { code, down, _ in
+            keys.append((code, down))
+            return true
+        }
+        let held = RemoteButtonInteractionController(scheduler: clock, keys: ownership)
+        let repeating = RemoteButtonInteractionController(scheduler: clock)
+        held.handle(.press, button: .ok, snapshot: snapshot(.holdSingle), valid: { true }) { _, _ in false }
+        var repeatCount = 0
+        repeating.handle(.press, button: .back, snapshot: snapshot(.repeatSingle), valid: { true }) { _, _ in
+            repeatCount += 1
+            return true
+        }
+
+        held.cancelAll(reason: "learning_started")
+        repeating.cancelAll(reason: "learning_started")
+        let countAfterCancellation = repeatCount
+        clock.advance(2_000)
+
+        #expect(keys.map(\.1) == [true, false])
+        #expect(keys.map(\.0) == [51, 51])
+        #expect(repeatCount == countAfterCancellation)
+    }
+
     @Test func invalidModeAndConflictingGesturesNeverFallBack() {
         let clock = InteractionClock()
         let controller = RemoteButtonInteractionController(scheduler: clock)
@@ -246,6 +272,53 @@ struct RemoteButtonInteractionTests {
         requirements["reader"] = "sayall-macos-configuration/1"
         object["requirements"] = requirements
         #expect(throws: Never.self) { _ = try MacConfigurationBackup.decode(JSONSerialization.data(withJSONObject: object)) }
+    }
+
+    @Test func unknownModelTimingIsRejectedDuringLoadAndImport() throws {
+        let name = "SayAll.Interaction.UnknownModel.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        let timing = RemoteButtonGestureTiming(
+            doubleClickMilliseconds: 150,
+            longPressMilliseconds: 1_000
+        )
+        defaults.set(
+            try JSONEncoder().encode([XiaomiRemoteModel.unknown.rawValue: timing]),
+            forKey: "buttonGestureTimingsByModel"
+        )
+        let settings = AppSettings(defaults: defaults)
+        #expect(settings.buttonGestureTimingsByModel[XiaomiRemoteModel.unknown.rawValue] == nil)
+        #expect(settings.buttonGestureTiming(for: .unknown) == RemoteButtonGestureTiming())
+
+        settings.setButtonGestureTiming(timing, for: .rc003)
+        var object = try #require(
+            JSONSerialization.jsonObject(with: settings.exportedConfigurationData()) as? [String: Any]
+        )
+        object["buttonGestureTimingsByModel"] = [
+            XiaomiRemoteModel.unknown.rawValue: [
+                "doubleClickMilliseconds": 150,
+                "longPressMilliseconds": 1_000,
+            ],
+        ]
+        try settings.importConfiguration(from: JSONSerialization.data(withJSONObject: object))
+        #expect(settings.configurationImportNotice?.rejectedEntryStorageKeys.contains(
+            "buttonGestureTimingsByModel"
+        ) == true)
+        #expect(settings.buttonGestureTiming(for: .rc003) == timing)
+    }
+
+    @Test func learningRequiresAConnectedKnownModelButManualTimingDoesNot() {
+        let disconnected = RemoteButtonGestureLearningAvailability(model: .rc003, isConnected: false)
+        #expect(disconnected.canSaveTiming)
+        #expect(!disconnected.canLearn)
+
+        let connected = RemoteButtonGestureLearningAvailability(model: .rc003, isConnected: true)
+        #expect(connected.canSaveTiming)
+        #expect(connected.canLearn)
+
+        let unknown = RemoteButtonGestureLearningAvailability(model: .unknown, isConnected: true)
+        #expect(!unknown.canSaveTiming)
+        #expect(!unknown.canLearn)
     }
 
     @Test func learningMeasuresOneButtonAndSuggestsValidSliderValues() {

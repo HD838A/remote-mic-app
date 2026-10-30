@@ -1325,6 +1325,7 @@
 "button_mapping.learning.start" = "Start learning";
 "button_mapping.learning.restart" = "Learn again";
 "button_mapping.learning.unavailable" = "This remote model cannot be learned. You can adjust the recognition times after the model is identified.";
+"button_mapping.learning.disconnected" = "Connect this remote to learn your timing. You can still adjust and save the recognition times manually.";
 "button_mapping.learning.adjusted" = "The measurements were adjusted to the allowed range and 50 ms steps.";
 "button_mapping.timing_title" = "Recognition time";
 "button_mapping.timing_double" = "Double-click window";
