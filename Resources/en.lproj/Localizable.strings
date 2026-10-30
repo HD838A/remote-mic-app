@@ -976,7 +976,7 @@
 "onboarding.secure_input.detail" = "Quit apps that are asking for a password or using a secure keyboard, then check again.";
 "onboarding.secure_input.recheck" = "Check again";
 "onboarding.secure_input.help" = "If it still does not work, lock your Mac, unlock it with your password, and check again.";
-"onboarding.complete.siri_membership" = "The voice test passed. Finishing setup will turn off the Apple Remote voice feature enabled here. Activate membership to enable it in Settings.";
+"onboarding.complete.siri_membership" = "The voice test passed. The Apple Remote keeps working for connection and buttons; voice is a membership feature and can be enabled in Settings after activation.";
 "onboarding.complete.title" = "SayAll is ready";
 "onboarding.complete.detail" = "You can now dictate with the selected control method and adjust connection, voice, and button settings from the main panel.";
 "onboarding.complete.runtime_changed" = "Your current setup has changed";
