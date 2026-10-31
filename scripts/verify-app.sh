@@ -286,6 +286,10 @@ abort "Invalid localization keys: #{invalid_keys.join(", ")}" unless invalid_key
 
 format_pattern = /%(?:[0-9]+\$)?[a-zA-Z@]/
 restricted_terms = /RC003|ATVV|\bHID\b|\bUUID\b|virtual[ -]transport/i
+# Keys whose copy is intentionally empty in some languages, because the UI omits
+# the whole label instead of translating it. Keep in sync with the same list in
+# Tests/RemoteMicTests/LocalizationTests.swift; every other empty value still fails.
+intentionally_empty_keys = ["statistics.metric.count_unit"]
 directories.each do |directory|
   localized = strings(File.join(directory, "Localizable.strings"))
   missing = english.keys - localized.keys
@@ -293,7 +297,10 @@ directories.each do |directory|
   abort "#{directory} has missing keys: #{missing.join(", ")}" unless missing.empty?
   abort "#{directory} has extra keys: #{extra.join(", ")}" unless extra.empty?
   localized.each do |key, value|
-    abort "#{directory} has an empty value for #{key}" if value.empty?
+    if value.empty?
+      abort "#{directory} has an empty value for #{key}" unless intentionally_empty_keys.include?(key)
+      next
+    end
     expected_formats = english.fetch(key).scan(format_pattern).sort
     actual_formats = value.scan(format_pattern).sort
     abort "#{directory} has mismatched formats for #{key}" unless actual_formats == expected_formats
