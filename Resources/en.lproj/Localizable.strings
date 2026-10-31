@@ -394,8 +394,6 @@
 "connection.web.plus_required_title" = "This connection requires Plus";
 "connection.web.plus_required_detail" = "The QR code is ready. Upgrade to connect from your phone.";
 "connection.web.plus_required_action" = "View Plus";
-"connection.web.test_bypass_title" = "Test mode: skip membership check";
-"connection.web.test_bypass_detail" = "On by default in local test apps. Connect without signing in or Plus. Production still checks membership.";
 "audio.section.title" = "Audio Settings";
 "audio.voice_output.section_title" = "Voice devices";
 "audio.output.title" = "Output device";
@@ -561,7 +559,7 @@
 "status_item.state.disconnected" = "%@: No devices connected";
 "status_item.state.connected" = "%@: Device connected";
 "status_item.state.streaming" = "%@: Voice active";
-"about.alert.description_with_version" = "Version %1$@\nWireless voice and shortcut controls for Xiaomi Bluetooth Remote 2 Pro.";
+"about.alert.description_with_version" = "Version %1$@\nWireless voice and shortcut controls for Xiaomi Bluetooth Remote 2 Pro and Apple Remote.";
 "common.action.ok" = "OK";
 "common.action.copy_link" = "Copy Link";
 "common.status.copied" = "Copied";
@@ -580,7 +578,7 @@
 "settings.section.login" = "Me";
 "settings.section.transcripts" = "Reflections";
 "about.page.subtitle" = "View version, updates, language, and app display options";
-"about.app.description" = "Wireless voice and shortcut controls for Xiaomi Bluetooth Remote 2 Pro.";
+"about.app.description" = "Wireless voice and shortcut controls for Xiaomi Bluetooth Remote 2 Pro and Apple Remote.";
 "about.app_support.title" = "App & Support";
 "about.preferences.show_dock_icon" = "Show app icon in the Dock";
 "about.preferences.show_dock_icon_help" = "When hidden, SayAll remains available from the menu bar.";
@@ -629,7 +627,7 @@
 "about.configuration.description" = "Transfer audio, button, shortcut, language, appearance, startup, and update settings to another Mac.";
 "about.configuration.export" = "Export Configuration…";
 "about.configuration.export_description" = "Save the current settings to a file.";
-"about.configuration.backup_description" = "Back up settings, routines, app configurations, and button profiles.";
+"about.configuration.backup_description" = "Back up settings, macros, app configurations, and button profiles.";
 "about.configuration.import" = "Import Configuration…";
 "about.configuration.import_description" = "Restore settings from a previously exported file.";
 "about.preferences.title" = "App Preferences";
@@ -1188,7 +1186,7 @@
 "settings.corrupted.item.statistics" = "usage statistics";
 "settings.corrupted.item.other" = "other settings";
 
-"action.combination_action" = "Routine";
+"action.combination_action" = "Macro";
 
 "button_mapping.editing_profile" = "Editing";
 
@@ -1200,14 +1198,14 @@
 
 "button_mapping.inherited" = "Using Default";
 
-"button_mapping.search_macros" = "Search routines";
+"button_mapping.search_macros" = "Search macros";
 
-"button_mapping.manage_macros" = "Manage routines";
+"button_mapping.manage_macros" = "Manage macros";
 
 "button_mapping.macro_unavailable" = "Action unavailable. Choose another action.";
 
 
-"button_mapping.macro_step_count" = "%d-step routine";
+"button_mapping.macro_step_count" = "%d-step macro";
 
 /* Common phrases */
 "action.open_common_phrases" = "Open Common Phrases";
@@ -1264,7 +1262,7 @@
 
 "custom_application.accessibility.needs_verification" = "Needs learning or verification";
 
-"settings.portable_configuration.title" = "Routines, app configurations, and button profiles";
+"settings.portable_configuration.title" = "Macros, app configurations, and button profiles";
 "connection.approval.title" = "Allow “%1$@” to connect to SayAll?";
 "connection.approval.watch_body" = "This Apple Watch will send button presses and microphone audio to SayAll. Check that its 2-digit code matches the code below. Allowing this connection saves this installation as a trusted device.";
 "connection.approval.phone_body" = "This iPhone will send button presses and microphone audio to SayAll. Check that its 2-digit code matches the code below. Allowing this connection saves this installation as a trusted device.";
@@ -1291,7 +1289,7 @@
 
 "configuration.import.restore_title" = "Import all settings?";
 
-"configuration.import.restore_detail" = "This replaces your buttons, key profiles, routines, app settings, shortcuts, common phrases, and preferences. Your account and system permissions stay unchanged. Verify recorded input fields again.";
+"configuration.import.restore_detail" = "This replaces your buttons, key profiles, macros, app settings, shortcuts, common phrases, and preferences. Your account and system permissions stay unchanged. Verify recorded input fields again.";
 
 "configuration.import.cancel" = "Cancel";
 

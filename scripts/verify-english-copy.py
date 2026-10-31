@@ -9,11 +9,11 @@ What this gate enforces
 * English copy uses US spelling, curly apostrophes and no "Please";
 * one name per concept. The agreed English vocabulary is:
 
-      combination actions / action sequences / quick commands -> Routine
-      Siri Remote                                              -> Apple Remote
-      Single Click / Double Click                              -> Single Press / Double Press
-      WeChat Mini Program SayAll                               -> SayAll WeChat Mini Program
-      backstage feature name "回眸"                              -> Reflections
+      combination actions / action sequences / quick commands / routines -> Macro
+      Siri Remote                                                        -> Apple Remote
+      Single Click / Double Click                                        -> Single Press / Double Press
+      WeChat Mini Program SayAll                                         -> SayAll WeChat Mini Program
+      backstage feature name "回眸"                                        -> Reflections
 
 The same vocabulary is checked in the bundled help pages and, when
 --private-root is given, in the private packages the Mac host loads.
@@ -42,10 +42,11 @@ FORBIDDEN_SPELLING = {
     "recognise": "recognize",
 }
 FORBIDDEN_TERM = {
-    "action sequence": "Routine",
-    "combination action": "Routine",
-    "quick command": "Routine",
-    "composite action": "Routine",
+    "action sequence": "Macro",
+    "combination action": "Macro",
+    "quick command": "Macro",
+    "composite action": "Macro",
+    "routine": "Macro",
     "siri remote": "Apple Remote",
     "single click": "Single Press",
     "double click": "Double Press",
