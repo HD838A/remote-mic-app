@@ -365,7 +365,7 @@
 
 ## 1.4.12 (Pre-release)
 
-- Lowered the minimum system version to macOS 14.0 while remaining Apple silicon only.
+- Lowered the minimum system version to macOS 14.0 while remaining Apple Silicon only.
 - Kept Liquid Glass on macOS 26 and added compatible styling for macOS 14/15.
 
 ## 1.4.11 (Stable)

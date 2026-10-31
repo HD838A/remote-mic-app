@@ -2,7 +2,7 @@
 
 ## Requirements
 
-- Apple silicon Mac
+- Apple Silicon Mac
 - macOS 14 or later
 - Xiaomi Bluetooth Remote 2 Pro
 

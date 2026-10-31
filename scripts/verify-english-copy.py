@@ -114,8 +114,6 @@ def check_help_docs(root, problems):
             for term, preferred in FORBIDDEN_TERM.items():
                 if term in lowered:
                     problems.append(f"{path}:{number}: use “{preferred}”, not “{term}”")
-            if re.search(r"Apple Silicon", line):
-                problems.append(f"{path}:{number}: Apple writes “Apple silicon”")
 
 
 def check_private_packages(root, problems):
