@@ -30,6 +30,12 @@ This file is a convenience translation of the current mandatory design rules. Th
   - [Button Mapping](Screenshots/key-mapping.png)
   - [Permissions & Privacy](Screenshots/permissions-and-privacy.png)
 
+## Screenshots and design drafts
+
+- The in-repository screenshots linked above are historical assets and are not extended further. New production screenshots and design drafts follow the [screenshot and design-draft archiving rules](AGENTS.md#截图与设计稿归档规范) in `AGENTS.md`: attach them to the PR or link them persistently, and keep only a `manifest.json` index in the repository.
+- `Screenshots/...` paths inside historical QA records only describe the evidence available at that time. When a path leaves the repository or is missing, use the format, dimensions, and SHA-256 recorded in the index; do not infer the current implementation from it.
+- Build-required assets (app icons, onboarding tool images, status icons, fonts) are exempt.
+
 ## Current implementation
 
 - The settings UI uses a narrow sidebar, header, and layered content areas. Primary actions on every visible page remain available at the production minimum window size. Pages remain scrollable without showing scroll bars.

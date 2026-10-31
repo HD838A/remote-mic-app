@@ -17,6 +17,7 @@
 | 分支、worktree、提交、PR、合并、CI 例外与稳定治理字段 | [`BRANCH_MANAGEMENT.md`](BRANCH_MANAGEMENT.md) |
 | 新功能开发流程 | [`FEATURE_DEVELOPMENT.md`](FEATURE_DEVELOPMENT.md) |
 | 文件命名 | [`FILE_NAMING.md`](FILE_NAMING.md) |
+| 截图与设计稿归档 | [`AGENTS.md` 的截图与设计稿归档规范](AGENTS.md#截图与设计稿归档规范) |
 | 运行日志和复制诊断 | [`LOGGING.md`](LOGGING.md) |
 | macOS 发布 | [`RELEASING.md`](RELEASING.md) |
 | 产品命名与宣传文案 | [`design-qa.md` 的产品命名与宣传文案](design-qa.md#产品命名与宣传文案) |
@@ -41,6 +42,7 @@
 - 根目录 [`Testing/`](Testing/) 存放当前测试手册、跨平台合同、候选准备记录和历史测试报告。除明确命名为合同的文件外，测试手册只定义验证方法和证据。
 - 常用语本地候选测试步骤、失败判定和验证边界见 [`Testing/CommonPhrases.md`](Testing/CommonPhrases.md)。
 - 临时探针、手工采集及实验包启动器的入库限制见 [`AGENTS.md` 的临时测试工具入库边界](AGENTS.md#临时测试工具入库边界)；正常产品回归与统一发布检查继续保留。
+- 截图、设计稿和界面录制只以 PR 附件或持久链接提供，仓库内只保留 `manifest.json` 索引；规则见 [`AGENTS.md` 的截图与设计稿归档规范](AGENTS.md#截图与设计稿归档规范)。
 - [`Bugs/README.md`](Bugs/README.md) 是证据驱动调查的记录格式和索引；具体调查位于 `Bugs/`。
 - Onboarding 验证按 `AGENTS.md` 分类；生产截图矩阵见 [`Testing/FirstRunOnboarding.md`](Testing/FirstRunOnboarding.md#生产页面与场景清单)。
 - [`TODO.md`](TODO.md) 只记录待办，不是现行产品规范。

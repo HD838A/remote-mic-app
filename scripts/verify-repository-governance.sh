@@ -16,6 +16,10 @@ if [[ -n "$base_ref" && "$base_ref" != 0000000000000000000000000000000000000000 
   git rev-parse --verify "$base_ref^{commit}" >/dev/null 2>&1 || fail "base commit is unavailable: $base_ref"
 
   new_engineering_helper=false
+  visual_evidence_exception=false
+  if git log --format=%B "$base_ref..HEAD" | grep -Fq -- '[visual-evidence-exception]'; then
+    visual_evidence_exception=true
+  fi
   while IFS= read -r -d '' path; do
     case "$path" in
       scripts/voice-acceptance.sh|Testing/build_rc003_preview.sh|Testing/启动Chromecast真机测试.command|Testing/启动RC003长语音测试.command|Testing/launch_rc003_voice_extension_test.command|scripts/run-apple-remote-no-packetlogger-probe.sh)
@@ -32,6 +36,15 @@ if [[ -n "$base_ref" && "$base_ref" != 0000000000000000000000000000000000000000 
     if [[ "$lower_path" == testing/* && "$file_mode" == 100755 ]]; then
       fail "Testing must not gain executable helpers: $path"
     fi
+    case "$lower_path" in
+      resources/*|sources/*|tests/*|packaging/*)
+        ;;
+      *.png|*.jpg|*.jpeg|*.gif|*.webp|*.heic|*.heif|*.tiff|*.bmp|*.icns|*.mov|*.mp4)
+        if [[ "$visual_evidence_exception" != true ]]; then
+          fail "visual evidence must stay outside the repository and be indexed by manifest.json: $path"
+        fi
+        ;;
+    esac
     case "$lower_path" in
       scripts/*|script/*)
         new_engineering_helper=true
@@ -124,7 +137,14 @@ policies = {
     "AGENTS.md": {
         "G-DOC.entry": "DOCUMENTATION.md", "G-DOC.authority": "chinese",
         "G-TOOL.temporary": "forbidden", "G-TOOL.testing-executable": "forbidden",
-        "G-TOOL.permanent-helper": "declared-purpose", "G-SCOPE.query": "read-only",
+        "G-TOOL.permanent-helper": "declared-purpose",
+        "G-EVIDENCE.screenshots": "pr-attachment-or-persistent-link",
+        "G-EVIDENCE.design-drafts": "external-with-index",
+        "G-EVIDENCE.index": "manifest-json",
+        "G-EVIDENCE.history": "retained-no-rewrite",
+        "G-EVIDENCE.exception": "commit-marker",
+        "G-EVIDENCE.build-assets": "exempt",
+        "G-SCOPE.query": "read-only",
         "G-SCOPE.unrelated": "separate", "G-WAIT.mode": "bounded",
         "G-CI.reference": "BRANCH_MANAGEMENT.md", "G-ONBOARD.validation": "risk-based",
         "G-ONBOARD.manifest": "production", "G-ONBOARD.real-acceptance": "retained",
