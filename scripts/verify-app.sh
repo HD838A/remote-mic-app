@@ -435,6 +435,12 @@ if [[ "$REQUIRE_SAYALL_COMBINATION_ACTIONS" == "1" && \
   exit 1
 fi
 SAYALL_PRIVATE_ARTIFACT_INCLUDED="$(plutil -extract SayAllPrivateArtifactsIncluded raw -o - "$PLIST" 2>/dev/null || true)"
+SAYALL_PRIVATE_PLATFORM_VERSION="$(plutil -extract SayAllPrivatePlatformVersion raw -o - "$PLIST" 2>/dev/null || true)"
+if [[ -n "$SAYALL_PRIVATE_PLATFORM_VERSION" ]] && \
+   [[ ! "$SAYALL_PRIVATE_PLATFORM_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  print -u2 "App declares an invalid SayAllPrivatePlatformVersion: $SAYALL_PRIVATE_PLATFORM_VERSION"
+  exit 1
+fi
 SAYALL_BUTTON_PROFILES_INCLUDED="$(plutil -extract SayAllButtonProfilesIncluded raw -o - "$PLIST" 2>/dev/null || true)"
 SAYALL_BUTTON_PROFILES_RESOURCE_BUNDLE="$APP/Contents/Resources/SayAllButtonProfiles_SayAllButtonProfiles.bundle"
 SAYALL_MEMBERSHIP_RESOURCE_BUNDLE="$APP/Contents/Resources/SayAllMembership_SayAllMembershipUI.bundle"
