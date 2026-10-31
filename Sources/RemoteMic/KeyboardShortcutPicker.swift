@@ -1,4 +1,6 @@
 import AppKit
+import CoreGraphics
+import IOKit.hidsystem
 import SwiftUI
 
 enum KeyboardShortcutModifier: String, CaseIterable, Identifiable {
@@ -69,6 +71,21 @@ enum StandaloneKeyboardModifier: String, CaseIterable, Identifiable {
         case .leftControl, .rightControl: return .control
         case .leftShift, .rightShift: return .shift
         case .function: return .function
+        }
+    }
+
+    /// Device-side flags belong to emitted events, not the persisted shortcut.
+    var deviceFlag: CGEventFlags {
+        switch self {
+        case .leftCommand: return CGEventFlags(rawValue: UInt64(NX_DEVICELCMDKEYMASK))
+        case .rightCommand: return CGEventFlags(rawValue: UInt64(NX_DEVICERCMDKEYMASK))
+        case .leftOption: return CGEventFlags(rawValue: UInt64(NX_DEVICELALTKEYMASK))
+        case .rightOption: return CGEventFlags(rawValue: UInt64(NX_DEVICERALTKEYMASK))
+        case .leftControl: return CGEventFlags(rawValue: UInt64(NX_DEVICELCTLKEYMASK))
+        case .rightControl: return CGEventFlags(rawValue: UInt64(NX_DEVICERCTLKEYMASK))
+        case .leftShift: return CGEventFlags(rawValue: UInt64(NX_DEVICELSHIFTKEYMASK))
+        case .rightShift: return CGEventFlags(rawValue: UInt64(NX_DEVICERSHIFTKEYMASK))
+        case .function: return []
         }
     }
 

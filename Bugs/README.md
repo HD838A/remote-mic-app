@@ -2,6 +2,8 @@
 
 - [发布校验拒绝有意留空的英文文案，导致无法打出任何正式包](./2026-11-01-release-verify-rejects-intentional-empty-copy.md)
 
+- [独立修饰键事件缺少左右设备标志](./2026-10-31-standalone-modifier-missing-side-flags.md)
+
 - [个人中心页头隐私说明冗余与累计语音时长省略号截断](./2026-10-31-profile-header-and-kpi-truncation.md)
 
 - [Intel 音量键原生泄露（原生事件早于拦截登记）](./2026-10-29-intel-volume-native-leak-before-arm.md)

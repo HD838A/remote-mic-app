@@ -300,7 +300,8 @@ enum KeyboardInjector {
         scrollPagePoster: (ScrollPageDirection) -> ScrollPageOutcome = defaultScrollPagePoster,
         systemKeyPoster: SystemKeyPoster = postSystemKey,
         shortcutEventPoster: (CGEvent) -> Bool = ShortcutEventSequence.post,
-        shortcutHardwareFlags: () -> CGEventFlags = { CGEventSource.flagsState(.hidSystemState) }
+        shortcutHardwareFlags: () -> CGEventFlags = { CGEventSource.flagsState(.hidSystemState) },
+        logger: (String) -> Void = { AppLogger.shared.write($0) }
     ) -> Bool {
         guard action != .disabled else { return true }
         if action.isAppInternal {
@@ -340,6 +341,34 @@ enum KeyboardInjector {
         if action == .customShortcut, shortcut == nil {
             AppLogger.shared.write("SHORTCUT ACTION ignored reason=not_configured")
             return true
+        }
+        if action == .customShortcut, let shortcut, let modifier = shortcut.standaloneModifier {
+            let prefix = "SHORTCUT ACTION operation_id=\(UUID().uuidString)"
+            let started = ProcessInfo.processInfo.systemUptime
+            logger("\(prefix) phase=requested standalone=true")
+            guard accessibilityTrusted() else {
+                let elapsed = Int((ProcessInfo.processInfo.systemUptime - started) * 1000)
+                logger(
+                    "\(prefix) phase=completed result=rejected reason=accessibility_denied " +
+                        "standalone=true elapsed_ms=\(elapsed) user_visible_result=unknown"
+                )
+                return false
+            }
+
+            let eventFlags = shortcut.cgEventFlags.union(modifier.deviceFlag)
+            let pressed = keyStatePoster(CGKeyCode(shortcut.keyCode), true, eventFlags)
+            // Even a failed press may have reached the system; always attempt its release.
+            let released = keyStatePoster(CGKeyCode(shortcut.keyCode), false, [])
+            let submitted = pressed && released
+            let result = submitted ? "submitted" : "failed"
+            let reason = !pressed ? "press_not_submitted" : !released ? "release_not_submitted" : "none"
+            let elapsed = Int((ProcessInfo.processInfo.systemUptime - started) * 1000)
+            logger(
+                "\(prefix) phase=completed result=\(result) reason=\(reason) standalone=true " +
+                    "press_submitted=\(pressed) release_submitted=\(released) " +
+                    "elapsed_ms=\(elapsed) user_visible_result=unknown"
+            )
+            return submitted
         }
         guard accessibilityTrusted() else { return false }
 
@@ -417,21 +446,6 @@ enum KeyboardInjector {
         case .customShortcut:
             if let shortcut {
                 let eventFlags = shortcut.cgEventFlags
-                if shortcut.standaloneModifier != nil {
-                    let pressed = keyStatePoster(
-                        CGKeyCode(shortcut.keyCode),
-                        true,
-                        eventFlags
-                    )
-                    let released = keyStatePoster(CGKeyCode(shortcut.keyCode), false, [])
-                    let submitted = pressed && released
-                    AppLogger.shared.write(
-                        "SHORTCUT ACTION submitted key_code=\(shortcut.keyCode) " +
-                            "modifier_flags=\(eventFlags.rawValue) standalone=true " +
-                            "success=\(submitted)"
-                    )
-                    return submitted
-                }
                 return ShortcutEventSequence.send(
                     keyCode: CGKeyCode(shortcut.keyCode),
                     modifiers: eventFlags,

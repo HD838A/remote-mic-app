@@ -1203,10 +1203,163 @@ struct RemoteButtonsTests {
         #expect(postedStates.count == 2)
         #expect(postedStates[0].0 == 61)
         #expect(postedStates[0].1)
-        #expect(postedStates[0].2 == .maskAlternate)
+        #expect(postedStates[0].2 == CGEventFlags(rawValue: 0x80040))
         #expect(postedStates[1].0 == 61)
         #expect(!postedStates[1].1)
         #expect(postedStates[1].2.isEmpty)
+    }
+
+    @Test func standaloneModifiersAddDeviceSideOnlyWhenPostedWithoutChangingLegacySettings() throws {
+        let cases: [(StandaloneKeyboardModifier, UInt16, UInt64, UInt64)] = [
+            (.leftCommand, 55, 0x100000, 0x08),
+            (.rightCommand, 54, 0x100000, 0x10),
+            (.leftOption, 58, 0x080000, 0x20),
+            (.rightOption, 61, 0x080000, 0x40),
+            (.leftControl, 59, 0x040000, 0x01),
+            (.rightControl, 62, 0x040000, 0x2000),
+            (.leftShift, 56, 0x020000, 0x02),
+            (.rightShift, 60, 0x020000, 0x04),
+            (.function, 63, 0x800000, 0),
+        ]
+
+        for (modifier, keyCode, genericFlags, deviceFlag) in cases {
+            let legacyJSON = """
+            {"keyCode":\(keyCode),"modifierFlagsRawValue":\(genericFlags),"keyLabel":"Legacy"}
+            """
+            let shortcut = try JSONDecoder().decode(
+                CustomKeyboardShortcut.self,
+                from: Data(legacyJSON.utf8)
+            )
+            #expect(shortcut.standaloneModifier == modifier)
+            #expect(shortcut.modifierFlagsRawValue == UInt(genericFlags))
+            #expect(shortcut.cgEventFlags.rawValue == genericFlags)
+            #expect(modifier.shortcut.modifierFlagsRawValue == UInt(genericFlags))
+            #expect(try JSONDecoder().decode(
+                CustomKeyboardShortcut.self,
+                from: JSONEncoder().encode(shortcut)
+            ) == shortcut)
+
+            var posted: [(CGKeyCode, Bool, CGEventFlags)] = []
+            #expect(KeyboardInjector.send(
+                .customShortcut,
+                shortcut: shortcut,
+                accessibilityTrusted: { true },
+                keyPoster: { _, _ in Issue.record("Standalone modifiers must use paired states") },
+                keyStatePoster: { code, isDown, flags in
+                    posted.append((code, isDown, flags))
+                    return true
+                },
+                shortcutEventPoster: { _ in
+                    Issue.record("Standalone modifiers must keep their dedicated injection path")
+                    return false
+                }
+            ))
+            try #require(posted.count == 2)
+            #expect(posted[0].0 == keyCode)
+            #expect(posted[0].1)
+            #expect(posted[0].2.rawValue == genericFlags | deviceFlag)
+            #expect(posted[1].0 == keyCode)
+            #expect(!posted[1].1)
+            #expect(posted[1].2.isEmpty)
+        }
+    }
+
+    @Test func standaloneModifierPermissionDenialDoesNotPostEvents() {
+        var posted = false
+        #expect(!KeyboardInjector.send(
+            .customShortcut,
+            shortcut: StandaloneKeyboardModifier.rightOption.shortcut,
+            accessibilityTrusted: { false },
+            keyStatePoster: { _, _, _ in
+                posted = true
+                return true
+            }
+        ))
+        #expect(!posted)
+    }
+
+    @Test func standaloneModifierPostingFailuresStillAttemptReleaseAndAllowTheNextCall() throws {
+        for (pressSucceeds, releaseSucceeds) in [(false, true), (true, false), (false, false)] {
+            var posted: [(Bool, CGEventFlags)] = []
+            #expect(!KeyboardInjector.send(
+                .customShortcut,
+                shortcut: StandaloneKeyboardModifier.rightOption.shortcut,
+                accessibilityTrusted: { true },
+                keyStatePoster: { _, isDown, flags in
+                    posted.append((isDown, flags))
+                    return isDown ? pressSucceeds : releaseSucceeds
+                }
+            ))
+            try #require(posted.count == 2)
+            #expect(posted[0].0)
+            #expect(!posted[1].0)
+            #expect(posted[1].1.isEmpty)
+
+            var recovered: [(Bool, CGEventFlags)] = []
+            #expect(KeyboardInjector.send(
+                .customShortcut,
+                shortcut: StandaloneKeyboardModifier.rightOption.shortcut,
+                accessibilityTrusted: { true },
+                keyStatePoster: { _, isDown, flags in
+                    recovered.append((isDown, flags))
+                    return true
+                }
+            ))
+            try #require(recovered.count == 2)
+            #expect(recovered[0].1.rawValue == 0x80040)
+            #expect(recovered[1].1.isEmpty)
+        }
+    }
+
+    @Test func standaloneModifierLogsCorrelateOneTerminalResultWithoutExposingTheShortcut() throws {
+        let cases: [(Bool, Bool, Bool, String, String)] = [
+            (true, true, true, "submitted", "none"),
+            (true, false, true, "failed", "press_not_submitted"),
+            (true, true, false, "failed", "release_not_submitted"),
+            (true, false, false, "failed", "press_not_submitted"),
+            (false, true, true, "rejected", "accessibility_denied"),
+        ]
+        for (trusted, pressSucceeds, releaseSucceeds, result, reason) in cases {
+            var logs: [String] = []
+            var postCount = 0
+            let shortcut = CustomKeyboardShortcut(
+                keyCode: 61,
+                modifierFlags: .option,
+                keyLabel: "Private shortcut label"
+            )
+            let submitted = KeyboardInjector.send(
+                .customShortcut,
+                shortcut: shortcut,
+                accessibilityTrusted: { trusted },
+                keyStatePoster: { _, isDown, _ in
+                    postCount += 1
+                    return isDown ? pressSucceeds : releaseSucceeds
+                },
+                logger: { logs.append($0) }
+            )
+            #expect(submitted == (trusted && pressSucceeds && releaseSucceeds))
+            #expect(postCount == (trusted ? 2 : 0))
+            try #require(logs.count == 2)
+            #expect(logs[0].contains("phase=requested standalone=true"))
+            #expect(logs.filter { $0.contains("phase=completed") }.count == 1)
+            #expect(logs[1].contains("result=\(result) reason=\(reason)"))
+            #expect(logs[1].contains("elapsed_ms="))
+            #expect(logs[1].contains("user_visible_result=unknown"))
+            if trusted {
+                #expect(logs[1].contains("press_submitted=\(pressSucceeds)"))
+                #expect(logs[1].contains("release_submitted=\(releaseSucceeds)"))
+            }
+            let operationIDs = logs.compactMap { line in
+                line.split(separator: " ").first { $0.hasPrefix("operation_id=") }
+            }
+            #expect(operationIDs.count == 2)
+            #expect(Set(operationIDs).count == 1)
+            for line in logs {
+                #expect(!line.contains("key_code="))
+                #expect(!line.contains("modifier_flags="))
+                #expect(!line.contains(shortcut.keyLabel))
+            }
+        }
     }
 
     @Test func appSwitcherSessionKeepsCommandHeldAcrossTabSelections() {
