@@ -177,6 +177,22 @@ final class MacroFeatureIntegration: ObservableObject {
         #endif
     }
 
+    /// 「保存为键位方案」先建空方案，再逐条写入当前基础映射。
+    func createMappingProfile(named name: String) -> UUID? {
+        #if canImport(SayAllButtonProfiles) && SAYALL_UNIFIED_BUTTON_CONFIGURATION
+        buttonProfilesFeature.createProfile(named: name)
+        #else
+        nil
+        #endif
+    }
+
+    /// 写入中途失败时回滚刚创建的方案。
+    func deleteMappingProfile(_ profile: UUID) {
+        #if canImport(SayAllButtonProfiles) && SAYALL_UNIFIED_BUTTON_CONFIGURATION
+        _ = buttonProfilesFeature.deleteProfile(profile)
+        #endif
+    }
+
     var supportsProfileHoldModes: Bool {
         #if canImport(SayAllButtonProfiles) && SAYALL_BUTTON_HOLD_MODES
         true
