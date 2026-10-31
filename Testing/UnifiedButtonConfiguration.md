@@ -508,11 +508,11 @@ PR 保持 Draft，不能将这些截图或自动化写为实机兼容性通过�
 
 | 文件 | 格式及像素 | SHA-256 |
 | --- | --- | --- |
-| hold-ui/card/en-dark/mapping-1020x772.png | PNG 2040×1544 | `107f85a65ef4bf6a991fd550bbf3dd8aaf40f1db46f01b5e1b519f4bac852feb` |
-| hold-ui/card/en-light/mapping-1020x772.png | PNG 2040×1544 | `aa679b5caee104242c1e10b3176f1252a588d93a2007b63dcfc7928c0b140c80` |
-| hold-ui/card/zh-Hans-dark/mapping-1020x772.png | PNG 2040×1544 | `6b384f7b8985868feb8f85738676eb3bf60ddddcd8ade0cf5bca3ddc8a61adf2` |
-| hold-ui/card/zh-Hans-light/mapping-1020x772.png | PNG 2040×1544 | `26e2e8191f35bf187dd8c3967b50d7060e1efd6e3887c86fdc7c1b516a8f6168` |
-| hold-ui/editor/en-dark/mapping-1020x772.png | PNG 2040×1544 | `5f279b34ecbd21c679d2c5131f5b72cec7b04ed0ceaff652211d007efb37e606` |
-| hold-ui/editor/en-light/mapping-1020x772.png | PNG 2040×1544 | `e096be486d8549d3b8aaf2b9c0ea165e0eb6757a5e23275f36d1d12e5c8cdfb2` |
-| hold-ui/editor/zh-Hans-dark/mapping-1020x772.png | PNG 2040×1544 | `3982e3b98d3e23031d11183cddb9ced1a930a0a62025c71832f7cc8ae93d588c` |
-| hold-ui/editor/zh-Hans-light/mapping-1020x772.png | PNG 2040×1544 | `f9336424be684f3c93f3a61f3bd0894726e2845757c07ee774b16054ebbddcc1` |
+| hold-ui/card/en-dark/mapping-1020x772.png | PNG 2040×1544 | `5ddb2e2cf5654eb45103a07bcf002e3be35e59d46a52b1fb8c45c9d79b474ce8` |
+| hold-ui/card/en-light/mapping-1020x772.png | PNG 2040×1544 | `3df1dbeb518e2736195aa0e4774d9b7cedc36cc33544c89cea1818d0c280a060` |
+| hold-ui/card/zh-Hans-dark/mapping-1020x772.png | PNG 2040×1544 | `2946f6bb6c073c2d036645de0da0d1b44e465d704a8124b9a7783b58c9693079` |
+| hold-ui/card/zh-Hans-light/mapping-1020x772.png | PNG 2040×1544 | `08f320028f23aefec2ce96f65528606bf9e14ddafe6edd25dff67d86be85b035` |
+| hold-ui/editor/en-dark/mapping-1020x772.png | PNG 2040×1544 | `c2179ba56160dc31bc801cad5d50008e89364ce44504b47d70cb519c894e4929` |
+| hold-ui/editor/en-light/mapping-1020x772.png | PNG 2040×1544 | `0b10672bf4919015cf0efcf1b67ba44c968b18424e448aab1ab9dd534dd5ab22` |
+| hold-ui/editor/zh-Hans-dark/mapping-1020x772.png | PNG 2040×1544 | `78453b531444ee99ea9e17d9e6d6381994c5161819119e7f6eb4a1c497645c91` |
+| hold-ui/editor/zh-Hans-light/mapping-1020x772.png | PNG 2040×1544 | `fbd921e8a572357098710e3731a4f4c0eee10ec09cddb2f50eb4c8e788765a67` |

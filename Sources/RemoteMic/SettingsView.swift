@@ -2239,8 +2239,12 @@ struct SettingsView: View {
                         }
                     }
                     guard mappingEditingTarget != nil || mappingHoldEditingButton != nil else { return }
+                    // The hold editor has its own anchor; scrolling to the action editor
+                    // would land on the page top when only the hold editor is open.
+                    let anchor = mappingEditingTarget == nil
+                        ? "mapping-hold-editor" : "mapping-action-editor"
                     DispatchQueue.main.async {
-                        proxy.scrollTo("mapping-action-editor", anchor: .top)
+                        proxy.scrollTo(anchor, anchor: .top)
                     }
                 }
                 .onChange(of: mappingEditingTarget?.id) { targetID in
