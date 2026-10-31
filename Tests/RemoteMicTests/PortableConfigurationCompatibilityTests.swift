@@ -14,7 +14,7 @@ struct PortableConfigurationCompatibilityTests {
         let defaults = try #require(UserDefaults(suiteName: name))
         return (AppSettings(defaults: defaults), { defaults.removePersistentDomain(forName: name) })
     }
-    @Test func legacy1921ConfigurationImportsAndRemainsReadableByTheFrozenOldContract() throws {
+    @Test func legacy1921ConfigurationImportsAndExportsVersionTwoWithoutLosingMappings() throws {
         let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("Testing/Fixtures/PersonalConfiguration-1.9.21.json")
         let bytes = try Data(contentsOf: url)
@@ -23,7 +23,7 @@ struct PortableConfigurationCompatibilityTests {
         try current.importConfiguration(from: bytes)
         let reencoded = try current.exportedConfigurationData()
         let rollback = try JSONDecoder().decode(Legacy1921PersonalizedConfiguration.self,from: reencoded)
-        #expect(rollback.formatVersion == 1)
+        #expect(rollback.formatVersion == 2) // Old readers reject before applying new hold semantics.
         #expect(rollback.gainDB == old.gainDB)
         #expect(rollback.buttonShortcuts == old.buttonShortcuts)
         #expect(rollback.secondaryButtonBindings == old.secondaryButtonBindings)

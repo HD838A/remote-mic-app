@@ -204,14 +204,17 @@ struct RemoteDeviceMappings: Codable, Equatable {
     var buttonApplicationProfileIDs: [String: UUID]?
     var secondaryButtonBindings: [String: [String: ConfiguredButtonAction]]
     var buttonRapidPressEnabled: [String: Bool]?
+    var interactionSettings: RemoteButtonInteractionSettings?
 
     init(
         buttonBindings: [RemoteButton: ButtonAction],
         buttonShortcuts: [RemoteButton: CustomKeyboardShortcut],
         buttonApplicationProfileIDs: [RemoteButton: UUID] = [:],
         secondaryButtonBindings: [RemoteButton: [ButtonTrigger: ConfiguredButtonAction]],
-        buttonRapidPressEnabled: [RemoteButton: Bool] = [:]
+        buttonRapidPressEnabled: [RemoteButton: Bool] = [:],
+        interactionSettings: RemoteButtonInteractionSettings? = nil
     ) {
+        self.interactionSettings = interactionSettings
         self.buttonBindings = Dictionary(
             uniqueKeysWithValues: buttonBindings.map { ($0.key.rawValue, $0.value) }
         )

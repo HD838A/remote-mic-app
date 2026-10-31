@@ -10,10 +10,10 @@ struct MacConfigurationBackup {
 
     func encoded(version: String, build: String) throws -> Data {
         var object: [String: Any] = [
-            "format": Self.format, "schemaVersion": 1, "type": "personalBackup",
+            "format": Self.format, "schemaVersion": 2, "type": "personalBackup",
             "product": "SayAll", "platform": "macOS",
             "source": ["version": version, "build": build],
-            "requirements": ["reader": "sayall-macos-configuration/1", "platform": "macOS",
+            "requirements": ["reader": "sayall-macos-configuration/2", "platform": "macOS",
                 "minimumAppVersion": "2.0.0"],
             "configuration": try JSONSerialization.jsonObject(with: host)
         ]
@@ -27,14 +27,14 @@ struct MacConfigurationBackup {
         guard data.count <= maximumBytes,
               let object = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               object["format"] as? String == format,
-              object["schemaVersion"] as? Int == 1,
+              let schema = object["schemaVersion"] as? Int, [1, 2].contains(schema),
               object["type"] as? String == "personalBackup",
               object["product"] as? String == "SayAll",
               object["platform"] as? String == platform, platform == "macOS",
               let source = object["source"] as? [String: String],
               source["version"]?.isEmpty == false, source["build"]?.isEmpty == false,
               let requirements = object["requirements"] as? [String: String],
-              requirements["reader"] == "sayall-macos-configuration/1",
+              requirements["reader"] == "sayall-macos-configuration/\(schema)",
               requirements["platform"] == platform,
               requirements["minimumAppVersion"] == "2.0.0",
               version.compare("2.0.0", options: .numeric) != .orderedAscending,

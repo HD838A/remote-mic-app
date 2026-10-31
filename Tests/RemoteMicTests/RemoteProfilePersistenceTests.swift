@@ -66,7 +66,10 @@ struct RemoteProfilePersistenceTests {
         #expect(settings.remoteDeviceProfiles.count == 1)
         #expect(settings.remoteDeviceProfiles.first?.id == selectedID)
         #expect(settings.selectedRemoteProfileID == selectedID)
-        #expect(settings.selectedRemoteProfile?.mappings == configuredMappings)
+        var migratedMappings = try #require(settings.selectedRemoteProfile?.mappings)
+        #expect(migratedMappings.interactionSettings?.mode(for: .back) == .repeatSingle)
+        migratedMappings.interactionSettings = nil
+        #expect(migratedMappings == configuredMappings)
     }
 
     /// A bridge whose `deviceIdentifier` is known without CoreBluetooth: with no peripheral

@@ -69,6 +69,7 @@ final class HIDRemoteMonitor {
     private let settings: AppSettings
     private let eventSuppressor: KeyboardEventSuppressor
     private let ownsEventSuppressor: Bool
+    private lazy var buttonInteractions = RemoteButtonInteractionController(scheduler: scheduler)
     private let scheduler: HIDRemoteScheduling
     private let permissionPoll: HIDPermissionPoll
     private let runtimePermissions: () -> Bool
@@ -732,6 +733,9 @@ final class HIDRemoteMonitor {
                 preflightProfileID, button, .singleClick
             ) != nil || hasOverrideBinding(preflightProfileID, button, .singleClick)
             let usesNativePassthrough = preflightProfileID != nil &&
+                (settings.buttonInteractionSettings(profileID: preflightProfileID).modes[button.rawValue] == nil ||
+                 settings.buttonInteractionSettings(profileID: preflightProfileID).migratedRepeatButtons?.contains(button.rawValue) == true) &&
+                settings.interactionModeOverride?(preflightProfileID, button) == nil &&
                 !preflightHasSingleClickOverride &&
                 claimsRuntimeButton?(preflightProfileID, button) != true && shouldUseNativePassthrough(
                 button: button,
@@ -823,30 +827,15 @@ final class HIDRemoteMonitor {
                         "path=configured reason=single_click_override override_present=true"
                 )
             }
-            if recognizesDoubleClick || recognizesLongPress || gestureRecognizer.isTracking(button) {
-                let commands = gestureRecognizer.press(
-                    button,
-                    recognizesDoubleClick: recognizesDoubleClick,
-                    recognizesLongPress: recognizesLongPress
-                )
-                guard processGestureCommands(commands) else { return }
-            } else {
-                // A profile with only single click must accept each complete edge pair,
-                // including an inherited single with explicit disabled secondary gestures.
-                let hasGestureOverride = hasSingleClickOverride ||
-                    settings.configuredActionOverride?(profileID, button, .doubleClick) != nil ||
-                    settings.configuredActionOverride?(profileID, button, .longPress) != nil
-                guard shouldAcceptRawPress(
-                    button: button,
-                    action: action,
-                    allowsRapidPress: hasGestureOverride || settings.configuredAction(
-                        for: button, trigger: .singleClick, profileID: profileID
-                    ).allowsSingleClickRepeat || settings.allowsRapidPress(
-                        for: button,
-                        profileID: profileID
-                    ),
-                    frontmostBundleIdentifier: frontmostBundleIdentifier()
-                ) else {
+            let snapshot = interactionSnapshot(button: button, profileID: profileID)
+            if snapshot.mode == .once, !snapshot.recognizesDouble, !snapshot.recognizesLong {
+                guard shouldAcceptRawPress(button: button, action: action,
+                    allowsRapidPress: hasSingleClickOverride ||
+                        settings.configuredActionOverride?(profileID, button, .doubleClick) != nil ||
+                        settings.configuredActionOverride?(profileID, button, .longPress) != nil ||
+                        snapshot.single.allowsSingleClickRepeat ||
+                        settings.allowsRapidPress(for: button, profileID: profileID),
+                    frontmostBundleIdentifier: frontmostBundleIdentifier()) else {
                     diagnosticLogger(
                         "HID PRESS rejected button=\(button.rawValue) " +
                             "action=\(action.rawValue) reason=awaiting_stable_release " +
@@ -855,23 +844,18 @@ final class HIDRemoteMonitor {
                     )
                     continue
                 }
-                diagnosticLogger(
-                    "HID GESTURE button=\(button.rawValue) trigger=singleClick path=raw"
-                )
-                guard performConfiguredAction(for: button, trigger: .singleClick) else { return }
-                let configured = settings.configuredAction(
-                    for: button, trigger: .singleClick, profileID: profileID
-                )
-                let hasOpaqueSingleClickOverride = hasSingleClickOverride &&
-                    settings.configuredActionOverride?(profileID, button, .singleClick) == nil
-                if !hasOpaqueSingleClickOverride {
-                    startRepeatIfNeeded(
-                        usage: usage,
-                        button: button,
-                        configured: configured
-                    )
-                }
             }
+            diagnosticLogger("HID GESTURE button=\(button.rawValue) path=raw mode=\(snapshot.mode?.rawValue ?? "invalid") external_result=unknown")
+            let target = frontmostBundleIdentifier()
+            buttonInteractions.handle(.press, button: button, snapshot: snapshot,
+                valid: { [weak self] in
+                    guard let self else { return false }
+                    return self.profileID == profileID && self.runtimePermissionsAreValid() &&
+                        self.frontmostBundleIdentifier() == target &&
+                        snapshot.hasSameBinding(as: self.interactionSnapshot(button: button, profileID: profileID))
+                }, perform: { [weak self] trigger, configured in
+                    self?.performConfiguredAction(for: button, trigger: trigger, captured: configured) ?? false
+                })
         }
 
         for usage in released {
@@ -883,6 +867,13 @@ final class HIDRemoteMonitor {
             repeatTimers.removeValue(forKey: usage)?.cancel()
             if let button = RemoteButton.usageMap[usage] {
                 if onRuntimeButton?(profileID, button, .release) == true { continue }
+                if buttonInteractions.isTracking(button) {
+                    buttonInteractions.handle(.release, button: button,
+                        snapshot: settings.interactionSnapshot(for: button, profileID: profileID),
+                        valid: { false }, perform: { _, _ in false })
+                    scheduleNonRepeatableRelease(for: button)
+                    continue
+                }
                 scheduleNonRepeatableRelease(for: button)
                 guard processGestureCommands(gestureRecognizer.release(button)) else { return }
             }
@@ -1263,9 +1254,21 @@ final class HIDRemoteMonitor {
         longPressTimers[button] = timer
     }
 
+    private func interactionSnapshot(button: RemoteButton, profileID: UUID) -> RemoteButtonInteractionSnapshot {
+        var snapshot = settings.interactionSnapshot(for: button, profileID: profileID) { [self] trigger in
+            hasOverrideBinding(profileID, button, trigger) &&
+                settings.configuredActionOverride?(profileID, button, trigger) == nil
+        }
+        let repeated = snapshot.mode == .repeatLong ? snapshot.long : snapshot.single
+        snapshot.repeatAllowed = Self.shouldRepeat(configured: repeated,
+            frontmostBundleIdentifier: frontmostBundleIdentifier())
+        return snapshot
+    }
+
     private func performConfiguredAction(
         for button: RemoteButton,
-        trigger: ButtonTrigger
+        trigger: ButtonTrigger,
+        captured: ConfiguredButtonAction? = nil
     ) -> Bool {
         guard runtimePermissionsAreValid() else {
             releaseForRevokedPermissions()
@@ -1277,7 +1280,7 @@ final class HIDRemoteMonitor {
             )
             return true
         }
-        let configured = settings.configuredAction(
+        let configured = captured ?? settings.configuredAction(
             for: button,
             trigger: trigger,
             profileID: profileID
@@ -1437,6 +1440,7 @@ final class HIDRemoteMonitor {
     }
 
     private func resetGestureRecognition() {
+        buttonInteractions.cancelAll(reason: "input_reset")
         doubleClickTimers.values.forEach { $0.cancel() }
         doubleClickTimers.removeAll()
         longPressTimers.values.forEach { $0.cancel() }
@@ -1445,6 +1449,8 @@ final class HIDRemoteMonitor {
     }
 
     func cancelMappingInteractions() { resetInputState() }
+
+    func cancelConfiguredInteractions(reason: String) { buttonInteractions.cancelAll(reason: reason) }
 
     func cancelPendingButtonActions() {
         repeatTimers.values.forEach { $0.cancel() }

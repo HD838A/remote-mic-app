@@ -31,13 +31,20 @@ struct SettingsCorruptionRecoveryTests {
         let upgraded = AppSettings(defaults: defaults)
 
         #expect(upgraded.corruptedSettingKeys.isEmpty)
-        #expect(upgraded.remoteDeviceProfiles == profiles)
+        let withoutInteraction = upgraded.remoteDeviceProfiles.map { profile in
+            var profile = profile
+            profile.mappings.interactionSettings = nil
+            return profile
+        }
+        #expect(withoutInteraction == profiles)
+        #expect(upgraded.remoteDeviceProfiles.allSatisfy { $0.mappings.interactionSettings != nil })
+        #expect(defaults.data(forKey: "buttonInteractionMigrationBackup") == Data(legacy.utf8))
         #expect(upgraded.selectedRemoteProfileID == profiles[1].id)
         #expect(upgraded.buttonBindings[.up] == .commandCopy)
         #expect(defaults.data(forKey: "remoteDeviceProfiles.corrupt") == nil)
         let resaved = try JSONEncoder().encode(upgraded.remoteDeviceProfiles)
         #expect(String(data: resaved, encoding: .utf8)?.contains("chromecase_voice_remote") == false)
-        #expect(try JSONDecoder().decode([RemoteDeviceProfile].self, from: resaved) == profiles)
+        #expect(try JSONDecoder().decode([RemoteDeviceProfile].self, from: resaved) == upgraded.remoteDeviceProfiles)
     }
 
     @Test func unknownRemoteModelStillFailsWithoutIncludingItsValueInTheError() throws {
@@ -71,6 +78,26 @@ struct SettingsCorruptionRecoveryTests {
         #expect(defaults.data(forKey: "buttonBindings.corrupt") == Self.garbage)
         // The unreadable bytes must survive the load so the reset stays recoverable.
         #expect(defaults.data(forKey: "buttonBindings") == Self.garbage)
+    }
+
+    @Test func unreadableButtonInteractionAndGestureTimingSettingsAreReportedAndBackedUp() throws {
+        var suiteName = ""
+        let defaults = try isolatedDefaults("buttonInteraction", suiteName: &suiteName)
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        defaults.set(Self.garbage, forKey: "buttonInteractionSettings")
+        defaults.set(Self.garbage, forKey: "buttonGestureTimingsByModel")
+
+        let settings = AppSettings(defaults: defaults)
+
+        #expect(Set(settings.corruptedSettingKeys).isSuperset(
+            of: ["buttonInteractionSettings", "buttonGestureTimingsByModel"]
+        ))
+        #expect(defaults.data(forKey: "buttonInteractionSettings.corrupt") == Self.garbage)
+        #expect(defaults.data(forKey: "buttonGestureTimingsByModel.corrupt") == Self.garbage)
+        #expect(settings.buttonGestureTimingsByModel.isEmpty)
+        #expect(settings.buttonGestureTiming(for: .rc003) == RemoteButtonGestureTiming())
+        // The degraded load must keep reporting itself instead of silently behaving like a first run.
+        #expect(!settings.interactionSettings.isValid)
     }
 
     @Test func structurallyMismatchedCustomApplicationProfilesAreReportedAsCorrupt() throws {

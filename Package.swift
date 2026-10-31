@@ -279,10 +279,24 @@ if buttonProfilesTestAccessEnabled {
 if unifiedButtonConfigurationAvailable {
     remoteMicSwiftSettings.append(.define("SAYALL_UNIFIED_BUTTON_CONFIGURATION"))
 }
+// Optional API probe preserves builds with previously released private components.
+let buttonHoldModesAvailable = [buttonProfilesPackagePath, privateSwiftPMEnabled ? privatePlatformPackagePath.map {
+    URL(fileURLWithPath: $0).appendingPathComponent("packages/macos-button-profiles").path
+} : nil].compactMap { $0 }.contains { path in
+    let api = URL(fileURLWithPath: path).appendingPathComponent("Sources/SayAllButtonProfiles/SayAllButtonProfilesFeature.swift")
+    return (try? String(contentsOf: api, encoding: .utf8))?.contains("public func holdMode(profile:") == true
+} || (privateArtifactPackagePath.map { path in
+    ["arm64", "x86_64"].allSatisfy { architecture in
+        let api = URL(fileURLWithPath: path).appendingPathComponent("Artifacts/SayAllButtonProfiles.xcframework/macos-arm64_x86_64/SayAllButtonProfiles.framework/Modules/SayAllButtonProfiles.swiftmodule/\(architecture)-apple-macos.swiftinterface")
+        return (try? String(contentsOf: api, encoding: .utf8))?.contains("func holdMode(profile:") == true
+    }
+} ?? false)
+if buttonHoldModesAvailable { remoteMicSwiftSettings.append(.define("SAYALL_BUTTON_HOLD_MODES")) }
 var remoteMicLinkerSettings: [LinkerSetting] = []
 if privateArtifactsAvailable { remoteMicLinkerSettings.append(.unsafeFlags(["-Xlinker", "-ObjC"])) }
 
 var remoteMicTestSwiftSettings: [SwiftSetting] = []
+if buttonHoldModesAvailable { remoteMicTestSwiftSettings.append(.define("SAYALL_BUTTON_HOLD_MODES")) }
 if sourceMacroHostShortcutsAvailable || artifactMacroHostShortcutsAvailable {
     remoteMicTestSwiftSettings.append(.define("SAYALL_MACRO_HOST_SHORTCUTS"))
 }

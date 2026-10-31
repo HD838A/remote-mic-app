@@ -65,7 +65,13 @@ enum SettingsScreenshotRenderer {
         let opensActionEditor = ProcessInfo.processInfo.environment[
             "REMOTE_MIC_SETTINGS_SCREENSHOT_OPEN_ACTION_EDITOR"
         ] == "1"
+        let opensHoldEditor = ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_SETTINGS_SCREENSHOT_OPEN_HOLD_EDITOR"
+        ] == "1"
         let opensMappingEditor = opensShortcutEditor || opensActionEditor
+        let showsGestureTiming = ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_SETTINGS_SCREENSHOT_GESTURE_TIMING"
+        ] == "1"
         let showsStandardKeyboard = ProcessInfo.processInfo.environment[
             "REMOTE_MIC_SETTINGS_SCREENSHOT_SHORTCUT_MODE"
         ] == "keyboard"
@@ -97,6 +103,9 @@ enum SettingsScreenshotRenderer {
         let settings = AppSettings(defaults: defaults)
         settings.applicationLanguage = language
         settings.completeOnboarding()
+        if showsGestureTiming, let profileID = settings.selectedRemoteProfileID {
+            settings.updateRemoteProfileModel(profileID, model: .rc003)
+        }
         if ProcessInfo.processInfo.environment["REMOTE_MIC_SETTINGS_SCREENSHOT_MISSING_ROUTINE"] == "1" {
             // Isolated upgrade fixture for the production cleanup page.
             let missing = ConfiguredButtonAction(action: .combinationAction, shortcut: nil,
@@ -169,6 +178,17 @@ enum SettingsScreenshotRenderer {
                 trigger: .singleClick
             )
         }
+        if let holdModeValue = ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_SETTINGS_SCREENSHOT_HOLD_MODE"
+        ], let holdMode = RemoteButtonHoldMode(rawValue: holdModeValue) {
+            if holdMode == .repeatLong {
+                settings.setAction(.returnKey, for: .ok, trigger: .longPress)
+            }
+            settings.setHoldMode(holdMode, for: .ok)
+        } else if opensHoldEditor {
+            settings.setAction(.returnKey, for: .ok, trigger: .longPress)
+            settings.setHoldMode(.repeatLong, for: .ok)
+        }
         seedStatisticsForScreenshot(settings)
         let historyDirectory = outputDirectory.appendingPathComponent(UUID().uuidString)
         let transcriptStore = TranscriptArchiveStore(
@@ -236,7 +256,9 @@ enum SettingsScreenshotRenderer {
                 initialSection: section,
                 initialShareSection: section == .statistics && expandsShare ? section : nil,
                 initialMappingEditingButton: section == .mapping && opensMappingEditor ? .ok : nil,
+                initialMappingHoldEditingButton: section == .mapping && opensHoldEditor ? .ok : nil,
                 initialShortcutPickerShowsKeyboard: showsStandardKeyboard,
+                initialMappingScrollsToGestureTiming: section == .mapping && showsGestureTiming,
                 supplementalSettings: supplementalSettings,
                 sidebarAccountDisplayName: sidebarAccountDisplayName
             ).environmentObject(localization))
@@ -270,7 +292,11 @@ enum SettingsScreenshotRenderer {
                 initialMappingEditingButton: section == .mapping && opensMappingEditor
                     ? .ok
                     : nil,
+                initialMappingHoldEditingButton: section == .mapping && opensHoldEditor
+                    ? .ok
+                    : nil,
                 initialShortcutPickerShowsKeyboard: showsStandardKeyboard,
+                initialMappingScrollsToGestureTiming: section == .mapping && showsGestureTiming,
                 supplementalSettings: supplementalSettings,
                 sidebarAccountDisplayName: sidebarAccountDisplayName,
                 minimumContentSize: .zero

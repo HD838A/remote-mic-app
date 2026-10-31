@@ -769,7 +769,12 @@ struct RemoteButtonsTests {
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let settings = AppSettings(defaults: defaults)
         settings.customMappingEnabled = true
+        // A shortcut-only binding must carry recorded keys; an empty one is "not set".
         settings.setAction(.customShortcut, for: .home)
+        settings.setShortcut(
+            CustomKeyboardShortcut(keyCode: 36, modifierFlags: [.command], keyLabel: "Return"),
+            for: .home
+        )
         let profileID = try #require(settings.selectedRemoteProfileID)
         let clock = Clock()
         var diagnostics: [String] = []

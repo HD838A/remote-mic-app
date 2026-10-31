@@ -541,6 +541,13 @@ struct ConfiguredButtonAction: Codable, Equatable {
 
     static let disabled = ConfiguredButtonAction(action: .disabled, shortcut: nil)
 
+    /// A custom shortcut without recorded keys cannot run. Reading normalises it to
+    /// "not set" so an unrecorded shortcut is never stored, exported or shown as a binding.
+    var normalizedForExecution: ConfiguredButtonAction {
+        guard action == .customShortcut, shortcut == nil else { return self }
+        return ConfiguredButtonAction(action: .disabled, shortcut: nil)
+    }
+
     var allowsSingleClickRepeat: Bool {
         action.allowsRepeat || (action == .customShortcut && shortcut?.isRepeatableNavigationKey == true)
     }
