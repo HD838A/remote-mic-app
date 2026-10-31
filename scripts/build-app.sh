@@ -206,6 +206,10 @@ if [[ "$PRIVATE_PATHS_PROVIDED" == false ]]; then
   PRIVATE_MODE="$(print -r -- "$PRIVATE_PREPARATION" | python3 -c 'import json,sys; print(json.load(sys.stdin)["mode"])')"
   if [[ "$PRIVATE_MODE" == private ]]; then
     PRIVATE_CHECKOUT="$(print -r -- "$PRIVATE_PREPARATION" | python3 -c 'import json,sys; print(json.load(sys.stdin)["checkout"])')"
+    # The manifest tag is what this build actually consumes, so it overrides any
+    # inherited value. Missing key means the resolver ran in a reduced mode and
+    # the version stays unknown rather than failing the build.
+    export SAYALL_PRIVATE_PLATFORM_VERSION="$(print -r -- "$PRIVATE_PREPARATION" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("tag") or "")')"
     export SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH="$(print -r -- "$PRIVATE_PREPARATION" | python3 -c 'import json,sys; print(json.load(sys.stdin)["artifacts"])')"
     export SAYALL_MAC_REMOTE_PACKAGE_PATH="$PRIVATE_CHECKOUT/packages/macos-remote"
     export SAYALL_SIRI_REMOTE_PACKAGE_PATH="$PRIVATE_CHECKOUT/packages/audio-input-kit/siri-remote"
@@ -659,6 +663,15 @@ plutil -insert SayAllButtonProfilesTestAccess -bool "$SAYALL_BUTTON_PROFILES_TES
 plutil -remove SayAllPrivateArtifactsIncluded "$APP_DIR/Contents/Info.plist" 2>/dev/null || true
 plutil -insert SayAllPrivateArtifactsIncluded -bool "$SAYALL_PRIVATE_ARTIFACT_INCLUDED" \
   "$APP_DIR/Contents/Info.plist"
+plutil -remove SayAllPrivatePlatformVersion "$APP_DIR/Contents/Info.plist" 2>/dev/null || true
+if [[ -n "${SAYALL_PRIVATE_PLATFORM_VERSION:-}" ]]; then
+  if [[ ! "$SAYALL_PRIVATE_PLATFORM_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    print -u2 "SAYALL_PRIVATE_PLATFORM_VERSION must be a bare semantic version"
+    exit 1
+  fi
+  plutil -insert SayAllPrivatePlatformVersion -string "$SAYALL_PRIVATE_PLATFORM_VERSION" \
+    "$APP_DIR/Contents/Info.plist"
+fi
 plutil -remove SayAllDiagnosticPublicKey "$APP_DIR/Contents/Info.plist" 2>/dev/null || true
 if [[ -n "$SAYALL_DIAGNOSTIC_PUBLIC_KEY_BASE64" ]]; then
   plutil -insert SayAllDiagnosticPublicKey -string "$SAYALL_DIAGNOSTIC_PUBLIC_KEY_BASE64" \

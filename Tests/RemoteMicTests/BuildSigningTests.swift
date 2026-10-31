@@ -609,6 +609,8 @@ struct BuildSigningTests {
         #expect(packageSource.contains("private artifacts cannot be combined with private source packages"))
         #expect(buildSource.contains("repositoryDirty == false"))
         #expect(buildSource.contains("SayAllPrivateArtifactsIncluded"))
+        #expect(buildSource.contains("plutil -insert SayAllPrivatePlatformVersion -string \"$SAYALL_PRIVATE_PLATFORM_VERSION\""))
+        #expect(buildSource.contains("print(json.load(sys.stdin).get(\"tag\") or \"\")"))
         #expect(buildSource.contains("PREVIOUS APP MOVED TO TRASH"))
         #expect(buildSource.contains("private artifact package contents do not match the prepared manifest"))
         let privateArtifactResolution = try #require(
