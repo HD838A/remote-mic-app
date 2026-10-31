@@ -2549,31 +2549,25 @@ struct SettingsView: View {
                 .accessibilityLabel(Text("\(modelName), \(systemName)"))
                 .accessibilityAddTraits(selected ? .isSelected : [])
                 HStack(spacing: 7) {
-                    if siriRemoteMembershipRequired {
-                        Button(localization.text("siri_remote.activation.open_membership")) {
-                            model.selectRemoteProfile(profile.id)
-                            selectedSection = .membership
-                            membershipFeature.refreshIfNeeded()
-                        }
-                        .buttonStyle(.borderless)
-                        .foregroundStyle(Color.accentColor)
-                    } else {
-                        remoteConnectionLabel(connected: connected)
-                    }
+                    remoteConnectionLabel(connected: connected)
                     if showsBattery {
                         remoteBatteryLabel(level: batteryLevel, powerState: powerState)
                     }
+                    #if SAYALL_SIRI_REMOTE_ENABLED && canImport(SayAllSiriRemote)
+                    if profile.model.isAppleSiriRemote {
+                        // 会员入口与启用/停用都排在这一行里，卡片不额外开一列。
+                        siriRemoteCardActions(
+                            profile,
+                            showsVoiceMembershipHint: siriRemoteMembershipRequired
+                        )
+                        .fixedSize()
+                    }
+                    #endif
                 }
                 .font(.system(size: 12))
                 .lineLimit(1)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            #if SAYALL_SIRI_REMOTE_ENABLED && canImport(SayAllSiriRemote)
-            if profile.model.isAppleSiriRemote && !siriRemoteMembershipRequired {
-                siriRemoteCardActions(profile)
-                    .fixedSize()
-            }
-            #endif
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
@@ -2596,6 +2590,8 @@ struct SettingsView: View {
         }
     }
 
+    /// 苹果遥控器只有**语音**需要会员；这里只决定是否给出「开通会员」提示，
+    /// 不再用来隐藏启用/停用，因为连接、按键与触摸都不看会员。
     private func requiresSiriRemoteMembership(for profile: RemoteDeviceProfile) -> Bool {
         guard profile.model.isAppleSiriRemote else { return false }
         switch membershipFeature.buttonProfilesAccessDecision {
@@ -2607,28 +2603,48 @@ struct SettingsView: View {
     }
 
     #if SAYALL_SIRI_REMOTE_ENABLED && canImport(SayAllSiriRemote)
-    private func siriRemoteCardActions(_ profile: RemoteDeviceProfile) -> some View {
-        VStack(spacing: 4) {
+    /// 第三行内联的紧凑操作：语音会员入口 + 启用/重试/准备中。
+    ///
+    /// 卡片正文固定三行（型号、系统名称、连接状态与电量），所以这些操作不再单独占一列，
+    /// 而是紧跟在连接状态与电量后面同一行显示。
+    private func siriRemoteCardActions(
+        _ profile: RemoteDeviceProfile,
+        showsVoiceMembershipHint: Bool = false
+    ) -> some View {
+        HStack(spacing: 8) {
+            if showsVoiceMembershipHint {
+                Button(localization.text("siri_remote.activation.open_membership")) {
+                    model.selectRemoteProfile(profile.id)
+                    selectedSection = .membership
+                    membershipFeature.refreshIfNeeded()
+                }
+                .buttonStyle(.borderless)
+                .foregroundStyle(Color.accentColor)
+                .help(localization.text("siri_remote.mapping.voice.detail"))
+            }
             if !settings.siriRemoteEnabled {
                 Button(localization.text("siri_remote.activation.enable")) {
                     model.selectRemoteProfile(profile.id)
                     model.setSiriRemoteEnabled(true)
                 }
-            } else {
-                if model.siriRemoteAudioStatus.hasPrefix("unavailable:") {
-                    Button(localization.text("siri_remote.activation.retry")) {
-                        model.selectRemoteProfile(profile.id)
-                        model.prepareSiriRemoteFromUserAction()
-                    }
-                } else if model.siriRemoteAudioStatus != "ready" {
-                    Button(localization.text("siri_remote.activation.preparing")) {}
-                        .disabled(true)
+                .buttonStyle(.borderless)
+                .foregroundStyle(Color.accentColor)
+                .disabled(model.isStreaming || model.activePhysicalVoiceControlSource == .siriRemote)
+            } else if model.siriRemoteAudioStatus.hasPrefix("unavailable:") {
+                Button(localization.text("siri_remote.activation.retry")) {
+                    model.selectRemoteProfile(profile.id)
+                    model.prepareSiriRemoteFromUserAction()
                 }
+                .buttonStyle(.borderless)
+                .foregroundStyle(Color.accentColor)
+                .disabled(model.isStreaming || model.activePhysicalVoiceControlSource == .siriRemote)
+            } else if model.siriRemoteAudioStatus != "ready" {
+                Button(localization.text("siri_remote.activation.preparing")) {}
+                    .buttonStyle(.borderless)
+                    .disabled(true)
             }
         }
-        .font(.system(size: 12))
-        .buttonStyle(.bordered)
-        .disabled(model.isStreaming || model.activePhysicalVoiceControlSource == .siriRemote)
+        .lineLimit(1)
     }
     #endif
 
