@@ -50,9 +50,9 @@ struct RemoteButtonInteractionSettings: Codable, Equatable {
             [String].self,
             forKey: .migratedRepeatButtons
         )
-        // These values came from an unshipped candidate design. The approved design has
-        // no raw key-down mode, and an explicit "once" entry is equivalent to no hold.
-        modes = modes.filter { $0.value != "holdSingle" && $0.value != "once" }
+        // Raw key-down came from an unshipped candidate design. "once" is retained as
+        // an internal marker so a user-cleared hold choice does not regain a later default.
+        modes = modes.filter { $0.value != "holdSingle" }
     }
 
     var isValid: Bool {
@@ -113,6 +113,12 @@ struct RemoteButtonInteractionSnapshot {
     var recognizesDouble: Bool { opaqueDouble || double.action != .disabled }
     var recognizesLong: Bool { opaqueLong || long.action != .disabled }
 
+    func withMode(_ mode: RemoteButtonHoldMode?) -> Self {
+        var copy = self
+        copy.mode = mode
+        return copy
+    }
+
     func hasSameBinding(as other: Self) -> Bool {
         mode == other.mode && single == other.single && double == other.double && long == other.long &&
             hasOpaqueBinding == other.hasOpaqueBinding && opaqueDouble == other.opaqueDouble && opaqueLong == other.opaqueLong
@@ -128,5 +134,19 @@ struct RemoteButtonInteractionSnapshot {
             return !hasOpaqueBinding && single.allowsHoldRepeat && !recognizesLong
                 ? nil : "button_mapping.hold_repeat_single_unavailable"
         }
+    }
+}
+
+/// First-edit default for the hold behavior. Storage is only ever raised from "unset" to
+/// `repeatSingle`; an existing choice, a cleared marker, or a mode inherited from the base
+/// buttons is never rewritten. A configuration conflict therefore degrades at runtime through
+/// `unavailableReason` and disappears by itself once the conflicting gesture is removed.
+enum RemoteButtonHoldModeDefault {
+    static func storedMode(
+        explicit: RemoteButtonHoldMode?,
+        snapshot: RemoteButtonInteractionSnapshot
+    ) -> RemoteButtonHoldMode? {
+        guard explicit == nil, snapshot.mode == .once else { return nil }
+        return snapshot.withMode(.repeatSingle).unavailableReason == nil ? .repeatSingle : nil
     }
 }

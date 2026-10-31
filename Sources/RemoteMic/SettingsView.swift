@@ -1829,6 +1829,7 @@ struct SettingsView: View {
             let matches = mappingConfiguration(for: button, trigger: trigger) == configured
             AppLogger.shared.write("BUTTON CONFIGURATION operation_id=\(operationID) action=select_combination phase=completed result=\(matches ? "stored" : "not_stored") scope=\(editingMappingProfileID == nil ? "base" : "profile")")
         }
+        reconcileMappingHoldMode(afterChanging: button)
     }
 
     private func setMappingAction(_ action: ButtonAction, for button: RemoteButton, trigger: ButtonTrigger) {
@@ -2752,12 +2753,6 @@ struct SettingsView: View {
                 )
             }
 
-            if trigger == .singleClick,
-               configured.action != .disabled,
-               !configured.action.allowsRepeat {
-                mappingRapidPressControl(button: button)
-            }
-
             if button == .power && trigger == .singleClick && settings.experimentalContinuousRecordingEnabled {
                 Text("button_mapping.continuous_recording_experiment.power_managed")
                     .font(.system(size: 12))
@@ -2770,7 +2765,8 @@ struct SettingsView: View {
                 Text("button_mapping.long_press.effect")
                     .font(.system(size: 12))
                     .foregroundStyle(.orange)
-            } else if trigger == .singleClick {
+            } else if trigger == .singleClick,
+                      configured.action == .disabled || configured.action.allowsRepeat {
                 Text("button_mapping.single_click.help")
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
@@ -2845,6 +2841,20 @@ struct SettingsView: View {
         }
     }
 
+    private func reconcileMappingHoldMode(afterChanging button: RemoteButton) {
+        let explicitMode: RemoteButtonHoldMode? = if let profile = editingMappingProfileID {
+            macroFeature.profileHoldMode(profile: profile, button: button)
+                .flatMap(RemoteButtonHoldMode.init(rawValue:))
+        } else {
+            settings.interactionSettings.modes[button.rawValue]
+                .flatMap(RemoteButtonHoldMode.init(rawValue:))
+        }
+        let snapshot = mappingHoldSnapshot(for: button)
+        guard let mode = RemoteButtonHoldModeDefault.storedMode(explicit: explicitMode, snapshot: snapshot)
+        else { return }
+        setMappingHoldMode(mode, for: button)
+    }
+
     private func mappingHoldSnapshot(for button: RemoteButton) -> RemoteButtonInteractionSnapshot {
         let currentInteractionSettings = settings.buttonInteractionSettings()
         return RemoteButtonInteractionSnapshot(settings: currentInteractionSettings,
@@ -2894,18 +2904,7 @@ struct SettingsView: View {
 
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
                     ForEach(RemoteButtonHoldMode.selectableCases) { mode in
-                        let candidate = RemoteButtonInteractionSnapshot(
-                            settings: snapshot.settings,
-                            mode: mode,
-                            single: snapshot.single,
-                            double: snapshot.double,
-                            long: snapshot.long,
-                            hasOpaqueBinding: snapshot.hasOpaqueBinding,
-                            repeatInterval: snapshot.repeatInterval,
-                            repeatAllowed: snapshot.repeatAllowed,
-                            opaqueDouble: snapshot.opaqueDouble,
-                            opaqueLong: snapshot.opaqueLong
-                        )
+                        let candidate = snapshot.withMode(mode)
                     Button {
                             setMappingHoldMode(mode, for: button)
                     } label: {
@@ -2945,6 +2944,16 @@ struct SettingsView: View {
             }
             if let reason = snapshot.unavailableReason {
                 Text(localization.text(reason)).foregroundStyle(.orange).font(.system(size: 12))
+            }
+
+            if snapshot.single.action != .disabled, !snapshot.single.action.allowsRepeat {
+                Divider().padding(.top, 2)
+                mappingRapidPressControl(button: button)
+            } else if snapshot.single.action != .disabled {
+                Divider().padding(.top, 2)
+                Text("button_mapping.single_click.help")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
             }
             }
         }
@@ -3187,20 +3196,23 @@ struct SettingsView: View {
     }
 
     private func mappingRapidPressControl(button: RemoteButton) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Toggle("button_mapping.rapid_press", isOn: Binding(
-                get: { settings.allowsRapidPress(for: button) },
-                set: { settings.setAllowsRapidPress($0, for: button) }
-            ))
-            .font(.system(size: 13, weight: .medium))
-            .toggleStyle(.switch)
-            Text("button_mapping.rapid_press_hint_short")
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 10) {
+                Text("button_mapping.rapid_press")
+                    .font(.system(size: 13, weight: .semibold))
+                Spacer()
+                Toggle("", isOn: Binding(
+                    get: { settings.allowsRapidPress(for: button) },
+                    set: { settings.setAllowsRapidPress($0, for: button) }
+                ))
+                .labelsHidden()
+                .toggleStyle(.switch)
+            }
+            Text("button_mapping.hold.rapid_press_description")
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(12)
-        .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 10))
         .help(localization.text("button_mapping.rapid_press_help"))
     }
 

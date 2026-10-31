@@ -3060,11 +3060,7 @@ final class AppSettings: ObservableObject {
     func setHoldMode(_ mode: RemoteButtonHoldMode, for button: RemoteButton) {
         onInteractionModeChanged?(selectedRemoteProfileID)
         interactionSettings.migratedRepeatButtons?.removeAll { $0 == button.rawValue }
-        if mode == .once {
-            interactionSettings.modes.removeValue(forKey: button.rawValue)
-        } else {
-            interactionSettings.modes[button.rawValue] = mode.rawValue
-        }
+        interactionSettings.modes[button.rawValue] = mode.rawValue
     }
 
     func interactionSnapshot(for button: RemoteButton, profileID: UUID? = nil,

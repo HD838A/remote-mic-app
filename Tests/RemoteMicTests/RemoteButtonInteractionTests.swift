@@ -7,9 +7,10 @@ import Testing
 @MainActor
 struct RemoteButtonInteractionTests {
     private func snapshot(_ mode: RemoteButtonHoldMode = .once, double: Bool = false,
-                          long: Bool = false, d: Int = 300, l: Int = 550) -> RemoteButtonInteractionSnapshot {
+                          long: Bool = false, d: Int = 300, l: Int = 550,
+                          single: ButtonAction = .deleteBackward) -> RemoteButtonInteractionSnapshot {
         .init(settings: .init(doubleClickMilliseconds: d, longPressMilliseconds: l), mode: mode,
-              single: .init(action: .deleteBackward, shortcut: nil),
+              single: .init(action: single, shortcut: nil),
               double: .init(action: double ? .returnKey : .disabled, shortcut: nil),
               long: .init(action: long ? .arrowRight : .disabled, shortcut: nil))
     }
@@ -170,13 +171,134 @@ struct RemoteButtonInteractionTests {
         second.setHoldMode(.once, for: .back)
         #expect(second.interactionSettings.migratedRepeatButtons?.contains("back") == false)
         #expect(second.interactionSnapshot(for: .back).mode == .once)
+        let cleared = AppSettings(defaults: defaults)
+        #expect(cleared.interactionSettings.modes["back"] == "once")
         second.interactionSettings.modes["back"] = "unknown"
         second.interactionSettings.migratedRepeatButtons = ["back"]
         second.setAction(.arrowLeft, for: .back, trigger: .longPress)
         #expect(second.interactionSnapshot(for: .back).unavailableReason != nil)
     }
 
-    @Test func removedCandidateModesDecodeAsNoHoldBehavior() throws {
+    @Test func holdDefaultOnlyRaisesAnUnsetEligibleButton() {
+        #expect(RemoteButtonHoldModeDefault.storedMode(
+            explicit: nil, snapshot: snapshot()) == .repeatSingle)
+        // A double press does not block repeat single; it still blocks repeat long only.
+        #expect(RemoteButtonHoldModeDefault.storedMode(
+            explicit: nil, snapshot: snapshot(double: true)) == .repeatSingle)
+        #expect(RemoteButtonHoldModeDefault.storedMode(
+            explicit: nil, snapshot: snapshot(long: true)) == nil)
+        #expect(RemoteButtonHoldModeDefault.storedMode(
+            explicit: nil, snapshot: snapshot(single: .appSwitcher)) == nil)
+        #expect(RemoteButtonHoldModeDefault.storedMode(
+            explicit: nil, snapshot: snapshot(single: .disabled)) == nil)
+        // Out-of-range timing must not be "fixed" into a saved mode.
+        #expect(RemoteButtonHoldModeDefault.storedMode(
+            explicit: nil, snapshot: snapshot(d: 149)) == nil)
+    }
+
+    @Test func holdDefaultNeverRewritesAChoiceOrAnInheritedMode() {
+        // A cleared button keeps its clear marker and must not regain the default.
+        #expect(RemoteButtonHoldModeDefault.storedMode(
+            explicit: .once, snapshot: snapshot()) == nil)
+        #expect(RemoteButtonHoldModeDefault.storedMode(
+            explicit: .repeatLong, snapshot: snapshot(long: true)) == nil)
+        // A saved repeat-single that conflicts with a new long press degrades in the
+        // runtime snapshot only; storage must stay repeatSingle so it resumes by itself.
+        #expect(RemoteButtonHoldModeDefault.storedMode(
+            explicit: .repeatSingle, snapshot: snapshot(.repeatSingle, long: true)) == nil)
+        // A mode inherited from the base buttons is not this scope's to rewrite.
+        #expect(RemoteButtonHoldModeDefault.storedMode(
+            explicit: nil, snapshot: snapshot(.repeatSingle, long: true)) == nil)
+        #expect(RemoteButtonHoldModeDefault.storedMode(
+            explicit: nil, snapshot: snapshot(.repeatLong, long: true)) == nil)
+    }
+
+    @Test func conflictingLongPressDegradesWithoutOverwritingTheSavedHoldMode() throws {
+        let name = "SayAll.HoldConflict.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        let settings = AppSettings(defaults: defaults)
+        settings.setHoldMode(.repeatSingle, for: .ok)
+        settings.setAction(.arrowLeft, for: .ok, trigger: .longPress)
+        #expect(settings.interactionSettings.modes["ok"] == "repeatSingle")
+        #expect(settings.interactionSnapshot(for: .ok).mode == .repeatSingle)
+        #expect(settings.interactionSnapshot(for: .ok).unavailableReason != nil)
+        let restarted = AppSettings(defaults: defaults)
+        #expect(restarted.interactionSettings.modes["ok"] == "repeatSingle")
+        #expect(restarted.interactionSnapshot(for: .ok).unavailableReason != nil)
+        settings.setAction(.disabled, for: .ok, trigger: .longPress)
+        #expect(settings.interactionSnapshot(for: .ok).unavailableReason == nil)
+        #expect(settings.interactionSettings.modes["ok"] == "repeatSingle")
+    }
+
+    @Test func changingTheModelSeedsTheNewModelTimingFromTheLegacyFieldsOnce() throws {
+        let name = "SayAll.ModelTiming.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        let settings = AppSettings(defaults: defaults)
+        let device = settings.registerBluetoothRemote(identifier: UUID())
+        settings.selectRemoteProfile(device)
+        settings.interactionSettings.timing = RemoteButtonGestureTiming(
+            doubleClickMilliseconds: 200,
+            longPressMilliseconds: 900
+        )
+        settings.updateRemoteProfileModel(device, model: .rc003)
+        #expect(settings.buttonGestureTiming(for: .rc003) == .init(
+            doubleClickMilliseconds: 200,
+            longPressMilliseconds: 900
+        ))
+        settings.setButtonGestureTiming(.init(
+            doubleClickMilliseconds: 350,
+            longPressMilliseconds: 700
+        ), for: .rc003)
+        settings.updateRemoteProfileModel(device, model: .rc001)
+        // A model without a saved entry seeds from the legacy fields and never steals rc003.
+        #expect(settings.buttonGestureTiming(for: .rc001) == .init(
+            doubleClickMilliseconds: 200,
+            longPressMilliseconds: 900
+        ))
+        #expect(settings.buttonGestureTiming(for: .rc003) == .init(
+            doubleClickMilliseconds: 350,
+            longPressMilliseconds: 700
+        ))
+    }
+
+    @Test func invalidHoldModesAndTimingsAreRejectedOnImportWithoutChangingTheRest() throws {
+        let name = "SayAll.InteractionImport.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        let settings = AppSettings(defaults: defaults)
+        settings.setHoldMode(.repeatSingle, for: .back)
+        settings.setButtonGestureTiming(.init(
+            doubleClickMilliseconds: 150,
+            longPressMilliseconds: 1_000
+        ), for: .rc003)
+
+        var object = try #require(
+            JSONSerialization.jsonObject(with: settings.exportedConfigurationData()) as? [String: Any]
+        )
+        var interactionSettings = try #require(object["interactionSettings"] as? [String: Any])
+        interactionSettings["modes"] = ["back": "unknown"]
+        object["interactionSettings"] = interactionSettings
+        object["buttonGestureTimingsByModel"] = [
+            XiaomiRemoteModel.rc003.rawValue: [
+                "doubleClickMilliseconds": 149,
+                "longPressMilliseconds": 1_000,
+            ],
+        ]
+        try settings.importConfiguration(from: JSONSerialization.data(withJSONObject: object))
+
+        let rejected = try #require(settings.configurationImportNotice?.rejectedEntryStorageKeys)
+        #expect(rejected.contains("interactionSettings"))
+        #expect(rejected.contains("buttonGestureTimingsByModel"))
+        #expect(settings.buttonGestureTiming(for: .rc003) == .init(
+            doubleClickMilliseconds: 150,
+            longPressMilliseconds: 1_000
+        ))
+        #expect(settings.configuredBaseAction(for: .back, trigger: .singleClick).action != .disabled)
+    }
+
+    @Test func removedRawHoldModeDecodesWhileExplicitClearPersists() throws {
         let data = try JSONSerialization.data(withJSONObject: [
             "doubleClickMilliseconds": 300,
             "longPressMilliseconds": 550,
@@ -187,7 +309,7 @@ struct RemoteButtonInteractionTests {
             ],
         ])
         let decoded = try JSONDecoder().decode(RemoteButtonInteractionSettings.self, from: data)
-        #expect(decoded.modes == ["left": "repeatSingle"])
+        #expect(decoded.modes == ["right": "once", "left": "repeatSingle"])
         #expect(decoded.mode(for: .back) == .once)
         #expect(decoded.mode(for: .right) == .once)
     }

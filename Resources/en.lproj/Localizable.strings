@@ -424,6 +424,7 @@
 "button_mapping.rapid_press" = "Allow Rapid Repeated Presses";
 "button_mapping.rapid_press_hint_short" = "Every quick press runs the action instead of only the first one.";
 "button_mapping.rapid_press_help" = "By default, actions that do not support hold-to-repeat run once until the button has been released for a moment. Enable this to run an action on every quick press. Holding the button may then repeat the action.";
+"button_mapping.hold.rapid_press_description" = "A single press runs immediately and waits briefly when a double press is set. When enabled, every rapid press runs the action.";
 "common.suffix.not_installed" = " (Not installed)";
 "common.suffix.experimental_disabled" = " (Experiment disabled)";
 "shortcut.action.record" = "Click to Record a Shortcut";
