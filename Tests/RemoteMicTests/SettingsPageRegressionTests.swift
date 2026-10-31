@@ -786,7 +786,7 @@ struct SettingsPageRegressionTests {
         )
 
         let contentSize = try #require(appSource.range(
-            of: "window.setContentSize(NSSize(width: 1020, height: 772))"
+            of: "window.setContentSize(NSSize(width: 960, height: 742))"
         ))
         let autosave = try #require(appSource.range(
             of: "window.setFrameAutosaveName(\"RemoteMicSettings\")",

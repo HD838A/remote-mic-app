@@ -545,6 +545,10 @@ struct SettingsView: View {
     @ObservedObject private var privateFeature: PrivateFeatureIntegration
     @State private var preservesMappingContextOnNavigation = false
     @State private var editingMappingProfileID: UUID?
+    @State private var isSavingMappingProfile = false
+    @State private var savingMappingProfileName = ""
+    @State private var savingMappingProfileSwitches = true
+    @State private var savingMappingProfileError: String?
     @State private var mappingMacroSearch = ""
     @State private var mappingVoiceSettingsRequest = 0
 
@@ -1773,6 +1777,7 @@ struct SettingsView: View {
                     }
                     return mappingHoldSummary(for: button)
                 },
+                reservedControlIDs: profileScopeReservedSiriControlIDs,
                 onEdit: { controlID, triggerID in
                     guard let button = siriRemoteButton(for: controlID),
                           let trigger = ButtonTrigger(rawValue: triggerID)
@@ -1892,11 +1897,11 @@ struct SettingsView: View {
                     mappingHoldEditingButton = button
                     requestMappingEditorScroll(focusHold: true)
                 },
-                // 置灰表 = 默认表去掉已放开的键（主开关全放开 / 按键级豁免）。
+                // 置灰表 = 默认表去掉已放开的键（主开关全放开 / 按键级豁免）；方案作用域再并入非 10 键。
                 systemReservedControlIDs: ChromecastRemoteControl.canvasReservedControlIDs(
                     allowSystemReservedKeys: settings.chromecastAllowSystemReservedKeys,
                     exceptions: settings.chromecastSystemReservedExceptions
-                ),
+                ).union(profileScopeReservedChromecastControlIDs),
                 onVoiceSettings: { mappingVoiceSettingsRequest += 1 }
             )
         }
@@ -1980,31 +1985,155 @@ struct SettingsView: View {
         saveMappingBinding(configured, button: button, trigger: trigger)
     }
 
-    private var mappingProfileSelector: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text(localization.text("button_mapping.editing_profile")).font(.system(size: 13, weight: .semibold))
-                Spacer()
-                if let active = macroFeature.activeMappingProfileID(device: settings.selectedRemoteProfileID),
-                   let profile = macroFeature.mappingProfiles(device: settings.selectedRemoteProfileID).first(where: { $0.id == active }) {
-                    Text(localization.text("button_mapping.active_profile") + "：" + profile.name)
-                        .font(.system(size: 12)).foregroundStyle(.secondary)
-                } else {
-                    Text(localization.text("button_mapping.active_profile") + "：" + localization.text("button_mapping.base_profile"))
-                        .font(.system(size: 12)).foregroundStyle(.secondary)
-                }
+    /// 方案作用域只覆盖 10 个普通按键，其余控制项置灰且不可点。
+    private var profileScopeReservedButtons: Set<RemoteButton> {
+        guard editingMappingProfileID != nil else { return [] }
+        return Set(RemoteButton.allCases.filter { !macroFeature.supportsProfileButton($0.rawValue) })
+    }
+
+    #if SAYALL_SIRI_REMOTE_ENABLED && canImport(SayAllSiriRemote)
+    private var profileScopeReservedSiriControlIDs: Set<String> {
+        guard editingMappingProfileID != nil else { return [] }
+        return Set(SiriRemoteControl.allCases.map(\.rawValue).filter { controlID in
+            guard let button = siriRemoteButton(for: controlID) else { return true }
+            return !macroFeature.supportsProfileButton(button.rawValue)
+        })
+    }
+    #endif
+
+    #if SAYALL_CHROMECAST_ENABLED && canImport(SayAllChromecast)
+    private var profileScopeReservedChromecastControlIDs: Set<String> {
+        guard editingMappingProfileID != nil else { return [] }
+        return Set(ChromecastRemoteControl.allCases.map(\.rawValue).filter { controlID in
+            guard let button = chromecastButton(for: controlID) else { return true }
+            return !macroFeature.supportsProfileButton(button.rawValue)
+        })
+    }
+    #endif
+
+    private var mappingSaveAsProfileSheet: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text(localization.text("button_mapping.save_as_profile"))
+                .font(.system(size: 15, weight: .semibold))
+            VStack(alignment: .leading, spacing: 6) {
+                Text(localization.text("button_mapping.save_as_profile.name"))
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                TextField(localization.text("button_mapping.save_as_profile.name"), text: $savingMappingProfileName)
+                    .textFieldStyle(.roundedBorder)
             }
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack {
-                    Button(localization.text("button_mapping.base_profile")) { editingMappingProfileID = nil }
-                        .tint(editingMappingProfileID == nil ? .accentColor : .secondary)
-                    ForEach(macroFeature.mappingProfiles(device: settings.selectedRemoteProfileID)) { profile in
-                        Button(profile.name) { editingMappingProfileID = profile.id; shortcutCaptureTarget = nil }
-                            .tint(editingMappingProfileID == profile.id ? .accentColor : .secondary)
-                    }
-                }.buttonStyle(.bordered)
+            Text(localization.text("button_mapping.save_as_profile.note"))
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Toggle(localization.text("button_mapping.save_as_profile.switch"),
+                   isOn: $savingMappingProfileSwitches)
+                .toggleStyle(.switch)
+            if let savingMappingProfileError {
+                Text(savingMappingProfileError)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.red)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            HStack {
+                Spacer()
+                Button(localization.text("common.action.cancel")) {
+                    isSavingMappingProfile = false
+                }
+                Button(localization.text("common.action.save")) {
+                    saveMappingAsProfile()
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(savingMappingProfileName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }
+        .padding(20)
+        .frame(width: 420)
+    }
+
+    private func beginSavingMappingProfile() {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MM-dd"
+        savingMappingProfileName = localization.text("button_mapping.save_as_profile.default_name")
+            + " " + formatter.string(from: Date())
+        savingMappingProfileSwitches = true
+        savingMappingProfileError = nil
+        isSavingMappingProfile = true
+    }
+
+    /// 基础作用域下没有“差异”可言，保存即把 10 个按键的当前动作与按住抄成一份方案。
+    private func saveMappingAsProfile() {
+        let name = savingMappingProfileName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty,
+              let profileID = macroFeature.createMappingProfile(named: name) else {
+            savingMappingProfileError = localization.text("button_mapping.save_as_profile.failed")
+            return
+        }
+        var written = 0
+        for button in RemoteButton.allCases where macroFeature.supportsProfileButton(button.rawValue) {
+            for trigger in ButtonTrigger.allCases {
+                let configured = settings.configuredBaseAction(for: button, trigger: trigger)
+                guard configured.action != .disabled else { continue }
+                macroFeature.setProfileBinding(
+                    configured,
+                    profile: profileID,
+                    button: button,
+                    trigger: trigger,
+                    displayName: configured.action.displayName(using: localization)
+                )
+                written += 1
+            }
+            if let mode = settings.interactionSettings.mode(for: button) {
+                macroFeature.setProfileHoldMode(mode, profile: profileID, button: button)
+            }
+        }
+        guard written > 0 else {
+            macroFeature.deleteMappingProfile(profileID)
+            savingMappingProfileError = localization.text("button_mapping.save_as_profile.empty")
+            return
+        }
+        if savingMappingProfileSwitches {
+            editingMappingProfileID = profileID
+        }
+        isSavingMappingProfile = false
+    }
+
+    private var mappingProfileSelector: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                if editingMappingProfileID == nil {
+                    Button(localization.text("button_mapping.base_profile")) { editingMappingProfileID = nil }
+                        .buttonStyle(.borderedProminent)
+                } else {
+                    Button(localization.text("button_mapping.base_profile")) { editingMappingProfileID = nil }
+                        .buttonStyle(.bordered)
+                }
+                ForEach(macroFeature.mappingProfiles(device: settings.selectedRemoteProfileID)) { profile in
+                    if editingMappingProfileID == profile.id {
+                        Button(profile.name) { editingMappingProfileID = profile.id; shortcutCaptureTarget = nil }
+                            .buttonStyle(.borderedProminent)
+                    } else {
+                        Button(profile.name) { editingMappingProfileID = profile.id; shortcutCaptureTarget = nil }
+                            .buttonStyle(.bordered)
+                    }
+                }
+                Spacer(minLength: 12)
+                if editingMappingProfileID == nil && macroFeature.isFeatureVisible {
+                    Button {
+                        beginSavingMappingProfile()
+                    } label: {
+                        Label(localization.text("button_mapping.save_as_profile"),
+                              systemImage: "square.and.arrow.down")
+                            .font(.system(size: 11))
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+            }
+            .controlSize(.small)
+            .padding(.vertical, 2)
+        }
+        .sheet(isPresented: $isSavingMappingProfile) { mappingSaveAsProfileSheet }
         .onAppear { macroFeature.prepareMappingDevice(settings.selectedRemoteProfileID) }
         .onChange(of: macroFeature.mappingProfiles(device: settings.selectedRemoteProfileID).map(\.id)) { ids in
             if let profile = editingMappingProfileID, !ids.contains(profile) {
@@ -2132,7 +2261,8 @@ struct SettingsView: View {
                     mappingHoldEditingButton = button
                     requestMappingEditorScroll(focusHold: true)
                 },
-                onVoiceSettings: { mappingVoiceSettingsRequest += 1 }
+                onVoiceSettings: { mappingVoiceSettingsRequest += 1 },
+                reservedButtons: profileScopeReservedButtons
             )
             .onReceive(model.$activeRemoteButtons) { buttons in
                 selectedRemoteButton = MappingSelectionPolicy.selection(
@@ -2169,15 +2299,12 @@ struct SettingsView: View {
                             Color.clear
                                 .frame(height: 0)
                                 .id("mapping-page-top")
-                            if let profileID = editingMappingProfileID,
-                               let profile = macroFeature.mappingProfiles(device: settings.selectedRemoteProfileID).first(where: { $0.id == profileID }) {
-                                HStack {
-                                    Text(localization.text("button_mapping.editing_profile") + "：" + profile.name)
-                                        .font(.system(size: 13, weight: .medium))
-                                    Spacer()
-                                    Button(localization.text("button_mapping.base_profile")) { editingMappingProfileID = nil }
-                                        .buttonStyle(.bordered)
-                                }
+                            mappingProfileSelector
+                            if editingMappingProfileID != nil {
+                                Text(localization.text("button_mapping.profile_scope_hint"))
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
                             }
                             configurationImportBanner
                             corruptedSettingsBanner

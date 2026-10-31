@@ -303,6 +303,10 @@ if sourceMacroHostShortcutsAvailable || artifactMacroHostShortcutsAvailable {
 if unifiedButtonConfigurationAvailable {
     remoteMicTestSwiftSettings.append(.define("SAYALL_UNIFIED_BUTTON_CONFIGURATION"))
 }
+// 方案作用域的集成测试与 App 共用同一个放行开关，否则测试目标看不到该宏。
+if buttonProfilesTestAccessEnabled {
+    remoteMicTestSwiftSettings.append(.define("SAYALL_TEST_BUTTON_PROFILES_FREE"))
+}
 if siriRemoteEnabled {
     remoteMicTestSwiftSettings.append(.define("SAYALL_SIRI_REMOTE_ENABLED"))
 }
@@ -417,33 +421,11 @@ if let buttonProfilesPath = buttonProfilesPackagePath,
         .lastPathComponent
         .lowercased()
     packageDependencies.append(.package(path: buttonProfilesPath))
+    // 只登记 button profiles 自己的产品；Siri / Chromecast / Mac Remote 由各自的
+    // SAYALL_*_PACKAGE_PATH 分支登记，不能借这个包的 identity 引用别人的产品。
     remoteMicDependencies.append(
         .product(name: "SayAllButtonProfiles", package: packageIdentity)
     )
-    remoteMicDependencies.append(
-        .product(name: "SayAllMacRemoteCore", package: packageIdentity)
-    )
-    remoteMicDependencies.append(
-        .product(name: "SayAllMacRemoteUI", package: packageIdentity)
-    )
-    remoteMicDependencies.append(
-        .product(name: "SayAllSiriRemote", package: packageIdentity)
-    )
-    remoteMicDependencies.append(
-        .product(name: "SayAllChromecast", package: packageIdentity)
-    )
-    remoteMicTestDependencies.append(
-        .product(name: "SayAllSiriRemote", package: packageIdentity)
-    )
-    remoteMicTestDependencies.append(
-        .product(name: "SayAllChromecast", package: packageIdentity)
-    )
-    remoteMicSwiftSettings.append(.define("SAYALL_SIRI_REMOTE_ENABLED"))
-    remoteMicSwiftSettings.append(.define("SAYALL_CHROMECAST_ENABLED"))
-    remoteMicSwiftSettings.append(.define("SAYALL_MAC_REMOTE_ENABLED"))
-    remoteMicTestSwiftSettings.append(.define("SAYALL_SIRI_REMOTE_ENABLED"))
-    remoteMicTestSwiftSettings.append(.define("SAYALL_CHROMECAST_ENABLED"))
-    remoteMicTestSwiftSettings.append(.define("SAYALL_MAC_REMOTE_ENABLED"))
 }
 
 let unsupportedMembershipSourceVariables = [

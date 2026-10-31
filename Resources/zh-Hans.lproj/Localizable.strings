@@ -1193,6 +1193,14 @@
 "button_mapping.active_profile" = "正在使用";
 
 "button_mapping.base_profile" = "基础映射";
+"button_mapping.save_as_profile" = "保存为键位方案";
+"button_mapping.save_as_profile.name" = "方案名称";
+"button_mapping.save_as_profile.note" = "会把 10 个普通按键的当前动作与按住设置复制成一份方案；保存后这些按键不再跟随基础映射。";
+"button_mapping.save_as_profile.switch" = "保存后立即切换到该方案";
+"button_mapping.save_as_profile.default_name" = "按键方案";
+"button_mapping.save_as_profile.failed" = "无法创建方案，请重试。";
+"button_mapping.save_as_profile.empty" = "当前没有可保存的按键动作。";
+"button_mapping.profile_scope_hint" = "键位方案只覆盖 10 个普通按键；其他按键仍按基础映射执行。";
 
 "button_mapping.inherit_base" = "继承基础映射";
 

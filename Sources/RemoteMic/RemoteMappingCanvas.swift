@@ -99,6 +99,8 @@ struct RemoteMappingCanvas: View {
     let onEdit: (RemoteButton, ButtonTrigger) -> Void
     let onEditHold: (RemoteButton) -> Void
     var onVoiceSettings: () -> Void = {}
+    /// 方案作用域只覆盖 10 个普通按键；不在范围内的按键置灰且不可点。
+    var reservedButtons: Set<RemoteButton> = []
 
     var body: some View {
         GeometryReader { geometry in
@@ -205,6 +207,7 @@ struct RemoteMappingCanvas: View {
     private func mappingCard(_ button: RemoteButton) -> some View {
         let selected = selectedButton == button
         let active = activeButtons.contains(button)
+        let reserved = reservedButtons.contains(button)
         return VStack(alignment: .leading, spacing: 5) {
             HStack(spacing: 6) {
                 Image(systemName: symbol(for: button))
@@ -277,6 +280,8 @@ struct RemoteMappingCanvas: View {
                             : Color.secondary.opacity(0.15)
                 )
         }
+        .opacity(reserved ? 0.5 : 1)
+        .allowsHitTesting(!reserved)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(Text(button.displayName(using: localization)))
     }

@@ -1194,6 +1194,14 @@
 "button_mapping.active_profile" = "Active";
 
 "button_mapping.base_profile" = "Default Mapping";
+"button_mapping.save_as_profile" = "Save as Button Profile";
+"button_mapping.save_as_profile.name" = "Profile name";
+"button_mapping.save_as_profile.note" = "Copies the current actions and hold settings of the 10 standard buttons into a profile. These buttons will no longer follow the base mapping.";
+"button_mapping.save_as_profile.switch" = "Switch to this profile after saving";
+"button_mapping.save_as_profile.default_name" = "Button Profile";
+"button_mapping.save_as_profile.failed" = "Couldn't create the profile. Try again.";
+"button_mapping.save_as_profile.empty" = "There are no button actions to save.";
+"button_mapping.profile_scope_hint" = "Button profiles cover the 10 standard buttons only. Other buttons keep using the base mapping.";
 
 "button_mapping.inherit_base" = "Use Default Mapping";
 
