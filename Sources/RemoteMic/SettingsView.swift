@@ -2099,50 +2099,39 @@ struct SettingsView: View {
     }
 
     private var mappingProfileSelector: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                Spacer(minLength: 0)
-                if let active = macroFeature.activeMappingProfileID(device: settings.selectedRemoteProfileID),
-                   let profile = macroFeature.mappingProfiles(device: settings.selectedRemoteProfileID).first(where: { $0.id == active }) {
-                    Text(localization.text("button_mapping.active_profile") + "：" + profile.name)
-                        .font(.system(size: 12)).foregroundStyle(.secondary)
+                if editingMappingProfileID == nil {
+                    Button(localization.text("button_mapping.base_profile")) { editingMappingProfileID = nil }
+                        .buttonStyle(.borderedProminent)
                 } else {
-                    Text(localization.text("button_mapping.active_profile") + "：" + localization.text("button_mapping.base_profile"))
-                        .font(.system(size: 12)).foregroundStyle(.secondary)
+                    Button(localization.text("button_mapping.base_profile")) { editingMappingProfileID = nil }
+                        .buttonStyle(.bordered)
                 }
+                ForEach(macroFeature.mappingProfiles(device: settings.selectedRemoteProfileID)) { profile in
+                    if editingMappingProfileID == profile.id {
+                        Button(profile.name) { editingMappingProfileID = profile.id; shortcutCaptureTarget = nil }
+                            .buttonStyle(.borderedProminent)
+                    } else {
+                        Button(profile.name) { editingMappingProfileID = profile.id; shortcutCaptureTarget = nil }
+                            .buttonStyle(.bordered)
+                    }
+                }
+                Spacer(minLength: 12)
                 if editingMappingProfileID == nil && macroFeature.isFeatureVisible {
                     Button {
                         beginSavingMappingProfile()
                     } label: {
                         Label(localization.text("button_mapping.save_as_profile"),
                               systemImage: "square.and.arrow.down")
-                            .font(.system(size: 12))
+                            .font(.system(size: 11))
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.small)
                 }
             }
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
-                    if editingMappingProfileID == nil {
-                        Button(localization.text("button_mapping.base_profile")) { editingMappingProfileID = nil }
-                            .buttonStyle(.borderedProminent)
-                    } else {
-                        Button(localization.text("button_mapping.base_profile")) { editingMappingProfileID = nil }
-                            .buttonStyle(.bordered)
-                    }
-                    ForEach(macroFeature.mappingProfiles(device: settings.selectedRemoteProfileID)) { profile in
-                        if editingMappingProfileID == profile.id {
-                            Button(profile.name) { editingMappingProfileID = profile.id; shortcutCaptureTarget = nil }
-                                .buttonStyle(.borderedProminent)
-                        } else {
-                            Button(profile.name) { editingMappingProfileID = profile.id; shortcutCaptureTarget = nil }
-                                .buttonStyle(.bordered)
-                        }
-                    }
-                }
-                .controlSize(.small)
-            }
+            .controlSize(.small)
+            .padding(.vertical, 2)
         }
         .sheet(isPresented: $isSavingMappingProfile) { mappingSaveAsProfileSheet }
         .onAppear { macroFeature.prepareMappingDevice(settings.selectedRemoteProfileID) }
@@ -2244,14 +2233,6 @@ struct SettingsView: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             mappingHeaderToggle
-            mappingProfileSelector
-                .padding(.top, 2)
-            if editingMappingProfileID != nil {
-                Text(localization.text("button_mapping.profile_scope_hint"))
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
         }
     }
 
@@ -2318,6 +2299,13 @@ struct SettingsView: View {
                             Color.clear
                                 .frame(height: 0)
                                 .id("mapping-page-top")
+                            mappingProfileSelector
+                            if editingMappingProfileID != nil {
+                                Text(localization.text("button_mapping.profile_scope_hint"))
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
                             configurationImportBanner
                             corruptedSettingsBanner
 
