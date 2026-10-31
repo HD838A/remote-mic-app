@@ -490,6 +490,58 @@ struct KeyboardEventSuppressorTests {
         #expect(!suppressor.handle(type: down.type, event: down))
     }
 
+    @Test(arguments: [Int32(0), Int32(1)])
+    func twoNativeDownsBeforeMainThreadArmsKeepTheirOwnClaims(_ keyType: Int32) throws {
+        var now: TimeInterval = 10
+        let suppressor = KeyboardEventSuppressor(uptime: { now }, logger: { _ in })
+        suppressor.setPrearmActiveForTesting(true)
+        let native = RemoteNativeEvent.systemKey(type: keyType)
+        let down = try nativeEvent(native, down: true)
+
+        // 快速连按两次，且两次原生按下都先于主线程处理报告到达：
+        // 主线程此时持有两条各自独立的认领。
+        suppressor.prearm(nativeEvents: [native])
+        #expect(suppressor.handle(type: down.type, event: down))
+        suppressor.prearm(nativeEvents: [native])
+        #expect(suppressor.handle(type: down.type, event: down))
+
+        // 主线程按报告顺序登记：down 1 / up 1 / down 2 / up 2。
+        // 第一次松键不得动到第二次按下仍需的认领。
+        suppressor.arm(nativeEvents: [native], edge: .down)
+        suppressor.arm(nativeEvents: [native], edge: .up)
+        suppressor.arm(nativeEvents: [native], edge: .down)
+        suppressor.arm(nativeEvents: [native], edge: .up)
+
+        // 用户紧接着按实体键盘的音量键：认领若在第一次松键时被整体清空，
+        // 主线程会为第二次按下多留一条待匹配记录，这次真实按键就被吞掉。
+        now += 0.1
+        #expect(!suppressor.handle(type: down.type, event: down))
+    }
+
+    @Test(arguments: [Int32(0), Int32(1)])
+    func prearmStillSuppressesAfterPairedClaimsAreConsumed(_ keyType: Int32) throws {
+        var now: TimeInterval = 10
+        let suppressor = KeyboardEventSuppressor(uptime: { now }, logger: { _ in })
+        suppressor.setPrearmActiveForTesting(true)
+        let native = RemoteNativeEvent.systemKey(type: keyType)
+        let down = try nativeEvent(native, down: true)
+
+        // 连按两次并完成配对之后，第三次提前登记仍必须能吞掉原生按下：
+        // 逐条配对不能把「认领已用完」误当成「会话已关闭」。
+        suppressor.prearm(nativeEvents: [native])
+        #expect(suppressor.handle(type: down.type, event: down))
+        suppressor.prearm(nativeEvents: [native])
+        #expect(suppressor.handle(type: down.type, event: down))
+        suppressor.arm(nativeEvents: [native], edge: .down)
+        suppressor.arm(nativeEvents: [native], edge: .up)
+        suppressor.arm(nativeEvents: [native], edge: .down)
+        suppressor.arm(nativeEvents: [native], edge: .up)
+
+        now += 0.2
+        suppressor.prearm(nativeEvents: [native])
+        #expect(suppressor.handle(type: down.type, event: down))
+    }
+
     private func nativeEvent(_ native: RemoteNativeEvent, down: Bool) throws -> CGEvent {
         switch native {
         case let .keyboard(keyCode):

@@ -130,8 +130,10 @@ final class HIDRemoteMonitor {
         var permissionsGranted = false
     }
 
-    private let prearmRoutingLock = NSLock()
-    private var prearmRouting = PrearmRouting()
+    /// 提前登记的会话门禁。共享 suppressor 不会随本监视器 `stop()` 关闭，
+    /// 所以「本监视器的会话是否仍然有效」必须由这里判断，见 `HIDPrearmSession`。
+    private let prearmSession = HIDPrearmSession<PrearmRouting>()
+
     private var activeUsages = Set<UInt16>()
     private var nativePassthroughUsages = Set<UInt16>()
     private var repeatTimers: [UInt16: HIDRemoteScheduledTask] = [:]
@@ -341,7 +343,9 @@ final class HIDRemoteMonitor {
             return
         }
         self.manager = manager
-        refreshPrearmRouting()
+        // 会话在此开启：此前的任何在途快照都属于上一次会话，不能登记；
+        // 之后的设备、位置与权限变化由 `refreshPrearmRouting()` 在会话内刷新。
+        prearmSession.begin(makePrearmRouting())
         startPermissionMonitor()
         updateStatus(LocalizedMessage("button_mapping.status.waiting_for_device"))
         AppLogger.shared.write(
@@ -353,6 +357,9 @@ final class HIDRemoteMonitor {
     }
 
     func stop() {
+        // 先结束提前登记会话：共享 suppressor 不会在这里关闭，若不推进代数，
+        // 已经在报告线程上读到旧快照的回调仍会写入吞键的陈旧记录。
+        prearmSession.end()
         permissionPollSubscription?.cancel()
         permissionPollSubscription = nil
         resetInputState()
@@ -379,7 +386,6 @@ final class HIDRemoteMonitor {
         }
         scheduledReportRunLoop = nil
         reportRunLoop.stop()
-        refreshPrearmRouting()
     }
 
     /// 设备匹配回调在 HID 报告线程上执行，设置、界面和状态必须回到主线程。
@@ -625,7 +631,8 @@ final class HIDRemoteMonitor {
     /// 提前登记拦截，否则会吞掉用户真实键盘的按键。
     private func prearmManagedNativeEvents(from device: IOHIDDevice, reportID: UInt32, data: Data) {
         guard eventSuppressor.acceptsPrearm else { return }
-        let routing = currentPrearmRouting()
+        guard let ticket = prearmSession.current() else { return }
+        let routing = ticket.payload
         guard routing.enabled else { return }
         guard let usages = RemoteHIDReportParser.usages(reportID: reportID, data: data) else {
             return
@@ -656,7 +663,11 @@ final class HIDRemoteMonitor {
         ) else { return }
         // 权限只读快照：报告线程不执行同步 TCC 查询。
         guard routing.permissionsGranted else { return }
-        eventSuppressor.prearm(nativeEvents: events)
+        // 校验会话代数与写入必须在同一临界区内完成。共享 suppressor 不随本监视器
+        // `stop()` 关闭，若只在上面读过快照，`stop()` 之后回到这里仍会写入陈旧记录。
+        prearmSession.perform(ticket) { _ in
+            eventSuppressor.prearm(nativeEvents: events)
+        }
     }
 
     /// 音量与 TV 是否仍需事件级拦截。主线程与报告线程共用，避免判据漂移。
@@ -665,8 +676,13 @@ final class HIDRemoteMonitor {
     }
 
     /// 由主线程在启用状态、允许位置、目标设备或排除列表变化时刷新，
-    /// 供报告线程只读使用。
+    /// 供报告线程只读使用。会话未开启时是空操作，不会留下陈旧快照。
     private func refreshPrearmRouting() {
+        prearmSession.update(makePrearmRouting())
+    }
+
+    /// 只读取主线程已经记录的状态：不做 TCC 查询、不触碰界面。
+    private func makePrearmRouting() -> PrearmRouting {
         var routing = PrearmRouting()
         routing.enabled = settings.customMappingEnabled
         routing.activeFingerprint = deviceFingerprint
@@ -676,15 +692,7 @@ final class HIDRemoteMonitor {
         routing.deviceSeized = activeDeviceIsSeized
         routing.nativeKeysNeutralized = nativeKeysNeutralized
         routing.permissionsGranted = permissionsGranted
-        prearmRoutingLock.lock()
-        prearmRouting = routing
-        prearmRoutingLock.unlock()
-    }
-
-    private func currentPrearmRouting() -> PrearmRouting {
-        prearmRoutingLock.lock()
-        defer { prearmRoutingLock.unlock() }
-        return prearmRouting
+        return routing
     }
 
     private func handleReportOnMain(from device: IOHIDDevice, reportID: UInt32, data: Data) {

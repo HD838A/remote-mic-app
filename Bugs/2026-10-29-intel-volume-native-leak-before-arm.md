@@ -140,12 +140,41 @@ Apple Silicon 上主线程通常能在原生事件之前完成登记，所以同
 - **认领记录带过期时刻。** 认领原先是不带时间的计数：主线程若因权限撤销、
   设备移除等路径没有为该按下执行 `arm`，认领会一直留着，下一次真实按下被
   误判成重复登记而漏拦。现在过期时间与待匹配窗口一致，按 `arm` 时顺带清理。
-  同时把认领从「置 1」改成计数，连点时多次按下都已被认领也不会丢。
+  认领按按下顺序排队，每条只抵掉一次按下（配对方式见下方评审修复）。
 - **专用线程的可观测性与退出。** 就绪超时原先被忽略：超时后调用方退回主线程，
   而那条线程仍会在空转 source 上驻留，日志里也看不出走的哪条路径。现在超时
-  直接返回失败，`deinit` 兜住未显式 `stop()` 的释放路径，启动时补一条
-  `HID REPORT runloop mode=dedicated|main`；命中日志补 `armed_by=prearm|arm`，
-  让「提前登记是否真的生效」可以从日志直接读出来。
+  直接撤销工作线程并返回失败，`deinit` 兜住未显式 `stop()` 的释放路径，启动时
+  补一条 `HID REPORT runloop mode=dedicated|main`；命中日志补
+  `armed_by=prearm|arm`，让「提前登记是否真的生效」可以从日志直接读出来。
+
+### PR 评审提出的三个阻塞项
+
+首轮评审在行内提出三条阻塞意见，本轮逐条修复，各补一条回归：
+
+- **[P1] 松键会清空全部提前登记认领。** 认领原先按事件计数、松键时整条删除：
+  快速连按时 `up 1` 会把 `down 2` 仍需的认领一起删掉，主线程随后为 `down 2`
+  追加一条错误的待匹配记录，窗口期内吞掉实体键盘的音量键。现在认领改成按
+  按下顺序排列的队列，每条认领只抵掉一次 `arm(.down)`；松键不再改动认领，
+  只按过期时间清理。回归用例
+  `twoNativeDownsBeforeMainThreadArmsKeepTheirOwnClaims` 覆盖「两次原生按下都
+  先于主线程处理」的现场顺序，修复前必失败。
+- **[P1] 在途回调能在监视器 `stop()` 之后写入共享拦截器。** 生产结构里
+  `KeyboardEventSuppressor` 由多个监视器共享（`ownsEventSuppressor: false`），
+  `stop()` 不会关闭它；只刷新路由快照也无法让已经读到旧快照的在途回调失效。
+  现在提前登记由 `HIDPrearmSession` 的会话代数把关：监视器 `start()` 开启会话，
+  `stop()` 先结束会话，报告线程带快照回来时在同一个临界区内校验代数再调用
+  `prearm(...)`。回归用例
+  `staleSnapshotFromASharedMonitorCannotPrearmAfterStop` 按生产结构（共享
+  suppressor + 监视器级 `stop()`）复现；源码回归同时锁住「校验与写入必须是
+  同一次调用」和「`stop()` 先结束会话再释放资源」。
+- **[P2] 就绪超时没有撤销工作线程。** `start()` 超时原先只返回 `nil`，工作线程
+  在进入 `CFRunLoopRun()` 前把 weak self 提成强引用并长期持有，`deinit { stop() }`
+  永远轮不到。现在线程进入 `CFRunLoopRun()` 后不再强持有实例，超时走统一的
+  撤销路径（取消标志 + 只停本线程的 run loop + 有界等待退出）；
+  `stop(waitTimeout:)` 返回线程是否真的退出，并用每次启动的代数防止迟到的旧
+  线程清掉新会话状态或误报新线程已退出。回归用例
+  `readyTimeoutCancelsTheWorkerSoRestartStillWorks` 与
+  `stoppingAnIdleRunLoopIsSafe` 覆盖超时撤销、重启和重复停止。
 
 ### 已移出本修复的两项
 
@@ -172,19 +201,30 @@ Registry ID 去重），并加了一条 `native_delivery=observed` 观察日志�
 - 新增回归覆盖：命中日志的 `armed_by=prearm|arm` 能区分两条路径。
 - 新增回归覆盖：`stop()` 之后才到达的提前登记必须被忽略；未处于活动会话时的
   提前登记必须被忽略。
+- 新增回归覆盖（评审 P1）：两次原生按下都先于主线程处理时，两次按下各自保留认领；
+  第一次松键不得清掉第二次按下的认领，随后按下的实体键盘音量键必须放行。
+- 新增回归覆盖（评审 P1）：按生产结构（共享 suppressor + 监视器级 `stop()`）复现，
+  会话结束后带旧快照的在途回调不能再写入提前登记；重启会话会让旧快照失效。
+- 新增回归覆盖（评审 P2）：就绪超时撤销工作线程后仍能重新启动；`stop(waitTimeout:)`
+  报告线程确实退出；重复停止与未启动状态停止都安全。
 - 新增源码回归：提前登记必须复用主线程的 `reportRoutingDecision`、
   `isLocationAllowed`、`needsEventLevelArm` 与权限快照，且调用 `prearm`
   之前必须已完成路由判定；报告线程不得调用 `runtimePermissionsAreValid()`
-  或 `IOHIDCheckAccess`。
+  或 `IOHIDCheckAccess`；会话代数校验与 `prearm` 写入必须是同一次调用；
+  `stop()` 必须先结束会话再释放资源。
 - 新增源码回归：`shouldArmNativeEvent` 必须与报告线程共用 `needsEventLevelArm`，
   防止两条路径的判据再次分叉。
 - 既有 `KeyboardEventSuppressorTests` 与 `RemoteNativeKeyMapperTests` 全部保留。
 - 构建与测试命令均带 `--disable-keychain`。
-- 本地结果：`swift build` 通过；受影响三个套件 177 项全部通过；
-  `swift test` 全量中仅 `BuildSigningTests` 少量失败（最近一次 1 项，
-  `terminationStatus=141`），原因是本机安全策略禁止在
-  `.private-dependencies/preflight-tests/**` 内执行 `git init --bare`
-  （`could not set 'core.repositoryformatversion'`），与本改动无关。
+- 分支已 rebase 到 `origin/main`（`9190672d`，2026-11-01），
+  `Bugs/README.md` 的顶部链接与索引表格冲突按主线顺序解决。
+- 本地结果：`swift build` 通过；受影响四个套件 175 项全部通过；
+  `swift test` 全量 1153 项中 1151 项通过，2 项 `BuildSigningTests` 失败
+  （`binaryArtifactsEnableUnifiedButtonConfiguration`、
+  `releaseControlPlaneFixtureHasExecutableRegressionCoverage`），原因是本机沙箱
+  禁止嵌套 `sandbox-exec`：`swift package dump-package` 报
+  `sandbox-exec: sandbox_apply: Operation not permitted`，
+  `git init --bare` 报 `mkdir '/Users/andy/.Trash': File exists`，与本改动无关。
 
 ## Intel 真机验收（build 269）
 

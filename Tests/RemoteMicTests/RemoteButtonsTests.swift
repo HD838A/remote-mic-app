@@ -2179,7 +2179,7 @@ struct RemoteButtonsTests {
         // 提前登记必须复用主线程的同一套门禁。缺少这些判定时，被排除的设备、
         // 非目标设备或映射关闭状态下的报告也会登记拦截，吞掉真实键盘按键。
         for gate in [
-            "currentPrearmRouting()",
+            "prearmSession.current()",
             "isLocationAllowed(",
             "reportRoutingDecision(",
             "needsEventLevelArm(",
@@ -2194,6 +2194,29 @@ struct RemoteButtonsTests {
         let routing = try #require(prearmBody.range(of: "reportRoutingDecision("))
         let prearmCall = try #require(prearmBody.range(of: "eventSuppressor.prearm("))
         #expect(routing.lowerBound < prearmCall.lowerBound)
+
+        // 会话代数校验与写入必须由同一个调用完成：只在上面读过快照就写入时，
+        // 共享 suppressor（`ownsEventSuppressor: false`）会在本监视器 `stop()`
+        // 之后仍然收下陈旧记录，留下吞掉实体键盘音量键的窗口。
+        let sessionGate = try #require(prearmBody.range(of: "prearmSession.perform("))
+        #expect(sessionGate.lowerBound < prearmCall.lowerBound)
+    }
+
+    @Test func monitorStopEndsThePrearmSessionBeforeReleasingSharedResources() throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let source = try String(contentsOf: root.appendingPathComponent("Sources/RemoteMic/HIDRemoteMonitor.swift"), encoding: .utf8)
+        let start = try #require(source.range(of: "    func stop() {"))
+        let end = try #require(source.range(of: "    /// 设备匹配回调在 HID 报告线程上执行"))
+        let stopBody = source[start.upperBound..<end.lowerBound]
+
+        // 共享 suppressor 不随本监视器关闭，因此「本会话已结束」必须在
+        // 关闭 manager、停用 run loop、关闭 suppressor 之前就成立。
+        let sessionEnd = try #require(stopBody.range(of: "prearmSession.end()"))
+        let unregister = try #require(stopBody.range(of: "IOHIDManagerUnscheduleFromRunLoop"))
+        #expect(sessionEnd.lowerBound < unregister.lowerBound)
+        if let suppressorStop = stopBody.range(of: "eventSuppressor.stop()") {
+            #expect(sessionEnd.lowerBound < suppressorStop.lowerBound)
+        }
     }
 
     @Test func prearmAndMainThreadShareOneEventLevelArmDecision() throws {

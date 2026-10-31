@@ -40,11 +40,16 @@ final class KeyboardEventSuppressor {
     private var heldEventCounts: [RemoteNativeEvent: Int] = [:]
     // Only a native down actually consumed by this tap owns an early native up.
     private var nativeDownsAwaitingUp: [RemoteNativeEvent: Int] = [:]
-    // 报告线程提前登记、并已被原生按下认领的按下。主线程随后登记同一次
-    // 按下时不再追加重复记录，否则会留下吞掉下一次实体按键的陈旧窗口。
-    // 认领带过期时刻：主线程若因权限撤销、设备移除等路径没有为这次按下执行
+    // 报告线程提前登记、并已被原生按下认领的按下，按按下顺序逐个配对。
+    //
+    // 每条认领只对应一次按下：原生按下消费一条提前登记记录时入队一条，主线程
+    // 随后为同一次按下执行 `arm` 时出队一条。这里必须是队列而不是计数，也不能
+    // 在松键时按事件整体清空：快速连按时 `up 1` 与 `down 2` 会交错到达，
+    // 「松键就清空」会删掉第二次按下仍需的认领，主线程随后为它多追加一条待匹配
+    // 记录，在窗口期内吞掉实体键盘的音量键。
+    // 认领带过期时刻：主线程若因权限撤销、设备移除等路径没有为该按下执行
     // `arm`，认领也不能永久生效，否则下一次真实按下会被误判成重复登记。
-    private var prearmedDownsClaimed: [RemoteNativeEvent: (count: Int, until: TimeInterval)] = [:]
+    private var prearmedDownsClaimed: [RemoteNativeEvent: [TimeInterval]] = [:]
     private var earlyNativeUps: [RemoteNativeEvent: Int] = [:]
     // Diagnostic-only: bounded to the remote's known native descriptors.
     private var recentUnclaimedDowns: [RemoteNativeEvent: TimeInterval] = [:]
@@ -181,7 +186,10 @@ final class KeyboardEventSuppressor {
             recentArmed.append((event: nativeEvent, until: now + 1.0))
         }
         pendingEvents.removeAll { $0.expiresAt <= now }
-        prearmedDownsClaimed = prearmedDownsClaimed.filter { $0.value.until > now }
+        prearmedDownsClaimed = prearmedDownsClaimed.compactMapValues { claimed in
+            let live = claimed.filter { $0 > now }
+            return live.isEmpty ? nil : live
+        }
         for nativeEvent in nativeEvents {
             switch edge {
             case .down:
@@ -197,12 +205,11 @@ final class KeyboardEventSuppressor {
                 }
                 heldEventCounts[nativeEvent, default: 0] += 1
                 if heldEventCounts[nativeEvent] != 1 { nativeDownsAwaitingUp.removeValue(forKey: nativeEvent) }
-                if var claim = prearmedDownsClaimed.removeValue(forKey: nativeEvent) {
-                    // 报告线程已经登记过这次按下，并且原生事件已消费它。
-                    if claim.count > 1 {
-                        claim.count -= 1
-                        prearmedDownsClaimed[nativeEvent] = claim
-                    }
+                if var claims = prearmedDownsClaimed[nativeEvent], !claims.isEmpty {
+                    // 报告线程已经为这一次按下登记过，并且原生事件已消费它。
+                    // 只出队一条：队列里剩下的认领属于后续尚未被主线程处理的按下。
+                    claims.removeFirst()
+                    prearmedDownsClaimed[nativeEvent] = claims.isEmpty ? nil : claims
                     continue
                 }
                 // 报告线程登记过同一次按下、但原生事件还没到：只保留那一条记录。
@@ -228,7 +235,9 @@ final class KeyboardEventSuppressor {
                     continue
                 }
                 nativeDownsAwaitingUp.removeValue(forKey: nativeEvent)
-                prearmedDownsClaimed.removeValue(forKey: nativeEvent)
+                // 松键不能清空认领：`up 1` 到达时 `down 2` 的认领往往仍在等主线程
+                // 处理，整体清空会让主线程为第二次按下多追加一条待匹配记录。
+                // 认领只由主线程的 `arm(.down)` 逐条出队，或按过期时间清理。
                 // The native down may still be in flight. Release held-repeat
                 // ownership without discarding that unconsumed expected edge.
                 let remaining = (heldEventCounts[nativeEvent] ?? 0) - 1
@@ -349,11 +358,14 @@ final class KeyboardEventSuppressor {
         }) {
             let matched = pendingEvents.remove(at: matchIndex)
             if matched.prearmed, descriptor.edge == .down {
-                // 记住这次按下由报告线程提前登记并已被认领，主线程随后
-                // 登记同一按下时不再追加重复记录。计数而不是置 1：
-                // 连点时可能有多次按下都已被认领，而主线程还没登记完。
-                let count = (prearmedDownsClaimed[descriptor.event]?.count ?? 0) + 1
-                prearmedDownsClaimed[descriptor.event] = (count, now + Self.nativeDeliveryWindow)
+                // 记住这一次按下由报告线程提前登记并已被认领，主线程随后
+                // 为同一次按下执行 `arm` 时不再追加记录。按按下顺序入队：
+                // 连点时可能有多条按下已被认领而主线程还没登记完，
+                // 队列让每条认领只抵掉它自己那一次按下。
+                var claims = prearmedDownsClaimed[descriptor.event] ?? []
+                claims.append(now + Self.nativeDeliveryWindow)
+                if claims.count > 8 { claims.removeFirst(claims.count - 8) }
+                prearmedDownsClaimed[descriptor.event] = claims
             }
             if descriptor.edge == .down, heldEventCounts[descriptor.event] == 1,
                !pendingEvents.contains(where: { $0.event == descriptor.event && $0.edge == .up }),
