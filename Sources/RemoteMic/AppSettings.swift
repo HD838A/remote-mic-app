@@ -433,6 +433,7 @@ final class AppSettings: ObservableObject {
             bindings[trigger] = configured
             secondaryButtonBindings[button] = bindings
         }
+        dropUnrunnableHoldMode(for: button)
         saveSelectedRemoteProfileMappings()
     }
 
@@ -1651,8 +1652,9 @@ final class AppSettings: ObservableObject {
 
     func configuredAction(for button: RemoteButton, trigger: ButtonTrigger,
                           profileID: UUID?) -> ConfiguredButtonAction {
-        configuredActionOverride?(profileID, button, trigger)
-            ?? configuredBaseAction(for: button, trigger: trigger, profileID: profileID)
+        (configuredActionOverride?(profileID, button, trigger)
+            ?? configuredBaseAction(for: button, trigger: trigger, profileID: profileID))
+            .normalizedForExecution
     }
 
     var selectedRemoteProfile: RemoteDeviceProfile? {
@@ -3074,6 +3076,16 @@ final class AppSettings: ObservableObject {
         interactionSettings.modes[button.rawValue] = mode.rawValue
     }
 
+    /// An action change can make the saved hold choice unrunnable. Drop it to "unset" so the
+    /// button never keeps a choice it cannot honour.
+    private func dropUnrunnableHoldMode(for button: RemoteButton) {
+        guard let mode = interactionSettings.modes[button.rawValue]
+                .flatMap(RemoteButtonHoldMode.init(rawValue:)),
+              !interactionSnapshot(for: button).blockers(for: mode).isEmpty
+        else { return }
+        setHoldMode(.once, for: button)
+    }
+
     func interactionSnapshot(for button: RemoteButton, profileID: UUID? = nil,
                              opaque: (ButtonTrigger) -> Bool = { _ in false }) -> RemoteButtonInteractionSnapshot {
         let timing = buttonInteractionSettings(profileID: profileID)
@@ -3089,6 +3101,11 @@ final class AppSettings: ObservableObject {
            timing.migratedRepeatButtons?.contains(button.rawValue) == true,
            snapshot.hasOpaqueBinding || snapshot.recognizesDouble || snapshot.recognizesLong ||
             !snapshot.single.allowsHoldRepeat {
+            snapshot.mode = .once
+        }
+        // A hold choice that the current actions cannot run is dropped, not turned into a
+        // paused state: the button must keep its click and long press instead of going dead.
+        if let mode = snapshot.mode, !snapshot.blockers(for: mode).isEmpty {
             snapshot.mode = .once
         }
         return snapshot

@@ -90,6 +90,48 @@ struct SettingsPageRegressionTests {
         #expect(source.contains("guard model.webRemoteState.isEnabled else { return }"))
     }
 
+    @Test func gestureSectionExplainsDisabledHoldOptionsAndShowsLearningProgress() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+
+        // A disabled option must say what it is missing, and two disabled options must
+        // explain themselves instead of leaving the editor blank.
+        #expect(source.contains("Text(holdBlockerText(blocker))"))
+        #expect(source.contains("button_mapping.hold.blocker.long_configured"))
+        #expect(source.contains("button_mapping.hold.repeat_prefix"))
+        #expect(source.contains("button_mapping.hold.clear_long_to_enable"))
+        // Both hold targets share one card height, so the pair cannot look ragged.
+        #expect(source.contains("minHeight: 62, maxHeight: 62"))
+        let holdPanelStart = try #require(source.range(of: "private func mappingHoldEditorPanel"))
+        let holdPanelEnd = try #require(source.range(
+            of: "private func mappingHoldOptionColumn",
+            range: holdPanelStart.upperBound..<source.endIndex
+        ))
+        let holdPanel = source[holdPanelStart.lowerBound..<holdPanelEnd.lowerBound]
+        // The panel is replaced by the next selection, so it needs no close button of its own.
+        #expect(!holdPanel.contains("mappingHoldEditingButton = nil"))
+        // One state colour only: no leftover orange warnings or link-blue actions.
+        #expect(!holdPanel.contains(".orange"))
+        #expect(!holdPanel.contains(".buttonStyle(.link)"))
+        // Clicking the same hold entry again must still bring the editor into view.
+        #expect(source.contains("requestMappingEditorScroll(focusHold: true)"))
+        #expect(source.contains(".onChange(of: mappingEditorScrollRequest)"))
+        #expect(source.contains(".id(\"mapping-hold-editor\")"))
+        // Learning must state the three steps instead of leaving the count implicit.
+        #expect(source.contains("button_mapping.learning.progress"))
+        #expect(source.contains("Text(\"\\(number)/\\(total) · \\(localization.text(titleKey))\")"))
+        // Internal range/step maths stays out of the user-facing panel.
+        #expect(!source.contains("button_mapping.learning.adjusted"))
+        // The panel no longer floods itself with the system accent colour.
+        #expect(!source.contains("Color.accentColor.opacity(0.07)"))
+    }
+
     @Test func mappingPageSelectsTheDefaultXiaomiStyleOnlyWhenTheSectionOpens() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -1188,7 +1230,7 @@ struct SettingsPageRegressionTests {
         #expect(canvas.contains("let cardHeight: CGFloat = 72"))
         #expect(settings.contains("mappingHoldEditorPanel(button)"))
         #expect(settings.contains("RemoteButtonHoldMode.selectableCases"))
-        #expect(settings.contains("profileUnsupported || candidate.unavailableReason != nil"))
+        #expect(settings.contains(".disabled(profileUnsupported || !blockers.isEmpty)"))
         #expect(settings.contains("reconcileMappingHoldMode(afterChanging: button)"))
         #expect(settings.contains("guard let mode = RemoteButtonHoldModeDefault.storedMode"))
         #expect(!settings.contains("resolvedMode == .repeatSingle, repeatSingle.unavailableReason != nil"))
@@ -1196,8 +1238,8 @@ struct SettingsPageRegressionTests {
         #expect(!settings.contains("holdSingle"))
         #expect(renderer.contains("REMOTE_MIC_SETTINGS_SCREENSHOT_OPEN_HOLD_EDITOR"))
         #expect(renderer.contains("REMOTE_MIC_SETTINGS_SCREENSHOT_HOLD_MODE"))
-        #expect(chinese.contains("\"button_mapping.hold.summary.repeat_single\" = \"按住：重复单击\""))
-        #expect(chinese.contains("\"button_mapping.hold.summary.repeat_long\" = \"按住：重复长按\""))
+        #expect(chinese.contains("\"button_mapping.hold.repeat_prefix\" = \"按住：重复 \""))
+        #expect(!settings.contains("button_mapping.hold.paused_tag"))
     }
 
     @Test func cloudPhoneRemoteUsesOnlyTheCloudflareRelayContract() throws {

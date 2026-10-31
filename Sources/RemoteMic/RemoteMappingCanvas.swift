@@ -220,9 +220,10 @@ struct RemoteMappingCanvas: View {
                     Text(holdSummary(button))
                         .font(.system(size: 12, weight: .semibold))
                         .lineLimit(1)
+                        .truncationMode(.tail)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
-                        .background(Color.accentColor.opacity(0.10), in: RoundedRectangle(cornerRadius: 5))
+                        .background(.quaternary, in: RoundedRectangle(cornerRadius: 5))
                 }
                 .buttonStyle(.plain)
                 .help("\(button.displayName(using: localization)) · \(holdSummary(button))")

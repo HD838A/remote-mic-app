@@ -1319,9 +1319,15 @@
 
 // Device gesture timing and hold behavior
 "button_mapping.hold.entry" = "按住";
-"button_mapping.hold.summary.repeat_single" = "按住：重复单击";
-"button_mapping.hold.summary.repeat_long" = "按住：重复长按";
 "button_mapping.hold.description" = "长时间按住此键，持续执行下面选择的行为，松开后停止。";
+"button_mapping.hold.clear_long_to_enable" = "清除长按动作后可选";
+"button_mapping.hold.repeat_prefix" = "按住：重复 ";
+"button_mapping.hold.blocker.timing_invalid" = "识别时间无效";
+"button_mapping.hold.blocker.profile_owned" = "该按键由键位方案接管";
+"button_mapping.hold.blocker.action_unset" = "这一步还没有设置动作";
+"button_mapping.hold.blocker.action_not_repeatable" = "「%@」不支持连续执行";
+"button_mapping.hold.blocker.long_configured" = "长按已设置为「%@」，按住只能重复一种动作";
+"button_mapping.hold.blocker.long_owned_by_profile" = "长按由键位方案接管";
 "button_mapping.hold.target" = "执行目标（单选）";
 "button_mapping.hold.clear" = "清除按住";
 "button_mapping.hold.single_action" = "单击动作";
@@ -1331,13 +1337,13 @@
 "button_mapping.hold_mode.once" = "未设置按住";
 "button_mapping.hold_mode.repeatlong" = "重复长按";
 "button_mapping.hold_mode.repeatsingle" = "重复单击";
-"button_mapping.hold_invalid" = "此配置无效。此按键已停用，请重新选择模式或恢复默认时间。";
-"button_mapping.hold_repeat_long_unavailable" = "长按动作不支持重复，或此按键由键位方案接管。此按键已停用。";
-"button_mapping.hold_repeat_single_unavailable" = "重复单击需要可重复的单击动作，并且不能配置长按动作。键位方案接管时不可用。此按键已停用。";
+"button_mapping.hold_invalid" = "按住设置无效，请重新选择模式或恢复默认识别时间；其余动作照常执行。";
+"button_mapping.hold_repeat_long_unavailable" = "按住不会重复：当前配置冲突。其余动作照常执行。";
+"button_mapping.hold_repeat_single_unavailable" = "按住不会重复：当前配置冲突。其余动作照常执行。";
 "button_mapping.gesture.title" = "按键手势";
 "button_mapping.gesture.subtitle" = "本型号的全部普通按键共用以下识别时间。";
 "button_mapping.learning.title" = "学习你的单击、双击和长按";
-"button_mapping.learning.subtitle" = "请使用同一个普通按键完成三项操作。学习结果会直接填入下面的识别时间。";
+"button_mapping.learning.subtitle" = "需要依次完成 3 次操作：单击、双击和长按。学习结果会填入下面的识别时间。";
 "button_mapping.learning.single" = "单击一次";
 "button_mapping.learning.single_hint" = "按下后立即松开";
 "button_mapping.learning.double" = "双击一次";
@@ -1346,13 +1352,12 @@
 "button_mapping.learning.long_hint" = "按住后自然松开";
 "button_mapping.learning.waiting" = "等待学习";
 "button_mapping.learning.not_started" = "未开始";
-"button_mapping.learning.in_progress" = "学习中";
+"button_mapping.learning.progress" = "学习中 · 第 %d 步，共 %d 步";
 "button_mapping.learning.complete" = "学习完成";
 "button_mapping.learning.start" = "开始学习";
 "button_mapping.learning.restart" = "重新学习";
 "button_mapping.learning.unavailable" = "当前遥控器型号无法学习。识别型号后可手动调整识别时间。";
 "button_mapping.learning.disconnected" = "连接这台遥控器后才能学习。你仍可手动调整并保存识别时间。";
-"button_mapping.learning.adjusted" = "测量结果已按允许范围和 50 ms 步长调整。";
 "button_mapping.timing_title" = "识别时间";
 "button_mapping.timing_double" = "双击等待时间";
 "button_mapping.timing_long" = "长按判定时间";

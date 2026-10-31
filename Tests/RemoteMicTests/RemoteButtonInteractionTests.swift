@@ -107,7 +107,7 @@ struct RemoteButtonInteractionTests {
         let clock = InteractionClock()
         let controller = RemoteButtonInteractionController(scheduler: clock)
         var count = 0
-        for config in [snapshot(.repeatSingle, long: true), snapshot(d: 149),
+        for config in [snapshot(.repeatSingle, long: true), snapshot(d: 49),
                        RemoteButtonInteractionSnapshot(settings: .init(), mode: nil,
                             single: .disabled, double: .disabled, long: .disabled)] {
             controller.handle(.press, button: .ok, snapshot: config, valid: { true }) { _, _ in count += 1; return true }
@@ -193,7 +193,7 @@ struct RemoteButtonInteractionTests {
             explicit: nil, snapshot: snapshot(single: .disabled)) == nil)
         // Out-of-range timing must not be "fixed" into a saved mode.
         #expect(RemoteButtonHoldModeDefault.storedMode(
-            explicit: nil, snapshot: snapshot(d: 149)) == nil)
+            explicit: nil, snapshot: snapshot(d: 49)) == nil)
     }
 
     @Test func holdDefaultNeverRewritesAChoiceOrAnInheritedMode() {
@@ -213,22 +213,40 @@ struct RemoteButtonInteractionTests {
             explicit: nil, snapshot: snapshot(.repeatLong, long: true)) == nil)
     }
 
-    @Test func conflictingLongPressDegradesWithoutOverwritingTheSavedHoldMode() throws {
+    @Test func changingAnActionClearsAHoldChoiceItCanNoLongerRun() throws {
         let name = "SayAll.HoldConflict.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: name))
         defer { defaults.removePersistentDomain(forName: name) }
         let settings = AppSettings(defaults: defaults)
+        let profileID = try #require(settings.selectedRemoteProfileID)
+        let singleBefore = settings.interactionSnapshot(for: .ok).single
         settings.setHoldMode(.repeatSingle, for: .ok)
-        settings.setAction(.arrowLeft, for: .ok, trigger: .longPress)
-        #expect(settings.interactionSettings.modes["ok"] == "repeatSingle")
-        #expect(settings.interactionSnapshot(for: .ok).mode == .repeatSingle)
-        #expect(settings.interactionSnapshot(for: .ok).unavailableReason != nil)
-        let restarted = AppSettings(defaults: defaults)
-        #expect(restarted.interactionSettings.modes["ok"] == "repeatSingle")
-        #expect(restarted.interactionSnapshot(for: .ok).unavailableReason != nil)
-        settings.setAction(.disabled, for: .ok, trigger: .longPress)
+
+        // A completed edit goes through `setBaseBinding`, exactly like the settings page.
+        settings.setBaseBinding(
+            ConfiguredButtonAction(action: .arrowLeft, shortcut: nil),
+            for: .ok,
+            trigger: .longPress,
+            profileID: profileID
+        )
+
+        // The saved choice is dropped back to "unset" instead of becoming a paused state.
+        #expect(settings.interactionSettings.modes["ok"] == "once")
+        #expect(settings.interactionSnapshot(for: .ok).mode == .once)
         #expect(settings.interactionSnapshot(for: .ok).unavailableReason == nil)
-        #expect(settings.interactionSettings.modes["ok"] == "repeatSingle")
+
+        // The button keeps working: the click stays live, next to the new long press.
+        #expect(settings.interactionSnapshot(for: .ok).single == singleBefore)
+        #expect(settings.interactionSnapshot(for: .ok).long.action == .arrowLeft)
+
+        let restarted = AppSettings(defaults: defaults)
+        #expect(restarted.interactionSnapshot(for: .ok).mode == .once)
+
+        // Removing the conflict does not silently restore the old choice; the user picks again.
+        settings.setBaseBinding(
+            .disabled, for: .ok, trigger: .longPress, profileID: profileID
+        )
+        #expect(settings.interactionSnapshot(for: .ok).mode == .once)
     }
 
     @Test func changingTheModelSeedsTheNewModelTimingFromTheLegacyFieldsOnce() throws {
@@ -282,7 +300,7 @@ struct RemoteButtonInteractionTests {
         object["interactionSettings"] = interactionSettings
         object["buttonGestureTimingsByModel"] = [
             XiaomiRemoteModel.rc003.rawValue: [
-                "doubleClickMilliseconds": 149,
+                "doubleClickMilliseconds": 49,
                 "longPressMilliseconds": 1_000,
             ],
         ]
@@ -312,6 +330,30 @@ struct RemoteButtonInteractionTests {
         #expect(decoded.modes == ["right": "once", "left": "repeatSingle"])
         #expect(decoded.mode(for: .back) == .once)
         #expect(decoded.mode(for: .right) == .once)
+    }
+
+    @Test func unrecordedShortcutNeverReadsAsABinding() throws {
+        let name = "SayAll.UnrecordedShortcut.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        let settings = AppSettings(defaults: defaults)
+        let profileID = settings.selectedRemoteProfileID
+
+        // Choosing the action without recording keys must not produce a usable binding.
+        settings.setAction(.customShortcut, for: .power)
+        settings.setAction(.customShortcut, for: .power, trigger: .longPress)
+        #expect(settings.configuredAction(for: .power, trigger: .singleClick, profileID: profileID).action
+            == .disabled)
+        #expect(settings.configuredAction(for: .power, trigger: .longPress, profileID: profileID).action
+            == .disabled)
+
+        // Once keys exist the same action becomes a real binding again.
+        settings.setShortcut(
+            CustomKeyboardShortcut(keyCode: 40, modifierFlags: [.command], keyLabel: "K"),
+            for: .power
+        )
+        #expect(settings.configuredAction(for: .power, trigger: .singleClick, profileID: profileID).action
+            == .customShortcut)
     }
 
     @Test func timingChangesDoNotCancelButModeAndMappingChangesDo() throws {
@@ -459,6 +501,60 @@ struct RemoteButtonInteractionTests {
         ))
         #expect(result?.suggestedTiming.isValid == true)
         #expect(learner.status.step == .complete)
+    }
+
+    @Test func doubleClickWindowAllowsFiftyMilliseconds() {
+        #expect(RemoteButtonGestureTiming(doubleClickMilliseconds: 50, longPressMilliseconds: 550).isValid)
+        #expect(RemoteButtonGestureTiming(doubleClickMilliseconds: 500, longPressMilliseconds: 550).isValid)
+        #expect(!RemoteButtonGestureTiming(doubleClickMilliseconds: 0, longPressMilliseconds: 550).isValid)
+        #expect(!RemoteButtonGestureTiming(doubleClickMilliseconds: 25, longPressMilliseconds: 550).isValid)
+    }
+
+    @Test func holdBlockersNameTheActionThatBlocksEachMode() {
+        // Repeatable click plus a long press that never recorded keys: the power-button case.
+        let power = RemoteButtonInteractionSnapshot(
+            settings: .init(),
+            mode: .once,
+            single: .init(action: .deleteBackward, shortcut: nil),
+            double: .disabled,
+            long: .init(action: .customShortcut, shortcut: nil)
+        )
+        #expect(power.blockers(for: .repeatSingle)
+            == [.longPressConfigured(.init(action: .customShortcut, shortcut: nil))])
+        #expect(power.blockers(for: .repeatLong) == [.actionUnset])
+        #expect(power.blockers(for: .once).isEmpty)
+
+        // A click that launches an app cannot repeat, and no long press is set: the home-button case.
+        let home = RemoteButtonInteractionSnapshot(
+            settings: .init(),
+            mode: .once,
+            single: .init(action: .openCustomApplication, shortcut: nil),
+            double: .disabled,
+            long: .disabled
+        )
+        #expect(home.blockers(for: .repeatSingle)
+            == [.actionNotRepeatable(.init(action: .openCustomApplication, shortcut: nil))])
+        #expect(home.blockers(for: .repeatLong) == [.actionUnset])
+    }
+
+    @Test func holdBlockersAgreeWithTheRuntimeAvailabilityGate() {
+        let power = RemoteButtonInteractionSnapshot(
+            settings: .init(), mode: .once,
+            single: .init(action: .deleteBackward, shortcut: nil),
+            double: .disabled,
+            long: .init(action: .customShortcut, shortcut: nil)
+        )
+        var opaque = snapshot()
+        opaque.hasOpaqueBinding = true
+        let cases = [snapshot(), snapshot(long: true), snapshot(single: .appSwitcher), power, opaque]
+        for config in cases {
+            for mode in RemoteButtonHoldMode.selectableCases {
+                let candidate = config.withMode(mode)
+                #expect(candidate.blockers(for: mode).isEmpty
+                    == (candidate.unavailableReason == nil))
+            }
+        }
+        #expect(opaque.blockers(for: .repeatLong) == [.profileOwned])
     }
 
     @Test func learningIgnoresOtherButtonsAndModelsWithoutAdvancing() {

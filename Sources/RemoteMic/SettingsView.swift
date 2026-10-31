@@ -576,6 +576,10 @@ struct SettingsView: View {
     @State private var selectedStatisticsDate: Date?
     @State private var mappingEditingTarget: ShortcutEditingTarget?
     @State private var mappingHoldEditingButton: RemoteButton?
+    /// Clicking the same hold entry twice must still bring the editor into view, so the
+    /// scroll is driven by a request token instead of the selection identity.
+    @State private var mappingEditorScrollTarget = "mapping-action-editor"
+    @State private var mappingEditorScrollRequest = 0
     @State private var mappingActionFilter: MappingActionFilter = .all
     @State private var gestureTimingDraft = RemoteButtonGestureTiming()
     @State private var gestureTimingDraftModel: XiaomiRemoteModel?
@@ -977,7 +981,7 @@ struct SettingsView: View {
                             preservesMappingContextOnNavigation = true
                             if let device { settings.selectRemoteProfile(device) }
                             editingMappingProfileID = profile
-                            mappingHoldEditingButton = nil
+                            mappingHoldEditingButton = button
                             mappingEditingTarget = ShortcutEditingTarget(button: button, trigger: trigger)
                             selectedSection = .mapping
                         },
@@ -1776,7 +1780,7 @@ struct SettingsView: View {
                     selectedSiriRemoteControlID = controlID
                     selectedRemoteButton = button
                     mappingActionFilter = .all
-                    mappingHoldEditingButton = nil
+                    mappingHoldEditingButton = button
                     mappingEditingTarget = ShortcutEditingTarget(
                         button: button,
                         trigger: trigger
@@ -1790,6 +1794,7 @@ struct SettingsView: View {
                     shortcutCaptureTarget = nil
                     applicationShortcutCaptureProfileID = nil
                     mappingHoldEditingButton = button
+                    requestMappingEditorScroll(focusHold: true)
                 },
                 onVoiceSettings: { mappingVoiceSettingsRequest += 1 }
             )
@@ -1871,7 +1876,7 @@ struct SettingsView: View {
                     selectedChromecastControlID = controlID
                     selectedRemoteButton = button
                     mappingActionFilter = .all
-                    mappingHoldEditingButton = nil
+                    mappingHoldEditingButton = button
                     mappingEditingTarget = ShortcutEditingTarget(
                         button: button,
                         trigger: trigger
@@ -1885,6 +1890,7 @@ struct SettingsView: View {
                     shortcutCaptureTarget = nil
                     applicationShortcutCaptureProfileID = nil
                     mappingHoldEditingButton = button
+                    requestMappingEditorScroll(focusHold: true)
                 },
                 // 置灰表 = 默认表去掉已放开的键（主开关全放开 / 按键级豁免）。
                 systemReservedControlIDs: ChromecastRemoteControl.canvasReservedControlIDs(
@@ -1911,13 +1917,21 @@ struct SettingsView: View {
         #endif
     }
 
+    /// Asks the mapping scroll view to bring the hold editor into view. The token makes a
+    /// repeated click on the same button still scroll, instead of looking like a dead control.
+    private func requestMappingEditorScroll(focusHold: Bool) {
+        mappingEditorScrollTarget = focusHold ? "mapping-hold-editor" : "mapping-action-editor"
+        mappingEditorScrollRequest &+= 1
+    }
+
     private func mappingConfiguration(for button: RemoteButton, trigger: ButtonTrigger) -> ConfiguredButtonAction {
         if let profile = editingMappingProfileID {
-            return macroFeature.profileBinding(device: settings.selectedRemoteProfileID, profile: profile,
+            return (macroFeature.profileBinding(device: settings.selectedRemoteProfileID, profile: profile,
                 button: button, trigger: trigger)
-                ?? settings.configuredBaseAction(for: button, trigger: trigger)
+                ?? settings.configuredBaseAction(for: button, trigger: trigger))
+                .normalizedForExecution
         }
-        return settings.configuredBaseAction(for: button, trigger: trigger)
+        return settings.configuredBaseAction(for: button, trigger: trigger).normalizedForExecution
     }
 
     private func saveMappingBinding(_ configured: ConfiguredButtonAction, button: RemoteButton, trigger: ButtonTrigger) {
@@ -2104,7 +2118,7 @@ struct SettingsView: View {
                 onEdit: { button, trigger in
                     selectedRemoteButton = button
                     mappingActionFilter = .all
-                    mappingHoldEditingButton = nil
+                    mappingHoldEditingButton = button
                     mappingEditingTarget = ShortcutEditingTarget(
                         button: button,
                         trigger: trigger
@@ -2116,6 +2130,7 @@ struct SettingsView: View {
                     shortcutCaptureTarget = nil
                     applicationShortcutCaptureProfileID = nil
                     mappingHoldEditingButton = button
+                    requestMappingEditorScroll(focusHold: true)
                 },
                 onVoiceSettings: { mappingVoiceSettingsRequest += 1 }
             )
@@ -2172,9 +2187,13 @@ struct SettingsView: View {
                             if let target = mappingEditingTarget {
                                 mappingEditorPanel(target)
                                     .id("mapping-action-editor")
+                                if let holdButton = mappingHoldEditingButton, holdButton == target.button {
+                                    mappingHoldEditorPanel(holdButton)
+                                        .id("mapping-hold-editor")
+                                }
                             } else if let button = mappingHoldEditingButton {
                                 mappingHoldEditorPanel(button)
-                                    .id("mapping-action-editor")
+                                    .id("mapping-hold-editor")
                             }
 
                             #if SAYALL_CHROMECAST_ENABLED
@@ -2236,7 +2255,14 @@ struct SettingsView: View {
                     guard buttonID != nil else { return }
                     DispatchQueue.main.async {
                         withAnimation(.easeInOut(duration: 0.25)) {
-                            proxy.scrollTo("mapping-action-editor", anchor: .top)
+                            proxy.scrollTo("mapping-hold-editor", anchor: .top)
+                        }
+                    }
+                }
+                .onChange(of: mappingEditorScrollRequest) { _ in
+                    DispatchQueue.main.async {
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            proxy.scrollTo(mappingEditorScrollTarget, anchor: .top)
                         }
                     }
                 }
@@ -2850,9 +2876,18 @@ struct SettingsView: View {
                         installedBundleIdentifiers: installedBundleIdentifiers,
                         isManagedPowerAction: isManagedPowerAction,
                         onSelect: { action in
+                            applicationShortcutCaptureProfileID = nil
+                            guard action != .customShortcut else {
+                                // Choosing the action starts recording; an unrecorded shortcut
+                                // must never become a saved binding.
+                                shortcutCaptureTarget = ShortcutEditingTarget(
+                                    button: button,
+                                    trigger: trigger
+                                )
+                                return
+                            }
                             setMappingAction(action, for: button, trigger: trigger)
                             shortcutCaptureTarget = nil
-                            applicationShortcutCaptureProfileID = nil
                         }
                     )
                 }
@@ -2861,7 +2896,8 @@ struct SettingsView: View {
             if mappingActionFilter.includes(.custom), macroFeature.isFeatureVisible {
                 mappingMacroChoices(button: button, trigger: trigger, configured: configured)
             }
-            if configured.action == .customShortcut {
+            if configured.action == .customShortcut ||
+                shortcutCaptureTarget == ShortcutEditingTarget(button: button, trigger: trigger) {
                 inlineShortcutEditor(
                     button: button,
                     trigger: trigger,
@@ -2880,15 +2916,15 @@ struct SettingsView: View {
             if button == .power && trigger == .singleClick && settings.experimentalContinuousRecordingEnabled {
                 Text("button_mapping.continuous_recording_experiment.power_managed")
                     .font(.system(size: 12))
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(Color.accentColor)
             } else if trigger == .doubleClick && configured.action != .disabled {
                 Text("button_mapping.double_click.effect")
                     .font(.system(size: 12))
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(Color.accentColor)
             } else if trigger == .longPress && configured.action != .disabled {
                 Text("button_mapping.long_press.effect")
                     .font(.system(size: 12))
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(Color.accentColor)
             } else if trigger == .singleClick,
                       configured.action == .disabled || configured.action.allowsRepeat {
                 Text("button_mapping.single_click.help")
@@ -2946,14 +2982,13 @@ struct SettingsView: View {
     }
 
     private func mappingHoldSummary(for button: RemoteButton) -> String {
-        switch mappingHoldMode(for: button) {
-        case .once:
+        let mode = mappingHoldSnapshot(for: button).mode
+        guard let mode, mode != .once else {
             return localization.text("button_mapping.hold.entry")
-        case .repeatSingle:
-            return localization.text("button_mapping.hold.summary.repeat_single")
-        case .repeatLong:
-            return localization.text("button_mapping.hold.summary.repeat_long")
         }
+        let trigger: ButtonTrigger = mode == .repeatLong ? .longPress : .singleClick
+        return localization.text("button_mapping.hold.repeat_prefix") +
+            mappingActionSummary(for: button, trigger: trigger)
     }
 
     private func setMappingHoldMode(_ mode: RemoteButtonHoldMode, for button: RemoteButton) {
@@ -2974,6 +3009,12 @@ struct SettingsView: View {
                 .flatMap(RemoteButtonHoldMode.init(rawValue:))
         }
         let snapshot = mappingHoldSnapshot(for: button)
+        // The action just changed. If the saved hold choice can no longer run, drop it back to
+        // "unset" so the button always has a truthful state and the user can choose again.
+        if let explicitMode, !snapshot.blockers(for: explicitMode).isEmpty {
+            setMappingHoldMode(.once, for: button)
+            return
+        }
         guard let mode = RemoteButtonHoldModeDefault.storedMode(explicit: explicitMode, snapshot: snapshot)
         else { return }
         setMappingHoldMode(mode, for: button)
@@ -2981,11 +3022,39 @@ struct SettingsView: View {
 
     private func mappingHoldSnapshot(for button: RemoteButton) -> RemoteButtonInteractionSnapshot {
         let currentInteractionSettings = settings.buttonInteractionSettings()
-        return RemoteButtonInteractionSnapshot(settings: currentInteractionSettings,
+        var snapshot = RemoteButtonInteractionSnapshot(settings: currentInteractionSettings,
             mode: mappingHoldMode(for: button),
             single: mappingConfiguration(for: button, trigger: .singleClick),
             double: mappingConfiguration(for: button, trigger: .doubleClick),
             long: mappingConfiguration(for: button, trigger: .longPress))
+        // The editor mirrors runtime: a choice the actions cannot run is simply unset.
+        if let mode = snapshot.mode, !snapshot.blockers(for: mode).isEmpty {
+            snapshot.mode = .once
+        }
+        return snapshot
+    }
+
+    private func holdBlockerText(_ blocker: RemoteButtonHoldBlocker) -> String {
+        switch blocker {
+        case .timingInvalid:
+            return localization.text("button_mapping.hold.blocker.timing_invalid")
+        case .profileOwned:
+            return localization.text("button_mapping.hold.blocker.profile_owned")
+        case .actionUnset:
+            return localization.text("button_mapping.hold.blocker.action_unset")
+        case let .actionNotRepeatable(configured):
+            return String(
+                format: localization.text("button_mapping.hold.blocker.action_not_repeatable"),
+                actionSummary(configured)
+            )
+        case let .longPressConfigured(configured):
+            return String(
+                format: localization.text("button_mapping.hold.blocker.long_configured"),
+                actionSummary(configured)
+            )
+        case .longPressOwnedByProfile:
+            return localization.text("button_mapping.hold.blocker.long_owned_by_profile")
+        }
     }
 
     private func mappingHoldEditorPanel(_ button: RemoteButton) -> some View {
@@ -3010,10 +3079,6 @@ struct SettingsView: View {
                         .compatibilityButtonStyle(.standard)
                         .disabled(profileUnsupported)
                     }
-                    Button("common.action.close") {
-                        mappingHoldEditingButton = nil
-                    }
-                    .compatibilityButtonStyle(.standard)
                 }
 
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
@@ -3026,61 +3091,106 @@ struct SettingsView: View {
                     Spacer(minLength: 0)
                 }
 
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+                HStack(alignment: .top, spacing: 8) {
                     ForEach(RemoteButtonHoldMode.selectableCases) { mode in
-                        let candidate = snapshot.withMode(mode)
-                    Button {
-                            setMappingHoldMode(mode, for: button)
-                    } label: {
-                            VStack(alignment: .leading, spacing: 4) {
-                                HStack {
-                                    Image(systemName: snapshot.mode == mode ? "checkmark.circle.fill" : "circle")
-                            Text(localization.text(mode.localizationKey))
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                }
-                                Text(mode == .repeatSingle
-                                    ? localization.text("button_mapping.hold.repeat_single.action_prefix") +
-                                        mappingActionSummary(for: button, trigger: .singleClick)
-                                    : localization.text("button_mapping.hold.repeat_long.action_prefix") +
-                                        mappingActionSummary(for: button, trigger: .longPress))
-                                    .font(.system(size: 12))
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(2)
-                        }
-                        .font(.system(size: 13))
-                            .padding(8)
-                            .frame(maxWidth: .infinity, minHeight: 54, alignment: .topLeading)
-                        .background(snapshot.mode == mode ? Color.accentColor.opacity(0.12) : Color.primary.opacity(0.04),
-                                    in: RoundedRectangle(cornerRadius: 8))
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 8)
-                                    .stroke(snapshot.mode == mode ? Color.accentColor.opacity(0.55) : Color.clear)
-                            }
+                        mappingHoldOptionColumn(mode, button: button, snapshot: snapshot,
+                                                profileUnsupported: profileUnsupported)
                     }
-                    .buttonStyle(.plain)
-                    .disabled(profileUnsupported || candidate.unavailableReason != nil)
-                    .accessibilityAddTraits(snapshot.mode == mode ? .isSelected : [])
+                }
+
+                if profileUnsupported {
+                    Text("button_mapping.hold_profile_unavailable")
+                        .foregroundStyle(Color.accentColor)
+                        .font(.system(size: 12))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if let reason = snapshot.unavailableReason {
+                    Text(localization.text(reason))
+                        .foregroundStyle(Color.accentColor)
+                        .font(.system(size: 12))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                if snapshot.single.action != .disabled, !snapshot.single.action.allowsRepeat {
+                    Divider().padding(.top, 2)
+                    mappingRapidPressControl(button: button)
+                } else if snapshot.single.action != .disabled {
+                    Divider().padding(.top, 2)
+                    Text("button_mapping.single_click.help")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
                 }
             }
+        }
+    }
 
-            if profileUnsupported {
-                Text("button_mapping.hold_profile_unavailable").foregroundStyle(.orange).font(.system(size: 12))
+    /// One hold target. The card keeps a single height across both columns and its reason
+    /// sits directly underneath, so the pair always lines up.
+    private func mappingHoldOptionColumn(
+        _ mode: RemoteButtonHoldMode,
+        button: RemoteButton,
+        snapshot: RemoteButtonInteractionSnapshot,
+        profileUnsupported: Bool
+    ) -> some View {
+        let blockers = snapshot.blockers(for: mode)
+        let selected = snapshot.mode == mode
+        let subtitle = mode == .repeatSingle
+            ? localization.text("button_mapping.hold.repeat_single.action_prefix") +
+                mappingActionSummary(for: button, trigger: .singleClick)
+            : localization.text("button_mapping.hold.repeat_long.action_prefix") +
+                mappingActionSummary(for: button, trigger: .longPress)
+        return VStack(alignment: .leading, spacing: 5) {
+            Button {
+                setMappingHoldMode(mode, for: button)
+            } label: {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 6) {
+                        Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                            .foregroundStyle(selected ? Color.accentColor : Color.secondary)
+                        Text(localization.text(mode.localizationKey))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    Text(subtitle)
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .font(.system(size: 13))
+                .padding(8)
+                .frame(maxWidth: .infinity, minHeight: 62, maxHeight: 62, alignment: .topLeading)
+                .background(selected ? Color.accentColor.opacity(0.12) : Color.primary.opacity(0.04),
+                            in: RoundedRectangle(cornerRadius: 8))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(selected ? Color.accentColor.opacity(0.55) : Color.clear)
+                }
             }
-            if let reason = snapshot.unavailableReason {
-                Text(localization.text(reason)).foregroundStyle(.orange).font(.system(size: 12))
-            }
+            .buttonStyle(.plain)
+            .disabled(profileUnsupported || !blockers.isEmpty)
+            .accessibilityAddTraits(selected ? .isSelected : [])
 
-            if snapshot.single.action != .disabled, !snapshot.single.action.allowsRepeat {
-                Divider().padding(.top, 2)
-                mappingRapidPressControl(button: button)
-            } else if snapshot.single.action != .disabled {
-                Divider().padding(.top, 2)
-                Text("button_mapping.single_click.help")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-            }
+            if !blockers.isEmpty {
+                VStack(alignment: .leading, spacing: 3) {
+                    ForEach(Array(blockers.enumerated()), id: \.offset) { _, blocker in
+                        Text(holdBlockerText(blocker))
+                            .font(.system(size: 11))
+                            .foregroundStyle(Color.accentColor)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    if mode == .repeatSingle, blockers == [.longPressConfigured(snapshot.long)] {
+                        Button("button_mapping.hold.clear_long_to_enable") {
+                            setMappingAction(.disabled, for: button, trigger: .longPress)
+                        }
+                        .buttonStyle(.plain)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(Color.accentColor)
+                    }
+                }
+                .padding(.leading, 2)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
     }
 
     private var mappingGestureTimingSection: some View {
@@ -3095,8 +3205,8 @@ struct SettingsView: View {
         let persistedTiming = selectedModel.map { settings.buttonGestureTiming(for: $0) }
             ?? RemoteButtonGestureTiming()
         return GlassPanel {
-            VStack(alignment: .leading, spacing: 18) {
-                VStack(alignment: .leading, spacing: 5) {
+            VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
                     Text("button_mapping.gesture.title")
                         .font(.system(size: 20, weight: .bold))
                     Text("button_mapping.gesture.subtitle")
@@ -3105,26 +3215,27 @@ struct SettingsView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
-                VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: 10) {
                     HStack(alignment: .firstTextBaseline) {
                         Text("button_mapping.learning.title")
-                            .font(.system(size: 17, weight: .semibold))
+                            .font(.system(size: 16, weight: .semibold))
                         Spacer()
-                        Text(localization.text(learningStatusKey(
+                        Text(learningStatusText(
                             status: learningStatus,
                             matchesModel: learningMatchesModel
-                        )))
+                        ))
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(Color.accentColor)
                     }
                     Text("button_mapping.learning.subtitle")
-                        .font(.system(size: 13))
+                        .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
 
-                    HStack(alignment: .top, spacing: 10) {
+                    HStack(alignment: .top, spacing: 8) {
                         learningMeasurementCard(
                             number: 1,
+                            total: 3,
                             titleKey: "button_mapping.learning.single",
                             detailKey: "button_mapping.learning.single_hint",
                             value: learningMatchesModel ? learningStatus.singleClickMilliseconds : nil,
@@ -3132,6 +3243,7 @@ struct SettingsView: View {
                         )
                         learningMeasurementCard(
                             number: 2,
+                            total: 3,
                             titleKey: "button_mapping.learning.double",
                             detailKey: "button_mapping.learning.double_hint",
                             value: learningMatchesModel ? learningStatus.doubleClickMilliseconds : nil,
@@ -3139,6 +3251,7 @@ struct SettingsView: View {
                         )
                         learningMeasurementCard(
                             number: 3,
+                            total: 3,
                             titleKey: "button_mapping.learning.long",
                             detailKey: "button_mapping.learning.long_hint",
                             value: learningMatchesModel ? learningStatus.longPressMilliseconds : nil,
@@ -3151,14 +3264,10 @@ struct SettingsView: View {
                             ? "button_mapping.learning.disconnected"
                             : "button_mapping.learning.unavailable"))
                             .font(.system(size: 12))
-                            .foregroundStyle(.orange)
-                    } else if learningMatchesModel && learningStatus.adjustedToAllowedRange {
-                        Text("button_mapping.learning.adjusted")
-                            .font(.system(size: 12))
-                            .foregroundStyle(.orange)
+                            .foregroundStyle(Color.accentColor)
                     }
 
-                    HStack {
+                    HStack(spacing: 8) {
                         Spacer()
                         Button("button_mapping.learning.restart") {
                             gestureTimingSaveConfirmed = false
@@ -3176,40 +3285,44 @@ struct SettingsView: View {
                             (learningMatchesModel && learningStatus.isActive))
                     }
                 }
-                .padding(16)
-                .background(Color.accentColor.opacity(0.07), in: RoundedRectangle(cornerRadius: 12))
+                .padding(12)
+                .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 12))
                 .overlay {
                     RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color.accentColor.opacity(0.22), lineWidth: 1)
+                        .stroke(Color.secondary.opacity(0.16), lineWidth: 1)
                 }
 
                 Divider()
 
-                VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: 12) {
                     Text("button_mapping.timing_title")
-                        .font(.system(size: 17, weight: .semibold))
-                    gestureTimingSlider(
-                        titleKey: "button_mapping.timing_double",
-                        value: Binding(
-                            get: { gestureTimingDraft.doubleClickMilliseconds },
-                            set: {
-                                gestureTimingDraft.doubleClickMilliseconds = $0
-                                gestureTimingSaveConfirmed = false
-                            }
-                        ),
-                        range: 150...500
-                    )
-                    gestureTimingSlider(
-                        titleKey: "button_mapping.timing_long",
-                        value: Binding(
-                            get: { gestureTimingDraft.longPressMilliseconds },
-                            set: {
-                                gestureTimingDraft.longPressMilliseconds = $0
-                                gestureTimingSaveConfirmed = false
-                            }
-                        ),
-                        range: 300...1000
-                    )
+                        .font(.system(size: 16, weight: .semibold))
+                    HStack(alignment: .top, spacing: 18) {
+                        gestureTimingSlider(
+                            titleKey: "button_mapping.timing_double",
+                            value: Binding(
+                                get: { gestureTimingDraft.doubleClickMilliseconds },
+                                set: {
+                                    gestureTimingDraft.doubleClickMilliseconds = $0
+                                    gestureTimingSaveConfirmed = false
+                                }
+                            ),
+                            range: 50...500
+                        )
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        gestureTimingSlider(
+                            titleKey: "button_mapping.timing_long",
+                            value: Binding(
+                                get: { gestureTimingDraft.longPressMilliseconds },
+                                set: {
+                                    gestureTimingDraft.longPressMilliseconds = $0
+                                    gestureTimingSaveConfirmed = false
+                                }
+                            ),
+                            range: 300...1000
+                        )
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
                     HStack(spacing: 12) {
                         Text(gestureTimingSaveConfirmed
                             ? localization.text("button_mapping.timing_saved")
@@ -3228,8 +3341,8 @@ struct SettingsView: View {
                             (gestureTimingDraft == persistedTiming &&
                                 (model.buttonGestureLearningResult == nil || gestureTimingSaveConfirmed)))
                     }
-                    .padding(12)
-                    .background(Color.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 9))
+                    .padding(10)
+                    .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 9))
                 }
             }
         }
@@ -3270,24 +3383,25 @@ struct SettingsView: View {
 
     private func learningMeasurementCard(
         number: Int,
+        total: Int,
         titleKey: String,
         detailKey: String,
         value: Int?,
         isCurrent: Bool
     ) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("\(number) · \(localization.text(titleKey))")
+        VStack(alignment: .leading, spacing: 4) {
+            Text("\(number)/\(total) · \(localization.text(titleKey))")
                 .font(.system(size: 13, weight: .semibold))
             Text(localization.text(detailKey))
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
-            Spacer(minLength: 4)
+            Spacer(minLength: 2)
             Text(value.map { "\($0) ms" } ?? localization.text("button_mapping.learning.waiting"))
                 .font(.system(size: 12, design: .monospaced))
                 .foregroundStyle(value == nil ? Color.secondary : Color.primary)
         }
-        .padding(12)
-        .frame(maxWidth: .infinity, minHeight: 96, alignment: .topLeading)
+        .padding(10)
+        .frame(maxWidth: .infinity, minHeight: 76, alignment: .topLeading)
         .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10))
         .overlay {
             RoundedRectangle(cornerRadius: 10)
@@ -3295,15 +3409,25 @@ struct SettingsView: View {
         }
     }
 
-    private func learningStatusKey(
+    private func learningStatusText(
         status: RemoteButtonGestureLearningStatus,
         matchesModel: Bool
     ) -> String {
-        guard matchesModel else { return "button_mapping.learning.not_started" }
+        guard matchesModel else { return localization.text("button_mapping.learning.not_started") }
         switch status.step {
-        case .idle: return "button_mapping.learning.not_started"
-        case .complete: return "button_mapping.learning.complete"
-        case .singleClick, .doubleClick, .longPress: return "button_mapping.learning.in_progress"
+        case .idle: return localization.text("button_mapping.learning.not_started")
+        case .complete: return localization.text("button_mapping.learning.complete")
+        case .singleClick, .doubleClick, .longPress:
+            let step: Int = switch status.step {
+            case .doubleClick: 2
+            case .longPress: 3
+            default: 1
+            }
+            return String(
+                format: localization.text("button_mapping.learning.progress"),
+                step,
+                3
+            )
         }
     }
 
@@ -3721,7 +3845,7 @@ struct SettingsView: View {
             } else {
                 Text("custom_application.not_configured")
                     .font(.system(size: 12))
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(Color.accentColor)
             }
         }
         .padding(12)
@@ -4261,7 +4385,12 @@ struct SettingsView: View {
 
     private func mappingActionSummary(for button: RemoteButton, trigger: ButtonTrigger,
                                       configuredAction: ConfiguredButtonAction? = nil) -> String {
-        let configured = configuredAction ?? mappingConfiguration(for: button, trigger: trigger)
+        actionSummary(configuredAction ?? mappingConfiguration(for: button, trigger: trigger))
+    }
+
+    /// The user-visible name of one configured action. An unrecorded custom shortcut must not
+    /// read as if it already performed something.
+    private func actionSummary(_ configured: ConfiguredButtonAction) -> String {
         guard configured.action != .disabled else {
             return localization.text("button_mapping.action.not_set")
         }
@@ -4269,7 +4398,10 @@ struct SettingsView: View {
             return macroFeature.libraryActions.first { $0.id == configured.macroID }?.name
                 ?? localization.text("button_mapping.macro_unavailable")
         }
-        if configured.action == .customShortcut, let shortcut = configured.shortcut {
+        if configured.action == .customShortcut {
+            guard let shortcut = configured.shortcut else {
+                return localization.text("button_mapping.action.not_set")
+            }
             return shortcut.visualDisplayName(using: localization)
         }
         if configured.action == .openCustomApplication {

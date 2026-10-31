@@ -6,7 +6,7 @@ struct RemoteButtonGestureTiming: Codable, Equatable {
     var longPressMilliseconds: Int = 550
 
     var isValid: Bool {
-        (150...500).contains(doubleClickMilliseconds) && doubleClickMilliseconds % 50 == 0 &&
+        (50...500).contains(doubleClickMilliseconds) && doubleClickMilliseconds % 50 == 0 &&
         (300...1000).contains(longPressMilliseconds) && longPressMilliseconds % 50 == 0
     }
 }
@@ -134,6 +134,48 @@ struct RemoteButtonInteractionSnapshot {
             return !hasOpaqueBinding && single.allowsHoldRepeat && !recognizesLong
                 ? nil : "button_mapping.hold_repeat_single_unavailable"
         }
+    }
+}
+
+/// Concrete reason a hold mode cannot run for one button. Each case carries the configured
+/// action that blocks it, so the editor can name the real cause instead of quoting a rule.
+enum RemoteButtonHoldBlocker: Equatable {
+    case timingInvalid
+    case profileOwned
+    case actionUnset
+    case actionNotRepeatable(ConfiguredButtonAction)
+    case longPressConfigured(ConfiguredButtonAction)
+    case longPressOwnedByProfile
+}
+
+extension RemoteButtonInteractionSnapshot {
+    /// Empty means the mode can run. The order is the order the editor explains them.
+    func blockers(for mode: RemoteButtonHoldMode) -> [RemoteButtonHoldBlocker] {
+        guard mode != .once else { return [] }
+        guard settings.isValid else { return [.timingInvalid] }
+        if hasOpaqueBinding { return [.profileOwned] }
+        switch mode {
+        case .once:
+            return []
+        case .repeatLong:
+            return opaqueLong ? [.longPressOwnedByProfile] : Self.blockers(for: long)
+        case .repeatSingle:
+            var reasons = Self.blockers(for: single)
+            if opaqueLong {
+                reasons.append(.longPressOwnedByProfile)
+            } else if long.action != .disabled {
+                reasons.append(.longPressConfigured(long))
+            }
+            return reasons
+        }
+    }
+
+    private static func blockers(for configured: ConfiguredButtonAction) -> [RemoteButtonHoldBlocker] {
+        if configured.action == .disabled ||
+            (configured.action == .customShortcut && configured.shortcut == nil) {
+            return [.actionUnset]
+        }
+        return configured.allowsHoldRepeat ? [] : [.actionNotRepeatable(configured)]
     }
 }
 
