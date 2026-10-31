@@ -2169,15 +2169,12 @@ struct SettingsView: View {
                             Color.clear
                                 .frame(height: 0)
                                 .id("mapping-page-top")
-                            if let profileID = editingMappingProfileID,
-                               let profile = macroFeature.mappingProfiles(device: settings.selectedRemoteProfileID).first(where: { $0.id == profileID }) {
-                                HStack {
-                                    Text(localization.text("button_mapping.editing_profile") + "：" + profile.name)
-                                        .font(.system(size: 13, weight: .medium))
-                                    Spacer()
-                                    Button(localization.text("button_mapping.base_profile")) { editingMappingProfileID = nil }
-                                        .buttonStyle(.bordered)
-                                }
+                            mappingProfileSelector
+                            if editingMappingProfileID != nil {
+                                Text(localization.text("button_mapping.profile_scope_hint"))
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
                             }
                             configurationImportBanner
                             corruptedSettingsBanner

@@ -1194,6 +1194,7 @@
 "button_mapping.active_profile" = "Active";
 
 "button_mapping.base_profile" = "Default Mapping";
+"button_mapping.profile_scope_hint" = "Button profiles cover the 10 standard buttons only. Other buttons keep using the base mapping.";
 
 "button_mapping.inherit_base" = "Use Default Mapping";
 

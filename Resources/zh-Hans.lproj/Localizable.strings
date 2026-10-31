@@ -1193,6 +1193,7 @@
 "button_mapping.active_profile" = "正在使用";
 
 "button_mapping.base_profile" = "基础映射";
+"button_mapping.profile_scope_hint" = "键位方案只覆盖 10 个普通按键；其他按键仍按基础映射执行。";
 
 "button_mapping.inherit_base" = "继承基础映射";
 

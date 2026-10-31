@@ -158,6 +158,25 @@ final class MacroFeatureIntegration: ObservableObject {
         #endif
     }
 
+    /// 键位方案只能覆盖 10 个普通按键；组件版本不支持该查询时一律按“不支持”处理，
+    /// 由按键页保持只读基础映射的现有行为。
+    func supportsProfileButton(_ button: String) -> Bool {
+        #if canImport(SayAllButtonProfiles) && SAYALL_UNIFIED_BUTTON_CONFIGURATION
+        buttonProfilesFeature.supportsProfileButton(button)
+        #else
+        false
+        #endif
+    }
+
+    /// 默认方案继承基础映射且拒绝写入，按键页需要据此隐藏或禁用编辑。
+    func isMappingProfileEditable(_ profile: UUID?) -> Bool {
+        #if canImport(SayAllButtonProfiles) && SAYALL_UNIFIED_BUTTON_CONFIGURATION
+        buttonProfilesFeature.isButtonProfileEditable(profile: profile)
+        #else
+        false
+        #endif
+    }
+
     var supportsProfileHoldModes: Bool {
         #if canImport(SayAllButtonProfiles) && SAYALL_BUTTON_HOLD_MODES
         true
