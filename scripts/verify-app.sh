@@ -258,60 +258,10 @@ rg -q '^"CFBundleDisplayName" = "无线麦 SayAll";$' \
   "$APP/Contents/Resources/zh-Hans.lproj/InfoPlist.strings"
 rg -q '^"CFBundleName" = "无线麦 SayAll";$' \
   "$APP/Contents/Resources/zh-Hans.lproj/InfoPlist.strings"
-for RESOURCE_DIR in "${LOCALIZATION_DIRS[@]}"; do
-  test -f "$RESOURCE_DIR/InfoPlist.strings"
-  test -f "$RESOURCE_DIR/Localizable.strings"
-  plutil -lint "$RESOURCE_DIR/InfoPlist.strings"
-  plutil -lint "$RESOURCE_DIR/Localizable.strings"
-done
 rg -q '^"app.name" = "SayAll";$' "$APP/Contents/Resources/en.lproj/Localizable.strings"
-/usr/bin/ruby - "${LOCALIZATION_DIRS[@]}" <<'RUBY'
-def strings(path)
-  result = {}
-  File.foreach(path, encoding: "UTF-8") do |line|
-    match = line.match(/^"([^"]+)" = "(.*)";$/)
-    result[match[1]] = match[2] if match
-  end
-  result
-end
-
-directories = ARGV
-english_directory = directories.find { |path| File.basename(path) == "en.lproj" }
-abort "English localization is required" unless english_directory
-english = strings(File.join(english_directory, "Localizable.strings"))
-abort "English localization is empty" if english.empty?
-semantic_key = /\A[a-z0-9]+(?:[._][a-z0-9]+)*\z/
-invalid_keys = english.keys.reject { |key| semantic_key.match?(key) }
-abort "Invalid localization keys: #{invalid_keys.join(", ")}" unless invalid_keys.empty?
-
-format_pattern = /%(?:[0-9]+\$)?[a-zA-Z@]/
-restricted_terms = /RC003|ATVV|\bHID\b|\bUUID\b|virtual[ -]transport/i
-# Keys whose copy is intentionally empty in some languages, because the UI omits
-# the whole label instead of translating it. Keep in sync with the same list in
-# Tests/RemoteMicTests/LocalizationTests.swift; every other empty value still fails.
-intentionally_empty_keys = ["statistics.metric.count_unit"]
-directories.each do |directory|
-  localized = strings(File.join(directory, "Localizable.strings"))
-  missing = english.keys - localized.keys
-  extra = localized.keys - english.keys
-  abort "#{directory} has missing keys: #{missing.join(", ")}" unless missing.empty?
-  abort "#{directory} has extra keys: #{extra.join(", ")}" unless extra.empty?
-  localized.each do |key, value|
-    if value.empty?
-      abort "#{directory} has an empty value for #{key}" unless intentionally_empty_keys.include?(key)
-      next
-    end
-    expected_formats = english.fetch(key).scan(format_pattern).sort
-    actual_formats = value.scan(format_pattern).sort
-    abort "#{directory} has mismatched formats for #{key}" unless actual_formats == expected_formats
-    abort "#{directory} exposes a restricted term in #{key}" if value.match?(restricted_terms)
-  end
-
-  english_info = strings(File.join(english_directory, "InfoPlist.strings"))
-  localized_info = strings(File.join(directory, "InfoPlist.strings"))
-  abort "#{directory} has incomplete InfoPlist.strings" unless localized_info.keys.sort == english_info.keys.sort
-end
-RUBY
+# The localization rules live in one script so macOS CI can run the same check
+# against the source tree before any signed build exists.
+"$ROOT/scripts/verify-localizations.sh" "${LOCALIZATION_DIRS[@]}"
 
 test "$(plutil -extract CFBundleIdentifier raw -o - "$PLIST")" = \
   "com.hd838a.RemoteMic"

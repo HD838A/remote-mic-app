@@ -124,6 +124,12 @@ jobs:
         if: needs.classify_changes.outputs.product_change == 'true'
         run: ./scripts/check-repository-boundaries.sh
 
+      # Runs against the source tree, so a localization the signed-package
+      # verifier rejects fails here instead of after a full build.
+      - name: Verify localizations
+        if: needs.classify_changes.outputs.product_change == 'true'
+        run: ./scripts/verify-localizations.sh
+
       - name: Show toolchain
         if: needs.classify_changes.outputs.product_change == 'true'
         run: swift --version
