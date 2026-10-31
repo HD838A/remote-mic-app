@@ -1073,7 +1073,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
             .environmentObject(localization)
         )
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 1020, height: 772),
+            contentRect: NSRect(x: 0, y: 0, width: 960, height: 742),
             styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
@@ -1092,8 +1092,8 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         window.miniwindowImage = appIconController.catalog.image(
             for: model.settings.appIconIdentifier
         )
-        window.minSize = NSSize(width: 1020, height: 772)
-        window.setContentSize(NSSize(width: 1020, height: 772))
+        window.minSize = NSSize(width: 960, height: 742)
+        window.setContentSize(NSSize(width: 960, height: 742))
         window.setFrameAutosaveName("RemoteMicSettings")
         window.center()
         return NSWindowController(window: window)

@@ -2100,9 +2100,8 @@ struct SettingsView: View {
 
     private var mappingProfileSelector: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text(localization.text("button_mapping.editing_profile")).font(.system(size: 13, weight: .semibold))
-                Spacer()
+            HStack(spacing: 8) {
+                Spacer(minLength: 0)
                 if let active = macroFeature.activeMappingProfileID(device: settings.selectedRemoteProfileID),
                    let profile = macroFeature.mappingProfiles(device: settings.selectedRemoteProfileID).first(where: { $0.id == active }) {
                     Text(localization.text("button_mapping.active_profile") + "：" + profile.name)
@@ -2112,21 +2111,37 @@ struct SettingsView: View {
                         .font(.system(size: 12)).foregroundStyle(.secondary)
                 }
                 if editingMappingProfileID == nil && macroFeature.isFeatureVisible {
-                    Button(localization.text("button_mapping.save_as_profile")) { beginSavingMappingProfile() }
-                        .buttonStyle(.borderless)
-                        .font(.system(size: 12))
-                        .padding(.leading, 10)
+                    Button {
+                        beginSavingMappingProfile()
+                    } label: {
+                        Label(localization.text("button_mapping.save_as_profile"),
+                              systemImage: "square.and.arrow.down")
+                            .font(.system(size: 12))
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
                 }
             }
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack {
-                    Button(localization.text("button_mapping.base_profile")) { editingMappingProfileID = nil }
-                        .tint(editingMappingProfileID == nil ? .accentColor : .secondary)
-                    ForEach(macroFeature.mappingProfiles(device: settings.selectedRemoteProfileID)) { profile in
-                        Button(profile.name) { editingMappingProfileID = profile.id; shortcutCaptureTarget = nil }
-                            .tint(editingMappingProfileID == profile.id ? .accentColor : .secondary)
+                HStack(spacing: 6) {
+                    if editingMappingProfileID == nil {
+                        Button(localization.text("button_mapping.base_profile")) { editingMappingProfileID = nil }
+                            .buttonStyle(.borderedProminent)
+                    } else {
+                        Button(localization.text("button_mapping.base_profile")) { editingMappingProfileID = nil }
+                            .buttonStyle(.bordered)
                     }
-                }.buttonStyle(.bordered)
+                    ForEach(macroFeature.mappingProfiles(device: settings.selectedRemoteProfileID)) { profile in
+                        if editingMappingProfileID == profile.id {
+                            Button(profile.name) { editingMappingProfileID = profile.id; shortcutCaptureTarget = nil }
+                                .buttonStyle(.borderedProminent)
+                        } else {
+                            Button(profile.name) { editingMappingProfileID = profile.id; shortcutCaptureTarget = nil }
+                                .buttonStyle(.bordered)
+                        }
+                    }
+                }
+                .controlSize(.small)
             }
         }
         .sheet(isPresented: $isSavingMappingProfile) { mappingSaveAsProfileSheet }
@@ -2229,6 +2244,14 @@ struct SettingsView: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             mappingHeaderToggle
+            mappingProfileSelector
+                .padding(.top, 2)
+            if editingMappingProfileID != nil {
+                Text(localization.text("button_mapping.profile_scope_hint"))
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 
@@ -2295,13 +2318,6 @@ struct SettingsView: View {
                             Color.clear
                                 .frame(height: 0)
                                 .id("mapping-page-top")
-                            mappingProfileSelector
-                            if editingMappingProfileID != nil {
-                                Text(localization.text("button_mapping.profile_scope_hint"))
-                                    .font(.system(size: 11))
-                                    .foregroundStyle(.secondary)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
                             configurationImportBanner
                             corruptedSettingsBanner
 
