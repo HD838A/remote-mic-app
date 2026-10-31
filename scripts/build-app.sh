@@ -37,6 +37,13 @@ SAYALL_DIAGNOSTIC_PUBLIC_KEY_BASE64="${SAYALL_DIAGNOSTIC_PUBLIC_KEY_BASE64:-}"
 REMOTE_MIC_SENTRY_DSN="${REMOTE_MIC_SENTRY_DSN:-}"
 SAYALL_TEST_BUTTON_PROFILES_FREE="${SAYALL_TEST_BUTTON_PROFILES_FREE:-0}"
 SAYALL_BUILD_CHANNEL="${SAYALL_BUILD_CHANNEL:-}"
+# Empty means "no channel recorded in the App": local development builds. The
+# private checkout verifier then falls back to its own release default, which
+# matches the previous behaviour of protected builds.
+case "$SAYALL_BUILD_CHANNEL" in
+  ""|local|internalQA|release) ;;
+  *) print -u2 "SAYALL_BUILD_CHANNEL must be local, internalQA, or release"; exit 1 ;;
+esac
 RELEASE_STAGE_TIMEOUTS="${RELEASE_STAGE_TIMEOUTS:-0}"
 RELEASE_SWIFT_BUILD_TIMEOUT_SECONDS="${RELEASE_SWIFT_BUILD_TIMEOUT_SECONDS:-300}"
 RELEASE_CODESIGN_TIMEOUT_SECONDS="${RELEASE_CODESIGN_TIMEOUT_SECONDS:-45}"
@@ -489,8 +496,12 @@ for private_source in "$SAYALL_COMBINATION_ACTIONS_PATH" "$SAYALL_BUTTON_PROFILE
   PRIVATE_SOURCE_ROOT="$source_root"
 done
 if [[ -n "$PRIVATE_SOURCE_ROOT" ]]; then
+  # Passing an empty --channel made argument parsing fail with
+  # "invalid choice: ''" before any build work, so only forward a real channel.
+  private_channel_args=()
+  [[ -z "$SAYALL_BUILD_CHANNEL" ]] || private_channel_args=(--channel "$SAYALL_BUILD_CHANNEL")
   python3 "$ROOT/scripts/prepare-private-platform.py" check-checkout --checkout "$PRIVATE_SOURCE_ROOT" \
-    --channel "$SAYALL_BUILD_CHANNEL" --local-commit "${SAYALL_LOCAL_PRIVATE_SOURCE_COMMIT:-}"
+    "${private_channel_args[@]}" --local-commit "${SAYALL_LOCAL_PRIVATE_SOURCE_COMMIT:-}"
   if [[ -n "$SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH" && \
         "$(jq -r '.sourceCommit' "$SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH/private-artifact-package.json")" != "$(git -C "$PRIVATE_SOURCE_ROOT" rev-parse HEAD)" ]]; then
     print -u2 "Prepared artifacts and private source packages must use the same tag commit"
