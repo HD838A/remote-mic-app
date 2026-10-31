@@ -134,3 +134,53 @@ Windows 与网络控制入口未修改，保留稳定基线检查。
 
 自动化结果见 Bug 记录。全部型号的真实用户流程仍待验收。
 属性回读与模拟结果不能作为真机通过记录。
+
+## 用例 6：原生事件早于拦截登记（Intel 重点）
+
+适用：把 HID 报告迁到专用线程并提前登记之后的包。Build 268 及更早版本不含本次改动。
+必须在 Intel Mac 上执行，Apple Silicon 不能替代；同一缺陷在 Apple Silicon 上通常不表现。
+
+1. 开启自定义映射和所需权限，把音量加配置为逗号、音量减配置为句号。
+2. 关闭这两键的双击与长按动作。
+3. 在微信输入框慢按音量加十次，再快速完整点击十次。
+4. 每次只出现一个逗号，系统音量不得变化，屏幕不得出现音量指示浮层。
+5. 音量减重复第 3、4 步，预期只出现句号且音量不变化。
+6. 按住音量加两秒后松开，等待五秒；音量不得持续变化。
+7. 每次遥控器音量操作后，立即按一次电脑键盘的音量键；键盘音量必须正常生效。
+8. 连续快速点两次音量加，然后立刻按电脑键盘音量加；键盘音量必须正常生效。
+9. 在设置页快速关闭再打开一次「按键映射」，然后立刻按电脑键盘音量加；键盘音量必须正常生效。
+10. 穿插电脑键盘的逗号、反引号与 Fn 语音输入，确认未被吞掉。
+11. 断开并重新连接遥控器，重复第 3、4 步，首击同样只能出现一个逗号。
+
+日志判读：
+
+- 启动日志先确认 `HID REPORT runloop mode=dedicated`。若出现
+  `HID REPORT runloop mode=main reason=dedicated_thread_unavailable`，
+  说明这个包仍跑在主线程旧路径上，本次结果不能用来判定修复。
+- 提前登记在报告线程完成且不写日志，判读要看命中行的 `armed_by`：
+  `HID FILTER suppressed … armed_by=prearm` 表示报告线程的提前登记命中，
+  这是修复生效的直接证据；`armed_by=arm` 表示仍走主线程登记。
+  正常情况下按下边沿绝大多数应为 `armed_by=prearm`。
+- 对应原生事件必须是 `HID FILTER suppressed`；**按下边沿**出现 `passed_through` 或 `miss` 即判失败。
+  松开边沿的 `miss` 属已知残留（build 269 实测 23/226，约 10%），音量与动作都不受影响，不计失败。
+- 出现 `HID FILTER phase=arm_order ... result=already_passed_through` 即判失败：
+  该行表示原生按下先到、登记随后才到，Build 268 现场日志里这一行对应的差值是 199 ms。
+- 对照同一秒内的 `HID REPORT accepted` 时间戳与原生事件时间戳：
+  修复后两者应在数毫秒内；若仍相差 100 ms 以上，说明报告投递仍被阻塞。
+- 本版本已移除 `native_delivery=observed` 观察日志，不要再等这一行。
+  判断设备级映射是否仍在投递原生事件，改为看同窗是否有 `HID FILTER suppressed`：
+  有拦截就说明系统仍在产生原生音量事件，拦截全靠事件级兜底。
+- 提前登记按主线程同一套门禁判定：若日志里被拒绝的设备（`target_fingerprint_mismatch`、
+  `excluded_fingerprint`）随后出现音量原生事件被吞，属于门禁失效，判失败。
+- 第 7 步是本版本新增的重点：报告线程的提前登记与主线程共用同一个事件级拦截判据
+  （`needsEventLevelArm`）。若遥控器音量键操作后，电脑键盘的音量键被吞掉一次，
+  说明两条路径的判据又分叉了，判失败。同一按下的重复记录也会导致这个现象，
+  对应回归见 `prearmFollowedByMainThreadArmRegistersOneRecordOnly`。
+- 第 8 步覆盖快速连按的配对：第一次松键不得清掉第二次按下仍需的认领，
+  对应回归见 `twoNativeDownsBeforeMainThreadArmsKeepTheirOwnClaims`。
+- 第 9 步覆盖监视器重启：关闭映射会结束本次提前登记会话，但共享的拦截器
+  仍在运行，重启后不得有陈旧登记留下吞掉键盘音量键，
+  对应回归见 `staleSnapshotFromASharedMonitorCannotPrearmAfterStop`。
+
+失败判定：任何一个逗号之外还出现音量变化、音量浮层、额外字符、键盘音量被吞，或松键后音量连发。
+删除映射后的恢复回归仍按用例 5 执行。

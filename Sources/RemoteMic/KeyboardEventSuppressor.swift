@@ -28,6 +28,8 @@ final class KeyboardEventSuppressor {
         let edge: RemoteEventEdge
         let armedAt: TimeInterval
         let expiresAt: TimeInterval
+        /// 由 HID 报告线程提前登记，而不是主线程按报告登记。
+        var prearmed: Bool = false
     }
 
     private let hardwareModifierState: ShortcutHardwareModifierState
@@ -38,6 +40,16 @@ final class KeyboardEventSuppressor {
     private var heldEventCounts: [RemoteNativeEvent: Int] = [:]
     // Only a native down actually consumed by this tap owns an early native up.
     private var nativeDownsAwaitingUp: [RemoteNativeEvent: Int] = [:]
+    // 报告线程提前登记、并已被原生按下认领的按下，按按下顺序逐个配对。
+    //
+    // 每条认领只对应一次按下：原生按下消费一条提前登记记录时入队一条，主线程
+    // 随后为同一次按下执行 `arm` 时出队一条。这里必须是队列而不是计数，也不能
+    // 在松键时按事件整体清空：快速连按时 `up 1` 与 `down 2` 会交错到达，
+    // 「松键就清空」会删掉第二次按下仍需的认领，主线程随后为它多追加一条待匹配
+    // 记录，在窗口期内吞掉实体键盘的音量键。
+    // 认领带过期时刻：主线程若因权限撤销、设备移除等路径没有为该按下执行
+    // `arm`，认领也不能永久生效，否则下一次真实按下会被误判成重复登记。
+    private var prearmedDownsClaimed: [RemoteNativeEvent: [TimeInterval]] = [:]
     private var earlyNativeUps: [RemoteNativeEvent: Int] = [:]
     // Diagnostic-only: bounded to the remote's known native descriptors.
     private var recentUnclaimedDowns: [RemoteNativeEvent: TimeInterval] = [:]
@@ -52,8 +64,26 @@ final class KeyboardEventSuppressor {
     /// 最近 arm 过的事件（带过期时刻），仅用于诊断日志：只有与这些事件相关的
     /// 未命中才值得记录，避免被无关键盘输入淹没。
     private var recentArmed: [(event: RemoteNativeEvent, until: TimeInterval)] = []
+    private var prearmEnabled = false
 
     private(set) var isRunning = false
+
+    /// 是否接受来自 HID 回调线程的提前登记。与 `isRunning` 分开加锁维护，
+    /// 避免跨线程读写同一个非原子布尔值。
+    var acceptsPrearm: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return prearmEnabled
+    }
+
+    /// 仅用于单元测试：测试进程无法建立真实 `CGEvent` tap，`start()` 必然失败，
+    /// 因此单独开放一个小口来验证提前登记的会话边界。生产路径只经 `start()`
+    /// 与 `stop()` 改变该状态。
+    func setPrearmActiveForTesting(_ active: Bool) {
+        lock.lock()
+        prearmEnabled = active
+        lock.unlock()
+    }
 
     init(
         hardwareModifierState: ShortcutHardwareModifierState = ShortcutEventSequence.hardwareModifierState,
@@ -108,6 +138,7 @@ final class KeyboardEventSuppressor {
         lock.lock()
         self.eventTap = eventTap
         self.runLoopSource = runLoopSource
+        prearmEnabled = true
         lock.unlock()
         isRunning = true
         logger("HID FILTER phase=started result=active tap=session")
@@ -123,9 +154,11 @@ final class KeyboardEventSuppressor {
         let source = runLoopSource
         eventTap = nil
         runLoopSource = nil
+        prearmEnabled = false
         pendingEvents.removeAll()
         heldEventCounts.removeAll()
         nativeDownsAwaitingUp.removeAll()
+        prearmedDownsClaimed.removeAll()
         earlyNativeUps.removeAll()
         recentUnclaimedDowns.removeAll()
         passedVolumeDowns.removeAll()
@@ -153,6 +186,10 @@ final class KeyboardEventSuppressor {
             recentArmed.append((event: nativeEvent, until: now + 1.0))
         }
         pendingEvents.removeAll { $0.expiresAt <= now }
+        prearmedDownsClaimed = prearmedDownsClaimed.compactMapValues { claimed in
+            let live = claimed.filter { $0 > now }
+            return live.isEmpty ? nil : live
+        }
         for nativeEvent in nativeEvents {
             switch edge {
             case .down:
@@ -168,6 +205,23 @@ final class KeyboardEventSuppressor {
                 }
                 heldEventCounts[nativeEvent, default: 0] += 1
                 if heldEventCounts[nativeEvent] != 1 { nativeDownsAwaitingUp.removeValue(forKey: nativeEvent) }
+                if var claims = prearmedDownsClaimed[nativeEvent], !claims.isEmpty {
+                    // 报告线程已经为这一次按下登记过，并且原生事件已消费它。
+                    // 只出队一条：队列里剩下的认领属于后续尚未被主线程处理的按下。
+                    claims.removeFirst()
+                    prearmedDownsClaimed[nativeEvent] = claims.isEmpty ? nil : claims
+                    continue
+                }
+                // 报告线程登记过同一次按下、但原生事件还没到：只保留那一条记录。
+                // 再追加一条会让这一次按下占住两个待匹配窗口，随后的实体键盘
+                // 音量键会被其中一条吞掉。这里只认报告线程留下的记录，并把它
+                // 降级为主线程登记的记录——重叠点击的第二次按下仍需各占一条。
+                if let index = pendingEvents.firstIndex(where: {
+                    $0.event == nativeEvent && $0.edge == .down && $0.prearmed
+                }) {
+                    pendingEvents[index].prearmed = false
+                    continue
+                }
                 pendingEvents.append(PendingEvent(
                     event: nativeEvent,
                     edge: edge,
@@ -181,6 +235,9 @@ final class KeyboardEventSuppressor {
                     continue
                 }
                 nativeDownsAwaitingUp.removeValue(forKey: nativeEvent)
+                // 松键不能清空认领：`up 1` 到达时 `down 2` 的认领往往仍在等主线程
+                // 处理，整体清空会让主线程为第二次按下多追加一条待匹配记录。
+                // 认领只由主线程的 `arm(.down)` 逐条出队，或按过期时间清理。
                 // The native down may still be in flight. Release held-repeat
                 // ownership without discarding that unconsumed expected edge.
                 let remaining = (heldEventCounts[nativeEvent] ?? 0) - 1
@@ -223,6 +280,45 @@ final class KeyboardEventSuppressor {
         }
     }
 
+    /// 在 HID 报告线程上提前登记原生按下，只追加待匹配记录。
+    ///
+    /// 系统原生音量事件可能早于主线程处理遥控器报告到达（Intel 现场实测
+    /// 200–250 ms），此时主线程的 `arm` 还没执行，事件会被直接放行。这里只
+    /// 补充一条按下待匹配记录，不修改按住计数、已放行配对和提前松开状态，
+    /// 因此不会与主线程随后执行的 `arm` 语义冲突。
+    ///
+    /// 调用方的 `acceptsPrearm` 检查与本次登记之间可能插入 `stop()`，所以
+    /// 启用状态要在同一把锁内再确认一次，避免停止后仍写入陈旧记录。
+    func prearm(nativeEvents: Set<RemoteNativeEvent>) {
+        guard !nativeEvents.isEmpty else { return }
+        let now = uptime()
+        lock.lock()
+        defer { lock.unlock() }
+        guard prearmEnabled else { return }
+        pendingEvents.removeAll { $0.expiresAt <= now }
+        for nativeEvent in nativeEvents {
+            // 已放行的原生按下仍由 release 保护逻辑接管，不再新增拦截记录。
+            guard !passedVolumeDowns.contains(nativeEvent) else { continue }
+            guard !pendingEvents.contains(where: {
+                $0.event == nativeEvent && $0.edge == .down
+            }) else { continue }
+            pendingEvents.append(PendingEvent(
+                event: nativeEvent,
+                edge: .down,
+                armedAt: now,
+                expiresAt: now + Self.nativeDeliveryWindow,
+                prearmed: true
+            ))
+        }
+        if pendingEvents.count > 32 {
+            pendingEvents.removeFirst(pendingEvents.count - 32)
+        }
+        recentArmed.removeAll { $0.until <= now }
+        for nativeEvent in nativeEvents {
+            recentArmed.append((event: nativeEvent, until: now + 1.0))
+        }
+    }
+
     func handle(type: CGEventType, event: CGEvent) -> Bool {
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
             logger("HID FILTER phase=disabled reason=\(type == .tapDisabledByTimeout ? "timeout" : "user_input") tap=session")
@@ -261,17 +357,30 @@ final class KeyboardEventSuppressor {
             $0.event == descriptor.event && $0.edge == descriptor.edge
         }) {
             let matched = pendingEvents.remove(at: matchIndex)
+            if matched.prearmed, descriptor.edge == .down {
+                // 记住这一次按下由报告线程提前登记并已被认领，主线程随后
+                // 为同一次按下执行 `arm` 时不再追加记录。按按下顺序入队：
+                // 连点时可能有多条按下已被认领而主线程还没登记完，
+                // 队列让每条认领只抵掉它自己那一次按下。
+                var claims = prearmedDownsClaimed[descriptor.event] ?? []
+                claims.append(now + Self.nativeDeliveryWindow)
+                if claims.count > 8 { claims.removeFirst(claims.count - 8) }
+                prearmedDownsClaimed[descriptor.event] = claims
+            }
             if descriptor.edge == .down, heldEventCounts[descriptor.event] == 1,
                !pendingEvents.contains(where: { $0.event == descriptor.event && $0.edge == .up }),
                (earlyNativeUps[descriptor.event] ?? 0) == 0 {
                 nativeDownsAwaitingUp[descriptor.event] = 1
             }
             lock.unlock()
+            let latencyMs = Int((now - matched.armedAt) * 1_000)
             // 诊断：命中并吞掉——与 miss 日志对照即可判定「系统是否产生了该事件」。
+            // `via` 区分这条记录由谁登记：prearm 表示报告线程的提前登记命中，
+            // 这是本次修复真正生效的直接证据；arm 表示仍走主线程原路径。
             logger(
                 "HID FILTER suppressed event=\(Self.logToken(descriptor.event)) "
                     + "edge=\(descriptor.edge == .down ? "down" : "up") type=\(type.rawValue) "
-                    + "latency_ms=\(Int((now - matched.armedAt) * 1_000))"
+                    + "latency_ms=\(latencyMs) armed_by=\(matched.prearmed ? "prearm" : "arm")"
             )
             return true
         }
