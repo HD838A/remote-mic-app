@@ -25,6 +25,15 @@ G-DOC.authority=chinese
 - 在 macOS 本地运行本仓库的 `swift build`、`swift test` 或 `swift package resolve` 时，必须传入 `--disable-keychain`；GitHub 源码依赖继续使用现有 Git 凭据助手，公开二进制依赖不得扫描登录钥匙串。
 - 新增或修改调用 SwiftPM 的本地脚本时必须保留该参数。GitHub Actions 等没有交互式登录钥匙串的隔离 CI 环境可按其现有凭据配置执行。
 
+## 私有依赖与公开构建边界
+
+私有组件来自私有仓库 `GetSayAll/sayall-private-platform`；本仓库是公开仓库，下列四条不可绕过，细则见私有仓 `docs/release/packaging-governance.md` 第 2 节第 5–8 条。
+
+1. **打包基线是最新 `origin/main`**：对外候选（Preview / Stable）只从 `git fetch origin main` 之后的精确 `origin/main` SHA 构建，Hotfix 按 [`RELEASING.md`](RELEASING.md) 的例外走 `origin/hotfix/vX.Y.Z`。本地测试包可以从任意分支或工作树打包，但它不携带版本身份、不得上传 Release、不得作为分发候选。
+2. **私有实现不得进入本仓库**：私有平台的源码、XCFramework 二进制、`.swiftinterface`、构建日志、私有打包脚本，不得提交到本仓库，也不得进入本仓库的 CI Artifact 或 Release。允许存在的只有接入所需的最小引用——模块名与公开 API 的调用（`#if canImport(SayAll…)` 门控），以及清单里的版本标识（`config/release-dependencies.json`）、摘要与校验脚本；内部符号、私有文件路径不得写进公开代码、注释或日志。
+3. **没有私有读取权限也必须能编过**：任何 PR 都不得让 `SAYALL_PRIVATE_PLATFORM_MODE=public` 下的 `swift build`、`swift test` 失败。缺私有组件时走公开兼容层并标为 public 包；官方发布反过来不得回退到兼容层，缺件即停。
+4. **私有依赖只认私有仓发布的 Tag**：Tag 与 XCFramework 由私有仓在维护者本机产出，不依赖任何 CI Artifact。本仓库按清单版本解析 Tag、校验其为 `origin/main` 祖先并核对构件摘要；私有仓 workflow 的产物（含其 artifact）一律不构成依赖来源，该 workflow 全部未执行也不影响判定。
+
 ## 产品命名规范
 
 - 英文产品名统一为 `SayAll`，不得使用 `Remote Mic`、`Wireless Mic` 或 `SayAll Wireless Mic` 作为产品名。
