@@ -78,6 +78,7 @@ final class HIDRemoteMonitor {
     private let hasOverrideBinding: (UUID?, RemoteButton, ButtonTrigger) -> Bool
     private let frontmostBundleIdentifier: () -> String?
     private let diagnosticLogger: (String) -> Void
+    private let monotonicNow: () -> UInt64
     private let karabinerElementsInstalled: () -> Bool
     private let prepareNativeKeys: (() -> Bool)?
     private let restoreNativeKeys: () -> Void
@@ -97,6 +98,10 @@ final class HIDRemoteMonitor {
     private var repeatTimers: [UInt16: HIDRemoteScheduledTask] = [:]
     private var nonRepeatablePressedButtons = Set<RemoteButton>()
     private var nonRepeatableReleaseTimers: [RemoteButton: HIDRemoteScheduledTask] = [:]
+    // Physical edge timing used only for diagnostics: how long a button was held
+    // and how long ago it was released before the next press arrived.
+    private var physicalPressStartedAt: [RemoteButton: UInt64] = [:]
+    private var lastPhysicalReleaseAt: [RemoteButton: UInt64] = [:]
     private var gestureRecognizer = RemoteButtonGestureRecognizer()
     private var doubleClickTimers: [RemoteButton: HIDRemoteScheduledTask] = [:]
     private var longPressTimers: [RemoteButton: HIDRemoteScheduledTask] = [:]
@@ -141,6 +146,7 @@ final class HIDRemoteMonitor {
             NSWorkspace.shared.frontmostApplication?.bundleIdentifier
         },
         diagnosticLogger: @escaping (String) -> Void = AppLogger.shared.write,
+        monotonicNow: @escaping () -> UInt64 = { DispatchTime.now().uptimeNanoseconds },
         karabinerElementsInstalled: @escaping () -> Bool = {
             HIDRemoteMonitor.isKarabinerElementsInstalled()
         },
@@ -173,6 +179,7 @@ final class HIDRemoteMonitor {
         self.hasOverrideBinding = hasOverrideBinding
         self.frontmostBundleIdentifier = frontmostBundleIdentifier
         self.diagnosticLogger = diagnosticLogger
+        self.monotonicNow = monotonicNow
         self.karabinerElementsInstalled = karabinerElementsInstalled
         self.prepareNativeKeys = prepareNativeKeys
         self.restoreNativeKeys = restoreNativeKeys
@@ -689,9 +696,10 @@ final class HIDRemoteMonitor {
         let pressed = usages.subtracting(activeUsages)
         let released = activeUsages.subtracting(usages)
         if !pressed.isEmpty || !released.isEmpty {
+            let timing = recordPhysicalEdgeTiming(pressed: pressed, released: released)
             diagnosticLogger(
                 "HID EDGE pressed=\(Self.buttonList(for: pressed)) " +
-                    "released=\(Self.buttonList(for: released))"
+                    "released=\(Self.buttonList(for: released))" + timing
             )
         }
         activeUsages = usages
@@ -842,7 +850,8 @@ final class HIDRemoteMonitor {
                     diagnosticLogger(
                         "HID PRESS rejected button=\(button.rawValue) " +
                             "action=\(action.rawValue) reason=awaiting_stable_release " +
-                            "stable_release_ms=\(HIDRemoteTiming.stableReleaseMilliseconds)"
+                            "stable_release_ms=\(HIDRemoteTiming.stableReleaseMilliseconds)" +
+                            pressLatchDiagnosticSuffix(for: button)
                     )
                     continue
                 }
@@ -1020,6 +1029,60 @@ final class HIDRemoteMonitor {
     private static func buttonList(for usages: Set<UInt16>) -> String {
         let buttons = usages.compactMap { RemoteButton.usageMap[$0]?.rawValue }.sorted()
         return buttons.isEmpty ? "none" : buttons.joined(separator: ",")
+    }
+
+    /// Records physical edge timing and returns the fields that let a reader tell a
+    /// device bounce apart from a real press the stable-release latch swallowed,
+    /// instead of correlating `HID EDGE` timestamps by hand.
+    private func recordPhysicalEdgeTiming(
+        pressed: Set<UInt16>,
+        released: Set<UInt16>
+    ) -> String {
+        let now = monotonicNow()
+        var releaseGaps: [String] = []
+        var holds: [String] = []
+        for usage in pressed.sorted() {
+            guard let button = RemoteButton.usageMap[usage] else { continue }
+            if let releasedAt = lastPhysicalReleaseAt[button] {
+                releaseGaps.append(
+                    "\(button.rawValue):\(Self.elapsedMilliseconds(from: releasedAt, to: now))"
+                )
+            }
+            physicalPressStartedAt[button] = now
+        }
+        for usage in released.sorted() {
+            guard let button = RemoteButton.usageMap[usage] else { continue }
+            if let startedAt = physicalPressStartedAt.removeValue(forKey: button) {
+                holds.append(
+                    "\(button.rawValue):\(Self.elapsedMilliseconds(from: startedAt, to: now))"
+                )
+            }
+            lastPhysicalReleaseAt[button] = now
+        }
+        var suffix = ""
+        if !releaseGaps.isEmpty {
+            suffix += " since_release_ms=\(releaseGaps.joined(separator: ","))"
+        }
+        if !holds.isEmpty {
+            suffix += " hold_ms=\(holds.joined(separator: ","))"
+        }
+        return suffix
+    }
+
+    /// `latch_remaining_ms` is the nominal time left in the stable-release window at
+    /// the moment the press arrived; the window timer is only re-armed by a release.
+    private func pressLatchDiagnosticSuffix(for button: RemoteButton) -> String {
+        guard let releasedAt = lastPhysicalReleaseAt[button] else {
+            return " since_release_ms=unobserved"
+        }
+        let elapsed = Self.elapsedMilliseconds(from: releasedAt, to: monotonicNow())
+        let window = Int(clamping: HIDRemoteTiming.stableReleaseMilliseconds)
+        return " since_release_ms=\(elapsed) latch_remaining_ms=\(max(0, window - elapsed))"
+    }
+
+    private static func elapsedMilliseconds(from start: UInt64, to end: UInt64) -> Int {
+        guard end >= start else { return 0 }
+        return Int(clamping: (end - start) / 1_000_000)
     }
 
     func shouldAcceptRawPress(
@@ -1417,6 +1480,8 @@ final class HIDRemoteMonitor {
         nonRepeatableReleaseTimers.values.forEach { $0.cancel() }
         nonRepeatableReleaseTimers.removeAll()
         nonRepeatablePressedButtons.removeAll()
+        physicalPressStartedAt.removeAll()
+        lastPhysicalReleaseAt.removeAll()
         resetGestureRecognition()
         activeUsages.removeAll()
         onActiveButtons?(profileID, [])

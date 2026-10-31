@@ -99,10 +99,33 @@
 
 失败判定：文字被截断、页面出现横向滚动、窗口几何改变，或中文字号小于 12pt。
 
+## 用时间字段区分「设备回弹」与「真的被吞掉」
+
+`HID EDGE` 与 `HID PRESS rejected` 现在带时间字段，单位毫秒，取自单调时钟，不涉及按键内容、快捷键或设备身份：
+
+| 字段 | 出现位置 | 含义 |
+| --- | --- | --- |
+| `since_release_ms=<button>:<ms>` | `HID EDGE` 的按下边沿 | 该按键距上一次松开的间隔 |
+| `hold_ms=<button>:<ms>` | `HID EDGE` 的松开边沿 | 该按键实际按住时长 |
+| `since_release_ms=<ms>` | `HID PRESS rejected` | 被拒按下距上一次松开的时间 |
+| `latch_remaining_ms=<ms>` | `HID PRESS rejected` | 按下瞬间 600ms 稳定释放窗口的名义剩余时间 |
+
+一个报告里同时有按下和松开时，按下键写 `since_release_ms`、松开键写 `hold_ms`；同一字段多个按键用逗号分隔（如 `hold_ms=home:412,down:96`）。从未观测到对应边沿的按键不写条目，例如会话里第一次按下没有 `since_release_ms`；闩锁里没有释放记录时写 `since_release_ms=unobserved`。
+
+读法：
+
+1. 先找 `HID PRESS rejected button=<键>`，再找同一按键紧随其后的 `HID EDGE ... released=<键> hold_ms=...`，这一条就是被拒边沿的按住时长。
+2. `hold_ms < 10` 且紧跟在上一次松开后 1–2ms → 设备粘滞回弹，闩锁在正常工作，不要放宽阈值。
+3. `hold_ms > 150` 且 `since_release_ms > 150` → 人手误伤，记录目标按键与场景后再讨论阈值，或直接让用户对该键打开「允许连续快速按」。
+
+注意 `latch_remaining_ms` 只是按下瞬间的名义剩余时间：`shouldAcceptRawPress` 在判定被拒时已经取消了该按键的释放定时器，窗口只会在下一次松开时重新计时，所以「剩余 600ms 还很大」不等于马上会解锁。
+
+首次实机采样（2026-10-29，Intel，build 271）：124 条 `HID EDGE` 中 62 条带 `hold_ms`、59 条带 `since_release_ms`。`hold_ms` 呈明显双峰——27 次 < 10 ms（4–9 ms 的设备回弹），35 次 ≥ 150 ms（353–2238 ms 的人手按住），**10–150 ms 区间 0 次**。该会话没有出现 `HID PRESS rejected`，说明这批按键当时没有经过稳定释放闩锁（配置相关，不是字段问题），因此上述分布只用于说明判据可用，不能当作「闩锁拦截率」的统计。
+
 ## 日志收集
 
 - 位置：`~/Library/Logs/RemoteMic/runtime.log`
-- 关键行：`HID CONNECTED mode=`、`HID EDGE pressed=`、`HID GESTURE ... path=raw`、`HID BUTTON ... action=`、`HID PRESS rejected ... reason=awaiting_stable_release`
+- 关键行：`HID CONNECTED mode=`、`HID EDGE pressed=`、`since_release_ms=`、`hold_ms=`、`HID GESTURE ... path=raw`、`HID BUTTON ... action=`、`HID PRESS rejected ... reason=awaiting_stable_release`、`latch_remaining_ms=`
 - 每个用例记录开始与结束时间，便于按时间段截取。日志不记录快捷键内容和用户语音。
 
 ## 验证边界
