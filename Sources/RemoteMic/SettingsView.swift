@@ -33,7 +33,7 @@ struct SettingsSection: RawRepresentable, Hashable, CaseIterable, Identifiable {
     var supplementalID: String? { rawValue.hasPrefix("supplemental:") ? String(rawValue.dropFirst(13)) : nil }
     var id: String { rawValue }
 
-    var title: LocalizedStringKey {
+    var titleKey: String {
         switch self {
         case .connection: return "settings.section.connection"
         case .privateFeature: return ""
@@ -48,6 +48,10 @@ struct SettingsSection: RawRepresentable, Hashable, CaseIterable, Identifiable {
         case .about: return "settings.section.settings"
         default: return ""
         }
+    }
+
+    var title: LocalizedStringKey {
+        LocalizedStringKey(titleKey)
     }
 
     var systemImage: String {
@@ -132,6 +136,59 @@ enum RemoteBatteryPresentationPolicy {
 
 enum SettingsPageBehavior {
     static let sidebarTopDragHeight: CGFloat = 5
+
+    /// 侧边栏宽度按内容量出来：文字到左边界和到右边界都保持 `sidebarRowInset`，
+    /// 不再用固定宽度把多余空白全部堆在文字右侧。
+    static let sidebarRowInset: CGFloat = 15
+    static let sidebarRowIconWidth: CGFloat = 18
+    static let sidebarRowIconSpacing: CGFloat = 8
+    static let sidebarRowFontSize: CGFloat = 13
+    static let sidebarHeaderIconWidth: CGFloat = 44
+    static let sidebarHeaderIconSpacing: CGFloat = 8
+    static let sidebarHeaderTitleFontSize: CGFloat = 16
+    static let sidebarHeaderVersionFontSize: CGFloat = 12
+    static let sidebarWidthBounds: ClosedRange<CGFloat> = 104...136
+
+    static func sidebarWidth(
+        headerTitleWidth: CGFloat,
+        headerVersionWidth: CGFloat,
+        rowLabelWidths: [CGFloat]
+    ) -> CGFloat {
+        let headerTextWidth = max(headerTitleWidth, headerVersionWidth)
+        let headerWidth = sidebarRowInset * 2
+            + sidebarHeaderIconWidth
+            + sidebarHeaderIconSpacing
+            + headerTextWidth
+        let rowWidth = (rowLabelWidths.max() ?? 0)
+            + sidebarRowInset * 2
+            + sidebarRowIconWidth
+            + sidebarRowIconSpacing
+        let natural = max(headerWidth, rowWidth).rounded(.up)
+        return min(max(natural, sidebarWidthBounds.lowerBound), sidebarWidthBounds.upperBound)
+    }
+
+    /// 与 `SettingsSidebarRow`、侧边栏页头一致的字重，用于预估文字宽度。
+    static func sidebarTextWidth(
+        _ text: String,
+        size: CGFloat,
+        weight: NSFont.Weight = .semibold
+    ) -> CGFloat {
+        let font = NSFont.systemFont(ofSize: size, weight: weight)
+        return text
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .map { ($0 as NSString).size(withAttributes: [.font: font]).width }
+            .max() ?? 0
+    }
+
+    /// 侧边栏页头使用品牌字体（Oxanium），宽度必须按同一字体测量，否则会低估。
+    static func sidebarHeaderTextWidth(_ text: String) -> CGFloat {
+        let font = NSFont(name: "Oxanium-SemiBold", size: sidebarHeaderTitleFontSize)
+            ?? NSFont.systemFont(ofSize: sidebarHeaderTitleFontSize, weight: .semibold)
+        return text
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .map { ($0 as NSString).size(withAttributes: [.font: font]).width }
+            .max() ?? 0
+    }
 
     static let sidebarSectionOrder: [SettingsSection] = [
         .mapping,
@@ -246,11 +303,11 @@ enum SettingsPageBehavior {
 }
 
 private enum BrandFont {
-    static let sidebarFont: Font = {
+    static func sidebarTitleFont(size: CGFloat) -> Font {
         _ = font
-        return NSFont(name: "Oxanium-SemiBold", size: 16).map(Font.init)
-            ?? .system(size: 16, weight: .semibold)
-    }()
+        return NSFont(name: "Oxanium-SemiBold", size: size).map(Font.init)
+            ?? .system(size: size, weight: .semibold)
+    }
 
     static let font: Font = {
         if let url = RemoteMicResourceBundle.mainOrDevelopment.url(
@@ -598,7 +655,7 @@ struct SettingsView: View {
     var body: some View {
         HStack(spacing: 0) {
             sidebar
-                .frame(width: 136)
+                .frame(width: sidebarWidth)
             Color(nsColor: .separatorColor)
                 .frame(width: 1)
                 .frame(maxHeight: .infinity)
@@ -725,28 +782,67 @@ struct SettingsView: View {
         )
     }
 
+    /// 侧边栏宽度只由最宽的一行（或页头）决定，文字左右留白保持相等。
+    private var sidebarWidth: CGFloat {
+        let rowLabelWidths = visibleSections.map { section in
+            SettingsPageBehavior.sidebarTextWidth(
+                sidebarTitleString(section),
+                size: SettingsPageBehavior.sidebarRowFontSize
+            ) + (SettingsPageBehavior.showsUpdateBadge(
+                for: section,
+                hasUnseenUpdate: updateInformation.hasUnseenUpdate
+            ) ? 12 : 0)
+        }
+        return SettingsPageBehavior.sidebarWidth(
+            headerTitleWidth: SettingsPageBehavior.sidebarHeaderTextWidth("SayAll"),
+            headerVersionWidth: SettingsPageBehavior.sidebarTextWidth(
+                currentVersion,
+                size: SettingsPageBehavior.sidebarHeaderVersionFontSize,
+                weight: .regular
+            ),
+            rowLabelWidths: rowLabelWidths
+        )
+    }
+
+    private func sidebarTitleString(_ section: SettingsSection) -> String {
+        if section == .statistics {
+            return SettingsPageBehavior.sidebarAccountTitle(
+                accountDisplayName: membershipFeature.accountDisplayName ?? sidebarAccountDisplayName,
+                loginTitle: localization.text("settings.section.login")
+            )
+        }
+        if section == .privateFeature || section == .macros || section == .buttonProfiles
+            || section == .membership || section.supplementalID != nil {
+            return sectionTitle(section)
+        }
+        return localization.text(section.titleKey)
+    }
+
     private var sidebar: some View {
         VStack(spacing: 0) {
             WindowDragArea()
                 .frame(height: SettingsPageBehavior.sidebarTopDragHeight)
                 .accessibilityHidden(true)
-            HStack(alignment: .top, spacing: 8) {
+            HStack(alignment: .top, spacing: SettingsPageBehavior.sidebarHeaderIconSpacing) {
                 Image(nsImage: appIconCatalog.image(for: settings.appIconIdentifier))
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 44, height: 44)
+                    .frame(
+                        width: SettingsPageBehavior.sidebarHeaderIconWidth,
+                        height: SettingsPageBehavior.sidebarHeaderIconWidth
+                    )
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: -2) {
                     Text(verbatim: "SayAll")
-                        .font(BrandFont.sidebarFont)
+                        .font(BrandFont.sidebarTitleFont(size: SettingsPageBehavior.sidebarHeaderTitleFontSize))
                     Text(currentVersion)
-                        .font(.system(size: 12))
+                        .font(.system(size: SettingsPageBehavior.sidebarHeaderVersionFontSize))
                         .monospacedDigit()
                         .foregroundStyle(.secondary)
                 }
                 .padding(.top, 6)
             }
-            .padding(.horizontal, 12)
+            .padding(.horizontal, SettingsPageBehavior.sidebarRowInset)
             .padding(.top, 11)
             .frame(maxWidth: .infinity, alignment: .leading)
             .frame(height: 75, alignment: .topLeading)

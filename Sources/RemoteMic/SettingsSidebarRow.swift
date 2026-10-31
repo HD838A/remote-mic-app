@@ -28,7 +28,7 @@ struct SettingsSidebarRow: View {
             }
         }
         .padding(.leading, 9)
-        .padding(.trailing, showsUpdateBadge ? 7 : 5)
+        .padding(.trailing, showsUpdateBadge ? 7 : 9)
         .padding(.vertical, 4)
         .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
         .contentShape(Rectangle())

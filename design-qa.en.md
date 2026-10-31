@@ -53,8 +53,12 @@ This file is a convenience translation of the current mandatory design rules. Th
 
 On 2026-10-29 the user approved the [version 8 HTML design](Screenshots/design-drafts/sidebar-compact/v8/review.html) for implementation. Its Markdown source, original PNGs and digest manifest are stored beside it without changing the reviewed bytes. Statements such as “not implemented” describe the review-time state.
 
-- Use a `136pt` sidebar. Place the icon to the left of the text for the brand, every navigation entry and the bottom account entry.
-- Use a `44 × 44pt` brand logo, `16pt` below the window control region and `12pt` from the sidebar edge. Keep an `8pt` horizontal gap to the brand text.
+On 2026-10-31 the user asked for a narrower sidebar. The width is no longer fixed at `136pt`; it is measured from the widest visible row (brand header included) within `104–136pt`, keeping `15pt` from the text to both the leading and trailing edges instead of stacking spare space to the right of the labels. Both languages measure about `129pt` because the brand header is the widest block; longer English entries grow the width up to the `136pt` cap.
+
+Verification screenshots live in `Screenshots/design-drafts/sidebar-width/` (`sidebar-width-zh-hans-dark.png`, `sidebar-width-zh-hans-light.png`, `sidebar-width-en-dark.png`, `sidebar-width-en-light.png`), captured as `2040 × 1544` 2× images of a `1020 × 772` window.
+
+- Measure the sidebar width from its content within `104–136pt`. Place the icon to the left of the text for the brand, every navigation entry and the bottom account entry.
+- Use a `44 × 44pt` brand logo, `16pt` below the window control region and `15pt` from the sidebar edge. Keep an `8pt` horizontal gap to the brand text.
 - Use `16pt` Oxanium SemiBold 600 for sidebar SayAll. Move it `2pt` down from version 5. Keep the `12pt` system-font version closely below it and read the actual bundle version.
 - Use `18pt` navigation icons and `13pt` system Semibold labels. Set the icon column `15pt` from the left edge for optical alignment with the logo. Keep an `8pt` icon-to-text gap and left-align labels.
 - Navigation rows have a `44pt` minimum height. Keep the full `Button Profiles` name and wrap by available width instead of renaming it to `Profiles`. Center the icon vertically against the entire text block. Grow rows for additional lines without shrinking or clipping text.
