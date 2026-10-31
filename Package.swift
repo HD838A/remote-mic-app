@@ -303,6 +303,10 @@ if sourceMacroHostShortcutsAvailable || artifactMacroHostShortcutsAvailable {
 if unifiedButtonConfigurationAvailable {
     remoteMicTestSwiftSettings.append(.define("SAYALL_UNIFIED_BUTTON_CONFIGURATION"))
 }
+// 方案作用域的集成测试与 App 共用同一个放行开关，否则测试目标看不到该宏。
+if buttonProfilesTestAccessEnabled {
+    remoteMicTestSwiftSettings.append(.define("SAYALL_TEST_BUTTON_PROFILES_FREE"))
+}
 if siriRemoteEnabled {
     remoteMicTestSwiftSettings.append(.define("SAYALL_SIRI_REMOTE_ENABLED"))
 }
