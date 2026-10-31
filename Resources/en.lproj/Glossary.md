@@ -18,7 +18,7 @@ This guide explains names that may appear during installation, device selection,
 
 ### HID
 
-**Plain-language explanation:** A standard macOS uses for keyboards, mice, and remote-control buttons. For everyday use, think of it as the button device or button data.
+**Plain-language explanation:** A standard that macOS uses for keyboards, mice, and remote-control buttons. For everyday use, think of it as the button device or button data.
 
 **When you may see it:** Console logs, technical material, or Input Monitoring troubleshooting.
 

@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Use the selected Mac microphone for voice input when you do not use a remote.</string>
+	<string>Use the selected Mac microphone for voice input when you dictate with this Mac instead of a remote.</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
@@ -81,7 +81,7 @@
 	<key>LSUIElement</key>
 	<true/>
 	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>Connect to supported remote controls and Apple Watch to receive button and voice data.</string>
+	<string>Connect to supported remotes and Apple Watch to receive button presses and microphone audio.</string>
 	<key>NSBonjourServices</key>
 	<array>
 		<string>_remotemic._tcp</string>
@@ -89,7 +89,7 @@
 	<key>NSHumanReadableCopyright</key>
 	<string>GPL-3.0-only</string>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Allow nearby iPhone, iPad, and Apple Watch devices to connect as a remote control and microphone.</string>
+	<string>Connect to SayAll on a nearby iPhone, iPad, or Apple Watch to receive button presses and microphone audio.</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
 	<key>SUAllowsAutomaticUpdates</key>
