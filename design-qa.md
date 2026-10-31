@@ -233,8 +233,9 @@ final result: passed
 - 改动：个人中心页头只保留“个人中心 / Profile”标题，移除右上角锁图标与“数据仅存本机 / Data stays on this Mac”说明，并删除对应本地化键；累计语音时长改为紧凑写法（`15小时31分` / `15h 31m`），数值行增加收紧与缩放兜底，避免小时级数据被省略号截断。
 - 实现截图：`Screenshots/bug-fixes/profile-header-and-kpi-fit/zh-hans-light/profile-1020x772.png`，PNG，`2040 × 1544`，SHA-256 `3549588ef46f8c2c2abea6e7a7a8434377429a4a7861d727f42937cc5a01627d`。
 - 实现截图：`Screenshots/bug-fixes/profile-header-and-kpi-fit/zh-hans-dark/profile-1020x772.png`，PNG，`2040 × 1544`，SHA-256 `d73526e0feb0d1c9db500fdfc8e2a437ffb45adda73994d011794d2607573a5a`。
-- 实现截图：`Screenshots/bug-fixes/profile-header-and-kpi-fit/en-light/profile-1020x772.png`，PNG，`2040 × 1544`，SHA-256 `cbc41bdfa3a7c0cc659a26166e8aab0d1d36c7fccadfd36b681dedcecd11d275`。
+- 实现截图：`Screenshots/bug-fixes/profile-header-and-kpi-fit/en-light/profile-1020x772.png`，PNG，`2040 × 1544`，SHA-256 `5204ae3ccdbbc720ce7a8942145d0b3015af9a4f214d66d602a4972237aa15ba`。
 - 窄宽压力截图：`Screenshots/bug-fixes/profile-header-and-kpi-fit/zh-hans-light/profile-800x650.png`，PNG，`1600 × 1300`，SHA-256 `ceedca97a88768acf59d97bce6350ce3dd3938e9c918766ee51d46ba454ba450`。
-- 验证边界：四张截图均来自生产 `SettingsView` 的隐藏离屏入口，`1020 × 772` 为当前生产最小窗口；小时级时长来自离屏样本数据，不替代真实使用数月后的极端数据、真实权限与实体设备验收。
+- 英文文案同批修整：计数不再带 `times` 单位（`statistics.metric.count_unit` 在英文下为空，行内与卡片都不渲染单位），`Longest Voice Session(s)` 改为 `Longest Voice Input(s)`，日历提示改为 `Click a day or an entry to open Reflections`，分享说明改为 `Invite friends to try voice input on their Mac with a remote or a phone.`，按钮改为 `Show QR code`；中文文案不变，仍显示“次”。
+- 验证边界：四张截图均来自生产 `SettingsView` 的隐藏离屏入口，`1020 × 772` 为当前生产最小窗口；小时级时长来自离屏样本数据，不替代真实使用数月后的极端数据、真实权限与实体设备验收。英文另在 `800 × 650` 复验日历提示完整换行、计数无单位、卡片不裁切。
 
 final result: passed

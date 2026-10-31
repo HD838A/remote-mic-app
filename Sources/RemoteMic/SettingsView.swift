@@ -3820,7 +3820,7 @@ struct SettingsView: View {
                 systemImage: "keyboard",
                 title: localization.text("statistics.metric.total_button_count"),
                 value: localizedNumber(settings.usageStatistics(for: .total).buttonPressCount),
-                unit: localization.text("statistics.metric.count_unit")
+                unit: countUnit
             ),
             ProfileMetric(
                 id: "total-voice",
@@ -3834,7 +3834,7 @@ struct SettingsView: View {
                 systemImage: "chart.line.uptrend.xyaxis",
                 title: localization.text("statistics.metric.week_button_count"),
                 value: localizedNumber(settings.usageStatistics(for: .thisWeek).buttonPressCount),
-                unit: localization.text("statistics.metric.count_unit")
+                unit: countUnit
             ),
             ProfileMetric(
                 id: "longest-voice",
@@ -3848,6 +3848,13 @@ struct SettingsView: View {
                 unit: nil
             ),
         ]
+    }
+
+    /// Counter word such as “次”. English reads counts without one, so the key may be empty
+    /// and the surrounding rows skip the label entirely.
+    private var countUnit: String? {
+        let unit = localization.text("statistics.metric.count_unit")
+        return unit.isEmpty ? nil : unit
     }
 
     private var statisticsRankingPanel: some View {
@@ -3867,8 +3874,10 @@ struct SettingsView: View {
                         Text(localizedNumber(entry.count))
                             .foregroundStyle(.secondary)
                             .monospacedDigit()
-                        Text(localization.text("statistics.metric.count_unit"))
-                            .foregroundStyle(.secondary)
+                        if let countUnit {
+                            Text(countUnit)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
 
@@ -3883,8 +3892,10 @@ struct SettingsView: View {
                         Text(localizedNumber(entry.count))
                             .foregroundStyle(.secondary)
                             .monospacedDigit()
-                        Text(localization.text("statistics.metric.count_unit"))
-                            .foregroundStyle(.secondary)
+                        if let countUnit {
+                            Text(countUnit)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
 
@@ -5847,7 +5858,7 @@ private struct ProfileMetricCard: View {
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
                         .allowsTightening(true)
-                    if let unit {
+                    if let unit, !unit.isEmpty {
                         Text(unit)
                             .font(.system(size: 12, weight: .medium))
                             .foregroundStyle(tint)

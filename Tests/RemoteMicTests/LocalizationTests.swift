@@ -155,10 +155,14 @@ struct LocalizationTests {
             english["connection.web.help_short"]?.contains("WeChat") == true
         )
 
+        // Counter words such as “次” do not exist in English, so this unit is intentionally empty.
+        let intentionallyEmptyKeys: Set<String> = ["statistics.metric.count_unit"]
         #expect(!english.isEmpty)
         for (key, value) in english {
             #expect(key.range(of: #"^[a-z0-9]+(?:[._][a-z0-9]+)*$"#, options: .regularExpression) != nil)
-            #expect(!value.isEmpty)
+            if !intentionallyEmptyKeys.contains(key) {
+                #expect(!value.isEmpty)
+            }
             #expect(value != key)
         }
 
@@ -192,7 +196,9 @@ struct LocalizationTests {
             for key in english.keys {
                 let englishValue = try #require(english[key])
                 let localizedValue = try #require(localized[key])
-                #expect(!localizedValue.isEmpty)
+                if !intentionallyEmptyKeys.contains(key) {
+                    #expect(!localizedValue.isEmpty)
+                }
                 #expect(localizedValue != key)
                 #expect(formatPlaceholders(in: localizedValue) == formatPlaceholders(in: englishValue))
                 #expect(!containsRestrictedUserTerm(localizedValue))
