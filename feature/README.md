@@ -15,6 +15,7 @@
 | [Mac 下载 Cloudflare CDN](./cloudflare-download-cdn/) | 候选修复完成，等待发布验收 | 官网固定入口与版本化资产继续走 Cloudflare；新增 stable/preview 双架构 appcast 通道，客户端不再直接请求 GitHub Releases API。 |
 | [私有功能组件集成](./private-feature-integration/) | 已完成 | 公开 App 只保留可选适配层；私有实现、资源、测试和内部文档由独立私有组件维护。 |
 | [组合动作私有模块集成](./quick-commands-private-integration/) | 代码完成，等待人工验收 | 通过可选私有 Swift Package 提供组合动作页面与遥控器绑定；模块存在时无需邀请码直接使用，公开构建保持独立。 |
+| [按键页的方案作用域编辑](./button-profile-scope/) | 设计已评审，待开发 | 按键页顶部增加基础映射/方案作用域条，方案作用域下只开放 10 个普通按键并可保存为键位方案；方案页按键区改为只读摘要与跳转。 |
 | [Intel Ventura 独立发行](./intel-ventura-release/) | 已完成 | Intel 使用 macOS 13、x86_64、独立安装包与更新源，并与 Apple Silicon 分别打包。 |
 | [本地语音转写记录](./local-transcript-history/) | 界面迭代完成，等待人工验收 | 默认关闭；独立侧边栏页面使用顶部可展开应用栏、可折叠日期时间线和真实 App 图标筛选，不依赖 AI 或 API Key。 |
 | [Mac 本地原始录音资产](./local-recording-assets/) | 候选代码完成，等待真实硬件验收 | 默认关闭；将 Mac 音频管线中的 PCM 保存为本地 M4A/AAC，并与回眸 session 关联，支持播放、导出、Finder 和可恢复删除。 |
