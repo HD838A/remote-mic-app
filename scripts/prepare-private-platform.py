@@ -185,7 +185,10 @@ def package(root, mode):
     verify_checkout(repo, pinned)
     if os.environ.get("CODE_SIGN_IDENTITY", "-") == "-":
         raise RuntimeError("Private Siri Remote packaging requires CODE_SIGN_IDENTITY; use SAYALL_PRIVATE_PLATFORM_MODE=public for a public build")
-    output = root / ".private-dependencies" / "artifacts" / sha
+    # The release tag is the version identity; the commit is only its resolution.
+    # Keying the cache by tag gives one directory per released version and makes
+    # a stale entry obvious, while ``sha`` stays the value verified above.
+    output = root / ".private-dependencies" / "artifacts" / pinned
     output.mkdir(parents=True, exist_ok=True)
     release_dir = output / "xcframeworks" / "release"
     prepared = output / "prepared"
