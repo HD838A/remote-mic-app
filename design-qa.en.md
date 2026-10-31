@@ -34,7 +34,7 @@ This file is a convenience translation of the current mandatory design rules. Th
 
 - The settings UI uses a narrow sidebar, header, and layered content areas. Primary actions on every visible page remain available at the production minimum window size. Pages remain scrollable without showing scroll bars.
 - Sidebar and selected-button states use low-opacity semantic-blue interactive glass.
-- It uses system fonts, semantic type sizes, and system colors, following light/dark appearance, reduced transparency, and increased contrast.
+- The bottom Profile sidebar entry uses the system `person.crop.circle` icon. The sidebar and Settings brand names use Oxanium SemiBold 600; other text uses system fonts, semantic type sizes, and system colors, following light/dark appearance, reduced transparency, and increased contrast.
 - The window keeps native traffic-light controls and a meaningful logical title while hiding the visible title and titlebar separator. Page backgrounds extend to the top, only the dedicated blank titlebar region remains draggable, page content and controls do not move the whole window, and interactive content stays clear of the window controls.
 - Except for the flat Profile cards and sharing buttons, panels and buttons use native macOS 26 `glassEffect` and glass button styles; macOS 14/15 use system Material and standard buttons without a custom blur implementation.
 - The button-mapping page reuses Resources/RC003-remote-photo.png at its original 508×1030 aspect ratio.
@@ -48,6 +48,24 @@ This file is a convenience translation of the current mandatory design rules. Th
 - Settings keeps the current version, available update, Check for Updates, release notes, and the off-by-default pre-release toggle together. Permissions & Privacy precedes General, followed by Diagnostics & Logs and Support. Language choices remain visible without a drop-down; the page does not show a glossary, Version History, or Quit button.
 - General uses inline icon buttons for the app-icon choice and only shows icon resources actually included in the installed build. A selection immediately updates the Dock, app switcher, and Settings branding and persists across launches; a missing resource falls back to the default icon without showing an unavailable placeholder.
 - All UI text uses stable semantic keys. Localized Markdown help falls back to English when the selected language has no matching document.
+
+## Approved sidebar design
+
+On 2026-10-29 the user approved the [version 8 HTML design](Screenshots/design-drafts/sidebar-compact/v8/review.html) for implementation. Its Markdown source, original PNGs and digest manifest are stored beside it without changing the reviewed bytes. Statements such as “not implemented” describe the review-time state.
+
+On 2026-10-31 the user asked for a narrower sidebar. The width is no longer fixed at `136pt`; it is measured from the widest visible row (brand header included) within `104–136pt`, keeping `15pt` from the text to both the leading and trailing edges instead of stacking spare space to the right of the labels. Both languages measure about `129pt` because the brand header is the widest block; longer English entries grow the width up to the `136pt` cap.
+
+Verification screenshots live in `Screenshots/design-drafts/sidebar-width/` (`sidebar-width-zh-hans-dark.png`, `sidebar-width-zh-hans-light.png`, `sidebar-width-en-dark.png`, `sidebar-width-en-light.png`), captured as `2040 × 1544` 2× images of a `1020 × 772` window.
+
+- Measure the sidebar width from its content within `104–136pt`. Place the icon to the left of the text for the brand, every navigation entry and the bottom account entry.
+- Use a `44 × 44pt` brand logo, `16pt` below the window control region and `15pt` from the sidebar edge. Keep an `8pt` horizontal gap to the brand text.
+- Use `16pt` Oxanium SemiBold 600 for sidebar SayAll. Move it `2pt` down from version 5. Keep the `12pt` system-font version closely below it and read the actual bundle version.
+- Use `18pt` navigation icons and `13pt` system Semibold labels. Set the icon column `15pt` from the left edge for optical alignment with the logo. Keep an `8pt` icon-to-text gap and left-align labels.
+- Navigation rows have a `44pt` minimum height. Keep the full `Button Profiles` name and wrap by available width instead of renaming it to `Profiles`. Center the icon vertically against the entire text block. Grow rows for additional lines without shrinking or clipping text.
+- Keep `person.crop.circle` for the account entry, with a `56pt` minimum account region and the same columns and centering. Wrap long names fully by available width, without forced breaks every eight characters or ellipses. Grow the account region when needed.
+- Use a rounded, low-opacity accent selection background. Put the Settings update dot at the row trailing edge and reserve room for it.
+- Keep the brand and account fixed and retain vertical scrolling for the middle navigation. Validate all enabled entries at the `1020 × 772` production minimum in Chinese/English and light/dark appearances. Do not hide entries or shrink Chinese text to remove scrolling.
+- Preserve existing names, ordering, visibility, account sources and behavior. Optional entries and the fictitious name in the draft are layout fixtures, not new features or real account state. Keep Oxanium 600 for the Settings brand too.
 
 ## Mandatory interaction, layout, and typography rules
 

@@ -135,19 +135,10 @@ struct OnboardingFlowTests {
             let resumed = AppSettings(defaults: defaults)
             resumed.beginOnboardingSiriRemoteTrial()
             #expect(resumed.onboardingSiriRemoteInitiallyEnabled == initiallyEnabled)
-            for decision in [HostButtonProfilesAccessDecision.requiresPlus, .unavailable] {
-                #expect(resumed.shouldDisableOnboardingSiriRemote(accessDecision: decision) == !initiallyEnabled)
-            }
-            for decision in [HostButtonProfilesAccessDecision.allowed(validUntil: .distantFuture),
-                             .temporarilyOffline(validUntil: .distantFuture),
-                             .authorized] {
-                #expect(!resumed.shouldDisableOnboardingSiriRemote(accessDecision: decision))
-            }
-            // Changing the selected source must not lose ownership of a temporary enable.
-            resumed.setOnboardingControlSource(.xiaomiRemote)
+            // 连接与按键不看会员：会员判定不再决定整个 Siri Remote 支持的开关。
             let model = BridgeAppModel(settings: resumed)
             model.completeOnboarding()
-            #expect(resumed.siriRemoteEnabled == initiallyEnabled)
+            #expect(resumed.siriRemoteEnabled)
             #expect(resumed.isOnboardingComplete)
             #expect(resumed.onboardingSiriRemoteInitiallyEnabled == nil)
         }
@@ -179,7 +170,7 @@ struct OnboardingFlowTests {
         }
     }
 
-    @Test @MainActor func completingProductionViewOnlyDisablesNewSiriRemoteTrials() throws {
+    @Test @MainActor func completingProductionViewKeepsSiriRemoteSupportWithoutMembership() throws {
         for initiallyEnabled in [false, true] {
             let fixture = try OnboardingOffscreenFixture(
                 step: .complete,
@@ -190,7 +181,8 @@ struct OnboardingFlowTests {
             fixture.model.enableSiriRemoteForOnboarding()
             fixture.probe.invoke("continue")
             #expect(fixture.settings.isOnboardingComplete)
-            #expect(fixture.settings.siriRemoteEnabled == initiallyEnabled)
+            // 连接与按键不看会员：完成引导不再关闭 Siri Remote 支持，只有语音按权益判定。
+            #expect(fixture.settings.siriRemoteEnabled)
         }
     }
 
@@ -3560,7 +3552,7 @@ struct OnboardingFlowTests {
         #expect(vokieSource.probe.actions["voice-tool.vokie.website"] != nil)
         invoke("voice-tool.vokie.website", on: vokieSource)
         #expect(vokieSource.probe.openedURLs.last == AppLinks.vokieWebsite)
-        #expect(AppLinks.vokieWebsite.query == "from=sayall.app")
+        #expect(AppLinks.vokieWebsite.query == "utm_source=sayall.app")
         for index in 0...3 {
             #expect(vokieSource.probe.actions.keys.contains("input-guide.\(index)"))
         }

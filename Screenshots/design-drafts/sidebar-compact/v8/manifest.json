@@ -1,0 +1,36 @@
+[
+  {
+    "file": "review.html",
+    "bytes": 1972495,
+    "sha256": "c2d497f8418fc26551df5803f976bb2849eb6f3d397ada207ea2b972fad1845a"
+  },
+  {
+    "file": "review.md",
+    "bytes": 971964,
+    "sha256": "de5df411ce2a9118474ec0cea927f22918fa244a8b63b9172783f2ebbae4ebc9"
+  },
+  {
+    "file": "multiline-comparison.png",
+    "bytes": 204801,
+    "sha256": "e95ec7283bb97cb63f6c2890021f624ef3376eae894266e3a5d3820daa444c2f",
+    "format": "PNG",
+    "width": 1440,
+    "height": 1740
+  },
+  {
+    "file": "english-light.png",
+    "bytes": 263756,
+    "sha256": "9b26aa4087665d7f873af54c5c2698578d90b28c61cdf68cb56661738fbef80d",
+    "format": "PNG",
+    "width": 2040,
+    "height": 1544
+  },
+  {
+    "file": "english-dark.png",
+    "bytes": 258739,
+    "sha256": "8ea98481ae88fa7c297dd59a7aba24d7ced2efc37528aebe0b12aa224b4c2ffd",
+    "format": "PNG",
+    "width": 2040,
+    "height": 1544
+  }
+]

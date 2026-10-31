@@ -12,7 +12,7 @@
 
 三个入口只控制同一个 `expandedShareSection`，侧边栏入口导航到关于页并展开分享面板。页面内平铺避免 Sheet 或 Popover，也不会占用或伪造原生侧边栏 selection。
 
-URL 构造会保留已有 query 和 fragment，移除大小写不敏感的旧 `from` 后追加唯一 `from=mac_share`。当前中文 URL 为 `https://sayall.app/?from=mac_share`，英文 URL 为 `https://sayall.app/en/?from=mac_share`。
+URL 构造会保留已有 query 和 fragment，移除大小写不敏感的旧 `from` 与 `utm_source` 后追加唯一 `utm_source=mac_share`。当前中文 URL 为 `https://sayall.app/?utm_source=mac_share`，英文 URL 为 `https://sayall.app/en/?utm_source=mac_share`。
 
 ## 已知限制
 

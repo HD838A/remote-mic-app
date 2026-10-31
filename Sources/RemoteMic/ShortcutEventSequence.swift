@@ -25,7 +25,8 @@ final class ShortcutHardwareModifierState {
     }
 
     func snapshot(_ raw: CGEventFlags) -> (
-        flags: CGEventFlags, functionState: String, removedFunctionFlag: Bool
+        flags: CGEventFlags, functionState: String, removedFunctionFlag: Bool,
+        functionFlagUnverified: Bool
     ) {
         lock.lock()
         let pressed = functionKeyPressed
@@ -37,7 +38,16 @@ final class ShortcutHardwareModifierState {
             flags.remove(.maskSecondaryFn)
         }
         let state = pressed.map { $0 ? "pressed" : "released" } ?? "unobserved"
-        return (flags, state, raw.contains(.maskSecondaryFn) && !flags.contains(.maskSecondaryFn))
+        // No real Fn edge has been seen, so a Fn bit that only the raw HID snapshot
+        // reports is an artifact of the source key, not a modifier the user holds.
+        // Home and other Fn-layer usages report Fn without the numeric pad bit that
+        // navigation keys carry, so the filter above cannot remove it here.
+        let unverified = pressed == nil && raw.contains(.maskSecondaryFn)
+        return (
+            flags, state,
+            raw.contains(.maskSecondaryFn) && !flags.contains(.maskSecondaryFn),
+            unverified
+        )
     }
 }
 
@@ -271,7 +281,18 @@ enum ShortcutEventSequence {
         let selectedModifiers = selectedModifiers(for: requested)
         let rawHardwareFlags = hardwareFlags()
         let hardwareSnapshot = modifierState.snapshot(rawHardwareFlags)
-        let physicalAtStart = hardwareSnapshot.flags.intersection(hardwareModifierMask)
+        var physicalAtStart = hardwareSnapshot.flags.intersection(hardwareModifierMask)
+        var functionFiltered = hardwareSnapshot.removedFunctionFlag
+        // A Fn bit that only the raw HID snapshot reports must not enter a shortcut
+        // that does not ask for Fn. Otherwise Command+Shift+H becomes
+        // Fn+Command+Shift+H and the target app no longer matches it. An explicitly
+        // configured Fn and a Fn the user really holds keep the previous behavior.
+        if hardwareSnapshot.functionFlagUnverified,
+           !requested.contains(.maskSecondaryFn),
+           physicalAtStart.contains(.maskSecondaryFn) {
+            physicalAtStart.remove(.maskSecondaryFn)
+            functionFiltered = true
+        }
         let diagnosticKind = diagnosticKind(keyCode, modifiers: requested)
         let diagnosticContext = diagnosticKind.map {
             " primary_kind=\($0) requested_flags=\(diagnosticFlags(requested)) " +
@@ -282,7 +303,7 @@ enum ShortcutEventSequence {
             "\(prefix) phase=requested modifier_count=\(selectedModifiers.count) " +
                 "side_specific=\(selectedModifiers.contains { $0.sideSpecific }) " +
                 "hardware_function_state=\(hardwareSnapshot.functionState) " +
-                "hardware_function_filtered=\(hardwareSnapshot.removedFunctionFlag)\(diagnosticContext)"
+                "hardware_function_filtered=\(functionFiltered)\(diagnosticContext)"
         )
         defer {
             let elapsed = Int((ProcessInfo.processInfo.systemUptime - started) * 1_000)
@@ -328,7 +349,7 @@ enum ShortcutEventSequence {
             // HID state after posting can retain our own modifiers and prevent release.
             event.flags = synthetic.union(physicalAtStart)
             if !modifier, (123...126).contains(code) {
-                event.flags.insert(.maskNumericPad)
+                event.flags.formUnion([.maskSecondaryFn, .maskNumericPad])
             }
             event.setIntegerValueField(.eventSourceUserData, value: KeyboardInjector.syntheticEventMarker)
             // Newly constructed keyboard events can have timestamp zero. Give

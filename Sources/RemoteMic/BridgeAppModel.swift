@@ -545,6 +545,10 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     @Published private(set) var macMicrophoneDevices: [AudioDeviceInfo] = []
     @Published private(set) var macMicrophoneState: MacMicrophoneSessionState = .idle
     @Published private(set) var macMicrophoneShortcutAvailable = true
+    @Published private(set) var macMicrophoneEnabled = false
+    private let macMicrophoneVoiceKeyMonitor = MacMicrophoneVoiceKeyMonitor()
+    private var macMicrophoneMonitoredMode: VoiceKeyMode?
+    private var macMicrophoneMonitoredGesture: VoiceGestureMode?
     private let macMicrophoneCapture = MacMicrophoneCapture()
     private let macMicrophoneHotKey = MacMicrophoneShortcut()
     private var macMicrophoneShortcutSubscription: AnyCancellable?
@@ -572,9 +576,11 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             },
             finish: { [weak self] in self?.releaseVirtualAudioOutputIfUnused(reason: "mac_microphone_stopped") }
         )
-        session.onStateChange = { [weak self] state in
-            guard let self else { return }
+        session.onStateChange = { [weak self, weak session] state in
+            guard let self, let session else { return }
             self.macMicrophoneState = state
+            self.macMicrophoneEnabled = session.isEnabled
+            if !session.isEnabled { self.macMicrophoneVoiceKeyMonitor.stop() }
         }
         return session
     }()
@@ -1065,7 +1071,17 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         }
 #if SAYALL_SIRI_REMOTE_ENABLED
         siriRemoteFeature.prepareNativeInput = { [weak self] sources in
-            self?.siriNativeKeyMapper.prepare(additionalSources: sources) == true
+            guard let self else { return false }
+            if self.siriNativeKeyMapper.prepare(additionalSources: sources) { return true }
+            // 苹果遥控器只上报消费类/厂商用途，没有键盘页，系统不接受
+            // `HIDKeyboardModifierMappingPairs` 写入，键位中和映射因此永远校验失败。
+            // 这种遥控器随后由适配器以独占方式打开，原生按键不会漏到系统，
+            // 所以不能因为映射未就绪就把整台设备拒掉——那样遥控器连设备卡片都不会出现。
+            AppLogger.shared.write(
+                "APPLE REMOTE NATIVE_INPUT phase=fallback reason=mapping_unavailable " +
+                    "isolation=exclusive_open"
+            )
+            return true
         }
         siriRemoteFeature.restoreNativeInput = { [weak self] in self?.siriNativeKeyMapper.restore() }
         siriRemoteFeature.onConnection = { [weak self] connection in
@@ -1470,6 +1486,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         macMicrophoneShortcutSubscription?.cancel()
         macMicrophoneShortcutSubscription = nil
         macMicrophoneHotKey.stop()
+        macMicrophoneVoiceKeyMonitor.stop()
         macMicrophoneSession.shutdown()
         membershipFeature.closeCommonPhrases(reason: "app_stop")
         privateFeature.stop()
@@ -2650,7 +2667,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
                 if self.settings.macMicrophoneInputUID.isEmpty, let builtIn {
                     self.settings.macMicrophoneInputUID = builtIn.uid
                 }
-                if self.macMicrophoneState.isActive,
+                if self.macMicrophoneEnabled,
                    !inputs.contains(where: { $0.uid == self.settings.macMicrophoneInputUID }) {
                     self.macMicrophoneSession.stop(failure: .inputUnavailable)
                 }
@@ -2696,10 +2713,29 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     }
 
     var macMicrophoneButtonKey: String {
-        macMicrophoneState.isActive ? "audio.mac_microphone.stop" : "audio.mac_microphone.start"
+        macMicrophoneEnabled ? "audio.mac_microphone.stop" : "audio.mac_microphone.start"
+    }
+
+    var macMicrophoneVoiceGesture: VoiceGestureMode {
+        if let binding = settings.verifiedVoiceToolBinding,
+           binding.tool == settings.onboardingVoiceTool, binding.shortcut == settings.voiceKeyMode {
+            return binding.gestureMode
+        }
+        return settings.onboardingPreferredGesture ??
+            (settings.voiceFnTapModeEnabled ? .toggle :
+                VoiceToolAdapterProfile.profile(for: settings.onboardingVoiceTool).recommendedMode ?? .hold)
     }
 
     func toggleMacMicrophone(from entry: MacMicrophoneEntry) {
+        if !macMicrophoneSession.isEnabled {
+            let mode = settings.voiceKeyMode
+            let gesture = macMicrophoneVoiceGesture
+            macMicrophoneVoiceKeyMonitor.onEdge = { [weak self] pressed, observedAt in
+                self?.macMicrophoneSession.handleVoiceKey(pressed: pressed, gesture: gesture, observedAt: observedAt)
+            }
+            macMicrophoneMonitoredMode = mode
+            macMicrophoneMonitoredGesture = gesture
+        }
         macMicrophoneSession.toggle(from: entry)
     }
 
@@ -2718,6 +2754,10 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
 
     private func prepareMacMicrophone(completion: @escaping (MacMicrophoneFailure?) -> Void) {
         let operation = macMicrophoneSession.operationID
+        guard macMicrophoneVoiceKeyMonitor.start(mode: macMicrophoneMonitoredMode ?? settings.voiceKeyMode) else {
+            completion(.inputMonitoring)
+            return
+        }
         let resume: (Bool) -> Void = { [weak self] granted in
             guard let self, self.macMicrophoneSession.operationID == operation,
                   self.macMicrophoneState == .preparing else { return }
@@ -2750,9 +2790,12 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             completion(.busy); return
         }
         let operation = macMicrophoneSession.operationID
-        AppLogger.shared.write("MAC MICROPHONE operation_id=\(operation) phase=route_ready voice_operation_id=\(activeMobileVoiceOperationID ?? "none") mode=audio_only voice_trigger=none target_activation=none target_response=unknown")
+        AppLogger.shared.write("MAC MICROPHONE operation_id=\(operation) phase=route_ready voice_operation_id=\(activeMobileVoiceOperationID ?? "none") mode=physical_voice_key voice_key_injection=none key_event_passthrough=true target_activation=none target_response=unknown")
         macMicrophoneCapture.start(input: input, operationID: operation,
-            onSamples: { [weak self] samples in self?.receivePhoneAudio(samples, source: .macMicrophone) },
+            onSamples: { [weak self] samples in
+                self?.macMicrophoneSession.observePCM(samples)
+                self?.receivePhoneAudio(samples, source: .macMicrophone)
+            },
             onFailure: { [weak self] in self?.macMicrophoneSession.stop(failure: .capture) },
             completion: completion)
     }
@@ -3217,6 +3260,10 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         allowVoiceKeyModeFallback: Bool = true,
         restartSiriRemote: Bool = true
     ) {
+        if macMicrophoneEnabled,
+           macMicrophoneMonitoredMode != settings.voiceKeyMode || macMicrophoneMonitoredGesture != macMicrophoneVoiceGesture {
+            macMicrophoneSession.stop(failure: .interrupted)
+        }
         let permissionSnapshot = HIDPermissionSnapshot.current
         appliedHIDPermissionSnapshot = permissionSnapshot
         if !settings.customMappingEnabled || !permissionSnapshot.accessibilityGranted ||
@@ -3383,21 +3430,11 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     }
 
     func completeOnboarding() {
-        let shouldDisable = settings.shouldDisableOnboardingSiriRemote(
-            accessDecision: membershipFeature.buttonProfilesAccessDecision
-        )
-        if shouldDisable {
-            setSiriRemoteEnabled(false)
-            guard !settings.siriRemoteEnabled else {
-                AppLogger.shared.write(
-                    "ONBOARDING SIRI_REMOTE phase=blocked reason=voice_session_active"
-                )
-                return
-            }
-        }
+        // 连接、按键与触摸不看会员，因此不再因为无权益把整个 Siri Remote 支持关掉；
+        // 语音是否可用改由按键入口的 `canStartAppleRemoteVoice` 判定。
         AppLogger.shared.write(
-            "ONBOARDING SIRI_REMOTE phase=completed result=\(shouldDisable ? "disabled" : "preserved") " +
-                "reason=\(shouldDisable ? "membership_required" : "existing_state_or_access")"
+            "ONBOARDING SIRI_REMOTE phase=completed result=preserved " +
+                "voice_entitlement=\(membershipFeature.canUseSiriRemoteVoice ? "granted" : "required")"
         )
         settings.completeOnboarding()
     }
@@ -4430,6 +4467,17 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
                 )
                 return
             }
+            // 苹果遥控器只有语音是会员功能；连接、按键与触摸此前已经放行。
+            // 无权益时按键不进入采集，也不唤醒输入法，避免出现「有反应但没字」。
+            guard canStartAppleRemoteVoice else {
+                if event.phase == .began {
+                    AppLogger.shared.write(
+                        "APPLE REMOTE VOICE phase=blocked result=membership_required " +
+                            "reason=siri_remote_voice_entitlement"
+                    )
+                }
+                return
+            }
             if event.phase == .began {
                 selectRemoteProfile(profileID)
             }
@@ -4451,9 +4499,13 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             }
             return
         }
-        if settings.customMappingEnabled, !siriNativeKeyMapper.isPrepared {
-            AppLogger.shared.write("APPLE REMOTE ACTION rejected reason=native_input_not_verified")
-            return
+        if settings.customMappingEnabled, !siriNativeKeyMapper.isPrepared, event.phase == .began {
+            // 键位中和映射不可用时设备已由适配器独占打开，原生事件不会漏到系统，
+            // 因此继续执行用户配置的动作，不再整键丢弃。
+            AppLogger.shared.write(
+                "APPLE REMOTE ACTION phase=continued result=exclusive_open_isolation " +
+                    "control=\(control.rawValue)"
+            )
         }
         if control == .select {
             let nativeEdge: RemoteEventEdge = event.phase == .began ? .down : .up
@@ -5318,6 +5370,14 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
 
     private func elapsedMilliseconds(since uptime: TimeInterval) -> Int {
         max(0, Int((ProcessInfo.processInfo.systemUptime - uptime) * 1_000))
+    }
+
+    /// 苹果遥控器语音的会员门槛：引导过程中允许试用，引导完成后按会员权益判定。
+    ///
+    /// 只作用于语音；连接、按键映射与触摸不受影响。
+    private var canStartAppleRemoteVoice: Bool {
+        if settings.onboardingStep != .complete { return true }
+        return membershipFeature.canUseSiriRemoteVoice
     }
 
     private func beginAppleRemoteVoice(for device: SiriRemoteDeviceIdentity) {
@@ -6566,7 +6626,8 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         settings.selectedAudioDeviceUID = "MiRemoteV2ch_UID"
         audioStatus = LocalizedMessage("audio.output.current_format", arguments: ["SayAll"])
         switch state {
-        case "recording": macMicrophoneState = .recording
+        case "armed": macMicrophoneState = .armed; macMicrophoneEnabled = true
+        case "recording": macMicrophoneState = .recording; macMicrophoneEnabled = true
         case "preparing": macMicrophoneState = .preparing
         case "stopping": macMicrophoneState = .stopping
         case "permission": macMicrophoneState = .failed(.permission)
@@ -7633,7 +7694,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         VirtualAudioConnectionLifecyclePolicy.shouldBeActive(
             readyBluetoothBridgeCount: readyBluetoothBridgeCount,
             bluetoothVoiceActive: bluetoothVoiceActive,
-            mobileVoiceActive: activeMobileVoiceSource != nil ||
+            mobileVoiceActive: macMicrophoneEnabled || activeMobileVoiceSource != nil ||
                 !appleRemoteVoiceDevices.isEmpty || appleRemoteVoiceStopping,
             testToneActive: isPlayingTestTone,
             systemSuspended: systemAudioSuspensionState.isSuspended

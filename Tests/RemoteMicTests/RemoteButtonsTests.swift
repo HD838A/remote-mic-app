@@ -3654,7 +3654,7 @@ struct RemoteButtonsTests {
         #expect(diagnostics.contains { $0.contains("HID GESTURE") && $0.contains("path=raw") })
         #expect(diagnostics.contains {
             $0 == "HID ROUTE button=\(button.rawValue) trigger=singleClick " +
-                "path=configured reason=single_click_override external_result=unknown"
+                "path=configured reason=single_click_override override_present=true"
         })
         #expect(!diagnostics.contains { $0.contains("HID NATIVE PASSTHROUGH") })
         #expect(scheduler.pendingTaskCount == 0)

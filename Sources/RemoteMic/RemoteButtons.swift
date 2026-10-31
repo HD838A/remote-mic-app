@@ -594,6 +594,9 @@ struct CustomApplicationProfile: Codable, Equatable, Identifiable {
     var focusStrategy: CustomApplicationFocusStrategy
     var focusShortcut: CustomKeyboardShortcut?
     var accessibilityTarget: AccessibilityFocusTarget?
+    /// Separate from `accessibilityTarget` on purpose: the scroll region is not
+    /// an input field (decision S17).
+    var scrollRegionTarget: ScrollRegionTarget?
 
     init(
         id: UUID = UUID(),
@@ -602,7 +605,8 @@ struct CustomApplicationProfile: Codable, Equatable, Identifiable {
         applicationPath: String,
         focusStrategy: CustomApplicationFocusStrategy = .none,
         focusShortcut: CustomKeyboardShortcut? = nil,
-        accessibilityTarget: AccessibilityFocusTarget? = nil
+        accessibilityTarget: AccessibilityFocusTarget? = nil,
+        scrollRegionTarget: ScrollRegionTarget? = nil
     ) {
         self.id = id
         self.displayName = displayName
@@ -611,6 +615,7 @@ struct CustomApplicationProfile: Codable, Equatable, Identifiable {
         self.focusStrategy = focusStrategy
         self.focusShortcut = focusShortcut
         self.accessibilityTarget = accessibilityTarget
+        self.scrollRegionTarget = scrollRegionTarget
     }
 }
 
@@ -736,6 +741,8 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
     case arrowRight
     case scrollUp
     case scrollDown
+    case pageUp
+    case pageDown
     case deleteBackward
     case showDesktop
     case contextMenu
@@ -793,6 +800,8 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
         case .arrowRight: return localization.text("action.arrow_right")
         case .scrollUp: return localization.text("action.scroll_up")
         case .scrollDown: return localization.text("action.scroll_down")
+        case .pageUp: return localization.text("action.page_up")
+        case .pageDown: return localization.text("action.page_down")
         case .deleteBackward: return localization.text("action.delete_backspace")
         case .showDesktop: return localization.text("action.show_desktop")
         case .contextMenu: return localization.text("action.context_menu")
@@ -923,7 +932,7 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
              .commandPaste, .commandClose, .commandQuit, .commandCut, .commandSelectAll,
              .commandUndo, .commandRedo, .commandFind, .commandSave, .commandDelete,
              .arrowUp, .arrowDown, .arrowLeft, .arrowRight, .scrollUp, .scrollDown,
-             .deleteBackward:
+             .pageUp, .pageDown, .deleteBackward:
             return .basicKeys
         case .showDesktop, .contextMenu, .appSwitcher, .volumeUp, .volumeDown, .volumeMute,
              .playPause, .previousCommandLeft, .nextCommandRight, .toggleLongRecording:
@@ -945,6 +954,8 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
         ![
             .customShortcut,
             .focusInput,
+            .pageUp,
+            .pageDown,
             .openCustomApplication,
             .commandReturn,
             .shiftReturn,

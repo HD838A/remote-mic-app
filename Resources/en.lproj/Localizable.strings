@@ -177,6 +177,26 @@
 "action.arrow_right" = "Right Arrow";
 "action.scroll_up" = "Scroll Up";
 "action.scroll_down" = "Scroll Down";
+"action.page_up" = "Page Up";
+"action.page_down" = "Page Down";
+"scroll_region.title" = "Scroll Region";
+"scroll_region.help" = "Page keys scroll this app's content area. Only the region structure is read; no content, focus or pointer is touched.";
+"scroll_region.learn" = "Learn Scroll Region";
+"scroll_region.countdown" = "Click the area to page (%d)";
+"scroll_region.status_preset" = "Built-in";
+"scroll_region.status_learned" = "Learned";
+"scroll_region.status_needs_calibration" = "Needs learning";
+"scroll_region.learn_succeeded" = "Scroll region recorded. You can test paging now.";
+"scroll_region.learn_failed" = "No scrollable area found. Click the content area (messages, document or terminal) and try again.";
+"scroll_region.test_up" = "Test Page Up";
+"scroll_region.test_down" = "Test Page Down";
+"scroll_region.test_moved" = "Content moved. This region pages correctly.";
+"scroll_region.test_unconfirmed" = "Page sent, but no movement was detected. You may already be at the top or bottom, or this area cannot scroll.";
+"scroll_region.test_sent" = "Page sent. Confirm visually that the content moved.";
+"scroll_region.test_needs_calibration" = "This app has no built-in region. Learn one first.";
+"scroll_region.test_failed" = "Paging failed. Make sure the app is frontmost and accessibility is granted.";
+"scroll_region.reset" = "Reset to Built-in";
+
 "action.delete_backspace" = "Delete (Backspace)";
 "action.command_delete" = "Command-Delete";
 "action.show_desktop" = "Show Desktop (fn + F11)";
@@ -956,7 +976,7 @@
 "onboarding.secure_input.detail" = "Quit apps that are asking for a password or using a secure keyboard, then check again.";
 "onboarding.secure_input.recheck" = "Check again";
 "onboarding.secure_input.help" = "If it still does not work, lock your Mac, unlock it with your password, and check again.";
-"onboarding.complete.siri_membership" = "The voice test passed. Finishing setup will turn off the Apple Remote voice feature enabled here. Activate membership to enable it in Settings.";
+"onboarding.complete.siri_membership" = "The voice test passed. The Apple Remote keeps working for connection and buttons; voice is a membership feature and can be enabled in Settings after activation.";
 "onboarding.complete.title" = "SayAll is ready";
 "onboarding.complete.detail" = "You can now dictate with the selected control method and adjust connection, voice, and button settings from the main panel.";
 "onboarding.complete.runtime_changed" = "Your current setup has changed";
@@ -1283,7 +1303,7 @@
 "audio.mac_microphone.preparing" = "Preparing…";
 "audio.mac_microphone.recording" = "Mac microphone is recording";
 "audio.mac_microphone.stopping" = "Stopping recording…";
-"audio.mac_microphone.shortcut" = "Shortcut";
+"audio.mac_microphone.shortcut" = "Switch shortcut";
 "audio.mac_microphone.shortcut_set" = "Set shortcut";
 "audio.mac_microphone.shortcut_prompt" = "Press a combination with ⌘, ⌃ or ⌥. Left and right modifiers are equivalent.";
 "audio.mac_microphone.shortcut_unavailable" = "Shortcut unavailable. Choose another combination with ⌘, ⌃ or ⌥.";
@@ -1296,3 +1316,9 @@
 "audio.mac_microphone.error.interrupted" = "Voice input was interrupted. Please retry.";
 "audio.mac_microphone.error.timed_out" = "Preparation timed out. Please retry.";
 "audio.mac_microphone.error.accessibility" = "Allow Accessibility access in System Settings.";
+
+"audio.mac_microphone.armed" = "Standby";
+"audio.mac_microphone.voice_key" = "Voice shortcut";
+"audio.mac_microphone.voice_hold" = "Hold to speak; release to finish";
+"audio.mac_microphone.voice_toggle" = "Press to start; press again to finish";
+"audio.mac_microphone.error.input_monitoring" = "Cannot observe the voice shortcut. Allow Input Monitoring in System Settings and retry.";

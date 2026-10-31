@@ -7,75 +7,111 @@ import Testing
 
 @Suite("Mac microphone input")
 struct MacMicrophoneInputTests {
-    @Test func threeEntriesShareOneSessionAndDrainAfterTheCaptureTail() throws {
+    @Test func choosingInputDoesNotStartCapture() {
+        let h = MacMicrophoneHarness(); h.controller.toggle(from: .connectionPage)
+        h.prepareCompletion?(nil)
+        #expect(!h.events.contains("start"))
+    }
+    @Test(arguments: [MacMicrophoneEntry.connectionPage, .statusMenu, .shortcut])
+    func allSourceEntriesArmWithoutCapture(_ entry: MacMicrophoneEntry) {
         let h = MacMicrophoneHarness()
-        h.controller.toggle(from: .connectionPage)
+        h.controller.toggle(from: entry)
+        h.prepareCompletion?(nil)
+        #expect(h.controller.state == .armed)
+        #expect(h.controller.isEnabled)
+        #expect(!h.controller.state.isActive)
+        #expect(h.events == ["prepare"])
+        h.controller.toggle(from: entry)
+        #expect(h.controller.state == .idle)
+        #expect(!h.controller.isEnabled)
+        #expect(!h.events.contains("start"))
+    }
+
+    @Test func holdKeyStartsOnlyAfterArmingAndDrainsTheCaptureTail() {
+        let h = MacMicrophoneHarness()
+        h.controller.handleVoiceKey(pressed: true, gesture: .hold)
+        #expect(h.events.isEmpty)
+        h.arm()
+        h.controller.handleVoiceKey(pressed: true, gesture: .hold)
         h.prepareCompletion?(nil)
         h.startCompletion?(nil)
         #expect(h.controller.state == .recording)
-        h.controller.toggle(from: .shortcut)
-        h.controller.toggle(from: .statusMenu)
-        #expect(h.events == ["prepare", "start", "stop_capture"])
-        // The final admitted PCM must reach the player before its drain starts.
+        h.controller.handleVoiceKey(pressed: false, gesture: .hold)
+        #expect(h.controller.state == .stopping)
         h.events.append("tail_pcm")
         h.stopCompletion?()
         #expect(h.events.suffix(2) == ["tail_pcm", "drain"])
         h.drainCompletion?(true)
         h.drainCompletion?(true)
-        #expect(h.controller.state == .idle)
+        #expect(h.controller.state == .armed)
         #expect(h.events.filter { $0 == "finish" }.count == 1)
         #expect(h.logs.filter { $0.contains("phase=completed") }.count == 1)
     }
 
-    @Test func cancelledPermissionCannotStartThisOrTheNextSession() {
+    @Test func toggleKeyKeepsCaptureAfterReleaseAndStopsOnNextPress() {
+        let h = MacMicrophoneHarness(); h.arm()
+        h.controller.handleVoiceKey(pressed: true, gesture: .toggle)
+        h.controller.handleVoiceKey(pressed: true, gesture: .toggle)
+        h.prepareCompletion?(nil); h.startCompletion?(nil)
+        #expect(h.events.filter { $0 == "start" }.count == 1)
+        h.controller.handleVoiceKey(pressed: false, gesture: .toggle)
+        #expect(h.controller.state == .recording)
+        h.controller.handleVoiceKey(pressed: true, gesture: .toggle)
+        #expect(h.controller.state == .stopping)
+        h.stopCompletion?(); h.drainCompletion?(true)
+        #expect(h.controller.state == .armed)
+    }
+
+    @Test func cancelledSelectionCannotStartThisOrTheNextSession() {
         let h = MacMicrophoneHarness()
         h.controller.toggle(from: .statusMenu)
         let oldPermission = h.prepareCompletion
         h.controller.toggle(from: .connectionPage)
-        h.stopCompletion?()
-        h.drainCompletion?(true)
+        h.stopCompletion?(); h.drainCompletion?(true)
+        #expect(h.controller.state == .idle)
         h.controller.toggle(from: .shortcut)
         oldPermission?(nil)
         #expect(h.controller.state == .preparing)
-        #expect(!h.events.contains("start"))
         h.prepareCompletion?(nil)
-        h.startCompletion?(nil)
-        #expect(h.controller.state == .recording)
+        #expect(h.controller.state == .armed)
+        #expect(!h.events.contains("start"))
         #expect(h.controller.operationID == 2)
     }
 
-    @Test func cancelledCaptureStartDoesNotResurrectRecording() {
+    @Test func voiceKeyDuringSelectionOnlyStartsIfStillRequested() {
         let h = MacMicrophoneHarness()
-        h.controller.toggle(from: .shortcut)
+        h.controller.toggle(from: .connectionPage)
+        h.controller.handleVoiceKey(pressed: true, gesture: .hold)
+        h.controller.handleVoiceKey(pressed: false, gesture: .hold)
+        h.prepareCompletion?(nil)
+        #expect(h.controller.state == .armed)
+        #expect(!h.events.contains("start"))
+        h.controller.handleVoiceKey(pressed: true, gesture: .hold)
         h.prepareCompletion?(nil)
         let oldStart = h.startCompletion
-        h.controller.stop()
-        h.stopCompletion?()
-        h.drainCompletion?(true)
-        oldStart?(nil)
-        #expect(h.controller.state == .idle)
+        h.controller.handleVoiceKey(pressed: false, gesture: .hold)
+        h.stopCompletion?(); h.drainCompletion?(true); oldStart?(nil)
+        #expect(h.controller.state == .armed)
     }
 
     @Test func busyRejectsWithoutCaptureAndAllowsExplicitRetry() {
-        let h = MacMicrophoneHarness()
-        h.busy = true
+        let h = MacMicrophoneHarness(); h.busy = true
         h.controller.toggle(from: .connectionPage)
         #expect(h.controller.state == .failed(.busy))
+        #expect(!h.controller.isEnabled)
         #expect(h.events.isEmpty)
-        h.busy = false
-        h.controller.toggle(from: .statusMenu)
-        #expect(h.controller.state == .preparing)
+        h.busy = false; h.arm()
+        #expect(h.controller.state == .armed)
     }
 
-    @Test(arguments: [MacMicrophoneFailure.permission, .accessibility, .inputUnavailable,
-                      .outputUnavailable, .targetUnavailable, .capture])
+    @Test(arguments: [MacMicrophoneFailure.permission, .accessibility, .inputMonitoring,
+                      .inputUnavailable, .outputUnavailable, .targetUnavailable, .capture])
     func preparationFailureFinishesOnceAndDoesNotStartCapture(_ failure: MacMicrophoneFailure) {
         let h = MacMicrophoneHarness()
         h.controller.toggle(from: .connectionPage)
-        h.prepareCompletion?(failure)
-        h.stopCompletion?()
-        h.drainCompletion?(true)
+        h.prepareCompletion?(failure); h.stopCompletion?(); h.drainCompletion?(true)
         #expect(h.controller.state == .failed(failure))
+        #expect(!h.controller.isEnabled)
         #expect(!h.events.contains("start"))
         h.controller.toggle(from: .shortcut)
         #expect(h.controller.state == .preparing)
@@ -83,38 +119,92 @@ struct MacMicrophoneInputTests {
 
     @Test func preparationDeadlineAndLateCallbacksRemainIsolated() {
         let h = MacMicrophoneHarness()
-        h.controller.toggle(from: .shortcut)
-        h.timeout?()
-        h.prepareCompletion?(nil)
-        h.stopCompletion?()
-        h.drainCompletion?(true)
+        h.controller.toggle(from: .shortcut); h.timeout?(); h.prepareCompletion?(nil)
+        h.stopCompletion?(); h.drainCompletion?(true)
         #expect(h.controller.state == .failed(.timedOut))
         #expect(!h.events.contains("start"))
     }
 
     @Test func forcedDrainAndFailureDuringStoppingNeverReportNormalSuccess() {
-        let h = MacMicrophoneHarness()
-        h.controller.toggle(from: .connectionPage)
-        h.prepareCompletion?(nil)
-        h.startCompletion?(nil)
-        h.controller.stop()
+        let h = MacMicrophoneHarness(); h.arm(); h.beginVoice()
+        h.controller.handleVoiceKey(pressed: false, gesture: .hold)
         h.controller.stop(failure: .capture)
-        h.stopCompletion?()
-        h.drainCompletion?(false)
+        h.stopCompletion?(); h.drainCompletion?(false)
         #expect(h.controller.state == .failed(.capture))
+        #expect(!h.controller.isEnabled)
         #expect(h.logs.last?.contains("completion=forced") == true)
     }
 
-    @Test func shutdownInvalidatesPendingWork() {
-        let h = MacMicrophoneHarness()
+    @Test func rapidNextKeyWaitsForDrainAndCanBeCancelled() {
+        let h = MacMicrophoneHarness(); h.arm(); h.beginVoice()
+        h.controller.handleVoiceKey(pressed: false, gesture: .hold)
+        h.controller.handleVoiceKey(pressed: true, gesture: .hold)
+        #expect(h.events.filter { $0 == "start" }.count == 1)
+        h.stopCompletion?(); h.drainCompletion?(true)
+        #expect(h.controller.state == .preparing)
+        h.prepareCompletion?(nil); h.startCompletion?(nil)
+        #expect(h.events.filter { $0 == "start" }.count == 2)
+        h.controller.handleVoiceKey(pressed: false, gesture: .hold)
+        h.controller.handleVoiceKey(pressed: true, gesture: .hold)
+        h.controller.handleVoiceKey(pressed: false, gesture: .hold)
+        h.stopCompletion?(); h.drainCompletion?(true)
+        #expect(h.controller.state == .armed)
+        #expect(h.events.filter { $0 == "start" }.count == 2)
+    }
+
+    @Test func twentyInjectedKeySessionsKeepSelectionArmed() {
+        let h = MacMicrophoneHarness(); h.arm()
+        for _ in 0..<20 {
+            h.beginVoice()
+            h.controller.handleVoiceKey(pressed: false, gesture: .hold)
+            h.stopCompletion?(); h.drainCompletion?(true)
+            #expect(h.controller.state == .armed)
+        }
+        #expect(h.events.filter { $0 == "start" }.count == 20)
+        #expect(h.events.filter { $0 == "finish" }.count == 20)
         h.controller.toggle(from: .statusMenu)
-        h.controller.shutdown()
-        h.prepareCompletion?(nil)
+        #expect(h.controller.state == .idle)
+        h.controller.handleVoiceKey(pressed: true, gesture: .hold)
+        #expect(h.events.filter { $0 == "start" }.count == 20)
+    }
+
+    @Test func shutdownInvalidatesPendingWorkAndSelection() {
+        let h = MacMicrophoneHarness()
+        h.controller.toggle(from: .statusMenu); h.controller.shutdown(); h.prepareCompletion?(nil)
         h.stopCompletion?()
         #expect(h.controller.state == .failed(.interrupted))
+        #expect(!h.controller.isEnabled)
         #expect(!h.events.contains("start"))
         #expect(!h.events.contains("drain"))
         #expect(h.logs.last?.contains("completion=forced reason=app_stop") == true)
+    }
+
+    @Test func firstEffectivePCMUsesTheCurrentPhysicalKeyTimestampOnlyOnce() {
+        let h = MacMicrophoneHarness(); h.arm()
+        h.controller.handleVoiceKey(pressed: true, gesture: .hold, observedAt: 10)
+        h.prepareCompletion?(nil); h.startCompletion?(nil)
+        h.controller.observePCM([0, 0], at: 10.125)
+        #expect(!h.logs.contains { $0.contains("first_effective_pcm") })
+        h.controller.observePCM([1, 0], at: 10.25)
+        h.controller.observePCM([2], at: 10.5)
+        #expect(h.logs.filter { $0.contains("first_effective_pcm") }.count == 1)
+        #expect(h.logs.contains { $0.contains("trigger_down_to_first_pcm_ms=250") })
+    }
+
+    @Test func physicalFnDetectionRejectsArrowFlagsOtherKeysAndSyntheticEvents() throws {
+        let event = try #require(CGEvent(keyboardEventSource: nil, virtualKey: 63, keyDown: true))
+        event.flags = .maskSecondaryFn
+        event.setIntegerValueField(.keyboardEventKeycode, value: 63)
+        #expect(MacMicrophoneVoiceKeyMonitor.physicalEdge(type: .flagsChanged, event: event, mode: .function) == true)
+        #expect(MacMicrophoneVoiceKeyMonitor.physicalEdge(type: .keyDown, event: event, mode: .function) == nil)
+        event.setIntegerValueField(.keyboardEventKeycode, value: 126)
+        #expect(MacMicrophoneVoiceKeyMonitor.physicalEdge(type: .flagsChanged, event: event, mode: .function) == nil)
+        event.setIntegerValueField(.keyboardEventKeycode, value: 63)
+        event.setIntegerValueField(.eventSourceUserData, value: KeyboardInjector.syntheticEventMarker)
+        #expect(MacMicrophoneVoiceKeyMonitor.physicalEdge(type: .flagsChanged, event: event, mode: .function) == nil)
+        let release = try #require(CGEvent(keyboardEventSource: nil, virtualKey: 63, keyDown: false))
+        release.flags = []
+        #expect(MacMicrophoneVoiceKeyMonitor.physicalEdge(type: .flagsChanged, event: release, mode: .function) == false)
     }
 
     @Test(arguments: [44_100.0, 48_000.0])
@@ -258,6 +348,15 @@ private final class MacMicrophoneHarness {
     var stopCompletion: (() -> Void)?
     var drainCompletion: ((Bool) -> Void)?
     var timeout: (() -> Void)?
+    func arm() {
+        controller.toggle(from: .connectionPage)
+        prepareCompletion?(nil)
+    }
+    func beginVoice() {
+        controller.handleVoiceKey(pressed: true, gesture: .hold)
+        prepareCompletion?(nil)
+        startCompletion?(nil)
+    }
     lazy var controller = MacMicrophoneSessionController(
         isBusy: { self.busy },
         prepare: { self.events.append("prepare"); self.prepareCompletion = $0 },

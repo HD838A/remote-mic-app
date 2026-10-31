@@ -177,6 +177,26 @@
 "action.arrow_right" = "方向右";
 "action.scroll_up" = "向上滚动";
 "action.scroll_down" = "向下滚动";
+"action.page_up" = "向上翻页";
+"action.page_down" = "向下翻页";
+"scroll_region.title" = "滚动区域";
+"scroll_region.help" = "翻页键会滚动这个 App 的内容区。只读取区域结构，不读取内容，也不移动焦点或鼠标。";
+"scroll_region.learn" = "学习滚动区域";
+"scroll_region.countdown" = "请点一下要翻页的区域（%d）";
+"scroll_region.status_preset" = "预置可用";
+"scroll_region.status_learned" = "已学习";
+"scroll_region.status_needs_calibration" = "需学习";
+"scroll_region.learn_succeeded" = "滚动区域已记录，可以直接测试翻页。";
+"scroll_region.learn_failed" = "没有识别到可滚动区域，请点内容区（消息列表、正文或终端）后重试。";
+"scroll_region.test_up" = "测试向上翻页";
+"scroll_region.test_down" = "测试向下翻页";
+"scroll_region.test_moved" = "内容已移动，这个区域可以翻页。";
+"scroll_region.test_unconfirmed" = "已发送翻页，但没有检测到内容移动；可能已在顶部或底部，或该区域不可滚动。";
+"scroll_region.test_sent" = "已发送翻页；请目视确认内容是否移动。";
+"scroll_region.test_needs_calibration" = "这个 App 没有可用的预置区域，请先学习。";
+"scroll_region.test_failed" = "翻页没有成功，请确认目标 App 在前台并已授予辅助功能权限。";
+"scroll_region.reset" = "恢复预置";
+
 "action.delete_backspace" = "Delete（退格）";
 "action.command_delete" = "Command-Delete";
 "action.show_desktop" = "显示桌面（fn + F11）";
@@ -956,7 +976,7 @@
 "onboarding.secure_input.detail" = "请退出正在输入密码或使用安全键盘输入的应用，然后重新检测。";
 "onboarding.secure_input.recheck" = "重新检测";
 "onboarding.secure_input.help" = "如果仍未恢复，请锁定 Mac 后使用密码重新解锁，再重新检测。";
-"onboarding.complete.siri_membership" = "语音测试已通过。完成后将关闭本次开启的苹果遥控器语音；开通会员后可在设置中启用。";
+"onboarding.complete.siri_membership" = "语音测试已通过。苹果遥控器的连接和按键可以继续使用；语音是会员功能，开通后即可在设置中启用。";
 "onboarding.complete.title" = "无线麦 SayAll 已经准备好了";
 "onboarding.complete.detail" = "现在可以用所选控制方式说话输入，也可以在主面板中调整连接、语音和按键设置。";
 "onboarding.complete.runtime_changed" = "当前环境状态发生了变化";
@@ -1277,13 +1297,13 @@
 "audio.mac_microphone.input" = "输入设备";
 "audio.mac_microphone.choose" = "选择 Mac 麦克风";
 "audio.mac_microphone.start" = "用 Mac 麦克风说话";
-"audio.mac_microphone.stop" = "停止用 Mac 麦克风说话";
+"audio.mac_microphone.stop" = "停用 Mac 麦克风说话";
 "audio.mac_microphone.help" = "仅在不使用遥控器时使用";
 "audio.mac_microphone.idle" = "未收音";
 "audio.mac_microphone.preparing" = "正在准备…";
 "audio.mac_microphone.recording" = "Mac 麦克风正在收音";
 "audio.mac_microphone.stopping" = "正在停止收音…";
-"audio.mac_microphone.shortcut" = "快捷键";
+"audio.mac_microphone.shortcut" = "切换快捷键";
 "audio.mac_microphone.shortcut_set" = "设置快捷键";
 "audio.mac_microphone.shortcut_prompt" = "请按组合键，需包含 ⌘、⌃ 或 ⌥。不区分左右修饰键。";
 "audio.mac_microphone.shortcut_unavailable" = "该快捷键不可用。请使用包含 ⌘、⌃ 或 ⌥ 的其他组合键。";
@@ -1296,3 +1316,9 @@
 "audio.mac_microphone.error.interrupted" = "语音已中断。请重试。";
 "audio.mac_microphone.error.timed_out" = "准备超时。请重试。";
 "audio.mac_microphone.error.accessibility" = "请在系统设置中允许辅助功能访问。";
+
+"audio.mac_microphone.armed" = "待命";
+"audio.mac_microphone.voice_key" = "语音快捷键";
+"audio.mac_microphone.voice_hold" = "按住说话，松开结束";
+"audio.mac_microphone.voice_toggle" = "按一下开始，再按一下结束";
+"audio.mac_microphone.error.input_monitoring" = "无法监听语音快捷键。请在系统设置中允许输入监控后重试。";

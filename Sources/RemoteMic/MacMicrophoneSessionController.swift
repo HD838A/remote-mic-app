@@ -10,6 +10,7 @@ enum MacMicrophoneFailure: String, Error {
     case busy
     case permission
     case accessibility
+    case inputMonitoring = "input_monitoring"
     case inputUnavailable = "input_unavailable"
     case outputUnavailable = "output_unavailable"
     case targetUnavailable = "target_unavailable"
@@ -20,6 +21,7 @@ enum MacMicrophoneFailure: String, Error {
 
 enum MacMicrophoneSessionState: Equatable {
     case idle
+    case armed
     case preparing
     case recording
     case stopping
@@ -28,13 +30,14 @@ enum MacMicrophoneSessionState: Equatable {
     var isActive: Bool {
         switch self {
         case .preparing, .recording, .stopping: return true
-        case .idle, .failed: return false
+        case .idle, .armed, .failed: return false
         }
     }
 
     var statusKey: String {
         switch self {
         case .idle: return "audio.mac_microphone.idle"
+        case .armed: return "audio.mac_microphone.armed"
         case .preparing: return "audio.mac_microphone.preparing"
         case .recording: return "audio.mac_microphone.recording"
         case .stopping: return "audio.mac_microphone.stopping"
@@ -59,6 +62,13 @@ final class MacMicrophoneSessionController {
     private(set) var state: MacMicrophoneSessionState = .idle {
         didSet { onStateChange(state) }
     }
+    private(set) var isEnabled = false
+    private var voiceKeyPressed = false
+    private var captureRequested = false
+    private var preparingSelection = false
+    private var requestedTriggerDownAt: TimeInterval?
+    private var activeTriggerDownAt: TimeInterval?
+    private var firstNonzeroPCMLogged = false
     private(set) var operationID: UInt64 = 0
     private var startedAt: TimeInterval = 0
     private var deadline: VoiceFnTapScheduledTask?
@@ -84,49 +94,120 @@ final class MacMicrophoneSessionController {
         self.log = log
     }
 
+    /// These three entries select the input; only a physical voice key starts capture.
     func toggle(from entry: MacMicrophoneEntry) {
-        switch state {
-        case .preparing, .recording:
-            stop()
-        case .stopping:
+        guard state != .stopping else {
             log("MAC MICROPHONE operation_id=\(operationID) phase=rejected reason=stopping entry=\(entry.rawValue)")
-        case .idle, .failed:
-            guard !isBusy() else {
-                state = .failed(.busy)
-                log("MAC MICROPHONE phase=rejected reason=busy entry=\(entry.rawValue)")
+            return
+        }
+        if isEnabled {
+            isEnabled = false
+            voiceKeyPressed = false
+            captureRequested = false
+            if state == .armed {
+                state = .idle
+                log("MAC MICROPHONE operation_id=\(operationID) phase=disabled result=idle entry=\(entry.rawValue)")
+                finish()
+            } else {
+                stop()
+            }
+        } else {
+            isEnabled = true
+            voiceKeyPressed = false
+            captureRequested = false
+            beginPreparation(entry: entry.rawValue, selectionOnly: true)
+        }
+    }
+
+    func handleVoiceKey(pressed: Bool, gesture: VoiceGestureMode,
+                        observedAt: TimeInterval = ProcessInfo.processInfo.systemUptime) {
+        guard isEnabled, pressed != voiceKeyPressed else { return }
+        voiceKeyPressed = pressed
+        log("MAC MICROPHONE operation_id=\(operationID) phase=voice_key edge=\(pressed ? "down" : "up") gesture=\(gesture.rawValue) target_response=unknown")
+        if gesture == .hold {
+            captureRequested = pressed
+        } else {
+            guard pressed else { return }
+            captureRequested.toggle()
+        }
+        if captureRequested, pressed { requestedTriggerDownAt = observedAt }
+        if preparingSelection { return }
+        if captureRequested {
+            if state == .armed { beginPreparation(entry: "voice_key", selectionOnly: false) }
+            // A rapid next press is retained until the previous output has drained.
+        } else if state == .preparing || state == .recording {
+            stop()
+        }
+    }
+
+    private func beginPreparation(entry: String, selectionOnly: Bool) {
+        guard !isBusy() else {
+            isEnabled = false
+            captureRequested = false
+            state = .failed(.busy)
+            log("MAC MICROPHONE phase=rejected reason=busy entry=\(entry)")
+            return
+        }
+        operationID &+= 1
+        let operation = operationID
+        startedAt = ProcessInfo.processInfo.systemUptime
+        terminalFailure = nil
+        preparingSelection = selectionOnly
+        firstNonzeroPCMLogged = false
+        activeTriggerDownAt = selectionOnly ? nil : requestedTriggerDownAt
+        state = .preparing
+        log("MAC MICROPHONE operation_id=\(operation) phase=requested entry=\(entry) selection_only=\(selectionOnly)")
+        deadline = schedule(30) { [weak self] in
+            guard let self, self.operationID == operation, self.state == .preparing else { return }
+            self.stop(failure: .timedOut)
+        }
+        prepare { [weak self] failure in
+            guard let self, self.operationID == operation, self.state == .preparing else { return }
+            if let failure { self.stop(failure: failure); return }
+            self.preparingSelection = false
+            if selectionOnly, !self.captureRequested {
+                self.deadline?.cancel()
+                self.deadline = nil
+                self.state = .armed
+                self.log("MAC MICROPHONE operation_id=\(operation) phase=armed result=waiting_for_voice_key capture_running=false")
                 return
             }
-            operationID &+= 1
-            let operation = operationID
-            startedAt = ProcessInfo.processInfo.systemUptime
-            terminalFailure = nil
-            state = .preparing
-            log("MAC MICROPHONE operation_id=\(operation) phase=requested entry=\(entry.rawValue)")
-            deadline = schedule(30) { [weak self] in
-                guard let self, self.operationID == operation, self.state == .preparing else { return }
-                self.stop(failure: .timedOut)
-            }
-            prepare { [weak self] failure in
+            if selectionOnly { self.activeTriggerDownAt = self.requestedTriggerDownAt }
+            self.startCapture { [weak self] failure in
                 guard let self, self.operationID == operation, self.state == .preparing else { return }
                 if let failure { self.stop(failure: failure); return }
-                self.startCapture { [weak self] failure in
-                    guard let self, self.operationID == operation, self.state == .preparing else { return }
-                    if let failure { self.stop(failure: failure); return }
-                    self.deadline?.cancel()
-                    self.deadline = nil
-                    self.state = .recording
-                    self.log("MAC MICROPHONE operation_id=\(operation) phase=started result=capturing mode=audio_only voice_trigger=none target_activation=none target_response=unknown")
-                }
+                self.deadline?.cancel()
+                self.deadline = nil
+                self.state = .recording
+                self.log("MAC MICROPHONE operation_id=\(operation) phase=started result=capturing mode=physical_voice_key voice_key_injection=none key_event_passthrough=true target_activation=none target_response=unknown")
             }
         }
     }
 
+    func observePCM(_ samples: [Int16], at uptime: TimeInterval = ProcessInfo.processInfo.systemUptime) {
+        guard !firstNonzeroPCMLogged, let triggerDownAt = activeTriggerDownAt,
+              state == .preparing || state == .recording || state == .stopping,
+              samples.contains(where: { $0 != 0 }) else { return }
+        firstNonzeroPCMLogged = true
+        let elapsed = max(0, Int((uptime - triggerDownAt) * 1_000))
+        log("MAC MICROPHONE operation_id=\(operationID) phase=first_effective_pcm trigger_down_to_first_pcm_ms=\(elapsed) target_response=unknown")
+    }
+
     func stop(failure: MacMicrophoneFailure? = nil) {
+        if failure != nil { isEnabled = false; captureRequested = false }
+        if state == .armed, let failure {
+            state = .failed(failure)
+            finish()
+            log("MAC MICROPHONE operation_id=\(operationID) phase=completed result=failed reason=\(failure.rawValue) capture_running=false")
+            return
+        }
         if state == .stopping {
             if terminalFailure == nil { terminalFailure = failure }
             return
         }
         guard state == .preparing || state == .recording else { return }
+        captureRequested = false
+        preparingSelection = false
         let operation = operationID
         terminalFailure = failure
         deadline?.cancel()
@@ -140,15 +221,22 @@ final class MacMicrophoneSessionController {
                 guard let self, self.operationID == operation, self.state == .stopping else { return }
                 self.finish()
                 let failure = self.terminalFailure ?? (normal ? nil : .interrupted)
-                self.state = failure.map(MacMicrophoneSessionState.failed) ?? .idle
+                if failure != nil { self.isEnabled = false; self.captureRequested = false }
+                self.state = failure.map(MacMicrophoneSessionState.failed) ?? (self.isEnabled ? .armed : .idle)
                 let elapsed = Int((ProcessInfo.processInfo.systemUptime - self.startedAt) * 1_000)
                 self.log("MAC MICROPHONE operation_id=\(operation) phase=completed result=\(failure == nil ? "stopped" : "failed") completion=\(normal && failure == nil ? "normal" : "forced") reason=\(failure?.rawValue ?? "user_stop") elapsed_ms=\(elapsed) target_response=unknown")
+                if self.isEnabled, self.captureRequested {
+                    self.beginPreparation(entry: "voice_key_after_drain", selectionOnly: false)
+                }
             }
         }
     }
     /// Process termination is a forced cancellation; normal user stop always drains.
     func shutdown() {
-        guard state.isActive else { return }
+        guard state.isActive || state == .armed else { return }
+        isEnabled = false
+        voiceKeyPressed = false
+        captureRequested = false
         let operation = operationID
         operationID &+= 1
         deadline?.cancel()
