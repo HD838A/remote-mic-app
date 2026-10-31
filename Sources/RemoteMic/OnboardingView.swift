@@ -2352,9 +2352,8 @@ struct OnboardingView: View {
                 .foregroundStyle(Color.green)
             onboardingTitle("onboarding.complete.title")
             Text(verbatim: localization.text(
-                settings.shouldDisableOnboardingSiriRemote(
-                    accessDecision: membershipFeature.buttonProfilesAccessDecision
-                ) ? "onboarding.complete.siri_membership" : "onboarding.complete.detail"
+                settings.siriRemoteEnabled && !membershipFeature.canUseSiriRemoteVoice
+                    ? "onboarding.complete.siri_membership" : "onboarding.complete.detail"
             ))
                 .font(.system(size: 15))
                 .foregroundStyle(.secondary)

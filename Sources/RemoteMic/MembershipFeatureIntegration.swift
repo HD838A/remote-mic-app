@@ -235,6 +235,17 @@ final class MembershipFeatureIntegration: ObservableObject, @unchecked Sendable 
         #endif
     }
 
+    /// 苹果遥控器只有**语音**是会员功能：连接、普通按键与触摸不读会员状态。
+    ///
+    /// 因此这里不能被用来拦住 `siriRemoteEnabled`（那会连带停掉连接和按键），
+    /// 只用于决定按下 Siri 键时是否允许开始采集。
+    var canUseSiriRemoteVoice: Bool {
+        switch buttonProfilesAccessDecision {
+        case .allowed, .temporarilyOffline, .authorized: return true
+        case .requiresPlus, .unavailable: return false
+        }
+    }
+
     var remoteSessionMembershipBypassEnabled: Bool {
         #if SAYALL_MEMBERSHIP_ENABLED && canImport(SayAllMembershipHostAdapter)
         adapter?.remoteSessionMembershipBypassEnabled ?? false
@@ -319,6 +330,11 @@ final class MembershipFeatureIntegration: ObservableObject, @unchecked Sendable 
                     occurredAt: record.occurredAt, category: record.category, fields: record.fields)
                 else { return }
                 AppLogger.shared.write(safeRecord.canonicalLine)
+            },
+            commonPhraseUnavailableTargetFallback: { processIdentifier in
+                KeyboardInjector.prepareCommonPhraseUnavailableTarget(
+                    processIdentifier: processIdentifier
+                )
             })
         self.adapter = adapter
         adapter.$isFeatureVisible.removeDuplicates().receive(on: RunLoop.main)

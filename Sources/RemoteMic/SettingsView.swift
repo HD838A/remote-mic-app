@@ -33,7 +33,7 @@ struct SettingsSection: RawRepresentable, Hashable, CaseIterable, Identifiable {
     var supplementalID: String? { rawValue.hasPrefix("supplemental:") ? String(rawValue.dropFirst(13)) : nil }
     var id: String { rawValue }
 
-    var title: LocalizedStringKey {
+    var titleKey: String {
         switch self {
         case .connection: return "settings.section.connection"
         case .privateFeature: return ""
@@ -48,6 +48,10 @@ struct SettingsSection: RawRepresentable, Hashable, CaseIterable, Identifiable {
         case .about: return "settings.section.settings"
         default: return ""
         }
+    }
+
+    var title: LocalizedStringKey {
+        LocalizedStringKey(titleKey)
     }
 
     var systemImage: String {
@@ -132,6 +136,59 @@ enum RemoteBatteryPresentationPolicy {
 
 enum SettingsPageBehavior {
     static let sidebarTopDragHeight: CGFloat = 5
+
+    /// 侧边栏宽度按内容量出来：文字到左边界和到右边界都保持 `sidebarRowInset`，
+    /// 不再用固定宽度把多余空白全部堆在文字右侧。
+    static let sidebarRowInset: CGFloat = 15
+    static let sidebarRowIconWidth: CGFloat = 18
+    static let sidebarRowIconSpacing: CGFloat = 8
+    static let sidebarRowFontSize: CGFloat = 13
+    static let sidebarHeaderIconWidth: CGFloat = 44
+    static let sidebarHeaderIconSpacing: CGFloat = 8
+    static let sidebarHeaderTitleFontSize: CGFloat = 16
+    static let sidebarHeaderVersionFontSize: CGFloat = 12
+    static let sidebarWidthBounds: ClosedRange<CGFloat> = 104...136
+
+    static func sidebarWidth(
+        headerTitleWidth: CGFloat,
+        headerVersionWidth: CGFloat,
+        rowLabelWidths: [CGFloat]
+    ) -> CGFloat {
+        let headerTextWidth = max(headerTitleWidth, headerVersionWidth)
+        let headerWidth = sidebarRowInset * 2
+            + sidebarHeaderIconWidth
+            + sidebarHeaderIconSpacing
+            + headerTextWidth
+        let rowWidth = (rowLabelWidths.max() ?? 0)
+            + sidebarRowInset * 2
+            + sidebarRowIconWidth
+            + sidebarRowIconSpacing
+        let natural = max(headerWidth, rowWidth).rounded(.up)
+        return min(max(natural, sidebarWidthBounds.lowerBound), sidebarWidthBounds.upperBound)
+    }
+
+    /// 与 `SettingsSidebarRow`、侧边栏页头一致的字重，用于预估文字宽度。
+    static func sidebarTextWidth(
+        _ text: String,
+        size: CGFloat,
+        weight: NSFont.Weight = .semibold
+    ) -> CGFloat {
+        let font = NSFont.systemFont(ofSize: size, weight: weight)
+        return text
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .map { ($0 as NSString).size(withAttributes: [.font: font]).width }
+            .max() ?? 0
+    }
+
+    /// 侧边栏页头使用品牌字体（Oxanium），宽度必须按同一字体测量，否则会低估。
+    static func sidebarHeaderTextWidth(_ text: String) -> CGFloat {
+        let font = NSFont(name: "Oxanium-SemiBold", size: sidebarHeaderTitleFontSize)
+            ?? NSFont.systemFont(ofSize: sidebarHeaderTitleFontSize, weight: .semibold)
+        return text
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .map { ($0 as NSString).size(withAttributes: [.font: font]).width }
+            .max() ?? 0
+    }
 
     static let sidebarSectionOrder: [SettingsSection] = [
         .mapping,
@@ -246,11 +303,11 @@ enum SettingsPageBehavior {
 }
 
 private enum BrandFont {
-    static let sidebarFont: Font = {
+    static func sidebarTitleFont(size: CGFloat) -> Font {
         _ = font
-        return NSFont(name: "Oxanium-SemiBold", size: 16).map(Font.init)
-            ?? .system(size: 16, weight: .semibold)
-    }()
+        return NSFont(name: "Oxanium-SemiBold", size: size).map(Font.init)
+            ?? .system(size: size, weight: .semibold)
+    }
 
     static let font: Font = {
         if let url = RemoteMicResourceBundle.mainOrDevelopment.url(
@@ -283,6 +340,16 @@ private enum PermissionVisualState {
         case .granted: return .green
         case .pending: return .orange
         }
+    }
+}
+
+private final class ScrollRegionLearningSession {
+    var point: CGPoint?
+    var monitor: Any?
+
+    static func finish(_ session: ScrollRegionLearningSession) {
+        if let monitor = session.monitor { NSEvent.removeMonitor(monitor) }
+        session.monitor = nil
     }
 }
 
@@ -519,6 +586,8 @@ struct SettingsView: View {
     @State private var applicationShortcutCaptureProfileID: UUID?
     @State private var shortcutCaptureFeedback: ShortcutCaptureFeedback?
     @State private var customApplicationLearningStates: [UUID: CustomApplicationLearningState] = [:]
+    @State private var scrollRegionCountdowns: [UUID: Int] = [:]
+    @State private var scrollRegionMessages: [UUID: String] = [:]
     @State private var bluetoothAuthorization = CBManager.authorization
     @State private var inputMonitoringGranted = HIDRemoteMonitor.isInputMonitoringGranted
     @State private var accessibilityGranted = KeyboardInjector.isAccessibilityTrusted
@@ -597,7 +666,7 @@ struct SettingsView: View {
     var body: some View {
         HStack(spacing: 0) {
             sidebar
-                .frame(width: 136)
+                .frame(width: sidebarWidth)
             Color(nsColor: .separatorColor)
                 .frame(width: 1)
                 .frame(maxHeight: .infinity)
@@ -728,28 +797,67 @@ struct SettingsView: View {
         )
     }
 
+    /// 侧边栏宽度只由最宽的一行（或页头）决定，文字左右留白保持相等。
+    private var sidebarWidth: CGFloat {
+        let rowLabelWidths = visibleSections.map { section in
+            SettingsPageBehavior.sidebarTextWidth(
+                sidebarTitleString(section),
+                size: SettingsPageBehavior.sidebarRowFontSize
+            ) + (SettingsPageBehavior.showsUpdateBadge(
+                for: section,
+                hasUnseenUpdate: updateInformation.hasUnseenUpdate
+            ) ? 12 : 0)
+        }
+        return SettingsPageBehavior.sidebarWidth(
+            headerTitleWidth: SettingsPageBehavior.sidebarHeaderTextWidth("SayAll"),
+            headerVersionWidth: SettingsPageBehavior.sidebarTextWidth(
+                currentVersion,
+                size: SettingsPageBehavior.sidebarHeaderVersionFontSize,
+                weight: .regular
+            ),
+            rowLabelWidths: rowLabelWidths
+        )
+    }
+
+    private func sidebarTitleString(_ section: SettingsSection) -> String {
+        if section == .statistics {
+            return SettingsPageBehavior.sidebarAccountTitle(
+                accountDisplayName: membershipFeature.accountDisplayName ?? sidebarAccountDisplayName,
+                loginTitle: localization.text("settings.section.login")
+            )
+        }
+        if section == .privateFeature || section == .macros || section == .buttonProfiles
+            || section == .membership || section.supplementalID != nil {
+            return sectionTitle(section)
+        }
+        return localization.text(section.titleKey)
+    }
+
     private var sidebar: some View {
         VStack(spacing: 0) {
             WindowDragArea()
                 .frame(height: SettingsPageBehavior.sidebarTopDragHeight)
                 .accessibilityHidden(true)
-            HStack(alignment: .top, spacing: 8) {
+            HStack(alignment: .top, spacing: SettingsPageBehavior.sidebarHeaderIconSpacing) {
                 Image(nsImage: appIconCatalog.image(for: settings.appIconIdentifier))
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 44, height: 44)
+                    .frame(
+                        width: SettingsPageBehavior.sidebarHeaderIconWidth,
+                        height: SettingsPageBehavior.sidebarHeaderIconWidth
+                    )
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: -2) {
                     Text(verbatim: "SayAll")
-                        .font(BrandFont.sidebarFont)
+                        .font(BrandFont.sidebarTitleFont(size: SettingsPageBehavior.sidebarHeaderTitleFontSize))
                     Text(currentVersion)
-                        .font(.system(size: 12))
+                        .font(.system(size: SettingsPageBehavior.sidebarHeaderVersionFontSize))
                         .monospacedDigit()
                         .foregroundStyle(.secondary)
                 }
                 .padding(.top, 6)
             }
-            .padding(.horizontal, 12)
+            .padding(.horizontal, SettingsPageBehavior.sidebarRowInset)
             .padding(.top, 11)
             .frame(maxWidth: .infinity, alignment: .leading)
             .frame(height: 75, alignment: .topLeading)
@@ -2533,31 +2641,25 @@ struct SettingsView: View {
                 .accessibilityLabel(Text("\(modelName), \(systemName)"))
                 .accessibilityAddTraits(selected ? .isSelected : [])
                 HStack(spacing: 7) {
-                    if siriRemoteMembershipRequired {
-                        Button(localization.text("siri_remote.activation.open_membership")) {
-                            model.selectRemoteProfile(profile.id)
-                            selectedSection = .membership
-                            membershipFeature.refreshIfNeeded()
-                        }
-                        .buttonStyle(.borderless)
-                        .foregroundStyle(Color.accentColor)
-                    } else {
-                        remoteConnectionLabel(connected: connected)
-                    }
+                    remoteConnectionLabel(connected: connected)
                     if showsBattery {
                         remoteBatteryLabel(level: batteryLevel, powerState: powerState)
                     }
+                    #if SAYALL_SIRI_REMOTE_ENABLED && canImport(SayAllSiriRemote)
+                    if profile.model.isAppleSiriRemote {
+                        // 会员入口与启用/停用都排在这一行里，卡片不额外开一列。
+                        siriRemoteCardActions(
+                            profile,
+                            showsVoiceMembershipHint: siriRemoteMembershipRequired
+                        )
+                        .fixedSize()
+                    }
+                    #endif
                 }
                 .font(.system(size: 12))
                 .lineLimit(1)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            #if SAYALL_SIRI_REMOTE_ENABLED && canImport(SayAllSiriRemote)
-            if profile.model.isAppleSiriRemote && !siriRemoteMembershipRequired {
-                siriRemoteCardActions(profile)
-                    .fixedSize()
-            }
-            #endif
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
@@ -2580,6 +2682,8 @@ struct SettingsView: View {
         }
     }
 
+    /// 苹果遥控器只有**语音**需要会员；这里只决定是否给出「开通会员」提示，
+    /// 不再用来隐藏启用/停用，因为连接、按键与触摸都不看会员。
     private func requiresSiriRemoteMembership(for profile: RemoteDeviceProfile) -> Bool {
         guard profile.model.isAppleSiriRemote else { return false }
         switch membershipFeature.buttonProfilesAccessDecision {
@@ -2591,28 +2695,48 @@ struct SettingsView: View {
     }
 
     #if SAYALL_SIRI_REMOTE_ENABLED && canImport(SayAllSiriRemote)
-    private func siriRemoteCardActions(_ profile: RemoteDeviceProfile) -> some View {
-        VStack(spacing: 4) {
+    /// 第三行内联的紧凑操作：语音会员入口 + 启用/重试/准备中。
+    ///
+    /// 卡片正文固定三行（型号、系统名称、连接状态与电量），所以这些操作不再单独占一列，
+    /// 而是紧跟在连接状态与电量后面同一行显示。
+    private func siriRemoteCardActions(
+        _ profile: RemoteDeviceProfile,
+        showsVoiceMembershipHint: Bool = false
+    ) -> some View {
+        HStack(spacing: 8) {
+            if showsVoiceMembershipHint {
+                Button(localization.text("siri_remote.activation.open_membership")) {
+                    model.selectRemoteProfile(profile.id)
+                    selectedSection = .membership
+                    membershipFeature.refreshIfNeeded()
+                }
+                .buttonStyle(.borderless)
+                .foregroundStyle(Color.accentColor)
+                .help(localization.text("siri_remote.mapping.voice.detail"))
+            }
             if !settings.siriRemoteEnabled {
                 Button(localization.text("siri_remote.activation.enable")) {
                     model.selectRemoteProfile(profile.id)
                     model.setSiriRemoteEnabled(true)
                 }
-            } else {
-                if model.siriRemoteAudioStatus.hasPrefix("unavailable:") {
-                    Button(localization.text("siri_remote.activation.retry")) {
-                        model.selectRemoteProfile(profile.id)
-                        model.prepareSiriRemoteFromUserAction()
-                    }
-                } else if model.siriRemoteAudioStatus != "ready" {
-                    Button(localization.text("siri_remote.activation.preparing")) {}
-                        .disabled(true)
+                .buttonStyle(.borderless)
+                .foregroundStyle(Color.accentColor)
+                .disabled(model.isStreaming || model.activePhysicalVoiceControlSource == .siriRemote)
+            } else if model.siriRemoteAudioStatus.hasPrefix("unavailable:") {
+                Button(localization.text("siri_remote.activation.retry")) {
+                    model.selectRemoteProfile(profile.id)
+                    model.prepareSiriRemoteFromUserAction()
                 }
+                .buttonStyle(.borderless)
+                .foregroundStyle(Color.accentColor)
+                .disabled(model.isStreaming || model.activePhysicalVoiceControlSource == .siriRemote)
+            } else if model.siriRemoteAudioStatus != "ready" {
+                Button(localization.text("siri_remote.activation.preparing")) {}
+                    .buttonStyle(.borderless)
+                    .disabled(true)
             }
         }
-        .font(.system(size: 12))
-        .buttonStyle(.bordered)
-        .disabled(model.isStreaming || model.activePhysicalVoiceControlSource == .siriRemote)
+        .lineLimit(1)
     }
     #endif
 
@@ -3580,6 +3704,10 @@ struct SettingsView: View {
                     accessibilityLearningEditor(profile)
                 }
 
+                Divider()
+
+                scrollRegionEditor(profile)
+
                 HStack {
                     Spacer()
                     Button("custom_application.test") {
@@ -3787,6 +3915,209 @@ struct SettingsView: View {
                 .fixedSize(horizontal: false, vertical: true)
             }
         }
+    }
+
+    @ViewBuilder
+    private func scrollRegionEditor(_ profile: CustomApplicationProfile) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Text("scroll_region.title")
+                    .font(.system(size: 14, weight: .semibold))
+                Text(scrollRegionStatusKey(profile))
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(scrollRegionStatusTint(profile))
+                Spacer()
+            }
+
+            Text("scroll_region.help")
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            HStack(spacing: 10) {
+                Button("scroll_region.learn") {
+                    learnScrollRegion(profile)
+                }
+                .compatibilityButtonStyle(.prominent)
+                .disabled(scrollRegionCountdowns[profile.id] != nil)
+
+                if let remaining = scrollRegionCountdowns[profile.id] {
+                    Text(String(format: localization.text("scroll_region.countdown"), remaining))
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Button("scroll_region.test_up") {
+                    testScrollRegion(profile, direction: .up)
+                }
+                .compatibilityButtonStyle(.standard)
+
+                Button("scroll_region.test_down") {
+                    testScrollRegion(profile, direction: .down)
+                }
+                .compatibilityButtonStyle(.standard)
+
+                if profile.scrollRegionTarget != nil {
+                    Button("scroll_region.reset") {
+                        resetScrollRegion(profile)
+                    }
+                    .compatibilityButtonStyle(.standard)
+                }
+            }
+
+            if let messageKey = scrollRegionMessages[profile.id] {
+                Text(LocalizedStringKey(messageKey))
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(
+                        messageKey.hasSuffix("failed") ||
+                            messageKey.hasSuffix("unconfirmed") ||
+                            messageKey.hasSuffix("needs_calibration")
+                            ? Color.orange : Color.green
+                    )
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private func scrollRegionStatusKey(_ profile: CustomApplicationProfile) -> LocalizedStringKey {
+        if profile.scrollRegionTarget != nil { return "scroll_region.status_learned" }
+        if ScrollRegionPreset.rule(for: profile.bundleIdentifier) != nil {
+            return "scroll_region.status_preset"
+        }
+        return "scroll_region.status_needs_calibration"
+    }
+
+    private func scrollRegionStatusTint(_ profile: CustomApplicationProfile) -> Color {
+        profile.scrollRegionTarget != nil ||
+            ScrollRegionPreset.rule(for: profile.bundleIdentifier) != nil ? .green : .orange
+    }
+
+    private func learnScrollRegion(_ profile: CustomApplicationProfile) {
+        guard KeyboardInjector.isAccessibilityTrusted else {
+            model.requestAccessibilityPermission()
+            return
+        }
+        let savedURL = URL(fileURLWithPath: profile.applicationPath)
+        let applicationURL = Bundle(url: savedURL)?.bundleIdentifier == profile.bundleIdentifier
+            ? savedURL
+            : NSWorkspace.shared.urlForApplication(withBundleIdentifier: profile.bundleIdentifier)
+        guard let applicationURL else {
+            scrollRegionMessages[profile.id] = "scroll_region.learn_failed"
+            return
+        }
+
+        scrollRegionMessages[profile.id] = nil
+        let session = ScrollRegionLearningSession()
+        session.monitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown]) { _ in
+            if session.point == nil { session.point = CGEvent(source: nil)?.location }
+        }
+
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = true
+        configuration.createsNewApplicationInstance = false
+        NSWorkspace.shared.openApplication(at: applicationURL, configuration: configuration) { _, error in
+            DispatchQueue.main.async {
+                guard error == nil else {
+                    ScrollRegionLearningSession.finish(session)
+                    scrollRegionCountdowns[profile.id] = nil
+                    scrollRegionMessages[profile.id] = "scroll_region.learn_failed"
+                    return
+                }
+                startScrollRegionCountdown(profile: profile, session: session)
+            }
+        }
+    }
+
+    private func startScrollRegionCountdown(
+        profile: CustomApplicationProfile,
+        session: ScrollRegionLearningSession
+    ) {
+        Task { @MainActor in
+            for remaining in stride(from: 3, through: 1, by: -1) {
+                scrollRegionCountdowns[profile.id] = remaining
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                if session.point != nil { break }
+            }
+            ScrollRegionLearningSession.finish(session)
+            scrollRegionCountdowns[profile.id] = nil
+
+            let point = session.point ?? CGEvent(source: nil)?.location
+            guard let point,
+                  let target = ScrollRegionInjector.captureTarget(
+                      bundleIdentifier: profile.bundleIdentifier,
+                      point: point
+                  ),
+                  var updated = settings.customApplicationProfile(id: profile.id)
+            else {
+                scrollRegionMessages[profile.id] = "scroll_region.learn_failed"
+                NSApp.activate(ignoringOtherApps: true)
+                return
+            }
+            updated.scrollRegionTarget = target
+            settings.updateCustomApplicationProfile(updated)
+            scrollRegionMessages[profile.id] = "scroll_region.learn_succeeded"
+            NSApp.activate(ignoringOtherApps: true)
+        }
+    }
+
+    private func testScrollRegion(_ profile: CustomApplicationProfile, direction: ScrollPageDirection) {
+        guard let applicationURL = NSWorkspace.shared.urlForApplication(
+            withBundleIdentifier: profile.bundleIdentifier
+        ) else {
+            scrollRegionMessages[profile.id] = "scroll_region.test_failed"
+            return
+        }
+        let learned = profile.scrollRegionTarget
+        scrollRegionMessages[profile.id] = nil
+
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = true
+        configuration.createsNewApplicationInstance = false
+        NSWorkspace.shared.openApplication(at: applicationURL, configuration: configuration) { _, error in
+            guard error == nil else {
+                DispatchQueue.main.async {
+                    scrollRegionMessages[profile.id] = "scroll_region.test_failed"
+                }
+                return
+            }
+            DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 0.6) {
+                let result = ScrollRegionInjector.scrollPage(
+                    direction: direction,
+                    learnedTarget: learned,
+                    verifyMovement: true
+                )
+                DispatchQueue.main.async {
+                    scrollRegionMessages[profile.id] = scrollRegionTestMessage(for: result)
+                    NSApp.activate(ignoringOtherApps: true)
+                }
+            }
+        }
+    }
+
+    private func scrollRegionTestMessage(for result: ScrollPageResult) -> String {
+        switch result.outcome {
+        case .scrolledByPageAction, .scrolledByPixelWheel:
+            switch result.verifiedMovement {
+            case true: return "scroll_region.test_moved"
+            case false: return "scroll_region.test_unconfirmed"
+            case nil: return "scroll_region.test_sent"
+            }
+        case .queued:
+            return "scroll_region.test_sent"
+        case .needsCalibration:
+            return "scroll_region.test_needs_calibration"
+        default:
+            return "scroll_region.test_failed"
+        }
+    }
+
+    private func resetScrollRegion(_ profile: CustomApplicationProfile) {
+        guard var updated = settings.customApplicationProfile(id: profile.id) else { return }
+        updated.scrollRegionTarget = nil
+        settings.updateCustomApplicationProfile(updated)
+        scrollRegionMessages[profile.id] = nil
     }
 
     private func chooseCustomApplication(
@@ -4015,13 +4346,7 @@ struct SettingsView: View {
 
     private var statisticsPage: some View {
         settingsPage {
-            HStack(spacing: 14) {
-                PageHeader(title: localization.text("statistics.page.title"))
-                Spacer(minLength: 20)
-                Label(localization.text("about.privacy.local_only"), systemImage: "lock")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.secondary)
-            }
+            PageHeader(title: localization.text("statistics.page.title"))
         } content: {
             VStack(spacing: 14) {
                 sharePanel(for: .statistics)
@@ -4064,7 +4389,7 @@ struct SettingsView: View {
                 systemImage: "keyboard",
                 title: localization.text("statistics.metric.total_button_count"),
                 value: localizedNumber(settings.usageStatistics(for: .total).buttonPressCount),
-                unit: localization.text("statistics.metric.count_unit")
+                unit: countUnit
             ),
             ProfileMetric(
                 id: "total-voice",
@@ -4078,7 +4403,7 @@ struct SettingsView: View {
                 systemImage: "chart.line.uptrend.xyaxis",
                 title: localization.text("statistics.metric.week_button_count"),
                 value: localizedNumber(settings.usageStatistics(for: .thisWeek).buttonPressCount),
-                unit: localization.text("statistics.metric.count_unit")
+                unit: countUnit
             ),
             ProfileMetric(
                 id: "longest-voice",
@@ -4092,6 +4417,13 @@ struct SettingsView: View {
                 unit: nil
             ),
         ]
+    }
+
+    /// Counter word such as “次”. English reads counts without one, so the key may be empty
+    /// and the surrounding rows skip the label entirely.
+    private var countUnit: String? {
+        let unit = localization.text("statistics.metric.count_unit")
+        return unit.isEmpty ? nil : unit
     }
 
     private var statisticsRankingPanel: some View {
@@ -4111,8 +4443,10 @@ struct SettingsView: View {
                         Text(localizedNumber(entry.count))
                             .foregroundStyle(.secondary)
                             .monospacedDigit()
-                        Text(localization.text("statistics.metric.count_unit"))
-                            .foregroundStyle(.secondary)
+                        if let countUnit {
+                            Text(countUnit)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
 
@@ -4127,8 +4461,10 @@ struct SettingsView: View {
                         Text(localizedNumber(entry.count))
                             .foregroundStyle(.secondary)
                             .monospacedDigit()
-                        Text(localization.text("statistics.metric.count_unit"))
-                            .foregroundStyle(.secondary)
+                        if let countUnit {
+                            Text(countUnit)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
 
@@ -5073,16 +5409,18 @@ struct SettingsView: View {
         let hours = totalSeconds / 3_600
         let minutes = totalSeconds % 3_600 / 60
         let seconds = totalSeconds % 60
+        // The four KPI cards share one row, so hour-scale totals must use the compact
+        // wording to stay complete inside the narrowest card.
         if hours > 0 {
             return String(
-                format: localization.text("usage.duration.hours_minutes"),
+                format: localization.text("usage.duration.compact_hours_minutes"),
                 locale: localization.locale,
                 arguments: [localizedNumber(UInt64(hours)), localizedNumber(UInt64(minutes))]
             )
         }
         if minutes > 0 {
             return String(
-                format: localization.text("usage.duration.minutes_seconds"),
+                format: localization.text("usage.duration.compact_minutes_seconds"),
                 locale: localization.locale,
                 arguments: [localizedNumber(UInt64(minutes)), localizedNumber(UInt64(seconds))]
             )
@@ -6087,8 +6425,9 @@ private struct ProfileMetricCard: View {
                         .font(.system(size: 22, weight: .semibold, design: .rounded))
                         .monospacedDigit()
                         .lineLimit(1)
-                        .minimumScaleFactor(0.75)
-                    if let unit {
+                        .minimumScaleFactor(0.7)
+                        .allowsTightening(true)
+                    if let unit, !unit.isEmpty {
                         Text(unit)
                             .font(.system(size: 12, weight: .medium))
                             .foregroundStyle(tint)

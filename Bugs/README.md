@@ -1,5 +1,7 @@
 # Bug 记录
 
+- [个人中心页头隐私说明冗余与累计语音时长省略号截断](./2026-10-31-profile-header-and-kpi-truncation.md)
+
 - [选择 Mac 麦克风后过早收音](./2026-10-28-mac-microphone-capture-before-voice-key.html)
 
 - [音量按一次后持续变化](./2026-10-26-volume-native-release-stuck.html)

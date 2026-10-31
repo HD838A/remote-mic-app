@@ -177,6 +177,26 @@
 "action.arrow_right" = "方向右";
 "action.scroll_up" = "向上滚动";
 "action.scroll_down" = "向下滚动";
+"action.page_up" = "向上翻页";
+"action.page_down" = "向下翻页";
+"scroll_region.title" = "滚动区域";
+"scroll_region.help" = "翻页键会滚动这个 App 的内容区。只读取区域结构，不读取内容，也不移动焦点或鼠标。";
+"scroll_region.learn" = "学习滚动区域";
+"scroll_region.countdown" = "请点一下要翻页的区域（%d）";
+"scroll_region.status_preset" = "预置可用";
+"scroll_region.status_learned" = "已学习";
+"scroll_region.status_needs_calibration" = "需学习";
+"scroll_region.learn_succeeded" = "滚动区域已记录，可以直接测试翻页。";
+"scroll_region.learn_failed" = "没有识别到可滚动区域，请点内容区（消息列表、正文或终端）后重试。";
+"scroll_region.test_up" = "测试向上翻页";
+"scroll_region.test_down" = "测试向下翻页";
+"scroll_region.test_moved" = "内容已移动，这个区域可以翻页。";
+"scroll_region.test_unconfirmed" = "已发送翻页，但没有检测到内容移动；可能已在顶部或底部，或该区域不可滚动。";
+"scroll_region.test_sent" = "已发送翻页；请目视确认内容是否移动。";
+"scroll_region.test_needs_calibration" = "这个 App 没有可用的预置区域，请先学习。";
+"scroll_region.test_failed" = "翻页没有成功，请确认目标 App 在前台并已授予辅助功能权限。";
+"scroll_region.reset" = "恢复预置";
+
 "action.delete_backspace" = "Delete（退格）";
 "action.command_delete" = "Command-Delete";
 "action.show_desktop" = "显示桌面（fn + F11）";
@@ -374,8 +394,6 @@
 "connection.web.plus_required_title" = "此连接需要 Plus 会员";
 "connection.web.plus_required_detail" = "二维码已准备好，开通后即可在手机上连接。";
 "connection.web.plus_required_action" = "查看 Plus";
-"connection.web.test_bypass_title" = "测试模式：跳过会员权益检查";
-"connection.web.test_bypass_detail" = "测试包默认开启，无需登录或 Plus 会员即可连接。正式环境仍检查会员权限。";
 "audio.section.title" = "音频设置";
 "audio.voice_output.section_title" = "语音设备";
 "audio.output.title" = "输出设备";
@@ -574,7 +592,6 @@
 "about.preferences.language" = "应用语言";
 "about.page.hero_subtitle" = "集中查看无线语音工作台的版本、偏好与支持信息";
 "about.page.hero_description" = "让遥控器成为随手可用的 Mac 语音与快捷操作入口。";
-"about.privacy.local_only" = "数据仅存本机";
 "statistics.page.title" = "个人中心";
 "statistics.page.subtitle" = "查看你的本机使用概览";
 "statistics.summary.title" = "查看方式";
@@ -683,6 +700,8 @@
 "usage.duration.compact_hours" = "%1$@小时";
 "usage.duration.compact_minutes" = "%1$@分";
 "usage.duration.compact_seconds" = "%1$@秒";
+"usage.duration.compact_hours_minutes" = "%1$@小时%2$@分";
+"usage.duration.compact_minutes_seconds" = "%1$@分%2$@秒";
 "configuration.export.panel_title" = "导出个性化配置";
 "configuration.export.prompt" = "导出";
 "configuration.export.success" = "配置已导出";
@@ -957,7 +976,7 @@
 "onboarding.secure_input.detail" = "请退出正在输入密码或使用安全键盘输入的应用，然后重新检测。";
 "onboarding.secure_input.recheck" = "重新检测";
 "onboarding.secure_input.help" = "如果仍未恢复，请锁定 Mac 后使用密码重新解锁，再重新检测。";
-"onboarding.complete.siri_membership" = "语音测试已通过。完成后将关闭本次开启的苹果遥控器语音；开通会员后可在设置中启用。";
+"onboarding.complete.siri_membership" = "语音测试已通过。苹果遥控器的连接和按键可以继续使用；语音是会员功能，开通后即可在设置中启用。";
 "onboarding.complete.title" = "无线麦 SayAll 已经准备好了";
 "onboarding.complete.detail" = "现在可以用所选控制方式说话输入，也可以在主面板中调整连接、语音和按键设置。";
 "onboarding.complete.runtime_changed" = "当前环境状态发生了变化";

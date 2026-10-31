@@ -15,6 +15,51 @@ struct SettingsPageRegressionTests {
         #expect(SettingsPageBehavior.sidebarAccountTitle(accountDisplayName: "  Christopher Anderson  ", loginTitle: "Me") == "Christopher Anderson")
     }
 
+    @MainActor @Test func sidebarWidthLeavesEqualInsetsAroundTheWidestRow() {
+        let inset = SettingsPageBehavior.sidebarRowInset
+        let label = SettingsPageBehavior.sidebarTextWidth(
+            "Permissions",
+            size: SettingsPageBehavior.sidebarRowFontSize
+        )
+        let width = SettingsPageBehavior.sidebarWidth(
+            headerTitleWidth: 0,
+            headerVersionWidth: 0,
+            rowLabelWidths: [label]
+        )
+        let expected = (label + inset * 2
+            + SettingsPageBehavior.sidebarRowIconWidth
+            + SettingsPageBehavior.sidebarRowIconSpacing).rounded(.up)
+        #expect(width == expected)
+        #expect(width <= SettingsPageBehavior.sidebarWidthBounds.upperBound)
+    }
+
+    @MainActor @Test func sidebarWidthStaysInsideBoundsForShortLabels() {
+        let label = SettingsPageBehavior.sidebarTextWidth(
+            "按键",
+            size: SettingsPageBehavior.sidebarRowFontSize
+        )
+        let width = SettingsPageBehavior.sidebarWidth(
+            headerTitleWidth: 0,
+            headerVersionWidth: 0,
+            rowLabelWidths: [label]
+        )
+        #expect(width == SettingsPageBehavior.sidebarWidthBounds.lowerBound)
+        #expect(width < 136)
+    }
+
+    @MainActor @Test func sidebarWidthKeepsTheBrandHeaderInside() {
+        let header = SettingsPageBehavior.sidebarHeaderTextWidth("SayAll")
+        let width = SettingsPageBehavior.sidebarWidth(
+            headerTitleWidth: header,
+            headerVersionWidth: 0,
+            rowLabelWidths: [0]
+        )
+        let needed = (SettingsPageBehavior.sidebarRowInset * 2
+            + SettingsPageBehavior.sidebarHeaderIconWidth
+            + SettingsPageBehavior.sidebarHeaderIconSpacing + header).rounded(.up)
+        #expect(width >= needed)
+    }
+
     @MainActor @Test func sidebarRowsGrowForLongNamesWithoutShrinkingText() {
         func height(_ title: String, badge: Bool = false) -> CGFloat {
             NSHostingView(rootView: SettingsSidebarRow(
