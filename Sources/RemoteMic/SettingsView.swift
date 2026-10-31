@@ -1777,6 +1777,7 @@ struct SettingsView: View {
                     }
                     return mappingHoldSummary(for: button)
                 },
+                reservedControlIDs: profileScopeReservedSiriControlIDs,
                 onEdit: { controlID, triggerID in
                     guard let button = siriRemoteButton(for: controlID),
                           let trigger = ButtonTrigger(rawValue: triggerID)
@@ -1800,8 +1801,7 @@ struct SettingsView: View {
                     mappingHoldEditingButton = button
                     requestMappingEditorScroll(focusHold: true)
                 },
-                onVoiceSettings: { mappingVoiceSettingsRequest += 1 },
-                reservedControlIDs: profileScopeReservedSiriControlIDs
+                onVoiceSettings: { mappingVoiceSettingsRequest += 1 }
             )
         }
     }
@@ -1897,13 +1897,12 @@ struct SettingsView: View {
                     mappingHoldEditingButton = button
                     requestMappingEditorScroll(focusHold: true)
                 },
-                // 置灰表 = 默认表去掉已放开的键（主开关全放开 / 按键级豁免）。
+                // 置灰表 = 默认表去掉已放开的键（主开关全放开 / 按键级豁免）；方案作用域再并入非 10 键。
                 systemReservedControlIDs: ChromecastRemoteControl.canvasReservedControlIDs(
                     allowSystemReservedKeys: settings.chromecastAllowSystemReservedKeys,
                     exceptions: settings.chromecastSystemReservedExceptions
-                ),
-                onVoiceSettings: { mappingVoiceSettingsRequest += 1 },
-                reservedControlIDs: profileScopeReservedChromecastControlIDs
+                ).union(profileScopeReservedChromecastControlIDs),
+                onVoiceSettings: { mappingVoiceSettingsRequest += 1 }
             )
         }
     }
