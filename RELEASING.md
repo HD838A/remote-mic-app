@@ -6,6 +6,7 @@
 
 - Preview：普通版本从精确 `origin/main` SHA 构建一次；紧急 Hotfix 只允许从当前稳定 Tag 派生的精确 `origin/hotfix/vX.Y.Z` SHA 构建。两者都必须完成真实 UI 升级后才能发布公开 Pre-release。
 - Stable：用户明确指定一个已经发布并验证通过的 Pre-release，将它改为正式版；不重新构建。
+- 本地测试包：只为验证、不发布时，可以从任意分支或工作树打包。它不参加 Preview/Stable 候选、不上传 Release、不冒用版本与 Build 号；基线约束的放宽只对「不发布」这一种用途成立。
 - 发布 Workflow 只能从精确 `origin/main` 运行。普通新候选源码只能来自 `main`；`hotfix/vX.Y.Z` 是唯一允许的新候选源码例外。`release-main` 冻结为只读历史，但已公开的旧 Pre-release 可按兼容晋升门禁完成正式化。
 - 私有内部 Draft：使用 private-draft-release skill 的独立路径，目标仓库固定为 GetSayAll/SayAll，不在公开源码仓库创建内部 Draft。
 - “发布正式版”不是独立构建命令。没有指定现有 Pre-release 时，只能准备 Preview 或报告缺少授权。
@@ -22,6 +23,8 @@
 5. 运行 `scripts/verify-release-ready-main-ci.sh`，确认 Apple Silicon 与 Intel Ventura 的源码分支 push CI 都完成无私有权限也可执行的 Swift tests、项目 self-test 和 Release build。官方 CI 探测到私有 deploy key 可用时，还必须完成版本化私有依赖的集成测试和双架构 Release build；脚本名为历史兼容名称，发布控制面 fixture 不得冒充产品 CI。
 
 Mac Remote 与其他 macOS 私有组件使用同一个私有 Swift Package。CI 和发布通过私有平台的统一 SemVer 标签解析包；不再把平台子目录伪装成独立远程 Package。无私有依赖的公开构建继续使用现有兼容层。私有平台版本必须从 `main` 发布。`2.3.0` 起以标准 `X.Y.Z` Tag、main 祖先关系和根 `Package.swift` 校验来源；私有仓库已停用根 `VERSION`。更早的不可变 Tag 保留历史 `VERSION` 一致性校验。回退发布流程时须同时回退清单、workflow 和验证脚本；旧版本通过对应的不可变标签回退。
+
+私有 Tag 与 XCFramework 由私有仓维护者在本机产出，本仓库只消费其 Tag 与构件摘要，**不消费任何私有 CI Artifact**：私有仓托管任务全部未执行（额度、账单等原因）不改变这里的发布判定，也不构成「发布未完成」的理由。反之，本仓库的 CI 与 Release 也不得反向成为私有构件的中转站。
 
 ### 打包前发布私有 Mac 包
 
