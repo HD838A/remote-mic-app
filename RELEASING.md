@@ -40,6 +40,10 @@ Mac Remote 与其他 macOS 私有组件使用同一个私有 Swift Package。CI 
 
 自动模式会执行私有发布前置检查。私有 Mac 变化尚未发布、私有发布失败或宿主清单尚未合入时，打包停止并提示下一步。它不会替用户合并版本 PR，也不会在精确 main 上修改宿主清单。读取成功后的网络、测试、Tag、构件、资源或签名错误必须报错；不能将这些错误伪装为无权限并生成公开包。私有 Siri Remote 集成继续要求 Developer ID 签名。
 
+两架构 XCFramework 默认由本机从 Tag 现场构建，新 Tag 首次约 9 分钟（2026-11-01 实测 9 分 18 秒）。同一 Tag 再次打包会直接命中 `.private-dependencies/artifacts/<tag>/prepared`，只需数秒（实测 6 秒）；该缓存命中不会重新构建，也不会重新校验已发布的远端状态。
+
+`SAYALL_PRIVATE_ARTIFACTS_SOURCE=release` 可改用私有仓为该 Tag 发布的 `sayall-private-platform-<tag>.release.zip`，省掉本地构建（同机实测 87 秒，其中下载约 13 秒）。它仍然要求同一 Tag 的源码 checkout（Siri Remote、Chromecast、Mac Remote 的源码路径来自该 checkout），只替换二进制来源。下载后必须逐项校验：发布方 `.sha256` 同时覆盖压缩包与 `SHA256SUMS` 摘要、压缩包摘要与发布值一致、解包条目只能落在 `release/` 内、解包后保留原有权限位（打包脚本要求 `Helpers/` 可执行）、并用 `shasum -a 256 -c SHA256SUMS` 复核全部构件。该路径需要 `gh` 与私有仓附件读取权限；受保护 CI 当前只有 SSH deploy key，无法下载 Release 附件，因此 CI 仍使用 `build`，复用必须另行配置可读该仓附件的凭据。默认值保持 `build`，不会因远端是否存在附件而静默改变发布包字节。
+
 `SAYALL_PRIVATE_PLATFORM_MODE=required` 强制要求私有组件。显式设置 `REQUIRE_*` 的完整发布仍在缺少组件时失败；签名、公证及公开发布门禁保持不变。受保护 staging 只检查私有 Mac 代码已被清单 Tag 覆盖，不在签名阶段发布私有 Tag 或修改版本。受保护 runner 再次检查完整历史中的 Tag、main 和 checkout，拒绝过期 pin。
 
 本机测试未发布的私有修复时，显式设置 `SAYALL_BUILD_CHANNEL=local` 和 `SAYALL_LOCAL_PRIVATE_SOURCE_COMMIT=<完整 SHA>`。手动提供同一干净提交的私有源码路径与 prepared artifacts；构建脚本继续校验二者的 SHA 相同。此入口不创建 Tag，不修改版本清单；`release` 和 `internalQA` 渠道拒绝该提交覆盖。未指定完整 SHA 时，本地渠道仍执行原有 Tag 校验。
