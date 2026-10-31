@@ -1129,9 +1129,72 @@ done
 print "CI CLASSIFICATION AND VARIANT ENTRY FIXTURE PASS"
 )
 
+test_localizations() (
+ROOT="$SCRIPT_ROOT"
+WORK_DIR="$(/usr/bin/mktemp -d /private/tmp/sayall-localization-gate-test.XXXXXX)"
+
+cleanup() {
+  local trash_root="$HOME/.Trash"
+  local trash_target="$trash_root/sayall-localization-gate-test.$(/bin/date +%s).$$.$RANDOM"
+  /bin/mkdir -p "$trash_root"
+  [[ -d "$WORK_DIR" ]] && /bin/mv "$WORK_DIR" "$trash_target"
+}
+trap cleanup EXIT
+
+fixture="$WORK_DIR/fixture"
+/bin/mkdir -p "$fixture/en.lproj" "$fixture/zh-Hans.lproj"
+print -r -- '"app.name" = "SayAll";
+"statistics.metric.count_unit" = "";
+"k.sample" = "Sample";' > "$fixture/en.lproj/Localizable.strings"
+print -r -- '"app.name" = "无线麦 SayAll";
+"statistics.metric.count_unit" = "次";
+"k.sample" = "示例";' > "$fixture/zh-Hans.lproj/Localizable.strings"
+print -r -- '"CFBundleDisplayName" = "SayAll";' > "$fixture/en.lproj/InfoPlist.strings"
+print -r -- '"CFBundleDisplayName" = "无线麦 SayAll";' > "$fixture/zh-Hans.lproj/InfoPlist.strings"
+
+# The allowlisted empty copy must pass; every other empty value and a missing
+# key must fail, exactly as the packaged App verifier requires.
+"$ROOT/scripts/verify-localizations.sh" \
+  "$fixture/en.lproj" "$fixture/zh-Hans.lproj" > "$WORK_DIR/pass.log" 2>&1
+/usr/bin/grep -Fq 'LOCALIZATION VERIFY PASS' "$WORK_DIR/pass.log"
+
+print -r -- '"app.name" = "SayAll";
+"statistics.metric.count_unit" = "";
+"k.sample" = "";' > "$fixture/en.lproj/Localizable.strings"
+if "$ROOT/scripts/verify-localizations.sh" \
+    "$fixture/en.lproj" "$fixture/zh-Hans.lproj" > "$WORK_DIR/empty.log" 2>&1; then
+  print -u2 "an unexpected empty localization must fail the gate"
+  exit 1
+fi
+/usr/bin/grep -Fq 'has an empty value for k.sample' "$WORK_DIR/empty.log"
+
+print -r -- '"app.name" = "SayAll";
+"statistics.metric.count_unit" = "";
+"k.sample" = "Sample";' > "$fixture/en.lproj/Localizable.strings"
+print -r -- '"app.name" = "无线麦 SayAll";
+"statistics.metric.count_unit" = "次";' > "$fixture/zh-Hans.lproj/Localizable.strings"
+if "$ROOT/scripts/verify-localizations.sh" \
+    "$fixture/en.lproj" "$fixture/zh-Hans.lproj" > "$WORK_DIR/missing.log" 2>&1; then
+  print -u2 "a missing localization key must fail the gate"
+  exit 1
+fi
+/usr/bin/grep -Fq 'has missing keys: k.sample' "$WORK_DIR/missing.log"
+
+# One implementation only: the packaged verifier must delegate to this script,
+# and macOS CI must run it against the source tree.
+if /usr/bin/grep -Fq '/usr/bin/ruby' "$ROOT/scripts/verify-app.sh"; then
+  print -u2 "verify-app.sh must delegate localization checks instead of embedding a second copy"
+  exit 1
+fi
+/usr/bin/grep -Fq '"$ROOT/scripts/verify-localizations.sh" "${LOCALIZATION_DIRS[@]}"' \
+  "$ROOT/scripts/verify-app.sh"
+/usr/bin/grep -Fq './scripts/verify-localizations.sh' "$ROOT/.github/workflows/mac-ci.yml"
+print "LOCALIZATION GATE FIXTURE PASS"
+)
+
 case "${1:-all}" in
-  all) test_ci_classification; test_flow; test_metadata ;;
-  flow) test_ci_classification; test_flow ;;
+  all) test_ci_classification; test_flow; test_localizations; test_metadata ;;
+  flow) test_ci_classification; test_flow; test_localizations ;;
   metadata) test_metadata ;;
   ready-ci) test_ready_ci ;;
   *) print -u2 "usage: $0 [all|flow|metadata|ready-ci]"; exit 2 ;;
