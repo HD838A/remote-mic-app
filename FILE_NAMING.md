@@ -35,6 +35,7 @@
 | Shell 脚本 | 小写 `kebab-case.sh`，名称以动作开头 | `build-app.sh`、`verify-app.sh`、`prepare-preview-release.sh` |
 | GitHub workflow | 小写 `kebab-case.yml` | `mac-ci.yml`、`mac-preview-publication.yml` |
 | JSON Schema | 小写角色名加 `.schema.json` | `analysis.schema.json`、`result.schema.json` |
+| 视觉证据索引 | 固定角色名 `manifest.json`，批次作用域由目录提供 | `Screenshots/design-drafts/common-phrases/revision-2/manifest.json` |
 
 只有当目录不能准确提供作用域，或者同一目录中会出现多个同名角色时，才在文件名中增加领域名称。例如 `Testing/` 汇集全项目测试手册，因此必须使用 `FirstRunOnboarding.md`，不能使用含义不明的 `Onboarding.md` 或 `testing.md`。
 
@@ -43,7 +44,8 @@
 - Swift 源文件继续遵循类型或主要职责的 PascalCase，例如 `OnboardingFlow.swift`、`AudioOutput.swift`。
 - 新增内部技术文件名优先使用 ASCII，避免空格；大小写和分隔符遵循所在目录的既有类别。
 - 面向用户直接分发、需要本地化辨识的资源可以使用中文文件名，例如现有安装说明；代码引用必须使用精确路径。
-- 截图和静态资源使用稳定的英文 `kebab-case` 基名，并把平台、语言、外观或状态作为从通用到具体的后缀；不得依赖 Finder 显示名区分文件。
+- 截图、设计稿和静态资源使用稳定的英文 `kebab-case` 基名，并把平台、语言、外观或状态作为从通用到具体的后缀；不得依赖 Finder 显示名区分文件。
+- 仓库外的视觉证据原件与 `manifest.json` 里的条目沿用同一命名，保证索引能唯一定位到原件；索引本身使用固定名 `manifest.json`，作用域由批次目录提供。
 - 由系统、第三方工具、构建系统或公开协议规定的文件名保持其要求，不套用本规范强制改写。
 
 ## 多语言文件
