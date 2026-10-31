@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Exercise release ordering and public fallback with isolated Git repositories."""
+import hashlib
 import importlib.util
 import json
 import os
@@ -10,6 +11,7 @@ import sys
 import unittest
 from unittest.mock import patch
 import uuid
+import zipfile
 
 sys.dont_write_bytecode = True
 ROOT = Path(__file__).resolve().parent.parent
@@ -329,6 +331,84 @@ class AccessTests(unittest.TestCase):
              patch.object(platform, "fetch_checkout", side_effect=RuntimeError("corrupt checkout")):
             with self.assertRaisesRegex(RuntimeError, "corrupt checkout"):
                 platform.package(ROOT, "auto")
+
+
+class PublishedArtifactTests(unittest.TestCase):
+    """Exercise the published-release reuse path without network access."""
+
+    def setUp(self):
+        self.directory = ROOT / ".private-dependencies/preflight-tests" / uuid.uuid4().hex
+        self.directory.mkdir(parents=True)
+        self.tag = "9.9.9"
+
+    def tearDown(self):
+        # Failed fixtures stay recoverable instead of being deleted in place.
+        trash = Path.home() / ".Trash"
+        trash.mkdir(exist_ok=True)
+        shutil.move(str(self.directory), trash / f"sayall-private-artifacts-{self.directory.name}")
+
+    def manifest_digest(self):
+        return hashlib.sha256(self.manifest).hexdigest()
+
+    def write_archive(self, destination):
+        destination.mkdir(parents=True, exist_ok=True)
+        archive = destination / platform.RELEASE_ASSET.format(tag=self.tag)
+        self.manifest = b"0" * 64 + b"  ./SayAllMembershipCore.xcframework.zip\n"
+        helper = zipfile.ZipInfo("release/Helpers/AppleRemoteHCIService")
+        helper.external_attr = 0o100755 << 16
+        with zipfile.ZipFile(archive, "w") as bundle:
+            bundle.writestr("release/SHA256SUMS", self.manifest)
+            bundle.writestr("release/provenance.json", b"{}\n")
+            bundle.writestr(helper, b"helper\n")
+        checksums = destination / f"{archive.name}.sha256"
+        checksums.write_text(
+            f"{platform.sha256_file(archive)}  {archive.name}\n{self.manifest_digest()}  SHA256SUMS\n")
+        return archive
+
+    def fake_gh(self, *args, cwd=None, timeout=90, capture=True):
+        self.write_archive(Path(args[args.index("--dir") + 1]))
+        return ""
+
+    def test_download_reuses_published_checksums(self):
+        with patch.object(platform, "run", side_effect=self.fake_gh), \
+                patch.object(platform.shutil, "which", return_value="/opt/homebrew/bin/gh"):
+            archive, manifest_digest = platform.download_release_archive(self.tag, self.directory)
+            self.assertTrue(archive.is_file())
+            self.assertEqual(manifest_digest, self.manifest_digest())
+            extracted = platform.extract_release_archive(archive, self.directory / "staging")
+            self.assertEqual((extracted / "SHA256SUMS").read_bytes(), self.manifest)
+            helper = extracted / "Helpers" / "AppleRemoteHCIService"
+            self.assertTrue(os.access(helper, os.X_OK), "packaged helpers must stay executable")
+
+    def test_tampered_archive_is_rejected(self):
+        archive = self.write_archive(self.directory)
+        checksums = self.directory / f"{archive.name}.sha256"
+        checksums.write_text(
+            f"{'0' * 64}  {archive.name}\n{self.manifest_digest()}  SHA256SUMS\n")
+        with patch.object(platform, "run"), \
+                patch.object(platform.shutil, "which", return_value="/opt/homebrew/bin/gh"):
+            with self.assertRaisesRegex(RuntimeError, "archive does not match its published checksum"):
+                platform.download_release_archive(self.tag, self.directory)
+
+    def test_release_without_checksums_is_rejected(self):
+        (self.directory / platform.RELEASE_ASSET.format(tag=self.tag)).write_bytes(b"archive")
+        with patch.object(platform, "run"), \
+                patch.object(platform.shutil, "which", return_value="/opt/homebrew/bin/gh"):
+            with self.assertRaisesRegex(RuntimeError, "does not publish"):
+                platform.download_release_archive(self.tag, self.directory)
+
+    def test_missing_gh_requires_a_local_build(self):
+        with patch.object(platform.shutil, "which", return_value=None):
+            with self.assertRaisesRegex(RuntimeError, "gh CLI"):
+                platform.download_release_archive(self.tag, self.directory)
+
+    def test_archive_entries_must_stay_inside_release(self):
+        for name in ("release/../escape", "other/file.txt", "/absolute"):
+            archive = self.directory / f"unsafe-{uuid.uuid4().hex}.zip"
+            with zipfile.ZipFile(archive, "w") as bundle:
+                bundle.writestr(name, b"x")
+            with self.assertRaisesRegex(RuntimeError, "unsafe entry"):
+                platform.extract_release_archive(archive, self.directory / uuid.uuid4().hex)
 
 
 if __name__ == "__main__":

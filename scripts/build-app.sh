@@ -188,6 +188,14 @@ case "$SAYALL_PRIVATE_PLATFORM_MODE" in
   auto|public|required) ;;
   *) print -u2 "SAYALL_PRIVATE_PLATFORM_MODE must be auto, public, or required"; exit 1 ;;
 esac
+# Rebuilding both XCFramework lanes from the tag costs minutes per new tag.
+# Setting this to release reuses the archive the private repository published
+# for the same tag instead; the default keeps the local source build.
+SAYALL_PRIVATE_ARTIFACTS_SOURCE="${SAYALL_PRIVATE_ARTIFACTS_SOURCE:-build}"
+case "$SAYALL_PRIVATE_ARTIFACTS_SOURCE" in
+  build|release) ;;
+  *) print -u2 "SAYALL_PRIVATE_ARTIFACTS_SOURCE must be build or release"; exit 1 ;;
+esac
 PRIVATE_PATHS_PROVIDED=false
 for private_input in \
   SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH SAYALL_COMBINATION_ACTIONS_PATH \
@@ -202,7 +210,7 @@ if [[ "$SAYALL_PRIVATE_PLATFORM_MODE" == public && "$PRIVATE_PATHS_PROVIDED" == 
 fi
 if [[ "$PRIVATE_PATHS_PROVIDED" == false ]]; then
   PRIVATE_PREPARATION="$(python3 "$ROOT/scripts/prepare-private-platform.py" package \
-    --mode "$SAYALL_PRIVATE_PLATFORM_MODE")"
+    --mode "$SAYALL_PRIVATE_PLATFORM_MODE" --artifacts "$SAYALL_PRIVATE_ARTIFACTS_SOURCE")"
   PRIVATE_MODE="$(print -r -- "$PRIVATE_PREPARATION" | python3 -c 'import json,sys; print(json.load(sys.stdin)["mode"])')"
   if [[ "$PRIVATE_MODE" == private ]]; then
     PRIVATE_CHECKOUT="$(print -r -- "$PRIVATE_PREPARATION" | python3 -c 'import json,sys; print(json.load(sys.stdin)["checkout"])')"
