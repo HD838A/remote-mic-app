@@ -21,7 +21,7 @@ If QuickTime receives sound but Doubao does not, click an editable text field in
 
 ## Uninstall
 
-Download and double-click `SayAll-<version>-Uninstaller.pkg` from the same Release. It verifies and moves SayAll, recognized legacy app bundles, and the compatible microphone to the macOS Trash, then restarts Core Audio. It does not modify BlackHole or SayAll's local settings.
+Download and double-click `SayAll-<version>-Uninstaller.pkg` from the same Release. It verifies SayAll and any recognized legacy app bundles, moves them and the compatible microphone to the Trash, then restarts Core Audio. It does not modify BlackHole or SayAll's local settings.
 
 ## Technology and License
 

@@ -123,7 +123,7 @@
 "chromecast.status.searching" = "Searching for remote";
 "chromecast.status.connecting" = "Connecting to remote";
 "chromecast.status.unauthorized" = "Bluetooth permission required";
-"chromecast.status.unsupported" = "Remote Not Supported";
+"chromecast.status.unsupported" = "Remote not supported";
 "chromecast.status.unsupported.detail" = "This remote uses an unsupported audio format. Choose a supported remote. The diagnostic log contains the reason.";
 "chromecast.status.connected" = "Connected";
 "chromecast.status.disconnected" = "Remote disconnected";
@@ -180,7 +180,7 @@
 "action.page_up" = "Page Up";
 "action.page_down" = "Page Down";
 "scroll_region.title" = "Scroll Region";
-"scroll_region.help" = "Page keys scroll this app's content area. Only the region structure is read; no content, focus or pointer is touched.";
+"scroll_region.help" = "Page keys scroll this app’s content area. SayAll reads only the structure of the scroll region; it does not read content, focus, or pointer position.";
 "scroll_region.learn" = "Learn Scroll Region";
 "scroll_region.countdown" = "Click the area to page (%d)";
 "scroll_region.status_preset" = "Built-in";
@@ -293,20 +293,20 @@
 "remote.device.power.charging" = "Charging";
 "remote.device.power.external" = "External power";
 "remote.device.power.unknown" = "Power Source Unknown";
-"remote.device.bind_help" = "Press a physical button once during setup. Future activity switches to this remote automatically.";
+"remote.device.bind_help" = "Press a physical button once during setup. Whichever remote you use next becomes the active one.";
 "button_mapping.status.press_button_to_bind" = "Press a button other than the voice button to finish setup";
 "button_mapping.status.select_device_to_bind" = "A new remote was found. Select it on this page and set up its buttons.";
 "connection.device.type" = "Voice remote";
 "connection.status.bluetooth_title" = "Bluetooth";
 "connection.status.voice_title" = "Voice";
 "connection.status.voice_streaming" = "Receiving microphone audio";
-"connection.status.voice_ready" = "Voice is ready. Hold the microphone button to speak";
+"connection.status.voice_ready" = "Voice is ready. Hold the voice button to speak.";
 "connection.voice_key_compatibility.title" = "The voice button is temporarily unavailable";
 "connection.voice_key_compatibility.karabiner_detail" = "Karabiner-Elements may be taking control of the remote. Open Devices, find the Xiaomi Bluetooth Voice Remote, turn off “Modify events” or set the device to “Ignore”, then recheck.";
 "connection.voice_key_compatibility.other_detail" = "Another keyboard, mouse, or device-remapping tool may be using the remote. Check and pause those tools, then recheck.";
 "connection.voice_key_compatibility.recheck" = "Recheck voice button";
 "connection.status.waiting_voice_button" = "Waiting for the microphone button";
-"connection.status.voice_active" = "Microphone in Use";
+"connection.status.voice_active" = "Microphone in use";
 "common.status.ready" = "Ready";
 "connection.status.voice_trigger" = "Voice trigger";
 "connection.voice_fn_tap.enabled" = "Use Fn Taps for Voice Typing";
@@ -320,7 +320,7 @@
 "connection.voice_key.mode.right_option" = "Right Option";
 "connection.voice_key_mode.help" = "Fn/Globe is the default. Command and Option modes require Accessibility permission and a target voice app that supports the corresponding standalone key hold; many apps merge both sides into a generic modifier. Pressing another key while held may trigger a modifier shortcut.";
 "connection.voice_key_mode.unverified" = "Check Your Voice Trigger Key";
-"connection.voice_key_mode.unverified_detail" = "Set the same trigger key in your voice typing app, then dictate a sentence to check it. SayAll cannot check that app's settings. If no text appears, switch back to Fn/Globe.";
+"connection.voice_key_mode.unverified_detail" = "Set the same trigger key in your voice typing app, then dictate a sentence to check it. SayAll cannot check that app’s settings. If no text appears, switch back to Fn/Globe.";
 "connection.voice_key_mode.command_permission" = "Modifier-key mode requires Accessibility permission";
 "connection.action.reconnect" = "Reconnect Now";
 "connection.phone.section_title" = "SayAll Mobile";
@@ -328,31 +328,31 @@
 "connection.phone.no_invite_badge" = "No Invite Code Required";
 "connection.phone.qr_badge" = "Scan first";
 "connection.phone.qr_title" = "Alternative: scan with the iOS app";
-"connection.phone.qr_help" = "The iOS app connects automatically without scanning. If this Mac is not found, tap Scan QR Code on the Mac page in the app.";
-"connection.phone.qr_refresh" = "The code expires shortly and refreshes automatically. Scan a new code after stopping or restarting phone connections.";
+"connection.phone.qr_help" = "The iOS app connects automatically without scanning. If this Mac does not appear, open the Mac page in the app and tap Scan QR Code.";
+"connection.phone.qr_refresh" = "The code expires quickly and refreshes automatically. Scan a new code after you stop or restart phone connections.";
 "connection.phone.qr_accessibility" = "iPhone connection QR code";
 "connection.phone.ios_help" = "After enabling connections, open SayAll to connect automatically. No scanning is needed.";
 "connection.phone.not_enabled" = "Not Started";
 "connection.trusted_devices.title" = "Trusted Mobile Devices";
-"connection.trusted_devices.help" = "iPhone and Apple Watch can serve as backup remotes. Click the connection button after each launch to allow nearby devices to connect. Clearing this list requires each device to be approved again.";
-"connection.trusted_devices.count" = "%1$@ trusted";
+"connection.trusted_devices.help" = "iPhone and Apple Watch can act as backup remotes. Click Connect after each launch to let nearby devices join. Clearing this list means each device must be approved again.";
+"connection.trusted_devices.count" = "%1$@ trusted devices";
 "connection.trusted_devices.count_long" = "%1$@ trusted devices";
 "connection.phone.connect" = "Connect";
-"connection.phone.enabled" = "Waiting for Phone";
+"connection.phone.enabled" = "Waiting for phone";
 "connection.phone.connected" = "Connected";
 "connection.phone.disconnect" = "Disconnect";
 "connection.phone.cancel_waiting" = "Stop Waiting";
 "connection.watch.title" = "Apple Watch";
 "connection.watch.help" = "The Watch connects directly to this Mac for tap-to-record.";
 "connection.watch.connect" = "Connect";
-"connection.watch.enabled" = "Waiting for Watch";
+"connection.watch.enabled" = "Waiting for watch";
 "connection.watch.connected" = "Connected";
 "connection.watch.disconnect" = "Disconnect";
 "connection.watch.cancel_waiting" = "Stop Waiting";
 "connection.trusted_devices.clear" = "Clear Trusted Devices";
 "connection.trusted_devices.clear_confirm.title" = "Clear All Trusted Devices?";
 "connection.trusted_devices.clear_confirm.message" = "The current connection stays active. Approval is required again the next time a phone connects.";
-"connection.web.title" = "WeChat Mini Program SayAll";
+"connection.web.title" = "SayAll WeChat Mini Program";
 "connection.web.help" = "Scan once with WeChat to connect. Tap or hold to talk.";
 "connection.web.help_short" = "Scan with WeChat to connect, even on different networks.";
 "connection.phone.app_store_open" = "Open App Store";
@@ -363,9 +363,9 @@
 "connection.web.retry" = "Reconnect";
 "connection.web.disabled" = "Not Enabled";
 "connection.web.disabled_help" = "Reconnect to create a new temporary QR code.";
-"connection.web.unavailable" = "Phone Remote Unavailable";
+"connection.web.unavailable" = "Phone remote unavailable";
 "connection.web.unavailable_help" = "Phone remote control is unavailable in this version.";
-"connection.web.connecting" = "Connecting Phone Remote";
+"connection.web.connecting" = "Connecting phone remote";
 "connection.web.connecting_help" = "Checking membership access and preparing the cloud connection.";
 "connection.web.waiting_scan" = "Waiting for Scan";
 "connection.web.waiting_approval" = "Waiting for Approval";
@@ -381,38 +381,36 @@
 "connection.web.mini_program_accessibility" = "WeChat mini program connection code";
 "connection.web.browser_scan" = "Connecting the web version in a browser? Scan this smaller code";
 "connection.web.awaiting_approval" = "Approve the connection from “%1$@” on this Mac.";
-"connection.web.connected" = "Phone Remote Connected";
+"connection.web.connected" = "Phone remote connected";
 "connection.web.connected_device" = "Current device: %1$@. Buttons and push-to-talk are ready.";
-"connection.web.failed" = "Phone Remote Connection Failed";
+"connection.web.failed" = "Phone remote connection failed";
 "connection.web.failure.sign_in_required" = "Sign in with your email on the Membership page before creating a phone-remote session.";
 "connection.web.failure.device_binding_required" = "Sign in again on the Membership page to link this Mac to your account.";
 "connection.web.failure.plus_required" = "Mini program remote control requires Plus. Upgrade to Plus first.";
 "connection.web.failure.upgrade_required" = "This version cannot create the new cloud session. Update SayAll and try again.";
-"connection.web.failure.unavailable" = "Cloud phone remote is currently unavailable. Please try again later.";
+"connection.web.failure.unavailable" = "Cloud phone remote is currently unavailable. Try again later.";
 "connection.web.failure.network_unavailable" = "Could not reach the cloud phone-remote service. Check the network and try again.";
 "connection.web.failure.invalid_response" = "The cloud phone-remote service returned an invalid result. Try again later.";
 "connection.web.plus_required_title" = "This connection requires Plus";
 "connection.web.plus_required_detail" = "The QR code is ready. Upgrade to connect from your phone.";
 "connection.web.plus_required_action" = "View Plus";
-"connection.web.test_bypass_title" = "Test mode: skip membership check";
-"connection.web.test_bypass_detail" = "On by default in local test apps. Connect without signing in or Plus. Production still checks membership.";
 "audio.section.title" = "Audio Settings";
 "audio.voice_output.section_title" = "Voice devices";
 "audio.output.title" = "Output device";
 "audio.output.disabled" = "Audio Output Off";
 "audio.gain.title" = "Gain";
-"audio.gain.help" = "0 dB keeps the original volume. Higher values make the voice louder and also amplify background noise. Start with 6–12 dB.";
+"audio.gain.help" = "0 dB keeps the original volume. Higher values make your voice louder and also amplify background noise. Start with 6–12 dB.";
 "audio.status.title" = "Audio status";
 "audio.action.refresh_devices" = "Refresh Devices";
 "audio.action.learn_virtual_microphones" = "Get BlackHole";
 "audio.action.send_test_tone" = "Play Test Sound";
-"audio.output.privacy_help" = "Voice audio is sent to the selected device. When the last remote disconnects, macOS switches its default microphone to a physical microphone if it was using this virtual device. On reconnect, SayAll restores the virtual microphone only if you have not changed that setting. The default speakers are never changed.";
+"audio.output.privacy_help" = "Voice audio is sent to the selected device. When the last remote disconnects, macOS switches the Mac’s default microphone to a physical microphone if it was using this virtual device. On reconnect, SayAll restores the virtual microphone only if you have not changed that setting. The default speakers are never changed.";
 "audio.compatibility.title" = "Compatible Audio Device";
 "audio.compatibility.section_title" = "Voice Input & Compatibility";
 "audio.compatibility.microphone_label" = "Compatible virtual microphone";
 "audio.compatibility.select_microphone" = "Select %@";
 "audio.compatibility.open_install_guide" = "Open Driver Installation Guide";
-"audio.compatibility.help" = "Install the compatible microphone and select it here. New installations use SayAll. Existing users keep MiRemoteV 2ch.";
+"audio.compatibility.help" = "Install the compatible microphone and select it here. New installations use SayAll. Existing installations keep MiRemoteV 2ch.";
 "audio.compatibility.help_plain" = "If your voice typing app receives no audio, select the compatible microphone included with the installer. Existing audio devices are not replaced.";
 "button_mapping.page.title" = "Button Mapping";
 "button_mapping.page.subtitle" = "Click a button to change its settings";
@@ -443,7 +441,7 @@
 "button_mapping.long_press.effect" = "Setting a long-press action disables hold-to-repeat for this button.";
 "button_mapping.rapid_press" = "Allow Rapid Repeated Presses";
 "button_mapping.rapid_press_hint_short" = "Every quick press runs the action instead of only the first one.";
-"button_mapping.rapid_press_help" = "By default, actions that do not support hold-to-repeat run once until the button has been released for a moment. Enable this to run an action on every quick press. Holding the button may then repeat the action.";
+"button_mapping.rapid_press_help" = "By default, an action that does not support hold-to-repeat runs once, then waits until you release the button for a moment. Turn this on to run the action on every quick press; holding the button may then repeat it.";
 "common.suffix.not_installed" = " (Not installed)";
 "common.suffix.experimental_disabled" = " (Experiment disabled)";
 "shortcut.action.record" = "Click to Record a Shortcut";
@@ -561,7 +559,7 @@
 "status_item.state.disconnected" = "%@: No devices connected";
 "status_item.state.connected" = "%@: Device connected";
 "status_item.state.streaming" = "%@: Voice active";
-"about.alert.description_with_version" = "Version %1$@\nWireless voice and shortcut controls for Xiaomi Bluetooth Remote 2 Pro.";
+"about.alert.description_with_version" = "Version %1$@\nWireless voice and shortcut controls for Xiaomi Bluetooth Remote 2 Pro and Apple Remote.";
 "common.action.ok" = "OK";
 "common.action.copy_link" = "Copy Link";
 "common.status.copied" = "Copied";
@@ -580,7 +578,7 @@
 "settings.section.login" = "Me";
 "settings.section.transcripts" = "Reflections";
 "about.page.subtitle" = "View version, updates, language, and app display options";
-"about.app.description" = "Wireless voice and shortcut controls for Xiaomi Bluetooth Remote 2 Pro.";
+"about.app.description" = "Wireless voice and shortcut controls for Xiaomi Bluetooth Remote 2 Pro and Apple Remote.";
 "about.app_support.title" = "App & Support";
 "about.preferences.show_dock_icon" = "Show app icon in the Dock";
 "about.preferences.show_dock_icon_help" = "When hidden, SayAll remains available from the menu bar.";
@@ -603,7 +601,7 @@
 "statistics.period.this_week" = "Week";
 "statistics.period.total" = "All";
 "statistics.chart.last_seven_days" = "Last 7 Days";
-"statistics.chart.weekly_history" = "Recent 7 Weeks + Earlier";
+"statistics.chart.weekly_history" = "Last 7 weeks + earlier";
 "statistics.chart.earlier" = "Earlier";
 "statistics.voice_ranking.title" = "Longest Voice Inputs";
 "statistics.voice_ranking.description" = "Stored only on this Mac. Shows your 10 longest voice sessions.";
@@ -629,7 +627,7 @@
 "about.configuration.description" = "Transfer audio, button, shortcut, language, appearance, startup, and update settings to another Mac.";
 "about.configuration.export" = "Export Configuration…";
 "about.configuration.export_description" = "Save the current settings to a file.";
-"about.configuration.backup_description" = "Back up settings, combination actions, app configurations and button profiles.";
+"about.configuration.backup_description" = "Back up settings, macros, app configurations, and button profiles.";
 "about.configuration.import" = "Import Configuration…";
 "about.configuration.import_description" = "Restore settings from a previously exported file.";
 "about.preferences.title" = "App Preferences";
@@ -641,14 +639,14 @@
 "about.version.available" = "Update Available";
 "about.version.update_to" = "Update to %1$@";
 "about.version.recheck" = "Check Again";
-"about.version.information_title" = "What's New";
+"about.version.information_title" = "What’s New";
 "about.version.information_idle" = "Available updates are checked automatically when this page opens.";
 "about.version.checking" = "Checking for available updates…";
-"about.version.up_to_date" = "You're Up to Date";
+"about.version.up_to_date" = "You’re up to date";
 "about.version.up_to_date_description" = "There is no newer version on the selected update channel.";
 "about.version.information_unavailable" = "Update Information Unavailable";
 "about.version.information_unavailable_description" = "Check again later. Your installed version is unaffected.";
-"about.version.release_notes_title" = "What's New in %1$@";
+"about.version.release_notes_title" = "What’s New in %1$@";
 "about.version.release_notes_unavailable" = "Release notes are not available for this version.";
 "about.version.check_prerelease" = "Check for pre-release updates";
 "about.version.check_prerelease_help" = "Off by default. When enabled, automatic and manual checks also include release candidates.";
@@ -757,7 +755,7 @@
 "onboarding.voice_key.migration.detail" = "First-time setup uses Fn/Globe so the input method configuration stays consistent. After setup, you can switch back to Left or Right Command or Option in the main settings.";
 "onboarding.voice_tool.guide.title" = "Set up your voice app";
 "onboarding.voice_tool.guide.detail" = "Review every step for the selected app. SayAll never changes third-party settings.";
-"onboarding.voice_tool.guide.continue_hint" = "Review and click every step on the right first.";
+"onboarding.voice_tool.guide.continue_hint" = "Review and click each step on the right before continuing.";
 "onboarding.voice_tool.guide.select_step" = "Click a step on the right to view its setup instructions.";
 "onboarding.voice_tool.guide.select_doubao" = "Select Doubao";
 "onboarding.voice_tool.guide.configure_doubao" = "Set Fn as Doubao’s voice shortcut";
@@ -772,9 +770,9 @@
 "onboarding.voice_tool.guide.open_other" = "Open your voice app";
 "onboarding.voice_tool.guide.open_other.detail" = "Start the app you want to use and confirm that it supports voice typing.";
 "onboarding.voice_tool.guide.configure_other" = "Set its voice shortcut to Fn";
-"onboarding.voice_tool.guide.configure_other.detail" = "In the app's settings, set its voice-typing shortcut to Fn.";
+"onboarding.voice_tool.guide.configure_other.detail" = "In the app’s settings, set its voice-typing shortcut to Fn.";
 "onboarding.voice_tool.guide.select_microphone" = "Choose the same microphone";
-"onboarding.voice_tool.guide.select_microphone.detail" = "In the voice app, choose the same microphone selected on SayAll's audio page.";
+"onboarding.voice_tool.guide.select_microphone.detail" = "In the voice app, choose the same microphone selected on SayAll’s audio page.";
 "onboarding.voice_tool.guide.release_system_fn" = "Set the macOS Fn action to Do Nothing";
 "onboarding.voice_tool.guide.release_wechat_fn" = "Clear WeChat app Fn shortcuts";
 "onboarding.voice_tool.guide.image_missing" = "The setup screenshot is unavailable. Reopen SayAll and try again.";
@@ -787,7 +785,7 @@
 "onboarding.voice_tool.switch.retry" = "Try Again";
 "onboarding.voice_tool.system_fn.ready" = "The macOS Fn action is set to Do Nothing";
 "onboarding.voice_tool.system_fn.conflict" = "The macOS Fn action needs to be changed";
-"onboarding.voice_tool.system_fn.detail" = "Open System Settings → Keyboard and set “Press Fn/Globe key to” to “Do Nothing.”";
+"onboarding.voice_tool.system_fn.detail" = "Open System Settings → Keyboard and set “Press Fn/Globe key to” to “Do Nothing”.";
 "onboarding.voice_tool.system_fn.open_settings" = "Open Keyboard Settings";
 "onboarding.voice_tool.vokie.title" = "Vokie";
 "onboarding.voice_tool.vokie.detail" = "Polishes your words and shows text as you speak, without changing your input source.";
@@ -795,8 +793,8 @@
 "onboarding.voice_tool.status.unknown" = "Open the tool to continue";
 "onboarding.voice_tool.binding.title" = "Shortcut configuration";
 "onboarding.voice_tool.binding.recommended" = "Use Recommended";
-"onboarding.voice_tool.binding.learn" = "I Changed the Shortcut";
-"onboarding.voice_tool.binding.recommended_detail" = "SayAll builds a configuration from the controller and documented tool defaults, then saves it only after real text appears.";
+"onboarding.voice_tool.binding.learn" = "I Use a Different Shortcut";
+"onboarding.voice_tool.binding.recommended_detail" = "SayAll builds a configuration from your remote or phone and the app’s documented defaults, then saves it only after real text appears.";
 "onboarding.voice_tool.binding.learn_detail" = "After permissions are granted, press the voice shortcut you currently use in that tool and SayAll will learn it.";
 "onboarding.voice_tool.binding.no_documented_default" = "There is no safe documented default. Learn the current shortcut instead.";
 "onboarding.voice_tool.binding.evidence_verified" = "Recommended";
@@ -828,7 +826,7 @@
 "onboarding.apple_companion.retry" = "Retry connection";
 "onboarding.apple_companion.connection_detail" = "Keep the iOS or watchOS app open and connect it to this Mac.";
 "onboarding.apple_companion.button_detail" = "Tap any button except the voice button on your connected iPhone or Apple Watch.";
-"onboarding.control_source.web_remote.title" = "WeChat Mini Program SayAll";
+"onboarding.control_source.web_remote.title" = "SayAll WeChat Mini Program";
 "onboarding.control_source.web_remote.detail" = "Scan with WeChat to connect. Tap or hold to talk.";
 "onboarding.gesture.title" = "Voice Input Mode";
 "onboarding.gesture.hold" = "Hold to Talk";
@@ -839,7 +837,7 @@
 "onboarding.pairing_plan.fn_tap_off" = "Fn tap conversion off";
 "onboarding.pairing_plan.pending_evidence" = "This setup is saved after the voice-and-text test passes.";
 "onboarding.pairing_plan.needs_learning" = "Learn the current shortcut";
-"onboarding.pairing_plan.needs_learning_detail" = "No safe documented combination is available. Choose “I Changed It,” then press the actual shortcut after granting permissions.";
+"onboarding.pairing_plan.needs_learning_detail" = "No safe documented combination is available. Choose “I Use a Different Shortcut,” then press the actual shortcut after granting permissions.";
 "onboarding.shortcut_learning.title" = "Learn your current voice shortcut";
 "onboarding.shortcut_learning.detail" = "Choose hold or toggle, start learning, then press the complete shortcut. SayAll does not read private settings from another app.";
 "onboarding.shortcut_learning.start" = "Start Learning";
@@ -863,7 +861,7 @@
 "onboarding.remote_availability.no_remote.detail" = "Choose the iOS app or WeChat mini program next.";
 "onboarding.remote_availability.recommended" = "Preferred";
 "onboarding.remote_availability.illustration" = "Use a physical remote when available";
-"onboarding.control_method.title" = "Choose a phone option without a remote";
+"onboarding.control_method.title" = "No remote? Choose how to control your Mac from your phone";
 "onboarding.control_method.detail" = "Use the iOS app, or scan with WeChat to connect to SayAll.";
 "onboarding.control_method.physical_remote.title" = "Physical Remote";
 "onboarding.control_method.physical_remote.detail" = "Connect a Xiaomi Bluetooth remote and use its physical buttons and microphone.";
@@ -872,7 +870,7 @@
 "onboarding.control_method.web_remote.title" = "Use WeChat Mini Program";
 "onboarding.control_method.web_remote.detail" = "Scan with WeChat to open SayAll and connect automatically. No app installation required.";
 "onboarding.control_method.recommended" = "Recommended";
-"onboarding.control_method.no_iphone" = "Without an iPhone";
+"onboarding.control_method.no_iphone" = "I don’t have an iPhone";
 "onboarding.control_method.illustration" = "Choose the control method you can use now";
 "onboarding.permissions.title" = "Allow SayAll to connect and control your Mac";
 "onboarding.permissions.detail" = "Enable all three permissions so every control method, custom button, and input-source switch remains available.";
@@ -883,9 +881,9 @@
 "onboarding.permissions.iphone_app_installed.pending" = "One step left: check this box to continue";
 "onboarding.permissions.iphone_app_installed.confirmed" = "Confirmed. The next page verifies it with a real connection.";
 "onboarding.remote.title" = "Connect the remote, then press a physical button";
-"onboarding.remote.detail" = "For a first-time connection, follow the steps below. After pairing, press any ordinary button to confirm the Mac receives it.";
+"onboarding.remote.detail" = "For a first-time connection, follow the steps below. After pairing, press any button other than the voice button to confirm the Mac receives it.";
 "onboarding.remote.first_pairing.title" = "Connect the remote for the first time";
-"onboarding.remote.first_pairing.wake" = "Hold TV for about 2 seconds until the white light at the bottom starts flashing.";
+"onboarding.remote.first_pairing.wake" = "Hold the TV button for about 2 seconds until the white light at the bottom starts flashing.";
 "onboarding.remote.first_pairing.pair" = "Then hold Home + Menu together to enter Bluetooth pairing mode.";
 "onboarding.remote.siri_pairing.title" = "Connect the Apple Remote for the first time";
 "onboarding.remote.siri_pairing.step1" = "Turn off the Apple TV it was paired with, or it reconnects to that.";
@@ -904,7 +902,7 @@
 "onboarding.remote.searching_detail" = "Keep the remote near your Mac. For a first connection, follow the steps above; if already paired, press any button to wake it.";
 "onboarding.remote.button_waiting" = "Waiting for a control button";
 "onboarding.remote.button_waiting_detail" = "Press the center OK button or an arrow button. Do not press the microphone/voice button.";
-"onboarding.remote.button_received" = "Button Press Detected";
+"onboarding.remote.button_received" = "Button press detected";
 "onboarding.remote.button_detail" = "Press any button except the voice button.";
 "onboarding.remote.voice_button_mistake.title" = "That was the voice button";
 "onboarding.remote.voice_button_mistake.detail" = "This step checks button controls. Press the center OK button or an arrow button instead.";
@@ -952,7 +950,7 @@
 "onboarding.voice_test.configuration.audio_output_not_ready" = "%@ (not connected)";
 "onboarding.voice_test.configuration.gesture_checkbox.hold" = "I set %@ to “Hold to Talk”";
 "onboarding.voice_test.configuration.gesture_checkbox.toggle" = "I set %@ to “press once to start, press again to finish”";
-"onboarding.voice_test.configuration.gesture_bridged_hint" = "The remote only has hold, so SayAll converts it into a single tap; keep “press once” selected in the voice app.";
+"onboarding.voice_test.configuration.gesture_bridged_hint" = "This remote only supports hold-to-talk, so SayAll converts it into a single tap; keep “press once” selected in the voice app.";
 "onboarding.voice_test.configuration.global_voice_checkbox" = "I confirmed %@ has “global voice activation” turned on";
 "onboarding.voice_test.configuration.no_commit" = "No text appeared. Check three things: whether %@ has “global voice activation” on, whether the voice button is set as described above, and whether its microphone is “%@”.";
 "onboarding.voice_test.configuration.no_commit.no_global" = "No text appeared. Check three things: whether %@ is running with voice input enabled, whether the voice button is set as described above, and whether its microphone is “%@”.";
@@ -978,7 +976,7 @@
 "onboarding.secure_input.detail" = "Quit apps that are asking for a password or using a secure keyboard, then check again.";
 "onboarding.secure_input.recheck" = "Check again";
 "onboarding.secure_input.help" = "If it still does not work, lock your Mac, unlock it with your password, and check again.";
-"onboarding.complete.siri_membership" = "The voice test passed. The Apple Remote keeps working for connection and buttons; voice is a membership feature and can be enabled in Settings after activation.";
+"onboarding.complete.siri_membership" = "The voice test passed. The Apple Remote keeps working for connection and buttons. Voice is a membership feature: activate membership, then turn it on in Settings.";
 "onboarding.complete.title" = "SayAll is ready";
 "onboarding.complete.detail" = "You can now dictate with the selected control method and adjust connection, voice, and button settings from the main panel.";
 "onboarding.complete.runtime_changed" = "Your current setup has changed";
@@ -1005,7 +1003,7 @@
 "statistics.transcripts.recording_stop" = "Stop playback";
 "statistics.transcripts.recording_playback_error.missing" = "This recording file could not be found. It may have been moved or deleted.";
 "statistics.transcripts.recording_playback_error.invalid" = "This recording cannot be played because it may be damaged or unsupported.";
-"statistics.transcripts.recording_playback_error.unavailable" = "This recording could not be played right now. Please try again later.";
+"statistics.transcripts.recording_playback_error.unavailable" = "This recording could not be played right now. Try again later.";
 "statistics.transcripts.recording_export" = "Export recording";
 "statistics.transcripts.recording_delete" = "Delete recording";
 "statistics.transcripts.recording_delete_confirm.title" = "Delete this recording?";
@@ -1038,7 +1036,7 @@
 "statistics.transcripts.agent_access.privacy" = "SayAll does not upload history. An authorized AI client may send returned text to its own provider. Access is off by default, and turning it off blocks every client immediately.";
 "statistics.transcripts.agent_access.quick_connect" = "Connect AI Tools";
 "statistics.transcripts.agent_access.quick_connect_description" = "SayAll creates a separate read-only authorization and updates local configuration for the selected tool. Quit and reopen that AI tool after connecting; SayAll does not need to restart.";
-"statistics.transcripts.agent_access.connected" = "Connected · Reopen %@";
+"statistics.transcripts.agent_access.connected" = "Connected · Reopen %@ to use it";
 "statistics.transcripts.agent_access.path_changed" = "The App location changed. Remove this connection, then connect it again.";
 "statistics.transcripts.agent_access.ready" = "Ready to connect";
 "statistics.transcripts.agent_access.not_installed" = "Not detected";
@@ -1067,9 +1065,9 @@
 "statistics.transcripts.agent_access.error.client_unavailable" = "%@ was not detected. Install it before connecting.";
 "statistics.transcripts.agent_access.error.client_command_unavailable" = "%@’s command-line tool could not start. Repair or reinstall the client, then try again.";
 "statistics.transcripts.agent_access.error.configuration_conflict" = "%@ already has an MCP server named sayall_history. SayAll did not overwrite it. Review or remove the conflicting entry first.";
-"statistics.transcripts.agent_access.error.invalid_client_configuration" = "%@'s MCP configuration is not valid JSON. SayAll did not change the file; repair it and try again.";
+"statistics.transcripts.agent_access.error.invalid_client_configuration" = "%@’s MCP configuration is not valid JSON. SayAll did not change the file; repair it and try again.";
 "statistics.transcripts.agent_access.error.unsafe_client_configuration" = "%@’s configuration path is unsafe or uses symbolic links. SayAll did not change it.";
-"statistics.transcripts.agent_access.error.client_configuration_write" = "%@'s MCP configuration could not be written safely. Check its file permissions and try again.";
+"statistics.transcripts.agent_access.error.client_configuration_write" = "%@’s MCP configuration could not be written safely. Check its file permissions and try again.";
 "statistics.transcripts.agent_access.error.client_installation_rejected" = "%@ rejected the MCP installation command. Check the client and try again.";
 "statistics.transcripts.agent_access.error.integration" = "%@ quick connection failed. The temporary authorization was not retained; repair the client or use manual setup.";
 "statistics.transcripts.agent_access.error.remove_configuration" = "%@ access was revoked, but its client configuration could not be removed automatically. Remove sayall_history manually.";
@@ -1083,7 +1081,7 @@
 "onboarding.side.iphone_connected" = "iPhone / Apple Watch connected";
 "onboarding.side.web_connected" = "Mini program connected";
 "onboarding.side.control_selected" = "Control method selected";
-"onboarding.side.button_received" = "Button Press Detected";
+"onboarding.side.button_received" = "Button press detected";
 "onboarding.side.device_found" = "Supported virtual audio device detected";
 "onboarding.side.device_selected" = "Virtual audio device selected";
 "onboarding.side.audio_ready" = "Audio output ready";
@@ -1133,7 +1131,7 @@
 "onboarding.recovery.voice.session_not_ended.title" = "Finish the Voice Session";
 "onboarding.recovery.voice.session_not_ended.detail" = "%@ to finish voice input so SayAll can check the result.";
 "onboarding.recovery.voice.session_not_ended.action" = "Start This Check Again";
-"onboarding.recovery.voice.gesture.hold" = "hold the voice button while speaking, then release it to finish";
+"onboarding.recovery.voice.gesture.hold" = "hold the voice button while you speak and release it when you’re done";
 "onboarding.recovery.voice.gesture.toggle" = "press the voice button once to start, then again to stop";
 "onboarding.recovery.voice.finish.hold" = "Release the voice button";
 "onboarding.recovery.voice.finish.toggle" = "Press the voice button again";
@@ -1188,7 +1186,7 @@
 "settings.corrupted.item.statistics" = "usage statistics";
 "settings.corrupted.item.other" = "other settings";
 
-"action.combination_action" = "Action Sequence";
+"action.combination_action" = "Macro";
 
 "button_mapping.editing_profile" = "Editing";
 
@@ -1200,14 +1198,14 @@
 
 "button_mapping.inherited" = "Using Default";
 
-"button_mapping.search_macros" = "Search action sequences";
+"button_mapping.search_macros" = "Search macros";
 
-"button_mapping.manage_macros" = "Manage action sequences";
+"button_mapping.manage_macros" = "Manage macros";
 
 "button_mapping.macro_unavailable" = "Action unavailable. Choose another action.";
 
 
-"button_mapping.macro_step_count" = "%d-step sequence";
+"button_mapping.macro_step_count" = "%d-step macro";
 
 /* Common phrases */
 "action.open_common_phrases" = "Open Common Phrases";
@@ -1243,28 +1241,28 @@
 "common_phrases.delete" = "Delete Phrase";
 "common_phrases.move_up" = "Move Up";
 "common_phrases.move_down" = "Move Down";
-"common_phrases.short_label" = "Short Label (Chinese)";
-"common_phrases.full_text" = "Full Text (Chinese)";
-"common_phrases.english_label" = "Short Label (English, optional)";
-"common_phrases.english_text" = "Full Text (English, optional)";
+"common_phrases.short_label" = "Short label (Chinese)";
+"common_phrases.full_text" = "Full text (Chinese)";
+"common_phrases.english_label" = "Short label (English, optional)";
+"common_phrases.english_text" = "Full text (English, optional)";
 "common_phrases.saved" = "Saved";
 "common_phrases.inserting" = "Inserting…";
-"common_phrases.paste_submitted" = "Paste performed. Check the text in your input field.";
+"common_phrases.paste_submitted" = "Phrase pasted. Check the text in your input field.";
 "common_phrases.error.resource_unavailable" = "Phrases could not load. Reinstall, or restore your exported phrases.";
 "common_phrases.error.edit_failed" = "Could not save. Check the content or imported format. Existing data was kept.";
 "common_phrases.error.no_phrase" = "No phrase is assigned to this button. Assign one in Common Phrases.";
 "common_phrases.error.accessibility_required" = "Allow SayAll in System Settings → Accessibility.";
-"common_phrases.error.input_unavailable" = "The caret is not in an input field. Place it in the input field and try again.";
+"common_phrases.error.input_unavailable" = "No text field is focused. Click in the field and try again.";
 "common_phrases.error.target_changed" = "The input target changed. Open Common Phrases again.";
 "common_phrases.error.clipboard_write_failed" = "Could not write to the clipboard. Try again.";
 "common_phrases.error.clipboard_restore_failed" = "Could not restore the clipboard after pasting. Check your clipboard.";
 "common_phrases.error.paste_failed" = "Could not paste. Check Accessibility permission and try again.";
-"common_phrases.error.cancelled" = "Insertion cancelled.";
+"common_phrases.error.cancelled" = "Insertion canceled.";
 "custom_application.accessibility.test" = "Test input field";
 
 "custom_application.accessibility.needs_verification" = "Needs learning or verification";
 
-"settings.portable_configuration.title" = "Combination actions, app configurations and button profiles";
+"settings.portable_configuration.title" = "Macros, app configurations, and button profiles";
 "connection.approval.title" = "Allow “%1$@” to connect to SayAll?";
 "connection.approval.watch_body" = "This Apple Watch will send button presses and microphone audio to SayAll. Check that its 2-digit code matches the code below. Allowing this connection saves this installation as a trusted device.";
 "connection.approval.phone_body" = "This iPhone will send button presses and microphone audio to SayAll. Check that its 2-digit code matches the code below. Allowing this connection saves this installation as a trusted device.";
@@ -1280,7 +1278,7 @@
 "onboarding.voice_tool.guide.screenshot.weixin_input_menu" = "In the input menu, choose WeType (微信输入法), then Settings (设置).";
 "onboarding.voice_tool.guide.screenshot.weixin_input_settings" = "In Voice Input (语音输入), enable Hold to Talk (按住说话) and set its shortcut to Fn.";
 "onboarding.voice_tool.guide.screenshot.weixin_app_shortcuts" = "In WeChat Settings → Shortcuts (快捷键), clear any Fn shortcut under Voice Typing (语音输入文字), for both hold and press-to-start modes.";
-"onboarding.voice_tool.guide.screenshot.system_fn" = "In System Settings → Keyboard (键盘), set Press Globe key to (按下🌐键时) to Do Nothing (不执行任何操作).";
+"onboarding.voice_tool.guide.screenshot.system_fn" = "In System Settings → Keyboard (键盘), set “Press Globe key to” (按下🌐键时) to “Do Nothing” (不执行任何操作).";
 "onboarding.voice_tool.guide.screenshot.vokie_step_1" = "On Vokie’s Home page (首页), set Standard Input (普通输入) to Fn.";
 "onboarding.voice_tool.guide.screenshot.vokie_step_2" = "In Vokie’s General settings (通用), choose the same Microphone (麦克风) as on SayAll’s audio page. The image shows the older MiRemoteV 2ch name; new installations show SayAll.";
 "siri_remote.activation.enable" = "Enable";
@@ -1291,7 +1289,7 @@
 
 "configuration.import.restore_title" = "Import all settings?";
 
-"configuration.import.restore_detail" = "This replaces your buttons, key profiles, combination actions, app settings, shortcuts, common phrases and preferences. Your account and system permissions stay unchanged. Verify recorded input fields again.";
+"configuration.import.restore_detail" = "This replaces your buttons, key profiles, macros, app settings, shortcuts, common phrases, and preferences. Your account and system permissions stay unchanged. Verify recorded input fields again.";
 
 "configuration.import.cancel" = "Cancel";
 
@@ -1314,9 +1312,9 @@
 "audio.mac_microphone.error.input_unavailable" = "The selected microphone is unavailable. Connect it or select another.";
 "audio.mac_microphone.error.output_unavailable" = "Select an available SayAll or BlackHole virtual microphone first.";
 "audio.mac_microphone.error.target_unavailable" = "The input location changed. Return to your text field and retry.";
-"audio.mac_microphone.error.capture" = "Capture or voice trigger failed. Please retry.";
-"audio.mac_microphone.error.interrupted" = "Voice input was interrupted. Please retry.";
-"audio.mac_microphone.error.timed_out" = "Preparation timed out. Please retry.";
+"audio.mac_microphone.error.capture" = "Voice capture or the voice trigger failed. Try again.";
+"audio.mac_microphone.error.interrupted" = "Voice input was interrupted. Try again.";
+"audio.mac_microphone.error.timed_out" = "Preparation timed out. Try again.";
 "audio.mac_microphone.error.accessibility" = "Allow Accessibility access in System Settings.";
 
 "audio.mac_microphone.armed" = "Standby";

@@ -126,7 +126,7 @@ struct LocalizationTests {
         #expect(english["keyboard.key.up"] == "Up")
         #expect(english["keyboard.key.down"] == "Down")
         #expect(english["about.support.feedback"] == "Feedback")
-        #expect(english["onboarding.remote.first_pairing.wake"] == "Hold TV for about 2 seconds until the white light at the bottom starts flashing.")
+        #expect(english["onboarding.remote.first_pairing.wake"] == "Hold the TV button for about 2 seconds until the white light at the bottom starts flashing.")
         #expect(english["onboarding.remote.first_pairing.pair"] == "Then hold Home + Menu together to enter Bluetooth pairing mode.")
         #expect(english["onboarding.remote.button_waiting_detail"] == "Press the center OK button or an arrow button. Do not press the microphone/voice button.")
         #expect(english["onboarding.remote.voice_button_mistake.title"] == "That was the voice button")
@@ -150,7 +150,7 @@ struct LocalizationTests {
         #expect(english["remote.device.model.apple_siri_remote_a2540"] == "Apple Remote (6th Generation)")
         #expect(english["siri_remote.activation.open_membership"] == "Unlock membership feature")
         #expect(english["remote.button.full.play_pause"] == "Play/Pause")
-        #expect(english["connection.web.title"] == "WeChat Mini Program SayAll")
+        #expect(english["connection.web.title"] == "SayAll WeChat Mini Program")
         #expect(
             english["connection.web.help_short"]?.contains("WeChat") == true
         )

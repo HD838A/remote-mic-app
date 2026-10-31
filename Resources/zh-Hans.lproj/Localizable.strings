@@ -394,8 +394,6 @@
 "connection.web.plus_required_title" = "此连接需要 Plus 会员";
 "connection.web.plus_required_detail" = "二维码已准备好，开通后即可在手机上连接。";
 "connection.web.plus_required_action" = "查看 Plus";
-"connection.web.test_bypass_title" = "测试模式：跳过会员权益检查";
-"connection.web.test_bypass_detail" = "测试包默认开启，无需登录或 Plus 会员即可连接。正式环境仍检查会员权限。";
 "audio.section.title" = "音频设置";
 "audio.voice_output.section_title" = "语音设备";
 "audio.output.title" = "输出设备";

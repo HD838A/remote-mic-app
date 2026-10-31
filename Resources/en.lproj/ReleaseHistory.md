@@ -3,7 +3,7 @@
 ## 2.0.0 (Pre-release)
 
 - Adds Common Phrases: insert frequently used text in one press, with editing and import/export.
-- Combination Actions support Shell and AppleScript scripts.
+- Macros can run Shell and AppleScript scripts.
 - Adds Button Profiles: save several setups and switch them with the frontmost app.
 - Official support for Apple Remote 6th generation (Lightning, A2540) and 7th generation (Type-C, A2854).
 - Apple Watch connects more reliably and supports Double Tap to start and stop recording.
@@ -14,7 +14,7 @@
 - The voice key adds Left and Right Option, for five trigger modes.
 - Xiaomi remotes warn as a single voice session approaches the 60-second limit.
 - Back up and restore a complete configuration.
-- About becomes a version centre and gains a feedback entry.
+- About becomes a version center and gains a feedback entry.
 - Diagnostic logs are encrypted and can be sent on request.
 - Remote cards show the system Bluetooth name; the menu bar icon can be hidden and dims when nothing is connected; the app icon can be switched.
 - Installers are now a single Installer PKG with a matching uninstaller.
@@ -75,14 +75,14 @@
 - Improved Bluetooth recovery after Mac wake and audio-failure diagnostics.
 - Added remote control of the macOS Command-Tab app switcher.
 - Added an optional rapid-press setting for non-repeatable actions, disabled by default.
-- Fixed the combination-action editor from consuming ordinary remote-button events.
+- Fixed the macro editor consuming ordinary remote-button events.
 - Added local original-recording storage and improved Reflections records when no editable input field is available.
 - Added Up and Down scroll actions for remote buttons.
 - Improved alignment of the language selector on the About page.
 
 ## 1.9.10 (Pre-release)
 
-- Combination Actions are now available by default, with no invitation code required to view, create, bind, or use them.
+- Macros are now available by default, with no invitation code required to view, create, bind, or use them.
 
 ## 1.9.9 (Pre-release)
 
@@ -121,12 +121,12 @@
 ## 1.9.3 (Pre-release)
 
 - First-run setup now keeps Typeless Fn-tap behavior in sync and can continue connection checks after a physical remote button has been recognized.
-- Combination Actions no longer require an invitation code and are directly available in builds that include the corresponding private module. Independent access restrictions for other invitation-only features remain unchanged.
+- Macros no longer require an invitation code and are available directly in builds that include the corresponding private module. Independent access restrictions for other invitation-only features remain unchanged.
 
 ## 1.9.1 (Pre-release)
 
 - Renamed the app bundle to SayAll.app and added migration from legacy Remote Mic.app and 无线麦.app installations.
-- Combination Actions can bind app launch, waiting, keyboard shortcuts, and input-field focus to remote buttons.
+- Macros can bind app launch, waiting, keyboard shortcuts, and input-field focus to remote buttons.
 - Added Reflections, an on-device voice history with undoable deletion. SayAll MCP remains off by default and provides read-only access when enabled.
 - Reworked first-run setup around explicitly compatible devices such as MiRemoteV 2ch and BlackHole 2ch, including real voice-input validation before completion.
 - Improved direct Apple Watch voice input and rapid restart after stopping. Full real-device scenarios remain under validation.
@@ -146,8 +146,8 @@
 
 ## 1.8.23 (Pre-release)
 
-- Fixed an issue that could cause 无线麦 SayAll to quit when opening Quick Commands from the sidebar.
-- Improved Quick Commands resource loading in installed builds so the page opens reliably after a fresh install or upgrade.
+- Fixed an issue that could cause 无线麦 SayAll to quit when opening Macros from the sidebar.
+- Improved Macros resource loading in installed builds so the page opens reliably after a fresh install or upgrade.
 
 ## 1.8.22 (Pre-release)
 
@@ -168,7 +168,7 @@
 ## 1.8.19 (Pre-release)
 
 - Added a dedicated Apple Watch entry to Connection & Voice, with on-demand nearby-device waiting and cancellation. Real-device validation of Apple Watch discovery, authorization, buttons, and microphone remains pending.
-- Added a Quick Commands preview for combining app launch, app wait, keyboard shortcut, and input-focus steps, then assigning them to remote buttons.
+- Added a Macros preview for combining app launch, app wait, keyboard shortcut, and input-focus steps, then assigning them to remote buttons.
 - Improved state restoration and error feedback for selected preview features, and fixed a possible unexpected exit when opening Settings for the first time from the final package.
 
 ## 1.8.12 (Pre-release)
@@ -193,7 +193,7 @@
 ## 1.8.9 (Pre-release)
 
 - Fixed the first Fn voice input sometimes doing nothing after a remote button launched or switched to an app. 无线麦 SayAll now waits for the target's editable input to be ready and preserves the beginning of speech during that wait.
-- If the target app closes, changes, takes too long, or focuses a sensitive field, the pending voice input is cancelled instead of being sent to the wrong window.
+- If the target app closes, changes, takes too long, or focuses a sensitive field, the pending voice input is canceled instead of being sent to the wrong window.
 
 ## 1.8.8 (Pre-release)
 
