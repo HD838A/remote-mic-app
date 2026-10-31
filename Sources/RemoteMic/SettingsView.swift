@@ -3873,13 +3873,7 @@ struct SettingsView: View {
 
     private var statisticsPage: some View {
         settingsPage {
-            HStack(spacing: 14) {
-                PageHeader(title: localization.text("statistics.page.title"))
-                Spacer(minLength: 20)
-                Label(localization.text("about.privacy.local_only"), systemImage: "lock")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.secondary)
-            }
+            PageHeader(title: localization.text("statistics.page.title"))
         } content: {
             VStack(spacing: 14) {
                 sharePanel(for: .statistics)
@@ -3922,7 +3916,7 @@ struct SettingsView: View {
                 systemImage: "keyboard",
                 title: localization.text("statistics.metric.total_button_count"),
                 value: localizedNumber(settings.usageStatistics(for: .total).buttonPressCount),
-                unit: localization.text("statistics.metric.count_unit")
+                unit: countUnit
             ),
             ProfileMetric(
                 id: "total-voice",
@@ -3936,7 +3930,7 @@ struct SettingsView: View {
                 systemImage: "chart.line.uptrend.xyaxis",
                 title: localization.text("statistics.metric.week_button_count"),
                 value: localizedNumber(settings.usageStatistics(for: .thisWeek).buttonPressCount),
-                unit: localization.text("statistics.metric.count_unit")
+                unit: countUnit
             ),
             ProfileMetric(
                 id: "longest-voice",
@@ -3950,6 +3944,13 @@ struct SettingsView: View {
                 unit: nil
             ),
         ]
+    }
+
+    /// Counter word such as “次”. English reads counts without one, so the key may be empty
+    /// and the surrounding rows skip the label entirely.
+    private var countUnit: String? {
+        let unit = localization.text("statistics.metric.count_unit")
+        return unit.isEmpty ? nil : unit
     }
 
     private var statisticsRankingPanel: some View {
@@ -3969,8 +3970,10 @@ struct SettingsView: View {
                         Text(localizedNumber(entry.count))
                             .foregroundStyle(.secondary)
                             .monospacedDigit()
-                        Text(localization.text("statistics.metric.count_unit"))
-                            .foregroundStyle(.secondary)
+                        if let countUnit {
+                            Text(countUnit)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
 
@@ -3985,8 +3988,10 @@ struct SettingsView: View {
                         Text(localizedNumber(entry.count))
                             .foregroundStyle(.secondary)
                             .monospacedDigit()
-                        Text(localization.text("statistics.metric.count_unit"))
-                            .foregroundStyle(.secondary)
+                        if let countUnit {
+                            Text(countUnit)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
 
@@ -4931,16 +4936,18 @@ struct SettingsView: View {
         let hours = totalSeconds / 3_600
         let minutes = totalSeconds % 3_600 / 60
         let seconds = totalSeconds % 60
+        // The four KPI cards share one row, so hour-scale totals must use the compact
+        // wording to stay complete inside the narrowest card.
         if hours > 0 {
             return String(
-                format: localization.text("usage.duration.hours_minutes"),
+                format: localization.text("usage.duration.compact_hours_minutes"),
                 locale: localization.locale,
                 arguments: [localizedNumber(UInt64(hours)), localizedNumber(UInt64(minutes))]
             )
         }
         if minutes > 0 {
             return String(
-                format: localization.text("usage.duration.minutes_seconds"),
+                format: localization.text("usage.duration.compact_minutes_seconds"),
                 locale: localization.locale,
                 arguments: [localizedNumber(UInt64(minutes)), localizedNumber(UInt64(seconds))]
             )
@@ -5945,8 +5952,9 @@ private struct ProfileMetricCard: View {
                         .font(.system(size: 22, weight: .semibold, design: .rounded))
                         .monospacedDigit()
                         .lineLimit(1)
-                        .minimumScaleFactor(0.75)
-                    if let unit {
+                        .minimumScaleFactor(0.7)
+                        .allowsTightening(true)
+                    if let unit, !unit.isEmpty {
                         Text(unit)
                             .font(.system(size: 12, weight: .medium))
                             .foregroundStyle(tint)

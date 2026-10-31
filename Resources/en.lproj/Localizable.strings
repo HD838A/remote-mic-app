@@ -593,7 +593,6 @@
 "about.preferences.language" = "App Language";
 "about.page.hero_subtitle" = "Version, preferences, and support for your wireless voice workspace";
 "about.page.hero_description" = "Turn your remote into an always-ready voice and shortcut controller for your Mac.";
-"about.privacy.local_only" = "Data stays on this Mac";
 "statistics.page.title" = "Profile";
 "statistics.page.subtitle" = "See your local usage at a glance";
 "statistics.summary.title" = "View By";
@@ -606,23 +605,24 @@
 "statistics.chart.last_seven_days" = "Last 7 Days";
 "statistics.chart.weekly_history" = "Recent 7 Weeks + Earlier";
 "statistics.chart.earlier" = "Earlier";
-"statistics.voice_ranking.title" = "Longest Voice Sessions";
+"statistics.voice_ranking.title" = "Longest Voice Inputs";
 "statistics.voice_ranking.description" = "Stored only on this Mac. Shows your 10 longest voice sessions.";
 "statistics.voice_ranking.empty" = "Complete a voice session to start your local ranking.";
 "statistics.metric.total_button_count" = "Total Button Presses";
 "statistics.metric.total_voice_duration" = "Total Speaking Time";
 "statistics.metric.week_button_count" = "Button Presses This Week";
-"statistics.metric.longest_voice" = "Longest Voice Session";
-"statistics.metric.count_unit" = "times";
+"statistics.metric.longest_voice" = "Longest Voice Input";
+// English reads counts without a counter word; only languages that need a unit fill this in.
+"statistics.metric.count_unit" = "";
 "statistics.ranking.title" = "Rankings";
 "statistics.ranking.actions" = "Most-Used Shortcuts and Actions";
 "statistics.ranking.buttons" = "Most-Used Remote Buttons";
-"statistics.ranking.voice_sessions" = "Longest Voice Sessions";
+"statistics.ranking.voice_sessions" = "Longest Voice Inputs";
 "statistics.ranking.unknown_app" = "Unknown App";
 "statistics.ranking.empty" = "No data to show yet.";
 "statistics.ranking.view_all" = "View all Reflections";
 "statistics.calendar.title" = "Usage Calendar";
-"statistics.calendar.hint" = "Click a day or record to open Reflections";
+"statistics.calendar.hint" = "Click a day or an entry to open Reflections";
 "statistics.calendar.summary" = "%@\nReflections: %@\nButton presses: %@\nSpeaking time: %@";
 "statistics.calendar.open_reflections" = "Open in Reflections";
 "about.configuration.title" = "Your Settings";
@@ -663,8 +663,8 @@
 "share.action" = "Share";
 "share.sidebar.accessibility_label" = "Share SayAll";
 "share.title" = "Share SayAll";
-"share.description" = "Let friends discover a simpler way to use a remote or phone for voice input on Mac.";
-"share.show_action" = "Show QR Code";
+"share.description" = "Invite friends to try voice input on their Mac with a remote or a phone.";
+"share.show_action" = "Show QR code";
 "share.hide_action" = "Hide";
 "share.card.title" = "Scan or copy the link";
 "share.card.description" = "Scan the QR code with a phone, or copy the same official website link.";
@@ -702,6 +702,8 @@
 "usage.duration.compact_hours" = "%1$@h";
 "usage.duration.compact_minutes" = "%1$@m";
 "usage.duration.compact_seconds" = "%1$@s";
+"usage.duration.compact_hours_minutes" = "%1$@h %2$@m";
+"usage.duration.compact_minutes_seconds" = "%1$@m %2$@s";
 "configuration.export.panel_title" = "Export Settings";
 "configuration.export.prompt" = "Export";
 "configuration.export.success" = "Configuration exported";
