@@ -1,5 +1,7 @@
 # Bug 记录
 
+- [Sparkle 更新组件停留在已知漏洞版本](./2026-11-01-sparkle-security-version.md)
+
 - [按键页控制器卡片到工具行留白过大且保存入口不右对齐](./2026-11-01-mapping-toolbar-spacing-and-save-alignment.md)
 
 - [发布校验拒绝有意留空的英文文案，导致无法打出任何正式包](./2026-11-01-release-verify-rejects-intentional-empty-copy.md)
