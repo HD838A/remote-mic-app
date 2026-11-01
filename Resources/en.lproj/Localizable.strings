@@ -248,11 +248,11 @@
 "custom_application.bindings.title" = "Buttons bound to it";
 "custom_application.bindings.empty" = "No button opens this app yet. Pick it under Open an App on the Buttons page.";
 "custom_application.bindings.go_mapping" = "Open Buttons";
-"custom_application.remove" = "Remove this app";
-"custom_application.remove_blocked" = "%d buttons still open it. Unbind them before removing.";
-"custom_application.remove_confirm_title" = "Remove “%@”?";
-"custom_application.remove_confirm_message" = "Its recorded input field and focus shortcut will be deleted. Buttons that open it are left as they are and will show “No app selected”.";
-"custom_application.remove_confirm_action" = "Remove";
+"custom_application.remove" = "Delete this app's setup";
+"custom_application.remove_blocked" = "%d buttons still open it. Unbind them before deleting its setup.";
+"custom_application.remove_confirm_title" = "Delete the setup for “%@”?";
+"custom_application.remove_confirm_message" = "This only deletes the setup SayAll keeps for this app (recorded input field, focus shortcut). The app itself is not modified or uninstalled. Buttons that open it stay as they are and will show “No app selected”.";
+"custom_application.remove_confirm_action" = "Delete setup";
 "custom_application.add" = "Add App";
 "custom_application.focus_strategy" = "Focus method";
 "custom_application.focus.none" = "Open app only";
