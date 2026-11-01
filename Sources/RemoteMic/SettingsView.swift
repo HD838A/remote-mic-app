@@ -2017,6 +2017,23 @@ struct SettingsView: View {
         return Set(RemoteButton.allCases.filter { !macroFeature.supportsProfileButton($0.rawValue) })
     }
 
+    /// 键位方案实际覆盖的按键名单，按固定顺序排列，方向键四颗合并成「方向键」。
+    ///
+    /// 名单来自私有组件的白名单（`supportsProfileButton`），换遥控器型号就会变；
+    /// 因此界面上的「10 个普通按键」既不能写死数量，也不能只报数量——用户无从知道是哪 10 个。
+    private var profileScopeItems: [ButtonProfileScopeItem] {
+        RemoteButton.profileScopeItems(
+            for: RemoteButton.allCases.filter { macroFeature.supportsProfileButton($0.rawValue) }
+        )
+    }
+
+    /// 纯文本形式的同一份名单，供作用域提示这类只能塞一句话的位置使用。
+    private var profileScopedButtonNames: String {
+        profileScopeItems
+            .map { $0.displayName(using: localization) }
+            .joined(separator: localization.text("common.list.separator"))
+    }
+
     #if SAYALL_SIRI_REMOTE_ENABLED && canImport(SayAllSiriRemote)
     private var profileScopeReservedSiriControlIDs: Set<String> {
         guard editingMappingProfileID != nil else { return [] }
@@ -2048,10 +2065,34 @@ struct SettingsView: View {
                 TextField(localization.text("button_mapping.save_as_profile.name"), text: $savingMappingProfileName)
                     .textFieldStyle(.roundedBorder)
             }
-            Text(localization.text("button_mapping.save_as_profile.note"))
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: 6) {
+                Text(localization.text("button_mapping.save_as_profile.note"))
+                    .fixedSize(horizontal: false, vertical: true)
+                if !profileScopeItems.isEmpty {
+                    Text(localization.text("button_mapping.save_as_profile.scope"))
+                    LazyVGrid(
+                        columns: [
+                            GridItem(.adaptive(minimum: 82), spacing: 6, alignment: .leading),
+                        ],
+                        alignment: .leading,
+                        spacing: 6
+                    ) {
+                        ForEach(profileScopeItems, id: \.self) { item in
+                            HStack(spacing: 4) {
+                                Image(systemName: item.systemImage)
+                                    .frame(width: 12)
+                                Text(item.displayName(using: localization))
+                                    .lineLimit(1)
+                            }
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 3)
+                            .background(.quaternary, in: RoundedRectangle(cornerRadius: 5))
+                        }
+                    }
+                }
+            }
+            .font(.system(size: 11))
+            .foregroundStyle(.secondary)
             Toggle(localization.text("button_mapping.save_as_profile.switch"),
                    isOn: $savingMappingProfileSwitches)
                 .toggleStyle(.switch)
@@ -2552,12 +2593,15 @@ struct SettingsView: View {
                 Group {
                     ScrollView(.vertical, showsIndicators: false) {
                         VStack(spacing: 16) {
-                            if editingMappingProfileID != nil {
+                            if editingMappingProfileID != nil, !profileScopedButtonNames.isEmpty {
                                 VStack(alignment: .leading, spacing: 3) {
-                                    Text(localization.text("button_mapping.profile_scope_hint"))
-                                        .font(.system(size: 11))
-                                        .foregroundStyle(.secondary)
-                                        .fixedSize(horizontal: false, vertical: true)
+                                    Text(String(
+                                        format: localization.text("button_mapping.profile_scope_hint"),
+                                        profileScopedButtonNames
+                                    ))
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
                                     if isMappingProfilePreviewOnly {
                                         // 选中方案只是浏览：说清「为什么现在改不了」，别让禁用看起来像故障。
                                         Text(localization.text(selectedMappingProfileIsEditable

@@ -210,7 +210,7 @@ struct RemoteMappingCanvas: View {
         let reserved = reservedButtons.contains(button)
         return VStack(alignment: .leading, spacing: 5) {
             HStack(spacing: 6) {
-                Image(systemName: symbol(for: button))
+                Image(systemName: button.systemImage)
                     .frame(width: 14)
                 Text(button.displayName(using: localization))
                     .font(.system(size: 13, weight: .semibold))
@@ -323,28 +323,6 @@ struct RemoteMappingCanvas: View {
             .accessibilityElement(children: .combine)
         }
         .buttonStyle(.plain)
-    }
-
-    private func symbol(for button: RemoteButton) -> String {
-        switch button {
-        case .power: return "power"
-        case .up: return "chevron.up"
-        case .left: return "chevron.left"
-        case .ok: return "circle.circle"
-        case .right: return "chevron.right"
-        case .down: return "chevron.down"
-        case .back: return "arrow.uturn.backward"
-        case .volumeUp: return "speaker.plus"
-        case .home: return "house"
-        case .volumeDown: return "speaker.minus"
-        case .menu: return "line.3.horizontal"
-        case .tv: return "tv"
-        case .playPause: return "playpause.fill"
-        case .mute: return "speaker.slash"
-        // 这三颗键只属于 Chromecast 遥控器，由它自己的画布渲染；小米画布的卡片集合是
-        // `RemoteButton.xiaomiCases`，不会出现它们，这里只是满足枚举穷尽性。
-        case .youtube, .netflix, .input: return "questionmark"
-        }
     }
 
     private struct Metrics {

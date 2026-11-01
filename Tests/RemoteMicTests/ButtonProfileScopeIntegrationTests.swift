@@ -31,3 +31,36 @@ struct ButtonProfileScopeIntegrationTests {
     }
 }
 #endif
+
+/// 「保存为键位方案」的覆盖名单必须在界面上点名具体按键。
+/// 旧文案写「10 个普通按键」，用户无从知道是哪 10 个，也不知道菜单键不在其中。
+@Suite("Button profile scope summary")
+struct ButtonProfileScopeSummaryTests {
+    @Test func mergesTheFourDirectionsIntoOneEntry() {
+        let items = RemoteButton.profileScopeItems(for: [
+            .power, .up, .down, .left, .right, .ok, .back, .home, .volumeUp, .volumeDown,
+        ])
+        #expect(items == [
+            .button(.power), .directions, .button(.ok), .button(.back),
+            .button(.home), .button(.volumeUp), .button(.volumeDown),
+        ])
+    }
+
+    @Test func listsDirectionsIndividuallyWhenOnlySomeAreSupported() {
+        #expect(RemoteButton.profileScopeItems(for: [.up, .ok]) == [.button(.up), .button(.ok)])
+    }
+
+    @Test func keepsUnorderedButtonsAtTheEnd() {
+        #expect(RemoteButton.profileScopeItems(for: [.menu, .power]) == [.button(.power), .button(.menu)])
+    }
+
+    @Test func reportsNothingWhenNoButtonIsSupported() {
+        #expect(RemoteButton.profileScopeItems(for: []).isEmpty)
+    }
+
+    @Test func reusesTheMappingPageSymbols() {
+        #expect(RemoteButton.power.systemImage == "power")
+        #expect(RemoteButton.ok.systemImage == "circle.circle")
+        #expect(ButtonProfileScopeItem.directions.systemImage == "dpad")
+    }
+}
