@@ -36,6 +36,49 @@
 仍未验证：Apple 芯片回归、实体键盘按住 Fn 的组合、语音键 Fn 注入期间触发快捷键，以及
 PageUp / PageDown、End、Forward Delete 四个同族键位。
 
+## 2026-10-29 失效 Fn 状态、Help 键位与 Fn 层诊断分类
+
+适用分支：`codex/shortcut-stale-fn-and-help-flag-20261029`。
+本次改三处注入侧行为，遥控器按键、原生动作与普通按键注入不变。
+
+1. 事件过滤器被系统禁用（安全输入、回调超时）后复位 Fn 状态，不再保留失效的
+   `pressed`。此前若松开的 Fn 边沿正好落在禁用窗口里，之后每个快捷键都会带上 Fn，
+   直到下一次真实按下 Fn。
+2. `Help` / `Insert` 用法写进硬件快照的 Help 位不再并入合成事件；大小写锁定位仍保留，
+   合成字母不会退化成小写。
+3. 裸 Home / End / Help / Forward Delete 补齐 `primary_kind`（`home`、`end`、`help`、
+   `forward_delete`，翻页仍是 `page_navigation`），带 Command 的快捷键仍记
+   `command_shortcut`。
+
+### 手动验收
+
+1. 记录来源提交、Build 和 macOS 版本，确认输入监控与辅助功能已授权，连接遥控器并退出按键捕获模式。
+2. **状态复位**：按住语音键（Fn 模式）后把焦点切到需要安全输入的密码框，等日志出现
+   `HID FILTER phase=disabled`，松开语音键，再触发任意不含 Fn 的快捷键。
+   该次 `SHORTCUT SEQUENCE phase=requested` 不应出现 `hardware_function_state=pressed`；
+   应看到 `hardware_function_state=unobserved`，且逐事件的 `event_function=false`。
+3. **Help 位**：若键盘有 Help / Insert 键，用它触发一次快捷键，逐事件 `event_flags` 不应含
+   `4194304`（`0x400000`）。没有该键可跳过，本次不把它当作已验收项。
+4. **诊断分类**：录一个只有 End 或 Forward Delete、没有修饰键的快捷键并触发一次，
+   应出现 `primary_kind=end` / `primary_kind=forward_delete` 的请求行、逐事件行和观察行。
+5. 回归对照：Command + L、Control + 方向键、裸方向键、语音 Fn 与长按连发保持原行为。
+
+### 判定口径
+
+- 复位后真实按住的 Fn 不再被信任，直到再次按下 Fn；这是刻意的取舍，日志里表现为
+  `hardware_function_state=unobserved`。若用户在此期间仍期望 Fn 组合生效，属于已知边界。
+- `HID FILTER phase=disabled` 本身不是失败，只说明监听中断过；必须结合紧随其后的
+  `phase=requested` 状态字段判断有没有留下失效状态。
+- 观察行只说明事件到达会话监听点并被放行，不代表目标 App 已执行。
+
+### 自动化
+
+`swift test --disable-keychain --filter 'ShortcutLifecycleTests'` 通过 35 项，覆盖禁用后复位、
+Help 位不并入、大小写锁定保留、Fn 层键位分类与裸 End 的完整事务；
+`swift test --disable-keychain` 通过 1085 项、79 个套件。
+这些结果只证明宿主投递的 flags 与日志字段，Apple 芯片真机、实体键盘 Fn 与实体
+Help 键仍待用户验收。
+
 ## 2026-10-24 Control 方向键诊断
 
 适用分支：`codex/shortcut-system-diagnostics-20261024`。
