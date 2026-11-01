@@ -634,6 +634,7 @@ struct SettingsView: View {
         initialMappingEditingButton: RemoteButton? = nil,
         initialMappingHoldEditingButton: RemoteButton? = nil,
         initialMappingEditingTrigger: ButtonTrigger = .singleClick,
+        initialMappingProfileID: UUID? = nil,
         initialShortcutPickerShowsKeyboard: Bool = false,
         initialMappingScrollsToGestureTiming: Bool = false,
         initialMappingVoiceSettingsPresented: Bool = false,
@@ -647,6 +648,7 @@ struct SettingsView: View {
         privateFeature = model.privateFeature
         macroFeature = model.macroFeature
         membershipFeature = model.membershipFeature
+        _editingMappingProfileID = State(initialValue: initialMappingProfileID)
         loginItemService = model.loginItemService
         self.updateInformation = updateInformation
         self.hardwareAnnouncements = hardwareAnnouncements

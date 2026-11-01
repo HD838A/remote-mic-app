@@ -275,6 +275,16 @@ final class MacroFeatureIntegration: ObservableObject {
         #endif
     }
 
+    /// 截图/测试用：渲染前同步载入方案。
+    ///
+    /// `SettingsView` 的 `onAppear` 会调用 `prepareMappingDevice`，而它在未加载时
+    /// 会创建默认方案并立刻保存，把磁盘上已有方案冲掉。先同步载入即可避免。
+    func loadProfilesForScreenshot() {
+        #if canImport(SayAllButtonProfiles) && SAYALL_SCREENSHOT_PROFILE_SEED
+        try? buttonProfilesFeature.loadProfilesSynchronously()
+        #endif
+    }
+
     /// 方案绑定的显示文案，与键位方案页共用私有组件里同一份格式化结果。
     ///
     /// 返回 nil 有两种含义，调用方都应当回落到基础映射：
