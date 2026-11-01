@@ -6,6 +6,25 @@ enum RemoteMappingSide: Equatable {
     case right
 }
 
+/// 画布按键卡的共享视觉规格。
+///
+/// 三种遥控器的画布由三份代码绘制：宿主的小米画布、私有包的 Siri 与 Chromecast 画布。
+/// 按住胶囊以前各自写死样式——2026-10-31 只把宿主侧改成与三个动作格子一致的灰底，
+/// 另外两处仍是浅橙底，于是同一页面切到不同遥控器，「按住」长得不一样。
+/// 规格集中在这里，私有画布必须按 `Testing/HardwareCompatibilityContract.md`
+/// 的「按键设置页共享合同」给出同样的数值，不得各自另写一套。
+enum RemoteMappingCardChrome {
+    enum HoldChip {
+        static let fontSize: CGFloat = 12
+        static let fontWeight = Font.Weight.semibold
+        static let horizontalPadding: CGFloat = 6
+        static let verticalPadding: CGFloat = 2
+        static let cornerRadius: CGFloat = 5
+        /// 与单击/双击/长按三个动作格子同底：中性灰，不用强调色。
+        static let background = AnyShapeStyle(.quaternary)
+    }
+}
+
 struct RemoteMappingPlacement: Identifiable {
     let button: RemoteButton
     let side: RemoteMappingSide
@@ -221,12 +240,20 @@ struct RemoteMappingCanvas: View {
                     onEditHold(button)
                 } label: {
                     Text(holdSummary(button))
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.system(
+                            size: RemoteMappingCardChrome.HoldChip.fontSize,
+                            weight: RemoteMappingCardChrome.HoldChip.fontWeight
+                        ))
                         .lineLimit(1)
                         .truncationMode(.tail)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(.quaternary, in: RoundedRectangle(cornerRadius: 5))
+                        .padding(.horizontal, RemoteMappingCardChrome.HoldChip.horizontalPadding)
+                        .padding(.vertical, RemoteMappingCardChrome.HoldChip.verticalPadding)
+                        .background(
+                            RemoteMappingCardChrome.HoldChip.background,
+                            in: RoundedRectangle(
+                                cornerRadius: RemoteMappingCardChrome.HoldChip.cornerRadius
+                            )
+                        )
                 }
                 .buttonStyle(.plain)
                 .help("\(button.displayName(using: localization)) · \(holdSummary(button))")

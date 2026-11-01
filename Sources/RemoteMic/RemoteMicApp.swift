@@ -355,9 +355,8 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
                 } else {
                     self.showSettings()
                 }
-                if completedUpdate {
-                    self.showUpdateCompletedAlert()
-                }
+                // 升级后不再弹「已成功更新到版本」确认框：完成更新的人已经知道版本变了，
+                // 弹窗只是挡住刚打开的窗口。主窗口与权限修复照旧自动呈现。
             }
         }
     }
@@ -1299,24 +1298,6 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         if error != nil, updateInformation.state == .checking {
             updateInformation.setUnavailable()
         }
-    }
-
-    private func showUpdateCompletedAlert() {
-        guard let window = settingsWindowController?.window else { return }
-        let version = Bundle.main.object(
-            forInfoDictionaryKey: "CFBundleShortVersionString"
-        ) as? String ?? localization.text("common.value.unknown")
-        let alert = NSAlert()
-        alert.messageText = localization.text("update.completed.title")
-        alert.informativeText = String(
-            format: localization.text("update.completed.message"),
-            locale: localization.locale,
-            arguments: [version]
-        )
-        alert.addButton(withTitle: localization.text("common.action.ok"))
-        NSApp.activate(ignoringOtherApps: true)
-        window.makeKeyAndOrderFront(nil)
-        alert.beginSheetModal(for: window, completionHandler: nil)
     }
 
     private func setDockIconVisible(_ isVisible: Bool) {

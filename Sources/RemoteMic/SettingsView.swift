@@ -712,6 +712,7 @@ struct SettingsView: View {
             minHeight: minimumContentSize.height
         )
         .onAppear {
+            model.setMappingPageVisible(selectedSection == .mapping)
             if selectedSection == .mapping {
                 model.selectDefaultMappingRemoteIfAvailable()
             }
@@ -723,6 +724,7 @@ struct SettingsView: View {
             routePendingButtonProfileImportIfNeeded()
         }
         .onChange(of: selectedSection) { section in
+            model.setMappingPageVisible(section == .mapping)
             if isCapturingMacMicrophoneShortcut { endMacMicrophoneShortcutCapture() }
             if section != .mapping {
                 model.cancelButtonGestureLearning(reason: "left_mapping_page")
@@ -739,6 +741,7 @@ struct SettingsView: View {
             }
         }
         .onDisappear {
+            model.setMappingPageVisible(false)
             endMacMicrophoneShortcutCapture()
             model.cancelButtonGestureLearning(reason: "settings_closed")
             macroFeature.setEditorActive(false)
@@ -3047,15 +3050,48 @@ struct SettingsView: View {
             let cards = HStack(spacing: 8) {
                 ForEach(visibleProfiles) { profile in
                     remoteDeviceCard(profile)
+                        .id(profile.id)
                 }
             }
             ViewThatFits(in: .horizontal) {
                 cards.fixedSize(horizontal: true, vertical: false)
-                ScrollView(.horizontal, showsIndicators: false) {
-                    cards
+                ScrollViewReader { proxy in
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        cards
+                    }
+                    // 三款遥控器同时在线时卡片行放不下：选中的那张可能在视口之外（Chromecast
+                    // 排最后，最容易被完全挡住），用户看到的画布就和顶部高亮对不上。卡片行
+                    // 必须自己把当前选中的那张滚进视野。
+                    .onAppear { revealSelectedRemoteCard(using: proxy) }
+                    .onChange(of: settings.selectedRemoteProfileID) { _ in
+                        revealSelectedRemoteCard(using: proxy, animated: true)
+                    }
+                    .onChange(of: visibleProfiles.map(\.id)) { _ in
+                        revealSelectedRemoteCard(using: proxy)
+                    }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .trailing)
+        }
+    }
+
+    /// 把当前选中的遥控器卡片滚进设备选择器的可见范围。
+    private func revealSelectedRemoteCard(
+        using proxy: ScrollViewProxy,
+        animated: Bool = false
+    ) {
+        guard let selectedProfileID = settings.selectedRemoteProfileID,
+              settings.remoteDeviceProfiles.contains(where: { $0.id == selectedProfileID })
+        else { return }
+        // 首帧的布局还没完成，立刻 scrollTo 会被丢弃；等一次主队列再滚。
+        DispatchQueue.main.async {
+            if animated {
+                withAnimation(.easeInOut(duration: 0.18)) {
+                    proxy.scrollTo(selectedProfileID, anchor: .center)
+                }
+            } else {
+                proxy.scrollTo(selectedProfileID, anchor: .center)
+            }
         }
     }
 
@@ -3110,6 +3146,7 @@ struct SettingsView: View {
         return HStack(alignment: .center, spacing: 10) {
             VStack(alignment: .leading, spacing: 5) {
                 Button {
+                    model.noteManualRemoteProfileSelection()
                     model.selectRemoteProfile(profile.id)
                 } label: {
                     VStack(alignment: .leading, spacing: 5) {
@@ -3158,6 +3195,7 @@ struct SettingsView: View {
                 .fill(selected ? Color.accentColor.opacity(0.13) : Color.primary.opacity(0.045))
                 .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 .onTapGesture {
+                    model.noteManualRemoteProfileSelection()
                     model.selectRemoteProfile(profile.id)
                 }
                 .accessibilityHidden(true)

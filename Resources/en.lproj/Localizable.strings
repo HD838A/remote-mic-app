@@ -694,8 +694,6 @@
 "about.preferences.launch_at_login_update_failed" = "Couldn’t update the login item. Try again.";
 "about.preferences.launch_at_login_open_system_settings" = "Open Login Items Settings";
 "about.preferences.language_description" = "Choose the app interface language.";
-"update.completed.title" = "SayAll Updated";
-"update.completed.message" = "Successfully updated to version %1$@.";
 "update.prerelease.feed_unavailable.title" = "Unable to Check Pre-release Updates";
 "update.prerelease.feed_unavailable.message" = "The latest candidate information is unavailable. Check your network and try again. Stable updates are unaffected.";
 "usage.duration.hours_minutes" = "%1$@ hr %2$@ min";

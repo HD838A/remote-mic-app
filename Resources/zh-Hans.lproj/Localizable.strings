@@ -693,8 +693,6 @@
 "about.preferences.launch_at_login_update_failed" = "无法更新登录项，请重试。";
 "about.preferences.launch_at_login_open_system_settings" = "打开登录项设置";
 "about.preferences.language_description" = "选择应用界面语言。";
-"update.completed.title" = "无线麦 SayAll 已更新";
-"update.completed.message" = "已成功更新到版本 %1$@。";
 "update.prerelease.feed_unavailable.title" = "暂时无法检查预发布版本";
 "update.prerelease.feed_unavailable.message" = "无法取得最新候选版本信息，请检查网络后重试。稳定版更新源不受影响。";
 "usage.duration.hours_minutes" = "%1$@ 小时 %2$@ 分钟";

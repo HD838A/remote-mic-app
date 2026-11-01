@@ -152,6 +152,98 @@ struct SettingsPageRegressionTests {
         #expect(!hardwarePage.contains("selectDefaultMappingRemoteIfAvailable"))
     }
 
+    @Test func mappingPageReappliesTheXiaomiDefaultAfterLateBluetoothReadiness() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let modelSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
+            encoding: .utf8
+        )
+
+        // 启动时设置窗口常先于蓝牙就绪打开，那一刻只能得到 xiaomi_unavailable；
+        // 小米 ready 之后必须再判一次默认画布，否则页面永远停在 Chromecast。
+        let readyBranch = try #require(modelSource.range(
+            of: "if case .ready = state {\n            refreshRemoteDeviceNames(reason: .connection)"
+        ))
+        let readyRemainder = modelSource[readyBranch.lowerBound...]
+        let readyEnd = try #require(readyRemainder.range(of: "\n        }"))
+        #expect(readyRemainder[..<readyEnd.upperBound].contains(
+            "applyDefaultMappingRemoteAfterConnectionChange()"
+        ))
+
+        // Chromecast 的「连接即选中」必须经过统一策略：已连接的小米不能被抢占。
+        let ensureStart = try #require(modelSource.range(
+            of: "private func ensureChromecastProfile() -> UUID {"
+        ))
+        let ensureRemainder = modelSource[ensureStart.upperBound...]
+        let ensureEnd = try #require(ensureRemainder.range(
+            of: "private var hasConnectedXiaomiProfile"
+        ))
+        #expect(ensureRemainder[..<ensureEnd.lowerBound].contains(
+            "RemoteDeviceNamePolicy.shouldAdoptConnectionSelection("
+        ))
+
+        // 用户手动点设备卡之后，连接事件不得把画布抢回小米。
+        let settingsSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+        #expect(settingsSource.contains("model.noteManualRemoteProfileSelection()"))
+        // 补优选只在按键页可见时发生：其他页面的编辑不能被自动切换打断。
+        #expect(modelSource.contains("guard isMappingPageVisible else {"))
+        #expect(settingsSource.contains("model.setMappingPageVisible(selectedSection == .mapping)"))
+    }
+
+    @Test func remoteSelectorKeepsTheSelectedCardInView() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+        let selectorStart = try #require(source.range(of: "private func remoteDeviceSelector"))
+        let selectorEnd = try #require(source.range(
+            of: "private func remoteDeviceCard",
+            range: selectorStart.upperBound..<source.endIndex
+        ))
+        let selectorSource = source[selectorStart.lowerBound..<selectorEnd.lowerBound]
+
+        // 三款遥控器同时在线时卡片行放不下；选中的 Chromecast 排在最后，
+        // 不主动滚动就完全看不见，用户会以为画布和顶部高亮对不上。
+        #expect(selectorSource.contains("ScrollViewReader { proxy in"))
+        #expect(selectorSource.contains(".id(profile.id)"))
+        #expect(selectorSource.contains("revealSelectedRemoteCard(using: proxy"))
+        #expect(selectorSource.contains(".onChange(of: settings.selectedRemoteProfileID)"))
+        #expect(source.contains("proxy.scrollTo(selectedProfileID, anchor: .center)"))
+    }
+
+    @Test func holdChipUsesTheSharedCanvasChrome() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let canvasSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/RemoteMappingCanvas.swift"),
+            encoding: .utf8
+        )
+
+        // 三种画布的「按住」胶囊必须是同一份规格，不能在各自画布里再写一遍数值。
+        #expect(canvasSource.contains("enum RemoteMappingCardChrome"))
+        #expect(canvasSource.contains("static let background = AnyShapeStyle(.quaternary)"))
+        let chipStart = try #require(canvasSource.range(of: "Text(holdSummary(button))"))
+        let remainder = canvasSource[chipStart.lowerBound...]
+        let chipEnd = try #require(remainder.range(of: ".background("))
+        let chip = remainder[..<chipEnd.upperBound]
+        #expect(chip.contains("RemoteMappingCardChrome.HoldChip"))
+        #expect(!chip.contains("size: 12"))
+        #expect(!chip.contains("padding(.horizontal, 6)"))
+        #expect(!chip.contains("cornerRadius: 5"))
+    }
+
     @Test func settingsSidebarAndPageUseTheSameBackgroundColor() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
