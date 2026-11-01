@@ -16,6 +16,22 @@
 
 仅验证内部键位方案而不测试会员时，使用私有 SwiftPM 根 Package，并显式设置 `SAYALL_ENABLE_BUTTON_PROFILES=1`。该模式不得设置 `SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH`。公开宿主不复制私有源码。
 
+## 客户端请求证明密钥
+
+内部构建通过环境变量 `SAYALL_CLIENT_PROOF_KEY` 传入会员服务的客户端请求证明密钥。构建脚本把它写进**最终产物**的 `Info.plist`，键名 `SayAllClientProofKey`，与诊断公钥走同一条注入路径：`Resources/Info.plist` 源文件保持干净，值不经过命令行参数。
+
+- 值是**单平台的 43 字符密钥**（`macos` 那一条），不是整份 JSON。服务端按平台从自己的 JSON 里取同一字符串，两边都把可打印字符的 UTF-8 字节直接用于 HMAC，任何一端多做一次 Base64 解码都会导致签名恒不匹配。
+- 原文只存在于私有 `sayall-membership-ops` 的统一 age 密文（`PRODUCTION_CLIENT_PROOF_KEYS` / `STAGING_CLIENT_PROOF_KEYS` 的 `macos` 字段）和本机环境变量，不得写入本仓库任何文件。
+- 不设置该变量时产物不含此键，客户端请求不带证明。服务端 `CLIENT_PROOF_MODE=off` 下没有影响；切到 `log` 会记录满屏 `missing`，切到 `enforce` 会拒掉新安装注册。**切 `enforce` 之前必须确认内测用户装到的包已经带这个键。**
+- 内部构建可加 `REQUIRE_CLIENT_PROOF_KEY=1`，让 `scripts/verify-app.sh` 在产物缺键或长度不是 43 时失败。
+
+```bash
+SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH=/path/to/prepared-private-artifact-package \
+SAYALL_CLIENT_PROOF_KEY="$SAYALL_CLIENT_PROOF_KEY" \
+REQUIRE_CLIENT_PROOF_KEY=1 \
+scripts/build-app.sh
+```
+
 ## 自动化与构建命令
 
 公开构建不得依赖私有 Package：
