@@ -3,7 +3,7 @@ import Foundation
 import PackageDescription
 
 var packageDependencies: [Package.Dependency] = [
-    .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.9.4"),
+    .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.9.6"),
 ]
 let privateSwiftPMEnabled = ProcessInfo.processInfo.environment[
     "SAYALL_ENABLE_PRIVATE_SWIFTPM"
