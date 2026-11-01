@@ -2372,16 +2372,23 @@ struct SettingsView: View {
                 .padding(.top, 8)
                 .padding(.bottom, 5)
                 .background(Color(nsColor: .controlBackgroundColor))
-                // 内容滚到工具行下面后给一条下边缘阴影，明确「上面这条是固定的」。
-                .shadow(
-                    // 深色背景上同样的黑色阴影几乎看不见，按外观加重一档。
-                    color: .black.opacity(
-                        mappingContentIsScrolled ? (colorScheme == .dark ? 0.55 : 0.26) : 0
-                    ),
-                    radius: 7,
-                    x: 0,
-                    y: 2
-                )
+                // 内容滚到工具行下面后，只在下边缘投影，明确「上面这条是固定的」。
+                // 直接给整行加 .shadow 会四条边一起投；这里用一条只向下的渐变代替。
+                .background(alignment: .bottom) {
+                    LinearGradient(
+                        colors: [
+                            // 深色背景上同样的黑色阴影几乎看不见，按外观加重一档。
+                            .black.opacity(colorScheme == .dark ? 0.32 : 0.10),
+                            .black.opacity(0)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .frame(height: 10)
+                    .offset(y: 10)
+                    .opacity(mappingContentIsScrolled ? 1 : 0)
+                    .allowsHitTesting(false)
+                }
                 // 不抬高层级时阴影会被后绘制的滚动内容盖住。
                 .zIndex(1)
 
