@@ -1460,10 +1460,20 @@ struct SettingsPageRegressionTests {
         #expect(source.contains("connection.voice_fn_tap.hint_short"))
         #expect(source.contains("ButtonActionCategory.allCases"))
         #expect(source.contains("MappingActionFilter.visibleCases"))
-        #expect(source.contains("[.basicKeys, .systemAndMedia, .custom, .commonPhrases, .applications, .applicationFocus]"))
+        #expect(source.contains("[.basicKeys, .systemAndMedia, .custom, .commonPhrases, .applications]"))
         #expect(source.contains("mappingActionFilterControl"))
-        #expect(source.contains("applicationFocusEditor(configured: configured)"))
         #expect(source.contains("customApplicationTargetPicker("))
+        // 聚焦方式与滚动区域已迁到独立的「APP 适配」页，按键编辑区只留只读状态与跳转。
+        #expect(source.contains("applicationsPage"))
+        #expect(source.contains("custom_application.go_configure"))
+        #expect(source.contains("applicationBindingSection"))
+        // APP 档案必须能移除，且移除前要有二次确认与绑定检查。
+        #expect(source.contains("removeCustomApplicationProfile"))
+        #expect(source.contains("custom_application.remove_blocked"))
+        #expect(source.contains("custom_application.remove_confirm_title"))
+        #expect(source.contains("settings.section.applications"))
+        #expect(!source.contains("applicationFocusEditor("))
+        #expect(!source.contains("applicationFocusProfileID"))
         #expect(source.contains("custom_application.focus.scope_note"))
         // 「App 输入框和滚动」只切换正在配置的 App，不得改写当前按键动作。
         #expect(!source.contains("bindCustomApplication("))
@@ -1990,6 +2000,7 @@ struct SettingsPageRegressionTests {
             membershipVisible: true
         ) == [
             .mapping,
+            .applications,
             .macros,
             .buttonProfiles,
             .membership,
