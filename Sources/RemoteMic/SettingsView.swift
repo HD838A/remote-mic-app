@@ -4318,16 +4318,16 @@ struct SettingsView: View {
     }
 
     private var applicationsPage: some View {
-        ScrollView(.vertical, showsIndicators: false) {
+        settingsPage {
+            VStack(alignment: .leading, spacing: 6) {
+                PageHeader(title: localization.text("settings.section.applications"))
+                Text("custom_application.page.subtitle")
+                    .font(.system(size: 13))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        } content: {
             VStack(alignment: .leading, spacing: 14) {
-                VStack(alignment: .leading, spacing: 6) {
-                    PageHeader(title: localization.text("settings.section.applications"))
-                    Text("custom_application.page.subtitle")
-                        .font(.system(size: 13))
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
                 if settings.customApplicationProfiles.isEmpty {
                     applicationEmptyPanel
                 } else {
@@ -4335,9 +4335,6 @@ struct SettingsView: View {
                     applicationDetailPanel
                 }
             }
-            .padding(.horizontal, 22)
-            .padding(.top, 18)
-            .padding(.bottom, 22)
             .frame(maxWidth: .infinity, alignment: .topLeading)
         }
     }
