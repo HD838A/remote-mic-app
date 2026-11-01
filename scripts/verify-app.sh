@@ -340,6 +340,22 @@ if (
     raise SystemExit("SayAllSentryDSN is not a valid protected Sentry DSN")
 PY
 fi
+# 会员客户端证明密钥只在内部构建里出现；公开构建没有这个字段，也不应报错。
+if plutil -type SayAllClientProofKey "$PLIST" >/dev/null 2>&1; then
+  SAYALL_CLIENT_PROOF_KEY="$(plutil -extract SayAllClientProofKey raw -expect string -o - "$PLIST")"
+else
+  SAYALL_CLIENT_PROOF_KEY=""
+fi
+if [[ "${REQUIRE_CLIENT_PROOF_KEY:-0}" == "1" && -z "$SAYALL_CLIENT_PROOF_KEY" ]]; then
+  print -u2 "App is missing the required client proof key"
+  exit 1
+fi
+# 该字段是单平台的 43 字符密钥，不是整份 JSON。传错时服务端只会回笼统的
+# client_proof_invalid，现象与签名算法不符一模一样，所以在产物侧先拦住。
+if [[ -n "$SAYALL_CLIENT_PROOF_KEY" && ${#SAYALL_CLIENT_PROOF_KEY} -ne 43 ]]; then
+  print -u2 "SayAllClientProofKey must be the 43-character per-platform key, not the whole JSON"
+  exit 1
+fi
 SAYALL_AI_INCLUDED="$(plutil -extract SayAllAIIncluded raw -o - "$PLIST" 2>/dev/null || true)"
 if [[ "$SAYALL_AI_INCLUDED" == "true" ]]; then
   SAYALL_AI_RESOURCE_BUNDLE="$APP/Contents/Resources/SayAllAI_SayAllAI.bundle"

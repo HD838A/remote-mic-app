@@ -34,6 +34,7 @@ SAYALL_SIRI_REMOTE_INCLUDED=false
 SAYALL_CHROMECAST_INCLUDED=false
 SAYALL_MAC_REMOTE_INCLUDED=false
 SAYALL_DIAGNOSTIC_PUBLIC_KEY_BASE64="${SAYALL_DIAGNOSTIC_PUBLIC_KEY_BASE64:-}"
+SAYALL_CLIENT_PROOF_KEY="${SAYALL_CLIENT_PROOF_KEY:-}"
 REMOTE_MIC_SENTRY_DSN="${REMOTE_MIC_SENTRY_DSN:-}"
 SAYALL_TEST_BUTTON_PROFILES_FREE="${SAYALL_TEST_BUTTON_PROFILES_FREE:-0}"
 SAYALL_BUILD_CHANNEL="${SAYALL_BUILD_CHANNEL:-}"
@@ -694,6 +695,14 @@ fi
 plutil -remove SayAllDiagnosticPublicKey "$APP_DIR/Contents/Info.plist" 2>/dev/null || true
 if [[ -n "$SAYALL_DIAGNOSTIC_PUBLIC_KEY_BASE64" ]]; then
   plutil -insert SayAllDiagnosticPublicKey -string "$SAYALL_DIAGNOSTIC_PUBLIC_KEY_BASE64" \
+    "$APP_DIR/Contents/Info.plist"
+fi
+# 会员服务的客户端请求证明密钥。与诊断公钥同一条路径：只在最终产物的 Info.plist 里出现，
+# 不写入仓库中的 Info.plist 源文件，也不经过命令行参数。未提供时留空，客户端请求就不带证明，
+# 服务端在 `CLIENT_PROOF_MODE=off` 下不受影响。
+plutil -remove SayAllClientProofKey "$APP_DIR/Contents/Info.plist" 2>/dev/null || true
+if [[ -n "$SAYALL_CLIENT_PROOF_KEY" ]]; then
+  plutil -insert SayAllClientProofKey -string "$SAYALL_CLIENT_PROOF_KEY" \
     "$APP_DIR/Contents/Info.plist"
 fi
 plutil -remove SayAllSentryDSN "$APP_DIR/Contents/Info.plist" 2>/dev/null || true
