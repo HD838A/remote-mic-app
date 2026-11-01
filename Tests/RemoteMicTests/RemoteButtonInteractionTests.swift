@@ -519,10 +519,11 @@ struct RemoteButtonInteractionTests {
         #expect(learner.status.step == .doubleClick)
         #expect(learner.status.discardedDoubleClickEdges == 1)
 
-        // 用户真正的第二下仍能测出来，间隔从重复边沿那次的松手算起。
+        // 用户真正的第二下仍能测出来：重复边沿整对被忽略，双击计数保持不变，
+        // 间隔仍从第一次松手（1 400）算起。
         _ = learner.handle(.release, button: .ok, model: .rc003, timestampMilliseconds: 1_450)
         _ = learner.handle(.press, button: .ok, model: .rc003, timestampMilliseconds: 1_570)
-        #expect(learner.status.doubleClickMilliseconds == 120)
+        #expect(learner.status.doubleClickMilliseconds == 170)
         _ = learner.handle(.release, button: .ok, model: .rc003, timestampMilliseconds: 1_620)
         #expect(learner.status.step == .longPress)
     }
@@ -560,9 +561,35 @@ struct RemoteButtonInteractionTests {
         #expect(learner.status.step == .doubleClick)
 
         _ = learner.handle(.press, button: .ok, model: .rc003, timestampMilliseconds: 1_515)
-        #expect(learner.status.doubleClickMilliseconds == 100)
+        #expect(learner.status.doubleClickMilliseconds == 115)
         _ = learner.handle(.release, button: .ok, model: .rc003, timestampMilliseconds: 1_560)
         #expect(learner.status.step == .longPress)
+    }
+
+    @Test func learningIgnoresBouncedEdgesThatLandOnTheLongPressStep() {
+        var learner = RemoteButtonGestureLearner()
+        learner.start(model: .rc003)
+        _ = learner.handle(.press, button: .ok, model: .rc003, timestampMilliseconds: 1_000)
+        _ = learner.handle(.release, button: .ok, model: .rc003, timestampMilliseconds: 1_200)
+        _ = learner.handle(.press, button: .ok, model: .rc003, timestampMilliseconds: 1_300)
+        _ = learner.handle(.release, button: .ok, model: .rc003, timestampMilliseconds: 1_350)
+        _ = learner.handle(.press, button: .ok, model: .rc003, timestampMilliseconds: 1_450)
+        _ = learner.handle(.release, button: .ok, model: .rc003, timestampMilliseconds: 1_500)
+        #expect(learner.status.doubleClickMilliseconds == 100)
+        #expect(learner.status.step == .longPress)
+
+        // 第二下之后跟着的重复边沿：它不是用户的长按，不能结束学习。
+        _ = learner.handle(.press, button: .ok, model: .rc003, timestampMilliseconds: 1_501)
+        _ = learner.handle(.release, button: .ok, model: .rc003, timestampMilliseconds: 1_502)
+        #expect(learner.status.longPressMilliseconds == nil)
+        #expect(learner.status.step == .longPress)
+        #expect(learner.status.discardedLongPressEdges == 1)
+
+        // 用户照常做一次长按即可完成，不需要从头重新学习。
+        _ = learner.handle(.press, button: .ok, model: .rc003, timestampMilliseconds: 1_700)
+        let result = learner.handle(.release, button: .ok, model: .rc003, timestampMilliseconds: 2_450)
+        #expect(result?.longPressMilliseconds == 750)
+        #expect(learner.status.step == .complete)
     }
 
     @Test func doubleClickWindowAllowsFiftyMilliseconds() {
