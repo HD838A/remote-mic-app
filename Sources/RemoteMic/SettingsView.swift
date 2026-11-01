@@ -459,17 +459,6 @@ private enum MappingActionFilter: String, CaseIterable, Identifiable {
     }
 }
 
-enum MappingSelectionPolicy {
-    static func selection(
-        current: RemoteButton,
-        activeButtons: Set<RemoteButton>,
-        isLocked: Bool
-    ) -> RemoteButton {
-        guard !isLocked else { return current }
-        return RemoteButton.allCases.first(where: activeButtons.contains) ?? current
-    }
-}
-
 enum MappingPermissionPolicy {
     static func requiresPrompt(
         enabled: Bool,
@@ -562,6 +551,9 @@ struct SettingsView: View {
     @State private var savingMappingProfileError: String?
     @State private var mappingMacroSearch = ""
     @State private var mappingVoiceSettingsRequest = 0
+    /// 语音键不属于可映射的普通按键：它的设置面板只在用户点击画布上的语音键之后出现，
+    /// 并且与普通按键的编辑器互斥，页面上任何时刻只留一份正在编辑的设置。
+    @State private var isMappingVoiceSettingsPresented = false
 
     @ObservedObject private var macroFeature: MacroFeatureIntegration
     @ObservedObject private var buttonProfileImportRequests: ButtonProfileImportRequestStore
@@ -588,7 +580,6 @@ struct SettingsView: View {
     @State private var selectedRemoteButton: RemoteButton = .ok
     @State private var selectedSiriRemoteControlID = "select"
     @State private var selectedChromecastControlID = "select"
-    @State private var isMappingSelectionLocked = true
     @State private var selectedStatisticsDate: Date?
     @State private var mappingEditingTarget: ShortcutEditingTarget?
     @State private var mappingHoldEditingButton: RemoteButton?
@@ -645,6 +636,7 @@ struct SettingsView: View {
         initialMappingEditingTrigger: ButtonTrigger = .singleClick,
         initialShortcutPickerShowsKeyboard: Bool = false,
         initialMappingScrollsToGestureTiming: Bool = false,
+        initialMappingVoiceSettingsPresented: Bool = false,
         supplementalSettings: SupplementalSettingsIntegration? = nil,
         sidebarAccountDisplayName: String? = nil,
         minimumContentSize: CGSize = CGSize(width: 980, height: 732)
@@ -686,6 +678,7 @@ struct SettingsView: View {
             } : nil
         )
         _mappingHoldEditingButton = State(initialValue: initialMappingHoldEditingButton)
+        _isMappingVoiceSettingsPresented = State(initialValue: initialMappingVoiceSettingsPresented)
     }
 
     var body: some View {
@@ -1827,7 +1820,7 @@ struct SettingsView: View {
                     mappingHoldEditingButton = button
                     requestMappingEditorScroll(focusHold: true)
                 },
-                onVoiceSettings: { mappingVoiceSettingsRequest += 1 }
+                onVoiceSettings: presentMappingVoiceSettings
             )
         }
     }
@@ -1928,7 +1921,7 @@ struct SettingsView: View {
                     allowSystemReservedKeys: settings.chromecastAllowSystemReservedKeys,
                     exceptions: settings.chromecastSystemReservedExceptions
                 ).union(profileScopeReservedChromecastControlIDs),
-                onVoiceSettings: { mappingVoiceSettingsRequest += 1 }
+                onVoiceSettings: presentMappingVoiceSettings
             )
         }
     }
@@ -1953,6 +1946,24 @@ struct SettingsView: View {
     private func requestMappingEditorScroll(focusHold: Bool) {
         mappingEditorScrollTarget = focusHold ? "mapping-hold-editor" : "mapping-action-editor"
         mappingEditorScrollRequest &+= 1
+    }
+
+    /// 语音键卡片：只展开语音键自己的设置面板。
+    ///
+    /// 语音键没有可配置的单击/双击/长按动作，所以它不打开普通按键的编辑器；反之，打开普通按键
+    /// 或按住编辑器时也会收起本面板（见 `hardwareMappingPage` 的 onChange），保证点击之后页面上
+    /// 只有这一份与语音键有关的设置。再点一次语音键卡片收起。
+    private func presentMappingVoiceSettings() {
+        mappingEditingTarget = nil
+        mappingHoldEditingButton = nil
+        shortcutCaptureTarget = nil
+        applicationShortcutCaptureProfileID = nil
+        guard !isMappingVoiceSettingsPresented else {
+            isMappingVoiceSettingsPresented = false
+            return
+        }
+        isMappingVoiceSettingsPresented = true
+        mappingVoiceSettingsRequest &+= 1
     }
 
     private func mappingConfiguration(for button: RemoteButton, trigger: ButtonTrigger) -> ConfiguredButtonAction {
@@ -2552,16 +2563,12 @@ struct SettingsView: View {
                     mappingHoldEditingButton = button
                     requestMappingEditorScroll(focusHold: true)
                 },
-                onVoiceSettings: { mappingVoiceSettingsRequest += 1 },
+                onVoiceSettings: presentMappingVoiceSettings,
                 reservedButtons: profileScopeReservedButtons
             )
-            .onReceive(model.$activeRemoteButtons) { buttons in
-                selectedRemoteButton = MappingSelectionPolicy.selection(
-                    current: selectedRemoteButton,
-                    activeButtons: buttons,
-                    isLocked: isMappingSelectionLocked
-                )
-            }
+            // 按下实体遥控器时只让对应卡片显示按下态（橙色），不移动选中项：
+            // 选中项决定高亮和编辑落点，跟着按键跳会把手里的编辑顶掉。
+            // 这个“锁定”以前是一个开关，现在固定生效，不再占页面位置。
         }
     }
 
@@ -2636,6 +2643,13 @@ struct SettingsView: View {
                                     .disabled(isMappingProfilePreviewOnly)
                             }
 
+                            // 语音键的设置只在点击语音键之后出现，而且是页面上唯一的编辑面板：
+                            // 选普通按键会收起它，点它会收起普通按键的编辑器。
+                            if isMappingVoiceSettingsPresented {
+                                mappingVoiceSettingsPanel(includeSiriScrollArrow: includeSiriScrollArrow)
+                                    .id("mapping-voice-settings")
+                            }
+
                             #if SAYALL_CHROMECAST_ENABLED
                             // 语音键模式仅 Chromecast 遥控器有（该遥控器是唯一支持「按一次说话」的），
                             // 放在按键页靠下的位置，方便随时切换手感。
@@ -2644,8 +2658,6 @@ struct SettingsView: View {
                             }
                             #endif
 
-                            mappingFooter(includeSiriScrollArrow: includeSiriScrollArrow)
-                                .id("mapping-footer")
                             mappingGestureTimingSection
                             Color.clear.frame(height: 1).id("mapping-page-bottom")
                         }
@@ -2676,6 +2688,7 @@ struct SettingsView: View {
                     // 编辑器属于上一只遥控器；切换设备后不得把旧编辑区带到新页面。
                     mappingEditingTarget = nil
                     mappingHoldEditingButton = nil
+                    isMappingVoiceSettingsPresented = false
                     shortcutCaptureTarget = nil
                     applicationShortcutCaptureProfileID = nil
                     DispatchQueue.main.async {
@@ -2693,17 +2706,22 @@ struct SettingsView: View {
                             proxy.scrollTo("mapping-gesture-timing", anchor: .top)
                         }
                     }
-                    guard mappingEditingTarget != nil || mappingHoldEditingButton != nil else { return }
+                    guard mappingEditingTarget != nil
+                        || mappingHoldEditingButton != nil
+                        || isMappingVoiceSettingsPresented
+                    else { return }
                     // The hold editor has its own anchor; scrolling to the action editor
                     // would land on the page top when only the hold editor is open.
-                    let anchor = mappingEditingTarget == nil
-                        ? "mapping-hold-editor" : "mapping-action-editor"
+                    let anchor = isMappingVoiceSettingsPresented
+                        ? "mapping-voice-settings"
+                        : (mappingEditingTarget == nil ? "mapping-hold-editor" : "mapping-action-editor")
                     DispatchQueue.main.async {
                         proxy.scrollTo(anchor, anchor: .top)
                     }
                 }
                 .onChange(of: mappingEditingTarget?.id) { targetID in
                     guard targetID != nil else { return }
+                    isMappingVoiceSettingsPresented = false
                     DispatchQueue.main.async {
                         withAnimation(.easeInOut(duration: 0.25)) {
                             proxy.scrollTo("mapping-action-editor", anchor: .top)
@@ -2712,6 +2730,7 @@ struct SettingsView: View {
                 }
                 .onChange(of: mappingHoldEditingButton?.rawValue) { buttonID in
                     guard buttonID != nil else { return }
+                    isMappingVoiceSettingsPresented = false
                     DispatchQueue.main.async {
                         withAnimation(.easeInOut(duration: 0.25)) {
                             proxy.scrollTo("mapping-hold-editor", anchor: .top)
@@ -2726,8 +2745,11 @@ struct SettingsView: View {
                     }
                 }
                 .onChange(of: mappingVoiceSettingsRequest) { _ in
-                    withAnimation(.easeInOut(duration: 0.25)) {
-                        proxy.scrollTo("mapping-footer", anchor: .bottom)
+                    // 面板是这一刻才插进视图树的，锚点要等下一轮布局完成才可滚动。
+                    DispatchQueue.main.async {
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            proxy.scrollTo("mapping-voice-settings", anchor: .top)
+                        }
                     }
                 }
                 .onChange(of: model.buttonGestureLearningResult) { result in
@@ -2889,14 +2911,14 @@ struct SettingsView: View {
         }
     }
 
-    private func mappingFooter(includeSiriScrollArrow: Bool = false) -> some View {
+    /// 语音键设置面板：用户点击画布上的语音键之后才出现，内容只包含这一块。
+    /// 语音键没有普通按键的单击/双击/长按动作，所以这里放的是触发方式、兼容开关和恢复默认。
+    private func mappingVoiceSettingsPanel(includeSiriScrollArrow: Bool = false) -> some View {
         // 能力一律取自「链路自报优先、型号默认兜底」的判定结果（见 RemoteVoiceCapabilities）。
         let capabilities = model.selectedRemoteVoiceCapabilities
         return GlassPanel {
             VStack(alignment: .leading, spacing: 12) {
                 mappingHIDStatus
-                Divider()
-                mappingSelectionLockControl
                 Divider()
                 mappingVoiceKeyModeControl
                 // 「语音键模拟 Fn 点按」只对「不会按一次收音」的遥控器有意义：
@@ -2945,19 +2967,6 @@ struct SettingsView: View {
         .font(.system(size: 12))
         .foregroundStyle(.secondary)
         .lineLimit(2)
-    }
-
-    private var mappingSelectionLockControl: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Toggle("button_mapping.selection_lock", isOn: $isMappingSelectionLocked)
-                .font(.system(size: 12, weight: .medium))
-                .toggleStyle(.switch)
-            Text("button_mapping.selection_lock_hint_short")
-                .font(.system(size: 12))
-                .foregroundStyle(.secondary)
-                .lineLimit(2)
-        }
-        .help(localization.text("button_mapping.selection_lock_help"))
     }
 
     private var mappingVoiceKeyModeControl: some View {
