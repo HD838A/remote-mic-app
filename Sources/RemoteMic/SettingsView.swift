@@ -4328,8 +4328,12 @@ struct SettingsView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
-                applicationListPanel
-                applicationDetailPanel
+                if settings.customApplicationProfiles.isEmpty {
+                    applicationEmptyPanel
+                } else {
+                    applicationListPanel
+                    applicationDetailPanel
+                }
             }
             .padding(.horizontal, 22)
             .padding(.top, 18)
@@ -4348,13 +4352,7 @@ struct SettingsView: View {
                 Text("custom_application.list.title")
                     .font(.system(size: 20, weight: .bold))
 
-                if settings.customApplicationProfiles.isEmpty {
-                    Text("custom_application.empty_hint")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                } else {
-                    LazyVGrid(
+                LazyVGrid(
                         columns: [GridItem(.adaptive(minimum: 150), spacing: 8)],
                         alignment: .leading,
                         spacing: 8
@@ -4368,7 +4366,6 @@ struct SettingsView: View {
                                 applicationShortcutCaptureProfileID = nil
                             }
                         }
-                    }
                 }
 
                 Button {
@@ -4381,6 +4378,29 @@ struct SettingsView: View {
                 }
                 .compatibilityButtonStyle(.standard)
             }
+        }
+    }
+
+    private var applicationEmptyPanel: some View {
+        GlassPanel {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("custom_application.empty_title")
+                    .font(.system(size: 20, weight: .bold))
+                Text("custom_application.empty_hint")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button {
+                    guard let id = pickCustomApplicationProfile() else { return }
+                    applicationDetailProfileID = id
+                    applicationShortcutCaptureProfileID = nil
+                } label: {
+                    Label("custom_application.add", systemImage: "plus")
+                        .font(.system(size: 13, weight: .semibold))
+                }
+                .compatibilityButtonStyle(.prominent)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
@@ -4452,10 +4472,6 @@ struct SettingsView: View {
                         accessibilityLearningEditor(profile)
                     }
 
-                    Divider()
-
-                    scrollRegionEditor(profile)
-
                     HStack {
                         Spacer()
                         Button("custom_application.test") {
@@ -4469,19 +4485,18 @@ struct SettingsView: View {
 
                     Divider()
 
+                    scrollRegionEditor(profile)
+
+                    Divider()
+
                     applicationBindingSection(profile)
                 }
             }
         } else {
             GlassPanel {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("custom_application.empty_title")
-                        .font(.system(size: 20, weight: .bold))
-                    Text("custom_application.empty_hint")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+                Text("custom_application.not_configured")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Color.accentColor)
             }
         }
     }
