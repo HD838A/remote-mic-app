@@ -4327,15 +4327,16 @@ struct SettingsView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         } content: {
-            VStack(alignment: .leading, spacing: 14) {
-                if settings.customApplicationProfiles.isEmpty {
-                    applicationEmptyPanel
-                } else {
+            if settings.customApplicationProfiles.isEmpty {
+                applicationEmptyPanel
+            } else {
+                HStack(alignment: .top, spacing: 14) {
                     applicationListPanel
+                        .frame(width: 246)
                     applicationDetailPanel
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .topLeading)
         }
     }
 
@@ -4349,20 +4350,10 @@ struct SettingsView: View {
                 Text("custom_application.list.title")
                     .font(.system(size: 20, weight: .bold))
 
-                LazyVGrid(
-                        columns: [GridItem(.adaptive(minimum: 150), spacing: 8)],
-                        alignment: .leading,
-                        spacing: 8
-                    ) {
-                        ForEach(settings.customApplicationProfiles) { profile in
-                            profileSelectionButton(
-                                profile,
-                                selected: resolvedApplicationProfileID == profile.id
-                            ) {
-                                applicationDetailProfileID = profile.id
-                                applicationShortcutCaptureProfileID = nil
-                            }
-                        }
+                VStack(spacing: 6) {
+                    ForEach(settings.customApplicationProfiles) { profile in
+                        applicationListRow(profile)
+                    }
                 }
 
                 Button {
@@ -4376,6 +4367,45 @@ struct SettingsView: View {
                 .compatibilityButtonStyle(.standard)
             }
         }
+    }
+
+    /// 左侧列表的一行：图标、名称、聚焦与翻页状态，选中项用任务里既有的强调底色。
+    private func applicationListRow(_ profile: CustomApplicationProfile) -> some View {
+        let isSelected = resolvedApplicationProfileID == profile.id
+        return Button {
+            applicationDetailProfileID = profile.id
+            applicationShortcutCaptureProfileID = nil
+        } label: {
+            HStack(spacing: 9) {
+                Image(nsImage: NSWorkspace.shared.icon(forFile: profile.applicationPath))
+                    .resizable()
+                    .frame(width: 22, height: 22)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(profile.displayName)
+                        .font(.system(size: 12, weight: .semibold))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Text(applicationCompactStatus(profile))
+                        .font(.system(size: 10))
+                        .foregroundStyle(isSelected ? Color.accentColor.opacity(0.75) : .secondary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 9)
+            .padding(.vertical, 7)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                isSelected ? Color.accentColor.opacity(0.12) : Color.primary.opacity(0.04),
+                in: RoundedRectangle(cornerRadius: 8)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(isSelected ? Color.accentColor.opacity(0.5) : Color.clear)
+            }
+        }
+        .buttonStyle(.plain)
     }
 
     private var applicationEmptyPanel: some View {
@@ -4502,6 +4532,21 @@ struct SettingsView: View {
         String(
             format: localization.text("custom_application.status.line"),
             profile.focusStrategy.displayName(using: localization),
+            applicationScrollStatusText(profile)
+        )
+    }
+
+    /// 列表一行的状态很短，用短标签；详情与按键页仍用全名。
+    private func applicationCompactStatus(_ profile: CustomApplicationProfile) -> String {
+        let focusKey: String
+        switch profile.focusStrategy {
+        case .none: focusKey = "custom_application.focus.short.none"
+        case .keyboardShortcut: focusKey = "custom_application.focus.short.shortcut"
+        case .recordedAccessibility: focusKey = "custom_application.focus.short.recorded"
+        }
+        return String(
+            format: localization.text("custom_application.status.compact"),
+            localization.text(focusKey),
             applicationScrollStatusText(profile)
         )
     }

@@ -240,6 +240,10 @@
 "custom_application.empty_title" = "No apps yet";
 "custom_application.empty_hint" = "Add an app to set its input focus and page scrolling. Both work whenever the app is in the foreground.";
 "custom_application.status.line" = "Focus: %@ · Scrolling: %@";
+"custom_application.focus.short.none" = "Open only";
+"custom_application.focus.short.shortcut" = "Shortcut";
+"custom_application.focus.short.recorded" = "Recorded field";
+"custom_application.status.compact" = "%@ · %@";
 "custom_application.go_configure" = "Configure";
 "custom_application.bindings.title" = "Buttons bound to it";
 "custom_application.bindings.empty" = "No button opens this app yet. Pick it under Open an App on the Buttons page.";

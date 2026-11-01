@@ -240,6 +240,10 @@
 "custom_application.empty_title" = "还没有添加任何 APP";
 "custom_application.empty_hint" = "添加后可以为它单独设置输入框聚焦与翻页滚动；这两项只要该 APP 在前台就能用。";
 "custom_application.status.line" = "聚焦：%@ · 翻页：%@";
+"custom_application.focus.short.none" = "只打开";
+"custom_application.focus.short.shortcut" = "快捷键";
+"custom_application.focus.short.recorded" = "已记录输入框";
+"custom_application.status.compact" = "%@ · %@";
 "custom_application.go_configure" = "去配置";
 "custom_application.bindings.title" = "绑定到它的按键";
 "custom_application.bindings.empty" = "还没有按键绑定这个 APP，可在按键页的「打开具体 APP」里选择它。";
