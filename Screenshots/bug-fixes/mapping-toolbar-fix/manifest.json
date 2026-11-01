@@ -63,6 +63,15 @@
       "sha256": "6df8c74899f398d358836e4d6266b58b87775f38b78f97d44e382a0679d80b6c",
       "state": "diagnostic-fixture",
       "note": "本地临时把基础项显示为「默认」、注入一个示例方案并强制显示保存入口后渲染，只用于核对「默认」与方案不重复、保存入口无图标且贴右；注入未提交。"
+    },
+    {
+      "file": "diagnostic-scroll-shadow-1020x772-dark.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "58c8132fb1bdec56f214abbba098f3bcd6bfd27c1704ec871bd94ae3d2f3d086",
+      "state": "diagnostic-fixture",
+      "note": "本地临时把「已滚动」状态强制为真后渲染，只用于核对工具行下边缘阴影的强度；绘制时机由滚动偏移驱动，注入未提交。"
     }
   ]
 }

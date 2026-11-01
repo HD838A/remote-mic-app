@@ -559,6 +559,7 @@ struct SettingsView: View {
     @ObservedObject private var updateInformation: UpdateInformationStore
     @ObservedObject private var hardwareAnnouncements: HardwareAnnouncementStore
     @EnvironmentObject private var localization: LocalizationStore
+    @Environment(\.colorScheme) private var colorScheme
 
     private let checkForUpdates: () -> Void
     private let refreshUpdateInformation: () -> Void
@@ -583,6 +584,8 @@ struct SettingsView: View {
     /// Clicking the same hold entry twice must still bring the editor into view, so the
     /// scroll is driven by a request token instead of the selection identity.
     @State private var mappingEditorScrollTarget = "mapping-action-editor"
+    /// 按键页内容滚动后，方案行下边缘要有一条阴影提示「下面还有内容」。
+    @State private var mappingContentIsScrolled = false
     @State private var mappingEditorScrollRequest = 0
     @State private var mappingActionFilter: MappingActionFilter = .all
     @State private var gestureTimingDraft = RemoteButtonGestureTiming()
@@ -2368,6 +2371,19 @@ struct SettingsView: View {
                 .padding(.horizontal, 22)
                 .padding(.top, 8)
                 .padding(.bottom, 5)
+                .background(Color(nsColor: .controlBackgroundColor))
+                // 内容滚到工具行下面后给一条下边缘阴影，明确「上面这条是固定的」。
+                .shadow(
+                    // 深色背景上同样的黑色阴影几乎看不见，按外观加重一档。
+                    color: .black.opacity(
+                        mappingContentIsScrolled ? (colorScheme == .dark ? 0.55 : 0.26) : 0
+                    ),
+                    radius: 7,
+                    x: 0,
+                    y: 2
+                )
+                // 不抬高层级时阴影会被后绘制的滚动内容盖住。
+                .zIndex(1)
 
             ScrollViewReader { proxy in
                 Group {
@@ -2414,7 +2430,19 @@ struct SettingsView: View {
                         .frame(maxWidth: .infinity, alignment: .topLeading)
                         // 锚点直接落在内容本身：再放一个零高度占位会在它与首行之间多出一段会滚走的间距。
                         .id("mapping-page-top")
+                        .background {
+                            // 只读取滚动偏移，用来决定工具行下边缘是否显示阴影。
+                            GeometryReader { geometry in
+                                let offset = geometry.frame(in: .named("mapping-scroll")).minY
+                                Color.clear
+                                    .onAppear { mappingContentIsScrolled = offset < -0.5 }
+                                    .onChange(of: offset) { value in
+                                        mappingContentIsScrolled = value < -0.5
+                                    }
+                            }
+                        }
                     }
+                    .coordinateSpace(name: "mapping-scroll")
                     .id(settings.selectedRemoteProfileID)
                     .compatibilityScrollEdgeEffect()
                 }
