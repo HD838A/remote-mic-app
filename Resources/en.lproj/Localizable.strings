@@ -196,6 +196,7 @@
 "scroll_region.test_needs_calibration" = "This app has no built-in region. Learn one first.";
 "scroll_region.test_failed" = "Paging failed. Make sure the app is frontmost and accessibility is granted.";
 "scroll_region.reset" = "Reset to Built-in";
+"scroll_region.clear" = "Clear learned area";
 
 "action.delete_backspace" = "Delete (Backspace)";
 "action.command_delete" = "Command-Delete";

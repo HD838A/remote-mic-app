@@ -196,6 +196,7 @@
 "scroll_region.test_needs_calibration" = "这个 App 没有可用的预置区域，请先学习。";
 "scroll_region.test_failed" = "翻页没有成功，请确认目标 App 在前台并已授予辅助功能权限。";
 "scroll_region.reset" = "恢复预置";
+"scroll_region.clear" = "清除学习结果";
 
 "action.delete_backspace" = "Delete（退格）";
 "action.command_delete" = "Command-Delete";

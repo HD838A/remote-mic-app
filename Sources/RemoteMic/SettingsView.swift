@@ -5012,7 +5012,9 @@ struct SettingsView: View {
                 .compatibilityButtonStyle(.standard)
 
                 if profile.scrollRegionTarget != nil {
-                    Button("scroll_region.reset") {
+                    // 没有内置预设的 APP 里，「恢复预置」等于直接清空，文案必须说清楚。
+                    let hasPreset = ScrollRegionPreset.rule(for: profile.bundleIdentifier) != nil
+                    Button(hasPreset ? "scroll_region.reset" : "scroll_region.clear") {
                         resetScrollRegion(profile)
                     }
                     .compatibilityButtonStyle(.standard)
