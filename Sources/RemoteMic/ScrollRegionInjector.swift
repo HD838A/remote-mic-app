@@ -158,11 +158,16 @@ enum ScrollRegionInjector {
 
         if axActions(candidate.element).contains("AXScrollUpByPage") {
             let action = direction == .up ? "AXScrollUpByPage" : "AXScrollDownByPage"
-            guard AXUIElementPerformAction(candidate.element, action as CFString) == .success else {
-                return ScrollPageResult(outcome: .eventFailed, verifiedMovement: nil)
+            if AXUIElementPerformAction(candidate.element, action as CFString) == .success {
+                return finish(window: window, region: candidate.descriptor.frame, before: before,
+                              outcome: .scrolledByPageAction, verifyMovement: verifyMovement)
             }
-            return finish(window: window, region: candidate.descriptor.frame, before: before,
-                          outcome: .scrolledByPageAction, verifyMovement: verifyMovement)
+            // 文本编辑这类 App 会声明支持 page action，实际执行却失败。
+            // 这时退回下面的滚轮注入，不要把这个能力缺口当成翻页失败抛给用户。
+            AppLogger.shared.write(
+                "SCROLL PAGE page_action_failed action=\(action) fallback=wheel " +
+                "bundle=\(bundleIdentifier)"
+            )
         }
 
         // No page action: scroll the recorded region by its visible height,
