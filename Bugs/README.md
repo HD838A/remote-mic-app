@@ -1,5 +1,7 @@
 # Bug 记录
 
+- [按键手势学习的双击间隔被压缩到 0–1 ms](./2026-11-01-gesture-learning-double-click-interval.md)
+
 - [按键页控制器卡片到工具行留白过大且保存入口不右对齐](./2026-11-01-mapping-toolbar-spacing-and-save-alignment.md)
 
 - [发布校验拒绝有意留空的英文文案，导致无法打出任何正式包](./2026-11-01-release-verify-rejects-intentional-empty-copy.md)
@@ -162,6 +164,7 @@
 
 | 时间 | Bug | 状态 |
 | --- | --- | --- |
+| 2026-11-01 | [按键手势学习的双击间隔被压缩到 0–1 ms](./2026-11-01-gesture-learning-double-click-interval.md) | 已修复（报告改用 HID 硬件时间戳并透传到学习器，20 ms 以下的间隔按重复边沿丢弃）；新增 5 项回归与全量 1175 项通过，等待 rc003 真机复验 |
 | 2026-11-01 | [按键页控制器卡片到工具行留白过大且保存入口不右对齐](./2026-11-01-mapping-toolbar-spacing-and-save-alignment.md) | 候选修复已实现（卡片底边对齐页头、方案行固定为页头横带的工具行、三个控件统一成同高 12pt 胶囊）；离屏渲染与 80 项定向回归通过，等待真实多方案窗口、私有构建与真机复验 |
 | 2026-11-01 | [发布校验拒绝有意留空的英文文案，导致无法打出任何正式包](./2026-11-01-release-verify-rejects-intentional-empty-copy.md) | 已修复（`verify-app.sh` 采用与 `LocalizationTests` 一致的显式空值白名单）；双架构签名 App 校验通过、反向对照仍失败，等待下一次完整打包复验 |
 | 2026-10-29 | [Intel 音量键原生泄露（原生事件早于拦截登记）](./2026-10-29-intel-volume-native-leak-before-arm.md) | 修复方式：HID 报告迁到专用线程并在报告回调内提前登记，与主线程共用同一套事件级拦截与权限判据。build 269 实测 223 次音量键动作按下边沿 0 泄露。范围已收窄：设备级映射与投递观察日志移出，观察器生命周期另立；评审提出的三个阻塞项已修复，门禁收紧后需 Intel 复验 |

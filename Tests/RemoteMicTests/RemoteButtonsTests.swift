@@ -820,6 +820,61 @@ struct RemoteButtonsTests {
         #expect(performedActions == [.customShortcut])
     }
 
+    @Test func runtimeButtonCarriesTheReportTimestampNotTheProcessingTime() throws {
+        final class Clock {
+            var milliseconds: UInt64 = 0
+        }
+
+        let suiteName = "RemoteButtonsTests.reportTimestamp.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = AppSettings(defaults: defaults)
+        settings.customMappingEnabled = true
+        let profileID = try #require(settings.selectedRemoteProfileID)
+        let clock = Clock()
+        var received: [(RemoteButton, RemoteButtonPhase, Int)] = []
+        let monitor = HIDRemoteMonitor(
+            settings: settings,
+            profileID: profileID,
+            ownsEventSuppressor: false,
+            runtimePermissions: { true },
+            actionPerformer: { _, _, _ in true },
+            diagnosticLogger: { _ in },
+            monotonicNow: { clock.milliseconds * 1_000_000 }
+        )
+        monitor.onRuntimeButton = { _, button, phase, milliseconds in
+            received.append((button, phase, milliseconds))
+            return true
+        }
+        #expect(monitor.connectSimulatedDevice(fingerprint: "report-timestamp", profileID: profileID))
+
+        let press = Data([UInt8(RemoteButton.ok.hidUsage), 0, 0, 0, 0, 0])
+        let release = Data(repeating: 0, count: press.count)
+        monitor.handleSimulatedReport(
+            reportID: 1,
+            data: press,
+            timestampNanoseconds: 5_000 * 1_000_000
+        )
+        // 主线程被界面更新占住 4 秒，松手报告晚到这里才被处理。
+        clock.milliseconds = 9_000
+        monitor.handleSimulatedReport(
+            reportID: 1,
+            data: release,
+            timestampNanoseconds: 5_284 * 1_000_000
+        )
+
+        #expect(received.count == 2)
+        #expect(received[0].2 == 5_000)
+        // 必须是报告到达的 5 284 ms，不是处理时刻的 9 000 ms。
+        #expect(received[1].2 == 5_284)
+    }
+
+    @Test func hidReportClockConvertsMachTicksToUptimeNanoseconds() {
+        // 无论 timebase 是多少，零时刻都必须落在零，且换算单调不减。
+        #expect(HIDReportClock.uptimeNanoseconds(fromMachTime: 0) == 0)
+        #expect(HIDReportClock.milliseconds(fromUptimeNanoseconds: 5_284_000_000) == 5_284)
+    }
+
     @Test func rapidPressOptInLetsNonRepeatableActionsFireOnEveryRawPress() throws {
         let suiteName = "RemoteButtonsTests.rapidPress.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))

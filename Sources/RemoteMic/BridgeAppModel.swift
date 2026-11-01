@@ -3774,11 +3774,12 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
                 source: Self.commonPhraseHIDSource(profileID)
             ) == true
         }
-        monitor.onRuntimeButton = { [weak self] profileID, button, phase in
+        monitor.onRuntimeButton = { [weak self] profileID, button, phase, timestampMilliseconds in
             if self?.handleButtonGestureLearning(
                 phase,
                 button: button,
-                profileID: profileID
+                profileID: profileID,
+                timestampMilliseconds: timestampMilliseconds
             ) == true { return true }
             return self?.membershipFeature.handleCommonPhrase(
                 button: button.rawValue,
@@ -4395,18 +4396,27 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     private func handleButtonGestureLearning(
         _ phase: RemoteButtonPhase,
         button: RemoteButton,
-        profileID: UUID?
+        profileID: UUID?,
+        timestampMilliseconds: Int? = nil
     ) -> Bool {
         guard claimsButtonGestureLearning(profileID: profileID),
               let model = settings.settingsModel(for: profileID) else { return false }
         let previousStep = buttonGestureLearner.status.step
+        let previousDiscardedEdges = buttonGestureLearner.status.discardedDoubleClickEdges
         let result = buttonGestureLearner.handle(
             phase,
             button: button,
             model: model,
-            timestampMilliseconds: Int(ProcessInfo.processInfo.systemUptime * 1_000)
+            timestampMilliseconds: timestampMilliseconds ?? Self.uptimeMilliseconds()
         )
         buttonGestureLearningStatus = buttonGestureLearner.status
+        if previousDiscardedEdges != buttonGestureLearningStatus.discardedDoubleClickEdges {
+            AppLogger.shared.write(
+                "BUTTON GESTURE LEARNING operation_id=\(buttonGestureLearningOperationID ?? "none") " +
+                    "phase=measured result=discarded reason=implausible_double_click_interval " +
+                    "discarded=\(buttonGestureLearningStatus.discardedDoubleClickEdges)"
+            )
+        }
         if previousStep != buttonGestureLearningStatus.step {
             AppLogger.shared.write(
                 "BUTTON GESTURE LEARNING operation_id=\(buttonGestureLearningOperationID ?? "none") " +
@@ -4424,6 +4434,12 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             )
         }
         return true
+    }
+
+    /// 没有硬件报告时间戳的来源（苹果遥控器、Chromecast）用同一个单调时钟补齐，
+    /// 保证三种输入在学习器里可以互相比较，也不会退回挂钟时间。
+    private static func uptimeMilliseconds() -> Int {
+        Int(clamping: DispatchTime.now().uptimeNanoseconds / 1_000_000)
     }
 
     /// 用户在按键页手动点过设备卡：在重新进入按键页之前，连接事件不再改变选中态。
