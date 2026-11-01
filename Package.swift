@@ -315,12 +315,22 @@ let bindingTextAvailable = privateSwiftPMEnabled
     || (privateArtifactsAvailable
         && (privatePlatformManifestVersion.map { $0 >= bindingTextSince } ?? false))
 if bindingTextAvailable { remoteMicSwiftSettings.append(.define("SAYALL_BUTTON_PROFILE_BINDING_TEXT")) }
+/// 截图/测试用的同步加载入口从这个版本起提供。
+let screenshotProfileSeedSince: (Int, Int, Int) = (2, 6, 3)
+let screenshotProfileSeedAvailable = privateSwiftPMEnabled
+    || !(buttonProfilesPackagePath ?? "").isEmpty
+    || (privateArtifactsAvailable
+        && (privatePlatformManifestVersion.map { $0 >= screenshotProfileSeedSince } ?? false))
+if screenshotProfileSeedAvailable {
+    remoteMicSwiftSettings.append(.define("SAYALL_SCREENSHOT_PROFILE_SEED"))
+}
 var remoteMicLinkerSettings: [LinkerSetting] = []
 if privateArtifactsAvailable { remoteMicLinkerSettings.append(.unsafeFlags(["-Xlinker", "-ObjC"])) }
 
 var remoteMicTestSwiftSettings: [SwiftSetting] = []
 if buttonHoldModesAvailable { remoteMicTestSwiftSettings.append(.define("SAYALL_BUTTON_HOLD_MODES")) }
 if bindingTextAvailable { remoteMicTestSwiftSettings.append(.define("SAYALL_BUTTON_PROFILE_BINDING_TEXT")) }
+if screenshotProfileSeedAvailable { remoteMicTestSwiftSettings.append(.define("SAYALL_SCREENSHOT_PROFILE_SEED")) }
 if sourceMacroHostShortcutsAvailable || artifactMacroHostShortcutsAvailable {
     remoteMicTestSwiftSettings.append(.define("SAYALL_MACRO_HOST_SHORTCUTS"))
 }
