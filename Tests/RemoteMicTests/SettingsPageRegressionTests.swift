@@ -1467,6 +1467,10 @@ struct SettingsPageRegressionTests {
         #expect(source.contains("applicationsPage"))
         #expect(source.contains("custom_application.go_configure"))
         #expect(source.contains("applicationBindingSection"))
+        // APP 档案必须能移除，且移除前要有二次确认与绑定检查。
+        #expect(source.contains("removeCustomApplicationProfile"))
+        #expect(source.contains("custom_application.remove_blocked"))
+        #expect(source.contains("custom_application.remove_confirm_title"))
         #expect(source.contains("settings.section.applications"))
         #expect(!source.contains("applicationFocusEditor("))
         #expect(!source.contains("applicationFocusProfileID"))

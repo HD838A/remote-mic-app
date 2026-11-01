@@ -1600,6 +1600,19 @@ final class AppSettings: ObservableObject {
         }
     }
 
+    /// 移除一个 APP 档案。调用方必须先确认没有任何绑定指向它，
+    /// 否则那些按键会静默变成「尚未选择 APP」。
+    func removeCustomApplicationProfile(id: UUID) {
+        guard customApplicationProfiles.contains(where: { $0.id == id }) else { return }
+        customApplicationProfiles.removeAll { $0.id == id }
+        if portablePendingApplications.contains(id.uuidString) {
+            var pending = portablePendingApplications
+            pending.remove(id.uuidString)
+            defaults.set(pending.sorted(), forKey: "portableTransferPendingApplications")
+        }
+        objectWillChange.send()
+    }
+
     func configuredBaseAction(
         for button: RemoteButton,
         trigger: ButtonTrigger

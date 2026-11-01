@@ -601,6 +601,8 @@ struct SettingsView: View {
     /// 聚焦与翻页滚动按 App 生效，App 在前台即可使用，和「打开具体 APP」动作无关。
     /// 「APP 适配」页当前展开的 APP；与按键页的编辑对象完全分开。
     @State private var applicationDetailProfileID: UUID?
+    /// 正在确认移除的 APP 档案；非空时弹确认框。
+    @State private var applicationPendingRemoval: CustomApplicationProfile?
     @State private var shortcutCaptureFeedback: ShortcutCaptureFeedback?
     @State private var customApplicationLearningStates: [UUID: CustomApplicationLearningState] = [:]
     @State private var scrollRegionCountdowns: [UUID: Int] = [:]
@@ -4724,7 +4726,58 @@ struct SettingsView: View {
                     .buttonStyle(.plain)
                 }
             }
+
+            Divider()
+                .padding(.top, 2)
+
+            if bindings.isEmpty {
+                Button(role: .destructive) {
+                    applicationPendingRemoval = profile
+                } label: {
+                    Text("custom_application.remove")
+                        .font(.system(size: 12, weight: .semibold))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(Color.red)
+            } else {
+                Text(String(
+                    format: localization.text("custom_application.remove_blocked"),
+                    bindings.count
+                ))
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            }
         }
+        .confirmationDialog(
+            String(
+                format: localization.text("custom_application.remove_confirm_title"),
+                profile.displayName
+            ),
+            isPresented: Binding(
+                get: { applicationPendingRemoval?.id == profile.id },
+                set: { if !$0 { applicationPendingRemoval = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button(localization.text("custom_application.remove_confirm_action"), role: .destructive) {
+                removeApplicationProfile(profile)
+            }
+            Button(localization.text("common.action.cancel"), role: .cancel) {
+                applicationPendingRemoval = nil
+            }
+        } message: {
+            Text("custom_application.remove_confirm_message")
+        }
+    }
+
+    private func removeApplicationProfile(_ profile: CustomApplicationProfile) {
+        settings.removeCustomApplicationProfile(id: profile.id)
+        if applicationDetailProfileID == profile.id {
+            applicationDetailProfileID = nil
+        }
+        applicationPendingRemoval = nil
+        applicationShortcutCaptureProfileID = nil
     }
 
     private func profileSelectionButton(

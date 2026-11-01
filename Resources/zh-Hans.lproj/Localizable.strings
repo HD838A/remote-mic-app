@@ -248,6 +248,11 @@
 "custom_application.bindings.title" = "绑定到它的按键";
 "custom_application.bindings.empty" = "还没有按键绑定这个 APP，可在按键页的「打开具体 APP」里选择它。";
 "custom_application.bindings.go_mapping" = "去按键页";
+"custom_application.remove" = "移除这个 APP";
+"custom_application.remove_blocked" = "还有 %d 处绑定在使用它，先解绑才能移除。";
+"custom_application.remove_confirm_title" = "移除「%@」？";
+"custom_application.remove_confirm_message" = "会一并删除它的输入框学习记录与聚焦快捷键。已经绑定的按键不会自动改动，它们会变成「尚未选择 APP」。";
+"custom_application.remove_confirm_action" = "移除";
 "custom_application.add" = "添加 APP";
 "custom_application.focus_strategy" = "聚焦方式";
 "custom_application.focus.none" = "只打开 APP";
