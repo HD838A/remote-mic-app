@@ -735,14 +735,24 @@ struct SettingsPageRegressionTests {
         #expect(rowSource.contains("if isMappingProfileUnlocked"))
         #expect(rowSource.contains("} else if selectedMappingProfileIsEditable {"))
 
-        // 会员判定必须复用按键方案页那套决策，不能自己发明一套规则。
+        // 会员判定必须复用按键方案页那套决策，不能自己发明一套规则；
+        // 而且要先过方案组件自己那份访问判定，否则测试构建里会出现「列表看得见、编辑被拦」的死按钮。
         let gateStart = try #require(source.range(of: "private var canEditMappingProfiles"))
-        let gateSource = source[gateStart.lowerBound...].prefix(1200)
+        let gateSource = source[gateStart.lowerBound...].prefix(1400)
+        #expect(gateSource.contains("guard macroFeature.canUseMappingProfiles else { return false }"))
         #expect(gateSource.contains("membershipFeature.buttonProfilesAccessDecision"))
         #expect(gateSource.contains("case .allowed, .temporarilyOffline, .authorized:"))
         #expect(gateSource.contains("case .requiresPlus, .unavailable:"))
         // 会员模块整体不可用的构建里没有可点开通的入口，不能把人锁死。
         #expect(gateSource.contains("guard membershipFeature.isFeatureVisible else { return true }"))
+
+        let integration = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/MacroFeatureIntegration.swift"),
+            encoding: .utf8
+        )
+        let accessStart = try #require(integration.range(of: "var canUseMappingProfiles: Bool"))
+        let accessSource = integration[accessStart.lowerBound...].prefix(600)
+        #expect(accessSource.contains("buttonProfilesFeature.buttonProfilesAccessDecision.permitsAccess"))
 
         // 唯一的会员入口是私有模块的视图，仓库不得自绘第二个开通按钮。
         let toolbarStart = try #require(source.range(of: "private var mappingProfileToolbar"))

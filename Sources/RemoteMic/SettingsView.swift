@@ -2159,8 +2159,13 @@ struct SettingsView: View {
 
     /// 键位方案编辑是会员功能，判定沿用按键方案页那一套（同一个私有模块、同一份凭据）。
     ///
-    /// 会员模块整个不可用时不去拦：那种构建里没有可点开通的入口，拦下来只会把功能锁死。
+    /// 两把锁都要过：先看方案组件自己的访问判定（方案列表就是按它过滤的，本地测试构建还会
+    /// 用测试开关把它放开），再看宿主会员模块（它决定有没有「点击开通」可点）。
+    /// 只看会员模块会漏掉测试构建里「列表看得见、编辑被拦」的死按钮；只看组件那份则会漏掉
+    /// 会员刚过期、组件还没收到新判定的那一小段时间。
     private var canEditMappingProfiles: Bool {
+        guard macroFeature.canUseMappingProfiles else { return false }
+        // 会员模块整个不在的构建里没有可点开通的入口，不拦。
         guard membershipFeature.isFeatureVisible else { return true }
         switch membershipFeature.buttonProfilesAccessDecision {
         case .allowed, .temporarilyOffline, .authorized:
