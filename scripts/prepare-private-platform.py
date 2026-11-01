@@ -226,6 +226,31 @@ def extract_release_archive(archive, destination):
     return release_dir
 
 
+def fetch_artifacts(tag, output):
+    """Materialize the published release artifacts into ``output/release``.
+
+    The protected release runner uses this instead of rebuilding both lanes when
+    a credential that can read the private release attachments is configured.
+    """
+    version_key(tag)
+    output = Path(output).resolve()
+    if output.exists() and any(output.iterdir()):
+        raise RuntimeError("Artifact output directory must be absent or empty")
+    output.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=output, prefix=".download-") as staging:
+        staging_path = Path(staging)
+        archive, manifest_digest = download_release_archive(tag, staging_path)
+        extracted = extract_release_archive(archive, staging_path)
+        if sha256_file(extracted / "SHA256SUMS") != manifest_digest:
+            raise RuntimeError("Published release manifest does not match its published checksum")
+        run("shasum", "-a", "256", "-c", "SHA256SUMS", cwd=extracted, timeout=300)
+        release_dir = output / "release"
+        if release_dir.exists():
+            raise RuntimeError("Release directory appeared during download")
+        os.replace(extracted, release_dir)
+    return {"tag": tag, "release": str(release_dir), "manifestSHA256": manifest_digest}
+
+
 def package(root, mode, artifacts="build"):
     if mode == "public":
         return {"mode": "public", "reason": "explicit_public"}
@@ -297,9 +322,10 @@ def package(root, mode, artifacts="build"):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("release", "check", "check-checkout", "package"))
+    parser.add_argument("action", choices=("release", "check", "check-checkout", "package", "artifacts"))
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parent.parent)
     parser.add_argument("--checkout", type=Path)
+    parser.add_argument("--output", type=Path)
     parser.add_argument("--tag")
     parser.add_argument("--channel", choices=("local", "internalQA", "release"), default="release")
     parser.add_argument("--local-commit")
@@ -313,6 +339,11 @@ def main():
         raise RuntimeError("Unexpected private dependency repository")
     tag = args.tag or dependency["version"]
     version_key(tag)
+    if args.action == "artifacts":
+        if not args.output:
+            raise RuntimeError("--output is required for the artifacts action")
+        print(json.dumps(fetch_artifacts(tag, args.output)))
+        return
     with ExitStack() as stack:
         if args.action == "package" or not args.checkout:
             lock_dir = args.root / ".private-dependencies"
