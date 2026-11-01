@@ -23,12 +23,14 @@ struct SettingsSection: RawRepresentable, Hashable, CaseIterable, Identifiable {
     static let buttonProfiles = SettingsSection(rawValue: "buttonProfiles")
     static let membership = SettingsSection(rawValue: "membership")
     static let mapping = SettingsSection(rawValue: "mapping")
+    /// 「APP 适配」：输入框聚焦与翻页滚动按 APP 单独配置，和按键页的按键绑定互不影响。
+    static let applications = SettingsSection(rawValue: "applications")
     static let statistics = SettingsSection(rawValue: "statistics")
     static let transcripts = SettingsSection(rawValue: "transcripts")
     static let commonPhrases = SettingsSection(rawValue: "commonPhrases")
     static let permissions = SettingsSection(rawValue: "permissions")
     static let about = SettingsSection(rawValue: "about")
-    static let allCases: [SettingsSection] = [.connection, .privateFeature, .macros, .buttonProfiles, .membership, .mapping, .statistics, .transcripts, .commonPhrases, .permissions, .about]
+    static let allCases: [SettingsSection] = [.connection, .privateFeature, .macros, .buttonProfiles, .membership, .mapping, .applications, .statistics, .transcripts, .commonPhrases, .permissions, .about]
     static func supplemental(_ id: String) -> SettingsSection { SettingsSection(rawValue: "supplemental:" + id) }
     var supplementalID: String? { rawValue.hasPrefix("supplemental:") ? String(rawValue.dropFirst(13)) : nil }
     var id: String { rawValue }
@@ -41,6 +43,7 @@ struct SettingsSection: RawRepresentable, Hashable, CaseIterable, Identifiable {
         case .buttonProfiles: return ""
         case .membership: return ""
         case .mapping: return "settings.section.buttons"
+        case .applications: return "settings.section.applications"
         case .statistics: return "settings.section.statistics"
         case .commonPhrases: return "common_phrases.title"
         case .transcripts: return "settings.section.transcripts"
@@ -62,6 +65,7 @@ struct SettingsSection: RawRepresentable, Hashable, CaseIterable, Identifiable {
         case .buttonProfiles: return "rectangle.3.group"
         case .membership: return "crown.fill"
         case .mapping: return "keyboard"
+        case .applications: return "square.grid.2x2"
         case .statistics: return "person.crop.circle"
         case .commonPhrases: return "text.quote"
         case .transcripts: return "text.bubble.fill"
@@ -192,6 +196,7 @@ enum SettingsPageBehavior {
 
     static let sidebarSectionOrder: [SettingsSection] = [
         .mapping,
+        .applications,
         .macros,
         .buttonProfiles,
         .membership,
@@ -209,7 +214,8 @@ enum SettingsPageBehavior {
         membershipVisible: Bool,
         supplementalPageIDs: [String] = []
     ) -> [SettingsSection] {
-        let sections = Array(sidebarSectionOrder.prefix(4)) + supplementalPageIDs.map(SettingsSection.supplemental) + Array(sidebarSectionOrder.dropFirst(4))
+        // 补充页插在固定入口之后；「按键 / APP 适配」属于最前面的固定入口。
+        let sections = Array(sidebarSectionOrder.prefix(5)) + supplementalPageIDs.map(SettingsSection.supplemental) + Array(sidebarSectionOrder.dropFirst(5))
         return sections.filter {
             switch $0 {
             case .privateFeature: privateFeatureVisible
@@ -417,14 +423,11 @@ private enum MappingActionFilter: String, CaseIterable, Identifiable {
     case custom
     case commonPhrases
     case applications
-    /// 目标 App 的聚焦方式与滚动区域。它不是动作分类，而是与动作分类平级的
-    /// 独立分区：同一按键的目标 App 只配置一次，不随所选动作变化。
-    case applicationFocus
 
     var id: String { rawValue }
 
     static var visibleCases: [Self] {
-        [.basicKeys, .systemAndMedia, .custom, .commonPhrases, .applications, .applicationFocus]
+        [.basicKeys, .systemAndMedia, .custom, .commonPhrases, .applications]
     }
 
     var localizationKey: String {
@@ -435,7 +438,6 @@ private enum MappingActionFilter: String, CaseIterable, Identifiable {
         case .custom: return ButtonActionCategory.custom.localizationKey
         case .commonPhrases: return ButtonActionCategory.commonPhrases.localizationKey
         case .applications: return ButtonActionCategory.applications.localizationKey
-        case .applicationFocus: return "button_mapping.action_filter.application_focus"
         }
     }
 
@@ -453,8 +455,6 @@ private enum MappingActionFilter: String, CaseIterable, Identifiable {
             return category == .commonPhrases
         case .applications:
             return category == .applications
-        case .applicationFocus:
-            return false
         }
     }
 }
@@ -599,7 +599,8 @@ struct SettingsView: View {
     @State private var applicationShortcutCaptureProfileID: UUID?
     /// 「App 输入框和滚动」里正在配置哪个 App。它只决定编辑对象，不写按键绑定：
     /// 聚焦与翻页滚动按 App 生效，App 在前台即可使用，和「打开具体 APP」动作无关。
-    @State private var applicationFocusProfileID: UUID?
+    /// 「APP 适配」页当前展开的 APP；与按键页的编辑对象完全分开。
+    @State private var applicationDetailProfileID: UUID?
     @State private var shortcutCaptureFeedback: ShortcutCaptureFeedback?
     @State private var customApplicationLearningStates: [UUID: CustomApplicationLearningState] = [:]
     @State private var scrollRegionCountdowns: [UUID: Int] = [:]
@@ -1055,6 +1056,8 @@ struct SettingsView: View {
                 // Submit only after this page has mounted its import observer.
                 consumePendingButtonProfileImportIfNeeded()
             }
+        case .applications:
+            applicationsPage
         case .membership:
             if membershipFeature.isFeatureVisible {
                 membershipFeature.settingsView()
@@ -3374,12 +3377,7 @@ struct SettingsView: View {
             mappingInheritanceControl(button: button, trigger: trigger)
             mappingActionFilterControl
 
-            if mappingActionFilter == .applicationFocus {
-                // 目标 App 的聚焦方式与滚动区域属于按键本身，不挂在任何动作分类下面，
-                // 因此和动作分类平级、单独成为一个分区。
-                applicationFocusEditor(configured: configured)
-            } else {
-                ForEach(ButtonActionCategory.allCases.filter(mappingActionFilter.includes)) { category in
+            ForEach(ButtonActionCategory.allCases.filter(mappingActionFilter.includes)) { category in
                     let groupedActions = actions.filter { $0.category == category }
                     if !groupedActions.isEmpty {
                         mappingActionGroup(
@@ -3444,7 +3442,6 @@ struct SettingsView: View {
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                 }
-            }
         }
     }
 
@@ -4294,119 +4291,21 @@ struct SettingsView: View {
                 .compatibilityButtonStyle(.standard)
             }
 
-            if configured.applicationProfileID == nil {
-                Text("custom_application.not_configured")
-                    .font(.system(size: 12))
+            if let profile = settings.customApplicationProfile(id: configured.applicationProfileID) {
+                // 聚焦与翻页属于 APP 档案，这里只报状态并给出跳转，不复制可写控件。
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(applicationStatusSummary(profile))
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 8)
+                    Button("custom_application.go_configure") {
+                        applicationDetailProfileID = profile.id
+                        selectedSection = .applications
+                    }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(Color.accentColor)
-            }
-        }
-        .padding(12)
-        .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 10))
-    }
-
-    @ViewBuilder
-    private func applicationFocusEditor(configured: ConfiguredButtonAction) -> some View {
-        let editingProfileID = applicationFocusProfileID
-            ?? configured.applicationProfileID
-            ?? settings.customApplicationProfiles.first?.id
-        VStack(alignment: .leading, spacing: 14) {
-            Text("custom_application.focus.scope_note")
-                .font(.system(size: 12))
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            Text("custom_application.target")
-                .font(.system(size: 14, weight: .semibold))
-
-            LazyVGrid(
-                columns: [GridItem(.adaptive(minimum: 150), spacing: 8)],
-                alignment: .leading,
-                spacing: 8
-            ) {
-                ForEach(settings.customApplicationProfiles) { profile in
-                    profileSelectionButton(
-                        profile,
-                        selected: editingProfileID == profile.id
-                    ) {
-                        applicationFocusProfileID = profile.id
-                        applicationShortcutCaptureProfileID = nil
-                    }
-                }
-
-                Button {
-                    guard let id = pickCustomApplicationProfile() else { return }
-                    applicationFocusProfileID = id
-                    applicationShortcutCaptureProfileID = nil
-                } label: {
-                    Label("custom_application.add", systemImage: "plus")
-                        .font(.system(size: 13, weight: .semibold))
-                        .frame(maxWidth: .infinity, minHeight: 36)
-                }
-                .compatibilityButtonStyle(.standard)
-            }
-
-            if let profile = settings.customApplicationProfile(id: editingProfileID) {
-                Divider()
-
-                Text("custom_application.focus_strategy")
-                    .font(.system(size: 14, weight: .semibold))
-
-                HStack(spacing: 8) {
-                    ForEach(CustomApplicationFocusStrategy.allCases) { strategy in
-                        Button {
-                            var updated = profile
-                            updated.focusStrategy = strategy
-                            settings.updateCustomApplicationProfile(updated)
-                            applicationShortcutCaptureProfileID = nil
-                        } label: {
-                            HStack(spacing: 6) {
-                                Image(systemName: profile.focusStrategy == strategy ? "checkmark.circle.fill" : "circle")
-                                Text(strategy.displayName(using: localization))
-                                    .lineLimit(1)
-                            }
-                            .font(.system(size: 13, weight: profile.focusStrategy == strategy ? .semibold : .regular))
-                            .frame(maxWidth: .infinity, minHeight: 36)
-                        }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(profile.focusStrategy == strategy ? Color.accentColor : Color.primary)
-                        .background(
-                            profile.focusStrategy == strategy
-                                ? Color.accentColor.opacity(0.12)
-                                : Color.primary.opacity(0.04),
-                            in: RoundedRectangle(cornerRadius: 8)
-                        )
-                        .overlay {
-                            RoundedRectangle(cornerRadius: 8)
-                                .stroke(
-                                    profile.focusStrategy == strategy
-                                        ? Color.accentColor.opacity(0.5)
-                                        : Color.secondary.opacity(0.16)
-                                )
-                        }
-                    }
-                }
-
-                if profile.focusStrategy == .keyboardShortcut {
-                    inlineApplicationShortcutEditor(profile)
-                }
-
-                if profile.focusStrategy == .recordedAccessibility {
-                    accessibilityLearningEditor(profile)
-                }
-
-                Divider()
-
-                scrollRegionEditor(profile)
-
-                HStack {
-                    Spacer()
-                    Button("custom_application.test") {
-                        _ = KeyboardInjector.send(
-                            .openCustomApplication,
-                            applicationProfile: profile
-                        )
-                    }
-                    .compatibilityButtonStyle(.prominent)
                 }
             } else {
                 Text("custom_application.not_configured")
@@ -4416,6 +4315,263 @@ struct SettingsView: View {
         }
         .padding(12)
         .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 10))
+    }
+
+    private var applicationsPage: some View {
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: 6) {
+                    PageHeader(title: localization.text("settings.section.applications"))
+                    Text("custom_application.page.subtitle")
+                        .font(.system(size: 13))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                applicationListPanel
+                applicationDetailPanel
+            }
+            .padding(.horizontal, 22)
+            .padding(.top, 18)
+            .padding(.bottom, 22)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+        }
+    }
+
+    private var resolvedApplicationProfileID: UUID? {
+        applicationDetailProfileID ?? settings.customApplicationProfiles.first?.id
+    }
+
+    private var applicationListPanel: some View {
+        GlassPanel {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("custom_application.list.title")
+                    .font(.system(size: 20, weight: .bold))
+
+                if settings.customApplicationProfiles.isEmpty {
+                    Text("custom_application.empty_hint")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    LazyVGrid(
+                        columns: [GridItem(.adaptive(minimum: 150), spacing: 8)],
+                        alignment: .leading,
+                        spacing: 8
+                    ) {
+                        ForEach(settings.customApplicationProfiles) { profile in
+                            profileSelectionButton(
+                                profile,
+                                selected: resolvedApplicationProfileID == profile.id
+                            ) {
+                                applicationDetailProfileID = profile.id
+                                applicationShortcutCaptureProfileID = nil
+                            }
+                        }
+                    }
+                }
+
+                Button {
+                    guard let id = pickCustomApplicationProfile() else { return }
+                    applicationDetailProfileID = id
+                    applicationShortcutCaptureProfileID = nil
+                } label: {
+                    Label("custom_application.add", systemImage: "plus")
+                        .font(.system(size: 12, weight: .semibold))
+                }
+                .compatibilityButtonStyle(.standard)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var applicationDetailPanel: some View {
+        if let profile = settings.customApplicationProfile(id: resolvedApplicationProfileID) {
+            GlassPanel {
+                VStack(alignment: .leading, spacing: 14) {
+                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                        Text(profile.displayName)
+                            .font(.system(size: 18, weight: .semibold))
+                        Text(profile.applicationPath)
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                        Spacer(minLength: 0)
+                    }
+
+                    Text("custom_application.focus.scope_note")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Text("custom_application.focus_strategy")
+                        .font(.system(size: 14, weight: .semibold))
+
+                    HStack(spacing: 8) {
+                        ForEach(CustomApplicationFocusStrategy.allCases) { strategy in
+                            Button {
+                                var updated = profile
+                                updated.focusStrategy = strategy
+                                settings.updateCustomApplicationProfile(updated)
+                                applicationShortcutCaptureProfileID = nil
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Image(systemName: profile.focusStrategy == strategy
+                                            ? "checkmark.circle.fill" : "circle")
+                                    Text(strategy.displayName(using: localization))
+                                        .lineLimit(1)
+                                }
+                                .font(.system(size: 13, weight: profile.focusStrategy == strategy
+                                        ? .semibold : .regular))
+                                .frame(maxWidth: .infinity, minHeight: 36)
+                            }
+                            .buttonStyle(.plain)
+                            .foregroundStyle(profile.focusStrategy == strategy
+                                    ? Color.accentColor : Color.primary)
+                            .background(
+                                profile.focusStrategy == strategy
+                                    ? Color.accentColor.opacity(0.12)
+                                    : Color.primary.opacity(0.04),
+                                in: RoundedRectangle(cornerRadius: 8)
+                            )
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(profile.focusStrategy == strategy
+                                            ? Color.accentColor.opacity(0.5)
+                                            : Color.secondary.opacity(0.16))
+                            }
+                        }
+                    }
+
+                    if profile.focusStrategy == .keyboardShortcut {
+                        inlineApplicationShortcutEditor(profile)
+                    }
+
+                    if profile.focusStrategy == .recordedAccessibility {
+                        accessibilityLearningEditor(profile)
+                    }
+
+                    Divider()
+
+                    scrollRegionEditor(profile)
+
+                    HStack {
+                        Spacer()
+                        Button("custom_application.test") {
+                            _ = KeyboardInjector.send(
+                                .openCustomApplication,
+                                applicationProfile: profile
+                            )
+                        }
+                        .compatibilityButtonStyle(.prominent)
+                    }
+
+                    Divider()
+
+                    applicationBindingSection(profile)
+                }
+            }
+        } else {
+            GlassPanel {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("custom_application.empty_title")
+                        .font(.system(size: 20, weight: .bold))
+                    Text("custom_application.empty_hint")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+    }
+
+    private func applicationStatusSummary(_ profile: CustomApplicationProfile) -> String {
+        String(
+            format: localization.text("custom_application.status.line"),
+            profile.focusStrategy.displayName(using: localization),
+            applicationScrollStatusText(profile)
+        )
+    }
+
+    private func applicationScrollStatusText(_ profile: CustomApplicationProfile) -> String {
+        if profile.scrollRegionTarget != nil {
+            return localization.text("scroll_region.status_learned")
+        }
+        if ScrollRegionPreset.rule(for: profile.bundleIdentifier) != nil {
+            return localization.text("scroll_region.status_preset")
+        }
+        return localization.text("scroll_region.status_needs_calibration")
+    }
+
+    private struct ApplicationBindingRef: Identifiable {
+        let button: RemoteButton
+        let trigger: ButtonTrigger
+        var id: String { "\(button.rawValue)-\(trigger.rawValue)" }
+    }
+
+    /// 反查范围限定当前遥控器与当前键位方案生效后的绑定，不混入其它遥控器。
+    private func applicationBindings(for profile: CustomApplicationProfile) -> [ApplicationBindingRef] {
+        var result: [ApplicationBindingRef] = []
+        for button in RemoteButton.allCases {
+            for trigger in ButtonTrigger.allCases {
+                let configured = mappingConfiguration(for: button, trigger: trigger)
+                guard configured.action == .openCustomApplication,
+                      configured.applicationProfileID == profile.id
+                else { continue }
+                result.append(ApplicationBindingRef(button: button, trigger: trigger))
+            }
+        }
+        return result
+    }
+
+    @ViewBuilder
+    private func applicationBindingSection(_ profile: CustomApplicationProfile) -> some View {
+        let bindings = applicationBindings(for: profile)
+        VStack(alignment: .leading, spacing: 8) {
+            Text("custom_application.bindings.title")
+                .font(.system(size: 14, weight: .semibold))
+
+            if bindings.isEmpty {
+                Text("custom_application.bindings.empty")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                ForEach(bindings) { binding in
+                    Button {
+                        preservesMappingContextOnNavigation = true
+                        mappingHoldEditingButton = nil
+                        mappingActionFilter = .all
+                        mappingEditingTarget = ShortcutEditingTarget(
+                            button: binding.button,
+                            trigger: binding.trigger
+                        )
+                        selectedSection = .mapping
+                    } label: {
+                        HStack(spacing: 8) {
+                            Text("\(binding.button.displayName(using: localization)) · " +
+                                 binding.trigger.displayName(using: localization))
+                                .font(.system(size: 12, weight: .semibold))
+                            Text("action.open_custom_application")
+                                .font(.system(size: 12))
+                                .foregroundStyle(.secondary)
+                            Spacer(minLength: 8)
+                            Text("custom_application.bindings.go_mapping")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(Color.accentColor)
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 34, alignment: .leading)
+                        .padding(.horizontal, 10)
+                        .background(
+                            Color.primary.opacity(0.045),
+                            in: RoundedRectangle(cornerRadius: 8)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
     }
 
     private func profileSelectionButton(

@@ -232,10 +232,18 @@
 "button_mapping.action_group.system_and_media" = "系统与媒体";
 "button_mapping.action_group.custom" = "自定义动作";
 "button_mapping.action_group.applications" = "打开具体 APP";
-"button_mapping.action_filter.application_focus" = "App 输入框和滚动";
 "button_mapping.action.disable_switch" = "禁用按键";
 "custom_application.target" = "目标 APP";
 "custom_application.not_configured" = "尚未选择 APP";
+"custom_application.page.subtitle" = "输入框聚焦与翻页滚动按 APP 生效，APP 在前台即可使用。";
+"custom_application.list.title" = "已添加的 APP";
+"custom_application.empty_title" = "还没有添加任何 APP";
+"custom_application.empty_hint" = "添加后可以为它单独设置输入框聚焦与翻页滚动；这两项只要该 APP 在前台就能用。";
+"custom_application.status.line" = "聚焦：%@ · 翻页：%@";
+"custom_application.go_configure" = "去配置";
+"custom_application.bindings.title" = "绑定到它的按键";
+"custom_application.bindings.empty" = "还没有按键绑定这个 APP，可在按键页的「打开具体 APP」里选择它。";
+"custom_application.bindings.go_mapping" = "去按键页";
 "custom_application.add" = "添加 APP";
 "custom_application.focus_strategy" = "聚焦方式";
 "custom_application.focus.none" = "只打开 APP";
@@ -266,6 +274,7 @@
 "custom_application.error.open_failed" = "无法打开目标 APP。";
 "settings.section.connection" = "连接";
 "settings.section.buttons" = "按键";
+"settings.section.applications" = "APP 适配";
 "settings.section.permissions" = "权限";
 "permission.status.enabled" = "已开启";
 "permission.status.pending" = "待授权";

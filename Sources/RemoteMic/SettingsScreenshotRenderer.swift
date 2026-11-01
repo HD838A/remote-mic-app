@@ -28,6 +28,7 @@ enum SettingsScreenshotRenderer {
 
     private static let sections: [SettingsSection] = [
         .mapping,
+        .applications,
         .commonPhrases,
         .macros,
         .buttonProfiles,
