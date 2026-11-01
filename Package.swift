@@ -292,11 +292,35 @@ let buttonHoldModesAvailable = [buttonProfilesPackagePath, privateSwiftPMEnabled
     }
 } ?? false)
 if buttonHoldModesAvailable { remoteMicSwiftSettings.append(.define("SAYALL_BUTTON_HOLD_MODES")) }
+/// 契约边界用版本号表达（docs/release/packaging-governance.md §4），不探测私有源码特征。
+/// 只有走 artifact 时才需要判断版本；本地指向私有源码即视为最新。
+let privatePlatformManifestVersion: (Int, Int, Int)? = {
+    let manifest = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .appendingPathComponent("config/release-dependencies.json")
+    guard let data = try? Data(contentsOf: manifest),
+          let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+          let dependencies = root["dependencies"] as? [String: Any],
+          let entry = dependencies["sayAllPrivatePlatform"] as? [String: Any],
+          let version = entry["version"] as? String
+    else { return nil }
+    let parts = version.split(separator: ".").compactMap { Int($0) }
+    guard parts.count == 3 else { return nil }
+    return (parts[0], parts[1], parts[2])
+}()
+/// 私有包从这个版本起提供 `resolvedBindingText` / `shortcutLabel`。
+let bindingTextSince: (Int, Int, Int) = (2, 6, 2)
+let bindingTextAvailable = privateSwiftPMEnabled
+    || !(buttonProfilesPackagePath ?? "").isEmpty
+    || (privateArtifactsAvailable
+        && (privatePlatformManifestVersion.map { $0 >= bindingTextSince } ?? false))
+if bindingTextAvailable { remoteMicSwiftSettings.append(.define("SAYALL_BUTTON_PROFILE_BINDING_TEXT")) }
 var remoteMicLinkerSettings: [LinkerSetting] = []
 if privateArtifactsAvailable { remoteMicLinkerSettings.append(.unsafeFlags(["-Xlinker", "-ObjC"])) }
 
 var remoteMicTestSwiftSettings: [SwiftSetting] = []
 if buttonHoldModesAvailable { remoteMicTestSwiftSettings.append(.define("SAYALL_BUTTON_HOLD_MODES")) }
+if bindingTextAvailable { remoteMicTestSwiftSettings.append(.define("SAYALL_BUTTON_PROFILE_BINDING_TEXT")) }
 if sourceMacroHostShortcutsAvailable || artifactMacroHostShortcutsAvailable {
     remoteMicTestSwiftSettings.append(.define("SAYALL_MACRO_HOST_SHORTCUTS"))
 }

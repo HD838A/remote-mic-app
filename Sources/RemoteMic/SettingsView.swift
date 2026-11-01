@@ -2546,6 +2546,7 @@ struct SettingsView: View {
                 voiceActive: model.isStreaming,
                 actionSummary: { button, trigger in mappingActionSummary(for: button, trigger: trigger) },
                 holdSummary: { button in mappingHoldSummary(for: button) },
+                actionDetail: { button, trigger in mappingActionDetail(for: button, trigger: trigger) },
                 onEdit: { button, trigger in
                     selectedRemoteButton = button
                     mappingActionFilter = .all
@@ -4950,7 +4951,32 @@ struct SettingsView: View {
 
     private func mappingActionSummary(for button: RemoteButton, trigger: ButtonTrigger,
                                       configuredAction: ConfiguredButtonAction? = nil) -> String {
-        actionSummary(configuredAction ?? mappingConfiguration(for: button, trigger: trigger))
+        // 方案作用域优先用私有组件的统一文案，和键位方案页逐字一致；
+        // 方案没覆盖这个按键、或旧私有组件没有这套 API 时返回 nil，回落到基础映射。
+        if configuredAction == nil,
+           let profile = editingMappingProfileID,
+           let text = macroFeature.profileBindingText(
+               device: settings.selectedRemoteProfileID,
+               profile: profile,
+               button: button,
+               trigger: trigger
+           ) {
+            return text.compact
+        }
+        return actionSummary(configuredAction ?? mappingConfiguration(for: button, trigger: trigger))
+    }
+
+    /// 悬停用的完整形态，和 `mappingActionSummary` 同一来源。
+    private func mappingActionDetail(for button: RemoteButton, trigger: ButtonTrigger) -> String {
+        guard let profile = editingMappingProfileID,
+              let text = macroFeature.profileBindingText(
+                  device: settings.selectedRemoteProfileID,
+                  profile: profile,
+                  button: button,
+                  trigger: trigger
+              )
+        else { return "" }
+        return text.detailed
     }
 
     /// The user-visible name of one configured action. An unrecorded custom shortcut must not

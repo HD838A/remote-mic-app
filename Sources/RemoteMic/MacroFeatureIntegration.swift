@@ -259,11 +259,33 @@ final class MacroFeatureIntegration: ObservableObject {
                 default: return .disabled
                 }
             }
+            #if SAYALL_BUTTON_PROFILE_BINDING_TEXT
+            // 私有组件提供真实键名；缺了它按键页只会显示修饰键符号。
+            let keyLabel = buttonProfilesFeature.shortcutLabel(id: key) ?? ""
+            #else
+            let keyLabel = ""
+            #endif
             return ConfiguredButtonAction(action: .customShortcut,
-                shortcut: CustomKeyboardShortcut(keyCode: shortcut.keyCode, modifierFlags: flags, keyLabel: ""))
+                shortcut: CustomKeyboardShortcut(keyCode: shortcut.keyCode, modifierFlags: flags, keyLabel: keyLabel))
         case .focus:
             return ConfiguredButtonAction(action: .focusInput, shortcut: nil)
         }
+        #else
+        return nil
+        #endif
+    }
+
+    /// 方案绑定的显示文案，与键位方案页共用私有组件里同一份格式化结果。
+    ///
+    /// 返回 nil 有两种含义，调用方都应当回落到基础映射：
+    /// 方案没有覆盖这个按键，或私有组件还没提供这套 API。
+    func profileBindingText(device: UUID?, profile: UUID? = nil, button: RemoteButton,
+                            trigger: ButtonTrigger) -> (compact: String, detailed: String)? {
+        #if canImport(SayAllButtonProfiles) && SAYALL_BUTTON_PROFILE_BINDING_TEXT
+        guard let resolved = buttonProfilesFeature.resolvedBindingText(
+            profile: profile, button: button.rawValue, trigger: trigger.rawValue
+        ) else { return nil }
+        return (resolved.text.compact, resolved.text.detailed)
         #else
         return nil
         #endif
