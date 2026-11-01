@@ -2098,40 +2098,40 @@ struct SettingsView: View {
         isSavingMappingProfile = false
     }
 
+    /// 方案切换与「保存为键位方案」共处一行。
+    ///
+    /// 方案数量不固定，因此只有方案一侧横向滚动；保存入口留在滚动区域之外、固定在行右端，
+    /// 不会随方案数量左右漂移，也不再是小号按钮挤在方案后面。
     private var mappingProfileSelector: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                if editingMappingProfileID == nil {
-                    Button(localization.text("button_mapping.base_profile")) { editingMappingProfileID = nil }
-                        .buttonStyle(.borderedProminent)
-                } else {
-                    Button(localization.text("button_mapping.base_profile")) { editingMappingProfileID = nil }
-                        .buttonStyle(.bordered)
-                }
-                ForEach(macroFeature.mappingProfiles(device: settings.selectedRemoteProfileID)) { profile in
-                    if editingMappingProfileID == profile.id {
-                        Button(profile.name) { editingMappingProfileID = profile.id; shortcutCaptureTarget = nil }
-                            .buttonStyle(.borderedProminent)
-                    } else {
-                        Button(profile.name) { editingMappingProfileID = profile.id; shortcutCaptureTarget = nil }
-                            .buttonStyle(.bordered)
+        let profiles = macroFeature.mappingProfiles(device: settings.selectedRemoteProfileID)
+        let baseProfile = baseMappingProfile(in: profiles)
+        let listedProfiles = baseProfile.map { base in profiles.filter { $0.id != base.id } } ?? profiles
+        return HStack(spacing: 12) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    mappingProfileChip(
+                        // 私有的「默认」方案就是基础映射，有它时直接用它的名字，不再重复一项「基础映射」。
+                        baseProfile?.name ?? localization.text("button_mapping.base_profile"),
+                        selected: editingMappingProfileID == nil
+                    ) {
+                        editingMappingProfileID = nil
+                    }
+                    ForEach(listedProfiles) { profile in
+                        mappingProfileChip(
+                            profile.name,
+                            selected: editingMappingProfileID == profile.id
+                        ) {
+                            editingMappingProfileID = profile.id
+                            shortcutCaptureTarget = nil
+                        }
                     }
                 }
-                Spacer(minLength: 12)
-                if editingMappingProfileID == nil && macroFeature.isFeatureVisible {
-                    Button {
-                        beginSavingMappingProfile()
-                    } label: {
-                        Label(localization.text("button_mapping.save_as_profile"),
-                              systemImage: "square.and.arrow.down")
-                            .font(.system(size: 11))
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                }
+                .padding(.vertical, 2)
             }
-            .controlSize(.small)
-            .padding(.vertical, 2)
+
+            if editingMappingProfileID == nil && macroFeature.isFeatureVisible {
+                mappingSaveAsProfileButton
+            }
         }
         .sheet(isPresented: $isSavingMappingProfile) { mappingSaveAsProfileSheet }
         .onAppear { macroFeature.prepareMappingDevice(settings.selectedRemoteProfileID) }
@@ -2148,6 +2148,71 @@ struct SettingsView: View {
                 editingMappingProfileID = nil
             }
         }
+    }
+
+    /// 私有「默认」方案继承基础映射且拒绝写入，因此它本身就是基础映射，不该再单独出现一项「基础映射」。
+    ///
+    /// 组件若无法区分可编辑性，会把全部方案都报成不可编辑；这时保留原来的「基础映射 + 全部方案」，
+    /// 宁可多一项，也不隐藏用户已有的方案。
+    private func baseMappingProfile(in profiles: [ButtonMappingProfile]) -> ButtonMappingProfile? {
+        guard let candidate = profiles.first(where: { !macroFeature.isMappingProfileEditable($0.id) }),
+              profiles.count == 1 || profiles.contains(where: { macroFeature.isMappingProfileEditable($0.id) })
+        else { return nil }
+        return candidate
+    }
+
+    /// 基础映射与所有键位方案共用同一尺寸的胶囊：选中只改变配色，不改变大小与描边宽度。
+    private func mappingProfileChip(
+        _ title: String,
+        selected: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 12, weight: selected ? .semibold : .regular))
+                .foregroundStyle(selected ? Color.accentColor : Color.primary)
+                .lineLimit(1)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .background(
+                    selected ? Color.accentColor.opacity(0.16) : Color.primary.opacity(0.06),
+                    in: Capsule(style: .continuous)
+                )
+                .overlay {
+                    Capsule(style: .continuous)
+                        .stroke(
+                            selected ? Color.accentColor.opacity(0.65) : Color.secondary.opacity(0.22),
+                            lineWidth: 1
+                        )
+                }
+                .contentShape(Capsule(style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+        .help(title)
+    }
+
+    /// 「保存为键位方案」与方案胶囊同高同字号，靠稍重的描边区分为动作而非状态。
+    private var mappingSaveAsProfileButton: some View {
+        Button {
+            beginSavingMappingProfile()
+        } label: {
+            Text(localization.text("button_mapping.save_as_profile"))
+                .font(.system(size: 12))
+                .foregroundStyle(Color.primary)
+                .lineLimit(1)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .background(Color.primary.opacity(0.06), in: Capsule(style: .continuous))
+                .overlay {
+                    Capsule(style: .continuous)
+                        .stroke(Color.secondary.opacity(0.32), lineWidth: 1)
+                }
+                .contentShape(Capsule(style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .fixedSize()
+        .help(localization.text("button_mapping.save_as_profile.note"))
     }
 
     @ViewBuilder
@@ -2279,7 +2344,9 @@ struct SettingsView: View {
         @ViewBuilder hardwareCanvas: @escaping () -> HardwareCanvas
     ) -> some View {
         VStack(spacing: 0) {
-            HStack(alignment: .top, spacing: 14) {
+            // 控制器卡片按底边与页头对齐：卡片高度随控制器和连接状态变化，
+            // 只有底边固定在分隔线上，卡片到下方工具行的间距才不会跟着控制器变。
+            HStack(alignment: .bottom, spacing: 14) {
                 mappingPageHeader
                     .fixedSize(horizontal: true, vertical: false)
                 remoteDeviceSelector()
@@ -2287,19 +2354,26 @@ struct SettingsView: View {
             }
             .padding(.horizontal, 22)
             .padding(.top, 18)
-            .padding(.bottom, 14)
+            .padding(.bottom, 12)
             .frame(maxWidth: .infinity, alignment: .leading)
 
             Divider()
+
+            // 方案切换与保存入口固定在页头下方的横带里：它不随内容滚动，宽度等于页面可视宽度，
+            // 因此「保存为键位方案」能稳定贴住右边缘，也不会被画布撑出的溢出宽度带出屏幕。
+            mappingProfileSelector
+                .padding(.horizontal, 22)
+                .padding(.top, 14)
+                .padding(.bottom, 2)
 
             ScrollViewReader { proxy in
                 Group {
                     ScrollView(.vertical, showsIndicators: false) {
                         VStack(spacing: 16) {
+                            // 零高度滚动锚点：与第一项之间的 VStack 间距就是上方固定行到内容的间距。
                             Color.clear
                                 .frame(height: 0)
                                 .id("mapping-page-top")
-                            mappingProfileSelector
                             if editingMappingProfileID != nil {
                                 Text(localization.text("button_mapping.profile_scope_hint"))
                                     .font(.system(size: 11))
@@ -2336,7 +2410,8 @@ struct SettingsView: View {
                             mappingGestureTimingSection
                             Color.clear.frame(height: 1).id("mapping-page-bottom")
                         }
-                        .padding(22)
+                        .padding(.horizontal, 22)
+                        .padding(.bottom, 22)
                         .frame(maxWidth: .infinity, alignment: .topLeading)
                     }
                     .id(settings.selectedRemoteProfileID)

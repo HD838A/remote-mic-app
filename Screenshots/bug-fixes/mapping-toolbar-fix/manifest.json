@@ -1,0 +1,65 @@
+{
+  "batch": "bug-fixes/mapping-toolbar-fix",
+  "date": "2026-11-01",
+  "purpose": "按键页控制器卡片到工具行留白过大、方案行按钮样式不一致、保存入口不右对齐的修复前后对照（Bug 记录 Bugs/2026-11-01-mapping-toolbar-spacing-and-save-alignment.md）",
+  "host_base": "2c5f2086",
+  "window_points": [1020, 772],
+  "storage": "external-persistent-directory",
+  "storage_path": "~/Develop/ReleaseArtifacts/mapping-toolbar-fix/",
+  "notes": [
+    "由构建产物里的 SettingsScreenshotRenderer 离屏托管生产 SettingsView 生成，入口为 REMOTE_MIC_SETTINGS_SCREENSHOT_* 环境变量；不是设计稿，也不启动硬件。",
+    "公开构建下键位方案与保存入口由私有模块提供，因此离屏图只渲染“基础映射”一项；多方案排布与保存入口右对齐另用本地临时示例注入核对后撤销，未提交。",
+    "图片字节不入库，本文件只做文本索引；外部链接在 PR 附件或评论中补齐。"
+  ],
+  "images": [
+    {
+      "file": "before-1020x772-dark.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "5bdd5c1db33e53b24e251b5b0086946dcb4333e30ce1c5eb2090d6d96631b9e5",
+      "state": "before"
+    },
+    {
+      "file": "after-1020x772-dark.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "f53f71ae5bd4ea1ac83b40a39ac5af80eb11dd5781f5c86371c33e27903c653f",
+      "state": "after"
+    },
+    {
+      "file": "after-1020x772-light.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "c9f733140abb5ea708981609d9a317d6a1042a66ac4c1f715e55d231152c3436",
+      "state": "after"
+    },
+    {
+      "file": "after-800x650-dark.png",
+      "format": "PNG",
+      "width": 1600,
+      "height": 1300,
+      "sha256": "d3117e6e5eba13260d7f01891ae479d0c026fb0fe7c4cb9484aa789816af03bb",
+      "state": "after"
+    },
+    {
+      "file": "after-1600x900-dark.png",
+      "format": "PNG",
+      "width": 3200,
+      "height": 1800,
+      "sha256": "6fa21e5c643ba48e3b85f5e6fc4c64db96ab725e41928a57da5dbd1f696d366c",
+      "state": "after"
+    },
+    {
+      "file": "diagnostic-demo-chips-1020x772-dark.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "6df8c74899f398d358836e4d6266b58b87775f38b78f97d44e382a0679d80b6c",
+      "state": "diagnostic-fixture",
+      "note": "本地临时把基础项显示为「默认」、注入一个示例方案并强制显示保存入口后渲染，只用于核对「默认」与方案不重复、保存入口无图标且贴右；注入未提交。"
+    }
+  ]
+}

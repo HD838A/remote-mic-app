@@ -649,7 +649,9 @@ struct SettingsPageRegressionTests {
         #expect(subtitle.lowerBound < toggle.lowerBound)
         #expect(headerSource.contains("VStack(alignment: .leading, spacing: 6)"))
         #expect(!headerSource.contains("HStack"))
-        #expect(mappingSource.contains("HStack(alignment: .top, spacing: 14)"))
+        // 卡片按底边对齐页头：底边固定后，页头到工具行的间距不再随控制器卡片高度变化。
+        #expect(mappingSource.contains("HStack(alignment: .bottom, spacing: 14)"))
+        #expect(!mappingSource.contains("HStack(alignment: .top, spacing: 14)"))
         #expect(mappingSource.contains(".padding(.top, 18)"))
 
         #expect(!mappingSource.contains("ViewThatFits(in: .horizontal)"))
@@ -661,6 +663,74 @@ struct SettingsPageRegressionTests {
 
         #expect(settingsSource.contains("hardwareMappingPage(includeSiriScrollArrow: true)"))
         #expect(settingsSource.contains("hardwareMappingPage {"))
+    }
+
+    /// 保存入口必须落在横向滚动区域之外，否则方案一多，它就会跟着方案左右漂移而不是右对齐。
+    @Test func mappingProfileRowPinsTheSaveActionOutsideTheScrollingChips() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+
+        let selectorStart = try #require(source.range(of: "private var mappingProfileSelector"))
+        let chipHelper = try #require(source.range(
+            of: "private func mappingProfileChip",
+            range: selectorStart.upperBound..<source.endIndex
+        ))
+        let rowSource = source[selectorStart.lowerBound..<chipHelper.lowerBound]
+
+        let scrollChips = try #require(rowSource.range(of: "ScrollView(.horizontal"))
+        let saveAction = try #require(rowSource.range(of: "mappingSaveAsProfileButton"))
+        #expect(scrollChips.upperBound < saveAction.lowerBound)
+        // 给滚动区域加 maxWidth: .infinity 会把它变成贪心视图，保存入口会被挤出右边界。
+        #expect(!rowSource.contains(".frame(maxWidth: .infinity, alignment: .leading)"))
+        // 滚动区域里的 Spacer 只会被压缩到最小长度，起不到右对齐作用。
+        #expect(!rowSource.contains("Spacer(minLength:"))
+        #expect(!rowSource.contains(".controlSize(.small)"))
+        #expect(!rowSource.contains(".font(.system(size: 11))"))
+
+        let saveButtonStart = try #require(source.range(of: "private var mappingSaveAsProfileButton"))
+        let saveButtonEnd = try #require(source.range(
+            of: "private func mappingInheritanceControl",
+            range: saveButtonStart.upperBound..<source.endIndex
+        ))
+        let saveButtonSource = source[saveButtonStart.lowerBound..<saveButtonEnd.lowerBound]
+        // 中文标注字号不得小于 12pt，保存入口不能再退回 11pt 小号。
+        #expect(saveButtonSource.contains(".font(.system(size: 12))"))
+        // 保存入口只保留文字，不再带下载图标。
+        #expect(!saveButtonSource.contains("square.and.arrow.down"))
+        #expect(!saveButtonSource.contains("Image(systemName:"))
+    }
+
+    /// 私有「默认」方案就是基础映射：行内只能出现一项，不能同时显示「基础映射」和「默认」。
+    @Test func mappingProfileRowDoesNotDuplicateTheBaseEntry() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+
+        let selectorStart = try #require(source.range(of: "private var mappingProfileSelector"))
+        let baseHelper = try #require(source.range(
+            of: "private func baseMappingProfile",
+            range: selectorStart.upperBound..<source.endIndex
+        ))
+        let rowSource = source[selectorStart.lowerBound..<baseHelper.lowerBound]
+
+        // 基础映射项的名称优先取「默认」方案名，列表里只剩其余方案。
+        #expect(rowSource.contains("baseProfile?.name ?? localization.text(\"button_mapping.base_profile\")"))
+        #expect(rowSource.contains("ForEach(listedProfiles)"))
+        #expect(!rowSource.contains("ForEach(macroFeature.mappingProfiles(device:"))
+        // 组件无法区分可编辑性时回退到「基础映射 + 全部方案」，不能因此隐藏用户方案。
+        #expect(rowSource.contains("baseMappingProfile(in: profiles)"))
+        #expect(source.contains("!macroFeature.isMappingProfileEditable($0.id)"))
     }
 
     @Test func remoteMappingScrollsResetWhenSwitchingProfilesAndConnectionPhotoFollowsModel() throws {
