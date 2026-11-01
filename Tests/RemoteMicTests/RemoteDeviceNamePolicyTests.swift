@@ -262,6 +262,35 @@ struct RemoteDeviceNamePolicyTests {
         }
     }
 
+    @Test func connectionSelectionNeverLetsChromecastTakeAConnectedXiaomiCanvas() {
+        // 多遥控器同时在线：已连接的小米是按键页优选画布，Chromecast 就绪不得抢占。
+        #expect(!RemoteDeviceNamePolicy.shouldAdoptConnectionSelection(
+            for: .chromecastVoiceRemote,
+            isAlreadySelected: false,
+            hasConnectedXiaomi: true
+        ))
+        // 没有小米在线时保持原有的「连接即选中」。
+        #expect(RemoteDeviceNamePolicy.shouldAdoptConnectionSelection(
+            for: .chromecastVoiceRemote,
+            isAlreadySelected: false,
+            hasConnectedXiaomi: false
+        ))
+        // 已经选中就不必再切一次。
+        #expect(!RemoteDeviceNamePolicy.shouldAdoptConnectionSelection(
+            for: .chromecastVoiceRemote,
+            isAlreadySelected: true,
+            hasConnectedXiaomi: false
+        ))
+        // 小米自己的链路与苹果遥控器不受这条 Chromecast 例外影响。
+        for model in [XiaomiRemoteModel.rc001, .rc003, .appleSiriRemoteA2854, .appleSiriRemoteA2540] {
+            #expect(RemoteDeviceNamePolicy.shouldAdoptConnectionSelection(
+                for: model,
+                isAlreadySelected: false,
+                hasConnectedXiaomi: true
+            ))
+        }
+    }
+
     private func makeProfile(
         id: UUID = UUID(),
         model: XiaomiRemoteModel = .rc001,

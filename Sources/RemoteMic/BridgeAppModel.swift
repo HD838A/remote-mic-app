@@ -4426,7 +4426,57 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         return true
     }
 
+    /// 用户在按键页手动点过设备卡：在重新进入按键页之前，连接事件不再改变选中态。
+    private var remoteSelectionWasManual = false
+
+    /// 按键页是否正在显示。连接事件只在按键页可见时补默认画布：
+    /// 用户在组合动作或连接页编辑时，选中档案的一次自动切换会打断正在进行的编辑。
+    private var isMappingPageVisible = false
+
+    /// 由设置窗口在进入/离开按键页时调用。
+    func setMappingPageVisible(_ isVisible: Bool) {
+        isMappingPageVisible = isVisible
+    }
+
+    /// 记录一次用户主动选择的遥控器档案（点击按键页顶部的设备卡）。
+    ///
+    /// 连接事件触发的优选只在没有任何手动选择时生效，否则用户刚切到 Chromecast 画布，
+    /// 小米链路一次重连就会把它抢回去，看起来像页面自己在乱跳。
+    func noteManualRemoteProfileSelection() {
+        remoteSelectionWasManual = true
+    }
+
     func selectDefaultMappingRemoteIfAvailable() {
+        // 进入按键页是一次「重新开始」：之前在那个页面里的手动选择不影响这次默认偏好。
+        remoteSelectionWasManual = false
+        applyDefaultMappingPreference(trigger: "mapping_page")
+    }
+
+    /// 连接状态变化后补一次按键页优选。
+    ///
+    /// 启动时设置窗口通常先于蓝牙就绪打开，那一刻只能得到 `xiaomi_unavailable`，
+    /// 页面沿用上一次的选择（往往是 Chromecast）。等小米真正 ready 之后必须再判一次，
+    /// 否则画布会一直停在 Chromecast（真机 2026-11-01 日志：按键页 0.9s 打开，
+    /// 小米 2.4s 才 ready，期间没有任何重新选择）。
+    func applyDefaultMappingRemoteAfterConnectionChange() {
+        guard isMappingPageVisible else {
+            AppLogger.shared.write(
+                "REMOTE MAPPING_DEFAULT phase=completed result=preserved " +
+                    "reason=mapping_page_hidden trigger=connection"
+            )
+            return
+        }
+        guard !remoteSelectionWasManual else {
+            AppLogger.shared.write(
+                "REMOTE MAPPING_DEFAULT phase=completed result=preserved " +
+                    "reason=manual_selection trigger=connection"
+            )
+            return
+        }
+        applyDefaultMappingPreference(trigger: "connection")
+    }
+
+    private func applyDefaultMappingPreference(trigger: String) {
         let localization = LocalizationStore(settings: settings)
         let connectedProfiles = RemoteDeviceNamePolicy.sortedForCards(
             settings.remoteDeviceProfiles.filter { isRemoteConnected($0.id) },
@@ -4444,20 +4494,20 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         ) else {
             AppLogger.shared.write(
                 "REMOTE MAPPING_DEFAULT phase=completed result=preserved " +
-                    "reason=xiaomi_unavailable"
+                    "reason=xiaomi_unavailable trigger=\(trigger)"
             )
             return
         }
         guard profile.id != settings.selectedRemoteProfileID else {
             AppLogger.shared.write(
                 "REMOTE MAPPING_DEFAULT phase=completed result=preserved " +
-                    "reason=xiaomi_already_selected"
+                    "reason=xiaomi_already_selected trigger=\(trigger)"
             )
             return
         }
         AppLogger.shared.write(
             "REMOTE MAPPING_DEFAULT phase=completed result=selected " +
-                "reason=xiaomi_default family=xiaomi"
+                "reason=xiaomi_default family=xiaomi trigger=\(trigger)"
         )
         if ProcessInfo.processInfo.environment["REMOTE_MIC_SETTINGS_SCREENSHOT_DIR"] != nil {
             settings.selectRemoteProfile(profile.id)
@@ -6131,7 +6181,12 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             }
         }
         refreshBluetoothPresentation()
-        if case .ready = state { refreshRemoteDeviceNames(reason: .connection) }
+        if case .ready = state {
+            refreshRemoteDeviceNames(reason: .connection)
+            // 小米就绪往往晚于设置窗口打开：此时按键页还停在启动那一刻的选择
+            // （Chromecast 或上一次的档案），必须在这里再判一次优选。
+            applyDefaultMappingRemoteAfterConnectionChange()
+        }
         if isConnected {
             voiceFnTapSession.resume()
             if shouldKeepVirtualAudioActive {
@@ -9246,12 +9301,28 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         connectedChromecastProfileIDs.insert(profileID)
         // 连接即选中（与小米链路的 activateRemoteProfile 对齐）：否则按键页停留在上一次
         // 选中的档案（用户看到的是小米遥控器画布），要等「按键映射开启且按下普通键」才会切换。
-        if settings.selectedRemoteProfileID != profileID {
+        //
+        // 例外：已经连着的小米遥控器是按键页的优选画布，Chromecast 不得把它抢走。
+        // 启动顺序不稳定（Chromecast 常先 ready），按「谁后连谁赢」会让页面永远停在 Chromecast。
+        let shouldTakeSelection = RemoteDeviceNamePolicy.shouldAdoptConnectionSelection(
+            for: .chromecastVoiceRemote,
+            isAlreadySelected: settings.selectedRemoteProfileID == profileID,
+            hasConnectedXiaomi: hasConnectedXiaomiProfile
+        )
+        if shouldTakeSelection {
             selectRemoteProfile(profileID)
         } else {
             refreshBluetoothPresentation()
         }
         return profileID
+    }
+
+    /// 是否存在已连接（链路就绪）的小米遥控器档案。私有适配器的档案不参与判定。
+    private var hasConnectedXiaomiProfile: Bool {
+        settings.remoteDeviceProfiles.contains { profile in
+            (profile.model == .rc001 || profile.model == .rc003)
+                && connectedRemoteProfileIDs.contains(profile.id)
+        }
     }
 
     private func refreshChromecastActiveControlIDs() {

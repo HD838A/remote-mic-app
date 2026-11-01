@@ -72,6 +72,21 @@ enum RemoteDeviceNamePolicy {
         profiles.first { $0.model == .rc001 || $0.model == .rc003 }
     }
 
+    /// 链路就绪事件是否接管按键页的选中态。
+    ///
+    /// 多遥控器同时在线时按键页优选小米画布：Chromecast 不得抢走已连接的小米。
+    /// 启动顺序不稳定（Chromecast 常比小米先 ready），只按「谁后连谁赢」会让页面
+    /// 永远停在 Chromecast。其余情况保持「连接即选中」，与小米链路的
+    /// `activateRemoteProfile` 一致。
+    static func shouldAdoptConnectionSelection(
+        for incoming: XiaomiRemoteModel,
+        isAlreadySelected: Bool,
+        hasConnectedXiaomi: Bool
+    ) -> Bool {
+        guard !isAlreadySelected else { return false }
+        return !(incoming.isChromecastRemote && hasConnectedXiaomi)
+    }
+
     private static func cardFamilyOrder(_ model: XiaomiRemoteModel) -> Int {
         switch model {
         case .rc001, .rc003: 0
