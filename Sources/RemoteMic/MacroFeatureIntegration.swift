@@ -77,6 +77,10 @@ final class MacroFeatureIntegration: ObservableObject {
             diagnosticLogger: AppLogger.shared.write
         )
         #endif
+        #if SAYALL_TEST_BUTTON_PROFILES_FREE
+        // 本地测试包没有会员模块，默认决策会让按键方案整页只读（去编辑点了没反应）。
+        buttonProfilesFeature.updateButtonProfilesAccess(.allowed(validUntil: .distantFuture))
+        #endif
 #endif
         #if canImport(SayAllMacroRemoteMic)
         feature.$isFeatureVisible
