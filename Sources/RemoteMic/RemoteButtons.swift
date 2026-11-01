@@ -398,7 +398,7 @@ struct CustomKeyboardShortcut: Codable, Equatable {
             )
         }
         if modifierFlags.contains(.function) { result += "fn " }
-        return result + visualKeyLabel
+        return result + visualKeyLabel(using: localization)
     }
 
     /// Full keyboard wording used by tooltips and accessibility labels.
@@ -478,7 +478,7 @@ struct CustomKeyboardShortcut: Codable, Equatable {
         return prefix.isEmpty ? name : "\(prefix) \(name)"
     }
 
-    private var visualKeyLabel: String {
+    private func visualKeyLabel(using localization: LocalizationStore) -> String {
         switch keyCode {
         case 36: return "⏎"
         case 48: return "⇥"
@@ -486,12 +486,26 @@ struct CustomKeyboardShortcut: Codable, Equatable {
         case 51: return "⌫"
         case 53: return "⎋"
         case 76: return "⌤"
+        case 115: return "Home"
+        case 116: return "Page Up"
         case 117: return "⌦"
+        case 119: return "End"
+        case 121: return "Page Down"
         case 123: return "←"
         case 124: return "→"
         case 125: return "↓"
         case 126: return "↑"
-        default: return keyLabel
+        default:
+            // 空 label 不能渲染成空串：按键页会出现一格空白，看着像没有设置。
+            let trimmed = keyLabel.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.isEmpty || trimmed.hasPrefix("Key Code ") || trimmed.hasPrefix("键码") {
+                return String(
+                    format: localization.text("keyboard.key_code"),
+                    locale: localization.locale,
+                    arguments: [String(keyCode)]
+                )
+            }
+            return trimmed
         }
     }
 

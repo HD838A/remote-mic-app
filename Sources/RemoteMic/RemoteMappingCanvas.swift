@@ -115,6 +115,8 @@ struct RemoteMappingCanvas: View {
     let voiceActive: Bool
     let actionSummary: (RemoteButton, ButtonTrigger) -> String
     let holdSummary: (RemoteButton) -> String
+    /// 悬停时显示的完整形态（例如 `⌘ Command + ⇧ Shift + H`）；卡片正文用 `actionSummary`。
+    var actionDetail: ((RemoteButton, ButtonTrigger) -> String)? = nil
     let onEdit: (RemoteButton, ButtonTrigger) -> Void
     let onEditHold: (RemoteButton) -> Void
     var onVoiceSettings: () -> Void = {}
@@ -223,6 +225,14 @@ struct RemoteMappingCanvas: View {
         context.fill(arrow, with: .color(color))
     }
 
+    /// 卡片正文是紧凑形态，完整形态只在悬停时出现。
+    private func actionHelp(button: RemoteButton, trigger: ButtonTrigger) -> String {
+        let prefix =
+            "\(button.displayName(using: localization)) · \(trigger.displayName(using: localization))"
+        guard let detail = actionDetail?(button, trigger), !detail.isEmpty else { return prefix }
+        return "\(prefix) — \(detail)"
+    }
+
     private func mappingCard(_ button: RemoteButton) -> some View {
         let selected = selectedButton == button
         let active = activeButtons.contains(button)
@@ -279,9 +289,7 @@ struct RemoteMappingCanvas: View {
                         .background(.quaternary, in: RoundedRectangle(cornerRadius: 5, style: .continuous))
                     }
                     .buttonStyle(.plain)
-                    .help(
-                        "\(button.displayName(using: localization)) · \(trigger.displayName(using: localization))"
-                    )
+                    .help(actionHelp(button: button, trigger: trigger))
                 }
             }
         }
