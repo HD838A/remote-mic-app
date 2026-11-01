@@ -19,14 +19,15 @@ template: doc
 
 ## 修复
 - 改用 `IOHIDManagerRegisterInputReportWithTimeStampCallback`，在报告回调里把 mach 绝对时间按 `mach_timebase_info` 换算成与 `DispatchTime.uptimeNanoseconds` 同刻度的纳秒，随报告一路传到 `onRuntimeButton` 和手势学习器；`HID EDGE` 的 `since_release_ms` / `hold_ms` 也改用同一时刻，诊断口径统一。
-- `RemoteButtonGestureLearner` 增加 `minimumDoubleClickIntervalMilliseconds = 20`：松手→再按下短于它时按重复边沿处理，丢弃这次按下、重新从该次按压计数，既不写入学习结果也不推进到长按；阈值只用于排除手指不可能完成的间隔，正常快速双击（40 ms 量级）仍可测量。
-- 丢弃次数记入 `RemoteButtonGestureLearningStatus.discardedDoubleClickEdges`，并由 `BridgeAppModel` 写成 `phase=measured result=discarded reason=implausible_double_click_interval` 诊断行，异常不再无声。
+- `RemoteButtonGestureLearner` 增加 `minimumDoubleClickIntervalMilliseconds = 20`：松手→再按下短于它时，把这一对按下/松开整对忽略——双击计数、第一次松手时刻都保持不变，用户随后的真实第二下仍按原来的第一次松手计时。重复边沿不会推进步骤，也不需要用户补按。
+- 3/3 同样增加 `minimumLongPressMilliseconds = 150`：第二下之后跟着的重复边沿会落进长按步骤，旧实现把它写成 1 ms 长按并直接结束学习；现在整对忽略并留在 3/3，用户照常做完本该做的那次长按即可完成。
+- 忽略次数记入 `RemoteButtonGestureLearningStatus.discardedDoubleClickEdges` / `discardedLongPressEdges`，并由 `BridgeAppModel` 写成 `phase=measured result=discarded reason=implausible_gesture_interval` 诊断行，异常不再无声。
 
 ## 验证
-- 新增 5 项自动化：1 ms 间隔被丢弃且随后真实双击仍能测出、乱序负间隔不再写成 0、两对抖动边沿被吸收且不跳过双击步骤、报告时间戳优先于处理时刻、mach tick 换算。
+- 新增 6 项自动化：1 ms 间隔被忽略且随后真实双击仍能测出、乱序负间隔不再写成 0、两对抖动边沿被吸收且不跳过双击步骤、落在长按步骤的抖动边沿被忽略后用户一次长按即可完成、报告时间戳优先于处理时刻、mach tick 换算。
 - `swift test --disable-keychain --disable-sandbox`：1175 项全部通过（含此前因本机缺 `ripgrep` 而失败的一项）。
 - `bash scripts/verify-repository-governance.sh`：通过。
-- 反向对照：把 20 ms 下限改成 0 后重跑，新增用例出现 9 处断言失败——1 ms 和 5 ms 的重复边沿被当作有效双击写进结果、步骤被提前推进到长按；恢复后全部通过。
+- 反向对照：把两个下限改成 0 后重跑，新增用例出现断言失败——1 ms 和 5 ms 的重复边沿被当作有效双击、1 ms 的“长按”直接结束学习；恢复后全部通过。
 
 ## 未覆盖边界
-真机复验尚未执行：需要在 rc003 上重跑一次学习，确认 2/3 步骤给出的是人类量级的间隔，并且日志里不出现 `result=discarded`。本修复不改变手势阈值默认值，也不涉及语音键路径。
+真机复验尚未执行：需要在 rc003 上重跑一次学习，确认 2/3 与 3/3 给出的是人类量级的间隔，并且日志里不出现 `result=discarded`。本修复不改变手势阈值默认值，也不涉及语音键路径。

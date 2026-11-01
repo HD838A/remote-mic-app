@@ -27,6 +27,8 @@ struct RemoteButtonGestureLearningStatus: Equatable {
     /// 松手到下一次按下短到不可能由手指完成的次数。报告层把一个按压拆成
     /// 相邻边沿时会走到这里，诊断日志据此区分「用户慢」与「事件重复」。
     var discardedDoubleClickEdges = 0
+    /// 落在 3/3 的重复边沿次数：按住时长短到不可能是长按。
+    var discardedLongPressEdges = 0
 
     var isActive: Bool {
         step != .idle && step != .complete
@@ -50,20 +52,32 @@ struct RemoteButtonGestureLearner {
     ///
     /// 真机日志里出现过 0 ms 和 1 ms：报告在主线程排队后，处理时刻被压到与
     /// 相邻边沿同一毫秒，`max(0, …)` 又把负值静默变成 0。手指完成一次松手再
-    /// 按下远快于 20 ms 做不到，短于它的间隔按重复边沿处理，既不写入学习结果，
-    /// 也不把步骤推进到长按，让用户的下一次真实点击重新计数。
+    /// 按下远快于 20 ms 做不到，短于它的按下连同配对的松开整对忽略：双击计数
+    /// 与第一次松手时刻都保持不变，用户不需要补按，随后的真实第二下照常计时。
     static let minimumDoubleClickIntervalMilliseconds = 20
+
+    /// 长按测量的最短可信按住时长。
+    ///
+    /// 第二下点击之后跟着的重复边沿会落进 3/3：那对边沿只有个位数毫秒，旧实现
+    /// 直接把它当成长按写进结果并结束学习。它不是用户做的长按，整对忽略后停在
+    /// 3/3 即可，用户照常完成本该做的那次长按。合法范围下限是 300 ms，150 ms
+    /// 远低于它，不会误伤真实长按。
+    static let minimumLongPressMilliseconds = 150
 
     private(set) var status = RemoteButtonGestureLearningStatus()
     private var pressStartedAt: Int?
     private var firstDoubleReleaseAt: Int?
     private var doublePressCount = 0
+    /// 当前这次按下被判定为重复边沿，与它配对的松开也要整对忽略，
+    /// 否则那一对会把双击计数推过一次，直接跳进长按步骤。
+    private var ignoresNextRelease = false
 
     mutating func start(model: XiaomiRemoteModel) {
         status = RemoteButtonGestureLearningStatus(step: .singleClick, model: model)
         pressStartedAt = nil
         firstDoubleReleaseAt = nil
         doublePressCount = 0
+        ignoresNextRelease = false
     }
 
     mutating func cancel() {
@@ -71,6 +85,7 @@ struct RemoteButtonGestureLearner {
         pressStartedAt = nil
         firstDoubleReleaseAt = nil
         doublePressCount = 0
+        ignoresNextRelease = false
     }
 
     mutating func handle(
@@ -101,24 +116,30 @@ struct RemoteButtonGestureLearner {
                 if doublePressCount == 1, let firstDoubleReleaseAt {
                     let interval = timestampMilliseconds - firstDoubleReleaseAt
                     if interval < Self.minimumDoubleClickIntervalMilliseconds {
-                        // 重复边沿或时间戳被压缩：不可能是用户的双击第二下。
-                        // 从这一次按压重新开始计数，避免把 0/1 ms 写进学习结果。
-                        doublePressCount = 0
-                        self.firstDoubleReleaseAt = nil
+                        // 重复边沿不是用户的第二次按下：这一对按下/松开整对忽略，
+                        // 双击计数不变，用户随后的真实第二下仍从第一次松手计时。
+                        ignoresNextRelease = true
                         status.discardedDoubleClickEdges += 1
                     } else {
+                        ignoresNextRelease = false
                         status.doubleClickMilliseconds = interval
                     }
+                } else {
+                    ignoresNextRelease = false
                 }
                 pressStartedAt = timestampMilliseconds
             } else if pressStartedAt != nil {
                 pressStartedAt = nil
-                doublePressCount += 1
-                if doublePressCount == 1 {
-                    firstDoubleReleaseAt = timestampMilliseconds
+                if ignoresNextRelease {
+                    ignoresNextRelease = false
                 } else {
-                    firstDoubleReleaseAt = nil
-                    status.step = .longPress
+                    doublePressCount += 1
+                    if doublePressCount == 1 {
+                        firstDoubleReleaseAt = timestampMilliseconds
+                    } else {
+                        firstDoubleReleaseAt = nil
+                        status.step = .longPress
+                    }
                 }
             }
         case .longPress:
@@ -127,9 +148,14 @@ struct RemoteButtonGestureLearner {
             } else if let pressStartedAt,
                       let single = status.singleClickMilliseconds,
                       let double = status.doubleClickMilliseconds {
-                let long = max(0, timestampMilliseconds - pressStartedAt)
-                status.longPressMilliseconds = long
+                let long = timestampMilliseconds - pressStartedAt
                 self.pressStartedAt = nil
+                guard long >= Self.minimumLongPressMilliseconds else {
+                    // 重复边沿不是长按：留在 3/3，用户照常做自己那次长按即可。
+                    status.discardedLongPressEdges += 1
+                    return nil
+                }
+                status.longPressMilliseconds = long
                 let roundedDouble = Self.rounded(double, step: 50, direction: .up)
                 let roundedLong = Self.rounded(long, step: 50, direction: .down)
                 let suggested = RemoteButtonGestureTiming(

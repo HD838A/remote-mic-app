@@ -4402,7 +4402,8 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         guard claimsButtonGestureLearning(profileID: profileID),
               let model = settings.settingsModel(for: profileID) else { return false }
         let previousStep = buttonGestureLearner.status.step
-        let previousDiscardedEdges = buttonGestureLearner.status.discardedDoubleClickEdges
+        let previousDiscardedDouble = buttonGestureLearner.status.discardedDoubleClickEdges
+        let previousDiscardedLong = buttonGestureLearner.status.discardedLongPressEdges
         let result = buttonGestureLearner.handle(
             phase,
             button: button,
@@ -4410,11 +4411,13 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             timestampMilliseconds: timestampMilliseconds ?? Self.uptimeMilliseconds()
         )
         buttonGestureLearningStatus = buttonGestureLearner.status
-        if previousDiscardedEdges != buttonGestureLearningStatus.discardedDoubleClickEdges {
+        if previousDiscardedDouble != buttonGestureLearningStatus.discardedDoubleClickEdges ||
+            previousDiscardedLong != buttonGestureLearningStatus.discardedLongPressEdges {
             AppLogger.shared.write(
                 "BUTTON GESTURE LEARNING operation_id=\(buttonGestureLearningOperationID ?? "none") " +
-                    "phase=measured result=discarded reason=implausible_double_click_interval " +
-                    "discarded=\(buttonGestureLearningStatus.discardedDoubleClickEdges)"
+                    "phase=measured result=discarded reason=implausible_gesture_interval " +
+                    "double=\(buttonGestureLearningStatus.discardedDoubleClickEdges) " +
+                    "long=\(buttonGestureLearningStatus.discardedLongPressEdges)"
             )
         }
         if previousStep != buttonGestureLearningStatus.step {
