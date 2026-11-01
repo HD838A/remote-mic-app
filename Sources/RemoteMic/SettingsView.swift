@@ -545,6 +545,11 @@ struct SettingsView: View {
     @ObservedObject private var privateFeature: PrivateFeatureIntegration
     @State private var preservesMappingContextOnNavigation = false
     @State private var editingMappingProfileID: UUID?
+    /// 选中方案只是**浏览**：方案行右侧的「编辑」才是进入可写态的开关。
+    @State private var isEditingMappingProfile = false
+    /// 点「编辑」但会员未开通时，把唯一的会员入口（私有模块那个「会员功能，点击开通」）
+    /// 挂在方案行下方，而不是在仓库里另画一个开通按钮。
+    @State private var showsProfileMembershipNotice = false
     @State private var isSavingMappingProfile = false
     @State private var savingMappingProfileName = ""
     @State private var savingMappingProfileSwitches = true
@@ -559,6 +564,7 @@ struct SettingsView: View {
     @ObservedObject private var updateInformation: UpdateInformationStore
     @ObservedObject private var hardwareAnnouncements: HardwareAnnouncementStore
     @EnvironmentObject private var localization: LocalizationStore
+    @Environment(\.colorScheme) private var colorScheme
 
     private let checkForUpdates: () -> Void
     private let refreshUpdateInformation: () -> Void
@@ -583,6 +589,8 @@ struct SettingsView: View {
     /// Clicking the same hold entry twice must still bring the editor into view, so the
     /// scroll is driven by a request token instead of the selection identity.
     @State private var mappingEditorScrollTarget = "mapping-action-editor"
+    /// 按键页内容滚动后，方案行下边缘要有一条阴影提示「下面还有内容」。
+    @State private var mappingContentIsScrolled = false
     @State private var mappingEditorScrollRequest = 0
     @State private var mappingActionFilter: MappingActionFilter = .all
     @State private var gestureTimingDraft = RemoteButtonGestureTiming()
@@ -984,7 +992,13 @@ struct SettingsView: View {
                         onEditBinding: { device, profile, button, trigger in
                             preservesMappingContextOnNavigation = true
                             if let device { settings.selectRemoteProfile(device) }
-                            editingMappingProfileID = profile
+                            // 从组合动作页点进来的同样是「编辑这份方案」的意图：走同一个解锁入口，
+                            // 会员没通过时停在只读预览，不会借这条路绕过限制。
+                            if let profile {
+                                openMappingProfileForEditing(profile)
+                            } else {
+                                selectMappingProfile(nil)
+                            }
                             mappingHoldEditingButton = button
                             mappingEditingTarget = ShortcutEditingTarget(button: button, trigger: trigger)
                             selectedSection = .mapping
@@ -1013,7 +1027,7 @@ struct SettingsView: View {
                             settings: settings,
                             onEditKeys: { profile in
                                 preservesMappingContextOnNavigation = true
-                                editingMappingProfileID = profile
+                                openMappingProfileForEditing(profile)
                                 selectedSection = .mapping
                             },
                             onChooseCustomApplication: { completion in
@@ -1940,6 +1954,9 @@ struct SettingsView: View {
     }
 
     private func saveMappingBinding(_ configured: ConfiguredButtonAction, button: RemoteButton, trigger: ButtonTrigger) {
+        // 只读预览下任何写入都必须被挡住：编辑器已经整体禁用，这里再兜一层，
+        // 防止快捷键录制、恢复默认之类的旁路把数据写进别人的方案。
+        guard !isMappingProfilePreviewOnly else { return }
         let operationID = UUID().uuidString
         if configured.action == .combinationAction {
             AppLogger.shared.write("BUTTON CONFIGURATION operation_id=\(operationID) action=select_combination phase=started result=requested")
@@ -2094,59 +2111,280 @@ struct SettingsView: View {
         }
         if savingMappingProfileSwitches {
             editingMappingProfileID = profileID
+            // 刚建出来的方案同样先给只读预览：写权限只由「编辑」这一步放行。
+            isEditingMappingProfile = false
         }
         isSavingMappingProfile = false
     }
 
-    private var mappingProfileSelector: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                if editingMappingProfileID == nil {
-                    Button(localization.text("button_mapping.base_profile")) { editingMappingProfileID = nil }
-                        .buttonStyle(.borderedProminent)
-                } else {
-                    Button(localization.text("button_mapping.base_profile")) { editingMappingProfileID = nil }
-                        .buttonStyle(.bordered)
-                }
-                ForEach(macroFeature.mappingProfiles(device: settings.selectedRemoteProfileID)) { profile in
-                    if editingMappingProfileID == profile.id {
-                        Button(profile.name) { editingMappingProfileID = profile.id; shortcutCaptureTarget = nil }
-                            .buttonStyle(.borderedProminent)
-                    } else {
-                        Button(profile.name) { editingMappingProfileID = profile.id; shortcutCaptureTarget = nil }
-                            .buttonStyle(.bordered)
-                    }
-                }
-                Spacer(minLength: 12)
-                if editingMappingProfileID == nil && macroFeature.isFeatureVisible {
-                    Button {
-                        beginSavingMappingProfile()
-                    } label: {
-                        Label(localization.text("button_mapping.save_as_profile"),
-                              systemImage: "square.and.arrow.down")
-                            .font(.system(size: 11))
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
+    /// 方案行（固定带）：上面一行是方案胶囊 + 右侧唯一的动作入口（保存 / 编辑 / 完成）；
+    /// 会员没开通时，全 App 唯一的会员入口紧贴在它下面，位置关系与按键方案页保持一致。
+    private var mappingProfileToolbar: some View {
+        VStack(spacing: 0) {
+            mappingProfileSelector
+                .padding(.horizontal, 22)
+                .padding(.top, 8)
+                .padding(.bottom, 5)
+            if showsProfileMembershipNotice {
+                membershipFeature.membershipRequiredView(forButtonProfiles: true) {
+                    selectedSection = .membership
+                    membershipFeature.refreshIfNeeded()
                 }
             }
-            .controlSize(.small)
-            .padding(.vertical, 2)
+        }
+        .background(Color(nsColor: .controlBackgroundColor))
+        // 内容滚到工具行下面后，只在下边缘投影，明确「上面这条是固定的」。
+        // 直接给整行加 .shadow 会四条边一起投；这里用一条只向下的渐变代替。
+        .background(alignment: .bottom) {
+            LinearGradient(
+                colors: [
+                    // 深色背景上同样的黑色阴影几乎看不见，按外观加重一档。
+                    .black.opacity(colorScheme == .dark ? 0.22 : 0.06),
+                    .black.opacity(0)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(height: 10)
+            .offset(y: 10)
+            .opacity(mappingContentIsScrolled ? 1 : 0)
+            .allowsHitTesting(false)
+        }
+        // 不抬高层级时阴影会被后绘制的滚动内容盖住。
+        .zIndex(1)
+        .onChange(of: membershipFeature.buttonProfilesAccessDecision) { _ in
+            reconcileMappingProfileMembership()
+        }
+    }
+
+    /// 键位方案编辑是会员功能，判定沿用按键方案页那一套（同一个私有模块、同一份凭据）。
+    ///
+    /// 两把锁都要过：先看方案组件自己的访问判定（方案列表就是按它过滤的，本地测试构建还会
+    /// 用测试开关把它放开），再看宿主会员模块（它决定有没有「点击开通」可点）。
+    /// 只看会员模块会漏掉测试构建里「列表看得见、编辑被拦」的死按钮；只看组件那份则会漏掉
+    /// 会员刚过期、组件还没收到新判定的那一小段时间。
+    private var canEditMappingProfiles: Bool {
+        guard macroFeature.canUseMappingProfiles else { return false }
+        // 会员模块整个不在的构建里没有可点开通的入口，不拦。
+        guard membershipFeature.isFeatureVisible else { return true }
+        switch membershipFeature.buttonProfilesAccessDecision {
+        case .allowed, .temporarilyOffline, .authorized:
+            return true
+        case .requiresPlus, .unavailable:
+            return false
+        }
+    }
+
+    /// 只有「选中了一份可编辑的方案」才谈得上解锁；私有的「默认」方案继承基础映射并拒绝写入。
+    private var selectedMappingProfileIsEditable: Bool {
+        guard let profile = editingMappingProfileID else { return false }
+        return macroFeature.isMappingProfileEditable(profile)
+    }
+
+    /// 可写：选中了可编辑方案，且用户点过「编辑」（会员通过后才允许点上）。
+    private var isMappingProfileUnlocked: Bool {
+        selectedMappingProfileIsEditable && isEditingMappingProfile
+    }
+
+    /// 只读预览：选中了方案但没解锁。编辑器整体禁用，写入路径再兜一层 guard。
+    private var isMappingProfilePreviewOnly: Bool {
+        editingMappingProfileID != nil && !isMappingProfileUnlocked
+    }
+
+    /// 切换方案一律回到只读预览：「刚解锁过」不能被带到另一份方案上。
+    private func selectMappingProfile(_ profile: UUID?) {
+        editingMappingProfileID = profile
+        isEditingMappingProfile = false
+        showsProfileMembershipNotice = false
+        shortcutCaptureTarget = nil
+    }
+
+    /// 从别的页面带过来的「编辑按键」意图：选中方案后立刻尝试解锁，行为与按下「编辑」一致。
+    private func openMappingProfileForEditing(_ profile: UUID) {
+        selectMappingProfile(profile)
+        beginEditingMappingProfile()
+    }
+
+    /// 「编辑」入口：会员通过就解锁；没通过只把唯一的会员入口摆出来，不跳页、不写任何数据。
+    private func beginEditingMappingProfile() {
+        guard selectedMappingProfileIsEditable else { return }
+        guard canEditMappingProfiles else {
+            isEditingMappingProfile = false
+            showsProfileMembershipNotice = true
+            AppLogger.shared.write("BUTTON PROFILE edit phase=blocked reason=membership")
+            return
+        }
+        showsProfileMembershipNotice = false
+        isEditingMappingProfile = true
+    }
+
+    private func endEditingMappingProfile() {
+        isEditingMappingProfile = false
+        shortcutCaptureTarget = nil
+        applicationShortcutCaptureProfileID = nil
+    }
+
+    /// 会员状态会随登录、续费、离线变化，编辑态必须跟着走：
+    /// 刚开通就顺势解锁用户刚点的那个「编辑」；掉权限就退回只读，并把原因重新摆出来。
+    private func reconcileMappingProfileMembership() {
+        if canEditMappingProfiles {
+            guard showsProfileMembershipNotice else { return }
+            showsProfileMembershipNotice = false
+            if selectedMappingProfileIsEditable {
+                isEditingMappingProfile = true
+            }
+        } else {
+            guard isEditingMappingProfile || showsProfileMembershipNotice else { return }
+            endEditingMappingProfile()
+            showsProfileMembershipNotice = selectedMappingProfileIsEditable
+        }
+    }
+
+    /// 方案切换与「保存为键位方案」共处一行。
+    ///
+    /// 方案数量不固定，因此只有方案一侧横向滚动；右侧动作入口留在滚动区域之外、固定在行右端，
+    /// 不会随方案数量左右漂移，也不再是小号按钮挤在方案后面。
+    private var mappingProfileSelector: some View {
+        let profiles = macroFeature.mappingProfiles(device: settings.selectedRemoteProfileID)
+        let baseProfile = baseMappingProfile(in: profiles)
+        let listedProfiles = baseProfile.map { base in profiles.filter { $0.id != base.id } } ?? profiles
+        return HStack(spacing: 12) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    mappingProfileChip(
+                        // 私有的「默认」方案就是基础映射，有它时直接用它的名字，不再重复一项「基础映射」。
+                        baseProfile?.name ?? localization.text("button_mapping.base_profile"),
+                        selected: editingMappingProfileID == nil
+                    ) {
+                        selectMappingProfile(nil)
+                    }
+                    ForEach(listedProfiles) { profile in
+                        mappingProfileChip(
+                            profile.name,
+                            selected: editingMappingProfileID == profile.id
+                        ) {
+                            selectMappingProfile(profile.id)
+                        }
+                    }
+                }
+                .padding(.vertical, 2)
+            }
+
+            // 右端只放一个动作：基础映射下是「保存为键位方案」，选中方案后是「编辑 / 完成」。
+            if editingMappingProfileID == nil {
+                if macroFeature.isFeatureVisible {
+                    mappingSaveAsProfileButton
+                }
+            } else if isMappingProfileUnlocked {
+                mappingProfileRowButton(
+                    localization.text("button_mapping.profile.edit_done"),
+                    help: localization.text("button_mapping.profile.edit_done.help")
+                ) {
+                    endEditingMappingProfile()
+                }
+            } else if selectedMappingProfileIsEditable {
+                mappingProfileRowButton(
+                    localization.text("button_mapping.profile.edit"),
+                    help: canEditMappingProfiles
+                        ? localization.text("button_mapping.profile.edit.help")
+                        : localization.text("button_mapping.profile.edit.help_locked")
+                ) {
+                    beginEditingMappingProfile()
+                }
+            }
         }
         .sheet(isPresented: $isSavingMappingProfile) { mappingSaveAsProfileSheet }
         .onAppear { macroFeature.prepareMappingDevice(settings.selectedRemoteProfileID) }
         .onChange(of: macroFeature.mappingProfiles(device: settings.selectedRemoteProfileID).map(\.id)) { ids in
             if let profile = editingMappingProfileID, !ids.contains(profile) {
-                editingMappingProfileID = nil
-                shortcutCaptureTarget = nil
+                selectMappingProfile(nil)
             }
         }
         .onChange(of: settings.selectedRemoteProfileID) { _ in
             macroFeature.prepareMappingDevice(settings.selectedRemoteProfileID)
             if let profile = editingMappingProfileID,
                !macroFeature.mappingProfiles(device: settings.selectedRemoteProfileID).contains(where: { $0.id == profile }) {
-                editingMappingProfileID = nil
+                selectMappingProfile(nil)
             }
+        }
+    }
+
+    /// 私有「默认」方案继承基础映射且拒绝写入，因此它本身就是基础映射，不该再单独出现一项「基础映射」。
+    ///
+    /// 组件若无法区分可编辑性，会把全部方案都报成不可编辑；这时保留原来的「基础映射 + 全部方案」，
+    /// 宁可多一项，也不隐藏用户已有的方案。
+    private func baseMappingProfile(in profiles: [ButtonMappingProfile]) -> ButtonMappingProfile? {
+        guard let candidate = profiles.first(where: { !macroFeature.isMappingProfileEditable($0.id) }),
+              profiles.count == 1 || profiles.contains(where: { macroFeature.isMappingProfileEditable($0.id) })
+        else { return nil }
+        return candidate
+    }
+
+    /// 基础映射与所有键位方案共用同一尺寸的胶囊：选中只改变配色，不改变大小与描边宽度。
+    private func mappingProfileChip(
+        _ title: String,
+        selected: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 12, weight: selected ? .semibold : .regular))
+                .foregroundStyle(selected ? Color.accentColor : Color.primary)
+                .lineLimit(1)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .background(
+                    selected ? Color.accentColor.opacity(0.16) : Color.primary.opacity(0.06),
+                    in: Capsule(style: .continuous)
+                )
+                .overlay {
+                    Capsule(style: .continuous)
+                        .stroke(
+                            selected ? Color.accentColor.opacity(0.65) : Color.secondary.opacity(0.22),
+                            lineWidth: 1
+                        )
+                }
+                .contentShape(Capsule(style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+        .help(title)
+    }
+
+    /// 方案行右端的动作入口，与方案胶囊同高同字号，靠稍重的描边区分为动作而非状态。
+    ///
+    /// 保存、编辑、完成共用这一份样式：切换方案时右侧只换文字，尺寸与描边不变。
+    private func mappingProfileRowButton(
+        _ title: String,
+        help: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 12))
+                .foregroundStyle(Color.primary)
+                .lineLimit(1)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .background(Color.primary.opacity(0.06), in: Capsule(style: .continuous))
+                .overlay {
+                    Capsule(style: .continuous)
+                        .stroke(Color.secondary.opacity(0.32), lineWidth: 1)
+                }
+                .contentShape(Capsule(style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .fixedSize()
+        .help(help)
+    }
+
+    /// 「保存为键位方案」：只在基础映射作用域下出现。
+    private var mappingSaveAsProfileButton: some View {
+        mappingProfileRowButton(
+            localization.text("button_mapping.save_as_profile"),
+            help: localization.text("button_mapping.save_as_profile.note")
+        ) {
+            beginSavingMappingProfile()
         }
     }
 
@@ -2279,7 +2517,9 @@ struct SettingsView: View {
         @ViewBuilder hardwareCanvas: @escaping () -> HardwareCanvas
     ) -> some View {
         VStack(spacing: 0) {
-            HStack(alignment: .top, spacing: 14) {
+            // 控制器卡片按底边与页头对齐：卡片高度随控制器和连接状态变化，
+            // 只有底边固定在分隔线上，卡片到下方工具行的间距才不会跟着控制器变。
+            HStack(alignment: .bottom, spacing: 14) {
                 mappingPageHeader
                     .fixedSize(horizontal: true, vertical: false)
                 remoteDeviceSelector()
@@ -2287,24 +2527,39 @@ struct SettingsView: View {
             }
             .padding(.horizontal, 22)
             .padding(.top, 18)
-            .padding(.bottom, 14)
+            .padding(.bottom, 12)
             .frame(maxWidth: .infinity, alignment: .leading)
 
             Divider()
+
+            // 方案切换与右侧动作入口固定在页头下方的横带里：它不随内容滚动，宽度等于页面可视宽度，
+            // 因此「保存为键位方案 / 编辑」能稳定贴住右边缘，也不会被画布撑出的溢出宽度带出屏幕。
+            // 上下留白都在滚动区域之外，滚动时不会塌掉。
+            // 画布第一张卡片自带约 6.5pt 内部留白，所以静止时下侧会比纯 padding 多这一段：
+            // 上 8pt、下 5pt 是让「静止」和「滚动中」两种状态都尽量接近 10pt 的取值。
+            mappingProfileToolbar
 
             ScrollViewReader { proxy in
                 Group {
                     ScrollView(.vertical, showsIndicators: false) {
                         VStack(spacing: 16) {
-                            Color.clear
-                                .frame(height: 0)
-                                .id("mapping-page-top")
-                            mappingProfileSelector
                             if editingMappingProfileID != nil {
-                                Text(localization.text("button_mapping.profile_scope_hint"))
-                                    .font(.system(size: 11))
-                                    .foregroundStyle(.secondary)
-                                    .fixedSize(horizontal: false, vertical: true)
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(localization.text("button_mapping.profile_scope_hint"))
+                                        .font(.system(size: 11))
+                                        .foregroundStyle(.secondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                    if isMappingProfilePreviewOnly {
+                                        // 选中方案只是浏览：说清「为什么现在改不了」，别让禁用看起来像故障。
+                                        Text(localization.text(selectedMappingProfileIsEditable
+                                                ? "button_mapping.profile.preview_hint"
+                                                : "button_mapping.profile.inherited_hint"))
+                                            .font(.system(size: 11))
+                                            .foregroundStyle(.secondary)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                    }
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
                             }
                             configurationImportBanner
                             corruptedSettingsBanner
@@ -2317,10 +2572,12 @@ struct SettingsView: View {
                                 if let holdButton = mappingHoldEditingButton, holdButton == target.button {
                                     mappingHoldEditorPanel(holdButton)
                                         .id("mapping-hold-editor")
+                                        .disabled(isMappingProfilePreviewOnly)
                                 }
                             } else if let button = mappingHoldEditingButton {
                                 mappingHoldEditorPanel(button)
                                     .id("mapping-hold-editor")
+                                    .disabled(isMappingProfilePreviewOnly)
                             }
 
                             #if SAYALL_CHROMECAST_ENABLED
@@ -2336,9 +2593,24 @@ struct SettingsView: View {
                             mappingGestureTimingSection
                             Color.clear.frame(height: 1).id("mapping-page-bottom")
                         }
-                        .padding(22)
+                        .padding(.horizontal, 22)
+                        .padding(.bottom, 22)
                         .frame(maxWidth: .infinity, alignment: .topLeading)
+                        // 锚点直接落在内容本身：再放一个零高度占位会在它与首行之间多出一段会滚走的间距。
+                        .id("mapping-page-top")
+                        .background {
+                            // 只读取滚动偏移，用来决定工具行下边缘是否显示阴影。
+                            GeometryReader { geometry in
+                                let offset = geometry.frame(in: .named("mapping-scroll")).minY
+                                Color.clear
+                                    .onAppear { mappingContentIsScrolled = offset < -0.5 }
+                                    .onChange(of: offset) { value in
+                                        mappingContentIsScrolled = value < -0.5
+                                    }
+                            }
+                        }
                     }
+                    .coordinateSpace(name: "mapping-scroll")
                     .id(settings.selectedRemoteProfileID)
                     .compatibilityScrollEdgeEffect()
                 }
@@ -2541,9 +2813,10 @@ struct SettingsView: View {
                     .padding(.vertical, 6)
                     .background(Color.red.opacity(0.09), in: RoundedRectangle(cornerRadius: 10))
                     .disabled(
-                        target.button == .power &&
-                            target.trigger == .singleClick &&
-                            settings.experimentalContinuousRecordingEnabled
+                        isMappingProfilePreviewOnly ||
+                            (target.button == .power &&
+                                target.trigger == .singleClick &&
+                                settings.experimentalContinuousRecordingEnabled)
                     )
                     Button("common.action.close") {
                         mappingEditingTarget = nil
@@ -2553,7 +2826,9 @@ struct SettingsView: View {
                     .compatibilityButtonStyle(.standard)
                 }
 
+                // 只读预览下只禁用会写入的部分，「关闭」仍然可点，否则面板变成关不掉的窗口。
                 mappingTriggerEditor(target.button, trigger: target.trigger)
+                    .disabled(isMappingProfilePreviewOnly)
             }
         }
     }
@@ -2689,6 +2964,8 @@ struct SettingsView: View {
             selectedRemoteButton = .ok
         }
         .compatibilityButtonStyle(.standard)
+        // 方案只读预览时「恢复默认」也是写入：和编辑器一起禁用。
+        .disabled(isMappingProfilePreviewOnly)
     }
 
     @ViewBuilder

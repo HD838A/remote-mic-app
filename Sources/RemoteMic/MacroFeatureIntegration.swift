@@ -181,6 +181,21 @@ final class MacroFeatureIntegration: ObservableObject {
         #endif
     }
 
+    /// 键位方案现在能不能写。
+    ///
+    /// 读私有组件自己的访问判定，而不是宿主会员模块那一份：方案列表就是按它过滤的
+    /// （无权限时直接返回空），本地测试构建还会用 `SAYALL_TEST_BUTTON_PROFILES_FREE`
+    /// 把访问放开。两边读同一个值，才不会出现「列表里有方案，点「编辑」却只弹开通会员」
+    /// 或者「点了完全没反应」这类看起来像故障的状态。
+    var canUseMappingProfiles: Bool {
+        #if canImport(SayAllButtonProfiles) && SAYALL_UNIFIED_BUTTON_CONFIGURATION
+        buttonProfilesFeature.buttonProfilesAccessDecision.permitsAccess
+        #else
+        // 没有私有组件就没有方案，也就没有可拦的写入。
+        true
+        #endif
+    }
+
     /// 「保存为键位方案」先建空方案，再逐条写入当前基础映射。
     func createMappingProfile(named name: String) -> UUID? {
         #if canImport(SayAllButtonProfiles) && SAYALL_UNIFIED_BUTTON_CONFIGURATION

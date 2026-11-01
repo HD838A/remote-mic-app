@@ -1,0 +1,77 @@
+{
+  "batch": "bug-fixes/mapping-toolbar-fix",
+  "date": "2026-11-01",
+  "purpose": "按键页控制器卡片到工具行留白过大、方案行按钮样式不一致、保存入口不右对齐的修复前后对照（Bug 记录 Bugs/2026-11-01-mapping-toolbar-spacing-and-save-alignment.md）",
+  "host_base": "2c5f2086",
+  "window_points": [
+    1020,
+    772
+  ],
+  "storage": "external-persistent-directory",
+  "storage_path": "~/Develop/ReleaseArtifacts/mapping-toolbar-fix/",
+  "notes": [
+    "由构建产物里的 SettingsScreenshotRenderer 离屏托管生产 SettingsView 生成，入口为 REMOTE_MIC_SETTINGS_SCREENSHOT_* 环境变量；不是设计稿，也不启动硬件。",
+    "公开构建下键位方案与保存入口由私有模块提供，因此离屏图只渲染“基础映射”一项；多方案排布与保存入口右对齐另用本地临时示例注入核对后撤销，未提交。",
+    "图片字节不入库，本文件只做文本索引；外部链接在 PR 附件或评论中补齐。"
+  ],
+  "images": [
+    {
+      "file": "before-1020x772-dark.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "5bdd5c1db33e53b24e251b5b0086946dcb4333e30ce1c5eb2090d6d96631b9e5",
+      "state": "before"
+    },
+    {
+      "file": "after-1020x772-dark.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "744ea6af7bbc9e8a5ab57c04c9e3e7bea78c65463f295515c1af1554fa49e6e7",
+      "state": "after"
+    },
+    {
+      "file": "after-1020x772-light.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "a686cfe7c8e231f207177a61756310738073069cf48309c854698770a2c68d45",
+      "state": "after"
+    },
+    {
+      "file": "after-800x650-dark.png",
+      "format": "PNG",
+      "width": 1600,
+      "height": 1300,
+      "sha256": "123219f381259523ccfdec8d49ff1626c03586fac9f771f331df793ad0069104",
+      "state": "after"
+    },
+    {
+      "file": "after-1600x900-dark.png",
+      "format": "PNG",
+      "width": 3200,
+      "height": 1800,
+      "sha256": "aeba6f148253d7c82e1624bd00e9ae3433d41de27c5c3d8c517c2b1befc2a1cb",
+      "state": "after"
+    },
+    {
+      "file": "diagnostic-demo-chips-1020x772-dark.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "6df8c74899f398d358836e4d6266b58b87775f38b78f97d44e382a0679d80b6c",
+      "state": "diagnostic-fixture",
+      "note": "本地临时把基础项显示为「默认」、注入一个示例方案并强制显示保存入口后渲染，只用于核对「默认」与方案不重复、保存入口无图标且贴右；注入未提交。"
+    },
+    {
+      "file": "diagnostic-scroll-shadow-1020x772-dark.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "2b8d0949398956484940a52eb1eaf4f990ade395dca14c7962823f3118630922",
+      "state": "diagnostic-fixture",
+      "note": "本地临时把「已滚动」状态强制为真后渲染，只用于核对工具行下边缘阴影的强度与「只向下、不包围」；绘制时机由滚动偏移驱动，注入未提交。"
+    }
+  ]
+}

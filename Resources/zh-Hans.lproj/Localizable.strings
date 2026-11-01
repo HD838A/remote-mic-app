@@ -1201,6 +1201,13 @@
 "button_mapping.save_as_profile.failed" = "无法创建方案，请重试。";
 "button_mapping.save_as_profile.empty" = "当前没有可保存的按键动作。";
 "button_mapping.profile_scope_hint" = "键位方案只覆盖 10 个普通按键；其他按键仍按基础映射执行。";
+"button_mapping.profile.edit" = "编辑";
+"button_mapping.profile.edit.help" = "编辑这份方案里的按键";
+"button_mapping.profile.edit.help_locked" = "编辑键位方案是会员功能";
+"button_mapping.profile.edit_done" = "完成";
+"button_mapping.profile.edit_done.help" = "结束编辑，回到只读预览";
+"button_mapping.profile.preview_hint" = "当前是只读预览：点「编辑」后可修改这 10 个按键。";
+"button_mapping.profile.inherited_hint" = "这份方案跟随基础映射，不能单独编辑。";
 
 "button_mapping.inherit_base" = "继承基础映射";
 
