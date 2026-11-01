@@ -1202,6 +1202,13 @@
 "button_mapping.save_as_profile.failed" = "Couldn't create the profile. Try again.";
 "button_mapping.save_as_profile.empty" = "There are no button actions to save.";
 "button_mapping.profile_scope_hint" = "Button profiles cover the 10 standard buttons only. Other buttons keep using the base mapping.";
+"button_mapping.profile.edit" = "Edit";
+"button_mapping.profile.edit.help" = "Edit the buttons in this profile";
+"button_mapping.profile.edit.help_locked" = "Editing button profiles requires membership";
+"button_mapping.profile.edit_done" = "Done";
+"button_mapping.profile.edit_done.help" = "Stop editing and return to the read-only preview";
+"button_mapping.profile.preview_hint" = "Read-only preview. Choose Edit to change these 10 buttons.";
+"button_mapping.profile.inherited_hint" = "This profile follows the default mapping and can't be edited on its own.";
 
 "button_mapping.inherit_base" = "Use Default Mapping";
 

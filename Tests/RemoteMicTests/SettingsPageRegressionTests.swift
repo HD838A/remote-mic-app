@@ -699,11 +699,72 @@ struct SettingsPageRegressionTests {
             range: saveButtonStart.upperBound..<source.endIndex
         ))
         let saveButtonSource = source[saveButtonStart.lowerBound..<saveButtonEnd.lowerBound]
-        // 中文标注字号不得小于 12pt，保存入口不能再退回 11pt 小号。
-        #expect(saveButtonSource.contains(".font(.system(size: 12))"))
-        // 保存入口只保留文字，不再带下载图标。
-        #expect(!saveButtonSource.contains("square.and.arrow.down"))
-        #expect(!saveButtonSource.contains("Image(systemName:"))
+        // 保存、编辑、完成必须是同一份样式，切换方案时右侧只换文字，尺寸与描边不变。
+        #expect(saveButtonSource.contains("mappingProfileRowButton("))
+
+        let rowButtonStart = try #require(source.range(of: "private func mappingProfileRowButton"))
+        let rowButtonSource = source[rowButtonStart.lowerBound..<saveButtonStart.lowerBound]
+        // 中文标注字号不得小于 12pt，行内动作入口不能再退回 11pt 小号。
+        #expect(rowButtonSource.contains(".font(.system(size: 12))"))
+        // 入口只保留文字，不再带下载/编辑图标。
+        #expect(!rowButtonSource.contains("square.and.arrow.down"))
+        #expect(!rowButtonSource.contains("Image(systemName:"))
+        #expect(rowButtonSource.contains(".fixedSize()"))
+    }
+
+    /// 选中方案只是**浏览**：右侧出现「编辑」，编辑是会员功能，未解锁时整页只读。
+    @Test func mappingProfileEditingIsGatedByTheEditEntryAndMembership() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+
+        // 行内右端只放一个动作：基础映射是「保存」，选中方案后是「编辑 / 完成」。
+        let selectorStart = try #require(source.range(of: "private var mappingProfileSelector"))
+        let chipHelper = try #require(source.range(
+            of: "private func mappingProfileChip",
+            range: selectorStart.upperBound..<source.endIndex
+        ))
+        let rowSource = source[selectorStart.lowerBound..<chipHelper.lowerBound]
+        #expect(rowSource.contains("\"button_mapping.profile.edit\""))
+        #expect(rowSource.contains("\"button_mapping.profile.edit_done\""))
+        #expect(rowSource.contains("if isMappingProfileUnlocked"))
+        #expect(rowSource.contains("} else if selectedMappingProfileIsEditable {"))
+
+        // 会员判定必须复用按键方案页那套决策，不能自己发明一套规则。
+        let gateStart = try #require(source.range(of: "private var canEditMappingProfiles"))
+        let gateSource = source[gateStart.lowerBound...].prefix(1200)
+        #expect(gateSource.contains("membershipFeature.buttonProfilesAccessDecision"))
+        #expect(gateSource.contains("case .allowed, .temporarilyOffline, .authorized:"))
+        #expect(gateSource.contains("case .requiresPlus, .unavailable:"))
+        // 会员模块整体不可用的构建里没有可点开通的入口，不能把人锁死。
+        #expect(gateSource.contains("guard membershipFeature.isFeatureVisible else { return true }"))
+
+        // 唯一的会员入口是私有模块的视图，仓库不得自绘第二个开通按钮。
+        let toolbarStart = try #require(source.range(of: "private var mappingProfileToolbar"))
+        let toolbarSource = source[toolbarStart.lowerBound..<gateStart.lowerBound]
+        #expect(toolbarSource.contains("membershipFeature.membershipRequiredView(forButtonProfiles: true)"))
+        #expect(toolbarSource.contains("showsProfileMembershipNotice"))
+
+        // 写入路径：编辑器禁用之外，保存函数自己也要拒绝只读预览。
+        #expect(source.contains("guard !isMappingProfilePreviewOnly else { return }"))
+        // 三处编辑器（动作、按住、单独的按住区）加页脚的「恢复默认」，一处都不能漏。
+        #expect(source.components(separatedBy: ".disabled(isMappingProfilePreviewOnly)").count - 1 == 4)
+        #expect(source.contains("private var isMappingProfilePreviewOnly: Bool"))
+
+        // 切换方案必须回到只读预览，不能让「刚解锁过」跟着带过去。
+        let selectStart = try #require(source.range(of: "private func selectMappingProfile("))
+        let selectEnd = try #require(source.range(
+            of: "private func openMappingProfileForEditing",
+            range: selectStart.upperBound..<source.endIndex
+        ))
+        let selectSource = source[selectStart.lowerBound..<selectEnd.lowerBound]
+        #expect(selectSource.contains("isEditingMappingProfile = false"))
+        #expect(selectSource.contains("showsProfileMembershipNotice = false"))
     }
 
     /// 私有「默认」方案就是基础映射：行内只能出现一项，不能同时显示「基础映射」和「默认」。
