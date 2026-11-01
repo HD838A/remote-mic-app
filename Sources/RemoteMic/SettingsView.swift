@@ -2378,7 +2378,7 @@ struct SettingsView: View {
                     LinearGradient(
                         colors: [
                             // 深色背景上同样的黑色阴影几乎看不见，按外观加重一档。
-                            .black.opacity(colorScheme == .dark ? 0.32 : 0.10),
+                            .black.opacity(colorScheme == .dark ? 0.22 : 0.06),
                             .black.opacity(0)
                         ],
                         startPoint: .top,
