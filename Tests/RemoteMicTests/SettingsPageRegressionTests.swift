@@ -925,7 +925,7 @@ struct SettingsPageRegressionTests {
         ).count == 2)
     }
 
-    @Test func mappingFooterUsesCompactLayoutAtMinimumWindowWidth() throws {
+    @Test func mappingVoiceSettingsPanelUsesCompactLayoutAtMinimumWindowWidth() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -935,21 +935,84 @@ struct SettingsPageRegressionTests {
             encoding: .utf8
         )
 
-        let footer = try #require(settingsSource.range(of: "private func mappingFooter"))
+        let panel = try #require(settingsSource.range(of: "private func mappingVoiceSettingsPanel"))
         let selector = try #require(settingsSource.range(
             of: "private func remoteDeviceSelector",
-            range: footer.upperBound..<settingsSource.endIndex
+            range: panel.upperBound..<settingsSource.endIndex
         ))
-        let footerSource = settingsSource[footer.lowerBound..<selector.lowerBound]
+        let panelSource = settingsSource[panel.lowerBound..<selector.lowerBound]
 
-        #expect(footerSource.contains("VStack(alignment: .leading, spacing: 12)"))
-        #expect(!footerSource.contains("HStack(spacing: 16)"))
-        #expect(footerSource.contains("mappingVoiceKeyModeControl"))
-        #expect(!footerSource.contains("\"connection.voice_key_mode.unverified\""))
-        #expect(footerSource.contains("connection.voice_key_mode.unverified_detail"))
-        #expect(footerSource.contains("mappingVoiceFnTapControl"))
-        #expect(!footerSource.contains("mappingVoiceShortTapFocusControl"))
-        #expect(footerSource.contains("mappingRestoreDefaultsButton"))
+        #expect(panelSource.contains("VStack(alignment: .leading, spacing: 12)"))
+        #expect(!panelSource.contains("HStack(spacing: 16)"))
+        #expect(panelSource.contains("mappingVoiceKeyModeControl"))
+        #expect(!panelSource.contains("\"connection.voice_key_mode.unverified\""))
+        #expect(panelSource.contains("connection.voice_key_mode.unverified_detail"))
+        #expect(panelSource.contains("mappingVoiceFnTapControl"))
+        #expect(!panelSource.contains("mappingVoiceShortTapFocusControl"))
+        #expect(panelSource.contains("mappingRestoreDefaultsButton"))
+    }
+
+    /// 语音键没有可映射动作，它的设置面板只能在点击语音键之后出现，而且出现时是页面上唯一的编辑区。
+    @Test func voiceKeySettingsPanelOnlyAppearsAfterClickingTheVoiceKey() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let settingsSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+
+        let page = try #require(settingsSource.range(of: "private func hardwareMappingPage"))
+        let pageEnd = try #require(settingsSource.range(
+            of: "private var configurationImportBanner",
+            range: page.upperBound..<settingsSource.endIndex
+        ))
+        let pageSource = settingsSource[page.lowerBound..<pageEnd.lowerBound]
+
+        // 面板由状态门控，并且排在画布之后：页面加载时不存在这份内容。
+        let canvas = try #require(pageSource.range(of: "hardwareCanvas()"))
+        let gate = try #require(pageSource.range(
+            of: "if isMappingVoiceSettingsPresented {",
+            range: canvas.upperBound..<pageSource.endIndex
+        ))
+        #expect(pageSource[gate.upperBound...].contains(
+            "mappingVoiceSettingsPanel(includeSiriScrollArrow: includeSiriScrollArrow)"
+        ))
+        // 旧的常驻页脚（含 ID）必须完全消失，否则内容会在没点语音键时就出现。
+        #expect(!settingsSource.contains("mapping-footer"))
+        #expect(!settingsSource.contains("private func mappingFooter"))
+
+        // 三个遥控器画布都走同一个入口，不允许任一页面绕过面板直接展开。
+        #expect(!settingsSource.contains("onVoiceSettings: { mappingVoiceSettingsRequest += 1 }"))
+        #expect(settingsSource.components(separatedBy: "onVoiceSettings: presentMappingVoiceSettings").count == 4)
+
+        let presentation = try #require(settingsSource.range(of: "private func presentMappingVoiceSettings()"))
+        let presentationEnd = try #require(settingsSource.range(
+            of: "private func mappingConfiguration(",
+            range: presentation.upperBound..<settingsSource.endIndex
+        ))
+        let presentationSource = settingsSource[presentation.lowerBound..<presentationEnd.lowerBound]
+        // 点语音键要收起普通按键的编辑器，点一次展开、再点一次收起。
+        #expect(presentationSource.contains("mappingEditingTarget = nil"))
+        #expect(presentationSource.contains("mappingHoldEditingButton = nil"))
+        #expect(presentationSource.contains("isMappingVoiceSettingsPresented = true"))
+        #expect(presentationSource.contains("isMappingVoiceSettingsPresented = false"))
+        #expect(presentationSource.contains("mappingVoiceSettingsRequest &+= 1"))
+
+        // 反过来，打开普通按键的编辑器时必须收起语音键面板。
+        let actionEditor = try #require(settingsSource.range(of: ".onChange(of: mappingEditingTarget?.id)"))
+        let holdEditor = try #require(settingsSource.range(of: ".onChange(of: mappingHoldEditingButton?.rawValue)"))
+        let neighbor = try #require(settingsSource.range(
+            of: ".onChange(of: mappingEditorScrollRequest)",
+            range: holdEditor.upperBound..<settingsSource.endIndex
+        ))
+        #expect(settingsSource[actionEditor.upperBound..<holdEditor.lowerBound].contains(
+            "isMappingVoiceSettingsPresented = false"
+        ))
+        #expect(settingsSource[holdEditor.upperBound..<neighbor.lowerBound].contains(
+            "isMappingVoiceSettingsPresented = false"
+        ))
     }
 
     @Test func voiceSessionStopDoesNotTriggerInputFocus() throws {
@@ -1150,22 +1213,35 @@ struct SettingsPageRegressionTests {
         #expect(remoteButtonsSource.contains("if self == .showDesktop"))
     }
 
-    @Test func mappingSelectionStaysOnTheEditedButtonWhileLocked() {
-        #expect(MappingSelectionPolicy.selection(
-            current: .home,
-            activeButtons: [.menu],
-            isLocked: true
-        ) == .home)
-        #expect(MappingSelectionPolicy.selection(
-            current: .home,
-            activeButtons: [.menu],
-            isLocked: false
-        ) == .menu)
-        #expect(MappingSelectionPolicy.selection(
-            current: .home,
-            activeButtons: [],
-            isLocked: false
-        ) == .home)
+    /// 「锁定当前按键」的开关已移除，但它的行为固定保留：按下实体遥控器不得移动选中项，
+    /// 否则正在编辑的按键会被刚按下的按键顶掉。
+    @Test func mappingSelectionNeverFollowsPhysicalPresses() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let settingsSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+
+        // 没有开关、没有策略、也没有把 activeRemoteButtons 接回选中项的通路。
+        #expect(!settingsSource.contains("isMappingSelectionLocked"))
+        #expect(!settingsSource.contains("mappingSelectionLockControl"))
+        #expect(!settingsSource.contains("MappingSelectionPolicy"))
+        #expect(!settingsSource.contains(".onReceive(model.$activeRemoteButtons)"))
+        #expect(!settingsSource.contains("button_mapping.selection_lock"))
+        // 按键仍要在画布上显示按下态，锁定只影响选中项。
+        #expect(settingsSource.contains("activeButtons: model.activeRemoteButtons"))
+        for language in ["zh-Hans", "en"] {
+            let strings = try String(
+                contentsOf: root.appendingPathComponent(
+                    "Resources/\(language).lproj/Localizable.strings"
+                ),
+                encoding: .utf8
+            )
+            #expect(!strings.contains("button_mapping.selection_lock"))
+        }
     }
 
     @Test func customMappingPromptsOnlyWhenAnEnabledPermissionIsMissing() {
@@ -1352,7 +1428,7 @@ struct SettingsPageRegressionTests {
         #expect(bridgeSource.contains("watchBluetoothServer.onConnectionStateChange"))
         #expect(mobileEntrySource.contains("PhoneRemoteInvitationCard"))
         #expect(source.contains("ButtonTrigger.allCases"))
-        #expect(source.contains("isMappingSelectionLocked"))
+        #expect(!source.contains("isMappingSelectionLocked"))
         #expect(!mobileEntrySource.contains("ScrollView(.horizontal, showsIndicators: false)"))
         #expect(!source.contains("remoteDeviceBindingPanel"))
         #expect(!source.contains("SidebarGlassModifier"))
@@ -1368,14 +1444,14 @@ struct SettingsPageRegressionTests {
         #expect(source.contains("showsAnchor: activeButtons.contains(placement.button)"))
         #expect(source.contains(".toggleStyle(.switch)"))
         #expect(source.contains("button_mapping.permission_prompt.open"))
-        #expect(source.contains("button_mapping.selection_lock_hint_short"))
+        #expect(source.contains("mappingVoiceKeyModeControl"))
         #expect(source.contains("Text(\"button_mapping.rapid_press\")"))
         #expect(source.contains("set: { settings.setAllowsRapidPress($0, for: button) }"))
         #expect(source.contains("button_mapping.hold.rapid_press_description"))
         #expect(source.contains("button_mapping.rapid_press_help"))
         #expect(source.contains("hardwareMappingPage(includeSiriScrollArrow: true)"))
         #expect(source.contains(
-            "mappingFooter(includeSiriScrollArrow: includeSiriScrollArrow)"
+            "mappingVoiceSettingsPanel(includeSiriScrollArrow: includeSiriScrollArrow)"
         ))
         #expect(source.contains("ScrollView(.horizontal, showsIndicators: false)"))
         #expect(source.contains("siriRemoteScrollArrowControl"))

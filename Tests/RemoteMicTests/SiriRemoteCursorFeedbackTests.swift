@@ -230,7 +230,7 @@ struct SiriRemoteCursorFeedbackTests {
         #expect(renderer.contains("REMOTE_MIC_SETTINGS_SCREENSHOT_SIRI_REMOTE"))
         #expect(settingsView.contains("hardwareMappingPage(includeSiriScrollArrow: true)"))
         #expect(settingsView.contains(
-            "mappingFooter(includeSiriScrollArrow: includeSiriScrollArrow)"
+            "mappingVoiceSettingsPanel(includeSiriScrollArrow: includeSiriScrollArrow)"
         ))
         let directionControl = try #require(settingsView.range(
             of: "private var siriRemoteScrollArrowControl"

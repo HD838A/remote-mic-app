@@ -72,6 +72,9 @@ enum SettingsScreenshotRenderer {
         let showsGestureTiming = ProcessInfo.processInfo.environment[
             "REMOTE_MIC_SETTINGS_SCREENSHOT_GESTURE_TIMING"
         ] == "1"
+        let opensVoiceSettings = ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_SETTINGS_SCREENSHOT_OPEN_VOICE_SETTINGS"
+        ] == "1"
         let showsStandardKeyboard = ProcessInfo.processInfo.environment[
             "REMOTE_MIC_SETTINGS_SCREENSHOT_SHORTCUT_MODE"
         ] == "keyboard"
@@ -259,6 +262,7 @@ enum SettingsScreenshotRenderer {
                 initialMappingHoldEditingButton: section == .mapping && opensHoldEditor ? .ok : nil,
                 initialShortcutPickerShowsKeyboard: showsStandardKeyboard,
                 initialMappingScrollsToGestureTiming: section == .mapping && showsGestureTiming,
+                initialMappingVoiceSettingsPresented: section == .mapping && opensVoiceSettings,
                 supplementalSettings: supplementalSettings,
                 sidebarAccountDisplayName: sidebarAccountDisplayName
             ).environmentObject(localization))
@@ -297,6 +301,7 @@ enum SettingsScreenshotRenderer {
                     : nil,
                 initialShortcutPickerShowsKeyboard: showsStandardKeyboard,
                 initialMappingScrollsToGestureTiming: section == .mapping && showsGestureTiming,
+                initialMappingVoiceSettingsPresented: section == .mapping && opensVoiceSettings,
                 supplementalSettings: supplementalSettings,
                 sidebarAccountDisplayName: sidebarAccountDisplayName,
                 minimumContentSize: .zero

@@ -431,9 +431,6 @@
 "button_mapping.all_buttons.title" = "All Buttons";
 "button_mapping.all_buttons.help" = "Each row shows the actions for a single press, double press, and long press.";
 "button_mapping.inspector.help" = "Choose an action for each type of button press.";
-"button_mapping.selection_lock" = "Lock Current Button";
-"button_mapping.selection_lock_help" = "When enabled, pressing the physical remote will not switch the button being edited.";
-"button_mapping.selection_lock_hint_short" = "Keep the current item selected while using the remote.";
 "button_mapping.voice_button.title" = "Voice Button";
 "button_mapping.voice_button.fixed" = "Voice Trigger Key";
 "button_mapping.voice_button.detail" = "Hold to talk. Choose Fn/Globe, Left or Right Command, or Left or Right Option as the trigger key. The voice button is separate from other button actions.";
