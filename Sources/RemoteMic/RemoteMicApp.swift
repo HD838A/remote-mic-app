@@ -243,6 +243,8 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     private var statusItemWarningBlinkVisible = true
     private var entryPointOperationID: UInt = 0
     private var statusMenu: NSMenu?
+    private var statusMenuOperationID: UInt = 0
+    private var activeStatusMenuOperation: (id: UInt, startedAt: TimeInterval, menu: NSMenu)?
     private var settingsWindowController: NSWindowController?
     private var isSettingsWindowOpen = false
     private var subscriptions = Set<AnyCancellable>()
@@ -477,7 +479,30 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     }
 
     func menuWillOpen(_ menu: NSMenu) {
+        guard menu === statusMenu else { return }
+        finishStatusMenuOperation(result: "cancelled", reason: "menu_replaced")
+        statusMenuOperationID &+= 1
+        let operationID = statusMenuOperationID
+        let source: String
+        switch NSApp.currentEvent?.type {
+        case .leftMouseDown, .leftMouseUp: source = "left_click"
+        case .rightMouseDown, .rightMouseUp: source = "right_click"
+        case .keyDown, .keyUp: source = "keyboard"
+        default: source = "other"
+        }
+        activeStatusMenuOperation = (operationID, ProcessInfo.processInfo.systemUptime, menu)
+        AppLogger.shared.write(
+            "UI STATUS_MENU operation_id=\(operationID) phase=requested source=\(source)"
+        )
         refreshMenuStatus()
+        AppLogger.shared.write(
+            "UI STATUS_MENU operation_id=\(operationID) phase=started result=opening"
+        )
+    }
+
+    func menuDidClose(_ menu: NSMenu) {
+        guard let operation = activeStatusMenuOperation, menu === operation.menu else { return }
+        finishStatusMenuOperation(result: "closed", reason: "menu_did_close")
     }
 
     @discardableResult
@@ -489,11 +514,6 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         }
 
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        if let button = item.button {
-            button.target = self
-            button.action = #selector(handleStatusItemClick(_:))
-            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
-        }
 
         connectionItem.isEnabled = false
         audioItem.isEnabled = false
@@ -517,6 +537,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     @discardableResult
     private func removeStatusItem() -> Bool {
         guard let statusItem else { return false }
+        finishStatusMenuOperation(result: "cancelled", reason: "status_item_hidden")
         stopStatusItemWarningBlinking()
         statusMenu?.removeItem(connectionItem)
         statusMenu?.removeItem(audioItem)
@@ -554,6 +575,8 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
 
         let menu = NSMenu()
         menu.delegate = self
+        menu.addItem(menuItem("menu.open_settings", action: #selector(showSettings)))
+        menu.addItem(.separator())
         menu.addItem(connectionItem)
         menu.addItem(audioItem)
         menu.addItem(hidItem)
@@ -562,7 +585,6 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         macMicrophoneItem.action = #selector(toggleMacMicrophone)
         menu.addItem(macMicrophoneItem)
         menu.addItem(menuItem("connection.action.reconnect", action: #selector(reconnect)))
-        menu.addItem(menuItem("menu.open_settings", action: #selector(showSettings)))
         menu.addItem(menuItem("menu.show_logs", action: #selector(showLog)))
         menu.addItem(languageMenuItem())
         menu.addItem(.separator())
@@ -574,6 +596,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         menu.addItem(.separator())
         menu.addItem(menuItem("common.action.quit", action: #selector(quit)))
         statusMenu = menu
+        statusItem?.menu = menu
         refreshMenuStatus()
     }
 
@@ -1001,20 +1024,17 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         statusItemWarningBlinkVisible = true
     }
 
-    @objc private func handleStatusItemClick(_ sender: NSStatusBarButton) {
-        if NSApp.currentEvent?.type == .rightMouseUp {
-            showStatusMenu()
-        } else {
-            showSettings()
-        }
-    }
-
-    private func showStatusMenu() {
-        guard let statusItem, let statusMenu else { return }
-        refreshMenuStatus()
-        statusItem.menu = statusMenu
-        statusItem.button?.performClick(nil)
-        statusItem.menu = nil
+    private func finishStatusMenuOperation(result: String, reason: String) {
+        guard let operation = activeStatusMenuOperation else { return }
+        activeStatusMenuOperation = nil
+        let elapsedMilliseconds = max(
+            0,
+            Int((ProcessInfo.processInfo.systemUptime - operation.startedAt) * 1_000)
+        )
+        AppLogger.shared.write(
+            "UI STATUS_MENU operation_id=\(operation.id) phase=completed " +
+                "result=\(result) reason=\(reason) elapsed_ms=\(elapsedMilliseconds)"
+        )
     }
 
     @objc private func toggleMacMicrophone() {

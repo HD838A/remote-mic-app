@@ -564,7 +564,7 @@
 "remote.mapping.instructions" = "点击或按下实物按键定位映射；麦克风键固定用于语音输入与 Fn 功能。";
 "remote.voice_button.help" = "按住麦克风键进行语音输入；在需要时也可作为 Mac Fn 键使用。";
 "remote.voice_button.accessibility_label" = "语音输入与 Fn 键，固定核心功能";
-"menu.open_settings" = "打开设置…";
+"menu.open_settings" = "打开主界面…";
 "menu.show_logs" = "显示日志";
 "menu.about" = "关于无线麦 SayAll";
 "menu.file" = "文件";
