@@ -3,7 +3,10 @@
   "date": "2026-11-01",
   "purpose": "按键页控制器卡片到工具行留白过大、方案行按钮样式不一致、保存入口不右对齐的修复前后对照（Bug 记录 Bugs/2026-11-01-mapping-toolbar-spacing-and-save-alignment.md）",
   "host_base": "2c5f2086",
-  "window_points": [1020, 772],
+  "window_points": [
+    1020,
+    772
+  ],
   "storage": "external-persistent-directory",
   "storage_path": "~/Develop/ReleaseArtifacts/mapping-toolbar-fix/",
   "notes": [
@@ -25,7 +28,7 @@
       "format": "PNG",
       "width": 2040,
       "height": 1544,
-      "sha256": "f53f71ae5bd4ea1ac83b40a39ac5af80eb11dd5781f5c86371c33e27903c653f",
+      "sha256": "744ea6af7bbc9e8a5ab57c04c9e3e7bea78c65463f295515c1af1554fa49e6e7",
       "state": "after"
     },
     {
@@ -33,7 +36,7 @@
       "format": "PNG",
       "width": 2040,
       "height": 1544,
-      "sha256": "c9f733140abb5ea708981609d9a317d6a1042a66ac4c1f715e55d231152c3436",
+      "sha256": "a686cfe7c8e231f207177a61756310738073069cf48309c854698770a2c68d45",
       "state": "after"
     },
     {
@@ -41,7 +44,7 @@
       "format": "PNG",
       "width": 1600,
       "height": 1300,
-      "sha256": "d3117e6e5eba13260d7f01891ae479d0c026fb0fe7c4cb9484aa789816af03bb",
+      "sha256": "123219f381259523ccfdec8d49ff1626c03586fac9f771f331df793ad0069104",
       "state": "after"
     },
     {
@@ -49,7 +52,7 @@
       "format": "PNG",
       "width": 3200,
       "height": 1800,
-      "sha256": "6fa21e5c643ba48e3b85f5e6fc4c64db96ab725e41928a57da5dbd1f696d366c",
+      "sha256": "aeba6f148253d7c82e1624bd00e9ae3433d41de27c5c3d8c517c2b1befc2a1cb",
       "state": "after"
     },
     {

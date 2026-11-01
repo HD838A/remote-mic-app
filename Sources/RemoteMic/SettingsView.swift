@@ -2361,19 +2361,18 @@ struct SettingsView: View {
 
             // 方案切换与保存入口固定在页头下方的横带里：它不随内容滚动，宽度等于页面可视宽度，
             // 因此「保存为键位方案」能稳定贴住右边缘，也不会被画布撑出的溢出宽度带出屏幕。
+            // 上下留白都在滚动区域之外，滚动时不会塌掉。
+            // 画布第一张卡片自带约 6.5pt 内部留白，所以静止时下侧会比纯 padding 多这一段：
+            // 上 8pt、下 5pt 是让「静止」和「滚动中」两种状态都尽量接近 10pt 的取值。
             mappingProfileSelector
                 .padding(.horizontal, 22)
-                .padding(.top, 14)
-                .padding(.bottom, 2)
+                .padding(.top, 8)
+                .padding(.bottom, 5)
 
             ScrollViewReader { proxy in
                 Group {
                     ScrollView(.vertical, showsIndicators: false) {
                         VStack(spacing: 16) {
-                            // 零高度滚动锚点：与第一项之间的 VStack 间距就是上方固定行到内容的间距。
-                            Color.clear
-                                .frame(height: 0)
-                                .id("mapping-page-top")
                             if editingMappingProfileID != nil {
                                 Text(localization.text("button_mapping.profile_scope_hint"))
                                     .font(.system(size: 11))
@@ -2413,6 +2412,8 @@ struct SettingsView: View {
                         .padding(.horizontal, 22)
                         .padding(.bottom, 22)
                         .frame(maxWidth: .infinity, alignment: .topLeading)
+                        // 锚点直接落在内容本身：再放一个零高度占位会在它与首行之间多出一段会滚走的间距。
+                        .id("mapping-page-top")
                     }
                     .id(settings.selectedRemoteProfileID)
                     .compatibilityScrollEdgeEffect()
