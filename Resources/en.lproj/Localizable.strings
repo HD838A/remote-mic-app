@@ -1199,11 +1199,11 @@
 "button_mapping.base_profile" = "Default Mapping";
 "button_mapping.save_as_profile" = "Save as Button Profile";
 "button_mapping.save_as_profile.name" = "Profile name";
-"button_mapping.save_as_profile.note" = "Copies the current actions and hold settings into a separate profile. Later changes to the base mapping won't affect it.";
+"button_mapping.save_as_profile.note" = "Copies the current actions and hold settings into a separate profile. Later changes to the base mapping won’t affect it.";
 "button_mapping.save_as_profile.scope" = "Covers";
 "button_mapping.save_as_profile.switch" = "Switch to this profile after saving";
 "button_mapping.save_as_profile.default_name" = "Button Profile";
-"button_mapping.save_as_profile.failed" = "Couldn't create the profile. Try again.";
+"button_mapping.save_as_profile.failed" = "Couldn’t create the profile. Try again.";
 "button_mapping.save_as_profile.empty" = "There are no button actions to save.";
 "button_mapping.scope.dpad" = "D-pad";
 "button_mapping.profile_scope_hint" = "Button profiles cover %@ only. Other buttons keep using the base mapping.";
@@ -1213,7 +1213,7 @@
 "button_mapping.profile.edit_done" = "Done";
 "button_mapping.profile.edit_done.help" = "Stop editing and return to the read-only preview";
 "button_mapping.profile.preview_hint" = "Read-only preview. Choose Edit to change these buttons.";
-"button_mapping.profile.inherited_hint" = "This profile follows the default mapping and can't be edited on its own.";
+"button_mapping.profile.inherited_hint" = "This profile follows the default mapping and can’t be edited on its own.";
 
 "button_mapping.inherit_base" = "Use Default Mapping";
 
