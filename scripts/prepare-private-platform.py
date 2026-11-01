@@ -3,14 +3,19 @@
 import argparse
 from contextlib import ExitStack
 import fcntl
+import hashlib
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
+import zipfile
 
 REPOSITORY = "GetSayAll/sayall-private-platform"
+RELEASE_ASSET = "sayall-private-platform-{tag}.release.zip"
 SEMVER = re.compile(r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\Z")
 # Mac runtime, resources, package resolution, helpers and binary packaging.
 MAC_PATHS = (
@@ -158,7 +163,95 @@ def fetch_checkout(root):
     return repo
 
 
-def package(root, mode):
+def sha256_file(path):
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def read_release_checksums(checksum_file):
+    """Parse the publisher's ``<digest>  <name>`` asset into a mapping."""
+    entries = {}
+    for line in checksum_file.read_text(encoding="utf-8").splitlines():
+        digest, separator, name = line.partition("  ")
+        if separator and re.fullmatch(r"[0-9a-f]{64}", digest.strip()):
+            entries[name.strip().lstrip("./")] = digest.strip()
+    return entries
+
+
+def download_release_archive(tag, destination):
+    """Fetch the archive that the private publisher attached to the tag."""
+    if shutil.which("gh") is None:
+        raise RuntimeError(
+            "Published private artifacts require the gh CLI; use --artifacts build to build them locally")
+    archive_name = RELEASE_ASSET.format(tag=tag)
+    run("gh", "release", "download", tag, "--repo", REPOSITORY,
+        "--pattern", archive_name, "--pattern", f"{archive_name}.sha256",
+        "--dir", str(destination), "--clobber", timeout=1800)
+    archive = destination / archive_name
+    checksums = destination / f"{archive_name}.sha256"
+    if not archive.is_file() or not checksums.is_file():
+        raise RuntimeError(
+            f"Release {tag} does not publish {archive_name}; publish it or build the artifacts locally")
+    entries = read_release_checksums(checksums)
+    archive_digest = entries.get(archive_name)
+    manifest_digest = entries.get("SHA256SUMS")
+    if not archive_digest or not manifest_digest:
+        raise RuntimeError("Published release checksums must cover both the archive and its SHA256SUMS")
+    if sha256_file(archive) != archive_digest:
+        raise RuntimeError("Published release archive does not match its published checksum")
+    return archive, manifest_digest
+
+
+def extract_release_archive(archive, destination):
+    """Extract the archive only when every entry stays inside ``release/``."""
+    with zipfile.ZipFile(archive) as bundle:
+        for name in bundle.namelist():
+            entry = PurePosixPath(name)
+            if entry.is_absolute() or ".." in entry.parts or not entry.parts or entry.parts[0] != "release":
+                raise RuntimeError(f"Published release archive has an unsafe entry: {name}")
+        bundle.extractall(destination)
+        # zipfile drops the stored permissions; the packaged helpers must stay
+        # executable, and the artifact package rejects non-executable helpers.
+        for info in bundle.infolist():
+            mode = (info.external_attr >> 16) & 0o777
+            target = destination / info.filename
+            if mode and not info.is_dir() and target.is_file():
+                target.chmod(mode)
+    release_dir = destination / "release"
+    if not release_dir.is_dir():
+        raise RuntimeError("Published release archive does not contain a release directory")
+    return release_dir
+
+
+def fetch_artifacts(tag, output):
+    """Materialize the published release artifacts into ``output/release``.
+
+    The protected release runner uses this instead of rebuilding both lanes when
+    a credential that can read the private release attachments is configured.
+    """
+    version_key(tag)
+    output = Path(output).resolve()
+    if output.exists() and any(output.iterdir()):
+        raise RuntimeError("Artifact output directory must be absent or empty")
+    output.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=output, prefix=".download-") as staging:
+        staging_path = Path(staging)
+        archive, manifest_digest = download_release_archive(tag, staging_path)
+        extracted = extract_release_archive(archive, staging_path)
+        if sha256_file(extracted / "SHA256SUMS") != manifest_digest:
+            raise RuntimeError("Published release manifest does not match its published checksum")
+        run("shasum", "-a", "256", "-c", "SHA256SUMS", cwd=extracted, timeout=300)
+        release_dir = output / "release"
+        if release_dir.exists():
+            raise RuntimeError("Release directory appeared during download")
+        os.replace(extracted, release_dir)
+    return {"tag": tag, "release": str(release_dir), "manifestSHA256": manifest_digest}
+
+
+def package(root, mode, artifacts="build"):
     if mode == "public":
         return {"mode": "public", "reason": "explicit_public"}
     # Only an authentication failure permits the optional public build. Network,
@@ -192,13 +285,36 @@ def package(root, mode):
     output.mkdir(parents=True, exist_ok=True)
     release_dir = output / "xcframeworks" / "release"
     prepared = output / "prepared"
+    trusted_manifest_digest = None
     if not release_dir.exists():
-        run(str(repo / "tools/release/build-private-xcframeworks.sh"),
-            str(output / "xcframeworks"), timeout=3600, capture=False)
+        if artifacts == "release":
+            # The published archive is an immutable per-tag build; reuse it
+            # instead of rebuilding both XCFramework lanes from source.
+            with tempfile.TemporaryDirectory(dir=output, prefix=".release-download-") as staging:
+                staging_path = Path(staging)
+                archive, published_manifest_digest = download_release_archive(pinned, staging_path)
+                extracted = extract_release_archive(archive, staging_path)
+                if sha256_file(extracted / "SHA256SUMS") != published_manifest_digest:
+                    raise RuntimeError("Published release manifest does not match its published checksum")
+                run("shasum", "-a", "256", "-c", "SHA256SUMS", cwd=extracted, timeout=300)
+                (output / "xcframeworks").mkdir(parents=True, exist_ok=True)
+                if release_dir.exists():
+                    raise RuntimeError("Private release directory appeared during download")
+                os.replace(extracted, release_dir)
+                trusted_manifest_digest = published_manifest_digest
+            print(f"PRIVATE PLATFORM artifacts reused from published release tag={pinned}", file=sys.stderr)
+        else:
+            run(str(repo / "tools/release/build-private-xcframeworks.sh"),
+                str(output / "xcframeworks"), timeout=3600, capture=False)
+    elif artifacts == "release":
+        print(f"PRIVATE PLATFORM kept existing release directory tag={pinned}", file=sys.stderr)
     if not prepared.exists():
-        digest = run("shasum", "-a", "256", str(release_dir / "SHA256SUMS")).split()[0]
+        digest = trusted_manifest_digest or run(
+            "shasum", "-a", "256", str(release_dir / "SHA256SUMS")).split()[0]
         run(str(root / "scripts/prepare-private-artifact-package.sh"), str(release_dir),
             str(prepared), digest, timeout=300, capture=False)
+    else:
+        print(f"PRIVATE PLATFORM prepared cache hit tag={pinned}", file=sys.stderr)
     # build-app verifies the prepared manifest and every packaged byte on reuse.
     return {"mode": "private", "tag": pinned, "commit": sha,
             "checkout": str(repo), "artifacts": str(prepared)}
@@ -206,13 +322,16 @@ def package(root, mode):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("release", "check", "check-checkout", "package"))
+    parser.add_argument("action", choices=("release", "check", "check-checkout", "package", "artifacts"))
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parent.parent)
     parser.add_argument("--checkout", type=Path)
+    parser.add_argument("--output", type=Path)
     parser.add_argument("--tag")
     parser.add_argument("--channel", choices=("local", "internalQA", "release"), default="release")
     parser.add_argument("--local-commit")
     parser.add_argument("--mode", choices=("auto", "public", "required"), default="auto")
+    parser.add_argument("--artifacts", choices=("build", "release"), default="build",
+                        help="build the XCFrameworks from the tag, or reuse the archive the tag published")
     args = parser.parse_args()
     manifest = json.loads((args.root / "config/release-dependencies.json").read_text())
     dependency = manifest["dependencies"]["sayAllPrivatePlatform"]
@@ -220,6 +339,11 @@ def main():
         raise RuntimeError("Unexpected private dependency repository")
     tag = args.tag or dependency["version"]
     version_key(tag)
+    if args.action == "artifacts":
+        if not args.output:
+            raise RuntimeError("--output is required for the artifacts action")
+        print(json.dumps(fetch_artifacts(tag, args.output)))
+        return
     with ExitStack() as stack:
         if args.action == "package" or not args.checkout:
             lock_dir = args.root / ".private-dependencies"
@@ -230,7 +354,7 @@ def main():
             except BlockingIOError as error:
                 raise RuntimeError("Another private platform preflight is running; retry after it finishes") from error
         if args.action == "package":
-            print(json.dumps(package(args.root, args.mode)))
+            print(json.dumps(package(args.root, args.mode, args.artifacts)))
             return
         repo = args.checkout.resolve() if args.checkout else fetch_checkout(args.root)
         verify_origin(repo)

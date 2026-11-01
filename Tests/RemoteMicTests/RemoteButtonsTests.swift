@@ -2158,10 +2158,77 @@ struct RemoteButtonsTests {
         #expect(RemoteButton.buttons(for: [0x52, 0x65, 0xFFFF]) == Set<RemoteButton>([.up, .menu]))
     }
 
-    @Test func HIDCallbacksDoNotDeferReportHandling() throws {
+    @Test func HIDReportCallbacksRegisterNativeEventsBeforeAnyMainThreadHop() throws {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         let source = try String(contentsOf: root.appendingPathComponent("Sources/RemoteMic/HIDRemoteMonitor.swift"), encoding: .utf8)
-        #expect(!source.contains("DispatchQueue.main.async"))
+        // 报告回调必须先在当前线程同步登记原生事件，再回主线程做解析、界面和动作。
+        // 整条链路都排在主线程时，登记会落后系统原生音量事件 200 ms 以上。
+        let reportStart = try #require(source.range(of: "fileprivate func handleReport("))
+        let reportEnd = try #require(source.range(of: "private func prearmManagedNativeEvents("))
+        let reportBody = source[reportStart.upperBound..<reportEnd.lowerBound]
+        let registration = try #require(reportBody.range(of: "prearmManagedNativeEvents(from:"))
+        let hop = try #require(reportBody.range(of: "DispatchQueue.main.async"))
+        #expect(registration.lowerBound < hop.lowerBound)
+
+        // 登记函数本身不得再切线程，否则等于没有提前。
+        let prearmStart = try #require(source.range(of: "private func prearmManagedNativeEvents("))
+        let prearmEnd = try #require(source.range(of: "private func handleReportOnMain("))
+        let prearmBody = source[prearmStart.upperBound..<prearmEnd.lowerBound]
+        #expect(!prearmBody.contains("DispatchQueue"))
+
+        // 提前登记必须复用主线程的同一套门禁。缺少这些判定时，被排除的设备、
+        // 非目标设备或映射关闭状态下的报告也会登记拦截，吞掉真实键盘按键。
+        for gate in [
+            "prearmSession.current()",
+            "isLocationAllowed(",
+            "reportRoutingDecision(",
+            "needsEventLevelArm(",
+            "routing.permissionsGranted",
+        ] {
+            #expect(prearmBody.contains(gate), "prearm is missing the \(gate) gate")
+        }
+        // 报告线程不得直接查 TCC：两个查询都是同步 IPC，会重新引入本次要消除的延迟。
+        #expect(!prearmBody.contains("runtimePermissionsAreValid()"))
+        #expect(!prearmBody.contains("IOHIDCheckAccess"))
+
+        let routing = try #require(prearmBody.range(of: "reportRoutingDecision("))
+        let prearmCall = try #require(prearmBody.range(of: "eventSuppressor.prearm("))
+        #expect(routing.lowerBound < prearmCall.lowerBound)
+
+        // 会话代数校验与写入必须由同一个调用完成：只在上面读过快照就写入时，
+        // 共享 suppressor（`ownsEventSuppressor: false`）会在本监视器 `stop()`
+        // 之后仍然收下陈旧记录，留下吞掉实体键盘音量键的窗口。
+        let sessionGate = try #require(prearmBody.range(of: "prearmSession.perform("))
+        #expect(sessionGate.lowerBound < prearmCall.lowerBound)
+    }
+
+    @Test func monitorStopEndsThePrearmSessionBeforeReleasingSharedResources() throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let source = try String(contentsOf: root.appendingPathComponent("Sources/RemoteMic/HIDRemoteMonitor.swift"), encoding: .utf8)
+        let start = try #require(source.range(of: "    func stop() {"))
+        let end = try #require(source.range(of: "    /// 设备匹配回调在 HID 报告线程上执行"))
+        let stopBody = source[start.upperBound..<end.lowerBound]
+
+        // 共享 suppressor 不随本监视器关闭，因此「本会话已结束」必须在
+        // 关闭 manager、停用 run loop、关闭 suppressor 之前就成立。
+        let sessionEnd = try #require(stopBody.range(of: "prearmSession.end()"))
+        let unregister = try #require(stopBody.range(of: "IOHIDManagerUnscheduleFromRunLoop"))
+        #expect(sessionEnd.lowerBound < unregister.lowerBound)
+        if let suppressorStop = stopBody.range(of: "eventSuppressor.stop()") {
+            #expect(sessionEnd.lowerBound < suppressorStop.lowerBound)
+        }
+    }
+
+    @Test func prearmAndMainThreadShareOneEventLevelArmDecision() throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let source = try String(contentsOf: root.appendingPathComponent("Sources/RemoteMic/HIDRemoteMonitor.swift"), encoding: .utf8)
+
+        // 两条路径必须调用同一个判定，避免报告线程比主线程多登记一次。
+        let armStart = try #require(source.range(of: "private func shouldArmNativeEvent("))
+        let armEnd = try #require(source.range(of: "private func prepareNativeKeyMapping("))
+        let armBody = source[armStart.upperBound..<armEnd.lowerBound]
+        #expect(armBody.contains("needsEventLevelArm("))
+        #expect(!armBody.contains("!activeDeviceIsSeized || !nativeKeysNeutralized"))
     }
 
     @Test func powerSuppressionIsArmedBeforeButtonCallbacksAndMonitoring() throws {

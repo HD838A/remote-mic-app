@@ -17,7 +17,7 @@ G-DOC.authority=chinese
 ## 新功能开发规范
 
 - 开发任何新功能前，必须完整阅读并遵守 [`FEATURE_DEVELOPMENT.md`](FEATURE_DEVELOPMENT.md)。该规范适用于仓库作者、维护者、外部贡献者、自动化 Agent 和受委托开发者，不因身份而豁免。
-- 新功能必须从最新 `origin/main` 开始，开发前扫描全部 Open PR 的标题和标签，再详细检查相关候选完成查重；UI 变更 PR 必须附实际运行截图；任何方案都不得读取或依赖第三方 App 的私有文件、数据或协议。
+- 新功能必须从最新 `origin/main` 开始，开发前扫描全部 Open PR 的标题和标签，再详细检查相关候选完成查重；UI 变更 PR 必须在 PR 附件或持久链接中附实际运行截图，图片字节不入仓库，规则见 [`截图与设计稿归档规范`](#截图与设计稿归档规范)；任何方案都不得读取或依赖第三方 App 的私有文件、数据或协议。
 - 新功能 PR 必须完成 [PR 提交模板](.github/PULL_REQUEST_TEMPLATE.md) 中的检查项，并同时遵守 [`BRANCH_MANAGEMENT.md`](BRANCH_MANAGEMENT.md) 与本文件的专项门禁。
 
 ## SwiftPM 本地凭据边界
@@ -61,12 +61,25 @@ G-TOOL.permanent-helper=declared-purpose
 - 正常产品源码、`Tests/` 中的长期自动化回归，以及产品构建、安装、签名、公证和统一发布检查不受禁止；新增可执行工程辅助文件必须说明长期职责及现有入口无法承载的原因，不能把临时工具换目录或扩展名后伪装成正式回归。
 - `scripts/verify-repository-governance.sh` 拒绝新增 `Testing/` 可执行文件和恢复已移除的六个入口；其他新增工程辅助文件必须在 PR 中确认用途边界。仅修改手工工具不应触发产品构建，但分类豁免不是临时工具入库许可。
 
-## 设计稿本地留存规范
+## 截图与设计稿归档规范
 
-- 任何准备交给用户评审的设计稿、UI 方案图或视觉对比图，必须先把生成或导出的原始字节保存到持久本地路径；不得只依赖会话内临时图片、工具返回预览、缓存目录或临时目录。
-- 本仓库的设计稿优先保存在 `Screenshots/design-drafts/<feature>/`，并按 `FILE_NAMING.md` 使用稳定、可辨识的英文 `kebab-case` 名称；多方案必须保持文件名、展示顺序和方案编号一一对应。
-- 展示前必须验证文件格式、像素尺寸和 SHA-256；Codex 回复中必须使用本地绝对路径展示或链接。只有本地文件存在且验证通过后，才能向用户表述为“已提供设计稿”。
-- 如果设计稿来自当前或历史 Codex 会话，必须优先取回并保存原始图片字节，不得用截图、重绘、缩放、重新压缩或再次生成替代；原始载荷确实无法取得时，必须明确说明限制，再决定是否重新生成。
+```governance-policy
+G-EVIDENCE.screenshots=pr-attachment-or-persistent-link
+G-EVIDENCE.design-drafts=external-with-index
+G-EVIDENCE.index=manifest-json
+G-EVIDENCE.history=retained-no-rewrite
+G-EVIDENCE.exception=commit-marker
+G-EVIDENCE.build-assets=exempt
+```
+
+- 截图、设计稿、UI 方案图、视觉对比图和界面录制属于视觉证据，其文件字节不进入版本控制；本仓库只保留可审计的文本索引。构建必需资源按下方例外条目处理。
+- 生产 UI 实际运行截图必须附在 PR 描述或评论中：直接上传为 GitHub 图片附件，或使用他人可访问的持久链接。只提供本地路径、会话内临时图片、工具返回预览或缓存目录不算完成。
+- 设计稿、方案图和视觉对比图同样使用外部证据：评审时用本地绝对路径或可访问链接展示，原始字节保存在仓库外的持久目录，并按用途归档。展示前必须验证格式、像素尺寸和 SHA-256；只有原件与索引都校验通过，才能对用户表述为“已提供设计稿”。
+- 每个证据批次在仓库内只保留一个 `manifest.json` 索引，沿用 `Screenshots/<batch>/manifest.json` 的既有惯例：记录批次标识、日期、用途或对应 PR、存储方式，以及逐项的 `file`、`format`、`width`、`height`、`sha256` 和外部证据 URL。索引是权威可审计记录；外部链接失效时以索引中的尺寸和 SHA-256 核对原件，不得据此推断当前实现。
+- 如果设计稿来自当前或历史会话，必须优先取回并保存原始字节，不得用截图、重绘、缩放、重新压缩或再次生成替代；原始载荷确实无法取得时，必须明确说明限制，再决定是否重新生成。
+- 构建必需资源不受本规则限制：`Resources/AppIcon*`、`Resources/AppIcons/`、`Resources/Onboarding/`、`Resources/Fonts/`、状态图标模板，以及 `Sources/`、`Tests/`、`packaging/` 中被代码、测试或打包脚本直接引用的资源。新增这类资源仍须遵守 `BRANCH_MANAGEMENT.md` 的大文件门禁。
+- 已入库的历史截图和设计稿按历史证据保留：不因本规则删除，也不重写 Git 历史。移出仓库或压缩存量属于独立清理工作项，必须先取得用户单独授权。
+- `scripts/verify-repository-governance.sh` 拒绝在 `Screenshots/`、`Design/` 等非构建位置新增位图和视频文件。确需在单个 PR 入库时，必须在提交信息中包含 `[visual-evidence-exception]`，并在 PR 正文记录路径、用途、批准来源和总大小。
 
 ## TODO 同步
 

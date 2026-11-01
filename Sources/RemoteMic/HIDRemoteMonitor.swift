@@ -85,15 +85,55 @@ final class HIDRemoteMonitor {
     private let restoreNativeKeys: () -> Void
     private let targetFingerprint: String?
     private let excludedFingerprints: () -> Set<String>
-    private var allowedLocationIDs: Set<UInt32>?
+    private var allowedLocationIDs: Set<UInt32>? {
+        didSet { refreshPrearmRouting() }
+    }
     private var backOnlyMode = false
     private var manager: IOHIDManager?
+    private let reportRunLoop = HIDReportRunLoop()
+    private var scheduledReportRunLoop: CFRunLoop?
     private var activeDevice: IOHIDDevice?
     private var probedDevices: [IOHIDDevice] = []
-    private(set) var deviceFingerprint: String?
+    private(set) var deviceFingerprint: String? {
+        didSet { refreshPrearmRouting() }
+    }
     private(set) var profileID: UUID?
-    private var activeDeviceIsSeized = false
-    private var nativeKeysNeutralized = false
+    private var activeDeviceIsSeized = false {
+        didSet { refreshPrearmRouting() }
+    }
+    /// 设备级映射是否已通过回读校验。回读只证明写入成功，不证明系统已停止投递原生事件。
+    private var nativeKeysNeutralized = false {
+        didSet { refreshPrearmRouting() }
+    }
+    /// 权限状态由主线程与权限轮询线程更新，报告线程只读这份快照。
+    /// `IOHIDCheckAccess` 与 `AXIsProcessTrusted` 是同步 IPC，不能在报告回调里查询。
+    private var permissionsGranted = false {
+        didSet { refreshPrearmRouting() }
+    }
+    /// 报告线程提前登记时使用的路由快照。
+    ///
+    /// `prearm` 运行在 HID 报告线程上，早于主线程的启用、位置与指纹判定。
+    /// 若不做同一套判定，被排除的设备、非目标设备或映射已关闭时的报告也会
+    /// 登记拦截，从而吞掉用户真实键盘的音量键。快照由主线程维护，报告线程
+    /// 只读一份带锁的值。
+    private struct PrearmRouting {
+        var enabled = false
+        var activeFingerprint: String?
+        var targetFingerprint: String?
+        var excludedFingerprints: Set<String> = []
+        var allowedLocationIDs: Set<UInt32>?
+        /// 与 `shouldArmNativeEvent` 相同的两项：独占成功且映射回读通过时，
+        /// 主线程不再登记事件级拦截，报告线程也不能登记，否则会留下陈旧记录。
+        var deviceSeized = false
+        var nativeKeysNeutralized = false
+        /// 权限状态由主线程与轮询线程更新，报告线程不查 TCC。
+        var permissionsGranted = false
+    }
+
+    /// 提前登记的会话门禁。共享 suppressor 不会随本监视器 `stop()` 关闭，
+    /// 所以「本监视器的会话是否仍然有效」必须由这里判断，见 `HIDPrearmSession`。
+    private let prearmSession = HIDPrearmSession<PrearmRouting>()
+
     private var activeUsages = Set<UInt16>()
     private var nativePassthroughUsages = Set<UInt16>()
     private var repeatTimers: [UInt16: HIDRemoteScheduledTask] = [:]
@@ -236,6 +276,9 @@ final class HIDRemoteMonitor {
             }
             return
         }
+        // 报告线程不能直接查 TCC：两个查询都是同步 IPC。这里在主线程记录一次，
+        // 之后由权限轮询线程更新，报告线程只读这份快照。
+        permissionsGranted = inputGranted && accessibilityGranted
 
         if settings.customMappingEnabled {
             let suppressionReady = eventSuppressor.start()
@@ -253,9 +296,21 @@ final class HIDRemoteMonitor {
         IOHIDManagerRegisterDeviceMatchingCallback(manager, hidDeviceMatched, context)
         IOHIDManagerRegisterDeviceRemovalCallback(manager, hidDeviceRemoved, context)
         IOHIDManagerRegisterInputReportCallback(manager, hidInputReport, context)
+        // 报告回调放到专用线程：主线程排队会让原生音量事件先于拦截登记生效。
+        // 线程无法就绪时退回主线程，保持原有可用性而不是直接失效。
+        let dedicatedReportRunLoop = self.reportRunLoop.start()
+        let reportRunLoop = dedicatedReportRunLoop ?? RunLoop.main.getCFRunLoop()
+        scheduledReportRunLoop = reportRunLoop
+        // 这一行决定现场日志能否区分「提前登记生效」与「报告仍在主线程排队」，
+        // 没有它就无法从日志判断本次修复是否真的运行在新路径上。
+        AppLogger.shared.write(
+            dedicatedReportRunLoop == nil
+                ? "HID REPORT runloop mode=main reason=dedicated_thread_unavailable"
+                : "HID REPORT runloop mode=dedicated thread=sayall.hid.reports"
+        )
         IOHIDManagerScheduleWithRunLoop(
             manager,
-            CFRunLoopGetMain(),
+            reportRunLoop,
             CFRunLoopMode.commonModes.rawValue
         )
 
@@ -263,9 +318,11 @@ final class HIDRemoteMonitor {
         guard result == kIOReturnSuccess else {
             IOHIDManagerUnscheduleFromRunLoop(
                 manager,
-                CFRunLoopGetMain(),
+                reportRunLoop,
                 CFRunLoopMode.commonModes.rawValue
             )
+            scheduledReportRunLoop = nil
+            self.reportRunLoop.stop()
             eventSuppressor.stop()
             let karabinerInstalled = karabinerElementsInstalled()
             if let exclusiveMessageKey = Self.deviceOpenFailureMessageKey(
@@ -286,6 +343,9 @@ final class HIDRemoteMonitor {
             return
         }
         self.manager = manager
+        // 会话在此开启：此前的任何在途快照都属于上一次会话，不能登记；
+        // 之后的设备、位置与权限变化由 `refreshPrearmRouting()` 在会话内刷新。
+        prearmSession.begin(makePrearmRouting())
         startPermissionMonitor()
         updateStatus(LocalizedMessage("button_mapping.status.waiting_for_device"))
         AppLogger.shared.write(
@@ -297,6 +357,9 @@ final class HIDRemoteMonitor {
     }
 
     func stop() {
+        // 先结束提前登记会话：共享 suppressor 不会在这里关闭，若不推进代数，
+        // 已经在报告线程上读到旧快照的回调仍会写入吞键的陈旧记录。
+        prearmSession.end()
         permissionPollSubscription?.cancel()
         permissionPollSubscription = nil
         resetInputState()
@@ -312,17 +375,32 @@ final class HIDRemoteMonitor {
             deviceFingerprint = nil
             activeDeviceIsSeized = false
         }
-        guard let manager else { return }
-        IOHIDManagerUnscheduleFromRunLoop(
-            manager,
-            CFRunLoopGetMain(),
-            CFRunLoopMode.commonModes.rawValue
-        )
-        IOHIDManagerClose(manager, IOOptionBits(kIOHIDOptionsTypeNone))
-        self.manager = nil
+        if let manager {
+            IOHIDManagerUnscheduleFromRunLoop(
+                manager,
+                scheduledReportRunLoop ?? RunLoop.main.getCFRunLoop(),
+                CFRunLoopMode.commonModes.rawValue
+            )
+            IOHIDManagerClose(manager, IOOptionBits(kIOHIDOptionsTypeNone))
+            self.manager = nil
+        }
+        scheduledReportRunLoop = nil
+        reportRunLoop.stop()
     }
 
+    /// 设备匹配回调在 HID 报告线程上执行，设置、界面和状态必须回到主线程。
     fileprivate func deviceDidMatch(result: IOReturn, device: IOHIDDevice) {
+        let retained = Unmanaged.passRetained(device)
+        DispatchQueue.main.async { [weak self] in
+            guard let self else {
+                retained.release()
+                return
+            }
+            self.deviceDidMatchOnMain(result: result, device: retained.takeRetainedValue())
+        }
+    }
+
+    private func deviceDidMatchOnMain(result: IOReturn, device: IOHIDDevice) {
         guard result == kIOReturnSuccess else {
             diagnosticLogger("HID DEVICE rejected reason=match_error result=\(result)")
             updateStatus(LocalizedMessage("button_mapping.error.device_open_failed"))
@@ -498,6 +576,17 @@ final class HIDRemoteMonitor {
     }
 
     fileprivate func deviceDidRemove(device: IOHIDDevice) {
+        let retained = Unmanaged.passRetained(device)
+        DispatchQueue.main.async { [weak self] in
+            guard let self else {
+                retained.release()
+                return
+            }
+            self.deviceDidRemoveOnMain(device: retained.takeRetainedValue())
+        }
+    }
+
+    private func deviceDidRemoveOnMain(device: IOHIDDevice) {
         if let activeDevice, CFEqual(activeDevice, device) {
             IOHIDDeviceClose(activeDevice, IOOptionBits(kIOHIDOptionsTypeNone))
             self.activeDevice = nil
@@ -518,6 +607,95 @@ final class HIDRemoteMonitor {
     }
 
     fileprivate func handleReport(from device: IOHIDDevice, reportID: UInt32, data: Data) {
+        // 登记必须在本线程立刻完成：系统原生音量事件可能早于主线程处理报告。
+        prearmManagedNativeEvents(from: device, reportID: reportID, data: data)
+        let retained = Unmanaged.passRetained(device)
+        DispatchQueue.main.async { [weak self] in
+            guard let self else {
+                retained.release()
+                return
+            }
+            self.handleReportOnMain(
+                from: retained.takeRetainedValue(),
+                reportID: reportID,
+                data: data
+            )
+        }
+    }
+
+    /// 只读取报告字节、设备属性与路由快照，不访问设置对象或界面，
+    /// 因此可以安全地运行在 HID 报告线程上。
+    ///
+    /// 提前登记必须与主线程使用同一套判定：被排除的指纹、非目标设备、
+    /// 位置不在白名单或映射已关闭时，主线程不会处理该报告，也就不允许
+    /// 提前登记拦截，否则会吞掉用户真实键盘的按键。
+    private func prearmManagedNativeEvents(from device: IOHIDDevice, reportID: UInt32, data: Data) {
+        guard eventSuppressor.acceptsPrearm else { return }
+        guard let ticket = prearmSession.current() else { return }
+        let routing = ticket.payload
+        guard routing.enabled else { return }
+        guard let usages = RemoteHIDReportParser.usages(reportID: reportID, data: data) else {
+            return
+        }
+        var events = Set<RemoteNativeEvent>()
+        for usage in usages {
+            guard let button = RemoteButton.usageMap[usage],
+                  button == .volumeUp || button == .volumeDown || button == .tv else { continue }
+            events.formUnion(button.nativeEvents)
+        }
+        guard !events.isEmpty else { return }
+        guard Self.isLocationAllowed(
+            locationID: Self.locationID(for: device),
+            allowedLocationIDs: routing.allowedLocationIDs
+        ) else { return }
+        guard case .accepted = Self.reportRoutingDecision(
+            reportingFingerprint: Self.fingerprint(for: device),
+            activeFingerprint: routing.activeFingerprint,
+            targetFingerprint: routing.targetFingerprint,
+            excludedFingerprints: routing.excludedFingerprints
+        ) else { return }
+        // 这两项与 `shouldArmNativeEvent` 同一判据：主线程不登记的事件，
+        // 报告线程也不能登记。否则映射已生效的机型会留下过期待匹配记录，
+        // 把用户真实键盘上的音量键吞掉一次。
+        guard Self.needsEventLevelArm(
+            seized: routing.deviceSeized,
+            neutralized: routing.nativeKeysNeutralized
+        ) else { return }
+        // 权限只读快照：报告线程不执行同步 TCC 查询。
+        guard routing.permissionsGranted else { return }
+        // 校验会话代数与写入必须在同一临界区内完成。共享 suppressor 不随本监视器
+        // `stop()` 关闭，若只在上面读过快照，`stop()` 之后回到这里仍会写入陈旧记录。
+        prearmSession.perform(ticket) { _ in
+            eventSuppressor.prearm(nativeEvents: events)
+        }
+    }
+
+    /// 音量与 TV 是否仍需事件级拦截。主线程与报告线程共用，避免判据漂移。
+    static func needsEventLevelArm(seized: Bool, neutralized: Bool) -> Bool {
+        !seized || !neutralized
+    }
+
+    /// 由主线程在启用状态、允许位置、目标设备或排除列表变化时刷新，
+    /// 供报告线程只读使用。会话未开启时是空操作，不会留下陈旧快照。
+    private func refreshPrearmRouting() {
+        prearmSession.update(makePrearmRouting())
+    }
+
+    /// 只读取主线程已经记录的状态：不做 TCC 查询、不触碰界面。
+    private func makePrearmRouting() -> PrearmRouting {
+        var routing = PrearmRouting()
+        routing.enabled = settings.customMappingEnabled
+        routing.activeFingerprint = deviceFingerprint
+        routing.targetFingerprint = targetFingerprint
+        routing.excludedFingerprints = excludedFingerprints()
+        routing.allowedLocationIDs = allowedLocationIDs
+        routing.deviceSeized = activeDeviceIsSeized
+        routing.nativeKeysNeutralized = nativeKeysNeutralized
+        routing.permissionsGranted = permissionsGranted
+        return routing
+    }
+
+    private func handleReportOnMain(from device: IOHIDDevice, reportID: UInt32, data: Data) {
         guard manager != nil else {
             diagnosticLogger("HID REPORT rejected reason=monitor_inactive")
             return
@@ -1503,7 +1681,10 @@ final class HIDRemoteMonitor {
         // monitored mode can still deliver TV/volume events after a successful
         // readback, so keep the event-tap fallback for those three controls.
         if button == .tv || button == .volumeUp || button == .volumeDown {
-            return !activeDeviceIsSeized || !nativeKeysNeutralized
+            return Self.needsEventLevelArm(
+                seized: activeDeviceIsSeized,
+                neutralized: nativeKeysNeutralized
+            )
         }
         return !nativeKeysNeutralized
     }
@@ -1522,9 +1703,11 @@ final class HIDRemoteMonitor {
 
     private func startPermissionMonitor() {
         permissionPollSubscription?.cancel()
-        permissionPollSubscription = permissionPoll.subscribe { [weak self] permissionsGranted in
+        // 轮询结果同时充当报告线程的权限快照：报告线程不能再自行查 TCC。
+        permissionPollSubscription = permissionPoll.subscribe { [weak self] granted in
             guard let self, self.manager != nil else { return }
-            if !permissionsGranted {
+            self.permissionsGranted = granted
+            if !granted {
                 self.releaseForRevokedPermissions()
             }
         }
