@@ -447,6 +447,7 @@
 "button_mapping.hold.rapid_press_description" = "A single press runs immediately and waits briefly when a double press is set. When enabled, every rapid press runs the action.";
 "common.suffix.not_installed" = " (Not installed)";
 "common.suffix.experimental_disabled" = " (Experiment disabled)";
+"common.list.separator" = ", ";
 "shortcut.action.record" = "Click to Record a Shortcut";
 "shortcut.action.record_again" = "Record Again";
 "shortcut.record.help" = "Record a single key or key combination to send to the current app";
@@ -1198,18 +1199,20 @@
 "button_mapping.base_profile" = "Default Mapping";
 "button_mapping.save_as_profile" = "Save as Button Profile";
 "button_mapping.save_as_profile.name" = "Profile name";
-"button_mapping.save_as_profile.note" = "Copies the current actions and hold settings of the 10 standard buttons into a profile. These buttons will no longer follow the base mapping.";
+"button_mapping.save_as_profile.note" = "Copies the current actions and hold settings into a separate profile. Later changes to the base mapping won't affect it.";
+"button_mapping.save_as_profile.scope" = "Covers";
 "button_mapping.save_as_profile.switch" = "Switch to this profile after saving";
 "button_mapping.save_as_profile.default_name" = "Button Profile";
 "button_mapping.save_as_profile.failed" = "Couldn't create the profile. Try again.";
 "button_mapping.save_as_profile.empty" = "There are no button actions to save.";
-"button_mapping.profile_scope_hint" = "Button profiles cover the 10 standard buttons only. Other buttons keep using the base mapping.";
+"button_mapping.scope.dpad" = "D-pad";
+"button_mapping.profile_scope_hint" = "Button profiles cover %@ only. Other buttons keep using the base mapping.";
 "button_mapping.profile.edit" = "Edit";
 "button_mapping.profile.edit.help" = "Edit the buttons in this profile";
 "button_mapping.profile.edit.help_locked" = "Editing button profiles requires membership";
 "button_mapping.profile.edit_done" = "Done";
 "button_mapping.profile.edit_done.help" = "Stop editing and return to the read-only preview";
-"button_mapping.profile.preview_hint" = "Read-only preview. Choose Edit to change these 10 buttons.";
+"button_mapping.profile.preview_hint" = "Read-only preview. Choose Edit to change these buttons.";
 "button_mapping.profile.inherited_hint" = "This profile follows the default mapping and can't be edited on its own.";
 
 "button_mapping.inherit_base" = "Use Default Mapping";

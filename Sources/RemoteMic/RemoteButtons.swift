@@ -141,6 +141,82 @@ enum RemoteButton: String, CaseIterable, Codable, Identifiable {
     }
 }
 
+/// 键位方案覆盖名单里的一项：四颗方向键合并成一项，其余按键逐颗列出。
+enum ButtonProfileScopeItem: Equatable, Hashable {
+    case directions
+    case button(RemoteButton)
+
+    /// 与按键页卡片保持同一套图标，识别方式不因文案而改变。
+    var systemImage: String {
+        switch self {
+        case .directions: return "dpad"
+        case let .button(button): return button.systemImage
+        }
+    }
+
+    func displayName(using localization: LocalizationStore) -> String {
+        switch self {
+        case .directions: return localization.text("button_mapping.scope.dpad")
+        case let .button(button): return button.displayName(using: localization)
+        }
+    }
+}
+
+extension RemoteButton {
+    /// 按键页卡片的 SF Symbol。键位方案的覆盖名单复用它，避免两处图标对不上。
+    var systemImage: String {
+        switch self {
+        case .power: return "power"
+        case .up: return "chevron.up"
+        case .left: return "chevron.left"
+        case .ok: return "circle.circle"
+        case .right: return "chevron.right"
+        case .down: return "chevron.down"
+        case .back: return "arrow.uturn.backward"
+        case .volumeUp: return "speaker.plus"
+        case .home: return "house"
+        case .volumeDown: return "speaker.minus"
+        case .menu: return "line.3.horizontal"
+        case .tv: return "tv"
+        case .playPause: return "playpause.fill"
+        case .mute: return "speaker.slash"
+        // 这三颗键只属于 Chromecast 遥控器，由它自己的画布渲染；小米画布的卡片集合是
+        // `RemoteButton.xiaomiCases`，不会出现它们，这里只是满足枚举穷尽性。
+        case .youtube, .netflix, .input: return "questionmark"
+        }
+    }
+
+    /// 覆盖名单的展示顺序：电源键在前，方向键随后，其余按按键页的顺序。
+    static let profileScopeDisplayOrder: [RemoteButton] = [
+        .power, .up, .down, .left, .right, .ok, .back, .home, .volumeUp, .volumeDown,
+    ]
+
+    /// 把「允许进键位方案」的按键排成可直接展示的序列。
+    ///
+    /// 名单由私有组件的白名单决定，换遥控器型号就会变，所以界面既不能写死数量，
+    /// 也不能只报数量——旧文案「10 个普通按键」用户根本不知道是哪 10 个。
+    /// 不在 `profileScopeDisplayOrder` 里的按键（Siri Remote 等）追加在末尾，保持不变。
+    static func profileScopeItems(for supported: [RemoteButton]) -> [ButtonProfileScopeItem] {
+        let order = profileScopeDisplayOrder
+        let ordered = order.filter(supported.contains) + supported.filter { !order.contains($0) }
+        let directions: [RemoteButton] = [.up, .down, .left, .right]
+        guard directions.allSatisfy(ordered.contains) else {
+            return ordered.map { .button($0) }
+        }
+        var items: [ButtonProfileScopeItem] = []
+        for button in ordered {
+            if directions.contains(button) {
+                if !items.contains(.directions) {
+                    items.append(.directions)
+                }
+            } else {
+                items.append(.button(button))
+            }
+        }
+        return items
+    }
+}
+
 enum RemoteNativeEvent: Hashable {
     case keyboard(keyCode: UInt16)
     case systemKey(type: Int32)
