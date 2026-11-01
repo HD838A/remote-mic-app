@@ -293,13 +293,33 @@ jobs:
 
       - name: Build and prepare private feature artifacts
         env:
+          SAYALL_PRIVATE_RELEASE_READ_TOKEN: ${{ secrets.SAYALL_PRIVATE_RELEASE_READ_TOKEN }}
+          SAYALL_PRIVATE_PLATFORM_VERSION: ${{ steps.release-dependencies.outputs.sayall_private_platform_version }}
           PRIVATE_ARTIFACT_OUTPUT: ${{ runner.temp }}/sayall-private-xcframeworks
           PRIVATE_ARTIFACT_PACKAGE: ${{ runner.temp }}/sayall-private-artifact-package
         run: |
           private_root="$GITHUB_WORKSPACE/.private-dependencies/sayall-private-platform"
-          "$private_root/tools/release/build-private-xcframeworks.sh" "$PRIVATE_ARTIFACT_OUTPUT"
           release_directory="$PRIVATE_ARTIFACT_OUTPUT/release"
-          trusted_manifest_sha256="$(shasum -a 256 "$release_directory/SHA256SUMS" | awk '{print $1}')"
+          if [[ -n "$SAYALL_PRIVATE_RELEASE_READ_TOKEN" ]]; then
+            # The publisher already built this exact tag and attached the
+            # artifacts, so reuse them instead of rebuilding both lanes. The
+            # download is verified against the publisher's own checksums and
+            # against the manifest digest before anything is packaged.
+            fetched="$(GH_TOKEN="$SAYALL_PRIVATE_RELEASE_READ_TOKEN" \
+              python3 scripts/prepare-private-platform.py artifacts \
+                --tag "$SAYALL_PRIVATE_PLATFORM_VERSION" \
+                --output "$PRIVATE_ARTIFACT_OUTPUT")"
+            trusted_manifest_sha256="$(printf '%s' "$fetched" | jq -r '.manifestSHA256')"
+            printf 'PRIVATE ARTIFACTS source=release tag=%s manifest=%s\n' \
+              "$SAYALL_PRIVATE_PLATFORM_VERSION" "$trusted_manifest_sha256"
+          else
+            # No credential that can read private release attachments: build the
+            # artifacts from the pinned tag, as before.
+            "$private_root/tools/release/build-private-xcframeworks.sh" "$PRIVATE_ARTIFACT_OUTPUT"
+            trusted_manifest_sha256="$(shasum -a 256 "$release_directory/SHA256SUMS" | awk '{print $1}')"
+            printf 'PRIVATE ARTIFACTS source=build tag=%s manifest=%s\n' \
+              "$SAYALL_PRIVATE_PLATFORM_VERSION" "$trusted_manifest_sha256"
+          fi
           ./scripts/prepare-private-artifact-package.sh \
             "$release_directory" \
             "$PRIVATE_ARTIFACT_PACKAGE" \

@@ -353,13 +353,15 @@ class PublishedArtifactTests(unittest.TestCase):
     def write_archive(self, destination):
         destination.mkdir(parents=True, exist_ok=True)
         archive = destination / platform.RELEASE_ASSET.format(tag=self.tag)
-        self.manifest = b"0" * 64 + b"  ./SayAllMembershipCore.xcframework.zip\n"
+        helper_bytes = b"helper\n"
+        helper_digest = hashlib.sha256(helper_bytes).hexdigest()
+        self.manifest = f"{helper_digest}  ./Helpers/AppleRemoteHCIService\n".encode()
         helper = zipfile.ZipInfo("release/Helpers/AppleRemoteHCIService")
         helper.external_attr = 0o100755 << 16
         with zipfile.ZipFile(archive, "w") as bundle:
             bundle.writestr("release/SHA256SUMS", self.manifest)
             bundle.writestr("release/provenance.json", b"{}\n")
-            bundle.writestr(helper, b"helper\n")
+            bundle.writestr(helper, helper_bytes)
         checksums = destination / f"{archive.name}.sha256"
         checksums.write_text(
             f"{platform.sha256_file(archive)}  {archive.name}\n{self.manifest_digest()}  SHA256SUMS\n")
@@ -409,6 +411,25 @@ class PublishedArtifactTests(unittest.TestCase):
                 bundle.writestr(name, b"x")
             with self.assertRaisesRegex(RuntimeError, "unsafe entry"):
                 platform.extract_release_archive(archive, self.directory / uuid.uuid4().hex)
+
+
+    def test_fetch_artifacts_materializes_the_release_directory(self):
+        archive = self.write_archive(self.directory / "download")
+        digest = self.manifest_digest()
+        output = self.directory / "output"
+        with patch.object(platform, "download_release_archive", return_value=(archive, digest)):
+            result = platform.fetch_artifacts(self.tag, output)
+        self.assertEqual(result["manifestSHA256"], digest)
+        self.assertEqual(Path(result["release"]), output.resolve() / "release")
+        self.assertTrue((output / "release" / "SHA256SUMS").is_file())
+        self.assertTrue(os.access(output / "release" / "Helpers" / "AppleRemoteHCIService", os.X_OK))
+
+    def test_fetch_artifacts_refuses_a_non_empty_output(self):
+        output = self.directory / "output"
+        output.mkdir()
+        (output / "leftover").write_text("x")
+        with self.assertRaisesRegex(RuntimeError, "must be absent or empty"):
+            platform.fetch_artifacts(self.tag, output)
 
 
 if __name__ == "__main__":

@@ -42,7 +42,9 @@ Mac Remote 与其他 macOS 私有组件使用同一个私有 Swift Package。CI 
 
 两架构 XCFramework 默认由本机从 Tag 现场构建，新 Tag 首次约 9 分钟（2026-11-01 实测 9 分 18 秒）。同一 Tag 再次打包会直接命中 `.private-dependencies/artifacts/<tag>/prepared`，只需数秒（实测 6 秒）；该缓存命中不会重新构建，也不会重新校验已发布的远端状态。
 
-`SAYALL_PRIVATE_ARTIFACTS_SOURCE=release` 可改用私有仓为该 Tag 发布的 `sayall-private-platform-<tag>.release.zip`，省掉本地构建（同机实测 87 秒，其中下载约 13 秒）。它仍然要求同一 Tag 的源码 checkout（Siri Remote、Chromecast、Mac Remote 的源码路径来自该 checkout），只替换二进制来源。下载后必须逐项校验：发布方 `.sha256` 同时覆盖压缩包与 `SHA256SUMS` 摘要、压缩包摘要与发布值一致、解包条目只能落在 `release/` 内、解包后保留原有权限位（打包脚本要求 `Helpers/` 可执行）、并用 `shasum -a 256 -c SHA256SUMS` 复核全部构件。该路径需要 `gh` 与私有仓附件读取权限；受保护 CI 当前只有 SSH deploy key，无法下载 Release 附件，因此 CI 仍使用 `build`，复用必须另行配置可读该仓附件的凭据。默认值保持 `build`，不会因远端是否存在附件而静默改变发布包字节。
+`SAYALL_PRIVATE_ARTIFACTS_SOURCE=release` 可改用私有仓为该 Tag 发布的 `sayall-private-platform-<tag>.release.zip`，省掉本地构建（同机实测 87 秒，其中下载约 13 秒）。它仍然要求同一 Tag 的源码 checkout（Siri Remote、Chromecast、Mac Remote 的源码路径来自该 checkout），只替换二进制来源。下载后必须逐项校验：发布方 `.sha256` 同时覆盖压缩包与 `SHA256SUMS` 摘要、压缩包摘要与发布值一致、解包条目只能落在 `release/` 内、解包后保留原有权限位（打包脚本要求 `Helpers/` 可执行）、并用 `shasum -a 256 -c SHA256SUMS` 复核全部构件。默认值保持 `build`，本地不会因远端是否存在附件而静默改变发布包字节。
+
+受保护发布 workflow 使用同一套校验，但仅在配置了可读私有仓附件的凭据时启用：`SAYALL_PRIVATE_RELEASE_READ_TOKEN` 存在时，`mac-release-package.yml` 走 `scripts/prepare-private-platform.py artifacts --tag <tag> --output <dir>`，由上述规则下载并校验后再交给 `prepare-private-artifact-package.sh`，并把**发布方声明的** `SHA256SUMS` 摘要作为可信摘要传入；该变量为空时仍执行原有的现场构建。两条路径都不改变私有 Tag 解析、`origin/main` 祖先校验、checkout 一致性与后续签名、公证门禁。凭据的权限范围、存储与轮换见私有仓 `sayall-membership-ops` 的 `docs/secret-inventory.md`。
 
 `SAYALL_PRIVATE_PLATFORM_MODE=required` 强制要求私有组件。显式设置 `REQUIRE_*` 的完整发布仍在缺少组件时失败；签名、公证及公开发布门禁保持不变。受保护 staging 只检查私有 Mac 代码已被清单 Tag 覆盖，不在签名阶段发布私有 Tag 或修改版本。受保护 runner 再次检查完整历史中的 Tag、main 和 checkout，拒绝过期 pin。
 
@@ -81,7 +83,7 @@ ReleaseHistory 的版本标题由 `scripts/sync-release-history-labels.mjs` 按 
 受保护 workflow 的 package job 才能读取 Apple/Match/Notary/Sparkle 凭据，并且必须：
 
 - 在 mac-release Environment 内使用只读 Match、隔离临时 Keychain 和最小权限；
-- 按 `config/release-dependencies.json` checkout 并验证全部发布所需私有 Package；缺少权限、版本标签、路径或组件时立即失败，不得降级为公开兼容层发布；
+- 按 `config/release-dependencies.json` checkout 并验证全部发布所需私有 Package；缺少权限、版本标签、路径或组件时立即失败，不得降级为公开兼容层发布；私有二进制来源二选一并显式记录（现场构建，或经发布方摘要校验的该 Tag 已发布附件）；
 - 独立构建 Apple Silicon/macOS 14 与 Intel Ventura/macOS 13 两条 lane；
 - 对 App、Framework、XPC、Helper、Installer、PKG 和 ZIP 完成 Developer ID 签名、Apple 公证、staple、Gatekeeper 和权限/符号链接校验；DMG 可以作为内部构建中间产物，但不进入公开下载资产。
 - 使用独立 SwiftPM scratch/output，独立提交可并行的 PKG 公证；
