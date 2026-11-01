@@ -503,6 +503,68 @@ struct RemoteButtonInteractionTests {
         #expect(learner.status.step == .complete)
     }
 
+    @Test func learningDiscardsImpossibleDoubleClickIntervals() {
+        var learner = RemoteButtonGestureLearner()
+        learner.start(model: .rc003)
+        _ = learner.handle(.press, button: .ok, model: .rc003, timestampMilliseconds: 1_000)
+        _ = learner.handle(.release, button: .ok, model: .rc003, timestampMilliseconds: 1_284)
+        #expect(learner.status.step == .doubleClick)
+
+        _ = learner.handle(.press, button: .ok, model: .rc003, timestampMilliseconds: 1_300)
+        _ = learner.handle(.release, button: .ok, model: .rc003, timestampMilliseconds: 1_400)
+
+        // 真机现场：松手后 1 ms 又收到一次按下，手指不可能完成。
+        _ = learner.handle(.press, button: .ok, model: .rc003, timestampMilliseconds: 1_401)
+        #expect(learner.status.doubleClickMilliseconds == nil)
+        #expect(learner.status.step == .doubleClick)
+        #expect(learner.status.discardedDoubleClickEdges == 1)
+
+        // 用户真正的第二下仍能测出来，间隔从重复边沿那次的松手算起。
+        _ = learner.handle(.release, button: .ok, model: .rc003, timestampMilliseconds: 1_450)
+        _ = learner.handle(.press, button: .ok, model: .rc003, timestampMilliseconds: 1_570)
+        #expect(learner.status.doubleClickMilliseconds == 120)
+        _ = learner.handle(.release, button: .ok, model: .rc003, timestampMilliseconds: 1_620)
+        #expect(learner.status.step == .longPress)
+    }
+
+    @Test func learningRejectsOutOfOrderDoubleClickTimestampsInsteadOfRecordingZero() {
+        var learner = RemoteButtonGestureLearner()
+        learner.start(model: .rc003)
+        _ = learner.handle(.press, button: .ok, model: .rc003, timestampMilliseconds: 1_000)
+        _ = learner.handle(.release, button: .ok, model: .rc003, timestampMilliseconds: 1_284)
+        _ = learner.handle(.press, button: .ok, model: .rc003, timestampMilliseconds: 1_300)
+        _ = learner.handle(.release, button: .ok, model: .rc003, timestampMilliseconds: 1_400)
+
+        // 排队让第二次按下的时间戳早于上一次松手：旧实现 max(0, …) 会写成 0 ms。
+        _ = learner.handle(.press, button: .ok, model: .rc003, timestampMilliseconds: 1_200)
+        #expect(learner.status.doubleClickMilliseconds == nil)
+        #expect(learner.status.discardedDoubleClickEdges == 1)
+        #expect(learner.status.step == .doubleClick)
+    }
+
+    @Test func learningAbsorbsBouncedEdgesWithoutSkippingTheDoubleClickStep() {
+        var learner = RemoteButtonGestureLearner()
+        learner.start(model: .rc003)
+        _ = learner.handle(.press, button: .ok, model: .rc003, timestampMilliseconds: 1_000)
+        _ = learner.handle(.release, button: .ok, model: .rc003, timestampMilliseconds: 1_284)
+        _ = learner.handle(.press, button: .ok, model: .rc003, timestampMilliseconds: 1_300)
+        _ = learner.handle(.release, button: .ok, model: .rc003, timestampMilliseconds: 1_400)
+
+        // 一次按压被报告层拆成两对边沿，两对都要被吸收，不能推进到长按。
+        _ = learner.handle(.press, button: .ok, model: .rc003, timestampMilliseconds: 1_401)
+        _ = learner.handle(.release, button: .ok, model: .rc003, timestampMilliseconds: 1_405)
+        _ = learner.handle(.press, button: .ok, model: .rc003, timestampMilliseconds: 1_410)
+        _ = learner.handle(.release, button: .ok, model: .rc003, timestampMilliseconds: 1_415)
+        #expect(learner.status.doubleClickMilliseconds == nil)
+        #expect(learner.status.discardedDoubleClickEdges == 2)
+        #expect(learner.status.step == .doubleClick)
+
+        _ = learner.handle(.press, button: .ok, model: .rc003, timestampMilliseconds: 1_515)
+        #expect(learner.status.doubleClickMilliseconds == 100)
+        _ = learner.handle(.release, button: .ok, model: .rc003, timestampMilliseconds: 1_560)
+        #expect(learner.status.step == .longPress)
+    }
+
     @Test func doubleClickWindowAllowsFiftyMilliseconds() {
         #expect(RemoteButtonGestureTiming(doubleClickMilliseconds: 50, longPressMilliseconds: 550).isValid)
         #expect(RemoteButtonGestureTiming(doubleClickMilliseconds: 500, longPressMilliseconds: 550).isValid)

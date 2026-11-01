@@ -24,6 +24,9 @@ struct RemoteButtonGestureLearningStatus: Equatable {
     var doubleClickMilliseconds: Int?
     var longPressMilliseconds: Int?
     var adjustedToAllowedRange = false
+    /// 松手到下一次按下短到不可能由手指完成的次数。报告层把一个按压拆成
+    /// 相邻边沿时会走到这里，诊断日志据此区分「用户慢」与「事件重复」。
+    var discardedDoubleClickEdges = 0
 
     var isActive: Bool {
         step != .idle && step != .complete
@@ -43,6 +46,14 @@ struct RemoteButtonGestureLearningAvailability: Equatable {
 /// Measures one single click, one double click and one long press on the same physical button.
 /// Timestamps use a monotonic clock supplied by the caller.
 struct RemoteButtonGestureLearner {
+    /// 松手到下一次按下的最短可信间隔。
+    ///
+    /// 真机日志里出现过 0 ms 和 1 ms：报告在主线程排队后，处理时刻被压到与
+    /// 相邻边沿同一毫秒，`max(0, …)` 又把负值静默变成 0。手指完成一次松手再
+    /// 按下远快于 20 ms 做不到，短于它的间隔按重复边沿处理，既不写入学习结果，
+    /// 也不把步骤推进到长按，让用户的下一次真实点击重新计数。
+    static let minimumDoubleClickIntervalMilliseconds = 20
+
     private(set) var status = RemoteButtonGestureLearningStatus()
     private var pressStartedAt: Int?
     private var firstDoubleReleaseAt: Int?
@@ -88,7 +99,16 @@ struct RemoteButtonGestureLearner {
         case .doubleClick:
             if phase == .press {
                 if doublePressCount == 1, let firstDoubleReleaseAt {
-                    status.doubleClickMilliseconds = max(0, timestampMilliseconds - firstDoubleReleaseAt)
+                    let interval = timestampMilliseconds - firstDoubleReleaseAt
+                    if interval < Self.minimumDoubleClickIntervalMilliseconds {
+                        // 重复边沿或时间戳被压缩：不可能是用户的双击第二下。
+                        // 从这一次按压重新开始计数，避免把 0/1 ms 写进学习结果。
+                        doublePressCount = 0
+                        self.firstDoubleReleaseAt = nil
+                        status.discardedDoubleClickEdges += 1
+                    } else {
+                        status.doubleClickMilliseconds = interval
+                    }
                 }
                 pressStartedAt = timestampMilliseconds
             } else if pressStartedAt != nil {

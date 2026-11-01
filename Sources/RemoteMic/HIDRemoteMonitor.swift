@@ -26,14 +26,43 @@ private func hidDeviceRemoved(
     monitor.deviceDidRemove(device: device)
 }
 
-private func hidInputReport(
+/// `IOHIDManagerRegisterInputReportWithTimeStampCallback` 交付的是 mach 绝对时间
+/// （tick，步长随架构变化），而本模块其余时间都按 `DispatchTime.uptimeNanoseconds`
+/// 记。这个换算让报告时刻可以和 `monotonicNow()` 直接比较。
+///
+/// 手势学习原先在报告回调之后另读一次 `ProcessInfo.systemUptime`，报告在专用
+/// run loop 上排队时两次读数会被压缩到同一毫秒，双击间隔因此出现过 0/1 ms。
+enum HIDReportClock {
+    private static let timebase: mach_timebase_info_data_t = {
+        var info = mach_timebase_info_data_t()
+        mach_timebase_info(&info)
+        return info
+    }()
+
+    static func uptimeNanoseconds(fromMachTime ticks: UInt64) -> UInt64 {
+        let numer = UInt64(timebase.numer)
+        let denom = UInt64(timebase.denom == 0 ? 1 : timebase.denom)
+        guard numer != denom else { return ticks }
+        let scaled = Double(ticks) * Double(numer) / Double(denom)
+        guard scaled.isFinite, scaled > 0 else { return 0 }
+        guard scaled < Double(UInt64.max) else { return UInt64.max }
+        return UInt64(scaled)
+    }
+
+    static func milliseconds(fromUptimeNanoseconds nanoseconds: UInt64) -> Int {
+        Int(clamping: nanoseconds / 1_000_000)
+    }
+}
+
+private func hidInputReportWithTimeStamp(
     context: UnsafeMutableRawPointer?,
     result: IOReturn,
     sender: UnsafeMutableRawPointer?,
     type: IOHIDReportType,
     reportID: UInt32,
     report: UnsafeMutablePointer<UInt8>,
-    reportLength: CFIndex
+    reportLength: CFIndex,
+    timeStamp: UInt64
 ) {
     guard let context else { return }
     let monitor = Unmanaged<HIDRemoteMonitor>.fromOpaque(context).takeUnretainedValue()
@@ -51,7 +80,12 @@ private func hidInputReport(
     }
     let device = Unmanaged<IOHIDDevice>.fromOpaque(sender).takeUnretainedValue()
     let data = Data(bytes: report, count: reportLength)
-    monitor.handleReport(from: device, reportID: reportID, data: data)
+    monitor.handleReport(
+        from: device,
+        reportID: reportID,
+        data: data,
+        timestampNanoseconds: HIDReportClock.uptimeNanoseconds(fromMachTime: timeStamp)
+    )
 }
 
 enum HIDReportRoutingDecision: Equatable {
@@ -155,7 +189,10 @@ final class HIDRemoteMonitor {
     var onStatus: ((LocalizedMessage) -> Void)?
     var onActiveButtons: ((UUID?, Set<RemoteButton>) -> Void)?
     var onButtonPressed: ((UUID?, String, RemoteButton) -> (profileID: UUID, shouldPerformAction: Bool)?)?
-    var onRuntimeButton: ((UUID?, RemoteButton, RemoteButtonPhase) -> Bool)?
+    /// 时间戳是报告到达 HID 回调的毫秒值，不是主线程处理该报告的毫秒值。
+    /// 报告要经过 `DispatchQueue.main.async` 才解析，用处理时刻会把排队等待
+    /// 算进相邻边沿的间隔里。
+    var onRuntimeButton: ((UUID?, RemoteButton, RemoteButtonPhase, Int) -> Bool)?
     var claimsRuntimeButton: ((UUID?, RemoteButton) -> Bool)?
     var onInputReset: ((UUID?) -> Void)?
     var onInternalAction: ((UUID?, ButtonAction) -> Void)?
@@ -295,7 +332,11 @@ final class HIDRemoteMonitor {
         let context = Unmanaged.passUnretained(self).toOpaque()
         IOHIDManagerRegisterDeviceMatchingCallback(manager, hidDeviceMatched, context)
         IOHIDManagerRegisterDeviceRemovalCallback(manager, hidDeviceRemoved, context)
-        IOHIDManagerRegisterInputReportCallback(manager, hidInputReport, context)
+        IOHIDManagerRegisterInputReportWithTimeStampCallback(
+            manager,
+            hidInputReportWithTimeStamp,
+            context
+        )
         // 报告回调放到专用线程：主线程排队会让原生音量事件先于拦截登记生效。
         // 线程无法就绪时退回主线程，保持原有可用性而不是直接失效。
         let dedicatedReportRunLoop = self.reportRunLoop.start()
@@ -606,9 +647,17 @@ final class HIDRemoteMonitor {
         diagnosticLogger("HID DEVICE probe_removed")
     }
 
-    fileprivate func handleReport(from device: IOHIDDevice, reportID: UInt32, data: Data) {
+    fileprivate func handleReport(
+        from device: IOHIDDevice,
+        reportID: UInt32,
+        data: Data,
+        timestampNanoseconds: UInt64? = nil
+    ) {
         // 登记必须在本线程立刻完成：系统原生音量事件可能早于主线程处理报告。
         prearmManagedNativeEvents(from: device, reportID: reportID, data: data)
+        // 报告时刻在进入主线程之前定下来：主线程一旦排队，处理时刻就不再代表
+        // 用户真正按下或松开的时间。
+        let reportUptime = timestampNanoseconds ?? monotonicNow()
         let retained = Unmanaged.passRetained(device)
         DispatchQueue.main.async { [weak self] in
             guard let self else {
@@ -618,7 +667,8 @@ final class HIDRemoteMonitor {
             self.handleReportOnMain(
                 from: retained.takeRetainedValue(),
                 reportID: reportID,
-                data: data
+                data: data,
+                timestampNanoseconds: reportUptime
             )
         }
     }
@@ -695,7 +745,12 @@ final class HIDRemoteMonitor {
         return routing
     }
 
-    private func handleReportOnMain(from device: IOHIDDevice, reportID: UInt32, data: Data) {
+    private func handleReportOnMain(
+        from device: IOHIDDevice,
+        reportID: UInt32,
+        data: Data,
+        timestampNanoseconds: UInt64
+    ) {
         guard manager != nil else {
             diagnosticLogger("HID REPORT rejected reason=monitor_inactive")
             return
@@ -768,10 +823,16 @@ final class HIDRemoteMonitor {
                 reportID: reportID,
                 data: data,
                 source: "device",
-                usages: discoveryUsages
+                usages: discoveryUsages,
+                timestampNanoseconds: timestampNanoseconds
             )
         } else {
-            parseAndProcess(reportID: reportID, data: data, source: "device")
+            parseAndProcess(
+                reportID: reportID,
+                data: data,
+                source: "device",
+                timestampNanoseconds: timestampNanoseconds
+            )
         }
     }
 
@@ -801,6 +862,16 @@ final class HIDRemoteMonitor {
     }
 
     func handleSimulatedReport(reportID: UInt32, data: Data) {
+        handleSimulatedReport(reportID: reportID, data: data, timestampNanoseconds: nil)
+    }
+
+    /// 传入报告时刻时按报告时刻计时，否则退回当前单调时钟。
+    /// 测试用显式时刻复现「主线程排队把相邻边沿压进同一毫秒」的现场。
+    func handleSimulatedReport(
+        reportID: UInt32,
+        data: Data,
+        timestampNanoseconds: UInt64?
+    ) {
         guard settings.customMappingEnabled || backOnlyMode else {
             diagnosticLogger("HID REPORT rejected reason=mapping_disabled source=simulated")
             return
@@ -809,7 +880,12 @@ final class HIDRemoteMonitor {
             diagnosticLogger("HID REPORT rejected reason=runtime_permission_revoked source=simulated")
             return
         }
-        parseAndProcess(reportID: reportID, data: data, source: "simulated")
+        parseAndProcess(
+            reportID: reportID,
+            data: data,
+            source: "simulated",
+            timestampNanoseconds: timestampNanoseconds ?? monotonicNow()
+        )
     }
 
     func handleSimulatedBackOnlyReport(reportID: UInt32, data: Data) {
@@ -819,11 +895,22 @@ final class HIDRemoteMonitor {
         handleSimulatedReport(reportID: reportID, data: data)
     }
 
-    private func parseAndProcess(reportID: UInt32, data: Data, source: String) {
+    private func parseAndProcess(
+        reportID: UInt32,
+        data: Data,
+        source: String,
+        timestampNanoseconds: UInt64
+    ) {
         guard let usages = parsedUsages(reportID: reportID, data: data, source: source) else {
             return
         }
-        processParsedReport(reportID: reportID, data: data, source: source, usages: usages)
+        processParsedReport(
+            reportID: reportID,
+            data: data,
+            source: source,
+            usages: usages,
+            timestampNanoseconds: timestampNanoseconds
+        )
     }
 
     private func parsedUsages(reportID: UInt32, data: Data, source: String) -> Set<UInt16>? {
@@ -841,7 +928,8 @@ final class HIDRemoteMonitor {
         reportID: UInt32,
         data: Data,
         source: String,
-        usages: Set<UInt16>
+        usages: Set<UInt16>,
+        timestampNanoseconds: UInt64
     ) {
         // TV and volume are always managed, unlike intentional left/right passthrough.
         // Register before diagnostics, UI callbacks and configuration lookups.
@@ -860,7 +948,7 @@ final class HIDRemoteMonitor {
         if backOnlyMode {
             processBackOnly(usages: usages.intersection([RemoteButton.back.hidUsage]))
         } else {
-            process(usages: usages)
+            process(usages: usages, timestampNanoseconds: timestampNanoseconds)
         }
     }
 
@@ -871,11 +959,18 @@ final class HIDRemoteMonitor {
         activeDeviceIsSeized = false
     }
 
-    private func process(usages: Set<UInt16>) {
+    private func process(usages: Set<UInt16>, timestampNanoseconds: UInt64) {
+        let reportMilliseconds = HIDReportClock.milliseconds(
+            fromUptimeNanoseconds: timestampNanoseconds
+        )
         let pressed = usages.subtracting(activeUsages)
         let released = activeUsages.subtracting(usages)
         if !pressed.isEmpty || !released.isEmpty {
-            let timing = recordPhysicalEdgeTiming(pressed: pressed, released: released)
+            let timing = recordPhysicalEdgeTiming(
+                pressed: pressed,
+                released: released,
+                now: timestampNanoseconds
+            )
             diagnosticLogger(
                 "HID EDGE pressed=\(Self.buttonList(for: pressed)) " +
                     "released=\(Self.buttonList(for: released))" + timing
@@ -947,7 +1042,7 @@ final class HIDRemoteMonitor {
                 profileID, button, .singleClick
             ) != nil || hasOverrideBinding(profileID, button, .singleClick)
 
-            if onRuntimeButton?(profileID, button, .press) == true {
+            if onRuntimeButton?(profileID, button, .press, reportMilliseconds) == true {
                 if !activeDeviceIsSeized, usesNativePassthrough { eventSuppressor.arm(button: button, edge: .down) }
                 continue
             }
@@ -1044,7 +1139,9 @@ final class HIDRemoteMonitor {
             }
             repeatTimers.removeValue(forKey: usage)?.cancel()
             if let button = RemoteButton.usageMap[usage] {
-                if onRuntimeButton?(profileID, button, .release) == true { continue }
+                if onRuntimeButton?(profileID, button, .release, reportMilliseconds) == true {
+                    continue
+                }
                 if buttonInteractions.isTracking(button) {
                     buttonInteractions.handle(.release, button: button,
                         snapshot: settings.interactionSnapshot(for: button, profileID: profileID),
@@ -1205,9 +1302,9 @@ final class HIDRemoteMonitor {
     /// instead of correlating `HID EDGE` timestamps by hand.
     private func recordPhysicalEdgeTiming(
         pressed: Set<UInt16>,
-        released: Set<UInt16>
+        released: Set<UInt16>,
+        now: UInt64
     ) -> String {
-        let now = monotonicNow()
         var releaseGaps: [String] = []
         var holds: [String] = []
         for usage in pressed.sorted() {
