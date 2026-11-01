@@ -1078,7 +1078,7 @@ struct SettingsPageRegressionTests {
             "settings.clearTrustedPhoneIdentities()",
             "setMappingAction(action, for: button, trigger: trigger)",
             "setMappingShortcut(",
-            "chooseCustomApplication(for:",
+            "pickCustomApplicationProfile(",
             "recordCustomApplicationInput(profileID:",
             "setMappingApplicationProfileID(",
             ".openCustomApplication",
@@ -1151,8 +1151,15 @@ struct SettingsPageRegressionTests {
         #expect(source.contains("connection.voice_fn_tap.hint_short"))
         #expect(source.contains("ButtonActionCategory.allCases"))
         #expect(source.contains("MappingActionFilter.visibleCases"))
-        #expect(source.contains("[.basicKeys, .systemAndMedia, .custom, .commonPhrases, .applications]"))
+        #expect(source.contains("[.basicKeys, .systemAndMedia, .custom, .commonPhrases, .applications, .applicationFocus]"))
         #expect(source.contains("mappingActionFilterControl"))
+        #expect(source.contains("applicationFocusEditor(configured: configured)"))
+        #expect(source.contains("customApplicationTargetPicker("))
+        #expect(source.contains("custom_application.focus.scope_note"))
+        // 「App 输入框和滚动」只切换正在配置的 App，不得改写当前按键动作。
+        #expect(!source.contains("bindCustomApplication("))
+        // 聚焦方式与滚动区域是和动作分类平级的独立分区，不能再折叠进「打开具体 APP」的动作组。
+        #expect(!source.contains("private func customApplicationEditor("))
         #expect(source.contains("ButtonActionCategory.allCases.filter(mappingActionFilter.includes)"))
         #expect(source.contains("category == .commonPhrases"))
         #expect(source.contains("category == .applications"))

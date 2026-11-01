@@ -417,11 +417,14 @@ private enum MappingActionFilter: String, CaseIterable, Identifiable {
     case custom
     case commonPhrases
     case applications
+    /// 目标 App 的聚焦方式与滚动区域。它不是动作分类，而是与动作分类平级的
+    /// 独立分区：同一按键的目标 App 只配置一次，不随所选动作变化。
+    case applicationFocus
 
     var id: String { rawValue }
 
     static var visibleCases: [Self] {
-        [.basicKeys, .systemAndMedia, .custom, .commonPhrases, .applications]
+        [.basicKeys, .systemAndMedia, .custom, .commonPhrases, .applications, .applicationFocus]
     }
 
     var localizationKey: String {
@@ -432,6 +435,7 @@ private enum MappingActionFilter: String, CaseIterable, Identifiable {
         case .custom: return ButtonActionCategory.custom.localizationKey
         case .commonPhrases: return ButtonActionCategory.commonPhrases.localizationKey
         case .applications: return ButtonActionCategory.applications.localizationKey
+        case .applicationFocus: return "button_mapping.action_filter.application_focus"
         }
     }
 
@@ -449,6 +453,8 @@ private enum MappingActionFilter: String, CaseIterable, Identifiable {
             return category == .commonPhrases
         case .applications:
             return category == .applications
+        case .applicationFocus:
+            return false
         }
     }
 }
@@ -592,6 +598,9 @@ struct SettingsView: View {
     @State private var isHoveringMacMicrophoneButton = false
     @State private var shortcutCaptureTarget: ShortcutEditingTarget?
     @State private var applicationShortcutCaptureProfileID: UUID?
+    /// 「App 输入框和滚动」里正在配置哪个 App。它只决定编辑对象，不写按键绑定：
+    /// 聚焦与翻页滚动按 App 生效，App 在前台即可使用，和「打开具体 APP」动作无关。
+    @State private var applicationFocusProfileID: UUID?
     @State private var shortcutCaptureFeedback: ShortcutCaptureFeedback?
     @State private var customApplicationLearningStates: [UUID: CustomApplicationLearningState] = [:]
     @State private var scrollRegionCountdowns: [UUID: Int] = [:]
@@ -2997,70 +3006,76 @@ struct SettingsView: View {
             mappingInheritanceControl(button: button, trigger: trigger)
             mappingActionFilterControl
 
-            ForEach(ButtonActionCategory.allCases.filter(mappingActionFilter.includes)) { category in
-                let groupedActions = actions.filter { $0.category == category }
-                if !groupedActions.isEmpty {
-                    mappingActionGroup(
-                        category: category,
-                        actions: groupedActions,
-                        selectedAction: configured.action,
-                        installedBundleIdentifiers: installedBundleIdentifiers,
-                        isManagedPowerAction: isManagedPowerAction,
-                        onSelect: { action in
-                            applicationShortcutCaptureProfileID = nil
-                            guard action != .customShortcut else {
-                                // Choosing the action starts recording; an unrecorded shortcut
-                                // must never become a saved binding.
-                                shortcutCaptureTarget = ShortcutEditingTarget(
-                                    button: button,
-                                    trigger: trigger
-                                )
-                                return
+            if mappingActionFilter == .applicationFocus {
+                // 目标 App 的聚焦方式与滚动区域属于按键本身，不挂在任何动作分类下面，
+                // 因此和动作分类平级、单独成为一个分区。
+                applicationFocusEditor(configured: configured)
+            } else {
+                ForEach(ButtonActionCategory.allCases.filter(mappingActionFilter.includes)) { category in
+                    let groupedActions = actions.filter { $0.category == category }
+                    if !groupedActions.isEmpty {
+                        mappingActionGroup(
+                            category: category,
+                            actions: groupedActions,
+                            selectedAction: configured.action,
+                            installedBundleIdentifiers: installedBundleIdentifiers,
+                            isManagedPowerAction: isManagedPowerAction,
+                            onSelect: { action in
+                                applicationShortcutCaptureProfileID = nil
+                                guard action != .customShortcut else {
+                                    // Choosing the action starts recording; an unrecorded shortcut
+                                    // must never become a saved binding.
+                                    shortcutCaptureTarget = ShortcutEditingTarget(
+                                        button: button,
+                                        trigger: trigger
+                                    )
+                                    return
+                                }
+                                setMappingAction(action, for: button, trigger: trigger)
+                                shortcutCaptureTarget = nil
                             }
-                            setMappingAction(action, for: button, trigger: trigger)
-                            shortcutCaptureTarget = nil
-                        }
+                        )
+                    }
+                }
+
+                if mappingActionFilter.includes(.custom), macroFeature.isFeatureVisible {
+                    mappingMacroChoices(button: button, trigger: trigger, configured: configured)
+                }
+                if configured.action == .customShortcut ||
+                    shortcutCaptureTarget == ShortcutEditingTarget(button: button, trigger: trigger) {
+                    inlineShortcutEditor(
+                        button: button,
+                        trigger: trigger,
+                        configured: configured
                     )
                 }
-            }
 
-            if mappingActionFilter.includes(.custom), macroFeature.isFeatureVisible {
-                mappingMacroChoices(button: button, trigger: trigger, configured: configured)
-            }
-            if configured.action == .customShortcut ||
-                shortcutCaptureTarget == ShortcutEditingTarget(button: button, trigger: trigger) {
-                inlineShortcutEditor(
-                    button: button,
-                    trigger: trigger,
-                    configured: configured
-                )
-            }
+                if configured.action == .openCustomApplication {
+                    customApplicationTargetPicker(
+                        button: button,
+                        trigger: trigger,
+                        configured: configured
+                    )
+                }
 
-            if configured.action == .openCustomApplication {
-                customApplicationEditor(
-                    button: button,
-                    trigger: trigger,
-                    configured: configured
-                )
-            }
-
-            if button == .power && trigger == .singleClick && settings.experimentalContinuousRecordingEnabled {
-                Text("button_mapping.continuous_recording_experiment.power_managed")
-                    .font(.system(size: 12))
-                    .foregroundStyle(Color.accentColor)
-            } else if trigger == .doubleClick && configured.action != .disabled {
-                Text("button_mapping.double_click.effect")
-                    .font(.system(size: 12))
-                    .foregroundStyle(Color.accentColor)
-            } else if trigger == .longPress && configured.action != .disabled {
-                Text("button_mapping.long_press.effect")
-                    .font(.system(size: 12))
-                    .foregroundStyle(Color.accentColor)
-            } else if trigger == .singleClick,
-                      configured.action == .disabled || configured.action.allowsRepeat {
-                Text("button_mapping.single_click.help")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
+                if button == .power && trigger == .singleClick && settings.experimentalContinuousRecordingEnabled {
+                    Text("button_mapping.continuous_recording_experiment.power_managed")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Color.accentColor)
+                } else if trigger == .doubleClick && configured.action != .disabled {
+                    Text("button_mapping.double_click.effect")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Color.accentColor)
+                } else if trigger == .longPress && configured.action != .disabled {
+                    Text("button_mapping.long_press.effect")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Color.accentColor)
+                } else if trigger == .singleClick,
+                          configured.action == .disabled || configured.action.allowsRepeat {
+                    Text("button_mapping.single_click.help")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                }
             }
         }
     }
@@ -3874,15 +3889,15 @@ struct SettingsView: View {
         .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 10))
     }
 
+    /// 「打开具体 APP」动作组里只负责挑目标 App；输入框聚焦与滚动区域不是打开 App 的一部分，
+    /// 它们按 App 生效、App 在前台就能用，统一放在平级的「App 输入框和滚动」里配置。
     @ViewBuilder
-    private func customApplicationEditor(
+    private func customApplicationTargetPicker(
         button: RemoteButton,
         trigger: ButtonTrigger,
         configured: ConfiguredButtonAction
     ) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            model.macroFeature.portableTransferView(profileID: settings.selectedRemoteProfileID,
-                model: settings.selectedRemoteProfile?.model, applicationsOnly: true)
+        VStack(alignment: .leading, spacing: 10) {
             Text("custom_application.target")
                 .font(.system(size: 14, weight: .semibold))
 
@@ -3901,7 +3916,8 @@ struct SettingsView: View {
                 }
 
                 Button {
-                    chooseCustomApplication(for: button, trigger: trigger)
+                    guard let id = pickCustomApplicationProfile() else { return }
+                    setMappingApplicationProfileID(id, for: button, trigger: trigger)
                 } label: {
                     Label("custom_application.add", systemImage: "plus")
                         .font(.system(size: 13, weight: .semibold))
@@ -3910,7 +3926,58 @@ struct SettingsView: View {
                 .compatibilityButtonStyle(.standard)
             }
 
-            if let profile = settings.customApplicationProfile(id: configured.applicationProfileID) {
+            if configured.applicationProfileID == nil {
+                Text("custom_application.not_configured")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Color.accentColor)
+            }
+        }
+        .padding(12)
+        .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 10))
+    }
+
+    @ViewBuilder
+    private func applicationFocusEditor(configured: ConfiguredButtonAction) -> some View {
+        let editingProfileID = applicationFocusProfileID
+            ?? configured.applicationProfileID
+            ?? settings.customApplicationProfiles.first?.id
+        VStack(alignment: .leading, spacing: 14) {
+            Text("custom_application.focus.scope_note")
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Text("custom_application.target")
+                .font(.system(size: 14, weight: .semibold))
+
+            LazyVGrid(
+                columns: [GridItem(.adaptive(minimum: 150), spacing: 8)],
+                alignment: .leading,
+                spacing: 8
+            ) {
+                ForEach(settings.customApplicationProfiles) { profile in
+                    profileSelectionButton(
+                        profile,
+                        selected: editingProfileID == profile.id
+                    ) {
+                        applicationFocusProfileID = profile.id
+                        applicationShortcutCaptureProfileID = nil
+                    }
+                }
+
+                Button {
+                    guard let id = pickCustomApplicationProfile() else { return }
+                    applicationFocusProfileID = id
+                    applicationShortcutCaptureProfileID = nil
+                } label: {
+                    Label("custom_application.add", systemImage: "plus")
+                        .font(.system(size: 13, weight: .semibold))
+                        .frame(maxWidth: .infinity, minHeight: 36)
+                }
+                .compatibilityButtonStyle(.standard)
+            }
+
+            if let profile = settings.customApplicationProfile(id: editingProfileID) {
                 Divider()
 
                 Text("custom_application.focus_strategy")
@@ -4375,10 +4442,9 @@ struct SettingsView: View {
         scrollRegionMessages[profile.id] = nil
     }
 
-    private func chooseCustomApplication(
-        for button: RemoteButton,
-        trigger: ButtonTrigger
-    ) {
+    /// 让用户挑一个 `.app`，返回（或复用）它的配置 ID；是否把它写进按键绑定由调用方决定——
+    /// 「打开具体 APP」组里写绑定，「App 输入框和滚动」里只切换正在配置的 App。
+    private func pickCustomApplicationProfile() -> UUID? {
         let panel = NSOpenPanel()
         panel.title = localization.text("custom_application.picker.title")
         panel.prompt = localization.text("common.action.choose")
@@ -4390,7 +4456,7 @@ struct SettingsView: View {
               let bundle = Bundle(url: url),
               let bundleIdentifier = bundle.bundleIdentifier,
               !bundleIdentifier.isEmpty
-        else { return }
+        else { return nil }
 
         let existing = settings.customApplicationProfiles.first {
             $0.bundleIdentifier == bundleIdentifier
@@ -4413,7 +4479,7 @@ struct SettingsView: View {
                 )
             )
         }
-        setMappingApplicationProfileID(profileID, for: button, trigger: trigger)
+        return profileID
     }
 
     private func chooseCustomApplicationForButtonProfile(

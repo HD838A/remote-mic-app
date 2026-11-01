@@ -232,6 +232,7 @@
 "button_mapping.action_group.system_and_media" = "System & Media";
 "button_mapping.action_group.custom" = "Custom Actions";
 "button_mapping.action_group.applications" = "Open an App";
+"button_mapping.action_filter.application_focus" = "App Input & Scroll";
 "button_mapping.action.disable_switch" = "Disable Button";
 "custom_application.target" = "Target app";
 "custom_application.not_configured" = "No app selected";
@@ -240,6 +241,7 @@
 "custom_application.focus.none" = "Open app only";
 "custom_application.focus.shortcut" = "Use an app shortcut";
 "custom_application.focus.recorded" = "Focus a Saved Input Field";
+"custom_application.focus.scope_note" = "Input-field focus and page scrolling are set per app: they work whenever the app is in the foreground, independent of the Open an App action.";
 "custom_application.shortcut.record" = "Record focus shortcut";
 "custom_application.shortcut.editor_title" = "Set the focus shortcut for %@";
 "custom_application.shortcut.editor_instructions" = "Click Record Shortcut first, then press the single key or key combination this app uses to focus its input field. SayAll activates the app before sending it.";
