@@ -4452,75 +4452,73 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
 
-                    Text("custom_application.focus_strategy")
-                        .font(.system(size: 14, weight: .semibold))
+                    applicationSectionCard {
+                        Text("custom_application.focus_strategy")
+                            .font(.system(size: 14, weight: .semibold))
 
-                    // 顺序固定：① 只打开 APP ② 打开后自动聚焦；快捷键是兜底，不再并列。
-                    HStack(spacing: 8) {
-                        applicationFocusOption(profile, .none, key: "custom_application.focus.none")
-                        applicationFocusOption(
-                            profile,
-                            .recordedAccessibility,
-                            key: "custom_application.focus.recorded"
-                        )
-                    }
-
-                    if profile.focusStrategy == .recordedAccessibility {
-                        accessibilityLearningEditor(profile)
-                        if profile.accessibilityTarget == nil {
-                            Text("custom_application.focus.learn_hint")
-                                .font(.system(size: 12))
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
-
-                    if profile.focusStrategy == .keyboardShortcut {
-                        inlineApplicationShortcutEditor(profile)
+                        // 顺序固定：① 只打开 APP ② 打开后自动聚焦；快捷键是兜底，不再并列。
                         HStack(spacing: 8) {
-                            Spacer()
-                            Button("custom_application.focus.shortcut_back") {
-                                var updated = profile
-                                updated.focusStrategy = .recordedAccessibility
-                                settings.updateCustomApplicationProfile(updated)
-                                applicationShortcutCaptureProfileID = nil
-                            }
-                            .compatibilityButtonStyle(.standard)
-                        }
-                    } else {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("custom_application.focus.shortcut_hint")
-                                .font(.system(size: 12))
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                            Button("custom_application.focus.shortcut_use") {
-                                var updated = profile
-                                updated.focusStrategy = .keyboardShortcut
-                                settings.updateCustomApplicationProfile(updated)
-                            }
-                            .compatibilityButtonStyle(.standard)
-                        }
-                        .padding(.top, 2)
-                    }
-
-                    HStack {
-                        Spacer()
-                        Button("custom_application.test") {
-                            _ = KeyboardInjector.send(
-                                .openCustomApplication,
-                                applicationProfile: profile
+                            applicationFocusOption(profile, .none, key: "custom_application.focus.none")
+                            applicationFocusOption(
+                                profile,
+                                .recordedAccessibility,
+                                key: "custom_application.focus.recorded"
                             )
                         }
-                        .compatibilityButtonStyle(.prominent)
+
+                        if profile.focusStrategy == .recordedAccessibility {
+                            accessibilityLearningEditor(profile)
+                            if profile.accessibilityTarget == nil {
+                                Text("custom_application.focus.learn_hint")
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+
+                        if profile.focusStrategy == .keyboardShortcut {
+                            inlineApplicationShortcutEditor(profile)
+                            HStack(spacing: 8) {
+                                Spacer()
+                                Button("custom_application.focus.shortcut_back") {
+                                    var updated = profile
+                                    updated.focusStrategy = .recordedAccessibility
+                                    settings.updateCustomApplicationProfile(updated)
+                                    applicationShortcutCaptureProfileID = nil
+                                }
+                                .compatibilityButtonStyle(.standard)
+                            }
+                        } else {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("custom_application.focus.shortcut_hint")
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                Button("custom_application.focus.shortcut_use") {
+                                    var updated = profile
+                                    updated.focusStrategy = .keyboardShortcut
+                                    settings.updateCustomApplicationProfile(updated)
+                                }
+                                .compatibilityButtonStyle(.standard)
+                            }
+                            .padding(.top, 2)
+                        }
+
+                        HStack {
+                            Spacer()
+                            Button("custom_application.test") {
+                                _ = KeyboardInjector.send(
+                                    .openCustomApplication,
+                                    applicationProfile: profile
+                                )
+                            }
+                            .compatibilityButtonStyle(.prominent)
+                        }
                     }
 
-                    Divider()
+                    applicationSectionCard { scrollRegionEditor(profile) }
 
-                    scrollRegionEditor(profile)
-
-                    Divider()
-
-                    applicationBindingSection(profile)
+                    applicationSectionCard { applicationBindingSection(profile) }
                 }
             }
         } else {
@@ -4529,6 +4527,24 @@ struct SettingsView: View {
                     .font(.system(size: 12))
                     .foregroundStyle(Color.accentColor)
             }
+        }
+    }
+
+    /// 详情里的三个分区用同一张内嵌卡片，避免只有一条细分隔线导致下面被发现不了。
+    private func applicationSectionCard<Content: View>(
+        @ViewBuilder _ content: () -> Content
+    ) -> some View {
+        // 必须先收进一个 VStack：直接把修饰符挂在多子视图的 @ViewBuilder 上会被摊到每个子视图，
+        // 结果是每个控件各自一张卡片，而不是整块一张。
+        VStack(alignment: .leading, spacing: 10) {
+            content()
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 12))
+        .overlay {
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.secondary.opacity(0.14))
         }
     }
 
@@ -4600,7 +4616,11 @@ struct SettingsView: View {
     private struct ApplicationBindingRef: Identifiable {
         let button: RemoteButton
         let trigger: ButtonTrigger
-        var id: String { "\(button.rawValue)-\(trigger.rawValue)" }
+        /// 来自哪个键位方案；nil 表示当前按键配置。
+        let profile: ButtonMappingProfile?
+        var id: String {
+            "\(profile?.id.uuidString ?? "base")-\(button.rawValue)-\(trigger.rawValue)"
+        }
     }
 
     /// 反查范围限定当前遥控器与当前键位方案生效后的绑定，不混入其它遥控器。
@@ -4612,7 +4632,30 @@ struct SettingsView: View {
                 guard configured.action == .openCustomApplication,
                       configured.applicationProfileID == profile.id
                 else { continue }
-                result.append(ApplicationBindingRef(button: button, trigger: trigger))
+                result.append(ApplicationBindingRef(button: button, trigger: trigger, profile: nil))
+            }
+        }
+        // 键位方案里的绑定同样要出现在这里，否则「他到底被谁用着」只能看到一半。
+        let device = settings.selectedRemoteProfileID
+        for mappingProfile in macroFeature.mappingProfiles(device: device) {
+            for button in RemoteButton.allCases {
+                for trigger in ButtonTrigger.allCases {
+                    guard let bound = macroFeature.profileBinding(
+                        device: device,
+                        profile: mappingProfile.id,
+                        button: button,
+                        trigger: trigger
+                    ) else { continue }
+                    let configured = bound.normalizedForExecution
+                    guard configured.action == .openCustomApplication,
+                          configured.applicationProfileID == profile.id
+                    else { continue }
+                    result.append(ApplicationBindingRef(
+                        button: button,
+                        trigger: trigger,
+                        profile: mappingProfile
+                    ))
+                }
             }
         }
         return result
@@ -4636,6 +4679,11 @@ struct SettingsView: View {
                         preservesMappingContextOnNavigation = true
                         mappingHoldEditingButton = nil
                         mappingActionFilter = .all
+                        if let mappingProfile = binding.profile {
+                            openMappingProfileForEditing(mappingProfile.id)
+                        } else {
+                            selectMappingProfile(nil)
+                        }
                         mappingEditingTarget = ShortcutEditingTarget(
                             button: binding.button,
                             trigger: binding.trigger
@@ -4643,6 +4691,18 @@ struct SettingsView: View {
                         selectedSection = .mapping
                     } label: {
                         HStack(spacing: 8) {
+                            if let mappingProfile = binding.profile {
+                                Text(mappingProfile.name)
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .lineLimit(1)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .foregroundStyle(Color.accentColor)
+                                    .background(
+                                        Color.accentColor.opacity(0.12),
+                                        in: RoundedRectangle(cornerRadius: 5)
+                                    )
+                            }
                             Text("\(binding.button.displayName(using: localization)) · " +
                                  binding.trigger.displayName(using: localization))
                                 .font(.system(size: 12, weight: .semibold))
