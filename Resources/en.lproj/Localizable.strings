@@ -252,7 +252,11 @@
 "custom_application.focus_strategy" = "Focus method";
 "custom_application.focus.none" = "Open app only";
 "custom_application.focus.shortcut" = "Use an app shortcut";
-"custom_application.focus.recorded" = "Focus a Saved Input Field";
+"custom_application.focus.shortcut_hint" = "Does this app have its own focus shortcut? You can use it instead of learning.";
+"custom_application.focus.shortcut_use" = "Use the app's shortcut";
+"custom_application.focus.shortcut_back" = "Back to focus after opening";
+"custom_application.focus.learn_hint" = "Learning only takes one click on the input field — faster than recording a shortcut.";
+"custom_application.focus.recorded" = "Focus after opening";
 "custom_application.focus.scope_note" = "Input-field focus and page scrolling are set per app: they work whenever the app is in the foreground, independent of the Open an App action.";
 "custom_application.shortcut.record" = "Record focus shortcut";
 "custom_application.shortcut.editor_title" = "Set the focus shortcut for %@";

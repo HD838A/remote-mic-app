@@ -252,7 +252,11 @@
 "custom_application.focus_strategy" = "聚焦方式";
 "custom_application.focus.none" = "只打开 APP";
 "custom_application.focus.shortcut" = "使用 APP 快捷键聚焦";
-"custom_application.focus.recorded" = "聚焦已记录的输入框";
+"custom_application.focus.shortcut_hint" = "这个 APP 有自带的聚焦快捷键？也可以用它代替学习。";
+"custom_application.focus.shortcut_use" = "改用 APP 快捷键聚焦";
+"custom_application.focus.shortcut_back" = "改回打开后自动聚焦";
+"custom_application.focus.learn_hint" = "学习只需要在目标 APP 里点一下输入框，比录快捷键更快。";
+"custom_application.focus.recorded" = "打开后自动聚焦";
 "custom_application.focus.scope_note" = "输入框聚焦和上下翻页按 APP 单独设置：只要该 APP 在前台就能用，与「打开具体 APP」动作无关。";
 "custom_application.shortcut.record" = "录入聚焦快捷键";
 "custom_application.shortcut.editor_title" = "设置 %@ 的聚焦快捷键";

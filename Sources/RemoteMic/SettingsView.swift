@@ -4455,48 +4455,52 @@ struct SettingsView: View {
                     Text("custom_application.focus_strategy")
                         .font(.system(size: 14, weight: .semibold))
 
+                    // 顺序固定：① 只打开 APP ② 打开后自动聚焦；快捷键是兜底，不再并列。
                     HStack(spacing: 8) {
-                        ForEach(CustomApplicationFocusStrategy.allCases) { strategy in
-                            Button {
-                                var updated = profile
-                                updated.focusStrategy = strategy
-                                settings.updateCustomApplicationProfile(updated)
-                                applicationShortcutCaptureProfileID = nil
-                            } label: {
-                                HStack(spacing: 6) {
-                                    Image(systemName: profile.focusStrategy == strategy
-                                            ? "checkmark.circle.fill" : "circle")
-                                    Text(strategy.displayName(using: localization))
-                                        .lineLimit(1)
-                                }
-                                .font(.system(size: 13, weight: profile.focusStrategy == strategy
-                                        ? .semibold : .regular))
-                                .frame(maxWidth: .infinity, minHeight: 36)
-                            }
-                            .buttonStyle(.plain)
-                            .foregroundStyle(profile.focusStrategy == strategy
-                                    ? Color.accentColor : Color.primary)
-                            .background(
-                                profile.focusStrategy == strategy
-                                    ? Color.accentColor.opacity(0.12)
-                                    : Color.primary.opacity(0.04),
-                                in: RoundedRectangle(cornerRadius: 8)
-                            )
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 8)
-                                    .stroke(profile.focusStrategy == strategy
-                                            ? Color.accentColor.opacity(0.5)
-                                            : Color.secondary.opacity(0.16))
-                            }
+                        applicationFocusOption(profile, .none, key: "custom_application.focus.none")
+                        applicationFocusOption(
+                            profile,
+                            .recordedAccessibility,
+                            key: "custom_application.focus.recorded"
+                        )
+                    }
+
+                    if profile.focusStrategy == .recordedAccessibility {
+                        accessibilityLearningEditor(profile)
+                        if profile.accessibilityTarget == nil {
+                            Text("custom_application.focus.learn_hint")
+                                .font(.system(size: 12))
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                     }
 
                     if profile.focusStrategy == .keyboardShortcut {
                         inlineApplicationShortcutEditor(profile)
-                    }
-
-                    if profile.focusStrategy == .recordedAccessibility {
-                        accessibilityLearningEditor(profile)
+                        HStack(spacing: 8) {
+                            Spacer()
+                            Button("custom_application.focus.shortcut_back") {
+                                var updated = profile
+                                updated.focusStrategy = .recordedAccessibility
+                                settings.updateCustomApplicationProfile(updated)
+                                applicationShortcutCaptureProfileID = nil
+                            }
+                            .compatibilityButtonStyle(.standard)
+                        }
+                    } else {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("custom_application.focus.shortcut_hint")
+                                .font(.system(size: 12))
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Button("custom_application.focus.shortcut_use") {
+                                var updated = profile
+                                updated.focusStrategy = .keyboardShortcut
+                                settings.updateCustomApplicationProfile(updated)
+                            }
+                            .compatibilityButtonStyle(.standard)
+                        }
+                        .padding(.top, 2)
                     }
 
                     HStack {
@@ -4525,6 +4529,38 @@ struct SettingsView: View {
                     .font(.system(size: 12))
                     .foregroundStyle(Color.accentColor)
             }
+        }
+    }
+
+    private func applicationFocusOption(
+        _ profile: CustomApplicationProfile,
+        _ strategy: CustomApplicationFocusStrategy,
+        key: String
+    ) -> some View {
+        let isSelected = profile.focusStrategy == strategy
+        return Button {
+            var updated = profile
+            updated.focusStrategy = strategy
+            settings.updateCustomApplicationProfile(updated)
+            applicationShortcutCaptureProfileID = nil
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                Text(LocalizedStringKey(key))
+                    .lineLimit(1)
+            }
+            .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
+            .frame(maxWidth: .infinity, minHeight: 36)
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(isSelected ? Color.accentColor : Color.primary)
+        .background(
+            isSelected ? Color.accentColor.opacity(0.12) : Color.primary.opacity(0.04),
+            in: RoundedRectangle(cornerRadius: 8)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(isSelected ? Color.accentColor.opacity(0.5) : Color.secondary.opacity(0.16))
         }
     }
 
