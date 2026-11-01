@@ -479,10 +479,24 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     }
 
     func menuWillOpen(_ menu: NSMenu) {
-        refreshMenuStatus()
-        guard let operation = activeStatusMenuOperation, menu === operation.menu else { return }
+        guard menu === statusMenu else { return }
+        finishStatusMenuOperation(result: "cancelled", reason: "menu_replaced")
+        statusMenuOperationID &+= 1
+        let operationID = statusMenuOperationID
+        let source: String
+        switch NSApp.currentEvent?.type {
+        case .leftMouseDown, .leftMouseUp: source = "left_click"
+        case .rightMouseDown, .rightMouseUp: source = "right_click"
+        case .keyDown, .keyUp: source = "keyboard"
+        default: source = "other"
+        }
+        activeStatusMenuOperation = (operationID, ProcessInfo.processInfo.systemUptime, menu)
         AppLogger.shared.write(
-            "UI STATUS_MENU operation_id=\(operation.id) phase=started result=opening"
+            "UI STATUS_MENU operation_id=\(operationID) phase=requested source=\(source)"
+        )
+        refreshMenuStatus()
+        AppLogger.shared.write(
+            "UI STATUS_MENU operation_id=\(operationID) phase=started result=opening"
         )
     }
 
@@ -500,11 +514,6 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         }
 
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        if let button = item.button {
-            button.target = self
-            button.action = #selector(handleStatusItemClick(_:))
-            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
-        }
 
         connectionItem.isEnabled = false
         audioItem.isEnabled = false
@@ -587,6 +596,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         menu.addItem(.separator())
         menu.addItem(menuItem("common.action.quit", action: #selector(quit)))
         statusMenu = menu
+        statusItem?.menu = menu
         refreshMenuStatus()
     }
 
@@ -1012,37 +1022,6 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         statusItemWarningBlinkTimer?.invalidate()
         statusItemWarningBlinkTimer = nil
         statusItemWarningBlinkVisible = true
-    }
-
-    @objc private func handleStatusItemClick(_ sender: NSStatusBarButton) {
-        showStatusMenu()
-    }
-
-    private func showStatusMenu() {
-        statusMenuOperationID &+= 1
-        let operationID = statusMenuOperationID
-        let source: String
-        switch NSApp.currentEvent?.type {
-        case .leftMouseUp: source = "left_click"
-        case .rightMouseUp: source = "right_click"
-        case .keyDown, .keyUp: source = "keyboard"
-        default: source = "other"
-        }
-        AppLogger.shared.write(
-            "UI STATUS_MENU operation_id=\(operationID) phase=requested source=\(source)"
-        )
-        guard let statusItem, let button = statusItem.button, let statusMenu else {
-            AppLogger.shared.write(
-                "UI STATUS_MENU operation_id=\(operationID) phase=failed " +
-                    "result=unavailable reason=status_item_unavailable"
-            )
-            return
-        }
-        activeStatusMenuOperation = (operationID, ProcessInfo.processInfo.systemUptime, statusMenu)
-        refreshMenuStatus()
-        statusItem.menu = statusMenu
-        button.performClick(nil)
-        statusItem.menu = nil
     }
 
     private func finishStatusMenuOperation(result: String, reason: String) {
