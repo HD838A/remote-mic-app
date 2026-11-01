@@ -232,6 +232,7 @@
 "button_mapping.action_group.system_and_media" = "系统与媒体";
 "button_mapping.action_group.custom" = "自定义动作";
 "button_mapping.action_group.applications" = "打开具体 APP";
+"button_mapping.action_filter.application_focus" = "App 输入框和滚动";
 "button_mapping.action.disable_switch" = "禁用按键";
 "custom_application.target" = "目标 APP";
 "custom_application.not_configured" = "尚未选择 APP";
@@ -240,6 +241,7 @@
 "custom_application.focus.none" = "只打开 APP";
 "custom_application.focus.shortcut" = "使用 APP 快捷键聚焦";
 "custom_application.focus.recorded" = "聚焦已记录的输入框";
+"custom_application.focus.scope_note" = "输入框聚焦和上下翻页按 APP 单独设置：只要该 APP 在前台就能用，与「打开具体 APP」动作无关。";
 "custom_application.shortcut.record" = "录入聚焦快捷键";
 "custom_application.shortcut.editor_title" = "设置 %@ 的聚焦快捷键";
 "custom_application.shortcut.editor_instructions" = "先点击“录入快捷键”，再按下该 APP 用于聚焦输入框的单个按键或组合键。执行时会先激活 APP，再发送此按键。";
