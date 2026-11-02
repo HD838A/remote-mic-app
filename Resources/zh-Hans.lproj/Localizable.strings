@@ -179,6 +179,8 @@
 "action.scroll_down" = "向下滚动";
 "action.page_up" = "向上翻页";
 "action.page_down" = "向下翻页";
+"action.scroll_to_top" = "滚到顶部";
+"action.scroll_to_bottom" = "滚到底部";
 "scroll_region.title" = "滚动区域";
 "scroll_region.help" = "翻页键会滚动这个 App 的内容区。只读取区域结构，不读取内容，也不移动焦点或鼠标。";
 "scroll_region.learn" = "学习滚动区域";
@@ -190,6 +192,12 @@
 "scroll_region.learn_failed" = "没有识别到可滚动区域，请点内容区（消息列表、正文或终端）后重试。";
 "scroll_region.test_up" = "测试向上翻页";
 "scroll_region.test_down" = "测试向下翻页";
+"scroll_region.edge_title" = "滚到两端：";
+"scroll_region.edge_top" = "滚到顶部";
+"scroll_region.edge_bottom" = "滚到底部";
+"scroll_region.edge_top_done" = "已滚到顶部。";
+"scroll_region.edge_bottom_done" = "已滚到底部。";
+"scroll_region.edge_failed" = "没有滚动；可能该区域不可滚，或已经在这一端。";
 "scroll_region.test_moved" = "内容已移动，这个区域可以翻页。";
 "scroll_region.test_unconfirmed" = "已发送翻页，但没有检测到内容移动；可能已在顶部或底部，或该区域不可滚动。";
 "scroll_region.test_sent" = "已发送翻页；请目视确认内容是否移动。";

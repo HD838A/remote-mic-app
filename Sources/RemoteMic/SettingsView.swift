@@ -5042,6 +5042,22 @@ struct SettingsView: View {
                 }
             }
 
+            // 到边缘是绝对位置语义，和翻页不是一回事，单独一行避免挤压上面的测试按钮。
+            HStack(spacing: 10) {
+                Text("scroll_region.edge_title")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                Button("scroll_region.edge_top") {
+                    testScrollEdge(profile, edge: .top)
+                }
+                .compatibilityButtonStyle(.standard)
+                Button("scroll_region.edge_bottom") {
+                    testScrollEdge(profile, edge: .bottom)
+                }
+                .compatibilityButtonStyle(.standard)
+                Spacer()
+            }
+
             if let messageKey = scrollRegionMessages[profile.id] {
                 Text(LocalizedStringKey(messageKey))
                     .font(.system(size: 12, weight: .medium))
@@ -5165,6 +5181,41 @@ struct SettingsView: View {
                 )
                 DispatchQueue.main.async {
                     scrollRegionMessages[profile.id] = scrollRegionTestMessage(for: result)
+                    NSApp.activate(ignoringOtherApps: true)
+                }
+            }
+        }
+    }
+
+    private func testScrollEdge(_ profile: CustomApplicationProfile, edge: ScrollEdge) {
+        guard let applicationURL = NSWorkspace.shared.urlForApplication(
+            withBundleIdentifier: profile.bundleIdentifier
+        ) else {
+            scrollRegionMessages[profile.id] = "scroll_region.edge_failed"
+            return
+        }
+        let learned = profile.scrollRegionTarget
+        scrollRegionMessages[profile.id] = nil
+
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = true
+        configuration.createsNewApplicationInstance = false
+        NSWorkspace.shared.openApplication(at: applicationURL, configuration: configuration) { _, error in
+            guard error == nil else {
+                DispatchQueue.main.async {
+                    scrollRegionMessages[profile.id] = "scroll_region.edge_failed"
+                }
+                return
+            }
+            DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 0.6) {
+                let result = ScrollRegionInjector.scrollToEdge(edge, learnedTarget: learned)
+                DispatchQueue.main.async {
+                    if result.outcome == .scrolledToEdge {
+                        scrollRegionMessages[profile.id] =
+                            edge == .top ? "scroll_region.edge_top_done" : "scroll_region.edge_bottom_done"
+                    } else {
+                        scrollRegionMessages[profile.id] = "scroll_region.edge_failed"
+                    }
                     NSApp.activate(ignoringOtherApps: true)
                 }
             }
