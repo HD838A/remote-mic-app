@@ -200,8 +200,11 @@ struct ScrollRegionTests {
     }
 
     /// 真机：需要前台 App 与辅助功能权限，默认跳过。
-    /// `REMOTEMIC_LIVE_SCROLL_EDGE_TEST=1 swift test --filter liveEdgeScrollMovesTextEdit`
-    @Test func liveEdgeScrollMovesTextEdit() async throws {
+    /// `REMOTEMIC_LIVE_SCROLL_EDGE_TEST=1 swift test --filter liveEdgeScrollDeliversEvents`
+    ///
+    /// 只证明「事件已投递、没有报错」，**不证明内容真的移动**——投递成功但界面不动是这轮踩过的坑，
+    /// 位移必须靠界面上「滚到顶部/滚到底部」按钮 + 截图确认。
+    @Test func liveEdgeScrollDeliversEvents() async throws {
         guard ProcessInfo.processInfo.environment["REMOTEMIC_LIVE_SCROLL_EDGE_TEST"] == "1" else { return }
         let textEdit = try #require(
             NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.TextEdit").first
@@ -210,10 +213,10 @@ struct ScrollRegionTests {
         try await Task.sleep(for: .milliseconds(700))
 
         let bottom = ScrollRegionInjector.scrollToEdge(.bottom)
-        #expect(bottom.outcome == .scrolledToEdge, "滚到底部失败：\(bottom.outcome.rawValue)")
+        #expect(bottom.outcome == .scrolledToEdge, "滚到底部投递失败：\(bottom.outcome.rawValue)")
         try await Task.sleep(for: .milliseconds(400))
         let top = ScrollRegionInjector.scrollToEdge(.top)
-        #expect(top.outcome == .scrolledToEdge, "滚到顶部失败：\(top.outcome.rawValue)")
+        #expect(top.outcome == .scrolledToEdge, "滚到顶部投递失败：\(top.outcome.rawValue)")
     }
 
     @Test func pageActionsRepeatWhileHeld() {
