@@ -50,6 +50,7 @@ private struct PersonalizedConfiguration: Codable {
     let buttonRapidPressEnabled: [String: Bool]?
     let interactionSettings: RemoteButtonInteractionSettings?
     let buttonGestureTimingsByModel: [String: RemoteButtonGestureTiming]?
+    let buttonGestureLearningsByModel: [String: StoredButtonGestureLearning]?
     let customApplicationProfiles: [CustomApplicationProfile]?
     let applicationLanguage: AppLanguage
     let appIconIdentifier: AppIconIdentifier?
@@ -315,6 +316,7 @@ final class AppSettings: ObservableObject {
         static let secondaryButtonBindings = "secondaryButtonBindings"
         static let buttonRapidPressEnabled = "buttonRapidPressEnabled"
         static let buttonGestureTimingsByModel = "buttonGestureTimingsByModel"
+        static let buttonGestureLearningsByModel = "buttonGestureLearningsByModel"
         static let customApplicationProfiles = "customApplicationProfiles"
         static let peripheralIdentifier = "peripheralIdentifier"
         static let remoteDeviceProfiles = "remoteDeviceProfiles"
@@ -537,6 +539,15 @@ final class AppSettings: ObservableObject {
         didSet {
             if let data = try? JSONEncoder().encode(buttonGestureTimingsByModel) {
                 defaults.set(data, forKey: Keys.buttonGestureTimingsByModel)
+            }
+        }
+    }
+
+    @Published private(set) var buttonGestureLearningsByModel:
+        [String: StoredButtonGestureLearning] = [:] {
+        didSet {
+            if let data = try? JSONEncoder().encode(buttonGestureLearningsByModel) {
+                defaults.set(data, forKey: Keys.buttonGestureLearningsByModel)
             }
         }
     }
@@ -1220,6 +1231,15 @@ final class AppSettings: ObservableObject {
             profiles: remoteDeviceProfiles,
             selectedProfileID: selectedRemoteProfileID
         )
+        let storedGestureLearnings = Self.decodeSetting(
+            [String: StoredButtonGestureLearning].self,
+            forKey: Keys.buttonGestureLearningsByModel,
+            from: defaults,
+            corrupted: &corruptedKeys
+        ) ?? [:]
+        buttonGestureLearningsByModel = storedGestureLearnings.filter {
+            XiaomiRemoteModel(rawValue: $0.key).map { $0 != .unknown } ?? false
+        }
         applyContinuousRecordingExperimentState(
             enabled: experimentalContinuousRecordingEnabled,
             backup: continuousRecordingPowerBindingBackup
@@ -2394,6 +2414,9 @@ final class AppSettings: ObservableObject {
                 ),
             interactionSettings: interactionSettings,
             buttonGestureTimingsByModel: buttonGestureTimingsByModel,
+            buttonGestureLearningsByModel: buttonGestureLearningsByModel.isEmpty
+                ? nil
+                : buttonGestureLearningsByModel,
             customApplicationProfiles: customApplicationProfiles,
             applicationLanguage: applicationLanguage,
             appIconIdentifier: appIconIdentifier,
@@ -3066,6 +3089,17 @@ final class AppSettings: ObservableObject {
     func buttonGestureTiming(for model: XiaomiRemoteModel) -> RemoteButtonGestureTiming {
         guard model != .unknown else { return RemoteButtonGestureTiming() }
         return buttonGestureTimingsByModel[model.rawValue] ?? RemoteButtonGestureTiming()
+    }
+
+    func buttonGestureLearning(for model: XiaomiRemoteModel) -> StoredButtonGestureLearning? {
+        guard model != .unknown else { return nil }
+        return buttonGestureLearningsByModel[model.rawValue]
+    }
+
+    /// 学习结果按机型保存，重开 App 后靠它把「学习完成」补回来；它不改识别时间本身。
+    func setButtonGestureLearning(_ learning: StoredButtonGestureLearning, for model: XiaomiRemoteModel) {
+        guard model != .unknown else { return }
+        buttonGestureLearningsByModel[model.rawValue] = learning
     }
 
     func setButtonGestureTiming(_ timing: RemoteButtonGestureTiming, for model: XiaomiRemoteModel) {

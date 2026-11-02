@@ -724,7 +724,8 @@ struct SettingsView: View {
         .onChange(of: selectedSection) { section in
             model.setMappingPageVisible(section == .mapping)
             if isCapturingMacMicrophoneShortcut { endMacMicrophoneShortcutCapture() }
-            if section != .mapping {
+            // 只取消进行中的学习；已完成的结果要留着，否则离开页面就显示“未开始”。
+            if section != .mapping, model.buttonGestureLearningStatus.isActive {
                 model.cancelButtonGestureLearning(reason: "left_mapping_page")
             }
             if section == .mapping {
@@ -2766,6 +2767,20 @@ struct SettingsView: View {
                     else { return }
                     gestureTimingDraft = result.suggestedTiming
                     gestureTimingSaveConfirmed = false
+                    if let learnedModel = gestureTimingDraftModel {
+                        settings.setButtonGestureLearning(
+                            StoredButtonGestureLearning(
+                                singleClickMilliseconds: result.singleClickMilliseconds,
+                                doubleClickMilliseconds: result.doubleClickMilliseconds,
+                                longPressMilliseconds: result.longPressMilliseconds,
+                                suggestedDoubleClickMilliseconds:
+                                    result.suggestedTiming.doubleClickMilliseconds,
+                                suggestedLongPressMilliseconds:
+                                    result.suggestedTiming.longPressMilliseconds
+                            ),
+                            for: learnedModel
+                        )
+                    }
                 }
             }
         }
@@ -3957,6 +3972,10 @@ struct SettingsView: View {
         gestureTimingDraftModel = selectedModel
         gestureTimingDraft = settings.buttonGestureTiming(for: selectedModel)
         gestureTimingSaveConfirmed = false
+        // 重开 App 或换机型回到这里时，用上次学习结果把「学习完成」补回来。
+        if let stored = settings.buttonGestureLearning(for: selectedModel) {
+            model.restoreButtonGestureLearning(stored, model: selectedModel)
+        }
     }
 
     private func mappingRapidPressControl(button: RemoteButton) -> some View {

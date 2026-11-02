@@ -1400,7 +1400,7 @@
 "button_mapping.timing_title" = "Recognition time";
 "button_mapping.timing_double" = "Double-click window";
 "button_mapping.timing_long" = "Long-press threshold";
-"button_mapping.timing_save_hint" = "Learning results fill the controls first. They take effect after you save.";
+"button_mapping.timing_save_hint" = "Learning results fill the controls and are kept across relaunches, so they still show as learned. They only affect the buttons after you save.";
 "button_mapping.timing_saved" = "Saved. The new times apply from the next ordinary button press.";
 "button_mapping.hold_profile_unavailable" = "This component version cannot save hold modes in button profiles. Update the component.";
 "audio.mac_microphone.armed" = "Standby";

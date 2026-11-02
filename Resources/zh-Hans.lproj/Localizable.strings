@@ -1399,7 +1399,7 @@
 "button_mapping.timing_title" = "识别时间";
 "button_mapping.timing_double" = "双击等待时间";
 "button_mapping.timing_long" = "长按判定时间";
-"button_mapping.timing_save_hint" = "学习结果会先填入识别时间。点击保存后生效。";
+"button_mapping.timing_save_hint" = "学习结果会填入识别时间并保留，重新打开也会显示「学习完成」；点保存后才会用到按键上。";
 "button_mapping.timing_saved" = "已保存。新时间从下一次普通按键开始生效。";
 "button_mapping.hold_profile_unavailable" = "此组件版本不能保存键位方案的按住效果。请更新组件。";
 "audio.mac_microphone.armed" = "待命";

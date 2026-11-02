@@ -27,6 +27,8 @@ xcrun swiftc \
   "$ROOT/Sources/RemoteMic/OnboardingFlow.swift" \
   "$ROOT/Sources/RemoteMic/VoiceKeyMode.swift" \
   "$ROOT/Sources/RemoteMic/AppIconController.swift" \
+  "$ROOT/Sources/RemoteMic/RemoteButtonGestureRecognizer.swift" \
+  "$ROOT/Sources/RemoteMic/RemoteButtonGestureLearning.swift" \
   "$ROOT/Sources/RemoteMic/AppSettings.swift" \
   "$ROOT/Sources/RemoteMic/LocalUsageLedger.swift" \
   "$ROOT/Sources/RemoteMic/MacConfigurationBackup.swift" \

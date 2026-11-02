@@ -4374,9 +4374,17 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         return true
     }
 
-    func cancelButtonGestureLearning(reason: String = "user_cancelled") {
-        guard buttonGestureLearningStatus.isActive || buttonGestureLearningStatus.step == .complete
+    /// 把已保存的学习结果恢复成「学习完成」状态，只影响展示，不改识别时间。
+    func restoreButtonGestureLearning(_ stored: StoredButtonGestureLearning, model: XiaomiRemoteModel) {
+        guard buttonGestureLearningStatus.step != .complete ||
+                buttonGestureLearningStatus.model != model
         else { return }
+        buttonGestureLearningStatus = .restored(from: stored, model: model)
+    }
+
+    func cancelButtonGestureLearning(reason: String = "user_cancelled") {
+        // 已经学完的结果不再被页面切换、遥控器变化或输入重置清掉。
+        guard buttonGestureLearningStatus.isCancellable else { return }
         AppLogger.shared.write(
             "BUTTON GESTURE LEARNING operation_id=\(buttonGestureLearningOperationID ?? "none") " +
                 "phase=cancelled result=cancelled reason=\(reason)"

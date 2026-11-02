@@ -1051,8 +1051,6 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
         ![
             .customShortcut,
             .focusInput,
-            .pageUp,
-            .pageDown,
             .openCustomApplication,
             .commandReturn,
             .shiftReturn,
@@ -1070,6 +1068,11 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
             .previousCommandLeft,
             .nextCommandRight,
         ].contains(self) && presetApplication == nil && !isAppInternal
+    }
+
+    /// 翻页要靠辅助功能扫描滚动容器，比行滚动贵得多；按住重复时按更长的间隔执行。
+    var isPageScroll: Bool {
+        self == .pageUp || self == .pageDown
     }
 
     var isDirectionalOrDeleteBackward: Bool {
