@@ -72,6 +72,119 @@ struct RemoteProfilePersistenceTests {
         #expect(migratedMappings == configuredMappings)
     }
 
+    /// 现场数据的形状：同一台 Apple Remote 留下了两条档案，两条都把序列号存成了设备名
+    /// （`C08JV3H32330`），但 `hidFingerprint` 不同——指纹会随接口、重新配对或指纹算法
+    /// 版本变化，所以按指纹去重永远认不出这是同一台设备，卡片上就是两张一模一样的卡片。
+    @Test func theSameSerialNumberCollapsesAcrossFingerprintChanges() throws {
+        let scope = try Self.scopedSettings("duplicate-serial")
+        defer { scope.tearDown() }
+        let legacyID = UUID()
+        let currentID = UUID()
+        var configuredBindings = AppSettings.defaultBindings
+        configuredBindings[.tv] = .disabled
+        let configuredMappings = RemoteDeviceMappings(
+            buttonBindings: configuredBindings,
+            buttonShortcuts: [:],
+            secondaryButtonBindings: [:]
+        )
+        let legacy = RemoteDeviceProfile(
+            id: legacyID,
+            model: .appleSiriRemoteA2854,
+            customName: "C08JV3H32330",
+            hidFingerprint: "older-fingerprint-scheme",
+            mappings: configuredMappings
+        )
+        let current = RemoteDeviceProfile(
+            id: currentID,
+            model: .appleSiriRemoteA2854,
+            hidFingerprint: "newer-fingerprint-scheme",
+            hardwareIdentity: RemoteDeviceIdentity.token(serialNumber: "C08JV3H32330"),
+            mappings: RemoteDeviceMappings(
+                buttonBindings: AppSettings.defaultBindings,
+                buttonShortcuts: [:],
+                secondaryButtonBindings: [:]
+            )
+        )
+        scope.defaults.set(try JSONEncoder().encode([legacy, current]), forKey: "remoteDeviceProfiles")
+        scope.defaults.set(legacyID.uuidString, forKey: "selectedRemoteProfileID")
+
+        let settings = AppSettings(defaults: scope.defaults)
+
+        #expect(settings.remoteDeviceProfiles.count == 1)
+        #expect(settings.remoteDeviceProfiles.first?.id == legacyID)
+        #expect(settings.remoteDeviceProfiles.first?.hardwareIdentity
+            == RemoteDeviceIdentity.token(serialNumber: "C08JV3H32330"))
+        var migratedMappings = try #require(settings.selectedRemoteProfile?.mappings)
+        migratedMappings.interactionSettings = nil
+        #expect(migratedMappings == configuredMappings)
+    }
+
+    /// 两台序列号不同的遥控器不能合并，否则会丢一台设备的映射。
+    @Test func differentSerialNumbersStaySeparate() throws {
+        let scope = try Self.scopedSettings("two-serials")
+        defer { scope.tearDown() }
+        let first = RemoteDeviceProfile(
+            model: .appleSiriRemoteA2854,
+            customName: "C08JV3H32330",
+            hidFingerprint: "first",
+            mappings: RemoteDeviceMappings(
+                buttonBindings: AppSettings.defaultBindings,
+                buttonShortcuts: [:],
+                secondaryButtonBindings: [:]
+            )
+        )
+        let second = RemoteDeviceProfile(
+            model: .appleSiriRemoteA2854,
+            customName: "DL1GHATQ17FC",
+            hidFingerprint: "second",
+            mappings: RemoteDeviceMappings(
+                buttonBindings: AppSettings.defaultBindings,
+                buttonShortcuts: [:],
+                secondaryButtonBindings: [:]
+            )
+        )
+        scope.defaults.set(try JSONEncoder().encode([first, second]), forKey: "remoteDeviceProfiles")
+        scope.defaults.set(first.id.uuidString, forKey: "selectedRemoteProfileID")
+
+        let settings = AppSettings(defaults: scope.defaults)
+
+        #expect(settings.remoteDeviceProfiles.count == 2)
+    }
+
+    /// 运行期重复项要立刻收敛，而且留下的是**正在用**的那条：连接状态、编辑目标都挂在它身上。
+    @Test func runtimeCollapseKeepsTheConnectedProfileAndMovesItsReferences() throws {
+        let scope = try Self.scopedSettings("runtime-collapse")
+        defer { scope.tearDown() }
+        let stale = RemoteDeviceProfile(
+            model: .appleSiriRemoteA2854,
+            customName: "C08JV3H32330",
+            hidFingerprint: "older-fingerprint-scheme",
+            mappings: RemoteDeviceMappings(
+                buttonBindings: AppSettings.defaultBindings,
+                buttonShortcuts: [:],
+                secondaryButtonBindings: [:]
+            )
+        )
+        scope.defaults.set(try JSONEncoder().encode([stale]), forKey: "remoteDeviceProfiles")
+        scope.defaults.set(stale.id.uuidString, forKey: "selectedRemoteProfileID")
+        let settings = AppSettings(defaults: scope.defaults)
+
+        let liveID = settings.registerAppleSiriRemote(fingerprint: "newer-fingerprint-scheme")
+        #expect(settings.updateRemoteProfileHardwareIdentity(
+            liveID, serialNumber: "C08JV3H32330"
+        ))
+        #expect(settings.remoteDeviceProfiles.count == 2)
+
+        let replacements = settings.collapseDuplicateRemoteProfiles(preferring: [liveID])
+
+        #expect(replacements[stale.id] == liveID)
+        #expect(settings.remoteDeviceProfiles.count == 1)
+        #expect(settings.remoteDeviceProfiles.first?.id == liveID)
+        #expect(settings.selectedRemoteProfileID == liveID)
+        // 序列号是身份不是显示名：留下来的标题不能变成一串序列号。
+        #expect(settings.remoteDeviceProfiles.first?.customName.isEmpty == true)
+    }
+
     /// A bridge whose `deviceIdentifier` is known without CoreBluetooth: with no peripheral
     /// attached it reports its target identifier, which is what the model keys profiles by.
     @MainActor
