@@ -179,6 +179,8 @@
 "action.scroll_down" = "向下滚动";
 "action.page_up" = "向上翻页";
 "action.page_down" = "向下翻页";
+"action.scroll_to_top" = "滚到顶部";
+"action.scroll_to_bottom" = "滚到底部";
 "scroll_region.title" = "滚动区域";
 "scroll_region.help" = "翻页键会滚动这个 App 的内容区。只读取区域结构，不读取内容，也不移动焦点或鼠标。";
 "scroll_region.learn" = "学习滚动区域";

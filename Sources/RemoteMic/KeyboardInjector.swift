@@ -194,6 +194,12 @@ enum KeyboardInjector {
 
     /// Page up / down scroll the recorded or preset region of the frontmost app.
     /// Never falls back to the window centre (decision S6).
+    static let defaultScrollEdgePoster: (ScrollEdge) -> ScrollPageOutcome = { edge in
+        let bundleIdentifier = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? ""
+        let learned = ScrollRegionTargetStore.shared.target(for: bundleIdentifier)
+        return ScrollRegionInjector.scrollToEdge(edge, learnedTarget: learned).outcome
+    }
+
     static let defaultScrollPagePoster: (ScrollPageDirection) -> ScrollPageOutcome = { direction in
         let bundleIdentifier = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? ""
         let learned = ScrollRegionTargetStore.shared.target(for: bundleIdentifier)
@@ -298,6 +304,7 @@ enum KeyboardInjector {
         keyStatePoster: KeyStatePoster = postKeyState,
         scrollPoster: ScrollPoster = { postScrollWheel(lines: $0) },
         scrollPagePoster: (ScrollPageDirection) -> ScrollPageOutcome = defaultScrollPagePoster,
+        scrollEdgePoster: (ScrollEdge) -> ScrollPageOutcome = defaultScrollEdgePoster,
         systemKeyPoster: SystemKeyPoster = postSystemKey,
         shortcutEventPoster: (CGEvent) -> Bool = ShortcutEventSequence.post,
         shortcutHardwareFlags: () -> CGEventFlags = { CGEventSource.flagsState(.hidSystemState) },
@@ -421,6 +428,10 @@ enum KeyboardInjector {
             return scrollPagePoster(.up).wasHandled
         case .pageDown:
             return scrollPagePoster(.down).wasHandled
+        case .scrollToTop:
+            return scrollEdgePoster(.top).wasHandled
+        case .scrollToBottom:
+            return scrollEdgePoster(.bottom).wasHandled
         case .deleteBackward:
             keyPoster(51, [])
         case .showDesktop:

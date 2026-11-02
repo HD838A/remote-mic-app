@@ -198,6 +198,85 @@ enum ScrollRegionInjector {
                       outcome: outcome, verifyMovement: verifyMovement)
     }
 
+    /// 滚到顶部 / 底部：绝对位置语义，一次投递足够大的行数，冲过头由内容边界截住。
+    ///
+    /// 与翻页的区别：翻页是相对一屏、可连发；到边缘是一次性跳转、不可连发（见 PRODUCT_SPEC）。
+    static func scrollToEdge(
+        _ edge: ScrollEdge,
+        learnedTarget: ScrollRegionTarget? = nil
+    ) -> ScrollPageResult {
+        guard AXIsProcessTrusted() else {
+            return ScrollPageResult(outcome: .accessibilityUnavailable, verifiedMovement: nil)
+        }
+        guard let application = NSWorkspace.shared.frontmostApplication,
+              let bundleIdentifier = application.bundleIdentifier
+        else { return ScrollPageResult(outcome: .noFrontmostApplication, verifiedMovement: nil) }
+
+        let applicationElement = AXUIElementCreateApplication(application.processIdentifier)
+        guard let window = focusedWindow(of: applicationElement) else {
+            return ScrollPageResult(outcome: .regionUnavailable, verifiedMovement: nil)
+        }
+        let windowFrame = axFrame(window) ?? .zero
+        let region = edgeRegionRect(learnedTarget, windowFrame: windowFrame)
+
+        let isValidTarget = makeTargetValidator(
+            window: window, expectedFrame: windowFrame,
+            processIdentifier: application.processIdentifier
+        )
+        let before = structuralSignature(in: window, region: region)
+        let direction: ScrollPageDirection = edge == .top ? .up : .down
+        let outcome = runEdgeWheel(
+            direction: direction,
+            at: CGPoint(x: region.midX, y: region.midY),
+            isValidTarget: isValidTarget
+        )
+        AppLogger.shared.write(
+            "SCROLL EDGE bundle=\(bundleIdentifier) edge=\(edge == .top ? "top" : "bottom") " +
+            "lines=\(ScrollRegionRule.edgeScrollLines) result=\(outcome.rawValue)"
+        )
+        guard outcome == .scrolledByPixelWheel else {
+            return ScrollPageResult(outcome: outcome, verifiedMovement: nil)
+        }
+        return finish(window: window, region: region, before: before,
+                      outcome: .scrolledToEdge, verifyMovement: true)
+    }
+
+    private static func edgeRegionRect(
+        _ target: ScrollRegionTarget?,
+        windowFrame: CGRect
+    ) -> CGRect {
+        guard let frame = target?.normalizedFrame,
+              ScrollRegionRule.isValid(normalizedFrame: frame),
+              windowFrame.width > 0, windowFrame.height > 0
+        else { return windowFrame }
+        return CGRect(
+            x: windowFrame.minX + frame.x * windowFrame.width,
+            y: windowFrame.minY + frame.y * windowFrame.height,
+            width: frame.width * windowFrame.width,
+            height: frame.height * windowFrame.height
+        )
+    }
+
+    private static func runEdgeWheel(
+        direction: ScrollPageDirection,
+        at point: CGPoint,
+        isValidTarget: @escaping () -> Bool
+    ) -> ScrollPageOutcome {
+        var remaining = ScrollRegionRule.edgeScrollLines
+        while remaining > 0 {
+            guard isValidTarget() else { return .cancelled }
+            let lines = min(ScrollRegionRule.edgeLinesPerChunk, remaining)
+            guard postLineWheel(direction: direction, lines: lines, at: point) else {
+                return .eventFailed
+            }
+            remaining -= lines
+            if remaining > 0 {
+                Thread.sleep(forTimeInterval: ScrollRegionRule.chunkInterval)
+            }
+        }
+        return .scrolledByPixelWheel
+    }
+
     static func usesContainerMatching(role: String) -> Bool {
         role == "AXScrollArea" || role == "AXWebArea"
     }

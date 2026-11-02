@@ -179,6 +179,8 @@
 "action.scroll_down" = "Scroll Down";
 "action.page_up" = "Page Up";
 "action.page_down" = "Page Down";
+"action.scroll_to_top" = "Scroll to Top";
+"action.scroll_to_bottom" = "Scroll to Bottom";
 "scroll_region.title" = "Scroll Region";
 "scroll_region.help" = "Page keys scroll this app’s content area. SayAll reads only the structure of the scroll region; it does not read content, focus, or pointer position.";
 "scroll_region.learn" = "Learn Scroll Region";

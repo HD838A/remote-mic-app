@@ -840,6 +840,8 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
     case scrollDown
     case pageUp
     case pageDown
+    case scrollToTop
+    case scrollToBottom
     case deleteBackward
     case showDesktop
     case contextMenu
@@ -899,6 +901,8 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
         case .scrollDown: return localization.text("action.scroll_down")
         case .pageUp: return localization.text("action.page_up")
         case .pageDown: return localization.text("action.page_down")
+        case .scrollToTop: return localization.text("action.scroll_to_top")
+        case .scrollToBottom: return localization.text("action.scroll_to_bottom")
         case .deleteBackward: return localization.text("action.delete_backspace")
         case .showDesktop: return localization.text("action.show_desktop")
         case .contextMenu: return localization.text("action.context_menu")
@@ -1029,7 +1033,7 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
              .commandPaste, .commandClose, .commandQuit, .commandCut, .commandSelectAll,
              .commandUndo, .commandRedo, .commandFind, .commandSave, .commandDelete,
              .arrowUp, .arrowDown, .arrowLeft, .arrowRight, .scrollUp, .scrollDown,
-             .pageUp, .pageDown, .deleteBackward:
+             .pageUp, .pageDown, .scrollToTop, .scrollToBottom, .deleteBackward:
             return .basicKeys
         case .showDesktop, .contextMenu, .appSwitcher, .volumeUp, .volumeDown, .volumeMute,
              .playPause, .previousCommandLeft, .nextCommandRight, .toggleLongRecording:
@@ -1051,6 +1055,9 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
         ![
             .customShortcut,
             .focusInput,
+            // 到边缘是一次性跳转，按住连发没有意义（PRODUCT_SPEC）。
+            .scrollToTop,
+            .scrollToBottom,
             .openCustomApplication,
             .commandReturn,
             .shiftReturn,

@@ -176,6 +176,46 @@ struct ScrollRegionTests {
         #expect(decoded.scrollRegionTarget == scrollTarget)
     }
 
+    @Test func pageStepIsAboutOneViewport() {
+        // 一屏 = 区域高度 × 0.9；每块 20 行 × 12 pt = 240 pt，封顶 3 块。
+        #expect(ScrollRegionRule.pageScrollChunks(regionHeight: 700) == 3)
+        #expect(ScrollRegionRule.pageScrollChunks(regionHeight: 300) == 1)
+        let lines = Int(ScrollRegionRule.linesPerChunk) * 3
+        let points = Double(lines) * ScrollRegionRule.pointsPerLine
+        #expect(points >= 600 && points <= 800, "一次翻页应约等于一屏，实际 \(points) pt")
+    }
+
+    @Test func edgeActionsNeverRepeat() {
+        #expect(!ButtonAction.scrollToTop.allowsRepeat)
+        #expect(!ButtonAction.scrollToBottom.allowsRepeat)
+        #expect(ButtonAction.scrollToTop.category == .basicKeys)
+        #expect(ButtonAction.scrollToBottom.category == .basicKeys)
+        #expect(ScrollPageOutcome.scrolledToEdge.wasHandled)
+    }
+
+    @Test func edgeScrollDeliversEnoughLines() {
+        #expect(ScrollRegionRule.edgeScrollLines >= 400)
+        #expect(ScrollRegionRule.edgeLinesPerChunk > 0)
+        #expect(ScrollRegionRule.edgeLinesPerChunk <= ScrollRegionRule.edgeScrollLines)
+    }
+
+    /// 真机：需要前台 App 与辅助功能权限，默认跳过。
+    /// `REMOTEMIC_LIVE_SCROLL_EDGE_TEST=1 swift test --filter liveEdgeScrollMovesTextEdit`
+    @Test func liveEdgeScrollMovesTextEdit() async throws {
+        guard ProcessInfo.processInfo.environment["REMOTEMIC_LIVE_SCROLL_EDGE_TEST"] == "1" else { return }
+        let textEdit = try #require(
+            NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.TextEdit").first
+        )
+        textEdit.activate()
+        try await Task.sleep(for: .milliseconds(700))
+
+        let bottom = ScrollRegionInjector.scrollToEdge(.bottom)
+        #expect(bottom.outcome == .scrolledToEdge, "滚到底部失败：\(bottom.outcome.rawValue)")
+        try await Task.sleep(for: .milliseconds(400))
+        let top = ScrollRegionInjector.scrollToEdge(.top)
+        #expect(top.outcome == .scrolledToEdge, "滚到顶部失败：\(top.outcome.rawValue)")
+    }
+
     @Test func pageActionsRepeatWhileHeld() {
         // 按住下键要能连续翻页，和行滚动一致；重复节奏由 HIDRemoteTiming 单独限速。
         #expect(ButtonAction.pageUp.allowsRepeat)
