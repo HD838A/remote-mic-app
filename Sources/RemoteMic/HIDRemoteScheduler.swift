@@ -17,6 +17,8 @@ enum HIDRemoteTiming {
     static let doubleClickMilliseconds: UInt64 = 300
     static let longPressMilliseconds: UInt64 = 550
     static let repeatStartMilliseconds: UInt64 = 350
+    /// 翻页每次都要扫一遍辅助功能树，按住重复时不能跟着 100ms 的节奏走。
+    static let pageRepeatMinimumMilliseconds: UInt64 = 250
     static let stableReleaseMilliseconds: UInt64 = 600
     static let permissionPollMilliseconds: UInt64 = 1_000
     static let appSwitcherTimeoutMilliseconds: UInt64 = 15_000

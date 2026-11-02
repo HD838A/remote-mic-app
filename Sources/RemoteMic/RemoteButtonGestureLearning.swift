@@ -16,6 +16,15 @@ struct RemoteButtonGestureLearningResult: Equatable {
     let adjustedToAllowedRange: Bool
 }
 
+/// 学到的三个样本值，按机型持久化。重开 App 后用它把「学习完成」补回来。
+struct StoredButtonGestureLearning: Codable, Equatable {
+    var singleClickMilliseconds: Int
+    var doubleClickMilliseconds: Int
+    var longPressMilliseconds: Int
+    var suggestedDoubleClickMilliseconds: Int
+    var suggestedLongPressMilliseconds: Int
+}
+
 struct RemoteButtonGestureLearningStatus: Equatable {
     var step: RemoteButtonGestureLearningStep = .idle
     var model: XiaomiRemoteModel?
@@ -32,6 +41,25 @@ struct RemoteButtonGestureLearningStatus: Equatable {
 
     var isActive: Bool {
         step != .idle && step != .complete
+    }
+}
+
+extension RemoteButtonGestureLearningStatus {
+    /// 只有进行中的学习可以取消；已完成的结果要留住，否则离开页面就退回「未开始」。
+    var isCancellable: Bool { isActive }
+
+    /// 用已保存的样本值重建「学习完成」状态，只影响展示，不改识别时间。
+    static func restored(
+        from stored: StoredButtonGestureLearning,
+        model: XiaomiRemoteModel
+    ) -> RemoteButtonGestureLearningStatus {
+        var status = RemoteButtonGestureLearningStatus()
+        status.step = .complete
+        status.model = model
+        status.singleClickMilliseconds = stored.singleClickMilliseconds
+        status.doubleClickMilliseconds = stored.doubleClickMilliseconds
+        status.longPressMilliseconds = stored.longPressMilliseconds
+        return status
     }
 }
 

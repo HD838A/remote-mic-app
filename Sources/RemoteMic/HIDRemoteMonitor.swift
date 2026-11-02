@@ -171,6 +171,8 @@ final class HIDRemoteMonitor {
     private var activeUsages = Set<UInt16>()
     private var nativePassthroughUsages = Set<UInt16>()
     private var repeatTimers: [UInt16: HIDRemoteScheduledTask] = [:]
+    /// 上一次真正执行翻页的时刻，用于按住重复时的最小间隔。
+    private var lastPageRepeatAt: [UInt16: Date] = [:]
     private var nonRepeatablePressedButtons = Set<RemoteButton>()
     private var nonRepeatableReleaseTimers: [RemoteButton: HIDRemoteScheduledTask] = [:]
     // Physical edge timing used only for diagnostics: how long a button was held
@@ -1138,6 +1140,7 @@ final class HIDRemoteMonitor {
                 eventSuppressor.arm(button: button, edge: .up)
             }
             repeatTimers.removeValue(forKey: usage)?.cancel()
+            lastPageRepeatAt.removeValue(forKey: usage)
             if let button = RemoteButton.usageMap[usage] {
                 if onRuntimeButton?(profileID, button, .release, reportMilliseconds) == true {
                     continue
@@ -1428,6 +1431,17 @@ final class HIDRemoteMonitor {
         nonRepeatablePressedButtons.remove(button)
     }
 
+    /// 翻页在按住重复里按更长的最小间隔执行，避免每 100ms 扫一次辅助功能树。
+    static func repeatIsDue(
+        lastFireAt: Date?,
+        now: Date,
+        minimumMilliseconds: UInt64
+    ) -> Bool {
+        guard let lastFireAt else { return true }
+        let elapsed = now.timeIntervalSince(lastFireAt) * 1000
+        return elapsed >= Double(minimumMilliseconds)
+    }
+
     private func startRepeatIfNeeded(
         usage: UInt16,
         button: RemoteButton,
@@ -1472,6 +1486,15 @@ final class HIDRemoteMonitor {
             guard current == configured, !hasOpaqueOverride else {
                 self.repeatTimers.removeValue(forKey: usage)?.cancel()
                 return
+            }
+            if current.action.isPageScroll {
+                let now = Date()
+                guard Self.repeatIsDue(
+                    lastFireAt: self.lastPageRepeatAt[usage],
+                    now: now,
+                    minimumMilliseconds: HIDRemoteTiming.pageRepeatMinimumMilliseconds
+                ) else { return }
+                self.lastPageRepeatAt[usage] = now
             }
             if !self.actionPerformer(button, .singleClick, current) {
                 self.releaseForRevokedPermissions()
@@ -1730,6 +1753,7 @@ final class HIDRemoteMonitor {
     func cancelPendingButtonActions() {
         repeatTimers.values.forEach { $0.cancel() }
         repeatTimers.removeAll()
+        lastPageRepeatAt.removeAll()
         nonRepeatableReleaseTimers.values.forEach { $0.cancel() }
         nonRepeatableReleaseTimers.removeAll()
         nonRepeatablePressedButtons.removeAll()

@@ -176,11 +176,30 @@ struct ScrollRegionTests {
         #expect(decoded.scrollRegionTarget == scrollTarget)
     }
 
-    @Test func pageActionsAreNotInTheHoldRepeatWhitelist() {
-        #expect(ButtonAction.pageUp.allowsRepeat == false)
-        #expect(ButtonAction.pageDown.allowsRepeat == false)
+    @Test func pageActionsRepeatWhileHeld() {
+        // 按住下键要能连续翻页，和行滚动一致；重复节奏由 HIDRemoteTiming 单独限速。
+        #expect(ButtonAction.pageUp.allowsRepeat)
+        #expect(ButtonAction.pageDown.allowsRepeat)
+        #expect(ButtonAction.pageUp.isPageScroll)
+        #expect(ButtonAction.pageDown.isPageScroll)
+        #expect(!ButtonAction.scrollUp.isPageScroll)
         #expect(ButtonAction.pageUp.category == .basicKeys)
         #expect(ButtonAction.pageDown.category == .basicKeys)
+    }
+
+    @Test func pageRepeatsAreRateLimited() {
+        let start = Date()
+        #expect(HIDRemoteMonitor.repeatIsDue(
+            lastFireAt: nil, now: start, minimumMilliseconds: 250
+        ))
+        #expect(!HIDRemoteMonitor.repeatIsDue(
+            lastFireAt: start, now: start.addingTimeInterval(0.1), minimumMilliseconds: 250
+        ))
+        #expect(HIDRemoteMonitor.repeatIsDue(
+            lastFireAt: start, now: start.addingTimeInterval(0.26), minimumMilliseconds: 250
+        ))
+        // 行滚动不受这个限速影响，仍按按钮自身间隔执行。
+        #expect(HIDRemoteTiming.pageRepeatMinimumMilliseconds > 100)
     }
 
     @Test func fullWindowWebAreaIsNotTreatedAsARegion() {
