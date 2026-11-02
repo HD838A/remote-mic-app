@@ -116,17 +116,28 @@ enum ScrollRegionInjector {
         let isValidTarget = makeTargetValidator(
             window: window, expectedFrame: windowFrame, processIdentifier: application.processIdentifier
         )
-        let candidates = scrollCandidates(in: window, windowFrame: windowFrame)
 
         let candidate: Candidate
         if let learnedTarget {
-            switch ScrollRegionRule.bestMatchIndex(in: candidates.map(\.descriptor), recorded: learnedTarget) {
-            case .matched(let found):
-                candidate = candidates[found]
-            case .failed(let outcome):
-                return ScrollPageResult(outcome: outcome, verifiedMovement: nil)
+            // 学过区域就用记录的中心点直接命中容器，省掉整棵树的多达 5000 个节点扫描；
+            // 命中结果对不上记录时再退回完整扫描。
+            if let direct = candidateAtLearnedPoint(
+                learnedTarget,
+                windowFrame: windowFrame,
+                processIdentifier: application.processIdentifier
+            ) {
+                candidate = direct
+            } else {
+                let candidates = scrollCandidates(in: window, windowFrame: windowFrame)
+                switch ScrollRegionRule.bestMatchIndex(in: candidates.map(\.descriptor), recorded: learnedTarget) {
+                case .matched(let found):
+                    candidate = candidates[found]
+                case .failed(let outcome):
+                    return ScrollPageResult(outcome: outcome, verifiedMovement: nil)
+                }
             }
         } else {
+            let candidates = scrollCandidates(in: window, windowFrame: windowFrame)
             guard let preset = ScrollRegionPreset.rule(for: bundleIdentifier) else {
                 return ScrollPageResult(outcome: .needsCalibration, verifiedMovement: nil)
             }
@@ -267,6 +278,75 @@ enum ScrollRegionInjector {
         let descriptor: ScrollRegionDescriptor
     }
 
+    /// 用学习时记录的归一化区域做一次命中测试，直接拿到滚动容器。
+    ///
+    /// 学习阶段本来就是这么取到容器的（`captureTarget`），翻页时再扫一遍整棵树属于重复劳动：
+    /// 这里只走「命中元素 → 向上找滚动祖先」这两步，深度受限，节点数无关。
+    /// 任何一步对不上记录（角色、identifier、边界）都返回 nil，由调用方退回完整扫描。
+    private static func candidateAtLearnedPoint(
+        _ target: ScrollRegionTarget,
+        windowFrame: CGRect,
+        processIdentifier: pid_t
+    ) -> Candidate? {
+        // identifier 为空的区域分不清同名容器，宁可全量扫描，也不要滚错区域。
+        let started = Date()
+        guard !target.identifier.isEmpty,
+              let frame = target.normalizedFrame,
+              ScrollRegionRule.isValid(normalizedFrame: frame),
+              windowFrame.width > 0, windowFrame.height > 0
+        else { return miss("no_identifier") }
+
+        let rect = CGRect(
+            x: windowFrame.minX + frame.x * windowFrame.width,
+            y: windowFrame.minY + frame.y * windowFrame.height,
+            width: frame.width * windowFrame.width,
+            height: frame.height * windowFrame.height
+        )
+        guard rect.width >= 8, rect.height >= 8 else { return miss("rect") }
+
+        var hit: AXUIElement?
+        guard AXUIElementCopyElementAtPosition(
+            AXUIElementCreateSystemWide(),
+            Float(rect.midX), Float(rect.midY), &hit
+        ) == .success, let element = hit else { return nil }
+
+        var hitProcessIdentifier: pid_t = 0
+        guard AXUIElementGetPid(element, &hitProcessIdentifier) == .success,
+              hitProcessIdentifier == processIdentifier
+        else { return miss("pid") }
+
+        guard let container = scrollAncestor(of: element) else { return miss("no_container") }
+        let role = axString(container, kAXRoleAttribute)
+        guard role == target.role else { return miss("role_\(role)") }
+        if axString(container, kAXIdentifierAttribute) != target.identifier {
+            return miss("identifier")
+        }
+        guard let containerFrame = axFrame(container),
+              containerFrame.width >= 8, containerFrame.height >= 8,
+              containerFrame.intersects(windowFrame)
+        else { return miss("frame") }
+
+        AppLogger.shared.write(
+            "SCROLL DIRECT role=\(role) nodes_skipped=true " +
+                "elapsed_ms=\(Int(Date().timeIntervalSince(started) * 1000))"
+        )
+        return Candidate(
+            element: container,
+            descriptor: ScrollRegionDescriptor(
+                role: role,
+                identifier: target.identifier,
+                context: target.context,
+                frame: containerFrame,
+                windowFrame: windowFrame
+            )
+        )
+    }
+
+    private static func miss(_ reason: String) -> Candidate? {
+        AppLogger.shared.write("SCROLL DIRECT miss=\(reason)")
+        return nil
+    }
+
     private static func focusedWindow(of applicationElement: AXUIElement) -> AXUIElement? {
         [
             axElement(applicationElement, kAXFocusedWindowAttribute),
@@ -275,6 +355,7 @@ enum ScrollRegionInjector {
     }
 
     private static func scrollCandidates(in window: AXUIElement, windowFrame: CGRect) -> [Candidate] {
+        let started = Date()
         var result: [Candidate] = []
         var stack: [(element: AXUIElement, depth: Int, context: String)] = [(window, 0, "")]
         var visited = 0
@@ -305,6 +386,10 @@ enum ScrollRegionInjector {
                 }
             }
         }
+        AppLogger.shared.write(
+            "SCROLL SCAN nodes=\(visited) candidates=\(result.count) " +
+                "elapsed_ms=\(Int(Date().timeIntervalSince(started) * 1000))"
+        )
         return result
     }
 
