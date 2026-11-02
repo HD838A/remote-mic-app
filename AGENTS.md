@@ -61,6 +61,14 @@ G-TOOL.permanent-helper=declared-purpose
 - 正常产品源码、`Tests/` 中的长期自动化回归，以及产品构建、安装、签名、公证和统一发布检查不受禁止；新增可执行工程辅助文件必须说明长期职责及现有入口无法承载的原因，不能把临时工具换目录或扩展名后伪装成正式回归。
 - `scripts/verify-repository-governance.sh` 拒绝新增 `Testing/` 可执行文件和恢复已移除的六个入口；其他新增工程辅助文件必须在 PR 中确认用途边界。仅修改手工工具不应触发产品构建，但分类豁免不是临时工具入库许可。
 
+## 本地测试包
+
+- 本地测试包固定命名 `SayAll.app`，优先替换 `~/Applications/SayAll.app`；替换失败才放 `~/Downloads/SayAll-test/SayAll.app`。
+- 每次构建必须递增 `CFBundleVersion`：取 `/Applications/SayAll.app`、`~/Applications/SayAll.app`、状态文件 `~/.sayall-local-build` 三者最大值 +1，写入本地包的 `Info.plist`；仓库 `Resources/Info.plist` 的模板值不得改动。
+- 打包统一走本仓 `scripts/package-local-test-app.sh`，不得手拼命令。该脚本入库、随仓库分发，已包含 release 构建、组装、递增构建号、ad-hoc 签名、先退出占锁实例再替换与启动。
+- 脚本要求 `SAYALL_PRIVATE_SOURCE_ROOT` 指向私有仓工作区根目录；缺私有组件时脚本直接报错退出，不会产出缺件的包。
+- 本地包是测试产物：必须如实记录 `source_commit` 与是否 dirty，不得冒用 Tag，不得作为分发候选。
+
 ## 截图与设计稿归档规范
 
 ```governance-policy
