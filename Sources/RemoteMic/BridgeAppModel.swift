@@ -4589,12 +4589,55 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
                 if settings.updateRemoteProfileSystemName(
                     profile.id, name: name, serialNumber: observation?.serialNumber
                 ) { changed += 1 }
+                if settings.updateRemoteProfileHardwareIdentity(
+                    profile.id, serialNumber: observation?.serialNumber
+                ) { changed += 1 }
             }
         }
+        collapseDuplicateRemoteProfiles()
         AppLogger.shared.write(
             "REMOTE NAME REFRESH operation_id=\(remoteDeviceNameRefreshOperation) " +
                 "phase=completed reason=\(reason.rawValue) requested=\(requested) " +
                 "resolved=\(resolved) changed=\(changed) unavailable=\(requested - resolved)"
+        )
+    }
+
+    /// 把被并掉的档案 ID 从运行时映射里搬走。
+    ///
+    /// 去重时优先保留正在使用的那条，所以被并掉的通常是没有连接的旧档案；但它的
+    /// 显示名、电量、设备映射仍可能留在字典里，必须一起迁到保留下来的那条，
+    /// 否则下一次渲染会读到一个已经不存在的档案。
+    private func collapseDuplicateRemoteProfiles() {
+        // `connectedRemoteProfileIDs` 由 `refreshBluetoothPresentation` 汇总，可能还没跟上
+        // 刚刚建好的档案，所以这里把各链路自己的连接集合也带上：正在用的那条必须留下。
+        var liveProfileIDs = connectedRemoteProfileIDs
+        liveProfileIDs.formUnion(connectedAppleRemoteProfileIDs)
+        liveProfileIDs.formUnion(connectedChromecastProfileIDs)
+        let replacements = settings.collapseDuplicateRemoteProfiles(
+            preferring: liveProfileIDs
+        )
+        guard !replacements.isEmpty else { return }
+        for (discarded, kept) in replacements {
+            if let name = remoteSystemDeviceNames[discarded], remoteSystemDeviceNames[kept] == nil {
+                remoteSystemDeviceNames[kept] = name
+            }
+            remoteSystemDeviceNames.removeValue(forKey: discarded)
+            if let level = remoteBatteryLevels[discarded], remoteBatteryLevels[kept] == nil {
+                remoteBatteryLevels[kept] = level
+            }
+            if let state = remotePowerStates[discarded], remotePowerStates[kept] == nil {
+                remotePowerStates[kept] = state
+            }
+            if let model = pendingRemoteModels[discarded], pendingRemoteModels[kept] == nil {
+                pendingRemoteModels[kept] = model
+            }
+            for (device, profileID) in appleRemoteProfileIDs where profileID == discarded {
+                appleRemoteProfileIDs[device] = kept
+            }
+        }
+        AppLogger.shared.write(
+            "REMOTE PROFILES phase=completed result=collapsed merged=\(replacements.count) " +
+                "remaining=\(settings.remoteDeviceProfiles.count)"
         )
     }
 

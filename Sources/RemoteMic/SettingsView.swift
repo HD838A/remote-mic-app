@@ -1126,10 +1126,11 @@ struct SettingsView: View {
         @ViewBuilder content: @escaping () -> Content
     ) -> some View {
         VStack(spacing: 0) {
+            // 页头：上 8 / 下 8，标题 24、副标题 13，见产品界面规范「Mac 设置窗口页头」。
             header()
                 .padding(.horizontal, 22)
-                .padding(.top, 18)
-                .padding(.bottom, 14)
+                .padding(.top, 8)
+                .padding(.bottom, 8)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             Divider()
@@ -2594,8 +2595,8 @@ struct SettingsView: View {
                     .frame(maxWidth: .infinity, alignment: .trailing)
             }
             .padding(.horizontal, 22)
-            .padding(.top, 18)
-            .padding(.bottom, 12)
+            .padding(.top, 8)
+            .padding(.bottom, 8)
             .frame(maxWidth: .infinity, alignment: .leading)
 
             Divider()
@@ -2867,7 +2868,7 @@ struct SettingsView: View {
             get: { settings.customMappingEnabled },
             set: setCustomMappingEnabled
         ))
-        .font(.system(size: 14, weight: .medium))
+        .font(.system(size: 13, weight: .medium))
         .toggleStyle(.switch)
         .fixedSize(horizontal: true, vertical: false)
     }
@@ -5788,7 +5789,7 @@ struct SettingsView: View {
                     .fixedSize(horizontal: true, vertical: false)
                     .layoutPriority(2)
                 Text(localization.text("statistics.transcripts.privacy"))
-                    .font(.system(size: 12))
+                    .font(.system(size: 13))
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
@@ -7370,7 +7371,8 @@ private struct PageHeader: View {
 
     var body: some View {
         Text(title)
-            .font(.system(size: 25, weight: .semibold))
+            // 设置窗口页头标题的唯一字号，见产品界面规范「Mac 设置窗口页头」。
+            .font(.system(size: 24, weight: .semibold))
     }
 }
 

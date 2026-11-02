@@ -230,6 +230,12 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         case userInitiated
     }
 
+    /// 设置窗口的默认尺寸与最小尺寸（整窗，含标题栏）。
+    ///
+    /// 数值取自用户确认的按键页截图（实测整窗 1067×771）。默认值和最小值都绑这一个常量，
+    /// 避免两处各写一遍后再次漂移。
+    private static let settingsWindowFrameSize = NSSize(width: 1067, height: 771)
+
     private let model = BridgeAppModel()
     private lazy var appIconController = AppIconController()
     private let updateInformation = UpdateInformationStore()
@@ -1071,9 +1077,20 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
             )
             .environmentObject(localization)
         )
+        // 窗口尺寸按设计稿给定的是**整窗**（含标题栏）。`NSWindow` 的初始化和
+        // `setContentSize` 用的是内容区，直接传整窗数值会多出一个标题栏的高度，
+        // 所以统一从目标 frame 反算内容区，默认值与最小值才能对齐同一张设计稿。
+        let styleMask: NSWindow.StyleMask = [
+            .titled, .closable, .miniaturizable, .resizable, .fullSizeContentView,
+        ]
+        let frameSize = Self.settingsWindowFrameSize
+        let contentRect = NSWindow.contentRect(
+            forFrameRect: NSRect(origin: .zero, size: frameSize),
+            styleMask: styleMask
+        )
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 960, height: 742),
-            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+            contentRect: contentRect,
+            styleMask: styleMask,
             backing: .buffered,
             defer: false
         )
@@ -1091,8 +1108,8 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         window.miniwindowImage = appIconController.catalog.image(
             for: model.settings.appIconIdentifier
         )
-        window.minSize = NSSize(width: 960, height: 742)
-        window.setContentSize(NSSize(width: 960, height: 742))
+        window.minSize = frameSize
+        window.setContentSize(contentRect.size)
         window.setFrameAutosaveName("RemoteMicSettings")
         window.center()
         return NSWindowController(window: window)
