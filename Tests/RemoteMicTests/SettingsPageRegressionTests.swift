@@ -744,7 +744,9 @@ struct SettingsPageRegressionTests {
         // 卡片按底边对齐页头：底边固定后，页头到工具行的间距不再随控制器卡片高度变化。
         #expect(mappingSource.contains("HStack(alignment: .bottom, spacing: 14)"))
         #expect(!mappingSource.contains("HStack(alignment: .top, spacing: 14)"))
-        #expect(mappingSource.contains(".padding(.top, 18)"))
+        // 页头参数见产品界面规范「Mac 设置窗口页头」：上 8 / 下 8。
+        #expect(mappingSource.contains(".padding(.top, 8)"))
+        #expect(mappingSource.contains(".padding(.bottom, 8)"))
 
         #expect(!mappingSource.contains("ViewThatFits(in: .horizontal)"))
         #expect(mappingSource.contains("private var mappingHeaderToggle"))
@@ -1081,8 +1083,11 @@ struct SettingsPageRegressionTests {
             encoding: .utf8
         )
 
+        let frameSize = try #require(appSource.range(
+            of: "private static let settingsWindowFrameSize = NSSize(width: 1067, height: 771)"
+        ))
         let contentSize = try #require(appSource.range(
-            of: "window.setContentSize(NSSize(width: 960, height: 742))"
+            of: "window.setContentSize(contentRect.size)"
         ))
         let autosave = try #require(appSource.range(
             of: "window.setFrameAutosaveName(\"RemoteMicSettings\")",
@@ -1093,6 +1098,7 @@ struct SettingsPageRegressionTests {
             range: autosave.upperBound..<appSource.endIndex
         ))
 
+        #expect(frameSize.upperBound <= contentSize.lowerBound)
         #expect(contentSize.upperBound <= autosave.lowerBound)
         #expect(autosave.upperBound <= center.lowerBound)
     }
