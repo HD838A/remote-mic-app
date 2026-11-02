@@ -20,6 +20,7 @@ xcrun swiftc \
   "$ROOT/Sources/RemoteMic/ButtonBindingConfiguration.swift" \
   "$ROOT/Sources/RemoteMic/KeyboardShortcutPicker.swift" \
   "$ROOT/Sources/RemoteMic/RemoteDeviceProfile.swift" \
+  "$ROOT/Sources/RemoteMic/RemoteDeviceIdentity.swift" \
   "$ROOT/Sources/RemoteMic/RemoteButtonInteractionSettings.swift" \
   "$ROOT/Sources/RemoteMic/HIDRemoteScheduler.swift" \
   "$ROOT/Sources/RemoteMic/RemoteDeviceNamePolicy.swift" \
