@@ -2141,10 +2141,9 @@ struct SettingsView: View {
     }
 
     private func beginSavingMappingProfile() {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "MM-dd"
+        let existingCount = macroFeature.mappingProfiles(device: settings.selectedRemoteProfileID).count
         savingMappingProfileName = localization.text("button_mapping.save_as_profile.default_name")
-            + " " + formatter.string(from: Date())
+            + " \(existingCount + 1)"
         savingMappingProfileSwitches = true
         savingMappingProfileError = nil
         isSavingMappingProfile = true

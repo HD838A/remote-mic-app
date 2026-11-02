@@ -826,6 +826,7 @@ final class MacroFeatureIntegration: ObservableObject {
                 )
             },
             baseBindingSummaries: settings.map { baseBindingSummaries($0, remoteProfileID: selectedRemoteProfileID) } ?? [],
+            onEditKeys: onEditKeys,
             membershipNotice: membershipNotice,
             onChooseCustomApplication: onChooseCustomApplication.map { callback in
                 { completion in
@@ -861,6 +862,7 @@ final class MacroFeatureIntegration: ObservableObject {
                 )
             },
             baseBindingSummaries: settings.map { baseBindingSummaries($0, remoteProfileID: selectedRemoteProfileID) } ?? [],
+            onEditKeys: onEditKeys,
             onChooseCustomApplication: onChooseCustomApplication.map { callback in
                 { completion in
                     callback { id, displayName, payload in
