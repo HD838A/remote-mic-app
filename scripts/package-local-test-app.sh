@@ -16,7 +16,7 @@
 #   - 这是测试产物，不是分发包；不得冒用 Tag
 set -euo pipefail
 
-HOST_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+HOST_ROOT="${${0:A}:h:h}"  # zsh：脚本所在目录的上一级，即宿主仓根目录
 PRIVATE_ROOT="${SAYALL_PRIVATE_SOURCE_ROOT:-}"
 TARGET="${SAYALL_LOCAL_APP_TARGET:-$HOME/Applications/SayAll.app}"
 FALLBACK_DIR="${SAYALL_LOCAL_APP_FALLBACK:-$HOME/Downloads/SayAll-test}"
@@ -60,6 +60,12 @@ APP=/tmp/SayAll.app
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp .build/release/RemoteMic "$APP/Contents/MacOS/"
+
+# 旧的 .build 可能是在没有私有路径的情况下编出来的；那种包会静默缺功能。
+if ! nm -gU "$APP/Contents/MacOS/RemoteMic" 2>/dev/null | grep -q "SayAllButtonProfiles"; then
+  echo "构建产物里没有 SayAllButtonProfiles：可能复用了旧 .build。请先 swift package clean 再重跑。" >&2
+  exit 3
+fi
 cp -R .build/out/Products/Release/Sparkle.framework "$APP/Contents/MacOS/"
 rsync -a --exclude Info.plist Resources/ "$APP/Contents/Resources/"
 for bundle in .build/out/Products/Release/*.bundle; do
