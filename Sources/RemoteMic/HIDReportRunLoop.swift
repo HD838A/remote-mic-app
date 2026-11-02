@@ -33,6 +33,14 @@ final class HIDReportRunLoop {
             lock.unlock()
             return runLoop
         }
+        // 非正超时表示「不等就绪」。这条路径不能靠调度运气决定结果：线程可能
+        // 在 wait 之前就 signal，让 `ready.wait(timeout: .now())` 立刻成功。
+        // 明确约定「不等待」就等于「不启动成功」，顺带把上一轮的线程撤干净。
+        guard timeout > 0 else {
+            lock.unlock()
+            _ = stop(waitTimeout: 0.5)
+            return nil
+        }
         generation &+= 1
         let startGeneration = generation
         cancelled = false
