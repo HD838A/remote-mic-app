@@ -788,11 +788,12 @@
 "onboarding.voice_tool.guide.detail" = "Review every step for the selected app. SayAll never changes third-party settings.";
 "onboarding.voice_tool.guide.continue_hint" = "Review and click each step on the right before continuing.";
 "onboarding.voice_tool.guide.select_step" = "Click a step on the right to view its setup instructions.";
+"onboarding.voice_tool.guide.zoom" = "Click to enlarge";
 "onboarding.voice_tool.guide.select_doubao" = "Select Doubao";
 "onboarding.voice_tool.guide.configure_doubao" = "Set Fn as Doubao’s voice shortcut";
 "onboarding.voice_tool.guide.select_weixin" = "Select WeType";
 "onboarding.voice_tool.guide.configure_weixin" = "Set Fn as WeType’s voice shortcut";
-"onboarding.voice_tool.guide.open_vokie" = "Open Vokie";
+"onboarding.voice_tool.guide.open_vokie" = "Vokie needs to be open";
 "onboarding.voice_tool.guide.configure_vokie" = "Enable live voice input";
 "onboarding.voice_tool.guide.open_typeless" = "Open Typeless";
 "onboarding.voice_tool.guide.open_typeless.detail" = "Start Typeless and leave it running in the background.";
@@ -862,7 +863,6 @@
 "onboarding.gesture.title" = "Voice Input Mode";
 "onboarding.gesture.hold" = "Hold to Talk";
 "onboarding.gesture.toggle" = "Press to Start/Stop";
-"onboarding.pairing_plan.title" = "SayAll will try this configuration";
 "onboarding.pairing_plan.summary" = "%1$@ · %2$@ · %3$@";
 "onboarding.pairing_plan.fn_tap_on" = "Fn tap conversion on";
 "onboarding.pairing_plan.fn_tap_off" = "Fn tap conversion off";
@@ -878,12 +878,6 @@
 "onboarding.shortcut_learning.incompatible" = "This shortcut cannot be converted reliably for the selected controller. Choose another behavior or shortcut.";
 "onboarding.shortcut_learning.permission_required" = "Grant Accessibility permission first.";
 "onboarding.shortcut_learning.unavailable" = "Shortcut capture is unavailable. Re-authorize and try again.";
-"onboarding.vokie.open" = "Open Vokie and Apply Mode";
-"onboarding.vokie.status.received" = "Vokie received the configuration";
-"onboarding.vokie.status.configured" = "Vokie reported configuration complete";
-"onboarding.vokie.status.partial" = "Vokie completed part of the configuration";
-"onboarding.vokie.status.ready" = "Vokie is ready; the real text test is still required";
-"onboarding.vokie.status.failed" = "Vokie configuration failed. Check it and try again";
 "onboarding.remote_availability.title" = "Do you have a physical remote right now?";
 "onboarding.remote_availability.detail" = "A physical remote provides the most complete and reliable SayAll experience. You can continue with a phone if one is not available.";
 "onboarding.remote_availability.has_remote.title" = "I Have a Remote";

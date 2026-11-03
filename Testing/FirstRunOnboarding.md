@@ -2,6 +2,23 @@
 
 > 执行本手册或修改 Onboarding 前，先完整阅读跨平台产品规范 [`feature/first-run-onboarding/PRODUCT_SPEC.md`](../feature/first-run-onboarding/PRODUCT_SPEC.md) 和 [macOS 平台适配](../feature/first-run-onboarding/platform-macos.md)。未来 Windows 测试应从同一产品规范出发，并使用 [Windows 平台适配](../feature/first-run-onboarding/platform-windows.md) 建立独立测试手册。
 
+## 引导图支持点击放大（2026-11-03）
+
+适用分支：`feat/onboarding-guide-image-zoom`。本次只改右栏引导图的查看方式与一处步骤标题，同时删除从未接线的 Vokie 配对摘要卡；不改变步骤判定门槛和语音链路。
+
+1. 进入「准备工作 → 设置」页，选择豆包、微信输入法、Vokie 或「其他语音工具」，依次点右栏四个步骤；第 3、4 项总会显示系统设置截图。Vokie 的第 1 步标题是「需要打开 Vokie」：点这个步骤只显示截图，不会启动 Vokie，标题不能写成会被读成按钮的动作。
+2. 点击缩略图任意位置。预期：出现覆盖整窗的遮罩与放大的图片卡片，缩略图右上角的放大角标仍在原位，关闭按钮固定在卡片右上角。
+3. 点击遮罩空白处。预期：放大层关闭，回到原页面，步骤选择、勾选状态和底部导航都不变。
+4. 再次打开放大层，点击右上角关闭按钮或按 Esc。预期：同样关闭，不触发页面导航。
+5. 分别用横版（系统设置、豆包/微信设置）和竖版（微信输入法菜单 414 × 1376）截图复验：横版完整显示在卡片内，四周留白一致；竖版按接近原始宽度显示，超出部分在卡片内上下滚动，文字可读，圆角不溢出。
+6. 浅色、深色外观各复验一次：遮罩、卡片底色、关闭按钮对比度与中文/英文说明文字都正常。
+
+失败判定：缩略图点不动、放大层盖不住整窗、点遮罩或关闭按钮关不掉、关闭后页面状态被重置、竖版长图被裁切或反向压扁，均为失败。
+
+验证范围：自动化覆盖「缩略图可点 → 放大层出现 → 关闭后消失」的状态迁移；实际鼠标点击与滚动仍须在真实窗口完成，离屏渲染只能证明版式。离屏入口为 `REMOTE_MIC_ONBOARDING_SCREENSHOT_GUIDE_ZOOM=<资源名>`（与 `Resources/Onboarding` 中的文件名一致，例如 `system-fn`、`weixin-input-menu`），配合 `REMOTE_MIC_ONBOARDING_SCREENSHOT_GUIDE_STEP` 使用；该值只在截图构建中注入，不写入用户配置。
+
+本轮结果：公开宿主全量 1201 项测试通过；`OnboardingFlowTests` 定向用例通过，含新增 `guideScreenshotOpensZoomOverlayAndCloses()`。中英文浅色、深色放大层各渲染 9 张离屏图并逐张查看 `06-voice-tool.png`，横版与竖版版式均无裁切，步骤 1 标题中英文都不换行溢出。删除的无调用视图与 `VokieDeepLink` 带走了 6 个文案键和 `vokieLaunchDoesNotClaimShortcutSynchronization()`，`sayall://launch` 回流解析与日志保持不变。真实鼠标点击、滚动和 Esc 关闭仍待签名候选包人工复验。
+
 ## 苹果遥控器音频授权恢复（2026-10-25）
 
 适用分支：`codex/siri-authorization-recovery-20261025`。本次修改授权恢复入口及失败提示，不修改正常语音按下/释放、音频数据或完成门槛。
@@ -672,12 +689,11 @@
 
 失败判定：缺少 Package 的入口仍可见、Siri 暴露未验证 toggle、App/网页没有 hold/toggle 两种选择、或来源串用通过门禁，均视为失败。
 
-## 用例：Vokie Deep Link 与 SayAll 回流
+## 用例：SayAll 回流 Deep Link
 
-1. 选择 Vokie toggle + Fn，确认调用 `vokie://launch` 时 action 为 `handsfree-ptt`，未确认 shortcut 编码前不发送 `shortcut`，也不在日志记录 microphoneId。
-2. 从浏览器或测试 App 打开 `sayall://launch`，确认 SayAll 激活并恢复当前窗口。
-3. 分别回调 `source=vokie&status=received|configured|partial|ready|failed`，确认只更新提示；即使 `ready` 也不能通过真实语音测试。
-4. 重复回调、未知 source/status、超长或含空格 reason，确认忽略非法值且不崩溃、不原样记录任意文本。
+1. 从浏览器或测试 App 打开 `sayall://launch`，确认 SayAll 激活并恢复当前窗口。
+2. 分别回调 `source=vokie&status=received|configured|partial|ready|failed`，确认只写入 `DEEPLINK SAYALL` 日志并刷新输入工具可用性，界面不出现新的提示或状态文字；即使 `ready` 也不能通过真实语音测试。
+3. 重复回调、未知 source/status、超长或含空格 reason，确认忽略非法值且不崩溃、不原样记录任意文本。
 
 失败判定：Deep Link 直接把 Binding 标成 verified、绕过 PCM/停止/文字门禁、记录原始查询串或用户文本，均视为失败。
 
@@ -1049,8 +1065,8 @@
 2. 使用生产隐藏入口构建一次 App，并通过 `REMOTE_MIC_ONBOARDING_SCREENSHOT_DIR`、`REMOTE_MIC_ONBOARDING_SCREENSHOT_APPEARANCE=light|dark` 生成截图；第 2 页为 `02-control-source.png`，第 6 页为 `06-voice-tool.png`。
 3. 公开构建设置 `REMOTE_MIC_ONBOARDING_SCREENSHOT_CONTROL_SOURCE=xiaomi_remote`，按生产页面清单生成适用语言和外观集合。
 4. 包含 Siri 的截图构建可用 `REMOTE_MIC_ONBOARDING_SCREENSHOT_SIRI_REMOTE_INSTALLED=1|0` 注入收据存在/缺失；可用 `REMOTE_MIC_ONBOARDING_SCREENSHOT_SIRI_REMOTE_TRIAL=1` 渲染非会员临时启用的完成提示；这些值仅用于隔离截图，不写入系统。完整 Package 构建分别设置 `REMOTE_MIC_ONBOARDING_SCREENSHOT_CONTROL_SOURCE=xiaomi_remote|siri_remote|chromecast_remote|apple_companion|web_remote`；Apple 来源再用 `REMOTE_MIC_ONBOARDING_SCREENSHOT_APPLE_REMOTE_GENERATION=generation_6|generation_7` 分开生成。按本次构建实际支持的来源、语言和外观生成完整集合，数量由清单推导。
-5. 对输入工具页额外覆盖豆包、微信、Typeless、Vokie、其他工具，以及 available/not-installed/unknown；每个工具用 `REMOTE_MIC_ONBOARDING_SCREENSHOT_GUIDE_STEP=0...3` 覆盖右栏四项步骤，Vokie 必须分别生成浅色/深色步骤截图。语音测试页另覆盖 Vokie/Typeless 未运行与运行中状态。
-6. 分别覆盖五个输入工具，确认固定排序、单行卡片标题、Fn staged 配置和右栏步骤无裁切。对 Vokie 额外覆盖 `partial`、`failed` 回流提示。
+5. 对输入工具页额外覆盖豆包、微信、Typeless、Vokie、其他工具，以及 available/not-installed/unknown；每个工具用 `REMOTE_MIC_ONBOARDING_SCREENSHOT_GUIDE_STEP=0...3` 覆盖右栏四项步骤，Vokie 必须分别生成浅色/深色步骤截图。语音测试页另覆盖 Vokie/Typeless 未运行与运行中状态。引导图放大层用 `REMOTE_MIC_ONBOARDING_SCREENSHOT_GUIDE_ZOOM=<资源名>` 单独出图，横版与竖版各一组。
+6. 分别覆盖五个输入工具，确认固定排序、单行卡片标题、Fn staged 配置和右栏步骤无裁切。
 7. 对旧正式配置设置 `REMOTE_MIC_ONBOARDING_SCREENSHOT_VOICE_KEY_MODE=left_command|right_command|right_option`，确认重新运行不会在欢迎或工具选择时立即覆盖；旧 Fn-only 迁移提示不得再被当作现行配置规则。
 8. 逐张用图像查看工具检查窗口 chrome、标题、导航、状态卡、右栏、裁切、对比度和中文字号，并在执行前后核对用户正式 Onboarding 进度未变化。
    - 连接失败卡必须完整显示在底部导航上方；重点检查 Chromecast 浅色/深色 `04-remote.png`。
