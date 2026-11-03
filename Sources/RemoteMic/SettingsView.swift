@@ -1036,6 +1036,13 @@ struct SettingsView: View {
                             remoteModel: settings.selectedRemoteProfile?.model,
                             hostActionSections: buttonProfileHostActionSections,
                             settings: settings,
+                            holdSummaryProvider: { profileID, buttonRaw in
+                                guard let button = RemoteButton(rawValue: buttonRaw) else { return "" }
+                                return mappingHoldSummary(for: button, profileID: profileID)
+                            },
+                            onChooseApplication: { completion in
+                                chooseApplicationForProfile(completion)
+                            },
                             onEditKeys: { profile in
                                 preservesMappingContextOnNavigation = true
                                 openMappingProfileForEditing(profile)
@@ -3513,13 +3520,35 @@ struct SettingsView: View {
     }
 
     private func mappingHoldSummary(for button: RemoteButton) -> String {
-        let mode = mappingHoldSnapshot(for: button).mode
+        mappingHoldSummary(for: button, profileID: editingMappingProfileID)
+    }
+
+    /// 方案页与按键页共用的唯一实现：按住只说一次，避免两边各拼一套文案。
+    private func mappingHoldSummary(for button: RemoteButton, profileID: UUID?) -> String {
+        let mode: RemoteButtonHoldMode? = if let profileID,
+            let raw = macroFeature.profileHoldMode(profile: profileID, button: button) {
+            RemoteButtonHoldMode(rawValue: raw)
+        } else {
+            settings.interactionSettings.mode(for: button)
+        }
         guard let mode, mode != .once else {
             return localization.text("button_mapping.hold.entry")
         }
         let trigger: ButtonTrigger = mode == .repeatLong ? .longPress : .singleClick
         return localization.text("button_mapping.hold.repeat_prefix") +
-            mappingActionSummary(for: button, trigger: trigger)
+            mappingHoldActionSummary(for: button, trigger: trigger)
+    }
+
+    /// 按住提示里的动作摘要：方向类动作统一用符号，不再随宽度在「方向左 / ←」之间摇摆。
+    private func mappingHoldActionSummary(for button: RemoteButton, trigger: ButtonTrigger) -> String {
+        let configured = mappingConfiguration(for: button, trigger: trigger)
+        switch configured.action {
+        case .arrowUp: return "↑"
+        case .arrowDown: return "↓"
+        case .arrowLeft: return "←"
+        case .arrowRight: return "→"
+        default: return mappingActionSummary(for: button, trigger: trigger)
+        }
     }
 
     private func setMappingHoldMode(_ mode: RemoteButtonHoldMode, for button: RemoteButton) {
@@ -5285,6 +5314,35 @@ struct SettingsView: View {
             )
         }
         return profileID
+    }
+
+    /// 键位方案页「添加 App…」：只回传 bundle id，关联关系由私有组件落盘。
+    private func chooseApplicationForProfile(_ completion: @escaping (String) -> Void) {
+        let panel = NSOpenPanel()
+        panel.title = localization.text("custom_application.picker.title")
+        panel.prompt = localization.text("common.action.choose")
+        panel.allowedContentTypes = [.application]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.resolvesAliases = true
+        guard panel.runModal() == .OK,
+              let url = panel.url,
+              let bundle = Bundle(url: url),
+              let bundleIdentifier = bundle.bundleIdentifier,
+              !bundleIdentifier.isEmpty
+        else { return }
+
+        if !settings.customApplicationProfiles.contains(where: { $0.bundleIdentifier == bundleIdentifier }) {
+            let displayName = (bundle.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String)
+                ?? (bundle.object(forInfoDictionaryKey: "CFBundleName") as? String)
+                ?? url.deletingPathExtension().lastPathComponent
+            _ = settings.addCustomApplicationProfile(CustomApplicationProfile(
+                displayName: displayName,
+                bundleIdentifier: bundleIdentifier,
+                applicationPath: url.path
+            ))
+        }
+        completion(bundleIdentifier)
     }
 
     private func chooseCustomApplicationForButtonProfile(

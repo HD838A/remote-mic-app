@@ -797,6 +797,8 @@ final class MacroFeatureIntegration: ObservableObject {
         remoteModel: XiaomiRemoteModel?,
         hostActionSections: [ButtonProfileHostActionSection],
         settings: AppSettings? = nil,
+        holdSummaryProvider: ((UUID, String) -> String)? = nil,
+        onChooseApplication: ((@escaping (String) -> Void) -> Void)? = nil,
         onEditKeys: @escaping (UUID) -> Void = { _ in },
         onChooseCustomApplication: ((@escaping (String, String, Data) -> Void) -> Void)? = nil,
         chromecastReservedControlIDs: Set<String> = ["left", "right", "select"],
@@ -826,6 +828,8 @@ final class MacroFeatureIntegration: ObservableObject {
                 )
             },
             baseBindingSummaries: settings.map { baseBindingSummaries($0, remoteProfileID: selectedRemoteProfileID) } ?? [],
+            holdSummaryProvider: holdSummaryProvider,
+            onChooseApplication: onChooseApplication,
             onEditKeys: onEditKeys,
             membershipNotice: membershipNotice,
             onChooseCustomApplication: onChooseCustomApplication.map { callback in
@@ -862,6 +866,8 @@ final class MacroFeatureIntegration: ObservableObject {
                 )
             },
             baseBindingSummaries: settings.map { baseBindingSummaries($0, remoteProfileID: selectedRemoteProfileID) } ?? [],
+            holdSummaryProvider: holdSummaryProvider,
+            onChooseApplication: onChooseApplication,
             onEditKeys: onEditKeys,
             onChooseCustomApplication: onChooseCustomApplication.map { callback in
                 { completion in
