@@ -1,5 +1,6 @@
 # Bug 记录
 
+- [Sparkle 更新组件停留在已知漏洞版本](./2026-11-01-sparkle-security-version.md)
 - [按键手势学习的双击间隔被压缩到 0–1 ms](./2026-11-01-gesture-learning-double-click-interval.md)
 
 - [按键页控制器卡片到工具行留白过大且保存入口不右对齐](./2026-11-01-mapping-toolbar-spacing-and-save-alignment.md)
@@ -164,6 +165,7 @@
 
 | 时间 | Bug | 状态 |
 | --- | --- | --- |
+| 2026-11-01 | [Sparkle 更新组件停留在已知漏洞版本](./2026-11-01-sparkle-security-version.md) | 依赖升级至 2.9.6 完成（三条上游安全公告覆盖），SwiftPM 解析、Release 构建与 CI 通过；真实安装更新待下次发布通道验收 |
 | 2026-11-01 | [按键手势学习的双击间隔被压缩到 0–1 ms](./2026-11-01-gesture-learning-double-click-interval.md) | 已修复（报告改用 HID 硬件时间戳并透传到学习器；2/3 与 3/3 的重复边沿整对忽略，计数不变、无需用户补按）；新增 6 项回归与全量 1175 项通过，等待 rc003 真机复验 |
 | 2026-11-01 | [按键页控制器卡片到工具行留白过大且保存入口不右对齐](./2026-11-01-mapping-toolbar-spacing-and-save-alignment.md) | 候选修复已实现（卡片底边对齐页头、方案行固定为页头横带的工具行、三个控件统一成同高 12pt 胶囊）；离屏渲染与 80 项定向回归通过，等待真实多方案窗口、私有构建与真机复验 |
 | 2026-11-01 | [发布校验拒绝有意留空的英文文案，导致无法打出任何正式包](./2026-11-01-release-verify-rejects-intentional-empty-copy.md) | 已修复（`verify-app.sh` 采用与 `LocalizationTests` 一致的显式空值白名单）；双架构签名 App 校验通过、反向对照仍失败，等待下一次完整打包复验 |

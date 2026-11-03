@@ -178,7 +178,7 @@ DMG 根目录严格只有 `Install SayAll.pkg`；App-only ZIP 与对应架构的
 
 `verify-dmg.sh` 校验 SHA-256、HFS+ 镜像、唯一根入口和安装 PKG payload。应用 bundle、卸载 PKG、版本号、架构、最低系统、签名与本地路径泄漏继续由各自产物校验器覆盖；正式模式还校验 Developer ID Team、Hardened Runtime、PKG/DMG 签名、stapled 公证票据与 Gatekeeper 评估。
 
-Sparkle `2.9.4` 通过 SwiftPM 嵌入应用。更新源和 EdDSA 公钥位于应用的 `Info.plist`；私钥仅存储在发布者本机的受限存储中，不进入项目或 Release。`SUEnableAutomaticChecks=true` 与 `SUScheduledCheckInterval=86400` 启用每日自动检查；`SUAutomaticallyUpdate=false` 与 `SUAllowsAutomaticUpdates=false` 禁止静默下载或自动安装。用户仍可选择菜单中的“检查更新…”立即检查。Sparkle 仅更新应用 bundle，不安装或替换兼容麦克风驱动。
+Sparkle `2.9.6` 通过 SwiftPM 嵌入应用。更新源和 EdDSA 公钥位于应用的 `Info.plist`；私钥仅存储在发布者本机的受限存储中，不进入项目或 Release。`SUEnableAutomaticChecks=true` 与 `SUScheduledCheckInterval=86400` 启用每日自动检查；`SUAutomaticallyUpdate=false` 与 `SUAllowsAutomaticUpdates=false` 禁止静默下载或自动安装。用户仍可选择菜单中的“检查更新…”立即检查。Sparkle 仅更新应用 bundle，不安装或替换兼容麦克风驱动。
 
 预览版发布采用两阶段 main-based 流程。版本和 Build 先通过普通 PR 合入 main；随后 .github/workflows/mac-release-package.yml 在受保护 mac-release Environment 中从精确 main SHA 构建 Apple Silicon 与 Intel 两条 lane，完成 Developer ID 签名、公证、staple、ZIP/DMG/PKG/appcast 校验，并上传不可变 payload artifact 和 stage record。该 workflow 不创建 Tag、Release 或公开 appcast。
 
