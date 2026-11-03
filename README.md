@@ -265,6 +265,13 @@ Typeless 等点按 Fn 开始、再次点按结束的语音工具，与小米蓝�
   </tr>
 </table>
 
+## 特别致谢
+
+无线麦 SayAll App 由 DimAgent 与 Vokie 友情赞助，感谢两位朋友，让好工具被更多人用上。
+
+- **DimAgent**：调度多模型团队，构建你想要的一切 → [dimagent.cn](https://dimagent.cn/?utm_source=sayall.app)
+- **Vokie**：首选语音助理，语音输入、闪记、旁听，直接给你可用结果 → [vokie.com](https://vokie.com/?utm_source=sayall.app)
+
 ## 许可与来源
 
 本仓库中的 macOS App、驱动及相关软件代码采用 `GPL-3.0-only` 许可。iOS App 已由独立私有仓库维护，并继续通过上方 App Store 入口分发。macOS App 的 Logo 和 App Icon 是需要单独授权的专有品牌资产，详情见 [LOGO-LICENSE.md](LOGO-LICENSE.md)。完整版权和第三方信息见 [COPYRIGHT.md](COPYRIGHT.md) 与 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
