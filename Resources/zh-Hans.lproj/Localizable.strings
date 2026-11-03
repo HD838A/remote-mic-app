@@ -787,11 +787,12 @@
 "onboarding.voice_tool.guide.detail" = "只显示当前工具需要的设置；无线麦 SayAll 不会自动修改第三方工具。";
 "onboarding.voice_tool.guide.continue_hint" = "请先查看并点击右侧的每一步。";
 "onboarding.voice_tool.guide.select_step" = "请点击右侧步骤，查看对应设置说明。";
+"onboarding.voice_tool.guide.zoom" = "点击查看大图";
 "onboarding.voice_tool.guide.select_doubao" = "选择豆包输入法";
 "onboarding.voice_tool.guide.configure_doubao" = "设置豆包的 Fn 语音";
 "onboarding.voice_tool.guide.select_weixin" = "选择微信输入法";
 "onboarding.voice_tool.guide.configure_weixin" = "设置微信输入法的 Fn 语音";
-"onboarding.voice_tool.guide.open_vokie" = "打开 Vokie";
+"onboarding.voice_tool.guide.open_vokie" = "需要打开 Vokie";
 "onboarding.voice_tool.guide.configure_vokie" = "开启实时语音输入";
 "onboarding.voice_tool.guide.open_typeless" = "打开 Typeless";
 "onboarding.voice_tool.guide.open_typeless.detail" = "启动 Typeless，并保持它在后台运行。";
@@ -861,7 +862,6 @@
 "onboarding.gesture.title" = "说话方式";
 "onboarding.gesture.hold" = "按住说话";
 "onboarding.gesture.toggle" = "按一次说话";
-"onboarding.pairing_plan.title" = "无线麦 SayAll 将按这个方案试用";
 "onboarding.pairing_plan.summary" = "%1$@ · %2$@ · %3$@";
 "onboarding.pairing_plan.fn_tap_on" = "已启用 Fn 点按转换";
 "onboarding.pairing_plan.fn_tap_off" = "无需 Fn 点按转换";
@@ -877,12 +877,6 @@
 "onboarding.shortcut_learning.incompatible" = "这个快捷键和所选控制设备的说话方式无法可靠转换，请更换模式或快捷键。";
 "onboarding.shortcut_learning.permission_required" = "需要先授予辅助功能权限。";
 "onboarding.shortcut_learning.unavailable" = "暂时无法监听快捷键，请重新授权后重试。";
-"onboarding.vokie.open" = "打开 Vokie 并应用模式";
-"onboarding.vokie.status.received" = "Vokie 已收到配置";
-"onboarding.vokie.status.configured" = "Vokie 已返回配置完成";
-"onboarding.vokie.status.partial" = "Vokie 只完成了部分配置";
-"onboarding.vokie.status.ready" = "Vokie 已就绪，仍需真实文字测试";
-"onboarding.vokie.status.failed" = "Vokie 配置失败，请检查后重试";
 "onboarding.remote_availability.title" = "你现在有实体遥控器吗？";
 "onboarding.remote_availability.detail" = "实体遥控器可以获得完整、稳定的无线麦 SayAll 体验。如果当前没有，也可以继续使用手机。";
 "onboarding.remote_availability.has_remote.title" = "有遥控器";

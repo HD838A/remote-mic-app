@@ -759,6 +759,34 @@ struct OnboardingFlowTests {
         #expect(confirmed.probe.toggleValues["permission.iphone-app-installed"] == true)
     }
 
+    /// 右栏引导图缩略图固定 220pt 高，竖版截图（如微信输入法菜单）几乎读不出内容。
+    /// 点击缩略图要打开覆盖整窗的放大层，并且能通过右上角关闭按钮退出。
+    @Test @MainActor func guideScreenshotOpensZoomOverlayAndCloses() throws {
+        let fixture = try OnboardingOffscreenFixture(
+            step: .voiceTool,
+            voiceTool: .vokie,
+            initialInputMethodGuideStep: 2
+        )
+        defer { fixture.close() }
+        let probe = fixture.probe
+
+        // 新建 fixture 时放大层还没打开，缩略图本身是可点的。
+        #expect(probe.actions["guide.screenshot.zoom"] != nil)
+        #expect(probe.stateEvents.isEmpty)
+
+        probe.invoke("guide.screenshot.zoom")
+        fixture.settleLayout()
+        #expect(probe.actions["guide.screenshot.zoom.close"] != nil)
+        #expect(probe.stateEvents == ["guide.screenshot.zoom=system-fn"])
+
+        probe.invoke("guide.screenshot.zoom.close")
+        fixture.settleLayout()
+        #expect(probe.stateEvents == [
+            "guide.screenshot.zoom=system-fn",
+            "guide.screenshot.zoom=-",
+        ])
+    }
+
     @MainActor
     private func hostedOnboardingProbe(
         suite: String,
@@ -3561,7 +3589,6 @@ struct OnboardingFlowTests {
             invoke("gesture.\(mode.rawValue)", on: vokieSource)
             #expect(vokieSource.settings.onboardingPreferredGesture == mode)
         }
-        #expect(!vokieSource.probe.actions.keys.contains("vokie.open"))
 
         let iPhone = try OnboardingOffscreenFixture(
             step: .remote,
@@ -3810,6 +3837,13 @@ private final class OnboardingOffscreenFixture {
         window.contentViewController = nil
         window.orderOut(nil)
         defaults.removePersistentDomain(forName: suiteName)
+    }
+
+    /// 状态变化后需要一轮 run loop 让 SwiftUI 重新求值 body，
+    /// 探针才会注册新出现的控件 action。
+    func settleLayout() {
+        RunLoop.main.run(until: Date().addingTimeInterval(0.1))
+        window.contentView?.layoutSubtreeIfNeeded()
     }
 
     private enum FixtureError: Error {

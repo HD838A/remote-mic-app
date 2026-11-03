@@ -261,7 +261,7 @@
     - 工具页不展示快捷键来源、学习路径或 Command/Option 选择；本次 Onboarding 的 staged 语音键统一固定为 Fn，选择工具时不立即改写正式配置。
     - 新配置采用 staged → verified 事务：只有真实会话开始、PCM、正常停止、第三方配置确认与文字上屏全部通过后才持久化；返回、退出或异常中断恢复原配置。
     - 控制来源已合并成单页并按 Package 门禁：公开构建只显示小米遥控器；完整包增加苹果遥控器第 6/7 代、Chromecast 及 Apple companion/Web 备用方式，实体设备优先展示。
-    - Vokie 使用公开 `vokie://launch` 唤起和 `sayall://launch` 回流；回流状态不能替代真实语音门禁，也不读取第三方私有配置。
+    - Vokie 通过公开 Bundle ID / URL Scheme 后台启动，`sayall://launch` 回流只做激活与日志记录；回流状态不能替代真实语音门禁，也不读取第三方私有配置。
     - 自动化已覆盖默认矩阵、来源转换、Fn 点按、Chromecast 原生 toggle、事务回滚、Package 编译门禁与 Deep Link 解析；仍需完成公开/完整包生产截图、私有 Package 构建、真实第三方工具、iPhone/Watch/Web 模式上报、各硬件真实语音文字与 macOS 14/15/当前系统验收后才能勾选。
     - 详细方案与证据保存在私有资料库 `projects/remote-mic-app/research/onboarding-voice-shortcuts-and-input-method-visibility/v1/ONBOARDING-OPTIMIZATION-PLAN.md`；公开仓只保留行为、兼容边界和验证状态。
     - Secure Input 仅作为实体遥控器普通按键无响应时的候选诊断；需在真实密码输入/安全键盘场景验证“重新检测”恢复路径，并确认普通按键页不执行用户已有映射。

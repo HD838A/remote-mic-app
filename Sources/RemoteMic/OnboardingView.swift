@@ -36,6 +36,7 @@ final class OnboardingInteractionProbe {
     private(set) var openedURLs: [URL] = []
     private(set) var launchedVoiceTools: [OnboardingVoiceTool] = []
     private(set) var invokedActions: [String] = []
+    private(set) var stateEvents: [String] = []
 
     var openURL: (URL) -> Void
 
@@ -65,6 +66,12 @@ final class OnboardingInteractionProbe {
     func invoke(_ id: String) {
         invokedActions.append(id)
         actions[id]?()
+    }
+
+    /// 记录一次状态迁移，用于验证「点开后出现、关闭后消失」这类只能靠状态判断的行为。
+    /// 控件注册表只增不减，无法用它证明某个控件已经卸载。
+    func recordState(_ id: String, _ value: String?) {
+        stateEvents.append("\(id)=\(value ?? "-")")
     }
 
     func recordOpenedURL(_ url: URL) {
@@ -118,6 +125,9 @@ struct OnboardingView: View {
     @State private var voiceKeyMigrationSource: VoiceKeyMode?
     @State private var selectedInputMethodGuideStep: Int?
     @State private var completedInputMethodGuideSteps = Set<Int>()
+    /// 右栏引导图的放大查看状态，存资源名而不是 `NSImage`：外观切换后按当前
+    /// `colorScheme` 重新取图，避免大图停留在旧外观的位图上。
+    @State private var zoomedGuideImageResourceName: String?
     @State private var transcriptFocusRequest = 0
     @State private var transcriptEditorMounted = false
     @State private var transcriptWindowKey = false
@@ -133,7 +143,6 @@ struct OnboardingView: View {
     @State private var suppressConnectedPhysicalRemoteAutoRouteOnce = false
     @State private var isCapturingVoiceShortcut = false
     @State private var shortcutCaptureErrorKey: String?
-    @State private var vokieDeepLinkStatus: SayAllDeepLinkStatus?
     @State private var showAlternativeControlSources = false
     @State private var secureInputActive: Bool?
     @State private var secureInputWaitStartedAtUptime: TimeInterval?
@@ -160,6 +169,7 @@ struct OnboardingView: View {
         systemFunctionKeyAvailableOverride: Bool? = nil,
         voiceToolAvailabilityOverride: [OnboardingVoiceTool: OnboardingVoiceToolAvailability]? = nil,
         initialInputMethodGuideStep: Int? = nil,
+        initialGuideImageZoomResource: String? = nil,
         remoteInputDiagnosticOverride: FirstUseRemoteInputDiagnostic? = nil,
         interactionProbe: OnboardingInteractionProbe? = nil,
         siriRemotePackageInstalledOverride: Bool? = nil,
@@ -182,6 +192,7 @@ struct OnboardingView: View {
             initialValue: voiceToolAvailabilityOverride ?? Self.detectVoiceToolAvailability()
         )
         _selectedInputMethodGuideStep = State(initialValue: initialInputMethodGuideStep)
+        _zoomedGuideImageResourceName = State(initialValue: initialGuideImageZoomResource)
         _didConfirmPhoneAppInstalled = State(initialValue: initialPhoneAppInstalled)
         _voiceKeyMigrationSource = State(
             initialValue: model.settings.pendingOnboardingVoiceKeyMigration
@@ -207,6 +218,16 @@ struct OnboardingView: View {
         .background(Color(nsColor: .windowBackgroundColor).ignoresSafeArea())
         .environment(\.locale, localization.locale)
         .frame(minWidth: 980, minHeight: 732)
+        // 引导图缩略图固定 220pt 高，竖版截图（如微信输入法菜单）只剩几十 pt 宽。
+        // 放大层盖住整窗，点击遮罩或右上角关闭按钮退出。
+        .overlay {
+            if let zoomedGuideImageResourceName {
+                onboardingGuideImageZoomOverlay(resourceName: zoomedGuideImageResourceName)
+            }
+        }
+        .onChange(of: zoomedGuideImageResourceName) { resourceName in
+            interactionProbe?.recordState("guide.screenshot.zoom", resourceName)
+        }
         .sheet(isPresented: $isMembershipPresented) {
             VStack(alignment: .trailing, spacing: 12) {
                 Button(localization.text("common.action.close")) { isMembershipPresented = false }
@@ -271,7 +292,6 @@ struct OnboardingView: View {
         .onReceive(NotificationCenter.default.publisher(for: .sayAllDeepLinkReceived)) { notification in
             guard let request = notification.object as? SayAllDeepLinkRequest,
                   request.source == "vokie" else { return }
-            vokieDeepLinkStatus = request.status
             refreshVoiceToolAvailability()
         }
         .onReceive(model.$isConnected.removeDuplicates()) { isConnected in
@@ -938,43 +958,6 @@ struct OnboardingView: View {
         }
     }
 
-    private func pairingPlanSummary(_ plan: OnboardingVoicePairingPlan) -> some View {
-        VStack(alignment: .leading, spacing: 7) {
-            Label {
-                Text(verbatim: localization.text("onboarding.pairing_plan.title"))
-            } icon: {
-                Image(systemName: "arrow.triangle.2.circlepath")
-            }
-                .font(.system(size: 13, weight: .semibold))
-            Text(OnboardingVoiceGesturePrompt.text(
-                for: plan.binding.gestureMode,
-                locale: localization.locale
-            ))
-            .font(.system(size: 12))
-            .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
-            if plan.binding.tool == .vokie {
-                HStack(spacing: 8) {
-                    onboardingActionButton(id: "vokie.open") {
-                        guard let url = VokieDeepLink.launchURL(for: plan) else { return }
-                        openOnboardingURL(url)
-                    } label: {
-                        Text(verbatim: localization.text("onboarding.vokie.open"))
-                    }
-                    .buttonStyle(.bordered)
-                    if let vokieDeepLinkStatus {
-                        Text(localization.text("onboarding.vokie.status.\(vokieDeepLinkStatus.rawValue)"))
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(vokieDeepLinkStatus == .failed ? Color.red : Color.secondary)
-                    }
-                }
-            }
-        }
-        .padding(8)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.accentColor.opacity(0.07), in: RoundedRectangle(cornerRadius: 12))
-    }
-
     private var controlMethodContent: some View {
         VStack(alignment: .leading, spacing: 18) {
             onboardingTitle("onboarding.control_method.title")
@@ -1282,15 +1265,30 @@ struct OnboardingView: View {
     private func onboardingGuideScreenshot(resourceName: String) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             if let image = onboardingGuideImage(resourceName: resourceName) {
-                Image(nsImage: image)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(maxWidth: .infinity, maxHeight: 220)
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 10)
-                            .stroke(Color.primary.opacity(0.10), lineWidth: 1)
-                    }
+                onboardingActionButton(id: "guide.screenshot.zoom") {
+                    zoomedGuideImageResourceName = resourceName
+                } label: {
+                    Image(nsImage: image)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(maxWidth: .infinity, maxHeight: 220)
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 10)
+                                .stroke(Color.primary.opacity(0.10), lineWidth: 1)
+                        }
+                        .overlay(alignment: .topTrailing) {
+                            Image(systemName: "arrow.up.left.and.arrow.down.right")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundStyle(.white)
+                                .frame(width: 20, height: 20)
+                                .background(.black.opacity(0.55), in: Circle())
+                                .padding(8)
+                        }
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(localization.text("onboarding.voice_tool.guide.zoom"))
+                .help(localization.text("onboarding.voice_tool.guide.zoom"))
             } else {
                 Text(verbatim: localization.text("onboarding.voice_tool.guide.image_missing"))
                     .font(.system(size: 12))
@@ -1308,6 +1306,84 @@ struct OnboardingView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
+    }
+
+    /// 引导图放大层。遮罩铺满整窗，点击遮罩、右上角关闭按钮或按 Esc 都能退出；
+    /// 卡片本身吞掉点击，避免看图时误关。
+    private func onboardingGuideImageZoomOverlay(resourceName: String) -> some View {
+        let image = onboardingGuideImage(resourceName: resourceName)
+
+        return ZStack {
+            Color.black.opacity(colorScheme == .dark ? 0.70 : 0.50)
+                .ignoresSafeArea()
+                .onTapGesture {
+                    zoomedGuideImageResourceName = nil
+                }
+                .accessibilityHidden(true)
+
+            ZStack(alignment: .topTrailing) {
+                Group {
+                    if let image, image.size.height > image.size.width {
+                        // 竖版长截图（微信输入法菜单 414×1376）若同样按整卡等比缩放，
+                        // 宽度只剩一半，放大了也读不清。改按接近原始宽度显示，
+                        // 超出的高度在卡片内滚动。
+                        ScrollView(.vertical) {
+                            Image(nsImage: image)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(maxWidth: 480)
+                                .frame(maxWidth: .infinity)
+                                .padding(14)
+                        }
+                    } else if let image {
+                        Image(nsImage: image)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .padding(14)
+                    } else {
+                        Text(verbatim: localization.text("onboarding.voice_tool.guide.image_missing"))
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                onboardingActionButton(id: "guide.screenshot.zoom.close") {
+                    zoomedGuideImageResourceName = nil
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(.primary)
+                        .frame(width: 26, height: 26)
+                        .background(.thickMaterial, in: Circle())
+                        .overlay {
+                            Circle().stroke(Color.primary.opacity(0.12), lineWidth: 1)
+                        }
+                }
+                .buttonStyle(.plain)
+                .keyboardShortcut(.cancelAction)
+                .accessibilityLabel(localization.text("common.action.close"))
+                .help(localization.text("common.action.close"))
+                .padding(10)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .clipShape(RoundedRectangle(cornerRadius: 16))
+            .background(Color(nsColor: .windowBackgroundColor), in: RoundedRectangle(cornerRadius: 16))
+            .overlay {
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(Color.primary.opacity(0.12), lineWidth: 1)
+            }
+            .shadow(color: .black.opacity(0.28), radius: 24, y: 8)
+            // 吞掉点击的范围必须与卡片本体一致：放在 padding 之后会把卡片外侧的
+            // 边距也吃掉，那圈就点不掉了。
+            .contentShape(RoundedRectangle(cornerRadius: 16))
+            .onTapGesture {}
+            .padding(.horizontal, 36)
+            .padding(.vertical, 28)
+        }
+        .transition(.opacity)
     }
 
     private func onboardingGuideInstruction(
