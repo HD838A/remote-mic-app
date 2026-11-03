@@ -284,6 +284,9 @@ enum ScrollRegionPreset {
         Rule(bundleIdentifier: "com.tinyspeck.slackmacgap", strategy: .lineWheel, placement: .container),
         Rule(bundleIdentifier: "com.openai.codex", strategy: .lineWheel, placement: .container),
         Rule(bundleIdentifier: "com.tencent.workbuddy.mac", strategy: .lineWheel, placement: .windowRect),
+        // DimAgent 只暴露一个覆盖整窗的 WebArea，学习记录也落在窗口矩形上，
+        // 所以按窗口矩形投递滚轮，和记录命中时的结果一致，不必再挑容器。
+        Rule(bundleIdentifier: "com.dimcode.app", strategy: .lineWheel, placement: .windowRect),
     ]
 
     static func rule(for bundleIdentifier: String) -> Rule? {

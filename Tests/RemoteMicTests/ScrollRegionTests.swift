@@ -273,6 +273,9 @@ struct ScrollRegionTests {
         // Whole-window web areas fall back to the window rectangle.
         #expect(ScrollRegionPreset.rule(for: "com.tencent.workbuddy.mac")?.placement == .windowRect)
         #expect(ScrollRegionPreset.rule(for: "com.apple.Safari")?.placement == .windowRect)
+        // DimAgent 的学习记录本身就落在窗口矩形上，内置预设必须保持一致。
+        #expect(ScrollRegionPreset.rule(for: "com.dimcode.app")?.placement == .windowRect)
+        #expect(ScrollRegionPreset.rule(for: "com.dimcode.app")?.strategy == .lineWheel)
     }
 
     @Test func outOfRangeNormalizedFramesAreRejected() {
