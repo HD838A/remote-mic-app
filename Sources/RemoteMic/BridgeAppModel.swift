@@ -544,8 +544,6 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     private var pendingRemoteModels: [UUID: XiaomiRemoteModel] = [:]
     @Published private(set) var remoteSystemDeviceNames: [UUID: String] = [:]
     @Published private(set) var audioDevices: [AudioDeviceInfo] = []
-    /// 设备上真实的音量百分比。用来让界面显示真实值，不覆盖用户在设置里保存的目标。
-    @Published private(set) var observedVirtualAudioVolumePercent: Double?
     @Published private(set) var macMicrophoneDevices: [AudioDeviceInfo] = []
     @Published private(set) var macMicrophoneState: MacMicrophoneSessionState = .idle
     @Published private(set) var macMicrophoneShortcutAvailable = true
@@ -1038,9 +1036,6 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         }
         settings.onInteractionModeChanged = { [weak self] device in
             self?.cancelButtonMappingInteractions(device: device)
-        }
-        audioOutput.onVirtualVolumeObserved = { [weak self] percent in
-            self?.observedVirtualAudioVolumePercent = percent
         }
         macroFeature.attachBindings(to: settings) { [weak self] device in
             self?.cancelButtonMappingInteractions(device: device)
@@ -2625,10 +2620,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             AppLogger.shared.write(
                 "AUDIO REBIND begin reason=startup state={\(self.audioOutput.diagnosticState())}"
             )
-            self.audioOutput.configureAsync(
-                deviceUID: selection.uid ?? "",
-                virtualVolumePercent: self.settings.virtualAudioVolumePercent
-            ) { [weak self] configured in
+            self.audioOutput.configureAsync(deviceUID: selection.uid ?? "") { [weak self] configured in
                 guard let self else { return }
                 let audioStatus = self.audioOutput.status
                 let isAudioOutputReady = self.audioOutput.isReadyForTestTone
@@ -2831,16 +2823,13 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             completion: completion)
     }
 
-    /// 连接页的音量滑块：拖动时只更新用户意图，松手（commit）才写设备。
-    func updateVirtualAudioVolumePercent(_ percent: Double, commit: Bool) {
-        let clamped = VirtualAudioDeviceLevelPolicy.clampedPercent(percent)
-        settings.virtualAudioVolumePercent = clamped
-        observedVirtualAudioVolumePercent = clamped
-        guard commit else { return }
-        audioOutput.applyVirtualVolumePercent(
-            clamped,
-            deviceUID: settings.selectedAudioDeviceUID
-        )
+    /// 连接页唯一的音量滑块：立即作用到送往语音工具的声音，不需要重建音频链路。
+    func updateOutputVolumePercent(_ percent: Double) {
+        let clamped = VirtualAudioOutputLevelPolicy.clampedPercent(percent)
+        if settings.outputVolumePercent != clamped {
+            settings.outputVolumePercent = clamped
+        }
+        audioOutput.setOutputLevelPercent(clamped)
     }
 
     func applyAudioSettings(
@@ -2943,14 +2932,13 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         let generation = audioConfigurationGeneration
         let deviceUID = settings.selectedAudioDeviceUID
         AppLogger.shared.write("AUDIO REBIND begin reason=\(reason) state={\(audioOutput.diagnosticState())}")
+        // 音量作用在写缓冲的出口，重启链路不会丢；这里再同步一次，避免外部重建后回到 100%。
+        audioOutput.setOutputLevelPercent(settings.outputVolumePercent)
         cancelTestToneIfNeeded(
             statusMessage: LocalizedMessage("audio.test_tone.cancelled_device_changed"),
             logReason: "device_reconfigure"
         )
-        audioOutput.configureAsync(
-            deviceUID: deviceUID,
-            virtualVolumePercent: settings.virtualAudioVolumePercent
-        ) { [weak self] configured in
+        audioOutput.configureAsync(deviceUID: deviceUID) { [weak self] configured in
             DispatchQueue.main.async {
                 guard let self,
                       self.started,
@@ -4259,7 +4247,6 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         let identifiers = Set(settings.remoteDeviceProfiles.compactMap(\.bluetoothIdentifier))
         for identifier in identifiers where bluetoothBridges[identifier] == nil {
             let bridge = XiaomiBluetoothBridge(
-                settings: settings,
                 delegate: self,
                 targetIdentifier: identifier
             )
@@ -4276,7 +4263,6 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     private func startBluetoothDiscoveryIfNeeded() {
         guard started, discoveryBluetoothBridge == nil else { return }
         let bridge = XiaomiBluetoothBridge(
-            settings: settings,
             delegate: self,
             excludedIdentifiers: { [weak self] in
                 guard let self else { return [] }

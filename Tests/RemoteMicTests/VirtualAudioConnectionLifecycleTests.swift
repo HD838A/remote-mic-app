@@ -5,45 +5,87 @@ import Testing
 
 @Suite("Virtual audio connection lifecycle", .serialized)
 struct VirtualAudioConnectionLifecycleTests {
-    @Test func virtualAudioLevelPolicyTracksUserVolumeTarget() {
+    @Test func virtualAudioDeviceLevelStaysPinnedToFullScale() {
         #expect(VirtualAudioDeviceLevelPolicy.requiresUnmute(mute: true))
         #expect(!VirtualAudioDeviceLevelPolicy.requiresUnmute(mute: false))
         #expect(!VirtualAudioDeviceLevelPolicy.requiresUnmute(mute: nil))
 
-        // 目标 100%：任何低于满音量（包括被其他 App 改小）都要写回。
-        let full = VirtualAudioDeviceLevelPolicy.volumeScalar(percent: 100)
+        // 设备音量恒为满值：任何被外部改小的值都要写回，否则用户会以为 App 音量失灵。
+        let full = VirtualAudioDeviceLevelPolicy.fixedVolumeScalar
+        #expect(full == 1)
         #expect(VirtualAudioDeviceLevelPolicy.requiresVolumeAdjustment(volume: 0, target: full))
         #expect(VirtualAudioDeviceLevelPolicy.requiresVolumeAdjustment(volume: 0.19, target: full))
         #expect(VirtualAudioDeviceLevelPolicy.requiresVolumeAdjustment(volume: 0.5, target: full))
         #expect(!VirtualAudioDeviceLevelPolicy.requiresVolumeAdjustment(volume: 1, target: full))
         #expect(!VirtualAudioDeviceLevelPolicy.requiresVolumeAdjustment(volume: nil, target: full))
         #expect(!VirtualAudioDeviceLevelPolicy.requiresVolumeAdjustment(volume: .nan, target: full))
-
-        // 目标 50% 时满音量反而需要调低，这是用户手动调节的语义。
-        let half = VirtualAudioDeviceLevelPolicy.volumeScalar(percent: 50)
-        #expect(VirtualAudioDeviceLevelPolicy.requiresVolumeAdjustment(volume: 1, target: half))
-        #expect(!VirtualAudioDeviceLevelPolicy.requiresVolumeAdjustment(volume: half, target: half))
     }
 
-    @Test func virtualAudioVolumePercentMapsToDriverScalar() {
-        #expect(VirtualAudioDeviceLevelPolicy.volumeScalar(percent: 100) == 1)
-        #expect(VirtualAudioDeviceLevelPolicy.volumeScalar(percent: 0) == 0)
-        // 百分比是线性幅度：50% 约 −6 dB，而不是驱动 dB 标量区间的中点。
-        #expect(abs(VirtualAudioDeviceLevelPolicy.volumeScalar(percent: 50) - 0.9059) < 0.001)
-        #expect(abs(VirtualAudioDeviceLevelPolicy.percent(volumeScalar: 1) - 100) < 0.001)
-        #expect(VirtualAudioDeviceLevelPolicy.percent(volumeScalar: 0) == 0)
-        for percent in [1.0, 10, 33, 50, 75, 99] {
-            let scalar = VirtualAudioDeviceLevelPolicy.volumeScalar(percent: percent)
-            #expect(abs(VirtualAudioDeviceLevelPolicy.percent(volumeScalar: scalar) - percent) < 0.5)
-        }
-        // 越界与非法值一律钳制，避免把 NaN 或超范围标量写进设备。
-        #expect(VirtualAudioDeviceLevelPolicy.volumeScalar(percent: 140) == 1)
-        #expect(VirtualAudioDeviceLevelPolicy.volumeScalar(percent: -5) == 0)
-        #expect(VirtualAudioDeviceLevelPolicy.volumeScalar(percent: .nan) == 1)
-        #expect(VirtualAudioDeviceLevelPolicy.percent(volumeScalar: .nan) == 0)
+    @Test func outputVolumePercentMapsToLinearScale() {
+        // 100% 是原始音量，0% 是静音，1000% 对应约 +20 dB。
+        #expect(VirtualAudioOutputLevelPolicy.linearScale(percent: 100) == 1)
+        #expect(VirtualAudioOutputLevelPolicy.linearScale(percent: 0) == 0)
+        #expect(abs(VirtualAudioOutputLevelPolicy.linearScale(percent: 300) - 3) < 0.0001)
+        #expect(abs(VirtualAudioOutputLevelPolicy.linearScale(percent: 1000) - 10) < 0.0001)
+        #expect(abs(VirtualAudioOutputLevelPolicy.decibels(percent: 100)) < 0.001)
+        #expect(abs(VirtualAudioOutputLevelPolicy.decibels(percent: 1000) - 20) < 0.01)
+        #expect(VirtualAudioOutputLevelPolicy.decibels(percent: 0) == VirtualAudioOutputLevelPolicy.floorDecibels)
+        #expect(abs(VirtualAudioOutputLevelPolicy.percent(decibels: 0) - 100) < 0.001)
+        #expect(abs(VirtualAudioOutputLevelPolicy.percent(decibels: 20) - 1000) < 0.01)
+
+        // 越界与非法值一律钳制，避免把 NaN 或超范围值带进写缓冲。
+        #expect(VirtualAudioOutputLevelPolicy.clampedPercent(5000) == 1000)
+        #expect(VirtualAudioOutputLevelPolicy.clampedPercent(-5) == 0)
+        #expect(VirtualAudioOutputLevelPolicy.clampedPercent(.nan) == 100)
+
+        // 放大超过满幅时直接削顶，不会产生 NaN 或溢出。
+        #expect(VirtualAudioOutputLevelPolicy.clampedSample(0.6, scale: 10) == 1)
+        #expect(VirtualAudioOutputLevelPolicy.clampedSample(-0.6, scale: 10) == -1)
+        #expect(VirtualAudioOutputLevelPolicy.clampedSample(0.5, scale: 0.5) == 0.25)
+        #expect(VirtualAudioOutputLevelPolicy.clampedSample(0.5, scale: 0) == 0)
     }
 
-    @Test func virtualAudioVolumeListenerCoversBothScopes() {
+    @Test func outputVolumeScalesDecodedSamplesWithClipping() {
+        // 100% 时归一化后原样写缓冲，不引入额外增益。
+        let identity = VirtualAudioOutputLevelPolicy.scaled([0, 1_000, -1_000], scale: 1)
+        #expect(identity[0] == 0)
+        #expect(abs(identity[1] - 1_000 / Float(Int16.max)) < 1e-6)
+        #expect(abs(identity[2] + 1_000 / Float(Int16.max)) < 1e-6)
+
+        // 300% 是线性三倍；0% 是静音。
+        let tripled = VirtualAudioOutputLevelPolicy.scaled([1_000], scale: 3)
+        #expect(abs(tripled[0] - 3_000 / Float(Int16.max)) < 1e-6)
+        #expect(VirtualAudioOutputLevelPolicy.scaled([1_000, -1_000], scale: 0) == [0, 0])
+
+        // 放大后越过满幅必须削顶，而不是溢出或产生 NaN。
+        #expect(VirtualAudioOutputLevelPolicy.scaled([Int16.max, Int16.min], scale: 10) == [1, -1])
+        #expect(VirtualAudioOutputLevelPolicy.scaled([], scale: 3).isEmpty)
+    }
+
+    @Test func outputVolumeSliderKeepsSparseTickMarks() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        // 连接页与 Onboarding 共用同一个控件，范围和步长只在 OutputVolumeSlider 里写一次。
+        let sliderSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/OutputVolumeSlider.swift"),
+            encoding: .utf8
+        )
+        // 0–1000% 若用 1% 步长，AppKit 会画 1000 条刻度，轨道会变成一条深色条带。
+        #expect(sliderSource.contains("in: VirtualAudioOutputLevelPolicy.percentRange"))
+        #expect(sliderSource.contains("step: 20"))
+        #expect(!sliderSource.contains("audio.gain.title"))
+
+        let settingsSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+        #expect(settingsSource.contains("OutputVolumeSlider(settings: settings, model: model)"))
+        #expect(!settingsSource.contains("audio.gain.title"))
+    }
+
+    @Test func virtualAudioDeviceLevelCoversBothScopes() {
         let addresses = CoreAudioDeviceCatalog.volumeAddresses()
         #expect(addresses.count == 2)
         #expect(addresses.allSatisfy { $0.mSelector == kAudioDevicePropertyVolumeScalar })
@@ -51,11 +93,6 @@ struct VirtualAudioConnectionLifecycleTests {
             kAudioDevicePropertyScopeOutput,
             kAudioDevicePropertyScopeInput,
         ])
-        // 自己写入的回声不覆盖界面；真正的外部改动才上报。
-        #expect(VirtualAudioDeviceLevelPolicy.isOwnVolumeEcho(volume: 1, lastApplied: 1))
-        #expect(!VirtualAudioDeviceLevelPolicy.isOwnVolumeEcho(volume: 0.5, lastApplied: 1))
-        #expect(!VirtualAudioDeviceLevelPolicy.isOwnVolumeEcho(volume: 1, lastApplied: nil))
-        #expect(!VirtualAudioDeviceLevelPolicy.isOwnVolumeEcho(volume: .nan, lastApplied: 1))
     }
 
     @Test func virtualAudioAudibilityTreatsUnknownPropertiesAsNonBlocking() {
@@ -202,66 +239,6 @@ struct VirtualAudioConnectionLifecycleTests {
         #expect(lowVolumeRepair.isReady)
         #expect(lowVolumeRepair.after.output.volume == 1)
         #expect(lowVolumeRepair.after.input.volume == 1)
-    }
-
-    @Test func installedMiRemoteVReportsExternalVolumeChanges() async throws {
-        guard ProcessInfo.processInfo.environment["SAYALL_TEST_MUTATE_VIRTUAL_AUDIO_LEVEL"] == "1"
-        else { return }
-        let device = try #require(
-            CoreAudioDeviceCatalog.outputDevices().first { $0.uid == "MiRemoteV2ch_UID" }
-        )
-        let original = CoreAudioDeviceCatalog.virtualAudioAudibilitySnapshot(for: device)
-        defer {
-            Self.restoreDeviceLevel(original.output, deviceID: device.id, scope: kAudioDevicePropertyScopeOutput)
-            Self.restoreDeviceLevel(original.input, deviceID: device.id, scope: kAudioDevicePropertyScopeInput)
-        }
-
-        let output = VirtualAudioOutput(
-            logger: { _ in },
-            engineQueue: DispatchQueue(label: "test.virtual.audio.volume.listener")
-        )
-        let observed = ObservedPercentBox()
-        output.onVirtualVolumeObserved = { observed.set($0) }
-
-        // 用户自己调到 50%：写入后界面应立刻知道目标值，不必等外部改动。
-        output.applyVirtualVolumePercent(50, deviceUID: device.uid)
-        try await Task.sleep(nanoseconds: 400_000_000)
-        #expect(observed.current == 50)
-        let written = try #require(
-            CoreAudioDeviceCatalog.virtualAudioAudibilitySnapshot(for: device).output.volume
-        )
-        #expect(abs(written - VirtualAudioDeviceLevelPolicy.volumeScalar(percent: 50)) < 0.01)
-
-        // 外部把设备音量改成 0.31（约 6%），监听要上报，而不是被当成自己的回声。
-        #expect(Self.setDeviceFloat32(
-            0.31,
-            deviceID: device.id,
-            selector: kAudioDevicePropertyVolumeScalar,
-            scope: kAudioDevicePropertyScopeOutput
-        ))
-        let deadline = Date().addingTimeInterval(2)
-        while Date() < deadline, (observed.current ?? 100) > 10 {
-            try await Task.sleep(nanoseconds: 20_000_000)
-        }
-        let reported = try #require(observed.current)
-        #expect(reported < 10)
-    }
-
-    private final class ObservedPercentBox: @unchecked Sendable {
-        private let lock = NSLock()
-        private var value: Double?
-
-        func set(_ newValue: Double) {
-            lock.lock()
-            value = newValue
-            lock.unlock()
-        }
-
-        var current: Double? {
-            lock.lock()
-            defer { lock.unlock() }
-            return value
-        }
     }
 
     private static func restoreDeviceLevel(
@@ -789,12 +766,13 @@ struct VirtualAudioConnectionLifecycleTests {
         #expect(outputSource.contains("func configureAsync("))
         #expect(outputSource.contains("engineQueue.async { [weak self] in"))
         #expect(outputSource.contains("configureOnEngineQueue("))
-        #expect(outputSource.contains("virtualVolumePercent: virtualVolumePercent"))
+        #expect(outputSource.contains("func setOutputLevelPercent("))
+        #expect(outputSource.contains("currentOutputLevelScale"))
         #expect(outputSource.contains("dispatchPrecondition(condition: .onQueue(engineQueue))"))
         #expect(outputSource.contains("engine.connect(player, to: engine.mainMixerNode"))
         #expect(modelSource.contains("audioOutput.configureAsync("))
-        #expect(modelSource.contains("virtualVolumePercent: settings.virtualAudioVolumePercent"))
-        #expect(modelSource.contains("virtualVolumePercent: self.settings.virtualAudioVolumePercent"))
+        #expect(modelSource.contains("func updateOutputVolumePercent("))
+        #expect(modelSource.contains("audioOutput.setOutputLevelPercent(settings.outputVolumePercent)"))
         #expect(!modelSource.contains("audioOutput.configure(deviceUID:"))
     }
 

@@ -432,10 +432,8 @@
 "audio.voice_output.section_title" = "Voice devices";
 "audio.output.title" = "Output device";
 "audio.output.disabled" = "Audio Output Off";
-"audio.gain.title" = "Gain";
-"audio.gain.help" = "0 dB keeps the original volume. Higher values make your voice louder and also amplify background noise. Start with 6–12 dB.";
 "audio.volume.title" = "Volume";
-"audio.volume.help" = "Sets how loud SayAll sends audio to your voice tool. 100% is the original level. This can only lower the level — raise the gain above to make it louder.";
+"audio.volume.help" = "Sets how loud SayAll sends audio to your voice tool: 0% is silent, 100% is the original level, and 1000% is about +20 dB. Raising it makes your voice louder and also amplifies background noise — start with 200–400%.";
 "audio.status.title" = "Audio status";
 "audio.action.refresh_devices" = "Refresh Devices";
 "audio.action.learn_virtual_microphones" = "Get BlackHole";
@@ -974,9 +972,9 @@
 "onboarding.audio.on_demand_detail" = "The selected device will connect automatically when phone voice input starts. The next step verifies real audio and text.";
 "onboarding.voice_test.title" = "Test voice typing";
 "onboarding.voice_test.detail" = "Click the field, then use the voice button as shown.";
-"onboarding.voice_test.gain.title" = "Adjust microphone gain";
-"onboarding.voice_test.gain.detail" = "Gain boosts quiet or breathy speech. Try 6–12 dB; too much also raises background noise.";
-"onboarding.voice_test.gain.help" = "The new value applies to subsequent voice input immediately.";
+"onboarding.voice_test.volume.title" = "Adjust output volume";
+"onboarding.voice_test.volume.detail" = "Volume boosts quiet or breathy speech. Try 200–400%; too much also raises background noise.";
+"onboarding.voice_test.volume.help" = "The new value applies to subsequent voice input immediately.";
 "onboarding.voice_test.configuration.title" = "Check these in %@ before testing";
 "onboarding.voice_test.configuration.detail" = "Check every box to start.";
 "onboarding.voice_test.configuration.sayall_audio_output" = "Audio output device";

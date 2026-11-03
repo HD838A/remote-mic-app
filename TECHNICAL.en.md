@@ -58,7 +58,7 @@ The app does not fuzzy-match every Bluetooth device whose name contains Xiaomi. 
 
 The app reaches ready only after characteristic discovery, Audio and Control notification subscriptions, and capability confirmation. Initialization times out after eight seconds. Only 16 kHz encoding is accepted; a remote that offers or switches to 8 kHz is closed and rediscovered.
 
-Voice data is accumulated by the remote-declared frame size and decoded with high-nibble-first IMA/DVI ADPCM. Sync packets reset predictor and step index. Decoded PCM receives three-point smoothing and a safe -24...24 dB gain clamp; the UI currently exposes 0...24 dB.
+Voice data is accumulated by the remote-declared frame size and decoded with high-nibble-first IMA/DVI ADPCM. Sync packets reset predictor and step index. Decoded PCM receives three-point smoothing and a safe -24...24 dB clamp; the user-facing volume no longer acts at this layer. It is applied once at the virtual output write buffer as 0...1000% (100% is the original level, 1000% is about +20 dB) with clipping.
 
 ## Audio output
 
@@ -126,7 +126,7 @@ On macOS 26, the settings window uses native `glassEffect`, glass button styles,
 
 - Voice PCM exists only in process memory and the selected CoreAudio output path. It is not saved or uploaded.
 - Test tone is generated only in memory.
-- Persistent values include language, gain, audio device UID, custom-mapping state, button bindings, and the macOS peripheral UUID.
+- Persistent values include language, output volume (a percentage; legacy dB gain is migrated by amplitude), audio device UID, custom-mapping state, button bindings, and the macOS peripheral UUID.
 - Runtime logs are written to ~/Library/Logs/RemoteMic/runtime.log. They contain status and errors but not voice content, Bluetooth addresses, or peripheral UUIDs.
 
 ## Build and test

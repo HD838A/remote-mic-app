@@ -432,10 +432,8 @@
 "audio.voice_output.section_title" = "语音设备";
 "audio.output.title" = "输出设备";
 "audio.output.disabled" = "不输出语音";
-"audio.gain.title" = "增益";
-"audio.gain.help" = "0 dB 保持原始音量；数值越大声音越响，也会放大环境噪声。建议先从 6–12 dB 开始。";
 "audio.volume.title" = "音量";
-"audio.volume.help" = "调整无线麦 SayAll 送往语音工具的声音，100% 为原始音量。这里只能调低，需要更大声请提高上面的增益。";
+"audio.volume.help" = "调整无线麦 SayAll 送往语音工具的声音：0% 静音，100% 是原始音量，最高 1000%（约 +20 dB）。调高会放大人声，也会同时放大环境噪声，建议先从 200–400% 开始。";
 "audio.status.title" = "音频状态";
 "audio.action.refresh_devices" = "刷新音频设备";
 "audio.action.learn_virtual_microphones" = "获取 BlackHole";
@@ -973,9 +971,9 @@
 "onboarding.audio.on_demand_detail" = "手机开始语音时会自动连接所选设备；下一步将通过真实声音和文字进行验证。";
 "onboarding.voice_test.title" = "亲自说一句，确认真的能用";
 "onboarding.voice_test.detail" = "点一下下面的输入框，按照上方提示使用语音键说一句话。";
-"onboarding.voice_test.gain.title" = "调整声音增益";
-"onboarding.voice_test.gain.detail" = "增益会放大无线麦 SayAll 送到语音工具的声音。小声或气声不容易识别时，可先试 6–12 dB；过高也会放大环境噪声，调节后再说一句测试。";
-"onboarding.voice_test.gain.help" = "调整会立即用于后续语音。";
+"onboarding.voice_test.volume.title" = "调整音量";
+"onboarding.voice_test.volume.detail" = "音量会放大无线麦 SayAll 送到语音工具的声音。小声或气声不容易识别时，可先试 200–400%；过高也会放大环境噪声，调节后再说一句测试。";
+"onboarding.voice_test.volume.help" = "调整会立即用于后续语音。";
 "onboarding.voice_test.configuration.title" = "测试前在%@里核对这几项";
 "onboarding.voice_test.configuration.detail" = "都勾上才能开始测试。";
 "onboarding.voice_test.configuration.sayall_audio_output" = "音频输出设备";

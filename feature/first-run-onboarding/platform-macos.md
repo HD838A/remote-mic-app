@@ -54,7 +54,7 @@
 
 - 当前 Onboarding 只接受产品明确支持的虚拟音频设备，不允许扬声器或普通输出设备通过。
 - SayAll 选择的是音频输出端；豆包、微信、Typeless 或其他工具必须把同一设备选择为麦克风输入端。
-- 语音测试输入框页提供 0–24 dB 的增益滑块和面向普通用户的说明；当前值直接复用 `AppSettings.gainDB`，调节后立即作用于后续 PCM，建议先从 6–12 dB 尝试小声或气声。增益变化不得触发音频链路重启，也不得改变 Fn 按下/释放语义。
+- 语音测试输入框页提供 0–20 dB 的增益滑块和面向普通用户的说明；它是连接页唯一音量（0–1000%）的 dB 视图，`AppSettings.gainDB` 由 `outputVolumePercent` 折算，调节后立即作用于后续 PCM，建议先从 6–12 dB 尝试小声或气声。增益变化不得触发音频链路重启，也不得改变 Fn 按下/释放语义。
 - 新安装虚拟麦克风显示为 SayAll；旧安装保持 MiRemoteV 2ch。两种形态均保留历史 UID，页面显示系统实际名称，不迁移已保存的选择或重置向导状态。
 - 对稳定识别为 SayAll、MiRemoteV 2ch 或 BlackHole 2ch 的设备，配置和语音开始前必须读取
   input/output scope 主声道的公开 CoreAudio mute/volume 属性；只有明确静音或音量严格低于

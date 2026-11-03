@@ -29,7 +29,7 @@
 | `KeyboardEventSuppressor.swift` | 兼容模式下对同一遥控器原生系统事件的短时抑制 |
 | `KeyboardInjector.swift` | 键盘、媒体键和预置应用启动动作 |
 | `RemoteVoiceFunctionMapper.swift` | RC003 语音键 F5 的 Fn 映射或 Command 模式中和，并在退出时恢复 |
-| `AppSettings.swift` | 音频设备、增益、HID 开关、按键映射和外设标识持久化 |
+| `AppSettings.swift` | 音频设备、输出音量、HID 开关、按键映射和外设标识持久化 |
 
 ## 国际化
 
@@ -57,7 +57,7 @@ ATVV 通道为：
 
 连接后必须完成特征发现、Audio/Control 通知订阅和能力确认，才会进入 ready 状态。初始化超时为 8 秒。当前只接受 16 kHz 编码；设备若只提供或切换到 8 kHz，连接会失败关闭并重新发现。
 
-语音数据按遥控器声明的帧长累积，使用高半字节优先的 IMA/DVI ADPCM 顺序解码。同步包可重置 predictor 和 step index。解码后的 PCM 经过三点平滑与 `-24...24 dB` 安全限幅增益处理；设置界面当前允许用户选择 `0...24 dB`。
+语音数据按遥控器声明的帧长累积，使用高半字节优先的 IMA/DVI ADPCM 顺序解码。同步包可重置 predictor 和 step index。解码后的 PCM 经过三点平滑与 `-24...24 dB` 安全限幅处理；用户音量不再作用在这一层，而是统一在虚拟输出写缓冲出口按 `0...1000%`（`100%` = 原始音量，`1000%` 约 `+20 dB`）缩放并削顶。
 
 ## 音频输出
 
@@ -127,7 +127,7 @@ Fn 层键位清单、修饰键标志位含义和快捷键注入的日志判读�
 
 - 语音 PCM 只存在于进程内存和用户选择的 CoreAudio 输出链路中，不落盘、不上传；
 - 测试音只在内存生成；
-- 持久化内容包括增益、音频设备 UID、自定义映射开关、按键绑定和 macOS 外设 UUID；
+- 持久化内容包括输出音量（百分比，历史 dB 增益按幅度折算迁移）、音频设备 UID、自定义映射开关、按键绑定和 macOS 外设 UUID；
 - 日志位于 `~/Library/Logs/RemoteMic/runtime.log`，每行包含无线麦 SayAll 自身 PID、版本与 Build；单文件达到 10 MiB 后滚动到 `.1`～`.3`，最旧归档只移入 macOS 废纸篓。日志记录状态和错误，不记录语音内容、蓝牙地址、外设 UUID、前台 App 或外部事件来源 PID。
 
 ## 构建与测试

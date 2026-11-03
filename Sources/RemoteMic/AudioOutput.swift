@@ -70,15 +70,14 @@ struct VirtualAudioDeviceAudibilityRepairResult: Equatable {
     }
 }
 
+/// 虚拟声卡自身的音量：由 App 独占并固定写成 100%，用户只通过 `VirtualAudioOutputLevelPolicy` 的
+/// 单一「音量」调节。这样设备音量既不会被子系统的外部改动留在低位，也不会和界面上的滑块打架。
 enum VirtualAudioDeviceLevelPolicy {
-    /// 用户可见的音量以百分比表示，100% 表示不衰减。
-    static let defaultPercent: Double = 100
-    static let percentRange: ClosedRange<Double> = 0...100
+    /// BlackHole 系驱动把 `kAudioDevicePropertyVolumeScalar` 编码成 dB：0 对应 −64 dB，1 对应 0 dB，
+    /// 因此 1 才是「不衰减」。
+    static let fixedVolumeScalar: Float32 = 1
     /// 驱动标量的比较容差，覆盖 dB 与线性幅度来回换算的舍入误差。
     static let volumeTolerance: Float32 = 0.002
-    /// BlackHole 把 `kAudioDevicePropertyVolumeScalar` 编码成 dB：0 对应 −64 dB，1 对应 0 dB。
-    static let minimumDecibel: Double = -64
-    static let maximumDecibel: Double = 0
 
     static func requiresUnmute(mute: Bool?) -> Bool {
         mute == true
@@ -88,31 +87,48 @@ enum VirtualAudioDeviceLevelPolicy {
         guard let volume, volume.isFinite else { return false }
         return abs(volume - target) > volumeTolerance
     }
+}
 
-    /// HAL 属性回调里区分「本进程刚写入的回声」和真正的外部改动。
-    static func isOwnVolumeEcho(volume: Float32, lastApplied: Float32?) -> Bool {
-        guard let lastApplied, volume.isFinite, lastApplied.isFinite else { return false }
-        return abs(volume - lastApplied) <= volumeTolerance
-    }
+/// 用户可见的唯一音量。0% 静音，100% 是原始音量，上限 1000%（约 +20 dB）。
+/// 它作用在 `VirtualAudioOutput` 写缓冲的唯一出口，因此对所有遥控器链路一致生效。
+enum VirtualAudioOutputLevelPolicy {
+    static let percentRange: ClosedRange<Double> = 0...1000
+    static let defaultPercent: Double = 100
+    /// 0% 没有对应的分贝值；对外暴露 dB 时用它兜底，避免 −inf 传到界面。
+    static let floorDecibels: Double = -60
 
     static func clampedPercent(_ percent: Double) -> Double {
         guard percent.isFinite else { return defaultPercent }
         return min(percentRange.upperBound, max(percentRange.lowerBound, percent))
     }
 
-    /// 百分比按线性幅度换算：50% 约等于 −6 dB。再编码成驱动要求的 dB 型标量。
-    static func volumeScalar(percent: Double) -> Float32 {
-        let amplitude = clampedPercent(percent) / 100
-        guard amplitude > 0 else { return 0 }
-        let decibel = min(maximumDecibel, max(minimumDecibel, 20 * log10(amplitude)))
-        return Float32((decibel - minimumDecibel) / (maximumDecibel - minimumDecibel))
+    static func linearScale(percent: Double) -> Float {
+        Float(clampedPercent(percent) / 100)
     }
 
-    static func percent(volumeScalar: Float32) -> Double {
-        guard volumeScalar.isFinite, volumeScalar > 0 else { return 0 }
-        let clampedScalar = min(1, max(0, Double(volumeScalar)))
-        let decibel = clampedScalar * (maximumDecibel - minimumDecibel) + minimumDecibel
-        return clampedPercent(pow(10, decibel / 20) * 100)
+    static func decibels(percent: Double) -> Double {
+        let clamped = clampedPercent(percent)
+        guard clamped > 0 else { return floorDecibels }
+        // 保留两位小数：`percent(decibels:)` 的往返误差不应让「3 dB」变成 3.0000000000000004。
+        return (20 * log10(clamped / 100) * 100).rounded() / 100
+    }
+
+    static func percent(decibels: Double) -> Double {
+        guard decibels.isFinite else { return defaultPercent }
+        // 与 `decibels(percent: 0)` 保持可逆，避免「静音」经 dB 往返变成 0.1%。
+        guard decibels > floorDecibels else { return 0 }
+        return clampedPercent(pow(10, decibels / 20) * 100)
+    }
+
+    static func clampedSample(_ sample: Float, scale: Float) -> Float {
+        let scaled = sample * scale
+        guard scaled.isFinite else { return 0 }
+        return min(1, max(-1, scaled))
+    }
+
+    /// 把解码后的 Int16 PCM 归一化并按用户音量缩放，是写缓冲前的最后一步。
+    static func scaled(_ samples: [Int16], scale: Float) -> [Float] {
+        samples.map { clampedSample(Float($0) / Float(Int16.max), scale: scale) }
     }
 }
 
@@ -245,7 +261,7 @@ enum CoreAudioDeviceCatalog {
         kAudioDevicePropertyScopeInput,
     ]
 
-    /// 输入与输出两个 scope 的音量属性地址。BlackHole 内部共用同一个值，但都要注册监听。
+    /// 输入与输出两个 scope 的音量属性地址。BlackHole 内部共用同一个值，写入时要两个 scope 都覆盖。
     static func volumeAddresses() -> [AudioObjectPropertyAddress] {
         virtualAudioScopes.map {
             AudioObjectPropertyAddress(
@@ -884,15 +900,10 @@ final class VirtualAudioOutput {
     private let engineQueue: DispatchQueue
     private let engineQueueKey = DispatchSpecificKey<Void>()
     private var nextConfigurationOperationID: UInt64 = 0
-    /// 用户设定的虚拟设备音量，供健康检查判断设备音量是否被其他 App 改动。
-    private var configuredVirtualVolumeScalar: Float32 = 1
-    /// 最近一次由本进程写入的音量，用于过滤 HAL 回调里自己的回声。
-    private var lastAppliedVolumeScalar: Float32?
-    private var volumeListenerDeviceID: AudioDeviceID?
-    private var volumeListenerAddresses: [AudioObjectPropertyAddress] = []
-    private var volumeListenerBlock: AudioObjectPropertyListenerBlock?
-    /// 外部（系统音量、音频 MIDI 设置、其他 App）改动设备音量时回报，只用于让界面显示真实值。
-    var onVirtualVolumeObserved: ((Double) -> Void)?
+    /// 用户设定的输出音量：百分比只用于日志，线性系数用于写缓冲。
+    private var outputLevelPercent: Double = VirtualAudioOutputLevelPolicy.defaultPercent
+    private var outputLevelScale: Float = 1
+    private let outputLevelLock = NSLock()
     private let outputStateLock = NSLock()
     private var outputState = OutputState()
     private var cachedOutputState: OutputState {
@@ -908,10 +919,6 @@ final class VirtualAudioOutput {
         outputStateLock.unlock()
     }
 
-    deinit {
-        // HAL 会一直持有这个 block，不在析构时摘掉会留下失效回调。
-        removeVirtualVolumeListener()
-    }
     private let sourceFormat = AVAudioFormat(
         commonFormat: .pcmFormatFloat32,
         sampleRate: 16_000,
@@ -966,7 +973,6 @@ final class VirtualAudioOutput {
 
     func configureAsync(
         deviceUID: String,
-        virtualVolumePercent: Double = VirtualAudioDeviceLevelPolicy.defaultPercent,
         completion: @escaping (Bool) -> Void
     ) {
         playbackLock.lock()
@@ -984,7 +990,6 @@ final class VirtualAudioOutput {
             )
             let configured = self.configureOnEngineQueue(
                 deviceUID: deviceUID,
-                virtualVolumePercent: virtualVolumePercent,
                 operationID: operationID
             )
             self.logger(
@@ -997,105 +1002,32 @@ final class VirtualAudioOutput {
         }
     }
 
-    /// 用户调整音量后立刻写进设备，不需要重建引擎；目标值同时用于健康检查。
-    /// 传入 UID 而不是只依赖已配置设备，是因为空闲释放后引擎已停止，用户仍应能调音量。
-    func applyVirtualVolumePercent(_ percent: Double, deviceUID: String) {
-        let target = VirtualAudioDeviceLevelPolicy.volumeScalar(percent: percent)
-        let roundedPercent = Int(VirtualAudioDeviceLevelPolicy.clampedPercent(percent).rounded())
-        engineQueue.async { [weak self] in
-            guard let self else { return }
-            self.configuredVirtualVolumeScalar = target
-            guard !deviceUID.isEmpty,
-                  let device = CoreAudioDeviceCatalog.outputDevices().first(where: { $0.uid == deviceUID })
-            else {
-                self.logger("AUDIO VOLUME skipped reason=no_selected_device percent=\(roundedPercent)")
-                return
-            }
-            self.installVirtualVolumeListener(device: device)
-            self.lastAppliedVolumeScalar = target
-            let result = CoreAudioDeviceCatalog.applyVirtualAudioDeviceLevel(
-                device,
-                targetVolumeScalar: target
-            )
-            self.logger(
-                "AUDIO VOLUME apply percent=\(roundedPercent) target_scalar=\(target) " +
-                    "device={\(CoreAudioDeviceCatalog.deviceDiagnostic(device))} " +
-                    "adjusted=\(result.volumeAdjustmentAttempted) unmuted=\(result.unmuteAttempted) " +
-                    "write_failed=\(result.writeFailed) result=\(result.isReady ? "ready" : "not_applied")"
-            )
-            self.refreshOutputStateOnEngineQueue()
-            DispatchQueue.main.async { [weak self] in
-                self?.onVirtualVolumeObserved?(VirtualAudioDeviceLevelPolicy.clampedPercent(percent))
-            }
-        }
+    /// 设置用户音量。作用点只有一个：`makeBuffer` 把 Int16 转成浮点后乘这个系数，
+    /// 因此不重建引擎、不碰设备属性，也不影响设备自身的音量修复逻辑。
+    func setOutputLevelPercent(_ percent: Double) {
+        let clamped = VirtualAudioOutputLevelPolicy.clampedPercent(percent)
+        outputLevelLock.lock()
+        outputLevelPercent = clamped
+        outputLevelScale = VirtualAudioOutputLevelPolicy.linearScale(percent: clamped)
+        outputLevelLock.unlock()
     }
 
-    /// 外部改动设备音量时回调，只更新界面显示，不覆盖用户设定。
-    private func installVirtualVolumeListener(device: AudioDeviceInfo) {
-        guard volumeListenerDeviceID != device.id else { return }
-        removeVirtualVolumeListener()
-        let block: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
-            self?.readObservedVirtualVolume(device: device)
-        }
-        let addresses = CoreAudioDeviceCatalog.volumeAddresses()
-        let status = addresses.withUnsafeBufferPointer { buffer in
-            AudioObjectAddPropertyListenerBlock(
-                device.id,
-                buffer.baseAddress!,
-                engineQueue,
-                block
-            )
-        }
-        guard status == noErr else {
-            logger("AUDIO VOLUME listener failed device_id=\(device.id) status=\(status)")
-            return
-        }
-        volumeListenerDeviceID = device.id
-        volumeListenerAddresses = addresses
-        volumeListenerBlock = block
+    private var outputLevelPercentSnapshot: Double {
+        outputLevelLock.lock()
+        defer { outputLevelLock.unlock() }
+        return outputLevelPercent
     }
 
-    private func removeVirtualVolumeListener() {
-        guard let deviceID = volumeListenerDeviceID,
-              let block = volumeListenerBlock,
-              !volumeListenerAddresses.isEmpty
-        else { return }
-        _ = volumeListenerAddresses.withUnsafeBufferPointer { buffer in
-            AudioObjectRemovePropertyListenerBlock(
-                deviceID,
-                buffer.baseAddress!,
-                engineQueue,
-                block
-            )
-        }
-        volumeListenerDeviceID = nil
-        volumeListenerAddresses = []
-        volumeListenerBlock = nil
+    private var currentOutputLevelScale: Float {
+        outputLevelLock.lock()
+        defer { outputLevelLock.unlock() }
+        return outputLevelScale
     }
 
-    private func readObservedVirtualVolume(device: AudioDeviceInfo) {
-        let snapshot = CoreAudioDeviceCatalog.virtualAudioAudibilitySnapshot(for: device)
-        guard let scalar = snapshot.output.volume ?? snapshot.input.volume, scalar.isFinite else { return }
-        if VirtualAudioDeviceLevelPolicy.isOwnVolumeEcho(
-            volume: scalar,
-            lastApplied: lastAppliedVolumeScalar
-        ) {
-            return
-        }
-        let percent = VirtualAudioDeviceLevelPolicy.percent(volumeScalar: scalar)
-        logger(
-            "AUDIO VOLUME external_change device_id=\(device.id) scalar=\(scalar) " +
-                "percent=\(Int(percent.rounded()))"
-        )
-        DispatchQueue.main.async { [weak self] in
-            self?.onVirtualVolumeObserved?(percent)
-        }
-    }
 
     @discardableResult
     private func configureOnEngineQueue(
         deviceUID: String,
-        virtualVolumePercent: Double,
         operationID: UInt64
     ) -> Bool {
         dispatchPrecondition(condition: .onQueue(engineQueue))
@@ -1138,12 +1070,8 @@ final class VirtualAudioOutput {
         )
 
         logStage("repair_audibility")
-        let targetVolumeScalar = VirtualAudioDeviceLevelPolicy.volumeScalar(
-            percent: virtualVolumePercent
-        )
-        configuredVirtualVolumeScalar = targetVolumeScalar
-        lastAppliedVolumeScalar = targetVolumeScalar
-        installVirtualVolumeListener(device: device)
+        // 设备音量固定写成 100%：用户音量由 App 侧出口统一承担，这里只负责保证不被外部留在低位。
+        let targetVolumeScalar = VirtualAudioDeviceLevelPolicy.fixedVolumeScalar
         let audibilityRepair = CoreAudioDeviceCatalog.applyVirtualAudioDeviceLevel(
             device,
             targetVolumeScalar: targetVolumeScalar
@@ -1155,7 +1083,7 @@ final class VirtualAudioOutput {
                     "unmute_attempted=\(audibilityRepair.unmuteAttempted) " +
                     "volume_adjustment_attempted=\(audibilityRepair.volumeAdjustmentAttempted) " +
                     "write_failed=\(audibilityRepair.writeFailed) " +
-                    "user_volume_percent=\(Int(virtualVolumePercent.rounded())) " +
+                    "user_volume_percent=\(Int(outputLevelPercentSnapshot.rounded())) " +
                     "before={\(audibilityRepair.before.diagnostic(targetVolume: targetVolumeScalar))} " +
                     "after={\(audibilityRepair.after.diagnostic(targetVolume: targetVolumeScalar))} " +
                     "result=\(audibilityRepair.isReady ? "ready" : "not_applied")"
@@ -1302,8 +1230,10 @@ final class VirtualAudioOutput {
               let channel = buffer.floatChannelData?[0]
         else { return nil }
 
-        for index in samples.indices {
-            channel[index] = Float(samples[index]) / Float(Int16.max)
+        // 唯一的用户音量作用点：所有遥控器链路都汇到这里；超出 ±1 直接限幅，避免削波溢出。
+        let scaled = VirtualAudioOutputLevelPolicy.scaled(samples, scale: currentOutputLevelScale)
+        for index in scaled.indices {
+            channel[index] = scaled[index]
         }
         buffer.frameLength = AVAudioFrameCount(samples.count)
         return buffer
@@ -1914,7 +1844,9 @@ final class VirtualAudioOutput {
             engineRunning: running,
             playerPlaying: playing,
             boundToSelectedDevice: selected?.id == actual?.id
-        ) && !audibility.requiresAudibilityRepair(targetVolume: configuredVirtualVolumeScalar)
+        ) && !audibility.requiresAudibilityRepair(
+            targetVolume: VirtualAudioDeviceLevelPolicy.fixedVolumeScalar
+        )
         updateOutputState {
             $0.actualDevice = actual
             $0.engineRunning = running
