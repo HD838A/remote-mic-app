@@ -107,6 +107,29 @@
 测试进程禁用共享运行日志；本轮以 AX 焦点断言核验结果。
 独立运行包的日志验收仍需按上述步骤执行。
 
+## 用例 0D：DimAgent 内置记录（2026-11-03 候选）
+
+DimAgent 的输入框来自真机学习记录，已内化为预置：记录随 App 发布，用户不学习也能用。
+预置记录只是首选；记录对不上窗口结构时仍回退到 composer 启发式扫描。
+
+安装 DimAgent（`/Applications/DimAgent.app`，`com.dimcode.app`），并确认辅助功能权限已授予无线麦 SayAll。
+
+1. 打开普通按键的动作编辑区，在“打开具体 APP”里直接选择“打开 DimAgent”，不要先添加自定义 APP，也不要学习输入框。
+2. 分别从后台、前台侧边栏和冷启动触发该动作。
+3. 每次确认光标进入底部对话输入区，并且没有落到搜索框或设置项。
+4. 把窗口拉到最小支持尺寸和最大化，各重复一次。
+5. 打开搜索框后再触发一次，确认焦点没有误入搜索框。
+6. 如果本机还留着 DimAgent 的自定义 APP 档案，在「APP 适配」页确认它的翻页状态显示「内置预设」而不是「需学习」，并确认「恢复预置」可用；没有该档案时这一步跳过，预置本身不需要在 App 适配页出现。
+
+预期：无需任何学习步骤即可聚焦输入框；`APP FOCUS` 日志显示 `method=preset_recorded`（记录命中）或 `method=accessibility`（启发式兜底）。
+两种都表示成功，不读取输入文字，也不读取 DimAgent 的私有文件。
+
+失败：需要手动添加或学习、焦点停在搜索框、`APP FOCUS failed ... reason=composer_not_found`，或按住按键反复启动 App。
+
+自动化覆盖：预置应用清单、内置记录的几何匹配（含同窗口干扰项不得抢走记录）、无学习记录时 composer 候选排序，以及滚动预置策略。
+真机用例可用 `REMOTEMIC_LIVE_DIMAGENT_TEST=1 swift test --disable-keychain --skip-build --filter liveDimAgentFocusUsesTheBuiltInRecordWithoutLearning`（默认不跑，会切换前台 App）。
+2026-11-03 候选状态：本机测试进程未获辅助功能权限（`AXError -25212`），真机聚焦与翻页结果待按上面步骤在授予权限的 App 内验收。
+
 ## 用例 1：选择并打开任意 APP
 
 1. 在测试按键的“双击”动作中选择“打开自定义 APP”。

@@ -236,6 +236,7 @@
 "action.open_chrome" = "打开 Chrome";
 "action.open_safari" = "打开 Safari";
 "action.open_zed" = "打开 Zed";
+"action.open_dim_agent" = "打开 DimAgent";
 "button_mapping.action_filter.all" = "全部";
 "button_mapping.action_group.basic_keys" = "基础按键";
 "button_mapping.action_group.system_and_media" = "系统与媒体";

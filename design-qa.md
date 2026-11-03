@@ -124,7 +124,7 @@ Onboarding 截图按 [`Testing/FirstRunOnboarding.md`](Testing/FirstRunOnboardin
 - 已在同一视觉对比中检查参考与实际页面：页面信息层级保持一致，遥控器固定尺寸，新建前后不会缩放；名称标签和输入框同行；步骤编号与动作标题字号、字重一致；App 图标、名称和 Bundle ID 位于同一信息行。
 - “测试动作”与可用状态的“保存修改”使用主要按钮样式；失焦或禁用时按照 macOS 系统规则降低强调，不额外伪造蓝色。
 - 遥控器触发方式文字会根据按键位置做纵向动画：左键位于右上区域，TV 键位于右下区域；点击页面热点和真实 HID 按键都更新当前按键。
-- 已安装 App 网格保持收起式展示；当前机器实际识别无线麦、Codex、Claude、cmux、飞书、微信、天气、豆包、OpenCode、剪映、Cursor、Xcode、网易云音乐、Chrome、Safari 和 Zed。WorkBuddy 按 `com.workbuddy.workbuddy` 过滤，需在安装该 App 的用户机器复验。
+- 已安装 App 网格保持收起式展示；当前机器实际识别无线麦、Codex、Claude、cmux、飞书、微信、天气、豆包、OpenCode、剪映、Cursor、Xcode、网易云音乐、Chrome、Safari、Zed 和 DimAgent。WorkBuddy 按 `com.workbuddy.workbuddy` 过滤，需在安装该 App 的用户机器复验。
 - 实测名称超过 20 字符会截断，回车保存后焦点退出输入框；列表删除辅助操作可删除临时组合动作并显示成功状态。
 - final result: passed。真实遥控器触发提示和 WorkBuddy 显示仍列入用户机器人工验收，不以当前机器截图替代。
 
