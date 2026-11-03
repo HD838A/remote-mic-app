@@ -2,13 +2,13 @@
 
 ## 适用范围
 
-- 分支：`codex/fix-virtual-audio-audibility-20260920`；2026-11-03 起音量改由设置页「音量」滑块决定
+- 分支：`codex/fix-virtual-audio-audibility-20260920`；2026-11-03 起音量改由连接页「音量」滑块决定
 - 跟踪 Issue：[#475](https://github.com/HD838A/remote-mic-app/issues/475)
 - 设备：`MiRemoteV 2ch`；原生 `BlackHole 2ch` 需要单独完成同类验证
 - 路径：App 启动配置、测试音、实体遥控器、iPhone、Apple Watch、网页和其他复用
   `VirtualAudioOutput` 的语音入口
 
-> 2026-11-03 起不再使用「低于 `0.2` 才恢复 `1.0`」的固定阈值：设备音量按设置页保存的
+> 2026-11-03 起不再使用「低于 `0.2` 才恢复 `1.0`」的固定阈值：设备音量按连接页保存的
 > 百分比写入，默认 100%（不衰减）。下文用例已按新语义更新。
 
 ## 测试前准备
@@ -65,7 +65,7 @@ SAYALL_TEST_MUTATE_VIRTUAL_AUDIO_LEVEL=1 swift test --disable-keychain \
 
 ## 用例二：按用户设定的音量写入
 
-1. 在设置页「音频」面板把「音量」调到 `100%`，把设备 input/output volume 手工改成 `0.886`
+1. 在连接页「语音设备」面板把「音量」调到 `100%`，把设备 input/output volume 手工改成 `0.886`
    （约 `−7.3 dB`），重新配置设备。
 2. 把「音量」调到 `50%`（约 `−6 dB`），松手后读回属性。
 3. 断开后重新连接，再读回属性。
@@ -94,7 +94,7 @@ SAYALL_TEST_MUTATE_VIRTUAL_AUDIO_LEVEL=1 swift test --disable-keychain \
 ## 用例五：启动后再次静音或被外部改动
 
 1. 启动 App 并确认虚拟声卡 Ready。
-2. 在空闲状态把设备改为 `mute=1`，或把 volume 改成与设置页目标明显不同的值（例如 `0.31`）。
+2. 在空闲状态把设备改为 `mute=1`，或把 volume 改成与连接页目标明显不同的值（例如 `0.31`）。
 3. 分别从实体遥控器、iPhone、Apple Watch 和网页开始下一次语音。
 
 预期：每个入口现有的实时音频健康检查发现静音或音量偏离目标，重新配置并写回目标值后才接受语音；
@@ -102,9 +102,9 @@ SAYALL_TEST_MUTATE_VIRTUAL_AUDIO_LEVEL=1 swift test --disable-keychain \
 
 ## 用例六：外部改动只更新显示
 
-1. 设置页「音量」保持 `100%`，确认设备为 `1.0`。
+1. 连接页「音量」保持 `100%`，确认设备为 `1.0`。
 2. 在「音频 MIDI 设置」或任何其他 App 把 MiRemoteV 主音量改成 `0.31`（约 6%）。
-3. 观察设置页「音量」滑块与日志，然后重新连接音频。
+3. 观察连接页「音量」滑块与日志，然后重新连接音频。
 
 预期：滑块显示约 `6%`，日志出现 `AUDIO VOLUME external_change`；保存的目标值仍是 `100%`，
 重新连接后设备写回 `1.0`，滑块回到 `100%`。外部改动不得覆盖用户保存的目标，避免把

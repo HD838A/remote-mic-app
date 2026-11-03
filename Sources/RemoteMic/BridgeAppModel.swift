@@ -2831,7 +2831,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             completion: completion)
     }
 
-    /// 设置页的音量滑块：拖动时只更新用户意图，松手（commit）才写设备。
+    /// 连接页的音量滑块：拖动时只更新用户意图，松手（commit）才写设备。
     func updateVirtualAudioVolumePercent(_ percent: Double, commit: Bool) {
         let clamped = VirtualAudioDeviceLevelPolicy.clampedPercent(percent)
         settings.virtualAudioVolumePercent = clamped
