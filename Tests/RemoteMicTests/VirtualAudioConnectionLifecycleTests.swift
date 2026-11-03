@@ -912,6 +912,44 @@ struct VirtualAudioConnectionLifecycleTests {
         ))
     }
 
+    @Test func idleBridgeTimeoutReleasesAudioWithoutActiveSource() {
+        #expect(!VirtualAudioConnectionLifecyclePolicy.shouldBeActive(
+            readyBluetoothBridgeCount: 1,
+            bluetoothVoiceActive: false,
+            mobileVoiceActive: false,
+            testToneActive: false,
+            systemSuspended: false,
+            idleBridgeReleaseDue: true
+        ))
+    }
+
+    @Test func idleBridgeTimeoutNeverInterruptsRunningAudioSource() {
+        #expect(VirtualAudioConnectionLifecyclePolicy.shouldBeActive(
+            readyBluetoothBridgeCount: 1,
+            bluetoothVoiceActive: true,
+            mobileVoiceActive: false,
+            testToneActive: false,
+            systemSuspended: false,
+            idleBridgeReleaseDue: true
+        ))
+        #expect(VirtualAudioConnectionLifecyclePolicy.shouldBeActive(
+            readyBluetoothBridgeCount: 1,
+            bluetoothVoiceActive: false,
+            mobileVoiceActive: true,
+            testToneActive: false,
+            systemSuspended: false,
+            idleBridgeReleaseDue: true
+        ))
+        #expect(VirtualAudioConnectionLifecyclePolicy.shouldBeActive(
+            readyBluetoothBridgeCount: 1,
+            bluetoothVoiceActive: false,
+            mobileVoiceActive: false,
+            testToneActive: true,
+            systemSuspended: false,
+            idleBridgeReleaseDue: true
+        ))
+    }
+
     @Test func connectedIdleBridgeReleasesAudioWhileSystemIsSuspended() {
         #expect(!VirtualAudioConnectionLifecyclePolicy.shouldBeActive(
             readyBluetoothBridgeCount: 1,

@@ -74,3 +74,12 @@
 - `./script/build_and_run.sh --verify`：Release 构建、App 组装和本地签名校验通过；仅出现修改前已存在的 macOS 14 `onChange` 弃用警告。
 - `git diff --check`：通过。
 - 尚未在反馈用户的 Mac 或等价真实环境执行真实 MiRemoteV 2ch、真实遥控器、自动显示器休眠、自动系统休眠及 `pmset -g assertions` 验收，因此当前只能标记为候选修复，不能确认 CoreAudio 断言已在真机消失。
+
+## 2026-11-03 补充：用户在场但长时间无语音时仍不释放
+
+- 现场：`/Applications/SayAll.app` v2.0.0 build 282，空闲 34 分钟内 `pmset -g assertions` 中 coreaudiod 为 App 持有的 `com.apple.audio.MiRemoteV2ch_UID.context.preventuseridlesleep` 持续存在且从未释放，期间没有任何语音流。
+- 代码定位：`VirtualAudioConnectionLifecyclePolicy.shouldBeActive` 把“存在 ready 遥控器”单独当作保持活动的理由，语音结束后的 `releaseVirtualAudioOutputIfUnused` 因此直接返回。上一版修复只覆盖屏幕休眠、会话锁定、系统将睡三类事件，没有“人在机器前、遥控器连着、没有语音”这一档。
+- 补充风险：同一设备还会产生 `PreventUserIdleDisplaySleep`（本机 `pmset -g log` 存在持续 07:47:03 的条目）。如果它确实阻止显示器空闲休眠，`screensDidSleep` 就不会到达，既有释放路径会自我锁死。
+- 修复：引擎就绪且无活跃音源时启动 600 秒一次性计时器，超时走与休眠释放完全相同的 `endSessionAfterDraining` + `stop()` 路径；活动判定新增 `idleBridgeReleaseDue` 开关，只解除“遥控器 ready”这一条理由，语音、测试音、Mac 麦克风与系统挂起仍保持活动。计时器在配置成功、以及释放被“仍需活动”挡回时重新布防，App 停止时取消。
+- 验证：`VirtualAudioConnectionLifecycleTests` 43 项通过（新增 2 项）；回退策略行后新增用例变红，恢复后复绿。
+- 未验证：真实遥控器下空闲 10 分钟后 `pmset -g assertions` 是否不再出现 SayAll 条目、超时后首次按键的重建耗时与首字延迟，仍需真机确认。

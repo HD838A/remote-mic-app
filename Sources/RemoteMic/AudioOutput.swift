@@ -657,12 +657,13 @@ enum VirtualAudioConnectionLifecyclePolicy {
         bluetoothVoiceActive: Bool,
         mobileVoiceActive: Bool,
         testToneActive: Bool,
-        systemSuspended: Bool
+        systemSuspended: Bool,
+        idleBridgeReleaseDue: Bool = false
     ) -> Bool {
         if bluetoothVoiceActive || mobileVoiceActive || testToneActive {
             return true
         }
-        return readyBluetoothBridgeCount > 0 && !systemSuspended
+        return readyBluetoothBridgeCount > 0 && !systemSuspended && !idleBridgeReleaseDue
     }
 
     static func shouldScheduleRelease(
