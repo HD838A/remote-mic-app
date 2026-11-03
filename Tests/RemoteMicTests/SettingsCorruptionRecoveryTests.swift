@@ -179,7 +179,9 @@ struct SettingsCorruptionRecoveryTests {
         #expect(settings.buttonBindings == AppSettings.defaultBindings)
         #expect(settings.customApplicationProfiles.isEmpty)
         #expect(settings.remoteDeviceProfiles.count == 1)
-        #expect(settings.gainDB == 10)
+        // 用户音量默认 100%（原始音量），dB 视图对应 0 dB。
+        #expect(settings.outputVolumePercent == 100)
+        #expect(settings.gainDB == 0)
     }
 
     @Test func validStoredSettingsReloadWithoutBeingReportedAsCorrupt() throws {

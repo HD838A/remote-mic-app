@@ -2052,36 +2052,28 @@ struct OnboardingView: View {
     private var onboardingGainCard: some View {
         VStack(alignment: .leading, spacing: 5) {
             Label {
-                Text(verbatim: localization.text("onboarding.voice_test.gain.title"))
+                Text(verbatim: localization.text("onboarding.voice_test.volume.title"))
                     .font(.system(size: 13, weight: .semibold))
             } icon: {
                 Image(systemName: "waveform.path.ecg")
                     .foregroundStyle(Color.accentColor)
             }
 
-            Text(verbatim: localization.text("onboarding.voice_test.gain.detail"))
+            Text(verbatim: localization.text("onboarding.voice_test.volume.detail"))
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
-            HStack(spacing: 12) {
-                Text(verbatim: localization.text("audio.gain.title"))
-                    .font(.system(size: 12, weight: .medium))
-                    .frame(width: 44, alignment: .leading)
-                Slider(
-                    value: Binding(
-                        get: { settings.gainDB },
-                        set: { settings.gainDB = min(24, max(0, $0)) }
-                    ),
-                    in: 0...24,
-                    step: 1,
-                    onEditingChanged: logOnboardingGainEditing
-                )
-                .accessibilityIdentifier("onboarding.voice-test.gain")
-                Text("\(Int(settings.gainDB)) dB")
-                    .font(.system(.body, design: .monospaced))
-                    .frame(width: 54, alignment: .trailing)
-            }
+            // 与连接页「语音设备」面板是同一个控件、同一个值，不在这里另做一套增益。
+            OutputVolumeSlider(
+                settings: settings,
+                model: model,
+                labelWidth: 44,
+                spacing: 12,
+                labelFont: .system(size: 12, weight: .medium),
+                accessibilityIdentifier: "onboarding.voice-test.gain",
+                onEditingChanged: logOnboardingVolumeEditing
+            )
 
         }
         .padding(8)
@@ -2092,15 +2084,15 @@ struct OnboardingView: View {
                 .stroke(Color.accentColor.opacity(0.22), lineWidth: 1)
         }
         .onAppear {
-            interactionProbe?.registerAction("voice-test.gain.set-12") {
-                settings.gainDB = 12
+            interactionProbe?.registerAction("voice-test.volume.set-400") {
+                model.updateOutputVolumePercent(400)
             }
         }
     }
 
-    private func logOnboardingGainEditing(_ isEditing: Bool) {
+    private func logOnboardingVolumeEditing(_ isEditing: Bool) {
         AppLogger.shared.write(
-            "ONBOARDING GAIN editing=\(isEditing) value_db=\(Int(settings.gainDB))"
+            "ONBOARDING VOLUME editing=\(isEditing) value_percent=\(Int(settings.outputVolumePercent.rounded()))"
         )
     }
 

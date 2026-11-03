@@ -118,7 +118,6 @@ final class XiaomiBluetoothBridge: NSObject {
         sampleRate: 16_000
     )
 
-    private let settings: AppSettings
     private weak var delegate: XiaomiBluetoothBridgeDelegate?
     private let targetIdentifier: UUID?
     private let excludedIdentifiers: () -> Set<UUID>
@@ -231,12 +230,10 @@ final class XiaomiBluetoothBridge: NSObject {
     }
 
     init(
-        settings: AppSettings,
         delegate: XiaomiBluetoothBridgeDelegate,
         targetIdentifier: UUID? = nil,
         excludedIdentifiers: @escaping () -> Set<UUID> = { [] }
     ) {
-        self.settings = settings
         self.delegate = delegate
         self.targetIdentifier = targetIdentifier
         self.excludedIdentifiers = excludedIdentifiers
@@ -1127,7 +1124,9 @@ final class XiaomiBluetoothBridge: NSObject {
                 self.pendingSync = nil
             }
             let decoded = decoder.decode(frame)
-            let samples = PCMPostprocessor.process(decoded, gainDB: settings.gainDB)
+            // 用户音量统一在 VirtualAudioOutput 写缓冲时应用，这里保留平滑与安全限幅即可，
+            // 否则蓝牙链路会被放大两次，音量含义也会和其它遥控器不一致。
+            let samples = PCMPostprocessor.process(decoded, gainDB: 0)
             audioDiagnostics?.decoded(bytes: frame.count, samples: samples.count)
             delegate?.bluetoothBridge(self, didDecode: samples)
         }

@@ -37,6 +37,7 @@ private struct OnboardingVoiceConfigurationSnapshot: Codable {
 
 private struct PersonalizedConfiguration: Codable {
     let formatVersion: Int
+    /// 旧版以 dB 表示的增益，只用于读取历史配置；写出时由 `outputVolumePercent` 折算。
     let gainDB: Double
     let selectedAudioDeviceUID: String
     let macMicrophoneInputUID: String?
@@ -62,6 +63,8 @@ private struct PersonalizedConfiguration: Codable {
     let voiceFnTapModeEnabled: Bool?
     let voiceKeyMode: VoiceKeyMode?
     let continuousRecordingPowerBindingBackup: ConfiguredButtonAction?
+    /// 唯一的用户音量（百分比）。早期配置没有这个字段，导入时回退到 `gainDB`。
+    let outputVolumePercent: Double?
 }
 
 enum UsageStatisticsPeriod: String, CaseIterable, Identifiable {
@@ -304,7 +307,9 @@ final class AppSettings: ObservableObject {
     static let currentOnboardingVersion = 1
 
     private enum Keys {
+        /// 历史键：只读取用于迁移，不再写入。
         static let gainDB = "gainDB"
+        static let outputVolumePercent = "outputVolumePercent"
         static let selectedAudioDeviceUID = "selectedAudioDeviceUID"
         static let lastUserSelectedInputDeviceUID = "lastUserSelectedInputDeviceUID"
         static let lastKnownAudioDeviceUID = "lastKnownAudioDeviceUID"
@@ -375,8 +380,25 @@ final class AppSettings: ObservableObject {
         longestVoice: voiceSessionRanking.map(\.duration).max() ?? 0)
     var configurationDefaults: UserDefaults { defaults }
 
-    @Published var gainDB: Double {
-        didSet { defaults.set(gainDB, forKey: Keys.gainDB) }
+    /// 用户唯一的音量：0% 静音，100% 原始音量，1000% 约等于 +20 dB。
+    @Published var outputVolumePercent: Double {
+        didSet {
+            // 不能在 didSet 里回写自身：@Published 的 setter 会再次触发 didSet 并递归。
+            defaults.set(
+                VirtualAudioOutputLevelPolicy.clampedPercent(outputVolumePercent),
+                forKey: Keys.outputVolumePercent
+            )
+        }
+    }
+
+    /// 旧版 dB 增益视图，只供 Onboarding 与配置导入导出使用；内部唯一真值是百分比。
+    var gainDB: Double {
+        get { VirtualAudioOutputLevelPolicy.decibels(percent: outputVolumePercent) }
+        set {
+            outputVolumePercent = VirtualAudioOutputLevelPolicy.clampedPercent(
+                VirtualAudioOutputLevelPolicy.percent(decibels: newValue)
+            )
+        }
     }
 
     @Published var selectedAudioDeviceUID: String {
@@ -896,9 +918,7 @@ final class AppSettings: ObservableObject {
         Self.restoreInterruptedOnboardingTrial(in: defaults)
         remoteDeviceProfiles = []
         selectedRemoteProfileID = nil
-        gainDB = defaults.object(forKey: Keys.gainDB) == nil
-            ? 10.0
-            : defaults.double(forKey: Keys.gainDB)
+        outputVolumePercent = Self.initialOutputVolumePercent(defaults: defaults)
         let persistedAudioDeviceUID = defaults.string(forKey: Keys.selectedAudioDeviceUID) ?? ""
         macMicrophoneInputUID = defaults.string(forKey: "macMicrophoneInputUID") ?? ""
         macMicrophoneShortcut = Self.decodeSetting(CustomKeyboardShortcut.self,
@@ -2428,9 +2448,24 @@ final class AppSettings: ObservableObject {
         return completedUpdate
     }
 
+    /// 首次启动时确定音量：新装用户按 100%（原始音量），老用户按旧 dB 增益折算，
+    /// 例如过去的 10 dB 会迁移成 316%，听感与升级前一致。
+    private static func initialOutputVolumePercent(defaults: UserDefaults) -> Double {
+        if defaults.object(forKey: Keys.outputVolumePercent) != nil {
+            return VirtualAudioOutputLevelPolicy.clampedPercent(
+                defaults.double(forKey: Keys.outputVolumePercent)
+            )
+        }
+        guard defaults.object(forKey: Keys.gainDB) != nil else {
+            return VirtualAudioOutputLevelPolicy.defaultPercent
+        }
+        return VirtualAudioOutputLevelPolicy.percent(decibels: defaults.double(forKey: Keys.gainDB))
+    }
+
     private var hasPersistedAppConfiguration: Bool {
         [
             Keys.gainDB,
+            Keys.outputVolumePercent,
             Keys.selectedAudioDeviceUID,
             Keys.lastKnownAudioDeviceUID,
             Keys.customMappingEnabled,
@@ -2499,7 +2534,8 @@ final class AppSettings: ObservableObject {
             experimentalContinuousRecordingEnabled: experimentalContinuousRecordingEnabled,
             voiceFnTapModeEnabled: voiceFnTapModeEnabled,
             voiceKeyMode: voiceKeyMode,
-            continuousRecordingPowerBindingBackup: continuousRecordingPowerBindingBackup
+            continuousRecordingPowerBindingBackup: continuousRecordingPowerBindingBackup,
+            outputVolumePercent: outputVolumePercent
         )
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -2693,7 +2729,12 @@ final class AppSettings: ObservableObject {
             selectedRemoteProfileID = preferences.selectedRemoteProfileID
             isLoadingRemoteProfile = false
         }
-        if gainDB != c.gainDB { gainDB = c.gainDB }
+        let importedVolumePercent = VirtualAudioOutputLevelPolicy.clampedPercent(
+            c.outputVolumePercent ?? VirtualAudioOutputLevelPolicy.percent(decibels: c.gainDB)
+        )
+        if outputVolumePercent != importedVolumePercent {
+            outputVolumePercent = importedVolumePercent
+        }
         if selectedAudioDeviceUID != c.selectedAudioDeviceUID { selectedAudioDeviceUID = c.selectedAudioDeviceUID }
         macMicrophoneInputUID = c.macMicrophoneInputUID ?? ""
         macMicrophoneShortcut = c.macMicrophoneShortcut.flatMap { $0.isMacMicrophoneCombination ? Self.validatedShortcut($0) : nil }
@@ -2878,7 +2919,10 @@ final class AppSettings: ObservableObject {
             importedRecordingBackup = nil
         }
 
-        gainDB = configuration.gainDB
+        outputVolumePercent = VirtualAudioOutputLevelPolicy.clampedPercent(
+            configuration.outputVolumePercent
+                ?? VirtualAudioOutputLevelPolicy.percent(decibels: configuration.gainDB)
+        )
         selectedAudioDeviceUID = importedAudioDeviceUID
         macMicrophoneInputUID = configuration.macMicrophoneInputUID.flatMap {
             $0.count <= Self.maximumImportedIdentifierLength ? $0 : nil
@@ -3094,8 +3138,18 @@ final class AppSettings: ObservableObject {
         guard [1, 2].contains(configuration.formatVersion) else {
             throw AppConfigurationError.unsupportedVersion
         }
-        guard configuration.gainDB.isFinite, (0...24).contains(configuration.gainDB) else {
+        // 兼容旧字段：静音时 `gainDB` 会落到下限，因此下界放宽到 `floorDecibels`。
+        guard configuration.gainDB.isFinite,
+              (VirtualAudioOutputLevelPolicy.floorDecibels...24).contains(configuration.gainDB)
+        else {
             throw AppConfigurationError.invalidValues
+        }
+        if let volumePercent = configuration.outputVolumePercent {
+            guard volumePercent.isFinite,
+                  VirtualAudioOutputLevelPolicy.percentRange.contains(volumePercent)
+            else {
+                throw AppConfigurationError.invalidValues
+            }
         }
         return configuration
     }

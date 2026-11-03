@@ -2825,6 +2825,15 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             completion: completion)
     }
 
+    /// 连接页唯一的音量滑块：立即作用到送往语音工具的声音，不需要重建音频链路。
+    func updateOutputVolumePercent(_ percent: Double) {
+        let clamped = VirtualAudioOutputLevelPolicy.clampedPercent(percent)
+        if settings.outputVolumePercent != clamped {
+            settings.outputVolumePercent = clamped
+        }
+        audioOutput.setOutputLevelPercent(clamped)
+    }
+
     func applyAudioSettings(
         reason: String = "settings_change",
         completion: @escaping (Bool) -> Void = { _ in }
@@ -2925,6 +2934,8 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         let generation = audioConfigurationGeneration
         let deviceUID = settings.selectedAudioDeviceUID
         AppLogger.shared.write("AUDIO REBIND begin reason=\(reason) state={\(audioOutput.diagnosticState())}")
+        // 音量作用在写缓冲的出口，重启链路不会丢；这里再同步一次，避免外部重建后回到 100%。
+        audioOutput.setOutputLevelPercent(settings.outputVolumePercent)
         cancelTestToneIfNeeded(
             statusMessage: LocalizedMessage("audio.test_tone.cancelled_device_changed"),
             logReason: "device_reconfigure"
@@ -4239,7 +4250,6 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         let identifiers = Set(settings.remoteDeviceProfiles.compactMap(\.bluetoothIdentifier))
         for identifier in identifiers where bluetoothBridges[identifier] == nil {
             let bridge = XiaomiBluetoothBridge(
-                settings: settings,
                 delegate: self,
                 targetIdentifier: identifier
             )
@@ -4256,7 +4266,6 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     private func startBluetoothDiscoveryIfNeeded() {
         guard started, discoveryBluetoothBridge == nil else { return }
         let bridge = XiaomiBluetoothBridge(
-            settings: settings,
             delegate: self,
             excludedIdentifiers: { [weak self] in
                 guard let self else { return [] }

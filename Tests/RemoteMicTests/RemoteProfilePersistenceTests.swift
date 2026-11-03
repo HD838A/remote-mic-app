@@ -193,7 +193,7 @@ struct RemoteProfilePersistenceTests {
         settings: AppSettings,
         delegate: BridgeAppModel
     ) -> XiaomiBluetoothBridge {
-        XiaomiBluetoothBridge(settings: settings, delegate: delegate, targetIdentifier: identifier)
+        XiaomiBluetoothBridge(delegate: delegate, targetIdentifier: identifier)
     }
 
     /// The regression test for the reported defect.

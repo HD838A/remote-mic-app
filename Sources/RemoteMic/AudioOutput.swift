@@ -14,9 +14,9 @@ struct VirtualAudioDeviceLevelObservation: Equatable {
     var mute: Bool?
     var volume: Float32?
 
-    var requiresAudibilityRepair: Bool {
+    func requiresAudibilityRepair(targetVolume: Float32) -> Bool {
         VirtualAudioDeviceLevelPolicy.requiresUnmute(mute: mute) ||
-            VirtualAudioDeviceLevelPolicy.requiresVolumeRestore(volume: volume)
+            VirtualAudioDeviceLevelPolicy.requiresVolumeAdjustment(volume: volume, target: targetVolume)
     }
 }
 
@@ -24,22 +24,23 @@ struct VirtualAudioDeviceAudibilitySnapshot: Equatable {
     var output = VirtualAudioDeviceLevelObservation()
     var input = VirtualAudioDeviceLevelObservation()
 
-    var requiresAudibilityRepair: Bool {
-        output.requiresAudibilityRepair || input.requiresAudibilityRepair
+    func requiresAudibilityRepair(targetVolume: Float32) -> Bool {
+        output.requiresAudibilityRepair(targetVolume: targetVolume) ||
+            input.requiresAudibilityRepair(targetVolume: targetVolume)
     }
 
     var hasObservation: Bool {
         output.mute != nil || output.volume != nil || input.mute != nil || input.volume != nil
     }
 
-    var diagnostic: String {
+    func diagnostic(targetVolume: Float32) -> String {
         "output_mute=\(Self.optionalBoolean(output.mute)) " +
             "output_volume_scalar=\(Self.optionalScalar(output.volume)) " +
-            "output_volume_low=\(Self.optionalBoolean(output.volume.map { VirtualAudioDeviceLevelPolicy.requiresVolumeRestore(volume: $0) })) " +
+            "output_volume_matches_target=\(Self.optionalBoolean(output.volume.map { !VirtualAudioDeviceLevelPolicy.requiresVolumeAdjustment(volume: $0, target: targetVolume) })) " +
             "input_mute=\(Self.optionalBoolean(input.mute)) " +
             "input_volume_scalar=\(Self.optionalScalar(input.volume)) " +
-            "input_volume_low=\(Self.optionalBoolean(input.volume.map { VirtualAudioDeviceLevelPolicy.requiresVolumeRestore(volume: $0) })) " +
-            "minimum_volume_scalar=\(VirtualAudioDeviceLevelPolicy.minimumUsableVolume)"
+            "input_volume_matches_target=\(Self.optionalBoolean(input.volume.map { !VirtualAudioDeviceLevelPolicy.requiresVolumeAdjustment(volume: $0, target: targetVolume) })) " +
+            "target_volume_scalar=\(Self.optionalScalar(targetVolume))"
     }
 
     private static func optionalBoolean(_ value: Bool?) -> String {
@@ -58,27 +59,14 @@ struct VirtualAudioDeviceAudibilityRepairResult: Equatable {
     var before = VirtualAudioDeviceAudibilitySnapshot()
     var after = VirtualAudioDeviceAudibilitySnapshot()
     var unmuteAttempted = false
-    var volumeRestoreAttempted = false
+    var volumeAdjustmentAttempted = false
     var writeFailed = false
+    var targetVolume: Float32 = 1
 
     var isReady: Bool {
-        !applicable || (
-            !after.requiresAudibilityRepair &&
-                (!before.requiresAudibilityRepair || after.hasObservation)
-        )
-    }
-}
-
-enum VirtualAudioDeviceLevelPolicy {
-    static let minimumUsableVolume: Float32 = 0.2
-
-    static func requiresUnmute(mute: Bool?) -> Bool {
-        mute == true
-    }
-
-    static func requiresVolumeRestore(volume: Float32?) -> Bool {
-        guard let volume, volume.isFinite else { return false }
-        return volume < minimumUsableVolume
+        guard applicable, !writeFailed else { return !applicable }
+        guard after.hasObservation else { return true }
+        return !after.requiresAudibilityRepair(targetVolume: targetVolume)
     }
 }
 
@@ -210,6 +198,17 @@ enum CoreAudioDeviceCatalog {
         kAudioDevicePropertyScopeOutput,
         kAudioDevicePropertyScopeInput,
     ]
+
+    /// 输入与输出两个 scope 的音量属性地址。BlackHole 内部共用同一个值，写入时要两个 scope 都覆盖。
+    static func volumeAddresses() -> [AudioObjectPropertyAddress] {
+        virtualAudioScopes.map {
+            AudioObjectPropertyAddress(
+                mSelector: kAudioDevicePropertyVolumeScalar,
+                mScope: $0,
+                mElement: kAudioObjectPropertyElementMain
+            )
+        }
+    }
 
     static func outputDevices() -> [AudioDeviceInfo] {
         withPropertyLock {
@@ -353,20 +352,27 @@ enum CoreAudioDeviceCatalog {
         }
     }
 
-    static func ensureVirtualAudioDeviceAudible(
-        _ device: AudioDeviceInfo
+    /// 把虚拟设备的主音量写成交付的目标值，并解除静音。
+    ///
+    /// BlackHole 的输入与输出 scope 共用同一个主音量，两处都写只是保持与驱动实际行为一致，
+    /// 也兼容将来把两侧拆开。
+    static func applyVirtualAudioDeviceLevel(
+        _ device: AudioDeviceInfo,
+        targetVolumeScalar: Float32
     ) -> VirtualAudioDeviceAudibilityRepairResult {
         let kind = VirtualAudioDeviceDiagnosticKind.classify(device)
         guard kind == .miRemoteV2ch || kind == .blackHole2ch else {
             return .init()
         }
+        let target = min(1, max(0, targetVolumeScalar.isFinite ? targetVolumeScalar : 1))
 
         return withPropertyLock {
             let before = virtualAudioAudibilitySnapshotLocked(for: device.id)
             var result = VirtualAudioDeviceAudibilityRepairResult(
                 applicable: true,
                 before: before,
-                after: before
+                after: before,
+                targetVolume: target
             )
 
             for scope in virtualAudioScopes {
@@ -382,13 +388,16 @@ enum CoreAudioDeviceCatalog {
                         result.writeFailed = true
                     }
                 }
-                if VirtualAudioDeviceLevelPolicy.requiresVolumeRestore(volume: observation.volume) {
-                    result.volumeRestoreAttempted = true
+                if VirtualAudioDeviceLevelPolicy.requiresVolumeAdjustment(
+                    volume: observation.volume,
+                    target: target
+                ) {
+                    result.volumeAdjustmentAttempted = true
                     if !setFloat32PropertyLocked(
                         device.id,
                         selector: kAudioDevicePropertyVolumeScalar,
                         scope: scope,
-                        value: 1
+                        value: target
                     ) {
                         result.writeFailed = true
                     }
@@ -830,6 +839,10 @@ final class VirtualAudioOutput {
     private let engineQueue: DispatchQueue
     private let engineQueueKey = DispatchSpecificKey<Void>()
     private var nextConfigurationOperationID: UInt64 = 0
+    /// 用户设定的输出音量：百分比只用于日志，线性系数用于写缓冲。
+    private var outputLevelPercent: Double = VirtualAudioOutputLevelPolicy.defaultPercent
+    private var outputLevelScale: Float = 1
+    private let outputLevelLock = NSLock()
     private let outputStateLock = NSLock()
     private var outputState = OutputState()
     private var cachedOutputState: OutputState {
@@ -844,6 +857,7 @@ final class VirtualAudioOutput {
         update(&outputState)
         outputStateLock.unlock()
     }
+
     private let sourceFormat = AVAudioFormat(
         commonFormat: .pcmFormatFloat32,
         sampleRate: 16_000,
@@ -896,7 +910,10 @@ final class VirtualAudioOutput {
         cachedOutputState.healthy
     }
 
-    func configureAsync(deviceUID: String, completion: @escaping (Bool) -> Void) {
+    func configureAsync(
+        deviceUID: String,
+        completion: @escaping (Bool) -> Void
+    ) {
         playbackLock.lock()
         nextConfigurationOperationID &+= 1
         let operationID = nextConfigurationOperationID
@@ -910,7 +927,10 @@ final class VirtualAudioOutput {
                 "AUDIO CONFIGURE operation_id=\(operationID) phase=started result=pending queue=audio_output " +
                     "queue_wait_ms=\(max(0, Int((startedAt - requestedAt) * 1_000)))"
             )
-            let configured = self.configureOnEngineQueue(deviceUID: deviceUID, operationID: operationID)
+            let configured = self.configureOnEngineQueue(
+                deviceUID: deviceUID,
+                operationID: operationID
+            )
             self.logger(
                 "AUDIO CONFIGURE operation_id=\(operationID) phase=completed " +
                     "result=\(configured ? "ready" : "failed") reason=\(configured ? "ready" : "configure_failed") " +
@@ -921,8 +941,34 @@ final class VirtualAudioOutput {
         }
     }
 
+    /// 设置用户音量。作用点只有一个：`makeBuffer` 把 Int16 转成浮点后乘这个系数，
+    /// 因此不重建引擎、不碰设备属性，也不影响设备自身的音量修复逻辑。
+    func setOutputLevelPercent(_ percent: Double) {
+        let clamped = VirtualAudioOutputLevelPolicy.clampedPercent(percent)
+        outputLevelLock.lock()
+        outputLevelPercent = clamped
+        outputLevelScale = VirtualAudioOutputLevelPolicy.linearScale(percent: clamped)
+        outputLevelLock.unlock()
+    }
+
+    private var outputLevelPercentSnapshot: Double {
+        outputLevelLock.lock()
+        defer { outputLevelLock.unlock() }
+        return outputLevelPercent
+    }
+
+    private var currentOutputLevelScale: Float {
+        outputLevelLock.lock()
+        defer { outputLevelLock.unlock() }
+        return outputLevelScale
+    }
+
+
     @discardableResult
-    private func configureOnEngineQueue(deviceUID: String, operationID: UInt64) -> Bool {
+    private func configureOnEngineQueue(
+        deviceUID: String,
+        operationID: UInt64
+    ) -> Bool {
         dispatchPrecondition(condition: .onQueue(engineQueue))
         let startedAtUptime = uptime()
         let elapsedMilliseconds = {
@@ -963,24 +1009,31 @@ final class VirtualAudioOutput {
         )
 
         logStage("repair_audibility")
-        let audibilityRepair = CoreAudioDeviceCatalog.ensureVirtualAudioDeviceAudible(device)
+        // 设备音量固定写成 100%：用户音量由 App 侧出口统一承担，这里只负责保证不被外部留在低位。
+        let targetVolumeScalar = VirtualAudioDeviceLevelPolicy.fixedVolumeScalar
+        let audibilityRepair = CoreAudioDeviceCatalog.applyVirtualAudioDeviceLevel(
+            device,
+            targetVolumeScalar: targetVolumeScalar
+        )
         if audibilityRepair.applicable {
             logger(
                 "AUDIO AUDIBILITY repair " +
                     "device_kind=\(VirtualAudioDeviceDiagnosticKind.classify(device).rawValue) " +
                     "unmute_attempted=\(audibilityRepair.unmuteAttempted) " +
-                    "volume_restore_attempted=\(audibilityRepair.volumeRestoreAttempted) " +
+                    "volume_adjustment_attempted=\(audibilityRepair.volumeAdjustmentAttempted) " +
                     "write_failed=\(audibilityRepair.writeFailed) " +
-                    "before={\(audibilityRepair.before.diagnostic)} " +
-                    "after={\(audibilityRepair.after.diagnostic)} " +
-                    "result=\(audibilityRepair.isReady ? "ready" : "below_minimum")"
+                    "user_volume_percent=\(Int(outputLevelPercentSnapshot.rounded())) " +
+                    "before={\(audibilityRepair.before.diagnostic(targetVolume: targetVolumeScalar))} " +
+                    "after={\(audibilityRepair.after.diagnostic(targetVolume: targetVolumeScalar))} " +
+                    "result=\(audibilityRepair.isReady ? "ready" : "not_applied")"
             )
         }
         guard audibilityRepair.isReady else {
             status = LocalizedMessage("audio.output.selected_unavailable")
             logger(
-                "AUDIO CONFIGURE failed reason=virtual_device_level_below_minimum " +
+                "AUDIO CONFIGURE failed reason=virtual_device_level_not_applied " +
                     "queue=audio_output elapsed_ms=\(elapsedMilliseconds()) " +
+                    "target_volume_scalar=\(targetVolumeScalar) " +
                     "device_kind=\(VirtualAudioDeviceDiagnosticKind.classify(device).rawValue)"
             )
             return false
@@ -1116,8 +1169,10 @@ final class VirtualAudioOutput {
               let channel = buffer.floatChannelData?[0]
         else { return nil }
 
-        for index in samples.indices {
-            channel[index] = Float(samples[index]) / Float(Int16.max)
+        // 唯一的用户音量作用点：所有遥控器链路都汇到这里；超出 ±1 直接限幅，避免削波溢出。
+        let scaled = VirtualAudioOutputLevelPolicy.scaled(samples, scale: currentOutputLevelScale)
+        for index in scaled.indices {
+            channel[index] = scaled[index]
         }
         buffer.frameLength = AVAudioFrameCount(samples.count)
         return buffer
@@ -1728,7 +1783,9 @@ final class VirtualAudioOutput {
             engineRunning: running,
             playerPlaying: playing,
             boundToSelectedDevice: selected?.id == actual?.id
-        ) && !audibility.requiresAudibilityRepair
+        ) && !audibility.requiresAudibilityRepair(
+            targetVolume: VirtualAudioDeviceLevelPolicy.fixedVolumeScalar
+        )
         updateOutputState {
             $0.actualDevice = actual
             $0.engineRunning = running

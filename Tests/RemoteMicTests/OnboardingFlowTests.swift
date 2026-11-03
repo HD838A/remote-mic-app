@@ -1451,7 +1451,7 @@ struct OnboardingFlowTests {
         #expect(viewSource.contains("voiceAttempt.audioDelivery.result == .deliveredToSelectedDevice"))
     }
 
-    @Test func voiceTestExplainsAndExposesLiveGainAdjustment() throws {
+    @Test func voiceTestExplainsAndSharesTheOutputVolumeSlider() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -1460,14 +1460,28 @@ struct OnboardingFlowTests {
             contentsOf: root.appendingPathComponent("Sources/RemoteMic/OnboardingView.swift"),
             encoding: .utf8
         )
+        let sliderSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/OutputVolumeSlider.swift"),
+            encoding: .utf8
+        )
+        let settingsSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
 
         #expect(viewSource.contains("onboardingGainCard"))
-        #expect(viewSource.contains("onboarding.voice_test.gain.title"))
-        #expect(viewSource.contains("onboarding.voice_test.gain.detail"))
-        #expect(viewSource.contains("in: 0...24"))
-        #expect(viewSource.contains("onboarding.voice-test.gain"))
-        #expect(viewSource.contains("settings.gainDB = min(24, max(0, $0))"))
-        #expect(viewSource.contains("ONBOARDING GAIN editing="))
+        #expect(viewSource.contains("onboarding.voice_test.volume.title"))
+        #expect(viewSource.contains("onboarding.voice_test.volume.detail"))
+        // 引导页不再有独立的增益滑块，复用连接页那一个音量控件。
+        #expect(viewSource.contains("OutputVolumeSlider("))
+        #expect(viewSource.contains("accessibilityIdentifier: \"onboarding.voice-test.gain\""))
+        #expect(!viewSource.contains("settings.gainDB = min("))
+        #expect(viewSource.contains("ONBOARDING VOLUME editing="))
+
+        // 连接页与引导页必须渲染同一份控件定义，范围与步长只写一次。
+        #expect(settingsSource.contains("OutputVolumeSlider("))
+        #expect(sliderSource.contains("in: VirtualAudioOutputLevelPolicy.percentRange"))
+        #expect(sliderSource.contains("step: 20"))
     }
 
     @Test func ordinaryButtonDetectionDoesNotExecuteExistingMappings() throws {
@@ -3677,9 +3691,9 @@ struct OnboardingFlowTests {
         ] {
             #expect(voiceTest.probe.actions.keys.contains(id), "missing voice-test action: \(id)")
         }
-        #expect(voiceTest.probe.actions.keys.contains("voice-test.gain.set-12"))
-        invoke("voice-test.gain.set-12", on: voiceTest)
-        #expect(voiceTest.settings.gainDB == 12)
+        #expect(voiceTest.probe.actions.keys.contains("voice-test.volume.set-400"))
+        invoke("voice-test.volume.set-400", on: voiceTest)
+        #expect(voiceTest.settings.outputVolumePercent == 400)
         invoke("voice-test.confirm.voice-key", on: voiceTest)
         invoke("voice-test.confirm.microphone", on: voiceTest)
         #expect(voiceTest.probe.toggleValues["voice-test.confirm.voice-key"] == true)

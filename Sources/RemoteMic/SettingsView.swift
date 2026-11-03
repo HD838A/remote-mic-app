@@ -1525,6 +1525,7 @@ struct SettingsView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    /// 音频输出面板：设备选择 + 唯一的用户音量（0–1000%）+ 状态与刷新。
     private var audioSettingsPanel: some View {
         GlassPanel {
             VStack(alignment: .leading, spacing: 13) {
@@ -1555,19 +1556,9 @@ struct SettingsView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 5) {
-                    HStack(spacing: 14) {
-                        Text("audio.gain.title")
-                            .frame(width: 92, alignment: .leading)
-                        Slider(value: Binding(
-                            get: { settings.gainDB },
-                            set: { settings.gainDB = $0 }
-                        ), in: 0...24, step: 1)
-                        Text("\(Int(settings.gainDB)) dB")
-                            .font(.system(.body, design: .monospaced))
-                            .frame(width: 54, alignment: .trailing)
-                    }
+                    OutputVolumeSlider(settings: settings, model: model)
 
-                    Text("audio.gain.help")
+                    Text("audio.volume.help")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .padding(.leading, 106)

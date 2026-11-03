@@ -545,7 +545,7 @@ struct ConfigurationImportValidationTests {
         // Neither attempt may leave a trace of the rejected file behind.
         #expect(settings.customApplicationProfiles.isEmpty)
         #expect(settings.configurationImportNotice == nil)
-        #expect(settings.gainDB == 10)
+        #expect(settings.outputVolumePercent == 100)
     }
 
     // MARK: - User-facing notice
