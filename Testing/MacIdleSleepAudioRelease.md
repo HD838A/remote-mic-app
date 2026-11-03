@@ -44,6 +44,33 @@
 
 失败判定：没有收到屏幕休眠事件、释放只 requested 但没有 completed/cancelled 结果、引擎仍为 running、MiRemoteV 2ch 的 CoreAudio 断言持续增长，或 Mac 仍不能自动休眠。
 
+## 用例二补充：屏幕亮起时长时间空闲释放虚拟音频
+
+适用：需要确认“人一直在机器前、遥控器保持 ready、但长时间没有语音”这一档也会释放虚拟音频，而不是只有屏幕休眠才释放。
+
+### 步骤
+
+1. 保持屏幕亮起且遥控器 ready，完成一次正常语音，确认文字上屏。
+2. 停止一切操作，保持 App 运行，不要切到“不输出语音”，也不要退出 App，等待 10 分钟。
+3. 10 分钟到点后立即保存一次 `pmset -g assertions`。
+4. 不做任何手动操作，直接按住语音键说一句话，再等五秒说第二句话。
+
+### 预期日志顺序
+
+1. `AUDIO IDLE release_due delay_s=600 ready_bridges=1 state={...}`（没有任何语音、测试音或系统挂起事件）
+2. `AUDIO RELEASE requested reason=idle_timeout ...`
+3. `AUDIO RELEASE completed reason=idle_timeout ... engine_running=false`；如默认输入原为虚拟设备，同时出现 `AUDIO DEFAULT_INPUT fallback_applied`
+4. 第 4 步首次按键时出现 `AUDIO REBIND begin reason=mobile_voice_start`（或等价语音重建原因）与 `AUDIO READY`，随后 `MOBILE VOICE flush_after_configuration` 冲刷重建期间的缓冲音频
+
+预期系统结果：10 分钟空闲后 `pmset -g assertions` 中不再有该 App 的 `MiRemoteV2ch_UID` 条目；首次按键靠重建恢复，两次语音都完整、不丢首字。
+
+### 失败判定
+
+- 空闲已超过 10 分钟仍无 `AUDIO IDLE release_due`，或出现 `AUDIO RELEASE skipped ... still_required=true` 但当时没有任何语音、测试音或系统挂起；
+- 请求了释放但没有 `completed`/`cancelled` 结果，或引擎仍为 running；
+- 正在语音、测试音、Mac 麦克风采集或系统挂起期间被 `idle_timeout` 释放；
+- 超时释放后首次按键无声、丢首字、尾字被截断，或必须手动重新选择音频设备。
+
 ## 用例三：唤醒后自动恢复且第一次语音可用
 
 1. 从用例二的休眠状态唤醒并解锁 Mac。
