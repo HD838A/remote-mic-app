@@ -1040,6 +1040,9 @@ struct SettingsView: View {
                                 guard let button = RemoteButton(rawValue: buttonRaw) else { return "" }
                                 return mappingHoldSummary(for: button, profileID: profileID)
                             },
+                            onChooseApplication: { completion in
+                                chooseApplicationForProfile(completion)
+                            },
                             onEditKeys: { profile in
                                 preservesMappingContextOnNavigation = true
                                 openMappingProfileForEditing(profile)
@@ -5259,6 +5262,35 @@ struct SettingsView: View {
             )
         }
         return profileID
+    }
+
+    /// 键位方案页「添加 App…」：只回传 bundle id，关联关系由私有组件落盘。
+    private func chooseApplicationForProfile(_ completion: @escaping (String) -> Void) {
+        let panel = NSOpenPanel()
+        panel.title = localization.text("custom_application.picker.title")
+        panel.prompt = localization.text("common.action.choose")
+        panel.allowedContentTypes = [.application]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.resolvesAliases = true
+        guard panel.runModal() == .OK,
+              let url = panel.url,
+              let bundle = Bundle(url: url),
+              let bundleIdentifier = bundle.bundleIdentifier,
+              !bundleIdentifier.isEmpty
+        else { return }
+
+        if !settings.customApplicationProfiles.contains(where: { $0.bundleIdentifier == bundleIdentifier }) {
+            let displayName = (bundle.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String)
+                ?? (bundle.object(forInfoDictionaryKey: "CFBundleName") as? String)
+                ?? url.deletingPathExtension().lastPathComponent
+            _ = settings.addCustomApplicationProfile(CustomApplicationProfile(
+                displayName: displayName,
+                bundleIdentifier: bundleIdentifier,
+                applicationPath: url.path
+            ))
+        }
+        completion(bundleIdentifier)
     }
 
     private func chooseCustomApplicationForButtonProfile(
