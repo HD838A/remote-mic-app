@@ -62,7 +62,10 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp .build/release/RemoteMic "$APP/Contents/MacOS/"
 
 # 旧的 .build 可能是在没有私有路径的情况下编出来的；那种包会静默缺功能。
-if ! nm -gU "$APP/Contents/MacOS/RemoteMic" 2>/dev/null | grep -q "SayAllButtonProfiles"; then
+# 这里用 `grep ... >/dev/null` 而不是 `grep -q`：脚本开了 pipefail，-q 命中后提前退出会让
+# nm 收到 SIGPIPE（141），链接私有包后符号表有几百 KB、必然写满管道缓冲，守卫就会误判成
+# “没有 SayAllButtonProfiles” 而拦下本来正常的构建。
+if ! nm -gU "$APP/Contents/MacOS/RemoteMic" 2>/dev/null | grep "SayAllButtonProfiles" >/dev/null; then
   echo "构建产物里没有 SayAllButtonProfiles：可能复用了旧 .build。请先 swift package clean 再重跑。" >&2
   exit 3
 fi
