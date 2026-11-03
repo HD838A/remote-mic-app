@@ -28,6 +28,7 @@ enum SettingsScreenshotRenderer {
 
     private static let sections: [SettingsSection] = [
         .mapping,
+        .applications,
         .commonPhrases,
         .macros,
         .buttonProfiles,
@@ -237,6 +238,12 @@ enum SettingsScreenshotRenderer {
         let localization = LocalizationStore(settings: settings, resourceBundle: RemoteMicResourceBundle.mainOrDevelopment)
         model.privateFeature.updateLocaleIdentifier(localization.locale.identifier)
         model.macroFeature.updateLocaleIdentifier(localization.locale.identifier)
+        model.macroFeature.loadProfilesForScreenshot()
+        let seededProfileID: UUID? = ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_SETTINGS_SCREENSHOT_PROFILE"
+        ].flatMap { name in
+            model.macroFeature.mappingProfiles(device: nil).first { $0.name == name }?.id
+        }
         model.membershipFeature.updateLocaleIdentifier(localization.locale.identifier)
 
         _ = NSApplication.shared
@@ -299,6 +306,7 @@ enum SettingsScreenshotRenderer {
                 initialMappingHoldEditingButton: section == .mapping && opensHoldEditor
                     ? .ok
                     : nil,
+                initialMappingProfileID: section == .mapping ? seededProfileID : nil,
                 initialShortcutPickerShowsKeyboard: showsStandardKeyboard,
                 initialMappingScrollsToGestureTiming: section == .mapping && showsGestureTiming,
                 initialMappingVoiceSettingsPresented: section == .mapping && opensVoiceSettings,

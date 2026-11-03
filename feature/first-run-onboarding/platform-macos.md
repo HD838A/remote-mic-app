@@ -48,7 +48,7 @@
 - Typeless、Vokie 和其他独立工具不执行系统输入源切换。
 - 进入 Typeless 或 Vokie 的语音测试页时，必须通过公开 Bundle ID/URL Scheme 尝试后台启动目标 App，但不得抢走 SayAll 输入框焦点；自动拉起失败、状态未知或目标仍未运行时必须阻止完成并显示“重新打开”，运行后仍保留真实语音文字门禁。
 - SayAll 不读取任何第三方工具的私有配置；语音识别键、全局唤起和麦克风只能显示期望值并由用户确认。
-- `sayall://launch` 只负责激活与 Vokie 状态回流；received/configured/ready 都不能替代真实语音文字门禁。
+- `sayall://launch` 只负责激活并记录回流日志，不更新引导页状态或提示；received/configured/ready 都不能替代真实语音文字门禁。
 
 ### 音频
 

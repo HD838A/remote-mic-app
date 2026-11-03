@@ -95,7 +95,7 @@ HIDRemoteMonitor first tries to open RC003 exclusively. If macOS rejects exclusi
 | Power | Escape |
 | Volume + / - | System volume up/down |
 
-Users can also choose mute, play/pause, or launch Codex, Claude, cmux, WeChat, Cursor, Xcode, Slack, WeCom, NetEase Cloud Music, Chrome, Safari, and Zed. The picker hides unavailable preset apps but retains an already configured app that was later removed. App-launch actions do not repeat.
+Users can also choose mute, play/pause, or launch Codex, Claude, cmux, WeChat, Cursor, Xcode, Slack, WeCom, NetEase Cloud Music, Chrome, Safari, Zed, and DimAgent. The picker hides unavailable preset apps but retains an already configured app that was later removed. App-launch actions do not repeat.
 
 Direction, Back, and volume buttons can hold-repeat. Normal physical button activity is published to SwiftUI to highlight the remote diagram and select its mapping row.
 

@@ -37,6 +37,12 @@ struct ScrollRegionTarget: Codable, Equatable {
     var strategy: Strategy
 }
 
+/// 滚到内容两端。与翻页的区别是绝对位置语义，因此不参与按住连发。
+enum ScrollEdge {
+    case top
+    case bottom
+}
+
 enum ScrollPageDirection {
     case up
     case down
@@ -58,6 +64,8 @@ enum ScrollRegionMatch {
 
 enum ScrollPageOutcome: String, Equatable {
     case scrolledByPageAction
+    /// 一次性滚到内容两端（绝对位置，不可连发）。
+    case scrolledToEdge
     case scrolledByPixelWheel
     /// Wheel chunks were accepted by the queue; the final result arrives in the
     /// log as `completed` or `aborted`, never as a synchronous success.
@@ -74,7 +82,7 @@ enum ScrollPageOutcome: String, Equatable {
     case eventFailed
 
     var didScroll: Bool {
-        self == .scrolledByPageAction || self == .scrolledByPixelWheel
+        self == .scrolledByPageAction || self == .scrolledByPixelWheel || self == .scrolledToEdge
     }
 
     var wasHandled: Bool {
@@ -98,14 +106,23 @@ enum ScrollRegionRule {
     static let sidebarWidthRatio: Double = 0.45
 
     /// Chromium ignores synthetic pixel-unit wheel events and accelerates large
-    /// line deltas, so a page is posted as several equal chunks: one chunk of
-    /// ten lines moves content by roughly 120 pt on WorkBuddy, and more than six
-    /// chunks typically runs past the end of the document.
+    /// line deltas, so a page is posted as several equal chunks.
+    ///
+    /// 一次翻页必须约等于一屏（见 feature/scroll-region-page-actions/PRODUCT_SPEC.md）：
+    /// 实测 10 行约 120 pt（12 pt/行），因此每块 20 行 ≈ 240 pt，块数按区域高度算、封顶 3 块，
+    /// 64 行 ≈ 一屏。原来的 30 行 × 3 块 ≈ 1080 pt，在多数窗口里超过两屏。
     static let overlapRatio: Double = 0.10
-    static let linesPerChunk: Int32 = 30
-    static let chunkPoints: Double = 215
+    static let linesPerChunk: Int32 = 20
+    static let pointsPerLine: Double = 12
+    static let chunkPoints: Double = Double(linesPerChunk) * pointsPerLine
     static let maximumPageChunks = 3
     static let chunkInterval: TimeInterval = 0.060
+
+    /// 滚到内容两端用的总行数。到边缘是绝对位置语义，冲过头会被内容边界自然截住，
+    /// 所以这里故意给一个足够大的值，一次投递完成，不做逐屏逼近。
+    static let edgeScrollLines: Int32 = 600
+    /// 单块上限：一次投递太多行会被部分 App 加速，分块更稳。
+    static let edgeLinesPerChunk: Int32 = 150
 
     /// Number of wheel chunks that approximate one viewport.
     static func pageScrollChunks(regionHeight: Double) -> Int {
@@ -267,6 +284,9 @@ enum ScrollRegionPreset {
         Rule(bundleIdentifier: "com.tinyspeck.slackmacgap", strategy: .lineWheel, placement: .container),
         Rule(bundleIdentifier: "com.openai.codex", strategy: .lineWheel, placement: .container),
         Rule(bundleIdentifier: "com.tencent.workbuddy.mac", strategy: .lineWheel, placement: .windowRect),
+        // DimAgent 只暴露一个覆盖整窗的 WebArea，学习记录也落在窗口矩形上，
+        // 所以按窗口矩形投递滚轮，和记录命中时的结果一致，不必再挑容器。
+        Rule(bundleIdentifier: "com.dimcode.app", strategy: .lineWheel, placement: .windowRect),
     ]
 
     static func rule(for bundleIdentifier: String) -> Rule? {

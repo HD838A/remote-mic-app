@@ -230,6 +230,12 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         case userInitiated
     }
 
+    /// 设置窗口的默认尺寸与最小尺寸（整窗，含标题栏）。
+    ///
+    /// 数值取自用户确认的按键页截图（实测整窗 1067×771）。默认值和最小值都绑这一个常量，
+    /// 避免两处各写一遍后再次漂移。
+    private static let settingsWindowFrameSize = NSSize(width: 1067, height: 771)
+
     private let model = BridgeAppModel()
     private lazy var appIconController = AppIconController()
     private let updateInformation = UpdateInformationStore()
@@ -243,6 +249,8 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     private var statusItemWarningBlinkVisible = true
     private var entryPointOperationID: UInt = 0
     private var statusMenu: NSMenu?
+    private var statusMenuOperationID: UInt = 0
+    private var activeStatusMenuOperation: (id: UInt, startedAt: TimeInterval, menu: NSMenu)?
     private var settingsWindowController: NSWindowController?
     private var isSettingsWindowOpen = false
     private var subscriptions = Set<AnyCancellable>()
@@ -477,7 +485,30 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     }
 
     func menuWillOpen(_ menu: NSMenu) {
+        guard menu === statusMenu else { return }
+        finishStatusMenuOperation(result: "cancelled", reason: "menu_replaced")
+        statusMenuOperationID &+= 1
+        let operationID = statusMenuOperationID
+        let source: String
+        switch NSApp.currentEvent?.type {
+        case .leftMouseDown, .leftMouseUp: source = "left_click"
+        case .rightMouseDown, .rightMouseUp: source = "right_click"
+        case .keyDown, .keyUp: source = "keyboard"
+        default: source = "other"
+        }
+        activeStatusMenuOperation = (operationID, ProcessInfo.processInfo.systemUptime, menu)
+        AppLogger.shared.write(
+            "UI STATUS_MENU operation_id=\(operationID) phase=requested source=\(source)"
+        )
         refreshMenuStatus()
+        AppLogger.shared.write(
+            "UI STATUS_MENU operation_id=\(operationID) phase=started result=opening"
+        )
+    }
+
+    func menuDidClose(_ menu: NSMenu) {
+        guard let operation = activeStatusMenuOperation, menu === operation.menu else { return }
+        finishStatusMenuOperation(result: "closed", reason: "menu_did_close")
     }
 
     @discardableResult
@@ -489,11 +520,6 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         }
 
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        if let button = item.button {
-            button.target = self
-            button.action = #selector(handleStatusItemClick(_:))
-            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
-        }
 
         connectionItem.isEnabled = false
         audioItem.isEnabled = false
@@ -517,6 +543,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     @discardableResult
     private func removeStatusItem() -> Bool {
         guard let statusItem else { return false }
+        finishStatusMenuOperation(result: "cancelled", reason: "status_item_hidden")
         stopStatusItemWarningBlinking()
         statusMenu?.removeItem(connectionItem)
         statusMenu?.removeItem(audioItem)
@@ -554,6 +581,8 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
 
         let menu = NSMenu()
         menu.delegate = self
+        menu.addItem(menuItem("menu.open_settings", action: #selector(showSettings)))
+        menu.addItem(.separator())
         menu.addItem(connectionItem)
         menu.addItem(audioItem)
         menu.addItem(hidItem)
@@ -562,7 +591,6 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         macMicrophoneItem.action = #selector(toggleMacMicrophone)
         menu.addItem(macMicrophoneItem)
         menu.addItem(menuItem("connection.action.reconnect", action: #selector(reconnect)))
-        menu.addItem(menuItem("menu.open_settings", action: #selector(showSettings)))
         menu.addItem(menuItem("menu.show_logs", action: #selector(showLog)))
         menu.addItem(languageMenuItem())
         menu.addItem(.separator())
@@ -574,6 +602,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         menu.addItem(.separator())
         menu.addItem(menuItem("common.action.quit", action: #selector(quit)))
         statusMenu = menu
+        statusItem?.menu = menu
         refreshMenuStatus()
     }
 
@@ -1001,20 +1030,17 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         statusItemWarningBlinkVisible = true
     }
 
-    @objc private func handleStatusItemClick(_ sender: NSStatusBarButton) {
-        if NSApp.currentEvent?.type == .rightMouseUp {
-            showStatusMenu()
-        } else {
-            showSettings()
-        }
-    }
-
-    private func showStatusMenu() {
-        guard let statusItem, let statusMenu else { return }
-        refreshMenuStatus()
-        statusItem.menu = statusMenu
-        statusItem.button?.performClick(nil)
-        statusItem.menu = nil
+    private func finishStatusMenuOperation(result: String, reason: String) {
+        guard let operation = activeStatusMenuOperation else { return }
+        activeStatusMenuOperation = nil
+        let elapsedMilliseconds = max(
+            0,
+            Int((ProcessInfo.processInfo.systemUptime - operation.startedAt) * 1_000)
+        )
+        AppLogger.shared.write(
+            "UI STATUS_MENU operation_id=\(operation.id) phase=completed " +
+                "result=\(result) reason=\(reason) elapsed_ms=\(elapsedMilliseconds)"
+        )
     }
 
     @objc private func toggleMacMicrophone() {
@@ -1071,9 +1097,20 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
             )
             .environmentObject(localization)
         )
+        // 窗口尺寸按设计稿给定的是**整窗**（含标题栏）。`NSWindow` 的初始化和
+        // `setContentSize` 用的是内容区，直接传整窗数值会多出一个标题栏的高度，
+        // 所以统一从目标 frame 反算内容区，默认值与最小值才能对齐同一张设计稿。
+        let styleMask: NSWindow.StyleMask = [
+            .titled, .closable, .miniaturizable, .resizable, .fullSizeContentView,
+        ]
+        let frameSize = Self.settingsWindowFrameSize
+        let contentRect = NSWindow.contentRect(
+            forFrameRect: NSRect(origin: .zero, size: frameSize),
+            styleMask: styleMask
+        )
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 960, height: 742),
-            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+            contentRect: contentRect,
+            styleMask: styleMask,
             backing: .buffered,
             defer: false
         )
@@ -1091,8 +1128,8 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         window.miniwindowImage = appIconController.catalog.image(
             for: model.settings.appIconIdentifier
         )
-        window.minSize = NSSize(width: 960, height: 742)
-        window.setContentSize(NSSize(width: 960, height: 742))
+        window.minSize = frameSize
+        window.setContentSize(contentRect.size)
         window.setFrameAutosaveName("RemoteMicSettings")
         window.center()
         return NSWindowController(window: window)

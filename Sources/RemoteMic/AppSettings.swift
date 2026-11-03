@@ -50,6 +50,7 @@ private struct PersonalizedConfiguration: Codable {
     let buttonRapidPressEnabled: [String: Bool]?
     let interactionSettings: RemoteButtonInteractionSettings?
     let buttonGestureTimingsByModel: [String: RemoteButtonGestureTiming]?
+    let buttonGestureLearningsByModel: [String: StoredButtonGestureLearning]?
     let customApplicationProfiles: [CustomApplicationProfile]?
     let applicationLanguage: AppLanguage
     let appIconIdentifier: AppIconIdentifier?
@@ -315,6 +316,7 @@ final class AppSettings: ObservableObject {
         static let secondaryButtonBindings = "secondaryButtonBindings"
         static let buttonRapidPressEnabled = "buttonRapidPressEnabled"
         static let buttonGestureTimingsByModel = "buttonGestureTimingsByModel"
+        static let buttonGestureLearningsByModel = "buttonGestureLearningsByModel"
         static let customApplicationProfiles = "customApplicationProfiles"
         static let peripheralIdentifier = "peripheralIdentifier"
         static let remoteDeviceProfiles = "remoteDeviceProfiles"
@@ -537,6 +539,15 @@ final class AppSettings: ObservableObject {
         didSet {
             if let data = try? JSONEncoder().encode(buttonGestureTimingsByModel) {
                 defaults.set(data, forKey: Keys.buttonGestureTimingsByModel)
+            }
+        }
+    }
+
+    @Published private(set) var buttonGestureLearningsByModel:
+        [String: StoredButtonGestureLearning] = [:] {
+        didSet {
+            if let data = try? JSONEncoder().encode(buttonGestureLearningsByModel) {
+                defaults.set(data, forKey: Keys.buttonGestureLearningsByModel)
             }
         }
     }
@@ -1220,6 +1231,15 @@ final class AppSettings: ObservableObject {
             profiles: remoteDeviceProfiles,
             selectedProfileID: selectedRemoteProfileID
         )
+        let storedGestureLearnings = Self.decodeSetting(
+            [String: StoredButtonGestureLearning].self,
+            forKey: Keys.buttonGestureLearningsByModel,
+            from: defaults,
+            corrupted: &corruptedKeys
+        ) ?? [:]
+        buttonGestureLearningsByModel = storedGestureLearnings.filter {
+            XiaomiRemoteModel(rawValue: $0.key).map { $0 != .unknown } ?? false
+        }
         applyContinuousRecordingExperimentState(
             enabled: experimentalContinuousRecordingEnabled,
             backup: continuousRecordingPowerBindingBackup
@@ -1600,6 +1620,19 @@ final class AppSettings: ObservableObject {
         }
     }
 
+    /// 移除一个 APP 档案。调用方必须先确认没有任何绑定指向它，
+    /// 否则那些按键会静默变成「尚未选择 APP」。
+    func removeCustomApplicationProfile(id: UUID) {
+        guard customApplicationProfiles.contains(where: { $0.id == id }) else { return }
+        customApplicationProfiles.removeAll { $0.id == id }
+        if portablePendingApplications.contains(id.uuidString) {
+            var pending = portablePendingApplications
+            pending.remove(id.uuidString)
+            defaults.set(pending.sorted(), forKey: "portableTransferPendingApplications")
+        }
+        objectWillChange.send()
+    }
+
     func configuredBaseAction(
         for button: RemoteButton,
         trigger: ButtonTrigger
@@ -1817,26 +1850,34 @@ final class AppSettings: ObservableObject {
     private struct RemoteProfileDeduplicationResult {
         let profiles: [RemoteDeviceProfile]
         let selectedProfileID: UUID?
-        let removedCount: Int
+        /// 被并掉的档案 → 保留下来的档案。宿主用它迁移自己的运行时映射。
+        let replacements: [UUID: UUID]
+
+        var removedCount: Int { replacements.count }
     }
 
+    /// 把同一台遥控器的重复档案并成一条。
+    ///
+    /// 去重键是 `RemoteDeviceIdentity` 给的稳定身份，不再只看 `hidFingerprint`：
+    /// 指纹会随接口、重新配对或指纹算法版本变化，同一台遥控器就会各留一条档案，
+    /// 按键页顶部于是出现两张名字和序列号都一样的卡片。
+    ///
+    /// `preferredProfileIDs` 用来在运行期保护「当前正在用」的档案：刚连上的那条必须
+    /// 留下来，其他同身份的旧档案并进去，否则连接状态和编辑目标会指向一条被删掉的档案。
     private static func deduplicateRemoteProfiles(
         _ profiles: [RemoteDeviceProfile],
-        selectedProfileID: UUID?
+        selectedProfileID: UUID?,
+        preferredProfileIDs: Set<UUID> = []
     ) -> RemoteProfileDeduplicationResult {
         var result: [RemoteDeviceProfile] = []
-        var indicesByFingerprint: [String: Int] = [:]
+        var indicesByIdentity: [String: Int] = [:]
+        var replacements: [UUID: UUID] = [:]
         var selected = selectedProfileID
-        var removedCount = 0
 
         for profile in profiles {
-            guard let fingerprint = profile.hidFingerprint,
-                  !fingerprint.isEmpty,
-                  let existingIndex = indicesByFingerprint[fingerprint]
-            else {
-                if let fingerprint = profile.hidFingerprint, !fingerprint.isEmpty {
-                    indicesByFingerprint[fingerprint] = result.count
-                }
+            let identity = RemoteDeviceIdentity.key(for: profile)
+            guard let existingIndex = indicesByIdentity[identity] else {
+                indicesByIdentity[identity] = result.count
                 result.append(profile)
                 continue
             }
@@ -1845,41 +1886,66 @@ final class AppSettings: ObservableObject {
             let keepExisting = Self.shouldKeepRemoteProfile(
                 existing,
                 over: profile,
-                selectedProfileID: selectedProfileID
+                selectedProfileID: selectedProfileID,
+                preferredProfileIDs: preferredProfileIDs
             )
             let kept = keepExisting ? existing : profile
             let discarded = keepExisting ? profile : existing
-            var merged = kept
-            if merged.model == .unknown, discarded.model != .unknown {
-                merged.model = discarded.model
-            }
-            if merged.customName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-               !discarded.customName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                merged.customName = discarded.customName
-            }
-            if Self.isDefaultRemoteMappings(merged.mappings),
-               !Self.isDefaultRemoteMappings(discarded.mappings) {
-                merged.mappings = discarded.mappings
-            }
-            result[existingIndex] = merged
-            if selected == existing.id || selected == profile.id {
-                selected = merged.id
-            }
-            removedCount += 1
+            result[existingIndex] = Self.mergingRemoteProfile(kept, with: discarded)
+            replacements[discarded.id] = kept.id
+            // 选中项可能落在被并掉的那条上，跟着搬到留下的那条。
+            if selected == discarded.id { selected = kept.id }
         }
 
         return RemoteProfileDeduplicationResult(
             profiles: result,
             selectedProfileID: selected,
-            removedCount: removedCount
+            replacements: replacements
         )
+    }
+
+    /// 合并两条同身份档案。留下的一条是主档，缺的字段从另一条补。
+    private static func mergingRemoteProfile(
+        _ kept: RemoteDeviceProfile,
+        with discarded: RemoteDeviceProfile
+    ) -> RemoteDeviceProfile {
+        var merged = kept
+        if merged.model == .unknown, discarded.model != .unknown {
+            merged.model = discarded.model
+        }
+        if merged.hardwareIdentity == nil {
+            merged.hardwareIdentity = discarded.hardwareIdentity
+        }
+        if merged.bluetoothIdentifier == nil {
+            merged.bluetoothIdentifier = discarded.bluetoothIdentifier
+        }
+        if merged.hidFingerprint == nil {
+            merged.hidFingerprint = discarded.hidFingerprint
+        }
+        // 旧档案把序列号存成了设备名。这种名字是身份，不是用户起的显示名，
+        // 不能搬过来，否则卡片标题会变成一串序列号。
+        if merged.customName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           !discarded.customName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           RemoteDeviceIdentity.legacyToken(storedName: discarded.customName) == nil {
+            merged.customName = discarded.customName
+        }
+        if Self.isDefaultRemoteMappings(merged.mappings),
+           !Self.isDefaultRemoteMappings(discarded.mappings) {
+            merged.mappings = discarded.mappings
+        }
+        return merged
     }
 
     private static func shouldKeepRemoteProfile(
         _ existing: RemoteDeviceProfile,
         over candidate: RemoteDeviceProfile,
-        selectedProfileID: UUID?
+        selectedProfileID: UUID?,
+        preferredProfileIDs: Set<UUID> = []
     ) -> Bool {
+        // 正在使用的那条优先：它承载着本次连接的设备映射，换掉会让运行时引用悬空。
+        if preferredProfileIDs.contains(existing.id) != preferredProfileIDs.contains(candidate.id) {
+            return preferredProfileIDs.contains(existing.id)
+        }
         if selectedProfileID == existing.id { return true }
         if selectedProfileID == candidate.id { return false }
         return remoteProfileScore(existing) >= remoteProfileScore(candidate)
@@ -1925,6 +1991,45 @@ final class AppSettings: ObservableObject {
         else { return false }
         remoteDeviceProfiles[index].customName = customName
         return true
+    }
+
+    /// 记下序列号的单向摘要，作为这台遥控器的稳定身份。
+    ///
+    /// 只存摘要，序列号本身既不落盘也不写日志。返回 `true` 表示身份有变化，
+    /// 调用方应随后调用 `collapseDuplicateRemoteProfiles` 把历史重复项并掉。
+    @discardableResult
+    func updateRemoteProfileHardwareIdentity(_ profileID: UUID, serialNumber: String?) -> Bool {
+        guard let index = remoteDeviceProfiles.firstIndex(where: { $0.id == profileID }),
+              let identity = serialNumber.flatMap(RemoteDeviceIdentity.token(serialNumber:)),
+              remoteDeviceProfiles[index].hardwareIdentity != identity
+        else { return false }
+        remoteDeviceProfiles[index].hardwareIdentity = identity
+        return true
+    }
+
+    /// 立即收敛重复档案，返回「被并掉的档案 ID → 保留下来的档案 ID」。
+    ///
+    /// 连接、改名、读到序列号之后都要调一次：只在启动时去重的话，运行期新生成的
+    /// 重复档案要等下次启动才消失，用户就一直看到两张一样的卡片。
+    @discardableResult
+    func collapseDuplicateRemoteProfiles(
+        preferring preferredProfileIDs: Set<UUID> = []
+    ) -> [UUID: UUID] {
+        let result = Self.deduplicateRemoteProfiles(
+            remoteDeviceProfiles,
+            selectedProfileID: selectedRemoteProfileID,
+            preferredProfileIDs: preferredProfileIDs
+        )
+        guard !result.replacements.isEmpty else { return [:] }
+        remoteDeviceProfiles = result.profiles
+        if selectedRemoteProfileID != result.selectedProfileID {
+            selectedRemoteProfileID = result.selectedProfileID
+        }
+        AppLogger.shared.write(
+            "SETTINGS REMOTE_PROFILES phase=completed result=deduplicated " +
+                "removed=\(result.removedCount) remaining=\(result.profiles.count)"
+        )
+        return result.replacements
     }
 
     func updateRemoteProfileModel(_ profileID: UUID, model: XiaomiRemoteModel) {
@@ -2381,6 +2486,9 @@ final class AppSettings: ObservableObject {
                 ),
             interactionSettings: interactionSettings,
             buttonGestureTimingsByModel: buttonGestureTimingsByModel,
+            buttonGestureLearningsByModel: buttonGestureLearningsByModel.isEmpty
+                ? nil
+                : buttonGestureLearningsByModel,
             customApplicationProfiles: customApplicationProfiles,
             applicationLanguage: applicationLanguage,
             appIconIdentifier: appIconIdentifier,
@@ -3053,6 +3161,17 @@ final class AppSettings: ObservableObject {
     func buttonGestureTiming(for model: XiaomiRemoteModel) -> RemoteButtonGestureTiming {
         guard model != .unknown else { return RemoteButtonGestureTiming() }
         return buttonGestureTimingsByModel[model.rawValue] ?? RemoteButtonGestureTiming()
+    }
+
+    func buttonGestureLearning(for model: XiaomiRemoteModel) -> StoredButtonGestureLearning? {
+        guard model != .unknown else { return nil }
+        return buttonGestureLearningsByModel[model.rawValue]
+    }
+
+    /// 学习结果按机型保存，重开 App 后靠它把「学习完成」补回来；它不改识别时间本身。
+    func setButtonGestureLearning(_ learning: StoredButtonGestureLearning, for model: XiaomiRemoteModel) {
+        guard model != .unknown else { return }
+        buttonGestureLearningsByModel[model.rawValue] = learning
     }
 
     func setButtonGestureTiming(_ timing: RemoteButtonGestureTiming, for model: XiaomiRemoteModel) {

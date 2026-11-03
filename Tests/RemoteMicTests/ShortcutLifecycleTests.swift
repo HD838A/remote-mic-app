@@ -296,6 +296,31 @@ struct ShortcutLifecycleTests {
         #expect(state.snapshot(.maskSecondaryFn).flags.contains(.maskSecondaryFn))
     }
 
+    @Test(arguments: [CGEventType.tapDisabledByTimeout, .tapDisabledByUserInput])
+    func tapDisableDropsStaleFunctionStateBeforeReenable(_ type: CGEventType) {
+        let state = ShortcutHardwareModifierState()
+        let suppressor = KeyboardEventSuppressor(hardwareModifierState: state)
+        let held = CGEvent(keyboardEventSource: nil, virtualKey: 63, keyDown: true)!
+        held.type = .flagsChanged
+        held.flags = .maskSecondaryFn
+        #expect(!suppressor.handle(type: .flagsChanged, event: held))
+        #expect(state.snapshot([]).functionState == "pressed")
+        // 禁用窗口里没有事件回调，松开 Fn 的边沿会丢失；此处必须复位，
+        // 否则过期的 pressed 会让之后每个快捷键都带上 Fn。
+        let disabled = CGEvent(source: nil)!
+        #expect(!suppressor.handle(type: type, event: disabled))
+        #expect(state.snapshot([]).functionState == "unobserved")
+        // 复位后只记录状态，不改变未观测 Fn 在快照里的历史行为。
+        var logs: [String] = []
+        let events = ShortcutEventSequence.send(
+            keyCode: 37, modifiers: .maskCommand,
+            hardwareFlags: { [] }, modifierState: state,
+            eventPoster: { _ in true }, logger: { logs.append($0) }
+        )
+        #expect(events)
+        #expect(logs.first?.contains("hardware_function_state=unobserved") == true)
+    }
+
     @Test func navigationFunctionFilteringHasCorrelatedContentFreeDiagnostic() {
         var logs: [String] = []
         let state = ShortcutHardwareModifierState()
@@ -364,6 +389,61 @@ struct ShortcutLifecycleTests {
         ))
         #expect(events.allSatisfy { $0.flags.contains(.maskSecondaryFn) })
         #expect(events.last?.flags == .maskSecondaryFn)
+    }
+
+    @Test func helpKeyIdentityFlagIsNotCarriedIntoShortcuts() {
+        var events: [Edge] = []
+        #expect(ShortcutEventSequence.send(
+            keyCode: 4, modifiers: [.maskCommand, .maskShift],
+            hardwareFlags: { .maskHelp },
+            eventPoster: { events.append(Edge($0)); return true }
+        ))
+        #expect(events.map(\.code) == [56, 55, 4, 4, 55, 56])
+        // Help / Insert 用法会把 Help 位写进硬件快照，和 Fn 层键位写 Fn 位同理；
+        // 没有任何快捷键能请求 Help，所以它不能进入合成事件。
+        #expect(events.allSatisfy { !$0.flags.contains(.maskHelp) })
+        #expect(events.last?.flags == [])
+    }
+
+    @Test func capsLockStateStillRidesAlongWithShortcuts() {
+        var events: [Edge] = []
+        #expect(ShortcutEventSequence.send(
+            keyCode: 4, modifiers: .maskCommand,
+            hardwareFlags: { .maskAlphaShift },
+            eventPoster: { events.append(Edge($0)); return true }
+        ))
+        // 大小写锁定是真实状态，不能让合成字母退化成小写。
+        #expect(events.allSatisfy { $0.flags.contains(.maskAlphaShift) })
+    }
+
+    @Test(arguments: [
+        (UInt16(114), "help"), (115, "home"), (116, "page_navigation"),
+        (117, "forward_delete"), (119, "end"), (121, "page_navigation")
+    ])
+    func functionLayerKeysHaveStableDiagnosticKinds(_ sample: (UInt16, String)) {
+        #expect(ShortcutEventSequence.diagnosticKind(sample.0, modifiers: []) == sample.1)
+        // 带 Command 的快捷键仍归入既有分类，入口优先级不变。
+        #expect(ShortcutEventSequence.diagnosticKind(sample.0, modifiers: .maskCommand) == "command_shortcut")
+        #expect(ShortcutEventSequence.diagnosticKind(37, modifiers: []) == nil)
+    }
+
+    @Test func bareFunctionLayerShortcutGetsCorrelatedDiagnostics() {
+        var logs: [String] = []
+        let suppressor = KeyboardEventSuppressor(logger: { logs.append($0) })
+        let result = ShortcutEventSequence.send(
+            keyCode: 119, modifiers: [], hardwareFlags: { [] },
+            modifierState: ShortcutHardwareModifierState(),
+            eventPoster: { event in
+                #expect(!suppressor.handle(type: event.type, event: event))
+                return true
+            },
+            logger: { logs.append($0) }
+        )
+        #expect(result)
+        let request = logs.first { $0.contains("phase=requested") }
+        #expect(request?.contains("primary_kind=end") == true)
+        #expect(logs.filter { $0.contains("phase=event_submission") }.count == 2)
+        #expect(logs.filter { $0.contains("SHORTCUT OBSERVATION") }.count == 2)
     }
 
     @Test(arguments: [UInt16(0), 11, 36, 37, 48, 49, 51, 53, 96, 123, 124, 125, 126])

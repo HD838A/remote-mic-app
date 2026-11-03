@@ -46,23 +46,6 @@ struct SayAllDeepLinkRequest: Equatable {
     }
 }
 
-enum VokieDeepLink {
-    static func launchURL(for plan: OnboardingVoicePairingPlan) -> URL? {
-        guard plan.binding.tool == .vokie else { return nil }
-        var components = URLComponents()
-        components.scheme = "vokie"
-        components.host = "launch"
-        components.queryItems = [
-            URLQueryItem(name: "source", value: "xiaomi-mic"),
-            URLQueryItem(
-                name: "action",
-                value: plan.binding.gestureMode == .toggle ? "handsfree-ptt" : "ptt"
-            ),
-        ]
-        return components.url
-    }
-}
-
 extension Notification.Name {
     static let sayAllDeepLinkReceived = Notification.Name("sayall.deepLink.received")
 }

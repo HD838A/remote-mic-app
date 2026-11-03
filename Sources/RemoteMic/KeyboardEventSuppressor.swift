@@ -322,6 +322,10 @@ final class KeyboardEventSuppressor {
     func handle(type: CGEventType, event: CGEvent) -> Bool {
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
             logger("HID FILTER phase=disabled reason=\(type == .tapDisabledByTimeout ? "timeout" : "user_input") tap=session")
+            // 禁用窗口里的事件不会送到这里，松开的 Fn 边沿可能就此丢失。若保留旧的
+            // pressed，之后每个快捷键都会被强行加上 Fn，直到下一次真实按下 Fn。
+            // 复位成 unobserved 后，只有新的真实边沿才能让快照的 Fn 重新被信任。
+            hardwareModifierState.reset()
             // 本回调在 tap 专用线程上执行，端口引用由主线程写入，必须加锁读取。
             lock.lock()
             let tap = eventTap

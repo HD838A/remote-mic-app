@@ -7,7 +7,7 @@
 - Preview：普通版本从精确 `origin/main` SHA 构建一次；紧急 Hotfix 只允许从当前稳定 Tag 派生的精确 `origin/hotfix/vX.Y.Z` SHA 构建。两者都必须完成真实 UI 升级后才能发布公开 Pre-release。
 - Stable：用户明确指定一个已经发布并验证通过的 Pre-release，将它改为正式版；不重新构建。
 - 本地测试包：只为验证、不发布时，可以从任意分支或工作树打包。它不参加 Preview/Stable 候选、不上传 Release、不冒用 Preview/Stable 的版本号与已冻结 Build 号；但它仍是「一次打包」，必须按下方 Build 号不变量先递增自己的 `CFBundleVersion`。基线约束的放宽只对「不发布」这一种用途成立。
-- Build 号不变量：任何打包前都必须先递增 `CFBundleVersion`，再执行构建、签名、公证或上传。Preview、Hotfix、本地测试包和私有内部 Draft 一律适用，不存在「先打包、需要时再补号」或「只有 Preview 才升号」的例外。递增必须写进源码并被记录：本地测试包和私有 Draft 在独立的打包 worktree 与打包分支里递增并提交，不把递增留在公开 `main` 工作区。**不得为了让工作区变干净而回滚、复用或跳回旧 Build 号**；一个 Build 号只能对应一个已产出的包，已经用掉的号即使没有对应源码提交也不能再次使用，需要继续往前递增。
+- Build 号不变量：任何打包前都必须先递增 `CFBundleVersion`，再执行构建、签名、公证或上传。Preview、Hotfix、本地测试包和私有内部 Draft 一律适用，不存在「先打包、需要时再补号」或「只有 Preview 才升号」的例外。递增必须写进源码并被记录：本地测试包和私有 Draft 在独立的打包 worktree 与打包分支里递增并提交，不把递增留在公开 `main` 工作区。**不得为了让工作区变干净而回滚、复用或跳回旧 Build 号**；一个 Build 号只能对应一个已产出的包，已经用掉的号即使没有对应源码提交也不能再次使用，需要继续往前递增。**Build 号的唯一记录是远端已发布的标签**：私有 Draft 的标签形如 `v<版本>-local.<build>`，下一次的起点取远端该形态标签的最大值加一。`Resources/Info.plist` 只保存源码里的起点值，不跟随打包递增，因此**不得**把 `plutil` 读到的数字当作基线——2026-11-02 就因为按 plist 的 270 递增，撞上了已被 `v2.0.0-local.271`–`280` 占用的号段。打包前用 private-draft-release skill 的 `increment_macos_build.sh --plist <Info.plist> --repo <分发仓库>`，它会取远端最大标签与 plist 的较大值再递增；远端不可查时必须先人工确认最大值，不得直接对 plist 加一。
 - 发布 Workflow 只能从精确 `origin/main` 运行。普通新候选源码只能来自 `main`；`hotfix/vX.Y.Z` 是唯一允许的新候选源码例外。`release-main` 冻结为只读历史，但已公开的旧 Pre-release 可按兼容晋升门禁完成正式化。
 - 私有内部 Draft：使用 private-draft-release skill 的独立路径，目标仓库固定为 GetSayAll/SayAll，不在公开源码仓库创建内部 Draft。
 - “发布正式版”不是独立构建命令。没有指定现有 Pre-release 时，只能准备 Preview 或报告缺少授权。
@@ -30,6 +30,8 @@ Mac Remote 与其他 macOS 私有组件使用同一个私有 Swift Package。CI 
 ### 打包前发布私有 Mac 包
 
 `build-app.sh` 默认使用 `SAYALL_PRIVATE_PLATFORM_MODE=auto`。脚本先探测私有仓库读取权限。缺少权限时，它使用公开兼容层完成本地 App 打包。`SAYALL_PRIVATE_PLATFORM_MODE=public` 可显式选择公开打包，并跳过私有仓库探测。公开 CI 固定使用此模式。公开包不包含私有能力，不作为完整官方发布包。
+
+打包用的新 worktree 里没有 `Apps/MobileWeb/.private/`（该目录被 `.gitignore` 排除、不入库），**打包前先从主工作区把它复制过来**，否则会在 DMG 阶段报 `Developer ID app is missing a production Web Remote relay URL`。
 
 有读取权限时，按以下顺序准备：
 

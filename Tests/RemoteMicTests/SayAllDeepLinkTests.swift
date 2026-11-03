@@ -39,19 +39,4 @@ struct SayAllDeepLinkTests {
         #expect(request.status == nil)
         #expect(request.reason == nil)
     }
-
-    @Test func vokieLaunchDoesNotClaimShortcutSynchronization() throws {
-        let plan = try #require(OnboardingVoicePairingPlan.resolve(
-            tool: .vokie,
-            controlSource: .xiaomiRemote
-        ))
-        let url = try #require(VokieDeepLink.launchURL(for: plan))
-        let components = try #require(URLComponents(url: url, resolvingAgainstBaseURL: false))
-        let items = Dictionary(uniqueKeysWithValues: (components.queryItems ?? []).map {
-            ($0.name, $0.value ?? "")
-        })
-        #expect(items["action"] == "handsfree-ptt")
-        #expect(items["shortcut"] == nil)
-        #expect(items["microphoneId"] == nil)
-    }
 }

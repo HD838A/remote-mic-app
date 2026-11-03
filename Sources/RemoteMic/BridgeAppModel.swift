@@ -3774,11 +3774,12 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
                 source: Self.commonPhraseHIDSource(profileID)
             ) == true
         }
-        monitor.onRuntimeButton = { [weak self] profileID, button, phase in
+        monitor.onRuntimeButton = { [weak self] profileID, button, phase, timestampMilliseconds in
             if self?.handleButtonGestureLearning(
                 phase,
                 button: button,
-                profileID: profileID
+                profileID: profileID,
+                timestampMilliseconds: timestampMilliseconds
             ) == true { return true }
             return self?.membershipFeature.handleCommonPhrase(
                 button: button.rawValue,
@@ -4373,9 +4374,17 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         return true
     }
 
-    func cancelButtonGestureLearning(reason: String = "user_cancelled") {
-        guard buttonGestureLearningStatus.isActive || buttonGestureLearningStatus.step == .complete
+    /// 把已保存的学习结果恢复成「学习完成」状态，只影响展示，不改识别时间。
+    func restoreButtonGestureLearning(_ stored: StoredButtonGestureLearning, model: XiaomiRemoteModel) {
+        guard buttonGestureLearningStatus.step != .complete ||
+                buttonGestureLearningStatus.model != model
         else { return }
+        buttonGestureLearningStatus = .restored(from: stored, model: model)
+    }
+
+    func cancelButtonGestureLearning(reason: String = "user_cancelled") {
+        // 已经学完的结果不再被页面切换、遥控器变化或输入重置清掉。
+        guard buttonGestureLearningStatus.isCancellable else { return }
         AppLogger.shared.write(
             "BUTTON GESTURE LEARNING operation_id=\(buttonGestureLearningOperationID ?? "none") " +
                 "phase=cancelled result=cancelled reason=\(reason)"
@@ -4395,18 +4404,30 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     private func handleButtonGestureLearning(
         _ phase: RemoteButtonPhase,
         button: RemoteButton,
-        profileID: UUID?
+        profileID: UUID?,
+        timestampMilliseconds: Int? = nil
     ) -> Bool {
         guard claimsButtonGestureLearning(profileID: profileID),
               let model = settings.settingsModel(for: profileID) else { return false }
         let previousStep = buttonGestureLearner.status.step
+        let previousDiscardedDouble = buttonGestureLearner.status.discardedDoubleClickEdges
+        let previousDiscardedLong = buttonGestureLearner.status.discardedLongPressEdges
         let result = buttonGestureLearner.handle(
             phase,
             button: button,
             model: model,
-            timestampMilliseconds: Int(ProcessInfo.processInfo.systemUptime * 1_000)
+            timestampMilliseconds: timestampMilliseconds ?? Self.uptimeMilliseconds()
         )
         buttonGestureLearningStatus = buttonGestureLearner.status
+        if previousDiscardedDouble != buttonGestureLearningStatus.discardedDoubleClickEdges ||
+            previousDiscardedLong != buttonGestureLearningStatus.discardedLongPressEdges {
+            AppLogger.shared.write(
+                "BUTTON GESTURE LEARNING operation_id=\(buttonGestureLearningOperationID ?? "none") " +
+                    "phase=measured result=discarded reason=implausible_gesture_interval " +
+                    "double=\(buttonGestureLearningStatus.discardedDoubleClickEdges) " +
+                    "long=\(buttonGestureLearningStatus.discardedLongPressEdges)"
+            )
+        }
         if previousStep != buttonGestureLearningStatus.step {
             AppLogger.shared.write(
                 "BUTTON GESTURE LEARNING operation_id=\(buttonGestureLearningOperationID ?? "none") " +
@@ -4424,6 +4445,12 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             )
         }
         return true
+    }
+
+    /// 没有硬件报告时间戳的来源（苹果遥控器、Chromecast）用同一个单调时钟补齐，
+    /// 保证三种输入在学习器里可以互相比较，也不会退回挂钟时间。
+    private static func uptimeMilliseconds() -> Int {
+        Int(clamping: DispatchTime.now().uptimeNanoseconds / 1_000_000)
     }
 
     /// 用户在按键页手动点过设备卡：在重新进入按键页之前，连接事件不再改变选中态。
@@ -4562,12 +4589,55 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
                 if settings.updateRemoteProfileSystemName(
                     profile.id, name: name, serialNumber: observation?.serialNumber
                 ) { changed += 1 }
+                if settings.updateRemoteProfileHardwareIdentity(
+                    profile.id, serialNumber: observation?.serialNumber
+                ) { changed += 1 }
             }
         }
+        collapseDuplicateRemoteProfiles()
         AppLogger.shared.write(
             "REMOTE NAME REFRESH operation_id=\(remoteDeviceNameRefreshOperation) " +
                 "phase=completed reason=\(reason.rawValue) requested=\(requested) " +
                 "resolved=\(resolved) changed=\(changed) unavailable=\(requested - resolved)"
+        )
+    }
+
+    /// 把被并掉的档案 ID 从运行时映射里搬走。
+    ///
+    /// 去重时优先保留正在使用的那条，所以被并掉的通常是没有连接的旧档案；但它的
+    /// 显示名、电量、设备映射仍可能留在字典里，必须一起迁到保留下来的那条，
+    /// 否则下一次渲染会读到一个已经不存在的档案。
+    private func collapseDuplicateRemoteProfiles() {
+        // `connectedRemoteProfileIDs` 由 `refreshBluetoothPresentation` 汇总，可能还没跟上
+        // 刚刚建好的档案，所以这里把各链路自己的连接集合也带上：正在用的那条必须留下。
+        var liveProfileIDs = connectedRemoteProfileIDs
+        liveProfileIDs.formUnion(connectedAppleRemoteProfileIDs)
+        liveProfileIDs.formUnion(connectedChromecastProfileIDs)
+        let replacements = settings.collapseDuplicateRemoteProfiles(
+            preferring: liveProfileIDs
+        )
+        guard !replacements.isEmpty else { return }
+        for (discarded, kept) in replacements {
+            if let name = remoteSystemDeviceNames[discarded], remoteSystemDeviceNames[kept] == nil {
+                remoteSystemDeviceNames[kept] = name
+            }
+            remoteSystemDeviceNames.removeValue(forKey: discarded)
+            if let level = remoteBatteryLevels[discarded], remoteBatteryLevels[kept] == nil {
+                remoteBatteryLevels[kept] = level
+            }
+            if let state = remotePowerStates[discarded], remotePowerStates[kept] == nil {
+                remotePowerStates[kept] = state
+            }
+            if let model = pendingRemoteModels[discarded], pendingRemoteModels[kept] == nil {
+                pendingRemoteModels[kept] = model
+            }
+            for (device, profileID) in appleRemoteProfileIDs where profileID == discarded {
+                appleRemoteProfileIDs[device] = kept
+            }
+        }
+        AppLogger.shared.write(
+            "REMOTE PROFILES phase=completed result=collapsed merged=\(replacements.count) " +
+                "remaining=\(settings.remoteDeviceProfiles.count)"
         )
     }
 

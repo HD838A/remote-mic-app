@@ -116,17 +116,28 @@ enum ScrollRegionInjector {
         let isValidTarget = makeTargetValidator(
             window: window, expectedFrame: windowFrame, processIdentifier: application.processIdentifier
         )
-        let candidates = scrollCandidates(in: window, windowFrame: windowFrame)
 
         let candidate: Candidate
         if let learnedTarget {
-            switch ScrollRegionRule.bestMatchIndex(in: candidates.map(\.descriptor), recorded: learnedTarget) {
-            case .matched(let found):
-                candidate = candidates[found]
-            case .failed(let outcome):
-                return ScrollPageResult(outcome: outcome, verifiedMovement: nil)
+            // 学过区域就用记录的中心点直接命中容器，省掉整棵树的多达 5000 个节点扫描；
+            // 命中结果对不上记录时再退回完整扫描。
+            if let direct = candidateAtLearnedPoint(
+                learnedTarget,
+                windowFrame: windowFrame,
+                processIdentifier: application.processIdentifier
+            ) {
+                candidate = direct
+            } else {
+                let candidates = scrollCandidates(in: window, windowFrame: windowFrame)
+                switch ScrollRegionRule.bestMatchIndex(in: candidates.map(\.descriptor), recorded: learnedTarget) {
+                case .matched(let found):
+                    candidate = candidates[found]
+                case .failed(let outcome):
+                    return ScrollPageResult(outcome: outcome, verifiedMovement: nil)
+                }
             }
         } else {
+            let candidates = scrollCandidates(in: window, windowFrame: windowFrame)
             guard let preset = ScrollRegionPreset.rule(for: bundleIdentifier) else {
                 return ScrollPageResult(outcome: .needsCalibration, verifiedMovement: nil)
             }
@@ -158,11 +169,16 @@ enum ScrollRegionInjector {
 
         if axActions(candidate.element).contains("AXScrollUpByPage") {
             let action = direction == .up ? "AXScrollUpByPage" : "AXScrollDownByPage"
-            guard AXUIElementPerformAction(candidate.element, action as CFString) == .success else {
-                return ScrollPageResult(outcome: .eventFailed, verifiedMovement: nil)
+            if AXUIElementPerformAction(candidate.element, action as CFString) == .success {
+                return finish(window: window, region: candidate.descriptor.frame, before: before,
+                              outcome: .scrolledByPageAction, verifyMovement: verifyMovement)
             }
-            return finish(window: window, region: candidate.descriptor.frame, before: before,
-                          outcome: .scrolledByPageAction, verifyMovement: verifyMovement)
+            // 文本编辑这类 App 会声明支持 page action，实际执行却失败。
+            // 这时退回下面的滚轮注入，不要把这个能力缺口当成翻页失败抛给用户。
+            AppLogger.shared.write(
+                "SCROLL PAGE page_action_failed action=\(action) fallback=wheel " +
+                "bundle=\(bundleIdentifier)"
+            )
         }
 
         // No page action: scroll the recorded region by its visible height,
@@ -180,6 +196,85 @@ enum ScrollRegionInjector {
         }
         return finish(window: window, region: candidate.descriptor.frame, before: before,
                       outcome: outcome, verifyMovement: verifyMovement)
+    }
+
+    /// 滚到顶部 / 底部：绝对位置语义，一次投递足够大的行数，冲过头由内容边界截住。
+    ///
+    /// 与翻页的区别：翻页是相对一屏、可连发；到边缘是一次性跳转、不可连发（见 PRODUCT_SPEC）。
+    static func scrollToEdge(
+        _ edge: ScrollEdge,
+        learnedTarget: ScrollRegionTarget? = nil
+    ) -> ScrollPageResult {
+        guard AXIsProcessTrusted() else {
+            return ScrollPageResult(outcome: .accessibilityUnavailable, verifiedMovement: nil)
+        }
+        guard let application = NSWorkspace.shared.frontmostApplication,
+              let bundleIdentifier = application.bundleIdentifier
+        else { return ScrollPageResult(outcome: .noFrontmostApplication, verifiedMovement: nil) }
+
+        let applicationElement = AXUIElementCreateApplication(application.processIdentifier)
+        guard let window = focusedWindow(of: applicationElement) else {
+            return ScrollPageResult(outcome: .regionUnavailable, verifiedMovement: nil)
+        }
+        let windowFrame = axFrame(window) ?? .zero
+        let region = edgeRegionRect(learnedTarget, windowFrame: windowFrame)
+
+        let isValidTarget = makeTargetValidator(
+            window: window, expectedFrame: windowFrame,
+            processIdentifier: application.processIdentifier
+        )
+        let before = structuralSignature(in: window, region: region)
+        let direction: ScrollPageDirection = edge == .top ? .up : .down
+        let outcome = runEdgeWheel(
+            direction: direction,
+            at: CGPoint(x: region.midX, y: region.midY),
+            isValidTarget: isValidTarget
+        )
+        AppLogger.shared.write(
+            "SCROLL EDGE bundle=\(bundleIdentifier) edge=\(edge == .top ? "top" : "bottom") " +
+            "lines=\(ScrollRegionRule.edgeScrollLines) result=\(outcome.rawValue)"
+        )
+        guard outcome == .scrolledByPixelWheel else {
+            return ScrollPageResult(outcome: outcome, verifiedMovement: nil)
+        }
+        return finish(window: window, region: region, before: before,
+                      outcome: .scrolledToEdge, verifyMovement: true)
+    }
+
+    private static func edgeRegionRect(
+        _ target: ScrollRegionTarget?,
+        windowFrame: CGRect
+    ) -> CGRect {
+        guard let frame = target?.normalizedFrame,
+              ScrollRegionRule.isValid(normalizedFrame: frame),
+              windowFrame.width > 0, windowFrame.height > 0
+        else { return windowFrame }
+        return CGRect(
+            x: windowFrame.minX + frame.x * windowFrame.width,
+            y: windowFrame.minY + frame.y * windowFrame.height,
+            width: frame.width * windowFrame.width,
+            height: frame.height * windowFrame.height
+        )
+    }
+
+    private static func runEdgeWheel(
+        direction: ScrollPageDirection,
+        at point: CGPoint,
+        isValidTarget: @escaping () -> Bool
+    ) -> ScrollPageOutcome {
+        var remaining = ScrollRegionRule.edgeScrollLines
+        while remaining > 0 {
+            guard isValidTarget() else { return .cancelled }
+            let lines = min(ScrollRegionRule.edgeLinesPerChunk, remaining)
+            guard postLineWheel(direction: direction, lines: lines, at: point) else {
+                return .eventFailed
+            }
+            remaining -= lines
+            if remaining > 0 {
+                Thread.sleep(forTimeInterval: ScrollRegionRule.chunkInterval)
+            }
+        }
+        return .scrolledByPixelWheel
     }
 
     static func usesContainerMatching(role: String) -> Bool {
@@ -262,6 +357,75 @@ enum ScrollRegionInjector {
         let descriptor: ScrollRegionDescriptor
     }
 
+    /// 用学习时记录的归一化区域做一次命中测试，直接拿到滚动容器。
+    ///
+    /// 学习阶段本来就是这么取到容器的（`captureTarget`），翻页时再扫一遍整棵树属于重复劳动：
+    /// 这里只走「命中元素 → 向上找滚动祖先」这两步，深度受限，节点数无关。
+    /// 任何一步对不上记录（角色、identifier、边界）都返回 nil，由调用方退回完整扫描。
+    private static func candidateAtLearnedPoint(
+        _ target: ScrollRegionTarget,
+        windowFrame: CGRect,
+        processIdentifier: pid_t
+    ) -> Candidate? {
+        // identifier 为空的区域分不清同名容器，宁可全量扫描，也不要滚错区域。
+        let started = Date()
+        guard !target.identifier.isEmpty,
+              let frame = target.normalizedFrame,
+              ScrollRegionRule.isValid(normalizedFrame: frame),
+              windowFrame.width > 0, windowFrame.height > 0
+        else { return miss("no_identifier") }
+
+        let rect = CGRect(
+            x: windowFrame.minX + frame.x * windowFrame.width,
+            y: windowFrame.minY + frame.y * windowFrame.height,
+            width: frame.width * windowFrame.width,
+            height: frame.height * windowFrame.height
+        )
+        guard rect.width >= 8, rect.height >= 8 else { return miss("rect") }
+
+        var hit: AXUIElement?
+        guard AXUIElementCopyElementAtPosition(
+            AXUIElementCreateSystemWide(),
+            Float(rect.midX), Float(rect.midY), &hit
+        ) == .success, let element = hit else { return nil }
+
+        var hitProcessIdentifier: pid_t = 0
+        guard AXUIElementGetPid(element, &hitProcessIdentifier) == .success,
+              hitProcessIdentifier == processIdentifier
+        else { return miss("pid") }
+
+        guard let container = scrollAncestor(of: element) else { return miss("no_container") }
+        let role = axString(container, kAXRoleAttribute)
+        guard role == target.role else { return miss("role_\(role)") }
+        if axString(container, kAXIdentifierAttribute) != target.identifier {
+            return miss("identifier")
+        }
+        guard let containerFrame = axFrame(container),
+              containerFrame.width >= 8, containerFrame.height >= 8,
+              containerFrame.intersects(windowFrame)
+        else { return miss("frame") }
+
+        AppLogger.shared.write(
+            "SCROLL DIRECT role=\(role) nodes_skipped=true " +
+                "elapsed_ms=\(Int(Date().timeIntervalSince(started) * 1000))"
+        )
+        return Candidate(
+            element: container,
+            descriptor: ScrollRegionDescriptor(
+                role: role,
+                identifier: target.identifier,
+                context: target.context,
+                frame: containerFrame,
+                windowFrame: windowFrame
+            )
+        )
+    }
+
+    private static func miss(_ reason: String) -> Candidate? {
+        AppLogger.shared.write("SCROLL DIRECT miss=\(reason)")
+        return nil
+    }
+
     private static func focusedWindow(of applicationElement: AXUIElement) -> AXUIElement? {
         [
             axElement(applicationElement, kAXFocusedWindowAttribute),
@@ -270,6 +434,7 @@ enum ScrollRegionInjector {
     }
 
     private static func scrollCandidates(in window: AXUIElement, windowFrame: CGRect) -> [Candidate] {
+        let started = Date()
         var result: [Candidate] = []
         var stack: [(element: AXUIElement, depth: Int, context: String)] = [(window, 0, "")]
         var visited = 0
@@ -300,6 +465,10 @@ enum ScrollRegionInjector {
                 }
             }
         }
+        AppLogger.shared.write(
+            "SCROLL SCAN nodes=\(visited) candidates=\(result.count) " +
+                "elapsed_ms=\(Int(Date().timeIntervalSince(started) * 1000))"
+        )
         return result
     }
 

@@ -225,6 +225,7 @@ struct RemoteButtonsTests {
             "Chrome": "com.google.Chrome",
             "Safari": "com.apple.Safari",
             "Zed": "dev.zed.Zed",
+            "DimAgent": "com.dimcode.app",
         ])
         #expect(Set(ButtonAction.allCases.compactMap(\.presetApplication)) == Set(PresetApplication.allCases))
     }
@@ -233,6 +234,7 @@ struct RemoteButtonsTests {
         #expect(PresetApplication.codex.focusStrategy == .accessibilityComposer)
         #expect(PresetApplication.workBuddy.focusStrategy == .accessibilityComposer)
         #expect(PresetApplication.claude.focusStrategy == .accessibilityComposer)
+        #expect(PresetApplication.dimAgent.focusStrategy == .accessibilityComposer)
         #expect(PresetApplication.cmux.focusStrategy == .cmuxSurfaceAPI)
         #expect(PresetApplication.allCases.filter { $0.focusStrategy == nil } == [
             .remoteMic, .weChat, .cursor, .xcode, .slack, .weCom, .neteaseMusic, .chrome, .safari, .zed,
@@ -289,6 +291,32 @@ struct RemoteButtonsTests {
         )
         #expect(restored == configured)
         #expect(restored.applicationProfileID == nil)
+    }
+
+    /// 未安装 DimAgent 时不应在「打开具体 APP」里多出卡片；已配置过的绑定仍然保留。
+    @Test func dimAgentActionOnlyAppearsWhenInstalled() {
+        let notInstalled = ButtonAction.pickerActions(
+            installedBundleIdentifiers: [PresetApplication.safari.bundleIdentifier],
+            current: .escape,
+            experimentalContinuousRecordingEnabled: false
+        )
+        #expect(!notInstalled.contains(.openDimAgent))
+        #expect(!notInstalled.contains(.openWorkBuddy))
+
+        let installed = ButtonAction.pickerActions(
+            installedBundleIdentifiers: [PresetApplication.dimAgent.bundleIdentifier],
+            current: .escape,
+            experimentalContinuousRecordingEnabled: false
+        )
+        #expect(installed.contains(.openDimAgent))
+        #expect(!installed.contains(.openSafari))
+
+        let configuredThenRemoved = ButtonAction.pickerActions(
+            installedBundleIdentifiers: [PresetApplication.safari.bundleIdentifier],
+            current: .openDimAgent,
+            experimentalContinuousRecordingEnabled: false
+        )
+        #expect(configuredThenRemoved.contains(.openDimAgent))
     }
 
     @Test func applicationActionsNeverRepeat() {
@@ -818,6 +846,61 @@ struct RemoteButtonsTests {
                 $0.contains("latch_remaining_ms=492")
         })
         #expect(performedActions == [.customShortcut])
+    }
+
+    @Test func runtimeButtonCarriesTheReportTimestampNotTheProcessingTime() throws {
+        final class Clock {
+            var milliseconds: UInt64 = 0
+        }
+
+        let suiteName = "RemoteButtonsTests.reportTimestamp.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = AppSettings(defaults: defaults)
+        settings.customMappingEnabled = true
+        let profileID = try #require(settings.selectedRemoteProfileID)
+        let clock = Clock()
+        var received: [(RemoteButton, RemoteButtonPhase, Int)] = []
+        let monitor = HIDRemoteMonitor(
+            settings: settings,
+            profileID: profileID,
+            ownsEventSuppressor: false,
+            runtimePermissions: { true },
+            actionPerformer: { _, _, _ in true },
+            diagnosticLogger: { _ in },
+            monotonicNow: { clock.milliseconds * 1_000_000 }
+        )
+        monitor.onRuntimeButton = { _, button, phase, milliseconds in
+            received.append((button, phase, milliseconds))
+            return true
+        }
+        #expect(monitor.connectSimulatedDevice(fingerprint: "report-timestamp", profileID: profileID))
+
+        let press = Data([UInt8(RemoteButton.ok.hidUsage), 0, 0, 0, 0, 0])
+        let release = Data(repeating: 0, count: press.count)
+        monitor.handleSimulatedReport(
+            reportID: 1,
+            data: press,
+            timestampNanoseconds: 5_000 * 1_000_000
+        )
+        // 主线程被界面更新占住 4 秒，松手报告晚到这里才被处理。
+        clock.milliseconds = 9_000
+        monitor.handleSimulatedReport(
+            reportID: 1,
+            data: release,
+            timestampNanoseconds: 5_284 * 1_000_000
+        )
+
+        #expect(received.count == 2)
+        #expect(received[0].2 == 5_000)
+        // 必须是报告到达的 5 284 ms，不是处理时刻的 9 000 ms。
+        #expect(received[1].2 == 5_284)
+    }
+
+    @Test func hidReportClockConvertsMachTicksToUptimeNanoseconds() {
+        // 无论 timebase 是多少，零时刻都必须落在零，且换算单调不减。
+        #expect(HIDReportClock.uptimeNanoseconds(fromMachTime: 0) == 0)
+        #expect(HIDReportClock.milliseconds(fromUptimeNanoseconds: 5_284_000_000) == 5_284)
     }
 
     @Test func rapidPressOptInLetsNonRepeatableActionsFireOnEveryRawPress() throws {
@@ -2050,6 +2133,97 @@ struct RemoteButtonsTests {
         #expect(KeyboardInjector.composerCandidateScore(candidates[2], windowFrame: windowFrame) == nil)
     }
 
+    /// DimAgent 的输入框与滚动区域都随 App 发布：用户不学习也能用。
+    @Test func dimAgentShipsBuiltInInputTargetAndScrollRegion() throws {
+        let target = try #require(
+            AccessibilityFocusPreset.target(for: PresetApplication.dimAgent.bundleIdentifier)
+        )
+        #expect(target.role == "AXTextArea")
+        #expect(target.normalizedFrame != nil)
+        #expect(AccessibilityFocusPreset.target(for: "com.example.unknown") == nil)
+
+        let region = try #require(
+            ScrollRegionPreset.rule(for: PresetApplication.dimAgent.bundleIdentifier)
+        )
+        #expect(region.placement == .windowRect)
+        #expect(region.strategy == .lineWheel)
+    }
+
+    /// 内置记录必须能被现有的记录匹配路径命中；否则「内置」只是一张不会被读到的表。
+    @Test func builtInDimAgentTargetMatchesTheRecordedGeometry() throws {
+        let windowFrame = CGRect(x: 0, y: 0, width: 1_000, height: 800)
+        let target = try #require(
+            AccessibilityFocusPreset.target(for: PresetApplication.dimAgent.bundleIdentifier)
+        )
+        let normalized = try #require(target.normalizedFrame)
+        let candidate = KeyboardInjector.AccessibilityTextCandidate(
+            role: target.role,
+            identifier: "",
+            title: "",
+            description: "",
+            help: "",
+            placeholder: "",
+            context: target.context,
+            frame: CGRect(
+                x: normalized.x * windowFrame.width,
+                y: normalized.y * windowFrame.height,
+                width: normalized.width * windowFrame.width,
+                height: normalized.height * windowFrame.height
+            ),
+            enabled: true
+        )
+        #expect(KeyboardInjector.recordedAccessibilityCandidateScore(
+            candidate,
+            target: target,
+            windowTitle: target.windowTitle,
+            windowFrame: windowFrame
+        ) != nil)
+
+        // 同窗口里位置不同的另一个输入框不得抢走记录。
+        let decoy = KeyboardInjector.AccessibilityTextCandidate(
+            role: target.role,
+            identifier: "",
+            title: "",
+            description: "",
+            help: "",
+            placeholder: "",
+            context: target.context,
+            frame: CGRect(x: 200, y: 120, width: 740, height: 60),
+            enabled: true
+        )
+        let recordedScore = try #require(KeyboardInjector.recordedAccessibilityCandidateScore(
+            candidate,
+            target: target,
+            windowTitle: target.windowTitle,
+            windowFrame: windowFrame
+        ))
+        let decoyScore = KeyboardInjector.recordedAccessibilityCandidateScore(
+            decoy,
+            target: target,
+            windowTitle: target.windowTitle,
+            windowFrame: windowFrame
+        ) ?? 0
+        #expect(recordedScore - decoyScore >= 40)
+    }
+
+    /// 记录失效时回退到 composer 启发式：DimAgent 的无语义输入框也要能被扫到。
+    @Test func dimAgentComposerIsReachableWithoutAnyLearnedTarget() {
+        let windowFrame = CGRect(x: 0, y: 0, width: 1_000, height: 800)
+        let candidates = [
+            KeyboardInjector.AccessibilityTextCandidate(
+                role: "AXTextField", identifier: "", title: "", description: "",
+                help: "", placeholder: "搜索", context: "DimAgent",
+                frame: CGRect(x: 120, y: 60, width: 480, height: 32), enabled: true
+            ),
+            KeyboardInjector.AccessibilityTextCandidate(
+                role: "AXTextArea", identifier: "", title: "", description: "",
+                help: "", placeholder: "", context: "DimAgent",
+                frame: CGRect(x: 232, y: 634, width: 738, height: 61), enabled: true
+            ),
+        ]
+        #expect(KeyboardInjector.bestComposerCandidateIndex(candidates, windowFrame: windowFrame) == 1)
+    }
+
     @Test func codexComposerSemanticsAndTraversalPriorityReachTheVisibleEditor() {
         let codexComposer = KeyboardInjector.AccessibilityTextCandidate(
             role: "AXTextArea",
@@ -2179,6 +2353,29 @@ struct RemoteButtonsTests {
             &focusedValue
         )
         #expect(result == .success)
+        let focused = try #require(focusedValue)
+        #expect(CFGetTypeID(focused) == AXUIElementGetTypeID())
+        var role: CFTypeRef?
+        #expect(AXUIElementCopyAttributeValue(
+            unsafeBitCast(focused, to: AXUIElement.self), kAXRoleAttribute as CFString, &role
+        ) == .success)
+        #expect(role as? String == kAXTextAreaRole as String)
+    }
+
+    /// 真机验收：DimAgent 没有任何学习记录时，打开动作应自己把焦点落到输入框。
+    /// 需要辅助功能权限，且会切换前台 App，因此默认不跑。
+    @Test func liveDimAgentFocusUsesTheBuiltInRecordWithoutLearning() async throws {
+        guard ProcessInfo.processInfo.environment["REMOTEMIC_LIVE_DIMAGENT_TEST"] == "1" else { return }
+        #expect(KeyboardInjector.send(.openDimAgent))
+        try await Task.sleep(for: .seconds(3))
+        let application = try #require(NSWorkspace.shared.frontmostApplication)
+        #expect(application.bundleIdentifier == PresetApplication.dimAgent.bundleIdentifier)
+        var focusedValue: CFTypeRef?
+        #expect(AXUIElementCopyAttributeValue(
+            AXUIElementCreateApplication(application.processIdentifier),
+            kAXFocusedUIElementAttribute as CFString,
+            &focusedValue
+        ) == .success)
         let focused = try #require(focusedValue)
         #expect(CFGetTypeID(focused) == AXUIElementGetTypeID())
         var role: CFTypeRef?

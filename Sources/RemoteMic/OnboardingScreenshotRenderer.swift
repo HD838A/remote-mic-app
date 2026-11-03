@@ -110,6 +110,11 @@ enum OnboardingScreenshotRenderer {
         let requestedGuideStep = ProcessInfo.processInfo.environment[
             "REMOTE_MIC_ONBOARDING_SCREENSHOT_GUIDE_STEP"
         ].flatMap(Int.init)
+        // 放大层是点击后才出现的状态，离屏渲染没有鼠标交互；用资源名直接注入，
+        // 才能对「点击查看大图」的版式出图。资源名与 `Resources/Onboarding` 一致。
+        let requestedGuideZoom = ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_ONBOARDING_SCREENSHOT_GUIDE_ZOOM"
+        ].flatMap { $0.isEmpty ? nil : $0 }
         let requestedControlMethod = ProcessInfo.processInfo.environment[
             "REMOTE_MIC_ONBOARDING_SCREENSHOT_CONTROL_METHOD"
         ].flatMap(OnboardingControlMethod.init(rawValue:))
@@ -206,6 +211,7 @@ enum OnboardingScreenshotRenderer {
                     .other: .unknown,
                 ],
                 initialInputMethodGuideStep: requestedGuideStep,
+                initialGuideImageZoomResource: requestedGuideZoom,
                 remoteInputDiagnosticOverride: remoteInputDiagnostic,
                 siriRemotePackageInstalledOverride: ProcessInfo.processInfo.environment[
                     "REMOTE_MIC_ONBOARDING_SCREENSHOT_SIRI_REMOTE_INSTALLED"

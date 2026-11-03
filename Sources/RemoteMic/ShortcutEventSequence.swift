@@ -209,6 +209,13 @@ enum ShortcutEventSequence {
         CGEventFlags([.maskAlphaShift, .maskHelp])
     ) { $0.union($1.flag).union($1.leftDeviceBit).union($1.rightDeviceBit) }
 
+    // The subset of hardwareModifierMask that may ride along into a synthesized
+    // event. Alpha shift is a real lock state, so a synthesized letter keeps its
+    // case. Help is key identity, not a modifier: the Help / Insert usage reports
+    // it the same way Fn-layer keys report the Fn bit, and no configured shortcut
+    // can ask for it, so carrying it only gives the target app an extra modifier.
+    private static let preservedModifierMask = hardwareModifierMask.subtracting(.maskHelp)
+
     static func diagnosticFlags(_ flags: CGEventFlags) -> UInt64 {
         flags.intersection(hardwareModifierMask.union(.maskNumericPad)).rawValue
     }
@@ -223,12 +230,27 @@ enum ShortcutEventSequence {
         }
     }
 
+    // Fn-layer usages share the Fn-bit artifact with PageUp / PageDown. They are
+    // also the keys most likely to need that investigation, so every one of them
+    // needs a stable category; without it a shortcut recorded on a bare Home,
+    // End, Help or Forward Delete produced no event_submission lines at all.
+    static func functionLayerKind(_ keyCode: CGKeyCode) -> String? {
+        switch keyCode {
+        case 114: return "help"
+        case 115: return "home"
+        case 116, 121: return "page_navigation"
+        case 117: return "forward_delete"
+        case 119: return "end"
+        default: return nil
+        }
+    }
+
     // Log only stable action categories for our configured synthetic transactions.
     // Never log the letter, raw key code, text, App identity or shortcut name.
     static func diagnosticKind(_ keyCode: CGKeyCode, modifiers: CGEventFlags) -> String? {
         if modifiers.contains(.maskControl), let kind = navigationKind(keyCode) { return kind }
         if modifiers.contains(.maskCommand) { return "command_shortcut" }
-        if keyCode == 116 || keyCode == 121 { return "page_navigation" }
+        if let kind = functionLayerKind(keyCode) { return kind }
         return nil
     }
 
@@ -281,7 +303,7 @@ enum ShortcutEventSequence {
         let selectedModifiers = selectedModifiers(for: requested)
         let rawHardwareFlags = hardwareFlags()
         let hardwareSnapshot = modifierState.snapshot(rawHardwareFlags)
-        var physicalAtStart = hardwareSnapshot.flags.intersection(hardwareModifierMask)
+        var physicalAtStart = hardwareSnapshot.flags.intersection(preservedModifierMask)
         var functionFiltered = hardwareSnapshot.removedFunctionFlag
         // A Fn bit that only the raw HID snapshot reports must not enter a shortcut
         // that does not ask for Fn. Otherwise Command+Shift+H becomes

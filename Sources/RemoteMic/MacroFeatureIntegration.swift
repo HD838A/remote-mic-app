@@ -259,11 +259,43 @@ final class MacroFeatureIntegration: ObservableObject {
                 default: return .disabled
                 }
             }
+            #if SAYALL_BUTTON_PROFILE_BINDING_TEXT
+            // 私有组件提供真实键名；缺了它按键页只会显示修饰键符号。
+            let keyLabel = buttonProfilesFeature.shortcutLabel(id: key) ?? ""
+            #else
+            let keyLabel = ""
+            #endif
             return ConfiguredButtonAction(action: .customShortcut,
-                shortcut: CustomKeyboardShortcut(keyCode: shortcut.keyCode, modifierFlags: flags, keyLabel: ""))
+                shortcut: CustomKeyboardShortcut(keyCode: shortcut.keyCode, modifierFlags: flags, keyLabel: keyLabel))
         case .focus:
             return ConfiguredButtonAction(action: .focusInput, shortcut: nil)
         }
+        #else
+        return nil
+        #endif
+    }
+
+    /// 截图/测试用：渲染前同步载入方案。
+    ///
+    /// `SettingsView` 的 `onAppear` 会调用 `prepareMappingDevice`，而它在未加载时
+    /// 会创建默认方案并立刻保存，把磁盘上已有方案冲掉。先同步载入即可避免。
+    func loadProfilesForScreenshot() {
+        #if canImport(SayAllButtonProfiles) && SAYALL_SCREENSHOT_PROFILE_SEED
+        try? buttonProfilesFeature.loadProfilesSynchronously()
+        #endif
+    }
+
+    /// 方案绑定的显示文案，与键位方案页共用私有组件里同一份格式化结果。
+    ///
+    /// 返回 nil 有两种含义，调用方都应当回落到基础映射：
+    /// 方案没有覆盖这个按键，或私有组件还没提供这套 API。
+    func profileBindingText(device: UUID?, profile: UUID? = nil, button: RemoteButton,
+                            trigger: ButtonTrigger) -> (compact: String, detailed: String)? {
+        #if canImport(SayAllButtonProfiles) && SAYALL_BUTTON_PROFILE_BINDING_TEXT
+        guard let resolved = buttonProfilesFeature.resolvedBindingText(
+            profile: profile, button: button.rawValue, trigger: trigger.rawValue
+        ) else { return nil }
+        return (resolved.text.compact, resolved.text.detailed)
         #else
         return nil
         #endif
@@ -765,6 +797,8 @@ final class MacroFeatureIntegration: ObservableObject {
         remoteModel: XiaomiRemoteModel?,
         hostActionSections: [ButtonProfileHostActionSection],
         settings: AppSettings? = nil,
+        holdSummaryProvider: ((UUID, String) -> String)? = nil,
+        onChooseApplication: ((@escaping (String) -> Void) -> Void)? = nil,
         onEditKeys: @escaping (UUID) -> Void = { _ in },
         onChooseCustomApplication: ((@escaping (String, String, Data) -> Void) -> Void)? = nil,
         chromecastReservedControlIDs: Set<String> = ["left", "right", "select"],
@@ -794,6 +828,9 @@ final class MacroFeatureIntegration: ObservableObject {
                 )
             },
             baseBindingSummaries: settings.map { baseBindingSummaries($0, remoteProfileID: selectedRemoteProfileID) } ?? [],
+            holdSummaryProvider: holdSummaryProvider,
+            onChooseApplication: onChooseApplication,
+            onEditKeys: onEditKeys,
             membershipNotice: membershipNotice,
             onChooseCustomApplication: onChooseCustomApplication.map { callback in
                 { completion in
@@ -829,6 +866,9 @@ final class MacroFeatureIntegration: ObservableObject {
                 )
             },
             baseBindingSummaries: settings.map { baseBindingSummaries($0, remoteProfileID: selectedRemoteProfileID) } ?? [],
+            holdSummaryProvider: holdSummaryProvider,
+            onChooseApplication: onChooseApplication,
+            onEditKeys: onEditKeys,
             onChooseCustomApplication: onChooseCustomApplication.map { callback in
                 { completion in
                     callback { id, displayName, payload in

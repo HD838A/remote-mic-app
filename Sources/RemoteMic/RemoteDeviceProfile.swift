@@ -282,6 +282,9 @@ struct RemoteDeviceProfile: Codable, Equatable, Identifiable {
     var customName: String
     var bluetoothIdentifier: UUID?
     var hidFingerprint: String?
+    /// 序列号的单向摘要（见 `RemoteDeviceIdentity`）。序列号本身不落盘；
+    /// 指纹会随接口/配对变化，这一项才是同一台遥控器的稳定身份。
+    var hardwareIdentity: String?
     var mappings: RemoteDeviceMappings
 
     var displayNameFallbackKey: String { model.localizationKey }
@@ -292,6 +295,7 @@ struct RemoteDeviceProfile: Codable, Equatable, Identifiable {
         customName: String = "",
         bluetoothIdentifier: UUID? = nil,
         hidFingerprint: String? = nil,
+        hardwareIdentity: String? = nil,
         mappings: RemoteDeviceMappings
     ) {
         self.id = id
@@ -299,6 +303,7 @@ struct RemoteDeviceProfile: Codable, Equatable, Identifiable {
         self.customName = customName
         self.bluetoothIdentifier = bluetoothIdentifier
         self.hidFingerprint = hidFingerprint
+        self.hardwareIdentity = hardwareIdentity
         self.mappings = mappings
     }
 }

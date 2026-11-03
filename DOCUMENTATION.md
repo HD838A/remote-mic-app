@@ -28,9 +28,11 @@
 
 - 功能产品规范使用 `feature/<feature>/PRODUCT_SPEC.md`。当前包括：
   - [`feature/button-mapping/PRODUCT_SPEC.md`](feature/button-mapping/PRODUCT_SPEC.md)
+  - [`feature/mapping-scope-separation/PRODUCT_SPEC.md`](feature/mapping-scope-separation/PRODUCT_SPEC.md)
   - [`feature/common-phrases/PRODUCT_SPEC.md`](feature/common-phrases/PRODUCT_SPEC.md)
   - [`feature/mac-microphone-input/PRODUCT_SPEC.md`](feature/mac-microphone-input/PRODUCT_SPEC.md)
   - [`feature/first-run-onboarding/PRODUCT_SPEC.md`](feature/first-run-onboarding/PRODUCT_SPEC.md)
+  - [`feature/scroll-region-page-actions/PRODUCT_SPEC.md`](feature/scroll-region-page-actions/PRODUCT_SPEC.md)
 - 平台附件使用 `feature/<feature>/platform-<platform>.md`，只能映射平台差异。当前 Onboarding 附件为：
   - [`feature/first-run-onboarding/platform-macos.md`](feature/first-run-onboarding/platform-macos.md)
   - [`feature/first-run-onboarding/platform-windows.md`](feature/first-run-onboarding/platform-windows.md)

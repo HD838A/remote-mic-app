@@ -398,7 +398,7 @@ struct CustomKeyboardShortcut: Codable, Equatable {
             )
         }
         if modifierFlags.contains(.function) { result += "fn " }
-        return result + visualKeyLabel
+        return result + visualKeyLabel(using: localization)
     }
 
     /// Full keyboard wording used by tooltips and accessibility labels.
@@ -478,7 +478,7 @@ struct CustomKeyboardShortcut: Codable, Equatable {
         return prefix.isEmpty ? name : "\(prefix) \(name)"
     }
 
-    private var visualKeyLabel: String {
+    private func visualKeyLabel(using localization: LocalizationStore) -> String {
         switch keyCode {
         case 36: return "⏎"
         case 48: return "⇥"
@@ -486,12 +486,26 @@ struct CustomKeyboardShortcut: Codable, Equatable {
         case 51: return "⌫"
         case 53: return "⎋"
         case 76: return "⌤"
+        case 115: return "Home"
+        case 116: return "Page Up"
         case 117: return "⌦"
+        case 119: return "End"
+        case 121: return "Page Down"
         case 123: return "←"
         case 124: return "→"
         case 125: return "↓"
         case 126: return "↑"
-        default: return keyLabel
+        default:
+            // 空 label 不能渲染成空串：按键页会出现一格空白，看着像没有设置。
+            let trimmed = keyLabel.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.isEmpty || trimmed.hasPrefix("Key Code ") || trimmed.hasPrefix("键码") {
+                return String(
+                    format: localization.text("keyboard.key_code"),
+                    locale: localization.locale,
+                    arguments: [String(keyCode)]
+                )
+            }
+            return trimmed
         }
     }
 
@@ -722,6 +736,7 @@ enum PresetApplication: String, CaseIterable, Identifiable {
     case chrome
     case safari
     case zed
+    case dimAgent
 
     var id: String { rawValue }
 
@@ -741,6 +756,7 @@ enum PresetApplication: String, CaseIterable, Identifiable {
         case .chrome: return "Chrome"
         case .safari: return "Safari"
         case .zed: return "Zed"
+        case .dimAgent: return "DimAgent"
         }
     }
 
@@ -760,12 +776,13 @@ enum PresetApplication: String, CaseIterable, Identifiable {
         case .chrome: return "com.google.Chrome"
         case .safari: return "com.apple.Safari"
         case .zed: return "dev.zed.Zed"
+        case .dimAgent: return "com.dimcode.app"
         }
     }
 
     var focusStrategy: ApplicationFocusStrategy? {
         switch self {
-        case .codex, .workBuddy, .claude: return .accessibilityComposer
+        case .codex, .workBuddy, .claude, .dimAgent: return .accessibilityComposer
         case .cmux: return .cmuxSurfaceAPI
         default: return nil
         }
@@ -778,6 +795,44 @@ enum PresetApplication: String, CaseIterable, Identifiable {
                 .map { _ in application.bundleIdentifier }
         })
         return identifiers
+    }
+}
+
+/// 随 App 发布的输入框记录：把已经在真机上验证过的结果内置，用户不需要自己学习。
+///
+/// 与 `ScrollRegionPreset` 平行但完全独立（decision S17）：这里只描述输入框，
+/// 命中后仍走 `focusRecordedAccessibilityTarget` 的记录匹配路径，不新增第二套匹配算法；
+/// 记录匹配失败时继续回退到 composer 启发式扫描，不会因为内置记录挡住原本能用的路径。
+enum AccessibilityFocusPreset {
+    struct Rule {
+        let bundleIdentifier: String
+        let target: AccessibilityFocusTarget
+    }
+
+    static let rules: [Rule] = [
+        Rule(
+            bundleIdentifier: PresetApplication.dimAgent.bundleIdentifier,
+            target: AccessibilityFocusTarget(
+                role: "AXTextArea",
+                identifier: "",
+                title: "",
+                description: "",
+                help: "",
+                placeholder: "",
+                context: "DimAgent",
+                windowTitle: "DimAgent",
+                normalizedFrame: NormalizedAccessibilityFrame(
+                    x: 0.2321285140562249,
+                    y: 0.792803970223325,
+                    width: 0.738152610441767,
+                    height: 0.07568238213399504
+                )
+            )
+        ),
+    ]
+
+    static func target(for bundleIdentifier: String) -> AccessibilityFocusTarget? {
+        rules.first { $0.bundleIdentifier == bundleIdentifier }?.target
     }
 }
 
@@ -826,6 +881,8 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
     case scrollDown
     case pageUp
     case pageDown
+    case scrollToTop
+    case scrollToBottom
     case deleteBackward
     case showDesktop
     case contextMenu
@@ -856,6 +913,7 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
     case openChrome
     case openSafari
     case openZed
+    case openDimAgent
 
     var id: String { rawValue }
 
@@ -885,6 +943,8 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
         case .scrollDown: return localization.text("action.scroll_down")
         case .pageUp: return localization.text("action.page_up")
         case .pageDown: return localization.text("action.page_down")
+        case .scrollToTop: return localization.text("action.scroll_to_top")
+        case .scrollToBottom: return localization.text("action.scroll_to_bottom")
         case .deleteBackward: return localization.text("action.delete_backspace")
         case .showDesktop: return localization.text("action.show_desktop")
         case .contextMenu: return localization.text("action.context_menu")
@@ -915,6 +975,7 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
         case .openChrome: return localization.text("action.open_chrome")
         case .openSafari: return localization.text("action.open_safari")
         case .openZed: return localization.text("action.open_zed")
+        case .openDimAgent: return localization.text("action.open_dim_agent")
         }
     }
 
@@ -1004,6 +1065,7 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
         case .openChrome: return .chrome
         case .openSafari: return .safari
         case .openZed: return .zed
+        case .openDimAgent: return .dimAgent
         default: return nil
         }
     }
@@ -1015,7 +1077,7 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
              .commandPaste, .commandClose, .commandQuit, .commandCut, .commandSelectAll,
              .commandUndo, .commandRedo, .commandFind, .commandSave, .commandDelete,
              .arrowUp, .arrowDown, .arrowLeft, .arrowRight, .scrollUp, .scrollDown,
-             .pageUp, .pageDown, .deleteBackward:
+             .pageUp, .pageDown, .scrollToTop, .scrollToBottom, .deleteBackward:
             return .basicKeys
         case .showDesktop, .contextMenu, .appSwitcher, .volumeUp, .volumeDown, .volumeMute,
              .playPause, .previousCommandLeft, .nextCommandRight, .toggleLongRecording:
@@ -1028,7 +1090,7 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
             return .applications
         case .openRemoteMic, .openCodex, .openWorkBuddy, .openClaude, .openCmux, .openWeChat, .openCursor,
              .openXcode, .openSlack, .openWeCom, .openNeteaseMusic, .openChrome, .openSafari,
-             .openZed:
+             .openZed, .openDimAgent:
             return .applications
         }
     }
@@ -1037,8 +1099,9 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
         ![
             .customShortcut,
             .focusInput,
-            .pageUp,
-            .pageDown,
+            // 到边缘是一次性跳转，按住连发没有意义（PRODUCT_SPEC）。
+            .scrollToTop,
+            .scrollToBottom,
             .openCustomApplication,
             .commandReturn,
             .shiftReturn,
@@ -1056,6 +1119,11 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
             .previousCommandLeft,
             .nextCommandRight,
         ].contains(self) && presetApplication == nil && !isAppInternal
+    }
+
+    /// 翻页要靠辅助功能扫描滚动容器，比行滚动贵得多；按住重复时按更长的间隔执行。
+    var isPageScroll: Bool {
+        self == .pageUp || self == .pageDown
     }
 
     var isDirectionalOrDeleteBackward: Bool {

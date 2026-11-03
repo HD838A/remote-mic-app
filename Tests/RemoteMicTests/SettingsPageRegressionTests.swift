@@ -744,7 +744,9 @@ struct SettingsPageRegressionTests {
         // 卡片按底边对齐页头：底边固定后，页头到工具行的间距不再随控制器卡片高度变化。
         #expect(mappingSource.contains("HStack(alignment: .bottom, spacing: 14)"))
         #expect(!mappingSource.contains("HStack(alignment: .top, spacing: 14)"))
-        #expect(mappingSource.contains(".padding(.top, 18)"))
+        // 页头参数见产品界面规范「Mac 设置窗口页头」：上 8 / 下 8。
+        #expect(mappingSource.contains(".padding(.top, 8)"))
+        #expect(mappingSource.contains(".padding(.bottom, 8)"))
 
         #expect(!mappingSource.contains("ViewThatFits(in: .horizontal)"))
         #expect(mappingSource.contains("private var mappingHeaderToggle"))
@@ -1081,8 +1083,11 @@ struct SettingsPageRegressionTests {
             encoding: .utf8
         )
 
+        let frameSize = try #require(appSource.range(
+            of: "private static let settingsWindowFrameSize = NSSize(width: 1067, height: 771)"
+        ))
         let contentSize = try #require(appSource.range(
-            of: "window.setContentSize(NSSize(width: 960, height: 742))"
+            of: "window.setContentSize(contentRect.size)"
         ))
         let autosave = try #require(appSource.range(
             of: "window.setFrameAutosaveName(\"RemoteMicSettings\")",
@@ -1093,6 +1098,7 @@ struct SettingsPageRegressionTests {
             range: autosave.upperBound..<appSource.endIndex
         ))
 
+        #expect(frameSize.upperBound <= contentSize.lowerBound)
         #expect(contentSize.upperBound <= autosave.lowerBound)
         #expect(autosave.upperBound <= center.lowerBound)
     }
@@ -1460,10 +1466,20 @@ struct SettingsPageRegressionTests {
         #expect(source.contains("connection.voice_fn_tap.hint_short"))
         #expect(source.contains("ButtonActionCategory.allCases"))
         #expect(source.contains("MappingActionFilter.visibleCases"))
-        #expect(source.contains("[.basicKeys, .systemAndMedia, .custom, .commonPhrases, .applications, .applicationFocus]"))
+        #expect(source.contains("[.basicKeys, .systemAndMedia, .custom, .commonPhrases, .applications]"))
         #expect(source.contains("mappingActionFilterControl"))
-        #expect(source.contains("applicationFocusEditor(configured: configured)"))
         #expect(source.contains("customApplicationTargetPicker("))
+        // 聚焦方式与滚动区域已迁到独立的「APP 适配」页，按键编辑区只留只读状态与跳转。
+        #expect(source.contains("applicationsPage"))
+        #expect(source.contains("custom_application.go_configure"))
+        #expect(source.contains("applicationBindingSection"))
+        // APP 档案必须能移除，且移除前要有二次确认与绑定检查。
+        #expect(source.contains("removeCustomApplicationProfile"))
+        #expect(source.contains("custom_application.remove_blocked"))
+        #expect(source.contains("custom_application.remove_confirm_title"))
+        #expect(source.contains("settings.section.applications"))
+        #expect(!source.contains("applicationFocusEditor("))
+        #expect(!source.contains("applicationFocusProfileID"))
         #expect(source.contains("custom_application.focus.scope_note"))
         // 「App 输入框和滚动」只切换正在配置的 App，不得改写当前按键动作。
         #expect(!source.contains("bindCustomApplication("))
@@ -1990,6 +2006,7 @@ struct SettingsPageRegressionTests {
             membershipVisible: true
         ) == [
             .mapping,
+            .applications,
             .macros,
             .buttonProfiles,
             .membership,
