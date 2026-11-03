@@ -434,6 +434,8 @@
 "audio.output.disabled" = "不输出语音";
 "audio.gain.title" = "增益";
 "audio.gain.help" = "0 dB 保持原始音量；数值越大声音越响，也会放大环境噪声。建议先从 6–12 dB 开始。";
+"audio.volume.title" = "音量";
+"audio.volume.help" = "调整无线麦 SayAll 送往语音工具的声音，100% 为原始音量。这里只能调低，需要更大声请提高上面的增益。";
 "audio.status.title" = "音频状态";
 "audio.action.refresh_devices" = "刷新音频设备";
 "audio.action.learn_virtual_microphones" = "获取 BlackHole";

@@ -434,6 +434,8 @@
 "audio.output.disabled" = "Audio Output Off";
 "audio.gain.title" = "Gain";
 "audio.gain.help" = "0 dB keeps the original volume. Higher values make your voice louder and also amplify background noise. Start with 6–12 dB.";
+"audio.volume.title" = "Volume";
+"audio.volume.help" = "Sets how loud SayAll sends audio to your voice tool. 100% is the original level. This can only lower the level — raise the gain above to make it louder.";
 "audio.status.title" = "Audio status";
 "audio.action.refresh_devices" = "Refresh Devices";
 "audio.action.learn_virtual_microphones" = "Get BlackHole";

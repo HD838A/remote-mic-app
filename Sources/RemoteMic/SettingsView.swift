@@ -1518,6 +1518,11 @@ struct SettingsView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    /// 设备上真实的音量优先；还没拿到观测值时显示用户保存的目标。
+    private var displayedVirtualAudioVolumePercent: Double {
+        model.observedVirtualAudioVolumePercent ?? settings.virtualAudioVolumePercent
+    }
+
     private var audioSettingsPanel: some View {
         GlassPanel {
             VStack(alignment: .leading, spacing: 13) {
@@ -1561,6 +1566,39 @@ struct SettingsView: View {
                     }
 
                     Text("audio.gain.help")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.leading, 106)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                VStack(alignment: .leading, spacing: 5) {
+                    HStack(spacing: 14) {
+                        Text("audio.volume.title")
+                            .frame(width: 92, alignment: .leading)
+                        Slider(
+                            value: Binding(
+                                get: { displayedVirtualAudioVolumePercent },
+                                set: { newValue in
+                                    model.updateVirtualAudioVolumePercent(newValue, commit: false)
+                                }
+                            ),
+                            in: 0...100,
+                            step: 1,
+                            onEditingChanged: { editing in
+                                guard !editing else { return }
+                                model.updateVirtualAudioVolumePercent(
+                                    settings.virtualAudioVolumePercent,
+                                    commit: true
+                                )
+                            }
+                        )
+                        Text("\(Int(displayedVirtualAudioVolumePercent.rounded()))%")
+                            .font(.system(.body, design: .monospaced))
+                            .frame(width: 54, alignment: .trailing)
+                    }
+
+                    Text("audio.volume.help")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .padding(.leading, 106)

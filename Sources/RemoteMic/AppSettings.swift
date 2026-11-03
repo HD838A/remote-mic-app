@@ -62,6 +62,8 @@ private struct PersonalizedConfiguration: Codable {
     let voiceFnTapModeEnabled: Bool?
     let voiceKeyMode: VoiceKeyMode?
     let continuousRecordingPowerBindingBackup: ConfiguredButtonAction?
+    /// 1.0 之前导出的配置没有这个字段，缺失时按默认音量处理。
+    let virtualAudioVolumePercent: Double?
 }
 
 enum UsageStatisticsPeriod: String, CaseIterable, Identifiable {
@@ -305,6 +307,7 @@ final class AppSettings: ObservableObject {
 
     private enum Keys {
         static let gainDB = "gainDB"
+        static let virtualAudioVolumePercent = "virtualAudioVolumePercent"
         static let selectedAudioDeviceUID = "selectedAudioDeviceUID"
         static let lastUserSelectedInputDeviceUID = "lastUserSelectedInputDeviceUID"
         static let lastKnownAudioDeviceUID = "lastKnownAudioDeviceUID"
@@ -377,6 +380,17 @@ final class AppSettings: ObservableObject {
 
     @Published var gainDB: Double {
         didSet { defaults.set(gainDB, forKey: Keys.gainDB) }
+    }
+
+    /// 虚拟音频设备的主音量百分比。写进设备的是换算后的标量，这里只存用户意图。
+    @Published var virtualAudioVolumePercent: Double {
+        didSet {
+            // 不能在 didSet 里回写自身：@Published 的 setter 会再次触发 didSet 并递归。
+            defaults.set(
+                VirtualAudioDeviceLevelPolicy.clampedPercent(virtualAudioVolumePercent),
+                forKey: Keys.virtualAudioVolumePercent
+            )
+        }
     }
 
     @Published var selectedAudioDeviceUID: String {
@@ -899,6 +913,11 @@ final class AppSettings: ObservableObject {
         gainDB = defaults.object(forKey: Keys.gainDB) == nil
             ? 10.0
             : defaults.double(forKey: Keys.gainDB)
+        virtualAudioVolumePercent = VirtualAudioDeviceLevelPolicy.clampedPercent(
+            defaults.object(forKey: Keys.virtualAudioVolumePercent) == nil
+                ? VirtualAudioDeviceLevelPolicy.defaultPercent
+                : defaults.double(forKey: Keys.virtualAudioVolumePercent)
+        )
         let persistedAudioDeviceUID = defaults.string(forKey: Keys.selectedAudioDeviceUID) ?? ""
         macMicrophoneInputUID = defaults.string(forKey: "macMicrophoneInputUID") ?? ""
         macMicrophoneShortcut = Self.decodeSetting(CustomKeyboardShortcut.self,
@@ -2431,6 +2450,7 @@ final class AppSettings: ObservableObject {
     private var hasPersistedAppConfiguration: Bool {
         [
             Keys.gainDB,
+            Keys.virtualAudioVolumePercent,
             Keys.selectedAudioDeviceUID,
             Keys.lastKnownAudioDeviceUID,
             Keys.customMappingEnabled,
@@ -2499,7 +2519,8 @@ final class AppSettings: ObservableObject {
             experimentalContinuousRecordingEnabled: experimentalContinuousRecordingEnabled,
             voiceFnTapModeEnabled: voiceFnTapModeEnabled,
             voiceKeyMode: voiceKeyMode,
-            continuousRecordingPowerBindingBackup: continuousRecordingPowerBindingBackup
+            continuousRecordingPowerBindingBackup: continuousRecordingPowerBindingBackup,
+            virtualAudioVolumePercent: virtualAudioVolumePercent
         )
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -2694,6 +2715,12 @@ final class AppSettings: ObservableObject {
             isLoadingRemoteProfile = false
         }
         if gainDB != c.gainDB { gainDB = c.gainDB }
+        let importedVolumePercent = VirtualAudioDeviceLevelPolicy.clampedPercent(
+            c.virtualAudioVolumePercent ?? VirtualAudioDeviceLevelPolicy.defaultPercent
+        )
+        if virtualAudioVolumePercent != importedVolumePercent {
+            virtualAudioVolumePercent = importedVolumePercent
+        }
         if selectedAudioDeviceUID != c.selectedAudioDeviceUID { selectedAudioDeviceUID = c.selectedAudioDeviceUID }
         macMicrophoneInputUID = c.macMicrophoneInputUID ?? ""
         macMicrophoneShortcut = c.macMicrophoneShortcut.flatMap { $0.isMacMicrophoneCombination ? Self.validatedShortcut($0) : nil }
@@ -2879,6 +2906,9 @@ final class AppSettings: ObservableObject {
         }
 
         gainDB = configuration.gainDB
+        virtualAudioVolumePercent = VirtualAudioDeviceLevelPolicy.clampedPercent(
+            configuration.virtualAudioVolumePercent ?? VirtualAudioDeviceLevelPolicy.defaultPercent
+        )
         selectedAudioDeviceUID = importedAudioDeviceUID
         macMicrophoneInputUID = configuration.macMicrophoneInputUID.flatMap {
             $0.count <= Self.maximumImportedIdentifierLength ? $0 : nil
@@ -3096,6 +3126,11 @@ final class AppSettings: ObservableObject {
         }
         guard configuration.gainDB.isFinite, (0...24).contains(configuration.gainDB) else {
             throw AppConfigurationError.invalidValues
+        }
+        if let volumePercent = configuration.virtualAudioVolumePercent {
+            guard volumePercent.isFinite, (0...100).contains(volumePercent) else {
+                throw AppConfigurationError.invalidValues
+            }
         }
         return configuration
     }

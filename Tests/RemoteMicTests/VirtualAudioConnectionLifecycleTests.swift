@@ -3,43 +3,84 @@ import Foundation
 import Testing
 @testable import RemoteMic
 
-@Suite("Virtual audio connection lifecycle")
+@Suite("Virtual audio connection lifecycle", .serialized)
 struct VirtualAudioConnectionLifecycleTests {
-    @Test func virtualAudioLevelPolicyRepairsMuteAndVolumesBelowMinimum() {
+    @Test func virtualAudioLevelPolicyTracksUserVolumeTarget() {
         #expect(VirtualAudioDeviceLevelPolicy.requiresUnmute(mute: true))
         #expect(!VirtualAudioDeviceLevelPolicy.requiresUnmute(mute: false))
         #expect(!VirtualAudioDeviceLevelPolicy.requiresUnmute(mute: nil))
 
-        #expect(VirtualAudioDeviceLevelPolicy.requiresVolumeRestore(volume: 0))
-        #expect(VirtualAudioDeviceLevelPolicy.requiresVolumeRestore(volume: 0.19))
-        #expect(!VirtualAudioDeviceLevelPolicy.requiresVolumeRestore(volume: 0.2))
-        #expect(!VirtualAudioDeviceLevelPolicy.requiresVolumeRestore(volume: 0.21))
-        #expect(!VirtualAudioDeviceLevelPolicy.requiresVolumeRestore(volume: 1))
-        #expect(!VirtualAudioDeviceLevelPolicy.requiresVolumeRestore(volume: nil))
-        #expect(!VirtualAudioDeviceLevelPolicy.requiresVolumeRestore(volume: .nan))
+        // 目标 100%：任何低于满音量（包括被其他 App 改小）都要写回。
+        let full = VirtualAudioDeviceLevelPolicy.volumeScalar(percent: 100)
+        #expect(VirtualAudioDeviceLevelPolicy.requiresVolumeAdjustment(volume: 0, target: full))
+        #expect(VirtualAudioDeviceLevelPolicy.requiresVolumeAdjustment(volume: 0.19, target: full))
+        #expect(VirtualAudioDeviceLevelPolicy.requiresVolumeAdjustment(volume: 0.5, target: full))
+        #expect(!VirtualAudioDeviceLevelPolicy.requiresVolumeAdjustment(volume: 1, target: full))
+        #expect(!VirtualAudioDeviceLevelPolicy.requiresVolumeAdjustment(volume: nil, target: full))
+        #expect(!VirtualAudioDeviceLevelPolicy.requiresVolumeAdjustment(volume: .nan, target: full))
+
+        // 目标 50% 时满音量反而需要调低，这是用户手动调节的语义。
+        let half = VirtualAudioDeviceLevelPolicy.volumeScalar(percent: 50)
+        #expect(VirtualAudioDeviceLevelPolicy.requiresVolumeAdjustment(volume: 1, target: half))
+        #expect(!VirtualAudioDeviceLevelPolicy.requiresVolumeAdjustment(volume: half, target: half))
+    }
+
+    @Test func virtualAudioVolumePercentMapsToDriverScalar() {
+        #expect(VirtualAudioDeviceLevelPolicy.volumeScalar(percent: 100) == 1)
+        #expect(VirtualAudioDeviceLevelPolicy.volumeScalar(percent: 0) == 0)
+        // 百分比是线性幅度：50% 约 −6 dB，而不是驱动 dB 标量区间的中点。
+        #expect(abs(VirtualAudioDeviceLevelPolicy.volumeScalar(percent: 50) - 0.9059) < 0.001)
+        #expect(abs(VirtualAudioDeviceLevelPolicy.percent(volumeScalar: 1) - 100) < 0.001)
+        #expect(VirtualAudioDeviceLevelPolicy.percent(volumeScalar: 0) == 0)
+        for percent in [1.0, 10, 33, 50, 75, 99] {
+            let scalar = VirtualAudioDeviceLevelPolicy.volumeScalar(percent: percent)
+            #expect(abs(VirtualAudioDeviceLevelPolicy.percent(volumeScalar: scalar) - percent) < 0.5)
+        }
+        // 越界与非法值一律钳制，避免把 NaN 或超范围标量写进设备。
+        #expect(VirtualAudioDeviceLevelPolicy.volumeScalar(percent: 140) == 1)
+        #expect(VirtualAudioDeviceLevelPolicy.volumeScalar(percent: -5) == 0)
+        #expect(VirtualAudioDeviceLevelPolicy.volumeScalar(percent: .nan) == 1)
+        #expect(VirtualAudioDeviceLevelPolicy.percent(volumeScalar: .nan) == 0)
+    }
+
+    @Test func virtualAudioVolumeListenerCoversBothScopes() {
+        let addresses = CoreAudioDeviceCatalog.volumeAddresses()
+        #expect(addresses.count == 2)
+        #expect(addresses.allSatisfy { $0.mSelector == kAudioDevicePropertyVolumeScalar })
+        #expect(Set(addresses.map(\.mScope)) == [
+            kAudioDevicePropertyScopeOutput,
+            kAudioDevicePropertyScopeInput,
+        ])
+        // 自己写入的回声不覆盖界面；真正的外部改动才上报。
+        #expect(VirtualAudioDeviceLevelPolicy.isOwnVolumeEcho(volume: 1, lastApplied: 1))
+        #expect(!VirtualAudioDeviceLevelPolicy.isOwnVolumeEcho(volume: 0.5, lastApplied: 1))
+        #expect(!VirtualAudioDeviceLevelPolicy.isOwnVolumeEcho(volume: 1, lastApplied: nil))
+        #expect(!VirtualAudioDeviceLevelPolicy.isOwnVolumeEcho(volume: .nan, lastApplied: 1))
     }
 
     @Test func virtualAudioAudibilityTreatsUnknownPropertiesAsNonBlocking() {
+        let target: Float32 = 1
         let unknown = VirtualAudioDeviceAudibilitySnapshot()
-        #expect(!unknown.requiresAudibilityRepair)
+        #expect(!unknown.requiresAudibilityRepair(targetVolume: target))
 
         let muted = VirtualAudioDeviceAudibilitySnapshot(
             output: VirtualAudioDeviceLevelObservation(mute: true, volume: nil)
         )
-        #expect(muted.requiresAudibilityRepair)
+        #expect(muted.requiresAudibilityRepair(targetVolume: target))
 
         let zeroInput = VirtualAudioDeviceAudibilitySnapshot(
             input: VirtualAudioDeviceLevelObservation(mute: nil, volume: 0)
         )
-        #expect(zeroInput.requiresAudibilityRepair)
+        #expect(zeroInput.requiresAudibilityRepair(targetVolume: target))
 
         let lowOutput = VirtualAudioDeviceAudibilitySnapshot(
             output: VirtualAudioDeviceLevelObservation(mute: false, volume: 0.19)
         )
-        #expect(lowOutput.requiresAudibilityRepair)
-        #expect(lowOutput.diagnostic.contains("output_volume_scalar=0.19"))
-        #expect(lowOutput.diagnostic.contains("output_volume_low=true"))
-        #expect(lowOutput.diagnostic.contains("minimum_volume_scalar=0.2"))
+        #expect(lowOutput.requiresAudibilityRepair(targetVolume: target))
+        let diagnostic = lowOutput.diagnostic(targetVolume: target)
+        #expect(diagnostic.contains("output_volume_scalar=0.19"))
+        #expect(diagnostic.contains("output_volume_matches_target=false"))
+        #expect(diagnostic.contains("target_volume_scalar=1"))
     }
 
     @Test func virtualAudioRepairRequiresAReadableUsableResult() {
@@ -56,14 +97,14 @@ struct VirtualAudioConnectionLifecycleTests {
             before: silent,
             after: audible,
             unmuteAttempted: true,
-            volumeRestoreAttempted: true
+            volumeAdjustmentAttempted: true
         ).isReady)
         #expect(!VirtualAudioDeviceAudibilityRepairResult(
             applicable: true,
             before: silent,
             after: silent,
             unmuteAttempted: true,
-            volumeRestoreAttempted: true,
+            volumeAdjustmentAttempted: true,
             writeFailed: true
         ).isReady)
         #expect(!VirtualAudioDeviceAudibilityRepairResult(
@@ -71,8 +112,20 @@ struct VirtualAudioConnectionLifecycleTests {
             before: silent,
             after: .init(),
             unmuteAttempted: true,
-            volumeRestoreAttempted: true,
+            volumeAdjustmentAttempted: true,
             writeFailed: true
+        ).isReady)
+        // 用户把音量调到 50% 也是合法目标，不能因为低于满音量而判失败。
+        #expect(VirtualAudioDeviceAudibilityRepairResult(
+            applicable: true,
+            before: silent,
+            after: VirtualAudioDeviceAudibilitySnapshot(
+                output: VirtualAudioDeviceLevelObservation(mute: false, volume: 0.906),
+                input: VirtualAudioDeviceLevelObservation(mute: false, volume: 0.906)
+            ),
+            unmuteAttempted: false,
+            volumeAdjustmentAttempted: true,
+            targetVolume: 0.906
         ).isReady)
         #expect(VirtualAudioDeviceAudibilityRepairResult().isReady)
     }
@@ -113,13 +166,14 @@ struct VirtualAudioConnectionLifecycleTests {
             selector: kAudioDevicePropertyVolumeScalar,
             scope: kAudioDevicePropertyScopeInput
         ))
-        #expect(CoreAudioDeviceCatalog.virtualAudioAudibilitySnapshot(for: device).requiresAudibilityRepair)
+        #expect(CoreAudioDeviceCatalog.virtualAudioAudibilitySnapshot(for: device)
+            .requiresAudibilityRepair(targetVolume: 1))
 
-        let repair = CoreAudioDeviceCatalog.ensureVirtualAudioDeviceAudible(device)
+        let repair = CoreAudioDeviceCatalog.applyVirtualAudioDeviceLevel(device, targetVolumeScalar: 1)
 
         #expect(repair.applicable)
         #expect(repair.unmuteAttempted)
-        #expect(repair.volumeRestoreAttempted)
+        #expect(repair.volumeAdjustmentAttempted)
         #expect(!repair.writeFailed)
         #expect(repair.isReady)
         #expect(repair.after.output.mute == false)
@@ -140,14 +194,74 @@ struct VirtualAudioConnectionLifecycleTests {
             scope: kAudioDevicePropertyScopeInput
         ))
 
-        let lowVolumeRepair = CoreAudioDeviceCatalog.ensureVirtualAudioDeviceAudible(device)
+        let lowVolumeRepair = CoreAudioDeviceCatalog.applyVirtualAudioDeviceLevel(device, targetVolumeScalar: 1)
 
         #expect(lowVolumeRepair.applicable)
         #expect(!lowVolumeRepair.unmuteAttempted)
-        #expect(lowVolumeRepair.volumeRestoreAttempted)
+        #expect(lowVolumeRepair.volumeAdjustmentAttempted)
         #expect(lowVolumeRepair.isReady)
         #expect(lowVolumeRepair.after.output.volume == 1)
         #expect(lowVolumeRepair.after.input.volume == 1)
+    }
+
+    @Test func installedMiRemoteVReportsExternalVolumeChanges() async throws {
+        guard ProcessInfo.processInfo.environment["SAYALL_TEST_MUTATE_VIRTUAL_AUDIO_LEVEL"] == "1"
+        else { return }
+        let device = try #require(
+            CoreAudioDeviceCatalog.outputDevices().first { $0.uid == "MiRemoteV2ch_UID" }
+        )
+        let original = CoreAudioDeviceCatalog.virtualAudioAudibilitySnapshot(for: device)
+        defer {
+            Self.restoreDeviceLevel(original.output, deviceID: device.id, scope: kAudioDevicePropertyScopeOutput)
+            Self.restoreDeviceLevel(original.input, deviceID: device.id, scope: kAudioDevicePropertyScopeInput)
+        }
+
+        let output = VirtualAudioOutput(
+            logger: { _ in },
+            engineQueue: DispatchQueue(label: "test.virtual.audio.volume.listener")
+        )
+        let observed = ObservedPercentBox()
+        output.onVirtualVolumeObserved = { observed.set($0) }
+
+        // 用户自己调到 50%：写入后界面应立刻知道目标值，不必等外部改动。
+        output.applyVirtualVolumePercent(50, deviceUID: device.uid)
+        try await Task.sleep(nanoseconds: 400_000_000)
+        #expect(observed.current == 50)
+        let written = try #require(
+            CoreAudioDeviceCatalog.virtualAudioAudibilitySnapshot(for: device).output.volume
+        )
+        #expect(abs(written - VirtualAudioDeviceLevelPolicy.volumeScalar(percent: 50)) < 0.01)
+
+        // 外部把设备音量改成 0.31（约 6%），监听要上报，而不是被当成自己的回声。
+        #expect(Self.setDeviceFloat32(
+            0.31,
+            deviceID: device.id,
+            selector: kAudioDevicePropertyVolumeScalar,
+            scope: kAudioDevicePropertyScopeOutput
+        ))
+        let deadline = Date().addingTimeInterval(2)
+        while Date() < deadline, (observed.current ?? 100) > 10 {
+            try await Task.sleep(nanoseconds: 20_000_000)
+        }
+        let reported = try #require(observed.current)
+        #expect(reported < 10)
+    }
+
+    private final class ObservedPercentBox: @unchecked Sendable {
+        private let lock = NSLock()
+        private var value: Double?
+
+        func set(_ newValue: Double) {
+            lock.lock()
+            value = newValue
+            lock.unlock()
+        }
+
+        var current: Double? {
+            lock.lock()
+            defer { lock.unlock() }
+            return value
+        }
     }
 
     private static func restoreDeviceLevel(
@@ -672,13 +786,15 @@ struct VirtualAudioConnectionLifecycleTests {
 
         #expect(outputSource.contains("label: \"RemoteMic.audioOutput.engine\""))
         #expect(!outputSource.contains("func configure(deviceUID: String)"))
-        #expect(outputSource.contains("func configureAsync(deviceUID: String"))
+        #expect(outputSource.contains("func configureAsync("))
         #expect(outputSource.contains("engineQueue.async { [weak self] in"))
-        #expect(outputSource.contains("configureOnEngineQueue(deviceUID: deviceUID, operationID: operationID)"))
+        #expect(outputSource.contains("configureOnEngineQueue("))
+        #expect(outputSource.contains("virtualVolumePercent: virtualVolumePercent"))
         #expect(outputSource.contains("dispatchPrecondition(condition: .onQueue(engineQueue))"))
         #expect(outputSource.contains("engine.connect(player, to: engine.mainMixerNode"))
-        #expect(modelSource.contains("audioOutput.configureAsync(deviceUID: deviceUID)"))
-        #expect(modelSource.contains("self.audioOutput.configureAsync(deviceUID: selection.uid ?? \"\")"))
+        #expect(modelSource.contains("audioOutput.configureAsync("))
+        #expect(modelSource.contains("virtualVolumePercent: settings.virtualAudioVolumePercent"))
+        #expect(modelSource.contains("virtualVolumePercent: self.settings.virtualAudioVolumePercent"))
         #expect(!modelSource.contains("audioOutput.configure(deviceUID:"))
     }
 
