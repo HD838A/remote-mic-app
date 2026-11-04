@@ -39,6 +39,7 @@ xcrun swiftc \
   "$ROOT/Sources/RemoteMic/AppLinks.swift" \
   "$ROOT/Sources/RemoteMic/Localization.swift" \
   "$ROOT/Sources/RemoteMic/VoiceFunctionKeyLatch.swift" \
+  "$ROOT/Sources/RemoteMic/AXSelfTargetPolicy.swift" \
   "$ROOT/Sources/RemoteMic/VoiceInputDestinationCoordinator.swift" \
   "$ROOT/Sources/RemoteMic/VoiceFnTapSessionController.swift" \
   "$ROOT/Sources/RemoteMic/RemoteVoiceFunctionMapper.swift" \

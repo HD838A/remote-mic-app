@@ -98,6 +98,11 @@ struct VoiceInputDestinationSnapshot: Equatable {
         guard AXIsProcessTrusted() else {
             return empty(bundleIdentifier: frontmostBundleIdentifier)
         }
+        // 自己是前台时不做 AX：同进程查询会进 SwiftUI view graph（#678 同类）。
+        // 语音目标必须是别的 App；设置窗口不该被当成输入目的地。
+        guard !AXSelfTargetPolicy.isOwnFrontmostApplication() else {
+            return empty(bundleIdentifier: nil)
+        }
         let systemWideElement = AXUIElementCreateSystemWide()
         guard let focusedElement = axElement(
             systemWideElement,
@@ -109,6 +114,9 @@ struct VoiceInputDestinationSnapshot: Equatable {
         var processIdentifier: pid_t = 0
         let focusedBundleIdentifier: String?
         if AXUIElementGetPid(focusedElement, &processIdentifier) == .success {
+            guard !AXSelfTargetPolicy.isOwnProcess(processIdentifier) else {
+                return empty(bundleIdentifier: nil)
+            }
             focusedBundleIdentifier = NSRunningApplication(
                 processIdentifier: processIdentifier
             )?.bundleIdentifier
