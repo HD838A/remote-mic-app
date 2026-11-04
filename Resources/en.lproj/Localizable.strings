@@ -710,6 +710,7 @@
 "common.action.cut" = "Cut";
 "common.action.paste" = "Paste";
 "common.action.select_all" = "Select All";
+"common.action.find" = "Find…";
 "common.action.hide" = "Hide SayAll";
 "common.action.hide_others" = "Hide Others";
 "common.action.show_all" = "Show All";

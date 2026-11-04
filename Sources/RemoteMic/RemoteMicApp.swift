@@ -262,6 +262,10 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     )
     private var updateCheckTask: Task<Void, Never>?
     private let buttonProfileImportRequests = ButtonProfileImportRequestStore()
+    private let searchFocusCoordinator = SearchFocusCoordinator()
+    /// 「编辑 > 查找…」当前实例。`configureApplicationMenu()` 在语言切换后会重建菜单，
+    /// 因此这里必须保存最新引用，供 `validateMenuItem` 判断。
+    private var findMenuItem: NSMenuItem?
     private var resolvedUpdateFeedURLString: String?
     private var updaterStarted = false
     private lazy var updaterController = SPUStandardUpdaterController(
@@ -481,7 +485,11 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     }
 
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
-        menuItem !== macMicrophoneItem || model.macMicrophoneState != .stopping
+        if let findMenuItem, menuItem === findMenuItem {
+            // 纯状态查询：打开「编辑」菜单本身不得产生聚焦副作用。
+            return searchFocusCoordinator.hasRegisteredSearchField
+        }
+        return menuItem !== macMicrophoneItem || model.macMicrophoneState != .stopping
     }
 
     func menuWillOpen(_ menu: NSMenu) {
@@ -666,6 +674,18 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         editMenu.addItem(responderMenuItem("common.action.paste", action: "paste:", keyEquivalent: "v"))
         editMenu.addItem(.separator())
         editMenu.addItem(responderMenuItem("common.action.select_all", action: "selectAll:", keyEquivalent: "a"))
+        editMenu.addItem(.separator())
+        let findItem = NSMenuItem(
+            title: localization.text("common.action.find"),
+            action: #selector(focusVisibleSearchField),
+            keyEquivalent: "f"
+        )
+        findItem.keyEquivalentModifierMask = [.command]
+        // 不能用 responderMenuItem：它会把 target 置 nil，让 AppKit 把动作路由到
+        // 当前聚焦的文本框；而 ⌘F 需要由宿主统一决定聚焦哪个搜索框。
+        findItem.target = self
+        editMenu.addItem(findItem)
+        findMenuItem = findItem
         editMenuItem.submenu = editMenu
         mainMenu.addItem(editMenuItem)
 
@@ -714,10 +734,32 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
             case "w":
                 self?.closeKeyWindow()
                 return nil
+            case "f":
+                // 与既有 ⌘Q / ⌘W 同一范式：本地监听先于菜单 keyEquivalent 派发，
+                // 返回 nil 后按键路径由此统一处理，菜单项保留 ⌘F 用于显示与鼠标点击。
+                // 无条件吞掉也保证没有可用搜索框时静默（灰掉的菜单项不会再引发
+                // AppKit 对未处理 ⌘F 的提示音）；是否聚焦由内部 guard 决定。
+                self?.performSearchFocus()
+                return nil
             default:
                 return event
             }
         }
+    }
+
+    @objc private func focusVisibleSearchField() {
+        performSearchFocus()
+    }
+
+    /// 菜单项与本地监听共用同一条路径，重复调用幂等。
+    /// 没有可用搜索框时既不广播也不吞掉已有焦点。
+    private func performSearchFocus() {
+        // 「常用语浮窗」等独立窗口也复用带搜索框的页面；只有设置窗口是 key window
+        // 时才聚焦，避免把浮窗里的搜索框抢过来。
+        guard settingsWindowController?.window?.isKeyWindow == true,
+              searchFocusCoordinator.hasRegisteredSearchField
+        else { return }
+        searchFocusCoordinator.requestFocus()
     }
 
     private func menuItem(_ title: String, action: Selector) -> NSMenuItem {

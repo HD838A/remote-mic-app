@@ -709,6 +709,7 @@
 "common.action.cut" = "剪切";
 "common.action.paste" = "粘贴";
 "common.action.select_all" = "全选";
+"common.action.find" = "查找…";
 "common.action.hide" = "隐藏无线麦 SayAll";
 "common.action.hide_others" = "隐藏其他";
 "common.action.show_all" = "全部显示";

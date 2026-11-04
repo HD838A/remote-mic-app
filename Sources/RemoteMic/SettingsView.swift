@@ -577,6 +577,9 @@ struct SettingsView: View {
 
     @State private var supplementalSettings = SupplementalSettingsIntegration()
     @State private var selectedSection: SettingsSection
+    /// 「按键」页组合动作搜索框的焦点。⌘F 由宿主广播，这里只响应，
+    /// 不改 `selectedSection` 或任何既有页面状态。
+    @FocusState private var isMappingMacroSearchFocused: Bool
     @State private var selectedRemoteButton: RemoteButton = .ok
     @State private var selectedSiriRemoteControlID = "select"
     @State private var selectedChromecastControlID = "select"
@@ -2487,6 +2490,19 @@ struct SettingsView: View {
                 .textFieldStyle(.roundedBorder)
                 .font(.system(size: 13))
                 .frame(maxWidth: 280)
+                .focused($isMappingMacroSearchFocused)
+                .onAppear {
+                    SearchFieldRegistration.post(
+                        section: SettingsSection.mapping.rawValue, isRegistered: true)
+                }
+                .onDisappear {
+                    SearchFieldRegistration.post(
+                        section: SettingsSection.mapping.rawValue, isRegistered: false)
+                }
+                .onReceive(NotificationCenter.default.publisher(
+                    for: SearchFocusRequest.focusNotification)) { _ in
+                    isMappingMacroSearchFocused = true
+                }
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: 8) {
                     ForEach(visibleActions) { action in
