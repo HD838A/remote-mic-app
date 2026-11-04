@@ -312,6 +312,7 @@
 "remote.device.model.apple_siri_remote_a2854" = "苹果遥控器第 7 代";
 "remote.device.model.apple_siri_remote_a2540" = "苹果遥控器第 6 代";
 "remote.device.model.chromecast_voice_remote" = "Chromecast 遥控器";
+"remote.device.model.google_tv_remote_g9n9n" = "谷歌电视遥控器 G9N9N";
 "remote.device.model.unknown" = "小米遥控器";
 "remote.device.custom_name" = "自定义名称";
 "remote.device.bind_button" = "绑定普通按键";

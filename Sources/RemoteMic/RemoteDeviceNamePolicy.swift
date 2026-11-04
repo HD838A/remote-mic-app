@@ -91,7 +91,7 @@ enum RemoteDeviceNamePolicy {
         switch model {
         case .rc001, .rc003: 0
         case .appleSiriRemoteA2854, .appleSiriRemoteA2540: 1
-        case .chromecastVoiceRemote: 2
+        case .chromecastVoiceRemote, .googleTVRemoteG9N9N: 2
         case .unknown: 3
         }
     }
@@ -148,6 +148,10 @@ enum RemoteDeviceNamePolicy {
             return commonNames.contains(lowercased) || modelNames.contains(lowercased)
         case .chromecastVoiceRemote:
             return ["chromecast 遥控器", "chromecast remote"].contains(lowercased)
+        case .googleTVRemoteG9N9N:
+            // 出厂名以型号本身与英文组合名为准；中文零售名（「谷歌电视遥控器」等）
+            // 尚无真机上报证据，不预置——宁可让用户看到系统名，也不猜。
+            return ["g9n9n", "g9n9n remote", "remote g9n9n"].contains(lowercased)
         case .unknown:
             // 小米发现阶段可能先读到名称、后读到型号；沿用已有发现白名单。
             return XiaomiVoiceRemoteNameMatcher.matches(name)

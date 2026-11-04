@@ -41,6 +41,14 @@ struct RemoteDeviceNamePolicyTests {
         }
     }
 
+    /// G9N9N 的出厂名以型号本身与英文组合名为准；用户改成其他名字后必须原样保留。
+    @Test func googleTVRemoteG9N9NFactoryNamesClearCachedName() {
+        for name in ["G9N9N", "G9N9N Remote", "Remote G9N9N"] {
+            #expect(RemoteDeviceNamePolicy.customName(from: name, model: .googleTVRemoteG9N9N) == "")
+        }
+        #expect(RemoteDeviceNamePolicy.customName(from: "客厅谷歌遥控器", model: .googleTVRemoteG9N9N) == "客厅谷歌遥控器")
+    }
+
     @Test func unknownModelRecognizesExistingDiscoveryAliases() {
         #expect(RemoteDeviceNamePolicy.customName(from: "MI RC", model: .unknown) == "")
         #expect(RemoteDeviceNamePolicy.customName(from: "客厅遥控器", model: .unknown) == "客厅遥控器")

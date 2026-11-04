@@ -312,6 +312,7 @@
 "remote.device.model.apple_siri_remote_a2854" = "Apple Remote (7th Generation)";
 "remote.device.model.apple_siri_remote_a2540" = "Apple Remote (6th Generation)";
 "remote.device.model.chromecast_voice_remote" = "Chromecast Remote";
+"remote.device.model.google_tv_remote_g9n9n" = "Google TV Remote G9N9N";
 "remote.device.model.unknown" = "Xiaomi Remote";
 "remote.device.custom_name" = "Custom name";
 "remote.device.bind_button" = "Set Up Button Controls";
