@@ -128,6 +128,31 @@ struct SiriRemotePressableTargetResolver {
     }
 }
 
+/// 光标命中测试的目标过滤。
+///
+/// 同进程 AX 请求不跨进程，直接在调用线程上执行 AppKit 的 AX 应答；应答会向
+/// `NSHostingView` 索取 accessibility 子节点，从而进入 SwiftUI 的 view graph。
+/// 主线程此时若正持有 `_MovableLock`（视图更新事务内），两边互等就是永久卡死，
+/// 与 #678「AX 查询自身」同一类问题。
+///
+/// 宿主自己的窗口不需要 AX 按压：指针模式已经由 `AppleSiriRemotePointerController`
+/// 先发过真实鼠标事件；这里再按一次既重复又会踩上面的死锁。
+enum SiriRemoteAXTargetPolicy {
+    static func isOwnProcess(
+        _ processIdentifier: pid_t,
+        ownProcessIdentifier: pid_t = ProcessInfo.processInfo.processIdentifier
+    ) -> Bool {
+        processIdentifier == ownProcessIdentifier
+    }
+
+    static func isPointInsideOwnWindow(
+        _ point: NSPoint,
+        windowFrames: [NSRect]
+    ) -> Bool {
+        windowFrames.contains { $0.contains(point) }
+    }
+}
+
 struct SiriRemoteCursorFeedbackLayout: Equatable {
     enum Placement: String, Equatable {
         case centeredOnCursor = "centered_on_cursor"
@@ -178,6 +203,8 @@ final class SiriRemoteCursorFeedbackController {
     private var interactionState = SiriRemoteCursorFeedbackInteractionState()
     private var hoveredElement: AXUIElement?
     private var hoveredElementDepth = 0
+    /// 悬停目标是宿主自己的窗口：不持有 AX 元素，点击由已发出的真实鼠标事件完成。
+    private var hoveredOwnWindow = false
     private var hoveredCursorLocation: CGPoint?
 
     init(logger: @escaping (String) -> Void = { _ in }) {
@@ -229,6 +256,7 @@ final class SiriRemoteCursorFeedbackController {
         case .clicked:
             interactionState.scrolled()
             hoveredElement = nil
+            hoveredOwnWindow = false
             hoveredCursorLocation = nil
             scheduleHide(after: 0.12)
         }
@@ -241,13 +269,17 @@ final class SiriRemoteCursorFeedbackController {
                 self?.activateHoveredElementIfAvailable() ?? false
             }
         }
-        guard interactionState.consumeOK(), let hoveredElement else { return false }
+        guard interactionState.consumeOK() else { return false }
+        let isOwnWindow = hoveredOwnWindow
+        guard hoveredElement != nil || isOwnWindow else { return false }
         hideWorkItem?.cancel()
         hideWorkItem = nil
+        let element = hoveredElement
         self.hoveredElement = nil
         let targetDepth = hoveredElementDepth
         let targetLocation = hoveredCursorLocation
         hoveredElementDepth = 0
+        hoveredOwnWindow = false
         hoveredCursorLocation = nil
         guard let targetLocation else {
             hide(reason: "hover_click_target_location_unavailable")
@@ -276,7 +308,18 @@ final class SiriRemoteCursorFeedbackController {
             )
             return false
         }
-        let error = AXUIElementPerformAction(hoveredElement, kAXPressAction as CFString)
+        // 自家窗口不做 AX 按压：真实鼠标事件已经点过一次，这里只要把这次按压「吃掉」，
+        // 避免同一颗键再执行一遍用户映射的动作。
+        if isOwnWindow {
+            hide(reason: "hover_click_self_window")
+            logger(
+                "APPLE REMOTE TOUCH FEEDBACK phase=hover_click result=skipped " +
+                    "reason=self_window fallback=system_click"
+            )
+            return true
+        }
+        guard let element else { return false }
+        let error = AXUIElementPerformAction(element, kAXPressAction as CFString)
         if error == .success {
             hide(reason: "hover_click_activated")
             logger(
@@ -309,6 +352,7 @@ final class SiriRemoteCursorFeedbackController {
         interactionState.expired()
         hoveredElement = nil
         hoveredElementDepth = 0
+        hoveredOwnWindow = false
         hoveredCursorLocation = nil
         hide(reason: reason)
     }
@@ -375,15 +419,18 @@ final class SiriRemoteCursorFeedbackController {
         case .hide:
             hoveredElement = nil
             hoveredElementDepth = 0
+            hoveredOwnWindow = false
             hoveredCursorLocation = nil
             hide(reason: "pointer_idle_no_clickable_target")
         case let .holdForClick(delay):
             hoveredElement = target?.element
             hoveredElementDepth = target?.depth ?? 0
+            hoveredOwnWindow = target?.isOwnWindow ?? false
             hoveredCursorLocation = target?.cursorLocation
             logger(
                 "APPLE REMOTE TOUCH FEEDBACK phase=hover_target result=held " +
-                    "action=ax_press target_depth=\(hoveredElementDepth) " +
+                    "action=\(hoveredOwnWindow ? "system_click" : "ax_press") " +
+                    "target_depth=\(hoveredElementDepth) " +
                     "hold_ms=\(Int(delay * 1_000))"
             )
             scheduleClickableTargetExpiration(after: delay)
@@ -397,6 +444,7 @@ final class SiriRemoteCursorFeedbackController {
             self.interactionState.expired()
             self.hoveredElement = nil
             self.hoveredElementDepth = 0
+            self.hoveredOwnWindow = false
             self.hoveredCursorLocation = nil
             self.logger(
                 "APPLE REMOTE TOUCH FEEDBACK phase=hover_target result=expired"
@@ -407,9 +455,17 @@ final class SiriRemoteCursorFeedbackController {
         DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
     }
 
+    /// 光标反馈面板自己不算目标窗口：它跟着光标走，算进来会把每次命中都判成自家。
+    private func ownWindowFrames() -> [NSRect] {
+        NSApp.windows
+            .filter { $0.isVisible && !$0.isMiniaturized && $0 !== window }
+            .map(\.frame)
+    }
+
     private func clickableElementAtCursor() -> (
-        element: AXUIElement,
+        element: AXUIElement?,
         depth: Int,
+        isOwnWindow: Bool,
         cursorLocation: CGPoint
     )? {
         guard let location = CGEvent(source: nil)?.location else {
@@ -418,6 +474,15 @@ final class SiriRemoteCursorFeedbackController {
                     "reason=cursor_location_unavailable"
             )
             return nil
+        }
+        // 落在自家窗口矩形内：不做 AX 命中测试，直接按「自家窗口」处理。
+        // 同进程 AX 应答会进 SwiftUI view graph，和更新事务抢 `_MovableLock`（#678 同类）；
+        // 真实鼠标点击已经由指针控制器先发过，这里不按也不会点不动。
+        if SiriRemoteAXTargetPolicy.isPointInsideOwnWindow(
+            location,
+            windowFrames: ownWindowFrames()
+        ) {
+            return (nil, 0, true, location)
         }
         let systemWide = AXUIElementCreateSystemWide()
         var element: AXUIElement?
@@ -434,12 +499,18 @@ final class SiriRemoteCursorFeedbackController {
             )
             return nil
         }
+        // 窗口列表可能刚变过（面板、浮层），解析出的元素仍要再确认一次归属。
+        var processIdentifier: pid_t = 0
+        if AXUIElementGetPid(element, &processIdentifier) == .success,
+           SiriRemoteAXTargetPolicy.isOwnProcess(processIdentifier) {
+            return (nil, 0, true, location)
+        }
         guard let target = SiriRemotePressableTargetResolver.resolve(
             startingAt: element,
             supportsPress: { self.supportsPress($0) },
             parent: { self.parentElement(of: $0) }
         ) else { return nil }
-        return (target.element, target.depth, location)
+        return (target.element, target.depth, false, location)
     }
 
     private func supportsPress(_ element: AXUIElement) -> Bool {
