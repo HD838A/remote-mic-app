@@ -128,31 +128,6 @@ struct SiriRemotePressableTargetResolver {
     }
 }
 
-/// 光标命中测试的目标过滤。
-///
-/// 同进程 AX 请求不跨进程，直接在调用线程上执行 AppKit 的 AX 应答；应答会向
-/// `NSHostingView` 索取 accessibility 子节点，从而进入 SwiftUI 的 view graph。
-/// 主线程此时若正持有 `_MovableLock`（视图更新事务内），两边互等就是永久卡死，
-/// 与 #678「AX 查询自身」同一类问题。
-///
-/// 宿主自己的窗口不需要 AX 按压：指针模式已经由 `AppleSiriRemotePointerController`
-/// 先发过真实鼠标事件；这里再按一次既重复又会踩上面的死锁。
-enum SiriRemoteAXTargetPolicy {
-    static func isOwnProcess(
-        _ processIdentifier: pid_t,
-        ownProcessIdentifier: pid_t = ProcessInfo.processInfo.processIdentifier
-    ) -> Bool {
-        processIdentifier == ownProcessIdentifier
-    }
-
-    static func isPointInsideOwnWindow(
-        _ point: NSPoint,
-        windowFrames: [NSRect]
-    ) -> Bool {
-        windowFrames.contains { $0.contains(point) }
-    }
-}
-
 struct SiriRemoteCursorFeedbackLayout: Equatable {
     enum Placement: String, Equatable {
         case centeredOnCursor = "centered_on_cursor"
@@ -478,7 +453,7 @@ final class SiriRemoteCursorFeedbackController {
         // 落在自家窗口矩形内：不做 AX 命中测试，直接按「自家窗口」处理。
         // 同进程 AX 应答会进 SwiftUI view graph，和更新事务抢 `_MovableLock`（#678 同类）；
         // 真实鼠标点击已经由指针控制器先发过，这里不按也不会点不动。
-        if SiriRemoteAXTargetPolicy.isPointInsideOwnWindow(
+        if AXSelfTargetPolicy.isPointInsideOwnWindow(
             location,
             windowFrames: ownWindowFrames()
         ) {
@@ -502,7 +477,7 @@ final class SiriRemoteCursorFeedbackController {
         // 窗口列表可能刚变过（面板、浮层），解析出的元素仍要再确认一次归属。
         var processIdentifier: pid_t = 0
         if AXUIElementGetPid(element, &processIdentifier) == .success,
-           SiriRemoteAXTargetPolicy.isOwnProcess(processIdentifier) {
+           AXSelfTargetPolicy.isOwnProcess(processIdentifier) {
             return (nil, 0, true, location)
         }
         guard let target = SiriRemotePressableTargetResolver.resolve(

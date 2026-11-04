@@ -28,6 +28,7 @@ enum ScrollRegionInjector {
 
         var processIdentifier: pid_t = 0
         guard AXUIElementGetPid(element, &processIdentifier) == .success,
+              !AXSelfTargetPolicy.isOwnProcess(processIdentifier),
               NSRunningApplication(processIdentifier: processIdentifier)?.bundleIdentifier == bundleIdentifier
         else { return nil }
 
@@ -93,6 +94,17 @@ enum ScrollRegionInjector {
         guard let application = NSWorkspace.shared.frontmostApplication,
               let bundleIdentifier = application.bundleIdentifier
         else { return ScrollPageResult(outcome: .noFrontmostApplication, verifiedMovement: nil) }
+
+        // 自家窗口不走 AX：同进程 AX 应答会进 SwiftUI view graph（#678 同类）。
+        // 翻页键在设置页仍要能用，所以退回一个窗口高度的像素滚轮事件。
+        if AXSelfTargetPolicy.isOwnProcess(application.processIdentifier) {
+            let result = scrollOwnWindow(direction: direction)
+            AppLogger.shared.write(
+                "SCROLL PAGE bundle=\(bundleIdentifier) direction=\(direction == .up ? "up" : "down") " +
+                    "result=\(result.outcome.rawValue) reason=self_process"
+            )
+            return result
+        }
 
         let applicationElement = AXUIElementCreateApplication(application.processIdentifier)
         guard let window = focusedWindow(of: applicationElement) else {
@@ -211,6 +223,16 @@ enum ScrollRegionInjector {
         guard let application = NSWorkspace.shared.frontmostApplication,
               let bundleIdentifier = application.bundleIdentifier
         else { return ScrollPageResult(outcome: .noFrontmostApplication, verifiedMovement: nil) }
+
+        // 到顶/到底同样不碰自家 AX；一次足够大的像素滚轮由内容边界截住。
+        if AXSelfTargetPolicy.isOwnProcess(application.processIdentifier) {
+            let result = scrollOwnWindow(direction: edge == .top ? .up : .down, pages: 6)
+            AppLogger.shared.write(
+                "SCROLL EDGE bundle=\(bundleIdentifier) edge=\(edge == .top ? "top" : "bottom") " +
+                    "result=\(result.outcome.rawValue) reason=self_process"
+            )
+            return result
+        }
 
         let applicationElement = AXUIElementCreateApplication(application.processIdentifier)
         guard let window = focusedWindow(of: applicationElement) else {
@@ -661,8 +683,35 @@ enum ScrollRegionInjector {
         return true
     }
 
-    private static func postLineWheel(direction: ScrollPageDirection, lines: Int32, at point: CGPoint) -> Bool {
+    /// 自家窗口的翻页回退：不查 AX，直接按窗口高度投递像素滚轮。
+    ///
+    /// 目标就是光标下的窗口，所以不设置别的定位；`pages` 只用于「到顶/到底」
+    /// 这种一次性大位移，冲过头由内容边界截住。
+    private static func scrollOwnWindow(
+        direction: ScrollPageDirection,
+        pages: Int = 1
+    ) -> ScrollPageResult {
+        guard let point = CGEvent(source: nil)?.location else {
+            return ScrollPageResult(outcome: .regionUnavailable, verifiedMovement: nil)
+        }
+        let windowHeight = (NSApp.keyWindow ?? NSApp.mainWindow)?.frame.height ?? 600
+        let pixels = Int32(max(240, windowHeight * CGFloat(pages)).rounded())
         guard let source = CGEventSource(stateID: .hidSystemState),
+              let event = CGEvent(
+                  scrollWheelEvent2Source: source,
+                  units: .pixel,
+                  wheelCount: 1,
+                  wheel1: direction.wheelSign * pixels,
+                  wheel2: 0,
+                  wheel3: 0
+              )
+        else { return ScrollPageResult(outcome: .eventFailed, verifiedMovement: nil) }
+        event.location = point
+        event.post(tap: .cghidEventTap)
+        return ScrollPageResult(outcome: .scrolledByPixelWheel, verifiedMovement: nil)
+    }
+
+    private static func postLineWheel(direction: ScrollPageDirection, lines: Int32, at point: CGPoint) -> Bool {        guard let source = CGEventSource(stateID: .hidSystemState),
               let event = CGEvent(
                   scrollWheelEvent2Source: source,
                   units: .line,

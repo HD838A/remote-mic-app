@@ -47,21 +47,21 @@ struct SiriRemoteCursorFeedbackTests {
     /// 自家窗口/自家进程不能成为 AX 目标：同进程 AX 应答会进 SwiftUI view graph，
     /// 与持有 `_MovableLock` 的更新事务互等（#678 同类）。
     @Test func ownProcessAndOwnWindowsAreNotAXTargets() {
-        #expect(SiriRemoteAXTargetPolicy.isOwnProcess(
+        #expect(AXSelfTargetPolicy.isOwnProcess(
             ProcessInfo.processInfo.processIdentifier
         ))
-        #expect(!SiriRemoteAXTargetPolicy.isOwnProcess(0))
+        #expect(!AXSelfTargetPolicy.isOwnProcess(0))
 
         let window = NSRect(x: 100, y: 60, width: 400, height: 300)
-        #expect(SiriRemoteAXTargetPolicy.isPointInsideOwnWindow(
+        #expect(AXSelfTargetPolicy.isPointInsideOwnWindow(
             NSPoint(x: 120, y: 80),
             windowFrames: [window]
         ))
-        #expect(!SiriRemoteAXTargetPolicy.isPointInsideOwnWindow(
+        #expect(!AXSelfTargetPolicy.isPointInsideOwnWindow(
             NSPoint(x: 99, y: 80),
             windowFrames: [window]
         ))
-        #expect(!SiriRemoteAXTargetPolicy.isPointInsideOwnWindow(
+        #expect(!AXSelfTargetPolicy.isPointInsideOwnWindow(
             NSPoint(x: 120, y: 80),
             windowFrames: []
         ))
