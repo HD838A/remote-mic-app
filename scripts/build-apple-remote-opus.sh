@@ -6,7 +6,12 @@ source "$ROOT/scripts/release-variant.sh"
 
 OPUS_VERSION="1.6.1"
 OPUS_SHA256="6ffcb593207be92584df15b32466ed64bbec99109f007c82205f0194572411a1"
-BUILD_ROOT="$ROOT/.build/apple-remote-opus/$RELEASE_VARIANT"
+# 产物按「版本 + 变体」缓存在用户缓存目录，供每个发版 worktree 复用：每次发版都会
+# 新建 worktree，放在 $ROOT/.build 下意味着每次都要重新构建 2–3 分钟。
+# 路径包含 $OPUS_VERSION，升级 opus 时不会命中上一版产物（build-app.sh 只校验
+# 架构与 minos，查不出小版本差异）。同一变体不应并发构建（构建会 mv 掉既有目录）。
+OPUS_CACHE_ROOT="${SAYALL_OPUS_CACHE_ROOT:-$HOME/Library/Caches/com.getsayall.apple-remote-opus}"
+BUILD_ROOT="$OPUS_CACHE_ROOT/$OPUS_VERSION/$RELEASE_VARIANT"
 SOURCE_ARCHIVE="$BUILD_ROOT/opus-$OPUS_VERSION.tar.gz"
 SOURCE_ROOT="$BUILD_ROOT/opus-$OPUS_VERSION"
 INSTALL_ROOT="$BUILD_ROOT/install"
