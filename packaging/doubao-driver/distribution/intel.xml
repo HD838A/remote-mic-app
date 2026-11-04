@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <installer-gui-script minSpecVersion="1">
     <title>SayAll</title>
+    <license file="License.txt"/>
     <options customize="always" hostArchitectures="arm64,x86_64" rootVolumeOnly="true"/>
     <domains enable_localSystem="true" enable_currentUserHome="false" enable_anywhere="false"/>
     <script><![CDATA[

@@ -79,6 +79,10 @@ test -x /usr/bin/productbuild
 test -f "$DISTRIBUTION"
 test -d "$DISTRIBUTION_RESOURCES/en.lproj"
 test -d "$DISTRIBUTION_RESOURCES/zh-Hans.lproj"
+test -f "$DISTRIBUTION_RESOURCES/en.lproj/License.txt"
+test -f "$DISTRIBUTION_RESOURCES/zh-Hans.lproj/License.txt"
+test -f "$ROOT/packaging/doubao-driver/privacy-policy.lock.json"
+"$ROOT/scripts/verify-installer-privacy-policy.py"
 case "$REQUIRE_DEVELOPER_ID_SIGNING" in
   0|1) ;;
   *) print -u2 "REQUIRE_DEVELOPER_ID_SIGNING must be 0 or 1"; exit 1 ;;
