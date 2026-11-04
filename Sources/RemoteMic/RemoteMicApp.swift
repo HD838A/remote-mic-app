@@ -266,6 +266,10 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     /// 「编辑 > 查找…」当前实例。`configureApplicationMenu()` 在语言切换后会重建菜单，
     /// 因此这里必须保存最新引用，供 `validateMenuItem` 判断。
     private var findMenuItem: NSMenuItem?
+    private let settingsNavigation = SettingsNavigationStore()
+    /// 「前往」菜单。`configureApplicationMenu()` 在语言切换后会重建菜单，
+    /// 因此保存最新引用，供 `menuNeedsUpdate` 识别。
+    private var goMenu: NSMenu?
     private var resolvedUpdateFeedURLString: String?
     private var updaterStarted = false
     private lazy var updaterController = SPUStandardUpdaterController(
@@ -492,6 +496,38 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         return menuItem !== macMicrophoneItem || model.macMicrophoneState != .stopping
     }
 
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        guard let goMenu, menu === goMenu else { return }
+        menu.removeAllItems()
+        for section in settingsNavigation.visibleSections {
+            let shortcut = SettingsPageBehavior.sidebarShortcutOrder.firstIndex(of: section)
+            let item = NSMenuItem(
+                title: settingsSectionTitle(section),
+                action: #selector(selectSettingsSection(_:)),
+                keyEquivalent: ""
+            )
+            item.representedObject = section.rawValue
+            if let shortcut {
+                item.keyEquivalent = String(shortcut + 1)
+                item.keyEquivalentModifierMask = .command
+            }
+            item.target = self
+            menu.addItem(item)
+        }
+    }
+
+    /// 私有页签的标题由私有组件提供（`SettingsSection.titleKey` 对它们返回空串），
+    /// 这里现算，避免语言切换后菜单里出现空白标题。
+    private func settingsSectionTitle(_ section: SettingsSection) -> String {
+        switch section {
+        case .macros: return model.macroFeature.sectionTitle
+        case .buttonProfiles: return model.macroFeature.buttonProfilesSectionTitle
+        case .membership: return model.membershipFeature.sectionTitle
+        case .privateFeature: return model.privateFeature.sectionTitle
+        default: return localization.text(section.titleKey)
+        }
+    }
+
     func menuWillOpen(_ menu: NSMenu) {
         guard menu === statusMenu else { return }
         finishStatusMenuOperation(result: "cancelled", reason: "menu_replaced")
@@ -689,6 +725,15 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         editMenuItem.submenu = editMenu
         mainMenu.addItem(editMenuItem)
 
+        let goMenuItem = NSMenuItem()
+        let goMenu = NSMenu(title: localization.text("menu.go"))
+        // 页签可见性随会员开通、私有功能启停与 supplemental 动态页变化，
+        // 因此每次打开菜单时按当前可见页签重建，避免标题或快捷键标签陈旧。
+        goMenu.delegate = self
+        goMenuItem.submenu = goMenu
+        self.goMenu = goMenu
+        mainMenu.addItem(goMenuItem)
+
         let windowMenuItem = NSMenuItem()
         let windowMenu = NSMenu(title: localization.text("menu.window"))
         windowMenu.addItem(responderMenuItem(
@@ -741,6 +786,11 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
                 // AppKit 对未处理 ⌘F 的提示音）；是否聚焦由内部 guard 决定。
                 self?.performSearchFocus()
                 return nil
+            case "1", "2", "3", "4", "5", "6", "7", "8", "9":
+                // 与 ⌘Q / ⌘W 同一范式：本地监听先于菜单 keyEquivalent 派发，
+                // 返回 nil 后按键路径由此统一处理，菜单项保留 ⌘N 用于显示与鼠标点击。
+                self?.requestSettingsSection(from: event)
+                return nil
             default:
                 return event
             }
@@ -760,6 +810,27 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
               searchFocusCoordinator.hasRegisteredSearchField
         else { return }
         searchFocusCoordinator.requestFocus()
+    }
+
+    private func requestSettingsSection(from event: NSEvent) {
+        guard let digit = event.charactersIgnoringModifiers?.first,
+              let index = Int(String(digit)),
+              index <= SettingsPageBehavior.sidebarShortcutOrder.count
+        else { return }
+        let section = SettingsPageBehavior.sidebarShortcutOrder[index - 1]
+        requestSettingsSection(rawValue: section.rawValue)
+    }
+
+    @objc private func selectSettingsSection(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String else { return }
+        requestSettingsSection(rawValue: raw)
+    }
+
+    private func requestSettingsSection(rawValue: String) {
+        let section = SettingsSection(rawValue: rawValue)
+        // 不可见的目标不生效，也不跳到别的页签；「前往」菜单本身就只列可见页签。
+        guard settingsNavigation.visibleSections.contains(section) else { return }
+        settingsNavigation.request(section: section)
     }
 
     private func menuItem(_ title: String, action: Selector) -> NSMenuItem {
@@ -1120,6 +1191,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
             rootView: RemoteMicRootView(
                 model: model,
                 buttonProfileImportRequests: buttonProfileImportRequests,
+                settingsNavigation: settingsNavigation,
                 updateInformation: updateInformation,
                 hardwareAnnouncements: hardwareAnnouncements,
                 checkForUpdates: { [weak self] in self?.checkForUpdates() },

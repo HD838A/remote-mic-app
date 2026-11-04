@@ -578,6 +578,7 @@
 "menu.about" = "About SayAll";
 "menu.file" = "File";
 "menu.edit" = "Edit";
+"menu.go" = "Go";
 "menu.window" = "Window";
 "menu.open_log_folder" = "Open Log Folder";
 "menu.check_for_updates" = "Check for Updates…";
