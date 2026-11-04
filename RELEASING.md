@@ -33,6 +33,10 @@ Mac Remote 与其他 macOS 私有组件使用同一个私有 Swift Package。CI 
 
 打包用的新 worktree 里没有 `Apps/MobileWeb/.private/`（该目录被 `.gitignore` 排除、不入库），**打包前先从主工作区把它复制过来**，否则会在 DMG 阶段报 `Developer ID app is missing a production Web Remote relay URL`。
 
+双架构可以在本机并行打包：`PARALLEL_RELEASE_VARIANTS=1 scripts/notarize-release.sh --all` 会同时跑 Apple Silicon 与 Intel 两条 lane。两条 lane 会争用私有平台准备锁（`scripts/prepare-private-platform.py`），此时后到的一条会**等待**前一条释放（`SAYALL_PREPARE_LOCK_TIMEOUT_SECONDS`，默认 600 秒），而不是像以前那样立刻失败。实测并行两架构约 203 秒、串行约 386 秒。
+
+并行时两条 lane 的输出会交错在同一个终端，失败时难以判断是哪条 lane 出问题。因此并行模式会额外把每条 lane 的完整输出分别写到 `RELEASE_VARIANT_LOG_DIR`（默认 `.build/release-logs/`）下的 `apple-silicon.log` 与 `intel.log`；终端实时输出照旧，退出码仍取 lane 自身。排查失败时先看这两个文件，目录可用 `RELEASE_VARIANT_LOG_DIR` 覆盖。
+
 有读取权限时，按以下顺序准备：
 
 1. 将 Mac 私有改动通过私有 PR 合入 `GetSayAll/sayall-private-platform` 的 `main`。只比较根 SwiftPM 清单、Mac Remote、组合动作、键位方案、常用语、会员与诊断、Siri Remote、Chromecast 和私有构建工具。网页、服务端和纯 Markdown/HTML 文档变化不触发 Mac 包升级。新增 Mac 模块时同步 `scripts/prepare-private-platform.py` 的路径范围。
