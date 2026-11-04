@@ -37,6 +37,10 @@ Mac Remote 与其他 macOS 私有组件使用同一个私有 Swift Package。CI 
 
 并行时两条 lane 的输出会交错在同一个终端，失败时难以判断是哪条 lane 出问题。因此并行模式会额外把每条 lane 的完整输出分别写到 `RELEASE_VARIANT_LOG_DIR`（默认 `.build/release-logs/`）下的 `apple-silicon.log` 与 `intel.log`；终端实时输出照旧，退出码仍取 lane 自身。排查失败时先看这两个文件，目录可用 `RELEASE_VARIANT_LOG_DIR` 覆盖。
 
+打包耗时的大头不是公证。同一 worktree 热缓存重跑整条 arm64 lane 只要约 193 秒，其中 Apple 公证只占约 50 秒到 2 分钟（从提交到 accepted）；真正的长尾是冷构建——新 worktree 里 `.build` 与 DerivedData 全空，约 10 分钟。因此优化方向是编译缓存，不是公证并行。
+
+`scripts/notarize-release.sh` 里已有 `PARALLEL_PACKAGE_NOTARIZATION=1`，会把安装包与卸载包的公证并行提交。按上面的实测，它最多只省下几十秒到两分钟，默认仍为 `0`；除非打包时特别在意这两分钟，否则不必开启。需要真正压缩打包时间时，先看 opus 构建是否命中跨 worktree 缓存（`scripts/build-apple-remote-opus.sh`，产物缓存在 `~/Library/Caches/com.getsayall.apple-remote-opus/<opus 版本>/<变体>/`），以及是否复用了同一份 `.build` 目录。
+
 有读取权限时，按以下顺序准备：
 
 1. 将 Mac 私有改动通过私有 PR 合入 `GetSayAll/sayall-private-platform` 的 `main`。只比较根 SwiftPM 清单、Mac Remote、组合动作、键位方案、常用语、会员与诊断、Siri Remote、Chromecast 和私有构建工具。网页、服务端和纯 Markdown/HTML 文档变化不触发 Mac 包升级。新增 Mac 模块时同步 `scripts/prepare-private-platform.py` 的路径范围。
