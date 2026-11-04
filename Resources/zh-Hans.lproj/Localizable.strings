@@ -578,6 +578,7 @@
 "menu.about" = "关于无线麦 SayAll";
 "menu.file" = "文件";
 "menu.edit" = "编辑";
+"menu.go" = "前往";
 "menu.window" = "窗口";
 "menu.open_log_folder" = "打开日志所在文件夹";
 "menu.check_for_updates" = "检查更新…";

@@ -207,6 +207,23 @@ enum SettingsPageBehavior {
         .statistics,
     ]
 
+    /// ⌘1–⌘9 的固定页签映射。
+    ///
+    /// 用固定身份而不是「当前可见顺序」：会员开通 / 私有功能启停会增删侧边栏行，
+    /// `sidebarSections()` 还会在第 5 项后插入 supplemental 动态页，按位置映射会让
+    /// 同一个 ⌘N 悄悄指向别的页面。固定映射下不可见的目标只是「无效」，不会串位。
+    static let sidebarShortcutOrder: [SettingsSection] = [
+        .mapping,
+        .applications,
+        .macros,
+        .buttonProfiles,
+        .membership,
+        .connection,
+        .transcripts,
+        .about,
+        .statistics,
+    ]
+
     static func sidebarSections(
         privateFeatureVisible: Bool,
         macroFeatureVisible: Bool,
@@ -557,6 +574,8 @@ struct SettingsView: View {
 
     @ObservedObject private var macroFeature: MacroFeatureIntegration
     @ObservedObject private var buttonProfileImportRequests: ButtonProfileImportRequestStore
+    /// AppKit 菜单与 ⌘1–⌘9 的导航桥。带默认值，直接渲染 SettingsView 的测试夹具无需改动。
+    @ObservedObject private var settingsNavigation: SettingsNavigationStore
     @ObservedObject private var membershipFeature: MembershipFeatureIntegration
     @ObservedObject private var loginItemService: LoginItemService
     @ObservedObject private var updateInformation: UpdateInformationStore
@@ -627,6 +646,7 @@ struct SettingsView: View {
     init(
         model: BridgeAppModel,
         buttonProfileImportRequests: ButtonProfileImportRequestStore = ButtonProfileImportRequestStore(),
+        settingsNavigation: SettingsNavigationStore = SettingsNavigationStore(),
         updateInformation: UpdateInformationStore,
         hardwareAnnouncements: HardwareAnnouncementStore = HardwareAnnouncementStore(),
         checkForUpdates: @escaping () -> Void = {},
@@ -650,6 +670,7 @@ struct SettingsView: View {
     ) {
         self.model = model
         self.buttonProfileImportRequests = buttonProfileImportRequests
+        self.settingsNavigation = settingsNavigation
         settings = model.settings
         privateFeature = model.privateFeature
         macroFeature = model.macroFeature
@@ -713,6 +734,8 @@ struct SettingsView: View {
             minHeight: minimumContentSize.height
         )
         .onAppear {
+            // onChange 不对初始值触发，首次出现时也要把当前页签与可见页签上报给 AppKit 菜单。
+            settingsNavigation.update(section: selectedSection, visible: visibleSections)
             model.setMappingPageVisible(selectedSection == .mapping)
             if selectedSection == .mapping {
                 model.selectDefaultMappingRemoteIfAvailable()
@@ -724,7 +747,17 @@ struct SettingsView: View {
             membershipFeature.refreshIfNeeded()
             routePendingButtonProfileImportIfNeeded()
         }
+        .onReceive(settingsNavigation.$requestedSection) { section in
+            guard let section else { return }
+            // 复用既有方法，保留「标记更新已读」等副作用；不绕过 selectedSection 的写入路径。
+            selectSidebarSection(section)
+            settingsNavigation.consumeRequestedSection()
+        }
+        .onChange(of: visibleSections) { sections in
+            settingsNavigation.update(section: selectedSection, visible: sections)
+        }
         .onChange(of: selectedSection) { section in
+            settingsNavigation.update(section: section, visible: visibleSections)
             model.setMappingPageVisible(section == .mapping)
             if isCapturingMacMicrophoneShortcut { endMacMicrophoneShortcutCapture() }
             // 只取消进行中的学习；已完成的结果要留着，否则离开页面就显示“未开始”。
@@ -2131,11 +2164,13 @@ struct SettingsView: View {
                 Button(localization.text("common.action.cancel")) {
                     isSavingMappingProfile = false
                 }
+                .keyboardShortcut(.cancelAction)
                 Button(localization.text("common.action.save")) {
                     saveMappingAsProfile()
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(savingMappingProfileName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .keyboardShortcut(.defaultAction)
             }
         }
         .padding(20)
