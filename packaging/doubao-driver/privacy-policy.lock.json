@@ -3,7 +3,7 @@
   "updated": "2026-11-05",
   "policy_url": "https://sayall.app/privacy/",
   "policy_json_url": "https://sayall.app/privacy/policy.json",
-  "source_commit": "working-tree",
+  "source_commit": "f46537dbe6a5058e3eef474d09b91cc0140b7522",
   "languages": {
     "zh-Hans": {
       "title": "隐私政策",
