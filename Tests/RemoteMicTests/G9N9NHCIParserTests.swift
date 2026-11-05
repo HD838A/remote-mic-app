@@ -3,6 +3,19 @@ import Testing
 @testable import RemoteMic
 
 struct G9N9NHCIParserTests {
+    @Test func identityWindowWaitsForRemoteAndRejectsOldReconnectTimers() {
+        var window = G9N9NHCIIdentityWindow()
+        #expect(!window.accepts(0))
+        let first = window.begin()
+        #expect(window.accepts(first))
+        window.invalidate()
+        #expect(!window.accepts(first))
+        let second = window.begin()
+        #expect(window.accepts(second))
+        #expect(!window.accepts(first))
+        window.invalidate()
+        #expect(!window.accepts(second))
+    }
     private let serial = Data("TEST-G9-SERIAL-001".utf8)
 
     private func acl(_ att: Data, handle: UInt16 = 0x40) -> Data {
@@ -17,7 +30,11 @@ struct G9N9NHCIParserTests {
             + Data(repeating: 0, count: 8) + Data([type]) + payload
     }
     private func notification(_ key: UInt8, handle: UInt16 = 0x40, attribute: UInt16 = 0x2B) -> Data {
-        record(acl(Data([0x1B, UInt8(attribute & 255), UInt8(attribute >> 8), 1, key]), handle: handle))
+        let usages: [UInt8: UInt16] = [0: 0, 1: 0x19E, 3: 0x42, 4: 0x43, 5: 0x44, 6: 0x45,
+            7: 0x41, 8: 0xE2, 10: 0x223, 11: 0x224, 12: 0xE9, 13: 0xEA, 14: 0x77, 15: 0x78, 17: 0x89]
+        let usage = usages[key] ?? 0xFFFF
+        return record(acl(Data([0x1B, UInt8(attribute & 255), UInt8(attribute >> 8),
+                                UInt8(usage & 255), UInt8(usage >> 8)]), handle: handle))
     }
     private func bound() -> G9N9NHCIParser {
         var parser = G9N9NHCIParser()
@@ -79,7 +96,7 @@ struct G9N9NHCIParserTests {
     @Test func fragmentedACLReassemblesWithinBound() {
         var parser = bound()
         func feed(_ data: Data) -> [G9N9NHCIParser.Edge] { parser.consume(data) }
-        let att = Data([0x1B, 0x2B, 0, 1, 7])
+        let att = Data([0x1B, 0x2B, 0, 0x41, 0])
         let firstPayload = Data([5, 0, 4, 0]) + att.prefix(2)
         let first = Data([0x40, 0x20, UInt8(firstPayload.count), 0]) + firstPayload
         let secondPayload = Data(att.dropFirst(2))

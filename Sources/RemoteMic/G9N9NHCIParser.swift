@@ -1,5 +1,20 @@
 import Foundation
 
+struct G9N9NHCIIdentityWindow {
+    private(set) var generation = 0
+    private(set) var hasIdentity = false
+    mutating func begin() -> Int {
+        generation += 1
+        hasIdentity = true
+        return generation
+    }
+    mutating func invalidate() {
+        generation += 1
+        hasIdentity = false
+    }
+    func accepts(_ attempt: Int) -> Bool { hasIdentity && generation == attempt }
+}
+
 /// In-memory ATT filter. A BLE connection handle becomes eligible only after a
 /// fresh DIS serial read matches the already admitted G9N9N connection. Neither
 /// the serial nor other devices' packets leave this parser or enter diagnostics.
@@ -109,9 +124,12 @@ struct G9N9NHCIParser {
         }
         guard att.count >= 5, attribute == 0x002B else { return [] }
         let report = Data(att.dropFirst(3))
-        guard (report.count == 2 || (report.count == 3 && report.last == 0)), report.first == 1 else { return [] }
-        let next = report[1] == 0 ? nil : Self.control(report[1])
-        guard report[1] == 0 || next != nil else { return [] }
+        // Legacy hid_mouse ATT carries the actual 16-bit Consumer usage, not
+        // the report-array index exposed by macOS's virtual HID collection.
+        guard report.count == 2 else { return [] }
+        let usage = Self.le16(report, 0)
+        let next = Self.consumerControl(usage)
+        guard usage == 0 || next != nil else { return [] }
         guard next != pressed else { return [] }
         var edges: [Edge] = []
         if let pressed { edges.append(.init(control: pressed, down: false)) }
@@ -146,6 +164,26 @@ struct G9N9NHCIParser {
         case 14: .youtube
         case 15: .netflix
         case 17: .input
+        default: nil
+        }
+    }
+
+    static func consumerControl(_ usage: UInt16) -> ChromecastRemoteControl? {
+        switch usage {
+        case 0x019E: .power
+        case 0x0042: .up
+        case 0x0043: .down
+        case 0x0044: .left
+        case 0x0045: .right
+        case 0x0041: .select
+        case 0x00E2: .mute
+        case 0x0223: .home
+        case 0x0224: .back
+        case 0x00E9: .volumeUp
+        case 0x00EA: .volumeDown
+        case 0x0077: .youtube
+        case 0x0078: .netflix
+        case 0x0089: .input
         default: nil
         }
     }

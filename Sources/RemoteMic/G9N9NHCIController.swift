@@ -20,10 +20,13 @@ final class G9N9NHCIController {
     private var reportedBinding = false
     private var reportedPackets = false
     private var reportedAttributes = Set<UInt16>()
+    private var identityWindow = G9N9NHCIIdentityWindow()
+    private var streamReady = false
 
     func start() {
         guard !enabled, !failed else { return }
         enabled = true
+        streamReady = false
         generation += 1
         let attempt = generation
         let configuration = AppleRemoteHCIConfigurationClient()
@@ -54,6 +57,8 @@ final class G9N9NHCIController {
     func stop() {
         guard enabled || configuration != nil else { return }
         enabled = false
+        streamReady = false
+        identityWindow.invalidate()
         generation += 1
         cancelControls(reason: "capture_stopped")
         let oldClient = client
@@ -73,19 +78,29 @@ final class G9N9NHCIController {
     }
 
     func identify(serial: Data) {
+        let identityAttempt = identityWindow.begin()
+        let attempt = generation
         queue.async { [weak self] in
             self?.parser.identify(serial: serial)
             self?.reportedBinding = false
-            self?.reportedAttributes.removeAll()
-            DispatchQueue.main.async { [weak self] in self?.requestIdentityRead?() }
+            DispatchQueue.main.async { [weak self] in
+                guard let self, self.enabled, self.generation == attempt,
+                      self.identityWindow.accepts(identityAttempt) else { return }
+                self.requestIdentityRead?()
+                if self.streamReady {
+                    self.scheduleIdentityCheck(attempt: attempt, identityAttempt: identityAttempt, remaining: 5)
+                }
+            }
         }
     }
 
     func disconnected() {
+        identityWindow.invalidate()
         cancelControls(reason: "remote_disconnected")
         queue.async { [weak self] in
             self?.parser.reset()
             self?.reportedBinding = false
+            self?.reportedAttributes.removeAll()
         }
     }
 
@@ -143,9 +158,11 @@ final class G9N9NHCIController {
                     self.status("authorization_required")
                     self.client?.requestAuthorization()
                 case .authorized:
+                    self.streamReady = true
                     self.status("waiting_for_identity")
                     self.requestIdentityRead?()
-                    self.scheduleIdentityCheck(attempt: attempt, remaining: 5)
+                    let identityAttempt = self.identityWindow.generation
+                    self.scheduleIdentityCheck(attempt: attempt, identityAttempt: identityAttempt, remaining: 5)
                 case .profileRequired:
                     self.failed = true
                     self.status("profile_required")
@@ -165,12 +182,16 @@ final class G9N9NHCIController {
         client.start()
     }
 
-    private func scheduleIdentityCheck(attempt: Int, remaining: Int) {
+    private func scheduleIdentityCheck(attempt: Int, identityAttempt: Int, remaining: Int) {
         queue.asyncAfter(deadline: .now() + 3) { [weak self] in
             guard let self, !self.parser.isBound else { return }
             let packets = self.parser.packetsSeen
             DispatchQueue.main.async { [weak self] in
-                guard let self, self.enabled, self.generation == attempt else { return }
+                guard let self, self.enabled, self.generation == attempt,
+                      self.identityWindow.accepts(identityAttempt) else { return }
+                // No identity was supplied yet: the peripheral is still asleep
+                // or reconnecting after tracing reload. A future identify() starts
+                // its own bounded verification window.
                 guard remaining > 0 else {
                     AppLogger.shared.write("G9N9N HCI phase=failed reason=identity_timeout packets=\(packets)")
                     self.failed = true
@@ -179,7 +200,7 @@ final class G9N9NHCIController {
                     return
                 }
                 self.requestIdentityRead?()
-                self.scheduleIdentityCheck(attempt: attempt, remaining: remaining - 1)
+                self.scheduleIdentityCheck(attempt: attempt, identityAttempt: identityAttempt, remaining: remaining - 1)
             }
         }
     }
