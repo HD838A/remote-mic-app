@@ -77,10 +77,9 @@ struct ChromecastIntegrationTests {
 
     // MARK: - 缺包时的退化行为
 
-    @Test func integrationIsInertWhenPrivatePackageIsAbsent() {
-        // 未编入私有包时，接入层必须完全惰性：不崩、不产生任何回调。
-        guard !ChromecastFeatureIntegration.isPackageIncluded else { return }
-        let integration = ChromecastFeatureIntegration()
+    @Test func integrationCanDisableHardwareForOffscreenTests() {
+        // Offscreen tests exercise host routing without opening real BLE/HID devices.
+        let integration = ChromecastFeatureIntegration(hardwareEnabled: false)
         var eventCount = 0
         integration.onVoiceStart = { eventCount += 1 }
         integration.onVoiceSustain = { eventCount += 1 }

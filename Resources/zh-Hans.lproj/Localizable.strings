@@ -1413,3 +1413,13 @@
 "audio.mac_microphone.voice_hold" = "按住说话，松开结束";
 "audio.mac_microphone.voice_toggle" = "按一下开始，再按一下结束";
 "audio.mac_microphone.error.input_monitoring" = "无法监听语音快捷键。请在系统设置中允许输入监控后重试。";
+
+"g9n9n.mapping.help" = "按住语音键说话，松开后等待文字上屏。若某个按键无响应，点该行“识别按键”，然后在 15 秒内按一次对应实体键；学习期间不执行原映射。";
+"g9n9n.mapping.learn" = "识别按键";
+"g9n9n.mapping.learning" = "请按一次遥控器上的“%@”（15 秒内）";
+"onboarding.control_source.g9n9n_remote.title" = "G9N9N 谷歌电视遥控器";
+"onboarding.control_source.g9n9n_remote.detail" = "实体语音键，按住说话、松开结束。";
+"g9n9n.pairing.title" = "连接 G9N9N 遥控器";
+"g9n9n.pairing.wake" = "按一下遥控器上的任意键唤醒。";
+"g9n9n.pairing.connect" = "在系统蓝牙设置中连接 Chromecast Remote，然后返回此处等待就绪。";
+"g9n9n.controls.detail" = "在 G9N9N 遥控器上按下三个不同的普通按键，例如方向、确定和返回。";

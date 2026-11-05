@@ -328,6 +328,7 @@ enum AgentConfigurationCommand {
 
     private static func controlSource(for model: XiaomiRemoteModel) -> OnboardingControlSource {
         if model.isAppleSiriRemote { return .siriRemote }
+        if model == .googleTVRemoteG9N9N { return .g9n9nRemote }
         if model.isChromecastRemote { return .chromecastRemote }
         return .xiaomiRemote
     }

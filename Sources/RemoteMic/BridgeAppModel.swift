@@ -534,6 +534,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     @Published private(set) var buttonGestureLearningResult: RemoteButtonGestureLearningResult?
     @Published private(set) var activeAppleRemoteControlIDs = Set<String>()
     /// Chromecast 画布的活动按键（控制 ID）。与苹果遥控器链路完全隔离，互不清除。
+    @Published private(set) var g9LearningControlID: String?
     @Published private(set) var activeChromecastControlIDs = Set<String>()
     @Published private(set) var lastRemoteButtonPress: RemoteButton?
     @Published private(set) var connectedRemoteProfileIDs = Set<UUID>()
@@ -633,7 +634,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             }
         case .siriRemote:
             return !connectedAppleRemoteProfileIDs.isEmpty
-        case .chromecastRemote:
+        case .chromecastRemote, .g9n9nRemote:
             return !connectedChromecastProfileIDs.isEmpty
         case .appleCompanion:
             return isPhoneRemoteConnected || isWatchRemoteConnected
@@ -648,7 +649,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     var activePhysicalVoiceControlSource: OnboardingControlSource? {
         if bluetoothVoiceActive { return .xiaomiRemote }
         if !appleRemoteVoiceDevices.isEmpty || appleRemoteVoiceStopping { return .siriRemote }
-        if chromecastVoiceActive || chromecastVoiceStopping { return .chromecastRemote }
+        if chromecastVoiceActive || chromecastVoiceStopping { return chromecastFeature.remoteModel == .googleTVRemoteG9N9N ? .g9n9nRemote : .chromecastRemote }
         return nil
     }
     private let phoneRemoteServer = PhoneRemoteServer(logger: { message in
@@ -895,7 +896,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     // MARK: - Chromecast（可选私有包）
 
     /// 私有包缺失时该实例内部全部退化为 no-op，宿主行为与未接入前完全一致。
-    private lazy var chromecastFeature = ChromecastFeatureIntegration()
+    private let chromecastFeature: ChromecastFeatureIntegration
     /// 当前是否有活跃的 Chromecast 收音会话。
     private var chromecastVoiceActive = false
     private var chromecastVoiceStopping = false
@@ -990,6 +991,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
 
     init(
         settings: AppSettings = AppSettings(),
+        chromecastFeature: ChromecastFeatureIntegration = ChromecastFeatureIntegration(),
         initialAudioDevices: [AudioDeviceInfo] = [],
         privateFeature: PrivateFeatureIntegration = PrivateFeatureIntegration(),
         macroFeature: MacroFeatureIntegration = MacroFeatureIntegration(),
@@ -1003,6 +1005,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         diagnosticLogUploader: DiagnosticLogUploader = .shared
     ) {
         self.settings = settings
+        self.chromecastFeature = chromecastFeature
         self.privateFeature = privateFeature
         self.macroFeature = macroFeature
         self.membershipFeature = membershipFeature
@@ -1160,6 +1163,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         // 适配层固定使用主队列，因此这里必须**同步**调用：
         // 包在发出 startRecognition 意图之后才写 MIC_OPEN，宿主必须在那之前备好音频出口，
         // 否则最早几帧会落在还没有出口的时刻（首字丢失）。
+        chromecastFeature.onG9LearningChange = { [weak self] in self?.g9LearningControlID = $0 }
         chromecastFeature.onStatusChange = { [weak self] status in
             self?.handleChromecastStatusChange(status)
         }
@@ -8874,6 +8878,12 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
 
     #if SAYALL_CHROMECAST_ENABLED
     /// 设置页「重新连接」。
+    func cancelG9Learning() { chromecastFeature.cancelG9Learning() }
+
+    func learnG9Control(_ control: ChromecastRemoteControl) {
+        chromecastFeature.learnG9Control(control)
+    }
+
     func reconnectChromecast() {
         chromecastFeature.reconnect()
     }
@@ -9370,7 +9380,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             return
         }
 
-        guard chromecastNativeKeyMapper.isPrepared else {
+        guard chromecastNativeKeyMapper.isPrepared || chromecastFeature.isPublicNativeInputReady else {
             AppLogger.shared.write("CHROMECAST ACTION rejected reason=native_input_not_verified")
             return
         }
@@ -9430,7 +9440,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         if let existing = chromecastProfileID {
             profileID = existing
         } else {
-            profileID = settings.registerChromecastRemote()
+            profileID = settings.registerChromecastRemote(model: chromecastFeature.remoteModel)
             chromecastProfileID = profileID
         }
         connectedChromecastProfileIDs.insert(profileID)
@@ -9440,7 +9450,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         // 例外：已经连着的小米遥控器是按键页的优选画布，Chromecast 不得把它抢走。
         // 启动顺序不稳定（Chromecast 常先 ready），按「谁后连谁赢」会让页面永远停在 Chromecast。
         let shouldTakeSelection = RemoteDeviceNamePolicy.shouldAdoptConnectionSelection(
-            for: .chromecastVoiceRemote,
+            for: chromecastFeature.remoteModel,
             isAlreadySelected: settings.selectedRemoteProfileID == profileID,
             hasConnectedXiaomi: hasConnectedXiaomiProfile
         )

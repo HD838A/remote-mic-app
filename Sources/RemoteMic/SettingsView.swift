@@ -1123,7 +1123,7 @@ struct SettingsView: View {
                 #if SAYALL_CHROMECAST_ENABLED && canImport(SayAllChromecast)
                 chromecastMappingPage
                 #else
-                mappingPage
+                g9MappingPage
                 #endif
             } else {
                 mappingPage
@@ -1886,6 +1886,62 @@ struct SettingsView: View {
         }
     }
     #endif
+
+    /// Public hardware controls reuse the same gesture and action editor as other remotes.
+    private var g9MappingPage: some View {
+        hardwareMappingPage {
+            VStack(alignment: .leading, spacing: 12) {
+                if let controlID = model.g9LearningControlID,
+                   let control = ChromecastRemoteControl(rawValue: controlID) {
+                    Text(String(format: localization.text("g9n9n.mapping.learning"), control.remoteButton.displayName(using: localization)))
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Color.accentColor)
+                }
+                Text("g9n9n.mapping.help")
+                    .font(.system(size: 13))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                ForEach(ChromecastRemoteControl.allCases, id: \.rawValue) { control in
+                    HStack(spacing: 10) {
+                        Text(control.remoteButton.displayName(using: localization))
+                            .font(.system(size: 13, weight: .medium))
+                            .frame(width: 90, alignment: .leading)
+                        ForEach(ButtonTrigger.allCases, id: \.rawValue) { trigger in
+                            Button {
+                                selectedRemoteButton = control.remoteButton
+                                mappingHoldEditingButton = nil
+                                mappingEditingTarget = ShortcutEditingTarget(button: control.remoteButton, trigger: trigger)
+                            } label: {
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(trigger.displayName(using: localization))
+                                    Text(mappingActionSummary(for: control.remoteButton, trigger: trigger))
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(1)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .contentShape(Rectangle())
+                            }
+                            .compatibilityButtonStyle(.standard)
+                        }
+                        Button("button_mapping.hold.entry") {
+                            selectedRemoteButton = control.remoteButton
+                            mappingEditingTarget = nil
+                            mappingHoldEditingButton = control.remoteButton
+                            requestMappingEditorScroll(focusHold: true)
+                        }
+                        .compatibilityButtonStyle(.standard)
+                        Button("g9n9n.mapping.learn") { model.learnG9Control(control) }
+                            .compatibilityButtonStyle(.standard)
+                    }
+                    .padding(8)
+                    .background(model.activeChromecastControlIDs.contains(control.rawValue)
+                        ? Color.accentColor.opacity(0.12) : Color.clear,
+                        in: RoundedRectangle(cornerRadius: 8))
+                }
+            }
+        }
+        .onDisappear { model.cancelG9Learning() }
+    }
 
     #if SAYALL_CHROMECAST_ENABLED && canImport(SayAllChromecast)
     /// Chromecast 按键页。

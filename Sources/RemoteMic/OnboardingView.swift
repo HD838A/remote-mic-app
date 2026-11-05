@@ -811,7 +811,7 @@ struct OnboardingView: View {
 
     private var availablePhysicalControlSources: [OnboardingControlSource] {
         visibleControlSources.filter {
-            [.xiaomiRemote, .siriRemote].contains($0)
+            [.xiaomiRemote, .siriRemote, .g9n9nRemote].contains($0)
         }
     }
 
@@ -2348,6 +2348,8 @@ struct OnboardingView: View {
                     "onboarding.remote.siri_pairing.step5",
                 ]
             )
+        case .g9n9nRemote:
+            return PhysicalRemotePairingGuide(title: "g9n9n.pairing.title", steps: ["g9n9n.pairing.wake", "g9n9n.pairing.connect"])
         case .chromecastRemote:
             return PhysicalRemotePairingGuide(
                 title: "onboarding.remote.chromecast_pairing.title",
@@ -2377,6 +2379,8 @@ struct OnboardingView: View {
             return "onboarding.controls.xiaomi.detail"
         case .siriRemote:
             return "onboarding.controls.siri.detail"
+        case .g9n9nRemote:
+            return "g9n9n.controls.detail"
         case .chromecastRemote:
             return "onboarding.controls.chromecast.detail"
         case .appleCompanion:
@@ -2403,7 +2407,7 @@ struct OnboardingView: View {
                 .power, .up, .left, .ok, .right, .down,
                 .back, .volumeUp, .volumeDown, .tv, .playPause, .mute,
             ]
-        case .chromecastRemote:
+        case .chromecastRemote, .g9n9nRemote:
             return [
                 .power, .up, .left, .ok, .right, .down, .back,
                 .home, .volumeUp, .volumeDown, .mute, .youtube, .netflix, .input,
@@ -2557,7 +2561,7 @@ struct OnboardingView: View {
 
     static func remoteNotFoundRecoveryDetailKey(for source: OnboardingControlSource) -> String {
         switch source {
-        case .xiaomiRemote, .siriRemote, .chromecastRemote:
+        case .xiaomiRemote, .siriRemote, .chromecastRemote, .g9n9nRemote:
             return "onboarding.recovery.remote.not_found.physical_detail"
         case .appleCompanion:
             return "onboarding.recovery.remote.not_found.apple_companion_detail"
@@ -2641,7 +2645,7 @@ struct OnboardingView: View {
     @ViewBuilder
     private var selectedControlSourceIllustration: some View {
         switch settings.onboardingControlSource {
-        case .xiaomiRemote, .siriRemote, .chromecastRemote:
+        case .xiaomiRemote, .siriRemote, .chromecastRemote, .g9n9nRemote:
             remoteIllustration
         case .appleCompanion, .webRemote:
             controlMethodIllustration
@@ -3669,7 +3673,7 @@ struct OnboardingView: View {
         switch source {
         case .xiaomiRemote: return "appletvremote.gen4.fill"
         case .siriRemote: return "appletvremote.gen4.fill"
-        case .chromecastRemote: return "tv.and.hifispeaker.fill"
+        case .chromecastRemote, .g9n9nRemote: return "tv.and.hifispeaker.fill"
         case .appleCompanion: return "iphone.and.arrow.forward"
         case .webRemote: return "safari.fill"
         case .unselected: return "circle"
@@ -4137,7 +4141,7 @@ struct OnboardingView: View {
         switch settings.onboardingControlSource {
         case .xiaomiRemote, .siriRemote:
             model.applyHIDSettings()
-        case .chromecastRemote:
+        case .chromecastRemote, .g9n9nRemote:
             prepareSelectedControlConnection()
         case .appleCompanion, .webRemote, .unselected:
             break
@@ -4325,7 +4329,7 @@ struct OnboardingView: View {
         case .siriRemote:
             model.enableSiriRemoteForOnboarding()
             prepareSelectedControlConnection()
-        case .xiaomiRemote, .chromecastRemote, .unselected:
+        case .xiaomiRemote, .chromecastRemote, .g9n9nRemote, .unselected:
             prepareSelectedControlConnection()
         }
     }
@@ -4779,7 +4783,7 @@ struct OnboardingView: View {
             model.applyHIDSettings()
         case .siriRemote:
             model.applyHIDSettings()
-        case .chromecastRemote:
+        case .chromecastRemote, .g9n9nRemote:
             #if SAYALL_CHROMECAST_ENABLED
             model.applyChromecastSettings()
             model.reconnectChromecast()
@@ -4823,7 +4827,7 @@ struct OnboardingView: View {
 
     private func selectedControlAcceptsVoice(_ source: UsageEventSource?) -> Bool {
         switch settings.onboardingControlSource {
-        case .xiaomiRemote, .siriRemote, .chromecastRemote:
+        case .xiaomiRemote, .siriRemote, .chromecastRemote, .g9n9nRemote:
             return source == .bluetoothRemote &&
                 (model.activePhysicalVoiceControlSource == settings.onboardingControlSource ||
                     selectedPhysicalRemoteProfileMatchesSource)
@@ -4845,8 +4849,10 @@ struct OnboardingView: View {
             guard model.isAppleSiriRemote else { return false }
             guard let generation = settings.onboardingAppleRemoteGeneration else { return true }
             return model == generation.model
+        case .g9n9nRemote:
+            return model == .googleTVRemoteG9N9N
         case .chromecastRemote:
-            return model.isChromecastRemote
+            return model == .chromecastVoiceRemote
         case .appleCompanion, .webRemote, .unselected:
             return false
         }

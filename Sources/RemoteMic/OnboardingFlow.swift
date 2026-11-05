@@ -390,6 +390,7 @@ enum OnboardingControlSource: String, CaseIterable, Codable, Identifiable {
     case xiaomiRemote = "xiaomi_remote"
     case siriRemote = "siri_remote"
     case chromecastRemote = "chromecast_remote"
+    case g9n9nRemote = "g9n9n_remote"
     case appleCompanion = "apple_companion"
     case webRemote = "web_remote"
 
@@ -402,7 +403,7 @@ enum OnboardingControlSource: String, CaseIterable, Codable, Identifiable {
         switch self {
         case .unselected:
             return []
-        case .xiaomiRemote, .siriRemote:
+        case .xiaomiRemote, .siriRemote, .g9n9nRemote:
             return [.hold]
         case .chromecastRemote, .appleCompanion, .webRemote:
             return [.hold, .toggle]
@@ -411,7 +412,7 @@ enum OnboardingControlSource: String, CaseIterable, Codable, Identifiable {
 
     var legacyControlMethod: OnboardingControlMethod {
         switch self {
-        case .xiaomiRemote, .siriRemote, .chromecastRemote:
+        case .xiaomiRemote, .siriRemote, .chromecastRemote, .g9n9nRemote:
             return .physicalRemote
         case .appleCompanion:
             return .iPhoneApp
@@ -441,7 +442,7 @@ enum OnboardingControlValidationPolicy {
     ) -> Bool {
         guard step == .controls else { return false }
         switch source {
-        case .xiaomiRemote, .siriRemote, .chromecastRemote, .appleCompanion, .webRemote:
+        case .xiaomiRemote, .siriRemote, .chromecastRemote, .g9n9nRemote, .appleCompanion, .webRemote:
             return true
         case .unselected:
             return false
@@ -458,7 +459,7 @@ enum OnboardingSecureInputPolicy {
     ) -> Bool {
         guard step == .remote || step == .controls else { return false }
         switch source {
-        case .xiaomiRemote, .siriRemote, .chromecastRemote:
+        case .xiaomiRemote, .siriRemote, .chromecastRemote, .g9n9nRemote:
             return true
         case .appleCompanion, .webRemote, .unselected:
             return false
@@ -537,7 +538,7 @@ enum OnboardingBuildCapabilities {
         if siriRemotePackageInstalled { sources.append(.siriRemote) }
         #endif
         #if SAYALL_CHROMECAST_ENABLED
-        sources.append(.chromecastRemote)
+        sources.append(ChromecastFeatureIntegration.usesPublicG9N9N ? .g9n9nRemote : .chromecastRemote)
         #endif
         #if SAYALL_MAC_REMOTE_ENABLED
         sources.append(contentsOf: [.appleCompanion, .webRemote])
@@ -641,7 +642,7 @@ struct OnboardingVoicePairingPlan: Equatable {
         }
         append(preferredGesture)
         if controlSource == .chromecastRemote { append(.toggle) }
-        if controlSource == .xiaomiRemote || controlSource == .siriRemote { append(.hold) }
+        if controlSource == .xiaomiRemote || controlSource == .siriRemote || controlSource == .g9n9nRemote { append(.hold) }
         append(profile.recommendedMode)
         append(.toggle)
         append(.hold)
@@ -667,7 +668,7 @@ struct OnboardingVoicePairingPlan: Equatable {
         let fnTap = binding.gestureMode == .toggle &&
             binding.shortcut == .function &&
             !controlSource.supportedGestureModes.contains(.toggle)
-        let chromecastMode: ChromecastVoiceMode? = controlSource == .chromecastRemote
+        let chromecastMode: ChromecastVoiceMode? = controlSource == .chromecastRemote || controlSource == .g9n9nRemote
             ? (binding.gestureMode == .toggle ? .toggle : .hold)
             : nil
         return Self(
@@ -710,6 +711,8 @@ enum OnboardingRemotePhotoKind: Equatable {
             return .siriRemote
         case .chromecastRemote:
             return .chromecastRemote
+        case .g9n9nRemote:
+            return .placeholder
         case .appleCompanion, .webRemote, .unselected:
             return .placeholder
         }

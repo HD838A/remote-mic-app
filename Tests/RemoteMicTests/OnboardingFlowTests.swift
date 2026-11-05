@@ -3807,6 +3807,7 @@ private final class OnboardingOffscreenFixture {
         probe = OnboardingInteractionProbe(openURL: { _ in })
         model = BridgeAppModel(
             settings: settings,
+            chromecastFeature: ChromecastFeatureIntegration(hardwareEnabled: false),
             initialAudioDevices: [
                 AudioDeviceInfo(id: 1, uid: DoubaoAudioDevicePolicy.deviceUID, name: "MiRemoteV 2ch"),
                 AudioDeviceInfo(id: 2, uid: "BlackHole2ch_UID", name: "BlackHole 2ch"),

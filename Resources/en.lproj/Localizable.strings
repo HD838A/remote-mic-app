@@ -1414,3 +1414,13 @@
 "audio.mac_microphone.voice_hold" = "Hold to speak; release to finish";
 "audio.mac_microphone.voice_toggle" = "Press to start; press again to finish";
 "audio.mac_microphone.error.input_monitoring" = "Cannot observe the voice shortcut. Allow Input Monitoring in System Settings and retry.";
+
+"g9n9n.mapping.help" = "Hold the voice key to speak. Release to finish. If a button does not respond, choose Learn button, then press that physical key within 15 seconds. Learning suppresses mapped actions.";
+"g9n9n.mapping.learn" = "Learn button";
+"g9n9n.mapping.learning" = "Press %@ on the remote within 15 seconds";
+"onboarding.control_source.g9n9n_remote.title" = "G9N9N Google TV remote";
+"onboarding.control_source.g9n9n_remote.detail" = "Hold the physical voice key to speak, release to finish.";
+"g9n9n.pairing.title" = "Connect your G9N9N remote";
+"g9n9n.pairing.wake" = "Press any remote button to wake it.";
+"g9n9n.pairing.connect" = "Connect Chromecast Remote in Bluetooth settings, then return here and wait for ready.";
+"g9n9n.controls.detail" = "Press three different ordinary buttons on your G9N9N remote, such as a direction, Select and Back.";

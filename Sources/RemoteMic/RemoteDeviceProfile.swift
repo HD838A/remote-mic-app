@@ -10,7 +10,7 @@ enum XiaomiRemoteModel: String, Codable, CaseIterable, Identifiable {
     case chromecastVoiceRemote = "chromecast_voice_remote"
     /// 第三方谷歌电视语音遥控器 G9N9N（Chromecast with Google TV 兼容机型的常见替代遥控器，
     /// 市售约 ¥15–25）。与 Chromecast 同链路：case 始终存在保证持久化兼容，宿主的
-    /// Xiaomi 桥必须在准入层把它明确留给 Chromecast 私有链路，不得按小米型号采用。
+    /// Xiaomi 桥必须在准入层隔离；公开 G9N9N 桥以 DIS model + manufacturer 识别。
     case googleTVRemoteG9N9N = "google_tv_remote_g9n9n"
     case unknown
 

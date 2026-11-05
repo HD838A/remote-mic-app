@@ -195,9 +195,36 @@ struct ChromecastRemoteControlEvent: Equatable {
 
 /// Chromecast 硬件接入层。
 ///
-/// 隔离保证：本类型与 Siri Remote 接入层互不引用；私有包缺失时全部方法退化为 no-op，
-/// 宿主的编译、运行和打包都不受影响。
+/// 隔离保证：本类型与 Siri Remote 接入层互不引用；公开构建使用独立 G9N9N 后端，
+/// 带私有包的构建保持原来的 Google 后端，不同时启动两个 BLE 客户端。
 final class ChromecastFeatureIntegration {
+    static var usesPublicG9N9N: Bool {
+        #if SAYALL_CHROMECAST_ENABLED && canImport(SayAllChromecast)
+        false
+        #else
+        true
+        #endif
+    }
+    var remoteModel: XiaomiRemoteModel { Self.usesPublicG9N9N ? .googleTVRemoteG9N9N : .chromecastVoiceRemote }
+    var isPublicNativeInputReady: Bool {
+        #if SAYALL_CHROMECAST_ENABLED && canImport(SayAllChromecast)
+        false
+        #else
+        g9.hid.isSeized && g9.hid.isPresent
+        #endif
+    }
+    func cancelG9Learning() {
+        #if !canImport(SayAllChromecast)
+        g9.hid.cancelLearning()
+        #endif
+    }
+    func learnG9Control(_ control: ChromecastRemoteControl) {
+        guard hardwareEnabled else { return }
+        #if !canImport(SayAllChromecast)
+        g9.hid.learn(control)
+        #endif
+    }
+
     static var nativeInputProductIDs: Set<Int> {
         #if SAYALL_CHROMECAST_ENABLED && canImport(SayAllChromecast)
         return [0x9450]
@@ -219,14 +246,16 @@ final class ChromecastFeatureIntegration {
             #endif
         }
     }
-    /// 本次构建是否编入了私有包。
+    /// 本次构建是否包含可用的 Chromecast-family 后端。
     static var isPackageIncluded: Bool {
         #if SAYALL_CHROMECAST_ENABLED && canImport(SayAllChromecast)
         return true
         #else
-        return false
+        return true // Public builds include the independent G9N9N backend.
         #endif
     }
+
+    var onG9LearningChange: ((String?) -> Void)?
 
     /// 链路状态变化。宿主据此刷新设置页与日志。
     var onStatusChange: ((ChromecastLinkStatus) -> Void)?
@@ -249,9 +278,14 @@ final class ChromecastFeatureIntegration {
 
     #if SAYALL_CHROMECAST_ENABLED && canImport(SayAllChromecast)
     private let feature: SayAllChromecastFeature
+    #else
+    private let g9 = G9N9NBluetoothBridge()
     #endif
 
-    init() {
+    private let hardwareEnabled: Bool
+
+    init(hardwareEnabled: Bool = true) {
+        self.hardwareEnabled = hardwareEnabled
         #if SAYALL_CHROMECAST_ENABLED && canImport(SayAllChromecast)
         feature = SayAllChromecastFeature()
         feature.onConnection = { [weak self] connection in
@@ -281,29 +315,49 @@ final class ChromecastFeatureIntegration {
                 cancellationReason: event.cancellationReason?.logToken
             ))
         }
+        #else
+        g9.onStatus = { [weak self] in self?.onStatusChange?($0) }
+        g9.onCapabilities = { [weak self] in self?.onDeclaredCapabilitiesChange?($0) }
+        g9.onVoiceStart = { [weak self] in self?.onVoiceStart?() }
+        g9.onVoiceStop = { [weak self] in self?.onVoiceStop?($0) }
+        g9.onSamples = { [weak self] in self?.onSamples?($0, $1) }
+        g9.onLog = { [weak self] in self?.onLog?($0) }
+        g9.hid.onLearningChange = { [weak self] in self?.onG9LearningChange?($0) }
+        g9.hid.onEvent = { [weak self] in self?.onControlEvent?($0) }
+        g9.hid.onPresence = { [weak self] in self?.onHIDPresenceChange?($0) }
         #endif
     }
 
     func start() {
+        guard hardwareEnabled else { return }
         #if SAYALL_CHROMECAST_ENABLED && canImport(SayAllChromecast)
         feature.start()
+        #else
+        g9.start()
         #endif
     }
 
     func stop() {
+        guard hardwareEnabled else { return }
         #if SAYALL_CHROMECAST_ENABLED && canImport(SayAllChromecast)
         feature.stop()
+        #else
+        g9.stop()
         #endif
     }
 
     /// 用户在设置页点「重新连接」。
     func reconnect() {
+        guard hardwareEnabled else { return }
         #if SAYALL_CHROMECAST_ENABLED && canImport(SayAllChromecast)
         feature.reconnect()
+        #else
+        g9.reconnect()
         #endif
     }
 
     func setVoiceMode(_ mode: ChromecastVoiceMode) {
+        guard hardwareEnabled else { return }
         #if SAYALL_CHROMECAST_ENABLED && canImport(SayAllChromecast)
         feature.setVoiceGestureMode(mode == .hold ? .hold : .toggle)
         #endif
@@ -311,26 +365,32 @@ final class ChromecastFeatureIntegration {
 
     /// 宿主「按键映射」总开关。开启后私有包独占该遥控器的 HID 设备，关闭时只观察。
     ///
-    /// 缺包时 no-op。幂等，可安全重复调用。
+    /// 公开后端仅独占通过 Jieli 厂商筛选的 HID 接口。幂等。
     func setControlMappingEnabled(_ enabled: Bool) {
+        guard hardwareEnabled else { return }
         #if SAYALL_CHROMECAST_ENABLED && canImport(SayAllChromecast)
         feature.setControlMappingEnabled(enabled)
+        #else
+        g9.hid.setMappingEnabled(enabled)
         #endif
     }
 
-    /// HID 侧是否已看到本遥控器。缺包时恒为 false。
+    /// HID 侧是否已看到当前后端对应的遥控器。
     var isHIDRemotePresent: Bool {
         #if SAYALL_CHROMECAST_ENABLED && canImport(SayAllChromecast)
         return feature.isHIDRemotePresent
         #else
-        return false
+        return g9.hid.isPresent
         #endif
     }
 
     /// 宿主侧语音会话被关闭（用户关闭语音、切换输入源）。包内 latched 状态必须同步清空。
     func notifyHostVoiceSessionEnded() {
+        guard hardwareEnabled else { return }
         #if SAYALL_CHROMECAST_ENABLED && canImport(SayAllChromecast)
         feature.notifyHostVoiceSessionEnded()
+        #else
+        g9.hostEnded()
         #endif
     }
 

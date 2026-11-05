@@ -1367,7 +1367,7 @@ final class AppSettings: ObservableObject {
         onboardingControlSource = source
         onboardingControlMethod = source.legacyControlMethod
         switch source {
-        case .xiaomiRemote, .siriRemote, .chromecastRemote:
+        case .xiaomiRemote, .siriRemote, .chromecastRemote, .g9n9nRemote:
             onboardingRemoteAvailability = .hasRemote
         case .appleCompanion, .webRemote:
             onboardingRemoteAvailability = .noRemote
@@ -1820,23 +1820,24 @@ final class AppSettings: ObservableObject {
     /// 启动都生成新档案，用户的映射就丢了。苹果遥控器用 HID fingerprint，本型号没有稳定的
     /// 宿主侧 HID 指纹，因此以型号为准（同时最多只有一台该型号遥控器）。
     @discardableResult
-    func registerChromecastRemote() -> UUID {
-        if let existing = remoteDeviceProfiles.first(where: { $0.model == .chromecastVoiceRemote }) {
+    func registerChromecastRemote(model: XiaomiRemoteModel = .chromecastVoiceRemote) -> UUID {
+        if let existing = remoteDeviceProfiles.first(where: { $0.model == model }) {
             return existing.id
         }
         if let index = remoteDeviceProfiles.firstIndex(where: {
             $0.bluetoothIdentifier == nil && $0.hidFingerprint == nil && $0.model == .unknown
         }) {
-            remoteDeviceProfiles[index].model = .chromecastVoiceRemote
-            ensureGestureTiming(for: .chromecastVoiceRemote, profileID: remoteDeviceProfiles[index].id)
+            remoteDeviceProfiles[index].model = model
+            if model == .googleTVRemoteG9N9N { remoteDeviceProfiles[index].mappings = mappingsForRemote(model: model) }
+            ensureGestureTiming(for: model, profileID: remoteDeviceProfiles[index].id)
             return remoteDeviceProfiles[index].id
         }
         let profile = RemoteDeviceProfile(
-            model: .chromecastVoiceRemote,
-            mappings: mappingsForNewRemote()
+            model: model,
+            mappings: mappingsForRemote(model: model)
         )
         remoteDeviceProfiles.append(profile)
-        ensureGestureTiming(for: .chromecastVoiceRemote, profileID: profile.id)
+        ensureGestureTiming(for: model, profileID: profile.id)
         return profile.id
     }
 
@@ -1854,6 +1855,19 @@ final class AppSettings: ObservableObject {
             remoteDeviceProfiles[candidate].hidFingerprint = nil
         }
         remoteDeviceProfiles[index].hidFingerprint = fingerprint
+    }
+
+    private func mappingsForRemote(model: XiaomiRemoteModel) -> RemoteDeviceMappings {
+        var mappings = mappingsForNewRemote()
+        if model == .googleTVRemoteG9N9N {
+            for (button, code, label) in [(RemoteButton.ok, UInt16(36), "Return"), (.back, 53, "Escape"),
+                (.up, 126, "↑"), (.down, 125, "↓"), (.left, 123, "←"), (.right, 124, "→")] {
+                mappings.buttonBindings[button.rawValue] = .customShortcut
+                mappings.buttonShortcuts[button.rawValue] = CustomKeyboardShortcut(keyCode: code, modifierFlags: [], keyLabel: label)
+                mappings.secondaryButtonBindings.removeValue(forKey: button.rawValue)
+            }
+        }
+        return mappings
     }
 
     private func mappingsForNewRemote() -> RemoteDeviceMappings {
