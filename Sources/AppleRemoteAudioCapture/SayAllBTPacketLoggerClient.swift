@@ -211,7 +211,7 @@ public final class AppleRemotePacketLoggerClient: @unchecked Sendable {
         xpc_connection_activate(newConnection)
         send(xpc_dictionary_create_empty(), over: newConnection, generation: activeGeneration)
 
-        stateQueue.asyncAfter(deadline: .now() + 5) { [weak self] in
+        stateQueue.asyncAfter(deadline: .now() + (requiresPreparedAuthorizationRule ? 20 : 5)) { [weak self] in
             guard let self, self.generation == activeGeneration, self.state == .connecting else { return }
             self.fail(.connectionTimedOut)
         }

@@ -14,6 +14,7 @@ struct G9N9NHCIConfigurationTests {
         #expect(traces["HCILiveTraces"] == true)
         #expect(traces["HCIFileTraces"] == false)
         #expect(traces["RawAudioTrace"] == false)
+        #expect(traces["HCISkipAuth"] == false)
         #expect(try AppleRemoteHCITraceConfiguration.restoreAction(
             originalPlistPresent: true, originalPlistData: original, currentPlistData: enabled) == .write(original))
     }

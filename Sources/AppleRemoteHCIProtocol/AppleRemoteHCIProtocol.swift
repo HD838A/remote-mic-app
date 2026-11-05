@@ -61,7 +61,7 @@ public enum AppleRemoteHCITraceConfiguration {
         preferences["HCITraces"] = [
             "StackDebugEnabled": true, "HCILiveTraces": true,
             "HCIFileTraces": false, "RawAudioTrace": false,
-            "HIDTrace": true, "HCISkipAuth": true,
+            "HIDTrace": true, "HCISkipAuth": false,
         ]
         return try serialized(preferences)
     }

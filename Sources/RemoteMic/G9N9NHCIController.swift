@@ -92,6 +92,7 @@ final class G9N9NHCIController {
     private func beginPackets(attempt: Int, configuration: AppleRemoteHCIConfigurationClient) {
         let client = AppleRemotePacketLoggerClient(
             stateQueue: queue, callbackQueue: .main,
+            allowsPacketAsAuthorization: true,
             requiresPreparedAuthorizationRule: true,
             sealsAfterServerAcceptance: true,
             sealAuthorizationRight: { configuration.sealAuthorizationRight(completion: $0) },
