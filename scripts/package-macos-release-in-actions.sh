@@ -77,6 +77,29 @@ MATCH_PASSWORD_ENCRYPTED_FILE="$MATCH_PASSWORD_ENCRYPTED_FILE" \
 SPARKLE_PRIVATE_KEY_ENCRYPTED_FILE="$SPARKLE_PRIVATE_KEY_ENCRYPTED_FILE" \
   "$ISOLATED_KEYCHAIN_RUNNER" -- "$ROOT/scripts/notarize-release.sh" --all
 
+# 从产物读回构建来源：CI 缓存或复用旧 dist 时，包和 dispatch 的提交会对不上。
+# 这一步在签名/公证之后、上传之前，覆盖两个架构的 DMG、安装器与 .app。
+EXPECTED_COMMIT="${EXPECTED_COMMIT:-$(git -C "$ROOT" rev-parse HEAD)}"
+print -r -- "$EXPECTED_COMMIT" | /usr/bin/grep -Eq '^[0-9a-f]{40}$' || {
+  print -u2 "EXPECTED_COMMIT must be a full 40-character lowercase SHA"
+  exit 1
+}
+verified_artifacts=0
+for artifact in \
+  "$ROOT"/dist/*.dmg(N) "$ROOT"/dist/*Install*.pkg(N) "$ROOT"/dist/SayAll.app(N) \
+  "$ROOT"/dist/intel/*.dmg(N) "$ROOT"/dist/intel/*Install*.pkg(N) "$ROOT"/dist/intel/SayAll.app(N); do
+  "$ROOT/scripts/verify-release-asset-source.sh" --asset "$artifact" --expected-commit "$EXPECTED_COMMIT" || {
+    print -u2 "refusing to publish: ${artifact:t} was not built from $EXPECTED_COMMIT"
+    exit 1
+  }
+  (( verified_artifacts += 1 ))
+done
+(( verified_artifacts > 0 )) || {
+  print -u2 "no built artifact to verify under $ROOT/dist"
+  exit 1
+}
+print "VERIFIED_ARTIFACT_COUNT=$verified_artifacts"
+
 print "GITHUB ACTIONS MAC RELEASE PACKAGE PASS"
 print "RELEASE TAG: $RELEASE_TAG"
 print "APPLE SILICON OUTPUT: $ROOT/dist"
