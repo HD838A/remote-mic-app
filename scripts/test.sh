@@ -36,6 +36,9 @@ xcrun swiftc \
   "$ROOT/Sources/RemoteMic/MacConfigurationBackup.swift" \
   "$ROOT/Sources/RemoteMic/MembershipFeatureTypes.swift" \
   "$ROOT/Sources/RemoteMic/ChromecastFeatureIntegration.swift" \
+  "$ROOT/Sources/RemoteMic/G9N9NBluetoothBridge.swift" \
+  "$ROOT/Sources/RemoteMic/G9N9NHIDMonitor.swift" \
+  "$ROOT/Sources/RemoteMic/G9N9NVoiceSession.swift" \
   "$ROOT/Sources/RemoteMic/AppLinks.swift" \
   "$ROOT/Sources/RemoteMic/Localization.swift" \
   "$ROOT/Sources/RemoteMic/VoiceFunctionKeyLatch.swift" \
