@@ -336,7 +336,11 @@ struct RemoteButtonsTests {
         #expect(ButtonAction.volumeUp.category == .systemAndMedia)
         #expect(ButtonAction.previousCommandLeft.category == .systemAndMedia)
         #expect(ButtonAction.nextCommandRight.category == .systemAndMedia)
-        #expect(ButtonAction.customShortcut.category == .custom)
+        // 自定义快捷键就是"发一个自己录的按键组合"，和固定快捷键同属基础按键。
+        #expect(ButtonAction.customShortcut.category == .basicKeys)
+        #expect(ButtonAction.focusInput.category == .custom)
+        // 组合动作是独立分类，和「常用语」同级。
+        #expect(ButtonAction.combinationAction.category == .combinations)
         #expect(ButtonAction.openCustomApplication.category == .applications)
         #expect(ButtonAction.openCodex.category == .applications)
         #expect(ButtonAction.openCommonPhrases.category == .commonPhrases)
