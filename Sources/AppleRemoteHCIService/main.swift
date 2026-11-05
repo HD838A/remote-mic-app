@@ -29,6 +29,7 @@ private enum HCIServiceError: Error {
     case authorizationRightLookup(OSStatus)
     case authorizationRightWrite(OSStatus)
     case bluetoothReloadFailed(Int32)
+    case preferencesSynchronizeFailed
 }
 
 private struct PersistedHCIState: Codable {
@@ -247,6 +248,24 @@ private final class HCIConfigurationStore {
     }
 
     private func writeRawPreferences(_ data: Data) throws {
+        guard let values = try PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any] else {
+            throw HCIServiceError.stateCorrupt
+        }
+        // Atomic file replacement alone leaves cfprefsd's system-domain cache
+        // stale. Publish through Preferences before asking bluetoothd to reload.
+        let domain = "com.apple.MobileBluetooth.debug" as CFString
+        let oldKeys = CFPreferencesCopyKeyList(domain, kCFPreferencesAnyUser, kCFPreferencesAnyHost) as? [String] ?? []
+        for key in oldKeys where values[key] == nil {
+            CFPreferencesSetValue(key as CFString, nil, domain, kCFPreferencesAnyUser, kCFPreferencesAnyHost)
+        }
+        for (key, value) in values {
+            CFPreferencesSetValue(key as CFString, value as CFPropertyList, domain,
+                                  kCFPreferencesAnyUser, kCFPreferencesAnyHost)
+        }
+        guard CFPreferencesSynchronize(domain, kCFPreferencesAnyUser, kCFPreferencesAnyHost) else {
+            throw HCIServiceError.preferencesSynchronizeFailed
+        }
+        // Preserve the exact original encoding on restore as well as its values.
         try data.write(to: preferencesURL, options: .atomic)
         try fileManager.setAttributes([
             .ownerAccountID: NSNumber(value: 0),
@@ -256,6 +275,12 @@ private final class HCIConfigurationStore {
     }
 
     private func movePreferencesToSystemTrash() throws {
+        let domain = "com.apple.MobileBluetooth.debug" as CFString
+        CFPreferencesSetValue("HCITraces" as CFString, nil, domain,
+                              kCFPreferencesAnyUser, kCFPreferencesAnyHost)
+        guard CFPreferencesSynchronize(domain, kCFPreferencesAnyUser, kCFPreferencesAnyHost) else {
+            throw HCIServiceError.preferencesSynchronizeFailed
+        }
         guard fileManager.fileExists(atPath: preferencesURL.path) else { return }
         let trashURL = URL(fileURLWithPath: "/var/root/.Trash", isDirectory: true)
         try fileManager.createDirectory(
@@ -382,6 +407,8 @@ private func hciErrorDiagnostic(_ error: Error) -> String {
         return "error=authorization_right_write status=\(status)"
     case let HCIServiceError.bluetoothReloadFailed(status):
         return "error=bluetooth_reload_failed status=\(status)"
+    case HCIServiceError.preferencesSynchronizeFailed:
+        return "error=preferences_synchronize_failed"
     default:
         return "error=unknown"
     }
