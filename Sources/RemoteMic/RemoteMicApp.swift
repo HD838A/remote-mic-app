@@ -497,6 +497,14 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     }
 
     func menuNeedsUpdate(_ menu: NSMenu) {
+        if menu === statusMenu {
+            StatusMenuBatterySection.update(
+                in: menu, before: audioItem, profiles: model.settings.remoteDeviceProfiles,
+                connectedIDs: model.connectedRemoteProfileIDs, levels: model.remoteBatteryLevels,
+                powerStates: model.remotePowerStates, localization: localization
+            )
+            return
+        }
         guard let goMenu, menu === goMenu else { return }
         menu.removeAllItems()
         for section in settingsNavigation.visibleSections {
@@ -1150,9 +1158,10 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
             0,
             Int((ProcessInfo.processInfo.systemUptime - operation.startedAt) * 1_000)
         )
+        let batteryRows = operation.menu.items.filter { $0.identifier == StatusMenuBatterySection.itemIdentifier }.count
         AppLogger.shared.write(
             "UI STATUS_MENU operation_id=\(operation.id) phase=completed " +
-                "result=\(result) reason=\(reason) elapsed_ms=\(elapsedMilliseconds)"
+                "result=\(result) reason=\(reason) elapsed_ms=\(elapsedMilliseconds) battery_rows=\(batteryRows)"
         )
     }
 

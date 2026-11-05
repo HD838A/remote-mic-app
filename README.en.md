@@ -135,6 +135,7 @@ SayAll appears in the Dock and remains in the menu bar after launch:
 
 - Click the Dock icon to open Settings.
 - Left-click or right-click the menu bar icon to show the same status menu.
+- Open the menu to see the remote’s battery level below the connection status. When several remotes are connected, the menu identifies each reading by name.
 - Choose **Open Main Window…** at the top to open or activate the main window. Connection status, reconnect, logs, About, version, update, GitHub, language, and Quit actions remain below it.
 
 SayAll opens its main window by default on ordinary launches. The **About** page at the bottom of the Settings sidebar provides version, update, version history, glossary, GitHub, language, Dock display, and launch controls. Turn off **Open main window at launch** to keep ordinary launches in the menu bar; an update relaunch still opens the main window unconditionally. Turn off **Show app icon in the Dock** to keep SayAll available only from its menu bar entry; the Dock icon can be restored from the same page.
