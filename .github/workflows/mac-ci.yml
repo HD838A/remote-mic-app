@@ -138,6 +138,10 @@ jobs:
         if: needs.classify_changes.outputs.release_checks == 'true'
         run: ./scripts/verify-release-dependency-pins.sh tokens
 
+      - name: Verify private Draft asset staging
+        if: needs.classify_changes.outputs.release_checks == 'true'
+        run: ./scripts/test-prepare-private-draft-assets.sh
+
       - name: Run Swift tests
         if: needs.classify_changes.outputs.product_change == 'true'
         run: swift test --disable-keychain --skip BuildSigningTests

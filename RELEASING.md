@@ -10,6 +10,7 @@
 - Build 号不变量：任何打包前都必须先递增 `CFBundleVersion`，再执行构建、签名、公证或上传。Preview、Hotfix、本地测试包和私有内部 Draft 一律适用，不存在「先打包、需要时再补号」或「只有 Preview 才升号」的例外。递增必须写进源码并被记录：本地测试包和私有 Draft 在独立的打包 worktree 与打包分支里递增并提交，不把递增留在公开 `main` 工作区。**不得为了让工作区变干净而回滚、复用或跳回旧 Build 号**；一个 Build 号只能对应一个已产出的包，已经用掉的号即使没有对应源码提交也不能再次使用，需要继续往前递增。**Build 号的唯一记录是远端已发布的标签**：私有 Draft 的标签形如 `v<版本>-local.<build>`，下一次的起点取远端该形态标签的最大值加一。`Resources/Info.plist` 只保存源码里的起点值，不跟随打包递增，因此**不得**把 `plutil` 读到的数字当作基线——2026-11-02 就因为按 plist 的 270 递增，撞上了已被 `v2.0.0-local.271`–`280` 占用的号段。打包前用 private-draft-release skill 的 `increment_macos_build.sh --plist <Info.plist> --repo <分发仓库>`，它会取远端最大标签与 plist 的较大值再递增；远端不可查时必须先人工确认最大值，不得直接对 plist 加一。
 - 发布 Workflow 只能从精确 `origin/main` 运行。普通新候选源码只能来自 `main`；`hotfix/vX.Y.Z` 是唯一允许的新候选源码例外。`release-main` 冻结为只读历史，但已公开的旧 Pre-release 可按兼容晋升门禁完成正式化。
 - 私有内部 Draft：使用 private-draft-release skill 的独立路径，目标仓库固定为 GetSayAll/SayAll，不在公开源码仓库创建内部 Draft。
+- 私有内部 Draft 的资产必须先暂存再上传：`scripts/prepare-private-draft-assets.sh <暂存目录> <架构=产物目录> [<架构=产物目录> ...]` 把每个架构的 DMG 与安装包复制成规范名 `SayAll-<版本>-<Build>-<AppleSilicon|Intel>[-Installer].<ext>`，并写出 `staged-assets.json`（名称、SHA-256、字节数）。**不得**把构建目录里的原始文件名直接上传：`gh release upload` 保留本地文件名并会把空白改名（`Install SayAll.pkg` 会变成 `Install.SayAll.pkg`），丢掉 Build 号与架构标识，上传后也无法按文件名回读校验。**每个架构必须覆盖同一组资产种类**，少一个架构的安装包即停止，不得只发布其中一个架构。上传后按 `staged-assets.json` 里的 SHA-256 逐个回读比对，不能按文件名找资产。
 - “发布正式版”不是独立构建命令。没有指定现有 Pre-release 时，只能准备 Preview 或报告缺少授权。
 - stable latest 不写死版本号。Preview 开始前、公开后和失败恢复前后都必须动态读取 `releases/latest`，确认其为正式稳定版且前后一致；流程不得修改 stable feed。
 
