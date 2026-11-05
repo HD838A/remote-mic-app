@@ -11,6 +11,7 @@ enum KeyboardInjector {
         @escaping (pid_t?, Error?) -> Void
     ) -> Void
     typealias ApplicationFocuser = (URL, PresetApplication, pid_t, UInt64) -> Void
+    typealias FrontmostApplicationProvider = () -> (bundleIdentifier: String, processIdentifier: pid_t)?
     typealias CustomApplicationOpener = (
         URL,
         CustomApplicationProfile,
@@ -295,6 +296,9 @@ enum KeyboardInjector {
         },
         applicationOpener: ApplicationOpener = openApplication,
         applicationFocuser: @escaping ApplicationFocuser = focusApplication,
+        frontmostApplication: FrontmostApplicationProvider = {
+            NSWorkspace.shared.frontmostApplication.map { ($0.bundleIdentifier ?? "", $0.processIdentifier) }
+        },
         customApplicationURL: (CustomApplicationProfile) -> URL? = resolveCustomApplicationURL,
         customApplicationOpener: CustomApplicationOpener = openCustomApplication,
         customApplicationFocuser: @escaping CustomApplicationFocuser = focusCustomApplication,
@@ -322,7 +326,8 @@ enum KeyboardInjector {
                 focusRequestID: focusRequestID,
                 applicationURL: applicationURL,
                 applicationOpener: applicationOpener,
-                applicationFocuser: applicationFocuser
+                applicationFocuser: applicationFocuser,
+                frontmostApplication: frontmostApplication
             )
             return true
         }
@@ -337,7 +342,8 @@ enum KeyboardInjector {
                 focusRequestID: focusRequestID,
                 applicationURL: customApplicationURL,
                 applicationOpener: customApplicationOpener,
-                applicationFocuser: customApplicationFocuser
+                applicationFocuser: customApplicationFocuser,
+                frontmostApplication: frontmostApplication
             )
             return true
         }
@@ -482,10 +488,22 @@ enum KeyboardInjector {
         focusRequestID: UInt64,
         applicationURL: (String) -> URL?,
         applicationOpener: ApplicationOpener,
-        applicationFocuser: @escaping ApplicationFocuser
+        applicationFocuser: @escaping ApplicationFocuser,
+        frontmostApplication: FrontmostApplicationProvider
     ) {
         guard let url = applicationURL(application.bundleIdentifier) else {
             AppLogger.shared.write("APP ACTION unavailable bundle=\(application.bundleIdentifier)")
+            return
+        }
+        // Re-activating an app that is already frontmost makes its window go
+        // through a resign/become-key cycle, which clears the web composer's
+        // focus for about two seconds. The focuser below reaches the running
+        // instance directly, so the activation step is skipped instead.
+        if let frontmost = frontmostApplication(), frontmost.bundleIdentifier == application.bundleIdentifier {
+            AppLogger.shared.write("APP ACTION skipped bundle=\(application.bundleIdentifier) reason=already_frontmost")
+            if application.focusStrategy != nil {
+                applicationFocuser(url, application, frontmost.processIdentifier, focusRequestID)
+            }
             return
         }
 
@@ -522,12 +540,23 @@ enum KeyboardInjector {
         focusRequestID: UInt64,
         applicationURL: (CustomApplicationProfile) -> URL?,
         applicationOpener: CustomApplicationOpener,
-        applicationFocuser: @escaping CustomApplicationFocuser
+        applicationFocuser: @escaping CustomApplicationFocuser,
+        frontmostApplication: FrontmostApplicationProvider
     ) {
         guard let url = applicationURL(application) else {
             AppLogger.shared.write(
                 "APP ACTION unavailable bundle=\(application.bundleIdentifier) custom=true"
             )
+            return
+        }
+        // Same as the preset path: re-activating an already frontmost app
+        // clears the web composer's focus for about two seconds.
+        if let frontmost = frontmostApplication(), frontmost.bundleIdentifier == application.bundleIdentifier {
+            AppLogger.shared.write(
+                "APP ACTION skipped bundle=\(application.bundleIdentifier) reason=already_frontmost custom=true"
+            )
+            guard application.focusStrategy != .none else { return }
+            applicationFocuser(application, frontmost.processIdentifier, focusRequestID)
             return
         }
 
@@ -1527,17 +1556,127 @@ enum KeyboardInjector {
         return priority
     }
 
+    /// Fallback caret placement: the standard "end of document" key (Cmd+Down).
+    /// Programmatic focus alone leaves the caret at offset 0 in Chromium hosts
+    /// (WorkBuddy, Codex, Claude), and WorkBuddy-style editors report unreliable
+    /// character counts that break out-of-range AXSelectedTextRange writes on
+    /// empty composers, so the chord is used instead of selection writes. It is
+    /// a no-op on an empty composer and reaches the end on non-empty content.
+    static let composerCaretEndKey: (keyCode: CGKeyCode, flags: CGEventFlags) = (125, [.maskCommand])
+    private static let composerCommandKeyCode: CGKeyCode = 55
+
+    /// Posts the chord exactly like a real keyboard: Command press, arrow
+    /// down/up, then Command release. Without the trailing Command release the
+    /// system modifier state would keep Command held after the action, which
+    /// poisons every later key event in the session.
+    private static func postComposerCaretEndKey() {
+        guard let source = CGEventSource(stateID: .hidSystemState) else { return }
+        func post(_ event: CGEvent?) {
+            guard let event else { return }
+            event.setIntegerValueField(.eventSourceUserData, value: syntheticEventMarker)
+            event.post(tap: .cghidEventTap)
+        }
+        if let commandPress = CGEvent(keyboardEventSource: source, virtualKey: composerCommandKeyCode, keyDown: false) {
+            commandPress.flags = composerCaretEndKey.flags
+            post(commandPress)
+        }
+        post(CGEvent(keyboardEventSource: source, virtualKey: composerCaretEndKey.keyCode, keyDown: true))
+        if let arrowUp = CGEvent(keyboardEventSource: source, virtualKey: composerCaretEndKey.keyCode, keyDown: false) {
+            arrowUp.flags = composerCaretEndKey.flags
+            post(arrowUp)
+        }
+        if let commandRelease = CGEvent(keyboardEventSource: source, virtualKey: composerCommandKeyCode, keyDown: false) {
+            commandRelease.flags = []
+            post(commandRelease)
+        }
+    }
+
+    private static func composerCaretProcessIdentifier(for element: AXUIElement) -> pid_t {
+        var processIdentifier: pid_t = 0
+        AXUIElementGetPid(element, &processIdentifier)
+        return processIdentifier
+    }
+
+    private static func composerCaretBundleIdentifier(for element: AXUIElement) -> String {
+        NSRunningApplication(processIdentifier: composerCaretProcessIdentifier(for: element))?
+            .bundleIdentifier ?? "unknown"
+    }
+
+    private static func logComposerCaret(
+        _ result: String,
+        bundleIdentifier: String,
+        element: AXUIElement
+    ) {
+        AppLogger.shared.write(
+            "APP FOCUS caret bundle=\(bundleIdentifier) " +
+                "role=\(axString(element, attribute: kAXRoleAttribute)) result=\(result)"
+        )
+    }
+
+    /// Sends the end-of-document chord and logs it.
+    private static func sendComposerCaretEndKey(for element: AXUIElement, bundleIdentifier: String) {
+        postComposerCaretEndKey()
+        logComposerCaret("end_key_sent", bundleIdentifier: bundleIdentifier, element: element)
+    }
+
+    /// Writes a remembered caret range back into the focused composer. Hosts
+    /// clamp out-of-range values, which degrades to "end of the (shortened)
+    /// text" — the documented fallback for content that shrank while unfocused.
+    private static func restoreComposerCaretRange(
+        _ range: CFRange,
+        for element: AXUIElement,
+        bundleIdentifier: String
+    ) {
+        var stored = range
+        if let value = AXValueCreate(.cfRange, &stored) {
+            AXUIElementSetAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, value)
+        }
+        logComposerCaret("restored", bundleIdentifier: bundleIdentifier, element: element)
+    }
+
+    /// 已聚焦入口：光标就在用户手里，读取当前偏移记入记忆并保持跟踪，
+    /// 不移动光标——这正是“恢复到之前的状态”要记住的状态。
+    private static func rememberComposerCaret(element: AXUIElement, bundleIdentifier: String) {
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, &value) == .success,
+              let value, CFGetTypeID(value) == AXValueGetTypeID()
+        else {
+            logComposerCaret("remember_failed", bundleIdentifier: bundleIdentifier, element: element)
+            return
+        }
+        var range = CFRange()
+        AXValueGetValue(value as! AXValue, .cfRange, &range)
+        ComposerCaretStore.shared.remember(range, forKey: bundleIdentifier)
+        logComposerCaret("remembered", bundleIdentifier: bundleIdentifier, element: element)
+    }
+
     private static func focusAccessibilityElement(
         _ element: AXUIElement,
         applicationElement: AXUIElement,
-        requiresApplicationFocusedElement: Bool = false
+        requiresApplicationFocusedElement: Bool = false,
+        restoresComposerCaret: Bool = true
     ) -> Bool {
+        let bundleIdentifier = composerCaretBundleIdentifier(for: element)
         if accessibilityElementIsFocused(
             element,
             applicationElement: applicationElement,
             requiresApplicationFocusedElement: requiresApplicationFocusedElement
         ) {
+            if restoresComposerCaret {
+                rememberComposerCaret(element: element, bundleIdentifier: bundleIdentifier)
+                ComposerCaretObserver.shared.beginObserving(
+                    element: element,
+                    processIdentifier: composerCaretProcessIdentifier(for: element),
+                    key: bundleIdentifier
+                )
+            }
             return true
+        }
+        // 有记忆偏移时先预置选区再请求焦点：宿主把它缓存为该输入框的选区，
+        // 聚焦在同一帧直接恢复到这个位置，不会先画出偏移 0 的光标。
+        if restoresComposerCaret,
+           let stored = ComposerCaretStore.shared.rememberedRange(forKey: bundleIdentifier) {
+            restoreComposerCaretRange(stored, for: element, bundleIdentifier: bundleIdentifier)
         }
         _ = AXUIElementSetAttributeValue(element, kAXFocusedAttribute as CFString, kCFBooleanTrue)
         _ = AXUIElementSetAttributeValue(
@@ -1545,19 +1684,41 @@ enum KeyboardInjector {
             kAXFocusedUIElementAttribute as CFString,
             element
         )
-        if accessibilityElementIsFocused(
-            element,
-            applicationElement: applicationElement,
-            requiresApplicationFocusedElement: requiresApplicationFocusedElement
-        ) {
-            return true
+        // 没有记忆偏移时，末尾键立即发送（先于确认读，避免宿主先画出偏移 0
+        // 的光标形成可见闪动）；确认后还会补发一次兜底。
+        if restoresComposerCaret,
+           ComposerCaretStore.shared.rememberedRange(forKey: bundleIdentifier) == nil {
+            sendComposerCaretEndKey(for: element, bundleIdentifier: bundleIdentifier)
         }
-        _ = AXUIElementPerformAction(element, kAXPressAction as CFString)
-        return accessibilityElementIsFocused(
+        var focused = accessibilityElementIsFocused(
             element,
             applicationElement: applicationElement,
             requiresApplicationFocusedElement: requiresApplicationFocusedElement
         )
+        if !focused {
+            _ = AXUIElementPerformAction(element, kAXPressAction as CFString)
+            focused = accessibilityElementIsFocused(
+                element,
+                applicationElement: applicationElement,
+                requiresApplicationFocusedElement: requiresApplicationFocusedElement
+            )
+        }
+        if focused, restoresComposerCaret {
+            // 预置成功时这里重写记忆偏移是幂等无操作（AXPress 兜底路径则抵消
+            // 按压落点）；没有记忆偏移时补发末尾键，覆盖首次末尾键先于聚焦
+            // 生效而落空的情况。
+            if let stored = ComposerCaretStore.shared.rememberedRange(forKey: bundleIdentifier) {
+                restoreComposerCaretRange(stored, for: element, bundleIdentifier: bundleIdentifier)
+            } else {
+                sendComposerCaretEndKey(for: element, bundleIdentifier: bundleIdentifier)
+            }
+            ComposerCaretObserver.shared.beginObserving(
+                element: element,
+                processIdentifier: composerCaretProcessIdentifier(for: element),
+                key: bundleIdentifier
+            )
+        }
+        return focused
     }
 
     private static func accessibilityElementIsFocused(
@@ -1691,7 +1852,8 @@ enum KeyboardInjector {
             if focusAccessibilityElement(
                 candidates[candidateIndex].element,
                 applicationElement: applicationElement,
-                requiresApplicationFocusedElement: true
+                requiresApplicationFocusedElement: true,
+                restoresComposerCaret: false
             ) {
                 return true
             }

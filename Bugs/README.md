@@ -1,5 +1,7 @@
 # Bug 记录
 
+- [聚焦 WorkBuddy 后光标落在文字之前](./2026-11-05-workbuddy-composer-caret-before-text.md)
+
 - [macOS CI 上主队列投递延迟导致自聚焦用例误报](./2026-11-05-macos-ci-main-queue-delivery-flake.md)
 
 - [睡眠期间遥控器链路一直保持，系统把它当成唤醒源](./2026-11-04-remote-hid-link-keeps-mac-awake.md)
@@ -18,7 +20,6 @@
 - [Intel 音量键原生泄露（原生事件早于拦截登记）](./2026-10-29-intel-volume-native-leak-before-arm.md)
 
 - [选择 Mac 麦克风后过早收音](./2026-10-28-mac-microphone-capture-before-voice-key.html)
-
 - [音量按一次后持续变化](./2026-10-26-volume-native-release-stuck.html)
 
 - [录入普通快捷键时崩溃](./2026-10-26-shortcut-capture-input-source-crash.html)
