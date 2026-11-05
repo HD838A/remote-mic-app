@@ -933,17 +933,8 @@ final class MacroFeatureIntegration: ObservableObject {
             return settings.customApplicationProfile(id: configured.applicationProfileID)?.displayName
                 ?? localization.text("custom_application.not_configured")
         }
-        switch configured.action {
-        case .arrowUp: return "↑"
-        case .arrowDown: return "↓"
-        case .arrowLeft: return "←"
-        case .arrowRight: return "→"
-        case .deleteBackward: return "⌫"
-        case .volumeUp: return localization.text("action.system_volume_up_short")
-        case .volumeDown: return localization.text("action.system_volume_down_short")
-        case .volumeMute: return "Mute"
-        default: return configured.action.displayName(using: localization)
-        }
+        // 与按键页、方案页共用同一套动作语义名，不再单独特判方向符号与音量短标签。
+        return configured.action.displayName(using: localization)
     }
     #endif
 

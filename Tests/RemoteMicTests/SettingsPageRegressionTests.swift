@@ -1206,16 +1206,20 @@ struct SettingsPageRegressionTests {
             encoding: .utf8
         )
 
-        #expect(settingsSource.contains("action.system_volume_up_short"))
-        #expect(settingsSource.contains("action.system_volume_down_short"))
-        #expect(chinese.contains(#""action.system_volume_up_short" = "Vol+""#))
-        #expect(chinese.contains(#""action.system_volume_down_short" = "Vol-""#))
-        #expect(chinese.contains("上一首（系统媒体）"))
-        #expect(chinese.contains("下一首（系统媒体）"))
-        #expect(chinese.contains(#""action.show_desktop" = "显示桌面（fn + F11）""#))
-        #expect(english.contains("Previous Track (System Media)"))
-        #expect(english.contains("Next Track (System Media)"))
-        #expect(english.contains(#""action.show_desktop" = "Show Desktop (fn + F11)""#))
+        // 按键页、方案页、手机端共用同一套动作语义名：
+        // 不再有 Vol+ / Vol- 短标签，音量、方向与内置按键动作统一读语义名表。
+        #expect(!settingsSource.contains("action.system_volume_up_short"))
+        #expect(!settingsSource.contains("action.system_volume_down_short"))
+        #expect(chinese.contains(#""action.system_volume_up" = "增大音量""#))
+        #expect(chinese.contains(#""action.system_volume_down" = "减小音量""#))
+        #expect(chinese.contains(#""action.previous_command_left" = "上一首""#))
+        #expect(chinese.contains(#""action.next_command_right" = "下一首""#))
+        #expect(chinese.contains(#""action.show_desktop" = "显示桌面""#))
+        #expect(chinese.contains(#""action.arrow_up" = "↑""#))
+        #expect(english.contains(#""action.previous_command_left" = "Previous Track""#))
+        #expect(english.contains(#""action.next_command_right" = "Next Track""#))
+        #expect(english.contains(#""action.show_desktop" = "Show Desktop""#))
+        #expect(remoteButtonsSource.contains(#"case .appSwitcher: return localization.text("action.app_switcher")"#))
         #expect(remoteButtonsSource.contains("if self == .showDesktop"))
     }
 

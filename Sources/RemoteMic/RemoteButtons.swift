@@ -920,20 +920,20 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
     func displayName(using localization: LocalizationStore) -> String {
         switch self {
         case .disabled: return localization.text("action.disabled")
-        case .escape: return "Escape"
-        case .returnKey: return "Return"
-        case .commandReturn: return "Command-Return"
-        case .shiftReturn: return "Shift-Return"
-        case .commandCopy: return "Command-C"
-        case .commandPaste: return "Command-V"
-        case .commandClose: return "Command-W"
-        case .commandQuit: return "Command-Q"
-        case .commandCut: return "Command-X"
-        case .commandSelectAll: return "Command-A"
-        case .commandUndo: return "Command-Z"
-        case .commandRedo: return "Command-Shift-Z"
-        case .commandFind: return "Command-F"
-        case .commandSave: return "Command-S"
+        case .escape: return localization.text("action.escape")
+        case .returnKey: return localization.text("action.return_key")
+        case .commandReturn: return localization.text("action.command_return")
+        case .shiftReturn: return localization.text("action.shift_return")
+        case .commandCopy: return localization.text("action.command_copy")
+        case .commandPaste: return localization.text("action.command_paste")
+        case .commandClose: return localization.text("action.command_close")
+        case .commandQuit: return localization.text("action.command_quit")
+        case .commandCut: return localization.text("action.command_cut")
+        case .commandSelectAll: return localization.text("action.command_select_all")
+        case .commandUndo: return localization.text("action.command_undo")
+        case .commandRedo: return localization.text("action.command_redo")
+        case .commandFind: return localization.text("action.command_find")
+        case .commandSave: return localization.text("action.command_save")
         case .commandDelete: return localization.text("action.command_delete")
         case .arrowUp: return localization.text("action.arrow_up")
         case .arrowDown: return localization.text("action.arrow_down")
@@ -948,7 +948,7 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
         case .deleteBackward: return localization.text("action.delete_backspace")
         case .showDesktop: return localization.text("action.show_desktop")
         case .contextMenu: return localization.text("action.context_menu")
-        case .appSwitcher: return "Command-Tab"
+        case .appSwitcher: return localization.text("action.app_switcher")
         case .volumeUp: return localization.text("action.system_volume_up")
         case .volumeDown: return localization.text("action.system_volume_down")
         case .volumeMute: return localization.text("action.system_mute")
