@@ -667,7 +667,9 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     )
     private let chromecastNativeKeyMapper = RemoteNativeKeyMapper(
         family: "chromecast", mappings: [], recoveryKey: "sayall.native-key-mapping-recovery.chromecast.v1",
-        serviceProvider: { RemoteVoiceFunctionMapper.systemServices(vendor: 0x18d1, products: ChromecastFeatureIntegration.nativeInputProductIDs) }
+        serviceProvider: { RemoteVoiceFunctionMapper.systemServices(vendor: 0x18d1,
+            products: ChromecastFeatureIntegration.nativeInputProductIDs,
+            manufacturer: ChromecastFeatureIntegration.usesPublicG9N9N ? "zhuhai_jieli" : nil) }
     )
     private lazy var preferredInputSourceMonitor = PreferredInputSourceMonitor(
         voiceTool: { [weak self] in

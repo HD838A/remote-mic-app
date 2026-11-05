@@ -4,6 +4,8 @@ import IOKit.hid
 /// Only opens the Jieli HID interfaces, never the original Google remote.
 /// Unknown vendor usages are learned explicitly instead of guessing branded keys.
 final class G9N9NHIDMonitor {
+    var prepareNativeInput: (([UInt64]) -> Bool)?
+    var restoreNativeInput: (() -> Void)?
     var onEvent: ((ChromecastRemoteControlEvent) -> Void)?
     var onPresence: ((Bool) -> Void)?
     var onLearningChange: ((String?) -> Void)?
@@ -11,7 +13,8 @@ final class G9N9NHIDMonitor {
     private var manager: IOHIDManager?
     private var enabled = false
     private var running = false
-    private(set) var isSeized = false
+    private var opened = false
+    private(set) var isNativeMappingPrepared = false
     private(set) var isPresent = false
     private var pressed = Set<ChromecastRemoteControl>()
     private var sequence = 0
@@ -67,19 +70,19 @@ final class G9N9NHIDMonitor {
     func setMappingEnabled(_ value: Bool) {
         guard enabled != value else { return }
         enabled = value
-        if running { close(); open() }
+        if running { updateNativeInput() }
     }
 
     func learn(_ control: ChromecastRemoteControl) {
         cancelPressed(reason: "learning")
         learning = control
         learningTimeout?.cancel()
-        if running { close(); open() }
+        if running { updateNativeInput() }
         let timeout = DispatchWorkItem { [weak self] in
             guard let self else { return }
             self.learning = nil
             self.onLog?("G9N9N HID learning=timed_out")
-            if self.running { self.close(); self.open() }
+            if self.running { self.updateNativeInput() }
         }
         learningTimeout = timeout
         DispatchQueue.main.asyncAfter(deadline: .now() + 15, execute: timeout)
@@ -90,7 +93,7 @@ final class G9N9NHIDMonitor {
         learning = nil
         learningTimeout?.cancel()
         learningTimeout = nil
-        if running { close(); open() }
+        if running { updateNativeInput() }
     }
 
     func stop() {
@@ -103,7 +106,7 @@ final class G9N9NHIDMonitor {
 
     func refreshAccess() {
         let observed = IOHIDCheckAccess(kIOHIDRequestTypeListenEvent)
-        guard running, observed != access else { return }
+        guard running, observed != access || (!opened && observed == kIOHIDAccessTypeGranted) else { return }
         access = observed
         close()
         open()
@@ -133,10 +136,10 @@ final class G9N9NHIDMonitor {
             monitor.presence(false)
         }, context)
         IOHIDManagerScheduleWithRunLoop(manager, CFRunLoopGetMain(), CFRunLoopMode.commonModes.rawValue)
-        let seizing = enabled || learning != nil
-        let result = IOHIDManagerOpen(manager, IOOptionBits(seizing ? kIOHIDOptionsTypeSeizeDevice : 0))
-        isSeized = seizing && result == kIOReturnSuccess
-        onLog?("G9N9N HID phase=opened result=\(result) seized=\(isSeized) input_monitoring=\(IOHIDCheckAccess(kIOHIDRequestTypeListenEvent).rawValue)")
+        let result = IOHIDManagerOpen(manager, IOOptionBits(kIOHIDOptionsTypeNone))
+        opened = result == kIOReturnSuccess
+        updateNativeInput()
+        onLog?("G9N9N HID phase=opened result=\(result) mode=observe input_monitoring=\(access.rawValue)")
     }
 
     private func close() {
@@ -146,14 +149,48 @@ final class G9N9NHIDMonitor {
             IOHIDManagerClose(manager, 0)
         }
         manager = nil
-        isSeized = false
+        opened = false
+        isNativeMappingPrepared = false
+        restoreNativeInput?()
         presence(false)
     }
 
     private func presence(_ value: Bool) {
-        guard value != isPresent else { return }
+        let changed = value != isPresent
         isPresent = value
-        onPresence?(value)
+        updateNativeInput()
+        if changed { onPresence?(value) }
+    }
+
+    /// Suppress native delivery with the host's reversible, service-local mapper.
+    /// Bluetooth HID does not permit seize on all macOS versions.
+    private func updateNativeInput() {
+        guard opened, isPresent, enabled || learning != nil else {
+            if isNativeMappingPrepared { restoreNativeInput?() }
+            isNativeMappingPrepared = false
+            return
+        }
+        isNativeMappingPrepared = prepareNativeInput?(nativeSources) == true
+    }
+
+    private var nativeSources: [UInt64] {
+        var sources = Set(RemoteNativeKeyMapper.mappings.map(\.source))
+        for page: UInt32 in [7, 12] {
+            for usage: UInt32 in [0x0E, 0x0F, 0x11, 0x28, 0x29, 0x30, 0x40, 0x41, 0x42,
+                0x43, 0x44, 0x45, 0x4A, 0x4F, 0x50, 0x51, 0x52, 0x66, 0xE2, 0xE9, 0xEA, 0x223, 0x224] {
+                if Self.control(page: page, usage: usage) != nil || [0x0E, 0x0F, 0x11].contains(usage) {
+                    sources.insert(UInt64(page) << 32 | UInt64(usage))
+                }
+            }
+        }
+        for key in learned.keys {
+            let parts = key.split(separator: ":")
+            if parts.count == 2, let page = UInt64(parts[0]), let usage = UInt64(parts[1]),
+               [7, 12].contains(page), usage > 0, usage < 0xFFFF {
+                sources.insert(page << 32 | usage)
+            }
+        }
+        return sources.sorted()
     }
 
     private func receive(_ value: IOHIDValue) {
@@ -166,7 +203,7 @@ final class G9N9NHIDMonitor {
         let key = "\(page):\(usage)"
         let down = IOHIDValueGetIntegerValue(value) != 0
         if let learning {
-            guard down, isSeized else { return }
+            guard down, isNativeMappingPrepared else { return }
             learned = learned.filter { $0.value != learning.rawValue }
             learned[key] = learning.rawValue
             defaults.set(learned, forKey: Self.key)
@@ -175,7 +212,7 @@ final class G9N9NHIDMonitor {
             onLog?("G9N9N HID learning=completed control=\(learning.rawValue)")
             DispatchQueue.main.async { [weak self] in
                 guard let self, self.running else { return }
-                self.close(); self.open()
+                self.updateNativeInput()
             }
             return
         }

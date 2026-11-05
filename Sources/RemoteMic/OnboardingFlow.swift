@@ -440,6 +440,7 @@ enum OnboardingControlValidationPolicy {
         at step: OnboardingStep,
         source: OnboardingControlSource
     ) -> Bool {
+        if source == .g9n9nRemote, step == .remote { return true }
         guard step == .controls else { return false }
         switch source {
         case .xiaomiRemote, .siriRemote, .chromecastRemote, .g9n9nRemote, .appleCompanion, .webRemote:

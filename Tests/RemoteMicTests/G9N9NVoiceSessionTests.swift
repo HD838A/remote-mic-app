@@ -157,7 +157,26 @@ struct G9N9NVoiceSessionTests {
         #expect(OnboardingControlSource.g9n9nRemote.supportedGestureModes == [.hold])
         #expect(OnboardingControlSource.g9n9nRemote.legacyControlMethod == .physicalRemote)
         #expect(OnboardingControlValidationPolicy.suppressConfiguredActions(at: .controls, source: .g9n9nRemote))
+        #expect(OnboardingControlValidationPolicy.suppressConfiguredActions(at: .remote, source: .g9n9nRemote))
+        #expect(!OnboardingControlValidationPolicy.suppressConfiguredActions(at: .remote, source: .chromecastRemote))
         #expect(OnboardingRemotePhotoKind.resolve(source: .g9n9nRemote, selectedModel: .googleTVRemoteG9N9N) == .placeholder)
+    }
+
+    @Test @MainActor func g9ConnectionCheckObservesKeysWhileMappingIsOff() throws {
+        let name = "G9N9NObserveTests." + UUID().uuidString
+        let defaults = try #require(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        let settings = AppSettings(defaults: defaults)
+        settings.customMappingEnabled = false
+        settings.setOnboardingControlSource(.g9n9nRemote)
+        settings.setOnboardingStep(.remote)
+        let feature = ChromecastFeatureIntegration(hardwareEnabled: false)
+        let model = BridgeAppModel(settings: settings, chromecastFeature: feature)
+        feature.onControlEvent?(.init(control: .up, phase: .began, sequence: 1, cancellationReason: nil))
+        #expect(model.lastRemoteButtonPress == .up)
+        #expect(model.activeChromecastControlIDs.contains("up"))
+        feature.onControlEvent?(.init(control: .up, phase: .ended, sequence: 2, cancellationReason: nil))
+        #expect(!model.activeChromecastControlIDs.contains("up"))
     }
 
 }

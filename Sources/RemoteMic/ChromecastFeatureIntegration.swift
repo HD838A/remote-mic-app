@@ -210,7 +210,7 @@ final class ChromecastFeatureIntegration {
         #if SAYALL_CHROMECAST_ENABLED && canImport(SayAllChromecast)
         false
         #else
-        g9.hid.isSeized && g9.hid.isPresent
+        g9.hid.isNativeMappingPrepared && g9.hid.isPresent
         #endif
     }
     func cancelG9Learning() {
@@ -229,7 +229,7 @@ final class ChromecastFeatureIntegration {
         #if SAYALL_CHROMECAST_ENABLED && canImport(SayAllChromecast)
         return [0x9450]
         #else
-        return []
+        return [0x9450]
         #endif
     }
     var prepareNativeInput: (([UInt64]) -> Bool)? {
@@ -322,6 +322,8 @@ final class ChromecastFeatureIntegration {
         g9.onVoiceStop = { [weak self] in self?.onVoiceStop?($0) }
         g9.onSamples = { [weak self] in self?.onSamples?($0, $1) }
         g9.onLog = { [weak self] in self?.onLog?($0) }
+        g9.hid.prepareNativeInput = { [weak self] in self?.prepareNativeInput?($0) == true }
+        g9.hid.restoreNativeInput = { [weak self] in self?.restoreNativeInput?() }
         g9.hid.onLearningChange = { [weak self] in self?.onG9LearningChange?($0) }
         g9.hid.onEvent = { [weak self] in self?.onControlEvent?($0) }
         g9.hid.onPresence = { [weak self] in self?.onHIDPresenceChange?($0) }
@@ -365,7 +367,7 @@ final class ChromecastFeatureIntegration {
 
     /// 宿主「按键映射」总开关。开启后私有包独占该遥控器的 HID 设备，关闭时只观察。
     ///
-    /// 公开后端仅独占通过 Jieli 厂商筛选的 HID 接口。幂等。
+    /// 公开后端使用经 Jieli 厂商筛选的主机服务级按键抑制。幂等。
     func setControlMappingEnabled(_ enabled: Bool) {
         guard hardwareEnabled else { return }
         #if SAYALL_CHROMECAST_ENABLED && canImport(SayAllChromecast)

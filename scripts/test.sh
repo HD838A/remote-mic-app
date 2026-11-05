@@ -46,6 +46,7 @@ xcrun swiftc \
   "$ROOT/Sources/RemoteMic/VoiceInputDestinationCoordinator.swift" \
   "$ROOT/Sources/RemoteMic/VoiceFnTapSessionController.swift" \
   "$ROOT/Sources/RemoteMic/RemoteVoiceFunctionMapper.swift" \
+  "$ROOT/Sources/RemoteMic/RemoteNativeKeyMapper.swift" \
   "$ROOT/Sources/RemoteMic/PublicDiagnosticEvent.swift" \
   "$ROOT/Sources/RemoteMic/PublicDiagnosticEventStore.swift" \
   "$ROOT/Sources/RemoteMic/DiagnosticLogEnvelope.swift" \
