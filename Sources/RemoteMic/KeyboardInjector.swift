@@ -1135,15 +1135,20 @@ enum KeyboardInjector {
     }
 
     static func prepareCommonPhraseUnavailableTarget(processIdentifier: pid_t) -> Bool {
-        guard isAccessibilityTrusted,
-              applicationIsFrontmost(processIdentifier),
-              usesWeChatComposerFallback(
-                bundleIdentifier: NSRunningApplication(
-                    processIdentifier: processIdentifier
-                )?.bundleIdentifier
-              )
-        else { return false }
-        return focusWeChatComposer(processIdentifier: processIdentifier)
+        // 本回退是微信专用：其他 App 的 AX 校验仍然照常把守（敏感输入框、
+        // 前台变化等拒绝语义不受影响）。
+        guard usesWeChatComposerFallback(
+            bundleIdentifier: NSRunningApplication(
+                processIdentifier: processIdentifier
+            )?.bundleIdentifier
+        ) else { return false }
+        // 微信只有输入框聚焦后才通过 AX 暴露焦点元素（打字后可读，仅点击聚焦
+        // 时不可读），所以这里的 noValue 不能作为“光标不在输入框”的判据。
+        // 合成点击无法可靠聚焦微信输入框（点击后 AX 焦点不发布、落点可能命
+        // 中会话列表），而粘贴本身是安全的：⌘V 不导航、不破坏内容，聚焦时
+        // 精确落在光标/选区，未聚焦时静默无操作。选区保护由私有包在插入前
+        // 不再写 AX 焦点来保证。这里直接放行粘贴。
+        return true
     }
 
     static func weChatComposerWindowFrame(
