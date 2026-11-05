@@ -1427,3 +1427,15 @@
 "g9n9n.connection.learn_help" = "A remote report arrived, but this button is not recognized yet. Learn Select, then press Select again to verify it.";
 "g9n9n.connection.learn_select" = "Learn Select button";
 "g9n9n.connection.learn_waiting" = "Press the center Select button within 15 seconds.";
+"g9n9n.hci.enabled" = "Use the remote button channel";
+"g9n9n.hci.help" = "Requires the signed local helper. Enabling or disabling may briefly reconnect Bluetooth devices. Raw Bluetooth data is filtered in memory and is not saved.";
+"g9n9n.hci.retry" = "Retry button channel";
+"g9n9n.hci.status.disabled" = "Button channel is off.";
+"g9n9n.hci.status.preparing" = "Preparing the button channel…";
+"g9n9n.hci.status.helper_unavailable" = "The button helper is unavailable. Install the matching signed helper and retry.";
+"g9n9n.hci.status.authorization_required" = "Confirm the system authorization prompt to receive remote buttons.";
+"g9n9n.hci.status.waiting_for_identity" = "Waiting to verify this remote connection…";
+"g9n9n.hci.status.identity_verified" = "Remote connection verified. Press a button to test.";
+"g9n9n.hci.status.identity_conflict" = "Remote identity is ambiguous. Button capture has stopped.";
+"g9n9n.hci.status.profile_required" = "The system diagnostic channel is not ready. Button capture has stopped.";
+"g9n9n.hci.status.capture_failed" = "The button channel failed. Configuration is being restored.";

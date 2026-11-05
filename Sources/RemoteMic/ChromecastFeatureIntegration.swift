@@ -213,6 +213,21 @@ final class ChromecastFeatureIntegration {
         g9.hid.isNativeMappingPrepared && g9.hid.isPresent
         #endif
     }
+    func setG9HCIEnabled(_ enabled: Bool) {
+        guard hardwareEnabled, Self.usesPublicG9N9N else { return }
+        #if !canImport(SayAllChromecast)
+        UserDefaults.standard.set(enabled, forKey: "g9n9n.hci.enabled")
+        g9HCIEnabled = enabled
+        if enabled {
+            g9HCI.start()
+            g9.prepareHCIIdentity()
+        } else {
+            g9HCI.stop()
+            onG9HCIStatus?("disabled")
+        }
+        #endif
+    }
+
     func cancelG9Learning() {
         #if !canImport(SayAllChromecast)
         g9.hid.cancelLearning()
@@ -255,6 +270,7 @@ final class ChromecastFeatureIntegration {
         #endif
     }
 
+    var onG9HCIStatus: ((String) -> Void)?
     var onG9UnmappedInput: (() -> Void)?
     var onG9LearningChange: ((String?) -> Void)?
 
@@ -281,6 +297,8 @@ final class ChromecastFeatureIntegration {
     private let feature: SayAllChromecastFeature
     #else
     private let g9 = G9N9NBluetoothBridge()
+    private let g9HCI = G9N9NHCIController()
+    private var g9HCIEnabled = false
     #endif
 
     private let hardwareEnabled: Bool
@@ -317,7 +335,18 @@ final class ChromecastFeatureIntegration {
             ))
         }
         #else
-        g9.onStatus = { [weak self] in self?.onStatusChange?($0) }
+        g9.onStatus = { [weak self] status in
+            guard let self else { return }
+            if !status.isConnected { self.g9HCI.disconnected() }
+            self.onStatusChange?(status)
+        }
+        g9.onHCIIdentity = { [weak self] in
+            guard let self, self.g9HCIEnabled else { return }
+            self.g9HCI.identify(serial: $0)
+        }
+        g9HCI.requestIdentityRead = { [weak self] in self?.g9.requestHCIIdentityRead() }
+        g9HCI.onControl = { [weak self] in self?.onControlEvent?($0) }
+        g9HCI.onStatus = { [weak self] in self?.onG9HCIStatus?($0) }
         g9.onCapabilities = { [weak self] in self?.onDeclaredCapabilitiesChange?($0) }
         g9.onVoiceStart = { [weak self] in self?.onVoiceStart?() }
         g9.onVoiceStop = { [weak self] in self?.onVoiceStop?($0) }
@@ -327,7 +356,10 @@ final class ChromecastFeatureIntegration {
         g9.hid.restoreNativeInput = { [weak self] in self?.restoreNativeInput?() }
         g9.hid.onUnmappedInput = { [weak self] in self?.onG9UnmappedInput?() }
         g9.hid.onLearningChange = { [weak self] in self?.onG9LearningChange?($0) }
-        g9.hid.onEvent = { [weak self] in self?.onControlEvent?($0) }
+        g9.hid.onEvent = { [weak self] event in
+            guard let self, !self.g9HCIEnabled else { return }
+            self.onControlEvent?(event)
+        }
         g9.hid.onPresence = { [weak self] in self?.onHIDPresenceChange?($0) }
         #endif
     }
@@ -337,6 +369,8 @@ final class ChromecastFeatureIntegration {
         #if SAYALL_CHROMECAST_ENABLED && canImport(SayAllChromecast)
         feature.start()
         #else
+        g9HCIEnabled = UserDefaults.standard.bool(forKey: "g9n9n.hci.enabled")
+        if g9HCIEnabled { g9HCI.start(); g9.prepareHCIIdentity() }
         g9.start()
         #endif
     }
@@ -347,6 +381,7 @@ final class ChromecastFeatureIntegration {
         feature.stop()
         #else
         g9.stop()
+        g9HCI.stop()
         #endif
     }
 

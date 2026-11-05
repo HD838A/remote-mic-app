@@ -47,3 +47,25 @@ SAYALL_LOCAL_PUBLIC=1 scripts/package-local-test-app.sh
 
 在 PR 中分别记录构建/自动化、实际 UI、权限、实际虚拟音频绑定、最终文字、逐键与长句结果。
 缺任何必要真机证据时保留 Draft，不能以历史 G9Voice 原型的识别结果宣称本实现通过。
+
+
+## HCI 按键通道（本地 fork，需单独启用）
+
+本样机在 macOS 27 上，三权限通过、HID普通打开成功后仍无value/report回调；
+原生映射关闭、冷唤醒也无效。此负结果保留，不要求用户继续重置TCC或重复试旧路径。
+HCI通道复用宿主现有PacketLogger内存客户端及签名辅助组件，ATVV语音不变。
+
+先以同一开发签名打包本地app，再运行 `scripts/install-local-hci-helper.sh /absolute/SayAll.app`。
+安装器只接受同Apple签名团队与固定SayAll标识；不覆盖其他团队的helper。
+在首次连接页或按键页明确打开“启用遥控器按键通道”，可随时关闭并恢复配置。
+
+启停live lease可能令其他蓝牙设备短暂重连。按键模式明确关闭HCIFileTraces/RawAudioTrace，
+原始流只在有容量上限的内存解析，不保存或上传。缺组件、授权失败、身份不明时显示失败并停止，
+不猜测另一设备的按键。必须以当前已准入G9的DIS序列号匹配新读取响应后绑定HCI连接；
+两个连接响应相同序列号则停止，断连清除绑定，重连重新核对。
+
+验收需观察：helper准备成功、系统授权完成、身份已核对、实际按键边沿、原生副作用与自定义动作，
+最后关闭通道确认helper lease释放且原诊断配置恢复。全量/逐键/HCI handle/ATT型号表仍以本样机实测为准；
+公开参考的legacy按键表和attribute `0x002B` 只是候选，不能由代码覆盖宣称全部键通过。
+公开参考：[同型号的macOS限制](https://github.com/anyshu/vokie-plugin-chromecast-remote/blob/main/spec/hid-macos-limitations.md)、
+[HCI按键方案](https://github.com/anyshu/vokie-plugin-chromecast-remote/blob/main/spec/hci-button-source.md)。

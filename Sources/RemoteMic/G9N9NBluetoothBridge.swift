@@ -5,6 +5,7 @@ import Foundation
 /// subscribing to ATVV; a Google VID/PID or a Bluetooth name alone is insufficient.
 final class G9N9NBluetoothBridge: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
     var onStatus: ((ChromecastLinkStatus) -> Void)?
+    var onHCIIdentity: ((Data) -> Void)?
     var onCapabilities: ((ChromecastDeclaredCapabilities) -> Void)?
     var onVoiceStart: (() -> Void)?
     var onVoiceStop: ((ChromecastVoiceEndReason) -> Void)?
@@ -19,6 +20,9 @@ final class G9N9NBluetoothBridge: NSObject, CBCentralManagerDelegate, CBPeripher
     private var control: CBCharacteristic?
     private var model: String?
     private var manufacturer: String?
+    private var serial: Data?
+    private var serialCharacteristic: CBCharacteristic?
+    private var identityPublished = false
     private(set) var enabled = false
     private var stopping = false
     private let makeCentral: (CBCentralManagerDelegate) -> CBCentralManager?
@@ -108,6 +112,22 @@ final class G9N9NBluetoothBridge: NSObject, CBCentralManagerDelegate, CBPeripher
         start()
     }
 
+    func prepareHCIIdentity() {
+        guard admitted, let serial else { return }
+        onHCIIdentity?(serial)
+    }
+
+    func requestHCIIdentityRead() {
+        guard admitted, let peripheral, let serialCharacteristic else { return }
+        peripheral.readValue(for: serialCharacteristic)
+    }
+
+    private func publishHCIIdentity() {
+        guard admitted, !identityPublished, let serial else { return }
+        identityPublished = true
+        onHCIIdentity?(serial)
+    }
+
     func hostEnded() { voice.cancel(reason: "host_stop", now: now) }
 
     private func discover() {
@@ -159,6 +179,9 @@ final class G9N9NBluetoothBridge: NSObject, CBCentralManagerDelegate, CBPeripher
         control = nil
         model = nil
         manufacturer = nil
+        serial = nil
+        serialCharacteristic = nil
+        identityPublished = false
         admitted = false
         requestedCapabilities = false
     }
@@ -173,6 +196,7 @@ final class G9N9NBluetoothBridge: NSObject, CBCentralManagerDelegate, CBPeripher
             return
         }
         admitted = true
+        publishHCIIdentity()
         onLog?("G9N9N IDENTITY phase=accepted model=g9n9n")
         for service in peripheral.services ?? [] where service.uuid == Self.service {
             peripheral.discoverCharacteristics([
@@ -260,7 +284,7 @@ final class G9N9NBluetoothBridge: NSObject, CBCentralManagerDelegate, CBPeripher
         guard self.peripheral === peripheral else { return }
         guard error == nil, peripheral.services?.contains(where: { $0.uuid == Self.service }) == true,
               let dis = peripheral.services?.first(where: { $0.uuid == Self.dis }) else { return }
-        peripheral.discoverCharacteristics([CBUUID(string: "2A24"), CBUUID(string: "2A29")], for: dis)
+        peripheral.discoverCharacteristics([CBUUID(string: "2A24"), CBUUID(string: "2A29"), CBUUID(string: "2A25")], for: dis)
     }
 
     func peripheral(_ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: Error?) {
@@ -268,6 +292,9 @@ final class G9N9NBluetoothBridge: NSObject, CBCentralManagerDelegate, CBPeripher
         for characteristic in service.characteristics ?? [] {
             switch characteristic.uuid {
             case CBUUID(string: "2A24"), CBUUID(string: "2A29"):
+                peripheral.readValue(for: characteristic)
+            case CBUUID(string: "2A25"):
+                serialCharacteristic = characteristic
                 peripheral.readValue(for: characteristic)
             case CBUUID(string: ATVVProtocol.transmitUUID): transmit = characteristic
             case CBUUID(string: ATVVProtocol.audioUUID):
@@ -307,6 +334,10 @@ final class G9N9NBluetoothBridge: NSObject, CBCentralManagerDelegate, CBPeripher
         case CBUUID(string: "2A29"):
             manufacturer = String(data: data, encoding: .utf8)
             verifyIdentity()
+        case CBUUID(string: "2A25"):
+            guard (8...64).contains(data.count) else { return }
+            serial = data
+            publishHCIIdentity()
         case CBUUID(string: ATVVProtocol.controlUUID):
             guard admitted else { return }
             if data.first == 0x0B {

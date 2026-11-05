@@ -95,6 +95,7 @@ public final class AppleRemotePacketLoggerClient: @unchecked Sendable {
         qos: .userInitiated
     )
     private let callbackQueue: DispatchQueue
+    private let requiresPreparedAuthorizationRule: Bool
     private let allowsPacketAsAuthorization: Bool
     private let sealAuthorizationRight: (@escaping (Bool) -> Void) -> Void
     private let onPacket: (Data) -> Void
@@ -115,6 +116,7 @@ public final class AppleRemotePacketLoggerClient: @unchecked Sendable {
         stateQueue: DispatchQueue,
         callbackQueue: DispatchQueue,
         allowsPacketAsAuthorization: Bool = false,
+        requiresPreparedAuthorizationRule: Bool = false,
         sealAuthorizationRight: @escaping (@escaping (Bool) -> Void) -> Void = { completion in
             completion(true)
         },
@@ -123,6 +125,7 @@ public final class AppleRemotePacketLoggerClient: @unchecked Sendable {
     ) {
         self.stateQueue = stateQueue
         self.callbackQueue = callbackQueue
+        self.requiresPreparedAuthorizationRule = requiresPreparedAuthorizationRule
         self.allowsPacketAsAuthorization = allowsPacketAsAuthorization
         self.sealAuthorizationRight = sealAuthorizationRight
         self.onPacket = onPacket
@@ -194,8 +197,9 @@ public final class AppleRemotePacketLoggerClient: @unchecked Sendable {
         let requestGeneration = generation
         emit(.authorizing)
 
+        let requiresPreparedRule = requiresPreparedAuthorizationRule
         authorizationQueue.async { [weak self] in
-            let result = Self.performAuthorizationRequest()
+            let result = Self.performAuthorizationRequest(requiresPreparedRule: requiresPreparedRule)
             self?.stateQueue.async { [weak self] in
                 self?.handleAuthorizationResult(result, generation: requestGeneration)
             }
@@ -450,7 +454,7 @@ public final class AppleRemotePacketLoggerClient: @unchecked Sendable {
         trafficPackets = 0
     }
 
-    private static func performAuthorizationRequest() -> AuthorizationResult {
+    private static func performAuthorizationRequest(requiresPreparedRule: Bool) -> AuthorizationResult {
         var authorization: AuthorizationRef?
         let createStatus = AuthorizationCreate(nil, nil, [], &authorization)
         guard createStatus == errAuthorizationSuccess, let authorization else {
@@ -463,6 +467,10 @@ public final class AppleRemotePacketLoggerClient: @unchecked Sendable {
             AuthorizationRightGet($0, &definition)
         }
         if lookupStatus == errAuthorizationDenied {
+            guard !requiresPreparedRule else {
+                AuthorizationFree(authorization, [.destroyRights])
+                return .failed(.authorizationRuleLookup(lookupStatus))
+            }
             let rule: CFDictionary = [
                 "class" as CFString: "allow" as CFString,
             ] as CFDictionary

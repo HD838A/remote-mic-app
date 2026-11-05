@@ -1646,6 +1646,28 @@ struct OnboardingView: View {
                 compact: true
             )
 
+            if settings.onboardingControlSource == .g9n9nRemote {
+                VStack(alignment: .leading, spacing: 8) {
+                    Toggle("g9n9n.hci.enabled", isOn: Binding(
+                        get: { model.g9HCICaptureEnabled },
+                        set: { model.setG9HCIEnabled($0) }
+                    ))
+                    .toggleStyle(.switch)
+                    Text("g9n9n.hci.help")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(localization.text("g9n9n.hci.status." + model.g9HCIStatus))
+                        .font(.system(size: 13))
+                    if model.g9HCICaptureEnabled && ["helper_unavailable", "capture_failed", "profile_required"].contains(model.g9HCIStatus) {
+                        Button("g9n9n.hci.retry") {
+                            model.setG9HCIEnabled(false)
+                            model.setG9HCIEnabled(true)
+                        }
+                    }
+                }
+            }
+
             if settings.onboardingControlSource == .g9n9nRemote,
                model.g9HasUnmappedInput, observedRemoteButtons.isEmpty {
                 Text("g9n9n.connection.learn_help")
@@ -4301,7 +4323,9 @@ struct OnboardingView: View {
         case .remoteNotFound:
             restartSelectedControlConnection()
         case .remoteButtonNotReady, .controlsNotConfirmed:
-            if settings.onboardingControlMethod == .physicalRemote {
+            if settings.onboardingControlSource == .g9n9nRemote || settings.onboardingControlSource == .chromecastRemote {
+                prepareSelectedControlConnection()
+            } else if settings.onboardingControlMethod == .physicalRemote {
                 model.applyHIDSettings()
             } else {
                 prepareSelectedControlConnection()

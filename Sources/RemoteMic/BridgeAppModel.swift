@@ -534,6 +534,8 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     @Published private(set) var buttonGestureLearningResult: RemoteButtonGestureLearningResult?
     @Published private(set) var activeAppleRemoteControlIDs = Set<String>()
     /// Chromecast 画布的活动按键（控制 ID）。与苹果遥控器链路完全隔离，互不清除。
+    @Published private(set) var g9HCICaptureEnabled = UserDefaults.standard.bool(forKey: "g9n9n.hci.enabled")
+    @Published private(set) var g9HCIStatus = "disabled"
     @Published private(set) var g9HasUnmappedInput = false
     @Published private(set) var g9LearningControlID: String?
     @Published private(set) var activeChromecastControlIDs = Set<String>()
@@ -1166,6 +1168,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         // 适配层固定使用主队列，因此这里必须**同步**调用：
         // 包在发出 startRecognition 意图之后才写 MIC_OPEN，宿主必须在那之前备好音频出口，
         // 否则最早几帧会落在还没有出口的时刻（首字丢失）。
+        chromecastFeature.onG9HCIStatus = { [weak self] in self?.g9HCIStatus = $0 }
         chromecastFeature.onG9UnmappedInput = { [weak self] in self?.g9HasUnmappedInput = true }
         chromecastFeature.onG9LearningChange = { [weak self] in self?.g9LearningControlID = $0 }
         chromecastFeature.onStatusChange = { [weak self] status in
@@ -8883,6 +8886,11 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
 
     #if SAYALL_CHROMECAST_ENABLED
     /// 设置页「重新连接」。
+    func setG9HCIEnabled(_ enabled: Bool) {
+        g9HCICaptureEnabled = enabled
+        chromecastFeature.setG9HCIEnabled(enabled)
+    }
+
     func cancelG9Learning() { chromecastFeature.cancelG9Learning() }
 
     func learnG9Control(_ control: ChromecastRemoteControl) {

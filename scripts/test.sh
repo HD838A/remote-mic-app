@@ -39,6 +39,8 @@ xcrun swiftc \
   "$ROOT/Sources/RemoteMic/G9N9NBluetoothBridge.swift" \
   "$ROOT/Sources/RemoteMic/G9N9NHIDMonitor.swift" \
   "$ROOT/Sources/RemoteMic/G9N9NHIDReport.swift" \
+  "$ROOT/Sources/RemoteMic/G9N9NHCIParser.swift" \
+  "$ROOT/Sources/RemoteMic/G9N9NHCIController.swift" \
   "$ROOT/Sources/RemoteMic/G9N9NVoiceSession.swift" \
   "$ROOT/Sources/RemoteMic/AppLinks.swift" \
   "$ROOT/Sources/RemoteMic/Localization.swift" \

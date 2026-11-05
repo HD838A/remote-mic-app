@@ -15,7 +15,7 @@ final class AppleRemoteHCIConfigurationClient {
         stop()
     }
 
-    func prepare(completion: @escaping (Result) -> Void) {
+    func prepare(buttonsOnly: Bool = false, completion: @escaping (Result) -> Void) {
         guard connection == nil else {
             completion(.failed(
                 prepared
@@ -65,11 +65,13 @@ final class AppleRemoteHCIConfigurationClient {
             }
             return
         }
-        helper.prepareConfiguration { [weak self] succeeded, status in
+        let reply: (Bool, String) -> Void = { [weak self] succeeded, status in
             guard latch.claim() else { return }
             self?.prepared = succeeded
             completion(succeeded ? .ready : .failed(status))
         }
+        if buttonsOnly { helper.prepareButtonConfiguration(reply: reply) }
+        else { helper.prepareConfiguration(reply: reply) }
         DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 8) {
             guard latch.claim() else { return }
             completion(.failed("hci_helper_timed_out"))

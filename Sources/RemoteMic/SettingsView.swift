@@ -1897,6 +1897,13 @@ struct SettingsView: View {
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(Color.accentColor)
                 }
+                Toggle("g9n9n.hci.enabled", isOn: Binding(
+                    get: { model.g9HCICaptureEnabled },
+                    set: { model.setG9HCIEnabled($0) }
+                ))
+                .toggleStyle(.switch)
+                Text(localization.text("g9n9n.hci.status." + model.g9HCIStatus))
+                    .font(.system(size: 13))
                 Text("g9n9n.mapping.help")
                     .font(.system(size: 13))
                     .foregroundStyle(.secondary)

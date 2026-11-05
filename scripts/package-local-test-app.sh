@@ -73,6 +73,13 @@ APP=/tmp/SayAll.app
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp .build/release/RemoteMic "$APP/Contents/MacOS/"
+if [[ "$PUBLIC_MODE" == 1 && "$SIGNING_IDENTITY" != - ]]; then
+  mkdir -p "$APP/Contents/Helpers"
+  cp .build/release/AppleRemoteHCIService "$APP/Contents/Helpers/SayAllAppleRemoteHCIService"
+  codesign --force --sign "$SIGNING_IDENTITY" \
+    --identifier com.hd838a.SayAll.AppleRemoteHCIService \
+    "$APP/Contents/Helpers/SayAllAppleRemoteHCIService"
+fi
 
 # 旧的 .build 可能是在没有私有路径的情况下编出来的；那种包会静默缺功能。
 # 这里用 `grep ... >/dev/null` 而不是 `grep -q`：脚本开了 pipefail，-q 命中后提前退出会让

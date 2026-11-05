@@ -1426,3 +1426,15 @@
 "g9n9n.connection.learn_help" = "已收到遥控器报告，但此按键尚未识别。可以先识别确定键，结束后再按一次确定键完成检查。";
 "g9n9n.connection.learn_select" = "识别确定键";
 "g9n9n.connection.learn_waiting" = "请在 15 秒内短按一次遥控器中间的确定键。";
+"g9n9n.hci.enabled" = "启用遥控器按键通道";
+"g9n9n.hci.help" = "需要已签名的本地辅助组件。启用或停用可能使蓝牙设备短暂重连。原始蓝牙数据只在内存筛选，不保存到文件。";
+"g9n9n.hci.retry" = "重试按键通道";
+"g9n9n.hci.status.disabled" = "按键通道未启用。";
+"g9n9n.hci.status.preparing" = "正在准备按键通道…";
+"g9n9n.hci.status.helper_unavailable" = "按键辅助组件不可用，请安装匹配的签名组件后重试。";
+"g9n9n.hci.status.authorization_required" = "请确认系统授权提示，以接收遥控器按键。";
+"g9n9n.hci.status.waiting_for_identity" = "正在核对这只遥控器的连接身份…";
+"g9n9n.hci.status.identity_verified" = "遥控器连接身份已核对，请按键测试。";
+"g9n9n.hci.status.identity_conflict" = "遥控器身份存在冲突，已停止按键采集。";
+"g9n9n.hci.status.profile_required" = "系统诊断通道未就绪，已停止按键采集。";
+"g9n9n.hci.status.capture_failed" = "按键通道失败，正在恢复原配置。";
