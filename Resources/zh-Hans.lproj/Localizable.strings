@@ -1438,3 +1438,4 @@
 "g9n9n.hci.status.identity_conflict" = "遥控器身份存在冲突，已停止按键采集。";
 "g9n9n.hci.status.profile_required" = "系统诊断通道未就绪，已停止按键采集。";
 "g9n9n.hci.status.capture_failed" = "按键通道失败，正在恢复原配置。";
+"g9n9n.hci.status.waiting_for_stream" = "系统授权已取得，等待蓝牙数据通道就绪…";

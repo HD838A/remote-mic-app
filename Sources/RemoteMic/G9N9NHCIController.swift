@@ -124,6 +124,11 @@ final class G9N9NHCIController {
                     for edge in edges { self.deliver(edge) }
                 }
             },
+            onAuthorizationProgress: { [weak self] progress in
+                guard let self, self.enabled, self.generation == attempt else { return }
+                AppLogger.shared.write("G9N9N HCI AUTH phase=\(progress.rawValue)")
+                if progress == .submitted { self.status("waiting_for_stream") }
+            },
             onEvent: { [weak self] event in
                 guard let self, self.enabled, self.generation == attempt else { return }
                 switch event {

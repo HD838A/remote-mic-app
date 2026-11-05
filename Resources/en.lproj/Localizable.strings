@@ -1439,3 +1439,4 @@
 "g9n9n.hci.status.identity_conflict" = "Remote identity is ambiguous. Button capture has stopped.";
 "g9n9n.hci.status.profile_required" = "The system diagnostic channel is not ready. Button capture has stopped.";
 "g9n9n.hci.status.capture_failed" = "The button channel failed. Configuration is being restored.";
+"g9n9n.hci.status.waiting_for_stream" = "System authorization granted; waiting for the Bluetooth stream…";

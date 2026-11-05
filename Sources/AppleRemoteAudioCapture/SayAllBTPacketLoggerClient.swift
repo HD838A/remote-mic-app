@@ -20,6 +20,9 @@ public enum PacketLoggerAuthorizationRulePolicy {
 /// Narrow in-memory client for macOS's private Bluetooth packet diagnostic service.
 /// Raw packet bytes stay on `stateQueue` and are never logged or written to disk.
 public final class AppleRemotePacketLoggerClient: @unchecked Sendable {
+    public enum AuthorizationProgress: String {
+        case requesting, granted, sealed, submitted
+    }
     public enum Event: Equatable {
         case connecting
         case requiresAuthorization
@@ -41,6 +44,7 @@ public final class AppleRemotePacketLoggerClient: @unchecked Sendable {
         case authorizationDenied(OSStatus)
         case authorizationExternalForm(OSStatus)
         case authorizationAlreadyAttempted
+        case authorizationRightNotGranted
         case connectionInterrupted
         case connectionInvalid
         case connectionTimedOut
@@ -61,6 +65,7 @@ public final class AppleRemotePacketLoggerClient: @unchecked Sendable {
             case .authorizationDenied(let status): return "authorization_denied_\(status)"
             case .authorizationExternalForm(let status): return "authorization_external_form_\(status)"
             case .authorizationAlreadyAttempted: return "authorization_already_attempted"
+            case .authorizationRightNotGranted: return "authorization_right_not_granted"
             case .connectionInterrupted: return "connection_interrupted"
             case .connectionInvalid: return "connection_invalid"
             case .connectionTimedOut: return "connection_timed_out"
@@ -116,6 +121,7 @@ public final class AppleRemotePacketLoggerClient: @unchecked Sendable {
     private let sealAuthorizationRight: (@escaping (Bool) -> Void) -> Void
     private let onPacket: (Data) -> Void
     private let onEvent: (Event) -> Void
+    private let onAuthorizationProgress: (AuthorizationProgress) -> Void
 
     private var state = State.stopped
     private var generation: UInt64 = 0
@@ -137,6 +143,7 @@ public final class AppleRemotePacketLoggerClient: @unchecked Sendable {
             completion(true)
         },
         onPacket: @escaping (Data) -> Void,
+        onAuthorizationProgress: @escaping (AuthorizationProgress) -> Void = { _ in },
         onEvent: @escaping (Event) -> Void
     ) {
         self.stateQueue = stateQueue
@@ -146,6 +153,7 @@ public final class AppleRemotePacketLoggerClient: @unchecked Sendable {
         self.sealAuthorizationRight = sealAuthorizationRight
         self.onPacket = onPacket
         self.onEvent = onEvent
+        self.onAuthorizationProgress = onAuthorizationProgress
         stateQueue.setSpecific(key: stateQueueKey, value: ())
     }
 
@@ -214,6 +222,7 @@ public final class AppleRemotePacketLoggerClient: @unchecked Sendable {
         emit(.authorizing)
 
         let requiresPreparedRule = requiresPreparedAuthorizationRule
+        authorizationProgress(.requesting)
         authorizationQueue.async { [weak self] in
             let result = Self.performAuthorizationRequest(requiresPreparedRule: requiresPreparedRule)
             self?.stateQueue.async { [weak self] in
@@ -221,7 +230,7 @@ public final class AppleRemotePacketLoggerClient: @unchecked Sendable {
             }
         }
 
-        stateQueue.asyncAfter(deadline: .now() + 30) { [weak self] in
+        stateQueue.asyncAfter(deadline: .now() + (requiresPreparedRule ? 120 : 30)) { [weak self] in
             guard let self, self.generation == requestGeneration, self.state == .authorizing else { return }
             self.fail(.authorizationTimedOut)
         }
@@ -238,6 +247,7 @@ public final class AppleRemotePacketLoggerClient: @unchecked Sendable {
         case .failed(let failure):
             fail(failure)
         case .granted(let grant):
+            authorizationProgress(.granted)
             authorization = grant.reference
             createdAuthorizationRule = grant.createdRule
             sealAuthorizationRight { [weak self] sealed in
@@ -251,6 +261,7 @@ public final class AppleRemotePacketLoggerClient: @unchecked Sendable {
                         self.fail(.authorizationRuleSealFailed)
                         return
                     }
+                    self.authorizationProgress(.sealed)
                     self.sendAuthorizationExternalForm(generation: resultGeneration)
                 }
             }
@@ -285,6 +296,7 @@ public final class AppleRemotePacketLoggerClient: @unchecked Sendable {
             return
         }
         send(message, over: connection, generation: resultGeneration)
+        authorizationProgress(.submitted)
     }
 
     private func send(
@@ -530,6 +542,8 @@ public final class AppleRemotePacketLoggerClient: @unchecked Sendable {
             return .failed(.authorizationRuleLookup(lookupStatus))
         }
 
+        var grantedRights: UnsafeMutablePointer<AuthorizationRights>?
+        defer { if let grantedRights { AuthorizationFreeItemSet(grantedRights) } }
         let status = authorizationRight.withCString { rightName in
             var item = AuthorizationItem(
                 name: rightName,
@@ -543,8 +557,9 @@ public final class AppleRemotePacketLoggerClient: @unchecked Sendable {
                     authorization,
                     &rights,
                     nil,
-                    [.interactionAllowed, .extendRights, .preAuthorize],
-                    nil
+                    requiresPreparedRule ? [.interactionAllowed, .extendRights]
+                        : [.interactionAllowed, .extendRights, .preAuthorize],
+                    &grantedRights
                 )
             }
         }
@@ -555,7 +570,20 @@ public final class AppleRemotePacketLoggerClient: @unchecked Sendable {
             AuthorizationFree(authorization, [.destroyRights])
             return .failed(.authorizationDenied(status))
         }
+        if requiresPreparedRule {
+            guard let grantedRights, grantedRights.pointee.count == 1,
+                  let items = grantedRights.pointee.items,
+                  String(cString: items.pointee.name) == authorizationRight,
+                  items.pointee.flags & 1 == 0 else {
+                AuthorizationFree(authorization, [.destroyRights])
+                return .failed(.authorizationRightNotGranted)
+            }
+        }
         return .granted(.init(reference: authorization, createdRule: createdRule))
+    }
+
+    private func authorizationProgress(_ value: AuthorizationProgress) {
+        callbackQueue.async { [onAuthorizationProgress] in onAuthorizationProgress(value) }
     }
 
     private static func authorizationRuleIsStrongEnough(_ definition: CFDictionary) -> Bool {
