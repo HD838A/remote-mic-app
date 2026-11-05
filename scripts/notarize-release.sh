@@ -455,6 +455,8 @@ export REMOTE_MIC_BUILD_CACHE_PATH="$RELEASE_BUILD_CACHE_PATH"
 export RELEASE_STAGE_TIMEOUTS
 export RELEASE_SWIFT_BUILD_TIMEOUT_SECONDS
 
+run_release_stage privacy-policy-remote-verify 60 \
+  "$ROOT/scripts/verify-installer-privacy-policy.py" --remote
 run_release_stage app-build "$RELEASE_APP_BUILD_TIMEOUT_SECONDS" \
   "$ROOT/scripts/build-app.sh"
 if [[ -z "${REMOTE_MIC_SENTRY_DSN:-}" ]]; then

@@ -61,6 +61,15 @@ Mac Remote 与其他 macOS 私有组件使用同一个私有 Swift Package。CI 
 
 本机测试未发布的私有修复时，显式设置 `SAYALL_BUILD_CHANNEL=local` 和 `SAYALL_LOCAL_PRIVATE_SOURCE_COMMIT=<完整 SHA>`。手动提供同一干净提交的私有源码路径与 prepared artifacts；构建脚本继续校验二者的 SHA 相同。此入口不创建 Tag，不修改版本清单；`release` 和 `internalQA` 渠道拒绝该提交覆盖。未指定完整 SHA 时，本地渠道仍执行原有 Tag 校验。
 
+### 安装器隐私政策同步
+
+安装包的许可页正文来自官网政策，不在本仓手工编辑：
+
+1. 在私有官网仓修改 `docs/product/policies/privacy.md` 与 `en/privacy.md`，更新 `subtitle` 日期；运行 `node apps/official-sites/sayall-app/scripts/sync-legal-pages.mjs` 与 `node tools/sync-payment-policies.mjs`，部署网站并确认 `/privacy/policy.json` 已更新。页面、`policy.json` 和 sitemap 日期由同一次生成完成，两个官网镜像字节一致。
+2. 在本仓运行 `scripts/sync-installer-privacy-policy.py`。默认读取线上 `policy.json`；本机也可用 `--policy-json` 指向私有仓构建产物。提交两份 `License.txt`、`privacy-policy.lock.json` 和必要的文档变更。本地脏工作树同步会把 `source_commit` 记为 `working-tree`，发布校验会拒绝；发布前必须从已部署的线上 `policy.json` 或干净的官网 checkout 重新同步，不能保留 `working-tree`。
+3. 打包前运行 `scripts/verify-installer-privacy-policy.py --remote`。`notarize-release.sh` 已在发布构建开始时执行同一检查；官网日期或正文与快照不一致时立即停止，必须显式同步快照并走新的普通 PR 和更高 Build。
+4. 不得手工修改 `License.txt`、跳过远程校验，或把网络失败当作无需校验。系统许可页只在图形安装器中显示；`installer -pkg` 与 MDM 安装不会征得同意，也不能作为同意记录。
+
 ### Hotfix 准备
 
 只有用户明确要求紧急修复时才使用 Hotfix：读取 GitHub 当前 `releases/latest`，从该 Tag 的精确 Commit 创建 `hotfix/vX.Y.Z`。版本必须是同一 major/minor 的更高 patch；分支只包含该修复、直接相关测试和版本元数据，并保持线性历史。Hotfix 发布完成后必须把修复通过普通 PR 同步回 `main`。不得用 Hotfix 承载一般功能、积压 Bug、依赖升级或发布流程重构。

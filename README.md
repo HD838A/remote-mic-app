@@ -115,7 +115,7 @@ Mac App 继续采用官网下载方式分发，Mac App Store 上架暂时暂停�
 
 Release 中的 Apple Silicon 安装包名为 `SayAll-VERSION-BUILD-AppleSilicon-install.pkg`，Intel 安装包名为 `SayAll-VERSION-BUILD-Intel-install.pkg`，两者不能混用。卸载包名分别为 `SayAll-VERSION-BUILD-AppleSilicon-uninstall.pkg` 和 `SayAll-VERSION-BUILD-Intel-uninstall.pkg`。
 
-运行对应的 Installer PKG。安装器会把无线麦 SayAll 安装为 `/Applications/SayAll.app`，并检查现有 `MiRemoteV 2ch`：健康且兼容时原样保留，缺失或不可用时才安装或更新。只需要 App、已经使用其他回环音频设备的高级用户，可从同一 Release 下载 App-only ZIP。
+运行对应的 Installer PKG。安装器会把无线麦 SayAll 安装为 `/Applications/SayAll.app`，并检查现有 `MiRemoteV 2ch`：健康且兼容时原样保留，缺失或不可用时才安装或更新。安装器在简介之后显示与官网一致的隐私政策；必须完成该页的系统确认才能继续安装。只需要 App、已经使用其他回环音频设备的高级用户，可从同一 Release 下载 App-only ZIP。
 
 自 v1.3.0 起，正式发布包使用 Apple Developer ID 签名并已完成 Apple 公证。请从官网 Cloudflare CDN 固定入口、本项目 GitHub Releases 或上方百度网盘备用入口下载，并按 GitHub 资产摘要或 PKG 签名完成核验。
 

@@ -115,7 +115,7 @@ Common Phrases and Apple Siri Remote support require membership. For Siri Remote
 
 Release assets use the version and Build in their names: `SayAll-VERSION-BUILD-AppleSilicon-install.pkg` for Apple Silicon and `SayAll-VERSION-BUILD-Intel-install.pkg` for Intel. They are not interchangeable. The matching uninstallers are `SayAll-VERSION-BUILD-AppleSilicon-uninstall.pkg` and `SayAll-VERSION-BUILD-Intel-uninstall.pkg`.
 
-Run the matching Installer PKG. It installs **SayAll.app** and checks the existing MiRemoteV 2ch. A healthy compatible driver is kept in place; a missing or unusable driver is installed or updated. Advanced users who need only the app can download the app-only ZIP from the same Release.
+Run the matching Installer PKG. It installs **SayAll.app** and checks the existing MiRemoteV 2ch. A healthy compatible driver is kept in place; a missing or unusable driver is installed or updated. The installer shows the same privacy policy as the official website after the Introduction; you must complete that system confirmation before installation can continue. Advanced users who need only the app can download the app-only ZIP from the same Release.
 
 Starting with v1.3.0, official release packages are signed with an Apple Developer ID and notarized by Apple. Download through the official Cloudflare CDN entry, this project's GitHub Releases, or the Baidu Netdisk backup link above. Verify the GitHub asset digest or the PKG signature.
 
