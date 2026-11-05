@@ -7,8 +7,9 @@
 - Preview：普通版本从精确 `origin/main` SHA 构建一次；紧急 Hotfix 只允许从当前稳定 Tag 派生的精确 `origin/hotfix/vX.Y.Z` SHA 构建。两者都必须完成真实 UI 升级后才能发布公开 Pre-release。
 - Stable：用户明确指定一个已经发布并验证通过的 Pre-release，将它改为正式版；不重新构建。
 - 本地测试包：只为验证、不发布时，可以从任意分支或工作树打包。它不参加 Preview/Stable 候选、不上传 Release、不冒用 Preview/Stable 的版本号与已冻结 Build 号；但它仍是「一次打包」，必须按下方 Build 号不变量先递增自己的 `CFBundleVersion`。基线约束的放宽只对「不发布」这一种用途成立。
-- Build 号不变量：任何打包前都必须先递增 `CFBundleVersion`，再执行构建、签名、公证或上传。Preview、Hotfix、本地测试包和私有内部 Draft 一律适用，不存在「先打包、需要时再补号」或「只有 Preview 才升号」的例外。递增必须写进源码并被记录：本地测试包和私有 Draft 在独立的打包 worktree 与打包分支里递增并提交，不把递增留在公开 `main` 工作区。**不得为了让工作区变干净而回滚、复用或跳回旧 Build 号**；一个 Build 号只能对应一个已产出的包，已经用掉的号即使没有对应源码提交也不能再次使用，需要继续往前递增。**Build 号的唯一记录是远端已发布的标签**：私有 Draft 的标签形如 `v<版本>-local.<build>`，下一次的起点取远端该形态标签的最大值加一。`Resources/Info.plist` 只保存源码里的起点值，不跟随打包递增，因此**不得**把 `plutil` 读到的数字当作基线——2026-11-02 就因为按 plist 的 270 递增，撞上了已被 `v2.0.0-local.271`–`280` 占用的号段。打包前用 private-draft-release skill 的 `increment_macos_build.sh --plist <Info.plist> --repo <分发仓库>`，它会取远端最大标签与 plist 的较大值再递增；远端不可查时必须先人工确认最大值，不得直接对 plist 加一。
+- Build 号不变量：任何打包前都必须先递增 `CFBundleVersion`，再执行构建、签名、公证或上传。Preview、Hotfix、本地测试包和私有内部 Draft 一律适用，不存在「先打包、需要时再补号」或「只有 Preview 才升号」的例外。递增必须写进源码并被记录：本地测试包和私有 Draft 在独立的打包 worktree 与打包分支里递增并提交，不把递增留在公开 `main` 工作区。**不得为了让工作区变干净而回滚、复用或跳回旧 Build 号**；一个 Build 号只能对应一个已产出的包，已经用掉的号即使没有对应源码提交也不能再次使用，需要继续往前递增。**Build 号的唯一记录是远端已发布的标签**：私有 Draft 的标签形如 `v<版本>-local.<build>`，下一次的起点取远端该形态标签的最大值加一。`Resources/Info.plist` 只保存源码里的起点值，不跟随打包递增，因此**不得**把 `plutil` 读到的数字当作基线——2026-11-02 就因为按 plist 的 270 递增，撞上了已被 `v2.0.0-local.271`–`280` 占用的号段。打包前用 private-draft-release skill 的 `increment_macos_build.sh --plist <Info.plist> --repo <分发仓库>`，它会取远端最大标签与 plist 的较大值再递增；远端不可查时必须先人工确认最大值，不得直接对 plist 加一。**Build 号跨版本连续递增**：升级 `CFBundleShortVersionString` 不重置它——Draft 取远端所有 `v*-local.<build>` 标签的最大值（不限版本），Preview 取 main 上当前 `CFBundleVersion` 之后的下一个可用号。Draft 的版本号同样取自打包 worktree 的 `Resources/Info.plist`，**不固定**为某个值：`v2.0.0-local.N` 只是主线当前恰好在 2.0.0，切到 2.1.0 后 Draft 就是 `v2.1.0-local.N`。
 - 发布 Workflow 只能从精确 `origin/main` 运行。普通新候选源码只能来自 `main`；`hotfix/vX.Y.Z` 是唯一允许的新候选源码例外。`release-main` 冻结为只读历史，但已公开的旧 Pre-release 可按兼容晋升门禁完成正式化。
+- 发布基线：Draft 与 Pre-release 只能从最新 `origin/main`（外加只含 Build 号递增与 `packaging/**` 政策锁的打包提交）构建，入口门禁见 `scripts/verify-release-baseline.sh`。构建来源写进 App 的 `Info.plist`，发布说明的 `Commit：` 必须来自实际构建树，不得手写。
 - 私有内部 Draft：使用 private-draft-release skill 的独立路径，目标仓库固定为 GetSayAll/SayAll，不在公开源码仓库创建内部 Draft。
 - 私有内部 Draft 的资产必须先暂存再上传：`scripts/prepare-private-draft-assets.sh <暂存目录> <架构=产物目录> [<架构=产物目录> ...]` 把每个架构的 DMG 与安装包复制成规范名 `SayAll-<版本>-<Build>-<AppleSilicon|Intel>[-Installer].<ext>`，并写出 `staged-assets.json`（名称、SHA-256、字节数）。**不得**把构建目录里的原始文件名直接上传：`gh release upload` 保留本地文件名并会把空白改名（`Install SayAll.pkg` 会变成 `Install.SayAll.pkg`），丢掉 Build 号与架构标识，上传后也无法按文件名回读校验。**每个架构必须覆盖同一组资产种类**，少一个架构的安装包即停止，不得只发布其中一个架构。上传后按 `staged-assets.json` 里的 SHA-256 逐个回读比对，不能按文件名找资产。
 - “发布正式版”不是独立构建命令。没有指定现有 Pre-release 时，只能准备 Preview 或报告缺少授权。
@@ -61,6 +62,30 @@ Mac Remote 与其他 macOS 私有组件使用同一个私有 Swift Package。CI 
 `SAYALL_PRIVATE_PLATFORM_MODE=required` 强制要求私有组件。显式设置 `REQUIRE_*` 的完整发布仍在缺少组件时失败；签名、公证及公开发布门禁保持不变。受保护 staging 只检查私有 Mac 代码已被清单 Tag 覆盖，不在签名阶段发布私有 Tag 或修改版本。受保护 runner 再次检查完整历史中的 Tag、main 和 checkout，拒绝过期 pin。
 
 本机测试未发布的私有修复时，显式设置 `SAYALL_BUILD_CHANNEL=local` 和 `SAYALL_LOCAL_PRIVATE_SOURCE_COMMIT=<完整 SHA>`。手动提供同一干净提交的私有源码路径与 prepared artifacts；构建脚本继续校验二者的 SHA 相同。此入口不创建 Tag，不修改版本清单；`release` 和 `internalQA` 渠道拒绝该提交覆盖。未指定完整 SHA 时，本地渠道仍执行原有 Tag 校验。
+
+### 发布基线门禁与构建来源
+
+Draft 与 Pre-release 必须由「最新 `origin/main` + 允许的打包提交」构建。打包分支当场从 `git fetch origin main` 之后的 `origin/main` 切出，只允许两类提交：`Resources/Info.plist` 的 Build 号递增，以及 `packaging/**` 下的政策快照锁。不得复用功能分支、旧打包分支或已合并的发布分支。
+
+`scripts/notarize-release.sh` 在入口调用 `scripts/verify-release-baseline.sh`，断言：
+
+- `origin/main` 是 `HEAD` 的祖先——方向不能反，只比较 diff 会把「落后 main」看成「只有几个无害的打包提交」；
+- `origin/main...HEAD` 只改上面两类文件；
+- 工作树干净；
+- 显式给出的 `--require <合并提交>` 都在构建树里。
+
+失败时脚本直接退出，不产出包。CI 的 Preview 打包会把基线钉到 dispatch 指定的 `EXPECTED_COMMIT`——源码身份已由 `verify-public-release-source.sh` 校验，而 dispatch 之后 `main` 可能前进，不能再按当时的 `origin/main` 判定。手工核对：
+
+```bash
+scripts/verify-release-baseline.sh --require <本次要发布的合并提交>
+```
+
+2026-11-05 的 `v2.0.0-local.284` 就是从旧功能分支 `5107cc62` 打的，比当时的 `origin/main 01606521` 少 11 个合并提交（含 #881 卡片修复），而发布说明手写了 `01606521`，两者对不上；事后靠 DMG 摘要才追到打包 worktree。因此另外三条同时成立：
+
+- **构建来源写进产物**：`build-app.sh` 往 App 的 `Info.plist` 注入 `SayAllSourceCommit`（实际 HEAD）与 `SayAllBaselineCommit`（构建时的 `origin/main`）。
+- **发布前从产物读回**：`scripts/verify-release-asset-source.sh --asset <DMG/PKG/App> --expected-commit <SHA>` 打开产物、读取 App 的 `SayAllSourceCommit` 并与构建树比对；不一致或缺失即停止。private-draft-release skill 在上传前对每个 macOS 资产调用它。
+- **发布说明的 `Commit：` 行由脚本生成**：`scripts/render-private-draft-notes.sh` 按实际构建树与基线改写该行（保留第一个 `；` 之后的内容），不得手写 `origin/main` 的 SHA。
+- **Preview 同样读回**：`scripts/package-macos-release-in-actions.sh` 在签名与公证之后、上传之前，对两个架构的 DMG、安装器与 `.app` 逐个调用 `verify-release-asset-source.sh --expected-commit "$EXPECTED_COMMIT"`；CI 缓存或复用旧 `dist` 时会在这一步停下。
 
 ### 安装器隐私政策同步
 
