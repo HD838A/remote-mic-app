@@ -179,4 +179,24 @@ struct G9N9NVoiceSessionTests {
         #expect(!model.activeChromecastControlIDs.contains("up"))
     }
 
+    @Test @MainActor func reconnectRejectsSynchronousHostRestartWhileStopping() {
+        var creations = 0
+        let bridge = G9N9NBluetoothBridge(makeCentral: { _ in creations += 1; return nil })
+        // Production host synchronizes its enabled setting when capabilities
+        // clear. That must not start a central in the middle of teardown.
+        bridge.onCapabilities = { capabilities in
+            if capabilities.isEmpty { bridge.start() }
+        }
+        bridge.start()
+        #expect(bridge.enabled && creations == 1)
+        bridge.reconnect()
+        #expect(bridge.enabled && creations == 2)
+        bridge.stop()
+        #expect(!bridge.enabled && creations == 2)
+        bridge.start()
+        #expect(bridge.enabled && creations == 3)
+        bridge.onCapabilities = nil
+        bridge.stop()
+    }
+
 }

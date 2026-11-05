@@ -19,7 +19,9 @@ final class G9N9NBluetoothBridge: NSObject, CBCentralManagerDelegate, CBPeripher
     private var control: CBCharacteristic?
     private var model: String?
     private var manufacturer: String?
-    private var enabled = false
+    private(set) var enabled = false
+    private var stopping = false
+    private let makeCentral: (CBCentralManagerDelegate) -> CBCentralManager?
     private var admitted = false
     private var requestedCapabilities = false
     private var rejected = Set<UUID>()
@@ -36,7 +38,10 @@ final class G9N9NBluetoothBridge: NSObject, CBCentralManagerDelegate, CBPeripher
     private static let dis = CBUUID(string: "180A")
     private var now: TimeInterval { ProcessInfo.processInfo.systemUptime }
 
-    override init() {
+    init(makeCentral: @escaping (CBCentralManagerDelegate) -> CBCentralManager? = {
+        CBCentralManager(delegate: $0, queue: .main)
+    }) {
+        self.makeCentral = makeCentral
         super.init()
         voice.onWrite = { [weak self] in self?.write($0) }
         voice.onStart = { [weak self] in self?.onVoiceStart?() }
@@ -59,16 +64,16 @@ final class G9N9NBluetoothBridge: NSObject, CBCentralManagerDelegate, CBPeripher
     }
 
     func start() {
-        guard !enabled else { return }
+        guard !enabled, !stopping else { return }
         enabled = true
-        central = CBCentralManager(delegate: self, queue: .main)
+        central = makeCentral(self)
         retry = Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { [weak self] _ in
             guard let self, self.enabled else { return }
             self.hid.refreshAccess()
             if self.central?.state == .unauthorized,
                CBCentralManager.authorization == .allowedAlways {
                 self.central?.delegate = nil
-                self.central = CBCentralManager(delegate: self, queue: .main)
+                self.central = self.makeCentral(self)
             } else { self.discover() }
         }
         extend = Timer.scheduledTimer(withTimeInterval: 50, repeats: true) { [weak self] _ in
@@ -77,6 +82,9 @@ final class G9N9NBluetoothBridge: NSObject, CBCentralManagerDelegate, CBPeripher
     }
 
     func stop() {
+        guard !stopping else { return }
+        stopping = true
+        defer { stopping = false }
         enabled = false
         reconnectWork?.cancel()
         reconnectWork = nil
@@ -92,6 +100,7 @@ final class G9N9NBluetoothBridge: NSObject, CBCentralManagerDelegate, CBPeripher
     }
 
     func reconnect() {
+        guard !stopping else { return }
         // A cancelled link can deliver didDisconnect after connect on the same
         // peripheral. A fresh manager isolates that old callback from this retry.
         if enabled { stop() }

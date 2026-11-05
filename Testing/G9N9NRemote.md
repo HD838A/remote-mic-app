@@ -26,7 +26,7 @@ SAYALL_LOCAL_PUBLIC=1 scripts/package-local-test-app.sh
 ```
 
 显式 public 模式不装入私有包；默认模式保持原私有依赖约束。输出是本地测试包，
-不是官方发行版。驱动仍沿 `scripts/build-doubao-driver.sh` 和
+不是官方发行版。若本机已有开发签名身份，可通过 `SAYALL_LOCAL_SIGNING_IDENTITY` 使用它，避免每次 ad-hoc 构建改变授权身份；该选项不授予分发身份或改变官方发布签名。驱动仍沿 `scripts/build-doubao-driver.sh` 和
 `scripts/install-doubao-driver.sh` 构建、校验及安装。
 
 ## 真机步骤

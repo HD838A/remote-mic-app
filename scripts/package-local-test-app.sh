@@ -8,6 +8,7 @@
 #
 # 环境变量：
 #   SAYALL_PRIVATE_SOURCE_ROOT  私有仓工作区根目录（必填，脚本会从这里取 4 个私有包）
+#   SAYALL_LOCAL_SIGNING_IDENTITY  Optional local development certificate; default ad-hoc
 #   SAYALL_LOCAL_PUBLIC      1 = explicit public G9N9N fork test build, no private components
 #   SAYALL_LOCAL_APP_TARGET     替换目标，默认 ~/Applications/SayAll.app
 #   SAYALL_LOCAL_APP_FALLBACK   兜底目录，默认 ~/Downloads/SayAll-test
@@ -23,6 +24,7 @@ TARGET="${SAYALL_LOCAL_APP_TARGET:-$HOME/Applications/SayAll.app}"
 FALLBACK_DIR="${SAYALL_LOCAL_APP_FALLBACK:-$HOME/Downloads/SayAll-test}"
 STATE="$HOME/.sayall-local-build"
 PUBLIC_MODE="${SAYALL_LOCAL_PUBLIC:-0}"
+SIGNING_IDENTITY="${SAYALL_LOCAL_SIGNING_IDENTITY:--}"
 [[ "$PUBLIC_MODE" == 0 || "$PUBLIC_MODE" == 1 ]] || { echo "SAYALL_LOCAL_PUBLIC must be 0 or 1" >&2; exit 2; }
 
 if [[ "$PUBLIC_MODE" != 1 && ( -z "$PRIVATE_ROOT" || ! -d "$PRIVATE_ROOT/packages/macos-button-profiles" ) ]]; then
@@ -92,7 +94,7 @@ printf 'APPL????' > "$APP/Contents/PkgInfo"
 /usr/libexec/PlistBuddy -c "Add :SayAllSourceCommit string $SOURCE_COMMIT" "$APP/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Add :SayAllSourceState string $DIRTY" "$APP/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Add :SayAllPublicG9N9N bool $([[ "$PUBLIC_MODE" == 1 ]] && echo true || echo false)" "$APP/Contents/Info.plist"
-codesign --force --deep --sign - "$APP" >/dev/null 2>&1
+codesign --force --deep --sign "$SIGNING_IDENTITY" "$APP" >/dev/null 2>&1
 
 # 单实例锁与 bundle id 无关，替换前必须先退出正在运行的实例。
 pkill -f "MacOS/RemoteMic" 2>/dev/null || true
@@ -106,7 +108,7 @@ else
   cp -R "$APP" "$FALLBACK_DIR/SayAll.app"
   FINAL="$FALLBACK_DIR/SayAll.app"
 fi
-codesign --force --deep --sign - "$FINAL" >/dev/null 2>&1
+codesign --force --deep --sign "$SIGNING_IDENTITY" "$FINAL" >/dev/null 2>&1
 echo "$NEXT_BUILD" > "$STATE"
 echo "==> $FINAL (build $NEXT_BUILD, source $SOURCE_COMMIT, $DIRTY)"
 open "$FINAL"
