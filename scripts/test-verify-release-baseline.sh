@@ -116,6 +116,8 @@ git -C "$repo" rebase -q main
 base_sha="$(git -C "$repo" rev-parse main)"
 expect_ok "required commit present" --require "$base_sha"
 expect_ok "historical head is validated" --head "$base_sha"
+# CI 的 Preview 打卡：基线钉在 dispatch 指定的提交上，main 前进也不应误判。
+expect_ok "pinned baseline equal to head passes" --base "$base_sha" --head "$base_sha"
 [[ "$last_output" == *"RELEASE_AHEAD_COUNT=0"* ]] || fail "--head reported the wrong ahead count: $last_output"
 git -C "$repo" switch -q -c side "$base_sha"
 print 'side' > "$repo/side.txt"

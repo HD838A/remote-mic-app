@@ -9,7 +9,13 @@ ROOT="${0:A:h:h}"
 # RELEASE_BASELINE_CHECK=0 只给脚本自身的回归测试用，发布候选不得关闭。
 if [[ "${RELEASE_BASELINE_CHECK:-1}" == "1" ]]; then
   baseline_args=()
-  [[ -n "${RELEASE_BASELINE_REF:-}" ]] && baseline_args+=(--base "$RELEASE_BASELINE_REF")
+  if [[ -n "${RELEASE_BASELINE_REF:-}" ]]; then
+    baseline_args+=(--base "$RELEASE_BASELINE_REF")
+  elif [[ -n "${EXPECTED_COMMIT:-}" ]]; then
+    # CI 的源码是 dispatch 指定的精确提交，祖先关系由 verify-public-release-source.sh 校验。
+    # dispatch 之后 main 可能前进，若仍按 origin/main 判定会被误判成「落后 main」。
+    baseline_args+=(--base "$EXPECTED_COMMIT")
+  fi
   for required_commit in ${=RELEASE_BASELINE_REQUIRE:-}; do
     baseline_args+=(--require "$required_commit")
   done

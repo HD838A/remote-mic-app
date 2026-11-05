@@ -74,7 +74,7 @@ Draft 与 Pre-release 必须由「最新 `origin/main` + 允许的打包提交�
 - 工作树干净；
 - 显式给出的 `--require <合并提交>` 都在构建树里。
 
-失败时脚本直接退出，不产出包。手工核对：
+失败时脚本直接退出，不产出包。CI 的 Preview 打包会把基线钉到 dispatch 指定的 `EXPECTED_COMMIT`——源码身份已由 `verify-public-release-source.sh` 校验，而 dispatch 之后 `main` 可能前进，不能再按当时的 `origin/main` 判定。手工核对：
 
 ```bash
 scripts/verify-release-baseline.sh --require <本次要发布的合并提交>
