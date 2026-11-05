@@ -130,6 +130,40 @@ DimAgent 的输入框来自真机学习记录，已内化为预置：记录随 A
 真机用例可用 `REMOTEMIC_LIVE_DIMAGENT_TEST=1 swift test --disable-keychain --skip-build --filter liveDimAgentFocusUsesTheBuiltInRecordWithoutLearning`（默认不跑，会切换前台 App）。
 2026-11-03 候选状态：本机测试进程未获辅助功能权限（`AXError -25212`），真机聚焦与翻页结果待按上面步骤在授予权限的 App 内验收。
 
+## 用例 0E：聚焦后恢复输入框光标位置（2026-11-05 候选）
+
+适用分支：`codex/fix-composer-caret-end-20261105`。
+
+背景：Chromium 宿主收到只设辅助功能焦点的请求时，会把插入点放到偏移 0。用户确认的语义是“记忆 / 恢复”：输入框聚焦期间用 AX 选中区变化通知记住光标偏移（只记偏移，不读内容），下次“打开 / 聚焦输入框”恢复到记住的位置；没有记忆（首次、无线麦重启、丢失聚焦后无记录）时默认落到文字末尾；已聚焦入口保持光标不动；空输入框不得丢失聚焦。WorkBuddy 的字符数上报不可信（恒 27、真实为 0），因此恢复写回直接使用记忆偏移、由宿主钳制越界值，默认末尾走标准 Cmd+Down 和弦，全程不读字符数。
+
+1. 在 WorkBuddy 对话输入区输入一段多行脱敏测试文字，不要发送。
+2. 触发一次按键让输入框聚焦（建立记忆），然后把光标手动移到文字中间。
+3. 不按按键，直接切到其他 App，让输入区失去焦点。
+4. 触发按键切回：光标应恢复到第 2 步的中间位置，而不是开头或末尾。
+5. 切走后删除部分文字，使记忆偏移超过新内容长度，再触发按键：光标应落到文字末尾（宿主钳制越界偏移）。
+6. 清空输入框后切走再触发：焦点应回到输入框且不丢失，无异常选区。
+7. 输入框已聚焦时再按一次按键：光标保持不动（不强制跳到末尾）。
+8. 退出并重新打开无线麦 SayAll（记忆清空）后触发：光标落到文字末尾。
+9. 对 Codex、Claude 和“记录目标输入框”的自定义 App 各复验一次上述核心路径。
+10. 保持目标 App 在前台且输入框已聚焦，再按一次按键：输入框焦点应保持不动，不出现先失焦约 1–2 秒再恢复的闪断；日志出现 `APP ACTION skipped bundle=<bundle> reason=already_frontmost` 而不是再次 `opened`。
+
+预期：有记忆时触发后光标恢复到记住的位置并可直接输入；无记忆或记忆越界时落到文字末尾；已聚焦入口光标保持不动；空输入区触发后焦点保持、不丢失；聚焦本身失败或需要重试时仍按用例 0C 的规则处理。
+日志出现 `APP FOCUS caret bundle=<bundle> role=<role> result=<token>`：已聚焦入口为 `remembered`；未聚焦入口有记忆为 `restored`、无记忆为 `end_key_sent`（无记忆路径确认后还有一条兜底 `end_key_sent`，共两条）；观察器建立时出现 `APP FOCUS caret observer result=observing`。日志不读取也不记录输入文字、长度、字符数或选区内容。
+
+范围说明：cmux 终端聚焦不执行这一步，终端不按对话输入区处理。
+
+延迟边界：聚焦确认后追加一次合成按键或恢复写回（均为单次本地 IPC），无 sleep、轮询或额外重试等待；整条聚焦路径不出现可感知延迟。
+
+失败判定：有记忆时光标恢复到开头/末尾而不是记住的位置、无记忆时光标停在文字之前、整段被选中、输入覆盖原有内容、空输入区丢失聚焦或出现选区、已聚焦入口光标被强制移动、已在前台时按键导致输入框焦点闪断、聚焦失败，或日志包含输入文字、长度、字符数等用户内容。
+
+自动化覆盖：`composerCaretStoreRemembersOffsetsPerBundle` 覆盖记忆写入、同键覆盖与非法偏移拒绝；`composerCaretUsesTheStandardEndOfDocumentKey` 锚定末尾键值与 Command 修饰；`alreadyFrontmostPresetApplicationSkipsReactivationAndFocusesRunningInstance`、`alreadyFrontmostCustomApplicationSkipsReactivationAndFocusesRunningInstance` 覆盖已在前台跳过激活；不覆盖真实 AX 通知与按键送达。
+
+2026-11-05 机制实测：在隔离的 Chromium 156 实例上，聚焦后光标在 `(0,0)`，发送 Cmd+Down 后选区读回 `(11,0)`，输入字符追加在末尾。WorkBuddy 的输入区 `AXNumberOfCharacters` 恒报 27 而真实内容长度为 0（越界写入钳制法确认），按字符数写选区在空输入框越界并使元素 `focused` 变为 `false`；聚焦态越界写虽不丢焦点，但 AX 读值与真实状态脱节，因此恢复写回直接使用记忆偏移并交由宿主钳制。
+
+范围说明：cmux 终端聚焦不执行这一步，终端不按对话输入区处理。
+
+验证边界：WorkBuddy、Codex、Claude 与自定义 App 的实机恢复路径、语音首字位置、空输入区、连续触发、权限恢复和实体遥控器仍待按上述步骤现场验收；机制实测不能替代真实 GUI 与语音工具验收。记忆键是 Bundle ID，同 App 多窗口共享一份记忆；无线麦重启后记忆清空。末尾键依赖宿主对 macOS 标准键的默认处理，如个别宿主把 Cmd+Down 绑定为其他功能，需按宿主补充豁免。
+
 ## 用例 1：选择并打开任意 APP
 
 1. 在测试按键的“双击”动作中选择“打开自定义 APP”。
