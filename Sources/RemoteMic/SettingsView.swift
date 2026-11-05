@@ -5552,17 +5552,8 @@ struct SettingsView: View {
             return settings.customApplicationProfile(id: configured.applicationProfileID)?.displayName
                 ?? localization.text("custom_application.not_configured")
         }
-        switch configured.action {
-        case .arrowUp: return "↑"
-        case .arrowDown: return "↓"
-        case .arrowLeft: return "←"
-        case .arrowRight: return "→"
-        case .deleteBackward: return "⌫"
-        case .volumeUp: return localization.text("action.system_volume_up_short")
-        case .volumeDown: return localization.text("action.system_volume_down_short")
-        case .volumeMute: return "Mute"
-        default: break
-        }
+        // 按键页 chip 与方案页、手机端共用同一套动作语义名：
+        // 方向键不再单独显示符号，音量不再用 Vol+ 短标签。
         return configured.action.displayName(using: localization)
     }
 

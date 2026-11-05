@@ -1149,7 +1149,7 @@ struct RemoteButtonsTests {
         #expect(ButtonAction.commandDelete.detailedDisplayName(using: localization) == "Command + Delete")
         #expect(ButtonAction.arrowLeft.visualDisplayName(using: localization) == "←")
         #expect(ButtonAction.arrowLeft.detailedDisplayName(using: localization) == "Left")
-        #expect(ButtonAction.volumeUp.visualDisplayName(using: localization) == "Increase System Volume")
+        #expect(ButtonAction.volumeUp.visualDisplayName(using: localization) == "Volume Up")
     }
 
     @Test func customShortcutPreservesRightCommandDeviceSide() {
