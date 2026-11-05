@@ -42,8 +42,10 @@ for forbidden_path in \
   fi
 done
 
+# 裸产品名 DeepSeek 是公开可用的第三方 AI 产品名，允许出现在用户文档中；
+# 这里只拦截私有实现的类型前缀（如 DeepSeekCredentialStore）、配置键与内部功能名。
 if git grep -n -I -E \
-  'DeepSeek|deepseek_post_dictation|post_dictation\.|AI 整理|EarlyAccessController' \
+  'DeepSeek[A-Z]|deepseek_post_dictation|post_dictation\.|AI 整理|EarlyAccessController' \
   -- \
   'Sources/RemoteMic/*.swift' \
   'Resources/**' \
