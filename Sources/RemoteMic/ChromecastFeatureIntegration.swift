@@ -219,7 +219,7 @@ final class ChromecastFeatureIntegration {
         UserDefaults.standard.set(enabled, forKey: "g9n9n.hci.enabled")
         g9HCIEnabled = enabled
         if enabled {
-            g9HCI.start()
+            g9HCI.retry()
             g9.prepareHCIIdentity()
         } else {
             g9HCI.stop()

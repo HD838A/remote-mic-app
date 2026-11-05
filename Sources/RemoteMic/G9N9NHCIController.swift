@@ -13,6 +13,7 @@ final class G9N9NHCIController {
     private var client: AppleRemotePacketLoggerClient?
     private var generation = 0
     private var enabled = false
+    private var failed = false
     private var sequence = 0
     private var parser = G9N9NHCIParser()
     private var pressed = Set<ChromecastRemoteControl>()
@@ -21,7 +22,7 @@ final class G9N9NHCIController {
     private var reportedAttributes = Set<UInt16>()
 
     func start() {
-        guard !enabled else { return }
+        guard !enabled, !failed else { return }
         enabled = true
         generation += 1
         let attempt = generation
@@ -35,6 +36,7 @@ final class G9N9NHCIController {
                     return
                 }
                 guard result == .ready else {
+                    self.failed = true
                     self.status("helper_unavailable")
                     self.stop()
                     return
@@ -42,6 +44,11 @@ final class G9N9NHCIController {
                 self.beginPackets(attempt: attempt, configuration: configuration)
             }
         }
+    }
+
+    func retry() {
+        failed = false
+        start()
     }
 
     func stop() {
@@ -108,6 +115,7 @@ final class G9N9NHCIController {
                 DispatchQueue.main.async { [weak self] in
                     guard let self, self.enabled, self.generation == attempt else { return }
                     if conflict {
+                        self.failed = true
                         self.status("identity_conflict")
                         self.stop()
                         return
@@ -127,10 +135,12 @@ final class G9N9NHCIController {
                     self.requestIdentityRead?()
                     self.scheduleIdentityCheck(attempt: attempt, remaining: 5)
                 case .profileRequired:
+                    self.failed = true
                     self.status("profile_required")
                     self.stop()
                 case .failed(let failure):
                     AppLogger.shared.write("G9N9N HCI phase=failed reason=\(failure.diagnosticCode)")
+                    self.failed = true
                     self.status("capture_failed")
                     self.stop()
                 case .stopped:
@@ -151,6 +161,7 @@ final class G9N9NHCIController {
                 guard let self, self.enabled, self.generation == attempt else { return }
                 guard remaining > 0 else {
                     AppLogger.shared.write("G9N9N HCI phase=failed reason=identity_timeout packets=\(packets)")
+                    self.failed = true
                     self.status("capture_failed")
                     self.stop()
                     return
@@ -191,6 +202,7 @@ final class G9N9NHCIController {
     var onStatus: ((String) -> Void)?
     var requestIdentityRead: (() -> Void)?
     func start() { onStatus?("helper_unavailable") }
+    func retry() { start() }
     func stop() {}
     func identify(serial: Data) {}
     func disconnected() {}

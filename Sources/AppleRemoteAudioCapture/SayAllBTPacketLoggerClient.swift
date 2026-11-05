@@ -3,6 +3,20 @@ import Foundation
 import Security
 import XPC
 
+public enum PacketLoggerAuthorizationRulePolicy {
+    public static func isStrongEnough(_ values: [String: Any]) -> Bool {
+        guard values["class"] as? String == "user",
+              values["group"] as? String == "admin",
+              values["authenticate-user"] as? Bool == true,
+              values["shared"] as? Bool == false,
+              let timeout = values["timeout"] as? NSNumber,
+              timeout.int64Value == 0, values["rule"] == nil else { return false }
+        // Authorization Services normalizes an omitted session-owner into false.
+        // Both mean no session-owner shortcut; true and non-boolean values fail.
+        return values["session-owner"] == nil || values["session-owner"] as? Bool == false
+    }
+}
+
 /// Narrow in-memory client for macOS's private Bluetooth packet diagnostic service.
 /// Raw packet bytes stay on `stateQueue` and are never logged or written to disk.
 public final class AppleRemotePacketLoggerClient: @unchecked Sendable {
@@ -545,16 +559,7 @@ public final class AppleRemotePacketLoggerClient: @unchecked Sendable {
     }
 
     private static func authorizationRuleIsStrongEnough(_ definition: CFDictionary) -> Bool {
-        let values = definition as NSDictionary
-        guard values["class"] as? String == "user",
-              values["group"] as? String == "admin",
-              values["authenticate-user"] as? Bool == true,
-              values["shared"] as? Bool == false,
-              let timeout = values["timeout"] as? NSNumber,
-              timeout.int64Value == 0 else {
-            return false
-        }
-        return values["session-owner"] == nil && values["rule"] == nil
+        PacketLoggerAuthorizationRulePolicy.isStrongEnough(definition as? [String: Any] ?? [:])
     }
 
     private static func authorizationRuleBelongsToCurrentApp(
