@@ -1123,6 +1123,8 @@ print -r -- "lane $RELEASE_VARIANT running"
 for parallel_mode in 0 1; do
   variant_log="$WORK_DIR/variants-$parallel_mode.log"
   lane_log_dir="$WORK_DIR/variants-$parallel_mode-lanes"
+  # 这里用假 runner 验证并行调度，构建树本身不是发布候选：显式关闭基线门禁。
+  RELEASE_BASELINE_CHECK=0 \
   RELEASE_VARIANT_LOG_DIR="$lane_log_dir" \
     PARALLEL_RELEASE_VARIANTS="$parallel_mode" GENERATE_SPARKLE_UPDATE=0 \
     RELEASE_VARIANT_RUNNER="$fake_runner" VARIANT_LOG="$variant_log" \
