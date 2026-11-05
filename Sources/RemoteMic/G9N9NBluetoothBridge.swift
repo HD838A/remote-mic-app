@@ -26,6 +26,7 @@ final class G9N9NBluetoothBridge: NSObject, CBCentralManagerDelegate, CBPeripher
     private var retry: Timer?
     private var extend: Timer?
     private var initializationTimeout: DispatchWorkItem?
+    private var reconnectWork: DispatchWorkItem?
     private var idle: DispatchWorkItem?
     private var tail: DispatchWorkItem?
     private var status: ChromecastLinkStatus = .disabled {
@@ -49,6 +50,7 @@ final class G9N9NBluetoothBridge: NSObject, CBCentralManagerDelegate, CBPeripher
         retry?.invalidate()
         extend?.invalidate()
         initializationTimeout?.cancel()
+        reconnectWork?.cancel()
         idle?.cancel()
         tail?.cancel()
         peripheral?.delegate = nil
@@ -76,6 +78,8 @@ final class G9N9NBluetoothBridge: NSObject, CBCentralManagerDelegate, CBPeripher
 
     func stop() {
         enabled = false
+        reconnectWork?.cancel()
+        reconnectWork = nil
         retry?.invalidate()
         extend?.invalidate()
         retry = nil
@@ -88,10 +92,11 @@ final class G9N9NBluetoothBridge: NSObject, CBCentralManagerDelegate, CBPeripher
     }
 
     func reconnect() {
-        guard enabled else { start(); return }
-        clearConnection()
+        // A cancelled link can deliver didDisconnect after connect on the same
+        // peripheral. A fresh manager isolates that old callback from this retry.
+        if enabled { stop() }
         rejected.removeAll()
-        discover()
+        start()
     }
 
     func hostEnded() { voice.cancel(reason: "host_stop", now: now) }
@@ -231,6 +236,15 @@ final class G9N9NBluetoothBridge: NSObject, CBCentralManagerDelegate, CBPeripher
         guard self.central === central, self.peripheral === peripheral else { return }
         clearConnection()
         status = .disconnected
+        reconnectWork?.cancel()
+        let retry = DispatchWorkItem { [weak self, weak central] in
+            guard let self, let central, self.enabled, self.central === central else { return }
+            self.discover()
+        }
+        reconnectWork = retry
+        // Recover an observed disconnect promptly; keep the 15s poll for sleeping
+        // devices that have not reappeared, rather than making each voice press wait.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: retry)
     }
 
     func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
