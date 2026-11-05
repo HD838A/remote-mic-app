@@ -840,6 +840,9 @@ enum ButtonActionCategory: String, CaseIterable, Identifiable {
     case basicKeys
     case systemAndMedia
     case custom
+    /// 「组合动作」和「常用语」一样是独立的动作分类：它的候选来自宏库卡片，
+    /// 不是动作网格里的一项，因此不参与 `ButtonAction` 的逐个列举。
+    case combinations
     case commonPhrases
     case applications
 
@@ -850,6 +853,7 @@ enum ButtonActionCategory: String, CaseIterable, Identifiable {
         case .basicKeys: return "button_mapping.action_group.basic_keys"
         case .systemAndMedia: return "button_mapping.action_group.system_and_media"
         case .custom: return "button_mapping.action_group.custom"
+        case .combinations: return "action.combination_action"
         case .commonPhrases: return "common_phrases.title"
         case .applications: return "button_mapping.action_group.applications"
         }
@@ -1082,8 +1086,13 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
         case .showDesktop, .contextMenu, .appSwitcher, .volumeUp, .volumeDown, .volumeMute,
              .playPause, .previousCommandLeft, .nextCommandRight, .toggleLongRecording:
             return .systemAndMedia
-        case .customShortcut, .combinationAction, .focusInput:
+        case .customShortcut:
+            // 自定义快捷键本质就是"发一个自己录的按键组合"，和固定快捷键同属基础按键。
+            return .basicKeys
+        case .focusInput:
             return .custom
+        case .combinationAction:
+            return .combinations
         case .openCommonPhrases:
             return .commonPhrases
         case .openCustomApplication:
