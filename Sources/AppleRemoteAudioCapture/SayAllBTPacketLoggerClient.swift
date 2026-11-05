@@ -20,6 +20,7 @@ public final class AppleRemotePacketLoggerClient: @unchecked Sendable {
         case authorizationCreate(OSStatus)
         case authorizationRuleLookup(OSStatus)
         case authorizationRuleTooWeak
+        case authorizationRuleShape(String)
         case authorizationRuleOwnedByAnotherClient
         case authorizationRuleRegistration(OSStatus)
         case authorizationRuleSealFailed
@@ -39,6 +40,7 @@ public final class AppleRemotePacketLoggerClient: @unchecked Sendable {
             case .authorizationCreate(let status): return "authorization_create_\(status)"
             case .authorizationRuleLookup(let status): return "authorization_rule_lookup_\(status)"
             case .authorizationRuleTooWeak: return "authorization_rule_too_weak"
+            case .authorizationRuleShape(let shape): return "authorization_rule_shape_\(shape)"
             case .authorizationRuleOwnedByAnotherClient: return "authorization_rule_owned_by_another_client"
             case .authorizationRuleRegistration(let status): return "authorization_rule_registration_\(status)"
             case .authorizationRuleSealFailed: return "authorization_rule_seal_failed"
@@ -494,8 +496,16 @@ public final class AppleRemotePacketLoggerClient: @unchecked Sendable {
             createdRule = true
         } else if lookupStatus == errAuthorizationSuccess {
             guard let definition, authorizationRuleIsStrongEnough(definition) else {
+                let values = definition as? [String: Any] ?? [:]
+                let shape = "user\(values["class"] as? String == "user" ? 1 : 0)" +
+                    "_admin\(values["group"] as? String == "admin" ? 1 : 0)" +
+                    "_auth\((values["authenticate-user"] as? Bool).map { $0 ? 1 : 0 } ?? -1)" +
+                    "_shared\((values["shared"] as? Bool).map { $0 ? 1 : 0 } ?? -1)" +
+                    "_timeout\((values["timeout"] as? NSNumber)?.int64Value ?? -1)" +
+                    "_owner\((values["session-owner"] as? Bool).map { $0 ? 1 : 0 } ?? -1)" +
+                    "_rule\(values["rule"] == nil ? 0 : 1)"
                 AuthorizationFree(authorization, [.destroyRights])
-                return .failed(.authorizationRuleTooWeak)
+                return .failed(.authorizationRuleShape(shape))
             }
             guard authorizationRuleBelongsToCurrentApp(definition) else {
                 AuthorizationFree(authorization, [.destroyRights])
