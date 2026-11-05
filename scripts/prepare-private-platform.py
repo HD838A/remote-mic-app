@@ -12,9 +12,15 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import zipfile
 
 REPOSITORY = "GetSayAll/sayall-private-platform"
+# 双架构打包会让两条 lane 同时走到准备阶段。这里排队等待而不是并发失败，否则
+# --all 并行必然有一条在这里退出。超时保留 fail-closed，避免持锁进程卡死时永久等待。
+PREPARE_LOCK_TIMEOUT_SECONDS = int(
+    os.environ.get("SAYALL_PREPARE_LOCK_TIMEOUT_SECONDS", "600")
+)
 RELEASE_ASSET = "sayall-private-platform-{tag}.release.zip"
 SEMVER = re.compile(r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\Z")
 # Mac runtime, resources, package resolution, helpers and binary packaging.
@@ -349,10 +355,20 @@ def main():
             lock_dir = args.root / ".private-dependencies"
             lock_dir.mkdir(parents=True, exist_ok=True)
             lock = stack.enter_context((lock_dir / "prepare.lock").open("w"))
-            try:
-                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            except BlockingIOError as error:
-                raise RuntimeError("Another private platform preflight is running; retry after it finishes") from error
+            deadline = time.monotonic() + PREPARE_LOCK_TIMEOUT_SECONDS
+            while True:
+                try:
+                    fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    break
+                except BlockingIOError as error:
+                    if time.monotonic() >= deadline:
+                        raise RuntimeError(
+                            "another private platform preparation still holds "
+                            f"{lock.name} after {PREPARE_LOCK_TIMEOUT_SECONDS}s; "
+                            "stop the other packaging run or raise "
+                            "SAYALL_PREPARE_LOCK_TIMEOUT_SECONDS"
+                        ) from error
+                    time.sleep(0.5)
         if args.action == "package":
             print(json.dumps(package(args.root, args.mode, args.artifacts)))
             return

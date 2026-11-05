@@ -1,0 +1,132 @@
+Privacy policy
+Updated: 2026-11-05
+
+Scope
+
+This policy applies to SayAll for macOS, the SayAll iPhone and Apple Watch apps, the SayAll mini program, and the sayall.app and getsayall.com websites. It explains what information we process, why we process it, how we store and protect it, and how you can manage it.
+
+Who we are
+
+The SayAll team operates SayAll. For privacy questions, access, correction, deletion, or complaints, contact support@sayall.app. We will respond after verifying your identity.
+
+Definitions
+
+In this policy, personal information means any information relating to an identified or identifiable natural person that is recorded by electronic or other means, excluding anonymized information. De-identification means processing personal information so that a specific natural person cannot be identified without additional information. Sensitive personal information means personal information that, if leaked or misused, may harm a person's dignity or personal or property safety.
+
+Information we collect
+
+We process only the information needed to provide the service. Different features use different information; features you do not use do not collect their associated information. We obtain information when you provide it, when it is collected automatically as you use a feature, and when it is returned by third-party services.
+
+Mini program voice and connection
+
+The mini program requests microphone permission and collects audio only when you use the voice feature. Audio streams through an encrypted connection to the Mac you authorize; the connection service does not store recordings. To establish and restore connections, we process device identifiers, connection authorization data, and connection status. If you deny microphone permission, you can still use remote control buttons.
+
+Mac app voice and local records
+
+The Mac requests microphone permission and collects audio only when you explicitly choose "Speak with Mac microphone"; other voice audio comes from the remote control, phone, or web page you connect. The Mac uses the received audio for the voice input feature you choose and does not use it to identify you.
+
+The Mac saves audio on the device only when you turn on "Save Original Audio"; it saves text only when you turn on "Reflections". Both are off by default, and the content is not uploaded. Deleting recordings or Reflections items moves them to the macOS Trash. The Mac also stores remote control, connection, and button settings on the device.
+
+iPhone and Apple Watch apps
+
+The iPhone and Apple Watch apps have no account system, do not upload usage statistics to our servers, and are not used for advertising profiles.
+
+The iPhone requests microphone permission and collects audio only when you use the voice feature. Audio is sent in real time over an encrypted local-network connection to the Mac you authorize, is not stored in the cloud, and is not used to identify you. The Apple Watch uses its own microphone for the same real-time recording.
+
+On first connection, both sides show the same verification code, and the installation becomes a trusted device only after you approve it on the Mac. We process device identifiers, connection authorization data, and connection status to discover and establish connections; this information stays on the device, and the matching authorization ends when you delete the app, clear trusted devices in Mac settings, or revoke the trust. The current version does not control your Mac across the internet.
+
+On-device diagnostic logs on iPhone and Apple Watch contain only network paths, connection duration, and connection status; they do not contain audio, button content, device names, IP addresses, verification codes, or keys, and you can export or delete them at any time. Apple Watch diagnostic logs are privacy-filtered and passed only to the paired iPhone through system channels.
+
+Membership and payments
+
+We process your membership email, WeChat account identifier (mini program only), orders, payment results, and membership status to sign you in, process purchases, verify refunds, and restore membership. We use verification codes only to verify your email address. WeChat or Apple processes payments, and we do not receive bank card information. Membership data and usage statistics are stored separately; statistical reports do not contain membership identity.
+
+Usage statistics
+
+The personal center (Statistics page) shows button presses, voice duration, and longest single session on your device. To understand overall product usage, the Mac app uploads the values for each completed statistical day, voice session counts, the statistical date, week-to-date and lifetime snapshots, and a randomly generated report ID for each report to stats.sayall.app. What is uploaded is usage values with identifying information removed; it does not include your name, email, phone number, account, membership level, orders, installation ID, device identifiers, IP address, voice, text, button values, app names, or free text. The upload does not require sign-in and does not depend on membership.
+
+A report ID is used only to deduplicate the same upload. It is not an installation ID and cannot be used to look up a user; different days and reports use different IDs. We use these values only to produce aggregate totals, maximums, and distributions. We do not use them for billing, rewards, advertising profiles, or other purposes, and we do not build personal or device profiles. The report itself does not contain an IP address; infrastructure providers such as Cloudflare still process connection IPs for transmission and security.
+
+These statistics are the default way we understand overall usage. They require no sign-in and do not affect membership, voice, or any other feature; they keep aggregate values only and build no personal profile. The current version has no separate switch, and uninstalling the app stops future uploads; aggregate values already produced are not rolled back.
+
+Diagnostics and error records
+
+The mini program keeps necessary request results, payment errors, and operation records to investigate faults and verify transactions. The Mac stores diagnostic logs encrypted on the device, and masked events are sent to the diagnostic service only when you choose "Send Diagnostics". Public diagnostic events do not contain voice content, Reflections text, verification codes, sign-in keys, device identity, or free text. Do not send sensitive information in issue reports.
+
+Website visits
+
+The website does not require registration. To improve pages and download entry points, we record anonymous page views and click events, including the page path, language, device class (mobile, tablet, or desktop), referring domain, campaign parameters, event name, and a random ID used only for the current tab session. These events do not include accounts, email, phone numbers, payment information, or precise location. The website does not use advertising cookies; the session ID is stored in browser sessionStorage and expires when the tab closes. Infrastructure providers such as Cloudflare process connection IPs and routine request logs.
+
+Purposes and legal bases
+
+We process information to provide voice input, device connection, and membership services; complete payments, refunds, and entitlement restoration; investigate faults and protect security; understand overall product usage and improve features; and comply with legal obligations. Our bases include your consent, performance of a contract to which you are a party, compliance with legal obligations, and protection of your or others' legitimate rights. Where processing relies on consent, you can withdraw it as described in this policy; withdrawal does not affect processing already carried out.
+
+Cookies and similar technologies
+
+The website does not use advertising cookies or cross-site tracking cookies. The app does not use cookies. The website's session ID and attribution information are stored in browser sessionStorage only for the current tab session; we do not use them to build a personal browsing profile.
+
+Third-party services and sharing
+
+We do not sell your personal information or use it for advertising profiles. We use the following third parties to provide and measure the service:
+
+Cloudflare: infrastructure for the website, downloads, statistics, and membership services; processes connection IPs and request metadata.
+
+Sentry: receives diagnostic events only when you choose to send them.
+
+Sparkle: checks for app updates and requests the update feed.
+
+Resend: sends email verification codes and membership-related emails.
+
+WeChat Pay and Apple: process payments and refunds under their own privacy policies.
+
+GitHub: provides Release downloads and source hosting; processes connection IPs.
+
+We do not provide your personal information to third parties except to these providers, as required by law, or as necessary to protect rights. For providers that process information on our behalf, we require them to act only on our instructions and to maintain confidentiality and security. WeChat Pay and Apple act as independent payment service providers and process payment information under their own privacy policies.
+
+If we are involved in a merger, acquisition, or asset transfer, we will require the successor to remain bound by this policy; where separate consent is required, we will provide notice and obtain it in accordance with the law. We will not publicly disclose your personal information except as required by law or with your consent.
+
+Storage location and retention
+
+Local recordings and Reflections text are stored on your Mac until you delete them in Reflections or uninstall the app; button and connection settings are stored on the device until you uninstall the app. Recordings and Reflections are off by default.
+
+Local encrypted diagnostic logs and public diagnostic events are kept on the device only and cleaned up automatically when they expire.
+
+Membership, order, and payment records are kept for as long as needed to provide the service, process refunds, and comply with legal obligations; transaction records that we must retain by law are not deleted when you sign out.
+
+The statistics service clears deduplication records under its internal retention policy; aggregate daily totals and distributions are kept long-term for all-time statistics, and we review the retention scope annually.
+
+Anonymous website events are kept under the analytics service's retention policy, and we do not build personal browsing profiles. Support emails are kept for as long as needed to resolve the issue and comply with legal obligations.
+
+Our cloud providers include Cloudflare and Resend, which may process membership, statistics, and website request data outside mainland China. Where cross-border transfer applies, we will provide notice, obtain consent, or take other steps required by applicable law. Local recordings, Reflections text, and encrypted logs are stored only on your Mac by default.
+
+Security
+
+We use HTTPS, access controls, least privilege, and allowlist validation to protect information. Mac recordings, Reflections files, and local queues use permissions readable only by the current user; diagnostic logs are encrypted on the device, and the app does not store the decryption private key. No internet transmission or storage is absolutely secure; please protect your device and account.
+
+If a personal information security incident occurs, we will activate our emergency response as required by law and notify you, as appropriate, of the incident, its possible impact, the measures taken, and steps you can take to protect yourself.
+
+Your rights
+
+You can request access to, a copy of, correction of, or deletion of your personal information, withdraw consent, or file a complaint. You can delete local text and recordings in Reflections, sign out on the membership page, or revoke microphone, accessibility, and input monitoring permissions in macOS System Settings.
+
+Usage statistics keep aggregate values only and contain no records that identify a person; uninstalling the app stops future uploads, and aggregate values already produced are not rolled back.
+
+To exercise these rights, contact support@sayall.app. We will respond after verifying your identity; information that we must retain by law may not be deleted immediately.
+
+Children
+
+The product is not directed to children under 4. Children aged 4 to 13 should use it with the consent and guidance of a guardian. If a guardian believes a child provided information without consent, they can contact support@sayall.app, and we will handle it in accordance with the law.
+
+Policy updates
+
+We may update this policy, and the update date will appear at the top of the page. For material changes to processing purposes, information types, sharing, or user rights, we will provide prominent notice on the website or in the app. Continued use after an update means you have read the new policy; if you do not agree, you can stop using the product and contact us.
+
+Contact us
+
+Operator: SayAll
+
+Privacy questions, access, correction, deletion, or complaints: support@sayall.app
+
+We will respond as soon as possible after verifying your identity.
+
+The online version of this policy: https://sayall.app/en/privacy/.

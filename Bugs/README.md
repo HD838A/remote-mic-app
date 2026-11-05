@@ -1,5 +1,9 @@
 # Bug 记录
 
+- [macOS CI 上主队列投递延迟导致自聚焦用例误报](./2026-11-05-macos-ci-main-queue-delivery-flake.md)
+
+- [睡眠期间遥控器链路一直保持，系统把它当成唤醒源](./2026-11-04-remote-hid-link-keeps-mac-awake.md)
+
 - [Sparkle 更新组件停留在已知漏洞版本](./2026-11-01-sparkle-security-version.md)
 - [按键手势学习的双击间隔被压缩到 0–1 ms](./2026-11-01-gesture-learning-double-click-interval.md)
 
@@ -165,6 +169,8 @@
 
 | 时间 | Bug | 状态 |
 | --- | --- | --- |
+| 2026-11-05 | [macOS CI 上主队列投递延迟导致自聚焦用例误报](./2026-11-05-macos-ci-main-queue-delivery-flake.md) | 已修复（等待预算由「轮询次数」改为墙钟，`perform` 默认 10 秒产品超时不变并由新用例锁定；`PermissionStatusProbeTests` 的 20 秒预算同步提到 60 秒）；30 秒主线程阻塞夹具下修复前 3 个 issue、修复后 1212 项全绿，夹具已删除不入库 |
+| 2026-11-04 | [睡眠期间遥控器链路一直保持，系统把它当成唤醒源](./2026-11-04-remote-hid-link-keeps-mac-awake.md) | 已确认应用层无法修复：睡眠前用带 `DoNotAutoConnectBuiltInServices` 的取消断开 CB 会话后，两次真机实测（Build 304，合盖+外接显示器）都在入睡 5 秒内被 `bluetoothd` 的 `Bluetooth LE HID Activity` 升级为完全唤醒；候选实现与测试已回退，结论回填 #441、#778 |
 | 2026-11-01 | [Sparkle 更新组件停留在已知漏洞版本](./2026-11-01-sparkle-security-version.md) | 依赖升级至 2.9.6 完成（三条上游安全公告覆盖），SwiftPM 解析、Release 构建与 CI 通过；真实安装更新待下次发布通道验收 |
 | 2026-11-01 | [按键手势学习的双击间隔被压缩到 0–1 ms](./2026-11-01-gesture-learning-double-click-interval.md) | 已修复（报告改用 HID 硬件时间戳并透传到学习器；2/3 与 3/3 的重复边沿整对忽略，计数不变、无需用户补按）；新增 6 项回归与全量 1175 项通过，等待 rc003 真机复验 |
 | 2026-11-01 | [按键页控制器卡片到工具行留白过大且保存入口不右对齐](./2026-11-01-mapping-toolbar-spacing-and-save-alignment.md) | 候选修复已实现（卡片底边对齐页头、方案行固定为页头横带的工具行、三个控件统一成同高 12pt 胶囊）；离屏渲染与 80 项定向回归通过，等待真实多方案窗口、私有构建与真机复验 |

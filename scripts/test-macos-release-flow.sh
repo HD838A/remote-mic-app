@@ -1117,14 +1117,32 @@ fake_runner="$WORK_DIR/fake-variant-runner"
 print -r -- '#!/bin/zsh
 set -euo pipefail
 print -r -- "$RELEASE_VARIANT" >> "$VARIANT_LOG"
+print -r -- "lane $RELEASE_VARIANT running"
 ' > "$fake_runner"
 /bin/chmod 755 "$fake_runner"
 for parallel_mode in 0 1; do
   variant_log="$WORK_DIR/variants-$parallel_mode.log"
-  PARALLEL_RELEASE_VARIANTS="$parallel_mode" GENERATE_SPARKLE_UPDATE=0 \
+  lane_log_dir="$WORK_DIR/variants-$parallel_mode-lanes"
+  RELEASE_VARIANT_LOG_DIR="$lane_log_dir" \
+    PARALLEL_RELEASE_VARIANTS="$parallel_mode" GENERATE_SPARKLE_UPDATE=0 \
     RELEASE_VARIANT_RUNNER="$fake_runner" VARIANT_LOG="$variant_log" \
     "$ROOT/scripts/notarize-release.sh" --all > "$WORK_DIR/variants-$parallel_mode.output"
   [[ "$(LC_ALL=C sort "$variant_log")" == $'apple-silicon\nintel' ]]
+  if [[ "$parallel_mode" == "1" ]]; then
+    # 并行 lane 必须各自留一份独立日志，失败时才能定位到具体架构。
+    [[ -f "$lane_log_dir/apple-silicon.log" ]]
+    [[ -f "$lane_log_dir/intel.log" ]]
+    /usr/bin/grep -Fq 'lane apple-silicon running' "$lane_log_dir/apple-silicon.log"
+    /usr/bin/grep -Fq 'lane intel running' "$lane_log_dir/intel.log"
+    ! /usr/bin/grep -Fq 'lane intel running' "$lane_log_dir/apple-silicon.log"
+    ! /usr/bin/grep -Fq 'lane apple-silicon running' "$lane_log_dir/intel.log"
+    # 实时输出仍然保留在终端上。
+    /usr/bin/grep -Fq 'lane apple-silicon running' "$WORK_DIR/variants-1.output"
+    /usr/bin/grep -Fq 'lane intel running' "$WORK_DIR/variants-1.output"
+  else
+    # 串行模式沿用单进程输出，不产生 lane 日志目录。
+    [[ ! -d "$lane_log_dir" ]]
+  fi
 done
 print "CI CLASSIFICATION AND VARIANT ENTRY FIXTURE PASS"
 )

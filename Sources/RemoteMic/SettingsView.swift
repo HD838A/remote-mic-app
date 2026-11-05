@@ -2446,8 +2446,10 @@ struct SettingsView: View {
                     in: Capsule(style: .continuous)
                 )
                 .overlay {
+                    // 胶囊是横向滚动内容的第一项，`.stroke` 有一半落在形状外，
+                    // 会被滚动容器在左边缘裁掉；`strokeBorder` 画在内侧，四条边才一样粗。
                     Capsule(style: .continuous)
-                        .stroke(
+                        .strokeBorder(
                             selected ? Color.accentColor.opacity(0.65) : Color.secondary.opacity(0.22),
                             lineWidth: 1
                         )
@@ -3107,16 +3109,21 @@ struct SettingsView: View {
 
     @ViewBuilder
     private func remoteDeviceSelector(vertical: Bool = false) -> some View {
-        let visibleProfiles = RemoteDeviceNamePolicy.sortedForCards(
-            settings.remoteDeviceProfiles.filter { profile in
-                #if SAYALL_SIRI_REMOTE_ENABLED && canImport(SayAllSiriRemote)
-                // Keep the activation entry available while the Apple adapter is stopped.
-                model.isRemoteConnected(profile.id) || profile.model.isAppleSiriRemote
-                #else
-                model.isRemoteConnected(profile.id)
-                #endif
-            },
-            modelName: remoteModelName,
+        let visibleProfiles = RemoteDeviceNamePolicy.cardsWithoutRepeatedSerial(
+            RemoteDeviceNamePolicy.sortedForCards(
+                settings.remoteDeviceProfiles.filter { profile in
+                    #if SAYALL_SIRI_REMOTE_ENABLED && canImport(SayAllSiriRemote)
+                    // Keep the activation entry available while the Apple adapter is stopped.
+                    model.isRemoteConnected(profile.id) || profile.model.isAppleSiriRemote
+                    #else
+                    model.isRemoteConnected(profile.id)
+                    #endif
+                },
+                modelName: remoteModelName,
+                systemName: { model.systemDeviceName(for: $0) }
+            ),
+            selectedProfileID: settings.selectedRemoteProfileID,
+            isConnected: { model.isRemoteConnected($0.id) },
             systemName: { model.systemDeviceName(for: $0) }
         )
         if visibleProfiles.isEmpty {
@@ -3243,6 +3250,10 @@ struct SettingsView: View {
                     }
                 }
                 .buttonStyle(.plain)
+                // 卡片行放得下时不再滚动，窗口的初始键盘焦点会落到这张标题按钮上，
+                // 画出一个只框住标题的焦点环，看起来像选中态渲染坏了。
+                // 卡片本身是点击选择的，这里不画焦点环；卡片里的其它按钮不受影响。
+                .modifier(CompatibilityFocusEffectDisabledModifier())
                 .accessibilityLabel(Text("\(modelName), \(systemName)"))
                 .accessibilityAddTraits(selected ? .isSelected : [])
                 HStack(spacing: 7) {
@@ -3282,8 +3293,10 @@ struct SettingsView: View {
                 .accessibilityHidden(true)
         }
         .overlay {
+            // 卡片行在放不下时会横向滚动，卡片贴着滚动容器的左边缘；
+            // `.stroke` 有一半在形状外，会被裁成半条边，改用画在内侧的 `strokeBorder`。
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .stroke(selected ? Color.accentColor.opacity(0.65) : Color.secondary.opacity(0.18))
+                .strokeBorder(selected ? Color.accentColor.opacity(0.65) : Color.secondary.opacity(0.18))
                 .allowsHitTesting(false)
         }
     }

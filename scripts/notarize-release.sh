@@ -23,6 +23,9 @@ if [[ "${1:-}" == --all ]]; then
   RELEASE_VARIANT_TIMEOUT_SECONDS="${RELEASE_VARIANT_TIMEOUT_SECONDS:-1140}"
   RELEASE_STAGE_RUNNER="$ROOT/scripts/run-release-stage.sh"
   GENERATE_SPARKLE_UPDATE="${GENERATE_SPARKLE_UPDATE:-1}"
+  # 并行模式下两条 lane 的输出会交错，失败时无法判断是哪条 lane 出的问题。
+  # 每条 lane 额外写一份独立日志（实时输出照旧），退出码仍取 lane 本身。
+  RELEASE_VARIANT_LOG_DIR="${RELEASE_VARIANT_LOG_DIR:-$ROOT/.build/release-logs}"
 
   if [[ "$#" -ne 0 ]]; then
     print -u2 "usage: $0"
@@ -62,14 +65,29 @@ if [[ "${1:-}" == --all ]]; then
 
   start_variant() {
     local variant="$1"
+    local lane_log="$RELEASE_VARIANT_LOG_DIR/$variant.log"
+    /bin/mkdir -p "$RELEASE_VARIANT_LOG_DIR"
+    # `> >(...)` 让子进程的退出码原样传回 `wait`，`tee` 只做副本，不吞状态。
     if [[ "$RELEASE_STAGE_TIMEOUTS" == "1" ]]; then
-      "$RELEASE_STAGE_RUNNER" "$variant" signed-variant \
-        "$RELEASE_VARIANT_TIMEOUT_SECONDS" -- \
-        env RELEASE_VARIANT="$variant" "$RELEASE_VARIANT_RUNNER" &
+      {
+        "$RELEASE_STAGE_RUNNER" "$variant" signed-variant \
+          "$RELEASE_VARIANT_TIMEOUT_SECONDS" -- \
+          env RELEASE_VARIANT="$variant" "$RELEASE_VARIANT_RUNNER"
+      } > >(/usr/bin/tee -a "$lane_log") 2>&1 &
     else
-      RELEASE_VARIANT="$variant" "$RELEASE_VARIANT_RUNNER" &
+      {
+        RELEASE_VARIANT="$variant" "$RELEASE_VARIANT_RUNNER"
+      } > >(/usr/bin/tee -a "$lane_log") 2>&1 &
     fi
     REPLY=$!
+  }
+
+  dump_variant_log() {
+    local variant="$1"
+    local lane_log="$RELEASE_VARIANT_LOG_DIR/$variant.log"
+    [[ -f "$lane_log" ]] || return 0
+    print -u2 "RELEASE VARIANT LOG TAIL variant=$variant file=$lane_log"
+    /usr/bin/tail -n 40 "$lane_log" >&2
   }
 
 
@@ -88,6 +106,12 @@ if [[ "${1:-}" == --all ]]; then
   }
 
   if [[ "$PARALLEL_RELEASE_VARIANTS" == "1" ]]; then
+    # 上一轮的 lane 日志不能混进本轮，先清空再起 lane。
+    /bin/mkdir -p "$RELEASE_VARIANT_LOG_DIR"
+    for variant in apple-silicon intel; do
+      : > "$RELEASE_VARIANT_LOG_DIR/$variant.log"
+    done
+    print "RELEASE VARIANT LOG DIR: $RELEASE_VARIANT_LOG_DIR"
     start_variant apple-silicon
     apple_silicon_pid="$REPLY"
     start_variant intel
@@ -101,6 +125,7 @@ if [[ "${1:-}" == --all ]]; then
         if (( apple_silicon_status != 0 )); then
           (( intel_done == 0 )) && stop_variant_job "$intel_pid" intel
           print -u2 "parallel signed release variant packaging failed: apple-silicon exit=$apple_silicon_status"
+          dump_variant_log apple-silicon
           exit 1
         fi
       fi
@@ -111,6 +136,7 @@ if [[ "${1:-}" == --all ]]; then
           (( apple_silicon_done == 0 )) && \
             stop_variant_job "$apple_silicon_pid" apple-silicon
           print -u2 "parallel signed release variant packaging failed: intel exit=$intel_status"
+          dump_variant_log intel
           exit 1
         fi
       fi
@@ -429,6 +455,8 @@ export REMOTE_MIC_BUILD_CACHE_PATH="$RELEASE_BUILD_CACHE_PATH"
 export RELEASE_STAGE_TIMEOUTS
 export RELEASE_SWIFT_BUILD_TIMEOUT_SECONDS
 
+run_release_stage privacy-policy-remote-verify 60 \
+  "$ROOT/scripts/verify-installer-privacy-policy.py" --remote
 run_release_stage app-build "$RELEASE_APP_BUILD_TIMEOUT_SECONDS" \
   "$ROOT/scripts/build-app.sh"
 if [[ -z "${REMOTE_MIC_SENTRY_DSN:-}" ]]; then

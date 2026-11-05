@@ -33,6 +33,14 @@ Mac Remote 与其他 macOS 私有组件使用同一个私有 Swift Package。CI 
 
 打包用的新 worktree 里没有 `Apps/MobileWeb/.private/`（该目录被 `.gitignore` 排除、不入库），**打包前先从主工作区把它复制过来**，否则会在 DMG 阶段报 `Developer ID app is missing a production Web Remote relay URL`。
 
+双架构可以在本机并行打包：`PARALLEL_RELEASE_VARIANTS=1 scripts/notarize-release.sh --all` 会同时跑 Apple Silicon 与 Intel 两条 lane。两条 lane 会争用私有平台准备锁（`scripts/prepare-private-platform.py`），此时后到的一条会**等待**前一条释放（`SAYALL_PREPARE_LOCK_TIMEOUT_SECONDS`，默认 600 秒），而不是像以前那样立刻失败。实测并行两架构约 203 秒、串行约 386 秒。
+
+并行时两条 lane 的输出会交错在同一个终端，失败时难以判断是哪条 lane 出问题。因此并行模式会额外把每条 lane 的完整输出分别写到 `RELEASE_VARIANT_LOG_DIR`（默认 `.build/release-logs/`）下的 `apple-silicon.log` 与 `intel.log`；终端实时输出照旧，退出码仍取 lane 自身。排查失败时先看这两个文件，目录可用 `RELEASE_VARIANT_LOG_DIR` 覆盖。
+
+打包耗时的大头不是公证。同一 worktree 热缓存重跑整条 arm64 lane 只要约 193 秒，其中 Apple 公证只占约 50 秒到 2 分钟（从提交到 accepted）；真正的长尾是冷构建——新 worktree 里 `.build` 与 DerivedData 全空，约 10 分钟。因此优化方向是编译缓存，不是公证并行。
+
+`scripts/notarize-release.sh` 里已有 `PARALLEL_PACKAGE_NOTARIZATION=1`，会把安装包与卸载包的公证并行提交。按上面的实测，它最多只省下几十秒到两分钟，默认仍为 `0`；除非打包时特别在意这两分钟，否则不必开启。需要真正压缩打包时间时，先看 opus 构建是否命中跨 worktree 缓存（`scripts/build-apple-remote-opus.sh`，产物缓存在 `~/Library/Caches/com.getsayall.apple-remote-opus/<opus 版本>/<变体>/`），以及是否复用了同一份 `.build` 目录。
+
 有读取权限时，按以下顺序准备：
 
 1. 将 Mac 私有改动通过私有 PR 合入 `GetSayAll/sayall-private-platform` 的 `main`。只比较根 SwiftPM 清单、Mac Remote、组合动作、键位方案、常用语、会员与诊断、Siri Remote、Chromecast 和私有构建工具。网页、服务端和纯 Markdown/HTML 文档变化不触发 Mac 包升级。新增 Mac 模块时同步 `scripts/prepare-private-platform.py` 的路径范围。
@@ -52,6 +60,15 @@ Mac Remote 与其他 macOS 私有组件使用同一个私有 Swift Package。CI 
 `SAYALL_PRIVATE_PLATFORM_MODE=required` 强制要求私有组件。显式设置 `REQUIRE_*` 的完整发布仍在缺少组件时失败；签名、公证及公开发布门禁保持不变。受保护 staging 只检查私有 Mac 代码已被清单 Tag 覆盖，不在签名阶段发布私有 Tag 或修改版本。受保护 runner 再次检查完整历史中的 Tag、main 和 checkout，拒绝过期 pin。
 
 本机测试未发布的私有修复时，显式设置 `SAYALL_BUILD_CHANNEL=local` 和 `SAYALL_LOCAL_PRIVATE_SOURCE_COMMIT=<完整 SHA>`。手动提供同一干净提交的私有源码路径与 prepared artifacts；构建脚本继续校验二者的 SHA 相同。此入口不创建 Tag，不修改版本清单；`release` 和 `internalQA` 渠道拒绝该提交覆盖。未指定完整 SHA 时，本地渠道仍执行原有 Tag 校验。
+
+### 安装器隐私政策同步
+
+安装包的许可页正文来自官网政策，不在本仓手工编辑：
+
+1. 在私有官网仓修改 `docs/product/policies/privacy.md` 与 `en/privacy.md`，更新 `subtitle` 日期；运行 `node apps/official-sites/sayall-app/scripts/sync-legal-pages.mjs` 与 `node tools/sync-payment-policies.mjs`，部署网站并确认 `/privacy/policy.json` 已更新。页面、`policy.json` 和 sitemap 日期由同一次生成完成，两个官网镜像字节一致。
+2. 在本仓运行 `scripts/sync-installer-privacy-policy.py`。默认读取线上 `policy.json`；本机也可用 `--policy-json` 指向私有仓构建产物。提交两份 `License.txt`、`privacy-policy.lock.json` 和必要的文档变更。本地脏工作树同步会把 `source_commit` 记为 `working-tree`，发布校验会拒绝；发布前必须从已部署的线上 `policy.json` 或干净的官网 checkout 重新同步，不能保留 `working-tree`。
+3. 打包前运行 `scripts/verify-installer-privacy-policy.py --remote`。`notarize-release.sh` 已在发布构建开始时执行同一检查；官网日期或正文与快照不一致时立即停止，必须显式同步快照并走新的普通 PR 和更高 Build。
+4. 不得手工修改 `License.txt`、跳过远程校验，或把网络失败当作无需校验。系统许可页只在图形安装器中显示；`installer -pkg` 与 MDM 安装不会征得同意，也不能作为同意记录。
 
 ### Hotfix 准备
 

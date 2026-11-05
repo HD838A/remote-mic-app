@@ -63,8 +63,10 @@ struct PermissionStatusProbeTests {
     /// 交付固定走主线程，而 CI 上会同时跑几百个测试，主队列可能被别人的工作占住数秒。
     /// 超时只用来兜住真正的死锁，不能短到把「主线程正忙」判成失败；
     /// 2026-10-23 的 macOS CI 就是在这里用 5 秒超时误报过一次。
+    /// 2026-11-04 又实测到主队列被占住 27 秒（run 41875979953，同一个进程里
+    /// 1210 项测试共用主队列），20 秒预算已经不够，因此提到 60 秒。
     private static func waitUntil(
-        timeout: TimeInterval = 20,
+        timeout: TimeInterval = 60,
         _ description: String,
         _ condition: () -> Bool
     ) async throws {

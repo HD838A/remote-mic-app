@@ -299,6 +299,73 @@ struct RemoteDeviceNamePolicyTests {
         }
     }
 
+    /// 现场数据的形状：同一台 Apple Remote 换过指纹，留下两条档案，两条都把序列号
+    /// 存成了设备名。卡片区只能出现一张，并且要留正在用的那条。
+    @Test func cardsCollapseRepeatedSerialAndPreferTheConnectedProfile() {
+        let connected = makeProfile(model: .appleSiriRemoteA2540, name: "DL1GHATQ17FC")
+        let stale = makeProfile(model: .appleSiriRemoteA2540, name: "DL1GHATQ17FC")
+        let other = makeProfile(model: .appleSiriRemoteA2854, name: "C08JV3H32330")
+
+        let cards = RemoteDeviceNamePolicy.cardsWithoutRepeatedSerial(
+            [stale, connected, other],
+            selectedProfileID: nil,
+            isConnected: { $0.id == connected.id },
+            systemName: { $0.customName.isEmpty ? nil : $0.customName }
+        )
+
+        #expect(cards.count == 2)
+        #expect(cards.first?.id == connected.id)
+        #expect(cards.contains { $0.id == other.id })
+    }
+
+    /// 两台序列号不同的遥控器必须各占一张卡片，否则会少一台设备的入口。
+    @Test func cardsKeepDifferentSerials() {
+        let first = makeProfile(model: .appleSiriRemoteA2540, name: "DL1GHATQ17FC")
+        let second = makeProfile(model: .appleSiriRemoteA2540, name: "C08JV3H32330")
+
+        let cards = RemoteDeviceNamePolicy.cardsWithoutRepeatedSerial(
+            [first, second],
+            selectedProfileID: nil,
+            isConnected: { _ in false },
+            systemName: { $0.customName }
+        )
+
+        #expect(cards.count == 2)
+    }
+
+    /// 只有「像序列号」的名字才当身份用；用户起的同名不算同一台设备。
+    @Test func cardsKeepRepeatedDisplayNamesThatAreNotSerials() {
+        let first = makeProfile(model: .appleSiriRemoteA2540, name: "客厅")
+        let second = makeProfile(model: .appleSiriRemoteA2540, name: "客厅")
+
+        let cards = RemoteDeviceNamePolicy.cardsWithoutRepeatedSerial(
+            [first, second],
+            selectedProfileID: nil,
+            isConnected: { _ in false },
+            systemName: { $0.customName }
+        )
+
+        #expect(cards.count == 2)
+    }
+
+    /// 正在编辑的那条不能被藏起来：否则页面在编辑一台卡片上看不到的设备，
+    /// 用户会以为刚配置的按键、键位方案丢了。
+    @Test func cardsNeverHideTheProfileBeingEdited() {
+        let connectedTwin = makeProfile(model: .appleSiriRemoteA2540, name: "DL1GHATQ17FC")
+        let editingTwin = makeProfile(model: .appleSiriRemoteA2540, name: "DL1GHATQ17FC")
+
+        let cards = RemoteDeviceNamePolicy.cardsWithoutRepeatedSerial(
+            [connectedTwin, editingTwin],
+            selectedProfileID: editingTwin.id,
+            isConnected: { $0.id == connectedTwin.id },
+            systemName: { $0.customName }
+        )
+
+        #expect(cards.count == 2)
+        #expect(cards.contains { $0.id == editingTwin.id })
+        #expect(cards.contains { $0.id == connectedTwin.id })
+    }
+
     private func makeProfile(
         id: UUID = UUID(),
         model: XiaomiRemoteModel = .rc001,

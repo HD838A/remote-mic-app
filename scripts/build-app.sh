@@ -761,8 +761,12 @@ fi
 mkdir -p "$APP_DIR/Contents/Frameworks"
 if [[ "$SAYALL_SIRI_REMOTE_INCLUDED" == "true" ]]; then
   OPUS_DYLIB=""
+  # 与 build-apple-remote-opus.sh 的缓存布局保持一致；两处版本号必须同步，
+  # 不一致时下面的候选列表只会找不到文件并提示运行构建脚本，不会静默用错版本。
+  OPUS_VERSION="1.6.1"
   for candidate in \
     "${SAYALL_OPUS_LIBRARY:-}" \
+    "${SAYALL_OPUS_CACHE_ROOT:-$HOME/Library/Caches/com.getsayall.apple-remote-opus}/$OPUS_VERSION/$RELEASE_VARIANT/install/lib/libopus.0.dylib" \
     "$ROOT/.build/apple-remote-opus/$RELEASE_VARIANT/install/lib/libopus.0.dylib" \
     "/opt/homebrew/opt/opus/lib/libopus.0.dylib" \
     "/usr/local/opt/opus/lib/libopus.0.dylib"; do
