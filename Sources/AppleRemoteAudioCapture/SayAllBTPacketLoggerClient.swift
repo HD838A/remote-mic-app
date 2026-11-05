@@ -117,6 +117,7 @@ public final class AppleRemotePacketLoggerClient: @unchecked Sendable {
     )
     private let callbackQueue: DispatchQueue
     private let requiresPreparedAuthorizationRule: Bool
+    private let sealsAfterServerAcceptance: Bool
     private let allowsPacketAsAuthorization: Bool
     private let sealAuthorizationRight: (@escaping (Bool) -> Void) -> Void
     private let onPacket: (Data) -> Void
@@ -130,6 +131,8 @@ public final class AppleRemotePacketLoggerClient: @unchecked Sendable {
     private var createdAuthorizationRule = false
     private var authorizationAttempted = false
     private var didEmitAuthorized = false
+    private var authorizationRuleSealed = false
+    private var authorizationRuleSealing = false
     private var trafficWindowStartedAt: UInt64 = 0
     private var trafficBytes = 0
     private var trafficPackets = 0
@@ -139,6 +142,7 @@ public final class AppleRemotePacketLoggerClient: @unchecked Sendable {
         callbackQueue: DispatchQueue,
         allowsPacketAsAuthorization: Bool = false,
         requiresPreparedAuthorizationRule: Bool = false,
+        sealsAfterServerAcceptance: Bool = false,
         sealAuthorizationRight: @escaping (@escaping (Bool) -> Void) -> Void = { completion in
             completion(true)
         },
@@ -149,6 +153,7 @@ public final class AppleRemotePacketLoggerClient: @unchecked Sendable {
         self.stateQueue = stateQueue
         self.callbackQueue = callbackQueue
         self.requiresPreparedAuthorizationRule = requiresPreparedAuthorizationRule
+        self.sealsAfterServerAcceptance = sealsAfterServerAcceptance
         self.allowsPacketAsAuthorization = allowsPacketAsAuthorization
         self.sealAuthorizationRight = sealAuthorizationRight
         self.onPacket = onPacket
@@ -186,6 +191,8 @@ public final class AppleRemotePacketLoggerClient: @unchecked Sendable {
         let activeGeneration = generation
         authorizationAttempted = false
         didEmitAuthorized = false
+        authorizationRuleSealed = false
+        authorizationRuleSealing = false
         resetTrafficBudget()
         state = .connecting
 
@@ -250,6 +257,12 @@ public final class AppleRemotePacketLoggerClient: @unchecked Sendable {
             authorizationProgress(.granted)
             authorization = grant.reference
             createdAuthorizationRule = grant.createdRule
+            if sealsAfterServerAcceptance {
+                // bluetoothd checks the rule definition after importing the
+                // external form. Do not remove it before that check finishes.
+                sendAuthorizationExternalForm(generation: resultGeneration)
+                return
+            }
             sealAuthorizationRight { [weak self] sealed in
                 self?.stateQueue.async { [weak self] in
                     guard let self,
@@ -262,6 +275,7 @@ public final class AppleRemotePacketLoggerClient: @unchecked Sendable {
                         return
                     }
                     self.authorizationProgress(.sealed)
+                    self.authorizationRuleSealed = true
                     self.sendAuthorizationExternalForm(generation: resultGeneration)
                 }
             }
@@ -360,7 +374,7 @@ public final class AppleRemotePacketLoggerClient: @unchecked Sendable {
                 state = .waitingForAuthorization
                 emit(.requiresAuthorization)
             } else {
-                markAuthorized()
+                _ = markAuthorized()
             }
             return
         }
@@ -400,15 +414,34 @@ public final class AppleRemotePacketLoggerClient: @unchecked Sendable {
             ))
             return
         }
-        markAuthorized()
+        guard markAuthorized() else { return }
         onPacket(packet)
     }
 
-    private func markAuthorized() {
+    @discardableResult
+    private func markAuthorized() -> Bool {
+        if sealsAfterServerAcceptance, !authorizationRuleSealed {
+            guard !authorizationRuleSealing else { return false }
+            authorizationRuleSealing = true
+            let acceptedGeneration = generation
+            sealAuthorizationRight { [weak self] sealed in
+                self?.stateQueue.async { [weak self] in
+                    guard let self, self.generation == acceptedGeneration,
+                          self.state == .authorizing || self.state == .connecting else { return }
+                    guard sealed else { self.fail(.authorizationRuleSealFailed); return }
+                    self.authorizationRuleSealed = true
+                    self.authorizationRuleSealing = false
+                    self.authorizationProgress(.sealed)
+                    _ = self.markAuthorized()
+                }
+            }
+            return false
+        }
         state = .streaming
-        guard !didEmitAuthorized else { return }
+        guard !didEmitAuthorized else { return true }
         didEmitAuthorized = true
         emit(.authorized)
+        return true
     }
 
     private func fail(_ failure: Failure) {

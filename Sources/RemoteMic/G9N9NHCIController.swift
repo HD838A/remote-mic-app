@@ -93,6 +93,7 @@ final class G9N9NHCIController {
         let client = AppleRemotePacketLoggerClient(
             stateQueue: queue, callbackQueue: .main,
             requiresPreparedAuthorizationRule: true,
+            sealsAfterServerAcceptance: true,
             sealAuthorizationRight: { configuration.sealAuthorizationRight(completion: $0) },
             onPacket: { [weak self] blob in
                 guard let self else { return }
@@ -127,7 +128,12 @@ final class G9N9NHCIController {
             onAuthorizationProgress: { [weak self] progress in
                 guard let self, self.enabled, self.generation == attempt else { return }
                 AppLogger.shared.write("G9N9N HCI AUTH phase=\(progress.rawValue)")
-                if progress == .submitted { self.status("waiting_for_stream") }
+                if progress == .submitted {
+                    self.status("waiting_for_stream")
+                    // Give a quiet Bluetooth session one target-only ATT read;
+                    // it can produce the first authenticated live-stream packet.
+                    self.requestIdentityRead?()
+                }
             },
             onEvent: { [weak self] event in
                 guard let self, self.enabled, self.generation == attempt else { return }

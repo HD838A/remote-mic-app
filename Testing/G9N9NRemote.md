@@ -69,3 +69,10 @@ HCI通道复用宿主现有PacketLogger内存客户端及签名辅助组件，AT
 公开参考的legacy按键表和attribute `0x002B` 只是候选，不能由代码覆盖宣称全部键通过。
 公开参考：[同型号的macOS限制](https://github.com/anyshu/vokie-plugin-chromecast-remote/blob/main/spec/hid-macos-limitations.md)、
 [HCI按键方案](https://github.com/anyshu/vokie-plugin-chromecast-remote/blob/main/spec/hci-button-source.md)。
+
+
+HCI授权交接补充：macOS 27的系统服务在导入external form之后仍查询授权数据库并验证规则。
+G9严格路径必须先取得实际grantedRights、提交凭证，收到服务的RequiresAuth=false或合法packet后，
+再恢复临时强规则并对上层宣布ready；恢复失败不交付数据。不能在提交之前删除规则，
+否则会出现客户端granted/sealed/submitted、系统Error authenticating、无packet的断层。
+超时/停止仍释放原lease恢复原配置；Apple旧音频路径保留原默认交接顺序，需独立回归。
