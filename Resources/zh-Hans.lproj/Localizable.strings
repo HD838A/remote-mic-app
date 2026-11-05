@@ -1423,3 +1423,6 @@
 "g9n9n.pairing.wake" = "按一下遥控器上的任意键唤醒。";
 "g9n9n.pairing.connect" = "在系统蓝牙设置中连接 Chromecast Remote，然后返回此处等待就绪。";
 "g9n9n.controls.detail" = "在 G9N9N 遥控器上按下三个不同的普通按键，例如方向、确定和返回。";
+"g9n9n.connection.learn_help" = "已收到遥控器报告，但此按键尚未识别。可以先识别确定键，结束后再按一次确定键完成检查。";
+"g9n9n.connection.learn_select" = "识别确定键";
+"g9n9n.connection.learn_waiting" = "请在 15 秒内短按一次遥控器中间的确定键。";

@@ -1424,3 +1424,6 @@
 "g9n9n.pairing.wake" = "Press any remote button to wake it.";
 "g9n9n.pairing.connect" = "Connect Chromecast Remote in Bluetooth settings, then return here and wait for ready.";
 "g9n9n.controls.detail" = "Press three different ordinary buttons on your G9N9N remote, such as a direction, Select and Back.";
+"g9n9n.connection.learn_help" = "A remote report arrived, but this button is not recognized yet. Learn Select, then press Select again to verify it.";
+"g9n9n.connection.learn_select" = "Learn Select button";
+"g9n9n.connection.learn_waiting" = "Press the center Select button within 15 seconds.";

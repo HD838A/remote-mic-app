@@ -8,6 +8,7 @@ final class G9N9NHIDMonitor {
     var restoreNativeInput: (() -> Void)?
     var onEvent: ((ChromecastRemoteControlEvent) -> Void)?
     var onPresence: ((Bool) -> Void)?
+    var onUnmappedInput: (() -> Void)?
     var onLearningChange: ((String?) -> Void)?
     var onLog: ((String) -> Void)?
     private var manager: IOHIDManager?
@@ -18,10 +19,15 @@ final class G9N9NHIDMonitor {
     private(set) var isPresent = false
     private var pressed = Set<ChromecastRemoteControl>()
     private var sequence = 0
+    private var reportState = G9N9NHIDReportState()
+    private var invalidReports = 0
+    private var observedReportIDs = Set<UInt32>()
+    private var reportedUnmapped = false
     private var access = IOHIDCheckAccess(kIOHIDRequestTypeListenEvent)
     private var learning: ChromecastRemoteControl? {
         didSet { onLearningChange?(learning?.rawValue) }
     }
+    private var learningUsages = Set<G9N9NHIDUsage>()
     private var learningTimeout: DispatchWorkItem?
     private var learned: [String: String]
     private let defaults: UserDefaults
@@ -75,12 +81,14 @@ final class G9N9NHIDMonitor {
 
     func learn(_ control: ChromecastRemoteControl) {
         cancelPressed(reason: "learning")
+        learningUsages.removeAll()
         learning = control
         learningTimeout?.cancel()
         if running { updateNativeInput() }
         let timeout = DispatchWorkItem { [weak self] in
             guard let self else { return }
             self.learning = nil
+            self.learningUsages.removeAll()
             self.onLog?("G9N9N HID learning=timed_out")
             if self.running { self.updateNativeInput() }
         }
@@ -91,6 +99,7 @@ final class G9N9NHIDMonitor {
     func cancelLearning() {
         guard learning != nil else { return }
         learning = nil
+        learningUsages.removeAll()
         learningTimeout?.cancel()
         learningTimeout = nil
         if running { updateNativeInput() }
@@ -101,6 +110,7 @@ final class G9N9NHIDMonitor {
         learningTimeout?.cancel()
         learningTimeout = nil
         learning = nil
+        learningUsages.removeAll()
         close()
     }
 
@@ -121,9 +131,11 @@ final class G9N9NHIDMonitor {
             kIOHIDManufacturerKey: "zhuhai_jieli",
         ] as CFDictionary)
         let context = Unmanaged.passUnretained(self).toOpaque()
-        IOHIDManagerRegisterInputValueCallback(manager, { context, result, _, value in
-            guard let context, result == kIOReturnSuccess else { return }
-            Unmanaged<G9N9NHIDMonitor>.fromOpaque(context).takeUnretainedValue().receive(value)
+        IOHIDManagerRegisterInputReportWithTimeStampCallback(manager, { context, result, sender, _, reportID, report, length, _ in
+            guard let context, let sender, result == kIOReturnSuccess, length > 0, length <= 64 else { return }
+            let monitor = Unmanaged<G9N9NHIDMonitor>.fromOpaque(context).takeUnretainedValue()
+            let device = Unmanaged<IOHIDDevice>.fromOpaque(sender).takeUnretainedValue()
+            monitor.receive(reportID: reportID, data: Data(bytes: report, count: length), device: device)
         }, context)
         IOHIDManagerRegisterDeviceMatchingCallback(manager, { context, result, _, _ in
             guard let context, result == kIOReturnSuccess else { return }
@@ -153,6 +165,10 @@ final class G9N9NHIDMonitor {
         isNativeMappingPrepared = false
         restoreNativeInput?()
         presence(false)
+        observedReportIDs.removeAll()
+        reportedUnmapped = false
+        if invalidReports > 0 { onLog?("G9N9N HID REPORT phase=completed invalid_reports=\(invalidReports)") }
+        invalidReports = 0
     }
 
     private func presence(_ value: Bool) {
@@ -175,6 +191,7 @@ final class G9N9NHIDMonitor {
 
     private var nativeSources: [UInt64] {
         var sources = Set(RemoteNativeKeyMapper.mappings.map(\.source))
+        for usage: UInt64 in 0xE0...0xE7 { sources.insert(UInt64(7) << 32 | usage) }
         for page: UInt32 in [7, 12] {
             for usage: UInt32 in [0x0E, 0x0F, 0x11, 0x28, 0x29, 0x30, 0x40, 0x41, 0x42,
                 0x43, 0x44, 0x45, 0x4A, 0x4F, 0x50, 0x51, 0x52, 0x66, 0xE2, 0xE9, 0xEA, 0x223, 0x224] {
@@ -186,44 +203,65 @@ final class G9N9NHIDMonitor {
         for key in learned.keys {
             let parts = key.split(separator: ":")
             if parts.count == 2, let page = UInt64(parts[0]), let usage = UInt64(parts[1]),
-               [7, 12].contains(page), usage > 0, usage < 0xFFFF {
+               [7, 9, 12].contains(page), usage > 0, usage < 0xFFFF {
                 sources.insert(page << 32 | usage)
             }
         }
         return sources.sorted()
     }
 
-    private func receive(_ value: IOHIDValue) {
-        let element = IOHIDValueGetElement(value)
-        let device = IOHIDElementGetDevice(element)
-        guard IOHIDDeviceGetProperty(device, kIOHIDManufacturerKey as CFString) as? String == "zhuhai_jieli" else { return }
-        let page = IOHIDElementGetUsagePage(element)
-        let usage = IOHIDElementGetUsage(element)
-        guard page == 7 || page == 12, usage > 0, usage < 0xFFFF else { return }
-        let key = "\(page):\(usage)"
-        let down = IOHIDValueGetIntegerValue(value) != 0
-        if let learning {
-            guard down, isNativeMappingPrepared else { return }
-            learned = learned.filter { $0.value != learning.rawValue }
-            learned[key] = learning.rawValue
-            defaults.set(learned, forKey: Self.key)
-            self.learning = nil
-            learningTimeout?.cancel()
-            onLog?("G9N9N HID learning=completed control=\(learning.rawValue)")
-            DispatchQueue.main.async { [weak self] in
-                guard let self, self.running else { return }
-                self.updateNativeInput()
+    private func receive(reportID: UInt32, data: Data, device: IOHIDDevice) {
+        guard running, IOHIDDeviceGetProperty(device, kIOHIDManufacturerKey as CFString) as? String == "zhuhai_jieli" else { return }
+        if observedReportIDs.count < 16, observedReportIDs.insert(reportID).inserted {
+            onLog?("G9N9N HID REPORT phase=first_received report_id=\(reportID) bytes=\(data.count)")
+        }
+        let effectiveID = G9N9NHIDReport.effectiveReportID(reported: reportID, data: data)
+        guard effectiveID == 1 || effectiveID == 2 else { return }
+        guard let snapshot = reportState.consume(reportID: reportID, data: data) else {
+            invalidReports = min(1_000_000, invalidReports + 1)
+            if invalidReports == 1 {
+                onLog?("G9N9N HID REPORT phase=rejected reason=invalid_layout report_id=\(reportID) bytes=\(data.count)")
             }
+            cancelPressed(reason: "invalid_report")
             return
         }
-        guard let control = learned[key].flatMap(ChromecastRemoteControl.init(rawValue:))
-                ?? Self.control(page: page, usage: usage) else { return }
-        if down {
-            guard pressed.insert(control).inserted else { return }
-        } else {
-            guard pressed.remove(control) != nil else { return }
+        if let learning {
+            guard isNativeMappingPrepared else { return }
+            learningUsages.formUnion(snapshot.newlyPressed)
+            guard snapshot.pressed.isEmpty,
+                  let usage = G9N9NHIDReport.learningCandidate(in: learningUsages) else { return }
+            learned = learned.filter { $0.value != learning.rawValue }
+            learned[usage.key] = learning.rawValue
+            defaults.set(learned, forKey: Self.key)
+            self.learning = nil
+            learningUsages.removeAll()
+            learningTimeout?.cancel()
+            onLog?("G9N9N HID learning=completed control=\(learning.rawValue)")
+            updateNativeInput()
+            // Learning consumes the complete press/release, including modifier
+            // chords. A fresh press verifies the new binding.
+            return
         }
-        emit(control, phase: down ? .began : .ended)
+        if learning != nil { return }
+        var controls = Set<ChromecastRemoteControl>()
+        for usage in snapshot.pressed {
+            if let control = learned[usage.key].flatMap(ChromecastRemoteControl.init(rawValue:))
+                ?? Self.control(page: usage.page, usage: usage.usage) {
+                controls.insert(control)
+            } else if !reportedUnmapped {
+                reportedUnmapped = true
+                onLog?("G9N9N HID REPORT phase=decoded result=unmapped_control")
+                onUnmappedInput?()
+            }
+        }
+        for control in pressed.subtracting(controls).sorted(by: { $0.rawValue < $1.rawValue }) {
+            emit(control, phase: .ended)
+        }
+        for control in controls.subtracting(pressed).sorted(by: { $0.rawValue < $1.rawValue }) {
+            onLog?("G9N9N HID CONTROL phase=began control=\(control.rawValue)")
+            emit(control, phase: .began)
+        }
+        pressed = controls
     }
 
     private func emit(_ control: ChromecastRemoteControl, phase: ChromecastRemoteControlPhase, reason: String? = nil) {
@@ -236,5 +274,6 @@ final class G9N9NHIDMonitor {
             emit(control, phase: .cancelled, reason: reason)
         }
         pressed.removeAll()
+        reportState.reset()
     }
 }

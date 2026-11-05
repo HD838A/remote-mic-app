@@ -255,6 +255,7 @@ final class ChromecastFeatureIntegration {
         #endif
     }
 
+    var onG9UnmappedInput: (() -> Void)?
     var onG9LearningChange: ((String?) -> Void)?
 
     /// 链路状态变化。宿主据此刷新设置页与日志。
@@ -324,6 +325,7 @@ final class ChromecastFeatureIntegration {
         g9.onLog = { [weak self] in self?.onLog?($0) }
         g9.hid.prepareNativeInput = { [weak self] in self?.prepareNativeInput?($0) == true }
         g9.hid.restoreNativeInput = { [weak self] in self?.restoreNativeInput?() }
+        g9.hid.onUnmappedInput = { [weak self] in self?.onG9UnmappedInput?() }
         g9.hid.onLearningChange = { [weak self] in self?.onG9LearningChange?($0) }
         g9.hid.onEvent = { [weak self] in self?.onControlEvent?($0) }
         g9.hid.onPresence = { [weak self] in self?.onHIDPresenceChange?($0) }

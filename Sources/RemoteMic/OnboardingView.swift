@@ -1646,6 +1646,23 @@ struct OnboardingView: View {
                 compact: true
             )
 
+            if settings.onboardingControlSource == .g9n9nRemote,
+               model.g9HasUnmappedInput, observedRemoteButtons.isEmpty {
+                Text("g9n9n.connection.learn_help")
+                    .font(.system(size: 13))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                if model.g9LearningControlID != nil {
+                    Text("g9n9n.connection.learn_waiting")
+                        .font(.system(size: 13, weight: .semibold))
+                } else {
+                    onboardingActionButton(id: "g9n9n.learn_select") { model.learnG9Control(.select) } label: {
+                        Text("g9n9n.connection.learn_select")
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+
             if shouldShowSecureInputWarning {
                 secureInputWarningCard
             }
@@ -4719,7 +4736,9 @@ struct OnboardingView: View {
             context: diagnosticContext,
             voiceAttempt: diagnosticVoiceAttempt,
             bluetoothStatus: model.connectionStatus.key,
-            buttonStatus: model.hidStatus.key,
+            buttonStatus: settings.onboardingControlSource == .g9n9nRemote
+                ? (observedRemoteButtons.isEmpty ? "g9n9n.hid.waiting_for_control" : "g9n9n.hid.control_observed")
+                : model.hidStatus.key,
             audioStatus: model.audioStatus.key,
             events: settings.firstUseEvents,
             appLanguage: localization.locale.identifier,
