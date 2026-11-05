@@ -83,8 +83,8 @@ scripts/verify-release-baseline.sh --require <本次要发布的合并提交>
 2026-11-05 的 `v2.0.0-local.284` 就是从旧功能分支 `5107cc62` 打的，比当时的 `origin/main 01606521` 少 11 个合并提交（含 #881 卡片修复），而发布说明手写了 `01606521`，两者对不上；事后靠 DMG 摘要才追到打包 worktree。因此另外三条同时成立：
 
 - **构建来源写进产物**：`build-app.sh` 往 App 的 `Info.plist` 注入 `SayAllSourceCommit`（实际 HEAD）与 `SayAllBaselineCommit`（构建时的 `origin/main`）。
-- **发布前从产物读回**：private-draft-release skill 在上传前读取 App 的 `SayAllSourceCommit`，与当前构建树比对；不一致或缺失即停止。
-- **发布说明的 `Commit：` 行由脚本生成**，写实际构建树与基线，不得手写 `origin/main` 的 SHA。
+- **发布前从产物读回**：`scripts/verify-release-asset-source.sh --asset <DMG/PKG/App> --expected-commit <SHA>` 打开产物、读取 App 的 `SayAllSourceCommit` 并与构建树比对；不一致或缺失即停止。private-draft-release skill 在上传前对每个 macOS 资产调用它。
+- **发布说明的 `Commit：` 行由脚本生成**：`scripts/render-private-draft-notes.sh` 按实际构建树与基线改写该行（保留第一个 `；` 之后的内容），不得手写 `origin/main` 的 SHA。
 
 ### 安装器隐私政策同步
 

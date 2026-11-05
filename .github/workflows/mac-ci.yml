@@ -146,6 +146,14 @@ jobs:
         if: needs.classify_changes.outputs.release_checks == 'true'
         run: ./scripts/test-verify-release-baseline.sh
 
+      - name: Verify release asset source check
+        if: needs.classify_changes.outputs.release_checks == 'true'
+        run: ./scripts/test-verify-release-asset-source.sh
+
+      - name: Verify release notes rendering
+        if: needs.classify_changes.outputs.release_checks == 'true'
+        run: ./scripts/test-render-private-draft-notes.sh
+
       - name: Run Swift tests
         if: needs.classify_changes.outputs.product_change == 'true'
         run: swift test --disable-keychain --skip BuildSigningTests
