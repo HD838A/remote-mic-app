@@ -101,7 +101,7 @@ printf 'APPL????' > "$APP/Contents/PkgInfo"
 /usr/libexec/PlistBuddy -c "Add :SayAllSourceCommit string $SOURCE_COMMIT" "$APP/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Add :SayAllSourceState string $DIRTY" "$APP/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Add :SayAllPublicG9N9N bool $([[ "$PUBLIC_MODE" == 1 ]] && echo true || echo false)" "$APP/Contents/Info.plist"
-codesign --force --deep --sign "$SIGNING_IDENTITY" "$APP" >/dev/null 2>&1
+codesign --force --deep --preserve-metadata=identifier --sign "$SIGNING_IDENTITY" "$APP" >/dev/null 2>&1
 
 # 单实例锁与 bundle id 无关，替换前必须先退出正在运行的实例。
 pkill -f "MacOS/RemoteMic" 2>/dev/null || true
@@ -115,7 +115,7 @@ else
   cp -R "$APP" "$FALLBACK_DIR/SayAll.app"
   FINAL="$FALLBACK_DIR/SayAll.app"
 fi
-codesign --force --deep --sign "$SIGNING_IDENTITY" "$FINAL" >/dev/null 2>&1
+codesign --force --deep --preserve-metadata=identifier --sign "$SIGNING_IDENTITY" "$FINAL" >/dev/null 2>&1
 echo "$NEXT_BUILD" > "$STATE"
 echo "==> $FINAL (build $NEXT_BUILD, source $SOURCE_COMMIT, $DIRTY)"
 open "$FINAL"
