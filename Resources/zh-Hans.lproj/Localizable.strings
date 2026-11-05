@@ -1337,7 +1337,8 @@
 "configuration.import.cancel" = "取消";
 
 /* Mac microphone: explicit, per-session capture. */
-"audio.mac_microphone.input" = "输入设备";
+"audio.mac_microphone.input" = "Mac 麦克风";
+"audio.mac_microphone.fallback_help" = "备用收音：不使用遥控器时可直接对 Mac 麦克风说话，遥控器收音与此设置无关。";
 "audio.mac_microphone.choose" = "选择 Mac 麦克风";
 "audio.mac_microphone.start" = "用 Mac 麦克风说话";
 "audio.mac_microphone.stop" = "停用 Mac 麦克风说话";

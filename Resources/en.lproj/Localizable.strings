@@ -1338,7 +1338,8 @@
 "configuration.import.cancel" = "Cancel";
 
 /* Mac microphone: explicit, per-session capture. */
-"audio.mac_microphone.input" = "Input device";
+"audio.mac_microphone.input" = "Mac Microphone";
+"audio.mac_microphone.fallback_help" = "Fallback input: talk into the Mac mic when the remote isn't in use. Remote audio is unaffected.";
 "audio.mac_microphone.choose" = "Choose a Mac microphone";
 "audio.mac_microphone.start" = "Speak with Mac microphone";
 "audio.mac_microphone.stop" = "Stop using Mac microphone";

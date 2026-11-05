@@ -1691,6 +1691,10 @@ struct SettingsView: View {
                 .disabled(model.macMicrophoneState == .stopping)
                 .fixedSize()
             }
+            Text("audio.mac_microphone.fallback_help")
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
             if case .failed = model.macMicrophoneState {
                 Text(LocalizedStringKey(model.macMicrophoneState.statusKey))
                     .font(.system(size: 12))
