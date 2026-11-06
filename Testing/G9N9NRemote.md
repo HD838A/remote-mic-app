@@ -3,6 +3,15 @@
 适用：Jieli G9N9N、macOS、公开构建。遵守 [硬件合同](HardwareCompatibilityContract.md) 与
 [语音合同](HardwareVoiceAudioContract.md)。构建和协议测试不替代真机结论。
 
+## 当前本机处置（2026-11-06）
+
+build24保留当前实现。用户确认样机实体右键不够灵敏，明确结束右键排查；最终本地对照页显示
+原始Right报告11次、页面Right事件11次，光标30→41，每次逐格右移。该样本不替代全部跨应用稳定性证明，
+也不独立证明所有历史失效的硬件原因；没有为此追加软件修复。详细失败、计时和最终处置见
+[右键现场结案](../Bugs/2026-11-06-g9n9n-right-input-observation.md)。
+本机左右已恢复为无修饰符key123/key124的自定义快捷键；信源Control+Space切中英文、连续语音的用户确认保留。
+临时计数页及服务已关闭，Deskflow保持运行。以下含早期构建的验收过程，跨型号、Windows、私有后端等未验矩阵仍保持未完成。
+
 ## 实现边界
 
 - G9N9N 与原装 Google 遥控器共用 VID/PID，不能以名字或 VID/PID 判定型号。
