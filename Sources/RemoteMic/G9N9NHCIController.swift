@@ -6,6 +6,8 @@ import AppleRemotePacketLogger
 /// is owned by the signed root helper; no PacketLogger process or capture file.
 final class G9N9NHCIController {
     var onControl: ((ChromecastRemoteControlEvent) -> Void)?
+    var onLearningChange: ((String?) -> Void)?
+    var onLearningFeedback: ((String) -> Void)?
     var onStatus: ((String) -> Void)?
     var requestIdentityRead: (() -> Void)?
     private let queue = DispatchQueue(label: "sayall.g9n9n.hci", qos: .userInitiated)
@@ -21,7 +23,69 @@ final class G9N9NHCIController {
     private var reportedPackets = false
     private var reportedAttributes = Set<UInt16>()
     private var identityWindow = G9N9NHCIIdentityWindow()
+    private var identitySerial: Data?
+    private var learningTimeout: DispatchWorkItem?
+    private var learningAttempt = 0
+    private let defaults: UserDefaults
+    private static let learnedKey = "g9n9n.hci.learned.v1"
     private var streamReady = false
+
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        let stored = defaults.dictionary(forKey: Self.learnedKey) as? [String: String] ?? [:]
+        if stored.count <= 32 {
+            var mappings: [UInt16: ChromecastRemoteControl] = [:]
+            for (key, value) in stored {
+                if let usage = UInt16(key), let control = ChromecastRemoteControl(rawValue: value) {
+                    mappings[usage] = control
+                }
+            }
+            parser.setLearnedMappings(mappings)
+        }
+    }
+
+    func learn(_ control: ChromecastRemoteControl) {
+        cancelLearning()
+        guard enabled, streamReady else { onLearningFeedback?("not_ready"); return }
+        cancelControls(reason: "learning")
+        learningAttempt += 1
+        let learnAttempt = learningAttempt
+        let attempt = generation
+        onLearningChange?(control.rawValue)
+        onLearningFeedback?("started")
+        queue.async { [weak self] in
+            guard let self else { return }
+            let accepted = self.parser.beginLearning(control)
+            DispatchQueue.main.async { [weak self] in
+                guard let self, self.generation == attempt, self.learningAttempt == learnAttempt else { return }
+                guard accepted else { self.cancelLearning(); self.onLearningFeedback?("not_ready"); return }
+                let timeout = DispatchWorkItem { [weak self] in
+                    guard let self, self.learningAttempt == learnAttempt else { return }
+                    self.queue.async { [weak self] in
+                        guard let self else { return }
+                        let reports = self.parser.learningReports
+                        self.parser.cancelLearning()
+                        DispatchQueue.main.async { [weak self] in
+                            guard let self, self.learningAttempt == learnAttempt else { return }
+                            self.onLearningChange?(nil)
+                            self.onLearningFeedback?(reports == 0 ? "no_report" : "incomplete")
+                            AppLogger.shared.write("G9N9N HCI LEARNING result=timed_out reports=\(reports)")
+                        }
+                    }
+                }
+                self.learningTimeout = timeout
+                DispatchQueue.main.asyncAfter(deadline: .now() + 15, execute: timeout)
+            }
+        }
+    }
+
+    func cancelLearning() {
+        learningAttempt += 1
+        learningTimeout?.cancel()
+        learningTimeout = nil
+        onLearningChange?(nil)
+        queue.async { [weak self] in self?.parser.cancelLearning() }
+    }
 
     func start() {
         guard !enabled, !failed else { return }
@@ -56,9 +120,11 @@ final class G9N9NHCIController {
 
     func stop() {
         guard enabled || configuration != nil else { return }
+        cancelLearning()
         enabled = false
         streamReady = false
         identityWindow.invalidate()
+        identitySerial = nil
         generation += 1
         cancelControls(reason: "capture_stopped")
         let oldClient = client
@@ -78,6 +144,8 @@ final class G9N9NHCIController {
     }
 
     func identify(serial: Data) {
+        guard !identityWindow.hasIdentity || identitySerial != serial else { return }
+        identitySerial = serial
         let identityAttempt = identityWindow.begin()
         let attempt = generation
         queue.async { [weak self] in
@@ -95,6 +163,8 @@ final class G9N9NHCIController {
     }
 
     func disconnected() {
+        cancelLearning()
+        identitySerial = nil
         identityWindow.invalidate()
         cancelControls(reason: "remote_disconnected")
         queue.async { [weak self] in
@@ -118,6 +188,8 @@ final class G9N9NHCIController {
                     AppLogger.shared.write("G9N9N HCI PACKET phase=first_received")
                 }
                 let edges = self.parser.consume(blob)
+                let learnedKey = self.parser.takeLearnedKey()
+                let learnedMappings = learnedKey == nil ? nil : self.parser.learnedMappings
                 for (attribute, bytes) in self.parser.observedNotifications
                     where self.reportedAttributes.insert(attribute).inserted {
                     AppLogger.shared.write("G9N9N HCI NOTIFICATION phase=first_received attribute=\(attribute) bytes=\(bytes)")
@@ -128,7 +200,7 @@ final class G9N9NHCIController {
                 if firstBinding { self.reportedBinding = true }
                 // Unrelated Bluetooth traffic stays on the bounded parser queue;
                 // never enqueue a main-thread callback for every captured packet.
-                guard conflict || firstBinding || !edges.isEmpty else { return }
+                guard conflict || firstBinding || !edges.isEmpty || learnedKey != nil else { return }
                 DispatchQueue.main.async { [weak self] in
                     guard let self, self.enabled, self.generation == attempt else { return }
                     if conflict {
@@ -138,6 +210,14 @@ final class G9N9NHCIController {
                         return
                     }
                     if firstBinding { self.status("identity_verified") }
+                    if let learnedKey, let learnedMappings {
+                        self.learningTimeout?.cancel()
+                        self.learningTimeout = nil
+                        self.defaults.set(Dictionary(uniqueKeysWithValues: learnedMappings.map { (String($0.key), $0.value.rawValue) }), forKey: Self.learnedKey)
+                        self.onLearningChange?(nil)
+                        self.onLearningFeedback?("completed")
+                        AppLogger.shared.write("G9N9N HCI LEARNING result=completed control=\(learnedKey.control.rawValue)")
+                    }
                     for edge in edges { self.deliver(edge) }
                 }
             },
@@ -232,10 +312,14 @@ final class G9N9NHCIController {
 /// The standalone source self-test has no SwiftPM diagnostic modules.
 final class G9N9NHCIController {
     var onControl: ((ChromecastRemoteControlEvent) -> Void)?
+    var onLearningChange: ((String?) -> Void)?
+    var onLearningFeedback: ((String) -> Void)?
     var onStatus: ((String) -> Void)?
     var requestIdentityRead: (() -> Void)?
     func start() { onStatus?("helper_unavailable") }
     func retry() { start() }
+    func learn(_ control: ChromecastRemoteControl) { onLearningFeedback?("not_ready") }
+    func cancelLearning() { onLearningChange?(nil) }
     func stop() {}
     func identify(serial: Data) {}
     func disconnected() {}

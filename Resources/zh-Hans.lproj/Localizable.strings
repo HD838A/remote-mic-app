@@ -1439,3 +1439,10 @@
 "g9n9n.hci.status.profile_required" = "系统诊断通道未就绪，已停止按键采集。";
 "g9n9n.hci.status.capture_failed" = "按键通道失败，正在恢复原配置。";
 "g9n9n.hci.status.waiting_for_stream" = "系统授权已取得，等待蓝牙数据通道就绪…";
+"g9n9n.mapping.learn_named" = "识别%@";
+"g9n9n.mapping.enable_actions" = "完成设置后启用自定义按键";
+"g9n9n.learning.started" = "请短按并松开所选实体键。";
+"g9n9n.learning.completed" = "已保存识别结果，请再按一次该键验证。";
+"g9n9n.learning.no_report" = "识别超时：没有收到这颗键的蓝牙报告。其他按键仍可使用。";
+"g9n9n.learning.incomplete" = "识别超时：收到了报告，但没有完整的单键按下和松开。";
+"g9n9n.learning.not_ready" = "按键通道尚未就绪，请先重试并唤醒遥控器。";

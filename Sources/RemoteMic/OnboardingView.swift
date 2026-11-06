@@ -1647,25 +1647,7 @@ struct OnboardingView: View {
             )
 
             if settings.onboardingControlSource == .g9n9nRemote {
-                VStack(alignment: .leading, spacing: 8) {
-                    Toggle("g9n9n.hci.enabled", isOn: Binding(
-                        get: { model.g9HCICaptureEnabled },
-                        set: { model.setG9HCIEnabled($0) }
-                    ))
-                    .toggleStyle(.switch)
-                    Text("g9n9n.hci.help")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Text(localization.text("g9n9n.hci.status." + model.g9HCIStatus))
-                        .font(.system(size: 13))
-                    if model.g9HCICaptureEnabled && ["helper_unavailable", "capture_failed", "profile_required"].contains(model.g9HCIStatus) {
-                        Button("g9n9n.hci.retry") {
-                            model.setG9HCIEnabled(false)
-                            model.setG9HCIEnabled(true)
-                        }
-                    }
-                }
+                g9HCIControls
             }
 
             if settings.onboardingControlSource == .g9n9nRemote,
@@ -1691,6 +1673,48 @@ struct OnboardingView: View {
 
             if !selectedControlConnected {
                 openBluetoothSettingsButton
+            }
+        }
+    }
+
+    private var g9HCIControls: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Toggle("g9n9n.hci.enabled", isOn: Binding(
+                get: { model.g9HCICaptureEnabled }, set: { model.setG9HCIEnabled($0) }
+            ))
+            .toggleStyle(.switch)
+            Text("g9n9n.hci.help")
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(localization.text("g9n9n.hci.status." + model.g9HCIStatus))
+                .font(.system(size: 13))
+            if model.g9HCICaptureEnabled && ["helper_unavailable", "capture_failed", "profile_required"].contains(model.g9HCIStatus) {
+                onboardingActionButton(id: "g9n9n.hci.retry") {
+                    model.setG9HCIEnabled(false)
+                    model.setG9HCIEnabled(true)
+                } label: { Text("g9n9n.hci.retry") }
+                .buttonStyle(.bordered)
+            }
+            if let controlID = model.g9LearningControlID,
+               let control = ChromecastRemoteControl(rawValue: controlID) {
+                Text(String(format: localization.text("g9n9n.mapping.learning"), control.remoteButton.displayName(using: localization)))
+                    .font(.system(size: 13, weight: .semibold))
+            } else if !model.g9LearningFeedback.isEmpty {
+                Text(localization.text("g9n9n.learning." + model.g9LearningFeedback))
+                    .font(.system(size: 13))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            HStack {
+                ForEach([ChromecastRemoteControl.right, .input], id: \.rawValue) { control in
+                    onboardingActionButton(id: "g9n9n.learn." + control.rawValue) {
+                        model.learnG9Control(control)
+                    } label: {
+                        Text(String(format: localization.text("g9n9n.mapping.learn_named"), control.remoteButton.displayName(using: localization)))
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(model.g9LearningControlID != nil)
+                }
             }
         }
     }
@@ -2287,6 +2311,15 @@ struct OnboardingView: View {
             Text(verbatim: localization.text(controlsDetailKey))
                 .font(.system(size: 14))
                 .foregroundStyle(.secondary)
+
+            if settings.onboardingControlSource == .g9n9nRemote {
+                g9HCIControls
+                Toggle("g9n9n.mapping.enable_actions", isOn: Binding(
+                    get: { settings.customMappingEnabled },
+                    set: { settings.customMappingEnabled = $0; model.applyHIDSettings() }
+                ))
+                    .toggleStyle(.switch)
+            }
 
             if shouldShowSecureInputWarning {
                 secureInputWarningCard

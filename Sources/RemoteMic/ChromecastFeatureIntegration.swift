@@ -231,12 +231,14 @@ final class ChromecastFeatureIntegration {
     func cancelG9Learning() {
         #if !canImport(SayAllChromecast)
         g9.hid.cancelLearning()
+        g9HCI.cancelLearning()
         #endif
     }
     func learnG9Control(_ control: ChromecastRemoteControl) {
         guard hardwareEnabled else { return }
         #if !canImport(SayAllChromecast)
-        g9.hid.learn(control)
+        if g9HCIEnabled { g9HCI.learn(control) }
+        else { g9.hid.learn(control) }
         #endif
     }
 
@@ -272,6 +274,7 @@ final class ChromecastFeatureIntegration {
 
     var onG9HCIStatus: ((String) -> Void)?
     var onG9UnmappedInput: (() -> Void)?
+    var onG9LearningFeedback: ((String) -> Void)?
     var onG9LearningChange: ((String?) -> Void)?
 
     /// 链路状态变化。宿主据此刷新设置页与日志。
@@ -347,6 +350,8 @@ final class ChromecastFeatureIntegration {
         g9HCI.requestIdentityRead = { [weak self] in self?.g9.requestHCIIdentityRead() }
         g9HCI.onControl = { [weak self] in self?.onControlEvent?($0) }
         g9HCI.onStatus = { [weak self] in self?.onG9HCIStatus?($0) }
+        g9HCI.onLearningChange = { [weak self] in self?.onG9LearningChange?($0) }
+        g9HCI.onLearningFeedback = { [weak self] in self?.onG9LearningFeedback?($0) }
         g9.onCapabilities = { [weak self] in self?.onDeclaredCapabilitiesChange?($0) }
         g9.onVoiceStart = { [weak self] in self?.onVoiceStart?() }
         g9.onVoiceStop = { [weak self] in self?.onVoiceStop?($0) }
@@ -355,7 +360,10 @@ final class ChromecastFeatureIntegration {
         g9.hid.prepareNativeInput = { [weak self] in self?.prepareNativeInput?($0) == true }
         g9.hid.restoreNativeInput = { [weak self] in self?.restoreNativeInput?() }
         g9.hid.onUnmappedInput = { [weak self] in self?.onG9UnmappedInput?() }
-        g9.hid.onLearningChange = { [weak self] in self?.onG9LearningChange?($0) }
+        g9.hid.onLearningChange = { [weak self] control in
+            guard let self, !self.g9HCIEnabled else { return }
+            self.onG9LearningChange?(control)
+        }
         g9.hid.onEvent = { [weak self] event in
             guard let self, !self.g9HCIEnabled else { return }
             self.onControlEvent?(event)
@@ -391,6 +399,7 @@ final class ChromecastFeatureIntegration {
         #if SAYALL_CHROMECAST_ENABLED && canImport(SayAllChromecast)
         feature.reconnect()
         #else
+        if g9HCIEnabled { g9HCI.retry() }
         g9.reconnect()
         #endif
     }

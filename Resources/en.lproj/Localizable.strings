@@ -1440,3 +1440,10 @@
 "g9n9n.hci.status.profile_required" = "The system diagnostic channel is not ready. Button capture has stopped.";
 "g9n9n.hci.status.capture_failed" = "The button channel failed. Configuration is being restored.";
 "g9n9n.hci.status.waiting_for_stream" = "System authorization granted; waiting for the Bluetooth stream…";
+"g9n9n.mapping.learn_named" = "Learn %@";
+"g9n9n.mapping.enable_actions" = "Enable custom buttons after setup";
+"g9n9n.learning.started" = "Press and release the selected physical button.";
+"g9n9n.learning.completed" = "Button learned and saved. Press it again to verify.";
+"g9n9n.learning.no_report" = "Learning timed out: no Bluetooth report arrived for this button. Other buttons remain available.";
+"g9n9n.learning.incomplete" = "Learning timed out: reports arrived, but no complete single-button press and release.";
+"g9n9n.learning.not_ready" = "The button channel is not ready. Retry it and wake the remote first.";

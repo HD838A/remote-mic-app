@@ -19,6 +19,10 @@ struct G9N9NHCIIdentityWindow {
 /// fresh DIS serial read matches the already admitted G9N9N connection. Neither
 /// the serial nor other devices' packets leave this parser or enter diagnostics.
 struct G9N9NHCIParser {
+    struct LearnedKey: Equatable {
+        let usage: UInt16
+        let control: ChromecastRemoteControl
+    }
     struct Edge: Equatable {
         let control: ChromecastRemoteControl
         let down: Bool
@@ -36,6 +40,46 @@ struct G9N9NHCIParser {
     private(set) var isBound = false
     private(set) var packetsSeen = 0
     private(set) var observedNotifications: [UInt16: Int] = [:]
+    private(set) var learnedMappings: [UInt16: ChromecastRemoteControl] = [:]
+    private var learning: ChromecastRemoteControl?
+    private var learningCandidate: UInt16?
+    private var learningRejected = false
+    private var learnedKey: LearnedKey?
+    private(set) var learningReports = 0
+
+    mutating func setLearnedMappings(_ mappings: [UInt16: ChromecastRemoteControl]) {
+        guard mappings.count <= 32 else { return }
+        learnedMappings.removeAll()
+        for usage in mappings.keys.sorted() where usage > 0 && usage <= 0x029C {
+            if let control = mappings[usage], !learnedMappings.values.contains(control) {
+                learnedMappings[usage] = control
+            }
+        }
+    }
+
+    mutating func beginLearning(_ control: ChromecastRemoteControl) -> Bool {
+        guard isBound, !identityConflict else { return false }
+        learning = control
+        learningCandidate = nil
+        learningRejected = false
+        learnedKey = nil
+        pressed = nil
+        learningReports = 0
+        return true
+    }
+
+    mutating func cancelLearning() {
+        learning = nil
+        learningCandidate = nil
+        learningRejected = false
+        learnedKey = nil
+        pressed = nil
+    }
+
+    mutating func takeLearnedKey() -> LearnedKey? {
+        defer { learnedKey = nil }
+        return learnedKey
+    }
 
     mutating func identify(serial: Data) {
         reset()
@@ -53,6 +97,8 @@ struct G9N9NHCIParser {
         identityConflict = false
         packetsSeen = 0
         observedNotifications.removeAll()
+        cancelLearning()
+        learningReports = 0
     }
 
     mutating func consume(_ blob: Data) -> [Edge] {
@@ -128,7 +174,25 @@ struct G9N9NHCIParser {
         // the report-array index exposed by macOS's virtual HID collection.
         guard report.count == 2 else { return [] }
         let usage = Self.le16(report, 0)
-        let next = Self.consumerControl(usage)
+        if let learning {
+            learningReports = min(1_000_000, learningReports + 1)
+            guard !learningRejected else { return [] }
+            if usage > 0, usage <= 0x029C {
+                // One Consumer array slot; reject a second different key rather
+                // than learning an ambiguous multi-button gesture.
+                if learningCandidate == nil || learningCandidate == usage {
+                    learningCandidate = usage
+                } else { learningRejected = true; learningCandidate = nil }
+            } else if usage == 0, let candidate = learningCandidate {
+                learnedMappings = learnedMappings.filter { $0.value != learning }
+                learnedMappings[candidate] = learning
+                learnedKey = LearnedKey(usage: candidate, control: learning)
+                self.learning = nil
+                learningCandidate = nil
+            }
+            return []
+        }
+        let next = learnedMappings[usage] ?? Self.consumerControl(usage)
         guard usage == 0 || next != nil else { return [] }
         guard next != pressed else { return [] }
         var edges: [Edge] = []
@@ -145,6 +209,7 @@ struct G9N9NHCIParser {
         isBound = false
         fragments.removeAll()
         observedNotifications.removeAll()
+        cancelLearning()
         return edges
     }
 

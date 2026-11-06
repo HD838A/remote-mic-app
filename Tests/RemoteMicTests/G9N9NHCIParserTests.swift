@@ -136,4 +136,43 @@ struct G9N9NHCIParserTests {
         #expect(feed(notification(7)).isEmpty)
         #expect(!parser.isBound)
     }
+
+    @Test func learnsUnknownConsumerOnlyAfterReleaseAndNeedsFreshPress() {
+        var parser = bound()
+        func feed(_ bytes: [UInt8], handle: UInt16 = 0x40) -> [G9N9NHCIParser.Edge] {
+            parser.consume(record(acl(Data([0x1B, 0x2B, 0]) + Data(bytes), handle: handle)))
+        }
+        let accepted = parser.beginLearning(.right)
+        #expect(accepted)
+        #expect(feed([0x46, 0]).isEmpty)
+        let noLearnedKey = parser.takeLearnedKey()
+        #expect(noLearnedKey == nil)
+        #expect(feed([0, 0]).isEmpty)
+        let learned = parser.takeLearnedKey()
+        #expect(learned == .init(usage: 0x46, control: .right))
+        #expect(feed([0x46, 0]) == [.init(control: .right, down: true)])
+        #expect(feed([0, 0]) == [.init(control: .right, down: false)])
+        parser.identify(serial: serial)
+        #expect(feed([0x46, 0]).isEmpty)
+        _ = parser.consume(record(acl(Data([0x0B]) + serial)))
+        #expect(feed([0x46, 0]) == [.init(control: .right, down: true)])
+    }
+
+    @Test func learningCannotConsumeOtherConnectionsOrAnAmbiguousChord() {
+        var parser = bound()
+        func feed(_ bytes: [UInt8], handle: UInt16 = 0x40) -> [G9N9NHCIParser.Edge] {
+            parser.consume(record(acl(Data([0x1B, 0x2B, 0]) + Data(bytes), handle: handle)))
+        }
+        let accepted = parser.beginLearning(.input)
+        #expect(accepted)
+        #expect(feed([0x83, 1], handle: 0x41).isEmpty)
+        #expect(parser.learningReports == 0)
+        #expect(feed([0x83, 1]).isEmpty)
+        #expect(feed([0x41, 0]).isEmpty)
+        #expect(feed([0, 0]).isEmpty)
+        let noLearnedKey = parser.takeLearnedKey()
+        #expect(noLearnedKey == nil)
+        parser.cancelLearning()
+        #expect(feed([0x41, 0]) == [.init(control: .select, down: true)])
+    }
 }

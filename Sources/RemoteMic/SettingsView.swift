@@ -1904,6 +1904,11 @@ struct SettingsView: View {
                 .toggleStyle(.switch)
                 Text(localization.text("g9n9n.hci.status." + model.g9HCIStatus))
                     .font(.system(size: 13))
+                if !model.g9LearningFeedback.isEmpty {
+                    Text(localization.text("g9n9n.learning." + model.g9LearningFeedback))
+                        .font(.system(size: 13))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 Text("g9n9n.mapping.help")
                     .font(.system(size: 13))
                     .foregroundStyle(.secondary)

@@ -537,6 +537,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     @Published private(set) var g9HCICaptureEnabled = UserDefaults.standard.bool(forKey: "g9n9n.hci.enabled")
     @Published private(set) var g9HCIStatus = "disabled"
     @Published private(set) var g9HasUnmappedInput = false
+    @Published private(set) var g9LearningFeedback = ""
     @Published private(set) var g9LearningControlID: String?
     @Published private(set) var activeChromecastControlIDs = Set<String>()
     @Published private(set) var lastRemoteButtonPress: RemoteButton?
@@ -1170,6 +1171,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         // 否则最早几帧会落在还没有出口的时刻（首字丢失）。
         chromecastFeature.onG9HCIStatus = { [weak self] in self?.g9HCIStatus = $0 }
         chromecastFeature.onG9UnmappedInput = { [weak self] in self?.g9HasUnmappedInput = true }
+        chromecastFeature.onG9LearningFeedback = { [weak self] in self?.g9LearningFeedback = $0 }
         chromecastFeature.onG9LearningChange = { [weak self] in self?.g9LearningControlID = $0 }
         chromecastFeature.onStatusChange = { [weak self] status in
             self?.handleChromecastStatusChange(status)
