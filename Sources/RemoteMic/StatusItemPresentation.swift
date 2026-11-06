@@ -120,3 +120,54 @@ enum StatusItemPresentation: String, Equatable {
         return image
     }
 }
+
+@MainActor
+enum StatusMenuBatterySection {
+    static let itemIdentifier = NSUserInterfaceItemIdentifier("remoteBattery")
+
+    static func update(
+        in menu: NSMenu, before anchor: NSMenuItem,
+        profiles: [RemoteDeviceProfile], connectedIDs: Set<UUID>,
+        levels: [UUID: Int], powerStates: [UUID: RemotePowerState],
+        localization: LocalizationStore
+    ) {
+        guard anchor.menu === menu else { return }
+        let connected = profiles.filter { connectedIDs.contains($0.id) }
+        let titles = connected.compactMap { profile -> String? in
+            let level = levels[profile.id]
+            let power = powerStates[profile.id]
+            guard RemoteBatteryPresentationPolicy.shouldShowBattery(
+                model: profile.model, level: level, powerState: power
+            ) else { return nil }
+
+            let value: String
+            if let level {
+                value = "\(level)%"
+            } else if power == .charging {
+                value = localization.text("remote.device.power.charging")
+            } else if power == .externalPower {
+                value = localization.text("remote.device.power.external")
+            } else {
+                value = localization.text("common.value.unknown")
+            }
+            if connected.count == 1 {
+                return LocalizedMessage("menu.remote_battery", arguments: [value]).text(using: localization)
+            }
+            let name = RemoteDeviceNamePolicy.displayName(
+                for: profile, among: profiles, defaultName: localization.text(profile.model.localizationKey)
+            )
+            return LocalizedMessage("menu.named_remote_battery", arguments: [name, value]).text(using: localization)
+        }
+
+        let items = menu.items.filter { $0.identifier == itemIdentifier }
+        guard items.map(\.title) != titles else { return }
+        items.forEach(menu.removeItem)
+        let index = menu.index(of: anchor)
+        for (offset, title) in titles.enumerated() {
+            let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+            item.identifier = itemIdentifier
+            item.isEnabled = false
+            menu.insertItem(item, at: index + offset)
+        }
+    }
+}

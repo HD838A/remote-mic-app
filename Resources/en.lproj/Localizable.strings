@@ -598,6 +598,8 @@
 "remote.voice_button.help" = "Hold the microphone button for voice input; it can also act as the Mac Fn key when needed.";
 "remote.voice_button.accessibility_label" = "Voice button. Used for voice input and Fn; cannot be reassigned.";
 "menu.open_settings" = "Open Main Window…";
+"menu.remote_battery" = "Remote battery: %@";
+"menu.named_remote_battery" = "%@ battery: %@";
 "menu.show_logs" = "Show Logs";
 "menu.about" = "About SayAll";
 "menu.file" = "File";

@@ -7,6 +7,56 @@ import Testing
 
 @Suite("Status item connection appearance")
 struct StatusItemPresentationTests {
+    @MainActor
+    @Test(arguments: [AppLanguage.simplifiedChinese, .english])
+    func statusMenuBatteryFollowsConnectedDevices(language: AppLanguage) throws {
+        let suite = "status-menu-battery-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let settings = AppSettings(defaults: defaults)
+        settings.applicationLanguage = language
+        let localization = LocalizationStore(settings: settings, resourceBundle: RemoteMicResourceBundle.mainOrDevelopment)
+        let mappings = RemoteDeviceMappings(buttonBindings: [:], buttonShortcuts: [:], secondaryButtonBindings: [:])
+        let desk = RemoteDeviceProfile(model: .rc003, customName: "Desk", mappings: mappings)
+        let travel = RemoteDeviceProfile(model: .rc001, customName: "Travel", mappings: mappings)
+        let tv = RemoteDeviceProfile(model: .chromecastVoiceRemote, mappings: mappings)
+        let siri = RemoteDeviceProfile(model: .appleSiriRemoteA2854, mappings: mappings)
+        let menu = NSMenu()
+        menu.addItem(withTitle: "Connection", action: nil, keyEquivalent: "")
+        let audio = menu.addItem(withTitle: "Audio", action: nil, keyEquivalent: "")
+        let chinese = language == .simplifiedChinese
+
+        func update(
+            _ connected: Set<UUID>, levels: [UUID: Int], power: [UUID: RemotePowerState] = [:]
+        ) -> [String] {
+            StatusMenuBatterySection.update(
+                in: menu, before: audio, profiles: [desk, travel, tv, siri], connectedIDs: connected,
+                levels: levels, powerStates: power, localization: localization
+            )
+            return menu.items.map(\.title)
+        }
+
+        #expect(update([desk.id], levels: [desk.id: 0]) == [
+            "Connection", chinese ? "遥控器电量：0%" : "Remote battery: 0%", "Audio"
+        ])
+        #expect(menu.items[1].action == nil && !menu.items[1].isEnabled)
+        #expect(update([desk.id], levels: [:]) == [
+            "Connection", chinese ? "遥控器电量：未知" : "Remote battery: Unknown", "Audio"
+        ])
+        #expect(update([desk.id, tv.id, travel.id], levels: [desk.id: 73, tv.id: 100, travel.id: 28]) == [
+            "Connection", chinese ? "Desk 电量：73%" : "Desk battery: 73%",
+            chinese ? "Travel 电量：28%" : "Travel battery: 28%", "Audio"
+        ])
+        #expect(update([], levels: [desk.id: 73]) == ["Connection", "Audio"])
+        #expect(update([tv.id, siri.id], levels: [tv.id: 100]) == ["Connection", "Audio"])
+        #expect(update([siri.id], levels: [:], power: [siri.id: .charging]) == [
+            "Connection", chinese ? "遥控器电量：正在充电" : "Remote battery: Charging", "Audio"
+        ])
+        #expect(update([desk.id], levels: [desk.id: 81]) == [
+            "Connection", chinese ? "遥控器电量：81%" : "Remote battery: 81%", "Audio"
+        ])
+    }
+
     private final class ConnectionFixture {
         @Published var physical = false
         @Published var phone = false
