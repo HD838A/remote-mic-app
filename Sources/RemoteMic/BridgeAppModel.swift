@@ -2046,6 +2046,13 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
 
     func reconnect() {
         guard started else { return }
+        #if SAYALL_CHROMECAST_ENABLED
+        if settings.selectedRemoteProfile?.model.isChromecastRemote == true {
+            AppLogger.shared.write("CHROMECAST RECONNECT phase=requested source=selected_remote")
+            reconnectChromecast()
+            return
+        }
+        #endif
         if bluetoothBridges.isEmpty && discoveryBluetoothBridge == nil {
             AppLogger.shared.write("BLE RECONNECT starting_missing_bridges")
             startBluetoothConnections()
