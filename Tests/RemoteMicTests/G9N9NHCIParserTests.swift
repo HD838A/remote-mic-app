@@ -186,4 +186,30 @@ struct G9N9NHCIParserTests {
         #expect(feed([0x89, 1]) == [.init(control: .input, down: true)])
         #expect(feed([0, 0]) == [.init(control: .input, down: false)])
     }
+
+    @Test func inputDiagnosticsObserveUnknownFormatsWithoutAcceptingThemAsKeys() {
+        var parser = bound()
+        func feed(_ bytes: [UInt8], handle: UInt16 = 0x40, attribute: UInt8 = 0x2B) -> [G9N9NHCIParser.Edge] {
+            parser.consume(record(acl(Data([0x1B, attribute, 0]) + Data(bytes), handle: handle)))
+        }
+        #expect(feed([0x45, 0], handle: 0x41).isEmpty)
+        #expect(feed([0x45, 0], attribute: 0x54).isEmpty)
+        #expect(parser.observedConsumerUsages.isEmpty && parser.observedConsumerReportLengths.isEmpty)
+        #expect(feed([0x45]).isEmpty)
+        #expect(feed([0xFF, 1]).isEmpty)
+        #expect(parser.observedConsumerReportLengths == [1, 2])
+        #expect(parser.observedConsumerUsages == [0x0045, 0x01FF])
+        #expect(feed([0x45, 0]) == [.init(control: .right, down: true)])
+    }
+
+    @Test func diagnosticBoundsDoNotBecomeAnInputGateAndResetClearsObservations() {
+        var parser = bound()
+        for usage: UInt16 in 0x0300..<0x0340 {
+            _ = parser.consume(record(acl(Data([0x1B, 0x2B, 0, UInt8(usage & 255), UInt8(usage >> 8)]))))
+        }
+        #expect(parser.observedConsumerUsages.count == 32)
+        #expect(parser.consume(notification(6)) == [.init(control: .right, down: true)])
+        parser.reset()
+        #expect(parser.observedConsumerUsages.isEmpty && parser.observedConsumerReportLengths.isEmpty)
+    }
 }

@@ -22,6 +22,8 @@ final class G9N9NHCIController {
     private var reportedBinding = false
     private var reportedPackets = false
     private var reportedAttributes = Set<UInt16>()
+    private var reportedConsumerUsages = Set<UInt16>()
+    private var reportedConsumerReportLengths = Set<Int>()
     private var identityWindow = G9N9NHCIIdentityWindow()
     private var identitySerial: Data?
     private var learningTimeout: DispatchWorkItem?
@@ -139,6 +141,8 @@ final class G9N9NHCIController {
             self?.reportedBinding = false
             self?.reportedPackets = false
             self?.reportedAttributes.removeAll()
+            self?.reportedConsumerUsages.removeAll()
+            self?.reportedConsumerReportLengths.removeAll()
             DispatchQueue.main.async { oldConfiguration?.stop() }
         }
     }
@@ -151,6 +155,8 @@ final class G9N9NHCIController {
         queue.async { [weak self] in
             self?.parser.identify(serial: serial)
             self?.reportedBinding = false
+            self?.reportedConsumerUsages.removeAll()
+            self?.reportedConsumerReportLengths.removeAll()
             DispatchQueue.main.async { [weak self] in
                 guard let self, self.enabled, self.generation == attempt,
                       self.identityWindow.accepts(identityAttempt) else { return }
@@ -171,6 +177,8 @@ final class G9N9NHCIController {
             self?.parser.reset()
             self?.reportedBinding = false
             self?.reportedAttributes.removeAll()
+            self?.reportedConsumerUsages.removeAll()
+            self?.reportedConsumerReportLengths.removeAll()
         }
     }
 
@@ -187,12 +195,27 @@ final class G9N9NHCIController {
                     self.reportedPackets = true
                     AppLogger.shared.write("G9N9N HCI PACKET phase=first_received")
                 }
+                let wasBound = self.parser.isBound
                 let edges = self.parser.consume(blob)
+                if wasBound && !self.parser.isBound {
+                    self.reportedConsumerUsages.removeAll()
+                    self.reportedConsumerReportLengths.removeAll()
+                }
                 let learnedKey = self.parser.takeLearnedKey()
                 let learnedMappings = learnedKey == nil ? nil : self.parser.learnedMappings
                 for (attribute, bytes) in self.parser.observedNotifications
                     where self.reportedAttributes.insert(attribute).inserted {
                     AppLogger.shared.write("G9N9N HCI NOTIFICATION phase=first_received attribute=\(attribute) bytes=\(bytes)")
+                }
+                for bytes in self.parser.observedConsumerReportLengths
+                    where self.reportedConsumerReportLengths.insert(bytes).inserted {
+                    AppLogger.shared.write("G9N9N HCI INPUT phase=first_shape bytes=\(bytes)")
+                }
+                for usage in self.parser.observedConsumerUsages
+                    where self.reportedConsumerUsages.insert(usage).inserted {
+                    let mapped = self.parser.learnedMappings[usage] ?? G9N9NHCIParser.consumerControl(usage)
+                    let value = String(format: "0x%04X", usage)
+                    AppLogger.shared.write("G9N9N HCI INPUT phase=first_candidate usage=\(value) meaning=\(mapped?.rawValue ?? (usage == 0 ? "release" : "unmapped")) action_delivery=unobserved")
                 }
                 let bound = self.parser.isBound
                 let conflict = self.parser.identityConflict

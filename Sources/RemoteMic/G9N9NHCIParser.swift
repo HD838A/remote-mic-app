@@ -40,6 +40,8 @@ struct G9N9NHCIParser {
     private(set) var isBound = false
     private(set) var packetsSeen = 0
     private(set) var observedNotifications: [UInt16: Int] = [:]
+    private(set) var observedConsumerUsages = Set<UInt16>()
+    private(set) var observedConsumerReportLengths = Set<Int>()
     private(set) var learnedMappings: [UInt16: ChromecastRemoteControl] = [:]
     private var learning: ChromecastRemoteControl?
     private var learningCandidate: UInt16?
@@ -97,6 +99,8 @@ struct G9N9NHCIParser {
         identityConflict = false
         packetsSeen = 0
         observedNotifications.removeAll()
+        observedConsumerUsages.removeAll()
+        observedConsumerReportLengths.removeAll()
         cancelLearning()
         learningReports = 0
     }
@@ -168,8 +172,17 @@ struct G9N9NHCIParser {
         if observedNotifications.count < 16, observedNotifications[attribute] == nil {
             observedNotifications[attribute] = att.count - 3
         }
-        guard att.count >= 5, attribute == 0x002B else { return [] }
+        guard attribute == 0x002B else { return [] }
         let report = Data(att.dropFirst(3))
+        if observedConsumerReportLengths.count < 16 {
+            observedConsumerReportLengths.insert(report.count)
+        }
+        // A one-byte variant remains unsupported for actions, but its candidate
+        // Consumer value helps distinguish that format from no radio report.
+        if observedConsumerUsages.count < 32 {
+            if report.count == 1 { observedConsumerUsages.insert(UInt16(report[0])) }
+            else if report.count == 2 { observedConsumerUsages.insert(Self.le16(report, 0)) }
+        }
         // Legacy hid_mouse ATT carries the actual 16-bit Consumer usage, not
         // the report-array index exposed by macOS's virtual HID collection.
         guard report.count == 2 else { return [] }
@@ -209,6 +222,8 @@ struct G9N9NHCIParser {
         isBound = false
         fragments.removeAll()
         observedNotifications.removeAll()
+        observedConsumerUsages.removeAll()
+        observedConsumerReportLengths.removeAll()
         cancelLearning()
         return edges
     }
