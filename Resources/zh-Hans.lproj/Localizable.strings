@@ -187,6 +187,10 @@
 "action.command_save" = "保存";
 "action.app_switcher" = "切换 App";
 "action.arrow_up" = "↑";
+"action.arrow_up_detail" = "上方向键";
+"action.arrow_down_detail" = "下方向键";
+"action.arrow_left_detail" = "左方向键";
+"action.arrow_right_detail" = "右方向键";
 "action.arrow_down" = "↓";
 "action.arrow_left" = "←";
 "action.arrow_right" = "→";
@@ -512,7 +516,7 @@
 "permissions.page.subtitle" = "按顺序完成权限设置，确保遥控器正常连接和发送按键";
 "permissions.required.title" = "所需权限";
 "permission.bluetooth.title" = "蓝牙";
-"permission.bluetooth.description" = "连接小米蓝牙遥控器 2 Pro 并接收语音";
+"permission.bluetooth.description" = "连接支持的蓝牙遥控器，并接收按键与语音";
 "permission.bluetooth.open_settings" = "打开蓝牙设置";
 "permission.input_monitoring.title" = "输入监控";
 "permission.input_monitoring.description" = "读取遥控器按键，并尽量避免系统原操作重复触发";
@@ -1364,7 +1368,10 @@
 
 /* Mac microphone: explicit, per-session capture. */
 "audio.mac_microphone.input" = "Mac 麦克风";
-"audio.mac_microphone.fallback_help" = "备用收音：不使用遥控器时可直接对 Mac 麦克风说话，遥控器收音与此设置无关。";
+"audio.mac_microphone.current" = "当前收音：";
+"audio.mac_microphone.current.remote" = "遥控器麦克风";
+"audio.mac_microphone.fallback" = "备用麦克风";
+"audio.mac_microphone.fallback_help" = "不使用遥控器时，可直接对 Mac 麦克风说话；遥控器收音与此设置无关。";
 "audio.mac_microphone.choose" = "选择 Mac 麦克风";
 "audio.mac_microphone.start" = "用 Mac 麦克风说话";
 "audio.mac_microphone.stop" = "停用 Mac 麦克风说话";

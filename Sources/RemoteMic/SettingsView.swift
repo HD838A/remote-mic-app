@@ -1670,8 +1670,15 @@ struct SettingsView: View {
 
     private var macMicrophoneControls: some View {
         VStack(alignment: .leading, spacing: 9) {
+            // 先说清楚当前用哪个麦克风，再谈备用麦克风，避免把「Mac 麦克风」误读成当前输入。
+            HStack(spacing: 6) {
+                Text("audio.mac_microphone.current")
+                Text("audio.mac_microphone.current.remote")
+            }
+            .font(.system(size: 12))
+            .foregroundStyle(.secondary)
             HStack(spacing: 14) {
-                Text("audio.mac_microphone.input").frame(width: 92, alignment: .leading)
+                Text("audio.mac_microphone.fallback").frame(width: 92, alignment: .leading)
                 Group {
                     if model.macMicrophoneDevices.count > 1 ||
                         !model.macMicrophoneDevices.contains(where: { $0.uid == settings.macMicrophoneInputUID }) {
@@ -4245,6 +4252,29 @@ struct SettingsView: View {
         }
     }
 
+    /// 动作选项：标题用语义名（切换 App），悬停补完整按键文字（切换 App · Command + Tab）。
+    /// 语义动作没有固定按键时，悬停只给名称，避免出现「增大音量 · 增大音量」。
+    private func actionChoiceHelp(_ action: ButtonAction) -> String {
+        let name = action.displayName(using: localization)
+        switch action {
+        case .escape:
+            // Esc 的详细名是「Escape（退出）」，和名字重复，只保留名称。
+            return name
+        case .arrowUp:
+            return name + " · " + localization.text("action.arrow_up_detail")
+        case .arrowDown:
+            return name + " · " + localization.text("action.arrow_down_detail")
+        case .arrowLeft:
+            return name + " · " + localization.text("action.arrow_left_detail")
+        case .arrowRight:
+            return name + " · " + localization.text("action.arrow_right_detail")
+        default:
+            break
+        }
+        let keys = action.detailedDisplayName(using: localization)
+        return keys == name ? name : name + " · " + keys
+    }
+
     private func mappingActionGrid(
         actions: [ButtonAction],
         selectedAction: ButtonAction,
@@ -4270,7 +4300,7 @@ struct SettingsView: View {
                             onSelect(action)
                         } label: {
                             mappingActionLabel(
-                                title: action.visualDisplayName(using: localization) +
+                                title: action.displayName(using: localization) +
                                     (unavailableApplication
                                         ? localization.text("common.suffix.not_installed")
                                         : unavailableExperiment
@@ -4281,8 +4311,8 @@ struct SettingsView: View {
                             )
                         }
                         .buttonStyle(.plain)
-                        .help(action.detailedDisplayName(using: localization))
-                        .accessibilityLabel(Text(action.detailedDisplayName(using: localization)))
+                        .help(actionChoiceHelp(action))
+                        .accessibilityLabel(Text(actionChoiceHelp(action)))
                         .disabled(isManagedPowerAction || unavailableApplication || unavailableExperiment)
                     }
                 }

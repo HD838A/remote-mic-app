@@ -187,6 +187,10 @@
 "action.command_save" = "Save";
 "action.app_switcher" = "Switch App";
 "action.arrow_up" = "↑";
+"action.arrow_up_detail" = "Up arrow";
+"action.arrow_down_detail" = "Down arrow";
+"action.arrow_left_detail" = "Left arrow";
+"action.arrow_right_detail" = "Right arrow";
 "action.arrow_down" = "↓";
 "action.arrow_left" = "←";
 "action.arrow_right" = "→";
@@ -512,7 +516,7 @@
 "permissions.page.subtitle" = "Grant these permissions in order so the remote can connect and send button actions";
 "permissions.required.title" = "Required Permissions";
 "permission.bluetooth.title" = "Bluetooth";
-"permission.bluetooth.description" = "Connect Xiaomi Bluetooth Remote 2 Pro and receive voice input";
+"permission.bluetooth.description" = "Connect supported Bluetooth remotes and receive button presses and voice audio";
 "permission.bluetooth.open_settings" = "Open Bluetooth Settings";
 "permission.input_monitoring.title" = "Input Monitoring";
 "permission.input_monitoring.description" = "Detect remote button presses and help prevent duplicate system actions";
@@ -1365,7 +1369,10 @@
 
 /* Mac microphone: explicit, per-session capture. */
 "audio.mac_microphone.input" = "Mac Microphone";
-"audio.mac_microphone.fallback_help" = "Fallback input: talk into the Mac mic when the remote isn't in use. Remote audio is unaffected.";
+"audio.mac_microphone.current" = "Current input:";
+"audio.mac_microphone.current.remote" = "Remote microphone";
+"audio.mac_microphone.fallback" = "Fallback microphone";
+"audio.mac_microphone.fallback_help" = "Talk into the Mac microphone when the remote isn't in use; remote audio is unaffected.";
 "audio.mac_microphone.choose" = "Choose a Mac microphone";
 "audio.mac_microphone.start" = "Speak with Mac microphone";
 "audio.mac_microphone.stop" = "Stop using Mac microphone";

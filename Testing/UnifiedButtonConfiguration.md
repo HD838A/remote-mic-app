@@ -54,8 +54,9 @@ swift build --disable-keychain --scratch-path .build/unified-binary -c release
 1. 依次进入按键、APP 适配、组合动作、键位方案、连接、回眸、设置、统计，标题字号一致；有副标题的页面标题到分隔线 `67pt`，只有标题的 `45pt`，按键页因多一行开关约 `94pt`（±1pt）。
 2. 按键页右侧遥控器卡片仍与标题同一行、底边贴着分隔线。
 3. 「我的」是卡片式布局、没有独立页头，不适用本条。
-4. 推荐页是内嵌的 `sayall.app/recommendations/` 网页，页头由网页自己渲染，不在本条范围内。
-5. 先前的「顶部 −10 / 高度 −10」版本被判定减过头，已废弃。
+4. 推荐页是内嵌的 `sayall.app/recommendations/` 网页，页头由网页渲染，但**同样受本条约束**：标题 `24 semibold`、副标题 `13`、顶部内边距 `36pt`（标题栏 28 + 8）、页头下 1pt 分隔线，与原生页一致。改内嵌页必须附 `1020 × 772` 与常用宽窗口各一张**真实窗口**截图（不接受静态 mock），并在私有仓运行 `npm run check:recommendations`（`scripts/check-recommendations-embed.mjs`）。
+5. 内容区不得留有整块空白：窗口高于内容时，卡片/媒体应拉伸或整体居中；最小窗口与常用窗口下，页面底部空白不得超过一个正文行高（约 `22pt`）。
+6. 先前的「顶部 −10 / 高度 −10」版本被判定减过头，已废弃。
 
 **重复遥控器卡片。** 详见 [Bug 记录](../Bugs/2026-11-02-duplicate-remote-cards.md)。检查项：
 
