@@ -659,6 +659,16 @@ if [[ "$SAYALL_CHROMECAST_INCLUDED" == "true" ]]; then
 fi
 ditto --norsrc --noextattr --noqtn --noacl \
   "$ROOT/Resources/Info.plist" "$APP_DIR/Contents/Info.plist"
+# 构建来源：把实际构建树与基线写进产物，发布脚本会从 DMG/App 读回来核对。
+# 2026-11-05 的 284 就是「说明写 main、包里却是旧分支」，事后只能靠翻目录才发现。
+SOURCE_COMMIT="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || print unknown)"
+[[ "$SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ ]] || SOURCE_COMMIT="unknown"
+BASELINE_COMMIT="$(git -C "$ROOT" rev-parse --verify origin/main 2>/dev/null || print unknown)"
+[[ "$BASELINE_COMMIT" =~ ^[0-9a-f]{40}$ ]] || BASELINE_COMMIT="unknown"
+plutil -remove SayAllSourceCommit "$APP_DIR/Contents/Info.plist" 2>/dev/null || true
+plutil -insert SayAllSourceCommit -string "$SOURCE_COMMIT" "$APP_DIR/Contents/Info.plist"
+plutil -remove SayAllBaselineCommit "$APP_DIR/Contents/Info.plist" 2>/dev/null || true
+plutil -insert SayAllBaselineCommit -string "$BASELINE_COMMIT" "$APP_DIR/Contents/Info.plist"
 plutil -remove SayAllBuildChannel "$APP_DIR/Contents/Info.plist" 2>/dev/null || true
 if [[ -n "$SAYALL_BUILD_CHANNEL" ]]; then
   plutil -insert SayAllBuildChannel -string "$SAYALL_BUILD_CHANNEL" \

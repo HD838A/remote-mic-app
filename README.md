@@ -104,6 +104,53 @@ Mac App 继续采用官网下载方式分发，Mac App Store 上架暂时暂停�
 - 小米蓝牙遥控器 2 或 2 Pro；
 - 使用语音输入时，需要安装随安装包提供的兼容麦克风，或在 Mac 上已有 BlackHole 2ch 等回环音频设备。
 
+## AI 一键安装（Agent 提示词）
+
+不熟悉 Mac 设置也可以：把下面这段提示词整段复制给豆包、DeepSeek 等 AI 助手，它会先确认 Mac 和遥控器是否符合要求，再一步一步带你下载安装、配对遥控器、设置语音输入，最后验证能不能出字。
+
+- 能操作电脑的 AI 可以直接完成检查、下载和安装中能自动完成的部分；只能聊天的 AI 会告诉你每一步点哪里。
+- 需要你本人确认的步骤（系统权限弹窗、安装器、蓝牙配对）它会停下来等你。
+- 安装包只从官网固定入口或官方 GitHub Releases 下载；打不开时用下方「下载与安装」里的百度网盘备用入口。任何让你关闭系统安全设置或杀毒软件的说法都不要照做。
+
+<details>
+<summary><strong>点开复制「SayAll 一键安装」提示词</strong></summary>
+
+```text
+你是我的 Mac 安装向导。请用简单的中文，少用术语；必须用时先用一句话解释。一步一步帮我在当前这台 Mac 上安装并配置「无线麦 SayAll」，直到我用遥控器说话能真正打出字。
+
+开始前先说明你的能力：如果你只能聊天，不要假装执行命令，只告诉我点哪里、输入什么，然后等我回复结果；如果你能操作这台电脑，可以先做检查、下载和安装，但每次动手前先说明要做什么，得到我同意再做。
+
+产品事实：
+- 支持 Apple Silicon Mac（macOS 14 或更高）和 Intel Mac（macOS 13 或更高）。先帮我确认芯片和系统版本。
+- 遥控器只支持小米蓝牙遥控器 2 和小米蓝牙遥控器 2 Pro。
+- Apple Silicon 从官网固定入口下载最新正式版（https://download.sayall.app/mac）；Intel 电脑或想安装预览版，从官方 GitHub Releases（https://github.com/HD838A/remote-mic-app/releases）下载，选标记为 Pre-release 的最新候选。
+- 安装包按芯片区分，文件名形如 SayAll-版本-编译号-AppleSilicon-install.pkg 或 …-Intel-install.pkg，两者不能混用；文件名带 uninstall 的是卸载包，不要下载。
+- 两个地址都打不开时停下来告诉我，我会按项目 README（https://github.com/HD838A/remote-mic-app）里的百度网盘备用入口下载。
+- 正式版安装包已通过 Apple 公证。如果 macOS 提示无法验证或已损坏，先核对是不是从上面的官方入口下载，重新下载再试；不要让我关闭 Gatekeeper 或任何安全设置。
+- 这份提示词与官方文档冲突时，以官方 README 和配置教程（https://sayall.app/tutorial/）为准。
+
+请按这个顺序做。每一步先告诉我目的和怎样算完成，再给操作；我确认后再进入下一步：
+1. 检查 Mac：芯片类型、macOS 版本、蓝牙是否已打开、遥控器是否在身边且电池有电。
+2. 按芯片下载对应的 install.pkg 并运行安装。安装器会先显示隐私政策页，同意后继续；它会装好 /Applications/SayAll.app，并在需要时装好语音用的 SayAll 虚拟麦克风。
+3. 配对遥控器：打开“系统设置 → 蓝牙”，同时长按遥控器的“主页 + 菜单”键进入配对状态，连接名称为 MI RC、Xiaomi Bluetooth Remote 2、Xiaomi Bluetooth Remote 2 Pro 或“小米蓝牙语音遥控器”的设备。配对由我本人操作。
+4. 打开 SayAll.app，按提示允许“蓝牙”权限；如果还要自定义按键，再允许“输入监控”和“辅助功能”，授权后完全退出并重新打开应用。
+5. 配置语音：打开“连接与语音”，点“刷新音频设备”，选择 SayAll（如果列表里是旧名称 MiRemoteV 2ch，选它也可以，两者是同一个设备）；在要说话打字的应用里把麦克风也选成同一个设备。
+6. 验证：点进输入框，按住遥控器语音键说话，松开后看有没有出字。语音键默认长按 Fn/地球键，用豆包输入法保持默认即可。找不到 SayAll 或 MiRemoteV 2ch 时，重新运行安装用的 Installer PKG，再点“刷新音频设备”。
+7. 基础语音通过后，再问我要不要自定义遥控器按键。
+
+必须遵守：
+- 配置只通过 SayAll 的可见界面和系统设置完成；不要读写其他软件的私有文件、数据库或内部数据。
+- 不要读取、记录或发送我的蓝牙地址、语音内容或个人路径。
+- 不要替我做系统权限弹窗、安装器确认和蓝牙配对；这些必须由我本人操作。
+- 不要安装来源不明的软件或脚本。
+- 最后告诉我：SayAll 版本、遥控器型号、语音设备是否就绪、权限是否给齐、实际出字是否成功，以及还有哪些步骤没完成。
+- 做不到的步骤直接说“这一步需要你来做”，给出具体点击位置，不要跳过，也不要假装成功。
+```
+
+</details>
+
+手动安装步骤见下方[下载与安装](#下载与安装)与[首次使用](#首次使用)。
+
 ## 下载与安装
 
 - 备用下载：[百度网盘](https://pan.baidu.com/s/1yuBRBCDEWnnwfzbxye5rnQ?pwd=9qhx)，提取码：`9qhx`。
@@ -115,7 +162,7 @@ Mac App 继续采用官网下载方式分发，Mac App Store 上架暂时暂停�
 
 Release 中的 Apple Silicon 安装包名为 `SayAll-VERSION-BUILD-AppleSilicon-install.pkg`，Intel 安装包名为 `SayAll-VERSION-BUILD-Intel-install.pkg`，两者不能混用。卸载包名分别为 `SayAll-VERSION-BUILD-AppleSilicon-uninstall.pkg` 和 `SayAll-VERSION-BUILD-Intel-uninstall.pkg`。
 
-运行对应的 Installer PKG。安装器会把无线麦 SayAll 安装为 `/Applications/SayAll.app`，并检查现有 `MiRemoteV 2ch`：健康且兼容时原样保留，缺失或不可用时才安装或更新。安装器在简介之后显示与官网一致的隐私政策；必须完成该页的系统确认才能继续安装。只需要 App、已经使用其他回环音频设备的高级用户，可从同一 Release 下载 App-only ZIP。
+运行对应的 Installer PKG。安装器会把无线麦 SayAll 安装为 `/Applications/SayAll.app`，并检查现有兼容麦克风（新安装显示为 `SayAll`，旧安装保留 `MiRemoteV 2ch`）：健康且兼容时按原名称保留，缺失或不可用时才安装或更新。安装器在简介之后显示与官网一致的隐私政策；必须完成该页的系统确认才能继续安装。只需要 App、已经使用其他回环音频设备的高级用户，可从同一 Release 下载 App-only ZIP。
 
 自 v1.3.0 起，正式发布包使用 Apple Developer ID 签名并已完成 Apple 公证。请从官网 Cloudflare CDN 固定入口、本项目 GitHub Releases 或上方百度网盘备用入口下载，并按 GitHub 资产摘要或 PKG 签名完成核验。
 
@@ -149,7 +196,7 @@ Release 中的 Apple Silicon 安装包名为 `SayAll-VERSION-BUILD-AppleSilicon-
 
 1. 打开“连接与语音”页面。
 2. 点击“刷新音频设备”。
-3. 选择 `MiRemoteV 2ch`，或选择你已经安装的其他回环音频设备。
+3. 选择 `SayAll`（旧安装保留 `MiRemoteV 2ch`，两者是同一个设备），或选择你已经安装的其他回环音频设备。
 4. 在需要听写或语音输入的应用中选择同一个设备作为麦克风。
 5. 单击目标输入框，按住遥控器语音键说话，松开后结束。
 
@@ -157,7 +204,7 @@ Release 中的 Apple Silicon 安装包名为 `SayAll-VERSION-BUILD-AppleSilicon-
 
 默认使用 Fn，是为了直接兼容豆包、微信等 Fn 长按语音入口和 Typeless 的 Fn 点按入口，同时让遥控器“按住采音、松开停止”的生命周期与快捷键一致。技术上可以继续扩展 F18、F19、F20 等低频键，但当前版本不支持任意自定义语音键：目标语音应用也必须配置同一个键，而且 RC001/RC003、iPhone、Apple Watch、网页版、权限与输入源切换都要共享同一套成对按下/释放逻辑。普通遥控器按键仍可单独配置 F1–F20。
 
-语音键不承担短按、双击或长按附加动作，只负责按下即开始、释放即结束的实时语音会话。需要聚焦前台 App 输入框时，请在普通按键的“自定义动作”中选择“聚焦输入框”；该动作使用 macOS Accessibility，不读取输入内容。
+语音键不承担短按、双击或长按附加动作，只负责按下即开始、释放即结束的实时语音会话。需要聚焦前台 App 输入框时，请在普通按键的“输入框”中选择“聚焦输入框”；该动作使用 macOS Accessibility，不读取输入内容。
 
 如果想先确认音频链路是否正常，可以点击“发送 1 秒测试音”，或在 QuickTime Player 的“新建音频录制”中观察输入电平。
 
@@ -167,7 +214,7 @@ Typeless 等点按 Fn 开始、再次点按结束的语音工具，与小米蓝�
 
 该模式仍然要求**按住小米蓝牙遥控器 2 或 2 Pro 语音键说话、松开结束**；这两款遥控器的固件在松开语音键后都不会继续发送麦克风音频，因此这不是持续录音或免按键模式。开关默认关闭；豆包输入法等使用 Fn 长按的工具应保持关闭。权限或遥控器 HID 映射不完整时，模式会自动关闭并恢复默认 Fn 长按映射。
 
-豆包输入法找不到普通虚拟麦克风时，请运行对应架构的 Installer PKG，然后在 SayAll.app 中选择 `MiRemoteV 2ch`。详细步骤见[豆包输入法兼容说明](Resources/豆包输入法兼容说明.md)。
+豆包输入法找不到普通虚拟麦克风时，请运行对应架构的 Installer PKG，然后在 SayAll.app 中选择 `SayAll`（旧安装保留 `MiRemoteV 2ch`）。详细步骤见[豆包输入法兼容说明](Resources/豆包输入法兼容说明.md)。
 
 ![豆包输入法 Mac 版选择 MiRemoteV 2ch 麦克风](Screenshots/doubao-input-method-macos.png)
 

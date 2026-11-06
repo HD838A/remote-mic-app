@@ -336,7 +336,11 @@ struct RemoteButtonsTests {
         #expect(ButtonAction.volumeUp.category == .systemAndMedia)
         #expect(ButtonAction.previousCommandLeft.category == .systemAndMedia)
         #expect(ButtonAction.nextCommandRight.category == .systemAndMedia)
-        #expect(ButtonAction.customShortcut.category == .custom)
+        // 自定义快捷键就是"发一个自己录的按键组合"，和固定快捷键同属基础按键。
+        #expect(ButtonAction.customShortcut.category == .basicKeys)
+        #expect(ButtonAction.focusInput.category == .custom)
+        // 组合动作是独立分类，和「常用语」同级。
+        #expect(ButtonAction.combinationAction.category == .combinations)
         #expect(ButtonAction.openCustomApplication.category == .applications)
         #expect(ButtonAction.openCodex.category == .applications)
         #expect(ButtonAction.openCommonPhrases.category == .commonPhrases)
@@ -1149,7 +1153,7 @@ struct RemoteButtonsTests {
         #expect(ButtonAction.commandDelete.detailedDisplayName(using: localization) == "Command + Delete")
         #expect(ButtonAction.arrowLeft.visualDisplayName(using: localization) == "←")
         #expect(ButtonAction.arrowLeft.detailedDisplayName(using: localization) == "Left")
-        #expect(ButtonAction.volumeUp.visualDisplayName(using: localization) == "Increase System Volume")
+        #expect(ButtonAction.volumeUp.visualDisplayName(using: localization) == "Volume Up")
     }
 
     @Test func customShortcutPreservesRightCommandDeviceSide() {
@@ -1851,6 +1855,7 @@ struct RemoteButtonsTests {
         #expect(KeyboardInjector.send(
             .openCustomApplication,
             applicationProfile: profile,
+            frontmostApplication: { nil },
             customApplicationURL: { _ in applicationURL },
             customApplicationOpener: { _, application, completion in
                 openedProfile = application
@@ -1970,12 +1975,68 @@ struct RemoteButtonsTests {
                 attemptedApplication = application
                 completion(nil, LaunchFailure())
             },
-            applicationFocuser: { _, _, _, _ in focusAttempted = true }
+            applicationFocuser: { _, _, _, _ in focusAttempted = true },
+            frontmostApplication: { nil }
         )
 
         #expect(handled)
         #expect(attemptedApplication == .codex)
         #expect(!focusAttempted)
+    }
+
+    @Test func alreadyFrontmostPresetApplicationSkipsReactivationAndFocusesRunningInstance() {
+        let applicationURL = URL(fileURLWithPath: "/Applications/WorkBuddy.app")
+        var openerCalled = false
+        var focusedURL: URL?
+        var focusedPID: pid_t?
+
+        let handled = KeyboardInjector.send(
+            .openWorkBuddy,
+            applicationURL: { _ in applicationURL },
+            applicationOpener: { _, _, completion in
+                openerCalled = true
+                completion(nil, nil)
+            },
+            applicationFocuser: { url, _, processIdentifier, _ in
+                focusedURL = url
+                focusedPID = processIdentifier
+            },
+            frontmostApplication: { (bundleIdentifier: PresetApplication.workBuddy.bundleIdentifier, processIdentifier: pid_t(4_244)) }
+        )
+
+        #expect(handled)
+        #expect(!openerCalled)
+        #expect(focusedURL == applicationURL)
+        #expect(focusedPID == 4_244)
+    }
+
+    @Test func alreadyFrontmostCustomApplicationSkipsReactivationAndFocusesRunningInstance() {
+        let profile = CustomApplicationProfile(
+            displayName: "Example Agent",
+            bundleIdentifier: "com.example.agent",
+            applicationPath: "/Applications/Example Agent.app",
+            focusStrategy: .recordedAccessibility,
+            accessibilityTarget: nil
+        )
+        let applicationURL = URL(fileURLWithPath: profile.applicationPath)
+        var openerCalled = false
+        var focusedPID: pid_t?
+
+        #expect(KeyboardInjector.send(
+            .openCustomApplication,
+            applicationProfile: profile,
+            frontmostApplication: { (bundleIdentifier: "com.example.agent", processIdentifier: pid_t(4_242)) },
+            customApplicationURL: { _ in applicationURL },
+            customApplicationOpener: { _, _, completion in
+                openerCalled = true
+                completion(nil, nil)
+            },
+            customApplicationFocuser: { _, processIdentifier, _ in
+                focusedPID = processIdentifier
+            }
+        ))
+        #expect(!openerCalled)
+        #expect(focusedPID == 4_242)
     }
 
     @Test func successfulComposerApplicationLaunchesPassURLApplicationAndPIDToFocuser() {
@@ -1999,7 +2060,8 @@ struct RemoteButtonsTests {
                     focusedURL = url
                     focusedApplication = application
                     focusedProcessIdentifier = processIdentifier
-                }
+                },
+                frontmostApplication: { nil }
             )
 
             #expect(handled)
@@ -2015,7 +2077,8 @@ struct RemoteButtonsTests {
             .openSafari,
             applicationURL: { _ in URL(fileURLWithPath: "/Applications/Safari.app") },
             applicationOpener: { _, _, completion in completion(123, nil) },
-            applicationFocuser: { _, _, _, _ in focusAttempted = true }
+            applicationFocuser: { _, _, _, _ in focusAttempted = true },
+            frontmostApplication: { nil }
         ))
         #expect(!focusAttempted)
     }
@@ -2306,6 +2369,28 @@ struct RemoteButtonsTests {
             applicationFocusedElementMatches: false,
             requiresApplicationFocusedElement: false
         ))
+    }
+
+    @Test func composerCaretStoreRemembersOffsetsPerBundle() {
+        let store = ComposerCaretStore()
+        #expect(store.rememberedRange(forKey: "com.example.app") == nil)
+        store.remember(CFRange(location: 12, length: 0), forKey: "com.example.app")
+        let remembered = store.rememberedRange(forKey: "com.example.app")
+        #expect(remembered?.location == 12 && remembered?.length == 0)
+        // 非法偏移不记忆，避免恢复时制造越界写。
+        store.remember(CFRange(location: -1, length: 0), forKey: "com.example.other")
+        #expect(store.rememberedRange(forKey: "com.example.other") == nil)
+        // 同一 App 手动移动光标后覆盖旧记忆。
+        store.remember(CFRange(location: 30, length: 0), forKey: "com.example.app")
+        let updated = store.rememberedRange(forKey: "com.example.app")
+        #expect(updated?.location == 30 && updated?.length == 0)
+    }
+
+    @Test func composerCaretUsesTheStandardEndOfDocumentKey() {
+        // Cmd+Down 是 macOS 文本域“移到文档末尾”的标准键，空输入框下是天然无操作，
+        // 不依赖各宿主不可信的 AXNumberOfCharacters，也不写入选区。
+        #expect(KeyboardInjector.composerCaretEndKey.keyCode == 125)
+        #expect(KeyboardInjector.composerCaretEndKey.flags == .maskCommand)
     }
 
     @Test func cmuxFocusRecoveryUsesCmuxOwnedForceFocusShortcuts() {

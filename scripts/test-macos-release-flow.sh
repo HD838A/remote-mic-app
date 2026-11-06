@@ -492,6 +492,10 @@ private_ci_workflow="$ROOT/.github/workflows/mac-private-ci.yml"
 notarize_release="$ROOT/scripts/notarize-release.sh"
 opus_build="$ROOT/scripts/build-apple-remote-opus.sh"
 
+/usr/bin/grep -Fq -- 'verify-release-asset-source.sh' "$ROOT/scripts/package-macos-release-in-actions.sh" || {
+  print -u2 "CI packaging must read the source commit back from every artifact"
+  exit 1
+}
 /usr/bin/grep -Fq -- '--disable-keychain' "$ROOT/scripts/build-app.sh"
 /usr/bin/grep -Fq 'xcrun swift build --disable-keychain' "$ROOT/scripts/test.sh"
 if [[ "$(/usr/bin/grep -c -- '--disable-keychain' "$ROOT/scripts/build-app.sh")" -lt 2 ]]; then
@@ -1123,6 +1127,8 @@ print -r -- "lane $RELEASE_VARIANT running"
 for parallel_mode in 0 1; do
   variant_log="$WORK_DIR/variants-$parallel_mode.log"
   lane_log_dir="$WORK_DIR/variants-$parallel_mode-lanes"
+  # 这里用假 runner 验证并行调度，构建树本身不是发布候选：显式关闭基线门禁。
+  RELEASE_BASELINE_CHECK=0 \
   RELEASE_VARIANT_LOG_DIR="$lane_log_dir" \
     PARALLEL_RELEASE_VARIANTS="$parallel_mode" GENERATE_SPARKLE_UPDATE=0 \
     RELEASE_VARIANT_RUNNER="$fake_runner" VARIANT_LOG="$variant_log" \

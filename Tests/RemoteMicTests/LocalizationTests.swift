@@ -114,7 +114,7 @@ struct LocalizationTests {
         )
         let englishInfo = try strings(at: englishDirectory.appendingPathComponent("InfoPlist.strings"))
 
-        #expect(english["action.command_delete"] == "Command-Delete")
+        #expect(english["action.command_delete"] == "Delete to Line Start")
         #expect(english["button_mapping.action_filter.all"] == "All")
         #expect(english["shortcut.editor.instructions"]?.contains("single key") == true)
         #expect(english["shortcut.editor.instructions"]?.contains("recorded alone") == true)
@@ -170,7 +170,7 @@ struct LocalizationTests {
             let localized = try strings(at: directory.appendingPathComponent("Localizable.strings"))
             let localizedInfo = try strings(at: directory.appendingPathComponent("InfoPlist.strings"))
             if directory.lastPathComponent == "zh-Hans.lproj" {
-                #expect(localized["action.command_delete"] == "Command-Delete")
+                #expect(localized["action.command_delete"] == "删除到行首")
                 #expect(localized["button_mapping.action_filter.all"] == "全部")
                 #expect(localized["shortcut.editor.instructions"]?.contains("单个按键") == true)
                 #expect(localized["shortcut.editor.instructions"]?.contains("单独录入") == true)

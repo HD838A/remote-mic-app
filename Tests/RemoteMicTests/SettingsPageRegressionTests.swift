@@ -856,8 +856,9 @@ struct SettingsPageRegressionTests {
 
         // 写入路径：编辑器禁用之外，保存函数自己也要拒绝只读预览。
         #expect(source.contains("guard !isMappingProfilePreviewOnly else { return }"))
-        // 三处编辑器（动作、按住、单独的按住区）加页脚的「恢复默认」，一处都不能漏。
-        #expect(source.components(separatedBy: ".disabled(isMappingProfilePreviewOnly)").count - 1 == 4)
+        // 动作编辑器、单独的按住区，加页脚的「恢复默认」；
+        // 编辑器内的按住面板跟随外层统一禁用，不再单独计一处。
+        #expect(source.components(separatedBy: ".disabled(isMappingProfilePreviewOnly)").count - 1 == 3)
         #expect(source.contains("private var isMappingProfilePreviewOnly: Bool"))
 
         // 切换方案必须回到只读预览，不能让「刚解锁过」跟着带过去。
@@ -946,6 +947,9 @@ struct SettingsPageRegressionTests {
 
         #expect(panelSource.contains("VStack(alignment: .leading, spacing: 12)"))
         #expect(!panelSource.contains("HStack(spacing: 16)"))
+        // 面板左上角标明是哪颗键，不再显示「按键功能已连接」这类连接状态。
+        #expect(!panelSource.contains("mappingHIDStatus"))
+        #expect(panelSource.contains("button_mapping.action_filter.voice_key"))
         #expect(panelSource.contains("mappingVoiceKeyModeControl"))
         #expect(!panelSource.contains("\"connection.voice_key_mode.unverified\""))
         #expect(panelSource.contains("connection.voice_key_mode.unverified_detail"))
@@ -1206,16 +1210,20 @@ struct SettingsPageRegressionTests {
             encoding: .utf8
         )
 
-        #expect(settingsSource.contains("action.system_volume_up_short"))
-        #expect(settingsSource.contains("action.system_volume_down_short"))
-        #expect(chinese.contains(#""action.system_volume_up_short" = "Vol+""#))
-        #expect(chinese.contains(#""action.system_volume_down_short" = "Vol-""#))
-        #expect(chinese.contains("上一首（系统媒体）"))
-        #expect(chinese.contains("下一首（系统媒体）"))
-        #expect(chinese.contains(#""action.show_desktop" = "显示桌面（fn + F11）""#))
-        #expect(english.contains("Previous Track (System Media)"))
-        #expect(english.contains("Next Track (System Media)"))
-        #expect(english.contains(#""action.show_desktop" = "Show Desktop (fn + F11)""#))
+        // 按键页、方案页、手机端共用同一套动作语义名：
+        // 不再有 Vol+ / Vol- 短标签，音量、方向与内置按键动作统一读语义名表。
+        #expect(!settingsSource.contains("action.system_volume_up_short"))
+        #expect(!settingsSource.contains("action.system_volume_down_short"))
+        #expect(chinese.contains(#""action.system_volume_up" = "增大音量""#))
+        #expect(chinese.contains(#""action.system_volume_down" = "减小音量""#))
+        #expect(chinese.contains(#""action.previous_command_left" = "上一首""#))
+        #expect(chinese.contains(#""action.next_command_right" = "下一首""#))
+        #expect(chinese.contains(#""action.show_desktop" = "显示桌面""#))
+        #expect(chinese.contains(#""action.arrow_up" = "↑""#))
+        #expect(english.contains(#""action.previous_command_left" = "Previous Track""#))
+        #expect(english.contains(#""action.next_command_right" = "Next Track""#))
+        #expect(english.contains(#""action.show_desktop" = "Show Desktop""#))
+        #expect(remoteButtonsSource.contains(#"case .appSwitcher: return localization.text("action.app_switcher")"#))
         #expect(remoteButtonsSource.contains("if self == .showDesktop"))
     }
 
@@ -1466,7 +1474,23 @@ struct SettingsPageRegressionTests {
         #expect(source.contains("connection.voice_fn_tap.hint_short"))
         #expect(source.contains("ButtonActionCategory.allCases"))
         #expect(source.contains("MappingActionFilter.visibleCases"))
-        #expect(source.contains("[.basicKeys, .systemAndMedia, .custom, .commonPhrases, .applications]"))
+        // 「语音键」排在最前，「按键速度」排在最后；两者都不是动作候选的过滤器。
+        #expect(source.contains("[.all, .basicKeys, .systemAndMedia, .custom]"))
+        #expect(source.contains("cases.append(.combinations)"))
+        // 顺序：打开 App → 按住 → 按键速度。
+        #expect(source.contains("[.commonPhrases, .applications, .hold, .buttonSpeed]"))
+        #expect(source.contains("case .hold, .buttonSpeed:"))
+        #expect(source.contains("mappingActionFilter == .hold"))
+        #expect(source.contains("mapping-hold-tab"))
+        // 点按键只打开动作编辑器，不能顺带把「按住」面板带出来。
+        #expect(source.contains(
+            "mappingHoldEditingButton = nil\n                    mappingEditingTarget = ShortcutEditingTarget("
+        ))
+        // 点按键时落在它已配置动作所属的胶囊；未配置才回落到「全部」。
+        #expect(source.contains("mappingFilterForConfiguredAction("))
+        #expect(source.contains("guard action != .disabled else { return .all }"))
+        // 打开编辑器滚到胶囊而不是面板顶部，否则胶囊会被顶出视口。
+        #expect(source.contains("proxy.scrollTo(\"mapping-action-filter\", anchor: .top)"))
         #expect(source.contains("mappingActionFilterControl"))
         #expect(source.contains("customApplicationTargetPicker("))
         // 聚焦方式与滚动区域已迁到独立的「APP 适配」页，按键编辑区只留只读状态与跳转。
@@ -1488,6 +1512,37 @@ struct SettingsPageRegressionTests {
         #expect(source.contains("ButtonActionCategory.allCases.filter(mappingActionFilter.includes)"))
         #expect(source.contains("category == .commonPhrases"))
         #expect(source.contains("category == .applications"))
+        // 组合动作是和「常用语」并列的独立分类：按自己的分类位置渲染，
+        // 不再寄生在「自定义动作」分组下面，也不再受该分组的筛选条件控制。
+        #expect(source.contains("if category == .combinations {"))
+        #expect(!source.contains("if mappingActionFilter.includes(.custom), macroFeature.isFeatureVisible"))
+        #expect(source.contains("mappingActionFilter = .combinations"))
+        // 「输入框」分类只有一个动作：提示语放在它右侧，指向真正配置学习入口的页面。
+        // 「按住」「按键速度」是整块面板，只在「全部」或选中自己那颗胶囊时渲染；
+        // 选中它们时动作编辑面板整块隐藏，避免两层边框和两个标题。
+        #expect(source.contains("mappingActionFilter == .hold"))
+        #expect(source.contains("mappingActionFilter == .buttonSpeed"))
+        #expect(source.contains("mapping-hold-tab"))
+        #expect(source.contains("mapping-button-speed-tab"))
+        #expect(source.contains("mappingActionFilter != .hold"))
+        #expect(source.contains("mappingActionFilter != .buttonSpeed"))
+        // 语音键不再是胶囊：它只在点击画布上的语音键卡片时出现。
+        #expect(!source.contains("case .voiceKey"))
+        // 标题图标与按键名按视觉居中成组；不同 SF Symbol 字形高度不同，
+        // 用固定基线偏移会让菜单键、上下键看起来忽高忽低。
+        #expect(!source.contains("alignmentGuide(.firstTextBaseline)"))
+        // 横向滚动容器内容左右各留 2pt，避免 ScrollView 裁掉首个元素的描边和圆角。
+        // 目前有四处：方案 chip、组合动作卡片、遥控器卡片、分类胶囊。
+        #expect(source.components(separatedBy: ".padding(.horizontal, 2)").count - 1 >= 4)
+        // 每次点按键都发滚动请求：重复点同一颗键时不能只依赖 onChange。
+        #expect(source.contains("mappingFilterScrollRequest &+= 1"))
+        #expect(source.contains("inputFocusActionControls("))
+        #expect(source.contains("button_mapping.focus_input.app_adaptation_hint.prefix"))
+        // 提示语里的「App 适配页面」是可点跳转的按钮，不是死文字。
+        #expect(source.contains("focus-input-app-adaptation-link"))
+        // 「目标 APP」选择器属于「打开 App」分类，切到其他胶囊后必须一起隐藏，
+        // 不能只凭当前动作是「打开自定义 APP」就常驻。
+        #expect(source.contains("mappingActionFilter.includes(.applications)"))
         #expect(source.contains("button_mapping.action_filter.all"))
         #expect(source.contains("macroFeature.configurationTransferView("))
         #expect(!source.contains("settings.portable_configuration.title"))

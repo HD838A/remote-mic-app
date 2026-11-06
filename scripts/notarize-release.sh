@@ -4,6 +4,26 @@ umask 022
 
 ROOT="${0:A:h:h}"
 
+# 发布基线门禁：Draft / Pre-release 只能从最新 origin/main（外加允许的打包提交）构建。
+# 2026-11-05 的 284 从旧功能分支打出，包比 main 落后 11 个合并，说明却写着 main 的 SHA。
+# RELEASE_BASELINE_CHECK=0 只给脚本自身的回归测试用，发布候选不得关闭。
+if [[ "${RELEASE_BASELINE_CHECK:-1}" == "1" ]]; then
+  baseline_args=()
+  if [[ -n "${RELEASE_BASELINE_REF:-}" ]]; then
+    baseline_args+=(--base "$RELEASE_BASELINE_REF")
+  elif [[ -n "${EXPECTED_COMMIT:-}" ]]; then
+    # CI 的源码是 dispatch 指定的精确提交，祖先关系由 verify-public-release-source.sh 校验。
+    # dispatch 之后 main 可能前进，若仍按 origin/main 判定会被误判成「落后 main」。
+    baseline_args+=(--base "$EXPECTED_COMMIT")
+  fi
+  for required_commit in ${=RELEASE_BASELINE_REQUIRE:-}; do
+    baseline_args+=(--require "$required_commit")
+  done
+  "$ROOT/scripts/verify-release-baseline.sh" "${baseline_args[@]}"
+else
+  print -u2 "WARNING: release baseline check disabled (RELEASE_BASELINE_CHECK=0); never use this for a release candidate"
+fi
+
 process_finished() {
   local target_pid="$1"
   local process_state
@@ -54,12 +74,13 @@ if [[ "${1:-}" == --all ]]; then
 
   run_variant() {
     local variant="$1"
+    # 父进程已经跑过基线门禁；两条 lane 并行时各自 fetch 会争 FETCH_HEAD 锁。
     if [[ "$RELEASE_STAGE_TIMEOUTS" == "1" ]]; then
       "$RELEASE_STAGE_RUNNER" "$variant" signed-variant \
         "$RELEASE_VARIANT_TIMEOUT_SECONDS" -- \
-        env RELEASE_VARIANT="$variant" "$RELEASE_VARIANT_RUNNER"
+        env RELEASE_VARIANT="$variant" RELEASE_BASELINE_CHECK=0 "$RELEASE_VARIANT_RUNNER"
     else
-      RELEASE_VARIANT="$variant" "$RELEASE_VARIANT_RUNNER"
+      RELEASE_VARIANT="$variant" RELEASE_BASELINE_CHECK=0 "$RELEASE_VARIANT_RUNNER"
     fi
   }
 

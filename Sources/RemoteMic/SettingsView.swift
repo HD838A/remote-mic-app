@@ -435,26 +435,55 @@ private struct ConfigurationStatus {
 
 private enum MappingActionFilter: String, CaseIterable, Identifiable {
     case all
+    /// 按住和按键速度不是动作分类：它们各自渲染一整块设置面板，
+    /// 因此不参与 `includes(_:)` 的候选过滤。
     case basicKeys
     case systemAndMedia
     case custom
+    case combinations
     case commonPhrases
     case applications
+    case hold
+    case buttonSpeed
 
     var id: String { rawValue }
 
-    static var visibleCases: [Self] {
-        [.basicKeys, .systemAndMedia, .custom, .commonPhrases, .applications]
+    /// 把动作分类映射成对应的胶囊：点按键时直接落在它已配置的那一类。
+    init(category: ButtonActionCategory) {
+        switch category {
+        case .basicKeys: self = .basicKeys
+        case .systemAndMedia: self = .systemAndMedia
+        case .custom: self = .custom
+        case .combinations: self = .combinations
+        case .commonPhrases: self = .commonPhrases
+        case .applications: self = .applications
+        }
     }
 
+    /// 公开构建没有注入 Macro Package：此时不显示「组合动作」胶囊，
+    /// 而不是让用户点进一个空分类。
+    static func visibleCases(macroFeatureVisible: Bool) -> [Self] {
+        var cases: [Self] = [.all, .basicKeys, .systemAndMedia, .custom]
+        if macroFeatureVisible {
+            cases.append(.combinations)
+        }
+        cases.append(contentsOf: [.commonPhrases, .applications, .hold, .buttonSpeed])
+        return cases
+    }
+
+    /// 胶囊按钮空间有限：标签只描述"去哪一类"，分组标题仍用全称。
+    /// 两种语言分开维护，避免英文长名称在 800pt 宽窗口被截断。
     var localizationKey: String {
         switch self {
         case .all: return "button_mapping.action_filter.all"
-        case .basicKeys: return ButtonActionCategory.basicKeys.localizationKey
-        case .systemAndMedia: return ButtonActionCategory.systemAndMedia.localizationKey
-        case .custom: return ButtonActionCategory.custom.localizationKey
-        case .commonPhrases: return ButtonActionCategory.commonPhrases.localizationKey
-        case .applications: return ButtonActionCategory.applications.localizationKey
+        case .basicKeys: return "button_mapping.action_filter.basic_keys"
+        case .systemAndMedia: return "button_mapping.action_filter.system_and_media"
+        case .custom: return "button_mapping.action_filter.custom"
+        case .combinations: return "button_mapping.action_filter.combinations"
+        case .commonPhrases: return "button_mapping.action_filter.common_phrases"
+        case .applications: return "button_mapping.action_filter.applications"
+        case .hold: return "button_mapping.action_filter.hold"
+        case .buttonSpeed: return "button_mapping.action_filter.button_speed"
         }
     }
 
@@ -462,12 +491,17 @@ private enum MappingActionFilter: String, CaseIterable, Identifiable {
         switch self {
         case .all:
             return true
+        case .hold, .buttonSpeed:
+            // 这几块是整块设置面板，不是动作候选的过滤器。
+            return false
         case .basicKeys:
             return category == .basicKeys
         case .systemAndMedia:
             return category == .systemAndMedia
         case .custom:
             return category == .custom
+        case .combinations:
+            return category == .combinations
         case .commonPhrases:
             return category == .commonPhrases
         case .applications:
@@ -612,6 +646,8 @@ struct SettingsView: View {
     @State private var mappingContentIsScrolled = false
     @State private var mappingEditorScrollRequest = 0
     @State private var mappingActionFilter: MappingActionFilter = .all
+    /// 点胶囊后请求把内容区滚到视口顶部。
+    @State private var mappingFilterScrollRequest = 0
     @State private var gestureTimingDraft = RemoteButtonGestureTiming()
     @State private var gestureTimingDraftModel: XiaomiRemoteModel?
     @State private var gestureTimingSaveConfirmed = false
@@ -620,7 +656,7 @@ struct SettingsView: View {
     @State private var shortcutCaptureTarget: ShortcutEditingTarget?
     @State private var applicationShortcutCaptureProfileID: UUID?
     /// 「App 输入框和滚动」里正在配置哪个 App。它只决定编辑对象，不写按键绑定：
-    /// 聚焦与翻页滚动按 App 生效，App 在前台即可使用，和「打开具体 APP」动作无关。
+    /// 聚焦与翻页滚动按 App 生效，App 在前台即可使用，和「打开 App」动作无关。
     /// 「APP 适配」页当前展开的 APP；与按键页的编辑对象完全分开。
     @State private var applicationDetailProfileID: UUID?
     /// 正在确认移除的 APP 档案；非空时弹确认框。
@@ -1046,7 +1082,13 @@ struct SettingsView: View {
                             } else {
                                 selectMappingProfile(nil)
                             }
-                            mappingHoldEditingButton = button
+                            // 只打开动作编辑器；按住是独立分类，不随跳转展开。
+                            mappingHoldEditingButton = nil
+                            mappingActionFilter = mappingFilterForConfiguredAction(
+                                button: button,
+                                trigger: trigger
+                            )
+                            mappingFilterScrollRequest &+= 1
                             mappingEditingTarget = ShortcutEditingTarget(button: button, trigger: trigger)
                             selectedSection = .mapping
                         },
@@ -1054,7 +1096,7 @@ struct SettingsView: View {
                             preservesMappingContextOnNavigation = true
                             mappingEditingTarget = nil
                             mappingHoldEditingButton = nil
-                            mappingActionFilter = .custom
+                            mappingActionFilter = .combinations
                             mappingMacroSearch = ""
                             selectedSection = .mapping
                         }
@@ -1263,7 +1305,7 @@ struct SettingsView: View {
                 }
             )) {
                 ForEach(offeredModes) { mode in
-                    Text(LocalizedStringKey(mode.localizationKey)).tag(mode)
+                    Text(localization.text(mode.localizationKey)).tag(mode)
                 }
             }
             .pickerStyle(.segmented)
@@ -1691,6 +1733,10 @@ struct SettingsView: View {
                 .disabled(model.macMicrophoneState == .stopping)
                 .fixedSize()
             }
+            Text("audio.mac_microphone.fallback_help")
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
             if case .failed = model.macMicrophoneState {
                 Text(LocalizedStringKey(model.macMicrophoneState.statusKey))
                     .font(.system(size: 12))
@@ -1846,8 +1892,15 @@ struct SettingsView: View {
                     else { return }
                     selectedSiriRemoteControlID = controlID
                     selectedRemoteButton = button
-                    mappingActionFilter = .all
-                    mappingHoldEditingButton = button
+                    mappingActionFilter = mappingFilterForConfiguredAction(
+                        button: button,
+                        trigger: trigger
+                    )
+                    // 重复点同一颗键时 mappingEditingTarget 不变，光靠 onChange 不会再滚，
+                    // 所以每次都单独发一次滚动请求。
+                    mappingFilterScrollRequest &+= 1
+                    // 点按键只打开它的动作编辑器；按住是独立分类，不能连带展开。
+                    mappingHoldEditingButton = nil
                     mappingEditingTarget = ShortcutEditingTarget(
                         button: button,
                         trigger: trigger
@@ -2010,8 +2063,15 @@ struct SettingsView: View {
                     else { return }
                     selectedChromecastControlID = controlID
                     selectedRemoteButton = button
-                    mappingActionFilter = .all
-                    mappingHoldEditingButton = button
+                    mappingActionFilter = mappingFilterForConfiguredAction(
+                        button: button,
+                        trigger: trigger
+                    )
+                    // 重复点同一颗键时 mappingEditingTarget 不变，光靠 onChange 不会再滚，
+                    // 所以每次都单独发一次滚动请求。
+                    mappingFilterScrollRequest &+= 1
+                    // 点按键只打开它的动作编辑器；按住是独立分类，不能连带展开。
+                    mappingHoldEditingButton = nil
                     mappingEditingTarget = ShortcutEditingTarget(
                         button: button,
                         trigger: trigger
@@ -2054,6 +2114,19 @@ struct SettingsView: View {
 
     /// Asks the mapping scroll view to bring the hold editor into view. The token makes a
     /// repeated click on the same button still scroll, instead of looking like a dead control.
+    /// 点按键时落在哪颗胶囊：已配置的动作决定分类，未配置（禁用）回落到「全部」。
+    private func mappingFilterForConfiguredAction(
+        button: RemoteButton,
+        trigger: ButtonTrigger
+    ) -> MappingActionFilter {
+        let action = mappingConfiguration(for: button, trigger: trigger).action
+        guard action != .disabled else { return .all }
+        let filter = MappingActionFilter(category: action.category)
+        return MappingActionFilter.visibleCases(
+            macroFeatureVisible: macroFeature.isFeatureVisible
+        ).contains(filter) ? filter : .all
+    }
+
     private func requestMappingEditorScroll(focusHold: Bool) {
         mappingEditorScrollTarget = focusHold ? "mapping-hold-editor" : "mapping-action-editor"
         mappingEditorScrollRequest &+= 1
@@ -2443,6 +2516,8 @@ struct SettingsView: View {
                         }
                     }
                 }
+                // 横向滚动会裁掉贴着边界的描边和圆角，内容两侧各留 2pt。
+                .padding(.horizontal, 2)
                 .padding(.vertical, 2)
             }
 
@@ -2640,13 +2715,14 @@ struct SettingsView: View {
                                 ? Color.accentColor.opacity(0.10) : Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 8))
                     }
                 }
+                .padding(.horizontal, 2)
             }
             if configured.action == .combinationAction,
                !macroFeature.libraryActions.contains(where: { $0.id == configured.macroID }) {
                 Text(localization.text("button_mapping.macro_unavailable")).font(.system(size: 13)).foregroundStyle(.orange)
             }
             Button(localization.text("button_mapping.manage_macros")) {
-                mappingActionFilter = .custom
+                mappingActionFilter = .combinations
                 mappingMacroSearch = ""
                 selectedSection = .macros
             }
@@ -2676,8 +2752,15 @@ struct SettingsView: View {
                 actionDetail: { button, trigger in mappingActionDetail(for: button, trigger: trigger) },
                 onEdit: { button, trigger in
                     selectedRemoteButton = button
-                    mappingActionFilter = .all
-                    mappingHoldEditingButton = button
+                    mappingActionFilter = mappingFilterForConfiguredAction(
+                        button: button,
+                        trigger: trigger
+                    )
+                    // 重复点同一颗键时 mappingEditingTarget 不变，光靠 onChange 不会再滚，
+                    // 所以每次都单独发一次滚动请求。
+                    mappingFilterScrollRequest &+= 1
+                    // 点按键只打开它的动作编辑器；按住是独立分类，不能连带展开。
+                    mappingHoldEditingButton = nil
                     mappingEditingTarget = ShortcutEditingTarget(
                         button: button,
                         trigger: trigger
@@ -2758,12 +2841,26 @@ struct SettingsView: View {
                             hardwareCanvas()
 
                             if let target = mappingEditingTarget {
-                                mappingEditorPanel(target)
-                                    .id("mapping-action-editor")
-                                if let holdButton = mappingHoldEditingButton, holdButton == target.button {
-                                    mappingHoldEditorPanel(holdButton)
-                                        .id("mapping-hold-editor")
-                                        .disabled(isMappingProfilePreviewOnly)
+                                // 分类胶囊和语音键、按键速度两块全局面板都不属于某一颗按键，
+                                // 因此放在编辑面板外面：胶囊在上，全局面板在面板之后。
+                                VStack(alignment: .leading, spacing: 16) {
+                                    mappingActionFilterControl
+                                        .id("mapping-action-filter")
+                                    // 选中「按住」或「按键速度」时整块不显示动作编辑面板：
+                                    // 否则会同时出现两层边框和两个「主键键」标题。
+                                    if mappingActionFilter != .hold,
+                                       mappingActionFilter != .buttonSpeed {
+                                        mappingEditorPanel(target)
+                                            .id("mapping-action-editor")
+                                    }
+                                    if mappingActionFilter == .all || mappingActionFilter == .hold {
+                                        mappingHoldEditorPanel(target.button)
+                                            .id("mapping-hold-tab")
+                                    }
+                                    if mappingActionFilter == .all || mappingActionFilter == .buttonSpeed {
+                                        mappingGestureTimingSection
+                                            .id("mapping-button-speed-tab")
+                                    }
                                 }
                             } else if let button = mappingHoldEditingButton {
                                 mappingHoldEditorPanel(button)
@@ -2786,7 +2883,8 @@ struct SettingsView: View {
                             }
                             #endif
 
-                            mappingGestureTimingSection
+                            // 「按键速度」已移进动作分类胶囊，只在「全部」或选中它时出现，
+                            // 不再常驻页面底部。
                             Color.clear.frame(height: 1).id("mapping-page-bottom")
                         }
                         .padding(.horizontal, 22)
@@ -2842,7 +2940,7 @@ struct SettingsView: View {
                     // would land on the page top when only the hold editor is open.
                     let anchor = isMappingVoiceSettingsPresented
                         ? "mapping-voice-settings"
-                        : (mappingEditingTarget == nil ? "mapping-hold-editor" : "mapping-action-editor")
+                        : (mappingEditingTarget == nil ? "mapping-hold-editor" : "mapping-action-filter")
                     DispatchQueue.main.async {
                         proxy.scrollTo(anchor, anchor: .top)
                     }
@@ -2852,7 +2950,8 @@ struct SettingsView: View {
                     isMappingVoiceSettingsPresented = false
                     DispatchQueue.main.async {
                         withAnimation(.easeInOut(duration: 0.25)) {
-                            proxy.scrollTo("mapping-action-editor", anchor: .top)
+                            // 滚到胶囊而不是面板：面板顶部对齐会让上面的胶囊被顶出视口。
+                            proxy.scrollTo("mapping-action-filter", anchor: .top)
                         }
                     }
                 }
@@ -2869,6 +2968,14 @@ struct SettingsView: View {
                     DispatchQueue.main.async {
                         withAnimation(.easeInOut(duration: 0.25)) {
                             proxy.scrollTo(mappingEditorScrollTarget, anchor: .top)
+                        }
+                    }
+                }
+                .onChange(of: mappingFilterScrollRequest) { _ in
+                    // 胶囊切换只改候选列表，滚到内容区顶部让整组内容完整露出。
+                    DispatchQueue.main.async {
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            proxy.scrollTo("mapping-action-filter", anchor: .top)
                         }
                     }
                 }
@@ -2996,8 +3103,16 @@ struct SettingsView: View {
         GlassPanel {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    Text(target.button.displayName(using: localization))
-                        .font(.system(size: 18, weight: .semibold))
+                    // 与按键页卡片同一套图标：同一颗键在画布和编辑面板上长得一样。
+                    // 图标和按键名先按视觉居中成组：不同 SF Symbol 的字形高度不同，
+                    // 直接用基线偏移对齐会让菜单键、上下键看起来忽高忽低。
+                    HStack(spacing: 6) {
+                        Image(systemName: target.button.systemImage)
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(Color.accentColor)
+                        Text(target.button.displayName(using: localization))
+                            .font(.system(size: 18, weight: .semibold))
+                    }
                     Text(target.trigger.displayName(using: localization))
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(Color.accentColor)
@@ -3060,7 +3175,9 @@ struct SettingsView: View {
         let capabilities = model.selectedRemoteVoiceCapabilities
         return GlassPanel {
             VStack(alignment: .leading, spacing: 12) {
-                mappingHIDStatus
+                // 左上角标明这是哪颗键的设置；字号与分类胶囊一致。
+                Text(localization.text("button_mapping.action_filter.voice_key"))
+                    .font(.system(size: 13, weight: .semibold))
                 Divider()
                 mappingVoiceKeyModeControl
                 // 「语音键模拟 Fn 点按」只对「不会按一次收音」的遥控器有意义：
@@ -3101,38 +3218,30 @@ struct SettingsView: View {
         .help(localization.text("siri_remote.scroll_arrow.reverse.help"))
     }
 
-    private var mappingHIDStatus: some View {
-        Label(
-            model.hidStatus.text(using: localization),
-            systemImage: "keyboard"
-        )
-        .font(.system(size: 12))
-        .foregroundStyle(.secondary)
-        .lineLimit(2)
-    }
-
     private var mappingVoiceKeyModeControl: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text("connection.voice_key_mode.title")
+            Text(localization.text("connection.voice_key_mode.title"))
                 .font(.system(size: 12, weight: .medium))
             Picker("connection.voice_key_mode.title", selection: Binding(
                 get: { settings.voiceKeyMode },
                 set: { model.setVoiceKeyMode($0) }
             )) {
                 ForEach(VoiceKeyMode.allCases) { mode in
-                    Text(LocalizedStringKey(mode.localizationKey)).tag(mode)
+                    Text(localization.text(mode.localizationKey)).tag(mode)
                 }
             }
             .pickerStyle(.segmented)
             .labelsHidden()
             .controlSize(.small)
             .tint(Color.accentColor)
-            Text("connection.voice_key_mode.help")
+            // 只占内容宽度并左对齐，不把整行铺满。
+            .fixedSize(horizontal: true, vertical: false)
+            Text(localization.text("connection.voice_key_mode.help"))
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
                 .lineLimit(3)
             if settings.voiceKeyMode != .function {
-                Text("connection.voice_key_mode.unverified_detail")
+                Text(localization.text("connection.voice_key_mode.unverified_detail"))
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -3214,6 +3323,7 @@ struct SettingsView: View {
                 ScrollViewReader { proxy in
                     ScrollView(.horizontal, showsIndicators: false) {
                         cards
+                            .padding(.horizontal, 2)
                     }
                     // 三款遥控器同时在线时卡片行放不下：选中的那张可能在视口之外（Chromecast
                     // 排最后，最容易被完全挡住），用户看到的画布就和顶部高亮对不上。卡片行
@@ -3525,9 +3635,15 @@ struct SettingsView: View {
             settings.experimentalContinuousRecordingEnabled
         return VStack(alignment: .leading, spacing: 16) {
             mappingInheritanceControl(button: button, trigger: trigger)
-            mappingActionFilterControl
 
             ForEach(ButtonActionCategory.allCases.filter(mappingActionFilter.includes)) { category in
+                if category == .combinations {
+                    // 组合动作的候选来自宏库，不走动作网格；它按自己的分类位置渲染，
+                    // 「全部」视图里同样排在常用语之前，不再寄居在自定义动作分组下面。
+                    if macroFeature.isFeatureVisible {
+                        mappingMacroChoices(button: button, trigger: trigger, configured: configured)
+                    }
+                } else {
                     let groupedActions = actions.filter { $0.category == category }
                     if !groupedActions.isEmpty {
                         mappingActionGroup(
@@ -3552,85 +3668,103 @@ struct SettingsView: View {
                             }
                         )
                     }
+                    // 录制区跟着「自定义快捷键」留在「基础按键」组内：
+                    // 选中后紧接着就能按键，不必滚到页面底部再找入口。
+                    if category == .basicKeys,
+                       (configured.action == .customShortcut ||
+                           shortcutCaptureTarget == ShortcutEditingTarget(
+                               button: button, trigger: trigger)) {
+                        inlineShortcutEditor(
+                            button: button,
+                            trigger: trigger,
+                            configured: configured
+                        )
+                    }
                 }
+            }
 
-                if mappingActionFilter.includes(.custom), macroFeature.isFeatureVisible {
-                    mappingMacroChoices(button: button, trigger: trigger, configured: configured)
-                }
-                if configured.action == .customShortcut ||
-                    shortcutCaptureTarget == ShortcutEditingTarget(button: button, trigger: trigger) {
-                    inlineShortcutEditor(
-                        button: button,
-                        trigger: trigger,
-                        configured: configured
-                    )
-                }
+            // 「目标 APP」属于「打开 App」分类：切到其他胶囊时必须一起隐藏，
+            // 不能只凭当前动作是「打开自定义 APP」就常驻在页面上。
+            if configured.action == .openCustomApplication,
+               mappingActionFilter.includes(.applications) {
+                customApplicationTargetPicker(
+                    button: button,
+                    trigger: trigger,
+                    configured: configured
+                )
+            }
 
-                if configured.action == .openCustomApplication {
-                    customApplicationTargetPicker(
-                        button: button,
-                        trigger: trigger,
-                        configured: configured
-                    )
-                }
-
-                if button == .power && trigger == .singleClick && settings.experimentalContinuousRecordingEnabled {
-                    Text("button_mapping.continuous_recording_experiment.power_managed")
-                        .font(.system(size: 12))
-                        .foregroundStyle(Color.accentColor)
-                } else if trigger == .doubleClick && configured.action != .disabled {
-                    Text("button_mapping.double_click.effect")
-                        .font(.system(size: 12))
-                        .foregroundStyle(Color.accentColor)
-                } else if trigger == .longPress && configured.action != .disabled {
-                    Text("button_mapping.long_press.effect")
-                        .font(.system(size: 12))
-                        .foregroundStyle(Color.accentColor)
-                } else if trigger == .singleClick,
-                          configured.action == .disabled || configured.action.allowsRepeat {
-                    Text("button_mapping.single_click.help")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                }
+            if button == .power && trigger == .singleClick && settings.experimentalContinuousRecordingEnabled {
+                Text("button_mapping.continuous_recording_experiment.power_managed")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Color.accentColor)
+            } else if trigger == .doubleClick && configured.action != .disabled {
+                Text("button_mapping.double_click.effect")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Color.accentColor)
+            } else if trigger == .longPress && configured.action != .disabled {
+                Text("button_mapping.long_press.effect")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Color.accentColor)
+            } else if trigger == .singleClick,
+                      configured.action == .disabled || configured.action.allowsRepeat {
+                Text("button_mapping.single_click.help")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+            }
         }
     }
 
+    /// 胶囊筛选行：始终单行，放不下时左右滚动。
     private var mappingActionFilterControl: some View {
-        HStack(spacing: 8) {
-            ForEach(MappingActionFilter.visibleCases) { filter in
-                let isSelected = mappingActionFilter == filter
-                Button {
-                    guard mappingActionFilter != filter else { return }
-                    mappingActionFilter = filter
-                } label: {
-                    Text(localization.text(filter.localizationKey))
-                        .font(.system(size: 14, weight: isSelected ? .semibold : .medium))
-                        .lineLimit(1)
-                        .foregroundStyle(
-                            isSelected
-                                ? Color(nsColor: .alternateSelectedControlTextColor)
-                                : Color.secondary
-                        )
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                        .background(
-                            isSelected ? Color.accentColor : Color.clear,
-                            in: Capsule()
-                        )
-                        .overlay {
-                            Capsule()
-                                .stroke(
-                                    isSelected ? Color.clear : Color.secondary.opacity(0.22),
-                                    lineWidth: 1
-                                )
-                        }
-                        .contentShape(Capsule())
+        let filters = MappingActionFilter.visibleCases(
+            macroFeatureVisible: macroFeature.isFeatureVisible
+        )
+        return ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(filters) { filter in
+                    mappingFilterButton(filter)
                 }
-                .buttonStyle(.plain)
-                .accessibilityAddTraits(isSelected ? .isSelected : [])
             }
+            .padding(.horizontal, 2)
+            .padding(.vertical, 1)
         }
-        .padding(8)
-        .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 12))
+        .frame(height: 32)
+    }
+
+    private func mappingFilterButton(_ filter: MappingActionFilter) -> some View {
+        let isSelected = mappingActionFilter == filter
+        return Button {
+            guard mappingActionFilter != filter else { return }
+            mappingActionFilter = filter
+            // 点完胶囊把内容区顶到视口顶部，让下面的分组完整露出来。
+            mappingFilterScrollRequest &+= 1
+        } label: {
+            Text(localization.text(filter.localizationKey))
+                .font(.system(size: 13, weight: isSelected ? .semibold : .medium))
+                .lineLimit(1)
+                .padding(.horizontal, 11)
+                .frame(minHeight: 28)
+                .foregroundStyle(
+                    isSelected
+                        ? Color(nsColor: .alternateSelectedControlTextColor)
+                        : Color.secondary
+                )
+                .background(
+                    isSelected ? Color.accentColor : Color.clear,
+                    in: Capsule()
+                )
+                .overlay {
+                    Capsule()
+                        .stroke(
+                            isSelected ? Color.clear : Color.secondary.opacity(0.22),
+                            lineWidth: 1
+                        )
+                }
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     private func mappingHoldMode(for button: RemoteButton) -> RemoteButtonHoldMode {
@@ -3746,8 +3880,13 @@ struct SettingsView: View {
         return GlassPanel {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    Text(button.displayName(using: localization))
-                        .font(.system(size: 18, weight: .semibold))
+                    HStack(spacing: 6) {
+                        Image(systemName: button.systemImage)
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(Color.accentColor)
+                        Text(button.displayName(using: localization))
+                            .font(.system(size: 18, weight: .semibold))
+                    }
                     Text("button_mapping.hold.entry")
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(Color.accentColor)
@@ -4181,36 +4320,39 @@ struct SettingsView: View {
         isManagedPowerAction: Bool,
         onSelect: @escaping (ButtonAction) -> Void
     ) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            LazyVGrid(
-                columns: [GridItem(.adaptive(minimum: 148), spacing: 8)],
-                alignment: .leading,
-                spacing: 8
-            ) {
-                ForEach(actions.filter { $0 != .openCommonPhrases }) { action in
-                    let unavailableApplication = action.presetApplication.map {
-                        !installedBundleIdentifiers.contains($0.bundleIdentifier)
-                    } ?? false
-                    let unavailableExperiment = action == .toggleLongRecording &&
-                        !settings.experimentalContinuousRecordingEnabled
-                    Button {
-                        onSelect(action)
-                    } label: {
-                        mappingActionLabel(
-                            title: action.visualDisplayName(using: localization) +
-                                (unavailableApplication
-                                    ? localization.text("common.suffix.not_installed")
-                                    : unavailableExperiment
-                                        ? localization.text("common.suffix.experimental_disabled")
-                                        : ""),
-                            isSelected: selectedAction == action,
-                            systemImage: selectedAction == action ? "checkmark.circle.fill" : "circle"
-                        )
+        let gridActions = actions.filter { $0 != .openCommonPhrases && $0 != .focusInput }
+        return VStack(alignment: .leading, spacing: 8) {
+            if !gridActions.isEmpty {
+                LazyVGrid(
+                    columns: [GridItem(.adaptive(minimum: 148), spacing: 8)],
+                    alignment: .leading,
+                    spacing: 8
+                ) {
+                    ForEach(gridActions) { action in
+                        let unavailableApplication = action.presetApplication.map {
+                            !installedBundleIdentifiers.contains($0.bundleIdentifier)
+                        } ?? false
+                        let unavailableExperiment = action == .toggleLongRecording &&
+                            !settings.experimentalContinuousRecordingEnabled
+                        Button {
+                            onSelect(action)
+                        } label: {
+                            mappingActionLabel(
+                                title: action.visualDisplayName(using: localization) +
+                                    (unavailableApplication
+                                        ? localization.text("common.suffix.not_installed")
+                                        : unavailableExperiment
+                                            ? localization.text("common.suffix.experimental_disabled")
+                                            : ""),
+                                isSelected: selectedAction == action,
+                                systemImage: selectedAction == action ? "checkmark.circle.fill" : "circle"
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .help(action.detailedDisplayName(using: localization))
+                        .accessibilityLabel(Text(action.detailedDisplayName(using: localization)))
+                        .disabled(isManagedPowerAction || unavailableApplication || unavailableExperiment)
                     }
-                    .buttonStyle(.plain)
-                    .help(action.detailedDisplayName(using: localization))
-                    .accessibilityLabel(Text(action.detailedDisplayName(using: localization)))
-                    .disabled(isManagedPowerAction || unavailableApplication || unavailableExperiment)
                 }
             }
             if actions.contains(.openCommonPhrases) {
@@ -4219,6 +4361,51 @@ struct SettingsView: View {
                     isManagedPowerAction: isManagedPowerAction,
                     onSelect: onSelect
                 )
+            }
+            if actions.contains(.focusInput) {
+                inputFocusActionControls(
+                    selectedAction: selectedAction,
+                    isManagedPowerAction: isManagedPowerAction,
+                    onSelect: onSelect
+                )
+            }
+        }
+    }
+
+    /// 「输入框」分类只有一个动作：提示语放在它右侧，指向真正配置学习入口的「APP 适配」页。
+    private func inputFocusActionControls(
+        selectedAction: ButtonAction,
+        isManagedPowerAction: Bool,
+        onSelect: @escaping (ButtonAction) -> Void
+    ) -> some View {
+        HStack(alignment: .center, spacing: 10) {
+            Button {
+                onSelect(.focusInput)
+            } label: {
+                mappingActionLabel(
+                    title: localization.text("action.focus_input"),
+                    isSelected: selectedAction == .focusInput,
+                    systemImage: selectedAction == .focusInput
+                        ? "checkmark.circle.fill"
+                        : "circle"
+                )
+            }
+            .buttonStyle(.plain)
+            .frame(width: 148)
+            .disabled(isManagedPowerAction)
+            .accessibilityIdentifier("focus-input-action")
+
+            HStack(spacing: 4) {
+                Text(localization.text("button_mapping.focus_input.app_adaptation_hint.prefix"))
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                Button(localization.text("button_mapping.focus_input.app_adaptation_hint.action")) {
+                    selectedSection = .applications
+                }
+                .buttonStyle(.plain)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(Color.accentColor)
+                .accessibilityIdentifier("focus-input-app-adaptation-link")
             }
         }
     }
@@ -4430,7 +4617,7 @@ struct SettingsView: View {
         .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 10))
     }
 
-    /// 「打开具体 APP」动作组里只负责挑目标 App；输入框聚焦与滚动区域不是打开 App 的一部分，
+    /// 「打开 App」动作组里只负责挑目标 App；输入框聚焦与滚动区域不是打开 App 的一部分，
     /// 它们按 App 生效、App 在前台就能用，统一放在平级的「App 输入框和滚动」里配置。
     @ViewBuilder
     private func customApplicationTargetPicker(
@@ -5400,7 +5587,7 @@ struct SettingsView: View {
     }
 
     /// 让用户挑一个 `.app`，返回（或复用）它的配置 ID；是否把它写进按键绑定由调用方决定——
-    /// 「打开具体 APP」组里写绑定，「App 输入框和滚动」里只切换正在配置的 App。
+    /// 「打开 App」组里写绑定，「App 输入框和滚动」里只切换正在配置的 App。
     private func pickCustomApplicationProfile() -> UUID? {
         let panel = NSOpenPanel()
         panel.title = localization.text("custom_application.picker.title")
@@ -5616,17 +5803,8 @@ struct SettingsView: View {
             return settings.customApplicationProfile(id: configured.applicationProfileID)?.displayName
                 ?? localization.text("custom_application.not_configured")
         }
-        switch configured.action {
-        case .arrowUp: return "↑"
-        case .arrowDown: return "↓"
-        case .arrowLeft: return "←"
-        case .arrowRight: return "→"
-        case .deleteBackward: return "⌫"
-        case .volumeUp: return localization.text("action.system_volume_up_short")
-        case .volumeDown: return localization.text("action.system_volume_down_short")
-        case .volumeMute: return "Mute"
-        default: break
-        }
+        // 按键页 chip 与方案页、手机端共用同一套动作语义名：
+        // 方向键不再单独显示符号，音量不再用 Vol+ 短标签。
         return configured.action.displayName(using: localization)
     }
 
