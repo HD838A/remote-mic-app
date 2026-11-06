@@ -1683,6 +1683,26 @@ struct RemoteButtonsTests {
         })
     }
 
+    @Test(arguments: [ButtonAction.arrowUp, .arrowDown, .arrowLeft, .arrowRight])
+    func builtInDirectionsMatchTheCustomShortcutNavigationIdentity(_ action: ButtonAction) throws {
+        let codes: [ButtonAction: CGKeyCode] = [.arrowUp: 126, .arrowDown: 125, .arrowLeft: 123, .arrowRight: 124]
+        let shortcut = CustomKeyboardShortcut(keyCode: try #require(codes[action]), modifierFlags: [], keyLabel: "Navigation")
+        var builtIn: (CGKeyCode, CGEventFlags)?
+        var custom: (CGKeyCode, CGEventFlags)?
+        #expect(KeyboardInjector.send(action, accessibilityTrusted: { true },
+            keyPoster: { builtIn = ($0, $1) }))
+        #expect(KeyboardInjector.send(.customShortcut, shortcut: shortcut,
+            accessibilityTrusted: { true }, shortcutEventPoster: { event in
+                if event.type == .keyDown {
+                    custom = (CGKeyCode(event.getIntegerValueField(.keyboardEventKeycode)), event.flags)
+                }
+                return true
+            }, shortcutHardwareFlags: { [] }))
+        #expect(builtIn?.0 == custom?.0)
+        #expect(builtIn?.1 == custom?.1)
+        #expect(builtIn?.1.contains([.maskSecondaryFn, .maskNumericPad]) == true)
+    }
+
     @Test func customShortcutPostsRecordedCombinationAndSingleKeyAndRequiresAccessibility() {
         let shortcut = CustomKeyboardShortcut(
             keyCode: 40,

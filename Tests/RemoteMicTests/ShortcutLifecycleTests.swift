@@ -425,6 +425,7 @@ struct ShortcutLifecycleTests {
         // 带 Command 的快捷键仍归入既有分类，入口优先级不变。
         #expect(ShortcutEventSequence.diagnosticKind(sample.0, modifiers: .maskCommand) == "command_shortcut")
         #expect(ShortcutEventSequence.diagnosticKind(37, modifiers: []) == nil)
+        #expect(ShortcutEventSequence.diagnosticKind(124, modifiers: []) == "arrow_right")
     }
 
     @Test func bareFunctionLayerShortcutGetsCorrelatedDiagnostics() {
