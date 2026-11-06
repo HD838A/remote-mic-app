@@ -175,4 +175,15 @@ struct G9N9NHCIParserTests {
         parser.cancelLearning()
         #expect(feed([0x41, 0]) == [.init(control: .select, down: true)])
     }
+
+    @Test func actualJieliInputUsageKeepsItsHighByteAndGoogleVariantRemainsReadable() {
+        #expect(G9N9NHCIParser.consumerControl(0x0189) == .input)
+        #expect(G9N9NHCIParser.consumerControl(0x0089) == .input)
+        var parser = bound()
+        func feed(_ bytes: [UInt8]) -> [G9N9NHCIParser.Edge] {
+            parser.consume(record(acl(Data([0x1B, 0x2B, 0]) + Data(bytes))))
+        }
+        #expect(feed([0x89, 1]) == [.init(control: .input, down: true)])
+        #expect(feed([0, 0]) == [.init(control: .input, down: false)])
+    }
 }

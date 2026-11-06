@@ -211,6 +211,7 @@ final class G9N9NHCIController {
                     }
                     if firstBinding { self.status("identity_verified") }
                     if let learnedKey, let learnedMappings {
+                        self.learningAttempt += 1
                         self.learningTimeout?.cancel()
                         self.learningTimeout = nil
                         self.defaults.set(Dictionary(uniqueKeysWithValues: learnedMappings.map { (String($0.key), $0.value.rawValue) }), forKey: Self.learnedKey)

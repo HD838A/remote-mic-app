@@ -248,7 +248,9 @@ struct G9N9NHCIParser {
         case 0x00EA: .volumeDown
         case 0x0077: .youtube
         case 0x0078: .netflix
-        case 0x0089: .input
+        // Original Google table uses 0x0089; the verified Jieli G9N9N emits
+        // 0x0189. Both are explicit Consumer usages, not a byte truncation.
+        case 0x0089, 0x0189: .input
         default: nil
         }
     }
