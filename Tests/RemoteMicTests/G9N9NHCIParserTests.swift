@@ -176,6 +176,35 @@ struct G9N9NHCIParserTests {
         #expect(feed([0x41, 0]) == [.init(control: .select, down: true)])
     }
 
+    @Test func reportCountsPrecedeDedupAndStayIsolatedFromOtherConnections() {
+        var parser = bound()
+        #expect(parser.consume(notification(6, handle: 0x41)).isEmpty)
+        #expect(parser.rightReportCount == 0)
+        #expect(parser.consume(notification(6)).count == 1)
+        #expect(parser.consume(notification(6)).isEmpty)
+        #expect(parser.rightReportCount == 2)
+        #expect(parser.consume(notification(0)).count == 1)
+        #expect(parser.releaseReportCount == 1)
+        #expect(parser.consume(notification(5)).count == 1)
+        #expect(parser.leftReportCount == 1)
+        _ = parser.consume(record(acl(Data([0x1B, 0x2B, 0, 0]))))
+        #expect(parser.oneByteReportCount == 1 && parser.releaseReportCount == 1)
+        parser.reset()
+        #expect(parser.leftReportCount == 0 && parser.rightReportCount == 0)
+        #expect(parser.releaseReportCount == 0 && parser.oneByteReportCount == 0)
+    }
+
+    @Test func packetTimestampIsDiagnosticOnlyAndDoesNotGateInput() {
+        var packet = notification(6)
+        packet.replaceSubrange(4..<12, with: [0x65, 0x53, 0xF1, 0x00, 0, 7, 0xA1, 0x20])
+        #expect(G9N9NHCIParser.packetCaptureUnixTime(packet) == 1_700_000_000.5)
+        packet.replaceSubrange(8..<12, with: [0, 0x0F, 0x42, 0x40])
+        #expect(G9N9NHCIParser.packetCaptureUnixTime(packet) == nil)
+        var parser = bound()
+        #expect(parser.consume(packet) == [.init(control: .right, down: true)])
+        #expect(G9N9NHCIParser.packetCaptureUnixTime(Data([3, 0, 0])) == nil)
+    }
+
     @Test func actualJieliInputUsageKeepsItsHighByteAndGoogleVariantRemainsReadable() {
         #expect(G9N9NHCIParser.consumerControl(0x0189) == .input)
         #expect(G9N9NHCIParser.consumerControl(0x0089) == .input)

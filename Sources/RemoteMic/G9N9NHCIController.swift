@@ -191,12 +191,17 @@ final class G9N9NHCIController {
             sealAuthorizationRight: { configuration.sealAuthorizationRight(completion: $0) },
             onPacket: { [weak self] blob in
                 guard let self else { return }
+                let receivedAt = ProcessInfo.processInfo.systemUptime
+                let receivedWall = Date().timeIntervalSince1970
                 if !self.reportedPackets {
                     self.reportedPackets = true
                     AppLogger.shared.write("G9N9N HCI PACKET phase=first_received")
                 }
                 let wasBound = self.parser.isBound
                 let edges = self.parser.consume(blob)
+                let captureAge = G9N9NHCIParser.packetCaptureUnixTime(blob).map { receivedWall - $0 }
+                let counts = (left: self.parser.leftReportCount, right: self.parser.rightReportCount,
+                    release: self.parser.releaseReportCount, oneByte: self.parser.oneByteReportCount)
                 if wasBound && !self.parser.isBound {
                     self.reportedConsumerUsages.removeAll()
                     self.reportedConsumerReportLengths.removeAll()
@@ -242,7 +247,9 @@ final class G9N9NHCIController {
                         self.onLearningFeedback?("completed")
                         AppLogger.shared.write("G9N9N HCI LEARNING result=completed control=\(learnedKey.control.rawValue)")
                     }
-                    for edge in edges { self.deliver(edge) }
+                    for edge in edges {
+                        self.deliver(edge, receivedAt: receivedAt, captureAge: captureAge, counts: counts)
+                    }
                 }
             },
             onAuthorizationProgress: { [weak self] progress in
@@ -309,13 +316,23 @@ final class G9N9NHCIController {
         }
     }
 
-    private func deliver(_ edge: G9N9NHCIParser.Edge) {
+    private func deliver(_ edge: G9N9NHCIParser.Edge, receivedAt: TimeInterval,
+        captureAge: TimeInterval?, counts: (left: Int, right: Int, release: Int, oneByte: Int)) {
+        let handlerStartedAt = ProcessInfo.processInfo.systemUptime
         if edge.down { pressed.insert(edge.control) } else { pressed.remove(edge.control) }
         sequence += 1
         onControl?(.init(control: edge.control,
                          phase: edge.cancelled ? .cancelled : (edge.down ? .began : .ended),
                          sequence: sequence, cancellationReason: edge.cancelled ? "hci_disconnected" : nil))
-        if edge.down { AppLogger.shared.write("G9N9N HCI CONTROL phase=began control=\(edge.control.rawValue)") }
+        if edge.down {
+            let finishedAt = ProcessInfo.processInfo.systemUptime
+            let captureMS = captureAge.map { String(Int(($0 * 1000).rounded())) } ?? "unavailable"
+            AppLogger.shared.write("G9N9N HCI CONTROL phase=began control=\(edge.control.rawValue) " +
+                "capture_to_receive_ms=\(captureMS) " +
+                "queue_wait_ms=\(Int((max(0, handlerStartedAt - receivedAt) * 1000).rounded())) " +
+                "handler_ms=\(Int((max(0, finishedAt - handlerStartedAt) * 1000).rounded())) " +
+                "raw_left=\(counts.left) raw_right=\(counts.right) raw_release=\(counts.release) one_byte=\(counts.oneByte)")
+        }
     }
 
     private func cancelControls(reason: String) {

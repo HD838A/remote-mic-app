@@ -649,6 +649,21 @@ struct ShortcutLifecycleTests {
         #expect(logs.isEmpty)
     }
 
+    @Test func sessionObservationMeasuresOnTheMonotonicCallbackClock() throws {
+        var now: TimeInterval = 10
+        let observation = ShortcutSessionObservation(uptime: { now })
+        let event = try #require(CGEvent(keyboardEventSource: nil, virtualKey: 124, keyDown: true))
+        event.timestamp = 1
+        event.flags = KeyboardInjector.navigationEventFlags
+        event.setIntegerValueField(.eventSourceUserData, value: KeyboardInjector.syntheticEventMarker)
+        observation.register(event, operationID: "timing", eventIndex: 0, primaryKind: "arrow_right")
+        now = 10.125
+        var logs: [String] = []
+        observation.observe(event, logger: { logs.append($0) })
+        #expect(logs.count == 1)
+        #expect(logs.first?.contains("registered_to_session_ms=125") == true)
+    }
+
     @Test func sessionObservationReportsChangedFlagsOnlyOnce() throws {
         let observation = ShortcutSessionObservation()
         let event = try #require(CGEvent(keyboardEventSource: nil, virtualKey: 126, keyDown: true))

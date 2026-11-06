@@ -75,6 +75,7 @@ final class ShortcutSessionObservation {
         let eventIndex: Int
         let primaryKind: String
         let flags: UInt64
+        let registeredAt: TimeInterval
         let expiresAt: TimeInterval
         let ambiguous: Bool
     }
@@ -101,7 +102,7 @@ final class ShortcutSessionObservation {
         let ambiguous = pending[key] != nil
         pending[key] = Pending(operationID: operationID, eventIndex: eventIndex,
             primaryKind: primaryKind, flags: ShortcutEventSequence.diagnosticFlags(event.flags),
-            expiresAt: now + 2, ambiguous: ambiguous)
+            registeredAt: now, expiresAt: now + 2, ambiguous: ambiguous)
     }
 
     func discard(operationID: String, eventIndex: Int) {
@@ -144,7 +145,8 @@ final class ShortcutSessionObservation {
             "correlation=matched event_index=\(match.eventIndex) event_timestamp_ns=\(event.timestamp) event_kind=\(eventKind) " +
             "primary_kind=\(match.primaryKind) source=session_event_tap " +
             "expected_flags=\(match.flags) event_flags=\(actualFlags) " +
-            "flags_match=\(match.flags == actualFlags) result=passed_through user_visible_result=unknown")
+            "flags_match=\(match.flags == actualFlags) registered_to_session_ms=\(Int((max(0, now - match.registeredAt) * 1000).rounded())) " +
+            "result=passed_through user_visible_result=unknown")
     }
 }
 

@@ -42,6 +42,10 @@ struct G9N9NHCIParser {
     private(set) var observedNotifications: [UInt16: Int] = [:]
     private(set) var observedConsumerUsages = Set<UInt16>()
     private(set) var observedConsumerReportLengths = Set<Int>()
+    private(set) var leftReportCount = 0
+    private(set) var rightReportCount = 0
+    private(set) var releaseReportCount = 0
+    private(set) var oneByteReportCount = 0
     private(set) var learnedMappings: [UInt16: ChromecastRemoteControl] = [:]
     private var learning: ChromecastRemoteControl?
     private var learningCandidate: UInt16?
@@ -99,8 +103,7 @@ struct G9N9NHCIParser {
         identityConflict = false
         packetsSeen = 0
         observedNotifications.removeAll()
-        observedConsumerUsages.removeAll()
-        observedConsumerReportLengths.removeAll()
+        resetConsumerObservations()
         cancelLearning()
         learningReports = 0
     }
@@ -177,6 +180,7 @@ struct G9N9NHCIParser {
         if observedConsumerReportLengths.count < 16 {
             observedConsumerReportLengths.insert(report.count)
         }
+        if report.count == 1 { oneByteReportCount = min(1_000_000_000, oneByteReportCount + 1) }
         // A one-byte variant remains unsupported for actions, but its candidate
         // Consumer value helps distinguish that format from no radio report.
         if observedConsumerUsages.count < 32 {
@@ -187,6 +191,12 @@ struct G9N9NHCIParser {
         // the report-array index exposed by macOS's virtual HID collection.
         guard report.count == 2 else { return [] }
         let usage = Self.le16(report, 0)
+        switch usage {
+        case 0: releaseReportCount = min(1_000_000_000, releaseReportCount + 1)
+        case 0x0044: leftReportCount = min(1_000_000_000, leftReportCount + 1)
+        case 0x0045: rightReportCount = min(1_000_000_000, rightReportCount + 1)
+        default: break
+        }
         if let learning {
             learningReports = min(1_000_000, learningReports + 1)
             guard !learningRejected else { return [] }
@@ -222,10 +232,25 @@ struct G9N9NHCIParser {
         isBound = false
         fragments.removeAll()
         observedNotifications.removeAll()
-        observedConsumerUsages.removeAll()
-        observedConsumerReportLengths.removeAll()
+        resetConsumerObservations()
         cancelLearning()
         return edges
+    }
+
+    private mutating func resetConsumerObservations() {
+        observedConsumerUsages.removeAll()
+        observedConsumerReportLengths.removeAll()
+        leftReportCount = 0
+        rightReportCount = 0
+        releaseReportCount = 0
+        oneByteReportCount = 0
+    }
+
+    static func packetCaptureUnixTime(_ blob: Data) -> TimeInterval? {
+        guard blob.count >= 13, be32(blob, 0) == blob.count - 4 else { return nil }
+        let seconds = be32(blob, 4), microseconds = be32(blob, 8)
+        guard seconds >= 1_000_000_000, microseconds < 1_000_000 else { return nil }
+        return Double(seconds) + Double(microseconds) / 1_000_000
     }
 
     static func control(_ value: UInt8) -> ChromecastRemoteControl? {
