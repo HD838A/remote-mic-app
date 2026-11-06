@@ -85,6 +85,31 @@ struct G9N9NVoiceSessionTests {
         #expect(starts == 2 && pcmCount == 494)
     }
 
+    @Test func normalStopThenHostCleanupAllowsTheNextExplicitStreamStart() {
+        let s = session()
+        var starts = 0
+        var pcmCount = 0
+        s.onStart = { starts += 1 }
+        s.onSamples = { pcm, _ in pcmCount += pcm.count }
+        // The host finishes usage/transcript bookkeeping after the transport
+        // has normally stopped, then notifies the transport of host teardown.
+        s.onStop = { reason in
+            #expect(reason.isNormal)
+            s.cancel(reason: "host_stop", now: 0.3)
+        }
+        s.control(Data([4, 0, 2, 7]), now: 0)
+        s.audio(Data(repeating: 0, count: 247), now: 0.01)
+        s.control(Data([0]), now: 0.02)
+        s.drain(now: 0.2)
+        #expect(!s.active && starts == 1 && pcmCount == 494)
+        // This remote may send STREAM_START directly on the next press,
+        // without a separate MIC_OPEN request.
+        s.control(Data([4, 0, 2, 8]), now: 2)
+        s.audio(Data(repeating: 0, count: 247), now: 2.01)
+        #expect(s.active && starts == 2 && pcmCount == 988)
+        s.onStop = nil
+    }
+
     @Test func longSessionExtendUsesCurrentSessionID() {
         let s = session()
         var writes: [Data] = []

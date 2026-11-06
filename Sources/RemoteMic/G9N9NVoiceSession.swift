@@ -97,6 +97,9 @@ final class G9N9NVoiceSession {
     }
 
     func cancel(reason: String, now: TimeInterval) {
+        // Host usage cleanup also runs after a normal transport stop. It must
+        // not poison the next direct STREAM_START as a cancelled late packet.
+        guard active else { return }
         cancelled = true
         if active, let caps = capabilities {
             onWrite?(ATVVProtocol.microphoneClose(version: caps.version, sessionID: sessionID))
