@@ -1088,7 +1088,7 @@ struct SettingsPageRegressionTests {
         )
 
         let frameSize = try #require(appSource.range(
-            of: "private static let settingsWindowFrameSize = NSSize(width: 1067, height: 771)"
+            of: "private static let settingsWindowFrameSize = NSSize(width: 1067, height: 760)"
         ))
         let contentSize = try #require(appSource.range(
             of: "window.setContentSize(contentRect.size)"

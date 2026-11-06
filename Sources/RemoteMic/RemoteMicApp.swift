@@ -232,9 +232,12 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
 
     /// 设置窗口的默认尺寸与最小尺寸（整窗，含标题栏）。
     ///
-    /// 数值取自用户确认的按键页截图（实测整窗 1067×771）。默认值和最小值都绑这一个常量，
+    /// 数值取自用户确认的按键页截图（实测整窗 1067×760）。默认值和最小值都绑这一个常量，
     /// 避免两处各写一遍后再次漂移。
-    private static let settingsWindowFrameSize = NSSize(width: 1067, height: 771)
+    ///
+    /// 760 必须等于 `SettingsView.minimumContentSize` 的高度 732 加标题栏 28：内容下限比
+    /// 整窗下限高时，SwiftUI 会在首次布局后把窗口压回内容下限，常量就只剩记录作用。
+    private static let settingsWindowFrameSize = NSSize(width: 1067, height: 760)
 
     private let model = BridgeAppModel()
     private lazy var appIconController = AppIconController()

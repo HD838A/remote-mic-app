@@ -21,7 +21,7 @@ This file is a convenience translation of the current mandatory design rules. Th
 
 ## Review scope
 
-- Settings window: default and minimum content size 1020×772, freely resizable above that minimum. An 800×650 offscreen render is only a narrow-width stress check, not a supported production window size.
+- Settings window: default and minimum frame size 1067×760, including the title bar (content area 1067×732), resizable above that minimum only. An 800×650 offscreen render is only a narrow-width stress check, not a supported production window size.
 - Pages: Connection & Voice, Button Mapping, Profile, Reflections, and Settings, including Permissions & Privacy, General, Diagnostics & Logs and Support.
 - First-run Onboarding: approximately 1020×772, without step numbers, totals, percentages, Skip, or Continue Later.
 - Each page header shows only its primary title, without a redundant subtitle.
@@ -42,6 +42,7 @@ This file is a convenience translation of the current mandatory design rules. Th
 - Sidebar and selected-button states use low-opacity semantic-blue interactive glass.
 - The bottom Profile sidebar entry uses the system `person.crop.circle` icon. The sidebar and Settings brand names use Oxanium SemiBold 600; other text uses system fonts, semantic type sizes, and system colors, following light/dark appearance, reduced transparency, and increased contrast.
 - The window keeps native traffic-light controls and a meaningful logical title while hiding the visible title and titlebar separator. Page backgrounds extend to the top, only the dedicated blank titlebar region remains draggable, page content and controls do not move the whole window, and interactive content stays clear of the window controls.
+- The settings window size has exactly one source: `settingsWindowFrameSize` in `Sources/RemoteMic/RemoteMicApp.swift`, shared by the default and the minimum. It is currently 1067×760 as a frame, or 1067×732 as a content area. The frame height must equal `SettingsView.minimumContentSize` height 732 plus the 28pt title bar; when the content minimum exceeds the frame minimum, SwiftUI shrinks the window back to the content minimum on first layout and `window.minSize` has no effect. At this size the page header, device card row, and mapping canvas must remain fully usable without clipping or reduced type.
 - Except for the flat Profile cards and sharing buttons, panels and buttons use native macOS 26 `glassEffect` and glass button styles; macOS 14/15 use system Material and standard buttons without a custom blur implementation.
 - The button-mapping page reuses Resources/RC003-remote-photo.png at its original 508×1030 aspect ratio.
 - Pressing a normal physical button highlights the remote diagram and selects its mapping row. The voice button has independent voice-activity state.
