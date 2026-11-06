@@ -8047,14 +8047,14 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         idleVirtualAudioReleaseWorkItem = nil
     }
 
-    private var shouldKeepVirtualAudioActive: Bool {
+    var shouldKeepVirtualAudioActive: Bool {
         shouldKeepVirtualAudioActive(allowingIdleBridgeRelease: false)
     }
 
     private func shouldKeepVirtualAudioActive(allowingIdleBridgeRelease: Bool) -> Bool {
         VirtualAudioConnectionLifecyclePolicy.shouldBeActive(
-            readyBluetoothBridgeCount: readyBluetoothBridgeCount,
-            bluetoothVoiceActive: bluetoothVoiceActive,
+            readyBluetoothBridgeCount: readyBluetoothBridgeCount + (chromecastStatus.isConnected ? 1 : 0),
+            bluetoothVoiceActive: bluetoothVoiceActive || chromecastVoiceActive || chromecastVoiceStopping,
             mobileVoiceActive: macMicrophoneEnabled || activeMobileVoiceSource != nil ||
                 !appleRemoteVoiceDevices.isEmpty || appleRemoteVoiceStopping,
             testToneActive: isPlayingTestTone,
@@ -8064,7 +8064,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     }
 
     private var hasActiveVirtualAudioSource: Bool {
-        bluetoothVoiceActive || activeMobileVoiceSource != nil ||
+        bluetoothVoiceActive || chromecastVoiceActive || chromecastVoiceStopping || activeMobileVoiceSource != nil ||
             !appleRemoteVoiceDevices.isEmpty || appleRemoteVoiceStopping || isPlayingTestTone
     }
 

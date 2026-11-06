@@ -199,4 +199,18 @@ struct G9N9NVoiceSessionTests {
         bridge.stop()
     }
 
+    @Test @MainActor func connectedG9KeepsVirtualAudioReadyBeforeFirstVoice() throws {
+        let name = "G9N9NAudioTests." + UUID().uuidString
+        let defaults = try #require(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        let settings = AppSettings(defaults: defaults)
+        let feature = ChromecastFeatureIntegration(hardwareEnabled: false)
+        let model = BridgeAppModel(settings: settings, chromecastFeature: feature)
+        #expect(!model.shouldKeepVirtualAudioActive)
+        feature.onStatusChange?(.connected(displayName: "G9N9N"))
+        #expect(model.shouldKeepVirtualAudioActive)
+        feature.onStatusChange?(.disconnected)
+        #expect(!model.shouldKeepVirtualAudioActive)
+    }
+
 }
