@@ -8659,9 +8659,12 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         if sessionID != nil {
             recordingAssetCoordinator.finish(endedAt: endedAt)
         }
-        // 会话因别的原因结束（用户关闭语音、切换输入源）时，必须让 Chromecast 包内的
-        // latched 状态同步清空；否则下一次点按会被误判成「结束」而不是「开始」。
-        chromecastFeature.notifyHostVoiceSessionEnded()
+        // The private toggle backend retains its host-latch completion contract.
+        // Public G9 transport cancellation belongs to its explicit forced-stop
+        // path, never to shared usage/transcript bookkeeping after normal STOP.
+        if !ChromecastFeatureIntegration.usesPublicG9N9N {
+            chromecastFeature.notifyHostVoiceSessionEnded()
+        }
     }
 
     private var currentVoiceUsageSource: UsageEventSource {
@@ -9263,6 +9266,11 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         guard chromecastVoiceActive else { return }
         chromecastVoiceActive = false
         isChromecastVoiceActive = false
+        if !reason.isNormal, ChromecastFeatureIntegration.usesPublicG9N9N {
+            // Clear host ownership first: cancelling the transport synchronously
+            // reports its stop, which must not re-enter the active host session.
+            chromecastFeature.notifyHostVoiceSessionEnded()
+        }
         if chromecastVoiceStopping {
             AppLogger.shared.write(
                 "CHROMECAST VOICE phase=completed result=deferred_session_cancelled " +
