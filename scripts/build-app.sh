@@ -142,6 +142,8 @@ if [[ "$REQUIRE_DEVELOPER_ID_SIGNING" == "1" && "$SIGNING_IDENTITY" == "-" ]]; t
   print -u2 "Developer ID Application signing is required"
   exit 1
 fi
+# SayAll 相关密钥、Token 与 API Key（含下面的诊断公钥与 Sentry DSN）统一从私有仓
+# GetSayAll/sayall-membership-ops 的 docs/secret-inventory.md 查取，不要在本机到处翻。
 if [[ "$REQUIRE_DIAGNOSTIC_PUBLIC_KEY" == "1" && -z "$SAYALL_DIAGNOSTIC_PUBLIC_KEY_BASE64" ]]; then
   print -u2 "SAYALL_DIAGNOSTIC_PUBLIC_KEY_BASE64 is required for this build"
   exit 1
