@@ -1,5 +1,7 @@
 # Bug 记录
 
+- [唤醒后 BLE 语音链路静默停死](./2026-11-07-ble-wake-recovery-stall.md)
+
 - [只有一只 Siri Remote 时 Onboarding 永久卡在音频页](./2026-11-07-siri-remote-onboarding-audio-gate.md)
 
 - [常用语粘贴后自定义 Return 继承残留 Command 变成换行](./2026-11-06-shortcut-inherits-stale-command.md)
@@ -174,6 +176,7 @@
 
 | 时间 | Bug | 状态 |
 | --- | --- | --- |
+| 2026-11-07 | [唤醒后 BLE 语音链路静默停死](./2026-11-07-ble-wake-recovery-stall.md) | 已修复（发现阶段无条件查询系统已连接候选；有已保存身份即启用 20 秒扫描窗口，到期原地重新发现）；26 项蓝牙生命周期回归通过；本机 rc003 两次真机睡眠（蓝牙 `state=4`）唤醒后 1.57–3.0 秒自动恢复，用户确认 Fn 与语音输入正常；等待维护者复验 |
 | 2026-11-07 | [只有一只 Siri Remote 时 Onboarding 永久卡在音频页](./2026-11-07-siri-remote-onboarding-audio-gate.md) | 已修复（音频门禁改为按控制来源区分：Siri Remote 的语音音频在按下语音键时才建立，不再要求它提前持续 Ready；小米与 Chromecast 仍要求持续 Ready，设备消失时两种来源都继续阻塞）；新增 2 项回归，反向验证策略与视图接线各自变红后恢复通过；真实 Siri Remote 现场重跑待验收 |
 | 2026-11-05 | [macOS CI 上主队列投递延迟导致自聚焦用例误报](./2026-11-05-macos-ci-main-queue-delivery-flake.md) | 已修复（等待预算由「轮询次数」改为墙钟，`perform` 默认 10 秒产品超时不变并由新用例锁定；`PermissionStatusProbeTests` 的 20 秒预算同步提到 60 秒）；30 秒主线程阻塞夹具下修复前 3 个 issue、修复后 1212 项全绿，夹具已删除不入库 |
 | 2026-11-04 | [睡眠期间遥控器链路一直保持，系统把它当成唤醒源](./2026-11-04-remote-hid-link-keeps-mac-awake.md) | 已确认应用层无法修复：睡眠前用带 `DoNotAutoConnectBuiltInServices` 的取消断开 CB 会话后，两次真机实测（Build 304，合盖+外接显示器）都在入睡 5 秒内被 `bluetoothd` 的 `Bluetooth LE HID Activity` 升级为完全唤醒；候选实现与测试已回退，结论回填 #441、#778 |
