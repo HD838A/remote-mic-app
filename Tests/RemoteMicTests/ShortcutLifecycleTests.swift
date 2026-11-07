@@ -16,6 +16,67 @@ struct ShortcutLifecycleTests {
         }
     }
 
+    @Test func builtInPastePreservesHeldCommandAndReportsSubmission() {
+        let physical = CGEventFlags([.maskCommand, .maskAlternate])
+        var events: [Edge] = []
+        var logs: [String] = []
+        #expect(KeyboardInjector.send(
+            .commandPaste,
+            accessibilityTrusted: { true },
+            keyPoster: { _, _ in Issue.record("Paste bypassed the shared transaction") },
+            shortcutEventPoster: { events.append(Edge($0)); return true },
+            shortcutHardwareFlags: { physical },
+            logger: { logs.append($0) }
+        ))
+        #expect(events.map(\.type) == [.keyDown, .keyUp])
+        #expect(events.map(\.code) == [9, 9])
+        #expect(events.allSatisfy { $0.flags == physical })
+        #expect(logs.filter { $0.contains("phase=completed") }.count == 1)
+        #expect(logs.contains { $0.contains("result=submitted") && $0.contains("user_visible_result=unknown") })
+    }
+
+    @Test func builtInPasteFailureCleansUpAndNextInvocationRecovers() {
+        var events: [Edge] = []
+        var logs: [String] = []
+        #expect(!KeyboardInjector.send(
+            .commandPaste,
+            accessibilityTrusted: { true },
+            keyPoster: { _, _ in Issue.record("Paste bypassed the shared transaction") },
+            shortcutEventPoster: { event in
+                events.append(Edge(event))
+                return event.type != .keyDown
+            },
+            shortcutHardwareFlags: { [] },
+            logger: { logs.append($0) }
+        ))
+        #expect(events.map(\.code) == [55, 9, 9, 55])
+        #expect(events.last?.flags.isEmpty == true)
+        #expect(logs.filter { $0.contains("phase=completed") }.count == 1)
+        #expect(logs.contains { $0.contains("result=failed") && $0.contains("reason=key_down_failed") })
+        events.removeAll()
+        #expect(KeyboardInjector.send(
+            .commandPaste,
+            accessibilityTrusted: { true },
+            keyPoster: { _, _ in Issue.record("Paste bypassed the shared transaction") },
+            shortcutEventPoster: { events.append(Edge($0)); return true },
+            shortcutHardwareFlags: { [] },
+            logger: { _ in }
+        ))
+        #expect(events.map(\.code) == [55, 9, 9, 55])
+        #expect(events.last?.flags.isEmpty == true)
+    }
+
+    @Test func builtInPasteWithoutAccessibilityDoesNotPost() {
+        #expect(!KeyboardInjector.send(
+            .commandPaste,
+            accessibilityTrusted: { false },
+            keyPoster: { _, _ in Issue.record("Posted without accessibility") },
+            shortcutEventPoster: { _ in Issue.record("Posted without accessibility"); return true },
+            shortcutHardwareFlags: { Issue.record("Read hardware state without accessibility"); return [] },
+            logger: { _ in }
+        ))
+    }
+
     @Test(arguments: [NSEvent.ModifierFlags.control, [.control, .shift], .command])
     func switcherReceivesFinalModifierRelease(_ flags: NSEvent.ModifierFlags) {
         var events: [Edge] = []
