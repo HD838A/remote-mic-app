@@ -30,7 +30,7 @@
 - 自动化覆盖构建和最终 App 校验脚本必须保留诊断公钥门禁。
 - 私有 Draft 构建必须显式传入 `REQUIRE_DIAGNOSTIC_PUBLIC_KEY=1` 和受控环境提供的 `SAYALL_DIAGNOSTIC_PUBLIC_KEY_BASE64`。
 - `BuildSigningTests` 23 项通过；强制模式下缺失公钥和解码后不足 32 字节的公钥均在构建前 fail closed。
-- 使用已经先合入私有 `GetSayAll/sayall-membership-ops` 主线的公钥构建本地主线 Release App，`verify-app.sh` 通过，最终 `Info.plist` 中公钥解码长度为 32 字节。
+- 使用已经先合入私有侧主线的公钥构建本地主线 Release App，`verify-app.sh` 通过，最终 `Info.plist` 中公钥解码长度为 32 字节。
 - 启动该候选后生成权限为 `0600`、文件头为 `RMLG2` 的新会话日志。使用私有仓库远端 `main` 的 age 密文取得匹配私钥，成功解密 88 条记录；验证过程只输出记录数与版本元数据，没有输出日志正文或密钥。
 - 当前验证证明本地主线候选的日志链路可用；尚未重打 Developer ID 签名、公证并上传的私有 Draft，也未重新执行遥控器语音按压时间线。
 
