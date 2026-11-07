@@ -186,6 +186,12 @@
 "action.command_find" = "查找";
 "action.command_save" = "保存";
 "action.app_switcher" = "切换 App";
+"action.mission_control" = "调度中心";
+"action.application_windows" = "应用程序窗口";
+"action.space_left" = "向左切换桌面";
+"action.space_right" = "向右切换桌面";
+"action.lock_screen" = "锁定屏幕";
+"action.screenshot" = "截屏";
 "action.arrow_up" = "↑";
 "action.arrow_up_detail" = "上方向键";
 "action.arrow_down_detail" = "下方向键";
@@ -227,6 +233,14 @@
 
 "action.delete_backspace" = "退格";
 "action.command_delete" = "删除到行首";
+"action.command_minimize" = "最小化窗口";
+"action.toggle_full_screen" = "切换全屏";
+"action.command_new_tab" = "新建标签页";
+"action.command_previous_tab" = "上一个标签页";
+"action.command_next_tab" = "下一个标签页";
+"action.command_next_window" = "切换窗口";
+"action.command_hide" = "隐藏当前 App";
+"action.command_new" = "新建窗口";
 "action.show_desktop" = "显示桌面";
 "action.context_menu" = "上下文菜单";
 "action.system_volume_up" = "增大音量";
