@@ -418,6 +418,18 @@ enum KeyboardInjector {
             keyPoster(1, .maskCommand)
         case .commandDelete:
             keyPoster(51, .maskCommand)
+        case .commandMinimize:
+            keyPoster(46, .maskCommand)
+        case .toggleFullScreen:
+            keyPoster(3, [.maskControl, .maskCommand])
+        case .commandNewTab:
+            keyPoster(17, .maskCommand)
+        case .commandPreviousTab:
+            keyPoster(33, [.maskShift, .maskCommand])
+        case .commandNextTab:
+            keyPoster(30, [.maskShift, .maskCommand])
+        case .commandNextWindow:
+            keyPoster(50, .maskCommand)
         case .arrowUp:
             keyPoster(126, [])
         case .arrowDown:

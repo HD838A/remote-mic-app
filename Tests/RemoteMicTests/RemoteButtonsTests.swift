@@ -333,6 +333,13 @@ struct RemoteButtonsTests {
         #expect(ButtonAction.commandClose.category == .basicKeys)
         #expect(ButtonAction.commandUndo.category == .basicKeys)
         #expect(ButtonAction.commandDelete.category == .basicKeys)
+        // 窗口与标签页动作是纯按键组合，和既有关闭/退出同属基础按键。
+        #expect(ButtonAction.commandMinimize.category == .basicKeys)
+        #expect(ButtonAction.toggleFullScreen.category == .basicKeys)
+        #expect(ButtonAction.commandNewTab.category == .basicKeys)
+        #expect(ButtonAction.commandPreviousTab.category == .basicKeys)
+        #expect(ButtonAction.commandNextTab.category == .basicKeys)
+        #expect(ButtonAction.commandNextWindow.category == .basicKeys)
         #expect(ButtonAction.volumeUp.category == .systemAndMedia)
         #expect(ButtonAction.previousCommandLeft.category == .systemAndMedia)
         #expect(ButtonAction.nextCommandRight.category == .systemAndMedia)
@@ -367,6 +374,13 @@ struct RemoteButtonsTests {
         #expect(!ButtonAction.commandFind.allowsRepeat)
         #expect(!ButtonAction.commandSave.allowsRepeat)
         #expect(!ButtonAction.commandDelete.allowsRepeat)
+        // 按住不放不应该反复最小化窗口或连开标签页。
+        #expect(!ButtonAction.commandMinimize.allowsRepeat)
+        #expect(!ButtonAction.toggleFullScreen.allowsRepeat)
+        #expect(!ButtonAction.commandNewTab.allowsRepeat)
+        #expect(!ButtonAction.commandPreviousTab.allowsRepeat)
+        #expect(!ButtonAction.commandNextTab.allowsRepeat)
+        #expect(!ButtonAction.commandNextWindow.allowsRepeat)
         #expect(!ButtonAction.previousCommandLeft.allowsRepeat)
         #expect(!ButtonAction.nextCommandRight.allowsRepeat)
         #expect(ButtonAction.arrowUp.allowsRepeat)
@@ -1154,6 +1168,13 @@ struct RemoteButtonsTests {
         #expect(ButtonAction.arrowLeft.visualDisplayName(using: localization) == "←")
         #expect(ButtonAction.arrowLeft.detailedDisplayName(using: localization) == "Left")
         #expect(ButtonAction.volumeUp.visualDisplayName(using: localization) == "Volume Up")
+        #expect(ButtonAction.commandMinimize.visualDisplayName(using: localization) == "⌘M")
+        #expect(ButtonAction.commandMinimize.detailedDisplayName(using: localization) == "Command + M")
+        #expect(ButtonAction.toggleFullScreen.visualDisplayName(using: localization) == "⌃⌘F")
+        #expect(ButtonAction.commandNewTab.visualDisplayName(using: localization) == "⌘T")
+        #expect(ButtonAction.commandPreviousTab.visualDisplayName(using: localization) == "⇧⌘[")
+        #expect(ButtonAction.commandNextTab.visualDisplayName(using: localization) == "⇧⌘]")
+        #expect(ButtonAction.commandNextWindow.visualDisplayName(using: localization) == "⌘`")
     }
 
     @Test func customShortcutPreservesRightCommandDeviceSide() {
@@ -1754,6 +1775,12 @@ struct RemoteButtonsTests {
             (.commandFind, 3, .maskCommand),
             (.commandSave, 1, .maskCommand),
             (.commandDelete, 51, .maskCommand),
+            (.commandMinimize, 46, .maskCommand),
+            (.toggleFullScreen, 3, [.maskControl, .maskCommand]),
+            (.commandNewTab, 17, .maskCommand),
+            (.commandPreviousTab, 33, [.maskShift, .maskCommand]),
+            (.commandNextTab, 30, [.maskShift, .maskCommand]),
+            (.commandNextWindow, 50, .maskCommand),
         ]
 
         for (action, keyCode, modifiers) in expected {

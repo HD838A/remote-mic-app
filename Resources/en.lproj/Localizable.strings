@@ -227,6 +227,12 @@
 
 "action.delete_backspace" = "Backspace";
 "action.command_delete" = "Delete to Line Start";
+"action.command_minimize" = "Minimize Window";
+"action.toggle_full_screen" = "Toggle Full Screen";
+"action.command_new_tab" = "New Tab";
+"action.command_previous_tab" = "Previous Tab";
+"action.command_next_tab" = "Next Tab";
+"action.command_next_window" = "Cycle Windows";
 "action.show_desktop" = "Show Desktop";
 "action.context_menu" = "Context Menu";
 "action.system_volume_up" = "Volume Up";

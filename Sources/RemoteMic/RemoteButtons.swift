@@ -877,6 +877,14 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
     case commandFind
     case commandSave
     case commandDelete
+    /// 窗口与标签页的固定快捷键。遥控器没有键盘，这些组合此前只能靠
+    /// `customShortcut` 逐个录制，新增预设后可直接从动作列表选择。
+    case commandMinimize
+    case toggleFullScreen
+    case commandNewTab
+    case commandPreviousTab
+    case commandNextTab
+    case commandNextWindow
     case arrowUp
     case arrowDown
     case arrowLeft
@@ -939,6 +947,12 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
         case .commandFind: return localization.text("action.command_find")
         case .commandSave: return localization.text("action.command_save")
         case .commandDelete: return localization.text("action.command_delete")
+        case .commandMinimize: return localization.text("action.command_minimize")
+        case .toggleFullScreen: return localization.text("action.toggle_full_screen")
+        case .commandNewTab: return localization.text("action.command_new_tab")
+        case .commandPreviousTab: return localization.text("action.command_previous_tab")
+        case .commandNextTab: return localization.text("action.command_next_tab")
+        case .commandNextWindow: return localization.text("action.command_next_window")
         case .arrowUp: return localization.text("action.arrow_up")
         case .arrowDown: return localization.text("action.arrow_down")
         case .arrowLeft: return localization.text("action.arrow_left")
@@ -1034,6 +1048,32 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
             return CustomKeyboardShortcut(keyCode: 1, modifierFlags: .command, keyLabel: "S")
         case .commandDelete:
             return CustomKeyboardShortcut(keyCode: 51, modifierFlags: .command, keyLabel: "Delete")
+        // 键码取 macOS ANSI 布局：M=46、F=3、T=17、[=33、]=30、`=50。
+        // ⌃⌘F 与系统的「切换全屏」菜单项一致；⌘` 走同一 App 的窗口循环。
+        case .commandMinimize:
+            return CustomKeyboardShortcut(keyCode: 46, modifierFlags: .command, keyLabel: "M")
+        case .toggleFullScreen:
+            return CustomKeyboardShortcut(
+                keyCode: 3,
+                modifierFlags: [.control, .command],
+                keyLabel: "F"
+            )
+        case .commandNewTab:
+            return CustomKeyboardShortcut(keyCode: 17, modifierFlags: .command, keyLabel: "T")
+        case .commandPreviousTab:
+            return CustomKeyboardShortcut(
+                keyCode: 33,
+                modifierFlags: [.shift, .command],
+                keyLabel: "["
+            )
+        case .commandNextTab:
+            return CustomKeyboardShortcut(
+                keyCode: 30,
+                modifierFlags: [.shift, .command],
+                keyLabel: "]"
+            )
+        case .commandNextWindow:
+            return CustomKeyboardShortcut(keyCode: 50, modifierFlags: .command, keyLabel: "`")
         case .arrowUp:
             return CustomKeyboardShortcut(keyCode: 126, modifierFlags: [], keyLabel: "Up")
         case .arrowDown:
@@ -1080,6 +1120,8 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
         case .disabled, .escape, .returnKey, .commandReturn, .shiftReturn, .commandCopy,
              .commandPaste, .commandClose, .commandQuit, .commandCut, .commandSelectAll,
              .commandUndo, .commandRedo, .commandFind, .commandSave, .commandDelete,
+             .commandMinimize, .toggleFullScreen, .commandNewTab, .commandPreviousTab,
+             .commandNextTab, .commandNextWindow,
              .arrowUp, .arrowDown, .arrowLeft, .arrowRight, .scrollUp, .scrollDown,
              .pageUp, .pageDown, .scrollToTop, .scrollToBottom, .deleteBackward:
             return .basicKeys
@@ -1125,6 +1167,15 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
             .commandFind,
             .commandSave,
             .commandDelete,
+            // 窗口与标签页动作都是"一次操作一个结果"，按住连发会把窗口
+            // 反复最小化、或瞬间开出十几个标签页，因此与既有固定快捷键
+            // 一样只执行一次。
+            .commandMinimize,
+            .toggleFullScreen,
+            .commandNewTab,
+            .commandPreviousTab,
+            .commandNextTab,
+            .commandNextWindow,
             .previousCommandLeft,
             .nextCommandRight,
         ].contains(self) && presetApplication == nil && !isAppInternal
