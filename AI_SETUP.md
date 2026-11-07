@@ -51,9 +51,13 @@ App 内快速连接支持 Codex、Claude Code、Cursor 和 OpenCode。它会为�
 
 如果总开关关闭或授权已撤销，读取失败是预期行为。不要尝试绕过。
 
-## 4. 自动连接失败时的手动配置
+## 4. 让其他 Agent 安装
 
-让用户在“其他客户端或手动配置”中输入客户端名称，点击“创建只读授权”，然后直接把生成的配置粘贴到目标客户端的本机配置文件。令牌只显示一次。
+快速连接不可用时，在“让其他 Agent 安装”中输入目标客户端名称并创建只读授权。点击“复制安装提示词”，立即粘贴到能在同一台 Mac 上执行命令的目标 Agent。粘贴的文字只包含安装指令。Agent 在本机从剪贴板读取凭据并将它们写入客户端的用户级 MCP 配置。
+
+如果复制过其他内容，请回到回眸重新复制提示词。Agent 应保留现有 MCP 服务器，遇到同名条目时停止。注册后按客户端要求重新打开，再检查工具列表。安装检查无需读取回眸正文。
+
+以下是客户端配置示例。Agent 应使用剪贴板提供的实际路径和凭据。
 
 ### Codex
 
@@ -63,7 +67,7 @@ App 内快速连接支持 Codex、Claude Code、Cursor 和 OpenCode。它会为�
 ~/.codex/config.toml
 ```
 
-从无线麦SayAll.app 点击“复制 Codex TOML”，粘贴为独立配置段：
+用独立配置段合并 `sayall_history`：
 
 ```toml
 [mcp_servers.sayall_history]
@@ -74,7 +78,7 @@ env = { SAYALL_MCP_CLIENT_ID = "<由 App 生成>", SAYALL_MCP_ACCESS_TOKEN = "<�
 
 ### Claude Code
 
-从无线麦SayAll.app 点击“复制标准 MCP JSON”，取出 `sayall_history` 对象后使用 Claude Code 官方用户级命令：
+使用 Claude Code 的用户级 MCP 配置入口。以下命令只展示参数格式：
 
 ```text
 claude mcp add-json --scope user sayall_history '<stdio server JSON>'
@@ -90,7 +94,7 @@ claude mcp add-json --scope user sayall_history '<stdio server JSON>'
 ~/.cursor/mcp.json
 ```
 
-把 App 生成的标准 MCP JSON 中 `mcpServers.sayall_history` 合并进现有 `mcpServers`。必须保留其他 Server。文件若包含注释、JSONC 或无法解析，不要整体重写；改由用户在 Cursor 设置中手动添加。
+把 剪贴板配置中的  `mcpServers.sayall_history` 合并进现有 `mcpServers`。必须保留其他 Server。文件若包含注释、JSONC 或无法解析，不要整体重写；改由用户在 Cursor 设置中手动添加。
 
 ### OpenCode
 
