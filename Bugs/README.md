@@ -174,7 +174,7 @@
 
 | 时间 | Bug | 状态 |
 | --- | --- | --- |
-| 2026-11-07 | [只有一只 Siri Remote 时 Onboarding 永久卡在音频页](./2026-11-07-siri-remote-onboarding-audio-gate.md) | 已修复（音频门禁改为按控制来源区分：Siri Remote 的语音音频在按下语音键时才建立，不再要求它提前持续 Ready；小米与 Chromecast 仍要求持续 Ready，设备消失时两种来源都继续阻塞）；新增 2 项回归，反向验证策略与视图接线各自变红后恢复通过；真实 Siri Remote 现场重跑待验收 |
+| 2026-11-07 | [只有一只 Siri Remote 时 Onboarding 永久卡在音频页](./2026-11-07-siri-remote-onboarding-audio-gate.md) | 已修复（音频门禁改为按控制来源区分：Siri Remote 的语音音频在按下语音键时才建立，不再要求它提前持续 Ready；小米与 Chromecast 仍要求持续 Ready，设备消失时两种来源都继续阻塞）；新增 2 项回归，反向验证策略与视图接线各自变红后恢复通过；2026-11-08 真机复验通过（只有一只苹果遥控器的机器上重跑向导可走完，音频页显示「语音开始时连接音频」） |
 | 2026-11-05 | [macOS CI 上主队列投递延迟导致自聚焦用例误报](./2026-11-05-macos-ci-main-queue-delivery-flake.md) | 已修复（等待预算由「轮询次数」改为墙钟，`perform` 默认 10 秒产品超时不变并由新用例锁定；`PermissionStatusProbeTests` 的 20 秒预算同步提到 60 秒）；30 秒主线程阻塞夹具下修复前 3 个 issue、修复后 1212 项全绿，夹具已删除不入库 |
 | 2026-11-04 | [睡眠期间遥控器链路一直保持，系统把它当成唤醒源](./2026-11-04-remote-hid-link-keeps-mac-awake.md) | 已确认应用层无法修复：睡眠前用带 `DoNotAutoConnectBuiltInServices` 的取消断开 CB 会话后，两次真机实测（Build 304，合盖+外接显示器）都在入睡 5 秒内被 `bluetoothd` 的 `Bluetooth LE HID Activity` 升级为完全唤醒；候选实现与测试已回退，结论回填 #441、#778 |
 | 2026-11-01 | [Sparkle 更新组件停留在已知漏洞版本](./2026-11-01-sparkle-security-version.md) | 依赖升级至 2.9.6 完成（三条上游安全公告覆盖），SwiftPM 解析、Release 构建与 CI 通过；真实安装更新待下次发布通道验收 |
