@@ -31,20 +31,32 @@ struct HIDUsageMapping: Equatable, Codable {
 }
 
 enum RemoteVoiceFunctionMappingPolicy {
-    // Xiaomi RC001 and RC003 expose the microphone button as keyboard F5 (usage page 7,
-    // usage 0x3e). macOS represents the laptop Fn/Globe key as the Apple
-    // vendor top-case usage (usage page 0xff, usage 3).
-    static let remoteVoiceKey = HIDUsageMapping(
-        source: 0x0000_0007_0000_003E,
-        destination: 0x0000_00FF_0000_0003
-    )
+    // Xiaomi RC001/RC003 把麦克风键暴露成键盘用法，但具体用法随固件批次不同：
+    // - 多数机器是键盘 F5（usage page 7，usage 0x3e）。
+    // - 部分 RC003 是键盘 i（usage page 7，usage 0x0c）。2026-11-06 现场：按住语音键
+    //   在 ABC 输入源下直接打出字母 i，说明这颗键落在这个用法上；只映射 F5 时它既不会
+    //   变成 Fn（第三方语音工具收不到启动键），又会把 i 打进前台输入框。
+    // 两者都映射为 Apple vendor top-case Fn/Globe（usage page 0xff，usage 3），
+    // macOS 只把这个用法转换成语音工具监听的 Fn。
+    static let remoteVoiceKeySources: [UInt64] = [
+        0x0000_0007_0000_003E,
+        0x0000_0007_0000_000C,
+    ]
+
+    static let functionKeyDestination: UInt64 = 0x0000_00FF_0000_0003
+
+    static let remoteVoiceKeys: [HIDUsageMapping] = remoteVoiceKeySources.map {
+        HIDUsageMapping(source: $0, destination: functionKeyDestination)
+    }
 
     // Typeless 等点按式语音工具会被 Fn 长按干扰；此模式下彻底丢弃语音键的
     // 按键事件（目标 usage 0），Fn 点按改由软件注入，避免物理按键按住时干扰注入。
-    static let neutralRemoteVoiceKey = HIDUsageMapping(
-        source: 0x0000_0007_0000_003E,
-        destination: 0x0
-    )
+    static let neutralRemoteVoiceKeys: [HIDUsageMapping] = remoteVoiceKeySources.map {
+        HIDUsageMapping(source: $0, destination: 0x0)
+    }
+
+    static var remoteVoiceKey: HIDUsageMapping { remoteVoiceKeys[0] }
+    static var neutralRemoteVoiceKey: HIDUsageMapping { neutralRemoteVoiceKeys[0] }
 
     // Xiaomi RC001 and RC003 expose the power button as keyboard Power (usage 0x66).
     // Remap it to harmless F20 before macOS can turn it into a sleep event.
@@ -55,14 +67,15 @@ enum RemoteVoiceFunctionMappingPolicy {
 
     static func applying(
         to existing: [HIDUsageMapping],
-        voiceMapping: HIDUsageMapping = remoteVoiceKey,
+        voiceMappings: [HIDUsageMapping] = RemoteVoiceFunctionMappingPolicy.remoteVoiceKeys,
         powerMapping: HIDUsageMapping? = nil,
         preservePowerKeyMapping: Bool = false
     ) -> [HIDUsageMapping] {
         var desired = existing.filter {
-            $0.source != remoteVoiceKey.source &&
+            !remoteVoiceKeySources.contains($0.source) &&
                 (preservePowerKeyMapping || $0.source != suppressedRemotePowerKey.source)
-        } + [voiceMapping]
+        }
+        desired.append(contentsOf: voiceMappings)
         if let powerMapping {
             desired.append(powerMapping)
         }
@@ -70,18 +83,16 @@ enum RemoteVoiceFunctionMappingPolicy {
     }
 
     static func restoring(
-        originalVoiceMapping: HIDUsageMapping?,
+        originalVoiceMappings: [HIDUsageMapping],
         originalPowerMapping: HIDUsageMapping?,
         in current: [HIDUsageMapping],
         preservePowerKeyMapping: Bool = false
     ) -> [HIDUsageMapping] {
         var restored = current.filter {
-            $0.source != remoteVoiceKey.source &&
+            !remoteVoiceKeySources.contains($0.source) &&
                 (preservePowerKeyMapping || $0.source != suppressedRemotePowerKey.source)
         }
-        if let originalVoiceMapping {
-            restored.append(originalVoiceMapping)
-        }
+        restored.append(contentsOf: originalVoiceMappings)
         if !preservePowerKeyMapping, let originalPowerMapping {
             restored.append(originalPowerMapping)
         }
@@ -119,7 +130,7 @@ final class RemoteVoiceFunctionMapper {
     private static let mappingProperty = "UserKeyMapping" as CFString
 
     private struct OriginalMappings {
-        let voice: HIDUsageMapping?
+        let voices: [HIDUsageMapping]
         let power: HIDUsageMapping?
     }
 
@@ -188,8 +199,8 @@ final class RemoteVoiceFunctionMapper {
                     $0.source == RemoteVoiceFunctionMappingPolicy.suppressedRemotePowerKey.source
                 }
                 originalMappings[registryID] = OriginalMappings(
-                    voice: current.first {
-                        $0.source == RemoteVoiceFunctionMappingPolicy.remoteVoiceKey.source
+                    voices: current.filter {
+                        RemoteVoiceFunctionMappingPolicy.remoteVoiceKeySources.contains($0.source)
                     },
                     power: currentPower == RemoteVoiceFunctionMappingPolicy.suppressedRemotePowerKey
                         ? nil
@@ -199,9 +210,9 @@ final class RemoteVoiceFunctionMapper {
             }
             let desired = RemoteVoiceFunctionMappingPolicy.applying(
                 to: current,
-                voiceMapping: neutralizeVoiceKey
-                    ? RemoteVoiceFunctionMappingPolicy.neutralRemoteVoiceKey
-                    : RemoteVoiceFunctionMappingPolicy.remoteVoiceKey,
+                voiceMappings: neutralizeVoiceKey
+                    ? RemoteVoiceFunctionMappingPolicy.neutralRemoteVoiceKeys
+                    : RemoteVoiceFunctionMappingPolicy.remoteVoiceKeys,
                 powerMapping: preservePowerKeyMapping ? nil : (suppressPowerKey
                     ? RemoteVoiceFunctionMappingPolicy.suppressedRemotePowerKey
                     : originalMappings[registryID]?.power),
@@ -264,7 +275,7 @@ final class RemoteVoiceFunctionMapper {
                   let original = originalMappings[registryID]
             else { continue }
             let restored = RemoteVoiceFunctionMappingPolicy.restoring(
-                originalVoiceMapping: original.voice,
+                originalVoiceMappings: original.voices,
                 originalPowerMapping: original.power,
                 in: service.readMappings(),
                 preservePowerKeyMapping: preservesPowerKeyMapping
