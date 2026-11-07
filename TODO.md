@@ -257,7 +257,8 @@
 
 - [x] 设计并实现完整的首次 Onboarding、权限设置流程，并重新布局“连接”和“按键映射”页面 <!-- workshop:status=已完成;priority=P1 -->
   - 首次启动使用可恢复、不可跳过的多步骤 Onboarding，而不是一次弹出全部权限或只展示功能介绍。当前流程依次覆盖：欢迎、单页选择当前构建实际包含的控制来源、选择输入工具、对应必要权限、所选来源真实连接与普通按键、音频回环设备选择、同一来源真实语音文字测试、三个普通按键和完成页。
-  - 2026-08-18 修复手机分支按需音频门禁：iPhone/网页版要求受支持的虚拟音频设备已选择且仍存在，实际输出在语音开始时建立并由下一页真实声音和文字验证；停止语音后的正常释放不再阻塞完成页。实体遥控器仍要求持续输出就绪。三种控制方式统一要求蓝牙、输入监控和辅助功能全部开启，手机本地网络由下一页真实连接验证；本地测试包强制注入并校验 Web Relay 配置后才可交付。
+  - 2026-08-18 修复手机分支按需音频门禁：iPhone/网页版要求受支持的虚拟音频设备已选择且仍存在，实际输出在语音开始时建立并由下一页真实声音和文字验证；停止语音后的正常释放不再阻塞完成页。小米遥控器与 Chromecast 等桥接实体遥控器仍要求持续输出就绪。三种控制方式统一要求蓝牙、输入监控和辅助功能全部开启，手机本地网络由下一页真实连接验证；本地测试包强制注入并校验 Web Relay 配置后才可交付。
+  - 2026-11-07 把按需音频门禁扩到控制来源：Siri Remote 的语音音频由 HCI 组件在按下语音键时建立，连接遥控器不会启动引擎，因此音频页与完成页不再要求它提前持续 Ready；小米遥控器和 Chromecast 的桥在连接期间保持 Ready，门禁不变。设备仍必须选中且仍在受支持列表里。诊断新增 `audio_gate=on_demand|ready_required`。现场记录见 [Bug 诊断记录](Bugs/2026-11-07-siri-remote-onboarding-audio-gate.md)，真实 Siri Remote 重跑待验收。
   - [x] 在 Onboarding 增加遥控器蓝牙配对提示：同时长按“主页 Home + 菜单 Menu”可使遥控器进入蓝牙配对模式。当用户需要首次配对、清除旧连接后重新配对，或连接排障需要重置配对关系时，明确展示这组按键和后续在 macOS“系统设置 → 蓝牙”中重新连接的操作；不能把进入配对模式误写成 App 已自动完成蓝牙重置。
     - 2026-10-23 核对实现状态：提示已随 `1.8.25` Stable 发布（见 `Resources/en.lproj/ReleaseHistory.md`）。`OnboardingView.swift` 的 `physicalRemoteContent` 按 `onboardingControlSource` 渲染 `onboarding.remote.first_pairing.wake` 与 `onboarding.remote.first_pairing.pair` 两步，中英文文案齐备；`open_bluetooth` 提供“打开蓝牙设置”入口。措辞只说明如何进入配对模式，未声称 App 已自动重置蓝牙连接。
     - 两处与原文字面的偏差：**提示落在“遥控器”步骤而非欢迎页**（`OnboardingFlow.visibleCases` 顺序为 welcome → remoteAvailability → permissions → remote → …）；**“系统设置 → 蓝牙”重新连接作为页面独立按钮提供，未并入配对提示的步骤卡**。按产品实际行为记录为已完成，如需把提示前移到欢迎页或并入步骤卡另开工作项。

@@ -430,6 +430,15 @@ enum OnboardingControlSource: String, CaseIterable, Codable, Identifiable {
         case .unselected: return .unselected
         }
     }
+
+    /// 语音音频是否只在按下语音键时建立。
+    ///
+    /// 小米遥控器和 Chromecast 连接成功后蓝牙桥保持 Ready，虚拟音频引擎因此常驻；
+    /// Siri Remote 的音频由 HCI 组件在按键时开始采集，连接本身不启动引擎，按需建立。
+    /// 两者都归为 `physical_remote`，只能按来源区分，不能按控制方式区分。
+    var usesOnDemandAudioOutput: Bool {
+        self == .siriRemote
+    }
 }
 
 /// During the ordinary-button check, Onboarding observes fresh input events but must
@@ -791,6 +800,32 @@ enum OnboardingAudioSelectionPolicy {
     }
 }
 
+/// 音频页与完成页的音频门禁。
+///
+/// 语音音频按需建立的来源（iPhone、网页版、Siri Remote）只要选中受支持的设备且该设备仍在
+/// 列表里就能继续，真实输出由下一页的会话、PCM、停止和文字验证；其他实体遥控器在连接期间
+/// 常驻输出引擎，仍然要求持续 Ready。把 Siri Remote 一起按持续 Ready 要求会让只有一只
+/// Siri Remote 的用户永远停在这一页：连接遥控器不会启动引擎，重试也只是重复同一个判断。
+enum OnboardingAudioReadinessPolicy {
+    static func usesOnDemandAudioOutput(
+        controlMethod: OnboardingControlMethod,
+        controlSource: OnboardingControlSource
+    ) -> Bool {
+        controlMethod.usesOnDemandAudioOutput || controlSource.usesOnDemandAudioOutput
+    }
+
+    static func isSatisfied(
+        controlMethod: OnboardingControlMethod,
+        controlSource: OnboardingControlSource,
+        audioOutputSelected: Bool,
+        audioReady: Bool
+    ) -> Bool {
+        audioOutputSelected &&
+            (usesOnDemandAudioOutput(controlMethod: controlMethod, controlSource: controlSource) ||
+                audioReady)
+    }
+}
+
 enum OnboardingTranscriptInputPolicy {
     private static let keyDownEventTypeRawValue: UInt = 10
     private static let hidSystemStateRawValue: Int64 = 1
@@ -846,6 +881,7 @@ enum OnboardingFlowPolicy {
         voiceTool: OnboardingVoiceTool,
         remoteAvailability: OnboardingRemoteAvailability = .hasRemote,
         controlMethod: OnboardingControlMethod = .physicalRemote,
+        controlSource: OnboardingControlSource = .unselected,
         voiceKeyMode: VoiceKeyMode = .function,
         capabilities: OnboardingCapabilities,
         phoneAppInstallConfirmed: Bool = true
@@ -876,8 +912,12 @@ enum OnboardingFlowPolicy {
         case .remote:
             return capabilities.remoteConnected && capabilities.remoteButtonObserved
         case .audio:
-            return capabilities.audioOutputSelected &&
-                (controlMethod.usesOnDemandAudioOutput || capabilities.audioReady)
+            return OnboardingAudioReadinessPolicy.isSatisfied(
+                controlMethod: controlMethod,
+                controlSource: controlSource,
+                audioOutputSelected: capabilities.audioOutputSelected,
+                audioReady: capabilities.audioReady
+            )
         case .voiceTest:
             return capabilities.voiceSessionStarted &&
                 capabilities.voiceSamplesReceived &&
@@ -896,8 +936,12 @@ enum OnboardingFlowPolicy {
                     capabilities.inputMonitoringGranted) &&
                 capabilities.accessibilityGranted &&
                 capabilities.remoteConnected &&
-                capabilities.audioOutputSelected &&
-                (controlMethod.usesOnDemandAudioOutput || capabilities.audioReady)
+                OnboardingAudioReadinessPolicy.isSatisfied(
+                    controlMethod: controlMethod,
+                    controlSource: controlSource,
+                    audioOutputSelected: capabilities.audioOutputSelected,
+                    audioReady: capabilities.audioReady
+                )
         }
     }
 
@@ -906,6 +950,7 @@ enum OnboardingFlowPolicy {
         voiceTool: OnboardingVoiceTool,
         remoteAvailability: OnboardingRemoteAvailability = .hasRemote,
         controlMethod: OnboardingControlMethod = .physicalRemote,
+        controlSource: OnboardingControlSource = .unselected,
         capabilities: OnboardingCapabilities,
         hasSelectedAudioUID: Bool
     ) -> OnboardingStep? {
@@ -913,6 +958,7 @@ enum OnboardingFlowPolicy {
             step: step,
             remoteAvailability: remoteAvailability,
             controlMethod: controlMethod,
+            controlSource: controlSource,
             capabilities: capabilities,
             hasSelectedAudioUID: hasSelectedAudioUID
         )

@@ -1021,6 +1021,116 @@ struct OnboardingFlowTests {
         }
     }
 
+    /// 只有一只 Siri Remote 时没有任何来源能让虚拟音频引擎常驻：连接遥控器不启动引擎，
+    /// 引擎只在按下语音键时按需建立，所以音频页和完成页不能要求它一直 Ready。这是
+    /// 2026-11-07 现场卡在音频页、重试 12 次仍不动的原因；小米与 Chromecast 的桥在连接期间
+    /// 保持 Ready，仍按原来的持续 Ready 要求。
+    @Test func siriRemoteAudioGateFollowsTheOnDemandLifecycle() {
+        var capabilities = OnboardingCapabilities(
+            bluetoothGranted: true,
+            inputMonitoringGranted: true,
+            accessibilityGranted: true,
+            remoteConnected: true,
+            remoteButtonObserved: true,
+            audioReady: false,
+            audioOutputSelected: true
+        )
+
+        #expect(OnboardingControlSource.siriRemote.usesOnDemandAudioOutput)
+        #expect(!OnboardingControlSource.xiaomiRemote.usesOnDemandAudioOutput)
+        #expect(!OnboardingControlSource.chromecastRemote.usesOnDemandAudioOutput)
+        #expect(!OnboardingControlMethod.physicalRemote.usesOnDemandAudioOutput)
+
+        for step in [OnboardingStep.audio, .complete] {
+            #expect(OnboardingFlowPolicy.canContinue(
+                from: step,
+                voiceTool: .weixin,
+                controlMethod: .physicalRemote,
+                controlSource: .siriRemote,
+                capabilities: capabilities
+            ))
+            #expect(!OnboardingFlowPolicy.canContinue(
+                from: step,
+                voiceTool: .weixin,
+                controlMethod: .physicalRemote,
+                controlSource: .xiaomiRemote,
+                capabilities: capabilities
+            ))
+            #expect(OnboardingFlowPolicy.recoveryStep(
+                from: step,
+                voiceTool: .weixin,
+                controlMethod: .physicalRemote,
+                controlSource: .siriRemote,
+                capabilities: capabilities,
+                hasSelectedAudioUID: true
+            ) == nil)
+        }
+
+        #expect(FirstUseDiagnosticContext(
+            step: .audio,
+            controlMethod: .physicalRemote,
+            controlSource: .siriRemote,
+            capabilities: capabilities,
+            hasSelectedAudioUID: true
+        ).failureReason == nil)
+        #expect(FirstUseDiagnosticContext(
+            step: .audio,
+            controlMethod: .physicalRemote,
+            controlSource: .xiaomiRemote,
+            capabilities: capabilities,
+            hasSelectedAudioUID: true
+        ).failureReason == .audioOutputNotReady)
+
+        // 设备被移除后两种来源都必须继续阻塞：按需不等于放弃设备选择。
+        capabilities.audioOutputSelected = false
+        for source in [OnboardingControlSource.siriRemote, .xiaomiRemote] {
+            for step in [OnboardingStep.audio, .complete] {
+                #expect(!OnboardingFlowPolicy.canContinue(
+                    from: step,
+                    voiceTool: .weixin,
+                    controlMethod: .physicalRemote,
+                    controlSource: source,
+                    capabilities: capabilities
+                ))
+            }
+            #expect(FirstUseDiagnosticContext(
+                step: .audio,
+                controlMethod: .physicalRemote,
+                controlSource: source,
+                capabilities: capabilities,
+                hasSelectedAudioUID: true
+            ).failureReason == .audioSelectedDeviceMissing)
+        }
+    }
+
+    /// 视图不能自己再算一套门禁：来源必须真的传进门禁，否则只有一只 Siri Remote 的用户
+    /// 依然会被挡住，而单元测试仍全绿。
+    @Test func onboardingViewPassesTheControlSourceIntoTheAudioGate() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let viewSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/OnboardingView.swift"),
+            encoding: .utf8
+        )
+
+        // 逐行比对完整调用形态，避免「别处也有一模一样的参数名」把接线缺失盖过去。
+        #expect(viewSource.contains("""
+                    controlMethod: settings.onboardingControlMethod,
+                    controlSource: settings.onboardingControlSource,
+                    voiceKeyMode: settings.voiceKeyMode,
+        """))
+        #expect(viewSource.contains("""
+                    controlMethod: settings.onboardingControlMethod,
+                    controlSource: settings.onboardingControlSource,
+                    capabilities: capabilities,
+        """))
+        #expect(viewSource.contains("OnboardingAudioReadinessPolicy.isSatisfied("))
+        #expect(!viewSource.contains("settings.onboardingControlMethod.usesOnDemandAudioOutput ||"))
+        #expect(viewSource.contains("sideCheck(audioSideCheckKey"))
+    }
+
     @Test func connectedPhysicalRemoteSkipsOnlyTheAvailabilityQuestion() {
         #expect(OnboardingFlowPolicy.shouldAutoSelectPhysicalRemote(
             at: .remoteAvailability,
