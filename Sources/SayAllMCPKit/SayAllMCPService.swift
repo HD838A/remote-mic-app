@@ -21,10 +21,10 @@ public final class SayAllMCPService: @unchecked Sendable {
 
     public func validateServerStart() throws {
         do {
-            try authorizationStore.requireAuthorized(clientId: clientId, token: token)
+            let authorization = try authorizationStore.requireAuthorized(clientId: clientId, token: token)
             try auditLog.append(
                 SayAllMCPAuditEvent(
-                    clientId: clientId,
+                    clientId: authorization.clientId.uuidString.lowercased(),
                     tool: "server_start",
                     result: "allowed"
                 )
@@ -32,7 +32,7 @@ public final class SayAllMCPService: @unchecked Sendable {
         } catch {
             try? auditLog.append(
                 SayAllMCPAuditEvent(
-                    clientId: clientId,
+                    clientId: "unknown",
                     tool: "server_start",
                     result: "denied",
                     reasonCode: Self.errorCode(error)
@@ -44,12 +44,14 @@ public final class SayAllMCPService: @unchecked Sendable {
 
     public func listApplications() throws -> SayAllMCPApplicationPage {
         let occurredAt = Date()
+        var auditClientID = "unknown"
         do {
-            try authorizationStore.requireAuthorized(clientId: clientId, token: token)
+            let authorization = try authorizationStore.requireAuthorized(clientId: clientId, token: token)
+            auditClientID = authorization.clientId.uuidString.lowercased()
             let result = try historyStore.listApplications()
             try auditLog.append(
                 SayAllMCPAuditEvent(
-                    clientId: clientId,
+                    clientId: auditClientID,
                     tool: "list_transcript_apps",
                     occurredAt: occurredAt,
                     result: "allowed",
@@ -60,7 +62,7 @@ public final class SayAllMCPService: @unchecked Sendable {
         } catch {
             try? auditLog.append(
                 SayAllMCPAuditEvent(
-                    clientId: clientId,
+                    clientId: auditClientID,
                     tool: "list_transcript_apps",
                     occurredAt: occurredAt,
                     result: error is SayAllMCPAccessDeniedError ? "denied" : "error",
@@ -73,18 +75,18 @@ public final class SayAllMCPService: @unchecked Sendable {
 
     public func query(_ query: SayAllMCPTranscriptQuery) throws -> SayAllMCPTranscriptPage {
         let occurredAt = Date()
+        var auditClientID = "unknown"
         do {
-            try authorizationStore.requireAuthorized(clientId: clientId, token: token)
+            let authorization = try authorizationStore.requireAuthorized(clientId: clientId, token: token)
+            auditClientID = authorization.clientId.uuidString.lowercased()
             let result = try historyStore.query(query)
             try auditLog.append(
                 SayAllMCPAuditEvent(
-                    clientId: clientId,
+                    clientId: auditClientID,
                     tool: "query_transcripts",
                     occurredAt: occurredAt,
                     result: "allowed",
                     returnedRecordCount: result.records.count,
-                    startedAtOrAfter: query.startedAtOrAfter,
-                    endedAtBefore: query.endedAtBefore,
                     bundleIdentifierCount: query.bundleIdentifiers?.count ?? 0
                 )
             )
@@ -92,12 +94,10 @@ public final class SayAllMCPService: @unchecked Sendable {
         } catch {
             try? auditLog.append(
                 SayAllMCPAuditEvent(
-                    clientId: clientId,
+                    clientId: auditClientID,
                     tool: "query_transcripts",
                     occurredAt: occurredAt,
                     result: error is SayAllMCPAccessDeniedError ? "denied" : "error",
-                    startedAtOrAfter: query.startedAtOrAfter,
-                    endedAtBefore: query.endedAtBefore,
                     bundleIdentifierCount: query.bundleIdentifiers?.count ?? 0,
                     reasonCode: Self.errorCode(error)
                 )
