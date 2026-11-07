@@ -77,10 +77,9 @@ struct ChromecastIntegrationTests {
 
     // MARK: - 缺包时的退化行为
 
-    @Test func integrationIsInertWhenPrivatePackageIsAbsent() {
-        // 未编入私有包时，接入层必须完全惰性：不崩、不产生任何回调。
-        guard !ChromecastFeatureIntegration.isPackageIncluded else { return }
-        let integration = ChromecastFeatureIntegration()
+    @Test func integrationCanDisableHardwareForOffscreenTests() {
+        // Offscreen tests exercise host routing without opening real BLE/HID devices.
+        let integration = ChromecastFeatureIntegration(hardwareEnabled: false)
         var eventCount = 0
         integration.onVoiceStart = { eventCount += 1 }
         integration.onVoiceSustain = { eventCount += 1 }
@@ -218,6 +217,30 @@ struct ChromecastIntegrationTests {
         #expect(!XiaomiRemoteModel.rc003.usesPrivateAdapter)
         #expect(XiaomiRemoteModel.chromecastVoiceRemote.stableHardwareModelID == "chromecast-voice-remote")
         #expect(XiaomiRemoteModel.chromecastVoiceRemote.localizationKey.hasPrefix("remote.device.model."))
+    }
+
+    /// G9N9N 是第三方谷歌电视遥控器，与原装 Chromecast 同链路（BLE HID + ATVV），
+    /// 必须路由到 Chromecast 私有适配器，绝不能落进小米 HID 发现链路。
+    @Test func googleTVRemoteG9N9NIsRoutedToTheChromecastAdapter() {
+        #expect(XiaomiRemoteModel.googleTVRemoteG9N9N.isChromecastRemote)
+        #expect(!XiaomiRemoteModel.googleTVRemoteG9N9N.isAppleSiriRemote)
+        #expect(XiaomiRemoteModel.googleTVRemoteG9N9N.usesPrivateAdapter)
+        #expect(XiaomiRemoteModel.googleTVRemoteG9N9N.stableHardwareModelID == "google-tv-remote-g9n9n")
+        #expect(XiaomiRemoteModel.googleTVRemoteG9N9N.localizationKey.hasPrefix("remote.device.model."))
+        // 电量策略跟随 Chromecast 链路：能力未经真机验证前不得显示电量位。
+        #expect(!RemoteBatteryPresentationPolicy.shouldShowBattery(
+            model: .googleTVRemoteG9N9N,
+            level: 80,
+            powerState: .onBattery
+        ))
+    }
+
+    /// 型号的持久化 rawValue 必须稳定：历史档案解码不得因拼写变化而失败。
+    @Test func googleTVRemoteG9N9NRawValueRoundTrips() throws {
+        let encoded = try JSONEncoder().encode(XiaomiRemoteModel.googleTVRemoteG9N9N)
+        let decoded = try JSONDecoder().decode(XiaomiRemoteModel.self, from: encoded)
+        #expect(decoded == .googleTVRemoteG9N9N)
+        #expect(XiaomiRemoteModel.googleTVRemoteG9N9N.rawValue == "google_tv_remote_g9n9n")
     }
 
     /// 该型号不宣告电池能力，界面不得显示一个永远是「未知」的电量位。

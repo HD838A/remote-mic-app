@@ -8,6 +8,10 @@ enum XiaomiRemoteModel: String, Codable, CaseIterable, Identifiable {
     /// Chromecast（Google Chromecast 语音遥控器）。与苹果遥控器同理，case 始终存在以保证
     /// 持久化数据在任何构建里都能解码；只有展示文案受私有包门禁控制。
     case chromecastVoiceRemote = "chromecast_voice_remote"
+    /// 第三方谷歌电视语音遥控器 G9N9N（Chromecast with Google TV 兼容机型的常见替代遥控器，
+    /// 市售约 ¥15–25）。与 Chromecast 同链路：case 始终存在保证持久化兼容，宿主的
+    /// Xiaomi 桥必须在准入层隔离；公开 G9N9N 桥以 DIS model + manufacturer 识别。
+    case googleTVRemoteG9N9N = "google_tv_remote_g9n9n"
     case unknown
 
     init(from decoder: Decoder) throws {
@@ -49,6 +53,12 @@ enum XiaomiRemoteModel: String, Codable, CaseIterable, Identifiable {
 #else
             return "remote.device.model.unknown"
 #endif
+        case .googleTVRemoteG9N9N:
+#if SAYALL_CHROMECAST_ENABLED
+            return "remote.device.model.google_tv_remote_g9n9n"
+#else
+            return "remote.device.model.unknown"
+#endif
         case .unknown: return "remote.device.model.unknown"
         }
     }
@@ -60,6 +70,7 @@ enum XiaomiRemoteModel: String, Codable, CaseIterable, Identifiable {
         case .appleSiriRemoteA2854: "apple-siri-remote-a2854"
         case .appleSiriRemoteA2540: "apple-siri-remote-a2540"
         case .chromecastVoiceRemote: "chromecast-voice-remote"
+        case .googleTVRemoteG9N9N: "google-tv-remote-g9n9n"
         case .unknown: nil
         }
     }
@@ -69,8 +80,9 @@ enum XiaomiRemoteModel: String, Codable, CaseIterable, Identifiable {
     }
 
     /// 该型号由 Chromecast 私有包的 HID 通道驱动，不走小米 HID 发现链路。
+    /// G9N9N 与原装 Chromecast 遥控器同协议（BLE HID + ATVV 语音），归入同一链路。
     var isChromecastRemote: Bool {
-        self == .chromecastVoiceRemote
+        self == .chromecastVoiceRemote || self == .googleTVRemoteG9N9N
     }
 
     /// 该型号是否由私有包的专用链路驱动（苹果遥控器或 Chromecast）。

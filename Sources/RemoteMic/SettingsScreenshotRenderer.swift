@@ -167,7 +167,8 @@ enum SettingsScreenshotRenderer {
 #endif
 #if SAYALL_CHROMECAST_ENABLED
         if usesChromecast {
-            let profileID = settings.registerChromecastRemote()
+            let profileID = settings.registerChromecastRemote(model:
+                ChromecastFeatureIntegration.usesPublicG9N9N ? .googleTVRemoteG9N9N : .chromecastVoiceRemote)
             settings.selectRemoteProfile(profileID)
         }
 #else

@@ -1,4 +1,5 @@
 import Foundation
+import IOKit
 import IOKit.hid
 import IOKit.hidsystem
 
@@ -317,10 +318,13 @@ final class RemoteVoiceFunctionMapper {
         systemServices(vendor: vendorID, products: [productID])
     }
 
-    static func systemServices(vendor: Int, products: Set<Int>) -> [RemoteVoiceMappingService] {
+    static func systemServices(vendor: Int, products: Set<Int>, manufacturer: String? = nil) -> [RemoteVoiceMappingService] {
         let client = IOHIDEventSystemClientCreateSimpleClient(kCFAllocatorDefault)
         let services = IOHIDEventSystemClientCopyServices(client) as? [IOHIDServiceClient] ?? []
-        return services.filter { isTarget($0, vendorID: vendor, productIDs: products) }.map { service in
+        return services.filter { service in
+            guard isTarget(service, vendorID: vendor, productIDs: products) else { return false }
+            return manufacturer == nil || serviceManufacturer(service) == manufacturer
+        }.map { service in
             RemoteVoiceMappingService(
                 registryID: registryID(service),
                 locationID: locationID(service),
@@ -335,6 +339,21 @@ final class RemoteVoiceFunctionMapper {
                 }
             )
         }
+    }
+
+    private static func serviceManufacturer(_ service: IOHIDServiceClient) -> String? {
+        if let value = IOHIDServiceClientCopyProperty(service, kIOHIDManufacturerKey as CFString) as? String {
+            return value
+        }
+        // Event services can omit Manufacturer even when the parent HID device
+        // publishes it. Resolve only this already VID/PID-matched registry entry.
+        guard let id = registryID(service) else { return nil }
+        let entry = IOServiceGetMatchingService(kIOMainPortDefault, IORegistryEntryIDMatching(id))
+        guard entry != 0 else { return nil }
+        defer { IOObjectRelease(entry) }
+        return IORegistryEntrySearchCFProperty(entry, kIOServicePlane,
+            kIOHIDManufacturerKey as CFString, kCFAllocatorDefault,
+            IOOptionBits(kIORegistryIterateRecursively | kIORegistryIterateParents)) as? String
     }
 
     private static func isTarget(_ service: IOHIDServiceClient, vendorID: Int, productIDs: Set<Int>) -> Bool {

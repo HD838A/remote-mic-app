@@ -811,7 +811,7 @@ struct OnboardingView: View {
 
     private var availablePhysicalControlSources: [OnboardingControlSource] {
         visibleControlSources.filter {
-            [.xiaomiRemote, .siriRemote].contains($0)
+            [.xiaomiRemote, .siriRemote, .g9n9nRemote].contains($0)
         }
     }
 
@@ -1646,12 +1646,75 @@ struct OnboardingView: View {
                 compact: true
             )
 
+            if settings.onboardingControlSource == .g9n9nRemote {
+                g9HCIControls
+            }
+
+            if settings.onboardingControlSource == .g9n9nRemote,
+               model.g9HasUnmappedInput, observedRemoteButtons.isEmpty {
+                Text("g9n9n.connection.learn_help")
+                    .font(.system(size: 13))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                if model.g9LearningControlID != nil {
+                    Text("g9n9n.connection.learn_waiting")
+                        .font(.system(size: 13, weight: .semibold))
+                } else {
+                    onboardingActionButton(id: "g9n9n.learn_select") { model.learnG9Control(.select) } label: {
+                        Text("g9n9n.connection.learn_select")
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+
             if shouldShowSecureInputWarning {
                 secureInputWarningCard
             }
 
             if !selectedControlConnected {
                 openBluetoothSettingsButton
+            }
+        }
+    }
+
+    private var g9HCIControls: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Toggle("g9n9n.hci.enabled", isOn: Binding(
+                get: { model.g9HCICaptureEnabled }, set: { model.setG9HCIEnabled($0) }
+            ))
+            .toggleStyle(.switch)
+            Text("g9n9n.hci.help")
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(localization.text("g9n9n.hci.status." + model.g9HCIStatus))
+                .font(.system(size: 13))
+            if model.g9HCICaptureEnabled && ["helper_unavailable", "capture_failed", "profile_required"].contains(model.g9HCIStatus) {
+                onboardingActionButton(id: "g9n9n.hci.retry") {
+                    model.setG9HCIEnabled(false)
+                    model.setG9HCIEnabled(true)
+                } label: { Text("g9n9n.hci.retry") }
+                .buttonStyle(.bordered)
+            }
+            if let controlID = model.g9LearningControlID,
+               let control = ChromecastRemoteControl(rawValue: controlID) {
+                Text(String(format: localization.text("g9n9n.mapping.learning"), control.remoteButton.displayName(using: localization)))
+                    .font(.system(size: 13, weight: .semibold))
+            } else if !model.g9LearningFeedback.isEmpty {
+                Text(localization.text("g9n9n.learning." + model.g9LearningFeedback))
+                    .font(.system(size: 13))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            HStack {
+                ForEach([ChromecastRemoteControl.right, .input], id: \.rawValue) { control in
+                    onboardingActionButton(id: "g9n9n.learn." + control.rawValue) {
+                        model.learnG9Control(control)
+                    } label: {
+                        Text(String(format: localization.text("g9n9n.mapping.learn_named"), control.remoteButton.displayName(using: localization)))
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(model.g9LearningControlID != nil)
+                }
             }
         }
     }
@@ -2249,6 +2312,15 @@ struct OnboardingView: View {
                 .font(.system(size: 14))
                 .foregroundStyle(.secondary)
 
+            if settings.onboardingControlSource == .g9n9nRemote {
+                g9HCIControls
+                Toggle("g9n9n.mapping.enable_actions", isOn: Binding(
+                    get: { settings.customMappingEnabled },
+                    set: { settings.customMappingEnabled = $0; model.applyHIDSettings() }
+                ))
+                    .toggleStyle(.switch)
+            }
+
             if shouldShowSecureInputWarning {
                 secureInputWarningCard
             }
@@ -2348,6 +2420,8 @@ struct OnboardingView: View {
                     "onboarding.remote.siri_pairing.step5",
                 ]
             )
+        case .g9n9nRemote:
+            return PhysicalRemotePairingGuide(title: "g9n9n.pairing.title", steps: ["g9n9n.pairing.wake", "g9n9n.pairing.connect"])
         case .chromecastRemote:
             return PhysicalRemotePairingGuide(
                 title: "onboarding.remote.chromecast_pairing.title",
@@ -2377,6 +2451,8 @@ struct OnboardingView: View {
             return "onboarding.controls.xiaomi.detail"
         case .siriRemote:
             return "onboarding.controls.siri.detail"
+        case .g9n9nRemote:
+            return "g9n9n.controls.detail"
         case .chromecastRemote:
             return "onboarding.controls.chromecast.detail"
         case .appleCompanion:
@@ -2403,7 +2479,7 @@ struct OnboardingView: View {
                 .power, .up, .left, .ok, .right, .down,
                 .back, .volumeUp, .volumeDown, .tv, .playPause, .mute,
             ]
-        case .chromecastRemote:
+        case .chromecastRemote, .g9n9nRemote:
             return [
                 .power, .up, .left, .ok, .right, .down, .back,
                 .home, .volumeUp, .volumeDown, .mute, .youtube, .netflix, .input,
@@ -2557,7 +2633,7 @@ struct OnboardingView: View {
 
     static func remoteNotFoundRecoveryDetailKey(for source: OnboardingControlSource) -> String {
         switch source {
-        case .xiaomiRemote, .siriRemote, .chromecastRemote:
+        case .xiaomiRemote, .siriRemote, .chromecastRemote, .g9n9nRemote:
             return "onboarding.recovery.remote.not_found.physical_detail"
         case .appleCompanion:
             return "onboarding.recovery.remote.not_found.apple_companion_detail"
@@ -2641,7 +2717,7 @@ struct OnboardingView: View {
     @ViewBuilder
     private var selectedControlSourceIllustration: some View {
         switch settings.onboardingControlSource {
-        case .xiaomiRemote, .siriRemote, .chromecastRemote:
+        case .xiaomiRemote, .siriRemote, .chromecastRemote, .g9n9nRemote:
             remoteIllustration
         case .appleCompanion, .webRemote:
             controlMethodIllustration
@@ -3684,7 +3760,7 @@ struct OnboardingView: View {
         switch source {
         case .xiaomiRemote: return "appletvremote.gen4.fill"
         case .siriRemote: return "appletvremote.gen4.fill"
-        case .chromecastRemote: return "tv.and.hifispeaker.fill"
+        case .chromecastRemote, .g9n9nRemote: return "tv.and.hifispeaker.fill"
         case .appleCompanion: return "iphone.and.arrow.forward"
         case .webRemote: return "safari.fill"
         case .unselected: return "circle"
@@ -4152,7 +4228,7 @@ struct OnboardingView: View {
         switch settings.onboardingControlSource {
         case .xiaomiRemote, .siriRemote:
             model.applyHIDSettings()
-        case .chromecastRemote:
+        case .chromecastRemote, .g9n9nRemote:
             prepareSelectedControlConnection()
         case .appleCompanion, .webRemote, .unselected:
             break
@@ -4295,7 +4371,9 @@ struct OnboardingView: View {
         case .remoteNotFound:
             restartSelectedControlConnection()
         case .remoteButtonNotReady, .controlsNotConfirmed:
-            if settings.onboardingControlMethod == .physicalRemote {
+            if settings.onboardingControlSource == .g9n9nRemote || settings.onboardingControlSource == .chromecastRemote {
+                prepareSelectedControlConnection()
+            } else if settings.onboardingControlMethod == .physicalRemote {
                 model.applyHIDSettings()
             } else {
                 prepareSelectedControlConnection()
@@ -4341,7 +4419,7 @@ struct OnboardingView: View {
         case .siriRemote:
             model.enableSiriRemoteForOnboarding()
             prepareSelectedControlConnection()
-        case .xiaomiRemote, .chromecastRemote, .unselected:
+        case .xiaomiRemote, .chromecastRemote, .g9n9nRemote, .unselected:
             prepareSelectedControlConnection()
         }
     }
@@ -4731,7 +4809,9 @@ struct OnboardingView: View {
             context: diagnosticContext,
             voiceAttempt: diagnosticVoiceAttempt,
             bluetoothStatus: model.connectionStatus.key,
-            buttonStatus: model.hidStatus.key,
+            buttonStatus: settings.onboardingControlSource == .g9n9nRemote
+                ? (observedRemoteButtons.isEmpty ? "g9n9n.hid.waiting_for_control" : "g9n9n.hid.control_observed")
+                : model.hidStatus.key,
             audioStatus: model.audioStatus.key,
             events: settings.firstUseEvents,
             appLanguage: localization.locale.identifier,
@@ -4795,7 +4875,7 @@ struct OnboardingView: View {
             model.applyHIDSettings()
         case .siriRemote:
             model.applyHIDSettings()
-        case .chromecastRemote:
+        case .chromecastRemote, .g9n9nRemote:
             #if SAYALL_CHROMECAST_ENABLED
             model.applyChromecastSettings()
             model.reconnectChromecast()
@@ -4839,7 +4919,7 @@ struct OnboardingView: View {
 
     private func selectedControlAcceptsVoice(_ source: UsageEventSource?) -> Bool {
         switch settings.onboardingControlSource {
-        case .xiaomiRemote, .siriRemote, .chromecastRemote:
+        case .xiaomiRemote, .siriRemote, .chromecastRemote, .g9n9nRemote:
             return source == .bluetoothRemote &&
                 (model.activePhysicalVoiceControlSource == settings.onboardingControlSource ||
                     selectedPhysicalRemoteProfileMatchesSource)
@@ -4861,8 +4941,10 @@ struct OnboardingView: View {
             guard model.isAppleSiriRemote else { return false }
             guard let generation = settings.onboardingAppleRemoteGeneration else { return true }
             return model == generation.model
+        case .g9n9nRemote:
+            return model == .googleTVRemoteG9N9N
         case .chromecastRemote:
-            return model.isChromecastRemote
+            return model == .chromecastVoiceRemote
         case .appleCompanion, .webRemote, .unselected:
             return false
         }

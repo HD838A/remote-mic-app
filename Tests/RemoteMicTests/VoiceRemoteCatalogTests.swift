@@ -74,6 +74,10 @@ struct VoiceRemoteCatalogTests {
         #expect(VoiceRemoteCatalog.photoResource(for: .appleSiriRemoteA2854) == nil)
         #expect(VoiceRemoteCatalog.photoResource(for: .appleSiriRemoteA2540) == nil)
         #expect(VoiceRemoteCatalog.photoResource(for: .chromecastVoiceRemote) == nil)
+        // G9N9N 走 Chromecast 私有链路：无真机素材前必须返回 nil，不得套用小米或原装图。
+        #expect(VoiceRemoteCatalog.photoResource(for: .googleTVRemoteG9N9N) == nil)
+        // 目录条目只收已验证的小米型号；G9N9N 不得经由 DIS 识别进入小米发现链路。
+        #expect(VoiceRemoteCatalog.entry(matchingDISModelNumber: "G9N9N") == nil)
     }
 
     @Test func advertisedNamesCoverEveryNameTheBridgeHasEverAdopted() {

@@ -20,6 +20,14 @@ struct ForeignVoiceRemoteProductTests {
             "RemoteG10",
             "Remote-G10",
             "G10",
+            // G9N9N：第三方谷歌电视遥控器，走同一 ATVV 通用服务，必须留给 Chromecast 链路。
+            "G9N9N",
+            "g9n9n",
+            "G9-N9N",
+            "G9_N9N",
+            "Remote G9N9N",
+            "G9N9N Remote",
+            "Remote-G9N9N",
         ]
         for name in names {
             #expect(ForeignVoiceRemoteProduct.isRejected(name: name), "应当拒绝 \(name)")

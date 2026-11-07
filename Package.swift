@@ -217,7 +217,7 @@ if buttonProfilesTestAccessEnabled && (buttonProfilesPackagePath ?? "").isEmpty 
 if buttonProfilesTestAccessEnabled && privateArtifactsAvailable {
     fatalError("free button profile test access excludes private membership artifacts")
 }
-let chromecastEnabled = privateChromecastEnabled || !(chromecastPackagePath ?? "").isEmpty
+let chromecastEnabled = true // Public G9N9N backend; original Google backend remains optional.
 let macOSPlatform: SupportedPlatform = ProcessInfo.processInfo.environment["RELEASE_VARIANT"] == "intel"
     ? .macOS(.v13)
     : .macOS(.v14)

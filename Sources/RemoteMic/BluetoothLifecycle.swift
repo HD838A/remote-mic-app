@@ -33,6 +33,13 @@ enum ForeignVoiceRemoteProduct {
         "remote g10",
         "remoteg10",
         "g10",
+        // G9N9N：第三方谷歌电视语音遥控器（Chromecast with Google TV 兼容），同样走
+        // ATVV 通用服务，不拒绝就会被 Xiaomi 桥当成小米遥控器采用。裸型号、组合名与
+        // 连字符归一化变体都要覆盖（归一化把 "G9-N9N" 折叠成 "g9 n9n"）。
+        "g9n9n",
+        "remote g9n9n",
+        "g9n9n remote",
+        "g9 n9n",
     ]
 
     static func isRejected(name: String?) -> Bool {

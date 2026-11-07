@@ -36,6 +36,12 @@ xcrun swiftc \
   "$ROOT/Sources/RemoteMic/MacConfigurationBackup.swift" \
   "$ROOT/Sources/RemoteMic/MembershipFeatureTypes.swift" \
   "$ROOT/Sources/RemoteMic/ChromecastFeatureIntegration.swift" \
+  "$ROOT/Sources/RemoteMic/G9N9NBluetoothBridge.swift" \
+  "$ROOT/Sources/RemoteMic/G9N9NHIDMonitor.swift" \
+  "$ROOT/Sources/RemoteMic/G9N9NHIDReport.swift" \
+  "$ROOT/Sources/RemoteMic/G9N9NHCIParser.swift" \
+  "$ROOT/Sources/RemoteMic/G9N9NHCIController.swift" \
+  "$ROOT/Sources/RemoteMic/G9N9NVoiceSession.swift" \
   "$ROOT/Sources/RemoteMic/AppLinks.swift" \
   "$ROOT/Sources/RemoteMic/Localization.swift" \
   "$ROOT/Sources/RemoteMic/VoiceFunctionKeyLatch.swift" \
@@ -43,6 +49,7 @@ xcrun swiftc \
   "$ROOT/Sources/RemoteMic/VoiceInputDestinationCoordinator.swift" \
   "$ROOT/Sources/RemoteMic/VoiceFnTapSessionController.swift" \
   "$ROOT/Sources/RemoteMic/RemoteVoiceFunctionMapper.swift" \
+  "$ROOT/Sources/RemoteMic/RemoteNativeKeyMapper.swift" \
   "$ROOT/Sources/RemoteMic/PublicDiagnosticEvent.swift" \
   "$ROOT/Sources/RemoteMic/PublicDiagnosticEventStore.swift" \
   "$ROOT/Sources/RemoteMic/DiagnosticLogEnvelope.swift" \

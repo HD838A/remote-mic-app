@@ -30,7 +30,7 @@ extension XiaomiRemoteModel {
     /// 只在「链路还没自报能力」时回退使用：运行中的判定一律走 `RemoteVoiceCapabilities.resolve`，
     /// 它优先采用设备自报的能力位。这里的值与私有包的型号声明等价，由跨仓一致性测试锁定。
     var supportsToggleVoiceRecording: Bool {
-        isChromecastRemote
+        self == .chromecastVoiceRemote
     }
 
     /// **型号默认值**：是否有触摸面（滑动 / 光标）。同上，仅在缺少自报能力时回退使用。

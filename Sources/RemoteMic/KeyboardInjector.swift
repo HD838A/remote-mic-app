@@ -167,6 +167,8 @@ enum KeyboardInjector {
     }
 
     static let syntheticEventMarker: Int64 = 0x5849_414F
+    // Native arrow identity, distinct from a physically held Fn modifier.
+    static let navigationEventFlags: CGEventFlags = [.maskSecondaryFn, .maskNumericPad]
     static let contextualMenuKeyCode: CGKeyCode = 110
     static let functionKeyCode: CGKeyCode = 63
     static let leftCommandKeyCode: CGKeyCode = 55
@@ -419,13 +421,13 @@ enum KeyboardInjector {
         case .commandDelete:
             keyPoster(51, .maskCommand)
         case .arrowUp:
-            keyPoster(126, [])
+            keyPoster(126, navigationEventFlags)
         case .arrowDown:
-            keyPoster(125, [])
+            keyPoster(125, navigationEventFlags)
         case .arrowLeft:
-            keyPoster(123, [])
+            keyPoster(123, navigationEventFlags)
         case .arrowRight:
-            keyPoster(124, [])
+            keyPoster(124, navigationEventFlags)
         case .scrollUp:
             scrollPoster(scrollLineCount)
         case .scrollDown:
@@ -2132,6 +2134,14 @@ enum KeyboardInjector {
         up.flags = flags
         down.setIntegerValueField(.eventSourceUserData, value: syntheticEventMarker)
         up.setIntegerValueField(.eventSourceUserData, value: syntheticEventMarker)
+        if let kind = ShortcutEventSequence.navigationKind(code) {
+            let operationID = UUID().uuidString
+            for (index, event) in [down, up].enumerated() {
+                if event.timestamp == 0 { event.timestamp = DispatchTime.now().uptimeNanoseconds }
+                ShortcutSessionObservation.shared.register(event, operationID: operationID,
+                    eventIndex: index, primaryKind: kind)
+            }
+        }
         down.post(tap: .cghidEventTap)
         up.post(tap: .cghidEventTap)
     }

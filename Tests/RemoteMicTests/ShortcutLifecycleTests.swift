@@ -425,6 +425,7 @@ struct ShortcutLifecycleTests {
         // 带 Command 的快捷键仍归入既有分类，入口优先级不变。
         #expect(ShortcutEventSequence.diagnosticKind(sample.0, modifiers: .maskCommand) == "command_shortcut")
         #expect(ShortcutEventSequence.diagnosticKind(37, modifiers: []) == nil)
+        #expect(ShortcutEventSequence.diagnosticKind(124, modifiers: []) == "arrow_right")
     }
 
     @Test func bareFunctionLayerShortcutGetsCorrelatedDiagnostics() {
@@ -646,6 +647,21 @@ struct ShortcutLifecycleTests {
             #expect(!suppressor.handle(type: .keyDown, event: event))
         }
         #expect(logs.isEmpty)
+    }
+
+    @Test func sessionObservationMeasuresOnTheMonotonicCallbackClock() throws {
+        var now: TimeInterval = 10
+        let observation = ShortcutSessionObservation(uptime: { now })
+        let event = try #require(CGEvent(keyboardEventSource: nil, virtualKey: 124, keyDown: true))
+        event.timestamp = 1
+        event.flags = KeyboardInjector.navigationEventFlags
+        event.setIntegerValueField(.eventSourceUserData, value: KeyboardInjector.syntheticEventMarker)
+        observation.register(event, operationID: "timing", eventIndex: 0, primaryKind: "arrow_right")
+        now = 10.125
+        var logs: [String] = []
+        observation.observe(event, logger: { logs.append($0) })
+        #expect(logs.count == 1)
+        #expect(logs.first?.contains("registered_to_session_ms=125") == true)
     }
 
     @Test func sessionObservationReportsChangedFlagsOnlyOnce() throws {

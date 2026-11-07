@@ -75,6 +75,7 @@ final class ShortcutSessionObservation {
         let eventIndex: Int
         let primaryKind: String
         let flags: UInt64
+        let registeredAt: TimeInterval
         let expiresAt: TimeInterval
         let ambiguous: Bool
     }
@@ -101,7 +102,7 @@ final class ShortcutSessionObservation {
         let ambiguous = pending[key] != nil
         pending[key] = Pending(operationID: operationID, eventIndex: eventIndex,
             primaryKind: primaryKind, flags: ShortcutEventSequence.diagnosticFlags(event.flags),
-            expiresAt: now + 2, ambiguous: ambiguous)
+            registeredAt: now, expiresAt: now + 2, ambiguous: ambiguous)
     }
 
     func discard(operationID: String, eventIndex: Int) {
@@ -129,6 +130,10 @@ final class ShortcutSessionObservation {
                   let code = CGKeyCode(exactly: event.getIntegerValueField(.keyboardEventKeycode)),
                   let kind = ShortcutEventSequence.diagnosticKind(code, modifiers: event.flags)
             else { return }
+            // Plain navigation is observed only for an explicitly registered
+            // transaction, not for unrelated or duplicate synthetic arrows.
+            if ShortcutEventSequence.navigationKind(code) != nil,
+               !event.flags.contains(.maskControl), !event.flags.contains(.maskCommand) { return }
             logger("SHORTCUT OBSERVATION operation_id=unknown phase=observed correlation=unavailable " +
                 "event_index=unknown event_timestamp_ns=\(event.timestamp) event_kind=\(eventKind) " +
                 "primary_kind=\(kind) source=session_event_tap event_flags=\(actualFlags) " +
@@ -140,7 +145,8 @@ final class ShortcutSessionObservation {
             "correlation=matched event_index=\(match.eventIndex) event_timestamp_ns=\(event.timestamp) event_kind=\(eventKind) " +
             "primary_kind=\(match.primaryKind) source=session_event_tap " +
             "expected_flags=\(match.flags) event_flags=\(actualFlags) " +
-            "flags_match=\(match.flags == actualFlags) result=passed_through user_visible_result=unknown")
+            "flags_match=\(match.flags == actualFlags) registered_to_session_ms=\(Int((max(0, now - match.registeredAt) * 1000).rounded())) " +
+            "result=passed_through user_visible_result=unknown")
     }
 }
 
@@ -250,6 +256,7 @@ enum ShortcutEventSequence {
     static func diagnosticKind(_ keyCode: CGKeyCode, modifiers: CGEventFlags) -> String? {
         if modifiers.contains(.maskControl), let kind = navigationKind(keyCode) { return kind }
         if modifiers.contains(.maskCommand) { return "command_shortcut" }
+        if let kind = navigationKind(keyCode) { return kind }
         if let kind = functionLayerKind(keyCode) { return kind }
         return nil
     }
@@ -371,7 +378,7 @@ enum ShortcutEventSequence {
             // HID state after posting can retain our own modifiers and prevent release.
             event.flags = synthetic.union(physicalAtStart)
             if !modifier, (123...126).contains(code) {
-                event.flags.formUnion([.maskSecondaryFn, .maskNumericPad])
+                event.flags.formUnion(KeyboardInjector.navigationEventFlags)
             }
             event.setIntegerValueField(.eventSourceUserData, value: KeyboardInjector.syntheticEventMarker)
             // Newly constructed keyboard events can have timestamp zero. Give

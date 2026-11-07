@@ -4,6 +4,24 @@ import Foundation
 import OSLog
 import Security
 
+/// The root-owned helper accepts only the same Apple-signed team as itself and
+/// the fixed SayAll bundle ID. Local developer builds do not impersonate the
+/// upstream team or add an arbitrary-team allowlist.
+private enum HCIClientTrust {
+    static let serviceTeam: String? = {
+        var code: SecCode?
+        guard SecCodeCopySelf([], &code) == errSecSuccess, let code else { return nil }
+        var staticCode: SecStaticCode?
+        guard SecCodeCopyStaticCode(code, [], &staticCode) == errSecSuccess, let staticCode else { return nil }
+        var information: CFDictionary?
+        guard SecCodeCopySigningInformation(staticCode, SecCSFlags(rawValue: kSecCSSigningInformation), &information) == errSecSuccess,
+              let values = information as? [String: Any],
+              let team = values[kSecCodeInfoTeamIdentifier as String] as? String,
+              team.count == 10, team.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber) }) else { return nil }
+        return team
+    }()
+}
+
 private enum HCIServiceError: Error {
     case notRoot
     case stateCorrupt
@@ -11,6 +29,7 @@ private enum HCIServiceError: Error {
     case authorizationRightLookup(OSStatus)
     case authorizationRightWrite(OSStatus)
     case bluetoothReloadFailed(Int32)
+    case preferencesSynchronizeFailed
 }
 
 private struct PersistedHCIState: Codable {
@@ -46,7 +65,7 @@ private final class HCIConfigurationStore {
         try restore()
     }
 
-    func enable() throws {
+    func enable(buttonsOnly: Bool = false) throws {
         guard geteuid() == 0 else { throw HCIServiceError.notRoot }
         let existingState = try readState()
         if existingState.active {
@@ -66,9 +85,9 @@ private final class HCIConfigurationStore {
         do {
             try writeTemporaryPacketLoggerAuthorizationRight()
             try writeRawPreferences(
-                AppleRemoteHCITraceConfiguration.enabledPreferencesData(
-                    from: originalData
-                )
+                buttonsOnly
+                    ? AppleRemoteHCITraceConfiguration.liveButtonPreferencesData(from: originalData)
+                    : AppleRemoteHCITraceConfiguration.enabledPreferencesData(from: originalData)
             )
             try reloadBluetoothDaemon()
         } catch {
@@ -208,7 +227,7 @@ private final class HCIConfigurationStore {
     }
 
     private func writeTemporaryPacketLoggerAuthorizationRight() throws {
-        let requirement = "identifier \"\(AppleRemoteHCIConstants.expectedClientIdentifier)\" and anchor apple generic and certificate leaf[subject.OU] = \"\(AppleRemoteHCIConstants.expectedTeamIdentifier)\""
+        let requirement = "identifier \"\(AppleRemoteHCIConstants.expectedClientIdentifier)\" and anchor apple generic and certificate leaf[subject.OU] = \"\(HCIClientTrust.serviceTeam ?? "unavailable")\""
         let definition: CFDictionary = [
             "class" as CFString: "user" as CFString,
             "group" as CFString: "admin" as CFString,
@@ -229,6 +248,24 @@ private final class HCIConfigurationStore {
     }
 
     private func writeRawPreferences(_ data: Data) throws {
+        guard let values = try PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any] else {
+            throw HCIServiceError.stateCorrupt
+        }
+        // Atomic file replacement alone leaves cfprefsd's system-domain cache
+        // stale. Publish through Preferences before asking bluetoothd to reload.
+        let domain = "com.apple.MobileBluetooth.debug" as CFString
+        let oldKeys = CFPreferencesCopyKeyList(domain, kCFPreferencesAnyUser, kCFPreferencesAnyHost) as? [String] ?? []
+        for key in oldKeys where values[key] == nil {
+            CFPreferencesSetValue(key as CFString, nil, domain, kCFPreferencesAnyUser, kCFPreferencesAnyHost)
+        }
+        for (key, value) in values {
+            CFPreferencesSetValue(key as CFString, value as CFPropertyList, domain,
+                                  kCFPreferencesAnyUser, kCFPreferencesAnyHost)
+        }
+        guard CFPreferencesSynchronize(domain, kCFPreferencesAnyUser, kCFPreferencesAnyHost) else {
+            throw HCIServiceError.preferencesSynchronizeFailed
+        }
+        // Preserve the exact original encoding on restore as well as its values.
         try data.write(to: preferencesURL, options: .atomic)
         try fileManager.setAttributes([
             .ownerAccountID: NSNumber(value: 0),
@@ -238,6 +275,12 @@ private final class HCIConfigurationStore {
     }
 
     private func movePreferencesToSystemTrash() throws {
+        let domain = "com.apple.MobileBluetooth.debug" as CFString
+        CFPreferencesSetValue("HCITraces" as CFString, nil, domain,
+                              kCFPreferencesAnyUser, kCFPreferencesAnyHost)
+        guard CFPreferencesSynchronize(domain, kCFPreferencesAnyUser, kCFPreferencesAnyHost) else {
+            throw HCIServiceError.preferencesSynchronizeFailed
+        }
         guard fileManager.fileExists(atPath: preferencesURL.path) else { return }
         let trashURL = URL(fileURLWithPath: "/var/root/.Trash", isDirectory: true)
         try fileManager.createDirectory(
@@ -278,6 +321,7 @@ private final class HCIServiceCoordinator {
     private let lock = NSLock()
     private let store = HCIConfigurationStore()
     private var leaseState = AppleRemoteHCILeaseState()
+    private var buttonMode: Bool?
 
     func recoverAtStartup() {
         do {
@@ -291,11 +335,17 @@ private final class HCIServiceCoordinator {
         }
     }
 
-    func acquire() -> Bool {
+    func acquire(buttonsOnly: Bool = false) -> Bool {
         lock.lock()
         defer { lock.unlock() }
+        // Do not silently join a disk-tracing audio lease for a live-only client.
+        if let buttonMode, buttonMode != buttonsOnly, leaseState.activeLeaseCount > 0 {
+            serviceLog("lease_failed result=conflicting_trace_mode")
+            return false
+        }
         do {
-            try leaseState.acquire { try store.enable() }
+            try leaseState.acquire { try store.enable(buttonsOnly: buttonsOnly) }
+            buttonMode = buttonsOnly
             serviceLog("lease_acquired active_leases=\(leaseState.activeLeaseCount)")
             return true
         } catch {
@@ -312,6 +362,7 @@ private final class HCIServiceCoordinator {
         defer { lock.unlock() }
         do {
             try leaseState.release { try store.restore() }
+            if leaseState.activeLeaseCount == 0 { buttonMode = nil }
             serviceLog("lease_released active_leases=\(leaseState.activeLeaseCount)")
             return true
         } catch {
@@ -356,6 +407,8 @@ private func hciErrorDiagnostic(_ error: Error) -> String {
         return "error=authorization_right_write status=\(status)"
     case let HCIServiceError.bluetoothReloadFailed(status):
         return "error=bluetooth_reload_failed status=\(status)"
+    case HCIServiceError.preferencesSynchronizeFailed:
+        return "error=preferences_synchronize_failed"
     default:
         return "error=unknown"
     }
@@ -370,14 +423,22 @@ private final class HCIRequestHandler: NSObject, AppleRemoteHCIServiceProtocol {
         self.coordinator = coordinator
     }
 
+    func prepareButtonConfiguration(reply: @escaping (Bool, String) -> Void) {
+        prepare(buttonsOnly: true, reply: reply)
+    }
+
     func prepareConfiguration(reply: @escaping (Bool, String) -> Void) {
+        prepare(buttonsOnly: false, reply: reply)
+    }
+
+    private func prepare(buttonsOnly: Bool, reply: @escaping (Bool, String) -> Void) {
         lock.lock()
         defer { lock.unlock() }
         if hasLease {
             reply(true, "ready")
             return
         }
-        let acquired = coordinator.acquire()
+        let acquired = coordinator.acquire(buttonsOnly: buttonsOnly)
         guard acquired else {
             reply(false, "configuration_enable_failed")
             return
@@ -491,13 +552,13 @@ private final class HCIService: NSObject, NSXPCListenerDelegate {
         guard let teamIdentifier else {
             return "adhoc_signature"
         }
-        guard teamIdentifier == AppleRemoteHCIConstants.expectedTeamIdentifier else {
+        guard let serviceTeam = HCIClientTrust.serviceTeam, teamIdentifier == serviceTeam else {
             return "team_mismatch"
         }
         let requirementText = """
         identifier "\(AppleRemoteHCIConstants.expectedClientIdentifier)" and \
         anchor apple generic and \
-        certificate leaf[subject.OU] = "\(AppleRemoteHCIConstants.expectedTeamIdentifier)"
+        certificate leaf[subject.OU] = "\(HCIClientTrust.serviceTeam ?? "unavailable")"
         """
         var requirement: SecRequirement?
         let requirementStatus = SecRequirementCreateWithString(

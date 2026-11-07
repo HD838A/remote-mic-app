@@ -8,6 +8,8 @@
 #
 # 环境变量：
 #   SAYALL_PRIVATE_SOURCE_ROOT  私有仓工作区根目录（必填，脚本会从这里取 4 个私有包）
+#   SAYALL_LOCAL_SIGNING_IDENTITY  Optional local development certificate; default ad-hoc
+#   SAYALL_LOCAL_PUBLIC      1 = explicit public G9N9N fork test build, no private components
 #   SAYALL_LOCAL_APP_TARGET     替换目标，默认 ~/Applications/SayAll.app
 #   SAYALL_LOCAL_APP_FALLBACK   兜底目录，默认 ~/Downloads/SayAll-test
 #
@@ -21,8 +23,11 @@ PRIVATE_ROOT="${SAYALL_PRIVATE_SOURCE_ROOT:-}"
 TARGET="${SAYALL_LOCAL_APP_TARGET:-$HOME/Applications/SayAll.app}"
 FALLBACK_DIR="${SAYALL_LOCAL_APP_FALLBACK:-$HOME/Downloads/SayAll-test}"
 STATE="$HOME/.sayall-local-build"
+PUBLIC_MODE="${SAYALL_LOCAL_PUBLIC:-0}"
+SIGNING_IDENTITY="${SAYALL_LOCAL_SIGNING_IDENTITY:--}"
+[[ "$PUBLIC_MODE" == 0 || "$PUBLIC_MODE" == 1 ]] || { echo "SAYALL_LOCAL_PUBLIC must be 0 or 1" >&2; exit 2; }
 
-if [[ -z "$PRIVATE_ROOT" || ! -d "$PRIVATE_ROOT/packages/macos-button-profiles" ]]; then
+if [[ "$PUBLIC_MODE" != 1 && ( -z "$PRIVATE_ROOT" || ! -d "$PRIVATE_ROOT/packages/macos-button-profiles" ) ]]; then
   echo "SAYALL_PRIVATE_SOURCE_ROOT 必须指向私有仓根目录（含 packages/macos-button-profiles）" >&2
   exit 2
 fi
@@ -43,41 +48,60 @@ current_build() {
 
 NEXT_BUILD=$(( $(current_build) + 1 ))
 P="$PRIVATE_ROOT/packages"
-SOURCE_COMMIT="$(git -C "$HOST_ROOT" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+SOURCE_COMMIT="$(git -C "$HOST_ROOT" rev-parse HEAD 2>/dev/null || echo unknown)"
 DIRTY="clean"
 [[ -n "$(git -C "$HOST_ROOT" status --porcelain 2>/dev/null)" ]] && DIRTY="dirty"
 
 echo "==> build $NEXT_BUILD from $SOURCE_COMMIT ($DIRTY)"
 cd "$HOST_ROOT"
+if [[ "$PUBLIC_MODE" == 1 ]]; then
+  SAYALL_ENABLE_PRIVATE_SWIFTPM=0 SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH="" \
+  SAYALL_COMBINATION_ACTIONS_PATH="" SAYALL_BUTTON_PROFILES_PACKAGE_PATH="" \
+  SAYALL_SIRI_REMOTE_PACKAGE_PATH="" SAYALL_CHROMECAST_PACKAGE_PATH="" \
+  SAYALL_MAC_REMOTE_PACKAGE_PATH="" SAYALL_AI_PACKAGE_PATH="" \
+    swift build -c release --disable-sandbox --disable-keychain --jobs 4
+else
 SAYALL_TEST_BUTTON_PROFILES_FREE=1 \
 SAYALL_COMBINATION_ACTIONS_PATH="$P/macos-combination-actions" \
 SAYALL_BUTTON_PROFILES_PACKAGE_PATH="$P/macos-button-profiles" \
 SAYALL_SIRI_REMOTE_PACKAGE_PATH="$P/audio-input-kit/siri-remote" \
 SAYALL_CHROMECAST_PACKAGE_PATH="$P/audio-input-kit/chromecast" \
-  swift build -c release --disable-sandbox
+  swift build -c release --disable-sandbox --disable-keychain --jobs 4
+fi
 
 APP=/tmp/SayAll.app
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp .build/release/RemoteMic "$APP/Contents/MacOS/"
+if [[ "$PUBLIC_MODE" == 1 && "$SIGNING_IDENTITY" != - ]]; then
+  mkdir -p "$APP/Contents/Helpers"
+  cp .build/release/AppleRemoteHCIService "$APP/Contents/Helpers/SayAllAppleRemoteHCIService"
+  codesign --force --sign "$SIGNING_IDENTITY" \
+    --identifier com.hd838a.SayAll.AppleRemoteHCIService \
+    "$APP/Contents/Helpers/SayAllAppleRemoteHCIService"
+fi
 
 # 旧的 .build 可能是在没有私有路径的情况下编出来的；那种包会静默缺功能。
 # 这里用 `grep ... >/dev/null` 而不是 `grep -q`：脚本开了 pipefail，-q 命中后提前退出会让
 # nm 收到 SIGPIPE（141），链接私有包后符号表有几百 KB、必然写满管道缓冲，守卫就会误判成
 # “没有 SayAllButtonProfiles” 而拦下本来正常的构建。
-if ! nm -gU "$APP/Contents/MacOS/RemoteMic" 2>/dev/null | grep "SayAllButtonProfiles" >/dev/null; then
+if [[ "$PUBLIC_MODE" != 1 ]] && ! nm -gU "$APP/Contents/MacOS/RemoteMic" 2>/dev/null | grep "SayAllButtonProfiles" >/dev/null; then
   echo "构建产物里没有 SayAllButtonProfiles：可能复用了旧 .build。请先 swift package clean 再重跑。" >&2
   exit 3
 fi
 cp -R .build/out/Products/Release/Sparkle.framework "$APP/Contents/MacOS/"
 rsync -a --exclude Info.plist Resources/ "$APP/Contents/Resources/"
-for bundle in .build/out/Products/Release/*.bundle; do
+for bundle in .build/out/Products/Release/*.bundle(N); do
   cp -R "$bundle" "$APP/Contents/Resources/"
 done
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 printf 'APPL????' > "$APP/Contents/PkgInfo"
 /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $NEXT_BUILD" "$APP/Contents/Info.plist"
-codesign --force --deep --sign - "$APP" >/dev/null 2>&1
+/usr/libexec/PlistBuddy -c "Add :SayAllBuildChannel string local" "$APP/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c "Add :SayAllSourceCommit string $SOURCE_COMMIT" "$APP/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c "Add :SayAllSourceState string $DIRTY" "$APP/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c "Add :SayAllPublicG9N9N bool $([[ "$PUBLIC_MODE" == 1 ]] && echo true || echo false)" "$APP/Contents/Info.plist"
+codesign --force --deep --preserve-metadata=identifier --sign "$SIGNING_IDENTITY" "$APP" >/dev/null 2>&1
 
 # 单实例锁与 bundle id 无关，替换前必须先退出正在运行的实例。
 pkill -f "MacOS/RemoteMic" 2>/dev/null || true
@@ -91,7 +115,7 @@ else
   cp -R "$APP" "$FALLBACK_DIR/SayAll.app"
   FINAL="$FALLBACK_DIR/SayAll.app"
 fi
-codesign --force --deep --sign - "$FINAL" >/dev/null 2>&1
+codesign --force --deep --preserve-metadata=identifier --sign "$SIGNING_IDENTITY" "$FINAL" >/dev/null 2>&1
 echo "$NEXT_BUILD" > "$STATE"
 echo "==> $FINAL (build $NEXT_BUILD, source $SOURCE_COMMIT, $DIRTY)"
 open "$FINAL"

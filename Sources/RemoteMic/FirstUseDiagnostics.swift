@@ -516,6 +516,17 @@ struct FirstUseDiagnosticSnapshot {
             plan.fnTapModeEnabled == voiceFnTapModeEnabled
     }
 
+    private static var sourceRevision: String {
+        guard let value = Bundle.main.object(forInfoDictionaryKey: "SayAllSourceCommit") as? String,
+              value.count == 40, value.allSatisfy({ $0.isHexDigit }) else { return "unknown" }
+        return value
+    }
+
+    private static var buildChannel: String {
+        let value = Bundle.main.object(forInfoDictionaryKey: "SayAllBuildChannel") as? String ?? "unknown"
+        return ["local", "internalQA", "release"].contains(value) ? value : "unknown"
+    }
+
     var redactedText: String {
         let capabilities = context.capabilities
         var lines = [
@@ -524,8 +535,8 @@ struct FirstUseDiagnosticSnapshot {
             "generated_at=\(Self.timestamp(generatedAt))",
             "app_version=\(appVersion)",
             "app_build=\(appBuild)",
-            "source_revision=unknown",
-            "build_channel=unknown",
+            "source_revision=\(Self.sourceRevision)",
+            "build_channel=\(Self.buildChannel)",
             "release_tag=unknown",
             "bundle_id=\(Bundle.main.bundleIdentifier ?? "unknown")",
             "process_id=\(ProcessInfo.processInfo.processIdentifier)",

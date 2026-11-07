@@ -2,7 +2,7 @@ import Foundation
 
 public enum AppleRemoteHCIConstants {
     public static let machServiceName = "com.hd838a.SayAll.AppleRemoteHCIService"
-    public static let serviceVersion = 1
+    public static let serviceVersion = 2
     public static let expectedTeamIdentifier = "L3QHLDRPAY"
     public static let expectedClientIdentifier = "com.hd838a.RemoteMic"
 }
@@ -55,6 +55,17 @@ public enum AppleRemoteHCITraceConfiguration {
         return try serialized(preferences)
     }
 
+    /// Button capture uses only the live stream; no raw packet/audio files.
+    public static func liveButtonPreferencesData(from originalData: Data?) throws -> Data {
+        var preferences = try preferences(from: originalData)
+        preferences["HCITraces"] = [
+            "StackDebugEnabled": true, "HCILiveTraces": true,
+            "HCIFileTraces": false, "RawAudioTrace": false,
+            "HIDTrace": true, "HCISkipAuth": false,
+        ]
+        return try serialized(preferences)
+    }
+
     public static func restoreAction(
         originalPlistPresent: Bool,
         originalPlistData: Data?,
@@ -100,6 +111,7 @@ public enum AppleRemoteHCITraceConfiguration {
 }
 
 @objc public protocol AppleRemoteHCIServiceProtocol {
+    func prepareButtonConfiguration(reply: @escaping (Bool, String) -> Void)
     func prepareConfiguration(reply: @escaping (Bool, String) -> Void)
     func sealAuthorizationRight(reply: @escaping (Bool, String) -> Void)
     func releaseConfiguration(reply: @escaping (Bool, String) -> Void)
