@@ -463,13 +463,13 @@ enum KeyboardInjector {
         case .appSwitcher:
             keyPoster(48, .maskCommand)
         case .missionControl:
-            keyPoster(126, .maskControl)
+            return postControlArrow(126, keyStatePoster: keyStatePoster)
         case .applicationWindows:
-            keyPoster(125, .maskControl)
+            return postControlArrow(125, keyStatePoster: keyStatePoster)
         case .spaceLeft:
-            keyPoster(123, .maskControl)
+            return postControlArrow(123, keyStatePoster: keyStatePoster)
         case .spaceRight:
-            keyPoster(124, .maskControl)
+            return postControlArrow(124, keyStatePoster: keyStatePoster)
         case .volumeUp:
             postSystemKey(type: 0)
         case .volumeDown:
@@ -2145,6 +2145,32 @@ enum KeyboardInjector {
         ]
         .filter { !$0.isEmpty }
         .joined(separator: " ")
+    }
+
+    /// 投递 Control + 方向键的系统窗口手势（调度中心、应用程序窗口、切换桌面空间）。
+    ///
+    /// 这四个是 WindowServer 的符号快捷键，它匹配的是**真实按键流里的修饰键状态**，
+    /// 不是箭头事件上挂的 `flags`。只发「箭头 down/up + maskControl」会被静默丢弃，
+    /// 表现为动作执行了、事件也投递了，但系统毫无反应。macOS 27.0.1 (26A434) 实测：
+    ///
+    /// - 只带 flags 的箭头事件：不切换
+    /// - 显式 Control 按下/抬起边沿 + 箭头带 Fn/NumericPad：切换
+    ///
+    /// 方向键在真实键盘上恒带 `SecondaryFn | NumericPad`（见 `MACOS_FUNCTION_LAYER.md`），
+    /// 因此这里补齐这两位，让合成事件与真实按键一致。两次 12ms 的停顿是让 WindowServer
+    /// 的修饰键状态机落地；不加会偶发丢动作。
+    private static func postControlArrow(
+        _ code: CGKeyCode,
+        keyStatePoster: KeyStatePoster
+    ) -> Bool {
+        let controlKey: CGKeyCode = 59
+        let arrowFlags: CGEventFlags = [.maskControl, .maskSecondaryFn, .maskNumericPad]
+        _ = keyStatePoster(controlKey, true, .maskControl)
+        usleep(12_000)
+        _ = keyStatePoster(code, true, arrowFlags)
+        _ = keyStatePoster(code, false, arrowFlags)
+        usleep(12_000)
+        return keyStatePoster(controlKey, false, [])
     }
 
     private static func postKey(code: CGKeyCode, flags: CGEventFlags = []) {

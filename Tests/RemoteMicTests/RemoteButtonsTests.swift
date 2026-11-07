@@ -1802,10 +1802,6 @@ struct RemoteButtonsTests {
             (.commandNextWindow, 50, .maskCommand),
             (.commandHide, 4, .maskCommand),
             (.commandNew, 45, .maskCommand),
-            (.missionControl, 126, .maskControl),
-            (.applicationWindows, 125, .maskControl),
-            (.spaceLeft, 123, .maskControl),
-            (.spaceRight, 124, .maskControl),
         ]
 
         for (action, keyCode, modifiers) in expected {
@@ -1828,6 +1824,40 @@ struct RemoteButtonsTests {
             ))
         }
         #expect(systemTypes == [16, 18, 17])
+    }
+
+    /// 调度中心等 WindowServer 符号快捷键不认箭头事件上的 flags，必须显式投递
+    /// Control 的按下/抬起边沿，并让箭头带 Fn + NumericPad（真实键盘恒带）。
+    /// 四个动作的序列必须是：Control down → arrow down → arrow up → Control up。
+    @Test func systemWindowGesturesPostControlEdgesAroundTheArrow() {
+        let expected: [(ButtonAction, CGKeyCode)] = [
+            (.missionControl, 126),
+            (.applicationWindows, 125),
+            (.spaceLeft, 123),
+            (.spaceRight, 124),
+        ]
+        let arrowFlags: CGEventFlags = [.maskControl, .maskSecondaryFn, .maskNumericPad]
+
+        for (action, arrow) in expected {
+            var events: [(CGKeyCode, Bool, CGEventFlags)] = []
+            #expect(KeyboardInjector.send(
+                action,
+                accessibilityTrusted: { true },
+                keyPoster: { _, _ in
+                    Issue.record("\(action) 不应走单键注入路径")
+                },
+                keyStatePoster: { code, isDown, flags in
+                    events.append((code, isDown, flags))
+                    return true
+                }
+            ))
+            #expect(events.map(\.0) == [59, arrow, arrow, 59])
+            #expect(events.map(\.1) == [true, true, false, false])
+            #expect(events[0].2 == .maskControl)
+            #expect(events[1].2 == arrowFlags)
+            #expect(events[2].2 == arrowFlags)
+            #expect(events[3].2 == [])
+        }
     }
 
     @Test func phoneVoicePostsFunctionKeyDownAndUp() {

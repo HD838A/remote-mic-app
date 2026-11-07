@@ -615,6 +615,13 @@ PR 保持 Draft，不能将这些截图或自动化写为实机兼容性通过�
 12. 中文、英文界面各看一次动作名与提示，不得出现原始 key（如 `action.command_minimize`）。
 13. 换设备或导入导出配置后，12 个动作的 raw value 保持不变（`command_minimize`、`toggle_full_screen`、`command_new_tab`、`command_previous_tab`、`command_next_tab`、`command_next_window`、`command_hide`、`command_new`、`mission_control`、`application_windows`、`space_left`、`space_right`）。
 
+**实现约束（不要改回单事件注入）**：调度中心、应用程序窗口、向左/向右切换桌面这四项**不能**用
+「箭头事件上挂 `maskControl`」的方式投递。WindowServer 匹配符号快捷键时读的是真实按键流里的修饰键
+状态，不看合成事件自己声明的 flags——表现是动作日志正常、事件也确实发出去了，系统毫无反应。
+正确序列是：Control 单独按下 → 箭头按下/抬起（带 `Control + Fn + NumericPad`）→ Control 抬起，
+中间各停 12ms。macOS 27.0.1 (26A434) 实测确认；
+`systemWindowGesturesPostControlEdgesAroundTheArrow` 锁定这个序列，改动这四项时该用例会变红。
+
 **外部配置边界**：`⌃↑`、`⌃↓`、`⌃←`、`⌃→` 都是 macOS 默认键盘快捷键。用户在「系统设置 → 键盘 → 键盘快捷键」里改过或关掉「调度中心」「应用程序窗口」后，注入会失效或触发用户自定义的行为。这属于用户配置，应用内不检测也不兜底；验收时按系统默认配置执行，并记录被测机器的实际设置。
 
 未覆盖：多显示器、Split View、全屏 Space 之间的布局切换；目标 App 自身占用同一组合键时的优先级冲突。
