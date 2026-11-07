@@ -340,6 +340,13 @@ struct RemoteButtonsTests {
         #expect(ButtonAction.commandPreviousTab.category == .basicKeys)
         #expect(ButtonAction.commandNextTab.category == .basicKeys)
         #expect(ButtonAction.commandNextWindow.category == .basicKeys)
+        #expect(ButtonAction.commandHide.category == .basicKeys)
+        #expect(ButtonAction.commandNew.category == .basicKeys)
+        // 系统窗口管理手势归「系统与媒体」，与显示桌面、切换 App 同级。
+        #expect(ButtonAction.missionControl.category == .systemAndMedia)
+        #expect(ButtonAction.applicationWindows.category == .systemAndMedia)
+        #expect(ButtonAction.spaceLeft.category == .systemAndMedia)
+        #expect(ButtonAction.spaceRight.category == .systemAndMedia)
         #expect(ButtonAction.volumeUp.category == .systemAndMedia)
         #expect(ButtonAction.previousCommandLeft.category == .systemAndMedia)
         #expect(ButtonAction.nextCommandRight.category == .systemAndMedia)
@@ -381,6 +388,12 @@ struct RemoteButtonsTests {
         #expect(!ButtonAction.commandPreviousTab.allowsRepeat)
         #expect(!ButtonAction.commandNextTab.allowsRepeat)
         #expect(!ButtonAction.commandNextWindow.allowsRepeat)
+        #expect(!ButtonAction.commandHide.allowsRepeat)
+        #expect(!ButtonAction.commandNew.allowsRepeat)
+        #expect(!ButtonAction.missionControl.allowsRepeat)
+        #expect(!ButtonAction.applicationWindows.allowsRepeat)
+        #expect(!ButtonAction.spaceLeft.allowsRepeat)
+        #expect(!ButtonAction.spaceRight.allowsRepeat)
         #expect(!ButtonAction.previousCommandLeft.allowsRepeat)
         #expect(!ButtonAction.nextCommandRight.allowsRepeat)
         #expect(ButtonAction.arrowUp.allowsRepeat)
@@ -1175,6 +1188,12 @@ struct RemoteButtonsTests {
         #expect(ButtonAction.commandPreviousTab.visualDisplayName(using: localization) == "⇧⌘[")
         #expect(ButtonAction.commandNextTab.visualDisplayName(using: localization) == "⇧⌘]")
         #expect(ButtonAction.commandNextWindow.visualDisplayName(using: localization) == "⌘`")
+        #expect(ButtonAction.commandHide.visualDisplayName(using: localization) == "⌘H")
+        #expect(ButtonAction.commandNew.visualDisplayName(using: localization) == "⌘N")
+        #expect(ButtonAction.missionControl.visualDisplayName(using: localization) == "⌃↑")
+        #expect(ButtonAction.applicationWindows.visualDisplayName(using: localization) == "⌃↓")
+        #expect(ButtonAction.spaceLeft.visualDisplayName(using: localization) == "⌃←")
+        #expect(ButtonAction.spaceRight.visualDisplayName(using: localization) == "⌃→")
     }
 
     @Test func customShortcutPreservesRightCommandDeviceSide() {
@@ -1781,6 +1800,12 @@ struct RemoteButtonsTests {
             (.commandPreviousTab, 33, [.maskShift, .maskCommand]),
             (.commandNextTab, 30, [.maskShift, .maskCommand]),
             (.commandNextWindow, 50, .maskCommand),
+            (.commandHide, 4, .maskCommand),
+            (.commandNew, 45, .maskCommand),
+            (.missionControl, 126, .maskControl),
+            (.applicationWindows, 125, .maskControl),
+            (.spaceLeft, 123, .maskControl),
+            (.spaceRight, 124, .maskControl),
         ]
 
         for (action, keyCode, modifiers) in expected {

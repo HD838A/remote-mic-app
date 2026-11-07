@@ -430,6 +430,10 @@ enum KeyboardInjector {
             keyPoster(30, [.maskShift, .maskCommand])
         case .commandNextWindow:
             keyPoster(50, .maskCommand)
+        case .commandHide:
+            keyPoster(4, .maskCommand)
+        case .commandNew:
+            keyPoster(45, .maskCommand)
         case .arrowUp:
             keyPoster(126, [])
         case .arrowDown:
@@ -458,6 +462,14 @@ enum KeyboardInjector {
             keyPoster(contextualMenuKeyCode, [])
         case .appSwitcher:
             keyPoster(48, .maskCommand)
+        case .missionControl:
+            keyPoster(126, .maskControl)
+        case .applicationWindows:
+            keyPoster(125, .maskControl)
+        case .spaceLeft:
+            keyPoster(123, .maskControl)
+        case .spaceRight:
+            keyPoster(124, .maskControl)
         case .volumeUp:
             postSystemKey(type: 0)
         case .volumeDown:

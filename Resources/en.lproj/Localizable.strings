@@ -186,6 +186,10 @@
 "action.command_find" = "Find";
 "action.command_save" = "Save";
 "action.app_switcher" = "Switch App";
+"action.mission_control" = "Mission Control";
+"action.application_windows" = "Application Windows";
+"action.space_left" = "Move Left a Space";
+"action.space_right" = "Move Right a Space";
 "action.arrow_up" = "↑";
 "action.arrow_up_detail" = "Up arrow";
 "action.arrow_down_detail" = "Down arrow";
@@ -233,6 +237,8 @@
 "action.command_previous_tab" = "Previous Tab";
 "action.command_next_tab" = "Next Tab";
 "action.command_next_window" = "Cycle Windows";
+"action.command_hide" = "Hide App";
+"action.command_new" = "New Window";
 "action.show_desktop" = "Show Desktop";
 "action.context_menu" = "Context Menu";
 "action.system_volume_up" = "Volume Up";
