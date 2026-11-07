@@ -1,5 +1,7 @@
 # Bug 记录
 
+- [APP 适配的聚焦方式选项空白区域无法点击](./2026-11-07-focus-option-hit-area.md)
+
 - [常用语粘贴后自定义 Return 继承残留 Command 变成换行](./2026-11-06-shortcut-inherits-stale-command.md)
 
 - [聚焦 WorkBuddy 后光标落在文字之前](./2026-11-05-workbuddy-composer-caret-before-text.md)
