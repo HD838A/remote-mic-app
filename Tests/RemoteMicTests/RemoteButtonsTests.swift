@@ -1757,14 +1757,21 @@ struct RemoteButtonsTests {
         ]
 
         for (action, keyCode, modifiers) in expected {
-            var posted: (CGKeyCode, CGEventFlags)?
+            var events: [ShortcutLifecycleTests.Edge] = []
             #expect(KeyboardInjector.send(
                 action,
                 accessibilityTrusted: { true },
-                keyPoster: { posted = ($0, $1) }
+                keyPoster: { _, _ in Issue.record("Built-in combinations must use the shared transaction") },
+                shortcutEventPoster: { events.append(ShortcutLifecycleTests.Edge($0)); return true },
+                shortcutHardwareFlags: { [] }
             ))
-            #expect(posted?.0 == keyCode)
-            #expect(posted?.1 == modifiers)
+            let primary = events.filter { $0.type == .keyDown || $0.type == .keyUp }
+            #expect(primary.map(\.code) == [keyCode, keyCode])
+            #expect(primary.allSatisfy { $0.flags.contains(modifiers) })
+            #expect(events.first?.type == .flagsChanged)
+            #expect(events.last?.type == .flagsChanged)
+            #expect(events.last?.flags.isEmpty == true)
+            #expect(events.count == (modifiers.contains(.maskShift) && modifiers.contains(.maskCommand) ? 6 : 4))
         }
 
         var systemTypes: [Int32] = []
