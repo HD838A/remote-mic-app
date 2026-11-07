@@ -910,6 +910,10 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
     case applicationWindows
     case spaceLeft
     case spaceRight
+    /// 系统级副作用动作：锁屏与系统截屏。两者都依赖 WindowServer 符号快捷键，
+    /// 注入方式与窗口手势一致（显式修饰键边沿）。
+    case lockScreen
+    case screenshot
     case volumeUp
     case volumeDown
     case volumeMute
@@ -984,6 +988,8 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
         case .applicationWindows: return localization.text("action.application_windows")
         case .spaceLeft: return localization.text("action.space_left")
         case .spaceRight: return localization.text("action.space_right")
+        case .lockScreen: return localization.text("action.lock_screen")
+        case .screenshot: return localization.text("action.screenshot")
         case .volumeUp: return localization.text("action.system_volume_up")
         case .volumeDown: return localization.text("action.system_volume_down")
         case .volumeMute: return localization.text("action.system_mute")
@@ -1118,6 +1124,18 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
             return CustomKeyboardShortcut(keyCode: 123, modifierFlags: .control, keyLabel: "Left")
         case .spaceRight:
             return CustomKeyboardShortcut(keyCode: 124, modifierFlags: .control, keyLabel: "Right")
+        case .lockScreen:
+            return CustomKeyboardShortcut(
+                keyCode: 12,
+                modifierFlags: [.control, .command],
+                keyLabel: "Q"
+            )
+        case .screenshot:
+            return CustomKeyboardShortcut(
+                keyCode: 20,
+                modifierFlags: [.shift, .command],
+                keyLabel: "3"
+            )
         default:
             return nil
         }
@@ -1156,7 +1174,7 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
              .pageUp, .pageDown, .scrollToTop, .scrollToBottom, .deleteBackward:
             return .basicKeys
         case .showDesktop, .contextMenu, .appSwitcher, .missionControl, .applicationWindows,
-             .spaceLeft, .spaceRight,
+             .spaceLeft, .spaceRight, .lockScreen, .screenshot,
              .volumeUp, .volumeDown, .volumeMute,
              .playPause, .previousCommandLeft, .nextCommandRight, .toggleLongRecording:
             return .systemAndMedia
@@ -1216,6 +1234,9 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
             .applicationWindows,
             .spaceLeft,
             .spaceRight,
+            // 锁屏与截屏都是一次性系统副作用：连发只会反复锁屏、或瞬间堆出十几张截图。
+            .lockScreen,
+            .screenshot,
             .previousCommandLeft,
             .nextCommandRight,
         ].contains(self) && presetApplication == nil && !isAppInternal

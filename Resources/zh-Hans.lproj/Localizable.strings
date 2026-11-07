@@ -190,6 +190,8 @@
 "action.application_windows" = "应用程序窗口";
 "action.space_left" = "向左切换桌面";
 "action.space_right" = "向右切换桌面";
+"action.lock_screen" = "锁定屏幕";
+"action.screenshot" = "截屏";
 "action.arrow_up" = "↑";
 "action.arrow_up_detail" = "上方向键";
 "action.arrow_down_detail" = "下方向键";

@@ -190,6 +190,8 @@
 "action.application_windows" = "Application Windows";
 "action.space_left" = "Move Left a Space";
 "action.space_right" = "Move Right a Space";
+"action.lock_screen" = "Lock Screen";
+"action.screenshot" = "Take Screenshot";
 "action.arrow_up" = "↑";
 "action.arrow_up_detail" = "Up arrow";
 "action.arrow_down_detail" = "Down arrow";

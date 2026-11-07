@@ -598,6 +598,8 @@ PR 保持 Draft，不能将这些截图或自动化写为实机兼容性通过�
 | 应用程序窗口 | ⌃↓ | 125 / Control |
 | 向左切换桌面 | ⌃← | 123 / Control |
 | 向右切换桌面 | ⌃→ | 124 / Control |
+| 锁定屏幕 | ⌃⌘Q | 12 / Control + Command |
+| 截屏 | ⌘⇧3 | 20 / Shift + Command |
 
 自动化只证明 `KeyboardInjector.send` 投递了正确的键码与修饰键，不证明目标 App 或系统真的执行了对应行为。真机验收逐项做：
 
@@ -612,15 +614,18 @@ PR 保持 Draft，不能将这些截图或自动化写为实机兼容性通过�
 9. 「调度中心」按一次：进入调度中心；再按一次或按 Esc 退出。
 10. 「应用程序窗口」在有两个以上窗口的 App 前台按一次：显示该 App 的全部窗口。
 11. 配置多个桌面空间后测试「向左/向右切换桌面」：每次移动一个空间，抵达边缘时不循环。
-12. 中文、英文界面各看一次动作名与提示，不得出现原始 key（如 `action.command_minimize`）。
-13. 换设备或导入导出配置后，12 个动作的 raw value 保持不变（`command_minimize`、`toggle_full_screen`、`command_new_tab`、`command_previous_tab`、`command_next_tab`、`command_next_window`、`command_hide`、`command_new`、`mission_control`、`application_windows`、`space_left`、`space_right`）。
+12. 「锁定屏幕」按一次：屏幕立即锁定。**这一步会中断手头工作**，先保存再测；解锁后继续。
+13. 「截屏」先确认系统侧已启用：系统设置 → 键盘 → 键盘快捷键… → 截屏 →「将图片存储为文件」为勾选状态。按一次应在桌面生成一张截图，行为与手动按 ⌘⇧3 一致。该项若在系统里关闭，注入既不报错也不截图，属外部配置边界，不是应用故障。
+14. 中文、英文界面各看一次动作名与提示，不得出现原始 key（如 `action.command_minimize`）。
+15. 换设备或导入导出配置后，14 个动作的 raw value 保持不变（`command_minimize`、`toggle_full_screen`、`command_new_tab`、`command_previous_tab`、`command_next_tab`、`command_next_window`、`command_hide`、`command_new`、`mission_control`、`application_windows`、`space_left`、`space_right`、`lock_screen`、`screenshot`）。
 
-**实现约束（不要改回单事件注入）**：调度中心、应用程序窗口、向左/向右切换桌面这四项**不能**用
-「箭头事件上挂 `maskControl`」的方式投递。WindowServer 匹配符号快捷键时读的是真实按键流里的修饰键
-状态，不看合成事件自己声明的 flags——表现是动作日志正常、事件也确实发出去了，系统毫无反应。
-正确序列是：Control 单独按下 → 箭头按下/抬起（带 `Control + Fn + NumericPad`）→ Control 抬起，
-中间各停 12ms。macOS 27.0.1 (26A434) 实测确认；
-`systemWindowGesturesPostControlEdgesAroundTheArrow` 锁定这个序列，改动这四项时该用例会变红。
+**实现约束（不要改回单事件注入）**：调度中心、应用程序窗口、向左/向右切换桌面、锁定屏幕、截屏
+这几项**不能**用「目标键事件上挂 flags」的方式投递。WindowServer 匹配符号快捷键时读的是真实按键流
+里的修饰键状态，不看合成事件自己声明的 flags——表现是动作日志正常、事件也确实发出去了，系统毫无反应。
+正确序列是：按真实键入顺序逐个按下修饰键 → 目标键按下/抬起 → 逆序抬起修饰键，中间各停 12ms；
+方向键还要额外带 `Fn + NumericPad`。macOS 27.0.1 (26A434) 实测确认；
+`systemWindowGesturesPostControlEdgesAroundTheArrow` 与
+`lockScreenAndScreenshotPostModifierEdgesInTypingOrder` 锁定这些序列，改动时会变红。
 
 **外部配置边界**：`⌃↑`、`⌃↓`、`⌃←`、`⌃→` 都是 macOS 默认键盘快捷键。用户在「系统设置 → 键盘 → 键盘快捷键」里改过或关掉「调度中心」「应用程序窗口」后，注入会失效或触发用户自定义的行为。这属于用户配置，应用内不检测也不兜底；验收时按系统默认配置执行，并记录被测机器的实际设置。
 

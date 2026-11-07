@@ -347,6 +347,8 @@ struct RemoteButtonsTests {
         #expect(ButtonAction.applicationWindows.category == .systemAndMedia)
         #expect(ButtonAction.spaceLeft.category == .systemAndMedia)
         #expect(ButtonAction.spaceRight.category == .systemAndMedia)
+        #expect(ButtonAction.lockScreen.category == .systemAndMedia)
+        #expect(ButtonAction.screenshot.category == .systemAndMedia)
         #expect(ButtonAction.volumeUp.category == .systemAndMedia)
         #expect(ButtonAction.previousCommandLeft.category == .systemAndMedia)
         #expect(ButtonAction.nextCommandRight.category == .systemAndMedia)
@@ -394,6 +396,8 @@ struct RemoteButtonsTests {
         #expect(!ButtonAction.applicationWindows.allowsRepeat)
         #expect(!ButtonAction.spaceLeft.allowsRepeat)
         #expect(!ButtonAction.spaceRight.allowsRepeat)
+        #expect(!ButtonAction.lockScreen.allowsRepeat)
+        #expect(!ButtonAction.screenshot.allowsRepeat)
         #expect(!ButtonAction.previousCommandLeft.allowsRepeat)
         #expect(!ButtonAction.nextCommandRight.allowsRepeat)
         #expect(ButtonAction.arrowUp.allowsRepeat)
@@ -1194,6 +1198,8 @@ struct RemoteButtonsTests {
         #expect(ButtonAction.applicationWindows.visualDisplayName(using: localization) == "⌃↓")
         #expect(ButtonAction.spaceLeft.visualDisplayName(using: localization) == "⌃←")
         #expect(ButtonAction.spaceRight.visualDisplayName(using: localization) == "⌃→")
+        #expect(ButtonAction.lockScreen.visualDisplayName(using: localization) == "⌃⌘Q")
+        #expect(ButtonAction.screenshot.visualDisplayName(using: localization) == "⇧⌘3")
     }
 
     @Test func customShortcutPreservesRightCommandDeviceSide() {
@@ -1858,6 +1864,46 @@ struct RemoteButtonsTests {
             #expect(events[2].2 == arrowFlags)
             #expect(events[3].2 == [])
         }
+    }
+
+    /// 锁屏与系统截屏同样是 WindowServer 符号快捷键，必须按真实键入顺序
+    /// 先按下全部修饰键、再按目标键、最后逆序抬起。
+    @Test func lockScreenAndScreenshotPostModifierEdgesInTypingOrder() {
+        var lockEvents: [(CGKeyCode, Bool, CGEventFlags)] = []
+        #expect(KeyboardInjector.send(
+            .lockScreen,
+            accessibilityTrusted: { true },
+            keyPoster: { _, _ in Issue.record("锁屏不应走单键注入路径") },
+            keyStatePoster: { code, isDown, flags in
+                lockEvents.append((code, isDown, flags))
+                return true
+            }
+        ))
+        #expect(lockEvents.map(\.0) == [59, 55, 12, 12, 55, 59])
+        #expect(lockEvents.map(\.1) == [true, true, true, false, false, false])
+        #expect(lockEvents[0].2 == .maskControl)
+        #expect(lockEvents[1].2 == [.maskControl, .maskCommand])
+        #expect(lockEvents[2].2 == [.maskControl, .maskCommand])
+        #expect(lockEvents[4].2 == .maskControl)
+        #expect(lockEvents[5].2 == [])
+
+        var shotEvents: [(CGKeyCode, Bool, CGEventFlags)] = []
+        #expect(KeyboardInjector.send(
+            .screenshot,
+            accessibilityTrusted: { true },
+            keyPoster: { _, _ in Issue.record("截屏不应走单键注入路径") },
+            keyStatePoster: { code, isDown, flags in
+                shotEvents.append((code, isDown, flags))
+                return true
+            }
+        ))
+        #expect(shotEvents.map(\.0) == [55, 56, 20, 20, 56, 55])
+        #expect(shotEvents.map(\.1) == [true, true, true, false, false, false])
+        #expect(shotEvents[0].2 == .maskCommand)
+        #expect(shotEvents[1].2 == [.maskCommand, .maskShift])
+        #expect(shotEvents[2].2 == [.maskCommand, .maskShift])
+        #expect(shotEvents[4].2 == .maskCommand)
+        #expect(shotEvents[5].2 == [])
     }
 
     @Test func phoneVoicePostsFunctionKeyDownAndUp() {
