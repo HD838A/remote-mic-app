@@ -117,6 +117,8 @@ final class HIDRemoteMonitor {
     private let karabinerElementsInstalled: () -> Bool
     private let prepareNativeKeys: (() -> Bool)?
     private let restoreNativeKeys: () -> Void
+    /// 方向键是否登记事件级兜底；默认按构建架构取值，测试可以显式注入。
+    private let directionalNativeFallback: Bool
     private let targetFingerprint: String?
     private let excludedFingerprints: () -> Set<String>
     private var allowedLocationIDs: Set<UInt32>? {
@@ -232,6 +234,7 @@ final class HIDRemoteMonitor {
         },
         prepareNativeKeys: (() -> Bool)? = nil,
         restoreNativeKeys: @escaping () -> Void = {},
+        directionalNativeFallback: Bool = HIDRemoteMonitor.directionalNativeFallbackEnabled,
         appSwitcherKeyStatePoster: @escaping KeyboardInjector.KeyStatePoster = KeyboardInjector.postKeyState
     ) {
         self.settings = settings
@@ -263,6 +266,7 @@ final class HIDRemoteMonitor {
         self.karabinerElementsInstalled = karabinerElementsInstalled
         self.prepareNativeKeys = prepareNativeKeys
         self.restoreNativeKeys = restoreNativeKeys
+        self.directionalNativeFallback = directionalNativeFallback
     }
 
     func assignProfileID(_ profileID: UUID) {
@@ -692,7 +696,12 @@ final class HIDRemoteMonitor {
         var events = Set<RemoteNativeEvent>()
         for usage in usages {
             guard let button = RemoteButton.usageMap[usage],
-                  button == .volumeUp || button == .volumeDown || button == .tv else { continue }
+                  Self.prearmsNativeEvent(
+                      for: button,
+                      seized: routing.deviceSeized,
+                      neutralized: routing.nativeKeysNeutralized,
+                      directionalFallback: directionalNativeFallback
+                  ) else { continue }
             events.formUnion(button.nativeEvents)
         }
         guard !events.isEmpty else { return }
@@ -725,6 +734,42 @@ final class HIDRemoteMonitor {
     /// 音量与 TV 是否仍需事件级拦截。主线程与报告线程共用，避免判据漂移。
     static func needsEventLevelArm(seized: Bool, neutralized: Bool) -> Bool {
         !seized || !neutralized
+    }
+
+    /// 方向键是否启用事件级兜底。
+    ///
+    /// Intel 现场已证实「映射回读通过 ≠ 系统停止投递」（音量键 227 次、方向键双跳），
+    /// 而 Apple Silicon 上从未观察到该泄漏。方向键的原生码与实体键盘完全同码，
+    /// 在没有泄漏的机器上登记只会开出会吞掉实体键盘方向键的窗口（甚至吞掉 keyUp
+    /// 导致系统认为键仍按下），因此默认只在 Intel 构建启用。
+    /// 若将来在 Apple Silicon 上拿到同样的泄漏日志，把这个默认值改成 true 即可。
+    static let directionalNativeFallbackEnabled: Bool = {
+        #if arch(x86_64)
+        return true
+        #else
+        return false
+        #endif
+    }()
+
+    /// 报告线程可以提前登记的原生事件。
+    ///
+    /// TV 与音量始终由 App 执行，判据与外层 `needsEventLevelArm` 一致。
+    /// 方向键不同：monitored 且源头映射未生效时，默认左右动作故意走原生透传，
+    /// 原生事件本身就是那一次移动；此时提前登记会把它吞掉，按键完全没有反应。
+    /// 因此方向键要求「非独占 + 映射已回读生效 + 本构建启用了方向键兜底」，
+    /// 这正是 Intel 上原生方向键比主线程登记早到约 200 ms、单次按下移动两格的现场条件。
+    ///
+    /// 判据自带完整答案（不依赖调用点的粗筛），因此可以直接单测。
+    static func prearmsNativeEvent(
+        for button: RemoteButton,
+        seized: Bool,
+        neutralized: Bool,
+        directionalFallback: Bool
+    ) -> Bool {
+        if button == .tv || button == .volumeUp || button == .volumeDown {
+            return Self.needsEventLevelArm(seized: seized, neutralized: neutralized)
+        }
+        return button.isDirectional && directionalFallback && !seized && neutralized
     }
 
     /// 由主线程在启用状态、允许位置、目标设备或排除列表变化时刷新，
@@ -1798,14 +1843,27 @@ final class HIDRemoteMonitor {
 
     private func shouldArmNativeEvent(for button: RemoteButton) -> Bool {
         // UserKeyMapping readback only proves that the mapping was written. It
-        // does not prove that macOS stopped delivering the native event. Intel
-        // monitored mode can still deliver TV/volume events after a successful
-        // readback, so keep the event-tap fallback for those three controls.
+        // does not prove that macOS stopped delivering the native event: Intel
+        // monitored mode still delivers TV/volume events after a successful
+        // readback, so those three controls always keep the event-tap fallback.
+        // Callers already skip this for intentional native passthrough.
         if button == .tv || button == .volumeUp || button == .volumeDown {
             return Self.needsEventLevelArm(
                 seized: activeDeviceIsSeized,
                 neutralized: nativeKeysNeutralized
             )
+        }
+        // 方向键同样会被泄漏（2026-11-07 现场：一次按下把光标推了两格），但它与实体
+        // 键盘完全同码，登记等于凭空开出会吞掉键盘方向键的窗口，因此按
+        // `directionalNativeFallback` 收窄到有现场证据的构建（默认 Intel）。
+        // 映射未生效时方向键本来就没有源头隔离，登记是修复前就有的行为，必须保留：
+        // 默认左右动作走原生透传由调用点排除，其余动作（自定义快捷键等）仍要靠它。
+        if button.isDirectional {
+            guard Self.needsEventLevelArm(
+                seized: activeDeviceIsSeized,
+                neutralized: nativeKeysNeutralized
+            ) else { return false }
+            return !nativeKeysNeutralized || directionalNativeFallback
         }
         return !nativeKeysNeutralized
     }
