@@ -4892,6 +4892,7 @@ struct SettingsView: View {
             }
             .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
             .frame(maxWidth: .infinity, minHeight: 36)
+            .contentShape(RoundedRectangle(cornerRadius: 8))
         }
         .buttonStyle(.plain)
         .foregroundStyle(isSelected ? Color.accentColor : Color.primary)
