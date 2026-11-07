@@ -1,97 +1,121 @@
 #!/bin/zsh
-# 打本地测试包：名字固定 SayAll.app，优先替换 ~/Applications/SayAll.app，
-# 失败落到 ~/Downloads/SayAll-test/。每次构建号自动 +1。
-#
-# 用法：
-#   SAYALL_PRIVATE_SOURCE_ROOT=/path/to/sayall-private-platform \
-#     scripts/package-local-test-app.sh
-#
-# 环境变量：
-#   SAYALL_PRIVATE_SOURCE_ROOT  私有仓工作区根目录（必填，脚本会从这里取 4 个私有包）
-#   SAYALL_LOCAL_APP_TARGET     替换目标，默认 ~/Applications/SayAll.app
-#   SAYALL_LOCAL_APP_FALLBACK   兜底目录，默认 ~/Downloads/SayAll-test
-#
-# 约定（见 AGENTS.md「本地测试包」）：
-#   - 包名固定 SayAll.app，构建号每次 +1，仓库 Resources/Info.plist 模板值不动
-#   - 这是测试产物，不是分发包；不得冒用 Tag
+# Build and install a local SayAll test app with the project's native packager.
+# Inputs: SAYALL_PRIVATE_SOURCE_ROOT, SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH,
+# CODE_SIGN_IDENTITY, and the diagnostic settings required by build-app.sh.
+# Set SAYALL_LOCAL_DEFER_LAUNCH=1 to install without launching.
 set -euo pipefail
 
-HOST_ROOT="${${0:A}:h:h}"  # zsh：脚本所在目录的上一级，即宿主仓根目录
-PRIVATE_ROOT="${SAYALL_PRIVATE_SOURCE_ROOT:-}"
+ROOT="${0:A:h:h}"
 TARGET="${SAYALL_LOCAL_APP_TARGET:-$HOME/Applications/SayAll.app}"
-FALLBACK_DIR="${SAYALL_LOCAL_APP_FALLBACK:-$HOME/Downloads/SayAll-test}"
+FALLBACK="${SAYALL_LOCAL_APP_FALLBACK:-$HOME/Downloads/SayAll-test}/SayAll.app"
 STATE="$HOME/.sayall-local-build"
 
-if [[ -z "$PRIVATE_ROOT" || ! -d "$PRIVATE_ROOT/packages/macos-button-profiles" ]]; then
-  echo "SAYALL_PRIVATE_SOURCE_ROOT 必须指向私有仓根目录（含 packages/macos-button-profiles）" >&2
-  exit 2
+: "${SAYALL_PRIVATE_SOURCE_ROOT:?Set the private platform source root}"
+test -d "$SAYALL_PRIVATE_SOURCE_ROOT/packages"
+: "${SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH:?Set the prepared private artifact package}"
+: "${CODE_SIGN_IDENTITY:?Set the local Developer ID signing identity}"
+
+platform_version="$(jq -er '.dependencies.sayAllPrivatePlatform.version' "$ROOT/config/release-dependencies.json")"
+source_tag_commit="$(git -C "$SAYALL_PRIVATE_SOURCE_ROOT" rev-parse "refs/tags/$platform_version^{commit}")"
+artifact_commit="$(jq -er '.sourceCommit' "$SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH/private-artifact-package.json")"
+if [[ "$source_tag_commit" != "$artifact_commit" ]]; then
+  print -u2 "Prepared private artifacts do not match the pinned private tag."
+  exit 1
 fi
 
-current_build() {
-  local value=0 v app
-  for app in "/Applications/SayAll.app" "$TARGET" "$FALLBACK_DIR/SayAll.app"; do
-    [[ -d "$app" ]] || continue
-    v=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$app/Contents/Info.plist" 2>/dev/null || echo 0)
-    [[ "$v" =~ ^[0-9]+$ ]] && (( v > value )) && value=$v
-  done
-  if [[ -f "$STATE" ]]; then
-    v=$(cat "$STATE" 2>/dev/null || echo 0)
-    [[ "$v" =~ ^[0-9]+$ ]] && (( v > value )) && value=$v
+zmodload zsh/system
+touch "$STATE.lock"
+if ! zsystem flock -t 0 "$STATE.lock"; then
+  print -u2 "Another SayAll local build is in progress."
+  exit 1
+fi
+
+max_build=0
+for app in /Applications/SayAll.app "$HOME/Applications/SayAll.app" "$TARGET" "$FALLBACK"; do
+  value="$(plutil -extract CFBundleVersion raw -o - "$app/Contents/Info.plist" 2>/dev/null || true)"
+  if [[ "$value" == <-> ]] && (( value > max_build )); then
+    max_build="$value"
   fi
-  echo "$value"
+done
+if [[ -f "$STATE" ]]; then
+  value="$(<"$STATE")"
+  if [[ "$value" == <-> ]] && (( value > max_build )); then
+    max_build="$value"
+  fi
+fi
+next_build=$((max_build + 1))
+source_commit="$(git -C "$ROOT" rev-parse HEAD)"
+dirty=false
+if [[ -n "$(git -C "$ROOT" status --porcelain)" ]]; then
+  dirty=true
+fi
+
+if [[ "$(uname -m)" == x86_64 ]]; then
+  RELEASE_VARIANT=intel
+else
+  RELEASE_VARIANT=apple-silicon
+fi
+source "$ROOT/scripts/release-variant.sh"
+export CONFIGURATION=release
+export SAYALL_BUILD_CHANNEL=local
+export SAYALL_PRIVATE_PLATFORM_VERSION="$platform_version"
+export SAYALL_PRIVATE_PLATFORM_MODE=required
+export REQUIRE_SAYALL_PRIVATE_ARTIFACT_PACKAGE=1
+export REQUIRE_SAYALL_COMBINATION_ACTIONS=1
+export REQUIRE_SAYALL_BUTTON_PROFILES=1
+export REQUIRE_SAYALL_MAC_REMOTE_PACKAGE=1
+export REQUIRE_SAYALL_CHROMECAST=1
+export REQUIRE_SIRI_REMOTE_SIGNING=1
+"$ROOT/scripts/build-app.sh"
+
+app="$RELEASE_OUTPUT_DIR/SayAll.app"
+plist="$app/Contents/Info.plist"
+plutil -replace CFBundleVersion -string "$next_build" "$plist"
+plutil -insert SayAllSourceDirty -bool "$dirty" "$plist"
+codesign --force --options runtime --timestamp --sign "$CODE_SIGN_IDENTITY" \
+  --entitlements "$ROOT/packaging/app.entitlements" "$app"
+codesign --verify --deep --strict "$app"
+"$ROOT/scripts/verify-app.sh" "$app"
+
+install_app() {
+  local destination="$1" staged backup=""
+  mkdir -p "${destination:h}" || return 1
+  staged="$(mktemp -d "${destination:h}/.sayall-stage.XXXXXX")" || return 1
+  ditto "$app" "$staged/SayAll.app" || return 1
+  codesign --verify --deep --strict "$staged/SayAll.app" || return 1
+  if [[ -e "$destination" ]]; then
+    backup="$HOME/.Trash/SayAll.app.local-$(date -u +%Y%m%dT%H%M%S)-$$"
+    test ! -e "$backup" && mv "$destination" "$backup" || return 1
+  fi
+  if ! mv "$staged/SayAll.app" "$destination"; then
+    if [[ -n "$backup" ]]; then mv "$backup" "$destination"; fi
+    return 1
+  fi
+  mv "$staged" "$HOME/.Trash/${staged:t}-$$" || print -u2 "Could not move the empty staging directory to Trash."
 }
 
-NEXT_BUILD=$(( $(current_build) + 1 ))
-P="$PRIVATE_ROOT/packages"
-SOURCE_COMMIT="$(git -C "$HOST_ROOT" rev-parse --short HEAD 2>/dev/null || echo unknown)"
-DIRTY="clean"
-[[ -n "$(git -C "$HOST_ROOT" status --porcelain 2>/dev/null)" ]] && DIRTY="dirty"
-
-echo "==> build $NEXT_BUILD from $SOURCE_COMMIT ($DIRTY)"
-cd "$HOST_ROOT"
-SAYALL_TEST_BUTTON_PROFILES_FREE=1 \
-SAYALL_COMBINATION_ACTIONS_PATH="$P/macos-combination-actions" \
-SAYALL_BUTTON_PROFILES_PACKAGE_PATH="$P/macos-button-profiles" \
-SAYALL_SIRI_REMOTE_PACKAGE_PATH="$P/audio-input-kit/siri-remote" \
-SAYALL_CHROMECAST_PACKAGE_PATH="$P/audio-input-kit/chromecast" \
-  swift build -c release --disable-sandbox
-
-APP=/tmp/SayAll.app
-rm -rf "$APP"
-mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp .build/release/RemoteMic "$APP/Contents/MacOS/"
-
-# 旧的 .build 可能是在没有私有路径的情况下编出来的；那种包会静默缺功能。
-# 这里用 `grep ... >/dev/null` 而不是 `grep -q`：脚本开了 pipefail，-q 命中后提前退出会让
-# nm 收到 SIGPIPE（141），链接私有包后符号表有几百 KB、必然写满管道缓冲，守卫就会误判成
-# “没有 SayAllButtonProfiles” 而拦下本来正常的构建。
-if ! nm -gU "$APP/Contents/MacOS/RemoteMic" 2>/dev/null | grep "SayAllButtonProfiles" >/dev/null; then
-  echo "构建产物里没有 SayAllButtonProfiles：可能复用了旧 .build。请先 swift package clean 再重跑。" >&2
-  exit 3
-fi
-cp -R .build/out/Products/Release/Sparkle.framework "$APP/Contents/MacOS/"
-rsync -a --exclude Info.plist Resources/ "$APP/Contents/Resources/"
-for bundle in .build/out/Products/Release/*.bundle; do
-  cp -R "$bundle" "$APP/Contents/Resources/"
+for old_app in /Applications/SayAll.app "$TARGET" "$FALLBACK"; do
+  for pid in $(pgrep -fx -- "$old_app/Contents/MacOS/RemoteMic" || true); do
+    kill -TERM "$pid"
+    for attempt in {1..25}; do
+      kill -0 "$pid" 2>/dev/null || break
+      sleep 0.2
+    done
+    if kill -0 "$pid" 2>/dev/null; then
+      print -u2 "The previous SayAll instance did not exit."
+      exit 1
+    fi
+  done
 done
-cp Resources/Info.plist "$APP/Contents/Info.plist"
-printf 'APPL????' > "$APP/Contents/PkgInfo"
-/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $NEXT_BUILD" "$APP/Contents/Info.plist"
-codesign --force --deep --sign - "$APP" >/dev/null 2>&1
 
-# 单实例锁与 bundle id 无关，替换前必须先退出正在运行的实例。
-pkill -f "MacOS/RemoteMic" 2>/dev/null || true
-sleep 1
-
-if rm -rf "$TARGET" 2>/dev/null && cp -R "$APP" "$TARGET" 2>/dev/null; then
-  FINAL="$TARGET"
-else
-  mkdir -p "$FALLBACK_DIR"
-  rm -rf "$FALLBACK_DIR/SayAll.app"
-  cp -R "$APP" "$FALLBACK_DIR/SayAll.app"
-  FINAL="$FALLBACK_DIR/SayAll.app"
+final="$TARGET"
+if ! install_app "$final"; then
+  final="$FALLBACK"
+  install_app "$final"
 fi
-codesign --force --deep --sign - "$FINAL" >/dev/null 2>&1
-echo "$NEXT_BUILD" > "$STATE"
-echo "==> $FINAL (build $NEXT_BUILD, source $SOURCE_COMMIT, $DIRTY)"
-open "$FINAL"
+codesign --verify --deep --strict "$final"
+print "$next_build" > "$STATE"
+print "Installed $final, build $next_build, source $source_commit, dirty=$dirty"
+if [[ "${SAYALL_LOCAL_DEFER_LAUNCH:-0}" != 1 ]]; then
+  open -a "$final"
+fi
