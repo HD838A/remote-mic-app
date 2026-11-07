@@ -385,6 +385,16 @@ enum KeyboardInjector {
         }
         guard accessibilityTrusted() else { return false }
 
+        func sendShortcut(_ keyCode: CGKeyCode, _ modifiers: CGEventFlags) -> Bool {
+            ShortcutEventSequence.send(
+                keyCode: keyCode,
+                modifiers: modifiers,
+                hardwareFlags: shortcutHardwareFlags,
+                eventPoster: shortcutEventPoster,
+                logger: logger
+            )
+        }
+
         switch action {
         case .disabled:
             return true
@@ -393,31 +403,31 @@ enum KeyboardInjector {
         case .returnKey:
             keyPoster(36, [])
         case .commandReturn:
-            keyPoster(36, .maskCommand)
+            return sendShortcut(36, .maskCommand)
         case .shiftReturn:
-            keyPoster(36, .maskShift)
+            return sendShortcut(36, .maskShift)
         case .commandCopy:
-            keyPoster(8, .maskCommand)
+            return sendShortcut(8, .maskCommand)
         case .commandPaste:
-            keyPoster(9, .maskCommand)
+            return sendShortcut(9, .maskCommand)
         case .commandClose:
-            keyPoster(13, .maskCommand)
+            return sendShortcut(13, .maskCommand)
         case .commandQuit:
-            keyPoster(12, .maskCommand)
+            return sendShortcut(12, .maskCommand)
         case .commandCut:
-            keyPoster(7, .maskCommand)
+            return sendShortcut(7, .maskCommand)
         case .commandSelectAll:
-            keyPoster(0, .maskCommand)
+            return sendShortcut(0, .maskCommand)
         case .commandUndo:
-            keyPoster(6, .maskCommand)
+            return sendShortcut(6, .maskCommand)
         case .commandRedo:
-            keyPoster(6, [.maskCommand, .maskShift])
+            return sendShortcut(6, [.maskCommand, .maskShift])
         case .commandFind:
-            keyPoster(3, .maskCommand)
+            return sendShortcut(3, .maskCommand)
         case .commandSave:
-            keyPoster(1, .maskCommand)
+            return sendShortcut(1, .maskCommand)
         case .commandDelete:
-            keyPoster(51, .maskCommand)
+            return sendShortcut(51, .maskCommand)
         case .arrowUp:
             keyPoster(126, [])
         case .arrowDown:
@@ -463,12 +473,7 @@ enum KeyboardInjector {
         case .customShortcut:
             if let shortcut {
                 let eventFlags = shortcut.cgEventFlags
-                return ShortcutEventSequence.send(
-                    keyCode: CGKeyCode(shortcut.keyCode),
-                    modifiers: eventFlags,
-                    hardwareFlags: shortcutHardwareFlags,
-                    eventPoster: shortcutEventPoster
-                )
+                return sendShortcut(CGKeyCode(shortcut.keyCode), eventFlags)
             }
         case .focusInput:
             break
