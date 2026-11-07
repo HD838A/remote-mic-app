@@ -30,13 +30,44 @@ remote_voice_button_press_count=0
 
 ## 根因
 
-Siri Remote 的语音音频是**按需**建立的：连接遥控器只登记资料与 HID（`BridgeAppModel.handleAppleRemoteConnection`），不启动虚拟音频引擎；引擎只在 `apple_remote_voice_start` 里建立。因此只要没按过语音键，`isReadyForTestTone`（要求引擎运行、播放器播放）必然为假。
+虚拟音频引擎有两条启动路径，都跟遥控器连接无关：
 
-但音频页与完成页的门禁按**控制方式**判断：`physical_remote` 一律要求输出持续 Ready（`OnboardingFlow.swift` 的 `.audio` / `.complete`），只有 `iphone_app` / `web_remote` 走按需分支（2026-08-18 手机与网页版那次修复）。Siri Remote 与小米遥控器同属 `physical_remote`，于是被套上了「持续 Ready」的要求，而它的输出永远不会提前 Ready。
+1. `startAudioSubsystem()` 在 App 启动时按**已保存的选择**无条件配置一次（不看控制来源）。
+2. 按下语音键时的 `apple_remote_voice_start`。
 
-「重试音频设置」同样无效：它走 `applyAudioSettings`，第一道门是 `shouldKeepVirtualAudioActive`。该判定只认就绪的小米蓝牙桥、蓝牙语音、手机语音、测试音和 Mac 麦克风；Siri Remote 的连接不在其中，所以重试被静默忽略，连一条 `AUDIO CONFIGURE` 日志都不会产生。
+全新安装没有保存的选择，第 1 条落在 `VirtualAudioSelectionRecoveryPolicy` 的 `.noHistory` 分支、以空 UID 调 `configureAsync`，于是得到 `AUDIO CONFIGURE skipped reason=no_selected_device`，`status` 停在 `audio.output.none_selected`。此后音频页选设备是**唯一**的配置入口，而它被下一段所述的门禁拦下——这就是本现场的序列。
 
-小米遥控器或 Chromecast 在场时，桥保持 Ready 让引擎常驻，音频页会顺带通过——这也是这个缺陷能在测试里长期不被发现的原因。用户机器上只有一只 Siri Remote，就没有这条旁路。
+反过来，**升级用户**带着上一版保存的选择，启动时第 1 条就会把引擎配好，`isReadyForTestTone` 为真，音频页「顺带」通过。这解释了为什么这个缺陷在测试机上长期不可见；等一次空闲释放（600 s）或任意一次 `applyAudioSettings` 把引擎释放掉，同一台机器又会卡住。
+
+音频页与完成页的门禁按**控制方式**判断：`physical_remote` 一律要求输出持续 Ready（`OnboardingFlow.swift` 的 `.audio` / `.complete`），只有 `iphone_app` / `web_remote` 走按需分支（2026-08-18 手机与网页版那次修复）。Siri Remote 与小米遥控器同属 `physical_remote`，于是被套上了「持续 Ready」的要求，而在全新安装上它没有任何机会提前 Ready。
+
+「重试音频设置」同样无效：它走 `applyAudioSettings`，第一道门是 `shouldKeepVirtualAudioActive`。该判定只认就绪的小米蓝牙桥、蓝牙语音、手机语音、测试音和 Mac 麦克风；Siri Remote 的连接不在其中，所以点击被静默忽略——这条路径连一行日志都不写，用户的 12 次重试在日志里不留痕迹。
+
+小米遥控器或 Chromecast 在场时，桥保持 Ready 让引擎常驻，音频页会顺带通过。用户机器上只有一只 Siri Remote，就没有这条旁路。
+
+## 日志指纹（同类现场照此定位）
+
+`~/Library/Logs/RemoteMic/sayall.app-<day>-session-<id>.rmlog`（加密；开发构建同目录另有明文 `runtime.log`）里应当出现这组序列：
+
+```
+AUDIO STARTUP scheduled id=1
+AUDIO DEVICES startup id=1 devices={...}
+AUDIO SELECTION RECOVERY phase=skipped source=none reason=noHistory kind=unavailable supported_candidates=1 historical=false
+AUDIO REBIND begin reason=startup state={...ready=false...}
+AUDIO CONFIGURE skipped reason=no_selected_device queue=audio_output elapsed_ms=...
+AUDIO REBIND finished reason=startup success=false status=audio.output.none_selected
+```
+
+判定：`reason=noHistory` + `skipped reason=no_selected_device` ⇒ 全新安装、启动没有可用选择；此后用户在音频页的每次点击都**不产生日志**（被 `shouldKeepVirtualAudioActive` 静默拦下），所以日志停在 `AUDIO REBIND finished` 之后不动，这就是「重试无效」的日志形态。
+
+反向对照（修好后的期望）：用户在语音测试页按下语音键时出现
+
+```
+AUDIO CONFIGURE operation_id=<n> phase=completed result=ready reason=ready status_key=audio.output.current_format
+AUDIO READY target={...}
+```
+
+若 `AUDIO CONFIGURE failed` 出现，`reason=` 会直接区分驱动缺失（`selected_device_unavailable`）、音量/静音自愈失败（`virtual_device_level_not_applied`）、输出单元打不开（`no_output_unit`）和绑定失败（`set_current_device`）；这三类都不是本 Bug。
 
 ## 修复
 
