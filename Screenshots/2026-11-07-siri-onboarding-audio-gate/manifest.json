@@ -1,0 +1,60 @@
+{
+  "batch": "2026-11-07-siri-onboarding-audio-gate",
+  "date": "2026-11-07",
+  "commit": "4115b260e4cde741ef50354b237fd5b762c3e44c",
+  "pull_request": 916,
+  "purpose": "Onboarding 音频页：Siri Remote 按需音频门禁修复后的可见状态，以及小米遥控器未放宽门禁的对照态。",
+  "window_points": [1020, 772],
+  "storage": "pr-attachment",
+  "generator": "OnboardingScreenshotRenderer 离屏托管生产 OnboardingView（公开源码 + -Xswiftc -DSAYALL_SIRI_REMOTE_ENABLED；_SIRI_REMOTE_INSTALLED=1、_AUDIO_SELECTED=1、_AUDIO_NAME=legacy、_CONTROL_SOURCE=siri_remote|xiaomi_remote）",
+  "notes": [
+    "这四张是离屏 harness 截图，不是真实窗口运行截图；离屏环境缺少 App bundle 的强调色资源，选中态渲染为橙色而非正式包的蓝色，与本次改动无关。",
+    "Siri Remote 三张：左栏状态卡说明为「按住遥控器语音键时会自动连接所选设备；下一步将通过真实声音和文字进行验证。」，右栏第三项是「语音开始时连接音频」且已勾选，「继续」可用，没有「语音输出还没有准备好」恢复卡。",
+    "小米遥控器一张：同一套夹具、同一个未启动的音频运行时下仍是「音频输出正常」未勾选 + 橙色恢复卡 + 「继续」禁用，证明本次只放宽按需来源。",
+    "音频页的「已选中设备」态由本次新增的 REMOTE_MIC_ONBOARDING_SCREENSHOT_AUDIO_SELECTED=1 夹具开关产生，默认关闭时其余页面的既有基线不变。",
+    "截图只证明门禁呈现与文案版式；真实 Siri Remote 重跑、语音键上屏、完成页与签名包仍未验收。",
+    "音频名称使用 legacy（MiRemoteV 2ch）以匹配本次现场；新安装显示 SayAll，文案与布局相同。"
+  ],
+  "images": [
+    {
+      "file": "audio-siri-zh-hans-light.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1600,
+      "sha256": "54a28ff9efa833badd994aca7843b7e49393971a4321fa3183e60a41af76de6c",
+      "bytes": 890266,
+      "state": "siri_remote_on_demand_audio_selected",
+      "url": "https://github.com/user-attachments/assets/ae38fa10-9728-42d8-9072-9a91c1269f53"
+    },
+    {
+      "file": "audio-siri-zh-hans-dark.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1600,
+      "sha256": "3c33124aed2f81deceef5df5546a74ddaeeab2073e15b0b08467a8eca363626d",
+      "bytes": 1053622,
+      "state": "siri_remote_on_demand_audio_selected",
+      "url": "https://github.com/user-attachments/assets/417f7ef5-8281-4b11-83eb-c038e5810c0b"
+    },
+    {
+      "file": "audio-siri-en-light.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1600,
+      "sha256": "0631ed5d9203352f6c67f58f7269204af7e377949589b33da694b67cb493ff3d",
+      "bytes": 883365,
+      "state": "siri_remote_on_demand_audio_selected",
+      "url": "https://github.com/user-attachments/assets/d4ec1e0f-c9c8-4fa0-9962-5870486d0eea"
+    },
+    {
+      "file": "audio-xiaomi-zh-hans-light.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1600,
+      "sha256": "99998ad5ba346045341cbd8ebc6768e05f16d1d13bf6a2cd6515e426b958c201",
+      "bytes": 1027340,
+      "state": "xiaomi_remote_ready_required_baseline",
+      "url": "https://github.com/user-attachments/assets/fe61c49f-b109-4e6f-865d-e293da83ebc8"
+    }
+  ]
+}

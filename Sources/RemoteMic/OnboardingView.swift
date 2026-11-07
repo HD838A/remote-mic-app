@@ -2890,23 +2890,13 @@ struct OnboardingView: View {
             sidePanel(titleKey: "onboarding.side.audio") {
                 sideCheck("onboarding.side.device_found", isComplete: !supportedAudioDevices.isEmpty)
                 sideCheck("onboarding.side.device_selected", isComplete: audioOutputSelected)
-                sideCheck(
-                    settings.onboardingControlMethod.usesOnDemandAudioOutput
-                        ? "onboarding.side.audio_on_demand"
-                        : "onboarding.side.audio_ready",
-                    isComplete: onboardingAudioReady
-                )
+                sideCheck(audioSideCheckKey, isComplete: onboardingAudioReady)
             }
         case .voiceTest:
             sidePanel(titleKey: "onboarding.side.voice_test") {
                 sideCheck("onboarding.side.voice_key", isComplete: voiceSessionStarted && voiceSessionEnded)
                 sideCheck("onboarding.side.samples", isComplete: voiceSamplesReceived)
-                sideCheck(
-                    settings.onboardingControlMethod.usesOnDemandAudioOutput
-                        ? "onboarding.side.audio_on_demand"
-                        : "onboarding.side.audio_ready",
-                    isComplete: onboardingAudioReady
-                )
+                sideCheck(audioSideCheckKey, isComplete: onboardingAudioReady)
                 sideCheck("onboarding.side.transcript", isComplete: verifiedTranscriptionAppeared)
             }
         case .controls:
@@ -3195,6 +3185,7 @@ struct OnboardingView: View {
             voiceTool: settings.onboardingVoiceTool,
             remoteAvailability: settings.onboardingRemoteAvailability,
             controlMethod: settings.onboardingControlMethod,
+            controlSource: settings.onboardingControlSource,
             voiceKeyMode: settings.voiceKeyMode,
             capabilities: capabilities,
             phoneAppInstallConfirmed: didConfirmPhoneAppInstalled
@@ -3276,6 +3267,7 @@ struct OnboardingView: View {
             step: settings.onboardingStep,
             remoteAvailability: settings.onboardingRemoteAvailability,
             controlMethod: settings.onboardingControlMethod,
+            controlSource: settings.onboardingControlSource,
             capabilities: capabilities,
             hasSelectedAudioUID: !settings.selectedAudioDeviceUID.isEmpty,
             voiceAttempt: settings.onboardingStep == .voiceTest ? voiceAttempt : nil,
@@ -3315,9 +3307,28 @@ struct OnboardingView: View {
         )
     }
 
+    /// 当前来源的语音音频是否在按下语音键时才建立。Siri Remote 与小屏来源都是这样，
+    /// 只是它们分属不同控制方式，必须同时看来源。
+    private var usesOnDemandAudioOutput: Bool {
+        OnboardingAudioReadinessPolicy.usesOnDemandAudioOutput(
+            controlMethod: settings.onboardingControlMethod,
+            controlSource: settings.onboardingControlSource
+        )
+    }
+
+    private var audioSideCheckKey: String {
+        usesOnDemandAudioOutput
+            ? "onboarding.side.audio_on_demand"
+            : "onboarding.side.audio_ready"
+    }
+
     private var onboardingAudioReady: Bool {
-        audioOutputSelected &&
-            (settings.onboardingControlMethod.usesOnDemandAudioOutput || model.isAudioOutputReady)
+        OnboardingAudioReadinessPolicy.isSatisfied(
+            controlMethod: settings.onboardingControlMethod,
+            controlSource: settings.onboardingControlSource,
+            audioOutputSelected: audioOutputSelected,
+            audioReady: model.isAudioOutputReady
+        )
     }
 
     private var selectedAudioDeviceTitle: String {
@@ -3334,9 +3345,13 @@ struct OnboardingView: View {
         guard audioOutputSelected else {
             return localization.text("onboarding.audio.select_detail")
         }
-        if settings.onboardingControlMethod.usesOnDemandAudioOutput,
-           !model.isAudioOutputReady {
-            return localization.text("onboarding.audio.on_demand_detail")
+        if usesOnDemandAudioOutput, !model.isAudioOutputReady {
+            // 下一页的动作不同：手机是「开始手机语音」，Siri Remote 是「按住遥控器语音键」。
+            return localization.text(
+                settings.onboardingControlMethod.usesOnDemandAudioOutput
+                    ? "onboarding.audio.on_demand_detail"
+                    : "onboarding.audio.on_demand_detail_remote"
+            )
         }
         return model.audioStatus.text(using: localization)
     }
@@ -4307,6 +4322,7 @@ struct OnboardingView: View {
                 voiceTool: settings.onboardingVoiceTool,
                 remoteAvailability: settings.onboardingRemoteAvailability,
                 controlMethod: settings.onboardingControlMethod,
+                controlSource: settings.onboardingControlSource,
                 capabilities: capabilities,
                 hasSelectedAudioUID: !settings.selectedAudioDeviceUID.isEmpty
             ) else { return }

@@ -995,6 +995,7 @@
 "onboarding.audio.select_detail" = "从上方选择 SayAll、MiRemoteV 2ch 或 BlackHole 2ch。";
 "onboarding.audio.refresh" = "重新检查";
 "onboarding.audio.on_demand_detail" = "手机开始语音时会自动连接所选设备；下一步将通过真实声音和文字进行验证。";
+"onboarding.audio.on_demand_detail_remote" = "按住遥控器语音键时会自动连接所选设备；下一步将通过真实声音和文字进行验证。";
 "onboarding.voice_test.title" = "亲自说一句，确认真的能用";
 "onboarding.voice_test.detail" = "点一下下面的输入框，按照上方提示使用语音键说一句话。";
 "onboarding.voice_test.volume.title" = "调整音量";

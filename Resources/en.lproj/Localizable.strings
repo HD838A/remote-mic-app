@@ -996,6 +996,7 @@
 "onboarding.audio.select_detail" = "Choose SayAll, MiRemoteV 2ch, or BlackHole 2ch above.";
 "onboarding.audio.refresh" = "Check Again";
 "onboarding.audio.on_demand_detail" = "The selected device will connect automatically when phone voice input starts. The next step verifies real audio and text.";
+"onboarding.audio.on_demand_detail_remote" = "The selected device will connect automatically when you hold the remote's voice button. The next step verifies real audio and text.";
 "onboarding.voice_test.title" = "Test voice typing";
 "onboarding.voice_test.detail" = "Click the field, then use the voice button as shown.";
 "onboarding.voice_test.volume.title" = "Adjust output volume";

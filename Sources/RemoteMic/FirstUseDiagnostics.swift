@@ -347,6 +347,9 @@ struct FirstUseDiagnosticContext: Equatable {
     let step: OnboardingStep
     let remoteAvailability: OnboardingRemoteAvailability
     let controlMethod: OnboardingControlMethod
+    /// 生产路径与 `FirstUseDiagnosticSnapshot.controlSource` 取自同一个 Onboarding 设置。
+    /// 音频门禁按来源区分（Siri Remote 按需建立输出），所以失败原因必须看它。
+    let controlSource: OnboardingControlSource
     let capabilities: OnboardingCapabilities
     let hasSelectedAudioUID: Bool
     let voiceAttempt: FirstUseVoiceAttemptDiagnostic?
@@ -357,6 +360,7 @@ struct FirstUseDiagnosticContext: Equatable {
         step: OnboardingStep,
         remoteAvailability: OnboardingRemoteAvailability = .hasRemote,
         controlMethod: OnboardingControlMethod = .physicalRemote,
+        controlSource: OnboardingControlSource = .unselected,
         capabilities: OnboardingCapabilities,
         hasSelectedAudioUID: Bool,
         voiceAttempt: FirstUseVoiceAttemptDiagnostic? = nil,
@@ -366,11 +370,21 @@ struct FirstUseDiagnosticContext: Equatable {
         self.step = step
         self.remoteAvailability = remoteAvailability
         self.controlMethod = controlMethod
+        self.controlSource = controlSource
         self.capabilities = capabilities
         self.hasSelectedAudioUID = hasSelectedAudioUID
         self.voiceAttempt = voiceAttempt
         self.remoteInput = remoteInput
         self.voiceAuthorizationRequired = voiceAuthorizationRequired
+    }
+
+    /// 音频页与完成页实际采用的门禁：`on_demand` 表示输出会在按下语音键时建立，
+    /// `ready_required` 表示要求输出在页面停留期间一直就绪。
+    var audioGate: String {
+        OnboardingAudioReadinessPolicy.usesOnDemandAudioOutput(
+            controlMethod: controlMethod,
+            controlSource: controlSource
+        ) ? "on_demand" : "ready_required"
     }
 
     var failureReason: FirstUseFailureReason? {
@@ -394,7 +408,12 @@ struct FirstUseDiagnosticContext: Equatable {
         case .audio:
             if !hasSelectedAudioUID { return .audioNoOutputDevice }
             if !capabilities.audioOutputSelected { return .audioSelectedDeviceMissing }
-            if !controlMethod.usesOnDemandAudioOutput && !capabilities.audioReady {
+            if !OnboardingAudioReadinessPolicy.isSatisfied(
+                controlMethod: controlMethod,
+                controlSource: controlSource,
+                audioOutputSelected: capabilities.audioOutputSelected,
+                audioReady: capabilities.audioReady
+            ) {
                 return .audioOutputNotReady
             }
         case .voiceTest:
@@ -415,6 +434,7 @@ struct FirstUseDiagnosticContext: Equatable {
                 voiceTool: .other,
                 remoteAvailability: remoteAvailability,
                 controlMethod: controlMethod,
+                controlSource: controlSource,
                 capabilities: capabilities
             ) else { return .completeRuntimeRegressed }
         }
@@ -542,6 +562,7 @@ struct FirstUseDiagnosticSnapshot {
             "audio_device_selected=\(context.hasSelectedAudioUID)",
             "audio_device_available=\(capabilities.audioOutputSelected)",
             "audio_output_ready=\(capabilities.audioReady)",
+            "audio_gate=\(context.audioGate)",
             "voice_started=\(capabilities.voiceSessionStarted)",
             "voice_samples_received=\(capabilities.voiceSamplesReceived)",
             "voice_ended=\(capabilities.voiceSessionEnded)",
