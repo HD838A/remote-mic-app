@@ -381,7 +381,12 @@ struct MCPClientIntegrationServiceTests {
             homeDirectory: home,
             applicationURLProvider: { _ in nil },
             executableURLProvider: { _ in home.appendingPathComponent("claude") },
-            commandRunner: { _, arguments in arguments.contains("remove") ? 1 : 0 }
+            commandRunner: { _, arguments in
+                guard arguments.contains("remove") else { return 0 }
+                let revokedAt = try store.listAuthorizations().first?.revokedAt
+                #expect(revokedAt != nil)
+                return 1
+            }
         )
         let model = TranscriptAgentAccessModel(
             authorizationStore: store,
