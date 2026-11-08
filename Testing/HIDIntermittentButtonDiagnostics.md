@@ -212,6 +212,10 @@ Windows 与网络控制入口未修改，保留稳定基线检查。
   `armed_by=prearm` 表示报告线程提前登记命中，是本修复生效的直接证据。
 - 出现 `HID FILTER phase=arm_order … result=already_passed_through` 即判失败：
   原生方向键仍跑在登记之前。
+- 出现 `HID FILTER phase=arm result=passthrough event=key1xx edge=down reason=held_same_key`：
+  说明按下的这一刻，电脑键盘上同一颗方向键还按着没松，这次遥控器按下放弃了事件级登记
+  （判据不变，属已知边界）。此时若同时看到原生方向键未被吞（双跳），按已记录的边界处理，
+  不要当成修复失效；先松开键盘方向键再复测一次即可区分。
 - 完全没有 `suppressed` 时先别判通过：说明这台机器上映射确实阻断了原生投递，
   双跳另有原因，按 `Bugs/2026-11-07-intel-directional-double-step.md` 重新定位。
 

@@ -182,6 +182,9 @@ final class KeyboardEventSuppressor {
         recentUnclaimedDowns = recentUnclaimedDowns.filter { now - $0.value < Self.nativeDeliveryWindow }
         var precedingDownAges: [(RemoteNativeEvent, Int)] = []
         var passedRawEvents: [RemoteNativeEvent] = []
+        // 账本里已有同码按下（通常是实体键盘仍按住）而放弃登记的按下：只用于诊断，
+        // 与「原生配对已逃逸」区分开，见 `reason=held_same_key`。
+        var heldSameKeyEvents: [RemoteNativeEvent] = []
         for nativeEvent in nativeEvents {
             recentArmed.append((event: nativeEvent, until: now + 1.0))
         }
@@ -200,7 +203,10 @@ final class KeyboardEventSuppressor {
                 if passedNativeDowns.contains(nativeEvent) {
                     // Consume the raw pair without creating stale native credits.
                     passedNativeReleases[nativeEvent, default: 0] += 1
-                    passedRawEvents.append(nativeEvent)
+                    // 同码键仍在按住时这次按下无法登记，判据保持不变；只把原因与
+                    // `escaped_native_pair` 分开，现场才能把一次双跳对应到「键盘
+                    // 同码键仍未松开」。
+                    heldSameKeyEvents.append(nativeEvent)
                     continue
                 }
                 heldEventCounts[nativeEvent, default: 0] += 1
@@ -273,6 +279,12 @@ final class KeyboardEventSuppressor {
         for native in passedRawEvents {
             logger("HID FILTER phase=arm result=passthrough event=\(Self.logToken(native)) " +
                 "edge=\(edge == .down ? "down" : "up") reason=escaped_native_pair source_correlation=timing_only")
+        }
+        for native in heldSameKeyEvents {
+            // 判据不变（这次按下确实没有登记），只换原因码：日志里出现这一行，说明
+            // 实体键盘上同一键码仍按住，这一次遥控器按下不可能被事件级拦截。
+            logger("HID FILTER phase=arm result=passthrough event=\(Self.logToken(native)) " +
+                "edge=down reason=held_same_key")
         }
         for (native, age) in precedingDownAges {
             logger("HID FILTER phase=arm_order event=\(Self.logToken(native)) edge=down preceding_unclaimed_ms=\(age) " +
