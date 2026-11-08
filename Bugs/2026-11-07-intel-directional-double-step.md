@@ -4,7 +4,7 @@ subtitle: 方向键缺少事件级兜底，原生方向键与 App 注入同时�
 lang: zh
 template: doc
 date: 2026-11-07
-status: 代码与回归已提交；本机无可编译工具链，待 CI 与 Intel 真机验收
+status: 已修复并验收（CI 通过；Intel build 289 与 Apple Silicon build 290 真机验收通过）
 ---
 
 ## 现象
@@ -153,15 +153,17 @@ Apple Silicon 上没有该泄漏证据，为不存在的泄漏开窗口没有收
 - `directionalPrearmOnlyCoversSessionsWhereTheAppOwnsTheMove`：
   报告线程提前登记范围的取值表（方向键三种状态 + 兜底开关 + TV/音量两种状态 + 普通键）。
 
-本地限制：本机只装了 Xcode 15 / Swift 5.9，而 `Package.swift` 要求 Swift tools 6.2，
-`swift test --disable-keychain` 在本机无法启动（`package is using Swift tools version 6.2.0
-but the installed version is 5.9.0`）。本次只完成 `swiftc -parse` 语法检查，
-**自动化结果必须由 CI 或具备 Xcode 27 的机器确认**：
+提交时作者机器只有 Xcode 15 / Swift 5.9，而 `Package.swift` 要求 Swift tools 6.2，
+`swift test` 无法启动（`package is using Swift tools version 6.2.0 but the installed version
+is 5.9.0`），因此自动化结果由 CI 与维护者机器补完：
 
-```sh
-SAYALL_PRIVATE_PLATFORM_MODE=public swift test --disable-keychain \
-  --filter "KeyboardEventSuppressorTests|RemoteButtonsTests"
-```
+- **CI**（`Public Swift tests and dual-architecture build`，run 42380300103）：
+  1227 tests / 87 suites 全绿；新增 5 个用例共 12 个 case 全部通过；
+  `arm64-apple-macosx14.0` 与 `x86_64-apple-macosx13.0` 两条 release 构建均成功。
+- **维护者机器**（Apple Silicon，Xcode 26.5 / Swift 6.3.2）：
+  `swift test --disable-keychain --skip BuildSigningTests` 同样 1227 tests / 87 suites 通过。
+  另用一次性探针确认该机 arm64 产物里 `directionalNativeFallbackEnabled == false`
+  （探针运行后删除，未入库）。
 
 ## Intel 真机验收
 
@@ -185,6 +187,27 @@ SAYALL_PRIVATE_PLATFORM_MODE=public swift test --disable-keychain \
 - 若完全没有 `HID FILTER suppressed`，说明这台机器上映射确实阻断了原生投递，
   双跳另有原因，不能按本结论关闭。
 
+**验收结果（2026-11-08，build 289，x86_64）**：按上述用例验收通过——一次按下只移动一格、
+按住不翻倍、遥控器操作后紧邻的电脑键盘方向键仍生效。本轮未取回现场日志
+（`.rmlog` 加密），因此只记录行为结论，不引用具体 `HID FILTER` 行。
+
+## Apple Silicon 回归验收
+
+目的不是验证修复生效，而是确认 Apple Silicon 与修复前完全一致（兜底默认不启用）。
+
+**证据（2026-11-08，build 290，arm64，维护者机器）**：
+
+- 前置条件与 Intel 现场相同：`HID CONNECTED mode=monitored seize_error_code=-536870207`、
+  `HID NATIVE MAPPING phase=prepare result=verified services=1`，即非独占 + 映射回读一致。
+- 事件 tap 正常运行：`HID FILTER phase=started result=active`，
+  `HID PERMISSIONS input=true accessibility=true`，因此「没有登记」不是 tap 缺失造成的假象。
+- 该会话共 20 次方向键按下（`HID REPORT accepted … buttons=left|right|up|down`），
+  `HID FILTER arm` / `suppressed` / `miss` / `passed_through` 行数均为 **0**：
+  方向键既没有登记，也没有开出待匹配窗口，实体键盘方向键不受影响。
+- 每次按下只提交一次 `SHORTCUT SEQUENCE`（`submitted_events=2`）；按住时按 100 ms 间隔重复、
+  松开即停，未见双份动作。
+- 结论：Apple Silicon 上本补丁为纯 no-op（含日志），与 `#if arch(x86_64)` 的取值一致。
+
 ## 剩余边界
 
 - **Apple Silicon 不接受本次兜底**。默认只在 Intel 构建启用（`#if arch(x86_64)`）。
@@ -201,7 +224,8 @@ SAYALL_PRIVATE_PLATFORM_MODE=public swift test --disable-keychain \
 - 若 macOS 在用户态投递 HID 报告之前就生成原生事件，仍可能漏一次；
   这是概率性保障，不是结构性保证。
 - 本轮未改动源头映射、恢复记录、语音、音频、共享协议与设置存储。
-- 未打包、未替换安装目录。
+- 验收用本地测试包为 build 289（x86_64）与 build 290（arm64），两者都是测试产物：
+  未做 Developer ID 签名、公证与更新链路验证，不得作为分发候选。
 
 ## 基线与合入
 
@@ -220,11 +244,14 @@ SAYALL_PRIVATE_PLATFORM_MODE=public swift test --disable-keychain \
 | `Bugs/README.md` | `80683308` | `1c2110d9` | **已变化**（#902–#916 增加索引表） |
 
 即本次分析与补丁针对的代码就是最新 main 上的代码，补丁可直接套用；
-唯一需要人工处理的是 `Bugs/README.md`：rebase 后除了顶部 bullet，还要在
-「## 索引」表中补一行（该表在 #902–#916 之间新增，基线里没有）。
+唯一需要人工处理的是 `Bugs/README.md`：除顶部 bullet 外，还要在「## 索引」表中补一行
+（该表在 #902–#916 之间新增，基线里没有）。这两处都已在同一提交内补齐。
 
-- bullet：`- [Intel 上方向键一次按下移动两格](./2026-11-07-intel-directional-double-step.md)`
-- 索引行：`| 2026-11-07 | Intel 上方向键一次按下移动两格 | 代码与回归已提交；本机无 Swift 6.2 工具链，待 CI 与 Intel 真机验收 |`
+本分支最终以 `91f27056` 为父提交（`git rev-list --count` 显示领先 main 1、落后 0），
+与分析基线一致。
 
-本机 `git fetch upstream` 走代理返回 `CONNECT tunnel failed, response 502`，
-无法直接 rebase 到 `91f27056`，因此本地分支仍停在 #901 基线。
+相关工作项的准确状态：#706、#794 已合并；**#409（统一按住连发、切换器双格）仍是
+Open 的 Draft**，不应按已合并引用。它的「切换器内关闭左右原生透传」部分已由
+`86b769e7`（2026-10-03，`fix(mac): suppress native arrows during app switcher navigation`）
+在 main 上单独修复；剩余价值是动作级连发策略，与本 PR 没有重叠改动
+（本 PR 未触碰 `repeatTimers` / 连发引擎，也未修改 `shouldAcceptRawPress`）。
