@@ -9,8 +9,19 @@ profile=$(mktemp -d)
 export XDG_RUNTIME_DIR="$profile/runtime"
 mkdir -m 700 "$XDG_RUNTIME_DIR"
 pid=
+stop_app() {
+    [ -n "$pid" ] || return 0
+    /bin/kill -TERM -- "-$pid" 2>/dev/null || true
+    wait "$pid" 2>/dev/null || true
+    pid=
+}
 finish() {
-    if [ -n "$pid" ]; then kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true; fi
+    stop_app
+    # WebKit subprocesses can finish writing caches just after their parent exits.
+    for retry in 1 2 3 4; do
+        if rm -rf "$profile"; then return; fi
+        sleep 1
+    done
     rm -rf "$profile"
 }
 trap finish EXIT
@@ -31,7 +42,7 @@ for view in welcome dashboard dashboard-en; do
     else
         echo '{"flow_version":1,"completed_version":0,"step":"welcome","migration_version":1,"staged":null}' > "$conf/onboarding.json"
     fi
-    WEBKIT_DISABLE_DMABUF_RENDERER=1 LIBGL_ALWAYS_SOFTWARE=1 GDK_BACKEND=x11 "$app" > "$profile/startup.log" 2>&1 &
+    WEBKIT_DISABLE_DMABUF_RENDERER=1 LIBGL_ALWAYS_SOFTWARE=1 GDK_BACKEND=x11 setsid "$app" > "$profile/startup.log" 2>&1 &
     pid=$!
     window=
     for i in $(seq 1 45); do
@@ -45,5 +56,5 @@ for view in welcome dashboard dashboard-en; do
     sleep 1
     scrot -o -z -w "$window" "$evidence/$view.png"
     /usr/bin/python3 -c 'from PIL import Image; import sys; assert len(Image.open(sys.argv[1]).convert("RGB").resize((96, 72)).getcolors(6912)) > 50, "empty window"' "$evidence/$view.png"
-    kill "$pid"; wait "$pid" || true; pid=
+    stop_app
 done

@@ -46,7 +46,7 @@ jobs:
       - name: Launch the packaged desktop and capture its real windows
         run: |
           dpkg-deb -x .build/ubuntu/*.deb "$RUNNER_TEMP/sayall"
-          dbus-run-session -- xvfb-run -a -s "-screen 0 1440x1000x24" \
+          xvfb-run -a -s "-screen 0 1440x1000x24" dbus-run-session -- \
             sh Tests/Ubuntu/smoke-desktop.sh "$RUNNER_TEMP/sayall/usr/bin/sayall-ubuntu" .build/ubuntu/screenshots
       - name: Upload Ubuntu test package and desktop screenshots
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
