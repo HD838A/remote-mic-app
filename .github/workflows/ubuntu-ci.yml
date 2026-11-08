@@ -36,9 +36,11 @@ jobs:
           rustup update stable --no-self-update
       - name: Compile the shared audio library with Swift 6.2
         run: |
-          docker run --rm --user "$(id -u):$(id -g)" -v "$GITHUB_WORKSPACE:/src" -w /src \
+          mkdir -p .build/ubuntu
+          docker run --rm -v "$GITHUB_WORKSPACE:/src" -w /src \
             swift:6.2-noble@sha256:e508ef1e4be68087f720de622b91cbf1e32799a7aa96134b35e6f1a1d656db7a \
-            make -f packaging/ubuntu/Makefile .build/ubuntu/libatvv.so .build/ubuntu/Swift-LICENSE.txt
+            sh -ec 'apt-get update -qq && apt-get install -y --no-install-recommends make binutils > /dev/null &&
+              make -f packaging/ubuntu/Makefile .build/ubuntu/libatvv.so .build/ubuntu/Swift-LICENSE.txt'
       - name: Test and build the public Ubuntu desktop package
         run: make -f packaging/ubuntu/Makefile test package VERSION=0~ci+${GITHUB_SHA}
       - name: Launch the packaged desktop and capture its real windows

@@ -22,18 +22,28 @@ impl ImeStatus {
     }
 }
 
-
 pub fn ime_status_for(_: Option<VoiceInputTool>) -> ImeStatus {
     let mut status = ImeStatus::unavailable();
     if let Ok(result) = std::process::Command::new("ibus").arg("engine").output() {
         if result.status.success() {
             let name = String::from_utf8_lossy(&result.stdout).trim().to_owned();
-            if !name.is_empty() { status.active = Some(name); status.detected = true; }
+            if !name.is_empty() {
+                status.active = Some(name);
+                status.detected = true;
+            }
         }
     }
     status
 }
 
-pub fn ime_status_log_line(action: &str, _: Option<VoiceInputTool>, status: &ImeStatus, elapsed_ms: u128) -> String {
-    format!("ime_status action={action} detected={} elapsed_ms={elapsed_ms}", status.detected)
+pub fn ime_status_log_line(
+    action: &str,
+    _: Option<VoiceInputTool>,
+    status: &ImeStatus,
+    elapsed_ms: u128,
+) -> String {
+    format!(
+        "ime_status action={action} detected={} elapsed_ms={elapsed_ms}",
+        status.detected
+    )
 }

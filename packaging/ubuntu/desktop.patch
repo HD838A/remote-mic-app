@@ -139,7 +139,7 @@ index aa413b5..60d7fef 100644
 
  #[cfg(test)]
 diff --git a/crates/sayall-windows/src/button_mapping.rs b/crates/sayall-windows/src/button_mapping.rs
-index 87bbee7..3bbb3c5 100644
+index 87bbee7..753b996 100644
 --- a/crates/sayall-windows/src/button_mapping.rs
 +++ b/crates/sayall-windows/src/button_mapping.rs
 @@ -205,6 +205,7 @@ impl AppSwitcherIo for InjectorAppSwitcherIo<'_> {
@@ -175,6 +175,18 @@ index 87bbee7..3bbb3c5 100644
      let slot = app_switcher_sender_slot()
          .lock()
          .unwrap_or_else(|poisoned| poisoned.into_inner());
+@@ -1799,6 +1802,11 @@ fn fire_gesture(
+         return false;
+     }
+     if action == ButtonAction::Disabled {
++        #[cfg(target_os = "linux")]
++        if mappings.mapped_mask() & (1 << button.ordinal()) == 0 {
++            // evdev forwards an entirely unbound button's original press and release.
++            return false;
++        }
+         // 吞键缝隙（2026-09-27 真机，见 Bugs/2026-09-27-fullkey-swallowed-keys.md）：
+         // 整键因任一触发列有动作而进 mapped_mask，门控/报告层按整键吞原始键；
+         // 当前触发列却是 Disabled 时，不回注则按键凭空消失（真机：Tv 配置长按
 diff --git a/crates/sayall-windows/src/file_dialog.rs b/crates/sayall-windows/src/file_dialog.rs
 index b0d7f04..34f7dd3 100644
 --- a/crates/sayall-windows/src/file_dialog.rs
