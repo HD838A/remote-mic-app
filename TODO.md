@@ -184,6 +184,7 @@
   - 2026-10-15 统一回眸操作顺序为复制、播放/暂停、停止、分享、删除，并统一分享图标，单条、应用和全部删除均靠右；停止按钮保持占位，空闲时禁用。布局验证见 `Bugs/2026-10-15-reflections-action-alignment.html`，父项实机边界保留。
   - 2026-10-15 修复回眸录音暂停/继续/停止、无线麦前台应用回退、文字与原始录音开关耦合，以及关联记录重复删除入口；真实微信、无线麦 App 和播放控制仍需人工验收。
 - [ ] 在无线麦SayAll.app 内集成本地语音历史只读 MCP
+  - WorkBuddy 回眸连接器候选使用公开凭据表单和随 App 提供的本地 Helper。WorkBuddy 平台导入、真实客户端连接和重启后的读取仍待验收。见 [WorkBuddy 连接器测试手册](Testing/WorkBuddyConnector.md)。
   - 已将唯一正式运行时实现为 App 内 Swift `stdio` Helper，提供默认关闭总开关、每客户端 256-bit 授权、SHA-256 哈希、撤销、脱敏审计、App 列表和按时间/App 分页查询；App 内可一键连接 Codex、Claude Code、Cursor 和 OpenCode，其他本机客户端可通过一行安装提示词连接，用户不需要 Node.js、npm 或开发工具。`GetSayAll/sayall-mcp` 只提供公开契约、Schema 和集成资料。
   - 主仓库提供中英文 AI 安装与 MCP 配置指南，约束 AI 必须先取得用户明确授权、不得静默开启访问或上传令牌，并说明完整 App 检查、快速连接、Agent 安装、验证和排障流程。
   - canonical Helper 路径统一为 `/Applications/SayAll.app/Contents/Helpers/SayAllMCP`；非标准目录使用运行中 App 的真实路径。授权状态只保存 Helper 路径指纹，App 移动、改名或旧记录缺少指纹时显示移除并重新连接提示，不自动覆盖其他 MCP 配置。

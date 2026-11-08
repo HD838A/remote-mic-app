@@ -21,6 +21,7 @@ enum TranscriptAgentAccessError: Equatable, Sendable {
     case configurationRemovalFailed
     case duplicateClient
     case copyInstallPromptFailed
+    case copyWorkBuddyCredentialFailed
 }
 
 @MainActor
@@ -315,6 +316,38 @@ final class TranscriptAgentAccessModel: ObservableObject {
     func removeConnection(_ client: MCPClientKind) {
         guard let authorization = activeAuthorization(for: client) else { return }
         revoke(authorization)
+    }
+
+    enum WorkBuddyCredential: String {
+        case clientID = "client_id"
+        case accessToken = "access_token"
+    }
+
+    @discardableResult
+    func copyWorkBuddyCredential(
+        _ field: WorkBuddyCredential,
+        to pasteboard: NSPasteboard = .general
+    ) -> Bool {
+        guard let authorization = generatedConfiguration?.authorization else { return false }
+        let operationID = UUID()
+        AppLogger.shared.write("mcp_workbuddy_copy stage=request operation_id=\(operationID) field=\(field.rawValue)")
+        let value = switch field {
+        case .clientID: authorization.clientId.uuidString.lowercased()
+        case .accessToken: authorization.token
+        }
+        let item = NSPasteboardItem()
+        pasteboard.clearContents()
+        copiedInstallPrompt = nil
+        let copied = item.setString(value, forType: .string) && pasteboard.writeObjects([item])
+        if copied {
+            if error == .copyWorkBuddyCredentialFailed { error = nil }
+        } else {
+            error = .copyWorkBuddyCredentialFailed
+            failedClient = nil
+        }
+        let result = copied ? "copied" : "pasteboard_write_failed"
+        AppLogger.shared.write("mcp_workbuddy_copy stage=complete operation_id=\(operationID) result=\(result)")
+        return copied
     }
 
     func copyInstallPrompt(format: String, to pasteboard: NSPasteboard = .general) {
