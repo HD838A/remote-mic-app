@@ -81,17 +81,24 @@ install_app() {
   local destination="$1" staged backup=""
   mkdir -p "${destination:h}" || return 1
   staged="$(mktemp -d "${destination:h}/.sayall-stage.XXXXXX")" || return 1
-  ditto "$app" "$staged/SayAll.app" || return 1
-  codesign --verify --deep --strict "$staged/SayAll.app" || return 1
-  if [[ -e "$destination" ]]; then
-    backup="$HOME/.Trash/SayAll.app.local-$(date -u +%Y%m%dT%H%M%S)-$$"
-    test ! -e "$backup" && mv "$destination" "$backup" || return 1
-  fi
-  if ! mv "$staged/SayAll.app" "$destination"; then
-    if [[ -n "$backup" ]]; then mv "$backup" "$destination"; fi
-    return 1
-  fi
-  mv "$staged" "$HOME/.Trash/${staged:t}-$$" || print -u2 "Could not move the empty staging directory to Trash."
+  {
+    ditto "$app" "$staged/SayAll.app" || return 1
+    codesign --verify --deep --strict "$staged/SayAll.app" || return 1
+    if [[ -e "$destination" ]]; then
+      backup="$HOME/.Trash/SayAll.app.local-$(date -u +%Y%m%dT%H%M%S)-$$"
+      test ! -e "$backup" && mv "$destination" "$backup" || return 1
+    fi
+    if ! mv "$staged/SayAll.app" "$destination"; then
+      if [[ -n "$backup" ]] && ! mv "$backup" "$destination"; then
+        print -u2 -- "Could not restore the previous SayAll app. Recover it from: $backup"
+        return 2
+      fi
+      return 1
+    fi
+  } always {
+    mv "$staged" "$HOME/.Trash/${staged:t}-$$" ||
+      print -u2 -- "Could not move the staging directory to Trash: $staged"
+  }
 }
 
 for old_app in /Applications/SayAll.app "$TARGET" "$FALLBACK"; do
@@ -109,10 +116,16 @@ for old_app in /Applications/SayAll.app "$TARGET" "$FALLBACK"; do
 done
 
 final="$TARGET"
-if ! install_app "$final"; then
-  final="$FALLBACK"
-  install_app "$final"
-fi
+install_status=0
+install_app "$final" || install_status=$?
+case "$install_status" in
+  0) ;;
+  1)
+    final="$FALLBACK"
+    install_app "$final"
+    ;;
+  *) exit "$install_status" ;;
+esac
 codesign --verify --deep --strict "$final"
 print "$next_build" > "$STATE"
 print "Installed $final, build $next_build, source $source_commit, dirty=$dirty"
