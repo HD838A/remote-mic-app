@@ -586,6 +586,10 @@ private struct StatisticsColumnsLayout: Layout {
 }
 
 struct SettingsView: View {
+    /// Chromecast「语音键模式」选择器的最大宽度：只统一控件高度与样式，
+    /// 宽度按两个选项的实际内容收敛，不跟随上方五个触发键选项铺得过宽。
+    private static let chromecastVoiceModePickerMaxWidth: CGFloat = 320
+
     @ObservedObject var model: BridgeAppModel
     @ObservedObject var settings: AppSettings
     @ObservedObject private var privateFeature: PrivateFeatureIntegration
@@ -1242,7 +1246,7 @@ struct SettingsView: View {
                         audioSettingsPanel
                         audioCompatibilityPanel
                         // Chromecast 连接卡片已按产品要求移除：启用开关默认常开，
-                        // 语音键模式在按键页底部，状态见侧边栏「连接」的设备列表。
+                        // 语音键模式在语音键设置面板内，状态见侧边栏「连接」的设备列表。
                     }
                     .frame(maxWidth: .infinity, alignment: .topLeading)
                 }
@@ -1280,17 +1284,15 @@ struct SettingsView: View {
     }
 
     #if SAYALL_CHROMECAST_ENABLED
-    /// 语音键模式选择器。挂在按键页靠下的位置（仅 Chromecast 档案的按键页显示）；
-    /// 从连接设置页迁移过来，避免同一控件出现在两处。
-    private var chromecastVoiceModeSection: some View {
+    /// 语音键模式选择器。只有 Chromecast 遥控器支持「按一次说话」，
+    /// 因此挂在语音键设置面板内，跟随语音键的设置一起出现。
+    private var chromecastVoiceModeControl: some View {
         // 选项只列设备**自报**支持的模式：自报不支持「按一次说话」时，这个选项根本不出现。
         let capabilities = model.selectedRemoteVoiceCapabilities
         let offeredModes = ChromecastVoiceMode.allCases.filter { mode in
             mode != .toggle || capabilities.supportsToggleVoiceRecording
         }
         return VStack(alignment: .leading, spacing: 10) {
-            Divider()
-
             Text("chromecast.mode.title")
                 .font(.system(size: 13, weight: .medium))
 
@@ -1307,6 +1309,9 @@ struct SettingsView: View {
             }
             .pickerStyle(.segmented)
             .labelsHidden()
+            .controlSize(.small)
+            // 与「语音触发键」统一控件高度和样式；宽度按两个选项收敛，保留左右内边距。
+            .frame(maxWidth: Self.chromecastVoiceModePickerMaxWidth, alignment: .leading)
             .disabled(!settings.chromecastEnabled)
 
             Text(LocalizedStringKey(model.effectiveChromecastVoiceMode.detailLocalizationKey))
@@ -2811,14 +2816,6 @@ struct SettingsView: View {
                                     .id("mapping-voice-settings")
                             }
 
-                            #if SAYALL_CHROMECAST_ENABLED
-                            // 语音键模式仅 Chromecast 遥控器有（该遥控器是唯一支持「按一次说话」的），
-                            // 放在按键页靠下的位置，方便随时切换手感。
-                            if settings.selectedRemoteProfile?.model.isChromecastRemote == true {
-                                chromecastVoiceModeSection
-                            }
-                            #endif
-
                             // 「按键速度」已移进动作分类胶囊，只在「全部」或选中它时出现，
                             // 不再常驻页面底部。
                             Color.clear.frame(height: 1).id("mapping-page-bottom")
@@ -3103,6 +3100,7 @@ struct SettingsView: View {
     private func mappingVoiceSettingsPanel(includeSiriScrollArrow: Bool = false) -> some View {
         // 能力一律取自「链路自报优先、型号默认兜底」的判定结果（见 RemoteVoiceCapabilities）。
         let capabilities = model.selectedRemoteVoiceCapabilities
+        let usesChromecastVoiceMode = settings.selectedRemoteProfile?.model.isChromecastRemote == true
         return GlassPanel {
             VStack(alignment: .leading, spacing: 12) {
                 // 左上角标明这是哪颗键的设置；字号与分类胶囊一致。
@@ -3110,6 +3108,14 @@ struct SettingsView: View {
                     .font(.system(size: 13, weight: .semibold))
                 Divider()
                 mappingVoiceKeyModeControl
+                #if SAYALL_CHROMECAST_ENABLED
+                // 「按一次说话」只有 Chromecast 遥控器支持；模式决定这颗语音键的行为，
+                // 因此和语音触发键一起留在语音键设置面板内，不再常驻页面底部。
+                if usesChromecastVoiceMode {
+                    Divider()
+                    chromecastVoiceModeControl
+                }
+                #endif
                 // 「语音键模拟 Fn 点按」只对「不会按一次收音」的遥控器有意义：
                 // 它把按住模拟成点按，用来驱动只认点按的工具。Chromecast 自己能按一次收音，
                 // 驱动方式由语音模式直接决定，页面不出现该开关（见能力矩阵文档）。
