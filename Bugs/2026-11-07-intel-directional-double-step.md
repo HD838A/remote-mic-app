@@ -161,7 +161,8 @@ is 5.9.0`），因此自动化结果由 CI 与维护者机器补完：
   1227 tests / 87 suites 全绿；新增 5 个用例共 12 个 case 全部通过；
   `arm64-apple-macosx14.0` 与 `x86_64-apple-macosx13.0` 两条 release 构建均成功。
 - **维护者机器**（Apple Silicon，Xcode 26.5 / Swift 6.3.2）：
-  `swift test --disable-keychain --skip BuildSigningTests` 同样 1227 tests / 87 suites 通过。
+  合并 `c3970ab9` 后重跑 `swift test --disable-keychain --skip BuildSigningTests`，
+  1232 tests / 87 suites 通过（合并前为 1227 项，多出的 5 项来自主线新增测试）。
   另用一次性探针确认该机 arm64 产物里 `directionalNativeFallbackEnabled == false`
   （探针运行后删除，未入库）。
 
