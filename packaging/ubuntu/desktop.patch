@@ -1,0 +1,1840 @@
+diff --git a/Cargo.lock b/Cargo.lock
+index 10df680..e6f10c3 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -3178,6 +3178,7 @@ dependencies = [
+ name = "sayall-windows"
+ version = "0.0.0"
+ dependencies = [
++ "base64 0.22.1",
+  "chrono",
+  "futures",
+  "png 0.17.16",
+@@ -3213,6 +3214,7 @@ dependencies = [
+  "tauri-plugin-opener",
+  "tauri-plugin-updater",
+  "webview2-com",
++ "webkit2gtk",
+  "windows 0.62.2",
+  "windows-core 0.62.2",
+ ]
+diff --git a/crates/sayall-core/src/lib.rs b/crates/sayall-core/src/lib.rs
+index 21c49a8..0c2a9d6 100644
+--- a/crates/sayall-core/src/lib.rs
++++ b/crates/sayall-core/src/lib.rs
+@@ -51,3 +51,10 @@ pub use transcripts::{
+     TRANSCRIPT_FORMAT_VERSION, TRANSCRIPT_SCHEMA_VERSION,
+ };
+ pub use voice::{VoiceSession, VoiceSessionError, VoiceSessionEvent, VoiceSessionState};
++
++/// User-local data root shared by the desktop host, voice archive and MCP server.
++pub fn ubuntu_data_dir() -> Option<std::ffi::OsString> {
++    std::env::var_os("XDG_DATA_HOME").filter(|p| std::path::Path::new(p).is_absolute()).or_else(|| {
++        std::env::var_os("HOME").map(|p| std::path::PathBuf::from(p).join(".local/share").into_os_string())
++    })
++}
+diff --git a/crates/sayall-mcp/src/main.rs b/crates/sayall-mcp/src/main.rs
+index 496d822..afb55cd 100644
+--- a/crates/sayall-mcp/src/main.rs
++++ b/crates/sayall-mcp/src/main.rs
+@@ -19,6 +19,12 @@ use paths::McpPaths;
+ use service::Service;
+
+ fn main() {
++    #[cfg(target_os = "linux")]
++    {
++        unsafe extern "C" { fn umask(mask: u32) -> u32; }
++        // Keep transcript, diagnostic and MCP authorization files private to this user.
++        unsafe { umask(0o077); }
++    }
+     let arguments: Vec<String> = std::env::args().skip(1).collect();
+     if arguments != ["serve"] {
+         eprintln!("用法：sayall-mcp serve");
+diff --git a/crates/sayall-mcp/src/paths.rs b/crates/sayall-mcp/src/paths.rs
+index 7df9b77..254a8bf 100644
+--- a/crates/sayall-mcp/src/paths.rs
++++ b/crates/sayall-mcp/src/paths.rs
+@@ -22,7 +22,7 @@ impl McpPaths {
+         let data_root = match std::env::var_os("SAYALL_MCP_DATA_ROOT") {
+             Some(value) if !value.is_empty() => PathBuf::from(value),
+             _ => {
+-                let local = std::env::var_os("LOCALAPPDATA")
++                let local = sayall_core::ubuntu_data_dir()
+                     .filter(|value| !value.is_empty())
+                     .ok_or_else(|| "读不到 LOCALAPPDATA，无法定位回眸记录".to_owned())?;
+                 PathBuf::from(local).join("SayAll")
+diff --git a/crates/sayall-windows/Cargo.toml b/crates/sayall-windows/Cargo.toml
+index 1d409a1..56f5309 100644
+--- a/crates/sayall-windows/Cargo.toml
++++ b/crates/sayall-windows/Cargo.toml
+@@ -6,6 +6,7 @@ license.workspace = true
+ repository.workspace = true
+
+ [dependencies]
++base64 = "0.22"
+ sayall-core = { path = "../sayall-core" }
+ chrono.workspace = true
+ serde.workspace = true
+diff --git a/crates/sayall-windows/src/app_launcher.rs b/crates/sayall-windows/src/app_launcher.rs
+index aa413b5..60d7fef 100644
+--- a/crates/sayall-windows/src/app_launcher.rs
++++ b/crates/sayall-windows/src/app_launcher.rs
+@@ -424,7 +424,7 @@ pub fn probe_preset_apps() -> Vec<PresetAppInfo> {
+
+ #[cfg(not(windows))]
+ pub fn probe_preset_apps() -> Vec<PresetAppInfo> {
+-    Vec::new()
++    crate::ubuntu::call("apps", serde_json::Value::Null).ok().and_then(|v|serde_json::from_value(v).ok()).unwrap_or_default()
+ }
+
+ /// 预设应用在聚焦快捷键之后仍需点击的控件（96 DPI 下的窗口内偏移）。
+@@ -1090,7 +1090,7 @@ fn resolve_lnk(lnk_path: &str) -> Option<ResolvedShortcut> {
+
+ #[cfg(not(windows))]
+ pub fn activate_or_launch(_id: &str) -> Result<(), String> {
+-    Err("打开应用仅在 Windows 上可用".to_owned())
++    crate::ubuntu::call("launch",serde_json::json!(_id)).map(drop)
+ }
+
+ #[cfg(windows)]
+@@ -2877,7 +2877,7 @@ pub fn open_directory(path: &std::path::Path) -> Result<(), String> {
+
+ #[cfg(not(windows))]
+ pub fn open_directory(_path: &std::path::Path) -> Result<(), String> {
+-    Err("打开目录仅在 Windows 上可用".to_owned())
++    std::process::Command::new("gio").arg("open").arg(_path).spawn().map(drop).map_err(|e|e.to_string())
+ }
+
+ /// 打开固定的 Windows 设置页（`ms-settings:` URI）。
+@@ -2898,7 +2898,7 @@ pub fn open_uri(uri: &str) -> Result<(), String> {
+
+ #[cfg(not(windows))]
+ pub fn open_uri(_uri: &str) -> Result<(), String> {
+-    Err("打开系统设置仅在 Windows 上可用".to_owned())
++    let page = match _uri {"ms-settings:bluetooth"=>"bluetooth", "ms-settings:sound" | "ms-settings:privacy-microphone"=>"sound", _=>return Err("Unknown settings panel".into())}; std::process::Command::new("gnome-control-center").arg(page).spawn().map(drop).map_err(|e|e.to_string())
+ }
+
+ /// 组合动作「打开网址」：只接受 `sayall_core` 校验过的 http/https 完整网址
+@@ -2914,7 +2914,7 @@ pub fn open_web_url(url: &str) -> Result<(), String> {
+
+ #[cfg(not(windows))]
+ pub fn open_web_url(_url: &str) -> Result<(), String> {
+-    Err("打开网址仅在 Windows 上可用".to_owned())
++    sayall_core::validate_http_url(_url).map_err(|_|"Invalid HTTP URL".to_owned())?; std::process::Command::new("gio").args(["open",_url]).spawn().map(drop).map_err(|e|e.to_string())
+ }
+
+ /// 组合动作「等待应用」的就绪判据（只读枚举：不显示、不置前、不写任何窗口状态）。
+@@ -2991,12 +2991,7 @@ pub fn application_readiness(target: &str) -> ApplicationReadiness {
+
+ #[cfg(not(windows))]
+ pub fn application_readiness(_target: &str) -> ApplicationReadiness {
+-    ApplicationReadiness {
+-        running: false,
+-        running_process: false,
+-        visible_window: false,
+-        known: false,
+-    }
++    let state=crate::ubuntu::call("readiness", serde_json::json!(_target)).unwrap_or_default(); ApplicationReadiness{known:state.is_array(), running:state[0].as_bool().unwrap_or(false),running_process:state[0].as_bool().unwrap_or(false),visible_window:state[1].as_bool().unwrap_or(false)}
+ }
+
+ #[cfg(test)]
+diff --git a/crates/sayall-windows/src/button_mapping.rs b/crates/sayall-windows/src/button_mapping.rs
+index 87bbee7..3bbb3c5 100644
+--- a/crates/sayall-windows/src/button_mapping.rs
++++ b/crates/sayall-windows/src/button_mapping.rs
+@@ -205,6 +205,7 @@ impl AppSwitcherIo for InjectorAppSwitcherIo<'_> {
+ }
+
+ /// 生产注入器：批量 SendInput tap（DOWN+UP），部分交付时由 send_input 层回滚。
++#[cfg(windows)]
+ pub struct SendInputInjector {
+     runtime: Arc<crate::send_input_windows::SendInputRuntime>,
+     /// 聚焦服务：单线程串行执行 UIA 聚焦（不阻塞按键/手势线程）。
+@@ -214,6 +215,7 @@ pub struct SendInputInjector {
+     common_phrase_host: RwLock<Arc<dyn crate::common_phrases::CommonPhraseHost>>,
+ }
+
++#[cfg(windows)]
+ impl SendInputInjector {
+     #[cfg(windows)]
+     pub fn new(runtime: Arc<crate::send_input_windows::SendInputRuntime>) -> Self {
+@@ -270,6 +272,7 @@ impl SendInputInjector {
+     }
+ }
+
++#[cfg(windows)]
+ impl MappingInjector for SendInputInjector {
+     fn scroll(&self, direction: ScrollDirection, steps: u16) -> Result<(), String> {
+         self.runtime
+@@ -1096,7 +1099,7 @@ fn app_switcher_sender_slot() -> &'static Mutex<Option<Sender<EngineMessage>>> {
+     APP_SWITCHER_SENDER.get_or_init(|| Mutex::new(None))
+ }
+
+-fn request_app_switcher_start() -> Result<(), String> {
++pub(crate) fn request_app_switcher_start() -> Result<(), String> {
+     let slot = app_switcher_sender_slot()
+         .lock()
+         .unwrap_or_else(|poisoned| poisoned.into_inner());
+diff --git a/crates/sayall-windows/src/file_dialog.rs b/crates/sayall-windows/src/file_dialog.rs
+index b0d7f04..34f7dd3 100644
+--- a/crates/sayall-windows/src/file_dialog.rs
++++ b/crates/sayall-windows/src/file_dialog.rs
+@@ -41,32 +41,32 @@ pub fn pick_combined_actions_export_path() -> Result<Option<PathBuf>, String> {
+
+ #[cfg(not(windows))]
+ pub fn pick_button_mapping_import_path() -> Result<Option<PathBuf>, String> {
+-    Err("文件选择器仅在 Windows 上可用".to_owned())
++    ubuntu_file_dialog(false, "json")
+ }
+
+ #[cfg(not(windows))]
+ pub fn pick_button_mapping_export_path() -> Result<Option<PathBuf>, String> {
+-    Err("文件选择器仅在 Windows 上可用".to_owned())
++    ubuntu_file_dialog(true, "json")
+ }
+
+ #[cfg(not(windows))]
+ pub fn pick_button_profile_import_path() -> Result<Option<PathBuf>, String> {
+-    Err("文件选择器仅在 Windows 上可用".to_owned())
++    ubuntu_file_dialog(false, "sayall")
+ }
+
+ #[cfg(not(windows))]
+ pub fn pick_button_profile_export_path() -> Result<Option<PathBuf>, String> {
+-    Err("文件选择器仅在 Windows 上可用".to_owned())
++    ubuntu_file_dialog(true, "sayall")
+ }
+
+ #[cfg(not(windows))]
+ pub fn pick_combined_actions_import_path() -> Result<Option<PathBuf>, String> {
+-    Err("文件选择器仅在 Windows 上可用".to_owned())
++    ubuntu_file_dialog(false, "sayall")
+ }
+
+ #[cfg(not(windows))]
+ pub fn pick_combined_actions_export_path() -> Result<Option<PathBuf>, String> {
+-    Err("文件选择器仅在 Windows 上可用".to_owned())
++    ubuntu_file_dialog(true, "sayall")
+ }
+
+ /// 选择回眸原始录音的导出位置。
+@@ -77,7 +77,7 @@ pub fn pick_audio_export_path() -> Result<Option<PathBuf>, String> {
+
+ #[cfg(not(windows))]
+ pub fn pick_audio_export_path() -> Result<Option<PathBuf>, String> {
+-    Err("文件选择器仅在 Windows 上可用".to_owned())
++    ubuntu_file_dialog(true, "wav")
+ }
+
+ #[cfg(windows)]
+@@ -299,3 +299,21 @@ mod tests {
+         assert!(available, "IFileOpenDialog/IFileSaveDialog COM 类应可用");
+     }
+ }
++
++#[cfg(target_os="linux")]
++fn ubuntu_file_dialog(save: bool, ext: &str) -> Result<Option<PathBuf>, String> {
++    use std::os::unix::ffi::OsStringExt;
++    let mut dialog = std::process::Command::new("zenity");
++    dialog.arg("--file-selection").arg(format!("--file-filter=*.{ext}"));
++    if save { dialog.arg("--save").arg(format!("--filename=SayAll.{ext}")); }
++    let result = dialog.output().map_err(|e| e.to_string())?;
++    match result.status.code() {
++        Some(0) => {
++            let mut bytes = result.stdout;
++            if bytes.last() == Some(&b'\n') { bytes.pop(); }
++            Ok(Some(std::ffi::OsString::from_vec(bytes).into()))
++        }
++        Some(1) => Ok(None),
++        _ => Err("Ubuntu file chooser failed".into()),
++    }
++}
+diff --git a/crates/sayall-windows/src/key_gate.rs b/crates/sayall-windows/src/key_gate.rs
+index 9788bd2..5697c68 100644
+--- a/crates/sayall-windows/src/key_gate.rs
++++ b/crates/sayall-windows/src/key_gate.rs
+@@ -1381,7 +1381,7 @@ mod fallback {
+         false
+     }
+     pub fn is_gate_thread_alive() -> bool {
+-        false
++        crate::ubuntu::GRABBED.load(std::sync::atomic::Ordering::Acquire)
+     }
+     pub fn listener_active() -> bool {
+         false
+diff --git a/crates/sayall-windows/src/lib.rs b/crates/sayall-windows/src/lib.rs
+index ddeae9b..9d9d35a 100644
+--- a/crates/sayall-windows/src/lib.rs
++++ b/crates/sayall-windows/src/lib.rs
+@@ -22,6 +22,9 @@ mod audio;
+ pub mod battery;
+ #[cfg(windows)]
+ mod ble;
++#[cfg(target_os = "linux")]
++#[path = "ubuntu_log.rs"]
++mod ble;
+ #[cfg(windows)]
+ mod bluetooth_radio;
+ mod button_gestures;
+@@ -48,6 +51,7 @@ pub mod graceful_exit;
+ #[cfg(windows)]
+ pub mod instance_signal;
+ /// 按键宿主进程（LL 钩子迁出主进程；见 Bugs/2026-10-04-ll-hooks-break-in-app-ime-voice.md）。
++#[cfg(windows)]
+ pub mod key_host;
+ /// 回眸原始录音：WAV 写入、终态清理与 manifest。跨平台可单测，写入只在启用时发生。
+ pub mod voice_recording;
+@@ -57,7 +61,6 @@ pub mod hardware_script;
+ pub mod registered_apps;
+ #[cfg(windows)]
+ pub(crate) use ble::bluetooth_address_from_device_id;
+-#[cfg(windows)]
+ pub use ble::{
+     diagnostic_log_directory, gatt_note, initialize_diagnostic_log, DiagnosticLogMetadata,
+ };
+@@ -71,6 +74,13 @@ pub use ime::{
+     ImeStatus, MAX_INSTALLED_IME_NAMES,
+ };
+
++#[cfg(target_os = "linux")]
++mod ubuntu_ime;
++#[cfg(target_os = "linux")]
++pub mod ubuntu;
++#[cfg(target_os = "linux")]
++pub use ubuntu_ime::{ime_status_for, ime_status_log_line, ImeStatus};
++
+ pub use transcript_capture::{
+     new_session_id, CaptureSnapshot, CaptureText, CaptureTimings, CapturedTranscript,
+     SnapshotError, SnapshotProvider, TranscriptCaptureRuntime, UnsupportedSnapshotProvider,
+@@ -400,13 +410,11 @@ impl UsageCounters {
+     }
+
+     /// 记录一次实体按键，并写入待落盘事件。
+-    #[cfg(any(windows, test))]
+     pub(crate) fn record_button_press(&self, button: RemoteButton) {
+         self.record_button_press_key(button.storage_key());
+     }
+
+     /// 记录一次使用统计按键；`control` 必须是稳定键（`button.*` / `voice`）。
+-    #[cfg(any(windows, test))]
+     pub(crate) fn record_button_press_key(&self, control: &str) {
+         {
+             let mut state = lock(&self.state);
+@@ -418,7 +426,6 @@ impl UsageCounters {
+         });
+     }
+
+-    #[cfg(any(windows, test))]
+     pub(crate) fn record_voice_session(&self, samples: u64) {
+         let mut state = lock(&self.state);
+         state.voice_sessions = state.voice_sessions.saturating_add(1);
+@@ -427,8 +434,7 @@ impl UsageCounters {
+
+     /// 语音键对应的 `MIC_OPEN` 请求到达：先结束上一轮未收尾的会话，再记一次
+     /// `voice` 按键并开始计时。重复调用不会丢上一轮时长。
+-    #[cfg(any(windows, test))]
+-    pub(crate) fn begin_voice_session(&self, application_name: Option<String>) {
++        pub(crate) fn begin_voice_session(&self, application_name: Option<String>) {
+         self.finish_voice_session();
+         self.start_voice_session(application_name, "mic_open");
+     }
+@@ -438,8 +444,7 @@ impl UsageCounters {
+     /// RC003 的报告层语音路径实测会直接发 `0x04 STREAM_START`，不经过
+     /// `MIC_OPEN`；因此不能只依赖 [`Self::begin_voice_session`]。若 `MIC_OPEN`
+     /// 已经先到，这里保持幂等，避免同一次按键记两次、时长从半途重新计时。
+-    #[cfg(any(windows, test))]
+-    pub(crate) fn ensure_voice_session_started(&self, application_name: Option<String>) {
++        pub(crate) fn ensure_voice_session_started(&self, application_name: Option<String>) {
+         let mut active = lock(&self.active_voice);
+         if active.is_some() {
+             return;
+@@ -452,8 +457,7 @@ impl UsageCounters {
+         );
+     }
+
+-    #[cfg(any(windows, test))]
+-    fn start_voice_session(&self, application_name: Option<String>, source: &str) {
++        fn start_voice_session(&self, application_name: Option<String>, source: &str) {
+         let mut active = lock(&self.active_voice);
+         self.start_voice_session_locked(&mut active, application_name);
+         drop(active);
+@@ -462,8 +466,7 @@ impl UsageCounters {
+         ));
+     }
+
+-    #[cfg(any(windows, test))]
+-    fn start_voice_session_locked(
++        fn start_voice_session_locked(
+         &self,
+         active: &mut Option<ActiveVoiceUsage>,
+         application_name: Option<String>,
+@@ -540,6 +543,8 @@ impl Default for ConnectionSnapshot {
+
+ #[derive(Clone)]
+ pub struct WindowsPlatform {
++    #[cfg(target_os = "linux")]
++    desktop: Arc<ubuntu::Desktop>,
+     usage: Arc<UsageCounters>,
+     voice_hold_hotkey: Arc<Mutex<Option<send_input::KeyChord>>>,
+     /// 用户在连接页选的语音输入工具：决定语音会话开始前把哪个输入法
+@@ -553,13 +558,11 @@ pub struct WindowsPlatform {
+     /// `align_ime_after_tool_selection` 取走并执行一次（2026-10-03，Andy 要求消除
+     /// "换工具后第一按必拉不起"的窗口期）。
+     ime_align_pending: Arc<Mutex<Option<(VoiceInputTool, std::time::Instant)>>>,
+-    #[cfg(windows)]
+     button_mapping: Arc<ButtonMappingRuntime>,
+     /// 组合动作运行时（引擎 RunMacro 手势与 UI 测试入口共用）。
+     macro_runtime: Arc<macro_runtime::MacroRuntime>,
+     /// 组合动作执行器读取的聚焦档案镜像：与 `set_button_mappings` 同步
+     /// （执行器不直接持有 `ButtonMappingRuntime`，避免引用环）。
+-    #[cfg(windows)]
+     macro_focus_profiles:
+         Arc<std::sync::RwLock<std::collections::BTreeMap<String, focus::AppFocusProfile>>>,
+     raw_input_snapshot: Arc<Mutex<RawInputSnapshot>>,
+@@ -601,38 +604,6 @@ impl fmt::Debug for WindowsPlatform {
+     }
+ }
+
+-/// 非必须注入器（非 Windows 主机）：注入请求直接失败，保持"不伪造能力"边界。
+-#[cfg(not(windows))]
+-#[derive(Debug)]
+-struct UnsupportedInjector;
+-
+-#[cfg(not(windows))]
+-impl MappingInjector for UnsupportedInjector {
+-    fn tap(&self, _chord: &send_input::KeyChord) -> Result<(), String> {
+-        Err("SendInput 仅在 Windows 上可用".to_owned())
+-    }
+-
+-    fn focus_frontmost(&self) -> Result<(), String> {
+-        Err("聚焦输入框仅在 Windows 上可用".to_owned())
+-    }
+-
+-    fn launch_app_and_focus(
+-        &self,
+-        _target: &str,
+-        _profile: Option<&crate::focus::AppFocusProfile>,
+-    ) -> Result<(), String> {
+-        Err("打开应用仅在 Windows 上可用".to_owned())
+-    }
+-
+-    fn learn_focus_target(&self) -> Result<crate::focus::RecordedFocusTarget, String> {
+-        Err("学习输入框仅在 Windows 上可用".to_owned())
+-    }
+-
+-    fn learn_focus_point(&self, _target: &str) -> Result<crate::focus::RecordedPoint, String> {
+-        Err("记录点击位置仅在 Windows 上可用".to_owned())
+-    }
+-}
+-
+ impl Default for WindowsPlatform {
+     fn default() -> Self {
+         let usage = Arc::new(UsageCounters::default());
+@@ -640,7 +611,6 @@ impl Default for WindowsPlatform {
+         let voice_input_tool = Arc::new(Mutex::new(None));
+         let gain_db = Arc::new(Mutex::new(0.0));
+         let ime_align_pending = Arc::new(Mutex::new(None));
+-        #[cfg(windows)]
+         let raw_input_snapshot = Arc::new(Mutex::new(RawInputSnapshot::default()));
+         #[cfg(windows)]
+         {
+@@ -736,35 +706,20 @@ impl Default for WindowsPlatform {
+             }
+         }
+
+-        #[cfg(not(windows))]
++        #[cfg(target_os = "linux")]
+         {
+-            let mut initial = raw_input_snapshot.lock().unwrap();
+-            initial.phase = RawInputPhase::Unsupported;
+-            drop(initial);
+-            let macro_runtime = Arc::new(macro_runtime::MacroRuntime::new(Arc::new(
+-                macro_runtime::UnsupportedStepperSource,
+-            )));
+-            let button_mapping = Arc::new(ButtonMappingRuntime::new(
+-                Arc::new(UnsupportedInjector),
+-                Arc::clone(&usage),
+-                Arc::clone(&raw_input_snapshot),
+-                Arc::clone(&macro_runtime),
+-            ));
+-            let transcript_capture = Arc::new(transcript_capture::TranscriptCaptureRuntime::new(
+-                Arc::new(transcript_capture::UnsupportedSnapshotProvider),
+-                transcript_capture::CaptureTimings::default(),
+-            ));
+-            Self {
+-                usage,
+-                voice_hold_hotkey,
+-                voice_input_tool,
+-                gain_db,
+-                ime_align_pending,
+-                button_mapping,
+-                macro_runtime,
+-                raw_input_snapshot,
+-                transcript_capture,
+-            }
++            let desktop = Arc::new(ubuntu::Desktop::default());
++            let injector: Arc<dyn MappingInjector> = Arc::new(ubuntu::Injector);
++            let macro_focus_profiles = Arc::new(std::sync::RwLock::new(std::collections::BTreeMap::<String, focus::AppFocusProfile>::new()));
++            let profiles = Arc::clone(&macro_focus_profiles);
++            let source = macro_runtime::WindowsMacroStepperSource::new(injector.clone(), Arc::new(move |id| profiles.read().ok()?.get(id).cloned()));
++            let macro_runtime = Arc::new(macro_runtime::MacroRuntime::new(Arc::new(source)));
++            let button_mapping = Arc::new(ButtonMappingRuntime::new(injector, usage.clone(), raw_input_snapshot.clone(), macro_runtime.clone()));
++            let transcript_capture = Arc::new(TranscriptCaptureRuntime::new(Arc::new(ubuntu::Provider), CaptureTimings::default()));
++            let platform = Self { desktop: desktop.clone(), usage, voice_hold_hotkey, voice_input_tool, gain_db,
++                ime_align_pending, button_mapping, macro_focus_profiles, macro_runtime, raw_input_snapshot, transcript_capture };
++            desktop.install(platform.clone());
++            platform
+         }
+     }
+ }
+@@ -821,7 +776,14 @@ impl WindowsPlatform {
+         }
+         #[cfg(not(windows))]
+         {
+-            rc003_bridge::BridgeSnapshot::default()
++            let raw = self.raw_input_snapshot();
++            rc003_bridge::BridgeSnapshot {
++                phase: if ubuntu::GRABBED.load(std::sync::atomic::Ordering::Acquire) { rc003_bridge::BridgePhase::Connected }
++                       else if raw.phase == RawInputPhase::Stopped { rc003_bridge::BridgePhase::Stopped }
++                       else { rc003_bridge::BridgePhase::Listening },
++                edges_applied: self.desktop.applied_edges.load(std::sync::atomic::Ordering::Relaxed),
++                ..Default::default()
++            }
+         }
+     }
+
+@@ -841,7 +803,7 @@ impl WindowsPlatform {
+         &self,
+         _timeout: std::time::Duration,
+     ) -> Result<(), PlatformError> {
+-        Ok(())
++        self.disconnect_remote().map(drop)
+     }
+
+     /// 退出前同步释放应用切换器（Alt+Tab）会话，等引擎确认 Alt 已释放。
+@@ -867,10 +829,9 @@ impl WindowsPlatform {
+         {
+             self.send_input.scroll(direction, steps)
+         }
+-        #[cfg(not(windows))]
++        #[cfg(target_os = "linux")]
+         {
+-            let _ = (direction, steps);
+-            Err(PlatformError::UnsupportedPlatform)
++            ubuntu::Injector.scroll(direction,steps).map_err(PlatformError::SendInput)?; Ok(self.send_input_snapshot())
+         }
+     }
+
+@@ -889,10 +850,9 @@ impl WindowsPlatform {
+                 _ => Err(PlatformError::SendInput("unsupported mouse action".into())),
+             }
+         }
+-        #[cfg(not(windows))]
++        #[cfg(target_os = "linux")]
+         {
+-            let _ = action;
+-            Err(PlatformError::UnsupportedPlatform)
++            match action { send_input::ButtonAction::MouseClick{kind}=>ubuntu::Injector.mouse_click(kind), send_input::ButtonAction::MouseMove{direction,distance}=>ubuntu::Injector.mouse_move(direction,distance), _=>Err("Invalid pointer action".into()) }.map_err(PlatformError::SendInput)?; Ok(self.send_input_snapshot())
+         }
+     }
+
+@@ -916,6 +876,7 @@ impl WindowsPlatform {
+     pub fn set_voice_hold_hotkey(&self, hotkey: Option<send_input::KeyChord>) {
+         // 诊断时间基线（2026-10-09）：按下时"距快捷键（合成目标）变更多久"进
+         // `voice_attempt`；任何一次 set 都算（含清空与启动时的配置装载）。
++        #[cfg(windows)]
+         ime::note_hotkey_change();
+         *lock(&self.voice_hold_hotkey) = hotkey.clone();
+         #[cfg(windows)]
+@@ -934,6 +895,7 @@ impl WindowsPlatform {
+     /// （早于应用知情一个 BLE 往返），若按下时系统输入法还不是所选工具，这一按必然
+     /// 赶不上切换——表现为"换工具后第一按拉不起"。选中即对齐把该窗口期清零；
+     /// 按下时的兜底切换保留（覆盖用户手动改走输入法的情况）。
++    #[cfg(windows)]
+     pub fn set_voice_input_tool(&self, tool: Option<VoiceInputTool>) {
+         // 诊断时间基线（2026-10-09）：失败样本全部来自"切完工具、快速切到目标
+         // 窗口"，按下时"距选工具多久"由此起算并进 `voice_attempt`。
+@@ -984,6 +946,7 @@ impl WindowsPlatform {
+     /// 跳过；布防是 `take()` 一次性的，对齐就此永久丢失（日志
+     /// `last_switch_age_ms=never`）。现在改为**有界等待**：轮询到"前台不再是自己"
+     /// 再执行一次；始终不变则照旧跳过（保留 2026-09-12 的 WebView 整页重载保护）。
++    #[cfg(windows)]
+     pub fn align_ime_after_tool_selection(&self) {
+         let Some((tool, armed_at)) = lock(&self.ime_align_pending).take() else {
+             return;
+@@ -1031,6 +994,14 @@ impl WindowsPlatform {
+             });
+     }
+
++    #[cfg(not(windows))]
++    pub fn set_voice_input_tool(&self, tool: Option<VoiceInputTool>) {
++        *lock(&self.voice_input_tool) = tool;
++    }
++
++    #[cfg(not(windows))]
++    pub fn align_ime_after_tool_selection(&self) {}
++
+     pub fn voice_input_tool(&self) -> Option<VoiceInputTool> {
+         *lock(&self.voice_input_tool)
+     }
+@@ -1041,16 +1012,22 @@ impl WindowsPlatform {
+     /// 这里再钳一次是为了让"从任何入口进来"的平台状态都落在同一区间。
+     pub fn set_gain_db(&self, gain_db: f32) {
+         *lock(&self.gain_db) = sayall_core::normalize_gain_db(gain_db);
++        #[cfg(target_os = "linux")]
++        let _ = self.desktop.call("gain", serde_json::json!(gain_db));
+     }
+
+     /// 「回眸」开关：关闭时取消正在进行的捕获，不删除已有记录。
+     pub fn set_transcript_capture_enabled(&self, enabled: bool) {
+         self.transcript_capture.set_enabled(enabled);
++        #[cfg(target_os = "linux")]
++        let _ = self.desktop.call("recording", serde_json::json!(enabled && self.transcript_capture.is_audio_recording_enabled()));
+     }
+
+     /// 「回眸」原始录音开关：关闭时取消当前录音，不删除已有录音。
+     pub fn set_transcript_audio_recording_enabled(&self, enabled: bool) {
+         self.transcript_capture.set_audio_recording_enabled(enabled);
++        #[cfg(target_os = "linux")]
++        let _ = self.desktop.call("recording", serde_json::json!(enabled && self.transcript_capture.is_enabled()));
+     }
+
+     /// 录音成功落盘后只通知会话号；app host 用它触发页面静默刷新。
+@@ -1122,25 +1099,17 @@ impl WindowsPlatform {
+             }
+         }
+
+-        #[cfg(not(windows))]
++        #[cfg(target_os = "linux")]
+         {
+-            PlatformSnapshot {
+-                platform: std::env::consts::OS.to_owned(),
+-                windows_api_available: false,
+-                ble_scan_available: false,
+-                ble_voice_ready: false,
+-                wasapi_ready: false,
+-                raw_input_ready: false,
+-                send_input_ready: false,
+-                verification_status: "当前主机不是 Windows，仅可验证界面与纯 Rust 核心".to_owned(),
+-                connection: ConnectionSnapshot::default(),
+-                audio: AudioSnapshot {
+-                    phase: AudioPhase::Unsupported,
+-                    ..AudioSnapshot::default()
+-                },
+-                raw_input: self.raw_input_snapshot(),
+-                button_mapping: self.button_mapping_snapshot(),
+-            }
++            let connection = self.connection_snapshot();
++            let audio = self.audio_snapshot();
++            let raw_input = self.raw_input_snapshot();
++            PlatformSnapshot { platform: "linux".into(), windows_api_available:false,
++                ble_scan_available:true, ble_voice_ready:connection.capabilities.is_some(),
++                wasapi_ready: matches!(audio.phase, AudioPhase::Ready | AudioPhase::Streaming),
++                raw_input_ready:raw_input.phase == RawInputPhase::Ready, send_input_ready:self.send_input_snapshot().available,
++                verification_status:"BlueZ / PipeWire / evdev".into(), connection, audio, raw_input,
++                button_mapping:self.button_mapping_snapshot() }
+         }
+     }
+
+@@ -1148,7 +1117,6 @@ impl WindowsPlatform {
+     pub fn set_button_mappings(&self, mappings: send_input::ButtonMappings) {
+         #[cfg(windows)]
+         let mapped_mask = mappings.mapped_mask();
+-        #[cfg(windows)]
+         {
+             // 组合动作执行器读的聚焦档案镜像：与映射同一次热加载更新。
+             // 预设应用没有显式档案时补产品默认值，使组合动作与按键页复用同一聚焦方式。
+@@ -1167,6 +1135,12 @@ impl WindowsPlatform {
+                 .unwrap_or_else(|poisoned| poisoned.into_inner());
+             *mirror = profiles;
+         }
++        #[cfg(target_os = "linux")]
++        {
++            let mask = mappings.mapped_mask();
++            let buttons: Vec<_> = raw_input::ALL_BUTTONS.iter().filter(|b| mask & (1 << b.ordinal()) != 0).collect();
++            let _ = self.desktop.call("mappings", serde_json::json!({"enabled": mappings.enabled, "buttons":buttons}));
++        }
+         self.button_mapping.set_mappings(mappings);
+         #[cfg(windows)]
+         self.rc003_bridge.set_capture_targets(
+@@ -1176,7 +1150,6 @@ impl WindowsPlatform {
+     }
+
+     /// 安装/清除键位方案覆盖层（私有组件经公开宿主调用）。
+-    #[cfg(windows)]
+     pub fn set_button_profile_overlay(&self, overlay: Option<send_input::ButtonMappings>) {
+         self.button_mapping.set_profile_overlay(overlay);
+     }
+@@ -1211,7 +1184,10 @@ impl WindowsPlatform {
+             enabled,
+         );
+         #[cfg(not(windows))]
+-        let _ = enabled;
++        if enabled {
++            let service = self.desktop.clone();
++            std::thread::spawn(move || { let _ = service.call("capture", serde_json::json!(true)); });
++        }
+     }
+
+     pub fn button_mappings(&self) -> send_input::ButtonMappings {
+@@ -1268,6 +1244,8 @@ impl WindowsPlatform {
+
+     /// 向导第⑥步：按键映射临时暂挂（只观察、不注入；内存态、不改用户配置）。
+     pub fn set_mapping_suspension(&self, suspended: bool) {
++        #[cfg(target_os = "linux")]
++        let _ = self.desktop.call("suspend", serde_json::json!(suspended));
+         self.button_mapping.set_suspended(suspended);
+     }
+
+@@ -1301,7 +1279,10 @@ impl WindowsPlatform {
+     }
+
+     pub fn scan_paired_remotes(&self) -> Result<Vec<PairedRemote>, PlatformError> {
+-        scan_paired_remotes()
++        #[cfg(windows)]
++        return scan_paired_remotes();
++        #[cfg(target_os = "linux")]
++        self.desktop.scan()
+     }
+
+     pub fn connection_snapshot(&self) -> ConnectionSnapshot {
+@@ -1310,9 +1291,9 @@ impl WindowsPlatform {
+             self.runtime.snapshot()
+         }
+
+-        #[cfg(not(windows))]
++        #[cfg(target_os = "linux")]
+         {
+-            ConnectionSnapshot::default()
++            lock(&self.desktop.connection).clone()
+         }
+     }
+
+@@ -1335,10 +1316,10 @@ impl WindowsPlatform {
+             self.runtime.connect(device_id)
+         }
+
+-        #[cfg(not(windows))]
++        #[cfg(target_os = "linux")]
+         {
+-            let _ = device_id;
+-            Err(PlatformError::UnsupportedPlatform)
++            self.desktop.call("connect", serde_json::json!(device_id)).map_err(PlatformError::Gatt)?;
++            Ok(self.connection_snapshot())
+         }
+     }
+
+@@ -1348,9 +1329,10 @@ impl WindowsPlatform {
+             self.runtime.disconnect()
+         }
+
+-        #[cfg(not(windows))]
++        #[cfg(target_os = "linux")]
+         {
+-            Err(PlatformError::UnsupportedPlatform)
++            self.desktop.call("disconnect", serde_json::json!(null)).map_err(PlatformError::Gatt)?;
++            Ok(self.connection_snapshot())
+         }
+     }
+
+@@ -1369,10 +1351,10 @@ impl WindowsPlatform {
+             self.runtime.restore(device_id)
+         }
+
+-        #[cfg(not(windows))]
++        #[cfg(target_os = "linux")]
+         {
+-            let _ = device_id;
+-            Err(PlatformError::UnsupportedPlatform)
++            self.desktop.call("connect", serde_json::json!(device_id)).map_err(PlatformError::Gatt)?;
++            Ok(self.connection_snapshot())
+         }
+     }
+
+@@ -1382,9 +1364,10 @@ impl WindowsPlatform {
+             self.audio.list_endpoints()
+         }
+
+-        #[cfg(not(windows))]
++        #[cfg(target_os = "linux")]
+         {
+-            Err(PlatformError::UnsupportedPlatform)
++            let audio = self.audio_snapshot();
++            Ok(audio.selected_endpoint_id.map(|id| AudioEndpoint{id,name:"SayAll RC003".into(),is_virtual_cable_candidate:true}).into_iter().collect())
+         }
+     }
+
+@@ -1397,10 +1380,10 @@ impl WindowsPlatform {
+             self.audio.select_endpoint(endpoint_id)
+         }
+
+-        #[cfg(not(windows))]
++        #[cfg(target_os = "linux")]
+         {
+-            let _ = endpoint_id;
+-            Err(PlatformError::UnsupportedPlatform)
++            if self.audio_snapshot().selected_endpoint_id.as_ref() != Some(&endpoint_id) { return Err(PlatformError::AudioEndpointNotSelected) }
++            Ok(self.audio_snapshot())
+         }
+     }
+
+@@ -1414,10 +1397,9 @@ impl WindowsPlatform {
+             self.audio.restore_endpoint(endpoint_id, expected_name)
+         }
+
+-        #[cfg(not(windows))]
++        #[cfg(target_os = "linux")]
+         {
+-            let _ = (endpoint_id, expected_name);
+-            Err(PlatformError::UnsupportedPlatform)
++            let _ = expected_name; self.select_audio_endpoint(endpoint_id)
+         }
+     }
+
+@@ -1427,12 +1409,9 @@ impl WindowsPlatform {
+             self.audio.snapshot()
+         }
+
+-        #[cfg(not(windows))]
++        #[cfg(target_os = "linux")]
+         {
+-            AudioSnapshot {
+-                phase: AudioPhase::Unsupported,
+-                ..AudioSnapshot::default()
+-            }
++            lock(&self.desktop.audio).clone()
+         }
+     }
+
+@@ -1442,12 +1421,9 @@ impl WindowsPlatform {
+             .lock()
+             .unwrap_or_else(|poisoned| poisoned.into_inner())
+             .clone();
+-        #[cfg(not(windows))]
++        #[cfg(target_os = "linux")]
+         {
+-            RawInputSnapshot {
+-                phase: RawInputPhase::Unsupported,
+-                ..snapshot
+-            }
++            snapshot
+         }
+         #[cfg(windows)]
+         {
+@@ -1461,9 +1437,9 @@ impl WindowsPlatform {
+             self.raw_input.start()
+         }
+
+-        #[cfg(not(windows))]
++        #[cfg(target_os = "linux")]
+         {
+-            Err(PlatformError::UnsupportedPlatform)
++            self.desktop.call("listen", serde_json::json!(true)).map_err(PlatformError::RawInput)?; Ok(self.raw_input_snapshot())
+         }
+     }
+
+@@ -1473,9 +1449,9 @@ impl WindowsPlatform {
+             self.raw_input.stop()
+         }
+
+-        #[cfg(not(windows))]
++        #[cfg(target_os = "linux")]
+         {
+-            Err(PlatformError::UnsupportedPlatform)
++            self.desktop.call("listen", serde_json::json!(false)).map_err(PlatformError::RawInput)?; Ok(self.raw_input_snapshot())
+         }
+     }
+
+@@ -1485,9 +1461,9 @@ impl WindowsPlatform {
+             self.send_input.snapshot()
+         }
+
+-        #[cfg(not(windows))]
++        #[cfg(target_os = "linux")]
+         {
+-            send_input::SendInputSnapshot::default()
++            lock(&self.desktop.input).clone()
+         }
+     }
+
+@@ -1500,10 +1476,9 @@ impl WindowsPlatform {
+             self.send_input.tap(chord)
+         }
+
+-        #[cfg(not(windows))]
++        #[cfg(target_os = "linux")]
+         {
+-            let _ = chord;
+-            Err(PlatformError::UnsupportedPlatform)
++            ubuntu::Injector.tap(&chord).map_err(PlatformError::SendInput)?; Ok(self.send_input_snapshot())
+         }
+     }
+ }
+diff --git a/crates/sayall-windows/src/macro_runtime.rs b/crates/sayall-windows/src/macro_runtime.rs
+index afd8dea..9bf756c 100644
+--- a/crates/sayall-windows/src/macro_runtime.rs
++++ b/crates/sayall-windows/src/macro_runtime.rs
+@@ -901,13 +901,13 @@ pub fn macro_chord_to_key_chord(chord: &MacroChord) -> Option<crate::send_input:
+ ///
+ /// 聚焦档案由平台层维护（与按键映射热加载同源，见 `platform.rs` 的
+ /// `set_button_mappings` 镜像），这里只读。
+-#[cfg(windows)]
++#[cfg(any(windows, target_os = "linux"))]
+ pub struct WindowsMacroStepperSource {
+     injector: Arc<dyn crate::button_mapping::MappingInjector>,
+     focus_profiles: Arc<dyn Fn(&str) -> Option<crate::focus::AppFocusProfile> + Send + Sync>,
+ }
+
+-#[cfg(windows)]
++#[cfg(any(windows, target_os = "linux"))]
+ impl WindowsMacroStepperSource {
+     pub fn new(
+         injector: Arc<dyn crate::button_mapping::MappingInjector>,
+@@ -920,7 +920,7 @@ impl WindowsMacroStepperSource {
+     }
+ }
+
+-#[cfg(windows)]
++#[cfg(any(windows, target_os = "linux"))]
+ impl MacroStepperSource for WindowsMacroStepperSource {
+     fn create(&self) -> Box<dyn MacroStepper> {
+         Box::new(WindowsMacroStepper {
+@@ -931,20 +931,20 @@ impl MacroStepperSource for WindowsMacroStepperSource {
+ }
+
+ /// 生产 stepper：打开/激活应用、就绪轮询、SendInput 注入、UIA 聚焦、受限 URL 打开。
+-#[cfg(windows)]
++#[cfg(any(windows, target_os = "linux"))]
+ pub struct WindowsMacroStepper {
+     injector: Arc<dyn crate::button_mapping::MappingInjector>,
+     focus_profiles: Arc<dyn Fn(&str) -> Option<crate::focus::AppFocusProfile> + Send + Sync>,
+ }
+
+ /// 就绪轮询间隔（与 Mac 的 45×100ms 同款节奏）。
+-#[cfg(windows)]
++#[cfg(any(windows, target_os = "linux"))]
+ const READINESS_POLL_INTERVAL_MS: u64 = 100;
+
+ /// `open_application` 超时后的判定（纯函数，便于单测）：
+ /// 进程确实存在 ⇒ `Unknown`（应用起来了、窗口没被观察到——UWP 常态，
+ /// 不得谎报成功也不得误报失败）；进程也不在 ⇒ `Failed`。
+-#[cfg(windows)]
++#[cfg(any(windows, target_os = "linux"))]
+ fn open_application_timeout_outcome(process_running: bool) -> StepOutcome {
+     if process_running {
+         StepOutcome::Unknown
+@@ -953,7 +953,7 @@ fn open_application_timeout_outcome(process_running: bool) -> StepOutcome {
+     }
+ }
+
+-#[cfg(windows)]
++#[cfg(any(windows, target_os = "linux"))]
+ impl WindowsMacroStepper {
+     /// 有界等待：`predicate` 为真即返回 true，超时返回 false。
+     fn wait_until(timeout_ms: u64, mut predicate: impl FnMut() -> bool) -> bool {
+@@ -970,7 +970,7 @@ impl WindowsMacroStepper {
+     }
+ }
+
+-#[cfg(windows)]
++#[cfg(any(windows, target_os = "linux"))]
+ impl MacroStepper for WindowsMacroStepper {
+     fn open_application(&mut self, target: &str, timeout_ms: u64) -> StepOutcome {
+         if let Err(_error) = self.injector.launch_app(target) {
+diff --git a/crates/sayall-windows/src/registered_apps.rs b/crates/sayall-windows/src/registered_apps.rs
+index 0e29de4..f1579b4 100644
+--- a/crates/sayall-windows/src/registered_apps.rs
++++ b/crates/sayall-windows/src/registered_apps.rs
+@@ -9,6 +9,7 @@ struct RegisteredIdentity {
+ }
+
+ pub fn is_registered_target(target: &str) -> bool {
++    if target.ends_with(".desktop") && !target.contains(['/', '\\']) && !target.chars().any(char::is_control) { return true }
+     target.strip_prefix(REGISTERED_PREFIX).is_some_and(|id| {
+         !id.is_empty()
+             && id.len() <= 4096
+@@ -203,7 +204,7 @@ fn scan_sta(started: std::time::Instant) -> Result<Vec<CustomAppPick>, String> {
+
+ #[cfg(not(windows))]
+ pub fn scan_registered_apps() -> Result<Vec<CustomAppPick>, String> {
+-    Err("仅 Windows 支持应用扫描".into())
++    Ok(crate::app_launcher::probe_preset_apps().into_iter().map(|app| CustomAppPick {name:app.name, path:app.id}).collect())
+ }
+
+ /// 启动结果的分类（2026-09-28 Andy 定稿）：**应用已启动即算成功**——前台
+diff --git a/crates/sayall-windows/src/voice_recording.rs b/crates/sayall-windows/src/voice_recording.rs
+index 0e86e29..d9208df 100644
+--- a/crates/sayall-windows/src/voice_recording.rs
++++ b/crates/sayall-windows/src/voice_recording.rs
+@@ -516,7 +516,7 @@ fn write_wav_header(writer: &mut impl Write, data_bytes: u32) -> std::io::Result
+ }
+
+ fn default_root() -> Option<PathBuf> {
+-    let base = std::env::var_os("LOCALAPPDATA")?;
++    let base = sayall_core::ubuntu_data_dir()?;
+     Some(
+         PathBuf::from(base)
+             .join("SayAll")
+diff --git a/src-tauri/Cargo.toml b/src-tauri/Cargo.toml
+index 8a1470d..e9a51e7 100644
+--- a/src-tauri/Cargo.toml
++++ b/src-tauri/Cargo.toml
+@@ -39,6 +39,7 @@ semver = "1"
+ tauri = { version = "2.8", features = ["tray-icon", "image-png", "unstable"] }
+ tauri-plugin-opener = "2.5.5"
+ tauri-plugin-updater = "2.11.0"
++[target.'cfg(windows)'.dependencies]
+ windows = { version = "0.62", features = [
+     "Win32_Foundation",
+     "Win32_Globalization",
+@@ -58,5 +59,7 @@ windows = { version = "0.62", features = [
+ # 与主工程的 windows 0.62 类型一致（不再需要 0.61 别名）。
+ windows-core = "0.62"
+
+-[target.'cfg(windows)'.dependencies]
+ webview2-com = "0.39"
++
++[target.'cfg(target_os = "linux")'.dependencies]
++webkit2gtk = "2.0.2"
+diff --git a/src-tauri/src/agent_access.rs b/src-tauri/src/agent_access.rs
+index dfbb6dd..5e5ac25 100644
+--- a/src-tauri/src/agent_access.rs
++++ b/src-tauri/src/agent_access.rs
+@@ -195,7 +195,7 @@ impl AgentAccessStore {
+
+     /// `%LOCALAPPDATA%\SayAll\mcp\v1`。
+     pub fn default_root() -> Result<PathBuf, String> {
+-        let base = std::env::var_os("LOCALAPPDATA")
++        let base = sayall_core::ubuntu_data_dir()
+             .map(PathBuf::from)
+             .ok_or_else(|| "读不到 LOCALAPPDATA".to_owned())?;
+         Ok(base.join("SayAll").join("mcp").join("v1"))
+@@ -470,6 +470,10 @@ impl AgentAccessStore {
+     }
+
+     /// 客户端真实图标 → `data:image/png;base64,...`。只读公开的 Shell 图标。
++    #[cfg(not(windows))]
++    fn client_icon_data_url(&self, _: AgentClientId) -> Option<String> { None }
++
++    #[cfg(windows)]
+     fn client_icon_data_url(&self, client: AgentClientId) -> Option<String> {
+         use base64::Engine as _;
+         let path = self.client_executable(client)?;
+@@ -542,70 +546,19 @@ impl AgentAccessStore {
+     fn executable_path(&self) -> Option<String> {
+         #[cfg(test)]
+         if let Some(directory) = &self.executable_directory_override {
+-            let candidate = directory.join("sayall-mcp.exe");
++            let candidate = directory.join("sayall-mcp");
+             return candidate.is_file().then(|| candidate.display().to_string());
+         }
+         let directory = std::env::current_exe().ok()?.parent()?.to_path_buf();
+-        let candidate = directory.join("sayall-mcp.exe");
++        let candidate = directory.join("sayall-mcp");
+         candidate.is_file().then(|| candidate.display().to_string())
+     }
+
+     /// 找到客户端自己的启动入口（Claude Code 直接跑它，其余只用来判断是否安装）。
+     fn client_executable(&self, client: AgentClientId) -> Option<PathBuf> {
+-        let home = self.home()?;
+-        match client {
+-            AgentClientId::Codex => self
+-                .which("codex.exe")
+-                .or_else(|| self.which("codex.cmd"))
+-                .or_else(|| {
+-                    // Windows 版 Codex：%LOCALAPPDATA%\OpenAI\Codex\bin\<hash>\codex.exe
+-                    let base = std::env::var_os("LOCALAPPDATA")
+-                        .map(PathBuf::from)?
+-                        .join("OpenAI")
+-                        .join("Codex")
+-                        .join("bin");
+-                    first_existing_subdirectory_file(&base, "codex.exe")
+-                }),
+-            AgentClientId::ClaudeCode => {
+-                #[cfg(test)]
+-                if let Some(executable) = &self.claude_executable_override {
+-                    return executable.is_file().then(|| executable.clone());
+-                }
+-                let native = home.join(".local").join("bin").join("claude.exe");
+-                if native.is_file() {
+-                    return Some(native);
+-                }
+-                self.which("claude.exe")
+-                    .or_else(|| self.which("claude.cmd"))
+-                    .or_else(|| {
+-                        let npm = std::env::var_os("APPDATA").map(PathBuf::from)?.join("npm");
+-                        let candidate = npm.join("claude.cmd");
+-                        candidate.is_file().then_some(candidate)
+-                    })
+-            }
+-            AgentClientId::Cursor => {
+-                let local = std::env::var_os("LOCALAPPDATA").map(PathBuf::from)?;
+-                let candidates = [
+-                    local.join("Programs").join("cursor").join("Cursor.exe"),
+-                    local.join("Programs").join("Cursor").join("Cursor.exe"),
+-                ];
+-                candidates
+-                    .into_iter()
+-                    .find(|path| path.is_file())
+-                    .or_else(|| self.which("cursor.exe"))
+-            }
+-            AgentClientId::OpenCode => self
+-                .which("opencode.exe")
+-                .or_else(|| self.which("opencode.cmd"))
+-                .or_else(|| {
+-                    let local = std::env::var_os("LOCALAPPDATA").map(PathBuf::from)?;
+-                    let candidates = [
+-                        local.join("Programs").join("opencode").join("opencode.exe"),
+-                        local.join("Programs").join("OpenCode").join("opencode.exe"),
+-                    ];
+-                    candidates.into_iter().find(|path| path.is_file())
+-                }),
+-        }
++        self.which(match client { AgentClientId::Codex => "codex", AgentClientId::ClaudeCode => "claude",
++            AgentClientId::Cursor => "cursor", AgentClientId::OpenCode => "opencode" })
++
+     }
+
+     /// 在 PATH 上找可执行文件（`where` 的等价实现，不启动子进程）。
+@@ -1014,6 +967,7 @@ fn reject_reparse_point(file: &Path) -> Result<(), &'static str> {
+
+ /// 原子替换（Windows 上 rename 到已存在文件会失败，先删再改名）。
+ fn replace_file(temporary: &Path, target: &Path) -> std::io::Result<()> {
++    #[cfg(windows)]
+     if target.exists() {
+         std::fs::remove_file(target)?;
+     }
+diff --git a/src-tauri/src/common_phrase_panel.rs b/src-tauri/src/common_phrase_panel.rs
+index 78eb883..26a53bc 100644
+--- a/src-tauri/src/common_phrase_panel.rs
++++ b/src-tauri/src/common_phrase_panel.rs
+@@ -91,11 +91,13 @@ fn panel_window(app: &AppHandle) -> tauri::Result<WebviewWindow> {
+     .focusable(false)
+     .visible(false)
+     .build()?;
++#[cfg(windows)]
+     apply_no_activate(window.hwnd().map(|handle| handle.0 as isize).ok());
+     Ok(window)
+ }
+
+ /// 追加「绝不激活」扩展样式。拿不到窗口句柄时只记录，不影响功能。
++#[cfg(windows)]
+ fn apply_no_activate(hwnd: Option<isize>) {
+     use windows::Win32::Foundation::HWND;
+     use windows::Win32::UI::WindowsAndMessaging::{
+@@ -131,6 +133,7 @@ impl PhrasePanelWindow for AppPanelWindow {
+         let window = self.window.clone();
+         let dispatched = app.clone().run_on_main_thread(move || {
+             // 显示前的前台进程（判据：show 不得改变前台窗口）。
++#[cfg(windows)]
+             let before = sayall_windows::focus_windows::foreground_process_id();
+             // 居中显示：优先落在**光标所在屏**（`current_monitor()` 是"窗口当前所在屏"，
+             // 窗口未定位时恒为主屏，副屏用户会看不到面板却仍被吞键）。
+@@ -153,7 +156,9 @@ impl PhrasePanelWindow for AppPanelWindow {
+             let _ = window.emit(PANEL_REFRESH_EVENT, ());
+             // 真机判据：面板显示与鼠标点选都不得抢走前台焦点（前后进程号应一致，
+             // 且都不是本应用）。点击面板后的读数另行从日志观察。
++#[cfg(windows)]
+             let after = sayall_windows::focus_windows::foreground_process_id();
++#[cfg(windows)]
+             sayall_windows::gatt_note(format!(
+                 "COMMON_PHRASES PANEL phase=shown result=visible fg_before={:?} fg_after={:?} self_pid={}",
+                 before,
+diff --git a/src-tauri/src/lib.rs b/src-tauri/src/lib.rs
+index 5cec185..05ecefe 100644
+--- a/src-tauri/src/lib.rs
++++ b/src-tauri/src/lib.rs
+@@ -30,6 +30,10 @@ mod launch_state;
+ mod membership;
+ mod onboarding;
+ mod platform;
++#[cfg(windows)]
++mod rc003_task;
++#[cfg(target_os="linux")]
++#[path="ubuntu_capture.rs"]
+ mod rc003_task;
+ mod recommendations;
+ mod settings;
+@@ -1974,6 +1978,8 @@ impl CaptureHealth {
+
+     /// 读取当前发布值（未知编码按 `Off` 处理，界面不显示文案）。
+     fn current(slot: &std::sync::atomic::AtomicU8) -> Self {
++        #[cfg(target_os="linux")]
++        if sayall_windows::ubuntu::GRABBED.load(std::sync::atomic::Ordering::Acquire) { return Self::Active; }
+         match slot.load(std::sync::atomic::Ordering::Relaxed) {
+             2 => Self::Inactive,
+             3 => Self::Active,
+@@ -2357,6 +2363,7 @@ fn decide_reconcile_round(enabled: bool, check: AutoTriggerCheck) -> ReconcileAc
+ ///   （见 `capture_recover_after_ms`），仍无效则降速重试；
+ /// * 桥在监听、助手未连上 → 触发：前 4 轮每 5 秒，第 5 轮 `/end` + `/run`
+ ///   兜底一次，此后每 30 秒稳态重试，稳态期每 10 轮再兜底一次。
++#[cfg(windows)]
+ fn rc003_auto_trigger_reconcile(
+     platform: Arc<dyn PlatformRuntime>,
+     settings: SettingsStore,
+@@ -3659,7 +3666,10 @@ fn start_shortcut_capture(
+     app: tauri::AppHandle,
+ ) -> Result<Vec<sayall_windows::send_input::KeyCode>, String> {
+     let started = std::time::Instant::now();
++    #[cfg(windows)]
+     let mic_baseline = sayall_windows::capture_mic_baseline();
++    #[cfg(not(windows))]
++    let mic_baseline: Option<u64> = None;
+     match capture_mic_baseline_slot().lock() {
+         Ok(mut guard) => *guard = mic_baseline,
+         Err(poisoned) => *poisoned.into_inner() = mic_baseline,
+@@ -3677,7 +3687,7 @@ fn start_shortcut_capture(
+             "capture_ime_yield outcome=unavailable reason=window_thread_timeout".to_owned(),
+         ),
+     }
+-    if !sayall_windows::key_gate::set_shortcut_capture_active(true) {
++    if cfg!(windows) && !sayall_windows::key_gate::set_shortcut_capture_active(true) {
+         // 让位已发生但门控不可用：立即恢复布局，避免留下非 IME 输入区域。
+         if let Some(note) =
+             run_ime_yield_on_window_thread(&app, sayall_windows::restore_input_method_after_capture)
+@@ -3716,7 +3726,10 @@ fn stop_shortcut_capture(app: tauri::AppHandle) -> ShortcutCaptureStopResult {
+         Ok(mut guard) => guard.take(),
+         Err(poisoned) => poisoned.into_inner().take(),
+     };
++    #[cfg(windows)]
+     let wetype_voice = sayall_windows::capture_mic_verdict(mic_baseline);
++    #[cfg(not(windows))]
++    let wetype_voice = "unknown";
+     let _ = sayall_windows::key_gate::set_shortcut_capture_active(false);
+     // 恢复录入前的输入区域布局（让位撤销，输入法回到该窗口会话）。
+     match run_ime_yield_on_window_thread(&app, sayall_windows::restore_input_method_after_capture) {
+@@ -5190,6 +5203,15 @@ fn register_shortcut_capture_events(app: tauri::AppHandle) {
+ /// Stopped（用户在按键页显式停止）不重启；成功后保持低频巡检自愈。
+ /// 注意：设备暂时缺失时监听器进入 Awaiting（窗口与设备热插拔通知已就位），
+ /// 由 WM_INPUT_DEVICE_CHANGE 在接口恢复时立即重绑，不在此处重启，避免无谓抖动。
++#[cfg(target_os = "linux")]
++fn show_main_window(app: &tauri::AppHandle, _: &str) {
++    if let Some(window) = main_window(app) {
++        let _ = window.unminimize();
++        let _ = window.show();
++        let _ = window.set_focus();
++    }
++}
++
+ fn spawn_raw_input_supervisor(platform: Arc<dyn PlatformRuntime>) {
+     std::thread::Builder::new()
+         .name("sayall-raw-input-supervisor".to_owned())
+@@ -5264,6 +5286,7 @@ fn shutdown_platform_for_exit(app: &tauri::AppHandle) {
+     }
+     let started = std::time::Instant::now();
+     // 按键宿主随退出收尾关闭（幂等；宿主自身 EOF 兜底同样保证不驻留）。
++    #[cfg(windows)]
+     sayall_windows::key_host::shutdown_global();
+     // 会员组件收尾（2026-10-15）：私有实现在这里释放网络与凭据刷新任务，
+     // 公开实现是 no-op。
+@@ -5295,6 +5318,7 @@ fn shutdown_platform_for_exit(app: &tauri::AppHandle) {
+ /// 连提示都没有）。于是"升级"这个动作会留下未正常关闭的 GATT 会话——正是
+ /// AGENTS.md 记录的链路僵死诱因。安装器侧现在会先置位一个命名事件并等待应用
+ /// 自行退出（见 `windows/installer-hooks.nsh`），本线程即那个等待端。
++#[cfg(windows)]
+ fn spawn_installer_graceful_exit_watcher(app: tauri::AppHandle) {
+     let spawned = std::thread::Builder::new()
+         .name("sayall-graceful-exit".to_owned())
+@@ -5338,6 +5362,7 @@ fn spawn_installer_graceful_exit_watcher(app: tauri::AppHandle) {
+ ///
+ /// 线程按进程存活设计（阻塞在 wait()）；Tauri 的退出路径是
+ /// `std::process::exit`、不执行析构，线程不做（也无法做）退场处理。
++#[cfg(windows)]
+ fn spawn_second_instance_listener(app: tauri::AppHandle) {
+     let spawned = std::thread::Builder::new()
+         .name("sayall-second-instance".to_owned())
+@@ -5379,7 +5404,13 @@ fn spawn_second_instance_listener(app: tauri::AppHandle) {
+ }
+
+ pub fn run() {
+-    let log_path = std::env::var_os("LOCALAPPDATA")
++    #[cfg(target_os = "linux")]
++    let instance = match rc003_task::primary_instance() {
++        Ok(Some(instance)) => instance,
++        Ok(None) => return,
++        Err(error) => { eprintln!("Could not acquire SayAll desktop session: {error}"); return; }
++    };
++    let log_path = sayall_core::ubuntu_data_dir()
+         .map(std::path::PathBuf::from)
+         .unwrap_or_else(std::env::temp_dir)
+         .join("SayAll")
+@@ -5514,7 +5545,18 @@ pub fn run() {
+                 webview.label() == "main"
+             ));
+         })
+-        .setup(|app| {
++        .setup(move |app| {
++            #[cfg(target_os = "linux")]
++            {
++                let handle = app.handle().clone();
++                std::thread::spawn(move || {
++                    let (_lock, listener) = instance;
++                    for connection in listener.incoming() {
++                        if connection.is_err() { break; }
++                        show_main_window(&handle, "second_instance");
++                    }
++                });
++            }
+             sayall_windows::gatt_note(
+                 "app_lifecycle event=tauri_setup phase=started result=passed".to_owned(),
+             );
+@@ -5530,7 +5572,7 @@ pub fn run() {
+             ));
+             // 托盘图标：主窗口关闭后驻留；菜单 = 显示主界面 / 退出；
+             // 左键点击托盘 = 显示并聚焦主窗口（Mac StatusIcon 同款行为）。
+-            #[cfg(all(windows, not(feature = "runtime-simulation")))]
++            #[cfg(not(feature = "runtime-simulation"))]
+             {
+                 use tauri::menu::{Menu, MenuItem};
+                 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+@@ -5544,7 +5586,7 @@ pub fn run() {
+                 TrayIconBuilder::with_id(app_icon::TRAY_ID)
+                     .icon(icon)
+                     .menu(&menu)
+-                    .show_menu_on_left_click(false)
++                    .show_menu_on_left_click(cfg!(target_os = "linux"))
+                     .tooltip("无线麦 SayAll")
+                     .on_menu_event(|app, event| match event.id.as_ref() {
+                         "tray-show" => show_main_window(app, "tray_menu"),
+@@ -5945,6 +5987,11 @@ pub fn run() {
+                 });
+             }
+
++            #[cfg(target_os = "linux")]
++            if let Some(id) = saved_settings.selected_remote_id.clone() {
++                let p = platform.clone();
++                std::thread::spawn(move || { let _ = p.connect_remote(id); });
++            }
+             #[cfg(windows)]
+             if let Some(device_id) = saved_settings.selected_remote_id {
+                 if let Err(error) = platform.restore_remote(device_id) {
+@@ -6165,6 +6212,7 @@ pub fn run() {
+             app.manage(recommendations::RecommendationsState::default());
+             // 按键宿主进程（切片 1：骨架/握手/生命周期；钩子迁移见后续切片）：
+             // 失败仅记录日志并保持 fail-open，不阻塞启动。
++            #[cfg(windows)]
+             let _ = sayall_windows::key_host::start_global();
+             #[cfg(windows)]
+             if let Some(window) = main_window(app.handle()) {
+@@ -6178,8 +6226,10 @@ pub fn run() {
+             }
+             // 安装/升级前的优雅退出监听（2026-09-16）：安装器会先请求退出、
+             // 再考虑强杀（详见函数注释）。
++            #[cfg(windows)]
+             spawn_installer_graceful_exit_watcher(app.handle().clone());
+             // 二次启动（双击快捷方式 / 再点启动图标）→ 显示主窗口的监听端。
++            #[cfg(windows)]
+             spawn_second_instance_listener(app.handle().clone());
+             // "打开无线麦"（自身窗口）后的 tao 可见性缓存同步：`app_launcher` 用
+             // Win32 `ShowWindow` 显示已隐藏的自身主窗口（同步生效，其后抢前台才有
+@@ -6199,6 +6249,7 @@ pub fn run() {
+             // 前台焦点虽然切给了目标，Z 序上却永远压着它——日志 `foreground_observed`
+             // 全绿、用户只看到无线麦（2026-11-05 现场）。产品从未主动置顶主窗口，
+             // 该样式来自外部工具或历史状态，所以这里不追来源，直接按结果兜底。
++            #[cfg(windows)]
+             {
+                 let handle = app.handle().clone();
+                 sayall_windows::app_launcher::set_self_drop_topmost(move || {
+diff --git a/src-tauri/src/main.rs b/src-tauri/src/main.rs
+index a86a4e9..602eaf3 100644
+--- a/src-tauri/src/main.rs
++++ b/src-tauri/src/main.rs
+@@ -7,6 +7,13 @@
+ )]
+
+ fn main() {
++    #[cfg(target_os = "linux")]
++    {
++        unsafe extern "C" { fn umask(mask: u32) -> u32; }
++        // Keep transcript, diagnostic and MCP authorization files private to this user.
++        unsafe { umask(0o077); }
++    }
++    #[cfg(windows)]
+     match sayall_windows::key_host::parse_host_args(std::env::args()) {
+         sayall_windows::key_host::HostArgParse::Launch(launch) => {
+             // 按键宿主模式：不进入 Tauri / 单实例 / GUI 路径，只跑宿主循环。
+diff --git a/src-tauri/src/recommendations.rs b/src-tauri/src/recommendations.rs
+index 1573cb4..d1e244b 100644
+--- a/src-tauri/src/recommendations.rs
++++ b/src-tauri/src/recommendations.rs
+@@ -646,6 +646,7 @@ async fn present(app: AppHandle, theme: &str, language: &str, retry: bool) -> Re
+         *value = language.to_owned();
+     }
+     state.phase.store(PHASE_LOADING, Ordering::Release);
++    state.visible.store(true, Ordering::Release);
+     attach_navigation_observers(&webview, app.clone())?;
+     let target = if retry {
+         embedded_destination(None, theme, language)
+@@ -687,6 +688,9 @@ pub fn hide_recommendations(app: AppHandle) -> Result<(), String> {
+         // 离开页面时停止本次加载，避免挂起的导航在后台继续占用网络/渲染资源。
+         if phase == PHASE_LOADING {
+             stopped = true;
++            #[cfg(target_os = "linux")]
++            let _ = webview.with_webview(|platform| webkit2gtk::WebViewExt::stop_loading(&platform.inner()));
++            #[cfg(windows)]
+             let _ = webview.with_webview(|platform| unsafe {
+                 if let Ok(core) = platform.controller().CoreWebView2() {
+                     let _ = core.Stop();
+@@ -740,6 +744,9 @@ pub fn go_back_recommendations(app: AppHandle) -> Result<(), String> {
+     let Some(webview) = app.get_webview(LABEL) else {
+         return Ok(());
+     };
++    #[cfg(target_os = "linux")]
++    return webview.with_webview(|platform| webkit2gtk::WebViewExt::go_back(&platform.inner())).map_err(|error| error.to_string());
++    #[cfg(windows)]
+     webview
+         .with_webview(|platform| unsafe {
+             let Ok(core) = platform.controller().CoreWebView2() else {
+@@ -1234,9 +1241,38 @@ fn attach_navigation_observers(webview: &Webview, app: AppHandle) -> Result<(),
+         .map_err(|error| format!("无法监听推荐页面导航: {error}"))
+ }
+
+-#[cfg(not(windows))]
+-fn attach_navigation_observers(_webview: &Webview, _app: AppHandle) -> Result<(), String> {
+-    Err("推荐页面仅在 Windows 上提供".to_owned())
++#[cfg(target_os = "linux")]
++fn attach_navigation_observers(webview: &Webview, app: AppHandle) -> Result<(), String> {
++    use webkit2gtk::{LoadEvent, WebViewExt};
++    webview.with_webview(move |platform| {
++        let view = platform.inner();
++        let failed_app = app.clone();
++        view.connect_load_failed(move |_, _, uri, _| {
++            if uri == "about:blank" { return false; }
++            let state = failed_app.state::<RecommendationsState>();
++            state.phase.store(PHASE_FAILED, Ordering::Release);
++            if let Some(child) = failed_app.get_webview(LABEL) { let _ = child.hide(); }
++            emit_failed(&failed_app, state.generation.load(Ordering::Acquire), "network");
++            false
++        });
++        view.connect_load_changed(move |view, event| {
++            if view.uri().is_none_or(|uri| uri == "about:blank") { return; }
++            let state = app.state::<RecommendationsState>();
++            if event == LoadEvent::Started {
++                state.phase.store(PHASE_LOADING, Ordering::Release);
++            }
++            if event != LoadEvent::Finished || state.phase.load(Ordering::Acquire) == PHASE_FAILED { return; }
++            state.phase.store(PHASE_READY, Ordering::Release);
++            state.can_go_back.store(view.can_go_back(), Ordering::Release);
++            if !state.visible.load(Ordering::Acquire) { return; }
++            if let (Some(child), Some((position, size))) = (app.get_webview(LABEL), layout(&app)) {
++                let _ = child.set_position(position);
++                let _ = child.set_size(size);
++                let _ = child.show();
++            }
++            emit_ready(&app, state.generation.load(Ordering::Acquire));
++        });
++    }).map_err(|error| error.to_string())
+ }
+
+ #[cfg(test)]
+diff --git a/src-tauri/src/startup.rs b/src-tauri/src/startup.rs
+index 9868859..96bdc86 100644
+--- a/src-tauri/src/startup.rs
++++ b/src-tauri/src/startup.rs
+@@ -266,12 +266,23 @@ mod windows_impl {
+ #[cfg(windows)]
+ pub use windows_impl::{is_enabled, set_enabled};
+
+-#[cfg(not(windows))]
+-pub fn is_enabled() -> Result<bool, String> {
+-    Ok(false)
+-}
+
+-#[cfg(not(windows))]
+-pub fn set_enabled(_enabled: bool) -> Result<(), String> {
+-    Err("当前平台不支持开机自启动".to_owned())
++fn desktop_file() -> Result<std::path::PathBuf, String> {
++    let root = std::env::var_os("XDG_CONFIG_HOME").map(std::path::PathBuf::from)
++        .or_else(|| std::env::var_os("HOME").map(|p|std::path::PathBuf::from(p).join(".config")))
++        .ok_or("无法定位 Ubuntu 配置目录")?;
++    Ok(root.join("autostart/app.getsayall.remote-mic.ubuntu.desktop"))
++}
++pub fn is_enabled() -> Result<bool, String> { Ok(desktop_file()?.is_file()) }
++pub fn set_enabled(enabled: bool) -> Result<(), String> {
++    let file = desktop_file()?;
++    if enabled {
++        std::fs::create_dir_all(file.parent().unwrap()).map_err(|e|e.to_string())?;
++        std::fs::write(file, "[Desktop Entry]\nType=Application\nName=SayAll\nExec=sayall-ubuntu\n").map_err(|e|e.to_string())
++    } else {
++        match std::fs::remove_file(file) {
++            Err(e) if e.kind()==std::io::ErrorKind::NotFound => Ok(()),
++            result => result.map_err(|e|e.to_string())
++        }
++    }
+ }
+diff --git a/src-tauri/src/transcripts.rs b/src-tauri/src/transcripts.rs
+index 177c74f..8c7545a 100644
+--- a/src-tauri/src/transcripts.rs
++++ b/src-tauri/src/transcripts.rs
+@@ -122,7 +122,7 @@ impl TranscriptStore {
+
+     /// `%LOCALAPPDATA%\SayAll\transcripts\v1`；与其他本机运行数据同目录。
+     pub fn default_root() -> Result<PathBuf, String> {
+-        let base = std::env::var_os("LOCALAPPDATA")
++        let base = sayall_core::ubuntu_data_dir()
+             .map(PathBuf::from)
+             .ok_or_else(|| "读不到 LOCALAPPDATA，无法保存回眸记录".to_owned())?;
+         Ok(base.join("SayAll").join("transcripts").join("v1"))
+@@ -761,8 +761,7 @@ pub fn default_move_to_recycle_bin(path: &Path) -> Result<(), String> {
+
+ #[cfg(not(windows))]
+ pub fn default_move_to_recycle_bin(path: &Path) -> Result<(), String> {
+-    let _ = path;
+-    Err("当前平台不支持回收站删除".to_owned())
++    std::process::Command::new("gio").arg("trash").arg(path).status().map_err(|e| e.to_string())?.success().then_some(()).ok_or("无法移至回收站".into())
+ }
+
+ #[cfg(test)]
+diff --git a/src-tauri/src/updater.rs b/src-tauri/src/updater.rs
+index 7c27e5b..6e171ea 100644
+--- a/src-tauri/src/updater.rs
++++ b/src-tauri/src/updater.rs
+@@ -305,6 +305,22 @@ pub async fn check_app_update(
+     app: AppHandle,
+     state: State<'_, AppState>,
+ ) -> Result<AppUpdateInfo, String> {
++    #[cfg(target_os="linux")]
++    {
++        let policy = std::process::Command::new("apt-cache").env("LC_ALL", "C")
++            .args(["policy", "sayall-ubuntu"]).output().map_err(|e| e.to_string())?;
++        if !policy.status.success() { return Err("Could not read the APT package cache".into()); }
++        let text = String::from_utf8_lossy(&policy.stdout);
++        let version = |prefix: &str| text.lines().find_map(|l| l.trim().strip_prefix(prefix))
++            .map(str::trim).filter(|v| !v.is_empty() && *v != "(none)").map(str::to_owned);
++        let installed = version("Installed:");
++        let candidate = version("Candidate:");
++        let available = installed.as_ref().zip(candidate.as_ref()).is_some_and(|(old, new)|
++            std::process::Command::new("dpkg").args(["--compare-versions", new, "gt", old])
++                .status().is_ok_and(|s| s.success()));
++        return Ok(AppUpdateInfo {current_version: installed.unwrap_or_else(|| app.package_info().version.to_string()),
++            version: candidate.filter(|_| available), available, notes: None, date: None});
++    }
+     let started = Instant::now();
+     let include_prereleases = state
+         .settings
+@@ -452,6 +468,12 @@ pub async fn set_app_update_preferences(
+
+ #[tauri::command]
+ pub async fn install_app_update(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
++    #[cfg(target_os = "linux")]
++    {
++        let status = std::process::Command::new("/usr/bin/pkexec").args(["/usr/bin/apt-get", "install",
++            "--only-upgrade", "-y", "sayall-ubuntu"]).status().map_err(|e| e.to_string())?;
++        return if status.success() { Ok(()) } else { Err("Ubuntu package update did not complete".into()) };
++    }
+     let started = Instant::now();
+     let mut update = state
+         .pending_update
+diff --git a/src/components/EnhancedCaptureConfirmDialog.vue b/src/components/EnhancedCaptureConfirmDialog.vue
+index f014a2f..eed03f7 100644
+--- a/src/components/EnhancedCaptureConfirmDialog.vue
++++ b/src/components/EnhancedCaptureConfirmDialog.vue
+@@ -1,6 +1,7 @@
+ <script setup lang="ts">
+ import { onMounted, ref } from "vue";
+ import { CAPTURE_MORE_INPUT_TOOLS_NOTE } from "../lib/capture-switch";
++import { isUbuntuDesktop } from "../lib/ubuntu-messages";
+ import { t } from "../lib/i18n";
+
+ /**
+@@ -42,13 +43,13 @@ onMounted(() => {
+     <p class="capture-confirm-intro">
+       {{ t("开启后，无线麦会直接读取遥控器上已配置的按键，避免影响物理键盘上的同名按键；返回 / 音量+ / 音量−也需要开启后才能使用。每次开启都会弹出 Windows 授权窗口，请选择“是”；关闭开关即停。") }}
+     </p>
+-    <p class="capture-confirm-note">
++    <p v-if="!isUbuntuDesktop()" class="capture-confirm-note">
+       {{ t(CAPTURE_MORE_INPUT_TOOLS_NOTE) }}
+     </p>
+-    <p class="capture-confirm-note">
++    <p v-if="!isUbuntuDesktop()" class="capture-confirm-note">
+       {{ t("个别杀毒软件可能把这个功能当成风险，拦截或关闭它，导致按键失灵、开启失败。") }}
+     </p>
+-    <p class="capture-confirm-note">
++    <p v-if="!isUbuntuDesktop()" class="capture-confirm-note">
+       {{ t("个别游戏带有防作弊保护，可能和这个功能合不来：表现为按键失灵、游戏打不开等。玩这类游戏前，建议先把全按键支持关掉。") }}
+     </p>
+     <p class="capture-confirm-privacy">
+diff --git a/src/lib/bridge.ts b/src/lib/bridge.ts
+index 25a49d9..b98d46d 100644
+--- a/src/lib/bridge.ts
++++ b/src/lib/bridge.ts
+@@ -1,3 +1,4 @@
++import { isUbuntuDesktop } from "./ubuntu-messages";
+ import { invoke } from "@tauri-apps/api/core";
+ import { getCurrentWindow } from "@tauri-apps/api/window";
+ import { openUrl } from "@tauri-apps/plugin-opener";
+@@ -99,6 +100,7 @@ export interface AudioEndpoint {
+  * 决定推荐标记；两者刻意分开。
+  */
+ export function isRecommendedVoiceEndpoint(endpoint: AudioEndpoint): boolean {
++  if (endpoint.id === "sayall.rc003.mic") return true;
+   const name = endpoint.name.trim().toLowerCase();
+   if (!name.includes("vb-audio virtual cable")) {
+     return false;
+@@ -1136,6 +1138,7 @@ export async function setGainDb(gainDb: number): Promise<number> {
+ }
+
+ export async function openVbCableDownloadPage(): Promise<void> {
++  if (isUbuntuDesktop()) return openWindowsSettings("sound");
+   if (!isTauriRuntime()) {
+     window.open(VB_CABLE_DOWNLOAD_URL, "_blank", "noopener,noreferrer");
+     return;
+@@ -1727,8 +1730,82 @@ export async function subscribeButtonGestures(
+  *  preheld 键的边沿对录入不可见（防粘键：其 DOWN 已进 OS，UP 必须放行），
+  *  后端会等它们全部松开后才开始投递边沿——前端据此提示用户先松手，
+  *  避免"按住中打开录入"被静默截断成半截组合。 */
++let ubuntuCapturing = false;
++
++export function codeToKeyCode(code: string): KeyCode | null {
++  const modifierMap: Record<string, KeyCode> = {
++    ControlLeft: "left_control",
++    ControlRight: "right_control",
++    ShiftLeft: "left_shift",
++    ShiftRight: "right_shift",
++    AltLeft: "left_alt",
++    AltRight: "right_alt",
++    MetaLeft: "left_windows",
++    MetaRight: "right_windows",
++  };
++  if (modifierMap[code]) return modifierMap[code];
++  const named: Record<string, KeyCode> = {
++    Enter: "enter",
++    Space: "space",
++    Tab: "tab",
++    Backspace: "backspace",
++    Escape: "escape",
++    ArrowLeft: "left",
++    ArrowUp: "up",
++    ArrowRight: "right",
++    ArrowDown: "down",
++    Home: "home",
++    End: "end",
++    PageUp: "page_up",
++    PageDown: "page_down",
++    Insert: "insert",
++    Delete: "delete",
++    ContextMenu: "apps",
++    Semicolon: "oem1",
++    Equal: "oem_plus",
++    Comma: "oem_comma",
++    Minus: "oem_minus",
++    Period: "oem_period",
++    Slash: "oem2",
++    Backquote: "oem3",
++    BracketLeft: "oem4",
++    Backslash: "oem5",
++    BracketRight: "oem6",
++    Quote: "oem7",
++    IntlBackslash: "oem102",
++    Numpad0: "numpad0",
++    Numpad1: "numpad1",
++    Numpad2: "numpad2",
++    Numpad3: "numpad3",
++    Numpad4: "numpad4",
++    Numpad5: "numpad5",
++    Numpad6: "numpad6",
++    Numpad7: "numpad7",
++    Numpad8: "numpad8",
++    Numpad9: "numpad9",
++    NumpadMultiply: "numpad_multiply",
++    NumpadAdd: "numpad_add",
++    NumpadSubtract: "numpad_subtract",
++    NumpadDecimal: "numpad_decimal",
++    NumpadDivide: "numpad_divide",
++    NumLock: "numlock",
++    VolumeMute: "volume_mute",
++    VolumeUp: "volume_up",
++    VolumeDown: "volume_down",
++  };
++  if (named[code]) return named[code];
++  const letter = /^Key([A-Z])$/.exec(code);
++  if (letter) return letter[1].toLowerCase();
++  const digit = /^Digit([0-9])$/.exec(code);
++  if (digit) return `digit${digit[1]}`;
++  const functionKey = /^F([1-9]|1[0-2])$/.exec(code);
++  if (functionKey) return `f${functionKey[1]}`;
++  return null;
++}
++
+ export async function startShortcutCapture(): Promise<KeyCode[]> {
+   if (!isTauriRuntime()) return [];
++  ubuntuCapturing = true;
+   const preheld = await invoke<KeyCode[]>("start_shortcut_capture");
+   return preheld ?? [];
+ }
+@@ -1742,6 +1819,7 @@ export interface ShortcutCaptureStopResult {
+ }
+
+ export async function stopShortcutCapture(): Promise<ShortcutCaptureStopResult | null> {
++  ubuntuCapturing = false;
+   if (!isTauriRuntime()) return null;
+   const result = await invoke<ShortcutCaptureStopResult | null>("stop_shortcut_capture");
+   return result ?? null;
+@@ -1752,12 +1830,22 @@ export async function subscribeShortcutCaptureEdges(
+   handler: (edge: ShortcutCaptureEdge) => void,
+ ): Promise<() => void> {
+   if (!isTauriRuntime()) return () => {};
+-  const { listen } = await import("@tauri-apps/api/event");
+-  const unlisten = await listen<ShortcutCaptureEdge>("shortcut-capture-edge", (event) =>
+-    handler(event.payload),
+-  );
++  if (!isUbuntuDesktop()) {
++    const { listen } = await import("@tauri-apps/api/event");
++    return listen<ShortcutCaptureEdge>("shortcut-capture-edge", event => handler(event.payload));
++  }
++  const edge = (event: KeyboardEvent) => {
++    if (!ubuntuCapturing || event.repeat) return;
++    const key = codeToKeyCode(event.code);
++    if (!key) return;
++    event.preventDefault();
++    handler({key, isPressed: event.type === "keydown", source: "real"});
++  };
++  window.addEventListener("keydown", edge, true);
++  window.addEventListener("keyup", edge, true);
+   return () => {
+-    void unlisten();
++    window.removeEventListener("keydown", edge, true);
++    window.removeEventListener("keyup", edge, true);
+   };
+ }
+
+diff --git a/src/lib/i18n.ts b/src/lib/i18n.ts
+index d6b0550..2009789 100644
+--- a/src/lib/i18n.ts
++++ b/src/lib/i18n.ts
+@@ -1,6 +1,8 @@
+ import { effectiveLanguage } from "./language-state";
+ import { en } from "./i18n/en";
+
++import { isUbuntuDesktop, ubuntuMessages } from "./ubuntu-messages";
++
+ const missing = new Set<string>();
+
+ function interpolate(
+@@ -24,8 +26,11 @@ export function t(
+   source: string,
+   params?: Record<string, string | number>,
+ ): string {
++  const ubuntu = isUbuntuDesktop();
++  const local = ubuntu && ubuntuMessages[source];
++  if (local) return interpolate(local[effectiveLanguage.value === "zh-Hans" ? 0 : 1], params);
+   if (effectiveLanguage.value === "zh-Hans") {
+-    return interpolate(source, params);
++    return interpolate(ubuntu ? source.replaceAll("CABLE Output", "SayAll RC003") : source, params);
+   }
+   const translated = en[source];
+   if (translated === undefined) {
+@@ -35,7 +40,7 @@ export function t(
+     }
+     return interpolate(source, params);
+   }
+-  return interpolate(translated, params);
++  return interpolate(ubuntu ? translated.replaceAll("CABLE Output", "SayAll RC003") : translated, params);
+ }
+
+ /** 供开发/测试检查：本次运行中实际缺失的英文 key。 */
+diff --git a/src/pages/ButtonsPage.vue b/src/pages/ButtonsPage.vue
+index 0b300d8..49b175a 100644
+--- a/src/pages/ButtonsPage.vue
++++ b/src/pages/ButtonsPage.vue
+@@ -71,7 +71,7 @@ import {
+   scanPairedRemotes,
+   shortcutCapability,
+   startRawInput,
+-  startShortcutCapture,
++  codeToKeyCode, startShortcutCapture,
+   stopRawInput,
+   stopShortcutCapture,
+   subscribeButtonEdges,
+@@ -1436,78 +1436,6 @@ async function importConfiguration(): Promise<void> {
+   }
+ }
+
+-/** KeyboardEvent.code → KeyCode（serde snake_case）。 */
+-function codeToKeyCode(code: string): KeyCode | null {
+-  const modifierMap: Record<string, KeyCode> = {
+-    ControlLeft: "left_control",
+-    ControlRight: "right_control",
+-    ShiftLeft: "left_shift",
+-    ShiftRight: "right_shift",
+-    AltLeft: "left_alt",
+-    AltRight: "right_alt",
+-    MetaLeft: "left_windows",
+-    MetaRight: "right_windows",
+-  };
+-  if (modifierMap[code]) return modifierMap[code];
+-  const named: Record<string, KeyCode> = {
+-    Enter: "enter",
+-    Space: "space",
+-    Tab: "tab",
+-    Backspace: "backspace",
+-    Escape: "escape",
+-    ArrowLeft: "left",
+-    ArrowUp: "up",
+-    ArrowRight: "right",
+-    ArrowDown: "down",
+-    Home: "home",
+-    End: "end",
+-    PageUp: "page_up",
+-    PageDown: "page_down",
+-    Insert: "insert",
+-    Delete: "delete",
+-    ContextMenu: "apps",
+-    Semicolon: "oem1",
+-    Equal: "oem_plus",
+-    Comma: "oem_comma",
+-    Minus: "oem_minus",
+-    Period: "oem_period",
+-    Slash: "oem2",
+-    Backquote: "oem3",
+-    BracketLeft: "oem4",
+-    Backslash: "oem5",
+-    BracketRight: "oem6",
+-    Quote: "oem7",
+-    IntlBackslash: "oem102",
+-    Numpad0: "numpad0",
+-    Numpad1: "numpad1",
+-    Numpad2: "numpad2",
+-    Numpad3: "numpad3",
+-    Numpad4: "numpad4",
+-    Numpad5: "numpad5",
+-    Numpad6: "numpad6",
+-    Numpad7: "numpad7",
+-    Numpad8: "numpad8",
+-    Numpad9: "numpad9",
+-    NumpadMultiply: "numpad_multiply",
+-    NumpadAdd: "numpad_add",
+-    NumpadSubtract: "numpad_subtract",
+-    NumpadDecimal: "numpad_decimal",
+-    NumpadDivide: "numpad_divide",
+-    NumLock: "numlock",
+-    VolumeMute: "volume_mute",
+-    VolumeUp: "volume_up",
+-    VolumeDown: "volume_down",
+-  };
+-  if (named[code]) return named[code];
+-  const letter = /^Key([A-Z])$/.exec(code);
+-  if (letter) return letter[1].toLowerCase();
+-  const digit = /^Digit([0-9])$/.exec(code);
+-  if (digit) return `digit${digit[1]}`;
+-  const functionKey = /^F([1-9]|1[0-2])$/.exec(code);
+-  if (functionKey) return `f${functionKey[1]}`;
+-  return null;
+-}
+-
+ const selectedCaptureModifiers = reactive(new Set<KeyCode>());
+ const pressedCaptureModifiers = new Set<KeyCode>();
+ const MODIFIER_KEYS = new Set<KeyCode>([
+diff --git a/src/pages/ConnectionPage.vue b/src/pages/ConnectionPage.vue
+index 1f7b52f..d421c30 100644
+--- a/src/pages/ConnectionPage.vue
++++ b/src/pages/ConnectionPage.vue
+@@ -1276,7 +1276,7 @@ onUnmounted(() => {
+           <button
+             class="secondary-button"
+             type="button"
+-            :disabled="scanningAudio || audioBusy || !runtime?.platform.windowsApiAvailable"
++            :disabled="scanningAudio || audioBusy || (!runtime?.platform.windowsApiAvailable && runtime?.platform.platform !== 'linux')"
+             @click="scanAudio()"
+           >
+             {{ scanningAudio ? t("读取中…") : t("刷新设备列表") }}

@@ -2,12 +2,14 @@
 # SPDX-License-Identifier: GPL-3.0-only
 """Expose a paired RC003's ATVV audio as a PipeWire microphone."""
 import argparse
+import json
 from contextlib import ExitStack, contextmanager
 import fcntl
 from functools import wraps
 import os
 from pathlib import Path
 import signal
+import threading
 import subprocess
 import sys
 import time
@@ -58,6 +60,19 @@ def characteristics(objects, device):
             if (c := i.get(GATT)) and c['Service'] in services}
 
 
+def model_number(objects, device, bus):
+    dis = '0000180a-0000-1000-8000-00805f9b34fb'
+    model = '00002a24-0000-1000-8000-00805f9b34fb'
+    services = {p for p, i in objects.items() if i.get(SERVICE, {}).get('Device') == device
+                and i[SERVICE]['UUID'].lower() == dis}
+    for path, interfaces in objects.items():
+        char = interfaces.get(GATT, {})
+        if char.get('Service') in services and char.get('UUID', '').lower() == model:
+            value = dbus.Interface(bus.get_object(BLUEZ, path), GATT).ReadValue(dbus.Dictionary(signature='sv'), timeout=3)
+            return bytes(value).rstrip(b'\0').decode('ascii', errors='replace').strip().upper()
+    return ''
+
+
 def stop_process(child):
     if child.poll() is None:
         child.terminate()
@@ -102,7 +117,8 @@ def microphone():
 
 
 class Stream:
-    def __init__(self, audio, send, output):
+    def __init__(self, audio, send, output, event=lambda *args: None):
+        self.event = event
         self.audio, self.send, self.output = audio, send, output
         self.ready = self.opened = False
         self.session = None
@@ -131,6 +147,7 @@ class Stream:
             if not self.audio.configure(packet):
                 raise RuntimeError('Remote did not negotiate supported 16 kHz audio')
             self.ready = True
+            self.event('ready', list(packet))
             log('ATVV ready: 16000 Hz mono')
         elif self.ready:
             if op == 0x08:
@@ -141,11 +158,13 @@ class Stream:
                 if self.session != packet[3]:
                     self.audio.reset()
                     self.session, self.samples = packet[3], 0
+                    self.event('voice_start', self.session)
                     log('Voice started')
             elif op == 0x0a and len(packet) >= 7:
                 self.audio.reset(int.from_bytes(packet[4:6], 'big', signed=True), packet[6])
             elif op == 0x00:
                 if self.session is not None:
+                    self.event('voice_stop', self.samples)
                     log(f'Voice ended: {self.samples} samples')
                 self.opened, self.session = False, None
                 self.audio.reset()
@@ -158,7 +177,7 @@ class Stream:
                 self.samples += len(pcm) // 2
 
 
-def run(args):
+def run(args, event=lambda *args: None, control=None):
     DBusGMainLoop(set_as_default=True)
     bus = dbus.SystemBus()
     manager = dbus.Interface(bus.get_object(BLUEZ, '/'), MANAGER)
@@ -180,6 +199,10 @@ def run(args):
         time.sleep(0.1)
     else:
         raise RuntimeError('ATVV service unavailable; wake or reconnect the remote')
+    model = model_number(manager.GetManagedObjects(), path, bus)
+    if model and model != 'RC003':
+        raise RuntimeError('This Ubuntu audio backend requires the verified RC003 profile')
+    event('model', model.lower() if model else 'unknown')
     tx, txprops = chars[UUIDS[1]]
     writer = dbus.Interface(bus.get_object(BLUEZ, tx), GATT)
     mode = 'request' if 'write' in txprops['Flags'] else 'command'
@@ -219,7 +242,12 @@ def run(args):
         def output(pcm):
             out.write(pcm)
             out.flush()
-        stream = Stream(codec, send, output)
+            if getattr(args, 'recording', False):
+                import base64
+                event('recording', base64.b64encode(pcm).decode('ascii'))
+        stream = Stream(codec, send, output, event)
+        if control:
+            control(codec, loop)
 
         @guard
         def changed(interface, props, invalid, object_path=None):
@@ -290,12 +318,31 @@ def run(args):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--device', metavar='ADDRESS', help='select one paired RC003')
+    parser.add_argument('--desktop', action='store_true', help=argparse.SUPPRESS)
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument('--list', action='store_true', help='list paired RC003 devices')
     mode.add_argument('--probe', action='store_true', help='verify GATT negotiation and exit')
     mode.add_argument('--pcm', action='store_true', help='write raw 16 kHz mono s16le to stdout')
     try:
-        run(parser.parse_args())
+        args = parser.parse_args()
+        if args.desktop:
+            def event(kind, value):
+                print(json.dumps([kind, value]), flush=True)
+            def command_reader(codec, loop):
+                def read():
+                    try:
+                        for line in sys.stdin:
+                            message = json.loads(line)
+                            if 'gain' in message:
+                                GLib.idle_add(codec.gain, float(message['gain']))
+                            if 'recording' in message:
+                                args.recording = bool(message['recording'])
+                    finally:
+                        GLib.idle_add(loop.quit)
+                threading.Thread(target=read, daemon=True).start()
+            run(args, event, command_reader)
+        else:
+            run(args)
     except (OSError, RuntimeError, ValueError, ImportError, dbus.DBusException, subprocess.SubprocessError) as exc:
         # BlueZ may include a device address in the detailed D-Bus exception message.
         log(exc.get_dbus_name() if isinstance(exc, dbus.DBusException) else str(exc))

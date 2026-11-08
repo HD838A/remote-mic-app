@@ -12,6 +12,7 @@ class Audio:
             'sayall_audio_new': (ptr, []), 'sayall_audio_free': (None, [ptr]),
             'sayall_capabilities': (size, [ptr, c.c_char_p, size]),
             'sayall_command': (size, [ptr, byte, byte, c.POINTER(byte)]),
+            'sayall_audio_gain': (None, [ptr, c.c_double]),
             'sayall_audio_reset': (None, [ptr, c.c_int32, byte]),
             'sayall_decode': (size, [ptr, c.c_char_p, size, c.POINTER(c.c_int16), size]),
         }
@@ -25,6 +26,9 @@ class Audio:
         if self.handle:
             self.lib.sayall_audio_free(self.handle)
             self.handle = None
+
+    def gain(self, db):
+        self.lib.sayall_audio_gain(self.handle, db)
 
     def configure(self, packet):
         return self.lib.sayall_capabilities(self.handle, packet, len(packet))

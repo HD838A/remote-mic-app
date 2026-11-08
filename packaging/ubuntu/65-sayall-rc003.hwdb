@@ -1,7 +1,4 @@
-# RC003 keyboard-page usages from RemoteButtons.swift / RemoteVoiceFunctionMapper.swift.
-# F13 through F15 can be bound in a dictation app or a focused desktop app.
+# Expose the vendor Back usage as an evdev event; keep voice distinct from a keyboard's F5.
 evdev:input:b0005v2717p32B8*
  KEYBOARD_KEY_7003e=f13
- KEYBOARD_KEY_70035=f14
- KEYBOARD_KEY_70065=f15
  KEYBOARD_KEY_700f1=esc

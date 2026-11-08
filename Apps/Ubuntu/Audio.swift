@@ -4,6 +4,7 @@ import Foundation
 // Each BlueZ connection owns its own decoder, negotiated format and partial frame.
 private final class Connection {
     var capabilities: ATVVCapabilities?
+    var gainDB = 0.0
     var frames = FrameAccumulator()
     let decoder = IMAADPCMDecoder()
 }
@@ -53,6 +54,11 @@ public func command(_ handle: UnsafeMutableRawPointer, _ opcode: UInt8, _ sessio
     return payload.count
 }
 
+@_cdecl("sayall_audio_gain")
+public func gain(_ handle: UnsafeMutableRawPointer, _ decibels: Double) {
+    connection(handle).gainDB = min(24, max(0, decibels))
+}
+
 @_cdecl("sayall_audio_reset")
 public func reset(_ handle: UnsafeMutableRawPointer, _ predictor: Int32, _ step: UInt8) {
     let state = connection(handle)
@@ -68,7 +74,7 @@ public func decode(_ handle: UnsafeMutableRawPointer, _ bytes: UnsafePointer<UIn
           (state.frames.pending.count + count) * 2 <= capacity else { return -1 }
     var written = 0
     for frame in state.frames.append(Data(bytes: bytes, count: count), frameSize: caps.frameSize) {
-        let samples = PCMPostprocessor.process(state.decoder.decode(frame), gainDB: 0)
+        let samples = PCMPostprocessor.process(state.decoder.decode(frame), gainDB: state.gainDB)
         samples.withUnsafeBufferPointer { buffer in
             output.advanced(by: written).update(from: buffer.baseAddress!, count: buffer.count)
         }

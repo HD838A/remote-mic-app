@@ -1,25 +1,30 @@
-# Ubuntu RC003 候选版本
+# Ubuntu 桌面版构建与验收
 
-Ubuntu 24.04 或 26.04，BlueZ、PipeWire 和 WirePlumber。请在当前用户的图形会话内运行。当前提供命令行桥接与 Debian 安装包，复用 macOS 的 ATVV 协商、分帧、解码和 PCM 后处理。实体遥控器验收遵循[跨硬件音频合同](HardwareVoiceAudioContract.md)。
+Ubuntu 24.04 或 26.04 桌面，BlueZ、PipeWire、WirePlumber 和带 RemoteDesktop 门户的图形会话。当前硬件验收型号为小米蓝牙语音遥控器 2 Pro（RC003）。
 
-## 构建与安装
+## 安装及连接
 
-在仓库根目录，使用官方 Swift 6.2 Ubuntu 24.04 工具链、GNU make、binutils 和 dpkg-dev 编译。测试需要系统 Python 3、python3-gi 和 python3-dbus。
+1. 下载当前 PR 的 Ubuntu CI 测试包，在下载目录运行 `sudo apt install ./sayall-ubuntu_*.deb`。从应用菜单启动「无线麦 SayAll」，或在终端运行 `sayall-ubuntu`。
+2. 按向导打开 Ubuntu 蓝牙设置。长按遥控器主页和菜单键配对。若已配对，安装后断开并重连一次，让 udev 应用设备权限。在向导里选中遥控器并连接。
+3. 在听写工具的麦克风列表里选 **SayAll RC003**。在向导里选择语音输入工具或自定义其快捷键。要使用改键，在「按键」中开启全按键支持，并在 Ubuntu 的桌面授权窗口允许键盘和指针控制。系统权限按当前用户和这支遥控器生效。
+4. 在 Codex 输入框中按住语音键说一句话，松开检查文字。由用户选择的 Linux 听写工具完成转写。按键页可为确认、返回、菜单等键设置快捷键或组合动作。
+5. 在托盘菜单退出即可释放连接。可在「设置」中启用登录启动。卸载使用 `sudo apt remove sayall-ubuntu`，然后重新连接遥控器。
+
+## 从源码编译
+
+构建需要 Swift 6.2、近期稳定版 Rust 和 Cargo、Node.js 22.12 以上、pnpm 10.15.0，以及系统开发包。原生 Vue/Tauri 桌面取自[官方 Windows 公开源码的固定版本](https://github.com/GetSayAll/remote-mic-app-windows/tree/5410f6d30e1061607c8ccbbca7c6c7f1cc474951)。编译脚本检出精确提交，应用 Ubuntu 平台补丁，按 pnpm 和 Cargo 锁文件构建。音频库直接编译本仓库中的 ATVV 实现。已安装软件无需这些开发工具。
 
 ```sh
-make -f packaging/ubuntu/Makefile test package
+sudo apt install build-essential git patch dpkg-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libssl-dev libxdo-dev python3-dbus python3-gi python3-pil gir1.2-atspi-2.0
+SAYALL_TEST_FRONTEND=1 make -f packaging/ubuntu/Makefile test package
 sudo apt install ./.build/ubuntu/sayall-ubuntu_*.deb
 ```
 
-## 连接与使用
-
-1. 在 Ubuntu 的蓝牙设置里配对小米蓝牙遥控器 2 Pro（RC003）。按住主页和菜单键可进入配对。安装后重新连接一次，让系统加载此型号专用的键位表。
-2. 运行 `sayall-ubuntu --list` 和 `sayall-ubuntu --probe`。已配对多支时，用 `--device ADDRESS` 选择其中一支。探测成功应显示 `ATVV ready: 16000 Hz mono`。
-3. 在终端运行 `sayall-ubuntu`，保持进程运行。在支持麦克风的输入工具中选 **SayAll RC003**。将焦点放到 Codex 输入框，使用该工具的听写功能。如需按住说话，将输入工具的快捷键设为 `F13`。确认键发送 Enter，方向键用于导航，返回键发送 Esc。可在 Codex 的「设置 → 键盘快捷键」里把电视键（F14）绑定为新建会话，把菜单键（F15）绑定为切换会话。此版本输出音频，由所选输入工具完成转写。
-4. `Ctrl+C` 会释放蓝牙通知并移除本进程创建的音频节点。遥控器断开时桥接会退出，唤醒并重连后再次启动即可。需要登录时自动运行和断线重试时，执行 `systemctl --user enable --now sayall-ubuntu.service`，停用时执行 `systemctl --user disable --now sayall-ubuntu.service`。卸载使用 `sudo apt remove sayall-ubuntu`，然后重连遥控器。
+完整 Ubuntu 24.04 构建环境及无硬件桌面冒烟测试见 [Ubuntu CI](../.github/workflows/ubuntu-ci.yml)。`SAYALL_PUBLIC_CHECKOUT` 可指定已包含固定提交的本地上游检出。安装包包括 Linux 桌面程序、只读回眸 MCP 服务、BlueZ/PipeWire 后端及 Swift 音频库。
 
 ## 验收
 
-- 开机首次协商、短按、长句（超过 60 秒）、两段连续语音，应从同一遥控器收到完整首尾。正常松手后日志应给出该段的样本数。听写软件选中虚拟麦克风后，逐句核对 Codex 输入框里的文字。
-- 蓝牙断开、权限不足和 PipeWire 停止时，检查进程的诊断与退出结果，再检查能否重启恢复。确认其他键盘、默认扬声器及默认麦克风不变。
-- `sayall-ubuntu --pcm` 输出 16 kHz 单声道有符号小端 16 位 PCM，仅在显式重定向时写盘。`--probe` 只读回能力响应并退出。实物采样、听写结果与用户的设备地址均不提交到仓库。
+- 在欢迎向导和主窗口检查公开版的连接、按键、组合动作、推荐、回眸、设置和账号入口。验证修改设置后重启能恢复。账号服务遵循上游公开构建的可用范围。
+- 验证按键录入、自定义快捷键、组合动作和桌面权限撤销。验证选定遥控器以外的键盘正常。只在明确启用回眸时核对可访问的前台编辑框，密码输入框不参与捕获。
+- 用同一设备测试短句、超过 60 秒的长句和连续两段话，对照[硬件语音合同](HardwareVoiceAudioContract.md)。关掉蓝牙后再启用，核对 UI 连接状态及麦克风节点清理、恢复。
+- 排查音频时先从托盘退出桌面程序，再运行 `/usr/bin/python3 /usr/lib/sayall-ubuntu/bridge.py --probe`。成功会显示 `ATVV ready: 16000 Hz mono`。`--pcm` 为显式诊断模式，输出 16 kHz 单声道 s16le。公开验证材料请隐藏设备地址和用户语音。

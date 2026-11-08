@@ -52,7 +52,7 @@
 
 ## 用户、技术与支持文档
 
-- [Ubuntu RC003 构建、安装与验收](Testing/Ubuntu.md)。
+- [Ubuntu 桌面版构建、安装与验收](Testing/Ubuntu.md)。
 
 - 普通用户入口：[`README.md`](README.md)、[`TROUBLESHOOTING.md`](TROUBLESHOOTING.md)。
 - 技术架构：[`TECHNICAL.md`](TECHNICAL.md)。
