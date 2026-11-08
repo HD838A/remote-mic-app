@@ -126,12 +126,27 @@ enum SayAllMCPFileSecurity {
         guard Darwin.lstat(url.path, &metadata) == 0 else {
             throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
         }
-        return FileStatus(mode: metadata.st_mode, size: metadata.st_size)
+        return FileStatus(
+            mode: metadata.st_mode,
+            size: metadata.st_size,
+            device: metadata.st_dev,
+            inode: metadata.st_ino,
+            modifiedSeconds: metadata.st_mtimespec.tv_sec,
+            modifiedNanoseconds: metadata.st_mtimespec.tv_nsec,
+            changedSeconds: metadata.st_ctimespec.tv_sec,
+            changedNanoseconds: metadata.st_ctimespec.tv_nsec
+        )
     }
 
-    struct FileStatus {
+    struct FileStatus: Equatable {
         let mode: mode_t
         let size: off_t
+        let device: dev_t
+        let inode: ino_t
+        let modifiedSeconds: Int
+        let modifiedNanoseconds: Int
+        let changedSeconds: Int
+        let changedNanoseconds: Int
 
         var isDirectory: Bool { mode & S_IFMT == S_IFDIR }
         var isRegularFile: Bool { mode & S_IFMT == S_IFREG }
