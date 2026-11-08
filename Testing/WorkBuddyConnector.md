@@ -6,8 +6,8 @@
 
 1. 将 `packaging/workbuddy/sayall-history/` 内的文件打包成 ZIP。ZIP 根目录应直接包含 `connector-meta.json`、`mcp.json`、`token-schema.json`、`icon.svg` 和 `skills/`。用 WorkBuddy 官方连接器测试或审核入口加载候选包。
 2. 在无线麦 SayAll 的“回眸”中用两款 App 生成无隐私的测试记录。开启“本地 Agent 访问”，以 WorkBuddy 为名称创建专用只读授权。
-3. 从当前版本的授权结果复制标准 MCP JSON。在本机查看 `mcpServers.sayall_history.env`。将 `SAYALL_MCP_CLIENT_ID` 和 `SAYALL_MCP_ACCESS_TOKEN` 分别填入 WorkBuddy 连接器表单的“客户端 ID”和“访问令牌”。测试结束后清空剪贴板。凭据只用于本机配置。
-4. 连接时确认 WorkBuddy 接受两项必填字段，并将访问令牌显示为密码输入。启用连接器后，确认能初始化并发现 `list_transcript_apps` 和 `query_transcripts`。
+3. 在新授权下展开“WorkBuddy 连接器”。点击“复制客户端 ID”，粘贴到连接器表单的“客户端 ID”字段。然后点击“复制访问令牌”，粘贴到“访问令牌”字段。每次只复制一项，完成后清空剪贴板。
+4. 确认回眸页面只显示复制操作。复制后的剪贴板每次只含对应的字段值。连接时确认 WorkBuddy 接受两项必填字段，并将访问令牌显示为密码输入。启用连接器后，确认能初始化并发现 `list_transcript_apps` 和 `query_transcripts`。
 
 如平台拒绝 ZIP、缺少任一字段、令牌未遮蔽、Helper 无法启动或工具列表不全，判定失败。平台需要按 [WorkBuddy 连接器规范](https://open.workbuddy.cn/docs/connector) 解析表单并注入凭据。
 

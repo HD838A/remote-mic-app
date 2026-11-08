@@ -1146,6 +1146,11 @@
 "statistics.transcripts.agent_access.error.remove_configuration" = "%@ access was revoked, but its client configuration could not be removed automatically. Remove sayall_history manually.";
 "statistics.transcripts.agent_access.error.duplicate_client" = "This client already has an active authorization. Use it or revoke it before creating another.";
 "statistics.transcripts.agent_access.error.copy_install_prompt" = "Could not copy the install prompt. Try again.";
+"statistics.transcripts.agent_access.workbuddy" = "WorkBuddy Connector";
+"statistics.transcripts.agent_access.workbuddy_description" = "Copy each value into its matching WorkBuddy connector field on this Mac.";
+"statistics.transcripts.agent_access.workbuddy_copy_id" = "Copy Client ID";
+"statistics.transcripts.agent_access.workbuddy_copy_token" = "Copy Access Token";
+"statistics.transcripts.agent_access.error.copy_workbuddy_credential" = "Could not copy the WorkBuddy credential. Try again.";
 "onboarding.side.permissions" = "Permission Check";
 "onboarding.side.remote" = "Connection Check";
 "onboarding.side.audio" = "Audio Check";
