@@ -20,7 +20,11 @@ def apps():
 
 def application(target):
     available = apps()
-    return available.get(ALIASES.get(target, target)) or available.get(target + '.desktop')
+    entry = available.get(ALIASES.get(target, target)) or available.get(target + '.desktop')
+    if not entry and target == 'vokie':
+        return next((app for app in available.values() if app.get_name().casefold() == 'vokie'
+                     or os.path.basename(app.get_executable()).casefold() == 'vokie'), None)
+    return entry
 
 
 def active_window():
