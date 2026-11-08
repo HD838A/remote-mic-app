@@ -184,8 +184,8 @@
   - 2026-10-15 统一回眸操作顺序为复制、播放/暂停、停止、分享、删除，并统一分享图标，单条、应用和全部删除均靠右；停止按钮保持占位，空闲时禁用。布局验证见 `Bugs/2026-10-15-reflections-action-alignment.html`，父项实机边界保留。
   - 2026-10-15 修复回眸录音暂停/继续/停止、无线麦前台应用回退、文字与原始录音开关耦合，以及关联记录重复删除入口；真实微信、无线麦 App 和播放控制仍需人工验收。
 - [ ] 在无线麦SayAll.app 内集成本地语音历史只读 MCP
-  - 已将唯一正式运行时实现为 App 内 Swift `stdio` Helper，提供默认关闭总开关、每客户端 256-bit 授权、SHA-256 哈希、撤销、脱敏审计、App 列表和按时间/App 分页查询；App 内可一键连接 Codex、Claude Code、Cursor 和 OpenCode，并保留标准 MCP JSON、Codex TOML 手动降级，用户不需要 Node.js、npm 或开发工具。`GetSayAll/sayall-mcp` 只提供公开契约、Schema 和集成资料。
-  - 主仓库提供中英文 AI 安装与 MCP 配置指南，约束 AI 必须先取得用户明确授权、不得静默开启访问或上传令牌，并说明完整 App 检查、快速连接、手动配置、验证和排障流程。
+  - 已将唯一正式运行时实现为 App 内 Swift `stdio` Helper，提供默认关闭总开关、每客户端 256-bit 授权、SHA-256 哈希、撤销、脱敏审计、App 列表和按时间/App 分页查询；App 内可一键连接 Codex、Claude Code、Cursor 和 OpenCode，其他本机客户端可通过一行安装提示词连接，用户不需要 Node.js、npm 或开发工具。`GetSayAll/sayall-mcp` 只提供公开契约、Schema 和集成资料。
+  - 主仓库提供中英文 AI 安装与 MCP 配置指南，约束 AI 必须先取得用户明确授权、不得静默开启访问或上传令牌，并说明完整 App 检查、快速连接、Agent 安装、验证和排障流程。
   - canonical Helper 路径统一为 `/Applications/SayAll.app/Contents/Helpers/SayAllMCP`；非标准目录使用运行中 App 的真实路径。授权状态只保存 Helper 路径指纹，App 移动、改名或旧记录缺少指纹时显示移除并重新连接提示，不自动覆盖其他 MCP 配置。
   - 未发布的 Node 实现、旧目录和旧事件格式不纳入兼容；正式 `v1` 发布后保持 Helper 路径、`serve` 参数、环境变量、工具名、已发布字段语义和 `RemoteMic/MCP/v1/access.json` 向后兼容；`v1` 输出 Schema 为封闭对象，新增输出字段或其他破坏性变化使用新工具名或并行 `v2`。
   - MCP 只读现有 `Application Support/RemoteMic/Transcripts/v1`，不监听网络、不常驻、不修改或删除历史；自动化已覆盖四客户端配置合并、冲突拒绝、私有备份、移除和失败授权回滚，仍需在四个真实客户端完成连接、分页读取、撤销、关闭后拒绝和第三方数据处理人工验收后再勾选。
@@ -258,7 +258,7 @@
 - [x] 设计并实现完整的首次 Onboarding、权限设置流程，并重新布局“连接”和“按键映射”页面 <!-- workshop:status=已完成;priority=P1 -->
   - 首次启动使用可恢复、不可跳过的多步骤 Onboarding，而不是一次弹出全部权限或只展示功能介绍。当前流程依次覆盖：欢迎、单页选择当前构建实际包含的控制来源、选择输入工具、对应必要权限、所选来源真实连接与普通按键、音频回环设备选择、同一来源真实语音文字测试、三个普通按键和完成页。
   - 2026-08-18 修复手机分支按需音频门禁：iPhone/网页版要求受支持的虚拟音频设备已选择且仍存在，实际输出在语音开始时建立并由下一页真实声音和文字验证；停止语音后的正常释放不再阻塞完成页。小米遥控器与 Chromecast 等桥接实体遥控器仍要求持续输出就绪。三种控制方式统一要求蓝牙、输入监控和辅助功能全部开启，手机本地网络由下一页真实连接验证；本地测试包强制注入并校验 Web Relay 配置后才可交付。
-  - 2026-11-07 把按需音频门禁扩到控制来源：Siri Remote 的语音音频由 HCI 组件在按下语音键时建立，连接遥控器不会启动引擎，因此音频页与完成页不再要求它提前持续 Ready；小米遥控器和 Chromecast 的桥在连接期间保持 Ready，门禁不变。设备仍必须选中且仍在受支持列表里。诊断新增 `audio_gate=on_demand|ready_required`。现场记录见 [Bug 诊断记录](Bugs/2026-11-07-siri-remote-onboarding-audio-gate.md)，真实 Siri Remote 重跑待验收。
+  - 2026-11-07 把按需音频门禁扩到控制来源：Siri Remote 的语音音频由 HCI 组件在按下语音键时建立，连接遥控器不会启动引擎，因此音频页与完成页不再要求它提前持续 Ready；小米遥控器和 Chromecast 的桥在连接期间保持 Ready，门禁不变。设备仍必须选中且仍在受支持列表里。诊断新增 `audio_gate=on_demand|ready_required`。现场记录见 [Bug 诊断记录](Bugs/2026-11-07-siri-remote-onboarding-audio-gate.md)；2026-11-08 真机复验通过（只有一只苹果遥控器的机器可走完向导）。
   - [x] 在 Onboarding 增加遥控器蓝牙配对提示：同时长按“主页 Home + 菜单 Menu”可使遥控器进入蓝牙配对模式。当用户需要首次配对、清除旧连接后重新配对，或连接排障需要重置配对关系时，明确展示这组按键和后续在 macOS“系统设置 → 蓝牙”中重新连接的操作；不能把进入配对模式误写成 App 已自动完成蓝牙重置。
     - 2026-10-23 核对实现状态：提示已随 `1.8.25` Stable 发布（见 `Resources/en.lproj/ReleaseHistory.md`）。`OnboardingView.swift` 的 `physicalRemoteContent` 按 `onboardingControlSource` 渲染 `onboarding.remote.first_pairing.wake` 与 `onboarding.remote.first_pairing.pair` 两步，中英文文案齐备；`open_bluetooth` 提供“打开蓝牙设置”入口。措辞只说明如何进入配对模式，未声称 App 已自动重置蓝牙连接。
     - 两处与原文字面的偏差：**提示落在“遥控器”步骤而非欢迎页**（`OnboardingFlow.visibleCases` 顺序为 welcome → remoteAvailability → permissions → remote → …）；**“系统设置 → 蓝牙”重新连接作为页面独立按钮提供，未并入配对提示的步骤卡**。按产品实际行为记录为已完成，如需把提示前移到欢迎页或并入步骤卡另开工作项。
@@ -566,6 +566,7 @@
   - 2026-08-10 修复 monitored fallback 下左右键按住不能连续移动其他 APP 文本光标：当物理左右键与方向动作完全匹配且没有辅助动作时改用 macOS 原生事件；非匹配映射仍保留 App 连发，并修正 timer 重复累加原生按住状态的问题。seized/monitored、无线麦前台和非匹配动作已通过硬件模拟，实体遥控器仍待 Preview 验收。
   - 2026-08-10 基础按键继续补充 Command-W、Command-X、Command-A、Command-Z、Command-Shift-Z、Command-F 和 Command-S；这些固定组合与既有 Command-Q 一样禁止按住重复。无线麦自身补上标准 macOS 菜单，可使用 Command-Q 退出、Command-W 关闭当前窗口。
   - 2026-08-13 基础按键补充 Command-Delete，沿用固定组合键的一次触发策略；动作分类、键码与 Command 修饰键已有自动化覆盖，真实遥控器和目标 App 行为仍需人工验收。
+  - 2026-11-08 固定快捷键补充 12 个预设，此前只能靠自定义快捷键逐个录制。基础按键 8 个：最小化窗口（Command-M）、切换全屏（Control-Command-F）、新建标签页（Command-T）、上一个/下一个标签页（Command-Shift-[ / ]）、切换窗口（Command-Backtick）、隐藏当前 App（Command-H）、新建窗口（Command-N）；系统与媒体 4 个：调度中心（Control-Up）、应用程序窗口（Control-Down）、向左/向右切换桌面（Control-Left / Control-Right）。全部沿用固定组合键的一次触发策略；动作分类、键码、修饰键与紧凑/完整文案已有自动化覆盖，真实遥控器和目标 App 行为仍需人工验收。Control 方向键四项是 macOS 默认快捷键，用户在系统设置改过即失效，属用户配置边界。真机首测这四项无响应：日志显示动作已执行、事件带 Control 且未被拦截，根因是 WindowServer 的符号快捷键只认真实按键流里的修饰键边沿，不接受合成事件自带的 flags；已改为显式投递 Control 按下/抬起边沿、箭头补 Fn 与 NumericPad，待真机复测。2026-11-08 追加锁定屏幕（Control-Command-Q）与截屏（Command-Shift-3）两项，复用同一套修饰键边沿投递（已泛化为 postSymbolicHotKey，按真实键入顺序按下/逆序抬起修饰键）；截屏依赖系统「键盘快捷键 → 截屏」处于启用状态，用户机器上该项当前为关闭，属外部配置边界。
 - [ ] 支持更容易购买的低价 ATVV 语音遥控器 <!-- workshop:status=进行中;priority=P2 -->
   - 2026-08-08 已实际测试三款硬件：小米蓝牙语音遥控器第三方兼容版、Ugoos UR02 和音仕达录音笔。三款设备在当前真实 Mac 环境中均无法建立蓝牙连接，因此没有进入 GATT、ATVV、HID、音频格式或 App 适配阶段，当前均不能列为兼容或推荐设备。
   - 公开的 Linux / BlueZ 日志可以证明特定 UR02 样机曾暴露 ATVV v1.0 和 16kHz ADPCM，但不能证明同型号、同批次或当前样机能与 macOS 配对。此前将 UR02 列为优先工程样机的判断已经撤回，除非找到明确的 macOS 配对方法、固件差异证据或另一只样机完成复验，否则暂停继续投入。

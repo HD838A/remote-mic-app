@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 @testable import RemoteMic
 @testable import SayAllMCPKit
@@ -5,6 +6,38 @@ import Testing
 
 @Suite("MCP client quick connections")
 struct MCPClientIntegrationServiceTests {
+    @Test @MainActor func installPromptKeepsCredentialsInSeparateClipboardData() throws {
+        let model = TranscriptAgentAccessModel(
+            authorizationStore: SayAllMCPAuthorizationStore(
+                accessRoot: temporaryDirectory("install-prompt")
+            ),
+            helperExecutableURL: { URL(fileURLWithPath: "/usr/bin/true") }
+        )
+        model.setEnabled(true)
+        model.clientName = "Install prompt test"
+        model.createAuthorization()
+        let configuration = try #require(model.generatedConfiguration)
+        let pasteboard = NSPasteboard.withUniqueName()
+        defer { pasteboard.releaseGlobally() }
+
+        model.copyInstallPrompt(format: "Install sayall_history using %@.", to: pasteboard)
+
+        let firstCopy = try #require(model.copiedInstallPrompt)
+        let type = NSPasteboard.PasteboardType("com.sayall.mcp-install.\(firstCopy.uuidString.lowercased())")
+        let prompt = try #require(pasteboard.string(forType: .string))
+        #expect(prompt.contains(type.rawValue))
+        let hasLineBreak = prompt.contains { $0.isNewline }
+        #expect(!hasLineBreak)
+        #expect(!prompt.contains(configuration.authorization.token))
+        #expect(!prompt.contains(configuration.command))
+        #expect(pasteboard.string(forType: type) == configuration.standardJSON)
+
+        model.copyInstallPrompt(format: "Install sayall_history using %@.", to: pasteboard)
+
+        #expect(model.copiedInstallPrompt != firstCopy)
+        #expect(pasteboard.string(forType: type) == nil)
+    }
+
     @Test func codexAddsAndUpdatesOnlyItsManagedBlock() throws {
         let home = temporaryDirectory("codex-managed")
         let file = home.appendingPathComponent(".codex/config.toml")
@@ -381,7 +414,12 @@ struct MCPClientIntegrationServiceTests {
             homeDirectory: home,
             applicationURLProvider: { _ in nil },
             executableURLProvider: { _ in home.appendingPathComponent("claude") },
-            commandRunner: { _, arguments in arguments.contains("remove") ? 1 : 0 }
+            commandRunner: { _, arguments in
+                guard arguments.contains("remove") else { return 0 }
+                let revokedAt = try store.listAuthorizations().first?.revokedAt
+                #expect(revokedAt != nil)
+                return 1
+            }
         )
         let model = TranscriptAgentAccessModel(
             authorizationStore: store,

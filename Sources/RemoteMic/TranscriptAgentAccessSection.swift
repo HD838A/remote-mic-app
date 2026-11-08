@@ -222,35 +222,26 @@ struct TranscriptAgentAccessSection: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 10) {
-                Button {
-                    model.copyStandardConfiguration()
-                } label: {
-                    Label(
-                        model.copiedConfiguration == .standardJSON
-                            ? "statistics.transcripts.agent_access.copied"
-                            : "statistics.transcripts.agent_access.copy_standard",
-                        systemImage: model.copiedConfiguration == .standardJSON
-                            ? "checkmark"
-                            : "doc.on.doc"
-                    )
-                }
-                .buttonStyle(.bordered)
+                Text("statistics.transcripts.agent_access.install_prompt_preview")
+                    .font(.system(size: 12))
+                    .lineLimit(1)
 
                 Button {
-                    model.copyCodexConfiguration()
+                    model.copyInstallPrompt(
+                        format: localization.text("statistics.transcripts.agent_access.install_prompt")
+                    )
                 } label: {
                     Label(
-                        model.copiedConfiguration == .codexTOML
-                            ? "statistics.transcripts.agent_access.copied"
-                            : "statistics.transcripts.agent_access.copy_codex",
-                        systemImage: model.copiedConfiguration == .codexTOML
-                            ? "checkmark"
-                            : "doc.on.doc"
+                        model.copiedInstallPrompt == nil
+                            ? "statistics.transcripts.agent_access.copy_install_prompt"
+                            : "statistics.transcripts.agent_access.copied",
+                        systemImage: model.copiedInstallPrompt == nil ? "doc.on.doc" : "checkmark"
                     )
+                    .fixedSize()
                 }
                 .buttonStyle(.bordered)
+                .font(.system(size: 12, weight: .medium))
             }
-            .font(.system(size: 12, weight: .medium))
         }
         .padding(12)
         .background(
@@ -350,6 +341,8 @@ struct TranscriptAgentAccessSection: View {
             key = "statistics.transcripts.agent_access.error.remove_configuration"
         case .duplicateClient:
             key = "statistics.transcripts.agent_access.error.duplicate_client"
+        case .copyInstallPromptFailed:
+            key = "statistics.transcripts.agent_access.error.copy_install_prompt"
         }
         let text = localization.text(key)
         if let client = model.failedClient {

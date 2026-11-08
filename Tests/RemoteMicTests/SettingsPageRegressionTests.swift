@@ -173,17 +173,35 @@ struct SettingsPageRegressionTests {
             "applyDefaultMappingRemoteAfterConnectionChange()"
         ))
 
-        // Chromecast 的「连接即选中」必须经过统一策略：已连接的小米不能被抢占。
+        // 链路就绪不再改选中态。冷启动时 Chromecast 常比小米先 ready，小米 2 秒后才
+        // ready，两边都「连接即选中」就会让画布 小米 → Chromecast → 小米 来回跳。
+        // 只有首次使用（还没有选中项）才允许自动选，其余交给「上次选中 + 重连窗口」。
         let ensureStart = try #require(modelSource.range(
             of: "private func ensureChromecastProfile() -> UUID {"
         ))
         let ensureRemainder = modelSource[ensureStart.upperBound...]
         let ensureEnd = try #require(ensureRemainder.range(
-            of: "private var hasConnectedXiaomiProfile"
+            of: "private func refreshChromecastActiveControlIDs"
         ))
-        #expect(ensureRemainder[..<ensureEnd.lowerBound].contains(
-            "RemoteDeviceNamePolicy.shouldAdoptConnectionSelection("
+        let ensureBody = ensureRemainder[..<ensureEnd.lowerBound]
+        #expect(ensureBody.contains("if settings.selectedRemoteProfile == nil {"))
+        #expect(!ensureBody.contains("RemoteDeviceNamePolicy.shouldAdoptConnectionSelection("))
+
+        let activateStart = try #require(modelSource.range(
+            of: "private func activateRemoteProfile(for bridge: XiaomiBluetoothBridge) -> UUID? {"
         ))
+        let activateRemainder = modelSource[activateStart.upperBound...]
+        let activateEnd = try #require(activateRemainder.range(
+            of: "/// Refresh display metadata without starting discovery"
+        ))
+        #expect(activateRemainder[..<activateEnd.lowerBound].contains(
+            "if settings.selectedRemoteProfile == nil {"
+        ))
+
+        // 进入按键页以「上次选中」为起点，留出重连窗口；窗口到期仍未连上才回退。
+        #expect(modelSource.contains("beginWaitingForPreviousRemote(trigger: \"mapping_page\")"))
+        #expect(modelSource.contains("reason=previous_remote_absent"))
+        #expect(modelSource.contains("RemoteDeviceNamePolicy.fallbackSelection("))
 
         // 用户手动点设备卡之后，连接事件不得把画布抢回小米。
         let settingsSource = try String(
@@ -2331,8 +2349,10 @@ struct SettingsPageRegressionTests {
         #expect(historySource.contains("reason = \"date_groups_collapsed\""))
         #expect(historySource.contains("displayed_count=\\(displayedCount)"))
         #expect(agentAccessSource.contains("statistics.transcripts.agent_access.enable"))
-        #expect(agentAccessSource.contains("model.copyStandardConfiguration()"))
-        #expect(agentAccessSource.contains("model.copyCodexConfiguration()"))
+        #expect(agentAccessSource.contains("model.copyInstallPrompt("))
+        #expect(agentAccessSource.contains("statistics.transcripts.agent_access.install_prompt_preview"))
+        #expect(!agentAccessSource.contains("statistics.transcripts.agent_access.copy_standard"))
+        #expect(!agentAccessSource.contains("statistics.transcripts.agent_access.copy_codex"))
         #expect(agentAccessSource.contains("model.revoke(authorization)"))
         #expect(agentAccessSource.contains("ForEach(MCPClientKind.allCases)"))
         #expect(agentAccessSource.contains("LazyVGrid("))

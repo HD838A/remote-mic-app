@@ -1,7 +1,7 @@
 # 只有一只 Siri Remote 时 Onboarding 永久卡在音频页
 
 - 时间：2026-11-07
-- 状态：已修复（候选，等待真机复验与签名包验收）
+- 状态：已修复（2026-11-08 真机复验通过）
 - 影响范围：macOS；控制来源为苹果遥控器、机器上没有小米遥控器或 Chromecast 桥的首次 Onboarding（含重新运行）
 - 功能点：Onboarding 音频页、完成页音频门禁
 - 简单描述：用户选好 `MiRemoteV 2ch` 后，音频页第三项「音频输出正常」永远不勾选，「重试音频设置」连续点击没有任何变化，无法继续也无法完成。
@@ -83,4 +83,11 @@ AUDIO READY target={...}
 
 - `swift test --filter OnboardingFlowTests`：111 项通过（新增 2 项）。`siriRemoteAudioGateFollowsTheOnDemandLifecycle` 覆盖音频页、完成页、恢复步骤、失败原因、设备消失仍阻塞；`onboardingViewPassesTheControlSourceIntoTheAudioGate` 锁定视图真的把来源传进门禁。
 - 反向验证：把策略里的 `controlSource` 判断去掉后，新用例在音频页、完成页、恢复步骤和失败原因四处变红（5 个 issue）；把视图侧 `controlSource:` 参数去掉后，接线用例变红。恢复后复跑通过。
-- 未覆盖：真实 Siri Remote 现场复验（只有一只 Siri Remote 的机器上重跑 Onboarding 直到完成页）、签名包、语音键按下后的真实音频与文字上屏。
+
+## 真机验收（2026-11-08）
+
+- 环境：只有一只苹果遥控器的机器，没有同时连接小米遥控器或 Chromecast（这正是本缺陷的触发条件）。
+- 结果：重新运行设置向导可以通过音频页，不再出现「语音输出还没有准备好」，后续流程走通。完成页本身要求真实语音会话与文字上屏（`OnboardingFlowPolicy.canContinue` 的 `.voiceTest` / `.complete`），因此走通即包含一次真实按键收音与文字上屏。
+- 可观察差异：音频页第三项从「音频输出正常」未勾选，变成「语音开始时连接音频」已勾选——这是修复前后唯一应发生变化的地方；设备选择、小米/Chromecast 门禁与其余页面均未变。
+- 本轮未复核：小米遥控器与 Chromecast 的真机对照、诊断摘要中 `audio_gate` 的实际取值、干净机器上的首次安装（需管理员认证）。
+- 自动化边界不变：单元测试与离屏截图只证明门禁分支、接线与文案版式，真机结论以本节为准。

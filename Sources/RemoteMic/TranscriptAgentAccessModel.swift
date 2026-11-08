@@ -20,6 +20,7 @@ enum TranscriptAgentAccessError: Equatable, Sendable {
     case integrationFailed
     case configurationRemovalFailed
     case duplicateClient
+    case copyInstallPromptFailed
 }
 
 @MainActor
@@ -29,15 +30,10 @@ final class TranscriptAgentAccessModel: ObservableObject {
     @Published var clientName = ""
     @Published private(set) var generatedConfiguration: SayAllMCPIntegrationConfig?
     @Published private(set) var error: TranscriptAgentAccessError?
-    @Published private(set) var copiedConfiguration: ConfigurationKind?
+    @Published private(set) var copiedInstallPrompt: UUID?
     @Published private(set) var integrationInProgress: MCPClientKind?
     @Published private(set) var failedClient: MCPClientKind?
     @Published private(set) var authorizationsNeedingReconnect: Set<UUID> = []
-
-    enum ConfigurationKind {
-        case standardJSON
-        case codexTOML
-    }
 
     private let authorizationStore: SayAllMCPAuthorizationStore
     private let helperExecutableURL: () -> URL
@@ -77,7 +73,7 @@ final class TranscriptAgentAccessModel: ObservableObject {
             try authorizationStore.setEnabled(enabled)
             isEnabled = enabled
             generatedConfiguration = nil
-            copiedConfiguration = nil
+            copiedInstallPrompt = nil
             error = nil
             failedClient = nil
         } catch {
@@ -113,7 +109,7 @@ final class TranscriptAgentAccessModel: ObservableObject {
                 $0.revokedAt == nil
             }
             refreshReconnectRequirements()
-            copiedConfiguration = nil
+            copiedInstallPrompt = nil
             error = nil
             failedClient = nil
         } catch SayAllMCPAuthorizationError.activeClientNameExists,
@@ -226,7 +222,7 @@ final class TranscriptAgentAccessModel: ObservableObject {
                 refreshReconnectRequirements()
                 if result.error == nil {
                     generatedConfiguration = nil
-                    copiedConfiguration = nil
+                    copiedInstallPrompt = nil
                 }
                 error = result.error
                 failedClient = result.error == nil ? nil : client
@@ -247,17 +243,20 @@ final class TranscriptAgentAccessModel: ObservableObject {
         integrationInProgress = client
         let authorizationStore = authorizationStore
         let integrationService = integrationService
+        let operationID = UUID()
+        AppLogger.shared.write("mcp_revoke stage=request operation_id=\(operationID) client=\(client.rawValue)")
         Task.detached(priority: .userInitiated) { [weak self] in
-            var configurationRemovalFailed = false
-            do {
-                try integrationService.remove(client)
-            } catch {
-                configurationRemovalFailed = true
-            }
-
             let result: (authorizations: [SayAllMCPAuthorizationRecord], error: TranscriptAgentAccessError?)
             do {
                 try authorizationStore.revokeAuthorization(clientId: authorization.clientId)
+                AppLogger.shared.write("mcp_revoke stage=local_access_revoked operation_id=\(operationID)")
+                let configurationRemovalFailed: Bool
+                do {
+                    try integrationService.remove(client)
+                    configurationRemovalFailed = false
+                } catch {
+                    configurationRemovalFailed = true
+                }
                 result = (
                     try authorizationStore.listAuthorizations(),
                     configurationRemovalFailed ? .configurationRemovalFailed : nil
@@ -270,6 +269,17 @@ final class TranscriptAgentAccessModel: ObservableObject {
                     .revokeFailed
                 )
             }
+
+            let outcome: String
+            switch result.error {
+            case .configurationRemovalFailed:
+                outcome = "client_cleanup_failed"
+            case nil:
+                outcome = "revoked"
+            default:
+                outcome = "authorization_state_unavailable"
+            }
+            AppLogger.shared.write("mcp_revoke stage=complete operation_id=\(operationID) result=\(outcome)")
 
             await MainActor.run { [weak self] in
                 guard let self else { return }
@@ -307,23 +317,40 @@ final class TranscriptAgentAccessModel: ObservableObject {
         revoke(authorization)
     }
 
-    func copyStandardConfiguration() {
-        guard let text = generatedConfiguration?.standardJSON else { return }
-        copy(text, kind: .standardJSON)
-    }
+    func copyInstallPrompt(format: String, to pasteboard: NSPasteboard = .general) {
+        guard let configuration = generatedConfiguration else { return }
+        let operationID = UUID()
+        AppLogger.shared.write("mcp_install_prompt stage=request operation_id=\(operationID)")
 
-    func copyCodexConfiguration() {
-        guard let text = generatedConfiguration?.codexTOML else { return }
-        copy(text, kind: .codexTOML)
-    }
-
-    private func copy(_ text: String, kind: ConfigurationKind) {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(text, forType: .string)
-        copiedConfiguration = kind
+        // The pasted text carries only a reference to this copy, never the credential.
+        let type = NSPasteboard.PasteboardType("com.sayall.mcp-install.\(operationID.uuidString.lowercased())")
+        let readCommand = """
+        /usr/bin/osascript -l JavaScript -e 'ObjC.import("AppKit"); const config = ObjC.unwrap($.NSPasteboard.generalPasteboard.stringForType("\(type.rawValue)")); if (!config) throw new Error("Copy a new install prompt in SayAll."); config;'
+        """
+        let item = NSPasteboardItem()
+        pasteboard.clearContents()
+        guard item.setString(String(format: format, readCommand), forType: .string),
+              item.setString(configuration.standardJSON, forType: type),
+              pasteboard.writeObjects([item])
+        else {
+            copiedInstallPrompt = nil
+            error = .copyInstallPromptFailed
+            failedClient = nil
+            AppLogger.shared.write(
+                "mcp_install_prompt stage=complete result=failed reason=pasteboard_write operation_id=\(operationID)"
+            )
+            return
+        }
+        if error == .copyInstallPromptFailed {
+            error = nil
+        }
+        copiedInstallPrompt = operationID
+        AppLogger.shared.write(
+            "mcp_install_prompt stage=complete result=copied installation=unknown operation_id=\(operationID)"
+        )
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
-            if self?.copiedConfiguration == kind {
-                self?.copiedConfiguration = nil
+            if self?.copiedInstallPrompt == operationID {
+                self?.copiedInstallPrompt = nil
             }
         }
     }
