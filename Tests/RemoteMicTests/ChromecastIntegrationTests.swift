@@ -134,6 +134,39 @@ struct ChromecastIntegrationTests {
         #expect(!packageSource.contains("fatalError(\"SAYALL_CHROMECAST"))
     }
 
+    /// 「按一次说话 / 按住说话」只属于 Chromecast 的语音键，必须放在语音键设置面板内，
+    /// 不能重新变成按键页底部的常驻区块。
+    @Test func chromecastVoiceModeLivesInsideVoiceKeySettingsPanel() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let settingsView = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+
+        let panelStart = try #require(settingsView.range(of: "private func mappingVoiceSettingsPanel"))
+        let panelEnd = try #require(settingsView.range(
+            of: "private var siriRemoteScrollArrowControl",
+            range: panelStart.upperBound..<settingsView.endIndex
+        ))
+        let panelSource = settingsView[panelStart.lowerBound..<panelEnd.lowerBound]
+        #expect(panelSource.contains(
+            "settings.selectedRemoteProfile?.model.isChromecastRemote == true"
+        ))
+        #expect(panelSource.contains("chromecastVoiceModeControl"))
+
+        let pageStart = try #require(settingsView.range(of: "private func hardwareMappingPage"))
+        let pageEnd = try #require(settingsView.range(
+            of: "private var configurationImportBanner",
+            range: pageStart.upperBound..<settingsView.endIndex
+        ))
+        #expect(!settingsView[pageStart.lowerBound..<pageEnd.lowerBound].contains(
+            "chromecastVoiceModeControl"
+        ))
+    }
+
     @Test func chromecastPanelChangesReachTheRuntimeWithoutRestart() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
