@@ -45,7 +45,7 @@ Mac Remote 与其他 macOS 私有组件使用同一个私有 Swift Package。CI 
 
 有读取权限时，按以下顺序准备：
 
-1. 将 Mac 私有改动通过私有 PR 合入 `GetSayAll/sayall-private-platform` 的 `main`。只比较根 SwiftPM 清单、Mac Remote、组合动作、键位方案、常用语、会员与诊断、Siri Remote、Chromecast 和私有构建工具。网页、服务端和纯 Markdown/HTML 文档变化不触发 Mac 包升级。新增 Mac 模块时同步 `scripts/prepare-private-platform.py` 的路径范围。
+1. 将 Mac 私有改动通过私有 PR 合入 `GetSayAll/sayall-private-platform` 的 `main`。只比较根 SwiftPM 清单、Mac Remote、组合动作、键位方案、常用语、会员与诊断、Siri Remote、Chromecast 和私有构建工具。网页、服务端、纯 Markdown/HTML 文档和 SwiftPM `Tests/` 测试变化不触发 Mac 包升级。测试变化不进入分发构件，不得据此强制新 Tag 或阻止既有不可变 Tag 的集成。新增 Mac 模块时同步 `scripts/prepare-private-platform.py` 的路径范围。
 2. 若上述内容相对最新数字 Tag 有变化，按私有仓库 `docs/release/tagging.md` 发布新的标准 SemVer Tag。`2.3.0` 起不再升级根 `VERSION`。默认升 patch；破坏性接口按 SemVer 升 major。不得给未合入源码或脏工作区打发布 Tag。
 3. 运行 `python3 scripts/prepare-private-platform.py release` 核对最新私有 `main`。`2.3.0` 起，存在未发布 Mac 变化时停止，并要求先由私有发布者完成测试、构建与新 Tag 发布；不从停用的 `VERSION` 推导新版本。更早版本保留历史发布兼容路径。测试使用 Debug 模式以保留现有测试接口；正式构建保持 Release 模式。全部本地 SwiftPM 命令使用 `--disable-keychain`。脚本在推送前复核远端 main，并在推送后复核 Tag Commit。没有 Mac 变化时复用原 Tag；不创建 `private-vX.Y.Z`，不移动已有 Tag。
 4. 私有 Tag 发布后，运行 `scripts/update-private-dependency-versions.sh --publish` 更新宿主清单；该命令不能替代 `2.3.0` 起的私有发布步骤。该命令在宿主普通 PR 分支执行。私有 Tag 发布成功后，再更新 `config/release-dependencies.json`，验证并通过宿主 PR 合入。Tag 写权限与只读权限不同；无写权限时请有发布权限的维护者完成私有发布。
