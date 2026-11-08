@@ -401,7 +401,9 @@ struct OnboardingView: View {
                 sourceStateID: currentCGEvent?.getIntegerValueField(.eventSourceStateID),
                 sourceUnixProcessID: currentCGEvent?.getIntegerValueField(
                     .eventSourceUnixProcessID
-                )
+                ),
+                keyCode: currentEvent?.keyCode,
+                characters: currentEvent?.characters
             ) else { return }
             manualTranscriptInputObserved = true
             AppLogger.shared.write("ONBOARDING TRANSCRIPT manual_keyboard_input=true")
