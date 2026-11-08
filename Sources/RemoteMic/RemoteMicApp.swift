@@ -75,25 +75,6 @@ struct UpdateCheckPolicy: Equatable {
     }
 }
 
-enum SettingsWindowActivationPolicy {
-    static func value(
-        showDockIcon: Bool,
-        temporarilyShowsDockIcon: Bool
-    ) -> NSApplication.ActivationPolicy {
-        showDockIcon || temporarilyShowsDockIcon ? .regular : .accessory
-    }
-}
-
-enum AppEntryPointVisibilityPolicy {
-    static func shouldShowMainWindow(
-        baseLaunchDecision: Bool,
-        showDockIcon: Bool,
-        showStatusBarIcon: Bool
-    ) -> Bool {
-        baseLaunchDecision || (!showDockIcon && !showStatusBarIcon)
-    }
-}
-
 struct ButtonProfileImportRequest: Equatable {
     let url: URL
     let operationID: UInt
@@ -212,7 +193,16 @@ enum RemoteMicApp {
         let application = NSApplication.shared
         let delegate = RemoteMicAppDelegate()
         application.delegate = delegate
-        application.setActivationPolicy(delegate.activationPolicy)
+        let dockPolicyFields = "operation_id=launch source=launch target_policy=regular"
+        let dockPolicyStartedAt = ProcessInfo.processInfo.systemUptime
+        AppLogger.shared.write("UI DOCK_POLICY phase=requested \(dockPolicyFields)")
+        let appliedDockPolicy = application.setActivationPolicy(.regular)
+        let dockPolicyElapsed = Int((ProcessInfo.processInfo.systemUptime - dockPolicyStartedAt) * 1_000)
+        AppLogger.shared.write(
+            "UI DOCK_POLICY phase=completed result=\(appliedDockPolicy ? "applied" : "failed") " +
+                "reason=\(appliedDockPolicy ? "policy_active" : "appkit_rejected") " +
+                "elapsed_ms=\(dockPolicyElapsed) dock_visible=unknown \(dockPolicyFields)"
+        )
         withExtendedLifetime(instanceLock) {
             withExtendedLifetime(delegate) {
                 application.run()
@@ -255,7 +245,6 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     private var statusMenuOperationID: UInt = 0
     private var activeStatusMenuOperation: (id: UInt, startedAt: TimeInterval, menu: NSMenu)?
     private var settingsWindowController: NSWindowController?
-    private var temporarilyShowsDockIcon = false
     private var subscriptions = Set<AnyCancellable>()
     private var terminationSignalSources: [DispatchSourceSignal] = []
     private var applicationShortcutMonitor: Any?
@@ -285,13 +274,6 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     private let audioItem = NSMenuItem()
     private let hidItem = NSMenuItem()
     private let macMicrophoneItem = NSMenuItem()
-
-    var activationPolicy: NSApplication.ActivationPolicy {
-        SettingsWindowActivationPolicy.value(
-            showDockIcon: model.settings.showDockIcon,
-            temporarilyShowsDockIcon: temporarilyShowsDockIcon
-        )
-    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         if let environmentEvent = AppEnvironmentSnapshot.current(
@@ -350,31 +332,18 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         }
         refreshMenuStatus()
 
-        let baseLaunchDecision = OnboardingLaunchPolicy.shouldShowMainWindow(
+        let shouldShowMainWindow = OnboardingLaunchPolicy.shouldShowMainWindow(
             isComplete: model.settings.isOnboardingComplete,
             completedUpdate: completedUpdate,
             openMainWindowAtLaunch: model.settings.openMainWindowAtLaunch
         )
-        let shouldShowMainWindow = AppEntryPointVisibilityPolicy.shouldShowMainWindow(
-            baseLaunchDecision: baseLaunchDecision,
-            showDockIcon: model.settings.showDockIcon,
-            showStatusBarIcon: model.settings.showStatusBarIcon
-        )
         if shouldShowMainWindow {
-            if !baseLaunchDecision {
-                AppLogger.shared.write(
-                    "UI ENTRY_POINT phase=completed result=passed source=launch_recovery " +
-                        "show_dock=false show_status_bar=false decision=open_settings"
-                )
-            }
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
                 if shouldOpenPermissionRepair {
                     self.showSettingsWindow(initialSection: .about)
                 } else {
-                    let opensOnLaunch = self.model.settings.isOnboardingComplete &&
-                        self.model.settings.openMainWindowAtLaunch
-                    self.showSettingsWindow(temporaryDockSource: opensOnLaunch ? "launch_open" : nil)
+                    self.showSettingsWindow()
                 }
                 // 升级后不再弹「已成功更新到版本」确认框：完成更新的人已经知道版本变了，
                 // 弹窗只是挡住刚打开的窗口。主窗口与权限修复照旧自动呈现。
@@ -415,7 +384,6 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         showSettingsWindow()
         AppLogger.shared.write(
             "UI ENTRY_POINT phase=completed result=passed source=application_reopen " +
-                "show_dock=\(model.settings.showDockIcon) " +
                 "show_status_bar=\(model.settings.showStatusBarIcon) " +
                 "decision=open_settings"
         )
@@ -618,14 +586,12 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         let operationID = entryPointOperationID
         AppLogger.shared.write(
             "UI ENTRY_POINT operation_id=\(operationID) phase=requested source=\(source) " +
-                "show_dock=\(model.settings.showDockIcon) show_status_bar=\(isVisible)"
+                "show_status_bar=\(isVisible)"
         )
         let changed = isVisible ? configureStatusItem() : removeStatusItem()
         AppLogger.shared.write(
             "UI ENTRY_POINT operation_id=\(operationID) phase=completed result=passed " +
-                "source=\(source) show_dock=\(model.settings.showDockIcon) " +
-                "show_status_bar=\(isVisible) " +
-                "both_hidden=\(!model.settings.showDockIcon && !isVisible) " +
+                "source=\(source) show_status_bar=\(isVisible) " +
                 "change=\(changed ? (isVisible ? "created" : "removed") : "none")"
         )
     }
@@ -1180,13 +1146,10 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     }
 
     @objc private func showSettingsFromStatusMenu() {
-        showSettingsWindow(temporaryDockSource: "status_menu_open")
+        showSettingsWindow()
     }
 
-    private func showSettingsWindow(
-        initialSection: SettingsSection? = nil,
-        temporaryDockSource: String? = nil
-    ) {
+    private func showSettingsWindow(initialSection: SettingsSection? = nil) {
         if settingsWindowController == nil {
             settingsWindowController = makeSettingsWindowController(
                 initialSettingsSection: initialSection
@@ -1194,10 +1157,6 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         }
         guard let windowController = settingsWindowController,
               let window = windowController.window else { return }
-        if temporaryDockSource != nil && !model.settings.showDockIcon {
-            temporarilyShowsDockIcon = true
-        }
-        updateDockActivationPolicy(source: temporaryDockSource ?? "window_open")
         windowController.showWindow(nil)
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
@@ -1216,9 +1175,6 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
                 checkForUpdates: { [weak self] in self?.checkForUpdates() },
                 refreshUpdateInformation: { [weak self] in
                     self?.refreshUpdateInformation()
-                },
-                setDockIconVisible: { [weak self] isVisible in
-                    self?.setDockIconVisible(isVisible)
                 },
                 setStatusBarIconVisible: { [weak self] isVisible in
                     self?.setStatusBarIconVisible(isVisible)
@@ -1273,8 +1229,6 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
               window === settingsWindowController?.window
         else { return }
         model.macroFeature.setEditorActive(false)
-        temporarilyShowsDockIcon = false
-        updateDockActivationPolicy(source: "window_close")
     }
 
     func windowDidMiniaturize(_ notification: Notification) {
@@ -1470,45 +1424,15 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         }
     }
 
-    private func setDockIconVisible(_ isVisible: Bool) {
-        model.settings.showDockIcon = isVisible
-        temporarilyShowsDockIcon = false
-        updateDockActivationPolicy(source: "dock_toggle")
-    }
-
     private func setStatusBarIconVisible(_ isVisible: Bool) {
         model.settings.showStatusBarIcon = isVisible
         applyStatusBarIconVisibility(isVisible, source: "status_bar_toggle")
     }
 
     private func applyImportedEntryPointVisibility() {
-        // Temporary display only exists while the stored preference is off.
-        if model.settings.showDockIcon {
-            temporarilyShowsDockIcon = false
-        }
-        updateDockActivationPolicy(source: "configuration_import")
         applyStatusBarIconVisibility(
             model.settings.showStatusBarIcon,
             source: "configuration_import"
-        )
-    }
-
-    private func updateDockActivationPolicy(source: String) {
-        entryPointOperationID &+= 1
-        let operationID = entryPointOperationID
-        let startedAt = ProcessInfo.processInfo.systemUptime
-        let policy = activationPolicy
-        let fields = "operation_id=\(operationID) source=\(source) " +
-            "show_dock=\(model.settings.showDockIcon) temporary=\(temporarilyShowsDockIcon) " +
-            "target_policy=\(policy == .regular ? "regular" : "accessory")"
-        AppLogger.shared.write("UI DOCK_POLICY phase=requested \(fields)")
-        let applied = NSApp.activationPolicy() == policy || NSApp.setActivationPolicy(policy)
-        reapplyCurrentAppIcon(source: "activation_policy")
-        let elapsedMilliseconds = Int((ProcessInfo.processInfo.systemUptime - startedAt) * 1_000)
-        AppLogger.shared.write(
-            "UI DOCK_POLICY phase=completed result=\(applied ? "applied" : "failed") " +
-                "reason=\(applied ? "policy_active" : "appkit_rejected") " +
-                "elapsed_ms=\(elapsedMilliseconds) dock_visible=unknown \(fields)"
         )
     }
 

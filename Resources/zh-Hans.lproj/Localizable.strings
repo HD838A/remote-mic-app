@@ -658,10 +658,10 @@
 "about.page.subtitle" = "查看版本、更新、语言和应用显示选项";
 "about.app.description" = "小米蓝牙遥控器 2 Pro 的无线语音与快捷操作工具。";
 "about.app_support.title" = "应用与支持";
-"about.preferences.show_dock_icon" = "在 Dock 中常驻显示应用图标";
-"about.preferences.show_dock_icon_help" = "关闭后，主界面从菜单栏打开或随启动自动打开时，图标临时显示到关窗。macOS 固定的图标会保留。";
+"about.preferences.dock_icon" = "Dock 图标";
+"about.preferences.dock_icon_help" = "SayAll 运行时会显示在 Dock 中。关闭主界面后，点 Dock 图标可重新打开。";
 "about.preferences.show_status_bar_icon" = "在菜单栏中显示应用图标";
-"about.preferences.show_status_bar_icon_help" = "如果 Dock 和菜单栏图标都已关闭，可再次启动无线麦 SayAll 来打开设置。";
+"about.preferences.show_status_bar_icon_help" = "关闭后仍可从 Dock 打开主界面。";
 "about.preferences.app_icon" = "应用图标";
 "about.preferences.app_icon_help" = "选择在 Dock、应用切换器和设置窗口中显示的图标。";
 "about.preferences.app_icon_standard" = "经典鸭";
@@ -761,7 +761,7 @@
 "common.action.minimize" = "最小化";
 "about.version.history_load_failed" = "无法加载版本历史。";
 "about.preferences.open_main_window_at_launch" = "启动时自动打开主面板";
-"about.preferences.open_main_window_help" = "关闭后普通启动仅保留菜单栏入口；更新完成后仍会显示主面板。";
+"about.preferences.open_main_window_help" = "关闭后，普通启动在后台运行。可从 Dock 打开主界面。更新完成后仍会显示主界面。";
 "about.preferences.launch_at_login" = "登录时自动启动";
 "about.preferences.launch_at_login_help" = "登录此 Mac 后自动启动无线麦 SayAll。默认关闭。";
 "about.preferences.launch_at_login_requires_approval" = "macOS 需要你的允许，才能在登录时自动启动无线麦 SayAll。";

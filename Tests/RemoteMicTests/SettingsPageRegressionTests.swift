@@ -1125,7 +1125,7 @@ struct SettingsPageRegressionTests {
         #expect(autosave.upperBound <= center.lowerBound)
     }
 
-    @Test func settingsWindowHonorsDockPreferenceAndKeepsStandardWindowActions() throws {
+    @Test func runningAppKeepsItsDockEntryAndStandardWindowActions() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -1137,61 +1137,23 @@ struct SettingsPageRegressionTests {
 
         #expect(appSource.contains("window.hidesOnDeactivate = false"))
         #expect(appSource.contains("window.delegate = self"))
-        #expect(appSource.contains("SettingsWindowActivationPolicy.value("))
+        #expect(appSource.contains("application.setActivationPolicy(.regular)"))
+        #expect(!appSource.contains("model.settings.showDockIcon"))
         #expect(appSource.contains("func windowWillClose(_ notification: Notification)"))
         #expect(appSource.contains("func windowDidMiniaturize(_ notification: Notification)"))
         #expect(appSource.contains("func windowDidDeminiaturize(_ notification: Notification)"))
         #expect(appSource.contains("source: \"window_miniaturized\""))
         #expect(appSource.contains("source: \"window_deminiaturized\""))
-        #expect(appSource.contains("source: \"activation_policy\""))
         #expect(appSource.contains("#selector(showSettingsFromStatusMenu)"))
-        #expect(appSource.contains("showSettingsWindow(temporaryDockSource: \"status_menu_open\")"))
-        #expect(appSource.contains("showSettingsWindow(temporaryDockSource: opensOnLaunch ? \"launch_open\" : nil)"))
-        #expect(appSource.contains("temporarilyShowsDockIcon = false\n        updateDockActivationPolicy(source: \"window_close\")"))
-        #expect(appSource.contains("temporarilyShowsDockIcon = false\n        updateDockActivationPolicy(source: \"dock_toggle\")"))
         #expect(!appSource.contains("window.canHide = false"))
         #expect(appSource.contains("NSApp.keyWindow?.performClose(nil)"))
         #expect(appSource.contains("performMiniaturize:"))
         #expect(appSource.contains("hideOtherApplications:"))
         #expect(appSource.contains("unhideAllApplications:"))
         #expect(appSource.contains("NSApp.windowsMenu = windowMenu"))
-
-        #expect(SettingsWindowActivationPolicy.value(
-            showDockIcon: false,
-            temporarilyShowsDockIcon: true
-        ) == .regular)
-        #expect(SettingsWindowActivationPolicy.value(
-            showDockIcon: false,
-            temporarilyShowsDockIcon: false
-        ) == .accessory)
-        #expect(SettingsWindowActivationPolicy.value(
-            showDockIcon: true,
-            temporarilyShowsDockIcon: false
-        ) == .regular)
     }
 
-    @Test func hiddenDockAndMenuBarKeepAnExplicitLaunchRecoveryPath() throws {
-        #expect(AppEntryPointVisibilityPolicy.shouldShowMainWindow(
-            baseLaunchDecision: true,
-            showDockIcon: true,
-            showStatusBarIcon: true
-        ))
-        #expect(AppEntryPointVisibilityPolicy.shouldShowMainWindow(
-            baseLaunchDecision: false,
-            showDockIcon: false,
-            showStatusBarIcon: false
-        ))
-        #expect(!AppEntryPointVisibilityPolicy.shouldShowMainWindow(
-            baseLaunchDecision: false,
-            showDockIcon: true,
-            showStatusBarIcon: false
-        ))
-        #expect(!AppEntryPointVisibilityPolicy.shouldShowMainWindow(
-            baseLaunchDecision: false,
-            showDockIcon: false,
-            showStatusBarIcon: true
-        ))
-
+    @Test func menuBarVisibilityKeepsTheSystemReopenPath() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
