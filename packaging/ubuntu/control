@@ -1,0 +1,10 @@
+Package: sayall-ubuntu
+Version: @VERSION@
+Architecture: @ARCH@
+Section: sound
+Priority: optional
+Maintainer: SayAll contributors
+Depends: bluez, libc6 (>= 2.39), libstdc++6, libgcc-s1, pipewire-bin, pipewire-pulse, pulseaudio-utils, python3, python3-dbus, python3-gi, udev
+Description: SayAll RC003 Bluetooth voice bridge for Ubuntu
+ Decode a paired Xiaomi remote's ATVV audio into a PipeWire microphone.
+ The command-line bridge shares the ATVV implementation with the macOS app.

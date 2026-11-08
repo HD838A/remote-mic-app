@@ -52,6 +52,8 @@
 
 ## 用户、技术与支持文档
 
+- [Ubuntu RC003 构建、安装与验收](Testing/Ubuntu.md)。
+
 - 普通用户入口：[`README.md`](README.md)、[`TROUBLESHOOTING.md`](TROUBLESHOOTING.md)。
 - 技术架构：[`TECHNICAL.md`](TECHNICAL.md)。
 - macOS Fn 层键位、修饰键标志位与快捷键注入判读：[`MACOS_FUNCTION_LAYER.md`](MACOS_FUNCTION_LAYER.md)。

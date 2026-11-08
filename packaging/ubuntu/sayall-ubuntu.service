@@ -1,0 +1,12 @@
+[Unit]
+Description=SayAll RC003 microphone
+PartOf=graphical-session.target
+After=pipewire.service wireplumber.service
+
+[Service]
+ExecStart=/usr/bin/sayall-ubuntu
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=graphical-session.target

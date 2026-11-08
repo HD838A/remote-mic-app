@@ -1,0 +1,38 @@
+name: Ubuntu bridge
+on:
+  push:
+    branches: [main]
+    paths: &ubuntu-paths
+      - 'Apps/Ubuntu/**'
+      - 'Sources/RemoteMic/ATVVProtocol.swift'
+      - 'Tests/Ubuntu/**'
+      - 'Testing/Ubuntu.md'
+      - 'packaging/ubuntu/**'
+      - '.github/workflows/ubuntu-ci.yml'
+  pull_request:
+    branches: [main]
+    paths: *ubuntu-paths
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    container: swift:6.2-noble@sha256:e508ef1e4be68087f720de622b91cbf1e32799a7aa96134b35e6f1a1d656db7a
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - name: Install test dependencies
+        run: apt-get update && apt-get install -y --no-install-recommends make binutils python3-dbus python3-gi
+      - name: Compile shared ATVV, test and package
+        run: make -f packaging/ubuntu/Makefile test package VERSION=0~ci+${GITHUB_SHA}
+      - name: Smoke-test the installed layout
+        run: |
+          dpkg-deb -x .build/ubuntu/*.deb /tmp/sayall-install
+          /tmp/sayall-install/usr/bin/sayall-ubuntu --help
+      - name: Upload Ubuntu test package
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: sayall-ubuntu-amd64
+          path: .build/ubuntu/*.deb
+          include-hidden-files: true
+          if-no-files-found: error
