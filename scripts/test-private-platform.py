@@ -92,6 +92,14 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual(self.publish(), "2.2.0")
         self.assertEqual(platform.mac_changes(self.repo, self.baseline, "HEAD"), [])
 
+    def test_mac_test_changes_do_not_require_a_new_tag(self):
+        self.write("packages/macos-remote/Tests/RemoteMicTests/runtimeTests.swift", "test\n")
+        self.commit()
+        self.git("push", "origin", "main")
+        self.assertEqual(platform.mac_changes(self.repo, self.baseline, "HEAD"), [])
+        self.assertEqual(self.publish(), "2.2.0")
+        self.assertEqual(self.swift_calls, [])
+
     def test_mac_change_requires_reviewed_version_bump(self):
         self.advance()
         with self.assertRaisesRegex(RuntimeError, "Bump VERSION through a private PR"):
@@ -177,7 +185,8 @@ class ReleaseTests(unittest.TestCase):
                      "tools/release/build-private-xcframeworks.sh"):
             self.assertTrue(platform.relevant(path), path)
         for path in ("apps/web/source.ts", "services/membership-api/index.ts",
-                     "packages/macos-membership/README.md"):
+                     "packages/macos-membership/README.md",
+                     "packages/macos-remote/Tests/RemoteMicTests/runtimeTests.swift"):
             self.assertFalse(platform.relevant(path), path)
 
     def test_tag_requires_standard_semver_version_and_root_manifest(self):
