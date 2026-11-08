@@ -658,10 +658,10 @@
 "about.page.subtitle" = "查看版本、更新、语言和应用显示选项";
 "about.app.description" = "小米蓝牙遥控器 2 Pro 的无线语音与快捷操作工具。";
 "about.app_support.title" = "应用与支持";
-"about.preferences.show_dock_icon" = "在 Dock 中显示应用图标";
-"about.preferences.show_dock_icon_help" = "关闭后仍可通过菜单栏图标打开无线麦 SayAll。";
+"about.preferences.dock_icon" = "Dock 图标";
+"about.preferences.dock_icon_help" = "SayAll 运行时会显示在 Dock 中。若要在退出后保留入口，右键点图标并选择“选项 → 在程序坞中保留”。从 Dock 移除图标可取消固定。";
 "about.preferences.show_status_bar_icon" = "在菜单栏中显示应用图标";
-"about.preferences.show_status_bar_icon_help" = "如果 Dock 和菜单栏图标都已关闭，可再次启动无线麦 SayAll 来打开设置。";
+"about.preferences.show_status_bar_icon_help" = "关闭后仍可从 Dock 打开主界面。";
 "about.preferences.app_icon" = "应用图标";
 "about.preferences.app_icon_help" = "选择在 Dock、应用切换器和设置窗口中显示的图标。";
 "about.preferences.app_icon_standard" = "经典鸭";
@@ -761,7 +761,7 @@
 "common.action.minimize" = "最小化";
 "about.version.history_load_failed" = "无法加载版本历史。";
 "about.preferences.open_main_window_at_launch" = "启动时自动打开主面板";
-"about.preferences.open_main_window_help" = "关闭后普通启动仅保留菜单栏入口；更新完成后仍会显示主面板。";
+"about.preferences.open_main_window_help" = "关闭后，普通启动在后台运行。可从 Dock 打开主界面。更新完成后仍会显示主界面。";
 "about.preferences.launch_at_login" = "登录时自动启动";
 "about.preferences.launch_at_login_help" = "登录此 Mac 后自动启动无线麦 SayAll。默认关闭。";
 "about.preferences.launch_at_login_requires_approval" = "macOS 需要你的允许，才能在登录时自动启动无线麦 SayAll。";
@@ -1145,6 +1145,11 @@
 "statistics.transcripts.agent_access.error.remove_configuration" = "%@ 的访问授权已撤销，但无法自动移除客户端配置。请手动删除 sayall_history。";
 "statistics.transcripts.agent_access.error.duplicate_client" = "这个客户端已经有一份有效授权，请先使用现有授权或撤销后再创建。";
 "statistics.transcripts.agent_access.error.copy_install_prompt" = "未能复制安装提示词，请重试。";
+"statistics.transcripts.agent_access.workbuddy" = "WorkBuddy 连接器";
+"statistics.transcripts.agent_access.workbuddy_description" = "请在这台 Mac 上将两项分别粘贴到 WorkBuddy 连接器的对应字段。";
+"statistics.transcripts.agent_access.workbuddy_copy_id" = "复制客户端 ID";
+"statistics.transcripts.agent_access.workbuddy_copy_token" = "复制访问令牌";
+"statistics.transcripts.agent_access.error.copy_workbuddy_credential" = "未能复制 WorkBuddy 凭据，请重试。";
 "onboarding.side.permissions" = "权限检查";
 "onboarding.side.remote" = "连接检查";
 "onboarding.side.audio" = "音频检查";

@@ -658,10 +658,10 @@
 "about.page.subtitle" = "View version, updates, language, and app display options";
 "about.app.description" = "Wireless voice and shortcut controls for Xiaomi Bluetooth Remote 2 Pro and Apple Remote.";
 "about.app_support.title" = "App & Support";
-"about.preferences.show_dock_icon" = "Show app icon in the Dock";
-"about.preferences.show_dock_icon_help" = "When hidden, SayAll remains available from the menu bar.";
+"about.preferences.dock_icon" = "Dock Icon";
+"about.preferences.dock_icon_help" = "SayAll appears in the Dock while running. To keep it there after quitting, Control-click its icon and choose Options > Keep in Dock. Remove the icon from the Dock to unpin it.";
 "about.preferences.show_status_bar_icon" = "Show app icon in the menu bar";
-"about.preferences.show_status_bar_icon_help" = "If both Dock and menu bar icons are hidden, launch SayAll again to open Settings.";
+"about.preferences.show_status_bar_icon_help" = "Open the main window from the Dock when the menu bar icon is off.";
 "about.preferences.app_icon" = "App Icon";
 "about.preferences.app_icon_help" = "Choose the icon shown in the Dock, app switcher, and Settings.";
 "about.preferences.app_icon_standard" = "Classic Duck";
@@ -762,7 +762,7 @@
 "common.action.minimize" = "Minimize";
 "about.version.history_load_failed" = "Version history could not be loaded.";
 "about.preferences.open_main_window_at_launch" = "Open main window at launch";
-"about.preferences.open_main_window_help" = "When off, SayAll starts in the menu bar. The main window still opens after an update.";
+"about.preferences.open_main_window_help" = "When off, SayAll starts in the background. Open the main window from the Dock. The window still opens after an update.";
 "about.preferences.launch_at_login" = "Launch at login";
 "about.preferences.launch_at_login_help" = "Start SayAll automatically after you sign in to this Mac. Disabled by default.";
 "about.preferences.launch_at_login_requires_approval" = "macOS needs your approval before SayAll can launch at login.";
@@ -1146,6 +1146,11 @@
 "statistics.transcripts.agent_access.error.remove_configuration" = "%@ access was revoked, but its client configuration could not be removed automatically. Remove sayall_history manually.";
 "statistics.transcripts.agent_access.error.duplicate_client" = "This client already has an active authorization. Use it or revoke it before creating another.";
 "statistics.transcripts.agent_access.error.copy_install_prompt" = "Could not copy the install prompt. Try again.";
+"statistics.transcripts.agent_access.workbuddy" = "WorkBuddy Connector";
+"statistics.transcripts.agent_access.workbuddy_description" = "Copy each value into its matching WorkBuddy connector field on this Mac.";
+"statistics.transcripts.agent_access.workbuddy_copy_id" = "Copy Client ID";
+"statistics.transcripts.agent_access.workbuddy_copy_token" = "Copy Access Token";
+"statistics.transcripts.agent_access.error.copy_workbuddy_credential" = "Could not copy the WorkBuddy credential. Try again.";
 "onboarding.side.permissions" = "Permission Check";
 "onboarding.side.remote" = "Connection Check";
 "onboarding.side.audio" = "Audio Check";

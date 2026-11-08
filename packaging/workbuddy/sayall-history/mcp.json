@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "sayall_history": {
+      "type": "stdio",
+      "command": "/Applications/SayAll.app/Contents/Helpers/SayAllMCP",
+      "args": [
+        "serve"
+      ],
+      "env": {
+        "SAYALL_MCP_CLIENT_ID": "${SAYALL_MCP_CLIENT_ID}",
+        "SAYALL_MCP_ACCESS_TOKEN": "${SAYALL_MCP_ACCESS_TOKEN}"
+      },
+      "timeout": 30000
+    }
+  }
+}

@@ -619,7 +619,6 @@ struct SettingsView: View {
 
     private let checkForUpdates: () -> Void
     private let refreshUpdateInformation: () -> Void
-    private let setDockIconVisible: (Bool) -> Void
     private let setStatusBarIconVisible: (Bool) -> Void
     private let syncEntryPointVisibility: () -> Void
     private let appIconCatalog: AppIconCatalog
@@ -687,7 +686,6 @@ struct SettingsView: View {
         hardwareAnnouncements: HardwareAnnouncementStore = HardwareAnnouncementStore(),
         checkForUpdates: @escaping () -> Void = {},
         refreshUpdateInformation: @escaping () -> Void = {},
-        setDockIconVisible: @escaping (Bool) -> Void = { _ in },
         setStatusBarIconVisible: @escaping (Bool) -> Void = { _ in },
         syncEntryPointVisibility: @escaping () -> Void = {},
         appIconCatalog: AppIconCatalog? = nil,
@@ -717,7 +715,6 @@ struct SettingsView: View {
         self.hardwareAnnouncements = hardwareAnnouncements
         self.checkForUpdates = checkForUpdates
         self.refreshUpdateInformation = refreshUpdateInformation
-        self.setDockIconVisible = setDockIconVisible
         self.setStatusBarIconVisible = setStatusBarIconVisible
         self.syncEntryPointVisibility = syncEntryPointVisibility
         self.appIconCatalog = appIconCatalog ?? .live()
@@ -4892,6 +4889,7 @@ struct SettingsView: View {
             }
             .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
             .frame(maxWidth: .infinity, minHeight: 36)
+            .contentShape(RoundedRectangle(cornerRadius: 8))
         }
         .buttonStyle(.plain)
         .foregroundStyle(isSelected ? Color.accentColor : Color.primary)
@@ -6471,19 +6469,13 @@ struct SettingsView: View {
                                     .foregroundStyle(Color.accentColor)
                                     .frame(width: 34)
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text("about.preferences.show_dock_icon")
-                                        .font(.subheadline.weight(.semibold))
-                                    Text("about.preferences.show_dock_icon_help")
-                                        .font(.caption)
+                                    Text("about.preferences.dock_icon")
+                                        .font(.system(size: 12, weight: .semibold))
+                                    Text("about.preferences.dock_icon_help")
+                                        .font(.system(size: 12))
                                         .foregroundStyle(.secondary)
                                 }
                                 Spacer()
-                                Toggle("", isOn: Binding(
-                                    get: { settings.showDockIcon },
-                                    set: { setDockIconVisible($0) }
-                                ))
-                                .labelsHidden()
-                                .toggleStyle(.switch)
                             }
                             .padding(.vertical, 8)
 
