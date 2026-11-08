@@ -326,6 +326,12 @@ final class HIDRemoteMonitor {
         if settings.customMappingEnabled {
             let suppressionReady = eventSuppressor.start()
             AppLogger.shared.write("HID FILTER ready=\(suppressionReady)")
+            // 兜底默认值只在编译期按架构决定，自动化里只有 arm64 那份真正跑过测试；
+            // 把生效值写进会话日志，现场不必再靠一次性探针判断这台机器有没有开窗口。
+            AppLogger.shared.write(
+                "HID FILTER directional_fallback="
+                    + (directionalNativeFallback ? "true" : "false")
+            )
         }
 
         let manager = IOHIDManagerCreate(kCFAllocatorDefault, IOOptionBits(kIOHIDOptionsTypeNone))
