@@ -38,6 +38,34 @@ struct MCPClientIntegrationServiceTests {
         #expect(pasteboard.string(forType: type) == nil)
     }
 
+    @Test @MainActor func workBuddyCopiesOnlyTheRequestedCredentialField() throws {
+        let model = TranscriptAgentAccessModel(
+            authorizationStore: SayAllMCPAuthorizationStore(
+                accessRoot: temporaryDirectory("workbuddy-credential")
+            ),
+            helperExecutableURL: { URL(fileURLWithPath: "/usr/bin/true") }
+        )
+        let pasteboard = NSPasteboard.withUniqueName()
+        defer { pasteboard.releaseGlobally() }
+        #expect(!model.copyWorkBuddyCredential(.clientID, to: pasteboard))
+        model.setEnabled(true)
+        model.clientName = "WorkBuddy"
+        model.createAuthorization()
+        let authorization = try #require(model.generatedConfiguration?.authorization)
+        model.copyInstallPrompt(format: "Install using %@.", to: pasteboard)
+        let priorTypes = try #require(pasteboard.types)
+        #expect(priorTypes.count > 1)
+
+        #expect(model.copyWorkBuddyCredential(.clientID, to: pasteboard))
+        #expect(pasteboard.pasteboardItems?.count == 1)
+        #expect(pasteboard.types?.allSatisfy { $0 == .string || $0.rawValue == "NSStringPboardType" } == true)
+        #expect(pasteboard.string(forType: .string) == authorization.clientId.uuidString.lowercased())
+        #expect(model.copyWorkBuddyCredential(.accessToken, to: pasteboard))
+        #expect(pasteboard.pasteboardItems?.count == 1)
+        #expect(pasteboard.types?.allSatisfy { $0 == .string || $0.rawValue == "NSStringPboardType" } == true)
+        #expect(pasteboard.string(forType: .string) == authorization.token)
+    }
+
     @Test func codexAddsAndUpdatesOnlyItsManagedBlock() throws {
         let home = temporaryDirectory("codex-managed")
         let file = home.appendingPathComponent(".codex/config.toml")

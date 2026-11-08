@@ -65,9 +65,9 @@ G-TOOL.permanent-helper=declared-purpose
 
 - 本地测试包固定命名 `SayAll.app`，优先替换 `~/Applications/SayAll.app`；替换失败才放 `~/Downloads/SayAll-test/SayAll.app`。
 - 每次构建必须递增 `CFBundleVersion`：取 `/Applications/SayAll.app`、`~/Applications/SayAll.app`、状态文件 `~/.sayall-local-build` 三者最大值 +1，写入本地包的 `Info.plist`；仓库 `Resources/Info.plist` 的模板值不得改动。
-- 打包统一走本仓 `scripts/package-local-test-app.sh`，不得手拼命令。该脚本入库、随仓库分发，已包含 release 构建、组装、递增构建号、ad-hoc 签名、先退出占锁实例再替换与启动。
-- 脚本要求 `SAYALL_PRIVATE_SOURCE_ROOT` 指向私有仓工作区根目录；缺私有组件时脚本直接报错退出，不会产出缺件的包。
-- 本地包是测试产物：必须如实记录 `source_commit` 与是否 dirty，不得冒用 Tag，不得作为分发候选。
+- 打包统一走本仓 `scripts/package-local-test-app.sh`，不得手拼命令。该脚本入库、随仓库分发，已包含 release 构建、组装、递增构建号、Developer ID 签名、先退出占锁实例再替换与启动。
+- 脚本要求 `SAYALL_PRIVATE_SOURCE_ROOT` 指向私有仓工作区根目录，`SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH` 指向与 `config/release-dependencies.json` 固定 Tag 对应的已准备私有构件包，`CODE_SIGN_IDENTITY` 指向本机 Developer ID 签名身份；缺私有组件、构件或签名身份时脚本直接报错退出，不会产出缺件或未签名的包。
+- 本地包是测试产物：Developer ID 签名不改变其测试身份；必须如实记录 `source_commit` 与是否 dirty，不得冒用 Tag，不得作为分发候选。
 
 ## 截图与设计稿归档规范
 

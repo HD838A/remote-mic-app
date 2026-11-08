@@ -75,25 +75,6 @@ struct UpdateCheckPolicy: Equatable {
     }
 }
 
-enum SettingsWindowActivationPolicy {
-    static func value(
-        showDockIcon: Bool,
-        isSettingsWindowOpen _: Bool
-    ) -> NSApplication.ActivationPolicy {
-        showDockIcon ? .regular : .accessory
-    }
-}
-
-enum AppEntryPointVisibilityPolicy {
-    static func shouldShowMainWindow(
-        baseLaunchDecision: Bool,
-        showDockIcon: Bool,
-        showStatusBarIcon: Bool
-    ) -> Bool {
-        baseLaunchDecision || (!showDockIcon && !showStatusBarIcon)
-    }
-}
-
 struct ButtonProfileImportRequest: Equatable {
     let url: URL
     let operationID: UInt
@@ -212,7 +193,16 @@ enum RemoteMicApp {
         let application = NSApplication.shared
         let delegate = RemoteMicAppDelegate()
         application.delegate = delegate
-        application.setActivationPolicy(delegate.activationPolicy)
+        let dockPolicyFields = "operation_id=launch source=launch target_policy=regular"
+        let dockPolicyStartedAt = ProcessInfo.processInfo.systemUptime
+        AppLogger.shared.write("UI DOCK_POLICY phase=requested \(dockPolicyFields)")
+        let appliedDockPolicy = application.setActivationPolicy(.regular)
+        let dockPolicyElapsed = Int((ProcessInfo.processInfo.systemUptime - dockPolicyStartedAt) * 1_000)
+        AppLogger.shared.write(
+            "UI DOCK_POLICY phase=completed result=\(appliedDockPolicy ? "applied" : "failed") " +
+                "reason=\(appliedDockPolicy ? "policy_active" : "appkit_rejected") " +
+                "elapsed_ms=\(dockPolicyElapsed) dock_visible=unknown \(dockPolicyFields)"
+        )
         withExtendedLifetime(instanceLock) {
             withExtendedLifetime(delegate) {
                 application.run()
@@ -255,7 +245,6 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     private var statusMenuOperationID: UInt = 0
     private var activeStatusMenuOperation: (id: UInt, startedAt: TimeInterval, menu: NSMenu)?
     private var settingsWindowController: NSWindowController?
-    private var isSettingsWindowOpen = false
     private var subscriptions = Set<AnyCancellable>()
     private var terminationSignalSources: [DispatchSourceSignal] = []
     private var applicationShortcutMonitor: Any?
@@ -285,13 +274,6 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     private let audioItem = NSMenuItem()
     private let hidItem = NSMenuItem()
     private let macMicrophoneItem = NSMenuItem()
-
-    var activationPolicy: NSApplication.ActivationPolicy {
-        SettingsWindowActivationPolicy.value(
-            showDockIcon: model.settings.showDockIcon,
-            isSettingsWindowOpen: false
-        )
-    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         if let environmentEvent = AppEnvironmentSnapshot.current(
@@ -350,29 +332,18 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         }
         refreshMenuStatus()
 
-        let baseLaunchDecision = OnboardingLaunchPolicy.shouldShowMainWindow(
+        let shouldShowMainWindow = OnboardingLaunchPolicy.shouldShowMainWindow(
             isComplete: model.settings.isOnboardingComplete,
             completedUpdate: completedUpdate,
             openMainWindowAtLaunch: model.settings.openMainWindowAtLaunch
         )
-        let shouldShowMainWindow = AppEntryPointVisibilityPolicy.shouldShowMainWindow(
-            baseLaunchDecision: baseLaunchDecision,
-            showDockIcon: model.settings.showDockIcon,
-            showStatusBarIcon: model.settings.showStatusBarIcon
-        )
         if shouldShowMainWindow {
-            if !baseLaunchDecision {
-                AppLogger.shared.write(
-                    "UI ENTRY_POINT phase=completed result=passed source=launch_recovery " +
-                        "show_dock=false show_status_bar=false decision=open_settings"
-                )
-            }
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
                 if shouldOpenPermissionRepair {
                     self.showSettingsWindow(initialSection: .about)
                 } else {
-                    self.showSettings()
+                    self.showSettingsWindow()
                 }
                 // 升级后不再弹「已成功更新到版本」确认框：完成更新的人已经知道版本变了，
                 // 弹窗只是挡住刚打开的窗口。主窗口与权限修复照旧自动呈现。
@@ -410,10 +381,9 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         _ sender: NSApplication,
         hasVisibleWindows flag: Bool
     ) -> Bool {
-        showSettings()
+        showSettingsWindow()
         AppLogger.shared.write(
             "UI ENTRY_POINT phase=completed result=passed source=application_reopen " +
-                "show_dock=\(model.settings.showDockIcon) " +
                 "show_status_bar=\(model.settings.showStatusBarIcon) " +
                 "decision=open_settings"
         )
@@ -429,7 +399,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
                 "BUTTON_PROFILE_IMPORT phase=requested result=accepted " +
                     "source=finder_file operation_id=button_profile_import_\(request.operationID)"
             )
-            showSettings()
+            showSettingsWindow()
         }
 
         guard let request = urls.lazy.compactMap(SayAllDeepLinkRequest.parse).first else {
@@ -444,7 +414,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
             name: .sayAllDeepLinkReceived,
             object: request
         )
-        showSettings()
+        showSettingsWindow()
         NSApp.activate(ignoringOtherApps: true)
     }
 
@@ -616,14 +586,12 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         let operationID = entryPointOperationID
         AppLogger.shared.write(
             "UI ENTRY_POINT operation_id=\(operationID) phase=requested source=\(source) " +
-                "show_dock=\(model.settings.showDockIcon) show_status_bar=\(isVisible)"
+                "show_status_bar=\(isVisible)"
         )
         let changed = isVisible ? configureStatusItem() : removeStatusItem()
         AppLogger.shared.write(
             "UI ENTRY_POINT operation_id=\(operationID) phase=completed result=passed " +
-                "source=\(source) show_dock=\(model.settings.showDockIcon) " +
-                "show_status_bar=\(isVisible) " +
-                "both_hidden=\(!model.settings.showDockIcon && !isVisible) " +
+                "source=\(source) show_status_bar=\(isVisible) " +
                 "change=\(changed ? (isVisible ? "created" : "removed") : "none")"
         )
     }
@@ -636,7 +604,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
 
         let menu = NSMenu()
         menu.delegate = self
-        menu.addItem(menuItem("menu.open_settings", action: #selector(showSettings)))
+        menu.addItem(menuItem("menu.open_settings", action: #selector(showSettingsFromStatusMenu)))
         menu.addItem(.separator())
         menu.addItem(connectionItem)
         menu.addItem(audioItem)
@@ -1177,7 +1145,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         model.reconnect()
     }
 
-    @objc private func showSettings() {
+    @objc private func showSettingsFromStatusMenu() {
         showSettingsWindow()
     }
 
@@ -1189,8 +1157,6 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         }
         guard let windowController = settingsWindowController,
               let window = windowController.window else { return }
-        isSettingsWindowOpen = true
-        updateDockActivationPolicy()
         windowController.showWindow(nil)
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
@@ -1209,9 +1175,6 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
                 checkForUpdates: { [weak self] in self?.checkForUpdates() },
                 refreshUpdateInformation: { [weak self] in
                     self?.refreshUpdateInformation()
-                },
-                setDockIconVisible: { [weak self] isVisible in
-                    self?.setDockIconVisible(isVisible)
                 },
                 setStatusBarIconVisible: { [weak self] isVisible in
                     self?.setStatusBarIconVisible(isVisible)
@@ -1266,8 +1229,6 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
               window === settingsWindowController?.window
         else { return }
         model.macroFeature.setEditorActive(false)
-        isSettingsWindowOpen = false
-        updateDockActivationPolicy()
     }
 
     func windowDidMiniaturize(_ notification: Notification) {
@@ -1463,35 +1424,16 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         }
     }
 
-    private func setDockIconVisible(_ isVisible: Bool) {
-        model.settings.showDockIcon = isVisible
-        updateDockActivationPolicy()
-        AppLogger.shared.write(
-            "UI ENTRY_POINT phase=completed result=passed source=dock_toggle " +
-                "show_dock=\(isVisible) show_status_bar=\(model.settings.showStatusBarIcon) " +
-                "both_hidden=\(!isVisible && !model.settings.showStatusBarIcon)"
-        )
-    }
-
     private func setStatusBarIconVisible(_ isVisible: Bool) {
         model.settings.showStatusBarIcon = isVisible
         applyStatusBarIconVisibility(isVisible, source: "status_bar_toggle")
     }
 
     private func applyImportedEntryPointVisibility() {
-        updateDockActivationPolicy()
         applyStatusBarIconVisibility(
             model.settings.showStatusBarIcon,
             source: "configuration_import"
         )
-    }
-
-    private func updateDockActivationPolicy() {
-        NSApp.setActivationPolicy(SettingsWindowActivationPolicy.value(
-            showDockIcon: model.settings.showDockIcon,
-            isSettingsWindowOpen: isSettingsWindowOpen
-        ))
-        reapplyCurrentAppIcon(source: "activation_policy")
     }
 
     @objc private func openGitHub() {

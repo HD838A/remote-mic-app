@@ -242,12 +242,34 @@ struct TranscriptAgentAccessSection: View {
                 .buttonStyle(.bordered)
                 .font(.system(size: 12, weight: .medium))
             }
+            workBuddyCredentials
         }
         .padding(12)
         .background(
             Color.accentColor.opacity(0.08),
             in: RoundedRectangle(cornerRadius: 10, style: .continuous)
         )
+    }
+
+    private var workBuddyCredentials: some View {
+        DisclosureGroup("statistics.transcripts.agent_access.workbuddy") {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("statistics.transcripts.agent_access.workbuddy_description")
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: 10) {
+                    Button("statistics.transcripts.agent_access.workbuddy_copy_id") {
+                        model.copyWorkBuddyCredential(.clientID)
+                    }
+                    Button("statistics.transcripts.agent_access.workbuddy_copy_token") {
+                        model.copyWorkBuddyCredential(.accessToken)
+                    }
+                }
+                .buttonStyle(.bordered)
+            }
+            .padding(.top, 8)
+        }
+        .font(.system(size: 12))
     }
 
     private var authorizationList: some View {
@@ -343,6 +365,8 @@ struct TranscriptAgentAccessSection: View {
             key = "statistics.transcripts.agent_access.error.duplicate_client"
         case .copyInstallPromptFailed:
             key = "statistics.transcripts.agent_access.error.copy_install_prompt"
+        case .copyWorkBuddyCredentialFailed:
+            key = "statistics.transcripts.agent_access.error.copy_workbuddy_credential"
         }
         let text = localization.text(key)
         if let client = model.failedClient {

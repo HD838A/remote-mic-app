@@ -1,0 +1,65 @@
+{
+  "batch": "focus-option-hit-area",
+  "date": "2026-11-07",
+  "purpose": "Issue #898 / PR #913: focus-option hit areas and unchanged spacing",
+  "pull_request": "https://github.com/HD838A/remote-mic-app/pull/913",
+  "storage": "GitHub PR attachment; original interaction captures retained locally for verification",
+  "images": [
+    {
+      "file": "focus-options-zh-light.png",
+      "format": "PNG",
+      "width": 925,
+      "height": 753,
+      "sha256": "36fb9680c8c562e1e3c3895f6276aad930de4774b18cafb36340963f788e6093",
+      "external_url": "https://github.com/user-attachments/assets/67f93f0c-6701-483d-b5c1-c1b1f0e0c5b8",
+      "purpose": "User-captured Chinese light content area, without pointer overlays"
+    }
+  ],
+  "verification_captures": {
+    "storage": "Local original bytes; retained for interaction-test provenance, superseded for PR presentation",
+    "images": [
+      {
+        "file": "baseline-zh-light.jpg",
+        "format": "JPEG",
+        "width": 1067,
+        "height": 764,
+        "sha256": "187a6c6c07e70a5ac2085adac79c53b482d6f1600718769ba3280425e9ff170f"
+      },
+      {
+        "file": "after-zh-light-same-selection.jpg",
+        "format": "JPEG",
+        "width": 1067,
+        "height": 764,
+        "sha256": "3623ae9fcac40a3b18fbf97c8f97278214ad08ee0d960ae5169f34159f91759f"
+      },
+      {
+        "file": "focus-options-zh-light.jpg",
+        "format": "JPEG",
+        "width": 1067,
+        "height": 764,
+        "sha256": "0a213cee1dab36b1aa310a6ac01704c1af0765bab19e4a6ef4480f3d294f9cbb"
+      },
+      {
+        "file": "focus-options-zh-dark.jpg",
+        "format": "JPEG",
+        "width": 1067,
+        "height": 764,
+        "sha256": "a396a10f8f9948dc61723fd7e643caf9a4c24390386f607f3801f64d90aae804"
+      },
+      {
+        "file": "focus-options-en-light.jpg",
+        "format": "JPEG",
+        "width": 1067,
+        "height": 764,
+        "sha256": "4382b4f06ebdd42976dd833c9f610ef1e46a7c9f14a274f217e940263fe9adba"
+      },
+      {
+        "file": "focus-options-en-dark.jpg",
+        "format": "JPEG",
+        "width": 1067,
+        "height": 764,
+        "sha256": "46b18f1f8fa96eae26baa3256bfd6ee8b231bfffeffc1dd68bc12ef0f4f7cad7"
+      }
+    ]
+  }
+}
