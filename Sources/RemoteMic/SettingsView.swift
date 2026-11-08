@@ -3086,15 +3086,9 @@ struct SettingsView: View {
                                 target.trigger == .singleClick &&
                                 settings.experimentalContinuousRecordingEnabled)
                     )
-                    Button("common.action.close") {
-                        mappingEditingTarget = nil
-                        shortcutCaptureTarget = nil
-                        applicationShortcutCaptureProfileID = nil
-                    }
-                    .compatibilityButtonStyle(.standard)
                 }
 
-                // 只读预览下只禁用会写入的部分，「关闭」仍然可点，否则面板变成关不掉的窗口。
+                // 只读预览下只禁用会写入的部分；编辑区由下一次按键或手势选择替换。
                 mappingTriggerEditor(target.button, trigger: target.trigger)
                     .disabled(isMappingProfilePreviewOnly)
             }

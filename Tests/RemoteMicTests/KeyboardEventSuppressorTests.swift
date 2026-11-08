@@ -251,6 +251,31 @@ struct KeyboardEventSuppressorTests {
         #expect(!logs.contains { $0.contains("passed_through") })
     }
 
+    /// 实体键盘的同码键仍按住时，遥控器这一次按下放弃事件级登记——判据不变，
+    /// 但日志必须给出独立原因码，现场才能把「双跳重现」对应到「键盘同码键未松开」。
+    @Test(arguments: [UInt16(123), UInt16(36)])
+    func heldSameKeyArmKeepsItsBehaviorAndLogsItsOwnReason(_ keyCode: UInt16) throws {
+        var now: TimeInterval = 10
+        let native = RemoteNativeEvent.keyboard(keyCode: keyCode)
+        var logs: [String] = []
+        let suppressor = KeyboardEventSuppressor(uptime: { now }, logger: { logs.append($0) })
+        let down = try nativeEvent(native, down: true)
+
+        // 实体键先按下：不是泄漏配对，既不放行日志也不写 held_same_key。
+        #expect(!suppressor.handle(type: down.type, event: down))
+        #expect(!logs.contains { $0.contains("reason=held_same_key") })
+
+        // 遥控器同码按下：放弃登记的行为不变（放行，不产生待匹配记录），
+        // 但要留下独立原因码，且只留一行。
+        suppressor.arm(nativeEvents: [native], edge: .down)
+        let heldLogs = logs.filter { $0.contains("reason=held_same_key") }
+        #expect(heldLogs.count == 1)
+        #expect(heldLogs.allSatisfy {
+            $0.contains("phase=arm result=passthrough") && $0.contains("edge=down")
+        })
+        #expect(!suppressor.handle(type: down.type, event: down))
+    }
+
     @Test(arguments: [RemoteButton.volumeUp, .volumeDown, .tv], [false, true])
     func managedNativeKeysAreArmedBeforeReportDiagnosticsAndConfigurationCallbacks(
         _ button: RemoteButton, _ isSeized: Bool
