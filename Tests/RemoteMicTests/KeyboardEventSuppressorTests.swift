@@ -602,6 +602,29 @@ struct KeyboardEventSuppressorTests {
         #expect(!suppressor.handle(type: up.type, event: up))
     }
 
+    /// 本 Bug 的真实顺序：报告线程的提前登记必须早于主线程的 `arm` 生效。
+    /// 这里按现场顺序喂事件（prearm → 原生 down → 主线程 arm），确认方向键走的是
+    /// 提前登记这条路径，而不是「有没有登记」这种主线程也能满足的判据。
+    @Test func prearmedDirectionalDownBeatsTheMainThreadArm() throws {
+        var logs: [String] = []
+        let suppressor = KeyboardEventSuppressor(logger: { logs.append($0) })
+        suppressor.setPrearmActiveForTesting(true)
+        let native = RemoteNativeEvent.keyboard(keyCode: 123)
+        let down = try nativeEvent(native, down: true)
+        let up = try nativeEvent(native, down: false)
+
+        suppressor.prearm(nativeEvents: [native])
+        #expect(suppressor.handle(type: down.type, event: down))
+        #expect(logs.contains {
+            $0.contains("HID FILTER suppressed") && $0.contains("armed_by=prearm")
+        })
+
+        // 主线程随后登记同一次按下/松开，不得留下会吞掉下一次实体键盘按键的记录。
+        suppressor.arm(nativeEvents: [native], edge: .down)
+        suppressor.arm(nativeEvents: [native], edge: .up)
+        #expect(suppressor.handle(type: up.type, event: up))
+    }
+
     @Test(arguments: [Int32(0), Int32(1)])
     func prearmFollowedByMainThreadArmRegistersOneRecordOnly(_ keyType: Int32) throws {
         var now: TimeInterval = 10
