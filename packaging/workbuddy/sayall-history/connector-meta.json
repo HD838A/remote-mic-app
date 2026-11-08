@@ -1,0 +1,21 @@
+{
+  "name": "SayAll 回眸",
+  "name_zh": "SayAll 回眸",
+  "name_en": "SayAll Reflections",
+  "description": "在同一台 Mac 上只读查询无线麦 SayAll 保存的回眸文字。",
+  "description_zh": "在同一台 Mac 上只读查询无线麦 SayAll 保存的回眸文字。",
+  "description_en": "Read Reflections transcripts saved by SayAll on the same Mac.",
+  "source": "sayall-history",
+  "type": "mcp",
+  "version": "0.1.0",
+  "auth_mode": "token",
+  "examples_zh": [
+    "列出回眸中最近使用过的应用",
+    "总结我今天通过无线麦输入的测试记录"
+  ],
+  "examples_en": [
+    "List the applications represented in my recent SayAll history",
+    "Summarize today's test transcripts saved by SayAll"
+  ],
+  "minWorkbuddyVersion": "4.24.0"
+}

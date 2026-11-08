@@ -190,9 +190,16 @@ enum OnboardingScreenshotRenderer {
         NSApp.setActivationPolicy(.regular)
         defer { NSApp.appearance = previousAppearance }
 
+        // 音频页的“已选中设备”是修好 Siri Remote 门禁后的可见结果，默认夹具故意不选设备，
+        // 需要出这一态时显式打开，避免改变其余页面的既有基线。
+        let selectsDeviceOnAudioStep = ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_ONBOARDING_SCREENSHOT_AUDIO_SELECTED"
+        ] == "1"
         for (step, filename) in pages(for: controlMethod) {
             settings.selectedAudioDeviceUID = switch step {
             case .voiceTest, .controls, .complete:
+                DoubaoAudioDevicePolicy.deviceUID
+            case .audio where selectsDeviceOnAudioStep:
                 DoubaoAudioDevicePolicy.deviceUID
             default:
                 ""

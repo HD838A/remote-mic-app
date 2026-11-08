@@ -1,6 +1,8 @@
 import Foundation
 
 private let maximumDayFileBytes: Int64 = 32 * 1024 * 1024
+private let maximumCachedDayFiles = 64
+private let maximumCachedDayFileBytes: Int64 = 8 * 1024 * 1024
 private let maximumTranscriptCharacters = 8_000
 private let maximumApplicationKeyCharacters = 200
 
@@ -96,6 +98,8 @@ public enum SayAllMCPHistoryError: Error, Equatable {
 
 public final class SayAllMCPHistoryStore: @unchecked Sendable {
     private let transcriptRoot: URL
+    private let cacheLock = NSLock()
+    private var dayFileCache: [URL: CachedDayFile] = [:]
 
     public init(transcriptRoot: URL) {
         self.transcriptRoot = transcriptRoot
@@ -106,9 +110,8 @@ public final class SayAllMCPHistoryStore: @unchecked Sendable {
     }
 
     public func listApplications() throws -> SayAllMCPApplicationPage {
-        let loaded = try loadAllRecords()
         var groups: [String: ApplicationAccumulator] = [:]
-        for record in loaded.records {
+        let skippedFileCount = try visitRecords { record in
             let key = record.bundleIdentifier.isEmpty ? record.applicationKey : record.bundleIdentifier
             if var group = groups[key] {
                 group.count += 1
@@ -141,7 +144,7 @@ public final class SayAllMCPHistoryStore: @unchecked Sendable {
         }
         return SayAllMCPApplicationPage(
             applications: applications,
-            skippedFileCount: loaded.skippedFileCount
+            skippedFileCount: skippedFileCount
         )
     }
 
@@ -157,37 +160,73 @@ public final class SayAllMCPHistoryStore: @unchecked Sendable {
         }
         let bundleIdentifiers = try Self.normalizedBundleIdentifiers(query.bundleIdentifiers)
         let cursor = try query.cursor.map { try Self.decodeCursor($0, order: order) }
-        let loaded = try loadAllRecords()
-        var records = loaded.records.filter { record in
-            if let startedAt, record.startedAt < startedAt { return false }
-            if let endedAt, record.endedAt >= endedAt { return false }
-            if let bundleIdentifiers, !bundleIdentifiers.contains(record.bundleIdentifier) {
-                return false
-            }
-            if let cursor {
-                let comparison = Self.compare(record, endedAt: cursor.endedAt, id: cursor.id)
-                return order == .ascending ? comparison > 0 : comparison < 0
-            }
-            return true
-        }
-        records.sort {
+        let candidateLimit = limit + 1
+        var records: [StoredTranscriptRecord] = []
+        records.reserveCapacity(candidateLimit * 2)
+        let comesBefore: (StoredTranscriptRecord, StoredTranscriptRecord) -> Bool = {
             let comparison = Self.compare($0, $1)
             return order == .ascending ? comparison < 0 : comparison > 0
         }
+        let skippedFileCount = try visitRecords { record in
+            if let startedAt, record.startedAt < startedAt { return }
+            if let endedAt, record.endedAt >= endedAt { return }
+            if let bundleIdentifiers, !bundleIdentifiers.contains(record.bundleIdentifier) { return }
+            if let cursor {
+                let comparison = Self.compare(record, endedAt: cursor.endedAt, id: cursor.id)
+                guard order == .ascending ? comparison > 0 : comparison < 0 else { return }
+            }
+
+            records.append(record)
+            // Keep one lookahead for hasMore and trim in batches to bound sorting and memory.
+            if records.count == candidateLimit * 2 {
+                records.sort(by: comesBefore)
+                records.removeLast(records.count - candidateLimit)
+            }
+        }
+        records.sort(by: comesBefore)
         let selected = Array(records.prefix(limit))
         let hasMore = records.count > selected.count
         return SayAllMCPTranscriptPage(
             records: selected.map(Self.publicRecord),
             nextCursor: hasMore ? selected.last.map { Self.encodeCursor($0, order: order) } : nil,
             hasMore: hasMore,
-            skippedFileCount: loaded.skippedFileCount
+            skippedFileCount: skippedFileCount
         )
     }
 
-    private func loadAllRecords() throws -> LoadedHistory {
-        guard FileManager.default.fileExists(atPath: transcriptRoot.path) else {
-            return LoadedHistory(records: [], skippedFileCount: 0)
+    private func visitRecords(_ visit: (StoredTranscriptRecord) -> Void) throws -> Int {
+        try cacheLock.withLock {
+            // Retain only files visited in this scan. Cached content never leaves this process
+            // except through the same authorized query path used for a fresh decode.
+            var nextCache: [URL: CachedDayFile] = [:]
+            defer { dayFileCache = nextCache }
+            var cachedBytes = dayFileCache.values.reduce(Int64(0)) { $0 + $1.status.size }
+            return try scanDayFiles { file, status, applicationKey, localDateKey in
+                let cached = dayFileCache.removeValue(forKey: file)
+                if let cached, cached.status == status {
+                    nextCache[file] = cached
+                    cached.records.forEach(visit)
+                    return
+                }
+
+                cachedBytes -= cached?.status.size ?? 0
+                let records = try Self.readDayFile(file, applicationKey: applicationKey, localDateKey: localDateKey)
+                // Keep room for existing entries until their files have been checked.
+                if nextCache.count + dayFileCache.count < maximumCachedDayFiles,
+                   status.size <= maximumCachedDayFileBytes - cachedBytes,
+                   (try? SayAllMCPFileSecurity.fileStatus(at: file)) == status {
+                    nextCache[file] = CachedDayFile(status: status, records: records)
+                    cachedBytes += status.size
+                }
+                records.forEach(visit)
+            }
         }
+    }
+
+    private func scanDayFiles(
+        _ visit: (URL, SayAllMCPFileSecurity.FileStatus, String, String) throws -> Void
+    ) throws -> Int {
+        guard FileManager.default.fileExists(atPath: transcriptRoot.path) else { return 0 }
         let rootStatus = try SayAllMCPFileSecurity.fileStatus(at: transcriptRoot)
         guard rootStatus.isDirectory, !rootStatus.isSymbolicLink else {
             throw SayAllMCPStorageError.invalidTranscriptRoot
@@ -198,7 +237,6 @@ public final class SayAllMCPHistoryStore: @unchecked Sendable {
             includingPropertiesForKeys: nil,
             options: [.skipsHiddenFiles]
         )
-        var records: [StoredTranscriptRecord] = []
         var skippedFileCount = 0
         for applicationDirectory in applications {
             let applicationKey = applicationDirectory.lastPathComponent
@@ -227,28 +265,33 @@ public final class SayAllMCPHistoryStore: @unchecked Sendable {
                         skippedFileCount += 1
                         continue
                     }
-                    let dayFile = try JSONDecoder().decode(
-                        StoredTranscriptDayFile.self,
-                        from: Data(contentsOf: file, options: [.mappedIfSafe])
-                    )
-                    guard dayFile.formatVersion == 1,
-                          dayFile.applicationKey == applicationKey,
-                          dayFile.localDateKey == localDateKey,
-                          dayFile.applicationKey.count <= maximumApplicationKeyCharacters,
-                          dayFile.applicationName.count <= 500,
-                          dayFile.bundleIdentifier.count <= 500,
-                          dayFile.records.allSatisfy({ Self.isValid($0, dayFile: dayFile) })
-                    else {
-                        skippedFileCount += 1
-                        continue
-                    }
-                    records.append(contentsOf: dayFile.records)
+                    try visit(file, status, applicationKey, localDateKey)
                 } catch {
                     skippedFileCount += 1
                 }
             }
         }
-        return LoadedHistory(records: records, skippedFileCount: skippedFileCount)
+        return skippedFileCount
+    }
+
+    private static func readDayFile(
+        _ file: URL,
+        applicationKey: String,
+        localDateKey: String
+    ) throws -> [StoredTranscriptRecord] {
+        let dayFile = try JSONDecoder().decode(
+            StoredTranscriptDayFile.self,
+            from: Data(contentsOf: file, options: [.mappedIfSafe])
+        )
+        guard dayFile.formatVersion == 1,
+              dayFile.applicationKey == applicationKey,
+              dayFile.localDateKey == localDateKey,
+              dayFile.applicationKey.count <= maximumApplicationKeyCharacters,
+              dayFile.applicationName.count <= 500,
+              dayFile.bundleIdentifier.count <= 500,
+              dayFile.records.allSatisfy({ Self.isValid($0, dayFile: dayFile) })
+        else { throw CocoaError(.fileReadCorruptFile) }
+        return dayFile.records
     }
 
     private static func isValid(
@@ -404,9 +447,9 @@ private struct StoredTranscriptRecord: Decodable {
     let captureMethodVersion: Int
 }
 
-private struct LoadedHistory {
+private struct CachedDayFile {
+    let status: SayAllMCPFileSecurity.FileStatus
     let records: [StoredTranscriptRecord]
-    let skippedFileCount: Int
 }
 
 private struct ApplicationAccumulator {

@@ -115,25 +115,25 @@ enum RemoteDeviceNamePolicy {
         return "\(profile.model.rawValue)|\(name.uppercased())"
     }
 
-    static func defaultMappingProfile(
-        from profiles: [RemoteDeviceProfile]
-    ) -> RemoteDeviceProfile? {
-        profiles.first { $0.model == .rc001 || $0.model == .rc003 }
-    }
-
-    /// 链路就绪事件是否接管按键页的选中态。
+    /// 上次选中的遥控器缺席时，接管画布的档案。
     ///
-    /// 多遥控器同时在线时按键页优选小米画布：Chromecast 不得抢走已连接的小米。
-    /// 启动顺序不稳定（Chromecast 常比小米先 ready），只按「谁后连谁赢」会让页面
-    /// 永远停在 Chromecast。其余情况保持「连接即选中」，与小米链路的
-    /// `activateRemoteProfile` 一致。
-    static func shouldAdoptConnectionSelection(
-        for incoming: XiaomiRemoteModel,
-        isAlreadySelected: Bool,
-        hasConnectedXiaomi: Bool
-    ) -> Bool {
-        guard !isAlreadySelected else { return false }
-        return !(incoming.isChromecastRemote && hasConnectedXiaomi)
+    /// 只在这里用到型号顺序，而且前提是「历史偏好已经确定不成立」：用户卖掉了原来的
+    /// 遥控器、换成了别的设备。此时没有历史可依据，才按卡片顺序取第一台在线的
+    /// （小米 > Siri Remote > Chromecast）。
+    ///
+    /// 不能用型号顺序决定正常启动时显示谁——那会让「卖掉小米、换成 Chromecast」的用户
+    /// 永远看到已经不在的小米画布。
+    static func fallbackSelection(
+        from profiles: [RemoteDeviceProfile],
+        isConnected: (RemoteDeviceProfile) -> Bool,
+        modelName: (RemoteDeviceProfile) -> String,
+        systemName: (RemoteDeviceProfile) -> String?
+    ) -> RemoteDeviceProfile? {
+        sortedForCards(
+            profiles.filter(isConnected),
+            modelName: modelName,
+            systemName: systemName
+        ).first
     }
 
     private static func cardFamilyOrder(_ model: XiaomiRemoteModel) -> Int {

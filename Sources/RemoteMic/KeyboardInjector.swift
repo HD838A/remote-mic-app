@@ -418,6 +418,22 @@ enum KeyboardInjector {
             keyPoster(1, .maskCommand)
         case .commandDelete:
             keyPoster(51, .maskCommand)
+        case .commandMinimize:
+            keyPoster(46, .maskCommand)
+        case .toggleFullScreen:
+            keyPoster(3, [.maskControl, .maskCommand])
+        case .commandNewTab:
+            keyPoster(17, .maskCommand)
+        case .commandPreviousTab:
+            keyPoster(33, [.maskShift, .maskCommand])
+        case .commandNextTab:
+            keyPoster(30, [.maskShift, .maskCommand])
+        case .commandNextWindow:
+            keyPoster(50, .maskCommand)
+        case .commandHide:
+            keyPoster(4, .maskCommand)
+        case .commandNew:
+            keyPoster(45, .maskCommand)
         case .arrowUp:
             keyPoster(126, [])
         case .arrowDown:
@@ -446,6 +462,48 @@ enum KeyboardInjector {
             keyPoster(contextualMenuKeyCode, [])
         case .appSwitcher:
             keyPoster(48, .maskCommand)
+        case .missionControl:
+            return postSymbolicHotKey(
+                126,
+                modifiers: [controlModifier],
+                keyFlags: [.maskSecondaryFn, .maskNumericPad],
+                keyStatePoster: keyStatePoster
+            )
+        case .applicationWindows:
+            return postSymbolicHotKey(
+                125,
+                modifiers: [controlModifier],
+                keyFlags: [.maskSecondaryFn, .maskNumericPad],
+                keyStatePoster: keyStatePoster
+            )
+        case .spaceLeft:
+            return postSymbolicHotKey(
+                123,
+                modifiers: [controlModifier],
+                keyFlags: [.maskSecondaryFn, .maskNumericPad],
+                keyStatePoster: keyStatePoster
+            )
+        case .spaceRight:
+            return postSymbolicHotKey(
+                124,
+                modifiers: [controlModifier],
+                keyFlags: [.maskSecondaryFn, .maskNumericPad],
+                keyStatePoster: keyStatePoster
+            )
+        case .lockScreen:
+            // ⌃⌘Q：真实按键顺序是先 Control 再 Command，收尾逆序抬起。
+            return postSymbolicHotKey(
+                12,
+                modifiers: [controlModifier, commandModifier],
+                keyStatePoster: keyStatePoster
+            )
+        case .screenshot:
+            // ⌘⇧3：系统截屏快捷键，需要系统侧该项处于启用状态。
+            return postSymbolicHotKey(
+                20,
+                modifiers: [commandModifier, shiftModifier],
+                keyStatePoster: keyStatePoster
+            )
         case .volumeUp:
             postSystemKey(type: 0)
         case .volumeDown:
@@ -2121,6 +2179,50 @@ enum KeyboardInjector {
         ]
         .filter { !$0.isEmpty }
         .joined(separator: " ")
+    }
+
+    /// 参与符号快捷键的修饰键：键码 + 它对应的 CGEventFlags 位。
+    private struct SymbolicModifier {
+        let keyCode: CGKeyCode
+        let flag: CGEventFlags
+    }
+
+    private static let controlModifier = SymbolicModifier(keyCode: 59, flag: .maskControl)
+    private static let commandModifier = SymbolicModifier(keyCode: 55, flag: .maskCommand)
+    private static let shiftModifier = SymbolicModifier(keyCode: 56, flag: .maskShift)
+
+    /// 投递 WindowServer 符号快捷键（调度中心、切换桌面、锁屏、系统截屏等）。
+    ///
+    /// 这类快捷键匹配的是**真实按键流里的修饰键状态**，不是事件自带的 `flags`。
+    /// 只发「目标键 down/up + flags」会被静默丢弃：动作执行了、事件也投递了，
+    /// 系统毫无反应。macOS 27.0.1 (26A434) 实测确认。
+    ///
+    /// 因此这里按真实键入顺序先按下修饰键，再按目标键，最后逆序抬起；
+    /// 两次 12ms 停顿让 WindowServer 的修饰键状态机落地，不加会偶发丢动作。
+    ///
+    /// - Parameter keyFlags: 目标键自身固有的标志位。方向键在真实键盘上恒带
+    ///   `SecondaryFn | NumericPad`（见 `MACOS_FUNCTION_LAYER.md`），普通字母键不需要。
+    private static func postSymbolicHotKey(
+        _ key: CGKeyCode,
+        modifiers: [SymbolicModifier],
+        keyFlags: CGEventFlags = [],
+        keyStatePoster: KeyStatePoster
+    ) -> Bool {
+        var active: CGEventFlags = []
+        for modifier in modifiers {
+            active.insert(modifier.flag)
+            _ = keyStatePoster(modifier.keyCode, true, active)
+        }
+        usleep(12_000)
+        let effective = active.union(keyFlags)
+        _ = keyStatePoster(key, true, effective)
+        _ = keyStatePoster(key, false, effective)
+        usleep(12_000)
+        for modifier in modifiers.reversed() {
+            active.remove(modifier.flag)
+            _ = keyStatePoster(modifier.keyCode, false, active)
+        }
+        return true
     }
 
     private static func postKey(code: CGKeyCode, flags: CGEventFlags = []) {
