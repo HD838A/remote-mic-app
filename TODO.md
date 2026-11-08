@@ -185,8 +185,8 @@
   - 2026-10-15 修复回眸录音暂停/继续/停止、无线麦前台应用回退、文字与原始录音开关耦合，以及关联记录重复删除入口；真实微信、无线麦 App 和播放控制仍需人工验收。
 - [ ] 在无线麦SayAll.app 内集成本地语音历史只读 MCP
   - WorkBuddy 回眸连接器候选使用公开凭据表单和随 App 提供的本地 Helper。WorkBuddy 平台导入、真实客户端连接和重启后的读取仍待验收。见 [WorkBuddy 连接器测试手册](Testing/WorkBuddyConnector.md)。
-  - 已将唯一正式运行时实现为 App 内 Swift `stdio` Helper，提供默认关闭总开关、每客户端 256-bit 授权、SHA-256 哈希、撤销、脱敏审计、App 列表和按时间/App 分页查询；App 内可一键连接 Codex、Claude Code、Cursor 和 OpenCode，并保留标准 MCP JSON、Codex TOML 手动降级，用户不需要 Node.js、npm 或开发工具。`GetSayAll/sayall-mcp` 只提供公开契约、Schema 和集成资料。
-  - 主仓库提供中英文 AI 安装与 MCP 配置指南，约束 AI 必须先取得用户明确授权、不得静默开启访问或上传令牌，并说明完整 App 检查、快速连接、手动配置、验证和排障流程。
+  - 已将唯一正式运行时实现为 App 内 Swift `stdio` Helper，提供默认关闭总开关、每客户端 256-bit 授权、SHA-256 哈希、撤销、脱敏审计、App 列表和按时间/App 分页查询；App 内可一键连接 Codex、Claude Code、Cursor 和 OpenCode，其他本机客户端可通过一行安装提示词连接，用户不需要 Node.js、npm 或开发工具。`GetSayAll/sayall-mcp` 只提供公开契约、Schema 和集成资料。
+  - 主仓库提供中英文 AI 安装与 MCP 配置指南，约束 AI 必须先取得用户明确授权、不得静默开启访问或上传令牌，并说明完整 App 检查、快速连接、Agent 安装、验证和排障流程。
   - canonical Helper 路径统一为 `/Applications/SayAll.app/Contents/Helpers/SayAllMCP`；非标准目录使用运行中 App 的真实路径。授权状态只保存 Helper 路径指纹，App 移动、改名或旧记录缺少指纹时显示移除并重新连接提示，不自动覆盖其他 MCP 配置。
   - 未发布的 Node 实现、旧目录和旧事件格式不纳入兼容；正式 `v1` 发布后保持 Helper 路径、`serve` 参数、环境变量、工具名、已发布字段语义和 `RemoteMic/MCP/v1/access.json` 向后兼容；`v1` 输出 Schema 为封闭对象，新增输出字段或其他破坏性变化使用新工具名或并行 `v2`。
   - MCP 只读现有 `Application Support/RemoteMic/Transcripts/v1`，不监听网络、不常驻、不修改或删除历史；自动化已覆盖四客户端配置合并、冲突拒绝、私有备份、移除和失败授权回滚，仍需在四个真实客户端完成连接、分页读取、撤销、关闭后拒绝和第三方数据处理人工验收后再勾选。
@@ -567,6 +567,7 @@
   - 2026-08-10 修复 monitored fallback 下左右键按住不能连续移动其他 APP 文本光标：当物理左右键与方向动作完全匹配且没有辅助动作时改用 macOS 原生事件；非匹配映射仍保留 App 连发，并修正 timer 重复累加原生按住状态的问题。seized/monitored、无线麦前台和非匹配动作已通过硬件模拟，实体遥控器仍待 Preview 验收。
   - 2026-08-10 基础按键继续补充 Command-W、Command-X、Command-A、Command-Z、Command-Shift-Z、Command-F 和 Command-S；这些固定组合与既有 Command-Q 一样禁止按住重复。无线麦自身补上标准 macOS 菜单，可使用 Command-Q 退出、Command-W 关闭当前窗口。
   - 2026-08-13 基础按键补充 Command-Delete，沿用固定组合键的一次触发策略；动作分类、键码与 Command 修饰键已有自动化覆盖，真实遥控器和目标 App 行为仍需人工验收。
+  - 2026-11-08 固定快捷键补充 12 个预设，此前只能靠自定义快捷键逐个录制。基础按键 8 个：最小化窗口（Command-M）、切换全屏（Control-Command-F）、新建标签页（Command-T）、上一个/下一个标签页（Command-Shift-[ / ]）、切换窗口（Command-Backtick）、隐藏当前 App（Command-H）、新建窗口（Command-N）；系统与媒体 4 个：调度中心（Control-Up）、应用程序窗口（Control-Down）、向左/向右切换桌面（Control-Left / Control-Right）。全部沿用固定组合键的一次触发策略；动作分类、键码、修饰键与紧凑/完整文案已有自动化覆盖，真实遥控器和目标 App 行为仍需人工验收。Control 方向键四项是 macOS 默认快捷键，用户在系统设置改过即失效，属用户配置边界。真机首测这四项无响应：日志显示动作已执行、事件带 Control 且未被拦截，根因是 WindowServer 的符号快捷键只认真实按键流里的修饰键边沿，不接受合成事件自带的 flags；已改为显式投递 Control 按下/抬起边沿、箭头补 Fn 与 NumericPad，待真机复测。2026-11-08 追加锁定屏幕（Control-Command-Q）与截屏（Command-Shift-3）两项，复用同一套修饰键边沿投递（已泛化为 postSymbolicHotKey，按真实键入顺序按下/逆序抬起修饰键）；截屏依赖系统「键盘快捷键 → 截屏」处于启用状态，用户机器上该项当前为关闭，属外部配置边界。
 - [ ] 支持更容易购买的低价 ATVV 语音遥控器 <!-- workshop:status=进行中;priority=P2 -->
   - 2026-08-08 已实际测试三款硬件：小米蓝牙语音遥控器第三方兼容版、Ugoos UR02 和音仕达录音笔。三款设备在当前真实 Mac 环境中均无法建立蓝牙连接，因此没有进入 GATT、ATVV、HID、音频格式或 App 适配阶段，当前均不能列为兼容或推荐设备。
   - 公开的 Linux / BlueZ 日志可以证明特定 UR02 样机曾暴露 ATVV v1.0 和 16kHz ADPCM，但不能证明同型号、同批次或当前样机能与 macOS 配对。此前将 UR02 列为优先工程样机的判断已经撤回，除非找到明确的 macOS 配对方法、固件差异证据或另一只样机完成复验，否则暂停继续投入。
