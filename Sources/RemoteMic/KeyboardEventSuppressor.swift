@@ -326,6 +326,11 @@ final class KeyboardEventSuppressor {
             // pressed，之后每个快捷键都会被强行加上 Fn，直到下一次真实按下 Fn。
             // 复位成 unobserved 后，只有新的真实边沿才能让快照的 Fn 重新被信任。
             hardwareModifierState.reset()
+            // 这里刻意不清空 passedNativeDowns / passedNativeReleases：tap 禁用窗口
+            // 吃掉某次松开时，清空会让主线程随后的 arm(edge: .up) 重新开出待匹配
+            // 窗口、把那一次松开吞掉——正是「系统认为键仍按住并连发」要避免的事。
+            // 保留账本时，下一次同码松开到达即自愈（放行并出账），最坏情况只是
+            // 该键在下一次按下前少一次拦截，不会出现卡键。
             // 本回调在 tap 专用线程上执行，端口引用由主线程写入，必须加锁读取。
             lock.lock()
             let tap = eventTap
@@ -352,9 +357,19 @@ final class KeyboardEventSuppressor {
             if descriptor.edge == .up {
                 passedNativeDowns.remove(descriptor.event)
             }
+            // 纯实体键盘的同码按键不属于「泄漏配对」，不写日志：否则用户每次按
+            // 回车/方向键都会在 runtime.log 里多一行。远端泄漏场景主线程随后必然
+            // arm（recentArmed 命中）；音量/TV 是系统键，保留既有日志。
+            let armedRecently = recentArmed.contains {
+                $0.event == descriptor.event && $0.until > now
+            }
+            var isSystemKey = false
+            if case .systemKey = descriptor.event { isSystemKey = true }
             lock.unlock()
-            logger("HID FILTER passed_through event=\(Self.logToken(descriptor.event)) " +
-                "edge=\(descriptor.edge == .down ? "down" : "up") reason=escaped_native_pair")
+            if armedRecently || isSystemKey {
+                logger("HID FILTER passed_through event=\(Self.logToken(descriptor.event)) " +
+                    "edge=\(descriptor.edge == .down ? "down" : "up") reason=escaped_native_pair")
+            }
             return false
         }
         if let matchIndex = pendingEvents.firstIndex(where: {

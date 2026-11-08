@@ -237,6 +237,20 @@ struct KeyboardEventSuppressorTests {
         #expect(suppressor.handle(type: up.type, event: up))
     }
 
+    /// 纯实体键盘的同码按键不是泄漏配对：不能为每次打字在 runtime.log 里写
+    /// `passed_through` 日志。放行本身不变，只是不再记日志。
+    @Test func physicalKeyboardTypingDoesNotLogPassedThrough() throws {
+        var logs: [String] = []
+        let suppressor = KeyboardEventSuppressor(logger: { logs.append($0) })
+        let native = RemoteNativeEvent.keyboard(keyCode: 36)
+        let down = try nativeEvent(native, down: true)
+        let up = try nativeEvent(native, down: false)
+
+        #expect(!suppressor.handle(type: down.type, event: down))
+        #expect(!suppressor.handle(type: up.type, event: up))
+        #expect(!logs.contains { $0.contains("passed_through") })
+    }
+
     @Test(arguments: [RemoteButton.volumeUp, .volumeDown, .tv], [false, true])
     func managedNativeKeysAreArmedBeforeReportDiagnosticsAndConfigurationCallbacks(
         _ button: RemoteButton, _ isSeized: Bool
