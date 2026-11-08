@@ -658,8 +658,8 @@
 "about.page.subtitle" = "View version, updates, language, and app display options";
 "about.app.description" = "Wireless voice and shortcut controls for Xiaomi Bluetooth Remote 2 Pro and Apple Remote.";
 "about.app_support.title" = "App & Support";
-"about.preferences.show_dock_icon" = "Show app icon in the Dock";
-"about.preferences.show_dock_icon_help" = "When hidden, SayAll remains available from the menu bar.";
+"about.preferences.show_dock_icon" = "Keep the app icon visible in the Dock";
+"about.preferences.show_dock_icon_help" = "When off, opening the main window from the menu bar or at launch shows the icon until you close the window. Icons pinned in macOS stay in the Dock.";
 "about.preferences.show_status_bar_icon" = "Show app icon in the menu bar";
 "about.preferences.show_status_bar_icon_help" = "If both Dock and menu bar icons are hidden, launch SayAll again to open Settings.";
 "about.preferences.app_icon" = "App Icon";

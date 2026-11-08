@@ -6472,13 +6472,13 @@ struct SettingsView: View {
                                     .frame(width: 34)
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text("about.preferences.show_dock_icon")
-                                        .font(.subheadline.weight(.semibold))
+                                        .font(.system(size: 12, weight: .semibold))
                                     Text("about.preferences.show_dock_icon_help")
-                                        .font(.caption)
+                                        .font(.system(size: 12))
                                         .foregroundStyle(.secondary)
                                 }
                                 Spacer()
-                                Toggle("", isOn: Binding(
+                                Toggle("about.preferences.show_dock_icon", isOn: Binding(
                                     get: { settings.showDockIcon },
                                     set: { setDockIconVisible($0) }
                                 ))

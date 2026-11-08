@@ -372,7 +372,9 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
                 if shouldOpenPermissionRepair {
                     self.showSettingsWindow(initialSection: .about)
                 } else {
-                    self.showSettingsWindow()
+                    let opensOnLaunch = self.model.settings.isOnboardingComplete &&
+                        self.model.settings.openMainWindowAtLaunch
+                    self.showSettingsWindow(temporaryDockSource: opensOnLaunch ? "launch_open" : nil)
                 }
                 // 升级后不再弹「已成功更新到版本」确认框：完成更新的人已经知道版本变了，
                 // 弹窗只是挡住刚打开的窗口。主窗口与权限修复照旧自动呈现。
@@ -1178,12 +1180,12 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     }
 
     @objc private func showSettingsFromStatusMenu() {
-        showSettingsWindow(fromStatusMenu: true)
+        showSettingsWindow(temporaryDockSource: "status_menu_open")
     }
 
     private func showSettingsWindow(
         initialSection: SettingsSection? = nil,
-        fromStatusMenu: Bool = false
+        temporaryDockSource: String? = nil
     ) {
         if settingsWindowController == nil {
             settingsWindowController = makeSettingsWindowController(
@@ -1192,10 +1194,10 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         }
         guard let windowController = settingsWindowController,
               let window = windowController.window else { return }
-        if fromStatusMenu && !model.settings.showDockIcon {
+        if temporaryDockSource != nil && !model.settings.showDockIcon {
             temporarilyShowsDockIcon = true
         }
-        updateDockActivationPolicy(source: fromStatusMenu ? "status_menu_open" : "window_open")
+        updateDockActivationPolicy(source: temporaryDockSource ?? "window_open")
         windowController.showWindow(nil)
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
@@ -1480,7 +1482,10 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     }
 
     private func applyImportedEntryPointVisibility() {
-        temporarilyShowsDockIcon = false
+        // Temporary display only exists while the stored preference is off.
+        if model.settings.showDockIcon {
+            temporarilyShowsDockIcon = false
+        }
         updateDockActivationPolicy(source: "configuration_import")
         applyStatusBarIconVisibility(
             model.settings.showStatusBarIcon,
