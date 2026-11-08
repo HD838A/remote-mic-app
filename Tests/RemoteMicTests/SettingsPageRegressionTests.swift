@@ -1144,7 +1144,10 @@ struct SettingsPageRegressionTests {
         #expect(appSource.contains("source: \"window_miniaturized\""))
         #expect(appSource.contains("source: \"window_deminiaturized\""))
         #expect(appSource.contains("source: \"activation_policy\""))
-        #expect(appSource.contains("isSettingsWindowOpen = false"))
+        #expect(appSource.contains("#selector(showSettingsFromStatusMenu)"))
+        #expect(appSource.contains("showSettingsWindow(fromStatusMenu: true)"))
+        #expect(appSource.contains("temporarilyShowsDockIcon = false\n        updateDockActivationPolicy(source: \"window_close\")"))
+        #expect(appSource.contains("temporarilyShowsDockIcon = false\n        updateDockActivationPolicy(source: \"dock_toggle\")"))
         #expect(!appSource.contains("window.canHide = false"))
         #expect(appSource.contains("NSApp.keyWindow?.performClose(nil)"))
         #expect(appSource.contains("performMiniaturize:"))
@@ -1154,15 +1157,15 @@ struct SettingsPageRegressionTests {
 
         #expect(SettingsWindowActivationPolicy.value(
             showDockIcon: false,
-            isSettingsWindowOpen: true
-        ) == .accessory)
+            temporarilyShowsDockIcon: true
+        ) == .regular)
         #expect(SettingsWindowActivationPolicy.value(
             showDockIcon: false,
-            isSettingsWindowOpen: false
+            temporarilyShowsDockIcon: false
         ) == .accessory)
         #expect(SettingsWindowActivationPolicy.value(
             showDockIcon: true,
-            isSettingsWindowOpen: false
+            temporarilyShowsDockIcon: false
         ) == .regular)
     }
 
