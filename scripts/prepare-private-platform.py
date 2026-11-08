@@ -57,6 +57,10 @@ def relevant(path):
     # Package manifests added to the unified Mac package change Package.swift.
     if path.endswith((".md", ".html")):
         return False
+    # SwiftPM test targets are not shipped. A test-only change after a tag must
+    # not force a new product tag or block integration of the existing one.
+    if "Tests" in PurePosixPath(path).parts:
+        return False
     return any(path == scope or (scope.endswith("/") and path.startswith(scope))
                for scope in MAC_PATHS)
 
