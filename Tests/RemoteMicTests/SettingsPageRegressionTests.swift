@@ -1535,6 +1535,15 @@ struct SettingsPageRegressionTests {
         #expect(source.contains(".accessibilityAddTraits(isSelected ? .isSelected : [])"))
         #expect(source.contains("LazyVGrid("))
         #expect(source.contains("button_mapping.action.disable_switch"))
+        // 动作编辑面板保留停用开关，但不再提供「关闭」按钮。
+        let editorPanelStart = try #require(settingsSource.range(of: "private func mappingEditorPanel"))
+        let editorPanelEnd = try #require(settingsSource.range(
+            of: "private func mappingVoiceSettingsPanel",
+            range: editorPanelStart.upperBound..<settingsSource.endIndex
+        ))
+        let editorPanelSource = settingsSource[editorPanelStart.lowerBound..<editorPanelEnd.lowerBound]
+        #expect(editorPanelSource.contains("button_mapping.action.disable_switch"))
+        #expect(!editorPanelSource.contains("Button(\"common.action.close\")"))
         #expect(source.contains(").filter { $0 != .disabled && $0 != .combinationAction }"))
         #expect(!source.contains("DisclosureGroup(isExpanded: $isPresetApplicationActionsExpanded)"))
         #expect(!source.contains("isPresetApplicationActionsExpanded"))
