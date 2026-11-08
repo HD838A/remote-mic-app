@@ -282,7 +282,7 @@
 "button_mapping.action_group.system_and_media" = "系统与媒体";
 "button_mapping.action_group.custom" = "输入框";
 "button_mapping.action_group.applications" = "打开 App";
-"button_mapping.action.disable_switch" = "禁用按键";
+"button_mapping.action.disable_switch" = "停用此动作";
 "button_mapping.focus_input.app_adaptation_hint.prefix" = "学习指定 App 的输入框请去";
 "button_mapping.focus_input.app_adaptation_hint.action" = "App 适配页面";
 "custom_application.target" = "目标 APP";
