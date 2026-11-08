@@ -109,6 +109,9 @@ private final class SayAllMCPStdioServer {
         guard let name = parameters["name"] as? String else {
             return toolFailure(code: "invalid_request", message: "Tool name is required.")
         }
+        guard parameters["arguments"] == nil || parameters["arguments"] is [String: Any] else {
+            return toolFailure(code: "invalid_arguments", message: "Tool arguments must be an object.")
+        }
         let arguments = parameters["arguments"] as? [String: Any] ?? [:]
         do {
             switch name {
@@ -121,6 +124,8 @@ private final class SayAllMCPStdioServer {
             default:
                 return toolFailure(code: "unknown_tool", message: "Tool is unavailable.")
             }
+        } catch SayAllMCPProtocolError.invalidArguments {
+            return toolFailure(code: "invalid_arguments", message: "Tool arguments do not match the schema.")
         } catch {
             let code = SayAllMCPService.errorCode(error)
             let message = (error as? SayAllMCPAccessDeniedError)?.message
@@ -187,6 +192,11 @@ private final class SayAllMCPStdioServer {
             bundleIdentifiers = values
         } else {
             bundleIdentifiers = nil
+        }
+        for key in ["startedAtOrAfter", "endedAtBefore", "order", "cursor"] {
+            if let value = arguments[key], !(value is String) {
+                throw SayAllMCPProtocolError.invalidArguments
+            }
         }
         let order: SayAllMCPTranscriptOrder?
         if let rawOrder = arguments["order"] as? String {
