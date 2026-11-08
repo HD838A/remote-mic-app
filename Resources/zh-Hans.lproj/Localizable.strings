@@ -659,7 +659,7 @@
 "about.app.description" = "小米蓝牙遥控器 2 Pro 的无线语音与快捷操作工具。";
 "about.app_support.title" = "应用与支持";
 "about.preferences.dock_icon" = "Dock 图标";
-"about.preferences.dock_icon_help" = "SayAll 运行时会显示在 Dock 中。关闭主界面后，点 Dock 图标可重新打开。";
+"about.preferences.dock_icon_help" = "SayAll 运行时会显示在 Dock 中。若要在退出后保留入口，右键点图标并选择“选项 → 在程序坞中保留”。从 Dock 移除图标可取消固定。";
 "about.preferences.show_status_bar_icon" = "在菜单栏中显示应用图标";
 "about.preferences.show_status_bar_icon_help" = "关闭后仍可从 Dock 打开主界面。";
 "about.preferences.app_icon" = "应用图标";
