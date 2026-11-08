@@ -1,5 +1,7 @@
 # Bug 记录
 
+- [注入的 Fn 事件无法驱动系统听写](./2026-11-08-system-dictation-ignores-injected-fn.md)
+
 - [只有一只 Siri Remote 时 Onboarding 永久卡在音频页](./2026-11-07-siri-remote-onboarding-audio-gate.md)
 
 - [常用语粘贴后自定义 Return 继承残留 Command 变成换行](./2026-11-06-shortcut-inherits-stale-command.md)
@@ -174,6 +176,7 @@
 
 | 时间 | Bug | 状态 |
 | --- | --- | --- |
+| 2026-11-08 | [注入的 Fn 事件无法驱动系统听写](./2026-11-08-system-dictation-ignores-injected-fn.md) | 调研完成，无产品代码改动：`CGEventPost` 注入的 Fn（单击、双击 80 ms、`cgSessionEventTap`、两种事件源）都不能启动或结束系统听写；辅助功能点击「编辑 > 开始听写」可稳定启动（+0.04 s 检出）。另确认只写 `Dictation Enabled` 不足以启用听写，必须真人点确认框。Control 两下与自定义组合键未验证，#326 需按同法复验 |
 | 2026-11-07 | [只有一只 Siri Remote 时 Onboarding 永久卡在音频页](./2026-11-07-siri-remote-onboarding-audio-gate.md) | 已修复（音频门禁改为按控制来源区分：Siri Remote 的语音音频在按下语音键时才建立，不再要求它提前持续 Ready；小米与 Chromecast 仍要求持续 Ready，设备消失时两种来源都继续阻塞）；新增 2 项回归，反向验证策略与视图接线各自变红后恢复通过；2026-11-08 真机复验通过（只有一只苹果遥控器的机器上重跑向导可走完，音频页显示「语音开始时连接音频」） |
 | 2026-11-05 | [macOS CI 上主队列投递延迟导致自聚焦用例误报](./2026-11-05-macos-ci-main-queue-delivery-flake.md) | 已修复（等待预算由「轮询次数」改为墙钟，`perform` 默认 10 秒产品超时不变并由新用例锁定；`PermissionStatusProbeTests` 的 20 秒预算同步提到 60 秒）；30 秒主线程阻塞夹具下修复前 3 个 issue、修复后 1212 项全绿，夹具已删除不入库 |
 | 2026-11-04 | [睡眠期间遥控器链路一直保持，系统把它当成唤醒源](./2026-11-04-remote-hid-link-keeps-mac-awake.md) | 已确认应用层无法修复：睡眠前用带 `DoNotAutoConnectBuiltInServices` 的取消断开 CB 会话后，两次真机实测（Build 304，合盖+外接显示器）都在入睡 5 秒内被 `bluetoothd` 的 `Bluetooth LE HID Activity` 升级为完全唤醒；候选实现与测试已回退，结论回填 #441、#778 |
