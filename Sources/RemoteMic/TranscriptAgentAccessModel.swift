@@ -247,17 +247,20 @@ final class TranscriptAgentAccessModel: ObservableObject {
         integrationInProgress = client
         let authorizationStore = authorizationStore
         let integrationService = integrationService
+        let operationID = UUID()
+        AppLogger.shared.write("mcp_revoke stage=request operation_id=\(operationID) client=\(client.rawValue)")
         Task.detached(priority: .userInitiated) { [weak self] in
-            var configurationRemovalFailed = false
-            do {
-                try integrationService.remove(client)
-            } catch {
-                configurationRemovalFailed = true
-            }
-
             let result: (authorizations: [SayAllMCPAuthorizationRecord], error: TranscriptAgentAccessError?)
             do {
                 try authorizationStore.revokeAuthorization(clientId: authorization.clientId)
+                AppLogger.shared.write("mcp_revoke stage=local_access_revoked operation_id=\(operationID)")
+                let configurationRemovalFailed: Bool
+                do {
+                    try integrationService.remove(client)
+                    configurationRemovalFailed = false
+                } catch {
+                    configurationRemovalFailed = true
+                }
                 result = (
                     try authorizationStore.listAuthorizations(),
                     configurationRemovalFailed ? .configurationRemovalFailed : nil
@@ -270,6 +273,17 @@ final class TranscriptAgentAccessModel: ObservableObject {
                     .revokeFailed
                 )
             }
+
+            let outcome: String
+            switch result.error {
+            case .configurationRemovalFailed:
+                outcome = "client_cleanup_failed"
+            case nil:
+                outcome = "revoked"
+            default:
+                outcome = "authorization_state_unavailable"
+            }
+            AppLogger.shared.write("mcp_revoke stage=complete operation_id=\(operationID) result=\(outcome)")
 
             await MainActor.run { [weak self] in
                 guard let self else { return }
