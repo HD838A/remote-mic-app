@@ -1,5 +1,7 @@
 # Bug 记录
 
+- [Intel 上方向键一次按下移动两格](./2026-11-07-intel-directional-double-step.md)
+
 - [只有一只 Siri Remote 时 Onboarding 永久卡在音频页](./2026-11-07-siri-remote-onboarding-audio-gate.md)
 
 - [APP 适配的聚焦方式选项空白区域无法点击](./2026-11-07-focus-option-hit-area.md)
@@ -176,6 +178,7 @@
 
 | 时间 | Bug | 状态 |
 | --- | --- | --- |
+| 2026-11-07 | [Intel 上方向键一次按下移动两格](./2026-11-07-intel-directional-double-step.md) | 已修复并验收（方向键登记事件级兜底，默认只在 Intel 构建启用；Apple Silicon 保持零差异）；5 项回归随 CI 1227 tests 全绿；Intel build 289 验收通过，Apple Silicon build 290 日志确认零登记、零待匹配窗口 |
 | 2026-11-07 | [只有一只 Siri Remote 时 Onboarding 永久卡在音频页](./2026-11-07-siri-remote-onboarding-audio-gate.md) | 已修复（音频门禁改为按控制来源区分：Siri Remote 的语音音频在按下语音键时才建立，不再要求它提前持续 Ready；小米与 Chromecast 仍要求持续 Ready，设备消失时两种来源都继续阻塞）；新增 2 项回归，反向验证策略与视图接线各自变红后恢复通过；2026-11-08 真机复验通过（只有一只苹果遥控器的机器上重跑向导可走完，音频页显示「语音开始时连接音频」） |
 | 2026-11-07 | [APP 适配的聚焦方式选项空白区域无法点击](./2026-11-07-focus-option-hit-area.md) | 已修复（`SettingsView.applicationFocusOption` 在标签布局后补与背景一致的 `contentShape`）；实际设置窗口文字、图标、左右留白、边框内侧与按钮外部/间隙坐标点击通过，Tab、Shift-Tab、空格与重启保留通过；未覆盖遥控器、第三方 APP 聚焦执行与 VoiceOver |
 | 2026-11-05 | [macOS CI 上主队列投递延迟导致自聚焦用例误报](./2026-11-05-macos-ci-main-queue-delivery-flake.md) | 已修复（等待预算由「轮询次数」改为墙钟，`perform` 默认 10 秒产品超时不变并由新用例锁定；`PermissionStatusProbeTests` 的 20 秒预算同步提到 60 秒）；30 秒主线程阻塞夹具下修复前 3 个 issue、修复后 1212 项全绿，夹具已删除不入库 |

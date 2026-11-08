@@ -2747,6 +2747,8 @@ struct RemoteButtonsTests {
             "reportRoutingDecision(",
             "needsEventLevelArm(",
             "routing.permissionsGranted",
+            // 方向键的提前登记必须走与主线程共用的判据，不能各自写一份。
+            "prearmsNativeEvent(",
         ] {
             #expect(prearmBody.contains(gate), "prearm is missing the \(gate) gate")
         }

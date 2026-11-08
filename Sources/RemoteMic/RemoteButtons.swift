@@ -139,6 +139,13 @@ enum RemoteButton: String, CaseIterable, Codable, Identifiable {
         guard let nativeEvent else { return [] }
         return self == .tv ? [nativeEvent, .keyboard(keyCode: 50)] : [nativeEvent]
     }
+
+    /// 四颗方向键。它们的原生键码与实体键盘完全同码，因此拦截图层的登记范围
+    /// 必须单独判断：既要覆盖 Intel 上映射回读之后仍会泄漏的原生方向键，又不能
+    /// 在默认透传会话里抢先吞掉唯一一次移动。
+    var isDirectional: Bool {
+        self == .up || self == .down || self == .left || self == .right
+    }
 }
 
 /// 键位方案覆盖名单里的一项：四颗方向键合并成一项，其余按键逐颗列出。
