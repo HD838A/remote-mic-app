@@ -202,6 +202,55 @@ struct KeyboardEventSuppressorTests {
         #expect(suppressor.handle(type: up.type, event: up))
     }
 
+    /// 键盘描述符（方向键、回车）与音量键共用同一本「已放行」账本。
+    /// Intel 方向键泄漏时会先放行原生 down，随后主线程才 `arm(edge: .up)`；
+    /// 只放行 down 会吞掉 up，系统据此认为键仍按住并继续连发。
+    @Test(arguments: [UInt16(123), UInt16(36)], [false, true])
+    func escapedKeyboardDownKeepsItsReleaseAndDoesNotStealTheNextPress(
+        _ keyCode: UInt16, _ nativeReleaseFirst: Bool
+    ) throws {
+        var now: TimeInterval = 10
+        let native = RemoteNativeEvent.keyboard(keyCode: keyCode)
+        var logs: [String] = []
+        let suppressor = KeyboardEventSuppressor(uptime: { now }, logger: { logs.append($0) })
+        let down = try nativeEvent(native, down: true)
+        let up = try nativeEvent(native, down: false)
+
+        #expect(!suppressor.handle(type: down.type, event: down))
+        now += 0.011
+        suppressor.arm(nativeEvents: [native], edge: .down)
+        now += 0.15
+        if nativeReleaseFirst {
+            #expect(!suppressor.handle(type: up.type, event: up))
+            suppressor.arm(nativeEvents: [native], edge: .up)
+        } else {
+            suppressor.arm(nativeEvents: [native], edge: .up)
+            #expect(!suppressor.handle(type: up.type, event: up))
+        }
+        #expect(logs.contains { $0.contains("edge=up reason=escaped_native_pair") })
+
+        // 这一对关闭后，遥控器的下一次按下必须恢复拦截。
+        now += 0.25
+        suppressor.arm(nativeEvents: [native], edge: .down)
+        #expect(suppressor.handle(type: down.type, event: down))
+        suppressor.arm(nativeEvents: [native], edge: .up)
+        #expect(suppressor.handle(type: up.type, event: up))
+    }
+
+    /// 纯实体键盘的同码按键不是泄漏配对：不能为每次打字在 runtime.log 里写
+    /// `passed_through` 日志。放行本身不变，只是不再记日志。
+    @Test func physicalKeyboardTypingDoesNotLogPassedThrough() throws {
+        var logs: [String] = []
+        let suppressor = KeyboardEventSuppressor(logger: { logs.append($0) })
+        let native = RemoteNativeEvent.keyboard(keyCode: 36)
+        let down = try nativeEvent(native, down: true)
+        let up = try nativeEvent(native, down: false)
+
+        #expect(!suppressor.handle(type: down.type, event: down))
+        #expect(!suppressor.handle(type: up.type, event: up))
+        #expect(!logs.contains { $0.contains("passed_through") })
+    }
+
     @Test(arguments: [RemoteButton.volumeUp, .volumeDown, .tv], [false, true])
     func managedNativeKeysAreArmedBeforeReportDiagnosticsAndConfigurationCallbacks(
         _ button: RemoteButton, _ isSeized: Bool
