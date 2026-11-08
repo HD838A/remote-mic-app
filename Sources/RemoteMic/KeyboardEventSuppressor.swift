@@ -53,11 +53,11 @@ final class KeyboardEventSuppressor {
     private var earlyNativeUps: [RemoteNativeEvent: Int] = [:]
     // Diagnostic-only: bounded to the remote's known native descriptors.
     private var recentUnclaimedDowns: [RemoteNativeEvent: TimeInterval] = [:]
-    // An escaped volume down belongs to the system through its final release.
-    // Dropping only its up can leave the system repeating volume indefinitely.
-    private var passedVolumeDowns = Set<RemoteNativeEvent>()
-    private var passedVolumeRawReleases: [RemoteNativeEvent: Int] = [:]
-    private static let volumeEvents: Set<RemoteNativeEvent> = [.systemKey(type: 0), .systemKey(type: 1)]
+    // 已放行的原生命中属于系统，直到它的松开也走完为止。只吞掉 up 会让系统
+    // 认为按键仍按住并继续连发：音量键会一直加音量，方向键会一直移动光标。
+    // 键盘描述符（方向键、回车、Esc 等）与系统键共用同一本账。
+    private var passedNativeDowns = Set<RemoteNativeEvent>()
+    private var passedNativeReleases: [RemoteNativeEvent: Int] = [:]
     private static let knownNativeEvents = Set(RemoteButton.allCases.flatMap { $0.nativeEvents })
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
@@ -161,8 +161,8 @@ final class KeyboardEventSuppressor {
         prearmedDownsClaimed.removeAll()
         earlyNativeUps.removeAll()
         recentUnclaimedDowns.removeAll()
-        passedVolumeDowns.removeAll()
-        passedVolumeRawReleases.removeAll()
+        passedNativeDowns.removeAll()
+        passedNativeReleases.removeAll()
         recentArmed.removeAll()
         lock.unlock()
         EventTapPort.release(port: port, source: source)
@@ -197,9 +197,9 @@ final class KeyboardEventSuppressor {
                 if let unclaimed {
                     precedingDownAges.append((nativeEvent, Int((now - unclaimed) * 1_000)))
                 }
-                if passedVolumeDowns.contains(nativeEvent) {
+                if passedNativeDowns.contains(nativeEvent) {
                     // Consume the raw pair without creating stale native credits.
-                    passedVolumeRawReleases[nativeEvent, default: 0] += 1
+                    passedNativeReleases[nativeEvent, default: 0] += 1
                     passedRawEvents.append(nativeEvent)
                     continue
                 }
@@ -229,8 +229,8 @@ final class KeyboardEventSuppressor {
                     expiresAt: now + Self.nativeDeliveryWindow
                 ))
             case .up:
-                if let passed = passedVolumeRawReleases[nativeEvent], passed > 0 {
-                    passedVolumeRawReleases[nativeEvent] = passed > 1 ? passed - 1 : nil
+                if let passed = passedNativeReleases[nativeEvent], passed > 0 {
+                    passedNativeReleases[nativeEvent] = passed > 1 ? passed - 1 : nil
                     passedRawEvents.append(nativeEvent)
                     continue
                 }
@@ -298,7 +298,7 @@ final class KeyboardEventSuppressor {
         pendingEvents.removeAll { $0.expiresAt <= now }
         for nativeEvent in nativeEvents {
             // 已放行的原生按下仍由 release 保护逻辑接管，不再新增拦截记录。
-            guard !passedVolumeDowns.contains(nativeEvent) else { continue }
+            guard !passedNativeDowns.contains(nativeEvent) else { continue }
             guard !pendingEvents.contains(where: {
                 $0.event == nativeEvent && $0.edge == .down
             }) else { continue }
@@ -348,9 +348,9 @@ final class KeyboardEventSuppressor {
         let now = uptime()
         lock.lock()
         pendingEvents.removeAll { $0.expiresAt <= now }
-        if passedVolumeDowns.contains(descriptor.event) {
+        if passedNativeDowns.contains(descriptor.event) {
             if descriptor.edge == .up {
-                passedVolumeDowns.remove(descriptor.event)
+                passedNativeDowns.remove(descriptor.event)
             }
             lock.unlock()
             logger("HID FILTER passed_through event=\(Self.logToken(descriptor.event)) " +
@@ -416,9 +416,10 @@ final class KeyboardEventSuppressor {
         }
         if descriptor.edge == .down, Self.knownNativeEvents.contains(descriptor.event) {
             recentUnclaimedDowns[descriptor.event] = now
-            if Self.volumeEvents.contains(descriptor.event) {
-                passedVolumeDowns.insert(descriptor.event)
-            }
+            // 这次按下没被吞掉，就必须连它的松开一起放行。只记音量键时，键盘描述符
+            // （Intel 上泄漏的方向键正是如此）会在主线程 `arm(edge: .up)` 之后被吞掉
+            // up，系统据此认为键仍按住并继续连发。
+            passedNativeDowns.insert(descriptor.event)
         }
         let pendingCount = pendingEvents.count
         // 诊断范围（187 的教训：条件太窄会漏掉「系统事件与预定键码不同」的情况）：
