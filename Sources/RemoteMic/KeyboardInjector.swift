@@ -2355,6 +2355,15 @@ enum KeyboardInjector {
             .max { $0.width * $0.height < $1.width * $1.height }
     }
 
+    /// 目标 App 的普通窗口数（含最小化），用 CGWindowList 统计。
+    /// 辅助功能的 `AXWindows` 会把隐藏窗口算进来，Chrome 之类会被误判成单窗口。
+    static func ordinaryWindowCount(bundleIdentifier: String?) -> Int? {
+        guard let bundleIdentifier else { return nil }
+        return applicationVisibilitySnapshot(
+            bundleIdentifier: bundleIdentifier
+        ).ordinaryWindowCount
+    }
+
     static func ordinaryWindowCount(
         windowInfo: [[String: Any]],
         processIdentifier: pid_t
@@ -2441,18 +2450,6 @@ enum KeyboardInjector {
             !$0.isTerminated && $0.activationPolicy == .regular && $0.localizedName == title
         }
         return candidates.first(where: { $0.isActive }) ?? candidates.first
-    }
-
-    /// 目标 App 只有一个窗口时，窗口选择层的上下键会把高亮带到别的窗口条上；
-    /// 直接查窗口数，交给调用方走确定性路径。
-    static func accessibilityWindowCount(bundleIdentifier: String?) -> Int? {
-        guard let bundleIdentifier, isAccessibilityTrusted,
-              let application = NSRunningApplication.runningApplications(
-                  withBundleIdentifier: bundleIdentifier
-              ).first(where: { !$0.isTerminated })
-        else { return nil }
-        let element = AXUIElementCreateApplication(application.processIdentifier)
-        return axElements(element, attribute: kAXWindowsAttribute).count
     }
 
     /// 单窗口场景：窗口层里的高亮不稳定，直接恢复那个唯一窗口并置前。

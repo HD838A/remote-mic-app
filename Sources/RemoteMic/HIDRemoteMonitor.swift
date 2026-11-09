@@ -254,7 +254,7 @@ final class HIDRemoteMonitor {
             )
         },
         windowCounter: @escaping (String?) -> Int? = {
-            KeyboardInjector.accessibilityWindowCount(bundleIdentifier: $0)
+            KeyboardInjector.ordinaryWindowCount(bundleIdentifier: $0)
         },
         windowActivator: @escaping (String?) -> Bool = {
             KeyboardInjector.restoreSingleWindow(bundleIdentifier: $0)
@@ -1702,6 +1702,7 @@ final class HIDRemoteMonitor {
                windowCounter(target) == 1 {
                 // 单窗口时窗口层的高亮不可靠，Return 也可能不关窗口层；
                 // 直接 Escape 退出窗口层，再恢复唯一窗口。
+                // 窗口数用 CGWindowList 统计（含最小化），避免辅助功能隐藏窗口误判。
                 _ = appSwitcherSession.cancel()
                 finishAppSwitcherLifecycle(
                     reason: "single_window_confirmed",
