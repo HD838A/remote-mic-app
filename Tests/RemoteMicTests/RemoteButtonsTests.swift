@@ -2380,8 +2380,9 @@ struct RemoteButtonsTests {
         #expect(timeout.posted.last?.1 == false)
         #expect(timeout.diagnostics.contains { $0.contains("ended reason=timeout") })
 
+        // 防抖：连续两个轮询周期都不是起始/高亮才结束会话。
         let frontmostChanged = runCancellation(
-            advanceMilliseconds: HIDRemoteTiming.appSwitcherFrontmostPollMilliseconds,
+            advanceMilliseconds: HIDRemoteTiming.appSwitcherFrontmostPollMilliseconds * 2,
             changeFrontmost: true
         )
         #expect(frontmostChanged.posted.last?.0 == KeyboardInjector.leftCommandKeyCode)
