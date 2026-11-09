@@ -621,6 +621,27 @@ class ReleaseContentTests(unittest.TestCase):
         data = b"/Users/runner/work/sentry-cocoa/sentry-cocoa/Sources/Sentry/SentryClient.m\0runtime\0"
         contents.verify_asset(self.archive("SayAll.app/Contents/MacOS/RemoteMic", data), self.scratch)
 
+    def test_public_driver_documentation_example_is_accepted_without_allowing_private_paths(self):
+        example = b"Note that the directory is the root `/Library` not `/Users/user/Library`.\n"
+        contents.verify_asset(self.archive("MiRemoteV2ch.driver/Contents/Resources/README.md", example), self.scratch)
+        for data in (b"/Users/user/Library/private.swift", b"/Users/user/project",
+                     b"/Users/runner/work/private/source.swift", b"/Users/another/Library`.",
+                     example + b"/Users/example/private/source.swift\0"):
+            with self.subTest(data=data), self.assertRaisesRegex(RuntimeError, "local build path"):
+                contents.verify_asset(self.archive("README.md", data), self.scratch)
+
+    def test_content_rejection_reports_only_a_fixed_reason(self):
+        for entry, data, reason in (("PRIVATE_CANARY.swift", b"fixture", "development-input"),
+                                    ("README.md", b"/Users/PRIVATE_CANARY/source.swift", "local-path")):
+            with self.subTest(reason=reason):
+                asset = self.archive(entry, data)
+                result = subprocess.run([sys.executable, "-B", str(ROOT / "scripts/verify-release-contents.py"), str(asset)],
+                                        capture_output=True, text=True)
+                self.assertEqual(result.returncode, 1)
+                self.assertIn(f"asset rejected reason={reason}", result.stderr)
+                self.assertNotIn("PRIVATE_CANARY", result.stdout + result.stderr)
+                self.assertNotIn(str(asset), result.stdout + result.stderr)
+
     def test_protected_workflow_captures_success_and_failure_diagnostics(self):
         source = (ROOT / ".github/workflows/mac-release-package.yml").read_text()
         step = source.split("      - name: Sign, notarize, staple, and verify both variants\n", 1)[1]
@@ -791,6 +812,17 @@ class ReleaseContentTests(unittest.TestCase):
                 self.assertNotEqual(result.returncode, 0)
                 self.assertEqual(result.stdout.strip(), "RELEASE STATUS result=unavailable")
                 self.assertNotIn("PRIVATE_", result.stdout + result.stderr)
+
+    @unittest.skipUnless(sys.platform == "darwin", "Installer inspection requires macOS pkgutil")
+    def test_public_driver_documentation_in_native_installer_is_accepted(self):
+        payload = self.directory / "payload"
+        documentation = payload / "MiRemoteV2ch.driver/Contents/Resources/README.md"
+        documentation.parent.mkdir(parents=True)
+        documentation.write_text("Note that the directory is the root `/Library` not `/Users/user/Library`.\n")
+        installer = self.directory / "fixture.pkg"
+        subprocess.run(["pkgbuild", "--root", str(payload), "--identifier", "invalid.example.public-documentation", "--version", "1", str(installer)],
+                       check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        contents.verify_asset(installer, self.scratch)
 
     @unittest.skipUnless(sys.platform == "darwin", "Installer inspection requires macOS pkgutil")
     def test_installer_payload_is_inspected(self):
