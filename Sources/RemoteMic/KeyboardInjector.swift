@@ -24,6 +24,32 @@ enum KeyboardInjector {
     typealias ScrollPoster = (Int32) -> Void
     typealias SystemKeyPoster = (Int32) -> Void
 
+    /// macOS 14 起，App 切换器可以用方向键移动高亮；更早的系统不响应，
+    /// 只能用 Tab 循环（真机验证：macOS 13 上 ⌘←/⌘→ 不移动高亮，⌘Tab 正常）。
+    static let switcherSupportsArrowNavigation: Bool = {
+        ProcessInfo.processInfo.isOperatingSystemAtLeast(
+            OperatingSystemVersion(majorVersion: 14, minorVersion: 0, patchVersion: 0)
+        )
+    }()
+
+    /// Dock 进程当前拥有的窗口数量。
+    ///
+    /// 切换器打开时 Dock 会多出一个窗口，这是判断“切换器是否还开着”最稳的信号：
+    /// 辅助功能里的切换器列表在部分系统上会一直存在（即使切换器没开），
+    /// 也会在切换器开着时随机消失，不能用来判断。
+    static func dockWindowCount() -> Int {
+        guard let dock = NSRunningApplication.runningApplications(
+            withBundleIdentifier: "com.apple.dock"
+        ).first else { return 0 }
+        let windows = (
+            CGWindowListCopyWindowInfo([.optionAll], kCGNullWindowID) as? [[String: Any]]
+        ) ?? []
+        let dockIdentifier = Int(dock.processIdentifier)
+        return windows.filter {
+            (($0[kCGWindowOwnerPID as String] as? NSNumber)?.intValue ?? -1) == dockIdentifier
+        }.count
+    }
+
     struct ApplicationVisibilitySnapshot: Equatable {
         let bundleIdentifier: String
         let processActive: Bool?
@@ -79,12 +105,22 @@ enum KeyboardInjector {
         /// 已经按下 ⌥/保持 ⌘、但还没走完释放流程；调度失败时由 watchdog 兜底。
         private(set) var hasPendingRelease = false
 
+        /// 合成按键按下与抬起之间保持的时长（微秒）。
+        /// 真实按键会按住几十毫秒；按下抬起同一瞬间送达的合成事件，
+        /// 部分系统 UI（macOS 13 的 App 切换器）会直接忽略。
+        static let syntheticKeyHoldMicroseconds: UInt32 = 25_000
+
+        private let switcherSupportsArrowNavigation: Bool
+
         init(
             keyStatePoster: @escaping KeyStatePoster = KeyboardInjector.postKeyState,
-            scheduler: @escaping DelayScheduler = AppSwitcherSession.mainQueueScheduler
+            scheduler: @escaping DelayScheduler = AppSwitcherSession.mainQueueScheduler,
+            switcherSupportsArrowNavigation: Bool = KeyboardInjector
+                .switcherSupportsArrowNavigation
         ) {
             self.keyStatePoster = keyStatePoster
             self.scheduler = scheduler
+            self.switcherSupportsArrowNavigation = switcherSupportsArrowNavigation
         }
 
         func setDiagnosticLogger(_ logger: @escaping (String) -> Void) {
@@ -155,6 +191,7 @@ enum KeyboardInjector {
                     flags: .maskCommand,
                     role: "window_picker"
                 )
+                usleep(Self.syntheticKeyHoldMicroseconds)
                 let released = post(
                     125,
                     isDown: false,
@@ -195,11 +232,10 @@ enum KeyboardInjector {
             if isWindowPickerActive {
                 // 窗口选择层里 OK 等于回车：打开当前高亮的窗口。
                 _ = releaseCommandForWindowPicker()
-                let pressed = post(36, isDown: true, flags: [], role: "return")
-                let released = post(36, isDown: false, flags: [], role: "return")
+                let posted = postKeyWithHold(code: 36, flags: [], role: "return")
                 isActive = false
                 isWindowPickerActive = false
-                return pressed && released
+                return posted
             }
             isActive = false
             guard post(
@@ -272,24 +308,51 @@ enum KeyboardInjector {
         @discardableResult
         func moveSelection(left: Bool) -> Bool {
             guard isActive else { return false }
-            let keyCode: CGKeyCode = left ? 123 : 124
-            let flags: CGEventFlags
             if isWindowPickerActive {
+                // 窗口层里 ⌘ 已经松开，方向键直接作用在窗口高亮上。
                 _ = releaseCommandForWindowPicker()
-                flags = []
-            } else {
-                flags = .maskCommand
+                let posted = postKeyWithHold(
+                    code: left ? 123 : 124,
+                    flags: [],
+                    role: "selection"
+                )
+                if posted { pickerHasHighlight = true }
+                return posted
             }
-            let pressed = post(keyCode, isDown: true, flags: flags, role: "selection")
-            let released = post(keyCode, isDown: false, flags: flags, role: "selection")
-            if pressed && released, isWindowPickerActive { pickerHasHighlight = true }
+            // macOS 13 的切换器不响应方向键（真机验证：⌘←/⌘→ 不移动高亮），
+            // 这类系统改用 Tab 循环移动高亮，效果等价且各版本都可靠。
+            guard switcherSupportsArrowNavigation else {
+                return cycleSelection(backwards: left)
+            }
+            return postKeyWithHold(
+                code: left ? 123 : 124,
+                flags: .maskCommand,
+                role: "selection"
+            )
+        }
+
+        /// 用 Tab（⌘Tab / ⌘⇧Tab）在切换器里循环高亮。
+        @discardableResult
+        func cycleSelection(backwards: Bool) -> Bool {
+            guard isActive else { return false }
+            let flags: CGEventFlags = backwards ? [.maskCommand, .maskShift] : .maskCommand
+            return postKeyWithHold(code: 48, flags: flags, role: "cycle")
+        }
+
+        /// 按下与抬起之间保持一小段时间，模拟真实按键。
+        private func postKeyWithHold(
+            code: CGKeyCode,
+            flags: CGEventFlags,
+            role: String
+        ) -> Bool {
+            let pressed = post(code, isDown: true, flags: flags, role: role)
+            usleep(Self.syntheticKeyHoldMicroseconds)
+            let released = post(code, isDown: false, flags: flags, role: role)
             return pressed && released
         }
 
         private func postTab() -> Bool {
-            let pressed = post(48, isDown: true, flags: .maskCommand, role: "tab")
-            let released = post(48, isDown: false, flags: .maskCommand, role: "tab")
-            return pressed && released
+            postKeyWithHold(code: 48, flags: .maskCommand, role: "tab")
         }
     }
 
@@ -2550,6 +2613,17 @@ enum KeyboardInjector {
         case visible(selectedBundleIdentifier: String?)
         case absent
         case unreadable
+
+        var logLabel: String {
+            switch self {
+            case .visible(let bundleIdentifier):
+                return "visible:\(bundleIdentifier ?? "-")"
+            case .absent:
+                return "absent"
+            case .unreadable:
+                return "unreadable"
+            }
+        }
     }
 
     private static func appSwitcherHudSelection()

@@ -1693,7 +1693,8 @@ struct RemoteButtonsTests {
         settings.setAction(.appSwitcher, for: .menu)
         let profileID = try #require(settings.selectedRemoteProfileID)
         let scheduler = RemoteButtonsTestScheduler()
-        var frontmost = PresetApplication.safari.bundleIdentifier
+        // 前台是另一个 App：表示这次直达没有落地。
+        var frontmost = PresetApplication.codex.bundleIdentifier
         var posted: [(CGKeyCode, Bool, CGEventFlags)] = []
         var activatedPids: [pid_t] = []
         let monitor = HIDRemoteMonitor(
@@ -2089,7 +2090,7 @@ struct RemoteButtonsTests {
         #expect(posted.contains { $0.0 == 48 && !$0.1 })
     }
 
-    @Test func appSwitcherKeepsSessionWhileSwitcherHudIsVisible() throws {
+    @Test func appSwitcherKeepsSessionRegardlessOfAccessibilityState() throws {
         let suiteName = "RemoteButtonsTests.appSwitcherHudWatch.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
@@ -2133,17 +2134,106 @@ struct RemoteButtonsTests {
         // HUD 可见：会话保持。
         scheduler.advance(toMilliseconds: poll * 4)
         #expect(!posted.contains { $0.0 == 55 && !$0.1 })
-        // 读不到 HUD 状态：放过这一拍，不能当成关闭。
+        // 读不到 HUD 状态：不能当成关闭。
         hudState = .unreadable
         scheduler.advance(toMilliseconds: poll * 6)
         #expect(!posted.contains { $0.0 == 55 && !$0.1 })
-        // HUD 消失一个周期：先放过。
+        // 辅助功能说 HUD 已经消失：仍然不能结束会话。
+        // macOS 13 真机日志里这个信号会在切换器明明开着时随机出现，
+        // 据此收尾会让切换器一闪而过并直接切到附近的 App。
         hudState = .absent
-        scheduler.advance(toMilliseconds: poll * 7)
+        scheduler.advance(toMilliseconds: poll * 12)
         #expect(!posted.contains { $0.0 == 55 && !$0.1 })
-        // 连续两个周期都没有 HUD：用户关掉了切换器，释放 ⌘ 结束会话。
-        scheduler.advance(toMilliseconds: poll * 9)
-        #expect(posted.contains { $0.0 == 55 && !$0.1 })
+    }
+
+    @Test func appSwitcherCyclesWithTabWhenArrowNavigationIsUnsupported() throws {
+        let suiteName = "RemoteButtonsTests.appSwitcherCycle.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = AppSettings(defaults: defaults)
+        settings.customMappingEnabled = true
+        settings.setAction(.appSwitcher, for: .menu)
+        let profileID = try #require(settings.selectedRemoteProfileID)
+        let scheduler = RemoteButtonsTestScheduler()
+        var posted: [(CGKeyCode, Bool, CGEventFlags)] = []
+        let monitor = HIDRemoteMonitor(
+            settings: settings,
+            profileID: profileID,
+            ownsEventSuppressor: false,
+            scheduler: scheduler,
+            runtimePermissions: { true },
+            frontmostBundleIdentifier: { PresetApplication.codex.bundleIdentifier },
+            diagnosticLogger: { _ in },
+            appSwitcherKeyStatePoster: { code, isDown, flags in
+                posted.append((code, isDown, flags))
+                return true
+            },
+            windowCounter: { _ in 2 },
+            appSwitcherSupportsArrowNavigation: false
+        )
+        monitor.connectSimulatedDevice(
+            fingerprint: "app-switcher-cycle", profileID: profileID
+        )
+
+        func press(_ button: RemoteButton) {
+            monitor.handleSimulatedReport(
+                reportID: 1, data: Data([UInt8(button.hidUsage), 0, 0, 0, 0, 0])
+            )
+            monitor.handleSimulatedReport(reportID: 1, data: Data(repeating: 0, count: 6))
+        }
+
+        press(.menu)
+        let tabPressesAfterOpen = posted.filter { $0.0 == 48 && $0.1 }.count
+        press(.right)
+        // macOS 13 的切换器不响应方向键：改用 Tab 循环移动高亮。
+        #expect(!posted.contains { $0.0 == 124 })
+        #expect(posted.filter { $0.0 == 48 && $0.1 }.count == tabPressesAfterOpen + 1)
+
+        press(.left)
+        // 后退用 ⌘⇧Tab。
+        #expect(posted.contains { $0.0 == 48 && $0.1 && $0.2.contains(.maskShift) })
+    }
+
+    @Test func appSwitcherUsesArrowNavigationWhenSupported() throws {
+        let suiteName = "RemoteButtonsTests.appSwitcherArrowNav.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = AppSettings(defaults: defaults)
+        settings.customMappingEnabled = true
+        settings.setAction(.appSwitcher, for: .menu)
+        let profileID = try #require(settings.selectedRemoteProfileID)
+        let scheduler = RemoteButtonsTestScheduler()
+        var posted: [(CGKeyCode, Bool, CGEventFlags)] = []
+        let monitor = HIDRemoteMonitor(
+            settings: settings,
+            profileID: profileID,
+            ownsEventSuppressor: false,
+            scheduler: scheduler,
+            runtimePermissions: { true },
+            frontmostBundleIdentifier: { PresetApplication.codex.bundleIdentifier },
+            diagnosticLogger: { _ in },
+            appSwitcherKeyStatePoster: { code, isDown, flags in
+                posted.append((code, isDown, flags))
+                return true
+            },
+            windowCounter: { _ in 2 },
+            appSwitcherSupportsArrowNavigation: true
+        )
+        monitor.connectSimulatedDevice(
+            fingerprint: "app-switcher-arrow-nav", profileID: profileID
+        )
+
+        func press(_ button: RemoteButton) {
+            monitor.handleSimulatedReport(
+                reportID: 1, data: Data([UInt8(button.hidUsage), 0, 0, 0, 0, 0])
+            )
+            monitor.handleSimulatedReport(reportID: 1, data: Data(repeating: 0, count: 6))
+        }
+
+        press(.menu)
+        press(.right)
+        // 支持方向键的系统仍然用 ⌘→ 移动高亮。
+        #expect(posted.contains { $0.0 == 124 && $0.1 && $0.2.contains(.maskCommand) })
     }
 
     @Test func appSwitcherHeldDirectionRepeatsSelection() throws {
@@ -2324,6 +2414,7 @@ struct RemoteButtonsTests {
         func runCancellation(
             advanceMilliseconds: UInt64? = nil,
             pressBack: Bool = false,
+            dismissExternally: Bool = false,
             hudState: KeyboardInjector.AppSwitcherHudState = .visible(
                 selectedBundleIdentifier: PresetApplication.safari.bundleIdentifier
             )
@@ -2332,6 +2423,7 @@ struct RemoteButtonsTests {
             var frontmost = PresetApplication.codex.bundleIdentifier
             var posted: [(CGKeyCode, Bool, CGEventFlags)] = []
             var diagnostics: [String] = []
+            var dismissHandler: (() -> Void)?
             let monitor = HIDRemoteMonitor(
                 settings: settings,
                 profileID: profileID,
@@ -2344,7 +2436,11 @@ struct RemoteButtonsTests {
                     posted.append((code, isDown, flags))
                     return true
                 },
-                appSwitcherHudState: { hudState }
+                appSwitcherHudState: { hudState },
+                appSwitcherDismissObserverInstaller: { handler in
+                    dismissHandler = handler
+                    return {}
+                }
             )
             monitor.connectSimulatedDevice(fingerprint: UUID().uuidString, profileID: profileID)
 
@@ -2356,6 +2452,7 @@ struct RemoteButtonsTests {
 
             press(.menu)
             if pressBack { press(.back) }
+            if dismissExternally { dismissHandler?() }
             if let advanceMilliseconds {
                 scheduler.advance(toMilliseconds: advanceMilliseconds)
             }
@@ -2374,16 +2471,21 @@ struct RemoteButtonsTests {
         #expect(timeout.posted.last?.1 == false)
         #expect(timeout.diagnostics.contains { $0.contains("ended reason=timeout") })
 
-        // HUD 消失（用户用别的方式关掉了切换器）：连续两个周期后释放 ⌘ 结束会话。
-        let hudDismissed = runCancellation(
-            advanceMilliseconds: HIDRemoteTiming.appSwitcherFrontmostPollMilliseconds * 2,
+        // 用户在切换器外点了鼠标（切换器被系统关掉）：释放 ⌘ 结束会话。
+        let dismissed = runCancellation(dismissExternally: true)
+        #expect(dismissed.posted.last?.0 == KeyboardInjector.leftCommandKeyCode)
+        #expect(dismissed.posted.last?.1 == false)
+        #expect(dismissed.diagnostics.contains {
+            $0.contains("ended reason=mouse_click")
+        })
+
+        // 辅助功能说 HUD 消失了：不结束会话（macOS 13 上这个信号不可靠）。
+        let hudAbsent = runCancellation(
+            advanceMilliseconds: HIDRemoteTiming.appSwitcherFrontmostPollMilliseconds * 4,
             hudState: .absent
         )
-        #expect(hudDismissed.posted.last?.0 == KeyboardInjector.leftCommandKeyCode)
-        #expect(hudDismissed.posted.last?.1 == false)
-        #expect(hudDismissed.diagnostics.contains {
-            $0.contains("ended reason=hud_dismissed")
-        })
+        #expect(!hudAbsent.diagnostics.contains { $0.contains("ended reason=") })
+        #expect(!hudAbsent.posted.contains { $0.0 == 55 && !$0.1 })
 
         // HUD 还在：会话保持，⌘ 不释放。
         let hudVisible = runCancellation(

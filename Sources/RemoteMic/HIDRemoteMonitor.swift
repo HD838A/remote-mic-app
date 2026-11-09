@@ -115,6 +115,12 @@ final class HIDRemoteMonitor {
     private let applicationActivator: (pid_t) -> Bool
     private let appSwitcherSelectedApplication: () -> KeyboardInjector.AppSwitcherSelection?
     private let appSwitcherHudState: () -> KeyboardInjector.AppSwitcherHudState
+    /// 注册“切换器被外部关闭”的观察者，返回取消注册的闭包。
+    /// 生产实现监听鼠标点击：用户在切换器开着时点别处会把它关掉，此时必须松开 ⌘。
+    private let appSwitcherDismissObserverInstaller:
+        (@escaping () -> Void) -> (() -> Void)?
+    /// 当前系统是否支持用方向键在切换器里移动高亮（macOS 14 起支持）。
+    private let appSwitcherSupportsArrowNavigation: Bool
     private let frontmostProcessIdentifier: () -> pid_t?
     private let overrideActionPerformer: (UUID?, RemoteButton, ButtonTrigger) -> Bool
     private let hasOverrideBinding: (UUID?, RemoteButton, ButtonTrigger) -> Bool
@@ -200,7 +206,10 @@ final class HIDRemoteMonitor {
     private var appSwitcherSingleWindowTask: HIDRemoteScheduledTask?
     private var appSwitcherForegroundTask: HIDRemoteScheduledTask?
     private var appSwitcherPendingPickerEntry: HIDRemoteScheduledTask?
-    private var appSwitcherHudAbsentTicks = 0
+    /// 取消注册外部关闭观察者的闭包。
+    private var appSwitcherDismissRemover: (() -> Void)?
+    /// 会话开始时 Dock 的窗口数量，用来判断切换器窗口是否还在。
+    private var appSwitcherDockWindowBaseline: Int?
     private var appSwitcherOriginBundleIdentifier: String?
     /// 切换器 HUD 里高亮的 App（按进程记录，同名双实例也能区分）。
     private var appSwitcherTargetApplication: KeyboardInjector.AppSwitcherSelection?
@@ -277,6 +286,11 @@ final class HIDRemoteMonitor {
         appSwitcherHudState: @escaping () -> KeyboardInjector.AppSwitcherHudState = {
             KeyboardInjector.appSwitcherHudState()
         },
+        appSwitcherDismissObserverInstaller:
+            @escaping (@escaping () -> Void) -> (() -> Void)? =
+            HIDRemoteMonitor.installMouseClickDismissObserver,
+        appSwitcherSupportsArrowNavigation: Bool = KeyboardInjector
+            .switcherSupportsArrowNavigation,
         frontmostProcessIdentifier: @escaping () -> pid_t? = {
             NSWorkspace.shared.frontmostApplication?.processIdentifier
         }
@@ -294,6 +308,8 @@ final class HIDRemoteMonitor {
         self.applicationActivator = applicationActivator
         self.appSwitcherSelectedApplication = appSwitcherSelectedApplication
         self.appSwitcherHudState = appSwitcherHudState
+        self.appSwitcherDismissObserverInstaller = appSwitcherDismissObserverInstaller
+        self.appSwitcherSupportsArrowNavigation = appSwitcherSupportsArrowNavigation
         self.frontmostProcessIdentifier = frontmostProcessIdentifier
         self.permissionPoll = permissionPoll
         self.runtimePermissions = runtimePermissions
@@ -305,7 +321,8 @@ final class HIDRemoteMonitor {
                     repeatingEveryMilliseconds: nil,
                     event
                 )
-            }
+            },
+            switcherSupportsArrowNavigation: appSwitcherSupportsArrowNavigation
         )
         self.appSwitcherSession.setDiagnosticLogger { message in
             diagnosticLogger("HID APP SWITCHER EVENT " + message)
@@ -1752,6 +1769,8 @@ final class HIDRemoteMonitor {
         let wasActive = appSwitcherSession.isActive
         if !wasActive {
             appSwitcherOriginBundleIdentifier = frontmostBundleIdentifier()
+            // 记录打开切换器之前 Dock 的窗口数：切换器开着时 Dock 会多一个窗口。
+            appSwitcherDockWindowBaseline = KeyboardInjector.dockWindowCount()
         }
         let phase = appSwitcherSession.isActive ? "tab" : "start"
         let submitted = appSwitcherSession.trigger()
@@ -1952,7 +1971,13 @@ final class HIDRemoteMonitor {
         guard !appSwitcherSession.isActive else { return false }
         guard let target = appSwitcherPendingLayerClose else { return false }
         // 已经切到目标 App，说明这次确认生效了，之后返回键保持原映射。
-        guard frontmostProcessIdentifier() != target.processIdentifier else {
+        // 判断用 bundle：同名双实例时进程号是猜的，而 macOS 13 上前台还会
+        // 短暂报告成我们自己的菜单栏 App，两者都会误判成“还没切过去”。
+        var landed = frontmostProcessIdentifier() == target.processIdentifier
+        if !landed, let bundleIdentifier = target.bundleIdentifier {
+            landed = frontmostBundleIdentifier() == bundleIdentifier
+        }
+        guard !landed else {
             appSwitcherPendingLayerClose = nil
             return false
         }
@@ -2063,35 +2088,61 @@ final class HIDRemoteMonitor {
         appSwitcherForegroundTask = nil
         appSwitcherPendingPickerEntry?.cancel()
         appSwitcherPendingPickerEntry = nil
-        appSwitcherHudAbsentTicks = 0
         appSwitcherFrontmostMonitor?.cancel()
+        installAppSwitcherDismissObserver()
         appSwitcherFrontmostMonitor = scheduler.schedule(
             afterMilliseconds: HIDRemoteTiming.appSwitcherFrontmostPollMilliseconds,
             repeatingEveryMilliseconds: HIDRemoteTiming.appSwitcherFrontmostPollMilliseconds
         ) { [weak self] in
             guard let self, self.appSwitcherSession.isActive else { return }
-            // 窗口层（Exposé）里系统会把各种 App 报告为前台，前台没有参考价值，
-            // 只靠 OK/返回/超时收尾。
+            // 窗口层（Exposé）里系统会把各种 App 报告为前台，前台没有参考价值。
             guard !self.appSwitcherSession.isWindowPickerActive else { return }
-            // 判断依据是“HUD 还在不在”，而不是“前台是谁”：
-            // macOS 13 上合成 ⌘Tab 会把高亮 App（或我们的菜单栏 App）报告成前台，
-            // 用前台判断会误杀会话。
-            switch self.appSwitcherHudState() {
-            case .visible:
-                self.appSwitcherHudAbsentTicks = 0
-            case .unreadable:
-                // 读不到不等于 HUD 关闭，先放过这一拍。
-                self.appSwitcherHudAbsentTicks = 0
-            case .absent:
-                self.appSwitcherHudAbsentTicks += 1
-                self.diagnosticLogger(
-                    "HID APP SWITCHER hud_watch absent_ticks=\(self.appSwitcherHudAbsentTicks)"
-                )
-                guard self.appSwitcherHudAbsentTicks >= 2 else { return }
-                self.appSwitcherHudAbsentTicks = 0
-                self.finishAppSwitcherLifecycle(reason: "hud_dismissed", confirmed: false)
-            }
+            // 这里只记录状态，不再据此结束会话。
+            //
+            // macOS 13 的真机日志证明：辅助功能里的切换器列表会在切换器明明开着时
+            // 随机消失（19/22 次会话在 1 秒内被判成“已关闭”），前台也会在
+            // “高亮 App”和“我们自己的菜单栏 App”之间来回跳。两种信号都不可靠，
+            // 据此收尾会让切换器一闪而过，并直接切到附近的 App。
+            //
+            // 现在的收尾条件只有三种：用户自己的操作（OK / 返回 / 再按一次绑定键）、
+            // 用户在切换器外点了鼠标（外部关闭），以及会话超时。
+            let state = self.appSwitcherHudState()
+            let dockWindows = KeyboardInjector.dockWindowCount()
+            self.diagnosticLogger(
+                "HID APP SWITCHER switcher_state ax=\(state.logLabel) " +
+                    "dock_windows=\(dockWindows) " +
+                    "baseline=\(self.appSwitcherDockWindowBaseline ?? -1) " +
+                    "front=\(self.frontmostBundleIdentifier() ?? "-")"
+            )
         }
+    }
+
+    /// 注册“切换器被外部关闭”的观察者。
+    ///
+    /// 切换器开着时用户点击别处会把它关掉，系统不会再给我们任何按键，
+    /// 必须由这个观察者松开 ⌘，否则修饰键会一直卡在按下状态。
+    private func installAppSwitcherDismissObserver() {
+        removeAppSwitcherDismissObserver()
+        appSwitcherDismissRemover = appSwitcherDismissObserverInstaller { [weak self] in
+            guard let self, self.appSwitcherSession.isActive else { return }
+            self.finishAppSwitcherLifecycle(reason: "mouse_click", confirmed: false)
+        }
+    }
+
+    private func removeAppSwitcherDismissObserver() {
+        appSwitcherDismissRemover?()
+        appSwitcherDismissRemover = nil
+    }
+
+    /// 默认的外部关闭观察者：监听鼠标点击。
+    static func installMouseClickDismissObserver(_ handler: @escaping () -> Void) -> (() -> Void)? {
+        let monitor = NSEvent.addGlobalMonitorForEvents(
+            matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]
+        ) { _ in
+            handler()
+        }
+        guard let monitor else { return nil }
+        return { NSEvent.removeMonitor(monitor) }
     }
 
     private func scheduleAppSwitcherTimeout() {
@@ -2110,6 +2161,8 @@ final class HIDRemoteMonitor {
         appSwitcherTimeout = nil
         appSwitcherFrontmostMonitor?.cancel()
         appSwitcherFrontmostMonitor = nil
+        removeAppSwitcherDismissObserver()
+        appSwitcherDockWindowBaseline = nil
         if appSwitcherSession.isActive {
             _ = appSwitcherSession.cancel()
         }
@@ -2239,7 +2292,8 @@ final class HIDRemoteMonitor {
         appSwitcherForegroundTask = nil
         appSwitcherPendingPickerEntry?.cancel()
         appSwitcherPendingPickerEntry = nil
-        appSwitcherHudAbsentTicks = 0
+        removeAppSwitcherDismissObserver()
+        appSwitcherDockWindowBaseline = nil
         appSwitcherTargetApplication = nil
         appSwitcherPendingLayerClose = nil
         appSwitcherOriginBundleIdentifier = nil
