@@ -98,7 +98,6 @@ PACKAGE_RESOLVED="$ROOT/Package.resolved"
 DEPENDENCY_MANIFEST="$ROOT/config/release-dependencies.json"
 WORKFLOWS=(
   "$CONTROL_ROOT/.github/workflows/mac-release-package.yml"
-  "$CONTROL_ROOT/.github/workflows/mac-private-ci.yml"
 )
 RELEASE_CRITICAL_WORKFLOWS=(
   "$CONTROL_ROOT/.github/workflows/mac-ci.yml"
@@ -184,13 +183,16 @@ for workflow in "${WORKFLOWS[@]}"; do
   done
 done
 
-grep -Fq '${{ steps.release-dependencies.outputs.sayall_ai_version }}' "$CONTROL_ROOT/.github/workflows/mac-release-package.yml"
 grep -Fq '${{ steps.release-dependencies.outputs.sayall_private_platform_version }}' "$CONTROL_ROOT/.github/workflows/mac-release-package.yml"
 
 grep -Fq 'SAYALL_PRIVATE_PLATFORM_PACKAGE_PATH' "$PACKAGE_MANIFEST"
-grep -Fq 'SAYALL_ENABLE_PRIVATE_SWIFTPM' "$CONTROL_ROOT/.github/workflows/mac-private-ci.yml"
-grep -Fq 'SAYALL_PRIVATE_PLATFORM_PACKAGE_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-private-platform' \
-  "$CONTROL_ROOT/.github/workflows/mac-private-ci.yml"
+for workflow in "$CONTROL_ROOT/.github/workflows/mac-release-package.yml" \
+  "$CONTROL_ROOT/.github/workflows/mac-private-ci.yml"; do
+  if grep -Eq 'build-private-xcframeworks|SAYALL_ENABLE_PRIVATE_SWIFTPM|[.]private-dependencies/sayall-private-platform|[.]private-dependencies/sayall-ai' "$workflow"; then
+    print -u2 "Public workflows must not check out or compile private sources"
+    exit 1
+  fi
+done
 if grep -Eq 'sayall_mac_remote_(repository|commit)|SAYALL_MAC_REMOTE_DEPLOY_KEY|\.private-dependencies/sayall-mac-remote' \
   "$CONTROL_ROOT/.github/workflows/mac-ci.yml" "$CONTROL_ROOT/.github/workflows/mac-release-package.yml"; then
   print -u2 "release workflows must use the unified private platform package"
