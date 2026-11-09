@@ -1827,7 +1827,8 @@ final class HIDRemoteMonitor {
 
     /// 只有单个窗口时，窗口选择层的高亮可能落到别的窗口条上，Return 会激活错的 App。
     /// 这里退出窗口层后直接把唯一的窗口拉起来。
-    /// 退出窗口层后直接把唯一窗口恢复并置前。
+    /// 退出窗口层后直接把唯一窗口恢复并置前；600ms 再重申一次，
+    /// 防止 Dock 关闭动画收尾或异步激活把前台压回原 App。
     private func scheduleSingleWindowRestore(selection: KeyboardInjector.AppSwitcherSelection) {
         appSwitcherSingleWindowTask?.cancel()
         appSwitcherSingleWindowTask = scheduler.schedule(
@@ -1840,6 +1841,25 @@ final class HIDRemoteMonitor {
             self.diagnosticLogger(
                 "HID APP SWITCHER single_window bundle_id=\(selection.bundleIdentifier ?? "-") " +
                     "pid=\(selection.processIdentifier) restored=\(restored)"
+            )
+            self.scheduleSingleWindowReassert(selection: selection)
+        }
+    }
+
+    /// 第一次恢复后如果前台仍不是目标进程（被瞬时压回），再补一次激活。
+    private func scheduleSingleWindowReassert(selection: KeyboardInjector.AppSwitcherSelection) {
+        appSwitcherSingleWindowTask = scheduler.schedule(
+            afterMilliseconds: HIDRemoteTiming.appSwitcherSingleWindowReassertMilliseconds,
+            repeatingEveryMilliseconds: nil
+        ) { [weak self] in
+            guard let self else { return }
+            self.appSwitcherSingleWindowTask = nil
+            guard !self.appSwitcherSession.isActive else { return }
+            guard self.frontmostProcessIdentifier() != selection.processIdentifier else { return }
+            let reasserted = self.windowActivator(selection.processIdentifier)
+            self.diagnosticLogger(
+                "HID APP SWITCHER single_window_reassert bundle_id=\(selection.bundleIdentifier ?? "-") " +
+                    "pid=\(selection.processIdentifier) reasserted=\(reasserted)"
             )
         }
     }
@@ -1945,7 +1965,8 @@ final class HIDRemoteMonitor {
                 self.appSwitcherConfirmationProbe = nil
                 self.diagnosticLogger(
                     "HID APP SWITCHER selection bundle_id=" +
-                        (self.frontmostBundleIdentifier() ?? "unknown")
+                        (self.frontmostBundleIdentifier() ?? "unknown") +
+                        " pid=\(self.frontmostProcessIdentifier() ?? -1)"
                 )
                 // 目标 App 没有可用窗口时，Return 不会关掉窗口层；
                 // 此时会话已结束，返回键不再被拦截，只能补一个 Escape。
