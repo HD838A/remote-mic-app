@@ -196,6 +196,8 @@ final class HIDRemoteMonitor {
     private var appSwitcherOriginBundleIdentifier: String?
     /// 切换器 HUD 里高亮的 App；进入窗口层后 Dock 不再暴露列表，必须在进入前记下。
     private var appSwitcherTargetBundleIdentifier: String?
+    /// 确认后窗口层可能还开着；这期间返回键要能把它关掉。
+    private var appSwitcherPendingLayerClose: (target: String, deadline: Date)?
     private(set) var status = LocalizedMessage("button_mapping.status.disabled")
     var onStatus: ((LocalizedMessage) -> Void)?
     var onActiveButtons: ((UUID?, Set<RemoteButton>) -> Void)?
@@ -1100,6 +1102,9 @@ final class HIDRemoteMonitor {
                 profileID: profileID
             ).action != .disabled || hasOverrideBinding(profileID, button, .longPress)
             let action = settings.action(for: button, profileID: profileID)
+            if button == .back, handlePendingLayerCloseBack() {
+                continue
+            }
             if appSwitcherSession.isActive,
                handleAppSwitcherControlPress(button, usage: usage) {
                 continue
@@ -1683,6 +1688,7 @@ final class HIDRemoteMonitor {
             finishAppSwitcherLifecycle(reason: "tab_failed", confirmed: false)
         } else {
             appSwitcherTargetBundleIdentifier = nil
+            appSwitcherPendingLayerClose = nil
             appSwitcherOriginBundleIdentifier = nil
         }
         return submitted
@@ -1702,6 +1708,7 @@ final class HIDRemoteMonitor {
                     confirmed: true
                 )
                 scheduleSingleWindowRestore(bundleIdentifier: target)
+                markPendingLayerClose(target)
                 return true
             }
             let confirmed = appSwitcherSession.confirm()
@@ -1709,6 +1716,9 @@ final class HIDRemoteMonitor {
                 reason: confirmed ? "confirmed" : "confirm_failed",
                 confirmed: confirmed
             )
+            if confirmed {
+                markPendingLayerClose(appSwitcherTargetBundleIdentifier)
+            }
             return true
         case .back:
             finishAppSwitcherLifecycle(reason: "back", confirmed: false)
@@ -1748,6 +1758,33 @@ final class HIDRemoteMonitor {
         default:
             return false
         }
+    }
+
+    /// 确认后窗口层可能还开着（目标 App 没有窗口时 Return 不会关闭它）。
+    /// 记一小段时间，期间返回键可以直接把它关掉。
+    private func markPendingLayerClose(_ target: String?) {
+        guard let target else { return }
+        appSwitcherPendingLayerClose = (
+            target,
+            Date().addingTimeInterval(
+                TimeInterval(HIDRemoteTiming.appSwitcherPendingLayerCloseSeconds)
+            )
+        )
+    }
+
+    /// 返回键兜底：确认没过、窗口层还开着时，返回键改发 Escape 而不是原映射。
+    private func handlePendingLayerCloseBack() -> Bool {
+        guard !appSwitcherSession.isActive else { return false }
+        guard let pending = appSwitcherPendingLayerClose else { return false }
+        guard Date() < pending.deadline else {
+            appSwitcherPendingLayerClose = nil
+            return false
+        }
+        appSwitcherPendingLayerClose = nil
+        guard frontmostBundleIdentifier() != pending.target else { return false }
+        _ = appSwitcherSession.dismissWindowPicker()
+        diagnosticLogger("HID APP SWITCHER back_escape bundle_id=\(pending.target)")
+        return true
     }
 
     /// 只有单个窗口时，窗口选择层的高亮可能落到别的窗口条上，Return 会激活错的 App。
@@ -1901,6 +1938,7 @@ final class HIDRemoteMonitor {
             }
         }
         appSwitcherTargetBundleIdentifier = nil
+        appSwitcherPendingLayerClose = nil
         appSwitcherOriginBundleIdentifier = nil
     }
 
@@ -1975,6 +2013,7 @@ final class HIDRemoteMonitor {
         appSwitcherSingleWindowTask?.cancel()
         appSwitcherSingleWindowTask = nil
         appSwitcherTargetBundleIdentifier = nil
+        appSwitcherPendingLayerClose = nil
         appSwitcherOriginBundleIdentifier = nil
         for usage in activeUsages.subtracting(nativePassthroughUsages) {
             if let button = RemoteButton.usageMap[usage], shouldArmNativeEvent(for: button) {

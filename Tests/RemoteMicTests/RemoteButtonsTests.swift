@@ -1693,6 +1693,11 @@ struct RemoteButtonsTests {
             toMilliseconds: HIDRemoteTiming.appSwitcherExposeCloseMilliseconds
         )
         #expect(activated == [PresetApplication.safari.bundleIdentifier])
+
+        // 确认后窗口层如果没关掉，返回键要能补一个 Escape。
+        frontmost = PresetApplication.codex.bundleIdentifier
+        press(.back)
+        #expect(posted.contains { $0.0 == 53 })
     }
 
     @Test func appSwitcherHeldDirectionRepeatsSelection() throws {
