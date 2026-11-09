@@ -1,5 +1,7 @@
 # Bug 记录
 
+- [Intel 包在「应用程序」和启动台里不是圆角，退出 App 后图标又变回几何鸭](./2026-11-09-intel-square-app-icon-and-static-icon-fallback.md)
+
 - [只有一只 Siri Remote 时 Onboarding 永久卡在音频页](./2026-11-07-siri-remote-onboarding-audio-gate.md)
 
 - [常用语粘贴后自定义 Return 继承残留 Command 变成换行](./2026-11-06-shortcut-inherits-stale-command.md)

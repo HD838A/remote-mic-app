@@ -1022,9 +1022,12 @@ final class AppSettings: ObservableObject {
         applicationLanguage = AppLanguage(
             rawValue: defaults.string(forKey: Keys.applicationLanguage) ?? ""
         ) ?? .system
+        // 默认与静态包图标保持一致：经典鸭圆角透明图标。
+        // 运行期覆盖只影响 Dock，App 退出后 Finder 与启动台回落到静态包图标，
+        // 因此默认值必须是经典鸭，否则退出后会看到与运行期不同的几何鸭。
         appIconIdentifier = AppIconIdentifier(
             rawValue: defaults.string(forKey: Keys.appIconIdentifier)
-                ?? AppIconIdentifier.facetedDuck.rawValue
+                ?? AppIconIdentifier.standard.rawValue
         )
         showDockIcon = defaults.object(forKey: Keys.showDockIcon) == nil
             ? true

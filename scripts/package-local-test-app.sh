@@ -70,7 +70,15 @@ if ! nm -gU "$APP/Contents/MacOS/RemoteMic" 2>/dev/null | grep "SayAllButtonProf
   exit 3
 fi
 cp -R .build/out/Products/Release/Sparkle.framework "$APP/Contents/MacOS/"
-rsync -a --exclude Info.plist Resources/ "$APP/Contents/Resources/"
+# 静态包图标只保留唯一一份 AppIcon.icns。
+# Info.plist 固定 CFBundleIconFile=AppIcon，一旦包内出现第二份 .icns，
+# Finder 与启动台可能命中错误资源（历史上 Intel 包因此显示方形方块图标）。
+# PNG 母版不属于运行时资源，不进包。
+rsync -a \
+  --exclude Info.plist \
+  --exclude 'AppIcon-*.icns' \
+  --exclude 'AppIcon.png' \
+  Resources/ "$APP/Contents/Resources/"
 for bundle in .build/out/Products/Release/*.bundle; do
   cp -R "$bundle" "$APP/Contents/Resources/"
 done

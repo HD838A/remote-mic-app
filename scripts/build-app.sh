@@ -50,10 +50,10 @@ RELEASE_SWIFT_BUILD_TIMEOUT_SECONDS="${RELEASE_SWIFT_BUILD_TIMEOUT_SECONDS:-300}
 RELEASE_CODESIGN_TIMEOUT_SECONDS="${RELEASE_CODESIGN_TIMEOUT_SECONDS:-45}"
 RELEASE_STAGE_RUNNER="$ROOT/scripts/run-release-stage.sh"
 
+# 两个发布变体共用同一份静态包图标：经典鸭圆角透明 ICNS。
+# 曾经按架构分叉出 Intel 专用 ICNS，但只要包内同时出现两份 .icns，
+# CFBundleIconFile=AppIcon 就可能命中方形旧资源，Finder 与启动台会显示方块图标。
 ICON_ICNS_RESOURCE="AppIcon.icns"
-if [[ "$RELEASE_VARIANT" == "intel" ]]; then
-  ICON_ICNS_RESOURCE="AppIcon-intel.icns"
-fi
 
 if [[ "$#" -ne 0 ]]; then
   print -u2 "usage: $0"

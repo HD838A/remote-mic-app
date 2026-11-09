@@ -45,8 +45,9 @@ struct AppIconControllerTests {
         #expect(complete.options.map(\.id) == [.standard, .facetedDuck])
         #expect(complete.resolvedIdentifier(for: .facetedDuck) == .facetedDuck)
         #expect(complete.image(for: .facetedDuck) === facetedDuck)
-        #expect(complete.resolvedIdentifier(for: missingIdentifier) == .facetedDuck)
-        #expect(complete.image(for: missingIdentifier) === facetedDuck)
+        // 未知 ID 回退到经典鸭，与静态包图标保持一致。
+        #expect(complete.resolvedIdentifier(for: missingIdentifier) == .standard)
+        #expect(complete.image(for: missingIdentifier) === standard)
         #expect(complete.image(for: .standard) === standard)
     }
 
@@ -75,15 +76,15 @@ struct AppIconControllerTests {
             app.applicationIconImage = originalDockIcon
         }
 
-        // Reproduce the bundle's opaque icon being cached before the runtime icon applies.
+        // Reproduce the bundle's rounded icon being cached before the runtime icon applies.
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-        let square = try #require(NSImage(contentsOf: root.appendingPathComponent("Resources/AppIcon.png")))
+        let bundled = try #require(NSImage(contentsOf: root.appendingPathComponent("Resources/AppIcon.png")))
         NSImage(named: NSImage.applicationIconName)?.setName(nil)
-        #expect(square.setName(NSImage.applicationIconName))
-        app.applicationIconImage = square
+        #expect(bundled.setName(NSImage.applicationIconName))
+        app.applicationIconImage = bundled
         let initial = try #require(NSAlert().icon?.tiffRepresentation.flatMap(NSBitmapImageRep.init(data:)))
-        #expect(initial.colorAt(x: 0, y: 0)?.alphaComponent == 1)
+        #expect(initial.colorAt(x: 0, y: 0)?.alphaComponent ?? 1 <= 1.0 / 255.0)
 
         let controller = AppIconController()
         for identifier in [AppIconIdentifier.facetedDuck, .standard, .facetedDuck] {
@@ -107,7 +108,8 @@ struct AppIconControllerTests {
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
         let settings = AppSettings(defaults: defaults)
-        #expect(settings.appIconIdentifier == .facetedDuck)
+        // 默认必须是经典鸭：静态包图标是经典鸭，App 退出后不能回退到几何鸭。
+        #expect(settings.appIconIdentifier == .standard)
 
         settings.appIconIdentifier = .facetedDuck
         let reloaded = AppSettings(defaults: defaults)

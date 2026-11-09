@@ -21,15 +21,11 @@ struct BuildSigningTests {
         }
     }
 
-    @Test func appIconUsesThePlatformSourceAsset() throws {
+    @Test func appIconUsesOneSharedRoundedStaticAsset() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-        let iconURL = root.appendingPathComponent("Resources/AppIcon.png")
-        let representation = try #require(
-            NSBitmapImageRep(data: Data(contentsOf: iconURL))
-        )
         let verifySource = try String(
             contentsOf: root.appendingPathComponent("scripts/verify-app.sh"),
             encoding: .utf8
@@ -38,53 +34,67 @@ struct BuildSigningTests {
             contentsOf: root.appendingPathComponent("scripts/build-app.sh"),
             encoding: .utf8
         )
+        let packageSource = try String(
+            contentsOf: root.appendingPathComponent("scripts/package-local-test-app.sh"),
+            encoding: .utf8
+        )
 
-        #expect(representation.pixelsWide == 1024)
-        #expect(representation.pixelsHigh == 1024)
-        #expect(representation.hasAlpha)
-        #expect(representation.colorAt(x: 0, y: 0)?.alphaComponent ?? 0 >= 0.5)
-        let centerAlpha = representation.colorAt(
-            x: representation.pixelsWide / 2,
-            y: representation.pixelsHigh / 2
-        )?.alphaComponent ?? 0
-        #expect(centerAlpha >= 0.5)
-
-        let bundledSource = try #require(NSBitmapImageRep(data: Data(contentsOf:
-            root.appendingPathComponent("Resources/AppIcons/faceted-duck.png")
-        )))
-        #expect(bundledSource.pixelsWide == 1024)
-        #expect(bundledSource.pixelsHigh == 1024)
-        #expect(bundledSource.hasAlpha)
+        // 静态包图标母版必须是运行时「经典鸭」同一份资产：四角透明、中心不透明。
+        let masterData = try Data(contentsOf: root.appendingPathComponent("Resources/AppIcon.png"))
+        let master = try #require(NSBitmapImageRep(data: masterData))
+        #expect(master.pixelsWide == 1024)
+        #expect(master.pixelsHigh == 1024)
+        #expect(master.hasAlpha)
         for (x, y) in [
             (0, 0),
-            (bundledSource.pixelsWide - 1, 0),
-            (0, bundledSource.pixelsHigh - 1),
-            (bundledSource.pixelsWide - 1, bundledSource.pixelsHigh - 1),
+            (master.pixelsWide - 1, 0),
+            (0, master.pixelsHigh - 1),
+            (master.pixelsWide - 1, master.pixelsHigh - 1),
         ] {
-            #expect(bundledSource.colorAt(x: x, y: y)?.alphaComponent ?? 1 <= 1.0 / 255.0)
+            #expect(master.colorAt(x: x, y: y)?.alphaComponent ?? 1 <= 1.0 / 255.0)
         }
-        let intelSource = try #require(NSBitmapImageRep(data: Data(contentsOf:
-            root.appendingPathComponent("Resources/AppIcon-intel.png")
-        )))
-        #expect(intelSource.pixelsWide == 1024)
-        #expect(intelSource.pixelsHigh == 1024)
-        #expect(intelSource.hasAlpha)
-        #expect(intelSource.colorAt(x: 0, y: 0)?.alphaComponent ?? 1 <= 1.0 / 255.0)
-        #expect(try Data(contentsOf: root.appendingPathComponent("Resources/AppIcon-intel.png")) ==
-            Data(contentsOf: root.appendingPathComponent("Resources/AppIcons/faceted-duck.png")))
-        let intelPackagedIcon = try Data(contentsOf: root.appendingPathComponent(
-            "Resources/AppIcon-intel.icns"
+        let masterCenterAlpha = master.colorAt(
+            x: master.pixelsWide / 2,
+            y: master.pixelsHigh / 2
+        )?.alphaComponent ?? 0
+        #expect(masterCenterAlpha >= 0.5)
+        let standardData = try Data(contentsOf: root.appendingPathComponent(
+            "Resources/AppIcons/standard.png"
         ))
-        let applePackagedIcon = try Data(contentsOf: root.appendingPathComponent(
-            "Resources/AppIcon.icns"
+        #expect(masterData == standardData)
+
+        // 运行时「几何鸭」仍然保留，只是不再作为静态包图标或默认值。
+        let facetedDuckData = try Data(contentsOf: root.appendingPathComponent(
+            "Resources/AppIcons/faceted-duck.png"
         ))
-        #expect(intelPackagedIcon != applePackagedIcon)
-        let intelIconSource = try #require(CGImageSourceCreateWithData(
-            intelPackagedIcon as CFData, nil
+        let facetedDuck = try #require(NSBitmapImageRep(data: facetedDuckData))
+        #expect(facetedDuck.pixelsWide == 1024)
+        #expect(facetedDuck.pixelsHigh == 1024)
+        #expect(facetedDuck.hasAlpha)
+        for (x, y) in [
+            (0, 0),
+            (facetedDuck.pixelsWide - 1, 0),
+            (0, facetedDuck.pixelsHigh - 1),
+            (facetedDuck.pixelsWide - 1, facetedDuck.pixelsHigh - 1),
+        ] {
+            #expect(facetedDuck.colorAt(x: x, y: y)?.alphaComponent ?? 1 <= 1.0 / 255.0)
+        }
+        #expect(facetedDuckData != masterData)
+
+        // 架构分叉资产必须已下线：Intel 与 Apple Silicon 共用同一份 AppIcon.icns。
+        #expect(!FileManager.default.fileExists(
+            atPath: root.appendingPathComponent("Resources/AppIcon-intel.icns").path
         ))
+        #expect(!FileManager.default.fileExists(
+            atPath: root.appendingPathComponent("Resources/AppIcon-intel.png").path
+        ))
+
+        let packagedIcon = try Data(contentsOf: root.appendingPathComponent("Resources/AppIcon.icns"))
+        let iconSource = try #require(CGImageSourceCreateWithData(packagedIcon as CFData, nil))
         var iconSizes = Set<Int>()
-        for index in 0..<CGImageSourceGetCount(intelIconSource) {
-            let image = try #require(CGImageSourceCreateImageAtIndex(intelIconSource, index, nil))
+        var masterLayer: CGImage?
+        for index in 0..<CGImageSourceGetCount(iconSource) {
+            let image = try #require(CGImageSourceCreateImageAtIndex(iconSource, index, nil))
             let layer = NSBitmapImageRep(cgImage: image)
             #expect(layer.pixelsWide == layer.pixelsHigh)
             iconSizes.insert(layer.pixelsWide)
@@ -95,16 +105,48 @@ struct BuildSigningTests {
                 #expect(layer.colorAt(x: x, y: y)?.alphaComponent ?? 1 <= 1.0 / 255.0)
             }
             #expect(layer.colorAt(x: layer.pixelsWide / 2, y: layer.pixelsHigh / 2)?.alphaComponent ?? 0 >= 0.5)
+            if layer.pixelsWide == 1024 {
+                masterLayer = image
+            }
         }
         #expect(iconSizes == Set([16, 32, 64, 128, 256, 512, 1024]))
+
+        // ICNS 的 1024 图层必须与母版 PNG 像素一致，避免包内图标与源资产脱节。
+        let masterImageSource = try #require(CGImageSourceCreateWithData(masterData as CFData, nil))
+        let masterImage = try #require(CGImageSourceCreateImageAtIndex(masterImageSource, 0, nil))
+        let masterLayerImage = try #require(masterLayer)
+        #expect(Self.rgbaBytes(for: masterImage, width: 1024, height: 1024) ==
+            Self.rgbaBytes(for: masterLayerImage, width: 1024, height: 1024))
+
         #expect(verifySource.contains("/usr/bin/iconutil --convert iconset"))
-        #expect(verifySource.contains("packaged app icon corner is not opaque"))
+        #expect(verifySource.contains("packaged app icon corner is not transparent"))
+        #expect(!verifySource.contains("packaged app icon corner is not opaque"))
         #expect(verifySource.contains("CFBundleIconName"))
         #expect(verifySource.contains("Assets.car"))
         #expect(verifySource.contains("*.icon(N)"))
+        #expect(verifySource.contains("AppIcon*(N.)"))
         #expect(buildSource.contains("\"$ROOT/Resources/AppIcons\""))
-        #expect(!buildSource.contains("\"$ROOT/Resources/AppIcon-intel.png\""))
-        #expect(!buildSource.contains("for app_icon_name in standard faceted-duck"))
+        #expect(buildSource.contains("\"$ROOT/Resources/$ICON_ICNS_RESOURCE\""))
+        #expect(!buildSource.contains("AppIcon-intel"))
+        #expect(packageSource.contains("--exclude 'AppIcon-*.icns'"))
+        #expect(packageSource.contains("--exclude 'AppIcon.png'"))
+    }
+
+    private static func rgbaBytes(for image: CGImage, width: Int, height: Int) -> Data? {
+        guard let colorSpace = CGColorSpace(name: CGColorSpace.sRGB),
+              let context = CGContext(
+                data: nil,
+                width: width,
+                height: height,
+                bitsPerComponent: 8,
+                bytesPerRow: width * 4,
+                space: colorSpace,
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+              ) else { return nil }
+        context.interpolationQuality = .high
+        context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+        guard let baseAddress = context.data else { return nil }
+        return Data(bytes: baseAddress, count: width * height * 4)
     }
 
     @Test func buildDefaultsToStableAdHocSigning() throws {

@@ -100,7 +100,9 @@ struct AppIconCatalog {
         if options.contains(where: { $0.id == requestedIdentifier }) {
             return requestedIdentifier
         }
-        return options.contains { $0.id == .facetedDuck } ? .facetedDuck : .standard
+        // 未知或已下线的图标 ID 回退到经典鸭，与静态包图标保持一致，
+        // 避免 App 退出后 Finder 与启动台显示的几何鸭和运行期不一致。
+        return options.contains { $0.id == .standard } ? .standard : .facetedDuck
     }
 
     func image(for requestedIdentifier: AppIconIdentifier) -> NSImage {

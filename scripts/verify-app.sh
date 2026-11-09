@@ -19,13 +19,7 @@ SPARKLE_FRAMEWORK="$APP/Contents/Frameworks/Sparkle.framework"
 APP_ICON="$APP/Contents/Resources/AppIcon.icns"
 ICON_SOURCE="$ROOT/Resources/AppIcon.png"
 EXPECTED_ICON_ICNS="$ROOT/Resources/AppIcon.icns"
-ICON_CORNER_STYLE="opaque"
-if [[ "$RELEASE_VARIANT" == "intel" ]]; then
-  APP_ICON="$APP/Contents/Resources/AppIcon.icns"
-  ICON_SOURCE="$ROOT/Resources/AppIcons/faceted-duck.png"
-  EXPECTED_ICON_ICNS="$ROOT/Resources/AppIcon-intel.icns"
-  ICON_CORNER_STYLE="transparent"
-fi
+# 两个发布变体共用同一份静态图标：四角透明、中心不透明。
 EXPECTED_DEVELOPER_TEAM_ID="${EXPECTED_DEVELOPER_TEAM_ID:-}"
 REQUIRE_DEVELOPER_ID_SIGNING="${REQUIRE_DEVELOPER_ID_SIGNING:-0}"
 REQUIRE_NOTARIZATION="${REQUIRE_NOTARIZATION:-0}"
@@ -104,6 +98,14 @@ if (( ${#FORBIDDEN_ICON_RESOURCES} > 0 )); then
   print -u2 "App must not package .icon resources for the legacy ICNS path"
   exit 1
 fi
+# 静态包图标必须唯一：CFBundleIconFile=AppIcon 只认 AppIcon.icns，
+# 包内多出的 AppIcon* 会让 Finder 与启动台命中错误资源（历史上 Intel 包因此显示方块图标）。
+for bundled_static_icon in "$APP/Contents/Resources"/AppIcon*(N.); do
+  if [[ "${bundled_static_icon:t}" != "AppIcon.icns" ]]; then
+    print -u2 "App must package exactly one static app icon (AppIcon.icns); found $bundled_static_icon"
+    exit 1
+  fi
+done
 SAYALL_SIRI_REMOTE_INCLUDED="$(plutil -extract SayAllSiriRemoteIncluded raw -o - "$PLIST" 2>/dev/null || true)"
 SAYALL_SIRI_REMOTE_RESOURCE_BUNDLE="$APP/Contents/Resources/SayAllSiriRemote_SayAllSiriRemote.bundle"
 SAYALL_CHROMECAST_RESOURCE_BUNDLE="$APP/Contents/Resources/SayAllChromecast_SayAllChromecast.bundle"
@@ -193,7 +195,7 @@ for icon_name in "${EXPECTED_ICON_NAMES[@]}"; do
   test -f "$ICONSET/$icon_name"
 done
 ICON_IMAGES=("$ICONSET"/*.png(N))
-/usr/bin/xcrun swift - "$ICON_CORNER_STYLE" "$ICON_SOURCE" "${ICON_IMAGES[@]}" <<'SWIFT'
+/usr/bin/xcrun swift - "$ICON_SOURCE" "${ICON_IMAGES[@]}" <<'SWIFT'
 import AppKit
 import Darwin
 import Foundation
@@ -203,8 +205,7 @@ func fail(_ message: String) -> Never {
     exit(1)
 }
 
-let transparentCorners = CommandLine.arguments[1] == "transparent"
-for (index, path) in CommandLine.arguments.dropFirst(2).enumerated() {
+for (index, path) in CommandLine.arguments.dropFirst(1).enumerated() {
     let url = URL(fileURLWithPath: path)
     guard let representation = try? NSBitmapImageRep(data: Data(contentsOf: url)) else {
         fail("unable to decode app icon image: \(path)")
@@ -223,11 +224,8 @@ for (index, path) in CommandLine.arguments.dropFirst(2).enumerated() {
     ]
     for (x, y) in corners {
         let alpha = representation.colorAt(x: x, y: y)?.alphaComponent ?? 1
-        if transparentCorners && alpha > (1.0 / 255.0) {
-            fail("packaged Intel app icon corner is not transparent: \(path) (\(x),\(y))")
-        }
-        if !transparentCorners && alpha < (1.0 - 1.0 / 255.0) {
-            fail("packaged app icon corner is not opaque: \(path) (\(x),\(y))")
+        if alpha > (1.0 / 255.0) {
+            fail("packaged app icon corner is not transparent: \(path) (\(x),\(y))")
         }
     }
     let centerAlpha = representation.colorAt(
