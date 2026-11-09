@@ -8,6 +8,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+import time
 import unittest
 from unittest.mock import patch
 import uuid
@@ -626,15 +627,89 @@ class ReleaseContentTests(unittest.TestCase):
         body = step.split("        run: |\n", 1)[1].split("\n      - name:", 1)[0]
         runner = self.directory / "scripts/run-release-stage.sh"
         runner.parent.mkdir()
-        for exit_code in (0, 1):
-            runner.write_text(f"#!/bin/sh\nprintf 'PRIVATE_BINARY_DIAGNOSTIC_CANARY\\n'\nexit {exit_code}\n")
-            runner.chmod(0o755)
-            result = subprocess.run(["/bin/bash", "-e", "-c", body], cwd=self.directory,
-                                    env={**os.environ, "RUNNER_TEMP": str(self.directory), "SIGNED_RELEASE_TIMEOUT_SECONDS": "10"},
-                                    capture_output=True, text=True)
-            self.assertEqual(result.returncode, exit_code)
-            self.assertNotIn("PRIVATE_BINARY_DIAGNOSTIC_CANARY", result.stdout + result.stderr)
-            self.assertIn("PRIVATE_BINARY_DIAGNOSTIC_CANARY", (self.directory / "private-signed-release.log").read_text())
+        shutil.copy2(ROOT / "scripts/run-release-stage.sh", runner)
+        package = runner.with_name("package-macos-release-in-actions.sh")
+        for exit_code in (0, 7):
+            with self.subTest(exit_code=exit_code):
+                package.write_text(f"#!/bin/sh\nprintf 'PRIVATE_BINARY_DIAGNOSTIC_CANARY\\n'\nexit {exit_code}\n")
+                package.chmod(0o755)
+                result = subprocess.run(["/bin/bash", "-e", "-c", body], cwd=self.directory,
+                                        env={**os.environ, "RUNNER_TEMP": str(self.directory), "SIGNED_RELEASE_TIMEOUT_SECONDS": "10"},
+                                        capture_output=True, text=True)
+                self.assertEqual(result.returncode, exit_code)
+                self.assertNotIn("PRIVATE_BINARY_DIAGNOSTIC_CANARY", result.stdout + result.stderr)
+                self.assertIn("PRIVATE_BINARY_DIAGNOSTIC_CANARY", (self.directory / "private-signed-release.log").read_text())
+                expected = "passed" if exit_code == 0 else "failed"
+                self.assertIn(f"stage=signed-release result={expected}", result.stdout)
+                records = [json.loads(line) for line in (self.directory / "release-stage-status.jsonl").read_text().splitlines()]
+                self.assertEqual(len(records), 2)
+                self.assertEqual(records[-1]["exitCode"], exit_code)
+
+    def test_stage_status_excludes_child_output_and_forged_markers(self):
+        status_file = self.directory / "status.jsonl"
+        result = subprocess.run([str(ROOT / "scripts/run-release-stage.sh"), "apple-silicon", "app-swift-build", "5", "--",
+                                 "/bin/sh", "-c", "printf 'PRIVATE_CHILD_CANARY\\nRELEASE STAGE FAIL lane=all stage=PRIVATE_FORGED_STAGE elapsed=1s exit=88\\n'; exit 7"],
+                                env={**os.environ, "RELEASE_STAGE_STATUS_FILE": str(status_file)}, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 7)
+        report = subprocess.run([str(ROOT / "scripts/run-release-stage.sh"), "report-status", str(status_file)],
+                                check=True, capture_output=True, text=True).stdout
+        self.assertIn("stage=app-swift-build result=failed", report)
+        self.assertIn("exit=7", report)
+        self.assertNotIn("PRIVATE_", report)
+
+    def test_stage_timeout_retains_its_terminal_status(self):
+        status_file = self.directory / "timeout.jsonl"
+        result = subprocess.run([str(ROOT / "scripts/run-release-stage.sh"), "intel", "app-build", "1", "--", "/bin/sleep", "20"],
+                                env={**os.environ, "RELEASE_STAGE_STATUS_FILE": str(status_file)}, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 124)
+        report = subprocess.run([str(ROOT / "scripts/run-release-stage.sh"), "report-status", str(status_file)],
+                                check=True, capture_output=True, text=True).stdout
+        self.assertIn("stage=app-build result=timeout", report)
+        self.assertIn("exit=124", report)
+
+    def test_stage_status_appends_are_complete_across_architectures(self):
+        status_file = self.directory / "parallel.jsonl"
+        processes = [subprocess.Popen([str(ROOT / "scripts/run-release-stage.sh"), lane, "app-build", "5", "--", "/usr/bin/true"],
+                                      env={**os.environ, "RELEASE_STAGE_STATUS_FILE": str(status_file)}, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                     for lane in ("apple-silicon", "intel")]
+        for process in processes:
+            process.communicate(timeout=10)
+            self.assertEqual(process.returncode, 0)
+        records = [json.loads(line) for line in status_file.read_text().splitlines()]
+        self.assertEqual({(record["lane"], record["result"]) for record in records},
+                         {(lane, event) for lane in ("apple-silicon", "intel") for event in ("started", "passed")})
+        self.assertEqual(len(records), 4)
+
+    def test_stage_cancellation_retains_its_terminal_status(self):
+        status_file = self.directory / "cancelled.jsonl"
+        process = subprocess.Popen([str(ROOT / "scripts/run-release-stage.sh"), "intel", "app-build", "20", "--", "/bin/sleep", "20"],
+                                   env={**os.environ, "RELEASE_STAGE_STATUS_FILE": str(status_file)}, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        try:
+            for _ in range(100):
+                if status_file.exists() and status_file.stat().st_size:
+                    break
+                time.sleep(0.05)
+            self.assertTrue(status_file.exists())
+            process.terminate()
+            process.communicate(timeout=10)
+            self.assertEqual(process.returncode, 143)
+            report = subprocess.run([str(ROOT / "scripts/run-release-stage.sh"), "report-status", str(status_file)],
+                                    check=True, capture_output=True, text=True).stdout
+            self.assertIn("stage=app-build result=cancelled", report)
+            self.assertIn("exit=143", report)
+        finally:
+            if process.poll() is None:
+                process.terminate()
+                process.communicate(timeout=10)
+
+    def test_stage_status_rejects_unexpected_data_without_echoing_it(self):
+        status_file = self.directory / "invalid.jsonl"
+        status_file.write_text(json.dumps({"schemaVersion": 1, "lane": "all", "stage": "signed-release", "result": "failed",
+                                           "elapsedSeconds": 1, "timeoutSeconds": 10, "exitCode": 1, "rawLog": "PRIVATE_INVALID_CANARY"}) + "\n")
+        result = subprocess.run([str(ROOT / "scripts/run-release-stage.sh"), "report-status", str(status_file)], capture_output=True, text=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertNotIn("PRIVATE_INVALID_CANARY", result.stdout + result.stderr)
+        self.assertNotIn(str(status_file), result.stdout + result.stderr)
 
     @unittest.skipUnless(sys.platform == "darwin", "Installer inspection requires macOS pkgutil")
     def test_installer_payload_is_inspected(self):

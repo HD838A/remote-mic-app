@@ -348,14 +348,21 @@ jobs:
           REMOTE_MIC_SENTRY_DSN: ${{ secrets.REMOTE_MIC_SENTRY_DSN }}
           SAYALL_DIAGNOSTIC_PUBLIC_KEY_BASE64: ${{ secrets.SAYALL_DIAGNOSTIC_PUBLIC_KEY_BASE64 }}
         run: |
-          if ! ./scripts/run-release-stage.sh \
+          umask 077
+          export RELEASE_STAGE_STATUS_FILE="$RUNNER_TEMP/release-stage-status.jsonl"
+          : > "$RELEASE_STAGE_STATUS_FILE"
+          if ./scripts/run-release-stage.sh \
             all signed-release "$SIGNED_RELEASE_TIMEOUT_SECONDS" -- \
             ./scripts/package-macos-release-in-actions.sh \
             > "$RUNNER_TEMP/private-signed-release.log" 2>&1; then
+            ./scripts/run-release-stage.sh report-status "$RELEASE_STAGE_STATUS_FILE"
+            echo "SIGNED RELEASE result=verified"
+          else
+            release_status=$?
+            ./scripts/run-release-stage.sh report-status "$RELEASE_STAGE_STATUS_FILE" || true
             echo "SIGNED RELEASE result=failed"
-            exit 1
+            exit "$release_status"
           fi
-          echo "SIGNED RELEASE result=verified"
 
       - name: Prepare canonical public asset bundle
         run: |
