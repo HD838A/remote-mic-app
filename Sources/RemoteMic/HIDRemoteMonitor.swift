@@ -109,6 +109,21 @@ final class HIDRemoteMonitor {
     private let runtimePermissions: () -> Bool
     private let actionPerformer: (RemoteButton, ButtonTrigger, ConfiguredButtonAction) -> Bool
     private let appSwitcherSession: KeyboardInjector.AppSwitcherSession
+    private let minimizedWindowRestorer: (String?, String?) -> KeyboardInjector.MinimizedWindowRestoreResult
+    private let windowCounter: (pid_t) -> Int?
+    private let windowActivator: (pid_t) -> Bool
+    private let applicationActivator: (pid_t) -> Bool
+    private let appSwitcherSelectedApplication: () -> KeyboardInjector.AppSwitcherSelection?
+    private let appSwitcherHudState: () -> KeyboardInjector.AppSwitcherHudState
+    /// 切换器里当前高亮的 App 标题，用来判断方向键是否真的移动了高亮。
+    private let appSwitcherHighlightedTitle: () -> String?
+    /// Dock 进程当前拥有的窗口数：切换器开着时 Dock 会多一个窗口。
+    private let appSwitcherDockWindowCount: () -> Int
+    /// 注册“切换器被外部关闭”的观察者，返回取消注册的闭包。
+    /// 生产实现监听鼠标点击：用户在切换器开着时点别处会把它关掉，此时必须松开 ⌘。
+    private let appSwitcherDismissObserverInstaller:
+        (@escaping () -> Void) -> (() -> Void)?
+    private let frontmostProcessIdentifier: () -> pid_t?
     private let overrideActionPerformer: (UUID?, RemoteButton, ButtonTrigger) -> Bool
     private let hasOverrideBinding: (UUID?, RemoteButton, ButtonTrigger) -> Bool
     private let frontmostBundleIdentifier: () -> String?
@@ -188,7 +203,30 @@ final class HIDRemoteMonitor {
     private var appSwitcherTimeout: HIDRemoteScheduledTask?
     private var appSwitcherFrontmostMonitor: HIDRemoteScheduledTask?
     private var appSwitcherConfirmationProbe: HIDRemoteScheduledTask?
+    private var appSwitcherMinimizedRestoreProbe: HIDRemoteScheduledTask?
+    private var appSwitcherModifierWatchdog: HIDRemoteScheduledTask?
+    private var appSwitcherSingleWindowTask: HIDRemoteScheduledTask?
+    private var appSwitcherForegroundTask: HIDRemoteScheduledTask?
+    private var appSwitcherPendingPickerEntry: HIDRemoteScheduledTask?
+    /// 取消注册外部关闭观察者的闭包。
+    private var appSwitcherDismissRemover: (() -> Void)?
+    /// 方向键之后核对高亮是否移动的任务。
+    private var appSwitcherArrowCheck: HIDRemoteScheduledTask?
+    /// 打开切换器之后核对它是否真的出现了的任务。
+    private var appSwitcherOpenProbe: HIDRemoteScheduledTask?
+    /// 本次会话里是否确实见过切换器打开（用 Dock 窗口数判断）。
+    private var appSwitcherObservedOpen = false
+    /// 本次会话里用户是否已经用方向键选过东西。
+    private var appSwitcherHasNavigated = false
+    /// 切换器自己关掉后补发的次数上限。
+    private var appSwitcherReopenCount = 0
+    /// 会话开始时 Dock 的窗口数量，用来判断切换器窗口是否还在。
+    private var appSwitcherDockWindowBaseline: Int?
     private var appSwitcherOriginBundleIdentifier: String?
+    /// 切换器 HUD 里高亮的 App（按进程记录，同名双实例也能区分）。
+    private var appSwitcherTargetApplication: KeyboardInjector.AppSwitcherSelection?
+    /// 确认后窗口层可能还开着；下一次按返回键时用它判断要不要补 Escape。
+    private var appSwitcherPendingLayerClose: KeyboardInjector.AppSwitcherSelection?
     private(set) var status = LocalizedMessage("button_mapping.status.disabled")
     var onStatus: ((LocalizedMessage) -> Void)?
     var onActiveButtons: ((UUID?, Set<RemoteButton>) -> Void)?
@@ -235,7 +273,44 @@ final class HIDRemoteMonitor {
         prepareNativeKeys: (() -> Bool)? = nil,
         restoreNativeKeys: @escaping () -> Void = {},
         directionalNativeFallback: Bool = HIDRemoteMonitor.directionalNativeFallbackEnabled,
-        appSwitcherKeyStatePoster: @escaping KeyboardInjector.KeyStatePoster = KeyboardInjector.postKeyState
+        appSwitcherKeyStatePoster: @escaping KeyboardInjector.KeyStatePoster = KeyboardInjector.postKeyState,
+        minimizedWindowRestorer: @escaping (
+            String?,
+            String?
+        ) -> KeyboardInjector.MinimizedWindowRestoreResult = {
+            KeyboardInjector.restoreMinimizedWindowIfNeeded(
+                frontmostBundleIdentifier: $0,
+                originBundleIdentifier: $1
+            )
+        },
+        windowCounter: @escaping (pid_t) -> Int? = {
+            KeyboardInjector.standardWindowCount(processIdentifier: $0)
+        },
+        windowActivator: @escaping (pid_t) -> Bool = {
+            KeyboardInjector.restoreSingleWindow(processIdentifier: $0)
+        },
+        applicationActivator: @escaping (pid_t) -> Bool = {
+            KeyboardInjector.activateApplication(processIdentifier: $0)
+        },
+        appSwitcherSelectedApplication: @escaping () -> KeyboardInjector.AppSwitcherSelection? = {
+            KeyboardInjector.appSwitcherSelectedApplication()
+        },
+        appSwitcherHudState: @escaping () -> KeyboardInjector.AppSwitcherHudState = {
+            KeyboardInjector.appSwitcherHudState()
+        },
+        appSwitcherHighlightedTitle: @escaping () -> String? = {
+            KeyboardInjector.appSwitcherHighlightedTitle()
+        },
+        appSwitcherDockWindowCount: @escaping () -> Int = {
+            KeyboardInjector.dockWindowCount()
+        },
+        appSwitcherDismissObserverInstaller:
+            @escaping (@escaping () -> Void) -> (() -> Void)? =
+            HIDRemoteMonitor.installMouseClickDismissObserver,
+
+        frontmostProcessIdentifier: @escaping () -> pid_t? = {
+            NSWorkspace.shared.frontmostApplication?.processIdentifier
+        }
     ) {
         self.settings = settings
         self.profileID = profileID
@@ -244,11 +319,31 @@ final class HIDRemoteMonitor {
         self.eventSuppressor = eventSuppressor
         self.ownsEventSuppressor = ownsEventSuppressor
         self.scheduler = scheduler
+        self.minimizedWindowRestorer = minimizedWindowRestorer
+        self.windowCounter = windowCounter
+        self.windowActivator = windowActivator
+        self.applicationActivator = applicationActivator
+        self.appSwitcherSelectedApplication = appSwitcherSelectedApplication
+        self.appSwitcherHudState = appSwitcherHudState
+        self.appSwitcherHighlightedTitle = appSwitcherHighlightedTitle
+        self.appSwitcherDockWindowCount = appSwitcherDockWindowCount
+        self.appSwitcherDismissObserverInstaller = appSwitcherDismissObserverInstaller
+        self.frontmostProcessIdentifier = frontmostProcessIdentifier
         self.permissionPoll = permissionPoll
         self.runtimePermissions = runtimePermissions
         self.appSwitcherSession = KeyboardInjector.AppSwitcherSession(
-            keyStatePoster: appSwitcherKeyStatePoster
+            keyStatePoster: appSwitcherKeyStatePoster,
+            scheduler: { delay, event in
+                scheduler.schedule(
+                    afterMilliseconds: delay,
+                    repeatingEveryMilliseconds: nil,
+                    event
+                )
+            }
         )
+        self.appSwitcherSession.setDiagnosticLogger { message in
+            diagnosticLogger("HID APP SWITCHER EVENT " + message)
+        }
         self.actionPerformer = actionPerformer ?? { _, _, configured in
             KeyboardInjector.send(
                 configured.action,
@@ -1072,7 +1167,9 @@ final class HIDRemoteMonitor {
             // Seizing one HID interface does not guarantee that sibling interfaces
             // stop emitting native events. Every managed press owns its native
             // descriptors; intentional passthrough and marked host events remain free.
-            if !usesNativePassthrough, shouldArmNativeEvent(for: button), button != .volumeUp, button != .volumeDown, button != .tv {
+            if !usesNativePassthrough,
+               shouldArmNativeEvent(for: button) || preflightAction == .appSwitcher,
+               button != .volumeUp, button != .volumeDown, button != .tv {
                 eventSuppressor.arm(button: button, edge: .down)
             }
             var shouldPerformAction = true
@@ -1110,8 +1207,21 @@ final class HIDRemoteMonitor {
                 profileID: profileID
             ).action != .disabled || hasOverrideBinding(profileID, button, .longPress)
             let action = settings.action(for: button, profileID: profileID)
+            if button == .back, handlePendingLayerCloseBack() {
+                continue
+            }
+            if button == .up || button == .down, handlePendingLayerCloseArrow(button: button) {
+                continue
+            }
+            // 会话中，绑定了切换器动作的按键等价于菜单键（Tab）；其余吞掉。
+            let sessionTabAllowed = action == .appSwitcher
+                && !recognizesDoubleClick && !recognizesLongPress
             if appSwitcherSession.isActive,
-               handleAppSwitcherControlPress(button) {
+               handleAppSwitcherControlPress(
+                   button,
+                   usage: usage,
+                   swallowsOthers: !sessionTabAllowed
+               ) {
                 continue
             }
             if appSwitcherSession.isActive, button == .tv {
@@ -1187,7 +1297,9 @@ final class HIDRemoteMonitor {
         for usage in released {
             let usedNativePassthrough = nativePassthroughUsages.remove(usage) != nil
             if let button = RemoteButton.usageMap[usage],
-               !usedNativePassthrough, shouldArmNativeEvent(for: button) {
+               !usedNativePassthrough,
+               shouldArmNativeEvent(for: button)
+                || settings.action(for: button, profileID: profileID) == .appSwitcher {
                 eventSuppressor.arm(button: button, edge: .up)
             }
             repeatTimers.removeValue(forKey: usage)?.cancel()
@@ -1678,6 +1790,8 @@ final class HIDRemoteMonitor {
         let wasActive = appSwitcherSession.isActive
         if !wasActive {
             appSwitcherOriginBundleIdentifier = frontmostBundleIdentifier()
+            // 记录打开切换器之前 Dock 的窗口数：切换器开着时 Dock 会多一个窗口。
+            appSwitcherDockWindowBaseline = appSwitcherDockWindowCount()
         }
         let phase = appSwitcherSession.isActive ? "tab" : "start"
         let submitted = appSwitcherSession.trigger()
@@ -1687,30 +1801,67 @@ final class HIDRemoteMonitor {
         )
         if submitted, !wasActive {
             startAppSwitcherLifecycle()
+            scheduleAppSwitcherOpenVerification()
         } else if submitted {
             scheduleAppSwitcherTimeout()
         } else if wasActive {
             finishAppSwitcherLifecycle(reason: "tab_failed", confirmed: false)
         } else {
+            appSwitcherTargetApplication = nil
+            appSwitcherPendingLayerClose = nil
             appSwitcherOriginBundleIdentifier = nil
         }
         return submitted
     }
 
-    private func handleAppSwitcherControlPress(_ button: RemoteButton) -> Bool {
+    private func handleAppSwitcherControlPress(
+        _ button: RemoteButton,
+        usage: UInt16,
+        swallowsOthers: Bool
+    ) -> Bool {
         switch button {
         case .ok:
+            if appSwitcherSession.isWindowPickerActive {
+                if let target = appSwitcherTargetApplication,
+                   windowCounter(target.processIdentifier) == 1 {
+                    // 单窗口时窗口层的高亮不可靠，Return 也可能不关窗口层；
+                    // 直接 Escape 退出窗口层，再恢复唯一窗口。
+                    // 窗口数按辅助功能的标准窗口统计（含最小化），避开隐藏面板。
+                    _ = appSwitcherSession.cancel()
+                    finishAppSwitcherLifecycle(
+                        reason: "single_window_confirmed",
+                        confirmed: true
+                    )
+                    scheduleSingleWindowRestore(selection: target)
+                    markPendingLayerClose(target)
+                    return true
+                }
+                // 原生语义：窗口层里没有高亮时，OK/Enter 不响应。
+                guard appSwitcherSession.pickerHasHighlight else {
+                    diagnosticLogger("HID APP SWITCHER ok_ignored reason=no_highlight")
+                    scheduleAppSwitcherTimeout()
+                    return true
+                }
+            }
+            // finishAppSwitcherLifecycle 会清空目标，必须先取出来再收尾。
+            let confirmedTarget = appSwitcherTargetApplication
             let confirmed = appSwitcherSession.confirm()
             finishAppSwitcherLifecycle(
                 reason: confirmed ? "confirmed" : "confirm_failed",
                 confirmed: confirmed
             )
+            if confirmed {
+                markPendingLayerClose(confirmedTarget)
+                scheduleForegroundEnsure(selection: confirmedTarget)
+            }
             return true
         case .back:
             finishAppSwitcherLifecycle(reason: "back", confirmed: false)
             return true
         case .left, .right:
-            let moved = appSwitcherSession.moveSelection(left: button == .left)
+            let left = button == .left
+            let highlightBefore = appSwitcherHighlightedTitle()
+            let moved = appSwitcherSession.moveSelection(left: left)
             diagnosticLogger(
                 "HID APP SWITCHER button=\(button.rawValue) phase=navigate success=\(moved)"
             )
@@ -1718,35 +1869,402 @@ final class HIDRemoteMonitor {
                 finishAppSwitcherLifecycle(reason: "navigate_failed", confirmed: false)
             } else {
                 scheduleAppSwitcherTimeout()
+                startAppSwitcherRepeat(usage: usage, button: button)
+                appSwitcherHasNavigated = true
+                if !appSwitcherSession.isWindowPickerActive {
+                    scheduleArrowNavigationCheck(
+                        highlightBefore: highlightBefore,
+                        left: left
+                    )
+                }
             }
             return true
         case .up, .down:
+            if !appSwitcherSession.isWindowPickerActive {
+                appSwitcherTargetApplication = appSwitcherSelectedApplication()
+                diagnosticLogger(
+                    "HID APP SWITCHER target bundle_id=" +
+                        (appSwitcherTargetApplication?.bundleIdentifier ?? "unknown") +
+                        " pid=\(appSwitcherTargetApplication?.processIdentifier ?? -1)"
+                )
+                // 单窗口 App 不进窗口层：直接松开 ⌘ 让切换器原生激活目标，
+                // 150ms 后再做一次恢复兜底。省掉窗口层的开合动画和 Esc。
+                if let target = appSwitcherTargetApplication,
+                   windowCounter(target.processIdentifier) == 1 {
+                    _ = appSwitcherSession.cancel()
+                    finishAppSwitcherLifecycle(
+                        reason: "single_window_direct",
+                        confirmed: true
+                    )
+                    scheduleSingleWindowRestore(
+                        selection: target,
+                        afterMilliseconds: HIDRemoteTiming
+                            .appSwitcherSingleWindowDirectRestoreMilliseconds
+                    )
+                    markPendingLayerClose(target)
+                    return true
+                }
+            }
+            let moved = appSwitcherSession.moveWindowSelection(up: button == .up)
             diagnosticLogger(
-                "HID APP SWITCHER button=\(button.rawValue) phase=navigate success=true " +
-                    "direction=unsupported"
+                "HID APP SWITCHER button=\(button.rawValue) phase=window_selection " +
+                    "success=\(moved)"
             )
+            if !moved {
+                finishAppSwitcherLifecycle(reason: "window_selection_failed", confirmed: false)
+            } else {
+                scheduleAppSwitcherTimeout()
+                startAppSwitcherRepeat(usage: usage, button: button)
+            }
             return true
         default:
+            // 会话期间吞掉未绑定切换器的按键（音量、主页等），避免误触。
+            // 绑定了切换器动作的按键（菜单/TV/音量）已在上层放行，等价于 Tab。
+            if !swallowsOthers { return false }
+            diagnosticLogger(
+                "HID APP SWITCHER swallowed button=\(button.rawValue) phase=session"
+            )
+            return true
+        }
+    }
+
+    /// 多窗口确认后 Return 不总是把 App 带到前台：300ms 时前台还不是目标 App
+    /// 就只做 App 激活，不动窗口层级。
+    private func scheduleForegroundEnsure(selection: KeyboardInjector.AppSwitcherSelection?) {
+        guard let selection else { return }
+        appSwitcherForegroundTask?.cancel()
+        appSwitcherForegroundTask = scheduler.schedule(
+            afterMilliseconds: HIDRemoteTiming.appSwitcherForegroundEnsureMilliseconds,
+            repeatingEveryMilliseconds: nil
+        ) { [weak self] in
+            guard let self else { return }
+            self.appSwitcherForegroundTask = nil
+            guard !self.appSwitcherSession.isActive else { return }
+            // 按 bundle 判断“切换是否落地”：同名双实例时，Return 打开哪个实例
+            // 的窗口就尊重哪个，不能按 pid 强行纠正（那会盖掉正确的结果）。
+            guard self.frontmostBundleIdentifier() != selection.bundleIdentifier else {
+                self.appSwitcherPendingLayerClose = nil
+                return
+            }
+            let activated = self.applicationActivator(selection.processIdentifier)
+            self.diagnosticLogger(
+                "HID APP SWITCHER foreground_ensure bundle_id=\(selection.bundleIdentifier ?? "-") " +
+                    "pid=\(selection.processIdentifier) activated=\(activated)"
+            )
+        }
+    }
+
+    /// 确认后按方向键：如果切换没成功（前台不是目标进程），就重新起切换器
+    /// 并直接进入它的窗口层——这种状态下原来的方向键是“死键”。
+    /// 切换成功时（前台已是目标进程）方向键保持原映射。
+    private func handlePendingLayerCloseArrow(button: RemoteButton) -> Bool {
+        guard !appSwitcherSession.isActive else { return false }
+        guard let target = appSwitcherPendingLayerClose else { return false }
+        guard frontmostProcessIdentifier() != target.processIdentifier else {
+            appSwitcherPendingLayerClose = nil
             return false
         }
+        appSwitcherPendingLayerClose = nil
+        guard appSwitcherSession.trigger() else { return false }
+        startAppSwitcherLifecycle()
+        scheduleAppSwitcherTimeout()
+        appSwitcherPendingPickerEntry?.cancel()
+        appSwitcherPendingPickerEntry = scheduler.schedule(
+            afterMilliseconds: HIDRemoteTiming.appSwitcherWindowPickerEntryMilliseconds,
+            repeatingEveryMilliseconds: nil
+        ) { [weak self] in
+            guard let self else { return }
+            self.appSwitcherPendingPickerEntry = nil
+            guard self.appSwitcherSession.isActive,
+                  !self.appSwitcherSession.isWindowPickerActive else { return }
+            self.appSwitcherTargetApplication = self.appSwitcherSelectedApplication()
+            self.diagnosticLogger(
+                "HID APP SWITCHER picker_reentered bundle_id=" +
+                    (self.appSwitcherTargetApplication?.bundleIdentifier ?? "unknown") +
+                    " pid=\(self.appSwitcherTargetApplication?.processIdentifier ?? -1)"
+            )
+            _ = self.appSwitcherSession.moveWindowSelection(up: button == .up)
+            self.scheduleAppSwitcherTimeout()
+        }
+        diagnosticLogger("HID APP SWITCHER picker_reenter_started")
+        return true
+    }
+
+    /// 确认后窗口层可能还开着（目标 App 没有窗口时 Return 不会关闭它）。
+    /// 记一小段时间，期间返回键可以直接把它关掉。
+    private func markPendingLayerClose(_ target: KeyboardInjector.AppSwitcherSelection?) {
+        guard let target else { return }
+        appSwitcherPendingLayerClose = target
+    }
+
+    /// 返回键兜底：确认没过、窗口层还开着时，返回键改发 Escape 而不是原映射。
+    private func handlePendingLayerCloseBack() -> Bool {
+        guard !appSwitcherSession.isActive else { return false }
+        guard let target = appSwitcherPendingLayerClose else { return false }
+        // 已经切到目标 App，说明这次确认生效了，之后返回键保持原映射。
+        // 判断用 bundle：同名双实例时进程号是猜的，而 macOS 13 上前台还会
+        // 短暂报告成我们自己的菜单栏 App，两者都会误判成“还没切过去”。
+        var landed = frontmostProcessIdentifier() == target.processIdentifier
+        if !landed, let bundleIdentifier = target.bundleIdentifier {
+            landed = frontmostBundleIdentifier() == bundleIdentifier
+        }
+        guard !landed else {
+            appSwitcherPendingLayerClose = nil
+            return false
+        }
+        appSwitcherPendingLayerClose = nil
+        _ = appSwitcherSession.dismissWindowPicker()
+        diagnosticLogger(
+            "HID APP SWITCHER back_escape bundle_id=\(target.bundleIdentifier ?? "-") " +
+                "pid=\(target.processIdentifier)"
+        )
+        return true
+    }
+
+    /// 只有单个窗口时，窗口选择层的高亮可能落到别的窗口条上，Return 会激活错的 App。
+    /// 这里退出窗口层后直接把唯一的窗口拉起来。
+    /// 退出窗口层后直接把唯一窗口恢复并置前；600ms 再重申一次，
+    /// 防止 Dock 关闭动画收尾或异步激活把前台压回原 App。
+    private func scheduleSingleWindowRestore(
+        selection: KeyboardInjector.AppSwitcherSelection,
+        afterMilliseconds: UInt64 = HIDRemoteTiming.appSwitcherExposeCloseMilliseconds
+    ) {
+        appSwitcherSingleWindowTask?.cancel()
+        appSwitcherSingleWindowTask = scheduler.schedule(
+            afterMilliseconds: afterMilliseconds,
+            repeatingEveryMilliseconds: nil
+        ) { [weak self] in
+            guard let self else { return }
+            self.appSwitcherSingleWindowTask = nil
+            let restored = self.windowActivator(selection.processIdentifier)
+            self.diagnosticLogger(
+                "HID APP SWITCHER single_window bundle_id=\(selection.bundleIdentifier ?? "-") " +
+                    "pid=\(selection.processIdentifier) restored=\(restored)"
+            )
+            self.scheduleSingleWindowReassert(selection: selection)
+        }
+    }
+
+    /// 第一次恢复后如果前台仍不是目标进程（被瞬时压回），再补一次激活。
+    private func scheduleSingleWindowReassert(selection: KeyboardInjector.AppSwitcherSelection) {
+        appSwitcherSingleWindowTask = scheduler.schedule(
+            afterMilliseconds: HIDRemoteTiming.appSwitcherSingleWindowReassertMilliseconds,
+            repeatingEveryMilliseconds: nil
+        ) { [weak self] in
+            guard let self else { return }
+            self.appSwitcherSingleWindowTask = nil
+            guard !self.appSwitcherSession.isActive else { return }
+            guard self.frontmostProcessIdentifier() != selection.processIdentifier else { return }
+            let reasserted = self.windowActivator(selection.processIdentifier)
+            self.diagnosticLogger(
+                "HID APP SWITCHER single_window_reassert bundle_id=\(selection.bundleIdentifier ?? "-") " +
+                    "pid=\(selection.processIdentifier) reasserted=\(reasserted)"
+            )
+        }
+    }
+
+    /// 切换器会话期间方向键由会话提前接管，普通“按住连发”不会启动；
+    /// 这里补一条独立连发，按住左右键可以连续移动选项。
+    private func startAppSwitcherRepeat(usage: UInt16, button: RemoteButton) {
+        guard button == .left || button == .right || button == .up || button == .down,
+              let interval = HIDRemoteTiming.repeatIntervalMilliseconds(for: button)
+        else { return }
+        repeatTimers.removeValue(forKey: usage)?.cancel()
+        let timer = scheduler.schedule(
+            afterMilliseconds: HIDRemoteTiming.repeatStartMilliseconds,
+            repeatingEveryMilliseconds: interval
+        ) { [weak self] in
+            guard let self else { return }
+            guard self.activeUsages.contains(usage), self.appSwitcherSession.isActive else {
+                self.repeatTimers.removeValue(forKey: usage)?.cancel()
+                return
+            }
+            guard self.runtimePermissionsAreValid() else {
+                self.releaseForRevokedPermissions()
+                return
+            }
+            let moved: Bool
+            switch button {
+            case .left, .right:
+                let left = button == .left
+                let highlightBefore = appSwitcherHighlightedTitle()
+                moved = self.appSwitcherSession.moveSelection(left: left)
+                if moved { self.appSwitcherHasNavigated = true }
+                if moved, !self.appSwitcherSession.isWindowPickerActive {
+                    self.scheduleArrowNavigationCheck(
+                        highlightBefore: highlightBefore,
+                        left: left
+                    )
+                }
+            case .up, .down:
+                moved = self.appSwitcherSession.moveWindowSelection(up: button == .up)
+            default:
+                moved = false
+            }
+            guard moved else {
+                self.repeatTimers.removeValue(forKey: usage)?.cancel()
+                self.finishAppSwitcherLifecycle(reason: "navigate_failed", confirmed: false)
+                return
+            }
+            self.diagnosticLogger(
+                "HID APP SWITCHER button=\(button.rawValue) phase=repeat success=true"
+            )
+            self.scheduleAppSwitcherTimeout()
+        }
+        repeatTimers[usage] = timer
     }
 
     private func startAppSwitcherLifecycle() {
         scheduleAppSwitcherTimeout()
         appSwitcherConfirmationProbe?.cancel()
         appSwitcherConfirmationProbe = nil
+        appSwitcherMinimizedRestoreProbe?.cancel()
+        appSwitcherMinimizedRestoreProbe = nil
+        appSwitcherModifierWatchdog?.cancel()
+        appSwitcherModifierWatchdog = nil
+        appSwitcherSingleWindowTask?.cancel()
+        appSwitcherSingleWindowTask = nil
+        appSwitcherForegroundTask?.cancel()
+        appSwitcherForegroundTask = nil
+        appSwitcherPendingPickerEntry?.cancel()
+        appSwitcherPendingPickerEntry = nil
         appSwitcherFrontmostMonitor?.cancel()
+        appSwitcherObservedOpen = false
+        appSwitcherReopenCount = 0
+        appSwitcherHasNavigated = false
+        installAppSwitcherDismissObserver()
         appSwitcherFrontmostMonitor = scheduler.schedule(
             afterMilliseconds: HIDRemoteTiming.appSwitcherFrontmostPollMilliseconds,
             repeatingEveryMilliseconds: HIDRemoteTiming.appSwitcherFrontmostPollMilliseconds
         ) { [weak self] in
             guard let self, self.appSwitcherSession.isActive else { return }
-            guard let origin = self.appSwitcherOriginBundleIdentifier,
-                  let current = self.frontmostBundleIdentifier(),
-                  current != origin
-            else { return }
-            self.finishAppSwitcherLifecycle(reason: "frontmost_changed", confirmed: false)
+            // 窗口层（Exposé）里系统会把各种 App 报告为前台，前台没有参考价值。
+            guard !self.appSwitcherSession.isWindowPickerActive else { return }
+            // 这里只记录状态，不再据此结束会话。
+            //
+            // macOS 13 的真机日志证明：辅助功能里的切换器列表会在切换器明明开着时
+            // 随机消失（19/22 次会话在 1 秒内被判成“已关闭”），前台也会在
+            // “高亮 App”和“我们自己的菜单栏 App”之间来回跳。两种信号都不可靠，
+            // 据此收尾会让切换器一闪而过，并直接切到附近的 App。
+            //
+            // 现在的收尾条件只有三种：用户自己的操作（OK / 返回 / 再按一次绑定键）、
+            // 用户在切换器外点了鼠标（外部关闭），以及会话超时。
+            let state = self.appSwitcherHudState()
+            let dockWindows = self.appSwitcherDockWindowCount()
+            let baseline = self.appSwitcherDockWindowBaseline ?? -1
+            self.diagnosticLogger(
+                "HID APP SWITCHER switcher_state ax=\(state.logLabel) " +
+                    "dock_windows=\(dockWindows) " +
+                    "baseline=\(baseline) " +
+                    "front=\(self.frontmostBundleIdentifier() ?? "-")"
+            )
+            // 见过切换器打开、之后又不见了：说明它被系统自己关掉了
+            // （部分系统上原生键码或切换器自身行为会关掉它）。
+            // 补发一次 Tab 把它拉回来，让“切换器定住”这件事成立。
+            if baseline >= 0 {
+                if dockWindows > baseline {
+                    self.appSwitcherObservedOpen = true
+                } else if self.appSwitcherObservedOpen {
+                    self.appSwitcherObservedOpen = false
+                    // 用户已经选过东西时不再拉回：补发的 Tab 会移动高亮，
+                    // 把用户选好的目标冲掉。这种情况下让会话结束更安全，
+                    // 用户再按一次方向键就能重新进入窗口层。
+                    guard !self.appSwitcherHasNavigated else { return }
+                    guard self.appSwitcherReopenCount < 3 else { return }
+                    self.appSwitcherReopenCount += 1
+                    let reopened = self.appSwitcherSession.trigger()
+                    self.diagnosticLogger(
+                        "HID APP SWITCHER switcher_reopen attempt=\(self.appSwitcherReopenCount) " +
+                            "success=\(reopened)"
+                    )
+                }
+            }
         }
+    }
+
+    /// 方向键之后核对切换器高亮是否真的移动了。
+    ///
+    /// macOS 14/15 的切换器不响应方向键（真机验证：⌘←/⌘→ 不移动高亮），
+    /// 而 ⌘Tab 循环有效。核对失败就把方向键标记为不可用，并用 Tab 循环补一次
+    /// 移动；核对成功则记住方向键可用，之后保持原行为。
+    private func scheduleArrowNavigationCheck(highlightBefore: String?, left: Bool) {
+        appSwitcherArrowCheck?.cancel()
+        appSwitcherArrowCheck = scheduler.schedule(
+            afterMilliseconds: HIDRemoteTiming.appSwitcherArrowNavigationCheckMilliseconds,
+            repeatingEveryMilliseconds: nil
+        ) { [weak self] in
+            guard let self else { return }
+            self.appSwitcherArrowCheck = nil
+            guard self.appSwitcherSession.isActive else { return }
+            let highlightAfter = self.appSwitcherHighlightedTitle()
+            // 读不到高亮就说明不了问题：不改判定，也不重复移动。
+            guard let highlightBefore, let highlightAfter else { return }
+            if highlightBefore == highlightAfter {
+                self.appSwitcherSession.markArrowNavigation(supported: false)
+                let cycled = self.appSwitcherSession.cycleSelection(backwards: left)
+                self.diagnosticLogger(
+                    "HID APP SWITCHER arrow_nav supported=false fallback_cycle=\(cycled)"
+                )
+            } else {
+                self.appSwitcherSession.markArrowNavigation(supported: true)
+                self.diagnosticLogger("HID APP SWITCHER arrow_nav supported=true")
+            }
+        }
+    }
+
+    /// 打开切换器之后核对它是否真的出现了。
+    ///
+    /// 真机日志（macOS 14/15）里第一次按“⌘ 刚按下 + Tab”经常打不开切换器，
+    /// 而稍后再按一次（⌘ 已经按住）就能打开。这里核对一次，没打开就补发一次
+    /// Tab——这条路径在出问题的系统上是有效的。
+    private func scheduleAppSwitcherOpenVerification() {
+        appSwitcherOpenProbe?.cancel()
+        appSwitcherOpenProbe = scheduler.schedule(
+            afterMilliseconds: HIDRemoteTiming.appSwitcherOpenVerificationMilliseconds,
+            repeatingEveryMilliseconds: nil
+        ) { [weak self] in
+            guard let self else { return }
+            self.appSwitcherOpenProbe = nil
+            guard self.appSwitcherSession.isActive else { return }
+            let baseline = self.appSwitcherDockWindowBaseline ?? 0
+            let dockWindows = self.appSwitcherDockWindowCount()
+            var axVisible = false
+            if case .visible = self.appSwitcherHudState() { axVisible = true }
+            guard dockWindows <= baseline, !axVisible else { return }
+            let retried = self.appSwitcherSession.trigger()
+            self.diagnosticLogger(
+                "HID APP SWITCHER switcher_open retried=\(retried) " +
+                    "dock_windows=\(dockWindows) baseline=\(baseline)"
+            )
+        }
+    }
+
+    /// 注册“切换器被外部关闭”的观察者。
+    ///
+    /// 切换器开着时用户点击别处会把它关掉，系统不会再给我们任何按键，
+    /// 必须由这个观察者松开 ⌘，否则修饰键会一直卡在按下状态。
+    private func installAppSwitcherDismissObserver() {
+        removeAppSwitcherDismissObserver()
+        appSwitcherDismissRemover = appSwitcherDismissObserverInstaller { [weak self] in
+            guard let self, self.appSwitcherSession.isActive else { return }
+            self.finishAppSwitcherLifecycle(reason: "mouse_click", confirmed: false)
+        }
+    }
+
+    private func removeAppSwitcherDismissObserver() {
+        appSwitcherDismissRemover?()
+        appSwitcherDismissRemover = nil
+    }
+
+    /// 默认的外部关闭观察者：监听鼠标点击。
+    static func installMouseClickDismissObserver(_ handler: @escaping () -> Void) -> (() -> Void)? {
+        let monitor = NSEvent.addGlobalMonitorForEvents(
+            matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]
+        ) { _ in
+            handler()
+        }
+        guard let monitor else { return nil }
+        return { NSEvent.removeMonitor(monitor) }
     }
 
     private func scheduleAppSwitcherTimeout() {
@@ -1765,6 +2283,8 @@ final class HIDRemoteMonitor {
         appSwitcherTimeout = nil
         appSwitcherFrontmostMonitor?.cancel()
         appSwitcherFrontmostMonitor = nil
+        removeAppSwitcherDismissObserver()
+        appSwitcherDockWindowBaseline = nil
         if appSwitcherSession.isActive {
             _ = appSwitcherSession.cancel()
         }
@@ -1772,6 +2292,7 @@ final class HIDRemoteMonitor {
             "HID APP SWITCHER ended reason=\(reason) confirmed=\(confirmed)"
         )
         if confirmed {
+            let origin = appSwitcherOriginBundleIdentifier
             appSwitcherConfirmationProbe?.cancel()
             appSwitcherConfirmationProbe = scheduler.schedule(
                 afterMilliseconds: HIDRemoteTiming.appSwitcherConfirmationProbeMilliseconds,
@@ -1781,11 +2302,70 @@ final class HIDRemoteMonitor {
                 self.appSwitcherConfirmationProbe = nil
                 self.diagnosticLogger(
                     "HID APP SWITCHER selection bundle_id=" +
-                        (self.frontmostBundleIdentifier() ?? "unknown")
+                        (self.frontmostBundleIdentifier() ?? "unknown") +
+                        " pid=\(self.frontmostProcessIdentifier() ?? -1)"
+                )
+                // 目标 App 没有可用窗口时，Return 不会关掉窗口层；
+                // 此时会话已结束，返回键不再被拦截，只能补一个 Escape。
+                if KeyboardInjector.appSwitcherSelectedApplication() != nil {
+                    _ = self.appSwitcherSession.dismissWindowPicker()
+                    self.diagnosticLogger("HID APP SWITCHER stuck_switcher escaped=true")
+                }
+            }
+            // 系统的 Option 恢复依赖 Dock 内部时序，真机并不总是生效；
+            // 到这里再按可见窗口状态兜底一次，保证窗口真的回到前台。
+            scheduleMinimizedWindowRestore(
+                afterMilliseconds: HIDRemoteTiming.appSwitcherMinimizedRestoreProbeMilliseconds,
+                attempt: 0,
+                origin: origin
+            )
+            // 释放 ⌥/⌘ 的任务挂在可注入调度器上，调度器不执行时必须强制放开，
+            // 否则 Command 会一直按下，之后所有按键都会变成快捷键。
+            appSwitcherModifierWatchdog?.cancel()
+            appSwitcherModifierWatchdog = scheduler.schedule(
+                afterMilliseconds: HIDRemoteTiming.appSwitcherModifierWatchdogMilliseconds,
+                repeatingEveryMilliseconds: nil
+            ) { [weak self] in
+                guard let self else { return }
+                self.appSwitcherModifierWatchdog = nil
+                guard self.appSwitcherSession.hasPendingRelease else { return }
+                let released = self.appSwitcherSession.forceReleaseModifiersIfNeeded()
+                self.diagnosticLogger(
+                    "HID APP SWITCHER watchdog released_modifiers=\(released)"
                 )
             }
         }
+        appSwitcherTargetApplication = nil
+        appSwitcherPendingLayerClose = nil
         appSwitcherOriginBundleIdentifier = nil
+    }
+
+    private func scheduleMinimizedWindowRestore(
+        afterMilliseconds milliseconds: UInt64,
+        attempt: Int,
+        origin: String?
+    ) {
+        appSwitcherMinimizedRestoreProbe?.cancel()
+        appSwitcherMinimizedRestoreProbe = scheduler.schedule(
+            afterMilliseconds: milliseconds,
+            repeatingEveryMilliseconds: nil
+        ) { [weak self] in
+            guard let self else { return }
+            self.appSwitcherMinimizedRestoreProbe = nil
+            let frontmost = self.frontmostBundleIdentifier()
+            let result = self.minimizedWindowRestorer(frontmost, origin)
+            self.diagnosticLogger(
+                "HID APP SWITCHER restore attempt=\(attempt) " +
+                    "bundle_id=\(frontmost ?? "unknown") result=\(result.rawValue)"
+            )
+            if result == .skippedNotFrontmost, attempt == 0 {
+                self.scheduleMinimizedWindowRestore(
+                    afterMilliseconds: HIDRemoteTiming.appSwitcherMinimizedRestoreRetryMilliseconds,
+                    attempt: 1,
+                    origin: origin
+                )
+            }
+        }
     }
 
     private func resetGestureRecognition() {
@@ -1824,6 +2404,24 @@ final class HIDRemoteMonitor {
         appSwitcherFrontmostMonitor = nil
         appSwitcherConfirmationProbe?.cancel()
         appSwitcherConfirmationProbe = nil
+        appSwitcherMinimizedRestoreProbe?.cancel()
+        appSwitcherMinimizedRestoreProbe = nil
+        appSwitcherModifierWatchdog?.cancel()
+        appSwitcherModifierWatchdog = nil
+        appSwitcherSingleWindowTask?.cancel()
+        appSwitcherSingleWindowTask = nil
+        appSwitcherForegroundTask?.cancel()
+        appSwitcherForegroundTask = nil
+        appSwitcherPendingPickerEntry?.cancel()
+        appSwitcherPendingPickerEntry = nil
+        appSwitcherArrowCheck?.cancel()
+        appSwitcherArrowCheck = nil
+        appSwitcherOpenProbe?.cancel()
+        appSwitcherOpenProbe = nil
+        removeAppSwitcherDismissObserver()
+        appSwitcherDockWindowBaseline = nil
+        appSwitcherTargetApplication = nil
+        appSwitcherPendingLayerClose = nil
         appSwitcherOriginBundleIdentifier = nil
         for usage in activeUsages.subtracting(nativePassthroughUsages) {
             if let button = RemoteButton.usageMap[usage], shouldArmNativeEvent(for: button) {
