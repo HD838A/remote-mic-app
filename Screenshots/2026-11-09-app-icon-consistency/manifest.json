@@ -1,0 +1,63 @@
+{
+  "batch": "2026-11-09-app-icon-consistency",
+  "date": "2026-11-09",
+  "commit": "f6c4be2c1986a9f74776bcf84b52931f46d42333",
+  "pull_request": 977,
+  "purpose": "静态包图标统一为「经典鸭」圆角透明 ICNS 之后，设置页品牌 Logo 与「应用图标」选择器的默认选中态、浅色/深色与中英文表现。",
+  "window_points": [
+    1020,
+    772
+  ],
+  "storage": "persistent-link (GitHub Release 资产，匿名可访问)",
+  "generator": "SettingsScreenshotRenderer 离屏托管生产 SettingsView（REMOTE_MIC_SETTINGS_SCREENSHOT_DIR + SECTION=about + APP_ICON 夹具），运行产物为 build 338 的本地测试包",
+  "external_directory": "/Users/yaya/WorkBuddy/2026-10-28-23-00-56/evidence/app-icon-2026-11-09",
+  "notes": [
+    "这四张是生产视图离屏截图，不是整屏窗口录制；用于证明设置页品牌 Logo 与图标选择器的默认选中态。",
+    "默认态（前三张）显示经典鸭被选中：侧边栏顶部 Logo 与「关于」页 Logo 均为圆角彩色经典鸭，与静态包图标一致。",
+    "第四张用 REMOTE_MIC_SETTINGS_SCREENSHOT_APP_ICON=faceted-duck 渲染同一界面，证明几何鸭选项仍是圆角、只是不再是默认与静态包图标。",
+    "截图不覆盖 Finder「应用程序」列表、启动台与 Dock 的静态图标显示：本机没有活动图形会话，整屏截图为纯黑，无法采集；该部分仍需真机验收。",
+    "外部证据 URL 为用户 fork 上的 GitHub Release 资产（匿名可访问，HTTP 200）；原始字节同时保存在仓库外持久目录，尺寸与 SHA-256 以本索引为准。"
+  ],
+  "images": [
+    {
+      "file": "settings-about-app-icon-default-zh-hans-light.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "cd88d82241e273d4b40a68d286200e68b9582e032ccae8a489dbc0568c1fc8c2",
+      "bytes": 384717,
+      "state": "default_app_icon_classic_duck_zh_hans_light",
+      "url": "https://github.com/qeeing/remote-mic-app/releases/download/app-icon-evidence-2026-11-09/settings-about-app-icon-default-zh-hans-light.png"
+    },
+    {
+      "file": "settings-about-app-icon-default-zh-hans-dark.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "11923464f639c2631050bd3ddf4d39890b8e12a34abf81a53abcb3a8171293e1",
+      "bytes": 384137,
+      "state": "default_app_icon_classic_duck_zh_hans_dark",
+      "url": "https://github.com/qeeing/remote-mic-app/releases/download/app-icon-evidence-2026-11-09/settings-about-app-icon-default-zh-hans-dark.png"
+    },
+    {
+      "file": "settings-about-app-icon-default-en-light.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "c7547de28de441f540e88e803f7562d706935605818cc718a83d621b2e313a1d",
+      "bytes": 370998,
+      "state": "default_app_icon_classic_duck_en_light",
+      "url": "https://github.com/qeeing/remote-mic-app/releases/download/app-icon-evidence-2026-11-09/settings-about-app-icon-default-en-light.png"
+    },
+    {
+      "file": "settings-about-app-icon-faceted-duck-zh-hans-light.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "05f4154f831bb2a58432bbfcaa2c0d2329cbfb13bbda7f2ec4ed7a3f05e7bb3b",
+      "bytes": 377741,
+      "state": "app_icon_faceted_duck_zh_hans_light",
+      "url": "https://github.com/qeeing/remote-mic-app/releases/download/app-icon-evidence-2026-11-09/settings-about-app-icon-faceted-duck-zh-hans-light.png"
+    }
+  ]
+}
