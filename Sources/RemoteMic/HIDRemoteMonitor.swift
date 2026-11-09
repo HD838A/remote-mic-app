@@ -112,7 +112,6 @@ final class HIDRemoteMonitor {
     private let minimizedWindowRestorer: (String?, String?) -> KeyboardInjector.MinimizedWindowRestoreResult
     private let windowCounter: (String?) -> Int?
     private let windowActivator: (String?) -> Bool
-    private let windowVisibility: (String?) -> Bool
     private let appSwitcherSelectedBundleIdentifier: () -> String?
     private let overrideActionPerformer: (UUID?, RemoteButton, ButtonTrigger) -> Bool
     private let hasOverrideBinding: (UUID?, RemoteButton, ButtonTrigger) -> Bool
@@ -258,9 +257,6 @@ final class HIDRemoteMonitor {
         windowActivator: @escaping (String?) -> Bool = {
             KeyboardInjector.restoreSingleWindow(bundleIdentifier: $0)
         },
-        windowVisibility: @escaping (String?) -> Bool = {
-            KeyboardInjector.hasVisibleWindow(bundleIdentifier: $0)
-        },
         appSwitcherSelectedBundleIdentifier: @escaping () -> String? = {
             KeyboardInjector.appSwitcherSelectedApplication()?.bundleIdentifier
         }
@@ -275,7 +271,6 @@ final class HIDRemoteMonitor {
         self.minimizedWindowRestorer = minimizedWindowRestorer
         self.windowCounter = windowCounter
         self.windowActivator = windowActivator
-        self.windowVisibility = windowVisibility
         self.appSwitcherSelectedBundleIdentifier = appSwitcherSelectedBundleIdentifier
         self.permissionPoll = permissionPoll
         self.runtimePermissions = runtimePermissions
@@ -1699,16 +1694,14 @@ final class HIDRemoteMonitor {
             if appSwitcherSession.isWindowPickerActive,
                let target = appSwitcherTargetBundleIdentifier,
                windowCounter(target) == 1 {
-                // 窗口层里 Return 能恢复窗口，但不会把 App 带到前台；
-                // 先走原生 Return，再补一次激活。
-                let confirmed = appSwitcherSession.confirm()
+                // 单窗口时窗口层的高亮不可靠，Return 也可能不关窗口层；
+                // 直接 Escape 退出窗口层，再恢复唯一窗口。
+                _ = appSwitcherSession.cancel()
                 finishAppSwitcherLifecycle(
-                    reason: confirmed ? "confirmed" : "confirm_failed",
-                    confirmed: confirmed
+                    reason: "single_window_confirmed",
+                    confirmed: true
                 )
-                if confirmed {
-                    scheduleSingleWindowRecovery(bundleIdentifier: target, attempt: 0)
-                }
+                scheduleSingleWindowRestore(bundleIdentifier: target)
                 return true
             }
             let confirmed = appSwitcherSession.confirm()
@@ -1759,39 +1752,19 @@ final class HIDRemoteMonitor {
 
     /// 只有单个窗口时，窗口选择层的高亮可能落到别的窗口条上，Return 会激活错的 App。
     /// 这里退出窗口层后直接把唯一的窗口拉起来。
-    /// 单窗口的 Return 可能因为窗口层没有高亮而完全不生效：
-    /// 先快速确认窗口是否已经可见；没可见就关掉窗口层，再直接恢复唯一窗口。
-    private func scheduleSingleWindowRecovery(bundleIdentifier: String, attempt: Int) {
+    /// 退出窗口层后直接把唯一窗口恢复并置前。
+    private func scheduleSingleWindowRestore(bundleIdentifier: String) {
         appSwitcherSingleWindowTask?.cancel()
         appSwitcherSingleWindowTask = scheduler.schedule(
-            afterMilliseconds: attempt == 0
-                ? HIDRemoteTiming.appSwitcherSingleWindowCheckMilliseconds
-                : HIDRemoteTiming.appSwitcherExposeCloseMilliseconds,
+            afterMilliseconds: HIDRemoteTiming.appSwitcherExposeCloseMilliseconds,
             repeatingEveryMilliseconds: nil
         ) { [weak self] in
             guard let self else { return }
             self.appSwitcherSingleWindowTask = nil
-            if self.windowVisibility(bundleIdentifier) {
-                let activated = self.windowActivator(bundleIdentifier)
-                self.diagnosticLogger(
-                    "HID APP SWITCHER single_window attempt=\(attempt) " +
-                        "bundle_id=\(bundleIdentifier) activated=\(activated)"
-                )
-                return
-            }
-            if attempt == 0 {
-                _ = self.appSwitcherSession.dismissWindowPicker()
-                self.diagnosticLogger("HID APP SWITCHER single_window dismiss_picker")
-                self.scheduleSingleWindowRecovery(
-                    bundleIdentifier: bundleIdentifier,
-                    attempt: 1
-                )
-                return
-            }
             let restored = self.windowActivator(bundleIdentifier)
             self.diagnosticLogger(
-                "HID APP SWITCHER single_window attempt=\(attempt) " +
-                    "bundle_id=\(bundleIdentifier) restored=\(restored)"
+                "HID APP SWITCHER single_window bundle_id=\(bundleIdentifier) " +
+                    "restored=\(restored)"
             )
         }
     }

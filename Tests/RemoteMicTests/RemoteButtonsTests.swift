@@ -1667,7 +1667,6 @@ struct RemoteButtonsTests {
                 activated.append(bundle)
                 return true
             },
-            windowVisibility: { _ in false },
             appSwitcherSelectedBundleIdentifier: {
                 PresetApplication.safari.bundleIdentifier
             }
@@ -1687,19 +1686,11 @@ struct RemoteButtonsTests {
         press(.down)
         #expect(posted.contains { $0.0 == 125 })
         press(.ok)
-        #expect(posted.contains { $0.0 == 36 })
-        #expect(!posted.contains { $0.0 == 53 })
-        #expect(posted.last?.0 == 36)
-
-        scheduler.advance(
-            toMilliseconds: HIDRemoteTiming.appSwitcherSingleWindowCheckMilliseconds
-        )
+        #expect(!posted.contains { $0.0 == 36 })
         #expect(posted.contains { $0.0 == 53 })
-        #expect(activated.isEmpty)
 
         scheduler.advance(
-            toMilliseconds: HIDRemoteTiming.appSwitcherSingleWindowCheckMilliseconds
-                + HIDRemoteTiming.appSwitcherExposeCloseMilliseconds
+            toMilliseconds: HIDRemoteTiming.appSwitcherExposeCloseMilliseconds
         )
         #expect(activated == [PresetApplication.safari.bundleIdentifier])
     }

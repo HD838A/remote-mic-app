@@ -227,17 +227,6 @@ enum KeyboardInjector {
             return true
         }
 
-        /// 窗口层里没有选中项时 Return 不会关掉窗口层；这里无条件补一个 Escape。
-        @discardableResult
-        func dismissWindowPicker() -> Bool {
-            isActive = false
-            isWindowPickerActive = false
-            commandReleasePending = false
-            hasPendingRelease = false
-            return post(53, isDown: true, flags: [], role: "escape") &&
-                post(53, isDown: false, flags: [], role: "escape")
-        }
-
         /// 调度器没有按期执行时的兜底：必须把 ⌘/⌥ 放开，不能把修饰键留在按下状态。
         @discardableResult
         func forceReleaseModifiersIfNeeded() -> Bool {
@@ -2453,13 +2442,6 @@ enum KeyboardInjector {
         else { return nil }
         let element = AXUIElementCreateApplication(application.processIdentifier)
         return axElements(element, attribute: kAXWindowsAttribute).count
-    }
-
-    /// 目标 App 当前是否有可见窗口：用来判断窗口层里的 Return 是否已经生效。
-    static func hasVisibleWindow(bundleIdentifier: String?) -> Bool {
-        guard let bundleIdentifier else { return false }
-        let snapshot = applicationVisibilitySnapshot(bundleIdentifier: bundleIdentifier)
-        return (snapshot.onscreenWindowCount ?? 0) > 0
     }
 
     /// 单窗口场景：窗口层里的高亮不稳定，直接恢复那个唯一窗口并置前。
