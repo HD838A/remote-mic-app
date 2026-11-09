@@ -212,6 +212,10 @@ final class HIDRemoteMonitor {
     private var appSwitcherArrowCheck: HIDRemoteScheduledTask?
     /// 打开切换器之后核对它是否真的出现了的任务。
     private var appSwitcherOpenProbe: HIDRemoteScheduledTask?
+    /// 本次会话里是否确实见过切换器打开（用 Dock 窗口数判断）。
+    private var appSwitcherObservedOpen = false
+    /// 切换器自己关掉后补发的次数上限。
+    private var appSwitcherReopenCount = 0
     /// 会话开始时 Dock 的窗口数量，用来判断切换器窗口是否还在。
     private var appSwitcherDockWindowBaseline: Int?
     private var appSwitcherOriginBundleIdentifier: String?
@@ -2115,6 +2119,8 @@ final class HIDRemoteMonitor {
         appSwitcherPendingPickerEntry?.cancel()
         appSwitcherPendingPickerEntry = nil
         appSwitcherFrontmostMonitor?.cancel()
+        appSwitcherObservedOpen = false
+        appSwitcherReopenCount = 0
         installAppSwitcherDismissObserver()
         appSwitcherFrontmostMonitor = scheduler.schedule(
             afterMilliseconds: HIDRemoteTiming.appSwitcherFrontmostPollMilliseconds,
@@ -2134,12 +2140,30 @@ final class HIDRemoteMonitor {
             // 用户在切换器外点了鼠标（外部关闭），以及会话超时。
             let state = self.appSwitcherHudState()
             let dockWindows = KeyboardInjector.dockWindowCount()
+            let baseline = self.appSwitcherDockWindowBaseline ?? -1
             self.diagnosticLogger(
                 "HID APP SWITCHER switcher_state ax=\(state.logLabel) " +
                     "dock_windows=\(dockWindows) " +
-                    "baseline=\(self.appSwitcherDockWindowBaseline ?? -1) " +
+                    "baseline=\(baseline) " +
                     "front=\(self.frontmostBundleIdentifier() ?? "-")"
             )
+            // 见过切换器打开、之后又不见了：说明它被系统自己关掉了
+            // （部分系统上原生键码或切换器自身行为会关掉它）。
+            // 补发一次 Tab 把它拉回来，让“切换器定住”这件事成立。
+            if baseline >= 0 {
+                if dockWindows > baseline {
+                    self.appSwitcherObservedOpen = true
+                } else if self.appSwitcherObservedOpen {
+                    self.appSwitcherObservedOpen = false
+                    guard self.appSwitcherReopenCount < 3 else { return }
+                    self.appSwitcherReopenCount += 1
+                    let reopened = self.appSwitcherSession.trigger()
+                    self.diagnosticLogger(
+                        "HID APP SWITCHER switcher_reopen attempt=\(self.appSwitcherReopenCount) " +
+                            "success=\(reopened)"
+                    )
+                }
+            }
         }
     }
 
