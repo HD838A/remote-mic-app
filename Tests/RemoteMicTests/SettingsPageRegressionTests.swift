@@ -173,17 +173,35 @@ struct SettingsPageRegressionTests {
             "applyDefaultMappingRemoteAfterConnectionChange()"
         ))
 
-        // Chromecast 的「连接即选中」必须经过统一策略：已连接的小米不能被抢占。
+        // 链路就绪不再改选中态。冷启动时 Chromecast 常比小米先 ready，小米 2 秒后才
+        // ready，两边都「连接即选中」就会让画布 小米 → Chromecast → 小米 来回跳。
+        // 只有首次使用（还没有选中项）才允许自动选，其余交给「上次选中 + 重连窗口」。
         let ensureStart = try #require(modelSource.range(
             of: "private func ensureChromecastProfile() -> UUID {"
         ))
         let ensureRemainder = modelSource[ensureStart.upperBound...]
         let ensureEnd = try #require(ensureRemainder.range(
-            of: "private var hasConnectedXiaomiProfile"
+            of: "private func refreshChromecastActiveControlIDs"
         ))
-        #expect(ensureRemainder[..<ensureEnd.lowerBound].contains(
-            "RemoteDeviceNamePolicy.shouldAdoptConnectionSelection("
+        let ensureBody = ensureRemainder[..<ensureEnd.lowerBound]
+        #expect(ensureBody.contains("if settings.selectedRemoteProfile == nil {"))
+        #expect(!ensureBody.contains("RemoteDeviceNamePolicy.shouldAdoptConnectionSelection("))
+
+        let activateStart = try #require(modelSource.range(
+            of: "private func activateRemoteProfile(for bridge: XiaomiBluetoothBridge) -> UUID? {"
         ))
+        let activateRemainder = modelSource[activateStart.upperBound...]
+        let activateEnd = try #require(activateRemainder.range(
+            of: "/// Refresh display metadata without starting discovery"
+        ))
+        #expect(activateRemainder[..<activateEnd.lowerBound].contains(
+            "if settings.selectedRemoteProfile == nil {"
+        ))
+
+        // 进入按键页以「上次选中」为起点，留出重连窗口；窗口到期仍未连上才回退。
+        #expect(modelSource.contains("beginWaitingForPreviousRemote(trigger: \"mapping_page\")"))
+        #expect(modelSource.contains("reason=previous_remote_absent"))
+        #expect(modelSource.contains("RemoteDeviceNamePolicy.fallbackSelection("))
 
         // 用户手动点设备卡之后，连接事件不得把画布抢回小米。
         let settingsSource = try String(
@@ -1107,7 +1125,7 @@ struct SettingsPageRegressionTests {
         #expect(autosave.upperBound <= center.lowerBound)
     }
 
-    @Test func settingsWindowHonorsDockPreferenceAndKeepsStandardWindowActions() throws {
+    @Test func settingsWindowKeepsStandardWindowActionsAndAppliesDockPreference() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -1119,57 +1137,55 @@ struct SettingsPageRegressionTests {
 
         #expect(appSource.contains("window.hidesOnDeactivate = false"))
         #expect(appSource.contains("window.delegate = self"))
-        #expect(appSource.contains("SettingsWindowActivationPolicy.value("))
+        #expect(appSource.contains("delegate.updateDockActivationPolicy(source: \"launch\")"))
+        #expect(appSource.contains("isSettingsWindowOpen = true\n        updateDockActivationPolicy(source: \"window_open\")"))
+        #expect(appSource.contains("isSettingsWindowOpen = false\n        updateDockActivationPolicy(source: \"window_close\")"))
+        #expect(appSource.contains("model.settings.showDockIcon = isVisible\n        updateDockActivationPolicy(source: \"dock_toggle\")"))
+        #expect(appSource.contains("updateDockActivationPolicy(source: \"configuration_import\")"))
         #expect(appSource.contains("func windowWillClose(_ notification: Notification)"))
         #expect(appSource.contains("func windowDidMiniaturize(_ notification: Notification)"))
         #expect(appSource.contains("func windowDidDeminiaturize(_ notification: Notification)"))
         #expect(appSource.contains("source: \"window_miniaturized\""))
         #expect(appSource.contains("source: \"window_deminiaturized\""))
-        #expect(appSource.contains("source: \"activation_policy\""))
-        #expect(appSource.contains("isSettingsWindowOpen = false"))
+        #expect(appSource.contains("#selector(showSettingsFromStatusMenu)"))
         #expect(!appSource.contains("window.canHide = false"))
         #expect(appSource.contains("NSApp.keyWindow?.performClose(nil)"))
         #expect(appSource.contains("performMiniaturize:"))
         #expect(appSource.contains("hideOtherApplications:"))
         #expect(appSource.contains("unhideAllApplications:"))
         #expect(appSource.contains("NSApp.windowsMenu = windowMenu"))
-
-        #expect(SettingsWindowActivationPolicy.value(
-            showDockIcon: false,
-            isSettingsWindowOpen: true
-        ) == .accessory)
-        #expect(SettingsWindowActivationPolicy.value(
-            showDockIcon: false,
-            isSettingsWindowOpen: false
-        ) == .accessory)
-        #expect(SettingsWindowActivationPolicy.value(
-            showDockIcon: true,
-            isSettingsWindowOpen: false
-        ) == .regular)
     }
 
-    @Test func hiddenDockAndMenuBarKeepAnExplicitLaunchRecoveryPath() throws {
+    @Test(arguments: [false, true], [false, true])
+    func dockPolicyHonorsPreferenceAndAnOpenSettingsWindow(
+        showDockIcon: Bool,
+        isSettingsWindowOpen: Bool
+    ) {
+        let policy = SettingsWindowActivationPolicy.value(
+            showDockIcon: showDockIcon,
+            isSettingsWindowOpen: isSettingsWindowOpen
+        )
+        #expect(policy == (!showDockIcon && !isSettingsWindowOpen ? .accessory : .regular))
+    }
+
+    @Test(arguments: [false, true], [false, true])
+    func startupOpensSettingsIfBothEntryPointsAreDisabled(
+        showDockIcon: Bool,
+        showStatusBarIcon: Bool
+    ) {
+        #expect(AppEntryPointVisibilityPolicy.shouldShowMainWindow(
+            baseLaunchDecision: false,
+            showDockIcon: showDockIcon,
+            showStatusBarIcon: showStatusBarIcon
+        ) == (!showDockIcon && !showStatusBarIcon))
         #expect(AppEntryPointVisibilityPolicy.shouldShowMainWindow(
             baseLaunchDecision: true,
-            showDockIcon: true,
-            showStatusBarIcon: true
+            showDockIcon: showDockIcon,
+            showStatusBarIcon: showStatusBarIcon
         ))
-        #expect(AppEntryPointVisibilityPolicy.shouldShowMainWindow(
-            baseLaunchDecision: false,
-            showDockIcon: false,
-            showStatusBarIcon: false
-        ))
-        #expect(!AppEntryPointVisibilityPolicy.shouldShowMainWindow(
-            baseLaunchDecision: false,
-            showDockIcon: true,
-            showStatusBarIcon: false
-        ))
-        #expect(!AppEntryPointVisibilityPolicy.shouldShowMainWindow(
-            baseLaunchDecision: false,
-            showDockIcon: false,
-            showStatusBarIcon: true
-        ))
+    }
 
+    @Test func menuBarVisibilityKeepsTheSystemReopenPath() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -1551,6 +1567,15 @@ struct SettingsPageRegressionTests {
         #expect(source.contains(".accessibilityAddTraits(isSelected ? .isSelected : [])"))
         #expect(source.contains("LazyVGrid("))
         #expect(source.contains("button_mapping.action.disable_switch"))
+        // 动作编辑面板保留停用开关，但不再提供「关闭」按钮。
+        let editorPanelStart = try #require(settingsSource.range(of: "private func mappingEditorPanel"))
+        let editorPanelEnd = try #require(settingsSource.range(
+            of: "private func mappingVoiceSettingsPanel",
+            range: editorPanelStart.upperBound..<settingsSource.endIndex
+        ))
+        let editorPanelSource = settingsSource[editorPanelStart.lowerBound..<editorPanelEnd.lowerBound]
+        #expect(editorPanelSource.contains("button_mapping.action.disable_switch"))
+        #expect(!editorPanelSource.contains("Button(\"common.action.close\")"))
         #expect(source.contains(").filter { $0 != .disabled && $0 != .combinationAction }"))
         #expect(!source.contains("DisclosureGroup(isExpanded: $isPresetApplicationActionsExpanded)"))
         #expect(!source.contains("isPresetApplicationActionsExpanded"))
@@ -2331,8 +2356,10 @@ struct SettingsPageRegressionTests {
         #expect(historySource.contains("reason = \"date_groups_collapsed\""))
         #expect(historySource.contains("displayed_count=\\(displayedCount)"))
         #expect(agentAccessSource.contains("statistics.transcripts.agent_access.enable"))
-        #expect(agentAccessSource.contains("model.copyStandardConfiguration()"))
-        #expect(agentAccessSource.contains("model.copyCodexConfiguration()"))
+        #expect(agentAccessSource.contains("model.copyInstallPrompt("))
+        #expect(agentAccessSource.contains("statistics.transcripts.agent_access.install_prompt_preview"))
+        #expect(!agentAccessSource.contains("statistics.transcripts.agent_access.copy_standard"))
+        #expect(!agentAccessSource.contains("statistics.transcripts.agent_access.copy_codex"))
         #expect(agentAccessSource.contains("model.revoke(authorization)"))
         #expect(agentAccessSource.contains("ForEach(MCPClientKind.allCases)"))
         #expect(agentAccessSource.contains("LazyVGrid("))

@@ -1,0 +1,25 @@
+{
+  "title": "回眸只读授权",
+  "title_en": "Reflections Read-Only Access",
+  "description": "在无线麦 SayAll 的回眸页面创建 WorkBuddy 专用授权。",
+  "description_en": "Create a dedicated WorkBuddy authorization in SayAll Reflections.",
+  "docUrl": "https://github.com/HD838A/remote-mic-app/blob/main/Testing/WorkBuddyConnector.md",
+  "docLabel": "回眸连接说明",
+  "docLabel_en": "Reflections connection guide",
+  "fields": [
+    {
+      "key": "SAYALL_MCP_CLIENT_ID",
+      "label": "客户端 ID",
+      "label_en": "Client ID",
+      "type": "text",
+      "required": true
+    },
+    {
+      "key": "SAYALL_MCP_ACCESS_TOKEN",
+      "label": "访问令牌",
+      "label_en": "Access Token",
+      "type": "password",
+      "required": true
+    }
+  ]
+}

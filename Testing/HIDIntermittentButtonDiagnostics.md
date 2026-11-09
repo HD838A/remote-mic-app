@@ -184,3 +184,39 @@ Windows 与网络控制入口未修改，保留稳定基线检查。
 
 失败判定：任何一个逗号之外还出现音量变化、音量浮层、额外字符、键盘音量被吞，或松键后音量连发。
 删除映射后的恢复回归仍按用例 5 执行。
+
+## 用例 7：方向键单次按下只移动一格（Intel 重点）
+
+适用：2026-11-07 之后把方向键纳入事件级兜底的包。更早的包方向键只靠源头映射，
+在独占失败、映射回读一致的 Intel 机器上一次按下会移动两格。
+必须在 Intel Mac 上执行；Apple Silicon 上源头映射通常能真正阻断原生投递，不能替代。
+
+注意：方向键兜底默认**只在 Intel 构建启用**（`#if arch(x86_64)`）。Apple Silicon 包上
+看到「没有 `HID FILTER arm events=key1xx`」是预期行为，不是修复缺失；判定 Apple Silicon
+只看行为（每次一格、键盘方向键不被吞）。
+
+1. 前置确认：日志里 `HID CONNECTED mode=monitored`、
+   `HID NATIVE MAPPING phase=prepare result=verified`，即非独占且映射回读一致。
+2. 左、右、上、下各短按 10 次，每次间隔至少 1 秒；每次只移动一格。
+3. 按住左方向键 2 秒后松开：按配置的重复策略移动，松开立即停止，速度不得翻倍。
+4. 每次方向键操作后立刻按一次电脑键盘的方向键，键盘必须正常生效；
+   连续两次都被吞判失败，仅紧邻窗口期的一次被吞不算失败。
+5. 触发 Command-Tab 会话后按左右键，高亮每次只移动一格。
+6. 反向边界：关闭「按键映射」或在映射未生效的设备上，默认左右动作仍应由系统原生事件完成，
+   每次按下同样只移动一格（不得变成零格）。
+
+日志判读：
+
+- 每次按下应出现 `HID FILTER arm events=key123`（或 key124/125/126）。
+- 泄漏的原生按下应是 `HID FILTER suppressed event=key1xx … armed_by=prearm|arm`；
+  `armed_by=prearm` 表示报告线程提前登记命中，是本修复生效的直接证据。
+- 出现 `HID FILTER phase=arm_order … result=already_passed_through` 即判失败：
+  原生方向键仍跑在登记之前。
+- 出现 `HID FILTER phase=arm result=passthrough event=key1xx edge=down reason=held_same_key`：
+  说明按下的这一刻，电脑键盘上同一颗方向键还按着没松，这次遥控器按下放弃了事件级登记
+  （判据不变，属已知边界）。此时若同时看到原生方向键未被吞（双跳），按已记录的边界处理，
+  不要当成修复失效；先松开键盘方向键再复测一次即可区分。
+- 完全没有 `suppressed` 时先别判通过：说明这台机器上映射确实阻断了原生投递，
+  双跳另有原因，按 `Bugs/2026-11-07-intel-directional-double-step.md` 重新定位。
+
+失败判定：任一次按下移动两格、按住速度翻倍、透传会话变成零格，或键盘方向键连续被吞。

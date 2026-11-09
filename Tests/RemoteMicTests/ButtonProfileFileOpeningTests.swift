@@ -116,7 +116,8 @@ struct ButtonProfileFileOpeningTests {
             buttonProfileImportRequests: requests,
             updateInformation: UpdateInformationStore(userDefaults: defaults),
             checkForUpdates: {}, refreshUpdateInformation: {},
-            setDockIconVisible: { _ in }, setStatusBarIconVisible: { _ in },
+            setDockIconVisible: { _ in },
+            setStatusBarIconVisible: { _ in },
             syncEntryPointVisibility: {}
         ).environmentObject(LocalizationStore(settings: settings))
             .onAppear { viewDidAppear = true })

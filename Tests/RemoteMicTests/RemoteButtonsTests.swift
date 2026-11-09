@@ -333,6 +333,22 @@ struct RemoteButtonsTests {
         #expect(ButtonAction.commandClose.category == .basicKeys)
         #expect(ButtonAction.commandUndo.category == .basicKeys)
         #expect(ButtonAction.commandDelete.category == .basicKeys)
+        // 窗口与标签页动作是纯按键组合，和既有关闭/退出同属基础按键。
+        #expect(ButtonAction.commandMinimize.category == .basicKeys)
+        #expect(ButtonAction.toggleFullScreen.category == .basicKeys)
+        #expect(ButtonAction.commandNewTab.category == .basicKeys)
+        #expect(ButtonAction.commandPreviousTab.category == .basicKeys)
+        #expect(ButtonAction.commandNextTab.category == .basicKeys)
+        #expect(ButtonAction.commandNextWindow.category == .basicKeys)
+        #expect(ButtonAction.commandHide.category == .basicKeys)
+        #expect(ButtonAction.commandNew.category == .basicKeys)
+        // 系统窗口管理手势归「系统与媒体」，与显示桌面、切换 App 同级。
+        #expect(ButtonAction.missionControl.category == .systemAndMedia)
+        #expect(ButtonAction.applicationWindows.category == .systemAndMedia)
+        #expect(ButtonAction.spaceLeft.category == .systemAndMedia)
+        #expect(ButtonAction.spaceRight.category == .systemAndMedia)
+        #expect(ButtonAction.lockScreen.category == .systemAndMedia)
+        #expect(ButtonAction.screenshot.category == .systemAndMedia)
         #expect(ButtonAction.volumeUp.category == .systemAndMedia)
         #expect(ButtonAction.previousCommandLeft.category == .systemAndMedia)
         #expect(ButtonAction.nextCommandRight.category == .systemAndMedia)
@@ -367,6 +383,21 @@ struct RemoteButtonsTests {
         #expect(!ButtonAction.commandFind.allowsRepeat)
         #expect(!ButtonAction.commandSave.allowsRepeat)
         #expect(!ButtonAction.commandDelete.allowsRepeat)
+        // 按住不放不应该反复最小化窗口或连开标签页。
+        #expect(!ButtonAction.commandMinimize.allowsRepeat)
+        #expect(!ButtonAction.toggleFullScreen.allowsRepeat)
+        #expect(!ButtonAction.commandNewTab.allowsRepeat)
+        #expect(!ButtonAction.commandPreviousTab.allowsRepeat)
+        #expect(!ButtonAction.commandNextTab.allowsRepeat)
+        #expect(!ButtonAction.commandNextWindow.allowsRepeat)
+        #expect(!ButtonAction.commandHide.allowsRepeat)
+        #expect(!ButtonAction.commandNew.allowsRepeat)
+        #expect(!ButtonAction.missionControl.allowsRepeat)
+        #expect(!ButtonAction.applicationWindows.allowsRepeat)
+        #expect(!ButtonAction.spaceLeft.allowsRepeat)
+        #expect(!ButtonAction.spaceRight.allowsRepeat)
+        #expect(!ButtonAction.lockScreen.allowsRepeat)
+        #expect(!ButtonAction.screenshot.allowsRepeat)
         #expect(!ButtonAction.previousCommandLeft.allowsRepeat)
         #expect(!ButtonAction.nextCommandRight.allowsRepeat)
         #expect(ButtonAction.arrowUp.allowsRepeat)
@@ -1154,6 +1185,21 @@ struct RemoteButtonsTests {
         #expect(ButtonAction.arrowLeft.visualDisplayName(using: localization) == "←")
         #expect(ButtonAction.arrowLeft.detailedDisplayName(using: localization) == "Left")
         #expect(ButtonAction.volumeUp.visualDisplayName(using: localization) == "Volume Up")
+        #expect(ButtonAction.commandMinimize.visualDisplayName(using: localization) == "⌘M")
+        #expect(ButtonAction.commandMinimize.detailedDisplayName(using: localization) == "Command + M")
+        #expect(ButtonAction.toggleFullScreen.visualDisplayName(using: localization) == "⌃⌘F")
+        #expect(ButtonAction.commandNewTab.visualDisplayName(using: localization) == "⌘T")
+        #expect(ButtonAction.commandPreviousTab.visualDisplayName(using: localization) == "⇧⌘[")
+        #expect(ButtonAction.commandNextTab.visualDisplayName(using: localization) == "⇧⌘]")
+        #expect(ButtonAction.commandNextWindow.visualDisplayName(using: localization) == "⌘`")
+        #expect(ButtonAction.commandHide.visualDisplayName(using: localization) == "⌘H")
+        #expect(ButtonAction.commandNew.visualDisplayName(using: localization) == "⌘N")
+        #expect(ButtonAction.missionControl.visualDisplayName(using: localization) == "⌃↑")
+        #expect(ButtonAction.applicationWindows.visualDisplayName(using: localization) == "⌃↓")
+        #expect(ButtonAction.spaceLeft.visualDisplayName(using: localization) == "⌃←")
+        #expect(ButtonAction.spaceRight.visualDisplayName(using: localization) == "⌃→")
+        #expect(ButtonAction.lockScreen.visualDisplayName(using: localization) == "⌃⌘Q")
+        #expect(ButtonAction.screenshot.visualDisplayName(using: localization) == "⇧⌘3")
     }
 
     @Test func customShortcutPreservesRightCommandDeviceSide() {
@@ -2351,6 +2397,14 @@ struct RemoteButtonsTests {
             (.commandFind, 3, .maskCommand),
             (.commandSave, 1, .maskCommand),
             (.commandDelete, 51, .maskCommand),
+            (.commandMinimize, 46, .maskCommand),
+            (.toggleFullScreen, 3, [.maskControl, .maskCommand]),
+            (.commandNewTab, 17, .maskCommand),
+            (.commandPreviousTab, 33, [.maskShift, .maskCommand]),
+            (.commandNextTab, 30, [.maskShift, .maskCommand]),
+            (.commandNextWindow, 50, .maskCommand),
+            (.commandHide, 4, .maskCommand),
+            (.commandNew, 45, .maskCommand),
         ]
 
         for (action, keyCode, modifiers) in expected {
@@ -2373,6 +2427,80 @@ struct RemoteButtonsTests {
             ))
         }
         #expect(systemTypes == [16, 18, 17])
+    }
+
+    /// 调度中心等 WindowServer 符号快捷键不认箭头事件上的 flags，必须显式投递
+    /// Control 的按下/抬起边沿，并让箭头带 Fn + NumericPad（真实键盘恒带）。
+    /// 四个动作的序列必须是：Control down → arrow down → arrow up → Control up。
+    @Test func systemWindowGesturesPostControlEdgesAroundTheArrow() {
+        let expected: [(ButtonAction, CGKeyCode)] = [
+            (.missionControl, 126),
+            (.applicationWindows, 125),
+            (.spaceLeft, 123),
+            (.spaceRight, 124),
+        ]
+        let arrowFlags: CGEventFlags = [.maskControl, .maskSecondaryFn, .maskNumericPad]
+
+        for (action, arrow) in expected {
+            var events: [(CGKeyCode, Bool, CGEventFlags)] = []
+            #expect(KeyboardInjector.send(
+                action,
+                accessibilityTrusted: { true },
+                keyPoster: { _, _ in
+                    Issue.record("\(action) 不应走单键注入路径")
+                },
+                keyStatePoster: { code, isDown, flags in
+                    events.append((code, isDown, flags))
+                    return true
+                }
+            ))
+            #expect(events.map(\.0) == [59, arrow, arrow, 59])
+            #expect(events.map(\.1) == [true, true, false, false])
+            #expect(events[0].2 == .maskControl)
+            #expect(events[1].2 == arrowFlags)
+            #expect(events[2].2 == arrowFlags)
+            #expect(events[3].2 == [])
+        }
+    }
+
+    /// 锁屏与系统截屏同样是 WindowServer 符号快捷键，必须按真实键入顺序
+    /// 先按下全部修饰键、再按目标键、最后逆序抬起。
+    @Test func lockScreenAndScreenshotPostModifierEdgesInTypingOrder() {
+        var lockEvents: [(CGKeyCode, Bool, CGEventFlags)] = []
+        #expect(KeyboardInjector.send(
+            .lockScreen,
+            accessibilityTrusted: { true },
+            keyPoster: { _, _ in Issue.record("锁屏不应走单键注入路径") },
+            keyStatePoster: { code, isDown, flags in
+                lockEvents.append((code, isDown, flags))
+                return true
+            }
+        ))
+        #expect(lockEvents.map(\.0) == [59, 55, 12, 12, 55, 59])
+        #expect(lockEvents.map(\.1) == [true, true, true, false, false, false])
+        #expect(lockEvents[0].2 == .maskControl)
+        #expect(lockEvents[1].2 == [.maskControl, .maskCommand])
+        #expect(lockEvents[2].2 == [.maskControl, .maskCommand])
+        #expect(lockEvents[4].2 == .maskControl)
+        #expect(lockEvents[5].2 == [])
+
+        var shotEvents: [(CGKeyCode, Bool, CGEventFlags)] = []
+        #expect(KeyboardInjector.send(
+            .screenshot,
+            accessibilityTrusted: { true },
+            keyPoster: { _, _ in Issue.record("截屏不应走单键注入路径") },
+            keyStatePoster: { code, isDown, flags in
+                shotEvents.append((code, isDown, flags))
+                return true
+            }
+        ))
+        #expect(shotEvents.map(\.0) == [55, 56, 20, 20, 56, 55])
+        #expect(shotEvents.map(\.1) == [true, true, true, false, false, false])
+        #expect(shotEvents[0].2 == .maskCommand)
+        #expect(shotEvents[1].2 == [.maskCommand, .maskShift])
+        #expect(shotEvents[2].2 == [.maskCommand, .maskShift])
+        #expect(shotEvents[4].2 == .maskCommand)
+        #expect(shotEvents[5].2 == [])
     }
 
     @Test func phoneVoicePostsFunctionKeyDownAndUp() {
@@ -3216,6 +3344,8 @@ struct RemoteButtonsTests {
             "reportRoutingDecision(",
             "needsEventLevelArm(",
             "routing.permissionsGranted",
+            // 方向键的提前登记必须走与主线程共用的判据，不能各自写一份。
+            "prearmsNativeEvent(",
         ] {
             #expect(prearmBody.contains(gate), "prearm is missing the \(gate) gate")
         }

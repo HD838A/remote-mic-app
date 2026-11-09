@@ -4483,20 +4483,36 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     /// 小米链路一次重连就会把它抢回去，看起来像页面自己在乱跳。
     func noteManualRemoteProfileSelection() {
         remoteSelectionWasManual = true
+        // 用户已经自己决定了看哪台，重连窗口没有继续等下去的理由。
+        finishWaitingForPreviousRemote()
     }
+
+    /// 上次选中的遥控器在启动/进入按键页时留出的重连窗口。
+    ///
+    /// 冷启动时各链路的就绪顺序不稳定：Chromecast 往往比小米先报连接（真机 2026-11-01
+    /// 日志：按键页 0.9s 打开，小米 2.4s 才 ready）。按「谁先就绪谁接管」会让页面在
+    /// 小米 → Chromecast → 小米之间来回跳。
+    ///
+    /// 选中项本来就是从偏好恢复的，它才是「上一次在用哪台」的唯一依据，所以窗口期内
+    /// 任何链路就绪都不改选中态。等窗口到期仍未连上，说明这台设备这次不会出现
+    /// （用户卖掉了、换设备了），这时才回退到实际在线的那台——否则页面会永远停在
+    /// 一台已经不在的遥控器上。
+    private static let previousRemoteReconnectGrace: TimeInterval = 5
+
+    /// 是否还在等上次选中的遥控器连上。窗口内连接事件不得改动选中态。
+    private var isWaitingForPreviousRemote = false
+    private var previousRemoteGraceWorkItem: DispatchWorkItem?
 
     func selectDefaultMappingRemoteIfAvailable() {
         // 进入按键页是一次「重新开始」：之前在那个页面里的手动选择不影响这次默认偏好。
         remoteSelectionWasManual = false
-        applyDefaultMappingPreference(trigger: "mapping_page")
+        beginWaitingForPreviousRemote(trigger: "mapping_page")
     }
 
-    /// 连接状态变化后补一次按键页优选。
+    /// 连接状态变化后的按键页判定。
     ///
-    /// 启动时设置窗口通常先于蓝牙就绪打开，那一刻只能得到 `xiaomi_unavailable`，
-    /// 页面沿用上一次的选择（往往是 Chromecast）。等小米真正 ready 之后必须再判一次，
-    /// 否则画布会一直停在 Chromecast（真机 2026-11-01 日志：按键页 0.9s 打开，
-    /// 小米 2.4s 才 ready，期间没有任何重新选择）。
+    /// 只做三件事：上次选中的设备连上了就结束等待；窗口期内继续等；没有历史选择时才补选。
+    /// **不再**按就绪顺序改选中态——那正是冷启动来回跳的来源。
     func applyDefaultMappingRemoteAfterConnectionChange() {
         guard isMappingPageVisible else {
             AppLogger.shared.write(
@@ -4512,13 +4528,91 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             )
             return
         }
-        applyDefaultMappingPreference(trigger: "connection")
+        if let selectedID = settings.selectedRemoteProfileID, isRemoteConnected(selectedID) {
+            finishWaitingForPreviousRemote()
+            AppLogger.shared.write(
+                "REMOTE MAPPING_DEFAULT phase=completed result=preserved " +
+                    "reason=previous_remote_connected trigger=connection"
+            )
+            return
+        }
+        if isWaitingForPreviousRemote {
+            AppLogger.shared.write(
+                "REMOTE MAPPING_DEFAULT phase=in_progress result=waiting " +
+                    "reason=previous_remote_pending trigger=connection"
+            )
+            return
+        }
+        guard settings.selectedRemoteProfile == nil else {
+            // 有历史选择、只是此刻不在线：运行中的断连不自动跳。小米休眠或信号抖动
+            // 会把画布切到别的设备，而链路就绪不会自动切回来，用户就卡在别的画布上了。
+            // 重新进入按键页会再走一次重连窗口，那时才判定要不要回退。
+            AppLogger.shared.write(
+                "REMOTE MAPPING_DEFAULT phase=completed result=preserved " +
+                    "reason=previous_remote_offline trigger=connection"
+            )
+            return
+        }
+        applyConnectedRemoteFallback(trigger: "connection")
     }
 
-    private func applyDefaultMappingPreference(trigger: String) {
+    /// 以「上次选中的那台」为起点安排一次重连窗口。
+    private func beginWaitingForPreviousRemote(trigger: String) {
+        finishWaitingForPreviousRemote()
+        guard !remoteSelectionWasManual else { return }
+
+        guard let selected = settings.selectedRemoteProfile else {
+            // 没有历史选择（首次使用，或档案已被清理）：直接用实际在线的那台。
+            applyConnectedRemoteFallback(trigger: trigger)
+            return
+        }
+        if isRemoteConnected(selected.id) {
+            AppLogger.shared.write(
+                "REMOTE MAPPING_DEFAULT phase=completed result=preserved " +
+                    "reason=previous_remote_connected trigger=\(trigger)"
+            )
+            return
+        }
+
+        isWaitingForPreviousRemote = true
+        let workItem = DispatchWorkItem { [weak self] in
+            self?.previousRemoteGraceDidExpire(trigger: trigger)
+        }
+        previousRemoteGraceWorkItem = workItem
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + Self.previousRemoteReconnectGrace,
+            execute: workItem
+        )
+        AppLogger.shared.write(
+            "REMOTE MAPPING_DEFAULT phase=in_progress result=waiting " +
+                "reason=previous_remote_pending trigger=\(trigger) " +
+                "grace_ms=\(Int(Self.previousRemoteReconnectGrace * 1000))"
+        )
+    }
+
+    private func previousRemoteGraceDidExpire(trigger: String) {
+        previousRemoteGraceWorkItem = nil
+        guard isWaitingForPreviousRemote else { return }
+        isWaitingForPreviousRemote = false
+        guard !remoteSelectionWasManual else { return }
+        if let selectedID = settings.selectedRemoteProfileID, isRemoteConnected(selectedID) {
+            return
+        }
+        applyConnectedRemoteFallback(trigger: "grace_expired")
+    }
+
+    private func finishWaitingForPreviousRemote() {
+        isWaitingForPreviousRemote = false
+        previousRemoteGraceWorkItem?.cancel()
+        previousRemoteGraceWorkItem = nil
+    }
+
+    /// 回退到实际在线的设备。这里才用到型号顺序，而且只是「历史偏好已确定不成立」时的兜底。
+    private func applyConnectedRemoteFallback(trigger: String) {
         let localization = LocalizationStore(settings: settings)
-        let connectedProfiles = RemoteDeviceNamePolicy.sortedForCards(
-            settings.remoteDeviceProfiles.filter { isRemoteConnected($0.id) },
+        guard let profile = RemoteDeviceNamePolicy.fallbackSelection(
+            from: settings.remoteDeviceProfiles,
+            isConnected: { self.isRemoteConnected($0.id) },
             modelName: { profile in
                 RemoteDeviceNamePolicy.displayName(
                     for: profile,
@@ -4527,26 +4621,23 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
                 )
             },
             systemName: { self.systemDeviceName(for: $0) }
-        )
-        guard let profile = RemoteDeviceNamePolicy.defaultMappingProfile(
-            from: connectedProfiles
         ) else {
             AppLogger.shared.write(
                 "REMOTE MAPPING_DEFAULT phase=completed result=preserved " +
-                    "reason=xiaomi_unavailable trigger=\(trigger)"
+                    "reason=no_connected_remote trigger=\(trigger)"
             )
             return
         }
         guard profile.id != settings.selectedRemoteProfileID else {
             AppLogger.shared.write(
                 "REMOTE MAPPING_DEFAULT phase=completed result=preserved " +
-                    "reason=xiaomi_already_selected trigger=\(trigger)"
+                    "reason=connected_remote_already_selected trigger=\(trigger)"
             )
             return
         }
         AppLogger.shared.write(
             "REMOTE MAPPING_DEFAULT phase=completed result=selected " +
-                "reason=xiaomi_default family=xiaomi trigger=\(trigger)"
+                "reason=previous_remote_absent family=\(profile.model.rawValue) trigger=\(trigger)"
         )
         if ProcessInfo.processInfo.environment["REMOTE_MIC_SETTINGS_SCREENSHOT_DIR"] != nil {
             settings.selectRemoteProfile(profile.id)
@@ -4557,7 +4648,11 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
 
     private func activateRemoteProfile(for bridge: XiaomiBluetoothBridge) -> UUID? {
         guard let profileID = registerBluetoothBridgeIfNeeded(bridge) else { return nil }
-        selectRemoteProfile(profileID)
+        // 首次使用才自动选中；已有选中项时保持不动，否则小米一次重连就会把用户
+        // 正在看的 Chromecast 画布抢回去。画布的重新判定由「上次选中 + 重连窗口」负责。
+        if settings.selectedRemoteProfile == nil {
+            selectRemoteProfile(profileID)
+        }
         return profileID
     }
 
@@ -9446,30 +9541,17 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             chromecastProfileID = profileID
         }
         connectedChromecastProfileIDs.insert(profileID)
-        // 连接即选中（与小米链路的 activateRemoteProfile 对齐）：否则按键页停留在上一次
-        // 选中的档案（用户看到的是小米遥控器画布），要等「按键映射开启且按下普通键」才会切换。
+        // 首次使用（还没有任何选中项）才自动选它，其余尊重用户上一次的选择。
         //
-        // 例外：已经连着的小米遥控器是按键页的优选画布，Chromecast 不得把它抢走。
-        // 启动顺序不稳定（Chromecast 常先 ready），按「谁后连谁赢」会让页面永远停在 Chromecast。
-        let shouldTakeSelection = RemoteDeviceNamePolicy.shouldAdoptConnectionSelection(
-            for: .chromecastVoiceRemote,
-            isAlreadySelected: settings.selectedRemoteProfileID == profileID,
-            hasConnectedXiaomi: hasConnectedXiaomiProfile
-        )
-        if shouldTakeSelection {
+        // 这里以前是「连接即选中」。冷启动时 Chromecast 常比小米先就绪，会把从偏好恢复的
+        // 小米画布抢走，等小米 ready 再抢回来，用户看到 小米 → Chromecast → 小米 来回跳。
+        // 「上次选中 + 重连窗口」的判定在按键页可见时进行，链路就绪不再改选中态。
+        if settings.selectedRemoteProfile == nil {
             selectRemoteProfile(profileID)
         } else {
             refreshBluetoothPresentation()
         }
         return profileID
-    }
-
-    /// 是否存在已连接（链路就绪）的小米遥控器档案。私有适配器的档案不参与判定。
-    private var hasConnectedXiaomiProfile: Bool {
-        settings.remoteDeviceProfiles.contains { profile in
-            (profile.model == .rc001 || profile.model == .rc003)
-                && connectedRemoteProfileIDs.contains(profile.id)
-        }
     }
 
     private func refreshChromecastActiveControlIDs() {

@@ -45,7 +45,7 @@ Mac Remote 与其他 macOS 私有组件使用同一个私有 Swift Package。CI 
 
 有读取权限时，按以下顺序准备：
 
-1. 将 Mac 私有改动通过私有 PR 合入 `GetSayAll/sayall-private-platform` 的 `main`。只比较根 SwiftPM 清单、Mac Remote、组合动作、键位方案、常用语、会员与诊断、Siri Remote、Chromecast 和私有构建工具。网页、服务端和纯 Markdown/HTML 文档变化不触发 Mac 包升级。新增 Mac 模块时同步 `scripts/prepare-private-platform.py` 的路径范围。
+1. 将 Mac 私有改动通过私有 PR 合入 `GetSayAll/sayall-private-platform` 的 `main`。只比较根 SwiftPM 清单、Mac Remote、组合动作、键位方案、常用语、会员与诊断、Siri Remote、Chromecast 和私有构建工具。网页、服务端、纯 Markdown/HTML 文档和 SwiftPM `Tests/` 测试变化不触发 Mac 包升级。测试变化不进入分发构件，不得据此强制新 Tag 或阻止既有不可变 Tag 的集成。新增 Mac 模块时同步 `scripts/prepare-private-platform.py` 的路径范围。
 2. 若上述内容相对最新数字 Tag 有变化，按私有仓库 `docs/release/tagging.md` 发布新的标准 SemVer Tag。`2.3.0` 起不再升级根 `VERSION`。默认升 patch；破坏性接口按 SemVer 升 major。不得给未合入源码或脏工作区打发布 Tag。
 3. 运行 `python3 scripts/prepare-private-platform.py release` 核对最新私有 `main`。`2.3.0` 起，存在未发布 Mac 变化时停止，并要求先由私有发布者完成测试、构建与新 Tag 发布；不从停用的 `VERSION` 推导新版本。更早版本保留历史发布兼容路径。测试使用 Debug 模式以保留现有测试接口；正式构建保持 Release 模式。全部本地 SwiftPM 命令使用 `--disable-keychain`。脚本在推送前复核远端 main，并在推送后复核 Tag Commit。没有 Mac 变化时复用原 Tag；不创建 `private-vX.Y.Z`，不移动已有 Tag。
 4. 私有 Tag 发布后，运行 `scripts/update-private-dependency-versions.sh --publish` 更新宿主清单；该命令不能替代 `2.3.0` 起的私有发布步骤。该命令在宿主普通 PR 分支执行。私有 Tag 发布成功后，再更新 `config/release-dependencies.json`，验证并通过宿主 PR 合入。Tag 写权限与只读权限不同；无写权限时请有发布权限的维护者完成私有发布。
@@ -57,7 +57,7 @@ Mac Remote 与其他 macOS 私有组件使用同一个私有 Swift Package。CI 
 
 `SAYALL_PRIVATE_ARTIFACTS_SOURCE=release` 可改用私有仓为该 Tag 发布的 `sayall-private-platform-<tag>.release.zip`，省掉本地构建（同机实测 87 秒，其中下载约 13 秒）。它仍然要求同一 Tag 的源码 checkout（Siri Remote、Chromecast、Mac Remote 的源码路径来自该 checkout），只替换二进制来源。下载后必须逐项校验：发布方 `.sha256` 同时覆盖压缩包与 `SHA256SUMS` 摘要、压缩包摘要与发布值一致、解包条目只能落在 `release/` 内、解包后保留原有权限位（打包脚本要求 `Helpers/` 可执行）、并用 `shasum -a 256 -c SHA256SUMS` 复核全部构件。默认值保持 `build`，本地不会因远端是否存在附件而静默改变发布包字节。
 
-受保护发布 workflow 使用同一套校验，但仅在配置了可读私有仓附件的凭据时启用：`SAYALL_PRIVATE_RELEASE_READ_TOKEN` 存在时，`mac-release-package.yml` 走 `scripts/prepare-private-platform.py artifacts --tag <tag> --output <dir>`，由上述规则下载并校验后再交给 `prepare-private-artifact-package.sh`，并把**发布方声明的** `SHA256SUMS` 摘要作为可信摘要传入；该变量为空时仍执行原有的现场构建。两条路径都不改变私有 Tag 解析、`origin/main` 祖先校验、checkout 一致性与后续签名、公证门禁。凭据的权限范围、存储与轮换见私有仓 `sayall-membership-ops` 的 `docs/secret-inventory.md`。
+受保护发布 workflow 使用同一套校验，但仅在配置了可读私有仓附件的凭据时启用：`SAYALL_PRIVATE_RELEASE_READ_TOKEN` 存在时，`mac-release-package.yml` 走 `scripts/prepare-private-platform.py artifacts --tag <tag> --output <dir>`，由上述规则下载并校验后再交给 `prepare-private-artifact-package.sh`，并把**发布方声明的** `SHA256SUMS` 摘要作为可信摘要传入；该变量为空时仍执行原有的现场构建。两条路径都不改变私有 Tag 解析、`origin/main` 祖先校验、checkout 一致性与后续签名、公证门禁。
 
 `SAYALL_PRIVATE_PLATFORM_MODE=required` 强制要求私有组件。显式设置 `REQUIRE_*` 的完整发布仍在缺少组件时失败；签名、公证及公开发布门禁保持不变。受保护 staging 只检查私有 Mac 代码已被清单 Tag 覆盖，不在签名阶段发布私有 Tag 或修改版本。受保护 runner 再次检查完整历史中的 Tag、main 和 checkout，拒绝过期 pin。
 
