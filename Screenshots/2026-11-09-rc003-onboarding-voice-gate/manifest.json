@@ -1,0 +1,57 @@
+{
+  "batch": "2026-11-09-rc003-onboarding-voice-gate",
+  "date": "2026-11-09",
+  "purpose": "RC003 首用语音测试页",
+  "pull_request": 909,
+  "commit": "7d91585e608e492c6b17958b1f50fcc49ce39103",
+  "build": "314",
+  "storage": "pr-attachment",
+  "window_points": {
+    "width": 1020,
+    "height": 772
+  },
+  "generator": "Production OnboardingView offscreen renderer",
+  "notes": "PNG 来自签名候选包。设备和语音验收独立记录。",
+  "images": [
+    {
+      "file": "voice-test-zh-Hans-light.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1600,
+      "sha256": "e6e9e1a35eb66f64059dc0dcd0d7c6ee134298c795a7743d269ef80de6d94eb8",
+      "bytes": 1064579,
+      "state": "xiaomi_remote_voice_test_zh-Hans-light",
+      "url": "https://github.com/user-attachments/assets/647373c6-0738-4109-b72a-25b349221752"
+    },
+    {
+      "file": "voice-test-zh-Hans-dark.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1600,
+      "sha256": "50762b2b34992e3ccbe06148958ad329154d8476a20d0ec60db070189c6fdc89",
+      "bytes": 1224024,
+      "state": "xiaomi_remote_voice_test_zh-Hans-dark",
+      "url": "https://github.com/user-attachments/assets/aa887321-1e99-4020-9d31-685591997859"
+    },
+    {
+      "file": "voice-test-en-light.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1600,
+      "sha256": "84b9027f5133b7f90979882127f7c746f6be4436a6d390784687215a6a00db68",
+      "bytes": 1025884,
+      "state": "xiaomi_remote_voice_test_en-light",
+      "url": "https://github.com/user-attachments/assets/22f0ae08-afc1-4ac7-a2cd-0d8cd5f4566c"
+    },
+    {
+      "file": "voice-test-en-dark.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1600,
+      "sha256": "1b9145aa9e23411f15203b347ff9b282d8e164868e1b86ae064708265dc03d4c",
+      "bytes": 1188871,
+      "state": "xiaomi_remote_voice_test_en-dark",
+      "url": "https://github.com/user-attachments/assets/4643718c-c1ec-4f7a-9d3c-2a65ce515b29"
+    }
+  ]
+}

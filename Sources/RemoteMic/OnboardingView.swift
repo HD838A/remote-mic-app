@@ -391,17 +391,19 @@ struct OnboardingView: View {
         .onChange(of: transcript) { updatedText in
             captureVoiceTranscriptCandidate(updatedText)
             guard settings.onboardingStep == .voiceTest,
-                  !updatedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                  !updatedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                  let currentEvent = NSApp.currentEvent,
+                  currentEvent.type == .keyDown else {
                 return
             }
-            let currentEvent = NSApp.currentEvent
-            let currentCGEvent = currentEvent?.cgEvent
+            let currentCGEvent = currentEvent.cgEvent
             guard OnboardingTranscriptInputPolicy.isConfirmedPhysicalKeyboardInput(
-                eventTypeRawValue: currentEvent?.type.rawValue,
+                eventTypeRawValue: currentEvent.type.rawValue,
                 sourceStateID: currentCGEvent?.getIntegerValueField(.eventSourceStateID),
                 sourceUnixProcessID: currentCGEvent?.getIntegerValueField(
                     .eventSourceUnixProcessID
-                )
+                ),
+                keyCode: currentEvent.keyCode
             ) else { return }
             manualTranscriptInputObserved = true
             AppLogger.shared.write("ONBOARDING TRANSCRIPT manual_keyboard_input=true")
