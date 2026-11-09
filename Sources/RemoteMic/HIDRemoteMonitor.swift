@@ -1120,8 +1120,15 @@ final class HIDRemoteMonitor {
             if button == .up || button == .down, handlePendingLayerCloseArrow(button: button) {
                 continue
             }
+            // 会话中，绑定了切换器动作的按键等价于菜单键（Tab）；其余吞掉。
+            let sessionTabAllowed = action == .appSwitcher
+                && !recognizesDoubleClick && !recognizesLongPress
             if appSwitcherSession.isActive,
-               handleAppSwitcherControlPress(button, usage: usage) {
+               handleAppSwitcherControlPress(
+                   button,
+                   usage: usage,
+                   swallowsOthers: !sessionTabAllowed
+               ) {
                 continue
             }
             if appSwitcherSession.isActive, button == .tv {
@@ -1709,7 +1716,11 @@ final class HIDRemoteMonitor {
         return submitted
     }
 
-    private func handleAppSwitcherControlPress(_ button: RemoteButton, usage: UInt16) -> Bool {
+    private func handleAppSwitcherControlPress(
+        _ button: RemoteButton,
+        usage: UInt16,
+        swallowsOthers: Bool
+    ) -> Bool {
         switch button {
         case .ok:
             if appSwitcherSession.isWindowPickerActive {
@@ -1800,9 +1811,9 @@ final class HIDRemoteMonitor {
             }
             return true
         default:
-            // 会话期间吞掉切换器之外的按键（音量、主页、TV、常用语等），避免误触。
-            // 菜单键例外：保持“再按一次 = 切到下一个 App”的原生行为。
-            if button == .menu { return false }
+            // 会话期间吞掉未绑定切换器的按键（音量、主页等），避免误触。
+            // 绑定了切换器动作的按键（菜单/TV/音量）已在上层放行，等价于 Tab。
+            if !swallowsOthers { return false }
             diagnosticLogger(
                 "HID APP SWITCHER swallowed button=\(button.rawValue) phase=session"
             )
