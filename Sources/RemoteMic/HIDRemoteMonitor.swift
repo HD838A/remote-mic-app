@@ -199,6 +199,7 @@ final class HIDRemoteMonitor {
     private var appSwitcherSingleWindowTask: HIDRemoteScheduledTask?
     private var appSwitcherForegroundTask: HIDRemoteScheduledTask?
     private var appSwitcherPendingPickerEntry: HIDRemoteScheduledTask?
+    private var appSwitcherFrontmostMissTicks = 0
     private var appSwitcherOriginBundleIdentifier: String?
     /// 切换器 HUD 里高亮的 App（按进程记录，同名双实例也能区分）。
     private var appSwitcherTargetApplication: KeyboardInjector.AppSwitcherSelection?
@@ -2057,6 +2058,7 @@ final class HIDRemoteMonitor {
         appSwitcherForegroundTask = nil
         appSwitcherPendingPickerEntry?.cancel()
         appSwitcherPendingPickerEntry = nil
+        appSwitcherFrontmostMissTicks = 0
         appSwitcherFrontmostMonitor?.cancel()
         appSwitcherFrontmostMonitor = scheduler.schedule(
             afterMilliseconds: HIDRemoteTiming.appSwitcherFrontmostPollMilliseconds,
@@ -2064,15 +2066,26 @@ final class HIDRemoteMonitor {
         ) { [weak self] in
             guard let self, self.appSwitcherSession.isActive else { return }
             guard let origin = self.appSwitcherOriginBundleIdentifier,
-                  let current = self.frontmostBundleIdentifier(),
-                  current != origin
+                  let current = self.frontmostBundleIdentifier()
             else { return }
-            // macOS 13（Intel）上合成 ⌘Tab 后，系统会把切换器里高亮的 App
-            // 报告为前台——这不是用户切走，保持会话。
-            if let highlighted = self.appSwitcherSelectedApplication()?.bundleIdentifier,
-               highlighted == current {
+            // 容忍两类“看起来切走了”的报告：
+            // 1. 前台就是起始 App；
+            // 2. 前台是切换器里高亮的 App（macOS 13 合成 ⌘Tab 会这样报告）。
+            let tolerated = current == origin
+                || self.appSwitcherSelectedApplication()?.bundleIdentifier == current
+            if tolerated {
+                self.appSwitcherFrontmostMissTicks = 0
                 return
             }
+            // Dock 高亮读取偶发失败时也会走进这里，连续两个轮询周期仍不是
+            // 起始/高亮，才认定用户真的切走了，结束会话并释放 ⌘。
+            self.appSwitcherFrontmostMissTicks += 1
+            self.diagnosticLogger(
+                "HID APP SWITCHER frontmost_watch front=\(current) origin=\(origin) " +
+                    "miss=\(self.appSwitcherFrontmostMissTicks)"
+            )
+            guard self.appSwitcherFrontmostMissTicks >= 2 else { return }
+            self.appSwitcherFrontmostMissTicks = 0
             self.finishAppSwitcherLifecycle(reason: "frontmost_changed", confirmed: false)
         }
     }
@@ -2222,6 +2235,7 @@ final class HIDRemoteMonitor {
         appSwitcherForegroundTask = nil
         appSwitcherPendingPickerEntry?.cancel()
         appSwitcherPendingPickerEntry = nil
+        appSwitcherFrontmostMissTicks = 0
         appSwitcherTargetApplication = nil
         appSwitcherPendingLayerClose = nil
         appSwitcherOriginBundleIdentifier = nil

@@ -2141,9 +2141,16 @@ struct RemoteButtonsTests {
         frontmost = PresetApplication.safari.bundleIdentifier
         scheduler.advance(toMilliseconds: poll * 4)
         #expect(!posted.contains { $0.0 == 55 && !$0.1 })
-        // 前台变成无关 App：用户真的切走了，释放 ⌘ 结束会话。
+        // 前台变成无关 App 只有一个轮询周期（Dock 高亮读取偶发失败）：恢复。
         frontmost = "com.apple.finder"
+        scheduler.advance(toMilliseconds: poll * 5)
+        #expect(!posted.contains { $0.0 == 55 && !$0.1 })
+        frontmost = PresetApplication.safari.bundleIdentifier
         scheduler.advance(toMilliseconds: poll * 6)
+        #expect(!posted.contains { $0.0 == 55 && !$0.1 })
+        // 前台连续两个周期都是无关 App：用户真的切走了，释放 ⌘ 结束会话。
+        frontmost = "com.apple.finder"
+        scheduler.advance(toMilliseconds: poll * 8)
         #expect(posted.contains { $0.0 == 55 && !$0.1 })
     }
 
