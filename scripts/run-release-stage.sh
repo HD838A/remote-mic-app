@@ -9,11 +9,23 @@ import re
 import sys
 
 fields = {"schemaVersion", "lane", "stage", "result", "elapsedSeconds", "timeoutSeconds", "exitCode"}
+check_fields = {"schemaVersion", "lane", "stage", "checkLine", "exitCode"}
 try:
     records = [json.loads(line) for line in Path(sys.argv[1]).read_text().splitlines() if line.strip()]
     if not records:
         raise ValueError("empty status")
     for record in records:
+        if isinstance(record, dict) and set(record) == check_fields:
+            valid = (
+                type(record["schemaVersion"]) is int and record["schemaVersion"] == 1
+                and record["lane"] in {"apple-silicon", "intel"}
+                and record["stage"] == "app-verify"
+                and type(record["checkLine"]) is int and record["checkLine"] > 0
+                and type(record["exitCode"]) is int and 1 <= record["exitCode"] <= 255
+            )
+            if not valid:
+                raise ValueError("invalid check status")
+            continue
         valid = (
             isinstance(record, dict) and set(record) == fields
             and record["schemaVersion"] == 1
@@ -32,6 +44,10 @@ except (OSError, ValueError, TypeError):
     sys.exit(1)
 
 for record in records:
+    if "checkLine" in record:
+        print(f"RELEASE STATUS lane={record['lane']} stage=app-verify "
+              f"result=failed line={record['checkLine']} exit={record['exitCode']}")
+        continue
     message = (f"RELEASE STATUS lane={record['lane']} stage={record['stage']} "
                f"result={record['result']} elapsed={record['elapsedSeconds']}s")
     if record["exitCode"] is not None:

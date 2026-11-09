@@ -61,6 +61,8 @@ canonical payload 在上传 Actions Artifact 前执行内容扫描。恢复 stag
 
 构件准备和签名构建的详细输出保存在 runner 的受控临时日志中。阶段 supervisor 将自身控制数据写入独立 JSONL，公开日志通过 `scripts/run-release-stage.sh report-status` 输出阶段、结果、耗时和退出码。状态报告只读取该控制数据，子进程输出中的相似文本仍保存在受控日志中。SDK 接口校验失败和编译错误也使用此输出边界。公开 Artifact 包含规定的最终资产和脱敏来源记录。
 
+App 验证器失败时，同一控制流额外记录公开 `scripts/verify-app.sh` 的失败行号、架构和原退出码。该记录覆盖命令失败与显式校验退出，报告前验证固定字段与数值类型。调查时按 staging 的精确源码 Commit 定位行号，详细输出继续使用受控边界。
+
 本机测试未发布的私有修复时，显式设置 `SAYALL_BUILD_CHANNEL=local` 和 `SAYALL_LOCAL_PRIVATE_SOURCE_COMMIT=<完整 SHA>`。手动提供同一干净提交的私有源码路径与 prepared artifacts；构建脚本继续校验二者的 SHA 相同。此入口不创建 Tag，不修改版本清单；`release` 和 `internalQA` 渠道拒绝该提交覆盖。未指定完整 SHA 时，本地渠道仍执行原有 Tag 校验。
 
 ### 发布基线门禁与构建来源
