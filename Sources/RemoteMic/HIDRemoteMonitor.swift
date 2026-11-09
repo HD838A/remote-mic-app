@@ -1880,20 +1880,25 @@ final class HIDRemoteMonitor {
             ) { [weak self] in
                 guard let self else { return }
                 self.appSwitcherConfirmationProbe = nil
+                let frontmost = self.frontmostBundleIdentifier()
                 self.diagnosticLogger(
                     "HID APP SWITCHER selection bundle_id=" +
-                        (self.frontmostBundleIdentifier() ?? "unknown")
+                        (frontmost ?? "unknown")
                 )
-                // 目标 App 没有任何窗口时，Return 不会关掉窗口层；
-                // 此时会话已结束，返回键不再被拦截，只能补一个 Escape。
+                // 目标 App 没有可用窗口时 Return 不会关掉窗口层；此时会话已结束，
+                // 返回键不再被拦截。Dock 的切换器列表在窗口层里也会消失，
+                // 所以用“前台不是目标 App”作为确认未生效的信号。
                 let windowless = target.map {
                     !self.windowPresence($0)
                 } ?? false
+                let mismatched = target.map { frontmost != $0 } ?? false
                 if windowless
+                    || mismatched
                     || KeyboardInjector.appSwitcherSelectedApplication() != nil {
                     _ = self.appSwitcherSession.dismissWindowPicker()
                     self.diagnosticLogger(
-                        "HID APP SWITCHER stuck_switcher escaped=true windowless=\(windowless)"
+                        "HID APP SWITCHER stuck_switcher escaped=true " +
+                            "windowless=\(windowless) mismatched=\(mismatched)"
                     )
                 }
             }

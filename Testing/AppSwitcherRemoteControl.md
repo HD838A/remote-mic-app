@@ -136,7 +136,7 @@
 1. 让目标 App 保持运行但关闭所有窗口（例如 WPS 关闭全部文档）。
 2. 起切换器选中它，按上/下方向键进入窗口层，再按 OK 或返回。
 
-预期结果：窗口层可能显示“无可用窗口”；此时按 OK 会直接退出窗口层（目标 App 没有任何普通窗口），确认后 300ms 还会复查一次，仍无窗口就补一个 `Escape`，日志出现 `HID APP SWITCHER stuck_switcher escaped=true windowless=true`，不会停留在无法退出的窗口层。
+预期结果：窗口层可能显示“无可用窗口”；此时按 OK 会直接退出窗口层；即使没有及时退出，确认后 300ms 会检查前台 App，只要前台不是目标 App（或目标没有任何普通窗口、或 Dock 的切换器列表仍在），就补一个 `Escape`，日志出现 `HID APP SWITCHER stuck_switcher escaped=true mismatched=true`，不会停留在无法退出的窗口层。
 
 失败判定：窗口层一直停留、返回键和 OK 都无法关闭，只能按键盘 Esc；或日志缺少 `stuck_switcher` 且切换器列表仍在。
 
