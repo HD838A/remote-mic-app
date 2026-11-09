@@ -23,6 +23,20 @@ PUBLIC_SENTRY_PATH = re.compile(
     rb"/Users/runner/work/sentry-cocoa/sentry-cocoa/Sources/([A-Za-z0-9_-]+/)+[A-Za-z0-9_+-]+\.(m|mm|c|cpp|h|swift)"
 )
 INSTALLER_USER_PATH = re.compile(rb"/Users/(?:\$[A-Za-z_][A-Za-z0-9_]*|\*)[^\s\x00]*")
+# BlackHole v0.7.1's bundled README uses this literal Markdown example.
+PUBLIC_DOCUMENTATION_PATH = b"/Users/user/Library`."
+REJECTION_CODES = {
+    "unsafe archive path": "unsafe-path",
+    "development input or credential file": "development-input",
+    "credential-like material": "credentials",
+    "local build path": "local-path",
+    "escaping symbolic link": "escaping-link",
+    "escaping archive link": "escaping-link",
+    "duplicate archive entry": "duplicate-entry",
+    "installer contents could not be inspected": "installer-inspection",
+    "disk image contents could not be inspected": "disk-image-inspection",
+    "disk image could not be detached": "disk-image-detach",
+}
 
 
 def verify_name(name):
@@ -40,7 +54,9 @@ def verify_stream(stream):
     if CREDENTIAL.search(data):
         raise RuntimeError("credential-like material")
     for match in LOCAL_PATH.finditer(data):
-        if not PUBLIC_SENTRY_PATH.fullmatch(match.group()) and not INSTALLER_USER_PATH.fullmatch(match.group()):
+        if (not PUBLIC_SENTRY_PATH.fullmatch(match.group())
+                and not INSTALLER_USER_PATH.fullmatch(match.group())
+                and match.group() != PUBLIC_DOCUMENTATION_PATH):
             raise RuntimeError("local build path")
 
 
@@ -127,7 +143,8 @@ def main():
 if __name__ == "__main__":
     try:
         main()
-    except (OSError, RuntimeError, ValueError, zipfile.BadZipFile):
+    except (OSError, RuntimeError, ValueError, zipfile.BadZipFile) as error:
         # Compiler output, archive entry names and local paths stay out of public logs.
-        print("RELEASE CONTENTS FAILED: asset rejected", file=sys.stderr)
+        code = REJECTION_CODES.get(str(error), "inspection")
+        print(f"RELEASE CONTENTS FAILED: asset rejected reason={code}", file=sys.stderr)
         sys.exit(1)
