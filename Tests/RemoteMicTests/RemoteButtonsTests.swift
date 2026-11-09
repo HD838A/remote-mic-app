@@ -1700,6 +1700,54 @@ struct RemoteButtonsTests {
         #expect(posted.contains { $0.0 == 53 })
     }
 
+    @Test func appSwitcherConfirmedWindowLayerCanBeClosedWithBack() throws {
+        let suiteName = "RemoteButtonsTests.appSwitcherBackEscape.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = AppSettings(defaults: defaults)
+        settings.customMappingEnabled = true
+        settings.setAction(.appSwitcher, for: .menu)
+        let profileID = try #require(settings.selectedRemoteProfileID)
+        let scheduler = RemoteButtonsTestScheduler()
+        var frontmost = PresetApplication.codex.bundleIdentifier
+        var posted: [(CGKeyCode, Bool, CGEventFlags)] = []
+        let monitor = HIDRemoteMonitor(
+            settings: settings,
+            profileID: profileID,
+            ownsEventSuppressor: false,
+            scheduler: scheduler,
+            runtimePermissions: { true },
+            frontmostBundleIdentifier: { frontmost },
+            diagnosticLogger: { _ in },
+            appSwitcherKeyStatePoster: { code, isDown, flags in
+                posted.append((code, isDown, flags))
+                return true
+            },
+            windowCounter: { _ in 2 },
+            appSwitcherSelectedBundleIdentifier: {
+                PresetApplication.safari.bundleIdentifier
+            }
+        )
+        monitor.connectSimulatedDevice(
+            fingerprint: "app-switcher-back-escape", profileID: profileID
+        )
+
+        func press(_ button: RemoteButton) {
+            monitor.handleSimulatedReport(
+                reportID: 1, data: Data([UInt8(button.hidUsage), 0, 0, 0, 0, 0])
+            )
+            monitor.handleSimulatedReport(reportID: 1, data: Data(repeating: 0, count: 6))
+        }
+
+        press(.menu)
+        press(.down)
+        press(.ok)
+        // 确认没生效：前台仍是原 App，窗口层还开着。
+        frontmost = PresetApplication.codex.bundleIdentifier
+        press(.back)
+        #expect(posted.contains { $0.0 == 53 })
+    }
+
     @Test func appSwitcherHeldDirectionRepeatsSelection() throws {
         let suiteName = "RemoteButtonsTests.appSwitcherRepeat.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))

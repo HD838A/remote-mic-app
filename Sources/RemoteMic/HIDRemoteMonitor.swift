@@ -1711,13 +1711,15 @@ final class HIDRemoteMonitor {
                 markPendingLayerClose(target)
                 return true
             }
+            // finishAppSwitcherLifecycle 会清空目标，必须先取出来再收尾。
+            let confirmedTarget = appSwitcherTargetBundleIdentifier
             let confirmed = appSwitcherSession.confirm()
             finishAppSwitcherLifecycle(
                 reason: confirmed ? "confirmed" : "confirm_failed",
                 confirmed: confirmed
             )
             if confirmed {
-                markPendingLayerClose(appSwitcherTargetBundleIdentifier)
+                markPendingLayerClose(confirmedTarget)
             }
             return true
         case .back:
