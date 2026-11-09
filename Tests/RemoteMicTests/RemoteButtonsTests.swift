@@ -2254,6 +2254,167 @@ struct RemoteButtonsTests {
         #expect(posted.filter { $0.0 == 48 && $0.1 }.count == tabPressesAfterOpen)
     }
 
+    @Test func appSwitcherRetriesOpeningWhenSwitcherDidNotAppear() throws {
+        let suiteName = "RemoteButtonsTests.appSwitcherOpenRetry.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = AppSettings(defaults: defaults)
+        settings.customMappingEnabled = true
+        settings.setAction(.appSwitcher, for: .menu)
+        let profileID = try #require(settings.selectedRemoteProfileID)
+        let scheduler = RemoteButtonsTestScheduler()
+        var posted: [(CGKeyCode, Bool, CGEventFlags)] = []
+        var diagnostics: [String] = []
+        // Dock 窗口数一直不变：切换器没有出现。
+        let monitor = HIDRemoteMonitor(
+            settings: settings,
+            profileID: profileID,
+            ownsEventSuppressor: false,
+            scheduler: scheduler,
+            runtimePermissions: { true },
+            frontmostBundleIdentifier: { PresetApplication.codex.bundleIdentifier },
+            diagnosticLogger: { diagnostics.append($0) },
+            appSwitcherKeyStatePoster: { code, isDown, flags in
+                posted.append((code, isDown, flags))
+                return true
+            },
+            windowCounter: { _ in 2 },
+            appSwitcherHudState: { .absent },
+            appSwitcherDockWindowCount: { 3 }
+        )
+        monitor.connectSimulatedDevice(
+            fingerprint: "app-switcher-open-retry", profileID: profileID
+        )
+
+        func press(_ button: RemoteButton) {
+            monitor.handleSimulatedReport(
+                reportID: 1, data: Data([UInt8(button.hidUsage), 0, 0, 0, 0, 0])
+            )
+            monitor.handleSimulatedReport(reportID: 1, data: Data(repeating: 0, count: 6))
+        }
+
+        press(.menu)
+        let tabPressesAfterOpen = posted.filter { $0.0 == 48 && $0.1 }.count
+        scheduler.advance(
+            toMilliseconds: HIDRemoteTiming.appSwitcherOpenVerificationMilliseconds
+        )
+        // 没打开就补发一次 Tab。
+        #expect(posted.filter { $0.0 == 48 && $0.1 }.count == tabPressesAfterOpen + 1)
+        #expect(diagnostics.contains { $0.contains("switcher_open retried=true") })
+    }
+
+    @Test func appSwitcherReopensSwitcherThatClosedByItself() throws {
+        let suiteName = "RemoteButtonsTests.appSwitcherReopen.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = AppSettings(defaults: defaults)
+        settings.customMappingEnabled = true
+        settings.setAction(.appSwitcher, for: .menu)
+        let profileID = try #require(settings.selectedRemoteProfileID)
+        let scheduler = RemoteButtonsTestScheduler()
+        var posted: [(CGKeyCode, Bool, CGEventFlags)] = []
+        var diagnostics: [String] = []
+        // 切换器打开时 Dock 多一个窗口，随后又自己关掉了。
+        var dockWindows = 3
+        let monitor = HIDRemoteMonitor(
+            settings: settings,
+            profileID: profileID,
+            ownsEventSuppressor: false,
+            scheduler: scheduler,
+            runtimePermissions: { true },
+            frontmostBundleIdentifier: { PresetApplication.codex.bundleIdentifier },
+            diagnosticLogger: { diagnostics.append($0) },
+            appSwitcherKeyStatePoster: { code, isDown, flags in
+                posted.append((code, isDown, flags))
+                return true
+            },
+            windowCounter: { _ in 2 },
+            appSwitcherHudState: { .absent },
+            appSwitcherDockWindowCount: { dockWindows }
+        )
+        monitor.connectSimulatedDevice(
+            fingerprint: "app-switcher-reopen", profileID: profileID
+        )
+
+        func press(_ button: RemoteButton) {
+            monitor.handleSimulatedReport(
+                reportID: 1, data: Data([UInt8(button.hidUsage), 0, 0, 0, 0, 0])
+            )
+            monitor.handleSimulatedReport(reportID: 1, data: Data(repeating: 0, count: 6))
+        }
+
+        press(.menu)
+        let poll = HIDRemoteTiming.appSwitcherFrontmostPollMilliseconds
+        let tabPressesAfterOpen = posted.filter { $0.0 == 48 && $0.1 }.count
+        // 切换器打开。
+        dockWindows = 4
+        scheduler.advance(toMilliseconds: poll * 2)
+        #expect(!diagnostics.contains { $0.contains("switcher_reopen") })
+        // 它又自己关掉了：补发一次 Tab 把它拉回来。
+        dockWindows = 3
+        scheduler.advance(toMilliseconds: poll * 4)
+        #expect(posted.filter { $0.0 == 48 && $0.1 }.count == tabPressesAfterOpen + 1)
+        #expect(diagnostics.contains { $0.contains("switcher_reopen attempt=1") })
+    }
+
+    @Test func appSwitcherKeepsSelectionWhenSwitcherClosesAfterNavigating() throws {
+        let suiteName = "RemoteButtonsTests.appSwitcherReopenGuard.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = AppSettings(defaults: defaults)
+        settings.customMappingEnabled = true
+        settings.setAction(.appSwitcher, for: .menu)
+        let profileID = try #require(settings.selectedRemoteProfileID)
+        let scheduler = RemoteButtonsTestScheduler()
+        var posted: [(CGKeyCode, Bool, CGEventFlags)] = []
+        var diagnostics: [String] = []
+        var dockWindows = 3
+        let monitor = HIDRemoteMonitor(
+            settings: settings,
+            profileID: profileID,
+            ownsEventSuppressor: false,
+            scheduler: scheduler,
+            runtimePermissions: { true },
+            frontmostBundleIdentifier: { PresetApplication.codex.bundleIdentifier },
+            diagnosticLogger: { diagnostics.append($0) },
+            appSwitcherKeyStatePoster: { code, isDown, flags in
+                posted.append((code, isDown, flags))
+                return true
+            },
+            windowCounter: { _ in 2 },
+            appSwitcherHudState: { .absent },
+            appSwitcherHighlightedTitle: { "Safari" },
+            appSwitcherDockWindowCount: { dockWindows }
+        )
+        monitor.connectSimulatedDevice(
+            fingerprint: "app-switcher-reopen-guard", profileID: profileID
+        )
+
+        func press(_ button: RemoteButton) {
+            monitor.handleSimulatedReport(
+                reportID: 1, data: Data([UInt8(button.hidUsage), 0, 0, 0, 0, 0])
+            )
+            monitor.handleSimulatedReport(reportID: 1, data: Data(repeating: 0, count: 6))
+        }
+
+        press(.menu)
+        let poll = HIDRemoteTiming.appSwitcherFrontmostPollMilliseconds
+        dockWindows = 4
+        scheduler.advance(toMilliseconds: poll * 2)
+        // 用户已经用方向键选过东西（高亮标题固定不变，方向键核对会补一次循环）。
+        press(.right)
+        scheduler.advance(
+            toMilliseconds: poll * 2
+                + HIDRemoteTiming.appSwitcherArrowNavigationCheckMilliseconds
+        )
+        let tabPressesAfterNavigation = posted.filter { $0.0 == 48 && $0.1 }.count
+        // 切换器这时自己关掉了：不能再补 Tab，否则会冲掉用户选好的高亮。
+        dockWindows = 3
+        scheduler.advance(toMilliseconds: poll * 6)
+        #expect(posted.filter { $0.0 == 48 && $0.1 }.count == tabPressesAfterNavigation)
+        #expect(!diagnostics.contains { $0.contains("switcher_reopen") })
+    }
+
     @Test func appSwitcherHeldDirectionRepeatsSelection() throws {
         let suiteName = "RemoteButtonsTests.appSwitcherRepeat.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))

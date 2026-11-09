@@ -117,6 +117,8 @@ final class HIDRemoteMonitor {
     private let appSwitcherHudState: () -> KeyboardInjector.AppSwitcherHudState
     /// 切换器里当前高亮的 App 标题，用来判断方向键是否真的移动了高亮。
     private let appSwitcherHighlightedTitle: () -> String?
+    /// Dock 进程当前拥有的窗口数：切换器开着时 Dock 会多一个窗口。
+    private let appSwitcherDockWindowCount: () -> Int
     /// 注册“切换器被外部关闭”的观察者，返回取消注册的闭包。
     /// 生产实现监听鼠标点击：用户在切换器开着时点别处会把它关掉，此时必须松开 ⌘。
     private let appSwitcherDismissObserverInstaller:
@@ -214,6 +216,8 @@ final class HIDRemoteMonitor {
     private var appSwitcherOpenProbe: HIDRemoteScheduledTask?
     /// 本次会话里是否确实见过切换器打开（用 Dock 窗口数判断）。
     private var appSwitcherObservedOpen = false
+    /// 本次会话里用户是否已经用方向键选过东西。
+    private var appSwitcherHasNavigated = false
     /// 切换器自己关掉后补发的次数上限。
     private var appSwitcherReopenCount = 0
     /// 会话开始时 Dock 的窗口数量，用来判断切换器窗口是否还在。
@@ -297,6 +301,9 @@ final class HIDRemoteMonitor {
         appSwitcherHighlightedTitle: @escaping () -> String? = {
             KeyboardInjector.appSwitcherHighlightedTitle()
         },
+        appSwitcherDockWindowCount: @escaping () -> Int = {
+            KeyboardInjector.dockWindowCount()
+        },
         appSwitcherDismissObserverInstaller:
             @escaping (@escaping () -> Void) -> (() -> Void)? =
             HIDRemoteMonitor.installMouseClickDismissObserver,
@@ -319,6 +326,7 @@ final class HIDRemoteMonitor {
         self.appSwitcherSelectedApplication = appSwitcherSelectedApplication
         self.appSwitcherHudState = appSwitcherHudState
         self.appSwitcherHighlightedTitle = appSwitcherHighlightedTitle
+        self.appSwitcherDockWindowCount = appSwitcherDockWindowCount
         self.appSwitcherDismissObserverInstaller = appSwitcherDismissObserverInstaller
         self.frontmostProcessIdentifier = frontmostProcessIdentifier
         self.permissionPoll = permissionPoll
@@ -1783,7 +1791,7 @@ final class HIDRemoteMonitor {
         if !wasActive {
             appSwitcherOriginBundleIdentifier = frontmostBundleIdentifier()
             // 记录打开切换器之前 Dock 的窗口数：切换器开着时 Dock 会多一个窗口。
-            appSwitcherDockWindowBaseline = KeyboardInjector.dockWindowCount()
+            appSwitcherDockWindowBaseline = appSwitcherDockWindowCount()
         }
         let phase = appSwitcherSession.isActive ? "tab" : "start"
         let submitted = appSwitcherSession.trigger()
@@ -1862,6 +1870,7 @@ final class HIDRemoteMonitor {
             } else {
                 scheduleAppSwitcherTimeout()
                 startAppSwitcherRepeat(usage: usage, button: button)
+                appSwitcherHasNavigated = true
                 if !appSwitcherSession.isWindowPickerActive {
                     scheduleArrowNavigationCheck(
                         highlightBefore: highlightBefore,
@@ -2080,6 +2089,7 @@ final class HIDRemoteMonitor {
                 let left = button == .left
                 let highlightBefore = appSwitcherHighlightedTitle()
                 moved = self.appSwitcherSession.moveSelection(left: left)
+                if moved { self.appSwitcherHasNavigated = true }
                 if moved, !self.appSwitcherSession.isWindowPickerActive {
                     self.scheduleArrowNavigationCheck(
                         highlightBefore: highlightBefore,
@@ -2121,6 +2131,7 @@ final class HIDRemoteMonitor {
         appSwitcherFrontmostMonitor?.cancel()
         appSwitcherObservedOpen = false
         appSwitcherReopenCount = 0
+        appSwitcherHasNavigated = false
         installAppSwitcherDismissObserver()
         appSwitcherFrontmostMonitor = scheduler.schedule(
             afterMilliseconds: HIDRemoteTiming.appSwitcherFrontmostPollMilliseconds,
@@ -2139,7 +2150,7 @@ final class HIDRemoteMonitor {
             // 现在的收尾条件只有三种：用户自己的操作（OK / 返回 / 再按一次绑定键）、
             // 用户在切换器外点了鼠标（外部关闭），以及会话超时。
             let state = self.appSwitcherHudState()
-            let dockWindows = KeyboardInjector.dockWindowCount()
+            let dockWindows = self.appSwitcherDockWindowCount()
             let baseline = self.appSwitcherDockWindowBaseline ?? -1
             self.diagnosticLogger(
                 "HID APP SWITCHER switcher_state ax=\(state.logLabel) " +
@@ -2155,6 +2166,10 @@ final class HIDRemoteMonitor {
                     self.appSwitcherObservedOpen = true
                 } else if self.appSwitcherObservedOpen {
                     self.appSwitcherObservedOpen = false
+                    // 用户已经选过东西时不再拉回：补发的 Tab 会移动高亮，
+                    // 把用户选好的目标冲掉。这种情况下让会话结束更安全，
+                    // 用户再按一次方向键就能重新进入窗口层。
+                    guard !self.appSwitcherHasNavigated else { return }
                     guard self.appSwitcherReopenCount < 3 else { return }
                     self.appSwitcherReopenCount += 1
                     let reopened = self.appSwitcherSession.trigger()
@@ -2212,7 +2227,7 @@ final class HIDRemoteMonitor {
             self.appSwitcherOpenProbe = nil
             guard self.appSwitcherSession.isActive else { return }
             let baseline = self.appSwitcherDockWindowBaseline ?? 0
-            let dockWindows = KeyboardInjector.dockWindowCount()
+            let dockWindows = self.appSwitcherDockWindowCount()
             var axVisible = false
             if case .visible = self.appSwitcherHudState() { axVisible = true }
             guard dockWindows <= baseline, !axVisible else { return }
