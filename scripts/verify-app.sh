@@ -3,6 +3,29 @@ set -euo pipefail
 
 ROOT="${0:A:h:h}"
 source "$ROOT/scripts/release-variant.sh"
+
+# ZERR covers errexit inside functions. EXIT also covers explicit validation
+# exits. Only public script coordinates enter the supervisor's status stream.
+TRAPZERR TRAPEXIT() {
+  local result=$?
+  if (( result != 0 && ZSH_SUBSHELL == 0 )) && [[ -n "${RELEASE_STAGE_STATUS_FILE:-}" ]]; then
+    python3 - "$RELEASE_STAGE_STATUS_FILE" "$RELEASE_VARIANT" \
+      "${funcfiletrace[1]##*:}" "$result" 2>/dev/null <<'PY' || true
+import json
+import sys
+
+line, code = int(sys.argv[3]), int(sys.argv[4])
+if sys.argv[2] not in {"apple-silicon", "intel"} or line <= 0 or not 1 <= code <= 255:
+    sys.exit(1)
+record = {"schemaVersion": 1, "lane": sys.argv[2], "stage": "app-verify",
+          "checkLine": line, "exitCode": code}
+with open(sys.argv[1], "ab", buffering=0) as output:
+    output.write((json.dumps(record) + "\n").encode())
+PY
+  fi
+  return "$result"
+}
+
 if [[ "$#" -gt 1 ]]; then
   print -u2 "usage: $0 [APP]"
   exit 1

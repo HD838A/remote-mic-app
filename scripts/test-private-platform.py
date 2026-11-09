@@ -711,6 +711,87 @@ class ReleaseContentTests(unittest.TestCase):
         self.assertNotIn("PRIVATE_INVALID_CANARY", result.stdout + result.stderr)
         self.assertNotIn(str(status_file), result.stdout + result.stderr)
 
+    def test_app_verifier_records_failure_lines_without_child_output(self):
+        source = (ROOT / "scripts/verify-app.sh").read_text()
+        prefix = source.split('if [[ "$#" -gt 1 ]]; then', 1)[0]
+        # Execute the production traps, followed by synthetic checks. The
+        # original source prefix still resolves release-variant.sh from ROOT.
+        prefix = prefix.replace('ROOT="${0:A:h:h}"', 'ROOT="$VERIFY_FIXTURE_ROOT"')
+        fixture = self.directory / "verify-fixture.sh"
+        status_file = self.directory / "verify-status.jsonl"
+        cases = (
+            ("false", 1, 2),
+            ("exit 7", 7, 2),
+            ("false | true", 1, 2),
+            ("probe() { false; }\nprobe", 1, 2),
+            ("probe() { exit 9; }\nprobe", 9, 3),
+            ("value=$(false)", 1, 2),
+            ("if false; then exit 3; fi\ntrue", 0, None),
+            ("value=$(false || true)\ntrue", 0, None),
+            ("exit 0", 0, None),
+        )
+        for lane in ("apple-silicon", "intel"):
+            for body, expected, line_offset in cases:
+                with self.subTest(lane=lane, body=body):
+                    status_file.write_text("")
+                    fixture.write_text(prefix + 'print "PRIVATE_VERIFY_CANARY"\n' + body + "\n")
+                    result = subprocess.run(["/bin/zsh", str(fixture)],
+                                            env={**os.environ, "VERIFY_FIXTURE_ROOT": str(ROOT),
+                                                 "RELEASE_VARIANT": lane,
+                                                 "RELEASE_STAGE_STATUS_FILE": str(status_file)},
+                                            capture_output=True, text=True)
+                    self.assertEqual(result.returncode, expected)
+                    records = [json.loads(line) for line in status_file.read_text().splitlines()]
+                    self.assertEqual(len(records), 1 if expected else 0)
+                    if expected:
+                        record = records[0]
+                        self.assertEqual(record["lane"], lane)
+                        self.assertEqual(record["exitCode"], expected)
+                        self.assertEqual(record["checkLine"], len(prefix.splitlines()) + line_offset)
+                        report = subprocess.run([str(ROOT / "scripts/run-release-stage.sh"),
+                                                 "report-status", str(status_file)],
+                                                check=True, capture_output=True, text=True)
+                        self.assertIn(f"line={record['checkLine']} exit={expected}", report.stdout)
+                        self.assertNotIn("PRIVATE_", report.stdout + report.stderr)
+                        self.assertNotIn(str(fixture), report.stdout + report.stderr)
+        fixture.write_text(prefix + "exit 7\n")
+        status_file.write_text("")
+        processes = [subprocess.Popen(["/bin/zsh", str(fixture)],
+                                      env={**os.environ, "VERIFY_FIXTURE_ROOT": str(ROOT),
+                                           "RELEASE_VARIANT": lane,
+                                           "RELEASE_STAGE_STATUS_FILE": str(status_file)},
+                                      stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                     for lane in ("apple-silicon", "intel")]
+        for process in processes:
+            process.communicate(timeout=10)
+            self.assertEqual(process.returncode, 7)
+        records = [json.loads(line) for line in status_file.read_text().splitlines()]
+        self.assertEqual(len(records), 2)
+        self.assertEqual({record["lane"] for record in records}, {"apple-silicon", "intel"})
+        # A diagnostic write failure must preserve the original validation exit.
+        result = subprocess.run(["/bin/zsh", str(fixture)],
+                                env={**os.environ, "VERIFY_FIXTURE_ROOT": str(ROOT),
+                                     "RELEASE_STAGE_STATUS_FILE": str(self.directory / "absent/status")},
+                                capture_output=True, text=True)
+        self.assertEqual(result.returncode, 7)
+
+    def test_app_verifier_status_rejects_non_numeric_or_unexpected_fields(self):
+        status_file = self.directory / "invalid-check.jsonl"
+        record = {"schemaVersion": 1, "lane": "apple-silicon", "stage": "app-verify",
+                  "checkLine": 100, "exitCode": 1}
+        for key, value in (("checkLine", "PRIVATE_CANARY"), ("checkLine", True),
+                           ("checkLine", 0), ("exitCode", 0), ("exitCode", 256),
+                           ("lane", "PRIVATE_CANARY"), ("stage", "PRIVATE_CANARY"),
+                           ("rawLog", "PRIVATE_CANARY")):
+            with self.subTest(key=key, value=value):
+                status_file.write_text(json.dumps(record) + "\n" + json.dumps({**record, key: value}) + "\n")
+                result = subprocess.run([str(ROOT / "scripts/run-release-stage.sh"),
+                                         "report-status", str(status_file)],
+                                        capture_output=True, text=True)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(result.stdout.strip(), "RELEASE STATUS result=unavailable")
+                self.assertNotIn("PRIVATE_", result.stdout + result.stderr)
+
     @unittest.skipUnless(sys.platform == "darwin", "Installer inspection requires macOS pkgutil")
     def test_installer_payload_is_inspected(self):
         payload = self.directory / "payload"
