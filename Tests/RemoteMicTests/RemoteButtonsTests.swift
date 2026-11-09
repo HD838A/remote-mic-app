@@ -2089,8 +2089,8 @@ struct RemoteButtonsTests {
         #expect(posted.contains { $0.0 == 48 && !$0.1 })
     }
 
-    @Test func appSwitcherKeepsSessionWhenFrontmostIsHighlightedApp() throws {
-        let suiteName = "RemoteButtonsTests.appSwitcherFrontWatch.\(UUID().uuidString)"
+    @Test func appSwitcherKeepsSessionWhileSwitcherHudIsVisible() throws {
+        let suiteName = "RemoteButtonsTests.appSwitcherHudWatch.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let settings = AppSettings(defaults: defaults)
@@ -2098,7 +2098,9 @@ struct RemoteButtonsTests {
         settings.setAction(.appSwitcher, for: .menu)
         let profileID = try #require(settings.selectedRemoteProfileID)
         let scheduler = RemoteButtonsTestScheduler()
-        var frontmost = PresetApplication.codex.bundleIdentifier
+        var hudState: KeyboardInjector.AppSwitcherHudState = .visible(
+            selectedBundleIdentifier: PresetApplication.safari.bundleIdentifier
+        )
         var posted: [(CGKeyCode, Bool, CGEventFlags)] = []
         let monitor = HIDRemoteMonitor(
             settings: settings,
@@ -2106,23 +2108,17 @@ struct RemoteButtonsTests {
             ownsEventSuppressor: false,
             scheduler: scheduler,
             runtimePermissions: { true },
-            frontmostBundleIdentifier: { frontmost },
+            frontmostBundleIdentifier: { PresetApplication.codex.bundleIdentifier },
             diagnosticLogger: { _ in },
             appSwitcherKeyStatePoster: { code, isDown, flags in
                 posted.append((code, isDown, flags))
                 return true
             },
             windowCounter: { _ in 2 },
-            appSwitcherSelectedApplication: {
-                KeyboardInjector.AppSwitcherSelection(
-                    processIdentifier: 4321,
-                    bundleIdentifier: PresetApplication.safari.bundleIdentifier
-                )
-            },
-            frontmostProcessIdentifier: { 9999 }
+            appSwitcherHudState: { hudState }
         )
         monitor.connectSimulatedDevice(
-            fingerprint: "app-switcher-front-watch", profileID: profileID
+            fingerprint: "app-switcher-hud-watch", profileID: profileID
         )
 
         func press(_ button: RemoteButton) {
@@ -2134,23 +2130,19 @@ struct RemoteButtonsTests {
 
         press(.menu)
         let poll = HIDRemoteTiming.appSwitcherFrontmostPollMilliseconds
-        // 前台是起始 App：无动作。
-        scheduler.advance(toMilliseconds: poll * 2)
-        #expect(!posted.contains { $0.0 == 55 && !$0.1 })
-        // 前台变成切换器里高亮的 App（macOS 13 合成 ⌘Tab 的报告行为）：会话保持。
-        frontmost = PresetApplication.safari.bundleIdentifier
+        // HUD 可见：会话保持。
         scheduler.advance(toMilliseconds: poll * 4)
         #expect(!posted.contains { $0.0 == 55 && !$0.1 })
-        // 前台变成无关 App 只有一个轮询周期（Dock 高亮读取偶发失败）：恢复。
-        frontmost = "com.apple.finder"
-        scheduler.advance(toMilliseconds: poll * 5)
-        #expect(!posted.contains { $0.0 == 55 && !$0.1 })
-        frontmost = PresetApplication.safari.bundleIdentifier
+        // 读不到 HUD 状态：放过这一拍，不能当成关闭。
+        hudState = .unreadable
         scheduler.advance(toMilliseconds: poll * 6)
         #expect(!posted.contains { $0.0 == 55 && !$0.1 })
-        // 前台连续两个周期都是无关 App：用户真的切走了，释放 ⌘ 结束会话。
-        frontmost = "com.apple.finder"
-        scheduler.advance(toMilliseconds: poll * 8)
+        // HUD 消失一个周期：先放过。
+        hudState = .absent
+        scheduler.advance(toMilliseconds: poll * 7)
+        #expect(!posted.contains { $0.0 == 55 && !$0.1 })
+        // 连续两个周期都没有 HUD：用户关掉了切换器，释放 ⌘ 结束会话。
+        scheduler.advance(toMilliseconds: poll * 9)
         #expect(posted.contains { $0.0 == 55 && !$0.1 })
     }
 
@@ -2332,7 +2324,9 @@ struct RemoteButtonsTests {
         func runCancellation(
             advanceMilliseconds: UInt64? = nil,
             pressBack: Bool = false,
-            changeFrontmost: Bool = false
+            hudState: KeyboardInjector.AppSwitcherHudState = .visible(
+                selectedBundleIdentifier: PresetApplication.safari.bundleIdentifier
+            )
         ) -> (posted: [(CGKeyCode, Bool, CGEventFlags)], diagnostics: [String]) {
             let scheduler = RemoteButtonsTestScheduler()
             var frontmost = PresetApplication.codex.bundleIdentifier
@@ -2349,7 +2343,8 @@ struct RemoteButtonsTests {
                 appSwitcherKeyStatePoster: { code, isDown, flags in
                     posted.append((code, isDown, flags))
                     return true
-                }
+                },
+                appSwitcherHudState: { hudState }
             )
             monitor.connectSimulatedDevice(fingerprint: UUID().uuidString, profileID: profileID)
 
@@ -2361,7 +2356,6 @@ struct RemoteButtonsTests {
 
             press(.menu)
             if pressBack { press(.back) }
-            if changeFrontmost { frontmost = PresetApplication.safari.bundleIdentifier }
             if let advanceMilliseconds {
                 scheduler.advance(toMilliseconds: advanceMilliseconds)
             }
@@ -2380,16 +2374,22 @@ struct RemoteButtonsTests {
         #expect(timeout.posted.last?.1 == false)
         #expect(timeout.diagnostics.contains { $0.contains("ended reason=timeout") })
 
-        // 防抖：连续两个轮询周期都不是起始/高亮才结束会话。
-        let frontmostChanged = runCancellation(
+        // HUD 消失（用户用别的方式关掉了切换器）：连续两个周期后释放 ⌘ 结束会话。
+        let hudDismissed = runCancellation(
             advanceMilliseconds: HIDRemoteTiming.appSwitcherFrontmostPollMilliseconds * 2,
-            changeFrontmost: true
+            hudState: .absent
         )
-        #expect(frontmostChanged.posted.last?.0 == KeyboardInjector.leftCommandKeyCode)
-        #expect(frontmostChanged.posted.last?.1 == false)
-        #expect(frontmostChanged.diagnostics.contains {
-            $0.contains("ended reason=frontmost_changed")
+        #expect(hudDismissed.posted.last?.0 == KeyboardInjector.leftCommandKeyCode)
+        #expect(hudDismissed.posted.last?.1 == false)
+        #expect(hudDismissed.diagnostics.contains {
+            $0.contains("ended reason=hud_dismissed")
         })
+
+        // HUD 还在：会话保持，⌘ 不释放。
+        let hudVisible = runCancellation(
+            advanceMilliseconds: HIDRemoteTiming.appSwitcherFrontmostPollMilliseconds * 4
+        )
+        #expect(!hudVisible.diagnostics.contains { $0.contains("ended reason=hud_dismissed") })
     }
 
     @Test func customShortcutPostsRecordedCombinationAndSingleKeyAndRequiresAccessibility() {

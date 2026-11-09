@@ -114,6 +114,7 @@ final class HIDRemoteMonitor {
     private let windowActivator: (pid_t) -> Bool
     private let applicationActivator: (pid_t) -> Bool
     private let appSwitcherSelectedApplication: () -> KeyboardInjector.AppSwitcherSelection?
+    private let appSwitcherHudState: () -> KeyboardInjector.AppSwitcherHudState
     private let frontmostProcessIdentifier: () -> pid_t?
     private let overrideActionPerformer: (UUID?, RemoteButton, ButtonTrigger) -> Bool
     private let hasOverrideBinding: (UUID?, RemoteButton, ButtonTrigger) -> Bool
@@ -199,7 +200,7 @@ final class HIDRemoteMonitor {
     private var appSwitcherSingleWindowTask: HIDRemoteScheduledTask?
     private var appSwitcherForegroundTask: HIDRemoteScheduledTask?
     private var appSwitcherPendingPickerEntry: HIDRemoteScheduledTask?
-    private var appSwitcherFrontmostMissTicks = 0
+    private var appSwitcherHudAbsentTicks = 0
     private var appSwitcherOriginBundleIdentifier: String?
     /// 切换器 HUD 里高亮的 App（按进程记录，同名双实例也能区分）。
     private var appSwitcherTargetApplication: KeyboardInjector.AppSwitcherSelection?
@@ -273,6 +274,9 @@ final class HIDRemoteMonitor {
         appSwitcherSelectedApplication: @escaping () -> KeyboardInjector.AppSwitcherSelection? = {
             KeyboardInjector.appSwitcherSelectedApplication()
         },
+        appSwitcherHudState: @escaping () -> KeyboardInjector.AppSwitcherHudState = {
+            KeyboardInjector.appSwitcherHudState()
+        },
         frontmostProcessIdentifier: @escaping () -> pid_t? = {
             NSWorkspace.shared.frontmostApplication?.processIdentifier
         }
@@ -289,6 +293,7 @@ final class HIDRemoteMonitor {
         self.windowActivator = windowActivator
         self.applicationActivator = applicationActivator
         self.appSwitcherSelectedApplication = appSwitcherSelectedApplication
+        self.appSwitcherHudState = appSwitcherHudState
         self.frontmostProcessIdentifier = frontmostProcessIdentifier
         self.permissionPoll = permissionPoll
         self.runtimePermissions = runtimePermissions
@@ -2058,35 +2063,34 @@ final class HIDRemoteMonitor {
         appSwitcherForegroundTask = nil
         appSwitcherPendingPickerEntry?.cancel()
         appSwitcherPendingPickerEntry = nil
-        appSwitcherFrontmostMissTicks = 0
+        appSwitcherHudAbsentTicks = 0
         appSwitcherFrontmostMonitor?.cancel()
         appSwitcherFrontmostMonitor = scheduler.schedule(
             afterMilliseconds: HIDRemoteTiming.appSwitcherFrontmostPollMilliseconds,
             repeatingEveryMilliseconds: HIDRemoteTiming.appSwitcherFrontmostPollMilliseconds
         ) { [weak self] in
             guard let self, self.appSwitcherSession.isActive else { return }
-            guard let origin = self.appSwitcherOriginBundleIdentifier,
-                  let current = self.frontmostBundleIdentifier()
-            else { return }
-            // 容忍两类“看起来切走了”的报告：
-            // 1. 前台就是起始 App；
-            // 2. 前台是切换器里高亮的 App（macOS 13 合成 ⌘Tab 会这样报告）。
-            let tolerated = current == origin
-                || self.appSwitcherSelectedApplication()?.bundleIdentifier == current
-            if tolerated {
-                self.appSwitcherFrontmostMissTicks = 0
-                return
+            // 窗口层（Exposé）里系统会把各种 App 报告为前台，前台没有参考价值，
+            // 只靠 OK/返回/超时收尾。
+            guard !self.appSwitcherSession.isWindowPickerActive else { return }
+            // 判断依据是“HUD 还在不在”，而不是“前台是谁”：
+            // macOS 13 上合成 ⌘Tab 会把高亮 App（或我们的菜单栏 App）报告成前台，
+            // 用前台判断会误杀会话。
+            switch self.appSwitcherHudState() {
+            case .visible:
+                self.appSwitcherHudAbsentTicks = 0
+            case .unreadable:
+                // 读不到不等于 HUD 关闭，先放过这一拍。
+                self.appSwitcherHudAbsentTicks = 0
+            case .absent:
+                self.appSwitcherHudAbsentTicks += 1
+                self.diagnosticLogger(
+                    "HID APP SWITCHER hud_watch absent_ticks=\(self.appSwitcherHudAbsentTicks)"
+                )
+                guard self.appSwitcherHudAbsentTicks >= 2 else { return }
+                self.appSwitcherHudAbsentTicks = 0
+                self.finishAppSwitcherLifecycle(reason: "hud_dismissed", confirmed: false)
             }
-            // Dock 高亮读取偶发失败时也会走进这里，连续两个轮询周期仍不是
-            // 起始/高亮，才认定用户真的切走了，结束会话并释放 ⌘。
-            self.appSwitcherFrontmostMissTicks += 1
-            self.diagnosticLogger(
-                "HID APP SWITCHER frontmost_watch front=\(current) origin=\(origin) " +
-                    "miss=\(self.appSwitcherFrontmostMissTicks)"
-            )
-            guard self.appSwitcherFrontmostMissTicks >= 2 else { return }
-            self.appSwitcherFrontmostMissTicks = 0
-            self.finishAppSwitcherLifecycle(reason: "frontmost_changed", confirmed: false)
         }
     }
 
@@ -2235,7 +2239,7 @@ final class HIDRemoteMonitor {
         appSwitcherForegroundTask = nil
         appSwitcherPendingPickerEntry?.cancel()
         appSwitcherPendingPickerEntry = nil
-        appSwitcherFrontmostMissTicks = 0
+        appSwitcherHudAbsentTicks = 0
         appSwitcherTargetApplication = nil
         appSwitcherPendingLayerClose = nil
         appSwitcherOriginBundleIdentifier = nil

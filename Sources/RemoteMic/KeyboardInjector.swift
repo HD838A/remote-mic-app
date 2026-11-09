@@ -2544,32 +2544,51 @@ enum KeyboardInjector {
 
     /// 切换器里选中的 App。同名实例（两个 Chrome）时优先非活跃的那个：
     /// 用户在切换器里选的几乎总是“另一个”App，而不是当前活跃的实例。
-    static func appSwitcherSelectedApplication() -> AppSwitcherSelection? {
+    /// 切换器 HUD 的三种状态：可见 / 已消失 / 读不到。
+    /// 读不到与“消失”必须区分开：辅助功能读取偶发失败时不能当成 HUD 关闭。
+    enum AppSwitcherHudState: Equatable {
+        case visible(selectedBundleIdentifier: String?)
+        case absent
+        case unreadable
+    }
+
+    private static func appSwitcherHudSelection()
+    -> (state: AppSwitcherHudState, application: NSRunningApplication?) {
         guard isAccessibilityTrusted,
               let dock = NSRunningApplication.runningApplications(
                   withBundleIdentifier: "com.apple.dock"
               ).first
-        else { return nil }
+        else { return (.unreadable, nil) }
         let dockElement = AXUIElementCreateApplication(dock.processIdentifier)
         guard let elements = axAttribute(
             dockElement,
             attribute: kAXChildrenAttribute
-        ) as? [AXUIElement] else { return nil }
+        ) as? [AXUIElement] else { return (.unreadable, nil) }
         guard let list = elements.first(where: {
             axString($0, attribute: kAXSubroleAttribute) == "AXProcessSwitcherList"
-        }) else { return nil }
+        }) else { return (.absent, nil) }
         guard let selected = axElements(
             list,
             attribute: kAXSelectedChildrenAttribute
-        ).first else { return nil }
+        ).first else { return (.visible(selectedBundleIdentifier: nil), nil) }
         let title = axString(selected, attribute: kAXTitleAttribute)
-        guard !title.isEmpty else { return nil }
+        guard !title.isEmpty else { return (.visible(selectedBundleIdentifier: nil), nil) }
         let candidates = NSWorkspace.shared.runningApplications.filter {
             !$0.isTerminated && $0.activationPolicy == .regular && $0.localizedName == title
         }
         // 同名多实例时优先非活跃的那个：切换器里选中的通常不是当前 App。
         let match = candidates.first(where: { !$0.isActive }) ?? candidates.first
-        guard let match else { return nil }
+        return (.visible(selectedBundleIdentifier: match?.bundleIdentifier), match)
+    }
+
+    /// 切换器 HUD 是否还开着。用来判断会话是否还需要保持 ⌘ 按住。
+    static func appSwitcherHudState() -> AppSwitcherHudState {
+        appSwitcherHudSelection().state
+    }
+
+    static func appSwitcherSelectedApplication() -> AppSwitcherSelection? {
+        let selection = appSwitcherHudSelection()
+        guard let match = selection.application else { return nil }
         return AppSwitcherSelection(
             processIdentifier: match.processIdentifier,
             bundleIdentifier: match.bundleIdentifier
