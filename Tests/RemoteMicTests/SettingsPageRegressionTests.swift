@@ -1125,7 +1125,7 @@ struct SettingsPageRegressionTests {
         #expect(autosave.upperBound <= center.lowerBound)
     }
 
-    @Test func runningAppKeepsItsDockEntryAndStandardWindowActions() throws {
+    @Test func settingsWindowKeepsStandardWindowActionsAndAppliesDockPreference() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -1137,8 +1137,11 @@ struct SettingsPageRegressionTests {
 
         #expect(appSource.contains("window.hidesOnDeactivate = false"))
         #expect(appSource.contains("window.delegate = self"))
-        #expect(appSource.contains("application.setActivationPolicy(.regular)"))
-        #expect(!appSource.contains("model.settings.showDockIcon"))
+        #expect(appSource.contains("delegate.updateDockActivationPolicy(source: \"launch\")"))
+        #expect(appSource.contains("isSettingsWindowOpen = true\n        updateDockActivationPolicy(source: \"window_open\")"))
+        #expect(appSource.contains("isSettingsWindowOpen = false\n        updateDockActivationPolicy(source: \"window_close\")"))
+        #expect(appSource.contains("model.settings.showDockIcon = isVisible\n        updateDockActivationPolicy(source: \"dock_toggle\")"))
+        #expect(appSource.contains("updateDockActivationPolicy(source: \"configuration_import\")"))
         #expect(appSource.contains("func windowWillClose(_ notification: Notification)"))
         #expect(appSource.contains("func windowDidMiniaturize(_ notification: Notification)"))
         #expect(appSource.contains("func windowDidDeminiaturize(_ notification: Notification)"))
@@ -1151,6 +1154,35 @@ struct SettingsPageRegressionTests {
         #expect(appSource.contains("hideOtherApplications:"))
         #expect(appSource.contains("unhideAllApplications:"))
         #expect(appSource.contains("NSApp.windowsMenu = windowMenu"))
+    }
+
+    @Test(arguments: [false, true], [false, true])
+    func dockPolicyHonorsPreferenceAndAnOpenSettingsWindow(
+        showDockIcon: Bool,
+        isSettingsWindowOpen: Bool
+    ) {
+        let policy = SettingsWindowActivationPolicy.value(
+            showDockIcon: showDockIcon,
+            isSettingsWindowOpen: isSettingsWindowOpen
+        )
+        #expect(policy == (!showDockIcon && !isSettingsWindowOpen ? .accessory : .regular))
+    }
+
+    @Test(arguments: [false, true], [false, true])
+    func startupOpensSettingsIfBothEntryPointsAreDisabled(
+        showDockIcon: Bool,
+        showStatusBarIcon: Bool
+    ) {
+        #expect(AppEntryPointVisibilityPolicy.shouldShowMainWindow(
+            baseLaunchDecision: false,
+            showDockIcon: showDockIcon,
+            showStatusBarIcon: showStatusBarIcon
+        ) == (!showDockIcon && !showStatusBarIcon))
+        #expect(AppEntryPointVisibilityPolicy.shouldShowMainWindow(
+            baseLaunchDecision: true,
+            showDockIcon: showDockIcon,
+            showStatusBarIcon: showStatusBarIcon
+        ))
     }
 
     @Test func menuBarVisibilityKeepsTheSystemReopenPath() throws {

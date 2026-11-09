@@ -10,6 +10,7 @@ struct RemoteMicRootView: View {
     @ObservedObject private var hardwareAnnouncements: HardwareAnnouncementStore
     let checkForUpdates: () -> Void
     let refreshUpdateInformation: () -> Void
+    let setDockIconVisible: (Bool) -> Void
     let setStatusBarIconVisible: (Bool) -> Void
     let syncEntryPointVisibility: () -> Void
     private let initialSettingsSection: SettingsSection?
@@ -22,6 +23,7 @@ struct RemoteMicRootView: View {
         hardwareAnnouncements: HardwareAnnouncementStore = HardwareAnnouncementStore(),
         checkForUpdates: @escaping () -> Void,
         refreshUpdateInformation: @escaping () -> Void,
+        setDockIconVisible: @escaping (Bool) -> Void,
         setStatusBarIconVisible: @escaping (Bool) -> Void,
         syncEntryPointVisibility: @escaping () -> Void,
         initialSettingsSection: SettingsSection? = nil
@@ -34,6 +36,7 @@ struct RemoteMicRootView: View {
         self.hardwareAnnouncements = hardwareAnnouncements
         self.checkForUpdates = checkForUpdates
         self.refreshUpdateInformation = refreshUpdateInformation
+        self.setDockIconVisible = setDockIconVisible
         self.setStatusBarIconVisible = setStatusBarIconVisible
         self.syncEntryPointVisibility = syncEntryPointVisibility
         self.initialSettingsSection = initialSettingsSection
@@ -50,6 +53,7 @@ struct RemoteMicRootView: View {
                     hardwareAnnouncements: hardwareAnnouncements,
                     checkForUpdates: checkForUpdates,
                     refreshUpdateInformation: refreshUpdateInformation,
+                    setDockIconVisible: setDockIconVisible,
                     setStatusBarIconVisible: setStatusBarIconVisible,
                     syncEntryPointVisibility: syncEntryPointVisibility,
                     initialSection: initialSettingsSection
