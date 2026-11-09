@@ -2089,6 +2089,64 @@ struct RemoteButtonsTests {
         #expect(posted.contains { $0.0 == 48 && !$0.1 })
     }
 
+    @Test func appSwitcherKeepsSessionWhenFrontmostIsHighlightedApp() throws {
+        let suiteName = "RemoteButtonsTests.appSwitcherFrontWatch.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = AppSettings(defaults: defaults)
+        settings.customMappingEnabled = true
+        settings.setAction(.appSwitcher, for: .menu)
+        let profileID = try #require(settings.selectedRemoteProfileID)
+        let scheduler = RemoteButtonsTestScheduler()
+        var frontmost = PresetApplication.codex.bundleIdentifier
+        var posted: [(CGKeyCode, Bool, CGEventFlags)] = []
+        let monitor = HIDRemoteMonitor(
+            settings: settings,
+            profileID: profileID,
+            ownsEventSuppressor: false,
+            scheduler: scheduler,
+            runtimePermissions: { true },
+            frontmostBundleIdentifier: { frontmost },
+            diagnosticLogger: { _ in },
+            appSwitcherKeyStatePoster: { code, isDown, flags in
+                posted.append((code, isDown, flags))
+                return true
+            },
+            windowCounter: { _ in 2 },
+            appSwitcherSelectedApplication: {
+                KeyboardInjector.AppSwitcherSelection(
+                    processIdentifier: 4321,
+                    bundleIdentifier: PresetApplication.safari.bundleIdentifier
+                )
+            },
+            frontmostProcessIdentifier: { 9999 }
+        )
+        monitor.connectSimulatedDevice(
+            fingerprint: "app-switcher-front-watch", profileID: profileID
+        )
+
+        func press(_ button: RemoteButton) {
+            monitor.handleSimulatedReport(
+                reportID: 1, data: Data([UInt8(button.hidUsage), 0, 0, 0, 0, 0])
+            )
+            monitor.handleSimulatedReport(reportID: 1, data: Data(repeating: 0, count: 6))
+        }
+
+        press(.menu)
+        let poll = HIDRemoteTiming.appSwitcherFrontmostPollMilliseconds
+        // 前台是起始 App：无动作。
+        scheduler.advance(toMilliseconds: poll * 2)
+        #expect(!posted.contains { $0.0 == 55 && !$0.1 })
+        // 前台变成切换器里高亮的 App（macOS 13 合成 ⌘Tab 的报告行为）：会话保持。
+        frontmost = PresetApplication.safari.bundleIdentifier
+        scheduler.advance(toMilliseconds: poll * 4)
+        #expect(!posted.contains { $0.0 == 55 && !$0.1 })
+        // 前台变成无关 App：用户真的切走了，释放 ⌘ 结束会话。
+        frontmost = "com.apple.finder"
+        scheduler.advance(toMilliseconds: poll * 6)
+        #expect(posted.contains { $0.0 == 55 && !$0.1 })
+    }
+
     @Test func appSwitcherHeldDirectionRepeatsSelection() throws {
         let suiteName = "RemoteButtonsTests.appSwitcherRepeat.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))

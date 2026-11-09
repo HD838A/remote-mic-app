@@ -2067,6 +2067,12 @@ final class HIDRemoteMonitor {
                   let current = self.frontmostBundleIdentifier(),
                   current != origin
             else { return }
+            // macOS 13（Intel）上合成 ⌘Tab 后，系统会把切换器里高亮的 App
+            // 报告为前台——这不是用户切走，保持会话。
+            if let highlighted = self.appSwitcherSelectedApplication()?.bundleIdentifier,
+               highlighted == current {
+                return
+            }
             self.finishAppSwitcherLifecycle(reason: "frontmost_changed", confirmed: false)
         }
     }
