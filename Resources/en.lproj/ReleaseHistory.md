@@ -26,6 +26,7 @@
 - Fixes voice keys not recovering after a disconnect or wake, missing sound, dropped first words and a failing second session.
 - Fixes a configuration-import security issue, and unclear notices for corrupted or partially imported settings.
 - Fixes update checks missing new versions, calendar misalignment and clipped interface text.
+- Control menu bar and Dock icons separately, with refined Settings and Macros layouts.
 
 ## 1.9.21 (Pre-release)
 

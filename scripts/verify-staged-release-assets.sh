@@ -150,4 +150,5 @@ except (AssertionError, ET.ParseError, OSError) as error:
     sys.exit(f"Sparkle appcast validation failed: {error}")
 PYTHON
 
+python3 "$(cd "$(dirname "$0")" && pwd)/verify-release-contents.py" "$PUBLIC_DIR"
 echo "STAGED RELEASE ASSETS PASS"

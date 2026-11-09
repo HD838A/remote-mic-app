@@ -18,6 +18,9 @@ ROOT = Path(__file__).resolve().parent.parent
 spec = importlib.util.spec_from_file_location("private_platform", ROOT / "scripts/prepare-private-platform.py")
 platform = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(platform)
+contents_spec = importlib.util.spec_from_file_location("release_contents", ROOT / "scripts/verify-release-contents.py")
+contents = importlib.util.module_from_spec(contents_spec)
+contents_spec.loader.exec_module(contents)
 
 
 class ReleaseTests(unittest.TestCase):
@@ -349,6 +352,9 @@ class PublishedArtifactTests(unittest.TestCase):
         self.directory = ROOT / ".private-dependencies/preflight-tests" / uuid.uuid4().hex
         self.directory.mkdir(parents=True)
         self.tag = "9.9.9"
+        identity = patch.object(platform, "verify_published_tag", return_value="a" * 40)
+        identity.start()
+        self.addCleanup(identity.stop)
 
     def tearDown(self):
         # Failed fixtures stay recoverable instead of being deleted in place.
@@ -369,7 +375,11 @@ class PublishedArtifactTests(unittest.TestCase):
         helper.external_attr = 0o100755 << 16
         with zipfile.ZipFile(archive, "w") as bundle:
             bundle.writestr("release/SHA256SUMS", self.manifest)
-            bundle.writestr("release/provenance.json", b"{}\n")
+            bundle.writestr("release/provenance.json", json.dumps({
+                "source_repository": platform.REPOSITORY,
+                "source_commit": "a" * 40,
+                "repository_state": {"dirty": False},
+            }))
             bundle.writestr(helper, helper_bytes)
         checksums = destination / f"{archive.name}.sha256"
         checksums.write_text(
@@ -408,7 +418,7 @@ class PublishedArtifactTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "does not publish"):
                 platform.download_release_archive(self.tag, self.directory)
 
-    def test_missing_gh_requires_a_local_build(self):
+    def test_missing_gh_stops_artifact_consumption(self):
         with patch.object(platform.shutil, "which", return_value=None):
             with self.assertRaisesRegex(RuntimeError, "gh CLI"):
                 platform.download_release_archive(self.tag, self.directory)
@@ -439,6 +449,203 @@ class PublishedArtifactTests(unittest.TestCase):
         (output / "leftover").write_text("x")
         with self.assertRaisesRegex(RuntimeError, "must be absent or empty"):
             platform.fetch_artifacts(self.tag, output)
+
+    def test_artifact_provenance_is_bound_to_the_clean_tag(self):
+        provenance = {
+            "source_repository": platform.REPOSITORY,
+            "source_commit": "a" * 40,
+            "repository_state": {"dirty": False},
+        }
+        path = self.directory / "provenance.json"
+        path.write_text(json.dumps(provenance))
+        platform.verify_artifact_identity(self.directory, "a" * 40)
+        for key, value in (
+            ("source_repository", "example/other"),
+            ("source_commit", "b" * 40),
+            ("repository_state", {"dirty": True}),
+        ):
+            path.write_text(json.dumps({**provenance, key: value}))
+            with self.assertRaisesRegex(RuntimeError, "provenance does not match"):
+                platform.verify_artifact_identity(self.directory, "a" * 40)
+
+    def test_checksum_paths_cannot_escape_or_repeat(self):
+        checksum = self.directory / "SHA256SUMS"
+        for name in ("../outside", "/absolute", "./../outside", "folder\\outside"):
+            checksum.write_text(f"{'a' * 64}  {name}\n")
+            with self.assertRaisesRegex(RuntimeError, "invalid or duplicate path"):
+                platform.read_release_checksums(checksum)
+        checksum.write_text((f"{'a' * 64}  ./same\n") * 2)
+        with self.assertRaisesRegex(RuntimeError, "invalid or duplicate path"):
+            platform.read_release_checksums(checksum)
+
+
+class PublishedIdentityTests(unittest.TestCase):
+    def setUp(self):
+        self.commit = "a" * 40
+        self.main = "b" * 40
+        self.responses = {
+            "git/ref/tags/2.7.9": {"object": {"type": "tag", "sha": "c" * 40}},
+            "git/tags/" + "c" * 40: {"tag": "2.7.9", "object": {"type": "commit", "sha": self.commit}},
+            "git/ref/heads/main": {"object": {"sha": self.main}},
+            f"compare/{self.commit}...{self.main}?per_page=1&page=2": {
+                "status": "ahead", "merge_base_commit": {"sha": self.commit},
+            },
+            "git/trees/" + self.commit: {"tree": [{"path": "Package.swift", "type": "blob"}]},
+        }
+        self.api = patch.object(platform, "github_json", side_effect=lambda path: self.responses[path])
+        self.api.start()
+        self.addCleanup(self.api.stop)
+
+    def comparison(self):
+        return self.responses[f"compare/{self.commit}...{self.main}?per_page=1&page=2"]
+
+    def test_tag_and_main_are_verified_without_source_checkout(self):
+        with patch.object(platform, "git", side_effect=AssertionError("private source access")):
+            self.assertEqual(platform.verify_published_tag("2.7.9"), self.commit)
+
+    def test_private_main_advancement_preserves_the_selected_binary_tag(self):
+        self.assertEqual(platform.verify_published_tag("2.7.9"), self.commit)
+
+    def test_ancestry_query_rejects_responses_that_include_file_diffs(self):
+        self.comparison()["files"] = []
+        with self.assertRaisesRegex(RuntimeError, "must exclude source diffs"):
+            platform.verify_published_tag("2.7.9")
+
+    def test_non_ancestor_and_lightweight_tags_are_rejected(self):
+        self.comparison()["status"] = "diverged"
+        with self.assertRaisesRegex(RuntimeError, "ancestor"):
+            platform.verify_published_tag("2.7.9")
+        self.responses["git/ref/tags/2.7.9"]["object"]["type"] = "commit"
+        with self.assertRaisesRegex(RuntimeError, "annotated"):
+            platform.verify_published_tag("2.7.9")
+
+    def test_missing_root_package_is_rejected(self):
+        self.responses["git/trees/" + self.commit]["tree"] = []
+        with self.assertRaisesRegex(RuntimeError, "root package"):
+            platform.verify_published_tag("2.7.9")
+
+    def test_distribution_never_falls_back_to_source_compilation(self):
+        directory = ROOT / ".private-dependencies/preflight-tests" / uuid.uuid4().hex
+        (directory / "config").mkdir(parents=True)
+        (directory / "config/release-dependencies.json").write_text(json.dumps({
+            "dependencies": {"sayAllPrivatePlatform": {"version": "2.7.9"}},
+        }))
+        try:
+            with patch.object(platform, "fetch_checkout", side_effect=AssertionError("private checkout")), \
+                 patch.object(platform, "fetch_artifacts", side_effect=RuntimeError("attachment unavailable")):
+                with self.assertRaisesRegex(RuntimeError, "attachment unavailable"):
+                    platform.package(directory, "required", channel="release")
+        finally:
+            trash = Path.home() / ".Trash"
+            trash.mkdir(exist_ok=True)
+            shutil.move(str(directory), trash / f"sayall-distribution-boundary-{directory.name}")
+
+
+class PublicWorkflowBoundaryTests(unittest.TestCase):
+    def test_packaging_defaults_to_public(self):
+        source = (ROOT / "scripts/build-app.sh").read_text()
+        line = next(line for line in source.splitlines() if line.startswith("SAYALL_PRIVATE_PLATFORM_MODE="))
+        environment = dict(os.environ)
+        environment.pop("SAYALL_PRIVATE_PLATFORM_MODE", None)
+        result = subprocess.run(["/bin/zsh", "-c", line + '; print -r -- "$SAYALL_PRIVATE_PLATFORM_MODE"'],
+                                env=environment, capture_output=True, text=True, check=True)
+        self.assertEqual(result.stdout.strip(), "public")
+
+    def test_public_workflows_exclude_private_sources(self):
+        for name in ("mac-release-package.yml", "mac-private-ci.yml"):
+            source = (ROOT / ".github/workflows" / name).read_text()
+            for forbidden in ("build-private-xcframeworks", "SAYALL_ENABLE_PRIVATE_SWIFTPM", ".private-dependencies/sayall-private-platform", ".private-dependencies/sayall-ai"):
+                self.assertNotIn(forbidden, source)
+
+    def test_private_binary_diagnostics_stay_out_of_public_logs(self):
+        source = (ROOT / ".github/workflows/mac-release-package.yml").read_text()
+        for log in ("private-artifact-preparation.log", "private-signed-release.log"):
+            self.assertIn(f'> "$RUNNER_TEMP/{log}" 2>&1', source)
+        self.assertIn('echo "SIGNED RELEASE result=failed"', source)
+
+    def test_distribution_rejects_explicit_source_paths_before_building(self):
+        for channel in ("release", "internalQA"):
+            environment = dict(os.environ)
+            for key in list(environment):
+                if key.startswith("SAYALL_"):
+                    environment.pop(key)
+            environment.update({
+                "SAYALL_BUILD_CHANNEL": channel,
+                "SAYALL_PRIVATE_PLATFORM_MODE": "required",
+                "SAYALL_MAC_REMOTE_PACKAGE_PATH": "/private-source-fixture",
+                "CODE_SIGN_IDENTITY": "-",
+                "REMOTE_MIC_SENTRY_DSN": "https://fixture@sentry.example.invalid/1",
+            })
+            result = subprocess.run(["/bin/zsh", str(ROOT / "scripts/build-app.sh")],
+                                    env=environment, text=True, capture_output=True)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("Distribution packaging requires published private binaries", result.stderr)
+
+
+class ReleaseContentTests(unittest.TestCase):
+    def setUp(self):
+        self.directory = ROOT / ".private-dependencies/preflight-tests" / uuid.uuid4().hex
+        self.directory.mkdir(parents=True)
+        self.scratch = self.directory / "scratch"
+        self.scratch.mkdir()
+
+    def tearDown(self):
+        trash = Path.home() / ".Trash"
+        trash.mkdir(exist_ok=True)
+        shutil.move(str(self.directory), trash / f"sayall-release-contents-{self.directory.name}")
+
+    def archive(self, name, data=b"fixture", destination="fixture.zip"):
+        path = self.directory / destination
+        with zipfile.ZipFile(path, "w") as archive:
+            archive.writestr(name, data)
+        return path
+
+    def test_private_development_inputs_are_rejected(self):
+        for name in ("SayAll.app/source.swift", "archive.xcframework/module", "app.dSYM/Contents/info", "module.swiftinterface", "build.log", ".env", "release.p12"):
+            with self.subTest(name=name), self.assertRaises(RuntimeError):
+                contents.verify_asset(self.archive(name), self.scratch)
+
+    def test_nested_archives_are_inspected(self):
+        inner = self.archive("private.swift", destination="inner.zip")
+        outer = self.archive("SayAll.app/Contents/Resources/inner.zip", inner.read_bytes(), "outer.zip")
+        with self.assertRaisesRegex(RuntimeError, "development input"):
+            contents.verify_asset(outer, self.scratch)
+
+    def test_credentials_and_local_build_paths_are_rejected(self):
+        for data in (b"ghp_" + b"a" * 36, b"/Users/example/private/source.swift\0"):
+            with self.assertRaises(RuntimeError):
+                contents.verify_asset(self.archive("SayAll.app/Contents/MacOS/RemoteMic", data), self.scratch)
+
+    def test_public_vendor_paths_and_runtime_bytes_are_accepted(self):
+        data = b"/Users/runner/work/sentry-cocoa/sentry-cocoa/Sources/Sentry/SentryClient.m\0runtime\0"
+        contents.verify_asset(self.archive("SayAll.app/Contents/MacOS/RemoteMic", data), self.scratch)
+
+    def test_protected_workflow_captures_success_and_failure_diagnostics(self):
+        source = (ROOT / ".github/workflows/mac-release-package.yml").read_text()
+        step = source.split("      - name: Sign, notarize, staple, and verify both variants\n", 1)[1]
+        body = step.split("        run: |\n", 1)[1].split("\n      - name:", 1)[0]
+        runner = self.directory / "scripts/run-release-stage.sh"
+        runner.parent.mkdir()
+        for exit_code in (0, 1):
+            runner.write_text(f"#!/bin/sh\nprintf 'PRIVATE_BINARY_DIAGNOSTIC_CANARY\\n'\nexit {exit_code}\n")
+            runner.chmod(0o755)
+            result = subprocess.run(["/bin/bash", "-e", "-c", body], cwd=self.directory,
+                                    env={**os.environ, "RUNNER_TEMP": str(self.directory), "SIGNED_RELEASE_TIMEOUT_SECONDS": "10"},
+                                    capture_output=True, text=True)
+            self.assertEqual(result.returncode, exit_code)
+            self.assertNotIn("PRIVATE_BINARY_DIAGNOSTIC_CANARY", result.stdout + result.stderr)
+            self.assertIn("PRIVATE_BINARY_DIAGNOSTIC_CANARY", (self.directory / "private-signed-release.log").read_text())
+
+    @unittest.skipUnless(sys.platform == "darwin", "Installer inspection requires macOS pkgutil")
+    def test_installer_payload_is_inspected(self):
+        payload = self.directory / "payload"
+        payload.mkdir()
+        (payload / "private.swift").write_text("fixture")
+        installer = self.directory / "fixture.pkg"
+        subprocess.run(["pkgbuild", "--root", str(payload), "--identifier", "invalid.example.boundary-fixture", "--version", "1", str(installer)],
+                       check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        with self.assertRaisesRegex(RuntimeError, "development input"):
+            contents.verify_asset(installer, self.scratch)
 
 
 if __name__ == "__main__":
