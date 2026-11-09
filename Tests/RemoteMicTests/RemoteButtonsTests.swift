@@ -1468,7 +1468,7 @@ struct RemoteButtonsTests {
         #expect(session.cancel())
         #expect(!session.moveSelection(left: true))
 
-        #expect(posted.count == 10)
+        #expect(posted.count == 12)
         #expect(posted[0].0 == KeyboardInjector.leftCommandKeyCode)
         #expect(posted[0].1)
         #expect(posted[0].2 == .maskCommand)
@@ -1496,9 +1496,34 @@ struct RemoteButtonsTests {
         #expect(posted[6].2 == .maskCommand)
         #expect(posted[7].2 == .maskCommand)
         #expect(posted[8].2 == .maskCommand)
-        #expect(posted[9].0 == KeyboardInjector.leftCommandKeyCode)
-        #expect(!posted[9].1)
-        #expect(posted[9].2.isEmpty)
+        #expect(posted[9].0 == KeyboardInjector.leftOptionKeyCode)
+        #expect(posted[9].1)
+        #expect(posted[9].2 == [.maskCommand, .maskAlternate])
+        #expect(posted[10].0 == KeyboardInjector.leftCommandKeyCode)
+        #expect(!posted[10].1)
+        #expect(posted[10].2 == .maskAlternate)
+        #expect(posted[11].0 == KeyboardInjector.leftOptionKeyCode)
+        #expect(!posted[11].1)
+        #expect(posted[11].2.isEmpty)
+    }
+
+    @Test func appSwitcherConfirmReleasesCommandWithoutOptionWhenOptionCannotBePressed() {
+        var posted: [(CGKeyCode, Bool, CGEventFlags)] = []
+        let session = KeyboardInjector.AppSwitcherSession(
+            keyStatePoster: { code, isDown, flags in
+                if code == KeyboardInjector.leftOptionKeyCode, isDown { return false }
+                posted.append((code, isDown, flags))
+                return true
+            }
+        )
+
+        #expect(session.trigger())
+        #expect(session.confirm())
+        #expect(!session.isActive)
+        #expect(posted.last?.0 == KeyboardInjector.leftCommandKeyCode)
+        #expect(posted.last?.1 == false)
+        #expect(posted.last?.2.isEmpty == true)
+        #expect(!posted.contains { $0.0 == KeyboardInjector.leftOptionKeyCode })
     }
 
     @Test func appleRemoteCircularNavigationAccumulatesNoiseAndPreservesDirection() {
@@ -1602,9 +1627,13 @@ struct RemoteButtonsTests {
         #expect(posted.map { $0.0 } == [
             KeyboardInjector.leftCommandKeyCode, 48, 48,
             124, 124, 123, 123,
+            KeyboardInjector.leftOptionKeyCode,
             KeyboardInjector.leftCommandKeyCode,
+            KeyboardInjector.leftOptionKeyCode,
         ])
-        #expect(posted.map { $0.1 } == [true, true, false, true, false, true, false, false])
+        #expect(posted.map { $0.1 } == [
+            true, true, false, true, false, true, false, true, false, false,
+        ])
         #expect(diagnostics.contains { $0.contains("ended reason=confirmed confirmed=true") })
         #expect(diagnostics.contains {
             $0.contains("selection bundle_id=\(PresetApplication.safari.bundleIdentifier)")

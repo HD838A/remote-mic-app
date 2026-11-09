@@ -99,9 +99,28 @@ enum KeyboardInjector {
             return released
         }
 
+        /// 系统切换器只在「⌥ 已经按住、随后松开 ⌘」时才把目标 App 最小化的窗口带回前台。
+        /// 先松开 ⌘ 再按 ⌥ 等价于普通 ⌘Tab，只会换成目标 App 的菜单栏，窗口仍留在程序坞。
         @discardableResult
         func confirm() -> Bool {
-            cancel()
+            guard isActive else { return true }
+            let optionDown = post(
+                leftOptionKeyCode,
+                isDown: true,
+                flags: [.maskCommand, .maskAlternate],
+                role: "option"
+            )
+            let commandUp = post(
+                leftCommandKeyCode,
+                isDown: false,
+                flags: optionDown ? [.maskAlternate] : [],
+                role: "command"
+            )
+            let optionUp = optionDown
+                ? post(leftOptionKeyCode, isDown: false, flags: [], role: "option")
+                : true
+            isActive = false
+            return commandUp && optionUp
         }
 
         @discardableResult
@@ -171,6 +190,7 @@ enum KeyboardInjector {
     static let functionKeyCode: CGKeyCode = 63
     static let leftCommandKeyCode: CGKeyCode = 55
     static let rightCommandKeyCode: CGKeyCode = 54
+    static let leftOptionKeyCode: CGKeyCode = 58
     /// Web content shells only build the accessibility tree once an assistive
     /// client announces itself, so the composer scan finds an empty shell until
     /// one of these attributes is set. `AXManualAccessibility` is the Chromium
