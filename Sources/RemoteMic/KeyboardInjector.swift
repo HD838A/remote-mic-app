@@ -2463,8 +2463,11 @@ enum KeyboardInjector {
         }
         AXUIElementSetAttributeValue(element, kAXFrontmostAttribute as CFString, kCFBooleanTrue)
         AXUIElementPerformAction(window, kAXRaiseAction as CFString)
-        // 后台辅助型 App 调 activate 常被系统忽略，走 LaunchServices 激活更可靠。
-        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleIdentifier) {
+        // 已经在前台时不要再走 LaunchServices，避免多出一次激活延时。
+        let isFrontmost = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+            == bundleIdentifier
+        if !isFrontmost,
+           let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleIdentifier) {
             let configuration = NSWorkspace.OpenConfiguration()
             configuration.activates = true
             configuration.createsNewApplicationInstance = false

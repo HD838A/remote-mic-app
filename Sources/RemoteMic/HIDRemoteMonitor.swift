@@ -196,6 +196,8 @@ final class HIDRemoteMonitor {
     private var appSwitcherOriginBundleIdentifier: String?
     /// 切换器 HUD 里高亮的 App；进入窗口层后 Dock 不再暴露列表，必须在进入前记下。
     private var appSwitcherTargetBundleIdentifier: String?
+    /// 目标 App 只有一个窗口：不进入窗口层，OK 时直接切换再拉起窗口。
+    private var appSwitcherSingleWindowPending = false
     private(set) var status = LocalizedMessage("button_mapping.status.disabled")
     var onStatus: ((LocalizedMessage) -> Void)?
     var onActiveButtons: ((UUID?, Set<RemoteButton>) -> Void)?
@@ -1682,6 +1684,7 @@ final class HIDRemoteMonitor {
         } else if wasActive {
             finishAppSwitcherLifecycle(reason: "tab_failed", confirmed: false)
         } else {
+            appSwitcherSingleWindowPending = false
             appSwitcherTargetBundleIdentifier = nil
             appSwitcherOriginBundleIdentifier = nil
         }
@@ -1691,11 +1694,24 @@ final class HIDRemoteMonitor {
     private func handleAppSwitcherControlPress(_ button: RemoteButton, usage: UInt16) -> Bool {
         switch button {
         case .ok:
+            if appSwitcherSingleWindowPending,
+               let target = appSwitcherTargetBundleIdentifier {
+                _ = appSwitcherSession.cancel()
+                confirmSingleWindow(
+                    bundleIdentifier: target,
+                    delayMilliseconds: HIDRemoteTiming
+                        .appSwitcherSingleWindowActivationMilliseconds
+                )
+                return true
+            }
             if appSwitcherSession.isWindowPickerActive,
                let target = appSwitcherTargetBundleIdentifier,
                windowCounter(target) == 1 {
                 _ = appSwitcherSession.cancel()
-                confirmSingleWindow(bundleIdentifier: target)
+                confirmSingleWindow(
+                    bundleIdentifier: target,
+                    delayMilliseconds: HIDRemoteTiming.appSwitcherExposeCloseMilliseconds
+                )
                 return true
             }
             let confirmed = appSwitcherSession.confirm()
@@ -1722,6 +1738,18 @@ final class HIDRemoteMonitor {
         case .up, .down:
             if !appSwitcherSession.isWindowPickerActive {
                 appSwitcherTargetBundleIdentifier = appSwitcherSelectedBundleIdentifier()
+                if let target = appSwitcherTargetBundleIdentifier,
+                   windowCounter(target) == 1 {
+                    // 只有一个窗口，没有可选择的“页面”，直接保持切换器，
+                    // OK 时走最快的原生切换，不再进出窗口层。
+                    appSwitcherSingleWindowPending = true
+                    diagnosticLogger(
+                        "HID APP SWITCHER window_picker_skipped reason=single_window " +
+                            "bundle_id=\(target)"
+                    )
+                    scheduleAppSwitcherTimeout()
+                    return true
+                }
                 diagnosticLogger(
                     "HID APP SWITCHER target bundle_id=" +
                         (appSwitcherTargetBundleIdentifier ?? "unknown")
@@ -1746,11 +1774,14 @@ final class HIDRemoteMonitor {
 
     /// 只有单个窗口时，窗口选择层的高亮可能落到别的窗口条上，Return 会激活错的 App。
     /// 这里退出窗口层后直接把唯一的窗口拉起来。
-    private func confirmSingleWindow(bundleIdentifier: String) {
+    private func confirmSingleWindow(
+        bundleIdentifier: String,
+        delayMilliseconds: UInt64
+    ) {
         finishAppSwitcherLifecycle(reason: "single_window_confirmed", confirmed: true)
         appSwitcherSingleWindowTask?.cancel()
         appSwitcherSingleWindowTask = scheduler.schedule(
-            afterMilliseconds: HIDRemoteTiming.appSwitcherSingleWindowActivationMilliseconds,
+            afterMilliseconds: delayMilliseconds,
             repeatingEveryMilliseconds: nil
         ) { [weak self] in
             guard let self else { return }
@@ -1888,6 +1919,7 @@ final class HIDRemoteMonitor {
                 )
             }
         }
+        appSwitcherSingleWindowPending = false
         appSwitcherTargetBundleIdentifier = nil
         appSwitcherOriginBundleIdentifier = nil
     }
@@ -1962,6 +1994,7 @@ final class HIDRemoteMonitor {
         appSwitcherModifierWatchdog = nil
         appSwitcherSingleWindowTask?.cancel()
         appSwitcherSingleWindowTask = nil
+        appSwitcherSingleWindowPending = false
         appSwitcherTargetBundleIdentifier = nil
         appSwitcherOriginBundleIdentifier = nil
         for usage in activeUsages.subtracting(nativePassthroughUsages) {
