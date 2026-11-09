@@ -1803,6 +1803,7 @@ struct RemoteButtonsTests {
 
         press(.menu)
         press(.down)
+        press(.down) // 选中一个窗口：OK 才会响应
         press(.ok)
         // 确认后前台仍是原 App：300ms 时应该补一次 App 激活。
         scheduler.advance(
@@ -1813,6 +1814,7 @@ struct RemoteButtonsTests {
         // 切换成功时不应再打扰。
         press(.menu)
         press(.down)
+        press(.down)
         frontmost = PresetApplication.safari.bundleIdentifier
         frontPid = 4321
         press(.ok)
@@ -1820,6 +1822,59 @@ struct RemoteButtonsTests {
             toMilliseconds: HIDRemoteTiming.appSwitcherForegroundEnsureMilliseconds * 2
         )
         #expect(activatedPids.count == 1)
+    }
+
+    @Test func appSwitcherIgnoresOKUntilWindowHighlighted() throws {
+        let suiteName = "RemoteButtonsTests.appSwitcherOKGate.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = AppSettings(defaults: defaults)
+        settings.customMappingEnabled = true
+        settings.setAction(.appSwitcher, for: .menu)
+        let profileID = try #require(settings.selectedRemoteProfileID)
+        let scheduler = RemoteButtonsTestScheduler()
+        var posted: [(CGKeyCode, Bool, CGEventFlags)] = []
+        let monitor = HIDRemoteMonitor(
+            settings: settings,
+            profileID: profileID,
+            ownsEventSuppressor: false,
+            scheduler: scheduler,
+            runtimePermissions: { true },
+            frontmostBundleIdentifier: { PresetApplication.codex.bundleIdentifier },
+            diagnosticLogger: { _ in },
+            appSwitcherKeyStatePoster: { code, isDown, flags in
+                posted.append((code, isDown, flags))
+                return true
+            },
+            windowCounter: { _ in 2 },
+            appSwitcherSelectedApplication: {
+                KeyboardInjector.AppSwitcherSelection(
+                    processIdentifier: 4321,
+                    bundleIdentifier: PresetApplication.safari.bundleIdentifier
+                )
+            },
+            frontmostProcessIdentifier: { 9999 }
+        )
+        monitor.connectSimulatedDevice(
+            fingerprint: "app-switcher-ok-gate", profileID: profileID
+        )
+
+        func press(_ button: RemoteButton) {
+            monitor.handleSimulatedReport(
+                reportID: 1, data: Data([UInt8(button.hidUsage), 0, 0, 0, 0, 0])
+            )
+            monitor.handleSimulatedReport(reportID: 1, data: Data(repeating: 0, count: 6))
+        }
+
+        press(.menu)
+        press(.down)
+        press(.ok)
+        // 没有高亮：OK 不响应，会话保持。
+        #expect(!posted.contains { $0.0 == 36 })
+        press(.up)
+        // 有高亮后：OK 发 Return。
+        press(.ok)
+        #expect(posted.contains { $0.0 == 36 })
     }
 
     @Test func appSwitcherHeldDirectionRepeatsSelection() throws {

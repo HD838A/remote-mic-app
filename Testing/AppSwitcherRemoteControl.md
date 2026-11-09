@@ -129,6 +129,8 @@
 
 确认后 300ms 检查前台：如果还不是目标 App（Chrome 等偶尔不把选中窗口的 App 带到前台），会补一次 App 激活且不动窗口层级，日志出现 `HID APP SWITCHER foreground_ensure … activated=true`。
 
+窗口层里没有高亮时 OK 不响应（日志 `ok_ignored reason=no_highlight`，会话保持）：先按方向键选中一个窗口，OK 才会发 `Return` 打开它；返回键始终是 `Esc`。
+
 目标 App 只有一个窗口时，窗口层里的高亮不可靠（Return 可能既不打开窗口也不关闭窗口层），OK 直接发 `Escape` 退出窗口层，200ms 后恢复那个唯一窗口并置前（日志 `single_window … restored=true`）；窗口数从目标 App 的辅助功能窗口列表读取。目标 App 从 Dock 的 `AXSelectedChildren` 读取（日志 `target bundle_id=`）；进入窗口层后该列表会消失，所以必须在进入前读取。
 
 失败判定：上下键无反应、进入窗口选择后方向键仍在切换 App、OK 只切换菜单栏、返回键关掉整个切换器但没有退出窗口层，或结束后 `⌘` 仍被按下。

@@ -72,6 +72,8 @@ enum KeyboardInjector {
         private var optionReleaseTask: AnyObject?
         private var commandReleaseTask: AnyObject?
         private(set) var isWindowPickerActive = false
+        /// 窗口层里是否已经用方向键选中过某个窗口（原生语义：选中后 Enter/Esc 才响应）。
+        private(set) var pickerHasHighlight = false
         private var commandReleasePending = false
         private(set) var isActive = false
         /// 已经按下 ⌥/保持 ⌘、但还没走完释放流程；调度失败时由 watchdog 兜底。
@@ -159,6 +161,7 @@ enum KeyboardInjector {
                     role: "window_picker"
                 )
                 isWindowPickerActive = true
+                pickerHasHighlight = false
                 commandReleasePending = true
                 hasPendingRelease = true
                 commandReleaseTask = scheduler(Self.windowPickerCommandReleaseMilliseconds) {
@@ -168,8 +171,10 @@ enum KeyboardInjector {
                 return pressed && released
             }
             _ = releaseCommandForWindowPicker()
-            return post(keyCode, isDown: true, flags: [], role: "window_selection") &&
+            let posted = post(keyCode, isDown: true, flags: [], role: "window_selection") &&
                 post(keyCode, isDown: false, flags: [], role: "window_selection")
+            if posted { pickerHasHighlight = true }
+            return posted
         }
 
         @discardableResult
@@ -275,6 +280,7 @@ enum KeyboardInjector {
             }
             let pressed = post(keyCode, isDown: true, flags: flags, role: "selection")
             let released = post(keyCode, isDown: false, flags: flags, role: "selection")
+            if pressed && released, isWindowPickerActive { pickerHasHighlight = true }
             return pressed && released
         }
 

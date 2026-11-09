@@ -196,7 +196,6 @@ final class HIDRemoteMonitor {
     private var appSwitcherModifierWatchdog: HIDRemoteScheduledTask?
     private var appSwitcherSingleWindowTask: HIDRemoteScheduledTask?
     private var appSwitcherForegroundTask: HIDRemoteScheduledTask?
-    private var appSwitcherPendingPickerEntry: HIDRemoteScheduledTask?
     private var appSwitcherOriginBundleIdentifier: String?
     /// 切换器 HUD 里高亮的 App（按进程记录，同名双实例也能区分）。
     private var appSwitcherTargetApplication: KeyboardInjector.AppSwitcherSelection?
@@ -1117,9 +1116,6 @@ final class HIDRemoteMonitor {
             if button == .back, handlePendingLayerCloseBack() {
                 continue
             }
-            if button == .up || button == .down, handlePendingLayerCloseArrow(button: button) {
-                continue
-            }
             if appSwitcherSession.isActive,
                handleAppSwitcherControlPress(button, usage: usage) {
                 continue
@@ -1712,20 +1708,27 @@ final class HIDRemoteMonitor {
     private func handleAppSwitcherControlPress(_ button: RemoteButton, usage: UInt16) -> Bool {
         switch button {
         case .ok:
-            if appSwitcherSession.isWindowPickerActive,
-               let target = appSwitcherTargetApplication,
-               windowCounter(target.processIdentifier) == 1 {
-                // 单窗口时窗口层的高亮不可靠，Return 也可能不关窗口层；
-                // 直接 Escape 退出窗口层，再恢复唯一窗口。
-                // 窗口数按辅助功能的标准窗口统计（含最小化），避开隐藏面板。
-                _ = appSwitcherSession.cancel()
-                finishAppSwitcherLifecycle(
-                    reason: "single_window_confirmed",
-                    confirmed: true
-                )
-                scheduleSingleWindowRestore(selection: target)
-                markPendingLayerClose(target)
-                return true
+            if appSwitcherSession.isWindowPickerActive {
+                if let target = appSwitcherTargetApplication,
+                   windowCounter(target.processIdentifier) == 1 {
+                    // 单窗口时窗口层的高亮不可靠，Return 也可能不关窗口层；
+                    // 直接 Escape 退出窗口层，再恢复唯一窗口。
+                    // 窗口数按辅助功能的标准窗口统计（含最小化），避开隐藏面板。
+                    _ = appSwitcherSession.cancel()
+                    finishAppSwitcherLifecycle(
+                        reason: "single_window_confirmed",
+                        confirmed: true
+                    )
+                    scheduleSingleWindowRestore(selection: target)
+                    markPendingLayerClose(target)
+                    return true
+                }
+                // 原生语义：窗口层里没有高亮时，OK/Enter 不响应。
+                guard appSwitcherSession.pickerHasHighlight else {
+                    diagnosticLogger("HID APP SWITCHER ok_ignored reason=no_highlight")
+                    scheduleAppSwitcherTimeout()
+                    return true
+                }
             }
             // finishAppSwitcherLifecycle 会清空目标，必须先取出来再收尾。
             let confirmedTarget = appSwitcherTargetApplication
@@ -1802,41 +1805,6 @@ final class HIDRemoteMonitor {
                     "pid=\(selection.processIdentifier) activated=\(activated)"
             )
         }
-    }
-
-    /// 确认后按方向键：如果切换没成功（前台不是目标进程），就重新起切换器
-    /// 并直接进入它的窗口层，用户不必再按一次菜单键。
-    private func handlePendingLayerCloseArrow(button: RemoteButton) -> Bool {
-        guard !appSwitcherSession.isActive else { return false }
-        guard let target = appSwitcherPendingLayerClose else { return false }
-        // 已经切到目标 App，说明确认生效，方向键保持原映射。
-        guard frontmostProcessIdentifier() != target.processIdentifier else {
-            appSwitcherPendingLayerClose = nil
-            return false
-        }
-        appSwitcherPendingLayerClose = nil
-        guard appSwitcherSession.trigger() else { return false }
-        startAppSwitcherLifecycle()
-        scheduleAppSwitcherTimeout()
-        appSwitcherPendingPickerEntry?.cancel()
-        appSwitcherPendingPickerEntry = scheduler.schedule(
-            afterMilliseconds: HIDRemoteTiming.appSwitcherWindowPickerEntryMilliseconds,
-            repeatingEveryMilliseconds: nil
-        ) { [weak self] in
-            guard let self else { return }
-            self.appSwitcherPendingPickerEntry = nil
-            guard self.appSwitcherSession.isActive, !self.appSwitcherSession.isWindowPickerActive else { return }
-            self.appSwitcherTargetApplication = self.appSwitcherSelectedApplication()
-            self.diagnosticLogger(
-                "HID APP SWITCHER picker_reentered bundle_id=" +
-                    (self.appSwitcherTargetApplication?.bundleIdentifier ?? "unknown") +
-                    " pid=\(self.appSwitcherTargetApplication?.processIdentifier ?? -1)"
-            )
-            _ = self.appSwitcherSession.moveWindowSelection(up: button == .up)
-            self.scheduleAppSwitcherTimeout()
-        }
-        diagnosticLogger("HID APP SWITCHER picker_reenter_started")
-        return true
     }
 
     /// 确认后窗口层可能还开着（目标 App 没有窗口时 Return 不会关闭它）。
@@ -1957,8 +1925,6 @@ final class HIDRemoteMonitor {
         appSwitcherSingleWindowTask = nil
         appSwitcherForegroundTask?.cancel()
         appSwitcherForegroundTask = nil
-        appSwitcherPendingPickerEntry?.cancel()
-        appSwitcherPendingPickerEntry = nil
         appSwitcherFrontmostMonitor?.cancel()
         appSwitcherFrontmostMonitor = scheduler.schedule(
             afterMilliseconds: HIDRemoteTiming.appSwitcherFrontmostPollMilliseconds,
@@ -2116,8 +2082,6 @@ final class HIDRemoteMonitor {
         appSwitcherSingleWindowTask = nil
         appSwitcherForegroundTask?.cancel()
         appSwitcherForegroundTask = nil
-        appSwitcherPendingPickerEntry?.cancel()
-        appSwitcherPendingPickerEntry = nil
         appSwitcherTargetApplication = nil
         appSwitcherPendingLayerClose = nil
         appSwitcherOriginBundleIdentifier = nil
