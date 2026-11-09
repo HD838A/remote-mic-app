@@ -74,6 +74,10 @@ jobs:
       RELEASE_VARIANT: intel
       SAYALL_AI_PACKAGE_PATH: ""
       SAYALL_PRIVATE_PLATFORM_MODE: public
+      SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH: ""
+      SAYALL_CHROMECAST_PACKAGE_PATH: ""
+      SAYALL_ENABLE_CHROMECAST: "0"
+      SAYALL_ENABLE_BUTTON_PROFILES: "0"
       SAYALL_ENABLE_PRIVATE_SWIFTPM: "0"
       SAYALL_PRIVATE_PLATFORM_PACKAGE_PATH: ""
       SAYALL_COMBINATION_ACTIONS_PATH: ""
@@ -192,6 +196,16 @@ jobs:
         env:
           RELEASE_VARIANT: intel
         run: swift build --disable-keychain -c release --triple x86_64-apple-macosx13.0
+
+      - name: Build the default public App
+        if: needs.classify_changes.outputs.product_change == 'true'
+        env:
+          RELEASE_VARIANT: apple-silicon
+          REMOTE_MIC_BUILD_SCRATCH_PATH: ${{ github.workspace }}/.build
+        run: |
+          env -u SAYALL_PRIVATE_PLATFORM_MODE ./scripts/build-app.sh
+          ./scripts/verify-app.sh dist/SayAll.app
+          test "$(plutil -extract SayAllPrivateArtifactsIncluded raw -o - dist/SayAll.app/Contents/Info.plist)" = false
 
   test:
     name: Swift tests and build (${{ matrix.label }})

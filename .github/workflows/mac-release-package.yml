@@ -61,6 +61,7 @@ jobs:
           test "$TRIGGER_REF_TYPE" = branch
           test "$TRIGGER_REF_NAME" = main
           test "$TRIGGER_REPOSITORY" = HD838A/remote-mic-app
+          test "${{ inputs.include_ai }}" = false || { echo "AI distribution requires a published binary artifact contract" >&2; exit 1; }
           [[ "$SOURCE_BRANCH" == main || "$SOURCE_BRANCH" =~ ^hotfix/v[0-9]+\.[0-9]+\.[0-9]+$ ]]
           remote_main="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')"
           test "$TRIGGER_COMMIT" = "$remote_main"
@@ -165,6 +166,7 @@ jobs:
           test "$TRIGGER_REF_TYPE" = branch
           test "$TRIGGER_REF_NAME" = main
           test "$TRIGGER_REPOSITORY" = HD838A/remote-mic-app
+          test "${{ inputs.include_ai }}" = false || { echo "AI distribution requires a published binary artifact contract" >&2; exit 1; }
           [[ "$SOURCE_BRANCH" == main || "$SOURCE_BRANCH" =~ ^hotfix/v[0-9]+\.[0-9]+\.[0-9]+$ ]]
           remote_main="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')"
           test "$TRIGGER_COMMIT" = "$remote_main"
@@ -232,26 +234,6 @@ jobs:
           /dist/
           EOF
 
-      - name: Check out private feature package
-        if: ${{ inputs.include_ai }}
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
-        with:
-          repository: ${{ steps.release-dependencies.outputs.sayall_ai_repository }}
-          ref: ${{ steps.release-dependencies.outputs.sayall_ai_version }}
-          path: .private-dependencies/sayall-ai
-          ssh-key: ${{ secrets.SAYALL_AI_DEPLOY_KEY }}
-          persist-credentials: false
-
-      - name: Check out private macOS feature packages
-        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
-        with:
-          repository: ${{ steps.release-dependencies.outputs.sayall_private_platform_repository }}
-          ref: ${{ steps.release-dependencies.outputs.sayall_private_platform_version }}
-          path: .private-dependencies/sayall-private-platform
-          fetch-depth: 0
-          ssh-key: ${{ secrets.SAYALL_PRIVATE_PLATFORM_DEPLOY_KEY }}
-          persist-credentials: false
-
       - name: Check out readonly release credentials
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
@@ -270,20 +252,8 @@ jobs:
           ssh-key: ${{ secrets.APPLE_SIGNING_MATCH_DEPLOY_KEY }}
           persist-credentials: false
 
-      - name: Verify immutable private dependency checkouts
-        env:
-          SAYALL_AI_VERSION: ${{ steps.release-dependencies.outputs.sayall_ai_version }}
-          SAYALL_PRIVATE_PLATFORM_VERSION: ${{ steps.release-dependencies.outputs.sayall_private_platform_version }}
+      - name: Verify immutable credential checkouts
         run: |
-          if [[ "$INCLUDE_SAYALL_AI" == 1 ]]; then
-            test "$(git -C .private-dependencies/sayall-ai describe --tags --exact-match)" = "$SAYALL_AI_VERSION"
-          fi
-          test "$(git -C .private-dependencies/sayall-private-platform describe --tags --exact-match)" = "$SAYALL_PRIVATE_PLATFORM_VERSION"
-          python3 scripts/prepare-private-platform.py check-checkout --checkout .private-dependencies/sayall-private-platform
-          test -f .private-dependencies/sayall-private-platform/packages/macos-remote/Package.swift
-          test -f .private-dependencies/sayall-private-platform/packages/audio-input-kit/siri-remote/Package.swift
-          test -f .private-dependencies/sayall-private-platform/packages/audio-input-kit/chromecast/Package.swift
-          test -x .private-dependencies/sayall-private-platform/tools/release/build-private-xcframeworks.sh
           test "$(git -C .private-release/remotemic-notary-secrets rev-parse HEAD)" = 5baaeaf56f6cd5fbd0fb0e08c9290077ba8b5b5d
           match_repo="$GITHUB_WORKSPACE/.private-release/apple-signing-match"
           match_commit=2e271768593821611c54f3d1b376f39e503f53be
@@ -291,62 +261,36 @@ jobs:
           git -C "$match_repo" update-ref refs/heads/main "$match_commit"
           test "$(git -C "$match_repo" rev-parse refs/heads/main)" = "$match_commit"
 
-      - name: Build and prepare private feature artifacts
+      - name: Verify and prepare published private artifacts
         env:
-          SAYALL_PRIVATE_RELEASE_READ_TOKEN: ${{ secrets.SAYALL_PRIVATE_RELEASE_READ_TOKEN }}
+          GH_TOKEN: ${{ secrets.SAYALL_PRIVATE_RELEASE_READ_TOKEN }}
           SAYALL_PRIVATE_PLATFORM_VERSION: ${{ steps.release-dependencies.outputs.sayall_private_platform_version }}
           PRIVATE_ARTIFACT_OUTPUT: ${{ runner.temp }}/sayall-private-xcframeworks
           PRIVATE_ARTIFACT_PACKAGE: ${{ runner.temp }}/sayall-private-artifact-package
         run: |
-          private_root="$GITHUB_WORKSPACE/.private-dependencies/sayall-private-platform"
-          release_directory="$PRIVATE_ARTIFACT_OUTPUT/release"
-          if [[ -n "$SAYALL_PRIVATE_RELEASE_READ_TOKEN" ]]; then
-            # The publisher already built this exact tag and attached the
-            # artifacts, so reuse them instead of rebuilding both lanes. The
-            # download is verified against the publisher's own checksums and
-            # against the manifest digest before anything is packaged.
-            fetched="$(GH_TOKEN="$SAYALL_PRIVATE_RELEASE_READ_TOKEN" \
-              python3 scripts/prepare-private-platform.py artifacts \
-                --tag "$SAYALL_PRIVATE_PLATFORM_VERSION" \
-                --output "$PRIVATE_ARTIFACT_OUTPUT")"
-            trusted_manifest_sha256="$(printf '%s' "$fetched" | jq -r '.manifestSHA256')"
-            printf 'PRIVATE ARTIFACTS source=release tag=%s manifest=%s\n' \
-              "$SAYALL_PRIVATE_PLATFORM_VERSION" "$trusted_manifest_sha256"
-          else
-            # No credential that can read private release attachments: build the
-            # artifacts from the pinned tag, as before.
-            "$private_root/tools/release/build-private-xcframeworks.sh" "$PRIVATE_ARTIFACT_OUTPUT"
-            trusted_manifest_sha256="$(shasum -a 256 "$release_directory/SHA256SUMS" | awk '{print $1}')"
-            printf 'PRIVATE ARTIFACTS source=build tag=%s manifest=%s\n' \
-              "$SAYALL_PRIVATE_PLATFORM_VERSION" "$trusted_manifest_sha256"
+          test -n "$GH_TOKEN" || { echo "Private release attachment access is required" >&2; exit 1; }
+          fetched="$(python3 scripts/prepare-private-platform.py artifacts \
+            --tag "$SAYALL_PRIVATE_PLATFORM_VERSION" --output "$PRIVATE_ARTIFACT_OUTPUT")"
+          trusted_manifest_sha256="$(printf '%s' "$fetched" | jq -r '.manifestSHA256')"
+          if ! ./scripts/prepare-private-artifact-package.sh \
+            "$PRIVATE_ARTIFACT_OUTPUT/release" "$PRIVATE_ARTIFACT_PACKAGE" "$trusted_manifest_sha256" \
+            > "$RUNNER_TEMP/private-artifact-preparation.log" 2>&1; then
+            echo "PRIVATE ARTIFACT PREPARATION result=failed"
+            exit 1
           fi
-          ./scripts/prepare-private-artifact-package.sh \
-            "$release_directory" \
-            "$PRIVATE_ARTIFACT_PACKAGE" \
-            "$trusted_manifest_sha256"
+          echo "PRIVATE ARTIFACT PREPARATION result=verified"
           {
             echo "SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH=$PRIVATE_ARTIFACT_PACKAGE"
+            echo "SAYALL_PRIVATE_PLATFORM_VERSION=$SAYALL_PRIVATE_PLATFORM_VERSION"
+            echo "SAYALL_PRIVATE_PLATFORM_MODE=required"
+            echo "SAYALL_PRIVATE_ARTIFACTS_SOURCE=release"
             echo "REQUIRE_SAYALL_PRIVATE_ARTIFACT_PACKAGE=1"
             echo "REQUIRE_SAYALL_BUTTON_PROFILES=1"
             echo "REQUIRE_SAYALL_COMBINATION_ACTIONS=1"
-            echo "SAYALL_BUILD_CHANNEL=release"
-          } >> "$GITHUB_ENV"
-
-      - name: Configure private feature package
-        run: |
-          {
-            if [[ "$INCLUDE_SAYALL_AI" == 1 ]]; then
-              echo "SAYALL_AI_PACKAGE_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-ai"
-              echo "REQUIRE_SAYALL_AI_PACKAGE=1"
-            else
-              echo "SAYALL_AI_PACKAGE_PATH="
-              echo "REQUIRE_SAYALL_AI_PACKAGE=0"
-            fi
-            echo "SAYALL_SIRI_REMOTE_PACKAGE_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-private-platform/packages/audio-input-kit/siri-remote"
-            echo "SAYALL_CHROMECAST_PACKAGE_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-private-platform/packages/audio-input-kit/chromecast"
-            echo "SAYALL_MAC_REMOTE_PACKAGE_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-private-platform/packages/macos-remote"
             echo "REQUIRE_SAYALL_CHROMECAST=1"
             echo "REQUIRE_SAYALL_MAC_REMOTE_PACKAGE=1"
+            echo "REQUIRE_SAYALL_AI_PACKAGE=0"
+            echo "SAYALL_BUILD_CHANNEL=release"
           } >> "$GITHUB_ENV"
 
       - name: Validate protected diagnostics configuration
@@ -398,14 +342,20 @@ jobs:
       - name: Sign, notarize, staple, and verify both variants
         timeout-minutes: 30
         env:
+          GH_TOKEN: ${{ secrets.SAYALL_PRIVATE_RELEASE_READ_TOKEN }}
           REMOTE_WEB_RELAY_URL: ${{ secrets.REMOTE_WEB_RELAY_URL }}
           EARLY_ACCESS_SERVICE_URL: ${{ secrets.EARLY_ACCESS_SERVICE_URL }}
           REMOTE_MIC_SENTRY_DSN: ${{ secrets.REMOTE_MIC_SENTRY_DSN }}
           SAYALL_DIAGNOSTIC_PUBLIC_KEY_BASE64: ${{ secrets.SAYALL_DIAGNOSTIC_PUBLIC_KEY_BASE64 }}
         run: |
-          ./scripts/run-release-stage.sh \
+          if ! ./scripts/run-release-stage.sh \
             all signed-release "$SIGNED_RELEASE_TIMEOUT_SECONDS" -- \
-            ./scripts/package-macos-release-in-actions.sh
+            ./scripts/package-macos-release-in-actions.sh \
+            > "$RUNNER_TEMP/private-signed-release.log" 2>&1; then
+            echo "SIGNED RELEASE result=failed"
+            exit 1
+          fi
+          echo "SIGNED RELEASE result=verified"
 
       - name: Prepare canonical public asset bundle
         run: |
