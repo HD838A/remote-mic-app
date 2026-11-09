@@ -1587,6 +1587,59 @@ struct RemoteButtonsTests {
         #expect(AppleRemoteCircularNavigationAccumulator.movesLeft(for: 1))
     }
 
+    @Test func appSwitcherHeldDirectionRepeatsSelection() throws {
+        let suiteName = "RemoteButtonsTests.appSwitcherRepeat.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = AppSettings(defaults: defaults)
+        settings.customMappingEnabled = true
+        settings.setAction(.appSwitcher, for: .menu)
+        let profileID = try #require(settings.selectedRemoteProfileID)
+        let scheduler = RemoteButtonsTestScheduler()
+        var posted: [(CGKeyCode, Bool, CGEventFlags)] = []
+        var diagnostics: [String] = []
+        let monitor = HIDRemoteMonitor(
+            settings: settings,
+            profileID: profileID,
+            ownsEventSuppressor: false,
+            scheduler: scheduler,
+            runtimePermissions: { true },
+            frontmostBundleIdentifier: { PresetApplication.codex.bundleIdentifier },
+            diagnosticLogger: { diagnostics.append($0) },
+            appSwitcherKeyStatePoster: { code, isDown, flags in
+                posted.append((code, isDown, flags))
+                return true
+            }
+        )
+        monitor.connectSimulatedDevice(
+            fingerprint: "app-switcher-repeat", profileID: profileID
+        )
+
+        func press(_ button: RemoteButton) {
+            monitor.handleSimulatedReport(
+                reportID: 1, data: Data([UInt8(button.hidUsage), 0, 0, 0, 0, 0])
+            )
+            monitor.handleSimulatedReport(reportID: 1, data: Data(repeating: 0, count: 6))
+        }
+
+        press(.menu)
+        monitor.handleSimulatedReport(
+            reportID: 1, data: Data([UInt8(RemoteButton.left.hidUsage), 0, 0, 0, 0, 0])
+        )
+        #expect(posted.filter { $0.0 == 123 }.count == 2)
+
+        scheduler.advance(toMilliseconds: HIDRemoteTiming.repeatStartMilliseconds)
+        #expect(posted.filter { $0.0 == 123 }.count == 4)
+
+        scheduler.advance(toMilliseconds: HIDRemoteTiming.repeatStartMilliseconds + 100)
+        #expect(posted.filter { $0.0 == 123 }.count == 6)
+
+        monitor.handleSimulatedReport(reportID: 1, data: Data(repeating: 0, count: 6))
+        scheduler.advance(toMilliseconds: HIDRemoteTiming.repeatStartMilliseconds + 500)
+        #expect(posted.filter { $0.0 == 123 }.count == 6)
+        #expect(diagnostics.contains { $0.contains("phase=repeat") })
+    }
+
     @Test(arguments: [true, false])
     func appSwitcherRemoteControlsNavigateConfirmAndReportFinalFrontmostApp(isSeized: Bool) throws {
         let suiteName = "RemoteButtonsTests.appSwitcherControls.\(UUID().uuidString)"

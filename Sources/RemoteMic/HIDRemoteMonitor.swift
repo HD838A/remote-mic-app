@@ -1083,7 +1083,7 @@ final class HIDRemoteMonitor {
             ).action != .disabled || hasOverrideBinding(profileID, button, .longPress)
             let action = settings.action(for: button, profileID: profileID)
             if appSwitcherSession.isActive,
-               handleAppSwitcherControlPress(button) {
+               handleAppSwitcherControlPress(button, usage: usage) {
                 continue
             }
             if appSwitcherSession.isActive, button == .tv {
@@ -1669,7 +1669,7 @@ final class HIDRemoteMonitor {
         return submitted
     }
 
-    private func handleAppSwitcherControlPress(_ button: RemoteButton) -> Bool {
+    private func handleAppSwitcherControlPress(_ button: RemoteButton, usage: UInt16) -> Bool {
         switch button {
         case .ok:
             let confirmed = appSwitcherSession.confirm()
@@ -1690,6 +1690,7 @@ final class HIDRemoteMonitor {
                 finishAppSwitcherLifecycle(reason: "navigate_failed", confirmed: false)
             } else {
                 scheduleAppSwitcherTimeout()
+                startAppSwitcherRepeat(usage: usage, button: button)
             }
             return true
         case .up, .down:
@@ -1701,6 +1702,37 @@ final class HIDRemoteMonitor {
         default:
             return false
         }
+    }
+
+    /// 切换器会话期间方向键由会话提前接管，普通“按住连发”不会启动；
+    /// 这里补一条独立连发，按住左右键可以连续移动选项。
+    private func startAppSwitcherRepeat(usage: UInt16, button: RemoteButton) {
+        guard let interval = HIDRemoteTiming.repeatIntervalMilliseconds(for: button) else { return }
+        repeatTimers.removeValue(forKey: usage)?.cancel()
+        let timer = scheduler.schedule(
+            afterMilliseconds: HIDRemoteTiming.repeatStartMilliseconds,
+            repeatingEveryMilliseconds: interval
+        ) { [weak self] in
+            guard let self else { return }
+            guard self.activeUsages.contains(usage), self.appSwitcherSession.isActive else {
+                self.repeatTimers.removeValue(forKey: usage)?.cancel()
+                return
+            }
+            guard self.runtimePermissionsAreValid() else {
+                self.releaseForRevokedPermissions()
+                return
+            }
+            guard self.appSwitcherSession.moveSelection(left: button == .left) else {
+                self.repeatTimers.removeValue(forKey: usage)?.cancel()
+                self.finishAppSwitcherLifecycle(reason: "navigate_failed", confirmed: false)
+                return
+            }
+            self.diagnosticLogger(
+                "HID APP SWITCHER button=\(button.rawValue) phase=repeat success=true"
+            )
+            self.scheduleAppSwitcherTimeout()
+        }
+        repeatTimers[usage] = timer
     }
 
     private func startAppSwitcherLifecycle() {
