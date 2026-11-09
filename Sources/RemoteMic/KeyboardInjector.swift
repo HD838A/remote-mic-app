@@ -2444,8 +2444,8 @@ enum KeyboardInjector {
         return axElements(element, attribute: kAXWindowsAttribute).count
     }
 
-    /// 把指定 App 的窗口直接拉到前台：必要时取消最小化，再置顶并激活。
-    static func activateApplicationWindow(bundleIdentifier: String?) -> Bool {
+    /// 单窗口场景：窗口层里的高亮不稳定，直接恢复那个唯一窗口并置前。
+    static func restoreSingleWindow(bundleIdentifier: String?) -> Bool {
         guard let bundleIdentifier, isAccessibilityTrusted,
               let application = NSRunningApplication.runningApplications(
                   withBundleIdentifier: bundleIdentifier
@@ -2453,24 +2453,17 @@ enum KeyboardInjector {
         else { return false }
         let element = AXUIElementCreateApplication(application.processIdentifier)
         let windows = axElements(element, attribute: kAXWindowsAttribute)
-        let visibility = applicationVisibilitySnapshot(bundleIdentifier: bundleIdentifier)
-        let hasOnscreenWindow = (visibility.onscreenWindowCount ?? 0) > 0
-        if !hasOnscreenWindow,
-           let target = windows.first(where: {
-               axBool($0, attribute: kAXMinimizedAttribute) == true
-           }) {
+        guard let window = windows.first else { return false }
+        if axBool(window, attribute: kAXMinimizedAttribute) == true {
             AXUIElementSetAttributeValue(
-                target,
+                window,
                 kAXMinimizedAttribute as CFString,
                 kCFBooleanFalse
             )
-            AXUIElementPerformAction(target, kAXRaiseAction as CFString)
         }
+        AXUIElementPerformAction(window, kAXRaiseAction as CFString)
         AXUIElementSetAttributeValue(element, kAXFrontmostAttribute as CFString, kCFBooleanTrue)
-        // 已经在前台时不要再走 LaunchServices，避免多出一次激活延时。
-        let isFrontmost = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
-            == bundleIdentifier
-        if !isFrontmost,
+        if NSWorkspace.shared.frontmostApplication?.bundleIdentifier != bundleIdentifier,
            let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleIdentifier) {
             let configuration = NSWorkspace.OpenConfiguration()
             configuration.activates = true

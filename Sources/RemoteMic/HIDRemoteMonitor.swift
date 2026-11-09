@@ -255,7 +255,7 @@ final class HIDRemoteMonitor {
             KeyboardInjector.accessibilityWindowCount(bundleIdentifier: $0)
         },
         windowActivator: @escaping (String?) -> Bool = {
-            KeyboardInjector.activateApplicationWindow(bundleIdentifier: $0)
+            KeyboardInjector.restoreSingleWindow(bundleIdentifier: $0)
         },
         appSwitcherSelectedBundleIdentifier: @escaping () -> String? = {
             KeyboardInjector.appSwitcherSelectedApplication()?.bundleIdentifier
