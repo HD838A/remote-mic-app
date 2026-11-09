@@ -2453,16 +2453,20 @@ enum KeyboardInjector {
         else { return false }
         let element = AXUIElementCreateApplication(application.processIdentifier)
         let windows = axElements(element, attribute: kAXWindowsAttribute)
-        guard let window = windows.first else { return false }
-        if axBool(window, attribute: kAXMinimizedAttribute) == true {
+        let visibility = applicationVisibilitySnapshot(bundleIdentifier: bundleIdentifier)
+        let hasOnscreenWindow = (visibility.onscreenWindowCount ?? 0) > 0
+        if !hasOnscreenWindow,
+           let target = windows.first(where: {
+               axBool($0, attribute: kAXMinimizedAttribute) == true
+           }) {
             AXUIElementSetAttributeValue(
-                window,
+                target,
                 kAXMinimizedAttribute as CFString,
                 kCFBooleanFalse
             )
+            AXUIElementPerformAction(target, kAXRaiseAction as CFString)
         }
         AXUIElementSetAttributeValue(element, kAXFrontmostAttribute as CFString, kCFBooleanTrue)
-        AXUIElementPerformAction(window, kAXRaiseAction as CFString)
         // 已经在前台时不要再走 LaunchServices，避免多出一次激活延时。
         let isFrontmost = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
             == bundleIdentifier

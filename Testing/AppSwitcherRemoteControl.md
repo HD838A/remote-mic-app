@@ -127,7 +127,7 @@
 
 预期结果：第一次按上下键进入窗口选择层，之后方向键只在窗口之间移动，不再切换 App，也不会变成 `⌘←`/`⌘→` 等系统快捷键；OK 打开当前高亮的窗口并把该 App 切到前台；返回键退出窗口选择层并释放 `⌘`。日志依次出现 `phase=window_selection`、`role=return` 或 `role=escape`。
 
-目标 App 只有一个窗口时，上下键不会进入窗口层（没有可选页面），只记录目标并保持切换器，日志出现 `window_picker_skipped reason=single_window`；OK 时按原生路径立即松开 `Command` 完成切换，80ms 后用辅助功能取消最小化并置顶，日志 `single_window … activated=true`，避免 Exposé 进出带来的延迟。目标 App 从 Dock 的 `AXSelectedChildren` 读取（日志 `target bundle_id=`）；进入窗口层后该列表会消失，所以必须在进入前读取。
+目标 App 只有一个窗口时，窗口层里按 OK 先走原生 Return（窗口立即恢复），200ms 后再用辅助功能补一次激活，把 App 带到前台（日志 `single_window … activated=true`）；窗口数从目标 App 的辅助功能窗口列表读取。目标 App 从 Dock 的 `AXSelectedChildren` 读取（日志 `target bundle_id=`）；进入窗口层后该列表会消失，所以必须在进入前读取。
 
 失败判定：上下键无反应、进入窗口选择后方向键仍在切换 App、OK 只切换菜单栏、返回键关掉整个切换器但没有退出窗口层，或结束后 `⌘` 仍被按下。
 

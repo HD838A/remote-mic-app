@@ -1684,15 +1684,14 @@ struct RemoteButtonsTests {
 
         press(.menu)
         press(.down)
-        #expect(!posted.contains { $0.0 == 125 })
+        #expect(posted.contains { $0.0 == 125 })
         press(.ok)
-        #expect(!posted.contains { $0.0 == 36 })
+        #expect(posted.contains { $0.0 == 36 })
         #expect(!posted.contains { $0.0 == 53 })
-        #expect(posted.last?.0 == KeyboardInjector.leftCommandKeyCode)
-        #expect(posted.last?.1 == false)
+        #expect(posted.last?.0 == 36)
 
         scheduler.advance(
-            toMilliseconds: HIDRemoteTiming.appSwitcherSingleWindowActivationMilliseconds
+            toMilliseconds: HIDRemoteTiming.appSwitcherExposeCloseMilliseconds
         )
         #expect(activated == [PresetApplication.safari.bundleIdentifier])
     }
