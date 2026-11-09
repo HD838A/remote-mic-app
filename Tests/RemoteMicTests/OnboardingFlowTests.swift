@@ -2426,41 +2426,25 @@ struct OnboardingFlowTests {
         ))
     }
 
-    @Test func transcriptInputPolicyIgnoresModifierAndNonTextKeys() {
-        // 硬件 Fn/Globe（keyCode 63）和方向键同样来自 hidSystemState 且 pid=0，
-        // 但它们不落字：语音触发键本身不能把整次语音测试判成“手动打字”。
+    @Test func transcriptInputPolicyIgnoresFnTrigger() {
         #expect(!OnboardingTranscriptInputPolicy.isConfirmedPhysicalKeyboardInput(
             eventTypeRawValue: 10,
             sourceStateID: 1,
             sourceUnixProcessID: 0,
-            keyCode: 63,
-            characters: ""
+            keyCode: 63
         ))
-        #expect(!OnboardingTranscriptInputPolicy.isConfirmedPhysicalKeyboardInput(
-            eventTypeRawValue: 10,
-            sourceStateID: 1,
-            sourceUnixProcessID: 0,
-            keyCode: 0x7E,
-            characters: "\u{F700}"
-        ))
-        #expect(!OnboardingTranscriptInputPolicy.isConfirmedPhysicalKeyboardInput(
-            eventTypeRawValue: 10,
-            sourceStateID: 1,
-            sourceUnixProcessID: 0,
-            keyCode: 34,
-            characters: ""
-        ))
+    }
+
+    @Test(arguments: [UInt16(16), 34, 0x7E])
+    func transcriptInputPolicyStillRejectsOtherPhysicalEdits(keyCode: UInt16) {
+        // Ctrl+Y can insert killed text. An input method can also commit text
+        // while handling a key that does not itself carry printable characters.
         #expect(OnboardingTranscriptInputPolicy.isConfirmedPhysicalKeyboardInput(
             eventTypeRawValue: 10,
             sourceStateID: 1,
             sourceUnixProcessID: 0,
-            keyCode: 34,
-            characters: "i"
+            keyCode: keyCode
         ))
-        #expect(!OnboardingTranscriptInputPolicy.producesText(""))
-        #expect(!OnboardingTranscriptInputPolicy.producesText("\u{8}"))
-        #expect(OnboardingTranscriptInputPolicy.producesText("I"))
-        #expect(OnboardingTranscriptInputPolicy.producesText("你好"))
     }
 
     @Test func voiceSamplePresentationPublishesOnlyTheFirstNonemptyBatchPerSession() {

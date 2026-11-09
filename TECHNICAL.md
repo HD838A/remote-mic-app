@@ -102,7 +102,7 @@ ATVV 通道为：
 
 ## 语音键触发方式与 Fn 映射
 
-RC003 的语音键以键盘用法出现，具体 usage 随固件批次不同：多数机型是 F5（usage page `0x07`、usage `0x3E`），部分机型是字母 i（usage page `0x07`、usage `0x0C`，2026-11-06 现场复现：按住语音键会在输入框里打出 `i`）。`RemoteVoiceFunctionMapper` 只匹配 RC003 的 Vendor ID/Product ID；默认把这两个 usage 都映射为 Apple vendor top-case Fn/Globe（usage page `0xFF`、usage `0x03`）。自定义按键映射启用时，同一组件还会把 RC003 的 Keyboard Power（usage `0x66`）映射为 F20（usage `0x6F`）。
+RC003 的语音键通常表现为键盘 F5（usage page `0x07`、usage `0x3E`）。2026-11-06 的现场记录还观察到语音键输入字母 `i`（usage page `0x07`、usage `0x0C`）。`RemoteVoiceFunctionMapper` 只匹配 RC003 的 Vendor ID/Product ID；默认把这两个 usage 都映射为 Apple vendor top-case Fn/Globe（usage page `0xFF`、usage `0x03`）。自定义按键映射启用时，同一组件还会把 RC003 的 Keyboard Power（usage `0x66`）映射为 F20（usage `0x6F`）。
 
 默认关闭的 Typeless 兼容模式会先确认辅助功能权限，再以事务方式把所有匹配 RC003 服务的已知语音键 usage（F5 与 `i`）映射为 usage `0`；尚未枚举到任何匹配服务时保留用户开关、暂停 Fn 点按运行时并进入有限 HID 恢复，已枚举目标但任一写入失败或目标不完整时才立即回滚、关闭设置并恢复默认 Fn 映射。开启后，`VoiceFnTapSessionController` 在物理语音流开始时缓存 pre-roll，Fn 开始点按成功后再写入回环设备；松开时等待 `VirtualAudioOutput.endSessionAfterDraining` 排空队列，再发送配对的 Fn 结束点按。generation 和可取消任务隔离快速连续会话，并在开关关闭、断连、重连或 App 退出时完成或取消对应会话；开始点按失败时不会发送结束点按。
 

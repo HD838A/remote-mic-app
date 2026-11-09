@@ -830,18 +830,13 @@ enum OnboardingTranscriptInputPolicy {
     private static let keyDownEventTypeRawValue: UInt = 10
     private static let hidSystemStateRawValue: Int64 = 1
 
-    // 修饰键按下时也会产生 keyDown，且 NSTextView 不会插入字符；把它们当成“手动打字”
-    // 会让语音会话自己的触发键（尤其是硬件 Fn/Globe）把整次测试判失败。
-    static let modifierKeyCodes: Set<UInt16> = [
-        54, 55, 56, 58, 59, 60, 61, 62, 63,
-    ]
+    private static let functionKeyCode: UInt16 = 63
 
     static func isConfirmedPhysicalKeyboardInput(
         eventTypeRawValue: UInt?,
         sourceStateID: Int64?,
         sourceUnixProcessID: Int64?,
-        keyCode: UInt16? = nil,
-        characters: String? = nil
+        keyCode: UInt16? = nil
     ) -> Bool {
         guard eventTypeRawValue == keyDownEventTypeRawValue,
               sourceStateID == hidSystemStateRawValue,
@@ -849,23 +844,9 @@ enum OnboardingTranscriptInputPolicy {
               sourceUnixProcessID <= 0 else {
             return false
         }
-        if let keyCode, modifierKeyCodes.contains(keyCode) {
-            return false
-        }
-        if let characters, !producesText(characters) {
-            return false
-        }
-        return true
-    }
-
-    /// 只有真正会落字的事件才算手动输入：控制字符和 AppKit 的功能键私用区
-    /// （U+F700–U+F8FF，方向键、功能键、Fn 等）都不产生可见文字。
-    static func producesText(_ characters: String) -> Bool {
-        guard !characters.isEmpty else { return false }
-        return characters.unicodeScalars.contains { scalar in
-            !CharacterSet.controlCharacters.contains(scalar) &&
-                !(0xF700...0xF8FF).contains(scalar.value)
-        }
+        // Fn/Globe can trigger the voice tool. Other physical keys can edit the
+        // text even when AppKit reports no printable character (for example, Ctrl+Y).
+        return keyCode != functionKeyCode
     }
 }
 

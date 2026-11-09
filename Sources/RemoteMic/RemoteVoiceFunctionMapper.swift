@@ -31,13 +31,8 @@ struct HIDUsageMapping: Equatable, Codable {
 }
 
 enum RemoteVoiceFunctionMappingPolicy {
-    // Xiaomi RC001/RC003 把麦克风键暴露成键盘用法，但具体用法随固件批次不同：
-    // - 多数机器是键盘 F5（usage page 7，usage 0x3e）。
-    // - 部分 RC003 是键盘 i（usage page 7，usage 0x0c）。2026-11-06 现场：按住语音键
-    //   在 ABC 输入源下直接打出字母 i，说明这颗键落在这个用法上；只映射 F5 时它既不会
-    //   变成 Fn（第三方语音工具收不到启动键），又会把 i 打进前台输入框。
-    // 两者都映射为 Apple vendor top-case Fn/Globe（usage page 0xff，usage 3），
-    // macOS 只把这个用法转换成语音工具监听的 Fn。
+    // Map RC003 F5 and the letter-i usage observed in the 2026-11-06 field report.
+    // Both map to Apple vendor top-case Fn/Globe (usage page 0xff, usage 3).
     static let remoteVoiceKeySources: [UInt64] = [
         0x0000_0007_0000_003E,
         0x0000_0007_0000_000C,
