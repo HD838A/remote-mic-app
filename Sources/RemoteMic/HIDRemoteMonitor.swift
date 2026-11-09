@@ -196,8 +196,8 @@ final class HIDRemoteMonitor {
     private var appSwitcherOriginBundleIdentifier: String?
     /// 切换器 HUD 里高亮的 App；进入窗口层后 Dock 不再暴露列表，必须在进入前记下。
     private var appSwitcherTargetBundleIdentifier: String?
-    /// 确认后窗口层可能还开着；这期间返回键要能把它关掉。
-    private var appSwitcherPendingLayerClose: (target: String, deadline: Date)?
+    /// 确认后窗口层可能还开着；下一次按返回键时用它判断要不要补 Escape。
+    private var appSwitcherPendingLayerClose: String?
     private(set) var status = LocalizedMessage("button_mapping.status.disabled")
     var onStatus: ((LocalizedMessage) -> Void)?
     var onActiveButtons: ((UUID?, Set<RemoteButton>) -> Void)?
@@ -1766,26 +1766,21 @@ final class HIDRemoteMonitor {
     /// 记一小段时间，期间返回键可以直接把它关掉。
     private func markPendingLayerClose(_ target: String?) {
         guard let target else { return }
-        appSwitcherPendingLayerClose = (
-            target,
-            Date().addingTimeInterval(
-                TimeInterval(HIDRemoteTiming.appSwitcherPendingLayerCloseSeconds)
-            )
-        )
+        appSwitcherPendingLayerClose = target
     }
 
     /// 返回键兜底：确认没过、窗口层还开着时，返回键改发 Escape 而不是原映射。
     private func handlePendingLayerCloseBack() -> Bool {
         guard !appSwitcherSession.isActive else { return false }
-        guard let pending = appSwitcherPendingLayerClose else { return false }
-        guard Date() < pending.deadline else {
+        guard let target = appSwitcherPendingLayerClose else { return false }
+        // 已经切到目标 App，说明这次确认生效了，之后返回键保持原映射。
+        guard frontmostBundleIdentifier() != target else {
             appSwitcherPendingLayerClose = nil
             return false
         }
         appSwitcherPendingLayerClose = nil
-        guard frontmostBundleIdentifier() != pending.target else { return false }
         _ = appSwitcherSession.dismissWindowPicker()
-        diagnosticLogger("HID APP SWITCHER back_escape bundle_id=\(pending.target)")
+        diagnosticLogger("HID APP SWITCHER back_escape bundle_id=\(target)")
         return true
     }
 
