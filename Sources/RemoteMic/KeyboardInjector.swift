@@ -2355,13 +2355,18 @@ enum KeyboardInjector {
             .max { $0.width * $0.height < $1.width * $1.height }
     }
 
-    /// 目标 App 的普通窗口数（含最小化），用 CGWindowList 统计。
-    /// 辅助功能的 `AXWindows` 会把隐藏窗口算进来，Chrome 之类会被误判成单窗口。
-    static func ordinaryWindowCount(bundleIdentifier: String?) -> Int? {
-        guard let bundleIdentifier else { return nil }
-        return applicationVisibilitySnapshot(
-            bundleIdentifier: bundleIdentifier
-        ).ordinaryWindowCount
+    /// 目标 App 的标准窗口数（含最小化窗口），按辅助功能 subrole 过滤。
+    /// CGWindowList 会把菜单栏阴影、1×1 辅助窗口也算进来，不能用来数窗口。
+    static func standardWindowCount(bundleIdentifier: String?) -> Int? {
+        guard let bundleIdentifier, isAccessibilityTrusted,
+              let application = NSRunningApplication.runningApplications(
+                  withBundleIdentifier: bundleIdentifier
+              ).first(where: { !$0.isTerminated })
+        else { return nil }
+        let element = AXUIElementCreateApplication(application.processIdentifier)
+        return axElements(element, attribute: kAXWindowsAttribute).filter {
+            axString($0, attribute: kAXSubroleAttribute) == kAXStandardWindowSubrole as String
+        }.count
     }
 
     static func ordinaryWindowCount(
