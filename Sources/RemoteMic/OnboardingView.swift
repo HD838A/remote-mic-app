@@ -205,41 +205,11 @@ struct OnboardingView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            phaseHeader
-            GeometryReader { proxy in
-                HStack(spacing: 0) {
-                    leftPane
-                        .frame(width: max(520, proxy.size.width * 0.53))
-                    rightPane
-                }
-            }
-        }
-        .background(Color(nsColor: .windowBackgroundColor).ignoresSafeArea())
-        .environment(\.locale, localization.locale)
-        .frame(minWidth: 980, minHeight: 732)
-        // 引导图缩略图固定 220pt 高，竖版截图（如微信输入法菜单）只剩几十 pt 宽。
-        // 放大层盖住整窗，点击遮罩或右上角关闭按钮退出。
-        .overlay {
-            if let zoomedGuideImageResourceName {
-                onboardingGuideImageZoomOverlay(resourceName: zoomedGuideImageResourceName)
-            }
-        }
-        .onChange(of: zoomedGuideImageResourceName) { resourceName in
-            interactionProbe?.recordState("guide.screenshot.zoom", resourceName)
-        }
-        .sheet(isPresented: $isMembershipPresented) {
-            VStack(alignment: .trailing, spacing: 12) {
-                Button(localization.text("common.action.close")) { isMembershipPresented = false }
-                // 会员中心是按整页设计的（内部 GeometryReader 以可用宽度推算内容宽度，
-                // 可用宽度不足 48pt 时内容宽度会被算成 0）。sheet 不给尺寸时它会塌缩成
-                // 一个只有「关闭」按钮的空弹窗，用户因此无法开通会员。这里给足尺寸。
-                // 上界取 900 + 两侧 padding，保持小于窗口最小宽度 980，避免窗口缩小时
-                // sheet 溢出窗口、把位于最右侧的「关闭」按钮推到窗口之外。
-                membershipFeature.settingsView()
-                    .frame(minWidth: 900, minHeight: 620)
-            }.padding(20)
-        }
+        onboardingBody
+    }
+
+    private var onboardingBody: some View {
+        onboardingLayout
         .onAppear {
             settings.beginOnboardingSiriRemoteTrial()
             AppLogger.shared.write(
@@ -258,15 +228,54 @@ struct OnboardingView: View {
                 refreshPermissionStates()
             }
         }
-        .onReceive(runtimeRefreshTimer) { _ in
-            refreshSecureInputState()
-            if settings.onboardingStep == .voiceTool {
-                refreshSystemFunctionKeyUsage()
-            }
-            if settings.onboardingStep == .voiceTest {
-                refreshSelectedVoiceToolRuntimeState()
+    }
+
+    private var onboardingFrame: some View {
+        VStack(spacing: 0) {
+            phaseHeader
+            GeometryReader { proxy in
+                HStack(spacing: 0) {
+                    leftPane
+                        .frame(width: max(520, proxy.size.width * 0.53))
+                    rightPane
+                }
             }
         }
+    }
+
+    private var onboardingStyledLayout: some View {
+        onboardingFrame
+            .background(Color(nsColor: .windowBackgroundColor).ignoresSafeArea())
+            .environment(\.locale, localization.locale)
+            .frame(minWidth: 980, minHeight: 732)
+            .overlay {
+                if let zoomedGuideImageResourceName {
+                    onboardingGuideImageZoomOverlay(resourceName: zoomedGuideImageResourceName)
+                }
+            }
+            .onChange(of: zoomedGuideImageResourceName) { resourceName in
+                interactionProbe?.recordState("guide.screenshot.zoom", resourceName)
+            }
+            .sheet(isPresented: $isMembershipPresented) {
+                VStack(alignment: .trailing, spacing: 12) {
+                    Button(localization.text("common.action.close")) { isMembershipPresented = false }
+                    // 会员中心是按整页设计的（内部 GeometryReader 以可用宽度推算内容宽度，
+                    // 可用宽度不足 48pt 时内容宽度会被算成 0）。sheet 不给尺寸时它会塌缩成
+                    // 一个只有「关闭」按钮的空弹窗，用户因此无法开通会员。这里给足尺寸。
+                    // 上界取 900 + 两侧 padding，保持小于窗口最小宽度 980，避免窗口缩小时
+                    // sheet 溢出窗口、把位于最右侧的「关闭」按钮推到窗口之外。
+                    membershipFeature.settingsView()
+                        .frame(minWidth: 900, minHeight: 620)
+                }.padding(20)
+            }
+    }
+
+    private var onboardingLayout: some View {
+        onboardingRuntimeEvents
+    }
+
+    private var onboardingRuntimeEvents: some View {
+        onboardingRuntimeRefresh
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             refreshPermissionStates()
             switch settings.onboardingStep {
@@ -294,6 +303,20 @@ struct OnboardingView: View {
                   request.source == "vokie" else { return }
             refreshVoiceToolAvailability()
         }
+    }
+
+    private var onboardingRuntimeRefresh: some View {
+        onboardingStyledLayout
+        .onReceive(runtimeRefreshTimer) { _ in
+            refreshSecureInputState()
+            if settings.onboardingStep == .voiceTool {
+                refreshSystemFunctionKeyUsage()
+            }
+            if settings.onboardingStep == .voiceTest {
+                refreshSelectedVoiceToolRuntimeState()
+            }
+        }
+
         .onReceive(model.$isConnected.removeDuplicates()) { isConnected in
             guard isConnected else { return }
             routeConnectedPhysicalRemoteIfNeeded()
