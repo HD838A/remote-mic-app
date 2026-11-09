@@ -813,6 +813,73 @@ class ReleaseContentTests(unittest.TestCase):
                 self.assertEqual(result.stdout.strip(), "RELEASE STATUS result=unavailable")
                 self.assertNotIn("PRIVATE_", result.stdout + result.stderr)
 
+    def test_app_content_rejection_reports_fixed_component_groups(self):
+        source = (ROOT / "scripts/verify-app.sh").read_text()
+        start = source.index("# Sentry's pinned SDK contains public CI __FILE__ paths")
+        end = source.index('if [[ "$REQUIRE_NOTARIZATION" == "1" ]]; then', start)
+        block = source[start:end]
+        fixture = self.directory / "content-check.sh"
+        fixture.write_text("set -euo pipefail\n" + block)
+        app = self.directory / "fixture.app"
+        for component in ("MacOS", "Helpers", "Frameworks", "Resources", "Library", "_CodeSignature"):
+            (app / "Contents" / component).mkdir(parents=True)
+        (app / "Contents/Info.plist").write_text("fixture")
+        status_file = self.directory / "content-status.jsonl"
+        rg_configuration = self.directory / "rg-config"
+        rg_configuration.write_text("--line-number\n")
+        cases = (
+            (None, None, b"", None, False),
+            ("MacOS/RemoteMic", "macos", b"/Users/runner/work/sentry-cocoa/PRIVATE_CONTENT_CANARY", 11, False),
+            ("MacOS/RemoteMic", "macos", b"/Users/runner/work/remote-mic-app/PRIVATE_CONTENT_CANARY", 12, False),
+            ("MacOS/RemoteMic", "macos", b"/Users/runner/work/_temp/PRIVATE_CONTENT_CANARY", 13, False),
+            ("MacOS/RemoteMic", "macos", b"/Users/PRIVATE_CONTENT_CANARY/source.swift", 14, False),
+            ("Resources/fixture.txt", "resources", b"AA:BB:CC:DD:EE:FF", 16, False),
+            ("Helpers/fixture", "helpers", b"/tmp/remote-bridge-fixture", 15, False),
+            ("MacOS/RemoteMic", "macos", b"/Users/PRIVATE_CONTENT_CANARY/source.swift", 17, True),
+        )
+        for target, expected_group, data, expected_code, configured_output in cases:
+            with self.subTest(target=target):
+                (app / "Contents/MacOS/RemoteMic").write_bytes(
+                    b"/Users/runner/work/sentry-cocoa/sentry-cocoa/Sources/Sentry/SentryClient.m\0")
+                (app / "Contents/Resources/fixture.txt").write_text("safe")
+                (app / "Contents/Helpers/fixture").write_text("safe")
+                if target:
+                    (app / "Contents" / target).write_bytes(data)
+                status_file.write_text("")
+                environment = {**os.environ, "ROOT": str(ROOT), "APP": str(app),
+                               "RELEASE_VARIANT": "intel", "RELEASE_STAGE_STATUS_FILE": str(status_file)}
+                if configured_output:
+                    environment["RIPGREP_CONFIG_PATH"] = str(rg_configuration)
+                result = subprocess.run(["/bin/zsh", str(fixture)],
+                                        env=environment,
+                                        capture_output=True, text=True)
+                self.assertEqual(result.returncode, 1 if target else 0)
+                self.assertNotIn("PRIVATE_CONTENT_CANARY", result.stdout + result.stderr)
+                self.assertNotIn(str(app), result.stdout + result.stderr)
+                records = [json.loads(line) for line in status_file.read_text().splitlines()]
+                if expected_group:
+                    failed = [(record["stage"], record["exitCode"]) for record in records
+                              if record["result"] == "failed"]
+                    self.assertEqual(failed, [(f"app-content-{expected_group}", expected_code)])
+                    report = subprocess.run([str(ROOT / "scripts/run-release-stage.sh"),
+                                             "report-status", str(status_file)],
+                                            check=True, capture_output=True, text=True)
+                    self.assertIn(f"stage=app-content-{expected_group} result=failed", report.stdout)
+                    self.assertNotIn("PRIVATE_CONTENT_CANARY", report.stdout + report.stderr)
+                else:
+                    self.assertEqual(records, [])
+        supervisor = self.directory / "timeout-fixture/scripts/run-release-stage.sh"
+        supervisor.parent.mkdir(parents=True)
+        supervisor.write_text("#!/bin/sh\nexit 124\n")
+        supervisor.chmod(0o755)
+        result = subprocess.run(["/bin/zsh", str(fixture)],
+                                env={**os.environ, "ROOT": str(supervisor.parent.parent),
+                                     "APP": str(app), "RELEASE_VARIANT": "intel"},
+                                capture_output=True, text=True)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("bundle contains a forbidden", result.stderr)
+        self.assertNotIn("PRIVATE_CONTENT_CANARY", result.stdout + result.stderr)
+
     @unittest.skipUnless(sys.platform == "darwin", "Installer inspection requires macOS pkgutil")
     def test_public_driver_documentation_in_native_installer_is_accepted(self):
         payload = self.directory / "payload"

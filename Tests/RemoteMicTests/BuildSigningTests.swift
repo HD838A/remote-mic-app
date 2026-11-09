@@ -169,7 +169,7 @@ struct BuildSigningTests {
         #expect(source.contains(scanPattern))
         #expect(source.contains(publicPathPattern))
         #expect(source.contains("rg -a -o --no-filename"))
-        #expect(source.contains("| rg -v '"))
+        #expect(source.contains("| rg -v \"$PUBLIC_SENTRY_PATH_PATTERN\""))
         #expect(!source.contains("| rg -q -v"))
         let scan = try NSRegularExpression(pattern: scanPattern)
         let publicPath = try NSRegularExpression(pattern: publicPathPattern)

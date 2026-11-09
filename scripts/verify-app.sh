@@ -664,8 +664,32 @@ done
 
 # Sentry's pinned SDK contains public CI __FILE__ paths, not local user paths.
 # Read the full pipeline so pipefail cannot hide a match through SIGPIPE.
-if rg -a -o --no-filename '/Users/[^[:space:]\x00]+|/tmp/remote-bridge|AA:BB:CC:DD:EE:FF' "$APP/Contents" \
-    | rg -v '^/Users/runner/work/sentry-cocoa/sentry-cocoa/Sources/([A-Za-z0-9_-]+/)+[A-Za-z0-9_+-]+\.(m|mm|c|cpp|h|swift)$' >/dev/null; then
+FORBIDDEN_CONTENT_PATTERN='/Users/[^[:space:]\x00]+|/tmp/remote-bridge|AA:BB:CC:DD:EE:FF'
+PUBLIC_SENTRY_PATH_PATTERN='^/Users/runner/work/sentry-cocoa/sentry-cocoa/Sources/([A-Za-z0-9_-]+/)+[A-Za-z0-9_+-]+\.(m|mm|c|cpp|h|swift)$'
+if rg -a -o --no-filename "$FORBIDDEN_CONTENT_PATTERN" "$APP/Contents" \
+    | rg -v "$PUBLIC_SENTRY_PATH_PATTERN" >/dev/null; then
+  # Fixed public component labels locate the rejection without reporting a
+  # matched value, filename, command output or private implementation detail.
+  for component in MacOS Helpers Frameworks Resources Library Info.plist _CodeSignature; do
+    if [[ -e "$APP/Contents/$component" ]]; then
+      "$ROOT/scripts/run-release-stage.sh" "$RELEASE_VARIANT" \
+        "app-content-${component:l}" 3 -- /bin/zsh -c '
+          set -euo pipefail
+          if matches="$(rg -a -o --no-filename "$1" "$3" | rg -v "$2")"; then
+            case "$matches" in
+              /Users/runner/work/sentry-cocoa/*) exit 11 ;;
+              /Users/runner/work/remote-mic-app/*) exit 12 ;;
+              /Users/runner/work/_temp/*) exit 13 ;;
+              /Users/*) exit 14 ;;
+              /tmp/remote-bridge*) exit 15 ;;
+              AA:BB:CC:DD:EE:FF*) exit 16 ;;
+              *) exit 17 ;;
+            esac
+          fi
+        ' -- "$FORBIDDEN_CONTENT_PATTERN" "$PUBLIC_SENTRY_PATH_PATTERN" \
+        "$APP/Contents/$component" || true
+    fi
+  done
   print -u2 "bundle contains a forbidden local path or example device address"
   exit 1
 fi
