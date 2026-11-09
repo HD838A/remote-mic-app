@@ -1574,6 +1574,7 @@ struct RemoteButtonsTests {
         var frontmost = PresetApplication.codex.bundleIdentifier
         var posted: [(CGKeyCode, Bool, CGEventFlags)] = []
         var diagnostics: [String] = []
+        var restoreCalls: [(String?, String?)] = []
         let suppressor = KeyboardEventSuppressor()
         let monitor = HIDRemoteMonitor(
             settings: settings,
@@ -1587,6 +1588,10 @@ struct RemoteButtonsTests {
             appSwitcherKeyStatePoster: { code, isDown, flags in
                 posted.append((code, isDown, flags))
                 return true
+            },
+            minimizedWindowRestorer: { bundle, origin in
+                restoreCalls.append((bundle, origin))
+                return .skippedVisibleWindow
             }
         )
         monitor.connectSimulatedDevice(
@@ -1640,8 +1645,13 @@ struct RemoteButtonsTests {
         #expect(posted.last?.2.isEmpty == true)
         frontmost = PresetApplication.safari.bundleIdentifier
         scheduler.advance(
-            toMilliseconds: HIDRemoteTiming.appSwitcherConfirmationProbeMilliseconds
+            toMilliseconds: HIDRemoteTiming.appSwitcherMinimizedRestoreProbeMilliseconds
         )
+
+        #expect(restoreCalls.count == 1)
+        #expect(restoreCalls.first?.0 == PresetApplication.safari.bundleIdentifier)
+        #expect(restoreCalls.first?.1 == PresetApplication.codex.bundleIdentifier)
+        #expect(diagnostics.contains { $0.contains("restore attempt=0") })
 
         #expect(posted.map { $0.0 } == [
             KeyboardInjector.leftCommandKeyCode, 48, 48,

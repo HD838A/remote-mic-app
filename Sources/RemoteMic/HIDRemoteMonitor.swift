@@ -109,6 +109,7 @@ final class HIDRemoteMonitor {
     private let runtimePermissions: () -> Bool
     private let actionPerformer: (RemoteButton, ButtonTrigger, ConfiguredButtonAction) -> Bool
     private let appSwitcherSession: KeyboardInjector.AppSwitcherSession
+    private let minimizedWindowRestorer: (String?, String?) -> KeyboardInjector.MinimizedWindowRestoreResult
     private let overrideActionPerformer: (UUID?, RemoteButton, ButtonTrigger) -> Bool
     private let hasOverrideBinding: (UUID?, RemoteButton, ButtonTrigger) -> Bool
     private let frontmostBundleIdentifier: () -> String?
@@ -186,6 +187,7 @@ final class HIDRemoteMonitor {
     private var appSwitcherTimeout: HIDRemoteScheduledTask?
     private var appSwitcherFrontmostMonitor: HIDRemoteScheduledTask?
     private var appSwitcherConfirmationProbe: HIDRemoteScheduledTask?
+    private var appSwitcherMinimizedRestoreProbe: HIDRemoteScheduledTask?
     private var appSwitcherOriginBundleIdentifier: String?
     private(set) var status = LocalizedMessage("button_mapping.status.disabled")
     var onStatus: ((LocalizedMessage) -> Void)?
@@ -232,7 +234,16 @@ final class HIDRemoteMonitor {
         },
         prepareNativeKeys: (() -> Bool)? = nil,
         restoreNativeKeys: @escaping () -> Void = {},
-        appSwitcherKeyStatePoster: @escaping KeyboardInjector.KeyStatePoster = KeyboardInjector.postKeyState
+        appSwitcherKeyStatePoster: @escaping KeyboardInjector.KeyStatePoster = KeyboardInjector.postKeyState,
+        minimizedWindowRestorer: @escaping (
+            String?,
+            String?
+        ) -> KeyboardInjector.MinimizedWindowRestoreResult = {
+            KeyboardInjector.restoreMinimizedWindowIfNeeded(
+                frontmostBundleIdentifier: $0,
+                originBundleIdentifier: $1
+            )
+        }
     ) {
         self.settings = settings
         self.profileID = profileID
@@ -241,6 +252,7 @@ final class HIDRemoteMonitor {
         self.eventSuppressor = eventSuppressor
         self.ownsEventSuppressor = ownsEventSuppressor
         self.scheduler = scheduler
+        self.minimizedWindowRestorer = minimizedWindowRestorer
         self.permissionPoll = permissionPoll
         self.runtimePermissions = runtimePermissions
         self.appSwitcherSession = KeyboardInjector.AppSwitcherSession(
@@ -253,6 +265,9 @@ final class HIDRemoteMonitor {
                 )
             }
         )
+        self.appSwitcherSession.setDiagnosticLogger { message in
+            diagnosticLogger("HID APP SWITCHER EVENT " + message)
+        }
         self.actionPerformer = actionPerformer ?? { _, _, configured in
             KeyboardInjector.send(
                 configured.action,
@@ -1691,6 +1706,8 @@ final class HIDRemoteMonitor {
         scheduleAppSwitcherTimeout()
         appSwitcherConfirmationProbe?.cancel()
         appSwitcherConfirmationProbe = nil
+        appSwitcherMinimizedRestoreProbe?.cancel()
+        appSwitcherMinimizedRestoreProbe = nil
         appSwitcherFrontmostMonitor?.cancel()
         appSwitcherFrontmostMonitor = scheduler.schedule(
             afterMilliseconds: HIDRemoteTiming.appSwitcherFrontmostPollMilliseconds,
@@ -1728,6 +1745,7 @@ final class HIDRemoteMonitor {
             "HID APP SWITCHER ended reason=\(reason) confirmed=\(confirmed)"
         )
         if confirmed {
+            let origin = appSwitcherOriginBundleIdentifier
             appSwitcherConfirmationProbe?.cancel()
             appSwitcherConfirmationProbe = scheduler.schedule(
                 afterMilliseconds: HIDRemoteTiming.appSwitcherConfirmationProbeMilliseconds,
@@ -1740,8 +1758,43 @@ final class HIDRemoteMonitor {
                         (self.frontmostBundleIdentifier() ?? "unknown")
                 )
             }
+            // 系统的 Option 恢复依赖 Dock 内部时序，真机并不总是生效；
+            // 到这里再按可见窗口状态兜底一次，保证窗口真的回到前台。
+            scheduleMinimizedWindowRestore(
+                afterMilliseconds: HIDRemoteTiming.appSwitcherMinimizedRestoreProbeMilliseconds,
+                attempt: 0,
+                origin: origin
+            )
         }
         appSwitcherOriginBundleIdentifier = nil
+    }
+
+    private func scheduleMinimizedWindowRestore(
+        afterMilliseconds milliseconds: UInt64,
+        attempt: Int,
+        origin: String?
+    ) {
+        appSwitcherMinimizedRestoreProbe?.cancel()
+        appSwitcherMinimizedRestoreProbe = scheduler.schedule(
+            afterMilliseconds: milliseconds,
+            repeatingEveryMilliseconds: nil
+        ) { [weak self] in
+            guard let self else { return }
+            self.appSwitcherMinimizedRestoreProbe = nil
+            let frontmost = self.frontmostBundleIdentifier()
+            let result = self.minimizedWindowRestorer(frontmost, origin)
+            self.diagnosticLogger(
+                "HID APP SWITCHER restore attempt=\(attempt) " +
+                    "bundle_id=\(frontmost ?? "unknown") result=\(result.rawValue)"
+            )
+            if result == .skippedNotFrontmost, attempt == 0 {
+                self.scheduleMinimizedWindowRestore(
+                    afterMilliseconds: HIDRemoteTiming.appSwitcherMinimizedRestoreRetryMilliseconds,
+                    attempt: 1,
+                    origin: origin
+                )
+            }
+        }
     }
 
     private func resetGestureRecognition() {
@@ -1780,6 +1833,8 @@ final class HIDRemoteMonitor {
         appSwitcherFrontmostMonitor = nil
         appSwitcherConfirmationProbe?.cancel()
         appSwitcherConfirmationProbe = nil
+        appSwitcherMinimizedRestoreProbe?.cancel()
+        appSwitcherMinimizedRestoreProbe = nil
         appSwitcherOriginBundleIdentifier = nil
         for usage in activeUsages.subtracting(nativePassthroughUsages) {
             if let button = RemoteButton.usageMap[usage], shouldArmNativeEvent(for: button) {

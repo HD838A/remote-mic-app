@@ -5621,6 +5621,18 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
                     "diagnostic_boundary=window_content_unavailable"
             )
 
+            if probeResult == "no_visible_window", probeIndex >= 2 {
+                let restore = KeyboardInjector.restoreMinimizedWindowIfNeeded(
+                    frontmostBundleIdentifier: frontmost,
+                    originBundleIdentifier: origin
+                )
+                AppLogger.shared.write(
+                    "APPLE REMOTE APP SWITCHER operation_id=\(operationID) " +
+                        "phase=minimized_restore probe_delay_ms=\(delays[probeIndex]) " +
+                        "target_bundle=\(target ?? "unknown") result=\(restore.rawValue)"
+                )
+            }
+
             if probeIndex + 1 < delays.count {
                 self.scheduleAppleRemoteAppSwitcherVisibilityProbe(
                     operationID: operationID,

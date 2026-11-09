@@ -2255,6 +2255,48 @@ enum KeyboardInjector {
         }
     }
 
+    enum MinimizedWindowRestoreResult: String, Equatable {
+        case restored
+        case skippedNotFrontmost
+        case skippedVisibleWindow
+        case noMinimizedWindow
+        case restoreFailed
+        case notTrusted
+    }
+
+    /// 系统 ⌘Tab 只切换 App：目标 App 的窗口全部最小化时，切过去只有菜单栏。
+    /// 确认后如果前台已是目标 App 却没有可见窗口，就把它的一个最小化窗口拉起来。
+    static func restoreMinimizedWindowIfNeeded(
+        frontmostBundleIdentifier: String?,
+        originBundleIdentifier: String?
+    ) -> MinimizedWindowRestoreResult {
+        guard let frontmostBundleIdentifier,
+              frontmostBundleIdentifier != originBundleIdentifier
+        else { return .skippedNotFrontmost }
+        guard isAccessibilityTrusted else { return .notTrusted }
+        let visibility = applicationVisibilitySnapshot(
+            bundleIdentifier: frontmostBundleIdentifier
+        )
+        if visibility.onscreenWindowCount.map({ $0 > 0 }) == true {
+            return .skippedVisibleWindow
+        }
+        guard let application = NSRunningApplication.runningApplications(
+            withBundleIdentifier: frontmostBundleIdentifier
+        ).first(where: { !$0.isTerminated }) else {
+            return .noMinimizedWindow
+        }
+        let applicationElement = AXUIElementCreateApplication(application.processIdentifier)
+        let windows = axElements(applicationElement, attribute: kAXWindowsAttribute)
+        guard let target = windows.first(where: {
+            axBool($0, attribute: kAXMinimizedAttribute) == true
+        }) else { return .noMinimizedWindow }
+
+        AXUIElementSetAttributeValue(target, kAXMinimizedAttribute as CFString, kCFBooleanFalse)
+        AXUIElementPerformAction(target, kAXRaiseAction as CFString)
+        application.activate(options: [])
+        return axBool(target, attribute: kAXMinimizedAttribute) == false ? .restored : .restoreFailed
+    }
+
     static func applicationVisibilitySnapshot(
         bundleIdentifier: String
     ) -> ApplicationVisibilitySnapshot {
