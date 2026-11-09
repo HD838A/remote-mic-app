@@ -2404,6 +2404,34 @@ enum KeyboardInjector {
         return axBool(target, attribute: kAXMinimizedAttribute) == false ? .restored : .restoreFailed
     }
 
+    /// 切换器 HUD 的当前高亮项由 Dock 通过辅助功能暴露（`AXSelectedChildren`）。
+    /// 一旦进入窗口选择层，这个列表就会消失，所以必须在进入前读取。
+    static func appSwitcherSelectedApplication() -> NSRunningApplication? {
+        guard isAccessibilityTrusted,
+              let dock = NSRunningApplication.runningApplications(
+                  withBundleIdentifier: "com.apple.dock"
+              ).first
+        else { return nil }
+        let dockElement = AXUIElementCreateApplication(dock.processIdentifier)
+        guard let elements = axAttribute(
+            dockElement,
+            attribute: kAXChildrenAttribute
+        ) as? [AXUIElement] else { return nil }
+        guard let list = elements.first(where: {
+            axString($0, attribute: kAXSubroleAttribute) == "AXProcessSwitcherList"
+        }) else { return nil }
+        guard let selected = axElements(
+            list,
+            attribute: kAXSelectedChildrenAttribute
+        ).first else { return nil }
+        let title = axString(selected, attribute: kAXTitleAttribute)
+        guard !title.isEmpty else { return nil }
+        let candidates = NSWorkspace.shared.runningApplications.filter {
+            !$0.isTerminated && $0.activationPolicy == .regular && $0.localizedName == title
+        }
+        return candidates.first(where: { $0.isActive }) ?? candidates.first
+    }
+
     /// 目标 App 只有一个窗口时，窗口选择层的上下键会把高亮带到别的窗口条上；
     /// 直接查窗口数，交给调用方走确定性路径。
     static func accessibilityWindowCount(bundleIdentifier: String?) -> Int? {
@@ -2433,8 +2461,15 @@ enum KeyboardInjector {
                 kCFBooleanFalse
             )
         }
+        AXUIElementSetAttributeValue(element, kAXFrontmostAttribute as CFString, kCFBooleanTrue)
         AXUIElementPerformAction(window, kAXRaiseAction as CFString)
-        application.activate(options: [.activateAllWindows])
+        // 后台辅助型 App 调 activate 常被系统忽略，走 LaunchServices 激活更可靠。
+        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleIdentifier) {
+            let configuration = NSWorkspace.OpenConfiguration()
+            configuration.activates = true
+            configuration.createsNewApplicationInstance = false
+            NSWorkspace.shared.openApplication(at: url, configuration: configuration) { _, _ in }
+        }
         return true
     }
 

@@ -112,6 +112,7 @@ final class HIDRemoteMonitor {
     private let minimizedWindowRestorer: (String?, String?) -> KeyboardInjector.MinimizedWindowRestoreResult
     private let windowCounter: (String?) -> Int?
     private let windowActivator: (String?) -> Bool
+    private let appSwitcherSelectedBundleIdentifier: () -> String?
     private let overrideActionPerformer: (UUID?, RemoteButton, ButtonTrigger) -> Bool
     private let hasOverrideBinding: (UUID?, RemoteButton, ButtonTrigger) -> Bool
     private let frontmostBundleIdentifier: () -> String?
@@ -193,6 +194,8 @@ final class HIDRemoteMonitor {
     private var appSwitcherModifierWatchdog: HIDRemoteScheduledTask?
     private var appSwitcherSingleWindowTask: HIDRemoteScheduledTask?
     private var appSwitcherOriginBundleIdentifier: String?
+    /// 切换器 HUD 里高亮的 App；进入窗口层后 Dock 不再暴露列表，必须在进入前记下。
+    private var appSwitcherTargetBundleIdentifier: String?
     private(set) var status = LocalizedMessage("button_mapping.status.disabled")
     var onStatus: ((LocalizedMessage) -> Void)?
     var onActiveButtons: ((UUID?, Set<RemoteButton>) -> Void)?
@@ -253,6 +256,9 @@ final class HIDRemoteMonitor {
         },
         windowActivator: @escaping (String?) -> Bool = {
             KeyboardInjector.activateApplicationWindow(bundleIdentifier: $0)
+        },
+        appSwitcherSelectedBundleIdentifier: @escaping () -> String? = {
+            KeyboardInjector.appSwitcherSelectedApplication()?.bundleIdentifier
         }
     ) {
         self.settings = settings
@@ -265,6 +271,7 @@ final class HIDRemoteMonitor {
         self.minimizedWindowRestorer = minimizedWindowRestorer
         self.windowCounter = windowCounter
         self.windowActivator = windowActivator
+        self.appSwitcherSelectedBundleIdentifier = appSwitcherSelectedBundleIdentifier
         self.permissionPoll = permissionPoll
         self.runtimePermissions = runtimePermissions
         self.appSwitcherSession = KeyboardInjector.AppSwitcherSession(
@@ -1675,6 +1682,7 @@ final class HIDRemoteMonitor {
         } else if wasActive {
             finishAppSwitcherLifecycle(reason: "tab_failed", confirmed: false)
         } else {
+            appSwitcherTargetBundleIdentifier = nil
             appSwitcherOriginBundleIdentifier = nil
         }
         return submitted
@@ -1684,7 +1692,7 @@ final class HIDRemoteMonitor {
         switch button {
         case .ok:
             if appSwitcherSession.isWindowPickerActive,
-               let target = frontmostBundleIdentifier(),
+               let target = appSwitcherTargetBundleIdentifier,
                windowCounter(target) == 1 {
                 _ = appSwitcherSession.cancel()
                 confirmSingleWindow(bundleIdentifier: target)
@@ -1712,6 +1720,13 @@ final class HIDRemoteMonitor {
             }
             return true
         case .up, .down:
+            if !appSwitcherSession.isWindowPickerActive {
+                appSwitcherTargetBundleIdentifier = appSwitcherSelectedBundleIdentifier()
+                diagnosticLogger(
+                    "HID APP SWITCHER target bundle_id=" +
+                        (appSwitcherTargetBundleIdentifier ?? "unknown")
+                )
+            }
             let moved = appSwitcherSession.moveWindowSelection(up: button == .up)
             diagnosticLogger(
                 "HID APP SWITCHER button=\(button.rawValue) phase=window_selection " +
@@ -1873,6 +1888,7 @@ final class HIDRemoteMonitor {
                 )
             }
         }
+        appSwitcherTargetBundleIdentifier = nil
         appSwitcherOriginBundleIdentifier = nil
     }
 
@@ -1946,6 +1962,7 @@ final class HIDRemoteMonitor {
         appSwitcherModifierWatchdog = nil
         appSwitcherSingleWindowTask?.cancel()
         appSwitcherSingleWindowTask = nil
+        appSwitcherTargetBundleIdentifier = nil
         appSwitcherOriginBundleIdentifier = nil
         for usage in activeUsages.subtracting(nativePassthroughUsages) {
             if let button = RemoteButton.usageMap[usage], shouldArmNativeEvent(for: button) {

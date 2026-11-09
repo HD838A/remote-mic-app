@@ -1666,6 +1666,9 @@ struct RemoteButtonsTests {
             windowActivator: { bundle in
                 activated.append(bundle)
                 return true
+            },
+            appSwitcherSelectedBundleIdentifier: {
+                PresetApplication.safari.bundleIdentifier
             }
         )
         monitor.connectSimulatedDevice(

@@ -127,7 +127,7 @@
 
 预期结果：第一次按上下键进入窗口选择层，之后方向键只在窗口之间移动，不再切换 App，也不会变成 `⌘←`/`⌘→` 等系统快捷键；OK 打开当前高亮的窗口并把该 App 切到前台；返回键退出窗口选择层并释放 `⌘`。日志依次出现 `phase=window_selection`、`role=return` 或 `role=escape`。
 
-目标 App 只有一个窗口时，上下键会把高亮带到下方的窗口条上，回车可能激活别的 App。此时 OK 不发回车：先退出窗口层，再用辅助功能直接拉起该窗口，日志出现 `HID APP SWITCHER single_window … activated=true`。
+目标 App 只有一个窗口时，上下键会把高亮带到下方的窗口条上，回车可能激活别的 App。进入窗口层前会从 Dock 的 `AXSelectedChildren` 读取当前高亮的 App（日志 `target bundle_id=`）；OK 时若该 App 只有一个窗口，先退出窗口层，再用辅助功能取消最小化、置顶并通过 LaunchServices 激活，不再发回车，日志出现 `HID APP SWITCHER single_window … activated=true`。
 
 失败判定：上下键无反应、进入窗口选择后方向键仍在切换 App、OK 只切换菜单栏、返回键关掉整个切换器但没有退出窗口层，或结束后 `⌘` 仍被按下。
 
