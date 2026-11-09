@@ -71,7 +71,7 @@ enum KeyboardInjector {
         private var optionHoldTask: AnyObject?
         private var optionReleaseTask: AnyObject?
         private var commandReleaseTask: AnyObject?
-        private var isWindowPickerActive = false
+        private(set) var isWindowPickerActive = false
         private var commandReleasePending = false
         private(set) var isActive = false
         /// 已经按下 ⌥/保持 ⌘、但还没走完释放流程；调度失败时由 watchdog 兜底。
@@ -2402,6 +2402,40 @@ enum KeyboardInjector {
         AXUIElementPerformAction(target, kAXRaiseAction as CFString)
         application.activate(options: [])
         return axBool(target, attribute: kAXMinimizedAttribute) == false ? .restored : .restoreFailed
+    }
+
+    /// 目标 App 只有一个窗口时，窗口选择层的上下键会把高亮带到别的窗口条上；
+    /// 直接查窗口数，交给调用方走确定性路径。
+    static func accessibilityWindowCount(bundleIdentifier: String?) -> Int? {
+        guard let bundleIdentifier, isAccessibilityTrusted,
+              let application = NSRunningApplication.runningApplications(
+                  withBundleIdentifier: bundleIdentifier
+              ).first(where: { !$0.isTerminated })
+        else { return nil }
+        let element = AXUIElementCreateApplication(application.processIdentifier)
+        return axElements(element, attribute: kAXWindowsAttribute).count
+    }
+
+    /// 把指定 App 的窗口直接拉到前台：必要时取消最小化，再置顶并激活。
+    static func activateApplicationWindow(bundleIdentifier: String?) -> Bool {
+        guard let bundleIdentifier, isAccessibilityTrusted,
+              let application = NSRunningApplication.runningApplications(
+                  withBundleIdentifier: bundleIdentifier
+              ).first(where: { !$0.isTerminated })
+        else { return false }
+        let element = AXUIElementCreateApplication(application.processIdentifier)
+        let windows = axElements(element, attribute: kAXWindowsAttribute)
+        guard let window = windows.first else { return false }
+        if axBool(window, attribute: kAXMinimizedAttribute) == true {
+            AXUIElementSetAttributeValue(
+                window,
+                kAXMinimizedAttribute as CFString,
+                kCFBooleanFalse
+            )
+        }
+        AXUIElementPerformAction(window, kAXRaiseAction as CFString)
+        application.activate(options: [.activateAllWindows])
+        return true
     }
 
     static func applicationVisibilitySnapshot(

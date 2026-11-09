@@ -110,6 +110,8 @@ final class HIDRemoteMonitor {
     private let actionPerformer: (RemoteButton, ButtonTrigger, ConfiguredButtonAction) -> Bool
     private let appSwitcherSession: KeyboardInjector.AppSwitcherSession
     private let minimizedWindowRestorer: (String?, String?) -> KeyboardInjector.MinimizedWindowRestoreResult
+    private let windowCounter: (String?) -> Int?
+    private let windowActivator: (String?) -> Bool
     private let overrideActionPerformer: (UUID?, RemoteButton, ButtonTrigger) -> Bool
     private let hasOverrideBinding: (UUID?, RemoteButton, ButtonTrigger) -> Bool
     private let frontmostBundleIdentifier: () -> String?
@@ -189,6 +191,7 @@ final class HIDRemoteMonitor {
     private var appSwitcherConfirmationProbe: HIDRemoteScheduledTask?
     private var appSwitcherMinimizedRestoreProbe: HIDRemoteScheduledTask?
     private var appSwitcherModifierWatchdog: HIDRemoteScheduledTask?
+    private var appSwitcherSingleWindowTask: HIDRemoteScheduledTask?
     private var appSwitcherOriginBundleIdentifier: String?
     private(set) var status = LocalizedMessage("button_mapping.status.disabled")
     var onStatus: ((LocalizedMessage) -> Void)?
@@ -244,6 +247,12 @@ final class HIDRemoteMonitor {
                 frontmostBundleIdentifier: $0,
                 originBundleIdentifier: $1
             )
+        },
+        windowCounter: @escaping (String?) -> Int? = {
+            KeyboardInjector.accessibilityWindowCount(bundleIdentifier: $0)
+        },
+        windowActivator: @escaping (String?) -> Bool = {
+            KeyboardInjector.activateApplicationWindow(bundleIdentifier: $0)
         }
     ) {
         self.settings = settings
@@ -254,6 +263,8 @@ final class HIDRemoteMonitor {
         self.ownsEventSuppressor = ownsEventSuppressor
         self.scheduler = scheduler
         self.minimizedWindowRestorer = minimizedWindowRestorer
+        self.windowCounter = windowCounter
+        self.windowActivator = windowActivator
         self.permissionPoll = permissionPoll
         self.runtimePermissions = runtimePermissions
         self.appSwitcherSession = KeyboardInjector.AppSwitcherSession(
@@ -1672,6 +1683,13 @@ final class HIDRemoteMonitor {
     private func handleAppSwitcherControlPress(_ button: RemoteButton, usage: UInt16) -> Bool {
         switch button {
         case .ok:
+            if appSwitcherSession.isWindowPickerActive,
+               let target = frontmostBundleIdentifier(),
+               windowCounter(target) == 1 {
+                _ = appSwitcherSession.cancel()
+                confirmSingleWindow(bundleIdentifier: target)
+                return true
+            }
             let confirmed = appSwitcherSession.confirm()
             finishAppSwitcherLifecycle(
                 reason: confirmed ? "confirmed" : "confirm_failed",
@@ -1708,6 +1726,25 @@ final class HIDRemoteMonitor {
             return true
         default:
             return false
+        }
+    }
+
+    /// 只有单个窗口时，窗口选择层的高亮可能落到别的窗口条上，Return 会激活错的 App。
+    /// 这里退出窗口层后直接把唯一的窗口拉起来。
+    private func confirmSingleWindow(bundleIdentifier: String) {
+        finishAppSwitcherLifecycle(reason: "single_window_confirmed", confirmed: true)
+        appSwitcherSingleWindowTask?.cancel()
+        appSwitcherSingleWindowTask = scheduler.schedule(
+            afterMilliseconds: HIDRemoteTiming.appSwitcherSingleWindowActivationMilliseconds,
+            repeatingEveryMilliseconds: nil
+        ) { [weak self] in
+            guard let self else { return }
+            self.appSwitcherSingleWindowTask = nil
+            let activated = self.windowActivator(bundleIdentifier)
+            self.diagnosticLogger(
+                "HID APP SWITCHER single_window bundle_id=\(bundleIdentifier) " +
+                    "activated=\(activated)"
+            )
         }
     }
 
@@ -1761,6 +1798,8 @@ final class HIDRemoteMonitor {
         appSwitcherMinimizedRestoreProbe = nil
         appSwitcherModifierWatchdog?.cancel()
         appSwitcherModifierWatchdog = nil
+        appSwitcherSingleWindowTask?.cancel()
+        appSwitcherSingleWindowTask = nil
         appSwitcherFrontmostMonitor?.cancel()
         appSwitcherFrontmostMonitor = scheduler.schedule(
             afterMilliseconds: HIDRemoteTiming.appSwitcherFrontmostPollMilliseconds,
@@ -1905,6 +1944,8 @@ final class HIDRemoteMonitor {
         appSwitcherMinimizedRestoreProbe = nil
         appSwitcherModifierWatchdog?.cancel()
         appSwitcherModifierWatchdog = nil
+        appSwitcherSingleWindowTask?.cancel()
+        appSwitcherSingleWindowTask = nil
         appSwitcherOriginBundleIdentifier = nil
         for usage in activeUsages.subtracting(nativePassthroughUsages) {
             if let button = RemoteButton.usageMap[usage], shouldArmNativeEvent(for: button) {
