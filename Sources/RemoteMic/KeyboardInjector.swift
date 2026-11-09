@@ -55,6 +55,7 @@ enum KeyboardInjector {
         /// 读到的已经是 ⌥ 松开的最终状态，最小化窗口不会回来。
         static let optionHoldMilliseconds: UInt64 = 60
         static let optionReleaseMilliseconds: UInt64 = 100
+        static let windowPickerCommandReleaseMilliseconds: UInt64 = 80
         static let mainQueueScheduler: DelayScheduler = { milliseconds, action in
             let item = DispatchWorkItem(block: action)
             DispatchQueue.main.asyncAfter(
@@ -69,6 +70,9 @@ enum KeyboardInjector {
         private var diagnosticLogger: ((String) -> Void)?
         private var optionHoldTask: AnyObject?
         private var optionReleaseTask: AnyObject?
+        private var commandReleaseTask: AnyObject?
+        private var isWindowPickerActive = false
+        private var commandReleasePending = false
         private(set) var isActive = false
         /// 已经按下 ⌥/保持 ⌘、但还没走完释放流程；调度失败时由 watchdog 兜底。
         private(set) var hasPendingRelease = false
@@ -102,6 +106,8 @@ enum KeyboardInjector {
         @discardableResult
         func trigger() -> Bool {
             if isActive {
+                // 已经在窗口选择层，再发 ⌘Tab 会重开切换器。
+                if isWindowPickerActive { return true }
                 return postTab()
             }
 
@@ -118,10 +124,60 @@ enum KeyboardInjector {
 
         @discardableResult
         func cancel() -> Bool {
+            if isWindowPickerActive {
+                _ = releaseCommandForWindowPicker()
+                let escaped = post(53, isDown: true, flags: [], role: "escape") &&
+                    post(53, isDown: false, flags: [], role: "escape")
+                isWindowPickerActive = false
+                isActive = false
+                return escaped
+            }
             guard isActive else { return true }
             let released = post(leftCommandKeyCode, isDown: false, flags: [], role: "command")
             isActive = false
             return released
+        }
+
+        /// 切换器里按 ↑/↓ 会进入目标 App 的窗口选择（App Exposé）：
+        /// 第一次带 ⌘ 发送，让系统从切换器切到窗口层；之后 ⌘ 必须松开，
+        /// 方向键和回车才能作用在窗口选择上，而不是变成 ⌘← / ⌘→ 之类的系统快捷键。
+        @discardableResult
+        func moveWindowSelection(up: Bool) -> Bool {
+            guard isActive else { return false }
+            let keyCode: CGKeyCode = up ? 126 : 125
+            if !isWindowPickerActive {
+                let pressed = post(
+                    keyCode,
+                    isDown: true,
+                    flags: .maskCommand,
+                    role: "window_picker"
+                )
+                let released = post(
+                    keyCode,
+                    isDown: false,
+                    flags: .maskCommand,
+                    role: "window_picker"
+                )
+                isWindowPickerActive = true
+                commandReleasePending = true
+                hasPendingRelease = true
+                commandReleaseTask = scheduler(Self.windowPickerCommandReleaseMilliseconds) {
+                    [weak self] in
+                    _ = self?.releaseCommandForWindowPicker()
+                }
+                return pressed && released
+            }
+            _ = releaseCommandForWindowPicker()
+            return post(keyCode, isDown: true, flags: [], role: "window_selection") &&
+                post(keyCode, isDown: false, flags: [], role: "window_selection")
+        }
+
+        @discardableResult
+        private func releaseCommandForWindowPicker() -> Bool {
+            guard commandReleasePending else { return true }
+            commandReleasePending = false
+            hasPendingRelease = false
+            return post(leftCommandKeyCode, isDown: false, flags: [], role: "command")
         }
 
         /// 系统切换器只在「⌥ 已经按住、随后松开 ⌘」时才把目标 App 最小化的窗口带回前台。
@@ -129,6 +185,15 @@ enum KeyboardInjector {
         @discardableResult
         func confirm() -> Bool {
             guard isActive else { return true }
+            if isWindowPickerActive {
+                // 窗口选择层里 OK 等于回车：打开当前高亮的窗口。
+                _ = releaseCommandForWindowPicker()
+                let pressed = post(36, isDown: true, flags: [], role: "return")
+                let released = post(36, isDown: false, flags: [], role: "return")
+                isActive = false
+                isWindowPickerActive = false
+                return pressed && released
+            }
             isActive = false
             guard post(
                 leftOptionKeyCode,
@@ -179,6 +244,8 @@ enum KeyboardInjector {
                 role: "option"
             )
             hasPendingRelease = false
+            isWindowPickerActive = false
+            commandReleasePending = false
             optionHoldTask = nil
             optionReleaseTask = nil
             return commandReleased && optionReleased
@@ -188,8 +255,15 @@ enum KeyboardInjector {
         func moveSelection(left: Bool) -> Bool {
             guard isActive else { return false }
             let keyCode: CGKeyCode = left ? 123 : 124
-            let pressed = post(keyCode, isDown: true, flags: .maskCommand, role: "selection")
-            let released = post(keyCode, isDown: false, flags: .maskCommand, role: "selection")
+            let flags: CGEventFlags
+            if isWindowPickerActive {
+                _ = releaseCommandForWindowPicker()
+                flags = []
+            } else {
+                flags = .maskCommand
+            }
+            let pressed = post(keyCode, isDown: true, flags: flags, role: "selection")
+            let released = post(keyCode, isDown: false, flags: flags, role: "selection")
             return pressed && released
         }
 

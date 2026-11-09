@@ -1534,6 +1534,57 @@ struct RemoteButtonsTests {
         #expect(posted[5].2.isEmpty)
     }
 
+    @Test func appSwitcherWindowSelectionEntersExposeThenUsesPlainKeys() {
+        var posted: [(CGKeyCode, Bool, CGEventFlags)] = []
+        let session = KeyboardInjector.AppSwitcherSession(
+            keyStatePoster: { code, isDown, flags in
+                posted.append((code, isDown, flags))
+                return true
+            },
+            scheduler: { _, event in event(); return nil }
+        )
+
+        #expect(session.trigger())
+        #expect(session.moveWindowSelection(up: false))
+        #expect(session.moveWindowSelection(up: false))
+        #expect(session.moveSelection(left: false))
+        #expect(session.confirm())
+        #expect(!session.isActive)
+
+        #expect(posted.map { $0.0 } == [
+            KeyboardInjector.leftCommandKeyCode, 48, 48,
+            125, 125, KeyboardInjector.leftCommandKeyCode,
+            125, 125, 124, 124, 36, 36,
+        ])
+        #expect(posted[3].2 == .maskCommand)
+        #expect(posted[4].2 == .maskCommand)
+        #expect(posted[5].2.isEmpty)
+        #expect(posted[6].2.isEmpty)
+        #expect(posted[7].2.isEmpty)
+        #expect(posted[8].2.isEmpty)
+        #expect(posted[9].2.isEmpty)
+        #expect(posted[10].2.isEmpty)
+        #expect(posted[11].2.isEmpty)
+    }
+
+    @Test func appSwitcherWindowSelectionCancelSendsEscape() {
+        var posted: [(CGKeyCode, Bool, CGEventFlags)] = []
+        let session = KeyboardInjector.AppSwitcherSession(
+            keyStatePoster: { code, isDown, flags in
+                posted.append((code, isDown, flags))
+                return true
+            },
+            scheduler: { _, event in event(); return nil }
+        )
+
+        #expect(session.trigger())
+        #expect(session.moveWindowSelection(up: true))
+        #expect(session.cancel())
+        #expect(!session.isActive)
+        #expect(Array(posted.suffix(2).map { $0.0 }) == [53, 53])
+        #expect(posted.suffix(2).allSatisfy { $0.2.isEmpty })
+    }
+
     @Test func appSwitcherConfirmReleasesCommandWithoutOptionWhenOptionCannotBePressed() {
         var posted: [(CGKeyCode, Bool, CGEventFlags)] = []
         let session = KeyboardInjector.AppSwitcherSession(

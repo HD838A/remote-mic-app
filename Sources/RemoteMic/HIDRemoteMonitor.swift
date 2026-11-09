@@ -1694,10 +1694,17 @@ final class HIDRemoteMonitor {
             }
             return true
         case .up, .down:
+            let moved = appSwitcherSession.moveWindowSelection(up: button == .up)
             diagnosticLogger(
-                "HID APP SWITCHER button=\(button.rawValue) phase=navigate success=true " +
-                    "direction=unsupported"
+                "HID APP SWITCHER button=\(button.rawValue) phase=window_selection " +
+                    "success=\(moved)"
             )
+            if !moved {
+                finishAppSwitcherLifecycle(reason: "window_selection_failed", confirmed: false)
+            } else {
+                scheduleAppSwitcherTimeout()
+                startAppSwitcherRepeat(usage: usage, button: button)
+            }
             return true
         default:
             return false
@@ -1707,7 +1714,9 @@ final class HIDRemoteMonitor {
     /// 切换器会话期间方向键由会话提前接管，普通“按住连发”不会启动；
     /// 这里补一条独立连发，按住左右键可以连续移动选项。
     private func startAppSwitcherRepeat(usage: UInt16, button: RemoteButton) {
-        guard let interval = HIDRemoteTiming.repeatIntervalMilliseconds(for: button) else { return }
+        guard button == .left || button == .right || button == .up || button == .down,
+              let interval = HIDRemoteTiming.repeatIntervalMilliseconds(for: button)
+        else { return }
         repeatTimers.removeValue(forKey: usage)?.cancel()
         let timer = scheduler.schedule(
             afterMilliseconds: HIDRemoteTiming.repeatStartMilliseconds,
@@ -1722,7 +1731,16 @@ final class HIDRemoteMonitor {
                 self.releaseForRevokedPermissions()
                 return
             }
-            guard self.appSwitcherSession.moveSelection(left: button == .left) else {
+            let moved: Bool
+            switch button {
+            case .left, .right:
+                moved = self.appSwitcherSession.moveSelection(left: button == .left)
+            case .up, .down:
+                moved = self.appSwitcherSession.moveWindowSelection(up: button == .up)
+            default:
+                moved = false
+            }
+            guard moved else {
                 self.repeatTimers.removeValue(forKey: usage)?.cancel()
                 self.finishAppSwitcherLifecycle(reason: "navigate_failed", confirmed: false)
                 return
