@@ -2146,7 +2146,7 @@ struct RemoteButtonsTests {
         #expect(!posted.contains { $0.0 == 55 && !$0.1 })
     }
 
-    @Test func appSwitcherCyclesWithTabWhenArrowNavigationIsUnsupported() throws {
+    @Test func appSwitcherFallsBackToTabCycleWhenArrowDoesNotMoveHighlight() throws {
         let suiteName = "RemoteButtonsTests.appSwitcherCycle.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
@@ -2156,6 +2156,8 @@ struct RemoteButtonsTests {
         let profileID = try #require(settings.selectedRemoteProfileID)
         let scheduler = RemoteButtonsTestScheduler()
         var posted: [(CGKeyCode, Bool, CGEventFlags)] = []
+        var diagnostics: [String] = []
+        // 高亮标题始终不变：模拟“方向键不移动高亮”的系统。
         let monitor = HIDRemoteMonitor(
             settings: settings,
             profileID: profileID,
@@ -2163,13 +2165,13 @@ struct RemoteButtonsTests {
             scheduler: scheduler,
             runtimePermissions: { true },
             frontmostBundleIdentifier: { PresetApplication.codex.bundleIdentifier },
-            diagnosticLogger: { _ in },
+            diagnosticLogger: { diagnostics.append($0) },
             appSwitcherKeyStatePoster: { code, isDown, flags in
                 posted.append((code, isDown, flags))
                 return true
             },
             windowCounter: { _ in 2 },
-            appSwitcherSupportsArrowNavigation: false
+            appSwitcherHighlightedTitle: { "Safari" }
         )
         monitor.connectSimulatedDevice(
             fingerprint: "app-switcher-cycle", profileID: profileID
@@ -2185,16 +2187,23 @@ struct RemoteButtonsTests {
         press(.menu)
         let tabPressesAfterOpen = posted.filter { $0.0 == 48 && $0.1 }.count
         press(.right)
-        // macOS 13 的切换器不响应方向键：改用 Tab 循环移动高亮。
-        #expect(!posted.contains { $0.0 == 124 })
+        // 第一次仍然先发方向键。
+        #expect(posted.contains { $0.0 == 124 && $0.1 })
+        // 核对后发现高亮没动：补一次 Tab 循环。
+        scheduler.advance(
+            toMilliseconds: HIDRemoteTiming.appSwitcherArrowNavigationCheckMilliseconds
+        )
         #expect(posted.filter { $0.0 == 48 && $0.1 }.count == tabPressesAfterOpen + 1)
+        #expect(diagnostics.contains { $0.contains("arrow_nav supported=false") })
 
-        press(.left)
-        // 后退用 ⌘⇧Tab。
-        #expect(posted.contains { $0.0 == 48 && $0.1 && $0.2.contains(.maskShift) })
+        // 判定之后方向键直接走 Tab 循环，不再发方向键。
+        posted.removeAll()
+        press(.right)
+        #expect(!posted.contains { $0.0 == 124 })
+        #expect(posted.contains { $0.0 == 48 && $0.1 })
     }
 
-    @Test func appSwitcherUsesArrowNavigationWhenSupported() throws {
+    @Test func appSwitcherKeepsArrowNavigationWhenHighlightMoves() throws {
         let suiteName = "RemoteButtonsTests.appSwitcherArrowNav.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
@@ -2204,6 +2213,8 @@ struct RemoteButtonsTests {
         let profileID = try #require(settings.selectedRemoteProfileID)
         let scheduler = RemoteButtonsTestScheduler()
         var posted: [(CGKeyCode, Bool, CGEventFlags)] = []
+        var diagnostics: [String] = []
+        var highlight = "Safari"
         let monitor = HIDRemoteMonitor(
             settings: settings,
             profileID: profileID,
@@ -2211,13 +2222,13 @@ struct RemoteButtonsTests {
             scheduler: scheduler,
             runtimePermissions: { true },
             frontmostBundleIdentifier: { PresetApplication.codex.bundleIdentifier },
-            diagnosticLogger: { _ in },
+            diagnosticLogger: { diagnostics.append($0) },
             appSwitcherKeyStatePoster: { code, isDown, flags in
                 posted.append((code, isDown, flags))
                 return true
             },
             windowCounter: { _ in 2 },
-            appSwitcherSupportsArrowNavigation: true
+            appSwitcherHighlightedTitle: { highlight }
         )
         monitor.connectSimulatedDevice(
             fingerprint: "app-switcher-arrow-nav", profileID: profileID
@@ -2231,9 +2242,16 @@ struct RemoteButtonsTests {
         }
 
         press(.menu)
+        let tabPressesAfterOpen = posted.filter { $0.0 == 48 && $0.1 }.count
         press(.right)
-        // 支持方向键的系统仍然用 ⌘→ 移动高亮。
         #expect(posted.contains { $0.0 == 124 && $0.1 && $0.2.contains(.maskCommand) })
+        // 高亮确实移动了：不再补 Tab 循环。
+        highlight = "Chrome"
+        scheduler.advance(
+            toMilliseconds: HIDRemoteTiming.appSwitcherArrowNavigationCheckMilliseconds
+        )
+        #expect(diagnostics.contains { $0.contains("arrow_nav supported=true") })
+        #expect(posted.filter { $0.0 == 48 && $0.1 }.count == tabPressesAfterOpen)
     }
 
     @Test func appSwitcherHeldDirectionRepeatsSelection() throws {

@@ -24,14 +24,6 @@ enum KeyboardInjector {
     typealias ScrollPoster = (Int32) -> Void
     typealias SystemKeyPoster = (Int32) -> Void
 
-    /// macOS 14 起，App 切换器可以用方向键移动高亮；更早的系统不响应，
-    /// 只能用 Tab 循环（真机验证：macOS 13 上 ⌘←/⌘→ 不移动高亮，⌘Tab 正常）。
-    static let switcherSupportsArrowNavigation: Bool = {
-        ProcessInfo.processInfo.isOperatingSystemAtLeast(
-            OperatingSystemVersion(majorVersion: 14, minorVersion: 0, patchVersion: 0)
-        )
-    }()
-
     /// Dock 进程当前拥有的窗口数量。
     ///
     /// 切换器打开时 Dock 会多出一个窗口，这是判断“切换器是否还开着”最稳的信号：
@@ -110,17 +102,29 @@ enum KeyboardInjector {
         /// 部分系统 UI（macOS 13 的 App 切换器）会直接忽略。
         static let syntheticKeyHoldMicroseconds: UInt32 = 25_000
 
-        private let switcherSupportsArrowNavigation: Bool
+        /// ⌘ 按下与 Tab 按下之间要留出的间隔。
+        ///
+        /// 合成事件的修饰键状态不一定在下一条事件到达前就登记完：
+        /// 真机日志（macOS 14/15）里“⌘ 刚按下就紧跟 Tab”经常打不开切换器，
+        /// 而稍后再按一次（⌘ 已经按住）就能打开。
+        static let commandSettleMicroseconds: UInt32 = 80_000
+
+        /// 方向键是否真的能在切换器里移动高亮：nil 表示还没验证过。
+        /// macOS 14/15 上方向键无效、Tab 循环有效（真机验证），因此验证失败
+        /// 后就改用 Tab 循环。
+        private(set) var arrowNavigationSupported: Bool?
 
         init(
             keyStatePoster: @escaping KeyStatePoster = KeyboardInjector.postKeyState,
-            scheduler: @escaping DelayScheduler = AppSwitcherSession.mainQueueScheduler,
-            switcherSupportsArrowNavigation: Bool = KeyboardInjector
-                .switcherSupportsArrowNavigation
+            scheduler: @escaping DelayScheduler = AppSwitcherSession.mainQueueScheduler
         ) {
             self.keyStatePoster = keyStatePoster
             self.scheduler = scheduler
-            self.switcherSupportsArrowNavigation = switcherSupportsArrowNavigation
+        }
+
+        /// 记录方向键导航是否可用（由监视器在验证高亮后回填）。
+        func markArrowNavigation(supported: Bool) {
+            arrowNavigationSupported = supported
         }
 
         func setDiagnosticLogger(_ logger: @escaping (String) -> Void) {
@@ -152,6 +156,8 @@ enum KeyboardInjector {
             guard post(leftCommandKeyCode, isDown: true, flags: .maskCommand, role: "command") else {
                 return false
             }
+            // 等修饰键状态登记完再发 Tab，否则部分系统（macOS 14/15）会打不开切换器。
+            usleep(Self.commandSettleMicroseconds)
             guard postTab() else {
                 _ = post(leftCommandKeyCode, isDown: false, flags: [], role: "command")
                 return false
@@ -319,9 +325,9 @@ enum KeyboardInjector {
                 if posted { pickerHasHighlight = true }
                 return posted
             }
-            // macOS 13 的切换器不响应方向键（真机验证：⌘←/⌘→ 不移动高亮），
-            // 这类系统改用 Tab 循环移动高亮，效果等价且各版本都可靠。
-            guard switcherSupportsArrowNavigation else {
+            // 已经确认方向键无效的系统（macOS 14/15 真机验证）直接用 Tab 循环；
+            // 还没验证过的先发方向键，由监视器核对高亮是否真的移动了。
+            if arrowNavigationSupported == false {
                 return cycleSelection(backwards: left)
             }
             return postKeyWithHold(
@@ -2653,6 +2659,30 @@ enum KeyboardInjector {
         // 同名多实例时优先非活跃的那个：切换器里选中的通常不是当前 App。
         let match = candidates.first(where: { !$0.isActive }) ?? candidates.first
         return (.visible(selectedBundleIdentifier: match?.bundleIdentifier), match)
+    }
+
+    /// 切换器里当前高亮的 App 标题（原始标题，不解析成进程）。
+    /// 用来判断方向键是否真的移动了高亮。
+    static func appSwitcherHighlightedTitle() -> String? {
+        guard isAccessibilityTrusted,
+              let dock = NSRunningApplication.runningApplications(
+                  withBundleIdentifier: "com.apple.dock"
+              ).first
+        else { return nil }
+        let dockElement = AXUIElementCreateApplication(dock.processIdentifier)
+        guard let elements = axAttribute(
+            dockElement,
+            attribute: kAXChildrenAttribute
+        ) as? [AXUIElement] else { return nil }
+        guard let list = elements.first(where: {
+            axString($0, attribute: kAXSubroleAttribute) == "AXProcessSwitcherList"
+        }) else { return nil }
+        guard let selected = axElements(
+            list,
+            attribute: kAXSelectedChildrenAttribute
+        ).first else { return nil }
+        let title = axString(selected, attribute: kAXTitleAttribute)
+        return title.isEmpty ? nil : title
     }
 
     /// 切换器 HUD 是否还开着。用来判断会话是否还需要保持 ⌘ 按住。

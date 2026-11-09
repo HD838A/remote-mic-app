@@ -158,9 +158,10 @@ macOS 13（Intel）与 macOS 14+ 的切换器行为不同，必须在这两类�
 预期结果：
 
 - 切换器**不会自己消失**，也不会在 1 秒内跳到旁边的 App（会话只会因为用户操作、鼠标点击或 15 秒超时而结束）；
-- macOS 14+：左右方向键发 `⌘←`/`⌘→`，高亮按位置移动；
-- macOS 13：左右方向键改用 `⌘Tab`/`⌘⇧Tab` 循环（该系统的切换器不响应方向键），高亮同样会移动；
-- 每次操作后日志出现 `HID APP SWITCHER switcher_state ax=… dock_windows=… baseline=… front=…`，其中 `dock_windows` 比 `baseline` 大 1 表示切换器窗口仍在。
+- 左右方向键先发 `⌘←`/`⌘→`，140ms 后核对高亮是否真的移动：移动了就保持方向键；没移动（日志 `arrow_nav supported=false`）就改用 `⌘Tab`/`⌘⇧Tab` 循环，并在此后一直用循环；
+- 打开切换器后 320ms 会核对一次（`switcher_open retried=…`）：没打开就补发一次 `⌘Tab`；
+- 每次操作后日志出现 `HID APP SWITCHER switcher_state ax=… dock_windows=… baseline=… front=…`，其中 `dock_windows` 比 `baseline` 大 1 表示切换器窗口仍在；
+- 绑定「切换 APP」的按键（菜单/主页/TV/音量）必须屏蔽自己的原生键码：主页键的原生事件是 macOS 的 Home 键，漏进系统会把切换器关掉。
 
 失败判定：切换器在没有任何按键时自己消失；或按方向键高亮不动；或结束时 `⌘` 仍被按下。
 
