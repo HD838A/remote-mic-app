@@ -1769,6 +1769,23 @@ final class HIDRemoteMonitor {
                         (appSwitcherTargetApplication?.bundleIdentifier ?? "unknown") +
                         " pid=\(appSwitcherTargetApplication?.processIdentifier ?? -1)"
                 )
+                // 单窗口 App 不进窗口层：直接松开 ⌘ 让切换器原生激活目标，
+                // 150ms 后再做一次恢复兜底。省掉窗口层的开合动画和 Esc。
+                if let target = appSwitcherTargetApplication,
+                   windowCounter(target.processIdentifier) == 1 {
+                    _ = appSwitcherSession.cancel()
+                    finishAppSwitcherLifecycle(
+                        reason: "single_window_direct",
+                        confirmed: true
+                    )
+                    scheduleSingleWindowRestore(
+                        selection: target,
+                        afterMilliseconds: HIDRemoteTiming
+                            .appSwitcherSingleWindowDirectRestoreMilliseconds
+                    )
+                    markPendingLayerClose(target)
+                    return true
+                }
             }
             let moved = appSwitcherSession.moveWindowSelection(up: button == .up)
             diagnosticLogger(
@@ -1884,10 +1901,13 @@ final class HIDRemoteMonitor {
     /// 这里退出窗口层后直接把唯一的窗口拉起来。
     /// 退出窗口层后直接把唯一窗口恢复并置前；600ms 再重申一次，
     /// 防止 Dock 关闭动画收尾或异步激活把前台压回原 App。
-    private func scheduleSingleWindowRestore(selection: KeyboardInjector.AppSwitcherSelection) {
+    private func scheduleSingleWindowRestore(
+        selection: KeyboardInjector.AppSwitcherSelection,
+        afterMilliseconds: UInt64 = HIDRemoteTiming.appSwitcherExposeCloseMilliseconds
+    ) {
         appSwitcherSingleWindowTask?.cancel()
         appSwitcherSingleWindowTask = scheduler.schedule(
-            afterMilliseconds: HIDRemoteTiming.appSwitcherExposeCloseMilliseconds,
+            afterMilliseconds: afterMilliseconds,
             repeatingEveryMilliseconds: nil
         ) { [weak self] in
             guard let self else { return }

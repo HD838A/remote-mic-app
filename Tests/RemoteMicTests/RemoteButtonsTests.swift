@@ -1688,18 +1688,24 @@ struct RemoteButtonsTests {
 
         press(.menu)
         press(.down)
-        #expect(posted.contains { $0.0 == 125 })
-        press(.ok)
-        #expect(!posted.contains { $0.0 == 36 })
-        #expect(posted.contains { $0.0 == 53 })
-
+        // 单窗口直达：松开 ⌘ 让切换器激活目标，不进窗口层。
+        #expect(posted.contains { $0.0 == 55 && !$0.1 })
+        #expect(!posted.contains { $0.0 == 125 })
         scheduler.advance(
-            toMilliseconds: HIDRemoteTiming.appSwitcherExposeCloseMilliseconds
+            toMilliseconds: HIDRemoteTiming
+                .appSwitcherSingleWindowDirectRestoreMilliseconds
         )
         #expect(activatedPids == [4321])
 
-        // 确认后窗口层如果没关掉，返回键要能补一个 Escape。
-        frontmost = PresetApplication.codex.bundleIdentifier
+        // 600ms 的重申兜底：前台不是目标进程时再补一次。
+        scheduler.advance(
+            toMilliseconds: HIDRemoteTiming
+                .appSwitcherSingleWindowDirectRestoreMilliseconds
+                + HIDRemoteTiming.appSwitcherSingleWindowReassertMilliseconds
+        )
+        #expect(activatedPids == [4321, 4321])
+
+        // 直达没有落地时（前台不是目标进程），返回键补 Esc。
         press(.back)
         #expect(posted.contains { $0.0 == 53 })
     }
