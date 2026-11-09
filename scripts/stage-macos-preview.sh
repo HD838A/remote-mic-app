@@ -10,7 +10,7 @@ MODE="${1:-preview}"
 INCLUDE_SAYALL_AI="${INCLUDE_SAYALL_AI:-0}"
 case "$INCLUDE_SAYALL_AI" in
   0) include_ai=false ;;
-  1) include_ai=true ;;
+  1) print -u2 "AI distribution requires a published binary artifact contract"; exit 1 ;;
   *) print -u2 "INCLUDE_SAYALL_AI must be 0 or 1"; exit 2 ;;
 esac
 
@@ -125,7 +125,7 @@ fi
 GITHUB_REPOSITORY="$REPOSITORY" GH_BIN="$GH_BIN" \
   "$ROOT/scripts/verify-release-ready-main-ci.sh" "$commit" "$source_branch"
 # Exact-main staging only verifies; private releases and pin PRs precede it.
-python3 "$ROOT/scripts/prepare-private-platform.py" check --root "$ROOT"
+python3 "$ROOT/scripts/prepare-private-platform.py" check-release --root "$ROOT"
 REPOSITORY_ROOT="$ROOT" "$ROOT/scripts/verify-release-dependency-pins.sh" tokens >/dev/null
 GITHUB_REPOSITORY="$REPOSITORY" \
   "$ROOT/scripts/verify-release-dependency-pins.sh" >/dev/null

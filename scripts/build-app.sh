@@ -189,47 +189,55 @@ if [[ -n "$SAYALL_DIAGNOSTIC_PUBLIC_KEY_BASE64" ]]; then
   fi
 fi
 
-# Default packaging prepares a versioned private checkout when it is readable.
+# Ordinary packaging uses the public compatibility layer without private access.
 # Explicit paths (protected CI and development) are checked below instead.
-SAYALL_PRIVATE_PLATFORM_MODE="${SAYALL_PRIVATE_PLATFORM_MODE:-auto}"
-case "$SAYALL_PRIVATE_PLATFORM_MODE" in
-  auto|public|required) ;;
-  *) print -u2 "SAYALL_PRIVATE_PLATFORM_MODE must be auto, public, or required"; exit 1 ;;
-esac
 # Rebuilding both XCFramework lanes from the tag costs minutes per new tag.
 # Setting this to release reuses the archive the private repository published
-# for the same tag instead; the default keeps the local source build.
-SAYALL_PRIVATE_ARTIFACTS_SOURCE="${SAYALL_PRIVATE_ARTIFACTS_SOURCE:-build}"
+# for the same tag. Local source builds require an explicit build selection.
+SAYALL_PRIVATE_ARTIFACTS_SOURCE="${SAYALL_PRIVATE_ARTIFACTS_SOURCE:-release}"
 case "$SAYALL_PRIVATE_ARTIFACTS_SOURCE" in
   build|release) ;;
   *) print -u2 "SAYALL_PRIVATE_ARTIFACTS_SOURCE must be build or release"; exit 1 ;;
 esac
 PRIVATE_PATHS_PROVIDED=false
 for private_input in \
-  SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH SAYALL_COMBINATION_ACTIONS_PATH \
+  SAYALL_AI_PACKAGE_PATH SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH SAYALL_COMBINATION_ACTIONS_PATH \
   SAYALL_BUTTON_PROFILES_PACKAGE_PATH SAYALL_MAC_REMOTE_PACKAGE_PATH \
   SAYALL_SIRI_REMOTE_PACKAGE_PATH SAYALL_CHROMECAST_PACKAGE_PATH \
   SAYALL_PRIVATE_PLATFORM_PACKAGE_PATH; do
   [[ -z "${(P)private_input:-}" ]] || PRIVATE_PATHS_PROVIDED=true
 done
+if [[ "$PRIVATE_PATHS_PROVIDED" == true && -z "${SAYALL_PRIVATE_PLATFORM_MODE:-}" ]]; then
+  SAYALL_PRIVATE_PLATFORM_MODE=required
+fi
+SAYALL_PRIVATE_PLATFORM_MODE="${SAYALL_PRIVATE_PLATFORM_MODE:-public}"
+case "$SAYALL_PRIVATE_PLATFORM_MODE" in
+  auto|public|required) ;;
+  *) print -u2 "SAYALL_PRIVATE_PLATFORM_MODE must be auto, public, or required"; exit 1 ;;
+esac
 if [[ "$SAYALL_PRIVATE_PLATFORM_MODE" == public && "$PRIVATE_PATHS_PROVIDED" == true ]]; then
   print -u2 "Public packaging excludes private platform inputs; unset the private package paths"
   exit 1
 fi
 if [[ "$PRIVATE_PATHS_PROVIDED" == false ]]; then
+  private_channel_args=()
+  [[ -z "$SAYALL_BUILD_CHANNEL" ]] || private_channel_args=(--channel "$SAYALL_BUILD_CHANNEL")
   PRIVATE_PREPARATION="$(python3 "$ROOT/scripts/prepare-private-platform.py" package \
-    --mode "$SAYALL_PRIVATE_PLATFORM_MODE" --artifacts "$SAYALL_PRIVATE_ARTIFACTS_SOURCE")"
+    --mode "$SAYALL_PRIVATE_PLATFORM_MODE" --artifacts "$SAYALL_PRIVATE_ARTIFACTS_SOURCE" \
+    "${private_channel_args[@]}")"
   PRIVATE_MODE="$(print -r -- "$PRIVATE_PREPARATION" | python3 -c 'import json,sys; print(json.load(sys.stdin)["mode"])')"
   if [[ "$PRIVATE_MODE" == private ]]; then
-    PRIVATE_CHECKOUT="$(print -r -- "$PRIVATE_PREPARATION" | python3 -c 'import json,sys; print(json.load(sys.stdin)["checkout"])')"
+    PRIVATE_CHECKOUT="$(print -r -- "$PRIVATE_PREPARATION" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("checkout") or "")')"
     # The manifest tag is what this build actually consumes, so it overrides any
     # inherited value. Missing key means the resolver ran in a reduced mode and
     # the version stays unknown rather than failing the build.
     export SAYALL_PRIVATE_PLATFORM_VERSION="$(print -r -- "$PRIVATE_PREPARATION" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("tag") or "")')"
     export SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH="$(print -r -- "$PRIVATE_PREPARATION" | python3 -c 'import json,sys; print(json.load(sys.stdin)["artifacts"])')"
-    export SAYALL_MAC_REMOTE_PACKAGE_PATH="$PRIVATE_CHECKOUT/packages/macos-remote"
-    export SAYALL_SIRI_REMOTE_PACKAGE_PATH="$PRIVATE_CHECKOUT/packages/audio-input-kit/siri-remote"
-    export SAYALL_CHROMECAST_PACKAGE_PATH="$PRIVATE_CHECKOUT/packages/audio-input-kit/chromecast"
+    if [[ -n "$PRIVATE_CHECKOUT" ]]; then
+      export SAYALL_MAC_REMOTE_PACKAGE_PATH="$PRIVATE_CHECKOUT/packages/macos-remote"
+      export SAYALL_SIRI_REMOTE_PACKAGE_PATH="$PRIVATE_CHECKOUT/packages/audio-input-kit/siri-remote"
+      export SAYALL_CHROMECAST_PACKAGE_PATH="$PRIVATE_CHECKOUT/packages/audio-input-kit/chromecast"
+    fi
     REQUIRE_SAYALL_PRIVATE_ARTIFACT_PACKAGE=1
     REQUIRE_SAYALL_COMBINATION_ACTIONS=1
     REQUIRE_SAYALL_BUTTON_PROFILES=1
@@ -239,6 +247,20 @@ if [[ "$PRIVATE_PATHS_PROVIDED" == false ]]; then
   else
     print "PRIVATE PLATFORM public compatibility build (private components unavailable or explicitly disabled)"
   fi
+fi
+if [[ -n "${SAYALL_LOCAL_PRIVATE_SOURCE_COMMIT:-}" && "$SAYALL_BUILD_CHANNEL" != local ]]; then
+  print -u2 "An explicit private source commit is restricted to the local channel"
+  exit 1
+fi
+if [[ "$SAYALL_BUILD_CHANNEL" == release || "$SAYALL_BUILD_CHANNEL" == internalQA ]]; then
+  for private_source_input in SAYALL_AI_PACKAGE_PATH SAYALL_COMBINATION_ACTIONS_PATH \
+    SAYALL_BUTTON_PROFILES_PACKAGE_PATH SAYALL_MAC_REMOTE_PACKAGE_PATH \
+    SAYALL_SIRI_REMOTE_PACKAGE_PATH SAYALL_CHROMECAST_PACKAGE_PATH SAYALL_PRIVATE_PLATFORM_PACKAGE_PATH; do
+    if [[ -n "${(P)private_source_input:-}" ]]; then
+      print -u2 "Distribution packaging requires published private binaries; source inputs are restricted to local builds"
+      exit 1
+    fi
+  done
 fi
 if [[ "${SAYALL_ENABLE_PRIVATE_SWIFTPM:-0}" == 1 || -n "${SAYALL_PRIVATE_PLATFORM_PACKAGE_PATH:-}" ]]; then
   print -u2 "App packaging requires tag-pinned prepared artifacts; use SAYALL_PRIVATE_PLATFORM_MODE=required"
@@ -409,7 +431,7 @@ if [[ -n "$SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH" ]]; then
   EXPECTED_PREPARED_MANIFEST_SHA256="$(jq -r '.preparedManifestSHA256' "$SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH/private-artifact-package.json")"
   ACTUAL_PREPARED_MANIFEST_SHA256="$(shasum -a 256 "$SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH/PREPARED_SHA256SUMS" | awk '{print $1}')"
   if [[ "$ACTUAL_PREPARED_MANIFEST_SHA256" != "$EXPECTED_PREPARED_MANIFEST_SHA256" ]] || \
-      ! (cd "$SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH" && shasum -a 256 -c PREPARED_SHA256SUMS); then
+      ! (cd "$SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH" && shasum -a 256 -c PREPARED_SHA256SUMS >/dev/null); then
     print -u2 "private artifact package contents do not match the prepared manifest"
     exit 1
   fi
@@ -419,6 +441,10 @@ if [[ -n "$SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH" ]]; then
   SAYALL_COMBINATION_ACTIONS_INCLUDED=true
   SAYALL_BUTTON_PROFILES_INCLUDED=true
   SAYALL_MAC_REMOTE_INCLUDED=true
+  if [[ -z "${SAYALL_LOCAL_PRIVATE_SOURCE_COMMIT:-}" ]]; then
+    python3 "$ROOT/scripts/prepare-private-platform.py" check-artifacts \
+      --output "$SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH"
+  fi
 else
   SAYALL_PRIVATE_ARTIFACT_INCLUDED=false
   if [[ "$SAYALL_BUTTON_PROFILES_INCLUDED" == "true" &&
@@ -496,6 +522,10 @@ for private_source in "$SAYALL_COMBINATION_ACTIONS_PATH" "$SAYALL_BUTTON_PROFILE
   fi
   PRIVATE_SOURCE_ROOT="$source_root"
 done
+if [[ -n "${SAYALL_LOCAL_PRIVATE_SOURCE_COMMIT:-}" && -z "$PRIVATE_SOURCE_ROOT" ]]; then
+  print -u2 "An explicit private source commit requires its clean local checkout"
+  exit 1
+fi
 if [[ -n "$PRIVATE_SOURCE_ROOT" ]]; then
   # Passing an empty --channel made argument parsing fail with
   # "invalid choice: ''" before any build work, so only forward a real channel.
