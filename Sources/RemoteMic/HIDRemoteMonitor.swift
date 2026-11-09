@@ -244,7 +244,14 @@ final class HIDRemoteMonitor {
         self.permissionPoll = permissionPoll
         self.runtimePermissions = runtimePermissions
         self.appSwitcherSession = KeyboardInjector.AppSwitcherSession(
-            keyStatePoster: appSwitcherKeyStatePoster
+            keyStatePoster: appSwitcherKeyStatePoster,
+            scheduler: { delay, event in
+                _ = scheduler.schedule(
+                    afterMilliseconds: delay,
+                    repeatingEveryMilliseconds: nil,
+                    event
+                )
+            }
         )
         self.actionPerformer = actionPerformer ?? { _, _, configured in
             KeyboardInjector.send(

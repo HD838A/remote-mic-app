@@ -1455,7 +1455,8 @@ struct RemoteButtonsTests {
             keyStatePoster: { code, isDown, flags in
                 posted.append((code, isDown, flags))
                 return true
-            }
+            },
+            scheduler: { _, event in event() }
         )
 
         #expect(session.trigger())
@@ -1514,7 +1515,8 @@ struct RemoteButtonsTests {
                 if code == KeyboardInjector.leftOptionKeyCode, isDown { return false }
                 posted.append((code, isDown, flags))
                 return true
-            }
+            },
+            scheduler: { _, event in event() }
         )
 
         #expect(session.trigger())
@@ -1619,6 +1621,23 @@ struct RemoteButtonsTests {
         try press(.right)
         try press(.left)
         try press(.ok)
+        #expect(posted.count == 8)
+        #expect(posted.last?.0 == KeyboardInjector.leftOptionKeyCode)
+        #expect(posted.last?.1 == true)
+        scheduler.advance(
+            toMilliseconds: KeyboardInjector.AppSwitcherSession.optionHoldMilliseconds
+        )
+        #expect(posted.count == 9)
+        #expect(posted.last?.0 == KeyboardInjector.leftCommandKeyCode)
+        #expect(posted.last?.1 == false)
+        #expect(posted.last?.2 == .maskAlternate)
+        scheduler.advance(
+            toMilliseconds: KeyboardInjector.AppSwitcherSession.optionHoldMilliseconds
+                + KeyboardInjector.AppSwitcherSession.optionReleaseMilliseconds
+        )
+        #expect(posted.count == 10)
+        #expect(posted.last?.0 == KeyboardInjector.leftOptionKeyCode)
+        #expect(posted.last?.2.isEmpty == true)
         frontmost = PresetApplication.safari.bundleIdentifier
         scheduler.advance(
             toMilliseconds: HIDRemoteTiming.appSwitcherConfirmationProbeMilliseconds

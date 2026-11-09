@@ -48,12 +48,30 @@ enum KeyboardInjector {
     }
 
     final class AppSwitcherSession {
+        typealias DelayScheduler = (UInt64, @escaping () -> Void) -> Void
+
+        /// ⌥ 按下与 ⌘ 松开必须分两个事件周期送达：同一批送进 Dock 时，它处理 ⌘ 抬起
+        /// 读到的已经是 ⌥ 松开的最终状态，最小化窗口不会回来。
+        static let optionHoldMilliseconds: UInt64 = 60
+        static let optionReleaseMilliseconds: UInt64 = 100
+        static let mainQueueScheduler: DelayScheduler = { milliseconds, action in
+            DispatchQueue.main.asyncAfter(
+                deadline: .now() + .milliseconds(Int(milliseconds)),
+                execute: action
+            )
+        }
+
         private let keyStatePoster: KeyStatePoster
+        private let scheduler: DelayScheduler
         private var diagnosticLogger: ((String) -> Void)?
         private(set) var isActive = false
 
-        init(keyStatePoster: @escaping KeyStatePoster = KeyboardInjector.postKeyState) {
+        init(
+            keyStatePoster: @escaping KeyStatePoster = KeyboardInjector.postKeyState,
+            scheduler: @escaping DelayScheduler = AppSwitcherSession.mainQueueScheduler
+        ) {
             self.keyStatePoster = keyStatePoster
+            self.scheduler = scheduler
         }
 
         func setDiagnosticLogger(_ logger: @escaping (String) -> Void) {
@@ -104,23 +122,33 @@ enum KeyboardInjector {
         @discardableResult
         func confirm() -> Bool {
             guard isActive else { return true }
-            let optionDown = post(
+            isActive = false
+            guard post(
                 leftOptionKeyCode,
                 isDown: true,
                 flags: [.maskCommand, .maskAlternate],
                 role: "option"
-            )
-            let commandUp = post(
-                leftCommandKeyCode,
-                isDown: false,
-                flags: optionDown ? [.maskAlternate] : [],
-                role: "command"
-            )
-            let optionUp = optionDown
-                ? post(leftOptionKeyCode, isDown: false, flags: [], role: "option")
-                : true
-            isActive = false
-            return commandUp && optionUp
+            ) else {
+                return post(leftCommandKeyCode, isDown: false, flags: [], role: "command")
+            }
+            scheduler(Self.optionHoldMilliseconds) { [weak self] in
+                guard let self else { return }
+                _ = self.post(
+                    KeyboardInjector.leftCommandKeyCode,
+                    isDown: false,
+                    flags: [.maskAlternate],
+                    role: "command"
+                )
+                self.scheduler(Self.optionReleaseMilliseconds) { [weak self] in
+                    _ = self?.post(
+                        KeyboardInjector.leftOptionKeyCode,
+                        isDown: false,
+                        flags: [],
+                        role: "option"
+                    )
+                }
+            }
+            return true
         }
 
         @discardableResult
