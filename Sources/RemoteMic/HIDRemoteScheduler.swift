@@ -29,6 +29,7 @@ enum HIDRemoteTiming {
     static let appSwitcherModifierWatchdogMilliseconds: UInt64 = 1_000
     static let appSwitcherExposeCloseMilliseconds: UInt64 = 200
     static let appSwitcherForegroundEnsureMilliseconds: UInt64 = 300
+    static let appSwitcherWindowPickerEntryMilliseconds: UInt64 = 80
     static let appSwitcherSingleWindowReassertMilliseconds: UInt64 = 400
     static let appSwitcherVisibilityProbeMilliseconds: [UInt64] = [0, 150, 500, 1_000]
 

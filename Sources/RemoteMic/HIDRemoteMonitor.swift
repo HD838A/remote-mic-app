@@ -196,6 +196,7 @@ final class HIDRemoteMonitor {
     private var appSwitcherModifierWatchdog: HIDRemoteScheduledTask?
     private var appSwitcherSingleWindowTask: HIDRemoteScheduledTask?
     private var appSwitcherForegroundTask: HIDRemoteScheduledTask?
+    private var appSwitcherPendingPickerEntry: HIDRemoteScheduledTask?
     private var appSwitcherOriginBundleIdentifier: String?
     /// 切换器 HUD 里高亮的 App（按进程记录，同名双实例也能区分）。
     private var appSwitcherTargetApplication: KeyboardInjector.AppSwitcherSelection?
@@ -1116,6 +1117,9 @@ final class HIDRemoteMonitor {
             if button == .back, handlePendingLayerCloseBack() {
                 continue
             }
+            if button == .up || button == .down, handlePendingLayerCloseArrow(button: button) {
+                continue
+            }
             if appSwitcherSession.isActive,
                handleAppSwitcherControlPress(button, usage: usage) {
                 continue
@@ -1807,6 +1811,42 @@ final class HIDRemoteMonitor {
         }
     }
 
+    /// 确认后按方向键：如果切换没成功（前台不是目标进程），就重新起切换器
+    /// 并直接进入它的窗口层——这种状态下原来的方向键是“死键”。
+    /// 切换成功时（前台已是目标进程）方向键保持原映射。
+    private func handlePendingLayerCloseArrow(button: RemoteButton) -> Bool {
+        guard !appSwitcherSession.isActive else { return false }
+        guard let target = appSwitcherPendingLayerClose else { return false }
+        guard frontmostProcessIdentifier() != target.processIdentifier else {
+            appSwitcherPendingLayerClose = nil
+            return false
+        }
+        appSwitcherPendingLayerClose = nil
+        guard appSwitcherSession.trigger() else { return false }
+        startAppSwitcherLifecycle()
+        scheduleAppSwitcherTimeout()
+        appSwitcherPendingPickerEntry?.cancel()
+        appSwitcherPendingPickerEntry = scheduler.schedule(
+            afterMilliseconds: HIDRemoteTiming.appSwitcherWindowPickerEntryMilliseconds,
+            repeatingEveryMilliseconds: nil
+        ) { [weak self] in
+            guard let self else { return }
+            self.appSwitcherPendingPickerEntry = nil
+            guard self.appSwitcherSession.isActive,
+                  !self.appSwitcherSession.isWindowPickerActive else { return }
+            self.appSwitcherTargetApplication = self.appSwitcherSelectedApplication()
+            self.diagnosticLogger(
+                "HID APP SWITCHER picker_reentered bundle_id=" +
+                    (self.appSwitcherTargetApplication?.bundleIdentifier ?? "unknown") +
+                    " pid=\(self.appSwitcherTargetApplication?.processIdentifier ?? -1)"
+            )
+            _ = self.appSwitcherSession.moveWindowSelection(up: button == .up)
+            self.scheduleAppSwitcherTimeout()
+        }
+        diagnosticLogger("HID APP SWITCHER picker_reenter_started")
+        return true
+    }
+
     /// 确认后窗口层可能还开着（目标 App 没有窗口时 Return 不会关闭它）。
     /// 记一小段时间，期间返回键可以直接把它关掉。
     private func markPendingLayerClose(_ target: KeyboardInjector.AppSwitcherSelection?) {
@@ -1925,6 +1965,8 @@ final class HIDRemoteMonitor {
         appSwitcherSingleWindowTask = nil
         appSwitcherForegroundTask?.cancel()
         appSwitcherForegroundTask = nil
+        appSwitcherPendingPickerEntry?.cancel()
+        appSwitcherPendingPickerEntry = nil
         appSwitcherFrontmostMonitor?.cancel()
         appSwitcherFrontmostMonitor = scheduler.schedule(
             afterMilliseconds: HIDRemoteTiming.appSwitcherFrontmostPollMilliseconds,
@@ -2082,6 +2124,8 @@ final class HIDRemoteMonitor {
         appSwitcherSingleWindowTask = nil
         appSwitcherForegroundTask?.cancel()
         appSwitcherForegroundTask = nil
+        appSwitcherPendingPickerEntry?.cancel()
+        appSwitcherPendingPickerEntry = nil
         appSwitcherTargetApplication = nil
         appSwitcherPendingLayerClose = nil
         appSwitcherOriginBundleIdentifier = nil
