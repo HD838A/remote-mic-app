@@ -113,7 +113,6 @@ final class HIDRemoteMonitor {
     private let windowCounter: (String?) -> Int?
     private let windowActivator: (String?) -> Bool
     private let appSwitcherSelectedBundleIdentifier: () -> String?
-    private let windowPresence: (String?) -> Bool
     private let overrideActionPerformer: (UUID?, RemoteButton, ButtonTrigger) -> Bool
     private let hasOverrideBinding: (UUID?, RemoteButton, ButtonTrigger) -> Bool
     private let frontmostBundleIdentifier: () -> String?
@@ -194,7 +193,6 @@ final class HIDRemoteMonitor {
     private var appSwitcherMinimizedRestoreProbe: HIDRemoteScheduledTask?
     private var appSwitcherModifierWatchdog: HIDRemoteScheduledTask?
     private var appSwitcherSingleWindowTask: HIDRemoteScheduledTask?
-    private var appSwitcherWindowlessTask: HIDRemoteScheduledTask?
     private var appSwitcherOriginBundleIdentifier: String?
     /// 切换器 HUD 里高亮的 App；进入窗口层后 Dock 不再暴露列表，必须在进入前记下。
     private var appSwitcherTargetBundleIdentifier: String?
@@ -261,9 +259,6 @@ final class HIDRemoteMonitor {
         },
         appSwitcherSelectedBundleIdentifier: @escaping () -> String? = {
             KeyboardInjector.appSwitcherSelectedApplication()?.bundleIdentifier
-        },
-        windowPresence: @escaping (String?) -> Bool = {
-            KeyboardInjector.hasVisibleWindow(bundleIdentifier: $0)
         }
     ) {
         self.settings = settings
@@ -277,7 +272,6 @@ final class HIDRemoteMonitor {
         self.windowCounter = windowCounter
         self.windowActivator = windowActivator
         self.appSwitcherSelectedBundleIdentifier = appSwitcherSelectedBundleIdentifier
-        self.windowPresence = windowPresence
         self.permissionPoll = permissionPoll
         self.runtimePermissions = runtimePermissions
         self.appSwitcherSession = KeyboardInjector.AppSwitcherSession(
@@ -1715,11 +1709,6 @@ final class HIDRemoteMonitor {
                 reason: confirmed ? "confirmed" : "confirm_failed",
                 confirmed: confirmed
             )
-            if confirmed {
-                scheduleWindowlessEscapeCheck(
-                    bundleIdentifier: appSwitcherTargetBundleIdentifier
-                )
-            }
             return true
         case .back:
             finishAppSwitcherLifecycle(reason: "back", confirmed: false)
@@ -1763,25 +1752,6 @@ final class HIDRemoteMonitor {
 
     /// 只有单个窗口时，窗口选择层的高亮可能落到别的窗口条上，Return 会激活错的 App。
     /// 这里退出窗口层后直接把唯一的窗口拉起来。
-    /// 目标 App 一个可见窗口都没有时，窗口层里的 Return 无处可确认，
-    /// 关不掉窗口层；稍等一拍确认仍然无窗口，就补一个 Escape。
-    private func scheduleWindowlessEscapeCheck(bundleIdentifier: String?) {
-        guard let bundleIdentifier else { return }
-        appSwitcherWindowlessTask?.cancel()
-        appSwitcherWindowlessTask = scheduler.schedule(
-            afterMilliseconds: HIDRemoteTiming.appSwitcherWindowlessCheckMilliseconds,
-            repeatingEveryMilliseconds: nil
-        ) { [weak self] in
-            guard let self else { return }
-            self.appSwitcherWindowlessTask = nil
-            guard !self.windowPresence(bundleIdentifier) else { return }
-            _ = self.appSwitcherSession.dismissWindowPicker()
-            self.diagnosticLogger(
-                "HID APP SWITCHER windowless_escape bundle_id=\(bundleIdentifier)"
-            )
-        }
-    }
-
     /// 退出窗口层后直接把唯一窗口恢复并置前。
     private func scheduleSingleWindowRestore(bundleIdentifier: String) {
         appSwitcherSingleWindowTask?.cancel()
@@ -1851,8 +1821,6 @@ final class HIDRemoteMonitor {
         appSwitcherModifierWatchdog = nil
         appSwitcherSingleWindowTask?.cancel()
         appSwitcherSingleWindowTask = nil
-        appSwitcherWindowlessTask?.cancel()
-        appSwitcherWindowlessTask = nil
         appSwitcherFrontmostMonitor?.cancel()
         appSwitcherFrontmostMonitor = scheduler.schedule(
             afterMilliseconds: HIDRemoteTiming.appSwitcherFrontmostPollMilliseconds,
@@ -1891,7 +1859,6 @@ final class HIDRemoteMonitor {
         )
         if confirmed {
             let origin = appSwitcherOriginBundleIdentifier
-            let target = appSwitcherTargetBundleIdentifier
             appSwitcherConfirmationProbe?.cancel()
             appSwitcherConfirmationProbe = scheduler.schedule(
                 afterMilliseconds: HIDRemoteTiming.appSwitcherConfirmationProbeMilliseconds,
@@ -1903,6 +1870,8 @@ final class HIDRemoteMonitor {
                     "HID APP SWITCHER selection bundle_id=" +
                         (self.frontmostBundleIdentifier() ?? "unknown")
                 )
+                // 目标 App 没有可用窗口时，Return 不会关掉窗口层；
+                // 此时会话已结束，返回键不再被拦截，只能补一个 Escape。
                 if KeyboardInjector.appSwitcherSelectedApplication() != nil {
                     _ = self.appSwitcherSession.dismissWindowPicker()
                     self.diagnosticLogger("HID APP SWITCHER stuck_switcher escaped=true")
@@ -2005,8 +1974,6 @@ final class HIDRemoteMonitor {
         appSwitcherModifierWatchdog = nil
         appSwitcherSingleWindowTask?.cancel()
         appSwitcherSingleWindowTask = nil
-        appSwitcherWindowlessTask?.cancel()
-        appSwitcherWindowlessTask = nil
         appSwitcherTargetBundleIdentifier = nil
         appSwitcherOriginBundleIdentifier = nil
         for usage in activeUsages.subtracting(nativePassthroughUsages) {

@@ -2455,14 +2455,6 @@ enum KeyboardInjector {
         return axElements(element, attribute: kAXWindowsAttribute).count
     }
 
-    /// 目标 App 当前有没有可见窗口。窗口层展开时，有窗口的 App 会大于 0，
-    /// 运行中但没有窗口的 App 仍然是 0，可用它判断 Return 是否无处可确认。
-    static func hasVisibleWindow(bundleIdentifier: String?) -> Bool {
-        guard let bundleIdentifier else { return false }
-        let snapshot = applicationVisibilitySnapshot(bundleIdentifier: bundleIdentifier)
-        return (snapshot.onscreenWindowCount ?? 0) > 0
-    }
-
     /// 单窗口场景：窗口层里的高亮不稳定，直接恢复那个唯一窗口并置前。
     static func restoreSingleWindow(bundleIdentifier: String?) -> Bool {
         guard let bundleIdentifier, isAccessibilityTrusted,
