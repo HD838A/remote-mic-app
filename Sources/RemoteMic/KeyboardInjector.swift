@@ -2455,6 +2455,14 @@ enum KeyboardInjector {
         return axElements(element, attribute: kAXWindowsAttribute).count
     }
 
+    /// 目标 App 是否存在任何普通窗口（最小化的也算）。
+    /// 用来识别“运行中但没有窗口”的 App，这种 App 的窗口层没法用 Return 关闭。
+    static func hasAnyWindow(bundleIdentifier: String?) -> Bool {
+        guard let bundleIdentifier else { return false }
+        let snapshot = applicationVisibilitySnapshot(bundleIdentifier: bundleIdentifier)
+        return (snapshot.ordinaryWindowCount ?? 0) > 0
+    }
+
     /// 单窗口场景：窗口层里的高亮不稳定，直接恢复那个唯一窗口并置前。
     static func restoreSingleWindow(bundleIdentifier: String?) -> Bool {
         guard let bundleIdentifier, isAccessibilityTrusted,

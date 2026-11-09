@@ -1669,7 +1669,8 @@ struct RemoteButtonsTests {
             },
             appSwitcherSelectedBundleIdentifier: {
                 PresetApplication.safari.bundleIdentifier
-            }
+            },
+            windowPresence: { _ in true }
         )
         monitor.connectSimulatedDevice(
             fingerprint: "app-switcher-single-window", profileID: profileID
@@ -1779,7 +1780,8 @@ struct RemoteButtonsTests {
             minimizedWindowRestorer: { bundle, origin in
                 restoreCalls.append((bundle, origin))
                 return .skippedVisibleWindow
-            }
+            },
+            windowPresence: { _ in true }
         )
         monitor.connectSimulatedDevice(
             fingerprint: "app-switcher-controls", profileID: profileID, isSeized: isSeized
