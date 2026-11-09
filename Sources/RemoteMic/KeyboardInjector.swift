@@ -2457,6 +2457,31 @@ enum KeyboardInjector {
         return candidates.first(where: { $0.isActive }) ?? candidates.first
     }
 
+    /// 把目标 App 带到前台。窗口已经由 Return 打开时，只需要激活 App 本身，
+    /// 不要 raise 具体窗口，避免换掉用户选中的窗口。
+    static func activateApplication(bundleIdentifier: String?) -> Bool {
+        guard let bundleIdentifier,
+              let application = NSRunningApplication.runningApplications(
+                  withBundleIdentifier: bundleIdentifier
+              ).first(where: { !$0.isTerminated })
+        else { return false }
+        if NSWorkspace.shared.frontmostApplication?.bundleIdentifier == bundleIdentifier {
+            return true
+        }
+        AXUIElementSetAttributeValue(
+            AXUIElementCreateApplication(application.processIdentifier),
+            kAXFrontmostAttribute as CFString,
+            kCFBooleanTrue
+        )
+        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleIdentifier) {
+            let configuration = NSWorkspace.OpenConfiguration()
+            configuration.activates = true
+            configuration.createsNewApplicationInstance = false
+            NSWorkspace.shared.openApplication(at: url, configuration: configuration) { _, _ in }
+        }
+        return true
+    }
+
     /// 单窗口场景：窗口层里的高亮不稳定，直接恢复那个唯一窗口并置前。
     static func restoreSingleWindow(bundleIdentifier: String?) -> Bool {
         guard let bundleIdentifier, isAccessibilityTrusted,

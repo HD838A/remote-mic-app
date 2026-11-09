@@ -1748,6 +1748,66 @@ struct RemoteButtonsTests {
         #expect(posted.contains { $0.0 == 53 })
     }
 
+    @Test func appSwitcherEnsuresForegroundAfterMultiWindowConfirm() throws {
+        let suiteName = "RemoteButtonsTests.appSwitcherEnsureFront.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = AppSettings(defaults: defaults)
+        settings.customMappingEnabled = true
+        settings.setAction(.appSwitcher, for: .menu)
+        let profileID = try #require(settings.selectedRemoteProfileID)
+        let scheduler = RemoteButtonsTestScheduler()
+        var frontmost = PresetApplication.codex.bundleIdentifier
+        var activated: [String?] = []
+        let monitor = HIDRemoteMonitor(
+            settings: settings,
+            profileID: profileID,
+            ownsEventSuppressor: false,
+            scheduler: scheduler,
+            runtimePermissions: { true },
+            frontmostBundleIdentifier: { frontmost },
+            diagnosticLogger: { _ in },
+            appSwitcherKeyStatePoster: { _, _, _ in true },
+            windowCounter: { _ in 2 },
+            applicationActivator: { bundle in
+                activated.append(bundle)
+                return true
+            },
+            appSwitcherSelectedBundleIdentifier: {
+                PresetApplication.safari.bundleIdentifier
+            }
+        )
+        monitor.connectSimulatedDevice(
+            fingerprint: "app-switcher-ensure-front", profileID: profileID
+        )
+
+        func press(_ button: RemoteButton) {
+            monitor.handleSimulatedReport(
+                reportID: 1, data: Data([UInt8(button.hidUsage), 0, 0, 0, 0, 0])
+            )
+            monitor.handleSimulatedReport(reportID: 1, data: Data(repeating: 0, count: 6))
+        }
+
+        press(.menu)
+        press(.down)
+        press(.ok)
+        // 确认后前台仍是原 App：300ms 时应该补一次 App 激活。
+        scheduler.advance(
+            toMilliseconds: HIDRemoteTiming.appSwitcherForegroundEnsureMilliseconds
+        )
+        #expect(activated == [PresetApplication.safari.bundleIdentifier])
+
+        // 切换成功时不应再打扰。
+        press(.menu)
+        press(.down)
+        frontmost = PresetApplication.safari.bundleIdentifier
+        press(.ok)
+        scheduler.advance(
+            toMilliseconds: HIDRemoteTiming.appSwitcherForegroundEnsureMilliseconds * 2
+        )
+        #expect(activated.count == 1)
+    }
+
     @Test func appSwitcherHeldDirectionRepeatsSelection() throws {
         let suiteName = "RemoteButtonsTests.appSwitcherRepeat.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))
