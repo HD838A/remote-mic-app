@@ -1649,7 +1649,7 @@ struct RemoteButtonsTests {
         let scheduler = RemoteButtonsTestScheduler()
         var frontmost = PresetApplication.safari.bundleIdentifier
         var posted: [(CGKeyCode, Bool, CGEventFlags)] = []
-        var activated: [String?] = []
+        var activatedPids: [pid_t] = []
         let monitor = HIDRemoteMonitor(
             settings: settings,
             profileID: profileID,
@@ -1663,13 +1663,17 @@ struct RemoteButtonsTests {
                 return true
             },
             windowCounter: { _ in 1 },
-            windowActivator: { bundle in
-                activated.append(bundle)
+            windowActivator: { pid in
+                activatedPids.append(pid)
                 return true
             },
-            appSwitcherSelectedBundleIdentifier: {
-                PresetApplication.safari.bundleIdentifier
-            }
+            appSwitcherSelectedApplication: {
+                KeyboardInjector.AppSwitcherSelection(
+                    processIdentifier: 4321,
+                    bundleIdentifier: PresetApplication.safari.bundleIdentifier
+                )
+            },
+            frontmostProcessIdentifier: { 9999 }
         )
         monitor.connectSimulatedDevice(
             fingerprint: "app-switcher-single-window", profileID: profileID
@@ -1692,7 +1696,7 @@ struct RemoteButtonsTests {
         scheduler.advance(
             toMilliseconds: HIDRemoteTiming.appSwitcherExposeCloseMilliseconds
         )
-        #expect(activated == [PresetApplication.safari.bundleIdentifier])
+        #expect(activatedPids == [4321])
 
         // 确认后窗口层如果没关掉，返回键要能补一个 Escape。
         frontmost = PresetApplication.codex.bundleIdentifier
@@ -1724,9 +1728,13 @@ struct RemoteButtonsTests {
                 return true
             },
             windowCounter: { _ in 2 },
-            appSwitcherSelectedBundleIdentifier: {
-                PresetApplication.safari.bundleIdentifier
-            }
+            appSwitcherSelectedApplication: {
+                KeyboardInjector.AppSwitcherSelection(
+                    processIdentifier: 4321,
+                    bundleIdentifier: PresetApplication.safari.bundleIdentifier
+                )
+            },
+            frontmostProcessIdentifier: { 9999 }
         )
         monitor.connectSimulatedDevice(
             fingerprint: "app-switcher-back-escape", profileID: profileID
@@ -1758,7 +1766,8 @@ struct RemoteButtonsTests {
         let profileID = try #require(settings.selectedRemoteProfileID)
         let scheduler = RemoteButtonsTestScheduler()
         var frontmost = PresetApplication.codex.bundleIdentifier
-        var activated: [String?] = []
+        var frontPid: pid_t = 9999
+        var activatedPids: [pid_t] = []
         let monitor = HIDRemoteMonitor(
             settings: settings,
             profileID: profileID,
@@ -1769,13 +1778,17 @@ struct RemoteButtonsTests {
             diagnosticLogger: { _ in },
             appSwitcherKeyStatePoster: { _, _, _ in true },
             windowCounter: { _ in 2 },
-            applicationActivator: { bundle in
-                activated.append(bundle)
+            applicationActivator: { pid in
+                activatedPids.append(pid)
                 return true
             },
-            appSwitcherSelectedBundleIdentifier: {
-                PresetApplication.safari.bundleIdentifier
-            }
+            appSwitcherSelectedApplication: {
+                KeyboardInjector.AppSwitcherSelection(
+                    processIdentifier: 4321,
+                    bundleIdentifier: PresetApplication.safari.bundleIdentifier
+                )
+            },
+            frontmostProcessIdentifier: { frontPid }
         )
         monitor.connectSimulatedDevice(
             fingerprint: "app-switcher-ensure-front", profileID: profileID
@@ -1795,17 +1808,18 @@ struct RemoteButtonsTests {
         scheduler.advance(
             toMilliseconds: HIDRemoteTiming.appSwitcherForegroundEnsureMilliseconds
         )
-        #expect(activated == [PresetApplication.safari.bundleIdentifier])
+        #expect(activatedPids == [4321])
 
         // 切换成功时不应再打扰。
         press(.menu)
         press(.down)
         frontmost = PresetApplication.safari.bundleIdentifier
+        frontPid = 4321
         press(.ok)
         scheduler.advance(
             toMilliseconds: HIDRemoteTiming.appSwitcherForegroundEnsureMilliseconds * 2
         )
-        #expect(activated.count == 1)
+        #expect(activatedPids.count == 1)
     }
 
     @Test func appSwitcherHeldDirectionRepeatsSelection() throws {

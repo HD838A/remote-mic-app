@@ -2357,13 +2357,9 @@ enum KeyboardInjector {
 
     /// 目标 App 的标准窗口数（含最小化窗口），按辅助功能 subrole 过滤。
     /// CGWindowList 会把菜单栏阴影、1×1 辅助窗口也算进来，不能用来数窗口。
-    static func standardWindowCount(bundleIdentifier: String?) -> Int? {
-        guard let bundleIdentifier, isAccessibilityTrusted,
-              let application = NSRunningApplication.runningApplications(
-                  withBundleIdentifier: bundleIdentifier
-              ).first(where: { !$0.isTerminated })
-        else { return nil }
-        let element = AXUIElementCreateApplication(application.processIdentifier)
+    static func standardWindowCount(processIdentifier: pid_t) -> Int? {
+        guard isAccessibilityTrusted else { return nil }
+        let element = AXUIElementCreateApplication(processIdentifier)
         return axElements(element, attribute: kAXWindowsAttribute).filter {
             axString($0, attribute: kAXSubroleAttribute) == kAXStandardWindowSubrole as String
         }.count
@@ -2431,7 +2427,14 @@ enum KeyboardInjector {
 
     /// 切换器 HUD 的当前高亮项由 Dock 通过辅助功能暴露（`AXSelectedChildren`）。
     /// 一旦进入窗口选择层，这个列表就会消失，所以必须在进入前读取。
-    static func appSwitcherSelectedApplication() -> NSRunningApplication? {
+    struct AppSwitcherSelection {
+        let processIdentifier: pid_t
+        let bundleIdentifier: String?
+    }
+
+    /// 切换器里选中的 App。同名实例（两个 Chrome）时优先非活跃的那个：
+    /// 用户在切换器里选的几乎总是“另一个”App，而不是当前活跃的实例。
+    static func appSwitcherSelectedApplication() -> AppSwitcherSelection? {
         guard isAccessibilityTrusted,
               let dock = NSRunningApplication.runningApplications(
                   withBundleIdentifier: "com.apple.dock"
@@ -2454,40 +2457,39 @@ enum KeyboardInjector {
         let candidates = NSWorkspace.shared.runningApplications.filter {
             !$0.isTerminated && $0.activationPolicy == .regular && $0.localizedName == title
         }
-        return candidates.first(where: { $0.isActive }) ?? candidates.first
+        // 同名多实例时优先非活跃的那个：切换器里选中的通常不是当前 App。
+        let match = candidates.first(where: { !$0.isActive }) ?? candidates.first
+        guard let match else { return nil }
+        return AppSwitcherSelection(
+            processIdentifier: match.processIdentifier,
+            bundleIdentifier: match.bundleIdentifier
+        )
     }
 
     /// 把目标 App 带到前台。窗口已经由 Return 打开时，只需要激活 App 本身，
     /// 不要 raise 具体窗口，避免换掉用户选中的窗口。
-    static func activateApplication(bundleIdentifier: String?) -> Bool {
-        guard let bundleIdentifier,
-              let application = NSRunningApplication.runningApplications(
-                  withBundleIdentifier: bundleIdentifier
-              ).first(where: { !$0.isTerminated })
+    static func activateApplication(processIdentifier: pid_t) -> Bool {
+        guard let application = NSRunningApplication(processIdentifier: processIdentifier),
+              !application.isTerminated
         else { return false }
-        if NSWorkspace.shared.frontmostApplication?.bundleIdentifier == bundleIdentifier {
+        if NSWorkspace.shared.frontmostApplication?.processIdentifier == processIdentifier {
             return true
         }
         AXUIElementSetAttributeValue(
-            AXUIElementCreateApplication(application.processIdentifier),
+            AXUIElementCreateApplication(processIdentifier),
             kAXFrontmostAttribute as CFString,
             kCFBooleanTrue
         )
-        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleIdentifier) {
-            let configuration = NSWorkspace.OpenConfiguration()
-            configuration.activates = true
-            configuration.createsNewApplicationInstance = false
-            NSWorkspace.shared.openApplication(at: url, configuration: configuration) { _, _ in }
-        }
+        _ = application.activate(options: [.activateAllWindows])
         return true
     }
 
     /// 单窗口场景：窗口层里的高亮不稳定，直接恢复那个唯一窗口并置前。
-    static func restoreSingleWindow(bundleIdentifier: String?) -> Bool {
-        guard let bundleIdentifier, isAccessibilityTrusted,
-              let application = NSRunningApplication.runningApplications(
-                  withBundleIdentifier: bundleIdentifier
-              ).first(where: { !$0.isTerminated })
+    /// 按进程操作，双实例 App（两个 Chrome）也能落到正确的实例上。
+    static func restoreSingleWindow(processIdentifier: pid_t) -> Bool {
+        guard isAccessibilityTrusted,
+              let application = NSRunningApplication(processIdentifier: processIdentifier),
+              !application.isTerminated
         else { return false }
         let element = AXUIElementCreateApplication(application.processIdentifier)
         let windows = axElements(element, attribute: kAXWindowsAttribute)
@@ -2501,8 +2503,14 @@ enum KeyboardInjector {
         }
         AXUIElementPerformAction(window, kAXRaiseAction as CFString)
         AXUIElementSetAttributeValue(element, kAXFrontmostAttribute as CFString, kCFBooleanTrue)
-        if NSWorkspace.shared.frontmostApplication?.bundleIdentifier != bundleIdentifier,
-           let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleIdentifier) {
+        _ = application.activate(options: [.activateAllWindows])
+        // 同 bundle 只有一个实例时才用 LaunchServices 兜底，避免激活到另一个实例。
+        let sameBundle = application.bundleIdentifier.map {
+            NSRunningApplication.runningApplications(withBundleIdentifier: $0)
+        }?.filter { !$0.isTerminated }
+        if (sameBundle?.count ?? 2) <= 1,
+           NSWorkspace.shared.frontmostApplication?.processIdentifier != processIdentifier,
+           let url = application.bundleURL {
             let configuration = NSWorkspace.OpenConfiguration()
             configuration.activates = true
             configuration.createsNewApplicationInstance = false
