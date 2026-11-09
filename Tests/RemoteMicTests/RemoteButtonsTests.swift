@@ -1456,7 +1456,7 @@ struct RemoteButtonsTests {
                 posted.append((code, isDown, flags))
                 return true
             },
-            scheduler: { _, event in event() }
+            scheduler: { _, event in event(); return nil }
         )
 
         #expect(session.trigger())
@@ -1508,6 +1508,32 @@ struct RemoteButtonsTests {
         #expect(posted[11].2.isEmpty)
     }
 
+    @Test func appSwitcherSessionForceReleasesModifiersWhenScheduledReleaseIsLost() {
+        var posted: [(CGKeyCode, Bool, CGEventFlags)] = []
+        let session = KeyboardInjector.AppSwitcherSession(
+            keyStatePoster: { code, isDown, flags in
+                posted.append((code, isDown, flags))
+                return true
+            },
+            scheduler: { _, _ in nil }
+        )
+
+        #expect(session.trigger())
+        #expect(session.confirm())
+        #expect(session.hasPendingRelease)
+        #expect(posted.count == 4)
+        #expect(session.forceReleaseModifiersIfNeeded())
+        #expect(!session.hasPendingRelease)
+        #expect(session.forceReleaseModifiersIfNeeded())
+        #expect(posted.count == 6)
+        #expect(posted[4].0 == KeyboardInjector.leftCommandKeyCode)
+        #expect(!posted[4].1)
+        #expect(posted[4].2.isEmpty)
+        #expect(posted[5].0 == KeyboardInjector.leftOptionKeyCode)
+        #expect(!posted[5].1)
+        #expect(posted[5].2.isEmpty)
+    }
+
     @Test func appSwitcherConfirmReleasesCommandWithoutOptionWhenOptionCannotBePressed() {
         var posted: [(CGKeyCode, Bool, CGEventFlags)] = []
         let session = KeyboardInjector.AppSwitcherSession(
@@ -1516,7 +1542,7 @@ struct RemoteButtonsTests {
                 posted.append((code, isDown, flags))
                 return true
             },
-            scheduler: { _, event in event() }
+            scheduler: { _, event in event(); return nil }
         )
 
         #expect(session.trigger())
@@ -1652,6 +1678,10 @@ struct RemoteButtonsTests {
         #expect(restoreCalls.first?.0 == PresetApplication.safari.bundleIdentifier)
         #expect(restoreCalls.first?.1 == PresetApplication.codex.bundleIdentifier)
         #expect(diagnostics.contains { $0.contains("restore attempt=0") })
+        scheduler.advance(
+            toMilliseconds: HIDRemoteTiming.appSwitcherModifierWatchdogMilliseconds
+        )
+        #expect(!diagnostics.contains { $0.contains("watchdog") })
 
         #expect(posted.map { $0.0 } == [
             KeyboardInjector.leftCommandKeyCode, 48, 48,

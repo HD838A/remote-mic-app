@@ -48,23 +48,30 @@ enum KeyboardInjector {
     }
 
     final class AppSwitcherSession {
-        typealias DelayScheduler = (UInt64, @escaping () -> Void) -> Void
+        /// 返回值必须由调用方持有：DispatchSourceTimer 任务一旦释放，定时器就不会触发。
+        typealias DelayScheduler = (UInt64, @escaping () -> Void) -> AnyObject?
 
         /// ⌥ 按下与 ⌘ 松开必须分两个事件周期送达：同一批送进 Dock 时，它处理 ⌘ 抬起
         /// 读到的已经是 ⌥ 松开的最终状态，最小化窗口不会回来。
         static let optionHoldMilliseconds: UInt64 = 60
         static let optionReleaseMilliseconds: UInt64 = 100
         static let mainQueueScheduler: DelayScheduler = { milliseconds, action in
+            let item = DispatchWorkItem(block: action)
             DispatchQueue.main.asyncAfter(
                 deadline: .now() + .milliseconds(Int(milliseconds)),
-                execute: action
+                execute: item
             )
+            return item
         }
 
         private let keyStatePoster: KeyStatePoster
         private let scheduler: DelayScheduler
         private var diagnosticLogger: ((String) -> Void)?
+        private var optionHoldTask: AnyObject?
+        private var optionReleaseTask: AnyObject?
         private(set) var isActive = false
+        /// 已经按下 ⌥/保持 ⌘、但还没走完释放流程；调度失败时由 watchdog 兜底。
+        private(set) var hasPendingRelease = false
 
         init(
             keyStatePoster: @escaping KeyStatePoster = KeyboardInjector.postKeyState,
@@ -131,7 +138,8 @@ enum KeyboardInjector {
             ) else {
                 return post(leftCommandKeyCode, isDown: false, flags: [], role: "command")
             }
-            scheduler(Self.optionHoldMilliseconds) { [weak self] in
+            hasPendingRelease = true
+            optionHoldTask = scheduler(Self.optionHoldMilliseconds) { [weak self] in
                 guard let self else { return }
                 _ = self.post(
                     KeyboardInjector.leftCommandKeyCode,
@@ -139,16 +147,41 @@ enum KeyboardInjector {
                     flags: [.maskAlternate],
                     role: "command"
                 )
-                self.scheduler(Self.optionReleaseMilliseconds) { [weak self] in
-                    _ = self?.post(
+                self.optionReleaseTask = self.scheduler(Self.optionReleaseMilliseconds) {
+                    [weak self] in
+                    guard let self else { return }
+                    _ = self.post(
                         KeyboardInjector.leftOptionKeyCode,
                         isDown: false,
                         flags: [],
                         role: "option"
                     )
+                    self.hasPendingRelease = false
                 }
             }
             return true
+        }
+
+        /// 调度器没有按期执行时的兜底：必须把 ⌘/⌥ 放开，不能把修饰键留在按下状态。
+        @discardableResult
+        func forceReleaseModifiersIfNeeded() -> Bool {
+            guard hasPendingRelease else { return true }
+            let commandReleased = post(
+                leftCommandKeyCode,
+                isDown: false,
+                flags: [],
+                role: "command"
+            )
+            let optionReleased = post(
+                leftOptionKeyCode,
+                isDown: false,
+                flags: [],
+                role: "option"
+            )
+            hasPendingRelease = false
+            optionHoldTask = nil
+            optionReleaseTask = nil
+            return commandReleased && optionReleased
         }
 
         @discardableResult

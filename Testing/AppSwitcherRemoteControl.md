@@ -107,7 +107,7 @@
 
 失败判定：OK 后只切换菜单栏、窗口仍留在程序坞；已有可见窗口时多弹出窗口；确认后 Option 或 Command 卡住，导致后续输入变成快捷键或需要重启 App；日志 `restore` 结果为 `noMinimizedWindow` 或 `notTrusted` 且窗口仍未回来。
 
-实现约束：`Option` 按下与 `Command` 抬起必须分两个事件周期送达。同一批事件进入系统时，切换器处理 `Command` 抬起读到的是 `Option` 已松开的最终状态，窗口不会恢复；只改按键顺序、不加间隔仍会失败。
+实现约束：`Option` 按下与 `Command` 抬起必须分两个事件周期送达。同一批事件进入系统时，切换器处理 `Command` 抬起读到的是 `Option` 已松开的最终状态，窗口不会恢复；只改按键顺序、不加间隔仍会失败。确认后 1 秒内如果释放任务因调度异常没有执行，watchdog 会强制释放 `⌘`/`⌥` 并写入 `HID APP SWITCHER watchdog released_modifiers=true`；出现这条日志说明正常释放路径没有执行，应按缺陷记录并检查调度器是否持有任务。
 
 ## 稳定功能回归
 

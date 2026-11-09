@@ -188,6 +188,7 @@ final class HIDRemoteMonitor {
     private var appSwitcherFrontmostMonitor: HIDRemoteScheduledTask?
     private var appSwitcherConfirmationProbe: HIDRemoteScheduledTask?
     private var appSwitcherMinimizedRestoreProbe: HIDRemoteScheduledTask?
+    private var appSwitcherModifierWatchdog: HIDRemoteScheduledTask?
     private var appSwitcherOriginBundleIdentifier: String?
     private(set) var status = LocalizedMessage("button_mapping.status.disabled")
     var onStatus: ((LocalizedMessage) -> Void)?
@@ -258,7 +259,7 @@ final class HIDRemoteMonitor {
         self.appSwitcherSession = KeyboardInjector.AppSwitcherSession(
             keyStatePoster: appSwitcherKeyStatePoster,
             scheduler: { delay, event in
-                _ = scheduler.schedule(
+                scheduler.schedule(
                     afterMilliseconds: delay,
                     repeatingEveryMilliseconds: nil,
                     event
@@ -1708,6 +1709,8 @@ final class HIDRemoteMonitor {
         appSwitcherConfirmationProbe = nil
         appSwitcherMinimizedRestoreProbe?.cancel()
         appSwitcherMinimizedRestoreProbe = nil
+        appSwitcherModifierWatchdog?.cancel()
+        appSwitcherModifierWatchdog = nil
         appSwitcherFrontmostMonitor?.cancel()
         appSwitcherFrontmostMonitor = scheduler.schedule(
             afterMilliseconds: HIDRemoteTiming.appSwitcherFrontmostPollMilliseconds,
@@ -1765,6 +1768,21 @@ final class HIDRemoteMonitor {
                 attempt: 0,
                 origin: origin
             )
+            // 释放 ⌥/⌘ 的任务挂在可注入调度器上，调度器不执行时必须强制放开，
+            // 否则 Command 会一直按下，之后所有按键都会变成快捷键。
+            appSwitcherModifierWatchdog?.cancel()
+            appSwitcherModifierWatchdog = scheduler.schedule(
+                afterMilliseconds: HIDRemoteTiming.appSwitcherModifierWatchdogMilliseconds,
+                repeatingEveryMilliseconds: nil
+            ) { [weak self] in
+                guard let self else { return }
+                self.appSwitcherModifierWatchdog = nil
+                guard self.appSwitcherSession.hasPendingRelease else { return }
+                let released = self.appSwitcherSession.forceReleaseModifiersIfNeeded()
+                self.diagnosticLogger(
+                    "HID APP SWITCHER watchdog released_modifiers=\(released)"
+                )
+            }
         }
         appSwitcherOriginBundleIdentifier = nil
     }
@@ -1835,6 +1853,8 @@ final class HIDRemoteMonitor {
         appSwitcherConfirmationProbe = nil
         appSwitcherMinimizedRestoreProbe?.cancel()
         appSwitcherMinimizedRestoreProbe = nil
+        appSwitcherModifierWatchdog?.cancel()
+        appSwitcherModifierWatchdog = nil
         appSwitcherOriginBundleIdentifier = nil
         for usage in activeUsages.subtracting(nativePassthroughUsages) {
             if let button = RemoteButton.usageMap[usage], shouldArmNativeEvent(for: button) {
