@@ -1799,7 +1799,9 @@ final class HIDRemoteMonitor {
             guard let self else { return }
             self.appSwitcherForegroundTask = nil
             guard !self.appSwitcherSession.isActive else { return }
-            guard self.frontmostProcessIdentifier() != selection.processIdentifier else {
+            // 按 bundle 判断“切换是否落地”：同名双实例时，Return 打开哪个实例
+            // 的窗口就尊重哪个，不能按 pid 强行纠正（那会盖掉正确的结果）。
+            guard self.frontmostBundleIdentifier() != selection.bundleIdentifier else {
                 self.appSwitcherPendingLayerClose = nil
                 return
             }
