@@ -227,6 +227,17 @@ enum KeyboardInjector {
             return true
         }
 
+        /// 会话已经结束但系统切换器/窗口层还开着时，用它补一个 Escape。
+        @discardableResult
+        func dismissWindowPicker() -> Bool {
+            isActive = false
+            isWindowPickerActive = false
+            commandReleasePending = false
+            hasPendingRelease = false
+            return post(53, isDown: true, flags: [], role: "escape") &&
+                post(53, isDown: false, flags: [], role: "escape")
+        }
+
         /// 调度器没有按期执行时的兜底：必须把 ⌘/⌥ 放开，不能把修饰键留在按下状态。
         @discardableResult
         func forceReleaseModifiersIfNeeded() -> Bool {

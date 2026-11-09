@@ -1870,6 +1870,12 @@ final class HIDRemoteMonitor {
                     "HID APP SWITCHER selection bundle_id=" +
                         (self.frontmostBundleIdentifier() ?? "unknown")
                 )
+                // 目标 App 没有可用窗口时，Return 不会关掉窗口层；
+                // 此时会话已结束，返回键不再被拦截，只能补一个 Escape。
+                if KeyboardInjector.appSwitcherSelectedApplication() != nil {
+                    _ = self.appSwitcherSession.dismissWindowPicker()
+                    self.diagnosticLogger("HID APP SWITCHER stuck_switcher escaped=true")
+                }
             }
             // 系统的 Option 恢复依赖 Dock 内部时序，真机并不总是生效；
             // 到这里再按可见窗口状态兜底一次，保证窗口真的回到前台。
