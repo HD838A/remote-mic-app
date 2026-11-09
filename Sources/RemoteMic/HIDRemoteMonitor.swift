@@ -1783,7 +1783,13 @@ final class HIDRemoteMonitor {
             }
             return true
         default:
-            return false
+            // 会话期间吞掉切换器之外的按键（音量、主页、TV、常用语等），避免误触。
+            // 菜单键例外：保持“再按一次 = 切到下一个 App”的原生行为。
+            if button == .menu { return false }
+            diagnosticLogger(
+                "HID APP SWITCHER swallowed button=\(button.rawValue) phase=session"
+            )
+            return true
         }
     }
 

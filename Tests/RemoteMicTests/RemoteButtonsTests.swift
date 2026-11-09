@@ -1877,6 +1877,116 @@ struct RemoteButtonsTests {
         #expect(posted.contains { $0.0 == 36 })
     }
 
+    @Test func appSwitcherUpArrowAlsoEntersWindowLayer() throws {
+        let suiteName = "RemoteButtonsTests.appSwitcherUpEnter.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = AppSettings(defaults: defaults)
+        settings.customMappingEnabled = true
+        settings.setAction(.appSwitcher, for: .menu)
+        let profileID = try #require(settings.selectedRemoteProfileID)
+        let scheduler = RemoteButtonsTestScheduler()
+        var posted: [(CGKeyCode, Bool, CGEventFlags)] = []
+        let monitor = HIDRemoteMonitor(
+            settings: settings,
+            profileID: profileID,
+            ownsEventSuppressor: false,
+            scheduler: scheduler,
+            runtimePermissions: { true },
+            frontmostBundleIdentifier: { PresetApplication.codex.bundleIdentifier },
+            diagnosticLogger: { _ in },
+            appSwitcherKeyStatePoster: { code, isDown, flags in
+                posted.append((code, isDown, flags))
+                return true
+            },
+            windowCounter: { _ in 2 },
+            appSwitcherSelectedApplication: {
+                KeyboardInjector.AppSwitcherSelection(
+                    processIdentifier: 4321,
+                    bundleIdentifier: PresetApplication.safari.bundleIdentifier
+                )
+            },
+            frontmostProcessIdentifier: { 9999 }
+        )
+        monitor.connectSimulatedDevice(
+            fingerprint: "app-switcher-up-enter", profileID: profileID
+        )
+
+        func press(_ button: RemoteButton) {
+            monitor.handleSimulatedReport(
+                reportID: 1, data: Data([UInt8(button.hidUsage), 0, 0, 0, 0, 0])
+            )
+            monitor.handleSimulatedReport(reportID: 1, data: Data(repeating: 0, count: 6))
+        }
+
+        press(.menu)
+        press(.up)
+        // 上键进入窗口层：进入动作也是 ⌘↓。
+        #expect(posted.contains { $0.0 == 125 && $0.1 && $0.2.contains(.maskCommand) })
+        #expect(posted.contains { $0.0 == 125 && !$0.1 && $0.2.contains(.maskCommand) })
+        let countAfterEntry = posted.count
+        press(.up)
+        // 之后的上键是普通方向键；第一次还会先释放 ⌘。
+        #expect(posted.contains { $0.0 == 126 && !$0.2.contains(.maskCommand) })
+        #expect(posted.count == countAfterEntry + 3)
+    }
+
+    @Test func appSwitcherSwallowsOtherButtonsDuringSession() throws {
+        let suiteName = "RemoteButtonsTests.appSwitcherSwallow.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = AppSettings(defaults: defaults)
+        settings.customMappingEnabled = true
+        settings.setAction(.appSwitcher, for: .menu)
+        let profileID = try #require(settings.selectedRemoteProfileID)
+        let scheduler = RemoteButtonsTestScheduler()
+        var posted: [(CGKeyCode, Bool, CGEventFlags)] = []
+        let monitor = HIDRemoteMonitor(
+            settings: settings,
+            profileID: profileID,
+            ownsEventSuppressor: false,
+            scheduler: scheduler,
+            runtimePermissions: { true },
+            frontmostBundleIdentifier: { PresetApplication.codex.bundleIdentifier },
+            diagnosticLogger: { _ in },
+            appSwitcherKeyStatePoster: { code, isDown, flags in
+                posted.append((code, isDown, flags))
+                return true
+            },
+            windowCounter: { _ in 2 },
+            appSwitcherSelectedApplication: {
+                KeyboardInjector.AppSwitcherSelection(
+                    processIdentifier: 4321,
+                    bundleIdentifier: PresetApplication.safari.bundleIdentifier
+                )
+            },
+            frontmostProcessIdentifier: { 9999 }
+        )
+        monitor.connectSimulatedDevice(
+            fingerprint: "app-switcher-swallow", profileID: profileID
+        )
+
+        func press(_ button: RemoteButton) {
+            monitor.handleSimulatedReport(
+                reportID: 1, data: Data([UInt8(button.hidUsage), 0, 0, 0, 0, 0])
+            )
+            monitor.handleSimulatedReport(reportID: 1, data: Data(repeating: 0, count: 6))
+        }
+
+        press(.menu)
+        press(.down)
+        let countAfterEntry = posted.count
+        // 会话期间音量、主页、TV 等按键全部吞掉。
+        press(.volumeUp)
+        press(.home)
+        press(.tv)
+        press(.volumeDown)
+        #expect(posted.count == countAfterEntry)
+        // 会话仍然存活：返回键还是能退出（Esc）。
+        press(.back)
+        #expect(posted.contains { $0.0 == 53 })
+    }
+
     @Test func appSwitcherHeldDirectionRepeatsSelection() throws {
         let suiteName = "RemoteButtonsTests.appSwitcherRepeat.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suiteName))

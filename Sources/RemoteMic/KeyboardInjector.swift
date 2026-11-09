@@ -146,16 +146,17 @@ enum KeyboardInjector {
         @discardableResult
         func moveWindowSelection(up: Bool) -> Bool {
             guard isActive else { return false }
-            let keyCode: CGKeyCode = up ? 126 : 125
             if !isWindowPickerActive {
+                // 原生只有 ⌘↓ 能进入窗口层；上键进入时同样发 ⌘↓，
+                // 之后 ↑/↓ 只决定方向键的移动方向。
                 let pressed = post(
-                    keyCode,
+                    125,
                     isDown: true,
                     flags: .maskCommand,
                     role: "window_picker"
                 )
                 let released = post(
-                    keyCode,
+                    125,
                     isDown: false,
                     flags: .maskCommand,
                     role: "window_picker"
@@ -170,6 +171,7 @@ enum KeyboardInjector {
                 }
                 return pressed && released
             }
+            let keyCode: CGKeyCode = up ? 126 : 125
             _ = releaseCommandForWindowPicker()
             let posted = post(keyCode, isDown: true, flags: [], role: "window_selection") &&
                 post(keyCode, isDown: false, flags: [], role: "window_selection")
