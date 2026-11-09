@@ -2481,6 +2481,16 @@ enum KeyboardInjector {
             kCFBooleanTrue
         )
         _ = application.activate(options: [.activateAllWindows])
+        // 双实例时 LaunchServices 会把“有可见窗口的那个实例”带上来，
+        // 前台 bundle 已经一致时跳过。
+        if NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+            != application.bundleIdentifier,
+           let url = application.bundleURL {
+            let configuration = NSWorkspace.OpenConfiguration()
+            configuration.activates = true
+            configuration.createsNewApplicationInstance = false
+            NSWorkspace.shared.openApplication(at: url, configuration: configuration) { _, _ in }
+        }
         return true
     }
 
@@ -2504,12 +2514,10 @@ enum KeyboardInjector {
         AXUIElementPerformAction(window, kAXRaiseAction as CFString)
         AXUIElementSetAttributeValue(element, kAXFrontmostAttribute as CFString, kCFBooleanTrue)
         _ = application.activate(options: [.activateAllWindows])
-        // 同 bundle 只有一个实例时才用 LaunchServices 兜底，避免激活到另一个实例。
-        let sameBundle = application.bundleIdentifier.map {
-            NSRunningApplication.runningApplications(withBundleIdentifier: $0)
-        }?.filter { !$0.isTerminated }
-        if (sameBundle?.count ?? 2) <= 1,
-           NSWorkspace.shared.frontmostApplication?.processIdentifier != processIdentifier,
+        // LaunchServices 按 bundle 激活：同名双实例时会带上“有可见窗口的那个实例”，
+        // 正好符合用户直觉；前台 bundle 已经一致时跳过，避免多一次激活。
+        if NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+            != application.bundleIdentifier,
            let url = application.bundleURL {
             let configuration = NSWorkspace.OpenConfiguration()
             configuration.activates = true
