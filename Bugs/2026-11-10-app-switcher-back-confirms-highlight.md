@@ -4,7 +4,7 @@ subtitle: 取消路径只松开 Command，被系统当成确认
 lang: zh
 template: doc
 date: 2026-11-10
-status: 已修复，单元测试通过；真机待验收
+status: 已修复并验收（单元测试通过；Apple Silicon build 345 与 Intel build 346 真机通过）
 ---
 
 ## 现象
@@ -67,7 +67,7 @@ macOS 系统切换器的语义是：Command 松开即确认当前高亮项；取
 - 新增单测 `appSwitcherSessionCancelWithoutDismissalOnlyReleasesCommand` 与 `appSwitcherSessionCancelInWindowPickerWithoutDismissalOnlyReleasesCommand`：系统已关掉切换器时不补 Escape。
 - 监控层 `appSwitcherBackTimeoutAndFrontmostChangeReleaseCommand` 补两组断言：返回取消必须以 Esc 结尾、鼠标点击收尾不得出现 Esc。
 - 既有 3 个切换器会话单测保持通过；`swift test --disable-keychain --filter "appSwitcher"` 共 25 项通过。
-- 真机：待维护者用遥控器按测试手册「用例 6」复验。
+- 真机：维护者用遥控器按测试手册「用例 6」复验通过。Apple Silicon（本机，build 345）与 Intel（macOS 13，build 346）都表现为：起切换器、移动高亮后按返回，回到原 App，不再切到高亮项；Intel 侧同时确认 macOS 13 接受合成的 `⌘Esc`。
 
 ## 剩余边界
 
