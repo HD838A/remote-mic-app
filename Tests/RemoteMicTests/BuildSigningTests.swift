@@ -1166,17 +1166,26 @@ struct BuildSigningTests {
             contentsOf: root.appendingPathComponent("scripts/prepare-public-release-assets.sh"),
             encoding: .utf8
         )
-        #expect(assetSource.contains("published_prefix=\"SayAll-$version-$build\""))
-        #expect(assetSource.contains("$published_prefix.zh.txt"))
-        #expect(assetSource.contains("$published_prefix.en.txt"))
+        let contract = try #require(JSONSerialization.jsonObject(
+            with: Data(contentsOf: root.appendingPathComponent("config/release-assets.json"))
+        ) as? [String: Any])
+        let manifests = try #require(contract["manifests"] as? [String: [[String: String]]])
+        let currentAssets = try #require(manifests["2"])
+        #expect(Set(currentAssets.compactMap { $0["name"] }) == Set([
+            "SayAll-{version}-{build}.zip", "SayAll-{version}-{build}-Intel.zip",
+            "SayAll-{version}-{build}.zh.txt", "SayAll-{version}-{build}.en.txt",
+            "SayAll-{version}-{build}-AppleSilicon-install.pkg",
+            "SayAll-{version}-{build}-Intel-install.pkg",
+            "SayAll-{version}-{build}-AppleSilicon-uninstall.pkg",
+            "SayAll-{version}-{build}-Intel-uninstall.pkg",
+            "appcast.xml", "appcast-intel.xml",
+        ]))
+        #expect(manifests["1"]?.count == 13)
+        #expect(assetSource.contains("release-assets.py\" copies"))
         #expect(assetSource.contains("production_prefix"))
         #expect(assetSource.contains("staged-assets.json"))
         #expect(assetSource.contains("verify-staged-release-assets.sh"))
-        #expect(assetSource.contains("ASSET_COUNT: 10"))
-        #expect(assetSource.contains("$published_prefix-AppleSilicon-install.pkg"))
-        #expect(assetSource.contains("$published_prefix-Intel-install.pkg"))
-        #expect(assetSource.contains("$published_prefix-AppleSilicon-uninstall.pkg"))
-        #expect(assetSource.contains("$published_prefix-Intel-uninstall.pkg"))
+        #expect(assetSource.contains("ASSET_COUNT: $asset_count"))
         #expect(!assetSource.contains("candidate-provenance.json"))
     }
 
