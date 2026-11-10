@@ -127,6 +127,8 @@ AI 整理在本次分发协议中保持关闭。`include_ai=true` 在接触发�
 
 脚本先做无秘密检查：合法源码分支与精确 SHA、Hotfix 稳定基线、版本/build、stable latest、源码分支 CI、依赖版本、目标仓库、显式 GH_TOKEN 静态门禁和 10 个 CDN 固定路径全部为 HTTP 404。随后始终以 `--ref main` dispatch .github/workflows/mac-release-package.yml，输入 mode、source_branch 和 expected_commit；Workflow 再次独立验证。smoke 只用于受保护流程检查，不创建公开身份。
 
+`config/release-assets.json` 是资产名称、源文件映射和 manifest schema 的公共契约。打包、manifest 验证和 CDN 探测共用 `scripts/release-assets.py`。该长期入口集中渲染契约，现有 Shell 入口继续负责各自的校验。下载服务公开 `/mac/release-contract.json`，必须返回相同契约；缺失、无效或不同即停止。此检查在本机 staging 和受保护 workflow 的无凭据 validate job 执行，smoke 同样执行。路径 404 只有在契约一致后才表示未占用。
+
 受保护 workflow 的 package job 才能读取 Apple/Match/Notary/Sparkle 凭据，并且必须：
 
 - 在 mac-release Environment 内使用只读 Match、隔离临时 Keychain 和最小权限；
