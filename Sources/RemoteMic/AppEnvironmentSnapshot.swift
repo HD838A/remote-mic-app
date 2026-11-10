@@ -1,6 +1,22 @@
 import Foundation
 
 struct AppEnvironmentSnapshot: Equatable {
+    static func buildIdentityFields(_ metadata: [String: Any]) -> String {
+        let revision = metadata["SayAllSourceCommit"] as? String ?? ""
+        let sourceRevision = revision.range(of: "\\A[0-9a-f]{40}\\z", options: .regularExpression) != nil
+            ? revision : "unknown"
+        let version = metadata["SayAllPrivatePlatformVersion"] as? String ?? ""
+        let privateVersion = version.count <= 32 &&
+            version.range(of: "\\A[0-9]+\\.[0-9]+\\.[0-9]+\\z", options: .regularExpression) != nil
+            ? version : "unknown"
+        let channel = metadata["SayAllBuildChannel"] as? String ?? ""
+        let buildChannel = ["local", "release", "internalQA", "public", "private", "beta"].contains(channel)
+            ? channel : "unknown"
+        let sourceDirty = (metadata["SayAllSourceDirty"] as? Bool).map(String.init) ?? "unknown"
+        return "source_revision=\(sourceRevision) build_channel=\(buildChannel) " +
+            "source_dirty=\(sourceDirty) private_platform_version=\(privateVersion)"
+    }
+
     let operatingSystemMajor: String
     let cpuArchitecture: String
     let appVersion: String

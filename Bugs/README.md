@@ -1,5 +1,7 @@
 # Bug 记录
 
+- [语音键映射、Fn 观察与构建来源诊断缺口](./2026-11-10-voice-key-diagnostic-gaps.md)
+
 - [Intel 上方向键一次按下移动两格](./2026-11-07-intel-directional-double-step.md)
 
 - [只有一只 Siri Remote 时 Onboarding 永久卡在音频页](./2026-11-07-siri-remote-onboarding-audio-gate.md)

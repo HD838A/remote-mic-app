@@ -6663,10 +6663,19 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
                      self.voiceAudioDeliveryDiagnostic.generation != generation)
                 return observation
             },
-            fn: { [weak self] in
-                (self?.preferredInputSourceMonitor.lastFunctionKeyDownAtForDiagnostics,
-                 self?.preferredInputSourceMonitor.lastFunctionKeyUpAtForDiagnostics)
+            fnSource: "session_tap_unattributed",
+            fn: {
+                ShortcutEventSequence.hardwareModifierState.functionObservationForDiagnostics
             }
+        )
+        bridge.audioDiagnostics?.voiceKeyContext(
+            mode: settings.voiceKeyMode,
+            fnTapEnabled: settings.voiceFnTapModeEnabled,
+            mappingOperationID: voiceFunctionMapper.mappingOperationID,
+            mappingApplied: voiceFunctionMapper.isApplied,
+            readbackMatched: voiceFunctionMapper.voiceMappingReadbackMatched,
+            matchingServices: voiceFunctionMapper.matchedServiceCount,
+            eventTapRunning: hidEventSuppressor.isRunning
         )
         flushPendingCommandVoiceAudio(for: bridge)
         if !pendingStartAudio.isEmpty {

@@ -524,8 +524,8 @@ struct FirstUseDiagnosticSnapshot {
             "generated_at=\(Self.timestamp(generatedAt))",
             "app_version=\(appVersion)",
             "app_build=\(appBuild)",
-            "source_revision=unknown",
-            "build_channel=unknown",
+            AppEnvironmentSnapshot.buildIdentityFields(Bundle.main.infoDictionary ?? [:])
+                .replacingOccurrences(of: " ", with: "\n"),
             "release_tag=unknown",
             "bundle_id=\(Bundle.main.bundleIdentifier ?? "unknown")",
             "process_id=\(ProcessInfo.processInfo.processIdentifier)",
