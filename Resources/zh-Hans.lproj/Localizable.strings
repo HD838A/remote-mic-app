@@ -1469,3 +1469,11 @@
 "audio.mac_microphone.voice_hold" = "按住说话，松开结束";
 "audio.mac_microphone.voice_toggle" = "按一下开始，再按一下结束";
 "audio.mac_microphone.error.input_monitoring" = "无法监听语音快捷键。请在系统设置中允许输入监控后重试。";
+
+"notice.action.reopen_common_phrases" = "重新打开";
+"notice.action.open_system_settings" = "打开系统设置";
+"notice.action.retry" = "重试";
+"notice.action.dismiss" = "知道了";
+"notice.accessibility.dismiss" = "关闭提示";
+"notice.accessibility.error_prefix" = "错误：";
+"notice.accessibility.warning_prefix" = "警告：";

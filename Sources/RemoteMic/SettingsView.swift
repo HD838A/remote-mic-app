@@ -2673,7 +2673,10 @@ struct SettingsView: View {
             }
             if configured.action == .combinationAction,
                !macroFeature.libraryActions.contains(where: { $0.id == configured.macroID }) {
-                Text(localization.text("button_mapping.macro_unavailable")).font(.system(size: 13)).foregroundStyle(.orange)
+                NoticeInline(
+                    tier: .warning,
+                    title: localization.text("button_mapping.macro_unavailable")
+                )
             }
             Button(localization.text("button_mapping.manage_macros")) {
                 mappingActionFilter = .combinations
