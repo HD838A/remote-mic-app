@@ -1131,7 +1131,7 @@ final class HIDRemoteMonitor {
                 diagnosticLogger(
                     "HID VOICE_USAGE source_kind=\(kind) " +
                         "edge=\(pressed.contains(usage) ? "down" : "up") " +
-                        "correlation=timing_only system_fn_delivery=unknown"
+                        "phase=observed correlation=timing_only system_fn_delivery=unknown"
                 )
             }
         }

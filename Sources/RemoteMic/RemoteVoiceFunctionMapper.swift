@@ -139,10 +139,12 @@ final class RemoteVoiceFunctionMapper {
         matchedServiceCount > 0
     }
 
-    init(
-        diagnosticLogger: @escaping (String) -> Void = AppLogger.shared.write,
-        serviceProvider: @escaping ServiceProvider = RemoteVoiceFunctionMapper.systemServices
-    ) {
+    init(serviceProvider: @escaping ServiceProvider = RemoteVoiceFunctionMapper.systemServices) {
+        self.serviceProvider = serviceProvider
+        diagnosticLogger = AppLogger.shared.write
+    }
+
+    init(diagnosticLogger: @escaping (String) -> Void, serviceProvider: @escaping ServiceProvider) {
         self.diagnosticLogger = diagnosticLogger
         self.serviceProvider = serviceProvider
     }
@@ -163,7 +165,8 @@ final class RemoteVoiceFunctionMapper {
             resetAppliedState()
             diagnosticLogger(
                 "VOICE FN MAPPING applied=false neutralized=false power_suppressed=false matched=0 " +
-                    "operation_id=\(mappingOperationID) voice_readback=unknown native_delivery=unknown"
+                    "operation_id=\(mappingOperationID) phase=completed result=no_service " +
+                    "voice_readback=unknown native_delivery=unknown"
             )
             return false
         }
@@ -268,7 +271,8 @@ final class RemoteVoiceFunctionMapper {
                 "matched=\(matchedCount) applied=\(appliedCount) operation_id=\(mappingOperationID) " +
                 "voice_readback=\(voiceMappingReadbackMatched == true ? "matched" : "mismatched") " +
                 "voice_readback_verified_services=\(verifiedVoiceServiceCount) " +
-                "voice_readback_source=f5 native_delivery=unknown"
+                "voice_readback_source=f5 native_delivery=unknown phase=completed " +
+                "result=\(appliedCount > 0 ? "write_observed" : "write_failed")"
         )
         return isApplied
     }
@@ -298,7 +302,10 @@ final class RemoteVoiceFunctionMapper {
 
         originalMappings.removeAll()
         resetAppliedState()
-        diagnosticLogger("VOICE FN MAPPING restored=\(restoredCount)")
+        diagnosticLogger(
+            "VOICE FN MAPPING restored=\(restoredCount) operation_id=\(mappingOperationID) " +
+                "phase=completed result=restore_writes_observed native_delivery=unknown"
+        )
     }
 
     private func rollback(
@@ -325,7 +332,7 @@ final class RemoteVoiceFunctionMapper {
         diagnosticLogger(
             "VOICE FN MAPPING rollback matched=\(matchedCount) applied=\(appliedIndices.count) " +
                 "restored=\(rollbackCount) operation_id=\(mappingOperationID) " +
-                "voice_readback=unknown native_delivery=unknown"
+                "phase=completed result=rollback_writes_observed voice_readback=unknown native_delivery=unknown"
         )
     }
 
