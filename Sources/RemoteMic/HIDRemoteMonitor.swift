@@ -350,7 +350,8 @@ final class HIDRemoteMonitor {
                 shortcut: configured.shortcut,
                 applicationProfile: settings.customApplicationProfile(
                     id: configured.applicationProfileID
-                )
+                ),
+                physicalShortcutEventsEnabled: settings.physicalShortcutEventsEnabled
             )
         }
         self.overrideActionPerformer = overrideActionPerformer

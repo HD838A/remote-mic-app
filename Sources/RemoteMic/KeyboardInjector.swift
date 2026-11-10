@@ -531,6 +531,7 @@ enum KeyboardInjector {
         _ action: ButtonAction,
         shortcut: CustomKeyboardShortcut? = nil,
         applicationProfile: CustomApplicationProfile? = nil,
+        physicalShortcutEventsEnabled: Bool = AppSettings.physicalShortcutEventsEnabled(),
         applicationURL: (String) -> URL? = {
             if $0 == PresetApplication.remoteMic.bundleIdentifier {
                 return Bundle.main.bundleURL
@@ -547,7 +548,7 @@ enum KeyboardInjector {
         customApplicationFocuser: @escaping CustomApplicationFocuser = focusCustomApplication,
         frontmostComposerFocuser: (@escaping (Bool) -> Void) -> Bool = focusFrontmostComposer,
         accessibilityTrusted: () -> Bool = { isAccessibilityTrusted },
-        keyPoster: KeyPoster = { postKey(code: $0, flags: $1) },
+        keyPoster rawKeyPoster: KeyPoster = { postFlagsOnlyKey(code: $0, flags: $1) },
         keyStatePoster: KeyStatePoster = postKeyState,
         scrollPoster: ScrollPoster = { postScrollWheel(lines: $0) },
         scrollPagePoster: (ScrollPageDirection) -> ScrollPageOutcome = defaultScrollPagePoster,
@@ -627,6 +628,24 @@ enum KeyboardInjector {
             return submitted
         }
         guard accessibilityTrusted() else { return false }
+
+        // Route ordinary combinations here so new built-ins inherit the setting
+        // without changing each case. The held app switcher owns its own lifecycle.
+        var keySubmissionSucceeded = true
+        func keyPoster(_ code: CGKeyCode, _ flags: CGEventFlags) {
+            guard !flags.isEmpty, action != .appSwitcher else {
+                rawKeyPoster(code, flags)
+                return
+            }
+            keySubmissionSucceeded = sendOrdinaryShortcut(
+                code: code, flags: flags,
+                physicalEvents: physicalShortcutEventsEnabled,
+                flagsOnlyPoster: rawKeyPoster,
+                eventPoster: shortcutEventPoster,
+                hardwareFlags: shortcutHardwareFlags,
+                logger: logger
+            ) && keySubmissionSucceeded
+        }
 
         switch action {
         case .disabled:
@@ -764,11 +783,22 @@ enum KeyboardInjector {
         case .customShortcut:
             if let shortcut {
                 let eventFlags = shortcut.cgEventFlags
+                if !eventFlags.isEmpty {
+                    return sendOrdinaryShortcut(
+                        code: CGKeyCode(shortcut.keyCode), flags: eventFlags,
+                        physicalEvents: physicalShortcutEventsEnabled,
+                        flagsOnlyPoster: rawKeyPoster,
+                        eventPoster: shortcutEventPoster,
+                        hardwareFlags: shortcutHardwareFlags,
+                        logger: logger
+                    )
+                }
                 return ShortcutEventSequence.send(
                     keyCode: CGKeyCode(shortcut.keyCode),
                     modifiers: eventFlags,
                     hardwareFlags: shortcutHardwareFlags,
-                    eventPoster: shortcutEventPoster
+                    eventPoster: shortcutEventPoster,
+                    logger: logger
                 )
             }
         case .focusInput:
@@ -781,7 +811,7 @@ enum KeyboardInjector {
              .openSlack, .openWeCom, .openNeteaseMusic, .openChrome, .openSafari, .openZed, .openDimAgent:
             break
         }
-        return true
+        return keySubmissionSucceeded
     }
 
     private static func open(
@@ -2469,6 +2499,42 @@ enum KeyboardInjector {
     }
 
     private static func postKey(code: CGKeyCode, flags: CGEventFlags = []) {
+        guard !flags.isEmpty else {
+            postFlagsOnlyKey(code: code, flags: flags)
+            return
+        }
+        _ = sendOrdinaryShortcut(
+            code: code, flags: flags,
+            physicalEvents: AppSettings.physicalShortcutEventsEnabled(),
+            flagsOnlyPoster: { postFlagsOnlyKey(code: $0, flags: $1) },
+            eventPoster: ShortcutEventSequence.post,
+            hardwareFlags: { CGEventSource.flagsState(.hidSystemState) },
+            logger: { AppLogger.shared.write($0) }
+        )
+    }
+
+    private static func sendOrdinaryShortcut(
+        code: CGKeyCode, flags: CGEventFlags, physicalEvents: Bool,
+        flagsOnlyPoster: KeyPoster, eventPoster: (CGEvent) -> Bool,
+        hardwareFlags: () -> CGEventFlags, logger: (String) -> Void
+    ) -> Bool {
+        if physicalEvents {
+            return ShortcutEventSequence.send(
+                keyCode: code, modifiers: flags, hardwareFlags: hardwareFlags,
+                eventPoster: eventPoster,
+                logger: { logger($0 + " delivery_mode=physical") }
+            )
+        }
+        let operationID = UUID().uuidString
+        logger("SHORTCUT DELIVERY operation_id=\(operationID) phase=requested delivery_mode=flags_only")
+        flagsOnlyPoster(code, flags)
+        // The legacy callback provides no acknowledgement from the event API.
+        logger("SHORTCUT DELIVERY operation_id=\(operationID) phase=completed delivery_mode=flags_only " +
+            "result=invoked submission_result=unknown user_visible_result=unknown")
+        return true
+    }
+
+    private static func postFlagsOnlyKey(code: CGKeyCode, flags: CGEventFlags = []) {
         guard let source = CGEventSource(stateID: .hidSystemState),
               let down = CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: true),
               let up = CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: false)

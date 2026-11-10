@@ -662,6 +662,8 @@
 "about.preferences.show_dock_icon_help" = "When off, you can still open SayAll from its menu bar icon";
 "about.preferences.show_status_bar_icon" = "Show app icon in the menu bar";
 "about.preferences.show_status_bar_icon_help" = "If both the Dock and menu bar icons are off, open SayAll again to show Settings";
+"settings.general.physical_shortcuts" = "Simulate physical shortcuts";
+"settings.general.physical_shortcuts_help" = "Applies to built-in and custom shortcuts. Try this if shortcuts only type letters during screen sharing.";
 "about.preferences.app_icon" = "App Icon";
 "about.preferences.app_icon_help" = "Choose the icon shown in the Dock, app switcher, and Settings";
 "about.preferences.app_icon_standard" = "Classic Duck";

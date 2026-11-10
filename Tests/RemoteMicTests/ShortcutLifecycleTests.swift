@@ -5,6 +5,112 @@ import Testing
 
 @Suite("Shortcut lifecycle")
 struct ShortcutLifecycleTests {
+    @Test func ordinaryBuiltInsAndCustomShortcutsSwitchTogether() {
+        let builtIns: [(ButtonAction, CGKeyCode, CGEventFlags)] = [
+            (.commandReturn, 36, .maskCommand), (.shiftReturn, 36, .maskShift),
+            (.commandCopy, 8, .maskCommand), (.commandPaste, 9, .maskCommand),
+            (.commandClose, 13, .maskCommand), (.commandQuit, 12, .maskCommand),
+            (.commandCut, 7, .maskCommand), (.commandSelectAll, 0, .maskCommand),
+            (.commandUndo, 6, .maskCommand), (.commandRedo, 6, [.maskCommand, .maskShift]),
+            (.commandFind, 3, .maskCommand), (.commandSave, 1, .maskCommand),
+            (.commandDelete, 51, .maskCommand), (.commandMinimize, 46, .maskCommand),
+            (.toggleFullScreen, 3, [.maskControl, .maskCommand]),
+            (.commandNewTab, 17, .maskCommand), (.commandPreviousTab, 33, [.maskShift, .maskCommand]),
+            (.commandNextTab, 30, [.maskShift, .maskCommand]),
+            (.commandNextWindow, 50, .maskCommand), (.commandHide, 4, .maskCommand),
+            (.commandNew, 45, .maskCommand)
+        ]
+        for (action, code, flags) in builtIns {
+            for custom in [false, true] {
+                // Also cover turning the setting back off after using it.
+                for physical in [false, true, false] {
+                    var edges: [Edge] = []
+                    var legacy: [(CGKeyCode, CGEventFlags)] = []
+                    var logs: [String] = []
+                    let sent = KeyboardInjector.send(
+                        custom ? .customShortcut : action,
+                        shortcut: custom ? .init(keyCode: code,
+                            modifierFlags: NSEvent.ModifierFlags(rawValue: UInt(flags.rawValue)), keyLabel: "") : nil,
+                        physicalShortcutEventsEnabled: physical,
+                        accessibilityTrusted: { true },
+                        keyPoster: { legacy.append(($0, $1)) },
+                        shortcutEventPoster: { edges.append(Edge($0)); return true },
+                        shortcutHardwareFlags: { [] }, logger: { logs.append($0) }
+                    )
+                    #expect(sent)
+                    if physical {
+                        #expect(legacy.isEmpty)
+                        #expect(edges.first?.type == .flagsChanged)
+                        #expect(edges.last?.flags.isEmpty == true)
+                        let primary = edges.filter { $0.type == .keyDown || $0.type == .keyUp }
+                        #expect(primary.map(\.code) == [code, code])
+                        #expect(primary.allSatisfy { $0.flags.contains(flags) })
+                    } else {
+                        #expect(edges.isEmpty)
+                        #expect(legacy.count == 1)
+                        #expect(legacy.first?.0 == code)
+                        #expect(legacy.first?.1 == flags)
+                    }
+                    #expect(logs.filter { $0.contains("phase=completed") }.count == 1)
+                    #expect(logs.last?.contains("user_visible_result=unknown") == true)
+                }
+            }
+        }
+    }
+
+    @Test func physicalModePreservesHeldCommandAndRecoversAfterFailedPress() {
+        var events: [Edge] = []
+        #expect(KeyboardInjector.send(.commandPaste, physicalShortcutEventsEnabled: true,
+            accessibilityTrusted: { true }, keyPoster: { _, _ in Issue.record("Used flags only") },
+            shortcutEventPoster: { events.append(Edge($0)); return true },
+            shortcutHardwareFlags: { .maskCommand }, logger: { _ in }))
+        #expect(events.map(\.type) == [.keyDown, .keyUp])
+        #expect(events.allSatisfy { $0.flags.contains(.maskCommand) })
+        for shouldFail in [true, false] {
+            events.removeAll()
+            let result = KeyboardInjector.send(.commandPaste, physicalShortcutEventsEnabled: true,
+                accessibilityTrusted: { true }, keyPoster: { _, _ in Issue.record("Used flags only") },
+                shortcutEventPoster: {
+                    events.append(Edge($0)); return !shouldFail || $0.type != .keyDown
+                }, shortcutHardwareFlags: { [] }, logger: { _ in })
+            #expect(result == !shouldFail)
+            #expect(events.map(\.code) == [55, 9, 9, 55])
+            #expect(events.last?.flags.isEmpty == true)
+        }
+    }
+
+    @Test func deliveryModePersistsAndMissingBackupFieldKeepsLocalChoice() throws {
+        let suite = "SayAll.ShortcutDelivery.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let settings = AppSettings(defaults: defaults)
+        #expect(!settings.physicalShortcutEventsEnabled)
+        for value in [false, true, false] {
+            settings.physicalShortcutEventsEnabled = value
+            #expect(AppSettings.physicalShortcutEventsEnabled(in: defaults) == value)
+            #expect(AppSettings(defaults: defaults).physicalShortcutEventsEnabled == value)
+        }
+        var snapshot = try #require(JSONSerialization.jsonObject(with: settings.portableLocalSnapshot()) as? [String: Any])
+        var preferences = try #require(snapshot["preferences"] as? [String: Any])
+        preferences.removeValue(forKey: "physicalShortcutEventsEnabled")
+        snapshot["preferences"] = preferences
+        settings.physicalShortcutEventsEnabled = true
+        try settings.applyPortableLocalSnapshot(JSONSerialization.data(withJSONObject: snapshot))
+        #expect(settings.physicalShortcutEventsEnabled)
+    }
+
+    @Test(arguments: [false, true])
+    func bothModesRespectPermissionAndLeaveBareBuiltInKeysAlone(_ physical: Bool) {
+        #expect(!KeyboardInjector.send(.commandPaste, physicalShortcutEventsEnabled: physical,
+            accessibilityTrusted: { false }, keyPoster: { _, _ in Issue.record("Permission denied") },
+            shortcutEventPoster: { _ in Issue.record("Permission denied"); return true }))
+        var legacyCodes: [CGKeyCode] = []
+        #expect(KeyboardInjector.send(.returnKey, physicalShortcutEventsEnabled: physical,
+            accessibilityTrusted: { true }, keyPoster: { code, _ in legacyCodes.append(code) },
+            shortcutEventPoster: { _ in Issue.record("Bare built-in key changed"); return true }))
+        #expect(legacyCodes == [36])
+    }
+
     struct Edge: Equatable {
         let type: CGEventType
         let code: CGKeyCode
@@ -23,6 +129,7 @@ struct ShortcutLifecycleTests {
         #expect(KeyboardInjector.send(
             .customShortcut,
             shortcut: CustomKeyboardShortcut(keyCode: 48, modifierFlags: flags, keyLabel: "Tab"),
+            physicalShortcutEventsEnabled: true,
             accessibilityTrusted: { true },
             keyPoster: { _, _ in Issue.record("Must not use flags-only injection") },
             shortcutEventPoster: { event in
@@ -460,6 +567,7 @@ struct ShortcutLifecycleTests {
                     keyCode: keyCode, modifiers: selected.map(\.0), deviceModifierFlags: bits))
                 var events: [Edge] = []
                 #expect(KeyboardInjector.send(.customShortcut, shortcut: shortcut,
+                    physicalShortcutEventsEnabled: true,
                     accessibilityTrusted: { true },
                     keyPoster: { _, _ in Issue.record("Shortcut bypassed shared transaction") },
                     shortcutEventPoster: { events.append(Edge($0)); return true },

@@ -303,6 +303,12 @@ private struct DailyUsageStatistics: Codable {
 }
 
 final class AppSettings: ObservableObject {
+    static let physicalShortcutEventsKey = "keyboard.physicalShortcutEventsEnabled"
+
+    static func physicalShortcutEventsEnabled(in defaults: UserDefaults = .standard) -> Bool {
+        defaults.bool(forKey: physicalShortcutEventsKey)
+    }
+
     static let continuousRecordingExperimentAvailable = false
     static let currentOnboardingVersion = 1
 
@@ -624,6 +630,13 @@ final class AppSettings: ObservableObject {
     @Published var checksForPreReleaseUpdates: Bool {
         didSet {
             defaults.set(checksForPreReleaseUpdates, forKey: Keys.checksForPreReleaseUpdates)
+        }
+    }
+
+    @Published var physicalShortcutEventsEnabled: Bool {
+        didSet {
+            defaults.set(physicalShortcutEventsEnabled, forKey: Self.physicalShortcutEventsKey)
+            AppLogger.shared.write("SHORTCUT SETTINGS phase=completed mode=\(physicalShortcutEventsEnabled ? "physical" : "flags_only") result=saved")
         }
     }
 
@@ -1036,6 +1049,7 @@ final class AppSettings: ObservableObject {
             ? true
             : defaults.bool(forKey: Keys.openMainWindowAtLaunch)
         checksForPreReleaseUpdates = defaults.bool(forKey: Keys.checksForPreReleaseUpdates)
+        physicalShortcutEventsEnabled = Self.physicalShortcutEventsEnabled(in: defaults)
         experimentalContinuousRecordingEnabled = defaults.bool(
             forKey: Keys.experimentalContinuousRecordingEnabled
         )
@@ -2663,7 +2677,8 @@ final class AppSettings: ObservableObject {
             siriRemoteEnabled: siriRemoteEnabled, siriRemoteNeedsUserAction: siriRemoteNeedsUserAction,
             localTranscriptHistoryEnabled: localTranscriptHistoryEnabled,
             localOriginalAudioRecordingEnabled: localOriginalAudioRecordingEnabled,
-            voiceTool: onboardingVoiceTool)
+            voiceTool: onboardingVoiceTool,
+            physicalShortcutEventsEnabled: physicalShortcutEventsEnabled)
     }
 
     static func validateConfigurationAction(_ data: Data) throws {
@@ -2724,6 +2739,9 @@ final class AppSettings: ObservableObject {
         // Set the destination scope before applying mappings. Otherwise a regular
         // portable import can be overwritten by its pre-import device snapshot.
         if let preferences {
+            if let value = preferences.physicalShortcutEventsEnabled {
+                physicalShortcutEventsEnabled = value
+            }
             isLoadingRemoteProfile = true
             remoteDeviceProfiles = preferences.remoteDeviceProfiles
             selectedRemoteProfileID = preferences.selectedRemoteProfileID

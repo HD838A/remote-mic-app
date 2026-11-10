@@ -7541,7 +7541,8 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         let handled = KeyboardInjector.send(
             configured.action,
             shortcut: configured.shortcut,
-            applicationProfile: applicationProfile
+            applicationProfile: applicationProfile,
+            physicalShortcutEventsEnabled: settings.physicalShortcutEventsEnabled
         )
         if !handled, let requestID {
             voiceInputDestinationCoordinator.cancel(requestID: requestID, reason: .actionFailed)

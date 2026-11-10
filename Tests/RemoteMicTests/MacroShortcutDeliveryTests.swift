@@ -11,6 +11,7 @@ struct MacroShortcutDeliveryTests {
             keyCode: 37, modifiers: ["command"], deviceModifierFlags: 0x10,
             accessibilityTrusted: { true }, shortcutSender: { shortcut in
                 KeyboardInjector.send(.customShortcut, shortcut: shortcut,
+                    physicalShortcutEventsEnabled: true,
                     accessibilityTrusted: { true },
                     shortcutEventPoster: { events.append($0); return true },
                     shortcutHardwareFlags: { CGEventFlags(rawValue: 0x00A0_0100) })
