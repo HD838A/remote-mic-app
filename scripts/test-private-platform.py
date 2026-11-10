@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import signal
 import subprocess
 import sys
 import time
@@ -976,6 +977,36 @@ class ReleaseContentTests(unittest.TestCase):
         self.assertEqual({(record["lane"], record["result"]) for record in records},
                          {(lane, event) for lane in ("apple-silicon", "intel") for event in ("started", "passed")})
         self.assertEqual(len(records), 4)
+
+    def test_stage_cancellation_between_fork_and_pid_assignment_reaps_child(self):
+        status_file = self.directory / "cancelled-before-pid.jsonl"
+        source = (ROOT / "scripts/run-release-stage.sh").read_text()
+        self.assertEqual(source.count("CHILD_PID=$!"), 1)
+        probe = self.directory / "delayed-stage.sh"
+        probe.write_text(source.replace("CHILD_PID=$!", "/bin/sleep 0.5\nCHILD_PID=$!"))
+        probe.chmod(0o755)
+        process = subprocess.Popen([str(probe), "intel", "app-build", "20", "--", "/bin/sleep", "20"],
+                                   env={**os.environ, "RELEASE_STAGE_STATUS_FILE": str(status_file)},
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
+        try:
+            for _ in range(200):
+                children = subprocess.run(["/usr/bin/pgrep", "-P", str(process.pid)], capture_output=True, text=True)
+                if len(children.stdout.split()) >= 2:
+                    break
+                time.sleep(0.01)
+            self.assertGreaterEqual(len(children.stdout.split()), 2, "probe must stop between fork and PID assignment")
+            process.terminate()
+            process.communicate(timeout=5)
+            self.assertEqual(process.returncode, 143)
+            self.assertEqual([json.loads(line)["result"] for line in status_file.read_text().splitlines()],
+                             ["started", "cancelled"])
+        finally:
+            # Only this isolated fixture process group can contain the orphan.
+            try:
+                os.killpg(process.pid, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
+            process.communicate(timeout=5)
 
     def test_stage_cancellation_retains_its_terminal_status(self):
         status_file = self.directory / "cancelled.jsonl"

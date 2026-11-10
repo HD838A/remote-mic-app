@@ -488,6 +488,15 @@ package_workflow="$ROOT/.github/workflows/mac-release-package.yml"
 publication_workflow="$ROOT/.github/workflows/mac-preview-publication.yml"
 stable_workflow="$ROOT/.github/workflows/mac-stable-promote.yml"
 ci_workflow="$ROOT/.github/workflows/mac-ci.yml"
+python3 - "$ci_workflow" <<'PYTHON'
+from pathlib import Path
+import sys
+source = Path(sys.argv[1]).read_text()
+assert source.index("- name: Run release control-plane fixture") < source.index("- name: Run Swift tests")
+assert source.count("./scripts/test-macos-release-flow.sh") == 1
+assert source.count("--skip releaseControlPlaneFixtureHasExecutableRegressionCoverage") == 2
+PYTHON
+
 private_ci_workflow="$ROOT/.github/workflows/mac-private-ci.yml"
 notarize_release="$ROOT/scripts/notarize-release.sh"
 opus_build="$ROOT/scripts/build-apple-remote-opus.sh"
@@ -1031,6 +1040,13 @@ for test_case in \
   'scripts/install-doubao-driver.sh:true:true' \
   'scripts/verify-release-dependency-pins.sh:false:true' \
   'scripts/test-macos-release-flow.sh:false:true' \
+  'scripts/test-private-platform.py:false:true' \
+  'scripts/run-release-stage.sh:false:true' \
+  'scripts/verify-release-contents.py:false:true' \
+  'scripts/release-assets.py:false:true' \
+  'config/release-assets.json:false:true' \
+  'config/release-dependencies.json:true:true' \
+  'config/future.json:true:false' \
   'scripts/verify-release-control-plane-diff.sh:true:true' \
   'scripts/verify-repository-governance.sh:false:false:true' \
   '.github/workflows/repository-governance.yml:false:false:true' \
@@ -1062,6 +1078,11 @@ for test_case in \
   print -r -- "$result" | /usr/bin/grep -Fxq "repository_only=$expected_repository"
   if [[ "$expected_product" == false && "$expected_release" == true ]]; then
     REPOSITORY_ROOT="$fixture_repo" "$ROOT/scripts/verify-release-control-plane-diff.sh" "$base_commit" HEAD
+    /bin/mkdir -p "$fixture_repo/Sources"
+    print -r -- product > "$fixture_repo/Sources/Product.swift"
+    /usr/bin/git -C "$fixture_repo" add .
+    /usr/bin/git -C "$fixture_repo" commit -q -m 'mixed release and product'
+    REPOSITORY_ROOT="$fixture_repo" "$ROOT/scripts/verify-release-control-plane-diff.sh" --classify "$base_commit" HEAD | /usr/bin/grep -Fx 'product_change=true' >/dev/null
   fi
   if [[ "$expected_repository" == true ]]; then
     print -r -- documentation > "$fixture_repo/AGENTS.md"
