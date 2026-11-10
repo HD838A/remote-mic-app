@@ -1498,6 +1498,7 @@ struct SettingsPageRegressionTests {
         #expect(source.contains("Button(\"button_mapping.action_filter.custom_shortcuts\")"))
         #expect(source.contains("source=basic_keys_header"))
         #expect(source.contains("result=editor_presented"))
+        #expect(source.contains("configured: configured\n                        )\n                        .disabled(isManagedPowerAction)"))
         // 顺序：打开 App → 按住 → 按键速度。
         #expect(source.contains("[.commonPhrases, .applications, .hold, .buttonSpeed]"))
         #expect(source.contains("case .hold, .buttonSpeed:"))

@@ -3628,6 +3628,7 @@ struct SettingsView: View {
                             trigger: trigger,
                             configured: configured
                         )
+                        .disabled(isManagedPowerAction)
                     }
                 }
             }
