@@ -168,6 +168,8 @@ AI 整理在本次分发协议中保持关闭。`include_ai=true` 在接触发�
 test-macos-release-flow.sh 默认运行原 flow、元数据和 CI 证明 fixture。生成 UI 证明和 publication 中的独立验证仍在不同阶段执行；Apple 凭据入口与无凭据上传边界保持不变。
 
 macOS CI 和发布证明共用 verify-release-control-plane-diff.sh 的分类。公开 CI 包含 Ubuntu 分类、公开 Mac 测试及双架构构建、两个架构 summary，Repository governance 独立执行。公开 Job 清空私有路径并使用公开模式。私有集成测试在私有仓库中保留免费与付费两种配置，每种配置以 macOS 13 最低部署目标运行完整 native tests，再构建 Apple Silicon/macOS 14 与 Intel/macOS 13 Release。发布证明仍要求实际产品步骤通过，summary 只汇总适用结果。
+发布 Shell/Python 全流程 fixture 在 Swift 编译前执行一次，先拦截协议、状态转换和静态门禁错误。后续 BuildSigningTests 跳过其中已单独通过的同一个 Shell fixture，其他签名与构建检查照常执行；本地默认 BuildSigningTests 仍执行完整 fixture。纯发布公共契约、内容校验器、阶段 supervisor 及其 Python 回归属于明确 allowlist，未知文件、混合产品改动、依赖清单和 CI/分类器自身改动继续触发完整产品验证。
+
 BuildSigningTests 按相关源码、资源、构建、安装、依赖或 workflow 变更执行，不在私有配置重复运行。产品变更时，公开 Job 用 --skip-build 复用已编译测试产物；纯发布控制面变更时由同一公开 Job 在 Mac 编译并验证，不再创建独立 Release script checks。summary 门禁要求所有适用检查成功。未知路径以及 mac-ci.yml、产品构建/签名/安装脚本变更仍走完整产品验证，不能因扩展名为 .sh 豁免。减少 Job 和重复 native tests 不保证单次墙钟耗时，仍须用实际 CI 记录比较排队与执行时间。
 
 仅修改开发启动入口 script/build_and_run.sh 时，不触发产品构建或发布检查；该入口不在 CI 中执行，其改动不能冒充新的产品验证证明。发布只允许继承经核对无产品变化的既有双架构证明。
