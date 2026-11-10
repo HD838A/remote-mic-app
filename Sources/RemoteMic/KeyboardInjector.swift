@@ -177,9 +177,13 @@ enum KeyboardInjector {
                 return escaped
             }
             guard isActive else { return true }
+            // 原生语义：切换器里松开 ⌘ 就等于确认高亮 App，只发 ⌘ 抬起会把「取消」变成切换。
+            // 取消必须先在 ⌘ 仍按住时发 Escape，再松开 ⌘；Escape 失败也不能把 ⌘ 留在按下状态。
+            let escaped = post(53, isDown: true, flags: .maskCommand, role: "escape")
+            let escapedUp = post(53, isDown: false, flags: .maskCommand, role: "escape")
             let released = post(leftCommandKeyCode, isDown: false, flags: [], role: "command")
             isActive = false
-            return released
+            return escaped && escapedUp && released
         }
 
         /// 切换器里按 ↑/↓ 会进入目标 App 的窗口选择（App Exposé）：

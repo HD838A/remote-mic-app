@@ -67,9 +67,9 @@
 2. 按返回键。
 3. 在原 App 中输入文字并测试普通 Command 快捷键。
 
-预期结果：切换器关闭，不切换到新高亮 App；返回键原映射不执行；Command 已释放，键盘输入正常。
+预期结果：切换器关闭，不切换到新高亮 App；返回键原映射不执行；Command 已释放，键盘输入正常。日志顺序为先 `role=escape`（`edge=down`、`edge=up`、`command=true`），再 `role=command edge=up`；返回后 `switcher_state` 的 `front=` 仍是原 App。
 
-失败判定：切换到了新 App、返回键执行原动作、Command 卡住或切换器仍停留在屏幕上。
+失败判定：切换到了新 App、返回键执行原动作、Command 卡住、切换器仍停留在屏幕上，或日志里 `role=command edge=up` 出现在 `role=escape` 之前。
 
 ## 用例 7：无操作超时
 
