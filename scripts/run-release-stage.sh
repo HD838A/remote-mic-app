@@ -1,6 +1,63 @@
 #!/bin/zsh
 set -euo pipefail
 
+if [[ "$#" -eq 2 && "$1" == report-status ]]; then
+  exec python3 - "$2" <<'PY'
+import json
+from pathlib import Path
+import re
+import sys
+
+fields = {"schemaVersion", "lane", "stage", "result", "elapsedSeconds", "timeoutSeconds", "exitCode"}
+check_fields = {"schemaVersion", "lane", "stage", "checkLine", "exitCode"}
+try:
+    records = [json.loads(line) for line in Path(sys.argv[1]).read_text().splitlines() if line.strip()]
+    if not records:
+        raise ValueError("empty status")
+    for record in records:
+        if isinstance(record, dict) and set(record) == check_fields:
+            valid = (
+                type(record["schemaVersion"]) is int and record["schemaVersion"] == 1
+                and record["lane"] in {"apple-silicon", "intel"}
+                and record["stage"] == "app-verify"
+                and type(record["checkLine"]) is int and record["checkLine"] > 0
+                and type(record["exitCode"]) is int and 1 <= record["exitCode"] <= 255
+            )
+            if not valid:
+                raise ValueError("invalid check status")
+            continue
+        valid = (
+            isinstance(record, dict) and set(record) == fields
+            and record["schemaVersion"] == 1
+            and all(isinstance(record[key], str) and re.fullmatch(r"[A-Za-z0-9._-]+", record[key])
+                    for key in ("lane", "stage"))
+            and record["result"] in {"started", "passed", "failed", "timeout", "cancelled"}
+            and type(record["elapsedSeconds"]) is int
+            and type(record["timeoutSeconds"]) is int and record["timeoutSeconds"] > 0
+            and (record["exitCode"] is None or
+                 (type(record["exitCode"]) is int and 0 <= record["exitCode"] <= 255))
+        )
+        if not valid:
+            raise ValueError("invalid status")
+except (OSError, ValueError, TypeError):
+    print("RELEASE STATUS result=unavailable")
+    sys.exit(1)
+
+for record in records:
+    if "checkLine" in record:
+        print(f"RELEASE STATUS lane={record['lane']} stage=app-verify "
+              f"result=failed line={record['checkLine']} exit={record['exitCode']}")
+        continue
+    message = (f"RELEASE STATUS lane={record['lane']} stage={record['stage']} "
+               f"result={record['result']} elapsed={record['elapsedSeconds']}s")
+    if record["exitCode"] is not None:
+        message += f" exit={record['exitCode']}"
+    if record["result"] == "timeout":
+        message += f" limit={record['timeoutSeconds']}s"
+    print(message)
+PY
+fi
+
 if [[ "$#" -lt 5 ]]; then
   print -u2 "usage: $0 <lane> <stage> <timeout-seconds> -- <command> [args...]"
   exit 2
@@ -41,6 +98,23 @@ fi
 CHILD_PID=""
 TIMED_OUT=0
 START_SECONDS="$(/bin/date +%s)"
+
+record_stage_status() {
+  [[ -n "${RELEASE_STAGE_STATUS_FILE:-}" ]] || return 0
+  # A single append keeps concurrent lanes separate. Diagnostics preserve the
+  # original command result, including timeout and cancellation exit codes.
+  python3 - "$RELEASE_STAGE_STATUS_FILE" "$LANE" "$STAGE" "$1" "$2" "$3" "$TIMEOUT_SECONDS" <<'PY' || true
+import json
+import sys
+
+record = {"schemaVersion": 1, "lane": sys.argv[2], "stage": sys.argv[3],
+          "result": sys.argv[4], "elapsedSeconds": int(sys.argv[5]),
+          "exitCode": None if sys.argv[4] == "started" else int(sys.argv[6]),
+          "timeoutSeconds": int(sys.argv[7])}
+with open(sys.argv[1], "ab", buffering=0) as output:
+    output.write((json.dumps(record) + "\n").encode())
+PY
+}
 
 collect_descendants() {
   local parent_pid="$1"
@@ -90,11 +164,14 @@ terminate_process_tree() {
 
 handle_signal() {
   local signal_name="$1"
+  # A signal can arrive after fork but before the main loop stores the PID.
+  local interrupted_child_pid="${CHILD_PID:-$!}"
   local elapsed=$(( $(/bin/date +%s) - START_SECONDS ))
   print -u2 "RELEASE STAGE CANCEL lane=$LANE stage=$STAGE elapsed=${elapsed}s signal=$signal_name"
-  if [[ -n "$CHILD_PID" ]]; then
-    terminate_process_tree "$CHILD_PID"
-    wait "$CHILD_PID" 2>/dev/null || true
+  record_stage_status cancelled "$elapsed" 143
+  if [[ "$interrupted_child_pid" =~ ^[1-9][0-9]*$ ]]; then
+    terminate_process_tree "$interrupted_child_pid"
+    wait "$interrupted_child_pid" 2>/dev/null || true
   fi
   exit 143
 }
@@ -105,6 +182,7 @@ trap 'handle_signal HUP' HUP
 
 NEXT_HEARTBEAT=$(( START_SECONDS + HEARTBEAT_SECONDS ))
 print -u2 "RELEASE STAGE START lane=$LANE stage=$STAGE timeout=${TIMEOUT_SECONDS}s"
+record_stage_status started 0 0
 
 "$@" &
 CHILD_PID=$!
@@ -119,6 +197,7 @@ while process_running "$CHILD_PID"; do
   if (( elapsed >= TIMEOUT_SECONDS )); then
     TIMED_OUT=1
     print -u2 "RELEASE STAGE TIMEOUT lane=$LANE stage=$STAGE elapsed=${elapsed}s limit=${TIMEOUT_SECONDS}s"
+    record_stage_status timeout "$elapsed" 124
     terminate_process_tree "$CHILD_PID"
     wait "$CHILD_PID" 2>/dev/null || true
     break
@@ -138,7 +217,9 @@ fi
 elapsed=$(( $(/bin/date +%s) - START_SECONDS ))
 if (( child_status == 0 )); then
   print -u2 "RELEASE STAGE PASS lane=$LANE stage=$STAGE elapsed=${elapsed}s"
+  record_stage_status passed "$elapsed" "$child_status"
 else
   print -u2 "RELEASE STAGE FAIL lane=$LANE stage=$STAGE elapsed=${elapsed}s exit=$child_status"
+  record_stage_status failed "$elapsed" "$child_status"
 fi
 exit "$child_status"

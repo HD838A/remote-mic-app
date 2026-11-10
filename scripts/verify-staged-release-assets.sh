@@ -32,7 +32,6 @@ jq -e '
   .tag == ("v" + .version) and
   (.build | test("^[1-9][0-9]*$")) and
   (.assets | type == "array") and
-  (if .schemaVersion == 2 then (.assets | length == 10) else (.assets | length == 13) end) and
   ([.assets[].name] | length == (unique | length)) and
   all(.assets[];
     (.name | test("^[A-Za-z0-9][A-Za-z0-9._-]*$")) and
@@ -46,35 +45,8 @@ jq -e '
 version="$(jq -r '.version' "$MANIFEST")"
 build="$(jq -r '.build' "$MANIFEST")"
 schema_version="$(jq -r '.schemaVersion' "$MANIFEST")"
-if [[ "$schema_version" == 2 ]]; then
-  published_prefix="SayAll-$version-$build"
-  expected_names="$(printf '%s\n' \
-    "$published_prefix-Intel-uninstall.pkg" \
-    "$published_prefix-Intel-install.pkg" \
-    "$published_prefix-Intel.zip" \
-    "$published_prefix-AppleSilicon-uninstall.pkg" \
-    "$published_prefix-AppleSilicon-install.pkg" \
-    "$published_prefix.en.txt" \
-    "$published_prefix.zh.txt" \
-    "$published_prefix.zip" \
-    "appcast-intel.xml" \
-    "appcast.xml" | LC_ALL=C /usr/bin/sort)"
-else
-  expected_names="$(printf '%s\n' \
-    "SayAll-$version-Intel-Uninstaller.pkg" \
-    "SayAll-$version-Intel-Installer.pkg" \
-    "Remote-Mic-$version-Intel.dmg" \
-    "Remote-Mic-$version-Intel.zip" \
-    "SayAll-$version-Uninstaller.pkg" \
-    "SayAll-$version-Installer.pkg" \
-    "Remote-Mic-$version.dmg" \
-    "Remote-Mic-$version.dmg.sha256" \
-    "Remote-Mic-$version.en.txt" \
-    "Remote-Mic-$version.zh.txt" \
-    "Remote-Mic-$version.zip" \
-    "appcast-intel.xml" \
-    "appcast.xml" | LC_ALL=C /usr/bin/sort)"
-fi
+contract_names="$(python3 "$(cd "$(dirname "$0")" && pwd)/release-assets.py" names "$version" "$build" "$schema_version")"
+expected_names="$(printf '%s\n' "$contract_names" | LC_ALL=C /usr/bin/sort)"
 manifest_names="$(jq -r '.assets[].name' "$MANIFEST" | LC_ALL=C /usr/bin/sort)"
 [[ "$manifest_names" == "$expected_names" ]] || {
   echo "staged asset manifest does not contain the canonical public payload assets" >&2
@@ -150,4 +122,5 @@ except (AssertionError, ET.ParseError, OSError) as error:
     sys.exit(f"Sparkle appcast validation failed: {error}")
 PYTHON
 
+python3 "$(cd "$(dirname "$0")" && pwd)/verify-release-contents.py" "$PUBLIC_DIR"
 echo "STAGED RELEASE ASSETS PASS"

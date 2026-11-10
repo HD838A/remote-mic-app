@@ -53,11 +53,11 @@ final class KeyboardEventSuppressor {
     private var earlyNativeUps: [RemoteNativeEvent: Int] = [:]
     // Diagnostic-only: bounded to the remote's known native descriptors.
     private var recentUnclaimedDowns: [RemoteNativeEvent: TimeInterval] = [:]
-    // An escaped volume down belongs to the system through its final release.
-    // Dropping only its up can leave the system repeating volume indefinitely.
-    private var passedVolumeDowns = Set<RemoteNativeEvent>()
-    private var passedVolumeRawReleases: [RemoteNativeEvent: Int] = [:]
-    private static let volumeEvents: Set<RemoteNativeEvent> = [.systemKey(type: 0), .systemKey(type: 1)]
+    // 已放行的原生命中属于系统，直到它的松开也走完为止。只吞掉 up 会让系统
+    // 认为按键仍按住并继续连发：音量键会一直加音量，方向键会一直移动光标。
+    // 键盘描述符（方向键、回车、Esc 等）与系统键共用同一本账。
+    private var passedNativeDowns = Set<RemoteNativeEvent>()
+    private var passedNativeReleases: [RemoteNativeEvent: Int] = [:]
     private static let knownNativeEvents = Set(RemoteButton.allCases.flatMap { $0.nativeEvents })
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
@@ -161,8 +161,8 @@ final class KeyboardEventSuppressor {
         prearmedDownsClaimed.removeAll()
         earlyNativeUps.removeAll()
         recentUnclaimedDowns.removeAll()
-        passedVolumeDowns.removeAll()
-        passedVolumeRawReleases.removeAll()
+        passedNativeDowns.removeAll()
+        passedNativeReleases.removeAll()
         recentArmed.removeAll()
         lock.unlock()
         EventTapPort.release(port: port, source: source)
@@ -182,6 +182,9 @@ final class KeyboardEventSuppressor {
         recentUnclaimedDowns = recentUnclaimedDowns.filter { now - $0.value < Self.nativeDeliveryWindow }
         var precedingDownAges: [(RemoteNativeEvent, Int)] = []
         var passedRawEvents: [RemoteNativeEvent] = []
+        // 账本里已有同码按下（通常是实体键盘仍按住）而放弃登记的按下：只用于诊断，
+        // 与「原生配对已逃逸」区分开，见 `reason=held_same_key`。
+        var heldSameKeyEvents: [RemoteNativeEvent] = []
         for nativeEvent in nativeEvents {
             recentArmed.append((event: nativeEvent, until: now + 1.0))
         }
@@ -197,10 +200,13 @@ final class KeyboardEventSuppressor {
                 if let unclaimed {
                     precedingDownAges.append((nativeEvent, Int((now - unclaimed) * 1_000)))
                 }
-                if passedVolumeDowns.contains(nativeEvent) {
+                if passedNativeDowns.contains(nativeEvent) {
                     // Consume the raw pair without creating stale native credits.
-                    passedVolumeRawReleases[nativeEvent, default: 0] += 1
-                    passedRawEvents.append(nativeEvent)
+                    passedNativeReleases[nativeEvent, default: 0] += 1
+                    // 同码键仍在按住时这次按下无法登记，判据保持不变；只把原因与
+                    // `escaped_native_pair` 分开，现场才能把一次双跳对应到「键盘
+                    // 同码键仍未松开」。
+                    heldSameKeyEvents.append(nativeEvent)
                     continue
                 }
                 heldEventCounts[nativeEvent, default: 0] += 1
@@ -229,8 +235,8 @@ final class KeyboardEventSuppressor {
                     expiresAt: now + Self.nativeDeliveryWindow
                 ))
             case .up:
-                if let passed = passedVolumeRawReleases[nativeEvent], passed > 0 {
-                    passedVolumeRawReleases[nativeEvent] = passed > 1 ? passed - 1 : nil
+                if let passed = passedNativeReleases[nativeEvent], passed > 0 {
+                    passedNativeReleases[nativeEvent] = passed > 1 ? passed - 1 : nil
                     passedRawEvents.append(nativeEvent)
                     continue
                 }
@@ -274,6 +280,12 @@ final class KeyboardEventSuppressor {
             logger("HID FILTER phase=arm result=passthrough event=\(Self.logToken(native)) " +
                 "edge=\(edge == .down ? "down" : "up") reason=escaped_native_pair source_correlation=timing_only")
         }
+        for native in heldSameKeyEvents {
+            // 判据不变（这次按下确实没有登记），只换原因码：日志里出现这一行，说明
+            // 实体键盘上同一键码仍按住，这一次遥控器按下不可能被事件级拦截。
+            logger("HID FILTER phase=arm result=passthrough event=\(Self.logToken(native)) " +
+                "edge=down reason=held_same_key")
+        }
         for (native, age) in precedingDownAges {
             logger("HID FILTER phase=arm_order event=\(Self.logToken(native)) edge=down preceding_unclaimed_ms=\(age) " +
                 "source_correlation=timing_only result=already_passed_through")
@@ -298,7 +310,7 @@ final class KeyboardEventSuppressor {
         pendingEvents.removeAll { $0.expiresAt <= now }
         for nativeEvent in nativeEvents {
             // 已放行的原生按下仍由 release 保护逻辑接管，不再新增拦截记录。
-            guard !passedVolumeDowns.contains(nativeEvent) else { continue }
+            guard !passedNativeDowns.contains(nativeEvent) else { continue }
             guard !pendingEvents.contains(where: {
                 $0.event == nativeEvent && $0.edge == .down
             }) else { continue }
@@ -326,6 +338,11 @@ final class KeyboardEventSuppressor {
             // pressed，之后每个快捷键都会被强行加上 Fn，直到下一次真实按下 Fn。
             // 复位成 unobserved 后，只有新的真实边沿才能让快照的 Fn 重新被信任。
             hardwareModifierState.reset()
+            // 这里刻意不清空 passedNativeDowns / passedNativeReleases：tap 禁用窗口
+            // 吃掉某次松开时，清空会让主线程随后的 arm(edge: .up) 重新开出待匹配
+            // 窗口、把那一次松开吞掉——正是「系统认为键仍按住并连发」要避免的事。
+            // 保留账本时，下一次同码松开到达即自愈（放行并出账），最坏情况只是
+            // 该键在下一次按下前少一次拦截，不会出现卡键。
             // 本回调在 tap 专用线程上执行，端口引用由主线程写入，必须加锁读取。
             lock.lock()
             let tap = eventTap
@@ -348,13 +365,23 @@ final class KeyboardEventSuppressor {
         let now = uptime()
         lock.lock()
         pendingEvents.removeAll { $0.expiresAt <= now }
-        if passedVolumeDowns.contains(descriptor.event) {
+        if passedNativeDowns.contains(descriptor.event) {
             if descriptor.edge == .up {
-                passedVolumeDowns.remove(descriptor.event)
+                passedNativeDowns.remove(descriptor.event)
             }
+            // 纯实体键盘的同码按键不属于「泄漏配对」，不写日志：否则用户每次按
+            // 回车/方向键都会在 runtime.log 里多一行。远端泄漏场景主线程随后必然
+            // arm（recentArmed 命中）；音量/TV 是系统键，保留既有日志。
+            let armedRecently = recentArmed.contains {
+                $0.event == descriptor.event && $0.until > now
+            }
+            var isSystemKey = false
+            if case .systemKey = descriptor.event { isSystemKey = true }
             lock.unlock()
-            logger("HID FILTER passed_through event=\(Self.logToken(descriptor.event)) " +
-                "edge=\(descriptor.edge == .down ? "down" : "up") reason=escaped_native_pair")
+            if armedRecently || isSystemKey {
+                logger("HID FILTER passed_through event=\(Self.logToken(descriptor.event)) " +
+                    "edge=\(descriptor.edge == .down ? "down" : "up") reason=escaped_native_pair")
+            }
             return false
         }
         if let matchIndex = pendingEvents.firstIndex(where: {
@@ -416,9 +443,10 @@ final class KeyboardEventSuppressor {
         }
         if descriptor.edge == .down, Self.knownNativeEvents.contains(descriptor.event) {
             recentUnclaimedDowns[descriptor.event] = now
-            if Self.volumeEvents.contains(descriptor.event) {
-                passedVolumeDowns.insert(descriptor.event)
-            }
+            // 这次按下没被吞掉，就必须连它的松开一起放行。只记音量键时，键盘描述符
+            // （Intel 上泄漏的方向键正是如此）会在主线程 `arm(edge: .up)` 之后被吞掉
+            // up，系统据此认为键仍按住并继续连发。
+            passedNativeDowns.insert(descriptor.event)
         }
         let pendingCount = pendingEvents.count
         // 诊断范围（187 的教训：条件太窄会漏掉「系统事件与预定键码不同」的情况）：

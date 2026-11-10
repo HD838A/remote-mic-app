@@ -357,6 +357,9 @@ trap cleanup EXIT
 /bin/cp "$ROOT/scripts/verify-preview-cdn-availability.sh" "$CHECKOUT/scripts/verify-preview-cdn-availability.sh"
 /bin/chmod 755 "$CHECKOUT/scripts/prepare-preview-release.sh"
 /bin/chmod 755 "$CHECKOUT/scripts/verify-preview-cdn-availability.sh"
+/bin/mkdir -p "$CHECKOUT/config"
+/bin/cp "$ROOT/config/release-assets.json" "$CHECKOUT/config/"
+/bin/cp "$ROOT/scripts/release-assets.py" "$CHECKOUT/scripts/"
 print -r -- '<?xml version="1.0" encoding="UTF-8"?>
 <plist version="1.0"><dict>
 <key>CFBundleShortVersionString</key><string>1.9.10</string>
@@ -394,7 +397,12 @@ FAKE_BIN="$WORK_DIR/bin"
 /bin/mkdir -p "$FAKE_BIN"
 print -r -- '#!/bin/zsh
 set -euo pipefail
-print -rn -- 404' > "$FAKE_BIN/curl"
+if [[ "$*" == *release-contract.json* ]]; then
+  /bin/cp "$CDN_CONTRACT_FIXTURE" "${@[-1]}"
+else
+  print -rn -- 404
+fi' > "$FAKE_BIN/curl"
+export CDN_CONTRACT_FIXTURE="$ROOT/config/release-assets.json"
 /bin/chmod 755 "$FAKE_BIN/curl"
 
 zh_notes="$WORK_DIR/zh.md"
@@ -488,6 +496,15 @@ package_workflow="$ROOT/.github/workflows/mac-release-package.yml"
 publication_workflow="$ROOT/.github/workflows/mac-preview-publication.yml"
 stable_workflow="$ROOT/.github/workflows/mac-stable-promote.yml"
 ci_workflow="$ROOT/.github/workflows/mac-ci.yml"
+python3 - "$ci_workflow" <<'PYTHON'
+from pathlib import Path
+import sys
+source = Path(sys.argv[1]).read_text()
+assert source.index("- name: Run release control-plane fixture") < source.index("- name: Run Swift tests")
+assert source.count("./scripts/test-macos-release-flow.sh") == 1
+assert source.count("--skip releaseControlPlaneFixtureHasExecutableRegressionCoverage") == 2
+PYTHON
+
 private_ci_workflow="$ROOT/.github/workflows/mac-private-ci.yml"
 notarize_release="$ROOT/scripts/notarize-release.sh"
 opus_build="$ROOT/scripts/build-apple-remote-opus.sh"
@@ -506,45 +523,40 @@ fi
 /usr/bin/grep -Fq 'mode:' "$package_workflow"
 /usr/bin/grep -Fq 'expected_commit:' "$package_workflow"
 /usr/bin/grep -Fq 'source_branch:' "$package_workflow"
-/usr/bin/grep -Fq 'if: ${{ inputs.include_ai }}' "$package_workflow"
 /usr/bin/grep -Fq 'INCLUDE_SAYALL_AI: ${{ inputs.include_ai && '\''1'\'' || '\''0'\'' }}' "$package_workflow"
 /usr/bin/grep -Fq 'INCLUDE_SAYALL_AI="${INCLUDE_SAYALL_AI:-0}"' "$ROOT/scripts/stage-macos-preview.sh"
 /usr/bin/grep -Fq -- 'include_ai=$include_ai' "$ROOT/scripts/stage-macos-preview.sh"
-/usr/bin/grep -Fq 'Build and prepare private feature artifacts' "$package_workflow"
-/usr/bin/grep -Fq 'build-private-xcframeworks.sh' "$package_workflow"
+/usr/bin/grep -Fq 'Verify and prepare published private artifacts' "$package_workflow"
 /usr/bin/grep -Fq 'prepare-private-artifact-package.sh' "$package_workflow"
 /usr/bin/grep -Fq 'SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH=$PRIVATE_ARTIFACT_PACKAGE' "$package_workflow"
-/usr/bin/grep -Fq 'REQUIRE_SAYALL_PRIVATE_ARTIFACT_PACKAGE=1' "$package_workflow"
-/usr/bin/grep -Fq 'REQUIRE_SAYALL_BUTTON_PROFILES=1' "$package_workflow"
+for requirement in REQUIRE_SAYALL_PRIVATE_ARTIFACT_PACKAGE REQUIRE_SAYALL_BUTTON_PROFILES \
+  REQUIRE_SAYALL_COMBINATION_ACTIONS REQUIRE_SAYALL_CHROMECAST REQUIRE_SAYALL_MAC_REMOTE_PACKAGE; do
+  /usr/bin/grep -Fq "$requirement=1" "$package_workflow"
+done
 /usr/bin/grep -Fq 'SAYALL_BUILD_CHANNEL=release' "$package_workflow"
-/usr/bin/grep -Fq 'SAYALL_CHROMECAST_PACKAGE_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-private-platform/packages/audio-input-kit/chromecast' "$package_workflow"
-/usr/bin/grep -Fq 'REQUIRE_SAYALL_CHROMECAST=1' "$package_workflow"
-/usr/bin/grep -Fq 'SAYALL_COMBINATION_ACTIONS_PATH=' "$package_workflow" && {
-  print -u2 "protected release must use the verified private artifact package for combination actions"
+if /usr/bin/grep -Eq 'build-private-xcframeworks|[.]private-dependencies/sayall-private-platform|[.]private-dependencies/sayall-ai' "$package_workflow"; then
+  print -u2 "public staging must exclude private source checkouts and compiler fallbacks"
   exit 1
-}
-# Execute the actual workflow configuration body without checkout or credentials.
+fi
 ai_input="$(/usr/bin/awk '/^      include_ai:/ { capture=1; next } capture && /^concurrency:/ { exit } capture { print }' "$package_workflow")"
 print -r -- "$ai_input" | /usr/bin/grep -Fq 'default: false'
 print -r -- "$ai_input" | /usr/bin/grep -Fq 'type: boolean'
-configure_features="$(/usr/bin/awk '
-  /- name: Configure private feature package/ { found=1; next }
+if INCLUDE_SAYALL_AI=1 "$ROOT/scripts/stage-macos-preview.sh" preview > "$WORK_DIR/ai-rejected.log" 2>&1; then
+  print -u2 "source-only AI distribution must stop before dispatch"
+  exit 1
+fi
+/usr/bin/grep -Fq 'published binary artifact contract' "$WORK_DIR/ai-rejected.log"
+prepare_features="$(/usr/bin/awk '
+  /- name: Verify and prepare published private artifacts/ { found=1; next }
   found && /run: \|/ { capture=1; next }
   capture && /^      - name:/ { exit }
   capture { print }
 ' "$package_workflow")"
-for ai_mode in 0 1; do
-  ai_env="$WORK_DIR/ai-config-$ai_mode.env"
-  INCLUDE_SAYALL_AI="$ai_mode" GITHUB_WORKSPACE="$WORK_DIR" GITHUB_ENV="$ai_env" \
-    /bin/bash -e -c "$configure_features"
-  /usr/bin/grep -Fxq "SAYALL_MAC_REMOTE_PACKAGE_PATH=$WORK_DIR/.private-dependencies/sayall-private-platform/packages/macos-remote" "$ai_env"
-  /usr/bin/grep -Fxq "REQUIRE_SAYALL_AI_PACKAGE=$ai_mode" "$ai_env"
-  if [[ "$ai_mode" == 0 ]]; then
-    /usr/bin/grep -Fxq 'SAYALL_AI_PACKAGE_PATH=' "$ai_env"
-  else
-    /usr/bin/grep -Fxq "SAYALL_AI_PACKAGE_PATH=$WORK_DIR/.private-dependencies/sayall-ai" "$ai_env"
-  fi
-done
+if GH_TOKEN= /bin/bash -e -c "$prepare_features" > "$WORK_DIR/missing-private-read.log" 2>&1; then
+  print -u2 "missing private attachment access must stop before preparing artifacts"
+  exit 1
+fi
+/usr/bin/grep -Fq 'Private release attachment access is required' "$WORK_DIR/missing-private-read.log"
 ai_requirement="$(/usr/bin/grep '^export REQUIRE_SAYALL_AI_PACKAGE=' "$notarize_release")"
 [[ "$(env -u REQUIRE_SAYALL_AI_PACKAGE /bin/zsh -c "$ai_requirement; print -- \$REQUIRE_SAYALL_AI_PACKAGE")" == 0 ]]
 [[ "$(REQUIRE_SAYALL_AI_PACKAGE=1 /bin/zsh -c "$ai_requirement; print -- \$REQUIRE_SAYALL_AI_PACKAGE")" == 1 ]]
@@ -577,13 +589,7 @@ fi
 /usr/bin/grep -Fq "branches: [main, 'hotfix/**']" "$ci_workflow"
 /usr/bin/grep -Fq 'swift test --disable-keychain --filter BuildSigningTests' "$ci_workflow"
 /usr/bin/grep -Fq 'macOS private integration CI' "$private_ci_workflow"
-/usr/bin/grep -Fq 'SAYALL_PRIVATE_PLATFORM_DEPLOY_KEY' "$private_ci_workflow"
-/usr/bin/grep -Fq 'Resolve private platform version' "$private_ci_workflow"
-/usr/bin/grep -Fq 'Run private integration tests' "$private_ci_workflow"
-/usr/bin/grep -Fq 'configuration: [free-combination-actions, paid-button-profiles]' "$private_ci_workflow"
-/usr/bin/grep -Fq 'SAYALL_PRIVATE_PLATFORM_PACKAGE_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-private-platform' "$private_ci_workflow"
-/usr/bin/grep -Fq 'sayall_private_platform_version' "$private_ci_workflow"
-/usr/bin/grep -Fq 'SAYALL_PRIVATE_PLATFORM_DEPLOY_KEY' "$package_workflow"
+/usr/bin/grep -Fq 'SAYALL_PRIVATE_RELEASE_READ_TOKEN' "$package_workflow"
 /usr/bin/grep -Fq 'sayall_private_platform_version' "$ci_workflow" && {
   print -u2 "public macOS CI must not resolve private dependency outputs"
   exit 1
@@ -592,8 +598,6 @@ fi
 /usr/bin/grep -Fq 'SAYALL_PRIVATE_PLATFORM_VERSION' "$package_workflow"
 /usr/bin/grep -Fq 'update-private-dependency-versions.sh' "$ROOT/.github/workflows/update-private-dependency-versions.yml"
 /usr/bin/grep -Fq '[0-9]+\\.[0-9]+\\.[0-9]+' "$ROOT/scripts/verify-release-dependency-pins.sh"
-/usr/bin/grep -Fq 'test -f .private-dependencies/sayall-private-platform/packages/audio-input-kit/siri-remote/Package.swift' "$package_workflow"
-/usr/bin/grep -Fq 'SAYALL_SIRI_REMOTE_PACKAGE_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-private-platform/packages/audio-input-kit/siri-remote' "$package_workflow"
 /usr/bin/grep -Fq 'RELEASE_VARIANT=apple-silicon ./scripts/build-apple-remote-opus.sh' "$package_workflow"
 /usr/bin/grep -Fq 'RELEASE_VARIANT=intel ./scripts/build-apple-remote-opus.sh' "$package_workflow"
 /usr/bin/grep -Fq 'CONFIGURE_HOST_ARGS=(--host "$CROSS_HOST")' "$opus_build"
@@ -612,12 +616,22 @@ fi
 /usr/bin/grep -Fq 'name: Public Swift tests and dual-architecture build' "$ci_workflow"
 /usr/bin/grep -Fq 'needs: [classify_changes, public_test]' "$ci_workflow"
 public_job="$(/usr/bin/awk '/^  public_test:/ { capture=1 } /^  test:/ { exit } capture { print }' "$ci_workflow")"
+macos_tool_setup="$(print -r -- "$public_job" | /usr/bin/awk '
+  /- name: Ensure macOS CI tools/ { capture=1 }
+  capture && /- name: Check patch formatting/ { exit }
+  capture { print }
+')"
+[[ -n "$macos_tool_setup" ]]
+print -r -- "$macos_tool_setup" | /usr/bin/grep -Fq \
+  "if: needs.classify_changes.outputs.product_change == 'true' || needs.classify_changes.outputs.release_checks == 'true'"
+print -r -- "$macos_tool_setup" | /usr/bin/grep -Fq \
+  'command -v rg >/dev/null || HOMEBREW_NO_AUTO_UPDATE=1 brew install ripgrep'
 for package_path in SAYALL_AI_PACKAGE_PATH SAYALL_PRIVATE_PLATFORM_PACKAGE_PATH SAYALL_COMBINATION_ACTIONS_PATH SAYALL_BUTTON_PROFILES_PACKAGE_PATH SAYALL_MAC_REMOTE_PACKAGE_PATH; do
   print -r -- "$public_job" | /usr/bin/grep -Fq "$package_path: \"\""
 done
-if ! /usr/bin/grep -Fq 'configuration: [free-combination-actions, paid-button-profiles]' "$private_ci_workflow" || \
-   ! /usr/bin/grep -Fq "matrix.configuration == 'paid-button-profiles'" "$private_ci_workflow"; then
-  print -u2 "private CI must keep the paid feature matrix separate from public CI"
+/usr/bin/grep -Fq 'macos-host-integration.yml' "$private_ci_workflow"
+if /usr/bin/grep -Eq 'swift (test|build)|secrets[.]|SAYALL_ENABLE_PRIVATE_SWIFTPM' "$private_ci_workflow"; then
+  print -u2 "private source validation must execute in the private repository"
   exit 1
 fi
 if [[ "$(/usr/bin/grep -c -- 'swift test --disable-keychain' "$ci_workflow")" -lt 4 ]] || \
@@ -879,6 +893,14 @@ fake_bin="$WORK_DIR/bin"
 print -r -- '#!/bin/zsh
 set -euo pipefail
 mode="${CDN_FIXTURE_MODE:-404}"
+if [[ "$*" == *release-contract.json* ]]; then
+  case "$mode" in
+    unsupported) print -r -- "{}" > "${@[-1]}" ;;
+    unavailable) exit 22 ;;
+    *) /bin/cp "$CDN_CONTRACT_FIXTURE" "${@[-1]}" ;;
+  esac
+  exit 0
+fi
 is_head=false
 for arg in "$@"; do
   [[ "$arg" == --head ]] && is_head=true
@@ -893,6 +915,7 @@ case "$mode" in
   *) print -rn -- 000; exit 1 ;;
 esac' > "$fake_bin/curl"
 /bin/chmod 755 "$fake_bin/curl"
+export CDN_CONTRACT_FIXTURE="$ROOT/config/release-assets.json"
 PATH="$fake_bin:$PATH" CDN_FIXTURE_MODE=404 \
   "$ROOT/scripts/verify-preview-cdn-availability.sh" v9.9.9 999 >/dev/null
 if PATH="$fake_bin:$PATH" CDN_FIXTURE_MODE=200 \
@@ -915,6 +938,16 @@ else
   exit 1
 fi
 
+for mode in unsupported unavailable; do
+  if PATH="$fake_bin:$PATH" CDN_FIXTURE_MODE="$mode" \
+    "$ROOT/scripts/verify-preview-cdn-availability.sh" v9.9.9 999 > "$WORK_DIR/contract-$mode.log" 2>&1; then
+    print -u2 "CDN occupancy gate accepted an incompatible deployed contract"
+    exit 1
+  fi
+done
+PATH="$fake_bin:$PATH" CDN_FIXTURE_MODE=200 \
+  "$ROOT/scripts/verify-preview-cdn-availability.sh" v9.9.9 999 --contract-only >/dev/null
+
 # Build a deterministic canonical payload fixture and exercise the manifest gate.
 public_dir="$WORK_DIR/public"
 /bin/mkdir -p "$public_dir"
@@ -935,8 +968,19 @@ for name in \
 done
 python3 - "$public_dir" <<'PYTHON'
 from pathlib import Path
+import subprocess
 import sys
+import zipfile
 public = Path(sys.argv[1])
+payload = public.parent / "installer-payload"
+payload.mkdir()
+(payload / "PublicFixture.txt").write_text("public fixture")
+for archive in public.glob("*.zip"):
+    with zipfile.ZipFile(archive, "w") as bundle:
+        bundle.writestr("SayAll.app/Contents/MacOS/RemoteMic", b"public runtime fixture")
+for installer in public.glob("*.pkg"):
+    subprocess.run(["pkgbuild", "--root", str(payload), "--identifier", "invalid.example.release-fixture", "--version", "1", str(installer)],
+                   check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 for feed, suffix in [("appcast.xml", ""), ("appcast-intel.xml", "-Intel")]:
     archive = f"SayAll-9.9.9-999{suffix}.zip"
     length = (public / archive).stat().st_size
@@ -1033,6 +1077,13 @@ for test_case in \
   'scripts/install-doubao-driver.sh:true:true' \
   'scripts/verify-release-dependency-pins.sh:false:true' \
   'scripts/test-macos-release-flow.sh:false:true' \
+  'scripts/test-private-platform.py:false:true' \
+  'scripts/run-release-stage.sh:false:true' \
+  'scripts/verify-release-contents.py:false:true' \
+  'scripts/release-assets.py:false:true' \
+  'config/release-assets.json:false:true' \
+  'config/release-dependencies.json:true:true' \
+  'config/future.json:true:false' \
   'scripts/verify-release-control-plane-diff.sh:true:true' \
   'scripts/verify-repository-governance.sh:false:false:true' \
   '.github/workflows/repository-governance.yml:false:false:true' \
@@ -1064,17 +1115,23 @@ for test_case in \
   print -r -- "$result" | /usr/bin/grep -Fxq "repository_only=$expected_repository"
   if [[ "$expected_product" == false && "$expected_release" == true ]]; then
     REPOSITORY_ROOT="$fixture_repo" "$ROOT/scripts/verify-release-control-plane-diff.sh" "$base_commit" HEAD
+    /bin/mkdir -p "$fixture_repo/Sources"
+    print -r -- product > "$fixture_repo/Sources/Product.swift"
+    /usr/bin/git -C "$fixture_repo" add .
+    /usr/bin/git -C "$fixture_repo" commit -q -m 'mixed release and product'
+    REPOSITORY_ROOT="$fixture_repo" "$ROOT/scripts/verify-release-control-plane-diff.sh" --classify "$base_commit" HEAD | /usr/bin/grep -Fx 'product_change=true' >/dev/null
   fi
   if [[ "$expected_repository" == true ]]; then
     print -r -- documentation > "$fixture_repo/AGENTS.md"
     /usr/bin/git -C "$fixture_repo" add .
     /usr/bin/git -C "$fixture_repo" commit -q -m 'mixed governance and docs'
-    REPOSITORY_ROOT="$fixture_repo" /bin/bash "$ROOT/scripts/verify-release-control-plane-diff.sh" --classify "$base_commit" HEAD | /usr/bin/grep -Fxq 'repository_only=true'
+    # Consume every classifier line so pipefail cannot turn an early match into SIGPIPE.
+    REPOSITORY_ROOT="$fixture_repo" /bin/bash "$ROOT/scripts/verify-release-control-plane-diff.sh" --classify "$base_commit" HEAD | /usr/bin/grep -Fx 'repository_only=true' >/dev/null
     /bin/mkdir -p "$fixture_repo/Sources"
     print -r -- product > "$fixture_repo/Sources/Product.swift"
     /usr/bin/git -C "$fixture_repo" add .
     /usr/bin/git -C "$fixture_repo" commit -q -m 'mixed governance and product'
-    REPOSITORY_ROOT="$fixture_repo" "$ROOT/scripts/verify-release-control-plane-diff.sh" --classify "$base_commit" HEAD | /usr/bin/grep -Fxq 'product_change=true'
+    REPOSITORY_ROOT="$fixture_repo" "$ROOT/scripts/verify-release-control-plane-diff.sh" --classify "$base_commit" HEAD | /usr/bin/grep -Fx 'product_change=true' >/dev/null
   fi
   if REPOSITORY_ROOT="$fixture_repo" "$ROOT/scripts/verify-release-control-plane-diff.sh" --classify 0000000000000000000000000000000000000000 HEAD > "$WORK_DIR/invalid-diff.log" 2>&1; then
     print -u2 "classifier accepted an invalid Git diff"
