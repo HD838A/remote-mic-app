@@ -6,7 +6,7 @@ TAG="${1:-}"
 BUILD="${2:-}"
 CDN_BASE_URL="https://download.sayall.app/mac/releases"
 
-if [[ "$#" -ne 2 || ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ || ! "$BUILD" =~ ^[1-9][0-9]*$ ]]; then
+if [[ ( "$#" -ne 2 && ( "$#" -ne 3 || "${3:-}" != --contract-only ) ) || ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ || ! "$BUILD" =~ ^[1-9][0-9]*$ ]]; then
   echo "usage: $0 <preview-tag> <build>" >&2
   exit 2
 fi
@@ -15,20 +15,20 @@ command -v curl >/dev/null 2>&1 || {
   exit 1
 }
 
-version="${TAG#v}"
-published_prefix="SayAll-$version-$BUILD"
-payload_names=(
-  "$published_prefix-Intel-uninstall.pkg"
-  "$published_prefix-Intel-install.pkg"
-  "$published_prefix-Intel.zip"
-  "$published_prefix-AppleSilicon-uninstall.pkg"
-  "$published_prefix-AppleSilicon-install.pkg"
-  "$published_prefix.en.txt"
-  "$published_prefix.zh.txt"
-  "$published_prefix.zip"
-  "appcast-intel.xml"
-  "appcast.xml"
-)
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+capability_file="$(mktemp)"
+cleanup() {
+  mkdir -p "$HOME/.Trash"
+  mv "$capability_file" "$HOME/.Trash/sayall-cdn-contract.$$.${RANDOM}.json"
+}
+trap cleanup EXIT
+# A route-level 404 proves availability only after the deployed router confirms
+# that it understands this exact public contract.
+curl --fail --silent --show-error --connect-timeout 10 --max-time 30 \
+  "https://download.sayall.app/mac/release-contract.json" --output "$capability_file"
+python3 "$ROOT/scripts/release-assets.py" check-capability "$capability_file"
+[[ "${3:-}" != --contract-only ]] || exit 0
+payload_names="$(python3 "$ROOT/scripts/release-assets.py" names "${TAG#v}" "$BUILD")"
 
 probe_status() {
   local method="$1" url="$2" http_code curl_status
@@ -71,7 +71,7 @@ probe_status() {
   esac
 }
 
-for name in "${payload_names[@]}"; do
+while IFS= read -r name; do
   url="$CDN_BASE_URL/$TAG/$name"
   status=0
   probe_status HEAD "$url" || status=$?
@@ -89,6 +89,6 @@ for name in "${payload_names[@]}"; do
       exit 1
       ;;
   esac
-done
+done <<< "$payload_names"
 
 echo "PREVIEW CDN PATHS AVAILABLE: $TAG"

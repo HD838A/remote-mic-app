@@ -98,6 +98,12 @@ jobs:
           RELEASE_SOURCE_CHECKOUT_MODE: detached
         run: ./scripts/verify-public-release-source.sh "${{ inputs.source_branch }}" "${{ inputs.expected_commit }}"
 
+      - name: Verify deployed public asset contract before credentials
+        run: |
+          version="$(/usr/bin/plutil -extract CFBundleShortVersionString raw -o - release-source/Resources/Info.plist)"
+          build="$(/usr/bin/plutil -extract CFBundleVersion raw -o - release-source/Resources/Info.plist)"
+          ./scripts/verify-preview-cdn-availability.sh "v$version" "$build" --contract-only
+
       - name: Verify successful source-branch CI
         env:
           GH_TOKEN: ${{ github.token }}
