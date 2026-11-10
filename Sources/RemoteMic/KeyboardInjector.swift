@@ -24,6 +24,24 @@ enum KeyboardInjector {
     typealias ScrollPoster = (Int32) -> Void
     typealias SystemKeyPoster = (Int32) -> Void
 
+    /// Dock 进程当前拥有的窗口数量。
+    ///
+    /// 切换器打开时 Dock 会多出一个窗口，这是判断“切换器是否还开着”最稳的信号：
+    /// 辅助功能里的切换器列表在部分系统上会一直存在（即使切换器没开），
+    /// 也会在切换器开着时随机消失，不能用来判断。
+    static func dockWindowCount() -> Int {
+        guard let dock = NSRunningApplication.runningApplications(
+            withBundleIdentifier: "com.apple.dock"
+        ).first else { return 0 }
+        let windows = (
+            CGWindowListCopyWindowInfo([.optionAll], kCGNullWindowID) as? [[String: Any]]
+        ) ?? []
+        let dockIdentifier = Int(dock.processIdentifier)
+        return windows.filter {
+            (($0[kCGWindowOwnerPID as String] as? NSNumber)?.intValue ?? -1) == dockIdentifier
+        }.count
+    }
+
     struct ApplicationVisibilitySnapshot: Equatable {
         let bundleIdentifier: String
         let processActive: Bool?
@@ -48,12 +66,65 @@ enum KeyboardInjector {
     }
 
     final class AppSwitcherSession {
-        private let keyStatePoster: KeyStatePoster
-        private var diagnosticLogger: ((String) -> Void)?
-        private(set) var isActive = false
+        /// 返回值必须由调用方持有：DispatchSourceTimer 任务一旦释放，定时器就不会触发。
+        typealias DelayScheduler = (UInt64, @escaping () -> Void) -> AnyObject?
 
-        init(keyStatePoster: @escaping KeyStatePoster = KeyboardInjector.postKeyState) {
+        /// ⌥ 按下与 ⌘ 松开必须分两个事件周期送达：同一批送进 Dock 时，它处理 ⌘ 抬起
+        /// 读到的已经是 ⌥ 松开的最终状态，最小化窗口不会回来。
+        static let optionHoldMilliseconds: UInt64 = 60
+        static let optionReleaseMilliseconds: UInt64 = 100
+        static let windowPickerCommandReleaseMilliseconds: UInt64 = 80
+        static let mainQueueScheduler: DelayScheduler = { milliseconds, action in
+            let item = DispatchWorkItem(block: action)
+            DispatchQueue.main.asyncAfter(
+                deadline: .now() + .milliseconds(Int(milliseconds)),
+                execute: item
+            )
+            return item
+        }
+
+        private let keyStatePoster: KeyStatePoster
+        private let scheduler: DelayScheduler
+        private var diagnosticLogger: ((String) -> Void)?
+        private var optionHoldTask: AnyObject?
+        private var optionReleaseTask: AnyObject?
+        private var commandReleaseTask: AnyObject?
+        private(set) var isWindowPickerActive = false
+        /// 窗口层里是否已经用方向键选中过某个窗口（原生语义：选中后 Enter/Esc 才响应）。
+        private(set) var pickerHasHighlight = false
+        private var commandReleasePending = false
+        private(set) var isActive = false
+        /// 已经按下 ⌥/保持 ⌘、但还没走完释放流程；调度失败时由 watchdog 兜底。
+        private(set) var hasPendingRelease = false
+
+        /// 合成按键按下与抬起之间保持的时长（微秒）。
+        /// 真实按键会按住几十毫秒；按下抬起同一瞬间送达的合成事件，
+        /// 部分系统 UI（macOS 13 的 App 切换器）会直接忽略。
+        static let syntheticKeyHoldMicroseconds: UInt32 = 25_000
+
+        /// ⌘ 按下与 Tab 按下之间要留出的间隔。
+        ///
+        /// 合成事件的修饰键状态不一定在下一条事件到达前就登记完：
+        /// 真机日志（macOS 14/15）里“⌘ 刚按下就紧跟 Tab”经常打不开切换器，
+        /// 而稍后再按一次（⌘ 已经按住）就能打开。
+        static let commandSettleMicroseconds: UInt32 = 80_000
+
+        /// 方向键是否真的能在切换器里移动高亮：nil 表示还没验证过。
+        /// macOS 14/15 上方向键无效、Tab 循环有效（真机验证），因此验证失败
+        /// 后就改用 Tab 循环。
+        private(set) var arrowNavigationSupported: Bool?
+
+        init(
+            keyStatePoster: @escaping KeyStatePoster = KeyboardInjector.postKeyState,
+            scheduler: @escaping DelayScheduler = AppSwitcherSession.mainQueueScheduler
+        ) {
             self.keyStatePoster = keyStatePoster
+            self.scheduler = scheduler
+        }
+
+        /// 记录方向键导航是否可用（由监视器在验证高亮后回填）。
+        func markArrowNavigation(supported: Bool) {
+            arrowNavigationSupported = supported
         }
 
         func setDiagnosticLogger(_ logger: @escaping (String) -> Void) {
@@ -77,12 +148,16 @@ enum KeyboardInjector {
         @discardableResult
         func trigger() -> Bool {
             if isActive {
+                // 已经在窗口选择层，再发 ⌘Tab 会重开切换器。
+                if isWindowPickerActive { return true }
                 return postTab()
             }
 
             guard post(leftCommandKeyCode, isDown: true, flags: .maskCommand, role: "command") else {
                 return false
             }
+            // 等修饰键状态登记完再发 Tab，否则部分系统（macOS 14/15）会打不开切换器。
+            usleep(Self.commandSettleMicroseconds)
             guard postTab() else {
                 _ = post(leftCommandKeyCode, isDown: false, flags: [], role: "command")
                 return false
@@ -93,30 +168,197 @@ enum KeyboardInjector {
 
         @discardableResult
         func cancel() -> Bool {
+            if isWindowPickerActive {
+                _ = releaseCommandForWindowPicker()
+                let escaped = post(53, isDown: true, flags: [], role: "escape") &&
+                    post(53, isDown: false, flags: [], role: "escape")
+                isWindowPickerActive = false
+                isActive = false
+                return escaped
+            }
             guard isActive else { return true }
             let released = post(leftCommandKeyCode, isDown: false, flags: [], role: "command")
             isActive = false
             return released
         }
 
+        /// 切换器里按 ↑/↓ 会进入目标 App 的窗口选择（App Exposé）：
+        /// 第一次带 ⌘ 发送，让系统从切换器切到窗口层；之后 ⌘ 必须松开，
+        /// 方向键和回车才能作用在窗口选择上，而不是变成 ⌘← / ⌘→ 之类的系统快捷键。
+        @discardableResult
+        func moveWindowSelection(up: Bool) -> Bool {
+            guard isActive else { return false }
+            if !isWindowPickerActive {
+                // 原生只有 ⌘↓ 能进入窗口层；上键进入时同样发 ⌘↓，
+                // 之后 ↑/↓ 只决定方向键的移动方向。
+                let pressed = post(
+                    125,
+                    isDown: true,
+                    flags: .maskCommand,
+                    role: "window_picker"
+                )
+                usleep(Self.syntheticKeyHoldMicroseconds)
+                let released = post(
+                    125,
+                    isDown: false,
+                    flags: .maskCommand,
+                    role: "window_picker"
+                )
+                isWindowPickerActive = true
+                pickerHasHighlight = false
+                commandReleasePending = true
+                hasPendingRelease = true
+                commandReleaseTask = scheduler(Self.windowPickerCommandReleaseMilliseconds) {
+                    [weak self] in
+                    _ = self?.releaseCommandForWindowPicker()
+                }
+                return pressed && released
+            }
+            let keyCode: CGKeyCode = up ? 126 : 125
+            _ = releaseCommandForWindowPicker()
+            let posted = post(keyCode, isDown: true, flags: [], role: "window_selection") &&
+                post(keyCode, isDown: false, flags: [], role: "window_selection")
+            if posted { pickerHasHighlight = true }
+            return posted
+        }
+
+        @discardableResult
+        private func releaseCommandForWindowPicker() -> Bool {
+            guard commandReleasePending else { return true }
+            commandReleasePending = false
+            hasPendingRelease = false
+            return post(leftCommandKeyCode, isDown: false, flags: [], role: "command")
+        }
+
+        /// 系统切换器只在「⌥ 已经按住、随后松开 ⌘」时才把目标 App 最小化的窗口带回前台。
+        /// 先松开 ⌘ 再按 ⌥ 等价于普通 ⌘Tab，只会换成目标 App 的菜单栏，窗口仍留在程序坞。
         @discardableResult
         func confirm() -> Bool {
-            cancel()
+            guard isActive else { return true }
+            if isWindowPickerActive {
+                // 窗口选择层里 OK 等于回车：打开当前高亮的窗口。
+                _ = releaseCommandForWindowPicker()
+                let posted = postKeyWithHold(code: 36, flags: [], role: "return")
+                isActive = false
+                isWindowPickerActive = false
+                return posted
+            }
+            isActive = false
+            guard post(
+                leftOptionKeyCode,
+                isDown: true,
+                flags: [.maskCommand, .maskAlternate],
+                role: "option"
+            ) else {
+                return post(leftCommandKeyCode, isDown: false, flags: [], role: "command")
+            }
+            hasPendingRelease = true
+            optionHoldTask = scheduler(Self.optionHoldMilliseconds) { [weak self] in
+                guard let self else { return }
+                _ = self.post(
+                    KeyboardInjector.leftCommandKeyCode,
+                    isDown: false,
+                    flags: [.maskAlternate],
+                    role: "command"
+                )
+                self.optionReleaseTask = self.scheduler(Self.optionReleaseMilliseconds) {
+                    [weak self] in
+                    guard let self else { return }
+                    _ = self.post(
+                        KeyboardInjector.leftOptionKeyCode,
+                        isDown: false,
+                        flags: [],
+                        role: "option"
+                    )
+                    self.hasPendingRelease = false
+                }
+            }
+            return true
+        }
+
+        /// 会话已经结束但系统切换器/窗口层还开着时，用它补一个 Escape。
+        @discardableResult
+        func dismissWindowPicker() -> Bool {
+            isActive = false
+            isWindowPickerActive = false
+            commandReleasePending = false
+            hasPendingRelease = false
+            return post(53, isDown: true, flags: [], role: "escape") &&
+                post(53, isDown: false, flags: [], role: "escape")
+        }
+
+        /// 调度器没有按期执行时的兜底：必须把 ⌘/⌥ 放开，不能把修饰键留在按下状态。
+        @discardableResult
+        func forceReleaseModifiersIfNeeded() -> Bool {
+            guard hasPendingRelease else { return true }
+            let commandReleased = post(
+                leftCommandKeyCode,
+                isDown: false,
+                flags: [],
+                role: "command"
+            )
+            let optionReleased = post(
+                leftOptionKeyCode,
+                isDown: false,
+                flags: [],
+                role: "option"
+            )
+            hasPendingRelease = false
+            isWindowPickerActive = false
+            commandReleasePending = false
+            optionHoldTask = nil
+            optionReleaseTask = nil
+            return commandReleased && optionReleased
         }
 
         @discardableResult
         func moveSelection(left: Bool) -> Bool {
             guard isActive else { return false }
-            let keyCode: CGKeyCode = left ? 123 : 124
-            let pressed = post(keyCode, isDown: true, flags: .maskCommand, role: "selection")
-            let released = post(keyCode, isDown: false, flags: .maskCommand, role: "selection")
+            if isWindowPickerActive {
+                // 窗口层里 ⌘ 已经松开，方向键直接作用在窗口高亮上。
+                _ = releaseCommandForWindowPicker()
+                let posted = postKeyWithHold(
+                    code: left ? 123 : 124,
+                    flags: [],
+                    role: "selection"
+                )
+                if posted { pickerHasHighlight = true }
+                return posted
+            }
+            // 已经确认方向键无效的系统（macOS 14/15 真机验证）直接用 Tab 循环；
+            // 还没验证过的先发方向键，由监视器核对高亮是否真的移动了。
+            if arrowNavigationSupported == false {
+                return cycleSelection(backwards: left)
+            }
+            return postKeyWithHold(
+                code: left ? 123 : 124,
+                flags: .maskCommand,
+                role: "selection"
+            )
+        }
+
+        /// 用 Tab（⌘Tab / ⌘⇧Tab）在切换器里循环高亮。
+        @discardableResult
+        func cycleSelection(backwards: Bool) -> Bool {
+            guard isActive else { return false }
+            let flags: CGEventFlags = backwards ? [.maskCommand, .maskShift] : .maskCommand
+            return postKeyWithHold(code: 48, flags: flags, role: "cycle")
+        }
+
+        /// 按下与抬起之间保持一小段时间，模拟真实按键。
+        private func postKeyWithHold(
+            code: CGKeyCode,
+            flags: CGEventFlags,
+            role: String
+        ) -> Bool {
+            let pressed = post(code, isDown: true, flags: flags, role: role)
+            usleep(Self.syntheticKeyHoldMicroseconds)
+            let released = post(code, isDown: false, flags: flags, role: role)
             return pressed && released
         }
 
         private func postTab() -> Bool {
-            let pressed = post(48, isDown: true, flags: .maskCommand, role: "tab")
-            let released = post(48, isDown: false, flags: .maskCommand, role: "tab")
-            return pressed && released
+            postKeyWithHold(code: 48, flags: .maskCommand, role: "tab")
         }
     }
 
@@ -171,6 +413,7 @@ enum KeyboardInjector {
     static let functionKeyCode: CGKeyCode = 63
     static let leftCommandKeyCode: CGKeyCode = 55
     static let rightCommandKeyCode: CGKeyCode = 54
+    static let leftOptionKeyCode: CGKeyCode = 58
     /// Web content shells only build the accessibility tree once an assistive
     /// client announces itself, so the composer scan finds an empty shell until
     /// one of these attributes is set. `AXManualAccessibility` is the Chromium
@@ -385,16 +628,6 @@ enum KeyboardInjector {
         }
         guard accessibilityTrusted() else { return false }
 
-        func sendShortcut(_ keyCode: CGKeyCode, _ modifiers: CGEventFlags) -> Bool {
-            ShortcutEventSequence.send(
-                keyCode: keyCode,
-                modifiers: modifiers,
-                hardwareFlags: shortcutHardwareFlags,
-                eventPoster: shortcutEventPoster,
-                logger: logger
-            )
-        }
-
         switch action {
         case .disabled:
             return true
@@ -403,31 +636,47 @@ enum KeyboardInjector {
         case .returnKey:
             keyPoster(36, [])
         case .commandReturn:
-            return sendShortcut(36, .maskCommand)
+            keyPoster(36, .maskCommand)
         case .shiftReturn:
-            return sendShortcut(36, .maskShift)
+            keyPoster(36, .maskShift)
         case .commandCopy:
-            return sendShortcut(8, .maskCommand)
+            keyPoster(8, .maskCommand)
         case .commandPaste:
-            return sendShortcut(9, .maskCommand)
+            keyPoster(9, .maskCommand)
         case .commandClose:
-            return sendShortcut(13, .maskCommand)
+            keyPoster(13, .maskCommand)
         case .commandQuit:
-            return sendShortcut(12, .maskCommand)
+            keyPoster(12, .maskCommand)
         case .commandCut:
-            return sendShortcut(7, .maskCommand)
+            keyPoster(7, .maskCommand)
         case .commandSelectAll:
-            return sendShortcut(0, .maskCommand)
+            keyPoster(0, .maskCommand)
         case .commandUndo:
-            return sendShortcut(6, .maskCommand)
+            keyPoster(6, .maskCommand)
         case .commandRedo:
-            return sendShortcut(6, [.maskCommand, .maskShift])
+            keyPoster(6, [.maskCommand, .maskShift])
         case .commandFind:
-            return sendShortcut(3, .maskCommand)
+            keyPoster(3, .maskCommand)
         case .commandSave:
-            return sendShortcut(1, .maskCommand)
+            keyPoster(1, .maskCommand)
         case .commandDelete:
-            return sendShortcut(51, .maskCommand)
+            keyPoster(51, .maskCommand)
+        case .commandMinimize:
+            keyPoster(46, .maskCommand)
+        case .toggleFullScreen:
+            keyPoster(3, [.maskControl, .maskCommand])
+        case .commandNewTab:
+            keyPoster(17, .maskCommand)
+        case .commandPreviousTab:
+            keyPoster(33, [.maskShift, .maskCommand])
+        case .commandNextTab:
+            keyPoster(30, [.maskShift, .maskCommand])
+        case .commandNextWindow:
+            keyPoster(50, .maskCommand)
+        case .commandHide:
+            keyPoster(4, .maskCommand)
+        case .commandNew:
+            keyPoster(45, .maskCommand)
         case .arrowUp:
             keyPoster(126, [])
         case .arrowDown:
@@ -456,6 +705,48 @@ enum KeyboardInjector {
             keyPoster(contextualMenuKeyCode, [])
         case .appSwitcher:
             keyPoster(48, .maskCommand)
+        case .missionControl:
+            return postSymbolicHotKey(
+                126,
+                modifiers: [controlModifier],
+                keyFlags: [.maskSecondaryFn, .maskNumericPad],
+                keyStatePoster: keyStatePoster
+            )
+        case .applicationWindows:
+            return postSymbolicHotKey(
+                125,
+                modifiers: [controlModifier],
+                keyFlags: [.maskSecondaryFn, .maskNumericPad],
+                keyStatePoster: keyStatePoster
+            )
+        case .spaceLeft:
+            return postSymbolicHotKey(
+                123,
+                modifiers: [controlModifier],
+                keyFlags: [.maskSecondaryFn, .maskNumericPad],
+                keyStatePoster: keyStatePoster
+            )
+        case .spaceRight:
+            return postSymbolicHotKey(
+                124,
+                modifiers: [controlModifier],
+                keyFlags: [.maskSecondaryFn, .maskNumericPad],
+                keyStatePoster: keyStatePoster
+            )
+        case .lockScreen:
+            // ⌃⌘Q：真实按键顺序是先 Control 再 Command，收尾逆序抬起。
+            return postSymbolicHotKey(
+                12,
+                modifiers: [controlModifier, commandModifier],
+                keyStatePoster: keyStatePoster
+            )
+        case .screenshot:
+            // ⌘⇧3：系统截屏快捷键，需要系统侧该项处于启用状态。
+            return postSymbolicHotKey(
+                20,
+                modifiers: [commandModifier, shiftModifier],
+                keyStatePoster: keyStatePoster
+            )
         case .volumeUp:
             postSystemKey(type: 0)
         case .volumeDown:
@@ -473,7 +764,12 @@ enum KeyboardInjector {
         case .customShortcut:
             if let shortcut {
                 let eventFlags = shortcut.cgEventFlags
-                return sendShortcut(CGKeyCode(shortcut.keyCode), eventFlags)
+                return ShortcutEventSequence.send(
+                    keyCode: CGKeyCode(shortcut.keyCode),
+                    modifiers: eventFlags,
+                    hardwareFlags: shortcutHardwareFlags,
+                    eventPoster: shortcutEventPoster
+                )
             }
         case .focusInput:
             break
@@ -2128,6 +2424,50 @@ enum KeyboardInjector {
         .joined(separator: " ")
     }
 
+    /// 参与符号快捷键的修饰键：键码 + 它对应的 CGEventFlags 位。
+    private struct SymbolicModifier {
+        let keyCode: CGKeyCode
+        let flag: CGEventFlags
+    }
+
+    private static let controlModifier = SymbolicModifier(keyCode: 59, flag: .maskControl)
+    private static let commandModifier = SymbolicModifier(keyCode: 55, flag: .maskCommand)
+    private static let shiftModifier = SymbolicModifier(keyCode: 56, flag: .maskShift)
+
+    /// 投递 WindowServer 符号快捷键（调度中心、切换桌面、锁屏、系统截屏等）。
+    ///
+    /// 这类快捷键匹配的是**真实按键流里的修饰键状态**，不是事件自带的 `flags`。
+    /// 只发「目标键 down/up + flags」会被静默丢弃：动作执行了、事件也投递了，
+    /// 系统毫无反应。macOS 27.0.1 (26A434) 实测确认。
+    ///
+    /// 因此这里按真实键入顺序先按下修饰键，再按目标键，最后逆序抬起；
+    /// 两次 12ms 停顿让 WindowServer 的修饰键状态机落地，不加会偶发丢动作。
+    ///
+    /// - Parameter keyFlags: 目标键自身固有的标志位。方向键在真实键盘上恒带
+    ///   `SecondaryFn | NumericPad`（见 `MACOS_FUNCTION_LAYER.md`），普通字母键不需要。
+    private static func postSymbolicHotKey(
+        _ key: CGKeyCode,
+        modifiers: [SymbolicModifier],
+        keyFlags: CGEventFlags = [],
+        keyStatePoster: KeyStatePoster
+    ) -> Bool {
+        var active: CGEventFlags = []
+        for modifier in modifiers {
+            active.insert(modifier.flag)
+            _ = keyStatePoster(modifier.keyCode, true, active)
+        }
+        usleep(12_000)
+        let effective = active.union(keyFlags)
+        _ = keyStatePoster(key, true, effective)
+        _ = keyStatePoster(key, false, effective)
+        usleep(12_000)
+        for modifier in modifiers.reversed() {
+            active.remove(modifier.flag)
+            _ = keyStatePoster(modifier.keyCode, false, active)
+        }
+        return true
+    }
+
     private static func postKey(code: CGKeyCode, flags: CGEventFlags = []) {
         guard let source = CGEventSource(stateID: .hidSystemState),
               let down = CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: true),
@@ -2194,6 +2534,16 @@ enum KeyboardInjector {
             .max { $0.width * $0.height < $1.width * $1.height }
     }
 
+    /// 目标 App 的标准窗口数（含最小化窗口），按辅助功能 subrole 过滤。
+    /// CGWindowList 会把菜单栏阴影、1×1 辅助窗口也算进来，不能用来数窗口。
+    static func standardWindowCount(processIdentifier: pid_t) -> Int? {
+        guard isAccessibilityTrusted else { return nil }
+        let element = AXUIElementCreateApplication(processIdentifier)
+        return axElements(element, attribute: kAXWindowsAttribute).filter {
+            axString($0, attribute: kAXSubroleAttribute) == kAXStandardWindowSubrole as String
+        }.count
+    }
+
     static func ordinaryWindowCount(
         windowInfo: [[String: Any]],
         processIdentifier: pid_t
@@ -2210,6 +2560,204 @@ enum KeyboardInjector {
             else { return }
             count += 1
         }
+    }
+
+    enum MinimizedWindowRestoreResult: String, Equatable {
+        case restored
+        case skippedNotFrontmost
+        case skippedVisibleWindow
+        case noMinimizedWindow
+        case restoreFailed
+        case notTrusted
+    }
+
+    /// 系统 ⌘Tab 只切换 App：目标 App 的窗口全部最小化时，切过去只有菜单栏。
+    /// 确认后如果前台已是目标 App 却没有可见窗口，就把它的一个最小化窗口拉起来。
+    static func restoreMinimizedWindowIfNeeded(
+        frontmostBundleIdentifier: String?,
+        originBundleIdentifier: String?
+    ) -> MinimizedWindowRestoreResult {
+        guard let frontmostBundleIdentifier,
+              frontmostBundleIdentifier != originBundleIdentifier
+        else { return .skippedNotFrontmost }
+        guard isAccessibilityTrusted else { return .notTrusted }
+        let visibility = applicationVisibilitySnapshot(
+            bundleIdentifier: frontmostBundleIdentifier
+        )
+        if visibility.onscreenWindowCount.map({ $0 > 0 }) == true {
+            return .skippedVisibleWindow
+        }
+        guard let application = NSRunningApplication.runningApplications(
+            withBundleIdentifier: frontmostBundleIdentifier
+        ).first(where: { !$0.isTerminated }) else {
+            return .noMinimizedWindow
+        }
+        let applicationElement = AXUIElementCreateApplication(application.processIdentifier)
+        let windows = axElements(applicationElement, attribute: kAXWindowsAttribute)
+        guard let target = windows.first(where: {
+            axBool($0, attribute: kAXMinimizedAttribute) == true
+        }) else { return .noMinimizedWindow }
+
+        AXUIElementSetAttributeValue(target, kAXMinimizedAttribute as CFString, kCFBooleanFalse)
+        AXUIElementPerformAction(target, kAXRaiseAction as CFString)
+        application.activate(options: [])
+        return axBool(target, attribute: kAXMinimizedAttribute) == false ? .restored : .restoreFailed
+    }
+
+    /// 切换器 HUD 的当前高亮项由 Dock 通过辅助功能暴露（`AXSelectedChildren`）。
+    /// 一旦进入窗口选择层，这个列表就会消失，所以必须在进入前读取。
+    struct AppSwitcherSelection {
+        let processIdentifier: pid_t
+        let bundleIdentifier: String?
+    }
+
+    /// 切换器里选中的 App。同名实例（两个 Chrome）时优先非活跃的那个：
+    /// 用户在切换器里选的几乎总是“另一个”App，而不是当前活跃的实例。
+    /// 切换器 HUD 的三种状态：可见 / 已消失 / 读不到。
+    /// 读不到与“消失”必须区分开：辅助功能读取偶发失败时不能当成 HUD 关闭。
+    enum AppSwitcherHudState: Equatable {
+        case visible(selectedBundleIdentifier: String?)
+        case absent
+        case unreadable
+
+        var logLabel: String {
+            switch self {
+            case .visible(let bundleIdentifier):
+                return "visible:\(bundleIdentifier ?? "-")"
+            case .absent:
+                return "absent"
+            case .unreadable:
+                return "unreadable"
+            }
+        }
+    }
+
+    private static func appSwitcherHudSelection()
+    -> (state: AppSwitcherHudState, application: NSRunningApplication?) {
+        guard isAccessibilityTrusted,
+              let dock = NSRunningApplication.runningApplications(
+                  withBundleIdentifier: "com.apple.dock"
+              ).first
+        else { return (.unreadable, nil) }
+        let dockElement = AXUIElementCreateApplication(dock.processIdentifier)
+        guard let elements = axAttribute(
+            dockElement,
+            attribute: kAXChildrenAttribute
+        ) as? [AXUIElement] else { return (.unreadable, nil) }
+        guard let list = elements.first(where: {
+            axString($0, attribute: kAXSubroleAttribute) == "AXProcessSwitcherList"
+        }) else { return (.absent, nil) }
+        guard let selected = axElements(
+            list,
+            attribute: kAXSelectedChildrenAttribute
+        ).first else { return (.visible(selectedBundleIdentifier: nil), nil) }
+        let title = axString(selected, attribute: kAXTitleAttribute)
+        guard !title.isEmpty else { return (.visible(selectedBundleIdentifier: nil), nil) }
+        let candidates = NSWorkspace.shared.runningApplications.filter {
+            !$0.isTerminated && $0.activationPolicy == .regular && $0.localizedName == title
+        }
+        // 同名多实例时优先非活跃的那个：切换器里选中的通常不是当前 App。
+        let match = candidates.first(where: { !$0.isActive }) ?? candidates.first
+        return (.visible(selectedBundleIdentifier: match?.bundleIdentifier), match)
+    }
+
+    /// 切换器里当前高亮的 App 标题（原始标题，不解析成进程）。
+    /// 用来判断方向键是否真的移动了高亮。
+    static func appSwitcherHighlightedTitle() -> String? {
+        guard isAccessibilityTrusted,
+              let dock = NSRunningApplication.runningApplications(
+                  withBundleIdentifier: "com.apple.dock"
+              ).first
+        else { return nil }
+        let dockElement = AXUIElementCreateApplication(dock.processIdentifier)
+        guard let elements = axAttribute(
+            dockElement,
+            attribute: kAXChildrenAttribute
+        ) as? [AXUIElement] else { return nil }
+        guard let list = elements.first(where: {
+            axString($0, attribute: kAXSubroleAttribute) == "AXProcessSwitcherList"
+        }) else { return nil }
+        guard let selected = axElements(
+            list,
+            attribute: kAXSelectedChildrenAttribute
+        ).first else { return nil }
+        let title = axString(selected, attribute: kAXTitleAttribute)
+        return title.isEmpty ? nil : title
+    }
+
+    /// 切换器 HUD 是否还开着。用来判断会话是否还需要保持 ⌘ 按住。
+    static func appSwitcherHudState() -> AppSwitcherHudState {
+        appSwitcherHudSelection().state
+    }
+
+    static func appSwitcherSelectedApplication() -> AppSwitcherSelection? {
+        let selection = appSwitcherHudSelection()
+        guard let match = selection.application else { return nil }
+        return AppSwitcherSelection(
+            processIdentifier: match.processIdentifier,
+            bundleIdentifier: match.bundleIdentifier
+        )
+    }
+
+    /// 把目标 App 带到前台。窗口已经由 Return 打开时，只需要激活 App 本身，
+    /// 不要 raise 具体窗口，避免换掉用户选中的窗口。
+    static func activateApplication(processIdentifier: pid_t) -> Bool {
+        guard let application = NSRunningApplication(processIdentifier: processIdentifier),
+              !application.isTerminated
+        else { return false }
+        if NSWorkspace.shared.frontmostApplication?.processIdentifier == processIdentifier {
+            return true
+        }
+        AXUIElementSetAttributeValue(
+            AXUIElementCreateApplication(processIdentifier),
+            kAXFrontmostAttribute as CFString,
+            kCFBooleanTrue
+        )
+        _ = application.activate(options: [.activateAllWindows])
+        // 双实例时 LaunchServices 会把“有可见窗口的那个实例”带上来，
+        // 前台 bundle 已经一致时跳过。
+        if NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+            != application.bundleIdentifier,
+           let url = application.bundleURL {
+            let configuration = NSWorkspace.OpenConfiguration()
+            configuration.activates = true
+            configuration.createsNewApplicationInstance = false
+            NSWorkspace.shared.openApplication(at: url, configuration: configuration) { _, _ in }
+        }
+        return true
+    }
+
+    /// 单窗口场景：窗口层里的高亮不稳定，直接恢复那个唯一窗口并置前。
+    /// 按进程操作，双实例 App（两个 Chrome）也能落到正确的实例上。
+    static func restoreSingleWindow(processIdentifier: pid_t) -> Bool {
+        guard isAccessibilityTrusted,
+              let application = NSRunningApplication(processIdentifier: processIdentifier),
+              !application.isTerminated
+        else { return false }
+        let element = AXUIElementCreateApplication(application.processIdentifier)
+        let windows = axElements(element, attribute: kAXWindowsAttribute)
+        guard let window = windows.first else { return false }
+        if axBool(window, attribute: kAXMinimizedAttribute) == true {
+            AXUIElementSetAttributeValue(
+                window,
+                kAXMinimizedAttribute as CFString,
+                kCFBooleanFalse
+            )
+        }
+        AXUIElementPerformAction(window, kAXRaiseAction as CFString)
+        AXUIElementSetAttributeValue(element, kAXFrontmostAttribute as CFString, kCFBooleanTrue)
+        _ = application.activate(options: [.activateAllWindows])
+        // LaunchServices 按 bundle 激活：同名双实例时会带上“有可见窗口的那个实例”，
+        // 正好符合用户直觉；前台 bundle 已经一致时跳过，避免多一次激活。
+        if NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+            != application.bundleIdentifier,
+           let url = application.bundleURL {
+            let configuration = NSWorkspace.OpenConfiguration()
+            configuration.activates = true
+            configuration.createsNewApplicationInstance = false
+            NSWorkspace.shared.openApplication(at: url, configuration: configuration) { _, _ in }
+        }
+        return true
     }
 
     static func applicationVisibilitySnapshot(
