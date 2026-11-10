@@ -1,5 +1,7 @@
 # Bug 记录
 
+- [build 320 语音键回归：加密日志解密复核与待做实验](./2026-11-10-build320-voice-key-log-recheck-and-experiments.md)
+
 - [build 320 语音键回归：责任边界与 #909 排除分析](./2026-11-10-build320-voice-key-regression-analysis.md)
 
 - [Build 320 语音键在 Fn（按住说话）配置下完全无反应](./2026-11-10-build320-voice-key-no-fn-delivery.md)
