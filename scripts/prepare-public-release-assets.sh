@@ -14,7 +14,7 @@ fi
   print -u2 "bundle directory already exists: $BUNDLE"
   exit 1
 }
-for command_name in git jq plutil rg shasum stat ditto; do
+for command_name in git jq plutil rg shasum stat ditto python3; do
   command -v "$command_name" >/dev/null 2>&1 || {
     print -u2 "Missing required command: $command_name"
     exit 1
@@ -47,17 +47,11 @@ copy_asset() {
   /usr/bin/cmp -s "$source_file" "$public_dir/$published_name"
 }
 
-published_prefix="SayAll-$version-$build"
-copy_asset "$DIST/Uninstall SayAll.pkg" "$published_prefix-AppleSilicon-uninstall.pkg"
-copy_asset "$DIST/Install SayAll.pkg" "$published_prefix-AppleSilicon-install.pkg"
-copy_asset "$DIST/$published_prefix.zip" "$published_prefix.zip"
-copy_asset "$DIST/appcast.xml" appcast.xml
-copy_asset "$DIST/$published_prefix.zh.txt" "$published_prefix.zh.txt"
-copy_asset "$DIST/$published_prefix.en.txt" "$published_prefix.en.txt"
-copy_asset "$DIST/intel/Uninstall SayAll Intel.pkg" "$published_prefix-Intel-uninstall.pkg"
-copy_asset "$DIST/intel/Install SayAll Intel.pkg" "$published_prefix-Intel-install.pkg"
-copy_asset "$DIST/intel/$published_prefix-Intel.zip" "$published_prefix-Intel.zip"
-copy_asset "$DIST/intel/appcast-intel.xml" appcast-intel.xml
+asset_copies="$(python3 "$ROOT/scripts/release-assets.py" copies "$version" "$build")"
+while IFS=$'\t' read -r source_name published_name; do
+  copy_asset "$DIST/$source_name" "$published_name"
+done <<< "$asset_copies"
+asset_count="$(print -r -- "$asset_copies" | /usr/bin/awk 'NF {count++} END {print count+0}')"
 
 production_prefix="https://download.sayall.app/mac/releases/$tag/"
 /usr/bin/grep -Fq "url=\"$production_prefix" "$public_dir/appcast.xml"
@@ -112,7 +106,7 @@ jq -s -S \
 # Only the canonical public payload and its signed manifest may enter the artifact.
 /bin/mv "$asset_jsonl" "/private/tmp/sayall-release-assets-consumed.$$.jsonl"
 
-jq -e '
+jq -e --argjson assetCount "$asset_count" '
   .schemaVersion == 2 and
   .repository == "HD838A/remote-mic-app" and
   (.tag | test("^v[0-9]+[.][0-9]+[.][0-9]+$")) and
@@ -120,7 +114,7 @@ jq -e '
   (.version | test("^[0-9]+[.][0-9]+[.][0-9]+$")) and
   .tag == ("v" + .version) and
   (.build | test("^[1-9][0-9]*$")) and
-  (.assets | length == 10) and
+  (.assets | length == $assetCount) and
   ([.assets[].name] | length == (unique | length)) and
   all(.assets[];
     (.name | test("^[A-Za-z0-9][A-Za-z0-9._-]*$")) and
@@ -134,5 +128,5 @@ jq -e '
 print "PUBLIC RELEASE ASSET BUNDLE PASS"
 print "TAG: $tag"
 print "SOURCE_COMMIT: $source_commit"
-print "ASSET_COUNT: 10"
+print "ASSET_COUNT: $asset_count"
 print "BUNDLE: $BUNDLE"

@@ -114,3 +114,11 @@ publication 的远端资产数量必须等于同一 expected-assets 清单的行
 ## 日志与边界
 
 保存 manifest、文件名、size、SHA-256、HTTP 状态和比较结果；不要保存凭据。自动化矩阵不等于真实安装、卸载、Sparkle UI 或实体硬件验收。
+
+## 用例 7 发布前资产契约
+
+1. 运行 `python3 scripts/release-assets.py names 9.9.9 999`，确认 schema 2 的 10 项 payload；指定 schema 1 时保留 13 项历史集合。
+2. 运行 `scripts/test-macos-release-flow.sh`，使用离线 curl fixture 分别返回一致、不同、缺失的 CDN 契约。
+3. 运行 `scripts/verify-preview-cdn-availability.sh v9.9.9 999 --contract-only`，只检查生产契约。
+
+预期为不一致或不可读的契约在占用探测及签名前失败。一致契约后仍分别拒绝 200、302、503、超时，并保留 HEAD 405 的 Range GET 回退。该测试只验证发布控制面，不产生新 Tag 或 Release。
