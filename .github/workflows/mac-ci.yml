@@ -92,6 +92,10 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Ensure macOS CI tools
+        if: needs.classify_changes.outputs.product_change == 'true' || needs.classify_changes.outputs.release_checks == 'true'
+        run: command -v rg >/dev/null || HOMEBREW_NO_AUTO_UPDATE=1 brew install ripgrep
+
       - name: Check patch formatting
         run: |
           if [[ "$GITHUB_EVENT_NAME" == pull_request ]]; then
