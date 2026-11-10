@@ -3987,6 +3987,59 @@ struct SettingsView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("button_mapping.timing_title")
+                        .font(.system(size: 16, weight: .semibold))
+                    HStack(alignment: .top, spacing: 18) {
+                        gestureTimingSlider(
+                            titleKey: "button_mapping.timing_double",
+                            value: Binding(
+                                get: { gestureTimingDraft.doubleClickMilliseconds },
+                                set: {
+                                    gestureTimingDraft.doubleClickMilliseconds = $0
+                                    gestureTimingSaveConfirmed = false
+                                }
+                            ),
+                            range: 50...500
+                        )
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        gestureTimingSlider(
+                            titleKey: "button_mapping.timing_long",
+                            value: Binding(
+                                get: { gestureTimingDraft.longPressMilliseconds },
+                                set: {
+                                    gestureTimingDraft.longPressMilliseconds = $0
+                                    gestureTimingSaveConfirmed = false
+                                }
+                            ),
+                            range: 300...1000
+                        )
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    HStack(spacing: 12) {
+                        Text(gestureTimingSaveConfirmed
+                            ? localization.text("button_mapping.timing_saved")
+                            : localization.text("button_mapping.timing_save_hint"))
+                            .font(.system(size: 12))
+                            .foregroundStyle(gestureTimingSaveConfirmed ? Color.green : Color.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer()
+                        Button("common.action.save") {
+                            guard let selectedModel, selectedModel != .unknown else { return }
+                            settings.setButtonGestureTiming(gestureTimingDraft, for: selectedModel)
+                            gestureTimingSaveConfirmed = true
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(!availability.canSaveTiming || !gestureTimingDraft.isValid ||
+                            (gestureTimingDraft == persistedTiming &&
+                                (model.buttonGestureLearningResult == nil || gestureTimingSaveConfirmed)))
+                    }
+                    .padding(10)
+                    .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 9))
+                }
+
+                // 不用 Divider 分隔：下面那块自带描边和底色的卡片已经说明了边界，
+                // 中间再横一条线就是「灰条 / 线 / 灰卡片」三道边挤在 12pt 里。
                 VStack(alignment: .leading, spacing: 10) {
                     HStack(alignment: .firstTextBaseline) {
                         Text("button_mapping.learning.title")
@@ -4062,59 +4115,6 @@ struct SettingsView: View {
                 .overlay {
                     RoundedRectangle(cornerRadius: 12)
                         .stroke(Color.secondary.opacity(0.16), lineWidth: 1)
-                }
-
-                Divider()
-
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("button_mapping.timing_title")
-                        .font(.system(size: 16, weight: .semibold))
-                    HStack(alignment: .top, spacing: 18) {
-                        gestureTimingSlider(
-                            titleKey: "button_mapping.timing_double",
-                            value: Binding(
-                                get: { gestureTimingDraft.doubleClickMilliseconds },
-                                set: {
-                                    gestureTimingDraft.doubleClickMilliseconds = $0
-                                    gestureTimingSaveConfirmed = false
-                                }
-                            ),
-                            range: 50...500
-                        )
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        gestureTimingSlider(
-                            titleKey: "button_mapping.timing_long",
-                            value: Binding(
-                                get: { gestureTimingDraft.longPressMilliseconds },
-                                set: {
-                                    gestureTimingDraft.longPressMilliseconds = $0
-                                    gestureTimingSaveConfirmed = false
-                                }
-                            ),
-                            range: 300...1000
-                        )
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    HStack(spacing: 12) {
-                        Text(gestureTimingSaveConfirmed
-                            ? localization.text("button_mapping.timing_saved")
-                            : localization.text("button_mapping.timing_save_hint"))
-                            .font(.system(size: 12))
-                            .foregroundStyle(gestureTimingSaveConfirmed ? Color.green : Color.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                        Spacer()
-                        Button("common.action.save") {
-                            guard let selectedModel, selectedModel != .unknown else { return }
-                            settings.setButtonGestureTiming(gestureTimingDraft, for: selectedModel)
-                            gestureTimingSaveConfirmed = true
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(!availability.canSaveTiming || !gestureTimingDraft.isValid ||
-                            (gestureTimingDraft == persistedTiming &&
-                                (model.buttonGestureLearningResult == nil || gestureTimingSaveConfirmed)))
-                    }
-                    .padding(10)
-                    .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 9))
                 }
             }
         }
