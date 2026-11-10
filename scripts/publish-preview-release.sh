@@ -337,8 +337,9 @@ fi
 release_json="$($GH_BIN release view "$tag" --repo "$REPOSITORY" --json isDraft,isPrerelease,assets)"
 printf '%s\n' "$release_json" | jq -e '.isDraft == false and .isPrerelease == true' >/dev/null
 remote_assets="$(printf '%s\n' "$release_json" | jq -r '.assets[] | [.name, (.size | tostring), (.digest // "")] | @tsv')"
-[[ "$(printf '%s\n' "$remote_assets" | /usr/bin/awk 'NF {count++} END {print count+0}')" -eq 12 ]] || {
-  echo "Published Pre-release does not contain the exact 12 expected assets" >&2
+[[ "$(printf '%s\n' "$remote_assets" | /usr/bin/awk 'NF {count++} END {print count+0}')" -eq \
+   "$(/usr/bin/awk 'NF {count++} END {print count+0}' "$expected_assets")" ]] || {
+  echo "Published Pre-release does not contain the exact staged asset count" >&2
   exit 1
 }
 

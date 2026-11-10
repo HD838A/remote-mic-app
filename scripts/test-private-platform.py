@@ -630,6 +630,24 @@ class ReleaseContentTests(unittest.TestCase):
             with self.subTest(data=data), self.assertRaisesRegex(RuntimeError, "local build path"):
                 contents.verify_asset(self.archive("README.md", data), self.scratch)
 
+    def test_publication_counts_the_manifest_payload_and_provenance(self):
+        source = (ROOT / "scripts/publish-preview-release.sh").read_text()
+        start = source.index('[[ "$(printf', source.index(
+            'release_json="$($GH_BIN release view "$tag" --repo "$REPOSITORY" --json isDraft,isPrerelease,assets)"'))
+        check = source[start:source.index('\ngithub_dir=', start)]
+        expected = self.directory / "expected-assets.tsv"
+        for payload_count in (10, 13):
+            expected.write_text("\n".join(f"payload-{index}\t1\tdigest" for index in range(payload_count))
+                                + "\ncandidate-provenance.json\t1\tdigest\n")
+            for remote_count in (payload_count, payload_count + 1, payload_count + 2):
+                with self.subTest(payload_count=payload_count, remote_count=remote_count):
+                    result = subprocess.run(["/bin/bash", "-e", "-c", check],
+                                            env={**os.environ, "expected_assets": str(expected),
+                                                 "remote_assets": "\n".join(f"asset-{index}\t1\tdigest"
+                                                                           for index in range(remote_count))},
+                                            capture_output=True, text=True)
+                    self.assertEqual(result.returncode, 0 if remote_count == payload_count + 1 else 1)
+
     def test_content_rejection_reports_only_a_fixed_reason(self):
         for entry, data, reason in (("PRIVATE_CANARY.swift", b"fixture", "development-input"),
                                     ("README.md", b"/Users/PRIVATE_CANARY/source.swift", "local-path")):
