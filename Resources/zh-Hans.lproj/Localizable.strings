@@ -662,6 +662,8 @@
 "about.preferences.show_dock_icon_help" = "关闭后仍可通过顶部菜单栏图标打开无线麦 SayAll";
 "about.preferences.show_status_bar_icon" = "在顶部菜单栏中显示应用图标";
 "about.preferences.show_status_bar_icon_help" = "如果程序坞 Dock 和顶部菜单栏图标都已关闭，可再次启动无线麦 SayAll 来打开设置";
+"settings.general.physical_shortcuts" = "真实按键发送";
+"settings.general.physical_shortcuts_help" = "适用于内置和自定义组合键。屏幕共享中快捷键只输入字母时，可尝试开启。";
 "about.preferences.app_icon" = "应用图标";
 "about.preferences.app_icon_help" = "选择在程序坞 Dock、应用切换器和设置窗口中显示的图标";
 "about.preferences.app_icon_standard" = "经典鸭";
