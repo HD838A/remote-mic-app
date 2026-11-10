@@ -271,6 +271,7 @@
 "button_mapping.action_filter.all" = "All";
 "button_mapping.action_filter.voice_key" = "Voice";
 "button_mapping.action_filter.basic_keys" = "Keys";
+"button_mapping.action_filter.custom_shortcuts" = "Custom Keys";
 "button_mapping.action_filter.system_and_media" = "System";
 "button_mapping.action_filter.custom" = "Input";
 "button_mapping.action_filter.combinations" = "Macro";

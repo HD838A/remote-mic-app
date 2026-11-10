@@ -438,6 +438,7 @@ private enum MappingActionFilter: String, CaseIterable, Identifiable {
     /// 按住和按键速度不是动作分类：它们各自渲染一整块设置面板，
     /// 因此不参与 `includes(_:)` 的候选过滤。
     case basicKeys
+    case customShortcuts
     case systemAndMedia
     case custom
     case combinations
@@ -452,6 +453,7 @@ private enum MappingActionFilter: String, CaseIterable, Identifiable {
     init(category: ButtonActionCategory) {
         switch category {
         case .basicKeys: self = .basicKeys
+        case .customShortcuts: self = .customShortcuts
         case .systemAndMedia: self = .systemAndMedia
         case .custom: self = .custom
         case .combinations: self = .combinations
@@ -463,7 +465,7 @@ private enum MappingActionFilter: String, CaseIterable, Identifiable {
     /// 公开构建没有注入 Macro Package：此时不显示「组合动作」胶囊，
     /// 而不是让用户点进一个空分类。
     static func visibleCases(macroFeatureVisible: Bool) -> [Self] {
-        var cases: [Self] = [.all, .basicKeys, .systemAndMedia, .custom]
+        var cases: [Self] = [.all, .basicKeys, .customShortcuts, .systemAndMedia, .custom]
         if macroFeatureVisible {
             cases.append(.combinations)
         }
@@ -477,6 +479,7 @@ private enum MappingActionFilter: String, CaseIterable, Identifiable {
         switch self {
         case .all: return "button_mapping.action_filter.all"
         case .basicKeys: return "button_mapping.action_filter.basic_keys"
+        case .customShortcuts: return "button_mapping.action_filter.custom_shortcuts"
         case .systemAndMedia: return "button_mapping.action_filter.system_and_media"
         case .custom: return "button_mapping.action_filter.custom"
         case .combinations: return "button_mapping.action_filter.combinations"
@@ -496,6 +499,8 @@ private enum MappingActionFilter: String, CaseIterable, Identifiable {
             return false
         case .basicKeys:
             return category == .basicKeys
+        case .customShortcuts:
+            return category == .customShortcuts
         case .systemAndMedia:
             return category == .systemAndMedia
         case .custom:
@@ -650,6 +655,7 @@ struct SettingsView: View {
     @State private var mappingContentIsScrolled = false
     @State private var mappingEditorScrollRequest = 0
     @State private var mappingActionFilter: MappingActionFilter = .all
+    @State private var shortcutEditorNavigationID = UUID()
     /// 点胶囊后请求把内容区滚到视口顶部。
     @State private var mappingFilterScrollRequest = 0
     @State private var gestureTimingDraft = RemoteButtonGestureTiming()
@@ -702,6 +708,7 @@ struct SettingsView: View {
         initialMappingEditingTrigger: ButtonTrigger = .singleClick,
         initialMappingProfileID: UUID? = nil,
         initialShortcutPickerShowsKeyboard: Bool = false,
+        initialMappingActionFilter: String? = nil,
         initialMappingScrollsToGestureTiming: Bool = false,
         initialMappingVoiceSettingsPresented: Bool = false,
         supplementalSettings: SupplementalSettingsIntegration? = nil,
@@ -726,6 +733,9 @@ struct SettingsView: View {
         self.syncEntryPointVisibility = syncEntryPointVisibility
         self.appIconCatalog = appIconCatalog ?? .live()
         self.minimumContentSize = minimumContentSize
+        _mappingActionFilter = State(
+            initialValue: initialMappingActionFilter.flatMap(MappingActionFilter.init(rawValue:)) ?? .all
+        )
         self.initialShortcutPickerShowsKeyboard = initialShortcutPickerShowsKeyboard
         self.initialMappingScrollsToGestureTiming = initialMappingScrollsToGestureTiming
         self.sidebarAccountDisplayName = sidebarAccountDisplayName
@@ -3607,10 +3617,10 @@ struct SettingsView: View {
                             }
                         )
                     }
-                    // 录制区跟着「自定义快捷键」留在「基础按键」组内：
-                    // 选中后紧接着就能按键，不必滚到页面底部再找入口。
-                    if category == .basicKeys,
-                       (configured.action == .customShortcut ||
+                    // 独立筛选直接展开编辑区；「全部」只展开当前已配置或正在录入的快捷键。
+                    if category == .customShortcuts,
+                       (mappingActionFilter == .customShortcuts ||
+                           configured.action == .customShortcut ||
                            shortcutCaptureTarget == ShortcutEditingTarget(
                                button: button, trigger: trigger)) {
                         inlineShortcutEditor(
@@ -4239,8 +4249,27 @@ struct SettingsView: View {
         onSelect: @escaping (ButtonAction) -> Void
     ) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(localization.text(category.localizationKey))
-                .font(.system(size: 14, weight: .semibold))
+            HStack {
+                Text(localization.text(category.localizationKey))
+                    .font(.system(size: 14, weight: .semibold))
+                if category == .basicKeys {
+                    Spacer(minLength: 8)
+                    Button("button_mapping.action_filter.custom_shortcuts") {
+                        applicationShortcutCaptureProfileID = nil
+                        shortcutCaptureTarget = nil
+                        shortcutEditorNavigationID = UUID()
+                        mappingActionFilter = .customShortcuts
+                        mappingFilterScrollRequest &+= 1
+                        AppLogger.shared.write(
+                            "BUTTON MAPPING operation_id=\(shortcutEditorNavigationID.uuidString) " +
+                                "phase=requested action=open_custom_shortcuts source=basic_keys_header"
+                        )
+                    }
+                    .compatibilityButtonStyle(.standard)
+                    .font(.system(size: 12))
+                    .disabled(isManagedPowerAction)
+                }
+            }
 
             mappingActionGrid(
                 actions: actions,
@@ -4577,6 +4606,12 @@ struct SettingsView: View {
         }
         .padding(12)
         .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 10))
+        .task(id: shortcutEditorNavigationID) {
+            AppLogger.shared.write(
+                "BUTTON MAPPING operation_id=\(shortcutEditorNavigationID.uuidString) " +
+                    "phase=completed action=open_custom_shortcuts result=editor_presented"
+            )
+        }
     }
 
     /// 「打开 App」动作组里只负责挑目标 App；输入框聚焦与滚动区域不是打开 App 的一部分，

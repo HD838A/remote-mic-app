@@ -1490,9 +1490,14 @@ struct SettingsPageRegressionTests {
         #expect(source.contains("connection.voice_fn_tap.hint_short"))
         #expect(source.contains("ButtonActionCategory.allCases"))
         #expect(source.contains("MappingActionFilter.visibleCases"))
-        // 「语音键」排在最前，「按键速度」排在最后；两者都不是动作候选的过滤器。
-        #expect(source.contains("[.all, .basicKeys, .systemAndMedia, .custom]"))
+        // 自定义按键紧接基础按键，按键速度排在最后。
+        #expect(source.contains("[.all, .basicKeys, .customShortcuts, .systemAndMedia, .custom]"))
         #expect(source.contains("cases.append(.combinations)"))
+        #expect(source.contains("mappingActionFilter = .customShortcuts"))
+        #expect(source.contains("if category == .customShortcuts,"))
+        #expect(source.contains("Button(\"button_mapping.action_filter.custom_shortcuts\")"))
+        #expect(source.contains("source=basic_keys_header"))
+        #expect(source.contains("result=editor_presented"))
         // 顺序：打开 App → 按住 → 按键速度。
         #expect(source.contains("[.commonPhrases, .applications, .hold, .buttonSpeed]"))
         #expect(source.contains("case .hold, .buttonSpeed:"))
