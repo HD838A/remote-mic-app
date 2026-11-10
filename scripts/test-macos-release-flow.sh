@@ -357,6 +357,9 @@ trap cleanup EXIT
 /bin/cp "$ROOT/scripts/verify-preview-cdn-availability.sh" "$CHECKOUT/scripts/verify-preview-cdn-availability.sh"
 /bin/chmod 755 "$CHECKOUT/scripts/prepare-preview-release.sh"
 /bin/chmod 755 "$CHECKOUT/scripts/verify-preview-cdn-availability.sh"
+/bin/mkdir -p "$CHECKOUT/config"
+/bin/cp "$ROOT/config/release-assets.json" "$CHECKOUT/config/"
+/bin/cp "$ROOT/scripts/release-assets.py" "$CHECKOUT/scripts/"
 print -r -- '<?xml version="1.0" encoding="UTF-8"?>
 <plist version="1.0"><dict>
 <key>CFBundleShortVersionString</key><string>1.9.10</string>
@@ -394,7 +397,12 @@ FAKE_BIN="$WORK_DIR/bin"
 /bin/mkdir -p "$FAKE_BIN"
 print -r -- '#!/bin/zsh
 set -euo pipefail
-print -rn -- 404' > "$FAKE_BIN/curl"
+if [[ "$*" == *release-contract.json* ]]; then
+  /bin/cp "$CDN_CONTRACT_FIXTURE" "${@[-1]}"
+else
+  print -rn -- 404
+fi' > "$FAKE_BIN/curl"
+export CDN_CONTRACT_FIXTURE="$ROOT/config/release-assets.json"
 /bin/chmod 755 "$FAKE_BIN/curl"
 
 zh_notes="$WORK_DIR/zh.md"
@@ -608,6 +616,16 @@ fi
 /usr/bin/grep -Fq 'name: Public Swift tests and dual-architecture build' "$ci_workflow"
 /usr/bin/grep -Fq 'needs: [classify_changes, public_test]' "$ci_workflow"
 public_job="$(/usr/bin/awk '/^  public_test:/ { capture=1 } /^  test:/ { exit } capture { print }' "$ci_workflow")"
+macos_tool_setup="$(print -r -- "$public_job" | /usr/bin/awk '
+  /- name: Ensure macOS CI tools/ { capture=1 }
+  capture && /- name: Check patch formatting/ { exit }
+  capture { print }
+')"
+[[ -n "$macos_tool_setup" ]]
+print -r -- "$macos_tool_setup" | /usr/bin/grep -Fq \
+  "if: needs.classify_changes.outputs.product_change == 'true' || needs.classify_changes.outputs.release_checks == 'true'"
+print -r -- "$macos_tool_setup" | /usr/bin/grep -Fq \
+  'command -v rg >/dev/null || HOMEBREW_NO_AUTO_UPDATE=1 brew install ripgrep'
 for package_path in SAYALL_AI_PACKAGE_PATH SAYALL_PRIVATE_PLATFORM_PACKAGE_PATH SAYALL_COMBINATION_ACTIONS_PATH SAYALL_BUTTON_PROFILES_PACKAGE_PATH SAYALL_MAC_REMOTE_PACKAGE_PATH; do
   print -r -- "$public_job" | /usr/bin/grep -Fq "$package_path: \"\""
 done
@@ -875,6 +893,14 @@ fake_bin="$WORK_DIR/bin"
 print -r -- '#!/bin/zsh
 set -euo pipefail
 mode="${CDN_FIXTURE_MODE:-404}"
+if [[ "$*" == *release-contract.json* ]]; then
+  case "$mode" in
+    unsupported) print -r -- "{}" > "${@[-1]}" ;;
+    unavailable) exit 22 ;;
+    *) /bin/cp "$CDN_CONTRACT_FIXTURE" "${@[-1]}" ;;
+  esac
+  exit 0
+fi
 is_head=false
 for arg in "$@"; do
   [[ "$arg" == --head ]] && is_head=true
@@ -889,6 +915,7 @@ case "$mode" in
   *) print -rn -- 000; exit 1 ;;
 esac' > "$fake_bin/curl"
 /bin/chmod 755 "$fake_bin/curl"
+export CDN_CONTRACT_FIXTURE="$ROOT/config/release-assets.json"
 PATH="$fake_bin:$PATH" CDN_FIXTURE_MODE=404 \
   "$ROOT/scripts/verify-preview-cdn-availability.sh" v9.9.9 999 >/dev/null
 if PATH="$fake_bin:$PATH" CDN_FIXTURE_MODE=200 \
@@ -910,6 +937,16 @@ else
   print -u2 "CDN occupancy gate did not use the GET fallback after HEAD 405"
   exit 1
 fi
+
+for mode in unsupported unavailable; do
+  if PATH="$fake_bin:$PATH" CDN_FIXTURE_MODE="$mode" \
+    "$ROOT/scripts/verify-preview-cdn-availability.sh" v9.9.9 999 > "$WORK_DIR/contract-$mode.log" 2>&1; then
+    print -u2 "CDN occupancy gate accepted an incompatible deployed contract"
+    exit 1
+  fi
+done
+PATH="$fake_bin:$PATH" CDN_FIXTURE_MODE=200 \
+  "$ROOT/scripts/verify-preview-cdn-availability.sh" v9.9.9 999 --contract-only >/dev/null
 
 # Build a deterministic canonical payload fixture and exercise the manifest gate.
 public_dir="$WORK_DIR/public"

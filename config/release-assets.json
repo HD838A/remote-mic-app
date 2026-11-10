@@ -1,0 +1,90 @@
+{
+  "schemaVersion": 1,
+  "currentManifestSchema": 2,
+  "provenance": "candidate-provenance.json",
+  "manifests": {
+    "1": [
+      {
+        "name": "SayAll-{version}-Intel-Uninstaller.pkg"
+      },
+      {
+        "name": "SayAll-{version}-Intel-Installer.pkg"
+      },
+      {
+        "name": "Remote-Mic-{version}-Intel.dmg"
+      },
+      {
+        "name": "Remote-Mic-{version}-Intel.zip"
+      },
+      {
+        "name": "SayAll-{version}-Uninstaller.pkg"
+      },
+      {
+        "name": "SayAll-{version}-Installer.pkg"
+      },
+      {
+        "name": "Remote-Mic-{version}.dmg"
+      },
+      {
+        "name": "Remote-Mic-{version}.dmg.sha256"
+      },
+      {
+        "name": "Remote-Mic-{version}.en.txt"
+      },
+      {
+        "name": "Remote-Mic-{version}.zh.txt"
+      },
+      {
+        "name": "Remote-Mic-{version}.zip"
+      },
+      {
+        "name": "appcast-intel.xml"
+      },
+      {
+        "name": "appcast.xml"
+      }
+    ],
+    "2": [
+      {
+        "source": "Uninstall SayAll.pkg",
+        "name": "SayAll-{version}-{build}-AppleSilicon-uninstall.pkg"
+      },
+      {
+        "source": "Install SayAll.pkg",
+        "name": "SayAll-{version}-{build}-AppleSilicon-install.pkg"
+      },
+      {
+        "source": "SayAll-{version}-{build}.zip",
+        "name": "SayAll-{version}-{build}.zip"
+      },
+      {
+        "source": "appcast.xml",
+        "name": "appcast.xml"
+      },
+      {
+        "source": "SayAll-{version}-{build}.zh.txt",
+        "name": "SayAll-{version}-{build}.zh.txt"
+      },
+      {
+        "source": "SayAll-{version}-{build}.en.txt",
+        "name": "SayAll-{version}-{build}.en.txt"
+      },
+      {
+        "source": "intel/Uninstall SayAll Intel.pkg",
+        "name": "SayAll-{version}-{build}-Intel-uninstall.pkg"
+      },
+      {
+        "source": "intel/Install SayAll Intel.pkg",
+        "name": "SayAll-{version}-{build}-Intel-install.pkg"
+      },
+      {
+        "source": "intel/SayAll-{version}-{build}-Intel.zip",
+        "name": "SayAll-{version}-{build}-Intel.zip"
+      },
+      {
+        "source": "intel/appcast-intel.xml",
+        "name": "appcast-intel.xml"
+      }
+    ]
+  }
+}

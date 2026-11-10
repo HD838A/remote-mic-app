@@ -122,6 +122,10 @@ if [[ "$MODE" == preview ]]; then
   }
 fi
 
+if [[ "$MODE" == smoke ]]; then
+  "$CDN_PROBE_BIN" "$tag" "$build" --contract-only
+fi
+
 GITHUB_REPOSITORY="$REPOSITORY" GH_BIN="$GH_BIN" \
   "$ROOT/scripts/verify-release-ready-main-ci.sh" "$commit" "$source_branch"
 # Exact-main staging only verifies; private releases and pin PRs precede it.

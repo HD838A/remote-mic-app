@@ -19,3 +19,13 @@
 - 定向命令：`SAYALL_PRIVATE_PLATFORM_MODE=public swift test --disable-keychain --filter 'OnboardingFlowTests|RemoteVoiceFunctionMapperTests|VoiceKeyModeTests'`。
 - 定向测试共 149 项通过。回归覆盖 Fn 触发、Ctrl+Y 等物理编辑、未知或合成事件、两种 usage 的映射和事务恢复。AppKit 对照确认初稿放行 Ctrl+Y，修订后将该事件归类为手动输入。
 - 现场的 Intel 对照使用旧构建和临时映射。改后构建的首次连接、真实文字、极速按放、连续语音、断连恢复及重复触发检查按[首次使用测试手册](../Testing/FirstRunOnboarding.md#rc003-语音键与手动输入pr-909)单独验收。
+
+## 2026-11-10 撤回记录
+
+维护者在 Intel build 320 无法语音输入、重装 build 289 恢复后，明确要求撤回 PR #909，并将诊断补充放入另一个 PR。此次撤回恢复 #909 前的 F5 单一映射、中和与原映射恢复，以及 Onboarding 手动输入判定。原现场漏出 i 的问题重新进入待验证状态。
+
+这是一项受维护者指示执行的回退。现有日志确认 build 320 的 26 段宿主音频会话正常排空，但硬件 Fn 送达与目标工具文字结果不可观察，尚未证明 #909 是根因。上文 build 314、Intel 临时映射及截图记录按历史证据保留。
+
+验证命令为 `SAYALL_PRIVATE_PLATFORM_MODE=public swift test --disable-keychain --filter 'OnboardingFlowTests|RemoteVoiceFunctionMapperTests|VoiceKeyModeTests'`。当前工作站只承担公开构建与自动化验证。Intel 同机重测、真实文字上屏、连续按放和异常恢复仍需现场验收，撤回不能表述为故障已修复。
+
+本地结果：公开模式定向 145 项 / 3 套件通过；全量执行 `swift test --disable-keychain --skip BuildSigningTests`，1260 项 / 88 套件通过；六份源码与测试文件和 #909 首父提交逐字节一致。治理、仓库边界、本地化及 diff 检查通过。签名构建检查由 GitHub CI 的默认公开 App 构建继续覆盖。
