@@ -2,7 +2,9 @@
 
 > 执行本手册或修改 Onboarding 前，先完整阅读跨平台产品规范 [`feature/first-run-onboarding/PRODUCT_SPEC.md`](../feature/first-run-onboarding/PRODUCT_SPEC.md) 和 [macOS 平台适配](../feature/first-run-onboarding/platform-macos.md)。未来 Windows 测试应从同一产品规范出发，并使用 [Windows 平台适配](../feature/first-run-onboarding/platform-windows.md) 建立独立测试手册。
 
-## RC003 语音键与手动输入（PR #909）
+## RC003 语音键与手动输入（PR #909 历史记录）
+
+2026-11-10 维护者要求撤回 PR #909。下列步骤和 build 314 结果属于撤回前的历史证据。当前实现恢复 F5 单一语音映射及原手动输入判定；撤回后的 Intel 语音、极速按放、连续会话和断连恢复须重新验收。
 
 使用本 PR 的签名候选包。在原现场的 RC003 上断开并重连，清除本次对照用的临时 HID 映射，再进入首次使用语音测试。
 
@@ -981,7 +983,7 @@ build 314 本机结果：Apple Silicon 用户实测报告无漏字母 `i`、重�
 26. 制造入队失败、实际设备绑定错误、播放中断和截止时仍 pending，分别确认归类为 `voice.audio_delivery_failed`，且不会被第三方工具失败覆盖；正常排空中的 pending 不得在三秒截止前提前失败。
 27. 快速连续执行两次语音，确认第二次的 `voice_audio_generation` 不同，上一会话迟到的播放完成/中断数量不会进入第二次。
 
-预期结果：首次进入、从其他 App 返回以及点击重试后，原生 `NSTextView` 都由当前窗口确认成为 `firstResponder`；无需额外点击即可让所选语音工具写入文字。只有当前所选来源的会话开始、PCM 样本数量大于零、松开后会话结束、所选 MiRemoteV 2ch 或 BlackHole 2ch 有效、单次 attempt 进入 `passed` 且文字由语音工具写入时才允许继续。进行中的正常阶段不写失败历史，每次 attempt 只产生一个 `passed` 或 `failed` 终态。每次会话的首个非空音频批次即可点亮样本检查，后续批次不会造成约 60 Hz 的整棵设置视图无效化；连续语音期间进程 CPU 不应再持续接近占满一个核心。确认来自 HID 系统且无用户进程来源的物理 `keyDown` 会标记手动输入，Fn/Globe 语音触发键除外。合成、combined/private、未知来源或缺少 CGEvent 的文字全部 fail-open。无线麦不读取第三方语音工具内部状态，也不记录音频内容、输入框文字或长度、输入事件来源 PID、键码、蓝牙地址、设备 UID 或前台 App。
+预期结果：首次进入、从其他 App 返回以及点击重试后，原生 `NSTextView` 都由当前窗口确认成为 `firstResponder`；无需额外点击即可让所选语音工具写入文字。只有当前所选来源的会话开始、PCM 样本数量大于零、松开后会话结束、所选 MiRemoteV 2ch 或 BlackHole 2ch 有效、单次 attempt 进入 `passed` 且文字由语音工具写入时才允许继续。进行中的正常阶段不写失败历史，每次 attempt 只产生一个 `passed` 或 `failed` 终态。每次会话的首个非空音频批次即可点亮样本检查，后续批次不会造成约 60 Hz 的整棵设置视图无效化；连续语音期间进程 CPU 不应再持续接近占满一个核心。只有确认来自 HID 系统且无用户进程来源的物理 `keyDown` 会标记手动输入。合成、combined/private、未知来源或缺少 CGEvent 的文字全部 fail-open。无线麦不读取第三方语音工具内部状态，也不记录音频内容、输入框文字或长度、输入事件来源 PID、键码、蓝牙地址、设备 UID 或前台 App。
 
 补充运行状态与配对切换检查：
 

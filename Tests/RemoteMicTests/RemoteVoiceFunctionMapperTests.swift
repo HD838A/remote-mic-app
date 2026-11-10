@@ -9,42 +9,7 @@ struct RemoteVoiceFunctionMapperTests {
         #expect(!model.supportsToggleVoiceRecording)
 
         let mapped = RemoteVoiceFunctionMappingPolicy.applying(to: [])
-        #expect(mapped == RemoteVoiceFunctionMappingPolicy.remoteVoiceKeys)
-    }
-
-    @Test func mapsEveryKnownVoiceKeyUsageToFunction() {
-        // RC001/RC003 的语音键在固件批次之间落在不同键盘用法：多数是 F5(0x3E)，
-        // 部分机型是字母 i(0x0C)。两种都必须变成 Fn，否则物理键会漏成普通字符。
-        #expect(RemoteVoiceFunctionMappingPolicy.remoteVoiceKeySources == [
-            0x0000_0007_0000_003E,
-            0x0000_0007_0000_000C,
-        ])
-        #expect(RemoteVoiceFunctionMappingPolicy.remoteVoiceKeys == [
-            HIDUsageMapping(source: 0x0000_0007_0000_003E, destination: 0x0000_00FF_0000_0003),
-            HIDUsageMapping(source: 0x0000_0007_0000_000C, destination: 0x0000_00FF_0000_0003),
-        ])
-        #expect(RemoteVoiceFunctionMappingPolicy.neutralRemoteVoiceKeys == [
-            HIDUsageMapping(source: 0x0000_0007_0000_003E, destination: 0),
-            HIDUsageMapping(source: 0x0000_0007_0000_000C, destination: 0),
-        ])
-        #expect(RemoteVoiceFunctionMappingPolicy.remoteVoiceKey ==
-            RemoteVoiceFunctionMappingPolicy.remoteVoiceKeys[0])
-        #expect(RemoteVoiceFunctionMappingPolicy.neutralRemoteVoiceKey ==
-            RemoteVoiceFunctionMappingPolicy.neutralRemoteVoiceKeys[0])
-    }
-
-    @Test func replacesLeakedLetterIVoiceKeyAsWellAsF5() {
-        let leakedLetter = HIDUsageMapping(
-            source: 0x0000_0007_0000_000C,
-            destination: 0x0000_0007_0000_000C
-        )
-        #expect(RemoteVoiceFunctionMappingPolicy.applying(to: [leakedLetter]) ==
-            RemoteVoiceFunctionMappingPolicy.remoteVoiceKeys)
-        #expect(RemoteVoiceFunctionMappingPolicy.restoring(
-            originalVoiceMappings: [],
-            originalPowerMapping: nil,
-            in: RemoteVoiceFunctionMappingPolicy.remoteVoiceKeys
-        ) == [])
+        #expect(mapped == [RemoteVoiceFunctionMappingPolicy.remoteVoiceKey])
     }
 
     @Test func commandBluetoothStreamRequiresCompleteCurrentNeutralization() {
@@ -105,7 +70,7 @@ struct RemoteVoiceFunctionMapperTests {
         ))
     }
 
-    @Test func replacesOnlyTheKnownRemoteVoiceMappings() {
+    @Test func replacesOnlyTheRemoteF5Mapping() {
         let unrelated = HIDUsageMapping(
             source: 0x0000_0007_0000_0004,
             destination: 0x0000_0007_0000_0005
@@ -116,15 +81,17 @@ struct RemoteVoiceFunctionMapperTests {
         )
 
         #expect(
-            RemoteVoiceFunctionMappingPolicy.applying(to: [unrelated, stale]) ==
-                [unrelated] + RemoteVoiceFunctionMappingPolicy.remoteVoiceKeys
+            RemoteVoiceFunctionMappingPolicy.applying(to: [unrelated, stale]) == [
+                unrelated,
+                RemoteVoiceFunctionMappingPolicy.remoteVoiceKey,
+            ]
         )
     }
 
     @Test func isIdempotentAndRoundTripsItsProperty() {
-        let mappings = RemoteVoiceFunctionMappingPolicy.remoteVoiceKeys
-        #expect(RemoteVoiceFunctionMappingPolicy.applying(to: mappings) == mappings)
-        #expect(HIDUsageMapping(property: mappings[0].property) == mappings[0])
+        let mapping = RemoteVoiceFunctionMappingPolicy.remoteVoiceKey
+        #expect(RemoteVoiceFunctionMappingPolicy.applying(to: [mapping]) == [mapping])
+        #expect(HIDUsageMapping(property: mapping.property) == mapping)
     }
 
     @Test func suppressesRemotePowerAsHarmlessF20WithoutChangingOtherMappings() {
@@ -144,7 +111,9 @@ struct RemoteVoiceFunctionMapperTests {
         #expect(RemoteVoiceFunctionMappingPolicy.applying(
             to: [unrelated, stalePower],
             powerMapping: RemoteVoiceFunctionMappingPolicy.suppressedRemotePowerKey
-        ) == [unrelated] + RemoteVoiceFunctionMappingPolicy.remoteVoiceKeys + [
+        ) == [
+            unrelated,
+            RemoteVoiceFunctionMappingPolicy.remoteVoiceKey,
             RemoteVoiceFunctionMappingPolicy.suppressedRemotePowerKey,
         ])
     }
@@ -162,22 +131,27 @@ struct RemoteVoiceFunctionMapperTests {
             source: RemoteVoiceFunctionMappingPolicy.suppressedRemotePowerKey.source,
             destination: 0x0000_0007_0000_006D
         )
-        let applied = RemoteVoiceFunctionMappingPolicy.remoteVoiceKeys + [
-            RemoteVoiceFunctionMappingPolicy.suppressedRemotePowerKey,
-        ]
 
         #expect(
             RemoteVoiceFunctionMappingPolicy.restoring(
-                originalVoiceMappings: [originalVoice],
+                originalVoiceMapping: originalVoice,
                 originalPowerMapping: originalPower,
-                in: [changedUnrelated] + applied
+                in: [
+                    changedUnrelated,
+                    RemoteVoiceFunctionMappingPolicy.remoteVoiceKey,
+                    RemoteVoiceFunctionMappingPolicy.suppressedRemotePowerKey,
+                ]
             ) == [changedUnrelated, originalVoice, originalPower]
         )
         #expect(
             RemoteVoiceFunctionMappingPolicy.restoring(
-                originalVoiceMappings: [],
+                originalVoiceMapping: nil,
                 originalPowerMapping: nil,
-                in: [changedUnrelated] + applied
+                in: [
+                    changedUnrelated,
+                    RemoteVoiceFunctionMappingPolicy.remoteVoiceKey,
+                    RemoteVoiceFunctionMappingPolicy.suppressedRemotePowerKey,
+                ]
             ) == [changedUnrelated]
         )
     }
@@ -233,8 +207,10 @@ struct RemoteVoiceFunctionMapperTests {
         let mapper = RemoteVoiceFunctionMapper { [first, second.service] }
 
         #expect(!mapper.apply(neutralizeVoiceKey: true))
-        #expect(firstMappings ==
-            [original[0]] + RemoteVoiceFunctionMappingPolicy.neutralRemoteVoiceKeys)
+        #expect(firstMappings == [
+            original[0],
+            RemoteVoiceFunctionMappingPolicy.neutralRemoteVoiceKey,
+        ])
 
         mapper.restore()
 

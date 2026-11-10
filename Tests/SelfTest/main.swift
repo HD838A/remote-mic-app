@@ -263,7 +263,9 @@ check(
     RemoteVoiceFunctionMappingPolicy.applying(
         to: [unrelatedKeyMapping],
         powerMapping: RemoteVoiceFunctionMappingPolicy.suppressedRemotePowerKey
-    ) == [unrelatedKeyMapping] + RemoteVoiceFunctionMappingPolicy.remoteVoiceKeys + [
+    ) == [
+        unrelatedKeyMapping,
+        RemoteVoiceFunctionMappingPolicy.remoteVoiceKey,
         RemoteVoiceFunctionMappingPolicy.suppressedRemotePowerKey,
     ],
     "Xiaomi RC001/RC003 power is remapped to harmless F20"
@@ -370,8 +372,11 @@ let hardwareVoiceMappings = RemoteVoiceFunctionMappingPolicy.applying(
     to: [unrelatedMapping, staleVoiceMapping]
 )
 check(
-    hardwareVoiceMappings == [unrelatedMapping] + RemoteVoiceFunctionMappingPolicy.remoteVoiceKeys,
-    "Xiaomi RC001/RC003 hardware voice mapping replaces every known voice usage (F5 and leaked i)"
+    hardwareVoiceMappings == [
+        unrelatedMapping,
+        RemoteVoiceFunctionMappingPolicy.remoteVoiceKey,
+    ],
+    "Xiaomi RC001/RC003 hardware voice mapping replaces only F5 and preserves unrelated mappings"
 )
 check(
     RemoteVoiceFunctionMappingPolicy.applying(to: hardwareVoiceMappings) == hardwareVoiceMappings,
@@ -380,9 +385,12 @@ check(
 check(
     RemoteVoiceFunctionMappingPolicy.applying(
         to: [unrelatedMapping],
-        voiceMappings: RemoteVoiceFunctionMappingPolicy.neutralRemoteVoiceKeys
-    ) == [unrelatedMapping] + RemoteVoiceFunctionMappingPolicy.neutralRemoteVoiceKeys,
-    "Xiaomi RC001/RC003 neutralized voice key drops every known voice usage for tap-style voice tools"
+        voiceMapping: RemoteVoiceFunctionMappingPolicy.neutralRemoteVoiceKey
+    ) == [
+        unrelatedMapping,
+        RemoteVoiceFunctionMappingPolicy.neutralRemoteVoiceKey,
+    ],
+    "Xiaomi RC001/RC003 neutralized voice key drops the F5 event for tap-style voice tools"
 )
 var transactionalFirstMappings = [unrelatedMapping]
 var transactionalFirstWrites = 0
@@ -417,24 +425,21 @@ let changedUnrelatedMapping = HIDUsageMapping(
 )
 check(
     RemoteVoiceFunctionMappingPolicy.restoring(
-        originalVoiceMappings: [staleVoiceMapping],
+        originalVoiceMapping: staleVoiceMapping,
         originalPowerMapping: nil,
-        in: [changedUnrelatedMapping] + RemoteVoiceFunctionMappingPolicy.remoteVoiceKeys
+        in: [changedUnrelatedMapping, RemoteVoiceFunctionMappingPolicy.remoteVoiceKey]
     ) == [changedUnrelatedMapping, staleVoiceMapping] &&
         RemoteVoiceFunctionMappingPolicy.restoring(
-            originalVoiceMappings: [],
+            originalVoiceMapping: nil,
             originalPowerMapping: nil,
-            in: [changedUnrelatedMapping] + RemoteVoiceFunctionMappingPolicy.remoteVoiceKeys
+            in: [changedUnrelatedMapping, RemoteVoiceFunctionMappingPolicy.remoteVoiceKey]
         ) == [changedUnrelatedMapping],
     "Xiaomi RC001/RC003 hardware voice mapping restore preserves unrelated runtime changes"
 )
 check(
     HIDUsageMapping(property: RemoteVoiceFunctionMappingPolicy.remoteVoiceKey.property) ==
-        RemoteVoiceFunctionMappingPolicy.remoteVoiceKey &&
-        RemoteVoiceFunctionMappingPolicy.remoteVoiceKeySources.contains(
-            0x0000_0007_0000_000C
-        ),
-    "Xiaomi RC001/RC003 hardware voice mapping property round-trips and covers the leaked i usage"
+        RemoteVoiceFunctionMappingPolicy.remoteVoiceKey,
+    "Xiaomi RC001/RC003 hardware voice mapping property round-trips"
 )
 
 check(

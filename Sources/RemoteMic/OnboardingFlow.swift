@@ -830,13 +830,10 @@ enum OnboardingTranscriptInputPolicy {
     private static let keyDownEventTypeRawValue: UInt = 10
     private static let hidSystemStateRawValue: Int64 = 1
 
-    private static let functionKeyCode: UInt16 = 63
-
     static func isConfirmedPhysicalKeyboardInput(
         eventTypeRawValue: UInt?,
         sourceStateID: Int64?,
-        sourceUnixProcessID: Int64?,
-        keyCode: UInt16? = nil
+        sourceUnixProcessID: Int64?
     ) -> Bool {
         guard eventTypeRawValue == keyDownEventTypeRawValue,
               sourceStateID == hidSystemStateRawValue,
@@ -844,9 +841,7 @@ enum OnboardingTranscriptInputPolicy {
               sourceUnixProcessID <= 0 else {
             return false
         }
-        // Fn/Globe can trigger the voice tool. Other physical keys can edit the
-        // text even when AppKit reports no printable character (for example, Ctrl+Y).
-        return keyCode != functionKeyCode
+        return true
     }
 }
 
