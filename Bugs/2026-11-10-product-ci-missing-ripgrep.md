@@ -29,4 +29,4 @@
 - 本地执行 workflow YAML 解析、Shell 语法和 `scripts/test-macos-release-flow.sh`。
 - 本 PR 自身会因修改 `mac-ci.yml` 运行完整产品和发布门禁，用真实 Xcode 27 runner 验证工具准备与默认公开 App 校验。
 - 本次不修改 `scripts/verify-app.sh` 的校验内容，不修改产品源码、依赖、签名、公证或发布行为。
-- PR #983 调整发布 fixture 的执行顺序，不覆盖纯产品路径的工具准备；两个改动可独立审查，若其先合入则在本 PR Ready 前同步最新主线并重跑验证。
+- PR #983 已合入并同步到本分支；它调整发布 fixture 的执行顺序，不覆盖纯产品路径的工具准备，两个改动保持互补。
