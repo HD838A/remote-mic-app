@@ -48,6 +48,8 @@ while IFS= read -r changed_path; do
     .github/workflows/mac-preview-publication.yml|\
     .github/workflows/mac-stable-promote.yml|\
     scripts/prepare-preview-release.sh|scripts/stage-macos-preview.sh|\
+    config/release-assets.json|scripts/release-assets.py|\
+    scripts/test-private-platform.py|scripts/run-release-stage.sh|scripts/verify-release-contents.py|\
     scripts/prepare-public-release-assets.sh|scripts/verify-preview-cdn-availability.sh|\
     scripts/verify-staged-release-assets.sh|scripts/recover-preview-stage.sh|\
     scripts/publish-staged-preview.sh|scripts/publish-preview-release.sh|\
