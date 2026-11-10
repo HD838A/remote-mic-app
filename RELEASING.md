@@ -195,6 +195,8 @@ BuildSigningTests 按相关源码、资源、构建、安装、依赖或 workflo
 - 从 GitHub 固定 Tag URL 和 download.sayall.app 固定 Tag URL 下载每项公开资产并逐字节比较；
 - 确认 releases/latest 仍为发布前记录的正式稳定版，且 Release 为非 Draft、Pre-release。
 
+公开下载和通道验证共享 300 秒总预算。每次请求最多 120 秒，并受剩余总预算限制；单项最多尝试 4 次。脚本入口设置 600 秒软截止时间，公开前至少保留 60 秒，公开阶段只使用其剩余预算，为 workflow 的 20 分钟硬超时留出退出与收回空间。普通网络超时进入失败回收。
+
 上传、集合、摘要或认证下载失败时保留 Draft。重试公开候选时先收回同一 Release 为 Draft，保留 ID、已有资产和版本说明。公开后的 GitHub、CDN、通道或 stable latest 验证失败，或脚本收到 INT/TERM 时，退出处理器将同一 Release 收回 Draft 并通过 API 回读确认。回收 API 失败时输出固定告警与 Release ID，必须立即人工处理；断电、强制杀进程或远端 API 不可用无法由 Shell 保证回收。已经下载或缓存的公开字节无法撤销。
 
 publication 失败时先查询远端状态。若 Tag、Release、资产和摘要已经正确，只重做缺失的公开验证；不要删除 Release、移动 Tag、重签名或重复上传不同字节。公开 Pre-release 的标题和正文与本次候选不一致时也必须 fail closed，不能在重试中覆盖 Release Notes。任何 Tag/Release 查询的认证、网络或非 404 错误都必须 fail closed，不能被当作“版本可用”。

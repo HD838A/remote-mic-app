@@ -7,6 +7,7 @@ REPOSITORY="${GITHUB_REPOSITORY:-HD838A/remote-mic-app}"
 GH_BIN="${GH_BIN:-gh}"
 CURL_BIN="${CURL_BIN:-curl}"
 ATTESTATION="${1:-}"
+publication_deadline=$(( SECONDS + 600 ))
 
 [[ "$REPOSITORY" == "HD838A/remote-mic-app" ]] || {
   echo "Preview publication is restricted to HD838A/remote-mic-app" >&2
@@ -381,6 +382,45 @@ while IFS=$'\t' read -r name expected_size expected_sha; do
   }
 done < "$expected_assets"
 echo "DRAFT ASSETS VERIFIED BEFORE PUBLICATION"
+if (( publication_deadline - SECONDS < 60 )); then
+  echo "Publication verification budget exhausted before becoming public" >&2
+  exit 1
+fi
+public_verification_timeout=300
+if [[ "${RELEASE_ALLOW_LOCAL_FIXTURE:-0}" == 1 ]]; then
+  public_verification_timeout="${RELEASE_FIXTURE_PUBLIC_TIMEOUT_SECONDS:-300}"
+fi
+[[ "$public_verification_timeout" =~ ^[1-9][0-9]*$ ]] || exit 2
+public_verification_deadline=$(( SECONDS + public_verification_timeout ))
+if (( public_verification_deadline > publication_deadline )); then
+  public_verification_deadline="$publication_deadline"
+fi
+if (( SECONDS >= public_verification_deadline )); then
+  echo "Publication verification budget exhausted before becoming public" >&2
+  exit 1
+fi
+
+fetch_public_asset() {
+  local url="$1" destination="$2" attempt remaining request_timeout
+  for attempt in {1..4}; do
+    remaining=$(( public_verification_deadline - SECONDS ))
+    if (( remaining <= 0 )); then
+      echo "Public verification deadline exceeded; retracting candidate" >&2
+      return 1
+    fi
+    request_timeout="$remaining"
+    (( request_timeout <= 120 )) || request_timeout=120
+    if "$CURL_BIN" --fail --silent --show-error --location \
+        --connect-timeout 10 --max-time "$request_timeout" \
+        "$url" --output "$destination"; then
+      return 0
+    fi
+    (( attempt == 4 )) || /bin/sleep 2
+  done
+  echo "Public asset download failed after bounded retries" >&2
+  return 1
+}
+
 "$GH_BIN" api --method PATCH "repos/$REPOSITORY/releases/$release_id" \
   -F draft=false -F prerelease=true -f make_latest=false >/dev/null
 "$GH_BIN" api "repos/$REPOSITORY/releases/$release_id" | jq -e --argjson id "$release_id" \
@@ -391,17 +431,15 @@ cdn_dir="$work_dir/cdn"
 /bin/mkdir -p "$github_dir" "$cdn_dir"
 while IFS=$'\t' read -r name _ expected_sha; do
   [[ -n "$name" ]] || continue
-  "$CURL_BIN" --fail --silent --show-error --location --connect-timeout 10 --max-time 120 --retry 3 --retry-delay 2 \
-    "https://github.com/$REPOSITORY/releases/download/$tag/$name" \
-    --output "$github_dir/$name"
+  fetch_public_asset \
+    "https://github.com/$REPOSITORY/releases/download/$tag/$name" "$github_dir/$name"
   [[ "$(/usr/bin/shasum -a 256 "$github_dir/$name" | /usr/bin/awk '{print $1}')" == "$expected_sha" ]] || {
     echo "GitHub fixed-tag download differs from staged bytes: $name" >&2
     exit 1
   }
   if [[ "$name" != candidate-provenance.json ]]; then
-    "$CURL_BIN" --fail --silent --show-error --location --connect-timeout 10 --max-time 120 --retry 6 --retry-all-errors --retry-delay 3 \
-      "https://download.sayall.app/mac/releases/$tag/$name" \
-      --output "$cdn_dir/$name"
+    fetch_public_asset \
+      "https://download.sayall.app/mac/releases/$tag/$name" "$cdn_dir/$name"
     /usr/bin/cmp -s "$github_dir/$name" "$cdn_dir/$name" || {
       echo "CDN fixed-tag download differs from GitHub: $name" >&2
       exit 1
@@ -416,12 +454,12 @@ verify_channel_appcast() {
   local downloaded_file="$4"
   local attempt
   for attempt in {1..20}; do
-    if "$CURL_BIN" --fail --silent --show-error --location --connect-timeout 10 --max-time 120 \
-        "https://download.sayall.app/mac/channels/$channel/$appcast" \
-        --output "$downloaded_file" && \
+    if fetch_public_asset \
+        "https://download.sayall.app/mac/channels/$channel/$appcast" "$downloaded_file" && \
        /usr/bin/cmp -s "$expected_file" "$downloaded_file"; then
       return 0
     fi
+    (( SECONDS < public_verification_deadline )) || return 1
     (( attempt < 20 )) && /bin/sleep 6
   done
   echo "Cloudflare $channel channel did not resolve to the expected appcast: $appcast" >&2
@@ -447,9 +485,8 @@ printf '%s\n' "$stable_release_after" | jq -e \
 for appcast in appcast.xml appcast-intel.xml; do
   verify_channel_appcast \
     preview "$appcast" "$github_dir/$appcast" "$work_dir/preview-channel-$appcast"
-  "$CURL_BIN" --fail --silent --show-error --location --connect-timeout 10 --max-time 120 --retry 3 --retry-delay 2 \
-    "https://github.com/$REPOSITORY/releases/download/$stable_latest_after/$appcast" \
-    --output "$work_dir/stable-fixed-$appcast"
+  fetch_public_asset \
+    "https://github.com/$REPOSITORY/releases/download/$stable_latest_after/$appcast" "$work_dir/stable-fixed-$appcast"
   verify_channel_appcast \
     stable "$appcast" "$work_dir/stable-fixed-$appcast" "$work_dir/stable-channel-$appcast"
 done

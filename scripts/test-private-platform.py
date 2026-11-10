@@ -656,7 +656,9 @@ class PublicationFlowTests(unittest.TestCase):
                               env={**os.environ, "REPOSITORY_ROOT": str(self.repo), "FIXTURE": str(self.directory),
                                    "GH_BIN": str(self.directory / "gh"), "CURL_BIN": str(self.directory / "curl"),
                                    "GITHUB_REPOSITORY": "HD838A/remote-mic-app", "RELEASE_ALLOW_LOCAL_FIXTURE": "1",
-                                   "FIXTURE_MODE": mode}, capture_output=True, text=True, timeout=30)
+                                   "FIXTURE_MODE": mode,
+                                   "RELEASE_FIXTURE_PUBLIC_TIMEOUT_SECONDS": "1" if mode == "timeout" else "300"},
+                              capture_output=True, text=True, timeout=30)
 
     def test_draft_readback_precedes_publication_and_retry_preserves_ids(self):
         result = self.publish()
@@ -708,6 +710,15 @@ class PublicationFlowTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(self.state()["release"]["databaseId"], 123)
         self.assertEqual(self.state()["events"].count("upload"), 11)
+
+    def test_public_verification_timeout_retracts_before_workflow_timeout(self):
+        started = time.monotonic()
+        result = self.publish("timeout")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Public verification deadline exceeded", result.stderr)
+        self.assertTrue(self.state()["release"]["isDraft"])
+        self.assertIn("publish", self.state()["events"])
+        self.assertLess(time.monotonic() - started, 15)
 
     def test_retraction_api_failure_emits_an_actionable_release_id(self):
         result = self.publish("retract")
@@ -766,6 +777,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import time
 
 root = Path(os.environ["FIXTURE"])
 mode = os.environ["FIXTURE_MODE"]
@@ -778,6 +790,9 @@ def save():
     state_path.write_text(json.dumps(state))
 
 if Path(sys.argv[0]).name == "curl":
+    if mode == "timeout":
+        time.sleep(1.1)
+        sys.exit(28)
     url = next(value for value in args if value.startswith("https://"))
     name = url.rsplit("/", 1)[1]
     output = Path(args[args.index("--output") + 1])

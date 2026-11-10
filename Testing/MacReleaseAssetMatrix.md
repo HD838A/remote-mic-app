@@ -63,7 +63,7 @@ Install PKG 作为 SayAll 品牌的公开独立资产上传。公开下载不再
 
 ## 用例 5：publication 重试
 
-1. 在离线 API fixture 中分别制造部分上传、错误数量、错误 digest、认证下载字节不一致、SIGTERM 和公开 CDN 字节不一致。
+1. 在离线 API fixture 中分别制造部分上传、错误数量、错误 digest、认证下载字节不一致、SIGTERM、公开验证总预算耗尽和公开 CDN 字节不一致。
 2. 使用相同 sourceCommit、Run/attempt、artifact digest 和 UI attestation 重试。
 
 预期为首次创建 Draft，完整认证字节校验先于公开。公开前失败保留 Draft，公开后失败将同一 Release 收回 Draft。重试只补缺失资产或重新验证，既有 ID、大小和 digest 不变。标题或正文不同时停止并保留原文。旧 manifest 13 项 payload 加 1 项证明同样通过。
