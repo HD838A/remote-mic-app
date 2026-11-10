@@ -608,6 +608,16 @@ fi
 /usr/bin/grep -Fq 'name: Public Swift tests and dual-architecture build' "$ci_workflow"
 /usr/bin/grep -Fq 'needs: [classify_changes, public_test]' "$ci_workflow"
 public_job="$(/usr/bin/awk '/^  public_test:/ { capture=1 } /^  test:/ { exit } capture { print }' "$ci_workflow")"
+macos_tool_setup="$(print -r -- "$public_job" | /usr/bin/awk '
+  /- name: Ensure macOS CI tools/ { capture=1 }
+  capture && /- name: Check patch formatting/ { exit }
+  capture { print }
+')"
+[[ -n "$macos_tool_setup" ]]
+print -r -- "$macos_tool_setup" | /usr/bin/grep -Fq \
+  "if: needs.classify_changes.outputs.product_change == 'true' || needs.classify_changes.outputs.release_checks == 'true'"
+print -r -- "$macos_tool_setup" | /usr/bin/grep -Fq \
+  'command -v rg >/dev/null || HOMEBREW_NO_AUTO_UPDATE=1 brew install ripgrep'
 for package_path in SAYALL_AI_PACKAGE_PATH SAYALL_PRIVATE_PLATFORM_PACKAGE_PATH SAYALL_COMBINATION_ACTIONS_PATH SAYALL_BUTTON_PROFILES_PACKAGE_PATH SAYALL_MAC_REMOTE_PACKAGE_PATH; do
   print -r -- "$public_job" | /usr/bin/grep -Fq "$package_path: \"\""
 done
