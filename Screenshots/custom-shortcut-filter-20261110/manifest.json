@@ -3,7 +3,7 @@
   "date": "2026-11-10",
   "purpose": "自定义按键独立筛选与基础按键标题入口",
   "pr": "https://github.com/HD838A/remote-mic-app/pull/991",
-  "source_commit": "264209971497bd65f2ee7e35000fafd393eb4577",
+  "source_commit": "b62a77c9054de8a491b78deee46ff7e6304af73c",
   "storage": "github-user-attachments-with-external-originals",
   "renderer": "production SettingsView offscreen entry point",
   "content_size_pt": [
@@ -13,7 +13,7 @@
   "validation_boundary": "Static production view only; native window input and signed app acceptance pending",
   "items": [
     {
-      "file": "verified-basic-zh-Hans-light/mapping-1067x732.png",
+      "file": "current-basic-zh-Hans-light/mapping-1067x732.png",
       "format": "PNG",
       "width": 2134,
       "height": 1464,
@@ -25,7 +25,7 @@
       "url": "https://github.com/user-attachments/assets/37f7e16c-19aa-40e5-84a5-4faaf92b83e3"
     },
     {
-      "file": "verified-custom-zh-Hans-light/mapping-1067x732.png",
+      "file": "current-custom-zh-Hans-light/mapping-1067x732.png",
       "format": "PNG",
       "width": 2134,
       "height": 1464,
@@ -37,7 +37,7 @@
       "url": "https://github.com/user-attachments/assets/ede65622-3cf9-45a9-8bd8-ddcb8556235d"
     },
     {
-      "file": "verified-basic-zh-Hans-dark/mapping-1067x732.png",
+      "file": "current-basic-zh-Hans-dark/mapping-1067x732.png",
       "format": "PNG",
       "width": 2134,
       "height": 1464,
@@ -49,7 +49,7 @@
       "url": "https://github.com/user-attachments/assets/ad77bcb2-b4ea-4975-ace6-f9a1537aab43"
     },
     {
-      "file": "verified-custom-zh-Hans-dark/mapping-1067x732.png",
+      "file": "current-custom-zh-Hans-dark/mapping-1067x732.png",
       "format": "PNG",
       "width": 2134,
       "height": 1464,
@@ -61,7 +61,7 @@
       "url": "https://github.com/user-attachments/assets/439c110b-e6c8-4d40-ad0e-12002f19acc0"
     },
     {
-      "file": "verified-basic-en-light/mapping-1067x732.png",
+      "file": "current-basic-en-light/mapping-1067x732.png",
       "format": "PNG",
       "width": 2134,
       "height": 1464,
@@ -73,7 +73,7 @@
       "url": "https://github.com/user-attachments/assets/e9da5fad-ba41-4c48-84a6-9c908eb00232"
     },
     {
-      "file": "verified-custom-en-light/mapping-1067x732.png",
+      "file": "current-custom-en-light/mapping-1067x732.png",
       "format": "PNG",
       "width": 2134,
       "height": 1464,
@@ -85,7 +85,7 @@
       "url": "https://github.com/user-attachments/assets/926865df-1e2e-4471-a90f-67ffa15358ff"
     },
     {
-      "file": "verified-basic-en-dark/mapping-1067x732.png",
+      "file": "current-basic-en-dark/mapping-1067x732.png",
       "format": "PNG",
       "width": 2134,
       "height": 1464,
@@ -97,7 +97,7 @@
       "url": "https://github.com/user-attachments/assets/d89e69f9-1442-4821-be6e-635de638412b"
     },
     {
-      "file": "verified-custom-en-dark/mapping-1067x732.png",
+      "file": "current-custom-en-dark/mapping-1067x732.png",
       "format": "PNG",
       "width": 2134,
       "height": 1464,
