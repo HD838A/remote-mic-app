@@ -166,21 +166,29 @@ enum KeyboardInjector {
             return true
         }
 
+        /// 取消切换器。
+        ///
+        /// `dismissSwitcher` 为 false 时只松开 ⌘，不补 Escape：系统已经自己关掉切换器
+        /// （例如用户点了别处），此时补发的 Escape 会落在前台 App 上，关掉它的弹窗或窗口。
         @discardableResult
-        func cancel() -> Bool {
+        func cancel(dismissSwitcher: Bool = true) -> Bool {
             if isWindowPickerActive {
                 _ = releaseCommandForWindowPicker()
-                let escaped = post(53, isDown: true, flags: [], role: "escape") &&
-                    post(53, isDown: false, flags: [], role: "escape")
+                let escapedDown = !dismissSwitcher
+                    || post(53, isDown: true, flags: [], role: "escape")
+                let escapedUp = !dismissSwitcher
+                    || post(53, isDown: false, flags: [], role: "escape")
                 isWindowPickerActive = false
                 isActive = false
-                return escaped
+                return escapedDown && escapedUp
             }
             guard isActive else { return true }
             // 原生语义：切换器里松开 ⌘ 就等于确认高亮 App，只发 ⌘ 抬起会把「取消」变成切换。
             // 取消必须先在 ⌘ 仍按住时发 Escape，再松开 ⌘；Escape 失败也不能把 ⌘ 留在按下状态。
-            let escaped = post(53, isDown: true, flags: .maskCommand, role: "escape")
-            let escapedUp = post(53, isDown: false, flags: .maskCommand, role: "escape")
+            let escaped = !dismissSwitcher
+                || post(53, isDown: true, flags: .maskCommand, role: "escape")
+            let escapedUp = !dismissSwitcher
+                || post(53, isDown: false, flags: .maskCommand, role: "escape")
             let released = post(leftCommandKeyCode, isDown: false, flags: [], role: "command")
             isActive = false
             return escaped && escapedUp && released

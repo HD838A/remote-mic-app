@@ -2258,7 +2258,11 @@ final class HIDRemoteMonitor {
         removeAppSwitcherDismissObserver()
         appSwitcherDismissRemover = appSwitcherDismissObserverInstaller { [weak self] in
             guard let self, self.appSwitcherSession.isActive else { return }
-            self.finishAppSwitcherLifecycle(reason: "mouse_click", confirmed: false)
+            self.finishAppSwitcherLifecycle(
+                reason: "mouse_click",
+                confirmed: false,
+                switcherAlreadyDismissed: true
+            )
         }
     }
 
@@ -2289,7 +2293,13 @@ final class HIDRemoteMonitor {
         }
     }
 
-    private func finishAppSwitcherLifecycle(reason: String, confirmed: Bool) {
+    /// `switcherAlreadyDismissed` 表示系统已经自己关掉切换器（目前只有鼠标点击外部），
+    /// 收尾时只能松开 ⌘，不能再往被点击的 App 补 Escape。
+    private func finishAppSwitcherLifecycle(
+        reason: String,
+        confirmed: Bool,
+        switcherAlreadyDismissed: Bool = false
+    ) {
         appSwitcherTimeout?.cancel()
         appSwitcherTimeout = nil
         appSwitcherFrontmostMonitor?.cancel()
@@ -2297,7 +2307,7 @@ final class HIDRemoteMonitor {
         removeAppSwitcherDismissObserver()
         appSwitcherDockWindowBaseline = nil
         if appSwitcherSession.isActive {
-            _ = appSwitcherSession.cancel()
+            _ = appSwitcherSession.cancel(dismissSwitcher: !switcherAlreadyDismissed)
         }
         diagnosticLogger(
             "HID APP SWITCHER ended reason=\(reason) confirmed=\(confirmed)"

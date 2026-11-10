@@ -55,11 +55,18 @@ macOS 系统切换器的语义是：Command 松开即确认当前高亮项；取
 
 窗口选择层的取消逻辑不变（该层 Command 已松开，直接 Esc 即可）。
 
+另外，`cancel()` 是所有取消路径共用的（返回、超时、外部点击、输入重置），不能无条件补 Escape：
+
+- 超时、输入重置、绑定键打断：切换器仍在屏幕上，补 Escape 才是真正的取消，否则松开 Command 依旧会确认高亮项。
+- 鼠标点击外部：系统已经自己关掉切换器，此时补 Escape 会落到被点击的 App 上，可能关掉它的弹窗或窗口。新增 `cancel(dismissSwitcher:)` 参数，只有这一条路径传 `false`，只松开 Command。
+
 ## 验证
 
 - 新增单测 `appSwitcherSessionCancelSendsEscapeBeforeReleasingCommand`：断言取消时的事件顺序为 Esc down/up（`command=true`）后跟 Command up，且会话状态清理干净。
 - 新增单测 `appSwitcherSessionCancelReleasesCommandWhenEscapeFails`：Escape 投递失败时最后一个事件仍是 Command up。
-- 既有 3 个切换器会话单测保持通过；`swift test --disable-keychain --filter "appSwitcherSession"` 共 4 项通过。
+- 新增单测 `appSwitcherSessionCancelWithoutDismissalOnlyReleasesCommand` 与 `appSwitcherSessionCancelInWindowPickerWithoutDismissalOnlyReleasesCommand`：系统已关掉切换器时不补 Escape。
+- 监控层 `appSwitcherBackTimeoutAndFrontmostChangeReleaseCommand` 补两组断言：返回取消必须以 Esc 结尾、鼠标点击收尾不得出现 Esc。
+- 既有 3 个切换器会话单测保持通过；`swift test --disable-keychain --filter "appSwitcher"` 共 25 项通过。
 - 真机：待维护者用遥控器按测试手册「用例 6」复验。
 
 ## 剩余边界
