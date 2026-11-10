@@ -4,10 +4,13 @@ import Foundation
 struct RemoteButtonGestureTiming: Codable, Equatable {
     var doubleClickMilliseconds: Int = 300
     var longPressMilliseconds: Int = 550
+    /// 学习后保存的重复启动时间。旧配置缺少此值时使用既有时间。
+    var repeatSingleStartMilliseconds: Int? = nil
 
     var isValid: Bool {
         (50...500).contains(doubleClickMilliseconds) && doubleClickMilliseconds % 50 == 0 &&
-        (300...1000).contains(longPressMilliseconds) && longPressMilliseconds % 50 == 0
+        (300...1000).contains(longPressMilliseconds) && longPressMilliseconds % 50 == 0 &&
+        (repeatSingleStartMilliseconds.map { $0 > 0 && $0 % 50 == 0 } ?? true)
     }
 }
 
@@ -107,6 +110,7 @@ struct RemoteButtonInteractionSnapshot {
     var long: ConfiguredButtonAction
     var hasOpaqueBinding = false
     var repeatInterval: UInt64 = 100
+    var repeatSingleStartMilliseconds: Int? = nil
     var repeatAllowed = true
     var opaqueDouble = false
     var opaqueLong = false
