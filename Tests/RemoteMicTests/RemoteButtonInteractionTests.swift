@@ -497,10 +497,78 @@ struct RemoteButtonInteractionTests {
         #expect(result?.longPressMilliseconds == 735)
         #expect(result?.suggestedTiming == .init(
             doubleClickMilliseconds: 250,
-            longPressMilliseconds: 700
+            longPressMilliseconds: 700,
+            repeatSingleStartMilliseconds: 150
         ))
         #expect(result?.suggestedTiming.isValid == true)
         #expect(learner.status.step == .complete)
+    }
+
+    @Test(arguments: [170, 200, 284, 600])
+    func learnedSingleDurationDoesNotBecomeAHoldDuringADoubleClick(singleMilliseconds: Int) throws {
+        var learner = RemoteButtonGestureLearner()
+        learner.start(model: .rc003)
+        for (phase, time): (RemoteButtonPhase, Int) in [
+            (.press, 0), (.release, singleMilliseconds),
+            (.press, 2_000), (.release, 2_080), (.press, 2_250), (.release, 2_330),
+            (.press, 3_000),
+        ] {
+            _ = learner.handle(phase, button: .ok, model: .rc003, timestampMilliseconds: time)
+        }
+        let measured = learner.handle(
+            .release, button: .ok, model: .rc003, timestampMilliseconds: 3_750
+        )
+        let result = try #require(measured)
+        let clock = InteractionClock()
+        let controller = RemoteButtonInteractionController(scheduler: clock)
+        var config = snapshot(.repeatSingle, double: true,
+                              d: result.suggestedTiming.doubleClickMilliseconds)
+        config.repeatSingleStartMilliseconds = result.suggestedTiming.repeatSingleStartMilliseconds
+        var events: [ButtonTrigger] = []
+        func edge(_ phase: RemoteButtonPhase, at time: UInt64) {
+            clock.advance(time)
+            controller.handle(phase, button: .ok, snapshot: config, valid: { true }) { trigger, _ in
+                events.append(trigger)
+                return true
+            }
+        }
+        edge(.press, at: 0)
+        edge(.release, at: UInt64(singleMilliseconds))
+        #expect(events.isEmpty)
+        edge(.press, at: UInt64(singleMilliseconds + 170))
+        clock.advance(UInt64(singleMilliseconds + 1_000))
+        #expect(events.isEmpty)
+        edge(.release, at: UInt64(singleMilliseconds + 1_010))
+        #expect(events == [.doubleClick])
+        clock.advance(UInt64(singleMilliseconds + 2_000))
+        #expect(events == [.doubleClick])
+    }
+
+    @Test(arguments: [false, true])
+    func calibratedRepeatStillStartsAndStopsAtTheCapturedThreshold(double: Bool) {
+        let clock = InteractionClock()
+        let controller = RemoteButtonInteractionController(scheduler: clock)
+        var config = snapshot(.repeatSingle, double: double, d: 200)
+        config.repeatSingleStartMilliseconds = 700
+        var events: [ButtonTrigger] = []
+        controller.handle(.press, button: .ok, snapshot: config, valid: { true }) { trigger, _ in
+            events.append(trigger)
+            return true
+        }
+        // 后续设置变化不影响当前按压已捕获的时间。
+        config.repeatSingleStartMilliseconds = 150
+        clock.advance(699)
+        #expect(events.count == (double ? 0 : 1))
+        clock.advance(700)
+        #expect(events.count == (double ? 1 : 2))
+        clock.advance(800)
+        #expect(events.count == (double ? 2 : 3))
+        #expect(events.allSatisfy { $0 == .singleClick })
+        controller.handle(.release, button: .ok, snapshot: config, valid: { true }) { _, _ in false }
+        let count = events.count
+        clock.advance(2_000)
+        #expect(events.count == count)
+        #expect(!controller.isTracking(.ok))
     }
 
     @Test func learningDiscardsImpossibleDoubleClickIntervals() {

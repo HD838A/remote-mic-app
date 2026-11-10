@@ -188,7 +188,8 @@ struct RemoteButtonGestureLearner {
                 let roundedLong = Self.rounded(long, step: 50, direction: .down)
                 let suggested = RemoteButtonGestureTiming(
                     doubleClickMilliseconds: min(500, max(150, roundedDouble)),
-                    longPressMilliseconds: min(1000, max(300, roundedLong))
+                    longPressMilliseconds: min(1000, max(300, roundedLong)),
+                    repeatSingleStartMilliseconds: Self.rounded(single, step: 50, direction: .up) + 50
                 )
                 let adjusted = suggested.doubleClickMilliseconds != double ||
                     suggested.longPressMilliseconds != long

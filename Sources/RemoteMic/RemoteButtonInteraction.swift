@@ -59,11 +59,18 @@ final class RemoteButtonInteractionController {
         }
         let mode = current.snapshot.mode!
         if mode == .repeatSingle {
+            let learnedStart = UInt64(current.snapshot.repeatSingleStartMilliseconds ?? 0)
             if !current.snapshot.recognizesDouble {
                 fire(button, current, .singleClick)
-                scheduleRepeat(button, current, .singleClick, delay: 350)
+                scheduleRepeat(button, current, .singleClick,
+                               delay: max(HIDRemoteTiming.repeatStartMilliseconds, learnedStart))
             } else {
-                current.timer = schedule(button, current, after: UInt64(current.snapshot.settings.doubleClickMilliseconds)) { owner, value in
+                let delay = max(UInt64(current.snapshot.settings.doubleClickMilliseconds), learnedStart)
+                AppLogger.shared.write(
+                    "BUTTON HOLD operation_id=\(current.id.uuidString) phase=waiting " +
+                        "repeat_start_ms=\(delay) double_ms=\(current.snapshot.settings.doubleClickMilliseconds)"
+                )
+                current.timer = schedule(button, current, after: delay) { owner, value in
                     guard value.pressed, !value.second else { return }
                     owner.fire(button, value, .singleClick)
                     owner.scheduleRepeat(button, value, .singleClick, delay: value.snapshot.repeatInterval)

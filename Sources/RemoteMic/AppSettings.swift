@@ -3234,7 +3234,8 @@ final class AppSettings: ObservableObject {
         AppLogger.shared.write(
             "BUTTON GESTURE TIMING operation_id=\(UUID().uuidString) phase=completed result=saved " +
                 "model=\(model.rawValue) double_ms=\(timing.doubleClickMilliseconds) " +
-                "long_ms=\(timing.longPressMilliseconds)"
+                "long_ms=\(timing.longPressMilliseconds) " +
+                "repeat_start_ms=\(timing.repeatSingleStartMilliseconds.map(String.init) ?? "legacy")"
         )
     }
 
@@ -3269,6 +3270,10 @@ final class AppSettings: ObservableObject {
             hasOpaqueBinding: ButtonTrigger.allCases.contains(where: opaque),
             repeatInterval: HIDRemoteTiming.repeatIntervalMilliseconds(for: button) ?? 100,
             opaqueDouble: opaque(.doubleClick), opaqueLong: opaque(.longPress))
+        if let model = settingsModel(for: profileID) {
+            snapshot.repeatSingleStartMilliseconds = buttonGestureTiming(for: model)
+                .repeatSingleStartMilliseconds
+        }
         if snapshot.mode == .repeatSingle,
            interactionModeOverride?(profileID ?? selectedRemoteProfileID, button) == nil,
            timing.migratedRepeatButtons?.contains(button.rawValue) == true,
