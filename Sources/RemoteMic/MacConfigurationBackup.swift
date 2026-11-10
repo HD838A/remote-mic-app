@@ -88,4 +88,5 @@ struct CompleteConfigurationPreferences: Codable {
     var localTranscriptHistoryEnabled: Bool
     var localOriginalAudioRecordingEnabled: Bool
     var voiceTool: OnboardingVoiceTool?
+    var physicalShortcutEventsEnabled: Bool? = nil
 }

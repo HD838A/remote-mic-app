@@ -105,6 +105,9 @@ enum SettingsScreenshotRenderer {
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
         let settings = AppSettings(defaults: defaults)
+        settings.physicalShortcutEventsEnabled = ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_SETTINGS_SCREENSHOT_PHYSICAL_SHORTCUTS"
+        ] == "1"
         settings.applicationLanguage = language
         settings.completeOnboarding()
         if showsGestureTiming, let profileID = settings.selectedRemoteProfileID {

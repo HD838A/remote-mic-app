@@ -6521,6 +6521,28 @@ struct SettingsView: View {
                             Divider()
 
                             HStack(spacing: 14) {
+                                Image(systemName: "keyboard")
+                                    .font(.title3)
+                                    .foregroundStyle(Color.accentColor)
+                                    .frame(width: 34)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("settings.general.physical_shortcuts")
+                                        .font(.subheadline.weight(.semibold))
+                                    Text("settings.general.physical_shortcuts_help")
+                                        .font(.system(size: 12))
+                                        .foregroundStyle(.secondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                                Spacer()
+                                Toggle("settings.general.physical_shortcuts", isOn: $settings.physicalShortcutEventsEnabled)
+                                    .labelsHidden()
+                                    .toggleStyle(.switch)
+                            }
+                            .padding(.vertical, 8)
+
+                            Divider()
+
+                            HStack(spacing: 14) {
                                 Image(systemName: "power")
                                     .font(.title3)
                                     .foregroundStyle(Color.accentColor)
