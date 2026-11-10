@@ -115,7 +115,7 @@ Fn-layer key usages, modifier flag bits, and the log-reading rules for shortcut 
 
 ## Menu bar and window
 
-The app runs as an LSUIElement accessory and has no Dock icon. The status item receives left and right mouse-up events:
+The bundle declares `LSUIElement`. At runtime, SayAll uses `.regular` when the Dock preference is on or the settings window is open. Otherwise it uses `.accessory`. Launch opens Settings when both entry points are disabled. The status item receives left and right mouse-up events.
 
 - Left-click creates or brings forward the resizable settings window, whose default and minimum size is 1020×772.
 - Right-click shows connection, audio, and HID status plus reconnect, settings, logs, language, About, version, update, GitHub, and Quit actions.

@@ -169,7 +169,7 @@ struct BuildSigningTests {
         #expect(source.contains(scanPattern))
         #expect(source.contains(publicPathPattern))
         #expect(source.contains("rg -a -o --no-filename"))
-        #expect(source.contains("| rg -v '"))
+        #expect(source.contains("| rg -v \"$PUBLIC_SENTRY_PATH_PATTERN\""))
         #expect(!source.contains("| rg -q -v"))
         let scan = try NSRegularExpression(pattern: scanPattern)
         let publicPath = try NSRegularExpression(pattern: publicPathPattern)
@@ -380,8 +380,9 @@ struct BuildSigningTests {
         #expect(buildSource.contains("REQUIRE_SAYALL_MAC_REMOTE_PACKAGE"))
         #expect(buildSource.contains("A SayAll Mac remote package is required for this build"))
         #expect(workflowSource.contains(
-            "SAYALL_MAC_REMOTE_PACKAGE_PATH=$GITHUB_WORKSPACE/.private-dependencies/sayall-private-platform/packages/macos-remote"
+            "SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH=$PRIVATE_ARTIFACT_PACKAGE"
         ))
+        #expect(!workflowSource.contains(".private-dependencies/sayall-private-platform"))
         #expect(workflowSource.contains("REQUIRE_SAYALL_MAC_REMOTE_PACKAGE=1"))
     }
 
@@ -579,6 +580,13 @@ struct BuildSigningTests {
                     return define["_0"] as? String
                 }
                 #expect(defines.contains("SAYALL_UNIFIED_BUTTON_CONFIGURATION") == includesArtifacts)
+                for hardwareFlag in [
+                    "SAYALL_SIRI_REMOTE_ENABLED",
+                    "SAYALL_CHROMECAST_ENABLED",
+                    "SAYALL_MAC_REMOTE_ENABLED",
+                ] {
+                    #expect(defines.contains(hardwareFlag) == includesArtifacts)
+                }
             }
         }
     }
@@ -1193,15 +1201,14 @@ struct BuildSigningTests {
         #expect(workflowSource.contains("RELEASE_CREDENTIALS_DEPLOY_KEY"))
         #expect(workflowSource.contains("APPLE_SIGNING_MATCH_DEPLOY_KEY"))
         #expect(workflowSource.contains("RELEASE_AGE_IDENTITY"))
-        #expect(workflowSource.contains(
-            "steps.release-dependencies.outputs.sayall_private_platform_repository"
-        ))
+        #expect(workflowSource.contains("SAYALL_PRIVATE_RELEASE_READ_TOKEN"))
         #expect(workflowSource.contains(
             "steps.release-dependencies.outputs.sayall_private_platform_version"
         ))
         #expect(!workflowSource.contains("SAYALL_MAC_REMOTE_DEPLOY_KEY"))
         #expect(!workflowSource.contains("steps.release-dependencies.outputs.sayall_mac_remote_commit"))
-        #expect(workflowSource.contains("SAYALL_MAC_REMOTE_PACKAGE_PATH"))
+        #expect(workflowSource.contains("REQUIRE_SAYALL_MAC_REMOTE_PACKAGE=1"))
+        #expect(!workflowSource.contains("build-private-xcframeworks.sh"))
         #expect(workflowSource.contains("HD838A/remotemic-notary-secrets"))
         #expect(workflowSource.contains("HD838A/apple-signing-match"))
         #expect(workflowSource.contains("package-macos-release-in-actions.sh"))

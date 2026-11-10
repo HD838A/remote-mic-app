@@ -121,7 +121,7 @@ fi
 
 (
   cd "$RELEASE_DIRECTORY"
-  shasum -a 256 -c SHA256SUMS
+  shasum -a 256 -c SHA256SUMS >/dev/null
 )
 
 for archive_name in "${EXPECTED_ARCHIVES[@]}"; do

@@ -23,7 +23,7 @@
 2. fetch `origin main --tags`，确认发布控制 worktree 干净、HEAD 与 `origin/main` 精确一致。普通源码必须是同一 `main` SHA；Hotfix 源码必须是 `origin/hotfix/vX.Y.Z` 的精确 HEAD，并由脚本验证当前稳定 Tag、版本和线性历史。
 3. 检查产品 Commit 已经通过普通 PR 合入 main。若用户指定 Commit 尚未合入，先在独立集成分支重放指定改动，逐个解决机械冲突，完成普通 PR、双架构 CI 后再继续；冲突涉及产品取舍时报告并暂停该取舍，不接触 Apple 凭据。
 4. 检查 `config/release-dependencies.json` 与受保护 workflow 使用相同的私有依赖版本标签，同时确认公开 `Package.swift`、`Package.resolved` 不解析私有仓库；运行 `scripts/verify-release-dependency-pins.sh`。
-5. 运行 `scripts/verify-release-ready-main-ci.sh`，确认 Apple Silicon 与 Intel Ventura 的源码分支 push CI 都完成无私有权限也可执行的 Swift tests、项目 self-test 和 Release build。官方 CI 探测到私有 deploy key 可用时，还必须完成版本化私有依赖的集成测试和双架构 Release build；脚本名为历史兼容名称，发布控制面 fixture 不得冒充产品 CI。
+5. 运行 `scripts/verify-release-ready-main-ci.sh`，确认 Apple Silicon 与 Intel Ventura 的源码分支 push CI 都完成无私有权限也可执行的 Swift tests、项目 self-test 和 Release build。官方发布还须在私有仓库或维护者本机完成同一宿主 Commit 与固定私有 Tag 的集成测试和双架构 Release build。公开 CI 使用公开依赖执行。私有源码验证日志保留在私有环境。脚本名为历史兼容名称，发布控制面 fixture 只能证明其覆盖的流程。
 
 Mac Remote 与其他 macOS 私有组件使用同一个私有 Swift Package。CI 和发布通过私有平台的统一 SemVer 标签解析包；不再把平台子目录伪装成独立远程 Package。无私有依赖的公开构建继续使用现有兼容层。私有平台版本必须从 `main` 发布。`2.3.0` 起以标准 `X.Y.Z` Tag、main 祖先关系和根 `Package.swift` 校验来源；私有仓库已停用根 `VERSION`。更早的不可变 Tag 保留历史 `VERSION` 一致性校验。回退发布流程时须同时回退清单、workflow 和验证脚本；旧版本通过对应的不可变标签回退。
 
@@ -31,7 +31,7 @@ Mac Remote 与其他 macOS 私有组件使用同一个私有 Swift Package。CI 
 
 ### 打包前发布私有 Mac 包
 
-`build-app.sh` 默认使用 `SAYALL_PRIVATE_PLATFORM_MODE=auto`。脚本先探测私有仓库读取权限。缺少权限时，它使用公开兼容层完成本地 App 打包。`SAYALL_PRIVATE_PLATFORM_MODE=public` 可显式选择公开打包，并跳过私有仓库探测。公开 CI 固定使用此模式。公开包不包含私有能力，不作为完整官方发布包。
+`build-app.sh` 默认使用 `SAYALL_PRIVATE_PLATFORM_MODE=public`，使用公开兼容层完成打包，整个公开路径只访问公开依赖。显式提供私有组件路径表示选择私有集成。官方公证入口显式选择 `required` 模式，缺少任何必需组件即停止。私有源码路径只允许用于本机开发，分发渠道只消费固定 Tag 的已发布二进制。
 
 打包用的新 worktree 里没有 `Apps/MobileWeb/.private/`（该目录被 `.gitignore` 排除、不入库），**打包前先从主工作区把它复制过来**，否则会在 DMG 阶段报 `Developer ID app is missing a production Web Remote relay URL`。
 
@@ -47,19 +47,21 @@ Mac Remote 与其他 macOS 私有组件使用同一个私有 Swift Package。CI 
 
 1. 将 Mac 私有改动通过私有 PR 合入 `GetSayAll/sayall-private-platform` 的 `main`。只比较根 SwiftPM 清单、Mac Remote、组合动作、键位方案、常用语、会员与诊断、Siri Remote、Chromecast 和私有构建工具。网页、服务端、纯 Markdown/HTML 文档和 SwiftPM `Tests/` 测试变化不触发 Mac 包升级。测试变化不进入分发构件，不得据此强制新 Tag 或阻止既有不可变 Tag 的集成。新增 Mac 模块时同步 `scripts/prepare-private-platform.py` 的路径范围。
 2. 若上述内容相对最新数字 Tag 有变化，按私有仓库 `docs/release/tagging.md` 发布新的标准 SemVer Tag。`2.3.0` 起不再升级根 `VERSION`。默认升 patch；破坏性接口按 SemVer 升 major。不得给未合入源码或脏工作区打发布 Tag。
-3. 运行 `python3 scripts/prepare-private-platform.py release` 核对最新私有 `main`。`2.3.0` 起，存在未发布 Mac 变化时停止，并要求先由私有发布者完成测试、构建与新 Tag 发布；不从停用的 `VERSION` 推导新版本。更早版本保留历史发布兼容路径。测试使用 Debug 模式以保留现有测试接口；正式构建保持 Release 模式。全部本地 SwiftPM 命令使用 `--disable-keychain`。脚本在推送前复核远端 main，并在推送后复核 Tag Commit。没有 Mac 变化时复用原 Tag；不创建 `private-vX.Y.Z`，不移动已有 Tag。
+3. 在维护者本机运行 `python3 scripts/prepare-private-platform.py release` 核对最新私有 `main`。`2.3.0` 起，存在未发布 Mac 变化时停止，并要求先由私有发布者完成测试、构建与新 Tag 发布；不从停用的 `VERSION` 推导新版本。更早版本保留历史发布兼容路径。测试使用 Debug 模式以保留现有测试接口；正式构建保持 Release 模式。全部本地 SwiftPM 命令使用 `--disable-keychain`。脚本在推送前复核远端 main，并在推送后复核 Tag Commit。没有 Mac 变化时复用原 Tag；不创建 `private-vX.Y.Z`，不移动已有 Tag。
 4. 私有 Tag 发布后，运行 `scripts/update-private-dependency-versions.sh --publish` 更新宿主清单；该命令不能替代 `2.3.0` 起的私有发布步骤。该命令在宿主普通 PR 分支执行。私有 Tag 发布成功后，再更新 `config/release-dependencies.json`，验证并通过宿主 PR 合入。Tag 写权限与只读权限不同；无写权限时请有发布权限的维护者完成私有发布。
-5. 再运行宿主打包。自动模式只从清单 Tag 的精确 Commit 准备私有二进制和源码路径，校验两者来源相同，再集成到 App。私有源码路径也必须属于同一干净 Tag checkout。不得直接集成本地未提交内容、可变分支或未发布 main。
+5. 运行宿主官方打包入口。`release` 与 `internalQA` 渠道通过 `check-release` 和 `artifacts` 验证固定 Tag，并消费该 Tag 的持久发布附件。
 
-自动模式会执行私有发布前置检查。私有 Mac 变化尚未发布、私有发布失败或宿主清单尚未合入时，打包停止并提示下一步。它不会替用户合并版本 PR，也不会在精确 main 上修改宿主清单。读取成功后的网络、测试、Tag、构件、资源或签名错误必须报错；不能将这些错误伪装为无权限并生成公开包。私有 Siri Remote 集成继续要求 Developer ID 签名。
+官方路径使用只读 GitHub API 验证 annotated Tag、其 Commit 与私有主线的祖先关系和根 Package 清单。主线关系查询使用不包含文件 diff 的 compare 后续页。固定二进制 Tag 及其摘要属于已冻结输入，私有主线后续变化进入下一候选。私有源码发布和本机自动准备仍执行其现有未发布变化检查。
 
-两架构 XCFramework 默认由本机从 Tag 现场构建，新 Tag 首次约 9 分钟（2026-11-01 实测 9 分 18 秒）。同一 Tag 再次打包会直接命中 `.private-dependencies/artifacts/<tag>/prepared`，只需数秒（实测 6 秒）；该缓存命中不会重新构建，也不会重新校验已发布的远端状态。
+下载后验证发布方 `.sha256`、压缩包、`SHA256SUMS` 和所有构件。`provenance.source_commit` 必须与 Tag Commit 相同，并声明来源干净。prepared package 复用时重新核对其来源和内容摘要。官方路径的读取凭据、附件、来源或摘要出现问题时立即停止。
 
-`SAYALL_PRIVATE_ARTIFACTS_SOURCE=release` 可改用私有仓为该 Tag 发布的 `sayall-private-platform-<tag>.release.zip`，省掉本地构建（同机实测 87 秒，其中下载约 13 秒）。它仍然要求同一 Tag 的源码 checkout（Siri Remote、Chromecast、Mac Remote 的源码路径来自该 checkout），只替换二进制来源。下载后必须逐项校验：发布方 `.sha256` 同时覆盖压缩包与 `SHA256SUMS` 摘要、压缩包摘要与发布值一致、解包条目只能落在 `release/` 内、解包后保留原有权限位（打包脚本要求 `Helpers/` 可执行）、并用 `shasum -a 256 -c SHA256SUMS` 复核全部构件。默认值保持 `build`，本地不会因远端是否存在附件而静默改变发布包字节。
+受保护 staging 使用 `SAYALL_PRIVATE_RELEASE_READ_TOKEN` 读取发布附件。它在公开 runner 上只准备二进制、资源和 Helper。私有源码的测试与构建在私有仓库的 `macos-host-integration.yml` 或维护者本机执行，记录精确宿主 Commit、私有 Tag/Commit、配置和结果。验证记录用于审计，正式构件始终来自 Tag 的持久发布附件。
 
-受保护发布 workflow 使用同一套校验，但仅在配置了可读私有仓附件的凭据时启用：`SAYALL_PRIVATE_RELEASE_READ_TOKEN` 存在时，`mac-release-package.yml` 走 `scripts/prepare-private-platform.py artifacts --tag <tag> --output <dir>`，由上述规则下载并校验后再交给 `prepare-private-artifact-package.sh`，并把**发布方声明的** `SHA256SUMS` 摘要作为可信摘要传入；该变量为空时仍执行原有的现场构建。两条路径都不改变私有 Tag 解析、`origin/main` 祖先校验、checkout 一致性与后续签名、公证门禁。
+canonical payload 在上传 Actions Artifact 前执行内容扫描。恢复 staging 和 publication 继续通过同一 verifier 复验。ZIP、安装包及嵌套归档出现私有源码、开发接口、原始 XCFramework、dSYM、日志、凭据或未批准的本机路径时停止上传。
 
-`SAYALL_PRIVATE_PLATFORM_MODE=required` 强制要求私有组件。显式设置 `REQUIRE_*` 的完整发布仍在缺少组件时失败；签名、公证及公开发布门禁保持不变。受保护 staging 只检查私有 Mac 代码已被清单 Tag 覆盖，不在签名阶段发布私有 Tag 或修改版本。受保护 runner 再次检查完整历史中的 Tag、main 和 checkout，拒绝过期 pin。
+构件准备和签名构建的详细输出保存在 runner 的受控临时日志中。阶段 supervisor 将自身控制数据写入独立 JSONL，公开日志通过 `scripts/run-release-stage.sh report-status` 输出阶段、结果、耗时和退出码。状态报告只读取该控制数据，子进程输出中的相似文本仍保存在受控日志中。SDK 接口校验失败和编译错误也使用此输出边界。公开 Artifact 包含规定的最终资产和脱敏来源记录。
+
+App 验证器失败时，同一控制流额外记录公开 `scripts/verify-app.sh` 的失败行号、架构和原退出码。该记录覆盖命令失败与显式校验退出，报告前验证固定字段与数值类型。调查时按 staging 的精确源码 Commit 定位行号，详细输出继续使用受控边界。
 
 本机测试未发布的私有修复时，显式设置 `SAYALL_BUILD_CHANNEL=local` 和 `SAYALL_LOCAL_PRIVATE_SOURCE_COMMIT=<完整 SHA>`。手动提供同一干净提交的私有源码路径与 prepared artifacts；构建脚本继续校验二者的 SHA 相同。此入口不创建 Tag，不修改版本清单；`release` 和 `internalQA` 渠道拒绝该提交覆盖。未指定完整 SHA 时，本地渠道仍执行原有 Tag 校验。
 
@@ -118,8 +120,7 @@ ReleaseHistory 的版本标题由 `scripts/sync-release-history-labels.mjs` 按 
 
 ## Preview staging：受保护的唯一签名入口
 
- AI 整理默认不进入发布包：本地构建未显式提供 `SAYALL_AI_PACKAGE_PATH` 时不链接 AI；公证入口默认 `REQUIRE_SAYALL_AI_PACKAGE=0`，不要求 AI 组件。受保护 staging 默认 `include_ai=false`，不 checkout 或注入 AI Package。需要 AI 的特定候选必须显式使用 `INCLUDE_SAYALL_AI=1 scripts/stage-macos-preview.sh preview`（或手动 dispatch 选择 `include_ai=true`）；此时按版本标签 checkout，并要求构建和最终 App 验证 AI 组件。其他发布所需组件与 Developer ID、Apple 公证、staple、Gatekeeper 门禁不变。
-
+AI 整理在本次分发协议中保持关闭。`include_ai=true` 在接触发布凭据前停止，并明确要求先建立已发布二进制协议。本机开发仍可在 `local` 渠道显式接入源码组件。
 普通版本从与 `origin/main` 相同的 main worktree 执行；Hotfix 从与远端完全一致的 `hotfix/vX.Y.Z` worktree 执行：
 
     scripts/stage-macos-preview.sh preview
@@ -129,7 +130,7 @@ ReleaseHistory 的版本标题由 `scripts/sync-release-history-labels.mjs` 按 
 受保护 workflow 的 package job 才能读取 Apple/Match/Notary/Sparkle 凭据，并且必须：
 
 - 在 mac-release Environment 内使用只读 Match、隔离临时 Keychain 和最小权限；
-- 按 `config/release-dependencies.json` checkout 并验证全部发布所需私有 Package；缺少权限、版本标签、路径或组件时立即失败，不得降级为公开兼容层发布；私有二进制来源二选一并显式记录（现场构建，或经发布方摘要校验的该 Tag 已发布附件）；
+- 按 `config/release-dependencies.json` 读取固定 Tag 的持久二进制附件并验证来源与摘要，缺少权限、Tag、附件或组件即停止。
 - 独立构建 Apple Silicon/macOS 14 与 Intel Ventura/macOS 13 两条 lane；
 - 对 App、Framework、XPC、Helper、Installer、PKG 和 ZIP 完成 Developer ID 签名、Apple 公证、staple、Gatekeeper 和权限/符号链接校验；DMG 可以作为内部构建中间产物，但不进入公开下载资产。
 - 使用独立 SwiftPM scratch/output，独立提交可并行的 PKG 公证；
@@ -164,8 +165,7 @@ ReleaseHistory 的版本标题由 `scripts/sync-release-history-labels.mjs` 按 
 
 test-macos-release-flow.sh 默认运行原 flow、元数据和 CI 证明 fixture。生成 UI 证明和 publication 中的独立验证仍在不同阶段执行；Apple 凭据入口与无凭据上传边界保持不变。
 
-macOS CI 和发布证明共用 verify-release-control-plane-diff.sh 的分类。产品 PR 共 7 个验证 Job：Ubuntu 分类兼私有权限探测、1 个公开 Mac Job、免费/付费各 1 个私有 Mac Job、2 个保留原名的 required summary 和独立 Repository governance。原架构矩阵的 native tests 都运行在同一 ARM runner；现在每配置以 macOS 13 最低部署目标运行完整 native tests 一次，然后分别以原配置构建 Apple Silicon/macOS 14 与 Intel/macOS 13 Release，配置之间仍使用隔离 scratch 路径。发布证明兼容历史双 lane，但新 Job 必须逐项证明两个架构构建成功；私有配置可用时，两种配置的测试及双架构构建也必须完成，summary 不能替代产品步骤。
-
+macOS CI 和发布证明共用 verify-release-control-plane-diff.sh 的分类。公开 CI 包含 Ubuntu 分类、公开 Mac 测试及双架构构建、两个架构 summary，Repository governance 独立执行。公开 Job 清空私有路径并使用公开模式。私有集成测试在私有仓库中保留免费与付费两种配置，每种配置以 macOS 13 最低部署目标运行完整 native tests，再构建 Apple Silicon/macOS 14 与 Intel/macOS 13 Release。发布证明仍要求实际产品步骤通过，summary 只汇总适用结果。
 BuildSigningTests 按相关源码、资源、构建、安装、依赖或 workflow 变更执行，不在私有配置重复运行。产品变更时，公开 Job 用 --skip-build 复用已编译测试产物；纯发布控制面变更时由同一公开 Job 在 Mac 编译并验证，不再创建独立 Release script checks。summary 门禁要求所有适用检查成功。未知路径以及 mac-ci.yml、产品构建/签名/安装脚本变更仍走完整产品验证，不能因扩展名为 .sh 豁免。减少 Job 和重复 native tests 不保证单次墙钟耗时，仍须用实际 CI 记录比较排队与执行时间。
 
 仅修改开发启动入口 script/build_and_run.sh 时，不触发产品构建或发布检查；该入口不在 CI 中执行，其改动不能冒充新的产品验证证明。发布只允许继承经核对无产品变化的既有双架构证明。
