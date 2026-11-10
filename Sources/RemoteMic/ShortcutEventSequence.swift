@@ -7,6 +7,19 @@ import Foundation
 final class ShortcutHardwareModifierState {
     private let lock = NSLock()
     private var functionKeyPressed: Bool?
+    private var functionKeyDownAt: TimeInterval?
+    private var functionKeyUpAt: TimeInterval?
+    private let uptime: () -> TimeInterval
+
+    init(uptime: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }) {
+        self.uptime = uptime
+    }
+
+    var functionObservationForDiagnostics: (down: TimeInterval?, up: TimeInterval?) {
+        lock.lock()
+        defer { lock.unlock() }
+        return (functionKeyDownAt, functionKeyUpAt)
+    }
 
     func observe(type: CGEventType, event: CGEvent) {
         guard type == .flagsChanged,
@@ -15,12 +28,20 @@ final class ShortcutHardwareModifierState {
         else { return }
         lock.lock()
         functionKeyPressed = event.flags.contains(.maskSecondaryFn)
+        if functionKeyPressed == true {
+            functionKeyDownAt = uptime()
+            functionKeyUpAt = nil
+        } else {
+            functionKeyUpAt = uptime()
+        }
         lock.unlock()
     }
 
     func reset() {
         lock.lock()
         functionKeyPressed = nil
+        functionKeyDownAt = nil
+        functionKeyUpAt = nil
         lock.unlock()
     }
 

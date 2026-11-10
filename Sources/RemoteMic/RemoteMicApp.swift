@@ -284,6 +284,10 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     private let macMicrophoneItem = NSMenuItem()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        AppLogger.shared.write(
+            "APP BUILD diagnostic_schema=3 phase=completed result=metadata_observed " +
+                FirstUseDiagnosticSnapshot.buildIdentityFields(Bundle.main.infoDictionary ?? [:])
+        )
         if let environmentEvent = AppEnvironmentSnapshot.current(
             settings: model.settings
         ).publicEvent {

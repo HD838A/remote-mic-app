@@ -1124,6 +1124,17 @@ final class HIDRemoteMonitor {
                     "released=\(Self.buttonList(for: released))" + timing
             )
         }
+        // Only classify the two documented remote voice usages. General key
+        // contents and report bytes never enter this diagnostic.
+        for (usage, kind) in [(UInt16(0x3E), "f5"), (UInt16(0x0C), "letter_i")] {
+            if pressed.contains(usage) || released.contains(usage) {
+                diagnosticLogger(
+                    "HID VOICE_USAGE source_kind=\(kind) " +
+                        "edge=\(pressed.contains(usage) ? "down" : "up") " +
+                        "phase=observed correlation=timing_only system_fn_delivery=unknown"
+                )
+            }
+        }
         activeUsages = usages
         onActiveButtons?(profileID, RemoteButton.buttons(for: usages))
 

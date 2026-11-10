@@ -124,6 +124,9 @@ final class RemoteVoiceFunctionMapper {
     }
 
     private let serviceProvider: ServiceProvider
+    private let diagnosticLogger: (String) -> Void
+    private(set) var mappingOperationID: UInt64 = 0
+    private(set) var voiceMappingReadbackMatched: Bool?
     private var preservesPowerKeyMapping = false
     private var originalMappings: [UInt64: OriginalMappings] = [:]
     private(set) var isApplied = false
@@ -138,6 +141,12 @@ final class RemoteVoiceFunctionMapper {
 
     init(serviceProvider: @escaping ServiceProvider = RemoteVoiceFunctionMapper.systemServices) {
         self.serviceProvider = serviceProvider
+        diagnosticLogger = AppLogger.shared.write
+    }
+
+    init(diagnosticLogger: @escaping (String) -> Void, serviceProvider: @escaping ServiceProvider) {
+        self.diagnosticLogger = diagnosticLogger
+        self.serviceProvider = serviceProvider
     }
 
     @discardableResult
@@ -146,20 +155,25 @@ final class RemoteVoiceFunctionMapper {
         neutralizeVoiceKey: Bool = false,
         preservePowerKeyMapping: Bool = false
     ) -> Bool {
+        mappingOperationID &+= 1
+        voiceMappingReadbackMatched = nil
         preservesPowerKeyMapping = preservePowerKeyMapping
         let services = serviceProvider()
         let matchedCount = services.count
         matchedServiceCount = matchedCount
         guard matchedCount > 0 else {
             resetAppliedState()
-            AppLogger.shared.write(
-                "VOICE FN MAPPING applied=false neutralized=false power_suppressed=false matched=0"
+            diagnosticLogger(
+                "VOICE FN MAPPING applied=false neutralized=false power_suppressed=false matched=0 " +
+                    "operation_id=\(mappingOperationID) phase=completed result=no_service " +
+                    "voice_readback=unknown native_delivery=unknown"
             )
             return false
         }
 
         var snapshots: [Int: [HIDUsageMapping]] = [:]
         var appliedIndices: [Int] = []
+        var verifiedVoiceServiceCount = 0
         var newlyStoredRegistryIDs = Set<UInt64>()
         let matchedCountsByLocation = services.reduce(into: [UInt32: Int]()) { counts, service in
             guard let locationID = service.locationID else { return }
@@ -221,6 +235,13 @@ final class RemoteVoiceFunctionMapper {
                 continue
             }
             appliedIndices.append(index)
+            // Readback is diagnostic only. It does not prove native Fn delivery
+            // and must not change the established mapping success/fallback policy.
+            let source = RemoteVoiceFunctionMappingPolicy.remoteVoiceKey.source
+            if service.readMappings().filter({ $0.source == source }) ==
+                desired.filter({ $0.source == source }) {
+                verifiedVoiceServiceCount += 1
+            }
             if let locationID = service.locationID {
                 appliedCountsByLocation[locationID, default: 0] += 1
             }
@@ -228,6 +249,7 @@ final class RemoteVoiceFunctionMapper {
 
         let appliedCount = appliedIndices.count
         let allTargetsApplied = appliedCount == matchedCount
+        voiceMappingReadbackMatched = allTargetsApplied && verifiedVoiceServiceCount == matchedCount
         let fullySuppressedLocations = Set(matchedCountsByLocation.compactMap { locationID, count in
             appliedCountsByLocation[locationID] == count ? locationID : nil
         })
@@ -243,10 +265,14 @@ final class RemoteVoiceFunctionMapper {
         let suppressionScope = isPowerKeySuppressed
             ? "locations=\(powerSuppressedLocationIDs?.count ?? 0)"
             : "none"
-        AppLogger.shared.write(
+        diagnosticLogger(
             "VOICE FN MAPPING applied=\(isApplied) neutralized=\(isVoiceKeyNeutralized) " +
                 "power_suppressed=\(isPowerKeySuppressed) suppression_scope=\(suppressionScope) " +
-                "matched=\(matchedCount) applied=\(appliedCount)"
+                "matched=\(matchedCount) applied=\(appliedCount) operation_id=\(mappingOperationID) " +
+                "voice_readback=\(voiceMappingReadbackMatched == true ? "matched" : "mismatched") " +
+                "voice_readback_verified_services=\(verifiedVoiceServiceCount) " +
+                "voice_readback_source=f5 native_delivery=unknown phase=completed " +
+                "result=\(appliedCount > 0 ? "write_observed" : "write_failed")"
         )
         return isApplied
     }
@@ -276,7 +302,10 @@ final class RemoteVoiceFunctionMapper {
 
         originalMappings.removeAll()
         resetAppliedState()
-        AppLogger.shared.write("VOICE FN MAPPING restored=\(restoredCount)")
+        diagnosticLogger(
+            "VOICE FN MAPPING restored=\(restoredCount) operation_id=\(mappingOperationID) " +
+                "phase=completed result=restore_writes_observed native_delivery=unknown"
+        )
     }
 
     private func rollback(
@@ -300,13 +329,15 @@ final class RemoteVoiceFunctionMapper {
             .subtracting(registryIDsNeedingRestore)
             .forEach { originalMappings.removeValue(forKey: $0) }
         resetAppliedState()
-        AppLogger.shared.write(
+        diagnosticLogger(
             "VOICE FN MAPPING rollback matched=\(matchedCount) applied=\(appliedIndices.count) " +
-                "restored=\(rollbackCount)"
+                "restored=\(rollbackCount) operation_id=\(mappingOperationID) " +
+                "phase=completed result=rollback_writes_observed voice_readback=unknown native_delivery=unknown"
         )
     }
 
     private func resetAppliedState() {
+        voiceMappingReadbackMatched = nil
         isApplied = false
         isPowerKeySuppressed = false
         powerSuppressedLocationIDs = nil
