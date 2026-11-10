@@ -28,3 +28,5 @@
 撤回 #909 后的集成版本在公开模式下执行 `swift test --disable-keychain`，1296 项 / 90 套件通过，含签名构建 fixture。治理、仓库边界、本地化、文档链接和 diff 检查通过。GitHub CI 与 Intel 实机验收分别记录。
 
 验收入口为 `Testing/RuntimeLogging.md` 的语音键诊断用例。工作站验证只承担编译、模拟事件和脱敏断言。Intel 真实 Fn、首尾字、连续会话和第三方文字上屏需现场记录。此次只补诊断，未将回归标记为修复。
+
+独立构建入口验证补充：首轮 PR CI 的 Swift 测试通过，但 `scripts/test.sh` 的独立源码清单未包含 `AppEnvironmentSnapshot`，因此复制诊断引用该类型时编译失败。构建来源格式化逻辑移入该入口已有的 `FirstUseDiagnostics.swift`，启动头与复制诊断复用同一实现。修正后 `SKIP_SWIFT_PACKAGE_BUILD=1 ./scripts/test.sh` 的 48 项全部通过，完整 Swift 测试重新执行 1296 项 / 90 套件通过。

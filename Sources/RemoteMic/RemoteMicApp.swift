@@ -286,7 +286,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppLogger.shared.write(
             "APP BUILD diagnostic_schema=3 phase=completed result=metadata_observed " +
-                AppEnvironmentSnapshot.buildIdentityFields(Bundle.main.infoDictionary ?? [:])
+                FirstUseDiagnosticSnapshot.buildIdentityFields(Bundle.main.infoDictionary ?? [:])
         )
         if let environmentEvent = AppEnvironmentSnapshot.current(
             settings: model.settings

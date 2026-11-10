@@ -42,7 +42,7 @@ struct VoiceKeyDiagnosticTests {
 
     @Test func buildIdentityUsesOnlyValidatedPackagedMetadata() {
         let revision = String(repeating: "a", count: 40)
-        let fields = AppEnvironmentSnapshot.buildIdentityFields([
+        let fields = FirstUseDiagnosticSnapshot.buildIdentityFields([
             "SayAllSourceCommit": revision,
             "SayAllBuildChannel": "release",
             "SayAllPrivatePlatformVersion": "2.8.1",
@@ -57,8 +57,8 @@ struct VoiceKeyDiagnosticTests {
     @Test func missingOrMalformedBuildIdentityRemainsUnknown() {
         let expected = "source_revision=unknown build_channel=unknown " +
             "source_dirty=unknown private_platform_version=unknown"
-        #expect(AppEnvironmentSnapshot.buildIdentityFields([:]) == expected)
-        #expect(AppEnvironmentSnapshot.buildIdentityFields([
+        #expect(FirstUseDiagnosticSnapshot.buildIdentityFields([:]) == expected)
+        #expect(FirstUseDiagnosticSnapshot.buildIdentityFields([
             "SayAllSourceCommit": String(repeating: "a", count: 40) + "\n",
             "SayAllBuildChannel": "release\nprivate-value",
             "SayAllPrivatePlatformVersion": "2.8.1\nprivate-value",
