@@ -1,5 +1,9 @@
 # Bug 记录
 
+- [build 320 语音键回归：责任边界与 #909 排除分析](./2026-11-10-build320-voice-key-regression-analysis.md)
+
+- [Build 320 语音键在 Fn（按住说话）配置下完全无反应](./2026-11-10-build320-voice-key-no-fn-delivery.md)
+
 - [Intel 上方向键一次按下移动两格](./2026-11-07-intel-directional-double-step.md)
 
 - [只有一只 Siri Remote 时 Onboarding 永久卡在音频页](./2026-11-07-siri-remote-onboarding-audio-gate.md)
