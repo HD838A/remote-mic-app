@@ -209,25 +209,7 @@ struct OnboardingView: View {
     }
 
     private var onboardingBody: some View {
-        onboardingLayout
-        .onAppear {
-            settings.beginOnboardingSiriRemoteTrial()
-            AppLogger.shared.write(
-                "ONBOARDING SIRI_REMOTE phase=availability installed=\(siriRemotePackageInstalled) " +
-                    "available=\(availableControlSources.contains(.siriRemote))"
-            )
-            refreshPermissionStates()
-            refreshVoiceToolAvailability()
-            prepareForStep(settings.onboardingStep)
-            refreshSecureInputState()
-        }
-        .onReceive(permissionRefreshTimer) { _ in
-            // 权限查询要同步访问 tccd；App 在后台时没有任何用户可见收益，
-            // 用户从系统设置改完权限回到前台时 didBecomeActive 会立即刷新一次。
-            if shouldRefreshPermissionStates {
-                refreshPermissionStates()
-            }
-        }
+        onboardingModelEvents
     }
 
     private var onboardingFrame: some View {
@@ -248,6 +230,8 @@ struct OnboardingView: View {
             .background(Color(nsColor: .windowBackgroundColor).ignoresSafeArea())
             .environment(\.locale, localization.locale)
             .frame(minWidth: 980, minHeight: 732)
+            // 引导图缩略图固定 220pt 高，竖版截图（如微信输入法菜单）只剩几十 pt 宽。
+            // 放大层盖住整窗，点击遮罩或右上角关闭按钮退出。
             .overlay {
                 if let zoomedGuideImageResourceName {
                     onboardingGuideImageZoomOverlay(resourceName: zoomedGuideImageResourceName)
@@ -270,12 +254,39 @@ struct OnboardingView: View {
             }
     }
 
-    private var onboardingLayout: some View {
-        onboardingRuntimeEvents
+    private var onboardingLifecycleEvents: some View {
+        onboardingStyledLayout
+            .onAppear {
+                settings.beginOnboardingSiriRemoteTrial()
+                AppLogger.shared.write(
+                    "ONBOARDING SIRI_REMOTE phase=availability installed=\(siriRemotePackageInstalled) " +
+                        "available=\(availableControlSources.contains(.siriRemote))"
+                )
+                refreshPermissionStates()
+                refreshVoiceToolAvailability()
+                prepareForStep(settings.onboardingStep)
+                refreshSecureInputState()
+            }
+            .onReceive(permissionRefreshTimer) { _ in
+                // 权限查询要同步访问 tccd；App 在后台时没有任何用户可见收益，
+                // 用户从系统设置改完权限回到前台时 didBecomeActive 会立即刷新一次。
+                if shouldRefreshPermissionStates {
+                    refreshPermissionStates()
+                }
+            }
+            .onReceive(runtimeRefreshTimer) { _ in
+                refreshSecureInputState()
+                if settings.onboardingStep == .voiceTool {
+                    refreshSystemFunctionKeyUsage()
+                }
+                if settings.onboardingStep == .voiceTest {
+                    refreshSelectedVoiceToolRuntimeState()
+                }
+            }
     }
 
-    private var onboardingRuntimeEvents: some View {
-        onboardingRuntimeRefresh
+    private var onboardingNotificationEvents: some View {
+        onboardingLifecycleEvents
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             refreshPermissionStates()
             switch settings.onboardingStep {
@@ -305,18 +316,8 @@ struct OnboardingView: View {
         }
     }
 
-    private var onboardingRuntimeRefresh: some View {
-        onboardingStyledLayout
-        .onReceive(runtimeRefreshTimer) { _ in
-            refreshSecureInputState()
-            if settings.onboardingStep == .voiceTool {
-                refreshSystemFunctionKeyUsage()
-            }
-            if settings.onboardingStep == .voiceTest {
-                refreshSelectedVoiceToolRuntimeState()
-            }
-        }
-
+    private var onboardingModelEvents: some View {
+        onboardingNotificationEvents
         .onReceive(model.$isConnected.removeDuplicates()) { isConnected in
             guard isConnected else { return }
             routeConnectedPhysicalRemoteIfNeeded()
