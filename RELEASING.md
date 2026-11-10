@@ -186,12 +186,14 @@ BuildSigningTests 按相关源码、资源、构建、安装、依赖或 workflo
 - 目标仓库固定为 `HD838A/remote-mic-app`，并验证触发事件的 `github.sha` 仍是精确 `origin/main`；
 - 按 Run/attempt/artifact ID 下载并验证同一 staged payload；
 - 创建或复用与 source SHA 完全一致的轻量 Tag；
-- 创建或恢复公开 Pre-release，上传 manifest 中的完整 10 项 payload 加 candidate-provenance.json；
-- 对已有资产做大小和 GitHub digest 比较，只补缺失项，发现字节不同即 fail closed；
+- 创建或恢复同一 Draft，上传 manifest 中的完整 payload 加 candidate-provenance.json；
+- 对已有资产做大小和 GitHub digest 比较，只补缺失项；完整集合通过后，通过认证 asset API 下载每项并与 staged 原件逐字节比较，全部通过才将同一 Release 公开为 Pre-release；
 - 若远端 Tag 尚不存在，创建 Tag 前最后一次确认该版本的 10 个 CDN 固定路径全部返回 HTTP 404；任一已占用或未知响应都不创建 Tag。已有 Tag 的幂等恢复跳过占用检查，继续执行固定 Tag/CDN 字节复验；
 - candidate-provenance.json 的 `stagedAt`/`publishedAt` 固定取受保护 staging 的时间戳；重试同一 staging 身份不会因当前时间变化而生成不同字节；
 - 从 GitHub 固定 Tag URL 和 download.sayall.app 固定 Tag URL 下载每项公开资产并逐字节比较；
 - 确认 releases/latest 仍为发布前记录的正式稳定版，且 Release 为非 Draft、Pre-release。
+
+上传、集合、摘要或认证下载失败时保留 Draft。重试公开候选时先收回同一 Release 为 Draft，保留 ID、已有资产和版本说明。公开后的 GitHub、CDN、通道或 stable latest 验证失败，或脚本收到 INT/TERM 时，退出处理器将同一 Release 收回 Draft 并通过 API 回读确认。回收 API 失败时输出固定告警与 Release ID，必须立即人工处理；断电、强制杀进程或远端 API 不可用无法由 Shell 保证回收。已经下载或缓存的公开字节无法撤销。
 
 publication 失败时先查询远端状态。若 Tag、Release、资产和摘要已经正确，只重做缺失的公开验证；不要删除 Release、移动 Tag、重签名或重复上传不同字节。公开 Pre-release 的标题和正文与本次候选不一致时也必须 fail closed，不能在重试中覆盖 Release Notes。任何 Tag/Release 查询的认证、网络或非 404 错误都必须 fail closed，不能被当作“版本可用”。
 

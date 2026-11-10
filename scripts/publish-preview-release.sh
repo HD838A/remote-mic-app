@@ -5,6 +5,7 @@ umask 077
 ROOT="${REPOSITORY_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
 REPOSITORY="${GITHUB_REPOSITORY:-HD838A/remote-mic-app}"
 GH_BIN="${GH_BIN:-gh}"
+CURL_BIN="${CURL_BIN:-curl}"
 ATTESTATION="${1:-}"
 
 [[ "$REPOSITORY" == "HD838A/remote-mic-app" ]] || {
@@ -21,7 +22,7 @@ if [[ "$#" -ne 1 || ! -r "$ATTESTATION" ]]; then
   echo "usage: $0 <preview-ui-attestation.json>" >&2
   exit 2
 fi
-for command_name in git jq shasum curl "$GH_BIN"; do
+for command_name in git jq shasum "$CURL_BIN" "$GH_BIN"; do
   command -v "$command_name" >/dev/null 2>&1 || {
     echo "Missing required command: $command_name" >&2
     exit 1
@@ -93,6 +94,8 @@ artifact_digest="$(jq -r '.signedArtifactDigest' "$ATTESTATION")"
 expected_manifest_sha="$(jq -r '.assetManifestSHA256' "$ATTESTATION")"
 staged_at="$(jq -r '.stagedAt' "$ATTESTATION")"
 version="${tag#v}"
+
+"$CDN_PROBE_BIN" "$tag" "$(jq -r '.target.build' "$ATTESTATION")" --contract-only >/dev/null
 
 stable_release_before="$($GH_BIN api "repos/$REPOSITORY/releases/latest")" || {
   echo "unable to resolve the current stable latest Release" >&2
@@ -246,10 +249,8 @@ fi
   exit 1
 }
 
-release_exists=0
 release_json=""
 if release_json="$($GH_BIN release view "$tag" --repo "$REPOSITORY" --json databaseId,isDraft,isPrerelease,tagName,name,body,assets 2>/dev/null)"; then
-  release_exists=1
   printf '%s\n' "$release_json" | jq -e \
     --arg tag "$tag" '.tagName == $tag and (.isDraft == true or .isPrerelease == true)' >/dev/null || {
     echo "Existing Release is neither a resumable Draft nor a Pre-release" >&2
@@ -278,10 +279,9 @@ else
     exit 1
   fi
   $GH_BIN release create "$tag" --repo "$REPOSITORY" --verify-tag \
-    --prerelease --latest=false \
+    --draft --prerelease --latest=false \
     --title "无线麦SayAll.app $version" \
     --notes-file "$recovered/bundle/release-notes.md"
-  release_exists=1
 fi
 
 expected_assets="$work_dir/expected-assets.tsv"
@@ -291,6 +291,39 @@ provenance_sha="$(/usr/bin/shasum -a 256 "$provenance" | /usr/bin/awk '{print $1
 printf 'candidate-provenance.json\t%s\t%s\n' "$provenance_size" "$provenance_sha" >> "$expected_assets"
 
 release_json="$($GH_BIN release view "$tag" --repo "$REPOSITORY" --json databaseId,isDraft,isPrerelease,tagName,name,body,assets)"
+release_id="$(printf '%s\n' "$release_json" | jq -er '.databaseId | select(type == "number" and . > 0)')"
+retraction_required=1
+retract_failed_publication() {
+  local exit_status=$?
+  trap - EXIT
+  if (( exit_status != 0 && retraction_required == 1 )); then
+    echo "Preview verification failed; retaining the candidate as Draft" >&2
+    if ! "$GH_BIN" api --method PATCH "repos/$REPOSITORY/releases/$release_id" \
+        -F draft=true -f make_latest=false >/dev/null || \
+       ! "$GH_BIN" api "repos/$REPOSITORY/releases/$release_id" | \
+        jq -e --argjson id "$release_id" '.id == $id and .draft == true' >/dev/null; then
+      echo "DRAFT RETRACTION FAILED; check this Release immediately: $release_id" >&2
+    fi
+  fi
+  exit "$exit_status"
+}
+trap retract_failed_publication EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+# Resume public candidates under Draft protection too. Keep their metadata and
+# immutable asset IDs intact while the complete authenticated readback runs.
+if [[ "$(printf '%s\n' "$release_json" | jq -r '.isDraft')" == false ]]; then
+  "$GH_BIN" api --method PATCH "repos/$REPOSITORY/releases/$release_id" \
+    -F draft=true -f make_latest=false >/dev/null
+fi
+release_name="$(printf '%s\n' "$release_json" | jq -r '.name // ""')"
+expected_release_body="$(<"$recovered/bundle/release-notes.md")"
+actual_release_body="$(printf '%s\n' "$release_json" | jq -r '.body // ""')"
+[[ "$release_name" == "无线麦SayAll.app $version" && "$actual_release_body" == "$expected_release_body" ]] || {
+  echo "Existing candidate metadata differs; refusing to overwrite Release Notes" >&2
+  exit 1
+}
+
 remote_assets="$(printf '%s\n' "$release_json" | jq -r '.assets[] | [.name, (.size | tostring), (.digest // "")] | @tsv')"
 while IFS=$'\t' read -r remote_name _ _; do
   [[ -n "$remote_name" ]] || continue
@@ -316,39 +349,49 @@ while IFS=$'\t' read -r name expected_size expected_sha; do
   $GH_BIN release upload "$tag" "$source_file" --repo "$REPOSITORY"
 done < "$expected_assets"
 
-release_name="$(printf '%s\n' "$release_json" | jq -r '.name // ""')"
-release_is_draft="$(printf '%s\n' "$release_json" | jq -r '.isDraft')"
-release_is_prerelease="$(printf '%s\n' "$release_json" | jq -r '.isPrerelease')"
-expected_release_body="$(<"$recovered/bundle/release-notes.md")"
-actual_release_body="$(printf '%s\n' "$release_json" | jq -r '.body // ""')"
-if [[ "$release_is_draft" == false || "$release_is_draft" == "false" ]] &&
-   [[ "$release_is_prerelease" == true || "$release_is_prerelease" == "true" ]]; then
-  [[ "$release_name" == "无线麦SayAll.app $version" && "$actual_release_body" == "$expected_release_body" ]] || {
-    echo "Existing public Pre-release metadata differs; refusing to overwrite Release Notes" >&2
-    exit 1
-  }
-else
-  $GH_BIN release edit "$tag" --repo "$REPOSITORY" \
-    --draft=false --prerelease=true --latest=false \
-    --title "无线麦SayAll.app $version" \
-    --notes-file "$recovered/bundle/release-notes.md"
-fi
-
-release_json="$($GH_BIN release view "$tag" --repo "$REPOSITORY" --json isDraft,isPrerelease,assets)"
-printf '%s\n' "$release_json" | jq -e '.isDraft == false and .isPrerelease == true' >/dev/null
+release_json="$($GH_BIN release view "$tag" --repo "$REPOSITORY" --json databaseId,isDraft,isPrerelease,assets)"
+printf '%s\n' "$release_json" | jq -e --argjson id "$release_id" \
+  '.databaseId == $id and .isDraft == true' >/dev/null
 remote_assets="$(printf '%s\n' "$release_json" | jq -r '.assets[] | [.name, (.size | tostring), (.digest // "")] | @tsv')"
 [[ "$(printf '%s\n' "$remote_assets" | /usr/bin/awk 'NF {count++} END {print count+0}')" -eq \
    "$(/usr/bin/awk 'NF {count++} END {print count+0}' "$expected_assets")" ]] || {
-  echo "Published Pre-release does not contain the exact staged asset count" >&2
+  echo "Draft does not contain the exact staged asset count" >&2
   exit 1
 }
+
+authenticated_dir="$work_dir/authenticated"
+/bin/mkdir -p "$authenticated_dir"
+while IFS=$'\t' read -r name expected_size expected_sha; do
+  asset_endpoint="$(printf '%s\n' "$release_json" | jq -er --arg name "$name" \
+    '[.assets[] | select(.name == $name)] | select(length == 1) | .[0].apiUrl | ltrimstr("https://api.github.com/")')"
+  [[ "$asset_endpoint" =~ ^repos/HD838A/remote-mic-app/releases/assets/[1-9][0-9]*$ ]] || {
+    echo "Draft asset API identity is invalid: $name" >&2
+    exit 1
+  }
+  printf '%s\n' "$release_json" | jq -e --arg name "$name" \
+    --argjson size "$expected_size" --arg digest "sha256:$expected_sha" \
+    '.assets[] | select(.name == $name) | .size == $size and .digest == $digest' >/dev/null
+  "$GH_BIN" api "$asset_endpoint" \
+    -H 'Accept: application/octet-stream' > "$authenticated_dir/$name"
+  source_file="$public_dir/$name"
+  [[ "$name" == candidate-provenance.json ]] && source_file="$provenance"
+  /usr/bin/cmp -s "$source_file" "$authenticated_dir/$name" || {
+    echo "Authenticated Draft download differs from staged bytes: $name" >&2
+    exit 1
+  }
+done < "$expected_assets"
+echo "DRAFT ASSETS VERIFIED BEFORE PUBLICATION"
+"$GH_BIN" api --method PATCH "repos/$REPOSITORY/releases/$release_id" \
+  -F draft=false -F prerelease=true -f make_latest=false >/dev/null
+"$GH_BIN" api "repos/$REPOSITORY/releases/$release_id" | jq -e --argjson id "$release_id" \
+  '.id == $id and .draft == false and .prerelease == true' >/dev/null
 
 github_dir="$work_dir/github"
 cdn_dir="$work_dir/cdn"
 /bin/mkdir -p "$github_dir" "$cdn_dir"
 while IFS=$'\t' read -r name _ expected_sha; do
   [[ -n "$name" ]] || continue
-  /usr/bin/curl --fail --silent --show-error --location --retry 3 --retry-delay 2 \
+  "$CURL_BIN" --fail --silent --show-error --location --connect-timeout 10 --max-time 120 --retry 3 --retry-delay 2 \
     "https://github.com/$REPOSITORY/releases/download/$tag/$name" \
     --output "$github_dir/$name"
   [[ "$(/usr/bin/shasum -a 256 "$github_dir/$name" | /usr/bin/awk '{print $1}')" == "$expected_sha" ]] || {
@@ -356,7 +399,7 @@ while IFS=$'\t' read -r name _ expected_sha; do
     exit 1
   }
   if [[ "$name" != candidate-provenance.json ]]; then
-    /usr/bin/curl --fail --silent --show-error --location --retry 6 --retry-all-errors --retry-delay 3 \
+    "$CURL_BIN" --fail --silent --show-error --location --connect-timeout 10 --max-time 120 --retry 6 --retry-all-errors --retry-delay 3 \
       "https://download.sayall.app/mac/releases/$tag/$name" \
       --output "$cdn_dir/$name"
     /usr/bin/cmp -s "$github_dir/$name" "$cdn_dir/$name" || {
@@ -373,7 +416,7 @@ verify_channel_appcast() {
   local downloaded_file="$4"
   local attempt
   for attempt in {1..20}; do
-    if /usr/bin/curl --fail --silent --show-error --location \
+    if "$CURL_BIN" --fail --silent --show-error --location --connect-timeout 10 --max-time 120 \
         "https://download.sayall.app/mac/channels/$channel/$appcast" \
         --output "$downloaded_file" && \
        /usr/bin/cmp -s "$expected_file" "$downloaded_file"; then
@@ -404,13 +447,14 @@ printf '%s\n' "$stable_release_after" | jq -e \
 for appcast in appcast.xml appcast-intel.xml; do
   verify_channel_appcast \
     preview "$appcast" "$github_dir/$appcast" "$work_dir/preview-channel-$appcast"
-  /usr/bin/curl --fail --silent --show-error --location --retry 3 --retry-delay 2 \
+  "$CURL_BIN" --fail --silent --show-error --location --connect-timeout 10 --max-time 120 --retry 3 --retry-delay 2 \
     "https://github.com/$REPOSITORY/releases/download/$stable_latest_after/$appcast" \
     --output "$work_dir/stable-fixed-$appcast"
   verify_channel_appcast \
     stable "$appcast" "$work_dir/stable-fixed-$appcast" "$work_dir/stable-channel-$appcast"
 done
 
+retraction_required=0
 echo "PREVIEW RELEASE PUBLISHED AND VERIFIED"
 echo "TAG: $tag"
 echo "SOURCE_COMMIT: $source_commit"
