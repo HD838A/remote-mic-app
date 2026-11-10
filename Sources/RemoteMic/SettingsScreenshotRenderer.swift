@@ -69,6 +69,9 @@ enum SettingsScreenshotRenderer {
         let opensHoldEditor = ProcessInfo.processInfo.environment[
             "REMOTE_MIC_SETTINGS_SCREENSHOT_OPEN_HOLD_EDITOR"
         ] == "1"
+        let initialActionFilter = ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_SETTINGS_SCREENSHOT_ACTION_FILTER"
+        ]
         let opensMappingEditor = opensShortcutEditor || opensActionEditor
         let showsGestureTiming = ProcessInfo.processInfo.environment[
             "REMOTE_MIC_SETTINGS_SCREENSHOT_GESTURE_TIMING"
@@ -268,6 +271,7 @@ enum SettingsScreenshotRenderer {
                 initialMappingEditingButton: section == .mapping && opensMappingEditor ? .ok : nil,
                 initialMappingHoldEditingButton: section == .mapping && opensHoldEditor ? .ok : nil,
                 initialShortcutPickerShowsKeyboard: showsStandardKeyboard,
+                initialMappingActionFilter: initialActionFilter,
                 initialMappingScrollsToGestureTiming: section == .mapping && showsGestureTiming,
                 initialMappingVoiceSettingsPresented: section == .mapping && opensVoiceSettings,
                 supplementalSettings: supplementalSettings,
@@ -308,6 +312,7 @@ enum SettingsScreenshotRenderer {
                     : nil,
                 initialMappingProfileID: section == .mapping ? seededProfileID : nil,
                 initialShortcutPickerShowsKeyboard: showsStandardKeyboard,
+                initialMappingActionFilter: initialActionFilter,
                 initialMappingScrollsToGestureTiming: section == .mapping && showsGestureTiming,
                 initialMappingVoiceSettingsPresented: section == .mapping && opensVoiceSettings,
                 supplementalSettings: supplementalSettings,

@@ -1,0 +1,112 @@
+{
+  "batch": "custom-shortcut-filter-20261110",
+  "date": "2026-11-10",
+  "purpose": "自定义按键独立筛选与基础按键标题入口",
+  "pr": "https://github.com/HD838A/remote-mic-app/pull/991",
+  "source_commit": "b62a77c9054de8a491b78deee46ff7e6304af73c",
+  "storage": "github-user-attachments-with-external-originals",
+  "renderer": "production SettingsView offscreen entry point",
+  "content_size_pt": [
+    1067,
+    732
+  ],
+  "validation_boundary": "Static production view only; native window input and signed app acceptance pending",
+  "items": [
+    {
+      "file": "current-basic-zh-Hans-light/mapping-1067x732.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1464,
+      "sha256": "8509487952d360b7537811208139254c8cd602c3ca8950b0190549653c626c5b",
+      "bytes": 301592,
+      "language": "zh-Hans",
+      "appearance": "light",
+      "state": "basic",
+      "url": "https://github.com/user-attachments/assets/37f7e16c-19aa-40e5-84a5-4faaf92b83e3"
+    },
+    {
+      "file": "current-custom-zh-Hans-light/mapping-1067x732.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1464,
+      "sha256": "3485f9ed98022213b5313969ba96b5322e62475b2aa1a6612d68ea8012680110",
+      "bytes": 285157,
+      "language": "zh-Hans",
+      "appearance": "light",
+      "state": "custom",
+      "url": "https://github.com/user-attachments/assets/ede65622-3cf9-45a9-8bd8-ddcb8556235d"
+    },
+    {
+      "file": "current-basic-zh-Hans-dark/mapping-1067x732.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1464,
+      "sha256": "2d4ae633e3c485f20009511343875020baa56052718654de1def1a685c104b62",
+      "bytes": 299837,
+      "language": "zh-Hans",
+      "appearance": "dark",
+      "state": "basic",
+      "url": "https://github.com/user-attachments/assets/ad77bcb2-b4ea-4975-ace6-f9a1537aab43"
+    },
+    {
+      "file": "current-custom-zh-Hans-dark/mapping-1067x732.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1464,
+      "sha256": "b83ec552021269d75e3fac79da9b814f60a0eacc45a321ff08824e883fd3aa9c",
+      "bytes": 281993,
+      "language": "zh-Hans",
+      "appearance": "dark",
+      "state": "custom",
+      "url": "https://github.com/user-attachments/assets/439c110b-e6c8-4d40-ad0e-12002f19acc0"
+    },
+    {
+      "file": "current-basic-en-light/mapping-1067x732.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1464,
+      "sha256": "297fc81ab2ac9e60ce102b7d44d6cad74f071933b5d5e0d405050704f993afa1",
+      "bytes": 298401,
+      "language": "en",
+      "appearance": "light",
+      "state": "basic",
+      "url": "https://github.com/user-attachments/assets/e9da5fad-ba41-4c48-84a6-9c908eb00232"
+    },
+    {
+      "file": "current-custom-en-light/mapping-1067x732.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1464,
+      "sha256": "fc433fa1dbbea3045f7695415cc8c54057c82a90fcb4836bf46dc20f441e87b5",
+      "bytes": 275665,
+      "language": "en",
+      "appearance": "light",
+      "state": "custom",
+      "url": "https://github.com/user-attachments/assets/926865df-1e2e-4471-a90f-67ffa15358ff"
+    },
+    {
+      "file": "current-basic-en-dark/mapping-1067x732.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1464,
+      "sha256": "c6df0318995ca4bba962d1fb9ed8f0a577cd67348c984d16174b998354416feb",
+      "bytes": 295024,
+      "language": "en",
+      "appearance": "dark",
+      "state": "basic",
+      "url": "https://github.com/user-attachments/assets/d89e69f9-1442-4821-be6e-635de638412b"
+    },
+    {
+      "file": "current-custom-en-dark/mapping-1067x732.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1464,
+      "sha256": "039299745332af689edf852f5129ce0dbef5957496472ed8f4db54a7a0180d41",
+      "bytes": 270844,
+      "language": "en",
+      "appearance": "dark",
+      "state": "custom",
+      "url": "https://github.com/user-attachments/assets/1ec46c8d-e155-44ef-b1aa-803d9a851308"
+    }
+  ]
+}

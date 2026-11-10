@@ -845,6 +845,7 @@ enum AccessibilityFocusPreset {
 
 enum ButtonActionCategory: String, CaseIterable, Identifiable {
     case basicKeys
+    case customShortcuts
     case systemAndMedia
     case custom
     /// 「组合动作」和「常用语」一样是独立的动作分类：它的候选来自宏库卡片，
@@ -858,6 +859,7 @@ enum ButtonActionCategory: String, CaseIterable, Identifiable {
     var localizationKey: String {
         switch self {
         case .basicKeys: return "button_mapping.action_group.basic_keys"
+        case .customShortcuts: return "action.custom_shortcut"
         case .systemAndMedia: return "button_mapping.action_group.system_and_media"
         case .custom: return "button_mapping.action_group.custom"
         case .combinations: return "action.combination_action"
@@ -1186,8 +1188,7 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
              .playPause, .previousCommandLeft, .nextCommandRight, .toggleLongRecording:
             return .systemAndMedia
         case .customShortcut:
-            // 自定义快捷键本质就是"发一个自己录的按键组合"，和固定快捷键同属基础按键。
-            return .basicKeys
+            return .customShortcuts
         case .focusInput:
             return .custom
         case .combinationAction:
