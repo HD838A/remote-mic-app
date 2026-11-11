@@ -1,5 +1,7 @@
 # Bug 记录
 
+- [语音键与豆包绑定不是同一个键时只有电平、没有文字](./2026-11-11-voice-key-binding-mismatch.md)
+
 - [语音键映射、Fn 观察与构建来源诊断缺口](./2026-11-10-voice-key-diagnostic-gaps.md)
 
 - [Intel 上方向键一次按下移动两格](./2026-11-07-intel-directional-double-step.md)
@@ -180,6 +182,7 @@
 
 | 时间 | Bug | 状态 |
 | --- | --- | --- |
+| 2026-11-11 | [语音键与豆包绑定不是同一个键时只有电平、没有文字](./2026-11-11-voice-key-binding-mismatch.md) | 用户改回标准配法（SayAll 语音触发键 = Fn，豆包长按模式 = fn，免按模式留空）后自述恢复；提示形态已由 PR #1010 改为可执行内联条；未在本机复现，`target_response=unknown`，尚未回收改后日志做前后对照 |
 | 2026-11-07 | [Intel 上方向键一次按下移动两格](./2026-11-07-intel-directional-double-step.md) | 已修复并验收（方向键登记事件级兜底，默认只在 Intel 构建启用；Apple Silicon 保持零差异）；5 项回归随 CI 1227 tests 全绿；Intel build 289 验收通过，Apple Silicon build 290 日志确认零登记、零待匹配窗口 |
 | 2026-11-07 | [只有一只 Siri Remote 时 Onboarding 永久卡在音频页](./2026-11-07-siri-remote-onboarding-audio-gate.md) | 已修复（音频门禁改为按控制来源区分：Siri Remote 的语音音频在按下语音键时才建立，不再要求它提前持续 Ready；小米与 Chromecast 仍要求持续 Ready，设备消失时两种来源都继续阻塞）；新增 2 项回归，反向验证策略与视图接线各自变红后恢复通过；2026-11-08 真机复验通过（只有一只苹果遥控器的机器上重跑向导可走完，音频页显示「语音开始时连接音频」） |
 | 2026-11-07 | [APP 适配的聚焦方式选项空白区域无法点击](./2026-11-07-focus-option-hit-area.md) | 已修复（`SettingsView.applicationFocusOption` 在标签布局后补与背景一致的 `contentShape`）；实际设置窗口文字、图标、左右留白、边框内侧与按钮外部/间隙坐标点击通过，Tab、Shift-Tab、空格与重启保留通过；未覆盖遥控器、第三方 APP 聚焦执行与 VoiceOver |
