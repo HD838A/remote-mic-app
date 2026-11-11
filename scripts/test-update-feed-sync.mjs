@@ -64,3 +64,10 @@ test("both official publication workflows gate mutation on preflight and wait fo
     assert.ok([...source.matchAll(/secrets\.([A-Z0-9_]+)/g)].every(match => match[1] === "SAYALL_FEED_SYNC_TOKEN"));
   }
 });
+
+test("standalone readiness can validate the delegated credential without a new App release", () => {
+  const source = readFileSync(new URL("../.github/workflows/mac-update-feed-preflight.yml", import.meta.url), "utf8");
+  assert.match(source, /github\.ref == 'refs\/heads\/main'/);
+  assert.match(source, /sync-update-feeds\.mjs --preflight/);
+  assert.doesNotMatch(source, /publish-preview-release\.sh|promote-preview-release\.sh|contents: write/);
+});

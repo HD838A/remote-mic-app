@@ -253,3 +253,5 @@ Preview publication 和 Stable promotion 在修改公开 Release 前，必须通
 公开资产或 latest 指针变更后，工作流必须等待频道同步成功，才能报告发布完成。私有同步入口固定为 `main`，同一源码与频道快照先 staging 验收，再 production 验收；旧版 App 的四个固定 feed URL 返回原始公开 XML。Preview 同步不能改变正式版选择或正式版 XML 字节。频道 XML 不使用长期 immutable 缓存，安装包及固定版本资产仍遵守原有不可变约束。
 
 缺少凭据、身份错误或 preflight 失败时，在公开 Release 变更前停止。同步失败或等待超过 12 分钟时，不把公开发布标记为成功；保留既有 Tag 和资产，核对私有同步状态后按同一发布身份恢复，不重新构建或重新签名。禁止将具备全仓权限的个人 OAuth Token 代替最小权限同步凭据。
+
+配置同步凭据后，先从 main 运行 `Mac update feed readiness`，使用现有公开 Tag 验证委托权限。该入口只做 preflight，不创建 Release、不晋升版本、不部署 Worker；验证通过后才启用生产原生静态频道。私有同步使用既有自托管 Runner，不调整 GitHub 付款或支出上限。
