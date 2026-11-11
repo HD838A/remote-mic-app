@@ -59,7 +59,8 @@
 "button_mapping.permission.accessibility_expired" = "辅助功能权限已失效；已释放遥控器";
 "button_mapping.permission.system_expired" = "系统权限已失效；已释放遥控器";
 "common.status.stopped" = "已停止";
-"connection.status.searching" = "正在查找小米遥控器";
+"connection.status.searching" = "正在查找遥控器";
+"connection.status.searching_for_device" = "正在查找%@";
 "connection.status.connecting" = "正在连接遥控器";
 "connection.status.initializing_voice" = "正在初始化语音服务";
 "connection.status.connected_to_device" = "小米遥控器已连接";

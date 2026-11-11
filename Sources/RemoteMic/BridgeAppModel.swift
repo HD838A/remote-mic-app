@@ -4340,6 +4340,17 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         refreshBluetoothPresentation()
     }
 
+    func connectionStatusText(using localization: LocalizationStore) -> String {
+        guard connectionStatus.key == "connection.status.searching",
+              let remoteModel = settings.selectedRemoteProfile?.model,
+              remoteModel.localizationKey != "remote.device.model.unknown"
+        else { return connectionStatus.text(using: localization) }
+        return LocalizedMessage(
+            "connection.status.searching_for_device",
+            arguments: [localization.text(remoteModel.localizationKey)]
+        ).text(using: localization)
+    }
+
     @discardableResult
     func startButtonGestureLearning() -> Bool {
         let operationID = UUID().uuidString
@@ -4767,7 +4778,11 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         isConnected = bluetoothIsReady
             || !connectedAppleRemoteProfileIDs.isEmpty
             || !connectedChromecastProfileIDs.isEmpty
-        if let selectedRemoteProfileID = settings.selectedRemoteProfileID,
+        if let selected = settings.selectedRemoteProfile,
+           selected.model.usesPrivateAdapter,
+           !connectedRemoteProfileIDs.contains(selected.id) {
+            connectionStatus = LocalizedMessage("connection.status.searching")
+        } else if let selectedRemoteProfileID = settings.selectedRemoteProfileID,
            connectedAppleRemoteProfileIDs.contains(selectedRemoteProfileID) {
             connectionStatus = LocalizedMessage("connection.status.apple_remote_connected")
         } else if let selectedRemoteProfileID = settings.selectedRemoteProfileID,
