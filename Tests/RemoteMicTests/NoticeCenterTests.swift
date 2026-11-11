@@ -185,3 +185,17 @@ struct NoticeActionTests {
         #expect(Notice.defaultDismissal(for: .error) == .automatic(6.0))
     }
 }
+
+#if canImport(SayAllHostBridge)
+import SayAllHostBridge
+
+/// 私有桥到公开组件的映射：只在私有依赖存在时编译。
+@Suite("Notice host bridge mapping")
+struct NoticeHostBridgeMappingTests {
+    @Test func everyToneMapsToTheSameTier() {
+        #expect(HostNoticeRequest.Tone.tip.noticeTier == .tip)
+        #expect(HostNoticeRequest.Tone.warning.noticeTier == .warning)
+        #expect(HostNoticeRequest.Tone.error.noticeTier == .error)
+    }
+}
+#endif

@@ -5,6 +5,9 @@ import SwiftUI
 #if SAYALL_MEMBERSHIP_ENABLED && canImport(SayAllMembershipHostAdapter)
 import SayAllMembershipHostAdapter
 #endif
+#if canImport(SayAllHostBridge)
+import SayAllHostBridge
+#endif
 
 enum HostRemoteSessionAccess: Equatable {
     case authorized
@@ -81,6 +84,11 @@ final class MembershipFeatureIntegration: ObservableObject, @unchecked Sendable 
     @Published private(set) var serviceEnvironmentForDiagnostics = "unavailable"
 
     private var localeIdentifier: String
+    #if canImport(SayAllHostBridge)
+    /// 把私有侧的展示请求翻译成公开仓气泡；只在私有桥存在时编译。
+    /// 一致性继承了 `@MainActor`，所以只能惰性创建，不能在属性初始化阶段构造。
+    @MainActor private lazy var noticeHostAdapter = NoticeHostAdapter()
+    #endif
     #if SAYALL_MEMBERSHIP_ENABLED && canImport(SayAllMembershipHostAdapter)
     private var adapter: MembershipHostAdapter?
     private var subscriptions = Set<AnyCancellable>()
@@ -323,6 +331,23 @@ final class MembershipFeatureIntegration: ObservableObject, @unchecked Sendable 
     @MainActor
     private func configure(_ configuration: MembershipFeatureConfiguration) {
         guard adapter == nil else { return }
+        // 两个分支只差 host 参数，其余保持一致；加新能力时两处都要改。
+        #if canImport(SayAllHostBridge)
+        let adapter = MembershipHostAdapter(appVersion: configuration.appVersion,
+            localeIdentifier: localeIdentifier,
+            localDiagnosticRecorder: { record in
+                guard let safeRecord = PrivateDiagnosticUploadRecord(recordID: record.recordID,
+                    occurredAt: record.occurredAt, category: record.category, fields: record.fields)
+                else { return }
+                AppLogger.shared.write(safeRecord.canonicalLine)
+            },
+            commonPhraseUnavailableTargetFallback: { processIdentifier in
+                KeyboardInjector.prepareCommonPhraseUnavailableTarget(
+                    processIdentifier: processIdentifier
+                )
+            },
+            host: HostServices(notice: noticeHostAdapter))
+        #else
         let adapter = MembershipHostAdapter(appVersion: configuration.appVersion,
             localeIdentifier: localeIdentifier,
             localDiagnosticRecorder: { record in
@@ -336,6 +361,7 @@ final class MembershipFeatureIntegration: ObservableObject, @unchecked Sendable 
                     processIdentifier: processIdentifier
                 )
             })
+        #endif
         self.adapter = adapter
         adapter.$isFeatureVisible.removeDuplicates().receive(on: RunLoop.main)
             .sink { [weak self] in self?.isFeatureVisible = $0 }.store(in: &subscriptions)
