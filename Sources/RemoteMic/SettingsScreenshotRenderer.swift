@@ -196,6 +196,11 @@ enum SettingsScreenshotRenderer {
                 trigger: .singleClick
             )
         }
+        if let voiceKeyModeValue = ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_SETTINGS_SCREENSHOT_VOICE_KEY_MODE"
+        ], let voiceKeyMode = VoiceKeyMode(rawValue: voiceKeyModeValue) {
+            settings.voiceKeyMode = voiceKeyMode
+        }
         seedStatisticsForScreenshot(settings)
         let historyDirectory = outputDirectory.appendingPathComponent(UUID().uuidString)
         let transcriptStore = TranscriptArchiveStore(

@@ -24,7 +24,7 @@ jobs:
     name: Promote an existing Preview without rebuilding
     if: ${{ github.ref_name == 'main' }}
     runs-on: macos-15
-    timeout-minutes: 20
+    timeout-minutes: 40
     environment: mac-stable-release
     steps:
       - name: Validate promotion dispatch
@@ -50,6 +50,11 @@ jobs:
           ref: ${{ github.sha }}
           persist-credentials: false
 
+      - name: Require feed synchronization readiness before public mutation
+        env:
+          GH_TOKEN: ${{ secrets.SAYALL_FEED_SYNC_TOKEN }}
+        run: node scripts/sync-update-feeds.mjs --preflight "${{ inputs.tag }}"
+
       - name: Promote and verify the selected Preview
         env:
           GH_TOKEN: ${{ github.token }}
@@ -57,3 +62,8 @@ jobs:
           REPOSITORY_ROOT: ${{ github.workspace }}
           GH_BIN: gh
         run: ./scripts/promote-preview-release.sh "${{ inputs.tag }}"
+
+      - name: Synchronize and verify all original update feed URLs
+        env:
+          GH_TOKEN: ${{ secrets.SAYALL_FEED_SYNC_TOKEN }}
+        run: node scripts/sync-update-feeds.mjs "${{ inputs.tag }}"

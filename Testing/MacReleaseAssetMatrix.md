@@ -122,3 +122,14 @@ publication 的远端资产数量必须等于同一 expected-assets 清单的行
 3. 运行 `scripts/verify-preview-cdn-availability.sh v9.9.9 999 --contract-only`，只检查生产契约。
 
 预期为不一致或不可读的契约在占用探测及签名前失败。一致契约后仍分别拒绝 200、302、503、超时，并保留 HEAD 405 的 Range GET 回退。该测试只验证发布控制面，不产生新 Tag 或 Release。
+
+
+## 用例 8 更新频道同步
+
+1. 运行 `node --test scripts/test-update-feed-sync.mjs`，验证 preflight、身份、main dispatch、旧 Run 排除和有界等待。
+2. 缺少 `SAYALL_FEED_SYNC_TOKEN` 或权限不足时运行 preflight，确认公开 Release 尚未变化。
+3. 预览公开成功后，确认同步 Run 成功，stable 的原始 XML 字节保持不变，preview 与当前公开预览匹配。
+4. 晋升正式版后，确认 stable 对应 GitHub latest，Apple Silicon 与 Intel 均匹配，四个旧 URL 能返回 200。
+5. 同步失败时确认父工作流失败，不覆盖 Release、Tag 或资产；按相同身份恢复同步。
+
+预期公开工作流不获取私有代码、构件或日志。只读源码及模拟测试不能代替真实跨仓 dispatch、staging/production 和旧客户端更新验收。

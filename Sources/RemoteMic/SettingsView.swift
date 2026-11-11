@@ -429,8 +429,7 @@ private enum CustomApplicationLearningState: Equatable {
 
 private struct ConfigurationStatus {
     let message: LocalizedMessage
-    let tint: Color
-    let systemImage: String
+    let tier: NoticeTier
 }
 
 private enum MappingActionFilter: String, CaseIterable, Identifiable {
@@ -3201,10 +3200,23 @@ struct SettingsView: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(3)
             if settings.voiceKeyMode != .function {
-                Text(localization.text("connection.voice_key_mode.unverified_detail"))
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                // 非 Fn 触发键要求目标工具配成同一个键，而 SayAll 读不到对方的设置。
+                // 这段原来只是一行灰色小字，容易被当成说明跳过；改成有标题和动作的
+                // 内联提示，标题直接报出当前键名，避免“配成同一个”这种看不出配哪个键的说法。
+                NoticeInline(
+                    tier: .warning,
+                    title: LocalizedMessage(
+                        "connection.voice_key_mode.mismatch.title",
+                        arguments: [localization.text(settings.voiceKeyMode.localizationKey)]
+                    ).text(using: localization),
+                    text: localization.text("connection.voice_key_mode.unverified_detail"),
+                    action: NoticeAction(
+                        title: localization.text("connection.voice_key_mode.mismatch.action")
+                    ) {
+                        model.setVoiceKeyMode(.function)
+                    }
+                )
+                .padding(.top, 4)
             }
         }
         .help(localization.text("connection.voice_key_mode.help"))
@@ -6547,13 +6559,10 @@ struct SettingsView: View {
 
                             if let configurationStatus {
                                 Divider()
-                                Label(
-                                    configurationStatus.message.text(using: localization),
-                                    systemImage: configurationStatus.systemImage
+                                NoticeInline(
+                                    tier: configurationStatus.tier,
+                                    title: configurationStatus.message.text(using: localization)
                                 )
-                                .font(.caption)
-                                .foregroundStyle(configurationStatus.tint)
-                                .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(.vertical, 8)
                             }
 
@@ -7192,15 +7201,13 @@ struct SettingsView: View {
             AppLogger.shared.write("CONFIGURATION EXPORT operation_id=\(operationID) phase=completed result=file_saved")
             configurationStatus = ConfigurationStatus(
                 message: LocalizedMessage("configuration.export.success"),
-                tint: .green,
-                systemImage: "checkmark.circle.fill"
+                tier: .tip
             )
         } catch {
             AppLogger.shared.write("CONFIGURATION EXPORT operation_id=\(operationID) phase=failed stage=\(phase) result=no_file_saved")
             configurationStatus = ConfigurationStatus(
                 message: LocalizedMessage("configuration.export.write_failed"),
-                tint: .red,
-                systemImage: "exclamationmark.triangle.fill"
+                tier: .error
             )
         }
     }
@@ -7249,36 +7256,31 @@ struct SettingsView: View {
             if settings.configurationImportNotice != nil {
                 configurationStatus = ConfigurationStatus(
                     message: LocalizedMessage("configuration.import.partial"),
-                    tint: .orange,
-                    systemImage: "exclamationmark.triangle.fill"
+                    tier: .warning
                 )
             } else {
                 configurationStatus = ConfigurationStatus(
                     message: LocalizedMessage("configuration.import.success"),
-                    tint: .green,
-                    systemImage: "checkmark.circle.fill"
+                    tier: .tip
                 )
             }
         } catch AppConfigurationError.unsupportedVersion {
             AppLogger.shared.write("CONFIGURATION IMPORT operation_id=\(operationID) phase=failed result=no_write reason=unsupported_format_or_platform")
             configurationStatus = ConfigurationStatus(
                 message: LocalizedMessage("configuration.import.unsupported_version"),
-                tint: .red,
-                systemImage: "exclamationmark.triangle.fill"
+                tier: .error
             )
         } catch AppConfigurationError.unsafeVoiceKeyChange {
             AppLogger.shared.write("CONFIGURATION IMPORT operation_id=\(operationID) phase=failed result=no_write reason=voice_busy")
             configurationStatus = ConfigurationStatus(
                 message: LocalizedMessage("configuration.import.voice_key_busy"),
-                tint: .red,
-                systemImage: "exclamationmark.triangle.fill"
+                tier: .error
             )
         } catch {
             AppLogger.shared.write("CONFIGURATION IMPORT operation_id=\(operationID) phase=failed result=not_completed reason=invalid_or_storage_failure")
             configurationStatus = ConfigurationStatus(
                 message: LocalizedMessage("configuration.import.invalid_file"),
-                tint: .red,
-                systemImage: "exclamationmark.triangle.fill"
+                tier: .error
             )
         }
     }
@@ -7298,7 +7300,7 @@ struct SettingsView: View {
             selectedSection = .about
             buttonProfileImportRequests.clear()
             configurationStatus = ConfigurationStatus(message: LocalizedMessage("configuration.import.invalid_file"),
-                tint: .red, systemImage: "exclamationmark.triangle.fill")
+                tier: .error)
             AppLogger.shared.write("CONFIGURATION IMPORT phase=failed result=no_write reason=unreadable_or_unknown_type")
         }
     }
@@ -7314,13 +7316,13 @@ struct SettingsView: View {
                 AppLogger.shared.write("BUTTON_PROFILE_IMPORT phase=started result=accepted source=finder_file operation_id=button_profile_import_\(request.operationID)")
             } else {
                 configurationStatus = ConfigurationStatus(message: LocalizedMessage("configuration.import.feature_unavailable"),
-                    tint: .red, systemImage: "exclamationmark.triangle.fill")
+                    tier: .error)
                 AppLogger.shared.write("BUTTON_PROFILE_IMPORT phase=completed result=rejected source=finder_file reason=feature_unavailable operation_id=button_profile_import_\(request.operationID)")
             }
         } catch {
             buttonProfileImportRequests.clear()
             configurationStatus = ConfigurationStatus(message: LocalizedMessage("configuration.import.invalid_file"),
-                tint: .red, systemImage: "exclamationmark.triangle.fill")
+                tier: .error)
             AppLogger.shared.write("CONFIGURATION IMPORT phase=failed result=no_write reason=unreadable_or_unknown_type")
         }
     }
