@@ -1,0 +1,128 @@
+{
+  "schemaVersion": 1,
+  "batch": "unified-notice-20261110",
+  "date": "2026-11-10",
+  "status": "implemented",
+  "purpose": "SayAll 通用提示设计稿。气泡形态 + 三档语义色（L1 绿 / L2 琥珀 / L3 品牌红），每档浅深两套；支持锚定元素与四向尾巴；错误标记为感叹号；引导气泡按「功能 + 版本」只显示一次。2026-11-11 随 PR #994 实现并合入：NoticeBubble / NoticeInline / NoticeAnchor / NoticeCenter。",
+  "storage": "可编辑源（HTML）入库；PNG 由同目录 HTML 在本地渲染，按 G-EVIDENCE.design-drafts 的 external-with-index 策略只保留元数据，文件字节不入库",
+  "supersedes": "review-v3.html（中性反色提示条）、review-v1.html（初版）——均保留作历史对照",
+  "deliverables": [
+    {
+      "file": "review.html",
+      "role": "定稿",
+      "sha256": "b0a442eecfaeeeea95e657f51beab6f02ae2d997d399dd676103d690479300a5"
+    },
+    {
+      "file": "review-v1.html",
+      "role": "初稿",
+      "sha256": "9fbb6ee372fc1ea846aa73edb3a8266d75b15333edb210c1a2ff2f70b789325e"
+    },
+    {
+      "file": "review-v3.html",
+      "role": "三种承载版（含 7.3 页内状态条原始形态）",
+      "sha256": "f0f2a7dbf8c4c57f515d25312c962845ae85eb00560f466d1ac3c1d054ad0933"
+    },
+    {
+      "file": "review-v4.html",
+      "role": "气泡版",
+      "sha256": "95816d550260167ab75b882ba7ea5cb75e0ca130e408162f84783668ebfa53bf"
+    },
+    {
+      "file": "inline-compare-20261111.html",
+      "role": "内联条形态对照：原设计 / 简化版 / 气泡 / 恢复后",
+      "sha256": "cfeacb0b925328a14f5add91b92fd30e6dce6db14fca150f9641fd828dd645a0"
+    },
+    {
+      "file": "review-full.png",
+      "role": "定稿整页渲染",
+      "storage": "external",
+      "sha256": "dc61c21a9c0a6f5ee174b935c514dfb3339d9c8a82b7000ddd042c7d2f17b4a7",
+      "width": 2488,
+      "height": 23623
+    },
+    {
+      "file": "reference-notice.png",
+      "role": "改造前的原始浮层截图（基线）",
+      "storage": "external",
+      "sha256": "413f38ba4f90dc34864677589e34c3e84f2197cb5e21e1975769a666fee08a31",
+      "width": 666,
+      "height": 236
+    },
+    {
+      "file": "inline-compare-20261111.png",
+      "role": "形态对照整页渲染",
+      "storage": "external",
+      "sha256": "7321c0fdecdd0a1ceb09b3f68acd5adad6e9763983c5f6eeea76bc5f76cdc05c",
+      "width": 2200,
+      "height": 4423
+    }
+  ],
+  "decisions": {
+    "style": "产品引导气泡替代系统提示条：18pt 连续圆角、同色系 172° 微渐变、无描边、双行排版、半透明白胶囊动作",
+    "palette": "品牌红 #A5342C 为主（白字 6.71:1）；备选墨蓝 #1657C8（6.50:1）、炭黑 #15171C（17.93:1）。原始品牌色 #D56059 仅 3.72:1，不可直接用于白字",
+    "semantics": "去掉彩色圆徽章；语义由标题措辞承担，错误使用更深的 #7A1C16 + 细线叉标记",
+    "anchor": "锚定元素：tail 四方向（left/top/bottom/right），优先右侧 → 左侧 → 下方 → 上方；距锚点 8pt，尾巴 18×10，避让圆角 22pt，贴边 12pt",
+    "position": "无锚点时由调用方指定 NoticePosition.top / .center / .bottom，默认 .center；三个落点都水平居中、距边 12pt；有锚点时锚点优先、位置参数被忽略",
+    "persistence": "引导气泡只显示一次，键名 tip.<feature>.v<N>；用户手动关闭计为已看，文案大改时升版本号",
+    "colorStrategy": "按行动量分三档，不按状态分四色：L1 引导/信息 #A5342C（6.71:1）、L2 警告 #8A4B0F（6.79:1）、L3 错误 #5E120D（13.39:1）。成功与引导同色，靠文案表达；不使用系统强调色做底色",
+    "accentColor": "NSColor.controlAccentColor 只用于动作按钮焦点环与键盘选中态（控件层），不用于气泡背景",
+    "tiers": {
+      "L1_tip": "浅 #12704A（白字 6.10）/ 深 #1A7A52（白字 5.32、深底分离 3.20）",
+      "L2_warning": "浅 #8A4B0F（白字 6.79）/ 深 #9E5611（白字 5.54、深底分离 3.03）",
+      "L3_error": "浅 #A5342C（白字 6.71）/ 深 #C04239（白字 5.15、深底分离 3.31）"
+    },
+    "darkMode": "三档各提亮一档；深色下用纯色不用渐变（避免末端变暗）；额外 1px 白 14% 描边补边界",
+    "successMapping": "成功与引导同档（绿），不单独占颜色",
+    "errorMarker": "白色感叹号 !（不用 ×，避免与关闭按钮形成两个叉）",
+    "darkGreen": "保持 #1A7A52（深底分离 3.20、白字 5.32），不再提亮",
+    "inline": "状态类提示用 NoticeInline，形态沿用 v3 7.3：16pt 圆形图标 + 标题与说明 + 右侧动作，一行排开；无关闭入口；浅底 #FFFFFF/#FFFAF0/#FFF7F6，深色统一 #2C2C2E"
+  },
+  "review": {
+    "visual": "三色气质对照、组件解剖、四方向尾巴演示、锚定场景（按键页 / 权限行 / 输入框）、无锚点居中、深色外观、长文案与英文、v3/v4 差异对照",
+    "notCovered": "真实 macOS 渲染、VoiceOver、遥控器确认、窗口缩放到 800×650 时尾巴翻转需实现后复验；本稿为 HTML 重绘示意",
+    "openQuestions": [],
+    "measuredContrast": {
+      "tierLightWhiteText": {
+        "L1": "6.10",
+        "L2": "6.79",
+        "L3": "6.71"
+      },
+      "tierDarkWhiteText": {
+        "L1": "5.32",
+        "L2": "5.54",
+        "L3": "5.15"
+      },
+      "tierDarkSeparationFrom_1C1C1E": {
+        "L1": "3.20",
+        "L2": "3.03",
+        "L3": "3.31"
+      },
+      "tierLightOriginalSeparation": {
+        "L1": "2.79",
+        "L2": "2.51",
+        "L3": "2.53",
+        "verdict": "原色直接放深色底低于 3:1，故需提亮"
+      },
+      "systemAccentWithWhiteText": "1.41–3.65，八种全部低于 4.5，不用于气泡底色"
+    },
+    "nextStep": "按 09 节顺序实现：NoticeBubble → NoticeAnchor → NoticeCenter → NoticeAction → 接线（设置页 / Onboarding / 私有常用语面板）",
+    "implementation": {
+      "status": "组件已实现；组合动作提示已接线",
+      "files": [
+        "Sources/RemoteMic/NoticeBubble.swift",
+        "Sources/RemoteMic/NoticeInline.swift",
+        "Sources/RemoteMic/NoticeAnchor.swift",
+        "Sources/RemoteMic/NoticeCenter.swift",
+        "Tests/RemoteMicTests/NoticeCenterTests.swift",
+        "Tests/RemoteMicTests/NoticePaletteTests.swift"
+      ],
+      "wired": [
+        "SettingsView.swift 按键页：组合动作不可用提示改为 NoticeInline(.warning)，带说明与右侧「管理组合动作」动作；提示出现时隐藏下面常驻的同名按钮",
+        "MembershipFeatureIntegration.swift：注入 HostServices(notice:)，常用语面板失败提示走 NoticeBubble"
+      ],
+      "tests": "19 项组件测试（摆放 5 + 落点 3 + 中心 5 + 动作 2 + 对比度 4），全量 1323 项通过",
+      "notWired": "浮层气泡尚未挂载 noticeHost()；设置页 / Onboarding / 常用语面板的其余提示未迁移"
+    }
+  },
+  "updated": "2026-11-11"
+}

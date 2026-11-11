@@ -1,5 +1,11 @@
 # TODO
 
+- [ ] 设置页其余提示迁移到统一提示组件
+  - 2026-11-11：`NoticeBubble` / `NoticeInline` / `NoticeCenter` 已随 PR #994 进入 `main`；按键页「组合动作不可用」已迁完，形态为 v3 7.3 的内联条（图标 + 标题与说明 + 右侧动作）。
+  - 待迁：权限缺失（`输入监控` / `辅助功能` 未允许）、配置导入与恢复结果、About 更新检查失败、Onboarding 提示。这些仍是各自手写的文字或独立浮层。
+  - 选形态的规则：持续存在的状态用 `NoticeInline`；瞬时事件用 `NoticeBubble` + `NoticeCenter`，需要指向具体元素时用 `noticeAnchor`。
+  - 视觉依据在 `Screenshots/design-drafts/unified-notice-20261110/`（本地目录，按仓库规范不入库）：`review.html` 的 04.5 与 04.7 两节，`inline-compare-20261111.html` 记录了内联条的形态取舍。
+
 - [ ] 状态菜单显示已连接遥控器的电量（#860）
   - 已实现。2026-11-05 使用小米蓝牙遥控器 2 Pro 实测，菜单和连接页均为 94%，连续打开两次各显示一行。未知读数、断开及多设备已由自动化覆盖，菜单外观截图待补。详见 `Testing/MenuBarVisibility.md` 用例 6。
 
