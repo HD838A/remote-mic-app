@@ -37,6 +37,7 @@ if [[ "$ACTUAL_SHA256SUMS_SHA256" != "$TRUSTED_SHA256SUMS_SHA256" ]]; then
 fi
 
 EXPECTED_ARCHIVES=(
+  SayAllHostBridge.xcframework.zip
   SayAllMacroCore.xcframework.zip
   SayAllMacroMacOS.xcframework.zip
   SayAllMacroRemoteMic.xcframework.zip
@@ -84,6 +85,7 @@ if ! jq -e '
   .architectures == ["arm64", "x86_64"] and
   .linkage == "static" and
   .modules == [
+    "SayAllHostBridge",
     "SayAllMembershipCore",
     "SayAllMembershipUI",
     "SayAllMembershipHostAdapter",
@@ -164,6 +166,7 @@ trap report_incomplete_package EXIT
 
 mkdir -p "$STAGING_DIRECTORY/Artifacts" "$STAGING_DIRECTORY/Resources"
 for module_name in \
+  SayAllHostBridge \
   SayAllMembershipCore \
   SayAllMembershipUI \
   SayAllMembershipHostAdapter \
@@ -241,6 +244,7 @@ let package = Package(
         .library(
             name: "SayAllMembershipHostAdapter",
             targets: [
+                "SayAllHostBridge",
                 "SayAllMembershipCore",
                 "SayAllMembershipUI",
                 "SayAllMembershipHostAdapter",
@@ -283,6 +287,7 @@ let package = Package(
         ),
     ],
     targets: [
+        .binaryTarget(name: "SayAllHostBridge", path: "Artifacts/SayAllHostBridge.xcframework"),
         .binaryTarget(name: "SayAllMembershipCore", path: "Artifacts/SayAllMembershipCore.xcframework"),
         .binaryTarget(name: "SayAllMembershipUI", path: "Artifacts/SayAllMembershipUI.xcframework"),
         .binaryTarget(
