@@ -90,7 +90,7 @@ struct NoticeInline: View {
         .overlay(alignment: .leading) {
             Rectangle()
                 .fill(accent)
-                .frame(width: 3)
+                .frame(width: 4.5)
                 .accessibilityHidden(true)
         }
         .clipShape(shape)
