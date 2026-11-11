@@ -136,7 +136,10 @@ struct NoticeCenterTests {
         center.show(Notice(tier: .tip, title: "自动消失", dismissal: .automatic(0.02)))
         #expect(center.current != nil)
 
-        try await Task.sleep(nanoseconds: 150_000_000)
+        // CI 的 Task 调度可能比本地慢，轮询到上限而不是固定等一次。
+        for _ in 0..<100 where center.current != nil {
+            try await Task.sleep(nanoseconds: 20_000_000)
+        }
         #expect(center.current == nil)
     }
 
