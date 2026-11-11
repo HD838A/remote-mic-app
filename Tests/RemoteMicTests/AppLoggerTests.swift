@@ -152,6 +152,30 @@ struct AppLoggerTests {
         #expect(!harness.failures.isEmpty)
     }
 
+    @Test func defaultLimitIsTenMegabytesIncludingEncryptionOverhead() throws {
+        #expect(AppLogger.defaultMaximumFileSize == 10_000_000)
+        let harness = try LoggerHarness()
+        let payload = String(repeating: "x", count: 70_000)
+        for index in 0..<40 { harness.logger.write("\(payload) index=\(index)") }
+        harness.logger.flush()
+        let firstSegments = try harness.segmentURLs()
+        #expect(firstSegments.count == 1)
+        #expect(try Data(contentsOf: firstSegments[0]).count > 2 * 1_024 * 1_024)
+
+        for index in 40..<160 { harness.logger.write("\(payload) index=\(index)") }
+        harness.logger.flush()
+        let segments = try harness.segmentURLs()
+        #expect(segments.count == 2)
+        for segment in segments {
+            #expect(try Data(contentsOf: segment).count <= 10_000_000)
+        }
+        let lines = try harness.decryptAllLines()
+        #expect(lines.count == 160)
+        #expect(lines.contains { $0.hasSuffix("index=0\n") })
+        #expect(lines.contains { $0.hasSuffix("index=159\n") })
+        #expect(harness.failures.isEmpty)
+    }
+
     @Test func rejectedOversizedRecordDoesNotCreateSequenceGap() throws {
         let harness = try LoggerHarness(maximumFileSize: 400)
 
@@ -289,7 +313,7 @@ private final class LoggerHarness {
             version: "1.9 beta",
             build: "121 rc"
         ),
-        maximumFileSize: UInt64 = 10 * 1_024 * 1_024
+        maximumFileSize: UInt64 = AppLogger.defaultMaximumFileSize
     ) throws {
         let fileManager = FileManager.default
         let rootURL = fileManager.temporaryDirectory
