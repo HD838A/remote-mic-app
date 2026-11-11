@@ -49,6 +49,7 @@
   - Sparkle 的稳定和预发布 feed 使用 `download.sayall.app/mac/channels/<channel>/` 固定通道；Cloudflare 边缘解析公开 GitHub Releases 并重定向到同域版本化 appcast，客户端不再直接请求未认证 GitHub Releases API。版本化 ZIP 与本地化更新说明继续使用 `download.sayall.app/mac/releases/<tag>/`。
   - GitHub Releases 继续保存全部签名、公证资产；发布后必须从 GitHub 与 CDN 分别下载并逐字节比较，同时验证 `HEAD`、`Range`、签名、公证和候选更新发现。完成公开 Worker、官网和 `1.8.12` Pre-release 验证后再勾选。
   - 2026-09-03：补充 Apple Silicon / Intel 的 stable、preview 四个 appcast 通道；发布后必须验证 preview 通道与新候选 appcast 一致，stable 通道仍与动态读取的正式版一致。`1.9.21` 的签名、公证、真实 Sparkle UI 和公开字节验收仍由统一 Mac 预览版流程完成。
+  - 2026-11-11：关于页成功信息查询增加进程内 6 小时复用，手动检查与频道变化仍可立即触发，重复检查在 feed 预取前合并。自动化和真实 Sparkle 验收分别记录，见 `Testing/AboutUpdateCenter.md`。
 
 - [ ] 在 Mac App 提供低门槛问题反馈入口
   - “关于”页面已增加“问题反馈”，点击后由默认浏览器打开 SayAll 工作台的最低权限入口；状态栏不再重复显示，不传递账号、设备标识、Token 或动态口令。

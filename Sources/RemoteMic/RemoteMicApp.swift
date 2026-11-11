@@ -222,11 +222,6 @@ enum RemoteMicApp {
 private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenuItemValidation,
     NSWindowDelegate, SPUUpdaterDelegate, @preconcurrency SPUStandardUserDriverDelegate
 {
-    private enum UpdateCheckPurpose {
-        case information
-        case userInitiated
-    }
-
     /// 设置窗口的默认尺寸与最小尺寸（整窗，含标题栏）。
     ///
     /// 数值取自用户确认的按键页截图（实测整窗 1067×760）。默认值和最小值都绑这一个常量，
@@ -261,6 +256,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         stableFeedURLString: Bundle.main.object(forInfoDictionaryKey: "SUFeedURL") as? String
     )
     private var updateCheckTask: Task<Void, Never>?
+    private var updateChecks = UpdateCheckCoordinator()
     private let buttonProfileImportRequests = ButtonProfileImportRequestStore()
     private let searchFocusCoordinator = SearchFocusCoordinator()
     /// 「编辑 > 查找…」当前实例。`configureApplicationMenu()` 在语言切换后会重建菜单，
@@ -1008,7 +1004,9 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
             .receive(on: RunLoop.main)
             .sink { [weak self] isEnabled in
                 guard let self else { return }
+                updateChecks.invalidate(cancelPreparation: updateCheckTask != nil)
                 updateCheckTask?.cancel()
+                updateCheckTask = nil
                 resolvedUpdateFeedURLString = nil
                 updateInformation.reset()
                 let policy = UpdateCheckPolicy(checksForPreReleaseUpdates: isEnabled)
@@ -1319,10 +1317,23 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         performUpdateCheck(.information)
     }
 
-    private func performUpdateCheck(_ purpose: UpdateCheckPurpose) {
-        updateCheckTask?.cancel()
+    private func performUpdateCheck(_ purpose: UpdateCheckCoordinator.Purpose) {
+        let decision = updateChecks.request(
+            purpose,
+            sessionInProgress: updaterStarted && updaterController.updater.sessionInProgress
+        )
+        guard decision == .start else {
+            AppLogger.shared.write(
+                "UPDATE CHECK phase=completed result=reused " +
+                    "reason=\(decision == .cached ? "fresh_information" : "check_in_progress")"
+            )
+            return
+        }
         updateCheckTask = Task { [weak self] in
             guard let self else { return }
+            defer {
+                if !Task.isCancelled { updateCheckTask = nil }
+            }
             updateInformation.beginChecking()
             let includePreRelease = model.settings.checksForPreReleaseUpdates
             let testFeed = UpdateFeedResolver.testInjectedFeed(
@@ -1349,6 +1360,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
                 }
                 guard !Task.isCancelled else { return }
                 guard let selectedFeed = resolution.selected else {
+                    finishUpdateCheck(success: false)
                     updateInformation.setUnavailable()
                     AppLogger.shared.write(
                         "UPDATE CHECK prerelease_enabled=true resolved=false " +
@@ -1367,6 +1379,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
                 )
             } else {
                 guard updateFeedSelection.feedURLString(checksForPreReleaseUpdates: false) != nil else {
+                    finishUpdateCheck(success: false)
                     updateInformation.setUnavailable()
                     AppLogger.shared.write(
                         "UPDATE CHECK prerelease_enabled=false resolved=false " +
@@ -1380,7 +1393,13 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
                 )
             }
             startUpdaterIfNeeded()
-            guard !updaterController.updater.sessionInProgress else { return }
+            guard !updaterController.updater.sessionInProgress else {
+                let queuedUserCheck = updateChecks.finish(success: false)
+                if purpose == .userInitiated || queuedUserCheck {
+                    _ = updateChecks.request(.userInitiated, sessionInProgress: true)
+                }
+                return
+            }
             switch purpose {
             case .information:
                 updateInformation.beginChecking()
@@ -1452,6 +1471,20 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     ) {
         if error != nil, updateInformation.state == .checking {
             updateInformation.setUnavailable()
+        }
+        let success: Bool
+        switch updateInformation.state {
+        case .available, .upToDate: success = true
+        case .idle, .checking, .unavailable: success = false
+        }
+        finishUpdateCheck(success: success)
+    }
+
+    private func finishUpdateCheck(success: Bool) {
+        guard updateChecks.finish(success: success) else { return }
+        Task { @MainActor [weak self] in
+            // Let Sparkle finish closing its previous session before opening the requested UI.
+            self?.performUpdateCheck(.userInitiated)
         }
     }
 
