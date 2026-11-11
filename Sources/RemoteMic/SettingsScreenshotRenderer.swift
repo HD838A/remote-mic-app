@@ -273,10 +273,10 @@ enum SettingsScreenshotRenderer {
         ], let holdAction = ButtonAction(rawValue: holdActionValue) {
             settings.setAction(holdAction, for: holdEditorButton, trigger: .longPress)
         }
-        if ProcessInfo.processInfo.environment[
-            "REMOTE_MIC_SETTINGS_SCREENSHOT_HOLD_EXECUTION"
-        ] == "1" {
-            settings.setHoldExecution(true, for: holdEditorButton)
+        if let holdSingleValue = ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_SETTINGS_SCREENSHOT_HOLD_SINGLE_ACTION"
+        ], let holdSingle = ButtonAction(rawValue: holdSingleValue) {
+            settings.setAction(holdSingle, for: holdEditorButton, trigger: .singleClick)
         }
 
         _ = NSApplication.shared

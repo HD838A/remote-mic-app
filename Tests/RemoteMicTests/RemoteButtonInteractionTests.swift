@@ -131,17 +131,15 @@ struct RemoteButtonInteractionTests {
         }
     }
 
-    @Test func holdExecutionPressesTheArrowKeyOnceAndReleasesIt() {
+    @Test func singleHoldPressesTheClickArrowOnceAndReleasesIt() {
         let clock = InteractionClock()
         let controller = RemoteButtonInteractionController(scheduler: clock)
         var begins: [ConfiguredButtonAction] = []
         var ends: [String] = []
         var discrete = 0
-        // 与重复方式无关：按住模式保持未设置，只要长按动作是方向键就能按住执行。
-        var config = snapshot(.once, single: .arrowRight)
-        config.holdExecutionAction = .init(action: .arrowRight, shortcut: nil)
-        config.holdExecution = true
-        #expect(config.isHoldExecutionActive)
+        var config = snapshot(.singleHold, single: .arrowRight)
+        config.holdableSingle = config.single
+        #expect(config.isHoldDownActive)
         controller.handle(.press, button: .up, snapshot: config, valid: { true }, perform: { _, _ in
             discrete += 1
             return true
@@ -150,7 +148,7 @@ struct RemoteButtonInteractionTests {
             return true
         }, endHold: { ends.append($0) })
         #expect(begins.map(\.action) == [.arrowRight])
-        // 按住执行由系统负责自动重复，控制器不再补发离散动作，也不再触发长按动作。
+        // 按住由系统负责自动重复，控制器不再补发离散动作。
         clock.advance(2_000)
         #expect(begins.count == 1)
         #expect(discrete == 0)
@@ -160,13 +158,34 @@ struct RemoteButtonInteractionTests {
         #expect(!controller.isTracking(.up))
     }
 
-    @Test func cancellingInteractionReleasesTheHeldKey() {
+    @Test func longHoldStartsAtTheLongPressThreshold() {
+        let clock = InteractionClock()
+        let controller = RemoteButtonInteractionController(scheduler: clock)
+        var begins = 0
+        var discrete = 0
+        var config = snapshot(.longHold, long: true, l: 400)
+        config.holdableLong = config.long
+        func edge(_ phase: RemoteButtonPhase) {
+            controller.handle(phase, button: .left, snapshot: config, valid: { true },
+                              perform: { _, _ in discrete += 1; return true },
+                              beginHold: { _ in begins += 1; return true }, endHold: { _ in })
+        }
+        edge(.press)
+        clock.advance(399)
+        #expect(begins == 0)
+        clock.advance(400)
+        #expect(begins == 1)
+        // 阈值处不执行一次长按动作，而是把它一直按住。
+        #expect(discrete == 0)
+        edge(.release)
+    }
+
+    @Test func cancellingHoldReleasesTheHeldKey() {
         let clock = InteractionClock()
         let controller = RemoteButtonInteractionController(scheduler: clock)
         var ends: [String] = []
-        var config = snapshot(.once, single: .arrowDown)
-        config.holdExecutionAction = .init(action: .arrowDown, shortcut: nil)
-        config.holdExecution = true
+        var config = snapshot(.singleHold, single: .arrowDown)
+        config.holdableSingle = config.single
         controller.handle(.press, button: .down, snapshot: config, valid: { true },
                           perform: { _, _ in true }, beginHold: { _ in true },
                           endHold: { ends.append($0) })
@@ -179,10 +198,9 @@ struct RemoteButtonInteractionTests {
         let controller = RemoteButtonInteractionController(scheduler: clock)
         var begins = 0
         var discrete = 0
-        var config = snapshot(.once)
+        var config = snapshot(.singleHold, single: .arrowLeft)
         config.double = .init(action: .returnKey, shortcut: nil)
-        config.holdExecutionAction = .init(action: .arrowLeft, shortcut: nil)
-        config.holdExecution = true
+        config.holdableSingle = config.single
         controller.handle(.press, button: .left, snapshot: config, valid: { true },
                           perform: { _, _ in discrete += 1; return true },
                           beginHold: { _ in begins += 1; return true }, endHold: { _ in })
@@ -195,38 +213,11 @@ struct RemoteButtonInteractionTests {
         #expect(discrete == 1)
     }
 
-    @Test func holdExecutionKeepsSingleClickWhenItDiffers() {
-        let clock = InteractionClock()
-        let controller = RemoteButtonInteractionController(scheduler: clock)
-        var begins = 0
-        var discrete = 0
-        var config = snapshot(.once, l: 400, single: .commandPaste)
-        config.holdExecutionAction = .init(action: .arrowRight, shortcut: nil)
-        config.holdExecution = true
-        func edge(_ phase: RemoteButtonPhase) {
-            controller.handle(phase, button: .ok, snapshot: config, valid: { true },
-                              perform: { _, _ in discrete += 1; return true },
-                              beginHold: { _ in begins += 1; return true }, endHold: { _ in })
-        }
-        // 短按仍然执行单击动作，不会把方向键按住。
-        edge(.press)
-        clock.advance(399)
-        #expect(begins == 0)
-        edge(.release)
-        #expect(discrete == 1)
-        // 越过长按阈值后进入按住。
-        edge(.press)
-        clock.advance(799)
-        #expect(begins == 1)
-        edge(.release)
-    }
-
     @Test func failedHoldStartCancelsTheInteraction() {
         let clock = InteractionClock()
         let controller = RemoteButtonInteractionController(scheduler: clock)
-        var config = snapshot(.once, single: .arrowRight)
-        config.holdExecutionAction = .init(action: .arrowRight, shortcut: nil)
-        config.holdExecution = true
+        var config = snapshot(.singleHold, single: .arrowRight)
+        config.holdableSingle = config.single
         var discrete = 0
         controller.handle(.press, button: .right, snapshot: config, valid: { true },
                           perform: { _, _ in discrete += 1; return true },
@@ -236,29 +227,24 @@ struct RemoteButtonInteractionTests {
         #expect(discrete == 0)
     }
 
-    @Test func holdExecutionIsStoredPerScope() throws {
+    @Test func holdChoiceIsASingleStoredMode() throws {
         let name = "SayAll.HoldExecution.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: name))
         defer { defaults.removePersistentDomain(forName: name) }
         let settings = AppSettings(defaults: defaults)
-        let scheme = UUID()
-        settings.setAction(.arrowUp, for: .up, trigger: .longPress)
-        settings.setHoldExecution(true, for: .up)
-        #expect(settings.holdExecution(for: .up))
-        #expect(settings.interactionSnapshot(for: .up).holdExecution)
-        #expect(settings.interactionSnapshot(for: .up).isHoldExecutionActive)
-        #expect(!settings.holdExecution(for: .down))
-        // 键位方案独立保存：未设置时沿用基础映射，能明确关闭，也能单独打开。
-        #expect(settings.holdExecution(for: .up, scheme: scheme))
-        settings.setHoldExecution(false, for: .up, scheme: scheme)
-        #expect(!settings.holdExecution(for: .up, scheme: scheme))
-        #expect(settings.holdExecution(for: .up))
-        settings.setHoldExecution(true, for: .down, scheme: scheme)
-        #expect(settings.holdExecution(for: .down, scheme: scheme))
-        #expect(!settings.holdExecution(for: .down))
-        settings.setHoldExecution(false, for: .up)
-        #expect(!settings.interactionSnapshot(for: .up).holdExecution)
-        #expect(settings.interactionSettings.holdExecutions == nil)
+        settings.setAction(.arrowUp, for: .up, trigger: .singleClick)
+        settings.setAction(.arrowLeft, for: .up, trigger: .longPress)
+        settings.setHoldMode(.singleHold, for: .up)
+        #expect(settings.interactionSnapshot(for: .up).mode == .singleHold)
+        #expect(settings.interactionSnapshot(for: .up).holdDownAction?.action == .arrowUp)
+        // 四个选项互斥：换一个模式会覆盖上一个。
+        settings.setHoldMode(.longHold, for: .up)
+        #expect(settings.interactionSnapshot(for: .up).mode == .longHold)
+        #expect(settings.interactionSnapshot(for: .up).holdDownAction?.action == .arrowLeft)
+        settings.setHoldMode(.repeatLong, for: .up)
+        #expect(settings.interactionSnapshot(for: .up).mode == .repeatLong)
+        #expect(settings.interactionSnapshot(for: .up).holdDownAction == nil)
+        #expect(settings.interactionSettings.modes["up"] == "repeatLong")
     }
 
     @Test func opaqueSecondaryGesturesRemainRecognizableButCannotRepeat() {

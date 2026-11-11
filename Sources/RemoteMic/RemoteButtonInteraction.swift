@@ -68,13 +68,12 @@ final class RemoteButtonInteractionController {
             self.cancel(button, reason: "context_changed")
         }
         let mode = current.snapshot.mode!
-        // 「按住执行」与上面的重复方式无关：按住即把长按动作里的方向键按下去，松手才抬起。
-        // 配了双击时先等双击窗口；单击另有动作时等长按阈值，保证短按仍执行单击。
-        if current.snapshot.isHoldExecutionActive {
-            let delay = holdStartDelay(for: current.snapshot)
-            if delay == 0 {
-                startHold(button, current)
-            } else {
+        // 「单击按住 / 长按按住」与重复方式并列：按住即把对应动作里的方向键按下去，松手才抬起。
+        // 单击按住配了双击时先等双击窗口；长按按住走长按阈值。
+        if mode.isHoldDown {
+            if mode == .singleHold, current.snapshot.recognizesDouble {
+                let delay = max(UInt64(current.snapshot.settings.doubleClickMilliseconds),
+                                UInt64(current.snapshot.repeatSingleStartMilliseconds ?? 0))
                 AppLogger.shared.write(
                     "BUTTON HOLD operation_id=\(current.id.uuidString) phase=hold_waiting " +
                         "start_ms=\(delay) double_ms=\(current.snapshot.settings.doubleClickMilliseconds)"
@@ -83,6 +82,10 @@ final class RemoteButtonInteractionController {
                     guard value.pressed, !value.second else { return }
                     owner.startHold(button, value)
                 }
+            } else if mode == .singleHold {
+                startHold(button, current)
+            } else {
+                scheduleLong(button, current)
             }
             return
         }
@@ -133,12 +136,15 @@ final class RemoteButtonInteractionController {
     }
 
     private func scheduleLong(_ button: RemoteButton, _ current: Interaction) {
-        // 按住执行已经接管了“按住”，长按动作不再作为一次性动作触发。
-        guard !current.snapshot.isHoldExecutionActive else { return }
         guard current.snapshot.recognizesLong,
               !(current.second && current.snapshot.mode == .repeatSingle) else { return }
         current.longTimer = schedule(button, current, after: UInt64(current.snapshot.settings.longPressMilliseconds)) { owner, value in
             guard value.pressed else { return }
+            // 长按按住：阈值处不是执行一次长按动作，而是把它一直按住。
+            if value.snapshot.mode == .longHold {
+                owner.startHold(button, value)
+                return
+            }
             owner.fire(button, value, .longPress)
             if value.snapshot.mode == .repeatLong {
                 owner.scheduleRepeat(button, value, .longPress, delay: value.snapshot.repeatInterval)
@@ -150,7 +156,7 @@ final class RemoteButtonInteractionController {
                                 _ trigger: ButtonTrigger, delay: UInt64) {
         // 按住执行把目标键真正按住，由系统负责自动重复；这里不再补发离散动作。
         guard interactions[button] === current, current.snapshot.repeatAllowed,
-              !current.snapshot.isHoldExecutionActive else { return }
+              !(current.snapshot.mode?.isHoldDown ?? false) else { return }
         current.timer = schedule(button, current, after: delay) { owner, value in
             guard value.pressed else { return }
             owner.fire(button, value, trigger)
@@ -169,25 +175,13 @@ final class RemoteButtonInteractionController {
         if !current.perform(trigger, action) { cancel(button, reason: "action_failed") }
     }
 
-    /// 按住开始前的等待：双击窗口优先；单击另有动作时等长按阈值，短按照常执行单击动作。
-    private func holdStartDelay(for snapshot: RemoteButtonInteractionSnapshot) -> UInt64 {
-        if snapshot.recognizesDouble {
-            return max(UInt64(snapshot.settings.doubleClickMilliseconds),
-                       UInt64(snapshot.repeatSingleStartMilliseconds ?? 0))
-        }
-        guard let holdAction = snapshot.holdExecutionAction,
-              snapshot.single.action != .disabled,
-              snapshot.single != holdAction else { return 0 }
-        return UInt64(snapshot.settings.longPressMilliseconds)
-    }
-
     /// 进入按住：只发一次按下，由 `KeyboardHoldExecution` 负责系统级自动重复，松键时抬起。
     private func startHold(_ button: RemoteButton, _ current: Interaction) {
         guard interactions[button] === current, current.pressed, current.valid() else {
             cancel(button, reason: "context_changed")
             return
         }
-        guard let action = current.snapshot.holdExecutionAction,
+        guard let action = current.snapshot.holdDownAction,
               let beginHold = current.beginHold else {
             cancel(button, reason: "hold_unavailable")
             return

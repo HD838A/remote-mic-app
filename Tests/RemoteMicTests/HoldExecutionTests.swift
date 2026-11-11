@@ -10,49 +10,41 @@ struct HoldExecutionTests {
         single: ButtonAction = .arrowRight,
         long: ButtonAction = .disabled
     ) -> RemoteButtonInteractionSnapshot {
-        .init(
+        var snapshot = RemoteButtonInteractionSnapshot(
             settings: .init(),
             mode: mode,
             single: .init(action: single, shortcut: nil),
             double: .disabled,
             long: .init(action: long, shortcut: nil)
         )
+        snapshot.holdableSingle = snapshot.single
+        snapshot.holdableLong = snapshot.long
+        return snapshot
     }
 
     // MARK: - 配置
 
-    @Test func settingsRoundTripAndLegacyDecoding() throws {
+    @Test func settingsRoundTripKeepsFourModes() throws {
         var settings = RemoteButtonInteractionSettings()
-        settings.setHoldExecution(true, for: .up)
-        #expect(settings.holdExecution(for: .up))
-        #expect(settings.holdExecutions == ["up"])
-        let decoded = try JSONDecoder().decode(
-            RemoteButtonInteractionSettings.self,
-            from: try JSONEncoder().encode(settings)
-        )
-        #expect(decoded == settings)
-        #expect(decoded.holdExecution(for: .up))
-
-        // 旧配置没有该字段：解码为 nil，所有按键保持既有重复行为。
+        for mode in RemoteButtonHoldMode.selectableCases {
+            settings.modes["up"] = mode.rawValue
+            let decoded = try JSONDecoder().decode(
+                RemoteButtonInteractionSettings.self,
+                from: try JSONEncoder().encode(settings)
+            )
+            #expect(decoded.mode(for: .up) == mode)
+        }
+        #expect(RemoteButtonHoldMode.selectableCases.count == 4)
+        // 旧配置没有新模式：保持未设置。
         let legacy = try JSONDecoder().decode(
             RemoteButtonInteractionSettings.self,
-            from: Data(#"{"doubleClickMilliseconds":300,"longPressMilliseconds":550}"#.utf8)
+            from: Data(#"{"doubleClickMilliseconds":300,"longPressMilliseconds":550,"modes":{"up":"repeatSingle"}}"#.utf8)
         )
-        #expect(legacy.holdExecutions == nil)
-        #expect(!legacy.holdExecution(for: .up))
-    }
-
-    @Test func clearingTheLastEntryRemovesTheField() {
-        var settings = RemoteButtonInteractionSettings()
-        settings.setHoldExecution(true, for: .up)
-        settings.setHoldExecution(false, for: .up)
-        #expect(settings.holdExecutions == nil)
-        #expect(settings.isWellFormed)
-    }
-
-    @Test func settingsRejectUnknownButtons() {
-        #expect(RemoteButtonInteractionSettings(holdExecutions: ["up"]).isWellFormed)
-        #expect(!RemoteButtonInteractionSettings(holdExecutions: ["nonexistent"]).isWellFormed)
+        #expect(legacy.mode(for: .down) == .once)
+        #expect(legacy.isWellFormed)
+        #expect(RemoteButtonInteractionSettings(modes: ["up": "singleHold"]).isWellFormed)
+        #expect(RemoteButtonInteractionSettings(modes: ["up": "longHold"]).isWellFormed)
+        #expect(!RemoteButtonInteractionSettings(modes: ["up": "holdSingle"]).isWellFormed)
     }
 
     // MARK: - 可用性
@@ -77,29 +69,32 @@ struct HoldExecutionTests {
         #expect(ConfiguredButtonAction(action: .disabled, shortcut: nil).holdableKey == nil)
     }
 
-    @Test func snapshotOnlyActivatesHoldForArrowTargets() {
-        // 与重复方式无关：只要长按动作是方向键，按住执行就可用。
-        for mode in [RemoteButtonHoldMode.once, .repeatSingle, .repeatLong] {
-            var holdable = snapshot(mode: mode, long: .arrowLeft)
-            holdable.holdExecutionAction = holdable.long
-            #expect(holdable.canHoldExecution)
-            #expect(!holdable.isHoldExecutionActive)
-            holdable.holdExecution = true
-            #expect(holdable.isHoldExecutionActive)
-        }
+    @Test func holdModesFollowTheirOwnAction() {
+        // 单击按住只看单击动作。
+        #expect(snapshot(mode: .singleHold).isHoldDownActive)
+        #expect(snapshot(mode: .singleHold, single: .deleteBackward).isHoldDownActive == false)
+        #expect(snapshot(mode: .singleHold, single: .deleteBackward).blockers(for: .singleHold)
+            == [.actionNotHoldable(.init(action: .deleteBackward, shortcut: nil))])
+        // 长按按住只看长按动作。
+        #expect(snapshot(mode: .longHold, long: .arrowLeft).isHoldDownActive)
+        #expect(!snapshot(mode: .longHold, long: .returnKey).isHoldDownActive)
+        // 重复模式不是按住执行。
+        #expect(!snapshot(mode: .repeatSingle).isHoldDownActive)
+        #expect(!snapshot(mode: .repeatLong).isHoldDownActive)
+        #expect(!snapshot(mode: .once).isHoldDownActive)
+        // 动作未设置时点名原因。
+        #expect(snapshot(mode: .singleHold, single: .disabled).blockers(for: .singleHold) == [.actionUnset])
+    }
 
-        // 没有可按住的动作时开关无效。
-        var missing = snapshot(mode: .once)
-        missing.holdExecution = true
-        #expect(!missing.canHoldExecution)
-        #expect(!missing.isHoldExecutionActive)
-
-        // 长按动作不是方向键时不进入按住状态，仍按原动作执行。
-        var nonArrow = snapshot(mode: .repeatSingle, long: .returnKey)
-        nonArrow.holdExecutionAction = nonArrow.long
-        nonArrow.holdExecution = true
-        #expect(!nonArrow.canHoldExecution)
-        #expect(!nonArrow.isHoldExecutionActive)
+    @Test func holdModeSelectionIsExclusive() {
+        var current = snapshot(mode: .singleHold, long: .arrowLeft)
+        #expect(current.holdDownAction?.action == .arrowRight)
+        current.mode = .longHold
+        #expect(current.holdDownAction?.action == .arrowLeft)
+        current.mode = .repeatSingle
+        #expect(current.holdDownAction == nil)
+        current.mode = .once
+        #expect(current.holdDownAction == nil)
     }
 
     // MARK: - 注入

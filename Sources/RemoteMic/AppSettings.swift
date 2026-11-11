@@ -52,7 +52,6 @@ private struct PersonalizedConfiguration: Codable {
     let interactionSettings: RemoteButtonInteractionSettings?
     let buttonGestureTimingsByModel: [String: RemoteButtonGestureTiming]?
     let buttonGestureLearningsByModel: [String: StoredButtonGestureLearning]?
-    let schemeHoldExecutions: [String: [String]]?
     let customApplicationProfiles: [CustomApplicationProfile]?
     let applicationLanguage: AppLanguage
     let appIconIdentifier: AppIconIdentifier?
@@ -323,7 +322,6 @@ final class AppSettings: ObservableObject {
         static let buttonRapidPressEnabled = "buttonRapidPressEnabled"
         static let buttonGestureTimingsByModel = "buttonGestureTimingsByModel"
         static let buttonGestureLearningsByModel = "buttonGestureLearningsByModel"
-        static let schemeHoldExecutions = "schemeHoldExecutions"
         static let customApplicationProfiles = "customApplicationProfiles"
         static let peripheralIdentifier = "peripheralIdentifier"
         static let remoteDeviceProfiles = "remoteDeviceProfiles"
@@ -548,8 +546,7 @@ final class AppSettings: ObservableObject {
     @Published var interactionSettings = RemoteButtonInteractionSettings() {
         didSet {
             if oldValue.modes != interactionSettings.modes ||
-                oldValue.migratedRepeatButtons != interactionSettings.migratedRepeatButtons ||
-                oldValue.holdExecutions != interactionSettings.holdExecutions {
+                oldValue.migratedRepeatButtons != interactionSettings.migratedRepeatButtons {
                 onInteractionModeChanged?(selectedRemoteProfileID)
             }
             if let data = try? JSONEncoder().encode(interactionSettings) {
@@ -574,16 +571,6 @@ final class AppSettings: ObservableObject {
         didSet {
             if let data = try? JSONEncoder().encode(buttonGestureLearningsByModel) {
                 defaults.set(data, forKey: Keys.buttonGestureLearningsByModel)
-            }
-        }
-    }
-
-    /// 键位方案里的「按住执行」。键位方案覆盖的长按动作为方向键时，方案可以独立选择；
-    /// 缺少该方案表示沿用基础映射，空数组表示在这个方案里明确关闭。
-    @Published private(set) var schemeHoldExecutions: [String: [String]] = [:] {
-        didSet {
-            if let data = try? JSONEncoder().encode(schemeHoldExecutions) {
-                defaults.set(data, forKey: Keys.schemeHoldExecutions)
             }
         }
     }
@@ -1271,17 +1258,6 @@ final class AppSettings: ObservableObject {
             from: defaults,
             corrupted: &corruptedKeys
         ) ?? [:]
-        let storedSchemeHoldExecutions = Self.decodeSetting(
-            [String: [String]].self,
-            forKey: Keys.schemeHoldExecutions,
-            from: defaults,
-            corrupted: &corruptedKeys
-        ) ?? [:]
-        let validSchemeHoldExecutions = Self.sanitizedSchemeHoldExecutions(storedSchemeHoldExecutions)
-        if validSchemeHoldExecutions != storedSchemeHoldExecutions {
-            corruptedKeys.append(Keys.schemeHoldExecutions)
-        }
-        schemeHoldExecutions = validSchemeHoldExecutions
         buttonGestureLearningsByModel = storedGestureLearnings.filter {
             XiaomiRemoteModel(rawValue: $0.key).map { $0 != .unknown } ?? false
         }
@@ -2549,7 +2525,6 @@ final class AppSettings: ObservableObject {
             buttonGestureLearningsByModel: buttonGestureLearningsByModel.isEmpty
                 ? nil
                 : buttonGestureLearningsByModel,
-            schemeHoldExecutions: schemeHoldExecutions.isEmpty ? nil : schemeHoldExecutions,
             customApplicationProfiles: customApplicationProfiles,
             applicationLanguage: applicationLanguage,
             appIconIdentifier: appIconIdentifier,
@@ -2774,7 +2749,6 @@ final class AppSettings: ObservableObject {
         })
         buttonRapidPressEnabled = Dictionary(uniqueKeysWithValues: (c.buttonRapidPressEnabled ?? [:]).compactMap { key,value in RemoteButton(rawValue: key).map { ($0,value) } })
         interactionSettings = c.interactionSettings ?? RemoteButtonInteractionSettings()
-        schemeHoldExecutions = Self.sanitizedSchemeHoldExecutions(c.schemeHoldExecutions ?? [:])
         if let importedGestureTimings = c.buttonGestureTimingsByModel {
             buttonGestureTimingsByModel = importedGestureTimings
         } else if let model = settingsModel(for: selectedRemoteProfileID), model != .unknown,
@@ -2978,8 +2952,6 @@ final class AppSettings: ObservableObject {
         ).mappings.interactionSettings ?? RemoteButtonInteractionSettings()
         if !interactionSettings.isValid || interactionSettings.modes.contains(where: {
             RemoteButton(rawValue: $0.key) == nil || RemoteButtonHoldMode(rawValue: $0.value) == nil
-        }) || (interactionSettings.holdExecutions ?? []).contains(where: {
-            RemoteButton(rawValue: $0) == nil
         }) { rejected.insert("interactionSettings") }
         if let importedGestureTimings = configuration.buttonGestureTimingsByModel,
            Self.gestureTimingsAreWellFormed(importedGestureTimings) {
@@ -3279,39 +3251,6 @@ final class AppSettings: ObservableObject {
         interactionSettings.modes[button.rawValue] = mode.rawValue
     }
 
-    /// 「按住执行」按作用域保存：基础映射一份，每个键位方案可以有自己的选择。
-    ///
-    /// 方案覆盖的长按动作由私有组件存储，开关本身留在宿主；缺少某方案的记录时沿用基础映射。
-    func setHoldExecution(_ enabled: Bool, for button: RemoteButton, scheme: UUID? = nil) {
-        guard let scheme else {
-            interactionSettings.setHoldExecution(enabled, for: button)
-            return
-        }
-        var values = Set(schemeHoldExecutions[scheme.uuidString] ?? [])
-        if enabled {
-            values.insert(button.rawValue)
-        } else {
-            values.remove(button.rawValue)
-        }
-        schemeHoldExecutions[scheme.uuidString] = values.sorted()
-    }
-
-    func holdExecution(for button: RemoteButton, scheme: UUID? = nil) -> Bool {
-        if let scheme, let values = schemeHoldExecutions[scheme.uuidString] {
-            return values.contains(button.rawValue)
-        }
-        return interactionSettings.holdExecution(for: button)
-    }
-
-    private static func sanitizedSchemeHoldExecutions(
-        _ raw: [String: [String]]
-    ) -> [String: [String]] {
-        var result: [String: [String]] = [:]
-        for (key, buttons) in raw where UUID(uuidString: key) != nil {
-            result[key] = buttons.filter { RemoteButton(rawValue: $0) != nil }
-        }
-        return result
-    }
 
     /// An action change can make the saved hold choice unrunnable. Drop it to "unset" so the
     /// button never keeps a choice it cannot honour.
@@ -3337,9 +3276,9 @@ final class AppSettings: ObservableObject {
             snapshot.repeatSingleStartMilliseconds = buttonGestureTiming(for: model)
                 .repeatSingleStartMilliseconds
         }
-        snapshot.holdExecution = timing.holdExecution(for: button)
-        // 默认按基础层的长按动作；方案生效时由监听层按活动方案覆盖。
-        snapshot.holdExecutionAction = snapshot.long
+        // 默认取基础层的动作；方案生效时由监听层按活动方案覆盖。
+        snapshot.holdableSingle = snapshot.single
+        snapshot.holdableLong = snapshot.long
         if snapshot.mode == .repeatSingle,
            interactionModeOverride?(profileID ?? selectedRemoteProfileID, button) == nil,
            timing.migratedRepeatButtons?.contains(button.rawValue) == true,
@@ -3349,7 +3288,11 @@ final class AppSettings: ObservableObject {
         }
         // A hold choice that the current actions cannot run is dropped, not turned into a
         // paused state: the button must keep its click and long press instead of going dead.
-        if let mode = snapshot.mode, !snapshot.blockers(for: mode).isEmpty {
+        // 方案接管时报废模式先留一层：这里的动作用的是基础映射，方案里的动作要等监听层
+        // 解析后再判断，否则方案里配好方向键也会被误判成不可用。
+        let modeFromProfile = interactionModeOverride?(profileID ?? selectedRemoteProfileID, button) != nil
+        if let mode = snapshot.mode, !snapshot.blockers(for: mode).isEmpty,
+           !(mode.isHoldDown && modeFromProfile) {
             snapshot.mode = .once
         }
         return snapshot

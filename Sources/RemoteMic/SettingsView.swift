@@ -3752,8 +3752,15 @@ struct SettingsView: View {
         guard let mode, mode != .once else {
             return localization.text("button_mapping.hold.entry")
         }
-        let trigger: ButtonTrigger = mode == .repeatLong ? .longPress : .singleClick
-        return localization.text("button_mapping.hold.repeat_prefix") +
+        let trigger: ButtonTrigger = (mode == .repeatLong || mode == .longHold)
+            ? .longPress
+            : .singleClick
+        let prefixKey: String = switch mode {
+        case .singleHold: "button_mapping.hold.single_hold.prefix"
+        case .longHold: "button_mapping.hold.long_hold.prefix"
+        case .repeatSingle, .repeatLong, .once: "button_mapping.hold.repeat_prefix"
+        }
+        return localization.text(prefixKey) +
             mappingHoldActionSummary(for: button, trigger: trigger)
     }
 
@@ -3805,11 +3812,8 @@ struct SettingsView: View {
             single: mappingConfiguration(for: button, trigger: .singleClick),
             double: mappingConfiguration(for: button, trigger: .doubleClick),
             long: mappingConfiguration(for: button, trigger: .longPress))
-        snapshot.holdExecution = settings.holdExecution(
-            for: button,
-            scheme: editingMappingProfileID
-        )
-        snapshot.holdExecutionAction = snapshot.long
+        snapshot.holdableSingle = snapshot.single
+        snapshot.holdableLong = snapshot.long
         // The editor mirrors runtime: a choice the actions cannot run is simply unset.
         if let mode = snapshot.mode, !snapshot.blockers(for: mode).isEmpty {
             snapshot.mode = .once
@@ -3828,6 +3832,11 @@ struct SettingsView: View {
         case let .actionNotRepeatable(configured):
             return String(
                 format: localization.text("button_mapping.hold.blocker.action_not_repeatable"),
+                actionSummary(configured)
+            )
+        case let .actionNotHoldable(configured):
+            return String(
+                format: localization.text("button_mapping.hold.blocker.action_not_holdable"),
                 actionSummary(configured)
             )
         case let .longPressConfigured(configured):
@@ -3879,7 +3888,12 @@ struct SettingsView: View {
                     Spacer(minLength: 0)
                 }
 
-                HStack(alignment: .top, spacing: 8) {
+                // 四个目标并列，最多只能选一个：两个重复、两个按住。
+                LazyVGrid(
+                    columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)],
+                    alignment: .leading,
+                    spacing: 8
+                ) {
                     ForEach(RemoteButtonHoldMode.selectableCases) { mode in
                         mappingHoldOptionColumn(mode, button: button, snapshot: snapshot,
                                                 profileUnsupported: profileUnsupported)
@@ -3897,13 +3911,6 @@ struct SettingsView: View {
                         .foregroundStyle(Color.accentColor)
                         .font(.system(size: 12))
                         .fixedSize(horizontal: false, vertical: true)
-                }
-
-                // 长按动作是方向键的按键都要有这个入口，基础映射与键位方案一致；
-                // 四颗方向键常驻，避免“配置了方向键却找不到开关”。
-                if snapshot.canHoldExecution || button.isDirectional {
-                    Divider().padding(.top, 2)
-                    mappingHoldExecutionControl(button: button, snapshot: snapshot)
                 }
 
                 if snapshot.single.action != .disabled, !snapshot.single.action.allowsRepeat {
@@ -3929,11 +3936,22 @@ struct SettingsView: View {
     ) -> some View {
         let blockers = snapshot.blockers(for: mode)
         let selected = snapshot.mode == mode
-        let subtitle = mode == .repeatSingle
-            ? localization.text("button_mapping.hold.repeat_single.action_prefix") +
+        let subtitle: String = switch mode {
+        case .repeatSingle:
+            localization.text("button_mapping.hold.repeat_single.action_prefix") +
                 mappingActionSummary(for: button, trigger: .singleClick)
-            : localization.text("button_mapping.hold.repeat_long.action_prefix") +
+        case .repeatLong:
+            localization.text("button_mapping.hold.repeat_long.action_prefix") +
                 mappingActionSummary(for: button, trigger: .longPress)
+        case .singleHold:
+            localization.text("button_mapping.hold.single_hold.action_prefix") +
+                mappingActionSummary(for: button, trigger: .singleClick)
+        case .longHold:
+            localization.text("button_mapping.hold.long_hold.action_prefix") +
+                mappingActionSummary(for: button, trigger: .longPress)
+        case .once:
+            ""
+        }
         return VStack(alignment: .leading, spacing: 5) {
             Button {
                 setMappingHoldMode(mode, for: button)
@@ -3986,64 +4004,6 @@ struct SettingsView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
-    }
-
-    /// 按住编辑区底部的「按住执行」开关：打开后按住按键等同按住键盘方向键，
-    /// 播放器这类 App 才会持续快进。它与上面的重复方式互相独立，
-    /// 只看这颗按键的长按动作是不是方向键。
-    private func mappingHoldExecutionControl(
-        button: RemoteButton,
-        snapshot: RemoteButtonInteractionSnapshot
-    ) -> some View {
-        let isAvailable = snapshot.canHoldExecution
-        return VStack(alignment: .leading, spacing: 5) {
-            Toggle(isOn: Binding(
-                get: { isAvailable && settings.holdExecution(for: button, scheme: editingMappingProfileID) },
-                set: {
-                    settings.setHoldExecution(
-                        $0,
-                        for: button,
-                        scheme: editingMappingProfileID
-                    )
-                }
-            )) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("button_mapping.hold_execution.title")
-                        .font(.system(size: 13, weight: .medium))
-                    Text("button_mapping.hold_execution.description")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-            .toggleStyle(.switch)
-            .disabled(!isAvailable || isMappingProfilePreviewOnly)
-            .help(localization.text("button_mapping.hold_execution.help"))
-            .accessibilityIdentifier("mapping-hold-execution")
-
-            if !isAvailable {
-                // 不可用时点名原因，不留下一个“看着能开却没反应”的开关。
-                Text(holdExecutionUnavailableText(snapshot: snapshot))
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.leading, 2)
-            }
-        }
-    }
-
-    private func holdExecutionUnavailableText(
-        snapshot: RemoteButtonInteractionSnapshot
-    ) -> String {
-        let action = snapshot.long
-        guard action.action != .disabled,
-              !(action.action == .customShortcut && action.shortcut == nil) else {
-            return localization.text("button_mapping.hold_execution.need_action")
-        }
-        return String(
-            format: localization.text("button_mapping.hold_execution.need_arrow"),
-            actionSummary(action)
-        )
     }
 
     private var mappingGestureTimingSection: some View {

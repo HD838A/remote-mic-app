@@ -3641,27 +3641,30 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             macroFeature.hasActiveBinding(profileID: profileID, button: button, trigger: trigger) &&
                 settings.configuredActionOverride?(profileID, button, trigger) == nil
         }
-        snapshot.holdExecutionAction = resolvedHoldAction(device: profileID, button: button)
-        snapshot.holdExecution = isHoldExecutionEnabled(device: profileID, button: button)
+        let resolved = resolvedHoldActions(device: profileID, button: button)
+        snapshot.holdableSingle = resolved.single
+        snapshot.holdableLong = resolved.long
+        if let mode = snapshot.mode, mode.isHoldDown, !snapshot.blockers(for: mode).isEmpty {
+            snapshot.mode = .once
+        }
         return snapshot
     }
 
-    /// 按住执行按当前生效的方案解析：方案覆盖的长按动作优先，其次基础映射。
-    private func resolvedHoldAction(device: UUID?, button: RemoteButton) -> ConfiguredButtonAction {
-        if let scheme = macroFeature.activeMappingProfileID(device: device),
-           let binding = macroFeature.profileBinding(
-               device: device, profile: scheme, button: button, trigger: .longPress
-           ) {
-            return binding
+    /// 按住执行按当前生效的方案解析：方案覆盖的动作优先，其次基础映射。
+    private func resolvedHoldActions(
+        device: UUID?,
+        button: RemoteButton
+    ) -> (single: ConfiguredButtonAction, long: ConfiguredButtonAction) {
+        let scheme = macroFeature.activeMappingProfileID(device: device)
+        func resolve(_ trigger: ButtonTrigger) -> ConfiguredButtonAction {
+            if let scheme, let binding = macroFeature.profileBinding(
+                device: device, profile: scheme, button: button, trigger: trigger
+            ) {
+                return binding
+            }
+            return settings.configuredAction(for: button, trigger: trigger, profileID: device)
         }
-        return settings.configuredAction(for: button, trigger: .longPress, profileID: device)
-    }
-
-    private func isHoldExecutionEnabled(device: UUID?, button: RemoteButton) -> Bool {
-        settings.holdExecution(
-            for: button,
-            scheme: macroFeature.activeMappingProfileID(device: device)
-        )
+        return (resolve(.singleClick), resolve(.longPress))
     }
 
     private func handleConfiguredButtonInteraction(_ phase: RemoteButtonPhase, button: RemoteButton,
@@ -3796,11 +3799,8 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             holdEndPerformer: { [weak self] reason in
                 self?.endHeldKeyExecution(reason: reason)
             },
-            holdExecutionResolver: { [weak self] device, button in
-                self?.resolvedHoldAction(device: device, button: button)
-            },
-            holdExecutionEnabled: { [weak self] device, button in
-                self?.isHoldExecutionEnabled(device: device, button: button) ?? false
+            holdTargetResolver: { [weak self] device, button in
+                self?.resolvedHoldActions(device: device, button: button)
             },
             overrideActionPerformer: { [weak self] profileID, button, trigger in
                 self?.performButtonProfileBoundAction(

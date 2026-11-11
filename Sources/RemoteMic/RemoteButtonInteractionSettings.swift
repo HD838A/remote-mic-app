@@ -21,26 +21,20 @@ struct RemoteButtonInteractionSettings: Codable, Equatable {
     var longPressMilliseconds: Int = 550
     var modes: [String: String] = [:]
     var migratedRepeatButtons: [String]? = nil
-    /// 打开「按住执行」的按键：按住期间把目标键真正压在按下状态，而不是反复点按。
-    /// 缺失表示旧配置，全部按键保持既有重复行为。
-    var holdExecutions: [String]? = nil
-
     init(
         doubleClickMilliseconds: Int = 300,
         longPressMilliseconds: Int = 550,
         modes: [String: String] = [:],
-        migratedRepeatButtons: [String]? = nil,
-        holdExecutions: [String]? = nil
+        migratedRepeatButtons: [String]? = nil
     ) {
         self.doubleClickMilliseconds = doubleClickMilliseconds
         self.longPressMilliseconds = longPressMilliseconds
         self.modes = modes
         self.migratedRepeatButtons = migratedRepeatButtons
-        self.holdExecutions = holdExecutions
     }
 
     private enum CodingKeys: String, CodingKey {
-        case doubleClickMilliseconds, longPressMilliseconds, modes, migratedRepeatButtons, holdExecutions
+        case doubleClickMilliseconds, longPressMilliseconds, modes, migratedRepeatButtons
     }
 
     init(from decoder: Decoder) throws {
@@ -58,10 +52,6 @@ struct RemoteButtonInteractionSettings: Codable, Equatable {
             [String].self,
             forKey: .migratedRepeatButtons
         )
-        holdExecutions = try container.decodeIfPresent(
-            [String].self,
-            forKey: .holdExecutions
-        )
         // Raw key-down came from an unshipped candidate design. "once" is retained as
         // an internal marker so a user-cleared hold choice does not regain a later default.
         modes = modes.filter { $0.value != "holdSingle" }
@@ -73,8 +63,7 @@ struct RemoteButtonInteractionSettings: Codable, Equatable {
 
     var isWellFormed: Bool {
         isValid && modes.allSatisfy { RemoteButton(rawValue: $0.key) != nil && RemoteButtonHoldMode(rawValue: $0.value) != nil } &&
-            (migratedRepeatButtons ?? []).allSatisfy { RemoteButton(rawValue: $0) != nil } &&
-            (holdExecutions ?? []).allSatisfy { RemoteButton(rawValue: $0) != nil }
+            (migratedRepeatButtons ?? []).allSatisfy { RemoteButton(rawValue: $0) != nil }
     }
 
     func mode(for button: RemoteButton) -> RemoteButtonHoldMode? {
@@ -82,20 +71,6 @@ struct RemoteButtonInteractionSettings: Codable, Equatable {
             return .once
         }
         return RemoteButtonHoldMode(rawValue: value)
-    }
-
-    func holdExecution(for button: RemoteButton) -> Bool {
-        holdExecutions?.contains(button.rawValue) == true
-    }
-
-    mutating func setHoldExecution(_ enabled: Bool, for button: RemoteButton) {
-        var values = Set(holdExecutions ?? [])
-        if enabled {
-            values.insert(button.rawValue)
-        } else {
-            values.remove(button.rawValue)
-        }
-        holdExecutions = values.isEmpty ? nil : values.sorted()
     }
 
     var timing: RemoteButtonGestureTiming {
@@ -114,10 +89,17 @@ struct RemoteButtonInteractionSettings: Codable, Equatable {
 
 enum RemoteButtonHoldMode: String, CaseIterable, Codable, Identifiable {
     case once, repeatLong, repeatSingle
+    /// 按住期间把单击动作里的方向键真正按下去。
+    case singleHold
+    /// 达到长按时间后把长按动作里的方向键真正按下去。
+    case longHold
     var id: String { rawValue }
     var localizationKey: String { "button_mapping.hold_mode.\(rawValue.lowercased())" }
 
-    static let selectableCases: [Self] = [.repeatSingle, .repeatLong]
+    /// 按住编辑区的四个并列选项，最多只能选一个。
+    static let selectableCases: [Self] = [.repeatSingle, .repeatLong, .singleHold, .longHold]
+
+    var isHoldDown: Bool { self == .singleHold || self == .longHold }
 }
 
 extension ConfiguredButtonAction {
@@ -136,20 +118,29 @@ struct RemoteButtonInteractionSnapshot {
     var repeatInterval: UInt64 = 100
     var repeatSingleStartMilliseconds: Int? = nil
     var repeatAllowed = true
-    /// 用户为这颗按键打开了「按住执行」。
-    var holdExecution = false
-    /// 按住执行要按下去的动作：解析后的「长按动作」。只有方向键能像物理键盘一样被按住。
-    var holdExecutionAction: ConfiguredButtonAction?
+    /// 解析后的单击动作（方案覆盖优先）。「单击按住」只看它能否被按住。
+    var holdableSingle: ConfiguredButtonAction?
+    /// 解析后的长按动作（方案覆盖优先）。「长按按住」只看它能否被按住。
+    var holdableLong: ConfiguredButtonAction?
     var opaqueDouble = false
     var opaqueLong = false
     var recognizesDouble: Bool { opaqueDouble || double.action != .disabled }
     var recognizesLong: Bool { opaqueLong || long.action != .disabled }
 
-    /// 长按动作是方向键时才能按住执行；与上面的重复方式无关。
-    var canHoldExecution: Bool { holdExecutionAction?.holdableKey != nil }
+    /// 当前按住模式真正要按下去的动作；重复模式返回 nil。
+    var holdDownAction: ConfiguredButtonAction? {
+        switch mode {
+        case .singleHold: return holdableSingle
+        case .longHold: return holdableLong
+        case .once, .repeatSingle, .repeatLong, nil: return nil
+        }
+    }
 
-    /// 运行时是否真的按“按住执行”处理：开关打开、长按动作可按住，且当前前台 App 允许。
-    var isHoldExecutionActive: Bool { holdExecution && canHoldExecution && repeatAllowed }
+    /// 当前按住模式能否执行：动作必须是方向键，且当前前台 App 允许。
+    var isHoldDownActive: Bool {
+        guard let action = holdDownAction else { return false }
+        return action.holdableKey != nil && repeatAllowed
+    }
 
     func withMode(_ mode: RemoteButtonHoldMode?) -> Self {
         var copy = self
@@ -160,8 +151,8 @@ struct RemoteButtonInteractionSnapshot {
     func hasSameBinding(as other: Self) -> Bool {
         mode == other.mode && single == other.single && double == other.double && long == other.long &&
             hasOpaqueBinding == other.hasOpaqueBinding && opaqueDouble == other.opaqueDouble &&
-            opaqueLong == other.opaqueLong && holdExecution == other.holdExecution &&
-            holdExecutionAction == other.holdExecutionAction
+            opaqueLong == other.opaqueLong && holdableSingle == other.holdableSingle &&
+            holdableLong == other.holdableLong
     }
 
     var unavailableReason: String? {
@@ -173,6 +164,10 @@ struct RemoteButtonInteractionSnapshot {
         case .repeatSingle:
             return !hasOpaqueBinding && single.allowsHoldRepeat && !recognizesLong
                 ? nil : "button_mapping.hold_repeat_single_unavailable"
+        case .singleHold:
+            return holdableSingle?.holdableKey != nil ? nil : "button_mapping.hold_single_hold_unavailable"
+        case .longHold:
+            return holdableLong?.holdableKey != nil ? nil : "button_mapping.hold_long_hold_unavailable"
         }
     }
 }
@@ -184,6 +179,7 @@ enum RemoteButtonHoldBlocker: Equatable {
     case profileOwned
     case actionUnset
     case actionNotRepeatable(ConfiguredButtonAction)
+    case actionNotHoldable(ConfiguredButtonAction)
     case longPressConfigured(ConfiguredButtonAction)
     case longPressOwnedByProfile
 }
@@ -193,13 +189,19 @@ extension RemoteButtonInteractionSnapshot {
     func blockers(for mode: RemoteButtonHoldMode) -> [RemoteButtonHoldBlocker] {
         guard mode != .once else { return [] }
         guard settings.isValid else { return [.timingInvalid] }
-        if hasOpaqueBinding { return [.profileOwned] }
+        // 按住执行由宿主直接按键，方案覆盖的动作也能按住，因此不受“方案接管”限制。
         switch mode {
         case .once:
             return []
+        case .singleHold:
+            return Self.holdBlockers(for: holdableSingle)
+        case .longHold:
+            return Self.holdBlockers(for: holdableLong)
         case .repeatLong:
+            if hasOpaqueBinding { return [.profileOwned] }
             return opaqueLong ? [.longPressOwnedByProfile] : Self.blockers(for: long)
         case .repeatSingle:
+            if hasOpaqueBinding { return [.profileOwned] }
             var reasons = Self.blockers(for: single)
             if opaqueLong {
                 reasons.append(.longPressOwnedByProfile)
@@ -208,6 +210,17 @@ extension RemoteButtonInteractionSnapshot {
             }
             return reasons
         }
+    }
+
+    private static func holdBlockers(
+        for configured: ConfiguredButtonAction?
+    ) -> [RemoteButtonHoldBlocker] {
+        guard let configured else { return [.actionUnset] }
+        if configured.action == .disabled ||
+            (configured.action == .customShortcut && configured.shortcut == nil) {
+            return [.actionUnset]
+        }
+        return configured.holdableKey == nil ? [.actionNotHoldable(configured)] : []
     }
 
     private static func blockers(for configured: ConfiguredButtonAction) -> [RemoteButtonHoldBlocker] {

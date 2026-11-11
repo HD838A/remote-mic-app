@@ -874,10 +874,9 @@ struct SettingsPageRegressionTests {
 
         // 写入路径：编辑器禁用之外，保存函数自己也要拒绝只读预览。
         #expect(source.contains("guard !isMappingProfilePreviewOnly else { return }"))
-        // 动作编辑器、单独的按住区，加页脚的「恢复默认」；按住面板里的「按住执行」开关
-        // 同时受可用性与只读预览约束，单独断言，不再计入这三处。
+        // 动作编辑器、单独的按住区，加页脚的「恢复默认」；编辑器内的按住面板跟随外层统一禁用，
+        // 不再单独计一处。
         #expect(source.components(separatedBy: ".disabled(isMappingProfilePreviewOnly)").count - 1 == 3)
-        #expect(source.contains(".disabled(!isAvailable || isMappingProfilePreviewOnly)"))
         #expect(source.contains("private var isMappingProfilePreviewOnly: Bool"))
 
         // 切换方案必须回到只读预览，不能让「刚解锁过」跟着带过去。
