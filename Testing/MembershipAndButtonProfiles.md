@@ -43,6 +43,11 @@ swift build --disable-keychain -c release
 
 内部集成构建只注入一个经过校验的私有二进制构件 Package；会员、组合动作和付费键位方案必须来自同一份构件清单：
 
+二进制测试需要把构件中的资源 Bundle 装配到测试 Bundle 的 `Contents/Resources`。
+设置 `SAYALL_MACRO_STORAGE_ROOT` 为隔离的本机测试目录，再运行按键页适配测试。
+源码专用 BLE 内部钩子套件仅在对应源码测试构建运行。发布二进制不提供这些钩子。
+
+
 ```bash
 SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH=/path/to/prepared-private-artifact-package \
 swift test --disable-keychain --scratch-path .build-free-paid

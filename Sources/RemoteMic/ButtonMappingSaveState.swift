@@ -13,6 +13,22 @@ enum ButtonMappingWriteRecovery {
         guard reload() else { return .unknown }
         return matches() ? .saved : .failed
     }
+
+    static func saveAction(write: () -> Bool, reload: () -> Bool, matches: () -> Bool,
+                           reconcileHold: () -> Void) -> Outcome {
+        let outcome = perform(write: write, reload: reload, matches: matches)
+        if outcome == .saved { reconcileHold() }
+        return outcome
+    }
+
+}
+
+struct ButtonMappingProfileCreation: Identifiable {
+    let id = UUID()
+    let sourceProfileID: UUID?
+    let deviceID: UUID?
+    let sourceName: String
+    var name: String
 }
 
 struct ButtonMappingSaveTarget: Equatable {
@@ -40,6 +56,18 @@ struct ButtonMappingSaveState {
         self.outcome = outcome
         self.retry = outcome == .failed ? retry : nil
         receipt = UUID()
+    }
+
+    @discardableResult
+    func performRetry(target: ButtonMappingSaveTarget,
+                      writeAction: (ConfiguredButtonAction?) -> Void,
+                      writeHold: (RemoteButtonHoldMode) -> Void) -> Bool {
+        guard self.target == target, outcome == .failed, let retry else { return false }
+        switch retry {
+        case let .action(value): writeAction(value)
+        case let .hold(mode): writeHold(mode)
+        }
+        return true
     }
 
     mutating func clearSuccess(_ receipt: UUID) {

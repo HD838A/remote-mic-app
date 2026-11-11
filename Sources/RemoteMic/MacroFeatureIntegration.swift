@@ -221,6 +221,32 @@ final class MacroFeatureIntegration: ObservableObject {
         #endif
     }
 
+    func profileHoldModeMatches(_ mode: RemoteButtonHoldMode, profile: UUID, button: RemoteButton) -> Bool {
+        if case let .explicit(stored) = displayProfileHoldMode(profile: profile, button: button) { return stored == mode }
+        return false
+    }
+
+    func profileBindingMatches(_ configured: ConfiguredButtonAction?, profile: UUID,
+                               button: RemoteButton, trigger: ButtonTrigger) -> Bool {
+        #if canImport(SayAllButtonProfiles) && SAYALL_BUTTON_PROFILE_AUTOSAVE
+        switch buttonProfilesFeature.displayBinding(profile: profile, button: button.rawValue, trigger: trigger.rawValue) {
+        case .inherited: return configured == nil
+        case let .explicit(stored, _):
+            guard let configured, let requested = mappingProfileBinding(configured, displayName: nil) else { return false }
+            switch (stored, requested) {
+            case let (.host(lhs), .host(rhs)):
+                // Display names are localized independently of the persisted action payload.
+                guard let decoded = MappingHostBindingCodec.decode(lhs.payload) else { return false }
+                return lhs.id == rhs.id && decoded.isEditable && decoded.configured == configured
+            default: return stored == requested
+            }
+        case .unavailable: return false
+        }
+        #else
+        return false
+        #endif
+    }
+
     func writeProfileHoldMode(_ mode: RemoteButtonHoldMode, profile: UUID, button: RemoteButton) -> Bool {
         #if canImport(SayAllButtonProfiles) && SAYALL_BUTTON_PROFILE_AUTOSAVE
         let result = buttonProfilesFeature.writeHoldMode(mode.rawValue, profile: profile, button: button.rawValue)
