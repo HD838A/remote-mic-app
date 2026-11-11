@@ -1478,3 +1478,4 @@
 "notice.accessibility.dismiss" = "Dismiss notice";
 "notice.accessibility.error_prefix" = "Error: ";
 "notice.accessibility.warning_prefix" = "Warning: ";
+"button_mapping.macro_unavailable.detail" = "The combination action this button points to was deleted.";

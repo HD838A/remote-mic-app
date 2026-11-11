@@ -2,8 +2,8 @@ import SwiftUI
 
 /// 内联提示条：描述“仍然存在的状态”，不是瞬时事件。
 ///
-/// 和 `NoticeBubble` 共用三档语义色，但没有尾巴、没有关闭按钮——
-/// 状态不会因为用户点一下 × 就消失，给关闭入口反而会误导。
+/// 形态回到 v3 7.3：`[图标 16] [标题 + 说明] [右侧动作]` 一行排开。
+/// 状态不会因为用户点一下 × 就消失，所以没有关闭入口——给 × 反而会误导。
 struct NoticeInline: View {
     let tier: NoticeTier
     let title: String
@@ -34,21 +34,28 @@ struct NoticeInline: View {
         RoundedRectangle(cornerRadius: 10, style: .continuous)
     }
 
+    private var iconName: String {
+        switch tier {
+        case .tip: return "checkmark.circle.fill"
+        case .warning: return "exclamationmark.circle.fill"
+        case .error: return "xmark.circle.fill"
+        }
+    }
+
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(alignment: .firstTextBaseline, spacing: 5) {
-                    if tier == .error {
-                        Image(systemName: "exclamationmark")
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundStyle(accent)
-                            .accessibilityHidden(true)
-                    }
-                    Text(title)
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(.primary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+        HStack(alignment: .top, spacing: 9) {
+            Image(systemName: iconName)
+                .font(.system(size: 16))
+                .foregroundStyle(accent)
+                .frame(width: 16, height: 16)
+                .padding(.top, 1)
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.primary)
+                    .fixedSize(horizontal: false, vertical: true)
                 if let text, !text.isEmpty {
                     Text(text)
                         .font(.system(size: 12))
@@ -56,22 +63,27 @@ struct NoticeInline: View {
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                if let action {
-                    Button {
-                        action.perform()
-                    } label: {
-                        Text(action.title)
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(accent)
-                            .padding(.top, 2)
-                    }
-                    .buttonStyle(.plain)
-                }
             }
-            Spacer(minLength: 0)
+
+            Spacer(minLength: 8)
+
+            if let action {
+                Button {
+                    action.perform()
+                } label: {
+                    Text(action.title)
+                        .font(.system(size: 12.5, weight: .semibold))
+                        .foregroundStyle(accent)
+                        .fixedSize()
+                        .padding(.vertical, 2)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 1)
+            }
         }
-        .padding(.leading, 14)
-        .padding(.trailing, 14)
+        .padding(.leading, 13)
+        .padding(.trailing, 13)
         .padding(.vertical, 11)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(surface, in: shape)

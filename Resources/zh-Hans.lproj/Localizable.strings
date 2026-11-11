@@ -1477,3 +1477,4 @@
 "notice.accessibility.dismiss" = "关闭提示";
 "notice.accessibility.error_prefix" = "错误：";
 "notice.accessibility.warning_prefix" = "警告：";
+"button_mapping.macro_unavailable.detail" = "这个按键指向的组合动作已被删除。";
