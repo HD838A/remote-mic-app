@@ -1444,8 +1444,8 @@
 "button_mapping.hold.target" = "选择一种行为";
 "button_mapping.hold.clear" = "清除设置";
 "button_mapping.hold.clear.help" = "清除后按单击、双击和长按的配置正常执行。";
-"button_mapping.hold.single_action" = "单击动作";
-"button_mapping.hold.long_action" = "长按动作";
+"button_mapping.hold.single_action" = "使用单击动作";
+"button_mapping.hold.long_action" = "使用长按动作";
 "button_mapping.hold.single_hold.prefix" = "按住时 按住 ";
 "button_mapping.hold.long_hold.prefix" = "按住时 长按后按住 ";
 "button_mapping.hold_mode.once" = "未设置按住";

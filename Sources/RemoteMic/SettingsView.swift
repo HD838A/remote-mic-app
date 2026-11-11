@@ -4000,7 +4000,8 @@ struct SettingsView: View {
     ) -> some View {
         let blockers = snapshot.blockers(for: mode)
         let selected = snapshot.mode == mode
-        return VStack(alignment: .leading, spacing: 5) {
+        let canClearLongAction = mode == .repeatSingle && blockers == [.longPressConfigured(snapshot.long)]
+        return ZStack(alignment: .bottomLeading) {
             Button {
                 setMappingHoldMode(mode, for: button)
             } label: {
@@ -4034,6 +4035,7 @@ struct SettingsView: View {
                 }
                 .font(.system(size: 12))
                 .padding(10)
+                .padding(.bottom, canClearLongAction ? 22 : 0)
                 .frame(maxWidth: .infinity, minHeight: 108, maxHeight: .infinity, alignment: .topLeading)
                 .background(selected ? Color.accentColor.opacity(0.12) : Color.primary.opacity(0.04),
                             in: RoundedRectangle(cornerRadius: 8))
@@ -4046,7 +4048,7 @@ struct SettingsView: View {
             .disabled(profileUnsupported || !blockers.isEmpty)
             .accessibilityAddTraits(selected ? .isSelected : [])
 
-            if mode == .repeatSingle, blockers == [.longPressConfigured(snapshot.long)] {
+            if canClearLongAction {
                 Button("button_mapping.hold.clear_long_to_enable") {
                     setMappingAction(.disabled, for: button, trigger: .longPress)
                 }
@@ -4054,6 +4056,7 @@ struct SettingsView: View {
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(Color.accentColor)
                 .disabled(profileUnsupported)
+                .padding(10)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)

@@ -1445,8 +1445,8 @@
 "button_mapping.hold.target" = "Choose one behavior";
 "button_mapping.hold.clear" = "Clear setting";
 "button_mapping.hold.clear.help" = "After clearing, the button runs its click, double-click and long-press actions as configured.";
-"button_mapping.hold.single_action" = "Single-click action";
-"button_mapping.hold.long_action" = "Long-press action";
+"button_mapping.hold.single_action" = "Uses the single-click action";
+"button_mapping.hold.long_action" = "Uses the long-press action";
 "button_mapping.hold.single_hold.prefix" = "While held: hold down ";
 "button_mapping.hold.long_hold.prefix" = "While held: hold down after long press ";
 "button_mapping.hold_mode.once" = "No hold behavior";

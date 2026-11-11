@@ -59,7 +59,7 @@ enum SettingsScreenshotRenderer {
                 return value == "long" ? "Christopher Alexander Anderson" : "Christopher Anderson"
             }
             return "春风十里无线麦设计验证账户"
-        }
+        } ?? (language == .english ? "Test account" : "测试账户")
         let opensShortcutEditor = ProcessInfo.processInfo.environment[
             "REMOTE_MIC_SETTINGS_SCREENSHOT_OPEN_SHORTCUT_EDITOR"
         ] == "1"
