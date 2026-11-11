@@ -3895,9 +3895,11 @@ struct SettingsView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
-                if snapshot.canHoldExecution, !profileUnsupported, editingMappingProfileID == nil {
+                let showsHoldExecution = !profileUnsupported && editingMappingProfileID == nil &&
+                    (button.isDirectional || snapshot.canHoldExecution)
+                if showsHoldExecution {
                     Divider().padding(.top, 2)
-                    mappingHoldExecutionControl(button: button)
+                    mappingHoldExecutionControl(button: button, snapshot: snapshot)
                 }
 
                 if snapshot.single.action != .disabled, !snapshot.single.action.allowsRepeat {
@@ -3982,29 +3984,61 @@ struct SettingsView: View {
         .frame(maxWidth: .infinity, alignment: .topLeading)
     }
 
-    /// 按住编辑区底部的「按住执行」开关。只在按住目标确实是方向键时出现：
-    /// 打开后按住按键等同按住键盘方向键，播放器这类 App 才会持续快进。
+    /// 按住编辑区底部的「按住执行」开关。方向键上始终显示，其他按键只在按住目标确实是
+    /// 方向键时出现：打开后按住按键等同按住键盘方向键，播放器这类 App 才会持续快进。
     ///
     /// 开关保存在设备的基础映射里；按键位方案覆盖的按住模式由私有组件拥有，
     /// 没有对应的方案级开关，因此编辑方案时不显示，避免写出一个会被忽略的值。
-    private func mappingHoldExecutionControl(button: RemoteButton) -> some View {
-        Toggle(isOn: Binding(
-            get: { settings.holdExecution(for: button) },
-            set: { settings.setHoldExecution($0, for: button) }
-        )) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text("button_mapping.hold_execution.title")
-                    .font(.system(size: 13, weight: .medium))
-                Text("button_mapping.hold_execution.description")
-                    .font(.system(size: 12))
+    private func mappingHoldExecutionControl(
+        button: RemoteButton,
+        snapshot: RemoteButtonInteractionSnapshot
+    ) -> some View {
+        let isAvailable = snapshot.canHoldExecution
+        return VStack(alignment: .leading, spacing: 5) {
+            Toggle(isOn: Binding(
+                get: { isAvailable && settings.holdExecution(for: button) },
+                set: { settings.setHoldExecution($0, for: button) }
+            )) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("button_mapping.hold_execution.title")
+                        .font(.system(size: 13, weight: .medium))
+                    Text("button_mapping.hold_execution.description")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .toggleStyle(.switch)
+            .disabled(!isAvailable || isMappingProfilePreviewOnly)
+            .help(localization.text("button_mapping.hold_execution.help"))
+            .accessibilityIdentifier("mapping-hold-execution")
+
+            if !isAvailable {
+                // 不可用时点名原因，不留下一个“看着能开却没反应”的开关。
+                Text(holdExecutionUnavailableText(button: button, snapshot: snapshot))
+                    .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+                    .padding(.leading, 2)
             }
         }
-        .toggleStyle(.switch)
-        .disabled(isMappingProfilePreviewOnly)
-        .help(localization.text("button_mapping.hold_execution.help"))
-        .accessibilityIdentifier("mapping-hold-execution")
+    }
+
+    private func holdExecutionUnavailableText(
+        button: RemoteButton,
+        snapshot: RemoteButtonInteractionSnapshot
+    ) -> String {
+        guard let action = snapshot.holdContinuationAction else {
+            return localization.text("button_mapping.hold_execution.need_mode")
+        }
+        guard action.action != .disabled,
+              !(action.action == .customShortcut && action.shortcut == nil) else {
+            return localization.text("button_mapping.hold_execution.need_action")
+        }
+        return String(
+            format: localization.text("button_mapping.hold_execution.need_arrow"),
+            actionSummary(action)
+        )
     }
 
     private var mappingGestureTimingSection: some View {

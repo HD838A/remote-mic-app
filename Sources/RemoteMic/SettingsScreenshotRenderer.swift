@@ -69,6 +69,10 @@ enum SettingsScreenshotRenderer {
         let opensHoldEditor = ProcessInfo.processInfo.environment[
             "REMOTE_MIC_SETTINGS_SCREENSHOT_OPEN_HOLD_EDITOR"
         ] == "1"
+        // 按住编辑区可以针对任意按键截图：方向键才有「按住执行」入口，证据需要能选到它们。
+        let holdEditorButton = ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_SETTINGS_SCREENSHOT_HOLD_BUTTON"
+        ].flatMap(RemoteButton.init(rawValue:)) ?? .ok
         let initialActionFilter = ProcessInfo.processInfo.environment[
             "REMOTE_MIC_SETTINGS_SCREENSHOT_ACTION_FILTER"
         ]
@@ -256,26 +260,26 @@ enum SettingsScreenshotRenderer {
             "REMOTE_MIC_SETTINGS_SCREENSHOT_HOLD_MODE"
         ], let holdMode = RemoteButtonHoldMode(rawValue: holdModeValue) {
             if holdMode == .repeatLong {
-                settings.setAction(.returnKey, for: .ok, trigger: .longPress)
+                settings.setAction(.returnKey, for: holdEditorButton, trigger: .longPress)
             }
-            settings.setHoldMode(holdMode, for: .ok)
+            settings.setHoldMode(holdMode, for: holdEditorButton)
         } else if opensHoldEditor {
-            settings.setAction(.returnKey, for: .ok, trigger: .longPress)
-            settings.setHoldMode(.repeatLong, for: .ok)
+            settings.setAction(.returnKey, for: holdEditorButton, trigger: .longPress)
+            settings.setHoldMode(.repeatLong, for: holdEditorButton)
         }
         // 「按住执行」只在按住目标是方向键时出现，证据截图必须能种出这个状态。
         if let holdActionValue = ProcessInfo.processInfo.environment[
             "REMOTE_MIC_SETTINGS_SCREENSHOT_HOLD_ACTION"
         ], let holdAction = ButtonAction(rawValue: holdActionValue) {
-            let trigger: ButtonTrigger = settings.interactionSettings.mode(for: .ok) == .repeatLong
+            let trigger: ButtonTrigger = settings.interactionSettings.mode(for: holdEditorButton) == .repeatLong
                 ? .longPress
                 : .singleClick
-            settings.setAction(holdAction, for: .ok, trigger: trigger)
+            settings.setAction(holdAction, for: holdEditorButton, trigger: trigger)
         }
         if ProcessInfo.processInfo.environment[
             "REMOTE_MIC_SETTINGS_SCREENSHOT_HOLD_EXECUTION"
         ] == "1" {
-            settings.setHoldExecution(true, for: .ok)
+            settings.setHoldExecution(true, for: holdEditorButton)
         }
 
         _ = NSApplication.shared
@@ -298,7 +302,9 @@ enum SettingsScreenshotRenderer {
                 initialSection: section,
                 initialShareSection: section == .statistics && expandsShare ? section : nil,
                 initialMappingEditingButton: section == .mapping && opensMappingEditor ? .ok : nil,
-                initialMappingHoldEditingButton: section == .mapping && opensHoldEditor ? .ok : nil,
+                initialMappingHoldEditingButton: section == .mapping && opensHoldEditor
+                    ? holdEditorButton
+                    : nil,
                 initialShortcutPickerShowsKeyboard: showsStandardKeyboard,
                 initialMappingActionFilter: initialActionFilter,
                 initialMappingScrollsToGestureTiming: section == .mapping && showsGestureTiming,
@@ -337,7 +343,7 @@ enum SettingsScreenshotRenderer {
                     ? .ok
                     : nil,
                 initialMappingHoldEditingButton: section == .mapping && opensHoldEditor
-                    ? .ok
+                    ? holdEditorButton
                     : nil,
                 initialMappingProfileID: section == .mapping ? seededProfileID : nil,
                 initialShortcutPickerShowsKeyboard: showsStandardKeyboard,
