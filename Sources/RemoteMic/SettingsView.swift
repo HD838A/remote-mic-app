@@ -3805,10 +3805,7 @@ struct SettingsView: View {
             single: mappingConfiguration(for: button, trigger: .singleClick),
             double: mappingConfiguration(for: button, trigger: .doubleClick),
             long: mappingConfiguration(for: button, trigger: .longPress))
-        snapshot.holdExecution = settings.holdExecution(
-            for: button,
-            profileID: editingMappingProfileID
-        )
+        snapshot.holdExecution = settings.holdExecution(for: button)
         // The editor mirrors runtime: a choice the actions cannot run is simply unset.
         if let mode = snapshot.mode, !snapshot.blockers(for: mode).isEmpty {
             snapshot.mode = .once
@@ -3898,7 +3895,7 @@ struct SettingsView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
-                if snapshot.canHoldExecution, !profileUnsupported {
+                if snapshot.canHoldExecution, !profileUnsupported, editingMappingProfileID == nil {
                     Divider().padding(.top, 2)
                     mappingHoldExecutionControl(button: button)
                 }
@@ -3987,10 +3984,13 @@ struct SettingsView: View {
 
     /// 按住编辑区底部的「按住执行」开关。只在按住目标确实是方向键时出现：
     /// 打开后按住按键等同按住键盘方向键，播放器这类 App 才会持续快进。
+    ///
+    /// 开关保存在设备的基础映射里；按键位方案覆盖的按住模式由私有组件拥有，
+    /// 没有对应的方案级开关，因此编辑方案时不显示，避免写出一个会被忽略的值。
     private func mappingHoldExecutionControl(button: RemoteButton) -> some View {
         Toggle(isOn: Binding(
-            get: { settings.holdExecution(for: button, profileID: editingMappingProfileID) },
-            set: { settings.setHoldExecution($0, for: button, profileID: editingMappingProfileID) }
+            get: { settings.holdExecution(for: button) },
+            set: { settings.setHoldExecution($0, for: button) }
         )) {
             VStack(alignment: .leading, spacing: 3) {
                 Text("button_mapping.hold_execution.title")

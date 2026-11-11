@@ -192,31 +192,6 @@ enum SettingsScreenshotRenderer {
                 trigger: .singleClick
             )
         }
-        if let holdModeValue = ProcessInfo.processInfo.environment[
-            "REMOTE_MIC_SETTINGS_SCREENSHOT_HOLD_MODE"
-        ], let holdMode = RemoteButtonHoldMode(rawValue: holdModeValue) {
-            if holdMode == .repeatLong {
-                settings.setAction(.returnKey, for: .ok, trigger: .longPress)
-            }
-            settings.setHoldMode(holdMode, for: .ok)
-        } else if opensHoldEditor {
-            settings.setAction(.returnKey, for: .ok, trigger: .longPress)
-            settings.setHoldMode(.repeatLong, for: .ok)
-        }
-        // 「按住执行」只在按住目标是方向键时出现，证据截图必须能种出这个状态。
-        if let holdActionValue = ProcessInfo.processInfo.environment[
-            "REMOTE_MIC_SETTINGS_SCREENSHOT_HOLD_ACTION"
-        ], let holdAction = ButtonAction(rawValue: holdActionValue) {
-            let trigger: ButtonTrigger = settings.interactionSettings.mode(for: .ok) == .repeatLong
-                ? .longPress
-                : .singleClick
-            settings.setAction(holdAction, for: .ok, trigger: trigger)
-        }
-        if ProcessInfo.processInfo.environment[
-            "REMOTE_MIC_SETTINGS_SCREENSHOT_HOLD_EXECUTION"
-        ] == "1" {
-            settings.setHoldExecution(true, for: .ok, profileID: settings.selectedRemoteProfileID)
-        }
         seedStatisticsForScreenshot(settings)
         let historyDirectory = outputDirectory.appendingPathComponent(UUID().uuidString)
         let transcriptStore = TranscriptArchiveStore(
@@ -276,6 +251,32 @@ enum SettingsScreenshotRenderer {
             model.macroFeature.mappingProfiles(device: nil).first { $0.name == name }?.id
         }
         model.membershipFeature.updateLocaleIdentifier(localization.locale.identifier)
+        // 加载方案会按方案重写按住设置，按住相关的种子必须落在加载之后。
+        if let holdModeValue = ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_SETTINGS_SCREENSHOT_HOLD_MODE"
+        ], let holdMode = RemoteButtonHoldMode(rawValue: holdModeValue) {
+            if holdMode == .repeatLong {
+                settings.setAction(.returnKey, for: .ok, trigger: .longPress)
+            }
+            settings.setHoldMode(holdMode, for: .ok)
+        } else if opensHoldEditor {
+            settings.setAction(.returnKey, for: .ok, trigger: .longPress)
+            settings.setHoldMode(.repeatLong, for: .ok)
+        }
+        // 「按住执行」只在按住目标是方向键时出现，证据截图必须能种出这个状态。
+        if let holdActionValue = ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_SETTINGS_SCREENSHOT_HOLD_ACTION"
+        ], let holdAction = ButtonAction(rawValue: holdActionValue) {
+            let trigger: ButtonTrigger = settings.interactionSettings.mode(for: .ok) == .repeatLong
+                ? .longPress
+                : .singleClick
+            settings.setAction(holdAction, for: .ok, trigger: trigger)
+        }
+        if ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_SETTINGS_SCREENSHOT_HOLD_EXECUTION"
+        ] == "1" {
+            settings.setHoldExecution(true, for: .ok)
+        }
 
         _ = NSApplication.shared
         AppIconController().apply(settings.appIconIdentifier, source: "screenshot")

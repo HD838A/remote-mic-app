@@ -3254,24 +3254,16 @@ final class AppSettings: ObservableObject {
         interactionSettings.modes[button.rawValue] = mode.rawValue
     }
 
-    /// 「按住执行」按方案保存：正在编辑的方案与基础层各存一份，互不覆盖。
-    func setHoldExecution(_ enabled: Bool, for button: RemoteButton, profileID: UUID?) {
-        if let profileID, profileID != selectedRemoteProfileID {
-            guard let index = remoteDeviceProfiles.firstIndex(where: { $0.id == profileID }) else {
-                return
-            }
-            var settings = remoteDeviceProfiles[index].mappings.interactionSettings
-                ?? RemoteButtonInteractionSettings()
-            settings.setHoldExecution(enabled, for: button)
-            remoteDeviceProfiles[index].mappings.interactionSettings = settings
-            saveRemoteDeviceProfiles()
-            return
-        }
+    /// 「按住执行」按设备的基础映射保存。
+    ///
+    /// 按住模式可以按键位方案覆盖，但方案存储由私有组件拥有；这里只保存本机基础层的开关，
+    /// 切换方案时按键仍按该方案的模式执行，只有打开开关的设备主路径会把方向键真正按住。
+    func setHoldExecution(_ enabled: Bool, for button: RemoteButton) {
         interactionSettings.setHoldExecution(enabled, for: button)
     }
 
-    func holdExecution(for button: RemoteButton, profileID: UUID?) -> Bool {
-        buttonInteractionSettings(profileID: profileID).holdExecution(for: button)
+    func holdExecution(for button: RemoteButton) -> Bool {
+        interactionSettings.holdExecution(for: button)
     }
 
     /// An action change can make the saved hold choice unrunnable. Drop it to "unset" so the
