@@ -99,10 +99,16 @@ class NoElevationOrAutoDriverTests(unittest.TestCase):
 class NoBinariesCommittedTests(unittest.TestCase):
     def test_no_forbidden_binary_extensions_under_rc003(self):
         rc003_root = _PACKAGE_ROOT.parents[2]
+        # Keep in sync with build/check-public-boundary.ps1's
+        # $excludedDirNames: generated build/venv output is gitignored and
+        # must not make the "no committed binaries" gate fail on a re-run.
+        _excluded_dir_names = frozenset({".venv", "dist", "pyinstaller-work", "third_party"})
         offenders = [
             str(path)
             for path in rc003_root.rglob("*")
-            if path.is_file() and path.suffix.lower() in _FORBIDDEN_BINARY_SUFFIXES
+            if path.is_file()
+            and path.suffix.lower() in _FORBIDDEN_BINARY_SUFFIXES
+            and not any(part in _excluded_dir_names for part in path.parts)
         ]
         self.assertEqual(offenders, [], f"forbidden binary committed: {offenders}")
 

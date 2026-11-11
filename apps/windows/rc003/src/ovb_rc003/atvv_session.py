@@ -104,7 +104,10 @@ class ATVVSession:
         if opcode == proto.OPCODE_CAPS:
             caps = proto.ATVVCapabilities.parse(payload)
             if caps is None:
-                raise ATVVProtocolError(f"malformed CAPS payload: {payload!r}")
+                # Never put device-controlled raw bytes into the exception
+                # text: it propagates to app.py's logger and lands in the
+                # persistent app.log (opaque-markers-only contract).
+                raise ATVVProtocolError("malformed CAPS payload")
             if caps.sample_rate != proto.SUPPORTED_SAMPLE_RATE_HZ:
                 raise UnsupportedSampleRateError(
                     "this bridge currently requires ATVV 16 kHz audio "
