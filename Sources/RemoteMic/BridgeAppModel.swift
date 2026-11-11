@@ -1505,6 +1505,8 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
 
     func stop() {
         cancelConfiguredButtonInteractions(reason: "app_stop")
+        // 退出、断连或映射关闭都必须抬起被按住的键，绝不让它在系统里留到下次启动。
+        KeyboardHoldExecution.shared.end(reason: "app_stop")
         buttonLifecycleObservers.forEach { NSWorkspace.shared.notificationCenter.removeObserver($0) }
         buttonLifecycleObservers.removeAll()
         macMicrophoneShortcutSubscription?.cancel()
@@ -3667,7 +3669,11 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
                 return (!requiresAccessibility || KeyboardInjector.isAccessibilityTrusted) && !self.macroFeature.isEditorActive &&
                     NSWorkspace.shared.frontmostApplication?.processIdentifier == target &&
                     bindingSnapshot.hasSameBinding(as: self.buttonInteractionSnapshot(button, profileID: profileID))
-            }, perform: perform)
+            }, perform: perform, beginHold: { [weak self] configured in
+                self?.beginHeldKeyExecution(configured) ?? false
+            }, endHold: { [weak self] reason in
+                self?.endHeldKeyExecution(reason: reason)
+            })
     }
 
     private func cancelConfiguredButtonInteractions(source: String? = nil, reason: String) {
@@ -3762,6 +3768,12 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             ownsEventSuppressor: false,
             actionPerformer: { [weak self] _, _, configured in
                 self?.performExternalConfiguredAction(configured) ?? false
+            },
+            holdBeginPerformer: { [weak self] configured in
+                self?.beginHeldKeyExecution(configured) ?? false
+            },
+            holdEndPerformer: { [weak self] reason in
+                self?.endHeldKeyExecution(reason: reason)
             },
             overrideActionPerformer: { [weak self] profileID, button, trigger in
                 self?.performButtonProfileBoundAction(
@@ -7531,6 +7543,19 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             action: .customShortcut,
             shortcut: shortcut
         ))
+    }
+
+    /// 「按住执行」开始：把方向键真正按下去，由系统按键盘节奏重复，直到松键。
+    private func beginHeldKeyExecution(_ configured: ConfiguredButtonAction) -> Bool {
+        guard !macroFeature.hasPendingPortableImport,
+              let key = configured.holdableKey,
+              KeyboardInjector.isAccessibilityTrusted
+        else { return false }
+        return KeyboardHoldExecution.shared.begin(.init(key))
+    }
+
+    private func endHeldKeyExecution(reason: String) {
+        KeyboardHoldExecution.shared.end(reason: reason)
     }
 
     private func performExternalConfiguredAction(_ configured: ConfiguredButtonAction) -> Bool {

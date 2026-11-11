@@ -21,21 +21,26 @@ struct RemoteButtonInteractionSettings: Codable, Equatable {
     var longPressMilliseconds: Int = 550
     var modes: [String: String] = [:]
     var migratedRepeatButtons: [String]? = nil
+    /// 打开「按住执行」的按键：按住期间把目标键真正压在按下状态，而不是反复点按。
+    /// 缺失表示旧配置，全部按键保持既有重复行为。
+    var holdExecutions: [String]? = nil
 
     init(
         doubleClickMilliseconds: Int = 300,
         longPressMilliseconds: Int = 550,
         modes: [String: String] = [:],
-        migratedRepeatButtons: [String]? = nil
+        migratedRepeatButtons: [String]? = nil,
+        holdExecutions: [String]? = nil
     ) {
         self.doubleClickMilliseconds = doubleClickMilliseconds
         self.longPressMilliseconds = longPressMilliseconds
         self.modes = modes
         self.migratedRepeatButtons = migratedRepeatButtons
+        self.holdExecutions = holdExecutions
     }
 
     private enum CodingKeys: String, CodingKey {
-        case doubleClickMilliseconds, longPressMilliseconds, modes, migratedRepeatButtons
+        case doubleClickMilliseconds, longPressMilliseconds, modes, migratedRepeatButtons, holdExecutions
     }
 
     init(from decoder: Decoder) throws {
@@ -53,6 +58,10 @@ struct RemoteButtonInteractionSettings: Codable, Equatable {
             [String].self,
             forKey: .migratedRepeatButtons
         )
+        holdExecutions = try container.decodeIfPresent(
+            [String].self,
+            forKey: .holdExecutions
+        )
         // Raw key-down came from an unshipped candidate design. "once" is retained as
         // an internal marker so a user-cleared hold choice does not regain a later default.
         modes = modes.filter { $0.value != "holdSingle" }
@@ -64,7 +73,8 @@ struct RemoteButtonInteractionSettings: Codable, Equatable {
 
     var isWellFormed: Bool {
         isValid && modes.allSatisfy { RemoteButton(rawValue: $0.key) != nil && RemoteButtonHoldMode(rawValue: $0.value) != nil } &&
-            (migratedRepeatButtons ?? []).allSatisfy { RemoteButton(rawValue: $0) != nil }
+            (migratedRepeatButtons ?? []).allSatisfy { RemoteButton(rawValue: $0) != nil } &&
+            (holdExecutions ?? []).allSatisfy { RemoteButton(rawValue: $0) != nil }
     }
 
     func mode(for button: RemoteButton) -> RemoteButtonHoldMode? {
@@ -72,6 +82,20 @@ struct RemoteButtonInteractionSettings: Codable, Equatable {
             return .once
         }
         return RemoteButtonHoldMode(rawValue: value)
+    }
+
+    func holdExecution(for button: RemoteButton) -> Bool {
+        holdExecutions?.contains(button.rawValue) == true
+    }
+
+    mutating func setHoldExecution(_ enabled: Bool, for button: RemoteButton) {
+        var values = Set(holdExecutions ?? [])
+        if enabled {
+            values.insert(button.rawValue)
+        } else {
+            values.remove(button.rawValue)
+        }
+        holdExecutions = values.isEmpty ? nil : values.sorted()
     }
 
     var timing: RemoteButtonGestureTiming {
@@ -112,10 +136,27 @@ struct RemoteButtonInteractionSnapshot {
     var repeatInterval: UInt64 = 100
     var repeatSingleStartMilliseconds: Int? = nil
     var repeatAllowed = true
+    /// 用户为这颗按键打开了「按住执行」。
+    var holdExecution = false
     var opaqueDouble = false
     var opaqueLong = false
     var recognizesDouble: Bool { opaqueDouble || double.action != .disabled }
     var recognizesLong: Bool { opaqueLong || long.action != .disabled }
+
+    /// 按住会持续执行的那个动作。`once` 表示这颗键没有按住行为。
+    var holdContinuationAction: ConfiguredButtonAction? {
+        switch mode {
+        case .repeatLong: return long
+        case .repeatSingle: return single
+        case .once, nil: return nil
+        }
+    }
+
+    /// 只有方向键动作才能像物理键盘一样被一直按住；其他动作没有“按下去不放”的语义。
+    var canHoldExecution: Bool { holdContinuationAction?.holdableKey != nil }
+
+    /// 运行时是否真的按“按住执行”处理：开关打开、动作可按住，且当前前台 App 允许。
+    var isHoldExecutionActive: Bool { holdExecution && canHoldExecution && repeatAllowed }
 
     func withMode(_ mode: RemoteButtonHoldMode?) -> Self {
         var copy = self
@@ -125,7 +166,8 @@ struct RemoteButtonInteractionSnapshot {
 
     func hasSameBinding(as other: Self) -> Bool {
         mode == other.mode && single == other.single && double == other.double && long == other.long &&
-            hasOpaqueBinding == other.hasOpaqueBinding && opaqueDouble == other.opaqueDouble && opaqueLong == other.opaqueLong
+            hasOpaqueBinding == other.hasOpaqueBinding && opaqueDouble == other.opaqueDouble &&
+            opaqueLong == other.opaqueLong && holdExecution == other.holdExecution
     }
 
     var unavailableReason: String? {

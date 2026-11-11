@@ -1421,6 +1421,9 @@
 // Device gesture timing and hold behavior
 "button_mapping.hold.entry" = "按住";
 "button_mapping.hold.description" = "长时间按住此键，持续执行下面选择的行为，松开后停止。";
+"button_mapping.hold_execution.title" = "按住执行";
+"button_mapping.hold_execution.description" = "打开后按住按键等同按住键盘方向键，长按会持续生效，例如播放器快进；关闭则按上面选择的方式重复执行。";
+"button_mapping.hold_execution.help" = "只在按住目标为方向键时提供。";
 "button_mapping.hold.clear_long_to_enable" = "清除长按动作后可选";
 "button_mapping.hold.repeat_prefix" = "按住：重复 ";
 "button_mapping.hold.blocker.timing_invalid" = "识别时间无效";

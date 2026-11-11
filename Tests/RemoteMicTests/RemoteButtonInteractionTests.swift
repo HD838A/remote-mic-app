@@ -131,6 +131,98 @@ struct RemoteButtonInteractionTests {
         }
     }
 
+    @Test func holdExecutionPressesTheArrowKeyOnceAndReleasesIt() {
+        let clock = InteractionClock()
+        let controller = RemoteButtonInteractionController(scheduler: clock)
+        var begins: [ConfiguredButtonAction] = []
+        var ends: [String] = []
+        var discrete = 0
+        var config = snapshot(.repeatSingle, single: .arrowRight)
+        config.holdExecution = true
+        #expect(config.isHoldExecutionActive)
+        controller.handle(.press, button: .up, snapshot: config, valid: { true }, perform: { _, _ in
+            discrete += 1
+            return true
+        }, beginHold: { action in
+            begins.append(action)
+            return true
+        }, endHold: { ends.append($0) })
+        #expect(begins.map(\.action) == [.arrowRight])
+        // 按住执行由系统负责自动重复，控制器不再补发离散动作。
+        clock.advance(2_000)
+        #expect(begins.count == 1)
+        #expect(discrete == 0)
+        controller.handle(.release, button: .up, snapshot: config, valid: { true },
+                          perform: { _, _ in false })
+        #expect(ends == ["released"])
+        #expect(!controller.isTracking(.up))
+    }
+
+    @Test func cancellingInteractionReleasesTheHeldKey() {
+        let clock = InteractionClock()
+        let controller = RemoteButtonInteractionController(scheduler: clock)
+        var ends: [String] = []
+        var config = snapshot(.repeatSingle, single: .arrowDown)
+        config.holdExecution = true
+        controller.handle(.press, button: .down, snapshot: config, valid: { true },
+                          perform: { _, _ in true }, beginHold: { _ in true },
+                          endHold: { ends.append($0) })
+        controller.cancelAll(reason: "environment_changed")
+        #expect(ends == ["environment_changed"])
+    }
+
+    @Test func releasedTapRunsTheActionInsteadOfStartingAHold() {
+        let clock = InteractionClock()
+        let controller = RemoteButtonInteractionController(scheduler: clock)
+        var begins = 0
+        var discrete = 0
+        var config = snapshot(.repeatSingle, single: .arrowLeft)
+        config.double = .init(action: .returnKey, shortcut: nil)
+        config.holdExecution = true
+        controller.handle(.press, button: .left, snapshot: config, valid: { true },
+                          perform: { _, _ in discrete += 1; return true },
+                          beginHold: { _ in begins += 1; return true }, endHold: { _ in })
+        clock.advance(100)
+        // 双击窗口内松手：这是“点一下”，必须发离散动作，不能留下按住的键。
+        controller.handle(.release, button: .left, snapshot: config, valid: { true },
+                          perform: { _, _ in false })
+        clock.advance(1_000)
+        #expect(begins == 0)
+        #expect(discrete == 1)
+    }
+
+    @Test func failedHoldStartCancelsTheInteraction() {
+        let clock = InteractionClock()
+        let controller = RemoteButtonInteractionController(scheduler: clock)
+        var config = snapshot(.repeatSingle, single: .arrowRight)
+        config.holdExecution = true
+        var discrete = 0
+        controller.handle(.press, button: .right, snapshot: config, valid: { true },
+                          perform: { _, _ in discrete += 1; return true },
+                          beginHold: { _ in false }, endHold: { _ in })
+        #expect(!controller.isTracking(.right))
+        clock.advance(1_000)
+        #expect(discrete == 0)
+    }
+
+    @Test func holdExecutionIsStoredPerButton() throws {
+        let name = "SayAll.HoldExecution.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        let settings = AppSettings(defaults: defaults)
+        settings.setAction(.arrowUp, for: .up, trigger: .singleClick)
+        settings.setAction(.disabled, for: .up, trigger: .longPress)
+        settings.setHoldMode(.repeatSingle, for: .up)
+        settings.setHoldExecution(true, for: .up, profileID: settings.selectedRemoteProfileID)
+        #expect(settings.holdExecution(for: .up, profileID: settings.selectedRemoteProfileID))
+        #expect(settings.interactionSnapshot(for: .up).holdExecution)
+        #expect(settings.interactionSnapshot(for: .up).isHoldExecutionActive)
+        #expect(!settings.holdExecution(for: .down, profileID: settings.selectedRemoteProfileID))
+        settings.setHoldExecution(false, for: .up, profileID: settings.selectedRemoteProfileID)
+        #expect(!settings.interactionSnapshot(for: .up).holdExecution)
+        #expect(settings.interactionSettings.holdExecutions == nil)
+    }
+
     @Test func opaqueSecondaryGesturesRemainRecognizableButCannotRepeat() {
         var config = snapshot()
         config.opaqueLong = true

@@ -545,7 +545,9 @@ final class AppSettings: ObservableObject {
     /// Timing edits affect the next interaction. Mode edits cancel through the binding hook.
     @Published var interactionSettings = RemoteButtonInteractionSettings() {
         didSet {
-            if oldValue.modes != interactionSettings.modes || oldValue.migratedRepeatButtons != interactionSettings.migratedRepeatButtons {
+            if oldValue.modes != interactionSettings.modes ||
+                oldValue.migratedRepeatButtons != interactionSettings.migratedRepeatButtons ||
+                oldValue.holdExecutions != interactionSettings.holdExecutions {
                 onInteractionModeChanged?(selectedRemoteProfileID)
             }
             if let data = try? JSONEncoder().encode(interactionSettings) {
@@ -2951,6 +2953,8 @@ final class AppSettings: ObservableObject {
         ).mappings.interactionSettings ?? RemoteButtonInteractionSettings()
         if !interactionSettings.isValid || interactionSettings.modes.contains(where: {
             RemoteButton(rawValue: $0.key) == nil || RemoteButtonHoldMode(rawValue: $0.value) == nil
+        }) || (interactionSettings.holdExecutions ?? []).contains(where: {
+            RemoteButton(rawValue: $0) == nil
         }) { rejected.insert("interactionSettings") }
         if let importedGestureTimings = configuration.buttonGestureTimingsByModel,
            Self.gestureTimingsAreWellFormed(importedGestureTimings) {
@@ -3250,6 +3254,26 @@ final class AppSettings: ObservableObject {
         interactionSettings.modes[button.rawValue] = mode.rawValue
     }
 
+    /// 「按住执行」按方案保存：正在编辑的方案与基础层各存一份，互不覆盖。
+    func setHoldExecution(_ enabled: Bool, for button: RemoteButton, profileID: UUID?) {
+        if let profileID, profileID != selectedRemoteProfileID {
+            guard let index = remoteDeviceProfiles.firstIndex(where: { $0.id == profileID }) else {
+                return
+            }
+            var settings = remoteDeviceProfiles[index].mappings.interactionSettings
+                ?? RemoteButtonInteractionSettings()
+            settings.setHoldExecution(enabled, for: button)
+            remoteDeviceProfiles[index].mappings.interactionSettings = settings
+            saveRemoteDeviceProfiles()
+            return
+        }
+        interactionSettings.setHoldExecution(enabled, for: button)
+    }
+
+    func holdExecution(for button: RemoteButton, profileID: UUID?) -> Bool {
+        buttonInteractionSettings(profileID: profileID).holdExecution(for: button)
+    }
+
     /// An action change can make the saved hold choice unrunnable. Drop it to "unset" so the
     /// button never keeps a choice it cannot honour.
     private func dropUnrunnableHoldMode(for button: RemoteButton) {
@@ -3274,6 +3298,7 @@ final class AppSettings: ObservableObject {
             snapshot.repeatSingleStartMilliseconds = buttonGestureTiming(for: model)
                 .repeatSingleStartMilliseconds
         }
+        snapshot.holdExecution = timing.holdExecution(for: button)
         if snapshot.mode == .repeatSingle,
            interactionModeOverride?(profileID ?? selectedRemoteProfileID, button) == nil,
            timing.migratedRepeatButtons?.contains(button.rawValue) == true,

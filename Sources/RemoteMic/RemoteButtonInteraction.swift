@@ -7,19 +7,26 @@ final class RemoteButtonInteractionController {
         let snapshot: RemoteButtonInteractionSnapshot
         let valid: () -> Bool
         let perform: (ButtonTrigger, ConfiguredButtonAction) -> Bool
+        let beginHold: ((ConfiguredButtonAction) -> Bool)?
+        let endHold: ((String) -> Void)?
         var pressed = true
         var second = false
         var waiting = false
         var consumed = false
+        var holding = false
         var count = 0
         var timer: HIDRemoteScheduledTask?
         var longTimer: HIDRemoteScheduledTask?
         var guardTimer: HIDRemoteScheduledTask?
         init(snapshot: RemoteButtonInteractionSnapshot, valid: @escaping () -> Bool,
-             perform: @escaping (ButtonTrigger, ConfiguredButtonAction) -> Bool) {
+             perform: @escaping (ButtonTrigger, ConfiguredButtonAction) -> Bool,
+             beginHold: ((ConfiguredButtonAction) -> Bool)? = nil,
+             endHold: ((String) -> Void)? = nil) {
             self.snapshot = snapshot
             self.valid = valid
             self.perform = perform
+            self.beginHold = beginHold
+            self.endHold = endHold
         }
     }
 
@@ -35,7 +42,9 @@ final class RemoteButtonInteractionController {
     func handle(_ phase: RemoteButtonPhase, button: RemoteButton,
                 snapshot: @autoclosure () -> RemoteButtonInteractionSnapshot,
                 valid: @escaping () -> Bool,
-                perform: @escaping (ButtonTrigger, ConfiguredButtonAction) -> Bool) {
+                perform: @escaping (ButtonTrigger, ConfiguredButtonAction) -> Bool,
+                beginHold: ((ConfiguredButtonAction) -> Bool)? = nil,
+                endHold: ((String) -> Void)? = nil) {
         if phase == .release { release(button); return }
         if let current = interactions[button] {
             guard current.waiting else { return }
@@ -46,7 +55,8 @@ final class RemoteButtonInteractionController {
             scheduleLong(button, current)
             return
         }
-        let current = Interaction(snapshot: snapshot(), valid: valid, perform: perform)
+        let current = Interaction(snapshot: snapshot(), valid: valid, perform: perform,
+                                  beginHold: beginHold, endHold: endHold)
         interactions[button] = current
         guard current.snapshot.unavailableReason == nil, valid() else {
             current.consumed = true
@@ -118,7 +128,9 @@ final class RemoteButtonInteractionController {
 
     private func scheduleRepeat(_ button: RemoteButton, _ current: Interaction,
                                 _ trigger: ButtonTrigger, delay: UInt64) {
-        guard interactions[button] === current, current.snapshot.repeatAllowed else { return }
+        // 按住执行把目标键真正按住，由系统负责自动重复；这里不再补发离散动作。
+        guard interactions[button] === current, current.snapshot.repeatAllowed,
+              !current.snapshot.isHoldExecutionActive else { return }
         current.timer = schedule(button, current, after: delay) { owner, value in
             guard value.pressed else { return }
             owner.fire(button, value, trigger)
@@ -134,6 +146,19 @@ final class RemoteButtonInteractionController {
             (trigger == .doubleClick ? current.snapshot.double : current.snapshot.long)
         current.consumed = true
         current.count += 1
+        let continuationTrigger: ButtonTrigger =
+            current.snapshot.mode == .repeatLong ? .longPress : .singleClick
+        // 只有键还按着才进入按住状态：松手后才执行的那一次是“点一下”，
+        // 必须按离散动作发出去，否则会在系统里留下一个没人按住的键。
+        if current.pressed, current.snapshot.isHoldExecutionActive, trigger == continuationTrigger,
+           let beginHold = current.beginHold {
+            current.holding = true
+            if !beginHold(action) {
+                current.holding = false
+                cancel(button, reason: "hold_failed")
+            }
+            return
+        }
         if !current.perform(trigger, action) { cancel(button, reason: "action_failed") }
     }
 
@@ -150,6 +175,11 @@ final class RemoteButtonInteractionController {
         current.timer?.cancel()
         current.longTimer?.cancel()
         current.guardTimer?.cancel()
+        if current.holding {
+            current.holding = false
+            // 无论因为松键、断连还是上下文变化结束，都必须把系统里的键抬起来。
+            current.endHold?(reason)
+        }
         AppLogger.shared.write("BUTTON HOLD operation_id=\(current.id.uuidString) phase=completed reason=\(reason) count=\(current.count) external_result=unknown")
     }
 

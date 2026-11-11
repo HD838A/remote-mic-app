@@ -108,6 +108,8 @@ final class HIDRemoteMonitor {
     private let permissionPoll: HIDPermissionPoll
     private let runtimePermissions: () -> Bool
     private let actionPerformer: (RemoteButton, ButtonTrigger, ConfiguredButtonAction) -> Bool
+    private let holdBeginPerformer: (ConfiguredButtonAction) -> Bool
+    private let holdEndPerformer: (String) -> Void
     private let appSwitcherSession: KeyboardInjector.AppSwitcherSession
     private let minimizedWindowRestorer: (String?, String?) -> KeyboardInjector.MinimizedWindowRestoreResult
     private let windowCounter: (pid_t) -> Int?
@@ -256,6 +258,8 @@ final class HIDRemoteMonitor {
             ButtonTrigger,
             ConfiguredButtonAction
         ) -> Bool)? = nil,
+        holdBeginPerformer: ((ConfiguredButtonAction) -> Bool)? = nil,
+        holdEndPerformer: ((String) -> Void)? = nil,
         overrideActionPerformer: @escaping (UUID?, RemoteButton, ButtonTrigger) -> Bool = {
             _, _, _ in false
         },
@@ -352,6 +356,14 @@ final class HIDRemoteMonitor {
                     id: configured.applicationProfileID
                 )
             )
+        }
+        self.holdBeginPerformer = holdBeginPerformer ?? { configured in
+            guard KeyboardInjector.isAccessibilityTrusted, let key = configured.holdableKey
+            else { return false }
+            return KeyboardHoldExecution.shared.begin(.init(key))
+        }
+        self.holdEndPerformer = holdEndPerformer ?? { reason in
+            KeyboardHoldExecution.shared.end(reason: reason)
         }
         self.overrideActionPerformer = overrideActionPerformer
         self.hasOverrideBinding = hasOverrideBinding
@@ -508,6 +520,8 @@ final class HIDRemoteMonitor {
         // 先结束提前登记会话：共享 suppressor 不会在这里关闭，若不推进代数，
         // 已经在报告线程上读到旧快照的回调仍会写入吞键的陈旧记录。
         prearmSession.end()
+        // 停止监视必须同时抬起任何仍被按住的键，否则它会一直留在系统里。
+        buttonInteractions.cancelAll(reason: "monitor_stopped")
         permissionPollSubscription?.cancel()
         permissionPollSubscription = nil
         resetInputState()
@@ -1302,6 +1316,10 @@ final class HIDRemoteMonitor {
                         snapshot.hasSameBinding(as: self.interactionSnapshot(button: button, profileID: profileID))
                 }, perform: { [weak self] trigger, configured in
                     self?.performConfiguredAction(for: button, trigger: trigger, captured: configured) ?? false
+                }, beginHold: { [weak self] configured in
+                    self?.holdBeginPerformer(configured) ?? false
+                }, endHold: { [weak self] reason in
+                    self?.holdEndPerformer(reason)
                 })
         }
 
@@ -2398,7 +2416,11 @@ final class HIDRemoteMonitor {
         gestureRecognizer.reset()
     }
 
-    func cancelMappingInteractions() { resetInputState() }
+    func cancelMappingInteractions() {
+        // 按住执行把键真正按下去了，取消映射时必须先走一遍交互取消把键抬起来。
+        buttonInteractions.cancelAll(reason: "mapping_cancelled")
+        resetInputState()
+    }
 
     func cancelConfiguredInteractions(reason: String) { buttonInteractions.cancelAll(reason: reason) }
 

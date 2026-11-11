@@ -3805,6 +3805,10 @@ struct SettingsView: View {
             single: mappingConfiguration(for: button, trigger: .singleClick),
             double: mappingConfiguration(for: button, trigger: .doubleClick),
             long: mappingConfiguration(for: button, trigger: .longPress))
+        snapshot.holdExecution = settings.holdExecution(
+            for: button,
+            profileID: editingMappingProfileID
+        )
         // The editor mirrors runtime: a choice the actions cannot run is simply unset.
         if let mode = snapshot.mode, !snapshot.blockers(for: mode).isEmpty {
             snapshot.mode = .once
@@ -3894,6 +3898,11 @@ struct SettingsView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
+                if snapshot.canHoldExecution, !profileUnsupported {
+                    Divider().padding(.top, 2)
+                    mappingHoldExecutionControl(button: button)
+                }
+
                 if snapshot.single.action != .disabled, !snapshot.single.action.allowsRepeat {
                     Divider().padding(.top, 2)
                     mappingRapidPressControl(button: button)
@@ -3974,6 +3983,28 @@ struct SettingsView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
+    }
+
+    /// 按住编辑区底部的「按住执行」开关。只在按住目标确实是方向键时出现：
+    /// 打开后按住按键等同按住键盘方向键，播放器这类 App 才会持续快进。
+    private func mappingHoldExecutionControl(button: RemoteButton) -> some View {
+        Toggle(isOn: Binding(
+            get: { settings.holdExecution(for: button, profileID: editingMappingProfileID) },
+            set: { settings.setHoldExecution($0, for: button, profileID: editingMappingProfileID) }
+        )) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("button_mapping.hold_execution.title")
+                    .font(.system(size: 13, weight: .medium))
+                Text("button_mapping.hold_execution.description")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .toggleStyle(.switch)
+        .disabled(isMappingProfilePreviewOnly)
+        .help(localization.text("button_mapping.hold_execution.help"))
+        .accessibilityIdentifier("mapping-hold-execution")
     }
 
     private var mappingGestureTimingSection: some View {

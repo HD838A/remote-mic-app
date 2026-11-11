@@ -1422,6 +1422,9 @@
 // Device gesture timing and hold behavior
 "button_mapping.hold.entry" = "Hold";
 "button_mapping.hold.description" = "Keep this button held to repeat the selected behavior. Release it to stop.";
+"button_mapping.hold_execution.title" = "Hold while pressed";
+"button_mapping.hold_execution.description" = "While on, holding the button keeps the arrow key pressed like a physical keyboard key, so players can fast-forward. While off, the repeat mode above runs instead.";
+"button_mapping.hold_execution.help" = "Available when the hold target is an arrow key.";
 "button_mapping.hold.clear_long_to_enable" = "Clear the long-press action to enable this";
 "button_mapping.hold.repeat_prefix" = "Hold: repeat ";
 "button_mapping.hold.blocker.timing_invalid" = "The recognition time is invalid";
