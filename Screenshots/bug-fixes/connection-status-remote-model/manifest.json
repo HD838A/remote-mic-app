@@ -18,7 +18,7 @@
   "rendering": "production SettingsView offscreen, isolated settings, source remote adapters",
   "images": [
     {
-      "file": "apple_siri_remote_a2540-en-dark.png",
+      "file": "apple-siri-remote-a2540-en-dark.png",
       "format": "PNG",
       "width": 2134,
       "height": 1520,
@@ -26,7 +26,7 @@
       "url": "https://github.com/user-attachments/assets/7680f5b1-1656-43d4-a5c4-079aca73af0b"
     },
     {
-      "file": "apple_siri_remote_a2540-en-light.png",
+      "file": "apple-siri-remote-a2540-en-light.png",
       "format": "PNG",
       "width": 2134,
       "height": 1520,
@@ -34,7 +34,7 @@
       "url": "https://github.com/user-attachments/assets/8d79b07c-0fd7-4f9e-b6c4-561c086b8eee"
     },
     {
-      "file": "apple_siri_remote_a2540-zh-Hans-dark.png",
+      "file": "apple-siri-remote-a2540-zh-hans-dark.png",
       "format": "PNG",
       "width": 2134,
       "height": 1520,
@@ -42,7 +42,7 @@
       "url": "https://github.com/user-attachments/assets/8300490d-50f2-4afb-beae-769239852b35"
     },
     {
-      "file": "apple_siri_remote_a2540-zh-Hans-light.png",
+      "file": "apple-siri-remote-a2540-zh-hans-light.png",
       "format": "PNG",
       "width": 2134,
       "height": 1520,
@@ -50,7 +50,7 @@
       "url": "https://github.com/user-attachments/assets/3ec931e3-a5d7-4c6d-9524-6cccbde179bc"
     },
     {
-      "file": "apple_siri_remote_a2854-en-dark.png",
+      "file": "apple-siri-remote-a2854-en-dark.png",
       "format": "PNG",
       "width": 2134,
       "height": 1520,
@@ -58,7 +58,7 @@
       "url": "https://github.com/user-attachments/assets/4d025a71-ad22-4050-b5ed-d283d5e4fdcc"
     },
     {
-      "file": "apple_siri_remote_a2854-en-light.png",
+      "file": "apple-siri-remote-a2854-en-light.png",
       "format": "PNG",
       "width": 2134,
       "height": 1520,
@@ -66,7 +66,7 @@
       "url": "https://github.com/user-attachments/assets/b308c5a5-d1c2-42fb-b32c-f1c29d572ea4"
     },
     {
-      "file": "apple_siri_remote_a2854-zh-Hans-dark.png",
+      "file": "apple-siri-remote-a2854-zh-hans-dark.png",
       "format": "PNG",
       "width": 2134,
       "height": 1520,
@@ -74,7 +74,7 @@
       "url": "https://github.com/user-attachments/assets/edd23131-ef4f-461d-b05c-1f043b203d2f"
     },
     {
-      "file": "apple_siri_remote_a2854-zh-Hans-light.png",
+      "file": "apple-siri-remote-a2854-zh-hans-light.png",
       "format": "PNG",
       "width": 2134,
       "height": 1520,
@@ -82,7 +82,7 @@
       "url": "https://github.com/user-attachments/assets/3535f11d-450f-44b0-b82d-7bef920e966a"
     },
     {
-      "file": "chromecast_voice_remote-en-dark.png",
+      "file": "chromecast-voice-remote-en-dark.png",
       "format": "PNG",
       "width": 2134,
       "height": 1520,
@@ -90,7 +90,7 @@
       "url": "https://github.com/user-attachments/assets/1af50f0a-e4d5-4670-bb07-b0f4308cae0c"
     },
     {
-      "file": "chromecast_voice_remote-en-light.png",
+      "file": "chromecast-voice-remote-en-light.png",
       "format": "PNG",
       "width": 2134,
       "height": 1520,
@@ -98,7 +98,7 @@
       "url": "https://github.com/user-attachments/assets/26fd9282-71a9-4c99-916a-88bd285d981b"
     },
     {
-      "file": "chromecast_voice_remote-zh-Hans-dark.png",
+      "file": "chromecast-voice-remote-zh-hans-dark.png",
       "format": "PNG",
       "width": 2134,
       "height": 1520,
@@ -106,7 +106,7 @@
       "url": "https://github.com/user-attachments/assets/66314abf-eac1-4bea-8d18-d5924a09c403"
     },
     {
-      "file": "chromecast_voice_remote-zh-Hans-light.png",
+      "file": "chromecast-voice-remote-zh-hans-light.png",
       "format": "PNG",
       "width": 2134,
       "height": 1520,
@@ -130,7 +130,7 @@
       "url": "https://github.com/user-attachments/assets/421266e0-c99d-4a99-829d-3a50536a45fa"
     },
     {
-      "file": "rc001-zh-Hans-dark.png",
+      "file": "rc001-zh-hans-dark.png",
       "format": "PNG",
       "width": 2134,
       "height": 1520,
@@ -138,7 +138,7 @@
       "url": "https://github.com/user-attachments/assets/023a59e1-9fc0-4cb3-9eb5-b942bba5c27e"
     },
     {
-      "file": "rc001-zh-Hans-light.png",
+      "file": "rc001-zh-hans-light.png",
       "format": "PNG",
       "width": 2134,
       "height": 1520,
@@ -162,7 +162,7 @@
       "url": "https://github.com/user-attachments/assets/47cbb227-3e30-41ea-b0c3-73d23c20bee4"
     },
     {
-      "file": "rc003-zh-Hans-dark.png",
+      "file": "rc003-zh-hans-dark.png",
       "format": "PNG",
       "width": 2134,
       "height": 1520,
@@ -170,7 +170,7 @@
       "url": "https://github.com/user-attachments/assets/c94a0c55-1663-40e0-8ac9-c2c493a3c205"
     },
     {
-      "file": "rc003-zh-Hans-light.png",
+      "file": "rc003-zh-hans-light.png",
       "format": "PNG",
       "width": 2134,
       "height": 1520,
@@ -194,7 +194,7 @@
       "url": "https://github.com/user-attachments/assets/54646d7d-7ede-46b3-a9a5-83e7846f226d"
     },
     {
-      "file": "unknown-zh-Hans-dark.png",
+      "file": "unknown-zh-hans-dark.png",
       "format": "PNG",
       "width": 2134,
       "height": 1520,
@@ -202,7 +202,7 @@
       "url": "https://github.com/user-attachments/assets/4770fedb-ec8e-4f17-88f4-36d0f791e4d5"
     },
     {
-      "file": "unknown-zh-Hans-light.png",
+      "file": "unknown-zh-hans-light.png",
       "format": "PNG",
       "width": 2134,
       "height": 1520,
@@ -210,5 +210,6 @@
       "url": "https://github.com/user-attachments/assets/52a8cc44-7954-432a-825b-51c92581033b"
     }
   ],
-  "pr_url": "https://github.com/HD838A/remote-mic-app/pull/999"
+  "pr_url": "https://github.com/HD838A/remote-mic-app/pull/999",
+  "browser_validation": "All 24 hosted images loaded with natural size 2134x1520"
 }
