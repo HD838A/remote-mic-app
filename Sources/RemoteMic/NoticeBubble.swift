@@ -74,7 +74,7 @@ enum NoticePalette {
 
     static func inlineSurface(_ tier: NoticeTier) -> UInt32 {
         switch tier {
-        case .tip: return 0xFFFFFF
+        case .tip: return 0xEAF7F0
         case .warning: return 0xFFFAF0
         case .error: return 0xFFF7F6
         }
@@ -82,7 +82,7 @@ enum NoticePalette {
 
     static func inlineBorder(_ tier: NoticeTier) -> UInt32 {
         switch tier {
-        case .tip: return 0xE8E8EC
+        case .tip: return 0xCFE8DB
         case .warning: return 0xF0E2C6
         case .error: return 0xF2DBD8
         }
