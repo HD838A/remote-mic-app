@@ -62,6 +62,8 @@ struct RemoteMicRootView: View {
                 OnboardingView(model: model)
             }
         }
+        // 窗口根挂一次：气泡覆盖整个窗口，`noticeAnchor` 上报的坐标也在这套坐标系里换算。
+        .noticeHost()
         .onAppear {
             startRuntimeIfRequired(for: settings.onboardingStep)
         }
