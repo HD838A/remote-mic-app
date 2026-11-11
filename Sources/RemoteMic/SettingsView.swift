@@ -2369,10 +2369,12 @@ struct SettingsView: View {
     /// Profile capsules and create/copy entry stay fixed above the mapping canvas.
     private var mappingProfileToolbar: some View {
         VStack(spacing: 0) {
-            mappingProfileSelector
-                .padding(.horizontal, 22)
-                .padding(.top, 8)
-                .padding(.bottom, 5)
+            if macroFeature.supportsMappingProfileAutosave {
+                mappingProfileSelector
+                    .padding(.horizontal, 22)
+                    .padding(.top, 8)
+                    .padding(.bottom, 5)
+            }
 
         }
         .background(Color(nsColor: .controlBackgroundColor))
@@ -2735,7 +2737,7 @@ struct SettingsView: View {
             // 上下留白都在滚动区域之外，滚动时不会塌掉。
             // 画布第一张卡片自带约 6.5pt 内部留白，所以静止时下侧会比纯 padding 多这一段：
             // 上 8pt、下 5pt 是让「静止」和「滚动中」两种状态都尽量接近 10pt 的取值。
-            if macroFeature.isButtonProfilesVisible { mappingProfileToolbar }
+            mappingProfileToolbar
 
             ScrollViewReader { proxy in
                 Group {

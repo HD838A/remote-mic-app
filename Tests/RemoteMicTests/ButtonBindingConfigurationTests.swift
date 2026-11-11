@@ -59,6 +59,7 @@ struct ButtonBindingConfigurationTests {
         #if !canImport(SayAllButtonProfiles)
         let integration = MacroFeatureIntegration()
         #expect(!integration.isButtonProfilesVisible)
+        #expect(!integration.supportsMappingProfileAutosave)
         #expect(integration.mappingProfiles(device: nil).isEmpty)
         #expect(integration.createMappingProfile(named: "Unavailable", copying: nil, bindings: [], holdModes: [:]) == nil)
         if case .unavailable = integration.displayProfileBinding(profile: UUID(), button: .back, trigger: .singleClick) {} else { Issue.record("Missing component must be unavailable") }
@@ -91,10 +92,14 @@ struct ButtonBindingConfigurationTests {
             bindings: [disabled], holdModes: ["ok": "once"]))
         let copy = try #require(integration.createMappingProfile(named: "Integration copy", copying: id,
             bindings: [], holdModes: [:]))
-        #expect(integration.profileBindingMatches(.disabled, profile: copy, button: .ok, trigger: .singleClick))
-        #expect(!integration.profileBindingMatches(.disabled, profile: copy, button: .ok, trigger: .doubleClick))
-        #expect(!integration.profileHoldModeMatches(.once, profile: copy, button: .back))
-        #expect(integration.profileHoldModeMatches(.once, profile: copy, button: .ok))
+        let matchesDisabled = integration.profileBindingMatches(.disabled, profile: copy, button: .ok, trigger: .singleClick)
+        let matchesInherited = integration.profileBindingMatches(.disabled, profile: copy, button: .ok, trigger: .doubleClick)
+        let matchesMissingHold = integration.profileHoldModeMatches(.once, profile: copy, button: .back)
+        let matchesExplicitHold = integration.profileHoldModeMatches(.once, profile: copy, button: .ok)
+        #expect(matchesDisabled)
+        #expect(!matchesInherited)
+        #expect(!matchesMissingHold)
+        #expect(matchesExplicitHold)
         integration.updateButtonProfilesAccess(.requiresPlus)
         #expect(integration.mappingProfiles(device: UUID()).contains { $0.id == id })
         if case let .explicit(value) = integration.displayProfileBinding(profile: copy, button: .ok, trigger: .singleClick) {

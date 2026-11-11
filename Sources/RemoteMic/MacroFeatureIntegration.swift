@@ -154,6 +154,14 @@ final class MacroFeatureIntegration: ObservableObject {
         #endif
     }
 
+    var supportsMappingProfileAutosave: Bool {
+        #if canImport(SayAllButtonProfiles) && SAYALL_BUTTON_PROFILE_AUTOSAVE
+        true
+        #else
+        false
+        #endif
+    }
+
     func mappingProfiles(device: UUID?) -> [ButtonMappingProfile] {
         #if canImport(SayAllButtonProfiles) && SAYALL_BUTTON_PROFILE_AUTOSAVE
         buttonProfilesFeature.displayProfiles().map { ButtonMappingProfile(id: $0.id, name: buttonProfilesFeature.profileDisplayName($0)) }
