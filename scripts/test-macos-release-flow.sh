@@ -668,7 +668,8 @@ fi
 /usr/bin/grep -Fq 'ref: ${{ github.sha }}' "$publication_workflow"
 /usr/bin/grep -Fq 'TRIGGER_REPOSITORY' "$publication_workflow"
 /usr/bin/grep -Fq "github.ref_name == 'main'" "$publication_workflow"
-if /usr/bin/grep -Eq 'environment:[[:space:]]*mac-release|secrets[.]|RELEASE_AGE_IDENTITY|MATCH|NOTARY|draft:' "$publication_workflow"; then
+if /usr/bin/grep -Eq 'environment:[[:space:]]*mac-release|RELEASE_AGE_IDENTITY|MATCH|NOTARY|draft:' "$publication_workflow" ||
+   /usr/bin/grep -oE 'secrets[.][A-Za-z0-9_]+' "$publication_workflow" | /usr/bin/grep -Fxv 'secrets.SAYALL_FEED_SYNC_TOKEN'; then
   print -u2 "Preview publication workflow contains protected Apple inputs"
   exit 1
 fi
@@ -1274,8 +1275,8 @@ print "LOCALIZATION GATE FIXTURE PASS"
 )
 
 case "${1:-all}" in
-  all) test_ci_classification; test_flow; test_localizations; test_metadata ;;
-  flow) test_ci_classification; test_flow; test_localizations ;;
+  all) test_ci_classification; test_flow; test_localizations; test_metadata; node --test "$SCRIPT_ROOT/scripts/test-update-feed-sync.mjs" ;;
+  flow) test_ci_classification; test_flow; test_localizations; node --test "$SCRIPT_ROOT/scripts/test-update-feed-sync.mjs" ;;
   metadata) test_metadata ;;
   ready-ci) test_ready_ci ;;
   *) print -u2 "usage: $0 [all|flow|metadata|ready-ci]"; exit 2 ;;
