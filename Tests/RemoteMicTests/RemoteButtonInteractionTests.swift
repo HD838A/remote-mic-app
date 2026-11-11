@@ -12,7 +12,8 @@ struct RemoteButtonInteractionTests {
         .init(settings: .init(doubleClickMilliseconds: d, longPressMilliseconds: l), mode: mode,
               single: .init(action: single, shortcut: nil),
               double: .init(action: double ? .returnKey : .disabled, shortcut: nil),
-              long: .init(action: long ? .arrowRight : .disabled, shortcut: nil))
+              long: .init(action: long ? .arrowRight : .disabled, shortcut: nil),
+              allowsKeyHold: true)
     }
 
     @Test func doubleWindowStartsAtReleaseAndUsesCapturedTiming() {
@@ -140,7 +141,7 @@ struct RemoteButtonInteractionTests {
         var config = snapshot(.singleHold, single: .arrowRight)
         config.holdableSingle = config.single
         #expect(config.isHoldDownActive)
-        controller.handle(.press, button: .up, snapshot: config, valid: { true }, perform: { _, _ in
+        controller.handle(.press, button: .right, snapshot: config, valid: { true }, perform: { _, _ in
             discrete += 1
             return true
         }, beginHold: { action in
@@ -152,10 +153,10 @@ struct RemoteButtonInteractionTests {
         clock.advance(2_000)
         #expect(begins.count == 1)
         #expect(discrete == 0)
-        controller.handle(.release, button: .up, snapshot: config, valid: { true },
+        controller.handle(.release, button: .right, snapshot: config, valid: { true },
                           perform: { _, _ in false })
         #expect(ends == ["released"])
-        #expect(!controller.isTracking(.up))
+        #expect(!controller.isTracking(.right))
     }
 
     @Test func longHoldStartsAtTheLongPressThreshold() {
@@ -186,7 +187,7 @@ struct RemoteButtonInteractionTests {
         var ends: [String] = []
         var config = snapshot(.singleHold, single: .arrowDown)
         config.holdableSingle = config.single
-        controller.handle(.press, button: .down, snapshot: config, valid: { true },
+        controller.handle(.press, button: .left, snapshot: config, valid: { true },
                           perform: { _, _ in true }, beginHold: { _ in true },
                           endHold: { ends.append($0) })
         controller.cancelAll(reason: "environment_changed")
@@ -232,19 +233,24 @@ struct RemoteButtonInteractionTests {
         let defaults = try #require(UserDefaults(suiteName: name))
         defer { defaults.removePersistentDomain(forName: name) }
         let settings = AppSettings(defaults: defaults)
-        settings.setAction(.arrowUp, for: .up, trigger: .singleClick)
-        settings.setAction(.arrowLeft, for: .up, trigger: .longPress)
-        settings.setHoldMode(.singleHold, for: .up)
-        #expect(settings.interactionSnapshot(for: .up).mode == .singleHold)
-        #expect(settings.interactionSnapshot(for: .up).holdDownAction?.action == .arrowUp)
+        settings.setAction(.arrowRight, for: .right, trigger: .singleClick)
+        settings.setAction(.arrowLeft, for: .right, trigger: .longPress)
+        settings.setHoldMode(.singleHold, for: .right)
+        #expect(settings.interactionSnapshot(for: .right).mode == .singleHold)
+        #expect(settings.interactionSnapshot(for: .right).holdDownAction?.action == .arrowRight)
         // 四个选项互斥：换一个模式会覆盖上一个。
-        settings.setHoldMode(.longHold, for: .up)
-        #expect(settings.interactionSnapshot(for: .up).mode == .longHold)
-        #expect(settings.interactionSnapshot(for: .up).holdDownAction?.action == .arrowLeft)
-        settings.setHoldMode(.repeatLong, for: .up)
-        #expect(settings.interactionSnapshot(for: .up).mode == .repeatLong)
-        #expect(settings.interactionSnapshot(for: .up).holdDownAction == nil)
-        #expect(settings.interactionSettings.modes["up"] == "repeatLong")
+        settings.setHoldMode(.longHold, for: .right)
+        #expect(settings.interactionSnapshot(for: .right).mode == .longHold)
+        #expect(settings.interactionSnapshot(for: .right).holdDownAction?.action == .arrowLeft)
+        settings.setHoldMode(.repeatLong, for: .right)
+        #expect(settings.interactionSnapshot(for: .right).mode == .repeatLong)
+        #expect(settings.interactionSnapshot(for: .right).holdDownAction == nil)
+        #expect(settings.interactionSettings.modes["right"] == "repeatLong")
+        // Invalid choices from callers cannot enable key hold on other physical buttons.
+        settings.setHoldMode(.singleHold, for: .up)
+        #expect(settings.interactionSettings.mode(for: .up) == .once)
+        settings.interactionSettings.modes["up"] = RemoteButtonHoldMode.longHold.rawValue
+        #expect(settings.interactionSnapshot(for: .up).mode == .once)
     }
 
     @Test func opaqueSecondaryGesturesRemainRecognizableButCannotRepeat() {

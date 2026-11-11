@@ -17,6 +17,7 @@ struct HoldExecutionTests {
             double: .disabled,
             long: .init(action: long, shortcut: nil)
         )
+        snapshot.allowsKeyHold = true
         snapshot.holdableSingle = snapshot.single
         snapshot.holdableLong = snapshot.long
         return snapshot
@@ -27,12 +28,12 @@ struct HoldExecutionTests {
     @Test func settingsRoundTripKeepsFourModes() throws {
         var settings = RemoteButtonInteractionSettings()
         for mode in RemoteButtonHoldMode.selectableCases {
-            settings.modes["up"] = mode.rawValue
+            settings.modes["right"] = mode.rawValue
             let decoded = try JSONDecoder().decode(
                 RemoteButtonInteractionSettings.self,
                 from: try JSONEncoder().encode(settings)
             )
-            #expect(decoded.mode(for: .up) == mode)
+            #expect(decoded.mode(for: .right) == mode)
         }
         #expect(RemoteButtonHoldMode.selectableCases.count == 4)
         // 旧配置没有新模式：保持未设置。
@@ -42,12 +43,38 @@ struct HoldExecutionTests {
         )
         #expect(legacy.mode(for: .down) == .once)
         #expect(legacy.isWellFormed)
-        #expect(RemoteButtonInteractionSettings(modes: ["up": "singleHold"]).isWellFormed)
-        #expect(RemoteButtonInteractionSettings(modes: ["up": "longHold"]).isWellFormed)
+        #expect(RemoteButtonInteractionSettings(modes: ["right": "singleHold"]).isWellFormed)
+        #expect(RemoteButtonInteractionSettings(modes: ["right": "longHold"]).isWellFormed)
         #expect(!RemoteButtonInteractionSettings(modes: ["up": "holdSingle"]).isWellFormed)
     }
 
     // MARK: - 可用性
+
+    @Test func onlyPhysicalLeftAndRightButtonsAllowKeyHold() throws {
+        for button in RemoteButton.allCases {
+            let expected = button == .left || button == .right
+            #expect(button.allowsKeyHold == expected)
+            var current = snapshot(mode: .singleHold, long: .arrowRight)
+            current.allowsKeyHold = button.allowsKeyHold
+            #expect(current.isHoldDownActive == expected)
+            #expect(current.blockers(for: .singleHold).isEmpty == expected)
+            #expect(current.blockers(for: .longHold).isEmpty == expected)
+            #expect(current.unavailableReason == (expected ? nil : "button_mapping.hold_button_unavailable"))
+            // The existing repeat modes remain available on their original buttons.
+            #expect(current.blockers(for: .repeatLong).isEmpty)
+        }
+        let candidate = try JSONDecoder().decode(
+            RemoteButtonInteractionSettings.self,
+            from: Data(#"{"modes":{"up":"singleHold","ok":"longHold","right":"singleHold","left":"longHold","down":"repeatSingle"}}"#.utf8)
+        )
+        #expect(candidate.mode(for: .up) == .once)
+        #expect(candidate.mode(for: .ok) == .once)
+        #expect(candidate.mode(for: .right) == .singleHold)
+        #expect(candidate.mode(for: .left) == .longHold)
+        #expect(candidate.mode(for: .down) == .repeatSingle)
+        #expect(candidate.isWellFormed)
+        #expect(!RemoteButtonInteractionSettings(modes: ["up": "singleHold"]).isWellFormed)
+    }
 
     @Test func onlyArrowActionsCanBeHeld() {
         #expect(ConfiguredButtonAction(action: .arrowRight, shortcut: nil).holdableKey ==

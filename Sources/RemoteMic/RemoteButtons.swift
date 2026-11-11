@@ -146,6 +146,11 @@ enum RemoteButton: String, CaseIterable, Codable, Identifiable {
     var isDirectional: Bool {
         self == .up || self == .down || self == .left || self == .right
     }
+
+    /// Maintaining a keyboard key-down is available only on the physical left/right buttons.
+    var allowsKeyHold: Bool {
+        self == .left || self == .right
+    }
 }
 
 /// 键位方案覆盖名单里的一项：四颗方向键合并成一项，其余按键逐颗列出。

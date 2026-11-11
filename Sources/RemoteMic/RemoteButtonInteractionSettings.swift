@@ -55,6 +55,11 @@ struct RemoteButtonInteractionSettings: Codable, Equatable {
         // Raw key-down came from an unshipped candidate design. "once" is retained as
         // an internal marker so a user-cleared hold choice does not regain a later default.
         modes = modes.filter { $0.value != "holdSingle" }
+        for (button, value) in modes where
+            RemoteButtonHoldMode(rawValue: value)?.isHoldDown == true &&
+            RemoteButton(rawValue: button)?.allowsKeyHold != true {
+            modes[button] = RemoteButtonHoldMode.once.rawValue
+        }
     }
 
     var isValid: Bool {
@@ -62,7 +67,11 @@ struct RemoteButtonInteractionSettings: Codable, Equatable {
     }
 
     var isWellFormed: Bool {
-        isValid && modes.allSatisfy { RemoteButton(rawValue: $0.key) != nil && RemoteButtonHoldMode(rawValue: $0.value) != nil } &&
+        isValid && modes.allSatisfy {
+            guard let button = RemoteButton(rawValue: $0.key),
+                  let mode = RemoteButtonHoldMode(rawValue: $0.value) else { return false }
+            return !mode.isHoldDown || button.allowsKeyHold
+        } &&
             (migratedRepeatButtons ?? []).allSatisfy { RemoteButton(rawValue: $0) != nil }
     }
 
@@ -118,6 +127,7 @@ struct RemoteButtonInteractionSnapshot {
     var repeatInterval: UInt64 = 100
     var repeatSingleStartMilliseconds: Int? = nil
     var repeatAllowed = true
+    var allowsKeyHold = false
     /// 解析后的单击动作（方案覆盖优先）。「单击按住」只看它能否被按住。
     var holdableSingle: ConfiguredButtonAction?
     /// 解析后的长按动作（方案覆盖优先）。「长按按住」只看它能否被按住。
@@ -138,7 +148,7 @@ struct RemoteButtonInteractionSnapshot {
 
     /// 当前按住模式能否执行：动作必须是方向键，且当前前台 App 允许。
     var isHoldDownActive: Bool {
-        guard let action = holdDownAction else { return false }
+        guard allowsKeyHold, let action = holdDownAction else { return false }
         return action.holdableKey != nil && repeatAllowed
     }
 
@@ -152,11 +162,12 @@ struct RemoteButtonInteractionSnapshot {
         mode == other.mode && single == other.single && double == other.double && long == other.long &&
             hasOpaqueBinding == other.hasOpaqueBinding && opaqueDouble == other.opaqueDouble &&
             opaqueLong == other.opaqueLong && holdableSingle == other.holdableSingle &&
-            holdableLong == other.holdableLong
+            holdableLong == other.holdableLong && allowsKeyHold == other.allowsKeyHold
     }
 
     var unavailableReason: String? {
         guard settings.isValid, let mode else { return "button_mapping.hold_invalid" }
+        if mode.isHoldDown, !allowsKeyHold { return "button_mapping.hold_button_unavailable" }
         switch mode {
         case .once: return nil
         case .repeatLong:
@@ -180,6 +191,7 @@ enum RemoteButtonHoldBlocker: Equatable {
     case actionUnset
     case actionNotRepeatable(ConfiguredButtonAction)
     case actionNotHoldable(ConfiguredButtonAction)
+    case buttonNotHoldable
     case longPressConfigured(ConfiguredButtonAction)
     case longPressOwnedByProfile
 }
@@ -189,6 +201,7 @@ extension RemoteButtonInteractionSnapshot {
     func blockers(for mode: RemoteButtonHoldMode) -> [RemoteButtonHoldBlocker] {
         guard mode != .once else { return [] }
         guard settings.isValid else { return [.timingInvalid] }
+        if mode.isHoldDown, !allowsKeyHold { return [.buttonNotHoldable] }
         // 按住执行由宿主直接按键，方案覆盖的动作也能按住，因此不受“方案接管”限制。
         switch mode {
         case .once:

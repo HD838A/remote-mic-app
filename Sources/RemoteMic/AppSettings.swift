@@ -3246,11 +3246,15 @@ final class AppSettings: ObservableObject {
     }
 
     func setHoldMode(_ mode: RemoteButtonHoldMode, for button: RemoteButton) {
+        let savedMode = mode.isHoldDown && !button.allowsKeyHold ? .once : mode
         onInteractionModeChanged?(selectedRemoteProfileID)
         interactionSettings.migratedRepeatButtons?.removeAll { $0 == button.rawValue }
-        interactionSettings.modes[button.rawValue] = mode.rawValue
+        interactionSettings.modes[button.rawValue] = savedMode.rawValue
+        AppLogger.shared.write(
+            "BUTTON HOLD CONFIG operation_id=\(UUID().uuidString) phase=completed result=saved " +
+                "button=\(button.rawValue) requested_mode=\(mode.rawValue) mode=\(savedMode.rawValue)"
+        )
     }
-
 
     /// An action change can make the saved hold choice unrunnable. Drop it to "unset" so the
     /// button never keeps a choice it cannot honour.
@@ -3277,6 +3281,7 @@ final class AppSettings: ObservableObject {
                 .repeatSingleStartMilliseconds
         }
         // 默认取基础层的动作；方案生效时由监听层按活动方案覆盖。
+        snapshot.allowsKeyHold = button.allowsKeyHold
         snapshot.holdableSingle = snapshot.single
         snapshot.holdableLong = snapshot.long
         if snapshot.mode == .repeatSingle,

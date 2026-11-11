@@ -107,7 +107,7 @@ struct SettingsPageRegressionTests {
         #expect(source.contains("button_mapping.hold.repeat_prefix"))
         #expect(source.contains("button_mapping.hold.clear_long_to_enable"))
         // Both hold targets share one card height, so the pair cannot look ragged.
-        #expect(source.contains("minHeight: 62, maxHeight: 62"))
+        #expect(source.contains("minHeight: 108, maxHeight: .infinity"))
         let holdPanelStart = try #require(source.range(of: "private func mappingHoldEditorPanel"))
         let holdPanelEnd = try #require(source.range(
             of: "private func mappingHoldOptionColumn",
@@ -1663,7 +1663,11 @@ struct SettingsPageRegressionTests {
         #expect(!settings.contains("holdSingle"))
         #expect(renderer.contains("REMOTE_MIC_SETTINGS_SCREENSHOT_OPEN_HOLD_EDITOR"))
         #expect(renderer.contains("REMOTE_MIC_SETTINGS_SCREENSHOT_HOLD_MODE"))
-        #expect(chinese.contains("\"button_mapping.hold.repeat_prefix\" = \"按住：重复 \""))
+        #expect(chinese.contains("\"button_mapping.hold.repeat_prefix\" = \"按住时 重复单击动作 \""))
+        #expect(chinese.contains("相当于按住键盘上的 %@，直到松手。"))
+        #expect(chinese.contains("重复执行单击动作"))
+        #expect(chinese.contains("重复执行长按动作"))
+        #expect(settings.contains("snapshot.allowsKeyHold = button.allowsKeyHold"))
         #expect(!settings.contains("button_mapping.hold.paused_tag"))
     }
 
