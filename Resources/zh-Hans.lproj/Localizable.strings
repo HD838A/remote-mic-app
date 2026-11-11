@@ -1424,7 +1424,6 @@
 "button_mapping.hold_button_unavailable" = "仅遥控器左键和右键支持按住方向键。";
 "button_mapping.hold.wait_double" = "设置了双击，开始前会稍等确认。";
 "button_mapping.hold.timing_help" = "长按时间采用当前已保存的按键速度设置。";
-"button_mapping.hold.current_setting" = "当前设置 · %@";
 "button_mapping.hold.long_hold.description" = "达到当前长按时间后按住 %@，松手时松开 %@。";
 "button_mapping.hold.single_hold.description" = "相当于按住键盘上的 %@，直到松手。";
 "button_mapping.hold.repeat_long.description" = "达到当前长按时间后重复执行长按动作，松手后停止。";

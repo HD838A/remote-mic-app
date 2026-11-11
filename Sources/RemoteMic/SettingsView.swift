@@ -3909,25 +3909,6 @@ struct SettingsView: View {
                     }
                 }
 
-                if let mode = snapshot.mode, mode != .once {
-                    Divider().padding(.top, 2)
-                    Text(String(
-                        format: localization.text("button_mapping.hold.current_setting"),
-                        mappingHoldOptionTitle(mode, button: button)
-                    ))
-                    .font(.system(size: 13, weight: .semibold))
-                    Text(mappingHoldOptionDescription(mode, button: button))
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                if button.allowsKeyHold {
-                    Text("button_mapping.hold.timing_help")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
                 if profileUnsupported {
                     Text("button_mapping.hold_profile_unavailable")
                         .foregroundStyle(Color.accentColor)
@@ -3954,14 +3935,11 @@ struct SettingsView: View {
         }
     }
 
-    /// 可显示的执行目标：重复方式常驻；“按住”只在对应动作能被按住时出现。
+    /// 左右物理键显示四项；动作不可用时由卡片说明原因并禁用。
     private func availableHoldModes(
         snapshot: RemoteButtonInteractionSnapshot
     ) -> [RemoteButtonHoldMode] {
-        RemoteButtonHoldMode.selectableCases.filter { mode in
-            guard mode.isHoldDown else { return true }
-            return snapshot.blockers(for: mode).isEmpty
-        }
+        RemoteButtonHoldMode.selectableCases.filter { !$0.isHoldDown || snapshot.allowsKeyHold }
     }
 
     private func mappingHoldOptionTitle(_ mode: RemoteButtonHoldMode, button: RemoteButton) -> String {
@@ -4021,6 +3999,11 @@ struct SettingsView: View {
                              ? "button_mapping.hold.single_action"
                              : "button_mapping.hold.long_action"))
                             .foregroundStyle(.secondary)
+                    }
+                    if mode == .repeatLong || mode == .longHold {
+                        Text("button_mapping.hold.timing_help")
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                     if mode == .singleHold, snapshot.recognizesDouble {
                         Text("button_mapping.hold.wait_double")

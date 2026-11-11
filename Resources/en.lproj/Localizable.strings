@@ -1425,7 +1425,6 @@
 "button_mapping.hold_button_unavailable" = "Only the remote’s left and right buttons can hold down arrow keys.";
 "button_mapping.hold.wait_double" = "Double-click is configured, so this waits briefly before starting.";
 "button_mapping.hold.timing_help" = "The long-press time uses your saved button speed setting.";
-"button_mapping.hold.current_setting" = "Current setting · %@";
 "button_mapping.hold.long_hold.description" = "Hold down %@ after the configured long-press time. Release the button to release %@.";
 "button_mapping.hold.single_hold.description" = "Like holding %@ on the keyboard until you release the button.";
 "button_mapping.hold.repeat_long.description" = "Repeat the long-press action after the configured long-press time. Release to stop.";

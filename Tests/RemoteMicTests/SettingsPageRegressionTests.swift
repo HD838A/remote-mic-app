@@ -1668,6 +1668,19 @@ struct SettingsPageRegressionTests {
         #expect(chinese.contains("重复执行单击动作"))
         #expect(chinese.contains("重复执行长按动作"))
         #expect(settings.contains("snapshot.allowsKeyHold = button.allowsKeyHold"))
+        let panelStart = try #require(settings.range(of: "private func mappingHoldEditorPanel("))
+        let modesStart = try #require(settings.range(of: "private func availableHoldModes("))
+        let titleStart = try #require(settings.range(of: "private func mappingHoldOptionTitle("))
+        let columnStart = try #require(settings.range(of: "private func mappingHoldOptionColumn("))
+        let timingStart = try #require(settings.range(of: "private var mappingGestureTimingSection:"))
+        let panel = settings[panelStart.lowerBound..<modesStart.lowerBound]
+        #expect(!panel.contains("button_mapping.hold.current_setting"))
+        #expect(!panel.contains("button_mapping.hold.timing_help"))
+        let modes = settings[modesStart.lowerBound..<titleStart.lowerBound]
+        #expect(modes.contains("snapshot.allowsKeyHold"))
+        #expect(!modes.contains("blockers(for:"))
+        let column = settings[columnStart.lowerBound..<timingStart.lowerBound]
+        #expect(column.contains("button_mapping.hold.timing_help"))
         #expect(!settings.contains("button_mapping.hold.paused_tag"))
     }
 
