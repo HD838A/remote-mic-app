@@ -1471,3 +1471,12 @@
 "audio.mac_microphone.voice_hold" = "Hold to speak; release to finish";
 "audio.mac_microphone.voice_toggle" = "Press to start; press again to finish";
 "audio.mac_microphone.error.input_monitoring" = "Cannot observe the voice shortcut. Allow Input Monitoring in System Settings and retry.";
+
+"notice.action.reopen_common_phrases" = "Reopen";
+"notice.action.open_system_settings" = "Open System Settings";
+"notice.action.retry" = "Retry";
+"notice.action.dismiss" = "Got it";
+"notice.accessibility.dismiss" = "Dismiss notice";
+"notice.accessibility.error_prefix" = "Error: ";
+"notice.accessibility.warning_prefix" = "Warning: ";
+"button_mapping.macro_unavailable.detail" = "The combination action this button points to was deleted.";

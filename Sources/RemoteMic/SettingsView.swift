@@ -2673,14 +2673,25 @@ struct SettingsView: View {
             }
             if configured.action == .combinationAction,
                !macroFeature.libraryActions.contains(where: { $0.id == configured.macroID }) {
-                Text(localization.text("button_mapping.macro_unavailable")).font(.system(size: 13)).foregroundStyle(.orange)
+                // 提示条把「管理组合动作」收进动作位，避免和下面那个常驻按钮重复。
+                NoticeInline(
+                    tier: .warning,
+                    title: localization.text("button_mapping.macro_unavailable"),
+                    text: localization.text("button_mapping.macro_unavailable.detail"),
+                    action: NoticeAction(title: localization.text("button_mapping.manage_macros")) {
+                        mappingActionFilter = .combinations
+                        mappingMacroSearch = ""
+                        selectedSection = .macros
+                    }
+                )
+            } else {
+                Button(localization.text("button_mapping.manage_macros")) {
+                    mappingActionFilter = .combinations
+                    mappingMacroSearch = ""
+                    selectedSection = .macros
+                }
+                    .buttonStyle(.bordered)
             }
-            Button(localization.text("button_mapping.manage_macros")) {
-                mappingActionFilter = .combinations
-                mappingMacroSearch = ""
-                selectedSection = .macros
-            }
-                .buttonStyle(.bordered)
         }
     }
 

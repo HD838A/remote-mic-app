@@ -120,6 +120,13 @@ enum SettingsScreenshotRenderer {
             settings.setBaseBinding(missing, for: .up, trigger: .singleClick,
                 profileID: settings.selectedRemoteProfileID)
         }
+        if ProcessInfo.processInfo.environment["REMOTE_MIC_SETTINGS_SCREENSHOT_MISSING_MACRO_ON_OK"] == "1" {
+            // 动作编辑器默认打开确定键；单独开关，避免影响既有 MISSING_ROUTINE 截图。
+            let missing = ConfiguredButtonAction(action: .combinationAction, shortcut: nil,
+                macroID: "local.screenshot-missing")
+            settings.setBaseBinding(missing, for: .ok, trigger: .singleClick,
+                profileID: settings.selectedRemoteProfileID)
+        }
         if let iconIdentifier = ProcessInfo.processInfo.environment[
             "REMOTE_MIC_SETTINGS_SCREENSHOT_APP_ICON"
         ] {
