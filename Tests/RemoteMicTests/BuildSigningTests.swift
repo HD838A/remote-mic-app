@@ -719,7 +719,12 @@ struct BuildSigningTests {
         #expect(publicationWorkflow.contains("ref: ${{ github.sha }}"))
         #expect(publicationWorkflow.contains("TRIGGER_REPOSITORY"))
         #expect(publicationWorkflow.contains("github.ref_name == 'main'"))
-        #expect(!publicationWorkflow.contains("secrets."))
+        let publicationWithoutFeedToken = publicationWorkflow.replacingOccurrences(
+            of: "secrets.SAYALL_FEED_SYNC_TOKEN", with: "feed_sync_credential"
+        )
+        #expect(!publicationWithoutFeedToken.contains("secrets."))
+        #expect(publicationWorkflow.contains("sync-update-feeds.mjs --preflight"))
+        #expect(publicationWorkflow.contains("Synchronize and verify all original update feed URLs"))
         #expect(!publicationWorkflow.contains("environment: mac-release"))
         #expect(stableWorkflow.contains("promote-preview-release.sh"))
         #expect(stableWorkflow.contains("environment: mac-stable-release"))
