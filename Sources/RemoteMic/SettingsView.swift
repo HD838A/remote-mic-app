@@ -3869,13 +3869,13 @@ struct SettingsView: View {
                         .padding(.vertical, 4)
                         .background(Color.accentColor.opacity(0.12), in: Capsule())
                     Spacer()
-                    if snapshot.mode != .once {
-                        Button("button_mapping.hold.clear") {
-                            setMappingHoldMode(.once, for: button)
-                        }
-                        .compatibilityButtonStyle(.standard)
-                        .disabled(profileUnsupported)
+                    // 清除入口常驻：选中任一目标后可以退回“未设置”，按键恢复正常执行。
+                    Button("button_mapping.hold.clear") {
+                        setMappingHoldMode(.once, for: button)
                     }
+                    .compatibilityButtonStyle(.standard)
+                    .disabled(profileUnsupported || snapshot.mode == .once)
+                    .help(localization.text("button_mapping.hold.clear.help"))
                 }
 
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
@@ -3888,13 +3888,14 @@ struct SettingsView: View {
                     Spacer(minLength: 0)
                 }
 
-                // 四个目标并列，最多只能选一个：两个重复、两个按住。
+                // 最多四选一：两个重复常驻，两项“按住”只在对应动作是方向键时出现，
+                // 不可用时整项隐藏，不留下“看得见点不动”的卡片。
                 LazyVGrid(
                     columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)],
                     alignment: .leading,
                     spacing: 8
                 ) {
-                    ForEach(RemoteButtonHoldMode.selectableCases) { mode in
+                    ForEach(availableHoldModes(snapshot: snapshot)) { mode in
                         mappingHoldOptionColumn(mode, button: button, snapshot: snapshot,
                                                 profileUnsupported: profileUnsupported)
                     }
@@ -3926,8 +3927,17 @@ struct SettingsView: View {
         }
     }
 
-    /// One hold target. The card keeps a single height across both columns and its reason
-    /// sits directly underneath, so the pair always lines up.
+    /// 可显示的执行目标：重复方式常驻；“按住”只在对应动作能被按住时出现。
+    private func availableHoldModes(
+        snapshot: RemoteButtonInteractionSnapshot
+    ) -> [RemoteButtonHoldMode] {
+        RemoteButtonHoldMode.selectableCases.filter { mode in
+            guard mode.isHoldDown else { return true }
+            return snapshot.blockers(for: mode).isEmpty
+        }
+    }
+
+    /// One hold target. 原因写在卡片右侧，不再另起一行，四个选项因此永远等高对齐。
     private func mappingHoldOptionColumn(
         _ mode: RemoteButtonHoldMode,
         button: RemoteButton,
@@ -3952,7 +3962,8 @@ struct SettingsView: View {
         case .once:
             ""
         }
-        return VStack(alignment: .leading, spacing: 5) {
+        let reasonWidth: CGFloat = blockers.isEmpty ? 0 : 148
+        return ZStack(alignment: .topTrailing) {
             Button {
                 setMappingHoldMode(mode, for: button)
             } label: {
@@ -3961,6 +3972,7 @@ struct SettingsView: View {
                         Image(systemName: selected ? "checkmark.circle.fill" : "circle")
                             .foregroundStyle(selected ? Color.accentColor : Color.secondary)
                         Text(localization.text(mode.localizationKey))
+                            .lineLimit(1)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
                     Text(subtitle)
@@ -3971,6 +3983,7 @@ struct SettingsView: View {
                 }
                 .font(.system(size: 13))
                 .padding(8)
+                .padding(.trailing, reasonWidth)
                 .frame(maxWidth: .infinity, minHeight: 62, maxHeight: 62, alignment: .topLeading)
                 .background(selected ? Color.accentColor.opacity(0.12) : Color.primary.opacity(0.04),
                             in: RoundedRectangle(cornerRadius: 8))
@@ -3984,11 +3997,11 @@ struct SettingsView: View {
             .accessibilityAddTraits(selected ? .isSelected : [])
 
             if !blockers.isEmpty {
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .trailing, spacing: 3) {
                     ForEach(Array(blockers.enumerated()), id: \.offset) { _, blocker in
                         Text(holdBlockerText(blocker))
                             .font(.system(size: 11))
-                            .foregroundStyle(Color.accentColor)
+                            .multilineTextAlignment(.trailing)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     if mode == .repeatSingle, blockers == [.longPressConfigured(snapshot.long)] {
@@ -3998,9 +4011,12 @@ struct SettingsView: View {
                         .buttonStyle(.plain)
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(Color.accentColor)
+                        .multilineTextAlignment(.trailing)
                     }
                 }
-                .padding(.leading, 2)
+                .frame(width: reasonWidth, alignment: .trailing)
+                .padding(.trailing, 8)
+                .padding(.top, 9)
             }
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)

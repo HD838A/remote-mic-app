@@ -1432,6 +1432,7 @@
 "button_mapping.hold.blocker.long_owned_by_profile" = "长按由键位方案接管";
 "button_mapping.hold.target" = "执行目标（单选）";
 "button_mapping.hold.clear" = "清除按住";
+"button_mapping.hold.clear.help" = "清除后按单击、双击和长按的配置正常执行。";
 "button_mapping.hold.single_action" = "单击动作";
 "button_mapping.hold.long_action" = "长按动作";
 "button_mapping.hold.repeat_single.action_prefix" = "持续执行：";

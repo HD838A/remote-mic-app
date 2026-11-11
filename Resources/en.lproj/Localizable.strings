@@ -1433,6 +1433,7 @@
 "button_mapping.hold.blocker.long_owned_by_profile" = "A button profile owns the long press";
 "button_mapping.hold.target" = "Repeat target";
 "button_mapping.hold.clear" = "Clear hold";
+"button_mapping.hold.clear.help" = "After clearing, the button runs its click, double-click and long-press actions as configured.";
 "button_mapping.hold.single_action" = "Single-click action";
 "button_mapping.hold.long_action" = "Long-press action";
 "button_mapping.hold.repeat_single.action_prefix" = "Repeat: ";
