@@ -263,10 +263,6 @@ final class ChromecastFeatureIntegration {
         feature.onSamples = { [weak self] samples, generation in
             self?.onSamples?(samples, generation)
         }
-        feature.onStatus = { [weak self] status in
-            // 包内文案只进日志：界面文案一律由宿主本地化，避免中英混排。
-            self?.onLog?("CHROMECAST STATUS \(status)")
-        }
         feature.onLog = { [weak self] message in
             self?.onLog?(message)
         }

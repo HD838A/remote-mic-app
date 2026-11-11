@@ -1,0 +1,215 @@
+{
+  "batch": "connection-status-remote-model-20261111",
+  "date": "2026-11-11",
+  "source_commit": "7d65f8f7213bbff01549f85e607c21ca7d8ec9d8",
+  "source_files": {
+    "Sources/RemoteMic/BridgeAppModel.swift": "e69a0a9181caf2a30529c304386cb3ad48475f8332cc653d924f1544588e5e37",
+    "Sources/RemoteMic/SettingsView.swift": "1a2161e15c06efe4ad35d65f457de3dbafb6a40af813ea3af7f8433f0e27f94a",
+    "Sources/RemoteMic/SettingsScreenshotRenderer.swift": "719bc37d63a8520864098c0ba693543b21debc60269c8d6fc0b80a483a2a7f11",
+    "Resources/en.lproj/Localizable.strings": "5ec57caa746b67e6ed6cbadac5e2c6f12ccae246639db560881d56ffd01ef5ad",
+    "Resources/zh-Hans.lproj/Localizable.strings": "3de29fe67aee9cbcd6bd331ffb1998acda2074a8c9d919e756cc1a0dbae28d5f"
+  },
+  "purpose": "所选遥控器查找状态的中英文与浅深色生产视图证据",
+  "storage": "github-pr-attachments",
+  "window_size": {
+    "width": 1067,
+    "height": 760
+  },
+  "rendering": "production SettingsView offscreen, isolated settings, source remote adapters",
+  "images": [
+    {
+      "file": "apple-siri-remote-a2540-en-dark.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1520,
+      "sha256": "7d441d3f5f2aab33b6d797dc7b3a66f7b818687d8a0cd537da124d4a6774a5c4",
+      "url": "https://github.com/user-attachments/assets/7680f5b1-1656-43d4-a5c4-079aca73af0b"
+    },
+    {
+      "file": "apple-siri-remote-a2540-en-light.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1520,
+      "sha256": "977fcd5cc2ce7b7fe6967103eaaf047a094d912c2496adc61676640cb7a761e4",
+      "url": "https://github.com/user-attachments/assets/8d79b07c-0fd7-4f9e-b6c4-561c086b8eee"
+    },
+    {
+      "file": "apple-siri-remote-a2540-zh-hans-dark.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1520,
+      "sha256": "d7b718c186f4f5c57d0f89d4cc3cc861cce902e32ce23fbf954ef69e617de0aa",
+      "url": "https://github.com/user-attachments/assets/8300490d-50f2-4afb-beae-769239852b35"
+    },
+    {
+      "file": "apple-siri-remote-a2540-zh-hans-light.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1520,
+      "sha256": "3ad5b88eb27c7fca6b56101447ab3d08c7a78b41d73dc0b6856ba86bfc8858e2",
+      "url": "https://github.com/user-attachments/assets/3ec931e3-a5d7-4c6d-9524-6cccbde179bc"
+    },
+    {
+      "file": "apple-siri-remote-a2854-en-dark.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1520,
+      "sha256": "288e8d03a76053352bf2182c397e340605db1e789dd9e3f4fb705feaa97e3673",
+      "url": "https://github.com/user-attachments/assets/4d025a71-ad22-4050-b5ed-d283d5e4fdcc"
+    },
+    {
+      "file": "apple-siri-remote-a2854-en-light.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1520,
+      "sha256": "1f64432efbfbea6c8dd7b8f47450722ccb3c7bf4d35258e81a724a5e76f395e1",
+      "url": "https://github.com/user-attachments/assets/b308c5a5-d1c2-42fb-b32c-f1c29d572ea4"
+    },
+    {
+      "file": "apple-siri-remote-a2854-zh-hans-dark.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1520,
+      "sha256": "ff03b0e11051b830d4eac99136fee51eb9c480ce0e21bcaf6969289f9f33516b",
+      "url": "https://github.com/user-attachments/assets/edd23131-ef4f-461d-b05c-1f043b203d2f"
+    },
+    {
+      "file": "apple-siri-remote-a2854-zh-hans-light.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1520,
+      "sha256": "13b6e8b0f7c07b36d480722bcbc0d6ecca53ce3c24e853f98ac00217e7ba1010",
+      "url": "https://github.com/user-attachments/assets/3535f11d-450f-44b0-b82d-7bef920e966a"
+    },
+    {
+      "file": "chromecast-voice-remote-en-dark.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1520,
+      "sha256": "cf2cd5237a5a2b077260feb84d95ad6a14dbe6d52f5b349dbeab28658f690637",
+      "url": "https://github.com/user-attachments/assets/1af50f0a-e4d5-4670-bb07-b0f4308cae0c"
+    },
+    {
+      "file": "chromecast-voice-remote-en-light.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1520,
+      "sha256": "3156b49ee1865fcdbffe03d6fb94585341ef0e8a04cf2600e2d9290516e77440",
+      "url": "https://github.com/user-attachments/assets/26fd9282-71a9-4c99-916a-88bd285d981b"
+    },
+    {
+      "file": "chromecast-voice-remote-zh-hans-dark.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1520,
+      "sha256": "111248a37aa04598f73826bb570e871e567224c9ed7c418a76061577e1008918",
+      "url": "https://github.com/user-attachments/assets/66314abf-eac1-4bea-8d18-d5924a09c403"
+    },
+    {
+      "file": "chromecast-voice-remote-zh-hans-light.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1520,
+      "sha256": "f241bbc3ddbe89ce1d9f717cd964e5fc36c751c0af2aa72499707486a969739b",
+      "url": "https://github.com/user-attachments/assets/1eda28c0-e59e-4808-8098-e1114eea829d"
+    },
+    {
+      "file": "rc001-en-dark.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1520,
+      "sha256": "92f342a51e5a8cfd983031c77ca4c993e8856d7384bc3fce2e9be1650d57aee3",
+      "url": "https://github.com/user-attachments/assets/8e79f42c-6df1-4b9b-b8be-843d95ad2851"
+    },
+    {
+      "file": "rc001-en-light.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1520,
+      "sha256": "3adad1d3e9afeb4d0dc7b83759639c06c0be118ebdd89c6edeafd21312a8cad0",
+      "url": "https://github.com/user-attachments/assets/421266e0-c99d-4a99-829d-3a50536a45fa"
+    },
+    {
+      "file": "rc001-zh-hans-dark.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1520,
+      "sha256": "3577b2432331c4c1d84ca66041e8bfe13524d72ba269c848736462b6a0527560",
+      "url": "https://github.com/user-attachments/assets/023a59e1-9fc0-4cb3-9eb5-b942bba5c27e"
+    },
+    {
+      "file": "rc001-zh-hans-light.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1520,
+      "sha256": "f118e320d17861696c6242a4e02f686766ef8fb3f5ab3ac809d4700877c8458b",
+      "url": "https://github.com/user-attachments/assets/3be93a31-8932-42e2-9807-ccf426f2ee55"
+    },
+    {
+      "file": "rc003-en-dark.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1520,
+      "sha256": "1df295a5135a61a69176fec96c49af33db9fb38942a84b8c4304e8c73e8824db",
+      "url": "https://github.com/user-attachments/assets/5957e693-aa67-487f-9921-ee1ea722008c"
+    },
+    {
+      "file": "rc003-en-light.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1520,
+      "sha256": "dcc08db1c0020352e1df3e33c7cbc68cb1db95a043ddc266a5adbe89d51b4a3d",
+      "url": "https://github.com/user-attachments/assets/47cbb227-3e30-41ea-b0c3-73d23c20bee4"
+    },
+    {
+      "file": "rc003-zh-hans-dark.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1520,
+      "sha256": "84f2951612a86fc6593ac1e60b4eba312348e511e738fec1cb2ffe4e7d60882c",
+      "url": "https://github.com/user-attachments/assets/c94a0c55-1663-40e0-8ac9-c2c493a3c205"
+    },
+    {
+      "file": "rc003-zh-hans-light.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1520,
+      "sha256": "8c258049ed4a5a9f44338a182c799abff8aab833e9372f8c7734fbfa2b381573",
+      "url": "https://github.com/user-attachments/assets/5818cb5c-f51c-42b8-bbfd-950d1979fbb7"
+    },
+    {
+      "file": "unknown-en-dark.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1520,
+      "sha256": "16ab2411fe74b1c9c66c7dfcbc52cf2135ae466d26f4eb082425a80e086614c7",
+      "url": "https://github.com/user-attachments/assets/0ebb952e-7733-4172-adfc-0c06925db085"
+    },
+    {
+      "file": "unknown-en-light.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1520,
+      "sha256": "c8e0107602ca59309d6a46a8899def2b72766e83df8ca391ec362b0461afb02c",
+      "url": "https://github.com/user-attachments/assets/54646d7d-7ede-46b3-a9a5-83e7846f226d"
+    },
+    {
+      "file": "unknown-zh-hans-dark.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1520,
+      "sha256": "a991abd084b9c72cd1148687c2c23f3411f47e4e2c2ad9a69cb38212575758de",
+      "url": "https://github.com/user-attachments/assets/4770fedb-ec8e-4f17-88f4-36d0f791e4d5"
+    },
+    {
+      "file": "unknown-zh-hans-light.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1520,
+      "sha256": "d12e981a1156e537288fa4cb5ce15e8e7b6787c6930ae7f76c53a6771de6d4e2",
+      "url": "https://github.com/user-attachments/assets/52a8cc44-7954-432a-825b-51c92581033b"
+    }
+  ],
+  "pr_url": "https://github.com/HD838A/remote-mic-app/pull/999",
+  "browser_validation": "All 24 hosted images loaded with natural size 2134x1520"
+}

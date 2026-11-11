@@ -220,6 +220,13 @@ enum SettingsScreenshotRenderer {
             transcriptArchiveStore: transcriptStore,
             recordingAssetStore: recordingStore
         )
+        if let rawModel = ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_SETTINGS_SCREENSHOT_REMOTE_MODEL"
+        ], let remoteModel = XiaomiRemoteModel(rawValue: rawModel) {
+            let profileID = settings.registerHIDRemote(fingerprint: "settings-screenshot-selected-remote")
+            settings.updateRemoteProfileModel(profileID, model: remoteModel)
+            model.selectRemoteProfile(profileID)
+        }
         if let state = ProcessInfo.processInfo.environment["REMOTE_MIC_SETTINGS_SCREENSHOT_MAC_MICROPHONE"] {
             model.configureMacMicrophoneForSettingsScreenshot(state)
         }

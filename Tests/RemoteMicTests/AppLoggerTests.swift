@@ -152,6 +152,30 @@ struct AppLoggerTests {
         #expect(!harness.failures.isEmpty)
     }
 
+    @Test func defaultLimitIsTenMegabytesIncludingEncryptionOverhead() throws {
+        #expect(AppLogger.defaultMaximumFileSize == 10_000_000)
+        let harness = try LoggerHarness()
+        let payload = String(repeating: "x", count: 70_000)
+        for index in 0..<40 { harness.logger.write("\(payload) index=\(index)") }
+        harness.logger.flush()
+        let firstSegments = try harness.segmentURLs()
+        #expect(firstSegments.count == 1)
+        #expect(try Data(contentsOf: firstSegments[0]).count > 2 * 1_024 * 1_024)
+
+        for index in 40..<160 { harness.logger.write("\(payload) index=\(index)") }
+        harness.logger.flush()
+        let segments = try harness.segmentURLs()
+        #expect(segments.count == 2)
+        for segment in segments {
+            #expect(try Data(contentsOf: segment).count <= 10_000_000)
+        }
+        let lines = try harness.decryptAllLines()
+        #expect(lines.count == 160)
+        #expect(lines.contains { $0.hasSuffix("index=0\n") })
+        #expect(lines.contains { $0.hasSuffix("index=159\n") })
+        #expect(harness.failures.isEmpty)
+    }
+
     @Test func rejectedOversizedRecordDoesNotCreateSequenceGap() throws {
         let harness = try LoggerHarness(maximumFileSize: 400)
 
@@ -189,6 +213,87 @@ struct AppLoggerTests {
         #expect(lines[0].contains("HID FILTER ready=true"))
         #expect(lines[1].contains("LOG REPEAT repeat_count=80"))
         #expect(lines[2].contains("FLOW phase=failed"))
+    }
+
+    @Test func interleavedDiscoveryObservationsKeepCountsAndFailureBoundaries() throws {
+        let harness = try LoggerHarness()
+        for sequence in 1...100 {
+            harness.logger.write("BLE CENTRAL state=4 lifecycle=stopped generation=3")
+            harness.logger.write("BLE CENTRAL state=5 lifecycle=waitingBluetoothPower(3) generation=3")
+            harness.logger.write("CHROMECAST CONNECTION state=discovering model=chromecast-voice-remote sequence=\(sequence) capabilities=voice_stream")
+            harness.logger.write("BLE SCANNING")
+        }
+        harness.logger.write("BLE CONNECT TIMEOUT")
+        harness.logger.write("BLE READY")
+        harness.logger.write("ATVV AUDIO completion=normal pending_samples=0")
+        harness.logger.flush()
+        let lines = try harness.decryptAllLines()
+        #expect(lines.count == 11)
+        #expect(lines.filter { $0.contains("aggregation=discovery_observation repeat_count=99") }.count == 4)
+        #expect(lines[8].contains("BLE CONNECT TIMEOUT"))
+        #expect(lines[9].contains("BLE READY"))
+        #expect(lines[10].contains("ATVV AUDIO completion=normal"))
+        #expect(lines.contains { $0.contains("last_observation=CHROMECAST CONNECTION") && $0.contains("sequence=100") })
+    }
+
+    @Test func discoveryAggregationIsBoundedDuringLongPowerFlapping() throws {
+        var uptime: TimeInterval = 0
+        let harness = try LoggerHarness(now: {
+            defer { uptime += 1 }
+            return Date(timeIntervalSince1970: uptime)
+        })
+        for cycle in 1...5_518 {
+            for generation in [3, 18, 400] {
+                harness.logger.write("BLE CENTRAL state=4 lifecycle=stopped generation=\(generation)")
+                harness.logger.write("BLE CENTRAL state=5 lifecycle=waitingBluetoothPower(\(generation)) generation=\(generation)")
+            }
+            harness.logger.write("BLE SYSTEM CONNECTED CANDIDATES count=0")
+            harness.logger.write("BLE SCANNING")
+            harness.logger.write("CHROMECAST CONNECTION state=discovering model=chromecast-voice-remote sequence=\(cycle * 2) capabilities=voice_stream")
+            harness.logger.write("CHROMECAST CONNECTION state=unavailable model=chromecast-voice-remote sequence=\(cycle * 2 + 1) capabilities=voice_stream")
+        }
+        harness.logger.flush()
+        let lines = try harness.decryptAllLines()
+        #expect(lines.count < 10_000)
+        let repeated = lines.reduce(0) { count, line in
+            let field = line.split(separator: " ").first { $0.hasPrefix("repeat_count=") }
+            return count + (field.flatMap { Int($0.dropFirst("repeat_count=".count)) } ?? 0)
+        }
+        let original = lines.filter { !$0.contains("aggregation=discovery_observation") }.count
+        #expect(original + repeated == 55_180)
+        #expect(lines.contains { $0.contains("first_at_ms=") && $0.contains("last_at_ms=") })
+        #expect(harness.failures.isEmpty)
+    }
+
+    @Test func typedEventsFlushObservationsAndNewDiscoveryStartsWithAFullRecord() throws {
+        let harness = try LoggerHarness()
+        harness.logger.write("BLE SCANNING")
+        harness.logger.write("BLE SCANNING")
+        let event = try #require(PublicDiagnosticEvent(
+            component: "remote", action: "connection", phase: "completed",
+            result: "connected", reason: "ready", source: "bluetooth", remoteModelFamily: "xiaomi"
+        ))
+        harness.logger.record(event)
+        harness.logger.write("BLE SCANNING")
+        harness.logger.flush()
+        let lines = try harness.decryptAllLines()
+        #expect(lines.count == 4)
+        #expect(lines[1].contains("repeat_count=1"))
+        #expect(lines[2].contains(event.canonicalLine))
+        #expect(lines[3].hasSuffix("BLE SCANNING\n"))
+    }
+
+    @Test func observationEvictionPreservesPendingCounts() throws {
+        let harness = try LoggerHarness()
+        for generation in 1...40 {
+            let message = "BLE CENTRAL state=5 lifecycle=scanning(\(generation)) generation=\(generation)"
+            harness.logger.write(message)
+            harness.logger.write(message)
+        }
+        harness.logger.flush()
+        let lines = try harness.decryptAllLines()
+        #expect(lines.count == 80)
+        #expect(lines.filter { $0.contains("aggregation=discovery_observation repeat_count=1") }.count == 40)
     }
 
     @Test func retentionMovesOnlyVerifiedInactiveLogsAndReportsBoundary() throws {
@@ -289,7 +394,8 @@ private final class LoggerHarness {
             version: "1.9 beta",
             build: "121 rc"
         ),
-        maximumFileSize: UInt64 = 10 * 1_024 * 1_024
+        maximumFileSize: UInt64 = AppLogger.defaultMaximumFileSize,
+        now: @escaping () -> Date = { Date(timeIntervalSinceReferenceDate: 0) }
     ) throws {
         let fileManager = FileManager.default
         let rootURL = fileManager.temporaryDirectory
@@ -301,7 +407,7 @@ private final class LoggerHarness {
             logURL: logURL,
             metadata: metadata,
             maximumFileSize: maximumFileSize,
-            now: { Date(timeIntervalSinceReferenceDate: 0) },
+            now: now,
             reportFailure: { [failureBox] message in failureBox.values.append(message) },
             publicKeyDataProvider: { publicKey }
         )

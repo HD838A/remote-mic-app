@@ -339,7 +339,7 @@ struct BluetoothLifecycleTests {
         #expect(abs(cappedHighDelay - 60) < 0.000_001)
     }
 
-    @Test func failedCachedTargetIsBypassedUntilThePolicyIsReset() {
+    @Test func failedCachedTargetIsBypassedBetweenProbesOrUntilReset() {
         var policy = BluetoothReconnectPolicy()
         #expect(policy.allowsCachedTargetRetrieval)
 
@@ -361,6 +361,64 @@ struct BluetoothLifecycleTests {
             bypassCachedTarget: false,
             jitterUnit: 0.5
         ) == 3)
+    }
+
+    @Test func cachedTargetProbeRecoversAfterTransientWakeFailureWithoutResettingBackoff() {
+        var policy = BluetoothReconnectPolicy()
+        let initialProbe = policy.shouldRetrieveCachedTarget(at: 0)
+        #expect(initialProbe)
+        _ = policy.nextAutomaticDelay(bypassCachedTarget: true, jitterUnit: 0.5, uptime: 8)
+
+        let beforeCooldown = policy.shouldRetrieveCachedTarget(at: 67.999)
+        let afterCooldown = policy.shouldRetrieveCachedTarget(at: 68)
+        let duplicateProbe = policy.shouldRetrieveCachedTarget(at: 68)
+        #expect(!beforeCooldown)
+        #expect(afterCooldown)
+        #expect(!duplicateProbe)
+        #expect(!policy.allowsCachedTargetRetrieval)
+        #expect(policy.consecutiveFailureCount == 1)
+
+        // An offline device keeps the existing backoff after the probe fails.
+        let delay = policy.nextAutomaticDelay(bypassCachedTarget: true, jitterUnit: 0.5, uptime: 76)
+        #expect(delay == 6)
+        let beforeSecondCooldown = policy.shouldRetrieveCachedTarget(at: 135.999)
+        let afterSecondCooldown = policy.shouldRetrieveCachedTarget(at: 136)
+        #expect(!beforeSecondCooldown)
+        #expect(afterSecondCooldown)
+        #expect(policy.consecutiveFailureCount == 2)
+    }
+
+    @Test func repeatedScanFailuresCannotPermanentlyDisableCachedTargetProbes() {
+        var policy = BluetoothReconnectPolicy()
+        _ = policy.nextAutomaticDelay(bypassCachedTarget: true, jitterUnit: 0.5, uptime: 8)
+        for attempt in 1...38 {
+            let uptime = 8 + Double(attempt) * 80
+            let probe = policy.shouldRetrieveCachedTarget(at: uptime)
+            let duplicate = policy.shouldRetrieveCachedTarget(at: uptime)
+            #expect(probe)
+            #expect(!duplicate)
+            _ = policy.nextAutomaticDelay(bypassCachedTarget: false, jitterUnit: 0.5, uptime: uptime)
+        }
+        #expect(policy.consecutiveFailureCount == 39)
+        #expect(!policy.allowsCachedTargetRetrieval)
+        #expect(BluetoothScanRecoveryPolicy.shouldStartScanTimeout(
+            hasSavedTarget: true,
+            allowsCachedTargetRetrieval: policy.allowsCachedTargetRetrieval
+        ))
+        policy.reset()
+        let manualProbe = policy.shouldRetrieveCachedTarget(at: 0)
+        #expect(manualProbe)
+        #expect(policy.consecutiveFailureCount == 0)
+    }
+
+    @Test func cachedProbeIsWiredToTheProductionDiscoveryPath() throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        let source = try String(contentsOf: root.appendingPathComponent(
+            "Sources/RemoteMic/XiaomiBluetoothBridge.swift"
+        ), encoding: .utf8)
+        #expect(source.contains("reconnectPolicy.shouldRetrieveCachedTarget(at: ProcessInfo.processInfo.systemUptime)"))
+        #expect(source.contains("reason=cached_target_cooldown_elapsed"))
     }
 
     @Test func systemConnectedCandidatesAreQueriedWhenTheSavedIdentityCannotBeUsedDirectly() {
