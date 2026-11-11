@@ -396,9 +396,11 @@
 "connection.voice_key.mode.right_command" = "Right Command (⌘)";
 "connection.voice_key.mode.left_option" = "Left Option (⌥)";
 "connection.voice_key.mode.right_option" = "Right Option (⌥)";
-"connection.voice_key_mode.help" = "Fn/Globe is the default. Command and Option modes require Accessibility permission and a target voice app that supports the corresponding standalone key hold; many apps merge both sides into a generic modifier. Pressing another key while held may trigger a modifier shortcut.";
+"connection.voice_key_mode.help" = "Fn/Globe is the default. Command and Option modes require Accessibility permission; many apps merge both sides into a generic modifier, and pressing another key while held may trigger a modifier shortcut.";
 "connection.voice_key_mode.unverified" = "Check Your Voice Trigger Key";
-"connection.voice_key_mode.unverified_detail" = "Set the same trigger key in your voice typing app, then dictate a sentence to check it. SayAll cannot check that app’s settings. If no text appears, switch back to Fn/Globe.";
+"connection.voice_key_mode.unverified_detail" = "Open the voice input settings in that app, set its hold-to-talk shortcut to this key, then dictate a sentence to check it. SayAll cannot read that app’s settings, so this step is manual; if no text appears, switch back to Fn/Globe.";
+"connection.voice_key_mode.mismatch.title" = "Also set your voice app’s shortcut to “%1$@”";
+"connection.voice_key_mode.mismatch.action" = "Use Fn";
 "connection.voice_key_mode.command_permission" = "Modifier-key mode requires Accessibility permission";
 "connection.action.reconnect" = "Reconnect Now";
 "connection.phone.section_title" = "SayAll Mobile";

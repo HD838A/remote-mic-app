@@ -3200,10 +3200,23 @@ struct SettingsView: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(3)
             if settings.voiceKeyMode != .function {
-                Text(localization.text("connection.voice_key_mode.unverified_detail"))
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                // 非 Fn 触发键要求目标工具配成同一个键，而 SayAll 读不到对方的设置。
+                // 这段原来只是一行灰色小字，容易被当成说明跳过；改成有标题和动作的
+                // 内联提示，标题直接报出当前键名，避免“配成同一个”这种看不出配哪个键的说法。
+                NoticeInline(
+                    tier: .warning,
+                    title: LocalizedMessage(
+                        "connection.voice_key_mode.mismatch.title",
+                        arguments: [localization.text(settings.voiceKeyMode.localizationKey)]
+                    ).text(using: localization),
+                    text: localization.text("connection.voice_key_mode.unverified_detail"),
+                    action: NoticeAction(
+                        title: localization.text("connection.voice_key_mode.mismatch.action")
+                    ) {
+                        model.setVoiceKeyMode(.function)
+                    }
+                )
+                .padding(.top, 4)
             }
         }
         .help(localization.text("connection.voice_key_mode.help"))

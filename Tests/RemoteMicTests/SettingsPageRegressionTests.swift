@@ -971,6 +971,13 @@ struct SettingsPageRegressionTests {
         #expect(panelSource.contains("mappingVoiceKeyModeControl"))
         #expect(!panelSource.contains("\"connection.voice_key_mode.unverified\""))
         #expect(panelSource.contains("connection.voice_key_mode.unverified_detail"))
+        // 非 Fn 触发键要目标工具配同一个键，SayAll 读不到对方设置；提示必须带可执行动作，
+        // 不能只是一行灰色说明，否则用户会当成介绍直接跳过。
+        #expect(panelSource.contains("NoticeInline("))
+        #expect(panelSource.contains("connection.voice_key_mode.mismatch.title"))
+        // 标题必须点名当前键名，不能用“配成同一个”这种看不出配哪个键的说法。
+        #expect(panelSource.contains("localization.text(settings.voiceKeyMode.localizationKey)"))
+        #expect(panelSource.contains("model.setVoiceKeyMode(.function)"))
         #expect(panelSource.contains("mappingVoiceFnTapControl"))
         #expect(!panelSource.contains("mappingVoiceShortTapFocusControl"))
         #expect(panelSource.contains("mappingRestoreDefaultsButton"))
