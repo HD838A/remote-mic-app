@@ -208,6 +208,15 @@ let profilesAuthorizedAccessAvailable = artifactSupportsAuthorizedAccess(module:
             .appendingPathComponent("Sources/SayAllButtonProfiles/ButtonProfilesAccessDecision.swift")
         return (try? String(contentsOf: source, encoding: .utf8))?.contains("case authorized") == true
     }
+let profileAutosaveAvailable = [buttonProfilesPackagePath].compactMap { $0 }.contains { path in
+    let api = URL(fileURLWithPath: path).appendingPathComponent("Sources/SayAllButtonProfiles/SayAllButtonProfilesFeature.swift")
+    return (try? String(contentsOf: api, encoding: .utf8))?.contains("public func displayProfiles()") == true
+} || (privateArtifactPackagePath.map { path in
+    ["arm64", "x86_64"].allSatisfy { architecture in
+        let api = URL(fileURLWithPath: path).appendingPathComponent("Artifacts/SayAllButtonProfiles.xcframework/macos-arm64_x86_64/SayAllButtonProfiles.framework/Modules/SayAllButtonProfiles.swiftmodule/\(architecture)-apple-macos.swiftinterface")
+        return (try? String(contentsOf: api, encoding: .utf8))?.contains("func displayProfiles()") == true
+    }
+} ?? false)
 let buttonProfilesTestAccessEnabled = ProcessInfo.processInfo.environment[
     "SAYALL_TEST_BUTTON_PROFILES_FREE"
 ] == "1"
@@ -248,6 +257,9 @@ if siriPermissionMonitorAvailable {
 }
 if membershipAuthorizedAccessAvailable {
     remoteMicSwiftSettings.append(.define("SAYALL_MEMBERSHIP_AUTHORIZED_ACCESS"))
+}
+if profileAutosaveAvailable {
+    remoteMicSwiftSettings.append(.define("SAYALL_BUTTON_PROFILE_AUTOSAVE"))
 }
 if profilesAuthorizedAccessAvailable {
     remoteMicSwiftSettings.append(.define("SAYALL_PROFILES_AUTHORIZED_ACCESS"))
@@ -328,6 +340,7 @@ var remoteMicLinkerSettings: [LinkerSetting] = []
 if privateArtifactsAvailable { remoteMicLinkerSettings.append(.unsafeFlags(["-Xlinker", "-ObjC"])) }
 
 var remoteMicTestSwiftSettings: [SwiftSetting] = []
+if profileAutosaveAvailable { remoteMicTestSwiftSettings.append(.define("SAYALL_BUTTON_PROFILE_AUTOSAVE")) }
 if buttonHoldModesAvailable { remoteMicTestSwiftSettings.append(.define("SAYALL_BUTTON_HOLD_MODES")) }
 if bindingTextAvailable { remoteMicTestSwiftSettings.append(.define("SAYALL_BUTTON_PROFILE_BINDING_TEXT")) }
 if screenshotProfileSeedAvailable { remoteMicTestSwiftSettings.append(.define("SAYALL_SCREENSHOT_PROFILE_SEED")) }
@@ -621,7 +634,8 @@ let package = Package(
             name: "RemoteMicTests",
             dependencies: remoteMicTestDependencies + ["SayAllMCPKit", "AppleRemoteHCIProtocol"],
             path: "Tests/RemoteMicTests",
-            exclude: macRemoteEnabled ? [] : ["WatchBluetoothVoiceJourneyTests.swift"],
+            // This suite exercises internal source-only BLE hooks. Distribution binaries do not export them.
+            exclude: macRemoteEnabled && !privateArtifactsAvailable ? [] : ["WatchBluetoothVoiceJourneyTests.swift"],
             swiftSettings: remoteMicTestSwiftSettings
         ),
     ],

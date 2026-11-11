@@ -31,7 +31,21 @@ struct ButtonProfileHostActionSection: Equatable {
     let actions: [ButtonProfileHostAction]
 }
 
+enum MappingDisplayValue<Value> {
+    case explicit(Value)
+    case inherited
+    case unavailable
+}
+
+struct MappingBindingDisplay {
+    let configured: ConfiguredButtonAction?
+    let compact: String
+    let detailed: String
+    let isEditable: Bool
+}
+
 final class MacroFeatureIntegration: ObservableObject {
+    @Published private(set) var mappingImportGeneration = 0
     @Published private(set) var isFeatureVisible = false
     @Published private(set) var isButtonProfilesVisible = false
     @Published private(set) var shouldShowEnrollment = false
@@ -141,10 +155,130 @@ final class MacroFeatureIntegration: ObservableObject {
     }
 
     func mappingProfiles(device: UUID?) -> [ButtonMappingProfile] {
-        #if canImport(SayAllButtonProfiles) && SAYALL_UNIFIED_BUTTON_CONFIGURATION
-        buttonProfilesFeature.profiles(for: device).map { ButtonMappingProfile(id: $0.id, name: buttonProfilesFeature.profileDisplayName($0)) }
+        #if canImport(SayAllButtonProfiles) && SAYALL_BUTTON_PROFILE_AUTOSAVE
+        buttonProfilesFeature.displayProfiles().map { ButtonMappingProfile(id: $0.id, name: buttonProfilesFeature.profileDisplayName($0)) }
         #else
         []
+        #endif
+    }
+
+    func isDefaultMappingProfile(_ id: UUID) -> Bool {
+        #if canImport(SayAllButtonProfiles) && SAYALL_BUTTON_PROFILE_AUTOSAVE
+        buttonProfilesFeature.isDefaultProfile(id)
+        #else
+        false
+        #endif
+    }
+
+    func reloadMappingProfiles() -> Bool {
+        #if canImport(SayAllButtonProfiles) && SAYALL_BUTTON_PROFILE_AUTOSAVE
+        let result = buttonProfilesFeature.reloadMappingProfiles().success
+        objectWillChange.send()
+        return result
+        #else
+        false
+        #endif
+    }
+
+    func displayProfileBinding(profile: UUID, button: RemoteButton, trigger: ButtonTrigger) -> MappingDisplayValue<MappingBindingDisplay> {
+        #if canImport(SayAllButtonProfiles) && SAYALL_BUTTON_PROFILE_AUTOSAVE
+        switch buttonProfilesFeature.displayBinding(profile: profile, button: button.rawValue, trigger: trigger.rawValue) {
+        case .inherited: return .inherited
+        case .unavailable: return .unavailable
+        case let .explicit(binding, text):
+            let configured: ConfiguredButtonAction?
+            let editable: Bool
+            switch binding {
+            case let .host(reference):
+                guard let decoded = MappingHostBindingCodec.decode(reference.payload) else { return .unavailable }
+                configured = decoded.configured
+                editable = decoded.isEditable
+            case let .macro(reference):
+                configured = .init(action: .combinationAction, shortcut: nil, macroID: reference.macroID)
+                // Preserve the pinned version. The host picker writes the latest library version.
+                editable = feature.savedMacroVersion(id: reference.macroID) == reference.version
+            case .shortcut, .focus:
+                configured = nil
+                editable = false
+            }
+            return .explicit(.init(configured: configured, compact: text.text.compact,
+                detailed: text.text.detailed, isEditable: editable))
+        }
+        #else
+        return .unavailable
+        #endif
+    }
+
+    func displayProfileHoldMode(profile: UUID, button: RemoteButton) -> MappingDisplayValue<RemoteButtonHoldMode> {
+        #if canImport(SayAllButtonProfiles) && SAYALL_BUTTON_PROFILE_AUTOSAVE
+        switch buttonProfilesFeature.displayHoldMode(profile: profile, button: button.rawValue) {
+        case let .explicit(raw): return RemoteButtonHoldMode(rawValue: raw).map { .explicit($0) } ?? .unavailable
+        case .inherited: return .inherited
+        case .unavailable: return .unavailable
+        }
+        #else
+        return .unavailable
+        #endif
+    }
+
+    func writeProfileHoldMode(_ mode: RemoteButtonHoldMode, profile: UUID, button: RemoteButton) -> Bool {
+        #if canImport(SayAllButtonProfiles) && SAYALL_BUTTON_PROFILE_AUTOSAVE
+        let result = buttonProfilesFeature.writeHoldMode(mode.rawValue, profile: profile, button: button.rawValue)
+        objectWillChange.send()
+        return result.success
+        #else
+        false
+        #endif
+    }
+
+    func createMappingProfile(named name: String, copying source: UUID?, bindings: [UnifiedButtonBinding], holdModes: [String: String]) -> UUID? {
+        #if canImport(SayAllButtonProfiles) && SAYALL_BUTTON_PROFILE_AUTOSAVE
+        let result: RemoteMicButtonProfileCreationResult
+        if let source {
+            result = buttonProfilesFeature.duplicateProfile(source, named: name)
+        } else {
+            var values: [RemoteMicButtonBindingKey: RemoteMicButtonProfileBinding] = [:]
+            for value in bindings {
+                guard let button = RemoteMicMacroButton(rawValue: value.button.rawValue),
+                      let trigger = RemoteMicMacroTrigger(rawValue: value.trigger.rawValue),
+                      let binding = mappingProfileBinding(value.configured, displayName: nil)
+                else { return nil }
+                values[.init(button: button, trigger: trigger)] = binding
+            }
+            result = buttonProfilesFeature.createProfile(named: name, bindings: values, holdModes: holdModes)
+        }
+        objectWillChange.send()
+        return result.profileID
+        #else
+        return nil
+        #endif
+    }
+
+    #if canImport(SayAllButtonProfiles) && SAYALL_BUTTON_PROFILE_AUTOSAVE
+    private func mappingProfileBinding(_ configured: ConfiguredButtonAction, displayName: String?) -> RemoteMicButtonProfileBinding? {
+        if configured.action == .combinationAction {
+            guard let id = configured.macroID, let version = feature.savedMacroVersion(id: id) else { return nil }
+            return .macro(MacroReference(macroID: id, version: version))
+        }
+        guard let data = try? JSONEncoder().encode(configured) else { return nil }
+        return .host(RemoteMicHostActionReference(id: "host.action.\(configured.action.rawValue)",
+            displayName: displayName ?? configured.action.rawValue, payload: data))
+    }
+    #endif
+
+    func writeProfileBinding(_ configured: ConfiguredButtonAction?, profile: UUID, button: RemoteButton,
+                             trigger: ButtonTrigger, displayName: String?) -> Bool {
+        #if canImport(SayAllButtonProfiles) && SAYALL_BUTTON_PROFILE_AUTOSAVE
+        let binding: RemoteMicButtonProfileBinding?
+        if let configured {
+            guard let value = mappingProfileBinding(configured, displayName: displayName) else { return false }
+            binding = value
+        } else { binding = nil }
+        let result = buttonProfilesFeature.writeBinding(binding, profile: profile, button: button.rawValue, trigger: trigger.rawValue)
+        objectWillChange.send()
+        return result.success
+        #else
+        return false
         #endif
     }
 
@@ -181,12 +315,7 @@ final class MacroFeatureIntegration: ObservableObject {
         #endif
     }
 
-    /// 键位方案现在能不能写。
-    ///
-    /// 读私有组件自己的访问判定，而不是宿主会员模块那一份：方案列表就是按它过滤的
-    /// （无权限时直接返回空），本地测试构建还会用 `SAYALL_TEST_BUTTON_PROFILES_FREE`
-    /// 把访问放开。两边读同一个值，才不会出现「列表里有方案，点「编辑」却只弹开通会员」
-    /// 或者「点了完全没反应」这类看起来像故障的状态。
+    /// Write permission comes from the profile provider. Display access is independent.
     var canUseMappingProfiles: Bool {
         #if canImport(SayAllButtonProfiles) && SAYALL_UNIFIED_BUTTON_CONFIGURATION
         buttonProfilesFeature.buttonProfilesAccessDecision.permitsAccess
@@ -353,6 +482,10 @@ final class MacroFeatureIntegration: ObservableObject {
             }
         }
         #endif
+        NotificationCenter.default.publisher(for: RemoteMicPortableTransferController.didCommit)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.mappingImportGeneration &+= 1 }
+            .store(in: &subscriptions)
         feature.portableTransfer.hostAdapter = settings.portableHostAdapter(beforeApply: beforeApply)
         feature.portableTransfer.validateConfigurationHostAction = AppSettings.validateConfigurationAction
         #if SAYALL_UNIFIED_BUTTON_CONFIGURATION
