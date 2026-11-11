@@ -1423,11 +1423,10 @@
 "button_mapping.hold.entry" = "Hold";
 "button_mapping.hold.description" = "Keep this button held to repeat the selected behavior. Release it to stop.";
 "button_mapping.hold_execution.title" = "Hold while pressed";
-"button_mapping.hold_execution.description" = "While on, holding the button keeps the arrow key pressed like a physical keyboard key, so players can fast-forward. While off, the repeat mode above runs instead.";
-"button_mapping.hold_execution.help" = "Available when the hold target is an arrow key.";
-"button_mapping.hold_execution.need_mode" = "Choose Repeat click or Repeat long press in Repeat target first; if both are unavailable, follow the reasons above.";
-"button_mapping.hold_execution.need_action" = "The hold target has no action yet. Choose what should run while held.";
-"button_mapping.hold_execution.need_arrow" = "\"%@\" is not an arrow key, so it cannot be held down.";
+"button_mapping.hold_execution.description" = "While on, holding the button keeps the arrow key pressed like a physical keyboard key, so players can fast-forward. It does not depend on the repeat mode above.";
+"button_mapping.hold_execution.help" = "Available when the long-press action is an arrow key; independent of the repeat mode above.";
+"button_mapping.hold_execution.need_action" = "The long-press action is not set yet. Choose an arrow key under Long press first.";
+"button_mapping.hold_execution.need_arrow" = "The long-press action \"%@\" is not an arrow key, so it cannot be held down.";
 "button_mapping.hold.clear_long_to_enable" = "Clear the long-press action to enable this";
 "button_mapping.hold.repeat_prefix" = "Hold: repeat ";
 "button_mapping.hold.blocker.timing_invalid" = "The recognition time is invalid";

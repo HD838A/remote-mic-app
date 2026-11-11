@@ -110,6 +110,10 @@ final class HIDRemoteMonitor {
     private let actionPerformer: (RemoteButton, ButtonTrigger, ConfiguredButtonAction) -> Bool
     private let holdBeginPerformer: (ConfiguredButtonAction) -> Bool
     private let holdEndPerformer: (String) -> Void
+    /// 解析该按键当前生效的长按动作：方案覆盖优先，其次基础映射。
+    private let holdExecutionResolver: ((UUID?, RemoteButton) -> ConfiguredButtonAction?)?
+    /// 该按键在当前生效方案里是否打开了「按住执行」。
+    private let holdExecutionEnabled: ((UUID?, RemoteButton) -> Bool)?
     private let appSwitcherSession: KeyboardInjector.AppSwitcherSession
     private let minimizedWindowRestorer: (String?, String?) -> KeyboardInjector.MinimizedWindowRestoreResult
     private let windowCounter: (pid_t) -> Int?
@@ -260,6 +264,8 @@ final class HIDRemoteMonitor {
         ) -> Bool)? = nil,
         holdBeginPerformer: ((ConfiguredButtonAction) -> Bool)? = nil,
         holdEndPerformer: ((String) -> Void)? = nil,
+        holdExecutionResolver: ((UUID?, RemoteButton) -> ConfiguredButtonAction?)? = nil,
+        holdExecutionEnabled: ((UUID?, RemoteButton) -> Bool)? = nil,
         overrideActionPerformer: @escaping (UUID?, RemoteButton, ButtonTrigger) -> Bool = {
             _, _, _ in false
         },
@@ -365,6 +371,8 @@ final class HIDRemoteMonitor {
         self.holdEndPerformer = holdEndPerformer ?? { reason in
             KeyboardHoldExecution.shared.end(reason: reason)
         }
+        self.holdExecutionResolver = holdExecutionResolver
+        self.holdExecutionEnabled = holdExecutionEnabled
         self.overrideActionPerformer = overrideActionPerformer
         self.hasOverrideBinding = hasOverrideBinding
         self.frontmostBundleIdentifier = frontmostBundleIdentifier
@@ -1752,6 +1760,18 @@ final class HIDRemoteMonitor {
         let repeated = snapshot.mode == .repeatLong ? snapshot.long : snapshot.single
         snapshot.repeatAllowed = Self.shouldRepeat(configured: repeated,
             frontmostBundleIdentifier: frontmostBundleIdentifier())
+        // 按住执行看的是当前生效的长按动作，与上面的重复方式无关：
+        // 是否允许按住由这个动作自己决定，不能复用“重复单击”的能力判断。
+        if let resolved = holdExecutionResolver?(profileID, button) {
+            snapshot.holdExecutionAction = resolved
+            snapshot.holdExecution = holdExecutionEnabled?(profileID, button) ?? false
+            if snapshot.holdExecution, snapshot.canHoldExecution {
+                snapshot.repeatAllowed = Self.shouldRepeat(
+                    action: resolved.action,
+                    frontmostBundleIdentifier: frontmostBundleIdentifier()
+                )
+            }
+        }
         return snapshot
     }
 

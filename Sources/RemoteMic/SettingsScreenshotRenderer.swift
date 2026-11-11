@@ -271,10 +271,7 @@ enum SettingsScreenshotRenderer {
         if let holdActionValue = ProcessInfo.processInfo.environment[
             "REMOTE_MIC_SETTINGS_SCREENSHOT_HOLD_ACTION"
         ], let holdAction = ButtonAction(rawValue: holdActionValue) {
-            let trigger: ButtonTrigger = settings.interactionSettings.mode(for: holdEditorButton) == .repeatLong
-                ? .longPress
-                : .singleClick
-            settings.setAction(holdAction, for: holdEditorButton, trigger: trigger)
+            settings.setAction(holdAction, for: holdEditorButton, trigger: .longPress)
         }
         if ProcessInfo.processInfo.environment[
             "REMOTE_MIC_SETTINGS_SCREENSHOT_HOLD_EXECUTION"

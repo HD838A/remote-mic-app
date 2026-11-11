@@ -138,24 +138,17 @@ struct RemoteButtonInteractionSnapshot {
     var repeatAllowed = true
     /// 用户为这颗按键打开了「按住执行」。
     var holdExecution = false
+    /// 按住执行要按下去的动作：解析后的「长按动作」。只有方向键能像物理键盘一样被按住。
+    var holdExecutionAction: ConfiguredButtonAction?
     var opaqueDouble = false
     var opaqueLong = false
     var recognizesDouble: Bool { opaqueDouble || double.action != .disabled }
     var recognizesLong: Bool { opaqueLong || long.action != .disabled }
 
-    /// 按住会持续执行的那个动作。`once` 表示这颗键没有按住行为。
-    var holdContinuationAction: ConfiguredButtonAction? {
-        switch mode {
-        case .repeatLong: return long
-        case .repeatSingle: return single
-        case .once, nil: return nil
-        }
-    }
+    /// 长按动作是方向键时才能按住执行；与上面的重复方式无关。
+    var canHoldExecution: Bool { holdExecutionAction?.holdableKey != nil }
 
-    /// 只有方向键动作才能像物理键盘一样被一直按住；其他动作没有“按下去不放”的语义。
-    var canHoldExecution: Bool { holdContinuationAction?.holdableKey != nil }
-
-    /// 运行时是否真的按“按住执行”处理：开关打开、动作可按住，且当前前台 App 允许。
+    /// 运行时是否真的按“按住执行”处理：开关打开、长按动作可按住，且当前前台 App 允许。
     var isHoldExecutionActive: Bool { holdExecution && canHoldExecution && repeatAllowed }
 
     func withMode(_ mode: RemoteButtonHoldMode?) -> Self {
@@ -167,7 +160,8 @@ struct RemoteButtonInteractionSnapshot {
     func hasSameBinding(as other: Self) -> Bool {
         mode == other.mode && single == other.single && double == other.double && long == other.long &&
             hasOpaqueBinding == other.hasOpaqueBinding && opaqueDouble == other.opaqueDouble &&
-            opaqueLong == other.opaqueLong && holdExecution == other.holdExecution
+            opaqueLong == other.opaqueLong && holdExecution == other.holdExecution &&
+            holdExecutionAction == other.holdExecutionAction
     }
 
     var unavailableReason: String? {

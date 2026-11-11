@@ -78,31 +78,28 @@ struct HoldExecutionTests {
     }
 
     @Test func snapshotOnlyActivatesHoldForArrowTargets() {
-        var repeating = snapshot(mode: .repeatSingle)
-        #expect(repeating.canHoldExecution)
-        #expect(!repeating.isHoldExecutionActive)
-        repeating.holdExecution = true
-        #expect(repeating.isHoldExecutionActive)
+        // 与重复方式无关：只要长按动作是方向键，按住执行就可用。
+        for mode in [RemoteButtonHoldMode.once, .repeatSingle, .repeatLong] {
+            var holdable = snapshot(mode: mode, long: .arrowLeft)
+            holdable.holdExecutionAction = holdable.long
+            #expect(holdable.canHoldExecution)
+            #expect(!holdable.isHoldExecutionActive)
+            holdable.holdExecution = true
+            #expect(holdable.isHoldExecutionActive)
+        }
 
-        // 没有按住行为时开关无效。
-        var unset = snapshot(mode: .once)
-        unset.holdExecution = true
-        #expect(!unset.canHoldExecution)
-        #expect(!unset.isHoldExecutionActive)
+        // 没有可按住的动作时开关无效。
+        var missing = snapshot(mode: .once)
+        missing.holdExecution = true
+        #expect(!missing.canHoldExecution)
+        #expect(!missing.isHoldExecutionActive)
 
-        // 目标不是方向键时开关无效，按住仍按原来的重复执行。
-        var nonArrow = snapshot(mode: .repeatSingle, single: .deleteBackward)
+        // 长按动作不是方向键时不进入按住状态，仍按原动作执行。
+        var nonArrow = snapshot(mode: .repeatSingle, long: .returnKey)
+        nonArrow.holdExecutionAction = nonArrow.long
         nonArrow.holdExecution = true
         #expect(!nonArrow.canHoldExecution)
         #expect(!nonArrow.isHoldExecutionActive)
-
-        // 重复长按看的是长按动作。
-        var repeatLong = snapshot(mode: .repeatLong, long: .arrowLeft)
-        repeatLong.holdExecution = true
-        #expect(repeatLong.isHoldExecutionActive)
-        var repeatLongNonArrow = snapshot(mode: .repeatLong, long: .returnKey)
-        repeatLongNonArrow.holdExecution = true
-        #expect(!repeatLongNonArrow.isHoldExecutionActive)
     }
 
     // MARK: - 注入

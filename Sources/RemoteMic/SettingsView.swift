@@ -3805,7 +3805,11 @@ struct SettingsView: View {
             single: mappingConfiguration(for: button, trigger: .singleClick),
             double: mappingConfiguration(for: button, trigger: .doubleClick),
             long: mappingConfiguration(for: button, trigger: .longPress))
-        snapshot.holdExecution = settings.holdExecution(for: button)
+        snapshot.holdExecution = settings.holdExecution(
+            for: button,
+            scheme: editingMappingProfileID
+        )
+        snapshot.holdExecutionAction = snapshot.long
         // The editor mirrors runtime: a choice the actions cannot run is simply unset.
         if let mode = snapshot.mode, !snapshot.blockers(for: mode).isEmpty {
             snapshot.mode = .once
@@ -3895,9 +3899,9 @@ struct SettingsView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
-                let showsHoldExecution = !profileUnsupported && editingMappingProfileID == nil &&
-                    (button.isDirectional || snapshot.canHoldExecution)
-                if showsHoldExecution {
+                // 长按动作是方向键的按键都要有这个入口，基础映射与键位方案一致；
+                // 四颗方向键常驻，避免“配置了方向键却找不到开关”。
+                if snapshot.canHoldExecution || button.isDirectional {
                     Divider().padding(.top, 2)
                     mappingHoldExecutionControl(button: button, snapshot: snapshot)
                 }
@@ -3984,11 +3988,9 @@ struct SettingsView: View {
         .frame(maxWidth: .infinity, alignment: .topLeading)
     }
 
-    /// 按住编辑区底部的「按住执行」开关。方向键上始终显示，其他按键只在按住目标确实是
-    /// 方向键时出现：打开后按住按键等同按住键盘方向键，播放器这类 App 才会持续快进。
-    ///
-    /// 开关保存在设备的基础映射里；按键位方案覆盖的按住模式由私有组件拥有，
-    /// 没有对应的方案级开关，因此编辑方案时不显示，避免写出一个会被忽略的值。
+    /// 按住编辑区底部的「按住执行」开关：打开后按住按键等同按住键盘方向键，
+    /// 播放器这类 App 才会持续快进。它与上面的重复方式互相独立，
+    /// 只看这颗按键的长按动作是不是方向键。
     private func mappingHoldExecutionControl(
         button: RemoteButton,
         snapshot: RemoteButtonInteractionSnapshot
@@ -3996,8 +3998,14 @@ struct SettingsView: View {
         let isAvailable = snapshot.canHoldExecution
         return VStack(alignment: .leading, spacing: 5) {
             Toggle(isOn: Binding(
-                get: { isAvailable && settings.holdExecution(for: button) },
-                set: { settings.setHoldExecution($0, for: button) }
+                get: { isAvailable && settings.holdExecution(for: button, scheme: editingMappingProfileID) },
+                set: {
+                    settings.setHoldExecution(
+                        $0,
+                        for: button,
+                        scheme: editingMappingProfileID
+                    )
+                }
             )) {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("button_mapping.hold_execution.title")
@@ -4015,7 +4023,7 @@ struct SettingsView: View {
 
             if !isAvailable {
                 // 不可用时点名原因，不留下一个“看着能开却没反应”的开关。
-                Text(holdExecutionUnavailableText(button: button, snapshot: snapshot))
+                Text(holdExecutionUnavailableText(snapshot: snapshot))
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -4025,12 +4033,9 @@ struct SettingsView: View {
     }
 
     private func holdExecutionUnavailableText(
-        button: RemoteButton,
         snapshot: RemoteButtonInteractionSnapshot
     ) -> String {
-        guard let action = snapshot.holdContinuationAction else {
-            return localization.text("button_mapping.hold_execution.need_mode")
-        }
+        let action = snapshot.long
         guard action.action != .disabled,
               !(action.action == .customShortcut && action.shortcut == nil) else {
             return localization.text("button_mapping.hold_execution.need_action")

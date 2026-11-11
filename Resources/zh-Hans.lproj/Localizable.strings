@@ -1422,11 +1422,10 @@
 "button_mapping.hold.entry" = "按住";
 "button_mapping.hold.description" = "长时间按住此键，持续执行下面选择的行为，松开后停止。";
 "button_mapping.hold_execution.title" = "按住执行";
-"button_mapping.hold_execution.description" = "打开后按住按键等同按住键盘方向键，长按会持续生效，例如播放器快进；关闭则按上面选择的方式重复执行。";
-"button_mapping.hold_execution.help" = "只在按住目标为方向键时提供。";
-"button_mapping.hold_execution.need_mode" = "先在「执行目标」里选择重复单击或重复长按；选项不可用时按上面的原因调整。";
-"button_mapping.hold_execution.need_action" = "按住还没有设置动作，先选择要持续执行的行为。";
-"button_mapping.hold_execution.need_arrow" = "按住目标是「%@」，不是方向键，无法按住执行。";
+"button_mapping.hold_execution.description" = "打开后按住按键等同按住键盘方向键，长按会持续生效，例如播放器快进；与上面的重复方式无关。";
+"button_mapping.hold_execution.help" = "长按动作为方向键时可用，与上面的重复方式无关。";
+"button_mapping.hold_execution.need_action" = "长按动作还没有设置；先在上面的「长按」里选一个方向键。";
+"button_mapping.hold_execution.need_arrow" = "长按动作是「%@」，不是方向键，无法按住执行。";
 "button_mapping.hold.clear_long_to_enable" = "清除长按动作后可选";
 "button_mapping.hold.repeat_prefix" = "按住：重复 ";
 "button_mapping.hold.blocker.timing_invalid" = "识别时间无效";

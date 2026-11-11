@@ -3637,10 +3637,31 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     private var configuredButtonInteractionOwners: [String: UUID] = [:]
 
     private func buttonInteractionSnapshot(_ button: RemoteButton, profileID: UUID?) -> RemoteButtonInteractionSnapshot {
-        settings.interactionSnapshot(for: button, profileID: profileID) { [self] trigger in
+        var snapshot = settings.interactionSnapshot(for: button, profileID: profileID) { [self] trigger in
             macroFeature.hasActiveBinding(profileID: profileID, button: button, trigger: trigger) &&
                 settings.configuredActionOverride?(profileID, button, trigger) == nil
         }
+        snapshot.holdExecutionAction = resolvedHoldAction(device: profileID, button: button)
+        snapshot.holdExecution = isHoldExecutionEnabled(device: profileID, button: button)
+        return snapshot
+    }
+
+    /// 按住执行按当前生效的方案解析：方案覆盖的长按动作优先，其次基础映射。
+    private func resolvedHoldAction(device: UUID?, button: RemoteButton) -> ConfiguredButtonAction {
+        if let scheme = macroFeature.activeMappingProfileID(device: device),
+           let binding = macroFeature.profileBinding(
+               device: device, profile: scheme, button: button, trigger: .longPress
+           ) {
+            return binding
+        }
+        return settings.configuredAction(for: button, trigger: .longPress, profileID: device)
+    }
+
+    private func isHoldExecutionEnabled(device: UUID?, button: RemoteButton) -> Bool {
+        settings.holdExecution(
+            for: button,
+            scheme: macroFeature.activeMappingProfileID(device: device)
+        )
     }
 
     private func handleConfiguredButtonInteraction(_ phase: RemoteButtonPhase, button: RemoteButton,
@@ -3774,6 +3795,12 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             },
             holdEndPerformer: { [weak self] reason in
                 self?.endHeldKeyExecution(reason: reason)
+            },
+            holdExecutionResolver: { [weak self] device, button in
+                self?.resolvedHoldAction(device: device, button: button)
+            },
+            holdExecutionEnabled: { [weak self] device, button in
+                self?.isHoldExecutionEnabled(device: device, button: button) ?? false
             },
             overrideActionPerformer: { [weak self] profileID, button, trigger in
                 self?.performButtonProfileBoundAction(
