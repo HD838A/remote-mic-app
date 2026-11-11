@@ -466,9 +466,16 @@ final class XiaomiBluetoothBridge: NSObject {
         else { return }
         resetPeripheral()
 
-        if reconnectPolicy.allowsCachedTargetRetrieval,
-           let identifier = targetIdentifier,
+        if let identifier = targetIdentifier,
+           reconnectPolicy.shouldRetrieveCachedTarget(at: ProcessInfo.processInfo.systemUptime),
            let saved = central.retrievePeripherals(withIdentifiers: [identifier]).first {
+            if !reconnectPolicy.allowsCachedTargetRetrieval {
+                AppLogger.shared.write(
+                    "BLE RECONNECT phase=probing reason=cached_target_cooldown_elapsed " +
+                        "failure_count=\(reconnectPolicy.consecutiveFailureCount) " +
+                        "cooldown_ms=\(Int(BluetoothReconnectPolicy.cachedTargetProbeInterval * 1_000))"
+                )
+            }
             // 已保存身份不再无条件采纳：早先版本把别的产品（Chromecast Remote）误存成 Xiaomi
             // 档案后，只按 UUID 连接会让这个错误一直重连、并且和私有 Chromecast 包抢同一台设备。
             // 被拒绝时不 return：按「设备不在」继续走既有扫描/重试路径，不新增状态分支。
