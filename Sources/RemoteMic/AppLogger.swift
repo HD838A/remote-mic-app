@@ -40,7 +40,7 @@ final class AppLogger: PublicDiagnosticEventSink {
         subsystem: Bundle.main.bundleIdentifier ?? "SayAll",
         category: "AppLogger"
     )
-    private static let defaultMaximumFileSize: UInt64 = 2 * 1_024 * 1_024
+    static let defaultMaximumFileSize: UInt64 = 10_000_000
     private static let maximumPublicEvents = 256
 
     private let queue = DispatchQueue(label: "RemoteMic.logger")
