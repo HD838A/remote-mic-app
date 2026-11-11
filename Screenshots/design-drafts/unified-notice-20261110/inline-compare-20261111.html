@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+<meta charset="utf-8">
+<title>组合动作提示 · 内联条还原 与 A / B 方案</title>
+<style>
+  :root{
+    --ink:#1d1d1f; --ink-2:#4a4a4f; --ink-3:#8e8e93;
+    --hair:rgba(0,0,0,.085); --paper:#fff; --bg:#f4f4f6;
+    --warn:#8a4b0f; --warn-bg:#fffaf0; --warn-line:#f0e2c6;
+    --err:#a5342c; --err-bg:#fff7f6; --err-line:#f2dbd8;
+    --l3:#a5342c; --l3-2:#96291f; --l3-d:#c04239;
+    --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; padding:56px 44px 80px; background:var(--bg); color:var(--ink);
+    font:14px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1000px; margin:0 auto;}
+  h1{font-size:23px; letter-spacing:-.01em; margin:0 0 8px;}
+  .lede{margin:0 0 8px; color:var(--ink-2); font-size:13.5px; max-width:760px;}
+  .meta{font-family:var(--mono); font-size:11.5px; color:var(--ink-3); margin:0 0 40px;}
+
+  section{margin-bottom:44px;}
+  .head{display:flex; align-items:baseline; gap:10px; margin-bottom:6px;}
+  .num{
+    font-family:var(--mono); font-size:11px; color:#fff; background:#1d1d1f;
+    border-radius:5px; padding:2px 6px; letter-spacing:.02em;
+  }
+  h2{font-size:16px; margin:0; letter-spacing:-.005em;}
+  .tag{
+    font-size:11px; padding:2px 7px; border-radius:20px;
+    background:#eceef1; color:var(--ink-2); font-weight:500;
+  }
+  .tag--old{background:#f1ece3; color:#7a5a2e;}
+  .tag--a{background:#eaf1fb; color:#2c5d9e;}
+  .tag--b{background:#eaf5ee; color:#23663f;}
+  .note{color:var(--ink-2); font-size:13px; margin:0 0 14px; max-width:780px;}
+  .note b{color:var(--ink); font-weight:600;}
+  .note code{font-family:var(--mono); font-size:12px; background:#ebedf0; padding:1px 5px; border-radius:4px;}
+
+  /* 页面语境：右侧动作面板 */
+  .panel{
+    width:720px; background:var(--paper); border:1px solid var(--hair);
+    border-radius:12px; padding:18px 20px 16px; box-shadow:0 1px 2px rgba(0,0,0,.04);
+    position:relative;
+  }
+  .panel-hd{font-size:13px; font-weight:600; margin-bottom:12px;}
+  .panel-hd span{font-weight:400; color:var(--ink-3); margin-left:6px;}
+  .chips{display:flex; gap:6px; margin-bottom:12px;}
+  .chip{
+    font-size:12px; padding:3px 9px; border-radius:7px;
+    background:#f1f2f4; color:var(--ink-2);
+  }
+  .chip.on{background:#1d1d1f; color:#fff;}
+  .macro-row{display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:14px;}
+  .macro{
+    border:1px solid var(--hair); border-radius:9px; padding:9px 10px; background:#fbfbfc;
+  }
+  .macro.on{border-color:var(--l3); background:rgba(165,52,44,.05);}
+  .macro b{display:block; font-size:12.5px; font-weight:600; margin-bottom:2px;}
+  .macro i{font-style:normal; font-size:11.5px; color:var(--ink-3);}
+  .panel-ft{display:flex; align-items:center; gap:10px;}
+  .btn{
+    font-size:12.5px; font-weight:500; padding:5px 11px; border-radius:7px;
+    border:1px solid var(--hair); background:#fff; color:var(--ink);
+  }
+  .spacer{flex:1;}
+  .perm-row{
+    display:flex; justify-content:space-between; align-items:center;
+    font-size:12.5px; padding:8px 10px; border-radius:8px; background:#fbfbfc;
+    border:1px solid var(--hair); margin-bottom:6px;
+  }
+  .perm-row .bad{color:var(--err); font-weight:600; font-size:12px;}
+  .perm-row .ok{color:#1c7c46; font-weight:600; font-size:12px;}
+
+  /* ── 改动前：v3 7.3 的页内状态条 ── */
+  .notice{
+    display:flex; align-items:flex-start; gap:9px;
+    padding:11px 13px; border-radius:10px; margin-bottom:12px;
+  }
+  .notice__glyph{flex:0 0 16px; width:16px; height:16px; margin-top:1px;}
+  .notice__body{min-width:0; flex:1;}
+  .notice__text{display:block; font-size:13px; line-height:17px;}
+  .notice__sub{display:block; margin-top:2px; font-size:12px; line-height:16px; color:var(--ink-3);}
+  .notice__cta{
+    flex:0 0 auto; align-self:center; font-size:12.5px; font-weight:600;
+    color:#2c5d9e; background:none; border:0; padding:2px 2px 2px 6px; white-space:nowrap;
+  }
+  .notice--inline{
+    background:#fff; border:1px solid var(--hair); border-left:3px solid var(--warn);
+    color:var(--ink); align-items:flex-start;
+  }
+  .notice--inline.is-warn{border-color:var(--warn-line); border-left-color:var(--warn); background:var(--warn-bg);}
+  .notice--inline.is-err{border-color:var(--err-line); border-left-color:var(--err); background:var(--err-bg);}
+  .g-warn{color:var(--warn);}
+  .g-err{color:var(--err);}
+
+  /* ── 方案 A：气泡 ── */
+  .scrim{
+    position:absolute; inset:0; background:rgba(0,0,0,.26);
+    border-radius:12px; display:flex; align-items:center; justify-content:center;
+  }
+  .bubble{
+    position:relative; width:330px; padding:15px 17px; border-radius:18px; color:#fff;
+    background:linear-gradient(172deg,var(--l3),var(--l3-2));
+    box-shadow:0 16px 40px -10px rgba(0,0,0,.45);
+  }
+  .bubble h4{margin:0 0 4px; font-size:14.5px; font-weight:600; display:flex; align-items:baseline; gap:5px;}
+  .bubble h4 i{font-style:normal; font-size:12px; font-weight:700;}
+  .bubble p{margin:0; font-size:13px; color:rgba(255,255,255,.93); line-height:1.45;}
+  .bubble .act{
+    display:inline-block; margin-top:10px; font-size:12.5px; font-weight:600;
+    background:rgba(255,255,255,.17); border-radius:9px; padding:5px 11px;
+  }
+  .bubble .x{
+    position:absolute; top:12px; right:12px; font-size:11px;
+    color:rgba(255,255,255,.62);
+  }
+
+  /* ── 方案 B：v3 形态 + 动作收进条内 ── */
+  .notice--b{
+    background:var(--warn-bg); border:1px solid var(--warn-line);
+    border-left:3px solid var(--warn); margin-bottom:0;
+  }
+  .notice--b .notice__cta{color:var(--warn);}
+
+  .pros{margin:14px 0 0; padding:0; list-style:none; display:grid; gap:6px;}
+  .pros li{font-size:12.5px; color:var(--ink-2); padding-left:16px; position:relative;}
+  .pros li::before{content:""; position:absolute; left:3px; top:8px; width:5px; height:5px; border-radius:50%; background:#c3c6cc;}
+  .pros li b{color:var(--ink); font-weight:600;}
+
+  .divider{height:1px; background:var(--hair); margin:44px 0;}
+  .foot{font-size:11.5px; color:var(--ink-3); font-family:var(--mono);}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>组合动作的提示：改前的样子，和 A / B 两条路</h1>
+  <p class="lede">
+    同一段页面语境——按键页右侧动作面板，确定键指向一个已被删除的组合动作。
+    三张图只有提示形态不同，其余布局完全一致。
+  </p>
+  <p class="meta">2026-11-11 · 基于 review-v3.html 7.3 与当前实现</p>
+
+  <!-- 00 改动前 -->
+  <section>
+    <div class="head"><span class="num">00</span><h2>改动前：v3 的页内状态条</h2><span class="tag tag--old">review-v3.html 7.3</span></div>
+    <p class="note">
+      11-10 23:32 那版（<code>review-v3.html</code> 第 7.3 节）的原始形态：
+      <b>16pt 圆形图标 + 标题 + 第二行说明 + 右侧动作</b>，外观像一条贴在页面里的状态卡。
+      当时的用途说明是「权限缺失、兼容性降级属于状态而不是事件」。
+    </p>
+
+    <div class="panel">
+      <div class="panel-hd">系统权限 <span>按键映射需要两项权限</span></div>
+      <div class="perm-row"><span>输入监控</span><span class="bad">未允许</span></div>
+      <div class="perm-row"><span>辅助功能</span><span class="ok">已允许</span></div>
+
+      <div class="notice notice--inline is-warn" style="margin-top:12px;">
+        <svg class="notice__glyph g-warn" viewBox="0 0 16 16" aria-hidden="true">
+          <circle cx="8" cy="8" r="7" fill="currentColor"/>
+          <rect x="7.15" y="4" width="1.7" height="5.1" rx=".85" fill="#fff"/>
+          <circle cx="8" cy="11.4" r=".95" fill="#fff"/>
+        </svg>
+        <span class="notice__body">
+          <span class="notice__text">这台 Mac 尚未允许「输入监控」，按键映射不会生效。</span>
+          <span class="notice__sub">在系统设置的「隐私与安全性」里勾选无线麦 SayAll 后返回本页。</span>
+        </span>
+        <button class="notice__cta">打开系统设置</button>
+      </div>
+    </div>
+
+    <ul class="pros">
+      <li>这是 7.3 原文的例子，<b>组合动作那条当时还不存在</b>；形态本身是通用的。</li>
+      <li><b>图标承担了 90% 的识别</b>：不读字也知道是警告，颜色只是辅助。</li>
+      <li><b>动作在右侧</b>，和标题同一行，视线不用往下走。</li>
+      <li>两行结构：第一行说"哪里不对"，第二行说"怎么修"。</li>
+    </ul>
+  </section>
+
+  <!-- 01 当前实现 -->
+  <section>
+    <div class="head"><span class="num">01</span><h2>当前实现（你说不能用的那版）</h2><span class="tag" style="background:#f6e7e5;color:#8c3a33;">本次改动 · NoticeInline</span></div>
+    <p class="note">
+      这次写代码时我按「状态类提示」的定位重做了一版：<b>去掉圆形图标、去掉条内动作、只留色条和一行标题</b>，
+      下面仍然保留原来的「管理组合动作」按钮。形状对了，但识别度和下一步都弱了——这是被否掉的原因。
+    </p>
+
+    <div class="panel">
+      <div class="panel-hd">确定键 · 单击 <span>共 3 个可用组合动作</span></div>
+      <div class="chips">
+        <span class="chip">全部</span><span class="chip">基础按键</span>
+        <span class="chip on">组合动作</span><span class="chip">快捷键</span>
+      </div>
+      <div class="macro-row">
+        <div class="macro"><b>编号 1</b><i>3 步</i></div>
+        <div class="macro"><b>编号 2</b><i>5 步</i></div>
+        <div class="macro"><b>编号 3</b><i>2 步</i></div>
+      </div>
+
+      <div class="notice notice--inline is-warn" style="margin-bottom:10px;">
+        <span class="notice__body">
+          <span class="notice__text">组合动作不可用，请重新选择</span>
+        </span>
+      </div>
+      <div class="panel-ft"><span class="spacer"></span><button class="btn">管理组合动作</button></div>
+    </div>
+
+    <ul class="pros">
+      <li>少了图标：<b>只剩颜色和一句话</b>，扫视时容易滑过去。</li>
+      <li>动作被拆到条的下面，<b>提示和下一步不在同一个视觉单元里</b>。</li>
+      <li>好处是更轻、更接近"页面里的一个说明"。</li>
+    </ul>
+  </section>
+
+  <!-- A -->
+  <section>
+    <div class="head"><span class="num">A</span><h2>组合动作改用气泡</h2><span class="tag tag--a">NoticeBubble · 错误档</span></div>
+    <p class="note">
+      和设置页其他提示统一成同一套语言。位置在动作面板正中，压暗背景，必须处理完才能继续。
+      <b>代价是它盖住了组合动作列表</b>——而用户要做的正是"从列表里重新选一个"。
+    </p>
+
+    <div class="panel">
+      <div class="panel-hd">确定键 · 单击 <span>共 3 个可用组合动作</span></div>
+      <div class="chips">
+        <span class="chip">全部</span><span class="chip">基础按键</span>
+        <span class="chip on">组合动作</span><span class="chip">快捷键</span>
+      </div>
+      <div class="macro-row">
+        <div class="macro"><b>编号 1</b><i>3 步</i></div>
+        <div class="macro"><b>编号 2</b><i>5 步</i></div>
+        <div class="macro"><b>编号 3</b><i>2 步</i></div>
+      </div>
+      <div class="panel-ft"><span class="spacer"></span><button class="btn">管理组合动作</button></div>
+
+      <div class="scrim">
+        <div class="bubble">
+          <span class="x">✕</span>
+          <h4><i>!</i>组合动作不可用</h4>
+          <p>这个按键指向的组合动作已被删除，请从列表里重新选择一个。</p>
+          <span class="act">知道了</span>
+        </div>
+      </div>
+    </div>
+
+    <ul class="pros">
+      <li><b>和全站提示一致</b>：颜色、圆角、按钮都跟其他气泡同源。</li>
+      <li>问题：<b>遮住了要选的那三个卡片</b>。用户点「知道了」后气泡消失，还得自己找回来。</li>
+      <li>问题：它是持续状态，但气泡的语义是"刚刚发生了一件事"——文案得写成事件才不别扭。</li>
+    </ul>
+  </section>
+
+  <!-- B -->
+  <section>
+    <div class="head"><span class="num">B</span><h2>恢复 v3 形态，动作收进条内</h2><span class="tag tag--b">NoticeInline · 还原 7.3</span></div>
+    <p class="note">
+      <b>B 不是新设计，就是把 00 原样用回来</b>：圆形图标、标题、说明、右侧动作。
+      唯一调整是把 01 里那个独立的「管理组合动作」按钮收进条内，省掉重复入口，让提示和下一步在同一个单元里。
+    </p>
+
+    <div class="panel">
+      <div class="panel-hd">确定键 · 单击 <span>共 3 个可用组合动作</span></div>
+      <div class="chips">
+        <span class="chip">全部</span><span class="chip">基础按键</span>
+        <span class="chip on">组合动作</span><span class="chip">快捷键</span>
+      </div>
+      <div class="macro-row">
+        <div class="macro"><b>编号 1</b><i>3 步</i></div>
+        <div class="macro"><b>编号 2</b><i>5 步</i></div>
+        <div class="macro"><b>编号 3</b><i>2 步</i></div>
+      </div>
+
+      <div class="notice notice--inline is-warn notice--b">
+        <svg class="notice__glyph g-warn" viewBox="0 0 16 16" aria-hidden="true">
+          <circle cx="8" cy="8" r="7" fill="currentColor"/>
+          <rect x="7.15" y="4" width="1.7" height="5.1" rx=".85" fill="#fff"/>
+          <circle cx="8" cy="11.4" r=".95" fill="#fff"/>
+        </svg>
+        <span class="notice__body">
+          <span class="notice__text">组合动作不可用，请重新选择</span>
+          <span class="notice__sub">这个按键指向的组合动作已被删除。</span>
+        </span>
+        <button class="notice__cta">管理组合动作</button>
+      </div>
+    </div>
+
+    <ul class="pros">
+      <li><b>列表始终可见</b>，用户边看提示边挑，不用先关掉什么。</li>
+      <li><b>只占一行</b>，不推挤下面的内容。</li>
+      <li><b>图标 + 色条 + 文案</b>三层信号，不依赖颜色单打独斗。</li>
+      <li>代价：和"通用提示"不是一个形态，需要接受"状态类提示长这样"这条规则。</li>
+    </ul>
+  </section>
+
+  <div class="divider"></div>
+  <p class="foot">
+    00 = review-v3.html 第 7.3 节原样还原（2026-11-10 23:32）<br>
+    01 = 本次实现的 NoticeInline（无图标、无条内动作）<br>
+    A = NoticeBubble 错误档，居中浮层 + 遮罩<br>
+    B = 恢复 00 的形态 + 把「管理组合动作」收进条内
+  </p>
+</div>
+</body>
+</html>

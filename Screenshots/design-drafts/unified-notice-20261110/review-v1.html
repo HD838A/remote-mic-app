@@ -1,0 +1,1127 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SayAll · 通用提示样式 · 待确认设计稿</title>
+<style>
+  :root{
+    --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+
+    --paper:#ffffff;
+    --canvas:#f2f2f4;
+    --ink:#1d1d1f;
+    --ink-2:#54545a;
+    --ink-3:#86868b;
+    --hair:rgba(0,0,0,.09);
+    --hair-strong:rgba(0,0,0,.16);
+
+    /* 生产取样（Screenshots/sidebar-compact-production/zh-Hans-light） */
+    --win-bg:#ffffff;
+    --win-card:#f7f7f7;
+    --win-seg:#dfdfdf;
+    --win-sep:rgba(0,0,0,.08);
+    --brand:#d56059;
+
+    /* 常用语深色面板取样（design-drafts/common-phrases/revision-2/panel-dark.png） */
+    --p-bg:#202121;
+    --p-raise:#2a2b2b;
+    --p-raise-2:#333434;
+    --p-line:rgba(255,255,255,.13);
+    --p-ink:#f5f5f7;
+    --p-ink-2:rgba(235,235,245,.62);
+
+    /* 语义色 */
+    --c-info:#0a6ed1;
+    --c-ok:#1c7c46;
+    --c-warn:#a8620a;
+    --c-err:#c0392b;
+
+    --r-notice:12px;
+  }
+
+  *{box-sizing:border-box;}
+  html{-webkit-font-smoothing:antialiased;}
+  body{
+    margin:0; padding:0 0 96px;
+    background:var(--canvas);
+    color:var(--ink);
+    font-family:var(--font);
+    font-size:14px; line-height:1.6;
+  }
+  .shell{max-width:1180px; margin:0 auto; padding:0 32px;}
+
+  /* ---------- 文档头 ---------- */
+  .doc-head{padding:56px 0 8px;}
+  .eyebrow{
+    font-size:12px; letter-spacing:.08em; text-transform:uppercase;
+    color:var(--ink-3); font-weight:600; margin-bottom:14px;
+  }
+  h1{font-size:38px; line-height:1.18; letter-spacing:-.02em; margin:0 0 14px; font-weight:700;}
+  .lede{font-size:16px; color:var(--ink-2); max-width:760px; margin:0;}
+  .lede b{color:var(--ink); font-weight:600;}
+  .meta-row{display:flex; gap:10px; flex-wrap:wrap; margin-top:22px;}
+  .tag{
+    font-size:12px; padding:4px 10px; border-radius:999px;
+    background:#fff; border:1px solid var(--hair); color:var(--ink-2);
+  }
+  .tag--wait{background:#fff7e8; border-color:#f0d9ab; color:#8a5a00;}
+
+  /* ---------- 结论卡 ---------- */
+  .verdict{
+    margin-top:34px; background:var(--paper); border:1px solid var(--hair);
+    border-radius:18px; padding:26px 28px;
+    box-shadow:0 1px 2px rgba(0,0,0,.04), 0 12px 32px -18px rgba(0,0,0,.18);
+  }
+  .verdict h2{font-size:19px; margin:0 0 10px; letter-spacing:-.01em;}
+  .verdict p{margin:0 0 14px; color:var(--ink-2); max-width:900px;}
+  .verdict p:last-child{margin-bottom:0;}
+  .verdict strong{color:var(--ink);}
+
+  /* ---------- 速览 ---------- */
+  .quicklook{
+    margin-top:18px; background:var(--paper); border:1px solid var(--hair); border-radius:18px;
+    padding:20px 22px 22px; box-shadow:0 1px 2px rgba(0,0,0,.04);
+  }
+  .ql-hd{display:flex; align-items:baseline; gap:12px; margin-bottom:16px;}
+  .ql-hd h2{font-size:15px; margin:0; font-weight:650;}
+  .ql-hd span{font-size:12px; color:var(--ink-3);}
+  .ql-grid{display:grid; grid-template-columns:repeat(2,1fr); gap:14px 18px;}
+  @media (max-width:900px){ .ql-grid{grid-template-columns:1fr;} }
+  .ql-item{min-width:0; display:flex; flex-direction:column;}
+  .ql-label{
+    display:block; font-size:11px; letter-spacing:.06em; color:var(--ink-3);
+    margin-bottom:7px; padding-left:2px;
+  }
+  .ql-item .notice{padding:10px 12px; align-items:center;}
+
+  /* ---------- 章节 ---------- */
+  section{margin-top:56px;}
+  .sec-head{display:flex; align-items:baseline; gap:14px; margin-bottom:6px;}
+  .sec-num{
+    font-family:var(--mono); font-size:12px; color:var(--brand); font-weight:600;
+    letter-spacing:.04em;
+  }
+  h2.sec{font-size:24px; margin:0; letter-spacing:-.015em; font-weight:700;}
+  .sec-note{font-size:13px; color:var(--ink-3); margin:8px 0 22px; max-width:860px;}
+
+  /* ---------- 对照：原图 + 判断 ---------- */
+  .split{display:grid; grid-template-columns:1.05fr .95fr; gap:24px; align-items:start;}
+  .split > *, .options > *, .asks > *{min-width:0;}
+  @media (max-width:980px){ .split{grid-template-columns:1fr;} }
+
+  .shot-card{
+    background:var(--paper); border:1px solid var(--hair); border-radius:16px;
+    padding:16px; box-shadow:0 1px 2px rgba(0,0,0,.04); overflow:hidden;
+  }
+  .shot-card img{width:100%; height:auto; display:block; border-radius:10px; border:1px solid var(--hair);}
+  .shot-cap{font-size:12px; color:var(--ink-3); margin-top:10px; line-height:1.5;}
+
+  .findings{list-style:none; margin:0; padding:0;}
+  .findings li{
+    background:var(--paper); border:1px solid var(--hair); border-radius:12px;
+    padding:13px 15px; margin-bottom:10px; display:flex; gap:11px; align-items:flex-start;
+  }
+  .findings .n{
+    flex:0 0 20px; height:20px; border-radius:6px; background:#f1f1f3;
+    font-family:var(--mono); font-size:11px; color:var(--ink-2);
+    display:flex; align-items:center; justify-content:center; margin-top:2px;
+  }
+  .findings b{font-weight:600;}
+  .findings span.txt{font-size:13px; color:var(--ink-2);}
+  .findings span.txt b{color:var(--ink);}
+
+  /* ---------- 方案对比 ---------- */
+  .options{display:grid; grid-template-columns:repeat(3,1fr); gap:18px;}
+  @media (max-width:980px){ .options{grid-template-columns:1fr;} }
+  .opt{
+    background:var(--paper); border:1px solid var(--hair); border-radius:16px; overflow:hidden;
+    display:flex; flex-direction:column;
+  }
+  .opt--pick{border-color:#c9d8ec; box-shadow:0 0 0 2px rgba(10,110,209,.10);}
+  .opt-hd{padding:14px 16px 0; display:flex; align-items:center; gap:8px;}
+  .opt-hd .letter{
+    width:20px;height:20px;border-radius:6px;background:#eef0f3;color:var(--ink-2);
+    font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;
+  }
+  .opt--pick .opt-hd .letter{background:#e4eefb;color:var(--c-info);}
+  .opt-hd h3{font-size:14px; margin:0; font-weight:650;}
+  .opt-stage{
+    height:168px; display:flex; align-items:center; justify-content:center;
+    padding:16px; background:
+      linear-gradient(180deg, #fbfbfc, #f6f6f8);
+    border-bottom:1px solid var(--hair);
+  }
+  .opt-body{padding:13px 16px 16px; font-size:12.5px; color:var(--ink-2); flex:1;}
+  .opt-body dl{display:grid; grid-template-columns:38px 1fr; gap:4px 8px; margin:0;}
+  .opt-body dt{color:var(--ink-3);}
+  .opt-body dd{margin:0;}
+  .pick-flag{
+    font-size:11px; font-weight:600; color:var(--c-info); background:#eaf2fc;
+    border-radius:999px; padding:2px 8px; margin-left:auto;
+  }
+
+  /* ---------- 提示条（核心组件） ---------- */
+  .notice{
+    display:flex; align-items:flex-start; gap:9px;
+    padding:11px 13px;
+    border-radius:var(--r-notice);
+    background:rgba(255,255,255,.86);
+    -webkit-backdrop-filter:blur(24px) saturate(180%);
+    backdrop-filter:blur(24px) saturate(180%);
+    box-shadow:
+      0 0 0 .5px rgba(0,0,0,.10),
+      0 10px 26px -6px rgba(0,0,0,.18);
+    font-size:13px; line-height:17px; color:var(--ink);
+    max-width:100%;
+  }
+  .notice--dark{
+    background:rgba(56,57,57,.94);
+    color:var(--p-ink);
+    box-shadow:
+      0 0 0 .5px rgba(255,255,255,.12),
+      0 14px 34px -8px rgba(0,0,0,.55);
+  }
+  .notice__glyph{flex:0 0 16px; width:16px; height:16px; margin-top:1px; display:block;}
+  .notice__body{min-width:0; flex:1;}
+  .notice__text{display:block;}
+  .notice__sub{display:block; margin-top:2px; font-size:12px; line-height:16px; color:var(--ink-3);}
+  .notice--dark .notice__sub{color:var(--p-ink-2);}
+  .notice__cta{
+    flex:0 0 auto; align-self:center; font-size:12.5px; font-weight:600;
+    color:var(--c-info); background:none; border:0; padding:2px 2px 2px 6px;
+    white-space:nowrap; cursor:default;
+  }
+  .notice--dark .notice__cta{color:#6fb0ff;}
+  .notice__close{
+    flex:0 0 16px; width:16px; height:16px; margin-top:1px; color:var(--ink-3);
+  }
+  .notice--dark .notice__close{color:var(--p-ink-2);}
+
+  .g-info{color:var(--c-info);} .g-ok{color:var(--c-ok);}
+  .g-warn{color:var(--c-warn);} .g-err{color:var(--c-err);}
+
+  /* 语义左条（内联形态用） */
+  .notice--inline{
+    border-radius:10px; background:#fff; box-shadow:none;
+    border:1px solid var(--hair); border-left:3px solid var(--c-info);
+    -webkit-backdrop-filter:none; backdrop-filter:none;
+  }
+  .notice--inline.is-ok{border-left-color:var(--c-ok);}
+  .notice--inline.is-warn{border-left-color:var(--c-warn); background:#fffaf0; border-color:#f0e2c6; border-left-color:var(--c-warn);}
+  .notice--inline.is-err{border-left-color:var(--c-err); background:#fff7f6; border-color:#f2dbd8;}
+
+  code{
+    font-family:var(--mono); font-size:.9em; background:rgba(0,0,0,.05);
+    border-radius:4px; padding:.5px 4px; color:#35353a;
+  }
+  .lede code{font-size:12.5px;}
+
+  /* ---------- 模拟窗口 ---------- */
+  .stage{
+    background:#e9e9ec;
+    border:1px solid var(--hair); border-radius:16px;
+    padding:22px 22px 0; overflow:hidden;
+  }
+  .stage--dark{background:#171718; border-color:rgba(255,255,255,.10);}
+  .win{
+    background:var(--win-bg); border-radius:10px 10px 0 0; overflow:hidden;
+    box-shadow:0 -1px 0 rgba(255,255,255,.7) inset, 0 18px 44px -12px rgba(0,0,0,.28);
+    position:relative;
+  }
+  .win-bar{
+    height:30px; display:flex; align-items:center; gap:7px; padding:0 12px;
+    background:#fbfbfc; border-bottom:1px solid var(--win-sep);
+  }
+  .dot{width:10px;height:10px;border-radius:50%;}
+  .dot.r{background:#ff5f57;} .dot.y{background:#febc2e;} .dot.g{background:#28c840;}
+  .win-body{display:flex; height:100%;}
+
+  .sidebar{
+    width:143px; flex:0 0 143px; border-right:1px solid var(--win-sep);
+    padding:14px 10px 0; background:#fff;
+  }
+  .brand{display:flex; gap:9px; align-items:center; padding:0 4px 16px;}
+  .brand .logo{
+    width:38px;height:38px;border-radius:9px;
+    background:radial-gradient(120% 120% at 20% 15%, #ffffff 0%, #f0eee7 42%, #d9d3c4 100%);
+    border:1px solid rgba(0,0,0,.10);
+    display:flex;align-items:center;justify-content:center;
+    font-size:10px;font-weight:700;color:#5b5a52;letter-spacing:-.02em;
+  }
+  .brand .name{font-size:15px;font-weight:650;letter-spacing:-.01em;line-height:1.2;}
+  .brand .ver{font-size:10.5px;color:var(--ink-3);line-height:1.4;}
+  .nav-item{
+    display:flex; align-items:center; gap:9px; height:34px; padding:0 9px;
+    border-radius:8px; font-size:13px; color:var(--ink); margin-bottom:2px; position:relative;
+  }
+  .nav-item .ni{width:17px;height:17px;display:block;color:var(--ink-2);}
+  .nav-item.on{background:#fdeceb; color:#b8433c; font-weight:600;}
+  .nav-item.on .ni{color:#c9554d;}
+  .nav-item .bullet{position:absolute; right:8px; top:13px; width:6px;height:6px;border-radius:50%;background:var(--brand);}
+
+  .content{flex:1; min-width:0; padding:18px 26px 0; position:relative;}
+  .page-hd{display:flex; align-items:flex-start; gap:16px; margin-bottom:16px;}
+  .page-hd h4{font-size:22px; margin:0; letter-spacing:-.02em; font-weight:700; line-height:1.2;}
+  .page-hd .sub{font-size:12px; color:var(--ink-3); margin-top:3px;}
+  .toggle-row{display:flex; align-items:center; gap:7px; font-size:12.5px; color:var(--ink);}
+  .toggle{
+    width:34px;height:20px;border-radius:999px;background:var(--brand);position:relative;
+  }
+  .toggle::after{content:"";position:absolute;right:2px;top:2px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.25);}
+  .toggle.off{background:#d8d8dc;}
+  .toggle.off::after{right:auto;left:2px;}
+
+  .grid3{display:grid; grid-template-columns:1fr 1fr; gap:14px;}
+  .card{
+    background:var(--win-card); border-radius:10px; padding:11px;
+  }
+  .card-hd{display:flex; align-items:center; gap:6px; font-size:12px; font-weight:600; margin-bottom:8px;}
+  .card-hd .ci{width:13px;height:13px;color:var(--ink-2);}
+  .segs{display:grid; grid-template-columns:repeat(3,1fr); gap:1px; background:rgba(0,0,0,.06); border-radius:8px; overflow:hidden;}
+  .seg{background:var(--win-seg); padding:6px 4px; text-align:center;}
+  .seg .k{display:block; font-size:10.5px; color:var(--ink-3); line-height:1.35;}
+  .seg .v{display:block; font-size:12px; color:var(--ink); line-height:1.35; margin-top:1px;}
+  .seg.sel{background:#f6dfdd;}
+  .seg.sel .v{color:#a63c34;}
+
+  .remote-wrap{display:flex; align-items:center; justify-content:center; padding-top:6px;}
+  .remote{
+    width:56px; height:220px; border-radius:28px;
+    background:linear-gradient(160deg,#e9e7e2,#cfccc4);
+    border:1px solid rgba(0,0,0,.14);
+    box-shadow:inset 0 1px 2px rgba(255,255,255,.9), 0 8px 20px -8px rgba(0,0,0,.35);
+    position:relative;
+  }
+  .remote .r-disk{
+    position:absolute; left:50%; top:38px; transform:translateX(-50%);
+    width:38px;height:38px;border-radius:50%;
+    background:radial-gradient(circle at 32% 28%, #4a4a4c, #232325 70%);
+  }
+  .remote .r-btn{
+    position:absolute; width:12px;height:12px;border-radius:50%;
+    background:linear-gradient(160deg,#f2f0ec,#d9d6cf); border:1px solid rgba(0,0,0,.12);
+  }
+
+  /* 提示在场景中的定位 */
+  .overlay-top{
+    position:absolute; left:50%; transform:translateX(-50%); top:12px; z-index:5;
+    width:max-content; max-width:calc(100% - 40px);
+  }
+  .overlay-center{
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center; z-index:5;
+  }
+  .overlay-bottom{
+    position:absolute; left:50%; transform:translateX(-50%); bottom:14px; z-index:5;
+    width:max-content; max-width:calc(100% - 40px);
+  }
+
+  /* ---------- 常用语面板 ---------- */
+  .panel-stage{
+    background:
+      radial-gradient(120% 90% at 50% 0%, #dcdcdc 0%, #c9c9c9 60%, #bdbdbd 100%);
+    border:1px solid var(--hair); border-radius:16px; padding:26px;
+    display:flex; justify-content:center;
+  }
+  .panel{
+    width:440px; max-width:100%; background:var(--p-bg); border-radius:18px;
+    box-shadow:0 30px 60px -20px rgba(0,0,0,.55), 0 0 0 .5px rgba(255,255,255,.14) inset;
+    padding:18px 18px 14px; position:relative; overflow:hidden;
+  }
+  .panel-hd{display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;}
+  .panel-hd h5{margin:0; font-size:19px; color:var(--p-ink); font-weight:650; letter-spacing:.01em;}
+  .panel-x{
+    width:26px;height:26px;border-radius:50%;background:#3a3b3b;color:#d9d9d9;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .disk{
+    width:336px;height:336px;margin:8px auto 0;border-radius:50%;
+    background:radial-gradient(circle at 50% 46%, #313232 0%, #2a2b2b 55%, #252626 100%);
+    box-shadow:inset 0 0 0 1px rgba(255,255,255,.08), 0 14px 30px -14px rgba(0,0,0,.9);
+    position:relative;
+  }
+  .disk .center{
+    position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+    width:132px;height:132px;border-radius:50%;
+    background:radial-gradient(circle at 50% 38%, #353636, #292a2a 75%);
+    box-shadow:inset 0 0 0 1px rgba(255,255,255,.10), 0 6px 14px -6px rgba(0,0,0,.8);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;
+  }
+  .disk .center .ok{font-size:15px;font-weight:650;color:var(--p-ink);letter-spacing:.06em;}
+  .disk .center .lbl{font-size:12.5px;color:var(--p-ink-2);}
+  .dir{position:absolute; text-align:center; color:var(--p-ink);}
+  .dir .chev{font-size:17px; line-height:1; color:#e9e9ec; display:block; margin-bottom:3px;}
+  .dir .lbl{font-size:12.5px; line-height:1.35; display:block;}
+  .dir.n{left:50%; top:28px; transform:translateX(-50%);}
+  .dir.s{left:50%; bottom:26px; transform:translateX(-50%);}
+  .dir.w{left:16px; top:50%; transform:translateY(-50%); width:76px;}
+  .dir.e{right:16px; top:50%; transform:translateY(-50%); width:76px;}
+  .panel-ft{
+    margin-top:12px; padding-top:11px; border-top:1px solid rgba(255,255,255,.10);
+    text-align:center; font-size:11.5px; line-height:1.6; color:var(--p-ink-2);
+  }
+
+  /* ---------- 解剖图 ---------- */
+  .anatomy{
+    background:var(--paper); border:1px solid var(--hair); border-radius:16px;
+    padding:34px 30px 28px; display:grid; grid-template-columns:1.15fr .85fr; gap:34px;
+    align-items:center;
+  }
+  @media (max-width:900px){ .anatomy{grid-template-columns:1fr;} }
+  .anatomy-canvas{
+    position:relative; padding:52px 24px 44px; border-radius:12px;
+    background:
+      linear-gradient(0deg,#eef0f3,#f7f8fa);
+    border:1px dashed var(--hair-strong);
+  }
+  .anatomy-canvas .notice{font-size:13px;}
+  .dim{
+    position:absolute; font-family:var(--mono); font-size:10px; color:var(--ink-2);
+    background:#fff; border:1px solid var(--hair); border-radius:4px; padding:1px 5px;
+    white-space:nowrap;
+  }
+  .dim-line{position:absolute; background:var(--hair-strong);}
+  .anatomy-legend{font-size:12.5px; color:var(--ink-2);}
+  .anatomy-legend table{width:100%; border-collapse:collapse;}
+  .anatomy-legend th{
+    text-align:left; font-size:11px; letter-spacing:.06em; text-transform:uppercase;
+    color:var(--ink-3); font-weight:600; padding:0 0 8px; border-bottom:1px solid var(--hair);
+  }
+  .anatomy-legend td{padding:7px 0; border-bottom:1px solid rgba(0,0,0,.05); vertical-align:top;}
+  .anatomy-legend td:first-child{width:44%;}
+  .anatomy-legend code{font-family:var(--mono); font-size:11.5px; color:var(--ink);}
+
+  /* ---------- 场景块 ---------- */
+  .scene{margin-top:26px;}
+  .scene-hd{display:flex; align-items:baseline; gap:10px; margin-bottom:8px;}
+  .scene-hd h3{font-size:15px; margin:0; font-weight:650;}
+  .scene-hd .badge{
+    font-size:11px; padding:2px 8px; border-radius:999px; background:#eef0f3; color:var(--ink-2);
+  }
+  .scene-hd .badge.rec{background:#eaf2fc; color:var(--c-info);}
+  .scene-desc{font-size:12.5px; color:var(--ink-3); margin:0 0 10px;}
+
+  /* 深色窗口 */
+  .win--dark{background:#1c1c1e;}
+  .win--dark .win-bar{background:#232325; border-bottom-color:rgba(255,255,255,.08);}
+  .win--dark .sidebar{background:#1c1c1e; border-right-color:rgba(255,255,255,.08);}
+  .win--dark .brand .logo{border-color:rgba(255,255,255,.14);}
+  .win--dark .nav-item{color:#f2f2f4;}
+  .win--dark .nav-item.on{background:rgba(213,96,89,.22); color:#ff9d95;}
+  .win--dark .content{color:#f2f2f4;}
+  .win--dark .page-hd .sub{color:#9a9a9f;}
+  .win--dark .card{background:#2c2c2e;}
+  .win--dark .segs{background:rgba(255,255,255,.08);}
+  .win--dark .seg{background:#3a3a3c;}
+  .win--dark .seg .k{color:#9a9a9f;}
+  .win--dark .seg .v{color:#f2f2f4;}
+  .win--dark .seg.sel{background:rgba(213,96,89,.24);}
+  .win--dark .seg.sel .v{color:#ff9d95;}
+  .win--dark .toggle.off{background:#48484a;}
+
+  /* ---------- 表格 ---------- */
+  .table-card{
+    background:var(--paper); border:1px solid var(--hair); border-radius:16px; overflow:hidden;
+  }
+  table.spec{width:100%; border-collapse:collapse; font-size:13px;}
+  table.spec th{
+    text-align:left; font-size:11px; letter-spacing:.06em; text-transform:uppercase;
+    color:var(--ink-3); font-weight:600; padding:13px 18px; background:#fafafb;
+    border-bottom:1px solid var(--hair); white-space:nowrap;
+  }
+  table.spec td{padding:12px 18px; border-bottom:1px solid rgba(0,0,0,.05); vertical-align:top; color:var(--ink-2);}
+  table.spec tr:last-child td{border-bottom:0;}
+  table.spec td:first-child{color:var(--ink); font-weight:550; white-space:nowrap;}
+  table.spec code{
+    font-family:var(--mono); font-size:11.5px; background:#f4f4f6; border-radius:4px;
+    padding:1px 5px; color:#35353a;
+  }
+  .swatch{
+    display:inline-block; width:11px; height:11px; border-radius:3px; margin-right:6px;
+    vertical-align:-1px; border:1px solid rgba(0,0,0,.10);
+  }
+
+  /* ---------- 待确认 ---------- */
+  .asks{display:grid; grid-template-columns:1fr 1fr; gap:16px;}
+  @media (max-width:900px){ .asks{grid-template-columns:1fr;} }
+  .ask{
+    background:var(--paper); border:1px solid var(--hair); border-radius:14px; padding:16px 18px;
+  }
+  .ask .q{font-size:13.5px; font-weight:600; margin:0 0 8px;}
+  .ask .opts{font-size:12.5px; color:var(--ink-2); margin:0; padding-left:0; list-style:none;}
+  .ask .opts li{padding:4px 0 4px 18px; position:relative;}
+  .ask .opts li::before{
+    content:""; position:absolute; left:2px; top:11px; width:8px;height:8px;
+    border-radius:50%; border:1.5px solid var(--ink-3);
+  }
+  .ask .opts li.dflt::before{border-color:var(--c-info); background:var(--c-info);}
+  .ask .opts b{color:var(--ink); font-weight:600;}
+
+  .foot{
+    margin-top:54px; padding-top:18px; border-top:1px solid var(--hair);
+    font-size:12px; color:var(--ink-3); display:flex; justify-content:space-between; gap:16px;
+    flex-wrap:wrap;
+  }
+
+  .legend-row{display:flex; gap:18px; flex-wrap:wrap; margin:14px 0 0; font-size:12px; color:var(--ink-3);}
+  .legend-row .k{display:flex; align-items:center; gap:6px;}
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <header class="doc-head">
+    <div class="eyebrow">SayAll · 设计评审 · 未开发</div>
+    <h1>通用提示样式</h1>
+    <p class="lede">
+      你要的是「所有页面共用一个提示样式」。我的建议是：<b>沿用常用语那条提示的结构，但不照搬它的深黑配色</b>——
+      结构值得保留（居中/顶部浮层、短句、无按钮也能读懂），配色要跟随所在窗口的材质，否则白色设置页里会出现一块突兀的黑。
+      下面是两套方案在真实页面语境里的对照，以及一套 token、三种承载形态。
+    </p>
+    <div class="meta-row">
+      <span class="tag">2026-11-10</span>
+      <span class="tag">覆盖：设置页 / 常用语面板 / Onboarding / APP 适配</span>
+      <span class="tag">中文最小 12pt</span>
+      <span class="tag tag--wait">待确认后才开发</span>
+    </div>
+  </header>
+
+  <!-- 结论 -->
+  <div class="verdict">
+    <h2>一句话结论</h2>
+    <p>
+      截图里那块是<strong>纯黑常用语面板内的错误提示</strong>（面板底色 <code>#202121</code>），黑底白字是对的。
+      但同一个组件如果出现在白色设置页里，仍然是一块 90% 不透明的黑，会像贴上去的异物——而且它没法区分成功、警告、失败。
+    </p>
+    <p>
+      所以推荐<strong>方案 B</strong>：保留截图的结构（浮层、短句、圆角、居中可读、不占布局），
+      底色改成随窗口自适应的材质（浅色 <code>.regularMaterial</code> / 深色 <code>.thickMaterial</code>），
+      左侧加 16pt 语义图标，状态由图标颜色承载。同一套组件派生三种承载：<strong>顶部轻提示</strong>、<strong>阻断提示</strong>、<strong>页内提示条</strong>。
+    </p>
+  </div>
+
+  <!-- 速览 -->
+  <div class="quicklook">
+    <div class="ql-hd">
+      <h2>样式速览</h2>
+      <span>同一组件，四种语义；浅色外观，深色见 4.6</span>
+    </div>
+    <div class="ql-grid">
+      <div class="ql-item">
+        <span class="ql-label">信息</span>
+        <div class="notice">
+          <svg class="notice__glyph g-info" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="currentColor"/><rect x="7.15" y="6.9" width="1.7" height="5" rx=".85" fill="#fff"/><circle cx="8" cy="4.7" r="1" fill="#fff"/></svg>
+          <span class="notice__body"><span class="notice__text">已切换到「跟随系统」外观。</span></span>
+        </div>
+      </div>
+      <div class="ql-item">
+        <span class="ql-label">成功</span>
+        <div class="notice">
+          <svg class="notice__glyph g-ok" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="currentColor"/><path d="M4.6 8.3l2.3 2.3 4.5-4.7" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span class="notice__body"><span class="notice__text">分享链接已复制到剪贴板。</span></span>
+        </div>
+      </div>
+      <div class="ql-item">
+        <span class="ql-label">警告</span>
+        <div class="notice">
+          <svg class="notice__glyph g-warn" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="currentColor"/><rect x="7.15" y="4" width="1.7" height="5.1" rx=".85" fill="#fff"/><circle cx="8" cy="11.4" r=".95" fill="#fff"/></svg>
+          <span class="notice__body"><span class="notice__text">遥控器电量偏低，仍可继续使用。</span></span>
+          <button class="notice__cta">查看</button>
+        </div>
+      </div>
+      <div class="ql-item">
+        <span class="ql-label">错误</span>
+        <div class="notice">
+          <svg class="notice__glyph g-err" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="currentColor"/><path d="M5.6 5.6l4.8 4.8M10.4 5.6l-4.8 4.8" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/></svg>
+          <span class="notice__body"><span class="notice__text">输入目标已改变，请重新打开常用语。</span></span>
+          <button class="notice__cta">重新打开</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 01 原图分析 -->
+  <section>
+    <div class="sec-head"><span class="sec-num">01</span><h2 class="sec">先看现状：这条提示做对了什么、缺什么</h2></div>
+    <p class="sec-note">左侧是你给的截图原始字节（已按原尺寸归档，未重绘）。它出现在常用语面板正中，遮住了正在操作的方向盘。</p>
+
+    <div class="split">
+      <div class="shot-card">
+        <img src="reference-notice.png" alt="常用语面板中的现有提示">
+        <div class="shot-cap">原始截图 666 × 236 px。提示条底色实测 <code>#3a3a3a</code>，面板底色 <code>#202121</code>；文字白色、无图标、无操作按钮。</div>
+      </div>
+
+      <ul class="findings">
+        <li><span class="n">1</span><span class="txt"><b>对：单行短句就够。</b>19 个字读完即懂，不需要标题+正文两级，也不需要图标才能理解。</span></li>
+        <li><span class="n">2</span><span class="txt"><b>对：浮在内容上、不顶开布局。</b>出现和消失都不会让页面跳动。</span></li>
+        <li><span class="n">3</span><span class="txt"><b>缺：语义。</b>成功、警告、失败长得一模一样，用户只能读文字判断严重程度。</span></li>
+        <li><span class="n">4</span><span class="txt"><b>缺：去处。</b>「请重新打开常用语」没有可点的下一步，用户得自己找返回键。</span></li>
+        <li><span class="n">5</span><span class="txt"><b>风险：遮住主控件。</b>居中浮层正好压住方向盘，遥控器用户既看不到按键分配，也不知道提示要停留多久。</span></li>
+        <li><span class="n">6</span><span class="txt"><b>风险：黑块不可移植。</b>面板是纯黑，所以成立；设置页是白色，同一块黑会显得过重、像模态遮罩。</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 02 三方案 -->
+  <section>
+    <div class="sec-head"><span class="sec-num">02</span><h2 class="sec">三种做法，放在同一语境里比</h2></div>
+    <p class="sec-note">三张卡里的提示条都是 13pt 文字、19 字同一条文案，只改底色与图标策略。这是决策的关键差异，不是装饰差异。</p>
+
+    <div class="options">
+      <!-- A -->
+      <div class="opt">
+        <div class="opt-hd"><span class="letter">A</span><h3>照搬截图</h3></div>
+        <div class="opt-stage" style="background:#fbfbfc;">
+          <div class="notice notice--dark" style="max-width:100%;">
+            <span class="notice__body"><span class="notice__text">输入目标已改变，请重新打开常用语。</span></span>
+          </div>
+        </div>
+        <div class="opt-body">
+          <dl>
+            <dt>优点</dt><dd>和常用语面板 100% 一致，存在感最强。</dd>
+            <dt>代价</dt><dd>浅色页里是一块深黑浮层，等于在每个页面盖一张小遮罩；无状态分级。</dd>
+            <dt>结论</dt><dd>只在深色面板内成立，不适合做全站样式。</dd>
+          </dl>
+        </div>
+      </div>
+
+      <!-- B -->
+      <div class="opt opt--pick">
+        <div class="opt-hd"><span class="letter">B</span><h3>结构沿用 · 材质自适应</h3><span class="pick-flag">推荐</span></div>
+        <div class="opt-stage">
+          <div class="notice" style="max-width:100%;">
+            <svg class="notice__glyph g-err" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="currentColor"/><path d="M5.6 5.6l4.8 4.8M10.4 5.6l-4.8 4.8" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/></svg>
+            <span class="notice__body"><span class="notice__text">输入目标已改变，请重新打开常用语。</span></span>
+          </div>
+        </div>
+        <div class="opt-body">
+          <dl>
+            <dt>优点</dt><dd>浅色/深色都自然；语义靠图标颜色区分；能带一个动作。</dd>
+            <dt>代价</dt><dd>需要在两种外观下各验一次对比度。</dd>
+            <dt>结论</dt><dd>作为唯一入口，全站复用。</dd>
+          </dl>
+        </div>
+      </div>
+
+      <!-- C -->
+      <div class="opt">
+        <div class="opt-hd"><span class="letter">C</span><h3>无底色纯文字</h3></div>
+        <div class="opt-stage">
+          <div class="notice" style="max-width:100%; background:transparent; box-shadow:none; -webkit-backdrop-filter:none; backdrop-filter:none;">
+            <svg class="notice__glyph g-err" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="currentColor"/><path d="M5.6 5.6l4.8 4.8M10.4 5.6l-4.8 4.8" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/></svg>
+            <span class="notice__body"><span class="notice__text">输入目标已改变，请重新打开常用语。</span></span>
+          </div>
+        </div>
+        <div class="opt-body">
+          <dl>
+            <dt>优点</dt><dd>最轻，几乎不打断阅读。</dd>
+            <dt>代价</dt><dd>叠在卡片、遥控器图、玻璃面板上时对比度不稳，长文案会糊进背景。</dd>
+            <dt>结论</dt><dd>只适合放在已有底色的提示容器里，不做浮层。</dd>
+          </dl>
+        </div>
+      </div>
+    </div>
+    <div class="legend-row">
+      <span class="k"><span class="swatch" style="background:#0a6ed1"></span>信息</span>
+      <span class="k"><span class="swatch" style="background:#1c7c46"></span>成功</span>
+      <span class="k"><span class="swatch" style="background:#a8620a"></span>警告</span>
+      <span class="k"><span class="swatch" style="background:#c0392b"></span>错误</span>
+      <span class="k">图标仅承载语义，不做装饰；文字本身必须能独立读懂。</span>
+    </div>
+  </section>
+
+  <!-- 03 解剖 -->
+  <section>
+    <div class="sec-head"><span class="sec-num">03</span><h2 class="sec">一个提示条的构成</h2></div>
+    <p class="sec-note">尺寸按 macOS 逻辑点给，落地时用同一组常量，不允许各页面自己调 padding 和圆角。</p>
+
+    <div class="anatomy">
+      <div class="anatomy-canvas">
+        <div class="notice" style="max-width:100%;">
+          <svg class="notice__glyph g-warn" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="currentColor"/><rect x="7.15" y="4" width="1.7" height="5.1" rx=".85" fill="#fff"/><circle cx="8" cy="11.4" r=".95" fill="#fff"/></svg>
+          <span class="notice__body">
+            <span class="notice__text">遥控器电量偏低，仍可继续使用。</span>
+            <span class="notice__sub">建议现在换电池，避免语音输入中途断开。</span>
+          </span>
+          <button class="notice__cta">查看</button>
+        </div>
+
+        <div class="dim" style="left:24px; top:16px;">圆角 12pt（continuous）</div>
+        <div class="dim" style="right:24px; top:16px;">最大宽 520pt / 容器 − 48pt</div>
+        <div class="dim" style="left:24px; bottom:14px;">内边距 11 × 13pt · 图标 16pt · 间距 9pt</div>
+        <div class="dim" style="right:24px; bottom:14px;">字号 13 / 行高 17</div>
+      </div>
+
+      <div class="anatomy-legend">
+        <table>
+          <tr><th>项</th><th>取值</th></tr>
+          <tr><td>圆角</td><td><code>12pt</code> continuous，与页内卡片 10pt 同族、比 GlassPanel 20pt 小一档</td></tr>
+          <tr><td>底色（浅）</td><td><code>.regularMaterial</code> + <code>separator 0.10</code> 描边 0.5pt</td></tr>
+          <tr><td>底色（深）</td><td><code>.thickMaterial</code>；纯黑面板内用 <code>white 0.10</code> 提亮</td></tr>
+          <tr><td>文字</td><td>13pt / 行高 17；次级说明 12pt / 16，颜色 <code>secondaryLabel</code></td></tr>
+          <tr><td>图标</td><td>16 × 16pt，距文字 9pt，垂直上偏 1pt 对齐首行</td></tr>
+          <tr><td>动作</td><td>可选，12.5pt semibold，蓝色，与文字基线居中；最多 1 个</td></tr>
+          <tr><td>阴影</td><td>浅色 <code>0 10 26 −6 / 18%</code>；深色 <code>0 14 34 −8 / 55%</code></td></tr>
+          <tr><td>最小高度</td><td>单行 40pt；带副文案 56pt；整条可点区域不小于 44pt 高</td></tr>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- 04 场景 -->
+  <section>
+    <div class="sec-head"><span class="sec-num">04</span><h2 class="sec">放进真实页面看</h2></div>
+    <p class="sec-note">下面都是按生产截图比例重绘的页面（1020 × 772 窗口），提示条是唯一变量。重点看它会不会抢走页面的注意力。</p>
+
+    <!-- 4.1 浅色成功 -->
+    <div class="scene">
+      <div class="scene-hd"><h3>4.1 设置页 · 成功轻提示</h3><span class="badge rec">推荐承载</span></div>
+      <p class="scene-desc">出现在内容区顶部居中，2.4s 自动消失，不拦截任何操作。用于「已复制」「已保存」这类无需回应的结果。</p>
+      <div class="stage">
+        <div class="win">
+          <div class="win-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span></div>
+          <div class="win-body" style="height:456px;">
+            <div class="sidebar">
+              <div class="brand">
+                <div class="logo">SA</div>
+                <div><div class="name">SayAll</div><div class="ver">2.0.0</div></div>
+              </div>
+              <div class="nav-item"><svg class="ni" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="2" y="3" width="12" height="10" rx="2"/><path d="M4.5 6.5h3M4.5 9.5h5"/></svg>按键</div>
+              <div class="nav-item"><svg class="ni" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M5.5 3.5v9M10.5 3.5v9M7.5 3.5h1M7.5 12.5h1"/></svg>连接</div>
+              <div class="nav-item"><svg class="ni" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M3 4h10v7H7l-3 2.5V11H3z"/></svg>回眸</div>
+              <div class="nav-item on"><svg class="ni" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="8" cy="8" r="2.4"/><path d="M8 1.8v1.7M8 12.5v1.7M1.8 8h1.7M12.5 8h1.7M3.6 3.6l1.2 1.2M11.2 11.2l1.2 1.2M12.4 3.6l-1.2 1.2M4.8 11.2l-1.2 1.2"/></svg>设置<span class="bullet"></span></div>
+              <div class="nav-item"><svg class="ni" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="8" cy="5.6" r="2.4"/><path d="M3.2 13c.6-2.4 2.5-3.7 4.8-3.7s4.2 1.3 4.8 3.7"/></svg>我的</div>
+            </div>
+            <div class="content">
+              <div class="page-hd" style="margin-top:46px;">
+                <div>
+                  <h4>设置</h4>
+                  <div class="sub">通用</div>
+                </div>
+              </div>
+
+              <div class="overlay-top" style="top:8px;">
+                <div class="notice">
+                  <svg class="notice__glyph g-ok" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="currentColor"/><path d="M4.6 8.3l2.3 2.3 4.5-4.7" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  <span class="notice__body"><span class="notice__text">分享链接已复制到剪贴板。</span></span>
+                </div>
+              </div>
+
+              <div class="grid3" style="margin-top:26px;">
+                <div class="card">
+                  <div class="card-hd"><svg class="ci" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="2" y="2.5" width="12" height="11" rx="2.5"/><path d="M5 6h6M5 9h4"/></svg>通用</div>
+                  <div class="segs">
+                    <div class="seg"><span class="k">启动</span><span class="v">登录时打开</span></div>
+                    <div class="seg sel"><span class="k">外观</span><span class="v">跟随系统</span></div>
+                    <div class="seg"><span class="k">语言</span><span class="v">简体中文</span></div>
+                  </div>
+                </div>
+                <div class="card">
+                  <div class="card-hd"><svg class="ci" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M4 3h8v10H4z"/><path d="M6 6h4M6 9h4"/></svg>版本与更新</div>
+                  <div class="segs">
+                    <div class="seg"><span class="k">当前</span><span class="v">2.0.0</span></div>
+                    <div class="seg"><span class="k">检查</span><span class="v">立即检查</span></div>
+                    <div class="seg"><span class="k">渠道</span><span class="v">正式版</span></div>
+                  </div>
+                </div>
+              </div>
+
+              <div style="margin-top:16px; display:flex; gap:16px; align-items:flex-start;">
+                <div style="flex:1;">
+                  <div class="card" style="margin-bottom:12px;">
+                    <div class="card-hd"><svg class="ci" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="8" cy="8" r="5.5"/><path d="M8 5v3.4l2 1.4"/></svg>权限与隐私</div>
+                    <div class="segs">
+                      <div class="seg"><span class="k">辅助功能</span><span class="v">已允许</span></div>
+                      <div class="seg"><span class="k">输入监控</span><span class="v">已允许</span></div>
+                      <div class="seg"><span class="k">麦克风</span><span class="v">已允许</span></div>
+                    </div>
+                  </div>
+                  <div class="card">
+                    <div class="card-hd"><svg class="ci" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M8 2l5 3v6l-5 3-5-3V5z"/></svg>按键功能摘要</div>
+                    <div class="segs">
+                      <div class="seg"><span class="k">语音键</span><span class="v">按住说话</span></div>
+                      <div class="seg"><span class="k">OK 键</span><span class="v">Return</span></div>
+                      <div class="seg"><span class="k">菜单键</span><span class="v">上下文菜单</span></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="remote-wrap" style="width:120px; padding:0;">
+                  <div class="remote">
+                    <div class="r-disk"></div>
+                    <div class="r-btn" style="left:50%; top:84px; transform:translateX(-50%);"></div>
+                    <div class="r-btn" style="left:50%; top:132px; transform:translateX(-50%);"></div>
+                    <div class="r-btn" style="left:50%; top:112px; transform:translateX(-50%); width:10px;height:10px;"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4.2 错误 + 操作 -->
+    <div class="scene">
+      <div class="scene-hd"><h3>4.2 设置页 · 失败提示带下一步</h3><span class="badge rec">推荐承载</span></div>
+      <p class="scene-desc">错误不自动消失，必须按 Esc 或点「去设置」；动作按钮只给一个，且必须是用户真能立刻做的下一步。</p>
+      <div class="stage">
+        <div class="win">
+          <div class="win-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span></div>
+          <div class="win-body" style="height:330px;">
+            <div class="sidebar">
+              <div class="brand">
+                <div class="logo">SA</div>
+                <div><div class="name">SayAll</div><div class="ver">2.0.0</div></div>
+              </div>
+              <div class="nav-item"><svg class="ni" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="2" y="3" width="12" height="10" rx="2"/><path d="M4.5 6.5h3M4.5 9.5h5"/></svg>按键</div>
+              <div class="nav-item on"><svg class="ni" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M5.5 3.5v9M10.5 3.5v9M7.5 3.5h1M7.5 12.5h1"/></svg>连接</div>
+              <div class="nav-item"><svg class="ni" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M3 4h10v7H7l-3 2.5V11H3z"/></svg>回眸</div>
+              <div class="nav-item"><svg class="ni" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="8" cy="8" r="2.4"/></svg>设置</div>
+            </div>
+            <div class="content">
+              <div class="page-hd" style="margin-top:58px;"><div><h4>连接与语音</h4><div class="sub">麦克风与输出设备</div></div></div>
+
+              <div class="overlay-top" style="top:10px;">
+                <div class="notice">
+                  <svg class="notice__glyph g-err" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="currentColor"/><path d="M5.6 5.6l4.8 4.8M10.4 5.6l-4.8 4.8" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/></svg>
+                  <span class="notice__body">
+                    <span class="notice__text">无法写入虚拟麦克风，语音输入暂不可用。</span>
+                    <span class="notice__sub">系统可能拦截了音频驱动，重新安装可恢复。</span>
+                  </span>
+                  <button class="notice__cta">去处理</button>
+                </div>
+              </div>
+
+              <div class="card" style="margin-top:34px;">
+                <div class="card-hd"><svg class="ci" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="2" y="3" width="12" height="10" rx="2"/><path d="M5 8h6"/></svg>语音设备</div>
+                <div class="segs" style="grid-template-columns:repeat(4,1fr);">
+                  <div class="seg"><span class="k">输入设备</span><span class="v">Mac 麦克风</span></div>
+                  <div class="seg"><span class="k">切换快捷键</span><span class="v">⌃⌥M</span></div>
+                  <div class="seg"><span class="k">输出设备</span><span class="v">不输出语音</span></div>
+                  <div class="seg"><span class="k">增益</span><span class="v">10 dB</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4.3 常用语顶部 -->
+    <div class="scene">
+      <div class="scene-hd"><h3>4.3 常用语面板 · 顶部提示（改进位）</h3><span class="badge rec">推荐</span></div>
+      <p class="scene-desc">同一条文案，从正中移到面板顶部：方向盘完整可见，遥控器可以继续操作；「重新打开」做成可确认的动作，遥控器 OK 键即可触发。</p>
+      <div class="panel-stage">
+        <div class="panel">
+          <div class="notice notice--dark overlay-top" style="top:10px;">
+            <svg class="notice__glyph g-err" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="currentColor"/><path d="M5.6 5.6l4.8 4.8M10.4 5.6l-4.8 4.8" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/></svg>
+            <span class="notice__body"><span class="notice__text">输入目标已改变，请重新打开常用语。</span></span>
+            <button class="notice__cta">重新打开</button>
+          </div>
+          <div class="panel-hd" style="margin-top:52px;"><h5>常用语</h5>
+            <div class="panel-x"><svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2.5 2.5l6 6M8.5 2.5l-6 6"/></svg></div>
+          </div>
+          <div class="disk">
+            <div class="dir n"><span class="chev">⌃</span><span class="lbl">说清楚一点</span></div>
+            <div class="dir w"><span class="chev">‹</span><span class="lbl">继续</span></div>
+            <div class="dir e"><span class="chev">›</span><span class="lbl">按你的来</span></div>
+            <div class="dir s"><span class="chev">⌄</span><span class="lbl">思路可以，<br>我补充一点</span></div>
+            <div class="center"><span class="ok">OK</span><span class="lbl">好的</span></div>
+          </div>
+          <div class="panel-ft">方向键或 OK 插入 · 返回键关闭<br>仅插入文字，不自动发送</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4.4 常用语居中对照 -->
+    <div class="scene">
+      <div class="scene-hd"><h3>4.4 同一面板 · 保持居中（对照）</h3><span class="badge">沿用截图位置</span></div>
+      <p class="scene-desc">如果你更看重「提示必须在视线焦点上」，保留居中；代价是遮挡方向盘、并且需要一条明确的停留或确认规则。</p>
+      <div class="panel-stage">
+        <div class="panel">
+          <div class="panel-hd"><h5>常用语</h5>
+            <div class="panel-x"><svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2.5 2.5l6 6M8.5 2.5l-6 6"/></svg></div>
+          </div>
+          <div class="disk">
+            <div class="dir n"><span class="chev">⌃</span><span class="lbl">说清楚一点</span></div>
+            <div class="dir w"><span class="chev">‹</span><span class="lbl">继续</span></div>
+            <div class="dir e"><span class="chev">›</span><span class="lbl">按你的来</span></div>
+            <div class="dir s"><span class="chev">⌄</span><span class="lbl">思路可以，<br>我补充一点</span></div>
+            <div class="center"><span class="ok">OK</span><span class="lbl">好的</span></div>
+            <div class="overlay-center">
+              <div class="notice notice--dark" style="max-width:330px;">
+                <svg class="notice__glyph g-err" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="currentColor"/><path d="M5.6 5.6l4.8 4.8M10.4 5.6l-4.8 4.8" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/></svg>
+                <span class="notice__body"><span class="notice__text">输入目标已改变，请重新打开常用语。</span></span>
+              </div>
+            </div>
+          </div>
+          <div class="panel-ft">方向键或 OK 插入 · 返回键关闭<br>仅插入文字，不自动发送</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4.5 内联 -->
+    <div class="scene">
+      <div class="scene-hd"><h3>4.5 页内提示条 · 持续状态</h3><span class="badge rec">第三种承载</span></div>
+      <p class="scene-desc">权限缺失、兼容性降级、驱动未安装这类「会一直存在」的状态不能用浮层反复弹；按现有规范放在页面内、随内容滚动。左侧语义条带颜色，不做整块底色。</p>
+      <div class="stage" style="padding-bottom:22px;">
+        <div class="win" style="border-radius:10px;">
+          <div class="win-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span></div>
+          <div style="padding:18px 22px; display:grid; gap:12px; background:#fff;">
+            <div class="notice notice--inline is-warn">
+              <svg class="notice__glyph g-warn" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="currentColor"/><rect x="7.15" y="4" width="1.7" height="5.1" rx=".85" fill="#fff"/><circle cx="8" cy="11.4" r=".95" fill="#fff"/></svg>
+              <span class="notice__body">
+                <span class="notice__text">这台 Mac 尚未允许「输入监控」，按键映射不会生效。</span>
+                <span class="notice__sub">在系统设置的「隐私与安全性」里勾选无线麦 SayAll 后返回本页。</span>
+              </span>
+              <button class="notice__cta">打开系统设置</button>
+            </div>
+
+            <div class="notice notice--inline is-err">
+              <svg class="notice__glyph g-err" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="currentColor"/><path d="M5.6 5.6l4.8 4.8M10.4 5.6l-4.8 4.8" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/></svg>
+              <span class="notice__body">
+                <span class="notice__text">自动连接失败：小米蓝牙遥控器 2 Pro 1 未响应。</span>
+                <span class="notice__sub">请确认遥控器在身边并唤醒，然后重试；也可以改用下面的手动配置。</span>
+              </span>
+              <button class="notice__cta">重试</button>
+            </div>
+
+            <div class="notice notice--inline is-ok">
+              <svg class="notice__glyph g-ok" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="currentColor"/><path d="M4.6 8.3l2.3 2.3 4.5-4.7" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span class="notice__body">
+                <span class="notice__text">语音输入已就绪，按住遥控器语音键即可说话。</span>
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4.6 深色 -->
+    <div class="scene">
+      <div class="scene-hd"><h3>4.6 深色外观 · 同一组件不换形状</h3><span class="badge">必须复验</span></div>
+      <p class="scene-desc">深色下只换材质与阴影，不改尺寸、不改图标位。深色窗口的提示条要比页面亮一档，否则会沉进背景。</p>
+      <div class="stage stage--dark">
+        <div class="win win--dark">
+          <div class="win-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span></div>
+          <div class="win-body" style="height:300px;">
+            <div class="sidebar">
+              <div class="brand">
+                <div class="logo" style="background:#3a3a3c; color:#e8e8ea;">SA</div>
+                <div><div class="name" style="color:#f2f2f4;">SayAll</div><div class="ver" style="color:#9a9a9f;">2.0.0</div></div>
+              </div>
+              <div class="nav-item"><svg class="ni" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="2" y="3" width="12" height="10" rx="2"/></svg>按键</div>
+              <div class="nav-item on"><svg class="ni" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M5.5 3.5v9M10.5 3.5v9"/></svg>连接</div>
+              <div class="nav-item"><svg class="ni" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M3 4h10v7H7l-3 2.5V11H3z"/></svg>回眸</div>
+              <div class="nav-item"><svg class="ni" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="8" cy="8" r="2.4"/></svg>设置</div>
+            </div>
+            <div class="content">
+              <div class="page-hd" style="margin-top:46px;"><div><h4 style="color:#f2f2f4;">连接与语音</h4><div class="sub">遥控器与设备</div></div></div>
+              <div class="overlay-top" style="top:8px;">
+                <div class="notice notice--dark">
+                  <svg class="notice__glyph g-ok" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="#2f9e63"/><path d="M4.6 8.3l2.3 2.3 4.5-4.7" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  <span class="notice__body"><span class="notice__text">遥控器已连接，电量 94%。</span></span>
+                </div>
+              </div>
+              <div class="card" style="margin-top:32px;">
+                <div class="card-hd" style="color:#f2f2f4;">遥控器</div>
+                <div class="segs">
+                  <div class="seg"><span class="k">设备</span><span class="v">小米 2 Pro 1</span></div>
+                  <div class="seg sel"><span class="k">状态</span><span class="v">已连接</span></div>
+                  <div class="seg"><span class="k">电量</span><span class="v">94%</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4.7 长文案 -->
+    <div class="scene">
+      <div class="scene-hd"><h3>4.7 长文案与英文</h3><span class="badge">边界</span></div>
+      <p class="scene-desc">中文 19 字是常态，英文同等语义约 1.6 倍长。规则：最多 2 行正文 + 1 行副文案；超出用副文案换行，不用省略号，也不缩小字号。</p>
+      <div class="stage" style="padding-bottom:22px;">
+        <div style="display:grid; gap:12px; padding:6px 4px 0; max-width:780px; margin:0 auto;">
+          <div class="notice" style="max-width:none;">
+            <svg class="notice__glyph g-info" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="currentColor"/><rect x="7.15" y="6.9" width="1.7" height="5" rx=".85" fill="#fff"/><circle cx="8" cy="4.7" r="1" fill="#fff"/></svg>
+            <span class="notice__body"><span class="notice__text">已切换到「输入目标已改变，请重新打开常用语」的提示样式预览。</span></span>
+          </div>
+          <div class="notice" style="max-width:none;">
+            <svg class="notice__glyph g-err" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="currentColor"/><path d="M5.6 5.6l4.8 4.8M10.4 5.6l-4.8 4.8" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/></svg>
+            <span class="notice__body"><span class="notice__text">The input target changed. Reopen Common Phrases to choose where the text goes.</span></span>
+            <button class="notice__cta">Reopen</button>
+          </div>
+          <div class="notice" style="max-width:none;">
+            <svg class="notice__glyph g-warn" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="currentColor"/><rect x="7.15" y="4" width="1.7" height="5.1" rx=".85" fill="#fff"/><circle cx="8" cy="11.4" r=".95" fill="#fff"/></svg>
+            <span class="notice__body">
+              <span class="notice__text">这台 Mac 尚未允许「输入监控」，按键映射不会生效；语音键也不会计入自定义动作。</span>
+              <span class="notice__sub">在系统设置的「隐私与安全性」里勾选无线麦 SayAll，然后回到本页重试。</span>
+            </span>
+            <button class="notice__cta">打开系统设置</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4.8 队列 -->
+    <div class="scene">
+      <div class="scene-hd"><h3>4.8 同时来了两条</h3><span class="badge">规则</span></div>
+      <p class="scene-desc">同一时刻只显示一条。错误/警告立即顶掉正在显示的轻提示；轻提示之间互相替换，不排队堆积。用户正在悬停或提示带动作时，延后 0.4s 再替换，避免点击落空。</p>
+      <div class="stage" style="padding-bottom:22px;">
+        <div style="display:flex; gap:26px; align-items:center; padding:8px 4px 0;">
+          <div style="flex:1; min-width:0;">
+            <div style="font-size:11px; color:var(--ink-3); margin-bottom:8px; font-family:var(--mono);">T0 成功提示显示中</div>
+            <div class="notice">
+              <svg class="notice__glyph g-ok" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="currentColor"/><path d="M4.6 8.3l2.3 2.3 4.5-4.7" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span class="notice__body"><span class="notice__text">已保存更改。</span></span>
+            </div>
+          </div>
+          <div style="flex:0 0 42px; text-align:center; color:var(--ink-3); font-size:18px;">→</div>
+          <div style="flex:1.35; min-width:0;">
+            <div style="font-size:11px; color:var(--ink-3); margin-bottom:8px; font-family:var(--mono);">T1 失败到达，立即替换</div>
+            <div class="notice">
+              <svg class="notice__glyph g-err" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="currentColor"/><path d="M5.6 5.6l4.8 4.8M10.4 5.6l-4.8 4.8" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/></svg>
+              <span class="notice__body"><span class="notice__text">保存失败，原内容未被修改。</span></span>
+              <button class="notice__cta">重试</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 05 行为规范 -->
+  <section>
+    <div class="sec-head"><span class="sec-num">05</span><h2 class="sec">行为规范</h2></div>
+    <p class="sec-note">这份表是开发时的验收口径，不只是设计说明。</p>
+
+    <div class="table-card">
+      <table class="spec">
+        <tr>
+          <th style="width:112px;">类型</th><th style="width:180px;">使用场景</th><th style="width:104px;">停留</th>
+          <th style="width:164px;">关闭方式</th><th>位置与要点</th>
+        </tr>
+        <tr>
+          <td><span class="swatch" style="background:#0a6ed1"></span>信息</td>
+          <td>状态说明、模式切换</td>
+          <td>2.4s 自动</td>
+          <td>自动 / 点击 / Esc</td>
+          <td>顶部居中，不拦截操作</td>
+        </tr>
+        <tr>
+          <td><span class="swatch" style="background:#1c7c46"></span>成功</td>
+          <td>已复制、已保存</td>
+          <td>2.4s 自动</td>
+          <td>自动 / 点击 / Esc</td>
+          <td>顶部居中；文案不超过 1 行</td>
+        </tr>
+        <tr>
+          <td><span class="swatch" style="background:#a8620a"></span>警告</td>
+          <td>可继续但有风险</td>
+          <td>4s 自动</td>
+          <td>自动 / 点击 / Esc</td>
+          <td>顶部居中；必须给动作或下一步</td>
+        </tr>
+        <tr>
+          <td><span class="swatch" style="background:#c0392b"></span>错误</td>
+          <td>操作失败、目标失效</td>
+          <td>不自动</td>
+          <td>Esc / 动作 / 关闭</td>
+          <td>顶部居中；必须说明原状态是否被修改</td>
+        </tr>
+        <tr>
+          <td>阻断</td>
+          <td>必须重做当前步骤</td>
+          <td>不自动</td>
+          <td>Return / 遥控器 OK</td>
+          <td>仅限小面板（常用语）；大窗口不得用居中遮罩挡表单</td>
+        </tr>
+        <tr>
+          <td>页内</td>
+          <td>权限缺失、兼容性降级</td>
+          <td>常驻</td>
+          <td>条件恢复后消失</td>
+          <td>随内容滚动；不重复弹浮层（design-qa 205/208 行既有约定）</td>
+        </tr>
+      </table>
+    </div>
+
+    <div class="verdict" style="margin-top:18px;">
+      <h2 style="font-size:16px;">跨页面共用时必须一致的六件事</h2>
+      <p style="margin-bottom:10px;"><strong>1. 只有一个入口。</strong>所有页面调用同一个 <code>NoticeCenter</code>，不允许各页自己拼 <code>Text</code> + <code>background</code>。否则半年后一定长出五种圆角。</p>
+      <p style="margin-bottom:10px;"><strong>2. 同一时刻只显示一条。</strong>新提示替换旧提示，不叠罗汉；错误优先于警告，警告优先于成功。</p>
+      <p style="margin-bottom:10px;"><strong>3. 不抢键盘焦点。</strong>提示不是 Sheet，不改变 first responder；常用语面板用遥控器操作，抢焦点会让方向键失效。</p>
+      <p style="margin-bottom:10px;"><strong>4. 文字必须独立可读。</strong>图标只承载语义；移除图标后，用户仍应能理解这条提示。VoiceOver 播报「错误：…」，而不是只读正文。</p>
+      <p style="margin-bottom:10px;"><strong>5. 尺寸不随页面变。</strong>字号 13 / 圆角 12 / 内边距 11×13 固定；只有最大宽度跟随容器。中文不低于 12pt，英文不缩字号换行。</p>
+      <p style="margin-bottom:0;"><strong>6. 出现不顶开布局。</strong>用 overlay / ZStack 浮层；如果提示会长期存在（权限、兼容性），改用页内 inline，不占浮层层级。</p>
+    </div>
+  </section>
+
+  <!-- 06 实现映射 -->
+  <section>
+    <div class="sec-head"><span class="sec-num">06</span><h2 class="sec">落地位置（确认后照这个开发）</h2></div>
+    <p class="sec-note">只新增一个共用组件，不改现有页面结构；各页面只把已有的错误/成功文案改接到它上面。</p>
+
+    <div class="table-card">
+      <table class="spec">
+        <tr><th style="width:210px;">文件</th><th>职责</th></tr>
+        <tr><td><code>Sources/RemoteMic/NoticeView.swift</code>（新增）</td><td>视觉组件：图标、文案、副文案、动作、深浅两套材质；不持有状态</td></tr>
+        <tr><td><code>Sources/RemoteMic/NoticeCenter.swift</code>（新增）</td><td>唯一入口：<code>show(_:in:)</code>、替换与优先级、自动消失计时、VoiceOver 播报</td></tr>
+        <tr><td><code>Sources/RemoteMic/SettingsView.swift</code></td><td>挂载顶部 overlay；替换现有零散错误文案的入口（不改卡片布局）</td></tr>
+        <tr><td><code>Sources/RemoteMic/OnboardingView.swift</code></td><td>失败提示改走同一组件；页内权限提示用 inline 形态</td></tr>
+        <tr><td>私有常用语面板（<code>SayAll…</code>）</td><td>仅把错误文案的展示改成同一 token；面板内的黑底版本保留 <code>notice--dark</code> 材质</td></tr>
+      </table>
+    </div>
+    <p class="sec-note" style="margin-top:12px;">
+      私有面板不在本仓库，公开仓库只提供视觉 token 与组件形态；实际接线需要在私有仓同步一次，保证两边的圆角、字号、内边距完全一致。
+    </p>
+  </section>
+
+  <!-- 07 待确认 -->
+  <section>
+    <div class="sec-head"><span class="sec-num">07</span><h2 class="sec">需要你定的四件事</h2></div>
+    <p class="sec-note">前两项影响全局，后两项只影响常用语面板。你回复序号即可，我按你的选择改稿或开工。</p>
+
+    <div class="asks">
+      <div class="ask">
+        <p class="q">1. 走哪套视觉？</p>
+        <ul class="opts">
+          <li class="dflt"><b>B（推荐）</b>结构沿用、材质自适应，浅深两套</li>
+          <li><b>A</b> 照搬截图的深黑浮层，全站统一深色</li>
+          <li><b>C</b> 无底色纯文字，只用在已有色块上</li>
+        </ul>
+      </div>
+      <div class="ask">
+        <p class="q">2. 错误提示要不要「必须手动关」？</p>
+        <ul class="opts">
+          <li class="dflt"><b>要</b>：错误不自动消失，逼用户看见</li>
+          <li><b>不要</b>：6s 后自动消失，减少打断</li>
+        </ul>
+      </div>
+      <div class="ask">
+        <p class="q">3. 常用语那条提示放哪？</p>
+        <ul class="opts">
+          <li class="dflt"><b>面板顶部</b>（4.3）：不挡方向盘，可继续操作</li>
+          <li><b>保持居中</b>（4.4）：视线焦点，但遮住主控件</li>
+        </ul>
+      </div>
+      <div class="ask">
+        <p class="q">4. 要不要带动作按钮？</p>
+        <ul class="opts">
+          <li class="dflt"><b>要</b>：最多 1 个，如「重新打开」「去处理」</li>
+          <li><b>不要</b>：只显示文字，动作靠用户自己找</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <div class="foot">
+    <span>SayAll · 通用提示样式 · 2026-11-10 · 未开发，待确认</span>
+    <span>本页为示意重绘，页面尺寸按 1020 × 772 生产窗口比例；截图原图见 01 节</span>
+  </div>
+
+</div>
+</body>
+</html>
