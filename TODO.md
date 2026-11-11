@@ -33,6 +33,7 @@
 	- 验证入口：[BluetoothDeviceNames](Testing/BluetoothDeviceNames.md)。
 
 - [x] 修复蓝牙扫描停滞后重连循环静默终止
+	- 2026-11-11 候选补充：异机 Build 320 唤醒后扫描持续但缓存直连被长期绕过，新增至少 60 秒冷却后的单次缓存探测，保留失败退避；现场睡眠和首次语音验收待完成，见 `Bugs/2026-11-11-cached-target-recovery-after-idle.md`。
 	- 2026-10-11 更新 #632：根因是 CoreBluetooth 扫描在没有回调时不会结束，扫描尝试永久停留在 `.scanning`，导致后续重连循环不再发起，表现为蓝牙连接在用户侧长时间无法自行恢复。修复新增 `BluetoothScanRecoveryPolicy` 扫描窗口（20 秒）与退避重试，超过窗口后按策略结束本次扫描并重新发起发现流程，避免静默终止。
 	- 已覆盖扫描窗口超时、取消、重试与恢复路径的自动化回归，公开宿主与蓝牙生命周期测试通过。真实遥控器在休眠唤醒、系统蓝牙开关与干扰环境下的恢复表现仍按测试手册人工验收。
 	- 记录见 [Bug 诊断记录](Bugs/2026-10-11-ble-scan-stall-after-cached-target-bypass.md)。

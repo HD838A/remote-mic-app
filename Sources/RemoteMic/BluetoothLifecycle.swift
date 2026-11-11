@@ -243,17 +243,32 @@ struct BluetoothReconnectPolicy {
     static let baseDelay: TimeInterval = 3
     static let maximumDelay: TimeInterval = 60
     static let jitterRatio = 0.1
+    static let cachedTargetProbeInterval: TimeInterval = 60
 
     private(set) var consecutiveFailureCount = 0
     private(set) var allowsCachedTargetRetrieval = true
+    private var nextCachedTargetProbeAt: TimeInterval?
+
+    /// A failed cached target stays bypassed between bounded probes. Keep that state
+    /// when retrieval returns no peripheral so the scan window can still expire.
+    mutating func shouldRetrieveCachedTarget(at uptime: TimeInterval) -> Bool {
+        if allowsCachedTargetRetrieval { return true }
+        guard let nextCachedTargetProbeAt, uptime >= nextCachedTargetProbeAt else {
+            return false
+        }
+        self.nextCachedTargetProbeAt = uptime + Self.cachedTargetProbeInterval
+        return true
+    }
 
     mutating func nextAutomaticDelay(
         bypassCachedTarget: Bool,
-        jitterUnit: Double
+        jitterUnit: Double,
+        uptime: TimeInterval = ProcessInfo.processInfo.systemUptime
     ) -> TimeInterval {
         consecutiveFailureCount += 1
         if bypassCachedTarget {
             allowsCachedTargetRetrieval = false
+            nextCachedTargetProbeAt = uptime + Self.cachedTargetProbeInterval
         }
 
         let exponent = min(consecutiveFailureCount - 1, 5)
@@ -270,6 +285,7 @@ struct BluetoothReconnectPolicy {
     mutating func reset() {
         consecutiveFailureCount = 0
         allowsCachedTargetRetrieval = true
+        nextCachedTargetProbeAt = nil
     }
 }
 
