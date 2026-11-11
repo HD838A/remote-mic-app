@@ -333,13 +333,12 @@
 
   /* 内联提示条 */
   .inote{
-    position:relative; display:flex; align-items:flex-start; gap:9px; padding:11px 13px;
+    position:relative; display:flex; align-items:flex-start; gap:9px; padding:11px 14px;
     border-radius:10px; overflow:hidden;
     background:#fff; border:1px solid #e8e8ec;
   }
   .inote__icon{flex:0 0 16px; width:16px; height:16px; margin-top:1px; color:var(--accent);}
   .inote__icon circle{fill:currentColor;}
-  .inote::before{content:""; position:absolute; left:0; top:0; bottom:0; width:4.5px; background:var(--accent);}
   .inote--warn{background:#fffaf0; border-color:#f0e2c6; --accent:#8a4b0f;}
   .inote--err{background:#fff7f6; border-color:#f2dbd8; --accent:#a5342c;}
   .inote--tip{--accent:#12704a; background:#f3faf6; border-color:#d8ede3;}
@@ -968,7 +967,7 @@
         <tr><td>结构</td><td><code>[图标 16] [标题 + 说明] [右侧动作]</code>，一行排开，动作垂直居中</td></tr>
         <tr><td>图标</td><td>实心圆 + 白色符号，16pt，与首行文字顶对齐；颜色用语义色</td></tr>
         <tr><td>圆角 / 内边距</td><td>10pt / 11 × 13，图标与文字间距 9</td></tr>
-        <tr><td>语义色条</td><td>4.5pt，贴左边，被圆角裁切；浅色用基准色，深色用提亮色</td></tr>
+        <tr><td>语义色</td><td>只用于圆形图标与右侧动作；不再单画左侧色条，底色与边框已足够区分档位</td></tr>
         <tr><td>背景</td><td>提示 #F3FAF6；警告 #FFFAF0；错误 #FFF7F6。深色统一 #2C2C2E</td></tr>
         <tr><td>文字</td><td>标题 13 / 600；说明 12 / 行高 16，次要色；动作 12.5 / 600</td></tr>
         <tr><td>关闭</td><td>没有。状态消失由条件决定，不由用户点掉</td></tr>
