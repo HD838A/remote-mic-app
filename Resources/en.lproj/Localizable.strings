@@ -59,7 +59,8 @@
 "button_mapping.permission.accessibility_expired" = "Accessibility access is unavailable. Button controls have stopped.";
 "button_mapping.permission.system_expired" = "Required permissions are no longer available. Button controls have stopped.";
 "common.status.stopped" = "Stopped";
-"connection.status.searching" = "Looking for a Xiaomi remote";
+"connection.status.searching" = "Looking for a remote";
+"connection.status.searching_for_device" = "Looking for %@";
 "connection.status.connecting" = "Connecting to the remote";
 "connection.status.initializing_voice" = "Initializing the voice service";
 "connection.status.connected_to_device" = "Xiaomi remote connected";

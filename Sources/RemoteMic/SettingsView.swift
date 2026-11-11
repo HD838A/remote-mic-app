@@ -1542,7 +1542,7 @@ struct SettingsView: View {
                 VStack(alignment: .leading, spacing: 9) {
                     connectionStatusLine(
                         symbol: "antenna.radiowaves.left.and.right",
-                        text: model.connectionStatus.text(using: localization),
+                        text: model.connectionStatusText(using: localization),
                         tint: connectionTint
                     )
                     connectionStatusLine(
@@ -3316,7 +3316,7 @@ struct SettingsView: View {
                 .font(.system(size: vertical ? 24 : 18, weight: .semibold))
                 .foregroundStyle(.secondary)
 
-            Text(model.connectionStatus.text(using: localization))
+            Text(model.connectionStatusText(using: localization))
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(vertical ? .leading : .center)
