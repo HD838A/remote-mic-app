@@ -2159,7 +2159,7 @@ struct SettingsPageRegressionTests {
         )
 
         #expect(source.contains(
-            "accountDisplayName: membershipFeature.accountDisplayName"
+            "accountDisplayName: sidebarAccountDisplayName ?? membershipFeature.accountDisplayName"
         ))
         #expect(integration.contains("@Published private(set) var accountDisplayName: String?"))
         #expect(integration.contains("adapter.$accountDisplayName"))

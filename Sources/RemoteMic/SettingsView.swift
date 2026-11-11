@@ -934,7 +934,7 @@ struct SettingsView: View {
     private func sidebarTitleString(_ section: SettingsSection) -> String {
         if section == .statistics {
             return SettingsPageBehavior.sidebarAccountTitle(
-                accountDisplayName: membershipFeature.accountDisplayName ?? sidebarAccountDisplayName,
+                accountDisplayName: sidebarAccountDisplayName ?? membershipFeature.accountDisplayName,
                 loginTitle: localization.text("settings.section.login")
             )
         }
@@ -1043,7 +1043,7 @@ struct SettingsView: View {
     private func sidebarTitle(_ section: SettingsSection) -> Text {
         if section == .statistics {
             return Text(SettingsPageBehavior.sidebarAccountTitle(
-                accountDisplayName: membershipFeature.accountDisplayName ?? sidebarAccountDisplayName,
+                accountDisplayName: sidebarAccountDisplayName ?? membershipFeature.accountDisplayName,
                 loginTitle: localization.text("settings.section.login")
             ))
         }
