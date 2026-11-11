@@ -473,6 +473,8 @@
 "connection.web.plus_required_action" = "查看 Plus";
 "audio.section.title" = "音频设置";
 "audio.voice_output.section_title" = "语音设备";
+"audio.auto_switch_input.title" = "按语音键切换默认话筒";
+"audio.auto_switch_input.help" = "按下遥控器语音键时，自动将系统默认话筒临时切到遥控器话筒；松开按键后自动切回原话筒。";
 "audio.output.title" = "输出设备";
 "audio.output.disabled" = "不输出语音";
 "audio.volume.title" = "音量";

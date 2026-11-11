@@ -1658,6 +1658,14 @@ struct SettingsView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
+                Toggle("audio.auto_switch_input.title", isOn: $settings.voiceKeyAutoSwitchInputDevice)
+                    .font(.system(size: 13))
+
+                Text("audio.auto_switch_input.help")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
                 HStack(alignment: .firstTextBaseline) {
                     Text("audio.status.title")
                         .frame(width: 92, alignment: .leading)

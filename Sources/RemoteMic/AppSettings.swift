@@ -311,6 +311,7 @@ final class AppSettings: ObservableObject {
         static let gainDB = "gainDB"
         static let outputVolumePercent = "outputVolumePercent"
         static let selectedAudioDeviceUID = "selectedAudioDeviceUID"
+        static let voiceKeyAutoSwitchInputDevice = "voiceKeyAutoSwitchInputDevice"
         static let lastUserSelectedInputDeviceUID = "lastUserSelectedInputDeviceUID"
         static let lastKnownAudioDeviceUID = "lastKnownAudioDeviceUID"
         static let customMappingEnabled = "customMappingEnabled"
@@ -420,6 +421,10 @@ final class AppSettings: ObservableObject {
             defaults.set(macMicrophoneShortcut.flatMap { try? JSONEncoder().encode($0) },
                 forKey: "macMicrophoneShortcut")
         }
+    }
+
+    @Published var voiceKeyAutoSwitchInputDevice: Bool {
+        didSet { defaults.set(voiceKeyAutoSwitchInputDevice, forKey: Keys.voiceKeyAutoSwitchInputDevice) }
     }
 
     var lastUserSelectedInputDeviceUID: String? {
@@ -924,6 +929,11 @@ final class AppSettings: ObservableObject {
         macMicrophoneShortcut = Self.decodeSetting(CustomKeyboardShortcut.self,
             forKey: "macMicrophoneShortcut", from: defaults, corrupted: &corruptedKeys)
         selectedAudioDeviceUID = persistedAudioDeviceUID
+        if defaults.object(forKey: Keys.voiceKeyAutoSwitchInputDevice) != nil {
+            voiceKeyAutoSwitchInputDevice = defaults.bool(forKey: Keys.voiceKeyAutoSwitchInputDevice)
+        } else {
+            voiceKeyAutoSwitchInputDevice = true
+        }
         lastKnownAudioDeviceUID = defaults.string(forKey: Keys.lastKnownAudioDeviceUID) ?? persistedAudioDeviceUID
         if defaults.string(forKey: Keys.lastKnownAudioDeviceUID) == nil,
            !persistedAudioDeviceUID.isEmpty {

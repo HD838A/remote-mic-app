@@ -586,6 +586,12 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         }
         return session
     }()
+    private lazy var voiceKeyDefaultInputCoordinator: VoiceKeyDefaultInputCoordinator = {
+        VoiceKeyDefaultInputCoordinator(
+            isEnabled: { [weak self] in self?.settings.voiceKeyAutoSwitchInputDevice ?? false },
+            selectedAudioDeviceUID: { [weak self] in self?.settings.selectedAudioDeviceUID ?? "" }
+        )
+    }()
     @Published private(set) var testToneStatus = LocalizedMessage("audio.output.none_selected")
     @Published private(set) var isPlayingTestTone = false
     @Published private(set) var isAudioOutputReady = false
@@ -1504,6 +1510,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     }
 
     func stop() {
+        voiceKeyDefaultInputCoordinator.forceRestoreImmediate(reason: "app_stop")
         cancelConfiguredButtonInteractions(reason: "app_stop")
         buttonLifecycleObservers.forEach { NSWorkspace.shared.notificationCenter.removeObserver($0) }
         buttonLifecycleObservers.removeAll()
@@ -8709,6 +8716,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             AppLogger.shared.write("RECORDING ASSET application_fallback unavailable")
         }
         transcriptCaptureCoordinator.startSession(sessionID: sessionID, startedAt: startedAt, source: source)
+        voiceKeyDefaultInputCoordinator.borrowInputDeviceIfNeeded(sessionID: sessionID)
         isStreaming = true
         if let activeMobileVoiceSource, activeMobileVoiceSource != .macMicrophone {
             voiceTargetActivityMonitor.start()
@@ -8754,6 +8762,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         if sessionID != nil {
             recordingAssetCoordinator.finish(endedAt: endedAt)
         }
+        voiceKeyDefaultInputCoordinator.restoreInputDeviceIfNeeded(reason: "voice_session_ended")
         // 会话因别的原因结束（用户关闭语音、切换输入源）时，必须让 Chromecast 包内的
         // latched 状态同步清空；否则下一次点按会被误判成「结束」而不是「开始」。
         chromecastFeature.notifyHostVoiceSessionEnded()

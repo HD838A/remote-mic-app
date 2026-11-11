@@ -473,6 +473,8 @@
 "connection.web.plus_required_action" = "View Plus";
 "audio.section.title" = "Audio Settings";
 "audio.voice_output.section_title" = "Voice devices";
+"audio.auto_switch_input.title" = "Switch default microphone on voice key";
+"audio.auto_switch_input.help" = "Temporarily switches macOS default microphone to the remote microphone while voice key is pressed, and restores it when released.";
 "audio.output.title" = "Output device";
 "audio.output.disabled" = "Audio Output Off";
 "audio.volume.title" = "Volume";
