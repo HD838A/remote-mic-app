@@ -1,35 +1,8 @@
 import CoreGraphics
 import Foundation
 
-/// 可以被「按住执行」一直按住的目标键。
-///
-/// 只有方向键成立：其他动作（打开 App、组合动作、滚动）没有“按下去不放”的系统语义，
-/// 让它们进入按下状态只会在目标 App 里留下无法解释的状态。
-struct HoldableKey: Equatable {
-    let keyCode: CGKeyCode
-    let flags: CGEventFlags
-}
-
-extension ConfiguredButtonAction {
-    var holdableKey: HoldableKey? {
-        switch action {
-        case .arrowUp:
-            return HoldableKey(keyCode: 126, flags: [])
-        case .arrowDown:
-            return HoldableKey(keyCode: 125, flags: [])
-        case .arrowLeft:
-            return HoldableKey(keyCode: 123, flags: [])
-        case .arrowRight:
-            return HoldableKey(keyCode: 124, flags: [])
-        case .customShortcut:
-            // 录制下来的方向键同样是方向键；修饰键按录制结果一起按住。
-            guard let shortcut, (123...126).contains(shortcut.keyCode) else { return nil }
-            return HoldableKey(keyCode: CGKeyCode(shortcut.keyCode), flags: shortcut.cgEventFlags)
-        default:
-            return nil
-        }
-    }
-}
+// 「哪些动作可以被按住」是动作类型自身的判定，定义在 `RemoteButtons.swift`，
+// 与 `ConfiguredButtonAction` 放在一起：自测脚本单独编译该文件时同样可用。
 
 /// 把一个方向键真正按在系统里，直到用户松开遥控器按键。
 ///

@@ -653,6 +653,36 @@ struct ConfiguredButtonAction: Codable, Equatable {
         action.isDirectionalOrDeleteBackward ||
             (action == .customShortcut && shortcut?.isRepeatableNavigationKey == true)
     }
+
+    /// 「按住执行」要一直按住的键。
+    ///
+    /// 只有方向键成立：其他动作（打开 App、组合动作、滚动）没有“按下去不放”的系统语义，
+    /// 让它们进入按下状态只会在目标 App 里留下无法解释的状态。
+    /// 判定放在动作类型这里，自测脚本单独编译该文件时也能拿到相同结论。
+    var holdableKey: HoldableKey? {
+        switch action {
+        case .arrowUp:
+            return HoldableKey(keyCode: 126, flags: [])
+        case .arrowDown:
+            return HoldableKey(keyCode: 125, flags: [])
+        case .arrowLeft:
+            return HoldableKey(keyCode: 123, flags: [])
+        case .arrowRight:
+            return HoldableKey(keyCode: 124, flags: [])
+        case .customShortcut:
+            // 录制下来的方向键同样是方向键；修饰键按录制结果一起按住。
+            guard let shortcut, (123...126).contains(shortcut.keyCode) else { return nil }
+            return HoldableKey(keyCode: CGKeyCode(shortcut.keyCode), flags: shortcut.cgEventFlags)
+        default:
+            return nil
+        }
+    }
+}
+
+/// 可以被「按住执行」一直按住的目标键。
+struct HoldableKey: Equatable {
+    let keyCode: CGKeyCode
+    let flags: CGEventFlags
 }
 
 enum CustomApplicationFocusStrategy: String, Codable, CaseIterable, Identifiable {
