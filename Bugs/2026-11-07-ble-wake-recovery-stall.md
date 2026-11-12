@@ -2,7 +2,7 @@
 
 - 时间：2026-11-07
 - 状态：候选修复；原作者报告两次 RC003 唤醒后语音恢复，尚未证明新增兜底分支命中；当前集成候选待实机复验
-- 影响范围：macOS `1.9.21 (174)`（`main` 同逻辑）、小米蓝牙语音遥控器 2 Pro（rc003）
+- 影响范围：macOS `1.9.21 (174)`（`main` 同逻辑）、小米蓝牙遥控器 2（RC001）与 2 Pro（RC003）共用发现代码；现有现场反馈来自 RC003
 - 功能点：CoreBluetooth 睡眠唤醒恢复、连接发现、ATVV 语音链路
 - 简单描述：睡眠唤醒后 BLE central 断电重连；唤醒瞬间 `retrievePeripherals(withIdentifiers:)` 可能返回空，而旧发现策略在「有已保存身份且缓存直连可重试」时跳过 `retrieveConnectedPeripherals`；扫描又没有窗口，重连循环静默终止。HID 按键继续工作，语音完全无响应，只能手动点「立即重新连接」或重启 App。
 
@@ -23,12 +23,12 @@
 ```
 
 - 19:49:57 之后没有任何 `ATVV STREAM`；
-- 21:23–21:36 期间 `HID REPORT accepted` 持续出现，说明遥控器与系统 HID 链路正常、电量正常；
+- 21:23–21:36 期间 `HID REPORT accepted` 持续出现，证明当时 HID 按键链路仍能工作；语音链路状态和电量无法由这些事件确认；
 - 同一台机器重启 coreaudiod 并重启 App 后，`BLE CONNECTING source=target_identifier` → `BLE READY` 约 50 ms，语音恢复。
 
-结论：这不是设备离线，也不是配置问题，而是 BLE 发现/重连循环在唤醒后静默终止。
+已观察到的结果为唤醒后扫描长期没有进展，HID 按键同期仍可用。现有节选没有直接记录缓存查询返回值、系统候选结果或设备是否广播，现场触发条件仍待确认。
 
-## 代码根因
+## 已确认的代码缺口与现场假设
 
 1. `XiaomiBluetoothBridge.discoverOrScan` 的 connected-candidate 查询被
    `VoiceRemoteDiscoveryPolicy.shouldQuerySystemConnectedCandidates` 门控：
@@ -38,8 +38,8 @@
 2. `BluetoothScanRecoveryPolicy.shouldStartScanTimeout` 只在
    `hasSavedTarget && !allowsCachedTargetRetrieval` 时开窗口；本场景下扫描永远停在
    `.scanning`，不会产生下一次 attempt。
-3. 两者叠加：唤醒瞬间 target 查询返回空 → 跳过系统已连接候选 → 进入无窗口扫描 →
-   循环静默终止。即使几秒后系统重新连上遥控器，App 也不会再查一次。
+3. 可重现的代码条件为缓存未采纳目标 → 跳过系统已连接候选 → 进入无窗口扫描。
+   没有扫描结果时，本轮没有超时重试出口。现场恰好由缓存返回空触发仍是假设，原日志没有记录该返回值。
 
 ## 最小修复
 
@@ -112,3 +112,12 @@
 - `scripts/verify-repository-governance.sh`、`zsh scripts/check-repository-boundaries.sh`、`git diff --check` 通过；修改文件均低于 5 MB。
 - 蓝牙生命周期首轮定向 29 项通过；新增源码接线检查已由上述最终全量运行覆盖。
 - 本轮没有 RC003 现场设备与目标语音工具完整流程的实测结果，不把这些自动化结果作为真实链路验收。
+
+## 2026-11-12 行为回归补强
+
+- 生产发现流程与回归共用 `VoiceRemoteDiscovery.run`，执行真实的缓存查询、系统候选回退、统一准入和扫描选择顺序。测试注入候选，不连接真实 CoreBluetooth。
+- 超时回调共用 `BluetoothScanRecoveryPolicy.handleTimeout`。回放覆盖超时、既有递增退避、下一轮发现，以及连接后、停止、挂起和旧 generation 的回调失效。
+- 新增 `BLE DISCOVERY` 有界诊断字段，区分缓存 `empty` / `found` / `skipped`、候选 `adopted` / `not_adopted`，并记录同一 generation 的系统候选数量。采用候选只代表进入连接尝试，最终恢复仍以 `BLE READY` 和第一次完整语音为准。
+- RC001、RC003 共用上述生产实现。两个型号的新增兜底、离线返回及恢复后首次语音均需分别记录实机结果。当前新增自动化无法替代 CoreBluetooth 回调、无线链路和文字上屏验收。
+
+- 本轮公开蓝牙生命周期 35 项通过。去除系统候选回退的单行反向实验使新增回归产生 4 个失败断言，恢复实现后公开全量 Swift Testing 1,388 项 / 100 suites、XCTest 4 项通过。仓库治理、边界与 diff 检查通过。

@@ -466,66 +466,62 @@ final class XiaomiBluetoothBridge: NSObject {
         else { return }
         resetPeripheral()
 
-        if let identifier = targetIdentifier,
-           reconnectPolicy.shouldRetrieveCachedTarget(at: ProcessInfo.processInfo.systemUptime),
-           let saved = central.retrievePeripherals(withIdentifiers: [identifier]).first {
-            if !reconnectPolicy.allowsCachedTargetRetrieval {
+        VoiceRemoteDiscovery.run(retrieveCachedTarget: { () -> CBPeripheral? in
+            guard let identifier = targetIdentifier else {
+                AppLogger.shared.write(
+                    "BLE DISCOVERY generation=\(generation) source=target_identifier result=skipped reason=no_saved_target"
+                )
+                return nil
+            }
+            guard reconnectPolicy.shouldRetrieveCachedTarget(at: ProcessInfo.processInfo.systemUptime) else {
+                AppLogger.shared.write(
+                    "BLE DISCOVERY generation=\(generation) source=target_identifier result=skipped reason=cached_target_cooldown"
+                )
+                return nil
+            }
+            let saved = central.retrievePeripherals(withIdentifiers: [identifier]).first
+            AppLogger.shared.write(
+                "BLE DISCOVERY generation=\(generation) source=target_identifier result=\(saved == nil ? "empty" : "found")"
+            )
+            if saved != nil, !reconnectPolicy.allowsCachedTargetRetrieval {
                 AppLogger.shared.write(
                     "BLE RECONNECT phase=probing reason=cached_target_cooldown_elapsed " +
                         "failure_count=\(reconnectPolicy.consecutiveFailureCount) " +
                         "cooldown_ms=\(Int(BluetoothReconnectPolicy.cachedTargetProbeInterval * 1_000))"
                 )
             }
-            // 已保存身份不再无条件采纳：早先版本把别的产品（Chromecast Remote）误存成 Xiaomi
-            // 档案后，只按 UUID 连接会让这个错误一直重连、并且和私有 Chromecast 包抢同一台设备。
-            // 被拒绝时不 return：按「设备不在」继续走既有扫描/重试路径，不新增状态分支。
-            if adopt(
-                saved,
-                using: central,
-                generation: generation,
-                source: "target_identifier",
-                advertisesVoiceService: true,
-                advertisedName: nil,
-                usesCachedTarget: true
-            ) {
-                return
-            }
-        }
-
-        // 缓存候选未采纳目标时仍查询系统连接态候选：息屏唤醒后 `retrievePeripherals` 可能返回空，
-        // 而遥控器仍以 HID 连着系统、不再广播；只靠扫描永远命中不了，链路静默停死。
-        // 准入仍走 VoiceRemoteAdmission，有已保存身份时非目标 UUID 一律 ignore，
-        // 不会把别的遥控器误收进来。
-        let connectedCandidates = central.retrieveConnectedPeripherals(withServices: [serviceUUID])
-        if !connectedCandidates.isEmpty {
-            // ATVV 服务可能命中多台遥控器；只记录数量，不记录系统设备名称。
+            return saved
+        }, retrieveConnectedCandidates: {
+            let connectedCandidates = central.retrieveConnectedPeripherals(withServices: [serviceUUID])
             AppLogger.shared.write(
-                "BLE SYSTEM CONNECTED CANDIDATES count=\(connectedCandidates.count)"
+                "BLE SYSTEM CONNECTED CANDIDATES generation=\(generation) count=\(connectedCandidates.count)"
             )
-        }
-        // 逐个过准入：第一台被拒绝（别的产品）时继续看下一台，而不是整批放弃。
-        for candidate in connectedCandidates
-        where !excludedIdentifiers().contains(candidate.identifier)
-            && !rejectedIdentifiers.contains(candidate.identifier) {
-            if adopt(
+            return connectedCandidates.filter {
+                !excludedIdentifiers().contains($0.identifier) && !rejectedIdentifiers.contains($0.identifier)
+            }
+        }, adopt: { candidate, source in
+            let adopted = adopt(
                 candidate,
                 using: central,
                 generation: generation,
-                source: "connected_peripheral",
+                source: source.rawValue,
                 advertisesVoiceService: true,
-                advertisedName: nil
-            ) {
-                return
-            }
-        }
-
-        state = .scanning
-        central.scanForPeripherals(
-            withServices: nil,
-            options: [CBCentralManagerScanOptionAllowDuplicatesKey: false]
-        )
-        AppLogger.shared.write("BLE SCANNING")
-        startScanTimeout(generation: generation)
+                advertisedName: nil,
+                usesCachedTarget: source == .cachedTarget
+            )
+            AppLogger.shared.write(
+                "BLE DISCOVERY generation=\(generation) source=\(source.rawValue) result=\(adopted ? "adopted" : "not_adopted")"
+            )
+            return adopted
+        }, startScan: {
+            state = .scanning
+            central.scanForPeripherals(
+                withServices: nil,
+                options: [CBCentralManagerScanOptionAllowDuplicatesKey: false]
+            )
+            AppLogger.shared.write("BLE SCANNING generation=\(generation)")
+            startScanTimeout(generation: generation)
+        })
     }
 
     /// 扫描窗口到期：结束本次 attempt，让退避策略继续排下一次重试。
@@ -539,20 +535,20 @@ final class XiaomiBluetoothBridge: NSObject {
             hasSavedTarget: targetIdentifier != nil
         ) else { return }
         let work = DispatchWorkItem { [weak self] in
-            guard let self,
-                  BluetoothScanRecoveryPolicy.shouldExpireScan(
-                      lifecycle: self.lifecycle,
-                      generation: generation,
-                      shouldRun: self.shouldRun,
-                      isSystemSuspended: self.systemSuspension.isSuspended
-                  )
-            else { return }
-            AppLogger.shared.write(
-                "BLE SCAN TIMEOUT generation=\(generation) phase=timed_out "
-                    + "result=retrying reason=scan_window_expired window_ms="
-                    + "\(Int((BluetoothScanRecoveryPolicy.scanWindow * 1_000).rounded()))"
-            )
-            self.scheduleReconnect()
+            guard let self else { return }
+            BluetoothScanRecoveryPolicy.handleTimeout(
+                lifecycle: self.lifecycle,
+                generation: generation,
+                shouldRun: self.shouldRun,
+                isSystemSuspended: self.systemSuspension.isSuspended
+            ) {
+                AppLogger.shared.write(
+                    "BLE SCAN TIMEOUT generation=\(generation) phase=timed_out "
+                        + "result=retrying reason=scan_window_expired window_ms="
+                        + "\(Int((BluetoothScanRecoveryPolicy.scanWindow * 1_000).rounded()))"
+                )
+                self.scheduleReconnect()
+            }
         }
         scanTimeoutWorkItem = work
         DispatchQueue.main.asyncAfter(

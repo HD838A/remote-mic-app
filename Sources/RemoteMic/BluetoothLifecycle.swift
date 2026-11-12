@@ -289,6 +289,29 @@ struct BluetoothReconnectPolicy {
     }
 }
 
+enum VoiceRemoteDiscoverySource: String {
+    case cachedTarget = "target_identifier"
+    case systemConnected = "connected_peripheral"
+}
+
+/// 生产与回归共用发现顺序，系统查询和设备采纳由调用方提供。
+enum VoiceRemoteDiscovery {
+    static func run<Candidate>(
+        retrieveCachedTarget: () -> Candidate?,
+        retrieveConnectedCandidates: () -> [Candidate],
+        adopt: (Candidate, VoiceRemoteDiscoverySource) -> Bool,
+        startScan: () -> Void
+    ) {
+        if let cached = retrieveCachedTarget(), adopt(cached, .cachedTarget) {
+            return
+        }
+        for candidate in retrieveConnectedCandidates() {
+            if adopt(candidate, .systemConnected) { return }
+        }
+        startScan()
+    }
+}
+
 /// 广播扫描的窗口策略。
 ///
 /// `scanForPeripherals` 不会因为「找不到」回调，所以没有窗口时一次未命中的 attempt
@@ -317,6 +340,22 @@ enum BluetoothScanRecoveryPolicy {
     ) -> Bool {
         guard shouldRun, !isSystemSuspended else { return false }
         return lifecycle == .scanning(generation)
+    }
+
+    static func handleTimeout(
+        lifecycle: BluetoothLifecyclePhase,
+        generation: UInt64,
+        shouldRun: Bool,
+        isSystemSuspended: Bool,
+        retry: () -> Void
+    ) {
+        guard shouldExpireScan(
+            lifecycle: lifecycle,
+            generation: generation,
+            shouldRun: shouldRun,
+            isSystemSuspended: isSystemSuspended
+        ) else { return }
+        retry()
     }
 }
 
