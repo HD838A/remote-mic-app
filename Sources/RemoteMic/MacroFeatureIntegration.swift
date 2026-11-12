@@ -197,6 +197,16 @@ final class MacroFeatureIntegration: ObservableObject {
         #endif
     }
 
+    /// 只重读组合动作库，让键位方案页显示最新的组合动作名。
+    ///
+    /// 键位方案页的绑定文案来自按键方案组件自己那份宏库快照。同一进程内改名会由
+    /// 组件内部的通知刷新；跨进程写入收不到通知，宿主在进入按键页时主动重读一次。
+    func reloadButtonProfileMacroLibrary() {
+        #if canImport(SayAllButtonProfiles) && SAYALL_BUTTON_PROFILE_MACRO_RELOAD
+        Task { await buttonProfilesFeature.reloadMacroLibrary() }
+        #endif
+    }
+
     func displayProfileBinding(device: UUID?, profile: UUID, button: RemoteButton,
                                trigger: ButtonTrigger) -> MappingDisplayValue<MappingBindingDisplay> {
         #if canImport(SayAllButtonProfiles) && SAYALL_BUTTON_PROFILE_AUTOSAVE
