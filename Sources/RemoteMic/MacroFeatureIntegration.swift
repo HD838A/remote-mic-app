@@ -302,10 +302,80 @@ final class MacroFeatureIntegration: ObservableObject {
         }
         objectWillChange.send()
         return result.profileID
+        #elseif canImport(SayAllButtonProfiles) && SAYALL_UNIFIED_BUTTON_CONFIGURATION
+        return createLegacyMappingProfile(named: name, copying: source,
+            bindings: bindings, holdModes: holdModes)
         #else
         return nil
         #endif
     }
+
+    #if canImport(SayAllButtonProfiles) && SAYALL_UNIFIED_BUTTON_CONFIGURATION
+    /// Older components create an empty profile and persist each override through the
+    /// single-binding API. Read back every write and roll back a partial profile.
+    private func createLegacyMappingProfile(named name: String, copying source: UUID?,
+                                            bindings: [UnifiedButtonBinding],
+                                            holdModes: [String: String]) -> UUID? {
+        guard let id = createMappingProfile(named: name) else { return nil }
+        var expectedBindings: [(RemoteButton, ButtonTrigger, ConfiguredButtonAction)] = []
+        var expectedHolds: [(RemoteButton, String)] = []
+
+        if let source {
+            for button in RemoteButton.allCases where supportsProfileButton(button.rawValue) {
+                for trigger in ButtonTrigger.allCases {
+                    guard let configured = profileBinding(device: nil, profile: source,
+                        button: button, trigger: trigger) else { continue }
+                    setProfileBinding(configured, profile: id, button: button, trigger: trigger)
+                    expectedBindings.append((button, trigger, configured))
+                }
+                if supportsProfileHoldModes, let hold = profileHoldMode(profile: source, button: button) {
+                    expectedHolds.append((button, hold))
+                }
+            }
+        } else {
+            for value in bindings {
+                guard let button = RemoteButton(rawValue: value.button.rawValue),
+                      let trigger = ButtonTrigger(rawValue: value.trigger.rawValue) else {
+                    deleteMappingProfile(id)
+                    return nil
+                }
+                setProfileBinding(value.configured, profile: id, button: button, trigger: trigger)
+                expectedBindings.append((button, trigger, value.configured))
+            }
+            for (rawButton, rawMode) in holdModes {
+                guard let button = RemoteButton(rawValue: rawButton) else { continue }
+                expectedHolds.append((button, rawMode))
+            }
+        }
+
+        // The 2.9.0 component stores only these hold modes. Other modes stay inherited
+        // from the base mapping, which keeps the same behavior for the copied profile.
+        let legacyHoldModes: Set<String> = ["once", "repeatLong", "repeatSingle"]
+        if supportsProfileHoldModes {
+            for (button, rawMode) in expectedHolds where legacyHoldModes.contains(rawMode) {
+                guard let mode = RemoteButtonHoldMode(rawValue: rawMode) else { continue }
+                setProfileHoldMode(mode, profile: id, button: button)
+            }
+        }
+
+        for (button, trigger, expected) in expectedBindings {
+            guard profileBinding(device: nil, profile: id, button: button, trigger: trigger) == expected else {
+                deleteMappingProfile(id)
+                return nil
+            }
+        }
+        if supportsProfileHoldModes {
+            for (button, rawMode) in expectedHolds where legacyHoldModes.contains(rawMode) {
+                guard profileHoldMode(profile: id, button: button) == rawMode else {
+                    deleteMappingProfile(id)
+                    return nil
+                }
+            }
+        }
+        objectWillChange.send()
+        return id
+    }
+    #endif
 
     #if canImport(SayAllButtonProfiles) && SAYALL_BUTTON_PROFILE_AUTOSAVE
     private func mappingProfileBinding(_ configured: ConfiguredButtonAction, displayName: String?) -> RemoteMicButtonProfileBinding? {

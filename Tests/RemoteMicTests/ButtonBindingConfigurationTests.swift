@@ -124,24 +124,42 @@ struct ButtonBindingConfigurationTests {
 
     #if canImport(SayAllButtonProfiles) && SAYALL_UNIFIED_BUTTON_CONFIGURATION && !SAYALL_BUTTON_PROFILE_AUTOSAVE
     @Test(.enabled(if: ProcessInfo.processInfo.environment["SAYALL_MACRO_STORAGE_ROOT"] != nil))
-    @MainActor func legacyComponentKeepsProfileListVisibleAndReadOnly() throws {
+    @MainActor func legacyComponentKeepsProfileListVisibleAndSupportsCreateAndCopy() throws {
         // The binary integration runner supplies an isolated storage root.
         _ = try #require(ProcessInfo.processInfo.environment["SAYALL_MACRO_STORAGE_ROOT"])
         let integration = MacroFeatureIntegration(localeIdentifier: "en")
         integration.updateButtonProfilesAccess(.allowed(validUntil: .distantFuture))
         integration.prepareMappingDevice(nil)
-        let id = try #require(integration.createMappingProfile(named: "Legacy integration"))
-        integration.setProfileBinding(.disabled, profile: id, button: .ok, trigger: .singleClick, displayName: nil)
-        #expect(integration.mappingProfiles(device: nil).contains { $0.id == id })
-        guard case let .explicit(value) = integration.displayProfileBinding(device: nil, profile: id,
+
+        let created = try #require(integration.createMappingProfile(named: "Legacy create", copying: nil,
+            bindings: [.init(remoteProfileID: nil, button: .ok, trigger: .singleClick, configured: .disabled)],
+            holdModes: ["ok": "once"]))
+        #expect(integration.mappingProfiles(device: nil).contains { $0.id == created })
+        guard case let .explicit(value) = integration.displayProfileBinding(device: nil, profile: created,
             button: .ok, trigger: .singleClick) else {
             Issue.record("Legacy explicit binding was not displayed")
             return
         }
         #expect(value.configured == .disabled)
         #expect(!value.isEditable)
-        if case .inherited = integration.displayProfileBinding(device: nil, profile: id,
+        if case .inherited = integration.displayProfileBinding(device: nil, profile: created,
             button: .back, trigger: .singleClick) {} else { Issue.record("Legacy inheritance was not displayed") }
+        if integration.supportsProfileHoldModes {
+            #expect(integration.profileHoldMode(profile: created, button: .ok) == "once")
+        }
+
+        let copy = try #require(integration.createMappingProfile(named: "Legacy copy", copying: created,
+            bindings: [], holdModes: [:]))
+        #expect(integration.mappingProfiles(device: nil).contains { $0.id == copy })
+        guard case let .explicit(copied) = integration.displayProfileBinding(device: nil, profile: copy,
+            button: .ok, trigger: .singleClick) else {
+            Issue.record("Legacy copied binding was not displayed")
+            return
+        }
+        #expect(copied.configured == .disabled)
+        if integration.supportsProfileHoldModes {
+            #expect(integration.profileHoldMode(profile: copy, button: .ok) == "once")
+        }
     }
     #endif
 

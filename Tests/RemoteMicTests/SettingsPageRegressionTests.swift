@@ -891,13 +891,15 @@ struct SettingsPageRegressionTests {
         let toolbarSource = source[toolbarStart.lowerBound..<canEditStart.lowerBound]
         let selectorSource = source[selectorStart.lowerBound..<baseHelper.lowerBound]
 
-        // 方案列表与查看入口不能绑定到新版自动保存接口；旧构件只隐藏无法完成的创建/复制。
+        // 方案列表、创建/复制入口不能绑定到新版自动保存接口；旧构件只把内容降为只读。
         #expect(!toolbarSource.contains("supportsMappingProfileAutosave"))
         #expect(source.contains("if macroFeature.isButtonProfilesVisible { mappingProfileToolbar }"))
-        #expect(selectorSource.contains("if macroFeature.supportsMappingProfileAutosave"))
+        #expect(!selectorSource.contains("if macroFeature.supportsMappingProfileAutosave"))
+        #expect(selectorSource.contains("if macroFeature.isButtonProfilesVisible"))
         #expect(selectorSource.contains("mappingSaveAsProfileButton"))
         #expect(integrationSource.contains("buttonProfilesFeature.profiles(for: device)"))
         #expect(integrationSource.contains("profileBinding(device: device, profile: profile"))
+        #expect(integrationSource.contains("createLegacyMappingProfile"))
     }
 
     @Test func remoteMappingScrollsResetWhenSwitchingProfilesAndConnectionPhotoFollowsModel() throws {

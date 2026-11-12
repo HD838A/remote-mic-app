@@ -18,16 +18,16 @@
 
 - 方案列表始终显示；旧构件用既有 `profiles(for:)` 读取方案。
 - 旧构件用既有 `binding(...)`、`resolvedBindingText(...)` 和 `holdMode(...)` 只读展示方案内容。
-- 创建和复制需要新版自动保存接口，旧构件不显示无法完成的入口。
-- 旧构件的方案保持只读；直接修改仍要求新版接口。
+- 创建和复制在旧构件通过 `createProfile(named:)` 与 `setBinding` / `setHoldMode` 逐条落盘，写后校验，失败删除半成品。
+- 旧构件的方案内容保持只读；直接修改仍要求新版接口。
 - 没有私有组件时仍不显示方案工具行，避免公开构建出现空壳。
 
 ## 验证
 
 - 公开模式：`SAYALL_PRIVATE_PLATFORM_MODE=public swift test --disable-keychain`。跳过与本次无关的并行 release fixture 后，1384 项测试、100 个套件通过；方案列表静态回归与公开兼容用例通过。全量并行运行时 `releaseControlPlaneFixtureHasExecutableRegressionCoverage` 失败，同一脚本单独执行通过。
-- 私有 2.9.0 源码：`SAYALL_ENABLE_PRIVATE_SWIFTPM=1 SAYALL_ENABLE_BUTTON_PROFILES=1`，用 Tag `2.9.0` 的私有 checkout 构建。跳过同一 fixture 后，1450 项测试、109 个套件通过；`legacyComponentKeepsProfileListVisibleAndReadOnly` 证明旧构件能列出方案、读取显式绑定并保持只读。
+- 私有 2.9.0 源码：`SAYALL_ENABLE_PRIVATE_SWIFTPM=1 SAYALL_ENABLE_BUTTON_PROFILES=1`，用 Tag `2.9.0` 的私有 checkout 构建。跳过同一 fixture 后，1450 项测试、109 个套件通过；`legacyComponentKeepsProfileListVisibleAndSupportsCreateAndCopy` 证明旧构件能列出方案、创建和复制方案、读取显式绑定并保持只读。
 - 新版私有构件：使用含自动保存接口的预构件完成编译。手动运行自动保存集成用例时缺少私有资源 Bundle 而中止，该结果不作为本轮结论。
-- 生产界面：用 2.9.0 私有源码构建的 `SettingsView` 离屏入口渲染 `1020 × 772` 中文浅色与深色。顶部方案行可见，包含「基础映射」「默认」和测试方案；创建入口不显示。
+- 生产界面：用 2.9.0 私有源码构建的 `SettingsView` 离屏入口渲染 `1020 × 772` 中文浅色与深色。顶部方案行可见，包含「基础映射」「默认」和测试方案；右侧「复制为新的键位方案」入口可见。
 - `scripts/verify-repository-governance.sh`、`scripts/check-repository-boundaries.sh` 与 `git diff --check` 通过。
 
 本记录只证明源码、隔离测试与生产视图静态布局；实体遥控器、真实会员到期/续费和第三方 App 的最终响应仍按测试手册单独验收。

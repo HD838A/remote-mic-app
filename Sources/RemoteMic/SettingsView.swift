@@ -2367,8 +2367,8 @@ struct SettingsView: View {
         AppLogger.shared.write("BUTTON CONFIGURATION operation_id=\(operationID) action=\(operation) phase=completed result=\(created == nil ? "failed" : "stored") reason=\(created != nil ? "storage_confirmed" : recovered ? "storage_failed" : "reload_failed")")
     }
 
-    /// Profile capsules stay fixed above the mapping canvas. Create/copy joins the row only
-    /// when the private component can complete the autosave-backed flow.
+    /// Profile capsules stay fixed above the mapping canvas. Create/copy stays in the same
+    /// row for both the autosave and older private-component paths.
     private var mappingProfileToolbar: some View {
         VStack(spacing: 0) {
             mappingProfileSelector
@@ -2470,7 +2470,7 @@ struct SettingsView: View {
                 .padding(.vertical, 2)
             }
 
-            if macroFeature.supportsMappingProfileAutosave {
+            if macroFeature.isButtonProfilesVisible {
                 mappingSaveAsProfileButton.disabled(!canEditMappingProfiles)
             }
         }
