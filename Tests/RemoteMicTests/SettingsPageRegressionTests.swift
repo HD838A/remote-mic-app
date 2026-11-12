@@ -649,8 +649,11 @@ struct SettingsPageRegressionTests {
             range: phoneEntry.upperBound..<source.endIndex
         ))
         let phoneEntrySource = source[phoneEntry.lowerBound..<watchEntry.lowerBound]
-        #expect(phoneEntrySource.contains("phoneRemoteServer.start()"))
-        #expect(phoneEntrySource.contains("watchBluetoothServer.start()"))
+        #expect(phoneEntrySource.contains("isPhoneRemoteConnectionEnabled = true"))
+        #expect(phoneEntrySource.contains("updateNearbyRemoteLifecycle(reason: \"enabled_by_user\")"))
+        #expect(phoneEntrySource.contains("enabled: started && isPhoneRemoteConnectionEnabled"))
+        #expect(source.contains("self?.phoneRemoteServer.start()"))
+        #expect(source.contains("self?.watchBluetoothServer.start()"))
 
         let webEntry = try #require(source.range(
             of: "func enableWebRemoteConnection()",
@@ -665,7 +668,7 @@ struct SettingsPageRegressionTests {
         #expect(source.contains("func togglePhoneRemoteConnection()"))
         #expect(source.contains("localization.text(\"connection.phone.cancel_waiting\")"))
         #expect(source.contains("response == .alertThirdButtonReturn"))
-        #expect(source.contains("guard let self, self.isPhoneRemoteConnectionEnabled,"))
+        #expect(source.contains("self.nearbyRemoteLifecycle.acceptsEvents(generation: generation)"))
         #expect(source.contains("guard self.isPhoneRemoteConnectionEnabled else"))
         #expect(source.contains("phoneRemoteServer.onInvitationChange"))
         #expect(source.contains("@Published private(set) var phoneRemoteInvitation"))

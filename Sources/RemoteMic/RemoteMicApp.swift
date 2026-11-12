@@ -465,7 +465,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         ]
         workspaceAudioLifecycleObservers = events.map { name, event in
             notificationCenter.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
-                Task { @MainActor [weak self] in
+                MainActor.assumeIsolated { [weak self] in
                     guard let self else { return }
                     self.model.handleSystemAudioLifecycle(event)
                     if event == .systemDidWake {
