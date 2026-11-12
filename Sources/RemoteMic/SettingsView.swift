@@ -5909,7 +5909,12 @@ struct SettingsView: View {
         if configuredAction == nil, editingMappingProfileID != nil {
             switch mappingDisplayConfiguration(for: button, trigger: trigger) {
             case let .explicit(value):
-                if let configured = value.configured, configured.action != .combinationAction {
+                if let configured = value.configured {
+                    // 组合动作的名字取自宏库当前内容：方案组件自己那份宏库快照只在启动时读取，
+                    // 改名或新建后仍是旧名字，命中不到还会显示「原操作已不可用，请重新配置。」。
+                    if configured.action == .combinationAction {
+                        return profileCombinationActionTitle(configured: configured)
+                    }
                     return configured.action == .disabled ? localization.text("button_mapping.action.no_action") : actionSummary(configured)
                 }
                 return value.compact
@@ -5925,8 +5930,23 @@ struct SettingsView: View {
         return actionSummary(configured)
     }
 
+    /// 方案作用域的组合动作名，取自宏库当前内容而不是方案组件自己的快照。
+    private func profileCombinationActionTitle(configured: ConfiguredButtonAction) -> String {
+        ProfileMacroTitle.resolve(
+            macroID: configured.macroID,
+            library: macroFeature.libraryActions,
+            unavailable: localization.text("button_mapping.macro_unavailable")
+        )
+    }
+
+    /// 悬停用的完整形态，和 `mappingActionSummary` 同一来源。
     private func mappingActionDetail(for button: RemoteButton, trigger: ButtonTrigger) -> String {
-        if case let .explicit(value) = mappingDisplayConfiguration(for: button, trigger: trigger) { return value.detailed }
+        if case let .explicit(value) = mappingDisplayConfiguration(for: button, trigger: trigger) {
+            if let configured = value.configured, configured.action == .combinationAction {
+                return profileCombinationActionTitle(configured: configured)
+            }
+            return value.detailed
+        }
         return ""
     }
 
