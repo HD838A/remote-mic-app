@@ -303,6 +303,22 @@ enum BluetoothVoiceStopPolicy {
     static func shouldFlushAudio(handledByFnTapMode _: Bool) -> Bool {
         false
     }
+
+    /// The remote's 60-second timeout is not a physical Fn release: the target
+    /// voice tool can remain in its hold-to-dictate state. Force one software
+    /// Fn up only for that timeout, and only when the hardware-mapped key is not
+    /// already managed by the software latch or the Fn-tap session.
+    static func shouldForceHardwareVoiceKeyRelease(
+        mode: VoiceKeyMode,
+        fnTapEnabled: Bool,
+        isHeldByLatch: Bool,
+        reason: BluetoothVoiceStopReason?
+    ) -> Bool {
+        !fnTapEnabled &&
+            !isHeldByLatch &&
+            mode.usesHardwareMapping &&
+            reason == .remoteTimeout
+    }
 }
 
 enum VoiceKeyPendingDownPolicy {
@@ -6788,6 +6804,18 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             )
             return
         }
+        let voiceKeyMode = heldVoiceKeyMode ?? pendingVoiceKeyMode ?? settings.voiceKeyMode
+        if BluetoothVoiceStopPolicy.shouldForceHardwareVoiceKeyRelease(
+            mode: voiceKeyMode,
+            fnTapEnabled: settings.voiceFnTapModeEnabled,
+            isHeldByLatch: voiceKeyLatch.isHeld,
+            reason: bridge.lastVoiceStopReason
+        ) {
+            forceHardwareVoiceKeyRelease(
+                mode: voiceKeyMode,
+                audioDiagnostic: bridge.audioDiagnostics
+            )
+        }
         activeBluetoothVoiceDeviceIdentifier = nil
         loggedBluetoothVoiceAudioDeviceIdentifier = nil
         cancelVoiceSessionWarningTracking()
@@ -8961,6 +8989,26 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
                 "result=event_submitted target_response=unknown"
         )
         return true
+    }
+
+    private func forceHardwareVoiceKeyRelease(
+        mode: VoiceKeyMode,
+        audioDiagnostic: ATVVAudioDiagnostics?
+    ) {
+        guard mode.usesHardwareMapping else { return }
+        let submitted = KeyboardInjector.setVoiceKeyPressed(mode, isPressed: false)
+        if submitted {
+            audioDiagnostic?.softwareKey(edge: "up", mode: mode.rawValue, result: "event_submitted")
+            AppLogger.shared.write(
+                "VOICE KEY mode=\(mode.rawValue) edge=up result=event_submitted " +
+                    "reason=remote_timeout_commit target_response=unknown"
+            )
+        } else {
+            audioDiagnostic?.softwareKey(edge: "up", mode: mode.rawValue, result: "event_submit_failed")
+            AppLogger.shared.write(
+                "VOICE KEY mode=\(mode.rawValue) edge=up failed reason=remote_timeout_commit"
+            )
+        }
     }
 
     @discardableResult
