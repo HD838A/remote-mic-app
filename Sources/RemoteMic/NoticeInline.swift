@@ -82,17 +82,11 @@ struct NoticeInline: View {
                 .padding(.top, 1)
             }
         }
-        .padding(.leading, 13)
-        .padding(.trailing, 13)
+        .padding(.leading, 14)
+        .padding(.trailing, 14)
         .padding(.vertical, 11)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(surface, in: shape)
-        .overlay(alignment: .leading) {
-            Rectangle()
-                .fill(accent)
-                .frame(width: 3)
-                .accessibilityHidden(true)
-        }
         .clipShape(shape)
         .overlay { shape.strokeBorder(border, lineWidth: 1) }
         .accessibilityElement(children: .combine)

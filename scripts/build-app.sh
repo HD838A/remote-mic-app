@@ -512,6 +512,9 @@ fi
 
 # Source inputs must all belong to the fixed private monorepo tag.
 PRIVATE_SOURCE_ROOT=""
+if [[ "$SAYALL_PRIVATE_ARTIFACT_INCLUDED" == "true" ]]; then
+  PRIVATE_SOURCE_ROOT="${SAYALL_PRIVATE_SOURCE_ROOT:-}"
+fi
 for private_source in "$SAYALL_COMBINATION_ACTIONS_PATH" "$SAYALL_BUTTON_PROFILES_PACKAGE_PATH" \
   "$SAYALL_MAC_REMOTE_PACKAGE_PATH" "$SAYALL_SIRI_REMOTE_PACKAGE_PATH" "$SAYALL_CHROMECAST_PACKAGE_PATH"; do
   [[ -n "$private_source" ]] || continue

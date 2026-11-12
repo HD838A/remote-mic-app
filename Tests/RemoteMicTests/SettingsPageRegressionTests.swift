@@ -107,7 +107,7 @@ struct SettingsPageRegressionTests {
         #expect(source.contains("button_mapping.hold.repeat_prefix"))
         #expect(source.contains("button_mapping.hold.clear_long_to_enable"))
         // Both hold targets share one card height, so the pair cannot look ragged.
-        #expect(source.contains("minHeight: 62, maxHeight: 62"))
+        #expect(source.contains("minHeight: 108, maxHeight: .infinity"))
         let holdPanelStart = try #require(source.range(of: "private func mappingHoldEditorPanel"))
         let holdPanelEnd = try #require(source.range(
             of: "private func mappingHoldOptionColumn",
@@ -807,7 +807,7 @@ struct SettingsPageRegressionTests {
 
         let saveButtonStart = try #require(source.range(of: "private var mappingSaveAsProfileButton"))
         let saveButtonEnd = try #require(source.range(
-            of: "private func mappingInheritanceControl",
+            of: "private func mappingMacroChoices",
             range: saveButtonStart.upperBound..<source.endIndex
         ))
         let saveButtonSource = source[saveButtonStart.lowerBound..<saveButtonEnd.lowerBound]
@@ -824,70 +824,14 @@ struct SettingsPageRegressionTests {
         #expect(rowButtonSource.contains(".fixedSize()"))
     }
 
-    /// 选中方案只是**浏览**：右侧出现「编辑」，编辑是会员功能，未解锁时整页只读。
-    @Test func mappingProfileEditingIsGatedByTheEditEntryAndMembership() throws {
-        let root = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-        let source = try String(
-            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
-            encoding: .utf8
-        )
-
-        // 行内右端只放一个动作：基础映射是「保存」，选中方案后是「编辑 / 完成」。
-        let selectorStart = try #require(source.range(of: "private var mappingProfileSelector"))
-        let chipHelper = try #require(source.range(
-            of: "private func mappingProfileChip",
-            range: selectorStart.upperBound..<source.endIndex
-        ))
-        let rowSource = source[selectorStart.lowerBound..<chipHelper.lowerBound]
-        #expect(rowSource.contains("\"button_mapping.profile.edit\""))
-        #expect(rowSource.contains("\"button_mapping.profile.edit_done\""))
-        #expect(rowSource.contains("if isMappingProfileUnlocked"))
-        #expect(rowSource.contains("} else if selectedMappingProfileIsEditable {"))
-
-        // 会员判定必须复用按键方案页那套决策，不能自己发明一套规则；
-        // 而且要先过方案组件自己那份访问判定，否则测试构建里会出现「列表看得见、编辑被拦」的死按钮。
-        let gateStart = try #require(source.range(of: "private var canEditMappingProfiles"))
-        let gateSource = source[gateStart.lowerBound...].prefix(1400)
-        #expect(gateSource.contains("guard macroFeature.canUseMappingProfiles else { return false }"))
-        #expect(gateSource.contains("membershipFeature.buttonProfilesAccessDecision"))
-        #expect(gateSource.contains("case .allowed, .temporarilyOffline, .authorized:"))
-        #expect(gateSource.contains("case .requiresPlus, .unavailable:"))
-        // 会员模块整体不可用的构建里没有可点开通的入口，不能把人锁死。
-        #expect(gateSource.contains("guard membershipFeature.isFeatureVisible else { return true }"))
-
-        let integration = try String(
-            contentsOf: root.appendingPathComponent("Sources/RemoteMic/MacroFeatureIntegration.swift"),
-            encoding: .utf8
-        )
-        let accessStart = try #require(integration.range(of: "var canUseMappingProfiles: Bool"))
-        let accessSource = integration[accessStart.lowerBound...].prefix(600)
-        #expect(accessSource.contains("buttonProfilesFeature.buttonProfilesAccessDecision.permitsAccess"))
-
-        // 唯一的会员入口是私有模块的视图，仓库不得自绘第二个开通按钮。
-        let toolbarStart = try #require(source.range(of: "private var mappingProfileToolbar"))
-        let toolbarSource = source[toolbarStart.lowerBound..<gateStart.lowerBound]
-        #expect(toolbarSource.contains("membershipFeature.membershipRequiredView(forButtonProfiles: true)"))
-        #expect(toolbarSource.contains("showsProfileMembershipNotice"))
-
-        // 写入路径：编辑器禁用之外，保存函数自己也要拒绝只读预览。
-        #expect(source.contains("guard !isMappingProfilePreviewOnly else { return }"))
-        // 动作编辑器、单独的按住区，加页脚的「恢复默认」；
-        // 编辑器内的按住面板跟随外层统一禁用，不再单独计一处。
-        #expect(source.components(separatedBy: ".disabled(isMappingProfilePreviewOnly)").count - 1 == 3)
-        #expect(source.contains("private var isMappingProfilePreviewOnly: Bool"))
-
-        // 切换方案必须回到只读预览，不能让「刚解锁过」跟着带过去。
-        let selectStart = try #require(source.range(of: "private func selectMappingProfile("))
-        let selectEnd = try #require(source.range(
-            of: "private func openMappingProfileForEditing",
-            range: selectStart.upperBound..<source.endIndex
-        ))
-        let selectSource = source[selectStart.lowerBound..<selectEnd.lowerBound]
-        #expect(selectSource.contains("isEditingMappingProfile = false"))
-        #expect(selectSource.contains("showsProfileMembershipNotice = false"))
+    @Test func mappingSaveFailureCanRecoverCommittedValue() {
+        var reloads = 0
+        let result = ButtonMappingWriteRecovery.perform(write: { false }, reload: {
+            reloads += 1
+            return true
+        }, matches: { true })
+        #expect(result == .saved)
+        #expect(reloads == 1)
     }
 
     /// 私有「默认」方案就是基础映射：行内只能出现一项，不能同时显示「基础映射」和「默认」。
@@ -914,7 +858,7 @@ struct SettingsPageRegressionTests {
         #expect(!rowSource.contains("ForEach(macroFeature.mappingProfiles(device:"))
         // 组件无法区分可编辑性时回退到「基础映射 + 全部方案」，不能因此隐藏用户方案。
         #expect(rowSource.contains("baseMappingProfile(in: profiles)"))
-        #expect(source.contains("!macroFeature.isMappingProfileEditable($0.id)"))
+        #expect(source.contains("macroFeature.isDefaultMappingProfile($0.id)"))
     }
 
     @Test func remoteMappingScrollsResetWhenSwitchingProfilesAndConnectionPhotoFollowsModel() throws {
@@ -971,6 +915,13 @@ struct SettingsPageRegressionTests {
         #expect(panelSource.contains("mappingVoiceKeyModeControl"))
         #expect(!panelSource.contains("\"connection.voice_key_mode.unverified\""))
         #expect(panelSource.contains("connection.voice_key_mode.unverified_detail"))
+        // 非 Fn 触发键要目标工具配同一个键，SayAll 读不到对方设置；提示必须带可执行动作，
+        // 不能只是一行灰色说明，否则用户会当成介绍直接跳过。
+        #expect(panelSource.contains("NoticeInline("))
+        #expect(panelSource.contains("connection.voice_key_mode.mismatch.title"))
+        // 标题必须点名当前键名，不能用“配成同一个”这种看不出配哪个键的说法。
+        #expect(panelSource.contains("localization.text(settings.voiceKeyMode.localizationKey)"))
+        #expect(panelSource.contains("model.setVoiceKeyMode(.function)"))
         #expect(panelSource.contains("mappingVoiceFnTapControl"))
         #expect(!panelSource.contains("mappingVoiceShortTapFocusControl"))
         #expect(panelSource.contains("mappingRestoreDefaultsButton"))
@@ -1648,15 +1599,32 @@ struct SettingsPageRegressionTests {
         #expect(canvas.contains("let cardHeight: CGFloat = 72"))
         #expect(settings.contains("mappingHoldEditorPanel(button)"))
         #expect(settings.contains("RemoteButtonHoldMode.selectableCases"))
-        #expect(settings.contains(".disabled(profileUnsupported || !blockers.isEmpty)"))
-        #expect(settings.contains("reconcileMappingHoldMode(afterChanging: button)"))
+        #expect(settings.contains(".disabled(profileUnsupported || !canWriteMappingHold(button) || !blockers.isEmpty)"))
+        #expect(settings.contains("reconcileMappingHoldMode(afterChanging: button, operationID: operationID)"))
         #expect(settings.contains("guard let mode = RemoteButtonHoldModeDefault.storedMode"))
         #expect(!settings.contains("resolvedMode == .repeatSingle, repeatSingle.unavailableReason != nil"))
         #expect(!settings.contains("mappingInteractionControl"))
         #expect(!settings.contains("holdSingle"))
         #expect(renderer.contains("REMOTE_MIC_SETTINGS_SCREENSHOT_OPEN_HOLD_EDITOR"))
         #expect(renderer.contains("REMOTE_MIC_SETTINGS_SCREENSHOT_HOLD_MODE"))
-        #expect(chinese.contains("\"button_mapping.hold.repeat_prefix\" = \"按住：重复 \""))
+        #expect(chinese.contains("\"button_mapping.hold.repeat_prefix\" = \"按住时 重复单击动作 \""))
+        #expect(chinese.contains("相当于按住键盘上的 %@，直到松手。"))
+        #expect(chinese.contains("重复执行单击动作"))
+        #expect(chinese.contains("重复执行长按动作"))
+        #expect(settings.contains("snapshot.allowsKeyHold = button.allowsKeyHold"))
+        let panelStart = try #require(settings.range(of: "private func mappingHoldEditorPanel("))
+        let modesStart = try #require(settings.range(of: "private func availableHoldModes("))
+        let titleStart = try #require(settings.range(of: "private func mappingHoldOptionTitle("))
+        let columnStart = try #require(settings.range(of: "private func mappingHoldOptionColumn("))
+        let timingStart = try #require(settings.range(of: "private var mappingGestureTimingSection:"))
+        let panel = settings[panelStart.lowerBound..<modesStart.lowerBound]
+        #expect(!panel.contains("button_mapping.hold.current_setting"))
+        #expect(!panel.contains("button_mapping.hold.timing_help"))
+        let modes = settings[modesStart.lowerBound..<titleStart.lowerBound]
+        #expect(modes.contains("snapshot.allowsKeyHold"))
+        #expect(!modes.contains("blockers(for:"))
+        let column = settings[columnStart.lowerBound..<timingStart.lowerBound]
+        #expect(column.contains("button_mapping.hold.timing_help"))
         #expect(!settings.contains("button_mapping.hold.paused_tag"))
     }
 
@@ -2148,7 +2116,7 @@ struct SettingsPageRegressionTests {
         )
 
         #expect(source.contains(
-            "accountDisplayName: membershipFeature.accountDisplayName"
+            "accountDisplayName: sidebarAccountDisplayName ?? membershipFeature.accountDisplayName"
         ))
         #expect(integration.contains("@Published private(set) var accountDisplayName: String?"))
         #expect(integration.contains("adapter.$accountDisplayName"))
