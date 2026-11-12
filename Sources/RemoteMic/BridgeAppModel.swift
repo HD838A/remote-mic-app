@@ -7506,7 +7506,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             profileID: profileID,
             button: button,
             trigger: trigger
-        )
+        ) || macroFeature.hasProfileBinding(button: button, trigger: trigger)
         let handled = macroFeature.executeBoundAction(
             profileID: profileID,
             button: button,
