@@ -5775,7 +5775,7 @@ struct SettingsView: View {
             // 组合动作跳过方案组件的文案：那份宏库快照只在启动时读取，
             // 改名或新建后仍是旧名字，命中不到还会显示「原操作已不可用，请重新配置。」。
             if let covered, covered.action == .combinationAction {
-                return profileMacroTitle(configured: covered)
+                return profileCombinationActionTitle(configured: covered)
             }
             // 其余动作沿用私有组件的统一文案，和键位方案页逐字一致；
             // 方案没覆盖这个按键、或旧私有组件没有这套 API 时返回 nil，回落到基础映射。
@@ -5792,7 +5792,7 @@ struct SettingsView: View {
     }
 
     /// 方案作用域的组合动作名，取自宏库当前内容而不是方案组件自己的快照。
-    private func profileMacroTitle(configured: ConfiguredButtonAction) -> String {
+    private func profileCombinationActionTitle(configured: ConfiguredButtonAction) -> String {
         ProfileMacroTitle.resolve(
             macroID: configured.macroID,
             library: macroFeature.libraryActions,
@@ -5810,7 +5810,7 @@ struct SettingsView: View {
             trigger: trigger
         )
         if let covered, covered.action == .combinationAction {
-            return profileMacroTitle(configured: covered)
+            return profileCombinationActionTitle(configured: covered)
         }
         guard let text = macroFeature.profileBindingText(
             device: settings.selectedRemoteProfileID,
