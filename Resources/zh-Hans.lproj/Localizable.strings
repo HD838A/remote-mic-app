@@ -1509,7 +1509,6 @@
 "button_mapping.save.membership" = "查看会员";
 "button_mapping.save.unsupported" = "此配置为只读";
 "button_mapping.binding.inherited" = "继承基础映射";
-"button_mapping.binding.inherited_prefix" = "继承：";
 "button_mapping.binding.overridden" = "已覆盖基础映射";
 "button_mapping.binding.clear_override" = "清除覆盖";
 "button_mapping.save.unavailable" = "配置不可用";

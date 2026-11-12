@@ -5993,9 +5993,7 @@ struct SettingsView: View {
                 }
                 return value.compact
             case .unavailable: return localization.text("button_mapping.save.unavailable")
-            case .inherited:
-                return localization.text("button_mapping.binding.inherited_prefix") +
-                    baseMappingActionSummary(for: button, trigger: trigger)
+            case .inherited: break
             }
         }
         let configured = configuredAction ?? mappingConfiguration(for: button, trigger: trigger)

@@ -1510,7 +1510,6 @@
 "button_mapping.save.membership" = "View membership";
 "button_mapping.save.unsupported" = "Read-only configuration";
 "button_mapping.binding.inherited" = "Inherits base mapping";
-"button_mapping.binding.inherited_prefix" = "Inherited: ";
 "button_mapping.binding.overridden" = "Overrides base mapping";
 "button_mapping.binding.clear_override" = "Clear Override";
 "button_mapping.save.unavailable" = "Configuration unavailable";

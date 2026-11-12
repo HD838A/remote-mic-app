@@ -915,6 +915,8 @@ struct SettingsPageRegressionTests {
         // 继承/显式/不可用必须在编辑区可见，并且不可用覆盖可以单独清除。
         #expect(source.contains("mappingProfileBindingControl(button: target.button, trigger: target.trigger)"))
         #expect(source.contains("\"button_mapping.binding.inherited\""))
+        // 网格每键摘要显示实际动作，重复的“继承：”前缀只允许留在编辑区状态行。
+        #expect(!source.contains("button_mapping.binding.inherited_prefix"))
         #expect(source.contains("\"button_mapping.binding.clear_override\""))
         #expect(source.contains("private func clearMappingOverride(button: RemoteButton, trigger: ButtonTrigger)"))
         #expect(source.contains("macroFeature.profileBindingMatches(nil, profile: profile"))
