@@ -7,6 +7,7 @@
 - [语音键映射、Fn 观察与构建来源诊断缺口](./2026-11-10-voice-key-diagnostic-gaps.md)
 
 - [Intel 上方向键一次按下移动两格](./2026-11-07-intel-directional-double-step.md)
+- [唤醒后 BLE 语音链路静默停死](./2026-11-07-ble-wake-recovery-stall.md)
 
 - [只有一只 Siri Remote 时 Onboarding 永久卡在音频页](./2026-11-07-siri-remote-onboarding-audio-gate.md)
 
@@ -188,6 +189,7 @@
 | 2026-11-07 | [Intel 上方向键一次按下移动两格](./2026-11-07-intel-directional-double-step.md) | 已修复并验收（方向键登记事件级兜底，默认只在 Intel 构建启用；Apple Silicon 保持零差异）；5 项回归随 CI 1227 tests 全绿；Intel build 289 验收通过，Apple Silicon build 290 日志确认零登记、零待匹配窗口 |
 | 2026-11-07 | [只有一只 Siri Remote 时 Onboarding 永久卡在音频页](./2026-11-07-siri-remote-onboarding-audio-gate.md) | 已修复（音频门禁改为按控制来源区分：Siri Remote 的语音音频在按下语音键时才建立，不再要求它提前持续 Ready；小米与 Chromecast 仍要求持续 Ready，设备消失时两种来源都继续阻塞）；新增 2 项回归，反向验证策略与视图接线各自变红后恢复通过；2026-11-08 真机复验通过（只有一只苹果遥控器的机器上重跑向导可走完，音频页显示「语音开始时连接音频」） |
 | 2026-11-07 | [APP 适配的聚焦方式选项空白区域无法点击](./2026-11-07-focus-option-hit-area.md) | 已修复（`SettingsView.applicationFocusOption` 在标签布局后补与背景一致的 `contentShape`）；实际设置窗口文字、图标、左右留白、边框内侧与按钮外部/间隙坐标点击通过，Tab、Shift-Tab、空格与重启保留通过；未覆盖遥控器、第三方 APP 聚焦执行与 VoiceOver |
+| 2026-11-07 | [唤醒后 BLE 语音链路静默停死](./2026-11-07-ble-wake-recovery-stall.md) | 候选修复（缓存未采纳时查询系统已连接候选；有已保存身份即启用 20 秒扫描窗口，到期沿用退避重连）；原作者历史 26 项蓝牙生命周期回归通过；原作者 rc003 两次真机睡眠（蓝牙 `state=4`）唤醒后 1.57–3.0 秒自动恢复，作者报告 Fn 与语音输入正常；未证明新增兜底分支命中，当前候选等待实机复验 |
 | 2026-11-05 | [macOS CI 上主队列投递延迟导致自聚焦用例误报](./2026-11-05-macos-ci-main-queue-delivery-flake.md) | 已修复（等待预算由「轮询次数」改为墙钟，`perform` 默认 10 秒产品超时不变并由新用例锁定；`PermissionStatusProbeTests` 的 20 秒预算同步提到 60 秒）；30 秒主线程阻塞夹具下修复前 3 个 issue、修复后 1212 项全绿，夹具已删除不入库 |
 | 2026-11-04 | [睡眠期间遥控器链路一直保持，系统把它当成唤醒源](./2026-11-04-remote-hid-link-keeps-mac-awake.md) | 已确认应用层无法修复：睡眠前用带 `DoNotAutoConnectBuiltInServices` 的取消断开 CB 会话后，两次真机实测（Build 304，合盖+外接显示器）都在入睡 5 秒内被 `bluetoothd` 的 `Bluetooth LE HID Activity` 升级为完全唤醒；候选实现与测试已回退，结论回填 #441、#778 |
 | 2026-11-01 | [Sparkle 更新组件停留在已知漏洞版本](./2026-11-01-sparkle-security-version.md) | 依赖升级至 2.9.6 完成（三条上游安全公告覆盖），SwiftPM 解析、Release 构建与 CI 通过；真实安装更新待下次发布通道验收 |

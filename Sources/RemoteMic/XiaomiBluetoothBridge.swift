@@ -492,31 +492,30 @@ final class XiaomiBluetoothBridge: NSObject {
             }
         }
 
-        if VoiceRemoteDiscoveryPolicy.shouldQuerySystemConnectedCandidates(
-            hasSavedTarget: targetIdentifier != nil,
-            allowsCachedTargetRetrieval: reconnectPolicy.allowsCachedTargetRetrieval
-        ) {
+        // 缓存候选未采纳目标时仍查询系统连接态候选：息屏唤醒后 `retrievePeripherals` 可能返回空，
+        // 而遥控器仍以 HID 连着系统、不再广播；只靠扫描永远命中不了，链路静默停死。
+        // 准入仍走 VoiceRemoteAdmission，有已保存身份时非目标 UUID 一律 ignore，
+        // 不会把别的遥控器误收进来。
+        let connectedCandidates = central.retrieveConnectedPeripherals(withServices: [serviceUUID])
+        if !connectedCandidates.isEmpty {
             // ATVV 服务可能命中多台遥控器；只记录数量，不记录系统设备名称。
-            let connectedCandidates = central.retrieveConnectedPeripherals(withServices: [serviceUUID])
-            if !connectedCandidates.isEmpty {
-                AppLogger.shared.write(
-                    "BLE SYSTEM CONNECTED CANDIDATES count=\(connectedCandidates.count)"
-                )
-            }
-            // 逐个过准入：第一台被拒绝（别的产品）时继续看下一台，而不是整批放弃。
-            for candidate in connectedCandidates
-            where !excludedIdentifiers().contains(candidate.identifier)
-                && !rejectedIdentifiers.contains(candidate.identifier) {
-                if adopt(
-                    candidate,
-                    using: central,
-                    generation: generation,
-                    source: "connected_peripheral",
-                    advertisesVoiceService: true,
-                    advertisedName: nil
-                ) {
-                    return
-                }
+            AppLogger.shared.write(
+                "BLE SYSTEM CONNECTED CANDIDATES count=\(connectedCandidates.count)"
+            )
+        }
+        // 逐个过准入：第一台被拒绝（别的产品）时继续看下一台，而不是整批放弃。
+        for candidate in connectedCandidates
+        where !excludedIdentifiers().contains(candidate.identifier)
+            && !rejectedIdentifiers.contains(candidate.identifier) {
+            if adopt(
+                candidate,
+                using: central,
+                generation: generation,
+                source: "connected_peripheral",
+                advertisesVoiceService: true,
+                advertisedName: nil
+            ) {
+                return
             }
         }
 
@@ -537,8 +536,7 @@ final class XiaomiBluetoothBridge: NSObject {
     private func startScanTimeout(generation: UInt64) {
         cancelScanTimeout()
         guard BluetoothScanRecoveryPolicy.shouldStartScanTimeout(
-            hasSavedTarget: targetIdentifier != nil,
-            allowsCachedTargetRetrieval: reconnectPolicy.allowsCachedTargetRetrieval
+            hasSavedTarget: targetIdentifier != nil
         ) else { return }
         let work = DispatchWorkItem { [weak self] in
             guard let self,

@@ -402,8 +402,7 @@ struct BluetoothLifecycleTests {
         #expect(policy.consecutiveFailureCount == 39)
         #expect(!policy.allowsCachedTargetRetrieval)
         #expect(BluetoothScanRecoveryPolicy.shouldStartScanTimeout(
-            hasSavedTarget: true,
-            allowsCachedTargetRetrieval: policy.allowsCachedTargetRetrieval
+            hasSavedTarget: true
         ))
         policy.reset()
         let manualProbe = policy.shouldRetrieveCachedTarget(at: 0)
@@ -421,38 +420,24 @@ struct BluetoothLifecycleTests {
         #expect(source.contains("reason=cached_target_cooldown_elapsed"))
     }
 
-    @Test func systemConnectedCandidatesAreQueriedWhenTheSavedIdentityCannotBeUsedDirectly() {
-        // 没有已保存身份：必须查系统当前已连接的候选。
-        #expect(VoiceRemoteDiscoveryPolicy.shouldQuerySystemConnectedCandidates(
-            hasSavedTarget: false,
-            allowsCachedTargetRetrieval: true
-        ))
-        // 有已保存身份且缓存直连可用：retrievePeripherals 已覆盖，不重复查。
-        #expect(!VoiceRemoteDiscoveryPolicy.shouldQuerySystemConnectedCandidates(
-            hasSavedTarget: true,
-            allowsCachedTargetRetrieval: true
-        ))
-        // 有已保存身份、但缓存直连已被禁用：必须查。否则只剩广播扫描，
-        // 而仍处于系统连接态的外设不广播（现场日志：卡死 16–75 分钟）。
-        #expect(VoiceRemoteDiscoveryPolicy.shouldQuerySystemConnectedCandidates(
-            hasSavedTarget: true,
-            allowsCachedTargetRetrieval: false
-        ))
-        #expect(VoiceRemoteDiscoveryPolicy.shouldQuerySystemConnectedCandidates(
-            hasSavedTarget: false,
-            allowsCachedTargetRetrieval: false
-        ))
+    @Test func scanTimeoutStartsForEverySavedTarget() {
+        // 没有已保存身份是首次发现，保持持续扫描；有已保存身份就必须有窗口，
+        // 让唤醒后可能失效的缓存直连重新走发现（含系统已连接候选）。
+        #expect(!BluetoothScanRecoveryPolicy.shouldStartScanTimeout(hasSavedTarget: false))
+        #expect(BluetoothScanRecoveryPolicy.shouldStartScanTimeout(hasSavedTarget: true))
+        #expect(BluetoothScanRecoveryPolicy.scanWindow > 0)
     }
 
-    @Test func scanTimeoutOnlyStartsForSavedTargetRecovery() {
-        for hasSavedTarget in [false, true] {
-            for allowsCachedTargetRetrieval in [false, true] {
-                #expect(BluetoothScanRecoveryPolicy.shouldStartScanTimeout(
-                    hasSavedTarget: hasSavedTarget,
-                    allowsCachedTargetRetrieval: allowsCachedTargetRetrieval
-                ) == (hasSavedTarget && !allowsCachedTargetRetrieval))
-            }
-        }
+    @Test func scanRecoveryIsWiredWithoutTheCachedTargetGate() throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        let source = try String(contentsOf: root.appendingPathComponent(
+            "Sources/RemoteMic/XiaomiBluetoothBridge.swift"
+        ), encoding: .utf8)
+        #expect(!source.contains("VoiceRemoteDiscoveryPolicy.shouldQuerySystemConnectedCandidates"))
+        #expect(source.contains("central.retrieveConnectedPeripherals(withServices: [serviceUUID])"))
+        #expect(source.contains("result=retrying reason=scan_window_expired"))
+        #expect(source.contains("self.scheduleReconnect()"))
     }
 
     @Test func scanWindowExpiresOnlyTheCurrentScanningAttempt() {
