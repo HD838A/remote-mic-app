@@ -5765,31 +5765,59 @@ struct SettingsView: View {
 
     private func mappingActionSummary(for button: RemoteButton, trigger: ButtonTrigger,
                                       configuredAction: ConfiguredButtonAction? = nil) -> String {
-        // 方案作用域优先用私有组件的统一文案，和键位方案页逐字一致；
-        // 方案没覆盖这个按键、或旧私有组件没有这套 API 时返回 nil，回落到基础映射。
-        if configuredAction == nil,
-           let profile = editingMappingProfileID,
-           let text = macroFeature.profileBindingText(
-               device: settings.selectedRemoteProfileID,
-               profile: profile,
-               button: button,
-               trigger: trigger
-           ) {
-            return text.compact
+        if configuredAction == nil, let profile = editingMappingProfileID {
+            let covered = macroFeature.profileBinding(
+                device: settings.selectedRemoteProfileID,
+                profile: profile,
+                button: button,
+                trigger: trigger
+            )
+            // 组合动作跳过方案组件的文案：那份宏库快照只在启动时读取，
+            // 改名或新建后仍是旧名字，命中不到还会显示「原操作已不可用，请重新配置。」。
+            if let covered, covered.action == .combinationAction {
+                return profileMacroTitle(configured: covered)
+            }
+            // 其余动作沿用私有组件的统一文案，和键位方案页逐字一致；
+            // 方案没覆盖这个按键、或旧私有组件没有这套 API 时返回 nil，回落到基础映射。
+            if let text = macroFeature.profileBindingText(
+                device: settings.selectedRemoteProfileID,
+                profile: profile,
+                button: button,
+                trigger: trigger
+            ) {
+                return text.compact
+            }
         }
         return actionSummary(configuredAction ?? mappingConfiguration(for: button, trigger: trigger))
     }
 
+    /// 方案作用域的组合动作名，取自宏库当前内容而不是方案组件自己的快照。
+    private func profileMacroTitle(configured: ConfiguredButtonAction) -> String {
+        ProfileMacroTitle.resolve(
+            macroID: configured.macroID,
+            library: macroFeature.libraryActions,
+            unavailable: localization.text("button_mapping.macro_unavailable")
+        )
+    }
+
     /// 悬停用的完整形态，和 `mappingActionSummary` 同一来源。
     private func mappingActionDetail(for button: RemoteButton, trigger: ButtonTrigger) -> String {
-        guard let profile = editingMappingProfileID,
-              let text = macroFeature.profileBindingText(
-                  device: settings.selectedRemoteProfileID,
-                  profile: profile,
-                  button: button,
-                  trigger: trigger
-              )
-        else { return "" }
+        guard let profile = editingMappingProfileID else { return "" }
+        let covered = macroFeature.profileBinding(
+            device: settings.selectedRemoteProfileID,
+            profile: profile,
+            button: button,
+            trigger: trigger
+        )
+        if let covered, covered.action == .combinationAction {
+            return profileMacroTitle(configured: covered)
+        }
+        guard let text = macroFeature.profileBindingText(
+            device: settings.selectedRemoteProfileID,
+            profile: profile,
+            button: button,
+            trigger: trigger
+        ) else { return "" }
         return text.detailed
     }
 
