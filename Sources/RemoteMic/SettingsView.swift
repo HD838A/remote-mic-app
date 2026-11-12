@@ -4964,7 +4964,7 @@ struct SettingsView: View {
             applicationShortcutCaptureProfileID = nil
         } label: {
             HStack(spacing: 9) {
-                Image(nsImage: NSWorkspace.shared.icon(forFile: profile.applicationPath))
+                Image(nsImage: applicationIcon(for: profile))
                     .resizable()
                     .frame(width: 22, height: 22)
                 VStack(alignment: .leading, spacing: 2) {
@@ -4993,6 +4993,17 @@ struct SettingsView: View {
             }
         }
         .buttonStyle(.plain)
+    }
+
+    /// 导入的档案可能没有 applicationPath，旧路径也可能在当前 Mac 上不存在。
+    /// 此时按 bundle identifier 找本机安装的 App，再取它的图标。
+    private func applicationIcon(for profile: CustomApplicationProfile) -> NSImage {
+        let path = ApplicationIconResolver.iconPath(
+            for: profile,
+            fileExists: { FileManager.default.fileExists(atPath: $0) },
+            resolveBundle: { NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0) }
+        )
+        return NSWorkspace.shared.icon(forFile: path)
     }
 
     private var applicationEmptyPanel: some View {
