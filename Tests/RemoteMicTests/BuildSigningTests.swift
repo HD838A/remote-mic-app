@@ -6,6 +6,49 @@ import Testing
 
 @Suite("Build signing")
 struct BuildSigningTests {
+    @Test(arguments: ["published", "local", "mismatch", "invalid_local"])
+    func localPackageChecksTheSelectedPrivateCommit(mode: String) throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let source = try String(contentsOf: root.appendingPathComponent("scripts/package-local-test-app.sh"), encoding: .utf8)
+        let start = try #require(source.range(of: "platform_version="))
+        let end = try #require(source.range(of: "zmodload zsh/system", range: start.upperBound..<source.endIndex))
+        let preflight = source[start.lowerBound..<end.lowerBound]
+        let harness = """
+        set -euo pipefail
+        ROOT=/fixture/host
+        SAYALL_PRIVATE_SOURCE_ROOT=/fixture/private
+        SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH=/fixture/artifacts
+        SAYALL_LOCAL_PRIVATE_SOURCE_COMMIT='\(mode == "local" || mode == "invalid_local" ? "candidate" : "")'
+        jq() {
+          if [[ "$2" == '.sourceCommit' ]]; then
+            print '\(mode == "local" ? "candidate" : mode == "mismatch" ? "other" : "published")'
+          else
+            print '2.9.0'
+          fi
+        }
+        git() { print published; }
+        python3() {
+          [[ "$*" == *'--channel local --local-commit candidate' ]] || return 17
+          print checked_local
+          return \(mode == "invalid_local" ? 1 : 0)
+        }
+        \(preflight)
+        print accepted
+        """
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/zsh")
+        process.arguments = ["-c", harness]
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = pipe
+        try process.run()
+        let output = String(decoding: pipe.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+        process.waitUntilExit()
+        #expect((process.terminationStatus == 0) == (mode == "published" || mode == "local"))
+        #expect(output.contains("accepted") == (process.terminationStatus == 0))
+        #expect(output.contains("checked_local") == (mode == "local" || mode == "invalid_local"))
+    }
+
     @Test func membershipServiceEnvironmentStaysBehindOptionalAdapter() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

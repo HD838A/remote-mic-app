@@ -1,0 +1,89 @@
+{
+  "batch": "button-profile-autosave-20261112",
+  "date": "2026-11-12",
+  "purpose": "PR 1012 production SettingsView autosave states",
+  "storage": "github-pr-attachments",
+  "sourceCommit": "e778e91751fd20f8e1d6720886dbd428e51fc5ed",
+  "appVersion": "2.0.0",
+  "build": "332",
+  "contentSize": {
+    "width": 1020,
+    "height": 772
+  },
+  "generation": "production SettingsView offscreen renderer, isolated membership and failure fixtures",
+  "realHardwareAcceptance": "pending",
+  "files": [
+    {
+      "file": "zh-light/mapping-1020x772.png",
+      "format": "png",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "f512cef8a5b6c1690c1e0afec0da1816458682e845bebbb5de7c51188be686d0",
+      "url": "https://github.com/user-attachments/assets/8a52dd0b-5b01-439b-90e7-14fd62adb47c"
+    },
+    {
+      "file": "zh-dark/mapping-1020x772.png",
+      "format": "png",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "8bf21bec8f39c76e366b4bbfabde2c6b728804a7bb4c6c9d16c03b65f4108873",
+      "url": "https://github.com/user-attachments/assets/eb8f7120-b9f0-4d02-b796-6f1db8534a66"
+    },
+    {
+      "file": "en-light/mapping-1020x772.png",
+      "format": "png",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "443e5641215c87d7bf7a237744b85180430771d127a73e3f97260a51197d3617",
+      "url": "https://github.com/user-attachments/assets/5adb4cca-a1b7-4aae-8fda-4919968136e8"
+    },
+    {
+      "file": "en-dark/mapping-1020x772.png",
+      "format": "png",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "2792a78ef1c286107168a486afda99925fdbb980970a9237ccc86e3dacd0a2d2",
+      "url": "https://github.com/user-attachments/assets/b65ea75d-f305-4b4a-aab2-2365188e8a5e"
+    },
+    {
+      "file": "viewer/mapping-1020x772.png",
+      "format": "png",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "96e6e0b58bc923d0105f26ffc2334f6f47cf50514c3d39452394de375fb84978",
+      "url": "https://github.com/user-attachments/assets/7698267d-694e-4a3d-abcb-d8c9b81b3733"
+    },
+    {
+      "file": "failure/mapping-1020x772.png",
+      "format": "png",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "f1117513234e4e6e43908d94ae6fcebe34e0d870ea0601181666714fa8ccfbba",
+      "url": "https://github.com/user-attachments/assets/ec3a2734-4668-4437-8b0b-d7a8a507fb2d"
+    },
+    {
+      "file": "success/mapping-1020x772.png",
+      "format": "png",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "4216e442c0394da859dc8f57c76c0a7b6b6dccc03de7c3d0f82500f6f6bffce8",
+      "url": "https://github.com/user-attachments/assets/bdf91fb6-7b79-40b6-8202-15efb39ae177"
+    },
+    {
+      "file": "disabled/mapping-1020x772.png",
+      "format": "png",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "4526d49dce1cc823fe71acf59b82b297876c810da6a485d4f2f2924d4ad72cfa",
+      "url": "https://github.com/user-attachments/assets/106205fc-b868-4ac2-b30b-bc7c9db65e3d"
+    },
+    {
+      "file": "unknown/mapping-1020x772.png",
+      "format": "png",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "aa34484aa4362e1655c75e43b1e7796e7c3d338bd29713c1b3ff8eb2c19ec630",
+      "url": "https://github.com/user-attachments/assets/f95ba248-2f2d-4aa7-9c1b-a54996f30c71"
+    }
+  ]
+}

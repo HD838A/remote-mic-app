@@ -1495,3 +1495,21 @@
 "notice.accessibility.error_prefix" = "错误：";
 "notice.accessibility.warning_prefix" = "警告：";
 "button_mapping.macro_unavailable.detail" = "这个按键指向的组合动作已被删除。";
+
+"button_mapping.profile.create" = "创建新的键位方案";
+"button_mapping.profile.copy" = "复制为新的键位方案";
+"button_mapping.profile.copy_suffix" = " 副本";
+"button_mapping.profile.source" = "来源";
+"button_mapping.save.automatic" = "自动保存";
+"button_mapping.save.success" = "自动保存成功";
+"button_mapping.save.failed" = "保存失败";
+"button_mapping.save.unknown" = "保存状态未知，请重启 App 确认";
+"button_mapping.save.read_only" = "只读";
+"button_mapping.save.membership" = "查看会员";
+"button_mapping.save.unsupported" = "此配置请在键位方案页查看";
+"button_mapping.save.unavailable" = "配置不可用";
+"button_mapping.save.retry" = "重试";
+"button_mapping.save.partial" = "动作已保存，按住未保存";
+"button_mapping.save.hold_failed" = "按住未保存";
+"button_mapping.action.no_action" = "不执行";
+"button_mapping.profile.created" = "键位方案已创建";

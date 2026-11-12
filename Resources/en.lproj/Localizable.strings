@@ -1496,3 +1496,21 @@
 "notice.accessibility.error_prefix" = "Error: ";
 "notice.accessibility.warning_prefix" = "Warning: ";
 "button_mapping.macro_unavailable.detail" = "The combination action this button points to was deleted.";
+
+"button_mapping.profile.create" = "Create New Key Profile";
+"button_mapping.profile.copy" = "Copy to New Key Profile";
+"button_mapping.profile.copy_suffix" = " Copy";
+"button_mapping.profile.source" = "Source";
+"button_mapping.save.automatic" = "Auto-save";
+"button_mapping.save.success" = "Auto-save succeeded";
+"button_mapping.save.failed" = "Save failed";
+"button_mapping.save.unknown" = "Save state unknown. Restart to confirm.";
+"button_mapping.save.read_only" = "Read-only";
+"button_mapping.save.membership" = "View membership";
+"button_mapping.save.unsupported" = "View this configuration in Key Profiles";
+"button_mapping.save.unavailable" = "Configuration unavailable";
+"button_mapping.save.retry" = "Retry";
+"button_mapping.save.partial" = "Action saved. Hold not saved.";
+"button_mapping.save.hold_failed" = "Hold not saved";
+"button_mapping.action.no_action" = "No action";
+"button_mapping.profile.created" = "Key profile created";

@@ -16,10 +16,16 @@ test -d "$SAYALL_PRIVATE_SOURCE_ROOT/packages"
 : "${CODE_SIGN_IDENTITY:?Set the local Developer ID signing identity}"
 
 platform_version="$(jq -er '.dependencies.sayAllPrivatePlatform.version' "$ROOT/config/release-dependencies.json")"
-source_tag_commit="$(git -C "$SAYALL_PRIVATE_SOURCE_ROOT" rev-parse "refs/tags/$platform_version^{commit}")"
+if [[ -n "${SAYALL_LOCAL_PRIVATE_SOURCE_COMMIT:-}" ]]; then
+  source_commit_expected="$SAYALL_LOCAL_PRIVATE_SOURCE_COMMIT"
+  python3 "$ROOT/scripts/prepare-private-platform.py" check-checkout \
+    --checkout "$SAYALL_PRIVATE_SOURCE_ROOT" --channel local --local-commit "$source_commit_expected"
+else
+  source_commit_expected="$(git -C "$SAYALL_PRIVATE_SOURCE_ROOT" rev-parse "refs/tags/$platform_version^{commit}")"
+fi
 artifact_commit="$(jq -er '.sourceCommit' "$SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH/private-artifact-package.json")"
-if [[ "$source_tag_commit" != "$artifact_commit" ]]; then
-  print -u2 "Prepared private artifacts do not match the pinned private tag."
+if [[ "$source_commit_expected" != "$artifact_commit" ]]; then
+  print -u2 "Prepared private artifacts do not match the selected private source."
   exit 1
 fi
 
@@ -58,7 +64,11 @@ fi
 source "$ROOT/scripts/release-variant.sh"
 export CONFIGURATION=release
 export SAYALL_BUILD_CHANNEL=local
-export SAYALL_PRIVATE_PLATFORM_VERSION="$platform_version"
+if [[ -n "${SAYALL_LOCAL_PRIVATE_SOURCE_COMMIT:-}" ]]; then
+  unset SAYALL_PRIVATE_PLATFORM_VERSION
+else
+  export SAYALL_PRIVATE_PLATFORM_VERSION="$platform_version"
+fi
 export SAYALL_PRIVATE_PLATFORM_MODE=required
 export REQUIRE_SAYALL_PRIVATE_ARTIFACT_PACKAGE=1
 export REQUIRE_SAYALL_COMBINATION_ACTIONS=1

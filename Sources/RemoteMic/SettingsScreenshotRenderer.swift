@@ -8,6 +8,7 @@ enum SettingsScreenshotRenderer {
         case invalidAppearance(String)
         case invalidLanguage(String)
         case bitmapCreationFailed
+        case profileFixtureRootRequired
         case pngCreationFailed
 
         var errorDescription: String? {
@@ -20,6 +21,8 @@ enum SettingsScreenshotRenderer {
                 return "Unsupported settings screenshot language: \(value)."
             case .bitmapCreationFailed:
                 return "The settings screenshot bitmap could not be created."
+            case .profileFixtureRootRequired:
+                return "Mapping fixtures require an isolated storage root inside the screenshot directory."
             case .pngCreationFailed:
                 return "The settings screenshot bitmap could not be encoded as PNG."
             }
@@ -100,6 +103,12 @@ enum SettingsScreenshotRenderer {
         ] == "1"
         let onlySection = ProcessInfo.processInfo.environment["REMOTE_MIC_SETTINGS_SCREENSHOT_SECTION"]
         let interactive = ProcessInfo.processInfo.environment["REMOTE_MIC_SETTINGS_SCREENSHOT_INTERACTIVE"] == "1"
+        let mappingScenario = ProcessInfo.processInfo.environment["REMOTE_MIC_SETTINGS_SCREENSHOT_MAPPING_SCENARIO"]
+        if mappingScenario != nil {
+            guard let storage = ProcessInfo.processInfo.environment["SAYALL_MACRO_STORAGE_ROOT"],
+                  URL(fileURLWithPath: storage).standardizedFileURL.path.hasPrefix(outputDirectory.standardizedFileURL.path + "/")
+            else { throw RenderingError.profileFixtureRootRequired }
+        }
         try FileManager.default.createDirectory(
             at: outputDirectory,
             withIntermediateDirectories: true
@@ -222,6 +231,7 @@ enum SettingsScreenshotRenderer {
         }
         let model = BridgeAppModel(
             settings: settings,
+            membershipFeature: mappingScenario == nil ? MembershipFeatureIntegration() : MembershipFeatureIntegration(configuration: nil),
             transcriptArchiveStore: transcriptStore,
             recordingAssetStore: recordingStore
         )
@@ -254,10 +264,21 @@ enum SettingsScreenshotRenderer {
         model.privateFeature.updateLocaleIdentifier(localization.locale.identifier)
         model.macroFeature.updateLocaleIdentifier(localization.locale.identifier)
         model.macroFeature.loadProfilesForScreenshot()
-        let seededProfileID: UUID? = ProcessInfo.processInfo.environment[
+        var seededProfileID: UUID? = ProcessInfo.processInfo.environment[
             "REMOTE_MIC_SETTINGS_SCREENSHOT_PROFILE"
         ].flatMap { name in
             model.macroFeature.mappingProfiles(device: nil).first { $0.name == name }?.id
+        }
+        if let mappingScenario {
+            model.macroFeature.updateButtonProfilesAccess(.authorized)
+            if ["member", "viewer", "copy", "disabled"].contains(mappingScenario) {
+                let binding = UnifiedButtonBinding(remoteProfileID: nil, button: .ok, trigger: .singleClick,
+                    configured: .init(action: mappingScenario == "disabled" ? .disabled : .commandCopy, shortcut: nil))
+                seededProfileID = model.macroFeature.createMappingProfile(
+                    named: language == .english ? "A long saved key profile for presentation" : "演示用的长名称键位方案与按住设置",
+                    copying: nil, bindings: [binding], holdModes: [RemoteButton.ok.rawValue: "once"])
+            }
+            if mappingScenario == "viewer" { model.macroFeature.updateButtonProfilesAccess(.requiresPlus) }
         }
         model.membershipFeature.updateLocaleIdentifier(localization.locale.identifier)
         // 加载方案会按方案重写按住设置，按住相关的种子必须落在加载之后。
@@ -307,6 +328,8 @@ enum SettingsScreenshotRenderer {
                 initialMappingHoldEditingButton: section == .mapping && opensHoldEditor
                     ? holdEditorButton
                     : nil,
+                initialMappingProfileID: section == .mapping ? seededProfileID : nil,
+                initialMappingSaveScenario: section == .mapping ? mappingScenario : nil,
                 initialShortcutPickerShowsKeyboard: showsStandardKeyboard,
                 initialMappingActionFilter: initialActionFilter,
                 initialMappingScrollsToGestureTiming: section == .mapping && showsGestureTiming,
@@ -348,6 +371,7 @@ enum SettingsScreenshotRenderer {
                     ? holdEditorButton
                     : nil,
                 initialMappingProfileID: section == .mapping ? seededProfileID : nil,
+                initialMappingSaveScenario: section == .mapping ? mappingScenario : nil,
                 initialShortcutPickerShowsKeyboard: showsStandardKeyboard,
                 initialMappingActionFilter: initialActionFilter,
                 initialMappingScrollsToGestureTiming: section == .mapping && showsGestureTiming,

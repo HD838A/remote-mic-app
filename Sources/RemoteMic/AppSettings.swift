@@ -461,6 +461,42 @@ final class AppSettings: ObservableObject {
         saveSelectedRemoteProfileMappings()
     }
 
+    @discardableResult
+    func writeBaseBinding(_ configured: ConfiguredButtonAction, for button: RemoteButton,
+                          trigger: ButtonTrigger, profileID: UUID?) -> Bool {
+        setBaseBinding(configured, for: button, trigger: trigger, profileID: profileID)
+        guard let data = defaults.data(forKey: "unifiedBaseBindings"),
+              let stored = try? JSONDecoder().decode([UnifiedButtonBinding].self, from: data)
+        else { return false }
+        return stored.first { $0.remoteProfileID == profileID && $0.button == button && $0.trigger == trigger }?.configured == configured
+    }
+
+    func reloadBaseMapping() -> Bool {
+        guard let data = defaults.data(forKey: "unifiedBaseBindings"),
+              let stored = try? JSONDecoder().decode([UnifiedButtonBinding].self, from: data)
+        else { return false }
+        unifiedBaseBindings = stored
+        return true
+    }
+
+    @discardableResult
+    func writeHoldMode(_ mode: RemoteButtonHoldMode, for button: RemoteButton, profileID: UUID?) -> Bool {
+        guard profileID == selectedRemoteProfileID else { return false }
+        setHoldMode(mode, for: button)
+        guard let data = defaults.data(forKey: "buttonInteractionSettings"),
+              let stored = try? JSONDecoder().decode(RemoteButtonInteractionSettings.self, from: data)
+        else { return false }
+        return stored.modes[button.rawValue] == mode.rawValue
+    }
+
+    func reloadBaseHoldModes() -> Bool {
+        guard let data = defaults.data(forKey: "buttonInteractionSettings"),
+              let stored = try? JSONDecoder().decode(RemoteButtonInteractionSettings.self, from: data)
+        else { return false }
+        interactionSettings = stored
+        return true
+    }
+
     /// Remove every persisted reference to a deleted combination action.
     /// This covers the current unified store and the legacy per-device stores.
     func removeMacroReferences(to macroID: String) {
