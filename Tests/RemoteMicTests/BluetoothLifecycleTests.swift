@@ -440,6 +440,10 @@ struct BluetoothLifecycleTests {
         #expect(source.contains("BluetoothScanRecoveryPolicy.handleTimeout("))
         #expect(source.contains("result=retrying reason=scan_window_expired"))
         #expect(source.contains("self.scheduleReconnect()"))
+        #expect(source.contains("discoveryOperationID = PublicDiagnosticEvent.newOperationID()"))
+        #expect(source.contains("BLE DISCOVERY operation_id="))
+        #expect(source.contains("BLE SCAN TIMEOUT operation_id="))
+        #expect(source.contains("BLE READY operation_id="))
     }
 
     @Test(arguments: [false, true])

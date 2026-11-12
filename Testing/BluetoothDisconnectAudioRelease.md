@@ -139,7 +139,7 @@
 
 RC001 与 RC003 共用本次修改的 BLE 发现路径。下列用例分别执行并记录型号、源码提交、自动化结果、真实设备结果和目标语音工具结果。当前两个型号的新分支实机结果均待完成。
 
-1. 使用已登记的小米遥控器，睡眠唤醒后通过同一 generation 的 `BLE DISCOVERY source=target_identifier result=empty|skipped|not_adopted` 确认缓存未采纳目标，随后由 `connected_peripheral` 接回。另一轮覆盖无候选时 20 秒 `BLE SCAN TIMEOUT`，退避重连后接回。
+1. 使用已登记的小米遥控器，睡眠唤醒后通过同一 operation_id 和 generation 的 `BLE DISCOVERY operation_id=<操作号> ... source=target_identifier result=empty|skipped|not_adopted` 确认缓存未采纳目标，随后由 `connected_peripheral` 接回。另一轮覆盖无候选时 20 秒 `BLE SCAN TIMEOUT`，退避重连后接回。
 2. 每次恢复后立即完成第一次语音、极速按下/释放、五次连续会话，记录首个有效 PCM 与可观察首字耗时；正常结束要求首尾完整、中断样本为零且 pending 归零。
 3. 遥控器离线至少五分钟后恢复，验证扫描窗口、既有 3～60 秒退避、缓存冷却探测和首次语音；同时覆盖停止、睡眠、蓝牙开关及旧代次窗口作废。
 

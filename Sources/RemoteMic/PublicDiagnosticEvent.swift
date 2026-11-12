@@ -410,7 +410,7 @@ struct PublicDiagnosticEvent: Equatable {
         }
     }
 
-    private static func newOperationID() -> String {
+    static func newOperationID() -> String {
         String(UUID().uuidString.filter { $0 != "-" }.prefix(12)).lowercased()
     }
 

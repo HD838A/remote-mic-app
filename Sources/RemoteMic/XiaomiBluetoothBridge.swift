@@ -151,6 +151,7 @@ final class XiaomiBluetoothBridge: NSObject {
     private var reconnectPolicy = BluetoothReconnectPolicy()
     private var currentAttemptUsesCachedTarget = false
     private var generationCounter: UInt64 = 0
+    private var discoveryOperationID = "none"
     private var lifecycle: BluetoothLifecyclePhase = .stopped
     private var shouldRun = false
     private var systemSuspension = BluetoothSystemSuspensionState()
@@ -378,6 +379,7 @@ final class XiaomiBluetoothBridge: NSObject {
         }
         guard central == nil else { return }
         generationCounter &+= 1
+        discoveryOperationID = PublicDiagnosticEvent.newOperationID()
         let generation = generationCounter
         lifecycle = .scanning(generation)
         let manager = CBCentralManager(
@@ -469,19 +471,19 @@ final class XiaomiBluetoothBridge: NSObject {
         VoiceRemoteDiscovery.run(retrieveCachedTarget: { () -> CBPeripheral? in
             guard let identifier = targetIdentifier else {
                 AppLogger.shared.write(
-                    "BLE DISCOVERY generation=\(generation) source=target_identifier result=skipped reason=no_saved_target"
+                    "BLE DISCOVERY operation_id=\(discoveryOperationID) generation=\(generation) source=target_identifier result=skipped reason=no_saved_target"
                 )
                 return nil
             }
             guard reconnectPolicy.shouldRetrieveCachedTarget(at: ProcessInfo.processInfo.systemUptime) else {
                 AppLogger.shared.write(
-                    "BLE DISCOVERY generation=\(generation) source=target_identifier result=skipped reason=cached_target_cooldown"
+                    "BLE DISCOVERY operation_id=\(discoveryOperationID) generation=\(generation) source=target_identifier result=skipped reason=cached_target_cooldown"
                 )
                 return nil
             }
             let saved = central.retrievePeripherals(withIdentifiers: [identifier]).first
             AppLogger.shared.write(
-                "BLE DISCOVERY generation=\(generation) source=target_identifier result=\(saved == nil ? "empty" : "found")"
+                "BLE DISCOVERY operation_id=\(discoveryOperationID) generation=\(generation) source=target_identifier result=\(saved == nil ? "empty" : "found")"
             )
             if saved != nil, !reconnectPolicy.allowsCachedTargetRetrieval {
                 AppLogger.shared.write(
@@ -494,7 +496,7 @@ final class XiaomiBluetoothBridge: NSObject {
         }, retrieveConnectedCandidates: {
             let connectedCandidates = central.retrieveConnectedPeripherals(withServices: [serviceUUID])
             AppLogger.shared.write(
-                "BLE SYSTEM CONNECTED CANDIDATES generation=\(generation) count=\(connectedCandidates.count)"
+                "BLE SYSTEM CONNECTED CANDIDATES operation_id=\(discoveryOperationID) generation=\(generation) count=\(connectedCandidates.count)"
             )
             return connectedCandidates.filter {
                 !excludedIdentifiers().contains($0.identifier) && !rejectedIdentifiers.contains($0.identifier)
@@ -510,7 +512,7 @@ final class XiaomiBluetoothBridge: NSObject {
                 usesCachedTarget: source == .cachedTarget
             )
             AppLogger.shared.write(
-                "BLE DISCOVERY generation=\(generation) source=\(source.rawValue) result=\(adopted ? "adopted" : "not_adopted")"
+                "BLE DISCOVERY operation_id=\(discoveryOperationID) generation=\(generation) source=\(source.rawValue) result=\(adopted ? "adopted" : "not_adopted")"
             )
             return adopted
         }, startScan: {
@@ -519,7 +521,8 @@ final class XiaomiBluetoothBridge: NSObject {
                 withServices: nil,
                 options: [CBCentralManagerScanOptionAllowDuplicatesKey: false]
             )
-            AppLogger.shared.write("BLE SCANNING generation=\(generation)")
+            AppLogger.shared.write("BLE DISCOVERY operation_id=\(discoveryOperationID) generation=\(generation) source=scan result=started")
+            AppLogger.shared.write("BLE SCANNING")
             startScanTimeout(generation: generation)
         })
     }
@@ -543,7 +546,7 @@ final class XiaomiBluetoothBridge: NSObject {
                 isSystemSuspended: self.systemSuspension.isSuspended
             ) {
                 AppLogger.shared.write(
-                    "BLE SCAN TIMEOUT generation=\(generation) phase=timed_out "
+                    "BLE SCAN TIMEOUT operation_id=\(self.discoveryOperationID) generation=\(generation) phase=timed_out "
                         + "result=retrying reason=scan_window_expired window_ms="
                         + "\(Int((BluetoothScanRecoveryPolicy.scanWindow * 1_000).rounded()))"
                 )
@@ -634,7 +637,7 @@ final class XiaomiBluetoothBridge: NSObject {
         state = .connecting
         startConnectionTimeout(generation: generation)
         central.connect(candidate, options: nil)
-        AppLogger.shared.write("BLE CONNECTING source=\(source) name=\(candidate.name ?? "unknown")")
+        AppLogger.shared.write("BLE CONNECTING operation_id=\(discoveryOperationID) source=\(source) name=\(candidate.name ?? "unknown")")
     }
 
     private func resetPeripheral() {
@@ -766,7 +769,7 @@ final class XiaomiBluetoothBridge: NSObject {
         let cachedIdentifierBypassed = targetIdentifier != nil &&
             !reconnectPolicy.allowsCachedTargetRetrieval
         AppLogger.shared.write(
-            "BLE RECONNECT scheduled failure_count=\(reconnectPolicy.consecutiveFailureCount) " +
+            "BLE RECONNECT scheduled operation_id=\(discoveryOperationID) failure_count=\(reconnectPolicy.consecutiveFailureCount) " +
                 "delay_ms=\(Int((delay * 1_000).rounded())) " +
                 "cached_identifier_bypassed=\(cachedIdentifierBypassed)"
         )
@@ -962,7 +965,7 @@ final class XiaomiBluetoothBridge: NSObject {
             lifecycle = .ready(generation)
             if let peripheral {
                 state = .ready(peripheral.name ?? "MI RC")
-                AppLogger.shared.write("BLE READY name=\(peripheral.name ?? "MI RC")")
+                AppLogger.shared.write("BLE READY operation_id=\(discoveryOperationID) name=\(peripheral.name ?? "MI RC")")
             }
         case 0x08:
             guard requestMicrophoneOpen() else {
