@@ -63,11 +63,19 @@ G-TOOL.permanent-helper=declared-purpose
 
 ## 本地测试包
 
+```governance-policy
+G-LOCAL.public=developer-self-use
+G-LOCAL.public-signing=ad-hoc-or-developer-id
+G-LOCAL.integrated=private-required
+G-LOCAL.distribution=release-trust
+```
+
 - 本地测试包固定命名 `SayAll.app`，优先替换 `~/Applications/SayAll.app`；替换失败才放 `~/Downloads/SayAll-test/SayAll.app`。
 - 每次构建必须递增 `CFBundleVersion`：取 `/Applications/SayAll.app`、`~/Applications/SayAll.app`、状态文件 `~/.sayall-local-build` 三者最大值 +1，写入本地包的 `Info.plist`；仓库 `Resources/Info.plist` 的模板值不得改动。
-- 打包统一走本仓 `scripts/package-local-test-app.sh`，不得手拼命令。该脚本入库、随仓库分发，已包含 release 构建、组装、递增构建号、Developer ID 签名、先退出占锁实例再替换与启动。
-- 脚本要求 `SAYALL_PRIVATE_SOURCE_ROOT` 指向私有仓工作区根目录，`SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH` 指向与 `config/release-dependencies.json` 固定 Tag 对应的已准备私有构件包，`CODE_SIGN_IDENTITY` 指向本机 Developer ID 签名身份；缺私有组件、构件或签名身份时脚本直接报错退出，不会产出缺件或未签名的包。
-- 本地包是测试产物：Developer ID 签名不改变其测试身份；必须如实记录 `source_commit` 与是否 dirty，不得冒用 Tag，不得作为分发候选。
+- 统一入口为 `scripts/package-local-test-app.sh`，复用原生 `scripts/build-app.sh` 完成 release 构建、资源组装与签名，再递增构建号、校验、退出占锁实例、替换与启动。该入口区分公开开发自用和完整集成测试两种模式。
+- 公开开发自用使用 `SAYALL_PRIVATE_PLATFORM_MODE=public`，无私有输入时为默认模式。只要求公开仓库访问权限，允许本机 ad-hoc 或 Developer ID 签名。产物记录 `SayAllBuildChannel=public`、公开组件标识、完整 `source_commit` 与 dirty 状态。公开功能必须可以启动，未包含的私有能力按公开兼容层报告不可用。该模式仅供构建者在本机开发自用。
+- 完整集成测试使用 `SAYALL_PRIVATE_PLATFORM_MODE=required`；既有调用提供私有源码或预构件且未指定模式时，继续选择此模式。要求 `SAYALL_PRIVATE_SOURCE_ROOT`、与清单固定 Tag 对应的 `SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH` 和本机 Developer ID `CODE_SIGN_IDENTITY`。缺件或签名不满足要求即失败。
+- 提供给他人安装的资产按 `RELEASING.md` 执行 Developer ID、Apple 公证、staple 和适用的下载复验。公开自用构建和完整集成本地测试构建均须如实标注来源与测试身份；作为分发候选时执行对应的完整发布门禁。
 
 ## 截图与设计稿归档规范
 
