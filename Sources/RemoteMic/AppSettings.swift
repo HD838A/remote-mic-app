@@ -471,6 +471,36 @@ final class AppSettings: ObservableObject {
         return stored.first { $0.remoteProfileID == profileID && $0.button == button && $0.trigger == trigger }?.configured == configured
     }
 
+    func hasExplicitBaseBinding(for button: RemoteButton, trigger: ButtonTrigger,
+                                profileID: UUID?) -> Bool {
+        unifiedBaseBindings.contains {
+            ($0.remoteProfileID == profileID || $0.remoteProfileID == nil) &&
+                $0.button == button && $0.trigger == trigger
+        }
+    }
+
+    /// Copy only explicit base values into a new profile. An unset action or hold mode
+    /// stays inherited so later base changes still reach the profile.
+    func mappingProfileSnapshot(deviceID: UUID?, supports: (String) -> Bool)
+        -> (bindings: [UnifiedButtonBinding], holdModes: [String: String]) {
+        var bindings: [UnifiedButtonBinding] = []
+        var holdModes: [String: String] = [:]
+        for button in RemoteButton.allCases where supports(button.rawValue) {
+            for trigger in ButtonTrigger.allCases {
+                let configured = configuredBaseAction(for: button, trigger: trigger, profileID: deviceID)
+                guard configured.action != .disabled ||
+                    hasExplicitBaseBinding(for: button, trigger: trigger, profileID: deviceID)
+                else { continue }
+                bindings.append(UnifiedButtonBinding(remoteProfileID: deviceID, button: button,
+                    trigger: trigger, configured: configured))
+            }
+            if let mode = interactionSettings.modes[button.rawValue] {
+                holdModes[button.rawValue] = mode
+            }
+        }
+        return (bindings, holdModes)
+    }
+
     func reloadBaseMapping() -> Bool {
         guard let data = defaults.data(forKey: "unifiedBaseBindings"),
               let stored = try? JSONDecoder().decode([UnifiedButtonBinding].self, from: data)
