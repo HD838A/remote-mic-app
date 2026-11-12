@@ -36,7 +36,7 @@
 - `swift test --disable-keychain` 通过，100 组共 1,390 项。
 - `swift build --disable-keychain -c release` 通过。
 - `SKIP_SWIFT_PACKAGE_BUILD=1 zsh scripts/test.sh` 通过，48 项。
-- 显式设置 `SAYALL_TEST_VIRTUAL_AUDIO_CONFIGURATION=1`，执行 `swift test --disable-keychain --skip-build --filter 'VirtualAudioConnectionLifecycleTests/installedVirtualOutputPreservesFirstPlaybackAfterQueuedPlayerRestart'` 通过。本机真实 `MiRemoteV 2ch` 的三次播放均观察到合成信号，正常排空、中断样本为零。
+- 显式设置 `SAYALL_TEST_VIRTUAL_AUDIO_CONFIGURATION=1`，执行 `swift test --disable-keychain --skip-build --filter 'VirtualAudioConnectionLifecycleTests/installedVirtualOutputPreservesFirstPlaybackAfterQueuedPlayerRestart'` 通过。本机真实 `SayAll` 虚拟声卡的三次播放均观察到合成信号，正常排空、中断样本为零。
 - 仓库治理、边界、修改文档相对链接和 `git diff --check` 通过。
 
 新增测试覆盖持续空闲、重复后台事件、明确请求、失败重试、排空期间再次按下、待播尾包，以及“空闲释放 → 目标延迟就绪 → 首次语音配置缓存 → 松键尾包 → 单次完整 Fn 会话”。回环测试只证明真实虚拟输出播放，不涉及实体遥控器或第三方工具文字上屏。

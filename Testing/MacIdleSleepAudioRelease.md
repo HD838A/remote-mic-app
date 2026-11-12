@@ -4,13 +4,14 @@
 
 - 分支：包含本手册对应修复的 `main` 或候选分支；2026-11-12 的持续空闲门禁候选为 `codex/fix-idle-audio-recovery`
 - 平台：macOS
-- 音频设备：优先使用 `MiRemoteV 2ch`，并至少回归一个其他可写入的虚拟音频设备
+- 音频设备：优先使用 `SayAll`，并至少回归一个其他可写入的虚拟音频设备
+- 默认声卡显示名为 `SayAll`；旧名称模式显示为 `MiRemoteV 2ch`。日志和电源断言继续使用设备 UID `MiRemoteV2ch_UID`。
 - 遥控器：RC003；如有 RC001，同步执行基础休眠与唤醒用例
 
 ## 测试前准备
 
 1. 安装待测无线麦SayAll.app，连接真实遥控器并确认 BLE、HID 和普通语音均正常。
-2. 在无线麦SayAll.app中选择 `MiRemoteV 2ch` 作为语音输出。
+2. 在无线麦 SayAll App 中选择 `SayAll` 作为语音输出。
 3. 准备豆包或另一个真实语音输入工具，并确认唤醒前能收到遥控器音频。
 4. 将 macOS 显示器关闭时间临时设置为便于测试的较短时间；记录测试前的设置，测试结束后恢复。
 5. 打开终端，准备在关键步骤运行 `pmset -g assertions`。
@@ -42,7 +43,7 @@
 
 预期系统结果：`com.apple.audio.MiRemoteV2ch_UID.context.preventuseridlesleep` 不再由无线麦SayAll.app进程持续持有，Mac 能按原系统设置进入自动空闲休眠。
 
-失败判定：没有收到屏幕休眠事件、释放只 requested 但没有 completed/cancelled 结果、引擎仍为 running、MiRemoteV 2ch 的 CoreAudio 断言持续增长，或 Mac 仍不能自动休眠。
+失败判定：没有收到屏幕休眠事件、释放只 requested 但没有 completed/cancelled 结果、引擎仍为 running、SayAll 虚拟声卡的 CoreAudio 断言持续增长，或 Mac 仍不能自动休眠。
 
 ## 用例二补充：屏幕亮起时长时间空闲释放虚拟音频
 
@@ -128,7 +129,7 @@
 ### 测试前准备
 
 1. 同一台 Mac 上准备两个真实用户账户 A、B，都安装并运行无线麦SayAll.app。
-2. 在 A 中选择 `MiRemoteV 2ch`，并确认实体遥控器的 BLE、HID、普通按键与真实语音文字上屏均正常。
+2. 在 A 中选择 `SayAll`，并确认实体遥控器的 BLE、HID、普通按键与真实语音文字上屏均正常。
 3. 两个账户都保留 `~/Library/Logs/RemoteMic/runtime.log`，并记录开始 UTC 时间。
 
 ### 步骤
@@ -183,7 +184,7 @@
 - 2026-11-12 持续空闲门禁候选的自动化与现场结果见 [独立 Bug 记录](../Bugs/2026-11-12-idle-audio-recovery-reopens-output.md)。本次现场用例尚未执行，既有休眠结果不能替代本次首字、尾字和无回占验收。
 - 自动化可以证明生命周期策略、重叠事件状态、活跃语音保护和原有蓝牙/Fn 会话基线。
 - Release 构建只能证明代码可编译和组装。
-- 只有真实 macOS 电源管理、真实 MiRemoteV 2ch、真实遥控器和 `pmset` 才能证明 CoreAudio 断言确实消失并且 Mac 能进入自动休眠。
+- 只有真实 macOS 电源管理、真实 SayAll 虚拟声卡、真实遥控器和 `pmset` 才能证明 CoreAudio 断言确实消失并且 Mac 能进入自动休眠。
 - 用例七的「会话切回」只涉及快速用户切换与解锁，不依赖休眠/唤醒，因此不需要 `pmset`；但只有**真实双账户 + 真实遥控器 + 真实第三方语音工具**才能证明切回后确实恢复拾音，单机单账户与单元测试都不能替代。
 
 ## 用例八：休眠期间暂停蓝牙扫描与重连
