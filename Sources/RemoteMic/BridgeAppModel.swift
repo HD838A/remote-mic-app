@@ -6498,6 +6498,17 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             rc003VoiceExtensionActive &&
             rc003VoiceExtensionAwaitingReopen &&
             rc003VoiceExtensionBridge === bridge
+        if !isRC003Continuation, voiceKeyLatch.isHeld {
+            // The previous stop may still be waiting for the audio tail to
+            // drain. A new session owns the key now, so release the stale
+            // software hold before beginning the fresh press.
+            _ = releaseVoiceKeyIfNeeded(
+                owner: .bluetooth,
+                forceSoftware: false,
+                audioDiagnostic: bridge.audioDiagnostics
+            )
+            AppLogger.shared.write("VOICE KEY stale_release reason=new_bluetooth_session")
+        }
         let profileID = activateRemoteProfile(for: bridge)
         if let activeBluetoothVoiceDeviceIdentifier,
            activeBluetoothVoiceDeviceIdentifier != identifier {
@@ -6795,7 +6806,6 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         pendingBluetoothVoiceStartIdentifier = nil
         cancelPendingBluetoothVoiceAudio(reason: "remote_stop")
         pendingBluetoothVoiceStopRequested = false
-        releaseVoiceKeyIfNeeded(owner: .bluetooth, forceSoftware: false, audioDiagnostic: bridge.audioDiagnostics)
         cancelPendingCommandVoiceAudio(reason: "remote_stop")
         if longRecordingRequested {
             finishLongRecording(reason: "remote_stop")
@@ -6857,6 +6867,28 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         audioOutput.logWhenPendingVoiceAudioDrains(
             context: "trace=\(traceID) model=\(bluetoothVoiceTraceModel.rawValue)"
         )
+        // Keep the voice key held until the already queued tail has actually
+        // reached the virtual microphone. This mirrors the Apple Remote and
+        // Chromecast stop paths; flush is still false, so pending audio is
+        // preserved rather than discarded.
+        audioOutput.endSessionAfterDraining(
+            source: "bluetooth_voice_stop",
+            operationID: UInt64(traceID),
+            maximumDelay: nil
+        ) { [weak self, weak bridge] outcome in
+            guard let self,
+                  self.activeBluetoothVoiceDeviceIdentifier == nil,
+                  !self.bluetoothVoiceActive
+            else { return }
+            self.releaseVoiceKeyIfNeeded(
+                owner: .bluetooth,
+                forceSoftware: false,
+                audioDiagnostic: bridge?.audioDiagnostics
+            )
+            AppLogger.shared.write(
+                "VOICE KEY tail_release trace=\(traceID) completion=\(outcome.rawValue)"
+            )
+        }
         let delivery = voiceAudioDeliveryDiagnosticSnapshot()
         let publicVoiceResult: (phase: String, result: String, reason: String) =
             bluetoothVoiceDecodedSampleCount == 0
