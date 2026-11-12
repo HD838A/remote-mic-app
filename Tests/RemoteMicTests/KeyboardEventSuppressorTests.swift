@@ -6,6 +6,38 @@ import Testing
 
 @Suite("Keyboard event suppressor")
 struct KeyboardEventSuppressorTests {
+    @Test func capsLockPassesThroughWithoutConsumingArmedMediaKeys() throws {
+        var logs: [String] = []
+        let suppressor = KeyboardEventSuppressor(logger: { logs.append($0) })
+        suppressor.arm(nativeEvents: [.systemKey(type: 0)], edge: .down)
+        let capsLock = try #require(NSEvent.otherEvent(
+            with: .systemDefined, location: .zero, modifierFlags: .capsLock,
+            timestamp: 1, windowNumber: 0, context: nil,
+            subtype: 8, data1: (4 << 16) | (0xB << 8), data2: -1
+        )?.cgEvent)
+        let volumeDown = try nativeEvent(.systemKey(type: 0), down: true)
+        let completed = EventTapRunLoop.shared.performAndWait {
+            #expect(!suppressor.handle(type: capsLock.type, event: capsLock))
+            #expect(suppressor.handle(type: volumeDown.type, event: volumeDown))
+        }
+        #expect(completed)
+        #expect(logs.contains { $0.contains("HID FILTER suppressed event=sys0 edge=down") })
+        #expect(capsLock.type.rawValue == NSEvent.EventType.systemDefined.rawValue)
+    }
+
+    @Test func otherSystemMessagesDoNotConsumeArmedMediaKeys() throws {
+        let suppressor = KeyboardEventSuppressor(logger: { _ in })
+        suppressor.arm(nativeEvents: [.systemKey(type: 0)], edge: .down)
+        let other = try #require(NSEvent.otherEvent(
+            with: .systemDefined, location: .zero, modifierFlags: [],
+            timestamp: 1, windowNumber: 0, context: nil,
+            subtype: 7, data1: 0xA00, data2: -1
+        )?.cgEvent)
+        #expect(!suppressor.handle(type: other.type, event: other))
+        let volumeDown = try nativeEvent(.systemKey(type: 0), down: true)
+        #expect(suppressor.handle(type: volumeDown.type, event: volumeDown))
+    }
+
     @Test(arguments: [RemoteNativeEvent.systemKey(type: 0), .systemKey(type: 1), .systemKey(type: 16), .keyboard(keyCode: 115), .keyboard(keyCode: 36)])
     func delayedNativePairRemainsOwnedAfterRemoteRelease(_ native: RemoteNativeEvent) throws {
         var now: TimeInterval = 10

@@ -486,9 +486,9 @@ final class KeyboardEventSuppressor {
         event: CGEvent
     ) -> (event: RemoteNativeEvent, edge: RemoteEventEdge)? {
         if type.rawValue == Self.systemDefinedEventTypeRawValue {
-            guard let nsEvent = NSEvent(cgEvent: event) else { return nil }
-            let systemKeyType = Int32((nsEvent.data1 & 0xFFFF_0000) >> 16)
-            let keyState = (nsEvent.data1 & 0x0000_FF00) >> 8
+            guard let data1 = SystemKeyEventDecoder.data1(from: event) else { return nil }
+            let systemKeyType = Int32((data1 & 0xFFFF_0000) >> 16)
+            let keyState = (data1 & 0x0000_FF00) >> 8
             let edge: RemoteEventEdge
             switch keyState {
             case 0xA: edge = .down
