@@ -1,0 +1,47 @@
+{
+  "batch": "bug-fixes/mapping-profile-list-fix",
+  "date": "2026-11-12",
+  "purpose": "旧私有构件下按键页方案列表消失的修复前后对照（Bug 记录 Bugs/2026-11-12-mapping-profile-list-hidden-by-autosave-gate.md，PR #1023）",
+  "host_base": "before=13b78884; after=d7cd7b7c",
+  "window_points": [
+    1020,
+    772
+  ],
+  "storage": "external-persistent-directory",
+  "storage_path": "~/Develop/ReleaseArtifacts/mapping-profile-list-fix/",
+  "notes": [
+    "由生产 SettingsView 的 REMOTE_MIC_SETTINGS_SCREENSHOT_DIR 离屏入口生成；不是设计稿，也不启动硬件。",
+    "修改前使用 origin/main 13b78884，修改后使用本 PR d7cd7b7c，两次都使用私有源码 Tag 2.9.0。",
+    "隔离 fixture 包含默认方案和一个测试方案；会员访问由截图 fixture 授权，不代表真实会员验收。",
+    "图片字节不入库，本文件只做文本索引；外部链接为 PR #1023 的 GitHub 附件。"
+  ],
+  "images": [
+    {
+      "file": "before-1020x772-zh-light.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "16b83517023e68cd927b73f04883aaf1ab2f24d9dbaa326854c6f82b4977f071",
+      "state": "before",
+      "external_url": "https://github.com/user-attachments/assets/4b64fb7d-78ba-45dd-a2ee-7e91cd3d1a5b"
+    },
+    {
+      "file": "after-1020x772-zh-light.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "58d605c3f21c0dfe7a9e990aa15654d6278fa15e8ad4a778af4fb09c48f72e33",
+      "state": "after",
+      "external_url": "https://github.com/user-attachments/assets/fa85c7cb-4e91-428b-bb41-611db008b0db"
+    },
+    {
+      "file": "after-1020x772-zh-dark.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "60a24e913ce7cdc67d4fd293b27c6b5214f74430cf136dfc4d83064b618539d9",
+      "state": "after",
+      "external_url": "https://github.com/user-attachments/assets/abf80c46-c737-4267-ae79-22fa28688d02"
+    }
+  ]
+}
