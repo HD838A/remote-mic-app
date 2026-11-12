@@ -581,7 +581,8 @@ final class AppSettings: ObservableObject {
     /// Timing edits affect the next interaction. Mode edits cancel through the binding hook.
     @Published var interactionSettings = RemoteButtonInteractionSettings() {
         didSet {
-            if oldValue.modes != interactionSettings.modes || oldValue.migratedRepeatButtons != interactionSettings.migratedRepeatButtons {
+            if oldValue.modes != interactionSettings.modes ||
+                oldValue.migratedRepeatButtons != interactionSettings.migratedRepeatButtons {
                 onInteractionModeChanged?(selectedRemoteProfileID)
             }
             if let data = try? JSONEncoder().encode(interactionSettings) {
@@ -3281,9 +3282,14 @@ final class AppSettings: ObservableObject {
     }
 
     func setHoldMode(_ mode: RemoteButtonHoldMode, for button: RemoteButton) {
+        let savedMode = mode.isHoldDown && !button.allowsKeyHold ? .once : mode
         onInteractionModeChanged?(selectedRemoteProfileID)
         interactionSettings.migratedRepeatButtons?.removeAll { $0 == button.rawValue }
-        interactionSettings.modes[button.rawValue] = mode.rawValue
+        interactionSettings.modes[button.rawValue] = savedMode.rawValue
+        AppLogger.shared.write(
+            "BUTTON HOLD CONFIG operation_id=\(UUID().uuidString) phase=completed result=saved " +
+                "button=\(button.rawValue) requested_mode=\(mode.rawValue) mode=\(savedMode.rawValue)"
+        )
     }
 
     /// An action change can make the saved hold choice unrunnable. Drop it to "unset" so the
@@ -3310,6 +3316,10 @@ final class AppSettings: ObservableObject {
             snapshot.repeatSingleStartMilliseconds = buttonGestureTiming(for: model)
                 .repeatSingleStartMilliseconds
         }
+        // 默认取基础层的动作；方案生效时由监听层按活动方案覆盖。
+        snapshot.allowsKeyHold = button.allowsKeyHold
+        snapshot.holdableSingle = snapshot.single
+        snapshot.holdableLong = snapshot.long
         if snapshot.mode == .repeatSingle,
            interactionModeOverride?(profileID ?? selectedRemoteProfileID, button) == nil,
            timing.migratedRepeatButtons?.contains(button.rawValue) == true,
@@ -3319,7 +3329,11 @@ final class AppSettings: ObservableObject {
         }
         // A hold choice that the current actions cannot run is dropped, not turned into a
         // paused state: the button must keep its click and long press instead of going dead.
-        if let mode = snapshot.mode, !snapshot.blockers(for: mode).isEmpty {
+        // 方案接管时报废模式先留一层：这里的动作用的是基础映射，方案里的动作要等监听层
+        // 解析后再判断，否则方案里配好方向键也会被误判成不可用。
+        let modeFromProfile = interactionModeOverride?(profileID ?? selectedRemoteProfileID, button) != nil
+        if let mode = snapshot.mode, !snapshot.blockers(for: mode).isEmpty,
+           !(mode.isHoldDown && modeFromProfile) {
             snapshot.mode = .once
         }
         return snapshot

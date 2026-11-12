@@ -53,6 +53,11 @@ struct ButtonBindingConfigurationTests {
         #expect(reopened.configuredBaseAction(for: .back, trigger: .singleClick).action == .escape)
         #expect(reopened.interactionSettings.modes[RemoteButton.back.rawValue] == "once")
         #expect(!source.writeHoldMode(.repeatSingle, for: .back, profileID: UUID()))
+        #expect(source.writeHoldMode(.singleHold, for: .right, profileID: device))
+        #expect(source.reloadBaseHoldModes())
+        #expect(source.interactionSettings.mode(for: .right) == .singleHold)
+        #expect(!source.writeHoldMode(.longHold, for: .up, profileID: device))
+        #expect(source.interactionSettings.mode(for: .up) == .once)
     }
 
     @Test func publicBuildHidesProfileActionsAndQueriesStayUnavailable() {

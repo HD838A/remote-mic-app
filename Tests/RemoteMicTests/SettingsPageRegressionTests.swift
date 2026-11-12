@@ -107,7 +107,7 @@ struct SettingsPageRegressionTests {
         #expect(source.contains("button_mapping.hold.repeat_prefix"))
         #expect(source.contains("button_mapping.hold.clear_long_to_enable"))
         // Both hold targets share one card height, so the pair cannot look ragged.
-        #expect(source.contains("minHeight: 62, maxHeight: 62"))
+        #expect(source.contains("minHeight: 108, maxHeight: .infinity"))
         let holdPanelStart = try #require(source.range(of: "private func mappingHoldEditorPanel"))
         let holdPanelEnd = try #require(source.range(
             of: "private func mappingHoldOptionColumn",
@@ -1607,7 +1607,24 @@ struct SettingsPageRegressionTests {
         #expect(!settings.contains("holdSingle"))
         #expect(renderer.contains("REMOTE_MIC_SETTINGS_SCREENSHOT_OPEN_HOLD_EDITOR"))
         #expect(renderer.contains("REMOTE_MIC_SETTINGS_SCREENSHOT_HOLD_MODE"))
-        #expect(chinese.contains("\"button_mapping.hold.repeat_prefix\" = \"按住：重复 \""))
+        #expect(chinese.contains("\"button_mapping.hold.repeat_prefix\" = \"按住时 重复单击动作 \""))
+        #expect(chinese.contains("相当于按住键盘上的 %@，直到松手。"))
+        #expect(chinese.contains("重复执行单击动作"))
+        #expect(chinese.contains("重复执行长按动作"))
+        #expect(settings.contains("snapshot.allowsKeyHold = button.allowsKeyHold"))
+        let panelStart = try #require(settings.range(of: "private func mappingHoldEditorPanel("))
+        let modesStart = try #require(settings.range(of: "private func availableHoldModes("))
+        let titleStart = try #require(settings.range(of: "private func mappingHoldOptionTitle("))
+        let columnStart = try #require(settings.range(of: "private func mappingHoldOptionColumn("))
+        let timingStart = try #require(settings.range(of: "private var mappingGestureTimingSection:"))
+        let panel = settings[panelStart.lowerBound..<modesStart.lowerBound]
+        #expect(!panel.contains("button_mapping.hold.current_setting"))
+        #expect(!panel.contains("button_mapping.hold.timing_help"))
+        let modes = settings[modesStart.lowerBound..<titleStart.lowerBound]
+        #expect(modes.contains("snapshot.allowsKeyHold"))
+        #expect(!modes.contains("blockers(for:"))
+        let column = settings[columnStart.lowerBound..<timingStart.lowerBound]
+        #expect(column.contains("button_mapping.hold.timing_help"))
         #expect(!settings.contains("button_mapping.hold.paused_tag"))
     }
 
@@ -2099,7 +2116,7 @@ struct SettingsPageRegressionTests {
         )
 
         #expect(source.contains(
-            "accountDisplayName: membershipFeature.accountDisplayName"
+            "accountDisplayName: sidebarAccountDisplayName ?? membershipFeature.accountDisplayName"
         ))
         #expect(integration.contains("@Published private(set) var accountDisplayName: String?"))
         #expect(integration.contains("adapter.$accountDisplayName"))

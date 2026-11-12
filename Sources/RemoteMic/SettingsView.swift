@@ -952,7 +952,7 @@ struct SettingsView: View {
     private func sidebarTitleString(_ section: SettingsSection) -> String {
         if section == .statistics {
             return SettingsPageBehavior.sidebarAccountTitle(
-                accountDisplayName: membershipFeature.accountDisplayName ?? sidebarAccountDisplayName,
+                accountDisplayName: sidebarAccountDisplayName ?? membershipFeature.accountDisplayName,
                 loginTitle: localization.text("settings.section.login")
             )
         }
@@ -1061,7 +1061,7 @@ struct SettingsView: View {
     private func sidebarTitle(_ section: SettingsSection) -> Text {
         if section == .statistics {
             return Text(SettingsPageBehavior.sidebarAccountTitle(
-                accountDisplayName: membershipFeature.accountDisplayName ?? sidebarAccountDisplayName,
+                accountDisplayName: sidebarAccountDisplayName ?? membershipFeature.accountDisplayName,
                 loginTitle: localization.text("settings.section.login")
             ))
         }
@@ -3807,8 +3807,16 @@ struct SettingsView: View {
         guard let mode, mode != .once else {
             return localization.text("button_mapping.hold.entry")
         }
-        let trigger: ButtonTrigger = mode == .repeatLong ? .longPress : .singleClick
-        return localization.text("button_mapping.hold.repeat_prefix") +
+        let trigger: ButtonTrigger = (mode == .repeatLong || mode == .longHold)
+            ? .longPress
+            : .singleClick
+        let prefixKey: String = switch mode {
+        case .singleHold: "button_mapping.hold.single_hold.prefix"
+        case .longHold: "button_mapping.hold.long_hold.prefix"
+        case .repeatLong: "button_mapping.hold.repeat_long.prefix"
+        case .repeatSingle, .once: "button_mapping.hold.repeat_prefix"
+        }
+        return localization.text(prefixKey) +
             mappingHoldActionSummary(for: button, trigger: trigger)
     }
 
@@ -3825,6 +3833,7 @@ struct SettingsView: View {
     }
 
     private func setMappingHoldMode(_ mode: RemoteButtonHoldMode, for button: RemoteButton, parentOperationID: String? = nil) {
+        guard !mode.isHoldDown || button.allowsKeyHold else { return }
         guard canWriteMappingHold(button) else { return }
         let profile = editingMappingProfileID
         let device = settings.selectedRemoteProfileID
@@ -3888,6 +3897,9 @@ struct SettingsView: View {
             single: mappingConfiguration(for: button, trigger: .singleClick),
             double: mappingConfiguration(for: button, trigger: .doubleClick),
             long: mappingConfiguration(for: button, trigger: .longPress))
+        snapshot.allowsKeyHold = button.allowsKeyHold
+        snapshot.holdableSingle = snapshot.single
+        snapshot.holdableLong = snapshot.long
         // The editor mirrors runtime: a choice the actions cannot run is simply unset.
         if canWriteMappingHold(button), let mode = snapshot.mode, !snapshot.blockers(for: mode).isEmpty {
             snapshot.mode = .once
@@ -3901,11 +3913,18 @@ struct SettingsView: View {
             return localization.text("button_mapping.hold.blocker.timing_invalid")
         case .profileOwned:
             return localization.text("button_mapping.hold.blocker.profile_owned")
+        case .buttonNotHoldable:
+            return localization.text("button_mapping.hold_button_unavailable")
         case .actionUnset:
             return localization.text("button_mapping.hold.blocker.action_unset")
         case let .actionNotRepeatable(configured):
             return String(
                 format: localization.text("button_mapping.hold.blocker.action_not_repeatable"),
+                actionSummary(configured)
+            )
+        case let .actionNotHoldable(configured):
+            return String(
+                format: localization.text("button_mapping.hold.blocker.action_not_holdable"),
                 actionSummary(configured)
             )
         case let .longPressConfigured(configured):
@@ -3939,27 +3958,23 @@ struct SettingsView: View {
                         .background(Color.accentColor.opacity(0.12), in: Capsule())
                     Spacer()
                     mappingSaveStatus(button: button, trigger: nil, holdOnly: true)
-                    if snapshot.mode != .once {
-                        Button("button_mapping.hold.clear") {
-                            setMappingHoldMode(.once, for: button)
-                        }
-                        .compatibilityButtonStyle(.standard)
-                        .disabled(profileUnsupported || !canWriteMappingHold(button))
+                    Button("button_mapping.hold.clear") {
+                        setMappingHoldMode(.once, for: button)
                     }
+                    .compatibilityButtonStyle(.standard)
+                    .disabled(profileUnsupported || snapshot.mode == .once || !canWriteMappingHold(button))
+                    .help(localization.text("button_mapping.hold.clear.help"))
                 }
 
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text("button_mapping.hold.target")
-                        .font(.system(size: 13, weight: .semibold))
-                    Text("button_mapping.hold.description")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                    Spacer(minLength: 0)
-                }
+                Text("button_mapping.hold.target")
+                    .font(.system(size: 13, weight: .semibold))
 
-                HStack(alignment: .top, spacing: 8) {
-                    ForEach(RemoteButtonHoldMode.selectableCases) { mode in
+                LazyVGrid(
+                    columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)],
+                    alignment: .leading,
+                    spacing: 8
+                ) {
+                    ForEach(availableHoldModes(snapshot: snapshot)) { mode in
                         mappingHoldOptionColumn(mode, button: button, snapshot: snapshot,
                                                 profileUnsupported: profileUnsupported)
                     }
@@ -3992,8 +4007,41 @@ struct SettingsView: View {
         }
     }
 
-    /// One hold target. The card keeps a single height across both columns and its reason
-    /// sits directly underneath, so the pair always lines up.
+    /// 左右物理键显示四项；动作不可用时由卡片说明原因并禁用。
+    private func availableHoldModes(
+        snapshot: RemoteButtonInteractionSnapshot
+    ) -> [RemoteButtonHoldMode] {
+        RemoteButtonHoldMode.selectableCases.filter { !$0.isHoldDown || snapshot.allowsKeyHold }
+    }
+
+    private func mappingHoldOptionTitle(_ mode: RemoteButtonHoldMode, button: RemoteButton) -> String {
+        let trigger: ButtonTrigger = mode == .repeatLong || mode == .longHold ? .longPress : .singleClick
+        return localization.text(mode.localizationKey) + " " +
+            mappingHoldActionSummary(for: button, trigger: trigger)
+    }
+
+    private func mappingHoldOptionDescription(_ mode: RemoteButtonHoldMode, button: RemoteButton) -> String {
+        switch mode {
+        case .repeatSingle:
+            return localization.text("button_mapping.hold.repeat_single.description")
+        case .repeatLong:
+            return localization.text("button_mapping.hold.repeat_long.description")
+        case .singleHold:
+            return String(
+                format: localization.text("button_mapping.hold.single_hold.description"),
+                mappingHoldActionSummary(for: button, trigger: .singleClick)
+            )
+        case .longHold:
+            let action = mappingHoldActionSummary(for: button, trigger: .longPress)
+            return String(
+                format: localization.text("button_mapping.hold.long_hold.description"),
+                action, action
+            )
+        case .once:
+            return ""
+        }
+    }
+
     private func mappingHoldOptionColumn(
         _ mode: RemoteButtonHoldMode,
         button: RemoteButton,
@@ -4002,31 +4050,48 @@ struct SettingsView: View {
     ) -> some View {
         let blockers = snapshot.blockers(for: mode)
         let selected = snapshot.mode == mode
-        let subtitle = mode == .repeatSingle
-            ? localization.text("button_mapping.hold.repeat_single.action_prefix") +
-                mappingActionSummary(for: button, trigger: .singleClick)
-            : localization.text("button_mapping.hold.repeat_long.action_prefix") +
-                mappingActionSummary(for: button, trigger: .longPress)
-        return VStack(alignment: .leading, spacing: 5) {
+        let canClearLongAction = mode == .repeatSingle && blockers == [.longPressConfigured(snapshot.long)]
+        return ZStack(alignment: .bottomLeading) {
             Button {
                 setMappingHoldMode(mode, for: button)
             } label: {
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 6) {
+                VStack(alignment: .leading, spacing: 5) {
+                    HStack(alignment: .top, spacing: 6) {
                         Image(systemName: selected ? "checkmark.circle.fill" : "circle")
                             .foregroundStyle(selected ? Color.accentColor : Color.secondary)
-                        Text(localization.text(mode.localizationKey))
+                        Text(mappingHoldOptionTitle(mode, button: button))
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    Text(subtitle)
-                        .font(.system(size: 12))
+                    .font(.system(size: 13))
+                    Text(mappingHoldOptionDescription(mode, button: button))
                         .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if mode.isHoldDown {
+                        Text(localization.text(mode == .singleHold
+                             ? "button_mapping.hold.single_action"
+                             : "button_mapping.hold.long_action"))
+                            .foregroundStyle(.secondary)
+                    }
+                    if mode == .repeatLong || mode == .longHold {
+                        Text("button_mapping.hold.timing_help")
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    if mode == .singleHold, snapshot.recognizesDouble {
+                        Text("button_mapping.hold.wait_double")
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    ForEach(Array(blockers.enumerated()), id: \.offset) { _, blocker in
+                        Text(holdBlockerText(blocker))
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
-                .font(.system(size: 13))
-                .padding(8)
-                .frame(maxWidth: .infinity, minHeight: 62, maxHeight: 62, alignment: .topLeading)
+                .font(.system(size: 12))
+                .padding(10)
+                .padding(.bottom, canClearLongAction ? 22 : 0)
+                .frame(maxWidth: .infinity, minHeight: 108, maxHeight: .infinity, alignment: .topLeading)
                 .background(selected ? Color.accentColor.opacity(0.12) : Color.primary.opacity(0.04),
                             in: RoundedRectangle(cornerRadius: 8))
                 .overlay {
@@ -4038,27 +4103,18 @@ struct SettingsView: View {
             .disabled(profileUnsupported || !canWriteMappingHold(button) || !blockers.isEmpty)
             .accessibilityAddTraits(selected ? .isSelected : [])
 
-            if !blockers.isEmpty {
-                VStack(alignment: .leading, spacing: 3) {
-                    ForEach(Array(blockers.enumerated()), id: \.offset) { _, blocker in
-                        Text(holdBlockerText(blocker))
-                            .font(.system(size: 11))
-                            .foregroundStyle(Color.accentColor)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    if mode == .repeatSingle, blockers == [.longPressConfigured(snapshot.long)] {
-                        Button("button_mapping.hold.clear_long_to_enable") {
-                            setMappingAction(.disabled, for: button, trigger: .longPress)
-                        }
-                        .buttonStyle(.plain)
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(Color.accentColor)
-                    }
+            if canClearLongAction {
+                Button("button_mapping.hold.clear_long_to_enable") {
+                    setMappingAction(.disabled, for: button, trigger: .longPress)
                 }
-                .padding(.leading, 2)
+                .buttonStyle(.plain)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(Color.accentColor)
+                .disabled(profileUnsupported)
+                .padding(10)
             }
         }
-        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     private var mappingGestureTimingSection: some View {

@@ -62,7 +62,7 @@ enum SettingsScreenshotRenderer {
                 return value == "long" ? "Christopher Alexander Anderson" : "Christopher Anderson"
             }
             return "春风十里无线麦设计验证账户"
-        }
+        } ?? (language == .english ? "Test account" : "测试账户")
         let opensShortcutEditor = ProcessInfo.processInfo.environment[
             "REMOTE_MIC_SETTINGS_SCREENSHOT_OPEN_SHORTCUT_EDITOR"
         ] == "1"
@@ -72,6 +72,10 @@ enum SettingsScreenshotRenderer {
         let opensHoldEditor = ProcessInfo.processInfo.environment[
             "REMOTE_MIC_SETTINGS_SCREENSHOT_OPEN_HOLD_EDITOR"
         ] == "1"
+        // 按住编辑区可以针对任意按键截图：方向键才有「按住执行」入口，证据需要能选到它们。
+        let holdEditorButton = ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_SETTINGS_SCREENSHOT_HOLD_BUTTON"
+        ].flatMap(RemoteButton.init(rawValue:)) ?? .ok
         let initialActionFilter = ProcessInfo.processInfo.environment[
             "REMOTE_MIC_SETTINGS_SCREENSHOT_ACTION_FILTER"
         ]
@@ -201,17 +205,6 @@ enum SettingsScreenshotRenderer {
                 trigger: .singleClick
             )
         }
-        if let holdModeValue = ProcessInfo.processInfo.environment[
-            "REMOTE_MIC_SETTINGS_SCREENSHOT_HOLD_MODE"
-        ], let holdMode = RemoteButtonHoldMode(rawValue: holdModeValue) {
-            if holdMode == .repeatLong {
-                settings.setAction(.returnKey, for: .ok, trigger: .longPress)
-            }
-            settings.setHoldMode(holdMode, for: .ok)
-        } else if opensHoldEditor {
-            settings.setAction(.returnKey, for: .ok, trigger: .longPress)
-            settings.setHoldMode(.repeatLong, for: .ok)
-        }
         if let voiceKeyModeValue = ProcessInfo.processInfo.environment[
             "REMOTE_MIC_SETTINGS_SCREENSHOT_VOICE_KEY_MODE"
         ], let voiceKeyMode = VoiceKeyMode(rawValue: voiceKeyModeValue) {
@@ -288,6 +281,29 @@ enum SettingsScreenshotRenderer {
             if mappingScenario == "viewer" { model.macroFeature.updateButtonProfilesAccess(.requiresPlus) }
         }
         model.membershipFeature.updateLocaleIdentifier(localization.locale.identifier)
+        // 加载方案会按方案重写按住设置，按住相关的种子必须落在加载之后。
+        if let holdModeValue = ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_SETTINGS_SCREENSHOT_HOLD_MODE"
+        ], let holdMode = RemoteButtonHoldMode(rawValue: holdModeValue) {
+            if holdMode == .repeatLong {
+                settings.setAction(.returnKey, for: holdEditorButton, trigger: .longPress)
+            }
+            settings.setHoldMode(holdMode, for: holdEditorButton)
+        } else if opensHoldEditor {
+            settings.setAction(.returnKey, for: holdEditorButton, trigger: .longPress)
+            settings.setHoldMode(.repeatLong, for: holdEditorButton)
+        }
+        // 「按住执行」只在按住目标是方向键时出现，证据截图必须能种出这个状态。
+        if let holdActionValue = ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_SETTINGS_SCREENSHOT_HOLD_ACTION"
+        ], let holdAction = ButtonAction(rawValue: holdActionValue) {
+            settings.setAction(holdAction, for: holdEditorButton, trigger: .longPress)
+        }
+        if let holdSingleValue = ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_SETTINGS_SCREENSHOT_HOLD_SINGLE_ACTION"
+        ], let holdSingle = ButtonAction(rawValue: holdSingleValue) {
+            settings.setAction(holdSingle, for: holdEditorButton, trigger: .singleClick)
+        }
 
         _ = NSApplication.shared
         AppIconController().apply(settings.appIconIdentifier, source: "screenshot")
@@ -309,7 +325,9 @@ enum SettingsScreenshotRenderer {
                 initialSection: section,
                 initialShareSection: section == .statistics && expandsShare ? section : nil,
                 initialMappingEditingButton: section == .mapping && opensMappingEditor ? .ok : nil,
-                initialMappingHoldEditingButton: section == .mapping && opensHoldEditor ? .ok : nil,
+                initialMappingHoldEditingButton: section == .mapping && opensHoldEditor
+                    ? holdEditorButton
+                    : nil,
                 initialMappingProfileID: section == .mapping ? seededProfileID : nil,
                 initialMappingSaveScenario: section == .mapping ? mappingScenario : nil,
                 initialShortcutPickerShowsKeyboard: showsStandardKeyboard,
@@ -350,7 +368,7 @@ enum SettingsScreenshotRenderer {
                     ? .ok
                     : nil,
                 initialMappingHoldEditingButton: section == .mapping && opensHoldEditor
-                    ? .ok
+                    ? holdEditorButton
                     : nil,
                 initialMappingProfileID: section == .mapping ? seededProfileID : nil,
                 initialMappingSaveScenario: section == .mapping ? mappingScenario : nil,
