@@ -51,3 +51,15 @@
   升级后才会在正式包里生效；本 PR 的能力探测保证旧版本下行为不变。
 - 宿主侧只覆盖「进入页面时重读」。停留在按键页时另一进程改名的场景，要等组件侧
   的通知机制在同进程内生效；跨进程仍需重新进入页面。
+
+### 代码评审记录的后续项
+
+宿主侧这轮评审还有三条不阻塞合入的整洁性问题：
+
+- `reloadButtonProfileMacroLibrary()` 是 fire-and-forget 的 `Task { }`，没有并发去重。
+  快速来回切页签会并发发起多次全量宏库读，每次都要抢全局存储锁。可以加一个
+  「正在刷新」的闸门。
+- `.onAppear`（按 `selectedSection` 判断）与 `.onChange(of: selectedSection)` 两个入口
+  都会触发刷新，首次进入按键页可能连读两次宏库。多余磁盘读，不是错误。
+- 旧私有包下 `shouldRefresh` 仍返回 `true`，每次进页面都会调一次空实现。
+  可以把调用点也放进 `#if canImport(SayAllButtonProfiles) && SAYALL_BUTTON_PROFILE_MACRO_RELOAD`。
