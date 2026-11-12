@@ -31,9 +31,9 @@
 
 ## 验证
 
-- 公开模式：`SAYALL_PRIVATE_PLATFORM_MODE=public swift test --disable-keychain`。跳过与本次无关的并行 release fixture 后，1386 项测试、100 个套件通过；方案快照、继承状态、会员门禁和公开兼容用例通过。全量并行运行时 `releaseControlPlaneFixtureHasExecutableRegressionCoverage` 失败，同一脚本单独执行通过。
-- 私有 2.9.0 源码：`SAYALL_ENABLE_PRIVATE_SWIFTPM=1 SAYALL_ENABLE_BUTTON_PROFILES=1`，用 Tag `2.9.0` 的私有 checkout 构建。跳过同一 fixture 后，1452 项测试、109 个套件通过；旧构件集成用例覆盖列表、创建、原始复制、未知 payload、固定引用、非会员只读和默认方案识别。
-- 私有主线源码：自动保存接口已由 `Package.swift` 探测启用；`mappingProfileAdapterPreservesReadOnlyDisplayAndCompleteCopy` 与相关回归通过，证明新版路径仍可编译和运行。
+- 公开模式：`SAYALL_PRIVATE_PLATFORM_MODE=public swift test --disable-keychain`。跳过与本次无关的并行 release fixture 后，1389 项测试、101 个套件通过；方案快照、继承状态、会员门禁和公开兼容用例通过。全量并行运行时 `releaseControlPlaneFixtureHasExecutableRegressionCoverage` 失败，同一脚本单独执行通过。
+- 私有 2.9.0 源码：`SAYALL_ENABLE_PRIVATE_SWIFTPM=1 SAYALL_ENABLE_BUTTON_PROFILES=1`，用 Tag `2.9.0` 的私有 checkout 构建。跳过同一 fixture 后，1455 项测试、110 个套件通过；旧构件集成用例覆盖列表、创建、原始复制、未知 payload、固定引用、非会员只读和默认方案识别。
+- 私有主线源码：自动保存接口已由 `Package.swift` 探测启用；`mappingProfileAdapterPreservesReadOnlyDisplayAndCompleteCopy` 与相关回归通过，1455 项测试、110 个套件通过，证明新版路径仍可编译和运行。
 - 生产界面：用 2.9.0 私有源码构建的 `SettingsView` 离屏入口渲染 `1020 × 772` 中文浅色与深色。顶部方案行可见，「默认」只出现一次，已有方案和右侧创建/复制入口可见；选择方案后可看到继承/覆盖状态，自动保存方案可看到「清除覆盖」。截图索引见 `Screenshots/bug-fixes/mapping-profile-list-fix/manifest.json`。
 - `scripts/verify-repository-governance.sh`、`scripts/check-repository-boundaries.sh` 与 `git diff --check` 通过。
 
