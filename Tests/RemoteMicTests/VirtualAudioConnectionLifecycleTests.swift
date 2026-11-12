@@ -736,7 +736,6 @@ struct VirtualAudioConnectionLifecycleTests {
         )
 
         for reason in [
-            "bluetooth_ready",
             "bluetooth_voice_start",
             "mobile_voice_start",
             "test_tone",
@@ -744,6 +743,7 @@ struct VirtualAudioConnectionLifecycleTests {
         ] {
             #expect(source.contains("ensureVirtualAudioOutputReady(reason: \"\(reason)\")"))
         }
+        #expect(source.contains("ensureVirtualAudioOutputReady(reason: \"bluetooth_ready\", isExplicitRequest: false)"))
         #expect(!source.contains("isAudioOutputReady || configureVirtualAudioOutput"))
     }
 
@@ -1015,6 +1015,110 @@ struct VirtualAudioConnectionLifecycleTests {
             systemSuspended: false,
             idleBridgeReleaseDue: true
         ))
+    }
+
+    @Test func idleReleaseStateIsSharedByTimeoutAndBackgroundRecovery() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
+            encoding: .utf8
+        )
+
+        #expect(source.contains("idleBridgeReleaseDue: allowingIdleBridgeRelease ||"))
+        #expect(source.contains("virtualAudioIdleRelease.isReleased && audioOutput.pendingVoiceBufferCountForDiagnostics == 0"))
+        #expect(source.contains("virtualAudioIdleRelease.release()"))
+        #expect(source.contains("self.applyAudioSettings(reason: \"recovery_\\(effectiveReason)\", isExplicitRequest: false)"))
+        #expect(source.contains("ensureVirtualAudioOutputReady(reason: \"chromecast_link_ready\", isExplicitRequest: false)"))
+        #expect(source.contains("decision=virtual_audio_inactive idle_released="))
+    }
+
+    @Test func idleReleaseSurvivesRepeatedBackgroundRecoveryAndReconnects() {
+        var state = VirtualAudioIdleReleaseState()
+        let initialActivation = state.requestActivation(hasDemand: false)
+        #expect(initialActivation)
+        state.release()
+
+        for _ in 0..<10 {
+            let backgroundActivation = state.requestActivation(hasDemand: false)
+            #expect(!backgroundActivation)
+            #expect(state.isReleased)
+            #expect(!VirtualAudioConnectionLifecyclePolicy.shouldBeActive(
+                readyBluetoothBridgeCount: 2,
+                bluetoothVoiceActive: false,
+                mobileVoiceActive: false,
+                testToneActive: false,
+                systemSuspended: false,
+                idleBridgeReleaseDue: state.isReleased
+            ))
+        }
+    }
+
+    @Test func explicitActivationResumesIdleOutputAndAllowsFailureRecovery() {
+        var state = VirtualAudioIdleReleaseState()
+        state.release()
+        let explicitActivation = state.requestActivation(hasDemand: true)
+        #expect(explicitActivation)
+        #expect(!state.isReleased)
+
+        // 真实请求后的配置失败继续沿用原有后台恢复，不能被旧空闲状态锁死。
+        let failureRecovery = state.requestActivation(hasDemand: false)
+        #expect(failureRecovery)
+        state.release()
+        let nextIdleRecovery = state.requestActivation(hasDemand: false)
+        #expect(!nextIdleRecovery)
+    }
+
+    @Test func voiceArrivingDuringIdleDrainCancelsTheIdleGate() {
+        var state = VirtualAudioIdleReleaseState()
+        state.release()
+        let voiceActivation = state.requestActivation(hasDemand: true)
+        #expect(voiceActivation)
+        #expect(VirtualAudioConnectionLifecyclePolicy.shouldBeActive(
+            readyBluetoothBridgeCount: 1,
+            bluetoothVoiceActive: true,
+            mobileVoiceActive: false,
+            testToneActive: false,
+            systemSuspended: false,
+            idleBridgeReleaseDue: state.isReleased
+        ))
+        #expect(!state.isReleased)
+    }
+
+    @Test func activeSourcesRemainEligibleForRecoveryAfterIdleRelease() {
+        for (bluetooth, mobile, tone) in [(true, false, false), (false, true, false), (false, false, true)] {
+            var state = VirtualAudioIdleReleaseState()
+            state.release()
+            #expect(VirtualAudioConnectionLifecyclePolicy.shouldBeActive(
+                readyBluetoothBridgeCount: 0,
+                bluetoothVoiceActive: bluetooth,
+                mobileVoiceActive: mobile,
+                testToneActive: tone,
+                systemSuspended: true,
+                idleBridgeReleaseDue: state.isReleased
+            ))
+            let activeRecovery = state.requestActivation(hasDemand: bluetooth || mobile || tone)
+            #expect(activeRecovery)
+        }
+    }
+
+    @Test func pendingTailAudioMayRecoverBeforeIdleReleaseCompletes() {
+        var state = VirtualAudioIdleReleaseState()
+        state.release()
+        let pendingBuffers = 1
+        #expect(VirtualAudioConnectionLifecyclePolicy.shouldBeActive(
+            readyBluetoothBridgeCount: 1,
+            bluetoothVoiceActive: false,
+            mobileVoiceActive: false,
+            testToneActive: false,
+            systemSuspended: false,
+            idleBridgeReleaseDue: state.isReleased && pendingBuffers == 0
+        ))
+        let tailRecovery = state.requestActivation(hasDemand: pendingBuffers > 0)
+        #expect(tailRecovery)
+        #expect(!state.isReleased)
     }
 
     @Test func idleBridgeTimeoutNeverInterruptsRunningAudioSource() {
