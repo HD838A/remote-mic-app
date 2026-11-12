@@ -213,10 +213,31 @@ jobs:
         env:
           RELEASE_VARIANT: apple-silicon
           REMOTE_MIC_BUILD_SCRATCH_PATH: ${{ github.workspace }}/.build
+          SAYALL_LOCAL_APP_TARGET: ${{ runner.temp }}/sayall-public/SayAll.app
+          SAYALL_LOCAL_DEFER_LAUNCH: "1"
         run: |
-          env -u SAYALL_PRIVATE_PLATFORM_MODE ./scripts/build-app.sh
-          ./scripts/verify-app.sh dist/SayAll.app
-          test "$(plutil -extract SayAllPrivateArtifactsIncluded raw -o - dist/SayAll.app/Contents/Info.plist)" = false
+          env -u SAYALL_PRIVATE_PLATFORM_MODE ./scripts/package-local-test-app.sh
+          ./scripts/verify-app.sh "$SAYALL_LOCAL_APP_TARGET"
+          test "$(plutil -extract SayAllPrivateArtifactsIncluded raw -o - "$SAYALL_LOCAL_APP_TARGET/Contents/Info.plist")" = false
+          test "$(plutil -extract SayAllBuildChannel raw -o - "$SAYALL_LOCAL_APP_TARGET/Contents/Info.plist")" = public
+
+      - name: Launch the packaged public App
+        if: needs.classify_changes.outputs.product_change == 'true'
+        env:
+          PUBLIC_APP: ${{ runner.temp }}/sayall-public/SayAll.app
+        run: |
+          open -n "$PUBLIC_APP"
+          app_pid=""
+          for _ in {1..20}; do
+            app_pid="$(pgrep -fx "$PUBLIC_APP/Contents/MacOS/RemoteMic" || true)"
+            [[ -z "$app_pid" ]] || break
+            sleep 0.5
+          done
+          test -n "$app_pid"
+          trap 'kill -TERM "$app_pid" 2>/dev/null || true' EXIT
+          sleep 2
+          kill -0 "$app_pid"
+          echo 'PUBLIC APP STARTUP result=passed'
 
   test:
     name: Swift tests and build (${{ matrix.label }})
