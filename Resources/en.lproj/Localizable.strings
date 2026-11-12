@@ -1276,6 +1276,7 @@
 "button_mapping.active_profile" = "Active";
 
 "button_mapping.base_profile" = "Default Mapping";
+"button_mapping.profile_scope_label" = "Button Profile";
 "button_mapping.save_as_profile" = "Save as Button Profile";
 "button_mapping.save_as_profile.name" = "Profile name";
 "button_mapping.save_as_profile.note" = "Copies the current actions and hold settings into a separate profile. Later changes to the base mapping won’t affect it.";

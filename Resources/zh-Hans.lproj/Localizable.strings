@@ -1275,6 +1275,7 @@
 "button_mapping.active_profile" = "正在使用";
 
 "button_mapping.base_profile" = "基础映射";
+"button_mapping.profile_scope_label" = "键位方案";
 "button_mapping.save_as_profile" = "保存为键位方案";
 "button_mapping.save_as_profile.name" = "方案名称";
 "button_mapping.save_as_profile.note" = "会把当前的动作与按住方式复制成一份独立方案；之后修改基础映射，这份方案不会跟着变。";

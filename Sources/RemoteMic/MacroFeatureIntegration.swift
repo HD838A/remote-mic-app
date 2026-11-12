@@ -684,18 +684,32 @@ final class MacroFeatureIntegration: ObservableObject {
     #if canImport(SayAllMacroRemoteMic) && SAYALL_UNIFIED_BUTTON_CONFIGURATION
     private func bindingUsages(_ settings: AppSettings) -> [RemoteMicBindingUsage] {
         let localization = LocalizationStore(settings: settings)
-        func deviceName(_ id: UUID?) -> String {
-            guard let profile = settings.remoteDeviceProfiles.first(where: { $0.id == id }) else {
-                return localization.text("button_mapping.base_profile")
+        /// 绑定所属设备的显示名；没有设备归属时返回 nil，由调用方只保留作用域文案，
+        /// 避免出现「基础映射 · 基础映射」这种重复前缀。
+        func deviceTitle(_ id: UUID?) -> String? {
+            guard let id, let profile = settings.remoteDeviceProfiles.first(where: { $0.id == id }) else {
+                return nil
             }
             return RemoteDeviceNamePolicy.displayName(for: profile, among: settings.remoteDeviceProfiles,
                 defaultName: localization.text(profile.displayNameFallbackKey))
+        }
+        /// 方案条目的作用域前缀：方案绑在某个设备下时用设备名，
+        /// 没有设备时用「键位方案」。这里不能回落到「基础映射」——
+        /// 那是基础映射作用域的文案，出现在方案条目上会让人以为
+        /// 这个动作配在基础映射里，而不是配在方案里。
+        func profileScopeName(_ id: UUID?) -> String {
+            MacroUsageScopeTitle.profile(
+                deviceName: deviceTitle(id),
+                profileScopeLabel: localization.text("button_mapping.profile_scope_label"))
         }
         var usages = settings.unifiedBaseBindings.compactMap { binding -> RemoteMicBindingUsage? in
             guard binding.configured.action == .combinationAction, let id = binding.configured.macroID else { return nil }
             return RemoteMicBindingUsage(
                 id: "base.\(binding.remoteProfileID?.uuidString ?? "default").\(binding.button.rawValue).\(binding.trigger.rawValue)",
-                macroID: id, title: deviceName(binding.remoteProfileID) + " · " + localization.text("button_mapping.base_profile") + " · " + binding.button.displayName(using: localization) + " · " + binding.trigger.displayName(using: localization),
+                macroID: id, title: MacroUsageScopeTitle.base(
+                    deviceName: deviceTitle(binding.remoteProfileID),
+                    baseLabel: localization.text("button_mapping.base_profile"))
+                    + " · " + binding.button.displayName(using: localization) + " · " + binding.trigger.displayName(using: localization),
                 device: binding.remoteProfileID, profile: nil, button: binding.button.rawValue, trigger: binding.trigger.rawValue)
         }
         func appendLegacy(_ bindings: [RemoteButton: [ButtonTrigger: ConfiguredButtonAction]], device: UUID?) {
@@ -706,7 +720,10 @@ final class MacroFeatureIntegration: ObservableObject {
                     else { continue }
                     usages.append(RemoteMicBindingUsage(
                         id: "secondary.\(device?.uuidString ?? "default").\(button.rawValue).\(trigger.rawValue).\(id)",
-                        macroID: id, title: deviceName(device) + " · " + localization.text("button_mapping.base_profile") + " · " + button.displayName(using: localization) + " · " + trigger.displayName(using: localization),
+                        macroID: id, title: MacroUsageScopeTitle.base(
+                            deviceName: deviceTitle(device),
+                            baseLabel: localization.text("button_mapping.base_profile"))
+                            + " · " + button.displayName(using: localization) + " · " + trigger.displayName(using: localization),
                         device: device, profile: nil, button: button.rawValue, trigger: trigger.rawValue))
                 }
             }
@@ -728,7 +745,7 @@ final class MacroFeatureIntegration: ObservableObject {
                 }
                 guard let id else { continue }
                 usages.append(RemoteMicBindingUsage(id: "\(profile.id).\(key.button.rawValue).\(key.trigger.rawValue)",
-                    macroID: id, title: deviceName(profile.remoteProfileID) + " · " + buttonProfilesFeature.profileDisplayName(profile) + " · " + (RemoteButton(rawValue: key.button.rawValue)?.displayName(using: localization) ?? key.button.rawValue) + " · " + (ButtonTrigger(rawValue: key.trigger.rawValue)?.displayName(using: localization) ?? key.trigger.rawValue),
+                    macroID: id, title: profileScopeName(profile.remoteProfileID) + " · " + buttonProfilesFeature.profileDisplayName(profile) + " · " + (RemoteButton(rawValue: key.button.rawValue)?.displayName(using: localization) ?? key.button.rawValue) + " · " + (ButtonTrigger(rawValue: key.trigger.rawValue)?.displayName(using: localization) ?? key.trigger.rawValue),
                     device: profile.remoteProfileID, profile: profile.id, button: key.button.rawValue, trigger: key.trigger.rawValue))
             }
         }
@@ -744,7 +761,9 @@ final class MacroFeatureIntegration: ObservableObject {
             usages.append(RemoteMicBindingUsage(
                 id: "legacy.\(legacy.device?.uuidString ?? "default").\(legacy.button).\(legacy.trigger)",
                 macroID: legacy.macroID,
-                title: localization.text("settings.section.macros") + " · " + deviceName(legacy.device) + " · " + buttonTitle + " · " + triggerTitle,
+                title: ([localization.text("settings.section.macros"), deviceTitle(legacy.device)] + [buttonTitle, triggerTitle])
+                    .compactMap { $0 }
+                    .joined(separator: " · "),
                 device: legacy.device, profile: nil, button: legacy.button, trigger: legacy.trigger))
         }
         return usages.sorted { $0.id < $1.id }
