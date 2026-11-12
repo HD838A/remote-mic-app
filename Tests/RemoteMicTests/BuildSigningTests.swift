@@ -11,7 +11,7 @@ struct BuildSigningTests {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         let source = try String(contentsOf: root.appendingPathComponent("scripts/package-local-test-app.sh"), encoding: .utf8)
         let start = try #require(source.range(of: "platform_version="))
-        let end = try #require(source.range(of: "zmodload zsh/system", range: start.upperBound..<source.endIndex))
+        let end = try #require(source.range(of: "\n    ;;\n  *)", range: start.upperBound..<source.endIndex))
         let preflight = source[start.lowerBound..<end.lowerBound]
         let harness = """
         set -euo pipefail
@@ -47,6 +47,47 @@ struct BuildSigningTests {
         #expect((process.terminationStatus == 0) == (mode == "published" || mode == "local"))
         #expect(output.contains("accepted") == (process.terminationStatus == 0))
         #expect(output.contains("checked_local") == (mode == "local" || mode == "invalid_local"))
+    }
+
+    @Test(arguments: ["public", "default", "private_input", "required_missing", "public_private", "invalid"])
+    func localPackageSelectsPublicOrRequiredBeforeBuilding(mode: String) throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        let source = try String(contentsOf: root.appendingPathComponent("scripts/package-local-test-app.sh"), encoding: .utf8)
+        let start = try #require(source.range(of: "private_inputs=false"))
+        let end = try #require(source.range(of: "zmodload zsh/system"))
+        let preflight = source[start.lowerBound..<end.lowerBound]
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/zsh")
+        process.arguments = ["-c", "set -euo pipefail\n" + preflight + "\nprint selected=$local_mode"]
+        var environment = ProcessInfo.processInfo.environment.filter {
+            !$0.key.hasPrefix("SAYALL_") && $0.key != "CODE_SIGN_IDENTITY"
+        }
+        switch mode {
+        case "public", "public_private": environment["SAYALL_PRIVATE_PLATFORM_MODE"] = "public"
+        case "required_missing": environment["SAYALL_PRIVATE_PLATFORM_MODE"] = "required"
+        case "invalid": environment["SAYALL_PRIVATE_PLATFORM_MODE"] = "auto"
+        default: break
+        }
+        if mode == "private_input" || mode == "public_private" {
+            environment["SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH"] = "/fixture/artifacts"
+        }
+        process.environment = environment
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = pipe
+        try process.run()
+        let output = String(decoding: pipe.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+        process.waitUntilExit()
+        let isPublic = mode == "public" || mode == "default"
+        #expect((process.terminationStatus == 0) == isPublic)
+        #expect(output.contains("selected=public") == isPublic)
+        if mode == "private_input" || mode == "required_missing" {
+            #expect(output.contains("Set the private platform source root"))
+        }
+        if mode == "public_private" {
+            #expect(output.contains("Public local builds exclude private inputs"))
+        }
     }
 
     @Test func membershipServiceEnvironmentStaysBehindOptionalAdapter() throws {
