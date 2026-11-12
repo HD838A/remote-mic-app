@@ -648,6 +648,30 @@ struct ShortcutLifecycleTests {
         #expect(logs.isEmpty)
     }
 
+    @Test(arguments: [0xA, 0xB])
+    func sessionObservationPreservesSystemKeyCorrelationOnTheTapThread(state: Int) throws {
+        let observation = ShortcutSessionObservation()
+        let event = try #require(NSEvent.otherEvent(
+            with: .systemDefined, location: .zero, modifierFlags: .capsLock,
+            timestamp: 1, windowNumber: 0, context: nil,
+            subtype: 8, data1: (16 << 16) | (state << 8), data2: -1
+        )?.cgEvent)
+        event.setIntegerValueField(.eventSourceUserData, value: KeyboardInjector.syntheticEventMarker)
+        observation.register(event, operationID: "media-test", eventIndex: 0, primaryKind: "media")
+        var logs: [String] = []
+        let completed = EventTapRunLoop.shared.performAndWait {
+            observation.observe(event, logger: { logs.append($0) })
+            observation.observe(event, logger: { logs.append($0) })
+        }
+        #expect(completed)
+        #expect(logs.count == 1)
+        #expect(logs.first?.contains("operation_id=media-test") == true)
+        #expect(logs.first?.contains("correlation=matched") == true)
+        #expect(logs.first?.contains("event_kind=system_key_\(state == 0xA ? "down" : "up")") == true)
+        #expect(logs.first?.contains("flags_match=true result=passed_through user_visible_result=unknown") == true)
+        #expect(event.type.rawValue == NSEvent.EventType.systemDefined.rawValue)
+    }
+
     @Test func sessionObservationReportsChangedFlagsOnlyOnce() throws {
         let observation = ShortcutSessionObservation()
         let event = try #require(CGEvent(keyboardEventSource: nil, virtualKey: 126, keyDown: true))
