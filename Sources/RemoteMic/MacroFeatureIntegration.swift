@@ -691,6 +691,21 @@ final class MacroFeatureIntegration: ObservableObject {
             return RemoteDeviceNamePolicy.displayName(for: profile, among: settings.remoteDeviceProfiles,
                 defaultName: localization.text(profile.displayNameFallbackKey))
         }
+        /// 方案条目的作用域前缀：方案绑在某个设备下时用设备名，
+        /// 没有设备时用「键位方案」。这里不能回落到「基础映射」——
+        /// 那是基础映射作用域的文案，出现在方案条目上会让人以为
+        /// 这个动作配在基础映射里，而不是配在方案里。
+        func profileScopeName(_ id: UUID?) -> String {
+            let deviceTitle = id.flatMap { deviceID in
+                settings.remoteDeviceProfiles.first(where: { $0.id == deviceID })
+            }.map { profile in
+                RemoteDeviceNamePolicy.displayName(for: profile, among: settings.remoteDeviceProfiles,
+                    defaultName: localization.text(profile.displayNameFallbackKey))
+            }
+            return MacroUsageScopeTitle.profile(
+                deviceName: deviceTitle,
+                profileScopeLabel: localization.text("button_mapping.profile_scope_label"))
+        }
         var usages = settings.unifiedBaseBindings.compactMap { binding -> RemoteMicBindingUsage? in
             guard binding.configured.action == .combinationAction, let id = binding.configured.macroID else { return nil }
             return RemoteMicBindingUsage(
@@ -728,7 +743,7 @@ final class MacroFeatureIntegration: ObservableObject {
                 }
                 guard let id else { continue }
                 usages.append(RemoteMicBindingUsage(id: "\(profile.id).\(key.button.rawValue).\(key.trigger.rawValue)",
-                    macroID: id, title: deviceName(profile.remoteProfileID) + " · " + buttonProfilesFeature.profileDisplayName(profile) + " · " + (RemoteButton(rawValue: key.button.rawValue)?.displayName(using: localization) ?? key.button.rawValue) + " · " + (ButtonTrigger(rawValue: key.trigger.rawValue)?.displayName(using: localization) ?? key.trigger.rawValue),
+                    macroID: id, title: profileScopeName(profile.remoteProfileID) + " · " + buttonProfilesFeature.profileDisplayName(profile) + " · " + (RemoteButton(rawValue: key.button.rawValue)?.displayName(using: localization) ?? key.button.rawValue) + " · " + (ButtonTrigger(rawValue: key.trigger.rawValue)?.displayName(using: localization) ?? key.trigger.rawValue),
                     device: profile.remoteProfileID, profile: profile.id, button: key.button.rawValue, trigger: key.trigger.rawValue))
             }
         }
