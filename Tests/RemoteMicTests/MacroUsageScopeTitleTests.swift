@@ -26,4 +26,17 @@ struct MacroUsageScopeTitleTests {
         #expect(scope != "基础映射")
         #expect(scope != "Default Mapping")
     }
+
+    @Test func keepsTheDeviceNameInBaseMappingTitles() {
+        #expect(
+            MacroUsageScopeTitle.base(deviceName: "小米蓝牙遥控器 2", baseLabel: "基础映射")
+                == "小米蓝牙遥控器 2 · 基础映射"
+        )
+    }
+
+    @Test func doesNotRepeatTheBaseMappingLabelWithoutADevice() {
+        #expect(
+            MacroUsageScopeTitle.base(deviceName: nil, baseLabel: "基础映射") == "基础映射"
+        )
+    }
 }

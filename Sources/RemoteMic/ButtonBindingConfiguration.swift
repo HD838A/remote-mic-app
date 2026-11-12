@@ -29,4 +29,11 @@ enum MacroUsageScopeTitle {
     static func profile(deviceName: String?, profileScopeLabel: String) -> String {
         deviceName ?? profileScopeLabel
     }
+
+    /// 基础映射条目的作用域名称：绑定在某个设备下时是「设备 · 基础映射」，
+    /// 没有设备归属时只留「基础映射」，不出现「基础映射 · 基础映射」。
+    static func base(deviceName: String?, baseLabel: String) -> String {
+        guard let deviceName else { return baseLabel }
+        return deviceName + " · " + baseLabel
+    }
 }
