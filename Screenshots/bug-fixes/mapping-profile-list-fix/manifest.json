@@ -1,0 +1,100 @@
+{
+  "batch": "bug-fixes/mapping-profile-list-fix",
+  "date": "2026-11-12",
+  "purpose": "旧私有构件下按键页方案列表消失的修复前后对照（Bug 记录 Bugs/2026-11-12-mapping-profile-list-hidden-by-autosave-gate.md，PR #1023）",
+  "host_base": "before=13b78884; after=80d45e5c; final=b30cae9b",
+  "window_points": [
+    1020,
+    772
+  ],
+  "storage": "external-persistent-directory-and-github-pr-attachments",
+  "storage_path": "~/Develop/ReleaseArtifacts/mapping-profile-list-fix/",
+  "notes": [
+    "由生产 SettingsView 的 REMOTE_MIC_SETTINGS_SCREENSHOT_DIR 离屏入口生成；不是设计稿，也不启动硬件。",
+    "修改前使用 origin/main 13b78884，中间修改后使用本 PR 代码提交 80d45e5c，最终修改后使用 b30cae9b（在 9e5ccb35 基础上移除网格「继承：」前缀）；均使用私有源码 Tag 2.9.0，自动保存覆盖截图使用私有主线源码。",
+    "隔离 fixture 包含默认方案和测试方案；修改后截图由截图场景创建并选中一个测试方案，证明创建路径和右侧入口可用。",
+    "会员访问由截图 fixture 授权，不代表真实会员验收。",
+    "图片字节不入库，本文件只做文本索引；外部链接为 PR #1023 的 GitHub 附件。",
+    "9b398436 合并 origin/main 6a307565 后重新构建并渲染，after-base、after-inherited、after-autosave-clear 和 after-base-zh-dark 四张图片的 SHA-256 与 9e5ccb35 结果一致。",
+    "after-1020x772-zh-light-v2 与 after-1020x772-zh-dark-v2 是中间修订的历史证据，保留不重写；最终状态以 after-base、after-inherited-no-prefix、after-autosave-clear 和 after-base-zh-dark 条目为准。",
+    "b30cae9b 只把继承状态保留在选中按键的编辑区；网格按键摘要继续显示实际动作，不再逐键叠加「继承：」前缀。"
+  ],
+  "images": [
+    {
+      "file": "before-1020x772-zh-light.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "16b83517023e68cd927b73f04883aaf1ab2f24d9dbaa326854c6f82b4977f071",
+      "state": "before",
+      "external_url": "https://github.com/user-attachments/assets/4b64fb7d-78ba-45dd-a2ee-7e91cd3d1a5b"
+    },
+    {
+      "file": "after-1020x772-zh-light-v2.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "1ec5ff4e6aaef724234cfaad289fb37d7a7cc7e3e0e93d917bfa504b598913e7",
+      "state": "after",
+      "note": "中间修订历史证据，保留不重写。",
+      "external_url": "https://github.com/user-attachments/assets/d30cf7a3-8fc3-4962-a980-a9c5e6e9a871"
+    },
+    {
+      "file": "after-1020x772-zh-dark-v2.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "28add7b05f4ae021a2c9db4dc6b0570b2256581a083c26f02b41250f9ad96e04",
+      "state": "after",
+      "note": "中间修订历史证据，保留不重写。",
+      "external_url": "https://github.com/user-attachments/assets/bcfdd552-fe25-4fe9-a90e-a686438349b8"
+    },
+    {
+      "file": "after-base-1020x772-zh-light.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "fbfedb265f860961f099d93243f790333c1548a6a9139e6f6c1ca6fc4c9656c7",
+      "state": "after-final",
+      "external_url": "https://github.com/user-attachments/assets/5e980ad6-5f50-458d-946e-b1ffcdbf212d"
+    },
+    {
+      "file": "after-inherited-1020x772-zh-light.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "907278a23a66887da4b0b9d518afeaf76e58d16d309adbb924648817bec532fc",
+      "state": "after-historical",
+      "external_url": "https://github.com/user-attachments/assets/63bbf0aa-9987-445a-8244-a5ae1441e65c",
+      "note": "历史证据：9e5ccb35 的编辑区状态图；网格前缀已在 b30cae9b 移除。"
+    },
+    {
+      "file": "after-autosave-clear-1020x772-zh-light.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "66f29df91548b822084420ef3e1810458a37ea800693cd9a9649c7fa98dad1a2",
+      "state": "after-final",
+      "external_url": "https://github.com/user-attachments/assets/6ef0301e-ca1b-4497-b2a8-859ef0ad4b58"
+    },
+    {
+      "file": "after-base-1020x772-zh-dark.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "731bf69b03800899943f3df2c4c2366aecf09a7cea777732ebd1c3c6b41bf5a5",
+      "state": "after-final",
+      "external_url": "https://github.com/user-attachments/assets/69ae26ff-a3b6-4e16-bf14-b9f1066f375e"
+    },
+    {
+      "file": "after-inherited-no-prefix-1020x772-zh-light.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "1d95f80cebcc27ca5a0c7df8d0783ea8cd0d497528b44779897f0407468cd6c9",
+      "state": "after-final",
+      "external_url": "https://github.com/user-attachments/assets/05636f57-35d2-4a74-b7c2-a807ace66f5d"
+    }
+  ],
+  "sourceCommit": "b30cae9b"
+}

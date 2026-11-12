@@ -1114,8 +1114,8 @@ struct SettingsView: View {
                         onEditBinding: { device, profile, button, trigger in
                             preservesMappingContextOnNavigation = true
                             if let device { settings.selectRemoteProfile(device) }
-                            // 从组合动作页点进来的同样是「编辑这份方案」的意图：走同一个解锁入口，
-                            // 会员没通过时停在只读预览，不会借这条路绕过限制。
+                            // 从组合动作页点进来只选择方案对象；写权限仍由
+                            // direct-edit 的会员与只读判定决定，不绕过限制。
                             if let profile {
                                 selectMappingProfile(profile)
                             } else {
@@ -2138,7 +2138,8 @@ struct SettingsView: View {
             return .explicit(.init(configured: settings.configuredBaseAction(for: button, trigger: trigger),
                 compact: "", detailed: "", isEditable: false))
         }
-        return macroFeature.displayProfileBinding(profile: profile, button: button, trigger: trigger)
+        return macroFeature.displayProfileBinding(device: settings.selectedRemoteProfileID,
+            profile: profile, button: button, trigger: trigger)
     }
 
     private func mappingConfiguration(for button: RemoteButton, trigger: ButtonTrigger) -> ConfiguredButtonAction {
@@ -2297,12 +2298,6 @@ struct SettingsView: View {
             Text(localization.text("button_mapping.profile.source") + " " + creation.sourceName)
                 .font(.system(size: 12))
                 .lineLimit(2)
-            if let savingMappingProfileError {
-                Text(savingMappingProfileError)
-                    .font(.system(size: 12))
-                    .foregroundStyle(.red)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
             HStack {
                 Spacer()
                 Button(localization.text("common.action.cancel")) {
@@ -2327,11 +2322,13 @@ struct SettingsView: View {
 
     private func beginSavingMappingProfile() {
         guard canEditMappingProfiles else { return }
-        let sourceName = macroFeature.mappingProfiles(device: settings.selectedRemoteProfileID)
-            .first { $0.id == editingMappingProfileID }?.name ?? localization.text("button_mapping.base_profile")
+        let profiles = macroFeature.mappingProfiles(device: settings.selectedRemoteProfileID)
+        let sourceName = profiles.first { $0.id == editingMappingProfileID }?.name
+            ?? localization.text("button_mapping.base_profile")
         mappingProfileCreation = .init(sourceProfileID: editingMappingProfileID,
             deviceID: settings.selectedRemoteProfileID, sourceName: sourceName,
-            name: editingMappingProfileID == nil ? localization.text("button_mapping.save_as_profile.default_name")
+            name: editingMappingProfileID == nil
+                ? "\(localization.text("button_mapping.save_as_profile.default_name")) \(profiles.count + 1)"
                 : sourceName + localization.text("button_mapping.profile.copy_suffix"))
         savingMappingProfileError = nil
     }
@@ -2347,43 +2344,48 @@ struct SettingsView: View {
         guard !name.isEmpty else { return }
         var bindings: [UnifiedButtonBinding] = []
         var holdModes: [String: String] = [:]
+        var displayNames: [String: String] = [:]
         if creation.sourceProfileID == nil {
-            for button in RemoteButton.allCases where macroFeature.supportsProfileButton(button.rawValue) {
-                for trigger in ButtonTrigger.allCases {
-                    bindings.append(.init(remoteProfileID: creation.deviceID, button: button,
-                        trigger: trigger, configured: settings.configuredBaseAction(for: button, trigger: trigger)))
-                }
-                if let mode = settings.interactionSettings.mode(for: button) { holdModes[button.rawValue] = mode.rawValue }
+            let snapshot = settings.mappingProfileSnapshot(deviceID: creation.deviceID) {
+                macroFeature.supportsProfileButton($0)
+            }
+            bindings = snapshot.bindings
+            holdModes = snapshot.holdModes
+            for binding in bindings {
+                displayNames["\(binding.button.rawValue).\(binding.trigger.rawValue)"] =
+                    binding.configured.action == .disabled
+                        ? localization.text("button_mapping.action.no_action")
+                        : actionSummary(binding.configured)
             }
         }
         let operationID = UUID().uuidString
         let operation = creation.sourceProfileID == nil ? "create" : "copy"
         AppLogger.shared.write("BUTTON CONFIGURATION operation_id=\(operationID) scope=\(creation.sourceProfileID == nil ? "base" : "profile") action=\(operation) phase=requested result=requested")
         let created = macroFeature.createMappingProfile(named: name, copying: creation.sourceProfileID,
-            bindings: bindings, holdModes: holdModes)
+            bindings: bindings, holdModes: holdModes, displayNames: displayNames)
         mappingProfileCreation = nil
         var recovered = true
         if let created {
             selectMappingProfile(created)
             NoticeCenter.shared.show(Notice(tier: .tip, title: localization.text("button_mapping.profile.created")))
         } else {
-            recovered = macroFeature.reloadMappingProfiles()
+            if macroFeature.supportsMappingProfileAutosave {
+                recovered = macroFeature.reloadMappingProfiles()
+            }
             savingMappingProfileError = localization.text(recovered ? "button_mapping.save_as_profile.failed" : "button_mapping.save.unknown")
             NoticeCenter.shared.show(Notice(tier: .error, title: savingMappingProfileError ?? ""))
         }
         AppLogger.shared.write("BUTTON CONFIGURATION operation_id=\(operationID) action=\(operation) phase=completed result=\(created == nil ? "failed" : "stored") reason=\(created != nil ? "storage_confirmed" : recovered ? "storage_failed" : "reload_failed")")
     }
 
-    /// Profile capsules and create/copy entry stay fixed above the mapping canvas.
+    /// Profile capsules stay fixed above the mapping canvas. Create/copy stays in the same
+    /// row for both the autosave and older private-component paths.
     private var mappingProfileToolbar: some View {
         VStack(spacing: 0) {
-            if macroFeature.supportsMappingProfileAutosave {
-                mappingProfileSelector
-                    .padding(.horizontal, 22)
-                    .padding(.top, 8)
-                    .padding(.bottom, 5)
-            }
-
+            mappingProfileSelector
+                .padding(.horizontal, 22)
+                .padding(.top, 8)
+                .padding(.bottom, 5)
         }
         .background(Color(nsColor: .controlBackgroundColor))
         // 内容滚到工具行下面后，只在下边缘投影，明确「上面这条是固定的」。
@@ -2431,7 +2433,8 @@ struct SettingsView: View {
 
     private var isMappingProfilePreviewOnly: Bool {
         guard let profile = editingMappingProfileID else { return false }
-        return !canEditMappingProfiles || !macroFeature.isMappingProfileEditable(profile)
+        return !macroFeature.supportsMappingProfileAutosave || !canEditMappingProfiles
+            || !macroFeature.isMappingProfileEditable(profile)
     }
 
     private func clearMappingSaveFeedback() {
@@ -2506,7 +2509,7 @@ struct SettingsView: View {
 
     /// Default identity is independent of membership and editability.
     private func baseMappingProfile(in profiles: [ButtonMappingProfile]) -> ButtonMappingProfile? {
-        profiles.first { macroFeature.isDefaultMappingProfile($0.id) }
+        profiles.first(where: \.isDefault)
     }
 
     /// 基础映射与所有键位方案共用同一尺寸的胶囊：选中只改变配色，不改变大小与描边宽度。
@@ -2745,7 +2748,7 @@ struct SettingsView: View {
             // 上下留白都在滚动区域之外，滚动时不会塌掉。
             // 画布第一张卡片自带约 6.5pt 内部留白，所以静止时下侧会比纯 padding 多这一段：
             // 上 8pt、下 5pt 是让「静止」和「滚动中」两种状态都尽量接近 10pt 的取值。
-            mappingProfileToolbar
+            if macroFeature.isButtonProfilesVisible { mappingProfileToolbar }
 
             ScrollViewReader { proxy in
                 Group {
@@ -3038,6 +3041,8 @@ struct SettingsView: View {
         let current = ButtonMappingSaveTarget(profileID: editingMappingProfileID, deviceID: settings.selectedRemoteProfileID,
             button: button, trigger: holdOnly || holdFailed ? nil : trigger)
         let state = candidate.target == current ? candidate : ButtonMappingSaveState()
+        let membershipCanUnlock = !canEditMappingProfiles &&
+            (!incompatible || !macroFeature.supportsMappingProfileAutosave)
         HStack(spacing: 6) {
             if state.outcome == .unknown {
                 Text(localization.text("button_mapping.save.unknown")).foregroundStyle(.red)
@@ -3045,14 +3050,16 @@ struct SettingsView: View {
             } else if unavailable {
                 Text(localization.text("button_mapping.save.unavailable")).foregroundStyle(.red)
             } else if !canWrite {
-                Text(localization.text("button_mapping.save.read_only"))
-                if editingMappingProfileID != nil && !canEditMappingProfiles && !incompatible {
+                if editingMappingProfileID != nil && membershipCanUnlock {
+                    Text(localization.text("button_mapping.save.read_only"))
                     Button(localization.text("button_mapping.save.membership")) {
                         selectedSection = .membership
                         membershipFeature.refreshIfNeeded()
                     }.buttonStyle(.link)
-                } else {
+                } else if incompatible {
                     Text(localization.text("button_mapping.save.unsupported"))
+                } else {
+                    Text(localization.text("button_mapping.save.read_only"))
                 }
             } else {
                 let key = state.outcome == .unknown ? "button_mapping.save.unknown"
@@ -3125,9 +3132,7 @@ struct SettingsView: View {
                         .background(Color.accentColor.opacity(0.12), in: Capsule())
                     Spacer()
                     mappingSaveStatus(button: target.button, trigger: target.trigger)
-                    Toggle(
-                        "button_mapping.action.disable_switch",
-                        isOn: Binding(
+                    Toggle(isOn: Binding(
                             get: {
                                 if case let .explicit(value) = mappingDisplayConfiguration(for: target.button, trigger: target.trigger) {
                                     return value.configured?.action == .disabled
@@ -3143,7 +3148,9 @@ struct SettingsView: View {
                                 applicationShortcutCaptureProfileID = nil
                             }
                         )
-                    )
+                    ) {
+                        Text(localization.text("button_mapping.action.disable_switch"))
+                    }
                     .font(.system(size: 15, weight: .semibold))
                     .toggleStyle(.switch)
                     .controlSize(.large)
@@ -3160,6 +3167,7 @@ struct SettingsView: View {
                 }
 
                 // 只读预览下只禁用会写入的部分；编辑区由下一次按键或手势选择替换。
+                mappingProfileBindingControl(button: target.button, trigger: target.trigger)
                 mappingTriggerEditor(target.button, trigger: target.trigger)
                     .disabled(!canWriteMappingBinding(button: target.button, trigger: target.trigger))
             }
@@ -3637,6 +3645,64 @@ struct SettingsView: View {
     private func remoteSystemName(_ profile: RemoteDeviceProfile) -> String {
         model.systemDeviceName(for: profile)
             ?? localization.text("remote.device.system_name_unknown")
+    }
+
+    @ViewBuilder
+    private func mappingProfileBindingControl(button: RemoteButton, trigger: ButtonTrigger) -> some View {
+        if let profile = editingMappingProfileID, macroFeature.supportsProfileButton(button.rawValue) {
+            switch mappingDisplayConfiguration(for: button, trigger: trigger) {
+            case .inherited:
+                Text(localization.text("button_mapping.binding.inherited") + "：" +
+                    baseMappingActionSummary(for: button, trigger: trigger))
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+            case let .explicit(value):
+                HStack(spacing: 8) {
+                    Text(localization.text(value.isEditable
+                        ? "button_mapping.binding.overridden" : "button_mapping.save.read_only"))
+                    if !isMappingProfilePreviewOnly {
+                        Button(localization.text("button_mapping.binding.clear_override")) {
+                            clearMappingOverride(button: button, trigger: trigger)
+                        }
+                        .buttonStyle(.link)
+                    }
+                }
+                .font(.system(size: 12))
+            case .unavailable:
+                HStack(spacing: 8) {
+                    Text(localization.text("button_mapping.save.unavailable")).foregroundStyle(.red)
+                    if !isMappingProfilePreviewOnly {
+                        Button(localization.text("button_mapping.binding.clear_override")) {
+                            clearMappingOverride(button: button, trigger: trigger)
+                        }
+                        .buttonStyle(.link)
+                    }
+                }
+                .font(.system(size: 12))
+            }
+        }
+    }
+
+    private func clearMappingOverride(button: RemoteButton, trigger: ButtonTrigger) {
+        guard let profile = editingMappingProfileID, !isMappingProfilePreviewOnly else { return }
+        let operationID = UUID().uuidString
+        AppLogger.shared.write("BUTTON CONFIGURATION operation_id=\(operationID) scope=profile button=\(button.rawValue) trigger=\(trigger.rawValue) action=clear_override phase=requested result=requested")
+        let outcome = ButtonMappingWriteRecovery.perform {
+            macroFeature.writeProfileBinding(nil, profile: profile, button: button, trigger: trigger,
+                displayName: nil)
+        } reload: {
+            macroFeature.reloadMappingProfiles()
+        } matches: {
+            macroFeature.profileBindingMatches(nil, profile: profile, button: button, trigger: trigger)
+        }
+        if outcome == .saved {
+            clearMappingSaveFeedback()
+        } else {
+            let title = localization.text(outcome == .unknown
+                ? "button_mapping.save.unknown" : "button_mapping.save.failed")
+            NoticeCenter.shared.show(Notice(tier: .error, title: title))
+        }
+        AppLogger.shared.write("BUTTON CONFIGURATION operation_id=\(operationID) action=clear_override phase=completed result=\(String(describing: outcome)) reason=\(outcome == .saved ? "storage_confirmed" : outcome == .unknown ? "reload_failed" : "storage_failed")")
     }
 
     private func mappingTriggerEditor(
@@ -5943,8 +6009,20 @@ struct SettingsView: View {
         }
         let configured = configuredAction ?? mappingConfiguration(for: button, trigger: trigger)
         if configured.action == .disabled {
-            let explicit = settings.unifiedBaseBindings.contains { $0.remoteProfileID == settings.selectedRemoteProfileID && $0.button == button && $0.trigger == trigger }
+            let explicit = settings.hasExplicitBaseBinding(for: button, trigger: trigger,
+                profileID: settings.selectedRemoteProfileID)
             return localization.text(editingMappingProfileID != nil || explicit ? "button_mapping.action.no_action" : "button_mapping.action.not_set")
+        }
+        return actionSummary(configured)
+    }
+
+    private func baseMappingActionSummary(for button: RemoteButton, trigger: ButtonTrigger) -> String {
+        let configured = settings.configuredBaseAction(for: button, trigger: trigger,
+            profileID: settings.selectedRemoteProfileID)
+        if configured.action == .disabled {
+            let explicit = settings.hasExplicitBaseBinding(for: button, trigger: trigger,
+                profileID: settings.selectedRemoteProfileID)
+            return localization.text(explicit ? "button_mapping.action.no_action" : "button_mapping.action.not_set")
         }
         return actionSummary(configured)
     }

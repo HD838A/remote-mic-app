@@ -284,6 +284,11 @@ enum SettingsScreenshotRenderer {
         model.privateFeature.updateLocaleIdentifier(localization.locale.identifier)
         model.macroFeature.updateLocaleIdentifier(localization.locale.identifier)
         model.macroFeature.loadProfilesForScreenshot()
+        switch ProcessInfo.processInfo.environment["REMOTE_MIC_SETTINGS_SCREENSHOT_MAPPING_ACCESS"] {
+        case "authorized": model.macroFeature.updateButtonProfilesAccess(.authorized)
+        case "requiresPlus": model.macroFeature.updateButtonProfilesAccess(.requiresPlus)
+        default: break
+        }
         var seededProfileID: UUID? = ProcessInfo.processInfo.environment[
             "REMOTE_MIC_SETTINGS_SCREENSHOT_PROFILE"
         ].flatMap { name in
