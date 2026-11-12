@@ -208,7 +208,10 @@ let profilesAuthorizedAccessAvailable = artifactSupportsAuthorizedAccess(module:
             .appendingPathComponent("Sources/SayAllButtonProfiles/ButtonProfilesAccessDecision.swift")
         return (try? String(contentsOf: source, encoding: .utf8))?.contains("case authorized") == true
     }
-let profileAutosaveAvailable = [buttonProfilesPackagePath].compactMap { $0 }.contains { path in
+let profileAutosaveAvailable = [buttonProfilesPackagePath,
+    privateSwiftPMEnabled ? privatePlatformPackagePath.map {
+        URL(fileURLWithPath: $0).appendingPathComponent("packages/macos-button-profiles").path
+    } : nil].compactMap { $0 }.contains { path in
     let api = URL(fileURLWithPath: path).appendingPathComponent("Sources/SayAllButtonProfiles/SayAllButtonProfilesFeature.swift")
     return (try? String(contentsOf: api, encoding: .utf8))?.contains("public func displayProfiles()") == true
 } || (privateArtifactPackagePath.map { path in

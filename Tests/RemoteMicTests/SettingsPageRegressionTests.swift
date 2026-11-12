@@ -858,7 +858,7 @@ struct SettingsPageRegressionTests {
         #expect(!rowSource.contains("ForEach(macroFeature.mappingProfiles(device:"))
         // 组件无法区分可编辑性时回退到「基础映射 + 全部方案」，不能因此隐藏用户方案。
         #expect(rowSource.contains("baseMappingProfile(in: profiles)"))
-        #expect(source.contains("macroFeature.isDefaultMappingProfile($0.id)"))
+        #expect(source.contains("profiles.first(where: \\.isDefault)"))
     }
 
     @Test func mappingProfileListStaysVisibleWithoutAutosaveInterface() throws {
@@ -898,8 +898,33 @@ struct SettingsPageRegressionTests {
         #expect(selectorSource.contains("if macroFeature.isButtonProfilesVisible"))
         #expect(selectorSource.contains("mappingSaveAsProfileButton"))
         #expect(integrationSource.contains("buttonProfilesFeature.profiles(for: device)"))
-        #expect(integrationSource.contains("profileBinding(device: device, profile: profile"))
+        #expect(integrationSource.contains("rawProfileBinding(device: device, profile: profile"))
         #expect(integrationSource.contains("createLegacyMappingProfile"))
+        #expect(integrationSource.contains("legacyProfileHoldMode"))
+    }
+
+    @Test func mappingProfileBindingStateAndClearEntryStayAvailable() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+        // 继承/显式/不可用必须在编辑区可见，并且不可用覆盖可以单独清除。
+        #expect(source.contains("mappingProfileBindingControl(button: target.button, trigger: target.trigger)"))
+        #expect(source.contains("\"button_mapping.binding.inherited\""))
+        #expect(source.contains("\"button_mapping.binding.clear_override\""))
+        #expect(source.contains("private func clearMappingOverride(button: RemoteButton, trigger: ButtonTrigger)"))
+        #expect(source.contains("macroFeature.profileBindingMatches(nil, profile: profile"))
+        // 会员只读门禁不能因直接修改而丢失。
+        #expect(source.contains("return !macroFeature.supportsMappingProfileAutosave || !canEditMappingProfiles"))
+        #expect(source.contains("guard !isMappingProfilePreviewOnly else { return false }"))
+        #expect(source.contains("guard macroFeature.canUseMappingProfiles else { return false }"))
+        #expect(source.contains("membershipFeature.buttonProfilesAccessDecision"))
+        #expect(source.contains("mappingSaveAsProfileButton.disabled(!canEditMappingProfiles)"))
+        #expect(source.contains("if editingMappingProfileID != nil && membershipCanUnlock"))
     }
 
     @Test func remoteMappingScrollsResetWhenSwitchingProfilesAndConnectionPhotoFollowsModel() throws {

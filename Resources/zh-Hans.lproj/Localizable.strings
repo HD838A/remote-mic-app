@@ -1507,7 +1507,11 @@
 "button_mapping.save.unknown" = "保存状态未知，请重启 App 确认";
 "button_mapping.save.read_only" = "只读";
 "button_mapping.save.membership" = "查看会员";
-"button_mapping.save.unsupported" = "此配置请在键位方案页查看";
+"button_mapping.save.unsupported" = "此配置为只读";
+"button_mapping.binding.inherited" = "继承基础映射";
+"button_mapping.binding.inherited_prefix" = "继承：";
+"button_mapping.binding.overridden" = "已覆盖基础映射";
+"button_mapping.binding.clear_override" = "清除覆盖";
 "button_mapping.save.unavailable" = "配置不可用";
 "button_mapping.save.retry" = "重试";
 "button_mapping.save.partial" = "动作已保存，按住未保存";
