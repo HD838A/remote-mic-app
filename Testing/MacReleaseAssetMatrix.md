@@ -63,10 +63,12 @@ Install PKG 作为 SayAll 品牌的公开独立资产上传。公开下载不再
 
 ## 用例 5：publication 重试
 
-1. 在上传或 CDN 验证阶段故意制造一次失败。
+1. 在离线 API fixture 中分别制造部分上传、错误数量、错误 digest、认证下载字节不一致、SIGTERM、公开验证总预算耗尽和公开 CDN 字节不一致。
 2. 使用相同 sourceCommit、Run/attempt、artifact digest 和 UI attestation 重试。
 
-预期：只补缺失资产或重新验证；既有资产大小和 digest 不变，不重新签名、不创建新 Tag/版本。
+预期为首次创建 Draft，完整认证字节校验先于公开。公开前失败保留 Draft，公开后失败将同一 Release 收回 Draft。重试只补缺失资产或重新验证，既有 ID、大小和 digest 不变。标题或正文不同时停止并保留原文。旧 manifest 13 项 payload 加 1 项证明同样通过。
+
+执行 `python3 scripts/test-private-platform.py PublicationFlowTests`。夹具完整执行生产 publication 脚本，Git、API 与下载对端使用本地隔离实现；stage 恢复及 UI 校验由受控 stub 提供，其真实边界继续由原有测试负责。
 
 ## 用例 6 私有实现内容检查
 
@@ -112,3 +114,22 @@ publication 的远端资产数量必须等于同一 expected-assets 清单的行
 ## 日志与边界
 
 保存 manifest、文件名、size、SHA-256、HTTP 状态和比较结果；不要保存凭据。自动化矩阵不等于真实安装、卸载、Sparkle UI 或实体硬件验收。
+
+## 用例 7 发布前资产契约
+
+1. 运行 `python3 scripts/release-assets.py names 9.9.9 999`，确认 schema 2 的 10 项 payload；指定 schema 1 时保留 13 项历史集合。
+2. 运行 `scripts/test-macos-release-flow.sh`，使用离线 curl fixture 分别返回一致、不同、缺失的 CDN 契约。
+3. 运行 `scripts/verify-preview-cdn-availability.sh v9.9.9 999 --contract-only`，只检查生产契约。
+
+预期为不一致或不可读的契约在占用探测及签名前失败。一致契约后仍分别拒绝 200、302、503、超时，并保留 HEAD 405 的 Range GET 回退。该测试只验证发布控制面，不产生新 Tag 或 Release。
+
+
+## 用例 8 更新频道同步
+
+1. 运行 `node --test scripts/test-update-feed-sync.mjs`，验证 preflight、身份、main dispatch、旧 Run 排除和有界等待。
+2. 缺少 `SAYALL_FEED_SYNC_TOKEN` 或权限不足时运行 preflight，确认公开 Release 尚未变化。
+3. 预览公开成功后，确认同步 Run 成功，stable 的原始 XML 字节保持不变，preview 与当前公开预览匹配。
+4. 晋升正式版后，确认 stable 对应 GitHub latest，Apple Silicon 与 Intel 均匹配，四个旧 URL 能返回 200。
+5. 同步失败时确认父工作流失败，不覆盖 Release、Tag 或资产；按相同身份恢复同步。
+
+预期公开工作流不获取私有代码、构件或日志。只读源码及模拟测试不能代替真实跨仓 dispatch、staging/production 和旧客户端更新验收。

@@ -127,6 +127,8 @@ AI 整理在本次分发协议中保持关闭。`include_ai=true` 在接触发�
 
 脚本先做无秘密检查：合法源码分支与精确 SHA、Hotfix 稳定基线、版本/build、stable latest、源码分支 CI、依赖版本、目标仓库、显式 GH_TOKEN 静态门禁和 10 个 CDN 固定路径全部为 HTTP 404。随后始终以 `--ref main` dispatch .github/workflows/mac-release-package.yml，输入 mode、source_branch 和 expected_commit；Workflow 再次独立验证。smoke 只用于受保护流程检查，不创建公开身份。
 
+`config/release-assets.json` 是资产名称、源文件映射和 manifest schema 的公共契约。打包、manifest 验证和 CDN 探测共用 `scripts/release-assets.py`。该长期入口集中渲染契约，现有 Shell 入口继续负责各自的校验。下载服务公开 `/mac/release-contract.json`，必须返回相同契约；缺失、无效或不同即停止。此检查在本机 staging 和受保护 workflow 的无凭据 validate job 执行，smoke 同样执行。路径 404 只有在契约一致后才表示未占用。
+
 受保护 workflow 的 package job 才能读取 Apple/Match/Notary/Sparkle 凭据，并且必须：
 
 - 在 mac-release Environment 内使用只读 Match、隔离临时 Keychain 和最小权限；
@@ -166,6 +168,8 @@ AI 整理在本次分发协议中保持关闭。`include_ai=true` 在接触发�
 test-macos-release-flow.sh 默认运行原 flow、元数据和 CI 证明 fixture。生成 UI 证明和 publication 中的独立验证仍在不同阶段执行；Apple 凭据入口与无凭据上传边界保持不变。
 
 macOS CI 和发布证明共用 verify-release-control-plane-diff.sh 的分类。公开 CI 包含 Ubuntu 分类、公开 Mac 测试及双架构构建、两个架构 summary，Repository governance 独立执行。公开 Job 清空私有路径并使用公开模式。私有集成测试在私有仓库中保留免费与付费两种配置，每种配置以 macOS 13 最低部署目标运行完整 native tests，再构建 Apple Silicon/macOS 14 与 Intel/macOS 13 Release。发布证明仍要求实际产品步骤通过，summary 只汇总适用结果。
+发布 Shell/Python 全流程 fixture 在 Swift 编译前执行一次，先拦截协议、状态转换和静态门禁错误。后续 BuildSigningTests 跳过其中已单独通过的同一个 Shell fixture，其他签名与构建检查照常执行；本地默认 BuildSigningTests 仍执行完整 fixture。纯发布公共契约、内容校验器、阶段 supervisor 及其 Python 回归属于明确 allowlist，未知文件、混合产品改动、依赖清单和 CI/分类器自身改动继续触发完整产品验证。
+
 BuildSigningTests 按相关源码、资源、构建、安装、依赖或 workflow 变更执行，不在私有配置重复运行。产品变更时，公开 Job 用 --skip-build 复用已编译测试产物；纯发布控制面变更时由同一公开 Job 在 Mac 编译并验证，不再创建独立 Release script checks。summary 门禁要求所有适用检查成功。未知路径以及 mac-ci.yml、产品构建/签名/安装脚本变更仍走完整产品验证，不能因扩展名为 .sh 豁免。减少 Job 和重复 native tests 不保证单次墙钟耗时，仍须用实际 CI 记录比较排队与执行时间。
 
 仅修改开发启动入口 script/build_and_run.sh 时，不触发产品构建或发布检查；该入口不在 CI 中执行，其改动不能冒充新的产品验证证明。发布只允许继承经核对无产品变化的既有双架构证明。
@@ -186,12 +190,16 @@ BuildSigningTests 按相关源码、资源、构建、安装、依赖或 workflo
 - 目标仓库固定为 `HD838A/remote-mic-app`，并验证触发事件的 `github.sha` 仍是精确 `origin/main`；
 - 按 Run/attempt/artifact ID 下载并验证同一 staged payload；
 - 创建或复用与 source SHA 完全一致的轻量 Tag；
-- 创建或恢复公开 Pre-release，上传 manifest 中的完整 10 项 payload 加 candidate-provenance.json；
-- 对已有资产做大小和 GitHub digest 比较，只补缺失项，发现字节不同即 fail closed；
+- 创建或恢复同一 Draft，上传 manifest 中的完整 payload 加 candidate-provenance.json；
+- 对已有资产做大小和 GitHub digest 比较，只补缺失项；完整集合通过后，通过认证 asset API 下载每项并与 staged 原件逐字节比较，全部通过才将同一 Release 公开为 Pre-release；
 - 若远端 Tag 尚不存在，创建 Tag 前最后一次确认该版本的 10 个 CDN 固定路径全部返回 HTTP 404；任一已占用或未知响应都不创建 Tag。已有 Tag 的幂等恢复跳过占用检查，继续执行固定 Tag/CDN 字节复验；
 - candidate-provenance.json 的 `stagedAt`/`publishedAt` 固定取受保护 staging 的时间戳；重试同一 staging 身份不会因当前时间变化而生成不同字节；
 - 从 GitHub 固定 Tag URL 和 download.sayall.app 固定 Tag URL 下载每项公开资产并逐字节比较；
 - 确认 releases/latest 仍为发布前记录的正式稳定版，且 Release 为非 Draft、Pre-release。
+
+公开下载和通道验证共享 300 秒总预算。每次请求最多 120 秒，并受剩余总预算限制；单项最多尝试 4 次。脚本入口设置 600 秒软截止时间，公开前至少保留 60 秒，公开阶段只使用其剩余预算，为 workflow 的 20 分钟硬超时留出退出与收回空间。普通网络超时进入失败回收。
+
+上传、集合、摘要或认证下载失败时保留 Draft。重试公开候选时先收回同一 Release 为 Draft，保留 ID、已有资产和版本说明。公开后的 GitHub、CDN、通道或 stable latest 验证失败，或脚本收到 INT/TERM 时，退出处理器将同一 Release 收回 Draft 并通过 API 回读确认。回收 API 失败时输出固定告警与 Release ID，必须立即人工处理；断电、强制杀进程或远端 API 不可用无法由 Shell 保证回收。已经下载或缓存的公开字节无法撤销。
 
 publication 失败时先查询远端状态。若 Tag、Release、资产和摘要已经正确，只重做缺失的公开验证；不要删除 Release、移动 Tag、重签名或重复上传不同字节。公开 Pre-release 的标题和正文与本次候选不一致时也必须 fail closed，不能在重试中覆盖 Release Notes。任何 Tag/Release 查询的认证、网络或非 404 错误都必须 fail closed，不能被当作“版本可用”。
 
@@ -236,3 +244,14 @@ G-NOTES.unpublished=excluded
 - 只记录普通用户能够看到或受益的功能、体验、兼容性和可靠性变化。
 - 不写提交标题、哈希、CI、文档维护、测试数量、签名、公证、分支规范或发布流程。
 - 已撤回、删除或从未公开的版本不进入 App 内版本历史。
+
+
+## 更新频道同步门禁
+
+Preview publication 和 Stable promotion 在修改公开 Release 前，必须通过更新频道同步的 preflight。该检查使用独立的 `SAYALL_FEED_SYNC_TOKEN`，仅授权 `GetSayAll/sayall-private-platform` 的 Actions 读写及默认元数据读取，账号必须为 HD838A。该凭据只触发和查询受控工作流，不读取私有源码、构件或运行日志，不包含 Cloudflare 或 Apple 凭据。公开 App 的编译、测试和运行不使用该凭据。
+
+公开资产或 latest 指针变更后，工作流必须等待频道同步成功，才能报告发布完成。私有同步入口固定为 `main`，同一源码与频道快照先 staging 验收，再 production 验收；旧版 App 的四个固定 feed URL 返回原始公开 XML。Preview 同步不能改变正式版选择或正式版 XML 字节。频道 XML 不使用长期 immutable 缓存，安装包及固定版本资产仍遵守原有不可变约束。
+
+缺少凭据、身份错误或 preflight 失败时，在公开 Release 变更前停止。同步失败或等待超过 12 分钟时，不把公开发布标记为成功；保留既有 Tag 和资产，核对私有同步状态后按同一发布身份恢复，不重新构建或重新签名。禁止将具备全仓权限的个人 OAuth Token 代替最小权限同步凭据。
+
+配置同步凭据后，先从 main 运行 `Mac update feed readiness`，使用现有公开 Tag 验证委托权限。该入口只做 preflight，不创建 Release、不晋升版本、不部署 Worker；验证通过后才启用生产原生静态频道。私有同步使用既有自托管 Runner，不调整 GitHub 付款或支出上限。

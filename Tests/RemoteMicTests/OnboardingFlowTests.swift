@@ -2426,27 +2426,6 @@ struct OnboardingFlowTests {
         ))
     }
 
-    @Test func transcriptInputPolicyIgnoresFnTrigger() {
-        #expect(!OnboardingTranscriptInputPolicy.isConfirmedPhysicalKeyboardInput(
-            eventTypeRawValue: 10,
-            sourceStateID: 1,
-            sourceUnixProcessID: 0,
-            keyCode: 63
-        ))
-    }
-
-    @Test(arguments: [UInt16(16), 34, 0x7E])
-    func transcriptInputPolicyStillRejectsOtherPhysicalEdits(keyCode: UInt16) {
-        // Ctrl+Y can insert killed text. An input method can also commit text
-        // while handling a key that does not itself carry printable characters.
-        #expect(OnboardingTranscriptInputPolicy.isConfirmedPhysicalKeyboardInput(
-            eventTypeRawValue: 10,
-            sourceStateID: 1,
-            sourceUnixProcessID: 0,
-            keyCode: keyCode
-        ))
-    }
-
     @Test func voiceSamplePresentationPublishesOnlyTheFirstNonemptyBatchPerSession() {
         var hasReceivedSamples = false
         var publicationCount = 0

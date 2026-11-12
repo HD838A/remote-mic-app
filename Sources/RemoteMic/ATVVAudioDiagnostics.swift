@@ -128,6 +128,8 @@ final class ATVVAudioDiagnostics {
     private var lastReceivedBytes = 0
     private var playback: (() -> Playback?)?
     private var fnObservation: (() -> (down: TimeInterval?, up: TimeInterval?))?
+    private var fnObservationSource = "unknown"
+    private var voiceKeyContextFields = "voice_key_context=unobserved"
     private var observedFnDownAt: TimeInterval?
     private var fnDownAtStop: TimeInterval?
     private var audioGeneration = 0
@@ -339,12 +341,34 @@ final class ATVVAudioDiagnostics {
     func bindOutput(
         generation: Int,
         snapshot: @escaping () -> Playback?,
+        fnSource: String = "unknown",
         fn: @escaping () -> (down: TimeInterval?, up: TimeInterval?)
     ) {
         audioGeneration = generation
         playback = snapshot
         fnObservation = fn
+        fnObservationSource = fnSource
         countersAtStart = snapshot()?.output.counters ?? .init()
+    }
+
+    func voiceKeyContext(
+        mode: VoiceKeyMode,
+        fnTapEnabled: Bool,
+        mappingOperationID: UInt64,
+        mappingApplied: Bool,
+        readbackMatched: Bool?,
+        matchingServices: Int,
+        eventTapRunning: Bool
+    ) {
+        guard !isFinalized else { return }
+        let path = mode.usesHardwareMapping && !fnTapEnabled ? "hardware_mapping" : "software_trigger"
+        let readback = readbackMatched.map { $0 ? "matched" : "mismatched" } ?? "unknown"
+        voiceKeyContextFields = "voice_key_mode=\(mode.rawValue) voice_fn_tap=\(fnTapEnabled) " +
+            "trigger_path=\(path) voice_mapping_operation_id=\(mappingOperationID) " +
+            "voice_mapping_applied=\(mappingApplied) voice_mapping_readback=\(readback) " +
+            "voice_mapping_services=\(matchingServices) fn_event_tap_running=\(eventTapRunning)"
+        log("ATVV AUDIO diagnostic operation_id=\(operationID) phase=trigger_context " +
+            voiceKeyContextFields + " fn_source=\(fnObservationSource) target_response=unknown")
     }
 
     func reject(_ reason: Drop, samples: Int = 0, errorFields: String? = nil) {
@@ -498,7 +522,9 @@ final class ATVVAudioDiagnostics {
         fields.append("software_down_to_first_pcm_ms=\(interval(softwareDownAt, firstPCMAt)) software_up_to_last_playback_ms=\(interval(softwareUpAt, observed?.lastPlayedAt))")
         fields.append("silence_episodes=\(silenceEpisodes) receive_stalled_at_stop=\(silenceActive) max_silence_ms=\(maxSilenceMilliseconds) observation_max_lag_ms=\(maxObservationLagMilliseconds)")
         fields.append("last_buffer_loss_reason=\(lastBufferLossReason) last_buffer_loss_cause=\(lastBufferLossCause)")
-        fields.append("fn_source=global_unattributed trigger_down_to_first_pcm_ms=unknown")
+        fields.append(voiceKeyContextFields)
+        fields.append("fn_source=\(fnObservationSource) fn_down_observed=\(fnDownAtStop != nil) fn_up_observed=\(fnUp != nil) " +
+            "fn_last_down_age_ms=\(interval(fnDownAtStop, stoppedAt)) trigger_down_to_first_pcm_ms=unknown")
         fields.append("transcript_commit=unknown external_capture=unknown")
         fields.append("diagnostic_boundary=transport_and_external_tool_unobservable")
         fields.append("observation_ms=\(milliseconds(elapsed)) progress_lines=\(progressLines)")

@@ -6,6 +6,49 @@ import Testing
 
 @Suite("Build signing")
 struct BuildSigningTests {
+    @Test(arguments: ["published", "local", "mismatch", "invalid_local"])
+    func localPackageChecksTheSelectedPrivateCommit(mode: String) throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let source = try String(contentsOf: root.appendingPathComponent("scripts/package-local-test-app.sh"), encoding: .utf8)
+        let start = try #require(source.range(of: "platform_version="))
+        let end = try #require(source.range(of: "zmodload zsh/system", range: start.upperBound..<source.endIndex))
+        let preflight = source[start.lowerBound..<end.lowerBound]
+        let harness = """
+        set -euo pipefail
+        ROOT=/fixture/host
+        SAYALL_PRIVATE_SOURCE_ROOT=/fixture/private
+        SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH=/fixture/artifacts
+        SAYALL_LOCAL_PRIVATE_SOURCE_COMMIT='\(mode == "local" || mode == "invalid_local" ? "candidate" : "")'
+        jq() {
+          if [[ "$2" == '.sourceCommit' ]]; then
+            print '\(mode == "local" ? "candidate" : mode == "mismatch" ? "other" : "published")'
+          else
+            print '2.9.0'
+          fi
+        }
+        git() { print published; }
+        python3() {
+          [[ "$*" == *'--channel local --local-commit candidate' ]] || return 17
+          print checked_local
+          return \(mode == "invalid_local" ? 1 : 0)
+        }
+        \(preflight)
+        print accepted
+        """
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/zsh")
+        process.arguments = ["-c", harness]
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = pipe
+        try process.run()
+        let output = String(decoding: pipe.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+        process.waitUntilExit()
+        #expect((process.terminationStatus == 0) == (mode == "published" || mode == "local"))
+        #expect(output.contains("accepted") == (process.terminationStatus == 0))
+        #expect(output.contains("checked_local") == (mode == "local" || mode == "invalid_local"))
+    }
+
     @Test func membershipServiceEnvironmentStaysBehindOptionalAdapter() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -719,7 +762,12 @@ struct BuildSigningTests {
         #expect(publicationWorkflow.contains("ref: ${{ github.sha }}"))
         #expect(publicationWorkflow.contains("TRIGGER_REPOSITORY"))
         #expect(publicationWorkflow.contains("github.ref_name == 'main'"))
-        #expect(!publicationWorkflow.contains("secrets."))
+        let publicationWithoutFeedToken = publicationWorkflow.replacingOccurrences(
+            of: "secrets.SAYALL_FEED_SYNC_TOKEN", with: "feed_sync_credential"
+        )
+        #expect(!publicationWithoutFeedToken.contains("secrets."))
+        #expect(publicationWorkflow.contains("sync-update-feeds.mjs --preflight"))
+        #expect(publicationWorkflow.contains("Synchronize and verify all original update feed URLs"))
         #expect(!publicationWorkflow.contains("environment: mac-release"))
         #expect(stableWorkflow.contains("promote-preview-release.sh"))
         #expect(stableWorkflow.contains("environment: mac-stable-release"))
@@ -1166,17 +1214,26 @@ struct BuildSigningTests {
             contentsOf: root.appendingPathComponent("scripts/prepare-public-release-assets.sh"),
             encoding: .utf8
         )
-        #expect(assetSource.contains("published_prefix=\"SayAll-$version-$build\""))
-        #expect(assetSource.contains("$published_prefix.zh.txt"))
-        #expect(assetSource.contains("$published_prefix.en.txt"))
+        let contract = try #require(JSONSerialization.jsonObject(
+            with: Data(contentsOf: root.appendingPathComponent("config/release-assets.json"))
+        ) as? [String: Any])
+        let manifests = try #require(contract["manifests"] as? [String: [[String: String]]])
+        let currentAssets = try #require(manifests["2"])
+        #expect(Set(currentAssets.compactMap { $0["name"] }) == Set([
+            "SayAll-{version}-{build}.zip", "SayAll-{version}-{build}-Intel.zip",
+            "SayAll-{version}-{build}.zh.txt", "SayAll-{version}-{build}.en.txt",
+            "SayAll-{version}-{build}-AppleSilicon-install.pkg",
+            "SayAll-{version}-{build}-Intel-install.pkg",
+            "SayAll-{version}-{build}-AppleSilicon-uninstall.pkg",
+            "SayAll-{version}-{build}-Intel-uninstall.pkg",
+            "appcast.xml", "appcast-intel.xml",
+        ]))
+        #expect(manifests["1"]?.count == 13)
+        #expect(assetSource.contains("release-assets.py\" copies"))
         #expect(assetSource.contains("production_prefix"))
         #expect(assetSource.contains("staged-assets.json"))
         #expect(assetSource.contains("verify-staged-release-assets.sh"))
-        #expect(assetSource.contains("ASSET_COUNT: 10"))
-        #expect(assetSource.contains("$published_prefix-AppleSilicon-install.pkg"))
-        #expect(assetSource.contains("$published_prefix-Intel-install.pkg"))
-        #expect(assetSource.contains("$published_prefix-AppleSilicon-uninstall.pkg"))
-        #expect(assetSource.contains("$published_prefix-Intel-uninstall.pkg"))
+        #expect(assetSource.contains("ASSET_COUNT: $asset_count"))
         #expect(!assetSource.contains("candidate-provenance.json"))
     }
 

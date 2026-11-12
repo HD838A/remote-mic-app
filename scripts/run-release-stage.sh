@@ -164,12 +164,14 @@ terminate_process_tree() {
 
 handle_signal() {
   local signal_name="$1"
+  # A signal can arrive after fork but before the main loop stores the PID.
+  local interrupted_child_pid="${CHILD_PID:-$!}"
   local elapsed=$(( $(/bin/date +%s) - START_SECONDS ))
   print -u2 "RELEASE STAGE CANCEL lane=$LANE stage=$STAGE elapsed=${elapsed}s signal=$signal_name"
   record_stage_status cancelled "$elapsed" 143
-  if [[ -n "$CHILD_PID" ]]; then
-    terminate_process_tree "$CHILD_PID"
-    wait "$CHILD_PID" 2>/dev/null || true
+  if [[ "$interrupted_child_pid" =~ ^[1-9][0-9]*$ ]]; then
+    terminate_process_tree "$interrupted_child_pid"
+    wait "$interrupted_child_pid" 2>/dev/null || true
   fi
   exit 143
 }

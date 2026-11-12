@@ -461,6 +461,42 @@ final class AppSettings: ObservableObject {
         saveSelectedRemoteProfileMappings()
     }
 
+    @discardableResult
+    func writeBaseBinding(_ configured: ConfiguredButtonAction, for button: RemoteButton,
+                          trigger: ButtonTrigger, profileID: UUID?) -> Bool {
+        setBaseBinding(configured, for: button, trigger: trigger, profileID: profileID)
+        guard let data = defaults.data(forKey: "unifiedBaseBindings"),
+              let stored = try? JSONDecoder().decode([UnifiedButtonBinding].self, from: data)
+        else { return false }
+        return stored.first { $0.remoteProfileID == profileID && $0.button == button && $0.trigger == trigger }?.configured == configured
+    }
+
+    func reloadBaseMapping() -> Bool {
+        guard let data = defaults.data(forKey: "unifiedBaseBindings"),
+              let stored = try? JSONDecoder().decode([UnifiedButtonBinding].self, from: data)
+        else { return false }
+        unifiedBaseBindings = stored
+        return true
+    }
+
+    @discardableResult
+    func writeHoldMode(_ mode: RemoteButtonHoldMode, for button: RemoteButton, profileID: UUID?) -> Bool {
+        guard profileID == selectedRemoteProfileID else { return false }
+        setHoldMode(mode, for: button)
+        guard let data = defaults.data(forKey: "buttonInteractionSettings"),
+              let stored = try? JSONDecoder().decode(RemoteButtonInteractionSettings.self, from: data)
+        else { return false }
+        return stored.modes[button.rawValue] == mode.rawValue
+    }
+
+    func reloadBaseHoldModes() -> Bool {
+        guard let data = defaults.data(forKey: "buttonInteractionSettings"),
+              let stored = try? JSONDecoder().decode(RemoteButtonInteractionSettings.self, from: data)
+        else { return false }
+        interactionSettings = stored
+        return true
+    }
+
     /// Remove every persisted reference to a deleted combination action.
     /// This covers the current unified store and the legacy per-device stores.
     func removeMacroReferences(to macroID: String) {
@@ -545,7 +581,8 @@ final class AppSettings: ObservableObject {
     /// Timing edits affect the next interaction. Mode edits cancel through the binding hook.
     @Published var interactionSettings = RemoteButtonInteractionSettings() {
         didSet {
-            if oldValue.modes != interactionSettings.modes || oldValue.migratedRepeatButtons != interactionSettings.migratedRepeatButtons {
+            if oldValue.modes != interactionSettings.modes ||
+                oldValue.migratedRepeatButtons != interactionSettings.migratedRepeatButtons {
                 onInteractionModeChanged?(selectedRemoteProfileID)
             }
             if let data = try? JSONEncoder().encode(interactionSettings) {
@@ -3234,7 +3271,8 @@ final class AppSettings: ObservableObject {
         AppLogger.shared.write(
             "BUTTON GESTURE TIMING operation_id=\(UUID().uuidString) phase=completed result=saved " +
                 "model=\(model.rawValue) double_ms=\(timing.doubleClickMilliseconds) " +
-                "long_ms=\(timing.longPressMilliseconds)"
+                "long_ms=\(timing.longPressMilliseconds) " +
+                "repeat_start_ms=\(timing.repeatSingleStartMilliseconds.map(String.init) ?? "legacy")"
         )
     }
 
@@ -3244,9 +3282,14 @@ final class AppSettings: ObservableObject {
     }
 
     func setHoldMode(_ mode: RemoteButtonHoldMode, for button: RemoteButton) {
+        let savedMode = mode.isHoldDown && !button.allowsKeyHold ? .once : mode
         onInteractionModeChanged?(selectedRemoteProfileID)
         interactionSettings.migratedRepeatButtons?.removeAll { $0 == button.rawValue }
-        interactionSettings.modes[button.rawValue] = mode.rawValue
+        interactionSettings.modes[button.rawValue] = savedMode.rawValue
+        AppLogger.shared.write(
+            "BUTTON HOLD CONFIG operation_id=\(UUID().uuidString) phase=completed result=saved " +
+                "button=\(button.rawValue) requested_mode=\(mode.rawValue) mode=\(savedMode.rawValue)"
+        )
     }
 
     /// An action change can make the saved hold choice unrunnable. Drop it to "unset" so the
@@ -3269,6 +3312,14 @@ final class AppSettings: ObservableObject {
             hasOpaqueBinding: ButtonTrigger.allCases.contains(where: opaque),
             repeatInterval: HIDRemoteTiming.repeatIntervalMilliseconds(for: button) ?? 100,
             opaqueDouble: opaque(.doubleClick), opaqueLong: opaque(.longPress))
+        if let model = settingsModel(for: profileID) {
+            snapshot.repeatSingleStartMilliseconds = buttonGestureTiming(for: model)
+                .repeatSingleStartMilliseconds
+        }
+        // 默认取基础层的动作；方案生效时由监听层按活动方案覆盖。
+        snapshot.allowsKeyHold = button.allowsKeyHold
+        snapshot.holdableSingle = snapshot.single
+        snapshot.holdableLong = snapshot.long
         if snapshot.mode == .repeatSingle,
            interactionModeOverride?(profileID ?? selectedRemoteProfileID, button) == nil,
            timing.migratedRepeatButtons?.contains(button.rawValue) == true,
@@ -3278,7 +3329,11 @@ final class AppSettings: ObservableObject {
         }
         // A hold choice that the current actions cannot run is dropped, not turned into a
         // paused state: the button must keep its click and long press instead of going dead.
-        if let mode = snapshot.mode, !snapshot.blockers(for: mode).isEmpty {
+        // 方案接管时报废模式先留一层：这里的动作用的是基础映射，方案里的动作要等监听层
+        // 解析后再判断，否则方案里配好方向键也会被误判成不可用。
+        let modeFromProfile = interactionModeOverride?(profileID ?? selectedRemoteProfileID, button) != nil
+        if let mode = snapshot.mode, !snapshot.blockers(for: mode).isEmpty,
+           !(mode.isHoldDown && modeFromProfile) {
             snapshot.mode = .once
         }
         return snapshot

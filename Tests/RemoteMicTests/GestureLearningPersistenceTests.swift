@@ -53,6 +53,50 @@ struct GestureLearningPersistenceTests {
         #expect(settings.buttonGestureTiming(for: .rc003) == original)
     }
 
+    @Test func learnedRepeatTimingAppliesOnSaveAndSurvivesBackupAndRelaunch() throws {
+        let (settings, defaults, suite) = try makeSettings()
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let first = settings.registerBluetoothRemote(identifier: UUID())
+        settings.updateRemoteProfileModel(first, model: .rc003)
+        settings.selectRemoteProfile(first)
+        settings.setButtonGestureLearning(Self.learned, for: .rc003)
+        #expect(settings.interactionSnapshot(for: .ok).repeatSingleStartMilliseconds == nil)
+
+        let timing = RemoteButtonGestureTiming(
+            doubleClickMilliseconds: 150,
+            longPressMilliseconds: 650,
+            repeatSingleStartMilliseconds: 250
+        )
+        settings.setButtonGestureTiming(timing, for: .rc003)
+        #expect(settings.interactionSnapshot(for: .ok).repeatSingleStartMilliseconds == 250)
+        let second = settings.registerBluetoothRemote(identifier: UUID())
+        settings.updateRemoteProfileModel(second, model: .rc003)
+        let otherModel = settings.registerBluetoothRemote(identifier: UUID())
+        settings.updateRemoteProfileModel(otherModel, model: .rc001)
+        #expect(settings.interactionSnapshot(for: .ok, profileID: second).repeatSingleStartMilliseconds == 250)
+        #expect(settings.interactionSnapshot(for: .ok, profileID: otherModel).repeatSingleStartMilliseconds == nil)
+
+        let restarted = AppSettings(defaults: defaults)
+        #expect(restarted.buttonGestureTiming(for: .rc003) == timing)
+        let data = try MacConfigurationBackup(
+            host: restarted.completeConfigurationSnapshot(), components: nil
+        ).encoded(version: "2.0.0", build: "test")
+        let backup = try MacConfigurationBackup.decode(data)
+        let validated = try restarted.validatedCompleteConfigurationSnapshot(backup.host)
+        try restarted.applyPortableLocalSnapshot(validated)
+        #expect(restarted.buttonGestureTiming(for: .rc003) == timing)
+    }
+
+    @Test func oldTimingKeepsLegacyRepeatBehaviorAndRejectsMalformedCalibration() throws {
+        let data = Data(#"{"doubleClickMilliseconds":200,"longPressMilliseconds":550}"#.utf8)
+        let timing = try JSONDecoder().decode(RemoteButtonGestureTiming.self, from: data)
+        #expect(timing == RemoteButtonGestureTiming(doubleClickMilliseconds: 200))
+        #expect(timing.repeatSingleStartMilliseconds == nil)
+        #expect(!RemoteButtonGestureTiming(repeatSingleStartMilliseconds: -50).isValid)
+        #expect(!RemoteButtonGestureTiming(repeatSingleStartMilliseconds: 0).isValid)
+        #expect(!RemoteButtonGestureTiming(repeatSingleStartMilliseconds: 175).isValid)
+    }
+
     /// 已完成的学习不能被「离开页面」这类取消清掉。
     @Test func completedLearningIsNotCancellable() {
         let status = RemoteButtonGestureLearningStatus.restored(from: Self.learned, model: .rc003)

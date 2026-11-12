@@ -352,8 +352,9 @@ struct RemoteButtonsTests {
         #expect(ButtonAction.volumeUp.category == .systemAndMedia)
         #expect(ButtonAction.previousCommandLeft.category == .systemAndMedia)
         #expect(ButtonAction.nextCommandRight.category == .systemAndMedia)
-        // 自定义快捷键就是"发一个自己录的按键组合"，和固定快捷键同属基础按键。
-        #expect(ButtonAction.customShortcut.category == .basicKeys)
+        // 自定义快捷键拥有紧接基础按键的独立分类。
+        #expect(ButtonAction.customShortcut.category == .customShortcuts)
+        #expect(Array(ButtonActionCategory.allCases.prefix(2)) == [.basicKeys, .customShortcuts])
         #expect(ButtonAction.focusInput.category == .custom)
         // 组合动作是独立分类，和「常用语」同级。
         #expect(ButtonAction.combinationAction.category == .combinations)
@@ -1554,6 +1555,95 @@ struct RemoteButtonsTests {
         #expect(posted[11].2.isEmpty)
     }
 
+    /// 切换器里松开 ⌘ 就是确认高亮 App；取消必须先在 ⌘ 仍按住时发 Escape。
+    @Test func appSwitcherSessionCancelSendsEscapeBeforeReleasingCommand() {
+        var posted: [(CGKeyCode, Bool, CGEventFlags)] = []
+        let session = KeyboardInjector.AppSwitcherSession(
+            keyStatePoster: { code, isDown, flags in
+                posted.append((code, isDown, flags))
+                return true
+            },
+            scheduler: { _, event in event(); return nil }
+        )
+
+        #expect(session.trigger())
+        #expect(session.moveSelection(left: false))
+        #expect(session.cancel())
+        #expect(!session.isActive)
+        #expect(!session.isWindowPickerActive)
+
+        // ⌘ down、Tab down/up、→ down/up、Esc down/up、⌘ up
+        #expect(posted.count == 8)
+        #expect(posted[5].0 == 53)
+        #expect(posted[5].1)
+        #expect(posted[5].2 == .maskCommand)
+        #expect(posted[6].0 == 53)
+        #expect(!posted[6].1)
+        #expect(posted[6].2 == .maskCommand)
+        #expect(posted[7].0 == KeyboardInjector.leftCommandKeyCode)
+        #expect(!posted[7].1)
+        #expect(posted[7].2.isEmpty)
+    }
+
+    /// 系统已自己关掉切换器（鼠标点了别处）时不能再补 Escape，否则它会落到被点击的 App 上。
+    @Test func appSwitcherSessionCancelWithoutDismissalOnlyReleasesCommand() {
+        var posted: [(CGKeyCode, Bool, CGEventFlags)] = []
+        let session = KeyboardInjector.AppSwitcherSession(
+            keyStatePoster: { code, isDown, flags in
+                posted.append((code, isDown, flags))
+                return true
+            },
+            scheduler: { _, event in event(); return nil }
+        )
+
+        #expect(session.trigger())
+        #expect(session.cancel(dismissSwitcher: false))
+        #expect(!session.isActive)
+        #expect(posted.count == 4)
+        #expect(!posted.contains { $0.0 == 53 })
+        #expect(posted.last?.0 == KeyboardInjector.leftCommandKeyCode)
+        #expect(posted.last?.1 == false)
+    }
+
+    /// 窗口层里系统自己关掉切换器时同样不能补 Escape。
+    @Test func appSwitcherSessionCancelInWindowPickerWithoutDismissalOnlyReleasesCommand() {
+        var posted: [(CGKeyCode, Bool, CGEventFlags)] = []
+        let session = KeyboardInjector.AppSwitcherSession(
+            keyStatePoster: { code, isDown, flags in
+                posted.append((code, isDown, flags))
+                return true
+            },
+            scheduler: { _, event in event(); return nil }
+        )
+
+        #expect(session.trigger())
+        #expect(session.moveWindowSelection(up: true))
+        posted.removeAll()
+        #expect(session.cancel(dismissSwitcher: false))
+        #expect(!session.isActive)
+        #expect(!session.isWindowPickerActive)
+        // 窗口层的 ⌘ 已在进入时释放，这里既不能补 Escape，也不应再重复投递 ⌘。
+        #expect(posted.isEmpty)
+    }
+
+    /// Escape 发送失败也不能把 ⌘ 留在按下状态，否则之后所有按键都会变成快捷键。
+    @Test func appSwitcherSessionCancelReleasesCommandWhenEscapeFails() {
+        var posted: [(CGKeyCode, Bool, CGEventFlags)] = []
+        let session = KeyboardInjector.AppSwitcherSession(
+            keyStatePoster: { code, isDown, flags in
+                posted.append((code, isDown, flags))
+                return code != 53
+            },
+            scheduler: { _, event in event(); return nil }
+        )
+
+        #expect(session.trigger())
+        #expect(!session.cancel())
+        #expect(!session.isActive)
+        #expect(posted.last?.0 == KeyboardInjector.leftCommandKeyCode)
+        #expect(posted.last?.1 == false)
+    }
+
     @Test func appSwitcherSessionForceReleasesModifiersWhenScheduledReleaseIsLost() {
         var posted: [(CGKeyCode, Bool, CGEventFlags)] = []
         let session = KeyboardInjector.AppSwitcherSession(
@@ -2641,6 +2731,9 @@ struct RemoteButtonsTests {
         let back = runCancellation(pressBack: true)
         #expect(back.posted.last?.0 == KeyboardInjector.leftCommandKeyCode)
         #expect(back.posted.last?.1 == false)
+        // 取消必须在 Command 仍按住时先发 Escape：只松 Command 会被系统当成确认高亮 App。
+        let backTail = back.posted.suffix(3).map { $0.0 }
+        #expect(Array(backTail) == [53, 53, KeyboardInjector.leftCommandKeyCode])
         #expect(back.diagnostics.contains { $0.contains("ended reason=back") })
 
         let timeout = runCancellation(
@@ -2650,10 +2743,11 @@ struct RemoteButtonsTests {
         #expect(timeout.posted.last?.1 == false)
         #expect(timeout.diagnostics.contains { $0.contains("ended reason=timeout") })
 
-        // 用户在切换器外点了鼠标（切换器被系统关掉）：释放 ⌘ 结束会话。
+        // 用户在切换器外点了鼠标（切换器被系统关掉）：只释放 ⌘，不能补 Escape。
         let dismissed = runCancellation(dismissExternally: true)
         #expect(dismissed.posted.last?.0 == KeyboardInjector.leftCommandKeyCode)
         #expect(dismissed.posted.last?.1 == false)
+        #expect(!dismissed.posted.contains { $0.0 == 53 })
         #expect(dismissed.diagnostics.contains {
             $0.contains("ended reason=mouse_click")
         })

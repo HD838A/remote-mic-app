@@ -357,6 +357,9 @@ trap cleanup EXIT
 /bin/cp "$ROOT/scripts/verify-preview-cdn-availability.sh" "$CHECKOUT/scripts/verify-preview-cdn-availability.sh"
 /bin/chmod 755 "$CHECKOUT/scripts/prepare-preview-release.sh"
 /bin/chmod 755 "$CHECKOUT/scripts/verify-preview-cdn-availability.sh"
+/bin/mkdir -p "$CHECKOUT/config"
+/bin/cp "$ROOT/config/release-assets.json" "$CHECKOUT/config/"
+/bin/cp "$ROOT/scripts/release-assets.py" "$CHECKOUT/scripts/"
 print -r -- '<?xml version="1.0" encoding="UTF-8"?>
 <plist version="1.0"><dict>
 <key>CFBundleShortVersionString</key><string>1.9.10</string>
@@ -394,7 +397,12 @@ FAKE_BIN="$WORK_DIR/bin"
 /bin/mkdir -p "$FAKE_BIN"
 print -r -- '#!/bin/zsh
 set -euo pipefail
-print -rn -- 404' > "$FAKE_BIN/curl"
+if [[ "$*" == *release-contract.json* ]]; then
+  /bin/cp "$CDN_CONTRACT_FIXTURE" "${@[-1]}"
+else
+  print -rn -- 404
+fi' > "$FAKE_BIN/curl"
+export CDN_CONTRACT_FIXTURE="$ROOT/config/release-assets.json"
 /bin/chmod 755 "$FAKE_BIN/curl"
 
 zh_notes="$WORK_DIR/zh.md"
@@ -488,6 +496,15 @@ package_workflow="$ROOT/.github/workflows/mac-release-package.yml"
 publication_workflow="$ROOT/.github/workflows/mac-preview-publication.yml"
 stable_workflow="$ROOT/.github/workflows/mac-stable-promote.yml"
 ci_workflow="$ROOT/.github/workflows/mac-ci.yml"
+python3 - "$ci_workflow" <<'PYTHON'
+from pathlib import Path
+import sys
+source = Path(sys.argv[1]).read_text()
+assert source.index("- name: Run release control-plane fixture") < source.index("- name: Run Swift tests")
+assert source.count("./scripts/test-macos-release-flow.sh") == 1
+assert source.count("--skip releaseControlPlaneFixtureHasExecutableRegressionCoverage") == 2
+PYTHON
+
 private_ci_workflow="$ROOT/.github/workflows/mac-private-ci.yml"
 notarize_release="$ROOT/scripts/notarize-release.sh"
 opus_build="$ROOT/scripts/build-apple-remote-opus.sh"
@@ -599,6 +616,16 @@ fi
 /usr/bin/grep -Fq 'name: Public Swift tests and dual-architecture build' "$ci_workflow"
 /usr/bin/grep -Fq 'needs: [classify_changes, public_test]' "$ci_workflow"
 public_job="$(/usr/bin/awk '/^  public_test:/ { capture=1 } /^  test:/ { exit } capture { print }' "$ci_workflow")"
+macos_tool_setup="$(print -r -- "$public_job" | /usr/bin/awk '
+  /- name: Ensure macOS CI tools/ { capture=1 }
+  capture && /- name: Check patch formatting/ { exit }
+  capture { print }
+')"
+[[ -n "$macos_tool_setup" ]]
+print -r -- "$macos_tool_setup" | /usr/bin/grep -Fq \
+  "if: needs.classify_changes.outputs.product_change == 'true' || needs.classify_changes.outputs.release_checks == 'true'"
+print -r -- "$macos_tool_setup" | /usr/bin/grep -Fq \
+  'command -v rg >/dev/null || HOMEBREW_NO_AUTO_UPDATE=1 brew install ripgrep'
 for package_path in SAYALL_AI_PACKAGE_PATH SAYALL_PRIVATE_PLATFORM_PACKAGE_PATH SAYALL_COMBINATION_ACTIONS_PATH SAYALL_BUTTON_PROFILES_PACKAGE_PATH SAYALL_MAC_REMOTE_PACKAGE_PATH; do
   print -r -- "$public_job" | /usr/bin/grep -Fq "$package_path: \"\""
 done
@@ -641,7 +668,8 @@ fi
 /usr/bin/grep -Fq 'ref: ${{ github.sha }}' "$publication_workflow"
 /usr/bin/grep -Fq 'TRIGGER_REPOSITORY' "$publication_workflow"
 /usr/bin/grep -Fq "github.ref_name == 'main'" "$publication_workflow"
-if /usr/bin/grep -Eq 'environment:[[:space:]]*mac-release|secrets[.]|RELEASE_AGE_IDENTITY|MATCH|NOTARY|draft:' "$publication_workflow"; then
+if /usr/bin/grep -Eq 'environment:[[:space:]]*mac-release|RELEASE_AGE_IDENTITY|MATCH|NOTARY|draft:' "$publication_workflow" ||
+   /usr/bin/grep -oE 'secrets[.][A-Za-z0-9_]+' "$publication_workflow" | /usr/bin/grep -Fxv 'secrets.SAYALL_FEED_SYNC_TOKEN'; then
   print -u2 "Preview publication workflow contains protected Apple inputs"
   exit 1
 fi
@@ -866,6 +894,14 @@ fake_bin="$WORK_DIR/bin"
 print -r -- '#!/bin/zsh
 set -euo pipefail
 mode="${CDN_FIXTURE_MODE:-404}"
+if [[ "$*" == *release-contract.json* ]]; then
+  case "$mode" in
+    unsupported) print -r -- "{}" > "${@[-1]}" ;;
+    unavailable) exit 22 ;;
+    *) /bin/cp "$CDN_CONTRACT_FIXTURE" "${@[-1]}" ;;
+  esac
+  exit 0
+fi
 is_head=false
 for arg in "$@"; do
   [[ "$arg" == --head ]] && is_head=true
@@ -880,6 +916,7 @@ case "$mode" in
   *) print -rn -- 000; exit 1 ;;
 esac' > "$fake_bin/curl"
 /bin/chmod 755 "$fake_bin/curl"
+export CDN_CONTRACT_FIXTURE="$ROOT/config/release-assets.json"
 PATH="$fake_bin:$PATH" CDN_FIXTURE_MODE=404 \
   "$ROOT/scripts/verify-preview-cdn-availability.sh" v9.9.9 999 >/dev/null
 if PATH="$fake_bin:$PATH" CDN_FIXTURE_MODE=200 \
@@ -901,6 +938,16 @@ else
   print -u2 "CDN occupancy gate did not use the GET fallback after HEAD 405"
   exit 1
 fi
+
+for mode in unsupported unavailable; do
+  if PATH="$fake_bin:$PATH" CDN_FIXTURE_MODE="$mode" \
+    "$ROOT/scripts/verify-preview-cdn-availability.sh" v9.9.9 999 > "$WORK_DIR/contract-$mode.log" 2>&1; then
+    print -u2 "CDN occupancy gate accepted an incompatible deployed contract"
+    exit 1
+  fi
+done
+PATH="$fake_bin:$PATH" CDN_FIXTURE_MODE=200 \
+  "$ROOT/scripts/verify-preview-cdn-availability.sh" v9.9.9 999 --contract-only >/dev/null
 
 # Build a deterministic canonical payload fixture and exercise the manifest gate.
 public_dir="$WORK_DIR/public"
@@ -1031,6 +1078,13 @@ for test_case in \
   'scripts/install-doubao-driver.sh:true:true' \
   'scripts/verify-release-dependency-pins.sh:false:true' \
   'scripts/test-macos-release-flow.sh:false:true' \
+  'scripts/test-private-platform.py:false:true' \
+  'scripts/run-release-stage.sh:false:true' \
+  'scripts/verify-release-contents.py:false:true' \
+  'scripts/release-assets.py:false:true' \
+  'config/release-assets.json:false:true' \
+  'config/release-dependencies.json:true:true' \
+  'config/future.json:true:false' \
   'scripts/verify-release-control-plane-diff.sh:true:true' \
   'scripts/verify-repository-governance.sh:false:false:true' \
   '.github/workflows/repository-governance.yml:false:false:true' \
@@ -1062,6 +1116,11 @@ for test_case in \
   print -r -- "$result" | /usr/bin/grep -Fxq "repository_only=$expected_repository"
   if [[ "$expected_product" == false && "$expected_release" == true ]]; then
     REPOSITORY_ROOT="$fixture_repo" "$ROOT/scripts/verify-release-control-plane-diff.sh" "$base_commit" HEAD
+    /bin/mkdir -p "$fixture_repo/Sources"
+    print -r -- product > "$fixture_repo/Sources/Product.swift"
+    /usr/bin/git -C "$fixture_repo" add .
+    /usr/bin/git -C "$fixture_repo" commit -q -m 'mixed release and product'
+    REPOSITORY_ROOT="$fixture_repo" "$ROOT/scripts/verify-release-control-plane-diff.sh" --classify "$base_commit" HEAD | /usr/bin/grep -Fx 'product_change=true' >/dev/null
   fi
   if [[ "$expected_repository" == true ]]; then
     print -r -- documentation > "$fixture_repo/AGENTS.md"
@@ -1216,8 +1275,8 @@ print "LOCALIZATION GATE FIXTURE PASS"
 )
 
 case "${1:-all}" in
-  all) test_ci_classification; test_flow; test_localizations; test_metadata ;;
-  flow) test_ci_classification; test_flow; test_localizations ;;
+  all) test_ci_classification; test_flow; test_localizations; test_metadata; node --test "$SCRIPT_ROOT/scripts/test-update-feed-sync.mjs" ;;
+  flow) test_ci_classification; test_flow; test_localizations; node --test "$SCRIPT_ROOT/scripts/test-update-feed-sync.mjs" ;;
   metadata) test_metadata ;;
   ready-ci) test_ready_ci ;;
   *) print -u2 "usage: $0 [all|flow|metadata|ready-ci]"; exit 2 ;;

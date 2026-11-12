@@ -1,0 +1,1242 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SayAll · 提示气泡 · 已定稿 · 三档语义色 + 指向</title>
+<style>
+  :root{
+    --font:-apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    --mono:ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+
+    --paper:#fff;
+    --canvas:#f4f4f6;
+    --ink:#1d1d1f;
+    --ink-2:#56565c;
+    --ink-3:#8a8a90;
+    --hair:rgba(0,0,0,.085);
+    --hair-strong:rgba(0,0,0,.16);
+
+    --win-bg:#fff;
+    --win-card:#f7f7f7;
+    --win-seg:#e3e3e6;
+    --win-sep:rgba(0,0,0,.08);
+    --brand:#d56059;
+
+    /* 三档语义色：浅色外观 */
+    --l1:#12704a;      --l1-2:#0e5e3e;   /* 引导/信息 · 白字 6.10 */
+    --l2:#8a4b0f;      --l2-2:#783f0b;   /* 警告 · 白字 6.79 */
+    --l3:#a5342c;      --l3-2:#96291f;   /* 错误 · 白字 6.71 */
+    /* 深色外观：各提亮一档，保证与 #1C1C1E 背景 ≥ 3:1 分离 */
+    --l1-d:#1a7a52;                       /* 深底分离 3.20 */
+    --l2-d:#9e5611;                       /* 深底分离 3.03 */
+    --l3-d:#c04239;                       /* 深底分离 3.31 */
+  }
+
+  *{box-sizing:border-box;}
+  body{margin:0; padding:0 0 100px; background:var(--canvas); color:var(--ink); font-family:var(--font); font-size:14px; line-height:1.6; -webkit-font-smoothing:antialiased;}
+  .shell{max-width:1180px; margin:0 auto; padding:0 32px;}
+
+  .doc-head{padding:58px 0 0;}
+  .eyebrow{font-size:11.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--ink-3); font-weight:600; margin-bottom:16px;}
+  h1{font-size:40px; line-height:1.14; letter-spacing:-.025em; margin:0 0 16px; font-weight:700;}
+  .lede{font-size:16px; color:var(--ink-2); max-width:790px; margin:0; line-height:1.65;}
+  .lede b{color:var(--ink); font-weight:600;}
+  .meta-row{display:flex; gap:9px; flex-wrap:wrap; margin-top:24px;}
+  .tag{font-size:11.5px; padding:4px 11px; border-radius:999px; background:#fff; border:1px solid var(--hair); color:var(--ink-2);}
+  .tag--new{background:#fbeceb; border-color:#f0cfcd; color:#8f2b25;}
+  .tag--wait{background:#fff8e9; border-color:#f0dcb0; color:#855607;}
+
+  section{margin-top:56px;}
+  .sec-head{display:flex; align-items:baseline; gap:13px; margin-bottom:6px;}
+  .sec-num{font-family:var(--mono); font-size:11.5px; color:#b0473f; font-weight:600; letter-spacing:.04em;}
+  h2.sec{font-size:25px; margin:0; letter-spacing:-.02em; font-weight:700;}
+  .sec-note{font-size:13px; color:var(--ink-3); margin:8px 0 22px; max-width:900px; line-height:1.65;}
+
+  /* ---------- 气泡本体 ---------- */
+  .bubble{
+    --fill:var(--l1); --fill2:var(--l1-2);
+    position:relative;
+    display:inline-block;
+    max-width:360px;
+    padding:16px 18px;
+    border-radius:18px;
+    background:linear-gradient(172deg, var(--fill) 0%, var(--fill2) 100%);
+    color:#fff;
+    box-shadow:
+      0 10px 30px -8px rgba(0,0,0,.30),
+      0 2px 6px rgba(0,0,0,.07);
+    text-align:left;
+  }
+  .bubble--warn{--fill:var(--l2); --fill2:var(--l2-2);}
+  .bubble--err{--fill:var(--l3); --fill2:var(--l3-2);}
+
+  /* 深色外观：提亮一档 + 纯色（深色底上渐变容易融进背景） */
+  .bubble--on-dark{
+    --fill:var(--l1-d); --fill2:var(--l1-d);
+    background:var(--l1-d);
+    box-shadow:
+      0 0 0 1px rgba(255,255,255,.14),
+      0 14px 38px -10px rgba(0,0,0,.70);
+  }
+  .bubble--warn.bubble--on-dark{--fill:var(--l2-d); --fill2:var(--l2-d); background:var(--l2-d);}
+  .bubble--err.bubble--on-dark{--fill:var(--l3-d); --fill2:var(--l3-d); background:var(--l3-d);}
+
+  .bubble__title{
+    font-size:14.5px; font-weight:650; line-height:1.3; letter-spacing:-.008em;
+    padding-right:22px; display:flex; align-items:center; gap:6px; flex-wrap:wrap;
+  }
+  .bubble__mark{width:13px; height:13px; flex:0 0 13px; opacity:.95;}
+  .bubble__text{
+    margin-top:5px; font-size:13.5px; line-height:1.56;
+    color:rgba(255,255,255,.93);
+  }
+  .bubble__action{
+    display:inline-block; margin-top:11px;
+    font-size:12.5px; font-weight:600;
+    color:#fff; background:rgba(255,255,255,.17);
+    border-radius:9px; padding:5px 11px;
+  }
+  .bubble__close{
+    position:absolute; top:13px; right:13px;
+    width:12px; height:12px; opacity:.62;
+  }
+
+  /* 尾巴：颜色跟随 --fill，不再按类硬编码 */
+  .bubble.tail-left::after{
+    content:""; position:absolute; width:18px; height:10px;
+    left:-15px; top:24px; background:var(--fill);
+    clip-path:polygon(100% 0, 100% 100%, 0 50%);
+  }
+  .bubble.tail-top::after{
+    content:""; position:absolute; width:16px; height:9px;
+    left:var(--tail-x, 26px); top:-8px; background:var(--fill);
+    clip-path:polygon(50% 0, 100% 100%, 0 100%);
+  }
+  .bubble.tail-bottom::after{
+    content:""; position:absolute; width:16px; height:9px;
+    left:var(--tail-x, 26px); bottom:-8px; background:var(--fill2);
+    clip-path:polygon(0 0, 100% 0, 50% 100%);
+  }
+  .bubble.tail-right::after{
+    content:""; position:absolute; width:18px; height:10px;
+    right:-15px; top:24px; background:var(--fill);
+    clip-path:polygon(0 0, 0 100%, 100% 50%);
+  }
+
+
+  /* ---------- 三色方案 ---------- */
+  .palette{display:grid; grid-template-columns:repeat(3,1fr); gap:18px;}
+  @media (max-width:980px){ .palette{grid-template-columns:1fr;} }
+  .pal{background:var(--paper); border:1px solid var(--hair); border-radius:18px; overflow:hidden; display:flex; flex-direction:column;}
+  .pal.pick{border-color:#e8c9c6; box-shadow:0 0 0 2px rgba(165,52,44,.10);}
+  .pal h3{font-size:13.5px; margin:0; padding:15px 18px 12px; font-weight:650; display:flex; align-items:center; gap:8px;}
+  .pal h3 .flag{font-size:10px; font-weight:600; background:#fbeceb; color:#8f2b25; border-radius:999px; padding:2px 8px; margin-left:auto;}
+  .pal h3 .flag.gray{background:#eef0f3; color:#54545a;}
+  .pal-stage{padding:22px 18px; background:linear-gradient(180deg,#fbfbfc,#f4f4f6); border-top:1px solid var(--hair); border-bottom:1px solid var(--hair); display:flex; justify-content:center; min-height:150px; align-items:center;}
+  .pal-stage .bubble{max-width:264px; padding:14px 15px;}
+  .pal-stage .bubble__title{font-size:13.5px; padding-right:18px;}
+  .pal-stage .bubble__text{font-size:12.5px; margin-top:4px;}
+  .pal-foot{padding:12px 18px 15px; font-size:12px; color:var(--ink-2); line-height:1.55; flex:1;}
+  .pal-foot .num{font-family:var(--mono); font-size:11px; color:var(--ink); background:rgba(0,0,0,.05); border-radius:4px; padding:1px 5px;}
+
+  /* ---------- 解剖 ---------- */
+  .anatomy{background:var(--paper); border:1px solid var(--hair); border-radius:18px; padding:34px 30px; display:grid; grid-template-columns:1.12fr .88fr; gap:34px; align-items:center;}
+  @media (max-width:920px){ .anatomy{grid-template-columns:1fr;} }
+  .anatomy-canvas{position:relative; padding:44px 34px 40px 56px; border-radius:14px; background:linear-gradient(180deg,#fafafb,#eff0f3); border:1px dashed var(--hair-strong);}
+  .anatomy-canvas .tgt2{width:34px;height:34px;border-radius:9px;background:#fff;border:1px solid var(--hair);position:absolute; left:7px; top:50%; transform:translateY(-50%); box-shadow:0 1px 2px rgba(0,0,0,.05);}
+  .dim{position:absolute; font-family:var(--mono); font-size:9.5px; color:var(--ink-2); background:#fff; border:1px solid var(--hair); border-radius:4px; padding:1px 5px; white-space:nowrap;}
+  .anatomy-legend table{width:100%; border-collapse:collapse; font-size:12.5px; color:var(--ink-2);}
+  .anatomy-legend th{text-align:left; font-size:10.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-3); font-weight:600; padding:0 0 9px; border-bottom:1px solid var(--hair);}
+  .anatomy-legend td{padding:8px 0; border-bottom:1px solid rgba(0,0,0,.045); vertical-align:top;}
+  .anatomy-legend td:first-child{width:40%; color:var(--ink); font-weight:550;}
+
+  /* ---------- 窗口 ---------- */
+  .stage{background:#e8e8eb; border:1px solid var(--hair); border-radius:18px; padding:24px 24px 0; overflow:hidden;}
+  .stage--dark{background:#141416; border-color:rgba(255,255,255,.10);}
+  .stage--flat{padding:24px;}
+  .win{background:var(--win-bg); border-radius:12px 12px 0 0; overflow:hidden; box-shadow:0 22px 50px -16px rgba(0,0,0,.30); position:relative;}
+  .stage--flat .win{border-radius:12px;}
+  .win-bar{height:32px; display:flex; align-items:center; gap:7px; padding:0 13px; background:#fbfbfc; border-bottom:1px solid var(--win-sep);}
+  .dot{width:10px;height:10px;border-radius:50%;}
+  .dot.r{background:#ff5f57;} .dot.y{background:#febc2e;} .dot.g{background:#28c840;}
+  .win-body{display:flex; position:relative;}
+
+  .sidebar{width:146px; flex:0 0 146px; border-right:1px solid var(--win-sep); padding:15px 11px 0; background:#fff;}
+  .brand{display:flex; gap:9px; align-items:center; padding:0 4px 17px;}
+  .brand .logo{width:38px;height:38px;border-radius:10px;background:radial-gradient(120% 120% at 20% 15%, #fff 0%, #f0eee7 42%, #d9d3c4 100%);border:1px solid rgba(0,0,0,.10);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#5b5a52;}
+  .brand .name{font-size:15px;font-weight:650;line-height:1.2;}
+  .brand .ver{font-size:10.5px;color:var(--ink-3);line-height:1.4;}
+  .nav-item{display:flex; align-items:center; gap:9px; height:35px; padding:0 9px; border-radius:9px; font-size:13px; margin-bottom:2px; position:relative;}
+  .nav-item .ni{width:17px;height:17px;display:block;color:var(--ink-2);}
+  .nav-item.on{background:#fdeceb; color:#b8433c; font-weight:600;}
+  .nav-item.on .ni{color:#c9554d;}
+  .nav-item .bullet{position:absolute; right:8px; top:13px; width:6px;height:6px;border-radius:50%;background:var(--brand);}
+
+  .content{flex:1; min-width:0; padding:20px 28px 0; position:relative;}
+  .page-hd{margin-bottom:18px;}
+  .page-hd h4{font-size:22px; margin:0; letter-spacing:-.02em; font-weight:700; line-height:1.2;}
+  .page-hd .sub{font-size:12px; color:var(--ink-3); margin-top:3px;}
+
+  .card{background:var(--win-card); border-radius:11px; padding:12px;}
+  .card-hd{display:flex; align-items:center; gap:6px; font-size:12px; font-weight:600; margin-bottom:9px;}
+  .segs{display:grid; grid-template-columns:repeat(3,1fr); gap:1px; background:rgba(0,0,0,.055); border-radius:9px; overflow:hidden;}
+  .seg{background:var(--win-seg); padding:7px 4px; text-align:center;}
+  .seg .k{display:block; font-size:10.5px; color:var(--ink-3); line-height:1.35;}
+  .seg .v{display:block; font-size:12px; line-height:1.35; margin-top:1px;}
+  .seg.hl{background:#fff; box-shadow:0 0 0 1.5px rgba(165,52,44,.55) inset;}
+  .seg.hl .v{color:#8f2b25; font-weight:600;}
+
+  .row-list{display:grid; gap:1px; background:rgba(0,0,0,.055); border-radius:9px; overflow:hidden;}
+  .row{display:flex; align-items:center; justify-content:space-between; background:var(--win-seg); padding:8px 11px; font-size:12px;}
+  .row .val{color:var(--ink-3); font-size:11.5px;}
+  .row.hl{background:#fff; box-shadow:0 0 0 1.5px rgba(165,52,44,.55) inset;}
+  .row.hl .val{color:#8f2b25; font-weight:600;}
+
+  .field{background:#fff; border-radius:9px; padding:11px 13px; font-size:12px; color:var(--ink); box-shadow:0 0 0 1px var(--hair);}
+  .field .caret{display:inline-block; width:1.5px; height:13px; background:#a5342c; vertical-align:-2px; margin-left:1px;}
+
+  /* 锚定方向演示 */
+  .dir-grid{display:grid; grid-template-columns:1fr 1fr; gap:16px;}
+  @media (max-width:920px){ .dir-grid{grid-template-columns:1fr;} }
+  .dir-box{background:var(--paper); border:1px solid var(--hair); border-radius:16px; padding:18px;}
+  .dir-box .label{font-size:11.5px; color:var(--ink-3); margin-bottom:12px; font-family:var(--mono);}
+  .dir-canvas{position:relative; height:172px; border-radius:10px; background:linear-gradient(180deg,#fafafb,#f2f2f5); display:flex; align-items:center; justify-content:center;}
+  .dir-canvas .bubble{max-width:250px; padding:13px 15px;}
+  .dir-canvas .bubble__title{font-size:13px; padding-right:16px;}
+  .dir-canvas .bubble__text{font-size:12px; margin-top:3px;}
+  .tgt{width:36px;height:36px;border-radius:9px;background:#fff;border:1px solid var(--hair);}
+
+  /* 场景 */
+  .scene{margin-top:28px;}
+  .scene-hd{display:flex; align-items:baseline; gap:10px; margin-bottom:8px;}
+  .scene-hd h3{font-size:15px; margin:0; font-weight:650;}
+  .scene-hd .badge{font-size:10.5px; padding:2px 9px; border-radius:999px; background:#eef0f3; color:#54545a;}
+  .scene-hd .badge.rec{background:#fbeceb; color:#8f2b25;}
+  .scene-desc{font-size:12.5px; color:var(--ink-3); margin:0 0 12px; max-width:900px;}
+
+  .rel{position:relative;}
+  .abs{position:absolute; z-index:6;}
+
+  /* 表格 */
+  .table-card{background:var(--paper); border:1px solid var(--hair); border-radius:16px; overflow:hidden;}
+  table.spec{width:100%; border-collapse:collapse; font-size:13px;}
+  table.spec th{text-align:left; font-size:10.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-3); font-weight:600; padding:13px 18px; background:#fafafb; border-bottom:1px solid var(--hair); white-space:nowrap;}
+  table.spec td{padding:12px 18px; border-bottom:1px solid rgba(0,0,0,.045); vertical-align:top; color:var(--ink-2);}
+  table.spec tr:last-child td{border-bottom:0;}
+  table.spec td:first-child{color:var(--ink); font-weight:550; white-space:nowrap;}
+
+  .cmp{display:grid; grid-template-columns:1fr 1fr; gap:18px;}
+  @media (max-width:920px){ .cmp{grid-template-columns:1fr;} }
+  .cmp-col{background:var(--paper); border:1px solid var(--hair); border-radius:16px; padding:18px 20px;}
+  .cmp-col h4{margin:0 0 12px; font-size:13px; font-weight:650; display:flex; align-items:center; gap:7px;}
+  .cmp-col h4 .dot2{width:7px;height:7px;border-radius:50%;}
+  .cmp-col.old h4 .dot2{background:#b9b9bf;}
+  .cmp-col.new h4 .dot2{background:#a5342c;}
+  .cmp-col ul{margin:0; padding-left:0; list-style:none; font-size:12.5px; color:var(--ink-2); line-height:1.6;}
+  .cmp-col li{padding:5px 0 5px 15px; position:relative;}
+  .cmp-col li::before{content:""; position:absolute; left:1px; top:12px; width:5px; height:5px; border-radius:50%; background:#c3c3c9;}
+  .cmp-col.new li::before{background:#d9a5a1;}
+
+  pre.code{margin:0; background:#17181b; color:#e9e9ec; border-radius:13px; padding:18px 20px; font-family:var(--mono); font-size:12px; line-height:1.7; overflow:auto;}
+  pre.code .c{color:#8b8b93;}
+  pre.code .k{color:#ff8f85;}
+  pre.code .s{color:#9fd6a2;}
+  pre.code .f{color:#9fc7ff;}
+  pre.code .t{color:#e6c07b;}
+  .code-cap{font-size:12px; color:var(--ink-3); margin:0 0 8px;}
+
+  .callout{background:#fff; border:1px solid var(--hair); border-left:3px solid #a5342c; border-radius:10px; padding:14px 17px; font-size:13px; color:var(--ink-2); margin-top:16px; line-height:1.65;}
+  .callout b{color:var(--ink);}
+
+  code{font-family:var(--mono); font-size:.9em; background:rgba(0,0,0,.05); border-radius:4px; padding:.5px 4px; color:#35353a;}
+
+  .asks{display:grid; grid-template-columns:1fr 1fr; gap:16px;}
+  @media (max-width:900px){ .asks{grid-template-columns:1fr;} }
+  .ask{background:var(--paper); border:1px solid var(--hair); border-radius:15px; padding:17px 19px;}
+  .ask .q{font-size:13.5px; font-weight:600; margin:0 0 9px;}
+  .ask .opts{font-size:12.5px; color:var(--ink-2); margin:0; padding-left:0; list-style:none;}
+  .ask .opts li{padding:4px 0 4px 18px; position:relative;}
+  .ask .opts li::before{content:""; position:absolute; left:2px; top:11px; width:8px;height:8px;border-radius:50%; border:1.5px solid #b6b6bc;}
+  .ask .opts li.dflt::before{border-color:#a5342c; background:#a5342c;}
+  .ask .opts b{color:var(--ink); font-weight:600;}
+
+  /* ---------- 强调色实测 ---------- */
+  .accent-row{display:grid; grid-template-columns:repeat(8,1fr); gap:10px;}
+  @media (max-width:1000px){ .accent-row{grid-template-columns:repeat(4,1fr);} }
+  .ac{background:var(--paper); border:1px solid var(--hair); border-radius:12px; overflow:hidden;}
+  .ac-swatch{height:96px; display:flex; align-items:center; justify-content:center; padding:10px;}
+  .ac-chip{width:100%; border-radius:12px; padding:10px 9px; font-size:12px; line-height:1.35; text-align:center; font-weight:600;}
+  .ac-meta{padding:8px 9px 10px; font-size:11px; color:var(--ink-2); text-align:center; line-height:1.5;}
+  .ac-meta .name{display:block; font-size:11px; color:var(--ink); font-weight:600;}
+  .ac-meta .ratio{font-family:var(--mono); font-size:10.5px;}
+  .ac-meta .ratio.bad{color:#b3261e;}
+  .ac-meta .ratio.ok{color:#1c7c46;}
+
+  .tier{display:grid; grid-template-columns:repeat(3,1fr); gap:16px;}
+  @media (max-width:920px){ .tier{grid-template-columns:1fr;} }
+  .tier-card{background:var(--paper); border:1px solid var(--hair); border-radius:16px; padding:18px; display:flex; flex-direction:column; gap:12px;}
+  .tier-card .lvl{font-family:var(--mono); font-size:10.5px; color:var(--ink-3); letter-spacing:.06em;}
+  .tier-card h4{margin:0; font-size:13.5px; font-weight:650;}
+  .tier-card p{margin:0; font-size:12px; color:var(--ink-2); line-height:1.55;}
+  .tier-card .demo{border-radius:12px; padding:12px 13px; font-size:12.5px; line-height:1.5; color:#fff;}
+
+  /* 档位对照：一张卡里上下各一只气泡 */
+  .pal-duo{display:grid; grid-template-rows:1fr 1fr;}
+  .pal-half{padding:16px 14px; display:flex; justify-content:center; align-items:center; min-height:104px;}
+  .pal-half.light{background:linear-gradient(180deg,#fbfbfc,#f4f4f6);}
+  .pal-half.dark{background:#1c1c1e; border-top:1px solid rgba(255,255,255,.08);}
+  .pal-half .bubble{max-width:236px; padding:12px 14px;}
+  .pal-half .bubble__title{font-size:13px; padding-right:18px;}
+  .pal-half .bubble__text{font-size:12px; margin-top:3px;}
+  .pal-tag{position:absolute; font-family:var(--mono); font-size:9px; color:var(--ink-3); top:6px; left:8px;}
+  .pal-half.dark .pal-tag{color:#77777e;}
+
+  /* 已定项 */
+  .ask.locked{border-color:#cfe6d3; background:#fbfefc;}
+  .ask.locked .q{display:flex; align-items:center; gap:7px;}
+  .ask.locked .q::before{
+    content:""; flex:0 0 14px; width:14px; height:14px; border-radius:50%;
+    background-color:#1c7c46;
+    -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M3.2 7.3l2.4 2.4 5-5.2' fill='none' stroke='%23000' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/14px no-repeat;
+    mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Cpath d='M3.2 7.3l2.4 2.4 5-5.2' fill='none' stroke='%23000' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/14px no-repeat;
+  }
+  .ask .done{font-size:12.5px; color:var(--ink-2); margin:0; line-height:1.6;}
+  .ask .done b{color:var(--ink);}
+  .ask .done code{font-size:11.5px;}
+
+  .steps{counter-reset:st; display:grid; gap:10px; margin-top:16px;}
+  .step{
+    background:var(--paper); border:1px solid var(--hair); border-radius:12px;
+    padding:13px 16px 13px 46px; position:relative; font-size:12.5px; color:var(--ink-2); line-height:1.6;
+  }
+  .step::before{
+    counter-increment:st; content:counter(st);
+    position:absolute; left:15px; top:13px;
+    width:20px; height:20px; border-radius:6px; background:#eef0f3;
+    display:flex; align-items:center; justify-content:center;
+    font-family:var(--mono); font-size:11px; color:var(--ink-2);
+  }
+  .step b{color:var(--ink); font-weight:600; display:block; margin-bottom:2px;}
+
+  /* 三个落点 */
+  .pos-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-top:16px;}
+  @media (max-width:920px){ .pos-grid{grid-template-columns:1fr;} }
+  .pos-box{background:var(--paper); border:1px solid var(--hair); border-radius:14px; overflow:hidden;}
+  .pos-stage{position:relative; height:210px; background:#f7f7f7; margin:10px; border-radius:10px; overflow:hidden;}
+  .pos-stage .bubble{position:absolute; left:50%; transform:translateX(-50%); max-width:230px; padding:11px 13px;}
+  .pos-stage .bubble__title{font-size:12.5px; padding-right:16px;}
+  .pos-stage .bubble__text{font-size:11.5px; margin-top:2px;}
+  .pos-cap{padding:2px 14px 12px; font-size:11.5px; color:var(--ink-2); display:flex; gap:6px; align-items:baseline;}
+  .pos-cap code{font-size:11px;}
+  .pos-cap b{color:var(--ink); font-weight:600;}
+
+  /* 内联提示条 */
+  .inote{
+    position:relative; display:flex; align-items:flex-start; gap:9px; padding:11px 14px;
+    border-radius:10px; overflow:hidden;
+    background:#fff; border:1px solid #e8e8ec;
+  }
+  .inote__icon{flex:0 0 16px; width:16px; height:16px; margin-top:1px; color:var(--accent);}
+  .inote__icon circle{fill:currentColor;}
+  .inote--warn{background:#fffaf0; border-color:#f0e2c6; --accent:#8a4b0f;}
+  .inote--err{background:#fff7f6; border-color:#f2dbd8; --accent:#a5342c;}
+  .inote--tip{--accent:#12704a; background:#eaf7f0; border-color:#cfe8db;}
+  .inote--dark{background:#2c2c2e; border-color:#3a3a3c;}
+  .inote--dark.inote--warn{--accent:#9e5611;}
+  .inote--dark.inote--err{--accent:#c04239;}
+  .inote--dark.inote--tip{--accent:#1a7a52;}
+  .inote__body{min-width:0; flex:1;}
+  .inote__title{font-size:13px; font-weight:600; display:flex; align-items:center; gap:5px; line-height:1.4;}
+  .inote--dark .inote__title{color:#f2f2f4;}
+  .inote__text{font-size:12px; color:var(--ink-2); margin-top:3px; line-height:1.5;}
+  .inote--dark .inote__text{color:#9a9a9f;}
+  .inote__action{
+    display:inline-block; align-self:center; flex:0 0 auto;
+    font-size:12.5px; font-weight:600; color:var(--accent); white-space:nowrap;
+  }
+  .inote__mark{font-size:11px; font-weight:800; color:var(--accent);}
+
+  .inote-row{display:grid; gap:10px;}
+  .two-col{display:grid; grid-template-columns:1fr 1fr; gap:16px;}
+  @media (max-width:920px){ .two-col{grid-template-columns:1fr;} }
+  .panel-card{background:#fff; border:1px solid var(--hair); border-radius:14px; padding:16px;}
+  .panel-card h4{margin:0 0 12px; font-size:12px; font-weight:650; color:var(--ink-2);}
+
+  .foot{margin-top:56px; padding-top:18px; border-top:1px solid var(--hair); font-size:12px; color:var(--ink-3); display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap;}
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <header class="doc-head">
+    <div class="eyebrow">SayAll · 提示气泡 · 已定稿 · 未开发</div>
+    <h1>气泡，而不是提示条</h1>
+    <p class="lede">
+      上一版是“系统提示条”的语言：中性底色、彩色徽章、紧凑排版。它正确，但确实像设置面板里的工具。
+      这一版换成<b>产品引导</b>的语言：饱和语义色、18pt 大圆角、指向锚点的尾巴、去掉图标、标题 + 说明的双行节奏。颜色按你要的三档：绿 / 琥珀 / 品牌红，深色外观各提亮一档。
+      同时补上你要的第二件事：<b>提示可以钉在某个元素上</b>，而不是只能浮在页面正中。
+    </p>
+    <div class="meta-row">
+      <span class="tag tag--new">已定：L1 绿 / L2 琥珀 / L3 品牌红</span>
+      <span class="tag tag--new">版式：标题 + 说明 + 一个动作</span>
+      <span class="tag tag--new">深色各提亮一档</span>
+      <span class="tag tag--new">已定稿 · 可开发</span>
+    </div>
+  </header>
+
+  <!-- 01 三档 -->
+  <section>
+    <div class="sec-head"><span class="sec-num">01</span><h2 class="sec">三档语义色，浅深各一套</h2></div>
+    <p class="sec-note">
+      已定：L1 绿 / L2 琥珀 / L3 品牌红。浅色外观一套、深色外观各提亮一档——
+      这不是审美调整，是三档色在 <code>#1C1C1E</code> 背景上的分离度只有 2.5–2.8，低于 3:1 的可见线。
+    </p>
+
+    <div class="palette">
+      <div class="pal pick">
+        <h3>L1 · 引导 / 信息<span class="flag">绿</span></h3>
+        <div class="pal-duo">
+          <div class="pal-half light" style="position:relative;">
+            <span class="pal-tag">LIGHT · #12704A</span>
+            <div class="bubble">
+              <div class="bubble__title">按住语音键说话
+                <svg class="bubble__close" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7"/></svg>
+              </div>
+              <div class="bubble__text">松开就结束，文字插到光标处。</div>
+            </div>
+          </div>
+          <div class="pal-half dark" style="position:relative;">
+            <span class="pal-tag">DARK · #1A7A52</span>
+            <div class="bubble bubble--on-dark">
+              <div class="bubble__title">按住语音键说话
+                <svg class="bubble__close" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7"/></svg>
+              </div>
+              <div class="bubble__text">松开就结束，文字插到光标处。</div>
+            </div>
+          </div>
+        </div>
+        <div class="pal-foot">
+          白字 6.10 / 5.32；深色底分离 3.20。<br>
+          成功也用这一档——「已复制」不需要额外的视觉重量。
+        </div>
+      </div>
+
+      <div class="pal">
+        <h3>L2 · 警告<span class="flag gray">琥珀</span></h3>
+        <div class="pal-duo">
+          <div class="pal-half light" style="position:relative;">
+            <span class="pal-tag">LIGHT · #8A4B0F</span>
+            <div class="bubble bubble--warn">
+              <div class="bubble__title">电量偏低
+                <svg class="bubble__close" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7"/></svg>
+              </div>
+              <div class="bubble__text">仍可继续使用，建议换电池。</div>
+            </div>
+          </div>
+          <div class="pal-half dark" style="position:relative;">
+            <span class="pal-tag">DARK · #9E5611</span>
+            <div class="bubble bubble--warn bubble--on-dark">
+              <div class="bubble__title">电量偏低
+                <svg class="bubble__close" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7"/></svg>
+              </div>
+              <div class="bubble__text">仍可继续使用，建议换电池。</div>
+            </div>
+          </div>
+        </div>
+        <div class="pal-foot">
+          白字 6.79 / 5.54；深色底分离 3.03。<br>
+          和绿、红都不同色相，不读字也知道“这不是失败”。
+        </div>
+      </div>
+
+      <div class="pal">
+        <h3>L3 · 错误<span class="flag gray">品牌红</span></h3>
+        <div class="pal-duo">
+          <div class="pal-half light" style="position:relative;">
+            <span class="pal-tag">LIGHT · #A5342C</span>
+            <div class="bubble bubble--err">
+              <div class="bubble__title">
+                <svg class="bubble__mark" viewBox="0 0 14 14" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round"><path d="M7 3.2v4.8"/><circle cx="7" cy="10.9" r=".95" fill="#fff" stroke="none"/></svg>
+                输入目标已改变
+              </div>
+              <div class="bubble__text">重新打开常用语后再试。</div>
+            </div>
+          </div>
+          <div class="pal-half dark" style="position:relative;">
+            <span class="pal-tag">DARK · #C04239</span>
+            <div class="bubble bubble--err bubble--on-dark">
+              <div class="bubble__title">
+                <svg class="bubble__mark" viewBox="0 0 14 14" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round"><path d="M7 3.2v4.8"/><circle cx="7" cy="10.9" r=".95" fill="#fff" stroke="none"/></svg>
+                输入目标已改变
+              </div>
+              <div class="bubble__text">重新打开常用语后再试。</div>
+            </div>
+          </div>
+        </div>
+        <div class="pal-foot">
+          白字 6.71 / 5.15；深色底分离 3.31。<br>
+          品牌红放在错误档：SayAll 的红本来就是“该注意了”的意思。
+        </div>
+      </div>
+    </div>
+
+    <div class="table-card" style="margin-top:18px;">
+      <table class="spec">
+        <tr>
+          <th style="width:130px;">档位</th><th style="width:120px;">浅色外观</th><th style="width:100px;">白字</th>
+          <th style="width:120px;">深色外观</th><th style="width:100px;">白字</th><th>深色底分离</th>
+        </tr>
+        <tr><td>L1 引导 / 信息</td><td><code>#12704A</code></td><td>6.10</td><td><code>#1A7A52</code></td><td>5.32</td><td>3.20</td></tr>
+        <tr><td>L2 警告</td><td><code>#8A4B0F</code></td><td>6.79</td><td><code>#9E5611</code></td><td>5.54</td><td>3.03</td></tr>
+        <tr><td>L3 错误</td><td><code>#A5342C</code></td><td>6.71</td><td><code>#C04239</code></td><td>5.15</td><td>3.31</td></tr>
+      </table>
+    </div>
+
+    <div class="callout">
+      <b>深色为什么必须换色值，而不是只加描边。</b>
+      三档原色放在 <code>#1C1C1E</code> 上，分离度只有 2.51 / 2.79 / 2.53——低于 3:1，气泡会顺着背景一起沉下去。
+      各提亮一档后升到 3.03–3.31，白字仍保持 5.15 以上。同时深色下改用纯色、不用渐变：渐变末端会更暗，正好抵消提亮。
+    </div>
+  </section>
+
+  <!-- 02 解剖 -->  <!-- 02 解剖 -->
+  <section>
+    <div class="sec-head"><span class="sec-num">02</span><h2 class="sec">一只气泡的构成</h2></div>
+    <p class="sec-note">相比上一版，字号、行距、留白、圆角全部放大一档；去掉彩色圆徽章，语义改由标题措辞承担。</p>
+
+    <div class="anatomy">
+      <div class="anatomy-canvas">
+        <div class="tgt2"></div>
+        <div class="bubble tail-left">
+          <div class="bubble__title">按住语音键说话
+            <svg class="bubble__close" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7"/></svg>
+          </div>
+          <div class="bubble__text">按住不放，松开就结束；文字会插到光标所在的输入框。</div>
+          <span class="bubble__action">知道了</span>
+        </div>
+
+        <div class="dim" style="left:56px; top:12px;">圆角 18pt continuous（上一版 12）</div>
+        <div class="dim" style="right:18px; top:12px;">最大宽 360pt</div>
+        <div class="dim" style="left:56px; bottom:12px;">内边距 16 × 18（上一版 11 × 13）</div>
+        <div class="dim" style="right:18px; bottom:12px;">尾巴 18 × 10</div>
+      </div>
+
+      <div class="anatomy-legend">
+        <table>
+          <tr><th>项</th><th>取值</th></tr>
+          <tr><td>底色</td><td>同色系 172° 微渐变，<code>#A5342C → #96291F</code>；不做纯平涂</td></tr>
+          <tr><td>标题</td><td>14.5pt / 650 / 行高 1.3，右侧留 22pt 给关闭</td></tr>
+          <tr><td>说明</td><td>13.5pt / 行高 1.56 / 白 93%，与标题间距 5pt</td></tr>
+          <tr><td>动作</td><td>可选，12.5pt / 600，白色 17% 底胶囊，9pt 圆角</td></tr>
+          <tr><td>关闭</td><td>12pt 细线，白色 62%，距上 / 右 13pt</td></tr>
+          <tr><td>尾巴</td><td>18 × 10，与气泡同色；距圆角 ≥ 22pt</td></tr>
+          <tr><td>阴影</td><td><code>0 10 30 −8 / 30%</code> + <code>0 2 6 / 7%</code></td></tr>
+          <tr><td>描边</td><td>无。深色界面额外加 1px 白 10% 分离</td></tr>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- 03 锚定 -->
+  <section>
+    <div class="sec-head"><span class="sec-num">03</span><h2 class="sec">钉在元素上：四个方向</h2></div>
+    <p class="sec-note">
+      尾巴指向锚点。优先放在锚点右侧（跟随阅读方向），空间不足依次翻到左侧、下方、上方；尾巴始终对准锚点中心，
+      但会避让 18pt 圆角，最近只到距边 22pt。
+    </p>
+
+    <div class="dir-grid">
+      <div class="dir-box">
+        <div class="label">tail-left · 气泡在右，指向左侧元素</div>
+        <div class="dir-canvas">
+          <div style="position:absolute; left:64px; top:50%; transform:translateY(-50%);"><div class="tgt"></div></div>
+          <div class="bubble tail-left" style="margin-left:56px;">
+            <div class="bubble__title">这个按钮做什么
+              <svg class="bubble__close" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7"/></svg>
+            </div>
+            <div class="bubble__text">点一下就开始录音。</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="dir-box">
+        <div class="label">tail-top · 气泡在下，指向上方元素</div>
+        <div class="dir-canvas" style="flex-direction:column; justify-content:flex-start; padding-top:26px;">
+          <div class="tgt" style="margin-bottom:12px;"></div>
+          <div class="bubble tail-top" style="margin-left:26px;">
+            <div class="bubble__title">这里还没允许
+              <svg class="bubble__close" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7"/></svg>
+            </div>
+            <div class="bubble__text">勾选后按键映射才会生效。</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="dir-box">
+        <div class="label">tail-bottom · 气泡在上，指向下方元素</div>
+        <div class="dir-canvas" style="flex-direction:column; justify-content:flex-end; padding-bottom:26px;">
+          <div class="bubble tail-bottom" style="margin-left:26px; margin-bottom:12px;">
+            <div class="bubble__title">输入目标已改变
+              <svg class="bubble__close" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7"/></svg>
+            </div>
+            <div class="bubble__text">重新打开常用语再试。</div>
+          </div>
+          <div class="tgt"></div>
+        </div>
+      </div>
+
+      <div class="dir-box">
+        <div class="label">tail-right · 气泡在左，指向右侧元素</div>
+        <div class="dir-canvas">
+          <div class="bubble tail-right" style="margin-right:56px;">
+            <div class="bubble__title">先选一条常用语
+              <svg class="bubble__close" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7"/></svg>
+            </div>
+            <div class="bubble__text">再点圆盘上的方向。</div>
+          </div>
+          <div style="position:absolute; right:64px; top:50%; transform:translateY(-50%);"><div class="tgt"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="table-card" style="margin-top:18px;">
+      <table class="spec">
+        <tr><th style="width:150px;">规则</th><th>取值</th><th style="width:210px;">为什么</th></tr>
+        <tr><td>首选方向</td><td>右侧 → 左侧 → 下方 → 上方</td><td>跟随阅读方向，不挡当前操作</td></tr>
+        <tr><td>与锚点距离</td><td>8pt（尾巴另占 10pt）</td><td>贴得够近才像从按钮上长出来</td></tr>
+        <tr><td>尾巴避让</td><td>距圆角 ≥ 22pt</td><td>避免切进圆角，看起来破形</td></tr>
+        <tr><td>贴边</td><td>距窗口内容边缘 ≥ 12pt</td><td>不被裁切，也不贴死在边上</td></tr>
+        <tr><td>锚点滚出视口</td><td>气泡跟随消失</td><td>指向一个看不见的东西没有意义</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <!-- 04 场景 -->
+  <section>
+    <div class="sec-head"><span class="sec-num">04</span><h2 class="sec">放进真实页面</h2></div>
+    <p class="sec-note">三个锚定场景 + 一个居中场景。居中保留：全局结果没有具体锚点，就落在页面正中。</p>
+
+    <div class="scene">
+      <div class="scene-hd"><h3>4.1 按键页 · 锚在「语音键」上</h3><span class="badge rec">tail-left</span></div>
+      <p class="scene-desc">新功能引导：第一次打开按键页时，气泡钉在语音键控件右侧，看完关掉就不再出现。</p>
+      <div class="stage">
+        <div class="win">
+          <div class="win-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span></div>
+          <div class="win-body" style="height:410px;">
+            <div class="sidebar">
+              <div class="brand"><div class="logo">SA</div><div><div class="name">SayAll</div><div class="ver">2.0.0</div></div></div>
+              <div class="nav-item on"><svg class="ni" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="2" y="3" width="12" height="10" rx="2"/><path d="M4.5 6.5h3M4.5 9.5h5"/></svg>按键</div>
+              <div class="nav-item"><svg class="ni" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M5.5 3.5v9M10.5 3.5v9M7.5 3.5h1M7.5 12.5h1"/></svg>连接</div>
+              <div class="nav-item"><svg class="ni" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M3 4h10v7H7l-3 2.5V11H3z"/></svg>回眸</div>
+              <div class="nav-item"><svg class="ni" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="8" cy="8" r="2.4"/></svg>设置</div>
+            </div>
+            <div class="content rel">
+              <div class="page-hd"><h4>按键</h4><div class="sub">遥控器按键与语音</div></div>
+
+              <div style="width:400px;">
+                <div class="card" style="margin-bottom:15px;">
+                  <div class="card-hd"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="#6e6e73" stroke-width="1.3"><rect x="2" y="3" width="12" height="10" rx="2"/></svg>语音键</div>
+                  <div class="segs">
+                    <div class="seg"><span class="k">按下</span><span class="v">开始录音</span></div>
+                    <div class="seg hl"><span class="k">松开</span><span class="v">插入文字</span></div>
+                    <div class="seg"><span class="k">长按</span><span class="v">持续录音</span></div>
+                  </div>
+                </div>
+                <div class="card">
+                  <div class="card-hd"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="#6e6e73" stroke-width="1.3"><circle cx="8" cy="8" r="5.5"/></svg>其他按键</div>
+                  <div class="segs">
+                    <div class="seg"><span class="k">OK</span><span class="v">Return</span></div>
+                    <div class="seg"><span class="k">菜单</span><span class="v">上下文菜单</span></div>
+                    <div class="seg"><span class="k">返回</span><span class="v">Esc</span></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="abs" style="left:424px; top:88px;">
+                <div class="bubble tail-left" style="max-width:312px;">
+                  <div class="bubble__title">按住它说话
+                    <svg class="bubble__close" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7"/></svg>
+                  </div>
+                  <div class="bubble__text">按住语音键说话，松开后文字插到光标处。</div>
+                  <span class="bubble__action">知道了</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="scene">
+      <div class="scene-hd"><h3>4.2 权限行 · 锚在未勾选的那一项</h3><span class="badge rec">tail-top</span></div>
+      <p class="scene-desc">状态类提示：不是事件，是“这里还差一步”。指向具体那一行，比在页面顶部弹一条少一次寻找。</p>
+      <div class="stage">
+        <div class="win" style="max-width:660px; margin:0 auto;">
+          <div class="win-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span></div>
+          <div style="padding:24px 28px 30px; position:relative; background:#fff; min-height:392px;">
+            <div class="page-hd" style="margin-bottom:16px;"><h4>权限与隐私</h4><div class="sub">三项都允许后，语音和按键才会生效</div></div>
+            <div class="row-list">
+              <div class="row"><span>辅助功能</span><span class="val">已允许</span></div>
+              <div class="row"><span>麦克风</span><span class="val">已允许</span></div>
+              <div class="row hl"><span>输入监控</span><span class="val">未允许</span></div>
+            </div>
+
+            <div class="abs" style="left:50%; transform:translateX(-50%); top:204px;">
+              <div class="bubble bubble--warn tail-top" style="max-width:300px; padding:14px 16px; --tail-x:calc(50% - 8px);">
+                <div class="bubble__title">这一项还没开
+                  <svg class="bubble__close" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7"/></svg>
+                </div>
+                <div class="bubble__text">勾选后按键映射才会生效。</div>
+                <span class="bubble__action">打开系统设置</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="scene">
+      <div class="scene-hd"><h3>4.3 输入框 · 锚在出问题的地方</h3><span class="badge">tail-top</span></div>
+      <p class="scene-desc">字段级错误：气泡挂在输入框下方，向上指。不遮住用户正在输入的文字——这一点比“在上方”更重要。</p>
+      <div class="stage stage--flat">
+        <div class="win" style="max-width:580px; margin:0 auto;">
+          <div style="padding:30px 30px 168px; position:relative; background:#fff;">
+            <div style="background:#f7f7f7; padding:14px; border-radius:11px;">
+              <div style="font-size:11.5px; color:#8a8a90; margin-bottom:6px;">常用语内容</div>
+              <div class="field">看不懂，说清楚一点<span class="caret"></span></div>
+            </div>
+
+            <div class="abs" style="left:50%; transform:translateX(-50%); top:118px;">
+              <div class="bubble bubble--err tail-top" style="max-width:330px; padding:14px 16px; --tail-x:calc(50% - 8px);">
+                <div class="bubble__title">
+                  <svg class="bubble__mark" viewBox="0 0 14 14" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round"><path d="M7 3.2v4.8"/><circle cx="7" cy="10.9" r=".95" fill="#fff" stroke="none"/></svg>
+                  输入目标已改变
+                  <svg class="bubble__close" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7"/></svg>
+                </div>
+                <div class="bubble__text">重新打开常用语后，文字会插到新位置。</div>
+                <span class="bubble__action">重新打开</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="scene">
+      <div class="scene-hd"><h3>4.4 没有锚点时 · 仍然居中</h3><span class="badge">居中保留</span></div>
+      <p class="scene-desc">保存成功、设备断开这类全局结果没有具体元素可指，落在内容区正中。视觉与锚定气泡一致，只是没有尾巴。</p>
+      <div class="stage">
+        <div class="win">
+          <div class="win-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span></div>
+          <div class="win-body" style="height:430px;">
+            <div class="sidebar">
+              <div class="brand"><div class="logo">SA</div><div><div class="name">SayAll</div><div class="ver">2.0.0</div></div></div>
+              <div class="nav-item"><svg class="ni" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="2" y="3" width="12" height="10" rx="2"/></svg>按键</div>
+              <div class="nav-item on"><svg class="ni" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M5.5 3.5v9M10.5 3.5v9"/></svg>连接</div>
+              <div class="nav-item"><svg class="ni" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M3 4h10v7H7l-3 2.5V11H3z"/></svg>回眸</div>
+              <div class="nav-item"><svg class="ni" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="8" cy="8" r="2.4"/></svg>设置</div>
+            </div>
+            <div class="content">
+              <div class="page-hd"><h4>连接与语音</h4><div class="sub">遥控器与设备</div></div>
+              <div class="card">
+                <div class="card-hd">遥控器</div>
+                <div class="segs">
+                  <div class="seg"><span class="k">设备</span><span class="v">小米 2 Pro 1</span></div>
+                  <div class="seg"><span class="k">状态</span><span class="v">已连接</span></div>
+                  <div class="seg"><span class="k">电量</span><span class="v">94%</span></div>
+                </div>
+              </div>
+            </div>
+            <div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; z-index:6;">
+              <div class="bubble" style="max-width:300px; padding:14px 16px;">
+                <div class="bubble__title">遥控器已连接
+                  <svg class="bubble__close" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7"/></svg>
+                </div>
+                <div class="bubble__text">电量 94%，可以直接按住语音键说话。</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="scene">
+      <div class="scene-hd"><h3>4.5 深色外观</h3><span class="badge">一套颜色，两种外观</span></div>
+      <p class="scene-desc">品牌色本身够重，深色界面上不需要换成浅色气泡——这是 v4 比 v3 简单的地方。</p>
+      <div class="stage stage--dark">
+        <div class="win" style="background:#1c1c1e; max-width:640px; margin:0 auto;">
+          <div class="win-bar" style="background:#232325; border-bottom-color:rgba(255,255,255,.08);"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span></div>
+          <div style="padding:24px 28px 30px; position:relative; color:#f2f2f4; min-height:300px;">
+            <div class="page-hd" style="margin-bottom:16px;"><h4 style="color:#f2f2f4;">按键</h4><div class="sub" style="color:#9a9a9f;">遥控器按键与语音</div></div>
+            <div class="row-list">
+              <div class="row" style="background:#2c2c2e; color:#f2f2f4;"><span>语音键</span><span class="val" style="color:#9a9a9f;">按住说话</span></div>
+              <div class="row" style="background:#2c2c2e; color:#f2f2f4;"><span>OK 键</span><span class="val" style="color:#9a9a9f;">Return</span></div>
+            </div>
+
+            <div class="abs" style="left:50%; transform:translateX(-50%); top:150px;">
+              <div class="bubble bubble--on-dark tail-top" style="max-width:300px; padding:14px 16px; --tail-x:calc(50% - 8px);">
+                <div class="bubble__title">按住语音键就行
+                  <svg class="bubble__close" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7"/></svg>
+                </div>
+                <div class="bubble__text">松开后文字会插到当前光标位置。</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="scene">
+      <div class="scene-hd"><h3>4.6 长文案与英文</h3><span class="badge">边界</span></div>
+      <p class="scene-desc">标题最多 2 行，说明最多 3 行；超出就缩短文案，不缩字号。英文按 1.6 倍长度验证，最大宽从 360 放到 400。</p>
+      <div class="stage stage--flat" style="background:#fbfbfc;">
+        <div style="display:flex; flex-direction:column; gap:14px; max-width:430px;">
+          <div class="bubble" style="max-width:400px;">
+            <div class="bubble__title">Try Annotation Mode
+              <svg class="bubble__close" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7"/></svg>
+            </div>
+            <div class="bubble__text">Leave visual comments for SayAll with a single click or drag to select an area.</div>
+          </div>
+          <div class="bubble bubble--err" style="max-width:400px;">
+            <div class="bubble__title">
+              <svg class="bubble__mark" viewBox="0 0 14 14" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round"><path d="M7 3.2v4.8"/><circle cx="7" cy="10.9" r=".95" fill="#fff" stroke="none"/></svg>
+              输入目标已改变
+              <svg class="bubble__close" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7"/></svg>
+            </div>
+            <div class="bubble__text">新的光标位置在另一个输入框里。重新打开常用语后，这条会插到那里；原来的窗口不会收到任何文字。</div>
+            <span class="bubble__action">重新打开</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 04.5 落点 -->
+  <section>
+    <div class="sec-head"><span class="sec-num">04.5</span><h2 class="sec">没有锚点时：三个落点</h2></div>
+    <p class="sec-note">
+      由调用方在 <code>Notice(position:)</code> 里指定，默认 <code>.center</code>。有锚点时这个值被忽略——指向元素的提示不该再被挪到别处。
+      三个落点都保持水平居中、左右留 12pt、距边 12pt。
+    </p>
+
+    <div class="pos-grid">
+      <div class="pos-box">
+        <div class="pos-stage">
+          <div class="bubble" style="top:12px;">
+            <div class="bubble__title">已保存更改
+              <svg class="bubble__close" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7"/></svg>
+            </div>
+            <div class="bubble__text">设置已写入本机。</div>
+          </div>
+        </div>
+        <div class="pos-cap"><b>顶部</b><code>.top</code><span>适合结果类，贴近标题区</span></div>
+      </div>
+
+      <div class="pos-box">
+        <div class="pos-stage">
+          <div class="bubble" style="top:50%; transform:translate(-50%,-50%);">
+            <div class="bubble__title">遥控器已连接
+              <svg class="bubble__close" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7"/></svg>
+            </div>
+            <div class="bubble__text">电量 94%。</div>
+          </div>
+        </div>
+        <div class="pos-cap"><b>中间</b><code>.center</code><span>默认，命中视线焦点</span></div>
+      </div>
+
+      <div class="pos-box">
+        <div class="pos-stage">
+          <div class="bubble" style="bottom:12px; top:auto;">
+            <div class="bubble__title">已复制到剪贴板
+              <svg class="bubble__close" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7"/></svg>
+            </div>
+            <div class="bubble__text">可以粘贴到任意输入框。</div>
+          </div>
+        </div>
+        <div class="pos-cap"><b>底部</b><code>.bottom</code><span>低调，不挡正文</span></div>
+      </div>
+    </div>
+
+    <div class="table-card" style="margin-top:16px;">
+      <table class="spec">
+        <tr><th style="width:130px;">落点</th><th style="width:170px;">取值</th><th>建议场景</th></tr>
+        <tr><td>顶部</td><td><code>NoticePosition.top</code></td><td>结果、状态切换；用户刚完成操作，视线还在页面上方</td></tr>
+        <tr><td>中间</td><td><code>NoticePosition.center</code></td><td>默认，需要被立刻看到而无需指向具体元素</td></tr>
+        <tr><td>底部</td><td><code>NoticePosition.bottom</code></td><td>次要成功反馈；正文字多，不想挡住阅读</td></tr>
+        <tr><td>锚定</td><td><code>anchor:</code> 非空</td><td>优先于落点，位置由元素决定</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <!-- 04.7 内联 -->
+  <section>
+    <div class="sec-head"><span class="sec-num">04.7</span><h2 class="sec">内联提示条：不是浮层，是状态</h2></div>
+    <p class="sec-note">
+      气泡描述“刚刚发生了什么”，会消失；内联条描述“现在仍然是什么样”，条件恢复才消失。
+      形态沿用 v3 7.3：<b>16pt 圆形图标 + 标题与说明 + 右侧动作</b>，一行排开。没有关闭入口——给 × 反而暗示“关掉就没事了”。
+    </p>
+
+    <div class="two-col">
+      <div class="panel-card">
+        <h4>浅色外观</h4>
+        <div class="inote-row">
+          <div class="inote inote--warn">
+            <svg class="inote__icon" viewBox="0 0 16 16" aria-hidden="true">
+              <circle cx="8" cy="8" r="7"/>
+              <rect x="7.15" y="4" width="1.7" height="5.1" rx=".85" fill="#fff"/>
+              <circle cx="8" cy="11.4" r=".95" fill="#fff"/>
+            </svg>
+            <div class="inote__body">
+              <div class="inote__title">组合动作不可用，请重新选择</div>
+              <div class="inote__text">这个按键指向的组合动作已被删除。</div>
+            </div>
+            <span class="inote__action">管理组合动作</span>
+          </div>
+
+          <div class="inote inote--err">
+            <svg class="inote__icon" viewBox="0 0 16 16" aria-hidden="true">
+              <circle cx="8" cy="8" r="7"/>
+              <path d="M5.6 5.6l4.8 4.8M10.4 5.6l-4.8 4.8" stroke="#fff" stroke-width="1.8" stroke-linecap="round" fill="none"/>
+            </svg>
+            <div class="inote__body">
+              <div class="inote__title">无法保存键位方案</div>
+              <div class="inote__text">原内容未被修改。</div>
+            </div>
+            <span class="inote__action">重试</span>
+          </div>
+
+          <div class="inote inote--tip">
+            <svg class="inote__icon" viewBox="0 0 16 16" aria-hidden="true">
+              <circle cx="8" cy="8" r="7"/>
+              <path d="M4.6 8.2l2.3 2.3 4.6-4.8" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+            </svg>
+            <div class="inote__body">
+              <div class="inote__title">遥控器已连接</div>
+              <div class="inote__text">电量 94%，可以直接使用。</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel-card" style="background:#1c1c1e; border-color:rgba(255,255,255,.10);">
+        <h4 style="color:#f2f2f4;">深色外观</h4>
+        <div class="inote-row">
+          <div class="inote inote--warn inote--dark">
+            <svg class="inote__icon" viewBox="0 0 16 16" aria-hidden="true">
+              <circle cx="8" cy="8" r="7"/>
+              <rect x="7.15" y="4" width="1.7" height="5.1" rx=".85" fill="#fff"/>
+              <circle cx="8" cy="11.4" r=".95" fill="#fff"/>
+            </svg>
+            <div class="inote__body">
+              <div class="inote__title">组合动作不可用，请重新选择</div>
+              <div class="inote__text">这个按键指向的组合动作已被删除。</div>
+            </div>
+            <span class="inote__action">管理组合动作</span>
+          </div>
+
+          <div class="inote inote--err inote--dark">
+            <svg class="inote__icon" viewBox="0 0 16 16" aria-hidden="true">
+              <circle cx="8" cy="8" r="7"/>
+              <path d="M5.6 5.6l4.8 4.8M10.4 5.6l-4.8 4.8" stroke="#fff" stroke-width="1.8" stroke-linecap="round" fill="none"/>
+            </svg>
+            <div class="inote__body">
+              <div class="inote__title">无法保存键位方案</div>
+              <div class="inote__text">原内容未被修改。</div>
+            </div>
+            <span class="inote__action">重试</span>
+          </div>
+
+          <div class="inote inote--tip inote--dark">
+            <svg class="inote__icon" viewBox="0 0 16 16" aria-hidden="true">
+              <circle cx="8" cy="8" r="7"/>
+              <path d="M4.6 8.2l2.3 2.3 4.6-4.8" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+            </svg>
+            <div class="inote__body">
+              <div class="inote__title">遥控器已连接</div>
+              <div class="inote__text">电量 94%，可以直接使用。</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="table-card" style="margin-top:16px;">
+      <table class="spec">
+        <tr><th style="width:150px;">项</th><th>取值</th></tr>
+        <tr><td>结构</td><td><code>[图标 16] [标题 + 说明] [右侧动作]</code>，一行排开，动作垂直居中</td></tr>
+        <tr><td>图标</td><td>实心圆 + 白色符号，16pt，与首行文字顶对齐；颜色用语义色</td></tr>
+        <tr><td>圆角 / 内边距</td><td>10pt / 11 × 13，图标与文字间距 9</td></tr>
+        <tr><td>语义色</td><td>只用于圆形图标与右侧动作；不再单画左侧色条，底色与边框已足够区分档位</td></tr>
+        <tr><td>背景</td><td>提示 #EAF7F0；警告 #FFFAF0；错误 #FFF7F6。深色统一 #2C2C2E</td></tr>
+        <tr><td>文字</td><td>标题 13 / 600；说明 12 / 行高 16，次要色；动作 12.5 / 600</td></tr>
+        <tr><td>关闭</td><td>没有。状态消失由条件决定，不由用户点掉</td></tr>
+        <tr><td>宽度</td><td>撑满所在容器，不设上限</td></tr>
+      </table>
+    </div>
+
+    <div class="callout">
+      <b>第一处落地：按键页的组合动作。</b>
+      按键指向的组合动作被删除后，提示条给出“哪里不对”和“怎么修”，并把原本独立的「管理组合动作」按钮收进右侧动作位，
+      避免同一行出现两个入口。没有提示时，这个按钮仍然常驻。
+    </div>
+  </section>
+
+  <!-- 05 行为 -->  <!-- 05 行为 -->
+  <section>
+    <div class="sec-head"><span class="sec-num">05</span><h2 class="sec">行为规则</h2></div>
+    <div class="table-card">
+      <table class="spec">
+        <tr><th style="width:160px;">场景</th><th style="width:200px;">关闭方式</th><th>说明</th></tr>
+        <tr><td>引导气泡（锚定）</td><td>点 X / Esc / 点气泡外</td><td>只显示一次，按 <code>seenKey</code> 记忆；手动关掉也算看过</td></tr>
+        <tr><td>状态气泡（权限）</td><td>条件恢复后自动消失</td><td>不给 X；它描述的是仍然存在的状态，关掉会误导</td></tr>
+        <tr><td>字段错误</td><td>点 X / Esc / 动作</td><td>修好后自动消失；不自动超时，避免还没读完就没了</td></tr>
+        <tr><td>全局结果（无锚点）</td><td>2.4s 自动 / 点气泡外</td><td>按 <code>position</code> 落在顶部 / 中间 / 底部，默认居中；不拦点击</td></tr>
+        <tr><td>多个锚定同时命中</td><td>—</td><td>只显示优先级最高的一条；其余排队</td></tr>
+      </table>
+    </div>
+
+    <div class="callout">
+      <b>位置规则共三种落点。</b><b>有具体元素 → 贴着那个元素</b>；没有锚点时默认<b>页面正中</b>；
+      业务也可以显式指定<b>顶部</b>或<b>底部</b>——比如保存完成后贴在底部，不打扰正在看的内容。
+      三个落点都在同一套视觉里，只有 y 不同，锚定优先于落点。
+    </div>
+  </section>
+
+  <!-- 06 实现 -->
+  <section>
+    <div class="sec-head"><span class="sec-num">06</span><h2 class="sec">锚定怎么实现</h2></div>
+    <p class="sec-note">业务侧只多传一个锚点标识，不写坐标、不写尾巴方向。方向由中心按可用空间算。</p>
+
+    <p class="code-cap">① 注册锚点：在目标元素上加一个修饰符</p>
+    <pre class="code"><span class="c">// 任何 View 都能被锚定</span>
+<span class="t">VoiceKeyCard</span>()
+    .<span class="f">noticeAnchor</span>(.<span class="f">voiceKey</span>)
+
+<span class="c">// 用枚举而不是字符串，避免拼错</span>
+<span class="k">enum</span> <span class="t">NoticeAnchorID</span>: <span class="t">Hashable</span> {
+    <span class="k">case</span> voiceKey, inputMonitoring, phraseField
+}</pre>
+
+    <p class="code-cap" style="margin-top:18px;">② 业务侧：只声明锚在哪</p>
+    <pre class="code"><span class="t">NoticeCenter</span>.shared.show(.init(
+    kind: .tip,
+    title: <span class="s">"按住它说话"</span>,
+    text: <span class="s">"按住遥控器语音键，松开后文字会插到光标处。"</span>,
+    action: .dismiss(title: <span class="s">"知道了"</span>),
+    anchor: .voiceKey,          <span class="c">// nil = 居中</span>
+    seenKey: <span class="s">"tip.voiceKey.v1"</span>  <span class="c">// 只显示一次</span>
+))
+
+<span class="c">// 状态类：不给 X，条件恢复后自己消失</span>
+<span class="t">NoticeCenter</span>.shared.show(.init(
+    kind: .status,
+    title: <span class="s">"这一项还没开"</span>,
+    text: <span class="s">"勾选后按键映射才会生效。"</span>,
+    action: .openSystemSettings(.inputMonitoring),
+    anchor: .inputMonitoring,
+    dismissible: <span class="k">false</span>
+))</pre>
+
+    <p class="code-cap" style="margin-top:18px;">③ 中心侧：方向由几何决定，不靠调用方猜</p>
+    <pre class="code"><span class="k">func</span> <span class="f">placement</span>(for anchor: <span class="t">CGRect</span>, in bounds: <span class="t">CGRect</span>, size: <span class="t">CGSize</span>) -&gt; <span class="t">Edge</span> {
+    <span class="k">let</span> gap: <span class="t">CGFloat</span> = 18   <span class="c">// 8 间距 + 10 尾巴</span>
+    <span class="k">if</span> bounds.maxX - anchor.maxX &gt;= size.width + gap { <span class="k">return</span> .trailing }
+    <span class="k">if</span> anchor.minX - bounds.minX &gt;= size.width + gap { <span class="k">return</span> .leading }
+    <span class="k">if</span> bounds.maxY - anchor.maxY &gt;= size.height + gap { <span class="k">return</span> .bottom }
+    <span class="k">return</span> .top
+}
+
+<span class="c">// 尾巴位置 = 锚点中心，收进 [22, 宽-22]</span>
+<span class="k">let</span> tailX = <span class="t">min</span>(<span class="t">max</span>(anchor.midX - frame.minX, 22), frame.width - 22)</pre>
+
+    <div class="callout">
+      <b>取值方式。</b>用 <code>anchorPreference</code> 把子视图的 frame 提到父层，避免全局坐标系手算；
+      滚动容器里再叠一层 <code>onScrollGeometryChange</code>，锚点离开可视区就关闭气泡。
+    </div>
+  </section>
+
+  <!-- 07 对比 -->
+  <section>
+    <div class="sec-head"><span class="sec-num">07</span><h2 class="sec">和上一版的差别</h2></div>
+    <div class="cmp">
+      <div class="cmp-col old">
+        <h4><span class="dot2"></span>v3 · 系统提示条</h4>
+        <ul>
+          <li>12pt 圆角矩形，中性黑 / 白底</li>
+          <li>16pt 彩色圆徽章承载语义</li>
+          <li>13pt 单行，11 × 13 内边距</li>
+          <li>只能居中，会挡住正在看的内容</li>
+          <li>动作是蓝色文字，像表单里的链接</li>
+          <li>气质：系统通知</li>
+        </ul>
+      </div>
+      <div class="cmp-col new">
+        <h4><span class="dot2"></span>v4 · 产品气泡</h4>
+        <ul>
+          <li>18pt 圆角 + 18 × 10 指向尾巴</li>
+          <li>去掉徽章，语义靠标题措辞与深红</li>
+          <li>14.5 标题 + 13.5 说明，16 × 18 内边距</li>
+          <li>锚定元素，不挡操作；没有锚点才居中</li>
+          <li>动作是半透明白胶囊，像气泡的一部分</li>
+          <li>气质：产品引导</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 09 颜色策略 -->
+  <section>
+    <div class="sec-head"><span class="sec-num">08</span><h2 class="sec">颜色：跟主题色，还是跟状态</h2></div>
+    <p class="sec-note">
+      我把八种系统强调色分别套进气泡算了一遍。结论不是“哪个好看”，而是其中一个方向在这个位置上根本不可读。
+    </p>
+
+    <h3 style="font-size:14px; margin:0 0 4px; font-weight:650;">方向 1 实测：白字 + 系统强调色</h3>
+    <p class="sec-note" style="margin-top:0;">同一句文案、同一个尺寸，只换底色。数字是白字的 WCAG 对比度，4.5 是正文合格线。</p>
+
+    <div class="accent-row">
+      <div class="ac"><div class="ac-swatch"><div class="ac-chip" style="background:#0A84FF; color:#fff;">已复制到剪贴板</div></div><div class="ac-meta"><span class="name">蓝</span><span class="ratio bad">3.65</span></div></div>
+      <div class="ac"><div class="ac-swatch"><div class="ac-chip" style="background:#BF5AF2; color:#fff;">已复制到剪贴板</div></div><div class="ac-meta"><span class="name">紫</span><span class="ratio bad">3.52</span></div></div>
+      <div class="ac"><div class="ac-swatch"><div class="ac-chip" style="background:#FF375F; color:#fff;">已复制到剪贴板</div></div><div class="ac-meta"><span class="name">粉</span><span class="ratio bad">3.52</span></div></div>
+      <div class="ac"><div class="ac-swatch"><div class="ac-chip" style="background:#FF453A; color:#fff;">已复制到剪贴板</div></div><div class="ac-meta"><span class="name">红</span><span class="ratio bad">3.41</span></div></div>
+      <div class="ac"><div class="ac-swatch"><div class="ac-chip" style="background:#FF9F0A; color:#fff;">已复制到剪贴板</div></div><div class="ac-meta"><span class="name">橙</span><span class="ratio bad">2.06</span></div></div>
+      <div class="ac"><div class="ac-swatch"><div class="ac-chip" style="background:#FFD60A; color:#fff;">已复制到剪贴板</div></div><div class="ac-meta"><span class="name">黄</span><span class="ratio bad">1.41</span></div></div>
+      <div class="ac"><div class="ac-swatch"><div class="ac-chip" style="background:#30D158; color:#fff;">已复制到剪贴板</div></div><div class="ac-meta"><span class="name">绿</span><span class="ratio bad">2.02</span></div></div>
+      <div class="ac"><div class="ac-swatch"><div class="ac-chip" style="background:#8E8E93; color:#fff;">已复制到剪贴板</div></div><div class="ac-meta"><span class="name">石墨</span><span class="ratio bad">3.26</span></div></div>
+    </div>
+
+    <div class="callout">
+      <b>八种全部不及格，最好的蓝也只有 3.65。</b>黄色 1.41 基本等于白纸上的浅黄块，文字只剩轮廓——这不是审美偏好，是读不出来。
+      让白字达标只剩两条路：把每个颜色再调深（用户选的黄会变成芥末黄，已经不是他选的了），或者换成黑字（全部 4.6–11.9 达标）。
+    </div>
+
+    <h3 style="font-size:14px; margin:26px 0 4px; font-weight:650;">同一个方向，换成黑字</h3>
+    <p class="sec-note" style="margin-top:0;">技术上能过，但气泡从“深色实体”变成“亮色标签”，质感完全变了；而且用户选红色时，错误提示没法再区分。</p>
+
+    <div class="accent-row">
+      <div class="ac"><div class="ac-swatch"><div class="ac-chip" style="background:#0A84FF; color:#1d1d1f;">已复制到剪贴板</div></div><div class="ac-meta"><span class="ratio ok">4.61</span></div></div>
+      <div class="ac"><div class="ac-swatch"><div class="ac-chip" style="background:#BF5AF2; color:#1d1d1f;">已复制到剪贴板</div></div><div class="ac-meta"><span class="ratio ok">4.78</span></div></div>
+      <div class="ac"><div class="ac-swatch"><div class="ac-chip" style="background:#FF375F; color:#1d1d1f;">已复制到剪贴板</div></div><div class="ac-meta"><span class="ratio ok">4.78</span></div></div>
+      <div class="ac"><div class="ac-swatch"><div class="ac-chip" style="background:#FF453A; color:#1d1d1f;">已复制到剪贴板</div></div><div class="ac-meta"><span class="ratio ok">4.94</span></div></div>
+      <div class="ac"><div class="ac-swatch"><div class="ac-chip" style="background:#FF9F0A; color:#1d1d1f;">已复制到剪贴板</div></div><div class="ac-meta"><span class="ratio ok">8.19</span></div></div>
+      <div class="ac"><div class="ac-swatch"><div class="ac-chip" style="background:#FFD60A; color:#1d1d1f;">已复制到剪贴板</div></div><div class="ac-meta"><span class="ratio ok">11.92</span></div></div>
+      <div class="ac"><div class="ac-swatch"><div class="ac-chip" style="background:#30D158; color:#1d1d1f;">已复制到剪贴板</div></div><div class="ac-meta"><span class="ratio ok">8.32</span></div></div>
+      <div class="ac"><div class="ac-swatch"><div class="ac-chip" style="background:#8E8E93; color:#1d1d1f;">已复制到剪贴板</div></div><div class="ac-meta"><span class="ratio ok">5.16</span></div></div>
+    </div>
+
+    <div class="callout" style="border-left-color:#8a8a90;">
+      <b>黑字全过，但代价是三条。</b>第一，气泡不再有“深色实体”的重量，像贴纸。第二，用户选红强调色时，错误提示和普通提示同一个色，语义分级作废。
+      第三，SayAll 的品牌识别被系统设置覆盖——用户换一次主题，App 的说话就变了。
+      Apple 自己的边界也在这里：强调色用于<b>控件高亮</b>（按钮、焦点环、开关），不用于承载整块信息背景。
+    </div>
+
+    <h3 style="font-size:14px; margin:30px 0 4px; font-weight:650;">已定：方向 2，三档按下表分配</h3>
+    <p class="sec-note" style="margin-top:0;">
+      绿给引导、琥珀给警告、品牌红给错误。成功与引导同档，不额外占一个颜色。
+    </p>
+
+    <div class="tier">
+      <div class="tier-card">
+        <span class="lvl">L1 · 看一眼就行</span>
+        <h4>引导 / 信息 / 成功</h4>
+        <div class="demo" style="background:linear-gradient(172deg,#12704a,#0e5e3e);">按住语音键说话，松开就结束。</div>
+        <p>绿 <code>#12704A</code>。成功不单独给色——「已复制」用同一种绿，靠文案说清就够了。</p>
+      </div>
+      <div class="tier-card">
+        <span class="lvl">L2 · 需要判断</span>
+        <h4>警告</h4>
+        <div class="demo" style="background:linear-gradient(172deg,#8a4b0f,#783f0b);">电量偏低，仍可继续使用。</div>
+        <p>琥珀 <code>#8A4B0F</code>。和绿、红都不同色相，不用读字就知道“不是失败，但要注意”。</p>
+      </div>
+      <div class="tier-card">
+        <span class="lvl">L3 · 必须处理</span>
+        <h4>错误</h4>
+        <div class="demo" style="background:linear-gradient(172deg,#a5342c,#96291f);">输入目标已改变，重新打开常用语。</div>
+        <p>品牌红 <code>#A5342C</code> + 白色感叹标记 + 不自动消失。三处信号叠加，颜色只是一层。</p>
+      </div>
+    </div>
+
+    <div class="callout">
+      <b>系统强调色留给控件层。</b>
+      气泡底色按上表固定；<code>NSColor.controlAccentColor</code> 只用在动作按钮的焦点环和键盘选中态。
+      那里是交互反馈，正好是 accent 的本职；气泡承载的是信息，不能让它随主题色变成读不出来的黄块。
+    </div>
+
+    <div class="callout" style="border-left-color:#1a7a52;">
+      <b>深色模式的三条规则。</b>
+      一、三档各提亮一档（<code>#1A7A52</code> / <code>#9E5611</code> / <code>#C04239</code>），保证与背景 ≥ 3:1；
+      二、深色下改用纯色，不用渐变，避免末端变暗吃掉提亮；
+      三、额外加 1px 白色 14% 描边，补足边界。
+    </div>
+  </section>
+
+  <!-- 09 定稿 -->
+  <section>
+    <div class="sec-head"><span class="sec-num">09</span><h2 class="sec">定稿记录</h2></div>
+    <p class="sec-note">三项待定已确认，设计侧不再有悬而未决的选择。下面是记录，以及按依赖排的实现顺序。</p>
+
+    <div class="asks">
+      <div class="ask locked">
+        <p class="q">错误标记用感叹号</p>
+        <p class="done">标题前 <code>!</code>，12pt 细线白色。不用 <code>×</code>，避免与右上角关闭按钮在同一区域形成两个叉。</p>
+      </div>
+      <div class="ask locked">
+        <p class="q">「显示一次」按功能 + 版本</p>
+        <p class="done">键名形如 <code>tip.voiceKey.v1</code>。用户手动关掉算看过；文案大改时升版本号，才有机会重新出现。</p>
+      </div>
+      <div class="ask locked">
+        <p class="q">深色绿色保持 #1A7A52</p>
+        <p class="done">深底分离 3.20，白字 5.32。不再提亮——再亮一档白字会掉到 4.4，贴着及格线。</p>
+      </div>
+      <div class="ask locked">
+        <p class="q">位置：默认居中，可指定三档</p>
+        <p class="done"><code>NoticePosition.top / .center / .bottom</code>；有锚点时锚点优先。</p>
+      </div>
+      <div class="ask locked">
+        <p class="q">颜色三档与深色规则</p>
+        <p class="done">L1 绿 / L2 琥珀 / L3 品牌红；深色各提亮一档、改纯色、加 1px 白 14% 描边。</p>
+      </div>
+    </div>
+
+    <h3 style="font-size:14px; margin:30px 0 4px; font-weight:650;">按依赖排的实现顺序</h3>
+    <p class="sec-note" style="margin-top:0;">每一步都能单独验，不需要等全部写完再看效果。</p>
+
+    <div class="steps">
+      <div class="step">
+        <b>NoticeBubble.swift · 视觉组件</b>
+        三档填充、深浅两套、18pt 圆角、四向尾巴、标题/说明/动作/关闭。只接数据，不持有状态。用离屏渲染对照本稿逐项量尺寸。
+      </div>
+      <div class="step">
+        <b>NoticeAnchor.swift · 锚点注册</b>
+        <code>noticeAnchor(_:)</code> 修饰符 + <code>anchorPreference</code> 收集 frame。先在按键页单独验证坐标，再谈摆放。
+      </div>
+      <div class="step">
+        <b>NoticeCenter.swift · 状态与规则</b>
+        单实例、优先级替换、<code>automatic</code> / <code>manual</code> 计时、<code>seenKey</code> 记账、VoiceOver 播报。这里写单测，不依赖 UI。
+      </div>
+      <div class="step">
+        <b>NoticeAction · 语义动作</b>
+        枚举 + <code>title</code> + 执行路由。执行失败替换成新的错误提示，不叠第二条。
+      </div>
+      <div class="step">
+        <b>接线：设置页 → Onboarding → 常用语面板</b>
+        前两个在公开仓；常用语面板在私有仓，需要用同一组 token 同步一次，并复验深色下的绿色与红色。
+      </div>
+    </div>
+
+    <div class="callout">
+      <b>验收时最容易漏的两项。</b>
+      一是 <code>800×650</code> 压力尺寸下尾巴是否翻转、气泡是否被裁；二是截图 harness 下的描边与阴影和正式运行是否一致——
+      v3 那版就是因为 glass 在 harness 里被关掉才放弃的，这版没有材质依赖，但仍要两处对照。
+    </div>
+  </section>
+
+  <div class="foot">
+    <span>SayAll · 提示气泡 · 定稿 2026-11-11 · 未开发</span>
+    <span>历史稿：review-v4.html（单色）/ review-v3.html（提示条）/ review-v1.html</span>
+  </div>
+
+</div>
+</body>
+</html>

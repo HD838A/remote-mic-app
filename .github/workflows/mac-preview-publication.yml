@@ -26,7 +26,7 @@ jobs:
     name: Publish verified staged Preview
     if: ${{ github.ref_name == 'main' }}
     runs-on: macos-15
-    timeout-minutes: 20
+    timeout-minutes: 40
     steps:
       - name: Validate publication dispatch
         env:
@@ -61,6 +61,11 @@ jobs:
           jq -e --argjson run "$SOURCE_RUN_ID" '.sourceRunId == $run' \
             "$RUNNER_TEMP/preview-ui-attestation.json" >/dev/null
 
+      - name: Require feed synchronization readiness before public mutation
+        env:
+          GH_TOKEN: ${{ secrets.SAYALL_FEED_SYNC_TOKEN }}
+        run: node scripts/sync-update-feeds.mjs --preflight "$(jq -er .tag "$RUNNER_TEMP/preview-ui-attestation.json")"
+
       - name: Publish and verify the staged Preview
         env:
           GH_TOKEN: ${{ github.token }}
@@ -68,3 +73,8 @@ jobs:
           REPOSITORY_ROOT: ${{ github.workspace }}
           GH_BIN: gh
         run: ./scripts/publish-preview-release.sh "$RUNNER_TEMP/preview-ui-attestation.json"
+
+      - name: Synchronize and verify all original update feed URLs
+        env:
+          GH_TOKEN: ${{ secrets.SAYALL_FEED_SYNC_TOKEN }}
+        run: node scripts/sync-update-feeds.mjs "$(jq -er .tag "$RUNNER_TEMP/preview-ui-attestation.json")"

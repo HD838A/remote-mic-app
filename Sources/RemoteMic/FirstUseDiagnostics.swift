@@ -482,6 +482,22 @@ struct FirstUseEvent: Codable, Equatable {
 }
 
 struct FirstUseDiagnosticSnapshot {
+    static func buildIdentityFields(_ metadata: [String: Any]) -> String {
+        let revision = metadata["SayAllSourceCommit"] as? String ?? ""
+        let sourceRevision = revision.range(of: "\\A[0-9a-f]{40}\\z", options: .regularExpression) != nil
+            ? revision : "unknown"
+        let version = metadata["SayAllPrivatePlatformVersion"] as? String ?? ""
+        let privateVersion = version.count <= 32 &&
+            version.range(of: "\\A[0-9]+\\.[0-9]+\\.[0-9]+\\z", options: .regularExpression) != nil
+            ? version : "unknown"
+        let channel = metadata["SayAllBuildChannel"] as? String ?? ""
+        let buildChannel = ["local", "release", "internalQA", "public", "private", "beta"].contains(channel)
+            ? channel : "unknown"
+        let sourceDirty = (metadata["SayAllSourceDirty"] as? Bool).map(String.init) ?? "unknown"
+        return "source_revision=\(sourceRevision) build_channel=\(buildChannel) " +
+            "source_dirty=\(sourceDirty) private_platform_version=\(privateVersion)"
+    }
+
     let appVersion: String
     let appBuild: String
     let systemMajorVersion: Int
@@ -524,8 +540,8 @@ struct FirstUseDiagnosticSnapshot {
             "generated_at=\(Self.timestamp(generatedAt))",
             "app_version=\(appVersion)",
             "app_build=\(appBuild)",
-            "source_revision=unknown",
-            "build_channel=unknown",
+            Self.buildIdentityFields(Bundle.main.infoDictionary ?? [:])
+                .replacingOccurrences(of: " ", with: "\n"),
             "release_tag=unknown",
             "bundle_id=\(Bundle.main.bundleIdentifier ?? "unknown")",
             "process_id=\(ProcessInfo.processInfo.processIdentifier)",

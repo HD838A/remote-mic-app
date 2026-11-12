@@ -40,7 +40,7 @@ final class AppLogger: PublicDiagnosticEventSink {
         subsystem: Bundle.main.bundleIdentifier ?? "SayAll",
         category: "AppLogger"
     )
-    private static let defaultMaximumFileSize: UInt64 = 2 * 1_024 * 1_024
+    static let defaultMaximumFileSize: UInt64 = 10_000_000
     private static let maximumPublicEvents = 256
 
     private let queue = DispatchQueue(label: "RemoteMic.logger")
@@ -66,6 +66,15 @@ final class AppLogger: PublicDiagnosticEventSink {
     private var repeatCount = 0
     private var firstRepeatDate: Date?
     private var lastRepeatDate: Date?
+    private struct Observation {
+        var message: String
+        var repeatCount = 0
+        var firstRepeatDate: Date?
+        var lastRepeatDate: Date?
+    }
+    private var observations: [String: Observation] = [:]
+    private static let observationWindow: TimeInterval = 60
+    private static let maximumObservations = 32
     private var pendingWriteFailures = 0
     private var retentionSummary: String?
     private var fileKey: SymmetricKey?
@@ -184,6 +193,13 @@ final class AppLogger: PublicDiagnosticEventSink {
             guard let self else { return }
             let date = self.now()
             let normalized = Self.singleLine(message)
+            if let key = Self.observationKey(normalized) {
+                self.flushRepeats()
+                self.lastMessage = nil
+                self.appendObservation(normalized, key: key, date: date)
+                return
+            }
+            self.flushObservationRepeats(at: date)
             if self.lastMessage == normalized && Self.isCoalescibleState(normalized) {
                 self.repeatCount += 1
                 self.firstRepeatDate = self.firstRepeatDate ?? date
@@ -214,6 +230,7 @@ final class AppLogger: PublicDiagnosticEventSink {
             self.flushRepeats()
             self.lastMessage = nil
             let eventDate = self.now()
+            self.flushObservationRepeats(at: eventDate)
             self.appendRecord(message: "\(normalizedEvent) BEGIN", date: eventDate)
             for line in lines {
                 self.appendRecord(
@@ -231,6 +248,7 @@ final class AppLogger: PublicDiagnosticEventSink {
         guard isEnabled else { return }
         queue.async { [weak self] in
             guard let self else { return }
+            self.flushObservationRepeats(at: self.now())
             self.flushRepeats()
             self.lastMessage = nil
             if let publicEventStore = self.publicEventStore, event.isApprovedForUpload {
@@ -277,18 +295,93 @@ final class AppLogger: PublicDiagnosticEventSink {
 
     func flush() {
         guard isEnabled else { return }
-        queue.sync { flushRepeats() }
+        queue.sync {
+            flushObservationRepeats(at: now())
+            flushRepeats()
+        }
     }
 
     deinit {
-        if DispatchQueue.getSpecific(key: queueKey) != nil { flushRepeats() }
-        else { queue.sync { flushRepeats() } }
+        if DispatchQueue.getSpecific(key: queueKey) != nil {
+            flushObservationRepeats(at: now())
+            flushRepeats()
+        } else {
+            queue.sync {
+                flushObservationRepeats(at: now())
+                flushRepeats()
+            }
+        }
         if activeDescriptor >= 0 { _ = Darwin.close(activeDescriptor) }
     }
 
     private static func isCoalescibleState(_ message: String) -> Bool {
         // Only stable observations, never requests, errors, or terminal results.
         ["HID PERMISSIONS ", "HID FILTER ", "AUDIO HEALTH ready "].contains { message.hasPrefix($0) }
+    }
+
+    /// Only repeated discovery observations are aggregated. Connections, errors,
+    /// voice events and typed diagnostic results keep their individual records.
+    private static func observationKey(_ message: String) -> String? {
+        if message.hasPrefix("BLE CENTRAL state=4 ") ||
+            message.hasPrefix("BLE CENTRAL state=5 ") ||
+            message == "BLE SCANNING" ||
+            message.hasPrefix("BLE SYSTEM CONNECTED CANDIDATES ") ||
+            message == "CHROMECAST LINK state=searching" ||
+            message.hasPrefix("CHROMECAST LINK state=unsupported(") {
+            return message
+        }
+        if message.hasPrefix("CHROMECAST CONNECTION state=discovering ") ||
+            message.hasPrefix("CHROMECAST CONNECTION state=unavailable ") {
+            return message.replacingOccurrences(
+                of: #" sequence=\d+"#, with: "", options: .regularExpression
+            )
+        }
+        return nil
+    }
+
+    private func appendObservation(_ message: String, key: String, date: Date) {
+        let expired = observations.keys.filter {
+            guard let first = observations[$0]?.firstRepeatDate else { return false }
+            return date.timeIntervalSince(first) >= Self.observationWindow
+        }
+        for key in expired.sorted() { flushObservation(key: key, at: date) }
+        guard var observation = observations[key] else {
+            if observations.count >= Self.maximumObservations,
+               let evictedKey = observations.keys.sorted().first {
+                flushObservation(key: evictedKey, at: date)
+                observations.removeValue(forKey: evictedKey)
+            }
+            observations[key] = Observation(message: message)
+            appendRecord(message: message, date: date)
+            return
+        }
+        observation.message = message
+        observation.repeatCount += 1
+        observation.firstRepeatDate = observation.firstRepeatDate ?? date
+        observation.lastRepeatDate = date
+        observations[key] = observation
+    }
+
+    private func flushObservationRepeats(at date: Date) {
+        for key in observations.keys.sorted() { flushObservation(key: key, at: date) }
+        observations.removeAll(keepingCapacity: true)
+    }
+
+    private func flushObservation(key: String, at date: Date) {
+        guard var observation = observations[key], observation.repeatCount > 0,
+              let first = observation.firstRepeatDate, let last = observation.lastRepeatDate
+        else { return }
+        appendRecord(
+            message: "LOG REPEAT aggregation=discovery_observation repeat_count=\(observation.repeatCount) " +
+                "first_at_ms=\(Int64(first.timeIntervalSince1970 * 1_000)) " +
+                "last_at_ms=\(Int64(last.timeIntervalSince1970 * 1_000)) " +
+                "last_observation=\(observation.message)",
+            date: date
+        )
+        observation.repeatCount = 0
+        observation.firstRepeatDate = nil
+        observation.lastRepeatDate = nil
+        observations[key] = observation
     }
 
     private func flushRepeats() {
@@ -306,6 +399,7 @@ final class AppLogger: PublicDiagnosticEventSink {
     func writeSynchronously(_ message: String, at date: Date) {
         guard isEnabled else { return }
         queue.sync {
+            flushObservationRepeats(at: date)
             flushRepeats()
             lastMessage = nil
             appendRecord(message: message, date: date)

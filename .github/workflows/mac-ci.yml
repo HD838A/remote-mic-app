@@ -92,6 +92,10 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Ensure macOS CI tools
+        if: needs.classify_changes.outputs.product_change == 'true' || needs.classify_changes.outputs.release_checks == 'true'
+        run: command -v rg >/dev/null || HOMEBREW_NO_AUTO_UPDATE=1 brew install ripgrep
+
       - name: Check patch formatting
         run: |
           if [[ "$GITHUB_EVENT_NAME" == pull_request ]]; then
@@ -142,6 +146,12 @@ jobs:
         if: needs.classify_changes.outputs.release_checks == 'true'
         run: ./scripts/verify-release-dependency-pins.sh tokens
 
+      - name: Run release control-plane fixture
+        if: needs.classify_changes.outputs.release_checks == 'true'
+        run: |
+          command -v rg >/dev/null || HOMEBREW_NO_AUTO_UPDATE=1 brew install ripgrep
+          ./scripts/test-macos-release-flow.sh
+
       - name: Verify private Draft asset staging
         if: needs.classify_changes.outputs.release_checks == 'true'
         run: ./scripts/test-prepare-private-draft-assets.sh
@@ -168,17 +178,18 @@ jobs:
           swift test --disable-keychain --filter VoiceInputDestinationCoordinatorTests
           swift test --disable-keychain --filter CoreVoiceInputJourneyTests
 
-      - name: Run release control-plane fixture
+      - name: Run release build-signing tests
         if: needs.classify_changes.outputs.release_checks == 'true'
         env:
           PRODUCT_CHANGE: ${{ needs.classify_changes.outputs.product_change }}
+        # The complete shell fixture already passed before Swift compilation.
         # Product changes reuse the test binary; control-only changes compile once.
         run: |
           command -v rg >/dev/null || HOMEBREW_NO_AUTO_UPDATE=1 brew install ripgrep
           if [[ "$PRODUCT_CHANGE" == true ]]; then
-            swift test --disable-keychain --skip-build --filter BuildSigningTests
+            swift test --disable-keychain --skip-build --filter BuildSigningTests --skip releaseControlPlaneFixtureHasExecutableRegressionCoverage
           else
-            swift test --disable-keychain --filter BuildSigningTests
+            swift test --disable-keychain --filter BuildSigningTests --skip releaseControlPlaneFixtureHasExecutableRegressionCoverage
           fi
 
       - name: Run project self-test

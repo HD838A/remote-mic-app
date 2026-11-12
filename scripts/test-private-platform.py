@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import signal
 import subprocess
 import sys
 import time
@@ -583,6 +584,297 @@ class PublicWorkflowBoundaryTests(unittest.TestCase):
             self.assertIn("Distribution packaging requires published private binaries", result.stderr)
 
 
+class PublicationFlowTests(unittest.TestCase):
+    """Run the complete production publisher with isolated Git/API/download peers."""
+    command = ReleaseTests.command
+    git = ReleaseTests.git
+
+    def setUp(self):
+        self.directory = ROOT / ".private-dependencies/preflight-tests" / uuid.uuid4().hex
+        self.directory.mkdir(parents=True)
+        self.repo = self.directory / "checkout"
+        self.remote = self.directory / "origin.git"
+        self.command("git", "init", "--bare", str(self.remote))
+        self.command("git", "init", "-b", "main", str(self.repo))
+        self.git("config", "user.name", "Publication Fixture")
+        self.git("config", "user.email", "fixture@example.invalid")
+        self.git("remote", "add", "origin", str(self.remote))
+        scripts = self.repo / "scripts"
+        scripts.mkdir()
+        shutil.copyfile(ROOT / "scripts/publish-preview-release.sh", scripts / "publish-preview-release.sh")
+        for name, body in {
+            "recover-preview-stage.sh": 'mkdir -p "$6/stage-record"; cp -R "$FIXTURE/bundle" "$6/bundle"; echo "{}" > "$6/stage-record/preview-stage-record.json"',
+            "record-preview-ui-attestation.sh": "exit 0",
+            "verify-public-release-source.sh": "exit 0",
+            "verify-preview-cdn-availability.sh": 'if [[ "${FIXTURE_MODE}" == "contract" ]]; then exit 1; fi',
+        }.items():
+            path = scripts / name
+            path.write_text("#!/bin/bash\nset -eu\n" + body + "\n")
+            path.chmod(0o755)
+        self.git("add", ".")
+        self.git("commit", "-m", "publication fixture")
+        self.git("push", "-u", "origin", "main")
+        commit = self.git("rev-parse", "HEAD")
+        public = self.directory / "bundle/public"
+        public.mkdir(parents=True)
+        names = [f"payload-{index}.txt" for index in range(8)] + ["appcast.xml", "appcast-intel.xml"]
+        assets = []
+        for name in names:
+            data = ("signed fixture " + name).encode()
+            (public / name).write_bytes(data)
+            assets.append({"name": name, "size": len(data), "sha256": hashlib.sha256(data).hexdigest()})
+        manifest = {"schemaVersion": 2, "tag": "v9.9.9", "sourceCommit": commit,
+                    "version": "9.9.9", "build": "999", "assets": assets}
+        manifest_path = public.parent / "staged-assets.json"
+        manifest_path.write_text(json.dumps(manifest))
+        (public.parent / "release-notes.md").write_text("- Fixture release.\n")
+        self.attestation = self.directory / "attestation.json"
+        self.attestation.write_text(json.dumps({
+            "schemaVersion": 4, "result": "passed", "mode": "preview", "tag": "v9.9.9",
+            "sourceBranch": "main", "sourceKind": "main", "sourceBaseTag": "", "sourceBaseCommit": "",
+            "sourceCommit": commit, "sourceWorkflowCommit": commit, "sourceRunId": 1,
+            "sourceRunAttempt": 1, "signedArtifactId": 2, "signedArtifactDigest": "sha256:" + "a" * 64,
+            "assetManifestSHA256": hashlib.sha256(manifest_path.read_bytes()).hexdigest(),
+            "stagedAt": "2026-11-10T00:00:00Z", "target": {"version": "9.9.9", "build": "999"},
+        }))
+        (self.directory / "state.json").write_text(json.dumps({"release": None, "events": []}))
+        for name in ("gh", "curl"):
+            path = self.directory / name
+            path.write_text(self.peer_source)
+            path.chmod(0o755)
+
+    def tearDown(self):
+        trash = Path.home() / ".Trash"
+        trash.mkdir(exist_ok=True)
+        shutil.move(str(self.directory), trash / f"sayall-publication-{self.directory.name}")
+
+    def state(self):
+        return json.loads((self.directory / "state.json").read_text())
+
+    def publish(self, mode="success"):
+        return subprocess.run(["/bin/bash", str(self.repo / "scripts/publish-preview-release.sh"), str(self.attestation)],
+                              env={**os.environ, "REPOSITORY_ROOT": str(self.repo), "FIXTURE": str(self.directory),
+                                   "GH_BIN": str(self.directory / "gh"), "CURL_BIN": str(self.directory / "curl"),
+                                   "GITHUB_REPOSITORY": "HD838A/remote-mic-app", "RELEASE_ALLOW_LOCAL_FIXTURE": "1",
+                                   "FIXTURE_MODE": mode,
+                                   "RELEASE_FIXTURE_PUBLIC_TIMEOUT_SECONDS": "1" if mode == "timeout" else "300"},
+                              capture_output=True, text=True, timeout=30)
+
+    def test_draft_readback_precedes_publication_and_retry_preserves_ids(self):
+        result = self.publish()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        state = self.state()
+        self.assertFalse(state["release"]["isDraft"])
+        self.assertTrue(state["release"]["isPrerelease"])
+        self.assertEqual(len(state["release"]["assets"]), 11)
+        self.assertEqual(state["events"].count("authenticated"), 11)
+        self.assertGreater(state["events"].index("publish"), max(index for index, event in enumerate(state["events"]) if event == "authenticated"))
+        result = self.publish()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.state()["release"], state["release"])
+        self.assertEqual(self.state()["events"].count("upload"), 11)
+
+    def test_partial_upload_stays_draft_and_resumes_without_overwriting(self):
+        result = self.publish("partial")
+        self.assertNotEqual(result.returncode, 0)
+        state = self.state()
+        self.assertTrue(state["release"]["isDraft"])
+        self.assertNotIn("publish", state["events"])
+        existing = state["release"]["assets"][:]
+        self.assertEqual(len(existing), 2)
+        state["release"]["isPrerelease"] = False
+        (self.directory / "state.json").write_text(json.dumps(state))
+        result = self.publish()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.state()["release"]["assets"][:2], existing)
+        self.assertTrue(self.state()["release"]["isPrerelease"])
+        self.assertEqual(self.state()["events"].count("upload"), 11)
+
+    def test_bad_count_digest_and_authenticated_bytes_never_become_public(self):
+        for mode in ("count", "digest", "authenticated"):
+            with self.subTest(mode=mode):
+                result = self.publish(mode)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertTrue(self.state()["release"]["isDraft"])
+                self.assertNotIn("publish", self.state()["events"])
+
+    def test_public_download_failure_retracts_same_release_to_draft(self):
+        result = self.publish("cdn")
+        self.assertNotEqual(result.returncode, 0)
+        state = self.state()
+        self.assertTrue(state["release"]["isDraft"])
+        self.assertEqual(state["release"]["databaseId"], 123)
+        self.assertEqual(state["events"][-1], "draft")
+        self.assertIn("publish", state["events"])
+        result = self.publish()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.state()["release"]["databaseId"], 123)
+        self.assertEqual(self.state()["events"].count("upload"), 11)
+
+    def test_public_verification_timeout_retracts_before_workflow_timeout(self):
+        started = time.monotonic()
+        result = self.publish("timeout")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Public verification deadline exceeded", result.stderr)
+        self.assertTrue(self.state()["release"]["isDraft"])
+        self.assertIn("publish", self.state()["events"])
+        self.assertLess(time.monotonic() - started, 15)
+
+    def test_retraction_api_failure_emits_an_actionable_release_id(self):
+        result = self.publish("retract")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("DRAFT RETRACTION FAILED", result.stderr)
+        self.assertIn("123", result.stderr)
+        self.assertEqual(self.state()["release"]["databaseId"], 123)
+        self.assertFalse(self.state()["release"]["isDraft"])
+
+    def test_incompatible_contract_stops_before_remote_identity_creation(self):
+        result = self.publish("contract")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIsNone(self.state()["release"])
+        self.assertEqual(self.state()["events"], [])
+
+    def test_termination_leaves_uploaded_assets_in_draft(self):
+        result = self.publish("terminate")
+        self.assertEqual(result.returncode, 143, result.stderr)
+        self.assertTrue(self.state()["release"]["isDraft"])
+        self.assertNotIn("publish", self.state()["events"])
+
+    def test_metadata_mismatch_is_retracted_without_overwriting_notes(self):
+        self.assertEqual(self.publish().returncode, 0)
+        state = self.state()
+        state["release"]["body"] = "Other reviewed notes"
+        (self.directory / "state.json").write_text(json.dumps(state))
+        result = self.publish()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertTrue(self.state()["release"]["isDraft"])
+        self.assertEqual(self.state()["release"]["body"], "Other reviewed notes")
+        self.assertEqual(self.state()["events"].count("upload"), 11)
+
+    def test_legacy_manifest_uses_its_own_payload_count(self):
+        manifest_path = self.directory / "bundle/staged-assets.json"
+        manifest = json.loads(manifest_path.read_text())
+        manifest["schemaVersion"] = 1
+        for index in range(3):
+            name = f"legacy-{index}.txt"
+            data = b"legacy signed fixture"
+            (self.directory / "bundle/public" / name).write_bytes(data)
+            manifest["assets"].append({"name": name, "size": len(data), "sha256": hashlib.sha256(data).hexdigest()})
+        manifest_path.write_text(json.dumps(manifest))
+        attestation = json.loads(self.attestation.read_text())
+        attestation["assetManifestSHA256"] = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+        self.attestation.write_text(json.dumps(attestation))
+        result = self.publish()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(len(self.state()["release"]["assets"]), 14)
+
+    peer_source = r'''#!/usr/bin/env python3
+import hashlib
+import json
+import os
+from pathlib import Path
+import shutil
+import signal
+import subprocess
+import sys
+import time
+
+root = Path(os.environ["FIXTURE"])
+mode = os.environ["FIXTURE_MODE"]
+state_path = root / "state.json"
+state = json.loads(state_path.read_text())
+args = sys.argv[1:]
+release = state["release"]
+
+def save():
+    state_path.write_text(json.dumps(state))
+
+if Path(sys.argv[0]).name == "curl":
+    if mode == "timeout":
+        time.sleep(1.1)
+        sys.exit(28)
+    url = next(value for value in args if value.startswith("https://"))
+    name = url.rsplit("/", 1)[1]
+    output = Path(args[args.index("--output") + 1])
+    if mode in ("cdn", "retract") and "download.sayall.app/mac/releases/" in url:
+        output.write_bytes(b"wrong CDN bytes")
+    elif "/v1.0.0/" in url or "/channels/stable/" in url:
+        output.write_bytes(b"stable " + name.encode())
+    else:
+        shutil.copyfile(root / "uploaded" / name, output)
+    sys.exit(0)
+
+if args[0] == "api":
+    endpoint = next(value for value in args if value.startswith("repos/"))
+    fields = dict(args[index + 1].split("=", 1) for index, value in enumerate(args) if value in ("-f", "-F"))
+    if endpoint.endswith("releases/latest"):
+        print(json.dumps({"tag_name": "v1.0.0", "draft": False, "prerelease": False}))
+    elif endpoint.endswith("git/refs"):
+        subprocess.run(["git", "--git-dir", str(root / "origin.git"), "update-ref", fields["ref"], fields["sha"]], check=True)
+        print("{}")
+    elif "/releases/assets/" in endpoint:
+        asset = next(asset for asset in release["assets"] if asset["apiUrl"].endswith("/" + endpoint.rsplit("/", 1)[1]))
+        assert release["isDraft"], "authenticated check must precede publication"
+        state["events"].append("authenticated")
+        save()
+        if mode == "terminate":
+            os.kill(os.getppid(), signal.SIGTERM)
+            sys.exit(143)
+        sys.stdout.buffer.write(b"bad" if mode == "authenticated" else (root / "uploaded" / asset["name"]).read_bytes())
+    elif "/releases/tags/" in endpoint:
+        if release is None:
+            print("HTTP/2.0 404 Not Found")
+            sys.exit(1)
+        print(json.dumps(release))
+    elif endpoint.endswith("releases/123"):
+        if "--method" in args:
+            if mode == "retract" and fields["draft"] == "true" and "publish" in state["events"]:
+                sys.exit(1)
+            release["isDraft"] = fields["draft"] == "true"
+            if "prerelease" in fields:
+                release["isPrerelease"] = fields["prerelease"] == "true"
+            state["events"].append("draft" if release["isDraft"] else "publish")
+            save()
+        print(json.dumps({"id": 123, "draft": release["isDraft"], "prerelease": release["isPrerelease"]}))
+    else:
+        raise AssertionError(args)
+elif args[:2] == ["release", "create"]:
+    assert "--draft" in args
+    assert release is None
+    state["release"] = {"databaseId": 123, "isDraft": True, "isPrerelease": True, "tagName": "v9.9.9",
+                        "name": args[args.index("--title") + 1], "body": Path(args[args.index("--notes-file") + 1]).read_text(), "assets": []}
+    state["events"].append("create-draft")
+    save()
+elif args[:2] == ["release", "view"]:
+    if release is None:
+        sys.exit(1)
+    result = json.loads(json.dumps(release))
+    if len(result["assets"]) == 11:
+        if mode == "count":
+            result["assets"].pop()
+        if mode == "digest":
+            result["assets"][0]["digest"] = "sha256:" + "0" * 64
+    print(json.dumps(result))
+elif args[:2] == ["release", "upload"]:
+    assert release["isDraft"], "upload must happen under Draft protection"
+    if mode == "partial" and len(release["assets"]) == 2:
+        sys.exit(1)
+    source = Path(args[3])
+    assert not any(asset["name"] == source.name for asset in release["assets"]), "immutable assets cannot be overwritten"
+    (root / "uploaded").mkdir(exist_ok=True)
+    shutil.copyfile(source, root / "uploaded" / source.name)
+    data = source.read_bytes()
+    release["assets"].append({"id": "RA_fixture_" + str(len(release["assets"])),
+                              "apiUrl": "https://api.github.com/repos/HD838A/remote-mic-app/releases/assets/" + str(1000 + len(release["assets"])),
+                              "name": source.name, "size": len(data),
+                              "digest": "sha256:" + hashlib.sha256(data).hexdigest()})
+    state["events"].append("upload")
+    save()
+else:
+    raise AssertionError(args)
+'''
+
+
 class ReleaseContentTests(unittest.TestCase):
     def setUp(self):
         self.directory = ROOT / ".private-dependencies/preflight-tests" / uuid.uuid4().hex
@@ -629,24 +921,6 @@ class ReleaseContentTests(unittest.TestCase):
                      example + b"/Users/example/private/source.swift\0"):
             with self.subTest(data=data), self.assertRaisesRegex(RuntimeError, "local build path"):
                 contents.verify_asset(self.archive("README.md", data), self.scratch)
-
-    def test_publication_counts_the_manifest_payload_and_provenance(self):
-        source = (ROOT / "scripts/publish-preview-release.sh").read_text()
-        start = source.index('[[ "$(printf', source.index(
-            'release_json="$($GH_BIN release view "$tag" --repo "$REPOSITORY" --json isDraft,isPrerelease,assets)"'))
-        check = source[start:source.index('\ngithub_dir=', start)]
-        expected = self.directory / "expected-assets.tsv"
-        for payload_count in (10, 13):
-            expected.write_text("\n".join(f"payload-{index}\t1\tdigest" for index in range(payload_count))
-                                + "\ncandidate-provenance.json\t1\tdigest\n")
-            for remote_count in (payload_count, payload_count + 1, payload_count + 2):
-                with self.subTest(payload_count=payload_count, remote_count=remote_count):
-                    result = subprocess.run(["/bin/bash", "-e", "-c", check],
-                                            env={**os.environ, "expected_assets": str(expected),
-                                                 "remote_assets": "\n".join(f"asset-{index}\t1\tdigest"
-                                                                           for index in range(remote_count))},
-                                            capture_output=True, text=True)
-                    self.assertEqual(result.returncode, 0 if remote_count == payload_count + 1 else 1)
 
     def test_content_rejection_reports_only_a_fixed_reason(self):
         for entry, data, reason in (("PRIVATE_CANARY.swift", b"fixture", "development-input"),
@@ -718,6 +992,36 @@ class ReleaseContentTests(unittest.TestCase):
         self.assertEqual({(record["lane"], record["result"]) for record in records},
                          {(lane, event) for lane in ("apple-silicon", "intel") for event in ("started", "passed")})
         self.assertEqual(len(records), 4)
+
+    def test_stage_cancellation_between_fork_and_pid_assignment_reaps_child(self):
+        status_file = self.directory / "cancelled-before-pid.jsonl"
+        source = (ROOT / "scripts/run-release-stage.sh").read_text()
+        self.assertEqual(source.count("CHILD_PID=$!"), 1)
+        probe = self.directory / "delayed-stage.sh"
+        probe.write_text(source.replace("CHILD_PID=$!", "/bin/sleep 0.5\nCHILD_PID=$!"))
+        probe.chmod(0o755)
+        process = subprocess.Popen([str(probe), "intel", "app-build", "20", "--", "/bin/sleep", "20"],
+                                   env={**os.environ, "RELEASE_STAGE_STATUS_FILE": str(status_file)},
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
+        try:
+            for _ in range(200):
+                children = subprocess.run(["/usr/bin/pgrep", "-P", str(process.pid)], capture_output=True, text=True)
+                if len(children.stdout.split()) >= 2:
+                    break
+                time.sleep(0.01)
+            self.assertGreaterEqual(len(children.stdout.split()), 2, "probe must stop between fork and PID assignment")
+            process.terminate()
+            process.communicate(timeout=5)
+            self.assertEqual(process.returncode, 143)
+            self.assertEqual([json.loads(line)["result"] for line in status_file.read_text().splitlines()],
+                             ["started", "cancelled"])
+        finally:
+            # Only this isolated fixture process group can contain the orphan.
+            try:
+                os.killpg(process.pid, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
+            process.communicate(timeout=5)
 
     def test_stage_cancellation_retains_its_terminal_status(self):
         status_file = self.directory / "cancelled.jsonl"

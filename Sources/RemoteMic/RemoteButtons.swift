@@ -146,6 +146,11 @@ enum RemoteButton: String, CaseIterable, Codable, Identifiable {
     var isDirectional: Bool {
         self == .up || self == .down || self == .left || self == .right
     }
+
+    /// Maintaining a keyboard key-down is available only on the physical left/right buttons.
+    var allowsKeyHold: Bool {
+        self == .left || self == .right
+    }
 }
 
 /// 键位方案覆盖名单里的一项：四颗方向键合并成一项，其余按键逐颗列出。
@@ -653,6 +658,36 @@ struct ConfiguredButtonAction: Codable, Equatable {
         action.isDirectionalOrDeleteBackward ||
             (action == .customShortcut && shortcut?.isRepeatableNavigationKey == true)
     }
+
+    /// 「按住执行」要一直按住的键。
+    ///
+    /// 只有方向键成立：其他动作（打开 App、组合动作、滚动）没有“按下去不放”的系统语义，
+    /// 让它们进入按下状态只会在目标 App 里留下无法解释的状态。
+    /// 判定放在动作类型这里，自测脚本单独编译该文件时也能拿到相同结论。
+    var holdableKey: HoldableKey? {
+        switch action {
+        case .arrowUp:
+            return HoldableKey(keyCode: 126, flags: [])
+        case .arrowDown:
+            return HoldableKey(keyCode: 125, flags: [])
+        case .arrowLeft:
+            return HoldableKey(keyCode: 123, flags: [])
+        case .arrowRight:
+            return HoldableKey(keyCode: 124, flags: [])
+        case .customShortcut:
+            // 录制下来的方向键同样是方向键；修饰键按录制结果一起按住。
+            guard let shortcut, (123...126).contains(shortcut.keyCode) else { return nil }
+            return HoldableKey(keyCode: CGKeyCode(shortcut.keyCode), flags: shortcut.cgEventFlags)
+        default:
+            return nil
+        }
+    }
+}
+
+/// 可以被「按住执行」一直按住的目标键。
+struct HoldableKey: Equatable {
+    let keyCode: CGKeyCode
+    let flags: CGEventFlags
 }
 
 enum CustomApplicationFocusStrategy: String, Codable, CaseIterable, Identifiable {
@@ -845,6 +880,7 @@ enum AccessibilityFocusPreset {
 
 enum ButtonActionCategory: String, CaseIterable, Identifiable {
     case basicKeys
+    case customShortcuts
     case systemAndMedia
     case custom
     /// 「组合动作」和「常用语」一样是独立的动作分类：它的候选来自宏库卡片，
@@ -858,6 +894,7 @@ enum ButtonActionCategory: String, CaseIterable, Identifiable {
     var localizationKey: String {
         switch self {
         case .basicKeys: return "button_mapping.action_group.basic_keys"
+        case .customShortcuts: return "action.custom_shortcut"
         case .systemAndMedia: return "button_mapping.action_group.system_and_media"
         case .custom: return "button_mapping.action_group.custom"
         case .combinations: return "action.combination_action"
@@ -1186,8 +1223,7 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
              .playPause, .previousCommandLeft, .nextCommandRight, .toggleLongRecording:
             return .systemAndMedia
         case .customShortcut:
-            // 自定义快捷键本质就是"发一个自己录的按键组合"，和固定快捷键同属基础按键。
-            return .basicKeys
+            return .customShortcuts
         case .focusInput:
             return .custom
         case .combinationAction:

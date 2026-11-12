@@ -4,6 +4,71 @@ import Testing
 
 @Suite("ATVV bounded audio diagnostics")
 struct ATVVAudioDiagnosticsTests {
+    @Test func nextSessionsFnEdgesDoNotBecomeThePreviousSessionsRelease() throws {
+        let clock = Clock()
+        let diagnostic = clock.make()
+        var observation: (down: TimeInterval?, up: TimeInterval?) = (99.8, nil)
+        diagnostic.start(frameSamples: 240, origin: "remote_initiated")
+        diagnostic.bindOutput(generation: 1, snapshot: { nil }, fn: { observation })
+        diagnostic.stop(reason: "session_reset")
+        observation = (100.1, 100.2)
+        clock.advance(0.4)
+        let final = try #require(clock.finals.first)
+        #expect(final.contains("fn_down_observed=true fn_up_observed=false"))
+        #expect(final.contains("fn_last_down_age_ms=200"))
+    }
+
+    @Test func mappingAndObservedFnContextDoNotClaimExternalSuccess() throws {
+        let clock = Clock()
+        let diagnostic = clock.make()
+        diagnostic.start(frameSamples: 240, origin: "remote_initiated")
+        diagnostic.bindOutput(
+            generation: 1,
+            snapshot: { nil },
+            fnSource: "session_tap_unattributed",
+            fn: { (100, 100.1) }
+        )
+        diagnostic.voiceKeyContext(
+            mode: .function, fnTapEnabled: false, mappingOperationID: 4,
+            mappingApplied: true, readbackMatched: false, matchingServices: 1,
+            eventTapRunning: true
+        )
+        diagnostic.stop(reason: "session_reset")
+        clock.advance(0.4)
+        let final = try #require(clock.finals.first)
+        #expect(final.contains("voice_key_mode=fn voice_fn_tap=false trigger_path=hardware_mapping"))
+        #expect(final.contains("voice_mapping_operation_id=4 voice_mapping_applied=true voice_mapping_readback=mismatched"))
+        #expect(final.contains("fn_source=session_tap_unattributed fn_down_observed=true fn_up_observed=true"))
+        #expect(final.contains("transcript_commit=unknown external_capture=unknown"))
+        #expect(clock.lines.filter { $0.contains("phase=trigger_context") }.count == 1)
+        diagnostic.voiceKeyContext(
+            mode: .rightOption, fnTapEnabled: false, mappingOperationID: 5,
+            mappingApplied: false, readbackMatched: nil, matchingServices: 0,
+            eventTapRunning: false
+        )
+        #expect(clock.finals.count == 1)
+        #expect(clock.lines.filter { $0.contains("phase=trigger_context") }.count == 1)
+    }
+
+    @Test func missingFnObservationRemainsUnobserved() throws {
+        let clock = Clock()
+        let diagnostic = clock.make()
+        diagnostic.start(frameSamples: 240, origin: "remote_initiated")
+        diagnostic.bindOutput(generation: 1, snapshot: { nil }, fn: { (nil, nil) })
+        diagnostic.voiceKeyContext(
+            mode: .rightOption, fnTapEnabled: false, mappingOperationID: 1,
+            mappingApplied: false, readbackMatched: nil, matchingServices: 0,
+            eventTapRunning: false
+        )
+        diagnostic.stop(reason: "session_reset")
+        clock.advance(0.4)
+        let final = try #require(clock.finals.first)
+        #expect(final.contains("trigger_path=software_trigger"))
+        #expect(final.contains("voice_mapping_readback=unknown"))
+        #expect(final.contains("fn_down_observed=false fn_up_observed=false fn_last_down_age_ms=unknown"))
+        #expect(final.contains("observed_fn_down_to_first_pcm_ms=unknown"))
+    }
+
     private final class Clock {
         var now: TimeInterval = 100
         var tasks: [(TimeInterval, () -> Void)] = []

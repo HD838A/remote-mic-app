@@ -7,19 +7,26 @@ final class RemoteButtonInteractionController {
         let snapshot: RemoteButtonInteractionSnapshot
         let valid: () -> Bool
         let perform: (ButtonTrigger, ConfiguredButtonAction) -> Bool
+        let beginHold: ((ConfiguredButtonAction) -> Bool)?
+        let endHold: ((String) -> Void)?
         var pressed = true
         var second = false
         var waiting = false
         var consumed = false
+        var holding = false
         var count = 0
         var timer: HIDRemoteScheduledTask?
         var longTimer: HIDRemoteScheduledTask?
         var guardTimer: HIDRemoteScheduledTask?
         init(snapshot: RemoteButtonInteractionSnapshot, valid: @escaping () -> Bool,
-             perform: @escaping (ButtonTrigger, ConfiguredButtonAction) -> Bool) {
+             perform: @escaping (ButtonTrigger, ConfiguredButtonAction) -> Bool,
+             beginHold: ((ConfiguredButtonAction) -> Bool)? = nil,
+             endHold: ((String) -> Void)? = nil) {
             self.snapshot = snapshot
             self.valid = valid
             self.perform = perform
+            self.beginHold = beginHold
+            self.endHold = endHold
         }
     }
 
@@ -35,7 +42,9 @@ final class RemoteButtonInteractionController {
     func handle(_ phase: RemoteButtonPhase, button: RemoteButton,
                 snapshot: @autoclosure () -> RemoteButtonInteractionSnapshot,
                 valid: @escaping () -> Bool,
-                perform: @escaping (ButtonTrigger, ConfiguredButtonAction) -> Bool) {
+                perform: @escaping (ButtonTrigger, ConfiguredButtonAction) -> Bool,
+                beginHold: ((ConfiguredButtonAction) -> Bool)? = nil,
+                endHold: ((String) -> Void)? = nil) {
         if phase == .release { release(button); return }
         if let current = interactions[button] {
             guard current.waiting else { return }
@@ -46,7 +55,8 @@ final class RemoteButtonInteractionController {
             scheduleLong(button, current)
             return
         }
-        let current = Interaction(snapshot: snapshot(), valid: valid, perform: perform)
+        let current = Interaction(snapshot: snapshot(), valid: valid, perform: perform,
+                                  beginHold: beginHold, endHold: endHold)
         interactions[button] = current
         guard current.snapshot.unavailableReason == nil, valid() else {
             current.consumed = true
@@ -58,12 +68,40 @@ final class RemoteButtonInteractionController {
             self.cancel(button, reason: "context_changed")
         }
         let mode = current.snapshot.mode!
+        // 「单击按住 / 长按按住」与重复方式并列：按住即把对应动作里的方向键按下去，松手才抬起。
+        // 单击按住配了双击时先等双击窗口；长按按住走长按阈值。
+        if mode.isHoldDown {
+            if mode == .singleHold, current.snapshot.recognizesDouble {
+                let delay = max(UInt64(current.snapshot.settings.doubleClickMilliseconds),
+                                UInt64(current.snapshot.repeatSingleStartMilliseconds ?? 0))
+                AppLogger.shared.write(
+                    "BUTTON HOLD operation_id=\(current.id.uuidString) phase=hold_waiting " +
+                        "start_ms=\(delay) double_ms=\(current.snapshot.settings.doubleClickMilliseconds)"
+                )
+                current.timer = schedule(button, current, after: delay) { owner, value in
+                    guard value.pressed, !value.second else { return }
+                    owner.startHold(button, value)
+                }
+            } else if mode == .singleHold {
+                startHold(button, current)
+            } else {
+                scheduleLong(button, current)
+            }
+            return
+        }
         if mode == .repeatSingle {
+            let learnedStart = UInt64(current.snapshot.repeatSingleStartMilliseconds ?? 0)
             if !current.snapshot.recognizesDouble {
                 fire(button, current, .singleClick)
-                scheduleRepeat(button, current, .singleClick, delay: 350)
+                scheduleRepeat(button, current, .singleClick,
+                               delay: max(HIDRemoteTiming.repeatStartMilliseconds, learnedStart))
             } else {
-                current.timer = schedule(button, current, after: UInt64(current.snapshot.settings.doubleClickMilliseconds)) { owner, value in
+                let delay = max(UInt64(current.snapshot.settings.doubleClickMilliseconds), learnedStart)
+                AppLogger.shared.write(
+                    "BUTTON HOLD operation_id=\(current.id.uuidString) phase=waiting " +
+                        "repeat_start_ms=\(delay) double_ms=\(current.snapshot.settings.doubleClickMilliseconds)"
+                )
+                current.timer = schedule(button, current, after: delay) { owner, value in
                     guard value.pressed, !value.second else { return }
                     owner.fire(button, value, .singleClick)
                     owner.scheduleRepeat(button, value, .singleClick, delay: value.snapshot.repeatInterval)
@@ -102,6 +140,11 @@ final class RemoteButtonInteractionController {
               !(current.second && current.snapshot.mode == .repeatSingle) else { return }
         current.longTimer = schedule(button, current, after: UInt64(current.snapshot.settings.longPressMilliseconds)) { owner, value in
             guard value.pressed else { return }
+            // 长按按住：阈值处不是执行一次长按动作，而是把它一直按住。
+            if value.snapshot.mode == .longHold {
+                owner.startHold(button, value)
+                return
+            }
             owner.fire(button, value, .longPress)
             if value.snapshot.mode == .repeatLong {
                 owner.scheduleRepeat(button, value, .longPress, delay: value.snapshot.repeatInterval)
@@ -111,7 +154,9 @@ final class RemoteButtonInteractionController {
 
     private func scheduleRepeat(_ button: RemoteButton, _ current: Interaction,
                                 _ trigger: ButtonTrigger, delay: UInt64) {
-        guard interactions[button] === current, current.snapshot.repeatAllowed else { return }
+        // 按住执行把目标键真正按住，由系统负责自动重复；这里不再补发离散动作。
+        guard interactions[button] === current, current.snapshot.repeatAllowed,
+              !(current.snapshot.mode?.isHoldDown ?? false) else { return }
         current.timer = schedule(button, current, after: delay) { owner, value in
             guard value.pressed else { return }
             owner.fire(button, value, trigger)
@@ -130,6 +175,26 @@ final class RemoteButtonInteractionController {
         if !current.perform(trigger, action) { cancel(button, reason: "action_failed") }
     }
 
+    /// 进入按住：只发一次按下，由 `KeyboardHoldExecution` 负责系统级自动重复，松键时抬起。
+    private func startHold(_ button: RemoteButton, _ current: Interaction) {
+        guard interactions[button] === current, current.pressed, current.valid() else {
+            cancel(button, reason: "context_changed")
+            return
+        }
+        guard let action = current.snapshot.holdDownAction,
+              let beginHold = current.beginHold else {
+            cancel(button, reason: "hold_unavailable")
+            return
+        }
+        current.consumed = true
+        current.count += 1
+        current.holding = true
+        if !beginHold(action) {
+            current.holding = false
+            cancel(button, reason: "hold_failed")
+        }
+    }
+
     private func schedule(_ button: RemoteButton, _ current: Interaction, after delay: UInt64,
                           action: @escaping (RemoteButtonInteractionController, Interaction) -> Void) -> HIDRemoteScheduledTask {
         scheduler.schedule(afterMilliseconds: delay, repeatingEveryMilliseconds: nil) { [weak self, weak current] in
@@ -143,6 +208,11 @@ final class RemoteButtonInteractionController {
         current.timer?.cancel()
         current.longTimer?.cancel()
         current.guardTimer?.cancel()
+        if current.holding {
+            current.holding = false
+            // 无论因为松键、断连还是上下文变化结束，都必须把系统里的键抬起来。
+            current.endHold?(reason)
+        }
         AppLogger.shared.write("BUTTON HOLD operation_id=\(current.id.uuidString) phase=completed reason=\(reason) count=\(current.count) external_result=unknown")
     }
 

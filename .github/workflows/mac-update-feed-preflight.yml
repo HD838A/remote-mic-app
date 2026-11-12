@@ -1,0 +1,36 @@
+name: Mac update feed readiness
+run-name: mac-update-feed-preflight ${{ inputs.tag }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing public tag for a no-deployment readiness check
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Verify the current main control plane
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          test "$GITHUB_REPOSITORY" = HD838A/remote-mic-app
+          test "$GITHUB_REF" = refs/heads/main
+          test "$GITHUB_SHA" = "$(gh api repos/HD838A/remote-mic-app/git/ref/heads/main --jq '.object.sha')"
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Check cross-repository synchronization without publishing or deploying
+        env:
+          GH_TOKEN: ${{ secrets.SAYALL_FEED_SYNC_TOKEN }}
+          TAG: ${{ inputs.tag }}
+        run: node scripts/sync-update-feeds.mjs --preflight "$TAG"

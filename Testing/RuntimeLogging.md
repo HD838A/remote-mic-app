@@ -51,6 +51,20 @@ swift test --disable-keychain --filter AppLoggerTests
 
 失败判定：任何测试失败，或为了测试读取了生产用户文件。
 
+单段默认上限为 10 MB，即 10,000,000 字节，包含文件头、长度字段与 AES-GCM 开销。定向回归先写入超过 2 MiB 的测试记录，确认仍为一个文件；再写入超过 10 MB 的总量，确认生成下一段、每段不超过上限，且全部记录均能按连续序号解密。文件名日期表示会话启动日期，跨日后继续使用同一会话的 part 编号。
+
+### 交错重复发现日志
+
+1. 在隔离测试中交替输入多个 central 的电源观察、扫描观察以及 Chromecast 发现和不可用状态，持续超过 60 秒。
+2. 插入连接失败、实际 Ready、正常语音终态和类型化诊断事件，再显式 flush。
+3. 解密并合计首条观察与 `repeat_count`，核对输入总数。
+
+预期：每种观察的首次记录可见，交错重复进入 60 秒摘要。摘要包含准确计数、首末时间和最后观察，连接序号更新保留在最后观察中。最多 32 组，淘汰前结算计数。失败、Ready 和语音终态逐条保留且前面的摘要先结算。下轮发现重新输出首条。Chromecast 保留结构化连接及宿主状态，省去重复本地化文案。
+
+失败判定：计数不符、关键事件被合并、缺少恢复后首次记录、组数无界增长，或加密、轮转和序号校验失败。
+
+2026-11-11 候选使用生成的 5,518 次电源抖动测试，以及用户授权日志的本地回放。回放输入 87,819 条，按已移除的文案入口扣除 11,043 条后，生产日志器输出 19,561 条、5,162,921 字节。该结果验证记录减量，不证明系统蓝牙抖动已消除。真实睡眠与硬件行为验收单独记录。
+
 ## 用例 5：内部解密工具边界
 
 1. 由受控支持环境取得与构建公钥对应的私钥，不将私钥复制到用户机器或公开仓库。
@@ -118,7 +132,7 @@ swift test --disable-keychain --disable-sandbox --filter ATVVAudioDiagnosticsTes
 
 预期：接受和拒绝计数完整，停流后尾包进入唯一终态。配置或 Fn 缓冲未排程时，不得因播放器 pending 为零而宣称成功。输出超时与共享 generation 标为未知。诊断不发送协议命令，不 flush，不修改 Fn。
 
-日志预算：新 ATVV 诊断每 10 秒最多一条 progress，每段最多 12 条 progress；started、first_pcm、stopping、completed 各最多一次。software_trigger 的 down/up 各最多一次；receive_stalled、receive_resumed 各最多一次。该模块每段最多 20 条；其他组件沿用既有事件行并补关联字段。20,000 个拒绝包及有效 PCM 包回放，各自总诊断文本小于 16 KB。含软件键、重复静默和恢复的完整 20,000 包回放小于 20 KB。上述数字不代表整个 App 的日志大小上限。
+日志预算：新 ATVV 诊断每 10 秒最多一条 progress，每段最多 12 条 progress；started、first_pcm、trigger_context、stopping、completed 各最多一次。software_trigger 的 down/up 各最多一次；receive_stalled、receive_resumed 各最多一次。该模块每段最多 21 条；其他组件沿用既有事件行并补关联字段。20,000 个拒绝包及有效 PCM 包回放，各自总诊断文本小于 16 KB。含软件键、重复静默和恢复的完整 20,000 包回放小于 20 KB。上述数字不代表整个 App 的日志大小上限。
 
 补充自动化预期：
 
@@ -146,3 +160,18 @@ swift test --disable-keychain --disable-sandbox --filter ATVVAudioDiagnosticsTes
 未知边界：主线程回调前排队、无线到达、真实硬件按下和外部工具收音不可观察。Fn 只记录全局可见事件时间。现有公开转写捕获只记录 text_present，不记录正文，也不自动启用捕获。
 
 2026-10-13 初版：定向 101 项 / 6 套及全量 857 项 / 67 套通过，构建通过。补充日志版：定向 99 项 / 5 套通过；本次全量 863 项 / 67 套和构建通过。本轮自动化覆盖上述账目与体积规则；真实设备、首字延迟、尾字完整、第三方工具文字和加密现场采集尚未验收。Bug 记录见 [RC003 诊断](../Bugs/2026-10-13-rc003-audio-delivery-rate-shortfall.md)。
+
+## 用例 10：语音键映射、Fn 观察与来源
+
+适用于语音键诊断补充后的构建。使用原日志目录和现有加密日志收集入口，记录测试时间、版本与 Build。
+
+1. 启动包并复制首次使用诊断。核对启动的 `APP BUILD` 和复制内容中的 `source_revision`、`build_channel`、`source_dirty`、`private_platform_version`。预期为产物已写入的值，旧包或字段缺失时为 unknown。
+2. 在开启普通按键映射且输入监控、辅助功能均有效的前提下，按放遥控器语音键。查看 `HID VOICE_USAGE source_kind=f5|letter_i edge=down|up`。重复按住报告只产生一次边沿；字段不含原始报告、设备身份或任意键值。该分类只证明遥控器报告被观察到。
+3. 核对最近 `VOICE FN MAPPING` 的 `operation_id`、`voice_readback` 和 `voice_readback_verified_services`。写入成功而回读不一致必须显示 mismatched。回读一致仍须保留 `native_delivery=unknown`。
+4. 在 SayAll 自身窗口和其他 App 输入框分别按放真实 Fn，再做一段遥控器语音。预期 ATVV 的 `trigger_context` 与终态含相同映射操作号，以及模式、触发路径和 `fn_event_tap_running`。`fn_source=session_tap_unattributed` 只说明现有事件 tap 看到 Fn，无法归属某只设备；最近按下年龄需要与本段时间核对。
+5. 关闭映射或撤销权限、取消录音、断连后恢复，并快速连续录两段。预期停止或 tap 禁用清空旧 Fn 观察，下一段的 Fn 释放不会成为上一段的释放证据。无观察时为 `fn_down_observed=false` 和 unknown 耗时，不能直接判定投递失败。
+6. 通过目标工具可见界面确认收音和文字结果，并与日志分开记录。正常音频仍要求零 interrupted、零 pending 和 normal 结束。`target_response`、`transcript_commit`、`external_capture` 继续如实为 unknown。
+
+失败判定包括来源字段输出无效值、一般键或原始报告进入日志、回读被误记为系统 Fn 送达、前一会话混入下一会话边沿，以及增加语音开始等待、改变正常结束排空或重复触发。
+
+自动化命令为 `swift test --disable-keychain --filter 'VoiceKeyDiagnosticTests|ATVVAudioDiagnosticsTests|ShortcutLifecycleTests|RemoteVoiceFunctionMapperTests|PreferredInputSourceMonitorTests'`。模拟事件与构建仅证明各自边界。Intel 实机 Fn、正常首尾字和目标工具文字须独立验收。

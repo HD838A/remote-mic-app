@@ -108,6 +108,11 @@ final class HIDRemoteMonitor {
     private let permissionPoll: HIDPermissionPoll
     private let runtimePermissions: () -> Bool
     private let actionPerformer: (RemoteButton, ButtonTrigger, ConfiguredButtonAction) -> Bool
+    private let holdBeginPerformer: (ConfiguredButtonAction) -> Bool
+    private let holdEndPerformer: (String) -> Void
+    /// 解析该按键当前生效的单击与长按动作：方案覆盖优先，其次基础映射。
+    private let holdTargetResolver:
+        ((UUID?, RemoteButton) -> (single: ConfiguredButtonAction, long: ConfiguredButtonAction)?)?
     private let appSwitcherSession: KeyboardInjector.AppSwitcherSession
     private let minimizedWindowRestorer: (String?, String?) -> KeyboardInjector.MinimizedWindowRestoreResult
     private let windowCounter: (pid_t) -> Int?
@@ -256,6 +261,10 @@ final class HIDRemoteMonitor {
             ButtonTrigger,
             ConfiguredButtonAction
         ) -> Bool)? = nil,
+        holdBeginPerformer: ((ConfiguredButtonAction) -> Bool)? = nil,
+        holdEndPerformer: ((String) -> Void)? = nil,
+        holdTargetResolver:
+            ((UUID?, RemoteButton) -> (single: ConfiguredButtonAction, long: ConfiguredButtonAction)?)? = nil,
         overrideActionPerformer: @escaping (UUID?, RemoteButton, ButtonTrigger) -> Bool = {
             _, _, _ in false
         },
@@ -353,6 +362,15 @@ final class HIDRemoteMonitor {
                 )
             )
         }
+        self.holdBeginPerformer = holdBeginPerformer ?? { configured in
+            guard KeyboardInjector.isAccessibilityTrusted, let key = configured.holdableKey
+            else { return false }
+            return KeyboardHoldExecution.shared.begin(.init(key))
+        }
+        self.holdEndPerformer = holdEndPerformer ?? { reason in
+            KeyboardHoldExecution.shared.end(reason: reason)
+        }
+        self.holdTargetResolver = holdTargetResolver
         self.overrideActionPerformer = overrideActionPerformer
         self.hasOverrideBinding = hasOverrideBinding
         self.frontmostBundleIdentifier = frontmostBundleIdentifier
@@ -508,6 +526,8 @@ final class HIDRemoteMonitor {
         // 先结束提前登记会话：共享 suppressor 不会在这里关闭，若不推进代数，
         // 已经在报告线程上读到旧快照的回调仍会写入吞键的陈旧记录。
         prearmSession.end()
+        // 停止监视必须同时抬起任何仍被按住的键，否则它会一直留在系统里。
+        buttonInteractions.cancelAll(reason: "monitor_stopped")
         permissionPollSubscription?.cancel()
         permissionPollSubscription = nil
         resetInputState()
@@ -1124,6 +1144,17 @@ final class HIDRemoteMonitor {
                     "released=\(Self.buttonList(for: released))" + timing
             )
         }
+        // Only classify the two documented remote voice usages. General key
+        // contents and report bytes never enter this diagnostic.
+        for (usage, kind) in [(UInt16(0x3E), "f5"), (UInt16(0x0C), "letter_i")] {
+            if pressed.contains(usage) || released.contains(usage) {
+                diagnosticLogger(
+                    "HID VOICE_USAGE source_kind=\(kind) " +
+                        "edge=\(pressed.contains(usage) ? "down" : "up") " +
+                        "phase=observed correlation=timing_only system_fn_delivery=unknown"
+                )
+            }
+        }
         activeUsages = usages
         onActiveButtons?(profileID, RemoteButton.buttons(for: usages))
 
@@ -1291,6 +1322,10 @@ final class HIDRemoteMonitor {
                         snapshot.hasSameBinding(as: self.interactionSnapshot(button: button, profileID: profileID))
                 }, perform: { [weak self] trigger, configured in
                     self?.performConfiguredAction(for: button, trigger: trigger, captured: configured) ?? false
+                }, beginHold: { [weak self] configured in
+                    self?.holdBeginPerformer(configured) ?? false
+                }, endHold: { [weak self] reason in
+                    self?.holdEndPerformer(reason)
                 })
         }
 
@@ -1723,6 +1758,22 @@ final class HIDRemoteMonitor {
         let repeated = snapshot.mode == .repeatLong ? snapshot.long : snapshot.single
         snapshot.repeatAllowed = Self.shouldRepeat(configured: repeated,
             frontmostBundleIdentifier: frontmostBundleIdentifier())
+        // 单击按住 / 长按按住使用当前生效方案里的动作；是否允许按住由该动作自己决定，
+        // 不能复用“重复单击”的能力判断。
+        if let resolved = holdTargetResolver?(profileID, button) {
+            snapshot.holdableSingle = resolved.single
+            snapshot.holdableLong = resolved.long
+        }
+        if let action = snapshot.holdDownAction, action.holdableKey != nil {
+            snapshot.repeatAllowed = Self.shouldRepeat(
+                action: action.action,
+                frontmostBundleIdentifier: frontmostBundleIdentifier()
+            )
+        }
+        // 方案解析后才知道动作是否可按住：不可用就回到“未设置”，不能把整键判死。
+        if let mode = snapshot.mode, mode.isHoldDown, !snapshot.blockers(for: mode).isEmpty {
+            snapshot.mode = .once
+        }
         return snapshot
     }
 
@@ -2247,7 +2298,11 @@ final class HIDRemoteMonitor {
         removeAppSwitcherDismissObserver()
         appSwitcherDismissRemover = appSwitcherDismissObserverInstaller { [weak self] in
             guard let self, self.appSwitcherSession.isActive else { return }
-            self.finishAppSwitcherLifecycle(reason: "mouse_click", confirmed: false)
+            self.finishAppSwitcherLifecycle(
+                reason: "mouse_click",
+                confirmed: false,
+                switcherAlreadyDismissed: true
+            )
         }
     }
 
@@ -2278,7 +2333,13 @@ final class HIDRemoteMonitor {
         }
     }
 
-    private func finishAppSwitcherLifecycle(reason: String, confirmed: Bool) {
+    /// `switcherAlreadyDismissed` 表示系统已经自己关掉切换器（目前只有鼠标点击外部），
+    /// 收尾时只能松开 ⌘，不能再往被点击的 App 补 Escape。
+    private func finishAppSwitcherLifecycle(
+        reason: String,
+        confirmed: Bool,
+        switcherAlreadyDismissed: Bool = false
+    ) {
         appSwitcherTimeout?.cancel()
         appSwitcherTimeout = nil
         appSwitcherFrontmostMonitor?.cancel()
@@ -2286,7 +2347,7 @@ final class HIDRemoteMonitor {
         removeAppSwitcherDismissObserver()
         appSwitcherDockWindowBaseline = nil
         if appSwitcherSession.isActive {
-            _ = appSwitcherSession.cancel()
+            _ = appSwitcherSession.cancel(dismissSwitcher: !switcherAlreadyDismissed)
         }
         diagnosticLogger(
             "HID APP SWITCHER ended reason=\(reason) confirmed=\(confirmed)"
@@ -2377,7 +2438,11 @@ final class HIDRemoteMonitor {
         gestureRecognizer.reset()
     }
 
-    func cancelMappingInteractions() { resetInputState() }
+    func cancelMappingInteractions() {
+        // 按住执行把键真正按下去了，取消映射时必须先走一遍交互取消把键抬起来。
+        buttonInteractions.cancelAll(reason: "mapping_cancelled")
+        resetInputState()
+    }
 
     func cancelConfiguredInteractions(reason: String) { buttonInteractions.cancelAll(reason: reason) }
 
