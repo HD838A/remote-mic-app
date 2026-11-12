@@ -9,6 +9,146 @@ struct ButtonBindingConfigurationTests {
         AppSettings(defaults: UserDefaults(suiteName: "UnifiedButtons.\(UUID().uuidString)")!)
     }
 
+    @Test(arguments: [true, false]) func saveRecoveryDoesNotReloadConfirmedSuccess(success: Bool) {
+        var reloads = 0
+        var reads = 0
+        let result = ButtonMappingWriteRecovery.perform(write: { success }, reload: { reloads += 1; return true }, matches: { reads += 1; return false })
+        #expect(result == (success ? .saved : .failed))
+        #expect(reloads == (success ? 0 : 1))
+        #expect(reads == (success ? 0 : 1))
+    }
+
+    @Test func reloadFailureRemainsUnknownWithoutComparingStaleValue() {
+        var compared = false
+        let result = ButtonMappingWriteRecovery.perform(write: { false }, reload: { false }, matches: { compared = true; return true })
+        #expect(result == .unknown)
+        #expect(!compared)
+    }
+
+    @Test func staleSuccessReceiptCannotClearNewFailure() {
+        let target = ButtonMappingSaveTarget(profileID: UUID(), deviceID: UUID(), button: .back, trigger: .singleClick)
+        var state = ButtonMappingSaveState()
+        state.record(.saved, retry: .action(.disabled), target: target)
+        let receipt = state.receipt
+        state.record(.failed, retry: .action(.disabled), target: target)
+        state.clearSuccess(receipt)
+        #expect(state.outcome == .failed)
+        #expect(state.retry != nil)
+        #expect(state.target == target)
+        state.record(.saved, retry: .action(.disabled), target: target)
+        state.clearSuccess(state.receipt)
+        #expect(state.outcome == nil)
+        #expect(state.retry == nil)
+    }
+
+    @Test func baseDirectEditPersistsDisabledEscapeAndHoldAcrossRestart() throws {
+        let defaults = try #require(UserDefaults(suiteName: "Autosave.\(UUID().uuidString)"))
+        let source = AppSettings(defaults: defaults)
+        let device = source.selectedRemoteProfileID
+        #expect(source.writeBaseBinding(.disabled, for: .back, trigger: .singleClick, profileID: device))
+        #expect(source.configuredBaseAction(for: .back, trigger: .singleClick).action == .disabled)
+        #expect(source.writeBaseBinding(.init(action: .escape, shortcut: nil), for: .back, trigger: .singleClick, profileID: device))
+        #expect(source.writeHoldMode(.once, for: .back, profileID: device))
+        let reopened = AppSettings(defaults: defaults)
+        #expect(reopened.configuredBaseAction(for: .back, trigger: .singleClick).action == .escape)
+        #expect(reopened.interactionSettings.modes[RemoteButton.back.rawValue] == "once")
+        #expect(!source.writeHoldMode(.repeatSingle, for: .back, profileID: UUID()))
+    }
+
+    @Test func publicBuildHidesProfileActionsAndQueriesStayUnavailable() {
+        #if !canImport(SayAllButtonProfiles)
+        let integration = MacroFeatureIntegration()
+        #expect(!integration.isButtonProfilesVisible)
+        #expect(!integration.supportsMappingProfileAutosave)
+        #expect(integration.mappingProfiles(device: nil).isEmpty)
+        #expect(integration.createMappingProfile(named: "Unavailable", copying: nil, bindings: [], holdModes: [:]) == nil)
+        if case .unavailable = integration.displayProfileBinding(profile: UUID(), button: .back, trigger: .singleClick) {} else { Issue.record("Missing component must be unavailable") }
+        #endif
+    }
+
+    @Test func futureHostPayloadDisplaysButCannotBeSilentlyRewritten() throws {
+        let value = ConfiguredButtonAction(action: .commandCopy, shortcut: nil)
+        let encoded = try JSONEncoder().encode(value)
+        #expect(MappingHostBindingCodec.decode(encoded)?.isEditable == true)
+        var json = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        json["futureField"] = ["mustKeep": true]
+        let future = try JSONSerialization.data(withJSONObject: json)
+        #expect(MappingHostBindingCodec.decode(future)?.configured == value)
+        #expect(MappingHostBindingCodec.decode(future)?.isEditable == false)
+        #expect(MappingHostBindingCodec.decode(Data("broken".utf8)) == nil)
+    }
+
+    #if SAYALL_BUTTON_PROFILE_AUTOSAVE
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["SAYALL_MACRO_STORAGE_ROOT"] != nil))
+    @MainActor func mappingProfileAdapterPreservesReadOnlyDisplayAndCompleteCopy() throws {
+        // The binary integration runner supplies an isolated storage root.
+        let root = try #require(ProcessInfo.processInfo.environment["SAYALL_MACRO_STORAGE_ROOT"])
+        #expect(root.hasPrefix("/"))
+        let integration = MacroFeatureIntegration(localeIdentifier: "en")
+        integration.loadProfilesForScreenshot()
+        integration.updateButtonProfilesAccess(.authorized)
+        let disabled = UnifiedButtonBinding(remoteProfileID: nil, button: .ok, trigger: .singleClick, configured: .disabled)
+        let id = try #require(integration.createMappingProfile(named: "Integration", copying: nil,
+            bindings: [disabled], holdModes: ["ok": "once"]))
+        let copy = try #require(integration.createMappingProfile(named: "Integration copy", copying: id,
+            bindings: [], holdModes: [:]))
+        let matchesDisabled = integration.profileBindingMatches(.disabled, profile: copy, button: .ok, trigger: .singleClick)
+        let matchesInherited = integration.profileBindingMatches(.disabled, profile: copy, button: .ok, trigger: .doubleClick)
+        let matchesMissingHold = integration.profileHoldModeMatches(.once, profile: copy, button: .back)
+        let matchesExplicitHold = integration.profileHoldModeMatches(.once, profile: copy, button: .ok)
+        #expect(matchesDisabled)
+        #expect(!matchesInherited)
+        #expect(!matchesMissingHold)
+        #expect(matchesExplicitHold)
+        integration.updateButtonProfilesAccess(.requiresPlus)
+        #expect(integration.mappingProfiles(device: UUID()).contains { $0.id == id })
+        if case let .explicit(value) = integration.displayProfileBinding(profile: copy, button: .ok, trigger: .singleClick) {
+            #expect(value.configured == .disabled)
+        } else { Issue.record("Explicit disabled was lost") }
+        if case .inherited = integration.displayProfileBinding(profile: copy, button: .ok, trigger: .doubleClick) {} else { Issue.record("Inheritance was lost") }
+        if case let .explicit(mode) = integration.displayProfileHoldMode(profile: copy, button: .ok) { #expect(mode == .once) }
+        else { Issue.record("Hold was lost") }
+        #expect(!integration.writeProfileBinding(nil, profile: copy, button: .ok, trigger: .singleClick, displayName: nil))
+        #expect(integration.profileBinding(device: nil, profile: copy, button: .ok, trigger: .singleClick) == nil)
+        integration.updateButtonProfilesAccess(.authorized)
+        #expect(integration.writeProfileBinding(nil, profile: copy, button: .ok, trigger: .singleClick, displayName: nil))
+        #expect(integration.reloadMappingProfiles())
+        if case .inherited = integration.displayProfileBinding(profile: copy, button: .ok, trigger: .singleClick) {} else { Issue.record("Clear did not persist") }
+    }
+    #endif
+
+    @Test(arguments: ["saved", "recovered", "failed", "unknown"])
+    func holdReconciliationRunsOnlyAfterConfirmedAction(mode: String) {
+        var holdWrites = 0
+        let result = ButtonMappingWriteRecovery.saveAction(write: { mode == "saved" },
+            reload: { mode != "unknown" }, matches: { mode == "recovered" },
+            reconcileHold: { holdWrites += 1 })
+        #expect(holdWrites == (mode == "saved" || mode == "recovered" ? 1 : 0))
+        #expect(result == (mode == "unknown" ? .unknown : mode == "failed" ? .failed : .saved))
+    }
+
+    @Test func holdFailureRetryWritesOnlyHoldAndRejectsAnotherTarget() {
+        let target = ButtonMappingSaveTarget(profileID: UUID(), deviceID: UUID(), button: .ok, trigger: nil)
+        let other = ButtonMappingSaveTarget(profileID: UUID(), deviceID: target.deviceID, button: .ok, trigger: nil)
+        var state = ButtonMappingSaveState()
+        state.record(.failed, retry: .hold(.repeatSingle), target: target)
+        var actions = 0
+        var holds = 0
+        #expect(!state.performRetry(target: other, writeAction: { _ in actions += 1 }, writeHold: { _ in holds += 1 }))
+        var retriedMode: RemoteButtonHoldMode?
+        let accepted = state.performRetry(target: target, writeAction: { _ in actions += 1 }, writeHold: { mode in
+            retriedMode = mode
+            holds += 1
+        })
+        #expect(accepted)
+        #expect(retriedMode == .repeatSingle)
+        #expect(actions == 0)
+        #expect(holds == 1)
+        state = .init()
+        #expect(!state.performRetry(target: target, writeAction: { _ in actions += 1 }, writeHold: { _ in holds += 1 }))
+        #expect(holds == 1)
+    }
+
     @Test func explicitDisabledOverrideNeverInherits() {
         let settings = settings()
         settings.setAction(.commandCopy, for: .home)
