@@ -32,7 +32,9 @@
 
 - 新增 `ProfileMacroTitleTests` 4 例：改名后取当前名字、动作缺失回落宿主文案、绑定缺宏 ID 回落、按稳定 ID 而非名字匹配。
 - `swift build --disable-keychain` 通过；公开全量 `swift test --disable-keychain` 1347 项通过。
-- 未验证：真实私有组件下的页面截图（需要私有构件与签名本地包）、实体遥控器复测、"宏库被其他进程改写"后的自动恢复。
+- 未验证：实体遥控器复测、"宏库被其他进程改写"后的自动恢复、正式 Developer ID 签名本地包。
+- 真实运行验证（本机）：用私有仓 2.9.0 源码在本机重建 XCFramework（Xcode 26.5 / Swift 6.3.2），经 `scripts/build-app.sh` 出包并启动后实测——在组合动作页改名保存，不重启回到按键页的键位方案作用域，主页键单击格立即显示新名字，"退出重开"不再是恢复手段。
+- 打包链路阻塞（与本修复无关，但会挡住所有人的本地包）：`scripts/prepare-private-artifact-package.sh` 未跟上私有平台 2.9.0 新增的 `SayAllHostBridge`——产物清单、provenance modules、解压循环和生成的 `Package.swift` 目标四处都缺，官方准备流程必然失败；本机验证包是在仓库外临时补齐后打出的，需要单独 PR 修。
 
 ## 遗留
 
