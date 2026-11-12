@@ -1,7 +1,7 @@
 # 远端 60 秒停止后语音工具没有收到 Fn 抬起
 
 - 时间：2026-11-13
-- 状态：候选修复，策略与事件注入自动化待执行；真实豆包 60 秒复测待完成
+- 状态：已修复；2026-11-13 00:33 CST 真实豆包 60 秒超时复测通过（用户确认），正常松键未在本轮真机重复覆盖
 - 影响范围：macOS 蓝牙遥控器语音键；硬件映射的 Fn 长按模式；远端 60 秒超时停止
 - 功能点：语音键结束、第三方语音工具提交与结束
 - 简单描述：远端在 60 秒超时停止音频后，App 结束了蓝牙流和本地录音，但没有向目标语音工具发送 Fn 抬起，工具仍停在长按听写状态，因此不提交文字也不结束。
@@ -61,11 +61,24 @@ build 344 的明文日志（2026-11-12 16:09:47–16:10:47 UTC，本机 00:09–
 
 - `swift test --disable-keychain --filter 'BluetoothVoiceStopPolicyTests|ATVVAudioDiagnosticsTests|BluetoothLifecycleTests'`：60 项 / 3 suites 通过。
 - `git diff --check`：通过。
+- 本地 release App build 345，源 `9cfaf11139a2efbe0e3487e44e54a27c0d9e28bf`，`dirty=false`。
+- 真实豆包 60 秒超时复测：用户确认“60s 的问题修复了”。运行时日志：
+
+```text
+2026-11-12T16:33:47.257Z pid=40764 ver=2.0.0 build=345
+    ATVV STREAM STOP session=120 reason=remote_timeout partial_frame_bytes=0
+2026-11-12T16:33:47.258Z pid=40764 ver=2.0.0 build=345
+    VOICE KEY mode=fn edge=up result=event_submitted reason=remote_timeout_commit target_response=unknown
+2026-11-12T16:33:47.293Z pid=40764 ver=2.0.0 build=345
+    AUDIO PLAYBACK drained trace=1 model=rc003 pending_buffers=0
+```
+
+同会话仍有 `TRANSCRIPT CAPTURE canceled reason=discontinuous_text_change`；这是本地语音记录捕获的独立问题，不影响目标工具提交。
 
 待执行：
 
-- 受影响语音键/本地记录回归。
-- 本地 release App 构建与真实豆包 60 秒复测，确认目标工具在超时停止时提交并结束。
+- 正常松键路径的真机重复覆盖（代码路径未改，本轮只验证 60 秒超时）。
+- 60 秒停止前最后一个词/尾音的独立调查；本修复不延长音频，也不恢复超时后的音频。
 
 ## 验证边界
 
