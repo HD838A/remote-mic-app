@@ -813,6 +813,9 @@ struct SettingsView: View {
             macroFeature.setEditorActive(false)
             membershipFeature.refreshIfNeeded()
             routePendingButtonProfileImportIfNeeded()
+            if ButtonProfileMacroRefreshPolicy.shouldRefresh(section: selectedSection) {
+                macroFeature.reloadButtonProfileMacroLibrary()
+            }
         }
         .onReceive(settingsNavigation.$requestedSection) { section in
             guard let section else { return }
@@ -840,6 +843,11 @@ struct SettingsView: View {
             }
             if section != .macros, section != .buttonProfiles {
                 macroFeature.setEditorActive(false)
+            }
+            if ButtonProfileMacroRefreshPolicy.shouldRefresh(section: section) {
+                // 组合动作改名后，键位方案页要显示新名字。跨进程写入收不到组件内部的通知，
+                // 进入页面时主动重读一次宏库。
+                macroFeature.reloadButtonProfileMacroLibrary()
             }
         }
         .onDisappear {

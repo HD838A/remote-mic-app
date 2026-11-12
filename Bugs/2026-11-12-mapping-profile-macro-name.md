@@ -39,3 +39,5 @@
 ## 遗留
 
 跨进程场景仍会旧：另一份安装包、测试包或配置恢复流程写同一个宏库目录时，本进程两处快照都不会重读。彻底解决需要键位方案组件暴露「只重读宏库」的接口（`RemoteMicButtonProfilesController.reload()` 已存在，只差 feature 层转发），由宿主在进入按键页时调用；该项属于私有仓工作，不在本修复范围。
+
+该接口与宿主接入已在 [`2026-11-12-profile-macro-library-refresh.md`](2026-11-12-profile-macro-library-refresh.md) 落地：组件侧广播宏库变化通知并提供 `reloadMacroLibrary()`，宿主在进入按键页和键位方案页时调用。
