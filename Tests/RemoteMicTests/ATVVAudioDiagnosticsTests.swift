@@ -399,6 +399,9 @@ struct ATVVAudioDiagnosticsTests {
         diagnostic.stop(reason: "remote_stop")
         clock.advance(0.4)
         let final = try #require(clock.finals.first)
+        #expect(clock.lines.contains {
+            $0.contains("callback_queue=bluetooth callback_business_queue=main")
+        })
         #expect(final.contains("ble_generation=9 protocol_version=256 codec=2 frame_bytes=120 sample_rate=16000"))
         #expect(final.contains("control_tail_schema=kind,offset_ms,callbacks,pcm_samples"))
         #expect(final.contains("control_tail=start:"))
@@ -407,14 +410,15 @@ struct ATVVAudioDiagnosticsTests {
         #expect(!final.contains("pcm="))
     }
 
-    @Test func callbackQueueAndVoiceBusinessPathRemainAtTheStableBaseline() throws {
+    @Test func callbackQueueIsDedicatedAndVoiceBusinessPathRemainsTheStableBaseline() throws {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
         let bridge = try String(contentsOf: root.appendingPathComponent("Sources/RemoteMic/XiaomiBluetoothBridge.swift"), encoding: .utf8)
-        #expect(bridge.contains("queue: .main"))
-        #expect(!bridge.contains("onMain"))
-        #expect(!bridge.contains("queue: bluetoothQueue"))
-        #expect(bridge.contains("guard let data = characteristic.value"))
+        #expect(bridge.contains("queue: notificationIngress.queue"))
+        #expect(!bridge.contains("queue: .main"))
+        #expect(bridge.contains("onMain"))
+        #expect(bridge.contains("let value = characteristic.value"))
+        #expect(bridge.contains("value: Data?,"))
         let diagnostic = try String(contentsOf: root.appendingPathComponent("Sources/RemoteMic/ATVVAudioDiagnostics.swift"), encoding: .utf8)
         #expect(!diagnostic.contains("microphoneClose("))
         #expect(!diagnostic.contains("microphoneExtend("))

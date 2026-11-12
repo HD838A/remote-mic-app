@@ -36,6 +36,56 @@ protocol XiaomiBluetoothBridgeDelegate: AnyObject {
     func bluetoothBridgeDeviceNameDidChange(_ bridge: XiaomiBluetoothBridge)
 }
 
+/// CoreBluetooth 回调与主线程之间的窄边界。
+///
+/// CoreBluetooth 只有在回调队列被及时排空时才释放接收缓冲。RC003 在语音期间
+/// 每秒发送约 66.7 个音频通知；如果这些通知直接投到 `.main`，主线程忙于界面、
+/// HID 或辅助功能查询时，系统蓝牙栈的接收缓冲就会积压并丢弃通知。丢失量随会话
+/// 时长累积，用户看到的就是“说得越久，尾部缺得越多”。
+///
+/// 这个类型只做一件事：在 CoreBluetooth 回调线程上立即复制 `Data`，再按顺序投递
+/// 到主线程。业务状态仍然只在主线程变更；回调队列不等待主线程，也不读取
+/// `CBCharacteristic.value` 的可变最新值。
+final class BluetoothNotificationIngress {
+    typealias MainScheduler = (@escaping () -> Void) -> Void
+
+    static let defaultQueue = DispatchQueue(label: "RemoteMic.bluetooth", qos: .userInteractive)
+
+    let queue: DispatchQueue
+    private let scheduleOnMain: MainScheduler
+
+    init(
+        queue: DispatchQueue = BluetoothNotificationIngress.defaultQueue,
+        scheduleOnMain: @escaping MainScheduler = { operation in
+            DispatchQueue.main.async(execute: operation)
+        }
+    ) {
+        self.queue = queue
+        self.scheduleOnMain = scheduleOnMain
+    }
+
+    /// `value` 必须由调用方在 CoreBluetooth 回调线程上读取并传入。
+    func receive(
+        value: Data?,
+        generation: UInt64,
+        deliver: @escaping (Data?, UInt64) -> Void
+    ) {
+        let capturedValue = value
+        scheduleOnMain {
+            deliver(capturedValue, generation)
+        }
+    }
+}
+
+@inline(__always)
+private func onMain(_ body: @escaping () -> Void) {
+    if Thread.isMainThread {
+        body()
+    } else {
+        DispatchQueue.main.async(execute: body)
+    }
+}
+
 private final class XiaomiPeripheralDelegateProxy: NSObject, CBPeripheralDelegate {
     let generation: UInt64
     weak var owner: XiaomiBluetoothBridge?
@@ -46,15 +96,20 @@ private final class XiaomiPeripheralDelegateProxy: NSObject, CBPeripheralDelegat
     }
 
     func peripheralDidUpdateName(_ peripheral: CBPeripheral) {
-        owner?.handleNameUpdate(peripheral: peripheral, generation: generation)
+        onMain { [weak self] in
+            self?.owner?.handleNameUpdate(peripheral: peripheral, generation: self?.generation ?? 0)
+        }
     }
 
     func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
-        owner?.handleDiscoveredServices(
-            peripheral: peripheral,
-            generation: generation,
-            error: error
-        )
+        onMain { [weak self] in
+            guard let self else { return }
+            self.owner?.handleDiscoveredServices(
+                peripheral: peripheral,
+                generation: self.generation,
+                error: error
+            )
+        }
     }
 
     func peripheral(
@@ -62,12 +117,15 @@ private final class XiaomiPeripheralDelegateProxy: NSObject, CBPeripheralDelegat
         didDiscoverCharacteristicsFor service: CBService,
         error: Error?
     ) {
-        owner?.handleDiscoveredCharacteristics(
-            peripheral: peripheral,
-            generation: generation,
-            service: service,
-            error: error
-        )
+        onMain { [weak self] in
+            guard let self else { return }
+            self.owner?.handleDiscoveredCharacteristics(
+                peripheral: peripheral,
+                generation: self.generation,
+                service: service,
+                error: error
+            )
+        }
     }
 
     func peripheral(
@@ -75,12 +133,15 @@ private final class XiaomiPeripheralDelegateProxy: NSObject, CBPeripheralDelegat
         didUpdateNotificationStateFor characteristic: CBCharacteristic,
         error: Error?
     ) {
-        owner?.handleNotificationState(
-            peripheral: peripheral,
-            generation: generation,
-            characteristic: characteristic,
-            error: error
-        )
+        onMain { [weak self] in
+            guard let self else { return }
+            self.owner?.handleNotificationState(
+                peripheral: peripheral,
+                generation: self.generation,
+                characteristic: characteristic,
+                error: error
+            )
+        }
     }
 
     func peripheral(
@@ -88,12 +149,22 @@ private final class XiaomiPeripheralDelegateProxy: NSObject, CBPeripheralDelegat
         didUpdateValueFor characteristic: CBCharacteristic,
         error: Error?
     ) {
-        owner?.handleCharacteristicValue(
-            peripheral: peripheral,
-            generation: generation,
-            characteristic: characteristic,
-            error: error
-        )
+        // `characteristic.value` is the mutable "latest value" property. Capture
+        // the bytes on the CoreBluetooth queue before the main-thread hop.
+        let value = characteristic.value
+        let generation = self.generation
+        owner?.notificationIngress.receive(
+            value: value,
+            generation: generation
+        ) { [weak owner] value, generation in
+            owner?.handleCharacteristicValue(
+                peripheral: peripheral,
+                generation: generation,
+                characteristic: characteristic,
+                value: value,
+                error: error
+            )
+        }
     }
 }
 
@@ -123,6 +194,7 @@ final class XiaomiBluetoothBridge: NSObject {
     private let excludedIdentifiers: () -> Set<UUID>
     /// 已被判定为「别的产品」的标识；本桥此后一律不再连接，也不再走扫描回退。
     private var rejectedIdentifiers = Set<UUID>()
+    fileprivate let notificationIngress = BluetoothNotificationIngress()
     private var central: CBCentralManager?
     private var centralGeneration: UInt64?
     private var peripheral: CBPeripheral?
@@ -382,7 +454,7 @@ final class XiaomiBluetoothBridge: NSObject {
         lifecycle = .scanning(generation)
         let manager = CBCentralManager(
             delegate: self,
-            queue: .main,
+            queue: notificationIngress.queue,
             options: [CBCentralManagerOptionShowPowerAlertKey: true]
         )
         central = manager
@@ -1164,6 +1236,12 @@ final class XiaomiBluetoothBridge: NSObject {
 
 extension XiaomiBluetoothBridge: CBCentralManagerDelegate {
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
+        guard Thread.isMainThread else {
+            onMain { [weak self] in
+                self?.centralManagerDidUpdateState(central)
+            }
+            return
+        }
         guard self.central === central, let generation = centralGeneration else { return }
         AppLogger.shared.write(
             "BLE CENTRAL state=\(central.state.rawValue) " +
@@ -1276,6 +1354,17 @@ extension XiaomiBluetoothBridge: CBCentralManagerDelegate {
         advertisementData: [String: Any],
         rssi RSSI: NSNumber
     ) {
+        guard Thread.isMainThread else {
+            onMain { [weak self] in
+                self?.centralManager(
+                    central,
+                    didDiscover: peripheral,
+                    advertisementData: advertisementData,
+                    rssi: RSSI
+                )
+            }
+            return
+        }
         guard !systemSuspension.isSuspended, self.central === central else { return }
         let advertisedName = advertisementData[CBAdvertisementDataLocalNameKey] as? String
         let serviceMatch = (advertisementData[CBAdvertisementDataServiceUUIDsKey] as? [CBUUID])?
@@ -1297,6 +1386,12 @@ extension XiaomiBluetoothBridge: CBCentralManagerDelegate {
     }
 
     func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
+        guard Thread.isMainThread else {
+            onMain { [weak self] in
+                self?.centralManager(central, didConnect: peripheral)
+            }
+            return
+        }
         guard self.central === central else { return }
         guard shouldRun else {
             central.cancelPeripheralConnection(peripheral)
@@ -1338,6 +1433,16 @@ extension XiaomiBluetoothBridge: CBCentralManagerDelegate {
         didFailToConnect peripheral: CBPeripheral,
         error: Error?
     ) {
+        guard Thread.isMainThread else {
+            onMain { [weak self] in
+                self?.centralManager(
+                    central,
+                    didFailToConnect: peripheral,
+                    error: error
+                )
+            }
+            return
+        }
         guard self.central === central,
               isCurrent(peripheral),
               let generation = centralGeneration,
@@ -1358,6 +1463,16 @@ extension XiaomiBluetoothBridge: CBCentralManagerDelegate {
         didDisconnectPeripheral peripheral: CBPeripheral,
         error: Error?
     ) {
+        guard Thread.isMainThread else {
+            onMain { [weak self] in
+                self?.centralManager(
+                    central,
+                    didDisconnectPeripheral: peripheral,
+                    error: error
+                )
+            }
+            return
+        }
         guard self.central === central,
               isCurrent(peripheral),
               let generation = centralGeneration,
@@ -1373,6 +1488,18 @@ extension XiaomiBluetoothBridge: CBCentralManagerDelegate {
         isReconnecting: Bool,
         error: Error?
     ) {
+        guard Thread.isMainThread else {
+            onMain { [weak self] in
+                self?.centralManager(
+                    central,
+                    didDisconnectPeripheral: peripheral,
+                    timestamp: timestamp,
+                    isReconnecting: isReconnecting,
+                    error: error
+                )
+            }
+            return
+        }
         guard self.central === central,
               isCurrent(peripheral),
               let generation = centralGeneration,
@@ -1618,12 +1745,13 @@ extension XiaomiBluetoothBridge {
         peripheral: CBPeripheral,
         generation: UInt64,
         characteristic: CBCharacteristic,
+        value: Data?,
         error: Error?
     ) {
         let callbackAt = ProcessInfo.processInfo.systemUptime
         let diagnostic = characteristic.uuid == audioUUID ? diagnosticForAudio() : nil
         diagnostic?.receive(
-            bytes: error == nil ? (characteristic.value?.count ?? 0) : 0,
+            bytes: error == nil ? (value?.count ?? 0) : 0,
             frameSize: capabilities.frameSize,
             at: callbackAt
         )
@@ -1658,7 +1786,7 @@ extension XiaomiBluetoothBridge {
             }
             return
         }
-        guard let data = characteristic.value else {
+        guard let data = value else {
             diagnostic?.reject(.missingValue)
             return
         }

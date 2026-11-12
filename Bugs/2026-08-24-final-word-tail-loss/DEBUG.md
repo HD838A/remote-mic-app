@@ -1,7 +1,7 @@
 # 语音结束时最后一个词偶发未识别调查
 
 - 时间：2026-08-24
-- 状态：调查中；现有证据不足以确认唯一根因，先增加诊断日志，未修改语音行为
+- 状态：2026-11-13 候选修复完成；自动化通过，等待真实 RC003 长句与连续会话验收
 - 现场机器：当前 Mac，`/Applications/SayAll.app` `1.9.8 (131)`，Developer ID Team `L3QHLDRPAY`
 - 现场设置：豆包输入法、`voiceFnTapModeEnabled = false`、RC003、虚拟音频路线
 - 原始日志：`~/Library/Logs/RemoteMic/runtime.log`
@@ -84,3 +84,42 @@
 - `swift build -c release`：通过，Production 配置编译与链接完成。
 - 构建只出现仓库既有的 macOS 14 `onChange(of:perform:)` 弃用警告，与本次诊断日志无关。
 - 尚未用真实 RC003 制造并标记一次“最后词缺失”会话，因此当前状态仍是“诊断能力已补充，根因未确认，业务行为未修复”。
+
+## 2026-11-13 复测、根因与候选修复
+
+### 现场证据
+
+2026-11-13 的 24.421 秒 RC003 会话（`operation_id=9`，录音 `6f9940a9-bef7-4e3d-a322-7dce854b41e0`）再次复现：
+
+- 实际收到的音频为 23.280 秒、372480 个样本；按实时应有 1628 帧，实际 1552 帧，少 76 帧，即约 1.14 秒。
+- `decoded_samples=372480`、`routed_samples=372480`、`scheduled_samples=372480`、`played_samples=372480`；`interrupted_samples=0`、`pending_samples=0`、`enqueue_failures=0`。
+- `RECORDING ASSET` 的 `writer_submitted_samples=372480`，`writer_rejected_samples=0`。录音文件实际为 23.280 秒，和收到的音频完全一致。
+- `last_pcm_to_stop_ms=15`、`callbacks_after_stop=0`、`partial_frame_bytes=0`。停止后没有迟到音频。
+- 用户听到录音在 `1234` 后进入低电平停顿，`567` 不在录音中；因此不是回眸、ASR 或本地播放截断。
+
+这推翻了旧 H1 的“Fn 松开早于本地播放排空”作为本次主因；H5 的旧 flush/入队失败也被否定。缺口发生在 ATVV 解码之前。
+
+### 新根因假设
+
+RC003 每秒约产生 66.7 个音频通知。旧实现把这些通知的 CoreBluetooth 回调全部投到 `.main`；主线程忙于 SwiftUI、HID 和辅助功能时，回调队列无法及时排空，CoreBluetooth 接收缓冲积压并丢弃通知。主线程越忙、会话越长，累计丢失越多。这解释了用户观察到的“只有开着无线麦时越长越容易丢尾，第三方工具直接使用同一支遥控器时正常”。
+
+### 修复
+
+- CoreBluetooth 回调改用专用串行队列 `RemoteMic.bluetooth`。
+- 在回调线程上立即复制 `CBCharacteristic.value` 的 `Data`，再按顺序投递到主线程；业务状态仍只在主线程变更。
+- 中央管理器和外设代理的非音频回调统一经 `onMain` 回主线程，保持原有状态机串行性。
+- 新增 `BluetoothNotificationIngress`，把“回调队列接收”和“主线程投递”拆成可测试边界。
+- `ATVV AUDIO diagnostic` 的 `callback_queue` 改为 `bluetooth`，并记录 `callback_business_queue=main`。
+
+### 自动化验证
+
+- `BluetoothNotificationIngressTests`：3 项通过。核心用例在模拟主线程保持忙碌时输入 1628 个 120 字节通知，断言全部先被回调队列接收，释放主线程后顺序和字节内容不变。
+- 原 `ATVVAudioDiagnosticsTests` 的稳定基线测试已改为断言专用回调和回调线程复制；不再要求 `.main` 和延迟读取 `characteristic.value`。
+- `swift test --disable-keychain`：1397 项 / 103 套通过。
+- `SKIP_SWIFT_PACKAGE_BUILD=1 scripts/test.sh`：48 项通过。
+- `swift build --disable-keychain -c release`：通过。
+- 构建仅有仓库既有的 macOS 14 `onChange(of:perform:)` 弃用警告。
+
+### 验收边界
+
+自动化证明接收队列与主线程解耦、通知在投递前被复制且顺序保持，但不能模拟真实 CoreBluetooth 控制器缓冲、射频环境、真实 HID/SwiftUI 负载和第三方工具最终文字。仍需真实 RC003 完成：长会话尾字、首字延迟、连续会话、断连恢复，以及至少一次与旧实现对比的 20 秒以上标记会话。完成前保持候选状态，不放宽 `HardwareVoiceAudioContract` 的尾字门槛。

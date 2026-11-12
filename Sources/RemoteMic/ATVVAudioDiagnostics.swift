@@ -208,7 +208,7 @@ final class ATVVAudioDiagnostics {
         windowStartAt = startedAt
         observeMainQueue()
         log("ATVV AUDIO diagnostic operation_id=\(operationID) phase=started " +
-            "callback_queue=main callback_wait_ms=unknown transport_arrival=unknown stream_origin=\(origin) frame_samples=\(frameSamples)")
+            "callback_queue=bluetooth callback_business_queue=main callback_wait_ms=unknown transport_arrival=unknown stream_origin=\(origin) frame_samples=\(frameSamples)")
         observeSilence()
     }
 
