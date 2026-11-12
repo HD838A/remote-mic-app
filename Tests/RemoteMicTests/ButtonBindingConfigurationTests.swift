@@ -67,7 +67,7 @@ struct ButtonBindingConfigurationTests {
         #expect(!integration.supportsMappingProfileAutosave)
         #expect(integration.mappingProfiles(device: nil).isEmpty)
         #expect(integration.createMappingProfile(named: "Unavailable", copying: nil, bindings: [], holdModes: [:]) == nil)
-        if case .unavailable = integration.displayProfileBinding(profile: UUID(), button: .back, trigger: .singleClick) {} else { Issue.record("Missing component must be unavailable") }
+        if case .unavailable = integration.displayProfileBinding(device: nil, profile: UUID(), button: .back, trigger: .singleClick) {} else { Issue.record("Missing component must be unavailable") }
         #endif
     }
 
@@ -107,10 +107,10 @@ struct ButtonBindingConfigurationTests {
         #expect(matchesExplicitHold)
         integration.updateButtonProfilesAccess(.requiresPlus)
         #expect(integration.mappingProfiles(device: UUID()).contains { $0.id == id })
-        if case let .explicit(value) = integration.displayProfileBinding(profile: copy, button: .ok, trigger: .singleClick) {
+        if case let .explicit(value) = integration.displayProfileBinding(device: nil, profile: copy, button: .ok, trigger: .singleClick) {
             #expect(value.configured == .disabled)
         } else { Issue.record("Explicit disabled was lost") }
-        if case .inherited = integration.displayProfileBinding(profile: copy, button: .ok, trigger: .doubleClick) {} else { Issue.record("Inheritance was lost") }
+        if case .inherited = integration.displayProfileBinding(device: nil, profile: copy, button: .ok, trigger: .doubleClick) {} else { Issue.record("Inheritance was lost") }
         if case let .explicit(mode) = integration.displayProfileHoldMode(profile: copy, button: .ok) { #expect(mode == .once) }
         else { Issue.record("Hold was lost") }
         #expect(!integration.writeProfileBinding(nil, profile: copy, button: .ok, trigger: .singleClick, displayName: nil))
@@ -118,7 +118,30 @@ struct ButtonBindingConfigurationTests {
         integration.updateButtonProfilesAccess(.authorized)
         #expect(integration.writeProfileBinding(nil, profile: copy, button: .ok, trigger: .singleClick, displayName: nil))
         #expect(integration.reloadMappingProfiles())
-        if case .inherited = integration.displayProfileBinding(profile: copy, button: .ok, trigger: .singleClick) {} else { Issue.record("Clear did not persist") }
+        if case .inherited = integration.displayProfileBinding(device: nil, profile: copy, button: .ok, trigger: .singleClick) {} else { Issue.record("Clear did not persist") }
+    }
+    #endif
+
+    #if canImport(SayAllButtonProfiles) && SAYALL_UNIFIED_BUTTON_CONFIGURATION && !SAYALL_BUTTON_PROFILE_AUTOSAVE
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["SAYALL_MACRO_STORAGE_ROOT"] != nil))
+    @MainActor func legacyComponentKeepsProfileListVisibleAndReadOnly() throws {
+        // The binary integration runner supplies an isolated storage root.
+        _ = try #require(ProcessInfo.processInfo.environment["SAYALL_MACRO_STORAGE_ROOT"])
+        let integration = MacroFeatureIntegration(localeIdentifier: "en")
+        integration.updateButtonProfilesAccess(.allowed(validUntil: .distantFuture))
+        integration.prepareMappingDevice(nil)
+        let id = try #require(integration.createMappingProfile(named: "Legacy integration"))
+        integration.setProfileBinding(.disabled, profile: id, button: .ok, trigger: .singleClick, displayName: nil)
+        #expect(integration.mappingProfiles(device: nil).contains { $0.id == id })
+        guard case let .explicit(value) = integration.displayProfileBinding(device: nil, profile: id,
+            button: .ok, trigger: .singleClick) else {
+            Issue.record("Legacy explicit binding was not displayed")
+            return
+        }
+        #expect(value.configured == .disabled)
+        #expect(!value.isEditable)
+        if case .inherited = integration.displayProfileBinding(device: nil, profile: id,
+            button: .back, trigger: .singleClick) {} else { Issue.record("Legacy inheritance was not displayed") }
     }
     #endif
 

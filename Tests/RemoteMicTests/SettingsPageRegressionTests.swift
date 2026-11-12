@@ -861,6 +861,45 @@ struct SettingsPageRegressionTests {
         #expect(source.contains("macroFeature.isDefaultMappingProfile($0.id)"))
     }
 
+    @Test func mappingProfileListStaysVisibleWithoutAutosaveInterface() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+        let integrationSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/MacroFeatureIntegration.swift"),
+            encoding: .utf8
+        )
+
+        let toolbarStart = try #require(source.range(of: "private var mappingProfileToolbar"))
+        let canEditStart = try #require(source.range(
+            of: "private var canEditMappingProfiles",
+            range: toolbarStart.upperBound..<source.endIndex
+        ))
+        let selectorStart = try #require(source.range(
+            of: "private var mappingProfileSelector",
+            range: canEditStart.upperBound..<source.endIndex
+        ))
+        let baseHelper = try #require(source.range(
+            of: "private func baseMappingProfile",
+            range: selectorStart.upperBound..<source.endIndex
+        ))
+        let toolbarSource = source[toolbarStart.lowerBound..<canEditStart.lowerBound]
+        let selectorSource = source[selectorStart.lowerBound..<baseHelper.lowerBound]
+
+        // 方案列表与查看入口不能绑定到新版自动保存接口；旧构件只隐藏无法完成的创建/复制。
+        #expect(!toolbarSource.contains("supportsMappingProfileAutosave"))
+        #expect(source.contains("if macroFeature.isButtonProfilesVisible { mappingProfileToolbar }"))
+        #expect(selectorSource.contains("if macroFeature.supportsMappingProfileAutosave"))
+        #expect(selectorSource.contains("mappingSaveAsProfileButton"))
+        #expect(integrationSource.contains("buttonProfilesFeature.profiles(for: device)"))
+        #expect(integrationSource.contains("profileBinding(device: device, profile: profile"))
+    }
+
     @Test func remoteMappingScrollsResetWhenSwitchingProfilesAndConnectionPhotoFollowsModel() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

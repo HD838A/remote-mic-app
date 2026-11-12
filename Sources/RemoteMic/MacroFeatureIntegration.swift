@@ -165,6 +165,10 @@ final class MacroFeatureIntegration: ObservableObject {
     func mappingProfiles(device: UUID?) -> [ButtonMappingProfile] {
         #if canImport(SayAllButtonProfiles) && SAYALL_BUTTON_PROFILE_AUTOSAVE
         buttonProfilesFeature.displayProfiles().map { ButtonMappingProfile(id: $0.id, name: buttonProfilesFeature.profileDisplayName($0)) }
+        #elseif canImport(SayAllButtonProfiles) && SAYALL_UNIFIED_BUTTON_CONFIGURATION
+        // Older private components still expose the read-only profile list. Missing the
+        // autosave interface must not hide profiles that the component can display.
+        buttonProfilesFeature.profiles(for: device).map { ButtonMappingProfile(id: $0.id, name: buttonProfilesFeature.profileDisplayName($0)) }
         #else
         []
         #endif
@@ -188,7 +192,8 @@ final class MacroFeatureIntegration: ObservableObject {
         #endif
     }
 
-    func displayProfileBinding(profile: UUID, button: RemoteButton, trigger: ButtonTrigger) -> MappingDisplayValue<MappingBindingDisplay> {
+    func displayProfileBinding(device: UUID?, profile: UUID, button: RemoteButton,
+                               trigger: ButtonTrigger) -> MappingDisplayValue<MappingBindingDisplay> {
         #if canImport(SayAllButtonProfiles) && SAYALL_BUTTON_PROFILE_AUTOSAVE
         switch buttonProfilesFeature.displayBinding(profile: profile, button: button.rawValue, trigger: trigger.rawValue) {
         case .inherited: return .inherited
@@ -212,6 +217,15 @@ final class MacroFeatureIntegration: ObservableObject {
             return .explicit(.init(configured: configured, compact: text.text.compact,
                 detailed: text.text.detailed, isEditable: editable))
         }
+        #elseif canImport(SayAllButtonProfiles) && SAYALL_UNIFIED_BUTTON_CONFIGURATION
+        // Older private components have no autosave display interface. They can still show
+        // the values read-only; direct editing and creation stay unavailable.
+        guard let configured = profileBinding(device: device, profile: profile, button: button, trigger: trigger) else {
+            return .inherited
+        }
+        let text = profileBindingText(device: device, profile: profile, button: button, trigger: trigger)
+        return .explicit(.init(configured: configured, compact: text?.compact ?? "",
+            detailed: text?.detailed ?? "", isEditable: false))
         #else
         return .unavailable
         #endif
@@ -224,6 +238,11 @@ final class MacroFeatureIntegration: ObservableObject {
         case .inherited: return .inherited
         case .unavailable: return .unavailable
         }
+        #elseif canImport(SayAllButtonProfiles) && SAYALL_BUTTON_HOLD_MODES
+        guard let raw = profileHoldMode(profile: profile, button: button) else {
+            return .inherited
+        }
+        return RemoteButtonHoldMode(rawValue: raw).map { .explicit($0) } ?? .unavailable
         #else
         return .unavailable
         #endif

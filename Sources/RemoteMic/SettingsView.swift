@@ -2130,7 +2130,8 @@ struct SettingsView: View {
             return .explicit(.init(configured: settings.configuredBaseAction(for: button, trigger: trigger),
                 compact: "", detailed: "", isEditable: false))
         }
-        return macroFeature.displayProfileBinding(profile: profile, button: button, trigger: trigger)
+        return macroFeature.displayProfileBinding(device: settings.selectedRemoteProfileID,
+            profile: profile, button: button, trigger: trigger)
     }
 
     private func mappingConfiguration(for button: RemoteButton, trigger: ButtonTrigger) -> ConfiguredButtonAction {
@@ -2366,16 +2367,14 @@ struct SettingsView: View {
         AppLogger.shared.write("BUTTON CONFIGURATION operation_id=\(operationID) action=\(operation) phase=completed result=\(created == nil ? "failed" : "stored") reason=\(created != nil ? "storage_confirmed" : recovered ? "storage_failed" : "reload_failed")")
     }
 
-    /// Profile capsules and create/copy entry stay fixed above the mapping canvas.
+    /// Profile capsules stay fixed above the mapping canvas. Create/copy joins the row only
+    /// when the private component can complete the autosave-backed flow.
     private var mappingProfileToolbar: some View {
         VStack(spacing: 0) {
-            if macroFeature.supportsMappingProfileAutosave {
-                mappingProfileSelector
-                    .padding(.horizontal, 22)
-                    .padding(.top, 8)
-                    .padding(.bottom, 5)
-            }
-
+            mappingProfileSelector
+                .padding(.horizontal, 22)
+                .padding(.top, 8)
+                .padding(.bottom, 5)
         }
         .background(Color(nsColor: .controlBackgroundColor))
         // 内容滚到工具行下面后，只在下边缘投影，明确「上面这条是固定的」。
@@ -2423,7 +2422,8 @@ struct SettingsView: View {
 
     private var isMappingProfilePreviewOnly: Bool {
         guard let profile = editingMappingProfileID else { return false }
-        return !canEditMappingProfiles || !macroFeature.isMappingProfileEditable(profile)
+        return !macroFeature.supportsMappingProfileAutosave || !canEditMappingProfiles
+            || !macroFeature.isMappingProfileEditable(profile)
     }
 
     private func clearMappingSaveFeedback() {
@@ -2470,7 +2470,7 @@ struct SettingsView: View {
                 .padding(.vertical, 2)
             }
 
-            if macroFeature.isButtonProfilesVisible {
+            if macroFeature.supportsMappingProfileAutosave {
                 mappingSaveAsProfileButton.disabled(!canEditMappingProfiles)
             }
         }
@@ -2737,7 +2737,7 @@ struct SettingsView: View {
             // 上下留白都在滚动区域之外，滚动时不会塌掉。
             // 画布第一张卡片自带约 6.5pt 内部留白，所以静止时下侧会比纯 padding 多这一段：
             // 上 8pt、下 5pt 是让「静止」和「滚动中」两种状态都尽量接近 10pt 的取值。
-            mappingProfileToolbar
+            if macroFeature.isButtonProfilesVisible { mappingProfileToolbar }
 
             ScrollViewReader { proxy in
                 Group {
