@@ -135,21 +135,19 @@ Development verification:
 
     ./scripts/test.sh
     swift test --disable-keychain
-    ./scripts/build-app.sh
-    ./scripts/verify-app.sh
+    SAYALL_PRIVATE_PLATFORM_MODE=public ./scripts/package-local-test-app.sh
 
 `scripts/test.sh` runs protocol and policy self-tests and compiles the full app. Swift Testing covers ATVV, Bluetooth lifecycle, audio-device policy, button mapping, permissions, configuration compatibility, Fn mapping, the Typeless session lifecycle, pre-roll, audio draining, and test-tone behavior.
 
-The default checkout is the complete public build path. `Package.swift` does not resolve private dependencies, so contributors with public-repository access only can run the tests above, produce `dist/SayAll.app`, and launch the public functionality. Official CI runs that public path first. Private CI enables `SAYALL_ENABLE_PRIVATE_SWIFTPM=1`, loads the unified-version private platform root package, and loads the private AI package separately. Private source is resolved only in private checkouts and protected builds. Public source repositories and public artifacts contain no private source. Paid button profiles are enabled only by the private build switch. Protected release builds consume verified private binary artifacts.
+The default checkout is the complete public build path. `Package.swift` does not resolve private dependencies, so contributors with public-repository access only can run the tests above, use the unified packager to install `~/Applications/SayAll.app`, increment the local build number, and launch public functionality. Public development builds support local ad-hoc or Developer ID signing and record `SayAllBuildChannel=public`. With no private inputs, the default mode is public. Existing calls with private inputs retain the `required` integration mode, pinned private artifacts, and Developer ID signing. Assets distributed to others follow the signing and notarization gates in `RELEASING.md`. Official CI runs that public path first. Private CI enables `SAYALL_ENABLE_PRIVATE_SWIFTPM=1`, loads the unified-version private platform root package, and loads the private AI package separately. Private source is resolved only in private checkouts and protected builds. Public source repositories and public artifacts contain no private source. Paid button profiles are enabled only by the private build switch. Protected release builds consume verified private binary artifacts.
 
 Common Phrases and Siri Remote support require membership. The private membership package provides Common Phrases; `canUseCommonPhrases` controls access. Siri Remote requires its optional PKG component, valid membership access, and user activation in the app. A successful public build, private package integration, or component installation does not grant membership access.
 
 Build and launch:
 
-    ./script/build_and_run.sh
-    ./script/build_and_run.sh --verify
+    SAYALL_PRIVATE_PLATFORM_MODE=public ./scripts/package-local-test-app.sh
 
---verify builds, launches, and confirms that the RemoteMic process exists. It is not hardware acceptance for the remote or a real voice path.
+Set `SAYALL_LOCAL_DEFER_LAUNCH=1` to build and install without launching. CI uses the same packager with an isolated target, launches the resulting app, and checks its process. Hardware and voice acceptance require separate real-device evidence.
 
 ## Release artifacts
 
