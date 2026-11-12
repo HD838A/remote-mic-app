@@ -2,7 +2,7 @@
 
 ## 适用范围
 
-- 分支：`fix/bug-mac-sleep-audio-20260818`
+- 分支：包含本手册对应修复的 `main` 或候选分支；2026-11-12 的持续空闲门禁候选为 `codex/fix-idle-audio-recovery`
 - 平台：macOS
 - 音频设备：优先使用 `MiRemoteV 2ch`，并至少回归一个其他可写入的虚拟音频设备
 - 遥控器：RC003；如有 RC001，同步执行基础休眠与唤醒用例
@@ -52,15 +52,19 @@
 
 1. 保持屏幕亮起且遥控器 ready，完成一次正常语音，确认文字上屏。
 2. 停止一切操作，保持 App 运行，不要切到“不输出语音”，也不要退出 App，等待 10 分钟。
-3. 10 分钟到点后立即保存一次 `pmset -g assertions`。
-4. 不做任何手动操作，直接按住语音键说一句话，再等五秒说第二句话。
+3. 10 分钟到点后立即保存一次 `pmset -g assertions`，继续观察至少三分钟，确认没有语音时不会重新占用。
+4. 在音频已空闲释放时，分别切换系统默认输出再切回、锁屏后解锁、等待遥控器重新 ready。每个状态单独记录时间与断言。预期仍保持释放，下一次真实语音才恢复输出。
+5. 直接按住语音键说一句话，再等五秒说第二句话。另覆盖一次出口重建完成前已松键的极速短句。
+6. 再次等待空闲释放，分别点击测试音、明确重试音频设置。两项操作单独验证，确认可以恢复输出；将输出改为“不输出语音”后，后台事件不得重新选择旧设备。
 
 ### 预期日志顺序
 
 1. `AUDIO IDLE release_due delay_s=600 ready_bridges=1 state={...}`（没有任何语音、测试音或系统挂起事件）
 2. `AUDIO RELEASE requested reason=idle_timeout ...`
 3. `AUDIO RELEASE completed reason=idle_timeout ... engine_running=false`；如默认输入原为虚拟设备，同时出现 `AUDIO DEFAULT_INPUT fallback_applied`
-4. 第 4 步首次按键时出现 `AUDIO REBIND begin reason=mobile_voice_start`（或等价语音重建原因）与 `AUDIO READY`，随后 `MOBILE VOICE flush_after_configuration` 冲刷重建期间的缓冲音频
+4. 空闲释放后的后台事件出现 `idle_released=true` 与 `virtual_audio_inactive`、`resume_skipped`、`activation_ignored` 或连接预热延期记录，不再出现新的 `AUDIO REBIND begin`
+5. 第 5 步首次按键时出现 `AUDIO IDLE phase=activation_requested`、`AUDIO REBIND begin reason=bluetooth_voice_start`（或对应来源的语音重建原因）与 `AUDIO READY`；配置期间收到的 PCM 按序重放，松键后自然排空
+6. 已排期恢复在空闲释放后执行时，以同一 `operation_id` 的 `phase=completed result=ignored decision=virtual_audio_inactive` 结束；实际语音配置失败仍记录失败与后续恢复结果
 
 预期系统结果：10 分钟空闲后 `pmset -g assertions` 中不再有该 App 的 `MiRemoteV2ch_UID` 条目；首次按键靠重建恢复，两次语音都完整、不丢首字。
 
@@ -68,8 +72,10 @@
 
 - 空闲已超过 10 分钟仍无 `AUDIO IDLE release_due`，或出现 `AUDIO RELEASE skipped ... still_required=true` 但当时没有任何语音、测试音或系统挂起；
 - 请求了释放但没有 `completed`/`cancelled` 结果，或引擎仍为 running；
+- 释放后三分钟内，后台硬件变化、系统恢复或连接就绪在没有音频需求时重新占用输出；
 - 正在语音、测试音、Mac 麦克风采集或系统挂起期间被 `idle_timeout` 释放；
 - 超时释放后首次按键无声、丢首字、尾字被截断，或必须手动重新选择音频设备。
+- 测试音或用户明确重试无法解除空闲门禁，配置失败后被旧空闲状态永久锁住。
 
 ## 用例三：唤醒后自动恢复且第一次语音可用
 
@@ -77,7 +83,7 @@
 2. 不进入设置页、不重新选择音频设备，立即按住语音键说一句话。
 3. 再等待五秒并说第二句话。
 
-预期：系统事件可能先后出现 `screen_did_wake`、`system_did_wake` 和 `session_did_become_active`；存在其他暂停原因时日志记录 `resume_deferred`，最后一个原因解除后记录 `AUDIO REBIND` 与 `SYSTEM AUDIO resume_completed configured=true`。如果唤醒发生在旧释放排空完成前，应出现带 `trigger=resume_...` 或 `trigger=bluetooth_voice_start` 的 `AUDIO RELEASE cancelled`。两次语音均正常，第一次不丢首字。
+预期：系统事件可能先后出现 `screen_did_wake`、`system_did_wake` 和 `session_did_become_active`；存在其他暂停原因时日志记录 `resume_deferred`。普通系统挂起释放在最后一个原因解除后恢复输出；如果挂起前已因空闲释放，则记录 `resume_skipped ... idle_released=true`，第一次真实语音才解除空闲门禁。如果恢复请求发生在旧释放排空完成前，应出现带恢复或语音触发原因的 `AUDIO RELEASE cancelled`。两次语音均正常，第一次不丢首字。
 
 失败判定：唤醒后必须手动重新选择设备、第一次语音无声或丢首字、恢复发生在会话仍锁定时，或恢复失败但日志没有具体原因和音频状态。
 
@@ -174,6 +180,7 @@
 
 ## 验证边界
 
+- 2026-11-12 持续空闲门禁候选的自动化与现场结果见 [独立 Bug 记录](../Bugs/2026-11-12-idle-audio-recovery-reopens-output.md)。本次现场用例尚未执行，既有休眠结果不能替代本次首字、尾字和无回占验收。
 - 自动化可以证明生命周期策略、重叠事件状态、活跃语音保护和原有蓝牙/Fn 会话基线。
 - Release 构建只能证明代码可编译和组装。
 - 只有真实 macOS 电源管理、真实 MiRemoteV 2ch、真实遥控器和 `pmset` 才能证明 CoreAudio 断言确实消失并且 Mac 能进入自动休眠。

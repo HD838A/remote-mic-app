@@ -1,5 +1,7 @@
 # Bug 记录
 
+- [空闲释放后后台恢复重新占用虚拟音频](./2026-11-12-idle-audio-recovery-reopens-output.md)
+
 - [输入组合动作名称时的 Caps Lock 崩溃](./2026-11-12-caps-lock-event-tap-crash.html)
 
 - [语音键与豆包绑定不是同一个键时只有电平、没有文字](./2026-11-11-voice-key-binding-mismatch.md)

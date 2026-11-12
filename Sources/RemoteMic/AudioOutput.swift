@@ -660,6 +660,21 @@ struct SystemAudioSuspensionState {
     }
 }
 
+/// 进程内的空闲门禁。连接、设备变化与系统唤醒不能代替真实音频需求。
+struct VirtualAudioIdleReleaseState {
+    private(set) var isReleased = false
+
+    mutating func release() {
+        isReleased = true
+    }
+
+    mutating func requestActivation(hasDemand: Bool) -> Bool {
+        guard !isReleased || hasDemand else { return false }
+        isReleased = false
+        return true
+    }
+}
+
 enum VirtualAudioConnectionLifecyclePolicy {
     static func shouldBeActive(
         readyBluetoothBridgeCount: Int,
