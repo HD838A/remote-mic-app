@@ -70,7 +70,7 @@ if [[ -n "$base_ref" && "$base_ref" != 0000000000000000000000000000000000000000 
     while IFS= read -r path; do
       [[ -n "$path" ]] || continue
       case "$path" in
-        AGENTS.md|BRANCH_MANAGEMENT.md|DOCUMENTATION.md|FEATURE_DEVELOPMENT.md|FILE_NAMING.md|LOGGING.md|RELEASING.md|README.md|design-qa.md|design-qa.en.md|Bugs/README.md|Testing/*.md|feature/*/PRODUCT_SPEC.md|feature/*/platform-*.md|feature/*/testing.md|.github/PULL_REQUEST_TEMPLATE.md|.github/workflows/repository-governance.yml|scripts/verify-repository-governance.sh)
+        AGENTS.md|BRANCH_MANAGEMENT.md|DOCUMENTATION.md|TECHNICAL.md|TECHNICAL.en.md|FEATURE_DEVELOPMENT.md|FILE_NAMING.md|LOGGING.md|RELEASING.md|README.md|design-qa.md|design-qa.en.md|Bugs/README.md|Testing/*.md|feature/*/PRODUCT_SPEC.md|feature/*/platform-*.md|feature/*/testing.md|.github/PULL_REQUEST_TEMPLATE.md|.github/workflows/repository-governance.yml|scripts/verify-repository-governance.sh)
           ;;
         *)
           scope_violation=true
@@ -138,6 +138,10 @@ policies = {
         "G-DOC.entry": "DOCUMENTATION.md", "G-DOC.authority": "chinese",
         "G-TOOL.temporary": "forbidden", "G-TOOL.testing-executable": "forbidden",
         "G-TOOL.permanent-helper": "declared-purpose",
+        "G-LOCAL.public": "developer-self-use",
+        "G-LOCAL.public-signing": "ad-hoc-or-developer-id",
+        "G-LOCAL.integrated": "private-required",
+        "G-LOCAL.distribution": "release-trust",
         "G-EVIDENCE.screenshots": "pr-attachment-or-persistent-link",
         "G-EVIDENCE.design-drafts": "external-with-index",
         "G-EVIDENCE.index": "manifest-json",

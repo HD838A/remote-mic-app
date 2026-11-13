@@ -126,6 +126,26 @@ enum SettingsScreenshotRenderer {
         if showsGestureTiming, let profileID = settings.selectedRemoteProfileID {
             settings.updateRemoteProfileModel(profileID, model: .rc003)
         }
+        if ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_SETTINGS_SCREENSHOT_APPLICATIONS_FIXTURE"
+        ] == "1" {
+            // 空路径和旧机器路径都要能显示本机 App 图标，供「APP 适配」页取证。
+            settings.addCustomApplicationProfile(CustomApplicationProfile(
+                displayName: language == .english ? "Notes" : "备忘录",
+                bundleIdentifier: "com.apple.Notes",
+                applicationPath: ""
+            ))
+            settings.addCustomApplicationProfile(CustomApplicationProfile(
+                displayName: "Safari",
+                bundleIdentifier: "com.apple.Safari",
+                applicationPath: "/Applications/Does Not Exist.app"
+            ))
+            settings.addCustomApplicationProfile(CustomApplicationProfile(
+                displayName: "Finder",
+                bundleIdentifier: "com.apple.finder",
+                applicationPath: "/Applications/Does Not Exist.app"
+            ))
+        }
         if ProcessInfo.processInfo.environment["REMOTE_MIC_SETTINGS_SCREENSHOT_MISSING_ROUTINE"] == "1" {
             // Isolated upgrade fixture for the production cleanup page.
             let missing = ConfiguredButtonAction(action: .combinationAction, shortcut: nil,
@@ -264,6 +284,11 @@ enum SettingsScreenshotRenderer {
         model.privateFeature.updateLocaleIdentifier(localization.locale.identifier)
         model.macroFeature.updateLocaleIdentifier(localization.locale.identifier)
         model.macroFeature.loadProfilesForScreenshot()
+        switch ProcessInfo.processInfo.environment["REMOTE_MIC_SETTINGS_SCREENSHOT_MAPPING_ACCESS"] {
+        case "authorized": model.macroFeature.updateButtonProfilesAccess(.authorized)
+        case "requiresPlus": model.macroFeature.updateButtonProfilesAccess(.requiresPlus)
+        default: break
+        }
         var seededProfileID: UUID? = ProcessInfo.processInfo.environment[
             "REMOTE_MIC_SETTINGS_SCREENSHOT_PROFILE"
         ].flatMap { name in

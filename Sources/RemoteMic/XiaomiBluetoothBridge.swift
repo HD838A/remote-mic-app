@@ -108,6 +108,11 @@ enum BluetoothBatteryPollingPolicy {
     }
 }
 
+enum BluetoothVoiceStopReason: String {
+    case remoteRelease = "remote_release"
+    case remoteTimeout = "remote_timeout"
+}
+
 final class XiaomiBluetoothBridge: NSObject {
     private static let defaultCapabilities = ATVVCapabilities(
         version: 0x0100,
@@ -121,6 +126,7 @@ final class XiaomiBluetoothBridge: NSObject {
     private weak var delegate: XiaomiBluetoothBridgeDelegate?
     private let targetIdentifier: UUID?
     private let excludedIdentifiers: () -> Set<UUID>
+    private(set) var lastVoiceStopReason: BluetoothVoiceStopReason?
     /// 已被判定为「别的产品」的标识；本桥此后一律不再连接，也不再走扫描回退。
     private var rejectedIdentifiers = Set<UUID>()
     private var central: CBCentralManager?
@@ -417,23 +423,6 @@ final class XiaomiBluetoothBridge: NSObject {
         cancelledMicrophoneOpenAt = nil
         microphoneOpened = true
         AppLogger.shared.write("ATVV MIC_OPEN host_request")
-        return true
-    }
-
-    @discardableResult
-    func requestMicrophoneExtend() -> Bool {
-        guard microphoneOpened,
-              streaming,
-              let command = ATVVProtocol.microphoneExtend(
-                  version: capabilities.version,
-                  sessionID: sessionID
-              ),
-              write(command)
-        else {
-            AppLogger.shared.write("ATVV MIC_EXTEND rejected session=\(sessionID)")
-            return false
-        }
-        AppLogger.shared.write("ATVV MIC_EXTEND request session=\(sessionID)")
         return true
     }
 
@@ -1023,7 +1012,7 @@ final class XiaomiBluetoothBridge: NSObject {
         case 0x00:
             guard lifecycle.acceptsProtocolData(generation: generation) else { return }
             audioDiagnostics?.control(.stop, at: controlAt)
-            stopStreaming()
+            stopStreaming(reason: Self.voiceStopReason(for: bytes))
         case 0x0A:
             guard lifecycle.acceptsProtocolData(generation: generation) else { return }
             guard bytes.count >= 7 else { return }
@@ -1075,8 +1064,9 @@ final class XiaomiBluetoothBridge: NSObject {
         AppLogger.shared.write("ATVV STREAM START session=\(sessionID)")
     }
 
-    private func stopStreaming() {
+    private func stopStreaming(reason: BluetoothVoiceStopReason = .remoteRelease) {
         guard streaming else { return }
+        lastVoiceStopReason = reason
         streaming = false
         audioDiagnostics?.stop(reason: "remote_stop")
         microphoneOpened = false
@@ -1086,9 +1076,15 @@ final class XiaomiBluetoothBridge: NSObject {
         pendingSync = nil
         lastStopAt = Date()
         AppLogger.shared.write(
-            "ATVV STREAM STOP session=\(sessionID) partial_frame_bytes=\(partialFrameBytes)"
+            "ATVV STREAM STOP session=\(sessionID) reason=\(reason.rawValue) " +
+                "partial_frame_bytes=\(partialFrameBytes)"
         )
         delegate?.bluetoothBridgeDidStopVoice(self)
+    }
+
+    static func voiceStopReason(for bytes: [UInt8]) -> BluetoothVoiceStopReason {
+        guard bytes.count >= 2 else { return .remoteRelease }
+        return bytes[1] == 0x08 ? .remoteTimeout : .remoteRelease
     }
 
     private func handleAudio(_ data: Data) {

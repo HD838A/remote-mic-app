@@ -303,6 +303,22 @@ enum BluetoothVoiceStopPolicy {
     static func shouldFlushAudio(handledByFnTapMode _: Bool) -> Bool {
         false
     }
+
+    /// The remote's 60-second timeout is not a physical Fn release: the target
+    /// voice tool can remain in its hold-to-dictate state. Force one software
+    /// Fn up only for that timeout, and only when the hardware-mapped key is not
+    /// already managed by the software latch or the Fn-tap session.
+    static func shouldForceHardwareVoiceKeyRelease(
+        mode: VoiceKeyMode,
+        fnTapEnabled: Bool,
+        isHeldByLatch: Bool,
+        reason: BluetoothVoiceStopReason?
+    ) -> Bool {
+        !fnTapEnabled &&
+            !isHeldByLatch &&
+            mode.usesHardwareMapping &&
+            reason == .remoteTimeout
+    }
 }
 
 enum VoiceKeyPendingDownPolicy {
@@ -511,9 +527,6 @@ enum VoiceKeyCompatibilityWarning: Equatable {
 final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDelegate, AVAudioPlayerDelegate {
     private static let longRecordingOpenTimeout: TimeInterval = 5
     private static let longRecordingCloseTimeout: TimeInterval = 2
-    private static let rc003VoiceExtensionOpenTimeout: TimeInterval = 5
-    private static let rc003VoiceExtensionInterval: TimeInterval = 8
-    private static let rc003VoiceExtensionMaximumDuration: TimeInterval = 120
 
     let settings: AppSettings
     let privateFeature: PrivateFeatureIntegration
@@ -806,15 +819,6 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     private var longRecordingGeneration: UInt64 = 0
     private var longRecordingOpenTimer: DispatchSourceTimer?
     private var longRecordingCloseTimer: DispatchSourceTimer?
-    private let rc003VoiceExtensionTestEnabled: Bool
-    private weak var rc003VoiceExtensionBridge: XiaomiBluetoothBridge?
-    private var rc003VoiceExtensionActive = false
-    private var rc003VoiceExtensionAwaitingReopen = false
-    private var rc003VoiceExtensionGeneration: UInt64 = 0
-    private var rc003VoiceExtensionDidReceiveAudio = false
-    private var rc003VoiceExtensionTimer: DispatchSourceTimer?
-    private var rc003VoiceExtensionOpenTimer: DispatchSourceTimer?
-    private var rc003VoiceExtensionDeadlineTimer: DispatchSourceTimer?
     private var phoneApprovalAlert: NSAlert?
     private var webApprovalAlert: NSAlert?
     private var webRemoteSessionGeneration: UInt64 = 0
@@ -1007,10 +1011,6 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         self?.scheduleAudioRecovery(reason: "hardware_change", details: "properties=\(properties)")
     }
 
-    var isRC003VoiceExtensionTestEnabled: Bool {
-        rc003VoiceExtensionTestEnabled
-    }
-
     init(
         settings: AppSettings = AppSettings(),
         initialAudioDevices: [AudioDeviceInfo] = [],
@@ -1019,9 +1019,6 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         membershipFeature: MembershipFeatureIntegration = MembershipFeatureIntegration(),
         loginItemService: LoginItemService = LoginItemService(),
         transcriptArchiveStore: TranscriptArchiveStore = TranscriptArchiveStore(),
-        rc003VoiceExtensionTestEnabled: Bool =
-            ProcessInfo.processInfo.arguments.contains("--rc003-voice-extension-test") ||
-            (Bundle.main.object(forInfoDictionaryKey: "RC003VoiceExtensionTestEnabled") as? Bool == true),
         recordingAssetStore: RecordingAssetStore = RecordingAssetStore(),
         diagnosticLogUploader: DiagnosticLogUploader = .shared
     ) {
@@ -1031,7 +1028,6 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         self.membershipFeature = membershipFeature
         self.loginItemService = loginItemService
         self.transcriptArchiveStore = transcriptArchiveStore
-        self.rc003VoiceExtensionTestEnabled = rc003VoiceExtensionTestEnabled
         self.recordingAssetStore = recordingAssetStore
         self.diagnosticLogUploader = diagnosticLogUploader
         super.init()
@@ -1539,9 +1535,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         let version = Bundle.main.object(
             forInfoDictionaryKey: "CFBundleShortVersionString"
         ) as? String ?? "development"
-        AppLogger.shared.write(
-            "APP START version=\(version) rc003_test=\(rc003VoiceExtensionTestEnabled)"
-        )
+        AppLogger.shared.write("APP START version=\(version)")
     }
 
     func stop() {
@@ -1582,7 +1576,6 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             logReason: "app_stop"
         )
         stopLongRecording(reason: "app_stop")
-        finishRC003VoiceExtensionTest(reason: "app_stop")
         voiceInputDestinationCoordinator.shutdown()
         voiceFnTapSession.shutdown()
         bluetoothBridges.values.forEach { $0.stop() }
@@ -6473,11 +6466,6 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             }
             let voiceWasActive = identifier == activeBluetoothVoiceDeviceIdentifier
             if voiceWasActive {
-                if rc003VoiceExtensionTestEnabled,
-                   rc003VoiceExtensionActive,
-                   rc003VoiceExtensionBridge === bridge {
-                    finishRC003VoiceExtensionTest(reason: "bluetooth_not_ready")
-                }
                 cancelVoiceSessionWarningTracking()
                 bluetoothVoiceActive = false
                 activeBluetoothVoiceDeviceIdentifier = nil
@@ -6559,10 +6547,17 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             )
             return
         }
-        let isRC003Continuation = rc003VoiceExtensionTestEnabled &&
-            rc003VoiceExtensionActive &&
-            rc003VoiceExtensionAwaitingReopen &&
-            rc003VoiceExtensionBridge === bridge
+        if voiceKeyLatch.isHeld {
+            // The previous stop may still be waiting for the audio tail to
+            // drain. A new session owns the key now, so release the stale
+            // software hold before beginning the fresh press.
+            _ = releaseVoiceKeyIfNeeded(
+                owner: .bluetooth,
+                forceSoftware: false,
+                audioDiagnostic: bridge.audioDiagnostics
+            )
+            AppLogger.shared.write("VOICE KEY stale_release reason=new_bluetooth_session")
+        }
         let profileID = activateRemoteProfile(for: bridge)
         if let activeBluetoothVoiceDeviceIdentifier,
            activeBluetoothVoiceDeviceIdentifier != identifier {
@@ -6696,31 +6691,8 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             longRecordingOpenTimer = nil
             AppLogger.shared.write("LONG RECORDING started")
         }
-        if isRC003Continuation {
-            rc003VoiceExtensionAwaitingReopen = false
-            rc003VoiceExtensionDidReceiveAudio = false
-            rc003VoiceExtensionOpenTimer?.cancel()
-            rc003VoiceExtensionOpenTimer = nil
-            AppLogger.shared.write(
-                "RC003 EXTENSION physical_segment_reopened trace=\(activeBluetoothVoiceTraceID ?? 0)"
-            )
-        } else {
-            _ = voiceFnTapSession.startVoice()
-            beginVoiceSessionIfNeeded(audioDiagnosticOperationID: bridge.audioDiagnostics?.operationID)
-            if rc003VoiceExtensionTestEnabled {
-                rc003VoiceExtensionActive = true
-                rc003VoiceExtensionAwaitingReopen = false
-                rc003VoiceExtensionDidReceiveAudio = false
-                rc003VoiceExtensionBridge = bridge
-                rc003VoiceExtensionGeneration &+= 1
-                scheduleRC003VoiceExtensionDeadline(
-                    generation: rc003VoiceExtensionGeneration
-                )
-                AppLogger.shared.write(
-                    "RC003 EXTENSION test_started max_duration_s=\(Int(Self.rc003VoiceExtensionMaximumDuration))"
-                )
-            }
-        }
+        _ = voiceFnTapSession.startVoice()
+        beginVoiceSessionIfNeeded(audioDiagnosticOperationID: bridge.audioDiagnostics?.operationID)
         if !outputReadyAtStart {
             let configurationDiagnostic = bridge.audioDiagnostics
             AppLogger.shared.write(
@@ -6828,30 +6800,17 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             return
         }
         guard identifier == activeBluetoothVoiceDeviceIdentifier else { return }
-        if rc003VoiceExtensionTestEnabled,
-           rc003VoiceExtensionActive,
-           rc003VoiceExtensionBridge === bridge {
-            cancelVoiceSessionWarningTracking()
-            bluetoothVoiceActive = false
-            loggedBluetoothVoiceAudioDeviceIdentifier = nil
-            rc003VoiceExtensionAwaitingReopen = true
-            rc003VoiceExtensionDidReceiveAudio = false
-            rc003VoiceExtensionTimer?.cancel()
-            rc003VoiceExtensionTimer = nil
-            rc003VoiceExtensionGeneration &+= 1
-            let opened = bridge.requestMicrophoneOpen()
-            if opened {
-                scheduleRC003VoiceExtensionOpenTimeout(
-                    generation: rc003VoiceExtensionGeneration
-                )
-            } else {
-                finishRC003VoiceExtensionTest(reason: "reopen_rejected")
-            }
-            AppLogger.shared.write(
-                "RC003 EXTENSION physical_stop reopen_requested=\(opened) " +
-                    "generation=\(rc003VoiceExtensionGeneration)"
+        let voiceKeyMode = heldVoiceKeyMode ?? pendingVoiceKeyMode ?? settings.voiceKeyMode
+        if BluetoothVoiceStopPolicy.shouldForceHardwareVoiceKeyRelease(
+            mode: voiceKeyMode,
+            fnTapEnabled: settings.voiceFnTapModeEnabled,
+            isHeldByLatch: voiceKeyLatch.isHeld,
+            reason: bridge.lastVoiceStopReason
+        ) {
+            forceHardwareVoiceKeyRelease(
+                mode: voiceKeyMode,
+                audioDiagnostic: bridge.audioDiagnostics
             )
-            return
         }
         activeBluetoothVoiceDeviceIdentifier = nil
         loggedBluetoothVoiceAudioDeviceIdentifier = nil
@@ -6860,7 +6819,6 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         pendingBluetoothVoiceStartIdentifier = nil
         cancelPendingBluetoothVoiceAudio(reason: "remote_stop")
         pendingBluetoothVoiceStopRequested = false
-        releaseVoiceKeyIfNeeded(owner: .bluetooth, forceSoftware: false, audioDiagnostic: bridge.audioDiagnostics)
         cancelPendingCommandVoiceAudio(reason: "remote_stop")
         if longRecordingRequested {
             finishLongRecording(reason: "remote_stop")
@@ -6922,6 +6880,28 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         audioOutput.logWhenPendingVoiceAudioDrains(
             context: "trace=\(traceID) model=\(bluetoothVoiceTraceModel.rawValue)"
         )
+        // Keep the voice key held until the already queued tail has actually
+        // reached the virtual microphone. This mirrors the Apple Remote and
+        // Chromecast stop paths; flush is still false, so pending audio is
+        // preserved rather than discarded.
+        audioOutput.endSessionAfterDraining(
+            source: "bluetooth_voice_stop",
+            operationID: UInt64(traceID),
+            maximumDelay: nil
+        ) { [weak self, weak bridge] outcome in
+            guard let self,
+                  self.activeBluetoothVoiceDeviceIdentifier == nil,
+                  !self.bluetoothVoiceActive
+            else { return }
+            self.releaseVoiceKeyIfNeeded(
+                owner: .bluetooth,
+                forceSoftware: false,
+                audioDiagnostic: bridge?.audioDiagnostics
+            )
+            AppLogger.shared.write(
+                "VOICE KEY tail_release trace=\(traceID) completion=\(outcome.rawValue)"
+            )
+        }
         let delivery = voiceAudioDeliveryDiagnosticSnapshot()
         let publicVoiceResult: (phase: String, result: String, reason: String) =
             bluetoothVoiceDecodedSampleCount == 0
@@ -7069,18 +7049,6 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
                     "model=\(model.rawValue) route=\(bluetoothVoiceTraceRoute) " +
                     "accepted=\(enqueued) first_batch_samples=\(samples.count) " +
                     "pending_buffers=\(audioOutput.pendingVoiceBufferCountForDiagnostics)"
-            )
-        }
-        if rc003VoiceExtensionTestEnabled,
-           rc003VoiceExtensionActive,
-           rc003VoiceExtensionBridge === bridge,
-           !rc003VoiceExtensionAwaitingReopen,
-           !rc003VoiceExtensionDidReceiveAudio {
-            rc003VoiceExtensionDidReceiveAudio = true
-            startRC003VoiceExtensionTimer()
-            AppLogger.shared.write(
-                "RC003 EXTENSION AUDIO_READY session_segment=\(activeBluetoothVoiceTraceID ?? 0) " +
-                    "samples=\(samples.count)"
             )
         }
     }
@@ -7870,99 +7838,6 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         longRecordingOpenTimer = nil
         longRecordingCloseTimer?.cancel()
         longRecordingCloseTimer = nil
-    }
-
-    private func scheduleRC003VoiceExtensionOpenTimeout(generation: UInt64) {
-        rc003VoiceExtensionOpenTimer?.cancel()
-        let timer = DispatchSource.makeTimerSource(queue: .main)
-        timer.schedule(deadline: .now() + Self.rc003VoiceExtensionOpenTimeout)
-        timer.setEventHandler { [weak self] in
-            guard let self,
-                  self.rc003VoiceExtensionActive,
-                  self.rc003VoiceExtensionAwaitingReopen,
-                  self.rc003VoiceExtensionGeneration == generation
-            else { return }
-            self.finishRC003VoiceExtensionTest(reason: "reopen_timeout")
-        }
-        rc003VoiceExtensionOpenTimer = timer
-        timer.resume()
-    }
-
-    private func scheduleRC003VoiceExtensionDeadline(generation: UInt64) {
-        rc003VoiceExtensionDeadlineTimer?.cancel()
-        let timer = DispatchSource.makeTimerSource(queue: .main)
-        timer.schedule(deadline: .now() + Self.rc003VoiceExtensionMaximumDuration)
-        timer.setEventHandler { [weak self] in
-            guard let self,
-                  self.rc003VoiceExtensionActive,
-                  self.rc003VoiceExtensionGeneration == generation
-            else { return }
-            self.finishRC003VoiceExtensionTest(reason: "safe_timeout")
-        }
-        rc003VoiceExtensionDeadlineTimer = timer
-        timer.resume()
-    }
-
-    private func startRC003VoiceExtensionTimer() {
-        guard rc003VoiceExtensionTimer == nil,
-              rc003VoiceExtensionActive,
-              !rc003VoiceExtensionAwaitingReopen,
-              rc003VoiceExtensionDidReceiveAudio,
-              let bridge = rc003VoiceExtensionBridge
-        else { return }
-        let generation = rc003VoiceExtensionGeneration
-        let timer = DispatchSource.makeTimerSource(queue: .main)
-        timer.schedule(
-            deadline: .now() + Self.rc003VoiceExtensionInterval,
-            repeating: Self.rc003VoiceExtensionInterval
-        )
-        timer.setEventHandler { [weak self, weak bridge] in
-            guard let self,
-                  let bridge,
-                  self.rc003VoiceExtensionActive,
-                  !self.rc003VoiceExtensionAwaitingReopen,
-                  self.rc003VoiceExtensionGeneration == generation,
-                  self.rc003VoiceExtensionDidReceiveAudio
-            else { return }
-            guard bridge.requestMicrophoneExtend() else {
-                AppLogger.shared.write("RC003 EXTENSION MIC_EXTEND failed")
-                self.finishRC003VoiceExtensionTest(reason: "extend_rejected")
-                return
-            }
-            AppLogger.shared.write("RC003 EXTENSION MIC_EXTEND sent")
-        }
-        rc003VoiceExtensionTimer = timer
-        timer.resume()
-    }
-
-    private func finishRC003VoiceExtensionTest(reason: String) {
-        guard rc003VoiceExtensionActive || rc003VoiceExtensionAwaitingReopen else { return }
-        let bridge = rc003VoiceExtensionBridge
-        let wasStreaming = bluetoothVoiceActive
-        rc003VoiceExtensionActive = false
-        rc003VoiceExtensionAwaitingReopen = false
-        rc003VoiceExtensionDidReceiveAudio = false
-        rc003VoiceExtensionGeneration &+= 1
-        rc003VoiceExtensionTimer?.cancel()
-        rc003VoiceExtensionTimer = nil
-        rc003VoiceExtensionOpenTimer?.cancel()
-        rc003VoiceExtensionOpenTimer = nil
-        rc003VoiceExtensionDeadlineTimer?.cancel()
-        rc003VoiceExtensionDeadlineTimer = nil
-        rc003VoiceExtensionBridge = nil
-        if wasStreaming {
-            cancelVoiceSessionWarningTracking()
-            _ = bridge?.requestMicrophoneClose()
-            AppLogger.shared.write("RC003 EXTENSION stopping reason=\(reason) close_requested=true")
-            return
-        }
-        activeBluetoothVoiceDeviceIdentifier = nil
-        cancelVoiceSessionWarningTracking()
-        bluetoothVoiceActive = false
-        _ = voiceFnTapSession.stopVoice()
-        releaseVoiceKeyIfNeeded(owner: .bluetooth, forceSoftware: false)
-        endVoiceSessionIfNeeded(flushAudio: true)
-        AppLogger.shared.write("RC003 EXTENSION finished reason=\(reason)")
     }
 
     private func startPhoneVoice(source: MobileVoiceSource) -> RemoteVoiceStartResult {
@@ -9032,6 +8907,26 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
                 "result=event_submitted target_response=unknown"
         )
         return true
+    }
+
+    private func forceHardwareVoiceKeyRelease(
+        mode: VoiceKeyMode,
+        audioDiagnostic: ATVVAudioDiagnostics?
+    ) {
+        guard mode.usesHardwareMapping else { return }
+        let submitted = KeyboardInjector.setVoiceKeyPressed(mode, isPressed: false)
+        if submitted {
+            audioDiagnostic?.softwareKey(edge: "up", mode: mode.rawValue, result: "event_submitted")
+            AppLogger.shared.write(
+                "VOICE KEY mode=\(mode.rawValue) edge=up result=event_submitted " +
+                    "reason=remote_timeout_commit target_response=unknown"
+            )
+        } else {
+            audioDiagnostic?.softwareKey(edge: "up", mode: mode.rawValue, result: "event_submit_failed")
+            AppLogger.shared.write(
+                "VOICE KEY mode=\(mode.rawValue) edge=up failed reason=remote_timeout_commit"
+            )
+        }
     }
 
     @discardableResult

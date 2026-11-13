@@ -253,6 +253,50 @@ struct TranscriptCaptureCoordinatorTests {
         #expect(harness.logs.contains { $0.contains("saved reason=next_session_snapshot") })
     }
 
+    @Test func discontinuousTextChangeAfterFinishKeepsTheLastAcceptedCandidate() throws {
+        let harness = CaptureHarness()
+        harness.snapshot = CaptureHarness.safeSnapshot(
+            text: "草稿",
+            selection: NSRange(location: 2, length: 0)
+        )
+        let startedAt = Date(timeIntervalSince1970: 100)
+        harness.coordinator.startSession(startedAt: startedAt, source: .bluetoothRemote)
+        harness.snapshot = CaptureHarness.safeSnapshot(
+            text: "草稿保留这段",
+            selection: NSRange(location: 6, length: 0)
+        )
+        harness.coordinator.finishSession(endedAt: Date(timeIntervalSince1970: 103))
+        harness.scheduler.advance(by: 0.125)
+
+        harness.snapshot = CaptureHarness.safeSnapshot(
+            text: "目标框被整体替换",
+            selection: NSRange(location: 8, length: 0)
+        )
+        harness.scheduler.advance(by: 0.125)
+
+        let capture = try #require(harness.captures.first)
+        #expect(capture.text == "保留这段")
+        #expect(harness.logs.contains { $0.contains("saved reason=discontinuous_after_finish") })
+    }
+
+    @Test func discontinuousTextChangeAfterFinishWithoutCandidateStillCancels() {
+        let harness = CaptureHarness()
+        harness.snapshot = CaptureHarness.safeSnapshot(
+            text: "草稿",
+            selection: NSRange(location: 2, length: 0)
+        )
+        harness.coordinator.startSession(startedAt: Date(), source: .bluetoothRemote)
+        harness.coordinator.finishSession(endedAt: Date(timeIntervalSince1970: 103))
+        harness.snapshot = CaptureHarness.safeSnapshot(
+            text: "目标框被整体替换",
+            selection: NSRange(location: 8, length: 0)
+        )
+        harness.scheduler.advance(by: 0.125)
+
+        #expect(harness.captures.isEmpty)
+        #expect(harness.logs.contains("TRANSCRIPT CAPTURE canceled reason=discontinuous_after_finish"))
+    }
+
     @Test func unavailableInitialFocusEndsWithADiagnosticReason() {
         let harness = CaptureHarness(initialSnapshotTimeout: 0.5)
         harness.snapshot = nil

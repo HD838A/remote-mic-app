@@ -42,8 +42,8 @@ SAYALL_BUILD_CHANNEL="${SAYALL_BUILD_CHANNEL:-}"
 # private checkout verifier then falls back to its own release default, which
 # matches the previous behaviour of protected builds.
 case "$SAYALL_BUILD_CHANNEL" in
-  ""|local|internalQA|release) ;;
-  *) print -u2 "SAYALL_BUILD_CHANNEL must be local, internalQA, or release"; exit 1 ;;
+  ""|public|local|internalQA|release) ;;
+  *) print -u2 "SAYALL_BUILD_CHANNEL must be public, local, internalQA, or release"; exit 1 ;;
 esac
 RELEASE_STAGE_TIMEOUTS="${RELEASE_STAGE_TIMEOUTS:-0}"
 RELEASE_SWIFT_BUILD_TIMEOUT_SECONDS="${RELEASE_SWIFT_BUILD_TIMEOUT_SECONDS:-300}"
@@ -219,9 +219,15 @@ if [[ "$SAYALL_PRIVATE_PLATFORM_MODE" == public && "$PRIVATE_PATHS_PROVIDED" == 
   print -u2 "Public packaging excludes private platform inputs; unset the private package paths"
   exit 1
 fi
+if [[ "$SAYALL_BUILD_CHANNEL" == public && "$SAYALL_PRIVATE_PLATFORM_MODE" != public ]]; then
+  print -u2 "The public build channel requires public platform mode"
+  exit 1
+fi
 if [[ "$PRIVATE_PATHS_PROVIDED" == false ]]; then
   private_channel_args=()
-  [[ -z "$SAYALL_BUILD_CHANNEL" ]] || private_channel_args=(--channel "$SAYALL_BUILD_CHANNEL")
+  if [[ -n "$SAYALL_BUILD_CHANNEL" && "$SAYALL_BUILD_CHANNEL" != public ]]; then
+    private_channel_args=(--channel "$SAYALL_BUILD_CHANNEL")
+  fi
   PRIVATE_PREPARATION="$(python3 "$ROOT/scripts/prepare-private-platform.py" package \
     --mode "$SAYALL_PRIVATE_PLATFORM_MODE" --artifacts "$SAYALL_PRIVATE_ARTIFACTS_SOURCE" \
     "${private_channel_args[@]}")"

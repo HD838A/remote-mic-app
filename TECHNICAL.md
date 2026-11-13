@@ -132,29 +132,27 @@ Fn 层键位清单、修饰键标志位含义和快捷键注入的日志判读�
 
 ## 构建与测试
 
-开发构建：
+公开开发自用构建：
 
 ```bash
 ./scripts/test.sh
 xcrun swift test --disable-keychain
-./scripts/build-app.sh
-./scripts/verify-app.sh
+SAYALL_PRIVATE_PLATFORM_MODE=public ./scripts/package-local-test-app.sh
 ```
 
 `scripts/test.sh` 运行协议/策略自检并编译完整应用；Swift Testing 继续覆盖 ATVV、蓝牙生命周期、音频设备策略、按键、权限、配置兼容、Fn 映射、Typeless 会话生命周期、pre-roll、音频排空和测试音。
 
-默认 checkout 是完整的公开构建路径：`Package.swift` 不解析私有依赖，没有私有仓库权限也可以执行上述测试、生成 `dist/SayAll.app` 并启动公开功能。官方 CI 先执行同一公开路径。私有 CI 再通过 `SAYALL_ENABLE_PRIVATE_SWIFTPM=1` 加载统一版本的私有平台根 Package，并单独加载私有 AI Package。私有源码只在私有 checkout 和受保护构建中解析。公开仓库和公开构件不包含私有源码。付费键位方案只由私有构建开关启用。受保护发布构建使用已校验的私有二进制构件。
+默认 checkout 是完整的公开构建路径：`Package.swift` 不解析私有依赖，没有私有仓库权限也可以执行上述测试、通过统一入口生成并安装 `~/Applications/SayAll.app`，递增本机构建号并启动公开功能。公开开发自用允许本机 ad-hoc 或 Developer ID 签名，包内记录 `SayAllBuildChannel=public`。默认没有私有输入时使用公开模式；既有私有输入调用继续使用 `required` 完整集成模式，要求固定私有预构件和 Developer ID。向他人分发按 `RELEASING.md` 执行签名与公证门禁。官方 CI 先执行同一公开路径。私有 CI 再通过 `SAYALL_ENABLE_PRIVATE_SWIFTPM=1` 加载统一版本的私有平台根 Package，并单独加载私有 AI Package。私有源码只在私有 checkout 和受保护构建中解析。公开仓库和公开构件不包含私有源码。付费键位方案只由私有构建开关启用。受保护发布构建使用已校验的私有二进制构件。
 
 常用语和 Siri Remote 均为会员功能。常用语实现由私有会员 Package 提供，使用权限由 `canUseCommonPhrases` 控制。Siri Remote 需要安装 PKG 可选组件，并在会员权益有效时由用户启用。公开构建成功、私有组件已集成或 PKG 组件已安装，都不等于获得会员使用权限。
 
 构建并启动应用：
 
 ```bash
-./script/build_and_run.sh
-./script/build_and_run.sh --verify
+SAYALL_PRIVATE_PLATFORM_MODE=public ./scripts/package-local-test-app.sh
 ```
 
-`--verify` 会构建、启动并确认 `RemoteMic` 进程存在；它不是遥控器或真实语音链路的硬件验收。
+设置 `SAYALL_LOCAL_DEFER_LAUNCH=1` 可只构建安装。CI 在独立目标目录执行同一入口，再启动本次产物并检查对应进程；该检查仅覆盖启动，遥控器和真实语音链路继续执行硬件验收。
 
 ## 发布产物
 
