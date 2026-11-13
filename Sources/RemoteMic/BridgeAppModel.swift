@@ -670,6 +670,29 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     private let watchBluetoothServer = WatchBluetoothRemoteServer(logger: { message in
         AppLogger.shared.write(message)
     })
+    private lazy var nearbyRemoteLifecycle = NearbyRemoteLifecycle(
+        start: { [weak self] in
+            self?.phoneRemoteServer.start()
+            self?.watchBluetoothServer.start()
+        },
+        stop: { [weak self] in
+            guard let self else { return }
+            self.phoneRemoteInvitation = nil
+            self.isPhoneRemoteConnected = false
+            self.isWatchRemoteConnected = false
+            self.phoneRemoteState = .idle
+            self.cancelPhoneApproval()
+            self.resetMobileButtonGestures(source: .nearbyPhone)
+            self.resetMobileButtonGestures(source: .nearbyPhone, phraseSource: "watch")
+            if let source = self.activeMobileVoiceSource,
+               source == .nearbyPhone || source == .nearbyWatch {
+                self.stopPhoneVoice(source: source)
+            }
+            self.phoneRemoteServer.stop()
+            self.watchBluetoothServer.stop()
+        },
+        log: { AppLogger.shared.write($0) }
+    )
     private let webRemoteClient = WebRemoteRelayClient()
     private let voiceFunctionMapper = RemoteVoiceFunctionMapper()
     private let remoteNativeKeyMapper = RemoteNativeKeyMapper()
@@ -1201,48 +1224,57 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             return self.settings.isPhoneIdentityTrusted(fingerprint)
         }
         phoneRemoteServer.onConnectionStateChange = { [weak self] connected in
-            DispatchQueue.main.async {
-                guard let self else { return }
-                if connected && !self.membershipFeature.canStartCompanionConnection {
-                    self.disablePhoneRemoteConnection()
+            self?.deliverNearbyRemoteEvent { model in
+                if connected && !model.membershipFeature.canStartCompanionConnection {
+                    model.disablePhoneRemoteConnection()
                     return
                 }
-                self.isPhoneRemoteConnected = connected
+                model.isPhoneRemoteConnected = connected
+                model.updateNearbyRemoteLifecycle(reason: "phone_connection_changed")
             }
         }
         phoneRemoteServer.onInvitationChange = { [weak self] invitation in
-            DispatchQueue.main.async {
-                self?.phoneRemoteInvitation = invitation
+            self?.deliverNearbyRemoteEvent { model in
+                model.phoneRemoteInvitation = invitation
             }
         }
         phoneRemoteServer.onApprovalCancelled = { [weak self] in
-            self?.cancelPhoneApproval()
+            self?.deliverNearbyRemoteEvent { model in model.cancelPhoneApproval() }
         }
         phoneRemoteServer.onApprovalRequested = { [weak self] deviceName, pairingCode, fingerprint, completion in
-            guard let self, self.isPhoneRemoteConnectionEnabled,
-                  self.membershipFeature.canStartCompanionConnection else {
+            guard let self else {
                 completion(false)
                 return
             }
-            requestPhoneApproval(
+            let generation = self.nearbyRemoteLifecycle.generation
+            self.requestPhoneApproval(
                 deviceName: deviceName,
                 pairingCode: pairingCode,
                 identityFingerprint: fingerprint,
+                generation: generation,
                 completion: completion
             )
         }
         phoneRemoteServer.onCommand = { [weak self] button, completion in
-            DispatchQueue.main.async {
+            guard let self else {
+                completion(false)
+                return
+            }
+            self.deliverNearbyRemoteEvent(onIgnored: { completion(false) }) { model in
                 guard let button = Self.appRemoteButton(rawValue: button.rawValue) else {
                     completion(false)
                     return
                 }
-                self?.observeMobileButton(button, source: .nearbyPhone)
-                completion(self?.performPhoneCommand(button, source: .nearbyPhone) ?? false)
+                model.observeMobileButton(button, source: .nearbyPhone)
+                completion(model.performPhoneCommand(button, source: .nearbyPhone))
             }
         }
         phoneRemoteServer.onButtonEvent = { [weak self] button, phase, completion in
-            DispatchQueue.main.async {
+            guard let self else {
+                completion(false)
+                return
+            }
+            self.deliverNearbyRemoteEvent(onIgnored: { completion(false) }) { model in
                 guard let button = Self.appRemoteButton(rawValue: button.rawValue),
                       let phase = Self.appRemoteButtonPhase(rawValue: phase.rawValue)
                 else {
@@ -1250,40 +1282,40 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
                     return
                 }
                 if phase == .press {
-                    self?.observeMobileButton(button, source: .nearbyPhone)
+                    model.observeMobileButton(button, source: .nearbyPhone)
                 }
-                completion(self?.handleMobileButtonEvent(
+                completion(model.handleMobileButtonEvent(
                     button,
                     phase: phase,
                     source: .nearbyPhone
-                ) ?? false)
+                ))
             }
         }
         phoneRemoteServer.onButtonEventsReset = { [weak self] in
-            DispatchQueue.main.async {
-                self?.resetMobileButtonGestures(source: .nearbyPhone)
+            self?.deliverNearbyRemoteEvent { model in
+                model.resetMobileButtonGestures(source: .nearbyPhone)
             }
         }
         phoneRemoteServer.onVoiceStartResult = { [weak self] completion in
-            DispatchQueue.main.async {
-                guard let self else {
-                    completion(.unavailable)
-                    return
-                }
-                self.requestPhoneVoiceStart(
+            guard let self else {
+                completion(.unavailable)
+                return
+            }
+            self.deliverNearbyRemoteEvent(onIgnored: { completion(.unavailable) }) { model in
+                model.requestPhoneVoiceStart(
                     source: .nearbyPhone,
                     completion: completion
                 )
             }
         }
         phoneRemoteServer.onVoiceStop = { [weak self] in
-            DispatchQueue.main.async {
-                self?.stopPhoneVoice(source: .nearbyPhone)
+            self?.deliverNearbyRemoteEvent { model in
+                model.stopPhoneVoice(source: .nearbyPhone)
             }
         }
         phoneRemoteServer.onAudio = { [weak self] samples in
-            DispatchQueue.main.async {
-                self?.receivePhoneAudio(samples, source: .nearbyPhone)
+            self?.deliverNearbyRemoteEvent { model in
+                model.receivePhoneAudio(samples, source: .nearbyPhone)
             }
         }
         watchBluetoothServer.isIdentityTrusted = { [weak self] fingerprint in
@@ -1291,43 +1323,52 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             return self.settings.isPhoneIdentityTrusted(fingerprint)
         }
         watchBluetoothServer.onConnectionStateChange = { [weak self] connected in
-            DispatchQueue.main.async {
-                guard let self else { return }
-                if connected && !self.membershipFeature.canStartCompanionConnection {
-                    self.disablePhoneRemoteConnection()
+            self?.deliverNearbyRemoteEvent { model in
+                if connected && !model.membershipFeature.canStartCompanionConnection {
+                    model.disablePhoneRemoteConnection()
                     return
                 }
-                self.isWatchRemoteConnected = connected
+                model.isWatchRemoteConnected = connected
+                model.updateNearbyRemoteLifecycle(reason: "watch_connection_changed")
             }
         }
         watchBluetoothServer.onApprovalCancelled = { [weak self] in
-            self?.cancelPhoneApproval()
+            self?.deliverNearbyRemoteEvent { model in model.cancelPhoneApproval() }
         }
         watchBluetoothServer.onApprovalRequested = { [weak self] deviceName, pairingCode, fingerprint, completion in
-            guard let self, self.isPhoneRemoteConnectionEnabled,
-                  self.membershipFeature.canStartCompanionConnection else {
+            guard let self else {
                 completion(false)
                 return
             }
-            requestPhoneApproval(
+            let generation = self.nearbyRemoteLifecycle.generation
+            self.requestPhoneApproval(
                 deviceName: deviceName,
                 pairingCode: pairingCode,
                 identityFingerprint: fingerprint,
+                generation: generation,
                 completion: completion
             )
         }
         watchBluetoothServer.onCommand = { [weak self] button, completion in
-            DispatchQueue.main.async {
+            guard let self else {
+                completion(false)
+                return
+            }
+            self.deliverNearbyRemoteEvent(onIgnored: { completion(false) }) { model in
                 guard let button = Self.appRemoteButton(rawValue: button.rawValue) else {
                     completion(false)
                     return
                 }
-                self?.observeMobileButton(button, source: .nearbyPhone)
-                completion(self?.performPhoneCommand(button, source: .nearbyPhone, phraseSource: "watch") ?? false)
+                model.observeMobileButton(button, source: .nearbyPhone)
+                completion(model.performPhoneCommand(button, source: .nearbyPhone, phraseSource: "watch"))
             }
         }
         watchBluetoothServer.onButtonEvent = { [weak self] button, phase, completion in
-            DispatchQueue.main.async {
+            guard let self else {
+                completion(false)
+                return
+            }
+            self.deliverNearbyRemoteEvent(onIgnored: { completion(false) }) { model in
                 guard let button = Self.appRemoteButton(rawValue: button.rawValue),
                       let phase = Self.appRemoteButtonPhase(rawValue: phase.rawValue)
                 else {
@@ -1335,41 +1376,41 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
                     return
                 }
                 if phase == .press {
-                    self?.observeMobileButton(button, source: .nearbyPhone)
+                    model.observeMobileButton(button, source: .nearbyPhone)
                 }
-                completion(self?.handleMobileButtonEvent(
+                completion(model.handleMobileButtonEvent(
                     button,
                     phase: phase,
                     source: .nearbyPhone,
                     phraseSource: "watch"
-                ) ?? false)
+                ))
             }
         }
         watchBluetoothServer.onButtonEventsReset = { [weak self] in
-            DispatchQueue.main.async {
-                self?.resetMobileButtonGestures(source: .nearbyPhone, phraseSource: "watch")
+            self?.deliverNearbyRemoteEvent { model in
+                model.resetMobileButtonGestures(source: .nearbyPhone, phraseSource: "watch")
             }
         }
         watchBluetoothServer.onVoiceStartResult = { [weak self] completion in
-            DispatchQueue.main.async {
-                guard let self else {
-                    completion(.unavailable)
-                    return
-                }
-                self.requestPhoneVoiceStart(
+            guard let self else {
+                completion(.unavailable)
+                return
+            }
+            self.deliverNearbyRemoteEvent(onIgnored: { completion(.unavailable) }) { model in
+                model.requestPhoneVoiceStart(
                     source: .nearbyWatch,
                     completion: completion
                 )
             }
         }
         watchBluetoothServer.onVoiceStop = { [weak self] in
-            DispatchQueue.main.async {
-                self?.stopPhoneVoice(source: .nearbyWatch)
+            self?.deliverNearbyRemoteEvent { model in
+                model.stopPhoneVoice(source: .nearbyWatch)
             }
         }
         watchBluetoothServer.onAudio = { [weak self] samples in
-            DispatchQueue.main.async {
-                self?.receivePhoneAudio(samples, source: .nearbyWatch)
+            self?.deliverNearbyRemoteEvent { model in
+                model.receivePhoneAudio(samples, source: .nearbyWatch)
             }
         }
         webRemoteClient.onStateChange = { [weak self] state in
@@ -1569,10 +1610,9 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         cancelPendingBluetoothVoiceAudio(reason: "app_stop")
         pendingBluetoothVoiceStopRequested = false
         activeBluetoothVoiceDeviceIdentifier = nil
-        phoneRemoteServer.stop()
-        watchBluetoothServer.stop()
         webRemoteClient.stop()
         isPhoneRemoteConnectionEnabled = false
+        updateNearbyRemoteLifecycle(reason: "app_stop")
         isPhoneRemoteConnected = false
         isWatchRemoteConnected = false
         phoneRemoteState = .idle
@@ -2131,8 +2171,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         cancelPhoneRemoteMembershipRetry()
         phoneRemoteState = .idle
         isPhoneRemoteConnectionEnabled = true
-        phoneRemoteServer.start()
-        watchBluetoothServer.start()
+        updateNearbyRemoteLifecycle(reason: "enabled_by_user")
         AppLogger.shared.write("PHONE REMOTE enabled_by_user")
     }
 
@@ -2146,9 +2185,33 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         isWatchRemoteConnected = false
         phoneRemoteState = .idle
         cancelPhoneApproval()
-        phoneRemoteServer.stop()
-        watchBluetoothServer.stop()
+        updateNearbyRemoteLifecycle(reason: "disabled_by_user")
         AppLogger.shared.write("PHONE REMOTE disabled_by_user")
+    }
+
+    private func updateNearbyRemoteLifecycle(reason: String) {
+        let hasNearbyVoice = activeMobileVoiceSource == .nearbyPhone ||
+            activeMobileVoiceSource == .nearbyWatch ||
+            pendingMobileVoiceStartSource == .nearbyPhone ||
+            pendingMobileVoiceStartSource == .nearbyWatch
+        nearbyRemoteLifecycle.update(
+            enabled: started && isPhoneRemoteConnectionEnabled,
+            hasActiveVoice: hasNearbyVoice,
+            reason: reason
+        )
+    }
+
+    private func deliverNearbyRemoteEvent(
+        onIgnored: @escaping () -> Void = {},
+        _ action: @escaping (BridgeAppModel) -> Void
+    ) {
+        nearbyRemoteLifecycle.deliver(onIgnored: onIgnored) { [weak self] in
+            guard let self else {
+                onIgnored()
+                return
+            }
+            action(self)
+        }
     }
 
     /// 门禁挡住时挂一个「只等一次放开」的监听：权益一变真就自动重试连接，随即断开。
@@ -2848,6 +2911,8 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     }
 
     func handleSystemAudioLifecycle(_ event: SystemAudioLifecycleEvent) {
+        nearbyRemoteLifecycle.handleSystemEvent(event)
+        updateNearbyRemoteLifecycle(reason: event.rawValue)
         let changed = systemAudioSuspensionState.apply(event)
         AppLogger.shared.write(
             "SYSTEM AUDIO event=\(event.rawValue) changed=\(changed) " +
@@ -7101,9 +7166,15 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         deviceName: String,
         pairingCode: String,
         identityFingerprint: String?,
+        generation: UInt64,
         completion: @escaping (Bool) -> Void
     ) {
         DispatchQueue.main.async {
+            guard self.nearbyRemoteLifecycle.acceptsEvents(generation: generation),
+                  self.membershipFeature.canStartCompanionConnection else {
+                completion(false)
+                return
+            }
             guard self.isPhoneRemoteConnectionEnabled else {
                 completion(false)
                 return
@@ -7134,7 +7205,8 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             alert.addButton(withTitle: localization.text("connection.phone.cancel_waiting"))
             self.phoneApprovalAlert = alert
             let response = alert.runModal()
-            guard self.phoneApprovalAlert === alert else {
+            guard self.phoneApprovalAlert === alert,
+                  self.nearbyRemoteLifecycle.acceptsEvents(generation: generation) else {
                 completion(false)
                 return
             }
@@ -7153,12 +7225,10 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     }
 
     private func cancelPhoneApproval() {
-        DispatchQueue.main.async {
-            guard let alert = self.phoneApprovalAlert else { return }
-            self.phoneApprovalAlert = nil
-            NSApp.abortModal()
-            alert.window.orderOut(nil)
-        }
+        guard let alert = phoneApprovalAlert else { return }
+        phoneApprovalAlert = nil
+        NSApp.abortModal()
+        alert.window.orderOut(nil)
     }
 
     private func requestWebApproval(
@@ -8003,6 +8073,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
                     self.activeMobileVoiceOperationID = nil
                     self.activeMobileVoiceStartedAt = nil
                     AppLogger.shared.write("MOBILE VOICE stopped source=\(source.logName)")
+                    self.updateNearbyRemoteLifecycle(reason: "voice_drained")
                     self.releaseVirtualAudioOutputIfUnused(reason: "mobile_voice_stopped")
                     if source == .macMicrophone {
                         let completion = self.macMicrophoneDrainCompletion

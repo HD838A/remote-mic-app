@@ -80,6 +80,43 @@
 
 失败：Watch 仍显示“已连接”、语音停止回调重复、iPhone 一直提示占用，或必须退出 Mac App 才能恢复。
 
+## 用例八：空闲等待期间系统睡眠与恢复
+
+适用版本为包含本修复的 `main` 或对应版本 / Build；当前真机记录为 build 352。准备真实 iPhone、Apple Watch 和保持开启的 Wi-Fi。记录 App 版本、Build、source revision、供电和起止时间。使用真实系统睡眠，屏幕关闭和锁屏分别验证。
+
+1. 重启 App，保持附近连接关闭。让系统睡眠并唤醒。
+2. 开启附近等待，保持手机和 Watch 均未连接。让系统睡眠，再正常唤醒。
+3. 连续重复第 2 步三轮。每轮唤醒后扫码或发现 Mac，并完成一次授权、普通按键和真实语音文字输入。
+4. 睡眠通知后，在唤醒恢复前取消等待或撤销权益。自动化覆盖这一时序，现场可用独立诊断回放补充。
+5. 分别只关闭屏幕、只锁屏。保持已有手机或 Watch 连接，验证普通按键。
+6. 保持附近客户端已连接，再触发系统睡眠。睡眠前空闲连接应被干净关闭，让手机收到断开；唤醒后重新开启一次监听。若睡眠时仍有语音在排空，先等排空再关闭。另测语音开始、松键排空与断连重叠的时序。
+
+预期结果：第 1 步始终关闭。第 2 步提交手机与 Watch 停止请求，二维码失效；系统唤醒后按原开启意图恢复一次，生成新的可用二维码。第 4 步保持关闭。第 5 步不因本次策略断开连接。第 6 步睡眠期间不截断尾音；空闲连接在睡眠前干净关闭，界面回到“正在等待”，唤醒后启动一次监听。手机或 Watch 重新连接后第一个按键和语音必须成功。不能只显示“已连接”但命令无效，也不能要求用户手动取消 Mac 端服务。每个睡眠/唤醒周期最多一次启动或重建；重复唤醒通知不得重复。
+
+失败判定：默认关闭被唤醒打开、重复启动、旧二维码或旧授权恢复、取消后仍重启、第一次连接或语音失败、丢首字/尾字、尾音未排空就停止服务，均为失败。已有连接睡眠/唤醒后界面显示假“已连接”、音量/按键无日志、必须手动取消 Mac 端服务再连接，或同一周期重复启动/重启，同样判失败。
+
+空闲连接睡眠前应出现：
+
+```text
+NEARBY REMOTE lifecycle ... result=stop_requested reason=system_will_sleep system_sleeping=true
+NEARBY REMOTE lifecycle ... result=start_requested reason=system_did_wake system_sleeping=false
+```
+
+只有睡眠时语音仍在排空、唤醒后服务还在运行的路径才使用一次重建：
+
+```text
+NEARBY REMOTE lifecycle ... result=stop_requested reason=system_did_wake_restart wake_restart_attempt=1/1
+NEARBY REMOTE lifecycle ... result=start_requested reason=system_did_wake_restart wake_restart_attempt=1/1
+```
+
+2026-11-13 真机记录：build 340 在已有 iPhone 连接睡眠后保留假“已连接”，音量键没有 `PHONE REMOTE button=volume_up` 日志，手动“取消连接 → 连接”后恢复。build 352 改为睡眠前干净关闭空闲连接、唤醒后启动一次：真机 iPhone 自动重新连接，日志出现 `trusted_identity_approved`，音量 +、唤醒后语音和连续三轮睡眠/唤醒均通过；Apple Watch 两次睡眠/唤醒回归也通过。整夜功耗和实际网络资源撤销仍待验收。
+
+诊断检查 `NEARBY REMOTE lifecycle` 的 generation、reason 与 `start_requested` / `stop_requested`，以及 `callback reason=stale_generation`。这些日志证明请求和回调门禁，不能证明系统已完成撤销网络资源。实际检查还须确认暂停期间 Bonjour 不再可发现、Watch 广播停止，并记录睡眠通知到实际撤销的耗时。
+
+功耗对照保持 Wi-Fi、其他应用、供电和睡眠条件一致。分别测试 App 退出、附近关闭、附近等待开启。按完整日期窗口统计实际 Wake / DarkWake 及睡眠时长，并与同机背景值比较。
+
+当前自动化覆盖生命周期、请求拒绝与投递顺序。真实入睡前资源撤销、实际 Bonjour/Watch 广播停止及整夜功耗待验收；iPhone 自动重连、音量键、唤醒后语音、连续三轮和 Watch 两次睡眠/唤醒已通过。空闲连接在睡眠前必须干净关闭；有语音时排空后再关闭；唤醒后只启动一次，不能保留假“已连接”状态。
+
 ## 稳定功能回归
 
 - 实体遥控器连接、按键映射和语音不变。
