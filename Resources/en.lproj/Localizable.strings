@@ -1508,7 +1508,10 @@
 "button_mapping.save.unknown" = "Save state unknown. Restart to confirm.";
 "button_mapping.save.read_only" = "Read-only";
 "button_mapping.save.membership" = "View membership";
-"button_mapping.save.unsupported" = "View this configuration in Key Profiles";
+"button_mapping.save.unsupported" = "Read-only configuration";
+"button_mapping.binding.inherited" = "Inherits base mapping";
+"button_mapping.binding.overridden" = "Overrides base mapping";
+"button_mapping.binding.clear_override" = "Clear Override";
 "button_mapping.save.unavailable" = "Configuration unavailable";
 "button_mapping.save.retry" = "Retry";
 "button_mapping.save.partial" = "Action saved. Hold not saved.";

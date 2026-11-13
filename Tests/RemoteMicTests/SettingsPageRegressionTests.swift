@@ -649,8 +649,11 @@ struct SettingsPageRegressionTests {
             range: phoneEntry.upperBound..<source.endIndex
         ))
         let phoneEntrySource = source[phoneEntry.lowerBound..<watchEntry.lowerBound]
-        #expect(phoneEntrySource.contains("phoneRemoteServer.start()"))
-        #expect(phoneEntrySource.contains("watchBluetoothServer.start()"))
+        #expect(phoneEntrySource.contains("isPhoneRemoteConnectionEnabled = true"))
+        #expect(phoneEntrySource.contains("updateNearbyRemoteLifecycle(reason: \"enabled_by_user\")"))
+        #expect(phoneEntrySource.contains("enabled: started && isPhoneRemoteConnectionEnabled"))
+        #expect(source.contains("self?.phoneRemoteServer.start()"))
+        #expect(source.contains("self?.watchBluetoothServer.start()"))
 
         let webEntry = try #require(source.range(
             of: "func enableWebRemoteConnection()",
@@ -665,7 +668,7 @@ struct SettingsPageRegressionTests {
         #expect(source.contains("func togglePhoneRemoteConnection()"))
         #expect(source.contains("localization.text(\"connection.phone.cancel_waiting\")"))
         #expect(source.contains("response == .alertThirdButtonReturn"))
-        #expect(source.contains("guard let self, self.isPhoneRemoteConnectionEnabled,"))
+        #expect(source.contains("self.nearbyRemoteLifecycle.acceptsEvents(generation: generation)"))
         #expect(source.contains("guard self.isPhoneRemoteConnectionEnabled else"))
         #expect(source.contains("phoneRemoteServer.onInvitationChange"))
         #expect(source.contains("@Published private(set) var phoneRemoteInvitation"))
@@ -858,7 +861,75 @@ struct SettingsPageRegressionTests {
         #expect(!rowSource.contains("ForEach(macroFeature.mappingProfiles(device:"))
         // 组件无法区分可编辑性时回退到「基础映射 + 全部方案」，不能因此隐藏用户方案。
         #expect(rowSource.contains("baseMappingProfile(in: profiles)"))
-        #expect(source.contains("macroFeature.isDefaultMappingProfile($0.id)"))
+        #expect(source.contains("profiles.first(where: \\.isDefault)"))
+    }
+
+    @Test func mappingProfileListStaysVisibleWithoutAutosaveInterface() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+        let integrationSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/MacroFeatureIntegration.swift"),
+            encoding: .utf8
+        )
+
+        let toolbarStart = try #require(source.range(of: "private var mappingProfileToolbar"))
+        let canEditStart = try #require(source.range(
+            of: "private var canEditMappingProfiles",
+            range: toolbarStart.upperBound..<source.endIndex
+        ))
+        let selectorStart = try #require(source.range(
+            of: "private var mappingProfileSelector",
+            range: canEditStart.upperBound..<source.endIndex
+        ))
+        let baseHelper = try #require(source.range(
+            of: "private func baseMappingProfile",
+            range: selectorStart.upperBound..<source.endIndex
+        ))
+        let toolbarSource = source[toolbarStart.lowerBound..<canEditStart.lowerBound]
+        let selectorSource = source[selectorStart.lowerBound..<baseHelper.lowerBound]
+
+        // 方案列表、创建/复制入口不能绑定到新版自动保存接口；旧构件只把内容降为只读。
+        #expect(!toolbarSource.contains("supportsMappingProfileAutosave"))
+        #expect(source.contains("if macroFeature.isButtonProfilesVisible { mappingProfileToolbar }"))
+        #expect(!selectorSource.contains("if macroFeature.supportsMappingProfileAutosave"))
+        #expect(selectorSource.contains("if macroFeature.isButtonProfilesVisible"))
+        #expect(selectorSource.contains("mappingSaveAsProfileButton"))
+        #expect(integrationSource.contains("buttonProfilesFeature.profiles(for: device)"))
+        #expect(integrationSource.contains("rawProfileBinding(device: device, profile: profile"))
+        #expect(integrationSource.contains("createLegacyMappingProfile"))
+        #expect(integrationSource.contains("legacyProfileHoldMode"))
+    }
+
+    @Test func mappingProfileBindingStateAndClearEntryStayAvailable() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+        // 继承/显式/不可用必须在编辑区可见，并且不可用覆盖可以单独清除。
+        #expect(source.contains("mappingProfileBindingControl(button: target.button, trigger: target.trigger)"))
+        #expect(source.contains("\"button_mapping.binding.inherited\""))
+        // 网格每键摘要显示实际动作，重复的“继承：”前缀只允许留在编辑区状态行。
+        #expect(!source.contains("button_mapping.binding.inherited_prefix"))
+        #expect(source.contains("\"button_mapping.binding.clear_override\""))
+        #expect(source.contains("private func clearMappingOverride(button: RemoteButton, trigger: ButtonTrigger)"))
+        #expect(source.contains("macroFeature.profileBindingMatches(nil, profile: profile"))
+        // 会员只读门禁不能因直接修改而丢失。
+        #expect(source.contains("return !macroFeature.supportsMappingProfileAutosave || !canEditMappingProfiles"))
+        #expect(source.contains("guard !isMappingProfilePreviewOnly else { return false }"))
+        #expect(source.contains("guard macroFeature.canUseMappingProfiles else { return false }"))
+        #expect(source.contains("membershipFeature.buttonProfilesAccessDecision"))
+        #expect(source.contains("mappingSaveAsProfileButton.disabled(!canEditMappingProfiles)"))
+        #expect(source.contains("if editingMappingProfileID != nil && membershipCanUnlock"))
     }
 
     @Test func remoteMappingScrollsResetWhenSwitchingProfilesAndConnectionPhotoFollowsModel() throws {

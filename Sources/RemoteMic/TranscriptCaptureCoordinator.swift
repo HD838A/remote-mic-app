@@ -464,7 +464,7 @@ final class TranscriptCaptureCoordinator {
             complete(session, reason: "destination_cleared")
             return
         } else {
-            cancel(reason: "discontinuous_text_change")
+            completeAcceptedChangeOrCancel(session, reason: "discontinuous_after_finish")
             return
         }
 

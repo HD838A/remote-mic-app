@@ -2,6 +2,16 @@
 
 > 执行本手册或修改 Onboarding 前，先完整阅读跨平台产品规范 [`feature/first-run-onboarding/PRODUCT_SPEC.md`](../feature/first-run-onboarding/PRODUCT_SPEC.md) 和 [macOS 平台适配](../feature/first-run-onboarding/platform-macos.md)。未来 Windows 测试应从同一产品规范出发，并使用 [Windows 平台适配](../feature/first-run-onboarding/platform-windows.md) 建立独立测试手册。
 
+## 附近连接等待的系统睡眠回归（2026-11-12）
+
+适用版本为包含本修复的 `main` 或对应版本 / Build；当前真机记录为 build 352。影响分类为连接生命周期变化。自动化验证附近资源暂停/恢复，并运行现有引导流程回归。生产完成门槛保持原定义。
+
+选择 iPhone / Apple Watch 来源，在等待连接时让 Mac 系统睡眠。唤醒后完成新的发现或扫码、授权、普通按键、真实收音、正常松键与文字上屏。再覆盖返回、退出续接、关于页重跑，以及睡眠恢复前取消等待。步骤、预期结果和失败判定见 [附近连接用例八](NearbyMobileWaitingCancellation.md#用例八空闲等待期间系统睡眠与恢复)。
+
+本轮完整流程截图、真实权限、iPhone / Watch 及目标语音工具旅程待验收。自动化、构建和旧版本现场结果分别记录，不代替本轮真实结果。
+
+2026-11-13 build 352：已有 iPhone 连接时空闲睡眠/唤醒自动重连、音量 +、唤醒后语音、连续三轮和 Watch 两次回归已通过；完整流程截图、整夜功耗和实际资源撤销仍待验收。
+
 ## RC003 语音键与手动输入（PR #909 历史记录）
 
 2026-11-10 维护者要求撤回 PR #909。下列步骤和 build 314 结果属于撤回前的历史证据。当前实现恢复 F5 单一语音映射及原手动输入判定；撤回后的 Intel 语音、极速按放、连续会话和断连恢复须重新验收。

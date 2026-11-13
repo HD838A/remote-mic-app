@@ -1,61 +1,30 @@
-# RC003 长语音续流测试包
+# RC003 长语音续流实验（已移除）
 
-适用版本：`codex/rc003-voice-extension-test-20260826`，测试包版本 `1.9.15 (155)`。这是仅用于验证“遥控器语音输入是否能跨越物理语音段限制”的实验包，不代表正式版本已支持无限时长录音。
+状态：2026-11-12 已移除。`--rc003-voice-extension-test`、测试包入口，以及 App 内基于物理 `STREAM_STOP` 的自动 `MIC_OPEN` / 定时 `MIC_EXTEND` 续流逻辑经真机验证不可用，已从代码删除。本文件只保留历史结论，不再作为测试入口。
 
-> 历史实验记录：2026-10-02 已移除专用构建脚本与两个启动器。本手册保留当时的用例和验证边界，不是当前安装包的构建或分发入口；当前测试包仍须遵守 [发布规范](../RELEASING.md) 的签名、公证与验收门禁。
+## 历史结论
 
-## 测试前准备
+- 曾尝试在 RC003 物理语音段 `STREAM_STOP` 后自动重开 `MIC_OPEN`，并每 8 秒发送 `MIC_EXTEND`，最长 120 秒。
+- 真机验证未能证明重开后的音频持续进入同一目标输入框；该实验入口不可用。
+- 当前正常产品行为仍是按住语音键收音，松开或遥控器物理段结束时结束会话；不支持跨物理段续流。
+- 相关历史证据见 [RC003 一分钟语音会话停止](../Bugs/2026-08-10-rc003-one-minute-voice-session-timeout.md)。
 
-1. 使用 macOS 14 或更高版本的 Apple Silicon Mac。
-2. 已完成无线麦SayAll.app 首次配置，RC003 已通过蓝牙连接并可进行普通语音输入。
-3. 已授予应用蓝牙、辅助功能和输入监控权限；目标输入框已打开并可接受语音输入。
-4. 退出正在运行的 SayAll/RemoteMic 实例，避免与测试包的蓝牙会话冲突。
+## 2026-11-13 会话补充记录
 
-## 启动
+### 历史调试原因
 
-解压对应历史测试包后，直接双击测试 App。测试 App 已在自身 `Info.plist` 中启用实验模式，不需要任何启动参数。
+- 2026-08-10 的现场问题是 RC003 普通语音约 60 秒后物理停止，用户仍按住时音频先结束；这是固件租期边界，不是普通松键行为。
+- 2026-08-26 开始的独立实验尝试在物理 `STREAM_STOP` 后自动发送 `MIC_OPEN`，随后每 8 秒发送 `MIC_EXTEND`，最高 120 秒。
+- 真机证据显示：主动 `MIC_OPEN` 可能返回 `STREAM START session=0`，但没有任何 audio characteristic 数据；控制流成功不等于真实收音成功。同一连接下普通语音键随后能收到连续 120-byte 音频包。
+- 因此该实验入口不能作为产品功能保留；本次删除只移除不可用实验，不改变正常语音键的按住/松键生命周期，也不删除 `ATVVProtocol.microphoneExtend()` 纯协议编码器。
+- #766 的 Fn 点按无缝续录是独立产品路径，不包含也不删除本实验入口；#1026 处理的是远端 60 秒超时后的 Fn 抬起，也不是本实验入口。
 
-```bash
-open -n "SayAll-RC003-VoiceExtension-Test.app"
-```
+### 本次测试记录
 
-首次打开如被 macOS 拦截，请在 Finder 中右键应用选择“打开”，并确认允许访问已有权限。当前本地测试包已使用 Developer ID 签名，但未提交 Apple 公证；Gatekeeper 可能因此显示“无法验证开发者”，这不代表续流逻辑失败。关于页面最底部会显示“测试长时间语音功能”，启动后沿用本机现有配置。
+- `swift test --disable-keychain --filter 'ATVVProtocolTests|ATVVAudioDiagnosticsTests'`：45 项 / 3 suites 通过。
+- `git diff --check`：通过。
+- 同一个删除补丁在本地测试 worktree 完成 release App 构建、签名和安装（build 343）；该本地包额外带有一条未提交的 `ATVV CONTROL` 诊断日志，不属于本 PR。
+- 本次会话使用的 build 348 仍来自 `origin/main` 的主线代码，RC003 实验入口尚未合并删除；因此 build 348 不能作为本 PR 的真机验收证据。
+- 待完成：合并后重新构建，确认 `--rc003-voice-extension-test` 不再存在，并在真实 RC003 上确认普通语音键不出现 `RC003 EXTENSION` 日志。
 
-## 核心用例
-
-1. 将光标放入目标输入框。
-2. 按住 RC003 语音键开始说话，先持续说满 10 秒以上，确认目标输入框已有文字或语音服务已有输入。
-3. 继续保持语音测试约 90 秒。遥控器固件可能在中途产生一次或多次物理 `STREAM_STOP`；测试包会自动重新发送 `MIC_OPEN`，不需要再次按键。
-4. 观察在物理段切换后，目标输入是否仍属于同一次连续语音输入，且没有出现第二次独立的 Fn/语音会话。
-5. 测试包最多运行 120 秒，到时自动发送 `MIC_CLOSE` 并结束会话。也可以直接退出应用中止测试。
-
-## 通过标准
-
-- 日志出现 `RC003 EXTENSION physical_stop reopen_requested=true`。
-- 随后日志出现 `RC003 EXTENSION physical_segment_reopened`，并且出现 `RC003 EXTENSION AUDIO_READY`。
-- 每约 8 秒出现 `RC003 EXTENSION MIC_EXTEND sent`；这些日志只能在真实解码音频到达后出现。
-- 物理段切换后文字仍继续进入原目标输入框，未产生第二个独立语音会话。
-
-## 失败判定
-
-- `reopen_requested=false`、`reopen_timeout` 或 `reopen_rejected`。
-- 只有 `STREAM_START` 日志却没有 `RC003 EXTENSION AUDIO_READY`，或重开后没有新的音频数据。
-- `MIC_EXTEND failed`、蓝牙断连，或 120 秒前会话被错误结束。
-- 目标输入框出现重复 Fn、第二个语音会话、输入中断或崩溃。
-
-## 日志收集
-
-测试结束后执行：
-
-```bash
-log show --last 10m --style compact --predicate 'process == "RemoteMic"' \
-  | grep -E 'RC003 EXTENSION|ATVV STREAM|ATVV AUDIO|VOICE FN TAP'
-```
-
-请同时记录：遥控器型号、macOS 版本、测试开始时间、第一次物理 STOP 的大致时间，以及目标输入框是否持续收到文字。
-
-## 验证边界
-
-- 当前自动化验证只覆盖编译和代码路径；它不能模拟 RC003 固件是否接受 `MIC_EXTEND`，也不能证明真实音频特征在主机重开后一定恢复。
-- “续流成功”必须以 `AUDIO_READY` 和目标输入框继续接收文字为准；仅看到控制层 `STREAM_START` 不算通过。
-- 本实验包有 120 秒安全上限，未实现正式产品的用户停止交互、持久化配置或 UI 提示。
+- 关联边界：#1029 处理正常停止的尾音释放，#1030 处理本地转写候选；它们都不是本实验入口，也不改变 RC003 的 60 秒固件边界。

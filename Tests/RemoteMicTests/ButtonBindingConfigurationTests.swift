@@ -2,6 +2,9 @@ import AppKit
 import Foundation
 import Testing
 @testable import RemoteMic
+#if canImport(SayAllButtonProfiles)
+import SayAllButtonProfiles
+#endif
 
 @Suite("Unified button configuration")
 struct ButtonBindingConfigurationTests {
@@ -60,6 +63,37 @@ struct ButtonBindingConfigurationTests {
         #expect(source.interactionSettings.mode(for: .up) == .once)
     }
 
+    @Test func mappingProfileSnapshotKeepsUnsetEntriesInherited() throws {
+        let defaults = try #require(UserDefaults(suiteName: "ProfileSnapshot.\(UUID().uuidString)"))
+        let settings = AppSettings(defaults: defaults)
+        let device = settings.selectedRemoteProfileID
+        settings.setBaseBinding(.init(action: .arrowRight, shortcut: nil),
+            for: .back, trigger: .singleClick, profileID: device)
+        settings.setBaseBinding(.disabled, for: .up, trigger: .singleClick, profileID: device)
+        settings.setHoldMode(.repeatSingle, for: .back)
+
+        let unset = try #require(RemoteButton.allCases.flatMap { button in
+            ButtonTrigger.allCases.map { (button, $0) }
+        }.first {
+            settings.configuredBaseAction(for: $0.0, trigger: $0.1, profileID: device).action == .disabled &&
+                !settings.hasExplicitBaseBinding(for: $0.0, trigger: $0.1, profileID: device)
+        })
+        let holdUnset = try #require(RemoteButton.allCases.first {
+            settings.interactionSettings.modes[$0.rawValue] == nil
+        })
+
+        let snapshot = settings.mappingProfileSnapshot(deviceID: device) { _ in true }
+        #expect(snapshot.bindings.contains {
+            $0.button == .back && $0.trigger == .singleClick && $0.configured.action == .arrowRight
+        })
+        #expect(snapshot.bindings.contains {
+            $0.button == .up && $0.trigger == .singleClick && $0.configured.action == .disabled
+        })
+        #expect(!snapshot.bindings.contains { $0.button == unset.0 && $0.trigger == unset.1 })
+        #expect(snapshot.holdModes[RemoteButton.back.rawValue] == "repeatSingle")
+        #expect(snapshot.holdModes[holdUnset.rawValue] == nil)
+    }
+
     @Test func publicBuildHidesProfileActionsAndQueriesStayUnavailable() {
         #if !canImport(SayAllButtonProfiles)
         let integration = MacroFeatureIntegration()
@@ -67,7 +101,7 @@ struct ButtonBindingConfigurationTests {
         #expect(!integration.supportsMappingProfileAutosave)
         #expect(integration.mappingProfiles(device: nil).isEmpty)
         #expect(integration.createMappingProfile(named: "Unavailable", copying: nil, bindings: [], holdModes: [:]) == nil)
-        if case .unavailable = integration.displayProfileBinding(profile: UUID(), button: .back, trigger: .singleClick) {} else { Issue.record("Missing component must be unavailable") }
+        if case .unavailable = integration.displayProfileBinding(device: nil, profile: UUID(), button: .back, trigger: .singleClick) {} else { Issue.record("Missing component must be unavailable") }
         #endif
     }
 
@@ -107,10 +141,10 @@ struct ButtonBindingConfigurationTests {
         #expect(matchesExplicitHold)
         integration.updateButtonProfilesAccess(.requiresPlus)
         #expect(integration.mappingProfiles(device: UUID()).contains { $0.id == id })
-        if case let .explicit(value) = integration.displayProfileBinding(profile: copy, button: .ok, trigger: .singleClick) {
+        if case let .explicit(value) = integration.displayProfileBinding(device: nil, profile: copy, button: .ok, trigger: .singleClick) {
             #expect(value.configured == .disabled)
         } else { Issue.record("Explicit disabled was lost") }
-        if case .inherited = integration.displayProfileBinding(profile: copy, button: .ok, trigger: .doubleClick) {} else { Issue.record("Inheritance was lost") }
+        if case .inherited = integration.displayProfileBinding(device: nil, profile: copy, button: .ok, trigger: .doubleClick) {} else { Issue.record("Inheritance was lost") }
         if case let .explicit(mode) = integration.displayProfileHoldMode(profile: copy, button: .ok) { #expect(mode == .once) }
         else { Issue.record("Hold was lost") }
         #expect(!integration.writeProfileBinding(nil, profile: copy, button: .ok, trigger: .singleClick, displayName: nil))
@@ -118,7 +152,89 @@ struct ButtonBindingConfigurationTests {
         integration.updateButtonProfilesAccess(.authorized)
         #expect(integration.writeProfileBinding(nil, profile: copy, button: .ok, trigger: .singleClick, displayName: nil))
         #expect(integration.reloadMappingProfiles())
-        if case .inherited = integration.displayProfileBinding(profile: copy, button: .ok, trigger: .singleClick) {} else { Issue.record("Clear did not persist") }
+        if case .inherited = integration.displayProfileBinding(device: nil, profile: copy, button: .ok, trigger: .singleClick) {} else { Issue.record("Clear did not persist") }
+    }
+    #endif
+
+    #if canImport(SayAllButtonProfiles) && SAYALL_UNIFIED_BUTTON_CONFIGURATION && !SAYALL_BUTTON_PROFILE_AUTOSAVE
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["SAYALL_MACRO_STORAGE_ROOT"] != nil))
+    @MainActor func legacyComponentKeepsProfileListVisibleAndSupportsCreateAndCopy() throws {
+        // The binary integration runner supplies an isolated storage root.
+        _ = try #require(ProcessInfo.processInfo.environment["SAYALL_MACRO_STORAGE_ROOT"])
+        let integration = MacroFeatureIntegration(localeIdentifier: "en")
+        integration.updateButtonProfilesAccess(.allowed(validUntil: .distantFuture))
+        integration.prepareMappingDevice(nil)
+
+        let created = try #require(integration.createMappingProfile(named: "Legacy create", copying: nil,
+            bindings: [.init(remoteProfileID: nil, button: .ok, trigger: .singleClick, configured: .disabled)],
+            holdModes: ["ok": "repeatLong"]))
+        let listed = integration.mappingProfiles(device: nil)
+        #expect(listed.contains { $0.id == created })
+        #expect(listed.contains { $0.isDefault && $0.id != created })
+
+        guard case let .explicit(value) = integration.displayProfileBinding(device: nil, profile: created,
+            button: .ok, trigger: .singleClick) else {
+            Issue.record("Legacy explicit binding was not displayed")
+            return
+        }
+        #expect(value.configured == .disabled)
+        #expect(!value.isEditable)
+        if case .inherited = integration.displayProfileBinding(device: nil, profile: created,
+            button: .back, trigger: .singleClick) {} else { Issue.record("Legacy inheritance was not displayed") }
+        if integration.supportsProfileHoldModes {
+            #expect(integration.profileHoldMode(profile: created, button: .ok) == "repeatLong")
+        }
+
+        // Exact copies keep future payloads and unreferenced shortcut types instead of
+        // rewriting them as host actions.
+        let futurePayload = Data(#"{"action":"commandCopy","futureField":true}"#.utf8)
+        let futureHost = RemoteMicHostActionReference(id: "host.action.future",
+            displayName: "Future", payload: futurePayload)
+        integration.setRawProfileBinding(.host(futureHost), profile: created,
+            button: .back, trigger: .longPress)
+        integration.setRawProfileBinding(.shortcut(profileKey: "legacy.missing"), profile: created,
+            button: .up, trigger: .longPress)
+
+        let copy = try #require(integration.createMappingProfile(named: "Legacy copy", copying: created,
+            bindings: [], holdModes: [:]))
+        #expect(integration.mappingProfiles(device: nil).contains { $0.id == copy })
+        #expect(integration.rawProfileBinding(device: nil, profile: copy, button: .back,
+            trigger: .longPress) == .host(futureHost))
+        #expect(integration.rawProfileBinding(device: nil, profile: copy, button: .up,
+            trigger: .longPress) == .shortcut(profileKey: "legacy.missing"))
+        guard case let .explicit(copied) = integration.displayProfileBinding(device: nil, profile: copy,
+            button: .ok, trigger: .singleClick) else {
+            Issue.record("Legacy copied binding was not displayed")
+            return
+        }
+        #expect(copied.configured == .disabled)
+        if case let .explicit(copiedFuture) = integration.displayProfileBinding(device: nil, profile: copy,
+            button: .back, trigger: .longPress) {
+            #expect(copiedFuture.configured == .init(action: .commandCopy, shortcut: nil))
+            #expect(!copiedFuture.isEditable)
+        } else { Issue.record("Legacy future payload was not displayed read-only") }
+        if case .unavailable = integration.displayProfileBinding(device: nil, profile: copy,
+            button: .up, trigger: .longPress) {} else {
+            Issue.record("Legacy missing shortcut must be unavailable")
+        }
+        if integration.supportsProfileHoldModes {
+            #expect(integration.profileHoldMode(profile: copy, button: .ok) == "repeatLong")
+        }
+
+        // Non-members keep the display list and values, but everything stays read-only.
+        integration.updateButtonProfilesAccess(.requiresPlus)
+        let visible = integration.mappingProfiles(device: nil)
+        #expect(visible.contains { $0.id == created })
+        #expect(visible.contains { $0.id == copy })
+        if case let .explicit(readOnly) = integration.displayProfileBinding(device: nil, profile: copy,
+            button: .ok, trigger: .singleClick) {
+            #expect(!readOnly.isEditable)
+        } else { Issue.record("Legacy non-member display was lost") }
+        if integration.supportsProfileHoldModes {
+            if case let .explicit(mode) = integration.displayProfileHoldMode(profile: copy, button: .ok) {
+                #expect(mode == .repeatLong)
+            } else { Issue.record("Legacy non-member hold was lost") }
+        }
     }
     #endif
 

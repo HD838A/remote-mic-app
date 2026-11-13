@@ -18,6 +18,7 @@ struct ButtonLibraryAction: Identifiable, Equatable {
 struct ButtonMappingProfile: Identifiable, Equatable {
     var id: UUID
     var name: String
+    var isDefault: Bool = false
 }
 
 /// 键位方案里一个组合动作绑定在按键页显示的名字。
