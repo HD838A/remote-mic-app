@@ -312,6 +312,9 @@ final class HIDRemoteMonitor {
     /// 算进相邻边沿的间隔里。
     var onRuntimeButton: ((UUID?, RemoteButton, RemoteButtonPhase, Int) -> Bool)?
     var claimsRuntimeButton: ((UUID?, RemoteButton) -> Bool)?
+    /// 设备已匹配、但原生键映射校验没有通过。绝大多数是 HID 服务尚未枚举出来，
+    /// 重连后重试一次即可；由上层决定重试节奏，监视器本身不排程。
+    var onNativeMappingVerificationFailed: (() -> Void)?
     var onInputReset: ((UUID?) -> Void)?
     var onInternalAction: ((UUID?, ButtonAction) -> Void)?
 
@@ -2783,6 +2786,10 @@ final class HIDRemoteMonitor {
         guard prepareNativeKeys() else {
             updateStatus(LocalizedMessage("button_mapping.error.native_mapping_failed"))
             diagnosticLogger("HID DEVICE rejected reason=native_mapping_not_verified")
+            // 设备匹配先于 HID 服务可枚举是重连时的常态：`RemoteNativeKeyMapper` 的
+            // `prepare()` 因此写成「每次设备激活重新枚举」，但校验失败后没有任何重试，
+            // 于是一次 `reason=no_service` 就让设备永久不被接管。
+            onNativeMappingVerificationFailed?()
             return false
         }
         nativeKeysNeutralized = true

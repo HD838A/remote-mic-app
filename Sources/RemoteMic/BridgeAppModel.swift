@@ -124,6 +124,24 @@ enum HIDMappingRecoveryPolicy {
         else { return nil }
         return retryDelays[attempt]
     }
+
+    /// 设备已经匹配、但它的 HID 服务还枚举不出来时的重试间隔。
+    ///
+    /// 与 `retryDelay` 共用同一组退避间隔，但不要求蓝牙桥已经 ready：设备已经匹配
+    /// 本身就是它在位的证据，而重连时设备总是先于服务出现。2026-11-13 的 Intel 现场
+    /// 只有一次 `HID NATIVE MAPPING phase=prepare result=pending reason=no_service`，
+    /// 之后不再重试，F5→Fn 映射再也没写回去，语音键的原生 F5 直接进了系统。
+    static func deviceVerificationRetryDelay(
+        forAttempt attempt: Int,
+        started: Bool,
+        hasMatchingServices: Bool
+    ) -> TimeInterval? {
+        guard started,
+              !hasMatchingServices,
+              retryDelays.indices.contains(attempt)
+        else { return nil }
+        return retryDelays[attempt]
+    }
 }
 
 enum MobileVoiceStopDisposition: Equatable {
@@ -3567,23 +3585,37 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
 #endif
     }
 
+    /// 排一次原生键映射的恢复重试。
+    ///
+    /// - Parameter requiresReadyBridge: 蓝牙桥是否必须 ready。语音键持久化分支要求
+    ///   ready；设备匹配失败引发的那次不要求——设备已经匹配说明它就在位，只是 HID
+    ///   服务还没枚举出来，而重连时蓝牙桥恰好可能还没回到 ready。
     private func scheduleHIDMappingRecoveryIfNeeded(
-        restartSiriRemote: Bool = true
+        restartSiriRemote: Bool = true,
+        requiresReadyBridge: Bool = true
     ) {
         guard hidMappingRecoveryWorkItem == nil else { return }
-        guard let delay = HIDMappingRecoveryPolicy.retryDelay(
-            forAttempt: hidMappingRecoveryAttempt,
-            started: started,
-            readyBridgeCount: readyBluetoothBridgeCount,
-            hasMatchingServices: voiceFunctionMapper.hasMatchingServices
-        ) else {
+        let hasMatchingServices = voiceFunctionMapper.hasMatchingServices
+        guard let delay = (requiresReadyBridge
+            ? HIDMappingRecoveryPolicy.retryDelay(
+                forAttempt: hidMappingRecoveryAttempt,
+                started: started,
+                readyBridgeCount: readyBluetoothBridgeCount,
+                hasMatchingServices: hasMatchingServices
+            )
+            : HIDMappingRecoveryPolicy.deviceVerificationRetryDelay(
+                forAttempt: hidMappingRecoveryAttempt,
+                started: started,
+                hasMatchingServices: hasMatchingServices
+            ))
+        else {
             if started,
-               readyBluetoothBridgeCount > 0,
-               !voiceFunctionMapper.hasMatchingServices,
+               !hasMatchingServices,
                hidMappingRecoveryAttempt == HIDMappingRecoveryPolicy.retryDelays.count {
                 AppLogger.shared.write(
                     "HID MAPPING RECOVERY exhausted attempts=\(hidMappingRecoveryAttempt) " +
-                        "ready_bridges=\(readyBluetoothBridgeCount)"
+                        "ready_bridges=\(readyBluetoothBridgeCount) " +
+                        "trigger=\(Self.hidMappingRecoveryTrigger(requiresReadyBridge))"
                 )
             }
             return
@@ -3597,7 +3629,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             guard let self, self.hidMappingRecoveryGeneration == generation else { return }
             self.hidMappingRecoveryWorkItem = nil
             guard self.started,
-                  self.readyBluetoothBridgeCount > 0,
+                  !requiresReadyBridge || self.readyBluetoothBridgeCount > 0,
                   !self.voiceFunctionMapper.hasMatchingServices
             else {
                 self.cancelHIDMappingRecovery(reason: "conditions_changed")
@@ -3605,21 +3637,28 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             }
             AppLogger.shared.write(
                 "HID MAPPING RECOVERY applying attempt=\(attempt) " +
-                    "ready_bridges=\(self.readyBluetoothBridgeCount)"
+                    "ready_bridges=\(self.readyBluetoothBridgeCount) " +
+                    "trigger=\(Self.hidMappingRecoveryTrigger(requiresReadyBridge))"
             )
             self.applyHIDSettings(restartSiriRemote: restartSiriRemote)
             if !self.voiceFunctionMapper.hasMatchingServices {
                 self.scheduleHIDMappingRecoveryIfNeeded(
-                    restartSiriRemote: restartSiriRemote
+                    restartSiriRemote: restartSiriRemote,
+                    requiresReadyBridge: requiresReadyBridge
                 )
             }
         }
         hidMappingRecoveryWorkItem = workItem
         AppLogger.shared.write(
             "HID MAPPING RECOVERY scheduled attempt=\(attempt) " +
-                "delay_ms=\(Int(delay * 1_000)) ready_bridges=\(readyBluetoothBridgeCount)"
+                "delay_ms=\(Int(delay * 1_000)) ready_bridges=\(readyBluetoothBridgeCount) " +
+                "trigger=\(Self.hidMappingRecoveryTrigger(requiresReadyBridge))"
         )
         DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
+    }
+
+    private static func hidMappingRecoveryTrigger(_ requiresReadyBridge: Bool) -> String {
+        requiresReadyBridge ? "bridge_ready" : "device_verification"
     }
 
     private func completeHIDMappingRecoveryIfNeeded() {
@@ -3878,6 +3917,14 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             prepareNativeKeys: { [weak self] in self?.remoteNativeKeyMapper.prepare() == true },
             restoreNativeKeys: { [weak self] in self?.remoteNativeKeyMapper.restore() }
         )
+        // 设备匹配先于 HID 服务可枚举：重连时校验只跑一次就会得到 no_service，
+        // 不排一次重试的话设备永久不被接管，语音键的 F5→Fn 映射也再不会写回去。
+        monitor.onNativeMappingVerificationFailed = { [weak self] in
+            self?.scheduleHIDMappingRecoveryIfNeeded(
+                restartSiriRemote: false,
+                requiresReadyBridge: false
+            )
+        }
         monitor.claimsRuntimeButton = { [weak self] profileID, button in
             self?.claimsButtonGestureLearning(profileID: profileID) == true ||
             self?.membershipFeature.claimsCommonPhrase(
