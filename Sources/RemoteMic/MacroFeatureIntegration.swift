@@ -1422,6 +1422,21 @@ final class MacroFeatureIntegration: ObservableObject {
     #endif
     #endif
 
+    /// 私有按键方案当前有没有给这个按键/触发方式配东西。
+    ///
+    /// 统一按键配置下 `hasActiveBinding` 恒为 false（那条执行路径不再由私有绑定接管，
+    /// 私有方案改由 `configuredActionOverride` 生效）。直接拿它判断「有没有绑定」会得出
+    /// 相反的结论，诊断日志会一直报 missing。这里单独问私有组件一次，**只用于日志**，
+    /// 不参与任何执行或按键手势判定。
+    func hasProfileBinding(button: RemoteButton, trigger: ButtonTrigger) -> Bool {
+        #if canImport(SayAllButtonProfiles) && SAYALL_UNIFIED_BUTTON_CONFIGURATION
+        return buttonProfilesFeature.binding(device: nil, profile: nil,
+            button: button.rawValue, trigger: trigger.rawValue) != nil
+        #else
+        return false
+        #endif
+    }
+
     func hasActiveBinding(profileID: UUID?, button: RemoteButton, trigger: ButtonTrigger) -> Bool {
         #if SAYALL_UNIFIED_BUTTON_CONFIGURATION
         return false
