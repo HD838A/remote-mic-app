@@ -2,6 +2,7 @@
 
 - 时间：2026-08-10
 - 状态：候选方案已撤回，原问题未解决
+- 2026-11-12 更新：独立 `--rc003-voice-extension-test` 自动重开 / `MIC_EXTEND` 发送路径已删除；本文保留历史证据。底层 `ATVVProtocol.microphoneExtend` 仅保留纯编码器和协议测试。
 - 影响范围：macOS；RC003 长时间按住语音键场景
 - 功能点：ATVV 普通物理语音会话保活
 - 简单描述：普通语音会话没有发送 `MIC_EXTEND`，若 RC003 使用约 60 秒租期，会在用户仍按住时结束音频。
@@ -48,3 +49,11 @@ ATVV VOICE LEASE extend written=false
 - 代码检查应确认普通语音路径不再引用租期控制器，也不再出现 `ATVV VOICE LEASE` 日志。
 - 主项目 `swift test` 189 项、`scripts/test.sh` 42 项、硬件模拟跨项目 16 项均通过；覆盖 RC001/RC003 直接流、Fn、HID、多设备和异常基线。
 - 真机边界：尚未实际按住 RC003 超过 60 秒验证撤回后的自然行为；“突破一分钟限制”仍是未解决事项。
+
+## 2026-11-13 会话补充
+
+- 历史尝试：在物理 `STREAM_STOP` 后自动 `MIC_OPEN`，再以 8 秒周期发送 `MIC_EXTEND`，最长 120 秒；真机没有证明音频持续进入同一目标输入框。
+- 关键证据：主动 `MIC_OPEN` 可返回 `STREAM START session=0`，但没有 audio characteristic 数据；同连接普通语音键立即能收到连续 120-byte 音频，说明控制命令成功不能当成真实收音成功。
+- 删除范围仅限 `--rc003-voice-extension-test` 实验入口、`BridgeAppModel` 的续流状态/定时器、`SettingsView` 的实验标签和 `XiaomiBluetoothBridge.requestMicrophoneExtend()`；`ATVVProtocol.microphoneExtend()` 纯编码器保留。
+- 与 #766、#1026 的边界：本 PR 不实现无缝续录，也不处理 60 秒超时后的 Fn 提交；#766 是独立产品功能，#1026 是独立的超时释放修复。
+- 测试记录：`ATVVProtocolTests|ATVVAudioDiagnosticsTests` 45 项 / 3 suites 通过；`git diff --check` 通过；删除补丁本地 release 构建（build 343）通过。真实 RC003 的“合并后无实验日志”验收仍待完成。
