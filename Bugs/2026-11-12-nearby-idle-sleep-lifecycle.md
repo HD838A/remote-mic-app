@@ -38,7 +38,7 @@ git diff --check
 
 2026-11-12 本地结果如下。
 
-- 公开构建完整 Swift Testing 1,397 项、XCTest 4 项通过。
+- 公开构建完整 Swift Testing 1,372 项、XCTest 4 项通过。
 - 公开构建定向回归 235 项通过，包含新增 14 项生命周期测试。
 - 固定 2.9.0 附近组件源码集成定向回归 240 项通过，包含已有 Watch 语音旅程。
 - Apple Silicon 公开 Release 构建、仓库治理、仓库边界、Markdown 文件链接及 `git diff --check` 通过。
@@ -60,6 +60,8 @@ git diff --check
 - 新增回归覆盖空闲连接睡眠前关闭、语音排空后关闭、语音仍在时唤醒重建、重复唤醒不重复、睡眠中禁用取消，以及一个睡眠周期最多一次重启。
 
 2026-11-13 修复后本地结果：公开完整 Swift Testing 1,372 项通过；受影响定向回归 238 项通过；`git diff --check` 通过。真机 build 352 验证：iPhone 已连接空闲睡眠时记录 `stop_requested reason=system_will_sleep`；唤醒后记录 `start_requested reason=system_did_wake`、`listener_ready`、`invitation_ready`，iPhone 自动重新连接并出现 `trusted_identity_approved`，音量 + 命令恢复；唤醒后语音、连续三轮睡眠/唤醒和 Watch 两次回归均通过。整夜功耗、实际 Bonjour/Watch 广播停止仍待验收。
+
+2026-11-14 同步最新 `origin/main` 并生成合并提交 `6dd9da9b` 后：公开完整 Swift Testing 1,387 项、XCTest 4 项通过；受影响定向回归 240 项通过；`git diff --check` 通过。用户确认现有真机结果足够合入，剩余整夜功耗、实际 Bonjour/Watch BLE 停止、现场周期性唤醒归因和受影响引导流程截图后续补测。
 
 该项仍保持候选：整夜功耗、实际 Bonjour/Watch 广播停止和现场周期性唤醒归因尚未完成复验；iPhone 和 Watch 的睡眠/唤醒自动重连、按键与语音已通过本轮真机验收。
 

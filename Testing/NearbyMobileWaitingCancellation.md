@@ -82,7 +82,7 @@
 
 ## 用例八：空闲等待期间系统睡眠与恢复
 
-适用分支为 `codex/fix-nearby-sleep-lifecycle`。准备真实 iPhone、Apple Watch 和保持开启的 Wi-Fi。记录 App 版本、Build、source revision、供电和起止时间。使用真实系统睡眠，屏幕关闭和锁屏分别验证。
+适用版本为包含本修复的 `main` 或对应版本 / Build；当前真机记录为 build 352。准备真实 iPhone、Apple Watch 和保持开启的 Wi-Fi。记录 App 版本、Build、source revision、供电和起止时间。使用真实系统睡眠，屏幕关闭和锁屏分别验证。
 
 1. 重启 App，保持附近连接关闭。让系统睡眠并唤醒。
 2. 开启附近等待，保持手机和 Watch 均未连接。让系统睡眠，再正常唤醒。
