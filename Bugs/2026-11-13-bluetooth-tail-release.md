@@ -29,3 +29,26 @@
 ## 边界
 
 自动化只能证明排空等待和按键释放顺序。真实 CoreBluetooth、RC003 固件、豆包最终文字仍须真机复测。
+
+## 2026-11-13 会话补充记录
+
+### 历史调试原因
+
+- `Bugs/2026-08-24-final-word-tail-loss/DEBUG.md` 的 H1 记录过：22 次真实 RC003 会话中有 20 次在 `STREAM_STOP` 时仍有待播放缓冲，单次最多 4 个；秒级日志不能证明 Fn 抬起与播放器排空谁先发生。结论是“音频已入队/最终排空”不等于“目标工具在 Fn 抬起前收到最后一批音频”。
+- #177 补过尾音诊断；#680 补过 RC003 有界音频缺口诊断；#320 曾尝试“Bluetooth voice playback before key release”但已关闭；#358 修复过 drain 超时后一直等待的问题；#523 合并过避免 drain deadlock 的实现。本次没有重做这些历史修复，只补正常停止的 release 时序。
+- #793 是更早的 Draft“drain Bluetooth playback before releasing software PTT”，当前与 main 冲突；本 PR #1029 是当前干净实现。两者只能保留一个，不能同时合入。
+- #1028 的独立蓝牙回调队列在 build 346 造成了音频交付回归：同长度会话覆盖率从 build 345 的 96.4% 降到 94.3%，录音少 1.681 秒，目标文字从 93 字变成 0 字。该队列改动已关闭；本 PR 不使用独立回调队列，也不改变主队列基线。
+
+### 本次现场与自动化记录
+
+- build 345（29.760 秒）：1912 / 1984 通知，覆盖率 96.4%，录音 28.680 秒，目标文字 93 字。
+- build 346（29.625 秒）：1863 / 1975 通知，覆盖率 94.3%，录音 27.945 秒，目标文字 0 字；`gaps_ge_20ms=96`、`gaps_ge_100ms=1`，App 侧 `dropped_samples=0`、`interrupted_samples=0`。
+- build 346 的缺失是通知到达前的交付缺口，不是本 PR 的 flush 或按键释放逻辑造成的；本 PR 解决的是“尾包已入队但语音键先释放”的独立时序。
+- 本 PR 定向测试：`Core voice input journeys` + `Virtual audio connection lifecycle` 51 项 / 2 suites 通过；`git diff --check` 通过。
+- 本地组合包 build 348（#1026 + #1029 + #1030，基于 main）完成 release 构建、签名、资源/本地化校验，并实际启动；组合 `swift test --disable-keychain` 为 1399 项 / 103 suites 通过。该组合结果不能替代逐 PR 合并后的真机结果。
+- 待完成：真实 RC003 正常松键最后词、连续快速会话、60 秒超时停止、异常断开恢复；没有真机结果前保持 Draft。
+
+### 合入边界
+
+- 不合入 #1028；不与 #793 同时合入。
+- 本 PR 只改正常蓝牙停止后的语音键释放时序，不改变解码、路由、录音或目标工具。
