@@ -1,0 +1,11 @@
+Package: sayall-ubuntu
+Version: @VERSION@
+Architecture: @ARCH@
+Section: sound
+Priority: optional
+Maintainer: SayAll contributors
+Depends: bluez, libc6 (>= 2.39), libstdc++6, libgcc-s1, libgtk-3-0t64, libwebkit2gtk-4.1-0, libayatana-appindicator3-1, libglib2.0-bin, pipewire-bin, pipewire-pulse, pulseaudio-utils, python3, python3-dbus, python3-gi, gir1.2-atspi-2.0, gir1.2-gtk-3.0, udev, zenity
+Recommends: gnome-control-center
+Description: SayAll desktop application for Ubuntu
+ Configure a Xiaomi Bluetooth voice remote, map its buttons to desktop
+ actions and use its microphone with PipeWire.
