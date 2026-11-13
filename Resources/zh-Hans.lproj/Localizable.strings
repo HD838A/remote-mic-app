@@ -395,7 +395,7 @@
 "connection.voice_continuation.seconds" = "%@ 秒";
 "connection.voice_continuation.wait_hint" = "松手后多久内再按算作接着录，超时未按则自动完成本次输入";
 "connection.voice_continuation.minimum_hint" = "录满多久才启用续录，防止较短录制时影响结束手感";
-"connection.voice_glow.period_hint" = "第 50 秒亮起 / 按下即亮，并在续录自动补满";
+"connection.voice_glow.period_hint" = "到达续录门槛（默认第 50 秒）亮起 / 按下即亮，并在续录自动补满";
 "connection.voice_continuation.subtitle" = "突破单次 60 秒语音限制，换气或快超时时松手快速再按可无缝接续录音";
 "connection.voice_continuation.enabled" = "无缝续录";
 "connection.voice_glow.enabled" = "底部倒计时灯条";

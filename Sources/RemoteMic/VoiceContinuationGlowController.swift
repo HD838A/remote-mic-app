@@ -17,13 +17,27 @@ enum VoiceGlowScreenSelection {
 }
 
 struct VoiceGlowState {
+    static let sessionDuration: TimeInterval = 60
+    static let defaultWarningStart: TimeInterval = 50
+
     var length: Double = 0
     var heat: Double = 0
     var hue: Double = 145
 
-    static func recording(elapsed: TimeInterval, fullSession: Bool) -> Self {
-        let warning = min(1, max(0, (elapsed - 50) / 10))
-        let progress = fullSession ? min(1, max(0, elapsed / 60)) : warning
+    static func recording(
+        elapsed: TimeInterval,
+        fullSession: Bool,
+        warningStart: TimeInterval = defaultWarningStart
+    ) -> Self {
+        let clampedStart = min(sessionDuration, max(0, warningStart))
+        let warningSpan = sessionDuration - clampedStart
+        let warning: Double
+        if warningSpan > 0 {
+            warning = min(1, max(0, (elapsed - clampedStart) / warningSpan))
+        } else {
+            warning = elapsed >= sessionDuration ? 1 : 0
+        }
+        let progress = fullSession ? min(1, max(0, elapsed / sessionDuration)) : warning
         return Self(
             length: 1 - 0.6 * progress * progress * (3 - 2 * progress),
             heat: warning * warning,
@@ -51,7 +65,16 @@ final class VoiceContinuationGlowController {
     private var view: VoiceContinuationGlowView?
     private var startedAt: TimeInterval = 0
     private var fullSession = false
+    private var warningStart: TimeInterval = VoiceGlowState.defaultWarningStart
+    private var isRecordingSessionActive = false
+    private var generation: UInt64 = 0
     private var lastScreenCheck: TimeInterval = 0
+    private let screenCheckInterval: TimeInterval = 1.0
+    private var hasResolvedScreen = false
+    private var trackedAppPID: pid_t?
+    private var trackedScreenFrames: [CGRect] = []
+    private var cachedWindowScreenIndex: Int?
+    private var axQuerySucceededForTrackedApp = false
     private var width = 0.64
     private var intensity = 1.0
     private var frozen: VoiceGlowState?
@@ -61,6 +84,19 @@ final class VoiceContinuationGlowController {
     private var releaseDeadline: TimeInterval?
     private var now: TimeInterval { ProcessInfo.processInfo.systemUptime }
 
+    var frontmostAppPIDProvider: () -> pid_t? = {
+        NSWorkspace.shared.frontmostApplication?.processIdentifier
+    }
+    var screenFramesProvider: () -> [CGRect] = {
+        NSScreen.screens.map(\.frame)
+    }
+    var mouseLocationProvider: () -> CGPoint = {
+        NSEvent.mouseLocation
+    }
+    var focusedWindowFrameProvider: (pid_t) -> CGRect? = { pid in
+        VoiceContinuationGlowController.queryFocusedWindowFrame(pid: pid)
+    }
+
     func setAppearance(width: Double, intensity: Double) {
         self.width = width
         self.intensity = intensity
@@ -69,33 +105,72 @@ final class VoiceContinuationGlowController {
         view?.needsDisplay = true
     }
 
-    func start(elapsed: TimeInterval = 0, fullSession: Bool = false) {
+    func setWarningStart(_ warningStart: TimeInterval) {
+        let clamped = min(VoiceGlowState.sessionDuration, max(0, warningStart))
+        guard self.warningStart != clamped else { return }
+        self.warningStart = clamped
+        guard isRecordingSessionActive, releaseDeadline == nil, previewTask == nil else { return }
+        let elapsed = max(0, now - startedAt)
+        generation &+= 1
+        let expectedGeneration = generation
+        pending?.cancel()
+        pending = nil
+        if fullSession || elapsed >= clamped {
+            show()
+        } else {
+            hide()
+            scheduleShow(after: max(0, clamped - elapsed), generation: expectedGeneration)
+        }
+    }
+
+    func start(
+        elapsed: TimeInterval = 0,
+        fullSession: Bool = false,
+        warningStart: TimeInterval = VoiceGlowState.defaultWarningStart
+    ) {
         let resumes = releaseDeadline.map { now < $0 } ?? false
         let previous = resumes ? currentState() : VoiceGlowState()
+        generation &+= 1
+        let expectedGeneration = generation
         pending?.cancel()
+        pending = nil
         releaseTask?.cancel()
         releaseTask = nil
         releaseDeadline = nil
         previewTask?.cancel()
         previewTask = nil
         frozen = nil
+        isRecordingSessionActive = true
         self.fullSession = fullSession
+        self.warningStart = min(VoiceGlowState.sessionDuration, max(0, warningStart))
         startedAt = now - elapsed
         transitionFrom = fullSession ? previous : nil
         transitionStartedAt = now
-        if fullSession || elapsed >= 50 {
+        if fullSession || elapsed >= self.warningStart {
             show()
         } else {
             hide()
-            let task = DispatchWorkItem { [weak self] in self?.show() }
-            pending = task
-            DispatchQueue.main.asyncAfter(deadline: .now() + max(0, 50 - elapsed), execute: task)
+            scheduleShow(after: max(0, self.warningStart - elapsed), generation: expectedGeneration)
         }
         AppLogger.shared.write("VOICE GLOW start full_session=\(fullSession) resumed=\(resumes)")
     }
 
+    private func scheduleShow(after delay: TimeInterval, generation expectedGeneration: UInt64) {
+        let task = DispatchWorkItem { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self, self.generation == expectedGeneration else { return }
+                self.pending = nil
+                self.show()
+            }
+        }
+        pending = task
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: task)
+    }
+
     func release(delay: TimeInterval) {
         guard releaseDeadline == nil else { return }
+        generation &+= 1
+        let expectedGeneration = generation
         pending?.cancel()
         pending = nil
         frozen = currentState()
@@ -104,7 +179,12 @@ final class VoiceContinuationGlowController {
         timer = nil
         guard delay > 0 else { stop(); return }
         releaseDeadline = now + delay
-        let task = DispatchWorkItem { [weak self] in self?.stop() }
+        let task = DispatchWorkItem { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self, self.generation == expectedGeneration else { return }
+                self.stop()
+            }
+        }
         releaseTask = task
         DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: task)
     }
@@ -117,7 +197,13 @@ final class VoiceContinuationGlowController {
     func preview(duration: TimeInterval = 3) {
         if previewTask == nil { start(elapsed: 0, fullSession: true) }
         previewTask?.cancel()
-        let task = DispatchWorkItem { [weak self] in self?.stop() }
+        let expectedGeneration = generation
+        let task = DispatchWorkItem { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self, self.generation == expectedGeneration else { return }
+                self.stop()
+            }
+        }
         previewTask = task
         DispatchQueue.main.asyncAfter(deadline: .now() + duration, execute: task)
     }
@@ -125,6 +211,7 @@ final class VoiceContinuationGlowController {
     var isVisible: Bool { panel != nil }
 
     func stop() {
+        generation &+= 1
         pending?.cancel()
         pending = nil
         releaseTask?.cancel()
@@ -132,6 +219,7 @@ final class VoiceContinuationGlowController {
         previewTask?.cancel()
         previewTask = nil
         releaseDeadline = nil
+        isRecordingSessionActive = false
         frozen = nil
         transitionFrom = nil
         hide()
@@ -143,10 +231,23 @@ final class VoiceContinuationGlowController {
         panel?.orderOut(nil)
         panel = nil
         view = nil
+        resetScreenTrackingCache()
+    }
+
+    private func resetScreenTrackingCache() {
+        hasResolvedScreen = false
+        trackedAppPID = nil
+        trackedScreenFrames = []
+        cachedWindowScreenIndex = nil
+        axQuerySucceededForTrackedApp = false
     }
 
     private func currentState() -> VoiceGlowState {
-        let target = frozen ?? .recording(elapsed: now - startedAt, fullSession: fullSession)
+        let target = frozen ?? .recording(
+            elapsed: now - startedAt,
+            fullSession: fullSession,
+            warningStart: warningStart
+        )
         guard let transitionFrom else { return target }
         let progress = (now - transitionStartedAt) / transitionDuration
         if progress >= 1 { self.transitionFrom = nil; return target }
@@ -155,7 +256,9 @@ final class VoiceContinuationGlowController {
 
     private func show() {
         if panel == nil {
+            resetScreenTrackingCache()
             guard let screen = activeScreen() else { return }
+            lastScreenCheck = now
             let frame = NSRect(x: screen.frame.minX, y: screen.frame.minY, width: screen.frame.width, height: 230)
             let panel = NSPanel(contentRect: frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
             panel.isOpaque = false
@@ -177,47 +280,107 @@ final class VoiceContinuationGlowController {
         timer?.invalidate()
         update()
         let timer = Timer(timeInterval: 1.0 / 60, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.update() }
+            MainActor.assumeIsolated {
+                self?.update()
+            }
         }
         self.timer = timer
         RunLoop.main.add(timer, forMode: .common)
     }
 
-    private func activeScreen() -> NSScreen? {
-        if let app = NSWorkspace.shared.frontmostApplication {
-            let application = AXUIElementCreateApplication(app.processIdentifier)
-            AXUIElementSetMessagingTimeout(application, 0.05)
-            var windowValue: CFTypeRef?
-            if AXUIElementCopyAttributeValue(application, kAXFocusedWindowAttribute as CFString, &windowValue) == .success,
-               let windowValue, CFGetTypeID(windowValue) == AXUIElementGetTypeID() {
-                let window = unsafeBitCast(windowValue, to: AXUIElement.self)
-                var positionValue: CFTypeRef?
-                var sizeValue: CFTypeRef?
-                if AXUIElementCopyAttributeValue(window, kAXPositionAttribute as CFString, &positionValue) == .success,
-                   AXUIElementCopyAttributeValue(window, kAXSizeAttribute as CFString, &sizeValue) == .success,
-                   let positionValue, let sizeValue,
-                   CFGetTypeID(positionValue) == AXValueGetTypeID(),
-                   CFGetTypeID(sizeValue) == AXValueGetTypeID() {
-                    var position = CGPoint.zero
-                    var size = CGSize.zero
-                    if AXValueGetValue(unsafeBitCast(positionValue, to: AXValue.self), .cgPoint, &position),
-                       AXValueGetValue(unsafeBitCast(sizeValue, to: AXValue.self), .cgSize, &size),
-                       let primary = NSScreen.screens.first {
-                        let frame = CGRect(x: position.x, y: primary.frame.maxY - position.y - size.height,
-                                           width: size.width, height: size.height)
-                        let screens = NSScreen.screens
-                        if let index = VoiceGlowScreenSelection.index(window: frame, screens: screens.map(\.frame)) {
-                            return screens[index]
-                        }
-                    }
-                }
+    func resolveScreenIndex() -> Int? {
+        let screens = screenFramesProvider()
+        guard !screens.isEmpty else {
+            resetScreenTrackingCache()
+            return nil
+        }
+        let mouseLocation = mouseLocationProvider()
+        let mouseScreenIndex = screens.firstIndex { $0.contains(mouseLocation) }
+        let currentPID = frontmostAppPIDProvider()
+        let appChanged = !hasResolvedScreen || currentPID != trackedAppPID
+        let screensChanged = screens != trackedScreenFrames
+        let shouldQueryWindow = appChanged || screensChanged || axQuerySucceededForTrackedApp
+
+        hasResolvedScreen = true
+        trackedAppPID = currentPID
+        trackedScreenFrames = screens
+
+        if shouldQueryWindow {
+            if let currentPID, let windowFrame = focusedWindowFrameProvider(currentPID) {
+                axQuerySucceededForTrackedApp = true
+                cachedWindowScreenIndex = VoiceGlowScreenSelection.index(
+                    window: windowFrame,
+                    screens: screens
+                )
+            } else {
+                axQuerySucceededForTrackedApp = false
+                cachedWindowScreenIndex = nil
             }
         }
-        return NSScreen.screens.first { $0.frame.contains(NSEvent.mouseLocation) }
+
+        if let cachedWindowScreenIndex, screens.indices.contains(cachedWindowScreenIndex) {
+            return cachedWindowScreenIndex
+        }
+        return mouseScreenIndex ?? 0
+    }
+
+    private func activeScreen() -> NSScreen? {
+        let screens = NSScreen.screens
+        guard let index = resolveScreenIndex(), screens.indices.contains(index) else {
+            return nil
+        }
+        return screens[index]
+    }
+
+    private static func queryFocusedWindowFrame(pid: pid_t) -> CGRect? {
+        if AXSelfTargetPolicy.isOwnProcess(pid) {
+            return (NSApp?.keyWindow ?? NSApp?.mainWindow)?.frame
+        }
+        let application = AXUIElementCreateApplication(pid)
+        AXUIElementSetMessagingTimeout(application, 0.05)
+        var windowValue: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(
+            application,
+            kAXFocusedWindowAttribute as CFString,
+            &windowValue
+        ) == .success,
+            let windowValue,
+            CFGetTypeID(windowValue) == AXUIElementGetTypeID()
+        else { return nil }
+        let window = unsafeBitCast(windowValue, to: AXUIElement.self)
+        var positionValue: CFTypeRef?
+        var sizeValue: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(
+            window,
+            kAXPositionAttribute as CFString,
+            &positionValue
+        ) == .success,
+            AXUIElementCopyAttributeValue(
+                window,
+                kAXSizeAttribute as CFString,
+                &sizeValue
+            ) == .success,
+            let positionValue,
+            let sizeValue,
+            CFGetTypeID(positionValue) == AXValueGetTypeID(),
+            CFGetTypeID(sizeValue) == AXValueGetTypeID()
+        else { return nil }
+        var position = CGPoint.zero
+        var size = CGSize.zero
+        guard AXValueGetValue(unsafeBitCast(positionValue, to: AXValue.self), .cgPoint, &position),
+              AXValueGetValue(unsafeBitCast(sizeValue, to: AXValue.self), .cgSize, &size),
+              let primary = NSScreen.screens.first
+        else { return nil }
+        return CGRect(
+            x: position.x,
+            y: primary.frame.maxY - position.y - size.height,
+            width: size.width,
+            height: size.height
+        )
     }
 
     private func update() {
-        if now - lastScreenCheck >= 0.2 {
+        if now - lastScreenCheck >= screenCheckInterval {
             lastScreenCheck = now
             if let screen = activeScreen(), let panel {
                 let frame = NSRect(x: screen.frame.minX, y: screen.frame.minY, width: screen.frame.width, height: 230)

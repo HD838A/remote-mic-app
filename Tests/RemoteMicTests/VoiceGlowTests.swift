@@ -31,6 +31,93 @@ struct VoiceGlowTests {
         #expect(VoiceGlowState.recording(elapsed: 30, fullSession: false).length == 1)
     }
 
+    @Test func warningFollowsConfiguredContinuationThreshold() {
+        let beforeThreshold = VoiceGlowState.recording(
+            elapsed: 25,
+            fullSession: false,
+            warningStart: 30
+        )
+        #expect(beforeThreshold.length == 1)
+        #expect(beforeThreshold.hue == 145)
+        #expect(beforeThreshold.heat == 0)
+
+        let midWarning = VoiceGlowState.recording(
+            elapsed: 40,
+            fullSession: false,
+            warningStart: 30
+        )
+        #expect(midWarning.length < 1)
+        #expect(midWarning.hue < 145)
+        #expect(midWarning.heat > 0)
+
+        let red = VoiceGlowState.recording(
+            elapsed: 51,
+            fullSession: false,
+            warningStart: 30
+        )
+        #expect(red.hue == 0)
+
+        let zeroSpanBeforeEnd = VoiceGlowState.recording(
+            elapsed: 59,
+            fullSession: false,
+            warningStart: 60
+        )
+        #expect(zeroSpanBeforeEnd.heat == 0)
+        let zeroSpanAtEnd = VoiceGlowState.recording(
+            elapsed: 60,
+            fullSession: false,
+            warningStart: 60
+        )
+        #expect(zeroSpanAtEnd.heat == 1)
+    }
+
+    @MainActor @Test func cachesAXWindowLookupUntilFrontmostAppOrScreenChanges() {
+        let glow = VoiceContinuationGlowController()
+        let screens = [
+            CGRect(x: 0, y: 0, width: 1920, height: 1080),
+            CGRect(x: 1920, y: 0, width: 1920, height: 1080),
+        ]
+        var currentPID: pid_t? = 101
+        var mouseLocation = CGPoint(x: 200, y: 200)
+        var queriedPIDs: [pid_t] = []
+        var windowFramesByPID: [pid_t: CGRect] = [
+            101: CGRect(x: 2100, y: 100, width: 800, height: 600),
+            202: CGRect(x: 100, y: 100, width: 800, height: 600),
+        ]
+
+        glow.screenFramesProvider = { screens }
+        glow.mouseLocationProvider = { mouseLocation }
+        glow.frontmostAppPIDProvider = { currentPID }
+        glow.focusedWindowFrameProvider = { pid in
+            queriedPIDs.append(pid)
+            return windowFramesByPID[pid]
+        }
+
+        #expect(glow.resolveScreenIndex() == 1)
+        #expect(queriedPIDs == [101])
+
+        // If the same responsive app moves its window to another screen without mouse movement,
+        // the next scheduled check refreshes and follows it.
+        windowFramesByPID[101] = CGRect(x: 100, y: 100, width: 800, height: 600)
+        #expect(glow.resolveScreenIndex() == 0)
+        #expect(queriedPIDs == [101, 101])
+
+        // Switching frontmost app triggers a lookup for the new PID.
+        currentPID = 202
+        #expect(glow.resolveScreenIndex() == 0)
+        #expect(queriedPIDs == [101, 101, 202])
+
+        // If an app fails AX lookup (e.g. unresponsive), it falls back to mouse screen
+        // and does not repeatedly query AX for the same frontmost PID.
+        currentPID = 303
+        mouseLocation = CGPoint(x: 2200, y: 200)
+        #expect(glow.resolveScreenIndex() == 1)
+        #expect(queriedPIDs == [101, 101, 202, 303])
+        mouseLocation = CGPoint(x: 300, y: 200)
+        #expect(glow.resolveScreenIndex() == 0)
+        #expect(queriedPIDs == [101, 101, 202, 303])
+    }
+
     @Test func refillIsContinuousAndFastThenSlow() {
         let from = VoiceGlowState.recording(elapsed: 58, fullSession: true)
         let target = VoiceGlowState.recording(elapsed: 0, fullSession: true)
@@ -68,7 +155,9 @@ struct VoiceGlowTests {
         let glow = VoiceContinuationGlowController()
         glow.preview(duration: 0.05)
         #expect(glow.isVisible)
-        try await Task.sleep(nanoseconds: 250_000_000)
+        for _ in 0..<20 where glow.isVisible {
+            try await Task.sleep(nanoseconds: 50_000_000)
+        }
         #expect(!glow.isVisible)
     }
 

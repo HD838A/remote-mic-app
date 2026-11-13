@@ -3665,7 +3665,10 @@ struct SettingsView: View {
                 if settings.voiceContinuationEnabled {
                     HStack(spacing: 14) {
                         Text("connection.voice_continuation.minimum").frame(width: 100, alignment: .leading)
-                        Slider(value: $settings.voiceContinuationMinimumDuration, in: 0...60, step: 1)
+                        Slider(value: Binding(
+                            get: { settings.voiceContinuationMinimumDuration },
+                            set: { model.setVoiceContinuationMinimumDuration($0) }
+                        ), in: 0...60, step: 1)
                         Text(verbatim: String(
                             format: localization.text("connection.voice_continuation.seconds"),
                             String(Int(settings.voiceContinuationMinimumDuration))

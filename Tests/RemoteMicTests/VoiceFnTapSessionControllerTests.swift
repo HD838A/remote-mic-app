@@ -707,6 +707,53 @@ struct VoiceFnTapSessionControllerTests {
             true, false,
         ])
     }
+
+    @Test func cancellingDestinationWaitClearsQueuedSegmentsAndAllowsSubsequentStop() {
+        let harness = Harness(defersDestination: true)
+        harness.controller.setEnabled(true)
+
+        #expect(harness.controller.startVoice())
+        #expect(harness.controller.stopVoice())
+        // Press again while the first segment is still waiting for destination readiness
+        // and marked remoteEnded; this queues a pending segment.
+        #expect(harness.controller.startVoice())
+        #expect(harness.controller.stopVoice())
+
+        harness.resolveDestination(.cancelled(.targetChanged))
+        #expect(harness.controller.phase == .idle)
+
+        // A new session started after cancellation must be able to stop cleanly.
+        #expect(harness.controller.startVoice())
+        harness.resolveDestination(.ready)
+        harness.scheduler.advance(by: 0.15)
+        harness.scheduler.advance(by: 0.12)
+        #expect(harness.controller.phase == .active(3))
+
+        #expect(harness.controller.stopVoice())
+        #expect(harness.controller.phase == .draining(3))
+        harness.completeNextDrain()
+        harness.scheduler.advance(by: 0.12)
+        #expect(harness.controller.phase == .idle)
+    }
+
+    @Test func differentSourceDoesNotMergeIntoWaitingContinuation() {
+        let harness = Harness()
+        harness.controller.setEnabled(true)
+        let remoteA = UUID()
+        let remoteB = UUID()
+
+        #expect(harness.controller.startVoice(sourceIdentifier: remoteA))
+        harness.scheduler.advance(by: 0.15)
+        harness.scheduler.advance(by: 0.12)
+        #expect(harness.controller.stopVoice(continuationDelay: 2))
+
+        // Remote B starts while Remote A is waiting for continuation: A closes and B queues separately.
+        #expect(harness.controller.startVoice(sourceIdentifier: remoteB))
+        #expect(harness.drainCompletions.count == 1)
+        harness.completeNextDrain()
+        harness.scheduler.advance(by: 0.12)
+        #expect(harness.controller.phase == .starting(2))
+    }
 }
 
 private final class Harness {

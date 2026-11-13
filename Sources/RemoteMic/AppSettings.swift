@@ -741,6 +741,10 @@ final class AppSettings: ObservableObject {
         }
     }
 
+    func setVoiceContinuationMinimumDuration(_ duration: TimeInterval) {
+        voiceContinuationMinimumDuration = min(60, max(0, duration))
+    }
+
     func setVoiceContinuationDelay(_ delay: TimeInterval) {
         voiceContinuationDelay = min(3, max(0.5, delay))
     }
@@ -749,6 +753,17 @@ final class AppSettings: ObservableObject {
         voiceContinuationEnabled && duration >= voiceContinuationMinimumDuration
             ? voiceContinuationDelay
             : 0
+    }
+
+    var voiceGlowWarningStart: TimeInterval {
+        guard voiceFnTapModeEnabled,
+              voiceContinuationEnabled,
+              voiceContinuationMinimumDuration > 0,
+              voiceContinuationMinimumDuration < 60
+        else {
+            return 50
+        }
+        return voiceContinuationMinimumDuration
     }
 
     @Published var voiceGlowReminderEnabled: Bool {
