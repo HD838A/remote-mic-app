@@ -43,3 +43,7 @@ swift test --disable-keychain --filter CoreVoiceInputJourneyTests
 单看非零波形、入队成功或 dataPlayedBack 不能判定 ASR 完整。
 如果立即松键仍缺少秒级尾部，而候选已排空后释放，应继续按现有 ATVV 诊断区分
 接收前缺口、解码/路由缺口、设备读写与外部消费者边界；不得声称所有尾音缺失均已解决。
+
+## 2026-11-13 会话补充边界
+
+本会话没有重新执行本手册的 RC001/RC003 真机步骤；build 346 的 94.3% 交付缺口和 build 348 的 1399 项组合测试都不属于本候选分支，不能作为本 PR 的通过证据。当前应把本手册与 #1029 的 `Bugs/2026-11-13-bluetooth-tail-release.md` 对照，二选一保留后再做真机。
