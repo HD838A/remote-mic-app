@@ -28,7 +28,108 @@ struct NearbyRemoteLifecycleTests {
         ])
     }
 
-    @Test func disablingWhileAsleepPreventsWakeRestart() {
+    @Test func idleConnectionStopsBeforeSleepAndStartsOnceOnWake() {
+        let harness = Harness()
+        harness.update(enabled: true)
+        let generation = harness.lifecycle.generation
+
+        // An idle connection is closed cleanly before sleep so the phone sees
+        // the disconnect instead of a silently dead socket.
+        harness.event(.systemWillSleep)
+        #expect(!harness.lifecycle.acceptsEvents(generation: generation))
+        #expect(harness.operations == ["start_phone", "start_watch", "stop_phone", "stop_watch"])
+        #expect(harness.logs.contains {
+            $0.contains("result=stop_requested reason=system_will_sleep")
+        })
+
+        harness.event(.systemDidWake)
+        harness.event(.systemDidWake)
+        #expect(harness.operations == [
+            "start_phone", "start_watch", "stop_phone", "stop_watch", "start_phone", "start_watch",
+        ])
+        #expect(harness.logs.contains {
+            $0.contains("result=start_requested reason=system_did_wake")
+        })
+        #expect(!harness.logs.contains { $0.contains("system_did_wake_restart") })
+    }
+
+    @Test func activeVoiceKeepsServiceUntilDrainThenStopsBeforeWake() {
+        let harness = Harness()
+        harness.update(enabled: true)
+        let generation = harness.lifecycle.generation
+
+        // Voice audio still needs to drain; closing the phone server now would
+        // cut the tail.
+        harness.event(.systemWillSleep, hasActiveVoice: true)
+        #expect(harness.lifecycle.acceptsEvents(generation: generation))
+        #expect(harness.operations == ["start_phone", "start_watch"])
+
+        // Drain finished while the system is still asleep.
+        harness.update(enabled: true, hasActiveVoice: false)
+        #expect(!harness.lifecycle.acceptsEvents(generation: generation))
+        #expect(harness.operations == ["start_phone", "start_watch", "stop_phone", "stop_watch"])
+
+        harness.event(.systemDidWake, hasActiveVoice: false)
+        #expect(harness.operations == [
+            "start_phone", "start_watch", "stop_phone", "stop_watch", "start_phone", "start_watch",
+        ])
+        #expect(!harness.logs.contains { $0.contains("system_did_wake_restart") })
+    }
+
+    @Test func activeVoiceStillRunningAtWakeRestartsOnce() {
+        let harness = Harness()
+        harness.update(enabled: true)
+        let generation = harness.lifecycle.generation
+        harness.event(.systemWillSleep, hasActiveVoice: true)
+        #expect(harness.operations == ["start_phone", "start_watch"])
+
+        harness.event(.systemDidWake, hasActiveVoice: true)
+        harness.event(.systemDidWake, hasActiveVoice: true)
+        #expect(!harness.lifecycle.acceptsEvents(generation: generation))
+        #expect(harness.operations == [
+            "start_phone", "start_watch",
+            "stop_phone", "stop_watch",
+            "start_phone", "start_watch",
+        ])
+        #expect(harness.operations.filter { $0 == "stop_phone" }.count == 1)
+        #expect(harness.operations.filter { $0 == "start_phone" }.count == 2)
+        #expect(harness.logs.contains {
+            $0.contains("result=stop_requested reason=system_did_wake_restart")
+        })
+        #expect(harness.logs.contains {
+            $0.contains("result=start_requested reason=system_did_wake_restart")
+        })
+        #expect(harness.logs.contains { $0.contains("wake_restart_attempt=1/1") })
+        #expect(!harness.logs.contains { $0.contains("wake_restart_attempt=2/1") })
+        #expect(!harness.logs.contains { $0.contains("phase=completed") })
+    }
+
+    @Test func aNewSleepCycleAllowsOneNewVoiceRestart() {
+        let harness = Harness()
+        harness.update(enabled: true)
+        harness.event(.systemWillSleep, hasActiveVoice: true)
+        harness.event(.systemDidWake, hasActiveVoice: true)
+        #expect(harness.operations.filter { $0 == "stop_phone" }.count == 1)
+
+        // A later sleep cycle gets one new attempt; repeated wake notifications
+        // in the same cycle still do not loop.
+        harness.event(.systemWillSleep, hasActiveVoice: true)
+        harness.event(.systemDidWake, hasActiveVoice: true)
+        #expect(harness.operations.filter { $0 == "stop_phone" }.count == 2)
+        #expect(harness.logs.contains { $0.contains("wake_restart_attempt=1/1") })
+    }
+
+    @Test func disablingWhileAsleepWithAnActiveVoiceStopsAndDoesNotRestart() {
+        let harness = Harness()
+        harness.update(enabled: true)
+        harness.event(.systemWillSleep, hasActiveVoice: true)
+        harness.update(enabled: false, hasActiveVoice: true)
+        harness.event(.systemDidWake, enabled: false, hasActiveVoice: true)
+        #expect(harness.operations == ["start_phone", "start_watch", "stop_phone", "stop_watch"])
+        #expect(!harness.logs.contains { $0.contains("system_did_wake_restart") })
+    }
+
+    @Test func disablingWhileAsleepPreventsWakeStart() {
         let harness = Harness()
         harness.update(enabled: true)
         harness.event(.systemWillSleep)
@@ -58,33 +159,11 @@ struct NearbyRemoteLifecycleTests {
         #expect(!harness.lifecycle.isSystemSleeping)
     }
 
-    @Test func existingConnectionAndVoiceDrainKeepTheirGeneration() {
-        let harness = Harness()
-        harness.update(enabled: true)
-        let generation = harness.lifecycle.generation
-        harness.event(.systemWillSleep, keepAlive: true)
-        harness.update(enabled: true, keepAlive: true)
-        #expect(harness.lifecycle.acceptsEvents(generation: generation))
-        #expect(harness.operations == ["start_phone", "start_watch"])
-        // The last connection and its tail audio have both finished.
-        harness.update(enabled: true, keepAlive: false)
-        #expect(!harness.lifecycle.acceptsEvents(generation: generation))
-        #expect(Array(harness.operations.suffix(2)) == ["stop_phone", "stop_watch"])
-    }
-
-    @Test func userDisableStopsEvenAnExistingSession() {
-        let harness = Harness()
-        harness.update(enabled: true)
-        harness.event(.systemWillSleep, keepAlive: true)
-        harness.update(enabled: false, keepAlive: true)
-        #expect(Array(harness.operations.suffix(2)) == ["stop_phone", "stop_watch"])
-    }
-
     @Test func staleConnectionStateCannotRestartAStoppedServiceDuringSleep() {
         let harness = Harness()
         harness.update(enabled: true)
         harness.event(.systemWillSleep)
-        harness.update(enabled: true, keepAlive: true)
+        harness.update(enabled: true, hasActiveVoice: true)
         #expect(harness.operations == ["start_phone", "start_watch", "stop_phone", "stop_watch"])
     }
 
@@ -137,14 +216,14 @@ struct NearbyRemoteLifecycleTests {
             Issue.record("Expected the normal mobile voice drain path")
             return
         }
-        harness.event(.systemWillSleep, keepAlive: voice.activeSource != nil)
+        harness.event(.systemWillSleep, hasActiveVoice: voice.activeSource != nil)
         var receivedSamples: [Int16] = []
         harness.lifecycle.deliver { receivedSamples.append(contentsOf: [1, 2]) }
         harness.lifecycle.deliver { receivedSamples.append(3) }
         harness.lifecycle.deliver {
             #expect(receivedSamples == [1, 2, 3])
             #expect(voice.completeStop(.nearbyPhone, generation: stopGeneration) == .stopped)
-            harness.update(enabled: true, keepAlive: voice.activeSource != nil)
+            harness.update(enabled: true, hasActiveVoice: voice.activeSource != nil)
         }
         await drainMainQueue()
         #expect(receivedSamples == [1, 2, 3])
@@ -171,6 +250,9 @@ struct NearbyRemoteLifecycleTests {
         let app = try String(contentsOf: root.appendingPathComponent(
             "Sources/RemoteMic/RemoteMicApp.swift"
         ), encoding: .utf8)
+        let lifecycleSource = try String(contentsOf: root.appendingPathComponent(
+            "Sources/RemoteMic/NearbyRemoteLifecycle.swift"
+        ), encoding: .utf8)
         let lifecycle = try #require(source.components(separatedBy:
             "func handleSystemAudioLifecycle(_ event: SystemAudioLifecycleEvent) {"
         ).last)
@@ -180,8 +262,23 @@ struct NearbyRemoteLifecycleTests {
         #expect(beforeAudioGuard.contains("nearbyRemoteLifecycle.handleSystemEvent(event)"))
         #expect(beforeAudioGuard.contains("updateNearbyRemoteLifecycle(reason: event.rawValue)"))
         #expect(source.contains("updateNearbyRemoteLifecycle(reason: \"voice_drained\")"))
+        #expect(source.contains("hasActiveVoice: hasNearbyVoice"))
         #expect(source.contains("self.nearbyRemoteLifecycle.acceptsEvents(generation: generation)"))
         #expect(app.contains("MainActor.assumeIsolated { [weak self] in"))
+
+        let stopStart = try #require(source.range(of: "stop: { [weak self] in"))
+        let stopEnd = try #require(source.range(
+            of: "log: { AppLogger.shared.write($0) }",
+            range: stopStart.upperBound..<source.endIndex
+        ))
+        let stopSource = source[stopStart.lowerBound..<stopEnd.lowerBound]
+        #expect(stopSource.contains("self.isPhoneRemoteConnected = false"))
+        #expect(stopSource.contains("self.isWatchRemoteConnected = false"))
+        #expect(stopSource.contains("self.phoneRemoteState = .idle"))
+        #expect(lifecycleSource.contains("hasActiveVoice"))
+        #expect(lifecycleSource.contains("needsWakeRestart"))
+        #expect(lifecycleSource.contains("maxWakeRestartsPerSleep"))
+        #expect(lifecycleSource.contains("wake_restart_attempt"))
     }
 
     private func drainMainQueue() async {
@@ -199,13 +296,13 @@ struct NearbyRemoteLifecycleTests {
             log: { [weak self] in self?.logs.append($0) }
         )
 
-        func update(enabled: Bool, keepAlive: Bool = false) {
-            lifecycle.update(enabled: enabled, keepAlive: keepAlive, reason: "test_update")
+        func update(enabled: Bool, hasActiveVoice: Bool = false) {
+            lifecycle.update(enabled: enabled, hasActiveVoice: hasActiveVoice, reason: "test_update")
         }
 
-        func event(_ event: SystemAudioLifecycleEvent, enabled: Bool = true, keepAlive: Bool = false) {
+        func event(_ event: SystemAudioLifecycleEvent, enabled: Bool = true, hasActiveVoice: Bool = false) {
             lifecycle.handleSystemEvent(event)
-            lifecycle.update(enabled: enabled, keepAlive: keepAlive, reason: event.rawValue)
+            lifecycle.update(enabled: enabled, hasActiveVoice: hasActiveVoice, reason: event.rawValue)
         }
     }
 }

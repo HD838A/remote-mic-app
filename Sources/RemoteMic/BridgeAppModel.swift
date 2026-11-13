@@ -665,6 +665,9 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         stop: { [weak self] in
             guard let self else { return }
             self.phoneRemoteInvitation = nil
+            self.isPhoneRemoteConnected = false
+            self.isWatchRemoteConnected = false
+            self.phoneRemoteState = .idle
             self.cancelPhoneApproval()
             self.resetMobileButtonGestures(source: .nearbyPhone)
             self.resetMobileButtonGestures(source: .nearbyPhone, phraseSource: "watch")
@@ -2200,7 +2203,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             pendingMobileVoiceStartSource == .nearbyWatch
         nearbyRemoteLifecycle.update(
             enabled: started && isPhoneRemoteConnectionEnabled,
-            keepAlive: isPhoneRemoteConnected || isWatchRemoteConnected || hasNearbyVoice,
+            hasActiveVoice: hasNearbyVoice,
             reason: reason
         )
     }
