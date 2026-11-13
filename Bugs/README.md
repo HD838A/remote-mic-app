@@ -2,6 +2,8 @@
 
 - [蓝牙语音停止前等待虚拟麦克风尾音排空](./2026-11-13-bluetooth-tail-release.md)
 
+- [远端 60 秒停止后语音工具没有收到 Fn 抬起](./2026-11-13-remote-timeout-does-not-commit-voice-key.md)
+
 - [远端 60 秒停止后本地转写候选被取消](./2026-11-13-transcript-capture-canceled-on-remote-stop.md)
 
 - [公开本地打包入口强制要求私有输入](./2026-11-12-public-local-package-requires-private-inputs.md)
@@ -191,6 +193,7 @@
 | 时间 | Bug | 状态 |
 | --- | --- | --- |
 | 2026-11-13 | [蓝牙语音停止前等待虚拟麦克风尾音排空](./2026-11-13-bluetooth-tail-release.md) | 候选修复：正常停止先等待已入队音频自然排空，再释放语音键；不 flush；新会话清理旧按键保持；1399 项自动化通过，真实 RC003 尾字复测待完成 |
+| 2026-11-13 | [远端 60 秒停止后语音工具没有收到 Fn 抬起](./2026-11-13-remote-timeout-does-not-commit-voice-key.md) | 已修复并真机验收：仅对远端超时强制一次软件 Fn 抬起，正常松键不变；build 345 豆包 60 秒超时提交/结束通过，60 秒后音频仍不延长 |
 | 2026-11-13 | [远端 60 秒停止后本地转写候选被取消](./2026-11-13-transcript-capture-canceled-on-remote-stop.md) | 候选修复：结束时已有合法候选则保存最后一个，只有没有候选才取消；定向自动化与真实 60 秒复测待完成 |
 | 2026-11-11 | [语音键与豆包绑定不是同一个键时只有电平、没有文字](./2026-11-11-voice-key-binding-mismatch.md) | 用户改回标准配法（SayAll 语音触发键 = Fn，豆包长按模式 = fn，免按模式留空）后自述恢复；提示形态已由 PR #1010 改为可执行内联条；未在本机复现，`target_response=unknown`，尚未回收改后日志做前后对照 |
 | 2026-11-07 | [Intel 上方向键一次按下移动两格](./2026-11-07-intel-directional-double-step.md) | 已修复并验收（方向键登记事件级兜底，默认只在 Intel 构建启用；Apple Silicon 保持零差异）；5 项回归随 CI 1227 tests 全绿；Intel build 289 验收通过，Apple Silicon build 290 日志确认零登记、零待匹配窗口 |
