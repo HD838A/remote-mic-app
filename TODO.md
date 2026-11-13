@@ -453,6 +453,7 @@
   - 曾尝试在普通物理语音会话收到 `STREAM_START` 后每 10 秒调用 ATVV v1.0 `MIC_EXTEND`，并设置 180 秒关闭与 2 秒超时重连。
   - 2026-08-11 真机日志确认普通物理会话没有 `microphoneOpened` 状态，定时调用持续返回 `ATVV MIC_EXTEND rejected`，命令并未写入遥控器；模拟租期模型不能证明真实固件行为。
   - 上述候选方案已经撤回：普通会话不再定时续期、不再由 Mac 强制限制为三分钟，也不再因关闭确认超时重连。底层命令只保留给未来成功主动 `MIC_OPEN` 的独立实验。
+  - 2026-11-12 已删除独立 RC003 续流实验入口 `--rc003-voice-extension-test` 及自动 `MIC_OPEN` / `MIC_EXTEND` 定时逻辑；真机验证不可用。正常语音会话仍在遥控器物理 `STREAM_STOP` 时结束。
   - 当前问题仍未解决，需要重新取得 RC003 约 60 秒停止的完整真机日志，再基于真实控制/音频事件顺序研究固件边界。
   - RC003 长录音、稳定语音基线和 iOS 点按/按住录音的真机步骤统一维护在 [`Testing/ExtendedVoiceRecording.md`](Testing/ExtendedVoiceRecording.md)。
 - [ ] 开关键支持开关式长时间录音 <!-- workshop:status=阻塞;priority=P2 -->
