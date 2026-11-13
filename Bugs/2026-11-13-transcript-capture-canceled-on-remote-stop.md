@@ -63,3 +63,31 @@
 ## 验证边界
 
 自动化快照只能证明捕获状态机；真实 RC003 的 60 秒固件停止、第三方输入法文字、目标 App 的 Accessibility 文本变化仍需真机复测。修复只保存停止前已经出现的文字，不延长远端 60 秒音频，也不恢复 60 秒后的尾音。
+
+## 2026-11-13 会话补充记录
+
+### 本次现场证据
+
+- build 346 的 `operation_id=2`（29.625 秒，目标 DimAgent，豆包语音工具）记录了 `TRANSCRIPT CAPTURE target_ready retry=false`，说明目标焦点输入框在开始时可用。
+- 同一会话的 `ATVV STREAM summary` 为 447120 samples、coverage 94.3%、`dropped_samples=0`、`interrupted_samples=0`；本地录音 27.945 秒并保存成功。
+- 21 秒后，`TRANSCRIPT CAPTURE canceled reason=discontinuous_text_change`，没有 `TRANSCRIPT CAPTURE saved`，也没有 `TRANSCRIPT OBSERVATION operation_id=2`。
+- 前一次 `operation_id=1`（6.990 秒）保存了 `characters=17`；同目标、同 build 的长会话失败，说明不是简单的焦点未就绪。
+- 该取消只影响 SayAll 的本地转写历史；不会删除或改写 DimAgent/豆包输入框文字。豆包是否识别、是否提交文字仍由目标工具决定。
+
+### 历史调试原因
+
+- 2026-11-12 的 60 秒 build 343 会话已出现同一 `canceled reason=discontinuous_text_change`，当时音频完成正常、录音资产保存，但没有本地转写候选。
+- 旧实现把“会话结束后目标文本发生非连续变化”当成必须取消的异常，导致已经通过安全目标、同一元素和连续差异校验的候选被丢弃；#1029 处理的尾音释放是另一个独立问题，#1026 处理的 60 秒 Fn 提交也是另一个独立问题。
+- 本 PR 不扩大采集范围：没有合法候选时仍然取消；只保留最后一份已确认候选。
+
+### 本次测试记录
+
+- `swift test --disable-keychain --filter TranscriptCaptureCoordinatorTests`：13 项 / 1 suite 通过，包含“结束后保留最后候选”和“没有候选仍取消”。
+- 更宽的定向组合：98 项 / 4 suites 通过（TranscriptCaptureCoordinatorTests、FirstVoiceReflectionJourneyTests、RecordingAssetStoreTests、SettingsPageRegressionTests）。
+- 本地组合包 build 348（#1026 + #1029 + #1030，基于 main）完成 release 构建、签名、资源和本地化校验，并实际启动；组合 `swift test --disable-keychain` 为 1399 项 / 103 suites 通过。
+- 待完成：真实 RC003 超过 60 秒、DimAgent 输入框、豆包最终文字和本地转写历史验收；没有真机结果前保持 Draft。
+
+### 合入边界
+
+- 本 PR 不改变豆包是否显示文字，也不改变音频交付或语音键释放；它只修本地转写候选的保存策略。
+- 不能把本次 build 346 的“豆包无文字”全部归因给本 PR；目标的最终文字仍需独立验收。
