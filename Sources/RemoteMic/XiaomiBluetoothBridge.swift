@@ -427,23 +427,6 @@ final class XiaomiBluetoothBridge: NSObject {
     }
 
     @discardableResult
-    func requestMicrophoneExtend() -> Bool {
-        guard microphoneOpened,
-              streaming,
-              let command = ATVVProtocol.microphoneExtend(
-                  version: capabilities.version,
-                  sessionID: sessionID
-              ),
-              write(command)
-        else {
-            AppLogger.shared.write("ATVV MIC_EXTEND rejected session=\(sessionID)")
-            return false
-        }
-        AppLogger.shared.write("ATVV MIC_EXTEND request session=\(sessionID)")
-        return true
-    }
-
-    @discardableResult
     func requestMicrophoneClose() -> Bool {
         guard microphoneOpened || streaming else { return true }
         let cancelledOpenAt = ATVVSessionGate.cancelledOpenDate(
