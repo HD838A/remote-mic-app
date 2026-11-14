@@ -4,6 +4,491 @@ import Testing
 
 @Suite("Typeless Fn tap session lifecycle")
 struct VoiceFnTapSessionControllerTests {
+    @Test
+    func eachHoldUsesItsOwnThreshold() throws {
+        let defaults = try #require(UserDefaults(suiteName: "Continuation-\(UUID().uuidString)"))
+        let settings = AppSettings(defaults: defaults)
+        settings.voiceContinuationEnabled = true
+        settings.setVoiceContinuationDelay(2)
+        let harness = Harness()
+        harness.controller.setEnabled(true)
+        harness.startActiveSession()
+        let opening = [true, false]
+        for duration in [50.0, 55, 59] {
+            #expect(settings.continuationDelay(after: duration) == 2)
+            _ = harness.controller.stopVoice(continuationDelay: settings.continuationDelay(after: duration))
+            harness.scheduler.advance(by: 1)
+            _ = harness.controller.startVoice()
+            #expect(harness.functionKeyEvents == opening)
+        }
+        #expect(settings.continuationDelay(after: 10) == 0)
+        _ = harness.controller.stopVoice(continuationDelay: settings.continuationDelay(after: 10))
+        harness.completeNextDrain()
+        harness.scheduler.runAll()
+        #expect(harness.functionKeyEvents == [true, false, true, false])
+        settings.voiceContinuationMinimumDuration = 0
+        #expect(settings.continuationDelay(after: 0.1) == 2)
+    }
+
+    @Test(arguments: [0.5, 1, 1.5, 2, 2.5, 3])
+    func releaseGraceKeepsOneFnPairAcrossPhysicalSegments(delay: TimeInterval) {
+        let harness = Harness()
+        harness.controller.setEnabled(true)
+        harness.startActiveSession()
+        #expect(harness.controller.stopVoice(continuationDelay: delay))
+        harness.scheduler.advance(by: delay - 0.1)
+        #expect(harness.drainCompletions.isEmpty)
+        #expect(harness.controller.startVoice())
+        #expect(harness.controller.receive([7, 8]))
+        harness.scheduler.advance(by: delay + 1)
+        #expect(harness.functionKeyEvents == [true, false])
+        #expect(harness.enqueuedAudio.last == [7, 8])
+        #expect(harness.controller.stopVoice(continuationDelay: delay))
+        harness.scheduler.advance(by: delay)
+        #expect(harness.drainCompletions.count == 1)
+        harness.completeNextDrain()
+        harness.scheduler.advance(by: 0.12)
+        #expect(harness.functionKeyEvents == [true, false, true, false])
+        #expect(harness.controller.phase == .idle)
+    }
+
+    @Test func earlyReleaseCanResumeWhileOpeningTapIsPending() {
+        let harness = Harness()
+        harness.controller.setEnabled(true)
+        #expect(harness.controller.startVoice())
+        #expect(harness.controller.stopVoice(continuationDelay: 2))
+        harness.scheduler.advance(by: 0.05)
+        #expect(harness.controller.startVoice())
+        harness.scheduler.advance(by: 3)
+        #expect(harness.functionKeyEvents == [true, false])
+        #expect(harness.drainCompletions.isEmpty)
+    }
+
+    @Test func disconnectCancelsGraceAndClosesExactlyOnce() {
+        let harness = Harness()
+        harness.controller.setEnabled(true)
+        harness.startActiveSession()
+        #expect(harness.controller.stopVoice(continuationDelay: 2))
+        harness.controller.suspend()
+        #expect(harness.drainCompletions.count == 1)
+        harness.completeNextDrain()
+        harness.scheduler.runAll()
+        #expect(harness.functionKeyEvents == [true, false, true, false])
+        #expect(harness.controller.phase == .idle)
+    }
+
+    @Test func disablingContinuationClosesPendingGraceImmediately() {
+        let harness = Harness()
+        harness.controller.setEnabled(true)
+        harness.startActiveSession()
+        #expect(harness.controller.stopVoice(continuationDelay: 2))
+        harness.controller.finishContinuationIfWaiting()
+        #expect(harness.drainCompletions.count == 1)
+        harness.completeNextDrain()
+        harness.scheduler.runAll()
+        #expect(harness.functionKeyEvents == [true, false, true, false])
+    }
+
+    @Test func disablingWhileWaitingForContinuationStillRunsTheCompletion() {
+        let harness = Harness()
+        harness.controller.setEnabled(true)
+        harness.startActiveSession()
+        #expect(harness.controller.stopVoice(continuationDelay: 2))
+        var disabledCount = 0
+
+        harness.controller.setEnabled(false) { disabledCount += 1 }
+        #expect(disabledCount == 0)
+        harness.completeNextDrain()
+        harness.scheduler.advance(by: 0.12)
+
+
+        #expect(disabledCount == 1)
+        #expect(harness.controller.phase == .idle)
+        #expect(!harness.controller.requiresCleanupBeforeMapping)
+        #expect(harness.functionKeyEvents == [true, false, true, false])
+        #expect(!harness.controller.stopVoice())
+        #expect(disabledCount == 1)
+    }
+
+    @Test func destinationCancellationAfterTheReleaseStillRunsTheCleanup() {
+        let harness = Harness(defersDestination: true)
+        harness.controller.setEnabled(true)
+        #expect(harness.controller.startVoice())
+        #expect(harness.controller.phase == .starting(1))
+        #expect(harness.controller.stopVoice(continuationDelay: 2))
+
+        harness.resolveDestination(.cancelled(.targetChanged))
+
+        #expect(harness.controller.phase == .idle)
+        #expect(!harness.controller.requiresCleanupBeforeMapping)
+        #expect(harness.functionKeyEvents.isEmpty)
+    }
+
+    @Test func continuationWindowCoversASegmentQueuedBehindTheClose() {
+        let harness = Harness()
+        harness.controller.setEnabled(true)
+        harness.startActiveSession()
+        #expect(harness.controller.stopVoice())
+        #expect(harness.controller.phase == .draining(1))
+        #expect(harness.controller.startVoice())
+        #expect(harness.controller.receive([4, 5]))
+        #expect(harness.controller.stopVoice(continuationDelay: 2))
+
+        harness.completeNextDrain()
+        harness.scheduler.advance(by: 0.12)
+        #expect(harness.controller.phase == .starting(2))
+        harness.scheduler.advance(by: 0.27)
+        #expect(harness.controller.phase == .active(2))
+        #expect(harness.drainCompletions.isEmpty)
+        #expect(harness.enqueuedAudio.last == [4, 5])
+
+
+        #expect(harness.controller.startVoice())
+        harness.scheduler.advance(by: 3)
+        #expect(harness.controller.phase == .active(2))
+        #expect(harness.drainCompletions.isEmpty)
+        #expect(harness.functionKeyEvents == [true, false, true, false, true, false])
+
+        #expect(harness.controller.stopVoice())
+        harness.completeNextDrain()
+        harness.scheduler.advance(by: 0.12)
+        #expect(harness.controller.phase == .idle)
+        #expect(harness.functionKeyEvents == [
+            true, false, true, false, true, false, true, false,
+        ])
+    }
+
+    @Test func aQueuedWindowThatExpiresEndsTheHandedOverSegment() {
+        let harness = Harness()
+        harness.controller.setEnabled(true)
+        harness.startActiveSession()
+        #expect(harness.controller.stopVoice())
+        #expect(harness.controller.startVoice())
+        #expect(harness.controller.stopVoice(continuationDelay: 2))
+        harness.completeNextDrain()
+        harness.scheduler.advance(by: 0.12)
+
+        harness.scheduler.advance(by: 2)
+        #expect(harness.controller.phase == .draining(2))
+        #expect(harness.drainCompletions.count == 1)
+        #expect(harness.functionKeyEvents == [true, false, true, false, true, false])
+    }
+
+    @Test func aQueuedSegmentPressedAgainBeforeHandoverKeepsItselfOpen() {
+        let harness = Harness()
+        harness.controller.setEnabled(true)
+        harness.startActiveSession()
+        #expect(harness.controller.stopVoice())
+        #expect(harness.controller.startVoice())
+        #expect(harness.controller.stopVoice(continuationDelay: 2))
+        #expect(harness.controller.startVoice())
+
+        harness.completeNextDrain()
+        harness.scheduler.advance(by: 0.39)
+        #expect(harness.controller.phase == .active(2))
+        harness.scheduler.advance(by: 3)
+        #expect(harness.controller.phase == .active(2))
+        #expect(harness.drainCompletions.isEmpty)
+    }
+
+    @Test func aQueuedSegmentWhoseWindowClosedBeforeHandoverEndsWithTheOpeningTap() {
+        let harness = Harness()
+        harness.controller.setEnabled(true)
+        harness.startActiveSession()
+        #expect(harness.controller.stopVoice())
+        #expect(harness.controller.startVoice())
+        #expect(harness.controller.stopVoice(continuationDelay: 0.5))
+        harness.scheduler.advance(by: 0.6)
+
+        harness.completeNextDrain()
+        harness.scheduler.advance(by: 0.39)
+        #expect(harness.controller.phase == .draining(2))
+        #expect(harness.drainCompletions.count == 1)
+        #expect(harness.functionKeyEvents == [true, false, true, false, true, false])
+    }
+
+    @Test func expiredQueuedSegmentKeepsItsOwnBoundaryAndTheNextPressStartsANewSession() {
+        let harness = Harness()
+        harness.controller.setEnabled(true)
+        harness.startActiveSession()
+        #expect(harness.controller.stopVoice())
+        #expect(harness.controller.phase == .draining(1))
+
+
+        #expect(harness.controller.startVoice())
+        #expect(harness.controller.receive([10, 11]))
+        #expect(harness.controller.stopVoice(continuationDelay: 0.5))
+        harness.scheduler.advance(by: 0.6)
+        #expect(harness.controller.phase == .draining(1))
+
+
+        #expect(harness.controller.startVoice())
+        #expect(harness.controller.receive([20, 21]))
+
+        harness.completeNextDrain()
+        harness.scheduler.advance(by: 0.12)
+        #expect(harness.controller.phase == .starting(2))
+        #expect(harness.enqueuedAudio.isEmpty)
+        #expect(harness.logs.contains { $0.contains(
+            "operation_id=2 phase=handover result=expired"
+        ) })
+
+        harness.scheduler.advance(by: 0.27)
+        #expect(harness.enqueuedAudio == [[10, 11]])
+        #expect(harness.controller.phase == .draining(2))
+        #expect(harness.drainCompletions.count == 1)
+
+        harness.completeNextDrain()
+        harness.scheduler.advance(by: 0.12)
+        #expect(harness.controller.phase == .starting(3))
+        harness.scheduler.advance(by: 0.27)
+        #expect(harness.enqueuedAudio == [[10, 11], [20, 21]])
+        #expect(harness.controller.phase == .active(3))
+        #expect(harness.drainCompletions.isEmpty)
+        #expect(harness.functionKeyEvents == [
+            true, false, true, false, true, false, true, false, true, false,
+        ])
+
+        #expect(harness.controller.stopVoice(continuationDelay: 0.5))
+        harness.scheduler.advance(by: 0.5)
+        #expect(harness.controller.phase == .draining(3))
+        harness.completeNextDrain()
+        harness.scheduler.advance(by: 0.12)
+        #expect(harness.controller.phase == .idle)
+        #expect(harness.functionKeyEvents.count == 12)
+    }
+
+    @Test func releaseOfASegmentQueuedBehindTheCloseKeepsItsOwnWindow() {
+        let harness = Harness()
+        harness.controller.setEnabled(true)
+        harness.startActiveSession()
+        #expect(harness.controller.stopVoice())
+
+        #expect(harness.controller.startVoice())
+        #expect(harness.controller.receive([1, 2]))
+        #expect(harness.controller.stopVoice(continuationDelay: 0.5))
+        harness.scheduler.advance(by: 0.6)
+
+        #expect(harness.controller.startVoice())
+        #expect(harness.controller.receive([3, 4]))
+
+        harness.completeNextDrain()
+        harness.scheduler.advance(by: 0.12)
+        #expect(harness.controller.phase == .starting(2))
+
+
+        #expect(harness.controller.stopVoice(continuationDelay: 2))
+
+        harness.scheduler.advance(by: 0.27)
+        #expect(harness.enqueuedAudio == [[1, 2]])
+        #expect(harness.controller.phase == .draining(2))
+        harness.completeNextDrain()
+        harness.scheduler.advance(by: 0.12)
+        #expect(harness.controller.phase == .starting(3))
+
+        harness.scheduler.advance(by: 0.27)
+        #expect(harness.enqueuedAudio == [[1, 2], [3, 4]])
+        #expect(harness.controller.phase == .active(3))
+        #expect(harness.drainCompletions.isEmpty)
+
+        harness.scheduler.advance(by: 2)
+        #expect(harness.controller.phase == .draining(3))
+        #expect(harness.drainCompletions.count == 1)
+    }
+
+    @Test func pressDuringExpiredSegmentOpeningKeepsAudioInSeparateSessions() {
+        let harness = Harness()
+        harness.controller.setEnabled(true)
+        harness.startActiveSession()
+        #expect(harness.controller.stopVoice())
+        #expect(harness.controller.startVoice())
+        #expect(harness.controller.receive([10, 11]))
+        #expect(harness.controller.stopVoice(continuationDelay: 0.5))
+        harness.scheduler.advance(by: 0.6)
+        harness.completeNextDrain()
+        harness.scheduler.advance(by: 0.12)
+        #expect(harness.controller.phase == .starting(2))
+
+        #expect(harness.controller.startVoice())
+        #expect(harness.controller.receive([20, 21]))
+        harness.scheduler.advance(by: 0.27)
+        #expect(harness.enqueuedAudio == [[10, 11]])
+        #expect(harness.controller.phase == .draining(2))
+        #expect(harness.controller.receive([22, 23]))
+        harness.completeNextDrain()
+        harness.scheduler.advance(by: 0.39)
+        #expect(harness.controller.phase == .active(3))
+        #expect(harness.enqueuedAudio == [[10, 11], [20, 21, 22, 23]])
+        #expect(harness.functionKeyEvents.count == 10)
+
+        #expect(harness.controller.stopVoice(continuationDelay: 0.5))
+        harness.scheduler.advance(by: 0.5)
+        #expect(harness.controller.phase == .draining(3))
+        if !harness.drainCompletions.isEmpty { harness.completeNextDrain() }
+        harness.scheduler.advance(by: 0.12)
+        #expect(harness.controller.phase == .idle)
+        #expect(harness.functionKeyEvents.count == 12)
+    }
+
+    @Test(arguments: [0.5, 2.0])
+    func queuedTailRepressDuringExpiredSegmentOpeningUsesItsOwnDeadline(delay: TimeInterval) {
+        let harness = Harness()
+        harness.controller.setEnabled(true)
+        harness.startActiveSession()
+        #expect(harness.controller.stopVoice())
+        #expect(harness.controller.startVoice())
+        #expect(harness.controller.receive([10, 11]))
+        #expect(harness.controller.stopVoice(continuationDelay: 0.5))
+        harness.scheduler.advance(by: 0.6)
+        #expect(harness.controller.startVoice())
+        #expect(harness.controller.receive([20, 21]))
+        #expect(harness.controller.stopVoice(continuationDelay: delay))
+        harness.scheduler.advance(by: 0.6)
+        harness.completeNextDrain()
+        harness.scheduler.advance(by: 0.12)
+        #expect(harness.controller.phase == .starting(2))
+
+        #expect(harness.controller.startVoice())
+        #expect(harness.controller.receive([30, 31]))
+        harness.scheduler.advance(by: 0.27)
+        #expect(harness.enqueuedAudio == [[10, 11]])
+        harness.completeNextDrain()
+        harness.scheduler.advance(by: 0.39)
+
+        if delay == 0.5 {
+            #expect(harness.enqueuedAudio == [[10, 11], [20, 21]])
+            #expect(harness.controller.phase == .draining(3))
+            harness.completeNextDrain()
+            harness.scheduler.advance(by: 0.39)
+            #expect(harness.controller.phase == .active(4))
+            #expect(harness.enqueuedAudio == [[10, 11], [20, 21], [30, 31]])
+        } else {
+            #expect(harness.controller.phase == .active(3))
+            #expect(harness.enqueuedAudio == [[10, 11], [20, 21, 30, 31]])
+        }
+        harness.scheduler.advance(by: 3)
+        #expect(harness.drainCompletions.isEmpty)
+        #expect(harness.controller.receive([32, 33]))
+        #expect(harness.enqueuedAudio.last == [32, 33])
+        #expect(harness.controller.stopVoice())
+        if !harness.drainCompletions.isEmpty { harness.completeNextDrain() }
+        harness.scheduler.advance(by: 0.12)
+        #expect(harness.controller.phase == .idle)
+        #expect(harness.functionKeyEvents.count == (delay == 0.5 ? 16 : 12))
+    }
+
+    @Test(arguments: [false, true], [false, true])
+    func disablingDropsSegmentsQueuedBehindTheClose(duringReplay: Bool, tailReleased: Bool) {
+        let harness = Harness()
+        harness.controller.setEnabled(true)
+        harness.startActiveSession()
+        #expect(harness.controller.stopVoice())
+
+        #expect(harness.controller.startVoice())
+        #expect(harness.controller.receive([1, 2]))
+        #expect(harness.controller.stopVoice(continuationDelay: 0.5))
+        harness.scheduler.advance(by: 0.6)
+        #expect(harness.controller.startVoice())
+        #expect(harness.controller.receive([3, 4]))
+
+        if duringReplay {
+            harness.completeNextDrain()
+            harness.scheduler.advance(by: 0.12)
+            #expect(harness.controller.phase == .starting(2))
+        }
+        if tailReleased {
+            #expect(harness.controller.stopVoice(continuationDelay: 2))
+        }
+        var disabledCount = 0
+        harness.controller.setEnabled(false) { disabledCount += 1 }
+        if !duringReplay {
+            #expect(disabledCount == 0)
+            harness.completeNextDrain()
+            harness.scheduler.advance(by: 0.12)
+        }
+
+        #expect(harness.controller.phase == .idle)
+        #expect(disabledCount == (tailReleased ? 1 : 0))
+        #expect(harness.controller.requiresCleanupBeforeMapping == !tailReleased)
+        #expect(harness.controller.receive([5, 6]) == !tailReleased)
+        #expect(harness.enqueuedAudio.isEmpty)
+        #expect(harness.drainCompletions.isEmpty)
+        #expect(harness.functionKeyEvents == [true, false, true, false])
+        #expect(!harness.controller.stopVoice())
+        #expect(disabledCount == 1)
+        #expect(!harness.controller.requiresCleanupBeforeMapping)
+        #expect(!harness.controller.receive([7, 8]))
+        #expect(!harness.controller.stopVoice())
+        #expect(disabledCount == 1)
+    }
+
+    @Test(arguments: [false, true])
+    func finishingQueuedContinuationDoesNotReleaseAHeldTail(tailWaiting: Bool) {
+        let harness = Harness()
+        harness.controller.setEnabled(true)
+        harness.startActiveSession()
+        #expect(harness.controller.stopVoice())
+        #expect(harness.controller.startVoice())
+        #expect(harness.controller.receive([10, 11]))
+        #expect(harness.controller.stopVoice(continuationDelay: 0.5))
+        harness.scheduler.advance(by: 0.6)
+        #expect(harness.controller.startVoice())
+        #expect(harness.controller.receive([20, 21]))
+        if tailWaiting {
+            #expect(harness.controller.stopVoice(continuationDelay: 2))
+        }
+
+        harness.controller.finishContinuationIfWaiting()
+        harness.controller.finishContinuationIfWaiting()
+        harness.completeNextDrain()
+        harness.scheduler.advance(by: 0.39)
+        #expect(harness.controller.phase == .draining(2))
+        #expect(harness.enqueuedAudio == [[10, 11]])
+        harness.completeNextDrain()
+        harness.scheduler.advance(by: 0.39)
+        #expect(harness.enqueuedAudio == [[10, 11], [20, 21]])
+        if tailWaiting {
+            #expect(harness.controller.phase == .draining(3))
+        } else {
+            #expect(harness.controller.phase == .active(3))
+            harness.scheduler.advance(by: 3)
+            #expect(harness.controller.phase == .active(3))
+            #expect(harness.drainCompletions.isEmpty)
+            #expect(harness.controller.receive([22, 23]))
+            #expect(harness.enqueuedAudio.last == [22, 23])
+            #expect(harness.controller.stopVoice())
+        }
+        if !harness.drainCompletions.isEmpty { harness.completeNextDrain() }
+        harness.scheduler.advance(by: 0.12)
+        #expect(harness.controller.phase == .idle)
+        #expect(harness.functionKeyEvents.count == 12)
+    }
+
+    @Test func repeatedQueuedReleaseDuringReplayDoesNotArmTheHistoricalSession() {
+        let harness = Harness()
+        harness.controller.setEnabled(true)
+        harness.startActiveSession()
+        #expect(harness.controller.stopVoice())
+        #expect(harness.controller.startVoice())
+        #expect(harness.controller.stopVoice(continuationDelay: 0.5))
+        harness.scheduler.advance(by: 0.6)
+        #expect(harness.controller.startVoice())
+        #expect(harness.controller.stopVoice(continuationDelay: 2))
+        harness.completeNextDrain()
+        harness.scheduler.advance(by: 0.12)
+        #expect(harness.controller.phase == .starting(2))
+
+        #expect(harness.controller.stopVoice(continuationDelay: 0.01))
+        harness.scheduler.advance(by: 0.27)
+        #expect(harness.controller.phase == .draining(2))
+        harness.completeNextDrain()
+        harness.scheduler.advance(by: 0.39)
+        #expect(harness.controller.phase == .active(3))
+        #expect(harness.drainCompletions.isEmpty)
+        harness.scheduler.advance(by: 2)
+        #expect(harness.controller.phase == .draining(3))
+    }
+
     @Test func defaultDisabledPreservesExistingVoicePath() {
         let harness = Harness()
         harness.controller.setEnabled(false)
@@ -232,8 +717,15 @@ private final class Harness {
     var drainCompletions: [() -> Void] = []
     var failures: [VoiceFnTapFailure] = []
     var logs: [String] = []
+    private let defersDestination: Bool
+    private var destinationCallbacks: [(VoiceInputDestinationWaitResult) -> Void] = []
     lazy var controller = VoiceFnTapSessionController(
         schedule: scheduler.schedule,
+        destinationReadiness: { [unowned self] completion in
+            guard defersDestination else { return .immediate }
+            destinationCallbacks.append(completion)
+            return .waiting(VoiceFnTapScheduledTask {})
+        },
         setFunctionKeyPressed: { [unowned self] pressed in
             functionKeyEvents.append(pressed)
             return functionKeyResults.isEmpty ? true : functionKeyResults.removeFirst()
@@ -251,8 +743,9 @@ private final class Harness {
         uptime: { [unowned self] in scheduler.currentTime }
     )
 
-    init(functionKeyResults: [Bool] = []) {
+    init(functionKeyResults: [Bool] = [], defersDestination: Bool = false) {
         self.functionKeyResults = functionKeyResults
+        self.defersDestination = defersDestination
     }
 
     func startActiveSession() {
@@ -264,6 +757,11 @@ private final class Harness {
     func completeNextDrain() {
         #expect(!drainCompletions.isEmpty)
         drainCompletions.removeFirst()()
+    }
+
+    func resolveDestination(_ result: VoiceInputDestinationWaitResult) {
+        #expect(!destinationCallbacks.isEmpty)
+        destinationCallbacks.removeFirst()(result)
     }
 }
 
