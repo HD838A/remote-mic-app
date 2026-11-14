@@ -663,6 +663,12 @@ struct SettingsView: View {
     /// 聚焦与翻页滚动按 App 生效，App 在前台即可使用，和「打开 App」动作无关。
     /// 「APP 适配」页当前展开的 APP；与按键页的编辑对象完全分开。
     @State private var applicationDetailProfileID: UUID?
+    /// 非空时 APP 档案页显示该 APP 的同窗口按键覆盖二级页。
+    @State private var applicationButtonSettingsProfileID: UUID?
+    @State private var applicationButtonEditingTarget: ShortcutEditingTarget?
+    @State private var applicationButtonActionFilter: MappingActionFilter = .all
+    @State private var applicationButtonEditingScrollRequest = 0
+    @State private var isApplicationButtonClearConfirmationPresented = false
     /// 正在确认移除的 APP 档案；非空时弹确认框。
     @State private var applicationPendingRemoval: CustomApplicationProfile?
     @State private var shortcutCaptureFeedback: ShortcutCaptureFeedback?
@@ -706,6 +712,10 @@ struct SettingsView: View {
         initialMappingActionFilter: String? = nil,
         initialMappingScrollsToGestureTiming: Bool = false,
         initialMappingVoiceSettingsPresented: Bool = false,
+        initialApplicationButtonSettingsProfileID: UUID? = nil,
+        initialApplicationButtonEditingButton: RemoteButton? = nil,
+        initialApplicationButtonEditingTrigger: ButtonTrigger = .singleClick,
+        initialApplicationButtonClearConfirmationPresented: Bool = false,
         supplementalSettings: SupplementalSettingsIntegration? = nil,
         sidebarAccountDisplayName: String? = nil,
         minimumContentSize: CGSize = CGSize(width: 980, height: 732)
@@ -775,6 +785,18 @@ struct SettingsView: View {
         )
         _mappingHoldEditingButton = State(initialValue: initialMappingHoldEditingButton)
         _isMappingVoiceSettingsPresented = State(initialValue: initialMappingVoiceSettingsPresented)
+        _applicationButtonSettingsProfileID = State(initialValue: initialApplicationButtonSettingsProfileID)
+        _applicationButtonEditingTarget = State(
+            initialValue: initialApplicationButtonEditingButton.map {
+                ShortcutEditingTarget(button: $0, trigger: initialApplicationButtonEditingTrigger)
+            }
+        )
+        _isApplicationButtonClearConfirmationPresented = State(
+            initialValue: initialApplicationButtonClearConfirmationPresented
+        )
+        _applicationButtonEditingScrollRequest = State(
+            initialValue: initialApplicationButtonEditingButton == nil ? 0 : 1
+        )
     }
 
     var body: some View {
@@ -1246,6 +1268,8 @@ struct SettingsView: View {
 
     private func settingsPage<Header: View, Content: View>(
         contentPadding: CGFloat = 22,
+        scrollTargetID: String? = nil,
+        scrollToken: Int = 0,
         @ViewBuilder header: () -> Header,
         @ViewBuilder content: @escaping () -> Content
     ) -> some View {
@@ -1259,12 +1283,22 @@ struct SettingsView: View {
 
             Divider()
 
-            ScrollView(.vertical, showsIndicators: false) {
-                content()
-                    .padding(contentPadding)
-                    .frame(maxWidth: .infinity, alignment: .topLeading)
+            ScrollViewReader { proxy in
+                ScrollView(.vertical, showsIndicators: false) {
+                    content()
+                        .padding(contentPadding)
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                }
+                .compatibilityScrollEdgeEffect()
+                .onChange(of: scrollToken) { _ in
+                    guard let scrollTargetID else { return }
+                    withAnimation { proxy.scrollTo(scrollTargetID, anchor: .top) }
+                }
+                .task {
+                    guard scrollToken > 0, let scrollTargetID else { return }
+                    proxy.scrollTo(scrollTargetID, anchor: .top)
+                }
             }
-            .compatibilityScrollEdgeEffect()
         }
     }
 
@@ -4474,13 +4508,14 @@ struct SettingsView: View {
         selectedAction: ButtonAction,
         installedBundleIdentifiers: Set<String>,
         isManagedPowerAction: Bool,
+        showsCustomShortcutNavigation: Bool = true,
         onSelect: @escaping (ButtonAction) -> Void
     ) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text(localization.text(category.localizationKey))
                     .font(.system(size: 14, weight: .semibold))
-                if category == .basicKeys {
+                if category == .basicKeys, showsCustomShortcutNavigation {
                     Spacer(minLength: 8)
                     Button("button_mapping.action_filter.custom_shortcuts") {
                         applicationShortcutCaptureProfileID = nil
@@ -4906,7 +4941,11 @@ struct SettingsView: View {
     }
 
     private var applicationsPage: some View {
-        settingsPage {
+        if let profileID = applicationButtonSettingsProfileID,
+           let profile = settings.customApplicationProfile(id: profileID) {
+            return AnyView(applicationButtonSettingsPage(profile))
+        }
+        return AnyView(settingsPage {
             VStack(alignment: .leading, spacing: 6) {
                 PageHeader(title: localization.text("settings.section.applications"))
                 Text("custom_application.page.subtitle")
@@ -4925,7 +4964,7 @@ struct SettingsView: View {
                         .frame(maxWidth: .infinity, alignment: .topLeading)
                 }
             }
-        }
+        })
     }
 
     private var resolvedApplicationProfileID: UUID? {
@@ -5118,6 +5157,8 @@ struct SettingsView: View {
                     applicationSectionCard { scrollRegionEditor(profile) }
 
                     applicationSectionCard { applicationBindingSection(profile) }
+
+                    applicationSectionCard { applicationButtonSettingsEntry(profile) }
                 }
             }
         } else {
@@ -5125,6 +5166,365 @@ struct SettingsView: View {
                 Text("custom_application.not_configured")
                     .font(.system(size: 12))
                     .foregroundStyle(Color.accentColor)
+            }
+        }
+    }
+
+    private func applicationButtonSettingsEntry(_ profile: CustomApplicationProfile) -> some View {
+        let count = profile.buttonBindings?.count ?? 0
+        return VStack(alignment: .leading, spacing: 10) {
+            Text("application_buttons.entry.title")
+                .font(.system(size: 14, weight: .semibold))
+            Text(String(format: localization.text("application_buttons.entry.summary"), count))
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Text("application_buttons.entry.hint")
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack {
+                Spacer(minLength: 0)
+                Button("application_buttons.entry.open") {
+                    applicationDetailProfileID = profile.id
+                    applicationButtonEditingTarget = nil
+                    applicationButtonActionFilter = .all
+                    applicationButtonSettingsProfileID = profile.id
+                }
+                .compatibilityButtonStyle(.prominent)
+            }
+        }
+    }
+
+    private func applicationButtonSettingsPage(_ profile: CustomApplicationProfile) -> some View {
+        let reserved = Set(RemoteButton.allCases.filter {
+            !ApplicationButtonBindingScope.buttons.contains($0)
+        })
+        return settingsPage(
+            scrollTargetID: applicationButtonEditingTarget == nil ? nil : "application-button-editor",
+            scrollToken: applicationButtonEditingScrollRequest
+        ) {
+            HStack(spacing: 10) {
+                Button("application_buttons.back") {
+                    applicationButtonSettingsProfileID = nil
+                    applicationButtonEditingTarget = nil
+                    applicationButtonActionFilter = .all
+                    applicationButtonEditingScrollRequest = 0
+                }
+                .compatibilityButtonStyle(.standard)
+                .frame(minWidth: 72, minHeight: 44, alignment: .leading)
+                Text(String(format: localization.text("application_buttons.page.title"), profile.displayName))
+                    .font(.system(size: 24, weight: .semibold))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Spacer(minLength: 0)
+            }
+        } content: {
+            VStack(alignment: .leading, spacing: 14) {
+                Text("application_buttons.page.subtitle")
+                    .font(.system(size: 13))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                HStack(spacing: 10) {
+                    Text(String(format: localization.text("application_buttons.page.count"),
+                        profile.buttonBindings?.count ?? 0))
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                    Spacer(minLength: 0)
+                    Button("application_buttons.page.clear_all") {
+                        isApplicationButtonClearConfirmationPresented = true
+                    }
+                    .compatibilityButtonStyle(.standard)
+                    .disabled(profile.buttonBindings?.isEmpty ?? true)
+                }
+
+                if isApplicationButtonClearConfirmationPresented {
+                    GlassPanel {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("application_buttons.clear.title")
+                                .font(.system(size: 14, weight: .semibold))
+                            Text("application_buttons.clear.message")
+                                .font(.system(size: 12))
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                            HStack {
+                                Spacer(minLength: 0)
+                                Button("common.action.cancel") {
+                                    isApplicationButtonClearConfirmationPresented = false
+                                }
+                                .compatibilityButtonStyle(.standard)
+                                Button("application_buttons.clear.action") {
+                                    _ = settings.clearApplicationButtonOverrides(applicationProfileID: profile.id)
+                                    applicationButtonEditingTarget = nil
+                                    isApplicationButtonClearConfirmationPresented = false
+                                }
+                                .compatibilityButtonStyle(.prominent)
+                            }
+                        }
+                    }
+                }
+
+                GlassPanel {
+                    RemoteMappingCanvas(
+                        selectedButton: Binding(
+                            get: { applicationButtonEditingTarget?.button ?? .ok },
+                            set: { _ in }
+                        ),
+                        activeButtons: [],
+                        voiceActive: false,
+                        actionSummary: { button, trigger in
+                            applicationButtonSummary(profile, button: button, trigger: trigger)
+                        },
+                        holdSummary: { _ in "" },
+                        actionDetail: { button, trigger in
+                            applicationButtonDetail(profile, button: button, trigger: trigger)
+                        },
+                        onEdit: { button, trigger in
+                            applicationButtonEditingTarget = ShortcutEditingTarget(
+                                button: button,
+                                trigger: trigger
+                            )
+                            applicationButtonEditingScrollRequest &+= 1
+                        },
+                        onEditHold: { _ in },
+                        reservedButtons: reserved,
+                        hidesUnavailableCards: true
+                    )
+                }
+
+                if let target = applicationButtonEditingTarget {
+                    applicationButtonSettingsEditor(profile, target: target)
+                        .id("application-button-editor")
+                }
+            }
+        }
+    }
+
+    private func applicationButtonSummary(
+        _ profile: CustomApplicationProfile,
+        button: RemoteButton,
+        trigger: ButtonTrigger
+    ) -> String {
+        let status = localization.text("application_buttons.short.global")
+        if let configured = ApplicationButtonBindingResolver.override(
+            in: profile.buttonBindings,
+            button: button,
+            trigger: trigger
+        ) {
+            let action = configured.action == .disabled
+                ? localization.text("button_mapping.action.no_action")
+                : actionSummary(configured)
+            return "\(localization.text("application_buttons.short.app")) · \(action)"
+        }
+        return "\(status) · \(applicationButtonGlobalSummary(button: button, trigger: trigger))"
+    }
+
+    private func applicationButtonGlobalSummary(button: RemoteButton, trigger: ButtonTrigger) -> String {
+        let configured = settings.configuredGlobalAction(
+            for: button,
+            trigger: trigger,
+            profileID: settings.selectedRemoteProfileID
+        )
+        guard configured.action != .disabled else {
+            let explicit = settings.hasExplicitBaseBinding(
+                for: button,
+                trigger: trigger,
+                profileID: settings.selectedRemoteProfileID
+            ) || settings.configuredActionOverride?(
+                settings.selectedRemoteProfileID,
+                button,
+                trigger
+            ) != nil
+            return localization.text(explicit
+                ? "button_mapping.action.no_action"
+                : "button_mapping.action.not_set")
+        }
+        return actionSummary(configured)
+    }
+
+    private func applicationButtonDetail(
+        _ profile: CustomApplicationProfile,
+        button: RemoteButton,
+        trigger: ButtonTrigger
+    ) -> String {
+        if let configured = ApplicationButtonBindingResolver.override(
+            in: profile.buttonBindings,
+            button: button,
+            trigger: trigger
+        ) {
+            let action = configured.action == .disabled
+                ? localization.text("button_mapping.action.no_action")
+                : actionSummary(configured)
+            return "\(localization.text("application_buttons.editor.overridden")) · \(action)"
+        }
+        return "\(localization.text("application_buttons.editor.inherited")) · " +
+            applicationButtonGlobalSummary(button: button, trigger: trigger)
+    }
+
+    private func applicationButtonSettingsEditor(
+        _ profile: CustomApplicationProfile,
+        target: ShortcutEditingTarget
+    ) -> some View {
+        let configured = ApplicationButtonBindingResolver.override(
+            in: profile.buttonBindings,
+            button: target.button,
+            trigger: target.trigger
+        ) ?? settings.configuredGlobalAction(
+            for: target.button,
+            trigger: target.trigger,
+            profileID: settings.selectedRemoteProfileID
+        )
+        let isOverridden = ApplicationButtonBindingResolver.hasOverride(
+            in: profile.buttonBindings,
+            button: target.button,
+            trigger: target.trigger
+        )
+        let installedBundleIdentifiers = PresetApplication.installedBundleIdentifiers
+        let actions = ButtonAction.pickerActions(
+            installedBundleIdentifiers: installedBundleIdentifiers,
+            current: configured.action,
+            experimentalContinuousRecordingEnabled: false
+        ).filter { $0 != .combinationAction }
+        return GlassPanel {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("\(target.button.displayName(using: localization)) · \(target.trigger.displayName(using: localization))")
+                            .font(.system(size: 16, weight: .semibold))
+                        Text(isOverridden
+                            ? "application_buttons.editor.overridden"
+                            : "application_buttons.editor.inherited")
+                            .font(.system(size: 12))
+                            .foregroundStyle(isOverridden ? Color.accentColor : .secondary)
+                    }
+                    Spacer(minLength: 8)
+                    if isOverridden {
+                        Button("application_buttons.editor.restore") {
+                            _ = settings.setApplicationButtonOverride(
+                                nil,
+                                applicationProfileID: profile.id,
+                                button: target.button,
+                                trigger: target.trigger
+                            )
+                        }
+                        .compatibilityButtonStyle(.standard)
+                    }
+                    Button("button_mapping.action.no_action") {
+                        _ = settings.setApplicationButtonOverride(
+                            .disabled,
+                            applicationProfileID: profile.id,
+                            button: target.button,
+                            trigger: target.trigger
+                        )
+                    }
+                    .compatibilityButtonStyle(.standard)
+                }
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(MappingActionFilter.visibleCases(macroFeatureVisible: false).filter {
+                            $0 != .hold && $0 != .buttonSpeed && $0 != .combinations &&
+                                $0 != .commonPhrases && $0 != .custom
+                        }) { filter in
+                            Button {
+                                applicationButtonActionFilter = filter
+                            } label: {
+                                Text(localization.text(filter.localizationKey))
+                                    .font(.system(size: 13, weight: applicationButtonActionFilter == filter ? .semibold : .medium))
+                                    .lineLimit(1)
+                                    .padding(.horizontal, 11)
+                                    .frame(minHeight: 28)
+                                    .foregroundStyle(applicationButtonActionFilter == filter
+                                        ? Color(nsColor: .alternateSelectedControlTextColor)
+                                        : Color.secondary)
+                                    .background(applicationButtonActionFilter == filter
+                                        ? Color.accentColor : Color.clear, in: Capsule())
+                                    .overlay {
+                                        Capsule().stroke(applicationButtonActionFilter == filter
+                                            ? Color.clear : Color.secondary.opacity(0.22))
+                                    }
+                                    .contentShape(Capsule())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal, 2)
+                }
+
+                ForEach(ButtonActionCategory.allCases.filter(applicationButtonActionFilter.includes)) { category in
+                    let groupedActions = actions.filter {
+                        $0.category == category && $0 != .customShortcut && $0 != .focusInput &&
+                            $0 != .openCommonPhrases && $0 != .disabled && $0 != .openCustomApplication
+                    }
+                    if !groupedActions.isEmpty {
+                        mappingActionGroup(
+                            category: category,
+                            actions: groupedActions,
+                            selectedAction: configured.action,
+                            installedBundleIdentifiers: installedBundleIdentifiers,
+                            isManagedPowerAction: false,
+                            showsCustomShortcutNavigation: false
+                        ) { action in
+                            _ = settings.setApplicationButtonOverride(
+                                ConfiguredButtonAction(action: action, shortcut: nil),
+                                applicationProfileID: profile.id,
+                                button: target.button,
+                                trigger: target.trigger
+                            )
+                        }
+                    }
+                    if category == .customShortcuts,
+                       applicationButtonActionFilter == .customShortcuts || configured.action == .customShortcut {
+                        KeyboardShortcutPicker(shortcut: configured.shortcut) { shortcut in
+                            _ = settings.setApplicationButtonOverride(
+                                ConfiguredButtonAction(action: .customShortcut, shortcut: shortcut),
+                                applicationProfileID: profile.id,
+                                button: target.button,
+                                trigger: target.trigger
+                            )
+                        }
+                        .id("application-button-shortcut-\(target.id)")
+                    }
+                    if category == .applications,
+                       configured.action == .openCustomApplication || applicationButtonActionFilter == .applications {
+                        applicationButtonTargetPicker(profile, target: target, configured: configured)
+                    }
+                }
+            }
+        }
+    }
+
+    private func applicationButtonTargetPicker(
+        _ profile: CustomApplicationProfile,
+        target: ShortcutEditingTarget,
+        configured: ConfiguredButtonAction
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("custom_application.target")
+                .font(.system(size: 14, weight: .semibold))
+            LazyVGrid(
+                columns: [GridItem(.adaptive(minimum: 150), spacing: 8)],
+                alignment: .leading,
+                spacing: 8
+            ) {
+                ForEach(settings.customApplicationProfiles) { candidate in
+                    profileSelectionButton(
+                        candidate,
+                        selected: configured.applicationProfileID == candidate.id
+                    ) {
+                        _ = settings.setApplicationButtonOverride(
+                            ConfiguredButtonAction(
+                                action: .openCustomApplication,
+                                shortcut: nil,
+                                applicationProfileID: candidate.id
+                            ),
+                            applicationProfileID: profile.id,
+                            button: target.button,
+                            trigger: target.trigger
+                        )
+                    }
+                }
             }
         }
     }

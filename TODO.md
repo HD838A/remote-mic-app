@@ -1,5 +1,9 @@
 # TODO
 
+- [ ] 按 APP 自定义普通按键动作
+  - 候选实现已完成：APP 档案详情增加同窗口二级页，按 `APP × 普通按键 × 手势` 保存显式覆盖；未配置项目逐项回退当前全局，APP 覆盖优先于键位方案，不改语音键与按住行为。
+  - 定向自动化、公开构建、配置持久化、导入校验和本地化检查已通过；生产窗口截图、真实遥控器、手机/Web/Watch、第三方 APP 前台切换和语音稳定基线仍待验收，验收通过前不勾选。
+
 - [ ] 设置页其余提示迁移到统一提示组件
   - 2026-11-11：`NoticeBubble` / `NoticeInline` / `NoticeCenter` 已随 PR #994 进入 `main`；按键页「组合动作不可用」已迁完，形态为 v3 7.3 的内联条（图标 + 标题与说明 + 右侧动作）。
   - 2026-11-11：配置导入与导出结果已迁移。`ConfigurationStatus` 从 `tint` + `systemImage` 改为 `tier: NoticeTier`，显示由一行 caption 换成 `NoticeInline`；设置窗口根 `RemoteMicRootView` 挂上了 `noticeHost()`，气泡从此具备显示条件。

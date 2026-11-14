@@ -165,8 +165,10 @@ extension AppSettings {
             }
             if let id = options.applicationReplacements[a.id] {
                 guard let index = profiles.firstIndex(where: { $0.id == id }) else { throw PortableTransferError.concurrentChange }
+                let existingBindings = profiles[index].buttonBindings
                 profile = CustomApplicationProfile(id: id,displayName: profile.displayName,bundleIdentifier: profile.bundleIdentifier,
-                    applicationPath: "",focusStrategy: profile.focusStrategy,focusShortcut: profile.focusShortcut,accessibilityTarget: profile.accessibilityTarget)
+                    applicationPath: "",focusStrategy: profile.focusStrategy,focusShortcut: profile.focusShortcut,accessibilityTarget: profile.accessibilityTarget,
+                    buttonBindings: existingBindings)
                 affected.append("App: \(profiles[index].displayName) → \(profile.displayName)")
                 for binding in unifiedBaseBindings where binding.configured.applicationProfileID == id {
                     let device = remoteDeviceProfiles.first { $0.id == binding.remoteProfileID }
@@ -201,6 +203,20 @@ extension AppSettings {
             map[a.id] = profile.id.uuidString
             if a.focusStrategy == .recordedAccessibility { pending.insert(profile.id.uuidString) }
             profiles.append(profile); if options.applicationReplacements[a.id] == nil { count += 1 }
+        }
+        for index in profiles.indices {
+            profiles[index].buttonBindings = ApplicationButtonBindingScope.sanitize(
+                profiles[index].buttonBindings,
+                validateAction: { configured in
+                    var result = configured
+                    if let id = result.applicationProfileID,
+                       let replacement = map[id.uuidString],
+                       let uuid = UUID(uuidString: replacement) {
+                        result.applicationProfileID = uuid
+                    }
+                    return result.normalizedForExecution
+                }
+            )
         }
         p = PortableTransferGraph.remapping(p, macros: [:],shortcuts: [:],focuses: [:],applications: map)
         p.applications = Dictionary(grouping: p.applications,by: \.id).values.compactMap(\.first).sorted { $0.id < $1.id }

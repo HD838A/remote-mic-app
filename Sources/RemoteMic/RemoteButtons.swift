@@ -623,6 +623,102 @@ enum ButtonTrigger: String, CaseIterable, Codable, Identifiable {
     }
 }
 
+/// A missing entry means "use the current global mapping"; an entry whose action is
+/// `.disabled` is an explicit override and must not inherit the global action.
+struct ApplicationButtonBinding: Codable, Equatable, Identifiable {
+    var button: RemoteButton
+    var trigger: ButtonTrigger
+    var configured: ConfiguredButtonAction
+
+    var id: String { "\(button.rawValue).\(trigger.rawValue)" }
+}
+
+enum ApplicationButtonBindingScope {
+    static let buttons = RemoteButton.profileScopeDisplayOrder
+    static let triggers = ButtonTrigger.allCases
+
+    enum OverrideState: Equatable {
+        case appOverride
+        case globalFallback(reason: String)
+
+        var result: String {
+            switch self {
+            case .appOverride: return "app_override"
+            case .globalFallback: return "global_fallback"
+            }
+        }
+
+        var reason: String {
+            switch self {
+            case .appOverride: return "explicit_override"
+            case let .globalFallback(reason): return reason
+            }
+        }
+    }
+
+    static func contains(button: RemoteButton, trigger: ButtonTrigger) -> Bool {
+        buttons.contains(button) && triggers.contains(trigger)
+    }
+
+    static func overrideState(
+        customMappingEnabled: Bool,
+        supportedButton: Bool,
+        frontmostBundleIdentifier: String?,
+        applicationBindings: [ApplicationButtonBinding]?,
+        button: RemoteButton,
+        trigger: ButtonTrigger
+    ) -> OverrideState {
+        guard customMappingEnabled else { return .globalFallback(reason: "custom_mapping_disabled") }
+        guard supportedButton else { return .globalFallback(reason: "unsupported_button") }
+        guard frontmostBundleIdentifier != nil else { return .globalFallback(reason: "frontmost_unknown") }
+        guard ApplicationButtonBindingResolver.hasOverride(
+            in: applicationBindings,
+            button: button,
+            trigger: trigger
+        ) else { return .globalFallback(reason: "not_configured") }
+        return .appOverride
+    }
+
+    static func sanitize(
+        _ bindings: [ApplicationButtonBinding]?,
+        validateAction: (ConfiguredButtonAction) -> ConfiguredButtonAction?
+    ) -> [ApplicationButtonBinding]? {
+        guard let bindings else { return nil }
+        var seen: Set<String> = []
+        var result: [ApplicationButtonBinding] = []
+        for binding in bindings where contains(button: binding.button, trigger: binding.trigger) {
+            guard let configured = validateAction(binding.configured), seen.insert(binding.id).inserted else { continue }
+            result.append(ApplicationButtonBinding(
+                button: binding.button,
+                trigger: binding.trigger,
+                configured: configured.normalizedForExecution
+            ))
+        }
+        return result.isEmpty ? nil : result
+    }
+}
+
+enum ApplicationButtonBindingResolver {
+    static func override(
+        in bindings: [ApplicationButtonBinding]?,
+        button: RemoteButton,
+        trigger: ButtonTrigger
+    ) -> ConfiguredButtonAction? {
+        guard ApplicationButtonBindingScope.contains(button: button, trigger: trigger),
+              let binding = bindings?.first(where: { $0.button == button && $0.trigger == trigger })
+        else { return nil }
+        return binding.configured.normalizedForExecution
+    }
+
+    static func hasOverride(
+        in bindings: [ApplicationButtonBinding]?,
+        button: RemoteButton,
+        trigger: ButtonTrigger
+    ) -> Bool {
+        override(in: bindings, button: button, trigger: trigger) != nil
+    }
+}
+
 struct ConfiguredButtonAction: Codable, Equatable {
     var action: ButtonAction
     var shortcut: CustomKeyboardShortcut?
@@ -736,6 +832,9 @@ struct CustomApplicationProfile: Codable, Equatable, Identifiable {
     /// Separate from `accessibilityTarget` on purpose: the scroll region is not
     /// an input field (decision S17).
     var scrollRegionTarget: ScrollRegionTarget?
+    /// Explicit action overrides for ordinary buttons. Missing entries inherit the
+    /// current global mapping; decoded old profiles leave this nil.
+    var buttonBindings: [ApplicationButtonBinding]?
 
     init(
         id: UUID = UUID(),
@@ -745,7 +844,8 @@ struct CustomApplicationProfile: Codable, Equatable, Identifiable {
         focusStrategy: CustomApplicationFocusStrategy = .none,
         focusShortcut: CustomKeyboardShortcut? = nil,
         accessibilityTarget: AccessibilityFocusTarget? = nil,
-        scrollRegionTarget: ScrollRegionTarget? = nil
+        scrollRegionTarget: ScrollRegionTarget? = nil,
+        buttonBindings: [ApplicationButtonBinding]? = nil
     ) {
         self.id = id
         self.displayName = displayName
@@ -755,6 +855,7 @@ struct CustomApplicationProfile: Codable, Equatable, Identifiable {
         self.focusShortcut = focusShortcut
         self.accessibilityTarget = accessibilityTarget
         self.scrollRegionTarget = scrollRegionTarget
+        self.buttonBindings = buttonBindings
     }
 }
 

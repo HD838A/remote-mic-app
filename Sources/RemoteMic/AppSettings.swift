@@ -433,6 +433,12 @@ final class AppSettings: ObservableObject {
     }
 
     var configuredActionOverride: ((UUID?, RemoteButton, ButtonTrigger) -> ConfiguredButtonAction?)?
+    var frontmostApplicationBundleIdentifier: (() -> String?)?
+    private let applicationButtonResolutionLock = NSLock()
+    private var lastApplicationButtonResolution: (
+        key: String,
+        timestamp: TimeInterval
+    )?
     @Published var unifiedBaseBindings: [UnifiedButtonBinding] = [] {
         didSet {
             onInteractionModeChanged?(selectedRemoteProfileID)
@@ -1707,6 +1713,67 @@ final class AppSettings: ObservableObject {
         }
     }
 
+    enum ApplicationButtonOverrideWriteResult: Equatable {
+        case wrote
+        case cleared
+        case invalidTarget
+        case invalidAction
+    }
+
+    @discardableResult
+    func setApplicationButtonOverride(
+        _ configured: ConfiguredButtonAction?,
+        applicationProfileID: UUID,
+        button: RemoteButton,
+        trigger: ButtonTrigger
+    ) -> ApplicationButtonOverrideWriteResult {
+        let operationID = UUID().uuidString
+        let action = configured == nil ? "clear_override" : "write"
+        AppLogger.shared.write("APP BUTTON CONFIGURATION operation_id=\(operationID) scope=application_overrides action=\(action) button=\(button.rawValue) trigger=\(trigger.rawValue) phase=requested result=requested")
+        guard ApplicationButtonBindingScope.contains(button: button, trigger: trigger),
+              let index = customApplicationProfiles.firstIndex(where: { $0.id == applicationProfileID })
+        else {
+            AppLogger.shared.write("APP BUTTON CONFIGURATION operation_id=\(operationID) action=\(action) phase=completed result=failed reason=invalid_target")
+            return .invalidTarget
+        }
+        var profile = customApplicationProfiles[index]
+        var bindings = profile.buttonBindings ?? []
+        bindings.removeAll { $0.button == button && $0.trigger == trigger }
+        if let configured {
+            guard let validated = Self.validatedConfiguredAction(configured),
+                  validated.applicationProfileID.map({ customApplicationProfile(id: $0) != nil }) ?? true
+            else {
+                AppLogger.shared.write("APP BUTTON CONFIGURATION operation_id=\(operationID) action=\(action) phase=completed result=failed reason=invalid_action")
+                return .invalidAction
+            }
+            bindings.append(ApplicationButtonBinding(
+                button: button,
+                trigger: trigger,
+                configured: validated.normalizedForExecution
+            ))
+        }
+        profile.buttonBindings = bindings.isEmpty ? nil : bindings
+        customApplicationProfiles[index] = profile
+        let outcome: ApplicationButtonOverrideWriteResult = configured == nil ? .cleared : .wrote
+        AppLogger.shared.write("APP BUTTON CONFIGURATION operation_id=\(operationID) action=\(action) phase=completed result=\(outcome == .cleared ? "cleared" : "saved") reason=storage_confirmed")
+        return outcome
+    }
+
+    @discardableResult
+    func clearApplicationButtonOverrides(applicationProfileID: UUID) -> ApplicationButtonOverrideWriteResult {
+        let operationID = UUID().uuidString
+        AppLogger.shared.write("APP BUTTON CONFIGURATION operation_id=\(operationID) scope=application_overrides action=clear_all phase=requested result=requested")
+        guard let index = customApplicationProfiles.firstIndex(where: { $0.id == applicationProfileID }) else {
+            AppLogger.shared.write("APP BUTTON CONFIGURATION operation_id=\(operationID) action=clear_all phase=completed result=failed reason=invalid_target")
+            return .invalidTarget
+        }
+        var profile = customApplicationProfiles[index]
+        profile.buttonBindings = nil
+        customApplicationProfiles[index] = profile
+        AppLogger.shared.write("APP BUTTON CONFIGURATION operation_id=\(operationID) action=clear_all phase=completed result=cleared reason=storage_confirmed")
+        return .cleared
+    }
+
     /// 移除一个 APP 档案。调用方必须先确认没有任何绑定指向它，
     /// 否则那些按键会静默变成「尚未选择 APP」。
     func removeCustomApplicationProfile(id: UUID) {
@@ -1770,11 +1837,102 @@ final class AppSettings: ObservableObject {
         configuredAction(for: button, trigger: trigger, profileID: selectedRemoteProfileID)
     }
 
-    func configuredAction(for button: RemoteButton, trigger: ButtonTrigger,
-                          profileID: UUID?) -> ConfiguredButtonAction {
+    func configuredGlobalAction(for button: RemoteButton, trigger: ButtonTrigger,
+                                profileID: UUID?) -> ConfiguredButtonAction {
         (configuredActionOverride?(profileID, button, trigger)
             ?? configuredBaseAction(for: button, trigger: trigger, profileID: profileID))
             .normalizedForExecution
+    }
+
+    func configuredAction(for button: RemoteButton, trigger: ButtonTrigger,
+                          profileID: UUID?) -> ConfiguredButtonAction {
+        let applicationOverride = applicationButtonOverride(for: button, trigger: trigger)
+        return applicationOverride ?? configuredGlobalAction(for: button, trigger: trigger, profileID: profileID)
+    }
+
+    private func applicationButtonOverride(
+        for button: RemoteButton,
+        trigger: ButtonTrigger
+    ) -> ConfiguredButtonAction? {
+        let bundleIdentifier = frontmostApplicationBundleIdentifier?()
+        let state = ApplicationButtonBindingScope.overrideState(
+            customMappingEnabled: customMappingEnabled,
+            supportedButton: ApplicationButtonBindingScope.contains(button: button, trigger: trigger),
+            frontmostBundleIdentifier: bundleIdentifier,
+            applicationBindings: applicationBindings(for: bundleIdentifier),
+            button: button,
+            trigger: trigger
+        )
+        logApplicationButtonResolution(
+            button: button,
+            trigger: trigger,
+            bundleIdentifier: bundleIdentifier,
+            state: state
+        )
+        guard let bundleIdentifier,
+              let profile = customApplicationProfiles.first(where: {
+                  $0.bundleIdentifier == bundleIdentifier
+              })
+        else { return nil }
+        return ApplicationButtonBindingResolver.override(
+            in: profile.buttonBindings,
+            button: button,
+            trigger: trigger
+        )
+    }
+
+    private func logApplicationButtonResolution(
+        button: RemoteButton,
+        trigger: ButtonTrigger,
+        bundleIdentifier: String?,
+        state: ApplicationButtonBindingScope.OverrideState
+    ) {
+        let key = [
+            bundleIdentifier ?? "-",
+            button.rawValue,
+            trigger.rawValue,
+            state.result,
+            state.reason,
+        ].joined(separator: "|")
+        let now = Date().timeIntervalSince1970
+        applicationButtonResolutionLock.lock()
+        defer { applicationButtonResolutionLock.unlock() }
+        if let last = lastApplicationButtonResolution,
+           last.key == key,
+           now - last.timestamp < 2 {
+            return
+        }
+        lastApplicationButtonResolution = (key, now)
+        AppLogger.shared.write(
+            "APP BUTTON RESOLUTION " +
+                "button=\(button.rawValue) trigger=\(trigger.rawValue) " +
+                "phase=completed result=\(state.result) reason=\(state.reason)"
+        )
+    }
+
+    private func applicationBindings(for bundleIdentifier: String?) -> [ApplicationButtonBinding]? {
+        guard let bundleIdentifier else { return nil }
+        return customApplicationProfiles.first {
+            $0.bundleIdentifier == bundleIdentifier
+        }?.buttonBindings
+    }
+
+    func applicationButtonOverrideExists(
+        for button: RemoteButton,
+        trigger: ButtonTrigger
+    ) -> Bool {
+        guard customMappingEnabled,
+              ApplicationButtonBindingScope.contains(button: button, trigger: trigger),
+              let bundleIdentifier = frontmostApplicationBundleIdentifier?(),
+              let profile = customApplicationProfiles.first(where: {
+                  $0.bundleIdentifier == bundleIdentifier
+              })
+        else { return false }
+        return ApplicationButtonBindingResolver.hasOverride(
+            in: profile.buttonBindings,
+            button: button,
+            trigger: trigger
+        )
     }
 
     var selectedRemoteProfile: RemoteDeviceProfile? {
@@ -2680,9 +2838,13 @@ final class AppSettings: ObservableObject {
             else { throw AppConfigurationError.invalidValues }
         }
         for application in configuration.customApplicationProfiles ?? [] {
-            switch Self.validatedApplicationProfile(application) {
+            switch Self.validatedApplicationProfile(application, applicationIDs: Set(appIDs)) {
+            case let .usable(validated), let .notInstalledOnThisMac(validated):
+                guard (validated.buttonBindings?.count ?? 0) ==
+                    (application.buttonBindings?.count ?? 0) else {
+                    throw AppConfigurationError.invalidValues
+                }
             case .rejected: throw AppConfigurationError.invalidValues
-            case .usable, .notInstalledOnThisMac: break
             }
             guard application.accessibilityTarget == nil, application.applicationPath.isEmpty,
                   application.focusShortcut.map({ Self.validatedShortcut($0) == $0 }) ?? true
@@ -2878,6 +3040,24 @@ final class AppSettings: ObservableObject {
     /// trusted), but a single bad entry only loses that entry: throwing the file away would
     /// punish a user whose configuration is 99% fine. Everything dropped is published in
     /// `configurationImportNotice` so the user is told rather than silently downgraded.
+    private func validatedApplicationProfileButtonBindings(
+        _ bindings: [ApplicationButtonBinding]?,
+        applicationIDs: Set<UUID>,
+        rejected: inout Set<String>
+    ) -> [ApplicationButtonBinding]? {
+        guard let bindings else { return nil }
+        let sanitized = ApplicationButtonBindingScope.sanitize(bindings) { configured in
+            guard let validated = Self.validatedConfiguredAction(configured),
+                  validated.applicationProfileID.map(applicationIDs.contains) ?? true
+            else { return nil }
+            return validated
+        }
+        if (sanitized?.count ?? 0) != bindings.count {
+            rejected.insert(Keys.customApplicationProfiles)
+        }
+        return sanitized
+    }
+
     func importConfiguration(from data: Data) throws {
         let configuration = try Self.validatedConfiguration(from: data)
         var rejected: Set<String> = []
@@ -2956,14 +3136,26 @@ final class AppSettings: ObservableObject {
                 }
             )
 
+        let appIDs = (configuration.customApplicationProfiles ?? []).map(\.id)
+        let applicationIDs = Set(appIDs)
         let importedApplicationProfiles = (configuration.customApplicationProfiles ?? [])
             .compactMap { profile -> CustomApplicationProfile? in
-                switch Self.validatedApplicationProfile(profile) {
-                case let .usable(profile):
-                    return profile
-                case let .notInstalledOnThisMac(profile):
-                    missingApplications.append(profile.displayName)
-                    return profile
+                let validation = Self.validatedApplicationProfile(
+                    profile,
+                    applicationIDs: applicationIDs
+                )
+                switch validation {
+                case let .usable(validated), let .notInstalledOnThisMac(validated):
+                    var result = validated
+                    result.buttonBindings = validatedApplicationProfileButtonBindings(
+                        profile.buttonBindings,
+                        applicationIDs: applicationIDs,
+                        rejected: &rejected
+                    )
+                    if case .notInstalledOnThisMac = validation {
+                        missingApplications.append(validated.displayName)
+                    }
+                    return result
                 case .rejected:
                     rejected.insert(Keys.customApplicationProfiles)
                     return nil
@@ -3118,7 +3310,8 @@ final class AppSettings: ObservableObject {
     /// and refusing it outright would break the entire point of moving a configuration to a Mac
     /// that has not installed everything yet.
     private static func validatedApplicationProfile(
-        _ profile: CustomApplicationProfile
+        _ profile: CustomApplicationProfile,
+        applicationIDs: Set<UUID>
     ) -> ImportedApplicationProfile {
         guard profile.displayName.count <= maximumImportedIdentifierLength,
               isWellFormedBundleIdentifier(profile.bundleIdentifier),
@@ -3133,6 +3326,15 @@ final class AppSettings: ObservableObject {
             .flatMap(validatedAccessibilityTarget)
         sanitized.scrollRegionTarget = profile.scrollRegionTarget
             .flatMap(validatedScrollRegionTarget)
+        sanitized.buttonBindings = ApplicationButtonBindingScope.sanitize(
+            profile.buttonBindings,
+            validateAction: { configured in
+                guard let validated = validatedConfiguredAction(configured),
+                      validated.applicationProfileID.map(applicationIDs.contains) ?? true
+                else { return nil }
+                return validated
+            }
+        )
 
         guard !sanitized.applicationPath.isEmpty else { return .notInstalledOnThisMac(sanitized) }
         let url = URL(fileURLWithPath: sanitized.applicationPath)

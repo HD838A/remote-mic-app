@@ -23,8 +23,16 @@ struct CompleteConfigurationBackupTests {
         source.buttonShortcuts[.menu] = .init(keyCode: 9, modifierFlags: .command, keyLabel: "V")
         source.setBaseBinding(.init(action: .commandPaste, shortcut: nil),
             for: .menu, trigger: .longPress, profileID: second)
-        let app = CustomApplicationProfile(displayName: "Unused app", bundleIdentifier: "com.example.unused", applicationPath: "")
-        source.addCustomApplicationProfile(app)
+        let appID = source.addCustomApplicationProfile(CustomApplicationProfile(
+            displayName: "Unused app", bundleIdentifier: "com.example.unused", applicationPath: ""
+        ))
+        #expect(source.setApplicationButtonOverride(
+            .init(action: .commandCopy, shortcut: nil),
+            applicationProfileID: appID,
+            button: .ok,
+            trigger: .singleClick
+        ) == .wrote)
+        let app = try #require(source.customApplicationProfile(id: appID))
         source.gainDB = 17
         source.setOnboardingVoiceTool(.weixin)
         source.localTranscriptHistoryEnabled = false
@@ -46,7 +54,7 @@ struct CompleteConfigurationBackupTests {
         #expect(destination.remoteDeviceProfiles.map(\.id) == source.remoteDeviceProfiles.map(\.id))
         #expect(destination.selectedRemoteProfileID == second)
         #expect(destination.unifiedBaseBindings == source.unifiedBaseBindings)
-        #expect(destination.customApplicationProfiles.map(\.id) == [app.id])
+        #expect(destination.customApplicationProfiles == [app])
         #expect(destination.gainDB == 17)
         #expect(destination.onboardingVoiceTool == .weixin)
         #expect(!destination.localTranscriptHistoryEnabled)
@@ -60,7 +68,7 @@ struct CompleteConfigurationBackupTests {
         let restarted = AppSettings(defaults: targetDefaults)
         #expect(restarted.remoteDeviceProfiles == destination.remoteDeviceProfiles)
         #expect(restarted.unifiedBaseBindings == source.unifiedBaseBindings)
-        #expect(restarted.customApplicationProfiles.map(\.id) == [app.id])
+        #expect(restarted.customApplicationProfiles == [app])
     }
 
     @Test func rejectsOtherPlatformsUnknownReadersAndOldAppsBeforeWriting() throws {
