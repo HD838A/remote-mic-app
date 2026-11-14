@@ -6351,7 +6351,7 @@ struct SettingsView: View {
                     systemImage: "waveform"
                 )
                 .font(.title3.weight(.semibold))
-                .foregroundStyle(.orange)
+                .foregroundStyle(Color.accentColor)
 
                 if settings.voiceSessionRanking.isEmpty {
                     Text("statistics.voice_ranking.empty")
@@ -6365,7 +6365,7 @@ struct SettingsView: View {
                         } label: {
                             HStack(spacing: 7) {
                                 Text("\(index + 1)")
-                                    .foregroundStyle(.orange)
+                                    .foregroundStyle(Color.accentColor)
                                     .frame(width: 18, alignment: .leading)
                                 Text(chartDurationText(
                                     seconds: UsageStatisticsPresentation.wholeSeconds(record.duration)
@@ -6892,7 +6892,7 @@ struct SettingsView: View {
                             HStack(spacing: 14) {
                                 Image(systemName: "globe")
                                     .font(.title3)
-                                    .foregroundStyle(.green)
+                                    .foregroundStyle(Color.accentColor)
                                     .frame(width: 34)
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text("about.preferences.language")

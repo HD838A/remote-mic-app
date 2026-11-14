@@ -1,5 +1,7 @@
 # Bug 记录
 
+- [设置相关页面装饰性图标颜色不一致](./2026-11-14-settings-decorative-icon-colors.md)
+
 - [音频引擎重绑后误报可用并在活跃语音中持续丢包](./2026-11-14-audio-engine-recovery-backoff.md)
 
 - [macOS 27 写入 native key mapping 后 HID 报告停止投递](./2026-11-14-macos-27-native-mapping-blocks-hid-reports.md)
