@@ -550,14 +550,22 @@ final class MacroFeatureIntegration: ObservableObject {
         #endif
     }
 
-    /// Hold modes the profile component can persist. The component intentionally
-    /// stores only repeat behaviors; directional key-hold modes are base-only.
+    /// Hold modes the profile component can persist. Older components store only
+    /// repeat behaviors; newer components expose the directional hold marker.
     var supportedProfileHoldModes: [RemoteButtonHoldMode] {
         #if canImport(SayAllButtonProfiles) && SAYALL_BUTTON_HOLD_MODES
+        #if SAYALL_BUTTON_PROFILE_DIRECTIONAL_HOLD
+        [.once, .repeatSingle, .repeatLong, .singleHold, .longHold]
+        #else
         [.once, .repeatSingle, .repeatLong]
+        #endif
         #else
         []
         #endif
+    }
+
+    var supportsDirectionalProfileHoldModes: Bool {
+        supportedProfileHoldModes.contains(.singleHold)
     }
 
     func supportsProfileHoldMode(_ mode: RemoteButtonHoldMode) -> Bool {

@@ -307,6 +307,21 @@ let buttonHoldModesAvailable = [buttonProfilesPackagePath, privateSwiftPMEnabled
     }
 } ?? false)
 if buttonHoldModesAvailable { remoteMicSwiftSettings.append(.define("SAYALL_BUTTON_HOLD_MODES")) }
+/// 方案组件从该版本起持久化方向键按住（singleHold/longHold）。
+let directionalProfileHoldAvailable = [buttonProfilesPackagePath, privateSwiftPMEnabled ? privatePlatformPackagePath.map {
+    URL(fileURLWithPath: $0).appendingPathComponent("packages/macos-button-profiles").path
+} : nil].compactMap { $0 }.contains { path in
+    let api = URL(fileURLWithPath: path).appendingPathComponent("Sources/SayAllButtonProfiles/SayAllButtonProfilesFeature.swift")
+    return (try? String(contentsOf: api, encoding: .utf8))?.contains("supportsDirectionalHoldModes") == true
+} || (privateArtifactPackagePath.map { path in
+    ["arm64", "x86_64"].allSatisfy { architecture in
+        let api = URL(fileURLWithPath: path).appendingPathComponent("Artifacts/SayAllButtonProfiles.xcframework/macos-arm64_x86_64/SayAllButtonProfiles.framework/Modules/SayAllButtonProfiles.swiftmodule/\(architecture)-apple-macos.swiftinterface")
+        return (try? String(contentsOf: api, encoding: .utf8))?.contains("supportsDirectionalHoldModes") == true
+    }
+} ?? false)
+if directionalProfileHoldAvailable {
+    remoteMicSwiftSettings.append(.define("SAYALL_BUTTON_PROFILE_DIRECTIONAL_HOLD"))
+}
 /// 键位方案组件提供「只重读宏库」的入口后，宿主才能在跨进程写入后刷新组合动作名。
 let buttonProfileMacroReloadAvailable = [buttonProfilesPackagePath, privateSwiftPMEnabled ? privatePlatformPackagePath.map {
     URL(fileURLWithPath: $0).appendingPathComponent("packages/macos-button-profiles").path
@@ -360,6 +375,9 @@ if privateArtifactsAvailable { remoteMicLinkerSettings.append(.unsafeFlags(["-Xl
 var remoteMicTestSwiftSettings: [SwiftSetting] = []
 if profileAutosaveAvailable { remoteMicTestSwiftSettings.append(.define("SAYALL_BUTTON_PROFILE_AUTOSAVE")) }
 if buttonHoldModesAvailable { remoteMicTestSwiftSettings.append(.define("SAYALL_BUTTON_HOLD_MODES")) }
+if directionalProfileHoldAvailable {
+    remoteMicTestSwiftSettings.append(.define("SAYALL_BUTTON_PROFILE_DIRECTIONAL_HOLD"))
+}
 if bindingTextAvailable { remoteMicTestSwiftSettings.append(.define("SAYALL_BUTTON_PROFILE_BINDING_TEXT")) }
 if screenshotProfileSeedAvailable { remoteMicTestSwiftSettings.append(.define("SAYALL_SCREENSHOT_PROFILE_SEED")) }
 if sourceMacroHostShortcutsAvailable || artifactMacroHostShortcutsAvailable {

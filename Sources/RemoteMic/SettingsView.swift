@@ -3974,10 +3974,6 @@ struct SettingsView: View {
         snapshot.allowsKeyHold = button.allowsKeyHold
         snapshot.holdableSingle = snapshot.single
         snapshot.holdableLong = snapshot.long
-        // The editor mirrors runtime: a choice the actions cannot run is simply unset.
-        if canWriteMappingHold(button), let mode = snapshot.mode, !snapshot.blockers(for: mode).isEmpty {
-            snapshot.mode = .once
-        }
         return snapshot
     }
 
@@ -4060,13 +4056,27 @@ struct SettingsView: View {
                         .font(.system(size: 12))
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                if editingMappingProfileID != nil, macroFeature.supportsProfileHoldModes {
+                if editingMappingProfileID != nil, macroFeature.supportsProfileHoldModes,
+                   !macroFeature.supportsDirectionalProfileHoldModes {
                     Text("button_mapping.hold.profile_repeat_only")
                         .foregroundStyle(.secondary)
                         .font(.system(size: 12))
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                if let reason = snapshot.unavailableReason {
+                if let mode = snapshot.mode {
+                    let blockers = snapshot.blockers(for: mode)
+                    if !blockers.isEmpty {
+                        Text(blockers.map(holdBlockerText).joined(separator: " "))
+                            .foregroundStyle(Color.accentColor)
+                            .font(.system(size: 12))
+                            .fixedSize(horizontal: false, vertical: true)
+                    } else if let reason = snapshot.unavailableReason {
+                        Text(localization.text(reason))
+                            .foregroundStyle(Color.accentColor)
+                            .font(.system(size: 12))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                } else if let reason = snapshot.unavailableReason {
                     Text(localization.text(reason))
                         .foregroundStyle(Color.accentColor)
                         .font(.system(size: 12))

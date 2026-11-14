@@ -1414,7 +1414,7 @@
 "audio.mac_microphone.error.accessibility" = "Allow Accessibility access in System Settings.";
 
 // Device gesture timing and hold behavior
-"button_mapping.hold_button_unavailable" = "Only the remote’s left and right buttons can hold down arrow keys.";
+"button_mapping.hold_button_unavailable" = "This button cannot hold an arrow key; only the remote’s left and right buttons can. Choose a repeat mode or clear the hold setting.";
 "button_mapping.hold.wait_double" = "Double-click is configured, so this waits briefly before starting.";
 "button_mapping.hold.timing_help" = "The long-press time uses your saved button speed setting.";
 "button_mapping.hold.long_hold.description" = "Hold down %@ after the configured long-press time. Release the button to release %@.";
@@ -1426,13 +1426,13 @@
 "button_mapping.hold.description" = "Run the selected behavior while held. Release to stop.";
 "button_mapping.hold.clear_long_to_enable" = "Clear long-press action";
 "button_mapping.hold.repeat_prefix" = "While held: repeat click action ";
-"button_mapping.hold.blocker.timing_invalid" = "The recognition time is invalid";
-"button_mapping.hold.blocker.profile_owned" = "A button profile owns this button";
-"button_mapping.hold.blocker.action_unset" = "This trigger has no action yet";
-"button_mapping.hold.blocker.action_not_repeatable" = "“%@” cannot be repeated";
-"button_mapping.hold.blocker.action_not_holdable" = "\"%@\" is not an arrow key, so it cannot be held down";
-"button_mapping.hold.blocker.long_configured" = "Long press is set to “%@”. Clear that action to enable this option.";
-"button_mapping.hold.blocker.long_owned_by_profile" = "A button profile owns the long press";
+"button_mapping.hold.blocker.timing_invalid" = "The interaction timing is invalid, so hold cannot be recognized. Restore the default timing or relearn it.";
+"button_mapping.hold.blocker.profile_owned" = "A button profile owns this button. Clear the profile override or choose a runnable action.";
+"button_mapping.hold.blocker.action_unset" = "This trigger has no action yet. Set an action first or clear the hold setting.";
+"button_mapping.hold.blocker.action_not_repeatable" = "“%@” cannot repeat. Choose a repeatable action or clear the hold setting.";
+"button_mapping.hold.blocker.action_not_holdable" = "“%@” is not an arrow key and cannot be held. Choose an arrow-key action or a repeat mode.";
+"button_mapping.hold.blocker.long_configured" = "Long press is set to “%@”. To enable Repeat Single, clear the long-press action; or choose Repeat Long Press.";
+"button_mapping.hold.blocker.long_owned_by_profile" = "A key profile owns the long press. Clear the profile override or choose another hold mode.";
 "button_mapping.hold.target" = "Choose one behavior";
 "button_mapping.hold.clear" = "Clear setting";
 "button_mapping.hold.clear.help" = "After clearing, the button runs its click, double-click and long-press actions as configured.";
