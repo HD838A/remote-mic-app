@@ -15,10 +15,20 @@ private func macMicrophoneVoiceKeyCallback(
 
 /// Observes the configured physical voice modifier, including Fn, without registering it as a hotkey.
 final class MacMicrophoneVoiceKeyMonitor {
+    private enum TapLevel: String {
+        case hid = "hid_head"
+        case session = "session_head"
+
+        var location: CGEventTapLocation {
+            self == .hid ? .cghidEventTap : .cgSessionEventTap
+        }
+    }
+
     var onEdge: (Bool, TimeInterval) -> Void = { _, _ in }
     private let lock = NSLock()
     private var port: CFMachPort?
     private var source: CFRunLoopSource?
+    private var tapLevel: TapLevel?
     private var generation: UInt64 = 0
     private var mode: VoiceKeyMode = .function
 
@@ -36,39 +46,88 @@ final class MacMicrophoneVoiceKeyMonitor {
         lock.lock()
         self.mode = mode
         lock.unlock()
+
+        // A voice tool such as Doubao may consume Fn in an earlier session tap.
+        // Try the HID-level listen-only tap first so the physical edge remains
+        // observable; fall back to the session-level head tap when unavailable.
+        if let installed = installTap(level: .hid, mode: mode) {
+            store(installed, level: .hid, mode: mode)
+            return true
+        }
+        AppLogger.shared.write(
+            "MAC MICROPHONE KEY_MONITOR phase=fallback result=session_head reason=hid_unavailable"
+        )
+        if let installed = installTap(level: .session, mode: mode) {
+            store(installed, level: .session, mode: mode)
+            return true
+        }
+        AppLogger.shared.write("MAC MICROPHONE KEY_MONITOR phase=failed reason=tap_unavailable")
+        return false
+    }
+
+    private func installTap(
+        level: TapLevel,
+        mode: VoiceKeyMode
+    ) -> (port: CFMachPort, source: CFRunLoopSource)? {
         guard let port = CGEvent.tapCreate(
-            tap: .cgSessionEventTap, place: .tailAppendEventTap, options: .listenOnly,
+            tap: level.location,
+            place: .headInsertEventTap,
+            options: .listenOnly,
             eventsOfInterest: CGEventMask(1 << CGEventType.flagsChanged.rawValue),
             callback: macMicrophoneVoiceKeyCallback,
             userInfo: Unmanaged.passUnretained(self).toOpaque()
         ) else {
-            AppLogger.shared.write("MAC MICROPHONE KEY_MONITOR phase=failed reason=tap_unavailable")
-            return false
+            AppLogger.shared.write(
+                "MAC MICROPHONE KEY_MONITOR phase=failed reason=tap_create_failed tap=\(level.rawValue)"
+            )
+            return nil
         }
         guard let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, port, 0) else {
             EventTapPort.release(port: port, source: nil)
-            return false
+            AppLogger.shared.write(
+                "MAC MICROPHONE KEY_MONITOR phase=failed reason=run_loop_source_failed tap=\(level.rawValue)"
+            )
+            return nil
         }
+        guard EventTapPort.activate(port: port, source: source) else {
+            EventTapPort.release(port: port, source: source)
+            AppLogger.shared.write(
+                "MAC MICROPHONE KEY_MONITOR phase=failed reason=tap_activation_failed tap=\(level.rawValue)"
+            )
+            return nil
+        }
+        return (port, source)
+    }
+
+    private func store(
+        _ installed: (port: CFMachPort, source: CFRunLoopSource),
+        level: TapLevel,
+        mode: VoiceKeyMode
+    ) {
         lock.lock()
-        self.port = port
-        self.source = source
+        port = installed.port
+        source = installed.source
+        tapLevel = level
         lock.unlock()
-        guard EventTapPort.activate(port: port, source: source) else { stop(); return false }
-        AppLogger.shared.write("MAC MICROPHONE KEY_MONITOR phase=started result=listening voice_key=\(mode.rawValue) event_passthrough=true")
-        return true
+        AppLogger.shared.write(
+            "MAC MICROPHONE KEY_MONITOR phase=started result=listening " +
+                "voice_key=\(mode.rawValue) event_passthrough=true tap=\(level.rawValue)"
+        )
     }
 
     func stop() {
         lock.lock()
         let port = self.port
         let source = self.source
+        let tapLevel = self.tapLevel?.rawValue ?? "unknown"
         self.port = nil
         self.source = nil
+        self.tapLevel = nil
         generation &+= 1
         lock.unlock()
         if port != nil || source != nil { EventTapPort.release(port: port, source: source) }
         if port != nil {
-            AppLogger.shared.write("MAC MICROPHONE KEY_MONITOR phase=completed result=stopped")
+            AppLogger.shared.write("MAC MICROPHONE KEY_MONITOR phase=completed result=stopped tap=\(tapLevel)")
         }
     }
 
