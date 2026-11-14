@@ -1288,7 +1288,6 @@ struct SettingsView: View {
                     VStack(spacing: 14) {
                         phoneConnectionsPanel
                         audioSettingsPanel
-                        audioCompatibilityPanel
                         // Chromecast 连接卡片已按产品要求移除：启用开关默认常开，
                         // 语音键模式在语音键设置面板内，状态见侧边栏「连接」的设备列表。
                     }
@@ -1679,6 +1678,24 @@ struct SettingsView: View {
                     .disabled(model.macMicrophoneState.isActive)
                 }
 
+                if !model.hasCompatibleVoiceOutputDevice {
+                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                        Label {
+                            Text("audio.compatibility.missing_notice")
+                                .fixedSize(horizontal: false, vertical: true)
+                        } icon: {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                        }
+                        .font(.system(size: 12))
+                        .foregroundStyle(.orange)
+                        Spacer(minLength: 8)
+                        Button("audio.compatibility.open_install_guide") {
+                            model.openDoubaoDriverInstructions(using: localization)
+                        }
+                        .compatibilityButtonStyle(.standard)
+                    }
+                }
+
                 VStack(alignment: .leading, spacing: 5) {
                     OutputVolumeSlider(settings: settings, model: model)
 
@@ -1863,46 +1880,6 @@ struct SettingsView: View {
         guard isCapturingMacMicrophoneShortcut else { return }
         isCapturingMacMicrophoneShortcut = false
         model.suspendMacMicrophoneShortcutCapture(false)
-    }
-
-    private var audioCompatibilityPanel: some View {
-        GlassPanel {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(alignment: .firstTextBaseline) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("audio.compatibility.section_title")
-                            .font(.headline)
-                        Text("audio.compatibility.microphone_label")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    Spacer(minLength: 16)
-                    Text(model.doubaoAudioStatus.text(using: localization))
-                        .font(.caption)
-                        .foregroundStyle(model.hasDoubaoAudioDevice ? .green : .orange)
-                        .multilineTextAlignment(.trailing)
-                }
-
-                HStack(spacing: 10) {
-                    Button(LocalizedMessage(
-                        "audio.compatibility.select_microphone", arguments: [
-                            DoubaoAudioDevicePolicy.device(in: model.audioDevices)?.name ?? DoubaoAudioDevicePolicy.deviceName
-                        ]
-                    ).text(using: localization)) { model.selectDoubaoAudioDevice() }
-                        .compatibilityButtonStyle(.prominent)
-                        .disabled(!model.hasDoubaoAudioDevice)
-                    Button("audio.compatibility.open_install_guide") {
-                        model.openDoubaoDriverInstructions(using: localization)
-                    }
-                    .compatibilityButtonStyle(.standard)
-                }
-
-                Text("audio.compatibility.help_plain")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
     }
 
     #if SAYALL_SIRI_REMOTE_ENABLED && canImport(SayAllSiriRemote)

@@ -590,7 +590,6 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     @Published private(set) var connectionStatus = LocalizedMessage("bluetooth.status.initializing")
     @Published private(set) var hidStatus = LocalizedMessage("button_mapping.status.disabled")
     @Published private(set) var audioStatus = LocalizedMessage("audio.output.none_selected")
-    @Published private(set) var doubaoAudioStatus = LocalizedMessage("audio.compatibility.checking")
     @Published private(set) var isStreaming = false
     @Published private(set) var voiceSessionWarningLevel: VoiceSessionWarningLevel = .none
     @Published private(set) var isConnected = false
@@ -2819,7 +2818,6 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             }
         }
         audioDevices = devices
-        doubaoAudioStatus = DoubaoAudioDevicePolicy.status(in: devices)
     }
 
     private static func audioDevicesDiagnostic(_ devices: [AudioDeviceInfo]) -> String {
@@ -2827,24 +2825,8 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             CoreAudioDeviceCatalog.routeDiagnostic()
     }
 
-    var hasDoubaoAudioDevice: Bool {
-        DoubaoAudioDevicePolicy.device(in: audioDevices) != nil
-    }
-
-    func selectDoubaoAudioDevice() {
-        guard let device = DoubaoAudioDevicePolicy.device(in: audioDevices) else {
-            doubaoAudioStatus = LocalizedMessage(
-                "audio.compatibility.device_missing",
-                arguments: [DoubaoAudioDevicePolicy.deviceName]
-            )
-            return
-        }
-        settings.selectedAudioDeviceUID = device.uid
-        applyAudioSettings(reason: "doubao_device_selected")
-        doubaoAudioStatus = LocalizedMessage(
-            "audio.compatibility.device_selected",
-            arguments: [device.name]
-        )
+    var hasCompatibleVoiceOutputDevice: Bool {
+        VoiceOutputDevicePolicy.hasCompatibleDevice(in: audioDevices)
     }
 
     func openDoubaoDriverInstructions(using localization: LocalizationStore) {
@@ -7430,6 +7412,33 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         case "permission": macMicrophoneState = .failed(.permission)
         case "shortcut_unavailable": macMicrophoneShortcutAvailable = false
         default: macMicrophoneState = .idle
+        }
+    }
+
+    func configureVoiceOutputForSettingsScreenshot(_ state: String) {
+        guard ProcessInfo.processInfo.environment["REMOTE_MIC_SETTINGS_SCREENSHOT_DIR"] != nil else { return }
+        switch state {
+        case "missing":
+            audioDevices = [AudioDeviceInfo(
+                id: 0,
+                uid: "screenshot-speaker",
+                name: settings.applicationLanguage == .english ? "Mac Speakers" : "Mac 扬声器"
+            )]
+            settings.selectedAudioDeviceUID = ""
+            audioStatus = LocalizedMessage("audio.output.none_selected")
+        case "compatible":
+            audioDevices = [AudioDeviceInfo(
+                id: 0,
+                uid: DoubaoAudioDevicePolicy.deviceUID,
+                name: DoubaoAudioDevicePolicy.deviceName
+            )]
+            settings.selectedAudioDeviceUID = DoubaoAudioDevicePolicy.deviceUID
+            audioStatus = LocalizedMessage(
+                "audio.output.current_format",
+                arguments: [DoubaoAudioDevicePolicy.deviceName]
+            )
+        default:
+            break
         }
     }
 

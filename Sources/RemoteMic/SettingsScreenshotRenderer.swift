@@ -274,6 +274,11 @@ enum SettingsScreenshotRenderer {
         if let state = ProcessInfo.processInfo.environment["REMOTE_MIC_SETTINGS_SCREENSHOT_MAC_MICROPHONE"] {
             model.configureMacMicrophoneForSettingsScreenshot(state)
         }
+        if let state = ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_SETTINGS_SCREENSHOT_VOICE_OUTPUT"
+        ] {
+            model.configureVoiceOutputForSettingsScreenshot(state)
+        }
         if showsRemoteCards {
             model.configureRemoteCardsForSettingsScreenshot(
                 profileIDs: Set(remoteCardSystemNames.keys),
