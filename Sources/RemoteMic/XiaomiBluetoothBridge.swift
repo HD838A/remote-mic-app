@@ -487,9 +487,17 @@ final class XiaomiBluetoothBridge: NSObject {
             AppLogger.shared.write(
                 "BLE SYSTEM CONNECTED CANDIDATES operation_id=\(discoveryOperationID) generation=\(generation) count=\(connectedCandidates.count)"
             )
-            return connectedCandidates.filter {
+            let usableCandidates = connectedCandidates.filter {
                 !excludedIdentifiers().contains($0.identifier) && !rejectedIdentifiers.contains($0.identifier)
             }
+            // 过滤不留痕时，`count=N` 会让人以为 N 台都进过准入判定；实际可能是 0 台。
+            if usableCandidates.count != connectedCandidates.count {
+                AppLogger.shared.write(
+                    "BLE CANDIDATES FILTERED operation_id=\(discoveryOperationID) generation=\(generation) " +
+                        "total=\(connectedCandidates.count) usable=\(usableCandidates.count)"
+                )
+            }
+            return usableCandidates
         }, adopt: { candidate, source in
             let adopted = adopt(
                 candidate,
@@ -505,6 +513,15 @@ final class XiaomiBluetoothBridge: NSObject {
             )
             return adopted
         }, startScan: {
+            guard BluetoothScanRecoveryPolicy.canStartScan(lifecycle: lifecycle, generation: generation) else {
+                // 候选已被采纳但前置条件跳过，或状态已被别的路径推进：此时开扫描会让
+                // `state` 与 `lifecycle` 分叉，只记录不执行。
+                AppLogger.shared.write(
+                    "BLE DISCOVERY operation_id=\(discoveryOperationID) generation=\(generation) " +
+                        "source=scan result=superseded lifecycle=\(lifecycle.logName)"
+                )
+                return
+            }
             state = .scanning
             central.scanForPeripherals(
                 withServices: nil,
@@ -575,15 +592,22 @@ final class XiaomiBluetoothBridge: NSObject {
         )
         switch decision {
         case .adoptSavedIdentity, .adoptRecognizedName:
-            connect(
+            // 只有真的发起连接才算「已采纳」。前置条件不满足时如实返回 false，
+            // 否则 `VoiceRemoteDiscovery` 会认为本候选已处理而不再扫描（Issue #1041）。
+            return connect(
                 candidate,
                 using: central,
                 generation: generation,
                 source: source,
                 usesCachedTarget: usesCachedTarget
             )
-            return true
         case .ignore:
+            // `.ignore` 原本完全静默：候选被忽略与候选压根不存在在日志里长得一样，
+            // 无法判断「系统已连接候选里为什么没有它」。只记原因，不记设备标识。
+            AppLogger.shared.write(
+                "BLE ADOPT IGNORED source=\(source) reason=" +
+                    (targetIdentifier == nil ? "no_voice_service" : "identifier_mismatch")
+            )
             return false
         case .rejectForeignProduct, .rejectUnrecognizedName, .rejectUnnamed:
             reject(candidate, reason: decision.logReason, source: source)
@@ -602,19 +626,32 @@ final class XiaomiBluetoothBridge: NSObject {
         )
     }
 
+    /// 发起连接，返回是否真的发出去了。
+    ///
+    /// 前置条件不满足时必须如实返回 `false` 并记录原因：旧实现静默 `return` 而让
+    /// `adopt()` 继续返回 `true`，日志于是写成 `result=adopted` 却看不到 `BLE CONNECTING`，
+    /// 「没发起连接」被报成「已采纳」（Issue #1041）。
+    @discardableResult
     private func connect(
         _ candidate: CBPeripheral,
         using central: CBCentralManager,
         generation: UInt64,
         source: String,
         usesCachedTarget: Bool = false
-    ) {
-        guard shouldRun,
-              !systemSuspension.isSuspended,
-              self.central === central,
-              peripheral == nil,
-              lifecycle == .scanning(generation)
-        else { return }
+    ) -> Bool {
+        if let reason = BluetoothConnectGate.skipReason(
+            shouldRun: shouldRun,
+            isSystemSuspended: systemSuspension.isSuspended,
+            isSameCentral: self.central === central,
+            hasPeripheral: peripheral != nil,
+            lifecycle: lifecycle,
+            generation: generation
+        ) {
+            AppLogger.shared.write(
+                "BLE CONNECT skipped operation_id=\(discoveryOperationID) source=\(source) reason=\(reason)"
+            )
+            return false
+        }
         central.stopScan()
         cancelScanTimeout()
         peripheral = candidate
@@ -627,6 +664,7 @@ final class XiaomiBluetoothBridge: NSObject {
         startConnectionTimeout(generation: generation)
         central.connect(candidate, options: nil)
         AppLogger.shared.write("BLE CONNECTING operation_id=\(discoveryOperationID) source=\(source) name=\(candidate.name ?? "unknown")")
+        return true
     }
 
     private func resetPeripheral() {

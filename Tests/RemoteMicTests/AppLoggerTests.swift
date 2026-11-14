@@ -265,6 +265,25 @@ struct AppLoggerTests {
         #expect(harness.failures.isEmpty)
     }
 
+    @Test func ignoredCandidatesAreAggregatedInsteadOfWrittenPerDevice() throws {
+        // 扫描一次会看到环境里所有 BLE 设备，每台都会产生一条 BLE ADOPT IGNORED。
+        // 不聚合的话条数随环境设备数线性增长，现场日志会被这类行淹没。
+        let harness = try LoggerHarness()
+        for _ in 1...60 {
+            harness.logger.write("BLE ADOPT IGNORED source=scan reason=identifier_mismatch")
+        }
+        harness.logger.write("BLE READY")
+        harness.logger.flush()
+        let lines = try harness.decryptAllLines()
+        // 首条 + 一条聚合 + BLE READY，共 3 行；不做聚合时这里会是 61 行。
+        #expect(lines.count == 3)
+        #expect(lines.contains {
+            $0.contains("aggregation=discovery_observation repeat_count=59") &&
+                $0.contains("last_observation=BLE ADOPT IGNORED source=scan reason=identifier_mismatch")
+        })
+        #expect(lines.last?.contains("BLE READY") == true)
+    }
+
     @Test func typedEventsFlushObservationsAndNewDiscoveryStartsWithAFullRecord() throws {
         let harness = try LoggerHarness()
         harness.logger.write("BLE SCANNING")
