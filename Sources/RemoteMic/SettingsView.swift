@@ -141,6 +141,11 @@ enum RemoteBatteryPresentationPolicy {
 enum SettingsPageBehavior {
     static let sidebarTopDragHeight: CGFloat = 5
 
+    /// 按键页设备区的固定卡片尺寸。三行设备卡的自然高度为 `72`，
+    /// 未连接空状态必须使用同一宽高，切换连接状态时页头才不会被撑高或压矮。
+    static let mappingRemoteCardWidth: CGFloat = 232
+    static let mappingRemoteCardHeight: CGFloat = 72
+
     /// 侧边栏宽度按内容量出来：文字到左边界和到右边界都保持 `sidebarRowInset`，
     /// 不再用固定宽度把多余空白全部堆在文字右侧。
     static let sidebarRowInset: CGFloat = 15
@@ -3338,35 +3343,77 @@ struct SettingsView: View {
         }
     }
 
+    /// 按键页的空状态必须和已连接设备卡保持同一宽高。
+    ///
+    /// 页头 HStack 按最高子视图底边对齐：纵向空状态比设备卡高约 16pt，遥控器连上后
+    /// 它会塌成卡片高度，把分隔线和整页内容一起往上顶。横向空状态因此使用和三行设备卡
+    /// 相同的固定尺寸并靠右排列；连接页的纵向说明没有这条页头对齐约束，继续保留原布局。
     private func remoteDeviceEmptyState(vertical: Bool) -> some View {
-        VStack(alignment: vertical ? .leading : .center, spacing: 8) {
-            Image(systemName: "appletvremote.gen4.fill")
-                .font(.system(size: vertical ? 24 : 18, weight: .semibold))
-                .foregroundStyle(.secondary)
+        Group {
+            if vertical {
+                VStack(alignment: .leading, spacing: 8) {
+                    Image(systemName: "appletvremote.gen4.fill")
+                        .font(.system(size: 24, weight: .semibold))
+                        .foregroundStyle(.secondary)
 
-            Text(model.connectionStatusText(using: localization))
-                .font(.system(size: 12))
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(vertical ? .leading : .center)
-                .fixedSize(horizontal: false, vertical: true)
-
-            if !vertical {
-                Button("connection.action.reconnect") {
-                    model.reconnect()
+                    Text(model.connectionStatusText(using: localization))
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                .compatibilityButtonStyle(.standard)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 10)
+                .background(
+                    Color.primary.opacity(0.045),
+                    in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                )
+                .overlay {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(Color.secondary.opacity(0.18))
+                }
+            } else {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Image(systemName: "appletvremote.gen4.fill")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(.secondary)
+
+                        Text(model.connectionStatusText(using: localization))
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .layoutPriority(1)
+                    }
+
+                    Spacer(minLength: 0)
+
+                    Button("connection.action.reconnect") {
+                        model.reconnect()
+                    }
+                    .compatibilityButtonStyle(.standard)
+                    .controlSize(.regular)
+                    .font(.system(size: 12))
+                    .fixedSize()
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .frame(
+                    width: SettingsPageBehavior.mappingRemoteCardWidth,
+                    height: SettingsPageBehavior.mappingRemoteCardHeight,
+                    alignment: .leading
+                )
+                .background(
+                    Color.primary.opacity(0.045),
+                    in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                )
+                .overlay {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(Color.secondary.opacity(0.18))
+                }
             }
-        }
-        .frame(maxWidth: .infinity, alignment: vertical ? .leading : .center)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 10)
-        .background(
-            Color.primary.opacity(0.045),
-            in: RoundedRectangle(cornerRadius: 10, style: .continuous)
-        )
-        .overlay {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .stroke(Color.secondary.opacity(0.18))
         }
     }
 
@@ -3434,7 +3481,10 @@ struct SettingsView: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .frame(width: fillsWidth ? nil : 232, alignment: .leading)
+        .frame(
+            width: fillsWidth ? nil : SettingsPageBehavior.mappingRemoteCardWidth,
+            alignment: .leading
+        )
         .frame(maxWidth: fillsWidth ? .infinity : nil, alignment: .leading)
         .background {
             // The background handles padding; foreground buttons keep their own actions.
