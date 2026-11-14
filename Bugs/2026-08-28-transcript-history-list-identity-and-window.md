@@ -31,6 +31,10 @@ swift test --filter 'TranscriptArchiveStoreTests|SettingsPageRegressionTests'
 
 结果：34 项测试通过（2 个测试套件），仅有仓库既有 macOS `onChange(of:perform:)` 弃用警告。
 
+## 2026-11-14 后续调整
+
+“按应用查看更多记录”提示按钮已移除；存在更早记录时，统一通过顶部应用栏“展开/收起”或选择具体 App 查看。原始记录保留为 2026-08-28 的修复证据。
+
 ## 未覆盖边界
 
 - 当前环境未运行真实第三方微信 UI，也未使用真实大规模用户归档驱动 Accessibility 滚动验收；需要在签名测试包中准备超过一周、同日文字与录音混合的记录，确认视觉无重复/空白且选择微信后可见完整历史。

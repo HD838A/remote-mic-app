@@ -506,6 +506,19 @@ enum SettingsScreenshotRenderer {
                     applicationName: "Notes", bundleIdentifier: "com.apple.Notes")
             }
         }
+        if ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_SETTINGS_SCREENSHOT_OLDER_HISTORY"
+        ] == "1",
+            let olderDate = calendar.date(byAdding: .day, value: -8, to: now) {
+            try transcriptStore.append(TranscriptRecord(
+                sessionID: UUID(),
+                startedAt: olderDate.addingTimeInterval(-60),
+                endedAt: olderDate,
+                applicationName: "Notes", bundleIdentifier: "com.apple.Notes",
+                source: .bluetoothRemote, originalTranscript: "更早记录测试 / Older history fixture",
+                calendar: calendar
+            ))
+        }
     }
 
     private static func seedAvailableUpdate(
