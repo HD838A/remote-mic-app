@@ -54,15 +54,20 @@ enum HIDReportClock {
     }
 }
 
-private func hidInputReportWithTimeStamp(
+enum HIDReportCallbackPath {
+    case manager
+    case device
+}
+
+private func processHIDReportCallback(
     context: UnsafeMutableRawPointer?,
     result: IOReturn,
     sender: UnsafeMutableRawPointer?,
-    type: IOHIDReportType,
     reportID: UInt32,
     report: UnsafeMutablePointer<UInt8>,
     reportLength: CFIndex,
-    timeStamp: UInt64
+    timeStamp: UInt64,
+    path: HIDReportCallbackPath
 ) {
     guard let context else { return }
     let monitor = Unmanaged<HIDRemoteMonitor>.fromOpaque(context).takeUnretainedValue()
@@ -84,7 +89,52 @@ private func hidInputReportWithTimeStamp(
         from: device,
         reportID: reportID,
         data: data,
-        timestampNanoseconds: HIDReportClock.uptimeNanoseconds(fromMachTime: timeStamp)
+        timestampNanoseconds: HIDReportClock.uptimeNanoseconds(fromMachTime: timeStamp),
+        path: path
+    )
+}
+
+private func hidInputReportWithTimeStamp(
+    context: UnsafeMutableRawPointer?,
+    result: IOReturn,
+    sender: UnsafeMutableRawPointer?,
+    type: IOHIDReportType,
+    reportID: UInt32,
+    report: UnsafeMutablePointer<UInt8>,
+    reportLength: CFIndex,
+    timeStamp: UInt64
+) {
+    processHIDReportCallback(
+        context: context,
+        result: result,
+        sender: sender,
+        reportID: reportID,
+        report: report,
+        reportLength: reportLength,
+        timeStamp: timeStamp,
+        path: .manager
+    )
+}
+
+private func hidDeviceInputReportWithTimeStamp(
+    context: UnsafeMutableRawPointer?,
+    result: IOReturn,
+    sender: UnsafeMutableRawPointer?,
+    type: IOHIDReportType,
+    reportID: UInt32,
+    report: UnsafeMutablePointer<UInt8>,
+    reportLength: CFIndex,
+    timeStamp: UInt64
+) {
+    processHIDReportCallback(
+        context: context,
+        result: result,
+        sender: sender,
+        reportID: reportID,
+        report: report,
+        reportLength: reportLength,
+        timeStamp: timeStamp,
+        path: .device
     )
 }
 
@@ -148,6 +198,27 @@ final class HIDRemoteMonitor {
     private var manager: IOHIDManager?
     private let reportRunLoop = HIDReportRunLoop()
     private var scheduledReportRunLoop: CFRunLoop?
+    private struct DeviceReportRegistration {
+        let device: IOHIDDevice
+        let buffer: UnsafeMutablePointer<UInt8>
+        let length: CFIndex
+    }
+
+    private var deviceReportCallbackRunLoop: CFRunLoop?
+    private var deviceReportRegistrations: [DeviceReportRegistration] = []
+    private var deviceReportPointers = Set<UInt>()
+    private var retiredDeviceReportBuffers: [
+        (buffer: UnsafeMutablePointer<UInt8>, length: CFIndex)
+    ] = []
+    private let deviceReportLock = NSLock()
+
+    /// macOS 27 stops delivering manager-level reports after the native key
+    /// mapping is written. Per-device callbacks still deliver them, so use the
+    /// device path there and keep the manager path for older systems.
+    private var usesDeviceReportCallback: Bool {
+        if #available(macOS 27, *) { return true }
+        return false
+    }
     private var activeDevice: IOHIDDevice?
     private var probedDevices: [IOHIDDevice] = []
     private(set) var deviceFingerprint: String? {
@@ -455,6 +526,7 @@ final class HIDRemoteMonitor {
         IOHIDManagerSetDeviceMatching(manager, matching)
 
         let context = Unmanaged.passUnretained(self).toOpaque()
+        let usesDeviceReportCallback = self.usesDeviceReportCallback
         IOHIDManagerRegisterDeviceMatchingCallback(manager, hidDeviceMatched, context)
         IOHIDManagerRegisterDeviceRemovalCallback(manager, hidDeviceRemoved, context)
         IOHIDManagerRegisterInputReportWithTimeStampCallback(
@@ -473,6 +545,9 @@ final class HIDRemoteMonitor {
             dedicatedReportRunLoop == nil
                 ? "HID REPORT runloop mode=main reason=dedicated_thread_unavailable"
                 : "HID REPORT runloop mode=dedicated thread=sayall.hid.reports"
+        )
+        AppLogger.shared.write(
+            "HID REPORT path=\(usesDeviceReportCallback ? "device+manager" : "manager")"
         )
         IOHIDManagerScheduleWithRunLoop(
             manager,
@@ -533,6 +608,7 @@ final class HIDRemoteMonitor {
         resetInputState()
         nativeKeysNeutralized = false
         if ownsEventSuppressor { eventSuppressor.stop() }
+        unregisterAllDeviceReportCallbacks()
         probedDevices.forEach {
             IOHIDDeviceClose($0, IOOptionBits(kIOHIDOptionsTypeNone))
         }
@@ -553,7 +629,143 @@ final class HIDRemoteMonitor {
             self.manager = nil
         }
         scheduledReportRunLoop = nil
-        reportRunLoop.stop()
+        if reportRunLoop.stop() {
+            releaseRetiredDeviceReportBuffers()
+        }
+    }
+
+    deinit {
+        if reportRunLoop.stop(waitTimeout: 0.5) {
+            releaseRetiredDeviceReportBuffers()
+        }
+    }
+
+    private static func deviceReportPointer(_ device: IOHIDDevice) -> UInt {
+        UInt(bitPattern: Unmanaged.passUnretained(device).toOpaque())
+    }
+
+    /// macOS 27 needs a per-device callback because the manager-level callback
+    /// stops delivering after the native key mapping is written. The manager
+    /// callback remains registered for devices that cannot be opened directly.
+    private func registerDeviceReportCallbackIfNeeded(_ device: IOHIDDevice) {
+        guard usesDeviceReportCallback else { return }
+        let pointer = Self.deviceReportPointer(device)
+        deviceReportLock.lock()
+        guard !deviceReportPointers.contains(pointer) else {
+            deviceReportLock.unlock()
+            return
+        }
+        deviceReportPointers.insert(pointer)
+        let runLoop = deviceReportCallbackRunLoop
+            ?? scheduledReportRunLoop
+            ?? RunLoop.main.getCFRunLoop()
+        deviceReportCallbackRunLoop = runLoop
+        let maxLength = (IOHIDDeviceGetProperty(
+            device,
+            kIOHIDMaxInputReportSizeKey as CFString
+        ) as? NSNumber)?.intValue ?? 4_096
+        let length = CFIndex(max(64, maxLength))
+        let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: Int(length))
+        buffer.initialize(repeating: 0, count: Int(length))
+        IOHIDDeviceRegisterInputReportWithTimeStampCallback(
+            device,
+            buffer,
+            length,
+            hidDeviceInputReportWithTimeStamp,
+            Unmanaged.passUnretained(self).toOpaque()
+        )
+        IOHIDDeviceScheduleWithRunLoop(
+            device,
+            runLoop,
+            CFRunLoopMode.commonModes.rawValue
+        )
+        deviceReportRegistrations.append(
+            DeviceReportRegistration(device: device, buffer: buffer, length: length)
+        )
+        deviceReportLock.unlock()
+        diagnosticLogger("HID REPORT device_callback registered path=device")
+    }
+
+    private func unregisterDeviceReportCallback(_ device: IOHIDDevice) {
+        let pointer = Self.deviceReportPointer(device)
+        deviceReportLock.lock()
+        guard let index = deviceReportRegistrations.firstIndex(where: {
+            Self.deviceReportPointer($0.device) == pointer
+        }) else {
+            deviceReportLock.unlock()
+            return
+        }
+        let registration = deviceReportRegistrations[index]
+        deviceReportLock.unlock()
+        IOHIDDeviceRegisterInputReportWithTimeStampCallback(
+            registration.device,
+            registration.buffer,
+            registration.length,
+            nil,
+            nil
+        )
+        if let runLoop = deviceReportCallbackRunLoop {
+            IOHIDDeviceUnscheduleFromRunLoop(
+                registration.device,
+                runLoop,
+                CFRunLoopMode.commonModes.rawValue
+            )
+        }
+        deviceReportLock.lock()
+        if let currentIndex = deviceReportRegistrations.firstIndex(where: {
+            Self.deviceReportPointer($0.device) == pointer
+        }) {
+            let current = deviceReportRegistrations.remove(at: currentIndex)
+            deviceReportPointers.remove(pointer)
+            // The report thread may still be inside a callback. Keep the
+            // buffer alive until the run loop has stopped.
+            retiredDeviceReportBuffers.append((current.buffer, current.length))
+        }
+        deviceReportLock.unlock()
+    }
+
+    private func unregisterAllDeviceReportCallbacks() {
+        deviceReportLock.lock()
+        let registrations = deviceReportRegistrations
+        deviceReportRegistrations.removeAll()
+        deviceReportLock.unlock()
+        for registration in registrations {
+            IOHIDDeviceRegisterInputReportWithTimeStampCallback(
+                registration.device,
+                registration.buffer,
+                registration.length,
+                nil,
+                nil
+            )
+            if let runLoop = deviceReportCallbackRunLoop {
+                IOHIDDeviceUnscheduleFromRunLoop(
+                    registration.device,
+                    runLoop,
+                    CFRunLoopMode.commonModes.rawValue
+                )
+            }
+        }
+        // Keep the device pointers until callbacks are unregistered so a
+        // manager report in flight during shutdown cannot run a second time.
+        deviceReportLock.lock()
+        for registration in registrations {
+            let pointer = Self.deviceReportPointer(registration.device)
+            deviceReportPointers.remove(pointer)
+            retiredDeviceReportBuffers.append((registration.buffer, registration.length))
+        }
+        deviceReportLock.unlock()
+        deviceReportCallbackRunLoop = nil
+    }
+
+    private func releaseRetiredDeviceReportBuffers() {
+        deviceReportLock.lock()
+        let buffers = retiredDeviceReportBuffers
+        retiredDeviceReportBuffers.removeAll()
+        deviceReportLock.unlock()
+        for entry in buffers {
+            entry.buffer.deinitialize(count: Int(entry.length))
+            entry.buffer.deallocate()
+        }
     }
 
     /// 设备匹配回调在 HID 报告线程上执行，设置、界面和状态必须回到主线程。
@@ -629,6 +841,7 @@ final class HIDRemoteMonitor {
             IOHIDDeviceClose(device, IOOptionBits(kIOHIDOptionsTypeNone))
             return
         }
+        registerDeviceReportCallbackIfNeeded(device)
         probedDevices.append(device)
         diagnosticLogger("HID DEVICE probing mode=monitored")
     }
@@ -640,6 +853,7 @@ final class HIDRemoteMonitor {
         guard prepareNativeKeyMapping() else { return false }
         let selectedDevice = probedDevices.remove(at: selectedIndex)
         probedDevices.forEach {
+            unregisterDeviceReportCallback($0)
             IOHIDDeviceClose($0, IOOptionBits(kIOHIDOptionsTypeNone))
         }
         probedDevices.removeAll()
@@ -670,6 +884,7 @@ final class HIDRemoteMonitor {
                 IOHIDDeviceClose(device, IOOptionBits(kIOHIDOptionsTypeNone))
                 return false
             }
+            registerDeviceReportCallbackIfNeeded(device)
             activeDevice = device
             deviceFingerprint = fingerprint
             activeDeviceIsSeized = true
@@ -705,6 +920,9 @@ final class HIDRemoteMonitor {
                 IOHIDDeviceClose(device, IOOptionBits(kIOHIDOptionsTypeNone))
             }
             return false
+        }
+        if monitorResult == kIOReturnSuccess {
+            registerDeviceReportCallbackIfNeeded(device)
         }
         activeDevice = device
         deviceFingerprint = fingerprint
@@ -756,6 +974,7 @@ final class HIDRemoteMonitor {
 
     private func deviceDidRemoveOnMain(device: IOHIDDevice) {
         if let activeDevice, CFEqual(activeDevice, device) {
+            unregisterDeviceReportCallback(activeDevice)
             IOHIDDeviceClose(activeDevice, IOOptionBits(kIOHIDOptionsTypeNone))
             self.activeDevice = nil
             deviceFingerprint = nil
@@ -770,16 +989,37 @@ final class HIDRemoteMonitor {
             return
         }
         let probedDevice = probedDevices.remove(at: probeIndex)
+        unregisterDeviceReportCallback(probedDevice)
         IOHIDDeviceClose(probedDevice, IOOptionBits(kIOHIDOptionsTypeNone))
         diagnosticLogger("HID DEVICE probe_removed")
+    }
+
+    static func shouldAcceptReport(
+        path: HIDReportCallbackPath,
+        hasDeviceCallback: Bool
+    ) -> Bool {
+        path == .device || !hasDeviceCallback
     }
 
     fileprivate func handleReport(
         from device: IOHIDDevice,
         reportID: UInt32,
         data: Data,
-        timestampNanoseconds: UInt64? = nil
+        timestampNanoseconds: UInt64? = nil,
+        path: HIDReportCallbackPath
     ) {
+        // 设备级回调已经覆盖的 device，不再处理同一份 manager 级回调，
+        // 避免 macOS 27 上两条路径同时投递时重复执行动作。
+        if path == .manager {
+            let pointer = Self.deviceReportPointer(device)
+            deviceReportLock.lock()
+            let hasDeviceCallback = deviceReportPointers.contains(pointer)
+            deviceReportLock.unlock()
+            guard Self.shouldAcceptReport(
+                path: path,
+                hasDeviceCallback: hasDeviceCallback
+            ) else { return }
+        }
         // 登记必须在本线程立刻完成：系统原生音量事件可能早于主线程处理报告。
         prearmManagedNativeEvents(from: device, reportID: reportID, data: data)
         // 报告时刻在进入主线程之前定下来：主线程一旦排队，处理时刻就不再代表
