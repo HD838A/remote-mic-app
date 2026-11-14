@@ -638,6 +638,78 @@ struct BluetoothLifecycleTests {
         ))
     }
 
+    @Test func connectGateNamesEverySkipReason() {
+        let generation: UInt64 = 21
+        func reason(
+            shouldRun: Bool = true,
+            suspended: Bool = false,
+            sameCentral: Bool = true,
+            hasPeripheral: Bool = false,
+            lifecycle: BluetoothLifecyclePhase = .scanning(21)
+        ) -> String? {
+            BluetoothConnectGate.skipReason(
+                shouldRun: shouldRun,
+                isSystemSuspended: suspended,
+                isSameCentral: sameCentral,
+                hasPeripheral: hasPeripheral,
+                lifecycle: lifecycle,
+                generation: generation
+            )
+        }
+
+        // 只有全部满足才允许连接。
+        #expect(reason() == nil)
+        // 每条前置条件都必须能被单独指名，否则日志仍然无法二分。
+        #expect(reason(shouldRun: false) == "not_running")
+        #expect(reason(suspended: true) == "system_suspended")
+        #expect(reason(sameCentral: false) == "central_replaced")
+        #expect(reason(hasPeripheral: true) == "peripheral_busy")
+        // 阶段不对时要带上阶段名：connecting（已有连接在飞）与 ready（已经连上）不是一回事。
+        #expect(reason(lifecycle: .connecting(generation)) == "lifecycle_connecting")
+        #expect(reason(lifecycle: .ready(generation)) == "lifecycle_ready")
+        #expect(reason(lifecycle: .waitingReconnect(generation)) == "lifecycle_waiting_reconnect")
+        // 旧 generation 的扫描不算本轮的扫描。
+        #expect(reason(lifecycle: .scanning(generation + 1)) == "lifecycle_scanning")
+    }
+
+    @Test func scanCannotRestartAfterLifecycleLeftScanning() {
+        let generation: UInt64 = 21
+        #expect(BluetoothScanRecoveryPolicy.canStartScan(
+            lifecycle: .scanning(generation),
+            generation: generation
+        ))
+        // 采纳候选时 connect() 若被前置条件跳过，发现流程仍会走到 startScan；
+        // 此时不能再开扫描，否则 state 与 lifecycle 分叉。
+        #expect(!BluetoothScanRecoveryPolicy.canStartScan(
+            lifecycle: .connecting(generation),
+            generation: generation
+        ))
+        #expect(!BluetoothScanRecoveryPolicy.canStartScan(
+            lifecycle: .scanning(generation + 1),
+            generation: generation
+        ))
+        #expect(!BluetoothScanRecoveryPolicy.canStartScan(
+            lifecycle: .stopped,
+            generation: generation
+        ))
+    }
+
+    @Test func adoptionReportsWhetherTheConnectionActuallyStarted() throws {
+        // `adopt()` 是私有的，且依赖真实 CBPeripheral，纯测试够不到；但「没发起连接不能
+        // 报成已采纳」这条契约必须有人守，否则下次重构很容易又退回无条件 return true。
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        let source = try String(contentsOf: root.appendingPathComponent(
+            "Sources/RemoteMic/XiaomiBluetoothBridge.swift"
+        ), encoding: .utf8)
+        #expect(source.contains("return connect("))
+        #expect(source.contains("BluetoothConnectGate.skipReason("))
+        #expect(source.contains("BLE CONNECT skipped"))
+        #expect(source.contains("BluetoothScanRecoveryPolicy.canStartScan("))
+        #expect(source.contains("BLE CANDIDATES FILTERED"))
+        #expect(source.contains("BLE ADOPT IGNORED"))
+    }
+
     @Test func poweredOffCancelsWaitingReconnectUntilBluetoothReturns() {
         let generation: UInt64 = 7
         let poweredOff = BluetoothCentralRecoveryPolicy.transition(
