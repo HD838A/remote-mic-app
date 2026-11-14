@@ -900,7 +900,12 @@ struct OnboardingView: View {
     ) -> some View {
         switch source {
         case .xiaomiRemote:
-            if let image = bundledRemoteImage(resourceName: "RC003-remote-photo") {
+            let photoKind = OnboardingRemotePhotoKind.resolve(
+                source: .xiaomiRemote,
+                selectedModel: settings.selectedRemoteProfile?.model
+            )
+            if case let .bundled(resourceName) = photoKind,
+               let image = bundledRemoteImage(resourceName: resourceName) {
                 Image(nsImage: image)
                     .resizable()
                     .scaledToFit()

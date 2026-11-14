@@ -191,6 +191,7 @@ test -f "$APP/Contents/Resources/TROUBLESHOOTING.md"
 test -f "$APP/Contents/Resources/COPYRIGHT.md"
 test -f "$APP/Contents/Resources/LOGO-LICENSE.md"
 test -f "$APP/Contents/Resources/FirstInstallGuide.md"
+test -f "$APP/Contents/Resources/RC001-remote-photo.png"
 test -f "$APP/Contents/Resources/RC003-remote-photo.png"
 for onboarding_image in "$ROOT"/Resources/Onboarding/*.png(N); do
   test -f "$APP/Contents/Resources/Onboarding/${onboarding_image:t}"
@@ -631,7 +632,7 @@ if [[ "$RELEASE_VARIANT" == "intel" ]]; then
   done
 fi
 
-EXPECTED_APP_FILES=$'Contents/Helpers/SayAllMCP\nContents/Info.plist\nContents/MacOS/RemoteMic\nContents/Resources/AppIcon.icns\nContents/Resources/COPYRIGHT.md\nContents/Resources/FirstInstallGuide.md\nContents/Resources/LICENSE.md\nContents/Resources/LOGO-LICENSE.md\nContents/Resources/RC003-remote-photo.png\nContents/Resources/README.md\nContents/Resources/StatusIconActiveTemplate.png\nContents/Resources/StatusIconActiveTemplate@2x.png\nContents/Resources/StatusIconTemplate.png\nContents/Resources/StatusIconTemplate@2x.png\nContents/Resources/TECHNICAL.md\nContents/Resources/THIRD_PARTY_NOTICES.md\nContents/Resources/TROUBLESHOOTING.md\nContents/_CodeSignature/CodeResources'
+EXPECTED_APP_FILES=$'Contents/Helpers/SayAllMCP\nContents/Info.plist\nContents/MacOS/RemoteMic\nContents/Resources/AppIcon.icns\nContents/Resources/COPYRIGHT.md\nContents/Resources/FirstInstallGuide.md\nContents/Resources/LICENSE.md\nContents/Resources/LOGO-LICENSE.md\nContents/Resources/RC001-remote-photo.png\nContents/Resources/RC003-remote-photo.png\nContents/Resources/README.md\nContents/Resources/StatusIconActiveTemplate.png\nContents/Resources/StatusIconActiveTemplate@2x.png\nContents/Resources/StatusIconTemplate.png\nContents/Resources/StatusIconTemplate@2x.png\nContents/Resources/TECHNICAL.md\nContents/Resources/THIRD_PARTY_NOTICES.md\nContents/Resources/TROUBLESHOOTING.md\nContents/_CodeSignature/CodeResources'
 if [[ "$SAYALL_SIRI_REMOTE_INCLUDED" == "true" ]]; then
   EXPECTED_APP_FILES=$'Contents/Frameworks/libopus.0.dylib\nContents/Helpers/SayAllAppleRemoteAudioCapture\nContents/Helpers/SayAllAppleRemoteHCIService\nContents/Library/LaunchServices/com.hd838a.SayAll.AppleRemoteHCIService\n'"$EXPECTED_APP_FILES"
 fi

@@ -103,11 +103,11 @@ struct VoiceRemoteCatalogEntry {
 /// 写成三份就会出现「某处漏收/误收，且只在特定配对状态下复现」的缺陷。
 enum VoiceRemoteCatalog {
     static let entries: [VoiceRemoteCatalogEntry] = [
-        // rc001 与 rc003 外观几乎一致，用户确认共用同一份真机素材（2026-09-19）——
-        // 共用是显式声明，不是默认行为。
+        // 两款外观接近，但电源键和麦克风键样式不同。用户于 2026-11-14 确认
+        // RC001 使用自己的真机图；每款显式声明一份素材，不默认套用别款。
         VoiceRemoteCatalogEntry(
             model: .rc001,
-            photoResource: "RC003-remote-photo",
+            photoResource: "RC001-remote-photo",
             // 真机证实（2026-09-19）：小米蓝牙遥控器 2 的 DIS 报 RC001。
             disModelNumbers: ["RC001"]
         ),

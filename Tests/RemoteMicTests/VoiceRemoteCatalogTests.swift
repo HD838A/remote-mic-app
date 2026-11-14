@@ -66,8 +66,8 @@ struct VoiceRemoteCatalogTests {
     }
 
     @Test func photoResourceIsExplicitPerModelAndAbsentForUnrecognized() {
-        // 共用是同一份素材的**显式声明**，不是默认行为：rc001/rc003 明确各写一遍。
-        #expect(VoiceRemoteCatalog.photoResource(for: .rc001) == "RC003-remote-photo")
+        // 每款型号显式声明自己的真机图，不默认套用别款。
+        #expect(VoiceRemoteCatalog.photoResource(for: .rc001) == "RC001-remote-photo")
         #expect(VoiceRemoteCatalog.photoResource(for: .rc003) == "RC003-remote-photo")
         // 未识别型号 / 走私有包链路的型号：目录里没有，调用方必须显示占位。
         #expect(VoiceRemoteCatalog.photoResource(for: .unknown) == nil)
