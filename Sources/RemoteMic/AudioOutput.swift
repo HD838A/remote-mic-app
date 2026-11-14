@@ -83,6 +83,20 @@ extension VirtualAudioDeviceDiagnosticKind {
     }
 }
 
+enum VoiceOutputDevicePolicy {
+    /// 只有 SayAll 内置驱动与 BlackHole 2ch 能承接遥控器语音；普通扬声器不满足语音工具收音。
+    static func hasCompatibleDevice(in devices: [AudioDeviceInfo]) -> Bool {
+        devices.contains { device in
+            switch VirtualAudioDeviceDiagnosticKind.classify(device) {
+            case .miRemoteV2ch, .blackHole2ch:
+                return true
+            case .unavailable, .other:
+                return false
+            }
+        }
+    }
+}
+
 enum VirtualAudioSelectionRecoverySource: String, Equatable {
     case currentSelection = "current_selection"
     case rememberedSelection = "remembered_selection"

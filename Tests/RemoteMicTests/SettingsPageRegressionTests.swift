@@ -282,7 +282,7 @@ struct SettingsPageRegressionTests {
         ))
     }
 
-    @Test func connectionPageKeepsCompatibilityAudioControlsWithoutExtraTools() throws {
+    @Test func connectionPageShowsCompatibilityAudioOnlyWhenMissing() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -293,9 +293,11 @@ struct SettingsPageRegressionTests {
         )
 
         #expect(settingsSource.contains("audio.action.refresh_devices"))
-        #expect(settingsSource.contains("audioCompatibilityPanel"))
-        #expect(settingsSource.contains("model.selectDoubaoAudioDevice()"))
+        #expect(settingsSource.contains("model.hasCompatibleVoiceOutputDevice"))
+        #expect(settingsSource.contains("audio.compatibility.missing_notice"))
         #expect(settingsSource.contains("model.openDoubaoDriverInstructions(using: localization)"))
+        #expect(!settingsSource.contains("audioCompatibilityPanel"))
+        #expect(!settingsSource.contains("model.selectDoubaoAudioDevice()"))
         #expect(!settingsSource.contains("audio.action.learn_virtual_microphones"))
         #expect(!settingsSource.contains("audio.action.send_test_tone"))
         #expect(!settingsSource.contains("model.testToneStatus.text(using: localization)"))

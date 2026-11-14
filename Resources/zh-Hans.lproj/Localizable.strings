@@ -6,11 +6,8 @@
 "audio.output.start_failed" = "启动音频输出失败：%1$@";
 "bluetooth.status.initializing" = "正在初始化蓝牙";
 "button_mapping.status.disabled" = "按键映射未启用";
-"audio.compatibility.checking" = "正在检查兼容音频设备";
 "voice_button.status.preparing" = "正在准备遥控器语音键映射";
 "app.status.stopped" = "应用已停止";
-"audio.compatibility.device_missing" = "未检测到 %1$@，请先安装兼容驱动";
-"audio.compatibility.device_selected" = "已选择 %1$@ 作为遥控器语音输出";
 "audio.test_tone.cancelled_device_changed" = "设备已更新，测试音已取消";
 "audio.test_tone.ready" = "可发送测试音";
 "audio.output.none_or_unavailable" = "未选择语音输出设备或设备不可用";
@@ -39,8 +36,6 @@
 "voice_button.status.waiting_for_input" = "正在等待目标输入位置准备完成";
 "voice_button.status.input_ready" = "目标输入位置已准备完成";
 "voice_button.status.input_unavailable" = "目标输入位置未准备完成，已取消本次语音输入";
-"audio.compatibility.device_detected" = "已检测到 %1$@";
-"audio.compatibility.device_not_detected" = "未检测到 %1$@";
 "button_mapping.status.system_managed" = "按键由 macOS 原生处理";
 "button_mapping.permission.input_monitoring_required" = "需要输入监控权限；未读取遥控器按键";
 "button_mapping.permission.accessibility_required" = "需要辅助功能权限；未发送映射动作";
@@ -486,13 +481,8 @@
 "audio.action.learn_virtual_microphones" = "获取 BlackHole";
 "audio.action.send_test_tone" = "发送 1 秒测试音";
 "audio.output.privacy_help" = "语音会写入所选设备。最后一只遥控器断开时，如果系统默认输入正是该虚拟设备，会临时回退到物理麦克风；重连时仅在用户没有手动改选的情况下恢复。系统默认输出不会被修改。";
-"audio.compatibility.title" = "兼容音频设备";
-"audio.compatibility.section_title" = "语音输入与兼容";
-"audio.compatibility.microphone_label" = "兼容虚拟麦克风";
-"audio.compatibility.select_microphone" = "选择 %@";
 "audio.compatibility.open_install_guide" = "打开驱动安装说明";
-"audio.compatibility.help" = "安装兼容麦克风后在这里选中。新安装名称为 SayAll；旧用户继续使用 MiRemoteV 2ch。";
-"audio.compatibility.help_plain" = "如果常用的语音工具收不到声音，可选择随安装包提供的兼容麦克风；已有音频设备不会被替换。";
+"audio.compatibility.missing_notice" = "未检测到兼容虚拟麦克风，语音工具可能收不到遥控器声音。";
 "button_mapping.page.title" = "按键映射";
 "button_mapping.page.subtitle" = "点击按键进行设置";
 "button_mapping.toggle.enabled" = "自定义按键";

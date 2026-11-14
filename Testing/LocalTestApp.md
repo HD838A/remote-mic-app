@@ -60,7 +60,8 @@ dist/SayAll.app/Contents/MacOS/RemoteMic
 ```
 
 支持的还有 `REMOTE_MIC_SETTINGS_SCREENSHOT_SECTION`（只渲染一页）、`..._OPEN_ACTION_EDITOR`、
-`..._GESTURE_TIMING` 等，见 `Sources/RemoteMic/SettingsScreenshotRenderer.swift`。
+`..._GESTURE_TIMING`、`..._VOICE_OUTPUT=missing|compatible`（隔离兼容音频设备状态）等，见
+`Sources/RemoteMic/SettingsScreenshotRenderer.swift`。
 
 ⚠️ 已知限制：渲染进程里方案数据加载不完整，即使 `SAYALL_MACRO_STORAGE_ROOT` 指向一份合法方案文件，
 按键页与键位方案页仍只显示默认方案。要截方案相关页面，目前需要在正常 GUI 里手动操作后截图。

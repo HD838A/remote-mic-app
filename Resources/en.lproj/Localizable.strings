@@ -6,11 +6,8 @@
 "audio.output.start_failed" = "Failed to start audio output: %1$@";
 "bluetooth.status.initializing" = "Initializing Bluetooth";
 "button_mapping.status.disabled" = "Button mapping is disabled";
-"audio.compatibility.checking" = "Checking for a compatible audio device";
 "voice_button.status.preparing" = "Setting up the remote voice button";
 "app.status.stopped" = "The app has stopped";
-"audio.compatibility.device_missing" = "%1$@ was not found. Install the compatibility driver first.";
-"audio.compatibility.device_selected" = "Remote audio will be sent to %1$@";
 "audio.test_tone.cancelled_device_changed" = "The device changed; the test tone was canceled";
 "audio.test_tone.ready" = "Ready to send a test tone";
 "audio.output.none_or_unavailable" = "No audio output device is selected, or the device is unavailable";
@@ -39,8 +36,6 @@
 "voice_button.status.waiting_for_input" = "Waiting for the text field to be ready";
 "voice_button.status.input_ready" = "Text field ready";
 "voice_button.status.input_unavailable" = "The text field was not ready. Voice input was canceled.";
-"audio.compatibility.device_detected" = "%1$@ detected";
-"audio.compatibility.device_not_detected" = "%1$@ was not found";
 "button_mapping.status.system_managed" = "Buttons are handled natively by macOS";
 "button_mapping.permission.input_monitoring_required" = "Allow Input Monitoring to use remote buttons.";
 "button_mapping.permission.accessibility_required" = "Allow Accessibility to run button actions.";
@@ -486,13 +481,8 @@
 "audio.action.learn_virtual_microphones" = "Get BlackHole";
 "audio.action.send_test_tone" = "Play Test Sound";
 "audio.output.privacy_help" = "Voice audio is sent to the selected device. When the last remote disconnects, macOS switches the Mac’s default microphone to a physical microphone if it was using this virtual device. On reconnect, SayAll restores the virtual microphone only if you have not changed that setting. The default speakers are never changed.";
-"audio.compatibility.title" = "Compatible Audio Device";
-"audio.compatibility.section_title" = "Voice Input & Compatibility";
-"audio.compatibility.microphone_label" = "Compatible virtual microphone";
-"audio.compatibility.select_microphone" = "Select %@";
 "audio.compatibility.open_install_guide" = "Open Driver Installation Guide";
-"audio.compatibility.help" = "Install the compatible microphone and select it here. New installations use SayAll. Existing installations keep MiRemoteV 2ch.";
-"audio.compatibility.help_plain" = "If your voice typing app receives no audio, select the compatible microphone included with the installer. Existing audio devices are not replaced.";
+"audio.compatibility.missing_notice" = "No compatible virtual microphone was found. Your voice tool may not receive remote audio.";
 "button_mapping.page.title" = "Button Mapping";
 "button_mapping.page.subtitle" = "Click a button to change its settings";
 "button_mapping.toggle.enabled" = "Custom Buttons";
