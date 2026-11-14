@@ -1,5 +1,7 @@
 # Bug 记录
 
+- [音频引擎重绑后误报可用并在活跃语音中持续丢包](./2026-11-14-audio-engine-recovery-backoff.md)
+
 - [macOS 27 写入 native key mapping 后 HID 报告停止投递](./2026-11-14-macos-27-native-mapping-blocks-hid-reports.md)
 
 - [断连后设备不再被接管，语音键的 F5→Fn 映射没有写回](./2026-11-13-voice-key-reconnect-mapping-not-reapplied.md)
