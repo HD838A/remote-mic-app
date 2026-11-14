@@ -89,14 +89,18 @@ final class MacMicrophoneCapture {
                     "phase=device_resolved result=\(resolvedInput.id == input.id ? "same" : "refreshed") " +
                     "previous_device_id=\(input.id) current_device_id=\(resolvedInput.id)"
             )
+            let engineBegin = ProcessInfo.processInfo.systemUptime
             let engine = AVAudioEngine()
             let inputNode = engine.inputNode
+            let engineReadyMs = Self.ms(since: engineBegin)
             guard let unit = inputNode.audioUnit else {
                 DispatchQueue.main.async { completion(.capture) }; return
             }
             var deviceID = resolvedInput.id
+            let inputBindBegin = ProcessInfo.processInfo.systemUptime
             let result = AudioUnitSetProperty(unit, kAudioOutputUnitProperty_CurrentDevice,
                 kAudioUnitScope_Global, 0, &deviceID, UInt32(MemoryLayout<AudioDeviceID>.size))
+            let inputBindMs = Self.ms(since: inputBindBegin)
             let format = inputNode.outputFormat(forBus: 0)
             guard result == noErr, format.sampleRate > 0, format.channelCount > 0,
                   let converter = MacMicrophonePCMConverter(inputFormat: format)
@@ -108,27 +112,41 @@ final class MacMicrophoneCapture {
             self.converter = converter
             deliver = onSamples
             fail = onFailure
-            guard RemoteMicTryInstallInputTap(inputNode, format, { [weak self] buffer, _ in
+            let tapBegin = ProcessInfo.processInfo.systemUptime
+            let tapInstalled = RemoteMicTryInstallInputTap(inputNode, format, { [weak self] buffer, _ in
                 self?.accept(buffer)
-            }) else {
+            })
+            let tapMs = Self.ms(since: tapBegin)
+            guard tapInstalled else {
                 self.engine = nil
                 self.converter = nil
                 DispatchQueue.main.async { completion(.capture) }
                 return
             }
             do {
+                let prepareBegin = ProcessInfo.processInfo.systemUptime
                 engine.prepare()
+                let prepareMs = Self.ms(since: prepareBegin)
+                let startBegin = ProcessInfo.processInfo.systemUptime
                 try engine.start()
+                let startMs = Self.ms(since: startBegin)
                 var boundDevice = AudioDeviceID(0)
                 var boundSize = UInt32(MemoryLayout<AudioDeviceID>.size)
                 guard AudioUnitGetProperty(unit, kAudioOutputUnitProperty_CurrentDevice,
                     kAudioUnitScope_Global, 0, &boundDevice, &boundSize) == noErr,
                     boundDevice == resolvedInput.id else { throw MacMicrophoneFailure.inputUnavailable }
+                let deviceStartBegin = ProcessInfo.processInfo.systemUptime
                 let deviceStart = AudioDeviceStart(resolvedInput.id, nil)
+                let deviceStartMs = Self.ms(since: deviceStartBegin)
                 AppLogger.shared.write(
                     "MAC MICROPHONE CAPTURE operation_id=\(operationID) " +
                         "phase=device_started result=\(deviceStart == noErr ? "started" : "failed") " +
                         "input_device_id=\(resolvedInput.id) code=\(deviceStart)"
+                )
+                AppLogger.shared.write(
+                    "MAC MICROPHONE CAPTURE operation_id=\(operationID) phase=startup_timing " +
+                        "engine_ms=\(engineReadyMs) input_bind_ms=\(inputBindMs) tap_ms=\(tapMs) " +
+                        "prepare_ms=\(prepareMs) start_ms=\(startMs) device_start_ms=\(deviceStartMs)"
                 )
                 configurationObserver = NotificationCenter.default.addObserver(
                     forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main
@@ -203,6 +221,10 @@ final class MacMicrophoneCapture {
             guard shouldFail else { return }
             DispatchQueue.main.async { onFailure(.capture) }
         }
+    }
+
+    private static func ms(since start: TimeInterval) -> Int {
+        Int((ProcessInfo.processInfo.systemUptime - start) * 1_000)
     }
 
     private static func currentInputDeviceID(for engine: AVAudioEngine) -> AudioDeviceID? {
