@@ -1936,6 +1936,9 @@ struct SettingsPageRegressionTests {
         let languageSection = settingsPage[languageSectionStart.lowerBound..<languageSectionEnd.lowerBound]
         #expect(languageSection.contains(".frame(width: 300)"))
         #expect(languageSection.contains(".frame(maxWidth: .infinity, alignment: .leading)"))
+        let languageRowIcon = settingsPage[..<languageSectionStart.lowerBound].suffix(200)
+        #expect(languageRowIcon.contains(".foregroundStyle(Color.accentColor)"))
+        #expect(!languageRowIcon.contains(".foregroundStyle(.green)"))
         #expect(!settingsPage.contains("help.glossary.open"))
         #expect(!settingsPage.contains("openGlossary"))
 
@@ -1947,6 +1950,27 @@ struct SettingsPageRegressionTests {
         #expect(appSource.contains("userDriverDelegate: self"))
         #expect(appSource.contains("standardUserDriverShouldShowVersionHistory(for item: SUAppcastItem) -> Bool"))
         #expect(appSource.contains("semantic_newer_but_sparkle_rejected"))
+    }
+
+    @Test func statisticsVoiceSessionRankingUsesAccentColorForDecorativeHighlight() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+        let panelStart = try #require(source.range(of: "private var statisticsVoiceSessionRankingPanel"))
+        let panelEnd = try #require(
+            source.range(
+                of: "private var transcriptHistoryPage",
+                range: panelStart.upperBound..<source.endIndex
+            )
+        )
+        let panel = source[panelStart.lowerBound..<panelEnd.lowerBound]
+        #expect(!panel.contains(".foregroundStyle(.orange)"))
+        #expect(panel.contains(".foregroundStyle(Color.accentColor)"))
     }
 
     @Test func settingsPageUsesAnInlineAppIconPickerWithoutUnavailablePlaceholders() throws {
