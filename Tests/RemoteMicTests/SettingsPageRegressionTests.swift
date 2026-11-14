@@ -1537,7 +1537,7 @@ struct SettingsPageRegressionTests {
         #expect(source.contains("proxy.scrollTo(\"mapping-action-filter\", anchor: .top)"))
         #expect(source.contains("mappingActionFilterControl"))
         #expect(source.contains("customApplicationTargetPicker("))
-        // 聚焦方式与滚动区域已迁到独立的「APP 适配」页，按键编辑区只留只读状态与跳转。
+        // 聚焦方式与滚动区域已迁到独立的「聚焦与翻页」页面，按键编辑区只留只读状态与跳转。
         #expect(source.contains("applicationsPage"))
         #expect(source.contains("custom_application.go_configure"))
         #expect(source.contains("applicationBindingSection"))
@@ -1546,6 +1546,7 @@ struct SettingsPageRegressionTests {
         #expect(source.contains("custom_application.remove_blocked"))
         #expect(source.contains("custom_application.remove_confirm_title"))
         #expect(source.contains("settings.section.applications"))
+        #expect(source.contains("settings.section.applications.sidebar"))
         #expect(!source.contains("applicationFocusEditor("))
         #expect(!source.contains("applicationFocusProfileID"))
         #expect(source.contains("custom_application.focus.scope_note"))
@@ -1582,7 +1583,7 @@ struct SettingsPageRegressionTests {
         #expect(source.contains("mappingFilterScrollRequest &+= 1"))
         #expect(source.contains("inputFocusActionControls("))
         #expect(source.contains("button_mapping.focus_input.app_adaptation_hint.prefix"))
-        // 提示语里的「App 适配页面」是可点跳转的按钮，不是死文字。
+        // 提示语里的「聚焦与翻页」页面入口是可点跳转的按钮，不是死文字。
         #expect(source.contains("focus-input-app-adaptation-link"))
         // 「目标 APP」选择器属于「打开 App」分类，切到其他胶囊后必须一起隐藏，
         // 不能只凭当前动作是「打开自定义 APP」就常驻。
