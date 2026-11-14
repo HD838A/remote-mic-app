@@ -286,10 +286,10 @@
 "button_mapping.action_group.applications" = "Open an App";
 "button_mapping.action.disable_switch" = "Disable This Action";
 "button_mapping.focus_input.app_adaptation_hint.prefix" = "To learn a specific app's input field, go to the";
-"button_mapping.focus_input.app_adaptation_hint.action" = "Apps page";
+"button_mapping.focus_input.app_adaptation_hint.action" = "Focus & Scrolling page";
 "custom_application.target" = "Target app";
 "custom_application.not_configured" = "No app selected";
-"custom_application.page.subtitle" = "Input focus and page scrolling are set per app and work whenever the app is in the foreground.";
+"custom_application.page.subtitle" = "Input focus and page scrolling are set per app and work whenever the app is in the foreground. These settings do not change button bindings.";
 "custom_application.list.title" = "Added apps";
 "custom_application.empty_title" = "No apps yet";
 "custom_application.empty_hint" = "Add an app to set its input focus and page scrolling. Both work whenever the app is in the foreground.";
@@ -299,7 +299,7 @@
 "custom_application.focus.short.recorded" = "Recorded field";
 "custom_application.status.compact" = "%@ · %@";
 "custom_application.go_configure" = "Configure";
-"custom_application.bindings.title" = "Buttons bound to it";
+"custom_application.bindings.title" = "Buttons that open it";
 "custom_application.bindings.empty" = "No button opens this app yet. Pick it under Open an App on the Buttons page.";
 "custom_application.bindings.go_mapping" = "Open Buttons";
 "custom_application.remove" = "Delete this app's setup";
@@ -341,7 +341,8 @@
 "custom_application.error.open_failed" = "The target app could not be opened.";
 "settings.section.connection" = "Connection";
 "settings.section.buttons" = "Buttons";
-"settings.section.applications" = "Apps";
+"settings.section.applications" = "Focus & Scrolling";
+"settings.section.applications.sidebar" = "Focus/Scroll";
 "settings.section.permissions" = "Permissions";
 "permission.status.enabled" = "Enabled";
 "permission.status.pending" = "Needs Permission";

@@ -23,7 +23,7 @@ struct SettingsSection: RawRepresentable, Hashable, CaseIterable, Identifiable {
     static let buttonProfiles = SettingsSection(rawValue: "buttonProfiles")
     static let membership = SettingsSection(rawValue: "membership")
     static let mapping = SettingsSection(rawValue: "mapping")
-    /// 「APP 适配」：输入框聚焦与翻页滚动按 APP 单独配置，和按键页的按键绑定互不影响。
+    /// 「聚焦与翻页」：输入框聚焦与翻页滚动按 App 单独配置，和按键页的按键绑定互不影响。
     static let applications = SettingsSection(rawValue: "applications")
     static let statistics = SettingsSection(rawValue: "statistics")
     static let transcripts = SettingsSection(rawValue: "transcripts")
@@ -231,7 +231,7 @@ enum SettingsPageBehavior {
         membershipVisible: Bool,
         supplementalPageIDs: [String] = []
     ) -> [SettingsSection] {
-        // 补充页插在固定入口之后；「按键 / APP 适配」属于最前面的固定入口。
+        // 补充页插在固定入口之后；「按键 / 聚焦与翻页」属于最前面的固定入口。
         let sections = Array(sidebarSectionOrder.prefix(5)) + supplementalPageIDs.map(SettingsSection.supplemental) + Array(sidebarSectionOrder.dropFirst(5))
         return sections.filter {
             switch $0 {
@@ -661,7 +661,7 @@ struct SettingsView: View {
     @State private var applicationShortcutCaptureProfileID: UUID?
     /// 「App 输入框和滚动」里正在配置哪个 App。它只决定编辑对象，不写按键绑定：
     /// 聚焦与翻页滚动按 App 生效，App 在前台即可使用，和「打开 App」动作无关。
-    /// 「APP 适配」页当前展开的 APP；与按键页的编辑对象完全分开。
+    /// 「聚焦与翻页」页面当前展开的 App；与按键页的编辑对象完全分开。
     @State private var applicationDetailProfileID: UUID?
     /// 正在确认移除的 APP 档案；非空时弹确认框。
     @State private var applicationPendingRemoval: CustomApplicationProfile?
@@ -968,6 +968,9 @@ struct SettingsView: View {
             || section == .membership || section.supplementalID != nil {
             return sectionTitle(section)
         }
+        if section == .applications {
+            return localization.text("settings.section.applications.sidebar")
+        }
         return localization.text(section.titleKey)
     }
 
@@ -1076,6 +1079,9 @@ struct SettingsView: View {
         if section == .privateFeature || section == .macros || section == .buttonProfiles
             || section == .membership || section.supplementalID != nil {
             return Text(sectionTitle(section))
+        }
+        if section == .applications {
+            return Text(localization.text("settings.section.applications.sidebar"))
         }
         return Text(section.title)
     }
@@ -4591,7 +4597,7 @@ struct SettingsView: View {
         }
     }
 
-    /// 「输入框」分类只有一个动作：提示语放在它右侧，指向真正配置学习入口的「APP 适配」页。
+    /// 「输入框」分类只有一个动作：提示语放在它右侧，指向真正配置学习入口的「聚焦与翻页」页面。
     private func inputFocusActionControls(
         selectedAction: ButtonAction,
         isManagedPowerAction: Bool,
