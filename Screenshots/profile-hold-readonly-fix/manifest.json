@@ -2,7 +2,7 @@
   "batch": "profile-hold-readonly-fix",
   "date": "2026-11-14",
   "purpose": "PR 1058 键位方案内组合动作与按住被误判只读的修复前后对照",
-  "host_base": "before=6390bd31; after=f30cfbb3",
+  "host_base": "before=16068d71; after=f30cfbb3",
   "window_points": [
     1020,
     772
@@ -11,7 +11,7 @@
   "storage_path": "~/Develop/ReleaseArtifacts/profile-hold-readonly-fix/",
   "notes": [
     "由生产 SettingsView 的 REMOTE_MIC_SETTINGS_SCREENSHOT_DIR 离屏入口生成；不是设计稿，也不启动蓝牙硬件。",
-    "修改前使用本机 16068d71 调试包，修改后使用本 PR 提交 f30cfbb3；私有键位方案场景由截图 fixture 授权。",
+    "修改前使用本机 16068d71 调试包（私有 2.9.0 构件），修改后使用本 PR 修复提交 f30cfbb3（私有 2.11.0 构件）；私有键位方案场景由截图 fixture 授权。",
     "隔离 fixture 创建并选中一个测试方案；按住面板固定为右键，基础按住模式为 repeatLong。",
     "修改前截图展示方案内仍提供四种按住模式且状态为只读；修改后只提供组件可持久化的重复模式，自动保存可用，并说明方向键按住属于默认方案。",
     "会员访问由截图 fixture 授权，不代表真实会员验收。",
