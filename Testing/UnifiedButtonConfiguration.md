@@ -752,3 +752,17 @@ swift test --disable-keychain --scratch-path .build/unified-legacy
 
 自动保存集成用例需要隔离的 `SAYALL_MACRO_STORAGE_ROOT`；没有该变量时只编译、不执行。
 旧构件集成用例同样需要该变量。自动化不替代真实会员状态、旧安装包升级和实体遥控器验收。截图只证明静态布局。
+
+## 2026-11-14 RC001/RC003 按型号显示真机图
+
+生产公开包 `2.0.0 (320)` 的按键页按所选小米型号读取 `VoiceRemoteCatalog` 指定的真机图：RC001 使用 `Resources/RC001-remote-photo.png`，RC003 使用 `Resources/RC003-remote-photo.png`。
+
+| 操作 | 预期结果与失败判定 |
+| --- | --- |
+| RC001 选中时打开按键页 | 画布显示红色电源键、无外圈麦克风键的 RC001 图；显示 RC003 图判失败。 |
+| RC003 选中时打开按键页 | 画布显示描边电源键、带外圈麦克风键的 RC003 图；显示 RC001 图判失败。 |
+| 两种型号切换 | 图片、设备选择器和右侧按键卡片连线同步切换；热点进入对应按键编辑区；热点错位或图片未刷新判失败。 |
+| 中英文、浅深色、1020×772 | 画布、设备卡和两侧动作卡完整可见；裁切、字号小于 12pt 或窗口几何改变判失败。 |
+| 未识别型号 | 继续回退 RC003 旧图，不新增空白画布；套用 RC001 图判失败。 |
+
+验证记录：使用生产 `SettingsScreenshotRenderer` 和 `REMOTE_MIC_SETTINGS_SCREENSHOT_REMOTE_MODEL=rc001|rc003`、`REMOTE_MIC_SETTINGS_SCREENSHOT_SECTION=mapping`、`REMOTE_MIC_SETTINGS_SCREENSHOT_SIZE=1020x772` 生成简体中文浅色/深色截图。RC001 浅色/深色 PNG 为 `2040 × 1544`，SHA-256 分别为 `9c225e3f088f447542db3385789b3975110b6f05b48a351813bf71a9a7b5782d` / `6e84e1660e67ac88419314c93e22717d0be8db1d0ebf12b5ee6e35b12dc1e15b`；RC003 浅色/深色分别为 `6d0250f3c5344862698a983b1f9407f4eb0181f33fd988b6526e0bd0955be5f7` / `c1a487076f1a5c5b1c2cba8b574bf9b65563224d6e6b064e9c304f38d33d80c9`。RC001 图已更新为带底部 NFC 标识的源图。截图字节保存在仓库外持久证据目录，PR 附件待补。该记录只证明静态 UI，真实 RC001/RC003 的 DIS 识别、热点点击和实体按键高亮仍需现场验收。

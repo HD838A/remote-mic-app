@@ -81,6 +81,6 @@ BlackHole remains an optional loopback-device choice. This fork includes `script
 
 The Doubao compatibility design is informed by MiRemoteVoice: a side-by-side BlackHole-derived device reports its actual audio Device as USB transport so Doubao can enumerate it. This fork reimplements that idea as a pinned, source-built BlackHole patch instead of reusing MiRemoteVoice's version-specific binary replacement script.
 
-## RC003 product photo
+## RC001 and RC003 product photos
 
-The RC003 product photo bundled as `RC003-remote-photo.png` was supplied by the user on 2026-07-17 for the physical-button mapping interface. It is preserved at its original 508 x 1030 aspect ratio. Copyright and trademark rights in the photo and depicted products remain with their respective owners; the GPL-3.0-only license for the program does not grant additional rights to this image or the Xiaomi marks.
+The RC003 product photo bundled as `RC003-remote-photo.png` was supplied by the user on 2026-07-17 for the physical-button mapping interface. The RC001 product photo bundled as `RC001-remote-photo.png` was supplied by the user for the same interface. Both files keep their 1024 x 1536 pixel dimensions; the bundled copies use palette compression only. Copyright and trademark rights in the photos and depicted products remain with their respective owners; the GPL-3.0-only license for the program does not grant additional rights to these images or the Xiaomi marks.

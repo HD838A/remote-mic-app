@@ -13,6 +13,18 @@ struct OnboardingVoicePairingPlanTests {
         )
         #expect(
             OnboardingRemotePhotoKind.resolve(
+                source: .xiaomiRemote,
+                selectedModel: .rc001
+            ) == .bundled(resourceName: "RC001-remote-photo")
+        )
+        #expect(
+            OnboardingRemotePhotoKind.resolve(
+                source: .xiaomiRemote,
+                selectedModel: .rc003
+            ) == .bundled(resourceName: "RC003-remote-photo")
+        )
+        #expect(
+            OnboardingRemotePhotoKind.resolve(
                 source: .siriRemote,
                 selectedModel: nil
             ) == .siriRemote

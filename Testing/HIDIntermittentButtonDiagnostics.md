@@ -220,3 +220,34 @@ Windows 与网络控制入口未修改，保留稳定基线检查。
   双跳另有原因，按 `Bugs/2026-11-07-intel-directional-double-step.md` 重新定位。
 
 失败判定：任一次按下移动两格、按住速度翻倍、透传会话变成零格，或键盘方向键连续被吞。
+
+## 用例 8：macOS 27 device 级报告回调与 native mapping 共存
+
+适用：包含 2026-11-14 macOS 27 修复的 2.0.0 候选包。必须在 macOS 27 上使用真实 RC003 或 RC001 执行。
+
+前置确认日志：
+
+```text
+HID REPORT path=device+manager
+HID REPORT device_callback registered path=device
+HID NATIVE MAPPING phase=prepare result=verified
+HID CONNECTED mode=monitored
+```
+
+1. 方向键、OK、音量加/减各短按 10 次，每次间隔至少 1 秒；每次只能产生一次动作。
+2. TV 键短按和快速连按；不得弹出额外系统界面或向输入框写入字符。
+3. Power 键短按；不得锁屏或睡眠。
+4. 按住左/右方向键 2 秒后松开；按住期间按配置连发，松开立即停止，速度不得翻倍。
+5. 语音键按住、松开、连续两轮；语音链路应保持正常。
+6. 退出并重新打开 App，重复步骤 1；断连后重连，重复步骤 1。
+7. 操作后用 Mac 键盘方向键和音量键做对照，键盘不得被吞。
+
+日志判读：
+
+- 每个普通按键按下应出现一次 `HID REPORT accepted`，随后出现对应 `HID EDGE pressed=...` 和 `HID BUTTON ...`；松开出现 `HID EDGE ... released=...`。
+- 同一物理按下出现两条 `HID REPORT accepted` 或两个 `HID BUTTON` 判失败，说明 device/manager 去重失效。
+- 完全没有 `HID REPORT accepted`，但 `HID CONNECTED` 和 `device_callback registered` 存在，判失败：device 级回调没有投递。
+- 出现 `HID FILTER suppressed` 不作为 macOS 27 修复的通过条件；本路径依赖 native mapping 在事件产生前阻断，事件 tap 只保留兜底。
+- `HID REPORT rejected reason=excluded_fingerprint` 来自发现监视器让位，属正常；其他拒绝原因按故障处理。
+
+失败判定：任一按键无动作、重复动作、TV/Power 原生动作泄露、语音异常，或键盘同码按键被吞。
