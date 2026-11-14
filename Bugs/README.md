@@ -1,5 +1,7 @@
 # Bug 记录
 
+- [音频引擎重绑后误报可用并在活跃语音中持续丢包](./2026-11-14-audio-engine-recovery-backoff.md)
+
 - [蓝牙语音停止前等待虚拟麦克风尾音排空](./2026-11-13-bluetooth-tail-release.md)
 
 - [远端 60 秒停止后语音工具没有收到 Fn 抬起](./2026-11-13-remote-timeout-does-not-commit-voice-key.md)

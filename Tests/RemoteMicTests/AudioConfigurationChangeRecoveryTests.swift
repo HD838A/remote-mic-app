@@ -116,4 +116,75 @@ struct AudioConfigurationChangeRecoveryTests {
 
         #expect(rebinds == 0)
     }
+
+    /// A rebind may return "configured" from the audio queue and still stop before the main-thread
+    /// completion observes it. Callers may only treat it as ready when both values are true;
+    /// otherwise the voice start path drains buffered audio into a stopped engine and every batch
+    /// is rejected as `playback_not_ready` (issue #1035).
+    @Test func configurationCompletionRequiresConfigurationAndCurrentReadiness() {
+        #expect(!AudioConfigurationCompletionPolicy.reportsReady(
+            configured: true,
+            readyNow: false
+        ))
+        #expect(!AudioConfigurationCompletionPolicy.reportsReady(
+            configured: false,
+            readyNow: true
+        ))
+        #expect(AudioConfigurationCompletionPolicy.reportsReady(
+            configured: true,
+            readyNow: true
+        ))
+    }
+
+    /// A failed rebind during an active session must not schedule the next attempt at the same
+    /// one-second cadence forever. The backoff is bounded and resets after a healthy output.
+    @Test func audioRecoveryBackoffEscalatesAndExhausts() {
+        #expect(AudioRecoveryBackoffPolicy.retryDelay(forRetry: -1) == nil)
+        #expect(AudioRecoveryBackoffPolicy.retryDelay(forRetry: 3) == nil)
+
+        var state = AudioRecoveryBackoffState()
+        #expect(state.nextRetryDelay() == 2)
+        #expect(state.nextRetryDelay() == 4)
+        #expect(state.nextRetryDelay() == 8)
+        #expect(state.nextRetryDelay() == nil)
+        #expect(state.exhausted)
+
+        state.reset()
+        #expect(!state.exhausted)
+        #expect(state.nextRetryDelay() == 2)
+    }
+
+    /// Replaying repeated active failures now consumes a finite number of retries instead of
+    /// sustaining the field-log loop.
+    @Test func repeatedActiveFailuresExhaustTheRetryBudget() {
+        var state = AudioRecoveryBackoffState()
+        var attempts = 0
+        while state.nextRetryDelay() != nil {
+            attempts += 1
+        }
+        #expect(attempts == AudioRecoveryBackoffPolicy.retryDelays.count)
+        #expect(state.exhausted)
+    }
+
+    /// The policy test above only proves the decision function. This keeps the production
+    /// completion wired to that decision instead of the old `completion(configured)` path.
+    @Test func rebindCompletionUsesCurrentReadiness() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
+            encoding: .utf8
+        )
+
+        #expect(source.contains("AudioConfigurationCompletionPolicy.reportsReady("))
+        #expect(source.contains("completion(reportsReady)"))
+        #expect(!source.contains("completion(configured)"))
+        #expect(source.contains("invalidatePendingAudioRecovery()"))
+        #expect(source.contains("scheduleAudioRecoveryRetry(reason: effectiveReason)"))
+        #expect(source.contains("recovery_in_flight"))
+        #expect(source.contains("retry_pending"))
+        #expect(source.contains("AUDIO RECOVERY retry_exhausted"))
+    }
 }
