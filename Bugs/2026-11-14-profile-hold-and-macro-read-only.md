@@ -21,7 +21,7 @@
   `savedMacroVersion(id:) == reference.version` 判断可编辑。组合动作被编辑后版本会递增，方案里钉住的旧版本因此永久只读。
 - `Sources/RemoteMic/SettingsView.swift` 的 `canWriteMappingHold` 要求所有手势都可写；任一长按组合动作因版本过期只读时，整个“按住时”面板也会被判只读。
 - 发布版私有键位方案组件（2.11.0）只接受 `once`、`repeatSingle`、`repeatLong` 三种 hold mode；宿主却向方案用户提供 `singleHold` / `longHold`（方向键按住）。用户选择这两种模式时组件返回 `write_denied`，宿主显示“按住未保存”。
-- 本次已在私有源码分支扩展 hold mode 白名单，并增加 `supportsDirectionalHoldModes` 能力标记；尚未发布 Private Tag。
+- 本次已在私有 PR #460扩展 hold mode 白名单，并增加 `supportsDirectionalHoldModes` 能力标记；尚未发布 Private Tag。
 - 私有组件读取到不支持的旧 hold mode 时返回 `.unavailable`；原实现又把该状态视为整块只读，导致无法用受支持的模式覆盖恢复。
 
 ## 根因
