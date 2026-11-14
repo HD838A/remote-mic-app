@@ -1784,6 +1784,7 @@ struct SettingsView: View {
                         model.toggleMacMicrophone(from: .connectionPage)
                     } label: {
                         Text(model.macMicrophoneButtonTitle(using: localization))
+                            .foregroundStyle(model.macMicrophoneEnabled ? Color.red : Color.primary)
                     }
                     .compatibilityButtonStyle(.standard)
                     .accessibilityHint(Text("audio.mac_microphone.help"))

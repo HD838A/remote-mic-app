@@ -1083,6 +1083,14 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
             : model.audioStatus.text(using: localization)
         hidItem.title = model.hidStatus.text(using: localization)
         macMicrophoneItem.title = model.macMicrophoneButtonTitle(using: localization)
+        if model.macMicrophoneEnabled {
+            macMicrophoneItem.attributedTitle = NSAttributedString(
+                string: macMicrophoneItem.title,
+                attributes: [.foregroundColor: NSColor.systemRed]
+            )
+        } else {
+            macMicrophoneItem.attributedTitle = nil
+        }
         macMicrophoneItem.toolTip = localization.text("audio.mac_microphone.help")
         macMicrophoneItem.state = model.macMicrophoneEnabled ? .on : .off
         macMicrophoneItem.isEnabled = model.macMicrophoneState != .stopping

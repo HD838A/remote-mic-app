@@ -2873,11 +2873,15 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     }
 
     func macMicrophoneButtonTitle(using localization: LocalizationStore) -> String {
-        if macMicrophoneEnabled {
-            return localization.text("audio.mac_microphone.stop")
-        }
         let name = macMicrophoneSelectedDevice?.name
             ?? localization.text("audio.mac_microphone.input")
+        if macMicrophoneEnabled {
+            return String(
+                format: localization.text("audio.mac_microphone.stop"),
+                locale: localization.locale,
+                arguments: [name]
+            )
+        }
         return String(
             format: localization.text("audio.mac_microphone.start"),
             locale: localization.locale,

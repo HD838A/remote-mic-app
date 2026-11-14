@@ -1,6 +1,6 @@
 # AirPods 作为 Mac 麦克风时采集启动失败或阻塞
 
-状态：代码候选，待真实 AirPods 验收。不得标记为已修复或兼容。
+状态：已修复，并通过 AirPods 实机验收（Build 382）。
 
 ## 现象
 
@@ -37,8 +37,12 @@
 
 - `swift build --disable-keychain`：通过。
 - `swift test --disable-keychain --filter MacMicrophoneInputTests`：24 项通过，包含 16 kHz 单声道 int16 `CMSampleBuffer` 转换测试。
-- 真实 AirPods：未验证。测试时另一个 worktree 的 Build 381 持有单实例锁，用户选择不中断该实例，因此没有启动新包。
-- 未覆盖：AirPods HFP 首次激活耗时、首个 PCM 延迟、松键尾音完整性、快速连续会话、断开恢复和第三方语音工具文字上屏。
+- 真实 AirPods：Build 382 实机通过。AirPods Pro 3 输入 `id=214`，三次连续会话均走 AVCapture：
+  - `operation_id=4`：`avcapture_started elapsed_ms=158`，`first_pcm elapsed_ms=295 samples=309`，释放后 `completed samples=49578 completion=normal`。
+  - `operation_id=5`：`avcapture_started elapsed_ms=80`，`first_pcm elapsed_ms=93 samples=309`，`first_effective_pcm 110ms`，释放后 `completed samples=45738 completion=normal`。
+  - `operation_id=6`：`avcapture_started elapsed_ms=42`，`first_pcm elapsed_ms=58 samples=309`，`first_effective_pcm 68ms`，释放后 `completed samples=45418 completion=normal`。
+  - 没有出现 `-10868`；三次会话都在 13 秒内连续完成，松键后均正常排空。
+- 未覆盖：断开恢复、长时间连续使用和第三方文字上屏的独立验收；用户本次实测结论为通过。
 
 ## 验收边界
 
