@@ -402,8 +402,7 @@ struct BluetoothLifecycleTests {
         #expect(policy.consecutiveFailureCount == 39)
         #expect(!policy.allowsCachedTargetRetrieval)
         #expect(BluetoothScanRecoveryPolicy.shouldStartScanTimeout(
-            hasSavedTarget: true,
-            allowsCachedTargetRetrieval: policy.allowsCachedTargetRetrieval
+            hasSavedTarget: true
         ))
         policy.reset()
         let manualProbe = policy.shouldRetrieveCachedTarget(at: 0)
@@ -421,38 +420,159 @@ struct BluetoothLifecycleTests {
         #expect(source.contains("reason=cached_target_cooldown_elapsed"))
     }
 
-    @Test func systemConnectedCandidatesAreQueriedWhenTheSavedIdentityCannotBeUsedDirectly() {
-        // 没有已保存身份：必须查系统当前已连接的候选。
-        #expect(VoiceRemoteDiscoveryPolicy.shouldQuerySystemConnectedCandidates(
-            hasSavedTarget: false,
-            allowsCachedTargetRetrieval: true
-        ))
-        // 有已保存身份且缓存直连可用：retrievePeripherals 已覆盖，不重复查。
-        #expect(!VoiceRemoteDiscoveryPolicy.shouldQuerySystemConnectedCandidates(
-            hasSavedTarget: true,
-            allowsCachedTargetRetrieval: true
-        ))
-        // 有已保存身份、但缓存直连已被禁用：必须查。否则只剩广播扫描，
-        // 而仍处于系统连接态的外设不广播（现场日志：卡死 16–75 分钟）。
-        #expect(VoiceRemoteDiscoveryPolicy.shouldQuerySystemConnectedCandidates(
-            hasSavedTarget: true,
-            allowsCachedTargetRetrieval: false
-        ))
-        #expect(VoiceRemoteDiscoveryPolicy.shouldQuerySystemConnectedCandidates(
-            hasSavedTarget: false,
-            allowsCachedTargetRetrieval: false
-        ))
+    @Test func scanTimeoutStartsForEverySavedTarget() {
+        // 没有已保存身份是首次发现，保持持续扫描；有已保存身份就必须有窗口，
+        // 让唤醒后可能失效的缓存直连重新走发现（含系统已连接候选）。
+        #expect(!BluetoothScanRecoveryPolicy.shouldStartScanTimeout(hasSavedTarget: false))
+        #expect(BluetoothScanRecoveryPolicy.shouldStartScanTimeout(hasSavedTarget: true))
+        #expect(BluetoothScanRecoveryPolicy.scanWindow > 0)
     }
 
-    @Test func scanTimeoutOnlyStartsForSavedTargetRecovery() {
-        for hasSavedTarget in [false, true] {
-            for allowsCachedTargetRetrieval in [false, true] {
-                #expect(BluetoothScanRecoveryPolicy.shouldStartScanTimeout(
-                    hasSavedTarget: hasSavedTarget,
-                    allowsCachedTargetRetrieval: allowsCachedTargetRetrieval
-                ) == (hasSavedTarget && !allowsCachedTargetRetrieval))
+    @Test func scanRecoveryIsWiredWithoutTheCachedTargetGate() throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        let source = try String(contentsOf: root.appendingPathComponent(
+            "Sources/RemoteMic/XiaomiBluetoothBridge.swift"
+        ), encoding: .utf8)
+        #expect(!source.contains("VoiceRemoteDiscoveryPolicy.shouldQuerySystemConnectedCandidates"))
+        #expect(source.contains("VoiceRemoteDiscovery.run(retrieveCachedTarget:"))
+        #expect(source.contains("central.retrieveConnectedPeripherals(withServices: [serviceUUID])"))
+        #expect(source.contains("BluetoothScanRecoveryPolicy.handleTimeout("))
+        #expect(source.contains("result=retrying reason=scan_window_expired"))
+        #expect(source.contains("self.scheduleReconnect()"))
+        #expect(source.contains("discoveryOperationID = PublicDiagnosticEvent.newOperationID()"))
+        #expect(source.contains("BLE DISCOVERY operation_id="))
+        #expect(source.contains("BLE SCAN TIMEOUT operation_id="))
+        #expect(source.contains("BLE READY operation_id="))
+    }
+
+    @Test(arguments: [false, true])
+    func discoveryUsesSystemTargetAfterCacheMissOrRejection(cachedPresent: Bool) {
+        let target = UUID()
+        let other = UUID()
+        var events: [String] = []
+        var adopted: UUID?
+        VoiceRemoteDiscovery.run(retrieveCachedTarget: {
+            events.append("cache")
+            return cachedPresent ? other : nil
+        }, retrieveConnectedCandidates: {
+            events.append("system")
+            return [other, target]
+        }, adopt: { candidate, source in
+            events.append(source.rawValue)
+            let decision = VoiceRemoteAdmission.decide(
+                identifier: candidate,
+                targetIdentifier: target,
+                advertisesVoiceService: true,
+                name: "MI RC",
+                advertisedName: nil
+            )
+            if decision.isAdopted { adopted = candidate }
+            return decision.isAdopted
+        }, startScan: {
+            events.append("scan")
+        })
+        var expected = ["cache"]
+        if cachedPresent { expected.append("target_identifier") }
+        expected += ["system", "connected_peripheral", "connected_peripheral"]
+        #expect(events == expected)
+        #expect(adopted == target)
+    }
+
+    @Test func adoptedCacheSkipsSystemQueryAndScan() {
+        var events: [String] = []
+        VoiceRemoteDiscovery.run(retrieveCachedTarget: {
+            events.append("cache")
+            return 1
+        }, retrieveConnectedCandidates: {
+            events.append("system")
+            return [2]
+        }, adopt: { candidate, source in
+            events.append(source.rawValue)
+            return candidate == 1
+        }, startScan: {
+            events.append("scan")
+        })
+        #expect(events == ["cache", "target_identifier"])
+    }
+
+    @Test(arguments: [false, true])
+    func missingSystemTargetStartsScan(hasOtherCandidate: Bool) {
+        let target = UUID()
+        var events: [String] = []
+        VoiceRemoteDiscovery.run(retrieveCachedTarget: {
+            events.append("cache")
+            return Optional<UUID>.none
+        }, retrieveConnectedCandidates: {
+            events.append("system")
+            return hasOtherCandidate ? [UUID()] : []
+        }, adopt: { candidate, _ in
+            events.append("admission")
+            return VoiceRemoteAdmission.decide(
+                identifier: candidate,
+                targetIdentifier: target,
+                advertisesVoiceService: true,
+                name: "MI RC",
+                advertisedName: nil
+            ).isAdopted
+        }, startScan: {
+            events.append("scan")
+        })
+        #expect(events == (hasOtherCandidate
+            ? ["cache", "system", "admission", "scan"]
+            : ["cache", "system", "scan"]))
+    }
+
+    @Test func expiredScanRetriesWithBackoffThenDiscoversAgain() {
+        var phase = BluetoothLifecyclePhase.scanning(1)
+        var reconnect = BluetoothReconnectPolicy()
+        var delays: [TimeInterval] = []
+        var events: [String] = []
+        for generation in UInt64(1) ... UInt64(2) {
+            VoiceRemoteDiscovery.run(retrieveCachedTarget: { Optional<Int>.none }, retrieveConnectedCandidates: {
+                events.append("system")
+                return []
+            }, adopt: { _, _ in false }, startScan: {
+                events.append("scan")
+            })
+            BluetoothScanRecoveryPolicy.handleTimeout(
+                lifecycle: phase, generation: generation, shouldRun: true, isSystemSuspended: false
+            ) {
+                events.append("retry")
+                delays.append(reconnect.nextAutomaticDelay(bypassCachedTarget: false, jitterUnit: 0.5))
+                phase = .waitingReconnect(generation)
+            }
+            // An already queued callback must become ineffective after the phase changes.
+            BluetoothScanRecoveryPolicy.handleTimeout(
+                lifecycle: phase, generation: generation, shouldRun: true, isSystemSuspended: false
+            ) {
+                events.append("duplicate_retry")
+            }
+            phase = .scanning(generation + 1)
+        }
+        #expect(events == ["system", "scan", "retry", "system", "scan", "retry"])
+        #expect(delays == [3, 6])
+        #expect(reconnect.consecutiveFailureCount == 2)
+    }
+
+    @Test func scanTimeoutCannotRetryAfterConnectionCancellationOrGenerationChange() {
+        let states: [(BluetoothLifecyclePhase, Bool, Bool)] = [
+            (.connecting(1), true, false),
+            (.discovering(1), true, false),
+            (.ready(1), true, false),
+            (.scanning(2), true, false),
+            (.stopped, false, false),
+            (.scanning(1), true, true),
+        ]
+        var retries = 0
+        for (phase, shouldRun, suspended) in states {
+            BluetoothScanRecoveryPolicy.handleTimeout(
+                lifecycle: phase, generation: 1, shouldRun: shouldRun, isSystemSuspended: suspended
+            ) {
+                retries += 1
             }
         }
+        #expect(retries == 0)
     }
 
     @Test func scanWindowExpiresOnlyTheCurrentScanningAttempt() {
