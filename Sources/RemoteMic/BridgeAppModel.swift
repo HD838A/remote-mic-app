@@ -1550,6 +1550,15 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
                     transcriptCaptureCoordinator.cancel()
                 }
             }
+        recordingToggleCancellable = settings.$localOriginalAudioRecordingEnabled
+            .removeDuplicates()
+            .sink { [weak self] isEnabled in
+                guard let self else { return }
+                if !isEnabled {
+                    self.recordingAssetCoordinator.cancel(reason: "feature_disabled")
+                }
+                self.refreshRecordingAssets()
+            }
     }
 
     func startIfNeeded() {
@@ -1738,7 +1747,8 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             do {
                 let records = try transcriptArchiveStore.loadAll()
                 DispatchQueue.main.async { [weak self] in
-                    self?.transcriptRecords = records
+                    guard let self, self.transcriptRecords != records else { return }
+                    self.transcriptRecords = records
                 }
             } catch {
                 AppLogger.shared.write(
@@ -1747,16 +1757,6 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
                 )
             }
         }
-        refreshRecordingAssets()
-        recordingToggleCancellable = settings.$localOriginalAudioRecordingEnabled
-            .removeDuplicates()
-            .sink { [weak self] isEnabled in
-                guard let self else { return }
-                if !isEnabled {
-                    self.recordingAssetCoordinator.cancel(reason: "feature_disabled")
-                }
-                self.refreshRecordingAssets()
-            }
     }
 
     func refreshRecordingAssets() {
@@ -1765,7 +1765,8 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             do {
                 let assets = try self.recordingAssetStore.loadAll()
                 DispatchQueue.main.async { [weak self] in
-                    self?.recordingAssets = assets
+                    guard let self, self.recordingAssets != assets else { return }
+                    self.recordingAssets = assets
                 }
             } catch {
                 AppLogger.shared.write(
