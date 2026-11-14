@@ -2687,6 +2687,7 @@ struct SettingsView: View {
                 selectedButton: $selectedRemoteButton,
                 activeButtons: model.activeRemoteButtons,
                 voiceActive: model.isStreaming,
+                remoteModel: settings.selectedRemoteProfile?.model,
                 actionSummary: { button, trigger in mappingActionSummary(for: button, trigger: trigger) },
                 holdSummary: { button in mappingHoldSummary(for: button) },
                 actionDetail: { button, trigger in mappingActionDetail(for: button, trigger: trigger) },

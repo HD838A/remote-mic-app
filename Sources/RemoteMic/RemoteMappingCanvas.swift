@@ -113,6 +113,8 @@ struct RemoteMappingCanvas: View {
     @Binding var selectedButton: RemoteButton
     let activeButtons: Set<RemoteButton>
     let voiceActive: Bool
+    /// 画布真机图跟随所选型号；目录里没有的型号仍回退 RC003 旧图。
+    var remoteModel: XiaomiRemoteModel? = nil
     let actionSummary: (RemoteButton, ButtonTrigger) -> String
     let holdSummary: (RemoteButton) -> String
     /// 悬停时显示的完整形态（例如 `⌘ Command + ⇧ Shift + H`）；卡片正文用 `actionSummary`。
@@ -127,7 +129,7 @@ struct RemoteMappingCanvas: View {
         GeometryReader { geometry in
             let metrics = Metrics(width: geometry.size.width)
             ZStack {
-                MappingRemotePhoto()
+                MappingRemotePhoto(model: remoteModel)
                     .frame(
                         width: RemoteMappingLayout.remoteSize.width,
                         height: RemoteMappingLayout.remoteSize.height
@@ -395,19 +397,31 @@ struct RemoteMappingCanvas: View {
 }
 
 private enum MappingRemoteImageResource {
-    static let image: NSImage? = {
-        guard let url = Bundle.main.url(
-            forResource: "RC003-remote-photo",
-            withExtension: "png"
-        ) else { return nil }
-        return NSImage(contentsOf: url)
+    private static let images: [String: NSImage] = {
+        var images: [String: NSImage] = [:]
+        for entry in VoiceRemoteCatalog.entries {
+            guard let url = RemoteMicResourceBundle.mainOrDevelopment.url(
+                forResource: entry.photoResource,
+                withExtension: "png"
+            ), let image = NSImage(contentsOf: url) else { continue }
+            images[entry.photoResource] = image
+        }
+        return images
     }()
+
+    static func image(for model: XiaomiRemoteModel?) -> NSImage? {
+        let resourceName = VoiceRemoteCatalog.photoResource(for: model ?? .rc003)
+            ?? "RC003-remote-photo"
+        return images[resourceName]
+    }
 }
 
 private struct MappingRemotePhoto: View {
+    let model: XiaomiRemoteModel?
+
     var body: some View {
         Group {
-            if let photo = MappingRemoteImageResource.image {
+            if let photo = MappingRemoteImageResource.image(for: model) {
                 Image(nsImage: photo)
                     .resizable()
                     .aspectRatio(contentMode: .fill)

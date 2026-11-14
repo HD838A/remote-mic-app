@@ -123,6 +123,15 @@ enum SettingsScreenshotRenderer {
         let settings = AppSettings(defaults: defaults)
         settings.applicationLanguage = language
         settings.completeOnboarding()
+        if let modelName = ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_SETTINGS_SCREENSHOT_REMOTE_MODEL"
+        ], let remoteModel = XiaomiRemoteModel(rawValue: modelName) {
+            let profileID = settings.registerHIDRemote(
+                fingerprint: "settings-screenshot-\(remoteModel.rawValue)"
+            )
+            settings.updateRemoteProfileModel(profileID, model: remoteModel)
+            settings.selectRemoteProfile(profileID)
+        }
         if showsGestureTiming, let profileID = settings.selectedRemoteProfileID {
             settings.updateRemoteProfileModel(profileID, model: .rc003)
         }

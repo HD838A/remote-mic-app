@@ -865,6 +865,9 @@ ditto --norsrc --noextattr --noqtn --noacl \
   "$ROOT/Resources/首次安装说明.en.md" \
   "$APP_DIR/Contents/Resources/FirstInstallGuide.md"
 ditto --norsrc --noextattr --noqtn --noacl \
+  "$ROOT/Resources/RC001-remote-photo.png" \
+  "$APP_DIR/Contents/Resources/RC001-remote-photo.png"
+ditto --norsrc --noextattr --noqtn --noacl \
   "$ROOT/Resources/RC003-remote-photo.png" \
   "$APP_DIR/Contents/Resources/RC003-remote-photo.png"
 ditto --norsrc --noextattr --noqtn --noacl \

@@ -1632,7 +1632,8 @@ struct SettingsPageRegressionTests {
         #expect(!mappingCanvasSource.contains("size: 10"))
         #expect(!mappingCanvasSource.contains("size: 11"))
         #expect(!mappingCanvasSource.contains("minimumScaleFactor"))
-        #expect(source.range(of: "MappingRemotePhoto()")!.lowerBound < source.range(of: "connectionLines(metrics: metrics)")!.lowerBound)
+        #expect(source.contains("remoteModel: settings.selectedRemoteProfile?.model"))
+        #expect(source.range(of: "MappingRemotePhoto(model: remoteModel)")!.lowerBound < source.range(of: "connectionLines(metrics: metrics)")!.lowerBound)
 
         let voiceFnToggle = "Toggle(\"connection.voice_fn_tap.enabled\""
         #expect(source.components(separatedBy: voiceFnToggle).count == 2)
@@ -1678,6 +1679,7 @@ struct SettingsPageRegressionTests {
         #expect(!settings.contains("holdSingle"))
         #expect(renderer.contains("REMOTE_MIC_SETTINGS_SCREENSHOT_OPEN_HOLD_EDITOR"))
         #expect(renderer.contains("REMOTE_MIC_SETTINGS_SCREENSHOT_HOLD_MODE"))
+        #expect(renderer.contains("REMOTE_MIC_SETTINGS_SCREENSHOT_REMOTE_MODEL"))
         #expect(chinese.contains("\"button_mapping.hold.repeat_prefix\" = \"按住时 重复单击动作 \""))
         #expect(chinese.contains("相当于按住键盘上的 %@，直到松手。"))
         #expect(chinese.contains("重复执行单击动作"))
