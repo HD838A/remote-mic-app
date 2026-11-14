@@ -1906,6 +1906,38 @@ struct SettingsPageRegressionTests {
         #expect(source.contains("remote.device.system_name_unknown"))
     }
 
+    /// 按键页空状态与已连接设备卡共用页头 HStack 的底边。
+    /// 空状态一旦回到纵向堆叠，就会比设备卡高，遥控器连上的瞬间把分隔线和整页内容顶上去。
+    @Test func mappingEmptyRemoteStateStaysOnOneCompactRow() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+
+        let emptyStart = try #require(source.range(of: "private func remoteDeviceEmptyState"))
+        let emptyEnd = try #require(source.range(
+            of: "private func remoteDeviceCard",
+            range: emptyStart.upperBound..<source.endIndex
+        ))
+        let emptySource = source[emptyStart.lowerBound..<emptyEnd.lowerBound]
+        let horizontalStart = try #require(emptySource.range(of: "} else {"))
+        let horizontalSource = emptySource[horizontalStart.upperBound...]
+
+        #expect(emptySource.contains("if vertical"))
+        #expect(emptySource.contains("VStack(alignment: .leading, spacing: 8)"))
+        #expect(horizontalSource.contains("HStack(spacing: 8)"))
+        #expect(!horizontalSource.contains("VStack"))
+        #expect(horizontalSource.contains(".lineLimit(2)"))
+        #expect(horizontalSource.contains(".fixedSize(horizontal: false, vertical: true)"))
+        #expect(horizontalSource.contains(".layoutPriority(1)"))
+        #expect(horizontalSource.contains("Button(\"connection.action.reconnect\")"))
+        #expect(emptySource.contains(".padding(.vertical, vertical ? 10 : 8)"))
+    }
+
     @Test func settingsPageKeepsVersionFeaturesTogetherAndLanguagesVisible() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

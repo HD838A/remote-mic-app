@@ -3373,28 +3373,49 @@ struct SettingsView: View {
         }
     }
 
+    /// 按键页的空状态必须和已连接设备卡保持同一行高。
+    ///
+    /// 页头 HStack 按最高子视图底边对齐：纵向空状态比设备卡高约 16pt，遥控器连上后
+    /// 它会塌成卡片高度，把分隔线和整页内容一起往上顶。横向空状态因此固定为紧凑横排；
+    /// 连接页的纵向说明没有这条页头对齐约束，继续保留原布局。
     private func remoteDeviceEmptyState(vertical: Bool) -> some View {
-        VStack(alignment: vertical ? .leading : .center, spacing: 8) {
-            Image(systemName: "appletvremote.gen4.fill")
-                .font(.system(size: vertical ? 24 : 18, weight: .semibold))
-                .foregroundStyle(.secondary)
+        Group {
+            if vertical {
+                VStack(alignment: .leading, spacing: 8) {
+                    Image(systemName: "appletvremote.gen4.fill")
+                        .font(.system(size: 24, weight: .semibold))
+                        .foregroundStyle(.secondary)
 
-            Text(model.connectionStatusText(using: localization))
-                .font(.system(size: 12))
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(vertical ? .leading : .center)
-                .fixedSize(horizontal: false, vertical: true)
-
-            if !vertical {
-                Button("connection.action.reconnect") {
-                    model.reconnect()
+                    Text(model.connectionStatusText(using: localization))
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                .compatibilityButtonStyle(.standard)
+            } else {
+                HStack(spacing: 8) {
+                    Image(systemName: "appletvremote.gen4.fill")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(.secondary)
+
+                    Text(model.connectionStatusText(using: localization))
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .layoutPriority(1)
+
+                    Button("connection.action.reconnect") {
+                        model.reconnect()
+                    }
+                    .compatibilityButtonStyle(.standard)
+                    .fixedSize()
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: vertical ? .leading : .center)
         .padding(.horizontal, 10)
-        .padding(.vertical, 10)
+        .padding(.vertical, vertical ? 10 : 8)
         .background(
             Color.primary.opacity(0.045),
             in: RoundedRectangle(cornerRadius: 10, style: .continuous)
