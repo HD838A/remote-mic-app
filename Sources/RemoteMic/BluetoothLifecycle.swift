@@ -130,6 +130,32 @@ enum VoiceRemoteAdmission {
     }
 }
 
+/// `connect()` 的准入条件。
+///
+/// 抽成纯函数有两个原因：一是这些条件不满足时旧实现静默 `return`，而调用它的 `adopt()` 仍然
+/// 返回 `true`，日志于是写成 `result=adopted` 却看不到 `BLE CONNECTING`（Issue #1041）；
+/// 二是纯函数可以逐条回归，不必构造真实的 `CBCentralManager`。
+enum BluetoothConnectGate {
+    /// 返回跳过原因；`nil` 表示可以发起连接。
+    static func skipReason(
+        shouldRun: Bool,
+        isSystemSuspended: Bool,
+        isSameCentral: Bool,
+        hasPeripheral: Bool,
+        lifecycle: BluetoothLifecyclePhase,
+        generation: UInt64
+    ) -> String? {
+        guard shouldRun else { return "not_running" }
+        guard !isSystemSuspended else { return "system_suspended" }
+        guard isSameCentral else { return "central_replaced" }
+        guard !hasPeripheral else { return "peripheral_busy" }
+        guard lifecycle == .scanning(generation) else {
+            return "lifecycle_\(lifecycle.logName)"
+        }
+        return nil
+    }
+}
+
 enum BluetoothLifecyclePhase: Equatable {
     case stopped
     case scanning(UInt64)
@@ -160,6 +186,24 @@ enum BluetoothLifecyclePhase: Equatable {
     var isReady: Bool {
         if case .ready = self { return true }
         return false
+    }
+
+    /// 诊断用短名。只出现在日志里，不参与任何判定。
+    ///
+    /// 跳过连接时必须说清当时停在哪个阶段：`lifecycle=connecting`（已有连接在飞）与
+    /// `lifecycle=ready`（已经连上）是两种完全不同的原因，只说「跳过」等于没说。
+    var logName: String {
+        switch self {
+        case .stopped: return "stopped"
+        case .scanning: return "scanning"
+        case .connecting: return "connecting"
+        case .discovering: return "discovering"
+        case .awaitingCapabilities: return "awaiting_capabilities"
+        case .ready: return "ready"
+        case .disconnecting: return "disconnecting"
+        case .waitingReconnect: return "waiting_reconnect"
+        case .waitingBluetoothPower: return "waiting_bluetooth_power"
+        }
     }
 
     func acceptsDidConnect(generation: UInt64) -> Bool {
@@ -329,6 +373,15 @@ enum BluetoothScanRecoveryPolicy {
 
     static func shouldStartScanTimeout(hasSavedTarget: Bool) -> Bool {
         hasSavedTarget
+    }
+
+    /// 发现流程收尾时是否还允许真的开一次扫描。
+    ///
+    /// 所有候选都被拒之后 `VoiceRemoteDiscovery` 会调用 `startScan`，但此时状态可能已经
+    /// 离开 `.scanning`——例如某个候选已经进入 `.connecting`，只因为前置条件被跳过而返回了
+    /// `false`。这种情况下再开扫描会让 `state` 与 `lifecycle` 分叉，必须由调用方跳过。
+    static func canStartScan(lifecycle: BluetoothLifecyclePhase, generation: UInt64) -> Bool {
+        lifecycle == .scanning(generation)
     }
 
     /// 窗口到期时是否真的结束本次 attempt（状态已变化时作废，例如已经连上进入 discovering）。
