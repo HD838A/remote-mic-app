@@ -1386,18 +1386,20 @@
 "configuration.import.cancel" = "Cancel";
 
 /* Mac microphone: explicit, per-session capture. */
-"audio.mac_microphone.input" = "Mac Microphone";
+"audio.mac_microphone.input" = "Microphone";
+"audio.mac_microphone.none" = "None";
 "audio.mac_microphone.current" = "Current input:";
 "audio.mac_microphone.current.remote" = "Remote microphone";
 "audio.mac_microphone.fallback" = "Fallback microphone";
-"audio.mac_microphone.fallback_help" = "Talk into the Mac microphone when the remote isn't in use; remote audio is unaffected.";
-"audio.mac_microphone.choose" = "Choose a Mac microphone";
-"audio.mac_microphone.start" = "Speak with Mac microphone";
-"audio.mac_microphone.stop" = "Stop using Mac microphone";
+"audio.mac_microphone.fallback_help" = "Talk into the selected microphone when the remote isn't in use; selecting one switches the macOS input device; remote audio is unaffected.";
+"audio.mac_microphone.start" = "Speak with %@";
+"audio.mac_microphone.stop" = "Stop using selected microphone";
+"audio.mac_microphone.error.switch_failed" = "Could not switch the macOS input device; the selected microphone will still be used for this feature.";
+"audio.mac_microphone.error.no_audio" = "The selected microphone produced no audio. Check the connection or choose another microphone.";
 "audio.mac_microphone.help" = "Use only when you are not using a remote";
 "audio.mac_microphone.idle" = "Not recording";
 "audio.mac_microphone.preparing" = "Preparing…";
-"audio.mac_microphone.recording" = "Mac microphone is recording";
+"audio.mac_microphone.recording" = "Selected microphone is recording";
 "audio.mac_microphone.stopping" = "Stopping recording…";
 "audio.mac_microphone.shortcut" = "Switch shortcut";
 "audio.mac_microphone.shortcut_set" = "Set shortcut";

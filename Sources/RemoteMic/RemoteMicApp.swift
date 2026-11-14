@@ -1082,10 +1082,11 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
             ? localization.text("connection.status.voice_active")
             : model.audioStatus.text(using: localization)
         hidItem.title = model.hidStatus.text(using: localization)
-        macMicrophoneItem.title = localization.text(model.macMicrophoneButtonKey)
+        macMicrophoneItem.title = model.macMicrophoneButtonTitle(using: localization)
         macMicrophoneItem.toolTip = localization.text("audio.mac_microphone.help")
         macMicrophoneItem.state = model.macMicrophoneEnabled ? .on : .off
         macMicrophoneItem.isEnabled = model.macMicrophoneState != .stopping
+        macMicrophoneItem.isHidden = !model.macMicrophoneSelectedDeviceIsReady
     }
 
     private func refreshStatusItemPresentation() {

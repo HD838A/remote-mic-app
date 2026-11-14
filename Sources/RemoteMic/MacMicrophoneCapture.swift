@@ -14,6 +14,34 @@ enum MacMicrophoneConfigurationChangePolicy {
     }
 }
 
+enum MacMicrophoneDefaultInputPolicy {
+    enum Source: String, Equatable {
+        case systemDefault = "system_default"
+        case builtIn = "built_in"
+    }
+
+    struct Selection: Equatable {
+        let device: AudioDeviceInfo
+        let source: Source
+    }
+
+    /// Uses the system default only when it is one of the selectable physical inputs.
+    static func select(
+        available: [AudioDeviceInfo],
+        systemDefault: AudioDeviceInfo?,
+        builtInDeviceIDs: Set<AudioDeviceID>
+    ) -> Selection? {
+        if let systemDefault,
+           let match = available.first(where: { $0.uid == systemDefault.uid }) {
+            return Selection(device: match, source: .systemDefault)
+        }
+        if let builtIn = available.first(where: { builtInDeviceIDs.contains($0.id) }) {
+            return Selection(device: builtIn, source: .builtIn)
+        }
+        return nil
+    }
+}
+
 /// Captures only the selected input. PCM follows the existing 16 kHz voice path.
 final class MacMicrophoneCapture {
     private let queue = DispatchQueue(label: "SayAll.macMicrophone.capture", qos: .userInitiated)
@@ -22,8 +50,9 @@ final class MacMicrophoneCapture {
     private var engine: AVAudioEngine?
     private var converter: MacMicrophonePCMConverter?
     private var deliver: (([Int16]) -> Void)?
-    private var fail: (() -> Void)?
+    private var fail: ((MacMicrophoneFailure) -> Void)?
     private var configurationObserver: NSObjectProtocol?
+    private var firstPCMWatchdog: DispatchWorkItem?
     private var operationID: UInt64 = 0
     private var startedAt: TimeInterval = 0
     private var receivedSamples = 0
@@ -33,7 +62,7 @@ final class MacMicrophoneCapture {
         input: AudioDeviceInfo,
         operationID: UInt64,
         onSamples: @escaping ([Int16]) -> Void,
-        onFailure: @escaping () -> Void,
+        onFailure: @escaping (MacMicrophoneFailure) -> Void,
         completion: @escaping (MacMicrophoneFailure?) -> Void
     ) {
         ingressLock.lock()
@@ -50,12 +79,22 @@ final class MacMicrophoneCapture {
             startedAt = ProcessInfo.processInfo.systemUptime
             receivedSamples = 0
             conversionFailed = false
+            // Bluetooth routes can be recreated between catalog refresh and
+            // capture start. Resolve the selected UID to the current device ID.
+            let resolvedInput = CoreAudioDeviceCatalog.inputDevices().first(where: {
+                $0.uid == input.uid
+            }) ?? input
+            AppLogger.shared.write(
+                "MAC MICROPHONE CAPTURE operation_id=\(operationID) " +
+                    "phase=device_resolved result=\(resolvedInput.id == input.id ? "same" : "refreshed") " +
+                    "previous_device_id=\(input.id) current_device_id=\(resolvedInput.id)"
+            )
             let engine = AVAudioEngine()
             let inputNode = engine.inputNode
             guard let unit = inputNode.audioUnit else {
                 DispatchQueue.main.async { completion(.capture) }; return
             }
-            var deviceID = input.id
+            var deviceID = resolvedInput.id
             let result = AudioUnitSetProperty(unit, kAudioOutputUnitProperty_CurrentDevice,
                 kAudioUnitScope_Global, 0, &deviceID, UInt32(MemoryLayout<AudioDeviceID>.size))
             let format = inputNode.outputFormat(forBus: 0)
@@ -84,22 +123,44 @@ final class MacMicrophoneCapture {
                 var boundSize = UInt32(MemoryLayout<AudioDeviceID>.size)
                 guard AudioUnitGetProperty(unit, kAudioOutputUnitProperty_CurrentDevice,
                     kAudioUnitScope_Global, 0, &boundDevice, &boundSize) == noErr,
-                    boundDevice == input.id else { throw MacMicrophoneFailure.inputUnavailable }
+                    boundDevice == resolvedInput.id else { throw MacMicrophoneFailure.inputUnavailable }
+                let deviceStart = AudioDeviceStart(resolvedInput.id, nil)
+                AppLogger.shared.write(
+                    "MAC MICROPHONE CAPTURE operation_id=\(operationID) " +
+                        "phase=device_started result=\(deviceStart == noErr ? "started" : "failed") " +
+                        "input_device_id=\(resolvedInput.id) code=\(deviceStart)"
+                )
                 configurationObserver = NotificationCenter.default.addObserver(
                     forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main
                 ) { [weak self, weak engine] _ in
                     guard let self, let engine else { return }
                     self.handleConfigurationChange(
                         engine: engine,
-                        input: input,
+                        input: resolvedInput,
                         onFailure: onFailure
                     )
                 }
                 AppLogger.shared.write(
                     "MAC MICROPHONE CAPTURE operation_id=\(operationID) phase=started " +
-                        "result=engine_running input_device_id=\(input.id) " +
+                        "result=engine_running input_device_id=\(resolvedInput.id) " +
                         "sample_rate_hz=\(Int(format.sampleRate)) channels=\(format.channelCount)"
                 )
+                let watchdogOperation = operationID
+                let watchdog = DispatchWorkItem { [weak self] in
+                    guard let self, self.operationID == watchdogOperation else { return }
+                    self.ingressLock.lock()
+                    let accepting = self.acceptingBuffers
+                    self.ingressLock.unlock()
+                    guard accepting, self.engine != nil, self.receivedSamples == 0 else { return }
+                    self.firstPCMWatchdog = nil
+                    AppLogger.shared.write(
+                        "MAC MICROPHONE CAPTURE operation_id=\(self.operationID) " +
+                            "phase=failed reason=no_audio"
+                    )
+                    DispatchQueue.main.async { self.fail?(.noAudio) }
+                }
+                firstPCMWatchdog = watchdog
+                queue.asyncAfter(deadline: .now() + 2, execute: watchdog)
                 DispatchQueue.main.async { completion(nil) }
             } catch {
                 ingressLock.lock()
@@ -121,7 +182,7 @@ final class MacMicrophoneCapture {
     private func handleConfigurationChange(
         engine: AVAudioEngine,
         input: AudioDeviceInfo,
-        onFailure: @escaping () -> Void
+        onFailure: @escaping (MacMicrophoneFailure) -> Void
     ) {
         queue.async { [weak self, weak engine] in
             guard let self, let engine, self.engine === engine else { return }
@@ -140,7 +201,7 @@ final class MacMicrophoneCapture {
                     "current_device_id=\(currentDeviceDescription)"
             )
             guard shouldFail else { return }
-            DispatchQueue.main.async { onFailure() }
+            DispatchQueue.main.async { onFailure(.capture) }
         }
     }
 
@@ -177,6 +238,8 @@ final class MacMicrophoneCapture {
         do {
             try converter.convert(input) { samples in
                 if receivedSamples == 0 {
+                    firstPCMWatchdog?.cancel()
+                    firstPCMWatchdog = nil
                     let elapsed = Int((ProcessInfo.processInfo.systemUptime - startedAt) * 1_000)
                     AppLogger.shared.write("MAC MICROPHONE CAPTURE operation_id=\(operationID) phase=first_pcm elapsed_ms=\(elapsed) samples=\(samples.count)")
                 }
@@ -190,9 +253,11 @@ final class MacMicrophoneCapture {
     private func reportFailure() {
         guard !conversionFailed else { return }
         conversionFailed = true
+        firstPCMWatchdog?.cancel()
+        firstPCMWatchdog = nil
         let fail = self.fail
         AppLogger.shared.write("MAC MICROPHONE CAPTURE operation_id=\(operationID) phase=failed reason=conversion_or_copy")
-        DispatchQueue.main.async { fail?() }
+        DispatchQueue.main.async { fail?(.capture) }
     }
 
     func stop(completion: @escaping () -> Void) {
@@ -200,6 +265,8 @@ final class MacMicrophoneCapture {
         acceptingBuffers = false
         // This barrier follows every buffer admitted by the tap, including main-queue delivery.
         queue.async { [self] in
+            firstPCMWatchdog?.cancel()
+            firstPCMWatchdog = nil
             guard engine != nil || converter != nil else {
                 DispatchQueue.main.async(execute: completion)
                 return
@@ -213,12 +280,19 @@ final class MacMicrophoneCapture {
                 engine.stop()
             }
             convert(nil)
-            AppLogger.shared.write("MAC MICROPHONE CAPTURE operation_id=\(operationID) phase=completed result=released samples=\(receivedSamples) conversion_failed=\(conversionFailed)")
+            let hadNoAudio = receivedSamples == 0 && !conversionFailed
+            AppLogger.shared.write(
+                "MAC MICROPHONE CAPTURE operation_id=\(operationID) phase=completed " +
+                    "result=released samples=\(receivedSamples) conversion_failed=\(conversionFailed) " +
+                    "completion=\(hadNoAudio ? "no_audio" : "normal")"
+            )
             engine = nil
             converter = nil
             deliver = nil
-            fail = nil
-            DispatchQueue.main.async(execute: completion)
+            self.fail = nil
+            DispatchQueue.main.async {
+                completion()
+            }
         }
         ingressLock.unlock()
     }

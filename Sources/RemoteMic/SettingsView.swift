@@ -1733,7 +1733,7 @@ struct SettingsView: View {
 
     private var macMicrophoneControls: some View {
         VStack(alignment: .leading, spacing: 9) {
-            // 先说清楚当前用哪个麦克风，再谈备用麦克风，避免把「Mac 麦克风」误读成当前输入。
+            // 先说清楚当前用哪个麦克风，再谈备用麦克风，避免把「所选麦克风」误读成当前输入。
             HStack(spacing: 6) {
                 Text("audio.mac_microphone.current")
                 Text("audio.mac_microphone.current.remote")
@@ -1743,19 +1743,24 @@ struct SettingsView: View {
             HStack(spacing: 14) {
                 Text("audio.mac_microphone.fallback").frame(width: 92, alignment: .leading)
                 Group {
-                    if model.macMicrophoneDevices.count > 1 ||
-                        !model.macMicrophoneDevices.contains(where: { $0.uid == settings.macMicrophoneInputUID }) {
-                        Picker("audio.mac_microphone.input", selection: $settings.macMicrophoneInputUID) {
-                            Text("audio.mac_microphone.choose").tag("")
+                    Picker("audio.mac_microphone.input", selection: Binding(
+                        get: {
+                            model.macMicrophoneDevices.contains { $0.uid == settings.macMicrophoneInputUID }
+                                ? settings.macMicrophoneInputUID
+                                : (model.macMicrophoneDevices.first?.uid ?? "")
+                        },
+                        set: { model.selectMacMicrophoneInput($0) }
+                    )) {
+                        if model.macMicrophoneDevices.isEmpty {
+                            Text("audio.mac_microphone.none").tag("")
+                        } else {
                             ForEach(model.macMicrophoneDevices, id: \.uid) { device in
                                 Text(device.name).tag(device.uid)
                             }
                         }
-                        .labelsHidden()
-                        .disabled(model.macMicrophoneState.isActive)
-                    } else {
-                        Text(model.macMicrophoneDevices.first?.name ?? "")
                     }
+                    .labelsHidden()
+                    .disabled(model.macMicrophoneDevices.isEmpty || model.macMicrophoneEnabled)
                 }
                 .lineLimit(1)
                 .truncationMode(.tail)
@@ -1773,40 +1778,48 @@ struct SettingsView: View {
                         .foregroundStyle(model.macMicrophoneState == .recording ? Color.green : Color.secondary)
                 }
                 .fixedSize()
-                Button {
-                    endMacMicrophoneShortcutCapture()
-                    model.toggleMacMicrophone(from: .connectionPage)
-                } label: {
-                    Text(LocalizedStringKey(model.macMicrophoneButtonKey))
-                }
-                .compatibilityButtonStyle(.standard)
-                .accessibilityHint(Text("audio.mac_microphone.help"))
-                .onHover { isHoveringMacMicrophoneButton = $0 }
-                .overlay(alignment: .bottom) {
-                    if isHoveringMacMicrophoneButton {
-                        Text("audio.mac_microphone.help")
-                            .font(.system(size: 12))
-                            .foregroundStyle(Color.primary)
-                            .padding(.horizontal, 9)
-                            .padding(.vertical, 6)
-                            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 6)
-                                    .stroke(Color(nsColor: .separatorColor).opacity(0.55), lineWidth: 1)
-                            )
-                            .fixedSize()
-                            .offset(y: -34)
-                            .allowsHitTesting(false)
-                            .zIndex(1)
+                if model.macMicrophoneSelectedDeviceIsReady {
+                    Button {
+                        endMacMicrophoneShortcutCapture()
+                        model.toggleMacMicrophone(from: .connectionPage)
+                    } label: {
+                        Text(model.macMicrophoneButtonTitle(using: localization))
                     }
+                    .compatibilityButtonStyle(.standard)
+                    .accessibilityHint(Text("audio.mac_microphone.help"))
+                    .onHover { isHoveringMacMicrophoneButton = $0 }
+                    .overlay(alignment: .bottom) {
+                        if isHoveringMacMicrophoneButton {
+                            Text("audio.mac_microphone.help")
+                                .font(.system(size: 12))
+                                .foregroundStyle(Color.primary)
+                                .padding(.horizontal, 9)
+                                .padding(.vertical, 6)
+                                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 6)
+                                        .stroke(Color(nsColor: .separatorColor).opacity(0.55), lineWidth: 1)
+                                )
+                                .fixedSize()
+                                .offset(y: -34)
+                                .allowsHitTesting(false)
+                                .zIndex(1)
+                        }
+                    }
+                    .disabled(model.macMicrophoneState == .stopping)
+                    .fixedSize()
                 }
-                .disabled(model.macMicrophoneState == .stopping)
-                .fixedSize()
             }
             Text("audio.mac_microphone.fallback_help")
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+            if let message = model.macMicrophoneSelectionMessage {
+                Text(message.text(using: localization))
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             if case .failed = model.macMicrophoneState {
                 Text(LocalizedStringKey(model.macMicrophoneState.statusKey))
                     .font(.system(size: 12))
@@ -1823,55 +1836,12 @@ struct SettingsView: View {
                 }.compatibilityButtonStyle(.standard)
             }
             HStack(spacing: 14) {
-                Text("audio.mac_microphone.shortcut")
-                    .font(.system(size: 12))
-                    .frame(width: 92, alignment: .leading)
-                Button {
-                    shortcutCaptureFeedback = nil
-                    isCapturingMacMicrophoneShortcut.toggle()
-                    model.suspendMacMicrophoneShortcutCapture(isCapturingMacMicrophoneShortcut)
-                } label: {
-                    Text(isCapturingMacMicrophoneShortcut
-                        ? localization.text("common.action.cancel")
-                        : settings.macMicrophoneShortcut?.displayName(using: localization)
-                            ?? localization.text("audio.mac_microphone.shortcut_set"))
-                }
-                .compatibilityButtonStyle(.standard)
-                .disabled(model.macMicrophoneState.isActive)
-                if settings.macMicrophoneShortcut != nil {
-                    Button("common.action.clear") {
-                        endMacMicrophoneShortcutCapture()
-                        model.setMacMicrophoneShortcut(nil)
-                    }
-                    .compatibilityButtonStyle(.standard)
-                    .disabled(model.macMicrophoneState.isActive)
-                }
-            }
-            HStack(spacing: 14) {
                 Text("audio.mac_microphone.voice_key").font(.system(size: 12))
                     .frame(width: 92, alignment: .leading)
                 Text(LocalizedStringKey(settings.voiceKeyMode.localizationKey)).font(.system(size: 12))
                 Text(model.macMicrophoneVoiceGesture == .hold
                     ? "audio.mac_microphone.voice_hold" : "audio.mac_microphone.voice_toggle")
                     .font(.system(size: 12)).foregroundStyle(.secondary)
-            }
-            if isCapturingMacMicrophoneShortcut {
-                Text("audio.mac_microphone.shortcut_prompt").font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-                ShortcutCaptureView(onCapture: { shortcut in
-                    endMacMicrophoneShortcutCapture()
-                    model.setMacMicrophoneShortcut(shortcut)
-                }, onFailure: { failure in
-                    endMacMicrophoneShortcutCapture()
-                    shortcutCaptureFeedback = ShortcutCaptureFeedback(contextID: "mac-microphone", result: .failed(failure))
-                    AppLogger.shared.write("MAC MICROPHONE SHORTCUT phase=failed reason=\(failure)")
-                }).frame(height: 1)
-            }
-            shortcutCaptureFeedbackView(contextID: "mac-microphone")
-            if !model.macMicrophoneShortcutAvailable {
-                Text("audio.mac_microphone.shortcut_unavailable")
-                    .font(.system(size: 12)).foregroundStyle(.orange)
-                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }

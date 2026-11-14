@@ -289,6 +289,34 @@ struct MacMicrophoneInputTests {
         #expect(restored.macMicrophoneInputUID == settings.macMicrophoneInputUID)
     }
 
+    @Test func defaultInputUsesSystemDefaultPhysicalDeviceAndFallsBackToBuiltIn() {
+        let builtIn = AudioDeviceInfo(id: 11, uid: "built-in", name: "Built-in")
+        let headset = AudioDeviceInfo(id: 22, uid: "headset", name: "Headset")
+        let virtual = AudioDeviceInfo(id: 33, uid: "virtual", name: "Virtual")
+
+        let preferred = MacMicrophoneDefaultInputPolicy.select(
+            available: [builtIn, headset],
+            systemDefault: headset,
+            builtInDeviceIDs: [builtIn.id]
+        )
+        #expect(preferred?.device == headset)
+        #expect(preferred?.source == .systemDefault)
+
+        let fallback = MacMicrophoneDefaultInputPolicy.select(
+            available: [builtIn, headset],
+            systemDefault: virtual,
+            builtInDeviceIDs: [builtIn.id]
+        )
+        #expect(fallback?.device == builtIn)
+        #expect(fallback?.source == .builtIn)
+
+        #expect(MacMicrophoneDefaultInputPolicy.select(
+            available: [],
+            systemDefault: headset,
+            builtInDeviceIDs: []
+        ) == nil)
+    }
+
     @Test func inputConfigurationChangeOnlyFailsWhenTheDeviceActuallyChanged() {
         #expect(!MacMicrophoneConfigurationChangePolicy.shouldFail(
             selectedDeviceID: 118,
