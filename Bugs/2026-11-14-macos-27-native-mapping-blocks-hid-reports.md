@@ -1,7 +1,7 @@
 # macOS 27 写入 native key mapping 后 HID 报告停止投递
 
 - 时间：2026-11-14
-- 状态：根因已确认，候选修复完成并通过本机 RC003 真机复测；干净构建与完整矩阵待补
+- 状态：根因已确认，修复已通过 build 360 干净源码构建及 RC001 / RC003 真机复测；macOS 26、Intel 等边界待补
 - 影响范围：macOS 27 上的小米 RC001 / RC003；SayAll 2.0.0 开发线
 - 功能点：普通按键 HID 报告接收、Onboarding 遥控器页、`RemoteNativeKeyMapper`
 
@@ -65,7 +65,7 @@ HID EDGE = 84
 HID BUTTON = 50
 ```
 
-RC003 真机复测：方向键、OK、音量各 1 次；TV 无额外系统动作；Power 不锁屏/睡眠；语音正常；快速连按和长按正常。
+真机复测：RC003 和 RC001 的方向键、OK、音量、TV、电源和语音均正常；TV 无额外系统动作；Power 不锁屏/睡眠；快速连按和长按正常。最终结果来自 build 360 干净源码构建。
 
 ## 根因
 
@@ -93,31 +93,29 @@ RC003 真机复测：方向键、OK、音量各 1 次；TV 无额外系统动作
 ```text
 xcrun swift test --disable-keychain --filter \
   'RemoteButtonsTests|RemoteNativeKeyMapperTests|KeyboardEventSuppressorTests'
-233 tests in 3 suites passed
+234 tests in 3 suites passed
 ```
 
-新增 `managerReportIsDroppedOnlyWhenDeviceCallbackExists` 覆盖 manager/device 去重判据。
+完整测试：1422 tests / 104 suites 通过。新增 `managerReportIsDroppedOnlyWhenDeviceCallbackExists` 覆盖 manager/device 去重判据。`scripts/test.sh` 自测 48/48 通过。
 
 ## 真机边界
 
 已完成：
 
-- macOS 27.0.1 + RC003，build 358；
-- 方向键、OK、音量各 1 次；
+- macOS 27.0.1 + RC003 / RC001，build 360 干净源码构建（`source_commit=57367e024a63b141594b3b48da22883dd293d1d6`，`dirty=false`）；
+- 两种型号的方向键、OK、音量、TV、电源和语音均正常；
 - TV 无额外动作；
 - Power 不锁屏/睡眠；
-- 语音正常；
-- 快速连按、长按方向键正常。
+- 快速连按、长按方向键正常；
+- build 359 候选验证 Onboarding 遥控器页可接收控制键。
 
 尚未完成：
 
-- 干净源码构建（当前 build 358 为 `dirty=true` 本地候选）；
 - macOS 26 / Intel 回归（代码路径保留 manager 回调，仍需实机确认）；
-- RC001 回归；
-- 睡眠/唤醒、断连重连、Onboarding 完整旅程、第三方语音工具文字上屏；
+- 睡眠/唤醒、断连重连、第三方语音工具文字上屏；
 - 双设备隔离和其他 HID 工具占用场景。
 
-未经上述验收，不得把 build 358 作为正式发布包，也不得把本机结果表述为完整兼容矩阵通过。
+build 360 可作为本 Bug 的候选修复，但 macOS 26、Intel 等边界未验证前，不得表述为完整兼容矩阵通过。
 
 ## 变更文件
 
