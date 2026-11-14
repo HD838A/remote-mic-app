@@ -220,10 +220,6 @@ struct TranscriptHistorySection: View {
         )
     }
 
-    private var totalEntryCount: Int {
-        Set(model.transcriptRecords.map(\.sessionID) + model.recordingAssets.map(\.sessionID)).count
-    }
-
     private var visibleTotalEntryCount: Int {
         Set(
             TranscriptHistoryPresentationPolicy.visibleRecords(
@@ -237,10 +233,6 @@ struct TranscriptHistorySection: View {
                     now: presentationNow
                 ).map(\.sessionID)
         ).count
-    }
-
-    private var hasEarlierEntries: Bool {
-        visibleTotalEntryCount < totalEntryCount
     }
 
     var body: some View {
@@ -378,23 +370,6 @@ struct TranscriptHistorySection: View {
                     }
                     .padding(10)
                 }
-            }
-
-            if activeApplicationKey == nil && hasEarlierEntries {
-                Button {
-                    withAnimation(.easeInOut(duration: 0.18)) {
-                        isApplicationSwitcherExpanded = true
-                    }
-                } label: {
-                    Label(
-                        "statistics.transcripts.view_more_by_application",
-                        systemImage: "clock.arrow.circlepath"
-                    )
-                    .font(.system(size: 12, weight: .medium))
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(Color.accentColor)
-                .padding(.horizontal, 8)
             }
 
             if groups.isEmpty {
