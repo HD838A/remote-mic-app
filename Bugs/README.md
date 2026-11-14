@@ -1,5 +1,7 @@
 # Bug 记录
 
+- [macOS 27 写入 native key mapping 后 HID 报告停止投递](./2026-11-14-macos-27-native-mapping-blocks-hid-reports.md)
+
 - [蓝牙语音停止前等待虚拟麦克风尾音排空](./2026-11-13-bluetooth-tail-release.md)
 
 - [远端 60 秒停止后语音工具没有收到 Fn 抬起](./2026-11-13-remote-timeout-does-not-commit-voice-key.md)

@@ -3805,6 +3805,25 @@ struct RemoteButtonsTests {
         #expect(sessionGate.lowerBound < prearmCall.lowerBound)
     }
 
+    @Test func managerReportIsDroppedOnlyWhenDeviceCallbackExists() {
+        #expect(HIDRemoteMonitor.shouldAcceptReport(
+            path: .manager,
+            hasDeviceCallback: false
+        ))
+        #expect(!HIDRemoteMonitor.shouldAcceptReport(
+            path: .manager,
+            hasDeviceCallback: true
+        ))
+        #expect(HIDRemoteMonitor.shouldAcceptReport(
+            path: .device,
+            hasDeviceCallback: true
+        ))
+        #expect(HIDRemoteMonitor.shouldAcceptReport(
+            path: .device,
+            hasDeviceCallback: false
+        ))
+    }
+
     @Test func monitorStopEndsThePrearmSessionBeforeReleasingSharedResources() throws {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         let source = try String(contentsOf: root.appendingPathComponent("Sources/RemoteMic/HIDRemoteMonitor.swift"), encoding: .utf8)
