@@ -2401,7 +2401,13 @@ struct SettingsPageRegressionTests {
         #expect(historySource.contains("statistics.transcripts.view_more_by_application"))
         #expect(historySource.contains("static let recentWindow: TimeInterval"))
         #expect(historySource.contains("private func toggleDay(_ dayKey: String)"))
-        #expect(historySource.contains("dayGroupView(group)"))
+        #expect(historySource.contains("LazyVStack(alignment: .leading, spacing: 0)"))
+        #expect(historySource.contains(
+            "TranscriptHistoryPresentationPolicy.timelineItems("
+        ))
+        #expect(historySource.contains("ForEach(Array(items.enumerated()), id: \\.element.id)"))
+        #expect(historySource.contains("timelineEntryView(entry, isLast: isLast)"))
+        #expect(!historySource.contains("dayGroupView(group)"))
         #expect(!historySource.contains(".frame(width: 250, alignment: .topLeading)"))
         #expect(historySource.contains("private var deleteAllRow"))
         let agentAccessPosition = try #require(
@@ -2464,6 +2470,12 @@ struct SettingsPageRegressionTests {
         #expect(modelSource.contains("recordingPlaybackAssetID"))
         #expect(modelSource.contains("isRecordingPlaybackPlaying"))
         #expect(modelSource.contains("audioPlayerDidFinishPlaying"))
+        let refreshStart = try #require(modelSource.range(of: "func refreshTranscriptRecords()"))
+        let refreshEnd = try #require(modelSource.range(of: "func playRecording("))
+        let refreshBody = modelSource[refreshStart.lowerBound..<refreshEnd.lowerBound]
+        #expect(refreshBody.contains("self.transcriptRecords != records"))
+        #expect(refreshBody.contains("self.recordingAssets != assets"))
+        #expect(!refreshBody.contains("recordingToggleCancellable ="))
         #expect(!captureSource.contains("PrivateFeatureIntegration"))
         #expect(!captureSource.contains("API"))
     }

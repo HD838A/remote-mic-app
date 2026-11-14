@@ -6317,7 +6317,10 @@ struct SettingsView: View {
             }
             .frame(maxWidth: .infinity, alignment: .top)
         }
-        .onAppear { model.refreshTranscriptRecords() }
+        .onAppear {
+            model.refreshTranscriptRecords()
+            model.refreshRecordingAssets()
+        }
     }
 
     private var statisticsVoiceSessionRankingPanel: some View {

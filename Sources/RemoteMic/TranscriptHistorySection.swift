@@ -14,6 +14,20 @@ struct TranscriptDayGroup: Identifiable {
     let entries: [TranscriptHistoryEntry]
 }
 
+enum TranscriptTimelineItem: Identifiable {
+    case dayHeader(TranscriptDayGroup)
+    case entry(TranscriptHistoryEntry, isLast: Bool)
+
+    var id: String {
+        switch self {
+        case let .dayHeader(group):
+            return "day-\(group.id)"
+        case let .entry(entry, _):
+            return "entry-\(entry.id.uuidString)"
+        }
+    }
+}
+
 enum TranscriptHistoryEntry: Identifiable {
     case transcript(TranscriptRecord)
     case recording(RecordingAssetManifest)
@@ -92,6 +106,21 @@ enum TranscriptHistoryPresentationPolicy {
             assets.filter { ($0.applicationKey ?? "__unknown__") == key }
         } ?? assets.filter { $0.endedAt >= now.addingTimeInterval(-recentWindow) }
         return scoped.sorted { $0.endedAt > $1.endedAt }
+    }
+
+    /// 日期头和记录行必须同为 LazyVStack 的直接子项，否则展开日会一次性创建所有记录行。
+    static func timelineItems(
+        for groups: [TranscriptDayGroup],
+        expandedDayKeys: Set<String>
+    ) -> [TranscriptTimelineItem] {
+        groups.flatMap { group in
+            var items: [TranscriptTimelineItem] = [.dayHeader(group)]
+            guard expandedDayKeys.contains(group.id) else { return items }
+            items.append(contentsOf: group.entries.enumerated().map { index, entry in
+                .entry(entry, isLast: index == group.entries.count - 1)
+            })
+            return items
+        }
     }
 }
 
@@ -274,7 +303,12 @@ struct TranscriptHistorySection: View {
     }
 
     private var historyContent: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        let groups = dayGroups
+        let items = TranscriptHistoryPresentationPolicy.timelineItems(
+            for: groups,
+            expandedDayKeys: expandedDayKeys
+        )
+        return VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .center, spacing: 14) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(selectedApplication?.name
@@ -363,7 +397,7 @@ struct TranscriptHistorySection: View {
                 .padding(.horizontal, 8)
             }
 
-            if dayGroups.isEmpty {
+            if groups.isEmpty {
                 GlassPanel {
                     Text("statistics.transcripts.no_recent_records")
                         .font(.system(size: 13))
@@ -372,9 +406,16 @@ struct TranscriptHistorySection: View {
                         .padding(12)
                 }
             } else {
-                LazyVStack(alignment: .leading, spacing: 12) {
-                    ForEach(dayGroups) { group in
-                        dayGroupView(group)
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                        switch item {
+                        case let .dayHeader(group):
+                            dayHeaderView(group)
+                                .padding(.top, index == 0 ? 0 : 12)
+                        case let .entry(entry, isLast):
+                            timelineEntryView(entry, isLast: isLast)
+                                .transition(.opacity.combined(with: .move(edge: .top)))
+                        }
                     }
                 }
             }
@@ -520,7 +561,7 @@ struct TranscriptHistorySection: View {
         .accessibilityValue(localizedEntryCount(application.count))
     }
 
-    private func dayGroupView(_ group: TranscriptDayGroup) -> some View {
+    private func dayHeaderView(_ group: TranscriptDayGroup) -> some View {
         let isExpanded = expandedDayKeys.contains(group.id)
         return VStack(alignment: .leading, spacing: 0) {
             Button {
@@ -549,20 +590,19 @@ struct TranscriptHistorySection: View {
             .accessibilityValue(localizedEntryCount(group.entries.count))
 
             Divider()
+        }
+    }
 
-            if isExpanded {
-                VStack(alignment: .leading, spacing: 0) {
-                    ForEach(Array(group.entries.enumerated()), id: \.element.id) { index, entry in
-                        switch entry {
-                        case let .transcript(record):
-                            timelineRecordRow(record, isLast: index == group.entries.count - 1)
-                        case let .recording(asset):
-                            recordingRow(asset, isLast: index == group.entries.count - 1)
-                        }
-                    }
-                }
-                .transition(.opacity.combined(with: .move(edge: .top)))
-            }
+    @ViewBuilder
+    private func timelineEntryView(
+        _ entry: TranscriptHistoryEntry,
+        isLast: Bool
+    ) -> some View {
+        switch entry {
+        case let .transcript(record):
+            timelineRecordRow(record, isLast: isLast)
+        case let .recording(asset):
+            recordingRow(asset, isLast: isLast)
         }
     }
 
@@ -660,8 +700,8 @@ struct TranscriptHistorySection: View {
             return name
         }
         if let bundleIdentifier = bundleIdentifier?.nilIfBlank,
-           let applicationURL = NSWorkspace.shared.urlForApplication(
-               withBundleIdentifier: bundleIdentifier
+           let applicationURL = TranscriptApplicationIconCache.applicationURL(
+               for: bundleIdentifier
            ),
            let bundle = Bundle(url: applicationURL),
            let displayName = (
@@ -685,10 +725,8 @@ struct TranscriptHistorySection: View {
         size: CGFloat
     ) -> some View {
         Group {
-            if let applicationURL = NSWorkspace.shared.urlForApplication(
-                withBundleIdentifier: bundleIdentifier
-            ) {
-                Image(nsImage: NSWorkspace.shared.icon(forFile: applicationURL.path))
+            if let image = TranscriptApplicationIconCache.icon(for: bundleIdentifier) {
+                Image(nsImage: image)
                     .resizable()
                     .scaledToFit()
             } else {
@@ -985,28 +1023,23 @@ struct TranscriptHistorySection: View {
     }
 
     private func timeText(_ record: TranscriptRecord) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = localization.locale
-        formatter.timeZone = TimeZone(identifier: record.timeZoneIdentifier)
-        formatter.dateStyle = .none
-        formatter.timeStyle = .short
-        return formatter.string(from: record.endedAt)
+        TranscriptHistoryFormatting.timeText(
+            record.endedAt,
+            timeZoneIdentifier: record.timeZoneIdentifier,
+            locale: localization.locale
+        )
     }
 
     private func timeText(_ date: Date, timeZoneIdentifier: String) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = localization.locale
-        formatter.timeZone = TimeZone(identifier: timeZoneIdentifier)
-        formatter.dateStyle = .none
-        formatter.timeStyle = .short
-        return formatter.string(from: date)
+        TranscriptHistoryFormatting.timeText(
+            date,
+            timeZoneIdentifier: timeZoneIdentifier,
+            locale: localization.locale
+        )
     }
 
     private func localizedCount(_ count: Int) -> String {
-        let formatter = NumberFormatter()
-        formatter.locale = localization.locale
-        formatter.numberStyle = .decimal
-        return formatter.string(from: NSNumber(value: count)) ?? String(count)
+        TranscriptHistoryFormatting.count(count, locale: localization.locale)
     }
 
     private func localizedEntryCount(_ count: Int) -> String {
@@ -1017,6 +1050,77 @@ struct TranscriptHistorySection: View {
             locale: localization.locale,
             localizedCount(count)
         )
+    }
+}
+
+private enum TranscriptApplicationIconCache {
+    private static let applicationURLs = NSCache<NSString, NSURL>()
+    private static let images = NSCache<NSString, NSImage>()
+
+    static func applicationURL(for bundleIdentifier: String) -> URL? {
+        guard !bundleIdentifier.isEmpty else { return nil }
+        let key = bundleIdentifier as NSString
+        if let cached = applicationURLs.object(forKey: key) {
+            return cached as URL
+        }
+        guard let url = NSWorkspace.shared.urlForApplication(
+            withBundleIdentifier: bundleIdentifier
+        ) else { return nil }
+        applicationURLs.setObject(url as NSURL, forKey: key)
+        return url
+    }
+
+    static func icon(for bundleIdentifier: String) -> NSImage? {
+        guard !bundleIdentifier.isEmpty else { return nil }
+        let key = bundleIdentifier as NSString
+        if let cached = images.object(forKey: key) {
+            return cached
+        }
+        guard let applicationURL = applicationURL(for: bundleIdentifier) else { return nil }
+        let image = NSWorkspace.shared.icon(forFile: applicationURL.path)
+        images.setObject(image, forKey: key)
+        return image
+    }
+}
+
+private enum TranscriptHistoryFormatting {
+    private static let timeFormatters = NSCache<NSString, DateFormatter>()
+    private static let countFormatters = NSCache<NSString, NumberFormatter>()
+
+    static func timeText(
+        _ date: Date,
+        timeZoneIdentifier: String,
+        locale: Locale
+    ) -> String {
+        let key = "\(locale.identifier)|\(timeZoneIdentifier)" as NSString
+        let formatter: DateFormatter
+        if let cached = timeFormatters.object(forKey: key) {
+            formatter = cached
+        } else {
+            let created = DateFormatter()
+            created.locale = locale
+            created.timeZone = TimeZone(identifier: timeZoneIdentifier)
+            created.dateStyle = .none
+            created.timeStyle = .short
+            timeFormatters.setObject(created, forKey: key)
+            formatter = created
+        }
+        return formatter.string(from: date)
+    }
+
+    static func count(_ count: Int, locale: Locale) -> String {
+        let key = locale.identifier as NSString
+        let formatter: NumberFormatter
+        if let cached = countFormatters.object(forKey: key) {
+            formatter = cached
+        } else {
+            let created = NumberFormatter()
+            created.locale = locale
+            created.numberStyle = .decimal
+            countFormatters.setObject(created, forKey: key)
+            formatter = created
+        }
+        return formatter.string(from: NSNumber(value: count)) ?? String(count)
     }
 }
 

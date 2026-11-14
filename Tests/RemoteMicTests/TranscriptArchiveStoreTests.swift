@@ -88,6 +88,55 @@ struct TranscriptArchiveStoreTests {
             records: records, assets: assets, applicationKey: "missing", now: now).isEmpty)
     }
 
+    @Test func timelineFlattensOnlyExpandedDaysIntoOneLazyList() {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let first = TranscriptRecord(
+            sessionID: UUID(),
+            startedAt: now,
+            endedAt: now,
+            applicationName: "Notes",
+            bundleIdentifier: "com.apple.Notes",
+            source: .bluetoothRemote,
+            originalTranscript: "first"
+        )
+        let second = TranscriptRecord(
+            sessionID: UUID(),
+            startedAt: now.addingTimeInterval(-60),
+            endedAt: now.addingTimeInterval(-60),
+            applicationName: "Notes",
+            bundleIdentifier: "com.apple.Notes",
+            source: .bluetoothRemote,
+            originalTranscript: "second"
+        )
+        let groups = [
+            TranscriptDayGroup(id: "2026-10-10", entries: [.transcript(first), .transcript(second)]),
+            TranscriptDayGroup(id: "2026-10-09", entries: [.transcript(first)]),
+        ]
+
+        let collapsed = TranscriptHistoryPresentationPolicy.timelineItems(
+            for: groups,
+            expandedDayKeys: []
+        )
+        #expect(collapsed.map(\.id) == ["day-2026-10-10", "day-2026-10-09"])
+
+        let expanded = TranscriptHistoryPresentationPolicy.timelineItems(
+            for: groups,
+            expandedDayKeys: ["2026-10-10"]
+        )
+        #expect(expanded.map(\.id) == [
+            "day-2026-10-10",
+            "entry-\(first.sessionID.uuidString)",
+            "entry-\(second.sessionID.uuidString)",
+            "day-2026-10-09",
+        ])
+        guard case let .entry(entry, isLast) = expanded[2] else {
+            Issue.record("expected the second entry to be the last row of its day")
+            return
+        }
+        #expect(entry.id == second.sessionID)
+        #expect(isLast)
+    }
+
     @Test func malformedDayFileIsSkippedAndLoggedWithoutTranscriptBody() throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent(
