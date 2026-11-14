@@ -1020,4 +1020,78 @@ struct KeyboardEventSuppressorTests {
             )
         )
     }
+
+    // MARK: - 切换器会话的诊断量
+
+    @Test func switcherRepeatsAreCountedInsteadOfWrittenPerRepeat() {
+        // 方向键连发 100ms 一次，而且每次成功都会重置 15 秒会话超时，所以按住不放
+        // 就是一直写。这类重复动作没有逐条诊断价值，只应该累加到会话汇总里。
+        var policy = AppSwitcherDiagnosticPolicy()
+        for _ in 1...600 {
+            policy.recordRepeat(button: "left")
+        }
+        policy.recordRepeat(button: "right")
+        #expect(policy.repeatCount == 601)
+        // 「哪个方向」这个信息不能因为不逐条写就丢掉。
+        #expect(policy.repeatBreakdown == "left:600,right:1")
+        // 连发不产生任何状态行。
+        #expect(policy.stateLineCount == 0)
+        #expect(policy.statePollCount == 0)
+    }
+
+    @Test func switcherRepeatBreakdownIsStableWhenNothingRepeats() {
+        let policy = AppSwitcherDiagnosticPolicy()
+        #expect(policy.repeatCount == 0)
+        #expect(policy.repeatBreakdown == "none")
+    }
+
+    @Test func switcherStateIsWrittenOnlyWhenTheStableSignalChanges() {
+        var policy = AppSwitcherDiagnosticPolicy()
+        var written = 0
+        // 30 次轮询都报同一份状态：切换器可见、Dock 窗口数高于基线。
+        for _ in 1...30 {
+            if policy.recordStatePoll(signature: "visible|above") { written += 1 }
+        }
+        #expect(written == 1)
+        #expect(policy.statePollCount == 30)
+        #expect(policy.stateLineCount == 1)
+
+        // 真的变了才再写一行。
+        let changed = policy.recordStatePoll(signature: "hidden|at")
+        #expect(changed)
+        #expect(policy.stateLineCount == 2)
+    }
+
+    @Test func switcherStateLinesAreCappedPerSession() {
+        // 两个信号本身会在区间内来回跳（macOS 13 真机日志：19/22 次会话在 1 秒内
+        // 被误判成“已关闭”），所以只靠变化判定仍然可能每 tick 一行，必须有上限。
+        var policy = AppSwitcherDiagnosticPolicy()
+        var written = 0
+        for index in 1...200 {
+            let signature = index.isMultiple(of: 2) ? "visible|above" : "hidden|at"
+            if policy.recordStatePoll(signature: signature) { written += 1 }
+        }
+        #expect(written == AppSwitcherDiagnosticPolicy.maximumStateLines)
+        #expect(policy.statePollCount == 200)
+        #expect(policy.stateLineCount == AppSwitcherDiagnosticPolicy.maximumStateLines)
+    }
+
+    @Test func switcherEndedLineCarriesTheSessionTotals() throws {
+        // 连发与状态轮询都改成计数后，这些数字必须真的落到收尾那一行，
+        // 否则现场只剩一条「ended」，看不出会话里到底发生了什么。
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        let source = try String(contentsOf: root.appendingPathComponent(
+            "Sources/RemoteMic/HIDRemoteMonitor.swift"
+        ), encoding: .utf8)
+        #expect(source.contains("repeat_count=\\(appSwitcherDiagnostics.repeatCount)"))
+        #expect(source.contains("repeat_buttons=\\(appSwitcherDiagnostics.repeatBreakdown)"))
+        #expect(source.contains("state_polls=\\(appSwitcherDiagnostics.statePollCount)"))
+        #expect(source.contains("state_lines=\\(appSwitcherDiagnostics.stateLineCount)"))
+        // 逐条连发日志已经移除，别再被加回来。
+        #expect(!source.contains("phase=repeat success=true"))
+        // 状态轮询必须经过限流，不能直接写。
+        #expect(source.contains("appSwitcherDiagnostics.recordStatePoll("))
+        #expect(source.contains("appSwitcherDiagnostics = AppSwitcherDiagnosticPolicy()"))
+    }
 }
