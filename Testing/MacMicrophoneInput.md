@@ -53,7 +53,7 @@
 | 首次启动，无可用物理输入 | 选择器显示“无”并禁用；“用<设备名>说话”按钮不显示。不得显示“选择麦克风”占位项，不静默选择其他设备。 |
 | 首次启动或应用自动选择麦克风 | 系统默认输入保持不变；只有用户在选择器中选择设备才允许切换。 |
 | 在选择器中切换到另一可用物理麦克风 | macOS 系统默认输入切换为所选设备；SayAll 选择与系统设置一致；系统默认输出保持不变。 |
-| 系统默认输入切换失败 | 选择器下方提示无法切换并保留选择；设备可输入时本功能仍可从所选设备收音，但不得显示为已切换或静默改用其他设备。 |
+| 系统默认输入切换失败 | 不显示用户可见技术错误；日志记录失败；选择保留；本功能仍从所选设备直接收音，系统默认输入可能保持原值。 |
 | 已保存选择后，在 macOS 设置中更改默认输入 | SayAll 的选择保持不变；重启后仍保持原选择。 |
 | 已配对的 AirPods 或其他蓝牙音频未连接 | 不出现在下拉框；在下拉框看到的只能是当前可采集设备。先在 macOS 控制中心或系统设置连接后再测试。 |
 | 已连接的 AirPods 或其他外接耳机被选中 | 设备出现在下拉框；选择后切换系统默认输入，点击“用<设备名>说话”进入待命，Fn 收音应产生 PCM 和文字。 |
@@ -152,6 +152,8 @@
 - Build 371 复测：日志 `operation_id=8` 记录 `device_started result=started input_device_id=200`、`engine_running input_device_id=200 sample_rate_hz=48000 channels=1`，随后 `no_audio`、0 samples。同时独立脚本从当前 AirPods 输入 `id=144 uid=74-77-86-2A-7A-9C:input` 采集到 30 buffers、72000 frames、peak=0.0695，格式 1 ch/24000 Hz；证明 AirPods 系统和耳机可用，应用绑定的是蓝牙路由重建后的过期设备 ID 200。
 - Build 372/373 在采集启动和选择设备时按所选 UID 重新解析当前设备 ID，并记录 `phase=device_resolved result=refreshed`；AirPods 实际采到 PCM。
 - Build 373 长按实测：AirPods 输入 189、24 kHz、1 ch；从开始准备到首个 PCM 约 6.2 秒（蓝牙 HFP 激活），随后 `operation_id=4` 采到 86400 samples、`operation_id=7` 采到 185600 samples，均正常排空。短按在准备完成前松开时，旧停止路径把 0 samples 记为 `no_audio` 并禁用功能，导致“再次按下 Fn 仍停在待命”；Build 374/375 已移除该停止路径失败，短按取消返回待命，下一次 Fn 可再次启动。
+- 用户明确拒绝页面上的“无法切换 macOS 系统输入设备”技术文案。系统默认输入切换改为尽力而为，失败只写日志，不向普通用户显示技术错误；本功能始终从所选设备直接收音。Build 378 已移除该文案和对应本地化键。
+- 自查 10:57 日志：最近一次是遥控器 ATVV 流，Mac 麦克风处于待命并被 busy 拒绝；截图当时按钮仍是“用 Andy AirPods Pro 3 说话”，说明尚未进入待命。没有 AirPods 的 Mac 采集 `startup_timing`，因此 6 秒问题仍缺少一次真实 AirPods Fn 采集的分步数据。后续由代理自行读取日志，不再要求用户查看。
 - 自动化：最终 UI 简化、动态按钮、隐藏快捷键行、无设备“无”状态、no_audio 修复、设备 ID 重解析和准备期取消修复后，`swift test --disable-keychain` 1423 项、104 个 suite 通过；`MacMicrophoneInputTests|LocalizationTests` 31 项、2 个 suite 通过；最后一行菜单栏隐藏改动后本地化 8 项通过。
 - 本地检查：`SKIP_SWIFT_PACKAGE_BUILD=1 scripts/test.sh` 48 项通过；`scripts/verify-localizations.sh` 通过；`scripts/verify-repository-governance.sh` 通过；`git diff --check` 通过。
 - 本机包：`scripts/package-local-test-app.sh` 构建并安装 `~/Applications/SayAll.app`，Build 375，source `822014ac`，dirty=true。

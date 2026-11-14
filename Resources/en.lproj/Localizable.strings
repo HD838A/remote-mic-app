@@ -1394,7 +1394,6 @@
 "audio.mac_microphone.fallback_help" = "Talk into the selected microphone when the remote isn't in use; selecting one switches the macOS input device; remote audio is unaffected.";
 "audio.mac_microphone.start" = "Speak with %@";
 "audio.mac_microphone.stop" = "Stop using selected microphone";
-"audio.mac_microphone.error.switch_failed" = "Could not switch the macOS input device; the selected microphone will still be used for this feature.";
 "audio.mac_microphone.error.no_audio" = "The selected microphone produced no audio. Check the connection or choose another microphone.";
 "audio.mac_microphone.help" = "Use only when you are not using a remote";
 "audio.mac_microphone.idle" = "Not recording";

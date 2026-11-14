@@ -610,7 +610,6 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     @Published private(set) var remoteSystemDeviceNames: [UUID: String] = [:]
     @Published private(set) var audioDevices: [AudioDeviceInfo] = []
     @Published private(set) var macMicrophoneDevices: [AudioDeviceInfo] = []
-    @Published private(set) var macMicrophoneSelectionMessage: LocalizedMessage?
     @Published private(set) var macMicrophoneState: MacMicrophoneSessionState = .idle
     @Published private(set) var macMicrophoneShortcutAvailable = true
     @Published private(set) var macMicrophoneEnabled = false
@@ -2839,7 +2838,6 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
                         )
                     } else if let defaultUID {
                         self.settings.macMicrophoneInputUID = defaultUID
-                        self.macMicrophoneSelectionMessage = nil
                         AppLogger.shared.write(
                             "MAC MICROPHONE INPUT phase=fallback result=selected " +
                                 "reason=selected_unavailable"
@@ -2910,7 +2908,6 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     func selectMacMicrophoneInput(_ uid: String) {
         guard settings.macMicrophoneInputUID != uid else { return }
         settings.macMicrophoneInputUID = uid
-        macMicrophoneSelectionMessage = nil
         guard let device = macMicrophoneDevices.first(where: { $0.uid == uid }) else { return }
         // The Bluetooth route can be recreated while the picker is open.
         let currentDevice = CoreAudioDeviceCatalog.inputDevices().first(where: {
@@ -2922,7 +2919,6 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
                 "result=\(result == noErr ? "applied" : "failed")"
         )
         guard result != noErr else {
-            macMicrophoneSelectionMessage = LocalizedMessage("audio.mac_microphone.error.switch_failed")
             return
         }
     }
@@ -2930,9 +2926,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     func toggleMacMicrophone(from entry: MacMicrophoneEntry) {
         if !macMicrophoneSession.isEnabled {
             guard macMicrophoneSelectedDeviceIsReady else {
-                macMicrophoneSelectionMessage = LocalizedMessage(
-                    "audio.mac_microphone.error.input_unavailable"
-                )
+                AppLogger.shared.write("MAC MICROPHONE phase=rejected reason=input_unavailable")
                 return
             }
             let mode = settings.voiceKeyMode

@@ -1393,7 +1393,6 @@
 "audio.mac_microphone.fallback_help" = "不使用遥控器时，可直接对所选麦克风说话；选择后会切换 macOS 输入设备；遥控器收音与此设置无关。";
 "audio.mac_microphone.start" = "用%@说话";
 "audio.mac_microphone.stop" = "停用所选麦克风说话";
-"audio.mac_microphone.error.switch_failed" = "无法切换 macOS 系统输入设备；所选麦克风仍可用于本功能。";
 "audio.mac_microphone.error.no_audio" = "所选麦克风没有音频。请检查连接，或改用其他麦克风。";
 "audio.mac_microphone.help" = "仅在不使用遥控器时使用";
 "audio.mac_microphone.idle" = "未收音";
