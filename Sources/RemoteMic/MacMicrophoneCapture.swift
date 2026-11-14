@@ -49,6 +49,9 @@ final class MacMicrophoneCapture {
     private var acceptingBuffers = false
     private var engine: AVAudioEngine?
     private var converter: MacMicrophonePCMConverter?
+    private var captureSession: AVCaptureSession?
+    private var captureOutput: AVCaptureAudioDataOutput?
+    private var captureDelegate: MacMicrophoneAudioCaptureDelegate?
     private var deliver: (([Int16]) -> Void)?
     private var fail: ((MacMicrophoneFailure) -> Void)?
     private var configurationObserver: NSObjectProtocol?
@@ -89,6 +92,19 @@ final class MacMicrophoneCapture {
                     "phase=device_resolved result=\(resolvedInput.id == input.id ? "same" : "refreshed") " +
                     "previous_device_id=\(input.id) current_device_id=\(resolvedInput.id)"
             )
+            let transport = CoreAudioDeviceCatalog.transportType(for: resolvedInput.id)
+            let isBluetooth = transport == kAudioDeviceTransportTypeBluetooth ||
+                transport == kAudioDeviceTransportTypeBluetoothLE
+            if isBluetooth {
+                startAVCapture(
+                    input: resolvedInput,
+                    operationID: operationID,
+                    onSamples: onSamples,
+                    onFailure: onFailure,
+                    completion: completion
+                )
+                return
+            }
             let engineBegin = ProcessInfo.processInfo.systemUptime
             let engine = AVAudioEngine()
             let inputNode = engine.inputNode
@@ -163,22 +179,7 @@ final class MacMicrophoneCapture {
                         "result=engine_running input_device_id=\(resolvedInput.id) " +
                         "sample_rate_hz=\(Int(format.sampleRate)) channels=\(format.channelCount)"
                 )
-                let watchdogOperation = operationID
-                let watchdog = DispatchWorkItem { [weak self] in
-                    guard let self, self.operationID == watchdogOperation else { return }
-                    self.ingressLock.lock()
-                    let accepting = self.acceptingBuffers
-                    self.ingressLock.unlock()
-                    guard accepting, self.engine != nil, self.receivedSamples == 0 else { return }
-                    self.firstPCMWatchdog = nil
-                    AppLogger.shared.write(
-                        "MAC MICROPHONE CAPTURE operation_id=\(self.operationID) " +
-                            "phase=failed reason=no_audio"
-                    )
-                    DispatchQueue.main.async { self.fail?(.noAudio) }
-                }
-                firstPCMWatchdog = watchdog
-                queue.asyncAfter(deadline: .now() + 2, execute: watchdog)
+                scheduleFirstPCMWatchdog(operationID: operationID)
                 DispatchQueue.main.async { completion(nil) }
             } catch {
                 ingressLock.lock()
@@ -195,6 +196,185 @@ final class MacMicrophoneCapture {
             }
         }
         ingressLock.unlock()
+    }
+
+    private func startAVCapture(
+        input: AudioDeviceInfo,
+        operationID: UInt64,
+        onSamples: @escaping ([Int16]) -> Void,
+        onFailure: @escaping (MacMicrophoneFailure) -> Void,
+        completion: @escaping (MacMicrophoneFailure?) -> Void
+    ) {
+        let devices = AVCaptureDevice.devices(for: .audio)
+        let captureDevice = devices.first(where: { $0.uniqueID == input.uid })
+            ?? devices.first(where: { $0.localizedName == input.name })
+        guard let captureDevice else {
+            AppLogger.shared.write(
+                "MAC MICROPHONE CAPTURE operation_id=\(operationID) " +
+                    "phase=avcapture_failed reason=device_not_found"
+            )
+            DispatchQueue.main.async { completion(.inputUnavailable) }
+            return
+        }
+        let session = AVCaptureSession()
+        session.beginConfiguration()
+        do {
+            let deviceInput = try AVCaptureDeviceInput(device: captureDevice)
+            guard session.canAddInput(deviceInput) else {
+                session.commitConfiguration()
+                AppLogger.shared.write(
+                    "MAC MICROPHONE CAPTURE operation_id=\(operationID) " +
+                        "phase=avcapture_failed reason=input_not_added"
+                )
+                DispatchQueue.main.async { completion(.inputUnavailable) }
+                return
+            }
+            session.addInput(deviceInput)
+        } catch {
+            session.commitConfiguration()
+            AppLogger.shared.write(
+                "MAC MICROPHONE CAPTURE operation_id=\(operationID) " +
+                    "phase=avcapture_failed reason=input_error " + AppLogger.errorFields(error)
+            )
+            DispatchQueue.main.async { completion(.capture) }
+            return
+        }
+        let output = AVCaptureAudioDataOutput()
+        output.audioSettings = [
+            AVFormatIDKey: kAudioFormatLinearPCM,
+            AVSampleRateKey: 16_000.0,
+            AVNumberOfChannelsKey: 1,
+            AVLinearPCMBitDepthKey: 16,
+            AVLinearPCMIsFloatKey: false,
+            AVLinearPCMIsBigEndianKey: false,
+            AVLinearPCMIsNonInterleaved: false,
+        ]
+        guard session.canAddOutput(output) else {
+            session.commitConfiguration()
+            AppLogger.shared.write(
+                "MAC MICROPHONE CAPTURE operation_id=\(operationID) " +
+                    "phase=avcapture_failed reason=output_not_added"
+            )
+            DispatchQueue.main.async { completion(.capture) }
+            return
+        }
+        session.addOutput(output)
+        let delegate = MacMicrophoneAudioCaptureDelegate(
+            onSamples: { [weak self] samples in self?.acceptPCM(samples) },
+            onFailure: { [weak self] in self?.reportAVCaptureFailure() }
+        )
+        output.setSampleBufferDelegate(delegate, queue: queue)
+        session.commitConfiguration()
+        captureSession = session
+        captureOutput = output
+        captureDelegate = delegate
+        deliver = onSamples
+        fail = onFailure
+        let startBegin = ProcessInfo.processInfo.systemUptime
+        session.startRunning()
+        let startMs = Self.ms(since: startBegin)
+        guard session.isRunning else {
+            AppLogger.shared.write(
+                "MAC MICROPHONE CAPTURE operation_id=\(operationID) " +
+                    "phase=avcapture_failed reason=not_running elapsed_ms=\(startMs)"
+            )
+            output.setSampleBufferDelegate(nil, queue: nil)
+            captureSession = nil
+            captureOutput = nil
+            captureDelegate = nil
+            deliver = nil
+            fail = nil
+            DispatchQueue.main.async { completion(.capture) }
+            return
+        }
+        AppLogger.shared.write(
+            "MAC MICROPHONE CAPTURE operation_id=\(operationID) " +
+                "phase=avcapture_started input_device_id=\(input.id) elapsed_ms=\(startMs)"
+        )
+        scheduleFirstPCMWatchdog(operationID: operationID)
+        DispatchQueue.main.async { completion(nil) }
+    }
+
+    private func scheduleFirstPCMWatchdog(operationID: UInt64) {
+        let watchdog = DispatchWorkItem { [weak self] in
+            guard let self, self.operationID == operationID else { return }
+            self.ingressLock.lock()
+            let accepting = self.acceptingBuffers
+            self.ingressLock.unlock()
+            guard accepting, self.engine != nil || self.captureSession != nil,
+                  self.receivedSamples == 0 else { return }
+            self.firstPCMWatchdog = nil
+            AppLogger.shared.write(
+                "MAC MICROPHONE CAPTURE operation_id=\(self.operationID) phase=failed reason=no_audio"
+            )
+            DispatchQueue.main.async { self.fail?(.noAudio) }
+        }
+        firstPCMWatchdog = watchdog
+        queue.asyncAfter(deadline: .now() + 2, execute: watchdog)
+    }
+
+    private func acceptPCM(_ samples: [Int16]) {
+        guard !samples.isEmpty else { return }
+        ingressLock.lock()
+        let accepting = acceptingBuffers
+        ingressLock.unlock()
+        guard accepting else { return }
+        queue.async { [self] in
+            guard captureSession != nil || engine != nil else { return }
+            if receivedSamples == 0 {
+                firstPCMWatchdog?.cancel()
+                firstPCMWatchdog = nil
+                let elapsed = Int((ProcessInfo.processInfo.systemUptime - startedAt) * 1_000)
+                AppLogger.shared.write(
+                    "MAC MICROPHONE CAPTURE operation_id=\(operationID) " +
+                        "phase=first_pcm elapsed_ms=\(elapsed) samples=\(samples.count)"
+                )
+            }
+            receivedSamples += samples.count
+            let deliver = self.deliver
+            DispatchQueue.main.async { deliver?(samples) }
+        }
+    }
+
+    private func reportAVCaptureFailure() {
+        AppLogger.shared.write(
+            "MAC MICROPHONE CAPTURE operation_id=\(operationID) phase=failed reason=sample_format"
+        )
+        DispatchQueue.main.async { self.fail?(.capture) }
+    }
+
+    static func int16Samples(from sampleBuffer: CMSampleBuffer) -> [Int16]? {
+        let frames = CMSampleBufferGetNumSamples(sampleBuffer)
+        guard frames > 0 else { return [] }
+        guard let formatDescription = CMSampleBufferGetFormatDescription(sampleBuffer),
+              let asbd = CMAudioFormatDescriptionGetStreamBasicDescription(formatDescription)?
+                  .pointee else { return nil }
+        guard asbd.mFormatID == kAudioFormatLinearPCM,
+              asbd.mChannelsPerFrame == 1,
+              asbd.mBitsPerChannel == 16,
+              asbd.mFormatFlags & kAudioFormatFlagIsFloat == 0 else { return nil }
+        var blockBuffer: CMBlockBuffer?
+        var audioBufferList = AudioBufferList()
+        let status = CMSampleBufferGetAudioBufferListWithRetainedBlockBuffer(
+            sampleBuffer,
+            bufferListSizeNeededOut: nil,
+            bufferListOut: &audioBufferList,
+            bufferListSize: MemoryLayout<AudioBufferList>.size,
+            blockBufferAllocator: nil,
+            blockBufferMemoryAllocator: nil,
+            flags: kCMSampleBufferFlag_AudioBufferList_Assure16ByteAlignment,
+            blockBufferOut: &blockBuffer
+        )
+        guard status == noErr,
+              audioBufferList.mNumberBuffers == 1,
+              let data = audioBufferList.mBuffers.mData else { return nil }
+        let byteCount = Int(audioBufferList.mBuffers.mDataByteSize)
+        let count = min(frames, byteCount / MemoryLayout<Int16>.size)
+        guard count > 0 else { return [] }
+        return Array(UnsafeBufferPointer(
+            start: data.assumingMemoryBound(to: Int16.self),
+            count: count
+        ))
     }
 
     private func handleConfigurationChange(
@@ -289,6 +469,23 @@ final class MacMicrophoneCapture {
         queue.async { [self] in
             firstPCMWatchdog?.cancel()
             firstPCMWatchdog = nil
+            if let session = captureSession {
+                captureOutput?.setSampleBufferDelegate(nil, queue: nil)
+                session.stopRunning()
+                captureSession = nil
+                captureOutput = nil
+                captureDelegate = nil
+                let hadNoAudio = receivedSamples == 0 && !conversionFailed
+                AppLogger.shared.write(
+                    "MAC MICROPHONE CAPTURE operation_id=\(operationID) phase=completed " +
+                        "result=released samples=\(receivedSamples) conversion_failed=\(conversionFailed) " +
+                        "completion=\(hadNoAudio ? "no_audio" : "normal")"
+                )
+                deliver = nil
+                fail = nil
+                DispatchQueue.main.async(execute: completion)
+                return
+            }
             guard engine != nil || converter != nil else {
                 DispatchQueue.main.async(execute: completion)
                 return
@@ -335,6 +532,29 @@ final class MacMicrophoneCapture {
 }
 
 /// Stateful conversion is shared by live capture and format/tail regression tests.
+private final class MacMicrophoneAudioCaptureDelegate: NSObject,
+    AVCaptureAudioDataOutputSampleBufferDelegate {
+    private let onSamples: ([Int16]) -> Void
+    private let onFailure: () -> Void
+
+    init(onSamples: @escaping ([Int16]) -> Void, onFailure: @escaping () -> Void) {
+        self.onSamples = onSamples
+        self.onFailure = onFailure
+    }
+
+    func captureOutput(
+        _ output: AVCaptureOutput,
+        didOutput sampleBuffer: CMSampleBuffer,
+        from connection: AVCaptureConnection
+    ) {
+        guard let samples = MacMicrophoneCapture.int16Samples(from: sampleBuffer) else {
+            onFailure()
+            return
+        }
+        onSamples(samples)
+    }
+}
+
 final class MacMicrophonePCMConverter {
     private let converter: AVAudioConverter
     private let outputFormat: AVAudioFormat
