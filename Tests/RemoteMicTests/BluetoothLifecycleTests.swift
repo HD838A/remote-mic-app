@@ -247,6 +247,31 @@ struct BluetoothLifecycleTests {
         ) == nil)
     }
 
+    /// 设备匹配先于 HID 服务可枚举：这一次失败发生时蓝牙桥可能还没回到 ready，
+    /// 但设备已经匹配本身就是它在位的证据，重试不能因此被丢掉。
+    @Test func deviceVerificationRetryDoesNotRequireAReadyBridge() {
+        let delays = (0 ... 5).map {
+            HIDMappingRecoveryPolicy.deviceVerificationRetryDelay(
+                forAttempt: $0,
+                started: true,
+                hasMatchingServices: false
+            )
+        }
+
+        #expect(delays == [0.5, 1, 2, 4, 8, nil])
+        #expect(HIDMappingRecoveryPolicy.deviceVerificationRetryDelay(
+            forAttempt: 0,
+            started: false,
+            hasMatchingServices: false
+        ) == nil)
+        // 服务已经能枚举出来时不需要重试，否则会无谓重启整套 HID 监视。
+        #expect(HIDMappingRecoveryPolicy.deviceVerificationRetryDelay(
+            forAttempt: 0,
+            started: true,
+            hasMatchingServices: true
+        ) == nil)
+    }
+
     @Test func generationAndPhaseRejectStaleCallbacks() {
         let phase = BluetoothLifecyclePhase.connecting(1)
         #expect(phase.acceptsDidConnect(generation: 1))

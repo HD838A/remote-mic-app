@@ -2,6 +2,8 @@
 
 - [macOS 27 写入 native key mapping 后 HID 报告停止投递](./2026-11-14-macos-27-native-mapping-blocks-hid-reports.md)
 
+- [断连后设备不再被接管，语音键的 F5→Fn 映射没有写回](./2026-11-13-voice-key-reconnect-mapping-not-reapplied.md)
+
 - [蓝牙语音停止前等待虚拟麦克风尾音排空](./2026-11-13-bluetooth-tail-release.md)
 
 - [远端 60 秒停止后语音工具没有收到 Fn 抬起](./2026-11-13-remote-timeout-does-not-commit-voice-key.md)
@@ -197,6 +199,7 @@
 
 | 时间 | Bug | 状态 |
 | --- | --- | --- |
+| 2026-11-13 | [断连后设备不再被接管，语音键的 F5→Fn 映射没有写回](./2026-11-13-voice-key-reconnect-mapping-not-reapplied.md) | 候选修复：映射校验失败回报上层，按 0.5/1/2/4/8 秒有界重试且不要求蓝牙桥 ready；1401 项自动化通过，反向验证两处断言变红后恢复；真实 Intel 复测待完成 |
 | 2026-11-13 | [蓝牙语音停止前等待虚拟麦克风尾音排空](./2026-11-13-bluetooth-tail-release.md) | 候选修复：正常停止先等待已入队音频自然排空，再释放语音键；不 flush；新会话清理旧按键保持；1399 项自动化通过，真实 RC003 尾字复测待完成 |
 | 2026-11-13 | [远端 60 秒停止后语音工具没有收到 Fn 抬起](./2026-11-13-remote-timeout-does-not-commit-voice-key.md) | 已修复并真机验收：仅对远端超时强制一次软件 Fn 抬起，正常松键不变；build 345 豆包 60 秒超时提交/结束通过，60 秒后音频仍不延长 |
 | 2026-11-13 | [远端 60 秒停止后本地转写候选被取消](./2026-11-13-transcript-capture-canceled-on-remote-stop.md) | 候选修复：结束时已有合法候选则保存最后一个，只有没有候选才取消；定向自动化与真实 60 秒复测待完成 |

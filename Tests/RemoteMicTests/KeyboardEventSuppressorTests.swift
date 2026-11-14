@@ -669,6 +669,42 @@ struct KeyboardEventSuppressorTests {
         ))
     }
 
+    /// 设备匹配成功、但原生键映射校验没过时必须回报一次：上层靠它排重试。
+    /// 2026-11-13 的 Intel 现场只有一次 `reason=no_service`，之后设备永久不被接管，
+    /// 语音键的 F5→Fn 映射再也没写回去，原生 F5 直接进了系统。
+    @Test func nativeMappingVerificationFailureIsReportedOncePerAttempt() throws {
+        let suite = "KeyboardEventSuppressorTests.nativeMappingFailure.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let settings = AppSettings(defaults: defaults)
+        settings.customMappingEnabled = true
+        let suppressor = KeyboardEventSuppressor(logger: { _ in })
+        var serviceReady = false
+        var failures = 0
+        let monitor = HIDRemoteMonitor(
+            settings: settings, eventSuppressor: suppressor, ownsEventSuppressor: false,
+            runtimePermissions: { true }, actionPerformer: { _, _, _ in true },
+            frontmostBundleIdentifier: { PresetApplication.safari.bundleIdentifier },
+            diagnosticLogger: { _ in },
+            prepareNativeKeys: { serviceReady }
+        )
+        monitor.onNativeMappingVerificationFailed = { failures += 1 }
+
+        // 服务还没枚举出来：连接被拒，同时回报一次。
+        #expect(!monitor.connectSimulatedDevice(
+            fingerprint: "service-pending", profileID: settings.selectedRemoteProfileID
+        ))
+        #expect(failures == 1)
+
+        // 服务就绪后校验通过，不应再回报——否则会无谓重启整套 HID 监视。
+        serviceReady = true
+        #expect(monitor.connectSimulatedDevice(
+            fingerprint: "service-ready", profileID: settings.selectedRemoteProfileID
+        ))
+        #expect(failures == 1)
+        monitor.disconnectSimulatedDevice()
+    }
+
     @Test(arguments: [Int32(0), Int32(1)])
     func stoppingClearsEscapedVolumeOwnership(_ keyType: Int32) throws {
         let native: RemoteNativeEvent = .systemKey(type: keyType)
