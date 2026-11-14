@@ -1,0 +1,61 @@
+{
+  "batch": "profile-hold-readonly-fix",
+  "date": "2026-11-14",
+  "purpose": "PR 1058 键位方案内组合动作与按住被误判只读的修复前后对照",
+  "host_base": "before=16068d71; after=f8b12c27",
+  "window_points": [
+    1020,
+    772
+  ],
+  "storage": "external-persistent-directory-and-github-pr-attachments",
+  "storage_path": "~/Develop/ReleaseArtifacts/profile-hold-readonly-fix/",
+  "notes": [
+    "由生产 SettingsView 的 REMOTE_MIC_SETTINGS_SCREENSHOT_DIR 离屏入口生成；不是设计稿，也不启动蓝牙硬件。",
+    "修改前使用本机 16068d71 调试包（私有 2.9.0 构件），修改后使用本 PR 修复提交 f30cfbb3（私有 2.11.0 构件）；私有键位方案场景由截图 fixture 授权。",
+    "隔离 fixture 创建并选中一个测试方案；按住面板固定为右键，基础按住模式为 repeatLong。",
+    "修改前截图展示方案内仍提供四种按住模式且状态为只读；修改后只提供组件可持久化的重复模式，自动保存可用，并说明方向键按住属于默认方案。",
+    "会员访问由截图 fixture 授权，不代表真实会员验收。",
+    "图片字节不入库，本文件只做文本索引；外部链接为 PR #1058 的 GitHub 附件。",
+    "修改后第二张使用私有方向键源码（本地提交 613b09ba，未发布 Tag）；固定 2.11.0 构件仍只提供重复模式，对应第一张 after 图。",
+    "冲突提示截图展示“长按已设置为「回车」”并给出清除长按动作或改选重复执行长按动作的解决路径。"
+  ],
+  "images": [
+    {
+      "file": "before-hold-panel-1020x772-zh-light.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "00cade3f06ba8a52fee750ea45b7f4528610f23f63c63805567034f957341a6c",
+      "state": "before",
+      "external_url": "https://github.com/user-attachments/assets/75783686-9113-4c63-a08f-484a643ae9f7"
+    },
+    {
+      "file": "after-hold-panel-1020x772-zh-light.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "fef13ccda30cc7fb8671b5264dac4f7acf9e4740b2198cb09fba22796c5c4a48",
+      "state": "after",
+      "external_url": "https://github.com/user-attachments/assets/db704022-e21b-48ab-9570-eaba9681f495"
+    },
+    {
+      "file": "after-directional-hold-panel-1020x772-zh-light.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "3c69519c88f8ac549a19962a541803175a23c86e484adbbf7ee5f1de0bc1a20e",
+      "state": "after-directional-source",
+      "external_url": "https://github.com/user-attachments/assets/edf3ffc6-a973-45dd-b801-86bb08384eb6"
+    },
+    {
+      "file": "after-conflict-message-1020x772-zh-light.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "8e2f850f261d7aeeb0daf5803e230560a44ec9cd9b03dd524ee08d1d51478a1b",
+      "state": "after-conflict-message",
+      "external_url": "https://github.com/user-attachments/assets/29c5f288-1877-4981-85a6-4b554fe97ff8"
+    }
+  ],
+  "sourceCommit": "f8b12c27"
+}

@@ -906,6 +906,9 @@ struct SettingsPageRegressionTests {
         #expect(integrationSource.contains("rawProfileBinding(device: device, profile: profile"))
         #expect(integrationSource.contains("createLegacyMappingProfile"))
         #expect(integrationSource.contains("legacyProfileHoldMode"))
+        // 钉住的组合动作版本过期时仍必须可编辑；只在宏已被删除时降为只读。
+        #expect(integrationSource.contains("editable = feature.savedMacroVersion(id: reference.macroID) != nil"))
+        #expect(integrationSource.contains("supportedProfileHoldModes"))
     }
 
     @Test func mappingProfileBindingStateAndClearEntryStayAvailable() throws {
@@ -932,6 +935,9 @@ struct SettingsPageRegressionTests {
         #expect(source.contains("membershipFeature.buttonProfilesAccessDecision"))
         #expect(source.contains("mappingSaveAsProfileButton.disabled(!canEditMappingProfiles)"))
         #expect(source.contains("if editingMappingProfileID != nil && membershipCanUnlock"))
+        // 方案里的按住只暴露组件能持久化的模式，并说明方向键按住属于默认方案。
+        #expect(source.contains("macroFeature.supportedProfileHoldModes"))
+        #expect(source.contains("button_mapping.hold.profile_repeat_only"))
     }
 
     @Test func remoteMappingScrollsResetWhenSwitchingProfilesAndConnectionPhotoFollowsModel() throws {
@@ -1687,6 +1693,9 @@ struct SettingsPageRegressionTests {
         #expect(chinese.contains("相当于按住键盘上的 %@，直到松手。"))
         #expect(chinese.contains("重复执行单击动作"))
         #expect(chinese.contains("重复执行长按动作"))
+        #expect(settings.contains("blockers.map(holdBlockerText)"))
+        #expect(chinese.contains("长按已设置为「%@」。要启用“重复执行单击动作”"))
+        #expect(chinese.contains("或改选“重复执行长按动作”"))
         #expect(settings.contains("snapshot.allowsKeyHold = button.allowsKeyHold"))
         let panelStart = try #require(settings.range(of: "private func mappingHoldEditorPanel("))
         let modesStart = try #require(settings.range(of: "private func availableHoldModes("))

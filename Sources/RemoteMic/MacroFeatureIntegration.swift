@@ -223,8 +223,10 @@ final class MacroFeatureIntegration: ObservableObject {
                 editable = decoded.isEditable
             case let .macro(reference):
                 configured = .init(action: .combinationAction, shortcut: nil, macroID: reference.macroID)
-                // Preserve the pinned version. The host picker writes the latest library version.
-                editable = feature.savedMacroVersion(id: reference.macroID) == reference.version
+                // A stale pinned version is still an existing macro: keep the binding
+                // editable so the user can explicitly replace it with the current version.
+                // Copy and display keep the pinned reference until the picker writes again.
+                editable = feature.savedMacroVersion(id: reference.macroID) != nil
             case .shortcut, .focus:
                 configured = nil
                 editable = false
@@ -338,6 +340,7 @@ final class MacroFeatureIntegration: ObservableObject {
 
     func writeProfileHoldMode(_ mode: RemoteButtonHoldMode, profile: UUID, button: RemoteButton) -> Bool {
         #if canImport(SayAllButtonProfiles) && SAYALL_BUTTON_PROFILE_AUTOSAVE
+        guard supportsProfileHoldMode(mode) else { return false }
         let result = buttonProfilesFeature.writeHoldMode(mode.rawValue, profile: profile, button: button.rawValue)
         objectWillChange.send()
         return result.success
@@ -347,6 +350,7 @@ final class MacroFeatureIntegration: ObservableObject {
     }
 
     func createMappingProfile(named name: String, copying source: UUID?, bindings: [UnifiedButtonBinding], holdModes: [String: String], displayNames: [String: String] = [:]) -> UUID? {
+        let holdModes = holdModes.filter { supportsProfileHoldMode(rawValue: $0.value) }
         #if canImport(SayAllButtonProfiles) && SAYALL_BUTTON_PROFILE_AUTOSAVE
         let result: RemoteMicButtonProfileCreationResult
         if let source {
@@ -394,7 +398,8 @@ final class MacroFeatureIntegration: ObservableObject {
                     expectedRawBindings.append((button, trigger, binding))
                 }
                 if supportsProfileHoldModes,
-                   let hold = legacyProfileHoldMode(profile: source, button: button) {
+                   let hold = legacyProfileHoldMode(profile: source, button: button),
+                   supportsProfileHoldMode(rawValue: hold) {
                     expectedHolds.append((button, hold))
                 }
             }
@@ -543,6 +548,32 @@ final class MacroFeatureIntegration: ObservableObject {
         #else
         false
         #endif
+    }
+
+    /// Hold modes the profile component can persist. Older components store only
+    /// repeat behaviors; newer components expose the directional hold marker.
+    var supportedProfileHoldModes: [RemoteButtonHoldMode] {
+        #if canImport(SayAllButtonProfiles) && SAYALL_BUTTON_HOLD_MODES
+        #if SAYALL_BUTTON_PROFILE_DIRECTIONAL_HOLD
+        [.once, .repeatSingle, .repeatLong, .singleHold, .longHold]
+        #else
+        [.once, .repeatSingle, .repeatLong]
+        #endif
+        #else
+        []
+        #endif
+    }
+
+    var supportsDirectionalProfileHoldModes: Bool {
+        supportedProfileHoldModes.contains(.singleHold)
+    }
+
+    func supportsProfileHoldMode(_ mode: RemoteButtonHoldMode) -> Bool {
+        supportedProfileHoldModes.contains(mode)
+    }
+
+    func supportsProfileHoldMode(rawValue: String) -> Bool {
+        RemoteButtonHoldMode(rawValue: rawValue).map(supportsProfileHoldMode) ?? false
     }
 
     func profileHoldMode(profile: UUID? = nil, button: RemoteButton) -> String? {

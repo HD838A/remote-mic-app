@@ -131,6 +131,24 @@ struct ButtonBindingConfigurationTests {
             bindings: [disabled], holdModes: ["ok": "once"]))
         let copy = try #require(integration.createMappingProfile(named: "Integration copy", copying: id,
             bindings: [], holdModes: [:]))
+        let holdModes = try #require(integration.createMappingProfile(named: "Hold modes", copying: nil,
+            bindings: [], holdModes: ["right": "singleHold", "back": "repeatLong"]))
+        #if SAYALL_BUTTON_PROFILE_DIRECTIONAL_HOLD
+        #expect(integration.supportedProfileHoldModes ==
+            [.once, .repeatSingle, .repeatLong, .singleHold, .longHold])
+        #expect(integration.profileHoldMode(profile: holdModes, button: .right) == "singleHold")
+        #expect(integration.profileHoldMode(profile: holdModes, button: .back) == "repeatLong")
+        #expect(integration.writeProfileHoldMode(.singleHold, profile: holdModes, button: .right))
+        #expect(integration.writeProfileHoldMode(.longHold, profile: holdModes, button: .back))
+        #expect(integration.writeProfileHoldMode(.repeatSingle, profile: holdModes, button: .right))
+        #else
+        #expect(integration.supportedProfileHoldModes == [.once, .repeatSingle, .repeatLong])
+        #expect(integration.profileHoldMode(profile: holdModes, button: .right) == nil)
+        #expect(integration.profileHoldMode(profile: holdModes, button: .back) == "repeatLong")
+        #expect(!integration.writeProfileHoldMode(.singleHold, profile: holdModes, button: .right))
+        #expect(!integration.writeProfileHoldMode(.longHold, profile: holdModes, button: .back))
+        #expect(integration.writeProfileHoldMode(.repeatSingle, profile: holdModes, button: .right))
+        #endif
         let matchesDisabled = integration.profileBindingMatches(.disabled, profile: copy, button: .ok, trigger: .singleClick)
         let matchesInherited = integration.profileBindingMatches(.disabled, profile: copy, button: .ok, trigger: .doubleClick)
         let matchesMissingHold = integration.profileHoldModeMatches(.once, profile: copy, button: .back)
