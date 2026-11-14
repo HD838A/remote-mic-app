@@ -1473,6 +1473,7 @@
 "button_mapping.timing_save_hint" = "学习结果会填入识别时间并保留，重新打开也会显示「学习完成」；点保存后才会用到按键上。";
 "button_mapping.timing_saved" = "已保存。新时间从下一次普通按键开始生效。";
 "button_mapping.hold_profile_unavailable" = "此组件版本不能保存键位方案的按住效果。请更新组件。";
+"button_mapping.hold.profile_repeat_only" = "键位方案只保存重复执行模式；方向键按住请在默认方案设置。";
 "audio.mac_microphone.armed" = "待命";
 "audio.mac_microphone.voice_key" = "语音快捷键";
 "audio.mac_microphone.voice_hold" = "按住说话，松开结束";

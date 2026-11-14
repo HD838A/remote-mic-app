@@ -906,6 +906,9 @@ struct SettingsPageRegressionTests {
         #expect(integrationSource.contains("rawProfileBinding(device: device, profile: profile"))
         #expect(integrationSource.contains("createLegacyMappingProfile"))
         #expect(integrationSource.contains("legacyProfileHoldMode"))
+        // 钉住的组合动作版本过期时仍必须可编辑；只在宏已被删除时降为只读。
+        #expect(integrationSource.contains("editable = feature.savedMacroVersion(id: reference.macroID) != nil"))
+        #expect(integrationSource.contains("supportedProfileHoldModes"))
     }
 
     @Test func mappingProfileBindingStateAndClearEntryStayAvailable() throws {
@@ -932,6 +935,9 @@ struct SettingsPageRegressionTests {
         #expect(source.contains("membershipFeature.buttonProfilesAccessDecision"))
         #expect(source.contains("mappingSaveAsProfileButton.disabled(!canEditMappingProfiles)"))
         #expect(source.contains("if editingMappingProfileID != nil && membershipCanUnlock"))
+        // 方案里的按住只暴露组件能持久化的模式，并说明方向键按住属于默认方案。
+        #expect(source.contains("macroFeature.supportedProfileHoldModes"))
+        #expect(source.contains("button_mapping.hold.profile_repeat_only"))
     }
 
     @Test func remoteMappingScrollsResetWhenSwitchingProfilesAndConnectionPhotoFollowsModel() throws {

@@ -3057,8 +3057,9 @@ struct SettingsView: View {
 
     private func canWriteMappingHold(_ button: RemoteButton) -> Bool {
         guard !isMappingProfilePreviewOnly else { return false }
-        if let profile = editingMappingProfileID {
-            if case .unavailable = macroFeature.displayProfileHoldMode(profile: profile, button: button) { return false }
+        if editingMappingProfileID != nil {
+            // An unsupported stored hold value must remain recoverable: the panel
+            // offers the component-supported modes instead of locking the whole key.
             return ButtonTrigger.allCases.allSatisfy { canWriteMappingBinding(button: button, trigger: $0) }
         }
         return true
@@ -3912,7 +3913,7 @@ struct SettingsView: View {
         let device = settings.selectedRemoteProfileID
         mappingHoldSave = .init()
         let operationID = UUID().uuidString
-        AppLogger.shared.write("BUTTON CONFIGURATION operation_id=\(operationID) parent_operation_id=\(parentOperationID ?? "none") scope=\(profile == nil ? "base" : "profile") button=\(button.rawValue) trigger=none action=hold phase=requested result=requested")
+        AppLogger.shared.write("BUTTON CONFIGURATION operation_id=\(operationID) parent_operation_id=\(parentOperationID ?? "none") scope=\(profile == nil ? "base" : "profile") button=\(button.rawValue) trigger=none action=hold mode=\(mode.rawValue) phase=requested result=requested")
         let outcome = ButtonMappingWriteRecovery.perform {
             if let profile {
                 settings.onInteractionModeChanged?(device)
@@ -3928,7 +3929,7 @@ struct SettingsView: View {
         mappingHoldSave.record(outcome, retry: .hold(mode), target: .init(profileID: profile, deviceID: device, button: button, trigger: nil))
         mappingHoldSave.holdActions = ButtonTrigger.allCases.map { mappingConfiguration(for: button, trigger: $0) }
         mappingHoldSave.holdMode = mappingHoldMode(for: button)
-        AppLogger.shared.write("BUTTON CONFIGURATION operation_id=\(operationID) scope=\(profile == nil ? "base" : "profile") button=\(button.rawValue) action=hold phase=completed result=\(String(describing: outcome)) reason=\(outcome == .saved ? "storage_confirmed" : outcome == .unknown ? "reload_failed" : "storage_failed")")
+        AppLogger.shared.write("BUTTON CONFIGURATION operation_id=\(operationID) scope=\(profile == nil ? "base" : "profile") button=\(button.rawValue) action=hold mode=\(mode.rawValue) phase=completed result=\(String(describing: outcome)) reason=\(outcome == .saved ? "storage_confirmed" : outcome == .unknown ? "reload_failed" : "storage_failed")")
     }
 
     private func clearMappingHoldFeedbackForChangedButton() {
@@ -4059,6 +4060,12 @@ struct SettingsView: View {
                         .font(.system(size: 12))
                         .fixedSize(horizontal: false, vertical: true)
                 }
+                if editingMappingProfileID != nil, macroFeature.supportsProfileHoldModes {
+                    Text("button_mapping.hold.profile_repeat_only")
+                        .foregroundStyle(.secondary)
+                        .font(.system(size: 12))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 if let reason = snapshot.unavailableReason {
                     Text(localization.text(reason))
                         .foregroundStyle(Color.accentColor)
@@ -4081,10 +4088,14 @@ struct SettingsView: View {
     }
 
     /// 左右物理键显示四项；动作不可用时由卡片说明原因并禁用。
+    /// 方案组件只持久化重复模式，方向键按住仍属于基础映射，不能在这里伪装成可选。
     private func availableHoldModes(
         snapshot: RemoteButtonInteractionSnapshot
     ) -> [RemoteButtonHoldMode] {
-        RemoteButtonHoldMode.selectableCases.filter { !$0.isHoldDown || snapshot.allowsKeyHold }
+        let modes = editingMappingProfileID == nil
+            ? RemoteButtonHoldMode.selectableCases
+            : macroFeature.supportedProfileHoldModes
+        return modes.filter { $0 != .once && (!$0.isHoldDown || snapshot.allowsKeyHold) }
     }
 
     private func mappingHoldOptionTitle(_ mode: RemoteButtonHoldMode, button: RemoteButton) -> String {

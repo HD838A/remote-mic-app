@@ -1474,6 +1474,7 @@
 "button_mapping.timing_save_hint" = "Learning results fill the controls and are kept across relaunches, so they still show as learned. They only affect the buttons after you save.";
 "button_mapping.timing_saved" = "Saved. The new times apply from the next ordinary button press.";
 "button_mapping.hold_profile_unavailable" = "This component version cannot save hold modes in button profiles. Update the component.";
+"button_mapping.hold.profile_repeat_only" = "Profiles only save repeat behaviors; set arrow-key hold in the default profile.";
 "audio.mac_microphone.armed" = "Standby";
 "audio.mac_microphone.voice_key" = "Voice shortcut";
 "audio.mac_microphone.voice_hold" = "Hold to speak; release to finish";
