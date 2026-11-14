@@ -2805,12 +2805,44 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
                     transport != kAudioDeviceTransportTypeAggregate &&
                     VirtualAudioDeviceDiagnosticKind.classify(device) == .other
             }
-            let builtIn = inputs.first { CoreAudioDeviceCatalog.transportType(for: $0.id) == kAudioDeviceTransportTypeBuiltIn }
+            let builtInDeviceIDs = Set(inputs.compactMap { device in
+                CoreAudioDeviceCatalog.transportType(for: device.id) == kAudioDeviceTransportTypeBuiltIn ? device.id : nil
+            })
+            let defaultSelection = MacMicrophoneDefaultInputPolicy.select(
+                available: inputs,
+                systemDefault: CoreAudioDeviceCatalog.defaultInputDevice(),
+                builtInDeviceIDs: builtInDeviceIDs
+            )
+            let defaultUID = defaultSelection?.device.uid
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
+                let previousSelected = self.macMicrophoneDevices.first {
+                    $0.uid == self.settings.macMicrophoneInputUID
+                }
                 self.macMicrophoneDevices = inputs
-                if self.settings.macMicrophoneInputUID.isEmpty, let builtIn {
-                    self.settings.macMicrophoneInputUID = builtIn.uid
+                if self.settings.macMicrophoneInputUID.isEmpty, let defaultUID {
+                    self.settings.macMicrophoneInputUID = defaultUID
+                    AppLogger.shared.write(
+                        "MAC MICROPHONE INPUT phase=defaulted result=selected " +
+                            "source=\(defaultSelection?.source.rawValue ?? "unknown")"
+                    )
+                } else if !inputs.contains(where: {
+                    $0.uid == self.settings.macMicrophoneInputUID
+                }) {
+                    if let previousSelected,
+                       let replacement = inputs.first(where: { $0.name == previousSelected.name }) {
+                        self.settings.macMicrophoneInputUID = replacement.uid
+                        AppLogger.shared.write(
+                            "MAC MICROPHONE INPUT phase=migrated result=selected " +
+                                "reason=core_audio_roster_changed"
+                        )
+                    } else if let defaultUID {
+                        self.settings.macMicrophoneInputUID = defaultUID
+                        AppLogger.shared.write(
+                            "MAC MICROPHONE INPUT phase=fallback result=selected " +
+                                "reason=selected_unavailable"
+                        )
+                    }
                 }
                 if self.macMicrophoneEnabled,
                    !inputs.contains(where: { $0.uid == self.settings.macMicrophoneInputUID }) {
@@ -2840,8 +2872,21 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         NSWorkspace.shared.open(instructions)
     }
 
-    var macMicrophoneButtonKey: String {
-        macMicrophoneEnabled ? "audio.mac_microphone.stop" : "audio.mac_microphone.start"
+    func macMicrophoneButtonTitle(using localization: LocalizationStore) -> String {
+        let name = macMicrophoneSelectedDevice?.name
+            ?? localization.text("audio.mac_microphone.input")
+        if macMicrophoneEnabled {
+            return String(
+                format: localization.text("audio.mac_microphone.stop"),
+                locale: localization.locale,
+                arguments: [name]
+            )
+        }
+        return String(
+            format: localization.text("audio.mac_microphone.start"),
+            locale: localization.locale,
+            arguments: [name]
+        )
     }
 
     var macMicrophoneVoiceGesture: VoiceGestureMode {
@@ -2854,8 +2899,40 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
                 VoiceToolAdapterProfile.profile(for: settings.onboardingVoiceTool).recommendedMode ?? .hold)
     }
 
+    var macMicrophoneSelectedDevice: AudioDeviceInfo? {
+        macMicrophoneDevices.first { $0.uid == settings.macMicrophoneInputUID }
+    }
+
+    var macMicrophoneSelectedDeviceIsReady: Bool {
+        macMicrophoneSelectedDevice != nil
+    }
+
+    /// Selecting a device also makes it macOS's default input. The picker only
+    /// offers input-ready devices, so this is a synchronous route request.
+    func selectMacMicrophoneInput(_ uid: String) {
+        guard settings.macMicrophoneInputUID != uid else { return }
+        settings.macMicrophoneInputUID = uid
+        guard let device = macMicrophoneDevices.first(where: { $0.uid == uid }) else { return }
+        // The Bluetooth route can be recreated while the picker is open.
+        let currentDevice = CoreAudioDeviceCatalog.inputDevices().first(where: {
+            $0.uid == device.uid
+        }) ?? device
+        let result = CoreAudioDeviceCatalog.setDefaultInputDevice(currentDevice)
+        AppLogger.shared.write(
+            "MAC MICROPHONE INPUT phase=switch_requested " +
+                "result=\(result == noErr ? "applied" : "failed")"
+        )
+        guard result != noErr else {
+            return
+        }
+    }
+
     func toggleMacMicrophone(from entry: MacMicrophoneEntry) {
         if !macMicrophoneSession.isEnabled {
+            guard macMicrophoneSelectedDeviceIsReady else {
+                AppLogger.shared.write("MAC MICROPHONE phase=rejected reason=input_unavailable")
+                return
+            }
             let mode = settings.voiceKeyMode
             let gesture = macMicrophoneVoiceGesture
             macMicrophoneVoiceKeyMonitor.onEdge = { [weak self] pressed, observedAt in
@@ -2890,7 +2967,9 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             guard let self, self.macMicrophoneSession.operationID == operation,
                   self.macMicrophoneState == .preparing else { return }
             guard granted else { completion(.permission); return }
-            guard self.macMicrophoneDevices.contains(where: { $0.uid == self.settings.macMicrophoneInputUID }) else {
+            guard self.macMicrophoneDevices.contains(where: {
+                $0.uid == self.settings.macMicrophoneInputUID
+            }) else {
                 completion(.inputUnavailable); return
             }
             let output = self.audioDevices.first { $0.uid == self.settings.selectedAudioDeviceUID }
@@ -2913,9 +2992,10 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     }
 
     private func startMacMicrophoneCapture(completion: @escaping (MacMicrophoneFailure?) -> Void) {
-        guard let input = macMicrophoneDevices.first(where: { $0.uid == settings.macMicrophoneInputUID }),
-              !isStreaming, startPhoneVoice(source: .macMicrophone) == .started else {
-            completion(.busy); return
+        guard let input = macMicrophoneDevices.first(where: {
+            $0.uid == settings.macMicrophoneInputUID
+        }), !isStreaming, startPhoneVoice(source: .macMicrophone) == .started else {
+            completion(.inputUnavailable); return
         }
         let operation = macMicrophoneSession.operationID
         AppLogger.shared.write("MAC MICROPHONE operation_id=\(operation) phase=route_ready voice_operation_id=\(activeMobileVoiceOperationID ?? "none") mode=physical_voice_key voice_key_injection=none key_event_passthrough=true target_activation=none target_response=unknown")
@@ -2924,7 +3004,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
                 self?.macMicrophoneSession.observePCM(samples)
                 self?.receivePhoneAudio(samples, source: .macMicrophone)
             },
-            onFailure: { [weak self] in self?.macMicrophoneSession.stop(failure: .capture) },
+            onFailure: { [weak self] failure in self?.macMicrophoneSession.stop(failure: failure) },
             completion: completion)
     }
 
@@ -7400,7 +7480,11 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
 
     func configureMacMicrophoneForSettingsScreenshot(_ state: String) {
         guard ProcessInfo.processInfo.environment["REMOTE_MIC_SETTINGS_SCREENSHOT_DIR"] != nil else { return }
-        macMicrophoneDevices = [AudioDeviceInfo(id: 0, uid: "screenshot-mic", name: settings.applicationLanguage == .english ? "Mac microphone" : "Mac 麦克风")]
+        let builtInName = settings.applicationLanguage == .english
+            ? "MacBook Pro Microphone" : "MacBook Pro 麦克风"
+        macMicrophoneDevices = [
+            AudioDeviceInfo(id: 0, uid: "screenshot-mic", name: builtInName),
+        ]
         audioDevices = [AudioDeviceInfo(id: 0, uid: "MiRemoteV2ch_UID", name: "SayAll")]
         settings.macMicrophoneInputUID = "screenshot-mic"
         settings.selectedAudioDeviceUID = "MiRemoteV2ch_UID"
@@ -7411,7 +7495,10 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         case "preparing": macMicrophoneState = .preparing
         case "stopping": macMicrophoneState = .stopping
         case "permission": macMicrophoneState = .failed(.permission)
-        case "shortcut_unavailable": macMicrophoneShortcutAvailable = false
+        case "no_device":
+            macMicrophoneDevices = []
+            settings.macMicrophoneInputUID = ""
+            macMicrophoneState = .idle
         default: macMicrophoneState = .idle
         }
     }

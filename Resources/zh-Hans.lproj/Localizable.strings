@@ -1384,18 +1384,19 @@
 "configuration.import.cancel" = "取消";
 
 /* Mac microphone: explicit, per-session capture. */
-"audio.mac_microphone.input" = "Mac 麦克风";
+"audio.mac_microphone.input" = "麦克风";
+"audio.mac_microphone.none" = "无";
 "audio.mac_microphone.current" = "当前收音：";
 "audio.mac_microphone.current.remote" = "遥控器麦克风";
 "audio.mac_microphone.fallback" = "备用麦克风";
-"audio.mac_microphone.fallback_help" = "不使用遥控器时，可直接对 Mac 麦克风说话；遥控器收音与此设置无关。";
-"audio.mac_microphone.choose" = "选择 Mac 麦克风";
-"audio.mac_microphone.start" = "用 Mac 麦克风说话";
-"audio.mac_microphone.stop" = "停用 Mac 麦克风说话";
+"audio.mac_microphone.fallback_help" = "不使用遥控器时，可直接对所选麦克风说话；选择后会切换 macOS 输入设备；遥控器收音与此设置无关。";
+"audio.mac_microphone.start" = "用%@说话";
+"audio.mac_microphone.stop" = "停用%@说话";
+"audio.mac_microphone.error.no_audio" = "所选麦克风没有音频。请检查连接，或改用其他麦克风。";
 "audio.mac_microphone.help" = "仅在不使用遥控器时使用";
 "audio.mac_microphone.idle" = "未收音";
 "audio.mac_microphone.preparing" = "正在准备…";
-"audio.mac_microphone.recording" = "Mac 麦克风正在收音";
+"audio.mac_microphone.recording" = "所选麦克风正在收音";
 "audio.mac_microphone.stopping" = "正在停止收音…";
 "audio.mac_microphone.shortcut" = "切换快捷键";
 "audio.mac_microphone.shortcut_set" = "设置快捷键";

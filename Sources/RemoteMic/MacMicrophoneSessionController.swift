@@ -15,6 +15,7 @@ enum MacMicrophoneFailure: String, Error {
     case outputUnavailable = "output_unavailable"
     case targetUnavailable = "target_unavailable"
     case capture
+    case noAudio = "no_audio"
     case interrupted
     case timedOut = "timed_out"
 }

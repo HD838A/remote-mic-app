@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Use the selected Mac microphone for voice input when you dictate with this Mac instead of a remote.</string>
+	<string>Use the selected microphone for voice input when you dictate with this Mac instead of a remote.</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>

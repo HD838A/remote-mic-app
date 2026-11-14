@@ -289,6 +289,34 @@ struct MacMicrophoneInputTests {
         #expect(restored.macMicrophoneInputUID == settings.macMicrophoneInputUID)
     }
 
+    @Test func defaultInputUsesSystemDefaultPhysicalDeviceAndFallsBackToBuiltIn() {
+        let builtIn = AudioDeviceInfo(id: 11, uid: "built-in", name: "Built-in")
+        let headset = AudioDeviceInfo(id: 22, uid: "headset", name: "Headset")
+        let virtual = AudioDeviceInfo(id: 33, uid: "virtual", name: "Virtual")
+
+        let preferred = MacMicrophoneDefaultInputPolicy.select(
+            available: [builtIn, headset],
+            systemDefault: headset,
+            builtInDeviceIDs: [builtIn.id]
+        )
+        #expect(preferred?.device == headset)
+        #expect(preferred?.source == .systemDefault)
+
+        let fallback = MacMicrophoneDefaultInputPolicy.select(
+            available: [builtIn, headset],
+            systemDefault: virtual,
+            builtInDeviceIDs: [builtIn.id]
+        )
+        #expect(fallback?.device == builtIn)
+        #expect(fallback?.source == .builtIn)
+
+        #expect(MacMicrophoneDefaultInputPolicy.select(
+            available: [],
+            systemDefault: headset,
+            builtInDeviceIDs: []
+        ) == nil)
+    }
+
     @Test func inputConfigurationChangeOnlyFailsWhenTheDeviceActuallyChanged() {
         #expect(!MacMicrophoneConfigurationChangePolicy.shouldFail(
             selectedDeviceID: 118,
@@ -335,6 +363,69 @@ struct MacMicrophoneInputTests {
         })
         #expect(attempts == 0)
         #expect(!MobileVoiceSource.nearbyPhone.updateVoiceTrigger { false })
+    }
+
+    @Test func audioCaptureSampleBufferConverts16kMonoInt16() throws {
+        var format = AudioStreamBasicDescription(
+            mSampleRate: 16_000,
+            mFormatID: kAudioFormatLinearPCM,
+            mFormatFlags: kAudioFormatFlagIsSignedInteger | kAudioFormatFlagIsPacked,
+            mBytesPerPacket: 2,
+            mFramesPerPacket: 1,
+            mBytesPerFrame: 2,
+            mChannelsPerFrame: 1,
+            mBitsPerChannel: 16,
+            mReserved: 0
+        )
+        var formatDescription: CMAudioFormatDescription?
+        #expect(CMAudioFormatDescriptionCreate(
+            allocator: nil,
+            asbd: &format,
+            layoutSize: 0,
+            layout: nil,
+            magicCookieSize: 0,
+            magicCookie: nil,
+            extensions: nil,
+            formatDescriptionOut: &formatDescription
+        ) == noErr)
+        let description = try #require(formatDescription)
+        let samples: [Int16] = [1, -2, 3, 400]
+        let byteCount = samples.count * MemoryLayout<Int16>.size
+        var blockBuffer: CMBlockBuffer?
+        #expect(CMBlockBufferCreateWithMemoryBlock(
+            allocator: kCFAllocatorDefault,
+            memoryBlock: nil,
+            blockLength: byteCount,
+            blockAllocator: kCFAllocatorDefault,
+            customBlockSource: nil,
+            offsetToData: 0,
+            dataLength: byteCount,
+            flags: 0,
+            blockBufferOut: &blockBuffer
+        ) == noErr)
+        let block = try #require(blockBuffer)
+        #expect(samples.withUnsafeBytes { bytes in
+            CMBlockBufferReplaceDataBytes(
+                with: bytes.baseAddress!,
+                blockBuffer: block,
+                offsetIntoDestination: 0,
+                dataLength: byteCount
+            ) == noErr
+        })
+        var sampleBuffer: CMSampleBuffer?
+        #expect(CMSampleBufferCreateReady(
+            allocator: nil,
+            dataBuffer: block,
+            formatDescription: description,
+            sampleCount: samples.count,
+            sampleTimingEntryCount: 0,
+            sampleTimingArray: nil,
+            sampleSizeEntryCount: 0,
+            sampleSizeArray: nil,
+            sampleBufferOut: &sampleBuffer
+        ) == noErr)
+        let buffer = try #require(sampleBuffer)
+        #expect(MacMicrophoneCapture.int16Samples(from: buffer) == samples)
     }
 
 }
