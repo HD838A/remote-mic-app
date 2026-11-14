@@ -282,7 +282,7 @@ struct SettingsPageRegressionTests {
         ))
     }
 
-    @Test func connectionPageKeepsCompatibilityAudioControlsWithoutExtraTools() throws {
+    @Test func connectionPageShowsCompatibilityAudioOnlyWhenMissing() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -293,9 +293,11 @@ struct SettingsPageRegressionTests {
         )
 
         #expect(settingsSource.contains("audio.action.refresh_devices"))
-        #expect(settingsSource.contains("audioCompatibilityPanel"))
-        #expect(settingsSource.contains("model.selectDoubaoAudioDevice()"))
+        #expect(settingsSource.contains("model.hasCompatibleVoiceOutputDevice"))
+        #expect(settingsSource.contains("audio.compatibility.missing_notice"))
         #expect(settingsSource.contains("model.openDoubaoDriverInstructions(using: localization)"))
+        #expect(!settingsSource.contains("audioCompatibilityPanel"))
+        #expect(!settingsSource.contains("model.selectDoubaoAudioDevice()"))
         #expect(!settingsSource.contains("audio.action.learn_virtual_microphones"))
         #expect(!settingsSource.contains("audio.action.send_test_tone"))
         #expect(!settingsSource.contains("model.testToneStatus.text(using: localization)"))
@@ -1537,7 +1539,7 @@ struct SettingsPageRegressionTests {
         #expect(source.contains("proxy.scrollTo(\"mapping-action-filter\", anchor: .top)"))
         #expect(source.contains("mappingActionFilterControl"))
         #expect(source.contains("customApplicationTargetPicker("))
-        // 聚焦方式与滚动区域已迁到独立的「APP 适配」页，按键编辑区只留只读状态与跳转。
+        // 聚焦方式与滚动区域已迁到独立的「聚焦与翻页」页面，按键编辑区只留只读状态与跳转。
         #expect(source.contains("applicationsPage"))
         #expect(source.contains("custom_application.go_configure"))
         #expect(source.contains("applicationBindingSection"))
@@ -1546,6 +1548,7 @@ struct SettingsPageRegressionTests {
         #expect(source.contains("custom_application.remove_blocked"))
         #expect(source.contains("custom_application.remove_confirm_title"))
         #expect(source.contains("settings.section.applications"))
+        #expect(source.contains("settings.section.applications.sidebar"))
         #expect(!source.contains("applicationFocusEditor("))
         #expect(!source.contains("applicationFocusProfileID"))
         #expect(source.contains("custom_application.focus.scope_note"))
@@ -1582,7 +1585,7 @@ struct SettingsPageRegressionTests {
         #expect(source.contains("mappingFilterScrollRequest &+= 1"))
         #expect(source.contains("inputFocusActionControls("))
         #expect(source.contains("button_mapping.focus_input.app_adaptation_hint.prefix"))
-        // 提示语里的「App 适配页面」是可点跳转的按钮，不是死文字。
+        // 提示语里的「聚焦与翻页」页面入口是可点跳转的按钮，不是死文字。
         #expect(source.contains("focus-input-app-adaptation-link"))
         // 「目标 APP」选择器属于「打开 App」分类，切到其他胶囊后必须一起隐藏，
         // 不能只凭当前动作是「打开自定义 APP」就常驻。
@@ -1935,6 +1938,9 @@ struct SettingsPageRegressionTests {
         let languageSection = settingsPage[languageSectionStart.lowerBound..<languageSectionEnd.lowerBound]
         #expect(languageSection.contains(".frame(width: 300)"))
         #expect(languageSection.contains(".frame(maxWidth: .infinity, alignment: .leading)"))
+        let languageRowIcon = settingsPage[..<languageSectionStart.lowerBound].suffix(200)
+        #expect(languageRowIcon.contains(".foregroundStyle(Color.accentColor)"))
+        #expect(!languageRowIcon.contains(".foregroundStyle(.green)"))
         #expect(!settingsPage.contains("help.glossary.open"))
         #expect(!settingsPage.contains("openGlossary"))
 
@@ -1946,6 +1952,27 @@ struct SettingsPageRegressionTests {
         #expect(appSource.contains("userDriverDelegate: self"))
         #expect(appSource.contains("standardUserDriverShouldShowVersionHistory(for item: SUAppcastItem) -> Bool"))
         #expect(appSource.contains("semantic_newer_but_sparkle_rejected"))
+    }
+
+    @Test func statisticsVoiceSessionRankingUsesAccentColorForDecorativeHighlight() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+        let panelStart = try #require(source.range(of: "private var statisticsVoiceSessionRankingPanel"))
+        let panelEnd = try #require(
+            source.range(
+                of: "private var transcriptHistoryPage",
+                range: panelStart.upperBound..<source.endIndex
+            )
+        )
+        let panel = source[panelStart.lowerBound..<panelEnd.lowerBound]
+        #expect(!panel.contains(".foregroundStyle(.orange)"))
+        #expect(panel.contains(".foregroundStyle(Color.accentColor)"))
     }
 
     @Test func settingsPageUsesAnInlineAppIconPickerWithoutUnavailablePlaceholders() throws {

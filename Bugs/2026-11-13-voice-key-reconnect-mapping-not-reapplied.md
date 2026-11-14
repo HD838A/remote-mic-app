@@ -1,7 +1,7 @@
 # 断连后设备不再被接管，语音键的 F5→Fn 映射没有写回
 
 - 时间：2026-11-13
-- 状态：候选修复完成；自动化通过，真实 Intel 机器复测待完成
+- 状态：修复已合入 main（PR #1036，merge commit `3576e649`）；自动化通过，真实 Intel 机器复测待完成
 - 影响范围：小米 RC001/RC003 重连后的 HID 接管、语音键映射、系统听写被反复触发
 - 功能点：bluetooth_remote、hid_mapping、voice key
 
@@ -24,7 +24,19 @@ Intel 用户（macOS 15.8.3，SayAll 2.0.0 build 320，`cpu_architecture=x86_64`
 16:09:40 → 16:14:25  HID REPORT rejected reason=excluded_fingerprint ×13，accepted ×0
 ```
 
-断连前：`HID REPORT accepted` 38 次、被拒 49 次（被拒的是发现监视器按设计让位）；断连后 5 分钟：**接受 0 次、拒绝 13 次**。同一时段没有任何一次 BLE 重连，也没有任何 `HID MAPPING RECOVERY` 记录。
+断连前：`HID REPORT accepted` 38 次、被拒 49 次（被拒的是发现监视器按设计让位）；断连后 5 分钟：**接受 0 次、拒绝 13 次**。
+
+同一时段**没有一次成功的** BLE 重连，也没有任何 `HID MAPPING RECOVERY` 记录。但 BLE 侧并非没有动作（以下为同一份日志的 UTC 时间，本地时间 = UTC+8）：
+
+```text
+08:09:36.070  BLE RECONNECT scheduled failure_count=1 delay_ms=2805 cached_identifier_bypassed=false
+08:09:39.064  BLE CENTRAL state=5 lifecycle=scanning(2) generation=2
+08:09:39.064  BLE SYSTEM CONNECTED CANDIDATES count=1
+08:09:39.069  BLE SCANNING
+              ← 到 08:14:25 零 BLE 事件：无 READY、无 SCAN TIMEOUT、无下一次 RECONNECT
+```
+
+即：排过退避重连、central 重建过、系统已连接候选也查到 1 台，之后完全停死。这段属于 BLE 重连层，见下方「与 BLE 重连层的关系」；本记录只处理 HID 接管层。
 
 ## 根因
 
@@ -47,11 +59,25 @@ Intel 用户（macOS 15.8.3，SayAll 2.0.0 build 320，`cpu_architecture=x86_64`
 
 ## 验证
 
-- 全量 `swift test --disable-keychain --disable-sandbox`：1401 项 / 103 suites 通过。
+- 全量 `swift test --disable-keychain --disable-sandbox`：基线 `f4c17229` 上 1401 项 / 103 suites 通过；rebase 到 `822014ac` 后 1424 项 / 104 suites 通过。
 - 新增 `BluetoothLifecycleTests.deviceVerificationRetryDoesNotRequireAReadyBridge`：锁定间隔序列、`started=false` 与「服务已就绪不重试」。
 - 新增 `KeyboardEventSuppressorTests.nativeMappingVerificationFailureIsReportedOncePerAttempt`：校验失败回报一次，服务就绪后不再回报。
 - 反向验证：临时移除 `onNativeMappingVerificationFailed?()` 后该用例在 `failures == 1` 两处变红，恢复后通过。
+- 合入：PR #1036，merge commit `3576e649`，双架构 CI 通过。
 - 待完成：真实 Intel 机器复测——重连后确认出现 `HID MAPPING RECOVERY … trigger=device_verification`、`HID CONNECTED`、`VOICE FN MAPPING applied=true`，以及 `HID VOICE_USAGE source_kind=f5` 恢复到 Fn 路径。
+
+## 与 BLE 重连层的关系（2026-11-14 补记）
+
+本次现场同时涉及两个独立的层，修一个不能解决另一个：
+
+| 层 | 缺口 | 用户看到 |
+| --- | --- | --- |
+| BLE 发现/重连（`XiaomiBluetoothBridge`、`BluetoothLifecycle`） | 首次重连失败后停死：旧策略只在 `hasSavedTarget && !allowsCachedTargetRetrieval` 时开 20 秒扫描窗口，本机 `cached_identifier_bypassed=false` 意味着窗口不开，于是没有超时、也没有下一次尝试 | 语音完全不可用，普通按键仍可用 |
+| HID 接管（`HIDRemoteMonitor`、`BridgeAppModel`） | 校验失败即 `IOHIDDeviceClose` 且不重试 | 语音键变裸 F5，反复触发系统听写 |
+
+- BLE 侧的同族问题与建议见 #631（已关闭）；它建议的两条（每轮都查系统已连接候选、给扫描加窗口）已由 #921 合入。本机 build 320 早于 #921，因此仍会停死。
+- 但 #921 没有覆盖「候选查到了却没采纳」这一段：本次日志 `count=1` 之后既无 `BLE CONNECTING` 也无 `BLE REJECTED`。该缺口另立 #1041。
+- 因此本记录的修复只消除「F5 进系统」。**语音能否恢复取决于 BLE 侧**，两者必须分别验收，不能互相代替。
 
 ## 边界
 

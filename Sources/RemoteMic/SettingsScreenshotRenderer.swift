@@ -147,7 +147,7 @@ enum SettingsScreenshotRenderer {
         if ProcessInfo.processInfo.environment[
             "REMOTE_MIC_SETTINGS_SCREENSHOT_APPLICATIONS_FIXTURE"
         ] == "1" {
-            // 空路径和旧机器路径都要能显示本机 App 图标，供「APP 适配」页取证。
+            // 空路径和旧机器路径都要能显示本机 App 图标，供「聚焦与翻页」页面取证。
             settings.addCustomApplicationProfile(CustomApplicationProfile(
                 displayName: language == .english ? "Notes" : "备忘录",
                 bundleIdentifier: "com.apple.Notes",
@@ -290,6 +290,11 @@ enum SettingsScreenshotRenderer {
         }
         if let state = ProcessInfo.processInfo.environment["REMOTE_MIC_SETTINGS_SCREENSHOT_MAC_MICROPHONE"] {
             model.configureMacMicrophoneForSettingsScreenshot(state)
+        }
+        if let state = ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_SETTINGS_SCREENSHOT_VOICE_OUTPUT"
+        ] {
+            model.configureVoiceOutputForSettingsScreenshot(state)
         }
         if showsRemoteCards {
             model.configureRemoteCardsForSettingsScreenshot(

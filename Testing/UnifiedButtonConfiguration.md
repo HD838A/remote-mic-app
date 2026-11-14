@@ -52,7 +52,7 @@ swift build --disable-keychain --scratch-path .build/unified-binary -c release
 
 **页头：统一到产品规范。** 参数基线写在私有仓 `docs/design/product-interface-standards.md`「Mac 设置窗口页头」：标题 `24 semibold`、副标题 `13`（行距 `6`）、上下内边距 `8 / 8`。之前宿主页面标题 25、私有包 24，副标题 13 / 12，现在全部对齐。检查项：
 
-1. 依次进入按键、APP 适配、组合动作、键位方案、连接、回眸、设置、统计，标题字号一致；有副标题的页面标题到分隔线 `67pt`，只有标题的 `45pt`，按键页因多一行开关约 `94pt`（±1pt）。
+1. 依次进入按键、聚焦与翻页、组合动作、键位方案、连接、回眸、设置、统计，标题字号一致；有副标题的页面标题到分隔线 `67pt`，只有标题的 `45pt`，按键页因多一行开关约 `94pt`（±1pt）。
 2. 按键页右侧遥控器卡片仍与标题同一行、底边贴着分隔线。
 3. 「我的」是卡片式布局、没有独立页头，不适用本条。
 4. 推荐页是内嵌的 `sayall.app/recommendations/` 网页，页头由网页渲染，但**同样受本条约束**：标题 `24 semibold`、副标题 `13`、顶部内边距 `36pt`（标题栏 28 + 8）、页头下 1pt 分隔线，与原生页一致。改内嵌页必须附 `1020 × 772` 与常用宽窗口各一张**真实窗口**截图（不接受静态 mock），并在私有仓运行 `npm run check:recommendations`（`scripts/check-recommendations-embed.mjs`）。

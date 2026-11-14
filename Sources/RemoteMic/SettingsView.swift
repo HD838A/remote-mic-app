@@ -23,7 +23,7 @@ struct SettingsSection: RawRepresentable, Hashable, CaseIterable, Identifiable {
     static let buttonProfiles = SettingsSection(rawValue: "buttonProfiles")
     static let membership = SettingsSection(rawValue: "membership")
     static let mapping = SettingsSection(rawValue: "mapping")
-    /// 「APP 适配」：输入框聚焦与翻页滚动按 APP 单独配置，和按键页的按键绑定互不影响。
+    /// 「聚焦与翻页」：输入框聚焦与翻页滚动按 App 单独配置，和按键页的按键绑定互不影响。
     static let applications = SettingsSection(rawValue: "applications")
     static let statistics = SettingsSection(rawValue: "statistics")
     static let transcripts = SettingsSection(rawValue: "transcripts")
@@ -231,7 +231,7 @@ enum SettingsPageBehavior {
         membershipVisible: Bool,
         supplementalPageIDs: [String] = []
     ) -> [SettingsSection] {
-        // 补充页插在固定入口之后；「按键 / APP 适配」属于最前面的固定入口。
+        // 补充页插在固定入口之后；「按键 / 聚焦与翻页」属于最前面的固定入口。
         let sections = Array(sidebarSectionOrder.prefix(5)) + supplementalPageIDs.map(SettingsSection.supplemental) + Array(sidebarSectionOrder.dropFirst(5))
         return sections.filter {
             switch $0 {
@@ -661,7 +661,7 @@ struct SettingsView: View {
     @State private var applicationShortcutCaptureProfileID: UUID?
     /// 「App 输入框和滚动」里正在配置哪个 App。它只决定编辑对象，不写按键绑定：
     /// 聚焦与翻页滚动按 App 生效，App 在前台即可使用，和「打开 App」动作无关。
-    /// 「APP 适配」页当前展开的 APP；与按键页的编辑对象完全分开。
+    /// 「聚焦与翻页」页面当前展开的 App；与按键页的编辑对象完全分开。
     @State private var applicationDetailProfileID: UUID?
     /// 非空时 APP 档案页显示该 APP 的同窗口按键覆盖二级页。
     @State private var applicationButtonSettingsProfileID: UUID?
@@ -990,6 +990,9 @@ struct SettingsView: View {
             || section == .membership || section.supplementalID != nil {
             return sectionTitle(section)
         }
+        if section == .applications {
+            return localization.text("settings.section.applications.sidebar")
+        }
         return localization.text(section.titleKey)
     }
 
@@ -1098,6 +1101,9 @@ struct SettingsView: View {
         if section == .privateFeature || section == .macros || section == .buttonProfiles
             || section == .membership || section.supplementalID != nil {
             return Text(sectionTitle(section))
+        }
+        if section == .applications {
+            return Text(localization.text("settings.section.applications.sidebar"))
         }
         return Text(section.title)
     }
@@ -1316,7 +1322,6 @@ struct SettingsView: View {
                     VStack(spacing: 14) {
                         phoneConnectionsPanel
                         audioSettingsPanel
-                        audioCompatibilityPanel
                         // Chromecast 连接卡片已按产品要求移除：启用开关默认常开，
                         // 语音键模式在语音键设置面板内，状态见侧边栏「连接」的设备列表。
                     }
@@ -1707,6 +1712,24 @@ struct SettingsView: View {
                     .disabled(model.macMicrophoneState.isActive)
                 }
 
+                if !model.hasCompatibleVoiceOutputDevice {
+                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                        Label {
+                            Text("audio.compatibility.missing_notice")
+                                .fixedSize(horizontal: false, vertical: true)
+                        } icon: {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                        }
+                        .font(.system(size: 12))
+                        .foregroundStyle(.orange)
+                        Spacer(minLength: 8)
+                        Button("audio.compatibility.open_install_guide") {
+                            model.openDoubaoDriverInstructions(using: localization)
+                        }
+                        .compatibilityButtonStyle(.standard)
+                    }
+                }
+
                 VStack(alignment: .leading, spacing: 5) {
                     OutputVolumeSlider(settings: settings, model: model)
 
@@ -1891,46 +1914,6 @@ struct SettingsView: View {
         guard isCapturingMacMicrophoneShortcut else { return }
         isCapturingMacMicrophoneShortcut = false
         model.suspendMacMicrophoneShortcutCapture(false)
-    }
-
-    private var audioCompatibilityPanel: some View {
-        GlassPanel {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(alignment: .firstTextBaseline) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("audio.compatibility.section_title")
-                            .font(.headline)
-                        Text("audio.compatibility.microphone_label")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    Spacer(minLength: 16)
-                    Text(model.doubaoAudioStatus.text(using: localization))
-                        .font(.caption)
-                        .foregroundStyle(model.hasDoubaoAudioDevice ? .green : .orange)
-                        .multilineTextAlignment(.trailing)
-                }
-
-                HStack(spacing: 10) {
-                    Button(LocalizedMessage(
-                        "audio.compatibility.select_microphone", arguments: [
-                            DoubaoAudioDevicePolicy.device(in: model.audioDevices)?.name ?? DoubaoAudioDevicePolicy.deviceName
-                        ]
-                    ).text(using: localization)) { model.selectDoubaoAudioDevice() }
-                        .compatibilityButtonStyle(.prominent)
-                        .disabled(!model.hasDoubaoAudioDevice)
-                    Button("audio.compatibility.open_install_guide") {
-                        model.openDoubaoDriverInstructions(using: localization)
-                    }
-                    .compatibilityButtonStyle(.standard)
-                }
-
-                Text("audio.compatibility.help_plain")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
     }
 
     #if SAYALL_SIRI_REMOTE_ENABLED && canImport(SayAllSiriRemote)
@@ -4626,7 +4609,7 @@ struct SettingsView: View {
         }
     }
 
-    /// 「输入框」分类只有一个动作：提示语放在它右侧，指向真正配置学习入口的「APP 适配」页。
+    /// 「输入框」分类只有一个动作：提示语放在它右侧，指向真正配置学习入口的「聚焦与翻页」页面。
     private func inputFocusActionControls(
         selectedAction: ButtonAction,
         isManagedPowerAction: Bool,
@@ -6745,7 +6728,7 @@ struct SettingsView: View {
                     systemImage: "waveform"
                 )
                 .font(.title3.weight(.semibold))
-                .foregroundStyle(.orange)
+                .foregroundStyle(Color.accentColor)
 
                 if settings.voiceSessionRanking.isEmpty {
                     Text("statistics.voice_ranking.empty")
@@ -6759,7 +6742,7 @@ struct SettingsView: View {
                         } label: {
                             HStack(spacing: 7) {
                                 Text("\(index + 1)")
-                                    .foregroundStyle(.orange)
+                                    .foregroundStyle(Color.accentColor)
                                     .frame(width: 18, alignment: .leading)
                                 Text(chartDurationText(
                                     seconds: UsageStatisticsPresentation.wholeSeconds(record.duration)
@@ -7286,7 +7269,7 @@ struct SettingsView: View {
                             HStack(spacing: 14) {
                                 Image(systemName: "globe")
                                     .font(.title3)
-                                    .foregroundStyle(.green)
+                                    .foregroundStyle(Color.accentColor)
                                     .frame(width: 34)
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text("about.preferences.language")

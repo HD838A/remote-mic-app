@@ -206,6 +206,29 @@ struct LocalizationTests {
         }
     }
 
+    @Test func focusAndScrollingPageUsesClearNames() throws {
+        let localizationDirectories = try sourceLocalizationDirectories()
+        let englishDirectory = try #require(
+            localizationDirectories.first { $0.lastPathComponent == "en.lproj" }
+        )
+        let simplifiedChineseDirectory = try #require(
+            localizationDirectories.first { $0.lastPathComponent == "zh-Hans.lproj" }
+        )
+        let english = try strings(at: englishDirectory.appendingPathComponent("Localizable.strings"))
+        let chinese = try strings(
+            at: simplifiedChineseDirectory.appendingPathComponent("Localizable.strings")
+        )
+
+        #expect(chinese["settings.section.applications"] == "聚焦与翻页")
+        #expect(chinese["settings.section.applications.sidebar"] == "聚焦与翻页")
+        #expect(english["settings.section.applications"] == "Focus & Scrolling")
+        #expect(english["settings.section.applications.sidebar"] == "Focus/Scroll")
+        #expect(chinese["custom_application.page.subtitle"]?.contains("不会改变按键绑定") == true)
+        #expect(english["custom_application.page.subtitle"]?.contains("do not change button bindings") == true)
+        #expect(chinese["custom_application.bindings.title"] == "哪些按键会打开它")
+        #expect(english["custom_application.bindings.title"] == "Buttons that open it")
+    }
+
     @Test func glossaryResourcesContainTheDocumentedTechnicalTerms() throws {
         for localization in ["en", "zh-Hans"] {
             let glossaryURL = repositoryRoot
