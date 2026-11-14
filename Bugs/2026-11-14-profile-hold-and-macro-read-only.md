@@ -49,7 +49,7 @@
 - 私有 2.9.0：`SAYALL_ENABLE_PRIVATE_SWIFTPM=1 SAYALL_ENABLE_BUTTON_PROFILES=1` 使用 Tag `2.9.0` checkout，1509 项测试、113 个套件通过。
 - 私有主线源码：同一命令使用含自动保存接口的私有 checkout，1509 项测试、113 个套件通过。
 - 私有 2.11.0 固定构件：方案集成用例覆盖不支持的 hold mode 被过滤、`singleHold` / `longHold` 写入被拒绝、`repeatLong` 写入成功；过期宏版本可编辑的源码回归。
-- 私有方向键按住源码：`profilePersistsDirectionalHoldModes` 与宿主依赖该源码的集成用例通过；`singleHold` / `longHold` 可创建、读取、重载和写入。私有包 158 项测试、15 个套件通过。
+- 私有方向键按住源码：`profilePersistsDirectionalHoldModes` 与宿主依赖该源码的集成用例通过；`singleHold` / `longHold` 可创建、读取、重载和写入。私有包 159 项测试、15 个套件通过。
 - `scripts/verify-repository-governance.sh`、`scripts/check-repository-boundaries.sh`、`scripts/verify-localizations.sh`、`git diff --check` 通过。
 
 ## 未覆盖边界
