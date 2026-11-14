@@ -23,19 +23,20 @@
 
 ## 修复
 
-- 按键页的横向空状态改为紧凑单行：图标、查找文案和“立即重新连接”同一行排列。
-- 文案最多两行，保留 `12pt` 字号和完整文本；按钮不压缩。
-- 标题区仍是更高的一方，因此空状态与设备卡切换时页头行高由同一来源决定。
+- 按键页的横向空状态改为与遥控器设备卡相同的 `232 × 72pt` 卡片，并排在设备区的右侧。
+- 卡片顶部保留图标和查找文案，最多两行；底部放“立即重新连接”，按钮文字保持 `12pt`，不压缩。
+- 空状态与三行设备卡使用同一宽度和高度来源；标题区仍是更高的一方，切换连接状态时页头行高不变。
 - 连接页的纵向空状态保留原布局；该页面没有这条页头底边对齐约束，不随本次修改变化。
 
 ## 验证
 
 - 构建：`SAYALL_PRIVATE_PLATFORM_MODE=public swift build --disable-keychain -c debug --product RemoteMic` 通过。
-- 定向自动化：`SAYALL_PRIVATE_PLATFORM_MODE=public swift test --disable-keychain --disable-automatic-resolution --skip-update --filter 'SettingsPageRegression'`，79 项通过；新增 `mappingEmptyRemoteStateStaysOnOneCompactRow` 并单独复跑通过。
+- 定向自动化：`SAYALL_PRIVATE_PLATFORM_MODE=public swift test --disable-keychain --disable-automatic-resolution --skip-update --filter 'SettingsPageRegression'`，79 项通过；新增 `mappingEmptyRemoteStateMatchesRemoteCardSize` 并单独复跑通过。
 - 生产视图离屏渲染：`1020 × 772` 中文浅色、中文深色、英文浅色、英文深色四组中，未连接空状态和三张已连接设备卡的页头分隔线均位于 `y=188–189`，不再跳动。
-- `800 × 650` 离屏压力渲染：中英文空状态文字为单行或两行，均未越过页头分隔线。
+- 卡片几何：空状态与设备卡的 Retina 像素矩形均约 `464 × 144`（`232 × 72pt`），右边缘对齐；英文两行状态文案和 `12pt` 重连按钮都在卡片内。
+- `800 × 650` 离屏压力渲染：中英文空状态均未越过页头分隔线。
 - 连接页纵向空状态与既有布局一致，未受影响。
-- 改动后空状态截图 SHA-256：中文浅色 `bc438307d2ef35b89a2df367e23b82291f53eb13fb72c1b1a1f9713aa6abd2a5`，中文深色 `0f68323ee4293a351ef944588b0a5d91e4950937766c38e41dac0cc27ed941da`，英文浅色 `213dc47b5454f4d24136c99fc95bab8db2a44b508b602806bb0198b1a76f1ec0`，英文深色 `a3e4716ad6cadd11ce26aa98ffae58fe43f18e97cbb882bc13f12d7ffa39ca46`。
+- 改动后空状态截图 SHA-256：中文浅色 `18436dfef470ab98567dedfd4f25e1a6b717b1c0fcbd0270af40ad6b1a33bdd1`，中文深色 `19c0447960e0e451ae620344d9e15fedd6cca3803782bd0f805916b2b89053eb`，英文浅色 `d98f7199632d8b2c7d6de712c9fc1a62dd86bc9b53e79e09ad193842bfd29f6a`，英文深色 `b830f38a325b0eb95c810ab208c3deabcf66b94fae55b1955965f9e236990ab9`。
 - 截图字节保存在仓库外 `~/Downloads/SayAll-mapping-header-jitter-20261114/`，不进入版本控制。
 
 ## 验证边界

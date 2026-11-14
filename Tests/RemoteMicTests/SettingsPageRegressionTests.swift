@@ -1800,7 +1800,7 @@ struct SettingsPageRegressionTests {
         ))
         let cardSource = settingsSource[cardStart.lowerBound..<cardEnd.lowerBound]
         #expect(cardSource.contains("return HStack(alignment: .center, spacing: 10)"))
-        #expect(cardSource.contains("fillsWidth ? nil : 232"))
+        #expect(cardSource.contains("fillsWidth ? nil : SettingsPageBehavior.mappingRemoteCardWidth"))
         #expect(cardSource.contains("let modelName = remoteModelName(profile)"))
         #expect(cardSource.contains("let systemName = remoteSystemName(profile)"))
         #expect(cardSource.contains("Text(modelName)"))
@@ -1907,8 +1907,11 @@ struct SettingsPageRegressionTests {
     }
 
     /// 按键页空状态与已连接设备卡共用页头 HStack 的底边。
-    /// 空状态一旦回到纵向堆叠，就会比设备卡高，遥控器连上的瞬间把分隔线和整页内容顶上去。
-    @Test func mappingEmptyRemoteStateStaysOnOneCompactRow() throws {
+    /// 空状态一旦比设备卡高或宽，遥控器连上的瞬间就会把分隔线和整页内容顶上去。
+    @Test func mappingEmptyRemoteStateMatchesRemoteCardSize() throws {
+        #expect(SettingsPageBehavior.mappingRemoteCardWidth == 232)
+        #expect(SettingsPageBehavior.mappingRemoteCardHeight == 72)
+
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -1929,13 +1932,14 @@ struct SettingsPageRegressionTests {
 
         #expect(emptySource.contains("if vertical"))
         #expect(emptySource.contains("VStack(alignment: .leading, spacing: 8)"))
-        #expect(horizontalSource.contains("HStack(spacing: 8)"))
-        #expect(!horizontalSource.contains("VStack"))
+        #expect(horizontalSource.contains("VStack(alignment: .leading, spacing: 4)"))
+        #expect(horizontalSource.contains("width: SettingsPageBehavior.mappingRemoteCardWidth"))
+        #expect(horizontalSource.contains("height: SettingsPageBehavior.mappingRemoteCardHeight"))
         #expect(horizontalSource.contains(".lineLimit(2)"))
         #expect(horizontalSource.contains(".fixedSize(horizontal: false, vertical: true)"))
         #expect(horizontalSource.contains(".layoutPriority(1)"))
         #expect(horizontalSource.contains("Button(\"connection.action.reconnect\")"))
-        #expect(emptySource.contains(".padding(.vertical, vertical ? 10 : 8)"))
+        #expect(source.contains("width: fillsWidth ? nil : SettingsPageBehavior.mappingRemoteCardWidth"))
     }
 
     @Test func settingsPageKeepsVersionFeaturesTogetherAndLanguagesVisible() throws {
