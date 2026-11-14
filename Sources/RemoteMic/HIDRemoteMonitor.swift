@@ -149,6 +149,57 @@ enum HIDDeviceMatchDecision: Equatable {
     case rejected(String)
 }
 
+/// 切换器会话期间的诊断限流。
+///
+/// 会话打开后有两处会跟着定时器节奏产生日志，而且都不封顶：
+///
+/// - 方向键连发每 100ms 成功一次就写一行，且每次成功都会重置 15 秒会话超时，
+///   所以按住不放就是一直写；
+/// - 500ms 的 HUD 状态轮询每 tick 写一行，而它的两个信号本身会在区间内来回跳
+///   （见 `startAppSwitcherLifecycle` 里的注释），单纯去重挡不住。
+///
+/// 这里把两处都收敛成「会话期间只累加计数，收尾时写一行汇总」：连发是同一次会话内的
+/// 重复动作，逐条写没有诊断价值；状态行保留真正的状态变化，并且单次会话封顶。
+struct AppSwitcherDiagnosticPolicy {
+    /// 单次会话最多写多少行状态。切换器正常只在开/关之间变一次，20 行足够覆盖
+    /// 抖动的极端情况，又不会因为信号乱跳而写满整个日志。
+    static let maximumStateLines = 20
+
+    private(set) var repeatCount = 0
+    private(set) var repeatCounts: [String: Int] = [:]
+    private(set) var statePollCount = 0
+    private(set) var stateLineCount = 0
+    private var lastStateSignature: String?
+
+    /// 连发不逐条写日志，只按按钮累加；收尾汇总里给出准确次数与分布。
+    mutating func recordRepeat(button: String) {
+        repeatCount += 1
+        repeatCounts[button, default: 0] += 1
+    }
+
+    /// 按按钮的连发分布，例如 `left:12,right:3`；没有连发时给 `none`。
+    var repeatBreakdown: String {
+        guard !repeatCounts.isEmpty else { return "none" }
+        return repeatCounts.keys.sorted()
+            .map { "\($0):\(repeatCounts[$0] ?? 0)" }
+            .joined(separator: ",")
+    }
+
+    /// 返回这一份状态是否需要写成日志。
+    ///
+    /// `signature` 只应该包含稳定信号（例如「切换器是否可见」），不要把会跳动的
+    /// 前台 App 拼进去，否则去重会退化成每 tick 一行。
+    mutating func recordStatePoll(signature: String) -> Bool {
+        statePollCount += 1
+        guard stateLineCount < Self.maximumStateLines, signature != lastStateSignature else {
+            return false
+        }
+        lastStateSignature = signature
+        stateLineCount += 1
+        return true
+    }
+}
+
 final class HIDRemoteMonitor {
     private let settings: AppSettings
     private let eventSuppressor: KeyboardEventSuppressor
@@ -290,6 +341,8 @@ final class HIDRemoteMonitor {
     private var appSwitcherArrowCheck: HIDRemoteScheduledTask?
     /// 打开切换器之后核对它是否真的出现了的任务。
     private var appSwitcherOpenProbe: HIDRemoteScheduledTask?
+    /// 本次会话的连发次数与状态行计数，收尾时汇总输出。
+    private var appSwitcherDiagnostics = AppSwitcherDiagnosticPolicy()
     /// 本次会话里是否确实见过切换器打开（用 Dock 窗口数判断）。
     private var appSwitcherObservedOpen = false
     /// 本次会话里用户是否已经用方向键选过东西。
@@ -2400,9 +2453,7 @@ final class HIDRemoteMonitor {
                 self.finishAppSwitcherLifecycle(reason: "navigate_failed", confirmed: false)
                 return
             }
-            self.diagnosticLogger(
-                "HID APP SWITCHER button=\(button.rawValue) phase=repeat success=true"
-            )
+            self.appSwitcherDiagnostics.recordRepeat(button: button.rawValue)
             self.scheduleAppSwitcherTimeout()
         }
         repeatTimers[usage] = timer
@@ -2426,6 +2477,7 @@ final class HIDRemoteMonitor {
         appSwitcherObservedOpen = false
         appSwitcherReopenCount = 0
         appSwitcherHasNavigated = false
+        appSwitcherDiagnostics = AppSwitcherDiagnosticPolicy()
         installAppSwitcherDismissObserver()
         appSwitcherFrontmostMonitor = scheduler.schedule(
             afterMilliseconds: HIDRemoteTiming.appSwitcherFrontmostPollMilliseconds,
@@ -2446,12 +2498,21 @@ final class HIDRemoteMonitor {
             let state = self.appSwitcherHudState()
             let dockWindows = self.appSwitcherDockWindowCount()
             let baseline = self.appSwitcherDockWindowBaseline ?? -1
-            self.diagnosticLogger(
-                "HID APP SWITCHER switcher_state ax=\(state.logLabel) " +
-                    "dock_windows=\(dockWindows) " +
-                    "baseline=\(baseline) " +
-                    "front=\(self.frontmostBundleIdentifier() ?? "-")"
-            )
+            // 只在稳定信号真的变化时写一行。前台 App 不参与判定：它在“高亮 App”
+            // 和“我们自己的菜单栏 App”之间来回跳，拼进签名等于每 tick 一行。
+            let relation = dockWindows > baseline
+                ? "above"
+                : (dockWindows == baseline ? "at" : "below")
+            if self.appSwitcherDiagnostics.recordStatePoll(
+                signature: "\(state.logLabel)|\(relation)"
+            ) {
+                self.diagnosticLogger(
+                    "HID APP SWITCHER switcher_state ax=\(state.logLabel) " +
+                        "dock_windows=\(dockWindows) " +
+                        "baseline=\(baseline) " +
+                        "front=\(self.frontmostBundleIdentifier() ?? "-")"
+                )
+            }
             // 见过切换器打开、之后又不见了：说明它被系统自己关掉了
             // （部分系统上原生键码或切换器自身行为会关掉它）。
             // 补发一次 Tab 把它拉回来，让“切换器定住”这件事成立。
@@ -2593,7 +2654,11 @@ final class HIDRemoteMonitor {
             _ = appSwitcherSession.cancel(dismissSwitcher: !switcherAlreadyDismissed)
         }
         diagnosticLogger(
-            "HID APP SWITCHER ended reason=\(reason) confirmed=\(confirmed)"
+            "HID APP SWITCHER ended reason=\(reason) confirmed=\(confirmed) " +
+                "repeat_count=\(appSwitcherDiagnostics.repeatCount) " +
+                "repeat_buttons=\(appSwitcherDiagnostics.repeatBreakdown) " +
+                "state_polls=\(appSwitcherDiagnostics.statePollCount) " +
+                "state_lines=\(appSwitcherDiagnostics.stateLineCount)"
         )
         if confirmed {
             let origin = appSwitcherOriginBundleIdentifier

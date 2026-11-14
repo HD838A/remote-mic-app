@@ -2527,7 +2527,11 @@ struct RemoteButtonsTests {
             appSwitcherKeyStatePoster: { code, isDown, flags in
                 posted.append((code, isDown, flags))
                 return true
-            }
+            },
+            // 固定 HUD 状态与 Dock 窗口数：本用例只关心连发与收尾汇总，
+            // 不该让 500ms 轮询去查真实辅助功能树。
+            appSwitcherHudState: { .absent },
+            appSwitcherDockWindowCount: { 3 }
         )
         monitor.connectSimulatedDevice(
             fingerprint: "app-switcher-repeat", profileID: profileID
@@ -2555,7 +2559,18 @@ struct RemoteButtonsTests {
         monitor.handleSimulatedReport(reportID: 1, data: Data(repeating: 0, count: 6))
         scheduler.advance(toMilliseconds: HIDRemoteTiming.repeatStartMilliseconds + 500)
         #expect(posted.filter { $0.0 == 123 }.count == 6)
-        #expect(diagnostics.contains { $0.contains("phase=repeat") })
+        // 连发只累加计数：会话期间不再逐次写日志，否则按住不放会一直刷。
+        #expect(!diagnostics.contains { $0.contains("phase=repeat") })
+
+        // 超时收尾那一行必须带着本会话的连发次数与方向，否则「按住移动了多少次」
+        // 这条信息就丢了。上面推进了两次，各触发一次连发。
+        let sessionEnd = HIDRemoteTiming.repeatStartMilliseconds + 500
+            + HIDRemoteTiming.appSwitcherTimeoutMilliseconds + 600
+        scheduler.advance(toMilliseconds: sessionEnd)
+        let ended = try #require(diagnostics.last { $0.contains("HID APP SWITCHER ended") })
+        #expect(ended.contains("reason=timeout"))
+        #expect(ended.contains("repeat_count=2"))
+        #expect(ended.contains("repeat_buttons=left:2"))
     }
 
     @Test(arguments: [true, false])
