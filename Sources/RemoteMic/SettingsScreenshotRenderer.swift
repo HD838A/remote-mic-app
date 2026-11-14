@@ -103,6 +103,15 @@ enum SettingsScreenshotRenderer {
         ] == "1"
         let onlySection = ProcessInfo.processInfo.environment["REMOTE_MIC_SETTINGS_SCREENSHOT_SECTION"]
         let interactive = ProcessInfo.processInfo.environment["REMOTE_MIC_SETTINGS_SCREENSHOT_INTERACTIVE"] == "1"
+        let showsApplicationButtons = ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_SETTINGS_SCREENSHOT_APPLICATION_BUTTONS"
+        ] == "1"
+        let opensApplicationButtonEditor = ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_SETTINGS_SCREENSHOT_APPLICATION_BUTTON_EDITOR"
+        ] == "1"
+        let showsApplicationButtonClearConfirmation = ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_SETTINGS_SCREENSHOT_APPLICATION_BUTTON_CLEAR"
+        ] == "1"
         let mappingScenario = ProcessInfo.processInfo.environment["REMOTE_MIC_SETTINGS_SCREENSHOT_MAPPING_SCENARIO"]
         if mappingScenario != nil {
             guard let storage = ProcessInfo.processInfo.environment["SAYALL_MACRO_STORAGE_ROOT"],
@@ -149,11 +158,19 @@ enum SettingsScreenshotRenderer {
                 bundleIdentifier: "com.apple.Safari",
                 applicationPath: "/Applications/Does Not Exist.app"
             ))
-            settings.addCustomApplicationProfile(CustomApplicationProfile(
+            let finderID = settings.addCustomApplicationProfile(CustomApplicationProfile(
                 displayName: "Finder",
                 bundleIdentifier: "com.apple.finder",
                 applicationPath: "/Applications/Does Not Exist.app"
             ))
+            if showsApplicationButtons {
+                _ = settings.setApplicationButtonOverride(
+                    ConfiguredButtonAction(action: .commandCopy, shortcut: nil),
+                    applicationProfileID: finderID,
+                    button: .ok,
+                    trigger: .singleClick
+                )
+            }
         }
         if ProcessInfo.processInfo.environment["REMOTE_MIC_SETTINGS_SCREENSHOT_MISSING_ROUTINE"] == "1" {
             // Isolated upgrade fixture for the production cleanup page.
@@ -373,6 +390,10 @@ enum SettingsScreenshotRenderer {
                 initialMappingActionFilter: initialActionFilter,
                 initialMappingScrollsToGestureTiming: section == .mapping && showsGestureTiming,
                 initialMappingVoiceSettingsPresented: section == .mapping && opensVoiceSettings,
+                initialApplicationButtonSettingsProfileID: showsApplicationButtons
+                    ? settings.customApplicationProfiles.last?.id : nil,
+                initialApplicationButtonEditingButton: opensApplicationButtonEditor ? .ok : nil,
+                initialApplicationButtonClearConfirmationPresented: showsApplicationButtonClearConfirmation,
                 supplementalSettings: supplementalSettings,
                 sidebarAccountDisplayName: sidebarAccountDisplayName
             ).environmentObject(localization))
@@ -415,6 +436,10 @@ enum SettingsScreenshotRenderer {
                 initialMappingActionFilter: initialActionFilter,
                 initialMappingScrollsToGestureTiming: section == .mapping && showsGestureTiming,
                 initialMappingVoiceSettingsPresented: section == .mapping && opensVoiceSettings,
+                initialApplicationButtonSettingsProfileID: showsApplicationButtons
+                    ? settings.customApplicationProfiles.last?.id : nil,
+                initialApplicationButtonEditingButton: opensApplicationButtonEditor ? .ok : nil,
+                initialApplicationButtonClearConfirmationPresented: showsApplicationButtonClearConfirmation,
                 supplementalSettings: supplementalSettings,
                 sidebarAccountDisplayName: sidebarAccountDisplayName,
                 minimumContentSize: .zero

@@ -1087,6 +1087,9 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         self.recordingAssetStore = recordingAssetStore
         self.diagnosticLogUploader = diagnosticLogUploader
         super.init()
+        settings.frontmostApplicationBundleIdentifier = {
+            NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+        }
         if settings.siriRemoteEnabled, settings.siriRemoteNeedsUserAction {
             siriRemoteAudioStatus = "unavailable:authorization_user_action_required"
         }
@@ -3984,7 +3987,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             ) {
                 return binding
             }
-            return settings.configuredAction(for: button, trigger: trigger, profileID: device)
+            return settings.configuredGlobalAction(for: button, trigger: trigger, profileID: device)
         }
         return (resolve(.singleClick), resolve(.longPress))
     }
@@ -5494,6 +5497,9 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
                 profileID: profileID,
                 button: button,
                 trigger: .singleClick
+            ) || settings.applicationButtonOverrideExists(
+                for: button,
+                trigger: .singleClick
             ),
             frontmostBundleIdentifier: NSWorkspace.shared.frontmostApplication?.bundleIdentifier
         ) else { return }
@@ -5535,6 +5541,9 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
                       hasSingleActionOverride: self.macroFeature.hasActiveBinding(
                           profileID: profileID,
                           button: button,
+                          trigger: .singleClick
+                      ) || self.settings.applicationButtonOverrideExists(
+                          for: button,
                           trigger: .singleClick
                       ),
                       frontmostBundleIdentifier:
@@ -5604,7 +5613,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
                     profileID: profileID,
                     button: button,
                     trigger: trigger
-                )
+                ) || settings.applicationButtonOverrideExists(for: button, trigger: trigger)
             }
     }
 
@@ -7844,6 +7853,9 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             button: button,
             trigger: trigger
         )
+        guard !settings.applicationButtonOverrideExists(for: button, trigger: trigger) else {
+            return false
+        }
         let handled = macroFeature.executeBoundAction(
             profileID: profileID,
             button: button,

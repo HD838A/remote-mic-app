@@ -300,7 +300,7 @@
 "custom_application.remove" = "Delete this app's setup";
 "custom_application.remove_blocked" = "%d buttons still open it. Unbind them before deleting its setup.";
 "custom_application.remove_confirm_title" = "Delete the setup for “%@”?";
-"custom_application.remove_confirm_message" = "This only deletes the setup SayAll keeps for this app (recorded input field, focus shortcut). The app itself is not modified or uninstalled. Buttons that open it stay as they are and will show “No app selected”.";
+"custom_application.remove_confirm_message" = "This only deletes the setup SayAll keeps for this app (recorded input field, focus shortcut, and app-specific button actions). The app itself is not modified or uninstalled. Buttons that open it stay as they are and will show “No app selected”.";
 "custom_application.remove_confirm_action" = "Delete setup";
 "custom_application.add" = "Add App";
 "custom_application.focus_strategy" = "Focus method";
@@ -1509,3 +1509,25 @@
 "button_mapping.save.hold_failed" = "Hold not saved";
 "button_mapping.action.no_action" = "No action";
 "button_mapping.profile.created" = "Key profile created";
+
+"application_buttons.back" = "Back";
+"application_buttons.entry.title" = "App-Specific Buttons";
+"application_buttons.entry.summary" = "%d items set for this app";
+"application_buttons.entry.hint" = "Items you do not set here keep using the global button configuration.";
+"application_buttons.entry.open" = "Set Buttons for This App";
+"application_buttons.page.title" = "Buttons for %@";
+"application_buttons.page.subtitle" = "Set ordinary button actions only while this app is in the foreground. Unset items use the global configuration; the voice button is unchanged.";
+"application_buttons.page.count" = "%d items set for this app";
+"application_buttons.page.clear_all" = "Restore All to Global";
+"application_buttons.editor.inherited" = "Uses global";
+"application_buttons.editor.overridden" = "Set for this app";
+"application_buttons.editor.restore" = "Restore Global";
+"application_buttons.clear.title" = "Restore all buttons to global?";
+"application_buttons.clear.message" = "App-specific button actions will be deleted. Every item will use the original global button configuration.";
+"application_buttons.clear.action" = "Restore All to Global";
+
+"application_buttons.short.global" = "Global";
+"application_buttons.short.app" = "App";
+
+"application_buttons.target.title" = "Open a Custom App";
+"application_buttons.target.hint" = "Choose an app to open. Its focus behavior is still defined by that app’s settings.";

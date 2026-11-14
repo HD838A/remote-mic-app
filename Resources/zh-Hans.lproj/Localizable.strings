@@ -300,7 +300,7 @@
 "custom_application.remove" = "删除这个 App 的设置";
 "custom_application.remove_blocked" = "还有 %d 处绑定在使用它，先解绑才能删除设置。";
 "custom_application.remove_confirm_title" = "删除「%@」的设置？";
-"custom_application.remove_confirm_message" = "只会删除无线麦 SayAll 里针对这个 App 的设置（输入框学习记录、聚焦快捷键），不会卸载或改动 App 本身。已绑定的按键会保留，但会变成「尚未选择 App」。";
+"custom_application.remove_confirm_message" = "只会删除无线麦 SayAll 里针对这个 App 的设置（输入框学习记录、聚焦快捷键、按 App 设置的按键），不会卸载或改动 App 本身。已绑定的按键会保留，但会变成「尚未选择 App」。";
 "custom_application.remove_confirm_action" = "删除设置";
 "custom_application.add" = "添加 App";
 "custom_application.focus_strategy" = "聚焦方式";
@@ -1508,3 +1508,25 @@
 "button_mapping.save.hold_failed" = "按住未保存";
 "button_mapping.action.no_action" = "不执行";
 "button_mapping.profile.created" = "键位方案已创建";
+
+"application_buttons.back" = "返回";
+"application_buttons.entry.title" = "按 APP 设置按键";
+"application_buttons.entry.summary" = "已单独设置 %d 项";
+"application_buttons.entry.hint" = "没有单独设置的项目会继续使用全局按键配置。";
+"application_buttons.entry.open" = "设置这个 APP 的按键";
+"application_buttons.page.title" = "%@ 的按键";
+"application_buttons.page.subtitle" = "只设置这个 APP 在前台时的普通按键动作。没有单独设置的项目使用全局配置；语音键不受影响。";
+"application_buttons.page.count" = "已单独设置 %d 项";
+"application_buttons.page.clear_all" = "全部恢复全局";
+"application_buttons.editor.inherited" = "使用全局";
+"application_buttons.editor.overridden" = "已为这个 APP 设置";
+"application_buttons.editor.restore" = "恢复全局";
+"application_buttons.clear.title" = "恢复全部全局按键？";
+"application_buttons.clear.message" = "这个 APP 单独设置的按键动作会被删除。所有项目将使用原来的全局按键配置。";
+"application_buttons.clear.action" = "全部恢复全局";
+
+"application_buttons.short.global" = "全局";
+"application_buttons.short.app" = "APP";
+
+"application_buttons.target.title" = "打开自定义 APP";
+"application_buttons.target.hint" = "选择要打开的 APP。聚焦方式仍由该 APP 的设置决定。";
