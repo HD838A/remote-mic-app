@@ -1,5 +1,16 @@
 # Version History
 
+## 2.0.2 (Pre-release)
+
+- Voice key and audio: fixes the voice key becoming unusable or repeatedly triggering system dictation after a reconnect; fixes remote buttons stopping after some key mappings on macOS 27; fixes heavy audio loss after rebinding during a voice session; waits for the audio tail to drain before release to reduce dropped last words; ends long recordings correctly near the 60-second limit.
+- Microphones: supports AirPods microphone capture; the voice devices page highlights the current input and lets you disable it; the compatible microphone entry on the connection page moves to voice devices.
+- Buttons and button profiles: edit and auto-save directly on the buttons page; button profiles can be read-only or copied in full; shortcut and focus bindings inside a profile are editable, and hold dependencies are cleared when an action changes; custom buttons gain their own filter and basic key titles; the left and right keys support holding arrow keys; the key-speed panel moves recognition timing before learning; renaming a macro refreshes the buttons page and button profiles immediately.
+- Remotes and app switcher: shows real RC001 and RC003 photos by model; the app switcher follows native interaction, and Back no longer brings the highlighted app to the front; fixes Intel arrow keys moving twice per press; fixes a Caps Lock system event crashing the input method in the background.
+- Connection stability: pauses idle nearby services while the system sleeps; restores direct probes for saved devices after wake; audio recovery is more reliable after sleep, wake and disconnect.
+- Settings and interface: renames the App Adaptation page to Focus and Paging; adds a shared notice bar to the buttons and common phrases pages; fixes header jitter on the empty buttons page; removes the duplicate entry on the Reflections page; decorative icons use the accent color; first-run setup no longer shows an unhelpful AI prompt.
+- Membership: keeps the verification-code resend countdown when the login page reopens; adds a membership entry to the button profiles header.
+- Performance and diagnostics: speeds up the first switch to Reflections; merges duplicate update checks on the About page; raises the encrypted diagnostic log segment limit to 10 MB; the same button no longer runs twice.
+
 ## 2.0.0 (Pre-release)
 
 - Adds Common Phrases: insert frequently used text in one press, with editing and import/export.
