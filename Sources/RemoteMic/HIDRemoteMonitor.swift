@@ -335,20 +335,7 @@ final class HIDRemoteMonitor {
     private let deviceReportLock = NSLock()
     private let reportDeduplicationLock = NSLock()
     private var reportDeduplicationCache = HIDReportDeduplicationCache()
-    private var pathWindowStartNanoseconds: UInt64?
-    private var lastPathReportNanoseconds: UInt64?
-    private var lastDeviceReportNanoseconds: UInt64?
-    private var pathWindowDeviceReports = 0
-    private var pathWindowManagerReports = 0
-    private var pathWindowDuplicateReports = 0
-    private var pathWindowFallbackReports = 0
-    private var consecutiveManagerOnlyWindows = 0
-    private var didLogDeviceDeliveryConfirmed = false
-    private var didLogManagerFallback = false
-    private var lastDeviceCallbackRecoveryNanoseconds: UInt64?
-    private var deviceCallbackRecoveryAttempts = 0
-    private var didLogDeviceCallbackRecoveryExhausted = false
-    private static let maximumDeviceCallbackRecoveryAttempts = 3
+    private var pathHealth = HIDReportPathHealth()
 
     /// macOS 27 can stop delivering manager-level reports after the native key
     /// mapping is written. Per-device callbacks provide another path, so keep
@@ -1198,121 +1185,47 @@ final class HIDRemoteMonitor {
         duplicate: Bool,
         nowNanoseconds: UInt64
     ) {
-        guard path != .simulated else { return }
-        if let last = lastPathReportNanoseconds, nowNanoseconds >= last,
-           nowNanoseconds - last > 10_000_000_000 {
-            resetPathWindow(nowNanoseconds: nowNanoseconds)
-        }
-        if pathWindowStartNanoseconds == nil {
-            pathWindowStartNanoseconds = nowNanoseconds
-        }
-        lastPathReportNanoseconds = nowNanoseconds
-
-        switch path {
-        case .device:
-            pathWindowDeviceReports += 1
-            lastDeviceReportNanoseconds = nowNanoseconds
-            if !didLogDeviceDeliveryConfirmed {
-                didLogDeviceDeliveryConfirmed = true
-                if !didLogManagerFallback {
-                    diagnosticLogger("HID REPORT PATH device_delivery=confirmed")
-                }
-            }
-            if didLogManagerFallback {
-                didLogManagerFallback = false
-                diagnosticLogger("HID REPORT PATH device_delivery=recovered")
-            }
-        case .manager:
-            pathWindowManagerReports += 1
-        case .simulated:
-            return
-        }
-
-        if duplicate {
-            pathWindowDuplicateReports += 1
-        } else if path == .manager {
-            let deviceIsRecent = lastDeviceReportNanoseconds.map {
-                nowNanoseconds >= $0 && nowNanoseconds - $0 <= 2_000_000_000
-            } ?? false
-            if !deviceIsRecent {
-                pathWindowFallbackReports += 1
-                if !didLogManagerFallback {
-                    didLogManagerFallback = true
-                    diagnosticLogger("HID REPORT PATH fallback=manager reason=device_silent")
-                }
-            }
-        }
-        logPathWindowIfNeeded(nowNanoseconds: nowNanoseconds)
-    }
-
-    private func resetPathWindow(nowNanoseconds: UInt64) {
-        pathWindowStartNanoseconds = nowNanoseconds
-        pathWindowDeviceReports = 0
-        pathWindowManagerReports = 0
-        pathWindowDuplicateReports = 0
-        pathWindowFallbackReports = 0
-    }
-
-    /// 每 10 秒最多一行汇总，避免逐报告记录路径造成日志爆炸。
-    private func logPathWindowIfNeeded(nowNanoseconds: UInt64) {
-        guard let start = pathWindowStartNanoseconds,
-              nowNanoseconds >= start,
-              nowNanoseconds - start >= 10_000_000_000
-        else { return }
-        let deviceReports = pathWindowDeviceReports
-        let managerReports = pathWindowManagerReports
-        let duplicateReports = pathWindowDuplicateReports
-        let fallbackReports = pathWindowFallbackReports
-        let windowMilliseconds = Int((nowNanoseconds - start) / 1_000_000)
-        diagnosticLogger(
-            "HID REPORT PATH WINDOW window_ms=\(windowMilliseconds) " +
-                "device_reports=\(deviceReports) manager_reports=\(managerReports) " +
-                "duplicates=\(duplicateReports) manager_fallback=\(fallbackReports) " +
-                "device_healthy=\(deviceReports > 0)"
+        let events = pathHealth.record(
+            path: path,
+            duplicate: duplicate,
+            nowNanoseconds: nowNanoseconds,
+            recoveryEnabled: usesDeviceReportCallback
         )
-        if managerReports > 0, deviceReports == 0 {
-            consecutiveManagerOnlyWindows += 1
-        } else {
-            consecutiveManagerOnlyWindows = 0
-        }
-        resetPathWindow(nowNanoseconds: nowNanoseconds)
-        if consecutiveManagerOnlyWindows >= 2 {
-            requestDeviceCallbackRecovery(
-                nowNanoseconds: nowNanoseconds,
-                managerReports: managerReports
-            )
+        for event in events {
+            switch event {
+            case .deviceDeliveryConfirmed:
+                diagnosticLogger("HID REPORT PATH device_delivery=confirmed")
+            case .deviceDeliveryRecovered:
+                diagnosticLogger("HID REPORT PATH device_delivery=recovered")
+            case .managerFallback:
+                diagnosticLogger("HID REPORT PATH fallback=manager reason=device_silent")
+            case let .window(window):
+                diagnosticLogger(
+                    "HID REPORT PATH WINDOW window_ms=\(window.windowMilliseconds) " +
+                        "device_reports=\(window.deviceReports) " +
+                        "manager_reports=\(window.managerReports) " +
+                        "duplicates=\(window.duplicateReports) " +
+                        "manager_fallback=\(window.fallbackReports) " +
+                        "device_healthy=\(window.deviceHealthy)"
+                )
+            case let .recoveryCandidate(attempt, managerReports):
+                diagnosticLogger(
+                    "HID REPORT PATH watchdog result=candidate reason=device_silent " +
+                        "attempt=\(attempt) manager_reports=\(managerReports)"
+                )
+                requestDeviceCallbackRecovery()
+            case let .recoveryExhausted(attempts):
+                diagnosticLogger(
+                    "HID REPORT PATH watchdog result=exhausted reason=device_silent " +
+                        "attempts=\(attempts)"
+                )
+            }
         }
     }
 
     /// manager 仍在投递、device 连续两个窗口没有投递时，重挂一次 device 回调。
-    /// 60 秒内最多尝试一次；即使重挂失败，manager 通道仍会继续处理报告。
-    private func requestDeviceCallbackRecovery(
-        nowNanoseconds: UInt64,
-        managerReports: Int
-    ) {
-        if let last = lastDeviceCallbackRecoveryNanoseconds,
-           nowNanoseconds >= last,
-           nowNanoseconds - last < 60_000_000_000 {
-            return
-        }
-        if deviceCallbackRecoveryAttempts >= Self.maximumDeviceCallbackRecoveryAttempts {
-            if !didLogDeviceCallbackRecoveryExhausted {
-                didLogDeviceCallbackRecoveryExhausted = true
-                diagnosticLogger(
-                    "HID REPORT PATH watchdog result=exhausted reason=device_silent " +
-                        "attempts=\(deviceCallbackRecoveryAttempts)"
-                )
-            }
-            return
-        }
-        lastDeviceCallbackRecoveryNanoseconds = nowNanoseconds
-        consecutiveManagerOnlyWindows = 0
-        guard usesDeviceReportCallback else { return }
-        deviceCallbackRecoveryAttempts += 1
-        diagnosticLogger(
-            "HID REPORT PATH watchdog result=candidate reason=device_silent " +
-                "attempt=\(deviceCallbackRecoveryAttempts) manager_reports=\(managerReports)"
-        )
+    /// 退避与尝试上限由 `HIDReportPathHealth` 维护；即使重挂失败，manager 通道仍会继续处理报告。
+    private func requestDeviceCallbackRecovery() {
         DispatchQueue.main.async { [weak self] in
             guard let self, self.usesDeviceReportCallback, let device = self.activeDevice else {
                 self?.diagnosticLogger(

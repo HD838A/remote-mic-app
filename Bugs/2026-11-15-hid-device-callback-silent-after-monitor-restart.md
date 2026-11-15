@@ -92,6 +92,23 @@ path == .device || !hasDeviceCallback
   - 快速连续按下和松开；
   - 语音键按下/释放与尾字完整。
 
+## 2026-11-15 当前会话 FAF36134 复核
+
+- `23:03:36.889` App 启动；`23:03:39.216` 第一次 BLE READY。启动后约 1.8 秒内第二组 HID monitor 启动，持有设备的 monitor 在 `23:03:39.266` 再次注册 device callback。
+- `23:07:01.885`–`23:12:38.850`：共 328 条 `HID REPORT rejected`，其中 164 条 `target_fingerprint_mismatch`、164 条 `excluded_fingerprint`；`HID REPORT accepted` 为 **0**。
+- `23:12:31` 点击“立即重新连接”后 BLE READY，HID monitor 再次重启；之后仍有 20 条 rejected，accepted 仍为 0。说明重连只重建 BLE，没有恢复持有设备 monitor 的 device 报告。
+- 持有设备 monitor 的 `HID CONNECTED` 和状态菜单“按键功能已连接”只证明设备已打开，不证明报告仍在投递。
+
+## 路径健康回归测试
+
+- 将路径窗口、manager fallback、watchdog 退避与上限提取为 `HIDReportPathHealth`，由 HID 报告线程按实际到达的报告更新。
+- 新增测试覆盖：
+  - device 回调静默、manager 有报告时，必须记录 manager fallback，并在连续两个 manager-only 窗口后请求重挂 device 回调；
+  - device 报告恢复后必须记录 `device_delivery=recovered`，并停止 manager fallback；
+  - 重复 manager 报告不得计为 fallback；
+  - 重挂请求必须遵守 60 秒退避、每个 monitor 最多 3 次，耗尽后只记录一次 exhausted；
+  - 源码守卫禁止恢复 `path == .device || !hasDeviceCallback` 的旧判据。
+
 ## 日志判读
 
 - `HID REPORT accepted ... path=device`：device 路径正常。
