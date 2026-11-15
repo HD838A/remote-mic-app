@@ -601,19 +601,23 @@ struct PreferredInputSourceMonitorTests {
     func productionWaiterProcessesCancellationWhileActivationIsPending(stopMonitor: Bool) {
         let state = ActivationState()
         defer { state.monitor.stop(); state.monitor = nil }
-        let timer = Timer(timeInterval: 0.04, repeats: false) { _ in
-            MainActor.assumeIsolated {
-                if stopMonitor { state.monitor.stop() } else { state.monitor.endVoiceSession() }
-            }
-        }
-        defer { timer.invalidate() }
+        var didPrepare = false
+        var didRequestCancellation = false
         state.monitor = PreferredInputSourceMonitor(
             voiceTool: { .doubao },
             prepareInputSource: { _ in
-                RunLoop.main.add(timer, forMode: .common)
+                didPrepare = true
                 return .selected
             },
-            currentInputSourceID: { state.original },
+            currentInputSourceID: {
+                // 生产 waiter 在 prepare 之后、等待循环内读取当前输入源。
+                // 在这里触发取消，避免测试依赖真实 timer 与 0.5 秒超时赛跑。
+                if didPrepare, !didRequestCancellation {
+                    didRequestCancellation = true
+                    if stopMonitor { state.monitor.stop() } else { state.monitor.endVoiceSession() }
+                }
+                return state.original
+            },
             restoreInputSource: { state.restored.append($0); return .selected },
             installMonitor: { _ in "monitor" },
             removeMonitor: { _ in },
