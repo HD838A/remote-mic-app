@@ -1516,3 +1516,4 @@
 "button_mapping.action.profile_disabled" = "Disabled here";
 "button_mapping.source.profile" = "This Profile · %@";
 "button_mapping.profile.created" = "Key profile created";
+"button_mapping.profile.created.detail" = "Switched to the new profile";

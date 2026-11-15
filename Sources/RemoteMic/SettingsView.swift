@@ -2337,7 +2337,13 @@ struct SettingsView: View {
         var recovered = true
         if let created {
             selectMappingProfile(created)
-            NoticeCenter.shared.show(Notice(tier: .tip, title: localization.text("button_mapping.profile.created")))
+            NoticeCenter.shared.show(Notice(
+                tier: .tip,
+                title: localization.text("button_mapping.profile.created"),
+                text: localization.text("button_mapping.profile.created.detail"),
+                position: .bottom,
+                dismissible: false
+            ))
         } else {
             if macroFeature.supportsMappingProfileAutosave {
                 recovered = macroFeature.reloadMappingProfiles()
