@@ -951,6 +951,8 @@ if [[ "$SAYALL_BUTTON_PROFILES_INCLUDED" == "true" &&
     "$SAYALL_COMMON_PHRASES_RESOURCE_BUNDLE" \
     "$APP_DIR/Contents/Resources/SayAllCommonPhrases_SayAllCommonPhrases.bundle"
 fi
+run_release_stage app-sanitize-paths 60 \
+  python3 "$ROOT/scripts/sanitize-release-paths.py" "$APP_DIR"
 SPARKLE_VERSION_DIR="$APP_DIR/Contents/Frameworks/Sparkle.framework/Versions/B"
 if [[ "$SIGNING_IDENTITY" != "-" ]]; then
   run_release_stage app-codesign-installer-xpc "$RELEASE_CODESIGN_TIMEOUT_SECONDS" \
