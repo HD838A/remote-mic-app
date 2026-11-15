@@ -106,7 +106,7 @@ publication 的远端资产数量必须等于同一 expected-assets 清单的行
 ## 稳定功能回归
 
 - candidate-provenance.json 不参与自身 digest 计算，上传后单独校验。
-- 下载后的 ZIP/PKG 必须再次执行签名、公证、权限和结构检查。
+- 解压 ZIP 后的 App 与 PKG 必须再次执行签名、公证、staple、权限和结构检查；ZIP 另验证 Sparkle 签名与解压字节。
 - Stable promotion 前后所有资产摘要保持一致。
 - Stable promotion 还要从 GitHub API 核对 provenance 绑定的成功 staging Run/attempt、payload artifact 和唯一未过期 Preview stage-record artifact；stage record 必须为 `mode=preview` 并与 Tag、SHA、manifest 和时间戳一致。
 - 不合法名称、路径遍历、未知扩展名和缺失架构名称必须被 verifier 拒绝。
@@ -115,7 +115,7 @@ publication 的远端资产数量必须等于同一 expected-assets 清单的行
 
 保存 manifest、文件名、size、SHA-256、HTTP 状态和比较结果；不要保存凭据。自动化矩阵不等于真实安装、卸载、Sparkle UI 或实体硬件验收。
 
-## 用例 7 发布前资产契约
+## 用例 8 发布前资产契约
 
 1. 运行 `python3 scripts/release-assets.py names 9.9.9 999`，确认 schema 2 的 10 项 payload；指定 schema 1 时保留 13 项历史集合。
 2. 运行 `scripts/test-macos-release-flow.sh`，使用离线 curl fixture 分别返回一致、不同、缺失的 CDN 契约。
@@ -124,7 +124,7 @@ publication 的远端资产数量必须等于同一 expected-assets 清单的行
 预期为不一致或不可读的契约在占用探测及签名前失败。一致契约后仍分别拒绝 200、302、503、超时，并保留 HEAD 405 的 Range GET 回退。该测试只验证发布控制面，不产生新 Tag 或 Release。
 
 
-## 用例 8 更新频道同步
+## 用例 9 更新频道同步
 
 1. 运行 `node --test scripts/test-update-feed-sync.mjs`，验证 preflight、身份、main dispatch、旧 Run 排除和有界等待。
 2. 缺少 `SAYALL_FEED_SYNC_TOKEN` 或权限不足时运行 preflight，确认公开 Release 尚未变化。

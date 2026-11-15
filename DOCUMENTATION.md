@@ -41,6 +41,7 @@
 
 ## 测试、Bug 与历史证据
 
+- 重大发布前必须执行的回归用例唯一索引入口见 [`Testing/MacReleaseRegression.md`](Testing/MacReleaseRegression.md)。该表只定义发布阻断结果、唯一权威步骤和自动化边界；各功能手册不得再维护第二份发布级稳定回归清单。
 - 根目录 [`Testing/`](Testing/) 存放当前测试手册、跨平台合同、候选准备记录和历史测试报告。除明确命名为合同的文件外，测试手册只定义验证方法和证据。
 - 常用语本地候选测试步骤、失败判定和验证边界见 [`Testing/CommonPhrases.md`](Testing/CommonPhrases.md)。
 - 临时探针、手工采集及实验包启动器的入库限制见 [`AGENTS.md` 的临时测试工具入库边界](AGENTS.md#临时测试工具入库边界)；正常产品回归与统一发布检查继续保留。

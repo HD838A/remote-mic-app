@@ -2,7 +2,7 @@
 
 ## 适用范围
 
-- 适用版本：macOS `1.9.21` Pre-release 及后续版本
+- 适用版本：当前候选及后续版本；`1.9.21` 及更早的 DMG/SHA256 记录只作历史证据
 - 官网：`https://sayall.app/`、`https://sayall.app/en/`
 - 固定下载入口：`https://download.sayall.app/mac`
 
@@ -10,7 +10,7 @@
 
 1. 确认 `sayall-download` Worker 已绑定 `download.sayall.app`。
 2. 确认 GitHub 当前 latest full release 仍是预期正式版，候选 Release 为公开、非 Draft 的 Pre-release。
-3. 准备当前正式版 App、候选版最终 ZIP、DMG、安装与卸载 PKG、SHA256、appcast 和中英文更新说明。
+3. 准备当前正式版 App、候选版最终 ZIP、安装与卸载 PKG、appcast、中英文更新说明和 candidate provenance。当前公开资产不包含 DMG 或独立 `.sha256` 资产。
 4. 不清除用户 App 偏好；Sparkle 候选测试只覆盖当前 CLI 调用的固定 appcast URL。
 
 ## 用例 1：固定正式版入口
@@ -19,9 +19,9 @@
 2. 记录状态码和 `Location`。
 3. 对 Location 再发起 `HEAD`。
 
-预期结果：首次响应为 `302` 且 `Cache-Control: no-store`；Location 为同域名 `/mac/releases/vX.Y.Z/SayAll-X.Y.Z.dmg`，其中版本等于 GitHub latest full release，不等于任何 Pre-release；最终响应为 200、文件名正确，并包含 `x-remote-mic-cdn: cloudflare`。
+预期结果：首次响应为 `302` 且 `Cache-Control: no-store`；Location 为同域名 `/mac/releases/vX.Y.Z/<当前公开契约允许的资产>`，版本等于 GitHub latest full release，不等于任何 Pre-release；最终响应为 200、文件名符合 `config/release-assets.json`，并包含 `x-remote-mic-cdn: cloudflare`。
 
-失败判定：跳到 GitHub 页面、跳到预览版、循环跳转、文件名错误、状态码不是 302/200，或返回 HTML 错误页。
+失败判定：跳到 GitHub 页面、跳到预览版、循环跳转、仍指向 DMG 或 `.sha256`、文件名错误、状态码不是 302/200，或返回 HTML 错误页。
 
 ## 用例 2：stable 与 preview appcast 通道
 
@@ -35,17 +35,17 @@
 
 ## 用例 3：版本化资产完整性
 
-对候选标签分别下载 ZIP、DMG、安装 PKG、卸载 PKG、SHA256、appcast、中英文说明和 candidate provenance。
+对候选标签分别下载 ZIP、安装 PKG、卸载 PKG、appcast、中英文说明和 candidate provenance。
 
-预期结果：Cloudflare 与 GitHub 固定标签下载的每个文件大小和 SHA-256 完全相同；签名、公证、staple、DMG 校验和 Sparkle helper 权限与符号链接均通过。
+预期结果：Cloudflare 与 GitHub 固定标签下载的每个文件大小和 SHA-256 完全相同；解压 ZIP 后的 App 与 PKG 通过签名、公证、staple、权限和 Sparkle helper 符号链接校验，ZIP 另验证 Sparkle 签名与解压字节。
 
 失败判定：任意字节不同、缺少资产、缓存旧版本、返回压缩/转换后的不同字节、签名或公证失效。
 
 ## 用例 4：HEAD 与断点续传
 
-1. 对版本化 DMG 发起 `HEAD`。
+1. 对版本化 ZIP 或安装 PKG 发起 `HEAD`。
 2. 发起 `Range: bytes=0-1023`。
-3. 将返回的 1024 字节与本地 DMG 前 1024 字节比较。
+3. 将返回的 1024 字节与本地对应资产前 1024 字节比较。
 
 预期结果：HEAD 无响应体并提供正确长度；Range 返回 `206` 和有效 `Content-Range`；字节完全相同。
 
@@ -77,17 +77,17 @@
 3. 确认 appcast enclosure 指向 Cloudflare 固定标签 ZIP。
 4. 下载 enclosure，验证 Ed25519 签名、目标版本、Build、helper 权限和符号链接。
 
-预期结果：正式版能发现 `1.9.21`；ZIP 经 Cloudflare 下载且与 GitHub 资产逐字节一致；不修改用户偏好。
+预期结果：正式版能发现当前候选版本；ZIP 经 Cloudflare 下载且与 GitHub 资产逐字节一致；不修改用户偏好。
 
 失败判定：旧版无法发现候选、enclosure 使用 `/mac` 或 `latest`、下载后签名失败、默认稳定 feed 被修改。
 
 ## 稳定功能回归
 
 - [x] App 内置 `SUFeedURL` 使用 Cloudflare stable 通道，客户端不直接访问 GitHub Releases API。
-- [ ] 发布后 preview 通道两架构均指向 `1.9.21`，stable 通道两架构仍指向动态读取的正式版。
+- [ ] 发布后 preview 通道两架构均指向本次候选，stable 通道两架构仍指向动态读取的正式版。
 - [x] 预发布开关缺失/默认关闭、明确关闭、开启、使用后再关闭的相关自动化回归通过；候选 UI 更新尚未执行。
 - [x] 当前 Stable latest 由 GitHub `releases/latest` 动态确认，Worker 与官网部署没有改变正式版。
-- [x] GitHub Release 页面和当前稳定 Tag 的 DMG 可直接下载，并与 CDN 字节一致。
+- [x] GitHub Release 页面和当前稳定 Tag 的 ZIP/安装 PKG 可直接下载，并与 CDN 字节一致。
 - [ ] 官网 GitHub、TestFlight、社群、版本历史和其他作品链接保持正常。
 - [x] Mac App 蓝牙、HID、音频、权限和 Onboarding 代码未被本功能修改；完整自动化与硬件事件模拟回归通过。
 

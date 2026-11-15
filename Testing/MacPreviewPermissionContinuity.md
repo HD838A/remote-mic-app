@@ -3,18 +3,18 @@
 ## 适用版本或分支
 
 - 来源：合入 `main` 的目标 Commit 及其受保护 staging artifact
-- 目标：由受保护 `macOS Signed Release Packages` 工作流生成、经真实 UI 验收，再由 publication workflow 公开的 Developer ID 签名公证包
+- 目标：由受保护 `macOS Signed Release Staging` 工作流生成、经真实 UI 验收，再由 publication workflow 公开的 Developer ID 签名公证包
 
 ## 测试前准备
 
 1. 一台已安装旧版无线麦SayAll.app且输入监控、辅助功能均已开启的 Mac。
 2. 记录旧 App 路径、版本、`codesign -dv --verbose=4` TeamIdentifier 和 `codesign -dr -` designated requirement。
-3. 从私有 Draft 或公开 Pre-release 下载对应 commit 的正确架构 DMG；不要使用本地构建或 `macOS Preview Candidate` 的 ad-hoc CI Artifact 代替。
+3. 从私有 Draft 或公开 Pre-release 下载对应 commit 的正确架构 ZIP 或 Install PKG；不要使用本地构建或 `macOS Preview Candidate` 的 ad-hoc CI Artifact 代替。
 
 ## 用例一：旧路径升级
 
 1. 确认旧 App 位于 `/Applications/Remote Mic.app`，按键映射可正常执行。
-2. 不删除系统设置中的权限条目，直接运行候选 DMG 中的安装器。
+2. 不删除系统设置中的权限条目，直接运行候选 Install PKG。
 3. 启动无线麦SayAll.app并进入“设置”页的“权限与隐私”区。
 4. 按一次普通遥控器按键并执行一个需要辅助功能的映射。
 
@@ -58,7 +58,7 @@
 - 蓝牙语音可开始、持续传输并停止。
 - 普通 OK、方向键映射正常。
 - 系统设置中不存在相同 Bundle ID 的异常重复运行副本。
-- DMG、App、PKG 均通过签名、公证和 staple 校验。
+- 解压 ZIP 后的 App 与 Install PKG 通过签名、公证和 staple 校验；ZIP 另验证 Sparkle 签名与解压字节。
 
 ## 日志收集
 

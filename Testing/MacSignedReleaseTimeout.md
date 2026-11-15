@@ -10,15 +10,15 @@
 2. 不提供 Apple 证书、P8、Match 密码、Sparkle 私钥或 Token。
 3. 确认 actionlint、zsh -n、bash -n 和 fixture 测试可用。
 
-## 用例 1：600 秒硬上限
+## 用例 1：阶段超时与硬上限
 
-1. 检查签名 Job 的 GitHub step timeout-minutes 为 10。
-2. 检查内部 signed-release supervisor 为 540 秒。
+1. 检查签名 Job 的 GitHub step timeout-minutes 为 30；job 级上限仍为 180 分钟。
+2. 检查内部 signed-release supervisor 为 1200 秒，单架构 lane 预算为 1140 秒，公证阶段预算为 600 秒。
 3. 用假命令让阶段超过内部期限。
 
 预期：supervisor 返回 124，完整子进程树被终止，第一份错误日志保留；不会静默重试或延长期限。
 
-失败判定：只有 job 级 180 分钟限制、后台 notarytool/pkgbuild 继续运行、超时后自动重打或改版本。
+失败判定：仍按旧的 540 秒 supervisor 或 10 分钟签名 step 执行、只有 job 级 180 分钟限制、后台 notarytool/pkgbuild 继续运行、超时后自动重打或改版本。
 
 ## 用例 2：双架构隔离
 
@@ -29,7 +29,7 @@
 
 ## 用例 3：PKG/DMG 顺序
 
-1. 检查两个架构的 App、卸载 PKG、DMG 和 appcast 生成顺序。
+1. 检查两个架构的 App、卸载 PKG、DMG（仅内部中间产物）和 appcast 生成顺序。
 2. 确认内嵌 component PKG 先生成，外层产品 PKG 再签名、公证和 staple。
 
 预期：独立 PKG 可并行提交公证；DMG 只在内嵌内容完成后生成，最终验证器检查外层 Installer 信任边界。
@@ -43,10 +43,10 @@
 
 ## 用例 5：凭据和 token 边界
 
-1. 运行 scripts/verify-release-dependency-pins.sh tokens。
+1. 确认 macOS CI 的 `Verify release configuration` 已运行并通过；本地复跑 scripts/verify-release-dependency-pins.sh tokens。
 2. 静态检查 staging workflow 的每个 gh/API step。
 
-预期：每个 step 都显式设置 GH_TOKEN；publication workflow 不声明 Apple Environment 或 secrets；日志不包含凭据值。
+预期：每个 step 都显式设置 GH_TOKEN；publication workflow 不声明 Apple Environment 或 Apple/签名/公证 secrets（允许最小权限的 `SAYALL_FEED_SYNC_TOKEN`）；日志不包含凭据值。
 
 ## 用例 6：主线 smoke
 

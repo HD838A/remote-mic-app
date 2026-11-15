@@ -24,6 +24,7 @@
 3. 检查产品 Commit 已经通过普通 PR 合入 main。若用户指定 Commit 尚未合入，先在独立集成分支重放指定改动，逐个解决机械冲突，完成普通 PR、双架构 CI 后再继续；冲突涉及产品取舍时报告并暂停该取舍，不接触 Apple 凭据。
 4. 检查 `config/release-dependencies.json` 与受保护 workflow 使用相同的私有依赖版本标签，同时确认公开 `Package.swift`、`Package.resolved` 不解析私有仓库；运行 `scripts/verify-release-dependency-pins.sh`。
 5. 运行 `scripts/verify-release-ready-main-ci.sh`，确认 Apple Silicon 与 Intel Ventura 的源码分支 push CI 都完成无私有权限也可执行的 Swift tests、项目 self-test 和 Release build。官方发布还须在私有仓库或维护者本机完成同一宿主 Commit 与固定私有 Tag 的集成测试和双架构 Release build。公开 CI 使用公开依赖执行。私有源码验证日志保留在私有环境。脚本名为历史兼容名称，发布控制面 fixture 只能证明其覆盖的流程。
+6. 按 [`Testing/MacReleaseRegression.md`](Testing/MacReleaseRegression.md) 执行本次重大发布的回归用例。自动化以该精确 SHA 的成功 macOS CI 和受保护 staging 为准；人工硬件、第三方工具、真实会员和真实窗口项必须逐项记录，未执行项不得写成通过。
 
 Mac Remote 与其他 macOS 私有组件使用同一个私有 Swift Package。CI 和发布通过私有平台的统一 SemVer 标签解析包；不再把平台子目录伪装成独立远程 Package。无私有依赖的公开构建继续使用现有兼容层。私有平台版本必须从 `main` 发布。`2.3.0` 起以标准 `X.Y.Z` Tag、main 祖先关系和根 `Package.swift` 校验来源；私有仓库已停用根 `VERSION`。更早的不可变 Tag 保留历史 `VERSION` 一致性校验。回退发布流程时须同时回退清单、workflow 和验证脚本；旧版本通过对应的不可变标签回退。
 
@@ -186,7 +187,7 @@ BuildSigningTests 按相关源码、资源、构建、安装、依赖或 workflo
 
 它只 dispatch .github/workflows/mac-preview-publication.yml。该 workflow：
 
-- 只在 `main` 上运行，显式配置 GH_TOKEN，不声明 mac-release Environment，不读取 secrets；
+- 只在 `main` 上运行，显式配置 GH_TOKEN，不声明 mac-release Environment，不读取 Apple、签名或公证 secrets；只读取更新 feed 同步所需的最小权限 `SAYALL_FEED_SYNC_TOKEN`；
 - 目标仓库固定为 `HD838A/remote-mic-app`，并验证触发事件的 `github.sha` 仍是精确 `origin/main`；
 - 按 Run/attempt/artifact ID 下载并验证同一 staged payload；
 - 创建或复用与 source SHA 完全一致的轻量 Tag；
@@ -213,10 +214,10 @@ publication 失败时先查询远端状态。若 Tag、Release、资产和摘要
 
 - Release 存在且当前是公开 Pre-release；
 - candidate-provenance.json、Tag Commit 和 source Commit 一致；
-- 当前 schema 5 的普通候选 Tag Commit 已包含在 `origin/main`，Hotfix 候选仍是对应远端 Hotfix 分支的精确 HEAD 并绑定当前稳定基线；历史 schema 4 候选则必须包含在冻结的 `origin/release-main`。
+- 当前 schema 6（兼容 schema 5）的普通候选 Tag Commit 已包含在 `origin/main`，Hotfix 候选仍是对应远端 Hotfix 分支的精确 HEAD 并绑定当前稳定基线；历史 schema 4 候选则必须包含在冻结的 `origin/release-main`。
 - 10 项 payload 与 provenance 的大小、SHA-256、GitHub digest 完全一致。
 - provenance 中的 sourceRunId/sourceRunAttempt 指向成功的 `.github/workflows/mac-release-package.yml` `workflow_dispatch` Run，且 Run 的 `head_branch=main`、`head_sha=sourceWorkflowCommit`、attempt 完全一致；sourceBranch/sourceCommit 则绑定实际源码。signedArtifactId/digest 指向同一 Run 的未过期 payload artifact，另有唯一未过期的 Preview stage-record artifact，记录 `mode=preview` 并与 provenance 的源码、控制面、artifact、manifest、Tag 和时间戳一致。
-- 目标仓库固定为 `HD838A/remote-mic-app`，Stable promotion 也只从精确 `origin/main` 控制面执行。晋升按 provenance schema 验证候选身份：schema 5 使用当前 `main`/Hotfix 规则，schema 4 仅允许已公开且可追溯到冻结 `release-main` 的历史候选；未知 schema 或不完整 provenance 一律拒绝。
+- 目标仓库固定为 `HD838A/remote-mic-app`，Stable promotion 也只从精确 `origin/main` 控制面执行。晋升按 provenance schema 验证候选身份：schema 6 或 5 使用当前 `main`/Hotfix 规则，schema 4 仅允许已公开且可追溯到冻结 `release-main` 的历史候选；未知 schema 或不完整 provenance 一律拒绝。
 
 随后唯一的远端突变是 gh release edit --prerelease=false --latest。Tag、Release Notes、appcast、ZIP、PKG 和 provenance 均保持原字节；晋升不重新构建、签名、公证、staple 或上传。若上一次突变已成功且该 Tag 已是 `releases/latest`，重试只做完整只读复验，不再次突变；所有候选晋升共享一个并发锁，并在突变前再次核对 stable latest。
 

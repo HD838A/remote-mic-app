@@ -2,10 +2,10 @@
 
 ## 适用范围
 
-- 基线：`origin/main` `18b42243710ac80f27ec2d16c41741e8ba0d99e5`
+- 基线：测试时记录本次候选的精确 `origin/main` 或 Hotfix SHA；不要把历史 SHA 当成当前基线。
 - 目标：macOS Apple Silicon 14+ 和 Intel Ventura 13
 - 安装资产：最终 Developer ID 签名、Apple 公证并 staple 的 `SayAll-VERSION-BUILD-AppleSilicon-install.pkg`、`SayAll-VERSION-BUILD-Intel-install.pkg` 和对应的 standalone uninstall PKG
-- Siri Remote 系统服务是 Install PKG 中的可选组件，默认不选择；MiRemoteV 2ch 与无线麦SayAll.app仍是默认组件。
+- Siri Remote 系统服务是 Install PKG 中的可选组件：新机默认不选择；已通过 PKG 安装过该组件并存在收据时自动选中。MiRemoteV 2ch 与无线麦SayAll.app仍是默认组件。
 - Siri Remote 是会员功能。安装组件与会员权益是两个独立条件；仅安装组件不会自动启用。App 内启用门禁按 [会员测试手册](MembershipAndButtonProfiles.md#用例八siri-remote-双层启用门禁) 验证。
 
 ## 测试前准备
@@ -39,7 +39,7 @@
 ### 3. 升级、旧路径与取消/失败
 
 1. 分别从 canonical App、`Remote Mic.app`、`无线麦.app`、仅驱动状态安装。
-2. 对“从未安装 Siri Remote”和“已经安装 Siri Remote”两种状态，分别运行新 PKG；观察默认选择保持未勾选。
+2. 对“从未安装 Siri Remote”和“已通过 PKG 安装 Siri Remote”两种状态，分别运行新 PKG；观察前者默认未勾选、后者因收据自动选中。仅手工安装 Helper 而没有组件收据时仍不自动选中。
 3. 分别在管理员授权前取消，以及用测试夹具触发驱动复制失败。
 4. 尝试用较旧 Build 覆盖较新 App。
 
@@ -55,9 +55,9 @@
 2. 分别验证 canonical App+驱动、历史 App+驱动、仅 App 和仅驱动。
 3. 在废纸篓中找到名称带 `uninstalled` 时间标记的项目，执行“放回原处”或手动恢复。
 
-预期：所有已识别 App 和 `MiRemoteV 2ch` 移入当前用户废纸篓，无永久删除；驱动被移除后 CoreAudio 刷新。BlackHole 和本地设置保留，恢复项目字节与 Bundle ID 不变。
+预期：所有已识别 App 和 `MiRemoteV 2ch` 移入当前用户废纸篓，无永久删除；已安装的 Apple Remote HCI helper、对应 LaunchDaemon 和状态目录按卸载器当前实现安全移除或停用，`--restore` 可恢复应保留的项；驱动被移除后 CoreAudio 刷新。BlackHole 和本地设置保留，恢复项目字节与 Bundle ID 不变。
 
-失败判定：PKG 成功但 App 或驱动仍在原位，项目未进入废纸篓，BlackHole/本地设置被改动，或无法恢复。
+失败判定：PKG 成功但 App、驱动或 HCI helper 仍在原位，项目未进入废纸篓，LaunchDaemon 仍加载，`--restore` 不可用，BlackHole/本地设置被改动，或无法恢复。
 
 ### 5. 未知同名内容、碰撞与回滚
 
@@ -69,7 +69,7 @@
 
 失败判定：未知内容被移动，废纸篓旧项被覆盖，或失败后产生半卸载状态。
 
-### 5. 系统音频服务未运行时的安装与卸载
+### 6. 系统音频服务未运行时的安装与卸载
 
 1. 在系统音频服务（coreaudiod）未运行的环境或等效夹具下执行安装。
 2. 在同样条件下执行卸载。

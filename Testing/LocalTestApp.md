@@ -1,10 +1,40 @@
 # 本地测试 App 构建
 
-用于本地调试和截图，**不是分发产物**。产物无公证、ad-hoc 或开发证书签名。
+用于本地调试和截图，**不是分发产物**。产物无公证，按模式使用 ad-hoc 或 Developer ID 签名。
 
-## 一条命令
+## 统一入口
 
-前置：私有组件有一个干净的可读 tag 检出（例如 `2.6.2`），路径记为 `$PRIVATE`。
+本地测试包统一使用 `scripts/package-local-test-app.sh`。不要直接调用 `build-app.sh` 作为日常入口；统一入口负责 native 打包、Build 号递增、替换、回退目录、锁和启动。
+
+公开开发自用（默认，无私有输入）：
+
+```bash
+SAYALL_LOCAL_DEFER_LAUNCH=1 ./scripts/package-local-test-app.sh
+```
+
+完整集成测试（要求私有源码、固定 Tag 对应的预构件和本机 Developer ID）：
+
+```bash
+SAYALL_PRIVATE_PLATFORM_MODE=required \
+SAYALL_PRIVATE_SOURCE_ROOT=/path/to/sayall-private-platform \
+SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH=/path/to/prepared-private-artifact-package \
+CODE_SIGN_IDENTITY='Developer ID Application: … (L3QHLDRPAY)' \
+./scripts/package-local-test-app.sh
+```
+
+产物与行为：
+
+- 优先安装到 `~/Applications/SayAll.app`；替换失败才使用 `~/Downloads/SayAll-test/SayAll.app`。
+- 每次构建从 `/Applications/SayAll.app`、`~/Applications/SayAll.app`、目标/回退路径和 `~/.sayall-local-build` 的最大值递增 `CFBundleVersion`，并写入 `SayAllSourceDirty`。
+- 同一时间只允许一个本地构建；已持有锁时直接失败。
+- 公开模式记录 `SayAllBuildChannel=public`；完整集成模式记录 `local` 并强制 Developer ID Team `L3QHLDRPAY`。
+- 默认构建完成后启动 App；设置 `SAYALL_LOCAL_DEFER_LAUNCH=1` 可只安装不启动。
+
+公开模式不能同时提供任何私有路径或 `SAYALL_ENABLE_PRIVATE_SWIFTPM=1`。完整集成模式缺少私有源码、预构件或 Developer ID 时直接失败。
+
+## 直接构建到 dist（高级）
+
+仅在需要 `dist/SayAll.app` 做截图或结构检查时使用 `build-app.sh`。前置：私有组件有当前 `config/release-dependencies.json` 固定 Tag 的干净可读检出，路径记为 `$PRIVATE`；不要使用历史示例 Tag。
 
 ```bash
 git -C "$PRIVATE" status --porcelain --untracked-files=all   # 必须为空
@@ -36,24 +66,16 @@ CONFIGURATION=debug \
    （`free button profile test access excludes private membership artifacts`）。
    所以本地放行方案功能时，必须走源码子包、不能同时给 `SAYALL_PRIVATE_ARTIFACT_PACKAGE_PATH`。
 
-## 需要签名身份时
-
-`CODE_SIGN_IDENTITY` 不能是 `-`（Siri Remote 打包要求真实身份）。本机可用：
-
-```
-CODE_SIGN_IDENTITY='Developer ID Application: lei qian (L3QHLDRPAY)'
-```
-
-只传子包路径、不启用 Siri Remote 私有包时，通常不需要这一项。
-
 ## 截图
 
 设置页可直接由 App 渲染成 PNG：
 
+截图目录必须使用仓库外的持久目录，不要使用 `/tmp`、`/private/tmp` 或 `$TMPDIR`。设置页生产最小窗口为 `1067 × 760`；`1020 × 772` 只适用于 Onboarding 或历史截图 harness。
+
 ```bash
-SAYALL_MACRO_STORAGE_ROOT=/tmp/shot-root \
-REMOTE_MIC_SETTINGS_SCREENSHOT_DIR=/tmp/shot-out \
-REMOTE_MIC_SETTINGS_SCREENSHOT_SIZE=1020x772 \
+SAYALL_MACRO_STORAGE_ROOT="$HOME/Pictures/SayAllEvidence/shot-root" \
+REMOTE_MIC_SETTINGS_SCREENSHOT_DIR="$HOME/Pictures/SayAllEvidence/shot-out" \
+REMOTE_MIC_SETTINGS_SCREENSHOT_SIZE=1067x760 \
 REMOTE_MIC_SETTINGS_SCREENSHOT_APPEARANCE=light \
 REMOTE_MIC_SETTINGS_SCREENSHOT_LANGUAGE=zh-Hans \
 dist/SayAll.app/Contents/MacOS/RemoteMic

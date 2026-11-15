@@ -2,10 +2,9 @@
 
 ## 适用版本
 
-- 本地测试包：无线麦SayAll.app `1.9.21 (174)`
+- 本地测试包：以本次候选的实际版本、Build 和 Commit 为准；历史 `1.9.21 (174)` 只作背景。
 - 构建变体：Apple Silicon，最低 macOS 14.0
-- 构建分支：`codex/complete-siri-pr16-20260907`
-- 本手册只适用于已注入私有 Siri Remote 与 Button Profiles package 的测试包，不适用于社区版 App。
+- 本手册只适用于已注入当前固定私有 Siri Remote 与 Button Profiles package 的测试包，不适用于社区版 App。
 
 ## 测试前准备
 
@@ -17,13 +16,13 @@
 ## 安装
 
 1. 从本次交付的持久化测试包目录双击 `Install SayAll.pkg`。该安装包属于候选制品，不提交到源码仓库；测试交付说明必须提供实际可访问路径和 SHA-256，不能使用仓库内失效链接代替。
-2. 在安装器的“自定安装”页面确认 `Siri Remote 支持` 初始未勾选，然后主动勾选它再继续。
+2. 在安装器的“自定安装”页面确认：无 Siri 组件收据的新机初始未勾选；本机已有 Siri 组件收据时自动选中，属于当前安装器行为。随后主动勾选它再继续。
 3. 完成系统管理员授权，等待安装结束。
 4. 从 `/Applications/SayAll.app` 启动 App。
 
 预期：App、`MiRemoteV 2ch` 和 Siri Remote HCI Helper 均安装；关于页或诊断信息可确认 Siri Remote 功能已包含。若不勾选 Siri Remote，系统 Helper 不应被安装。
 
-失败判定：安装器默认勾选 Siri Remote、主动勾选后缺少 HCI Helper、安装后 App 的 Siri Remote 页面消失，或仍显示 RC003 专属内容。
+失败判定：无收据却默认勾选 Siri Remote、有收据却未选中、主动勾选后缺少 HCI Helper、安装后 App 的 Siri Remote 页面消失，或仍显示 RC003 专属内容。
 
 ## 用例一：键位方案页面
 

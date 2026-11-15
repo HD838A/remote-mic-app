@@ -17,17 +17,18 @@
 
 组合动作历史开放与按键捕获修复来自已弃用的 `sayall-macro-platform`；当前免费组合动作事实源已迁移到
 `GetSayAll/sayall-private-platform/packages/macos-combination-actions`，付费键位方案则独立位于
-`packages/macos-button-profiles`。下方历史 PR 链接仅供审计，不得从旧仓库取代码。宿主验证使用当前平台仓库的统一版本标签：
+`packages/macos-button-profiles`。下方历史 PR 链接仅供审计，不得从旧仓库取代码。宿主验证使用 `config/release-dependencies.json` 当前固定的统一版本标签；本文旧记录中的 `2.1.0` 只是历史值：
 
-```text
-2.1.0
+```bash
+tag="$(jq -er '.dependencies.sayAllPrivatePlatform.version' config/release-dependencies.json)"
 ```
 
 本地开发或验证时，使用不可变的 SwiftPM 版本标签（不得使用浮动的 `main`）：
 
 ```bash
-git -C /path/to/sayall-private-platform fetch origin tag 2.1.0
-git -C /path/to/sayall-private-platform checkout --detach 2.1.0
+tag="$(jq -er '.dependencies.sayAllPrivatePlatform.version' config/release-dependencies.json)"
+git -C /path/to/sayall-private-platform fetch origin tag "$tag"
+git -C /path/to/sayall-private-platform checkout --detach "$tag"
 ```
 
 宿主通过标准 SwiftPM 依赖私有平台根 Package。私有 AI Package 仍单独作为 SwiftPM 依赖。公开宿主不会复制私有源码，也不会在公开构建中解析私有仓库。最小测试命令为：
@@ -127,7 +128,7 @@ swift test --disable-keychain --scratch-path .build-combination-actions
 
 步骤：在没有打开新建区域时记录遥控器大小，点击“新建”后再次观察；创建并选择一个包含“打开 App”步骤的组合动作，输入超过 20 个字符的名称，并依次查看飞书、微信、天气、豆包、OpenCode 和 WorkBuddy 的已安装过滤结果。
 
-预期：新建区域展开前后遥控器保持相同尺寸；“测试动作”和可用状态的“保存修改”与“新建”使用同一种主要按钮颜色；组合动作名称标签与输入框位于同一行，输入最多保留 20 个字符；步骤编号与动作名称字号一致；已选择 App 的真实图标显示在名称前，Bundle ID 紧跟名称显示；新增预置 App 仅在实际安装时出现。注入私有模块后，侧边栏主页面顺序为“按键、组合动作、统计、连接、权限、关于”，不因资格状态插入或移除组合动作页面。
+预期：新建区域展开前后遥控器保持相同尺寸；“测试动作”和可用状态的“保存修改”与“新建”使用同一种主要按钮颜色；组合动作名称标签与输入框位于同一行，输入最多保留 20 个字符；步骤编号与动作名称字号一致；已选择 App 的真实图标显示在名称前，Bundle ID 紧跟名称显示；新增预置 App 仅在实际安装时出现。注入私有模块后，侧边栏顺序以 `Sources/RemoteMic/SettingsView.swift` 的 `SettingsSection.allCases` 为准；不得因资格状态插入、移除或重复组合动作页面，也不得让页面顺序与当前主线不一致。
 
 失败判定：展开新建区域导致遥控器缩放、主要按钮颜色层级不一致、名称超过 20 个字符、步骤标题字号不一致、App 图标或 Bundle ID 缺失、未安装 App 出现在列表中，或主页面顺序错误。
 
@@ -179,7 +180,7 @@ swift test --disable-keychain --scratch-path .build-combination-actions
 
 步骤：
 
-1. 从最终 ZIP 或 DMG 全新解压 App，不从 SwiftPM 产物目录直接运行。
+1. 从最终 ZIP 解压 App，或从最终 Install PKG 安装 App；不从 SwiftPM 产物目录直接运行。
 2. 临时挪开该版本对应的 `/private/tmp/remote-mic-swiftpm/<版本>-<Build>` 和 CI 构建目录。
 3. 不提供组合动作资格，启动 App 并点击侧边栏“组合动作”。
 4. 分别验证已有宏列表和没有宏时的空状态；退出后再次启动重复点击。
@@ -208,13 +209,13 @@ swift test --disable-keychain --scratch-path .build-combination-actions
 
 - RC003 普通语音：`STREAM_START → AUDIO → STREAM_STOP`。
 - Fn 语音、Nearby、Web Remote、虚拟音频和普通按键映射。
-- 使用截图 harness 在 `800 × 650` 做窄宽压力检查，并在真实生产最小窗口 `1020 × 772` 逐一点击全部侧边栏入口，确认页面和滚动不裁切。
+- 使用截图 harness 在 `800 × 650` 做窄宽压力检查，并在真实生产最小窗口 `1067 × 760` 逐一点击全部侧边栏入口，确认页面和滚动不裁切。
 
 ## 安装与覆盖升级
 
 ### 用例六：覆盖已安装版本
 
-步骤：记录 `/Applications/SayAll.app` 当前版本和 Build；如果仍存在旧 `/Applications/Remote Mic.app` 或 `/Applications/无线麦.app` 也一并记录；确认测试包的 Build 更高；从最终 DMG 运行图形化 Installer。
+步骤：记录 `/Applications/SayAll.app` 当前版本和 Build；如果仍存在旧 `/Applications/Remote Mic.app` 或 `/Applications/无线麦.app` 也一并记录；确认测试包的 Build 更高；从最终 Install PKG 运行图形化 Installer。
 
 预期：Installer 成功；App 被原子更新为测试包版本；MiRemoteV 2ch 健康时不重复替换；App 能自动或手动启动；用户设置仍保留。
 
@@ -249,6 +250,6 @@ log show --last 30m \
 
 `1.8.22 (114)` 再次发生同类崩溃，但边界从当时的资格入口缩小到实际 `RemoteMicMacroView`：资格入口已经安全解析，页面空状态和通用本地化仍直接使用 `.module`。修复分支已让私有模块 37 项测试通过；宿主构建门禁先失败后通过；Apple Silicon Release App 和结构验证通过；独立打包页面在移走完整 SwiftPM 构建目录后真实渲染成功；无缓存宿主 App 可打开设置与当时的邀请码区域。这一段只记录历史故障，不代表当前组合动作仍要求邀请码。
 
-自动化只能验证编译边界、组合动作开放状态、事件路由和 App 结构。当前开放状态仍需在最终 Developer ID 包上复验：无组合动作资格的新账户直接进入、旧资格数据不影响入口、Intel Mac 安装、真实遥控器、第三方 App 输入框、系统权限、生产最小窗口 `1020 × 772` 全侧边栏点击、`800 × 650` 离屏压力截图以及不同前后台状态；未完成部分不得表述为已完成真机验证。
+自动化只能验证编译边界、组合动作开放状态、事件路由和 App 结构。当前开放状态仍需在最终 Developer ID 包上复验：无组合动作资格的新账户直接进入、旧资格数据不影响入口、Intel Mac 安装、真实遥控器、第三方 App 输入框、系统权限、生产最小窗口 `1067 × 760` 全侧边栏点击、`800 × 650` 离屏压力截图以及不同前后台状态；未完成部分不得表述为已完成真机验证。
 
-2026-08-14 增加本地化与编辑菜单回归：自动化已确认中英文资源不会回退为原始 key，并确认 Edit 菜单将常用编辑快捷键转发给聚焦输入框；最终签名 App 的生产最小窗口 `1020 × 772` 页面点击、`800 × 650` 离屏压力截图、真实键盘操作和两种系统语言仍需人工验收。
+2026-08-14 增加本地化与编辑菜单回归：自动化已确认中英文资源不会回退为原始 key，并确认 Edit 菜单将常用编辑快捷键转发给聚焦输入框；最终签名 App 的生产最小窗口 `1067 × 760` 页面点击、`800 × 650` 离屏压力截图、真实键盘操作和两种系统语言仍需人工验收。

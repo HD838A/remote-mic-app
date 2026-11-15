@@ -147,11 +147,11 @@ swift build --disable-keychain --scratch-path .build-button-profiles-test -c rel
 - Plus 或有效离线租约恢复原创建/复制按钮，不显示会员辅助说明。
 - 方案胶囊很多时只滚动胶囊区域，右侧说明和按钮不被挤出窗口。
 
-失败判定：只显示“开通会员”而看不出开通后能做什么；Free 仍出现可编辑的创建/复制；点击无响应或离开当前窗口；返回后空白、方案丢失；Plus 误显示会员入口；最小窗口 `1020 × 772` 下说明或按钮被裁切。
+失败判定：只显示“开通会员”而看不出开通后能做什么；Free 仍出现可编辑的创建/复制；点击无响应或离开当前窗口；返回后空白、方案丢失；Plus 误显示会员入口；最小窗口 `1067 × 760` 下说明或按钮被裁切。
 
-截图：使用生产 `SettingsView` 和 `SettingsScreenshotRenderer`，设置 `REMOTE_MIC_SETTINGS_SCREENSHOT_SECTION=mapping`、`REMOTE_MIC_SETTINGS_SCREENSHOT_SIZE=1020x772`、`REMOTE_MIC_SETTINGS_SCREENSHOT_MEMBERSHIP_ACCESS=requiresPlus`；默认状态不设置 `REMOTE_MIC_SETTINGS_SCREENSHOT_MAPPING_SCENARIO`，已选状态设置 `REMOTE_MIC_SETTINGS_SCREENSHOT_MAPPING_SCENARIO=viewer`，并把 `SAYALL_MACRO_STORAGE_ROOT` 放在输出目录内。会员态截图不设置 `REMOTE_MIC_SETTINGS_SCREENSHOT_MEMBERSHIP_ACCESS`。原始截图只保存在仓库外证据目录，PR 附 GitHub 可访问链接。
+截图：使用生产 `SettingsView` 和 `SettingsScreenshotRenderer`，设置 `REMOTE_MIC_SETTINGS_SCREENSHOT_SECTION=mapping`、`REMOTE_MIC_SETTINGS_SCREENSHOT_SIZE=1067x760`、`REMOTE_MIC_SETTINGS_SCREENSHOT_MEMBERSHIP_ACCESS=requiresPlus`；默认状态不设置 `REMOTE_MIC_SETTINGS_SCREENSHOT_MAPPING_SCENARIO`，已选状态设置 `REMOTE_MIC_SETTINGS_SCREENSHOT_MAPPING_SCENARIO=viewer`，并把 `SAYALL_MACRO_STORAGE_ROOT` 放在输出目录内。会员态截图不设置 `REMOTE_MIC_SETTINGS_SCREENSHOT_MEMBERSHIP_ACCESS`。原始截图只保存在仓库外证据目录，PR 附 GitHub 可访问链接。
 
-2026-11-15：生产截图 harness 已生成中文浅色/深色、英文浅色的默认与已选两状态，尺寸均为 `2040 × 1544`（内容 `1020 × 772`）。按钮跟随应用强调色，当前截图为橙色。真实会员点击、真实支付状态和实体遥控器流程仍未验收。
+2026-11-15：生产截图 harness 已生成中文浅色/深色、英文浅色的默认与已选两状态，尺寸均为 `2040 × 1544`（内容 `1020 × 772`；这是当时的截图夹具尺寸，当前生产设置窗口为 `1067 × 760`）。按钮跟随应用强调色，当前截图为橙色。真实会员点击、真实支付状态和实体遥控器流程仍未验收。
 
 ## 用例六：三类遥控入口一致性
 
@@ -167,7 +167,7 @@ swift build --disable-keychain --scratch-path .build-button-profiles-test -c rel
 
 ## 用例七：页面与升级回滚
 
-步骤：在真实生产窗口最小尺寸 `1020 × 772` 逐一打开“按键方案”和“会员”，并使用截图 harness 在 `800 × 650` 做窄宽压力渲染，检查中英文、浅色和深色；随后从不含私有 Package 的旧版升级到内部构建，再回滚到公开构建。
+步骤：在真实生产窗口最小尺寸 `1067 × 760` 逐一打开“按键方案”和“会员”，并使用截图 harness 在 `800 × 650` 做窄宽压力渲染，检查中英文、浅色和深色；随后从不含私有 Package 的旧版升级到内部构建，再回滚到公开构建。
 
 预期：侧边栏、页头、主要控件和滚动无裁切，中文字号不小于 12pt；升级保留公开按键映射和私有方案数据；回滚后私有入口隐藏，公开按键继续可用，旧版不会解析私有方案文件。
 
@@ -255,7 +255,7 @@ swift build --disable-keychain --scratch-path .build-button-profiles-test -c rel
 | 从方案概览进入，再返回 | 按键页可直接修改。返回概览后显示最新摘要。 |
 | 公开构建 | 只有基础键位能力。没有会失败的创建或复制入口。 |
 | 旧备份导入导出 | 绑定、引用、按住和覆盖三态保持。 |
-| 中英文、浅深色、长名称、1020×772 | 标题状态保持可见。中文至少 12pt。全部侧栏可点击和滚动。 |
+| 中英文、浅深色、长名称、1067×760 | 标题状态保持可见。中文至少 12pt。全部侧栏可点击和滚动。 |
 | 实体设备与目标 App | 普通按键三种手势、按住、方案/前台切换正确。语音按下/释放、连续会话和异常恢复无回退。 |
 
 任何跨对象写入、权限越界、半成品方案、丢失引用或状态未知误报成功均判失败。
