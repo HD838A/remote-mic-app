@@ -1,0 +1,44 @@
+Configure “SayAll” directly on this Mac. First decide what you can do:
+- If you cannot run terminal commands on this Mac, do not pretend to configure it. Guide me through the manual steps below.
+- If you can run terminal commands, follow the automatic configuration steps.
+
+Preconditions:
+- A macOS Bluetooth connection does not mean SayAll is connected. The command can continue only after SayAll has recognized and saved the remote in the app.
+- Ask me to confirm that SayAll shows the remote as connected. Then, if SayAll is running, ask me to quit it completely before you run the command. After configuration, ask me to reopen it so the app reads the new staged configuration.
+- Modify only SayAll’s own configuration. Do not read or print Bluetooth addresses, device identifiers, system logs, HCI service state, the system permission database, or other system internals.
+- Do not read or modify private files, databases, sandboxes, or undocumented protocols of third-party voice typing apps.
+
+Automatic configuration:
+1. Do not operate the screen or click windows. Locate SayAll only in the system and current-user Applications folders, then run the configuration command. If it is not found, ask me for its install location. Do not run test copies or download archives:
+   APP_PATH=""
+   for APP_CANDIDATE in "/Applications/SayAll.app" "/Applications/无线麦SayAll.app" "$HOME/Applications/SayAll.app" "$HOME/Applications/无线麦SayAll.app"; do
+     if test -x "$APP_CANDIDATE/Contents/MacOS/RemoteMic"; then
+       APP_PATH="$APP_CANDIDATE"
+       break
+     fi
+   done
+   if test -z "$APP_PATH"; then
+     printf '%s\n' '{"status":"not_found","reason":"installed_app","remaining":["app_installation"]}'
+     exit 1
+   fi
+   "$APP_PATH/Contents/MacOS/RemoteMic" --agent-configure --auto --json
+2. Parse the JSON output. Use only --agent-configure, --auto, --json, --verify, --control-source, and --voice-tool. Do not probe with --help, --version, --scope, or other arguments. Unknown arguments are ignored and do not indicate support.
+3. Handle the JSON result:
+   - configured: staged configuration is prepared. Do not claim that real voice input works. Ask me to reopen SayAll, stay at the real voice-test step, and complete a spoken test with text output.
+   - permission_required: tell me which permissions are missing. Ask me to grant them in System Settings, then rerun.
+   - needs_choice: show the candidates and ask me once. After I choose, rerun with --control-source or --voice-tool.
+   - not_found with reason=connected_remote, or remaining containing remote: stop automatic configuration. Explain that a macOS Bluetooth connection does not mean SayAll is connected. Ask me to open the app and confirm the remote is connected there, then rerun. Do not inspect Bluetooth addresses, HCI, the system permission database, or system services. Do not ask me to disconnect the remote from macOS Bluetooth.
+   - not_found with reason=audio_device: tell me that no supported SayAll audio output device is available. Ask me to install or refresh the audio device as the app directs, then rerun.
+   - not_found with reason=installed_app: ask me for the install location. Do not download or run a test copy.
+   - failed: explain the reason and stop. Do not guess that configuration succeeded.
+4. After configuration, leave SayAll at the real voice-test step. Do not skip voice, audio, button, or text-on-screen verification, and do not treat a written configuration as proof of success.
+5. After configuration, you may run --agent-configure --verify --json with the same app path to check the staged configuration. It still does not prove real voice success.
+
+Manual steps when you cannot run terminal commands:
+1. Open SayAll and confirm the remote is connected in the app. A macOS Bluetooth connection is not enough.
+2. Grant Bluetooth, Input Monitoring, and Accessibility in the onboarding flow.
+3. Select the voice typing app and remove the system Fn shortcut as the app instructs.
+4. On the voice-test page, select the SayAll audio output device and set the same device as its microphone in the voice typing app.
+5. Hold the voice button and speak. Confirm the target app actually writes text. Do not treat configuration as voice success.
+
+If macOS permissions, a user choice, or a real spoken test is still required, tell me exactly what remains. A JSON status of configured or permission_required means only that staged configuration is prepared; it does not mean real voice verification is complete. Use the command’s JSON result to determine success or failure, and explain the concrete reason if it fails. Never fabricate completion.

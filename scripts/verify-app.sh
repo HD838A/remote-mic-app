@@ -191,6 +191,11 @@ test -f "$APP/Contents/Resources/TROUBLESHOOTING.md"
 test -f "$APP/Contents/Resources/COPYRIGHT.md"
 test -f "$APP/Contents/Resources/LOGO-LICENSE.md"
 test -f "$APP/Contents/Resources/FirstInstallGuide.md"
+for onboarding_prompt_localization in en zh-Hans; do
+  onboarding_prompt="$APP/Contents/Resources/$onboarding_prompt_localization.lproj/OnboardingAIAssistantPrompt.txt"
+  test -f "$onboarding_prompt"
+  /usr/bin/grep -Fq -- '--agent-configure --auto --json' "$onboarding_prompt"
+done
 test -f "$APP/Contents/Resources/RC001-remote-photo.png"
 test -f "$APP/Contents/Resources/RC003-remote-photo.png"
 for onboarding_image in "$ROOT"/Resources/Onboarding/*.png(N); do

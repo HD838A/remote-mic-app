@@ -488,16 +488,8 @@ struct OnboardingView: View {
             .scrollIndicators(.hidden)
 
             HStack(alignment: .center, spacing: 16) {
-                if settings.onboardingStep == .welcome {
-                    onboardingActionButton(id: "welcome.copy-ai-prompt") {
-                        copyAIAssistantPrompt()
-                    } label: {
-                        Text(verbatim: localization.text(aiPromptCopyStatusKey))
-                            .font(.system(size: 13, weight: .medium))
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.large)
-                }
+                // 内置 AI 配置提示词尚未在外部 AI 工具中可靠完成任务，先隐藏入口。
+                // 无屏配置命令和提示词文案保留，待提示词验收通过后再恢复。
                 if settings.onboardingStep == .voiceTool && !canContinue {
                     Text(verbatim: localization.text("onboarding.voice_tool.guide.continue_hint"))
                         .font(.system(size: 12))
@@ -3475,6 +3467,11 @@ struct OnboardingView: View {
 
     private func copyAIAssistantPrompt() {
         let prompt = OnboardingAIAssistantPrompt.text(for: localization.locale)
+        guard !prompt.isEmpty else {
+            aiPromptCopyResult = false
+            AppLogger.shared.write("ONBOARDING AI_PROMPT copied=false reason=resource_missing")
+            return
+        }
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         let copied = pasteboard.setString(prompt, forType: .string)
