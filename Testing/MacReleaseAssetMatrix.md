@@ -89,6 +89,8 @@ App 校验诊断使用生产 ZERR/EXIT 陷阱，分别触发裸命令、管道�
 
 App 禁止内容断言触发时，检查 supervisor 是否报告固定公开组件分组。分别在合成宿主、资源与 Helper 中放入禁止路径、旧临时标记和示例设备地址，确认对应分组与固定拒绝码，且整个验证保持非零。仅包含批准 Sentry 路径时应通过。诊断不得输出命中值、私有文件名或完整 App 路径，分组超时也不得改变原拒绝结果。分组拒绝码含义见对应 Bug 记录。
 
+同时执行 `python3 scripts/test-private-platform.py ReleaseContentTests.test_app_content_location_diagnostics_do_not_disclose_paths`，以真实 arm64 与 x86_64 Mach-O 验证 `app-content-macos-rpath` 和 `app-content-macos-strings` 状态。其他位置只报告固定标签，状态不能包含原始 section 名、路径或文件名。位置诊断仍是失败定位证据，不代表候选内容已修复或允许发布。
+
 publication 的远端资产数量必须等于同一 expected-assets 清单的行数，其中包含 payload 和独立来源证明。生产片段回归分别验证当前 10 项与历史 13 项 payload，完整数量通过，缺失或多余均拒绝。
 
 ## 用例 7 公开与官方构建权限

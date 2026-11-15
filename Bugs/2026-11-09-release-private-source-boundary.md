@@ -66,3 +66,13 @@ Build 319 的 staging Run 42712811408 中，两架构编译与签名通过。Int
 Build 320 的 staging Run 42726454626 完成全部双架构检查和 canonical 内容扫描。真实稳定版 Sparkle 升级、二次启动、原配置完整导出及安装后信任检查通过。publication Run 42729867138 上传了清单规定的 10 项 payload 与 1 项来源证明，随后因遗留的固定 12 项断言失败。该断言没有使用前面已经生成的 expected-assets 清单。
 
 生产片段回归复现了 11 项合法资产被拒绝。数量断言改为读取同一 expected-assets 清单，覆盖当前 10 项及历史 13 项 payload，加来源证明后分别要求 11 和 14 项，缺失或多余均拒绝。候选资产身份和字节保留，Release 已收回 Draft，公开字节与 feed 验收须在修复后完成。
+
+## 2026-11-15 路径拒绝的二进制位置诊断
+
+宿主 `11276cef65332e8a74c527e118039728dfacb083`、私有平台 `2.12.2` 的 staging Run 43722512372 与 43724610921 均在公证前的 App 内容断言失败。两次都记录主程序和 Helpers 分组拒绝码 14；尚无 payload artifact、stage record 或公开 2.0.2 身份。
+
+本机复核同一私有发布附件的摘要和来源。原始 Helper 中的路径都位于符号表，生产 `strip -S -x` 可以清除；公开 MCP、加入私有二进制的 MCP 以及完整宿主的 Release 实验暂未复现该拒绝。不能据此认定私有组件存在运行时路径泄漏，也不能把本机通过当作受保护候选验收。
+
+现有分组码无法区分加载路径、常量和残留调试符号。拒绝后追加的只读诊断现在只输出固定位置标签：`rpath`、`dylib`、`symbols`、`signature`、`strings`、`constants`、`reflection`、`section` 或 `other`。匹配字节、文件名、原始 section 名和路径不进入公开状态流；没有新增允许项，原始断言与失败退出码继续生效。
+
+验证：`python3 scripts/test-private-platform.py ReleaseContentTests` 使用真实 arm64 与 x86_64 Mach-O 复现加载路径及字符串区拒绝，并断言原始 canary、文件名和路径不出现在直接输出或 supervisor 报告中。既有成功、拒绝、配置污染和 supervisor 超时用例继续覆盖原边界。真实受保护失败的具体路径来源仍待下一次 staging 确认；此改动只修复诊断缺口，不声称修复候选内容。
