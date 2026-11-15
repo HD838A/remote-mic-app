@@ -1,0 +1,327 @@
+{
+  "batch": "remote-connection-recovery-2026-11-15",
+  "date": "2026-11-15",
+  "purpose": "PR #1072 production SettingsView recovery states and native window navigation",
+  "pr": "https://github.com/HD838A/remote-mic-app/pull/1072",
+  "source_commit": "82bc360073ea772d720c0eae33caa65689c6ff5b",
+  "version": "2.0.2",
+  "build": "320",
+  "build_mode": "public debug; native scripts/build-app.sh; screenshot inspection only, not a distributed candidate",
+  "storage": "GitHub PR attachments; originals retained outside repository",
+  "evidence_url": "https://github.com/HD838A/remote-mic-app/pull/1072#issuecomment-6895235573",
+  "rendering": {
+    "offscreen": "1067x732 pt content, 2134x1464 PNG; 7 states x 2 languages x 2 appearances",
+    "interactive": "1067x760 pt whole window, 2134x1520 JPEG; Chinese light navigation and disclosure",
+    "fixture": "isolated profiles and connection/permission presentation; no real Bluetooth or recording",
+    "review": "All 34 originals viewed; text, controls, contrast, disclosure, five enabled sidebar entries and scroll access checked",
+    "unverified": "Real hardware, permission restoration, audio first/tail samples, speech text, power and Windows acceptance remain unverified"
+  },
+  "items": [
+    {
+      "file": "bluetooth-en-dark/connection-1067x732.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1464,
+      "sha256": "2e343f450dd2565153c143398d7f0ff0089f4f5a0766a241d6f56b8c2e36385b",
+      "bytes": 360577,
+      "url": "https://github.com/user-attachments/assets/17a4614e-cfe4-4c1c-a621-d66641eb7250"
+    },
+    {
+      "file": "bluetooth-en-light/connection-1067x732.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1464,
+      "sha256": "b6d82fad269ae070cdfd1c226933b2e000de9ea6ce97e68f9f56c2869dd8ebd7",
+      "bytes": 360303,
+      "url": "https://github.com/user-attachments/assets/83485e1c-0847-48d3-ada2-a9c2a9b51618"
+    },
+    {
+      "file": "bluetooth-zh-Hans-dark/connection-1067x732.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1464,
+      "sha256": "4243ddc9904e7e292bd2389b9661a610e2b40e76c7011730a94bc13aa0e3b2a5",
+      "bytes": 391486,
+      "url": "https://github.com/user-attachments/assets/7e169ccf-c912-4e43-8426-b528f184a229"
+    },
+    {
+      "file": "bluetooth-zh-Hans-light/connection-1067x732.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1464,
+      "sha256": "8b640ac5c4374e1f86f2bde08b7be6589f7d15a54588f7b50a0287815027658c",
+      "bytes": 392635,
+      "url": "https://github.com/user-attachments/assets/02f3f881-2e17-4af1-b5a3-27e0bcd539b4"
+    },
+    {
+      "file": "failed-en-dark/connection-1067x732.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1464,
+      "sha256": "72df97437331d344059a6ffa4b355da6a296710aa3468399651714365acc9569",
+      "bytes": 414762,
+      "url": "https://github.com/user-attachments/assets/cca0b4b8-1398-437f-8774-2669efeed918"
+    },
+    {
+      "file": "failed-en-light/connection-1067x732.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1464,
+      "sha256": "dc28062a8965f62388b23d621f9a63ca43610112267dd10c3f7902f7cbe46a4e",
+      "bytes": 413135,
+      "url": "https://github.com/user-attachments/assets/cbd82739-697b-47fb-b1bf-268070626f40"
+    },
+    {
+      "file": "failed-zh-Hans-dark/connection-1067x732.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1464,
+      "sha256": "6ab962b52b851dd873d1f5d67b616158c272678c11230f6c588dd7fae36cc58a",
+      "bytes": 456609,
+      "url": "https://github.com/user-attachments/assets/717fc057-44fc-4089-95d2-762784183bad"
+    },
+    {
+      "file": "failed-zh-Hans-light/connection-1067x732.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1464,
+      "sha256": "5e37a0f7ebb68ae51a2f0191aeb00c1cefa1983ae8344a28889314c964da3470",
+      "bytes": 457070,
+      "url": "https://github.com/user-attachments/assets/c9a3571d-89a6-4f9e-a292-02eb20bfcba4"
+    },
+    {
+      "file": "interactive/applications.jpg",
+      "format": "JPEG",
+      "width": 2134,
+      "height": 1520,
+      "sha256": "1b58d7a021af1183c53902b06dab6c17eb4aceab14eb0abb33fb28ba7394bd7d",
+      "bytes": 137503,
+      "url": "https://github.com/user-attachments/assets/78d7d5e9-fa55-43e9-934f-0d0b7698b92e"
+    },
+    {
+      "file": "interactive/connection-collapsed.jpg",
+      "format": "JPEG",
+      "width": 2134,
+      "height": 1520,
+      "sha256": "2a3b27d1bf4205cc43a2f083d16efe80a58147dbaa99db598b5446ca27b17a74",
+      "bytes": 298407,
+      "url": "https://github.com/user-attachments/assets/ff17131f-32bb-45eb-b429-4b4544422676"
+    },
+    {
+      "file": "interactive/connection-expanded.jpg",
+      "format": "JPEG",
+      "width": 2134,
+      "height": 1520,
+      "sha256": "d02705902b0eca774f26bda5f62fa314b676c659dda40816c848a176aab36e1e",
+      "bytes": 318356,
+      "url": "https://github.com/user-attachments/assets/98097198-71da-46a4-977d-e6548a220ef1"
+    },
+    {
+      "file": "interactive/mapping.jpg",
+      "format": "JPEG",
+      "width": 2134,
+      "height": 1520,
+      "sha256": "c4ba519bd8a89f0850847c7da41ebc7b82d0b1d0df3ea7b2d2ddd6aca51e594f",
+      "bytes": 397039,
+      "url": "https://github.com/user-attachments/assets/2d93fef9-cecb-442c-8217-995d6280e3ae"
+    },
+    {
+      "file": "interactive/settings.jpg",
+      "format": "JPEG",
+      "width": 2134,
+      "height": 1520,
+      "sha256": "a2c1278b59e3631ca844a6e1c0991ccd60df4af507bcd0d0ec64f1f800323564",
+      "bytes": 282411,
+      "url": "https://github.com/user-attachments/assets/f4acdfa9-3d02-400e-915d-001b994e8fc2"
+    },
+    {
+      "file": "interactive/transcripts.jpg",
+      "format": "JPEG",
+      "width": 2134,
+      "height": 1520,
+      "sha256": "879b4d2249562aa8ec862a9bf82175bc164f1098a3d58b5b0fad8d05515f06e0",
+      "bytes": 206221,
+      "url": "https://github.com/user-attachments/assets/33ff7b4c-e426-4ed4-8a57-7cdc76a88d9b"
+    },
+    {
+      "file": "mixed-en-dark/connection-1067x732.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1464,
+      "sha256": "1086d46ad9f6944c8fe777822af542983f8e0b0a7d58058198a6e153f3e8ab53",
+      "bytes": 407685,
+      "url": "https://github.com/user-attachments/assets/13022c7e-402f-4ef3-b347-f5b3fbcd2402"
+    },
+    {
+      "file": "mixed-en-light/connection-1067x732.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1464,
+      "sha256": "15fe00208ad8d7b6901a3cf7c73f344a9e40e61ab133cd4faf1afeebc35602e7",
+      "bytes": 406439,
+      "url": "https://github.com/user-attachments/assets/81c49513-7097-4ca2-88e5-f77209789098"
+    },
+    {
+      "file": "mixed-zh-Hans-dark/connection-1067x732.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1464,
+      "sha256": "7a007a326308ee5c17294d0d9bc2ec06abb8d32ffdfbed91c2cc8fed2e477039",
+      "bytes": 445680,
+      "url": "https://github.com/user-attachments/assets/b15c94a2-8147-4a07-957d-b5c713a924bd"
+    },
+    {
+      "file": "mixed-zh-Hans-light/connection-1067x732.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1464,
+      "sha256": "e27f261d8275d21321a9d11936b1e36c9cf81e808dc6432235566b5bdbd1b263",
+      "bytes": 446836,
+      "url": "https://github.com/user-attachments/assets/13dfce83-5729-43fb-816a-779f14fcbb56"
+    },
+    {
+      "file": "offline-en-dark/connection-1067x732.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1464,
+      "sha256": "33e69347c0ae0ce4549e1f946612d34c30b2fb7bbfe193d5b64524ad46bcff69",
+      "bytes": 353618,
+      "url": "https://github.com/user-attachments/assets/a07cfcf0-6623-4125-8b80-2602c3929d0a"
+    },
+    {
+      "file": "offline-en-light/connection-1067x732.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1464,
+      "sha256": "c9e4056fdd5ed4906ab2c9f5414acdfd25a72ec3648bdfb5bd7aaa2020b81e83",
+      "bytes": 352942,
+      "url": "https://github.com/user-attachments/assets/1c556080-4079-4686-82b2-fcce80897055"
+    },
+    {
+      "file": "offline-zh-Hans-dark/connection-1067x732.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1464,
+      "sha256": "a3ba2a9c56d9102ddfb165f98b224d102eac0ff542e07c884d0d56de01dd1cf3",
+      "bytes": 387240,
+      "url": "https://github.com/user-attachments/assets/79e9cff8-a282-4f8b-9904-19951232a3c8"
+    },
+    {
+      "file": "offline-zh-Hans-light/connection-1067x732.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1464,
+      "sha256": "29d6f1fd7f35136c815464608c5bf0d2c9c60105aa90cd1228f5426aa651774e",
+      "bytes": 388153,
+      "url": "https://github.com/user-attachments/assets/5824b633-8f57-492e-8809-017ff50bdf9a"
+    },
+    {
+      "file": "paused-en-dark/connection-1067x732.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1464,
+      "sha256": "a0e223e085e867aa6a9cbb12e1bb1cb5eaa19f32b25934fbe078ce9426b0057b",
+      "bytes": 415074,
+      "url": "https://github.com/user-attachments/assets/3858658b-32c8-41f2-8855-c4f0c7bfb476"
+    },
+    {
+      "file": "paused-en-light/connection-1067x732.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1464,
+      "sha256": "c0e84bf7ad8ef781032bf43cfd6f7b695e956f1698f2a2a942a65009a54ef2b7",
+      "bytes": 413571,
+      "url": "https://github.com/user-attachments/assets/c02777c3-9d8a-4693-8f7f-020c2cecaeeb"
+    },
+    {
+      "file": "paused-zh-Hans-dark/connection-1067x732.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1464,
+      "sha256": "5d61e03880520285815317188dd4f36d04aebe570e1457f72017d0790a08ab56",
+      "bytes": 453357,
+      "url": "https://github.com/user-attachments/assets/7df61857-f113-4e8d-9235-a6f2db0a0f4b"
+    },
+    {
+      "file": "paused-zh-Hans-light/connection-1067x732.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1464,
+      "sha256": "47473474381c1702eeb8a07d63eaf40460e6ad087c125dc3d6b8de5ee66ecae0",
+      "bytes": 454287,
+      "url": "https://github.com/user-attachments/assets/2a6766e7-13ef-4b72-8014-0632c8ded550"
+    },
+    {
+      "file": "permission-en-dark/connection-1067x732.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1464,
+      "sha256": "1032267c5031e01a1e79118ac0104268a0ceb17b9c9443545599f4638677f917",
+      "bytes": 367323,
+      "url": "https://github.com/user-attachments/assets/1dea1268-0d83-49cd-a61c-3f2c7791d8f8"
+    },
+    {
+      "file": "permission-en-light/connection-1067x732.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1464,
+      "sha256": "3560d6e4f1079b0364810e2ec54d277e5e570f744d09a0d7edd476ea2b0d6811",
+      "bytes": 367082,
+      "url": "https://github.com/user-attachments/assets/1ec47930-23fe-4543-9f24-1b3f8a0c0cd2"
+    },
+    {
+      "file": "permission-zh-Hans-dark/connection-1067x732.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1464,
+      "sha256": "fbdde5e5836bddb7d45fc10279acdb141d614708f93eb6981d533394a76a4ef0",
+      "bytes": 394641,
+      "url": "https://github.com/user-attachments/assets/d1053151-9988-41aa-9222-031df5e9ac69"
+    },
+    {
+      "file": "permission-zh-Hans-light/connection-1067x732.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1464,
+      "sha256": "53fa0b5385b82241155370faf71b0360eaee2485eff0098c5f85f95f80285b16",
+      "bytes": 395421,
+      "url": "https://github.com/user-attachments/assets/b15976c8-0467-48b0-a394-5fa5ab312e1c"
+    },
+    {
+      "file": "recovering-en-dark/connection-1067x732.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1464,
+      "sha256": "f0b7a656b6de4d66b2b8ad3e69f6decf72a5d7c6151d15d6ee1180109352a83e",
+      "bytes": 407744,
+      "url": "https://github.com/user-attachments/assets/e8645255-116c-4e54-a18d-658f7723a836"
+    },
+    {
+      "file": "recovering-en-light/connection-1067x732.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1464,
+      "sha256": "e56b711a437b41d9fc1cabd4284eead27c4d9073433886ef557d8163539bef79",
+      "bytes": 406577,
+      "url": "https://github.com/user-attachments/assets/39a6f906-ac7e-489e-bbe7-a1419ae5be3d"
+    },
+    {
+      "file": "recovering-zh-Hans-dark/connection-1067x732.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1464,
+      "sha256": "add19d47e55837f267d04c146dbf4519d27c6052b6298c45c1e987aaa2279d6b",
+      "bytes": 446637,
+      "url": "https://github.com/user-attachments/assets/d2d75e92-768c-4f64-a38b-737cb38ba436"
+    },
+    {
+      "file": "recovering-zh-Hans-light/connection-1067x732.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1464,
+      "sha256": "9a3c2673195bd7b0ea9e3639e279f4cbb08a662f4c7b67cbff6f59518a733539",
+      "bytes": 447693,
+      "url": "https://github.com/user-attachments/assets/31a19ec4-c90f-4192-99e1-31415cffb526"
+    }
+  ]
+}
