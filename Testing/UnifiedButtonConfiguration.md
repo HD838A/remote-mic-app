@@ -803,3 +803,5 @@ swift test --disable-keychain --filter 'ButtonBindingConfigurationTests|RemoteBu
 
 自动化覆盖动作变化时的清除判定、保存回执与失败提示生命周期；方案组件集成用例仍要求隔离的 `SAYALL_MACRO_STORAGE_ROOT`。
 真实会员状态、旧安装包升级、实体遥控器最终动作和第三方 App 收到快捷键/focus 仍需单独验收。截图只证明静态界面和状态文案。
+
+本轮截图证据：生产 `SettingsView` 离屏入口生成的中文浅色 `1020 × 772`（PNG `2040 × 1544`）共 7 张，覆盖方案总览、快捷键编辑、focus 编辑、继承默认行、可写按住面板、清除成功和清除失败重试。图片字节不入库，索引、尺寸和 SHA-256 见 `Screenshots/profile-editability-inheritance/manifest.json`，外链为 PR 附件。截图只证明静态界面和状态文案。

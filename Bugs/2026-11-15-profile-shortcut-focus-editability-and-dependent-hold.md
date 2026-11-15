@@ -64,7 +64,8 @@
   1512 项测试、113 个套件通过。该发布控制面 fixture 在公开模式通过；私有模式下受本机环境限制失败。
 - 生产界面：由生产 `SettingsView` 的离屏入口生成中文浅色 `1020 × 772`（PNG `2040 × 1544`）截图，覆盖方案总览、
   快捷键编辑、focus 编辑、继承默认行、可写按住面板、清除成功和清除失败重试。方案访问由截图 fixture 授权，
-  不代表真实会员状态；图片字节保存在仓库外证据目录，仅以 PR 附件和文本索引归档。
+  不代表真实会员状态；图片字节保存在仓库外证据目录，仅以 PR 附件和文本索引归档。索引见
+  `Screenshots/profile-editability-inheritance/manifest.json`。
 - `scripts/verify-localizations.sh`、`scripts/verify-repository-governance.sh`、
   `scripts/check-repository-boundaries.sh` 与 `git diff --check` 通过。
 
