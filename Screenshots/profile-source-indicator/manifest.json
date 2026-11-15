@@ -11,7 +11,7 @@
     772
   ],
   "storage": "external-persistent-directory-and-github-pr-attachments",
-  "storage_path": "/Users/andy/Develop/ReleaseArtifacts/profile-source-indicator-20261115/attachments/",
+  "storage_path": "~/Develop/ReleaseArtifacts/profile-source-indicator-20261115/attachments/",
   "notes": [
     "由生产 SettingsView 的 REMOTE_MIC_SETTINGS_SCREENSHOT_DIR 离屏入口生成；不是设计稿，也不启动蓝牙硬件。",
     "使用私有 2.12.0 子包源码和本地按键方案测试放行构建；方案访问由截图 fixture 授权，不代表真实会员验收。",
