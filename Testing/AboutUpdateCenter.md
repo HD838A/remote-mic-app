@@ -94,7 +94,7 @@
 
 2026-11-15 截图夹具修复验证：`SettingsScreenshotRenderer.seedAvailableUpdate` 改为从当前 `CFBundleShortVersionString` 和 `CFBundleVersion` 生成演示候选，最后一个版本段和 Build 各加 1。使用 Build 320 的公开 Release App，当前版本 `2.0.2 (Build 320)`，演示候选 `2.0.3 (Build 321)`。覆盖英文/中文、浅色/深色、标准图标、`SIDEBAR_FIXTURE=1` 和 `long` 账户名共 12 张 About 页面截图；全部为 `2040 × 1544` PNG，逐张确认显示“当前版本 2.0.2 (Build 320)”“可更新”“2.0.3 更新内容”“更新到 2.0.3”，不含 `1.9.22`。
 
-- 自动化：`swift test --disable-keychain --filter SettingsPageRegressionTests` 通过 82 项；新增用例覆盖补丁版本、两段/四段版本和缺失 Bundle 元数据回退。
+- 自动化：`swift test --disable-keychain --filter SettingsPageRegressionTests` 通过 83 项；新增用例覆盖补丁版本、两段/四段版本和缺失 Bundle 元数据回退。
 - 构建：`SAYALL_PRIVATE_PLATFORM_MODE=public SAYALL_BUILD_CHANNEL=public CODE_SIGN_IDENTITY=- REQUIRE_SIRI_REMOTE_SIGNING=0 CONFIGURATION=release scripts/build-app.sh` 通过。
 - 包检查：`scripts/verify-app.sh dist/SayAll.app` 通过（`APP VERIFY PASS`）。
 - 截图索引：[manifest.json](../Screenshots/2026-11-15-about-update-fixture/manifest.json)。图片字节保存在仓库外持久目录；PR 附件在交付时补齐。

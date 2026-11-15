@@ -73,7 +73,7 @@ updateInformation.setAvailable(
 
 ## 验证
 
-- `swift test --disable-keychain --filter SettingsPageRegressionTests` 通过 82 项。
+- `swift test --disable-keychain --filter SettingsPageRegressionTests` 通过 83 项。
 - `swift test --disable-keychain --filter UpdateInformationTests` 通过 17 项；真实更新比较和频道选择未回归。
 - `SAYALL_PRIVATE_PLATFORM_MODE=public SAYALL_BUILD_CHANNEL=public CODE_SIGN_IDENTITY=- REQUIRE_SIRI_REMOTE_SIGNING=0 CONFIGURATION=release scripts/build-app.sh` 通过。
 - `scripts/verify-app.sh dist/SayAll.app` 通过，输出 `APP VERIFY PASS`。
