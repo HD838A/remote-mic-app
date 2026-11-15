@@ -3895,6 +3895,169 @@ struct RemoteButtonsTests {
         #expect(cache.entries.count <= 8)
     }
 
+    @Test func hidPathHealthUsesManagerFallbackWhenOwningDeviceCallbackIsSilent() {
+        var health = HIDReportPathHealth()
+        let firstWindowEvents = driveManagerOnlyWindow(&health, startingAt: 1_000_000_000)
+        #expect(firstWindowEvents.contains(.managerFallback))
+        let firstWindow = firstWindowEvents.compactMap { event -> HIDReportPathWindow? in
+            if case let .window(window) = event { return window }
+            return nil
+        }.first
+        #expect(firstWindow?.deviceReports == 0)
+        #expect((firstWindow?.managerReports ?? 0) > 0)
+        #expect((firstWindow?.fallbackReports ?? 0) > 0)
+        #expect(firstWindow?.deviceHealthy == false)
+        #expect(!firstWindowEvents.contains { event in
+            if case .recoveryCandidate = event { return true }
+            return false
+        })
+
+        let secondWindowEvents = driveManagerOnlyWindow(&health, startingAt: 11_000_000_000)
+        let candidates = secondWindowEvents.compactMap { event -> (Int, Int)? in
+            if case let .recoveryCandidate(attempt, managerReports) = event {
+                return (attempt, managerReports)
+            }
+            return nil
+        }
+        #expect(candidates.map { $0.0 } == [1])
+    }
+
+    @Test func hidPathHealthConfirmsDeviceDeliveryAndRecoversAfterManagerFallback() {
+        var health = HIDReportPathHealth()
+        let confirmed = health.record(
+            path: .device,
+            duplicate: false,
+            nowNanoseconds: 1_000_000_000,
+            recoveryEnabled: true
+        )
+        #expect(confirmed == [.deviceDeliveryConfirmed])
+
+        let recentManager = health.record(
+            path: .manager,
+            duplicate: false,
+            nowNanoseconds: 2_000_000_000,
+            recoveryEnabled: true
+        )
+        #expect(!recentManager.contains(.managerFallback))
+
+        let fallback = health.record(
+            path: .manager,
+            duplicate: false,
+            nowNanoseconds: 4_000_000_000,
+            recoveryEnabled: true
+        )
+        #expect(fallback.contains(.managerFallback))
+
+        let recovered = health.record(
+            path: .device,
+            duplicate: false,
+            nowNanoseconds: 4_500_000_000,
+            recoveryEnabled: true
+        )
+        #expect(recovered.contains(.deviceDeliveryRecovered))
+    }
+
+    @Test func hidPathHealthDoesNotCountDuplicateManagerReportsAsFallback() {
+        var health = HIDReportPathHealth()
+        _ = health.record(
+            path: .manager,
+            duplicate: false,
+            nowNanoseconds: 1_000_000_000,
+            recoveryEnabled: true
+        )
+        let duplicate = health.record(
+            path: .manager,
+            duplicate: true,
+            nowNanoseconds: 2_000_000_000,
+            recoveryEnabled: true
+        )
+        #expect(!duplicate.contains(.managerFallback))
+
+        let windowEvents = health.record(
+            path: .manager,
+            duplicate: false,
+            nowNanoseconds: 11_000_000_000,
+            recoveryEnabled: true
+        )
+        let window = windowEvents.compactMap { event -> HIDReportPathWindow? in
+            if case let .window(window) = event { return window }
+            return nil
+        }.first
+        #expect(window?.duplicateReports == 1)
+        #expect(window?.fallbackReports == 2)
+    }
+
+    @Test func hidPathHealthThrottlesAndBoundsDeviceCallbackRecovery() {
+        var health = HIDReportPathHealth()
+        var events = driveManagerOnlyWindow(&health, startingAt: 1_000_000_000)
+        events += driveManagerOnlyWindow(&health, startingAt: 11_000_000_000)
+
+        var start: UInt64 = 21_000_000_000
+        for _ in 0 ..< 6 {
+            events += driveManagerOnlyWindow(&health, startingAt: start)
+            start += 10_000_000_000
+        }
+        start = 81_000_000_000
+        for _ in 0 ..< 6 {
+            events += driveManagerOnlyWindow(&health, startingAt: start)
+            start += 10_000_000_000
+        }
+        start = 141_000_000_000
+        for _ in 0 ..< 6 {
+            events += driveManagerOnlyWindow(&health, startingAt: start)
+            start += 10_000_000_000
+        }
+
+        let attempts = events.compactMap { event -> Int? in
+            if case let .recoveryCandidate(attempt, _) = event { return attempt }
+            return nil
+        }
+        #expect(attempts == [1, 2, 3])
+        #expect(events.contains { event in
+            if case .recoveryExhausted = event { return true }
+            return false
+        })
+    }
+
+    @Test func hidMonitorNeverDropsManagerReportsSolelyBecauseDeviceCallbackExists() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/HIDRemoteMonitor.swift"),
+            encoding: .utf8
+        )
+        #expect(!source.contains("path == .device || !hasDeviceCallback"))
+        #expect(!source.contains("static func shouldAcceptReport("))
+        #expect(source.contains("pathHealth.record("))
+    }
+
+    private func driveManagerOnlyWindow(
+        _ health: inout HIDReportPathHealth,
+        startingAt start: UInt64
+    ) -> [HIDReportPathHealthEvent] {
+        var events = health.record(
+            path: .manager,
+            duplicate: false,
+            nowNanoseconds: start,
+            recoveryEnabled: true
+        )
+        events += health.record(
+            path: .manager,
+            duplicate: false,
+            nowNanoseconds: start + 5_000_000_000,
+            recoveryEnabled: true
+        )
+        events += health.record(
+            path: .manager,
+            duplicate: false,
+            nowNanoseconds: start + 10_000_000_000,
+            recoveryEnabled: true
+        )
+        return events
+    }
+
     @Test func monitorStopEndsThePrearmSessionBeforeReleasingSharedResources() throws {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         let source = try String(contentsOf: root.appendingPathComponent("Sources/RemoteMic/HIDRemoteMonitor.swift"), encoding: .utf8)
