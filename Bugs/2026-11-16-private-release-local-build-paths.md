@@ -2,7 +2,7 @@
 
 ## 状态
 
-已修复，等待 2.0.3 Preview staging 重新验证。
+已修复并验证：2.0.3 staging run `43757992029` 通过，publication run `43763008826` 已发布 `v2.0.3` Pre-release。
 
 ## 影响范围
 
@@ -46,7 +46,9 @@ RELEASE STATUS lane=intel stage=app-verify-pre-notary result=passed
 
 - `python3 scripts/test-private-platform.py ReleaseContentTests.test_release_path_sanitizer_preserves_layout_and_public_sentry_paths` 通过。
 - 使用 2.12.2 私有构件重建 Apple Silicon App，`build-app.sh` 输出 `SANITIZE RELEASE PATHS result=passed`；主程序与 Helpers 的本地路径扫描为 0。
-- 待完成：PR 必需 CI、重新 staging、Sparkle 真实 UI 验收与发布后复验。
+- PR CI 与合并后 main CI 通过。
+- 2.0.3 staging run `43757992029` 的 Apple Silicon/Intel 签名、公证、内容门禁通过。
+- Sparkle 真实 UI 从稳定版 1.9.21 更新到 2.0.3/build 323，首次启动、退出和二次启动通过；公开 Pre-release 的 Apple Silicon 与 Intel ZIP 摘要、签名、公证和 Gatekeeper 复验通过。
 
 ## 验证边界
 
