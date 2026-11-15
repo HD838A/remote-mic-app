@@ -69,6 +69,10 @@ enum SettingsScreenshotRenderer {
         let opensActionEditor = ProcessInfo.processInfo.environment[
             "REMOTE_MIC_SETTINGS_SCREENSHOT_OPEN_ACTION_EDITOR"
         ] == "1"
+        // 动作编辑区与按住编辑区一样可以针对任意按键截图，证据才能覆盖快捷键和 focus 绑定。
+        let actionEditorButton = ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_SETTINGS_SCREENSHOT_ACTION_BUTTON"
+        ].flatMap(RemoteButton.init(rawValue:)) ?? .ok
         let opensHoldEditor = ProcessInfo.processInfo.environment[
             "REMOTE_MIC_SETTINGS_SCREENSHOT_OPEN_HOLD_EDITOR"
         ] == "1"
@@ -375,7 +379,7 @@ enum SettingsScreenshotRenderer {
                 updateInformation: updateInformation,
                 initialSection: section,
                 initialShareSection: section == .statistics && expandsShare ? section : nil,
-                initialMappingEditingButton: section == .mapping && opensMappingEditor ? .ok : nil,
+                initialMappingEditingButton: section == .mapping && opensMappingEditor ? actionEditorButton : nil,
                 initialMappingHoldEditingButton: section == .mapping && opensHoldEditor
                     ? holdEditorButton
                     : nil,
@@ -416,7 +420,7 @@ enum SettingsScreenshotRenderer {
                 initialSection: section,
                 initialShareSection: section == .statistics && expandsShare ? section : nil,
                 initialMappingEditingButton: section == .mapping && opensMappingEditor
-                    ? .ok
+                    ? actionEditorButton
                     : nil,
                 initialMappingHoldEditingButton: section == .mapping && opensHoldEditor
                     ? holdEditorButton

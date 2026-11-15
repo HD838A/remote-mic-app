@@ -2412,6 +2412,7 @@ struct SettingsPageRegressionTests {
             "model.macroFeature.updateLocaleIdentifier(localization.locale.identifier)"
         ))
         #expect(source.contains("REMOTE_MIC_SETTINGS_SCREENSHOT_OPEN_ACTION_EDITOR"))
+        #expect(source.contains("REMOTE_MIC_SETTINGS_SCREENSHOT_ACTION_BUTTON"))
         #expect(source.contains(
             "model.membershipFeature.updateLocaleIdentifier(localization.locale.identifier)"
         ))

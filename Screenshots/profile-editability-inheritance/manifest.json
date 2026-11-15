@@ -1,0 +1,90 @@
+{
+  "batch": "profile-editability-inheritance",
+  "date": "2026-11-15",
+  "purpose": "PR 1063 键位方案内快捷键/focus 绑定可编辑、来源文案和动作变化后清除依赖按住",
+  "branch": "codex/profile-editability-inheritance-20261115",
+  "pr": "https://github.com/HD838A/remote-mic-app/pull/1063",
+  "host_base": "8ac30cf2",
+  "main_merge": "bc7858f1",
+  "window_points": [
+    1020,
+    772
+  ],
+  "storage": "external-persistent-directory-and-github-pr-attachments",
+  "storage_path": "~/Develop/ReleaseArtifacts/profile-editability-inheritance-20261115/attachments/",
+  "notes": [
+    "由生产 SettingsView 的 REMOTE_MIC_SETTINGS_SCREENSHOT_DIR 离屏入口生成；不是设计稿，也不启动蓝牙硬件。",
+    "使用私有 2.12.0 子包源码和本地按键方案测试放行构建；方案访问由截图 fixture 授权，不代表真实会员验收。",
+    "隔离 fixture 包含一个非默认方案、一个快捷键引用、一个 focus 引用、可写按住设置和方案显式禁用状态。",
+    "方案显式禁用、默认继承和本方案覆盖分别显示「本方案禁用」「默认 · <动作>」「本方案 · <动作>」；继承默认行带链接图标。",
+    "按住清除成功与失败提示由生产视图的截图状态种子呈现；实际清除判定和回执生命周期由自动化测试覆盖。",
+    "用户现场修改前截图原件不在本机可访问的持久路径，本批次不重绘、不伪造修改前图片。",
+    "图片字节不入库，本文件只做文本索引；外部链接为 PR 1063 的 GitHub 附件。",
+    "截图只证明静态界面和状态文案，不证明目标 App 收到快捷键或 focus 动作。"
+  ],
+  "images": [
+    {
+      "file": "profile-overview-1020x772-zh-light.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "ddaace3404260fda7ce8b5fd39b949ed3b1f17609ef20f880e8271f0e6e76023",
+      "state": "after",
+      "external_url": "https://github.com/user-attachments/assets/6f639447-5094-4f08-8d64-f01d80205fb8"
+    },
+    {
+      "file": "profile-shortcut-editor-1020x772-zh-light.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "5f268be35e5d93b50079757b608c1eb558473e8e816d04ee82beb0f6970b9b6c",
+      "state": "after",
+      "external_url": "https://github.com/user-attachments/assets/baf8c69c-9714-4f3f-ac6f-d68ca715f0c4"
+    },
+    {
+      "file": "profile-focus-editor-1020x772-zh-light.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "4f0fb6c0ac140b2957b7045144143c10cd9a97789adba299b5f48a4838443172",
+      "state": "after",
+      "external_url": "https://github.com/user-attachments/assets/e6e91e47-e2a7-4395-8049-69e4a7706118"
+    },
+    {
+      "file": "profile-inherited-editor-1020x772-zh-light.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "92b3f9f3a4cffc91f59dec420621f4239233476a00d1bd347247aa7d4967f06b",
+      "state": "after",
+      "external_url": "https://github.com/user-attachments/assets/9f73399c-bcd4-49e3-a3d4-7d22ae1260ab"
+    },
+    {
+      "file": "profile-hold-writable-1020x772-zh-light.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "b57fe059ae63050b9fa76d23e1b50ae0fe323bbcf263de962de49aed135a18a0",
+      "state": "after",
+      "external_url": "https://github.com/user-attachments/assets/5c0c7235-748f-47b2-89df-83b80b6cd967"
+    },
+    {
+      "file": "hold-cleared-1020x772-zh-light.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "b883eefd9e7d81d39f56b92a8ace93cbc7ff47563a9bff890deac0d64adf4315",
+      "state": "after",
+      "external_url": "https://github.com/user-attachments/assets/0be388c7-8397-463c-a46a-59eda1e34165"
+    },
+    {
+      "file": "hold-clear-failed-1020x772-zh-light.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "04311742d81d6939beb8a35ddce400e9459a6598e8ee61f37f0f4a48a37ab7bf",
+      "state": "after",
+      "external_url": "https://github.com/user-attachments/assets/006bf6a2-322d-4a1c-bc3b-f055aa39f499"
+    }
+  ]
+}
