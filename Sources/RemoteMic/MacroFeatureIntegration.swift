@@ -228,8 +228,13 @@ final class MacroFeatureIntegration: ObservableObject {
                 // Copy and display keep the pinned reference until the picker writes again.
                 editable = feature.savedMacroVersion(id: reference.macroID) != nil
             case .shortcut, .focus:
-                configured = nil
-                editable = false
+                // Shortcut and focus references are first-class, executable profile
+                // bindings. Their text is resolved by the profile component, and the
+                // host can decode them into the same action model used by the editor.
+                // Only an unresolved reference is unavailable and clear-only.
+                guard let action = decodedProfileAction(binding) else { return .unavailable }
+                configured = action
+                editable = true
             }
             return .explicit(.init(configured: configured, compact: text.text.compact,
                 detailed: text.text.detailed, isEditable: editable))

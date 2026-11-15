@@ -225,6 +225,20 @@ extension RemoteButtonInteractionSnapshot {
         }
     }
 
+    /// A hold behavior that consumes the changed action must not survive as an invisible
+    /// stale setting. Clear the modes owned by the changed trigger and any stored mode that
+    /// no longer satisfies its blockers; an explicit "unset" marker stays untouched.
+    func shouldClearHold(afterChanging trigger: ButtonTrigger,
+                         previousHold: RemoteButtonHoldMode) -> Bool {
+        let dependentModes: Set<RemoteButtonHoldMode> = switch trigger {
+        case .singleClick: [.repeatSingle, .singleHold]
+        case .longPress: [.repeatLong, .longHold]
+        case .doubleClick: []
+        }
+        return previousHold != .once &&
+            (dependentModes.contains(previousHold) || !blockers(for: previousHold).isEmpty)
+    }
+
     private static func holdBlockers(
         for configured: ConfiguredButtonAction?
     ) -> [RemoteButtonHoldBlocker] {

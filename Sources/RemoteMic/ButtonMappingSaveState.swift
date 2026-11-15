@@ -50,11 +50,17 @@ struct ButtonMappingSaveState {
     var receipt = UUID()
     var holdActions: [ConfiguredButtonAction] = []
     var holdMode: RemoteButtonHoldMode?
+    /// The action was saved and its dependent hold was cleared successfully.
+    var holdClearedByActionChange = false
+    /// The action was saved but clearing its dependent hold failed.
+    var holdClearFailedByActionChange = false
 
     mutating func record(_ outcome: ButtonMappingWriteRecovery.Outcome, retry: Retry, target: ButtonMappingSaveTarget) {
         self.target = target
         self.outcome = outcome
         self.retry = outcome == .failed ? retry : nil
+        holdClearedByActionChange = false
+        holdClearFailedByActionChange = false
         receipt = UUID()
     }
 
@@ -73,6 +79,7 @@ struct ButtonMappingSaveState {
     mutating func clearSuccess(_ receipt: UUID) {
         guard self.receipt == receipt, outcome == .saved else { return }
         outcome = nil
+        holdClearedByActionChange = false
     }
 }
 
