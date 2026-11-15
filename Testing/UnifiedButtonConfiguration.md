@@ -775,3 +775,35 @@ swift test --disable-keychain --scratch-path .build/unified-legacy
 | 未识别型号 | 继续回退 RC003 旧图，不新增空白画布；套用 RC001 图判失败。 |
 
 验证记录：使用生产 `SettingsScreenshotRenderer` 和 `REMOTE_MIC_SETTINGS_SCREENSHOT_REMOTE_MODEL=rc001|rc003`、`REMOTE_MIC_SETTINGS_SCREENSHOT_SECTION=mapping`、`REMOTE_MIC_SETTINGS_SCREENSHOT_SIZE=1020x772` 生成简体中文浅色/深色截图。RC001 浅色/深色 PNG 为 `2040 × 1544`，SHA-256 分别为 `9c225e3f088f447542db3385789b3975110b6f05b48a351813bf71a9a7b5782d` / `6e84e1660e67ac88419314c93e22717d0be8db1d0ebf12b5ee6e35b12dc1e15b`；RC003 浅色/深色分别为 `6d0250f3c5344862698a983b1f9407f4eb0181f33fd988b6526e0bd0955be5f7` / `c1a487076f1a5c5b1c2cba8b574bf9b65563224d6e6b064e9c304f38d33d80c9`。RC001 图已更新为带底部 NFC 标识的源图。截图字节保存在仓库外持久证据目录，PR 附件待补。该记录只证明静态 UI，真实 RC001/RC003 的 DIS 识别、热点点击和实体按键高亮仍需现场验收。
+
+## 2026-11-15 方案快捷键/focus 可编辑与动作变化清除按住
+
+适用：包含自动保存接口的私有按键方案源码或 2.12.0 及更新构件；非默认方案可编辑（会员授权或本地测试放行）。
+测试前准备：使用隔离 HOME，按键方案组件存储中至少有一个非默认方案，方案内同时包含快捷键引用、focus 引用，以及设置了重复模式或按住模式的按键。不得使用真实用户数据；方案可由组件自己的写入路径生成。
+
+| 操作 | 预期结果与失败判定 |
+| --- | --- |
+| 打开含快捷键引用的非默认方案并点击该按键 | 动作摘要显示「本方案 · <组合键>」，编辑区和停用开关可用；不再出现「此配置为只读」。按住面板同时可写。显示只读或按住面板整体置灰判失败。 |
+| 打开含 focus 引用的按键 | 动作摘要显示「本方案 · <输入框名称>」并可改选动作；恢复继承默认后显示「默认 · <动作>」和链接图标。仍只读判失败。 |
+| 方案中未覆盖的按键 | 显示「默认 · <动作>」并带链接图标；显示「不执行」或无法区分继承来源判失败。 |
+| 方案显式禁用某手势 | 显示「本方案禁用」，停用开关为开；恢复继承默认后重新显示默认来源。 |
+| 基础映射从未设置 | 显示「无动作」；显式禁用显示「禁用」。两者文案相同判失败。 |
+| 单击动作为「重复执行单击动作」或「按住」时修改单击动作 | 保存成功后显示「动作已改变，按住设置已清除」；按住面板回到「按住」且旧模式不再生效。旧按住继续执行或没有任何提示判失败。 |
+| 长按动作为「重复执行长按动作」或「长按后按住」时修改长按动作 | 与上一行相同；只修改双击动作不得清除仍可执行且不依赖双击的按住设置。 |
+| 方案内恢复继承默认导致有效动作变化 | 同样清除依赖旧动作的按住设置；恢复继承后旧按住重新出现判失败。 |
+| 按住清除写入失败 | 显示「动作已保存，但按住设置清除失败」和「重试」；重试成功后显示清除成功。失败提示被成功回执覆盖或没有重试入口判失败。 |
+| 退出并重新打开 App | 动作和清除后的按住状态保持；不得重新启用已清除的按住模式。 |
+
+自动化入口（私有源码 checkout 指向与清单一致的 Tag）：
+
+```sh
+SAYALL_ENABLE_BUTTON_PROFILES=1 \
+SAYALL_COMBINATION_ACTIONS_PATH=/path/to/private/packages/macos-combination-actions \
+SAYALL_BUTTON_PROFILES_PACKAGE_PATH=/path/to/private/packages/macos-button-profiles \
+swift test --disable-keychain --filter 'ButtonBindingConfigurationTests|RemoteButtonInteractionTests'
+```
+
+自动化覆盖动作变化时的清除判定、保存回执与失败提示生命周期；方案组件集成用例仍要求隔离的 `SAYALL_MACRO_STORAGE_ROOT`。
+真实会员状态、旧安装包升级、实体遥控器最终动作和第三方 App 收到快捷键/focus 仍需单独验收。截图只证明静态界面和状态文案。
+
+本轮截图证据：生产 `SettingsView` 离屏入口生成的中文浅色 `1020 × 772`（PNG `2040 × 1544`）共 7 张，覆盖方案总览、快捷键编辑、focus 编辑、继承默认行、可写按住面板、清除成功和清除失败重试。图片字节不入库，索引、尺寸和 SHA-256 见 `Screenshots/profile-editability-inheritance/manifest.json`，外链为 PR 附件。截图只证明静态界面和状态文案。

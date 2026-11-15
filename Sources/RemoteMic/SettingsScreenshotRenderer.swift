@@ -69,6 +69,10 @@ enum SettingsScreenshotRenderer {
         let opensActionEditor = ProcessInfo.processInfo.environment[
             "REMOTE_MIC_SETTINGS_SCREENSHOT_OPEN_ACTION_EDITOR"
         ] == "1"
+        // 动作编辑区与按住编辑区一样可以针对任意按键截图，证据才能覆盖快捷键和 focus 绑定。
+        let actionEditorButton = ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_SETTINGS_SCREENSHOT_ACTION_BUTTON"
+        ].flatMap(RemoteButton.init(rawValue:)) ?? .ok
         let opensHoldEditor = ProcessInfo.processInfo.environment[
             "REMOTE_MIC_SETTINGS_SCREENSHOT_OPEN_HOLD_EDITOR"
         ] == "1"
@@ -375,7 +379,7 @@ enum SettingsScreenshotRenderer {
                 updateInformation: updateInformation,
                 initialSection: section,
                 initialShareSection: section == .statistics && expandsShare ? section : nil,
-                initialMappingEditingButton: section == .mapping && opensMappingEditor ? .ok : nil,
+                initialMappingEditingButton: section == .mapping && opensMappingEditor ? actionEditorButton : nil,
                 initialMappingHoldEditingButton: section == .mapping && opensHoldEditor
                     ? holdEditorButton
                     : nil,
@@ -416,7 +420,7 @@ enum SettingsScreenshotRenderer {
                 initialSection: section,
                 initialShareSection: section == .statistics && expandsShare ? section : nil,
                 initialMappingEditingButton: section == .mapping && opensMappingEditor
-                    ? .ok
+                    ? actionEditorButton
                     : nil,
                 initialMappingHoldEditingButton: section == .mapping && opensHoldEditor
                     ? holdEditorButton
@@ -544,13 +548,41 @@ enum SettingsScreenshotRenderer {
         case .system, .english:
             notes = "Refined the Settings layout\nCentralized permissions and logs\nFixed known issues"
         }
+        // The screenshot fixture must stay newer than the host app. Otherwise the
+        // About page shows an update to an older version after every release.
+        let candidate = demoUpdateCandidate(
+            currentVersion: Bundle.main.object(
+                forInfoDictionaryKey: "CFBundleShortVersionString"
+            ) as? String ?? "",
+            currentBuild: Bundle.main.object(
+                forInfoDictionaryKey: "CFBundleVersion"
+            ) as? String ?? ""
+        )
         updateInformation.setAvailable(
-            displayVersion: "1.9.22",
-            buildVersion: "183",
+            displayVersion: candidate.displayVersion,
+            buildVersion: candidate.buildVersion,
             archiveURL: nil,
             fallbackDescription: notes,
             localeIdentifier: language.rawValue
         )
+    }
+
+    static func demoUpdateCandidate(
+        currentVersion: String,
+        currentBuild: String
+    ) -> (displayVersion: String, buildVersion: String) {
+        let fallback = (displayVersion: "999.0.0", buildVersion: "999999999")
+        guard let normalizedVersion = UpdateVersion.normalized(currentVersion) else {
+            return fallback
+        }
+        var components = normalizedVersion.split(separator: ".").compactMap { Int($0) }
+        guard let lastComponent = components.last else { return fallback }
+        components[components.count - 1] = lastComponent + 1
+        let displayVersion = components.map(String.init).joined(separator: ".")
+        let buildVersion = Int(currentBuild).map { build in
+            build == Int.max ? String(build) : String(build + 1)
+        } ?? fallback.buildVersion
+        return (displayVersion: displayVersion, buildVersion: buildVersion)
     }
 
     private static func seedStatisticsForScreenshot(_ settings: AppSettings) {

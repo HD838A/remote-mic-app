@@ -1,0 +1,118 @@
+{
+  "batch": "2026-11-15-about-update-fixture",
+  "date": "2026-11-15",
+  "purpose": "设置页截图夹具显示旧版本更新的修复证据；证明当前版本、可更新状态和演示候选版本一致。",
+  "host_version": "2.0.2 (Build 320)",
+  "demo_candidate": "2.0.3 (Build 321)",
+  "window_points": [
+    1020,
+    772
+  ],
+  "storage": "external-persistent-directory-and-github-pr-attachments",
+  "storage_path": "/Users/andy/Develop/Src/AISrc/open-voice-bridge-evidence/settings-about-update-fixture-20261115/images/",
+  "notes": [
+    "由生产 SettingsView 的 REMOTE_MIC_SETTINGS_SCREENSHOT_DIR 离屏入口生成，只渲染 About 页面；不是设计稿，也不启动硬件或真实更新检查。",
+    "使用公开 Release App，SAYALL_PRIVATE_PLATFORM_MODE=public；截图只证明静态界面和截图夹具，不代表 Sparkle 安装或真实窗口导航验收。",
+    "旧截图和旧哈希按历史证据保留，不删除、不重写；本清单只记录修复后的新截图。",
+    "图片字节不入库，本文件只做文本索引；外部链接为 PR 附件或持久链接。",
+    "PR #1062 的 12 张附件已重新下载并逐张核对 SHA-256，与清单一致。"
+  ],
+  "images": [
+    {
+      "file": "about-1020x772-en-light.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "e7917d20411e12e5f1e8974339e4098c57950998fd186c6de30c73c88a4b0ad3",
+      "external_url": "https://github.com/user-attachments/assets/90032b3d-7ce1-4567-bac5-b3f9d944cc22"
+    },
+    {
+      "file": "about-1020x772-en-dark.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "92c293af9b037305946a4f2004b802dab72efa12e299fee12c8a658427e3461b",
+      "external_url": "https://github.com/user-attachments/assets/6c0a4f17-2430-4920-91b9-379296346f8d"
+    },
+    {
+      "file": "about-1020x772-zh-Hans-light.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "cc865f6a54054fdedeab4fdcebafd23d94bf9ea3ca38799f1369bf4d00b30b27",
+      "external_url": "https://github.com/user-attachments/assets/818be0f9-c463-4a67-90bd-b216adfca6d1"
+    },
+    {
+      "file": "about-1020x772-zh-Hans-dark.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "06aa6ec09346a98509b4a06817e6129e78dc9c59912e036a71cfce50d7500cb9",
+      "external_url": "https://github.com/user-attachments/assets/6cd442ae-64fe-4765-982c-fd522a8b62c7"
+    },
+    {
+      "file": "about-1020x772-standard-en-light.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "f2f4781a6d58eeeeb0932118c365c972a5e4a27f2c958e0e61fcb33b20778b3b",
+      "external_url": "https://github.com/user-attachments/assets/6e0777db-c83f-446d-a84d-07b39e09a1c0"
+    },
+    {
+      "file": "about-1020x772-standard-zh-Hans-light.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "78ec988d1a5cdb3b697f17cb031b77a04071a5f0f78ac030fd3ee4f6e1c889e4",
+      "external_url": "https://github.com/user-attachments/assets/dbd86d8f-3cfb-4aa5-8a6c-5d6823fc8fd5"
+    },
+    {
+      "file": "about-1020x772-fixture-en-light.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "f99863ba93f913d72cc4d9deb64024e180a978ddc439128a29864ddc8edab5b8",
+      "external_url": "https://github.com/user-attachments/assets/59402300-2305-496b-8ed6-bb9e4449980a"
+    },
+    {
+      "file": "about-1020x772-fixture-en-dark.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "c6ffcad4672817d6ee18768e092b2360a4fecf36a5c424cf8a0f6527523b8281",
+      "external_url": "https://github.com/user-attachments/assets/9c46af46-c8cf-4154-a153-d5d61a56892f"
+    },
+    {
+      "file": "about-1020x772-fixture-zh-Hans-light.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "df2663c3939667dcca8f543c83f90d61827803b56f1e79ebe4d2739faf8014ba",
+      "external_url": "https://github.com/user-attachments/assets/024ca42a-aad6-4303-9735-28ff5e7ccbb4"
+    },
+    {
+      "file": "about-1020x772-fixture-zh-Hans-dark.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "2c90a70e6e94efcf6701199aee5ac02d6a2501cea1ffae4ce3ae793768f8cddc",
+      "external_url": "https://github.com/user-attachments/assets/d3ed8f5b-4f1e-4a55-b0a6-0b2f81641101"
+    },
+    {
+      "file": "about-1020x772-long-en-light.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "9eb36535f8a85fb99d3862f79d9db9a3397b4d43be71300bba7a382e5b0cea90",
+      "external_url": "https://github.com/user-attachments/assets/e166ff97-99c2-4894-bb7f-538848ba9ad7"
+    },
+    {
+      "file": "about-1020x772-long-en-dark.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "2f2b1cec11cc6fca0e6e9fcef0aa1bdf4d5fe0fc8c938cd1c8d28ac00f3dfdf7",
+      "external_url": "https://github.com/user-attachments/assets/3c75faf1-a9a4-4735-824a-f0ff2744e2eb"
+    }
+  ]
+}

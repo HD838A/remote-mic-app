@@ -2412,6 +2412,7 @@ struct SettingsPageRegressionTests {
             "model.macroFeature.updateLocaleIdentifier(localization.locale.identifier)"
         ))
         #expect(source.contains("REMOTE_MIC_SETTINGS_SCREENSHOT_OPEN_ACTION_EDITOR"))
+        #expect(source.contains("REMOTE_MIC_SETTINGS_SCREENSHOT_ACTION_BUTTON"))
         #expect(source.contains(
             "model.membershipFeature.updateLocaleIdentifier(localization.locale.identifier)"
         ))
@@ -2872,5 +2873,43 @@ struct SettingsPageRegressionTests {
         #expect(!source.contains("button_mapping.return_choose_macro"))
         #expect(source.contains("onBindToButton: {"))
         #expect(source.contains("mappingEditingTarget = nil"))
+    }
+
+    @MainActor @Test func screenshotDemoUpdateStaysNewerThanTheHostApp() {
+        let candidate = SettingsScreenshotRenderer.demoUpdateCandidate(
+            currentVersion: "2.0.2",
+            currentBuild: "320"
+        )
+        #expect(candidate.displayVersion == "2.0.3")
+        #expect(candidate.buildVersion == "321")
+        #expect(UpdateVersion.isNewer(candidate.displayVersion, than: "2.0.2"))
+    }
+
+    @MainActor @Test func screenshotDemoUpdateBumpsTheLastVersionComponentAndBuild() {
+        let twoPart = SettingsScreenshotRenderer.demoUpdateCandidate(
+            currentVersion: "2.0",
+            currentBuild: "5"
+        )
+        #expect(twoPart.displayVersion == "2.1")
+        #expect(twoPart.buildVersion == "6")
+
+        let fourPart = SettingsScreenshotRenderer.demoUpdateCandidate(
+            currentVersion: "2.0.1.4",
+            currentBuild: "999"
+        )
+        #expect(fourPart.displayVersion == "2.0.1.5")
+        #expect(fourPart.buildVersion == "1000")
+        #expect(UpdateVersion.isNewer(fourPart.displayVersion, than: "2.0.1.4"))
+    }
+
+    @MainActor @Test func screenshotDemoUpdateFallsBackWhenBundleMetadataIsMissing() {
+        let candidate = SettingsScreenshotRenderer.demoUpdateCandidate(
+            currentVersion: "",
+            currentBuild: ""
+        )
+        #expect(candidate.displayVersion == "999.0.0")
+        #expect(candidate.buildVersion == "999999999")
+        #expect(UpdateVersion.isNewer(candidate.displayVersion, than: "2.0.2"))
+        #expect(Int(candidate.buildVersion)! > 320)
     }
 }
