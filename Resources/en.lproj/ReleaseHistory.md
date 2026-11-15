@@ -1,5 +1,11 @@
 # Version History
 
+## 2.0.3 (Pre-release)
+
+- Remote buttons: fixes ordinary buttons not responding on macOS 27 while the remote remains connected; falls back to the manager report path when device callbacks go silent and rebuilds HID monitors after discovering a new remote; the voice key is unaffected.
+- Connection reliability: fixes ordinary buttons failing after a newly discovered remote's profile monitor was not rebuilt.
+- Notice bubbles: updates bubble width, shadow, and success-notice placement to match the design.
+
 ## 2.0.2 (Pre-release)
 
 - Adds Common Phrases, with editing, import/export and one-press insertion.
