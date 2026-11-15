@@ -1,5 +1,7 @@
 # Bug 记录
 
+- [macOS 27 HID device 回调注册后不投递，显示已连接但遥控器无响应](./2026-11-15-hid-device-callback-silent-after-monitor-restart.md)
+
 - [方案来源前缀挤占按键卡片动作名](./2026-11-15-profile-source-prefix-card-truncation.md)
 
 - [设置页截图夹具显示旧版本更新](./2026-11-15-settings-screenshot-stale-update-fixture.md)
@@ -209,6 +211,7 @@
 
 | 时间 | Bug | 状态 |
 | --- | --- | --- |
+| 2026-11-15 | [macOS 27 HID device 回调注册后不投递，显示已连接但遥控器无响应](./2026-11-15-hid-device-callback-silent-after-monitor-restart.md) | 候选修复：不再按“回调已注册”丢弃 manager 报告，改为按实际报告去重；新增 `path=` 与 10 秒汇总日志，device 静默时重挂回调并有界退避；180 项定向测试、1456 项完整测试、Release 构建和 48 项项目自检通过，真实 RC001/RC003 断连重连验收待完成 |
 | 2026-11-14 | [回眸页首次切换耗时过长](./2026-11-14-reflections-page-switch-latency.md) | 候选修复：日期头和记录行改为同一 LazyVStack 懒加载，去重刷新并缓存图标/格式化器；Build 381 本机实测首次显示从约 1.3–1.7 秒降到约 0.5–1.0 秒；更大归档与 Intel 复测待完成 |
 | 2026-11-13 | [断连后设备不再被接管，语音键的 F5→Fn 映射没有写回](./2026-11-13-voice-key-reconnect-mapping-not-reapplied.md) | 候选修复：映射校验失败回报上层，按 0.5/1/2/4/8 秒有界重试且不要求蓝牙桥 ready；1401 项自动化通过，反向验证两处断言变红后恢复；真实 Intel 复测待完成 |
 | 2026-11-13 | [蓝牙语音停止前等待虚拟麦克风尾音排空](./2026-11-13-bluetooth-tail-release.md) | 候选修复：正常停止先等待已入队音频自然排空，再释放语音键；不 flush；新会话清理旧按键保持；1399 项自动化通过，真实 RC003 尾字复测待完成 |
