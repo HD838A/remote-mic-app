@@ -31,7 +31,7 @@
 | ID | 必须通过的用户结果 | 唯一权威步骤 | 自动化证据 / 人工边界 |
 | --- | --- | --- | --- |
 | REL-01 | 发布源码是精确 `origin/main` 或合法 `origin/hotfix/vX.Y.Z`；版本、Build、中英文说明只改允许文件；精确 SHA 的源码分支 CI 成功。 | `Testing/MacReleaseBranchLifecycle.md` 用例 1–3；`RELEASING.md` 发布前准备 | CI + `verify-public-release-source.sh`、`verify-release-ready-main-ci.sh`；发布运行的真实 SHA 和 CI 证明需人工核对 |
-| REL-02 | 发布基线、Build 号递增和构建来源正确；产物的 `SayAllSourceCommit` 与构建树一致，Release Notes 的 `Commit：` 行由脚本生成。 | `RELEASING.md` 发布基线门禁与构建来源；`Testing/MacSignedReleaseTimeout.md` | `verify-release-baseline.sh`、`verify-release-asset-source.sh`、`render-private-draft-notes.sh` 及 fixture；产物读回必须真实执行 |
+| REL-02 | 发布基线、Build 号递增和构建来源正确；产物的 `SayAllSourceCommit` 与构建树一致；发布说明中的 Commit 来源不得手写。 | `RELEASING.md` 发布基线门禁与构建来源；`Testing/MacSignedReleaseTimeout.md` | `verify-release-baseline.sh`、`verify-release-asset-source.sh` 及 fixture；产物读回必须真实执行 |
 | REL-03 | Apple Silicon 与 Intel 两个架构均完成 Developer ID 签名、公证、staple、Gatekeeper、Helper 权限和符号链接校验。 | `Testing/MacReleaseBranchLifecycle.md` 用例 4；`Testing/MacReleaseAssetMatrix.md` 用例 3 | 受保护 staging workflow；真实 Apple 服务和最终字节只能人工/发布运行验收 |
 | REL-04 | manifest 恰好为当前资产集合；名称唯一且无路径；appcast 架构、URL、长度和签名正确；公开资产不含私有源码、XCFramework、dSYM、日志、凭据或本机路径。 | `Testing/MacReleaseAssetMatrix.md` 用例 1、2、6 | `prepare-public-release-assets.sh`、`verify-staged-release-assets.sh`、`verify-release-contents.py`、`test-private-platform.py ReleaseContentTests`；最终签名资产需读回复验 |
 | REL-05 | CDN 合约与仓库发布契约一致；版本首次占用检查只接受 HTTP 404；2xx/3xx、认证、5xx、超时和未知响应均阻断。 | `Testing/MacReleaseAssetMatrix.md` 用例 8“发布前资产契约” | `verify-preview-cdn-availability.sh`、`release-assets.py`、发布控制面 fixture；真实域名和 Worker 需发布前探测 |
@@ -88,14 +88,15 @@
 | UI-03 | `⌘1`–`⌘9` 只切换可见页签；`⌘F` 只聚焦当前页搜索框；录入快捷键时不被菜单抢走；保存方案 Sheet 的 Escape/Return 正确。 | `Testing/SidebarShortcut.md` 用例 1–5；`Testing/SearchFieldShortcut.md` 用例 1–3 | `SettingsNavigationShortcutTests`、`SearchFocusTests`；真实键盘事件和私有页面必须人工 |
 | UI-04 | 设置窗口可移动/缩放/全屏；关闭窗口不改变蓝牙、音频或映射；Dock 图标、关窗重开、菜单栏入口在关闭后仍可恢复主界面。 | `Testing/SettingsWindowFocus.md` 用例 1–3；`Testing/MenuBarVisibility.md` 用例 1–3 | `SettingsPageRegressionTests`；真实 Dock、Finder 遮挡、最小化和 Command-W 必须人工 |
 | UI-05 | 共享提示条/气泡的放置、层级、对比度、自动消失、操作按钮和 VoiceOver 正确；不遮挡必需操作，不使用连续浮层。 | `design-qa.md`；`Tests/RemoteMicTests/NoticeCenterTests.swift`、`NoticePaletteTests.swift` | `NoticeCenterTests`、`NoticePaletteTests`；当前无专项 Testing 手册，真实窗口和 VoiceOver 仍须人工验收 |
+| UI-06 | App 图标选择、经典鸭/几何鸭切换、运行时圆角 Logo、资源缺失回退，以及 Dock、Finder、Command-Tab、窗口缩略图和确认弹窗外观正确。 | `Testing/AboutUpdateCenter.md` 用例 1A、1B | `AppIconControllerTests`、`ApplicationIconResolverTests`、`SettingsPageRegressionTests`；真实 Dock/Finder/Command-Tab 缓存、Intel 和重启必须人工 |
 
 ## E. 配置、数据与本地集成
 
 | ID | 必须通过的用户结果 | 唯一权威步骤 | 自动化证据 / 人工边界 |
 | --- | --- | --- | --- |
-| DATA-01 | 完整配置备份包含全部设备、方案、嵌套动作、App 规则、未引用对象、常用语、音频/语音键/回眸偏好；取消、替换、重启恢复和失败回滚正确；账号、凭据、配对和历史不导出。 | `Testing/CompleteConfigurationBackup.md` 准备、完整往返、不兼容与失败路径 | `CompleteConfigurationBackupTests`、`PortableConfigurationCompatibilityTests`；真实系统文件面板、旧配置升级和跨 Mac 必须人工 |
+| DATA-01 | 完整配置备份包含本格式支持的全部设备、方案、嵌套动作、App 规则、未引用对象、音频/语音键/回眸偏好和可迁移私有组件对象；取消、替换、重启恢复和失败回滚正确；账号、凭据、配对和历史不导出；常用语使用专用备份。 | `Testing/CompleteConfigurationBackup.md` 准备、完整往返、不兼容与失败路径 | `CompleteConfigurationBackupTests`、`PortableConfigurationCompatibilityTests`；真实系统文件面板、旧配置升级和跨 Mac 必须人工 |
 | DATA-02 | 外部个人配置逐条校验；目标 Mac 缺 App 保留绑定；篡改路径、冒名 Bundle、越界键码只丢该项；旧版缺字段仍可导入；录音中危险语音键变更被阻止。 | `Testing/ConfigurationImportValidation.md` 用例 1–6 | `ConfigurationImportValidationTests`；真实旧文件和跨 Mac 必须人工 |
-| DATA-03 | 对象级分享/导入导出和 Finder 双击分流正确；完整备份、旧 personalBackup、社区键位方案进入正确页面；预览取消不写入；重复打开请求不丢失。 | `Testing/PortableConfigurationTransfer.html`；`Testing/CompleteConfigurationBackup.md` 双击分流 | `PortableConfigurationCompatibilityTests`、`ButtonProfileFileOpeningTests`；真实 Finder、旧 personalBackup 格式和私有组件必须人工 |
+| DATA-03 | 对象级分享/导入导出和 Finder 双击分流正确；完整备份、`sayall-transfer` 的 `personalBackup`、社区键位方案进入正确页面；只有 `formatVersion` 的旧文件按实际识别结果记录，不假定成功；预览取消不写入，重复打开请求不丢失。 | `Testing/PortableConfigurationTransfer.html`；`Testing/CompleteConfigurationBackup.md` 双击分流 | `PortableConfigurationCompatibilityTests`、`ButtonProfileFileOpeningTests`；真实 Finder、旧 personalBackup 格式和私有组件必须人工 |
 | DATA-04 | 旧遥控器型号值解码不告警；设备、选中项和映射保留；损坏 JSON 保留 `.corrupt` 并显示可读告警；告警不遮住健康配置。 | `Testing/RemoteProfileUpgrade.md` 准备与操作；`Testing/CompleteConfigurationBackup.md` 不兼容与失败路径 | `SettingsCorruptionRecoveryTests`、`VoiceRemoteCatalogTests`；真实旧配置和重启必须人工 |
 | DATA-05 | 回眸默认关闭；只保存本次新增文字；RC003、Nearby iOS、Web 来源正确；快速发送、连续语音、焦点切换、敏感字段、日期/时区和删除恢复正确。 | `Testing/LocalTranscriptHistory.md` 用例 1–9 | `TranscriptCaptureCoordinatorTests`、`TranscriptArchiveStoreTests`；真实 AX、第三方输入法和硬件必须人工 |
 | DATA-06 | 原始录音默认关闭且与文字开关独立；仅录音、文字加录音、无输入框回退、播放/暂停/停止/导出/删除、损坏文件和磁盘失败正确。 | `Testing/LocalRecordingAssets.md` 核心用例 | `RecordingAssetStoreTests`；真实音频、磁盘和废纸篓必须人工 |
@@ -114,6 +115,7 @@
 | MEM-05 | 常用语非会员只读/示例；会员五键分配、面板插入、剪贴板恢复、密码/无输入框拒绝、多来源隔离、编辑/排序/导入导出和失败恢复正确。 | `Testing/CommonPhrases.md` 核心流程、剪贴板、用户内容、来源矩阵 | 私有 `CommonPhraseTests`；公开宿主只验证适配边界，真实遥控器和第三方文本框必须人工 |
 | MEM-06 | 免费组合动作公开回退、免邀请码、快捷指令、打开网址、嵌套/8 层、绑定提示、按键捕获模式、覆盖升级和旧包失败保护正确。 | `Testing/QuickCommandsPrivateIntegration.md` 用例一–七 | 私有宏包测试与公开宿主接线；真实遥控器、手机/Web 和快捷指令必须人工 |
 | MEM-07 | Siri Remote 可选 PKG 安装、Helper/LaunchDaemon、键位集合、组合动作绑定和型号隔离正确；Free 的 Siri 语音被会员门禁阻止，Plus 可用。 | `Testing/MacInstallerUninstaller.md` 安装用例 2；`Testing/MembershipAndButtonProfiles.md` 用例八；`Testing/SiriRemoteMacroButtonProfilesLocalPackage.md` | PKG 静态检查和私有组件测试；真实安装、会员和 A2854 必须人工 |
+| MEM-08 | 非默认键位方案内的快捷键/focus 引用可编辑；动作摘要区分“默认、本方案、本方案禁用、无动作”；单击或长按动作变化后清除依赖的旧按住设置，失败可重试，重启后保持。 | `Testing/UnifiedButtonConfiguration.md` 2026-11-15 方案快捷键/focus 可编辑；`Testing/MembershipAndButtonProfiles.md` 用例五、五 B | `ButtonBindingConfigurationTests`、`RemoteButtonInteractionTests`、`SettingsPageRegressionTests`；真实会员、旧安装包和实体遥控器动作必须人工 |
 
 ## G. 分享与反馈
 
@@ -137,7 +139,7 @@
 - 虚拟声卡静音/音量：`VirtualAudioAudibilityRecovery.md`；断连释放：`BluetoothDisconnectAudioRelease.md`；休眠/空闲：`MacIdleSleepAudioRelease.md`；引擎配置变化：`AudioConfigurationChangeRecovery.md`；启动选择恢复：`MiRemoteVAudioStaleRecovery.md`。
 - 苹果遥控器：`AppleRemoteHardwareInterface.md`；Chromecast：`ChromecastHardwareInterface.md`。两者共同遵守 `HardwareCompatibilityContract.md` 和 `HardwareVoiceAudioContract.md`。
 - 按键、手势、按住、方案作用域：`UnifiedButtonConfiguration.md`；连续快按：`RapidRepeatedButtonPresses.md`；快捷键选择：`KeyboardShortcutPicker.md`；快捷键投递：`CustomShortcutLifecycle.md`；App 切换器：`AppSwitcherRemoteControl.md`；滚动：`RemoteScrollActions.md`；翻页：`ScrollAreaPageActions.md`；聚焦：`CustomApplicationFocus.md`。
-- 设置窗口、页头、侧栏、最小尺寸：`UnifiedButtonConfiguration.md` 2026-11-02 和 `design-qa.md`；窗口焦点/Dock：`SettingsWindowFocus.md`；菜单栏：`MenuBarVisibility.md`；状态栏：`StatusBarConnectionAppearance.md`。
+- 设置窗口、页头、侧栏、最小尺寸：`UnifiedButtonConfiguration.md` 2026-11-02 和 `design-qa.md`；窗口焦点/Dock：`SettingsWindowFocus.md`；菜单栏：`MenuBarVisibility.md`；状态栏：`StatusBarConnectionAppearance.md`；App 图标/品牌：`AboutUpdateCenter.md` 用例 1A、1B。
 - Onboarding：`FirstRunOnboarding.md`；首次成功恢复：`FirstUseSuccess.md` 只保留失败恢复、安装和升级。
 - 配置：完整备份 `CompleteConfigurationBackup.md`；逐条导入 `ConfigurationImportValidation.md`；对象包 `PortableConfigurationTransfer.html`；设备档案升级 `RemoteProfileUpgrade.md`。
 - 回眸文字：`LocalTranscriptHistory.md`；原始录音：`LocalRecordingAssets.md`；个人中心统计：`ProfileStatistics.md`。
@@ -160,14 +162,12 @@
 
 以下项目不能在本表里用“通过”掩盖；发布前必须单独记录结论：
 
-1. **设置窗口尺寸治理冲突**：源码、测试和 `design-qa.md` 为 `1067 × 760`，`AGENTS.md` 仍写设置页 `1020 × 772`。本表按源码执行；`AGENTS.md` 需要独立治理 PR 修正，不能在普通发布 PR 中顺手改。
-2. **账号名截断合同**：`MembershipAndButtonProfiles.md` 要求邮箱前缀最多 6 个字符，`ProfileStatistics.md` 要求完整前缀；公开宿主只显示私有适配器提供的 `accountDisplayName`。两本手册在私有适配器合同确认前不得互相作为失败证据。
-3. **提示条无专项手册**：Notice 只有 `NoticeCenterTests`、`NoticePaletteTests` 和 `design-qa.md`，真实窗口/ VoiceOver 仍需人工。
-4. **MCP stdio 无仓库内真实进程测试**：公开测试覆盖存储、授权、历史和配置生成；`tools/list`、`invalid_arguments`、stdout 纯净度必须用真实客户端验收。
-5. **市场合同默认不跑**：`PortableConfigurationCompatibilityTests` 的市场 `.sayall` 用例需要 `SAYALL_MARKET_CONTRACT_PATH`；发布前必须显式设置。
-6. **旧 personalBackup 双击路由未确认**：当前 `ConfigurationImportDestination.detect` 只识别完整备份和 `sayall-transfer`；如果旧文件只有 `formatVersion`，Finder 双击可能不进入设置页，必须实测。
-7. **英文文案和画布静态检查未全部接入 CI**：`scripts/verify-english-copy.py` 和 `scripts/verify-mapping-canvas-chrome.py` 仍需在受影响发布中手工执行。
-8. **发布手册仍有历史参数**：`BRANCH_MANAGEMENT.md` 的 13 项 CDN/payload 和 schema 5 属于核心治理文件，需独立治理 PR 同步；当前执行以 `RELEASING.md`、`config/release-assets.json` 和实际脚本为准。
+1. **账号名截断合同**：`MembershipAndButtonProfiles.md` 要求邮箱前缀最多 6 个字符，`ProfileStatistics.md` 要求完整前缀；公开宿主只显示私有适配器提供的 `accountDisplayName`。两本手册在私有适配器合同确认前不得互相作为失败证据。
+2. **提示条无专项手册**：Notice 只有 `NoticeCenterTests`、`NoticePaletteTests` 和 `design-qa.md`，真实窗口/ VoiceOver 仍需人工。
+3. **MCP stdio 无仓库内真实进程测试**：公开测试覆盖存储、授权、历史和配置生成；`tools/list`、`invalid_arguments`、stdout 纯净度必须用真实客户端验收。
+4. **市场合同默认不跑**：`PortableConfigurationCompatibilityTests` 的市场 `.sayall` 用例需要 `SAYALL_MARKET_CONTRACT_PATH`；发布前必须显式设置。
+5. **旧 personalBackup 双击路由未确认**：当前 `ConfigurationImportDestination.detect` 只识别完整备份和 `sayall-transfer`；如果旧文件只有 `formatVersion`，Finder 双击可能不进入设置页，必须实测。
+6. **英文文案和画布静态检查未全部接入 CI**：`scripts/verify-english-copy.py` 和 `scripts/verify-mapping-canvas-chrome.py` 仍需在受影响发布中手工执行。
 
 ## 发布记录模板
 
