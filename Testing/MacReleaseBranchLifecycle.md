@@ -18,7 +18,7 @@
 2. 运行 scripts/prepare-preview-release.sh，传入请求版本、Build 和中英文说明。
 3. 检查 git diff --name-only。
 
-预期：只修改 Resources/Info.plist、Resources/en.lproj/ReleaseHistory.md 和 Resources/zh-Hans.lproj/ReleaseHistory.md。版本已被 Tag、Release 或 13 个 CDN 固定路径占用时只递增 patch；只有 CDN HTTP 404 才算可用，未知响应 fail closed。脚本不会创建 Tag 或 Release；元数据 PR 合入 main 后不再同步第二条发布主线。
+预期：只修改 Resources/Info.plist、Resources/en.lproj/ReleaseHistory.md 和 Resources/zh-Hans.lproj/ReleaseHistory.md。版本已被 Tag、Release 或当前 10 个 CDN 固定路径占用时只递增 patch；只有 CDN HTTP 404 才算可用，未知响应 fail closed。脚本不会创建 Tag 或 Release；元数据 PR 合入 main 后不再同步第二条发布主线。
 
 失败判定：从旧 Tag/旧版本分支开始、修改产品代码、版本因 CI 失败而递增，或 Release Notes 含内部入口/凭据。
 
@@ -28,7 +28,7 @@
 2. 在干净、与 `origin/main` 一致的 main worktree 运行 scripts/stage-macos-preview.sh smoke。
 3. 检查 workflow 输入和 Run 标题。
 
-预期：源码只使用 `main` 的精确 SHA，Workflow 也以精确 main HEAD 触发；前置检查包括源码分支 CI、私有依赖版本标签、稳定 latest、13 个 CDN 固定路径全为 HTTP 404 和 GH_TOKEN 静态门禁。Run 标题包含 mode、source branch 和 source commit，不创建 Tag/Release。
+预期：源码只使用 `main` 的精确 SHA，Workflow 也以精确 main HEAD 触发；前置检查包括源码分支 CI、私有依赖版本标签、稳定 latest、当前 10 个 CDN 固定路径全为 HTTP 404 和 GH_TOKEN 静态门禁。Run 标题包含 mode、source branch 和 source commit，不创建 Tag/Release。
 
 失败判定：接受 detached/旧 SHA、未推送提交、`release-main`、功能分支、找不到 main CI 仍进入 Environment，或 Run 使用隐式 GH_TOKEN。
 
@@ -44,11 +44,11 @@
 ## 用例 4：受保护 staging 的职责
 
 1. 运行 macOS Signed Release Staging 的 preview 模式。
-2. 检查两个架构 Job、artifact 名称和 stage record。
+2. 检查 `package` Job 内两个架构 lane、artifact 名称和 stage record。
 
-预期：Apple Silicon 与 Intel 都完成签名、公证、staple、Gatekeeper、manifest 和 ZIP/DMG/PKG 校验；上传一个 payload artifact 和一个 stage record；没有 Tag、Release、公开 appcast 或公开资产。
+预期：Apple Silicon 与 Intel 都完成签名、公证、staple、Gatekeeper、manifest 和 ZIP/PKG 校验；DMG 只能作为内部中间产物，不进入公开资产；上传一个 payload artifact 和一个 stage record；没有 Tag、Release、公开 appcast 或公开资产。
 
-失败判定：只构建一个架构、上传 ad-hoc 包、创建公开身份、重复签名同一 artifact，或把 smoke 当成 Preview 发布。
+失败判定：只构建一个架构、上传 ad-hoc 包、把 DMG 当公开资产、创建公开身份、重复签名同一 artifact，或把 smoke 当成 Preview 发布。
 
 ## 用例 5：真实 Sparkle UI 门禁
 
@@ -66,7 +66,7 @@
 2. 注入一次 GitHub 上传或 CDN 验证失败。
 3. 用同一 attestation 重试。
 
-预期：publication workflow 不读取 Apple 凭据；首次创建或复用 exact Tag 和 Pre-release，只上传缺失且摘要匹配的 13 项 payload 与 provenance。发布后等待 Cloudflare 缓存传播，preview 两架构通道必须与新候选 appcast 一致，stable 两架构通道必须仍与发布前后同一个正式 Tag 一致。重试不重签、不升版本、不创建新分支；已有不同字节时 fail closed。
+预期：publication workflow 不读取 Apple 凭据；首次创建或复用 exact Tag 和 Pre-release，只上传缺失且摘要匹配的 10 项 payload 与 provenance。发布后等待 Cloudflare 缓存传播，preview 两架构通道必须与新候选 appcast 一致，stable 两架构通道必须仍与发布前后同一个正式 Tag 一致。重试不重签、不升版本、不创建新分支；已有不同字节时 fail closed。
 
 ## 用例 7：Stable 只改分类
 
@@ -74,7 +74,7 @@
 2. 运行 promote-preview-release.sh。
 3. 比较晋升前后的全部资产名称、大小和 digest。
 
-预期：当前 schema 5 普通候选 Commit 已进入 `origin/main`，Hotfix 候选仍是对应远端 Hotfix HEAD 且稳定基线一致；历史 schema 4 候选包含在冻结的 `origin/release-main`。通过 GitHub API 核对 provenance 对应的 staging Run/attempt、payload artifact 和 `mode=preview` stage record 后，只修改 Release 的 prerelease/latest 分类；资产、Tag、appcast 和 provenance 字节不变，并等待 Cloudflare stable 两架构通道逐字节切换到该 Tag。
+预期：当前 schema 6（兼容 schema 5）普通候选 Commit 已进入 `origin/main`，Hotfix 候选仍是对应远端 Hotfix HEAD 且稳定基线一致；历史 schema 4 候选包含在冻结的 `origin/release-main`。通过 GitHub API 核对 provenance 对应的 staging Run/attempt、payload artifact 和 `mode=preview` stage record 后，只修改 Release 的 prerelease/latest 分类；资产、Tag、appcast 和 provenance 字节不变，并等待 Cloudflare stable 两架构通道逐字节切换到该 Tag。
 
 失败判定：选择 Draft/不存在的 Release、来源为未被支持 provenance schema 绑定的分支、Hotfix 基线或远端 HEAD 不匹配、历史候选不再包含于冻结 `release-main`、触发构建/签名/上传或替换资产。
 
@@ -90,7 +90,7 @@
 - stable latest 在 Preview 前后仍为发布前动态记录的同一正式版本。
 - 公开 Preview 保持 Pre-release，不触发 Stable workflow。
 - Private Draft 只写入 GetSayAll/SayAll，不污染公开源码仓库。
-- 两架构资产和固定 Tag URL 完整，13 项 payload 加 provenance 的摘要一致。
+- 两架构资产和固定 Tag URL 完整，10 项 payload 加 provenance 的摘要一致。
 - 所有调用 gh 的 workflow step 都显式设置 GH_TOKEN。
 - `release-main` push 不触发 macOS CI，所有新的发布 Workflow 都拒绝从该分支 dispatch；历史候选正式化必须从精确 `main` 控制面触发，并通过兼容晋升门禁。
 

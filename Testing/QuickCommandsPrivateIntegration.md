@@ -17,17 +17,18 @@
 
 组合动作历史开放与按键捕获修复来自已弃用的 `sayall-macro-platform`；当前免费组合动作事实源已迁移到
 `GetSayAll/sayall-private-platform/packages/macos-combination-actions`，付费键位方案则独立位于
-`packages/macos-button-profiles`。下方历史 PR 链接仅供审计，不得从旧仓库取代码。宿主验证使用当前平台仓库的统一版本标签：
+`packages/macos-button-profiles`。下方历史 PR 链接仅供审计，不得从旧仓库取代码。宿主验证使用 `config/release-dependencies.json` 当前固定的统一版本标签；本文旧记录中的 `2.1.0` 只是历史值：
 
-```text
-2.1.0
+```bash
+tag="$(jq -er '.dependencies.sayAllPrivatePlatform.version' config/release-dependencies.json)"
 ```
 
 本地开发或验证时，使用不可变的 SwiftPM 版本标签（不得使用浮动的 `main`）：
 
 ```bash
-git -C /path/to/sayall-private-platform fetch origin tag 2.1.0
-git -C /path/to/sayall-private-platform checkout --detach 2.1.0
+tag="$(jq -er '.dependencies.sayAllPrivatePlatform.version' config/release-dependencies.json)"
+git -C /path/to/sayall-private-platform fetch origin tag "$tag"
+git -C /path/to/sayall-private-platform checkout --detach "$tag"
 ```
 
 宿主通过标准 SwiftPM 依赖私有平台根 Package。私有 AI Package 仍单独作为 SwiftPM 依赖。公开宿主不会复制私有源码，也不会在公开构建中解析私有仓库。最小测试命令为：
@@ -127,7 +128,7 @@ swift test --disable-keychain --scratch-path .build-combination-actions
 
 步骤：在没有打开新建区域时记录遥控器大小，点击“新建”后再次观察；创建并选择一个包含“打开 App”步骤的组合动作，输入超过 20 个字符的名称，并依次查看飞书、微信、天气、豆包、OpenCode 和 WorkBuddy 的已安装过滤结果。
 
-预期：新建区域展开前后遥控器保持相同尺寸；“测试动作”和可用状态的“保存修改”与“新建”使用同一种主要按钮颜色；组合动作名称标签与输入框位于同一行，输入最多保留 20 个字符；步骤编号与动作名称字号一致；已选择 App 的真实图标显示在名称前，Bundle ID 紧跟名称显示；新增预置 App 仅在实际安装时出现。注入私有模块后，侧边栏主页面顺序为“按键、组合动作、统计、连接、权限、关于”，不因资格状态插入或移除组合动作页面。
+预期：新建区域展开前后遥控器保持相同尺寸；“测试动作”和可用状态的“保存修改”与“新建”使用同一种主要按钮颜色；组合动作名称标签与输入框位于同一行，输入最多保留 20 个字符；步骤编号与动作名称字号一致；已选择 App 的真实图标显示在名称前，Bundle ID 紧跟名称显示；新增预置 App 仅在实际安装时出现。注入私有模块后，侧边栏顺序以 `Sources/RemoteMic/SettingsView.swift` 的 `SettingsSection.allCases` 为准；不得因资格状态插入、移除或重复组合动作页面，也不得让页面顺序与当前主线不一致。
 
 失败判定：展开新建区域导致遥控器缩放、主要按钮颜色层级不一致、名称超过 20 个字符、步骤标题字号不一致、App 图标或 Bundle ID 缺失、未安装 App 出现在列表中，或主页面顺序错误。
 
@@ -208,7 +209,7 @@ swift test --disable-keychain --scratch-path .build-combination-actions
 
 - RC003 普通语音：`STREAM_START → AUDIO → STREAM_STOP`。
 - Fn 语音、Nearby、Web Remote、虚拟音频和普通按键映射。
-- 使用截图 harness 在 `800 × 650` 做窄宽压力检查，并在真实生产最小窗口 `1020 × 772` 逐一点击全部侧边栏入口，确认页面和滚动不裁切。
+- 使用截图 harness 在 `800 × 650` 做窄宽压力检查，并在真实生产最小窗口 `1067 × 760` 逐一点击全部侧边栏入口，确认页面和滚动不裁切。
 
 ## 安装与覆盖升级
 

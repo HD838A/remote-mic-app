@@ -2,7 +2,7 @@
 
 ## 适用范围
 
-Mac 2.0.0 源码候选。公开宿主须配套私有标准 SwiftPM Tag 2.2.2 或后续兼容版本。
+适用于当前候选。公开宿主须配套 `config/release-dependencies.json` 当前固定的私有标准 SwiftPM Tag 或兼容版本；本文历史记录中的 `2.2.2` 不是当前门槛。
 原有社区分享文件的合同不变。旧版 JSON 和旧 personalBackup 继续可读。
 
 ## 准备
@@ -57,7 +57,7 @@ Mac 2.0.0 源码候选。公开宿主须配套私有标准 SwiftPM Tag 2.2.2 或
 - 原个人配置 JSON、社区方案分享及单对象导入保持原合同。
 - 检查 `CONFIGURATION EXPORT`、`CONFIGURATION IMPORT`、`CONFIGURATION ARCHIVE` 和 `CONFIGURATION RESTORE`。
 - 只记录操作阶段、结果、计数及稳定原因。不记录路径、名称、输入内容或配置正文。
-- 在生产最小窗口 1020 × 772 检查设置导航、导出按钮和系统文件窗口。
+- 在生产最小窗口 1067 × 760 检查设置导航、导出按钮和系统文件窗口。
 - 导入后另行验证快捷键、普通按键和语音路径；自动化不替代真实遥控器与目标 App 验收。
 
 ## 本轮状态
