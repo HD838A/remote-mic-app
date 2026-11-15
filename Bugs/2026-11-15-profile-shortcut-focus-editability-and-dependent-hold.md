@@ -58,11 +58,10 @@
 - 定向测试：`ButtonBindingConfigurationTests` 与 `RemoteButtonInteractionTests` 共 61 项通过；新增动作变化清除策略
   和保存回执生命周期用例。
 - 公开模式：`SAYALL_PRIVATE_PLATFORM_MODE=public swift test --disable-keychain --scratch-path .build/public`，
-  1446 项测试、104 个套件通过。
+  1447 项测试、104 个套件通过。
 - 私有方向键源码：`SAYALL_ENABLE_PRIVATE_SWIFTPM=1 SAYALL_ENABLE_BUTTON_PROFILES=1` 指向私有 PR #460
   的干净 checkout，跳过与本修复无关的 `releaseControlPlaneFixtureHasExecutableRegressionCoverage` 后
-  1511 项测试、113 个套件通过。不跳过时 1512 项中只有该发布控制面 fixture 因本机私有环境失败；
-  公开模式同一 fixture 通过。
+  1512 项测试、113 个套件通过。该发布控制面 fixture 在公开模式通过；私有模式下受本机环境限制失败。
 - 生产界面：由生产 `SettingsView` 的离屏入口生成中文浅色 `1020 × 772`（PNG `2040 × 1544`）截图，覆盖方案总览、
   快捷键编辑、focus 编辑、继承默认行、可写按住面板、清除成功和清除失败重试。方案访问由截图 fixture 授权，
   不代表真实会员状态；图片字节保存在仓库外证据目录，仅以 PR 附件和文本索引归档。
