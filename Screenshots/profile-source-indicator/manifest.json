@@ -1,0 +1,98 @@
+{
+  "batch": "profile-source-indicator",
+  "date": "2026-11-15",
+  "purpose": "PR 1065 修复按键方案来源标识挤占卡片动作名，并验证继承链接、显式编辑区和中英文浅深色",
+  "branch": "codex/profile-source-indicator-20261115",
+  "pr": "https://github.com/HD838A/remote-mic-app/pull/1065",
+  "host_base": "99268153",
+  "base_main": "274ed213",
+  "window_points": [
+    1020,
+    772
+  ],
+  "storage": "external-persistent-directory-and-github-pr-attachments",
+  "storage_path": "~/Develop/ReleaseArtifacts/profile-source-indicator-20261115/attachments/",
+  "notes": [
+    "由生产 SettingsView 的 REMOTE_MIC_SETTINGS_SCREENSHOT_DIR 离屏入口生成；不是设计稿，也不启动蓝牙硬件。",
+    "使用私有 2.12.0 子包源码和本地按键方案测试放行构建；方案访问由截图 fixture 授权，不代表真实会员验收。",
+    "Before 图来自 PR 1063 合并后同一生产视图的真实截图，展示来源前缀挤占动作名；没有重绘或重新生成。",
+    "After 图覆盖中文/英文、浅色/深色，以及继承长动作、显式编辑区和继承编辑区。",
+    "卡片显式动作只显示动作名；继承项用链接图标；显式来源在编辑区头部和悬停帮助显示「本方案 · <动作>」。",
+    "超长动作名仍可能在窄卡片内截断；悬停和编辑区提供完整文案。截图只证明静态界面和状态文案。",
+    "图片字节不入库，本文件只做文本索引；外部链接为 PR 1065 的 GitHub 附件。"
+  ],
+  "images": [
+    {
+      "file": "before-zh-light.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "ddaace3404260fda7ce8b5fd39b949ed3b1f17609ef20f880e8271f0e6e76023",
+      "state": "before",
+      "external_url": "https://github.com/user-attachments/assets/d45f96a6-9647-4cd9-99ac-605f84337002"
+    },
+    {
+      "file": "after-zh-light.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "0592405c3112c33c28bd1d7957cc9b31d0445a3ef662b18cc4ef1f615e4986b6",
+      "state": "after",
+      "external_url": "https://github.com/user-attachments/assets/41e1332e-c088-4713-a64a-73faa0443e46"
+    },
+    {
+      "file": "after-zh-dark.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "9fd6bf01f0dbac3e59d80d1a648293c63bb25112ffe9d7ad10734f0a1ee9c78f",
+      "state": "after",
+      "external_url": "https://github.com/user-attachments/assets/fd3ce4c1-ebfc-4d25-a4b2-0b7f72b0c4fd"
+    },
+    {
+      "file": "after-en-light.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "77116ffa12993e5640bbedeedee47c443448742151313753b5701d0b644c8a05",
+      "state": "after",
+      "external_url": "https://github.com/user-attachments/assets/cbfb40dd-9c75-4d7a-8b01-fe960fcb2f32"
+    },
+    {
+      "file": "after-en-dark.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "4e0a9eb64ae7498e2e938310e9c7e8ab31a64ec1d610531116a29b674eaedfc0",
+      "state": "after",
+      "external_url": "https://github.com/user-attachments/assets/f46fa190-b300-4cdb-9d14-f3aa9fd939cc"
+    },
+    {
+      "file": "after-inherited-long-zh.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "72d282a79e05f6b3929385ce67d267414087a926578b6c2d989bfc5c6e9e7ab0",
+      "state": "after",
+      "external_url": "https://github.com/user-attachments/assets/cb2e5b86-3177-4649-ace0-d62436b3bb2c"
+    },
+    {
+      "file": "after-editor-explicit-zh.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "b60e2171f9e8e8bff766eb98065c288dee5f09375ace82260605280647d78a0a",
+      "state": "after",
+      "external_url": "https://github.com/user-attachments/assets/2baf660b-2e40-4724-a39c-5f9a21a2a7e2"
+    },
+    {
+      "file": "after-editor-inherited-zh.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "27073beb75f4ea462563e737b3b0d07f4cf8f6b6c2b45674c0f1cfc777f46604",
+      "state": "after",
+      "external_url": "https://github.com/user-attachments/assets/6fca2461-ba61-4549-898c-174118815904"
+    }
+  ]
+}

@@ -107,6 +107,15 @@ enum RemoteMappingLayout {
     }
 }
 
+/// 卡片动作的来源。只有继承项在窄卡片上加链接图标；显式动作的来源
+/// 在编辑区和悬停帮助里完整呈现，避免图标占用动作名宽度。
+enum RemoteMappingActionSource {
+    case base
+    case inherited
+    case explicit
+    case unavailable
+}
+
 struct RemoteMappingCanvas: View {
     @EnvironmentObject private var localization: LocalizationStore
 
@@ -119,6 +128,8 @@ struct RemoteMappingCanvas: View {
     let holdSummary: (RemoteButton) -> String
     /// 悬停时显示的完整形态（例如 `⌘ Command + ⇧ Shift + H`）；卡片正文用 `actionSummary`。
     var actionDetail: ((RemoteButton, ButtonTrigger) -> String)? = nil
+    /// 方案编辑时的动作来源；继承项在窄卡片上用链接图标标记。
+    var actionSource: ((RemoteButton, ButtonTrigger) -> RemoteMappingActionSource)? = nil
     let onEdit: (RemoteButton, ButtonTrigger) -> Void
     let onEditHold: (RemoteButton) -> Void
     var onVoiceSettings: () -> Void = {}
@@ -281,10 +292,23 @@ struct RemoteMappingCanvas: View {
                             Text(trigger.displayName(using: localization))
                                 .font(.system(size: 12, weight: .medium))
                                 .foregroundStyle(.secondary)
-                            Text(actionSummary(button, trigger))
-                                .font(.system(size: 12, weight: trigger == .singleClick ? .semibold : .regular))
-                                .lineLimit(1)
-                                .truncationMode(.tail)
+                            HStack(spacing: 2) {
+                                if actionSource?(button, trigger) == .inherited {
+                                    Image(systemName: "link")
+                                        .font(.system(size: 12, weight: .medium))
+                                        .foregroundStyle(.secondary)
+                                        .accessibilityLabel(
+                                            Text(localization.text("button_mapping.binding.inherited"))
+                                        )
+                                }
+                                Text(actionSummary(button, trigger))
+                                    .font(.system(
+                                        size: 12,
+                                        weight: trigger == .singleClick ? .semibold : .regular
+                                    ))
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
+                            }
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 5)

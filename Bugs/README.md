@@ -1,5 +1,7 @@
 # Bug 记录
 
+- [方案来源前缀挤占按键卡片动作名](./2026-11-15-profile-source-prefix-card-truncation.md)
+
 - [设置页截图夹具显示旧版本更新](./2026-11-15-settings-screenshot-stale-update-fixture.md)
 
 - [键位方案内的快捷键/focus 绑定只读，动作变化后旧按住设置残留](./2026-11-15-profile-shortcut-focus-editability-and-dependent-hold.md)
