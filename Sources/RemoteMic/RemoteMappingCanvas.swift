@@ -124,6 +124,8 @@ struct RemoteMappingCanvas: View {
     var onVoiceSettings: () -> Void = {}
     /// 方案作用域只覆盖 10 个普通按键；不在范围内的按键置灰且不可点。
     var reservedButtons: Set<RemoteButton> = []
+    /// 按 APP 作用域不显示语音键设置卡，也不让隐藏按键的连线占用画布。
+    var hidesUnavailableCards = false
 
     var body: some View {
         GeometryReader { geometry in
@@ -139,7 +141,7 @@ struct RemoteMappingCanvas: View {
 
                 connectionLines(metrics: metrics)
 
-                ForEach(RemoteMappingLayout.buttonPlacements) { placement in
+                ForEach(visibleButtonPlacements) { placement in
                     mappingCard(placement.button)
                         .frame(width: metrics.cardWidth, height: metrics.cardHeight)
                         .position(
@@ -148,20 +150,28 @@ struct RemoteMappingCanvas: View {
                         )
                 }
 
-                voiceCard
-                    .frame(width: metrics.cardWidth, height: metrics.cardHeight)
-                    .position(
-                        x: metrics.cardCenterX(for: .right),
-                        y: RemoteMappingLayout.canvasHeight * RemoteMappingLayout.voiceTargetY
-                    )
+                if !hidesUnavailableCards {
+                    voiceCard
+                        .frame(width: metrics.cardWidth, height: metrics.cardHeight)
+                        .position(
+                            x: metrics.cardCenterX(for: .right),
+                            y: RemoteMappingLayout.canvasHeight * RemoteMappingLayout.voiceTargetY
+                        )
+                }
             }
         }
         .frame(height: RemoteMappingLayout.canvasHeight)
     }
 
+    private var visibleButtonPlacements: [RemoteMappingPlacement] {
+        RemoteMappingLayout.buttonPlacements.filter {
+            !reservedButtons.contains($0.button) || !hidesUnavailableCards
+        }
+    }
+
     private func connectionLines(metrics: Metrics) -> some View {
         Canvas { context, _ in
-            for placement in RemoteMappingLayout.buttonPlacements {
+            for placement in visibleButtonPlacements {
                 drawConnection(
                     context: &context,
                     start: metrics.remotePoint(for: placement.anchor),
@@ -171,6 +181,7 @@ struct RemoteMappingCanvas: View {
                     showsAnchor: activeButtons.contains(placement.button)
                 )
             }
+            if hidesUnavailableCards { return }
             drawConnection(
                 context: &context,
                 start: metrics.remotePoint(for: RemoteMappingLayout.voiceAnchor),
@@ -247,28 +258,30 @@ struct RemoteMappingCanvas: View {
                     .font(.system(size: 13, weight: .semibold))
                     .lineLimit(1)
                 Spacer(minLength: 0)
-                Button {
-                    selectedButton = button
-                    onEditHold(button)
-                } label: {
-                    Text(holdSummary(button))
-                        .font(.system(
-                            size: RemoteMappingCardChrome.HoldChip.fontSize,
-                            weight: RemoteMappingCardChrome.HoldChip.fontWeight
-                        ))
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                        .padding(.horizontal, RemoteMappingCardChrome.HoldChip.horizontalPadding)
-                        .padding(.vertical, RemoteMappingCardChrome.HoldChip.verticalPadding)
-                        .background(
-                            RemoteMappingCardChrome.HoldChip.background,
-                            in: RoundedRectangle(
-                                cornerRadius: RemoteMappingCardChrome.HoldChip.cornerRadius
+                if !hidesUnavailableCards {
+                    Button {
+                        selectedButton = button
+                        onEditHold(button)
+                    } label: {
+                        Text(holdSummary(button))
+                            .font(.system(
+                                size: RemoteMappingCardChrome.HoldChip.fontSize,
+                                weight: RemoteMappingCardChrome.HoldChip.fontWeight
+                            ))
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                            .padding(.horizontal, RemoteMappingCardChrome.HoldChip.horizontalPadding)
+                            .padding(.vertical, RemoteMappingCardChrome.HoldChip.verticalPadding)
+                            .background(
+                                RemoteMappingCardChrome.HoldChip.background,
+                                in: RoundedRectangle(
+                                    cornerRadius: RemoteMappingCardChrome.HoldChip.cornerRadius
+                                )
                             )
-                        )
+                    }
+                    .buttonStyle(.plain)
+                    .help("\(button.displayName(using: localization)) · \(holdSummary(button))")
                 }
-                .buttonStyle(.plain)
-                .help("\(button.displayName(using: localization)) · \(holdSummary(button))")
             }
 
             HStack(spacing: 4) {

@@ -27,6 +27,7 @@
 ## 产品规范与跨平台合同
 
 - 功能产品规范使用 `feature/<feature>/PRODUCT_SPEC.md`。当前包括：
+  - [`feature/application-button-overrides/PRODUCT_SPEC.md`](feature/application-button-overrides/PRODUCT_SPEC.md)
   - [`feature/button-mapping/PRODUCT_SPEC.md`](feature/button-mapping/PRODUCT_SPEC.md)
   - [`feature/mapping-scope-separation/PRODUCT_SPEC.md`](feature/mapping-scope-separation/PRODUCT_SPEC.md)
   - [`feature/common-phrases/PRODUCT_SPEC.md`](feature/common-phrases/PRODUCT_SPEC.md)
