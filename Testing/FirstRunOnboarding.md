@@ -2,6 +2,21 @@
 
 > 执行本手册或修改 Onboarding 前，先完整阅读跨平台产品规范 [`feature/first-run-onboarding/PRODUCT_SPEC.md`](../feature/first-run-onboarding/PRODUCT_SPEC.md) 和 [macOS 平台适配](../feature/first-run-onboarding/platform-macos.md)。未来 Windows 测试应从同一产品规范出发，并使用 [Windows 平台适配](../feature/first-run-onboarding/platform-windows.md) 建立独立测试手册。
 
+## 欢迎页隐藏 AI 配置提示入口（2026-11-15）
+
+适用版本为包含本修改的 `main` 或对应候选；验证分支为 `codex/hide-onboarding-ai-prompt-20261115`。本次只隐藏欢迎页底部的“让 AI 工具帮我配置”按钮，不改无屏配置命令、提示词生成逻辑、步骤顺序、完成门禁、持久化或语音链路。影响分类为局部 UI 变化。
+
+1. 使用生产 `OnboardingView` 离屏入口分别生成中文、英文、浅色和深色的欢迎页。预期：`01-welcome.png` 底部只有“开始设置”主按钮，不显示“让 AI 工具帮我配置”、复制成功或复制失败文案，也不留下空白按钮位。
+2. 在真实窗口进入欢迎页，按 Tab 检查可聚焦控件。预期：只能聚焦“开始设置”；不存在隐藏的 AI 配置按钮，焦点顺序和窗口几何不变。
+3. 从欢迎页进入控制设备页，再返回欢迎页。预期：AI 配置入口仍不显示；返回、步骤进度和恢复位置保持原行为。
+4. 运行 `swift test --disable-keychain --filter OnboardingFlowTests` 和生产离屏控件回归。预期：欢迎页可交互控件集合只有 `continue`；无屏配置命令、提示词生成和原有步骤门禁测试仍通过。
+
+失败判定：欢迎页仍显示 AI 配置入口、出现空白按钮位、残留复制成功或失败提示、键盘焦点落到不可见控件，或步骤导航、门禁和持久化发生变化，均判定失败。
+
+验证范围：自动化覆盖欢迎页可交互控件集合与既有配置门禁；离屏截图覆盖中英文、浅色和深色的欢迎页布局。真实窗口键盘操作和外部 AI 工具对提示词的实际完成能力仍须现场验收；本次隐藏入口不代表提示词质量已经通过验收。
+
+本轮结果：`SAYALL_PRIVATE_PLATFORM_MODE=public swift test --disable-keychain --filter OnboardingFlowTests` 通过 111 项测试，`swift build --disable-keychain` 构建通过。生产离屏入口生成中文浅色、中文深色、英文浅色和英文深色欢迎页，均为 PNG、2040 × 1600；逐张查看确认底部只保留右侧“开始设置”，没有 AI 配置入口、复制结果文案、空白按钮位、裁切或错位。四张图按中文浅色、中文深色、英文浅色、英文深色顺序的 SHA-256 分别为 `75f718f5518c0d1c7c2cb25eb80bbab492d16182aa22d086daa4ada4afe3116b`、`916df2367362ec5c029d7815547eadb3eeee9a24fc9789bbe2db095c10955ce8`、`93004a9c8e4797aad61ebfdcb1085aa8b50e830119a115f37bae47adef57ce1a` 和 `f7c19c58f4dd1c68b1d6d9adba18e0e51982c8b025f0464ca0be273c560c19a4`，原始文件保存在仓库外持久目录 `.screenshot-workdir/onboarding-hide-ai-prompt-20261115/`（位于本仓库父目录）。真实窗口 Tab 焦点、返回恢复和外部 AI 工具实际完成能力未在本轮验证；本次只证明入口已隐藏，不代表提示词质量通过验收。
+
 ## 附近连接等待的系统睡眠回归（2026-11-12）
 
 适用版本为包含本修复的 `main` 或对应版本 / Build；当前真机记录为 build 352。影响分类为连接生命周期变化。自动化验证附近资源暂停/恢复，并运行现有引导流程回归。生产完成门槛保持原定义。
@@ -656,7 +671,7 @@ build 314 本机结果：Apple Silicon 用户实测报告无漏字母 `i`、重�
 
 流程自动化必须分为两层：进程内离屏交互和真实环境验收。进程内层复用生产 `OnboardingView`，在屏幕外的 `NSWindow` 中加载页面，并通过仅供测试注入的 action probe 驱动生产 `Button`、`Link`、`Toggle` action，检查状态更新和导航断言；它不使用屏幕坐标、`CGEvent` 或外部辅助功能点击，因此锁屏、屏幕熄灭或当前用户未登录都不应阻止这层测试。`真实环境` 仍记录需要权限、遥控器、手机或第三方工具的结果；它不能用离屏测试替代。
 
-当前 PR 的 `OnboardingFlowTests.offscreenOnboardingRegistersAndDrivesEveryInteractiveControl` 逐页覆盖生产 Onboarding 中的所有可点击控件：欢迎、AI 配置提示复制、返回/继续、实体设备、更多控制方式展开、备用来源、按住/按一次、五个输入工具、权限行、音频设备、语音测试确认、重新打开、失败恢复、诊断复制和完成动作。系统设置、真实硬件、第三方 App 启动结果和真实文字上屏仍按下表进入现场层。
+当前 PR 的 `OnboardingFlowTests.offscreenOnboardingRegistersAndDrivesEveryInteractiveControl` 逐页覆盖生产 Onboarding 中的所有可点击控件：欢迎、返回/继续、实体设备、更多控制方式展开、备用来源、按住/按一次、五个输入工具、权限行、音频设备、语音测试确认、重新打开、失败恢复、诊断复制和完成动作。系统设置、真实硬件、第三方 App 启动结果和真实文字上屏仍按下表进入现场层。
 
 如果外部 UI 自动化工具报告“Mac 已锁定”或无法取得辅助功能权限，只能将其记录为该自动化通道不可用，不能把“解锁 Mac”列为 Onboarding 的产品前置条件，也不能因此修改用户流程。需要屏幕级坐标、系统权限弹窗、真实蓝牙/音频或第三方 App 文字上屏的用例，单独安排在已登录的现场验收中。
 
