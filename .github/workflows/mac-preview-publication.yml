@@ -78,3 +78,20 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.SAYALL_FEED_SYNC_TOKEN }}
         run: node scripts/sync-update-feeds.mjs "$(jq -er .tag "$RUNNER_TEMP/preview-ui-attestation.json")"
+
+      - name: Retain Draft when publication or feed synchronization fails
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          attestation="$RUNNER_TEMP/preview-ui-attestation.json"
+          [[ -r "$attestation" ]] || exit 0
+          tag="$(jq -er .tag "$attestation" 2>/dev/null)" || exit 0
+          [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 0
+          release_id="$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+            --jq ".[] | select(.tag_name == \"$tag\") | .id" | head -n 1)"
+          [[ "$release_id" =~ ^[0-9]+$ ]] || exit 0
+          gh api --method PATCH "repos/$GITHUB_REPOSITORY/releases/$release_id" \
+            -F draft=true -f make_latest=false >/dev/null
+          gh api "repos/$GITHUB_REPOSITORY/releases/$release_id" | jq -e '.draft == true' >/dev/null

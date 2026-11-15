@@ -402,7 +402,7 @@ fi
 
 fetch_public_asset() {
   local url="$1" destination="$2" attempt remaining request_timeout
-  for attempt in {1..4}; do
+  for attempt in {1..20}; do
     remaining=$(( public_verification_deadline - SECONDS ))
     if (( remaining <= 0 )); then
       echo "Public verification deadline exceeded; retracting candidate" >&2
@@ -415,7 +415,7 @@ fetch_public_asset() {
         "$url" --output "$destination"; then
       return 0
     fi
-    (( attempt == 4 )) || /bin/sleep 2
+    (( attempt == 20 )) || /bin/sleep 6
   done
   echo "Public asset download failed after bounded retries" >&2
   return 1
@@ -482,9 +482,10 @@ printf '%s\n' "$stable_release_after" | jq -e \
   exit 1
 }
 
+# The Preview channel is synchronized and verified by the workflow's feed-sync
+# step after this script returns. Checking it here would require a feed mutation
+# that has not happened yet.
 for appcast in appcast.xml appcast-intel.xml; do
-  verify_channel_appcast \
-    preview "$appcast" "$github_dir/$appcast" "$work_dir/preview-channel-$appcast"
   fetch_public_asset \
     "https://github.com/$REPOSITORY/releases/download/$stable_latest_after/$appcast" "$work_dir/stable-fixed-$appcast"
   verify_channel_appcast \
