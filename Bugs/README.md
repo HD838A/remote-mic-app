@@ -1,5 +1,7 @@
 # Bug 记录
 
+- [设置页截图夹具显示旧版本更新](./2026-11-15-settings-screenshot-stale-update-fixture.md)
+
 - [键位方案内的快捷键/focus 绑定只读，动作变化后旧按住设置残留](./2026-11-15-profile-shortcut-focus-editability-and-dependent-hold.md)
 
 - [设置相关页面装饰性图标颜色不一致](./2026-11-14-settings-decorative-icon-colors.md)
