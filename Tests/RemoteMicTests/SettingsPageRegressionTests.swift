@@ -940,6 +940,62 @@ struct SettingsPageRegressionTests {
         #expect(source.contains("button_mapping.hold.profile_repeat_only"))
     }
 
+    @Test func nonMemberMappingHeaderUsesContextualMembershipCTA() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+        let zh = try String(
+            contentsOf: root.appendingPathComponent("Resources/zh-Hans.lproj/Localizable.strings"),
+            encoding: .utf8
+        )
+        let en = try String(
+            contentsOf: root.appendingPathComponent("Resources/en.lproj/Localizable.strings"),
+            encoding: .utf8
+        )
+        let renderer = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsScreenshotRenderer.swift"),
+            encoding: .utf8
+        )
+
+        let gate = try #require(source.range(of: "private var showsMappingProfileMembershipCTA"))
+        let gateEnd = try #require(source.range(
+            of: "private func clearMappingSaveFeedback",
+            range: gate.upperBound..<source.endIndex
+        ))
+        let gateSource = source[gate.lowerBound..<gateEnd.lowerBound]
+        #expect(gateSource.contains("membershipFeature.isFeatureVisible"))
+        #expect(gateSource.contains("membershipFeature.buttonProfilesAccessDecision == .requiresPlus"))
+        #expect(gateSource.contains("!canEditMappingProfiles"))
+
+        let cta = try #require(source.range(of: "private var mappingProfileMembershipCTA"))
+        let ctaEnd = try #require(source.range(
+            of: "private func mappingMacroChoices",
+            range: cta.upperBound..<source.endIndex
+        ))
+        let ctaSource = source[cta.lowerBound..<ctaEnd.lowerBound]
+        #expect(ctaSource.contains("selectedSection = .membership"))
+        #expect(ctaSource.contains("MEMBERSHIP ENTRY source=mapping_profile_toolbar"))
+        #expect(ctaSource.contains("button_mapping.profile.membership.open"))
+
+        #expect(source.contains("if showsMappingProfileMembershipCTA {"))
+        #expect(source.contains("mappingSaveAsProfileButton.disabled(!canEditMappingProfiles)"))
+        #expect(source.contains("\"button_mapping.profile.membership.create_hint\""))
+        #expect(source.contains("\"button_mapping.profile.membership.copy_hint\""))
+        #expect(zh.contains("\"button_mapping.profile.membership.create_hint\" = \"开通后可创建新方案\";"))
+        #expect(zh.contains("\"button_mapping.profile.membership.copy_hint\" = \"开通后可复制当前方案\";"))
+        #expect(zh.contains("\"button_mapping.profile.membership.open\" = \"开通会员\";"))
+        #expect(en.contains("\"button_mapping.profile.membership.create_hint\" = \"Membership unlocks new profiles\";"))
+        #expect(en.contains("\"button_mapping.profile.membership.copy_hint\" = \"Membership unlocks profile copies\";"))
+        #expect(en.contains("\"button_mapping.profile.membership.open\" = \"Open membership\";"))
+        #expect(renderer.contains("REMOTE_MIC_SETTINGS_SCREENSHOT_MEMBERSHIP_ACCESS"))
+        #expect(renderer.contains("applyScreenshotState("))
+    }
+
     @Test func remoteMappingScrollsResetWhenSwitchingProfilesAndConnectionPhotoFollowsModel() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
