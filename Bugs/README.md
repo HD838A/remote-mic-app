@@ -1,5 +1,7 @@
 # Bug 记录
 
+- [设置页截图夹具显示旧版本更新](./2026-11-15-settings-screenshot-stale-update-fixture.md)
+
 - [设置相关页面装饰性图标颜色不一致](./2026-11-14-settings-decorative-icon-colors.md)
 
 - [音频引擎重绑后误报可用并在活跃语音中持续丢包](./2026-11-14-audio-engine-recovery-backoff.md)

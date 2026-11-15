@@ -90,6 +90,16 @@
 
 实际窗口检查覆盖 Buttons、Macros、Button Profiles、Membership、Extra Page、AI Features、Connection、Reflections、Settings 和个人中心十个入口；夹具只证明公开宿主的布局，不证明可选模块行为或真实登录状态。
 
+> 历史证据说明：上面两张表（2026-10-28、2026-10-30）和仓库内 `Screenshots/copy-review/english-copy-20261031/en-light/about-1020x772.png` 使用旧截图夹具，固定显示 `1.9.22`。其中 `2.0.x` 当前版本被提示更新到 `1.9.22` 是夹具数据，不是生产更新逻辑；旧图按历史证据保留，不删除、不重写。
+
+2026-11-15 截图夹具修复验证：`SettingsScreenshotRenderer.seedAvailableUpdate` 改为从当前 `CFBundleShortVersionString` 和 `CFBundleVersion` 生成演示候选，最后一个版本段和 Build 各加 1。使用 Build 320 的公开 Release App，当前版本 `2.0.2 (Build 320)`，演示候选 `2.0.3 (Build 321)`。覆盖英文/中文、浅色/深色、标准图标、`SIDEBAR_FIXTURE=1` 和 `long` 账户名共 12 张 About 页面截图；全部为 `2040 × 1544` PNG，逐张确认显示“当前版本 2.0.2 (Build 320)”“可更新”“2.0.3 更新内容”“更新到 2.0.3”，不含 `1.9.22`。
+
+- 自动化：`swift test --disable-keychain --filter SettingsPageRegressionTests` 通过 82 项；新增用例覆盖补丁版本、两段/四段版本和缺失 Bundle 元数据回退。
+- 构建：`SAYALL_PRIVATE_PLATFORM_MODE=public SAYALL_BUILD_CHANNEL=public CODE_SIGN_IDENTITY=- REQUIRE_SIRI_REMOTE_SIGNING=0 CONFIGURATION=release scripts/build-app.sh` 通过。
+- 包检查：`scripts/verify-app.sh dist/SayAll.app` 通过（`APP VERIFY PASS`）。
+- 截图索引：[manifest.json](../Screenshots/2026-11-15-about-update-fixture/manifest.json)。图片字节保存在仓库外持久目录；PR 附件在交付时补齐。
+- 该结果只证明静态截图夹具和 About 页面布局，不替代真实更新检查、Sparkle 安装、真实窗口导航、权限或硬件验收。
+
 ## 用例 2：无更新与更新信息不可用
 
 1. 使用与当前 feed 相同或更高 Build 的 App 打开设置页。

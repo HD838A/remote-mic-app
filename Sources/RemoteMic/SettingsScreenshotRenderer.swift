@@ -532,13 +532,41 @@ enum SettingsScreenshotRenderer {
         case .system, .english:
             notes = "Refined the Settings layout\nCentralized permissions and logs\nFixed known issues"
         }
+        // The screenshot fixture must stay newer than the host app. Otherwise the
+        // About page shows an update to an older version after every release.
+        let candidate = demoUpdateCandidate(
+            currentVersion: Bundle.main.object(
+                forInfoDictionaryKey: "CFBundleShortVersionString"
+            ) as? String ?? "",
+            currentBuild: Bundle.main.object(
+                forInfoDictionaryKey: "CFBundleVersion"
+            ) as? String ?? ""
+        )
         updateInformation.setAvailable(
-            displayVersion: "1.9.22",
-            buildVersion: "183",
+            displayVersion: candidate.displayVersion,
+            buildVersion: candidate.buildVersion,
             archiveURL: nil,
             fallbackDescription: notes,
             localeIdentifier: language.rawValue
         )
+    }
+
+    static func demoUpdateCandidate(
+        currentVersion: String,
+        currentBuild: String
+    ) -> (displayVersion: String, buildVersion: String) {
+        let fallback = (displayVersion: "999.0.0", buildVersion: "999999999")
+        guard let normalizedVersion = UpdateVersion.normalized(currentVersion) else {
+            return fallback
+        }
+        var components = normalizedVersion.split(separator: ".").compactMap { Int($0) }
+        guard let lastComponent = components.last else { return fallback }
+        components[components.count - 1] = lastComponent + 1
+        let displayVersion = components.map(String.init).joined(separator: ".")
+        let buildVersion = Int(currentBuild).map { build in
+            build == Int.max ? String(build) : String(build + 1)
+        } ?? fallback.buildVersion
+        return (displayVersion: displayVersion, buildVersion: buildVersion)
     }
 
     private static func seedStatisticsForScreenshot(_ settings: AppSettings) {
