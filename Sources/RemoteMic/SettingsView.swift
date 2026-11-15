@@ -726,7 +726,7 @@ struct SettingsView: View {
         if let initialMappingSaveScenario {
             var initialState = ButtonMappingSaveState()
             let outcome: ButtonMappingWriteRecovery.Outcome? = switch initialMappingSaveScenario {
-            case "success": .saved
+            case "success", "hold_cleared", "hold_clear_failed": .saved
             case "failure": .failed
             case "unknown": .unknown
             default: nil
@@ -735,6 +735,8 @@ struct SettingsView: View {
                 initialState.record(outcome, retry: .action(.init(action: .commandPaste, shortcut: nil)),
                     target: .init(profileID: initialMappingProfileID, deviceID: model.settings.selectedRemoteProfileID,
                         button: initialMappingEditingButton ?? .ok, trigger: initialMappingEditingTrigger))
+                initialState.holdClearedByActionChange = initialMappingSaveScenario == "hold_cleared"
+                initialState.holdClearFailedByActionChange = initialMappingSaveScenario == "hold_clear_failed"
                 _mappingActionSave = State(initialValue: initialState)
             }
             if initialMappingSaveScenario == "create" || initialMappingSaveScenario == "copy" {
@@ -2114,12 +2116,14 @@ struct SettingsView: View {
 
     private func saveMappingBinding(_ configured: ConfiguredButtonAction?, button: RemoteButton, trigger: ButtonTrigger) {
         guard canWriteMappingBinding(button: button, trigger: trigger) else { return }
+        let previousAction = mappingConfiguration(for: button, trigger: trigger)
+        let previousHold = mappingHoldMode(for: button)
         mappingHoldSave = .init()
         let profile = editingMappingProfileID
         let device = settings.selectedRemoteProfileID
         let operationID = UUID().uuidString
         AppLogger.shared.write("BUTTON CONFIGURATION operation_id=\(operationID) scope=\(profile == nil ? "base" : "profile") button=\(button.rawValue) trigger=\(trigger.rawValue) action=write phase=requested result=requested")
-        let outcome = ButtonMappingWriteRecovery.saveAction {
+        let outcome = ButtonMappingWriteRecovery.perform {
             if let profile {
                 return macroFeature.writeProfileBinding(configured, profile: profile, button: button, trigger: trigger,
                     displayName: configured.map { $0.action == .disabled ? localization.text("button_mapping.action.no_action") : actionSummary($0) })
@@ -2133,10 +2137,17 @@ struct SettingsView: View {
                 return macroFeature.profileBindingMatches(configured, profile: profile, button: button, trigger: trigger)
             }
             return settings.configuredBaseAction(for: button, trigger: trigger) == configured
-        } reconcileHold: {
-            reconcileMappingHoldMode(afterChanging: button, operationID: operationID)
         }
         mappingActionSave.record(outcome, retry: .action(configured), target: .init(profileID: profile, deviceID: device, button: button, trigger: trigger))
+        if outcome == .saved {
+            reconcileHoldAfterActionChange(
+                button: button,
+                trigger: trigger,
+                previousAction: previousAction,
+                previousHold: previousHold,
+                operationID: operationID
+            )
+        }
         AppLogger.shared.write("BUTTON CONFIGURATION operation_id=\(operationID) action=write phase=completed result=\(String(describing: outcome)) reason=\(outcome == .saved ? "storage_confirmed" : outcome == .unknown ? "reload_failed" : "storage_failed")")
     }
 
@@ -3040,11 +3051,21 @@ struct SettingsView: View {
             if case .unavailable = mappingDisplayConfiguration(for: button, trigger: value) { return true }
             return false
         }
-        let holdFailed = mappingHoldSave.outcome == .failed || mappingHoldSave.outcome == .unknown
-        let candidate = holdOnly || holdFailed ? mappingHoldSave : mappingActionSave
-        let current = ButtonMappingSaveTarget(profileID: editingMappingProfileID, deviceID: settings.selectedRemoteProfileID,
-            button: button, trigger: holdOnly || holdFailed ? nil : trigger)
-        let state = candidate.target == current ? candidate : ButtonMappingSaveState()
+        let holdTarget = ButtonMappingSaveTarget(
+            profileID: editingMappingProfileID,
+            deviceID: settings.selectedRemoteProfileID,
+            button: button,
+            trigger: nil
+        )
+        let actionTarget = ButtonMappingSaveTarget(
+            profileID: editingMappingProfileID,
+            deviceID: settings.selectedRemoteProfileID,
+            button: button,
+            trigger: trigger
+        )
+        let state = holdOnly
+            ? (mappingHoldSave.target == holdTarget ? mappingHoldSave : ButtonMappingSaveState())
+            : (mappingActionSave.target == actionTarget ? mappingActionSave : ButtonMappingSaveState())
         let membershipCanUnlock = !canEditMappingProfiles &&
             (!incompatible || !macroFeature.supportsMappingProfileAutosave)
         HStack(spacing: 6) {
@@ -3065,9 +3086,20 @@ struct SettingsView: View {
                 } else {
                     Text(localization.text("button_mapping.save.read_only"))
                 }
+            } else if state.holdClearFailedByActionChange {
+                Text(localization.text("button_mapping.hold.clear_failed_by_action"))
+                    .foregroundStyle(.red)
+            } else if state.holdClearedByActionChange {
+                Text(localization.text("button_mapping.hold.cleared_by_action"))
+                    .foregroundStyle(Color.white)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(
+                        Capsule().fill(Color(hex: NoticePalette.inlineAccent(.tip, dark: colorScheme == .dark)))
+                    )
             } else {
                 let key = state.outcome == .unknown ? "button_mapping.save.unknown"
-                    : state.outcome == .failed ? (holdOnly ? "button_mapping.save.hold_failed" : holdFailed ? "button_mapping.save.partial" : "button_mapping.save.failed")
+                    : state.outcome == .failed ? (holdOnly ? "button_mapping.save.hold_failed" : "button_mapping.save.failed")
                     : state.outcome == .saved ? "button_mapping.save.success" : "button_mapping.save.automatic"
                 Text(localization.text(key))
                     .foregroundStyle(state.outcome == .saved ? Color.white : state.outcome == nil ? Color.secondary : Color.red)
@@ -3081,16 +3113,25 @@ struct SettingsView: View {
                     .help(localization.text(key))
                 if let retry = state.retry {
                     Button(localization.text("button_mapping.save.retry")) {
-                        guard state.target == current else { return }
+                        guard state.target == (holdOnly ? holdTarget : actionTarget) else { return }
                         invalidateChangedMappingHoldRetry()
                         if case .hold = retry, mappingHoldSave.retry == nil { return }
-                        state.performRetry(target: current) { value in
+                        state.performRetry(target: holdOnly ? holdTarget : actionTarget) { value in
                             if let trigger { saveMappingBinding(value, button: button, trigger: trigger) }
                         } writeHold: { mode in
                             setMappingHoldMode(mode, for: button)
                         }
                     }.buttonStyle(.link)
                 }
+            }
+            if state.holdClearFailedByActionChange {
+                Button(localization.text("button_mapping.save.retry")) {
+                    if setMappingHoldMode(.once, for: button) == .saved {
+                        mappingActionSave.record(.saved, retry: .action(nil), target: actionTarget)
+                        mappingActionSave.holdClearedByActionChange = true
+                    }
+                }
+                .buttonStyle(.link)
             }
         }
         .font(.system(size: 12))
@@ -3100,7 +3141,7 @@ struct SettingsView: View {
             guard state.outcome == .saved else { return }
             try? await Task.sleep(nanoseconds: 2_400_000_000)
             guard !Task.isCancelled else { return }
-            if holdOnly || holdFailed { mappingHoldSave.clearSuccess(state.receipt) }
+            if holdOnly { mappingHoldSave.clearSuccess(state.receipt) }
             else { mappingActionSave.clearSuccess(state.receipt) }
         }
     }
@@ -3108,11 +3149,20 @@ struct SettingsView: View {
     private func canWriteMappingHold(_ button: RemoteButton) -> Bool {
         guard !isMappingProfilePreviewOnly else { return false }
         if editingMappingProfileID != nil {
-            // An unsupported stored hold value must remain recoverable: the panel
-            // offers the component-supported modes instead of locking the whole key.
+            // A hold choice in a profile is stored alongside the profile's actions. Every
+            // trigger of this button must be rewritable, otherwise the choice would apply
+            // to a mix of inherited and overridden actions. Clearing back to the unset
+            // marker is still allowed (`canClearMappingHold`).
             return ButtonTrigger.allCases.allSatisfy { canWriteMappingBinding(button: button, trigger: $0) }
         }
         return true
+    }
+
+    /// Clearing a hold is a safe write even when one of the stored actions cannot be
+    /// rewritten (for example an unknown host payload). It must not leave the whole
+    /// panel permanently locked.
+    private func canClearMappingHold(_ button: RemoteButton) -> Bool {
+        !isMappingProfilePreviewOnly
     }
 
     private func mappingEditorPanel(_ target: ShortcutEditingTarget) -> some View {
@@ -3699,17 +3749,19 @@ struct SettingsView: View {
 
     @ViewBuilder
     private func mappingProfileBindingControl(button: RemoteButton, trigger: ButtonTrigger) -> some View {
-        if let profile = editingMappingProfileID, macroFeature.supportsProfileButton(button.rawValue) {
+        if editingMappingProfileID != nil, macroFeature.supportsProfileButton(button.rawValue) {
             switch mappingDisplayConfiguration(for: button, trigger: trigger) {
             case .inherited:
-                Text(localization.text("button_mapping.binding.inherited") + "：" +
-                    baseMappingActionSummary(for: button, trigger: trigger))
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
+                HStack(spacing: 5) {
+                    Image(systemName: "link")
+                    Text(localization.text("button_mapping.binding.inherited") + "：" +
+                        baseMappingActionSummary(for: button, trigger: trigger))
+                }
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
             case let .explicit(value):
                 HStack(spacing: 8) {
-                    Text(localization.text(value.isEditable
-                        ? "button_mapping.binding.overridden" : "button_mapping.save.read_only"))
+                    Text(explicitProfileBindingLabel(value))
                     if !isMappingProfilePreviewOnly {
                         Button(localization.text("button_mapping.binding.clear_override")) {
                             clearMappingOverride(button: button, trigger: trigger)
@@ -3733,8 +3785,23 @@ struct SettingsView: View {
         }
     }
 
+    private func explicitProfileBindingLabel(_ value: MappingBindingDisplay) -> String {
+        if value.configured?.action == .disabled {
+            return localization.text("button_mapping.action.profile_disabled")
+        }
+        guard value.isEditable, let configured = value.configured else {
+            return localization.text("button_mapping.save.read_only")
+        }
+        return String(
+            format: localization.text("button_mapping.source.profile"),
+            profileActionSummary(configured)
+        )
+    }
+
     private func clearMappingOverride(button: RemoteButton, trigger: ButtonTrigger) {
         guard let profile = editingMappingProfileID, !isMappingProfilePreviewOnly else { return }
+        let previousAction = mappingConfiguration(for: button, trigger: trigger)
+        let previousHold = mappingHoldMode(for: button)
         let operationID = UUID().uuidString
         AppLogger.shared.write("BUTTON CONFIGURATION operation_id=\(operationID) scope=profile button=\(button.rawValue) trigger=\(trigger.rawValue) action=clear_override phase=requested result=requested")
         let outcome = ButtonMappingWriteRecovery.perform {
@@ -3747,6 +3814,16 @@ struct SettingsView: View {
         }
         if outcome == .saved {
             clearMappingSaveFeedback()
+            mappingActionSave.record(.saved, retry: .action(previousAction),
+                target: .init(profileID: profile, deviceID: settings.selectedRemoteProfileID,
+                    button: button, trigger: trigger))
+            reconcileHoldAfterActionChange(
+                button: button,
+                trigger: trigger,
+                previousAction: previousAction,
+                previousHold: previousHold,
+                operationID: operationID
+            )
         } else {
             let title = localization.text(outcome == .unknown
                 ? "button_mapping.save.unknown" : "button_mapping.save.failed")
@@ -3956,9 +4033,12 @@ struct SettingsView: View {
         }
     }
 
-    private func setMappingHoldMode(_ mode: RemoteButtonHoldMode, for button: RemoteButton, parentOperationID: String? = nil) {
-        guard !mode.isHoldDown || button.allowsKeyHold else { return }
-        guard canWriteMappingHold(button) else { return }
+    @discardableResult
+    private func setMappingHoldMode(_ mode: RemoteButtonHoldMode, for button: RemoteButton, parentOperationID: String? = nil) -> ButtonMappingWriteRecovery.Outcome {
+        guard !mode.isHoldDown || button.allowsKeyHold else { return .failed }
+        guard canWriteMappingHold(button) || (mode == .once && canClearMappingHold(button)) else {
+            return .failed
+        }
         let profile = editingMappingProfileID
         let device = settings.selectedRemoteProfileID
         mappingHoldSave = .init()
@@ -3980,6 +4060,7 @@ struct SettingsView: View {
         mappingHoldSave.holdActions = ButtonTrigger.allCases.map { mappingConfiguration(for: button, trigger: $0) }
         mappingHoldSave.holdMode = mappingHoldMode(for: button)
         AppLogger.shared.write("BUTTON CONFIGURATION operation_id=\(operationID) scope=\(profile == nil ? "base" : "profile") button=\(button.rawValue) action=hold mode=\(mode.rawValue) phase=completed result=\(String(describing: outcome)) reason=\(outcome == .saved ? "storage_confirmed" : outcome == .unknown ? "reload_failed" : "storage_failed")")
+        return outcome
     }
 
     private func clearMappingHoldFeedbackForChangedButton() {
@@ -3995,23 +4076,61 @@ struct SettingsView: View {
         else { mappingHoldSave = .init(); return }
     }
 
+    /// When a single or long action changes, the hold behavior that used that action must not
+    /// survive as an invisible stale setting. Clear the dependent hold even when the new action
+    /// would still be technically compatible; an absent hold gets the existing first-edit
+    /// default behavior.
+    private func reconcileHoldAfterActionChange(
+        button: RemoteButton,
+        trigger: ButtonTrigger,
+        previousAction: ConfiguredButtonAction,
+        previousHold: RemoteButtonHoldMode,
+        operationID: String
+    ) {
+        guard trigger == .singleClick || trigger == .longPress else { return }
+        guard mappingConfiguration(for: button, trigger: trigger) != previousAction else { return }
+
+        let snapshot = mappingHoldSnapshot(for: button)
+        if snapshot.shouldClearHold(afterChanging: trigger, previousHold: previousHold) {
+            let outcome = setMappingHoldMode(.once, for: button, parentOperationID: operationID)
+            mappingActionSave.holdClearedByActionChange = outcome == .saved
+            mappingActionSave.holdClearFailedByActionChange = outcome != .saved
+            AppLogger.shared.write("BUTTON CONFIGURATION operation_id=\(operationID) action=hold_reconcile trigger=\(trigger.rawValue) previous=\(previousHold.rawValue) phase=completed result=\(String(describing: outcome))")
+            return
+        }
+
+        // No explicit hold was set. Preserve the existing first-edit default behavior, but
+        // never resurrect a hold that the user previously cleared.
+        if previousHold == .once {
+            reconcileMappingHoldMode(afterChanging: button, operationID: operationID)
+        }
+    }
+
     private func reconcileMappingHoldMode(afterChanging button: RemoteButton, operationID: String) {
-        let explicitMode: RemoteButtonHoldMode? = if let profile = editingMappingProfileID {
-            if case let .explicit(mode) = macroFeature.displayProfileHoldMode(profile: profile, button: button) { mode } else { nil }
+        let baseMode = settings.interactionSettings.modes[button.rawValue]
+            .flatMap(RemoteButtonHoldMode.init(rawValue:))
+        // "Inherited from the base buttons" is already a stored choice. Treating it as
+        // absent would let the first-edit default resurrect a hold the user cleared.
+        let storedMode: RemoteButtonHoldMode?
+        if let profile = editingMappingProfileID {
+            switch macroFeature.displayProfileHoldMode(profile: profile, button: button) {
+            case let .explicit(mode): storedMode = mode
+            case .inherited: storedMode = baseMode
+            case .unavailable: return
+            }
         } else {
-            settings.interactionSettings.modes[button.rawValue]
-                .flatMap(RemoteButtonHoldMode.init(rawValue:))
+            storedMode = baseMode
         }
         let snapshot = mappingHoldSnapshot(for: button)
         // The action just changed. If the saved hold choice can no longer run, drop it back to
         // "unset" so the button always has a truthful state and the user can choose again.
-        if let explicitMode, !snapshot.blockers(for: explicitMode).isEmpty {
-            setMappingHoldMode(.once, for: button, parentOperationID: operationID)
+        if let storedMode, !snapshot.blockers(for: storedMode).isEmpty {
+            _ = setMappingHoldMode(.once, for: button, parentOperationID: operationID)
             return
         }
-        guard let mode = RemoteButtonHoldModeDefault.storedMode(explicit: explicitMode, snapshot: snapshot)
+        guard let mode = RemoteButtonHoldModeDefault.storedMode(explicit: storedMode, snapshot: snapshot)
         else { return }
-        setMappingHoldMode(mode, for: button, parentOperationID: operationID)
+        _ = setMappingHoldMode(mode, for: button, parentOperationID: operationID)
     }
 
     private func mappingHoldSnapshot(for button: RemoteButton) -> RemoteButtonInteractionSnapshot {
@@ -4082,7 +4201,7 @@ struct SettingsView: View {
                         setMappingHoldMode(.once, for: button)
                     }
                     .compatibilityButtonStyle(.standard)
-                    .disabled(profileUnsupported || snapshot.mode == .once || !canWriteMappingHold(button))
+                    .disabled(profileUnsupported || snapshot.mode == .once || !canClearMappingHold(button))
                     .help(localization.text("button_mapping.hold.clear.help"))
                 }
 
@@ -6065,23 +6184,35 @@ struct SettingsView: View {
             switch mappingDisplayConfiguration(for: button, trigger: trigger) {
             case let .explicit(value):
                 if let configured = value.configured {
-                    // 组合动作的名字取自宏库当前内容：方案组件自己那份宏库快照只在启动时读取，
-                    // 改名或新建后仍是旧名字，命中不到还会显示「原操作已不可用，请重新配置。」。
-                    if configured.action == .combinationAction {
-                        return profileCombinationActionTitle(configured: configured)
+                    if configured.action == .disabled {
+                        return localization.text("button_mapping.action.profile_disabled")
                     }
-                    return configured.action == .disabled ? localization.text("button_mapping.action.no_action") : actionSummary(configured)
+                    return String(
+                        format: localization.text("button_mapping.source.profile"),
+                        profileActionSummary(configured)
+                    )
                 }
                 return value.compact
             case .unavailable: return localization.text("button_mapping.save.unavailable")
-            case .inherited: break
+            case .inherited:
+                return String(
+                    format: localization.text("button_mapping.source.default"),
+                    baseMappingActionSummary(for: button, trigger: trigger)
+                )
             }
         }
         let configured = configuredAction ?? mappingConfiguration(for: button, trigger: trigger)
         if configured.action == .disabled {
             let explicit = settings.hasExplicitBaseBinding(for: button, trigger: trigger,
                 profileID: settings.selectedRemoteProfileID)
-            return localization.text(editingMappingProfileID != nil || explicit ? "button_mapping.action.no_action" : "button_mapping.action.not_set")
+            return localization.text(explicit ? "button_mapping.action.no_action" : "button_mapping.action.not_set")
+        }
+        return actionSummary(configured)
+    }
+
+    private func profileActionSummary(_ configured: ConfiguredButtonAction) -> String {
+        if configured.action == .combinationAction {
+            return profileCombinationActionTitle(configured: configured)
         }
         return actionSummary(configured)
     }
@@ -6121,7 +6252,7 @@ struct SettingsView: View {
     /// read as if it already performed something.
     private func actionSummary(_ configured: ConfiguredButtonAction) -> String {
         guard configured.action != .disabled else {
-            return localization.text("button_mapping.action.not_set")
+            return localization.text("button_mapping.action.no_action")
         }
         if configured.action == .combinationAction {
             return macroFeature.libraryActions.first { $0.id == configured.macroID }?.name

@@ -44,6 +44,26 @@ struct ButtonBindingConfigurationTests {
         #expect(state.retry == nil)
     }
 
+    @Test func actionChangeHoldFeedbackOutlivesTheSuccessReceipt() {
+        let target = ButtonMappingSaveTarget(profileID: UUID(), deviceID: UUID(), button: .back, trigger: .singleClick)
+        var state = ButtonMappingSaveState()
+        state.record(.saved, retry: .action(.disabled), target: target)
+        state.holdClearedByActionChange = true
+        state.clearSuccess(state.receipt)
+        #expect(state.outcome == nil)
+        #expect(!state.holdClearedByActionChange)
+
+        state.record(.saved, retry: .action(.disabled), target: target)
+        state.holdClearFailedByActionChange = true
+        state.clearSuccess(state.receipt)
+        #expect(state.outcome == nil)
+        #expect(state.holdClearFailedByActionChange)
+
+        state.record(.saved, retry: .action(.disabled), target: target)
+        #expect(!state.holdClearFailedByActionChange)
+        #expect(!state.holdClearedByActionChange)
+    }
+
     @Test func baseDirectEditPersistsDisabledEscapeAndHoldAcrossRestart() throws {
         let defaults = try #require(UserDefaults(suiteName: "Autosave.\(UUID().uuidString)"))
         let source = AppSettings(defaults: defaults)
