@@ -1237,6 +1237,38 @@ class ReleaseContentTests(unittest.TestCase):
                     self.assertNotIn("PRIVATE_CONTENT_CANARY", output)
                     self.assertNotIn(str(app), output)
 
+    def test_release_path_sanitizer_preserves_layout_and_public_sentry_paths(self):
+        app = self.directory / "App.app"
+        macos = app / "Contents" / "MacOS"
+        macos.mkdir(parents=True)
+        binary = macos / "RemoteMic"
+        original = (
+            b"\xcf\xfa\xed\xfe"
+            + b"\0" * 4
+            + b"prefix\0/Users/private/source.swift\0"
+            + b"/Users/runner/work/sentry-cocoa/sentry-cocoa/Sources/Sentry/SentryClient.m\0"
+            + b"/tmp/remote-bridge\0AA:BB:CC:DD:EE:FF\0"
+        )
+        binary.write_bytes(original)
+
+        subprocess.run(
+            [sys.executable, str(ROOT / "scripts/sanitize-release-paths.py"), str(app)],
+            check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        )
+        sanitized = binary.read_bytes()
+        self.assertEqual(len(sanitized), len(original))
+        self.assertNotIn(b"/Users/private", sanitized)
+        self.assertNotIn(b"/tmp/remote-bridge", sanitized)
+        self.assertNotIn(b"AA:BB:CC:DD:EE:FF", sanitized)
+        self.assertIn(
+            b"/Users/runner/work/sentry-cocoa/sentry-cocoa/Sources/Sentry/SentryClient.m",
+            sanitized,
+        )
+        subprocess.run(
+            [sys.executable, str(ROOT / "scripts/sanitize-release-paths.py"), "--check", str(app)],
+            check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        )
+
     @unittest.skipUnless(sys.platform == "darwin", "Installer inspection requires macOS pkgutil")
     def test_public_driver_documentation_in_native_installer_is_accepted(self):
         payload = self.directory / "payload"

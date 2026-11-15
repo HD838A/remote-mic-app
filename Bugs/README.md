@@ -1,5 +1,7 @@
 # Bug 记录
 
+- [私有发布构件把本机构建路径带进 2.0.3 发布 App](./2026-11-16-private-release-local-build-paths.md)
+
 - [PreferredInputSourceMonitor 取消测试依赖真实 timer，CI 偶发超时失败](./2026-11-15-preferred-input-source-activation-timeout-flake.md)
 
 - [macOS 27 HID device 回调注册后不投递，显示已连接但遥控器无响应](./2026-11-15-hid-device-callback-silent-after-monitor-restart.md)
