@@ -911,6 +911,8 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     private let hidEventSuppressor = KeyboardEventSuppressor()
     private var hidMonitors: [String: HIDRemoteMonitor] = [:]
     private var discoveryHIDMonitor: HIDRemoteMonitor?
+    private var hidMonitorRebuildWorkItem: DispatchWorkItem?
+    private var hidMonitorRebuildPending = false
     private lazy var siriRemoteFeature = SiriRemoteFeatureIntegration(
         logger: { AppLogger.shared.write($0) }
     )
@@ -1604,6 +1606,12 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     }
 
     func stop() {
+        if hidMonitorRebuildWorkItem != nil {
+            AppLogger.shared.write("HID MONITOR REBUILD phase=cancelled reason=app_stop")
+        }
+        hidMonitorRebuildWorkItem?.cancel()
+        hidMonitorRebuildWorkItem = nil
+        hidMonitorRebuildPending = false
         cancelConfiguredButtonInteractions(reason: "app_stop")
         // 退出、断连或映射关闭都必须抬起被按住的键，绝不让它在系统里留到下次启动。
         KeyboardHoldExecution.shared.end(reason: "app_stop")
@@ -4035,6 +4043,49 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         startHIDDiscoveryIfNeeded(allowBackOnly: backOnlyMode)
     }
 
+    /// discovery monitor 提升为 profile monitor 后，不复用可能已经静默的旧回调。
+    ///
+    /// 现场日志显示提升后的 device 与 manager 回调可以同时停止；此时新 discovery
+    /// 只会把同一指纹当作 excluded。异步重建一组全新的 profile monitor，让
+    /// IOHIDManager 和 device callback 重新绑定，同时保留当前这次按键的执行结果。
+    private func scheduleHIDMonitorRebuildAfterDiscoveryAdoption() {
+        hidMonitorRebuildPending = false
+        hidMonitorRebuildWorkItem?.cancel()
+        guard HIDMonitorRebuildPolicy.shouldSchedule(
+            started: started,
+            customMappingEnabled: settings.customMappingEnabled,
+            isStreaming: isStreaming
+        ) else {
+            if started, settings.customMappingEnabled, isStreaming {
+                hidMonitorRebuildPending = true
+                AppLogger.shared.write("HID MONITOR REBUILD phase=deferred reason=voice_active")
+            }
+            return
+        }
+
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            guard HIDMonitorRebuildPolicy.shouldSchedule(
+                started: self.started,
+                customMappingEnabled: self.settings.customMappingEnabled,
+                isStreaming: self.isStreaming
+            ) else {
+                if self.started, self.settings.customMappingEnabled, self.isStreaming {
+                    self.hidMonitorRebuildPending = true
+                    AppLogger.shared.write(
+                        "HID MONITOR REBUILD phase=deferred reason=voice_active"
+                    )
+                }
+                return
+            }
+            AppLogger.shared.write("HID MONITOR REBUILD phase=started reason=discovery_adoption")
+            self.startHIDMonitors(powerKeySuppressed: self.hidPowerKeySuppressed)
+            AppLogger.shared.write("HID MONITOR REBUILD phase=completed reason=discovery_adoption")
+        }
+        hidMonitorRebuildWorkItem = workItem
+        DispatchQueue.main.async(execute: workItem)
+    }
+
     // A controller per physical or companion source keeps simultaneous holds isolated.
     private var configuredButtonInteractions: [String: RemoteButtonInteractionController] = [:]
     private var configuredButtonInteractionOwners: [String: UUID] = [:]
@@ -4289,7 +4340,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
                 self.hidMonitors[fingerprint] = monitor
                 if self.discoveryHIDMonitor === monitor {
                     self.discoveryHIDMonitor = nil
-                    self.startHIDDiscoveryIfNeeded()
+                    self.scheduleHIDMonitorRebuildAfterDiscoveryAdoption()
                 }
             }
             self.selectRemoteProfile(resolvedProfileID)
@@ -7285,6 +7336,13 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         endVoiceSessionIfNeeded(flushAudio: shouldFlushAudio)
         if systemAudioSuspensionState.isSuspended {
             releaseVirtualAudioOutputIfUnused(reason: "system_suspended_after_bluetooth_voice")
+        }
+        if HIDMonitorRebuildPolicy.shouldRetryAfterVoiceStop(
+            wasDeferred: hidMonitorRebuildPending,
+            started: started,
+            customMappingEnabled: settings.customMappingEnabled
+        ) {
+            scheduleHIDMonitorRebuildAfterDiscoveryAdoption()
         }
     }
 
