@@ -37,7 +37,7 @@
 
 对候选标签分别下载 ZIP、安装 PKG、卸载 PKG、appcast、中英文说明和 candidate provenance。
 
-预期结果：Cloudflare 与 GitHub 固定标签下载的每个文件大小和 SHA-256 完全相同；ZIP/PKG 签名、公证、staple、权限和 Sparkle helper 符号链接均通过。
+预期结果：Cloudflare 与 GitHub 固定标签下载的每个文件大小和 SHA-256 完全相同；解压 ZIP 后的 App 与 PKG 通过签名、公证、staple、权限和 Sparkle helper 符号链接校验，ZIP 另验证 Sparkle 签名与解压字节。
 
 失败判定：任意字节不同、缺少资产、缓存旧版本、返回压缩/转换后的不同字节、签名或公证失效。
 

@@ -34,7 +34,7 @@ CODE_SIGN_IDENTITY='Developer ID Application: … (L3QHLDRPAY)' \
 
 ## 直接构建到 dist（高级）
 
-仅在需要 `dist/SayAll.app` 做截图或结构检查时使用 `build-app.sh`。前置：私有组件有一个干净的可读 tag 检出（例如 `2.6.2`），路径记为 `$PRIVATE`。
+仅在需要 `dist/SayAll.app` 做截图或结构检查时使用 `build-app.sh`。前置：私有组件有当前 `config/release-dependencies.json` 固定 Tag 的干净可读检出，路径记为 `$PRIVATE`；不要使用历史示例 Tag。
 
 ```bash
 git -C "$PRIVATE" status --porcelain --untracked-files=all   # 必须为空

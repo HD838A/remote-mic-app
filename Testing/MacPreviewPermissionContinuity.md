@@ -58,7 +58,7 @@
 - 蓝牙语音可开始、持续传输并停止。
 - 普通 OK、方向键映射正常。
 - 系统设置中不存在相同 Bundle ID 的异常重复运行副本。
-- ZIP、App、PKG 均通过签名、公证和 staple 校验。
+- 解压 ZIP 后的 App 与 Install PKG 通过签名、公证和 staple 校验；ZIP 另验证 Sparkle 签名与解压字节。
 
 ## 日志收集
 

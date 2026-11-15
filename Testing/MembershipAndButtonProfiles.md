@@ -151,7 +151,7 @@ swift build --disable-keychain --scratch-path .build-button-profiles-test -c rel
 
 截图：使用生产 `SettingsView` 和 `SettingsScreenshotRenderer`，设置 `REMOTE_MIC_SETTINGS_SCREENSHOT_SECTION=mapping`、`REMOTE_MIC_SETTINGS_SCREENSHOT_SIZE=1067x760`、`REMOTE_MIC_SETTINGS_SCREENSHOT_MEMBERSHIP_ACCESS=requiresPlus`；默认状态不设置 `REMOTE_MIC_SETTINGS_SCREENSHOT_MAPPING_SCENARIO`，已选状态设置 `REMOTE_MIC_SETTINGS_SCREENSHOT_MAPPING_SCENARIO=viewer`，并把 `SAYALL_MACRO_STORAGE_ROOT` 放在输出目录内。会员态截图不设置 `REMOTE_MIC_SETTINGS_SCREENSHOT_MEMBERSHIP_ACCESS`。原始截图只保存在仓库外证据目录，PR 附 GitHub 可访问链接。
 
-2026-11-15：生产截图 harness 已生成中文浅色/深色、英文浅色的默认与已选两状态，尺寸均为 `2040 × 1544`（内容 `1020 × 772`）。按钮跟随应用强调色，当前截图为橙色。真实会员点击、真实支付状态和实体遥控器流程仍未验收。
+2026-11-15：生产截图 harness 已生成中文浅色/深色、英文浅色的默认与已选两状态，尺寸均为 `2040 × 1544`（内容 `1020 × 772`；这是当时的截图夹具尺寸，当前生产设置窗口为 `1067 × 760`）。按钮跟随应用强调色，当前截图为橙色。真实会员点击、真实支付状态和实体遥控器流程仍未验收。
 
 ## 用例六：三类遥控入口一致性
 

@@ -10,7 +10,7 @@ Tests/builds, actual window screenshots, deployment and physical-device results 
 
 ## 顶部区域回归
 
-1. 在 `1020 × 772` 生产窗口打开一个已注册私有页面。
+1. 在 `1067 × 760` 生产窗口打开一个已注册私有页面。
 2. 核对页面延伸到标题栏顶部，没有空白条。
 3. 切换到普通设置页，再返回私有页面。
 4. 在中英文、浅色和深色下重复检查。

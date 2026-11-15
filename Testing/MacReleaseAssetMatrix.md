@@ -106,7 +106,7 @@ publication 的远端资产数量必须等于同一 expected-assets 清单的行
 ## 稳定功能回归
 
 - candidate-provenance.json 不参与自身 digest 计算，上传后单独校验。
-- 下载后的 ZIP/PKG 必须再次执行签名、公证、权限和结构检查。
+- 解压 ZIP 后的 App 与 PKG 必须再次执行签名、公证、staple、权限和结构检查；ZIP 另验证 Sparkle 签名与解压字节。
 - Stable promotion 前后所有资产摘要保持一致。
 - Stable promotion 还要从 GitHub API 核对 provenance 绑定的成功 staging Run/attempt、payload artifact 和唯一未过期 Preview stage-record artifact；stage record 必须为 `mode=preview` 并与 Tag、SHA、manifest 和时间戳一致。
 - 不合法名称、路径遍历、未知扩展名和缺失架构名称必须被 verifier 拒绝。

@@ -97,7 +97,7 @@
 - 自动化：`swift test --disable-keychain --filter SettingsPageRegressionTests` 通过 83 项；新增用例覆盖补丁版本、两段/四段版本和缺失 Bundle 元数据回退。
 - 构建：`SAYALL_PRIVATE_PLATFORM_MODE=public SAYALL_BUILD_CHANNEL=public CODE_SIGN_IDENTITY=- REQUIRE_SIRI_REMOTE_SIGNING=0 CONFIGURATION=release scripts/build-app.sh` 通过。
 - 包检查：`scripts/verify-app.sh dist/SayAll.app` 通过（`APP VERIFY PASS`）。
-- 截图索引：[manifest.json](../Screenshots/2026-11-15-about-update-fixture/manifest.json)。图片字节保存在仓库外持久目录；PR 附件在交付时补齐。
+- 截图索引：[manifest.json](../Screenshots/2026-11-15-about-update-fixture/manifest.json)。图片字节保存在仓库外持久目录；该记录使用当时的 `1020 × 772` 截图夹具，真实发布 PR 必须附 GitHub 可访问的实际运行截图。
 - 该结果只证明静态截图夹具和 About 页面布局，不替代真实更新检查、Sparkle 安装、真实窗口导航、权限或硬件验收。
 
 ## 用例 2：无更新与更新信息不可用
@@ -112,11 +112,11 @@
 
 ## 用例 3：发现更新与本地化说明
 
-1. 使用低 Build 版本检查固定 `v1.9.21` appcast。
+1. 使用低 Build 版本检查本次候选生成的固定 appcast。
 2. 在中文界面查看设置页版本中心，再切换 English。
-3. 点击“更新到 1.9.21”，观察 Sparkle 标准更新界面。
+3. 点击“更新到 <本次候选版本>”，观察 Sparkle 标准更新界面。
 
-预期结果：页面显示当前版本、最新版本 `1.9.21` 和对应语言更新内容；待更新版本的 Release Notes 位于版本检查区域右侧，并随语言切换；更新按钮进入标准下载与安装流程。更新说明资产无法下载时仅显示说明不可用，更新按钮仍可使用。
+预期结果：页面显示当前版本、最新候选版本和对应语言更新内容；待更新版本的 Release Notes 位于版本检查区域右侧，并随语言切换；更新按钮进入标准下载与安装流程。更新说明资产无法下载时仅显示说明不可用，更新按钮仍可使用。
 
 失败判定：显示语义 key、语言不切换、读取错误版本的说明、更新按钮无响应，或说明加载失败阻断更新。
 
@@ -138,7 +138,7 @@
 2. 开启预发布检查，再点击“检查更新”。
 3. 再关闭预发布检查并点击“检查更新”。
 
-预期结果：关闭时只访问同架构 stable 通道；开启时同时解析同架构 stable 与 preview 通道，并选择语义版本更高者交给 Sparkle；再次关闭后立即清除候选结果并恢复仅检查 stable，不需要重启 App。stable 为 `1.9.21`、preview 为 `1.9.20` 时必须选择正式版 `1.9.21`；stable 为 `1.9.18`、preview 为 `1.9.21` 时必须选择预发布版 `1.9.21`。
+预期结果：关闭时只访问同架构 stable 通道；开启时同时解析同架构 stable 与 preview 通道，并选择语义版本更高者交给 Sparkle；再次关闭后立即清除候选结果并恢复仅检查 stable，不需要重启 App。stable 版本更高时必须选择正式版；preview 版本更高时必须选择预发布版。使用本次实际 stable/preview Tag 验证，不写死历史版本号。
 
 失败判定：通道切换后仍保留旧版本或旧更新内容、开启预发布后漏掉版本更高的正式版、正式更新查不到、显示低于当前版本的更新，或两个通道都不可用时仍显示旧结果。
 
@@ -146,12 +146,12 @@
 
 分别执行：
 
-- `1.9.20 → 1.9.21`：上一预览版到新候选版本。
-- `1.9.18 → 1.9.21`：当前正式版到候选版本。
+- 上一预览版 → 本次候选版本。
+- 当前正式版（`releases/latest`）→ 本次候选版本。
 
 每次使用 Sparkle 官方 CLI，仅为当次调用传入固定候选 appcast，不修改 App 偏好。完成安装后检查：
 
-- App 版本为 `1.9.21` 且 Build 高于 `173`。
+- 安装后版本和 Build 与本次候选 `Resources/Info.plist` 完全一致，且高于起点版本。
 - App 能正常启动、退出并第二次启动。
 - 主窗口和更新完成提示位于前台。
 - 签名、公证票据、Sparkle Framework 符号链接与五个 helper 的 `0755` 权限正确。
@@ -192,7 +192,7 @@
 
 ## 日志收集
 
-1. 在设置页打开日志目录，收集本次启动对应的 `.rmlog` 加密会话文件并交给受控支持环境分析，完整方法见 [运行日志测试手册](RuntimeLogging.md)；不要按明文读取或要求 App 解密。支持人员重点检查 `UPDATE CHECK`、`source=cloudflare_channel`、`HARDWARE ANNOUNCEMENT` 与 `APP_ICON CHANGE`；图标日志只包含已注册的可用稳定标识或固定 `unavailable`、阶段、结果与稳定原因码，不记录未知导入标识。缺失构建公钥时日志闭锁，不回退明文。
+1. 在设置页打开日志目录，收集本次启动对应的 `.rmlog` 加密会话文件并交给受控支持环境分析，完整方法见 [运行日志测试手册](RuntimeLogging.md)；不要按明文读取或要求 App 解密。支持人员重点检查 `UPDATE CHECK`、`source=cloudflare_channel`、`HARDWARE ANNOUNCEMENT` 与 `APP_ICON CHANGE`；图标日志只包含已注册的可用稳定标识或固定 `unavailable`、阶段、结果与稳定原因码，不记录未知导入标识。公开构建缺失构建公钥时回退到脱敏普通 `runtime.log`，不生成 `.rmlog`；内部包在构建或最终验证阶段拒绝缺失公钥。
 2. Console：按进程筛选 `RemoteMic`、`Autoupdate`、`Updater` 和 `Installer`。
 3. 崩溃报告：`~/Library/Logs/DiagnosticReports/` 中本次测试时间之后的 Remote Mic 报告。
 4. Sparkle CLI 使用 `--verbose` 保存完整输出；退出码 `4` 表示没有新版本，不判失败。
