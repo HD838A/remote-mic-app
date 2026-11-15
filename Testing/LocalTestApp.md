@@ -82,7 +82,8 @@ dist/SayAll.app/Contents/MacOS/RemoteMic
 ```
 
 支持的还有 `REMOTE_MIC_SETTINGS_SCREENSHOT_SECTION`（只渲染一页）、`..._OPEN_ACTION_EDITOR`、
-`..._GESTURE_TIMING`、`..._VOICE_OUTPUT=missing|compatible`（隔离兼容音频设备状态）等，见
+`..._GESTURE_TIMING`、`..._VOICE_OUTPUT=missing|compatible`（隔离兼容音频设备状态）、
+`..._NOTICE=profile-created`（在按键页叠加创建成功提示，用于视觉复核）等，见
 `Sources/RemoteMic/SettingsScreenshotRenderer.swift`。
 
 ⚠️ 已知限制：渲染进程里方案数据加载不完整，即使 `SAYALL_MACRO_STORAGE_ROOT` 指向一份合法方案文件，
