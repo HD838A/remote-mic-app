@@ -326,9 +326,16 @@ struct RemoteNativeKeyMapperTests {
 
     private func testDefaults() throws -> (defaults: UserDefaults, cleanup: () -> Void) {
         let suite = "RemoteNativeKeyMapperTests.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
+        let defaults = try #require(TestUserDefaults(suiteName: suite))
         return (defaults, { defaults.removePersistentDomain(forName: suite) })
     }
+}
+
+/// `synchronize()` may return false while the full suite creates many isolated
+/// preference domains concurrently; the mapper only needs the value to be
+/// readable from this process, which `set` already guarantees here.
+private final class TestUserDefaults: UserDefaults {
+    override func synchronize() -> Bool { true }
 }
 
 private final class NativeServiceBox {

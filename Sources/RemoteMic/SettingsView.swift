@@ -2705,6 +2705,7 @@ struct SettingsView: View {
                 actionSummary: { button, trigger in mappingActionSummary(for: button, trigger: trigger) },
                 holdSummary: { button in mappingHoldSummary(for: button) },
                 actionDetail: { button, trigger in mappingActionDetail(for: button, trigger: trigger) },
+                actionSource: { button, trigger in mappingActionSource(for: button, trigger: trigger) },
                 onEdit: { button, trigger in
                     selectedRemoteButton = button
                     mappingActionFilter = mappingFilterForConfiguredAction(
@@ -6187,18 +6188,16 @@ struct SettingsView: View {
                     if configured.action == .disabled {
                         return localization.text("button_mapping.action.profile_disabled")
                     }
-                    return String(
-                        format: localization.text("button_mapping.source.profile"),
-                        profileActionSummary(configured)
-                    )
+                    // 卡片宽度固定：显式动作只显示动作名，来源在编辑区头部
+                    // 用「本方案 · <动作>」完整呈现，避免长动作名被前缀挤掉。
+                    return profileActionSummary(configured)
                 }
                 return value.compact
             case .unavailable: return localization.text("button_mapping.save.unavailable")
             case .inherited:
-                return String(
-                    format: localization.text("button_mapping.source.default"),
-                    baseMappingActionSummary(for: button, trigger: trigger)
-                )
+                // 窄卡片不拼接「默认 ·」文字前缀：英文会把动作名挤成
+                // 「Default · No…」。来源由卡片上的链接图标和悬停帮助表达。
+                return baseMappingActionSummary(for: button, trigger: trigger)
             }
         }
         let configured = configuredAction ?? mappingConfiguration(for: button, trigger: trigger)
@@ -6238,8 +6237,40 @@ struct SettingsView: View {
     }
 
     /// 悬停用的完整形态，和 `mappingActionSummary` 同一来源。
+    private func mappingActionSource(for button: RemoteButton,
+                                     trigger: ButtonTrigger) -> RemoteMappingActionSource {
+        guard editingMappingProfileID != nil else { return .base }
+        switch mappingDisplayConfiguration(for: button, trigger: trigger) {
+        case .inherited:
+            return .inherited
+        case .unavailable:
+            return .unavailable
+        case let .explicit(value):
+            return value.configured == nil ? .base : .explicit
+        }
+    }
+
     private func mappingActionDetail(for button: RemoteButton, trigger: ButtonTrigger) -> String {
-        if case let .explicit(value) = mappingDisplayConfiguration(for: button, trigger: trigger) {
+        let display = mappingDisplayConfiguration(for: button, trigger: trigger)
+        if editingMappingProfileID != nil {
+            switch display {
+            case .inherited:
+                return localization.text("button_mapping.binding.inherited") + "：" +
+                    baseMappingActionSummary(for: button, trigger: trigger)
+            case let .explicit(value):
+                guard let configured = value.configured else { return value.detailed }
+                let summary = profileActionSummary(configured)
+                let source = String(
+                    format: localization.text("button_mapping.source.profile"),
+                    summary
+                )
+                return value.detailed.isEmpty || value.detailed == summary
+                    ? source : source + " · " + value.detailed
+            case .unavailable:
+                return localization.text("button_mapping.save.unavailable")
+            }
+        }
+        if case let .explicit(value) = display {
             if let configured = value.configured, configured.action == .combinationAction {
                 return profileCombinationActionTitle(configured: configured)
             }

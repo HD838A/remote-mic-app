@@ -1513,6 +1513,5 @@
 "button_mapping.hold.clear_failed_by_action" = "动作已保存，但按住设置清除失败";
 "button_mapping.action.no_action" = "禁用";
 "button_mapping.action.profile_disabled" = "本方案禁用";
-"button_mapping.source.default" = "默认 · %@";
 "button_mapping.source.profile" = "本方案 · %@";
 "button_mapping.profile.created" = "键位方案已创建";

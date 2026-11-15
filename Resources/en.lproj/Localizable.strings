@@ -1513,7 +1513,6 @@
 "button_mapping.hold.cleared_by_action" = "Hold setting cleared because the action changed.";
 "button_mapping.hold.clear_failed_by_action" = "Action saved, but clearing the hold setting failed.";
 "button_mapping.action.no_action" = "Disabled";
-"button_mapping.action.profile_disabled" = "Disabled in this profile";
-"button_mapping.source.default" = "Default · %@";
+"button_mapping.action.profile_disabled" = "Disabled here";
 "button_mapping.source.profile" = "This Profile · %@";
 "button_mapping.profile.created" = "Key profile created";
