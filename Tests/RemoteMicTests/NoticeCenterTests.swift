@@ -96,7 +96,7 @@ struct NoticePlacementTests {
 struct NoticeCenterTests {
     private func makeCenter() -> (NoticeCenter, UserDefaults, String) {
         let name = "NoticeCenterTests.\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: name)!
+        let defaults = TestUserDefaults(suiteName: name)!
         return (NoticeCenter(defaults: defaults), defaults, name)
     }
 

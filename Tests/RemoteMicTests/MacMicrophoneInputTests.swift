@@ -269,7 +269,7 @@ struct MacMicrophoneInputTests {
 
     @Test func settingsDefaultToNoHotKeyAndRoundTripWithoutChangingVoicePreferences() throws {
         let name = "MacMicrophoneInputTests.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: name))
+        let defaults = try #require(TestUserDefaults(suiteName: name))
         defer { defaults.removePersistentDomain(forName: name) }
         let settings = AppSettings(defaults: defaults)
         #expect(settings.macMicrophoneInputUID.isEmpty)
@@ -334,7 +334,7 @@ struct MacMicrophoneInputTests {
 
     @Test func legacyConfigurationWithoutMacFieldsRemainsImportable() throws {
         let name = "MacMicrophoneInputTests.legacy.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: name))
+        let defaults = try #require(TestUserDefaults(suiteName: name))
         defer { defaults.removePersistentDomain(forName: name) }
         let settings = AppSettings(defaults: defaults)
         settings.gainDB = 17

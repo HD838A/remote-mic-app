@@ -194,6 +194,8 @@ enum AgentConfigurationCommand {
             stagedSettings.selectedAudioDeviceUID == audioDevice.uid
         guard valid else {
             stageDefaults.removePersistentDomain(forName: stageSuiteName)
+            _ = stageDefaults.synchronize()
+            TemporaryUserDefaults.removeSuite(stageSuiteName)
             restore(previousDomain, in: defaults, name: domainName)
             defaults.removeObject(forKey: backupKey)
             return result(
@@ -213,6 +215,8 @@ enum AgentConfigurationCommand {
         defaults.setPersistentDomain(stagedDomain, forName: domainName)
         guard defaults.persistentDomain(forName: domainName) != nil else {
             stageDefaults.removePersistentDomain(forName: stageSuiteName)
+            _ = stageDefaults.synchronize()
+            TemporaryUserDefaults.removeSuite(stageSuiteName)
             restore(previousDomain, in: defaults, name: domainName)
             defaults.removeObject(forKey: backupKey)
             return result(
@@ -224,6 +228,8 @@ enum AgentConfigurationCommand {
             )
         }
         stageDefaults.removePersistentDomain(forName: stageSuiteName)
+        _ = stageDefaults.synchronize()
+        TemporaryUserDefaults.removeSuite(stageSuiteName)
         defaults.removeObject(forKey: backupKey)
 
         let missingPermissions = missingPermissionReasons()

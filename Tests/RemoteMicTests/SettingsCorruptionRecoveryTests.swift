@@ -11,7 +11,7 @@ struct SettingsCorruptionRecoveryTests {
 
     @Test func legacyChromecastProfilesRetainEveryDeviceAndMappingOnUpgrade() throws {
         let suiteName = "SettingsCorruptionRecoveryTests.legacyChromecast.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let mappings = RemoteDeviceMappings(
             buttonBindings: AppSettings.defaultBindings.merging([.up: .commandCopy]) { _, saved in saved },
@@ -62,7 +62,7 @@ struct SettingsCorruptionRecoveryTests {
         suiteName: inout String
     ) throws -> UserDefaults {
         suiteName = "SettingsCorruptionRecoveryTests.\(label).\(UUID().uuidString)"
-        return try #require(UserDefaults(suiteName: suiteName))
+        return try #require(TestUserDefaults(suiteName: suiteName))
     }
 
     @Test func unreadableButtonBindingsFallBackToDefaultsAndAreReportedAsCorrupt() throws {
@@ -332,7 +332,7 @@ struct CorruptedSettingsNoticeTests {
 
     @Test func aRealCorruptedLoadIsNamedPreciselyRatherThanGenerically() throws {
         let suiteName = "CorruptedSettingsNoticeTests.corrupted.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         for key in ["buttonBindings", "customApplicationProfiles", "usage.dailyStatistics"] {
             defaults.set(Data("not json".utf8), forKey: key)
@@ -362,7 +362,7 @@ struct CorruptedSettingsNoticeTests {
 
     @Test func aRealHealthyLoadKeepsTheNoticeCompletelyHidden() throws {
         let suiteName = "CorruptedSettingsNoticeTests.healthy.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
         let saved = AppSettings(defaults: defaults)

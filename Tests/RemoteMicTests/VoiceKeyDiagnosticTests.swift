@@ -7,7 +7,7 @@ import Testing
 struct VoiceKeyDiagnosticTests {
     @Test func remoteVoiceUsageDiagnosticsAreEdgeBoundedAndDoNotPerformActions() throws {
         let suite = "VoiceKeyDiagnosticTests-\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
+        let defaults = try #require(TestUserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         let settings = AppSettings(defaults: defaults)
         settings.customMappingEnabled = true

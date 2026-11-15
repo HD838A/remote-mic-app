@@ -290,7 +290,7 @@ struct UpdateInformationTests {
 
     @Test @MainActor func availableUpdateBadgePersistsSeenVersionAndReturnsForANewerVersion() {
         let suiteName = "UpdateInformationTests.badge.\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suiteName)!
+        let defaults = TestUserDefaults(suiteName: suiteName)!
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
         let firstStore = UpdateInformationStore(userDefaults: defaults)
@@ -328,7 +328,7 @@ struct UpdateInformationTests {
 
     @Test @MainActor func updateBadgeClearsWhenTheCandidateIsNoLongerAvailable() {
         let suiteName = "UpdateInformationTests.clearedBadge.\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suiteName)!
+        let defaults = TestUserDefaults(suiteName: suiteName)!
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let store = UpdateInformationStore(userDefaults: defaults)
 

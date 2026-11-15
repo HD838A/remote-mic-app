@@ -18,7 +18,7 @@ struct ConfigurationImportValidationTests {
 
     private func isolatedSettings(_ label: String) throws -> (AppSettings, () -> Void) {
         let suiteName = "ConfigurationImportValidationTests.\(label).\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         return (
             AppSettings(defaults: defaults),
             { defaults.removePersistentDomain(forName: suiteName) }

@@ -2618,7 +2618,7 @@ struct SettingsPageRegressionTests {
         let reference = try #require(calendar.date(from: DateComponents(year: 2026, month: 10, day: 10)))
         let today = try #require(calendar.date(byAdding: .day, value: offset, to: reference))
         let suite = "RemoteMicTests.Calendar.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
+        let defaults = try #require(TestUserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         let settings = AppSettings(defaults: defaults)
         settings.recordButtonPress(at: today, calendar: calendar)
@@ -2676,7 +2676,7 @@ struct SettingsPageRegressionTests {
                 byteCount: 0, sha256: "", format: "m4a")
         }
         let suite = "RemoteMicTests.CalendarCounts.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
+        let defaults = try #require(TestUserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         let settings = AppSettings(defaults: defaults)
         let assets = [asset(sessionID: record.sessionID), asset(sessionID: UUID())]

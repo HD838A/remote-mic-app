@@ -288,7 +288,7 @@ struct TranscriptArchiveStoreTests {
 
     @Test func historySwitchDefaultsOffAndPersistsWithoutTranscriptTextInDefaults() throws {
         let suiteName = "RemoteMicTests.TranscriptHistory.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
         let settings = AppSettings(defaults: defaults)
@@ -331,7 +331,7 @@ struct TranscriptArchiveStoreTests {
         )
         try harness.store.append(record)
         let suiteName = "RemoteMicTests.TranscriptHistoryAfterUse.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let settings = AppSettings(defaults: defaults)
 

@@ -6,7 +6,7 @@ import Testing
 struct SiriRemoteActivationTests {
     @Test @MainActor func discoveryAndOldOnboardingSelectionDoNotEnableServices() throws {
         let suite = "SiriActivation.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
+        let defaults = try #require(TestUserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         let settings = AppSettings(defaults: defaults)
         #expect(!settings.siriRemoteEnabled)
@@ -19,7 +19,7 @@ struct SiriRemoteActivationTests {
 
     @Test @MainActor func explicitEnableAndDisableSurviveRelaunch() throws {
         let suite = "SiriActivation.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
+        let defaults = try #require(TestUserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         defaults.set(false, forKey: "siriRemote.enabled")
         let settings = AppSettings(defaults: defaults)
@@ -36,7 +36,7 @@ struct SiriRemoteActivationTests {
 
     @Test @MainActor func deferredAuthorizationSurvivesRelaunchUntilUserRetries() throws {
         let suite = "SiriActivation.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
+        let defaults = try #require(TestUserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         let settings = AppSettings(defaults: defaults)
         settings.siriRemoteEnabled = true

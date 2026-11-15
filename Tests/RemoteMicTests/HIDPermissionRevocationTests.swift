@@ -29,7 +29,7 @@ extension EventTapPortTests {
         @Test(.enabled(if: HIDPermissionRevocationTests.canCreateActiveTap))
         func revokedPermissionsReleaseTheSharedEventTap() throws {
             let suiteName = "HIDPermissionRevocationTests.sharedTap.\(UUID().uuidString)"
-            let defaults = try #require(UserDefaults(suiteName: suiteName))
+            let defaults = try #require(TestUserDefaults(suiteName: suiteName))
             defer { defaults.removePersistentDomain(forName: suiteName) }
 
             let settings = AppSettings(defaults: defaults)
@@ -57,7 +57,7 @@ extension EventTapPortTests {
         @Test
         func revokedPermissionsStillReleaseTheOwnedEventTap() throws {
             let suiteName = "HIDPermissionRevocationTests.ownedTap.\(UUID().uuidString)"
-            let defaults = try #require(UserDefaults(suiteName: suiteName))
+            let defaults = try #require(TestUserDefaults(suiteName: suiteName))
             defer { defaults.removePersistentDomain(forName: suiteName) }
 
             let settings = AppSettings(defaults: defaults)

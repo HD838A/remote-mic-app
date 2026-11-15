@@ -25,7 +25,7 @@ struct RemoteProfilePersistenceTests {
 
     private static func scopedSettings(_ label: String) throws -> Scope {
         let name = "RemoteProfilePersistenceTests.\(label).\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: name))
+        let defaults = try #require(TestUserDefaults(suiteName: name))
         return Scope(settings: AppSettings(defaults: defaults), defaults: defaults, name: name)
     }
 

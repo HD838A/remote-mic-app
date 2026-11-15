@@ -97,7 +97,11 @@ enum OnboardingScreenshotRenderer {
         guard let defaults = UserDefaults(suiteName: suiteName) else {
             throw RenderingError.bitmapCreationFailed
         }
-        defer { defaults.removePersistentDomain(forName: suiteName) }
+        defer {
+            defaults.removePersistentDomain(forName: suiteName)
+            _ = defaults.synchronize()
+            TemporaryUserDefaults.removeSuite(suiteName)
+        }
 
         let settings = AppSettings(defaults: defaults)
         settings.applicationLanguage = screenshotLanguage.appLanguage

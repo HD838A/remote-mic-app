@@ -45,7 +45,7 @@ struct OnboardingVoicePairingPlanTests {
 
     @Test func verifiedBindingWinsDuringOnboardingRerun() throws {
         let suiteName = "RemoteMicTests.Onboarding.VerifiedBindingPriority.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
         let settings = AppSettings(defaults: defaults)
@@ -163,7 +163,7 @@ struct OnboardingVoicePairingPlanTests {
 
     @Test func restartDoesNotOverwriteExistingVoiceConfiguration() throws {
         let suiteName = "RemoteMicTests.Onboarding.BindingRestart.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
         let settings = AppSettings(defaults: defaults)
@@ -177,7 +177,7 @@ struct OnboardingVoicePairingPlanTests {
 
     @Test func stagedBindingRestoresOnFailureAndCommitsOnlyAfterVerification() throws {
         let suiteName = "RemoteMicTests.Onboarding.BindingTransaction.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
         let settings = AppSettings(defaults: defaults)

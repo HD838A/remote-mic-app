@@ -565,7 +565,7 @@ struct RemoteButtonsTests {
         }
 
         let suiteName = "RemoteButtonsTests.scrollActions.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         AppSettings(defaults: defaults).setAction(.scrollUp, for: .up)
         AppSettings(defaults: defaults).setAction(.scrollDown, for: .down)
@@ -790,7 +790,7 @@ struct RemoteButtonsTests {
 
     @Test func rawHardwareRepeatStaysLatchedUntilAStableRelease() throws {
         let suiteName = "RemoteButtonsTests.rawHardwareRepeat.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let monitor = HIDRemoteMonitor(settings: AppSettings(defaults: defaults))
 
@@ -829,7 +829,7 @@ struct RemoteButtonsTests {
         }
 
         let suiteName = "RemoteButtonsTests.stableReleaseTiming.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let settings = AppSettings(defaults: defaults)
         settings.customMappingEnabled = true
@@ -890,7 +890,7 @@ struct RemoteButtonsTests {
         }
 
         let suiteName = "RemoteButtonsTests.reportTimestamp.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let settings = AppSettings(defaults: defaults)
         settings.customMappingEnabled = true
@@ -941,7 +941,7 @@ struct RemoteButtonsTests {
 
     @Test func rapidPressOptInLetsNonRepeatableActionsFireOnEveryRawPress() throws {
         let suiteName = "RemoteButtonsTests.rapidPress.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let monitor = HIDRemoteMonitor(settings: AppSettings(defaults: defaults))
         let otherApp = PresetApplication.codex.bundleIdentifier
@@ -1003,7 +1003,7 @@ struct RemoteButtonsTests {
 
     @Test func rapidPressOptInDefaultsOffAndPersistsWithMappings() throws {
         let suiteName = "RemoteButtonsTests.rapidPressSettings.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let settings = AppSettings(defaults: defaults)
         #expect(!settings.allowsRapidPress(for: .volumeDown))
@@ -1030,14 +1030,14 @@ struct RemoteButtonsTests {
 
     @Test func rapidPressOptInTravelsWithExportedConfigurationAndToleratesOlderFiles() throws {
         let sourceSuiteName = "RemoteButtonsTests.rapidPressExport.\(UUID().uuidString)"
-        let sourceDefaults = try #require(UserDefaults(suiteName: sourceSuiteName))
+        let sourceDefaults = try #require(TestUserDefaults(suiteName: sourceSuiteName))
         defer { sourceDefaults.removePersistentDomain(forName: sourceSuiteName) }
         let source = AppSettings(defaults: sourceDefaults)
         source.setAllowsRapidPress(true, for: .volumeDown)
         let exported = try source.exportedConfigurationData()
 
         let targetSuiteName = "RemoteButtonsTests.rapidPressImport.\(UUID().uuidString)"
-        let targetDefaults = try #require(UserDefaults(suiteName: targetSuiteName))
+        let targetDefaults = try #require(TestUserDefaults(suiteName: targetSuiteName))
         defer { targetDefaults.removePersistentDomain(forName: targetSuiteName) }
         let target = AppSettings(defaults: targetDefaults)
         try target.importConfiguration(from: exported)
@@ -1085,7 +1085,7 @@ struct RemoteButtonsTests {
         }
 
         let suiteName = "RemoteButtonsTests.frontmostRepeat.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let monitor = HIDRemoteMonitor(settings: AppSettings(defaults: defaults))
         #expect(monitor.shouldAcceptRawPress(
@@ -1776,7 +1776,7 @@ struct RemoteButtonsTests {
 
     @Test func appSwitcherSingleWindowConfirmActivatesTheOnlyWindow() throws {
         let suiteName = "RemoteButtonsTests.appSwitcherSingleWindow.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let settings = AppSettings(defaults: defaults)
         settings.customMappingEnabled = true
@@ -1849,7 +1849,7 @@ struct RemoteButtonsTests {
 
     @Test func appSwitcherConfirmedWindowLayerCanBeClosedWithBack() throws {
         let suiteName = "RemoteButtonsTests.appSwitcherBackEscape.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let settings = AppSettings(defaults: defaults)
         settings.customMappingEnabled = true
@@ -1901,7 +1901,7 @@ struct RemoteButtonsTests {
 
     @Test func appSwitcherEnsuresForegroundAfterMultiWindowConfirm() throws {
         let suiteName = "RemoteButtonsTests.appSwitcherEnsureFront.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let settings = AppSettings(defaults: defaults)
         settings.customMappingEnabled = true
@@ -1969,7 +1969,7 @@ struct RemoteButtonsTests {
 
     @Test func appSwitcherIgnoresOKUntilWindowHighlighted() throws {
         let suiteName = "RemoteButtonsTests.appSwitcherOKGate.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let settings = AppSettings(defaults: defaults)
         settings.customMappingEnabled = true
@@ -2022,7 +2022,7 @@ struct RemoteButtonsTests {
 
     @Test func appSwitcherUpArrowAlsoEntersWindowLayer() throws {
         let suiteName = "RemoteButtonsTests.appSwitcherUpEnter.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let settings = AppSettings(defaults: defaults)
         settings.customMappingEnabled = true
@@ -2076,7 +2076,7 @@ struct RemoteButtonsTests {
 
     @Test func appSwitcherSwallowsOtherButtonsDuringSession() throws {
         let suiteName = "RemoteButtonsTests.appSwitcherSwallow.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let settings = AppSettings(defaults: defaults)
         settings.customMappingEnabled = true
@@ -2132,7 +2132,7 @@ struct RemoteButtonsTests {
 
     @Test func appSwitcherBoundButtonActsAsTabDuringSession() throws {
         let suiteName = "RemoteButtonsTests.appSwitcherTabBtn.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let settings = AppSettings(defaults: defaults)
         settings.customMappingEnabled = true
@@ -2182,7 +2182,7 @@ struct RemoteButtonsTests {
 
     @Test func appSwitcherKeepsSessionRegardlessOfAccessibilityState() throws {
         let suiteName = "RemoteButtonsTests.appSwitcherHudWatch.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let settings = AppSettings(defaults: defaults)
         settings.customMappingEnabled = true
@@ -2238,7 +2238,7 @@ struct RemoteButtonsTests {
 
     @Test func appSwitcherFallsBackToTabCycleWhenArrowDoesNotMoveHighlight() throws {
         let suiteName = "RemoteButtonsTests.appSwitcherCycle.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let settings = AppSettings(defaults: defaults)
         settings.customMappingEnabled = true
@@ -2295,7 +2295,7 @@ struct RemoteButtonsTests {
 
     @Test func appSwitcherKeepsArrowNavigationWhenHighlightMoves() throws {
         let suiteName = "RemoteButtonsTests.appSwitcherArrowNav.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let settings = AppSettings(defaults: defaults)
         settings.customMappingEnabled = true
@@ -2346,7 +2346,7 @@ struct RemoteButtonsTests {
 
     @Test func appSwitcherRetriesOpeningWhenSwitcherDidNotAppear() throws {
         let suiteName = "RemoteButtonsTests.appSwitcherOpenRetry.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let settings = AppSettings(defaults: defaults)
         settings.customMappingEnabled = true
@@ -2395,7 +2395,7 @@ struct RemoteButtonsTests {
 
     @Test func appSwitcherReopensSwitcherThatClosedByItself() throws {
         let suiteName = "RemoteButtonsTests.appSwitcherReopen.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let settings = AppSettings(defaults: defaults)
         settings.customMappingEnabled = true
@@ -2449,7 +2449,7 @@ struct RemoteButtonsTests {
 
     @Test func appSwitcherKeepsSelectionWhenSwitcherClosesAfterNavigating() throws {
         let suiteName = "RemoteButtonsTests.appSwitcherReopenGuard.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let settings = AppSettings(defaults: defaults)
         settings.customMappingEnabled = true
@@ -2507,7 +2507,7 @@ struct RemoteButtonsTests {
 
     @Test func appSwitcherHeldDirectionRepeatsSelection() throws {
         let suiteName = "RemoteButtonsTests.appSwitcherRepeat.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let settings = AppSettings(defaults: defaults)
         settings.customMappingEnabled = true
@@ -2576,7 +2576,7 @@ struct RemoteButtonsTests {
     @Test(arguments: [true, false])
     func appSwitcherRemoteControlsNavigateConfirmAndReportFinalFrontmostApp(isSeized: Bool) throws {
         let suiteName = "RemoteButtonsTests.appSwitcherControls.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let settings = AppSettings(defaults: defaults)
         settings.customMappingEnabled = true
@@ -2688,7 +2688,7 @@ struct RemoteButtonsTests {
 
     @Test func appSwitcherBackTimeoutAndFrontmostChangeReleaseCommand() throws {
         let suiteName = "RemoteButtonsTests.appSwitcherCancellation.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let settings = AppSettings(defaults: defaults)
         settings.customMappingEnabled = true
@@ -3995,7 +3995,7 @@ struct RemoteButtonsTests {
 
     @Test func savedBindingsMergeWithDefaults() throws {
         let suiteName = "RemoteMicTests.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
         let saved = try JSONEncoder().encode([RemoteButton.back.rawValue: ButtonAction.disabled])
@@ -4008,7 +4008,7 @@ struct RemoteButtonsTests {
 
     @Test func legacyBindingsMigrateIntoFirstPhysicalRemoteProfile() throws {
         let suiteName = "RemoteMicTests.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let legacyIdentifier = UUID()
         defaults.set(legacyIdentifier.uuidString, forKey: "peripheralIdentifier")
@@ -4026,7 +4026,7 @@ struct RemoteButtonsTests {
 
     @Test func physicalRemoteProfilesPersistIndependentMappingsAndBindings() throws {
         let suiteName = "RemoteMicTests.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let settings = AppSettings(defaults: defaults)
         let firstBluetoothID = UUID()
@@ -4072,7 +4072,7 @@ struct RemoteButtonsTests {
 
     @Test func additionalBluetoothRemoteCopiesCurrentMappingsBeforeIndependentEditing() throws {
         let suiteName = "RemoteMicTests.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let settings = AppSettings(defaults: defaults)
         let firstProfileID = settings.registerBluetoothRemote(identifier: UUID())
@@ -4110,7 +4110,7 @@ struct RemoteButtonsTests {
 
     @Test func HIDRemotesAreAutomaticallyAssignedAndKeepIndependentProfiles() throws {
         let suiteName = "RemoteMicTests.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let settings = AppSettings(defaults: defaults)
         settings.setAction(.openCodex, for: .menu)
@@ -4149,7 +4149,7 @@ struct RemoteButtonsTests {
 
     @Test func unavailableContinuousRecordingExperimentDoesNotReplacePowerShortcut() throws {
         let suiteName = "RemoteMicTests.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let settings = AppSettings(defaults: defaults)
         let shortcut = CustomKeyboardShortcut(
@@ -4169,7 +4169,7 @@ struct RemoteButtonsTests {
 
     @Test func unavailableContinuousRecordingExperimentRestoresStalePowerBinding() throws {
         let suiteName = "RemoteMicTests.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         defaults.set(true, forKey: "experimentalContinuousRecordingEnabled")
         defaults.set(
@@ -4203,7 +4203,7 @@ struct RemoteButtonsTests {
 
     @Test func importedContinuousRecordingExperimentIsDisabledAndRestoresBackup() throws {
         let sourceSuiteName = "RemoteMicTests.\(UUID().uuidString)"
-        let sourceDefaults = try #require(UserDefaults(suiteName: sourceSuiteName))
+        let sourceDefaults = try #require(TestUserDefaults(suiteName: sourceSuiteName))
         defer { sourceDefaults.removePersistentDomain(forName: sourceSuiteName) }
         let source = AppSettings(defaults: sourceDefaults)
         let shortcut = CustomKeyboardShortcut(
@@ -4229,7 +4229,7 @@ struct RemoteButtonsTests {
         let exported = try JSONSerialization.data(withJSONObject: configuration)
 
         let targetSuiteName = "RemoteMicTests.\(UUID().uuidString)"
-        let targetDefaults = try #require(UserDefaults(suiteName: targetSuiteName))
+        let targetDefaults = try #require(TestUserDefaults(suiteName: targetSuiteName))
         defer { targetDefaults.removePersistentDomain(forName: targetSuiteName) }
         let target = AppSettings(defaults: targetDefaults)
         try target.importConfiguration(from: exported)
@@ -4251,7 +4251,7 @@ struct RemoteButtonsTests {
 
     @Test func voiceFnTapModeExportsAndLegacyImportDisablesIt() throws {
         let sourceSuite = "RemoteMicTests.\(UUID().uuidString)"
-        let sourceDefaults = try #require(UserDefaults(suiteName: sourceSuite))
+        let sourceDefaults = try #require(TestUserDefaults(suiteName: sourceSuite))
         defer { sourceDefaults.removePersistentDomain(forName: sourceSuite) }
         let source = AppSettings(defaults: sourceDefaults)
         source.voiceFnTapModeEnabled = true
@@ -4262,7 +4262,7 @@ struct RemoteButtonsTests {
         #expect(object["voiceFnTapModeEnabled"] as? Bool == true)
 
         let targetSuite = "RemoteMicTests.\(UUID().uuidString)"
-        let targetDefaults = try #require(UserDefaults(suiteName: targetSuite))
+        let targetDefaults = try #require(TestUserDefaults(suiteName: targetSuite))
         defer { targetDefaults.removePersistentDomain(forName: targetSuite) }
         let target = AppSettings(defaults: targetDefaults)
         try target.importConfiguration(from: exported)
@@ -4300,7 +4300,7 @@ struct RemoteButtonsTests {
 
     @Test func trustedPhoneIdentitiesPersistDeduplicateAndClear() throws {
         let suiteName = "RemoteMicTests.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
         let settings = AppSettings(defaults: defaults)
@@ -4319,7 +4319,7 @@ struct RemoteButtonsTests {
 
     @Test func updateAndLaunchPreferencesPersistAndImportCompatibly() throws {
         let sourceSuiteName = "RemoteMicTests.\(UUID().uuidString)"
-        let sourceDefaults = try #require(UserDefaults(suiteName: sourceSuiteName))
+        let sourceDefaults = try #require(TestUserDefaults(suiteName: sourceSuiteName))
         defer { sourceDefaults.removePersistentDomain(forName: sourceSuiteName) }
         let sourceSettings = AppSettings(defaults: sourceDefaults)
         #expect(sourceSettings.openMainWindowAtLaunch)
@@ -4334,7 +4334,7 @@ struct RemoteButtonsTests {
 
         let exportedData = try sourceSettings.exportedConfigurationData()
         let targetSuiteName = "RemoteMicTests.\(UUID().uuidString)"
-        let targetDefaults = try #require(UserDefaults(suiteName: targetSuiteName))
+        let targetDefaults = try #require(TestUserDefaults(suiteName: targetSuiteName))
         defer { targetDefaults.removePersistentDomain(forName: targetSuiteName) }
         let targetSettings = AppSettings(defaults: targetDefaults)
         try targetSettings.importConfiguration(from: exportedData)
@@ -4361,7 +4361,7 @@ struct RemoteButtonsTests {
 
     @Test func localUsageStatisticsSeparatesTodayWeekAndTotalAndPersists() throws {
         let suiteName = "RemoteMicTests.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
         var calendar = Calendar(identifier: .gregorian)
@@ -4440,7 +4440,7 @@ struct RemoteButtonsTests {
 
     @Test func legacyUsageTotalsRemainAvailableWithoutInventingDailyHistory() throws {
         let suiteName = "RemoteMicTests.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         defaults.set(NSNumber(value: UInt64(42)), forKey: "usage.totalButtonPressCount")
         defaults.set(180.0, forKey: "usage.totalVoiceDuration")
@@ -4454,7 +4454,7 @@ struct RemoteButtonsTests {
 
     @Test func localVoiceSessionRankingKeepsTheLongestTenAndPersists() throws {
         let suiteName = "RemoteMicTests.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let baseDate = Date(timeIntervalSince1970: 1_800_000_000)
 
@@ -4480,7 +4480,7 @@ struct RemoteButtonsTests {
 
     @Test func localUsageMetadataPersistsSourcesControlsHoursAndVoiceSessions() throws {
         let suiteName = "RemoteMicTests.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
         var calendar = Calendar(identifier: .gregorian)
@@ -4564,7 +4564,7 @@ struct RemoteButtonsTests {
 
     @Test func legacyUsageJSONLoadsWithoutFabricatingNewMetadata() throws {
         let suiteName = "RemoteMicTests.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let recordID = UUID()
         let endedAt = Date(timeIntervalSinceReferenceDate: 800_000_000)
@@ -4607,7 +4607,7 @@ struct RemoteButtonsTests {
 
     @Test func weeklyUsageSeriesOnlyIncludesDatedHistory() throws {
         let suiteName = "RemoteMicTests.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         defaults.set(NSNumber(value: UInt64(42)), forKey: "usage.totalButtonPressCount")
         defaults.set(180.0, forKey: "usage.totalVoiceDuration")
@@ -4679,7 +4679,7 @@ struct RemoteButtonsTests {
 
     @Test func completedUpdateDetectionCoversBuildIncreaseAndExistingInstallMigration() throws {
         let suiteName = "RemoteMicTests.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let settings = AppSettings(defaults: defaults)
 
@@ -4697,7 +4697,7 @@ struct RemoteButtonsTests {
         ))
 
         let migrationSuiteName = "RemoteMicTests.\(UUID().uuidString)"
-        let migrationDefaults = try #require(UserDefaults(suiteName: migrationSuiteName))
+        let migrationDefaults = try #require(TestUserDefaults(suiteName: migrationSuiteName))
         defer { migrationDefaults.removePersistentDomain(forName: migrationSuiteName) }
         #expect(AppSettings(defaults: migrationDefaults).recordLaunchAndDetectCompletedUpdate(
             currentBuild: "39",
@@ -4808,7 +4808,7 @@ struct RemoteButtonsTests {
 
     @Test func customShortcutsPersistAndResetWithBindings() throws {
         let suiteName = "RemoteMicTests.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let shortcut = CustomKeyboardShortcut(
             keyCode: 8,
@@ -4831,7 +4831,7 @@ struct RemoteButtonsTests {
 
     @Test func customShortcutsSurviveSwitchingToOtherActionsAndBack() throws {
         let suiteName = "RemoteMicTests.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let shortcut = CustomKeyboardShortcut(
             keyCode: 36,
@@ -4863,7 +4863,7 @@ struct RemoteButtonsTests {
 
     @Test func inactiveShortcutAndCustomApplicationConfigurationsSurviveSwitchesRestartAndImport() throws {
         let suiteName = "RemoteMicTests.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let shortcut = CustomKeyboardShortcut(
             keyCode: 36,
@@ -4940,7 +4940,7 @@ struct RemoteButtonsTests {
         }
 
         let importedSuiteName = "RemoteMicTests.\(UUID().uuidString)"
-        let importedDefaults = try #require(UserDefaults(suiteName: importedSuiteName))
+        let importedDefaults = try #require(TestUserDefaults(suiteName: importedSuiteName))
         defer { importedDefaults.removePersistentDomain(forName: importedSuiteName) }
         let imported = AppSettings(defaults: importedDefaults)
         try imported.importConfiguration(from: restored.exportedConfigurationData())
@@ -4972,7 +4972,7 @@ struct RemoteButtonsTests {
 
     @Test func customApplicationProfilesPersistPerRemoteAndRoundTripConfiguration() throws {
         let suiteName = "RemoteMicTests.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let target = AccessibilityFocusTarget(
             role: "AXTextArea",
@@ -5012,7 +5012,7 @@ struct RemoteButtonsTests {
         ).applicationProfileID == profile.id)
 
         let importedSuiteName = "RemoteMicTests.\(UUID().uuidString)"
-        let importedDefaults = try #require(UserDefaults(suiteName: importedSuiteName))
+        let importedDefaults = try #require(TestUserDefaults(suiteName: importedSuiteName))
         defer { importedDefaults.removePersistentDomain(forName: importedSuiteName) }
         let imported = AppSettings(defaults: importedDefaults)
         try imported.importConfiguration(from: restored.exportedConfigurationData())
@@ -5053,7 +5053,7 @@ struct RemoteButtonsTests {
 
     @Test func secondaryTriggerActionsPersistAndResetWithoutChangingSingleClick() throws {
         let suiteName = "RemoteMicTests.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let shortcut = CustomKeyboardShortcut(
             keyCode: 9,
@@ -5089,7 +5089,7 @@ struct RemoteButtonsTests {
 
     @Test func migratesLegacyExclusiveToggleToCustomMappingToggle() throws {
         let suiteName = "RemoteMicTests.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
         defaults.set(true, forKey: "exclusiveHID")
@@ -5109,7 +5109,7 @@ struct RemoteButtonsTests {
         ]
         for (button, shortcut, profileOverride) in cases where !sayAllFrontmost || button == .back {
             let suite = "RemoteButtonsTests.finalRepeat.\(UUID().uuidString)"
-            let defaults = try #require(UserDefaults(suiteName: suite))
+            let defaults = try #require(TestUserDefaults(suiteName: suite))
             defer { defaults.removePersistentDomain(forName: suite) }
             let settings = AppSettings(defaults: defaults)
             settings.customMappingEnabled = true
@@ -5162,7 +5162,7 @@ struct RemoteButtonsTests {
         let inherited = variant & 2 != 0
         let command = variant & 4 != 0
         let suite = "RemoteButtonsTests.rapidProfile.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
+        let defaults = try #require(TestUserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         let settings = AppSettings(defaults: defaults)
         settings.customMappingEnabled = true
@@ -5223,7 +5223,7 @@ struct RemoteButtonsTests {
     @Test(arguments: RemoteButton.xiaomiCases.filter { $0.nativeEvent != nil }, [true, false])
     func profileShortcutSuppressesNativeEvent(button: RemoteButton, seized: Bool) throws {
         let suiteName = "RemoteButtonsTests.profileNative.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let settings = AppSettings(defaults: defaults)
         settings.customMappingEnabled = true
@@ -5294,7 +5294,7 @@ struct RemoteButtonsTests {
     @Test(arguments: [RemoteButton.left, .right], [true, false])
     func profileSingleClickOwnsMonitoredArrow(button: RemoteButton, unified: Bool) throws {
         let suiteName = "RemoteButtonsTests.profileArrow.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let settings = AppSettings(defaults: defaults)
         settings.customMappingEnabled = true
@@ -5379,7 +5379,7 @@ struct RemoteButtonsTests {
     @Test(arguments: [RemoteButton.left, .right], [true, false])
     func discoveredProfileSingleClickRepeatsFinalAction(button: RemoteButton, unified: Bool) throws {
         let suiteName = "RemoteButtonsTests.discoveryArrow.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let settings = AppSettings(defaults: defaults)
         settings.customMappingEnabled = true
@@ -5446,7 +5446,7 @@ struct RemoteButtonsTests {
     @Test(arguments: [RemoteButton.left, .right])
     func unrelatedProfileBindingKeepsMonitoredArrowNative(button: RemoteButton) throws {
         let suiteName = "RemoteButtonsTests.unboundArrow.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let settings = AppSettings(defaults: defaults)
         settings.customMappingEnabled = true
@@ -5483,7 +5483,7 @@ struct RemoteButtonsTests {
     @Test(arguments: [RemoteButton.left, .right], [ButtonAction.customShortcut, .disabled])
     func explicitArrowShortcutOrDisabledNeverInherits(button: RemoteButton, action: ButtonAction) throws {
         let suiteName = "RemoteButtonsTests.explicitArrow.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let settings = AppSettings(defaults: defaults)
         settings.customMappingEnabled = true
@@ -5520,7 +5520,7 @@ struct RemoteButtonsTests {
 
     @Test func disabledMappingBackIgnoresStoredMappingsOverridesAndOtherButtons() throws {
         let suiteName = "RemoteButtonsTests.backOnly.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let settings = AppSettings(defaults: defaults)
         settings.customMappingEnabled = false
@@ -5593,7 +5593,7 @@ struct RemoteButtonsTests {
 
     @Test func seizedTVConfiguredActionSuppressesNativePunctuationEvent() throws {
         let suiteName = "RemoteButtonsTests.tvSeizedSuppression.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let settings = AppSettings(defaults: defaults)
         settings.customMappingEnabled = true

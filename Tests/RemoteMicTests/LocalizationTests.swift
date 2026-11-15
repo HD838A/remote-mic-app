@@ -23,7 +23,7 @@ struct LocalizationTests {
 
     @Test func screenshotResourceFallbackLoadsRepositoryLocalizations() throws {
         let suiteName = "RemoteMicTests.Localization.ScreenshotFallback.(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
         let settings = AppSettings(defaults: defaults)
@@ -41,7 +41,7 @@ struct LocalizationTests {
 
     @Test func languageSelectionPersistsAndUpdatesTheLocaleImmediately() throws {
         let suiteName = "RemoteMicTests.Localization.(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
         let settings = AppSettings(defaults: defaults)
@@ -270,7 +270,7 @@ struct LocalizationTests {
 
         let bundle = try #require(Bundle(url: bundleURL))
         let suiteName = "RemoteMicTests.LocalizationFallback.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let settings = AppSettings(defaults: defaults)
         settings.applicationLanguage = .simplifiedChinese

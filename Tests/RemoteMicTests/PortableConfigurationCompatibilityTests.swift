@@ -11,7 +11,7 @@ import SayAllMacroRemoteMic
 struct PortableConfigurationCompatibilityTests {
     private func settings() throws -> (AppSettings, () -> Void) {
         let name = "PortableConfigurationTests.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: name))
+        let defaults = try #require(TestUserDefaults(suiteName: name))
         return (AppSettings(defaults: defaults), { defaults.removePersistentDomain(forName: name) })
     }
     @Test func legacy1921ConfigurationImportsAndExportsVersionTwoWithoutLosingMappings() throws {
