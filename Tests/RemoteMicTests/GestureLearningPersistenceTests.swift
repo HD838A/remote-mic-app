@@ -9,7 +9,7 @@ import Testing
 struct GestureLearningPersistenceTests {
     private func makeSettings() throws -> (AppSettings, UserDefaults, String) {
         let name = "SayAll.GestureLearning.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: name))
+        let defaults = try #require(TestUserDefaults(suiteName: name))
         return (AppSettings(defaults: defaults), defaults, name)
     }
 

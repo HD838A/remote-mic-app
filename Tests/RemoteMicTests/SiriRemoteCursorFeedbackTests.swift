@@ -102,7 +102,7 @@ struct SiriRemoteCursorFeedbackTests {
 
     @Test func scrollArrowDirectionPreferenceDefaultsToMatchAndPersists() throws {
         let suiteName = "RemoteMicTests.SiriRemoteScrollArrow.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
         let settings = AppSettings(defaults: defaults)

@@ -85,7 +85,7 @@ struct AudioSelectionRecoveryTests {
 
     @Test func rememberedAudioSelectionSurvivesRestartAndEmptyCurrentSelection() throws {
         let suiteName = "RemoteMicTests.AudioSelectionRecovery.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
         let firstLaunch = AppSettings(defaults: defaults)

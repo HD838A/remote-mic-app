@@ -331,13 +331,6 @@ struct RemoteNativeKeyMapperTests {
     }
 }
 
-/// `synchronize()` may return false while the full suite creates many isolated
-/// preference domains concurrently; the mapper only needs the value to be
-/// readable from this process, which `set` already guarantees here.
-private final class TestUserDefaults: UserDefaults {
-    override func synchronize() -> Bool { true }
-}
-
 private final class NativeServiceBox {
     let id: UInt64?
     var mappings: [HIDUsageMapping]

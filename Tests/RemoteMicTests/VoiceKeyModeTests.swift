@@ -612,7 +612,7 @@ struct VoiceKeyModeTests {
 
     @Test func configurationDefaultsLegacyAndRoundTripsCommandMode() throws {
         let sourceSuite = "RemoteMicTests.voice-key-source.\(UUID().uuidString)"
-        let sourceDefaults = try #require(UserDefaults(suiteName: sourceSuite))
+        let sourceDefaults = try #require(TestUserDefaults(suiteName: sourceSuite))
         defer { sourceDefaults.removePersistentDomain(forName: sourceSuite) }
         let source = AppSettings(defaults: sourceDefaults)
         #expect(source.voiceKeyMode == .function)
@@ -624,7 +624,7 @@ struct VoiceKeyModeTests {
         #expect(object["voiceKeyMode"] as? String == VoiceKeyMode.rightCommand.rawValue)
 
         let targetSuite = "RemoteMicTests.voice-key-target.\(UUID().uuidString)"
-        let targetDefaults = try #require(UserDefaults(suiteName: targetSuite))
+        let targetDefaults = try #require(TestUserDefaults(suiteName: targetSuite))
         defer { targetDefaults.removePersistentDomain(forName: targetSuite) }
         let target = AppSettings(defaults: targetDefaults)
         try target.importConfiguration(from: exported)
@@ -639,7 +639,7 @@ struct VoiceKeyModeTests {
 
     @Test func configurationImportRejectsUnsafeVoiceKeyChangesBeforeMutation() throws {
         let sourceSuite = "RemoteMicTests.voice-key-preflight-source.\(UUID().uuidString)"
-        let sourceDefaults = try #require(UserDefaults(suiteName: sourceSuite))
+        let sourceDefaults = try #require(TestUserDefaults(suiteName: sourceSuite))
         defer { sourceDefaults.removePersistentDomain(forName: sourceSuite) }
         let source = AppSettings(defaults: sourceDefaults)
         source.gainDB = 12
@@ -647,7 +647,7 @@ struct VoiceKeyModeTests {
         let data = try source.exportedConfigurationData()
 
         let targetSuite = "RemoteMicTests.voice-key-preflight-target.\(UUID().uuidString)"
-        let targetDefaults = try #require(UserDefaults(suiteName: targetSuite))
+        let targetDefaults = try #require(TestUserDefaults(suiteName: targetSuite))
         defer { targetDefaults.removePersistentDomain(forName: targetSuite) }
         let target = AppSettings(defaults: targetDefaults)
         target.gainDB = 3

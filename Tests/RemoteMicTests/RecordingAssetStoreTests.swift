@@ -141,7 +141,7 @@ struct RecordingAssetStoreTests {
 
     @Test func originalAudioRecordingSettingDefaultsOff() throws {
         let suiteName = "RemoteMicTests.RecordingSetting.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let settings = AppSettings(defaults: defaults)
         #expect(settings.localOriginalAudioRecordingEnabled == false)

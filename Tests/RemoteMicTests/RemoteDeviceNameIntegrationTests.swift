@@ -39,7 +39,7 @@ struct RemoteDeviceNameIntegrationTests {
 
     @Test func systemNameChangesOnlyTheMatchingProfileAndSurvivesRestart() throws {
         let suite = "RemoteNames.\(UUID())"
-        let defaults = try #require(UserDefaults(suiteName: suite))
+        let defaults = try #require(TestUserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         let settings = AppSettings(defaults: defaults)
         let first = settings.registerBluetoothRemote(identifier: UUID())
@@ -130,7 +130,7 @@ struct RemoteDeviceNameIntegrationTests {
 
     @Test func appleSerialObservationClearsOldCacheAndRestoresHistoricalNumbering() throws {
         let suite = "RemoteNames.Serial.\(UUID())"
-        let defaults = try #require(UserDefaults(suiteName: suite))
+        let defaults = try #require(TestUserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         let settings = AppSettings(defaults: defaults)
         // Model persisted Apple profiles without enabling or starting the private adapter.

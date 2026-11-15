@@ -103,7 +103,7 @@ struct AppIconControllerTests {
     @Test
     func appSettingsPersistTheSelectedIcon() throws {
         let suiteName = "RemoteMic.AppIconControllerTests.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
         let settings = AppSettings(defaults: defaults)
@@ -121,8 +121,8 @@ struct AppIconControllerTests {
     func appIconIdentifierRoundTripsThroughConfigurationExportAndImport() throws {
         let sourceSuite = "RemoteMic.AppIconControllerTests.Source.\(UUID().uuidString)"
         let destinationSuite = "RemoteMic.AppIconControllerTests.Destination.\(UUID().uuidString)"
-        let sourceDefaults = try #require(UserDefaults(suiteName: sourceSuite))
-        let destinationDefaults = try #require(UserDefaults(suiteName: destinationSuite))
+        let sourceDefaults = try #require(TestUserDefaults(suiteName: sourceSuite))
+        let destinationDefaults = try #require(TestUserDefaults(suiteName: destinationSuite))
         defer {
             sourceDefaults.removePersistentDomain(forName: sourceSuite)
             destinationDefaults.removePersistentDomain(forName: destinationSuite)

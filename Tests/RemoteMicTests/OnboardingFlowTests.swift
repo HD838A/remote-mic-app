@@ -126,7 +126,7 @@ struct OnboardingFlowTests {
     @Test @MainActor func siriRemoteTrialPreservesEntryStateAndMembershipAccessAcrossResume() throws {
         for initiallyEnabled in [false, true] {
             let suite = "RemoteMicTests.Onboarding.SiriTrial.\(UUID().uuidString)"
-            let defaults = try #require(UserDefaults(suiteName: suite))
+            let defaults = try #require(TestUserDefaults(suiteName: suite))
             defer { defaults.removePersistentDomain(forName: suite) }
             let settings = AppSettings(defaults: defaults)
             settings.siriRemoteEnabled = initiallyEnabled
@@ -189,7 +189,7 @@ struct OnboardingFlowTests {
     @Test func allAudioNamesKeepTheSavedSelectionAcrossResumeAndRerun() throws {
         for name in ["SayAll", "MiRemoteV 2ch", "BlackHole 2ch"] {
             let suite = "RemoteMicTests.Onboarding.AudioName.\(UUID().uuidString)"
-            let defaults = try #require(UserDefaults(suiteName: suite))
+            let defaults = try #require(TestUserDefaults(suiteName: suite))
             defer { defaults.removePersistentDomain(forName: suite) }
             let settings = AppSettings(defaults: defaults)
             let uid = name == "BlackHole 2ch" ? "BlackHole2ch_UID" : DoubaoAudioDevicePolicy.deviceUID
@@ -207,7 +207,7 @@ struct OnboardingFlowTests {
 
     @Test @MainActor func offscreenProductionViewCanBeHostedWithoutUnlockingMac() throws {
         let suiteName = "RemoteMicTests.Onboarding.Offscreen.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
         let settings = AppSettings(defaults: defaults)
@@ -295,7 +295,7 @@ struct OnboardingFlowTests {
 
     @Test func legacyChatterFlySelectionMigratesToUnselected() throws {
         let suiteName = "RemoteMicTests.Onboarding.ChatterFlyMigration.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
         defaults.set("chatterfly", forKey: "onboarding.voiceTool")
@@ -794,7 +794,7 @@ struct OnboardingFlowTests {
         installed: Bool
     ) throws -> (probe: OnboardingInteractionProbe, teardown: () -> Void) {
         let suiteName = "\(suite).\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         let settings = AppSettings(defaults: defaults)
         settings.applicationLanguage = .simplifiedChinese
         settings.setOnboardingControlMethod(method)
@@ -1365,7 +1365,7 @@ struct OnboardingFlowTests {
 
     @Test func selectingVoiceToolAndRestartingPreserveTheFormalVoiceConfiguration() throws {
         let suiteName = "RemoteMicTests.Onboarding.FnOnlyPolicy.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
         let settings = AppSettings(defaults: defaults)
@@ -1388,7 +1388,7 @@ struct OnboardingFlowTests {
 
     @Test func onboardingFnModeDoesNotCreateVoiceKeyMigrationNotice() throws {
         let suiteName = "RemoteMicTests.Onboarding.FnOnlyPolicyNotice.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
         let settings = AppSettings(defaults: defaults)
@@ -1401,7 +1401,7 @@ struct OnboardingFlowTests {
 
     @Test func typelessUsesFnTapOnlyAfterItsPairingPlanIsStaged() throws {
         let suiteName = "RemoteMicTests.Onboarding.TypelessFnMode.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
         let settings = AppSettings(defaults: defaults)
@@ -1909,7 +1909,7 @@ struct OnboardingFlowTests {
 
     @Test @MainActor func phoneRemoteConnectionIsBlockedByMembership() throws {
         let suiteName = "RemoteMicTests.Onboarding.PhoneMembership.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let settings = AppSettings(defaults: defaults)
         let model = BridgeAppModel(settings: settings)
@@ -2050,7 +2050,7 @@ struct OnboardingFlowTests {
         // 「重试连接」必须是真重跑门禁，不是空按钮：门禁没放开时仍是门禁态，
         // 放开时才启动连接服务。这条同时锁住「不会再变成静默 return」。
         let suiteName = "RemoteMicTests.Onboarding.PhoneRetry.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let settings = AppSettings(defaults: defaults)
         let model = BridgeAppModel(settings: settings)
@@ -2186,7 +2186,7 @@ struct OnboardingFlowTests {
 
     @Test @MainActor func membershipRetryIsArmedOnlyWhileTheGateBlocks() throws {
         let suiteName = "RemoteMicTests.Onboarding.RetryArmed.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let model = BridgeAppModel(settings: AppSettings(defaults: defaults))
         // 一开始没有任何监听挂着。
@@ -2857,7 +2857,7 @@ struct OnboardingFlowTests {
 
     @Test func progressVoiceToolAndCompletionPersistAcrossLaunches() throws {
         let suiteName = "RemoteMicTests.Onboarding.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
         let settings = AppSettings(defaults: defaults)
@@ -2912,7 +2912,7 @@ struct OnboardingFlowTests {
 
     @Test func onboardingPairingPlanControlsFnTapWithoutToolSelectionSideEffects() throws {
         let suiteName = "RemoteMicTests.OnboardingFnTap.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
         let settings = AppSettings(defaults: defaults)
@@ -2944,7 +2944,7 @@ struct OnboardingFlowTests {
 
     @Test func existingInstallSkipsOnboardingWhileNewAndResumedFlowsRemainRequired() throws {
         let legacySuiteName = "RemoteMicTests.Onboarding.Legacy.\(UUID().uuidString)"
-        let legacyDefaults = try #require(UserDefaults(suiteName: legacySuiteName))
+        let legacyDefaults = try #require(TestUserDefaults(suiteName: legacySuiteName))
         defer { legacyDefaults.removePersistentDomain(forName: legacySuiteName) }
         legacyDefaults.set("68", forKey: "launch.lastLaunchedBuild")
 
@@ -2957,7 +2957,7 @@ struct OnboardingFlowTests {
         #expect(legacySettings.onboardingStep == .complete)
 
         let sparkleLegacySuiteName = "RemoteMicTests.Onboarding.SparkleLegacy.\(UUID().uuidString)"
-        let sparkleLegacyDefaults = try #require(UserDefaults(suiteName: sparkleLegacySuiteName))
+        let sparkleLegacyDefaults = try #require(TestUserDefaults(suiteName: sparkleLegacySuiteName))
         defer { sparkleLegacyDefaults.removePersistentDomain(forName: sparkleLegacySuiteName) }
 
         let sparkleLegacySettings = AppSettings(defaults: sparkleLegacyDefaults)
@@ -2968,7 +2968,7 @@ struct OnboardingFlowTests {
         #expect(sparkleLegacySettings.isOnboardingComplete)
 
         let configuredLegacySuiteName = "RemoteMicTests.Onboarding.ConfiguredLegacy.\(UUID().uuidString)"
-        let configuredLegacyDefaults = try #require(UserDefaults(suiteName: configuredLegacySuiteName))
+        let configuredLegacyDefaults = try #require(TestUserDefaults(suiteName: configuredLegacySuiteName))
         defer { configuredLegacyDefaults.removePersistentDomain(forName: configuredLegacySuiteName) }
         configuredLegacyDefaults.set(Data("legacy".utf8), forKey: "buttonBindings")
         let configuredLegacySettings = AppSettings(defaults: configuredLegacyDefaults)
@@ -2979,7 +2979,7 @@ struct OnboardingFlowTests {
         #expect(configuredLegacySettings.isOnboardingComplete)
 
         let configuredAfterMigrationSuiteName = "RemoteMicTests.Onboarding.ConfiguredAfterMigration.\(UUID().uuidString)"
-        let configuredAfterMigrationDefaults = try #require(UserDefaults(suiteName: configuredAfterMigrationSuiteName))
+        let configuredAfterMigrationDefaults = try #require(TestUserDefaults(suiteName: configuredAfterMigrationSuiteName))
         defer { configuredAfterMigrationDefaults.removePersistentDomain(forName: configuredAfterMigrationSuiteName) }
         configuredAfterMigrationDefaults.set(AppSettings.currentOnboardingVersion, forKey: "onboarding.migrationVersion")
         configuredAfterMigrationDefaults.set(Data("legacy".utf8), forKey: "buttonBindings")
@@ -2991,7 +2991,7 @@ struct OnboardingFlowTests {
         #expect(configuredAfterMigrationSettings.isOnboardingComplete)
 
         let freshSuiteName = "RemoteMicTests.Onboarding.Fresh.\(UUID().uuidString)"
-        let freshDefaults = try #require(UserDefaults(suiteName: freshSuiteName))
+        let freshDefaults = try #require(TestUserDefaults(suiteName: freshSuiteName))
         defer { freshDefaults.removePersistentDomain(forName: freshSuiteName) }
 
         let firstFreshLaunch = AppSettings(defaults: freshDefaults)
@@ -3010,7 +3010,7 @@ struct OnboardingFlowTests {
         #expect(secondFreshLaunch.onboardingStep == .welcome)
 
         let resumedSuiteName = "RemoteMicTests.Onboarding.Resumed.\(UUID().uuidString)"
-        let resumedDefaults = try #require(UserDefaults(suiteName: resumedSuiteName))
+        let resumedDefaults = try #require(TestUserDefaults(suiteName: resumedSuiteName))
         defer { resumedDefaults.removePersistentDomain(forName: resumedSuiteName) }
         resumedDefaults.set("101", forKey: "launch.lastLaunchedBuild")
         resumedDefaults.set(OnboardingStep.audio.rawValue, forKey: "onboarding.step")
@@ -3422,7 +3422,7 @@ struct OnboardingFlowTests {
 
     @Test func firstUseEventsDeduplicatePollingAndKeepExplicitRetries() throws {
         let suiteName = "RemoteMicTests.Onboarding.Diagnostics.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let settings = AppSettings(defaults: defaults)
         let now = Date(timeIntervalSince1970: 1_700_000_000)
@@ -3459,7 +3459,7 @@ struct OnboardingFlowTests {
 
     @Test func firstUseEventsPersistVoiceAttemptIdentityAndDecodeLegacyEvents() throws {
         let suiteName = "RemoteMicTests.Onboarding.VoiceDiagnostics.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let settings = AppSettings(defaults: defaults)
 
@@ -3900,7 +3900,7 @@ private final class OnboardingOffscreenFixture {
         siriRemoteNeedsUserAction: Bool = false
     ) throws {
         let suiteName = "RemoteMicTests.Onboarding.Fixture.\(UUID().uuidString)"
-        guard let defaults = UserDefaults(suiteName: suiteName) else {
+        guard let defaults = TestUserDefaults(suiteName: suiteName) else {
             throw FixtureError.defaultsUnavailable
         }
         self.suiteName = suiteName

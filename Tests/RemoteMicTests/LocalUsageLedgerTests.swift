@@ -4,7 +4,7 @@ import Testing
 
 @Suite struct LocalUsageLedgerTests {
     private func date(_ value: String) -> Date { ISO8601DateFormatter().date(from: value)! }
-    private func store() -> UserDefaults { UserDefaults(suiteName: "LocalUsageTests.\(UUID())")! }
+    private func store() -> UserDefaults { TestUserDefaults(suiteName: "LocalUsageTests.\(UUID())")! }
     private func ledger(_ defaults: UserDefaults, now: Date) -> LocalUsageLedger {
         LocalUsageLedger(defaults: defaults, buttonCount: 0, voiceDuration: 0, longestVoice: 0, now: now)
     }

@@ -6,7 +6,7 @@ import Testing
 struct ConnectionStatusTests {
     @Test @MainActor func searchingFollowsSelectedModelAndLanguage() throws {
         let suite = "ConnectionStatus.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
+        let defaults = try #require(TestUserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         let settings = AppSettings(defaults: defaults)
         let model = BridgeAppModel(settings: settings)
@@ -42,7 +42,7 @@ struct ConnectionStatusTests {
 
     @Test @MainActor func searchingWithLegacyUnknownProfileUsesGenericCopy() throws {
         let suite = "ConnectionStatusEmpty.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
+        let defaults = try #require(TestUserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         let settings = AppSettings(defaults: defaults)
         let model = BridgeAppModel(settings: settings)
@@ -53,7 +53,7 @@ struct ConnectionStatusTests {
 
     @Test @MainActor func otherBluetoothRemoteDoesNotReplaceSelectedDisconnectedRemote() throws {
         let suite = "ConnectionStatusMultiple.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
+        let defaults = try #require(TestUserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         let settings = AppSettings(defaults: defaults)
         let model = BridgeAppModel(settings: settings)

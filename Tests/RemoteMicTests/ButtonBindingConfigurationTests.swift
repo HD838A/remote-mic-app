@@ -9,7 +9,7 @@ import SayAllButtonProfiles
 @Suite("Unified button configuration")
 struct ButtonBindingConfigurationTests {
     private func settings() -> AppSettings {
-        AppSettings(defaults: UserDefaults(suiteName: "UnifiedButtons.\(UUID().uuidString)")!)
+        AppSettings(defaults: TestUserDefaults(suiteName: "UnifiedButtons.\(UUID().uuidString)")!)
     }
 
     @Test(arguments: [true, false]) func saveRecoveryDoesNotReloadConfirmedSuccess(success: Bool) {
@@ -65,7 +65,7 @@ struct ButtonBindingConfigurationTests {
     }
 
     @Test func baseDirectEditPersistsDisabledEscapeAndHoldAcrossRestart() throws {
-        let defaults = try #require(UserDefaults(suiteName: "Autosave.\(UUID().uuidString)"))
+        let defaults = try #require(TestUserDefaults(suiteName: "Autosave.\(UUID().uuidString)"))
         let source = AppSettings(defaults: defaults)
         let device = source.selectedRemoteProfileID
         #expect(source.writeBaseBinding(.disabled, for: .back, trigger: .singleClick, profileID: device))
@@ -84,7 +84,7 @@ struct ButtonBindingConfigurationTests {
     }
 
     @Test func mappingProfileSnapshotKeepsUnsetEntriesInherited() throws {
-        let defaults = try #require(UserDefaults(suiteName: "ProfileSnapshot.\(UUID().uuidString)"))
+        let defaults = try #require(TestUserDefaults(suiteName: "ProfileSnapshot.\(UUID().uuidString)"))
         let settings = AppSettings(defaults: defaults)
         let device = settings.selectedRemoteProfileID
         settings.setBaseBinding(.init(action: .arrowRight, shortcut: nil),
@@ -342,7 +342,7 @@ struct ButtonBindingConfigurationTests {
 
     @Test func historicalMissingReferencesAreRemovedAcrossDevicesAndSurviveRestart() throws {
         let suite = "UnifiedButtons.HistoricalCleanup.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
+        let defaults = try #require(TestUserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         let settings = AppSettings(defaults: defaults)
         let first = settings.registerHIDRemote(fingerprint: "cleanup-first")
@@ -391,7 +391,7 @@ struct ButtonBindingConfigurationTests {
 
     @Test func selectedProfileKeepsShortcutMappingsAfterReload() throws {
         let suite = "UnifiedButtons.SelectedProfile.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
+        let defaults = try #require(TestUserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         let settings = AppSettings(defaults: defaults)
         let profileID = settings.registerHIDRemote(fingerprint: "rc001-mapping")
@@ -419,7 +419,7 @@ struct ButtonBindingConfigurationTests {
 
     @Test func chosenCombinationActionPersistsForOnlyOriginalButton() throws {
         let suite = "UnifiedButtons.MacroReturn.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
+        let defaults = try #require(TestUserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         let settings = AppSettings(defaults: defaults)
         let originalDevice = settings.registerHIDRemote(fingerprint: "macro-return-original-device")

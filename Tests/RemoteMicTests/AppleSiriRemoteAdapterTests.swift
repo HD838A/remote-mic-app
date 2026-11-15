@@ -395,7 +395,7 @@ struct AppleSiriRemoteAdapterTests {
 
     @Test func appleRegistrationDoesNotReuseBluetoothRemoteProfile() throws {
         let suiteName = "AppleSiriRemoteAdapterTests.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let settings = AppSettings(defaults: defaults)
         let bluetoothIdentifier = UUID()

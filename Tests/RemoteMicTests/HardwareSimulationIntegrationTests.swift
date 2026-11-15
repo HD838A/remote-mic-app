@@ -415,7 +415,7 @@ struct HardwareSimulationIntegrationTests {
 
     @Test func duplicateAndCombinedHIDReportsDoNotInventExtraPresses() throws {
         let suiteName = "HardwareSimulationIntegrationTests.combined.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let settings = AppSettings(defaults: defaults)
         settings.customMappingEnabled = true
@@ -457,7 +457,7 @@ struct HardwareSimulationIntegrationTests {
 
     @Test func appSwitcherSessionUsesAnyMappedButtonAndTVAdvancesThenReleasesOnDisconnect() throws {
         let suiteName = "HardwareSimulationIntegrationTests.appSwitcherSession.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let settings = AppSettings(defaults: defaults)
         settings.customMappingEnabled = true
@@ -506,7 +506,7 @@ struct HardwareSimulationIntegrationTests {
 
     @Test func HIDDiagnosticsTraceReportsEdgesGesturesAndActionsWithoutRawPayloads() throws {
         let suiteName = "HardwareSimulationIntegrationTests.hidDiagnostics.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let settings = AppSettings(defaults: defaults)
         settings.customMappingEnabled = true
@@ -539,7 +539,7 @@ struct HardwareSimulationIntegrationTests {
 
     @Test func privateMacroBindingCanOwnDisabledDoubleClickWithoutStoppingHID() throws {
         let suiteName = "HardwareSimulationIntegrationTests.privateMacro.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let settings = AppSettings(defaults: defaults)
         settings.customMappingEnabled = true
@@ -591,7 +591,7 @@ struct HardwareSimulationIntegrationTests {
     ) throws {
         let button = try #require(RemoteButton(rawValue: simulatedButton.rawValue))
         let suiteName = "HardwareSimulationIntegrationTests.nativeRelease.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let settings = AppSettings(defaults: defaults)
         settings.customMappingEnabled = true
@@ -638,7 +638,7 @@ struct HardwareSimulationIntegrationTests {
     ) throws {
         let button = try #require(RemoteButton(rawValue: simulatedButton.rawValue))
         let suiteName = "HardwareSimulationIntegrationTests.sharedNativeRelease.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let settings = AppSettings(defaults: defaults)
         settings.customMappingEnabled = true
@@ -690,7 +690,7 @@ struct HardwareSimulationIntegrationTests {
 
     @Test func monitoredBackButtonNeverArmsNativeKeyboardSuppression() throws {
         let suiteName = "HardwareSimulationIntegrationTests.backHasNoNativeEvent.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let settings = AppSettings(defaults: defaults)
         settings.customMappingEnabled = true
@@ -883,7 +883,7 @@ struct HardwareSimulationIntegrationTests {
         configure: (AppSettings) -> Void
     ) throws -> HIDScenarioResult {
         let suiteName = "HardwareSimulationIntegrationTests.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let settings = AppSettings(defaults: defaults)
         settings.customMappingEnabled = true

@@ -11,7 +11,7 @@ struct StatusItemPresentationTests {
     @Test(arguments: [AppLanguage.simplifiedChinese, .english])
     func statusMenuBatteryFollowsConnectedDevices(language: AppLanguage) throws {
         let suite = "status-menu-battery-\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
+        let defaults = try #require(TestUserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         let settings = AppSettings(defaults: defaults)
         settings.applicationLanguage = language

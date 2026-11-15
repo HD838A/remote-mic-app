@@ -313,7 +313,7 @@ struct KeyboardEventSuppressorTests {
         _ button: RemoteButton, _ isSeized: Bool
     ) throws {
         let suite = "KeyboardEventSuppressorTests.earlyVolume.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
+        let defaults = try #require(TestUserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         let settings = AppSettings(defaults: defaults)
         settings.customMappingEnabled = true
@@ -357,7 +357,7 @@ struct KeyboardEventSuppressorTests {
         _ button: RemoteButton, _ disconnectWhileHeld: Bool
     ) throws {
         let suite = "KeyboardEventSuppressorTests.sourceNeutralized.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
+        let defaults = try #require(TestUserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         let settings = AppSettings(defaults: defaults)
         settings.customMappingEnabled = true
@@ -403,7 +403,7 @@ struct KeyboardEventSuppressorTests {
     @Test(arguments: [RemoteButton.volumeUp, .volumeDown, .tv])
     func sourceMappingDoesNotDisableNativeSuppression(_ button: RemoteButton) throws {
         let suite = "KeyboardEventSuppressorTests.sourceMappingFallback.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
+        let defaults = try #require(TestUserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         let settings = AppSettings(defaults: defaults)
         settings.customMappingEnabled = true
@@ -436,7 +436,7 @@ struct KeyboardEventSuppressorTests {
     @Test(arguments: [RemoteButton.left, .right])
     func sourceIsolatedDefaultArrowsAreExecutedInsteadOfWaitingForNativePassthrough(_ button: RemoteButton) throws {
         let suite = "KeyboardEventSuppressorTests.defaultArrows.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
+        let defaults = try #require(TestUserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         let settings = AppSettings(defaults: defaults)
         settings.customMappingEnabled = true
@@ -464,7 +464,7 @@ struct KeyboardEventSuppressorTests {
     @Test(arguments: [RemoteButton.left, .right, .up, .down])
     func monitoredDirectionalPressOwnsItsLeakedNativeEvent(_ button: RemoteButton) throws {
         let suite = "KeyboardEventSuppressorTests.directionalLeak.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
+        let defaults = try #require(TestUserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         let settings = AppSettings(defaults: defaults)
         settings.customMappingEnabled = true
@@ -510,7 +510,7 @@ struct KeyboardEventSuppressorTests {
     /// 原生事件执行。此时若抢先登记，唯一一次移动会被吞掉，按键完全没有反应。
     @Test func monitoredPassthroughKeepsTheNativeArrowAsTheOnlyMove() throws {
         let suite = "KeyboardEventSuppressorTests.directionalPassthrough.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
+        let defaults = try #require(TestUserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         let settings = AppSettings(defaults: defaults)
         settings.customMappingEnabled = true
@@ -550,7 +550,7 @@ struct KeyboardEventSuppressorTests {
         _ button: RemoteButton
     ) throws {
         let suite = "KeyboardEventSuppressorTests.directionalFallbackOff.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
+        let defaults = try #require(TestUserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         let settings = AppSettings(defaults: defaults)
         settings.customMappingEnabled = true
@@ -596,7 +596,7 @@ struct KeyboardEventSuppressorTests {
     @Test(arguments: [RemoteButton.left, .right])
     func unneutralizedDirectionalKeepsItsArmingWithoutTheFallback(_ button: RemoteButton) throws {
         let suite = "KeyboardEventSuppressorTests.unneutralizedDirectional.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
+        let defaults = try #require(TestUserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         let settings = AppSettings(defaults: defaults)
         settings.customMappingEnabled = true
@@ -674,7 +674,7 @@ struct KeyboardEventSuppressorTests {
     /// 语音键的 F5→Fn 映射再也没写回去，原生 F5 直接进了系统。
     @Test func nativeMappingVerificationFailureIsReportedOncePerAttempt() throws {
         let suite = "KeyboardEventSuppressorTests.nativeMappingFailure.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
+        let defaults = try #require(TestUserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         let settings = AppSettings(defaults: defaults)
         settings.customMappingEnabled = true

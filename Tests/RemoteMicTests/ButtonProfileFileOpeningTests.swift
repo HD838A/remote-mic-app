@@ -13,7 +13,7 @@ struct ButtonProfileFileOpeningTests {
     @Test(arguments: [false, true], ["buttonProfile", "personalBackup"])
     func consumesFinderRequestsBeforeAndAfterMounting(queuedBeforeMount: Bool, fileType: String) async throws {
         let suite = "RemoteMic.ButtonProfileFileOpening.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
+        let defaults = try #require(TestUserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         let settings = AppSettings(defaults: defaults)
         settings.completeOnboarding()
@@ -104,7 +104,7 @@ struct ButtonProfileFileOpeningTests {
     @MainActor
     @Test func retainsFinderRequestDuringOnboarding() async throws {
         let suite = "RemoteMic.ButtonProfileFileOpening.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
+        let defaults = try #require(TestUserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         let settings = AppSettings(defaults: defaults)
         let model = BridgeAppModel(settings: settings)

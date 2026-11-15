@@ -479,6 +479,14 @@ check(
     "test tone safety gate rejects missing device, active Xiaomi RC001/RC003 voice stream, or in-flight playback"
 )
 
+func removeSelfTestPreferences(_ defaults: UserDefaults, suiteName: String) {
+    defaults.removePersistentDomain(forName: suiteName)
+    _ = defaults.synchronize()
+    let url = FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent("Library/Preferences/\(suiteName).plist")
+    try? FileManager.default.removeItem(at: url)
+}
+
 let suiteName = "RemoteMicSelfTest.\(UUID().uuidString)"
 if let defaults = UserDefaults(suiteName: suiteName) {
     let saved = try JSONEncoder().encode([
@@ -502,7 +510,7 @@ if let defaults = UserDefaults(suiteName: suiteName) {
             settings.customMappingEnabled,
         "unavailable continuous recording experiment cannot replace power binding"
     )
-    defaults.removePersistentDomain(forName: suiteName)
+    removeSelfTestPreferences(defaults, suiteName: suiteName)
 } else {
     check(false, "saved bindings merge with defaults")
 }
@@ -524,7 +532,7 @@ if let defaults = UserDefaults(suiteName: scrollSuiteName) {
             reloaded.action(for: .down) == .scrollDown,
         "scroll actions repeat, stay in the basic keys and keep their stored identifiers"
     )
-    defaults.removePersistentDomain(forName: scrollSuiteName)
+    removeSelfTestPreferences(defaults, suiteName: scrollSuiteName)
 } else {
     check(false, "scroll actions keep their stored identifiers")
 }

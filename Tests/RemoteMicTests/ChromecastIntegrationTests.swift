@@ -275,7 +275,7 @@ struct ChromecastIntegrationTests {
     /// Chromecast 设备档案按型号识别并且可重复注册，否则每次连接都会新建一个档案、丢掉映射。
     @Test func chromecastProfileRegistrationIsIdempotent() throws {
         let suiteName = "RemoteMicTests.ChromecastProfile.(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let settings = AppSettings(defaults: defaults)
 
