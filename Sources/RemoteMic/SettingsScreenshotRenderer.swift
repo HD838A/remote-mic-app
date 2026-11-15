@@ -300,6 +300,9 @@ enum SettingsScreenshotRenderer {
                 powerStates: remoteCardPowerStates
             )
         }
+        if let scenario = ProcessInfo.processInfo.environment["REMOTE_MIC_SETTINGS_SCREENSHOT_REMOTE_RECOVERY"] {
+            model.configureRemoteRecoveryForSettingsScreenshot(scenario)
+        }
         let updateInformation = UpdateInformationStore(userDefaults: defaults)
         seedAvailableUpdate(updateInformation, language: language)
         if ProcessInfo.processInfo.environment[
@@ -406,7 +409,7 @@ enum SettingsScreenshotRenderer {
             window.isMovableByWindowBackground = false
             window.hidesOnDeactivate = false
             window.isReleasedWhenClosed = false
-            window.minSize = NSSize(width: 1020, height: 772)
+            window.minSize = size
             window.contentViewController = controller
             window.setContentSize(size)
             window.center()

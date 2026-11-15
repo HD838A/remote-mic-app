@@ -1516,3 +1516,27 @@
 "button_mapping.action.profile_disabled" = "Disabled here";
 "button_mapping.source.profile" = "This Profile · %@";
 "button_mapping.profile.created" = "Key profile created";
+
+/* Bounded remote recovery and per-device controls. */
+"connection.history.title" = "Previously connected devices";
+"connection.history.expanded" = "Expanded";
+"connection.history.collapsed" = "Collapsed";
+"connection.history.all_connected" = "These devices are connected";
+"connection.history.offline" = "Currently offline";
+"connection.history.empty" = "No remote connected";
+"connection.history.keep_configuration" = "Your device settings are kept.";
+"connection.history.find" = "Find a remote";
+"connection.history.connect" = "Connect";
+"connection.history.cancel" = "Cancel";
+"connection.history.open_bluetooth" = "Open Bluetooth settings";
+"connection.history.not_found_help" = "Make sure the remote is on and nearby.";
+"connection.history.paused_help" = "Click Connect when you need this device.";
+"connection.history.status.waiting" = "Not connected";
+"connection.history.status.recovering" = "Connecting…";
+"connection.history.status.ready" = "Connected";
+"connection.history.status.paused" = "Auto-connect paused";
+"connection.history.status.not_found" = "Remote not found";
+"connection.history.status.cancelled" = "Connection cancelled";
+"connection.history.retry" = "Retry";
+"connection.history.voice_key_ready" = "Voice button: Fn";
+"connection.history.cooldown" = "Wait a moment; manual attempts must be at least five seconds apart.";

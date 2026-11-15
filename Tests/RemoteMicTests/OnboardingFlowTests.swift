@@ -2693,7 +2693,8 @@ struct OnboardingFlowTests {
             range: refreshStart.upperBound..<modelSource.endIndex
         ))
         let refreshSource = modelSource[refreshStart.lowerBound..<refreshEnd.lowerBound]
-        #expect(refreshSource.contains("discoveryBluetoothBridge?.reconnectNow()"))
+        #expect(refreshSource.contains("discoveryBluetoothBridge?.refreshDiscovery()"))
+        #expect(!refreshSource.contains("discoveryBluetoothBridge?.reconnectNow()"))
     }
 
     @Test func returningToAudioSetupRefreshesAvailableOutputs() throws {

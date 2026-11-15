@@ -1515,3 +1515,27 @@
 "button_mapping.action.profile_disabled" = "本方案禁用";
 "button_mapping.source.profile" = "本方案 · %@";
 "button_mapping.profile.created" = "键位方案已创建";
+
+/* Bounded remote recovery and per-device controls. */
+"connection.history.title" = "连接过的设备";
+"connection.history.expanded" = "已展开";
+"connection.history.collapsed" = "已收起";
+"connection.history.all_connected" = "这些设备均已连接";
+"connection.history.offline" = "当前未连接的设备";
+"connection.history.empty" = "遥控器未连接";
+"connection.history.keep_configuration" = "设备配置会保留。";
+"connection.history.find" = "查找遥控器";
+"connection.history.connect" = "连接";
+"connection.history.cancel" = "取消";
+"connection.history.open_bluetooth" = "打开蓝牙设置";
+"connection.history.not_found_help" = "请确认遥控器已开机并在附近。";
+"connection.history.paused_help" = "需要使用时，点击“连接”。";
+"connection.history.status.waiting" = "未连接";
+"connection.history.status.recovering" = "正在连接…";
+"connection.history.status.ready" = "已连接";
+"connection.history.status.paused" = "自动连接已暂停";
+"connection.history.status.not_found" = "未找到遥控器";
+"connection.history.status.cancelled" = "已取消连接";
+"connection.history.retry" = "重试";
+"connection.history.voice_key_ready" = "语音键已映射为 Fn";
+"connection.history.cooldown" = "请稍后重试；两次手动连接至少间隔五秒。";
