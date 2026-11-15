@@ -2,7 +2,7 @@
 
 ## 状态
 
-已修复，等待 2.0.3 publication 重新验证。
+已修复并验证：publication run `43763008826` 成功发布 `v2.0.3` Pre-release，preview feed 为 2.0.3，stable latest/feed 保持 1.9.21。
 
 ## 影响范围
 
@@ -37,7 +37,9 @@ Cloudflare preview channel did not resolve to the expected appcast: appcast.xml
 
 ## 验证
 
-- 待完成：PR 必需 CI、合并后 main CI、用同一 2.0.3 attestation 重新 publication，以及 preview/stable feed 最终核对。
+- PR CI 与合并后 main CI 通过。
+- 用同一 2.0.3 attestation 重跑 publication，run `43763008826` 完成公开资产验证、feed 同步和最终核对。
+- `v2.0.3` Release 为 Pre-release 且非 Draft；preview 与 Intel preview feed 均为 2.0.3；stable feed 与 `releases/latest` 保持 `v1.9.21`。
 
 ## 验证边界
 
