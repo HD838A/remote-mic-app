@@ -112,6 +112,13 @@ final class MembershipFeatureIntegration: ObservableObject, @unchecked Sendable 
         #endif
     }
 
+    /// 截图 harness 专用：不启动真实会员适配器，只固定可审计的门禁状态。
+    @MainActor
+    func applyScreenshotState(isFeatureVisible: Bool, accessDecision: HostButtonProfilesAccessDecision) {
+        self.isFeatureVisible = isFeatureVisible
+        self.buttonProfilesAccessDecision = accessDecision
+    }
+
     @MainActor var sectionTitle: String {
         #if SAYALL_MEMBERSHIP_ENABLED && canImport(SayAllMembershipHostAdapter)
         adapter?.sectionTitle ?? (Locale(identifier: localeIdentifier).identifier.lowercased().hasPrefix("zh") ? "会员" : "Membership")

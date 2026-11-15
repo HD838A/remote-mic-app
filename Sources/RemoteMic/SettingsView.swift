@@ -2273,6 +2273,12 @@ struct SettingsView: View {
         localization.text(editingMappingProfileID == nil ? "button_mapping.profile.create" : "button_mapping.profile.copy")
     }
 
+    private var mappingMembershipHint: String {
+        localization.text(editingMappingProfileID == nil
+            ? "button_mapping.profile.membership.create_hint"
+            : "button_mapping.profile.membership.copy_hint")
+    }
+
     private func beginSavingMappingProfile() {
         guard canEditMappingProfiles else { return }
         let profiles = macroFeature.mappingProfiles(device: settings.selectedRemoteProfileID)
@@ -2390,6 +2396,13 @@ struct SettingsView: View {
             || !macroFeature.isMappingProfileEditable(profile)
     }
 
+    /// 只有明确的 Plus 门禁才换成会员入口；组件不可用等其它只读原因仍保留原按钮禁用态。
+    private var showsMappingProfileMembershipCTA: Bool {
+        membershipFeature.isFeatureVisible
+            && membershipFeature.buttonProfilesAccessDecision == .requiresPlus
+            && !canEditMappingProfiles
+    }
+
     private func clearMappingSaveFeedback() {
         mappingActionSave = .init()
         mappingHoldSave = .init()
@@ -2435,7 +2448,11 @@ struct SettingsView: View {
             }
 
             if macroFeature.isButtonProfilesVisible {
-                mappingSaveAsProfileButton.disabled(!canEditMappingProfiles)
+                if showsMappingProfileMembershipCTA {
+                    mappingProfileMembershipCTA
+                } else {
+                    mappingSaveAsProfileButton.disabled(!canEditMappingProfiles)
+                }
             }
         }
         .sheet(item: $mappingProfileCreation) { creation in mappingSaveAsProfileSheet(creation) }
@@ -2535,7 +2552,40 @@ struct SettingsView: View {
         }
     }
 
+    /// 非会员页头入口：保留短按钮，旁边的一行说明告诉用户开通后能做什么。
+    private var mappingProfileMembershipCTA: some View {
+        HStack(spacing: 8) {
+            Text(mappingMembershipHint)
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
 
+            Button {
+                AppLogger.shared.write(
+                    "MEMBERSHIP ENTRY source=mapping_profile_toolbar state=\(editingMappingProfileID == nil ? "create" : "copy") phase=requested result=requested"
+                )
+                selectedSection = .membership
+                membershipFeature.refreshIfNeeded()
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "crown.fill")
+                        .font(.system(size: 10, weight: .semibold))
+                    Text(localization.text("button_mapping.profile.membership.open"))
+                        .font(.system(size: 12, weight: .semibold))
+                }
+                .foregroundStyle(.white)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .background(Color.accentColor, in: Capsule(style: .continuous))
+                .contentShape(Capsule(style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .help(mappingMembershipHint)
+            .accessibilityLabel(Text(localization.text("button_mapping.profile.membership.open")))
+            .accessibilityIdentifier("mapping-profile-membership")
+        }
+        .fixedSize(horizontal: true, vertical: false)
+    }
 
     private func mappingMacroChoices(button: RemoteButton, trigger: ButtonTrigger,
                                      configured: ConfiguredButtonAction) -> some View {
