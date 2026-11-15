@@ -1493,6 +1493,9 @@
 "button_mapping.profile.create" = "Create New Key Profile";
 "button_mapping.profile.copy" = "Copy to New Key Profile";
 "button_mapping.profile.copy_suffix" = " Copy";
+"button_mapping.profile.membership.create_hint" = "Membership unlocks new profiles";
+"button_mapping.profile.membership.copy_hint" = "Membership unlocks profile copies";
+"button_mapping.profile.membership.open" = "Open membership";
 "button_mapping.profile.source" = "Source";
 "button_mapping.save.automatic" = "Auto-save";
 "button_mapping.save.success" = "Auto-save succeeded";

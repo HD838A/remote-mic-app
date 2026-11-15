@@ -1492,6 +1492,9 @@
 "button_mapping.profile.create" = "创建新的键位方案";
 "button_mapping.profile.copy" = "复制为新的键位方案";
 "button_mapping.profile.copy_suffix" = " 副本";
+"button_mapping.profile.membership.create_hint" = "开通后可创建新方案";
+"button_mapping.profile.membership.copy_hint" = "开通后可复制当前方案";
+"button_mapping.profile.membership.open" = "开通会员";
 "button_mapping.profile.source" = "来源";
 "button_mapping.save.automatic" = "自动保存";
 "button_mapping.save.success" = "自动保存成功";

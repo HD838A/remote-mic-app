@@ -104,6 +104,9 @@ enum SettingsScreenshotRenderer {
         let onlySection = ProcessInfo.processInfo.environment["REMOTE_MIC_SETTINGS_SCREENSHOT_SECTION"]
         let interactive = ProcessInfo.processInfo.environment["REMOTE_MIC_SETTINGS_SCREENSHOT_INTERACTIVE"] == "1"
         let mappingScenario = ProcessInfo.processInfo.environment["REMOTE_MIC_SETTINGS_SCREENSHOT_MAPPING_SCENARIO"]
+        let membershipAccess = ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_SETTINGS_SCREENSHOT_MEMBERSHIP_ACCESS"
+        ]
         if mappingScenario != nil {
             guard let storage = ProcessInfo.processInfo.environment["SAYALL_MACRO_STORAGE_ROOT"],
                   URL(fileURLWithPath: storage).standardizedFileURL.path.hasPrefix(outputDirectory.standardizedFileURL.path + "/")
@@ -260,7 +263,9 @@ enum SettingsScreenshotRenderer {
         }
         let model = BridgeAppModel(
             settings: settings,
-            membershipFeature: mappingScenario == nil ? MembershipFeatureIntegration() : MembershipFeatureIntegration(configuration: nil),
+            membershipFeature: mappingScenario == nil && membershipAccess == nil
+                ? MembershipFeatureIntegration()
+                : MembershipFeatureIntegration(configuration: nil),
             transcriptArchiveStore: transcriptStore,
             recordingAssetStore: recordingStore
         )
@@ -318,6 +323,13 @@ enum SettingsScreenshotRenderer {
                     copying: nil, bindings: [binding], holdModes: [RemoteButton.ok.rawValue: "once"])
             }
             if mappingScenario == "viewer" { model.macroFeature.updateButtonProfilesAccess(.requiresPlus) }
+        }
+        if membershipAccess == "requiresPlus" {
+            model.macroFeature.updateButtonProfilesAccess(.requiresPlus)
+            model.membershipFeature.applyScreenshotState(
+                isFeatureVisible: true,
+                accessDecision: .requiresPlus
+            )
         }
         model.membershipFeature.updateLocaleIdentifier(localization.locale.identifier)
         // 加载方案会按方案重写按住设置，按住相关的种子必须落在加载之后。

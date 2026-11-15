@@ -128,6 +128,31 @@ swift build --disable-keychain --scratch-path .build-button-profiles-test -c rel
 
 失败判定：仍显示会员门槛、测试标记缺失、公开/正式构建意外获得免费权限，或内部免费测试包包含会员资源。
 
+## 用例五 B：非会员按键页页头入口
+
+适用：带真实会员模块的非会员状态。只修改按键映射页头的创建/复制入口；键位方案页底部不在本用例范围。
+
+步骤：
+
+1. 使用 Free 账号进入“按键映射”，停留在默认方案。检查页头右侧。
+2. 选中一个已保存方案，再检查同一个位置。
+3. 分别点击两种状态下的“开通会员”，从会员页返回按键映射页。
+4. 切到有效 Plus 或有效离线租约，重复步骤 1–2。
+
+预期：
+
+- 默认方案显示“开通后可创建新方案”和“开通会员”；已选方案显示“开通后可复制当前方案”和“开通会员”。
+- 原“创建新的键位方案 / 复制为新的键位方案”不再以灰色禁用按钮出现。
+- “开通会员”使用 12pt 以上中文，点击进入当前设置窗口的会员页；返回后方案选择、只读内容和滚动位置保留。
+- Plus 或有效离线租约恢复原创建/复制按钮，不显示会员辅助说明。
+- 方案胶囊很多时只滚动胶囊区域，右侧说明和按钮不被挤出窗口。
+
+失败判定：只显示“开通会员”而看不出开通后能做什么；Free 仍出现可编辑的创建/复制；点击无响应或离开当前窗口；返回后空白、方案丢失；Plus 误显示会员入口；最小窗口 `1020 × 772` 下说明或按钮被裁切。
+
+截图：使用生产 `SettingsView` 和 `SettingsScreenshotRenderer`，设置 `REMOTE_MIC_SETTINGS_SCREENSHOT_SECTION=mapping`、`REMOTE_MIC_SETTINGS_SCREENSHOT_SIZE=1020x772`、`REMOTE_MIC_SETTINGS_SCREENSHOT_MEMBERSHIP_ACCESS=requiresPlus`；默认状态不设置 `REMOTE_MIC_SETTINGS_SCREENSHOT_MAPPING_SCENARIO`，已选状态设置 `REMOTE_MIC_SETTINGS_SCREENSHOT_MAPPING_SCENARIO=viewer`，并把 `SAYALL_MACRO_STORAGE_ROOT` 放在输出目录内。会员态截图不设置 `REMOTE_MIC_SETTINGS_SCREENSHOT_MEMBERSHIP_ACCESS`。原始截图只保存在仓库外证据目录，PR 附 GitHub 可访问链接。
+
+2026-11-15：生产截图 harness 已生成中文浅色/深色、英文浅色的默认与已选两状态，尺寸均为 `2040 × 1544`（内容 `1020 × 772`）。按钮跟随应用强调色，当前截图为橙色。真实会员点击、真实支付状态和实体遥控器流程仍未验收。
+
 ## 用例六：三类遥控入口一致性
 
 分别验证以下入口的单击、双击和长按：
