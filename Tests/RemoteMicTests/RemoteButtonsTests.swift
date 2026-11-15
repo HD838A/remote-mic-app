@@ -3820,23 +3820,79 @@ struct RemoteButtonsTests {
         #expect(sessionGate.lowerBound < prearmCall.lowerBound)
     }
 
-    @Test func managerReportIsDroppedOnlyWhenDeviceCallbackExists() {
-        #expect(HIDRemoteMonitor.shouldAcceptReport(
-            path: .manager,
-            hasDeviceCallback: false
-        ))
-        #expect(!HIDRemoteMonitor.shouldAcceptReport(
-            path: .manager,
-            hasDeviceCallback: true
-        ))
-        #expect(HIDRemoteMonitor.shouldAcceptReport(
-            path: .device,
-            hasDeviceCallback: true
-        ))
-        #expect(HIDRemoteMonitor.shouldAcceptReport(
-            path: .device,
-            hasDeviceCallback: false
-        ))
+    @Test func hidReportDeduplicationDropsOnlyTheSameReportWithinTheWindow() {
+        var cache = HIDReportDeduplicationCache()
+        let press = HIDReportDeduplicationKey(
+            devicePointer: 42,
+            reportID: 1,
+            data: Data([0x4A, 0, 0, 0, 0, 0])
+        )
+        let release = HIDReportDeduplicationKey(
+            devicePointer: 42,
+            reportID: 1,
+            data: Data(repeating: 0, count: 6)
+        )
+
+        let firstPress = cache.shouldDrop(key: press, timestampNanoseconds: 1_000_000_000)
+        #expect(!firstPress)
+        // manager 与 device 对同一份物理报告的到达时刻只差几毫秒。
+        let managerCopy = cache.shouldDrop(key: press, timestampNanoseconds: 1_010_000_000)
+        #expect(managerCopy)
+        // 同一按键的松开报告内容不同，不能被当成重复。
+        let releaseReport = cache.shouldDrop(key: release, timestampNanoseconds: 1_012_000_000)
+        #expect(!releaseReport)
+        // 超过去重窗口后，同一份报告必须重新处理。
+        let repeatedAfterWindow = cache.shouldDrop(key: press, timestampNanoseconds: 1_060_000_000)
+        #expect(!repeatedAfterWindow)
+    }
+
+    @Test func hidReportDeduplicationSeparatesDevicesAndReportIDs() {
+        var cache = HIDReportDeduplicationCache()
+        let first = HIDReportDeduplicationKey(
+            devicePointer: 1,
+            reportID: 1,
+            data: Data([0x4A, 0, 0, 0, 0, 0])
+        )
+        let secondDevice = HIDReportDeduplicationKey(
+            devicePointer: 2,
+            reportID: 1,
+            data: Data([0x4A, 0, 0, 0, 0, 0])
+        )
+        let secondReportID = HIDReportDeduplicationKey(
+            devicePointer: 1,
+            reportID: 2,
+            data: Data([0x4A, 0, 0, 0, 0, 0])
+        )
+
+        let firstDropped = cache.shouldDrop(key: first, timestampNanoseconds: 1_000_000_000)
+        let secondDeviceDropped = cache.shouldDrop(
+            key: secondDevice,
+            timestampNanoseconds: 1_005_000_000
+        )
+        let secondReportIDDropped = cache.shouldDrop(
+            key: secondReportID,
+            timestampNanoseconds: 1_010_000_000
+        )
+        #expect(!firstDropped)
+        #expect(!secondDeviceDropped)
+        #expect(!secondReportIDDropped)
+    }
+
+    @Test func hidReportDeduplicationBoundsRetainedEntries() {
+        var cache = HIDReportDeduplicationCache()
+        for index in 0 ..< 12 {
+            let key = HIDReportDeduplicationKey(
+                devicePointer: UInt(index),
+                reportID: 1,
+                data: Data([UInt8(index), 0, 0, 0, 0, 0])
+            )
+            let dropped = cache.shouldDrop(
+                key: key,
+                timestampNanoseconds: 1_000_000_000 + UInt64(index) * 1_000_000
+            )
+            #expect(!dropped)
+        }
+        #expect(cache.entries.count <= 8)
     }
 
     @Test func monitorStopEndsThePrearmSessionBeforeReleasingSharedResources() throws {

@@ -17,7 +17,7 @@
 
 1. 在普通文本输入框中短按并松开 OK 键 10 次，每次间隔至少 1 秒。
 2. 每次应只执行一次配置动作。
-3. 每次日志应依次出现可对应的 `HID REPORT accepted`、`HID EDGE pressed=ok`、`HID GESTURE button=ok` 和 `HID BUTTON button=ok`；松开时应出现 `HID EDGE ... released=ok`。
+3. 每次日志应依次出现可对应的 `HID REPORT accepted`、`HID EDGE pressed=ok`、`HID GESTURE button=ok` 和 `HID BUTTON button=ok`；松开时应出现 `HID EDGE ... released=ok`。macOS 27 构建的 accepted/rejected 行还带 `path=device|manager`；`path=manager` 且出现 `HID REPORT PATH fallback=manager reason=device_silent` 表示 device 回调静默但 manager 兜底仍在工作。
 
 失败判定：动作缺失、重复，或日志在任意一层中断。
 
@@ -246,8 +246,38 @@ HID CONNECTED mode=monitored
 
 - 每个普通按键按下应出现一次 `HID REPORT accepted`，随后出现对应 `HID EDGE pressed=...` 和 `HID BUTTON ...`；松开出现 `HID EDGE ... released=...`。
 - 同一物理按下出现两条 `HID REPORT accepted` 或两个 `HID BUTTON` 判失败，说明 device/manager 去重失效。
-- 完全没有 `HID REPORT accepted`，但 `HID CONNECTED` 和 `device_callback registered` 存在，判失败：device 级回调没有投递。
+- 完全没有 `HID REPORT accepted`，但 `HID CONNECTED` 和 `device_callback registered` 存在，且也没有 `path=manager` 的 accepted，判失败：两条路径都没有投递。
 - 出现 `HID FILTER suppressed` 不作为 macOS 27 修复的通过条件；本路径依赖 native mapping 在事件产生前阻断，事件 tap 只保留兜底。
 - `HID REPORT rejected reason=excluded_fingerprint` 来自发现监视器让位，属正常；其他拒绝原因按故障处理。
 
 失败判定：任一按键无动作、重复动作、TV/Power 原生动作泄露、语音异常，或键盘同码按键被吞。
+
+## 2026-11-15 macOS 27 device 回调静默与 manager 兜底
+
+适用：包含 `HID REPORT PATH` 日志和双路径实际投递去重的构建。
+
+1. 启动 App，确认遥控器已连接。启动后立即短按方向键、OK 和菜单键各 3 次。
+2. 等待至少 20 秒，再重复上述按键。此窗口覆盖 BLE ready 触发的第二次 HID 监视器启动。
+3. 点击连接页“立即重新连接”，连接恢复后立即重复上述按键。
+4. 让 Mac 睡眠 30 秒后唤醒，等待遥控器重新连接，再重复上述按键。
+5. 快速连续短按同一个键 10 次，并按住方向键 2 秒后松开。
+
+预期：
+
+- 每次物理按下只执行一次动作，不得重复。
+- 每次按下出现一条 `HID REPORT accepted ... path=device` 或 `path=manager`。
+- 同一份物理报告最多出现一条 accepted，不得同时出现 device 和 manager 两条 accepted。
+- 如果 device 路径静默，允许出现 `HID REPORT PATH fallback=manager reason=device_silent`；按键仍必须正常执行。
+- device 路径恢复后出现 `HID REPORT PATH device_delivery=recovered`。
+- 持续按键时，`HID REPORT PATH WINDOW` 最多每 10 秒一行。
+- `HID REPORT PATH watchdog result=candidate` 和 `callback_reregistered` 最多每 60 秒一次，每个 HID 监视器实例最多 3 次；不得无限重试。
+- 日志不得包含原始 HID payload、设备 UUID、HID 指纹、输入文字或语音内容。
+
+失败判定：
+
+- `HID CONNECTED` 和 `device_callback registered` 存在，但没有任何 accepted，且 manager 路径也没有 accepted。
+- 同一物理按下出现两条 accepted 或两个 `HID BUTTON`。
+- `HID REPORT PATH WINDOW` 每 10 秒超过一行，或每次报告都出现 fallback/watchdog 行，造成日志爆炸。
+- 断连重连、睡眠唤醒或快速连按后出现丢键、重复动作、TV/Power 原生动作泄露或键盘同码按键被吞。
+
+自动化只验证去重策略与既有按键行为；真实 macOS 27 IOHID 投递、睡眠唤醒和 RC001/RC003 手势仍需真机执行。
