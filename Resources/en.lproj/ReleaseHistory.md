@@ -2,6 +2,14 @@
 
 ## 2.0.2 (Pre-release)
 
+- Adds Common Phrases, with editing, import/export and one-press insertion.
+- Macros can run Shell and AppleScript scripts; save several Button Profiles and switch them with the frontmost app.
+- Supports Apple Remote 6th generation (Lightning, A2540) and 7th generation (Type-C, A2854).
+- Apple Watch connects more reliably and supports Double Tap to start and stop recording; control this Mac with the WeChat mini program.
+- Buy membership with WeChat virtual payment or redeem a code; Profile adds a usage calendar, local leaderboards and sharing, plus a new Recommendations page.
+- Back up and restore a complete configuration; installers use Installer PKG with a matching uninstaller.
+- The voice key adds Left and Right Option triggers; Xiaomi remotes warn as a single voice session approaches the 60-second limit.
+- Control menu bar and Dock icons separately; the menu bar icon dims when no device is connected, and the app icon can be switched.
 - Voice key and audio: fixes the voice key becoming unusable or repeatedly triggering system dictation after a reconnect; fixes remote buttons stopping after some key mappings on macOS 27; fixes heavy audio loss after rebinding during a voice session; waits for the audio tail to drain before release to reduce dropped last words; ends long recordings correctly near the 60-second limit.
 - Microphones: supports AirPods microphone capture; the voice devices page highlights the current input and lets you disable it; the compatible microphone entry on the connection page moves to voice devices.
 - Buttons and button profiles: edit and auto-save directly on the buttons page; button profiles can be read-only or copied in full; shortcut and focus bindings inside a profile are editable, and hold dependencies are cleared when an action changes; custom buttons gain their own filter and basic key titles; the left and right keys support holding arrow keys; the key-speed panel moves recognition timing before learning; renaming a macro refreshes the buttons page and button profiles immediately.
@@ -10,36 +18,7 @@
 - Settings and interface: renames the App Adaptation page to Focus and Paging; adds a shared notice bar to the buttons and common phrases pages; fixes header jitter on the empty buttons page; removes the duplicate entry on the Reflections page; decorative icons use the accent color; first-run setup no longer shows an unhelpful AI prompt.
 - Membership: keeps the verification-code resend countdown when the login page reopens; adds a membership entry to the button profiles header.
 - Performance and diagnostics: speeds up the first switch to Reflections; merges duplicate update checks on the About page; raises the encrypted diagnostic log segment limit to 10 MB; the same button no longer runs twice.
-
-## 2.0.0 (Pre-release)
-
-- Adds Common Phrases: insert frequently used text in one press, with editing and import/export.
-- Macros can run Shell and AppleScript scripts.
-- Adds Button Profiles: save several setups and switch them with the frontmost app.
-- Official support for Apple Remote 6th generation (Lightning, A2540) and 7th generation (Type-C, A2854).
-- Apple Watch connects more reliably and supports Double Tap to start and stop recording.
-- Control this Mac with the WeChat mini program; the browser version is discontinued.
-- Buy membership with WeChat virtual payment, or redeem a code.
-- Profile is rebuilt with a usage calendar, local leaderboards and sharing, plus a new Recommendations page.
-- Onboarding can be configured by an AI agent.
-- The voice key adds Left and Right Option, for five trigger modes.
-- Xiaomi remotes warn as a single voice session approaches the 60-second limit.
-- Back up and restore a complete configuration.
-- About becomes a version center and gains a feedback entry.
-- Diagnostic logs are encrypted and can be sent on request.
-- Remote cards show the system Bluetooth name; the menu bar icon can be hidden and dims when nothing is connected; the app icon can be switched.
-- Installers are now a single Installer PKG with a matching uninstaller.
-- The virtual audio device is renamed from MiRemoteV 2ch to SayAll; existing users are unaffected.
-- Note: Common Phrases, Button Profiles, Apple Remote voice, and iPhone, Apple Watch and mini program connections require Plus.
-- Fixes some Onboarding failures.
-- Fixes input focus failures in some apps, and retry after focus is lost.
-- Fixes some shortcut recordings failing, not taking effect, or overwriting another action.
-- Fixes voice keys not recovering after a disconnect or wake, missing sound, dropped first words and a failing second session.
-- Fixes a configuration-import security issue, and unclear notices for corrupted or partially imported settings.
-- Fixes update checks missing new versions, calendar misalignment and clipped interface text.
-- Control menu bar and Dock icons separately, with refined Settings and Macros layouts.
-- Fixes complete configuration backups for settings saved by earlier previews.
-- Restores minimized windows from the app switcher and improves switching between app instances and button response.
+- Common Phrases, Button Profiles, Apple Remote voice, and iPhone, Apple Watch and mini program connections require Plus.
 
 ## 1.9.21 (Pre-release)
 
