@@ -1,0 +1,83 @@
+{
+  "batch": "unified-remote-cards-20261116",
+  "date": "2026-11-16",
+  "purpose": "Production SettingsView evidence for PR #1092; HTML design tracked separately by explicit user request",
+  "pr": "https://github.com/HD838A/remote-mic-app/pull/1092",
+  "source_commit": "f56b9dc9a447060e998ecf6facb8111764e75d2b",
+  "storage": "GitHub PR native media attachments; original bytes in persistent external workspace",
+  "app_version": "2.0.4",
+  "mode": "public",
+  "viewport": {
+    "offscreen_content_points": [
+      1067,
+      732
+    ],
+    "native_window_points": [
+      1067,
+      760
+    ]
+  },
+  "boundary": "Production views with isolated sample profiles; native navigation and collapse verified. Hardware, installer, permissions, membership service and third-party voice results not accepted.",
+  "items": [
+    {
+      "file": "native-bundle-review/native-connection.jpg",
+      "format": "JPEG",
+      "width": 2134,
+      "height": 1520,
+      "sha256": "c3c2cad827a9caecf831f0b2a1fd41b6522d4b169b2f238cce422c18f757299d",
+      "url": "https://github.com/user-attachments/assets/535c6f50-3541-4f91-a15b-6486840113b8",
+      "label": "原生生产设置窗口，隔离档案",
+      "source_commit": "f56b9dc9a447060e998ecf6facb8111764e75d2b"
+    },
+    {
+      "file": "commit-f56b9dc9/connection-activation-zh-Hans-light/connection-1067x732.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1464,
+      "sha256": "ef6201bbdb4172f1ce8a97fba7d17a23cb5a80667abca4328ed4390743c713b9",
+      "url": "https://github.com/user-attachments/assets/3640e61b-efc7-492c-a582-5711e901a60f",
+      "label": "连接页：未安装苹果组件，中文浅色",
+      "source_commit": "f56b9dc9a447060e998ecf6facb8111764e75d2b"
+    },
+    {
+      "file": "commit-f56b9dc9/mapping-activation-zh-Hans-light/mapping-1067x732.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1464,
+      "sha256": "4ba59842480c627e21fbddd0521c0793d43fc82fcd7eee8a584effdf63f87543",
+      "url": "https://github.com/user-attachments/assets/b54af442-d426-4bab-90ae-20755b3e5981",
+      "label": "按键页：同一苹果卡片及操作，中文浅色",
+      "source_commit": "f56b9dc9a447060e998ecf6facb8111764e75d2b"
+    },
+    {
+      "file": "commit-f56b9dc9/connection-apple-voice-zh-Hans-dark/connection-1067x732.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1464,
+      "sha256": "acddcd1770e03cbd397e265424a1868b9c19fc303e92d3fe36ae6e3d5cc97200",
+      "url": "https://github.com/user-attachments/assets/afdc8df2-2bed-4c25-8852-c5c1aecf800f",
+      "label": "苹果会员语音异常，中文深色",
+      "source_commit": "f56b9dc9a447060e998ecf6facb8111764e75d2b"
+    },
+    {
+      "file": "commit-f56b9dc9/connection-confirming-en-light/connection-1067x732.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1464,
+      "sha256": "52471871b6a00d227f26f63ca0f18626e95a411e583e9e36f5f15ecd92c7ee15",
+      "url": "https://github.com/user-attachments/assets/987e4882-b8ad-4f9a-9954-99b16be4ead6",
+      "label": "状态确认中，英文浅色",
+      "source_commit": "f56b9dc9a447060e998ecf6facb8111764e75d2b"
+    },
+    {
+      "file": "commit-f56b9dc9/mapping-mixed-en-dark/mapping-1067x732.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1464,
+      "sha256": "bb4c42553a0d35491d777de09d4aeffde4240b0ed0109761d308662f19c73b1f",
+      "url": "https://github.com/user-attachments/assets/be0dda9d-e8f9-46b1-9aa4-c39bb3125a87",
+      "label": "按键页共享卡片，英文深色",
+      "source_commit": "f56b9dc9a447060e998ecf6facb8111764e75d2b"
+    }
+  ]
+}

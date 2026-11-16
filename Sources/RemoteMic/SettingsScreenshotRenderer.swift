@@ -306,6 +306,9 @@ enum SettingsScreenshotRenderer {
         if let scenario = ProcessInfo.processInfo.environment["REMOTE_MIC_SETTINGS_SCREENSHOT_REMOTE_RECOVERY"] {
             model.configureRemoteRecoveryForSettingsScreenshot(scenario)
         }
+        if let scenario = ProcessInfo.processInfo.environment["REMOTE_MIC_SETTINGS_SCREENSHOT_CARD_SCENARIO"] {
+            model.configureUnifiedRemoteCardsForSettingsScreenshot(scenario)
+        }
         let updateInformation = UpdateInformationStore(userDefaults: defaults)
         seedAvailableUpdate(updateInformation, language: language)
         if ProcessInfo.processInfo.environment[
@@ -337,6 +340,9 @@ enum SettingsScreenshotRenderer {
                     copying: nil, bindings: [binding], holdModes: [RemoteButton.ok.rawValue: "once"])
             }
             if mappingScenario == "viewer" { model.macroFeature.updateButtonProfilesAccess(.requiresPlus) }
+        }
+        if membershipAccess == "allowed" {
+            model.membershipFeature.applyScreenshotState(isFeatureVisible: true, accessDecision: .allowed(validUntil: .distantFuture))
         }
         if membershipAccess == "requiresPlus" {
             model.macroFeature.updateButtonProfilesAccess(.requiresPlus)

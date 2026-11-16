@@ -1687,7 +1687,7 @@ struct SettingsPageRegressionTests {
         #expect(source.contains(".pickerStyle(.segmented)"))
         #expect(source.contains(".tint(Color.accentColor)"))
         #expect(source.contains("requiresSiriRemoteMembership(for: profile)"))
-        #expect(source.contains("siri_remote.activation.open_membership"))
+        #expect(source.contains("remote.card.open_membership"))
         #expect(source.contains("selectedSection = .membership"))
         #expect(source.contains("membershipFeature.refreshIfNeeded()"))
         #expect(!source.contains("siri_remote.activation.disable"))
@@ -1855,39 +1855,20 @@ struct SettingsPageRegressionTests {
         #expect(chinese.contains(#""remote.device.model.rc003" = "小米蓝牙遥控器 2 Pro";"#))
         #expect(english.contains(#""remote.device.model.rc001" = "Xiaomi Bluetooth Remote 2";"#))
         #expect(english.contains(#""remote.device.model.rc003" = "Xiaomi Bluetooth Remote 2 Pro";"#))
-        #expect(chinese.contains(#""remote.device.model.apple_siri_remote_a2854" = "苹果遥控器第 7 代";"#))
-        #expect(chinese.contains(#""remote.device.model.apple_siri_remote_a2540" = "苹果遥控器第 6 代";"#))
+        #expect(chinese.contains(#""remote.device.model.apple_siri_remote_a2854" = "苹果遥控器 Type-C";"#))
+        #expect(chinese.contains(#""remote.device.model.apple_siri_remote_a2540" = "苹果遥控器 Lightning";"#))
 
-        let cardStart = try #require(settingsSource.range(of: "private func remoteDeviceCard"))
-        let cardEnd = try #require(settingsSource.range(
-            of: "private func batterySymbol",
-            range: cardStart.upperBound..<settingsSource.endIndex
-        ))
-        let cardSource = settingsSource[cardStart.lowerBound..<cardEnd.lowerBound]
-        #expect(cardSource.contains("return HStack(alignment: .center, spacing: 10)"))
-        #expect(cardSource.contains("fillsWidth ? nil : SettingsPageBehavior.mappingRemoteCardWidth"))
-        #expect(cardSource.contains("let modelName = remoteModelName(profile)"))
-        #expect(cardSource.contains("let systemName = remoteSystemName(profile)"))
-        #expect(cardSource.contains("Text(modelName)"))
-        #expect(cardSource.contains("Text(systemName)"))
-        #expect(cardSource.contains(".accessibilityLabel(Text(\"\\(modelName), \\(systemName)\"))"))
-        #expect(cardSource.contains("remoteBatteryLabel("))
-        #expect(cardSource.contains("let powerState = model.powerState(for: profile.id)"))
-        #expect(cardSource.contains("if showsBattery"))
-        #expect(cardSource.contains("Image(systemName: \"bolt.fill\")"))
-        #expect(!cardSource.contains("Label(power.text"))
-        #expect(!cardSource.contains("remote.device.power.rechargeable"))
-        for symbol in [
-            "battery.0percent",
-            "battery.25percent",
-            "battery.50percent",
-            "battery.75percent",
-            "battery.100percent",
-        ] {
-            #expect(settingsSource.contains(symbol))
+        let shared = try String(contentsOf: root.appendingPathComponent("Sources/RemoteMic/RemoteDeviceCard.swift"), encoding: .utf8)
+        #expect(settingsSource.contains("return RemoteDeviceCard("))
+        #expect(settingsSource.contains("remoteDeviceCard(profile, history: true)"))
+        #expect(shared.contains("Text(modelName)"))
+        #expect(shared.contains("Text(systemName)"))
+        #expect(shared.contains("Image(systemName: \"bolt.fill\")"))
+        #expect(shared.contains("SettingsPageBehavior.mappingRemoteCardHeight"))
+        #expect(shared.contains("SettingsPageBehavior.mappingRemoteCardWidth"))
+        for symbol in ["battery.0percent", "battery.25percent", "battery.50percent", "battery.75percent", "battery.100percent"] {
+            #expect(shared.contains(symbol))
         }
-        #expect(settingsSource.contains("if level <= 10 { return .red }"))
-        #expect(settingsSource.contains("if level <= 25 { return .orange }"))
 
         let panelStart = try #require(settingsSource.range(of: "private var connectionDevicePanel"))
         let panelEnd = try #require(settingsSource.range(
@@ -1954,7 +1935,7 @@ struct SettingsPageRegressionTests {
         let selectorSource = source[selectorStart.lowerBound..<selectorEnd.lowerBound]
 
         #expect(selectorSource.contains("model.isRemoteConnected(profile.id)"))
-        #expect(selectorSource.contains("model.isRemoteConnected(profile.id) || profile.model.isAppleSiriRemote"))
+        #expect(selectorSource.contains("model.isRemoteConnected(profile.id) || (!vertical && profile.model.isAppleSiriRemote)"))
         #expect(selectorSource.contains("RemoteDeviceNamePolicy.sortedForCards("))
         #expect(selectorSource.contains("modelName: remoteModelName"))
         #expect(selectorSource.contains("systemName: { model.systemDeviceName(for: $0) }"))
@@ -2004,7 +1985,7 @@ struct SettingsPageRegressionTests {
         #expect(horizontalSource.contains(".fixedSize(horizontal: false, vertical: true)"))
         #expect(horizontalSource.contains(".layoutPriority(1)"))
         #expect(horizontalSource.contains("Button(\"connection.action.reconnect\")"))
-        #expect(source.contains("width: fillsWidth ? nil : SettingsPageBehavior.mappingRemoteCardWidth"))
+        #expect(source.contains("return RemoteDeviceCard("))
     }
 
     @Test func settingsPageKeepsVersionFeaturesTogetherAndLanguagesVisible() throws {

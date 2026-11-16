@@ -2000,6 +2000,9 @@ final class AppSettings: ObservableObject {
         if merged.model == .unknown, discarded.model != .unknown {
             merged.model = discarded.model
         }
+        if merged.lastKnownBluetoothName == nil {
+            merged.lastKnownBluetoothName = discarded.lastKnownBluetoothName
+        }
         if merged.hardwareIdentity == nil {
             merged.hardwareIdentity = discarded.hardwareIdentity
         }
@@ -2073,11 +2076,19 @@ final class AppSettings: ObservableObject {
         guard let index = remoteDeviceProfiles.firstIndex(where: { $0.id == profileID }),
               let customName = RemoteDeviceNamePolicy.customName(
                 from: name, model: remoteDeviceProfiles[index].model, serialNumber: serialNumber
-              ),
-              remoteDeviceProfiles[index].customName != customName
-        else { return false }
-        remoteDeviceProfiles[index].customName = customName
-        return true
+              ) else { return false }
+        var changed = false
+        if let observed = RemoteDeviceNamePolicy.observedSystemName(from: name),
+           observed != serialNumber, !RemoteDeviceIdentity.looksLikeSerial(observed),
+           remoteDeviceProfiles[index].lastKnownBluetoothName != observed {
+            remoteDeviceProfiles[index].lastKnownBluetoothName = observed
+            changed = true
+        }
+        if remoteDeviceProfiles[index].customName != customName {
+            remoteDeviceProfiles[index].customName = customName
+            changed = true
+        }
+        return changed
     }
 
     /// 记下序列号的单向摘要，作为这台遥控器的稳定身份。
