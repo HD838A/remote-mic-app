@@ -117,7 +117,7 @@ struct SettingsCorruptionRecoveryTests {
         #expect(defaults.data(forKey: "customApplicationProfiles") == payload)
     }
 
-    @Test func unreadableRemoteDeviceProfilesStillMigrateAndAreReportedAsCorrupt() throws {
+    @Test func unreadableRemoteDeviceProfilesArePreservedAndReportedAsCorrupt() throws {
         var suiteName = ""
         let defaults = try isolatedDefaults("remoteDeviceProfiles", suiteName: &suiteName)
         defer { defaults.removePersistentDomain(forName: suiteName) }
@@ -129,11 +129,10 @@ struct SettingsCorruptionRecoveryTests {
 
         #expect(settings.corruptedSettingKeys == ["remoteDeviceProfiles"])
         #expect(defaults.data(forKey: "remoteDeviceProfiles.corrupt") == payload)
-        // Unlike `buttonBindings`, this key is pre-initialized to `[]` before the load, so the
-        // migration assignment fires its `didSet` and persists over the unreadable payload
-        // during the very same launch. The ".corrupt" copy is the only surviving evidence.
-        #expect(defaults.data(forKey: "remoteDeviceProfiles") != payload)
-        // Same fallback as before: one migrated profile carrying the legacy mappings.
+        // A newer app may have written models or actions this build cannot decode. The live
+        // key must keep those bytes so returning to the newer app still has the profiles.
+        #expect(defaults.data(forKey: "remoteDeviceProfiles") == payload)
+        // Same fallback in memory: one migrated profile carrying the legacy mappings.
         #expect(settings.remoteDeviceProfiles.count == 1)
         #expect(settings.selectedRemoteProfileID == settings.remoteDeviceProfiles.first?.id)
         #expect(
@@ -141,6 +140,10 @@ struct SettingsCorruptionRecoveryTests {
                 == AppSettings.defaultBindings
         )
         #expect(settings.buttonBindings == AppSettings.defaultBindings)
+
+        // The first later save replaces the live key; the raw bytes must survive here first.
+        settings.registerBluetoothRemote(identifier: UUID())
+        #expect(defaults.data(forKey: AppSettings.unreadableRemoteProfilesBackupKey) == payload)
     }
 
     @Test func everyCorruptedKeyIsReportedOnceInASingleLoad() throws {
