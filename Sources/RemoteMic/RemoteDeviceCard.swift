@@ -97,6 +97,7 @@ struct RemoteDeviceCard: View {
                 .lineLimit(1)
                 .help(systemName)
                 .frame(maxWidth: .infinity, minHeight: 14, maxHeight: 14, alignment: .leading)
+                .allowsHitTesting(false)
             HStack(spacing: 6) {
                 HStack(spacing: 4) {
                     if status.isProgressing {
@@ -107,7 +108,8 @@ struct RemoteDeviceCard: View {
                     Text(LocalizedStringKey(status.message.key)).foregroundStyle(status.color)
                 }
                 .help(statusDetail)
-                if showsBattery { batteryLabel }
+                .allowsHitTesting(false)
+                if showsBattery { batteryLabel.allowsHitTesting(false) }
                 Spacer(minLength: 0)
                 if let membershipTitle {
                     Button(membershipTitle, action: onMembership)
