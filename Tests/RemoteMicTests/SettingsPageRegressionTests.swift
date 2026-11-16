@@ -1866,6 +1866,9 @@ struct SettingsPageRegressionTests {
         #expect(shared.contains("Image(systemName: \"bolt.fill\")"))
         #expect(shared.contains("SettingsPageBehavior.mappingRemoteCardHeight"))
         #expect(shared.contains("SettingsPageBehavior.mappingRemoteCardWidth"))
+        // Title, system name, status and battery must all route to device selection;
+        // the background alone leaves the text rows as dead zones.
+        #expect(shared.components(separatedBy: ".onTapGesture(perform: onSelect)").count - 1 >= 4)
         for symbol in ["battery.0percent", "battery.25percent", "battery.50percent", "battery.75percent", "battery.100percent"] {
             #expect(shared.contains(symbol))
         }

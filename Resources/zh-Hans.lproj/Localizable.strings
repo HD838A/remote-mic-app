@@ -1547,25 +1547,25 @@
 "button_mapping.profile.created.detail" = "已切换到新方案";
 
 "remote.card.status.connected" = "已连接";
-"remote.card.detail.connected" = "当前应当可用的按键和语音链路均正常。第三方 App 最终结果不在本状态诊断范围内。";
+"remote.card.detail.connected" = "设备已连接，当前应当可用的按键和语音功能均正常。";
 
 "remote.card.status.disconnected" = "未连接";
 "remote.card.detail.disconnected" = "设备尚未连接。";
 
 "remote.card.status.checking" = "检查中";
-"remote.card.detail.checking" = "正在检查本地按键和语音链路。";
+"remote.card.detail.checking" = "设备已连接，正在确认按键及已授权的语音功能；尚未确认一切正常。";
 
 "remote.card.status.confirming" = "状态确认中";
-"remote.card.detail.confirming" = "正在确认设备功能状态，尚不能显示为正常。";
+"remote.card.detail.confirming" = "设备已连接，正在确认功能状态；确认完成前不标记为正常。";
 
 "remote.card.status.buttons_failed" = "按键异常";
-"remote.card.detail.buttons_failed" = "本地按键通道或所需权限存在问题。";
+"remote.card.detail.buttons_failed" = "设备已连接，但按键功能出现问题。";
 
 "remote.card.status.voice_failed" = "语音异常";
-"remote.card.detail.voice_failed" = "已授权的本地语音链路或音频输出存在问题。";
+"remote.card.detail.voice_failed" = "设备已连接，但已授权的语音功能出现问题。";
 
 "remote.card.status.device_failed" = "设备异常";
-"remote.card.detail.device_failed" = "本地按键和已授权语音链路均存在问题。";
+"remote.card.detail.device_failed" = "设备已连接，但按键和已授权的语音功能均出现问题。";
 
 "remote.card.status.connecting" = "正在连接";
 "remote.card.detail.connecting" = "本次连接受有限恢复预算约束，可取消。";

@@ -21,6 +21,28 @@ struct LocalizationTests {
         }
     }
 
+    @Test func remoteCardStatusDetailsMatchTheApprovedDesign() throws {
+        let chinese = try strings(
+            at: repositoryRoot.appendingPathComponent("Resources/zh-Hans.lproj/Localizable.strings")
+        )
+        let english = try strings(
+            at: repositoryRoot.appendingPathComponent("Resources/en.lproj/Localizable.strings")
+        )
+        #expect(chinese["remote.card.detail.connected"] == "设备已连接，当前应当可用的按键和语音功能均正常。")
+        #expect(chinese["remote.card.detail.checking"] == "设备已连接，正在确认按键及已授权的语音功能；尚未确认一切正常。")
+        #expect(chinese["remote.card.detail.confirming"] == "设备已连接，正在确认功能状态；确认完成前不标记为正常。")
+        #expect(chinese["remote.card.detail.buttons_failed"] == "设备已连接，但按键功能出现问题。")
+        #expect(chinese["remote.card.detail.voice_failed"] == "设备已连接，但已授权的语音功能出现问题。")
+        #expect(chinese["remote.card.detail.device_failed"] == "设备已连接，但按键和已授权的语音功能均出现问题。")
+        #expect(chinese["remote.card.detail.connected"]?.contains("第三方 App") == false)
+        #expect(english["remote.card.detail.connected"] == "Device connected. The button and voice functions that should be available are working normally.")
+        #expect(english["remote.card.detail.checking"] == "Device connected. Checking the buttons and entitled voice functions; not yet confirmed normal.")
+        #expect(english["remote.card.detail.confirming"] == "Device connected. Confirming functional status; not marked normal until confirmed.")
+        #expect(english["remote.card.detail.buttons_failed"] == "Device connected, but the buttons are not working.")
+        #expect(english["remote.card.detail.voice_failed"] == "Device connected, but the entitled voice function is not working.")
+        #expect(english["remote.card.detail.device_failed"] == "Device connected, but both the buttons and the entitled voice function are not working.")
+    }
+
     @Test func screenshotResourceFallbackLoadsRepositoryLocalizations() throws {
         let suiteName = "RemoteMicTests.Localization.ScreenshotFallback.(UUID().uuidString)"
         let defaults = try #require(TestUserDefaults(suiteName: suiteName))
