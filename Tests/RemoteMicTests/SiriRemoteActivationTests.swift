@@ -17,16 +17,20 @@ struct SiriRemoteActivationTests {
         #expect(!AppSettings(defaults: defaults).siriRemoteEnabled)
     }
 
-    @Test @MainActor func explicitEnableAndDisableSurviveRelaunch() throws {
+    @Test @MainActor func explicitEnableWithoutMembershipSurvivesRelaunch() throws {
         let suite = "SiriActivation.\(UUID().uuidString)"
         let defaults = try #require(TestUserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         defaults.set(false, forKey: "siriRemote.enabled")
         let settings = AppSettings(defaults: defaults)
         #expect(!settings.siriRemoteEnabled)
-        let model = BridgeAppModel(settings: settings)
+        let membership = MembershipFeatureIntegration(configuration: nil)
+        #expect(membership.buttonProfilesAccessDecision == .unavailable)
+        #expect(!membership.canUseSiriRemoteVoice)
+        let model = BridgeAppModel(settings: settings, membershipFeature: membership)
         model.setSiriRemoteEnabled(true)
         #expect(AppSettings(defaults: defaults).siriRemoteEnabled)
+        #expect(!membership.canUseSiriRemoteVoice)
         model.setSiriRemoteEnabled(false)
         #expect(!AppSettings(defaults: defaults).siriRemoteEnabled)
         #expect(model.siriRemoteAudioStatus == "disabled")

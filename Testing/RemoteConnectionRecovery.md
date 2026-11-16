@@ -71,9 +71,12 @@
 失败：入口不可见、文字被缩小或裁切、操作错误设备、首次语音失败或首尾音损失。
 Apple、Chromecast 和手机/网页/Watch 入口分别回归，不以小米通过替代其他来源。
 
+苹果遥控器补充：使用无会员权益的账号，在已安装 Siri Remote 组件的环境中点击“启用”，确认可连接并使用普通按键和触摸；重启后启用状态保留。不可用时“重试”仍可操作，会员提示不能挡住启用或重试。语音权益单独按 [会员门禁用例](MembershipAndButtonProfiles.md#用例八siri-remote-语音会员门禁) 验证。公开兼容层不能证明私有组件与真实设备结果。
+
 ## 自动化与证据边界
 
 - `RemoteConnectionRecoveryTests` 使用虚拟时间验证预算、冷却、短暂 Ready、周期掉线、取消、迟到结果和多设备独立性。
+- `SiriRemoteActivationTests.explicitEnableWithoutMembershipSurvivesRelaunch` 使用无会员配置验证显式启用与持久化，不授予语音权益；真实 Free 账号、组件、按键与触摸仍待现场验收。
 - `BluetoothLifecycleTests` 验证既有发现、扫描、代次和会话门禁；`AppLoggerTests` 验证密集拒绝事件的聚合上限。
 - 生产 `SettingsView` 的隔离夹具截图只证明页面渲染；夹具不会发起真实蓝牙或录音。
 - 模拟、策略测试与构建不能证明真实 CoreBluetooth 的发现时机、功耗、首字、尾音和第三方工具文字结果。
