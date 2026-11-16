@@ -1584,16 +1584,26 @@ struct SettingsView: View {
 
                 if let profile = settings.selectedRemoteProfile,
                    model.isRemoteConnected(profile.id) {
-                    let status = model.remoteCardStatus(for: profile)
                     VStack(alignment: .leading, spacing: 9) {
                         connectionStatusLine(
-                            symbol: status.isFailure ? "exclamationmark.circle" : "antenna.radiowaves.left.and.right",
-                            text: localization.text("remote.card.detail.\(status.rawValue)"),
-                            tint: status.color
+                            symbol: "antenna.radiowaves.left.and.right",
+                            text: model.connectionStatusText(using: localization),
+                            tint: connectionTint
                         )
-                        if model.isStreaming {
-                            connectionStatusLine(symbol: "waveform", text: localization.text("connection.status.voice_streaming"), tint: .orange)
-                        }
+                        connectionStatusLine(
+                            symbol: "waveform",
+                            text: localization.text(
+                                model.isStreaming
+                                    ? "connection.status.voice_streaming"
+                                    : "connection.status.voice_ready"
+                            ),
+                            tint: model.isStreaming ? .orange : .blue
+                        )
+                        connectionStatusLine(
+                            symbol: "mic.fill",
+                            text: model.voiceShortcutStatus.text(using: localization),
+                            tint: .blue
+                        )
                     }
                 }
 
