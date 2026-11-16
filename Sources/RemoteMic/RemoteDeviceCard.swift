@@ -136,11 +136,11 @@ struct RemoteDeviceCard: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
         .frame(width: SettingsPageBehavior.mappingRemoteCardWidth, height: SettingsPageBehavior.mappingRemoteCardHeight)
-        .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .onTapGesture(perform: onSelect)
         .background {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .fill(selected ? Color.accentColor.opacity(0.13) : Color.primary.opacity(0.045))
+                .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .onTapGesture(perform: onSelect)
                 .accessibilityHidden(true)
         }
         .overlay {
