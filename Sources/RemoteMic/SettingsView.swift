@@ -3441,7 +3441,10 @@ struct SettingsView: View {
         let visibleProfiles = RemoteDeviceNamePolicy.cardsWithoutRepeatedSerial(
             RemoteDeviceNamePolicy.sortedForCards(
                 settings.remoteDeviceProfiles.filter { profile in
-                    model.isRemoteConnected(profile.id) || (!vertical && profile.model.isAppleSiriRemote)
+                    // 私有遥控器离线时仍保留在按键页选择器中：画布不依赖蓝牙连接，
+                    // 用户从连接页选中 Chromecast 后必须能在顶部继续看到并切换回它。
+                    model.isRemoteConnected(profile.id)
+                        || (!vertical && profile.model.usesPrivateAdapter)
                 },
                 modelName: remoteModelName,
                 systemName: { model.systemDeviceName(for: $0) }

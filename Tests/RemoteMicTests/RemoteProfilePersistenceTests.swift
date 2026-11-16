@@ -487,4 +487,23 @@ struct RemoteProfilePersistenceTests {
         #expect(model.batteryLevel(for: profileID) == nil)
         #expect(model.powerState(for: profileID) == nil)
     }
+
+    /// An older build cannot decode models or actions that a newer build added. It must not
+    /// replace the whole stored array with one fallback profile just because the load failed.
+    @Test func unreadableStoredProfilesArePreservedUntilAFutureSave() throws {
+        let scope = try Self.scopedSettings("unreadable")
+        defer { scope.tearDown() }
+        let raw = Data("{\"unexpected\":\"profile array\"}".utf8)
+        scope.defaults.set(raw, forKey: "remoteDeviceProfiles")
+
+        let settings = AppSettings(defaults: scope.defaults)
+
+        #expect(scope.defaults.data(forKey: "remoteDeviceProfiles") == raw)
+        #expect(settings.remoteDeviceProfiles.count == 1)
+
+        settings.registerBluetoothRemote(identifier: UUID())
+
+        #expect(scope.defaults.data(forKey: AppSettings.unreadableRemoteProfilesBackupKey) == raw)
+        #expect(scope.defaults.data(forKey: "remoteDeviceProfiles") != raw)
+    }
 }
