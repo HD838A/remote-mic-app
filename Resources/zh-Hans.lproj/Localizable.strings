@@ -1354,8 +1354,6 @@
 
 "button_mapping.action_failed.title" = "按键动作未完成";
 "button_mapping.action_failed.detail" = "这次按键没有执行成功；其他按键仍可使用。";
-"button_mapping.pending_verification.title" = "输入框聚焦还没有验证";
-"button_mapping.pending_verification.detail" = "本次只执行打开 App，不会自动聚焦输入框。";
 
 "settings.portable_configuration.title" = "组合动作、App 配置与键位方案";
 "connection.approval.title" = "允许“%1$@”连接无线麦 SayAll？";

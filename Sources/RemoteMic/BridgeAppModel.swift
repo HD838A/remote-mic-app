@@ -8406,8 +8406,6 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             if let requestID {
                 voiceInputDestinationCoordinator.cancel(requestID: requestID, reason: .actionFailed)
             }
-        } else if configured.action == .openCustomApplication, !customApplicationFocusAllowed {
-            presentCustomApplicationVerificationNotice()
         }
         return handled
     }
@@ -8418,17 +8416,6 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
                 tier: .warning,
                 title: noticeLocalized("button_mapping.action_failed.title"),
                 text: noticeLocalized("button_mapping.action_failed.detail"),
-                position: .bottom
-            ))
-        }
-    }
-
-    private func presentCustomApplicationVerificationNotice() {
-        Task { @MainActor in
-            NoticeCenter.shared.show(Notice(
-                tier: .warning,
-                title: noticeLocalized("button_mapping.pending_verification.title"),
-                text: noticeLocalized("button_mapping.pending_verification.detail"),
                 position: .bottom
             ))
         }

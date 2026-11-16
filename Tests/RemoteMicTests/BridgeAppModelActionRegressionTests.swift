@@ -51,10 +51,7 @@ struct BridgeAppModelActionRegressionTests {
         #expect(sent.first?.1 == profile.id)
         #expect(sent.first?.2 == false)
         try await Task.sleep(nanoseconds: 20_000_000)
-        #expect(NoticeCenter.shared.current?.tier == .warning)
-        #expect(NoticeCenter.shared.current?.title ==
-            noticeLocalized("button_mapping.pending_verification.title"))
-        NoticeCenter.shared.dismiss()
+        #expect(NoticeCenter.shared.current == nil)
     }
 
     @Test func missingApplicationThroughBridgeReturnsFailureAndShowsNotice() async throws {
