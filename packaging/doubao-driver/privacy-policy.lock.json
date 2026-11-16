@@ -1,19 +1,19 @@
 {
   "schema": 1,
-  "updated": "2026-11-05",
+  "updated": "2026-11-16",
   "policy_url": "https://sayall.app/privacy/",
   "policy_json_url": "https://sayall.app/privacy/policy.json",
-  "source_commit": "f46537dbe6a5058e3eef474d09b91cc0140b7522",
+  "source_commit": "8aa7f9399ccc8c534e425284fbeae8c7ae253057",
   "languages": {
     "zh-Hans": {
       "title": "隐私政策",
       "file": "zh-Hans.lproj/License.txt",
-      "sha256": "788f0b08cef0782b83f9c201892a698595e3c19e3dd50d585a0239f2c6e3bef2"
+      "sha256": "c3eb8ab68e49b3499978297bd99ba130a89b5c852f2518be2ded4e887f67cc29"
     },
     "en": {
       "title": "Privacy policy",
       "file": "en.lproj/License.txt",
-      "sha256": "5484611d14cb65dc425c9498d825bc95267cb95e1e41b4c6b3f303a0106ada6b"
+      "sha256": "87cbcf53b418018353dee557abed41c442191caf2d5ca7c1db5954ad162cf943"
     }
   }
 }
