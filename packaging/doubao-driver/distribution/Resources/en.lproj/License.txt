@@ -43,11 +43,9 @@ We process your membership email, WeChat account identifier (mini program only),
 
 Usage statistics
 
-The personal center (Statistics page) shows button presses, voice duration, and longest single session on your device. To understand overall product usage, the Mac app uploads the values for each completed statistical day, voice session counts, the statistical date, week-to-date and lifetime snapshots, and a randomly generated report ID for each report to stats.sayall.app. What is uploaded is usage values with identifying information removed; it does not include your name, email, phone number, account, membership level, orders, installation ID, device identifiers, IP address, voice, text, button values, app names, or free text. The upload does not require sign-in and does not depend on membership.
+The personal center (Statistics page) shows button presses, voice duration, and longest single session on your device. To understand overall product usage, the Mac app uploads the day's anonymous usage values and a random report ID to our statistics service after each statistical day ends. The upload does not include your name, email, account, membership information, orders, device identifiers, IP address, voice, text, button content, or app names, and it does not require sign-in or membership.
 
-A report ID is used only to deduplicate the same upload. It is not an installation ID and cannot be used to look up a user; different days and reports use different IDs. We use these values only to produce aggregate totals, maximums, and distributions. We do not use them for billing, rewards, advertising profiles, or other purposes, and we do not build personal or device profiles. The report itself does not contain an IP address; infrastructure providers such as Cloudflare still process connection IPs for transmission and security.
-
-These statistics are the default way we understand overall usage. They require no sign-in and do not affect membership, voice, or any other feature; they keep aggregate values only and build no personal profile. The current version has no separate switch, and uninstalling the app stops future uploads; aggregate values already produced are not rolled back.
+The report ID only deduplicates the same upload and cannot be used to look up a user. We use these values only for aggregate statistics, not for billing, rewards, advertising profiles, or personal profiles. The statistics are enabled by default and have no separate switch in the current version; uninstalling the app stops future uploads, and aggregate values already produced are not rolled back. Cloud service providers still process connection IPs and routine request logs for transmission and security.
 
 Diagnostics and error records
 
@@ -55,7 +53,7 @@ The mini program keeps necessary request results, payment errors, and operation 
 
 Website visits
 
-The website does not require registration. To improve pages and download entry points, we record anonymous page views and click events, including the page path, language, device class (mobile, tablet, or desktop), referring domain, campaign parameters, event name, and a random ID used only for the current tab session. These events do not include accounts, email, phone numbers, payment information, or precise location. The website does not use advertising cookies; the session ID is stored in browser sessionStorage and expires when the tab closes. Infrastructure providers such as Cloudflare process connection IPs and routine request logs.
+The website does not require registration. To improve pages and download entry points, we record anonymous page views and click events, including the page path, language, device class (mobile, tablet, or desktop), referring domain, campaign parameters, event name, and a random ID used only for the current tab session. These events do not include accounts, email, phone numbers, payment information, or precise location. The website does not use advertising cookies; the session ID is stored in browser sessionStorage and expires when the tab closes. Cloud service providers process connection IPs and routine request logs.
 
 Purposes and legal bases
 
@@ -69,17 +67,15 @@ Third-party services and sharing
 
 We do not sell your personal information or use it for advertising profiles. We use the following third parties to provide and measure the service:
 
-Cloudflare: infrastructure for the website, downloads, statistics, and membership services; processes connection IPs and request metadata.
+Cloud service providers: provide the website, downloads, statistics, and membership services; process connection IPs and request metadata.
 
-Sentry: receives diagnostic events only when you choose to send them.
+Diagnostics providers: receive diagnostic events only when you choose to send them.
 
-Sparkle: checks for app updates and requests the update feed.
+Email providers: send email verification codes and membership-related emails.
 
-Resend: sends email verification codes and membership-related emails.
+Download and source hosting providers: provide app updates, Release downloads, and source hosting; process connection IPs.
 
 WeChat Pay and Apple: process payments and refunds under their own privacy policies.
-
-GitHub: provides Release downloads and source hosting; processes connection IPs.
 
 We do not provide your personal information to third parties except to these providers, as required by law, or as necessary to protect rights. For providers that process information on our behalf, we require them to act only on our instructions and to maintain confidentiality and security. WeChat Pay and Apple act as independent payment service providers and process payment information under their own privacy policies.
 
@@ -97,7 +93,7 @@ The statistics service clears deduplication records under its internal retention
 
 Anonymous website events are kept under the analytics service's retention policy, and we do not build personal browsing profiles. Support emails are kept for as long as needed to resolve the issue and comply with legal obligations.
 
-Our cloud providers include Cloudflare and Resend, which may process membership, statistics, and website request data outside mainland China. Where cross-border transfer applies, we will provide notice, obtain consent, or take other steps required by applicable law. Local recordings, Reflections text, and encrypted logs are stored only on your Mac by default.
+Our cloud providers may process membership, statistics, and website request data outside mainland China. Where cross-border transfer applies, we will provide notice, obtain consent, or take other steps required by applicable law. Local recordings, Reflections text, and encrypted logs are stored only on your Mac by default.
 
 Security
 
