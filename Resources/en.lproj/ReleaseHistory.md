@@ -1,5 +1,32 @@
 # Version History
 
+## 2.0.8 (Pre-release)
+
+- Adds Common Phrases: insert frequently used text in one press, with editing and import/export.
+- Macros can run Shell and AppleScript scripts.
+- Adds Button Profiles: save several setups and switch them with the frontmost app.
+- Official support for Apple Remote 6th generation (Lightning, A2540) and 7th generation (Type-C, A2854).
+- Apple Watch connects more reliably and supports Double Tap to start and stop recording.
+- Control this Mac with the WeChat mini program; the browser version is discontinued.
+- Buy membership with WeChat virtual payment, or redeem a code.
+- Profile is rebuilt with a usage calendar, local leaderboards and sharing, plus a new Recommendations page.
+- Onboarding can be configured by an AI agent.
+- The voice key adds Left and Right Option, for five trigger modes.
+- Xiaomi remotes warn as a single voice session approaches the 60-second limit.
+- Back up and restore a complete configuration.
+- About becomes a version center and gains a feedback entry.
+- Diagnostic logs are encrypted and can be sent on request.
+- Remote cards show the system Bluetooth name; the menu bar icon can be hidden and dims when nothing is connected; the app icon can be switched.
+- Installers are now a single Installer PKG with a matching uninstaller.
+- The virtual audio device is renamed from MiRemoteV 2ch to SayAll; existing users are unaffected.
+- Note: Common Phrases, Button Profiles, Apple Remote voice, and iPhone, Apple Watch and mini program connections require Plus.
+- Fixes some Onboarding failures.
+- Fixes input focus failures in some apps, and retry after focus is lost.
+- Fixes some shortcut recordings failing, not taking effect, or overwriting another action.
+- Fixes voice keys not recovering after a disconnect or wake, missing sound, dropped first words and a failing second session.
+- Fixes a configuration-import security issue, and unclear notices for corrupted or partially imported settings.
+- Fixes update checks missing new versions, calendar misalignment and clipped interface text.
+
 ## 2.0.6 (Pre-release)
 
 - Remote cards: the buttons page header, the current device on the connection page, and previously connected devices now share one three-line card with the model, Bluetooth name, overall status, and valid battery information.
