@@ -385,6 +385,11 @@ print -r -- '# History
 
 print -r -- '#!/bin/zsh
 set -euo pipefail
+if [[ "$1" == release && "$2" == list ]]; then
+  print -r -- "[{\"tagName\":\"v2.0.0-local.271\"},{\"tagName\":\"v2.0.5-local.393\"},{\"tagName\":\"v2.0.6-local.394\"},{\"tagName\":\"remote-mic-1.8.5-intel-ventura-test-build66-20260812\"}]" \
+    | /usr/bin/jq -r "${@[-1]}"
+  exit 0
+fi
 if [[ "$1" == api && "$2" == --include ]]; then
   print -r -- "HTTP/2.0 404 Not Found"
   exit 1
@@ -415,9 +420,9 @@ PATH="$FAKE_BIN:$PATH" REPOSITORY_ROOT="$BRANCH" GH_BIN="$FAKE_GH" \
   > "$WORK_DIR/result.txt"
 
 /usr/bin/grep -Fq 'SELECTED_VERSION: 1.9.11' "$WORK_DIR/result.txt"
-/usr/bin/grep -Fq 'SELECTED_BUILD: 140' "$WORK_DIR/result.txt"
+/usr/bin/grep -Fq 'SELECTED_BUILD: 404' "$WORK_DIR/result.txt"
 test "$(/usr/bin/plutil -extract CFBundleShortVersionString raw -o - "$BRANCH/Resources/Info.plist")" = 1.9.11
-test "$(/usr/bin/plutil -extract CFBundleVersion raw -o - "$BRANCH/Resources/Info.plist")" = 140
+test "$(/usr/bin/plutil -extract CFBundleVersion raw -o - "$BRANCH/Resources/Info.plist")" = 404
 test "$(/usr/bin/git -C "$BRANCH" diff --name-only | LC_ALL=C /usr/bin/sort)" = \
   $'Resources/Info.plist\nResources/en.lproj/ReleaseHistory.md\nResources/zh-Hans.lproj/ReleaseHistory.md'
 /usr/bin/grep -Fq '## 1.9.11（预发布）' "$BRANCH/Resources/zh-Hans.lproj/ReleaseHistory.md"
@@ -429,6 +434,10 @@ ERROR_GH="$WORK_DIR/error-gh"
 /usr/bin/git -C "$ERROR_BRANCH" checkout -q -b codex/release-metadata-error origin/main
 print -r -- '#!/bin/zsh
 set -euo pipefail
+if [[ "$1" == release && "$2" == list ]]; then
+  print -rn -- 394
+  exit 0
+fi
 if [[ "$1" == api && "$2" == --include ]]; then
   print -r -- "HTTP/2.0 500 Internal Server Error"
   exit 1
@@ -443,6 +452,24 @@ if PATH="$FAKE_BIN:$PATH" REPOSITORY_ROOT="$ERROR_BRANCH" GH_BIN="$ERROR_GH" \
 fi
 /usr/bin/grep -Fq 'unable to check GitHub Release v1.9.11 (HTTP 500' "$WORK_DIR/error-stderr.txt"
 test "$(/usr/bin/git -C "$ERROR_BRANCH" status --porcelain)" = ""
+
+REMOTE_ERROR_BRANCH="$WORK_DIR/remote-error-branch"
+REMOTE_ERROR_GH="$WORK_DIR/remote-error-gh"
+/usr/bin/git clone -q "$ORIGIN" "$REMOTE_ERROR_BRANCH"
+/usr/bin/git -C "$REMOTE_ERROR_BRANCH" checkout -q -b codex/release-metadata-remote-error origin/main
+print -r -- '#!/bin/zsh
+set -euo pipefail
+exit 1' > "$REMOTE_ERROR_GH"
+/bin/chmod 755 "$REMOTE_ERROR_GH"
+if PATH="$FAKE_BIN:$PATH" REPOSITORY_ROOT="$REMOTE_ERROR_BRANCH" GH_BIN="$REMOTE_ERROR_GH" \
+  "$REMOTE_ERROR_BRANCH/scripts/prepare-preview-release.sh" 1.9.11 141 "$zh_notes" "$en_notes" \
+  > "$WORK_DIR/remote-error-result.txt" 2> "$WORK_DIR/remote-error-stderr.txt"; then
+  print -u2 "prepare-preview-release guessed a Build number without readable private Draft tags"
+  exit 1
+fi
+/usr/bin/grep -Fq 'unable to read remote private Draft build tags from GetSayAll/SayAll' \
+  "$WORK_DIR/remote-error-stderr.txt"
+test "$(/usr/bin/git -C "$REMOTE_ERROR_BRANCH" status --porcelain)" = ""
 
 print "PREVIEW RELEASE PREPARATION FIXTURE PASS"
 

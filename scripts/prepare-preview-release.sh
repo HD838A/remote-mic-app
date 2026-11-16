@@ -4,6 +4,8 @@ umask 077
 
 ROOT="${REPOSITORY_ROOT:-${0:A:h:h}}"
 REPOSITORY="${GITHUB_REPOSITORY:-HD838A/remote-mic-app}"
+PRIVATE_DRAFT_REPOSITORY="GetSayAll/SayAll"
+PREVIEW_BUILD_STEP=10
 GH_BIN="${GH_BIN:-gh}"
 REQUESTED_VERSION="${1:-}"
 REQUESTED_BUILD="${2:-}"
@@ -130,9 +132,29 @@ version="$REQUESTED_VERSION"
 if version_is_less "$version" "$base_version"; then
   version="$base_version"
 fi
+
+# Preview and private Draft share one build-number series. Draft tags record
+# every consumed number, so Preview must start from the larger of that remote
+# maximum and main's plist baseline, then leave a gap for Drafts that will be
+# produced before the next Preview.
+private_build_max="$("$GH_BIN" release list --repo "$PRIVATE_DRAFT_REPOSITORY" \
+  --limit 100 --json tagName --jq '
+    [.[].tagName
+     | select(test("-local\\.[0-9]+$"))
+     | capture("\\.(?<n>[0-9]+)$").n
+     | tonumber] | max // 0')" || {
+  print -u2 "unable to read remote private Draft build tags from $PRIVATE_DRAFT_REPOSITORY; refusing to guess the Build number"
+  exit 1
+}
+[[ "$private_build_max" =~ ^[0-9]+$ ]] || {
+  print -u2 "remote private Draft build tag query returned an invalid value: $private_build_max"
+  exit 1
+}
+base_for_build=$(( base_build > private_build_max ? base_build : private_build_max ))
+minimum_build=$(( base_for_build + PREVIEW_BUILD_STEP ))
 build="$REQUESTED_BUILD"
-if (( build <= base_build )); then
-  build=$(( base_build + 1 ))
+if (( build < minimum_build )); then
+  build="$minimum_build"
 fi
 while true; do
   tag="v$version"
