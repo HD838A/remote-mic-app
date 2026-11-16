@@ -1,5 +1,13 @@
 # Version History
 
+## 2.0.6 (Pre-release)
+
+- Remote cards: the buttons page header, the current device on the connection page, and previously connected devices now share one three-line card with the model, Bluetooth name, overall status, and valid battery information.
+- Overall status: Connected means local buttons and the authorized voice path are usable. Confirmed faults show Button Issue, Voice Issue, or Device Issue first. Starting states show Checking or Confirming Status.
+- Previous devices: connection history includes Apple and Chromecast profiles. The last Bluetooth name is kept when a device disconnects or its name cannot be read. An uninstalled Apple component offers Enable, and a voice entry without membership offers Join Plus.
+- Membership: Plus benefits are split into six rows, with separate notes for the iOS app and Apple Watch app. Purchase copy now says one purchase, no automatic renewal.
+- Installer: the license page syncs the November 16, 2026 privacy policy, covering the encrypted cloud relay for the web version and mini program, no recording storage on the relay, and LAN-first nearby connections.
+
 ## 2.0.4 (Pre-release)
 
 - Fixed an issue where one failed ordinary button action could disable all remote buttons.
