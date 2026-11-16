@@ -525,15 +525,6 @@ enum SettingsScreenshotRenderer {
                 position: .bottom,
                 dismissible: false
             ))
-        case "custom-application-verification-pending":
-            NoticeCenter.shared.show(Notice(
-                tier: .warning,
-                title: localization.text("button_mapping.pending_verification.title"),
-                text: localization.text("button_mapping.pending_verification.detail"),
-                dismissal: .manual,
-                position: .bottom,
-                dismissible: false
-            ))
         case "button-action-failed":
             NoticeCenter.shared.show(Notice(
                 tier: .warning,
