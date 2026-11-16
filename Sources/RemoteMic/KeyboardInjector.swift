@@ -543,6 +543,7 @@ enum KeyboardInjector {
         _ action: ButtonAction,
         shortcut: CustomKeyboardShortcut? = nil,
         applicationProfile: CustomApplicationProfile? = nil,
+        focusCustomApplication: Bool = true,
         applicationURL: (String) -> URL? = {
             if $0 == PresetApplication.remoteMic.bundleIdentifier {
                 return Bundle.main.bundleURL
@@ -598,7 +599,8 @@ enum KeyboardInjector {
                 applicationURL: customApplicationURL,
                 applicationOpener: customApplicationOpener,
                 applicationFocuser: customApplicationFocuser,
-                frontmostApplication: frontmostApplication
+                frontmostApplication: frontmostApplication,
+                focusAllowed: focusCustomApplication
             )
             return true
         }
@@ -854,7 +856,8 @@ enum KeyboardInjector {
         applicationURL: (CustomApplicationProfile) -> URL?,
         applicationOpener: CustomApplicationOpener,
         applicationFocuser: @escaping CustomApplicationFocuser,
-        frontmostApplication: FrontmostApplicationProvider
+        frontmostApplication: FrontmostApplicationProvider,
+        focusAllowed: Bool
     ) {
         guard let url = applicationURL(application) else {
             AppLogger.shared.write(
@@ -868,6 +871,10 @@ enum KeyboardInjector {
             AppLogger.shared.write(
                 "APP ACTION skipped bundle=\(application.bundleIdentifier) reason=already_frontmost custom=true"
             )
+            guard focusAllowed else {
+                logCustomApplicationFocusSkipped(application)
+                return
+            }
             guard application.focusStrategy != .none else { return }
             applicationFocuser(application, frontmost.processIdentifier, focusRequestID)
             return
@@ -884,9 +891,22 @@ enum KeyboardInjector {
             AppLogger.shared.write(
                 "APP ACTION opened bundle=\(application.bundleIdentifier) custom=true"
             )
+            guard focusAllowed else {
+                logCustomApplicationFocusSkipped(application)
+                return
+            }
             guard application.focusStrategy != .none, let processIdentifier else { return }
             applicationFocuser(application, processIdentifier, focusRequestID)
         }
+    }
+
+    private static func logCustomApplicationFocusSkipped(
+        _ application: CustomApplicationProfile
+    ) {
+        AppLogger.shared.write(
+            "APP ACTION focus skipped bundle=\(application.bundleIdentifier) " +
+                "custom=true reason=verification_pending"
+        )
     }
 
     private static func resolveCustomApplicationURL(

@@ -505,15 +505,38 @@ enum SettingsScreenshotRenderer {
         section: SettingsSection,
         localization: LocalizationStore
     ) {
-        guard fixture == "profile-created", section == .mapping else { return }
-        NoticeCenter.shared.show(Notice(
-            tier: .tip,
-            title: localization.text("button_mapping.profile.created"),
-            text: localization.text("button_mapping.profile.created.detail"),
-            dismissal: .manual,
-            position: .bottom,
-            dismissible: false
-        ))
+        guard section == .mapping, let fixture else { return }
+        switch fixture {
+        case "profile-created":
+            NoticeCenter.shared.show(Notice(
+                tier: .tip,
+                title: localization.text("button_mapping.profile.created"),
+                text: localization.text("button_mapping.profile.created.detail"),
+                dismissal: .manual,
+                position: .bottom,
+                dismissible: false
+            ))
+        case "custom-application-verification-pending":
+            NoticeCenter.shared.show(Notice(
+                tier: .warning,
+                title: localization.text("button_mapping.pending_verification.title"),
+                text: localization.text("button_mapping.pending_verification.detail"),
+                dismissal: .manual,
+                position: .bottom,
+                dismissible: false
+            ))
+        case "button-action-failed":
+            NoticeCenter.shared.show(Notice(
+                tier: .warning,
+                title: localization.text("button_mapping.action_failed.title"),
+                text: localization.text("button_mapping.action_failed.detail"),
+                dismissal: .manual,
+                position: .bottom,
+                dismissible: false
+            ))
+        default:
+            return
+        }
     }
 
     private static func seedMixedHistory(

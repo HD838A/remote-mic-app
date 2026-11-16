@@ -1353,6 +1353,11 @@
 
 "custom_application.accessibility.needs_verification" = "Needs learning or verification";
 
+"button_mapping.action_failed.title" = "Button action did not complete";
+"button_mapping.action_failed.detail" = "This press did not run. Other buttons still work.";
+"button_mapping.pending_verification.title" = "Input focus is not verified";
+"button_mapping.pending_verification.detail" = "This press only opens the app. It does not focus the input field.";
+
 "settings.portable_configuration.title" = "Macros, app configurations, and button profiles";
 "connection.approval.title" = "Allow “%1$@” to connect to SayAll?";
 "connection.approval.watch_body" = "This Apple Watch will send button presses and microphone audio to SayAll. Check that its 2-digit code matches the code below. Allowing this connection saves this installation as a trusted device.";

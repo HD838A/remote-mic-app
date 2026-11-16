@@ -685,6 +685,13 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     )
     private let audioOutput = VirtualAudioOutput()
     private let diagnosticLogUploader: DiagnosticLogUploader
+    private let externalActionSender: (
+        ButtonAction,
+        CustomKeyboardShortcut?,
+        CustomApplicationProfile?,
+        Bool
+    ) -> Bool
+    private let customApplicationURLResolver: (String) -> URL?
     private var recordingPlayback: AVAudioPlayer?
 
     func isOnboardingControlSourceConnected(_ source: OnboardingControlSource) -> Bool {
@@ -1078,7 +1085,23 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         loginItemService: LoginItemService = LoginItemService(),
         transcriptArchiveStore: TranscriptArchiveStore = TranscriptArchiveStore(),
         recordingAssetStore: RecordingAssetStore = RecordingAssetStore(),
-        diagnosticLogUploader: DiagnosticLogUploader = .shared
+        diagnosticLogUploader: DiagnosticLogUploader = .shared,
+        externalActionSender: @escaping (
+            ButtonAction,
+            CustomKeyboardShortcut?,
+            CustomApplicationProfile?,
+            Bool
+        ) -> Bool = {
+            KeyboardInjector.send(
+                $0,
+                shortcut: $1,
+                applicationProfile: $2,
+                focusCustomApplication: $3
+            )
+        },
+        customApplicationURLResolver: @escaping (String) -> URL? = {
+            NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0)
+        }
     ) {
         self.settings = settings
         self.privateFeature = privateFeature
@@ -1088,6 +1111,8 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         self.transcriptArchiveStore = transcriptArchiveStore
         self.recordingAssetStore = recordingAssetStore
         self.diagnosticLogUploader = diagnosticLogUploader
+        self.externalActionSender = externalActionSender
+        self.customApplicationURLResolver = customApplicationURLResolver
         super.init()
         if settings.siriRemoteEnabled, settings.siriRemoteNeedsUserAction {
             siriRemoteAudioStatus = "unavailable:authorization_user_action_required"
@@ -8068,19 +8093,49 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         KeyboardHoldExecution.shared.end(reason: reason)
     }
 
-    private func performExternalConfiguredAction(_ configured: ConfiguredButtonAction) -> Bool {
-        guard !macroFeature.hasPendingPortableImport else { return false }
+    @discardableResult
+    func performExternalConfiguredAction(_ configured: ConfiguredButtonAction) -> Bool {
+        guard !macroFeature.hasPendingPortableImport else {
+            presentButtonActionFailureNotice()
+            return false
+        }
         if configured.action == .combinationAction {
-            return macroFeature.executeMacro(id: configured.macroID)
+            let handled = macroFeature.executeMacro(id: configured.macroID)
+            if !handled { presentButtonActionFailureNotice() }
+            return handled
         }
         let applicationProfile = settings.customApplicationProfile(
             id: configured.applicationProfileID
         )
+        var customApplicationFocusAllowed = true
         if configured.action == .openCustomApplication {
-            guard let profile = applicationProfile,
-                !settings.portableApplicationRequiresVerification(profile),
-                NSWorkspace.shared.urlForApplication(withBundleIdentifier: profile.bundleIdentifier) != nil
-            else { return false }
+            let requiresVerification = applicationProfile.map {
+                settings.portableApplicationRequiresVerification($0)
+            } ?? false
+            let applicationURL = applicationProfile.flatMap {
+                customApplicationURLResolver($0.bundleIdentifier)
+            }
+            switch CustomApplicationLaunchPlan.resolve(
+                profile: applicationProfile,
+                requiresVerification: requiresVerification,
+                applicationURL: applicationURL
+            ) {
+            case .unavailable:
+                AppLogger.shared.write(
+                    "BUTTON ACTION action=openCustomApplication phase=failed " +
+                        "result=unavailable reason=profile_or_application_missing"
+                )
+                presentButtonActionFailureNotice()
+                return false
+            case .open(let focusAllowed):
+                customApplicationFocusAllowed = focusAllowed
+                if !focusAllowed {
+                    AppLogger.shared.write(
+                        "BUTTON ACTION action=openCustomApplication phase=requested " +
+                            "result=dispatched focus=skipped reason=verification_pending"
+                    )
+                }
+            }
         }
         let requestID = settings.voiceFnTapModeEnabled
             ? VoiceInputDestinationIntent.resolve(
@@ -8088,15 +8143,43 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
                 applicationProfile: applicationProfile
             ).map { voiceInputDestinationCoordinator.beginTargetSwitch(intent: $0) }
             : nil
-        let handled = KeyboardInjector.send(
+        let handled = externalActionSender(
             configured.action,
-            shortcut: configured.shortcut,
-            applicationProfile: applicationProfile
+            configured.shortcut,
+            applicationProfile,
+            customApplicationFocusAllowed
         )
-        if !handled, let requestID {
-            voiceInputDestinationCoordinator.cancel(requestID: requestID, reason: .actionFailed)
+        if !handled {
+            presentButtonActionFailureNotice()
+            if let requestID {
+                voiceInputDestinationCoordinator.cancel(requestID: requestID, reason: .actionFailed)
+            }
+        } else if configured.action == .openCustomApplication, !customApplicationFocusAllowed {
+            presentCustomApplicationVerificationNotice()
         }
         return handled
+    }
+
+    private func presentButtonActionFailureNotice() {
+        Task { @MainActor in
+            NoticeCenter.shared.show(Notice(
+                tier: .warning,
+                title: noticeLocalized("button_mapping.action_failed.title"),
+                text: noticeLocalized("button_mapping.action_failed.detail"),
+                position: .bottom
+            ))
+        }
+    }
+
+    private func presentCustomApplicationVerificationNotice() {
+        Task { @MainActor in
+            NoticeCenter.shared.show(Notice(
+                tier: .warning,
+                title: noticeLocalized("button_mapping.pending_verification.title"),
+                text: noticeLocalized("button_mapping.pending_verification.detail"),
+                position: .bottom
+            ))
+        }
     }
 
     private func handleVoiceInputDestinationState(_ state: VoiceInputDestinationState) {

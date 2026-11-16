@@ -1845,7 +1845,12 @@ final class HIDRemoteMonitor {
         guard pressed.contains(RemoteButton.back.hidUsage) else { return }
         let configured = ConfiguredButtonAction(action: .deleteBackward, shortcut: nil)
         guard actionPerformer(.back, .singleClick, configured) else {
-            releaseForRevokedPermissions()
+            logActionFailure(
+                button: .back,
+                trigger: .singleClick,
+                action: .deleteBackward,
+                path: "back_only"
+            )
             return
         }
         AppLogger.shared.write(
@@ -2177,7 +2182,13 @@ final class HIDRemoteMonitor {
                 self.lastPageRepeatAt[usage] = now
             }
             if !self.actionPerformer(button, .singleClick, current) {
-                self.releaseForRevokedPermissions()
+                self.repeatTimers.removeValue(forKey: usage)?.cancel()
+                self.logActionFailure(
+                    button: button,
+                    trigger: .singleClick,
+                    action: current.action,
+                    path: "repeat"
+                )
             }
         }
         repeatTimers[usage] = timer
@@ -2259,6 +2270,21 @@ final class HIDRemoteMonitor {
         return snapshot
     }
 
+    /// A button action is a single-press request, not a monitor lifecycle event.
+    /// Keep the device monitor alive so one failed action cannot disable every
+    /// other button. Device removal and revoked permissions have their own paths.
+    private func logActionFailure(
+        button: RemoteButton,
+        trigger: ButtonTrigger,
+        action: ButtonAction,
+        path: String
+    ) {
+        diagnosticLogger(
+            "HID ACTION failed button=\(button.rawValue) trigger=\(trigger.rawValue) " +
+                "action=\(action.rawValue) path=\(path) monitor_retained=true"
+        )
+    }
+
     private func performConfiguredAction(
         for button: RemoteButton,
         trigger: ButtonTrigger,
@@ -2299,15 +2325,15 @@ final class HIDRemoteMonitor {
             return true
         }
         guard actionPerformer(button, trigger, configured) else {
-            diagnosticLogger(
-                "HID ACTION failed button=\(button.rawValue) trigger=\(trigger.rawValue) " +
-                    "action=\(configured.action.rawValue)"
-            )
             // A library rejection is not evidence of revoked Accessibility permission.
             // Preserve the held edge so duplicate reports cannot restart the action.
-            if configured.action == .combinationAction { return false }
-            stop()
-            updateStatus(LocalizedMessage("button_mapping.permission.accessibility_expired"))
+            // The monitor remains alive; only this button's interaction is cancelled.
+            logActionFailure(
+                button: button,
+                trigger: trigger,
+                action: configured.action,
+                path: "button"
+            )
             return false
         }
         AppLogger.shared.write(
