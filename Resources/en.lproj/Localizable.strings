@@ -349,10 +349,10 @@
 "remote.device.model.rc001" = "Xiaomi Bluetooth Remote 2";
 "remote.device.model.rc003" = "Xiaomi Bluetooth Remote 2 Pro";
 "remote.device.model.unrecognized" = "Unrecognized remote";
-"remote.device.model.apple_siri_remote_a2854" = "Apple Remote (7th Generation)";
-"remote.device.model.apple_siri_remote_a2540" = "Apple Remote (6th Generation)";
+"remote.device.model.apple_siri_remote_a2854" = "Apple Remote Type-C";
+"remote.device.model.apple_siri_remote_a2540" = "Apple Remote Lightning";
 "remote.device.model.chromecast_voice_remote" = "Chromecast Remote";
-"remote.device.model.unknown" = "Xiaomi Remote";
+"remote.device.model.unknown" = "Unidentified remote";
 "remote.device.custom_name" = "Custom name";
 "remote.device.bind_button" = "Set Up Button Controls";
 "remote.device.binding_waiting" = "Press any button except the voice button on this remote";
@@ -1546,3 +1546,42 @@
 "connection.history.voice_key_ready" = "Voice button: Fn";
 "connection.history.cooldown" = "Wait a moment; manual attempts must be at least five seconds apart.";
 "button_mapping.profile.created.detail" = "Switched to the new profile";
+
+"remote.card.status.connected" = "Connected";
+"remote.card.detail.connected" = "The applicable local button and voice paths are ready. This does not confirm the result in another app.";
+
+"remote.card.status.disconnected" = "Not connected";
+"remote.card.detail.disconnected" = "The device is not connected.";
+
+"remote.card.status.checking" = "Checking";
+"remote.card.detail.checking" = "Checking the local button and voice paths.";
+
+"remote.card.status.confirming" = "Confirming status";
+"remote.card.detail.confirming" = "Device readiness is being confirmed.";
+
+"remote.card.status.buttons_failed" = "Button issue";
+"remote.card.detail.buttons_failed" = "The button path or a required permission is unavailable.";
+
+"remote.card.status.voice_failed" = "Voice issue";
+"remote.card.detail.voice_failed" = "The entitled voice path or audio output is unavailable.";
+
+"remote.card.status.device_failed" = "Device issue";
+"remote.card.detail.device_failed" = "Both the button and entitled voice paths have an issue.";
+
+"remote.card.status.connecting" = "Connecting";
+"remote.card.detail.connecting" = "This connection attempt is bounded and can be cancelled.";
+
+"remote.card.status.not_found" = "Not found";
+"remote.card.detail.not_found" = "No device was found. Wake it nearby and click Connect.";
+
+"remote.card.status.paused" = "Auto-connect paused";
+"remote.card.detail.paused" = "Automatic recovery has stopped. Click Connect when needed.";
+
+"remote.card.status.cancelled" = "Cancelled";
+"remote.card.detail.cancelled" = "The connection attempt was cancelled. You can connect again when needed.";
+
+"remote.card.open_membership" = "Join";
+
+"remote.card.install.title" = "Install Apple remote component";
+
+"remote.card.install.detail" = "Apple remote support requires the optional component in the installer. Download the installer, select the Apple remote component, then return here to enable it. Enabling and ordinary buttons do not require membership.";

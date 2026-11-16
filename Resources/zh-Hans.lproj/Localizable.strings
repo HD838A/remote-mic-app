@@ -349,10 +349,10 @@
 "remote.device.model.rc001" = "小米蓝牙遥控器 2";
 "remote.device.model.rc003" = "小米蓝牙遥控器 2 Pro";
 "remote.device.model.unrecognized" = "未识别的遥控器";
-"remote.device.model.apple_siri_remote_a2854" = "苹果遥控器第 7 代";
-"remote.device.model.apple_siri_remote_a2540" = "苹果遥控器第 6 代";
+"remote.device.model.apple_siri_remote_a2854" = "苹果遥控器 Type-C";
+"remote.device.model.apple_siri_remote_a2540" = "苹果遥控器 Lightning";
 "remote.device.model.chromecast_voice_remote" = "Chromecast 遥控器";
-"remote.device.model.unknown" = "小米遥控器";
+"remote.device.model.unknown" = "未识别的遥控器";
 "remote.device.custom_name" = "自定义名称";
 "remote.device.bind_button" = "绑定普通按键";
 "remote.device.binding_waiting" = "请按这只遥控器的任意普通键";
@@ -883,8 +883,8 @@
 "onboarding.control_source.xiaomi_remote.detail" = "实体语音键，按住说话、松开结束。";
 "onboarding.control_source.siri_remote.title" = "苹果遥控器第 6 代 / 第 7 代";
 "onboarding.control_source.siri_remote.detail" = "按住语音键说话，松开结束。设置期间可试用，日常语音需会员。";
-"onboarding.control_source.apple_remote.generation_6.title" = "苹果遥控器第 6 代";
-"onboarding.control_source.apple_remote.generation_7.title" = "苹果遥控器第 7 代";
+"onboarding.control_source.apple_remote.generation_6.title" = "苹果遥控器 Lightning";
+"onboarding.control_source.apple_remote.generation_7.title" = "苹果遥控器 Type-C";
 "onboarding.control_source.chromecast_remote.title" = "Chromecast 语音遥控器";
 "onboarding.control_source.chromecast_remote.detail" = "支持按住说话或按一次说话。";
 "onboarding.control_source.apple_companion.title" = "iOS / watchOS App";
@@ -1545,3 +1545,42 @@
 "connection.history.voice_key_ready" = "语音键已映射为 Fn";
 "connection.history.cooldown" = "请稍后重试；两次手动连接至少间隔五秒。";
 "button_mapping.profile.created.detail" = "已切换到新方案";
+
+"remote.card.status.connected" = "已连接";
+"remote.card.detail.connected" = "当前应当可用的按键和语音链路均正常。第三方 App 最终结果不在本状态诊断范围内。";
+
+"remote.card.status.disconnected" = "未连接";
+"remote.card.detail.disconnected" = "设备尚未连接。";
+
+"remote.card.status.checking" = "检查中";
+"remote.card.detail.checking" = "正在检查本地按键和语音链路。";
+
+"remote.card.status.confirming" = "状态确认中";
+"remote.card.detail.confirming" = "正在确认设备功能状态，尚不能显示为正常。";
+
+"remote.card.status.buttons_failed" = "按键异常";
+"remote.card.detail.buttons_failed" = "本地按键通道或所需权限存在问题。";
+
+"remote.card.status.voice_failed" = "语音异常";
+"remote.card.detail.voice_failed" = "已授权的本地语音链路或音频输出存在问题。";
+
+"remote.card.status.device_failed" = "设备异常";
+"remote.card.detail.device_failed" = "本地按键和已授权语音链路均存在问题。";
+
+"remote.card.status.connecting" = "正在连接";
+"remote.card.detail.connecting" = "本次连接受有限恢复预算约束，可取消。";
+
+"remote.card.status.not_found" = "未找到";
+"remote.card.detail.not_found" = "本轮未找到设备，请确认设备已开机并在附近，再点击连接。";
+
+"remote.card.status.paused" = "自动连接已暂停";
+"remote.card.detail.paused" = "自动恢复预算已用尽。需要时点击连接。";
+
+"remote.card.status.cancelled" = "已取消";
+"remote.card.detail.cancelled" = "本次连接已取消。需要时可以再次连接。";
+
+"remote.card.open_membership" = "开通会员";
+
+"remote.card.install.title" = "安装苹果遥控器组件";
+
+"remote.card.install.detail" = "苹果遥控器需要独立安装包中的可选组件。请下载安装包并勾选苹果遥控器组件，安装后回到本页启用。启用和普通按键无需会员。";

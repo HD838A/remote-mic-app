@@ -32,23 +32,11 @@ enum XiaomiRemoteModel: String, Codable, CaseIterable, Identifiable {
         case .rc001: return "remote.device.model.rc001"
         case .rc003: return "remote.device.model.rc003"
         case .appleSiriRemoteA2854:
-#if SAYALL_SIRI_REMOTE_ENABLED
             return "remote.device.model.apple_siri_remote_a2854"
-#else
-            return "remote.device.model.unknown"
-#endif
         case .appleSiriRemoteA2540:
-#if SAYALL_SIRI_REMOTE_ENABLED
             return "remote.device.model.apple_siri_remote_a2540"
-#else
-            return "remote.device.model.unknown"
-#endif
         case .chromecastVoiceRemote:
-#if SAYALL_CHROMECAST_ENABLED
             return "remote.device.model.chromecast_voice_remote"
-#else
-            return "remote.device.model.unknown"
-#endif
         case .unknown: return "remote.device.model.unknown"
         }
     }
@@ -280,6 +268,8 @@ struct RemoteDeviceProfile: Codable, Equatable, Identifiable {
     let id: UUID
     var model: XiaomiRemoteModel
     var customName: String
+    /// Last non-serial system name, used for offline display only.
+    var lastKnownBluetoothName: String?
     var bluetoothIdentifier: UUID?
     var hidFingerprint: String?
     /// 序列号的单向摘要（见 `RemoteDeviceIdentity`）。序列号本身不落盘；
@@ -293,6 +283,7 @@ struct RemoteDeviceProfile: Codable, Equatable, Identifiable {
         id: UUID = UUID(),
         model: XiaomiRemoteModel = .unknown,
         customName: String = "",
+        lastKnownBluetoothName: String? = nil,
         bluetoothIdentifier: UUID? = nil,
         hidFingerprint: String? = nil,
         hardwareIdentity: String? = nil,
@@ -301,6 +292,7 @@ struct RemoteDeviceProfile: Codable, Equatable, Identifiable {
         self.id = id
         self.model = model
         self.customName = customName
+        self.lastKnownBluetoothName = lastKnownBluetoothName
         self.bluetoothIdentifier = bluetoothIdentifier
         self.hidFingerprint = hidFingerprint
         self.hardwareIdentity = hardwareIdentity
