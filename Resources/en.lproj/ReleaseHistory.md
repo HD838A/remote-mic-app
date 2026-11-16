@@ -1,5 +1,10 @@
 # Version History
 
+## 2.0.4 (Pre-release)
+
+- Fixed an issue where one failed ordinary button action could disable all remote buttons.
+- Custom apps that still need focus verification now open and show a verification notice.
+
 ## 2.0.3 (Pre-release)
 
 - Remote buttons: fixes ordinary buttons not responding on macOS 27 while the remote remains connected; falls back to the manager report path when device callbacks go silent and rebuilds HID monitors after discovering a new remote; the voice key is unaffected.
