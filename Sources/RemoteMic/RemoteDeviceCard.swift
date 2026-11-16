@@ -79,7 +79,7 @@ struct RemoteDeviceCard: View {
                 }
                 .buttonStyle(.plain)
                 .modifier(CompatibilityFocusEffectDisabledModifier())
-                .help(modelName)
+                .help("\(modelName) · \(systemName)")
                 .accessibilityLabel("\(modelName), \(systemName), \(statusDetail)")
                 .accessibilityAddTraits(selected ? .isSelected : [])
                 if let enableTitle {
@@ -95,7 +95,6 @@ struct RemoteDeviceCard: View {
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
-                .help(systemName)
                 .frame(maxWidth: .infinity, minHeight: 14, maxHeight: 14, alignment: .leading)
                 .contentShape(Rectangle())
                 .onTapGesture(perform: onSelect)
@@ -111,7 +110,6 @@ struct RemoteDeviceCard: View {
                         .contentShape(Rectangle())
                         .onTapGesture(perform: onSelect)
                 }
-                .help(statusDetail)
                 .contentShape(Rectangle())
                 .onTapGesture(perform: onSelect)
                 if showsBattery { batteryLabel }
@@ -172,7 +170,6 @@ struct RemoteDeviceCard: View {
                 .onTapGesture(perform: onSelect)
         }
         .foregroundStyle(batteryLevel.map { $0 <= 10 ? Color.red : $0 <= 25 ? .orange : .secondary } ?? Color.secondary)
-        .help(Text(powerState == .charging ? "remote.device.power.charging" : powerState == .externalPower ? "remote.device.power.external" : "remote.device.power.battery"))
     }
 
     private var batterySymbol: String {
