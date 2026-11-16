@@ -104,6 +104,7 @@ enum VoiceRemoteAdmission {
     static func decide(
         identifier: UUID,
         targetIdentifier: UUID?,
+        knownIdentifiers: Set<UUID> = [],
         advertisesVoiceService: Bool,
         name: String?,
         advertisedName: String?
@@ -114,7 +115,7 @@ enum VoiceRemoteAdmission {
         if let foreign = ForeignVoiceRemoteProduct.rejectedName(nameForMatch) {
             return .rejectForeignProduct(foreign)
         }
-        if let targetIdentifier {
+        if let targetIdentifier = targetIdentifier ?? (knownIdentifiers.contains(identifier) ? identifier : nil) {
             // 身份优先于名称：用户改过名的遥控器仍然必须是同一台设备。
             return identifier == targetIdentifier ? .adoptSavedIdentity : .ignore
         }
@@ -465,7 +466,8 @@ enum BluetoothCentralRecoveryPolicy {
         from phase: BluetoothLifecyclePhase,
         generation: UInt64,
         event: BluetoothCentralRecoveryEvent,
-        shouldRun: Bool
+        shouldRun: Bool,
+        isDiscoveryObserver: Bool = false
     ) -> BluetoothCentralRecoveryTransition {
         switch event {
         case .poweredOff, .resetting:
@@ -496,7 +498,8 @@ enum BluetoothCentralRecoveryPolicy {
                 )
             }
             let requiresFreshConnectionCycle = phase == .waitingReconnect(generation) ||
-                phase == .waitingBluetoothPower(generation)
+                phase == .waitingBluetoothPower(generation) ||
+                (isDiscoveryObserver && phase == .stopped)
             return BluetoothCentralRecoveryTransition(
                 phase: requiresFreshConnectionCycle ? .stopped : phase,
                 shouldCancelScheduledReconnect: requiresFreshConnectionCycle,
@@ -511,7 +514,7 @@ enum BluetoothCentralRecoveryPolicy {
                 shouldCancelScheduledReconnect: true,
                 shouldDiscover: false,
                 shouldStartFreshConnectionCycle: false,
-                shouldReleaseCentral: true
+                shouldReleaseCentral: !isDiscoveryObserver || !shouldRun
             )
         }
     }

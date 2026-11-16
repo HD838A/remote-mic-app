@@ -1,5 +1,6 @@
 # Bug 记录
 
+- [历史设备持续盲连且缺少手动恢复入口](./2026-11-15-bounded-remote-recovery.md)
 - [HID 普通按键动作失败会停止整台遥控器](./2026-11-16-hid-action-failure-stops-all-buttons.md)
 
 - [Preview publication 在 feed 同步前要求 preview channel 已更新](./2026-11-16-preview-publication-feed-order.md)

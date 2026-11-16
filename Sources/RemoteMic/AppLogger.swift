@@ -329,6 +329,7 @@ final class AppLogger: PublicDiagnosticEventSink {
             // 每发现一台不相关设备就写一条，条数随环境里 BLE 设备数量线性增长；
             // 按 60 秒窗口聚合成一条，仍保留重复次数与首末时间。
             message.hasPrefix("BLE ADOPT IGNORED ") ||
+            message.hasPrefix("BLE REJECTED ") ||
             message == "CHROMECAST LINK state=searching" ||
             message.hasPrefix("CHROMECAST LINK state=unsupported(") {
             return message

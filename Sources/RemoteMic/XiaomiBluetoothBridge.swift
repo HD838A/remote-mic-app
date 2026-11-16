@@ -126,6 +126,19 @@ final class XiaomiBluetoothBridge: NSObject {
     private weak var delegate: XiaomiBluetoothBridgeDelegate?
     private let targetIdentifier: UUID?
     private let excludedIdentifiers: () -> Set<UUID>
+    private let knownIdentifiers: () -> Set<UUID>
+    private let discoveredCandidate: ((UUID) -> Void)?
+    private let recovery: RemoteConnectionRecovery
+    private var recoveryDeadlineWorkItem: DispatchWorkItem?
+    private var discoveryWindowWorkItem: DispatchWorkItem?
+    private var discoveryWindowStartedAt: TimeInterval?
+    private var lastDiscoveryEndedAt: TimeInterval?
+    private var discoveryWasManual = false
+    private var recoveryOperationID = "none"
+    var recoveryStatus: RemoteConnectionRecoveryStatus { recovery.presentationStatus }
+    var manualRecoveryAvailableAt: TimeInterval? { recovery.manualAvailableAt }
+    var isConnectionBusy: Bool { lifecycle.isReady || recovery.isActive }
+    var isDiscoveringDevices: Bool { discoveryWindowStartedAt != nil }
     private(set) var lastVoiceStopReason: BluetoothVoiceStopReason?
     /// 已被判定为「别的产品」的标识；本桥此后一律不再连接，也不再走扫描回退。
     private var rejectedIdentifiers = Set<UUID>()
@@ -239,16 +252,28 @@ final class XiaomiBluetoothBridge: NSObject {
     init(
         delegate: XiaomiBluetoothBridgeDelegate,
         targetIdentifier: UUID? = nil,
-        excludedIdentifiers: @escaping () -> Set<UUID> = { [] }
+        excludedIdentifiers: @escaping () -> Set<UUID> = { [] },
+        knownIdentifiers: @escaping () -> Set<UUID> = { [] },
+        discoveredCandidate: ((UUID) -> Void)? = nil,
+        recovery: RemoteConnectionRecovery = RemoteConnectionRecovery()
     ) {
         self.delegate = delegate
         self.targetIdentifier = targetIdentifier
         self.excludedIdentifiers = excludedIdentifiers
+        self.knownIdentifiers = knownIdentifiers
+        self.discoveredCandidate = discoveredCandidate
+        self.recovery = recovery
         super.init()
     }
 
-    func start() {
+    func start(manual: Bool = false) {
         shouldRun = true
+        if targetIdentifier == nil {
+            refreshDiscovery(manual: manual)
+            return
+        }
+        guard recovery.begin(manual: manual, at: ProcessInfo.processInfo.systemUptime) else { return }
+        armRecoveryDeadline()
         reconnectWorkItem?.cancel()
         reconnectPolicy.reset()
         guard !systemSuspension.isSuspended else {
@@ -263,6 +288,11 @@ final class XiaomiBluetoothBridge: NSObject {
 
     func stop() {
         shouldRun = false
+        recoveryDeadlineWorkItem?.cancel()
+        discoveryWindowWorkItem?.cancel()
+        discoveryWindowStartedAt = nil
+        if recovery.status == .ready { recovery.disconnected(at: ProcessInfo.processInfo.systemUptime) }
+        recovery.finish(at: ProcessInfo.processInfo.systemUptime, cancelled: true)
         reconnectWorkItem?.cancel()
         cancelScanTimeout()
         stopBatteryPolling(reason: "bridge_stopped")
@@ -280,13 +310,26 @@ final class XiaomiBluetoothBridge: NSObject {
         state = .stopped
     }
 
-    func reconnectNow() {
-        guard shouldRun else { return }
+    func reconnectNow(manual: Bool = false) {
+        guard shouldRun, !lifecycle.isReady, !streaming, !microphoneOpened else { return }
+        if targetIdentifier == nil {
+            refreshDiscovery()
+            return
+        }
         guard !systemSuspension.isSuspended else {
             systemSuspension.markConnectionCycleNeeded()
-            AppLogger.shared.write(
-                "BLE SYSTEM_SUSPENSION phase=deferred result=paused reason=reconnect_requested"
-            )
+            return
+        }
+        let resuming = recovery.needsResume
+        if resuming {
+            recovery.resume(at: ProcessInfo.processInfo.systemUptime)
+            armRecoveryDeadline()
+        }
+        if !recovery.isActive {
+            guard recovery.begin(manual: manual, at: ProcessInfo.processInfo.systemUptime) else { return }
+            armRecoveryDeadline()
+        } else if manual && !resuming {
+            // Duplicate user requests join the active operation; they cannot reset its deadline.
             return
         }
         _ = systemSuspension.consumeConnectionCycleNeeded()
@@ -301,6 +344,79 @@ final class XiaomiBluetoothBridge: NSObject {
             return
         }
         finishAttempt(reconnectAfter: 0.1)
+    }
+
+    func cancelRecovery() {
+        guard recovery.isActive else { return }
+        recovery.finish(at: ProcessInfo.processInfo.systemUptime, cancelled: true)
+        endRecovery()
+    }
+
+    func refreshDiscovery(manual: Bool = false) {
+        let now = ProcessInfo.processInfo.systemUptime
+        guard shouldRun, targetIdentifier == nil, !systemSuspension.isSuspended,
+              discoveryWindowStartedAt == nil,
+              lastDiscoveryEndedAt.map({ now - $0 >= 5 }) ?? true
+        else { return }
+        discoveryWindowStartedAt = now
+        discoveryWasManual = manual
+        let work = DispatchWorkItem { [weak self] in self?.endDiscovery() }
+        discoveryWindowWorkItem = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + RemoteConnectionRecovery.discoveryWindow, execute: work)
+        AppLogger.shared.write("BLE DISCOVERY_WINDOW phase=started result=searching window_ms=20000")
+        startFreshConnectionCycle()
+    }
+
+    func cancelDiscovery() {
+        guard discoveryWindowStartedAt != nil else { return }
+        endDiscovery(cancelled: true)
+    }
+
+    private func endDiscovery(cancelled: Bool = false) {
+        guard discoveryWindowStartedAt != nil else { return }
+        // A remote may have joined the system without advertising during this window.
+        if !cancelled, !systemSuspension.isSuspended, let central,
+           central.state == .poweredOn, let generation = currentGeneration() {
+            for candidate in central.retrieveConnectedPeripherals(withServices: [serviceUUID])
+                where !excludedIdentifiers().contains(candidate.identifier) {
+                _ = adopt(candidate, using: central, generation: generation,
+                          source: "connected_peripheral", advertisesVoiceService: true,
+                          advertisedName: nil)
+            }
+        }
+        discoveryWindowWorkItem?.cancel()
+        discoveryWindowWorkItem = nil
+        discoveryWindowStartedAt = nil
+        lastDiscoveryEndedAt = ProcessInfo.processInfo.systemUptime
+        central?.stopScan()
+        lifecycle = .stopped
+        if case .bluetoothUnavailable = state { return }
+        state = .failed(LocalizedMessage(cancelled ? "connection.history.status.cancelled" : discoveryWasManual ? "connection.history.status.not_found" : "connection.history.status.waiting"))
+        AppLogger.shared.write("BLE DISCOVERY_WINDOW phase=completed result=\(cancelled ? "cancelled" : "waiting")")
+    }
+
+    private func armRecoveryDeadline() {
+        recoveryDeadlineWorkItem?.cancel()
+        guard let deadline = recovery.deadline else { return }
+        let generation = recovery.generation
+        recoveryOperationID = PublicDiagnosticEvent.newOperationID()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self, self.recovery.generation == generation, self.recovery.isActive else { return }
+            self.recovery.finish(at: ProcessInfo.processInfo.systemUptime)
+            self.endRecovery()
+        }
+        recoveryDeadlineWorkItem = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + max(0, deadline - ProcessInfo.processInfo.systemUptime), execute: work)
+        AppLogger.shared.write("BLE RECOVERY_WINDOW operation_id=\(recoveryOperationID) phase=started result=recovering manual=\(recovery.isManual)")
+    }
+
+    private func endRecovery() {
+        recoveryDeadlineWorkItem?.cancel()
+        recoveryDeadlineWorkItem = nil
+        reconnectWorkItem?.cancel()
+        reconnectWorkItem = nil
+        if let central, let peripheral { central.cancelPeripheralConnection(peripheral) }
+        finishAttempt(reconnectAfter: nil)
     }
 
     /// 主动重建本桥的语音链路，重新从发现/连接开始。
@@ -321,17 +437,34 @@ final class XiaomiBluetoothBridge: NSObject {
         }
         let centralState = central.map { String($0.state.rawValue) } ?? "none"
         AppLogger.shared.write(
-            "BLE RECOVERY phase=requested trigger=\(reason) state=\(String(describing: state)) " +
+            "BLE RECOVERY phase=requested trigger=\(reason) state=\(lifecycle.logName) " +
                 "lifecycle=\(String(describing: lifecycle)) " +
                 "central_state=\(centralState) " +
                 "generation=\(generationCounter)"
         )
+        if lifecycle.isReady {
+            // A real OS wake can leave a stale voice link marked Ready. Preserve active audio,
+            // but keep the existing idle-link rebuild on that explicit lifecycle event.
+            guard !streaming, !microphoneOpened else { return }
+            recovery.disconnected(at: ProcessInfo.processInfo.systemUptime)
+            armRecoveryDeadline()
+            if let central, let peripheral {
+                requestedReconnectDelay = 0
+                lifecycle = .disconnecting(lifecycle.generation ?? generationCounter)
+                state = .reconnecting
+                central.cancelPeripheralConnection(peripheral)
+            } else {
+                finishAttempt(reconnectAfter: 0)
+            }
+            return
+        }
         reconnectNow()
     }
 
     func setSystemSuspended(_ suspended: Bool, reason: String) {
         if suspended {
             guard systemSuspension.suspend(phase: lifecycle) else { return }
+            if targetIdentifier == nil { endDiscovery(cancelled: true) }
             stopBatteryPolling(reason: "system_suspended")
             central?.stopScan()
             if !lifecycle.isReady,
@@ -384,8 +517,19 @@ final class XiaomiBluetoothBridge: NSObject {
             return
         }
         guard central == nil else { return }
+        if targetIdentifier != nil {
+            guard recovery.claimAttempt(at: ProcessInfo.processInfo.systemUptime) else {
+                endRecovery()
+                return
+            }
+        } else if discoveryWindowStartedAt == nil {
+            return
+        }
         generationCounter &+= 1
         discoveryOperationID = PublicDiagnosticEvent.newOperationID()
+        if targetIdentifier != nil {
+            AppLogger.shared.write("BLE RECOVERY_ATTEMPT operation_id=\(recoveryOperationID) attempt_id=\(discoveryOperationID) phase=started index=\(recovery.attemptCount)")
+        }
         let generation = generationCounter
         lifecycle = .scanning(generation)
         let manager = CBCentralManager(
@@ -586,12 +730,18 @@ final class XiaomiBluetoothBridge: NSObject {
         let decision = VoiceRemoteAdmission.decide(
             identifier: candidate.identifier,
             targetIdentifier: targetIdentifier,
+            knownIdentifiers: knownIdentifiers(),
             advertisesVoiceService: advertisesVoiceService,
             name: candidate.name,
             advertisedName: advertisedName
         )
         switch decision {
         case .adoptSavedIdentity, .adoptRecognizedName:
+            if let discoveredCandidate {
+                guard !excludedIdentifiers().contains(candidate.identifier) else { return false }
+                discoveredCandidate(candidate.identifier)
+                return false
+            }
             // 只有真的发起连接才算「已采纳」。前置条件不满足时如实返回 false，
             // 否则 `VoiceRemoteDiscovery` 会认为本候选已处理而不再扫描（Issue #1041）。
             return connect(
@@ -622,7 +772,7 @@ final class XiaomiBluetoothBridge: NSObject {
     private func reject(_ candidate: CBPeripheral, reason: String, source: String) {
         guard rejectedIdentifiers.insert(candidate.identifier).inserted else { return }
         AppLogger.shared.write(
-            "BLE REJECTED reason=\(reason) source=\(source) name=\(candidate.name ?? "unknown")"
+            "BLE REJECTED reason=\(reason) source=\(source)"
         )
     }
 
@@ -663,7 +813,7 @@ final class XiaomiBluetoothBridge: NSObject {
         state = .connecting
         startConnectionTimeout(generation: generation)
         central.connect(candidate, options: nil)
-        AppLogger.shared.write("BLE CONNECTING operation_id=\(discoveryOperationID) source=\(source) name=\(candidate.name ?? "unknown")")
+        AppLogger.shared.write("BLE CONNECTING operation_id=\(discoveryOperationID) source=\(source)")
         return true
     }
 
@@ -731,7 +881,7 @@ final class XiaomiBluetoothBridge: NSObject {
                   self.currentGeneration() == generation,
                   self.lifecycle == .connecting(generation)
             else { return }
-            AppLogger.shared.write("BLE CONNECT TIMEOUT")
+            AppLogger.shared.write("BLE CONNECT TIMEOUT operation_id=\(self.discoveryOperationID)")
             self.state = .reconnecting
             if let central = self.central,
                let peripheral = self.peripheral,
@@ -788,8 +938,9 @@ final class XiaomiBluetoothBridge: NSObject {
         finishAttempt(reconnectAfter: delay)
     }
 
-    private func nextAutomaticReconnectDelay(bypassCachedTarget: Bool) -> TimeInterval {
-        let delay = reconnectPolicy.nextAutomaticDelay(
+    private func nextAutomaticReconnectDelay(bypassCachedTarget: Bool) -> TimeInterval? {
+        guard let delay = recovery.retryDelay(at: ProcessInfo.processInfo.systemUptime) else { return nil }
+        _ = reconnectPolicy.nextAutomaticDelay(
             bypassCachedTarget: bypassCachedTarget,
             jitterUnit: Double.random(in: 0 ... 1)
         )
@@ -825,6 +976,12 @@ final class XiaomiBluetoothBridge: NSObject {
             central = nil
             centralGeneration = nil
             lifecycle = .stopped
+            if shouldRun, targetIdentifier != nil, !recovery.isActive {
+                recoveryDeadlineWorkItem?.cancel()
+                recoveryDeadlineWorkItem = nil
+                state = .failed(recovery.status.message)
+                AppLogger.shared.write("BLE RECOVERY_WINDOW operation_id=\(recoveryOperationID) phase=completed result=\(recovery.status.rawValue) attempts=\(recovery.attemptCount)")
+            }
             return
         }
 
@@ -883,7 +1040,7 @@ final class XiaomiBluetoothBridge: NSObject {
         write(ATVVProtocol.getCapabilitiesV10)
         lifecycle = .awaitingCapabilities(generation)
         state = .discovering
-        AppLogger.shared.write("ATVV CAPABILITIES requested name=\(peripheral.name ?? "MI RC")")
+        AppLogger.shared.write("ATVV CAPABILITIES requested")
     }
 
     private func updateBatteryPollingSchedule(generation: UInt64) {
@@ -989,10 +1146,18 @@ final class XiaomiBluetoothBridge: NSObject {
             initializationTimeoutWorkItem = nil
             reconnectPolicy.reset()
             currentAttemptUsesCachedTarget = false
+            if targetIdentifier != nil,
+               !recovery.connected(at: ProcessInfo.processInfo.systemUptime) {
+                endRecovery()
+                return
+            }
+            recoveryDeadlineWorkItem?.cancel()
+            recoveryDeadlineWorkItem = nil
             lifecycle = .ready(generation)
             if let peripheral {
                 state = .ready(peripheral.name ?? "MI RC")
-                AppLogger.shared.write("BLE READY operation_id=\(discoveryOperationID) name=\(peripheral.name ?? "MI RC")")
+                AppLogger.shared.write("BLE READY operation_id=\(discoveryOperationID)")
+                AppLogger.shared.write("BLE RECOVERY_WINDOW operation_id=\(recoveryOperationID) phase=completed result=ready attempts=\(recovery.attemptCount)")
             }
         case 0x08:
             guard requestMicrophoneOpen() else {
@@ -1203,6 +1368,11 @@ extension XiaomiBluetoothBridge: CBCentralManagerDelegate {
         )
         switch central.state {
         case .poweredOn:
+            if targetIdentifier == nil, discoveryWindowStartedAt == nil {
+                state = .failed(LocalizedMessage("connection.history.status.waiting"))
+                refreshDiscovery()
+                return
+            }
             applyCentralRecovery(
                 .poweredOn,
                 central: central,
@@ -1251,11 +1421,16 @@ extension XiaomiBluetoothBridge: CBCentralManagerDelegate {
         central: CBCentralManager,
         generation: UInt64
     ) {
+        if (event == .poweredOff || event == .resetting), recovery.status == .ready {
+            recovery.interrupted(suspended: systemSuspension.isSuspended, at: ProcessInfo.processInfo.systemUptime)
+            if recovery.isActive { armRecoveryDeadline() }
+        }
         let transition = BluetoothCentralRecoveryPolicy.transition(
             from: lifecycle,
             generation: generation,
             event: event,
-            shouldRun: shouldRun
+            shouldRun: shouldRun,
+            isDiscoveryObserver: targetIdentifier == nil
         )
         if transition.shouldCancelScheduledReconnect {
             reconnectWorkItem?.cancel()
@@ -1263,6 +1438,13 @@ extension XiaomiBluetoothBridge: CBCentralManagerDelegate {
         }
         lifecycle = transition.phase
         if transition.shouldReleaseCentral {
+            if shouldRun, targetIdentifier != nil {
+                recovery.interrupted(suspended: false, at: ProcessInfo.processInfo.systemUptime)
+                recovery.finish(at: ProcessInfo.processInfo.systemUptime)
+                recoveryDeadlineWorkItem?.cancel()
+                recoveryDeadlineWorkItem = nil
+                AppLogger.shared.write("BLE RECOVERY_WINDOW operation_id=\(recoveryOperationID) phase=completed result=blocked")
+            }
             resetPeripheral()
             central.stopScan()
             central.delegate = nil
@@ -1361,7 +1543,7 @@ extension XiaomiBluetoothBridge: CBCentralManagerDelegate {
             batteryServiceUUID,
             deviceInformationServiceUUID,
         ])
-        AppLogger.shared.write("BLE CONNECTED name=\(peripheral.name ?? "unknown")")
+        AppLogger.shared.write("BLE CONNECTED operation_id=\(discoveryOperationID)")
     }
 
     func centralManager(
@@ -1375,7 +1557,7 @@ extension XiaomiBluetoothBridge: CBCentralManagerDelegate {
               lifecycle.acceptsDidFailToConnect(generation: generation)
         else { return }
         AppLogger.shared.write(
-            "BLE CONNECT FAILED " + AppLogger.optionalErrorFields(error)
+            "BLE CONNECT FAILED operation_id=\(discoveryOperationID) " + AppLogger.optionalErrorFields(error)
         )
         let delay = reconnectDelayAfterFailure(
             bypassCachedTarget: currentAttemptUsesCachedTarget
@@ -1413,6 +1595,12 @@ extension XiaomiBluetoothBridge: CBCentralManagerDelegate {
     }
 
     private func handleDisconnect(error: Error?) {
+        if lifecycle.isReady, shouldRun {
+            recovery.interrupted(suspended: systemSuspension.isSuspended, at: ProcessInfo.processInfo.systemUptime)
+            if recovery.isActive { armRecoveryDeadline() }
+            // A device that was actually online gets the first recovery attempt immediately.
+            requestedReconnectDelay = 0
+        }
         let shouldBypassCachedTarget: Bool
         switch lifecycle {
         case .connecting, .discovering, .awaitingCapabilities:
@@ -1421,7 +1609,7 @@ extension XiaomiBluetoothBridge: CBCentralManagerDelegate {
             shouldBypassCachedTarget = false
         }
         AppLogger.shared.write(
-            "BLE DISCONNECTED phase=\(lifecycle) " + AppLogger.optionalErrorFields(error)
+            "BLE DISCONNECTED operation_id=\(discoveryOperationID) phase=\(lifecycle) " + AppLogger.optionalErrorFields(error)
         )
         let delay = reconnectDelayAfterFailure(
             bypassCachedTarget: shouldBypassCachedTarget || currentAttemptUsesCachedTarget

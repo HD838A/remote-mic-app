@@ -389,6 +389,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     }
 
     func applicationDidBecomeActive(_ notification: Notification) {
+        model.refreshRemoteDiscovery()
         model.refreshRemoteDeviceNames(reason: .foreground)
         model.privateFeature.refreshAccessIfNeeded()
         model.macroFeature.refreshAccessIfNeeded()

@@ -1,0 +1,43 @@
+{
+  "batch": "remote-connection-lifecycle-approved-20261115",
+  "date": "2026-11-15",
+  "purpose": "Approved HTML prototype; not production UI evidence",
+  "pr": 1072,
+  "storage": "github-pr-attachments",
+  "html_sha256": "d571ade2952615508fb51bee1ef6d6dd2258c1737b43d6d9edfc45e42669c523",
+  "html_source": "https://github.com/GetSayAll/private-marketing-toolkit/blob/55cdecc/projects/remote-mic-app/research/remote-connection-lifecycle/v2/prototype.html",
+  "items": [
+    {
+      "file": "connection-offline-zh-light.jpg",
+      "format": "JPEG",
+      "width": 970,
+      "height": 691,
+      "sha256": "be1c20183f2772118d11671167f82ece57f65c3672950abe416322b681a09d48",
+      "url": "https://github.com/user-attachments/assets/fd0f4cd0-8701-40df-a631-b232a41bd54f"
+    },
+    {
+      "file": "connection-mixed-zh-dark.jpg",
+      "format": "JPEG",
+      "width": 970,
+      "height": 691,
+      "sha256": "ba76d1a067bc3ef0ad28547d5af59d796b5f608cbf3e8d53095657a05086c479",
+      "url": "https://github.com/user-attachments/assets/93f17256-418a-49c9-8a45-4bc5173fa88a"
+    },
+    {
+      "file": "connection-mixed-en-light.jpg",
+      "format": "JPEG",
+      "width": 970,
+      "height": 691,
+      "sha256": "aa695c4c3894230290ae22ec0cc76cf93406640a45ac9d8a32357382f658f571",
+      "url": "https://github.com/user-attachments/assets/c84419be-2102-49ca-ab5e-34de156452e0"
+    },
+    {
+      "file": "connection-failed-en-dark.jpg",
+      "format": "JPEG",
+      "width": 970,
+      "height": 691,
+      "sha256": "d0caa2e142dcf408603de3cf8a724dcc7828c0f78067b55ea45270da29e86536",
+      "url": "https://github.com/user-attachments/assets/f9899676-1ae0-4b74-8a23-4436ab39b6ab"
+    }
+  ]
+}

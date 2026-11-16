@@ -284,6 +284,18 @@ struct AppLoggerTests {
         #expect(lines.last?.contains("BLE READY") == true)
     }
 
+    @Test func rejectedCandidatesShareABoundedObservationKey() throws {
+        let harness = try LoggerHarness()
+        for _ in 1...100 {
+            harness.logger.write("BLE REJECTED reason=unnamed source=scan")
+        }
+        harness.logger.write("BLE DISCOVERY_WINDOW phase=completed result=waiting")
+        harness.logger.flush()
+        let lines = try harness.decryptAllLines()
+        #expect(lines.count == 3)
+        #expect(lines.contains { $0.contains("repeat_count=99") })
+    }
+
     @Test func typedEventsFlushObservationsAndNewDiscoveryStartsWithAFullRecord() throws {
         let harness = try LoggerHarness()
         harness.logger.write("BLE SCANNING")

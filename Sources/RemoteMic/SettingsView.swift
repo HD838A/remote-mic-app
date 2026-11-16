@@ -686,6 +686,7 @@ struct SettingsView: View {
     @State private var isMappingPermissionAlertPresented = false
     @State private var isWaitingForMappingPermissions = false
     @State private var expandedShareSection: SettingsSection?
+    @State private var showsPreviouslyConnectedDevices = true
     @State private var versionTapRevealCounter = VersionTapRevealCounter()
 
     init(
@@ -1290,7 +1291,10 @@ struct SettingsView: View {
             }
             CompatibilityGlassContainer(spacing: 14) {
                 HStack(alignment: .top, spacing: 14) {
-                    connectionDevicePanel
+                    VStack(spacing: 14) {
+                        connectionDevicePanel
+                        previouslyConnectedDevicesPanel
+                    }
                         .frame(width: 230)
                     VStack(spacing: 14) {
                         phoneConnectionsPanel
@@ -1303,6 +1307,7 @@ struct SettingsView: View {
             }
         }
         .onAppear {
+            model.refreshRemoteDiscovery()
             model.refreshVoiceKeyCompatibilityWarning()
         }
     }
@@ -1572,6 +1577,7 @@ struct SettingsView: View {
     private var connectionDevicePanel: some View {
         GlassPanel {
             VStack(spacing: 16) {
+                if settings.remoteDeviceProfiles.contains(where: { model.isRemoteConnected($0.id) || $0.model.isAppleSiriRemote }) {
                 remoteDeviceSelector(vertical: true)
 
                 connectionRemotePhoto
@@ -1598,16 +1604,111 @@ struct SettingsView: View {
                     )
                 }
 
-                Button {
-                    model.reconnect()
-                } label: {
-                    Text("connection.action.reconnect")
-                        .foregroundStyle(.white)
+                } else {
+                    Image(systemName: "appletvremote.gen4.fill")
+                        .font(.system(size: 30))
+                        .foregroundStyle(.secondary)
+                    Text("connection.history.empty")
+                        .font(.system(size: 14, weight: .semibold))
+                    Text("connection.history.keep_configuration")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                    if previouslyConnectedProfiles.isEmpty {
+                        Text(model.connectionStatusText(using: localization))
+                            .font(.system(size: 12))
+                            .fixedSize(horizontal: false, vertical: true)
+                        Button(model.remoteDiscoveryIsActive ? "connection.history.cancel" : "connection.history.find") {
+                            if model.remoteDiscoveryIsActive { model.cancelRemoteDiscovery() }
+                            else { model.findRemoteDevices() }
+                        }
+                        .compatibilityButtonStyle(.standard)
+                    }
                 }
-                    .compatibilityButtonStyle(.prominent)
-                    .compatibilityRoundedButtonBorderShape(radius: 10)
-                    .frame(maxWidth: .infinity)
+            }
+            .frame(maxWidth: .infinity)
+        }
+    }
 
+    private var previouslyConnectedProfiles: [RemoteDeviceProfile] {
+        settings.remoteDeviceProfiles.filter {
+            $0.bluetoothIdentifier != nil && !$0.model.usesPrivateAdapter
+        }
+    }
+
+    @ViewBuilder
+    private var previouslyConnectedDevicesPanel: some View {
+        let profiles = previouslyConnectedProfiles.filter { !model.isRemoteConnected($0.id) }
+        if !previouslyConnectedProfiles.isEmpty {
+            GlassPanel {
+                VStack(alignment: .leading, spacing: 10) {
+                    Button {
+                        showsPreviouslyConnectedDevices.toggle()
+                    } label: {
+                        HStack {
+                            Text("connection.history.title")
+                                .font(.system(size: 13, weight: .semibold))
+                            Spacer(minLength: 4)
+                            Image(systemName: showsPreviouslyConnectedDevices ? "chevron.down" : "chevron.right")
+                                .font(.system(size: 12))
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 32, alignment: .leading)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityValue(localization.text(showsPreviouslyConnectedDevices ? "connection.history.expanded" : "connection.history.collapsed"))
+                    Text(profiles.isEmpty ? "connection.history.all_connected" : "connection.history.offline")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                    if let block = model.bluetoothConnectionBlock {
+                        Text(block.text(using: localization))
+                            .font(.system(size: 12))
+                            .foregroundStyle(.orange)
+                        Button("connection.history.open_bluetooth") { model.openBluetoothPrivacySettings() }
+                            .compatibilityButtonStyle(.standard)
+                    }
+                    if showsPreviouslyConnectedDevices {
+                        ForEach(profiles) { profile in
+                            previouslyConnectedDeviceRow(profile)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func previouslyConnectedDeviceRow(_ profile: RemoteDeviceProfile) -> some View {
+        let status = model.remoteRecoveryStates[profile.id] ?? .waiting
+        let isRecovering = status == .recovering
+        return VStack(alignment: .leading, spacing: 6) {
+            Divider()
+            Text(remoteModelName(profile))
+                .font(.system(size: 12, weight: .semibold))
+                .lineLimit(1)
+                .help(remoteModelName(profile))
+            Text(model.systemDeviceName(for: profile) ?? localization.text("remote.device.system_name_unknown"))
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+            HStack(alignment: .center, spacing: 6) {
+                if isRecovering { ProgressView().controlSize(.small) }
+                Text(status.message.text(using: localization))
+                    .font(.system(size: 12))
+                    .foregroundStyle(status == .notFound ? Color.orange : Color.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+                Button(isRecovering ? "connection.history.cancel" : status == .notFound || status == .cancelled ? "connection.history.retry" : "connection.history.connect") {
+                    if isRecovering { model.cancelRemoteConnection(profile.id) }
+                    else { model.connectRemoteProfile(profile.id) }
+                }
+                .compatibilityButtonStyle(.standard)
+                .disabled(!isRecovering && !model.canConnectRemoteProfile(profile.id))
+                .help(isRecovering || model.canConnectRemoteProfile(profile.id) ? "" : model.bluetoothConnectionBlock?.text(using: localization) ?? localization.text("connection.history.cooldown"))
+            }
+            if status == .notFound || status == .paused {
+                Text(status == .notFound ? "connection.history.not_found_help" : "connection.history.paused_help")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
