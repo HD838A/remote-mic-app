@@ -97,8 +97,6 @@ struct RemoteDeviceCard: View {
                 .lineLimit(1)
                 .help(systemName)
                 .frame(maxWidth: .infinity, minHeight: 14, maxHeight: 14, alignment: .leading)
-                .contentShape(Rectangle())
-                .onTapGesture(perform: onSelect)
             HStack(spacing: 6) {
                 HStack(spacing: 4) {
                     if status.isProgressing {
@@ -109,13 +107,7 @@ struct RemoteDeviceCard: View {
                     Text(LocalizedStringKey(status.message.key)).foregroundStyle(status.color)
                 }
                 .help(statusDetail)
-                .contentShape(Rectangle())
-                .onTapGesture(perform: onSelect)
-                if showsBattery {
-                    batteryLabel
-                        .contentShape(Rectangle())
-                        .onTapGesture(perform: onSelect)
-                }
+                if showsBattery { batteryLabel }
                 Spacer(minLength: 0)
                 if let membershipTitle {
                     Button(membershipTitle, action: onMembership)
@@ -139,11 +131,11 @@ struct RemoteDeviceCard: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
         .frame(width: SettingsPageBehavior.mappingRemoteCardWidth, height: SettingsPageBehavior.mappingRemoteCardHeight)
+        .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .onTapGesture(perform: onSelect)
         .background {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .fill(selected ? Color.accentColor.opacity(0.13) : Color.primary.opacity(0.045))
-                .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .onTapGesture(perform: onSelect)
                 .accessibilityHidden(true)
         }
         .overlay {
