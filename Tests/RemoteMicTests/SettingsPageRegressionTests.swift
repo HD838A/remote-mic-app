@@ -1866,6 +1866,10 @@ struct SettingsPageRegressionTests {
         #expect(shared.contains("Image(systemName: \"bolt.fill\")"))
         #expect(shared.contains("SettingsPageBehavior.mappingRemoteCardHeight"))
         #expect(shared.contains("SettingsPageBehavior.mappingRemoteCardWidth"))
+        // The whole card must route to device selection; a background-only gesture
+        // leaves the text rows as dead zones. Text and battery carry their own gestures
+        // because macOS Text views consume the click before the background.
+        #expect(shared.components(separatedBy: ".onTapGesture(perform: onSelect)").count - 1 >= 6)
         for symbol in ["battery.0percent", "battery.25percent", "battery.50percent", "battery.75percent", "battery.100percent"] {
             #expect(shared.contains(symbol))
         }
