@@ -97,7 +97,8 @@ struct RemoteDeviceCard: View {
                 .lineLimit(1)
                 .help(systemName)
                 .frame(maxWidth: .infinity, minHeight: 14, maxHeight: 14, alignment: .leading)
-                .allowsHitTesting(false)
+                .contentShape(Rectangle())
+                .onTapGesture(perform: onSelect)
             HStack(spacing: 6) {
                 HStack(spacing: 4) {
                     if status.isProgressing {
@@ -105,11 +106,15 @@ struct RemoteDeviceCard: View {
                     } else {
                         Circle().fill(status.color).frame(width: 4, height: 4)
                     }
-                    Text(LocalizedStringKey(status.message.key)).foregroundStyle(status.color)
+                    Text(LocalizedStringKey(status.message.key))
+                        .foregroundStyle(status.color)
+                        .contentShape(Rectangle())
+                        .onTapGesture(perform: onSelect)
                 }
                 .help(statusDetail)
-                .allowsHitTesting(false)
-                if showsBattery { batteryLabel.allowsHitTesting(false) }
+                .contentShape(Rectangle())
+                .onTapGesture(perform: onSelect)
+                if showsBattery { batteryLabel }
                 Spacer(minLength: 0)
                 if let membershipTitle {
                     Button(membershipTitle, action: onMembership)
@@ -151,6 +156,8 @@ struct RemoteDeviceCard: View {
         HStack(spacing: 4) {
             ZStack(alignment: .bottomTrailing) {
                 Image(systemName: batterySymbol).font(.system(size: 13, weight: .medium))
+                    .contentShape(Rectangle())
+                    .onTapGesture(perform: onSelect)
                 if powerState == .charging || powerState == .externalPower {
                     Image(systemName: "bolt.fill")
                         .font(.system(size: 7, weight: .bold))
@@ -161,6 +168,8 @@ struct RemoteDeviceCard: View {
                 }
             }.frame(width: 20)
             Text(batteryLevel.map { "\($0)%" } ?? "—")
+                .contentShape(Rectangle())
+                .onTapGesture(perform: onSelect)
         }
         .foregroundStyle(batteryLevel.map { $0 <= 10 ? Color.red : $0 <= 25 ? .orange : .secondary } ?? Color.secondary)
         .help(Text(powerState == .charging ? "remote.device.power.charging" : powerState == .externalPower ? "remote.device.power.external" : "remote.device.power.battery"))
