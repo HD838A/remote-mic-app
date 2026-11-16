@@ -112,7 +112,7 @@ swift test --disable-keychain --scratch-path .build/hid-action-isolation
 - 夹具：`REMOTE_MIC_SETTINGS_SCREENSHOT_NOTICE=custom-application-verification-pending` 与 `button-action-failed`，`REMOTE_MIC_SETTINGS_SCREENSHOT_SECTION=mapping`、`SIZE=1067x760`。
 - 生成中文浅色和英文深色各两张，PNG 尺寸均为 `2134 × 1520`。
 - OCR 确认中文图片包含“输入框聚焦还没有验证 / 本次只执行打开 App，不会自动聚焦输入框”和“按键动作未完成 / 这次按键没有执行成功；其他按键仍可使用”；英文图片包含对应英文文案。
-- 截图只证明气泡文案、布局和主题渲染，不证明实体遥控器触发；截图字节保存在仓库外证据目录，PR 附件和索引见提交说明。
+- 截图只证明气泡文案、布局和主题渲染，不证明实体遥控器触发；截图字节保存在仓库外证据目录，PR #1085 附件和文本索引见 [manifest.json](../Screenshots/hid-action-isolation-20261116/manifest.json)。
 
 构建与仓库检查：
 

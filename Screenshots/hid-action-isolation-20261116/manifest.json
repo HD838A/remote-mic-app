@@ -1,0 +1,64 @@
+{
+  "batch": "hid-action-isolation-20261116",
+  "date": "2026-11-16",
+  "purpose": "PR #1085 HID 单键动作失败隔离：待验证提示和动作失败提示的生产 NoticeBubble 视觉证据",
+  "pull_request": 1085,
+  "storage": "external-persistent-directory-and-github-pr-attachments",
+  "storage_path": "/Users/andy/Develop/Src/AISrc/.screenshot-workdir/hid-action-isolation-20261116/pr-media/",
+  "sourceCommit": "20d38b310d41ad6216dce7a3c2de77b64fd65c59",
+  "appVersion": "2.0.3",
+  "build": "323",
+  "window_points": [
+    1067,
+    760
+  ],
+  "generation": "SettingsScreenshotRenderer 生产 SettingsView + NoticeBubble + noticeHost；REMOTE_MIC_SETTINGS_SCREENSHOT_NOTICE=custom-application-verification-pending|button-action-failed，中文浅色和英文深色各一张；公开 App，SAYALL_PRIVATE_PLATFORM_MODE=public",
+  "notes": [
+    "由生产设置页的离屏截图入口生成；不是设计稿，不启动蓝牙、音频或真实遥控器。",
+    "待验证图只证明气泡文案和待验证静态状态；动作失败图只证明失败提示文案和布局。",
+    "图片字节不入库，本文件只做文本索引；外部链接为 PR #1085 的 GitHub 附件。",
+    "真实 RC001/RC003 按键、第三方 App 前台切换和输入框聚焦仍需现场验收。"
+  ],
+  "images": [
+    {
+      "file": "verification-pending-zh-light.png",
+      "state": "verification_pending_zh_light",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1520,
+      "bytes": 909112,
+      "sha256": "32f85c0ea00fa7b2e4a094c804b4cc6866f11d63b01844e58cc94fadbcd3727d",
+      "external_url": "https://github.com/user-attachments/assets/84d8c440-db30-4657-ab16-db609591f1ef"
+    },
+    {
+      "file": "verification-pending-en-dark.png",
+      "state": "verification_pending_en_dark",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1520,
+      "bytes": 862923,
+      "sha256": "61aa0cdd7a80f35aa18ada3bdd1abf49806f0309f71465273d232d051bd7bf3b",
+      "external_url": "https://github.com/user-attachments/assets/1c256f35-5591-4ada-a5c0-fa15d6b8f3f9"
+    },
+    {
+      "file": "action-failed-zh-light.png",
+      "state": "action_failed_zh_light",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1520,
+      "bytes": 907664,
+      "sha256": "e5b3c9a1a05a277ea84362457a3e75424800e9cd70e91b724abc4e709a5f49a1",
+      "external_url": "https://github.com/user-attachments/assets/18e84f91-8724-4563-bb79-9a9b204c0792"
+    },
+    {
+      "file": "action-failed-en-dark.png",
+      "state": "action_failed_en_dark",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1520,
+      "bytes": 859162,
+      "sha256": "bbf982b9e5c07e8aea4e4fac14c8c58e3a41f057bfb042cef6b1643a8e01f432",
+      "external_url": "https://github.com/user-attachments/assets/56ba48b4-10be-4fd3-97fd-9f1ba9ddbd22"
+    }
+  ]
+}
