@@ -1939,7 +1939,8 @@ struct SettingsPageRegressionTests {
         let selectorSource = source[selectorStart.lowerBound..<selectorEnd.lowerBound]
 
         #expect(selectorSource.contains("model.isRemoteConnected(profile.id)"))
-        #expect(selectorSource.contains("model.isRemoteConnected(profile.id) || (!vertical && profile.model.isAppleSiriRemote)"))
+        #expect(selectorSource.contains("(!vertical && profile.model.usesPrivateAdapter)"))
+        #expect(selectorSource.contains("profile.model.isAppleSiriRemote") == false)
         #expect(selectorSource.contains("RemoteDeviceNamePolicy.sortedForCards("))
         #expect(selectorSource.contains("modelName: remoteModelName"))
         #expect(selectorSource.contains("systemName: { model.systemDeviceName(for: $0) }"))

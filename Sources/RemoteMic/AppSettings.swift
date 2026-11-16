@@ -375,6 +375,13 @@ final class AppSettings: ObservableObject {
     static let agentConfigurationPendingKey = Keys.onboardingAgentConfigurationPending
 
     private let defaults: UserDefaults
+    /// Suppresses persistence while stored settings are being decoded. A decode failure must
+    /// never overwrite the raw profile array that a newer app version wrote.
+    private var isLoadingStoredSettings = true
+    /// Raw profile data that could not be decoded. It is copied to a recovery key before the
+    /// first later save replaces the live value.
+    private var unreadableStoredRemoteProfiles: Data?
+    static let unreadableRemoteProfilesBackupKey = "remoteDeviceProfilesUnreadableBackup"
     private lazy var localUsageLedger = LocalUsageLedger(defaults: defaults,
         buttonCount: totalButtonPressCount, voiceDuration: totalVoiceDuration,
         longestVoice: voiceSessionRanking.map(\.duration).max() ?? 0)
@@ -1247,6 +1254,7 @@ final class AppSettings: ObservableObject {
             buttonRapidPressEnabled: buttonRapidPressEnabled,
             interactionSettings: interactionSettings
         )
+        let storedRemoteProfilesData = defaults.data(forKey: Keys.remoteDeviceProfiles)
         if
             let decoded = Self.decodeSetting(
                 [RemoteDeviceProfile].self,
@@ -1288,6 +1296,16 @@ final class AppSettings: ObservableObject {
                 interactionSettings = selected.mappings.interactionSettings ?? RemoteButtonInteractionSettings()
             }
         } else {
+            // A newer app version may have written a model or action this build cannot decode.
+            // Keep the original bytes instead of replacing the whole array with one fallback
+            // profile. Otherwise opening an older build silently deletes every newer profile.
+            if let storedRemoteProfilesData, !storedRemoteProfilesData.isEmpty {
+                unreadableStoredRemoteProfiles = storedRemoteProfilesData
+                AppLogger.shared.write(
+                    "SETTINGS REMOTE_PROFILES phase=completed result=preserved_unreadable " +
+                        "reason=stored_decode_failed"
+                )
+            }
             var original = RemoteDeviceProfile(
                 bluetoothIdentifier: defaults.string(forKey: Keys.peripheralIdentifier).flatMap(UUID.init(uuidString:)),
                 mappings: legacyMappings
@@ -1336,12 +1354,14 @@ final class AppSettings: ObservableObject {
             catch { corruptedKeys.append("unifiedBaseBindings") }
         }
         corruptedSettingKeys = corruptedKeys
-        if let data = try? JSONEncoder().encode(remoteDeviceProfiles) {
+        if unreadableStoredRemoteProfiles == nil,
+           let data = try? JSONEncoder().encode(remoteDeviceProfiles) {
             defaults.set(data, forKey: Keys.remoteDeviceProfiles)
         }
         if let data = try? JSONEncoder().encode(interactionSettings) {
             defaults.set(data, forKey: "buttonInteractionSettings")
         }
+        isLoadingStoredSettings = false
         _ = localUsageLedger
     }
 
@@ -3556,7 +3576,8 @@ final class AppSettings: ObservableObject {
     }
 
     private func saveSelectedRemoteProfileMappings() {
-        guard !isLoadingRemoteProfile,
+        guard !isLoadingStoredSettings,
+              !isLoadingRemoteProfile,
               let selectedRemoteProfileID,
               let index = remoteDeviceProfiles.firstIndex(where: { $0.id == selectedRemoteProfileID })
         else { return }
@@ -3576,6 +3597,15 @@ final class AppSettings: ObservableObject {
     }
 
     private func saveRemoteDeviceProfiles() {
+        guard !isLoadingStoredSettings else { return }
+        if let unreadableStoredRemoteProfiles {
+            defaults.set(unreadableStoredRemoteProfiles, forKey: Self.unreadableRemoteProfilesBackupKey)
+            self.unreadableStoredRemoteProfiles = nil
+            AppLogger.shared.write(
+                "SETTINGS REMOTE_PROFILES phase=completed result=recovery_snapshot_saved " +
+                    "reason=stored_decode_failed"
+            )
+        }
         guard let data = try? JSONEncoder().encode(remoteDeviceProfiles) else { return }
         defaults.set(data, forKey: Keys.remoteDeviceProfiles)
     }
