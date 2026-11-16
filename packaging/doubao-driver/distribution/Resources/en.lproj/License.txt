@@ -1,5 +1,5 @@
 Privacy policy
-Updated: 2026-11-05
+Updated: 2026-11-16
 
 Scope
 
@@ -19,7 +19,7 @@ We process only the information needed to provide the service. Different feature
 
 Mini program voice and connection
 
-The mini program requests microphone permission and collects audio only when you use the voice feature. Audio streams through an encrypted connection to the Mac you authorize; the connection service does not store recordings. To establish and restore connections, we process device identifiers, connection authorization data, and connection status. If you deny microphone permission, you can still use remote control buttons.
+The mini program requests microphone permission and collects audio only when you use the voice feature. Audio streams through an encrypted connection to the Mac you authorize; the connection service does not store recordings. Web and mini program remote sessions use an encrypted cloud relay; the relay forwards session and voice data but does not store recordings. To establish and restore connections, we process device identifiers, connection authorization data, and connection status. If you deny microphone permission, you can still use remote control buttons.
 
 Mac app voice and local records
 
@@ -33,7 +33,7 @@ The iPhone and Apple Watch apps have no account system, do not upload usage stat
 
 The iPhone requests microphone permission and collects audio only when you use the voice feature. Audio is sent in real time over an encrypted local-network connection to the Mac you authorize, is not stored in the cloud, and is not used to identify you. The Apple Watch uses its own microphone for the same real-time recording.
 
-On first connection, both sides show the same verification code, and the installation becomes a trusted device only after you approve it on the Mac. We process device identifiers, connection authorization data, and connection status to discover and establish connections; this information stays on the device, and the matching authorization ends when you delete the app, clear trusted devices in Mac settings, or revoke the trust. The current version does not control your Mac across the internet.
+On first connection, both sides show the same verification code, and the installation becomes a trusted device only after you approve it on the Mac. We process device identifiers, connection authorization data, and connection status to discover and establish connections; this information stays on the device, and the matching authorization ends when you delete the app, clear trusted devices in Mac settings, or revoke the trust. Nearby connections use the local network by default; cloud sessions use an encrypted relay, and the relay does not store recordings.
 
 On-device diagnostic logs on iPhone and Apple Watch contain only network paths, connection duration, and connection status; they do not contain audio, button content, device names, IP addresses, verification codes, or keys, and you can export or delete them at any time. Apple Watch diagnostic logs are privacy-filtered and passed only to the paired iPhone through system channels.
 
