@@ -1,0 +1,172 @@
+<!doctype html><html lang="zh-Hans"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>SayAll · 统一遥控器卡片设计稿</title></head><body><div id="prototype"></div><script>/* Interactive UI design only. No hardware, installation, subscription, or system calls. */
+const root = document.getElementById('prototype');
+const query = new URLSearchParams(location.search);
+const remotes = {
+  apple: { name: '电视遥控器', model: '苹果遥控器 Lightning', apple: true, batteryLevel: 73, supportsBattery: true, supportsCharging: true },
+  appleUSB: { name: '卧室遥控器', model: '苹果遥控器 Type-C', apple: true, batteryLevel: 68, supportsBattery: true, supportsCharging: true },
+  xiaomi: { name: '客厅遥控器', model: '小米蓝牙遥控器 2 Pro', batteryLevel: 81, supportsBattery: true, supportsCharging: true },
+  xiaomi2: { name: '书房遥控器', model: '小米蓝牙遥控器 2', batteryLevel: 62, supportsBattery: true, supportsCharging: false },
+  chromecast: { name: '影音室遥控器', model: 'Chromecast 语音遥控器', supportsBattery: false, supportsCharging: false },
+};
+const healthStates = {
+  healthy: {label:'已连接',tone:'online',detail:'设备已连接，当前应当可用的按键和语音功能均正常。'},
+  checking: {label:'检查中',tone:'busy',detail:'设备已连接，正在确认按键及已授权的语音功能；尚未确认一切正常。'},
+  buttons: {label:'按键异常',tone:'fault',detail:'设备已连接，但按键功能出现问题。'},
+  voice: {label:'语音异常',tone:'fault',detail:'设备已连接，但已授权的语音功能出现问题。'},
+  multiple: {label:'设备异常',tone:'fault',detail:'设备已连接，但按键和已授权的语音功能均出现问题。'},
+  unknown: {label:'状态确认中',tone:'busy',detail:'设备已连接，正在确认功能状态；确认完成前不标记为正常。'},
+};
+let state = {
+  remote: Object.hasOwn(remotes,query.get('remote')) ? query.get('remote') : 'apple',
+  member: query.get('membership') === 'member', installed: query.get('component') === 'installed',
+  connected: query.get('connected') === 'yes', dark: query.get('theme') === 'dark',
+  phase: 'idle', notice: null, batteryExample: 'normal', health: Object.hasOwn(healthStates,query.get('health'))?query.get('health'):'healthy',
+};
+let deadline = null;
+function el(tag, attrs, ...children) {
+  const node = document.createElement(tag);
+  for (const [key,value] of Object.entries(attrs || {})) {
+    if (value == null || value === false) continue;
+    if (key === 'class') node.className = value;
+    else if (key.startsWith('on')) node.addEventListener(key.slice(2).toLowerCase(),value);
+    else if (key === 'disabled') node.disabled = true;
+    else node.setAttribute(key,String(value));
+  }
+  for (const child of children.flat(Infinity)) if (child != null && child !== false) node.append(child instanceof Node ? child : document.createTextNode(String(child)));
+  return node;
+}
+function button(label, action, attrs={}) { return el('button',{type:'button',onClick:action,...attrs},label); }
+function setState(patch) { state={...state,...patch,notice:null}; render(); }
+function segments(label, options, selected, action) {
+  return el('div',{class:'control-group'},el('span',{class:'control-label'},label),el('div',{class:'segments',role:'group','aria-label':label},options.map(([id,title])=>button(title,()=>action(id),{'aria-pressed':selected===id,'data-option':id}))));
+}
+function enableApple(){ state.notice='install'; render(); }
+function membership(){ state.notice='membership'; render(); }
+function connect(remote){
+  const remoteKey=Object.keys(remotes).find(key=>remotes[key]===remote);
+  if(state.remote!==remoteKey){clearTimeout(deadline);state.remote=remoteKey;state.phase='idle';}
+  if (remote.apple && !state.installed) { enableApple(); return; }
+  if (state.phase === 'connecting') { clearTimeout(deadline); setState({phase:'idle'}); return; }
+  state.phase='connecting'; state.notice=null; render();
+  deadline=setTimeout(()=>{state.phase='not-found';render();},30000);
+}
+function batteryReading(remote, connected, example){
+  if(!connected||!remote.supportsBattery||example==='unknown')return null;
+  const level=example==='low'?8:example==='charging'&&remote.supportsCharging?54:remote.batteryLevel;
+  const charging=example==='charging'&&remote.supportsCharging;
+  return el('span',{class:`battery ${charging?'charging':''} ${level<=10?'low':''}`,title:charging?'正在充电':`电量 ${level}%`,'aria-label':`电量 ${level}%${charging?'，正在充电':''}`},
+    el('span',{class:'battery-icon','aria-hidden':'true'},el('i',{style:`width:${level}%`}),charging?el('b',{class:'charging-bolt'}):null),`${level}%`);
+}
+// All three placements and all devices use this one card renderer.
+function remoteCard(remote, { placement='mapping', connected=false, member=state.member, installed=state.installed, selected=false, phase='idle', batteryExample=state.batteryExample, health='healthy', id=placement }={}) {
+  const history = placement === 'history';
+  const busy = history && phase === 'connecting';
+  // Unpurchased Apple voice access is not a malfunction. Buttons still count.
+  const effectiveHealth=remote.apple&&!member?(health==='voice'?'healthy':health==='multiple'?'buttons':health):health;
+  const overall=busy?{label:'正在连接',tone:'busy',detail:'正在尝试连接，本次最多等待 30 秒。'}:
+    history&&phase==='not-found'?{label:'未找到',tone:'uncertain',detail:'本轮连接未找到设备，可手动再次连接。'}:
+    connected?healthStates[effectiveHealth]:{label:'未连接',tone:'uncertain',detail:'设备尚未连接。'};
+  const status=overall.label;
+  const spinning=busy||(connected&&(effectiveHealth==='checking'||effectiveHealth==='unknown'));
+  const appleNeedsMembership = remote.apple && !member;
+  return el('article',{class:`remote-card ${selected?'selected':''}`,'data-placement':placement,'data-remote':remote.model,'aria-label':`${remote.name}，${remote.model}`},
+    el('div',{class:'card-row card-top'},el('strong',{class:'remote-name',title:remote.model},remote.model),
+      remote.apple && !installed ? button('启用',enableApple,{class:'card-button enable','aria-label':`启用 ${remote.name}`}) : null),
+    el('div',{class:'card-row card-middle'},el('span',{class:'remote-model',title:remote.name},remote.name)),
+    el('div',{class:'card-row card-bottom'},
+      el('span',{class:`device-status ${overall.tone}`,title:overall.detail,'aria-label':`${status}：${overall.detail}`},el('i',{class:spinning?'spinner':'status-dot','aria-hidden':'true'}),status,
+        batteryReading(remote,connected,batteryExample)),
+      el('div',{class:'card-actions'},appleNeedsMembership ? button('开通会员',membership,{class:'card-button membership','aria-label':`开通会员以使用 ${remote.name} 的语音`}) : null,
+        history ? button(busy?'取消':'连接',()=>connect(remote),{class:'card-button connect','aria-label':`${busy?'取消连接':'连接'} ${remote.name}`}) : null)));
+}
+function sample(label, card){return el('div',{class:'sample'},el('h3',{},label),card);}
+function notice(){
+  if (!state.notice) return null;
+  const install = state.notice==='install';
+  return el('section',{class:'notice',role:'status'},el('div',{},el('h2',{},install?'启用苹果遥控器':'苹果遥控器语音'),
+    el('p',{},install?'苹果遥控器需要安装独立组件。通过 App 升级的用户也可以从这里开始安装，无需会员。':'普通按键与连接无需会员。开通会员后，可使用苹果遥控器语音。'),
+    el('p',{class:'muted'},'这是 HTML 演示，不会安装组件或购买会员。')),
+    el('div',{class:'notice-actions'},install?button('模拟安装完成',()=>setState({installed:true}),{class:'primary'}):null,button('关闭',()=>setState({notice:null}))));
+}
+function render(){
+  document.documentElement.dataset.theme=state.dark?'dark':'light';
+  const device=remotes[state.remote];
+  const online=state.connected&&(!device.apple||state.installed);
+  root.replaceChildren(el('div',{},
+    el('header',{class:'page-heading'},el('div',{},el('p',{class:'eyebrow'},'交互原型 · 演示数据'),el('h1',{},'统一遥控器卡片'),el('p',{class:'muted'},'232 × 72 pt · 固定三行 · 三个位置复用同一卡片组件')),
+      el('div',{class:'appearance',role:'group','aria-label':'外观'},button('浅色',()=>setState({dark:false}),{'aria-pressed':!state.dark}),button('深色',()=>setState({dark:true}),{'aria-pressed':state.dark}))),
+    el('section',{class:'controls','aria-label':'原型演示控制'},
+      segments('遥控器',[['apple','苹果 Lightning'],['appleUSB','苹果 Type-C'],['xiaomi','小米 2 Pro'],['xiaomi2','小米 2'],['chromecast','Chromecast']],state.remote,id=>{clearTimeout(deadline);setState({remote:id,phase:'idle',batteryExample:'normal'});}),
+      el('div',{class:'control-line'},segments('账号',[['free','非会员'],['member','会员']],state.member?'member':'free',id=>setState({member:id==='member'})),
+        device.apple?segments('苹果组件',[['missing','未安装'],['installed','已安装']],state.installed?'installed':'missing',id=>{clearTimeout(deadline);setState({installed:id==='installed',phase:'idle'});}):null,
+        segments('蓝牙连接',[['no','断开'],['yes','连上']],state.connected?'yes':'no',id=>setState({connected:id==='yes'})),
+        device.supportsBattery?segments('电池示例',[['normal','正常电量'],['low','低电量'],...(device.supportsCharging?[['charging','充电中']]:[]),['unknown','未获取']],state.batteryExample,id=>setState({batteryExample:id})):null),
+      el('div',{class:'control-line'},segments('整体状态',[['healthy','正常'],['checking','检查中'],['buttons','按键异常'],['voice','语音异常'],['multiple','设备异常'],['unknown','状态确认中']],state.health,id=>setState({health:id})))),
+    el('section',{class:'placement-board','aria-label':'同一组件的三个位置'},
+      sample('按键页面 · 顶部',remoteCard(device,{placement:'mapping',connected:online,selected:true,health:state.health})),
+      sample('连接页面 · 当前设备',remoteCard(device,{placement:'current',connected:online,selected:true,health:state.health})),
+      sample('连接页面 · 连接过的设备',remoteCard(device,{placement:'history',phase:state.phase}))),
+    state.phase==='connecting'?el('div',{class:'operation-demo',role:'status'},el('span',{},'模拟连接中，本次最多 30 秒。'),button('模拟未找到',()=>{clearTimeout(deadline);setState({phase:'not-found'});})):null,
+    notice(),
+    el('section',{class:'examples health-examples'},el('h2',{},'状态位 · 当前可用功能正常，才显示“已连接”'),
+      el('p',{class:'muted section-note'},'蓝牙已连上、功能待检查或有故障时，显示对应状态。功能状态仍在确认时显示“状态确认中”。非会员苹果语音未开通不算故障。'),
+      el('div',{class:'sample-grid'},Object.entries(healthStates).map(([key,value])=>sample(value.label,remoteCard(remotes.xiaomi,{placement:'current',connected:true,health:key,batteryExample:'normal'}))))),
+    el('section',{class:'examples'},el('h2',{},'苹果遥控器 · 会员与组件状态'),
+      el('div',{class:'sample-grid'},
+        sample('非会员 · 未安装组件',remoteCard(remotes.apple,{placement:'mapping',installed:false,member:false})),
+        sample('非会员 · 语音未开通，按键正常',remoteCard(remotes.apple,{placement:'current',installed:true,member:false,connected:true,health:'voice'})),
+        sample('会员 · 语音异常',remoteCard(remotes.apple,{placement:'current',installed:true,member:true,connected:true,health:'voice'})))),
+    el('section',{class:'examples'},el('h2',{},'其他遥控器 · 默认启用'),
+      el('div',{class:'sample-grid'},
+        sample('按键页面 · 小米',remoteCard(remotes.xiaomi,{placement:'mapping',connected:true,selected:true})),
+        sample('连接页面 · 当前小米',remoteCard(remotes.xiaomi,{placement:'current',connected:true,selected:true})),
+        sample('连接过的设备 · 小米',remoteCard(remotes.xiaomi,{placement:'history'})))),
+    el('section',{class:'examples'},el('h2',{},'电池与充电 · 模拟数据'),
+      el('div',{class:'sample-grid'},
+        sample('小米 · 电量',remoteCard(remotes.xiaomi,{placement:'current',connected:true,batteryExample:'normal'})),
+        sample('小米 · 充电状态',remoteCard(remotes.xiaomi,{placement:'current',connected:true,batteryExample:'charging'})),
+        sample('Chromecast · 当前适配未提供电量',remoteCard(remotes.chromecast,{placement:'current',connected:true})))),
+    el('footer',{class:'muted'},'第一行：型号。第二行：蓝牙名称。第三行：整体状态及有效电池数据。“已连接”表示当前可用功能均正常，未确认时不显示为正常。苹果未安装组件时，右上显示“启用”；安装后隐藏。非会员右下：开通会员。历史设备卡片的“连接”始终位于最右下方。所有内容均保持三行，不增加卡片高度。')));
+}
+const rules={
+  '*':{boxSizing:'border-box'},
+  ':root':{fontFamily:'-apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif',fontSize:'12pt',color:'#202124',background:'#f5f5f7','--surface':'#fff','--text':'#242426','--muted':'#6b6b70','--line':'#d9d9de','--card':'#f4f4f5','--accent':'#b9541b','--selected':'#fff1e7','--green':'#287745'},
+  ':root[data-theme=dark]':{color:'#eeeef0',background:'#1d1d20','--surface':'#29292d','--text':'#eeeef0','--muted':'#b4b4bd','--line':'#4c4c53','--card':'#303034','--accent':'#f2a371','--selected':'#4a352b','--green':'#82d4a2'},
+  body:{margin:0,padding:'28px'},'#prototype':{maxWidth:'1060px',margin:'0 auto'},
+  'h1,h2,h3,p':{margin:0},'h1':{fontSize:'26px',lineHeight:1.3,fontWeight:650},'h2':{fontSize:'18px',fontWeight:600},'h3':{fontSize:'16px',fontWeight:500,color:'var(--muted)',lineHeight:1.5},
+  '.muted':{color:'var(--muted)'},'.eyebrow':{fontSize:'16px',color:'var(--muted)',marginBottom:'6px'},
+  'button':{font:'inherit',fontSize:'16px',color:'var(--text)',background:'var(--surface)',border:'1px solid var(--line)',borderRadius:'7px',padding:'5px 10px',cursor:'pointer',minHeight:'32px'},
+  'button:focus-visible':{outline:'2px solid var(--accent)',outlineOffset:'3px'},'button:disabled':{cursor:'default'},
+  'button[aria-pressed=true]':{background:'var(--selected)',color:'var(--accent)',borderColor:'var(--accent)'},
+  '.page-heading':{display:'flex',justifyContent:'space-between',alignItems:'center',gap:'24px',marginBottom:'22px'},'.page-heading .muted':{marginTop:'9px',fontSize:'16px',lineHeight:1.5},
+  '.appearance':{display:'flex',gap:'6px',flexShrink:0},'.controls':{paddingBottom:'23px',borderBottom:'1px solid var(--line)',marginBottom:'25px'},
+  '.control-group':{display:'flex',gap:'10px',alignItems:'center',flexWrap:'wrap'},'.control-label':{color:'var(--muted)',fontSize:'16px'},'.segments':{display:'flex',gap:'5px',flexWrap:'wrap'},'.control-line':{display:'flex',gap:'24px',flexWrap:'wrap',marginTop:'12px'},
+  '.placement-board,.sample-grid':{display:'grid',gridTemplateColumns:'repeat(3,232pt)',gap:'22px',alignItems:'start'},'.sample':{minWidth:0},'.sample h3':{marginBottom:'10px'},
+  '.placement-board':{paddingBottom:'26px',borderBottom:'1px solid var(--line)'},'.examples':{marginTop:'26px'},'.examples h2':{marginBottom:'15px'},
+  '.remote-card':{width:'232pt',height:'72pt',padding:'8pt 10pt',display:'grid',gridTemplateRows:'18pt 14pt 18pt',rowGap:'3pt',borderRadius:'10pt',background:'var(--card)',color:'var(--text)',boxShadow:'inset 0 0 0 1px var(--line)',overflow:'hidden'},
+  '.remote-card.selected':{background:'var(--selected)',boxShadow:'inset 0 0 0 1px var(--accent)'},
+  '.card-row':{display:'flex',alignItems:'center',justifyContent:'space-between',gap:'6pt',minWidth:0},
+  '.remote-name':{fontSize:'13pt',fontWeight:600,lineHeight:'16pt',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',minWidth:0},
+  '.remote-model':{fontSize:'12pt',lineHeight:'14pt',color:'var(--muted)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',minWidth:0},
+  '.device-status':{display:'flex',alignItems:'center',gap:'4pt',fontSize:'12pt',lineHeight:'16pt',color:'var(--muted)',minWidth:0,whiteSpace:'nowrap'},'.device-status.online':{color:'var(--green)'},'.device-status.busy':{color:'var(--accent)'},'.device-status.fault':{color:'#bd3333'},':root[data-theme=dark] .device-status.fault':{color:'#ff9699'},'.section-note':{fontSize:'16px',lineHeight:1.6,margin:'-4px 0 14px'},
+  '.status-dot':{width:'4pt',height:'4pt',borderRadius:'50%',background:'currentColor',flexShrink:0},
+  '.battery':{display:'inline-flex',alignItems:'center',gap:'4pt',marginLeft:'3pt',color:'var(--muted)'},'.battery.charging':{color:'var(--green)'},'.battery.low':{color:'#c55716'},
+  '.battery-icon':{display:'inline-block',width:'14pt',height:'7pt',border:'1px solid currentColor',borderRadius:'1.5pt',position:'relative',marginRight:'2pt',padding:'1px'},'.battery-icon i':{display:'block',height:'100%',background:'currentColor',borderRadius:'0.5pt'},'.charging-bolt':{position:'absolute',width:'6pt',height:'10pt',left:'4pt',top:'-2pt',background:'currentColor',filter:'drop-shadow(0 0 1px var(--card))',clipPath:'polygon(60% 0,0 58%,42% 58%,30% 100%,100% 35%,60% 35%,80% 0)'},'.battery-icon:after':{content:'""',position:'absolute',right:'-2pt',top:'1.5pt',width:'1.5pt',height:'3pt',background:'currentColor',borderRadius:'0 1pt 1pt 0'},
+  '.card-actions':{display:'flex',gap:'4pt',alignItems:'center',flexShrink:0,marginLeft:'auto'},
+  '.card-button':{fontSize:'12pt',lineHeight:'16pt',minHeight:0,height:'18pt',borderRadius:'4pt',padding:'0 5pt',display:'inline-flex',alignItems:'center',justifyContent:'center',whiteSpace:'nowrap',flexShrink:0},
+  '.card-button.enable,.card-button.membership':{color:'var(--accent)',borderColor:'transparent',background:'transparent'},
+  '.card-button.connect':{background:'var(--surface)'},
+  '.notice':{display:'flex',justifyContent:'space-between',gap:'24px',background:'var(--surface)',border:'1px solid var(--line)',borderRadius:'12px',padding:'18px',marginTop:'22px'},'.notice p':{fontSize:'16px',lineHeight:1.6,marginTop:'8px'},'.notice-actions':{display:'flex',gap:'8px',alignItems:'center',flexShrink:0},
+  '.primary':{background:'var(--accent)',color:'#fff',borderColor:'var(--accent)'},'.operation-demo':{display:'flex',alignItems:'center',gap:'14px',marginTop:'20px'},
+  '.spinner':{width:'10pt',height:'10pt',border:'1.5pt solid var(--line)',borderTopColor:'var(--accent)',borderRadius:'50%',animation:'spin 1s linear infinite',flexShrink:0},
+  footer:{fontSize:'16px',lineHeight:1.65,marginTop:'26px',paddingBottom:'12px',maxWidth:'1000px'},
+  '@keyframes spin':{to:{transform:'rotate(360deg)'}},
+  '@media(prefers-reduced-motion:reduce)':{'.spinner':{animation:'none'}},
+  '@media(max-width:1080px)':{'.placement-board,.sample-grid':{gridTemplateColumns:'repeat(2,232pt)'},'.page-heading':{alignItems:'flex-start'}},
+  '@media(max-width:720px)':{body:{padding:'20px'},'.placement-board,.sample-grid':{gridTemplateColumns:'232pt'},'.page-heading,.notice':{flexDirection:'column'},'.control-line':{gap:'12px'}},
+};
+function cssName(value){return value.startsWith('--')?value:value.replace(/[A-Z]/g,x=>'-'+x.toLowerCase());}
+function makeStyles(map){return Object.entries(map).map(([selector,props])=>selector+'{'+((selector.startsWith('@media')||selector.startsWith('@keyframes'))?makeStyles(props):Object.entries(props).map(([k,v])=>cssName(k)+':'+v+';').join(''))+'}').join('\n');}
+const style=document.createElement('style');style.textContent=makeStyles(rules);document.head.append(style);
+render();
+</script></body></html>

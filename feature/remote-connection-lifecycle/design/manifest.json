@@ -1,0 +1,14 @@
+{
+  "date": "2026-11-16",
+  "purpose": "Approved unified three-row remote card HTML prototype",
+  "revision": 6,
+  "approval": "User explicitly requested committing the HTML design to the repository, implementing it, testing, and opening a new PR in this conversation.",
+  "items": [
+    {
+      "file": "cards.html",
+      "format": "HTML",
+      "sha256": "143a9303fecfb185a395455b118175dc2540d66cf0fac174468061fbfa137ba3",
+      "note": "Self-contained interactive prototype, simulated device data, 232 × 72 pt cards; not production UI or hardware evidence."
+    }
+  ]
+}
