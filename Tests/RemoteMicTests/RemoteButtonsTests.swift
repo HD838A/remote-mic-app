@@ -4295,6 +4295,7 @@ struct RemoteButtonsTests {
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let settings = AppSettings(defaults: defaults)
         let firstProfileID = settings.registerBluetoothRemote(identifier: UUID())
+        settings.updateRemoteProfileModel(firstProfileID, model: .rc003)
         settings.selectRemoteProfile(firstProfileID)
         let shortcut = CustomKeyboardShortcut(
             keyCode: 40,
@@ -4306,6 +4307,7 @@ struct RemoteButtonsTests {
         settings.setAction(.showDesktop, for: .tv, trigger: .doubleClick)
 
         let secondProfileID = settings.registerBluetoothRemote(identifier: UUID())
+        settings.updateRemoteProfileModel(secondProfileID, model: .rc003)
 
         #expect(settings.configuredAction(
             for: .menu,
@@ -4327,6 +4329,37 @@ struct RemoteButtonsTests {
         ).action == .customShortcut)
     }
 
+    @Test func anotherModelDoesNotInheritTheSelectedRemotesMappings() throws {
+        let suiteName = "RemoteMicTests.\(UUID().uuidString)"
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = AppSettings(defaults: defaults)
+        let rc003ProfileID = settings.registerBluetoothRemote(identifier: UUID())
+        settings.updateRemoteProfileModel(rc003ProfileID, model: .rc003)
+        settings.selectRemoteProfile(rc003ProfileID)
+        settings.setAction(.openCodex, for: .menu)
+        settings.setAction(.showDesktop, for: .tv, trigger: .doubleClick)
+
+        let rc001ProfileID = settings.registerBluetoothRemote(identifier: UUID())
+        #expect(settings.configuredAction(
+            for: .menu,
+            trigger: .singleClick,
+            profileID: rc001ProfileID
+        ).action == AppSettings.defaultBindings[.menu])
+        settings.updateRemoteProfileModel(rc001ProfileID, model: .rc001)
+
+        #expect(settings.configuredAction(
+            for: .menu,
+            trigger: .singleClick,
+            profileID: rc001ProfileID
+        ).action == AppSettings.defaultBindings[.menu])
+        #expect(settings.configuredAction(
+            for: .tv,
+            trigger: .doubleClick,
+            profileID: rc001ProfileID
+        ).action == .disabled)
+    }
+
     @Test func HIDRemotesAreAutomaticallyAssignedAndKeepIndependentProfiles() throws {
         let suiteName = "RemoteMicTests.\(UUID().uuidString)"
         let defaults = try #require(TestUserDefaults(suiteName: suiteName))
@@ -4335,7 +4368,9 @@ struct RemoteButtonsTests {
         settings.setAction(.openCodex, for: .menu)
 
         let firstProfileID = settings.registerHIDRemote(fingerprint: "hid-one")
+        settings.updateRemoteProfileModel(firstProfileID, model: .rc003)
         let secondProfileID = settings.registerHIDRemote(fingerprint: "hid-two")
+        settings.updateRemoteProfileModel(secondProfileID, model: .rc003)
 
         #expect(firstProfileID != secondProfileID)
         #expect(settings.profileID(forHIDFingerprint: "hid-one") == firstProfileID)

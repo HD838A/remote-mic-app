@@ -185,6 +185,138 @@ struct RemoteProfilePersistenceTests {
         #expect(settings.remoteDeviceProfiles.first?.customName.isEmpty == true)
     }
 
+    /// One physical RC003 can leave an HID-only profile and a BLE-only profile. The card
+    /// used to ask the BLE profile for HID readiness and stay at "状态确认中"; merging the
+    /// pair keeps the HID monitor, mappings and selection on one record.
+    @Test func complementaryHIDAndBLEProfilesOfTheSameModelAreMerged() throws {
+        let scope = try Self.scopedSettings("complementary-pair")
+        defer { scope.tearDown() }
+        let hidID = UUID()
+        let bleID = UUID()
+        var bindings = AppSettings.defaultBindings
+        bindings[.menu] = .openCodex
+        let hid = RemoteDeviceProfile(
+            id: hidID,
+            model: .rc003,
+            hidFingerprint: "hid-rc003",
+            mappings: RemoteDeviceMappings(
+                buttonBindings: bindings,
+                buttonShortcuts: [:],
+                secondaryButtonBindings: [:]
+            )
+        )
+        let ble = RemoteDeviceProfile(
+            id: bleID,
+            model: .rc003,
+            lastKnownBluetoothName: "小米蓝牙语音遥控器",
+            bluetoothIdentifier: UUID(),
+            mappings: RemoteDeviceMappings(
+                buttonBindings: AppSettings.defaultBindings,
+                buttonShortcuts: [:],
+                secondaryButtonBindings: [:]
+            )
+        )
+        scope.defaults.set(try JSONEncoder().encode([hid, ble]), forKey: "remoteDeviceProfiles")
+        scope.defaults.set(hidID.uuidString, forKey: "selectedRemoteProfileID")
+
+        let settings = AppSettings(defaults: scope.defaults)
+        let replacements = settings.reconcileComplementaryRemoteProfiles(
+            connectedProfileIDs: [bleID],
+            activeHIDProfileIDs: [hidID]
+        )
+
+        #expect(replacements[bleID] == hidID)
+        #expect(settings.remoteDeviceProfiles.count == 1)
+        let merged = try #require(settings.remoteDeviceProfiles.first)
+        #expect(merged.id == hidID)
+        #expect(merged.hidFingerprint == "hid-rc003")
+        #expect(merged.bluetoothIdentifier != nil)
+        #expect(merged.lastKnownBluetoothName == "小米蓝牙语音遥控器")
+        #expect(merged.mappings.parsedButtonBindings[.menu] == .openCodex)
+        #expect(settings.selectedRemoteProfileID == hidID)
+    }
+
+    @Test func complementaryProfilesOfDifferentModelsStaySeparate() throws {
+        let scope = try Self.scopedSettings("complementary-models")
+        defer { scope.tearDown() }
+        let hid = RemoteDeviceProfile(
+            model: .rc003,
+            hidFingerprint: "hid-rc003",
+            mappings: RemoteDeviceMappings(
+                buttonBindings: AppSettings.defaultBindings,
+                buttonShortcuts: [:],
+                secondaryButtonBindings: [:]
+            )
+        )
+        let ble = RemoteDeviceProfile(
+            model: .rc001,
+            bluetoothIdentifier: UUID(),
+            mappings: RemoteDeviceMappings(
+                buttonBindings: AppSettings.defaultBindings,
+                buttonShortcuts: [:],
+                secondaryButtonBindings: [:]
+            )
+        )
+        scope.defaults.set(try JSONEncoder().encode([hid, ble]), forKey: "remoteDeviceProfiles")
+
+        let settings = AppSettings(defaults: scope.defaults)
+        let replacements = settings.reconcileComplementaryRemoteProfiles(
+            connectedProfileIDs: [ble.id],
+            activeHIDProfileIDs: [hid.id]
+        )
+
+        #expect(replacements.isEmpty)
+        #expect(settings.remoteDeviceProfiles.count == 2)
+    }
+
+    @Test func ambiguousComplementaryProfilesStaySeparate() throws {
+        let scope = try Self.scopedSettings("complementary-ambiguous")
+        defer { scope.tearDown() }
+        let mappings = RemoteDeviceMappings(
+            buttonBindings: AppSettings.defaultBindings,
+            buttonShortcuts: [:],
+            secondaryButtonBindings: [:]
+        )
+        let profiles = [
+            RemoteDeviceProfile(model: .rc003, hidFingerprint: "hid-a", mappings: mappings),
+            RemoteDeviceProfile(model: .rc003, hidFingerprint: "hid-b", mappings: mappings),
+            RemoteDeviceProfile(model: .rc003, bluetoothIdentifier: UUID(), mappings: mappings),
+            RemoteDeviceProfile(model: .rc003, bluetoothIdentifier: UUID(), mappings: mappings),
+        ]
+        scope.defaults.set(try JSONEncoder().encode(profiles), forKey: "remoteDeviceProfiles")
+
+        let settings = AppSettings(defaults: scope.defaults)
+        let replacements = settings.reconcileComplementaryRemoteProfiles(
+            connectedProfileIDs: Set(profiles.filter { $0.bluetoothIdentifier != nil }.map(\.id)),
+            activeHIDProfileIDs: Set(profiles.filter { $0.hidFingerprint != nil }.map(\.id))
+        )
+
+        #expect(replacements.isEmpty)
+        #expect(settings.remoteDeviceProfiles.count == 4)
+    }
+
+    @Test func complementaryProfilesRequireBothSidesToBeLive() throws {
+        let scope = try Self.scopedSettings("complementary-live")
+        defer { scope.tearDown() }
+        let mappings = RemoteDeviceMappings(
+            buttonBindings: AppSettings.defaultBindings,
+            buttonShortcuts: [:],
+            secondaryButtonBindings: [:]
+        )
+        let hid = RemoteDeviceProfile(model: .rc003, hidFingerprint: "hid-rc003", mappings: mappings)
+        let ble = RemoteDeviceProfile(model: .rc003, bluetoothIdentifier: UUID(), mappings: mappings)
+        scope.defaults.set(try JSONEncoder().encode([hid, ble]), forKey: "remoteDeviceProfiles")
+
+        let settings = AppSettings(defaults: scope.defaults)
+        let replacements = settings.reconcileComplementaryRemoteProfiles(
+            connectedProfileIDs: [],
+            activeHIDProfileIDs: [hid.id]
+        )
+
+        #expect(replacements.isEmpty)
+        #expect(settings.remoteDeviceProfiles.count == 2)
+    }
+
     /// A bridge whose `deviceIdentifier` is known without CoreBluetooth: with no peripheral
     /// attached it reports its target identifier, which is what the model keys profiles by.
     @MainActor

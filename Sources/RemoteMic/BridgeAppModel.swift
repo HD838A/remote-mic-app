@@ -5344,9 +5344,31 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         var liveProfileIDs = connectedRemoteProfileIDs
         liveProfileIDs.formUnion(connectedAppleRemoteProfileIDs)
         liveProfileIDs.formUnion(connectedChromecastProfileIDs)
-        let replacements = settings.collapseDuplicateRemoteProfiles(
+        var replacements = settings.collapseDuplicateRemoteProfiles(
             preferring: liveProfileIDs
         )
+        let activeHIDProfileIDs = Set(hidMonitors.values.compactMap { monitor -> UUID? in
+            guard monitor.status.key.hasPrefix("button_mapping.status.connected") else {
+                return nil
+            }
+            return monitor.profileID
+        })
+        let pairedReplacements = settings.reconcileComplementaryRemoteProfiles(
+            connectedProfileIDs: liveProfileIDs,
+            activeHIDProfileIDs: activeHIDProfileIDs
+        )
+        replacements.merge(pairedReplacements) { existing, _ in existing }
+        func finalProfileID(_ profileID: UUID) -> UUID {
+            var current = profileID
+            var seen = Set<UUID>()
+            while let next = replacements[current], next != current, seen.insert(current).inserted {
+                current = next
+            }
+            return current
+        }
+        replacements = Dictionary(uniqueKeysWithValues: replacements.map {
+            ($0.key, finalProfileID($0.value))
+        })
         guard !replacements.isEmpty else { return }
         for (discarded, kept) in replacements {
             if let name = remoteSystemDeviceNames[discarded], remoteSystemDeviceNames[kept] == nil {
@@ -5356,16 +5378,33 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             if let level = remoteBatteryLevels[discarded], remoteBatteryLevels[kept] == nil {
                 remoteBatteryLevels[kept] = level
             }
+            remoteBatteryLevels.removeValue(forKey: discarded)
             if let state = remotePowerStates[discarded], remotePowerStates[kept] == nil {
                 remotePowerStates[kept] = state
             }
+            remotePowerStates.removeValue(forKey: discarded)
             if let model = pendingRemoteModels[discarded], pendingRemoteModels[kept] == nil {
                 pendingRemoteModels[kept] = model
             }
+            pendingRemoteModels.removeValue(forKey: discarded)
+            if let readiness = remoteButtonReadiness[discarded], remoteButtonReadiness[kept] == nil {
+                remoteButtonReadiness[kept] = readiness
+            }
+            remoteButtonReadiness.removeValue(forKey: discarded)
+            if let recovery = remoteRecoveryStates[discarded], remoteRecoveryStates[kept] == nil {
+                remoteRecoveryStates[kept] = recovery
+            }
+            remoteRecoveryStates.removeValue(forKey: discarded)
+            lastLoggedCardStatuses.removeValue(forKey: discarded)
+            screenshotCardStatuses.removeValue(forKey: discarded)
             for (device, profileID) in appleRemoteProfileIDs where profileID == discarded {
                 appleRemoteProfileIDs[device] = kept
             }
         }
+        connectedRemoteProfileIDs = Set(connectedRemoteProfileIDs.map {
+            replacements[$0] ?? $0
+        })
+        refreshBluetoothPresentation()
         AppLogger.shared.write(
             "REMOTE PROFILES phase=completed result=collapsed merged=\(replacements.count) " +
                 "remaining=\(settings.remoteDeviceProfiles.count)"
