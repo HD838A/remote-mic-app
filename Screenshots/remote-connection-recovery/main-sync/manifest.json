@@ -1,0 +1,46 @@
+{
+  "batch": "remote-connection-recovery-main-sync-20261116",
+  "date": "2026-11-16",
+  "purpose": "PR #1072 production SettingsView smoke review after origin/main synchronization",
+  "source_commit": "4b5d37411704e8fcf5c586f5e452b62fc9fe2480",
+  "version": "2.0.4",
+  "build": "324",
+  "storage": "GitHub attachments; original bytes retained outside repository",
+  "evidence_url": "https://github.com/HD838A/remote-mic-app/pull/1072#issuecomment-6907499342",
+  "rendering": "public debug inspection App built by scripts/build-app.sh; production SettingsView; isolated profiles; 1067x732 pt content",
+  "boundary": "All originals visually checked and hashes verified. No real Bluetooth, audio or permission acceptance. Not a distribution asset. User authorized merge after automation and will test hardware.",
+  "items": [
+    {
+      "file": "failed-en-light/connection-1067x732.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1464,
+      "sha256": "bfb3910f41eaa78be8b0cba5ae7b5fb7655dc15e9985cbd89a7577c8baf0c0e8",
+      "url": "https://github.com/user-attachments/assets/46cdadb1-8266-4916-b1ca-dac869570137"
+    },
+    {
+      "file": "offline-zh-Hans-light/connection-1067x732.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1464,
+      "sha256": "b3f20e67f76edd6a9a44eefd5836341aa81b614d4e53931a953abc1484d1f69b",
+      "url": "https://github.com/user-attachments/assets/d555b8d9-5ada-4ba6-a57a-8a20a9a07d01"
+    },
+    {
+      "file": "paused-en-dark/connection-1067x732.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1464,
+      "sha256": "0506191e4d39fbf74674a336c92a55f3b0cbd32ed0b51081ea2a1915a7b3c3b2",
+      "url": "https://github.com/user-attachments/assets/3136236f-ada1-4426-8800-8e54c4fb921c"
+    },
+    {
+      "file": "recovering-zh-Hans-dark/connection-1067x732.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1464,
+      "sha256": "82704852dfa06f4e3842e0fe9e2d6bdd1e9456c2f927aef2364e6fbefa452713",
+      "url": "https://github.com/user-attachments/assets/9910827b-5973-438b-a097-0b7d522e8719"
+    }
+  ]
+}
