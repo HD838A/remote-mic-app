@@ -129,9 +129,13 @@ struct SettingsCorruptionRecoveryTests {
 
         #expect(settings.corruptedSettingKeys == ["remoteDeviceProfiles"])
         #expect(defaults.data(forKey: "remoteDeviceProfiles.corrupt") == payload)
-        // Unlike `buttonBindings`, this key is pre-initialized to `[]` before the load, so the
-        // migration assignment fires its `didSet` and persists over the unreadable payload
-        // during the very same launch. The ".corrupt" copy is the only surviving evidence.
+        // The load-time write-back guard keeps the unreadable payload in place until a later
+        // save. The ".corrupt" copy and the fallback profile are still available now.
+        #expect(defaults.data(forKey: "remoteDeviceProfiles") == payload)
+        // The first later save preserves the original bytes in the recovery key before it
+        // replaces the live value.
+        settings.registerBluetoothRemote(identifier: UUID())
+        #expect(defaults.data(forKey: AppSettings.unreadableRemoteProfilesBackupKey) == payload)
         #expect(defaults.data(forKey: "remoteDeviceProfiles") != payload)
         // Same fallback as before: one migrated profile carrying the legacy mappings.
         #expect(settings.remoteDeviceProfiles.count == 1)
