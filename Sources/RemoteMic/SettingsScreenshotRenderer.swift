@@ -111,6 +111,9 @@ enum SettingsScreenshotRenderer {
         let membershipAccess = ProcessInfo.processInfo.environment[
             "REMOTE_MIC_SETTINGS_SCREENSHOT_MEMBERSHIP_ACCESS"
         ]
+        let noticeFixture = ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_SETTINGS_SCREENSHOT_NOTICE"
+        ]
         if mappingScenario != nil {
             guard let storage = ProcessInfo.processInfo.environment["SAYALL_MACRO_STORAGE_ROOT"],
                   URL(fileURLWithPath: storage).standardizedFileURL.path.hasPrefix(outputDirectory.standardizedFileURL.path + "/")
@@ -398,7 +401,7 @@ enum SettingsScreenshotRenderer {
                 initialMappingVoiceSettingsPresented: section == .mapping && opensVoiceSettings,
                 supplementalSettings: supplementalSettings,
                 sidebarAccountDisplayName: sidebarAccountDisplayName
-            ).environmentObject(localization))
+            ).environmentObject(localization).noticeHost())
             let window = NSWindow(contentRect: NSRect(origin: .zero, size: size),
                 styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
                 backing: .buffered, defer: false)
@@ -416,6 +419,7 @@ enum SettingsScreenshotRenderer {
             NSApp.setActivationPolicy(.regular)
             window.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
+            showNoticeFixtureIfNeeded(noticeFixture, section: section, localization: localization)
             NSApp.run()
             return
         }
@@ -444,6 +448,7 @@ enum SettingsScreenshotRenderer {
             )
             .environmentObject(localization)
             .frame(width: size.width, height: size.height)
+            .noticeHost()
             let hostingController = NSHostingController(rootView: rootView)
             let window = NSWindow(
                 contentRect: NSRect(origin: .zero, size: size),
@@ -455,6 +460,7 @@ enum SettingsScreenshotRenderer {
             window.title = "SayAll — UI check"
             window.setContentSize(size)
             window.orderFront(nil)
+            showNoticeFixtureIfNeeded(noticeFixture, section: section, localization: localization)
             if interactive {
                 // The production settings view uses isolated screenshot data;
                 // this bounded mode permits clicks without starting hardware.
@@ -491,8 +497,49 @@ enum SettingsScreenshotRenderer {
             try png.write(to: outputDirectory.appendingPathComponent(filename))
             window.orderOut(nil)
             window.contentViewController = nil
+            NoticeCenter.shared.dismiss()
         }
 
+    }
+
+    /// 按需把提示气泡放进生产设置视图，供离屏截图复核视觉，不改变默认截图内容。
+    private static func showNoticeFixtureIfNeeded(
+        _ fixture: String?,
+        section: SettingsSection,
+        localization: LocalizationStore
+    ) {
+        guard section == .mapping, let fixture else { return }
+        switch fixture {
+        case "profile-created":
+            NoticeCenter.shared.show(Notice(
+                tier: .tip,
+                title: localization.text("button_mapping.profile.created"),
+                text: localization.text("button_mapping.profile.created.detail"),
+                dismissal: .manual,
+                position: .bottom,
+                dismissible: false
+            ))
+        case "custom-application-verification-pending":
+            NoticeCenter.shared.show(Notice(
+                tier: .warning,
+                title: localization.text("button_mapping.pending_verification.title"),
+                text: localization.text("button_mapping.pending_verification.detail"),
+                dismissal: .manual,
+                position: .bottom,
+                dismissible: false
+            ))
+        case "button-action-failed":
+            NoticeCenter.shared.show(Notice(
+                tier: .warning,
+                title: localization.text("button_mapping.action_failed.title"),
+                text: localization.text("button_mapping.action_failed.detail"),
+                dismissal: .manual,
+                position: .bottom,
+                dismissible: false
+            ))
+        default:
+            return
+        }
     }
 
     private static func seedMixedHistory(

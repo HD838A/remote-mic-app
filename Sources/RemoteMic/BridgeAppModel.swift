@@ -685,6 +685,13 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     )
     private let audioOutput = VirtualAudioOutput()
     private let diagnosticLogUploader: DiagnosticLogUploader
+    private let externalActionSender: (
+        ButtonAction,
+        CustomKeyboardShortcut?,
+        CustomApplicationProfile?,
+        Bool
+    ) -> Bool
+    private let customApplicationURLResolver: (String) -> URL?
     private var recordingPlayback: AVAudioPlayer?
 
     func isOnboardingControlSourceConnected(_ source: OnboardingControlSource) -> Bool {
@@ -914,6 +921,8 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     private let hidEventSuppressor = KeyboardEventSuppressor()
     private var hidMonitors: [String: HIDRemoteMonitor] = [:]
     private var discoveryHIDMonitor: HIDRemoteMonitor?
+    private var hidMonitorRebuildWorkItem: DispatchWorkItem?
+    private var hidMonitorRebuildPending = false
     private lazy var siriRemoteFeature = SiriRemoteFeatureIntegration(
         logger: { AppLogger.shared.write($0) }
     )
@@ -1079,7 +1088,23 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         loginItemService: LoginItemService = LoginItemService(),
         transcriptArchiveStore: TranscriptArchiveStore = TranscriptArchiveStore(),
         recordingAssetStore: RecordingAssetStore = RecordingAssetStore(),
-        diagnosticLogUploader: DiagnosticLogUploader = .shared
+        diagnosticLogUploader: DiagnosticLogUploader = .shared,
+        externalActionSender: @escaping (
+            ButtonAction,
+            CustomKeyboardShortcut?,
+            CustomApplicationProfile?,
+            Bool
+        ) -> Bool = {
+            KeyboardInjector.send(
+                $0,
+                shortcut: $1,
+                applicationProfile: $2,
+                focusCustomApplication: $3
+            )
+        },
+        customApplicationURLResolver: @escaping (String) -> URL? = {
+            NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0)
+        }
     ) {
         self.settings = settings
         self.privateFeature = privateFeature
@@ -1089,6 +1114,8 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         self.transcriptArchiveStore = transcriptArchiveStore
         self.recordingAssetStore = recordingAssetStore
         self.diagnosticLogUploader = diagnosticLogUploader
+        self.externalActionSender = externalActionSender
+        self.customApplicationURLResolver = customApplicationURLResolver
         super.init()
         if settings.siriRemoteEnabled, settings.siriRemoteNeedsUserAction {
             siriRemoteAudioStatus = "unavailable:authorization_user_action_required"
@@ -1607,6 +1634,12 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     }
 
     func stop() {
+        if hidMonitorRebuildWorkItem != nil {
+            AppLogger.shared.write("HID MONITOR REBUILD phase=cancelled reason=app_stop")
+        }
+        hidMonitorRebuildWorkItem?.cancel()
+        hidMonitorRebuildWorkItem = nil
+        hidMonitorRebuildPending = false
         cancelConfiguredButtonInteractions(reason: "app_stop")
         // 退出、断连或映射关闭都必须抬起被按住的键，绝不让它在系统里留到下次启动。
         KeyboardHoldExecution.shared.end(reason: "app_stop")
@@ -4081,6 +4114,49 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         startHIDDiscoveryIfNeeded(allowBackOnly: backOnlyMode)
     }
 
+    /// discovery monitor 提升为 profile monitor 后，不复用可能已经静默的旧回调。
+    ///
+    /// 现场日志显示提升后的 device 与 manager 回调可以同时停止；此时新 discovery
+    /// 只会把同一指纹当作 excluded。异步重建一组全新的 profile monitor，让
+    /// IOHIDManager 和 device callback 重新绑定，同时保留当前这次按键的执行结果。
+    private func scheduleHIDMonitorRebuildAfterDiscoveryAdoption() {
+        hidMonitorRebuildPending = false
+        hidMonitorRebuildWorkItem?.cancel()
+        guard HIDMonitorRebuildPolicy.shouldSchedule(
+            started: started,
+            customMappingEnabled: settings.customMappingEnabled,
+            isStreaming: isStreaming
+        ) else {
+            if started, settings.customMappingEnabled, isStreaming {
+                hidMonitorRebuildPending = true
+                AppLogger.shared.write("HID MONITOR REBUILD phase=deferred reason=voice_active")
+            }
+            return
+        }
+
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            guard HIDMonitorRebuildPolicy.shouldSchedule(
+                started: self.started,
+                customMappingEnabled: self.settings.customMappingEnabled,
+                isStreaming: self.isStreaming
+            ) else {
+                if self.started, self.settings.customMappingEnabled, self.isStreaming {
+                    self.hidMonitorRebuildPending = true
+                    AppLogger.shared.write(
+                        "HID MONITOR REBUILD phase=deferred reason=voice_active"
+                    )
+                }
+                return
+            }
+            AppLogger.shared.write("HID MONITOR REBUILD phase=started reason=discovery_adoption")
+            self.startHIDMonitors(powerKeySuppressed: self.hidPowerKeySuppressed)
+            AppLogger.shared.write("HID MONITOR REBUILD phase=completed reason=discovery_adoption")
+        }
+        hidMonitorRebuildWorkItem = workItem
+        DispatchQueue.main.async(execute: workItem)
+    }
+
     // A controller per physical or companion source keeps simultaneous holds isolated.
     private var configuredButtonInteractions: [String: RemoteButtonInteractionController] = [:]
     private var configuredButtonInteractionOwners: [String: UUID] = [:]
@@ -4343,7 +4419,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
                 self.hidMonitors[fingerprint] = monitor
                 if self.discoveryHIDMonitor === monitor {
                     self.discoveryHIDMonitor = nil
-                    self.startHIDDiscoveryIfNeeded()
+                    self.scheduleHIDMonitorRebuildAfterDiscoveryAdoption()
                 }
             }
             self.selectRemoteProfile(resolvedProfileID)
@@ -7356,6 +7432,13 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         if systemAudioSuspensionState.isSuspended {
             releaseVirtualAudioOutputIfUnused(reason: "system_suspended_after_bluetooth_voice")
         }
+        if HIDMonitorRebuildPolicy.shouldRetryAfterVoiceStop(
+            wasDeferred: hidMonitorRebuildPending,
+            started: started,
+            customMappingEnabled: settings.customMappingEnabled
+        ) {
+            scheduleHIDMonitorRebuildAfterDiscoveryAdoption()
+        }
     }
 
     func bluetoothBridge(_ bridge: XiaomiBluetoothBridge, didDecode samples: [Int16]) {
@@ -8100,19 +8183,49 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         KeyboardHoldExecution.shared.end(reason: reason)
     }
 
-    private func performExternalConfiguredAction(_ configured: ConfiguredButtonAction) -> Bool {
-        guard !macroFeature.hasPendingPortableImport else { return false }
+    @discardableResult
+    func performExternalConfiguredAction(_ configured: ConfiguredButtonAction) -> Bool {
+        guard !macroFeature.hasPendingPortableImport else {
+            presentButtonActionFailureNotice()
+            return false
+        }
         if configured.action == .combinationAction {
-            return macroFeature.executeMacro(id: configured.macroID)
+            let handled = macroFeature.executeMacro(id: configured.macroID)
+            if !handled { presentButtonActionFailureNotice() }
+            return handled
         }
         let applicationProfile = settings.customApplicationProfile(
             id: configured.applicationProfileID
         )
+        var customApplicationFocusAllowed = true
         if configured.action == .openCustomApplication {
-            guard let profile = applicationProfile,
-                !settings.portableApplicationRequiresVerification(profile),
-                NSWorkspace.shared.urlForApplication(withBundleIdentifier: profile.bundleIdentifier) != nil
-            else { return false }
+            let requiresVerification = applicationProfile.map {
+                settings.portableApplicationRequiresVerification($0)
+            } ?? false
+            let applicationURL = applicationProfile.flatMap {
+                customApplicationURLResolver($0.bundleIdentifier)
+            }
+            switch CustomApplicationLaunchPlan.resolve(
+                profile: applicationProfile,
+                requiresVerification: requiresVerification,
+                applicationURL: applicationURL
+            ) {
+            case .unavailable:
+                AppLogger.shared.write(
+                    "BUTTON ACTION action=openCustomApplication phase=failed " +
+                        "result=unavailable reason=profile_or_application_missing"
+                )
+                presentButtonActionFailureNotice()
+                return false
+            case .open(let focusAllowed):
+                customApplicationFocusAllowed = focusAllowed
+                if !focusAllowed {
+                    AppLogger.shared.write(
+                        "BUTTON ACTION action=openCustomApplication phase=requested " +
+                            "result=dispatched focus=skipped reason=verification_pending"
+                    )
+                }
+            }
         }
         let requestID = settings.voiceFnTapModeEnabled
             ? VoiceInputDestinationIntent.resolve(
@@ -8120,15 +8233,43 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
                 applicationProfile: applicationProfile
             ).map { voiceInputDestinationCoordinator.beginTargetSwitch(intent: $0) }
             : nil
-        let handled = KeyboardInjector.send(
+        let handled = externalActionSender(
             configured.action,
-            shortcut: configured.shortcut,
-            applicationProfile: applicationProfile
+            configured.shortcut,
+            applicationProfile,
+            customApplicationFocusAllowed
         )
-        if !handled, let requestID {
-            voiceInputDestinationCoordinator.cancel(requestID: requestID, reason: .actionFailed)
+        if !handled {
+            presentButtonActionFailureNotice()
+            if let requestID {
+                voiceInputDestinationCoordinator.cancel(requestID: requestID, reason: .actionFailed)
+            }
+        } else if configured.action == .openCustomApplication, !customApplicationFocusAllowed {
+            presentCustomApplicationVerificationNotice()
         }
         return handled
+    }
+
+    private func presentButtonActionFailureNotice() {
+        Task { @MainActor in
+            NoticeCenter.shared.show(Notice(
+                tier: .warning,
+                title: noticeLocalized("button_mapping.action_failed.title"),
+                text: noticeLocalized("button_mapping.action_failed.detail"),
+                position: .bottom
+            ))
+        }
+    }
+
+    private func presentCustomApplicationVerificationNotice() {
+        Task { @MainActor in
+            NoticeCenter.shared.show(Notice(
+                tier: .warning,
+                title: noticeLocalized("button_mapping.pending_verification.title"),
+                text: noticeLocalized("button_mapping.pending_verification.detail"),
+                position: .bottom
+            ))
+        }
     }
 
     private func handleVoiceInputDestinationState(_ state: VoiceInputDestinationState) {

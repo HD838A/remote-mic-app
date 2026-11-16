@@ -1,5 +1,7 @@
+import AppKit
 import CoreGraphics
 import Foundation
+import SwiftUI
 import Testing
 @testable import RemoteMic
 
@@ -186,6 +188,31 @@ struct NoticeActionTests {
         #expect(Notice.defaultDismissal(for: .tip) == .automatic(2.4))
         #expect(Notice.defaultDismissal(for: .warning) == .automatic(4.0))
         #expect(Notice.defaultDismissal(for: .error) == .automatic(6.0))
+    }
+}
+
+@Suite("Notice bubble layout")
+@MainActor
+struct NoticeBubbleLayoutTests {
+    private func fittingSize(title: String, text: String? = nil) -> CGSize {
+        NSHostingView(
+            rootView: NoticeBubble(tier: .tip, title: title, text: text)
+        ).fittingSize
+    }
+
+    @Test func shortNoticeHugsItsContent() {
+        let size = fittingSize(title: "已保存")
+        #expect(size.width < 300)
+        #expect(size.width >= 80)
+    }
+
+    @Test func longNoticeWrapsAtTheDesignLimit() {
+        let size = fittingSize(
+            title: String(repeating: "很长的提示标题", count: 20),
+            text: String(repeating: "这里是说明文字。", count: 20)
+        )
+        #expect(size.width <= 361)
+        #expect(size.height > 100)
     }
 }
 

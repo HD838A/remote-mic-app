@@ -1,6 +1,11 @@
 # Bug 记录
 
 - [历史设备持续盲连且缺少手动恢复入口](./2026-11-15-bounded-remote-recovery.md)
+- [HID 普通按键动作失败会停止整台遥控器](./2026-11-16-hid-action-failure-stops-all-buttons.md)
+
+- [Preview publication 在 feed 同步前要求 preview channel 已更新](./2026-11-16-preview-publication-feed-order.md)
+
+- [私有发布构件把本机构建路径带进 2.0.3 发布 App](./2026-11-16-private-release-local-build-paths.md)
 
 - [PreferredInputSourceMonitor 取消测试依赖真实 timer，CI 偶发超时失败](./2026-11-15-preferred-input-source-activation-timeout-flake.md)
 

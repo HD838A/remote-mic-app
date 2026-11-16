@@ -92,8 +92,42 @@ path == .device || !hasDeviceCallback
   - 快速连续按下和松开；
   - 语音键按下/释放与尾字完整。
 
+## 2026-11-15 当前会话 FAF36134 复核
+
+- `23:03:36.889` App 启动；`23:03:39.216` 第一次 BLE READY。启动后约 1.8 秒内第二组 HID monitor 启动，持有设备的 monitor 在 `23:03:39.266` 再次注册 device callback。
+- `23:07:01.885`–`23:12:38.850`：共 328 条 `HID REPORT rejected`，其中 164 条 `target_fingerprint_mismatch`、164 条 `excluded_fingerprint`；`HID REPORT accepted` 为 **0**。
+- `23:12:31` 点击“立即重新连接”后 BLE READY，HID monitor 再次重启；之后仍有 20 条 rejected，accepted 仍为 0。说明重连只重建 BLE，没有恢复持有设备 monitor 的 device 报告。
+- 持有设备 monitor 的 `HID CONNECTED` 和状态菜单“按键功能已连接”只证明设备已打开，不证明报告仍在投递。
+
+## 路径健康回归测试
+
+- 将路径窗口、manager fallback、watchdog 退避与上限提取为 `HIDReportPathHealth`，由 HID 报告线程按实际到达的报告更新。
+- 新增测试覆盖：
+  - device 回调静默、manager 有报告时，必须记录 manager fallback，并在连续两个 manager-only 窗口后请求重挂 device 回调；
+  - device 报告恢复后必须记录 `device_delivery=recovered`，并停止 manager fallback；
+  - 重复 manager 报告不得计为 fallback；
+  - 重挂请求必须遵守 60 秒退避、每个 monitor 最多 3 次，耗尽后只记录一次 exhausted；
+  - 源码守卫禁止恢复 `path == .device || !hasDeviceCallback` 的旧判据。
+
+## 2026-11-16 01:20 Build 322 discovery 提升复核
+
+- 会话 `9E9EB1D0`，Build 322，源提交 `50fcdb23`，已包含 #1070/#1077。01:18 的 `49B48964` 会话 device 路径正常（26 条 accepted），但 01:20 会话再次失败。
+- `17:21:21` 配置变化后只剩一个 discovery monitor（`HID START ... target_bound=false`），没有 profile monitor。
+- `17:21:38.946` 出现 `HID REPORT PATH fallback=manager reason=device_silent`；`17:21:38.977` discovery monitor 探测并提升为 profile monitor（`HID CONNECTED mode=probed`），随后通过 `path=manager` 接受了一次 `volume_up`。
+- 提升后该 monitor 的 device 与 manager 回调同时静默；新启动的 discovery monitor 收到 73 条后续报告，全部以 `excluded_fingerprint path=manager` 拒绝。按钮因此再次无响应，语音键仍可用。
+- 结论：不能复用处于 probing 状态、刚被提升的 discovery monitor；它的回调生命周期已经失效。必须在提升后重建全新的 profile monitor。
+
+## discovery 提升重建
+
+- `HIDMonitorRebuildPolicy` 决定何时重建：必须已启动、自定义映射开启且不在语音会话中；语音中只记 `HID MONITOR REBUILD phase=deferred reason=voice_active`，语音结束后重试。
+- discovery monitor 提升为新 HID profile 后，持久化 profile，异步停止并重建全部 HID monitor；当前这次按键仍先执行，后续报告由全新的 `IOHIDManager`/device callback 接管。
+- 日志新增 `HID MONITOR REBUILD phase=started|completed|cancelled|deferred reason=...`，不记录 fingerprint 或原始 payload。
+- 回归测试：`HIDMonitorRebuildPolicyTests` 覆盖调度条件、语音中延迟与语音结束后重试，以及源码守卫禁止恢复“提升后只启动 discovery monitor”的旧路径。
+
 ## 日志判读
 
+- `HID MONITOR REBUILD phase=started reason=discovery_adoption`：discovery 提升后已开始重建 profile monitor。
+- `HID MONITOR REBUILD phase=completed reason=discovery_adoption`：重建完成，后续报告应进入新的 `HID START ... target_bound=true` monitor。
 - `HID REPORT accepted ... path=device`：device 路径正常。
 - `HID REPORT accepted ... path=manager`：device 路径静默，manager 兜底在工作。
 - `HID REPORT PATH fallback=manager reason=device_silent`：device 路径曾经或当前没有投递。

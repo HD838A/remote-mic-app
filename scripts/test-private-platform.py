@@ -1182,7 +1182,8 @@ class ReleaseContentTests(unittest.TestCase):
                 if expected_group:
                     failed = [(record["stage"], record["exitCode"]) for record in records
                               if record["result"] == "failed"]
-                    self.assertEqual(failed, [(f"app-content-{expected_group}", expected_code)])
+                    self.assertEqual(failed, [(f"app-content-{expected_group}", expected_code),
+                                              (f"app-content-{expected_group}-other", 1)])
                     report = subprocess.run([str(ROOT / "scripts/run-release-stage.sh"),
                                              "report-status", str(status_file)],
                                             check=True, capture_output=True, text=True)
@@ -1201,6 +1202,72 @@ class ReleaseContentTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn("bundle contains a forbidden", result.stderr)
         self.assertNotIn("PRIVATE_CONTENT_CANARY", result.stdout + result.stderr)
+
+    @unittest.skipUnless(sys.platform == "darwin", "Mach-O diagnostics require the macOS linker")
+    def test_app_content_location_diagnostics_do_not_disclose_paths(self):
+        source = (ROOT / "scripts/verify-app.sh").read_text()
+        start = source.index("# Sentry's pinned SDK contains public CI __FILE__ paths")
+        end = source.index('if [[ "$REQUIRE_NOTARIZATION" == "1" ]]; then', start)
+        fixture = self.directory / "location-check.sh"
+        fixture.write_text("set -euo pipefail\n" + source[start:end])
+        app = self.directory / "fixture.app"
+        executable = app / "Contents/MacOS/RemoteMic"
+        executable.parent.mkdir(parents=True)
+        status_file = self.directory / "location-status.jsonl"
+        for architecture in ("arm64", "x86_64"):
+            with self.subTest(architecture=architecture):
+                subprocess.run(["xcrun", "clang", "-arch", architecture, "-x", "c", "-",
+                                "-Wl,-rpath,/Users/PRIVATE_CONTENT_CANARY/runtime", "-o", str(executable)],
+                               input=b'const char *marker = "/Users/PRIVATE_CONTENT_CANARY/source.swift";\n'
+                                     b'int main(void) { return marker[0]; }\n',
+                               check=True, capture_output=True)
+                status_file.write_text("")
+                result = subprocess.run(["/bin/zsh", str(fixture)],
+                                        env={**os.environ, "ROOT": str(ROOT), "APP": str(app),
+                                             "RELEASE_VARIANT": "intel" if architecture == "x86_64" else "apple-silicon",
+                                             "RELEASE_STAGE_STATUS_FILE": str(status_file)},
+                                        capture_output=True, text=True)
+                self.assertEqual(result.returncode, 1)
+                report = subprocess.run([str(ROOT / "scripts/run-release-stage.sh"),
+                                         "report-status", str(status_file)],
+                                        check=True, capture_output=True, text=True)
+                self.assertIn("stage=app-content-macos-rpath result=failed", report.stdout)
+                self.assertIn("stage=app-content-macos-strings result=failed", report.stdout)
+                for output in (result.stdout + result.stderr, report.stdout + report.stderr):
+                    self.assertNotIn("PRIVATE_CONTENT_CANARY", output)
+                    self.assertNotIn(str(app), output)
+
+    def test_release_path_sanitizer_preserves_layout_and_public_sentry_paths(self):
+        app = self.directory / "App.app"
+        macos = app / "Contents" / "MacOS"
+        macos.mkdir(parents=True)
+        binary = macos / "RemoteMic"
+        original = (
+            b"\xcf\xfa\xed\xfe"
+            + b"\0" * 4
+            + b"prefix\0/Users/private/source.swift\0"
+            + b"/Users/runner/work/sentry-cocoa/sentry-cocoa/Sources/Sentry/SentryClient.m\0"
+            + b"/tmp/remote-bridge\0AA:BB:CC:DD:EE:FF\0"
+        )
+        binary.write_bytes(original)
+
+        subprocess.run(
+            [sys.executable, str(ROOT / "scripts/sanitize-release-paths.py"), str(app)],
+            check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        )
+        sanitized = binary.read_bytes()
+        self.assertEqual(len(sanitized), len(original))
+        self.assertNotIn(b"/Users/private", sanitized)
+        self.assertNotIn(b"/tmp/remote-bridge", sanitized)
+        self.assertNotIn(b"AA:BB:CC:DD:EE:FF", sanitized)
+        self.assertIn(
+            b"/Users/runner/work/sentry-cocoa/sentry-cocoa/Sources/Sentry/SentryClient.m",
+            sanitized,
+        )
+        subprocess.run(
+            [sys.executable, str(ROOT / "scripts/sanitize-release-paths.py"), "--check", str(app)],
+            check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        )
 
     @unittest.skipUnless(sys.platform == "darwin", "Installer inspection requires macOS pkgutil")
     def test_public_driver_documentation_in_native_installer_is_accepted(self):

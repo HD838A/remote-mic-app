@@ -1352,6 +1352,11 @@
 
 "custom_application.accessibility.needs_verification" = "待学习或验证";
 
+"button_mapping.action_failed.title" = "按键动作未完成";
+"button_mapping.action_failed.detail" = "这次按键没有执行成功；其他按键仍可使用。";
+"button_mapping.pending_verification.title" = "输入框聚焦还没有验证";
+"button_mapping.pending_verification.detail" = "本次只执行打开 App，不会自动聚焦输入框。";
+
 "settings.portable_configuration.title" = "组合动作、App 配置与键位方案";
 "connection.approval.title" = "允许“%1$@”连接无线麦 SayAll？";
 "connection.approval.watch_body" = "这块 Apple Watch 将与无线麦 SayAll 通信，代替实体遥控器发送按键和麦克风声音。请确认 Apple Watch 上显示的 2 位校验码与下方一致。允许后，本次安装会成为受信任设备。";
@@ -1539,3 +1544,4 @@
 "connection.history.retry" = "重试";
 "connection.history.voice_key_ready" = "语音键已映射为 Fn";
 "connection.history.cooldown" = "请稍后重试；两次手动连接至少间隔五秒。";
+"button_mapping.profile.created.detail" = "已切换到新方案";

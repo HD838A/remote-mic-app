@@ -694,6 +694,56 @@ if rg -a -o --no-filename "$FORBIDDEN_CONTENT_PATTERN" "$APP/Contents" \
           fi
         ' -- "$FORBIDDEN_CONTENT_PATTERN" "$PUBLIC_SENTRY_PATH_PATTERN" \
         "$APP/Contents/$component" || true
+      # Only fixed Mach-O location labels leave this diagnostic. Matched bytes,
+      # filenames and section names remain inside the protected process.
+      for content_location in $(python3 - "$APP/Contents/$component" <<'PY'
+from pathlib import Path
+import re
+import struct
+import sys
+
+pattern = re.compile(rb"/Users/[^\s\x00]+|/tmp/remote-bridge|AA:BB:CC:DD:EE:FF")
+public = re.compile(rb"/Users/runner/work/sentry-cocoa/sentry-cocoa/Sources/([A-Za-z0-9_-]+/)+[A-Za-z0-9_+-]+\.(m|mm|c|cpp|h|swift)")
+root = Path(sys.argv[1])
+locations = set()
+for path in ([root] if root.is_file() else root.rglob("*")):
+    if not path.is_file() or path.is_symlink():
+        continue
+    data = path.read_bytes()
+    matches = [m for m in pattern.finditer(data) if not public.fullmatch(m.group())]
+    if not matches:
+        continue
+    ranges = []
+    if data[:4] == b"\xcf\xfa\xed\xfe":
+        offset = 32
+        for _ in range(struct.unpack_from("<I", data, 16)[0]):
+            command, size = struct.unpack_from("<II", data, offset)
+            if command in (0x8000001C, 0xC):
+                ranges.append((offset, offset + size, "rpath" if command == 0x8000001C else "dylib"))
+            elif command == 0x2:
+                start, length = struct.unpack_from("<II", data, offset + 16)
+                ranges.append((start, start + length, "symbols"))
+            elif command == 0x1D:
+                start, length = struct.unpack_from("<II", data, offset + 8)
+                ranges.append((start, start + length, "signature"))
+            elif command == 0x19:
+                for index in range(struct.unpack_from("<I", data, offset + 64)[0]):
+                    section = offset + 72 + index * 80
+                    name = data[section:section + 16].split(b"\0")[0]
+                    length, start = struct.unpack_from("<QI", data, section + 40)
+                    label = {b"__cstring": "strings", b"__const": "constants",
+                             b"__swift5_reflstr": "reflection"}.get(name, "section")
+                    ranges.append((start, start + length, label))
+            offset += size
+    for match in matches:
+        locations.add(next((label for start, end, label in ranges
+                            if start <= match.start() < end), "other"))
+print("\n".join(sorted(locations)))
+PY
+      ); do
+        "$ROOT/scripts/run-release-stage.sh" "$RELEASE_VARIANT" \
+          "app-content-${component:l}-$content_location" 3 -- /usr/bin/false || true
+      done
     fi
   done
   print -u2 "bundle contains a forbidden local path or example device address"

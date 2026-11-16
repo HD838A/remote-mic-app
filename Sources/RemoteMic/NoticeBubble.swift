@@ -142,30 +142,47 @@ struct NoticeBubble: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            titleRow
-            if let text, !text.isEmpty {
-                Text(text)
-                    .font(.system(size: 13.5))
-                    .lineSpacing(3)
-                    .foregroundStyle(.white.opacity(0.93))
-                    .fixedSize(horizontal: false, vertical: true)
+        NoticeBubbleWidthLayout(maxWidth: 360) {
+            VStack(alignment: .leading, spacing: 5) {
+                titleRow
+                if let text, !text.isEmpty {
+                    Text(text)
+                        .font(.system(size: 13.5))
+                        .lineSpacing(3)
+                        .foregroundStyle(.white.opacity(0.93))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if let action {
+                    actionButton(action)
+                        .padding(.top, 6)
+                }
             }
-            if let action {
-                actionButton(action)
-            }
+            .padding(.leading, 18)
+            .padding(.trailing, onClose == nil ? 18 : 31)
+            .padding(.vertical, 16)
         }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 16)
-        .frame(maxWidth: 360, alignment: .leading)
-        .background(
-            LinearGradient(
-                colors: [colors.base, colors.deep],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-        )
-        .clipShape(shape)
+        .background {
+            shape
+                .fill(
+                    LinearGradient(
+                        colors: [colors.base, colors.deep],
+                        startPoint: UnitPoint(x: 0.53, y: 0),
+                        endPoint: UnitPoint(x: 0.47, y: 1)
+                    )
+                )
+                .shadow(
+                    color: .black.opacity(colorScheme == .dark ? 0.50 : 0.20),
+                    radius: colorScheme == .dark ? 20 : 16,
+                    x: 0,
+                    y: colorScheme == .dark ? 12 : 8
+                )
+                .shadow(
+                    color: .black.opacity(colorScheme == .dark ? 0.35 : 0.06),
+                    radius: 3,
+                    x: 0,
+                    y: 2
+                )
+        }
         .overlay(alignment: .topTrailing) { closeButton }
         .overlay { darkRim }
         .overlay(alignment: tailAlignment) { tailShape }
@@ -188,7 +205,6 @@ struct NoticeBubble: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .foregroundStyle(.white)
-        .padding(.trailing, 22)
     }
 
     private func actionButton(_ action: NoticeAction) -> some View {
@@ -213,12 +229,16 @@ struct NoticeBubble: View {
         if let onClose {
             Button(action: onClose) {
                 Image(systemName: "xmark")
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.62))
                     .frame(width: 24, height: 24)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            // 设计稿：图标距上 / 右 13pt。24pt 命中区内再留 7pt，
+            // 12pt 图标的上缘与右缘正好落在 13pt。
+            .padding(.top, 7)
+            .padding(.trailing, 7)
             .accessibilityLabel(Text(noticeLocalized("notice.accessibility.dismiss")))
         }
     }
@@ -268,6 +288,36 @@ struct NoticeBubble: View {
         let prefix = prefixKey.map { noticeLocalized($0) } ?? ""
         let body = [title, text].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: "。")
         return prefix + body
+    }
+}
+
+/// 设计稿的 360pt 是上限而不是固定宽度：短文案按内容收窄，长文案在这里换行。
+private struct NoticeBubbleWidthLayout: Layout {
+    let maxWidth: CGFloat
+
+    func sizeThatFits(
+        proposal: ProposedViewSize,
+        subviews: Subviews,
+        cache: inout ()
+    ) -> CGSize {
+        guard let content = subviews.first else { return .zero }
+        let width = min(maxWidth, proposal.width ?? maxWidth)
+        return content.sizeThatFits(
+            ProposedViewSize(width: width, height: proposal.height)
+        )
+    }
+
+    func placeSubviews(
+        in bounds: CGRect,
+        proposal: ProposedViewSize,
+        subviews: Subviews,
+        cache: inout ()
+    ) {
+        guard let content = subviews.first else { return }
+        content.place(
+            at: bounds.origin,
+            proposal: ProposedViewSize(width: bounds.width, height: bounds.height)
+        )
     }
 }
 

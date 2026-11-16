@@ -758,6 +758,23 @@ struct CustomApplicationProfile: Codable, Equatable, Identifiable {
     }
 }
 
+enum CustomApplicationLaunchPlan: Equatable {
+    case open(focusAllowed: Bool)
+    case unavailable
+
+    static func resolve(
+        profile: CustomApplicationProfile?,
+        requiresVerification: Bool,
+        applicationURL: URL?
+    ) -> Self {
+        guard profile != nil, applicationURL != nil else { return .unavailable }
+        // The portable-import marker protects the unverified focus target. It
+        // must not block opening the app; skip the automatic focus until the
+        // user verifies it.
+        return .open(focusAllowed: !requiresVerification)
+    }
+}
+
 enum ApplicationFocusStrategy: Equatable {
     case accessibilityComposer
     case cmuxSurfaceAPI

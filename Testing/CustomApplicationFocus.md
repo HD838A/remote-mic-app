@@ -186,6 +186,26 @@ DimAgent 的输入框来自真机学习记录，已内化为预置：记录随 A
 
 失败判定：APP 没有打开、没有切到前台、出现重复实例、按键后监控停止，或系统错误提示音持续出现。
 
+## 用例 1A：待验证 APP 只提示，不阻断其他按键（2026-11-16 候选）
+
+1. 导入一份包含自定义 APP 输入框聚焦目标的便携配置，打开该 APP 的“聚焦方式”为“记录输入框”，确认页面显示“待学习或验证”。
+2. 将一个普通按键绑定到“打开自定义 APP”，触发该按键。
+3. 目标 APP 已在前台时再触发一次。
+4. 临时用一个指向不存在 App 的可抛弃测试档案触发同一动作，再立即触发另一个正常按键。
+
+预期结果：
+
+- 第 2、3 步仍打开或切到目标 APP；本次不自动聚焦输入框，并显示“输入框聚焦还没有验证”提示。
+- 日志出现 `BUTTON ACTION action=openCustomApplication ... focus=skipped reason=verification_pending` 和 `APP ACTION focus skipped ... reason=verification_pending`。
+- 第 4 步只有缺失 App 的那次动作失败并显示提示；另一个按键继续执行。
+- 失败日志包含 `HID ACTION failed ... monitor_retained=true`，不出现 `reason=monitor_stopped`、不显示辅助功能过期，也不出现后续所有按键失效。
+
+失败判定：待验证 APP 被直接拒绝打开；一次动作失败后其他按键全部无反应；状态误报辅助功能过期；日志出现 `monitor_stopped` 或 `excluded_fingerprint` 持续拒绝后续报告。
+
+验证边界：自动化覆盖待验证打开、跳过聚焦、动作失败后下一次报告仍被接受、组合动作失败、尾删失败和按住重复失败。真实第三方 APP 前台切换、辅助功能焦点和实体遥控器仍需按本用例执行；不能用模拟 HID 结果替代。
+
+截图复核：设置 `REMOTE_MIC_SETTINGS_SCREENSHOT_SECTION=mapping`、`REMOTE_MIC_SETTINGS_SCREENSHOT_SIZE=1067x760`、`REMOTE_MIC_SETTINGS_SCREENSHOT_NOTICE=custom-application-verification-pending` 或 `button-action-failed`，分别使用中文浅色和英文深色渲染生产 `SettingsView` 与 `NoticeBubble`。图片为 `2134 × 1520` PNG；只证明气泡文案和布局，不证明真实按键触发。
+
 ## 用例 2：使用 APP 自带快捷键聚焦
 
 只有在目标 APP 确实提供“聚焦输入框”快捷键时测试此策略。
