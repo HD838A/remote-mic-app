@@ -18,9 +18,9 @@
 2. 运行 scripts/prepare-preview-release.sh，传入请求版本、Build 和中英文说明。
 3. 检查 git diff --name-only。
 
-预期：只修改 Resources/Info.plist、Resources/en.lproj/ReleaseHistory.md 和 Resources/zh-Hans.lproj/ReleaseHistory.md。版本已被 Tag、Release 或当前 10 个 CDN 固定路径占用时只递增 patch；只有 CDN HTTP 404 才算可用，未知响应 fail closed。脚本不会创建 Tag 或 Release；元数据 PR 合入 main 后不再同步第二条发布主线。
+预期：只修改 Resources/Info.plist、Resources/en.lproj/ReleaseHistory.md 和 Resources/zh-Hans.lproj/ReleaseHistory.md。Build 取私有 Draft 远端 `v*-local.<build>` 标签最大值与 main 当前 Build 的较大值加 10，再与请求值取较大者；私有 Draft 标签不可查时停止。版本已被 Tag、Release 或当前 10 个 CDN 固定路径占用时只递增 patch；只有 CDN HTTP 404 才算可用，未知响应 fail closed。脚本不会创建 Tag 或 Release；元数据 PR 合入 main 后不再同步第二条发布主线。
 
-失败判定：从旧 Tag/旧版本分支开始、修改产品代码、版本因 CI 失败而递增，或 Release Notes 含内部入口/凭据。
+失败判定：从旧 Tag/旧版本分支开始、修改产品代码、版本因 CI 失败而递增、私有 Draft 标签不可查仍继续，或 Release Notes 含内部入口/凭据。
 
 ## 用例 2：精确 main staging
 
