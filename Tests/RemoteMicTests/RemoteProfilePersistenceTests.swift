@@ -295,6 +295,40 @@ struct RemoteProfilePersistenceTests {
         #expect(settings.remoteDeviceProfiles.count == 4)
     }
 
+    @Test func complementaryProfilesWithDifferentNamesStaySeparate() throws {
+        let scope = try Self.scopedSettings("complementary-names")
+        defer { scope.tearDown() }
+        let mappings = RemoteDeviceMappings(
+            buttonBindings: AppSettings.defaultBindings,
+            buttonShortcuts: [:],
+            secondaryButtonBindings: [:]
+        )
+        let hid = RemoteDeviceProfile(
+            model: .rc003,
+            customName: "书房",
+            lastKnownBluetoothName: "书房遥控器",
+            hidFingerprint: "hid-rc003",
+            mappings: mappings
+        )
+        let ble = RemoteDeviceProfile(
+            model: .rc003,
+            customName: "客厅",
+            lastKnownBluetoothName: "客厅遥控器",
+            bluetoothIdentifier: UUID(),
+            mappings: mappings
+        )
+        scope.defaults.set(try JSONEncoder().encode([hid, ble]), forKey: "remoteDeviceProfiles")
+
+        let settings = AppSettings(defaults: scope.defaults)
+        let replacements = settings.reconcileComplementaryRemoteProfiles(
+            connectedProfileIDs: [ble.id],
+            activeHIDProfileIDs: [hid.id]
+        )
+
+        #expect(replacements.isEmpty)
+        #expect(settings.remoteDeviceProfiles.count == 2)
+    }
+
     @Test func complementaryProfilesRequireBothSidesToBeLive() throws {
         let scope = try Self.scopedSettings("complementary-live")
         defer { scope.tearDown() }

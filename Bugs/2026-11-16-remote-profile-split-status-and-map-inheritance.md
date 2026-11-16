@@ -38,7 +38,7 @@ BLE 档案没有对应的 HID 监视器，得到 `.unknown`；语音链路为 `.
 
 ## 修复
 
-- `AppSettings.reconcileComplementaryRemoteProfiles(connectedProfileIDs:activeHIDProfileIDs:)`：仅在同一小米型号只有两条档案、一条 HID-only、一条 BLE-only，且 HID 侧在线/选中、BLE 侧已连接时合并。保留 HID 档案的 ID、监视器、选中状态和执行映射，补入蓝牙标识、名称、电量与连接状态。
+- `AppSettings.reconcileComplementaryRemoteProfiles(connectedProfileIDs:activeHIDProfileIDs:)`：仅在同一小米型号只有两条档案、一条 HID-only、一条 BLE-only，且 HID 侧在线/选中、BLE 侧已连接时合并。双方已有不同硬件身份、蓝牙名称或自定义名称时不合并，避免把两只已命名遥控器并成一台。保留 HID 档案的 ID、监视器、选中状态和执行映射，补入蓝牙标识、名称、电量与连接状态。
 - `BridgeAppModel.collapseDuplicateRemoteProfiles()`：在原有同身份去重后调用互补配对，并把被并档案的按键就绪、恢复状态、电量、电源、名称、待处理型号、最后记录状态等运行时引用迁到保留档案。
 - `AppSettings.mappingsForNewRemote(model:)`：只有型号已识别且与当前选中档案同型号时才继承映射；不同型号使用默认映射。无选中档案时保留首次配置的兼容行为。
 - `AppSettings.inheritMappingsIfCompatible(for:model:)`：创建时型号未知的小米档案先使用默认映射，BLE 握手识别型号后，只有同型号且映射尚未编辑才继承。移除 `registerHIDRemote` 中跨型号复制“任意已配置档案”的旧路径。
@@ -46,8 +46,8 @@ BLE 档案没有对应的 HID 监视器，得到 `.unknown`；语音链路为 `.
 
 ## 验证
 
-- `swift test --disable-keychain -j 4 --filter 'RemoteProfilePersistenceTests|RemoteDeviceCardStatusTests|RemoteButtonsTests'`：**208 tests / 3 suites passed**。
-- 公开模式全量 `swift test --disable-keychain -j 4`：**1502 tests / 111 suites passed**。
+- `swift test --disable-keychain -j 4 --filter 'RemoteProfilePersistenceTests|RemoteDeviceCardStatusTests|RemoteButtonsTests'`：**209 tests / 3 suites passed**。
+- 公开模式全量 `swift test --disable-keychain -j 4`：**1503 tests / 111 suites passed**。
 - 公开 `swift build --disable-keychain -j 4` 通过；`scripts/verify-repository-governance.sh` 通过。
 - 新增回归：互补档案唯一配对合并；不同型号不合并；同型号多组候选不合并；两侧不在线不合并；不同型号不继承映射；同型号仍继承并可独立编辑。
 - 待执行：真实 RC001/RC003 连接、按键、语音与卡片状态验收。

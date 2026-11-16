@@ -2173,7 +2173,8 @@ final class AppSettings: ObservableObject {
                       $0.bluetoothIdentifier != nil && $0.hidFingerprint == nil
                   }),
                   activeHIDProfileIDs.contains(hid.id) || selectedRemoteProfileID == hid.id,
-                  connectedProfileIDs.contains(ble.id)
+                  connectedProfileIDs.contains(ble.id),
+                  Self.complementaryProfilesMayDescribeTheSameRemote(hid, ble)
             else { continue }
 
             let merged = Self.mergingRemoteProfile(hid, with: ble)
@@ -2192,6 +2193,32 @@ final class AppSettings: ObservableObject {
             )
         }
         return replacements
+    }
+
+    /// Two named profiles with different identities must not be paired just because
+    /// their model and identifier shapes complement each other.
+    private static func complementaryProfilesMayDescribeTheSameRemote(
+        _ hid: RemoteDeviceProfile,
+        _ ble: RemoteDeviceProfile
+    ) -> Bool {
+        if let hidIdentity = hid.hardwareIdentity,
+           let bleIdentity = ble.hardwareIdentity,
+           hidIdentity != bleIdentity {
+            return false
+        }
+        let hidName = hid.lastKnownBluetoothName?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let bleName = ble.lastKnownBluetoothName?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if let hidName, let bleName, !hidName.isEmpty, !bleName.isEmpty, hidName != bleName {
+            return false
+        }
+        let hidCustomName = hid.customName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let bleCustomName = ble.customName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !hidCustomName.isEmpty, !bleCustomName.isEmpty, hidCustomName != bleCustomName {
+            return false
+        }
+        return true
     }
 
     func updateRemoteProfileModel(_ profileID: UUID, model: XiaomiRemoteModel) {
