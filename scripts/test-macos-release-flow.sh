@@ -334,6 +334,153 @@ print "CONSOLIDATED CI PROOF AND REJECTION FIXTURE PASS"
 
 )
 
+test_metadata_ready_ci() (
+ROOT="$SCRIPT_ROOT"
+export RELEASE_CONTROL_PLANE_DIFF_BIN="$ROOT/scripts/verify-release-control-plane-diff.sh"
+WORK_DIR="$(/usr/bin/mktemp -d /private/tmp/sayall-release-metadata-gate-test.XXXXXX)"
+cleanup() {
+  local trash_root="$HOME/.Trash"
+  local trash_target="$trash_root/sayall-release-metadata-gate-test.$(/bin/date +%s).$.$RANDOM"
+  /bin/mkdir -p "$trash_root"
+  [[ -d "$WORK_DIR" ]] && /bin/mv "$WORK_DIR" "$trash_target"
+}
+trap cleanup EXIT
+
+source_remote="$WORK_DIR/source-remote.git"
+source_repo="$WORK_DIR/source-repo"
+fixture_root="$WORK_DIR/gh-fixtures"
+/usr/bin/git init -q --bare "$source_remote"
+/usr/bin/git init -q "$source_repo"
+/usr/bin/git -C "$source_repo" config user.name "Release Metadata Gate Fixture"
+/usr/bin/git -C "$source_repo" config user.email "release-metadata-gate-fixture@example.invalid"
+/bin/mkdir -p "$source_repo/Sources" "$source_repo/Resources/zh-Hans.lproj" "$source_repo/Resources/en.lproj" "$fixture_root"
+print -r -- 'product baseline' > "$source_repo/Sources/Product.swift"
+cat > "$source_repo/Resources/Info.plist" <<'PLIST'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleIdentifier</key>
+  <string>com.example.metadata-gate</string>
+  <key>CFBundleShortVersionString</key>
+  <string>1.0.0</string>
+  <key>CFBundleVersion</key>
+  <string>1</string>
+</dict>
+</plist>
+PLIST
+print -r -- '## 1.0.0（预发布）' > "$source_repo/Resources/zh-Hans.lproj/ReleaseHistory.md"
+print -r -- '## 1.0.0 (Pre-release)' > "$source_repo/Resources/en.lproj/ReleaseHistory.md"
+/usr/bin/git -C "$source_repo" add .
+/usr/bin/git -C "$source_repo" commit -q -m 'full product baseline'
+/usr/bin/git -C "$source_repo" branch -M main
+/usr/bin/git -C "$source_repo" remote add origin "$source_remote"
+/usr/bin/git -C "$source_repo" push -q origin main
+product_commit="$(/usr/bin/git -C "$source_repo" rev-parse HEAD)"
+
+python3 - "$source_repo/Resources/Info.plist" <<'PY'
+from pathlib import Path
+import re
+import sys
+path = Path(sys.argv[1])
+data = path.read_text()
+for key, value in (("CFBundleShortVersionString", "1.0.1"), ("CFBundleVersion", "2")):
+    data = re.sub(
+        rf"(<key>{key}</key>\s*<string>)[^<]*(</string>)",
+        lambda match: match.group(1) + value + match.group(2),
+        data,
+        count=1,
+    )
+path.write_text(data)
+PY
+python3 - "$source_repo/Resources/zh-Hans.lproj/ReleaseHistory.md" '## 1.0.1（预发布）' <<'PY'
+from pathlib import Path
+import sys
+path = Path(sys.argv[1])
+path.write_text(sys.argv[2] + "\n\n- fixture\n\n" + path.read_text())
+PY
+python3 - "$source_repo/Resources/en.lproj/ReleaseHistory.md" '## 1.0.1 (Pre-release)' <<'PY'
+from pathlib import Path
+import sys
+path = Path(sys.argv[1])
+path.write_text(sys.argv[2] + "\n\n- fixture\n\n" + path.read_text())
+PY
+/usr/bin/git -C "$source_repo" add .
+/usr/bin/git -C "$source_repo" commit -q -m 'release metadata change'
+/usr/bin/git -C "$source_repo" push -q origin main
+metadata_commit="$(/usr/bin/git -C "$source_repo" rev-parse HEAD)"
+
+cat > "$WORK_DIR/fake-gh" <<'GH'
+#!/bin/zsh
+set -euo pipefail
+fixture_root="${FIXTURE_ROOT:?}"
+if [[ "$1" == run && "$2" == list ]]; then
+  commit=""
+  previous=""
+  for argument in "$@"; do
+    if [[ "$previous" == "--commit" ]]; then commit="$argument"; fi
+    previous="$argument"
+  done
+  [[ -r "$fixture_root/commit-$commit.id" ]] || exit 1
+  /bin/cat "$fixture_root/commit-$commit.id"
+  exit 0
+fi
+if [[ "$1" == run && "$2" == view ]]; then
+  cat "$fixture_root/run-$3.json"
+  exit 0
+fi
+exit 1
+GH
+/bin/chmod 755 "$WORK_DIR/fake-gh"
+
+write_metadata_run() {
+  local run_id="$1" commit="$2" mode="$3"
+  jq -n --arg sha "$commit" --arg url "https://github.example.invalid/runs/$run_id" --arg mode "$mode" '
+    {
+      workflowName: "macOS CI", event: "push", status: "completed", conclusion: "success",
+      headBranch: "main", headSha: $sha, url: $url, updatedAt: "2026-09-27T00:00:00Z",
+      jobs: [
+        {name: "Swift tests and build (Apple Silicon)", status: "completed", conclusion: "success",
+         steps: (if $mode == "full" then [
+           {name: "Run Swift tests", conclusion: "success"},
+           {name: "Run project self-test", conclusion: "success"},
+           {name: "Build release configuration", conclusion: "success"}
+         ] else [{name: "Run release metadata checks", conclusion: "success"}] end)},
+        {name: "Swift tests and build (Intel Ventura)", status: "completed", conclusion: "success",
+         steps: (if $mode == "full" then [
+           {name: "Run Swift tests", conclusion: "success"},
+           {name: "Run project self-test", conclusion: "success"},
+           {name: "Build release configuration", conclusion: "success"}
+         ] else [{name: "Run release metadata checks", conclusion: "success"}] end)}
+      ]
+    }' > "$fixture_root/run-$run_id.json"
+}
+write_metadata_run 220 "$product_commit" full
+write_metadata_run 221 "$metadata_commit" metadata
+print -r -- 220 > "$fixture_root/commit-$product_commit.id"
+print -r -- 221 > "$fixture_root/commit-$metadata_commit.id"
+REPOSITORY_ROOT="$source_repo" GH_BIN="$WORK_DIR/fake-gh" FIXTURE_ROOT="$fixture_root" \
+  RELEASE_READY_PROOF_OUTPUT="$WORK_DIR/metadata-proof.json" \
+  "$ROOT/scripts/verify-release-ready-main-ci.sh" "$metadata_commit" main > "$WORK_DIR/metadata-pass.log"
+jq -e --arg candidate "$metadata_commit" --arg product "$product_commit" \
+  '.candidateCommit == $candidate and .productProofCommit == $product' "$WORK_DIR/metadata-proof.json" >/dev/null
+
+print -r -- 'product change after metadata' > "$source_repo/Sources/Product.swift"
+/usr/bin/git -C "$source_repo" add .
+/usr/bin/git -C "$source_repo" commit -q -m 'product change with metadata CI'
+/usr/bin/git -C "$source_repo" push -q origin main
+mixed_commit="$(/usr/bin/git -C "$source_repo" rev-parse HEAD)"
+write_metadata_run 222 "$mixed_commit" metadata
+print -r -- 222 > "$fixture_root/commit-$mixed_commit.id"
+if REPOSITORY_ROOT="$source_repo" GH_BIN="$WORK_DIR/fake-gh" FIXTURE_ROOT="$fixture_root" \
+    "$ROOT/scripts/verify-release-ready-main-ci.sh" "$mixed_commit" main > "$WORK_DIR/metadata-rejected.log" 2>&1; then
+  print -u2 "release metadata gate accepted a product change"
+  exit 1
+fi
+/usr/bin/grep -Fq 'source changes after the inherited product proof are not release-metadata-only' "$WORK_DIR/metadata-rejected.log"
+print "RELEASE METADATA READY CI FIXTURE PASS"
+)
+
 test_metadata() (
 ROOT="$SCRIPT_ROOT"
 WORK_DIR="$(/usr/bin/mktemp -d /private/tmp/sayall-prepare-preview-release-test.XXXXXX)"
@@ -494,6 +641,7 @@ for script in \
   verify-preview-cdn-availability.sh \
   verify-staged-release-assets.sh recover-preview-stage.sh publish-staged-preview.sh \
   publish-preview-release.sh promote-preview-release.sh prepare-staged-preview-ui-test.sh \
+  verify-release-metadata.sh verify-preview-ui-assets.sh \
   record-preview-ui-attestation.sh; do
   [[ -x "$ROOT/scripts/$script" ]] || {
     print -u2 "release helper is not executable: $script"
@@ -507,6 +655,7 @@ for script in \
   verify-preview-cdn-availability.sh \
   recover-preview-stage.sh publish-staged-preview.sh publish-preview-release.sh \
   promote-preview-release.sh prepare-staged-preview-ui-test.sh \
+  verify-release-metadata.sh verify-preview-ui-assets.sh \
   record-preview-ui-attestation.sh; do
   case "$script" in
     prepare-public-release-assets.sh|stage-macos-preview.sh|prepare-preview-release.sh)
@@ -517,6 +666,7 @@ for script in \
 done
 
 test_ready_ci
+test_metadata_ready_ci
 python3 "$ROOT/scripts/test-private-platform.py"
 
 package_workflow="$ROOT/.github/workflows/mac-release-package.yml"
@@ -530,11 +680,16 @@ source = Path(sys.argv[1]).read_text()
 assert source.index("- name: Run release control-plane fixture") < source.index("- name: Run Swift tests")
 assert source.count("./scripts/test-macos-release-flow.sh") == 1
 assert source.count("--skip releaseControlPlaneFixtureHasExecutableRegressionCoverage") == 2
+assert "Run release metadata checks" in source
+assert "release_metadata_only" in source
 PYTHON
 
 private_ci_workflow="$ROOT/.github/workflows/mac-private-ci.yml"
 notarize_release="$ROOT/scripts/notarize-release.sh"
 opus_build="$ROOT/scripts/build-apple-remote-opus.sh"
+
+/usr/bin/grep -Fq 'RELEASE_SWIFT_BUILD_TIMEOUT_SECONDS="${RELEASE_SWIFT_BUILD_TIMEOUT_SECONDS:-600}"' \
+  "$notarize_release"
 
 /usr/bin/grep -Fq -- 'verify-release-asset-source.sh' "$ROOT/scripts/package-macos-release-in-actions.sh" || {
   print -u2 "CI packaging must read the source commit back from every artifact"
@@ -596,7 +751,7 @@ ai_requirement="$(/usr/bin/grep '^export REQUIRE_SAYALL_AI_PACKAGE=' "$notarize_
 /usr/bin/grep -Fq '/.private-release/' "$package_workflow"
 /usr/bin/grep -Fq 'test "$TRIGGER_REF_NAME" = main' "$package_workflow"
 /usr/bin/grep -Fq 'verify-public-release-source.sh' "$package_workflow"
-/usr/bin/grep -Fq 'RELEASE_SWIFT_BUILD_TIMEOUT_SECONDS="${RELEASE_SWIFT_BUILD_TIMEOUT_SECONDS:-420}"' "$notarize_release"
+/usr/bin/grep -Fq 'RELEASE_SWIFT_BUILD_TIMEOUT_SECONDS="${RELEASE_SWIFT_BUILD_TIMEOUT_SECONDS:-600}"' "$notarize_release"
 /usr/bin/grep -Fq 'RELEASE_APP_BUILD_TIMEOUT_SECONDS="${RELEASE_APP_BUILD_TIMEOUT_SECONDS:-450}"' "$notarize_release"
 /usr/bin/grep -Fq 'export RELEASE_SWIFT_BUILD_TIMEOUT_SECONDS' "$notarize_release"
 for release_dependency in \
@@ -650,7 +805,7 @@ macos_tool_setup="$(print -r -- "$public_job" | /usr/bin/awk '
 ')"
 [[ -n "$macos_tool_setup" ]]
 print -r -- "$macos_tool_setup" | /usr/bin/grep -Fq \
-  "if: needs.classify_changes.outputs.product_change == 'true' || needs.classify_changes.outputs.release_checks == 'true'"
+  "if: needs.classify_changes.outputs.product_change == 'true' || (needs.classify_changes.outputs.release_checks == 'true' && needs.classify_changes.outputs.release_metadata_only != 'true')"
 print -r -- "$macos_tool_setup" | /usr/bin/grep -Fq \
   'command -v rg >/dev/null || HOMEBREW_NO_AUTO_UPDATE=1 brew install ripgrep'
 for package_path in SAYALL_AI_PACKAGE_PATH SAYALL_PRIVATE_PLATFORM_PACKAGE_PATH SAYALL_COMBINATION_ACTIONS_PATH SAYALL_BUTTON_PROFILES_PACKAGE_PATH SAYALL_MAC_REMOTE_PACKAGE_PATH; do
@@ -749,6 +904,11 @@ ui_prep_source="$ROOT/scripts/prepare-staged-preview-ui-test.sh"
 /usr/bin/grep -Fq 'zipinfo -l' "$recovery_source"
 /usr/bin/grep -Fq 'zipinfo -l' "$ROOT/scripts/promote-preview-release.sh"
 /usr/bin/grep -Fq 'browser_download_url' "$ui_prep_source"
+/usr/bin/grep -Fq 'mac-preview-ui-payload-' "$ui_prep_source"
+/usr/bin/grep -Fq 'verify-preview-ui-assets.sh' "$recovery_source"
+/usr/bin/grep -Fq 'MODE="${7:-full}"' "$recovery_source"
+/usr/bin/grep -Fq 'Prepare immutable UI test payload' "$package_workflow"
+/usr/bin/grep -Fq 'mac-preview-ui-payload-v' "$package_workflow"
 if /usr/bin/grep -Fq 'application/octet-stream' "$ui_prep_source"; then
   print -u2 "Preview UI preparation still relies on an unsupported gh API media type"
   exit 1
@@ -1039,6 +1199,16 @@ write_fixture_manifest() {
 write_fixture_manifest
 
 "$ROOT/scripts/verify-staged-release-assets.sh" "$manifest" "$public_dir" >/dev/null
+"$ROOT/scripts/verify-preview-ui-assets.sh" "$manifest" "$public_dir" >/dev/null
+ui_archive="$public_dir/SayAll-9.9.9-999.zip"
+cp "$ui_archive" "$WORK_DIR/ui-archive.saved"
+print -rn -- altered >> "$ui_archive"
+if "$ROOT/scripts/verify-preview-ui-assets.sh" "$manifest" "$public_dir" >/dev/null 2>&1; then
+  print -u2 "UI asset verifier accepted an altered archive"
+  exit 1
+fi
+cp "$WORK_DIR/ui-archive.saved" "$ui_archive"
+print "PREVIEW UI ASSET FIXTURE PASS"
 # Update digests too, so each rejection proves URL/metadata validation.
 cp "$public_dir/appcast.xml" "$WORK_DIR/canonical-appcast.xml"
 for mutation in legacy architecture host length version signature malformed; do
@@ -1105,6 +1275,10 @@ for test_case in \
   'scripts/install-doubao-driver.sh:true:true' \
   'scripts/verify-release-dependency-pins.sh:false:true' \
   'scripts/test-macos-release-flow.sh:false:true' \
+  'scripts/test-verify-release-asset-source.sh:false:true' \
+  'scripts/verify-release-asset-source.sh:false:true' \
+  'scripts/verify-release-metadata.sh:false:true' \
+  'scripts/verify-preview-ui-assets.sh:false:true' \
   'scripts/test-private-platform.py:false:true' \
   'scripts/run-release-stage.sh:false:true' \
   'scripts/verify-release-contents.py:false:true' \
@@ -1167,11 +1341,100 @@ for test_case in \
   fi
 done
 
+# A release metadata-only diff may change only the two Info.plist version keys
+# and release history documentation. A second product key must fail closed.
+metadata_repo="$WORK_DIR/metadata-classification"
+/usr/bin/git init -q "$metadata_repo"
+/usr/bin/git -C "$metadata_repo" config user.name Fixture
+/usr/bin/git -C "$metadata_repo" config user.email fixture@example.invalid
+/bin/mkdir -p "$metadata_repo/Resources/zh-Hans.lproj" "$metadata_repo/Resources/en.lproj"
+cat > "$metadata_repo/Resources/Info.plist" <<'PLIST'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleIdentifier</key>
+  <string>com.example.metadata-fixture</string>
+  <key>CFBundleShortVersionString</key>
+  <string>1.0.0</string>
+  <key>CFBundleVersion</key>
+  <string>1</string>
+</dict>
+</plist>
+PLIST
+print -r -- '## 1.0.0（预发布）' > "$metadata_repo/Resources/zh-Hans.lproj/ReleaseHistory.md"
+print -r -- '## 1.0.0 (Pre-release)' > "$metadata_repo/Resources/en.lproj/ReleaseHistory.md"
+/usr/bin/git -C "$metadata_repo" add .
+/usr/bin/git -C "$metadata_repo" commit -q -m 'metadata baseline'
+metadata_base="$(/usr/bin/git -C "$metadata_repo" rev-parse HEAD)"
+python3 - "$metadata_repo/Resources/Info.plist" 1.0.1 2 <<'PY'
+from pathlib import Path
+import re
+import sys
+path = Path(sys.argv[1])
+data = path.read_text()
+for key, value in (("CFBundleShortVersionString", sys.argv[2]), ("CFBundleVersion", sys.argv[3])):
+    data = re.sub(
+        rf"(<key>{key}</key>\s*<string>)[^<]*(</string>)",
+        lambda match: match.group(1) + value + match.group(2),
+        data,
+        count=1,
+    )
+path.write_text(data)
+PY
+python3 - "$metadata_repo/Resources/zh-Hans.lproj/ReleaseHistory.md" '## 1.0.1（预发布）' <<'PY'
+from pathlib import Path
+import sys
+path = Path(sys.argv[1])
+path.write_text(sys.argv[2] + "\n\n- fixture\n\n" + path.read_text())
+PY
+python3 - "$metadata_repo/Resources/en.lproj/ReleaseHistory.md" '## 1.0.1 (Pre-release)' <<'PY'
+from pathlib import Path
+import sys
+path = Path(sys.argv[1])
+path.write_text(sys.argv[2] + "\n\n- fixture\n\n" + path.read_text())
+PY
+/usr/bin/git -C "$metadata_repo" add .
+/usr/bin/git -C "$metadata_repo" commit -q -m 'release metadata'
+metadata_commit="$(/usr/bin/git -C "$metadata_repo" rev-parse HEAD)"
+metadata_result="$(REPOSITORY_ROOT="$metadata_repo" \
+  "$ROOT/scripts/verify-release-control-plane-diff.sh" --classify "$metadata_base" HEAD)"
+print -r -- "$metadata_result" | /usr/bin/grep -Fxq 'release_metadata_only=true'
+print -r -- "$metadata_result" | /usr/bin/grep -Fxq 'product_change=false'
+print -r -- "$metadata_result" | /usr/bin/grep -Fxq 'release_checks=true'
+REPOSITORY_ROOT="$metadata_repo" "$ROOT/scripts/verify-release-control-plane-diff.sh" \
+  --require-release-metadata-only "$metadata_base" HEAD
+if REPOSITORY_ROOT="$metadata_repo" "$ROOT/scripts/verify-release-control-plane-diff.sh" \
+    "$metadata_base" HEAD > "$WORK_DIR/metadata-control-rejected.log" 2>&1; then
+  print -u2 "control-plane mode accepted a release metadata diff"
+  exit 1
+fi
+REPOSITORY_ROOT="$metadata_repo" RELEASE_METADATA_BASE="$metadata_base" \
+  "$ROOT/scripts/verify-release-metadata.sh" >/dev/null
+python3 - "$metadata_repo/Resources/Info.plist" <<'PY'
+from pathlib import Path
+import sys
+path = Path(sys.argv[1])
+path.write_text(path.read_text().replace("com.example.metadata-fixture", "com.example.metadata-changed", 1))
+PY
+/usr/bin/git -C "$metadata_repo" add .
+/usr/bin/git -C "$metadata_repo" commit -q -m 'non-version plist change'
+metadata_result="$(REPOSITORY_ROOT="$metadata_repo" \
+  "$ROOT/scripts/verify-release-control-plane-diff.sh" --classify "$metadata_base" HEAD)"
+print -r -- "$metadata_result" | /usr/bin/grep -Fxq 'release_metadata_only=false'
+print -r -- "$metadata_result" | /usr/bin/grep -Fxq 'product_change=true'
+if REPOSITORY_ROOT="$metadata_repo" "$ROOT/scripts/verify-release-control-plane-diff.sh" \
+    --require-release-metadata-only "$metadata_base" HEAD > "$WORK_DIR/metadata-require-rejected.log" 2>&1; then
+  print -u2 "release metadata check accepted a non-version plist change"
+  exit 1
+fi
+print "RELEASE METADATA CLASSIFICATION FIXTURE PASS"
+
 # Pin scheduling boundaries and execute the actual required-context shell gate.
 ci_workflow="$ROOT/.github/workflows/mac-ci.yml"
 classifier_job="$(/usr/bin/awk '/^  classify_changes:/ { capture=1 } /^  public_test:/ { exit } capture { print }' "$ci_workflow")"
 print -r -- "$classifier_job" | /usr/bin/grep -Fq 'runs-on: ubuntu-latest'
-/usr/bin/grep -Fq 'runs-on: ${{ (needs.classify_changes.outputs.product_change == '\''true'\'' || needs.classify_changes.outputs.release_checks == '\''true'\'') && '\''xcode-27'\'' || '\''ubuntu-latest'\'' }}' "$ci_workflow"
+/usr/bin/grep -Fq 'runs-on: ${{ (needs.classify_changes.outputs.product_change == '\''true'\'' || (needs.classify_changes.outputs.release_checks == '\''true'\'' && needs.classify_changes.outputs.release_metadata_only != '\''true'\'')) && '\''xcode-27'\'' || '\''ubuntu-latest'\'' }}' "$ci_workflow"
 if print -r -- "$classifier_job" | /usr/bin/grep -Eq 'private dependency|SAYALL_PRIVATE_PLATFORM_DEPLOY_KEY|verify-release-dependency-pins.sh resolve'; then
   print -u2 "public macOS CI classifier must not inspect private dependencies"
   exit 1
@@ -1305,6 +1568,6 @@ case "${1:-all}" in
   all) test_ci_classification; test_flow; test_localizations; test_metadata; node --test "$SCRIPT_ROOT/scripts/test-update-feed-sync.mjs" ;;
   flow) test_ci_classification; test_flow; test_localizations; node --test "$SCRIPT_ROOT/scripts/test-update-feed-sync.mjs" ;;
   metadata) test_metadata ;;
-  ready-ci) test_ready_ci ;;
+  ready-ci) test_ready_ci; test_metadata_ready_ci ;;
   *) print -u2 "usage: $0 [all|flow|metadata|ready-ci]"; exit 2 ;;
 esac

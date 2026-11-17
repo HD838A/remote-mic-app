@@ -231,8 +231,8 @@ RELEASE_CODESIGN_TIMEOUT_SECONDS="${RELEASE_CODESIGN_TIMEOUT_SECONDS:-45}"
 RELEASE_VERIFY_TIMEOUT_SECONDS="${RELEASE_VERIFY_TIMEOUT_SECONDS:-60}"
 # Both architectures can incur a cold SwiftPM dependency build and dSYM
 # generation. Keep one bounded budget for both lanes so a transiently slower
-# runner cannot terminate a valid release build at the old 300s limit.
-RELEASE_SWIFT_BUILD_TIMEOUT_SECONDS="${RELEASE_SWIFT_BUILD_TIMEOUT_SECONDS:-420}"
+# runner cannot terminate a valid release build at the previous 420s limit.
+RELEASE_SWIFT_BUILD_TIMEOUT_SECONDS="${RELEASE_SWIFT_BUILD_TIMEOUT_SECONDS:-600}"
 RELEASE_APP_BUILD_TIMEOUT_SECONDS="${RELEASE_APP_BUILD_TIMEOUT_SECONDS:-450}"
 RELEASE_STAGE_RUNNER="$ROOT/scripts/run-release-stage.sh"
 PRIVATE_PRODUCTION_ENV="$ROOT/Apps/MobileWeb/.private/production.env"
