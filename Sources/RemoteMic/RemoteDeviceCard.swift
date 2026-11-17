@@ -23,6 +23,9 @@ enum RemoteDeviceCardStatus: String, CaseIterable {
 
     var message: LocalizedMessage { LocalizedMessage("remote.card.status.\(rawValue)") }
     var isProgressing: Bool { self == .checking || self == .confirming || self == .connecting }
+    /// Readiness states that normally resolve shortly after the link connects.
+    /// They must not be presented until they survive the settling window.
+    var isTransientReadiness: Bool { self == .checking || self == .confirming }
     var isFailure: Bool { self == .buttonsFailed || self == .voiceFailed || self == .deviceFailed || self == .notFound }
     var color: Color {
         if self == .connected { return .green }
@@ -48,12 +51,77 @@ enum RemoteDeviceCardStatus: String, CaseIterable {
     }
 }
 
+/// What the card's status line is allowed to show right now.
+///
+/// `isVerifying` keeps the line neutral while the link is already connected but
+/// button/voice readiness is still being determined. It deliberately does not
+/// claim that every function is ready until `RemoteDeviceCardStatus.connected`
+/// is observed.
+struct RemoteDeviceCardStatusDisplay: Equatable {
+    let status: RemoteDeviceCardStatus
+    let isVerifying: Bool
+
+    static func settled(_ status: RemoteDeviceCardStatus) -> Self {
+        Self(status: status, isVerifying: false)
+    }
+
+    static let verifyingConnection = Self(status: .connected, isVerifying: true)
+}
+
+/// Holds short-lived `checking`/`confirming` states back so a fast connection
+/// goes straight to its final status instead of flashing orange on the way.
+struct RemoteCardStatusSettlingPolicy {
+    /// On this Mac the audio readiness recovery path took up to 2.37 s after
+    /// BLE became ready (public diagnostic events, 2026-11-17). Three seconds
+    /// keeps that real but slow handshake from flashing orange while still
+    /// surfacing a genuinely stuck check.
+    static let gracePeriod: TimeInterval = 3.0
+
+    private(set) var display: RemoteDeviceCardStatusDisplay?
+    private(set) var transientStartedAt: Date?
+
+    /// Returns the display to use and, when a transient state is still being
+    /// held back, how long until the caller must observe again.
+    mutating func observe(
+        _ observed: RemoteDeviceCardStatus,
+        at now: Date
+    ) -> (display: RemoteDeviceCardStatusDisplay, refreshAfter: TimeInterval?) {
+        guard observed.isTransientReadiness else {
+            transientStartedAt = nil
+            let display = RemoteDeviceCardStatusDisplay.settled(observed)
+            self.display = display
+            return (display, nil)
+        }
+        if transientStartedAt == nil { transientStartedAt = now }
+        let deadline = (transientStartedAt ?? now).addingTimeInterval(Self.gracePeriod)
+        if now >= deadline {
+            let display = RemoteDeviceCardStatusDisplay.settled(observed)
+            self.display = display
+            return (display, nil)
+        }
+        if let display, !display.isVerifying,
+           display.status == .connected || display.status.isFailure {
+            // A previously verified or failed function must not be downgraded
+            // to "checking" by a short recheck.
+            return (display, deadline.timeIntervalSince(now))
+        }
+        display = .verifyingConnection
+        return (.verifyingConnection, deadline.timeIntervalSince(now))
+    }
+}
+
 /// One fixed three-row card shared by mapping, current connections and connection history.
 struct RemoteDeviceCard: View {
     let modelName: String
     let systemName: String
     let status: RemoteDeviceCardStatus
     let statusDetail: String
+    /// Screenshot fixtures can pin the presented state; production passes nil.
+    let statusDisplayOverride: RemoteDeviceCardStatusDisplay?
+    /// Absorbs transient readiness states on the live button page. History and
+    /// screenshot fixtures keep the observed status so explicit states remain
+    /// inspectable.
+    let settlesTransientStatus: Bool
     let selected: Bool
     let batteryLevel: Int?
     let powerState: RemotePowerState?
@@ -99,19 +167,12 @@ struct RemoteDeviceCard: View {
                 .contentShape(Rectangle())
                 .onTapGesture(perform: onSelect)
             HStack(spacing: 6) {
-                HStack(spacing: 4) {
-                    if status.isProgressing {
-                        ProgressView().controlSize(.mini).scaleEffect(0.75).frame(width: 10, height: 12)
-                    } else {
-                        Circle().fill(status.color).frame(width: 4, height: 4)
-                    }
-                    Text(LocalizedStringKey(status.message.key))
-                        .foregroundStyle(status.color)
-                        .contentShape(Rectangle())
-                        .onTapGesture(perform: onSelect)
-                }
-                .contentShape(Rectangle())
-                .onTapGesture(perform: onSelect)
+                RemoteDeviceCardStatusReadout(
+                    observed: status,
+                    displayOverride: statusDisplayOverride,
+                    settlesTransientStatus: settlesTransientStatus,
+                    onSelect: onSelect
+                )
                 if showsBattery { batteryLabel }
                 Spacer(minLength: 0)
                 if let membershipTitle {
@@ -181,5 +242,89 @@ struct RemoteDeviceCard: View {
         case 11...: return "battery.25percent"
         default: return "battery.0percent"
         }
+    }
+}
+
+private struct RemoteDeviceCardStatusReadout: View {
+    let observed: RemoteDeviceCardStatus
+    let displayOverride: RemoteDeviceCardStatusDisplay?
+    let settlesTransientStatus: Bool
+    let onSelect: () -> Void
+
+    @State private var display: RemoteDeviceCardStatusDisplay
+    @State private var policy: RemoteCardStatusSettlingPolicy
+
+    init(
+        observed: RemoteDeviceCardStatus,
+        displayOverride: RemoteDeviceCardStatusDisplay?,
+        settlesTransientStatus: Bool,
+        onSelect: @escaping () -> Void
+    ) {
+        self.observed = observed
+        self.displayOverride = displayOverride
+        self.settlesTransientStatus = settlesTransientStatus
+        self.onSelect = onSelect
+        var policy = RemoteCardStatusSettlingPolicy()
+        let initial: RemoteDeviceCardStatusDisplay
+        if let displayOverride {
+            initial = displayOverride
+        } else if settlesTransientStatus {
+            initial = policy.observe(observed, at: Date()).display
+        } else {
+            initial = .settled(observed)
+        }
+        _display = State(initialValue: initial)
+        _policy = State(initialValue: policy)
+    }
+
+    var body: some View {
+        HStack(spacing: 4) {
+            if display.isVerifying {
+                Circle().fill(Color.secondary).frame(width: 4, height: 4)
+            } else if display.status.isProgressing {
+                ProgressView().controlSize(.mini).scaleEffect(0.75).frame(width: 10, height: 12)
+            } else {
+                Circle().fill(display.status.color).frame(width: 4, height: 4)
+            }
+            Text(LocalizedStringKey(presentedStatus.message.key))
+                .foregroundStyle(presentationColor)
+                .contentShape(Rectangle())
+                .onTapGesture(perform: onSelect)
+        }
+        .contentShape(Rectangle())
+        .onTapGesture(perform: onSelect)
+        .task(id: observed) {
+            while let delay = apply(observed) {
+                try? await Task.sleep(nanoseconds: UInt64(max(0.001, delay) * 1_000_000_000))
+                guard !Task.isCancelled else { return }
+            }
+        }
+    }
+
+    private var presentedStatus: RemoteDeviceCardStatus {
+        display.isVerifying ? .connected : display.status
+    }
+
+    private var presentationColor: Color {
+        display.isVerifying ? .secondary : display.status.color
+    }
+
+    /// Updates the presented state and returns how long the caller must wait
+    /// before a still-transient observed state becomes visible.
+    @discardableResult
+    private func apply(_ observed: RemoteDeviceCardStatus, now: Date = Date()) -> TimeInterval? {
+        if let displayOverride {
+            display = displayOverride
+            return nil
+        }
+        guard settlesTransientStatus else {
+            display = .settled(observed)
+            return nil
+        }
+        var policy = self.policy
+        let decision = policy.observe(observed, at: now)
+        self.policy = policy
+        display = decision.display
+        return decision.refreshAfter
     }
 }

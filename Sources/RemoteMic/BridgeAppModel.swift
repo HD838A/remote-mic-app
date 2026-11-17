@@ -612,6 +612,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     private var lastLoggedCardStatuses: [UUID: RemoteDeviceCardStatus] = [:]
     private var cardStatusOperation: UInt64 = 0
     private var screenshotCardStatuses: [UUID: RemoteDeviceCardStatus] = [:]
+    private var screenshotCardStatusDisplayOverrides: [UUID: RemoteDeviceCardStatusDisplay] = [:]
     private var screenshotSiriActivationNeeded: Bool?
     @Published private(set) var remoteSystemDeviceNames: [UUID: String] = [:]
     @Published private(set) var audioDevices: [AudioDeviceInfo] = []
@@ -5397,6 +5398,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             remoteRecoveryStates.removeValue(forKey: discarded)
             lastLoggedCardStatuses.removeValue(forKey: discarded)
             screenshotCardStatuses.removeValue(forKey: discarded)
+            screenshotCardStatusDisplayOverrides.removeValue(forKey: discarded)
             for (device, profileID) in appleRemoteProfileIDs where profileID == discarded {
                 appleRemoteProfileIDs[device] = kept
             }
@@ -7780,6 +7782,12 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         return .resolve(connected: true, buttons: buttons, voice: voice, voiceRequired: voiceRequired)
     }
 
+    /// Screenshot-only presentation override; production returns nil and lets
+    /// the live settling policy decide.
+    func remoteCardStatusDisplayOverride(for profileID: UUID) -> RemoteDeviceCardStatusDisplay? {
+        screenshotCardStatusDisplayOverrides[profileID]
+    }
+
     private func logRemoteCardStatusChanges() {
         for profile in settings.remoteDeviceProfiles {
             let status = remoteCardStatus(for: profile, history: true)
@@ -7905,10 +7913,13 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         case "voice", "apple-voice": status = .voiceFailed
         case "device": status = .deviceFailed
         case "checking": status = .checking
-        case "confirming": status = .confirming
+        case "confirming", "verifying": status = .confirming
         default: status = .connected
         }
         screenshotCardStatuses = [active: connectedRemoteProfileIDs.contains(active) ? status : .disconnected]
+        screenshotCardStatusDisplayOverrides = scenario == "verifying" && connectedRemoteProfileIDs.contains(active)
+            ? [active: .verifyingConnection]
+            : [:]
         settings.selectRemoteProfile(active)
         isConnected = !connectedRemoteProfileIDs.isEmpty
         settings.selectedAudioDeviceUID = "screenshot-output"
