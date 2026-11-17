@@ -1,7 +1,7 @@
 {
   "batch": "remote-card-settling-20261117",
   "date": "2026-11-17",
-  "purpose": "Production SettingsView evidence for PR #1110: neutral connected status during the 3-second readiness settling window, plus yellow checking states after the window",
+  "purpose": "Production SettingsView evidence for PR #1110: neutral connected status during the 0.8-second readiness settling window, plus yellow checking states after the window",
   "pr": "https://github.com/HD838A/remote-mic-app/pull/1110",
   "source_commit": "e6c0c226bd37fe3ef385541ef80f38c567d5b003",
   "storage": "GitHub PR native media attachments; original PNG bytes in persistent external workspace",

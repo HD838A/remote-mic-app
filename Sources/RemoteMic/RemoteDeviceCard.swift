@@ -71,11 +71,10 @@ struct RemoteDeviceCardStatusDisplay: Equatable {
 /// Holds short-lived `checking`/`confirming` states back so a fast connection
 /// goes straight to its final status instead of flashing orange on the way.
 struct RemoteCardStatusSettlingPolicy {
-    /// On this Mac the audio readiness recovery path took up to 2.37 s after
-    /// BLE became ready (public diagnostic events, 2026-11-17). Three seconds
-    /// keeps that real but slow handshake from flashing orange while still
-    /// surfacing a genuinely stuck check.
-    static let gracePeriod: TimeInterval = 3.0
+    /// Decrypted `REMOTE CARD_STATUS` logs from 2.0.8 build 404 show
+    /// checking → connected in 30–259 ms (median 53 ms). 0.8 s keeps a ~3×
+    /// margin while still surfacing a genuinely stuck check quickly.
+    static let gracePeriod: TimeInterval = 0.8
 
     private(set) var display: RemoteDeviceCardStatusDisplay?
     private(set) var transientStartedAt: Date?
