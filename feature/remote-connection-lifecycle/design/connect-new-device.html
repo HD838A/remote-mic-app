@@ -279,32 +279,53 @@
     align-items: center;
     gap: 9px;
     width: 100%;
-    padding: 10px;
-    border: 1px dashed var(--line);
-    border-radius: 10px;
-    background: var(--panel-subtle);
+    padding: 9px 6px;
+    border: 0;
+    border-radius: 9px;
+    background: transparent;
     color: var(--text);
     font: inherit;
     text-align: left;
     cursor: pointer;
   }
-  .connect-new-row:hover { border-color: var(--accent-line); background: var(--accent-soft); }
+  .connect-new-row:hover { background: var(--panel-subtle); }
   .connect-new-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .connect-new-row.soft { padding: 10px; background: var(--panel-subtle); }
+  .connect-new-row.soft:hover { background: var(--accent-soft); }
   .connect-new-icon {
     width: 28px;
     height: 28px;
     border-radius: 50%;
     display: grid;
     place-items: center;
-    border: 1px solid var(--line);
+    background: var(--accent-soft);
     color: var(--accent);
     font-size: 16pt;
     font-weight: 500;
     line-height: 1;
   }
+  .connect-new-row.soft .connect-new-icon { background: var(--panel); }
   .connect-new-title { display: block; font-size: 12pt; font-weight: 650; line-height: 1.25; }
   .connect-new-detail { display: block; margin-top: 2px; font-size: 12pt; line-height: 1.35; color: var(--muted); }
   .connect-new-chevron { color: var(--muted); font-size: 16pt; line-height: 1; text-align: right; }
+  .header-action {
+    appearance: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    border: 0;
+    border-radius: 7px;
+    padding: 4px 7px;
+    background: var(--panel-subtle);
+    color: var(--text);
+    font: inherit;
+    font-size: 12pt;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  .header-action:hover { background: var(--accent-soft); color: var(--accent); }
+  .header-action .plus { color: var(--accent); font-size: 14pt; line-height: 1; }
   .history-divider { height: 1px; background: var(--line); margin: 11px 0 9px; }
   .history-label { margin-bottom: 7px; font-size: 12pt; font-weight: 600; color: var(--muted); }
   .history-empty { padding: 10px 2px 2px; font-size: 12pt; line-height: 1.4; color: var(--muted); }
@@ -400,7 +421,7 @@
   <div>
     <p class="eyebrow">Interaction prototype · connect a new device</p>
     <h1>连接与语音 · 连接新的设备</h1>
-    <p class="lede">安装 Siri Remote 组件后，用户仍可能不知道如何连接 Apple Remote。此设计稿提供两个入口方案：在「连接过的设备」上方新增独立区域，或把新连接入口合并进现有设备区域。</p>
+    <p class="lede">安装 Siri Remote 组件后，用户仍可能不知道如何连接 Apple Remote。此设计稿提供三个入口样式：平面行、柔和按钮和标题按钮；都不使用虚线边框。</p>
   </div>
   <div class="demo-controls" aria-label="原型演示控制">
     <div class="control-group">
@@ -418,10 +439,11 @@
       </div>
     </div>
     <div class="control-group">
-      <span>布局</span>
-      <div class="segments" id="layout-control">
-        <button type="button" data-value="merged" aria-pressed="true">合并区域</button>
-        <button type="button" data-value="separate" aria-pressed="false">独立区域</button>
+      <span>入口样式</span>
+      <div class="segments" id="entry-style-control">
+        <button type="button" data-value="flat" aria-pressed="true">平面行</button>
+        <button type="button" data-value="soft" aria-pressed="false">柔和按钮</button>
+        <button type="button" data-value="header" aria-pressed="false">标题按钮</button>
       </div>
     </div>
     <div class="control-group">
@@ -524,17 +546,18 @@
     <div class="prototype-tag">Design review</div>
     <h2>设计说明</h2>
     <p>解决问题：组件安装完成后，如果没有 Apple Remote 卡片，用户没有继续连接设备的入口。</p>
-    <h3>两个方案</h3>
+    <h3>入口样式</h3>
     <ul>
-      <li><strong>合并区域（推荐）：</strong>在「连接过的设备」卡片内，把「连接新的设备」放在设备列表上方。少一个卡片，无历史设备时仍然可见。</li>
-      <li><strong>独立区域：</strong>在「连接过的设备」上方新增单独卡片。入口更醒目，但左栏会多一层卡片。</li>
+      <li><strong>平面行（推荐）：</strong>无边框、无独立底色，像列表入口；只有悬停时出现浅色背景，避免卡中卡。</li>
+      <li><strong>柔和按钮：</strong>整行浅色填充、无描边；点击感更强，但不再使用虚线或第二层边框。</li>
+      <li><strong>标题按钮：</strong>入口收进「设备」标题右侧；最省空间，但可发现性最低。</li>
     </ul>
     <h3>行为</h3>
     <ul>
       <li>点击「连接新的设备」重新运行现有设置向导；不新增第二套配对流程。</li>
       <li>不删除已有连接、按键映射、语音设置或其他本地配置。</li>
       <li>入口始终可见，不依赖 Apple Remote 卡片是否已经出现。</li>
-      <li>组件未安装时，安装模块仍按原规则显示；两个入口不互相替代。</li>
+      <li>组件未安装时，安装模块仍按原规则显示；安装模块与新入口不互相替代。</li>
     </ul>
     <h3>文案</h3>
     <ul>
@@ -560,8 +583,9 @@
       'history.empty': '还没有连接过的设备。连接后会显示在这里。',
       'history.merged.title': '设备',
       'history.list.title': '连接过的设备',
-      'state.merged': '当前演示：合并区域。新连接入口位于设备列表上方。',
-      'state.separate': '当前演示：独立区域。新连接入口单独成卡片。',
+      'state.entry.flat': '当前演示：平面入口行，无边框。',
+      'state.entry.soft': '当前演示：柔和按钮行，浅色填充、无描边。',
+      'state.entry.header': '当前演示：入口收进“设备”标题右侧。',
       'state.history.yes': '有历史设备',
       'state.history.no': '无历史设备',
       'wizard.toast': '将重新运行设置向导；现有连接、按键映射和语音设置不会被清除。这是演示，不会真的启动向导。',
@@ -604,8 +628,9 @@
       'history.empty': 'No previously connected devices. New devices will appear here.',
       'history.merged.title': 'Devices',
       'history.list.title': 'Previously connected devices',
-      'state.merged': 'Current demo: merged section. The new-connection entry sits above the device list.',
-      'state.separate': 'Current demo: separate section. The new-connection entry is its own card.',
+      'state.entry.flat': 'Current demo: flat entry row with no border.',
+      'state.entry.soft': 'Current demo: soft button row with a solid fill and no outline.',
+      'state.entry.header': 'Current demo: entry in the Devices header.',
       'state.history.yes': 'History present',
       'state.history.no': 'No history',
       'wizard.toast': 'The setup assistant would run again. Existing connections, button mappings and voice settings are kept. This is a demo and does not start the assistant.',
@@ -639,7 +664,7 @@
     }
   };
 
-  const state = { lang: 'zh', theme: 'light', layout: 'merged', hasHistory: true, toast: false };
+  const state = { lang: 'zh', theme: 'light', entryStyle: 'flat', hasHistory: true, toast: false };
 
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => Array.from(document.querySelectorAll(selector));
@@ -675,9 +700,9 @@
       </div>`).join('');
   }
 
-  function newConnectionMarkup() {
+  function newConnectionMarkup(style) {
     return `
-      <button class="connect-new-row" type="button" data-action="setup">
+      <button class="connect-new-row ${style === 'soft' ? 'soft' : ''}" type="button" data-action="setup">
         <span class="connect-new-icon" aria-hidden="true">＋</span>
         <span>
           <span class="connect-new-title">${t('connection.new.title')}</span>
@@ -687,35 +712,25 @@
       </button>`;
   }
 
+  function headerActionMarkup() {
+    return `
+      <button class="header-action" type="button" data-action="setup">
+        <span class="plus" aria-hidden="true">＋</span>${t('connection.new.title')}
+      </button>`;
+  }
+
   function renderConnection() {
     const slot = $('#connection-slot');
-    if (state.layout === 'separate') {
-      slot.innerHTML = `
-        <section class="panel">
-          <div class="panel-inner">
-            <div class="panel-title">${t('connection.new.title')}</div>
-            <p class="new-remote-detail">${t('connection.new.detail')}</p>
-            <button class="primary-button" type="button" data-action="setup">${t('connection.new.action')}</button>
-          </div>
-        </section>
-        <section class="panel">
-          <div class="panel-inner">
-            <div class="history-head">
-              <div class="panel-title">${t('history.title')}</div>
-              <div aria-hidden="true" style="color:var(--muted)">⌄</div>
-            </div>
-            ${historyMarkup()}
-          </div>
-        </section>`;
-      return;
-    }
+    const headerAction = state.entryStyle === 'header' ? headerActionMarkup() : '';
+    const entryRow = state.entryStyle === 'header' ? '' : newConnectionMarkup(state.entryStyle);
     slot.innerHTML = `
       <section class="panel">
         <div class="panel-inner">
           <div class="history-head">
             <div class="panel-title">${t('history.merged.title')}</div>
+            ${headerAction}
           </div>
-          ${newConnectionMarkup()}
+          ${entryRow}
           <div class="history-divider"></div>
           <div class="history-label">${t('history.list.title')}</div>
           ${historyMarkup()}
@@ -724,10 +739,10 @@
   }
 
   function renderStateNote() {
-    const layout = state.layout === 'merged' ? t('state.merged') : t('state.separate');
+    const style = t(`state.entry.${state.entryStyle}`);
     const history = state.hasHistory ? t('state.history.yes') : t('state.history.no');
     const period = state.lang === 'zh' ? '。' : '.';
-    $('#state-note').textContent = `${layout} ${history}${period}`;
+    $('#state-note').textContent = `${style} ${history}${period}`;
   }
 
   function render() {
@@ -738,7 +753,7 @@
     renderStateNote();
     setSegmented('#language-control', state.lang);
     setSegmented('#theme-control', state.theme);
-    setSegmented('#layout-control', state.layout);
+    setSegmented('#entry-style-control', state.entryStyle);
     setSegmented('#history-control', state.hasHistory ? 'yes' : 'no');
     const toast = $('#wizard-toast');
     toast.hidden = !state.toast;
@@ -758,10 +773,10 @@
     state.theme = button.dataset.value;
     render();
   });
-  $('#layout-control').addEventListener('click', (event) => {
+  $('#entry-style-control').addEventListener('click', (event) => {
     const button = event.target.closest('button');
     if (!button) return;
-    state.layout = button.dataset.value;
+    state.entryStyle = button.dataset.value;
     state.toast = false;
     render();
   });

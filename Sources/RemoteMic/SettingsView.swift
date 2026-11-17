@@ -687,6 +687,7 @@ struct SettingsView: View {
     @State private var isWaitingForMappingPermissions = false
     @State private var expandedShareSection: SettingsSection?
     @State private var showsPreviouslyConnectedDevices = true
+    @State private var isNewDeviceRowHovered = false
     @State private var versionTapRevealCounter = VersionTapRevealCounter()
 
     init(
@@ -1713,10 +1714,14 @@ struct SettingsView: View {
                     settings.restartOnboarding()
                 } label: {
                     HStack(spacing: 10) {
-                        Image(systemName: "plus.circle")
-                            .font(.system(size: 18, weight: .regular))
+                        Image(systemName: "plus")
+                            .font(.system(size: 13, weight: .semibold))
                             .foregroundStyle(Color.accentColor)
-                            .frame(width: 24)
+                            .frame(width: 28, height: 28)
+                            .background(
+                                Color.accentColor.opacity(0.12),
+                                in: Circle()
+                            )
                         VStack(alignment: .leading, spacing: 2) {
                             Text("connection.devices.new.title")
                                 .font(.system(size: 13, weight: .semibold))
@@ -1730,23 +1735,17 @@ struct SettingsView: View {
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(.secondary)
                     }
-                    .padding(.horizontal, 10)
+                    .padding(.horizontal, 6)
                     .padding(.vertical, 9)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(
-                        Color.primary.opacity(0.045),
-                        in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        isNewDeviceRowHovered ? Color.primary.opacity(0.045) : Color.clear,
+                        in: RoundedRectangle(cornerRadius: 9, style: .continuous)
                     )
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .strokeBorder(
-                                Color.secondary.opacity(0.18),
-                                style: StrokeStyle(lineWidth: 1, dash: [4, 3])
-                            )
-                    }
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .onHover { isNewDeviceRowHovered = $0 }
                 .accessibilityIdentifier("connection-connect-new-device")
                 .accessibilityLabel(Text("connection.devices.new.title"))
                 .accessibilityHint(Text("connection.devices.new.detail"))

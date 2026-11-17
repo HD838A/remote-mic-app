@@ -13,8 +13,8 @@
     {
       "file": "connect-new-device.html",
       "format": "HTML",
-      "sha256": "f703fdd375bb9d885562e479f3d206a0911b99b9eddf1584b00d2a3476cbc676",
-      "note": "Self-contained interactive prototype for the merged 设备 card and 连接新的设备 entry; includes the independent-card alternate. Simulated data; not production UI or hardware evidence."
+      "sha256": "a56864b15fb93eaf584f52750b1fd57da412183c73643899cf559b8cc1c2f7a9",
+      "note": "Self-contained interactive prototype for the merged 设备 card and 连接新的设备 entry; includes flat, soft-button and header-button treatments. Simulated data; not production UI or hardware evidence."
     }
   ]
 }
