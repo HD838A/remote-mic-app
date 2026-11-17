@@ -1015,6 +1015,8 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     /// 设置页展示用。私有包缺失时恒为 `.unavailable`，界面据此隐藏整块内容。
     @Published private(set) var chromecastStatus: ChromecastLinkStatus =
         ChromecastFeatureIntegration.isPackageIncluded ? .disabled : .unavailable
+    /// 系统 HID 是否已发现 Chromecast 遥控器；卡片可见性用，不代表语音 BLE 链路已连接。
+    var isChromecastHIDPresent: Bool { chromecastHIDIsPresent == true }
     /// 遥控器**自报**的能力位；链路不可用时为空集合。
     ///
     /// 界面与语音键驱动都读它（经 `RemoteVoiceCapabilities.resolve`），宿主不再维护第二份型号能力表。
