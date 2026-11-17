@@ -34,7 +34,7 @@
 | 两个可信名称记录并存 | 安装 | 安装成功；驱动存在时按实际名称或兼容旧名修复；驱动不存在时安装 SayAll；旧记录可恢复 | 因冲突停止安装或 UID/配置变化 |
 | 本产品 SayAll 驱动名称标记缺失 | 安装 | 安装成功；按完整名称常量修复，仍显示 SayAll | 改成旧名称或接受损坏驱动 |
 | 记录对象不可信（符号链接或权限不可信） | 安全故障注入 | 保留原文件，记录安全失败；修复对象后重新安装成功 | 覆盖不可信对象或把安全失败记为安装成功 |
-| 同产品 Bundle ID 位于多个 HAL bundle | 安装 | 停止 | 并存或只覆盖其中一个 |
+| 同产品 Bundle ID 位于多个 HAL bundle | 安装 | 可写 HAL 中只额外存在一份可信的本产品副本时，副本移入 root 废纸篓并继续安装，安装结束强制重启 Core Audio；只读 System HAL 中存在副本、任一副本为符号链接或身份不可验证时停止 | 并存、只覆盖其中一份、未重启音频服务，或把安全停止记为成功 |
 | 目标路径属于其他驱动，或路径父级为符号链接/可被普通用户写入 | 安装 | 停止 | 覆盖或修改其他软件 |
 | 候选负载签名无效、名称形态错误、权限操作失败或名称记录写入失败 | 对测试副本注入故障后安装 | 停止并恢复原驱动，失败副本可恢复 | 原驱动丢失或失败被记为成功 |
 | 完成安装后再次运行同一安装包 | 重试 | 保留健康驱动及原名称，无重复实例 | 重命名或重复安装 |
@@ -49,9 +49,11 @@
 
 `preinstall` 在负载写入前保存名称记录。实际驱动名称优先于旧记录。更新冲突记录前，先把可信旧记录移入 root 废纸篓。写入失败时恢复原记录。记录表示已选名称，不表示驱动已安装或音频可用。名称证据冲突必须通过实际驱动名称、历史记录或兼容规则完成安装；不能因为冲突本身停止安装。只有记录对象不可信、签名无效、权限操作失败或回滚失败等安全故障才阻断本次安装。取消安装后保留可信记录。后续安装在驱动仍存在时保留原名称；驱动不存在时使用 SayAll。
 
+HAL 安全扫描分两步：先校验 `/Library` 与 `/System/Library` 音频驱动目录链的所有权、权限和符号链接，再按 Bundle ID 枚举重复实例。只有可写 HAL 中身份完整、非符号链接的本产品副本会自动移入 root 废纸篓；移动、落盘或回滚失败时不继续，且已移动副本必须恢复。移除副本后，postinstall 必须强制重启 Core Audio，即使规范驱动已健康且同版本。只读 System HAL 中的副本、符号链接、身份不可验证或目录权限异常一律停止安装，不自动删除。
+
 ## 安装成功的验收标准
 
-正常安装、升级、可信记录冲突和本产品历史驱动修复，都必须安装成功。停止安装不算通过。
+正常安装、升级、可信记录冲突、可写 HAL 中的重复本产品副本和本产品历史驱动修复，都必须安装成功。停止安装不算通过。
 
 1. 分别运行两种架构的最终签名 PKG。
 2. 分别勾选和不勾选“苹果遥控器 Siri Remote”。
@@ -98,6 +100,8 @@ swift test --disable-keychain --filter 'DriverNamingTests|DoubaoAudioDeviceTests
 
 2026-10-23：Swift 名称、打包和设备身份定向测试 32 项通过；独立自检 48 项通过。最新主线 `53b007725576fc59b979b8cfb7e67b7ba53fcadb` 只新增版本说明和 Bug 文档，与本项无代码交集。
 
+2026-11-17：新增 HAL 重复实例诊断与可恢复归置。`scripts/test-driver-naming.sh` 在原有 43 个隔离场景（安装、恢复、卸载重装与直接安装）上全部通过；新增断言覆盖可写 HAL 副本移入 root 废纸篓、`duplicates-reconciled` 标记及失败回滚、postinstall 标记消费、符号链接不跟随、只读 System HAL 副本停止、目录权限异常停止和阻断文案枚举。真实 Installer、CoreAudio 重启后单实例枚举和现场日志仍未验收。
+
 ## 截图与日志
 
 - 使用生产隐藏入口 `REMOTE_MIC_ONBOARDING_SCREENSHOT_DIR`。分别设置语言 `zh-Hans`/`en`，外观 `light`/`dark`。
@@ -105,6 +109,7 @@ swift test --disable-keychain --filter 'DriverNamingTests|DoubaoAudioDeviceTests
 - 逐一覆盖当前构建支持的全部来源、完整页面和受影响状态。工具页及语音配置卡需额外覆盖每个受影响工具。
 - 每张 PNG 保存到持久目录，记录尺寸及 SHA-256，并逐张检查。截图只能证明静态界面。
 - 使用系统 Installer 日志中的 `DRIVER_NAMING` 事件确认原名称、驱动健康分类、记录恢复、失败原因和最终驱动验证。卸载成功须有 `phase=uninstall_completed result=verified records=trashed`；重装须有 `phase=installed result=verified variant=brand`。只记录稳定枚举，不记录用户内容、设备身份或第三方私有状态。
+- HAL 安全扫描每次安装都输出 `phase=hal_scan scope=library|system drivers=<n> ours_external=<n> symlinked=<n> unreadable=<n>`。自动修复输出 `phase=reconciled result=verified scope=library count=<n> backup=trash`；postinstall 输出 `phase=reconciled result=verified restart=required`。阻断行必须包含 `reason`、`scope`、`detail`；父目录问题带 `level`，具体条目问题带 `issue` 和 `count`。任何行都不得出现路径、bundle 名称或第三方身份。
 - 安装失败时保存系统安装日志；运行链路日志按 [RuntimeLogging.md](RuntimeLogging.md) 收集。不要把 received/queued 当成最终成功。
 
 ## 验证边界

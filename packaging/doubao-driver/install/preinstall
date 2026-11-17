@@ -148,7 +148,10 @@ check_legacy_app \
 # Decide before pkgbuild writes the new App or receipt. Pending selection lives
 # beside the extracted scripts, never in a payload path replaced by Installer.
 prepare_driver_naming_directory "$TARGET_VOLUME" || { driver_naming_failure unsafe_state_directory; exit 2; }
-check_driver_naming_duplicates "$TARGET_VOLUME" "$DESTINATION" || { driver_naming_failure duplicate_driver; exit 2; }
+DUPLICATE_MARKER="$SCRIPT_DIR/duplicates-reconciled"
+check_driver_naming_duplicates "$TARGET_VOLUME" "$DESTINATION" reconcile "$DUPLICATE_MARKER" || {
+  driver_naming_failure "${DRIVER_NAMING_SCAN_REASON:-duplicate_driver}"; exit 2
+}
 RECORDED_NAMING="$(driver_naming_record)" || { driver_naming_failure invalid_state; exit 2; }
 INSTALLED_NAMING=none
 INSTALLED_HEALTH=none
