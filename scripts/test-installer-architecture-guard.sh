@@ -155,6 +155,11 @@ if /usr/bin/grep -Eq 'HCI_SERVICE_DESTINATION=|HCI_SERVICE_PLIST=|launchctl boot
   exit 1
 fi
 /usr/bin/grep -Fq 'queue_owned_hci_service' "$UNINSTALL_POSTINSTALL"
+# 历史版本兼容：新增 App 身份不得删除旧路径或旧 Bundle ID。
+for app_destination in 'Applications/SayAll.app' 'Applications/Remote Mic.app' 'Applications/无线麦.app'; do
+  /usr/bin/grep -Fq "$app_destination" "$UNINSTALL_POSTINSTALL"
+done
+/usr/bin/grep -Fq 'BUNDLE_IDENTIFIER="com.hd838a.RemoteMic"' "$UNINSTALL_POSTINSTALL"
 if /usr/bin/grep -Eq '(/bin/)?rm([[:space:]]|$)|unlink|find[[:space:]].*-delete' \
     "$PREINSTALL" "$POSTINSTALL" "$UNINSTALL_POSTINSTALL"; then
   print -u2 "installer scripts must never permanently delete HCI or driver files"
