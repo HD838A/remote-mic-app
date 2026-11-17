@@ -40,6 +40,87 @@ driver_naming_safe_directory() { [[ -d "$1" && ! -L "$1" ]]; }
 check_driver_naming_duplicates "$WORK/duplicate" "$WORK/duplicate/Library/Audio/Plug-Ins/HAL/MiRemoteV2ch.driver"
 /usr/bin/ditto "$RELEASE_OUTPUT_DIR/legacy/MiRemoteV2ch.driver" "$WORK/duplicate/Library/Audio/Plug-Ins/HAL/Copy.driver"
 if check_driver_naming_duplicates "$WORK/duplicate" "$WORK/duplicate/Library/Audio/Plug-Ins/HAL/MiRemoteV2ch.driver"; then exit 1; fi
+[[ "$DRIVER_NAMING_SCAN_REASON" == duplicate_driver ]]
+[[ "$DRIVER_NAMING_SCAN_DETAIL" == duplicate_bundle ]]
+[[ "$DRIVER_NAMING_SCAN_SCOPE" == library ]]
+[[ "$DRIVER_NAMING_SCAN_ISSUE" == not_reconciled ]]
+[[ "$DRIVER_NAMING_SCAN_EXTRAS" -eq 1 ]]
+# Writable-scope duplicates of this product are moved to root's Trash.
+/bin/mkdir -p "$WORK/reconcile/Library/Audio/Plug-Ins/HAL" "$WORK/reconcile/private/var/root"
+/usr/bin/ditto "$RELEASE_OUTPUT_DIR/MiRemoteV2ch.driver" \
+  "$WORK/reconcile/Library/Audio/Plug-Ins/HAL/MiRemoteV2ch.driver"
+/usr/bin/ditto "$RELEASE_OUTPUT_DIR/legacy/MiRemoteV2ch.driver" \
+  "$WORK/reconcile/Library/Audio/Plug-Ins/HAL/Copy.driver"
+if ! check_driver_naming_duplicates "$WORK/reconcile" \
+  "$WORK/reconcile/Library/Audio/Plug-Ins/HAL/MiRemoteV2ch.driver" reconcile \
+  "$WORK/reconcile-marker"; then exit 1; fi
+[[ ! -e "$WORK/reconcile/Library/Audio/Plug-Ins/HAL/Copy.driver" ]]
+[[ "$(<"$WORK/reconcile-marker")" == SayAllDriverNamingDuplicates:1 ]]
+[[ "$DRIVER_NAMING_SCAN_RECONCILED" -eq 1 ]]
+[[ "$(/usr/bin/find "$WORK/reconcile/private/var/root/.Trash" -maxdepth 1 -name '*.driver' | /usr/bin/wc -l | /usr/bin/tr -d ' ')" == 1 ]]
+# A failed marker write must restore the moved duplicate.
+/bin/mkdir -p "$WORK/rollback/Library/Audio/Plug-Ins/HAL" "$WORK/rollback/private/var/root" "$WORK/readonly-marker"
+/usr/bin/ditto "$RELEASE_OUTPUT_DIR/MiRemoteV2ch.driver" \
+  "$WORK/rollback/Library/Audio/Plug-Ins/HAL/MiRemoteV2ch.driver"
+/usr/bin/ditto "$RELEASE_OUTPUT_DIR/legacy/MiRemoteV2ch.driver" \
+  "$WORK/rollback/Library/Audio/Plug-Ins/HAL/Copy.driver"
+/bin/chmod 555 "$WORK/readonly-marker"
+if check_driver_naming_duplicates "$WORK/rollback" \
+  "$WORK/rollback/Library/Audio/Plug-Ins/HAL/MiRemoteV2ch.driver" reconcile \
+  "$WORK/readonly-marker/marker"; then exit 1; fi
+[[ "$DRIVER_NAMING_SCAN_DETAIL" == reconcile_failed ]]
+[[ "$DRIVER_NAMING_SCAN_ISSUE" == marker_failed ]]
+[[ -d "$WORK/rollback/Library/Audio/Plug-Ins/HAL/Copy.driver" ]]
+[[ ! -e "$WORK/readonly-marker/marker" ]]
+/bin/chmod 755 "$WORK/readonly-marker"
+# A symlink that resolves to the product driver is never followed or removed.
+/bin/mkdir -p "$WORK/symlink/Library/Audio/Plug-Ins/HAL"
+/usr/bin/ditto "$RELEASE_OUTPUT_DIR/MiRemoteV2ch.driver" \
+  "$WORK/symlink/Library/Audio/Plug-Ins/HAL/MiRemoteV2ch.driver"
+/bin/ln -s MiRemoteV2ch.driver "$WORK/symlink/Library/Audio/Plug-Ins/HAL/Alias.driver"
+if check_driver_naming_duplicates "$WORK/symlink" \
+  "$WORK/symlink/Library/Audio/Plug-Ins/HAL/MiRemoteV2ch.driver" reconcile \
+  "$WORK/symlink-marker"; then exit 1; fi
+[[ "$DRIVER_NAMING_SCAN_REASON" == unsafe_hal_entry ]]
+[[ "$DRIVER_NAMING_SCAN_DETAIL" == symlink_bundle ]]
+[[ "$DRIVER_NAMING_SCAN_ISSUE" == symlink ]]
+[[ -L "$WORK/symlink/Library/Audio/Plug-Ins/HAL/Alias.driver" ]]
+[[ ! -e "$WORK/symlink-marker" ]]
+# A duplicate in the read-only system scope still stops the installation.
+/bin/mkdir -p "$WORK/system-copy/System/Library/Audio/Plug-Ins/HAL"
+/usr/bin/ditto "$RELEASE_OUTPUT_DIR/MiRemoteV2ch.driver" \
+  "$WORK/system-copy/System/Library/Audio/Plug-Ins/HAL/Copy.driver"
+if check_driver_naming_duplicates "$WORK/system-copy" \
+  "$WORK/system-copy/Library/Audio/Plug-Ins/HAL/MiRemoteV2ch.driver" reconcile \
+  "$WORK/system-copy-marker"; then exit 1; fi
+[[ "$DRIVER_NAMING_SCAN_REASON" == duplicate_driver ]]
+[[ "$DRIVER_NAMING_SCAN_SCOPE" == system ]]
+[[ "$DRIVER_NAMING_SCAN_ISSUE" == read_only_scope ]]
+[[ ! -e "$WORK/system-copy-marker" ]]
+# Unsafe directory permissions still stop the installation with an enum.
+driver_naming_safe_directory() {
+  [[ -d "$1" && ! -L "$1" ]] && (( (8#$(/usr/bin/stat -f %Lp "$1") & 8#022) == 0 ))
+}
+/bin/mkdir -p "$WORK/unsafe/Library/Audio/Plug-Ins/HAL"
+/bin/chmod 775 "$WORK/unsafe/Library/Audio/Plug-Ins/HAL"
+if check_driver_naming_duplicates "$WORK/unsafe" \
+  "$WORK/unsafe/Library/Audio/Plug-Ins/HAL/MiRemoteV2ch.driver"; then exit 1; fi
+[[ "$DRIVER_NAMING_SCAN_REASON" == unsafe_hal_parent ]]
+[[ "$DRIVER_NAMING_SCAN_LEVEL" == hal ]]
+[[ "$DRIVER_NAMING_SCAN_ISSUE" == group_writable || "$DRIVER_NAMING_SCAN_ISSUE" == not_root ]]
+/bin/chmod 755 "$WORK/unsafe/Library/Audio/Plug-Ins/HAL"
+# The blocked log line carries the enum detail, never a path or a name.
+failure_output="$(LC_ALL=C /bin/zsh -c '
+  source "$1"
+  installer_message() { print -r -- "$2"; }
+  DRIVER_NAMING_SCAN_REASON=duplicate_driver
+  DRIVER_NAMING_SCAN_DETAIL=duplicate_bundle
+  DRIVER_NAMING_SCAN_SCOPE=library
+  DRIVER_NAMING_SCAN_EXTRAS=1
+  driver_naming_failure duplicate_driver
+' fixture "$ROOT/packaging/doubao-driver/install/driver-naming.zsh" 2>&1 || true)"
+[[ "$failure_output" == *'reason=duplicate_driver scope=library detail=duplicate_bundle count=1'* ]]
+[[ "$failure_output" == *'could not be moved to Trash safely'* ]]
 functions[driver_naming_safe_directory]=$functions[fixture_original_safe_directory]
 # Execute the shipped preservation/replacement/rollback block on a fake volume.
 # Only chown is stubbed: no administrator rights or system installation.
@@ -114,6 +195,29 @@ fixture_pkill() { return 0; }
 fixture_chown() { return 0; }
 fixture_sysctl() { [[ "$FIXTURE_ARCH" == arm64 ]] && print 1 || print 0; }
 '''
+marker_block = source[source.index('DRIVER_CHANGED=0'):source.index('restore_previous_driver() {')]
+marker_block = marker_block.replace('/usr/bin/stat', 'fixture_stat')
+def run_marker_case(label, content=None, symlink=False):
+    case = work/('marker-'+label); case.mkdir()
+    marker = case/'duplicates-reconciled'
+    if symlink:
+        (case/'marker-target').write_text('SayAllDriverNamingDuplicates:1')
+        marker.symlink_to(case/'marker-target')
+    elif content is not None:
+        marker.write_text(content)
+        marker.chmod(0o600)
+    script = case/'run.zsh'
+    script.write_text('#!/bin/zsh\nset -euo pipefail\n' + stubs + '\nSCRIPT_DIR="$1"\n' + marker_block + '\nprint "changed=$DRIVER_CHANGED"\n')
+    result = subprocess.run(['/bin/zsh', str(script), str(case)], capture_output=True, text=True)
+    (case/'result.log').write_text(result.stdout + result.stderr)
+    assert result.returncode == 0, (label, result.stdout, result.stderr)
+    return result
+marker_result = run_marker_case('valid', 'SayAllDriverNamingDuplicates:1')
+assert 'phase=reconciled result=verified restart=required' in marker_result.stdout and 'changed=1' in marker_result.stdout
+assert 'changed=0' in run_marker_case('absent').stdout
+assert 'changed=0' in run_marker_case('symlink', symlink=True).stdout
+assert 'changed=0' in run_marker_case('foreign', 'SayAllDriverNaming:1:brand').stdout
+print('marker_scenarios=valid,absent,symlink,foreign result=passed')
 pre = (root/'packaging/doubao-driver/install/preinstall').read_text()
 pre = pre.replace('/usr/bin/pkill', 'fixture_pkill').replace('/usr/sbin/sysctl', 'fixture_sysctl')
 post = source[:source.index('test -f "$LEGACY_APP_TRASH_HELPER"')]

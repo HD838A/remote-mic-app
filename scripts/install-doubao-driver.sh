@@ -15,7 +15,9 @@ if [[ -e "$DESTINATION" || -L "$DESTINATION" ]]; then
   exit 2
 fi
 prepare_driver_naming_directory / || { driver_naming_failure unsafe_state_directory; exit 2; }
-check_driver_naming_duplicates / "$DESTINATION" || { driver_naming_failure duplicate_driver; exit 2; }
+check_driver_naming_duplicates / "$DESTINATION" || {
+  driver_naming_failure "${DRIVER_NAMING_SCAN_REASON:-duplicate_driver}"; exit 2
+}
 RECORDED_NAMING="$(driver_naming_record)" || { driver_naming_failure invalid_state; exit 2; }
 OWNED_APP_FOUND=0
 for app in /Applications/SayAll.app "/Applications/Remote Mic.app" /Applications/无线麦.app; do

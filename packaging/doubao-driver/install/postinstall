@@ -58,7 +58,9 @@ SELECTION_BUILD="$(/usr/bin/plutil -extract PackageBuild raw -o - "$NAMING_SELEC
 EXPECTED_BUILD="$(/usr/bin/plutil -extract PackageBuild raw -o - "$RELEASE_CONFIG")"
 [[ "$SELECTION_BUILD" == "$EXPECTED_BUILD" ]] || { driver_naming_failure mismatched_selection; exit 2; }
 prepare_driver_naming_directory "$TARGET_VOLUME" || { driver_naming_failure unsafe_state_directory; exit 2; }
-check_driver_naming_duplicates "$TARGET_VOLUME" "$DESTINATION" || { driver_naming_failure duplicate_driver; exit 2; }
+check_driver_naming_duplicates "$TARGET_VOLUME" "$DESTINATION" || {
+  driver_naming_failure "${DRIVER_NAMING_SCAN_REASON:-duplicate_driver}"; exit 2
+}
 STAGING_ROOT="${TARGET_VOLUME%/}/Library/Application Support/RemoteMic/Installer"
 [[ ! -L "$STAGING_ROOT" && ! -L "$STAGING_ROOT/legacy" ]] || { driver_naming_failure unsafe_payload; exit 2; }
 STAGED_DRIVER="$STAGING_ROOT$STAGED_SUFFIX/MiRemoteV2ch.driver"
@@ -147,6 +149,16 @@ SYSTEM_MAJOR="$(/usr/bin/sw_vers -productVersion | /usr/bin/cut -d. -f1)"
 test "$SYSTEM_MAJOR" -ge "$MINIMUM_SYSTEM_MAJOR"
 DRIVER_CHANGED=0
 DRIVER_BACKUP=""
+# preinstall records duplicate reconciliation in its own script directory. A
+# removed plug-in stays loaded in Core Audio until the service restarts, even
+# when the canonical driver itself is already healthy and current.
+DUPLICATES_MARKER="$SCRIPT_DIR/duplicates-reconciled"
+if [[ -f "$DUPLICATES_MARKER" && ! -L "$DUPLICATES_MARKER" && \
+      "$(/usr/bin/stat -f %u "$DUPLICATES_MARKER")" == 0 && \
+      "$(<"$DUPLICATES_MARKER")" == "SayAllDriverNamingDuplicates:1" ]]; then
+  DRIVER_CHANGED=1
+  print "DRIVER_NAMING phase=reconciled result=verified restart=required"
+fi
 
 restore_previous_driver() {
   if [[ -n "$DRIVER_BACKUP" && -e "$DRIVER_BACKUP" ]]; then

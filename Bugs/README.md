@@ -1,5 +1,6 @@
 # Bug 记录
 
+- [安装器因重复的兼容麦克风驱动阻止升级](./2026-11-17-installer-duplicate-driver-block.md)
 - [历史设备持续盲连且缺少手动恢复入口](./2026-11-15-bounded-remote-recovery.md)
 - [HID 普通按键动作失败会停止整台遥控器](./2026-11-16-hid-action-failure-stops-all-buttons.md)
 
@@ -220,6 +221,7 @@
 
 | 时间 | Bug | 状态 |
 | --- | --- | --- |
+| 2026-11-17 | [安装器因重复的兼容麦克风驱动阻止升级](./2026-11-17-installer-duplicate-driver-block.md) | 候选修复：HAL 扫描拆分为 `hal_scan` + 精确 `detail`/`scope`/`level`/`issue` 枚举；可写 HAL 中的本产品多余副本移入 root 废纸篓并强制重启 Core Audio；符号链接、只读 System HAL 副本和权限异常仍停止。隔离夹具全部通过；真实 Installer、CoreAudio 与现场日志待回收 |
 | 2026-11-15 | [PreferredInputSourceMonitor 取消测试依赖真实 timer，CI 偶发超时失败](./2026-11-15-preferred-input-source-activation-timeout-flake.md) | 候选修复：移除 0.04 秒真实 timer，改在 production waiter 的循环内确定触发取消；定向 20/20、1456 项完整测试、48 项项目自检通过；无产品源码改动，等待 CI |
 | 2026-11-15 | [macOS 27 HID device 回调注册后不投递，显示已连接但遥控器无响应](./2026-11-15-hid-device-callback-silent-after-monitor-restart.md) | 候选修复：不再按“回调已注册”丢弃 manager 报告，改为按实际报告去重；新增 `path=` 与 10 秒汇总日志，device 静默时重挂回调并有界退避；180 项定向测试、1456 项完整测试、Release 构建和 48 项项目自检通过，真实 RC001/RC003 断连重连验收待完成 |
 | 2026-11-14 | [回眸页首次切换耗时过长](./2026-11-14-reflections-page-switch-latency.md) | 候选修复：日期头和记录行改为同一 LazyVStack 懒加载，去重刷新并缓存图标/格式化器；Build 381 本机实测首次显示从约 1.3–1.7 秒降到约 0.5–1.0 秒；更大归档与 Intel 复测待完成 |

@@ -76,7 +76,7 @@ ATVV 通道为：
 - `/Applications/SayAll.app`；
 - `/Library/Audio/Plug-Ins/HAL/MiRemoteV2ch.driver`。
 
-安装脚本校验架构、最低系统版本和签名，重启 CoreAudio，并为当前桌面用户启动应用。新 `SayAll.app` 验证通过后，Bundle ID 匹配的旧 `Remote Mic.app` / `无线麦.app` 会使用防冲突名称移入目标卷对应的 macOS 废纸篓；Trash 不可用或移动失败时旧 App 保持原样。卸载 PKG 只删除 `MiRemoteV2ch.driver` 并重启 CoreAudio，不删除应用或 BlackHole。
+安装脚本校验架构、最低系统版本和签名，并检查两个 HAL 目录链的所有权、权限与符号链接，再按 Bundle ID 枚举重复实例。可写 HAL 中属于本产品的多余副本会移入 root 废纸篓并强制重启 Core Audio；只读 System HAL 中的副本、符号链接、身份不可验证或目录权限异常会停止安装，不自动删除。安装成功后脚本重启 CoreAudio，并为当前桌面用户启动应用。新 `SayAll.app` 验证通过后，Bundle ID 匹配的旧 `Remote Mic.app` / `无线麦.app` 会使用防冲突名称移入目标卷对应的 macOS 废纸篓；Trash 不可用或移动失败时旧 App 保持原样。卸载 PKG 只删除 `MiRemoteV2ch.driver` 并重启 CoreAudio，不删除应用或 BlackHole。
 
 ## HID 与按键映射
 
