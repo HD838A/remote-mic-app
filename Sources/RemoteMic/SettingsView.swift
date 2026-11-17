@@ -687,6 +687,7 @@ struct SettingsView: View {
     @State private var isWaitingForMappingPermissions = false
     @State private var expandedShareSection: SettingsSection?
     @State private var showsPreviouslyConnectedDevices = true
+    @State private var isNewDeviceRowHovered = false
     @State private var versionTapRevealCounter = VersionTapRevealCounter()
 
     init(
@@ -1293,7 +1294,7 @@ struct SettingsView: View {
                 HStack(alignment: .top, spacing: 14) {
                     VStack(spacing: 14) {
                         connectionDevicePanel
-                        previouslyConnectedDevicesPanel
+                        devicesPanel
 #if SAYALL_SIRI_REMOTE_ENABLED
                         if showsAppleRemoteComponentInstallation {
                             appleRemoteComponentInstallation
@@ -1699,35 +1700,103 @@ struct SettingsView: View {
         )
     }
 
-    @ViewBuilder
-    private var previouslyConnectedDevicesPanel: some View {
+    private var devicesPanel: some View {
         let profiles = previouslyConnectedProfiles.filter { !model.isRemoteConnected($0.id) }
-        if !previouslyConnectedProfiles.isEmpty {
-            GlassPanel {
-                VStack(alignment: .leading, spacing: 10) {
+        return GlassPanel {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("connection.devices.title")
+                    .font(.system(size: 13, weight: .semibold))
+
+                Button {
+                    AppLogger.shared.write(
+                        "CONNECTION NEW DEVICE phase=requested action=restart_onboarding source=connection_page"
+                    )
+                    settings.restartOnboarding()
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "plus")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(Color.accentColor)
+                            .frame(width: 28, height: 28)
+                            .background(
+                                Color.accentColor.opacity(0.12),
+                                in: Circle()
+                            )
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("connection.devices.new.title")
+                                .font(.system(size: 13, weight: .semibold))
+                            Text("connection.devices.new.detail")
+                                .font(.system(size: 12))
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        Spacer(minLength: 4)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 9)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(
+                        isNewDeviceRowHovered ? Color.primary.opacity(0.045) : Color.clear,
+                        in: RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    )
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .onHover { isNewDeviceRowHovered = $0 }
+                .accessibilityIdentifier("connection-connect-new-device")
+                .accessibilityLabel(Text("connection.devices.new.title"))
+                .accessibilityHint(Text("connection.devices.new.detail"))
+
+                Divider()
+
+                if profiles.isEmpty {
+                    Text("connection.history.title")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                    if previouslyConnectedProfiles.isEmpty {
+                        Text("connection.devices.history.empty")
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    } else {
+                        Text("connection.history.all_connected")
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                    }
+                } else {
                     Button { showsPreviouslyConnectedDevices.toggle() } label: {
                         HStack {
-                            Text("connection.history.title").font(.system(size: 13, weight: .semibold))
+                            Text("connection.history.title")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(.secondary)
                             Spacer(minLength: 4)
                             Image(systemName: showsPreviouslyConnectedDevices ? "chevron.down" : "chevron.right")
                                 .font(.system(size: 12))
-                        }.frame(maxWidth: .infinity, minHeight: 32, alignment: .leading)
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 24, alignment: .leading)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityValue(localization.text(showsPreviouslyConnectedDevices ? "connection.history.expanded" : "connection.history.collapsed"))
-                    if profiles.isEmpty {
-                        Text("connection.history.all_connected").font(.system(size: 12)).foregroundStyle(.secondary)
-                    }
-                    if let block = model.bluetoothConnectionBlock {
-                        Text(block.text(using: localization)).font(.system(size: 12)).foregroundStyle(.orange)
-                        Button("connection.history.open_bluetooth") { model.openBluetoothPrivacySettings() }
-                            .compatibilityButtonStyle(.standard)
-                    }
+                    .accessibilityValue(
+                        localization.text(
+                            showsPreviouslyConnectedDevices
+                                ? "connection.history.expanded"
+                                : "connection.history.collapsed"
+                        )
+                    )
                     if showsPreviouslyConnectedDevices {
                         ForEach(profiles) { profile in
                             remoteDeviceCard(profile, history: true)
                         }
                     }
+                }
+
+                if let block = model.bluetoothConnectionBlock {
+                    Text(block.text(using: localization)).font(.system(size: 12)).foregroundStyle(.orange)
+                    Button("connection.history.open_bluetooth") { model.openBluetoothPrivacySettings() }
+                        .compatibilityButtonStyle(.standard)
                 }
             }
         }

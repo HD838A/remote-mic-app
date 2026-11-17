@@ -480,9 +480,9 @@
 "audio.action.refresh_devices" = "刷新音频设备";
 "audio.action.learn_virtual_microphones" = "获取 BlackHole";
 "audio.action.send_test_tone" = "发送 1 秒测试音";
-"audio.output.privacy_help" = "语音会写入所选设备。最后一只遥控器断开时，如果系统默认输入正是该虚拟设备，会临时回退到物理麦克风；重连时仅在用户没有手动改选的情况下恢复。系统默认输出不会被修改。";
+"audio.output.privacy_help" = "语音会写入所选设备。最后一只设备断开时，如果系统默认输入正是该虚拟设备，会临时回退到物理麦克风；重连时仅在用户没有手动改选的情况下恢复。系统默认输出不会被修改。";
 "audio.compatibility.open_install_guide" = "打开驱动安装说明";
-"audio.compatibility.missing_notice" = "未检测到兼容虚拟麦克风，语音工具可能收不到遥控器声音。";
+"audio.compatibility.missing_notice" = "未检测到兼容虚拟麦克风，语音工具可能收不到设备声音。";
 "button_mapping.page.title" = "按键映射";
 "button_mapping.page.subtitle" = "点击按键进行设置";
 "button_mapping.toggle.enabled" = "自定义按键";
@@ -1390,9 +1390,9 @@
 "audio.mac_microphone.input" = "麦克风";
 "audio.mac_microphone.none" = "无";
 "audio.mac_microphone.current" = "当前收音：";
-"audio.mac_microphone.current.remote" = "遥控器麦克风";
+"audio.mac_microphone.current.remote" = "设备麦克风";
 "audio.mac_microphone.fallback" = "备用麦克风";
-"audio.mac_microphone.fallback_help" = "不使用遥控器时，可直接对所选麦克风说话；选择后会切换 macOS 输入设备；遥控器收音与此设置无关。";
+"audio.mac_microphone.fallback_help" = "不使用设备时，可直接对所选麦克风说话；选择后会切换 macOS 输入设备；设备收音与此设置无关。";
 "audio.mac_microphone.start" = "用%@说话";
 "audio.mac_microphone.stop" = "停用%@说话";
 "audio.mac_microphone.error.no_audio" = "所选麦克风没有音频。请检查连接，或改用其他麦克风。";
@@ -1520,24 +1520,28 @@
 "button_mapping.profile.created" = "键位方案已创建";
 
 /* Bounded remote recovery and per-device controls. */
+"connection.devices.title" = "设备";
+"connection.devices.new.title" = "连接新的设备";
+"connection.devices.new.detail" = "重新运行设置向导，配对新的设备。";
+"connection.devices.history.empty" = "还没有连接过的设备。连接后会显示在这里。";
 "connection.history.title" = "连接过的设备";
 "connection.history.expanded" = "已展开";
 "connection.history.collapsed" = "已收起";
 "connection.history.all_connected" = "这些设备均已连接";
 "connection.history.offline" = "当前未连接的设备";
-"connection.history.empty" = "遥控器未连接";
+"connection.history.empty" = "设备未连接";
 "connection.history.keep_configuration" = "设备配置会保留。";
-"connection.history.find" = "查找遥控器";
+"connection.history.find" = "查找设备";
 "connection.history.connect" = "连接";
 "connection.history.cancel" = "取消";
 "connection.history.open_bluetooth" = "打开蓝牙设置";
-"connection.history.not_found_help" = "请确认遥控器已开机并在附近。";
+"connection.history.not_found_help" = "请确认设备已开机并在附近。";
 "connection.history.paused_help" = "需要使用时，点击“连接”。";
 "connection.history.status.waiting" = "未连接";
 "connection.history.status.recovering" = "正在连接…";
 "connection.history.status.ready" = "已连接";
 "connection.history.status.paused" = "自动连接已暂停";
-"connection.history.status.not_found" = "未找到遥控器";
+"connection.history.status.not_found" = "未找到设备";
 "connection.history.status.cancelled" = "已取消连接";
 "connection.history.retry" = "重试";
 "connection.history.voice_key_ready" = "语音键已映射为 Fn";
