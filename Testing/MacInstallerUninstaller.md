@@ -15,6 +15,15 @@
 3. 准备一个 Bundle ID 不同的伪 `SayAll.app`，仅用于验证未知同名内容保护。
 4. 确保测试前废纸篓中的同名项目有记录，不要清空用户废纸篓。
 
+## 历史版本兼容原则
+
+每个新卸载包必须能卸载所有已发布版本使用的 App 身份，不得只支持当前版本。
+
+- canonical 与历史安装路径、Bundle ID 必须继续保留；新增或变更身份时，旧值不得删除。
+- 卸载器不得按 App 版本号或 Build 号跳过旧 App。
+- 发布前运行 `scripts/test-installer-architecture-guard.sh`，确认卸载器仍包含 1.9.x 及更早版本的 App 身份。
+- 人工验收至少覆盖一个 1.9.x 旧 App 与当前 App。
+
 ## 安装用例
 
 ### 1. PKG 全新安装
@@ -52,12 +61,12 @@
 ### 4. 完整卸载与可恢复性
 
 1. 退出 App，运行文件名包含当前 `VERSION-BUILD` 的对应架构 standalone 卸载包。
-2. 分别验证 canonical App+驱动、历史 App+驱动、仅 App 和仅驱动。
+2. 分别验证 canonical App+驱动、历史版本 App（至少一个 1.9.x 版本）+驱动、仅 App 和仅驱动。
 3. 在废纸篓中找到名称带 `uninstalled` 时间标记的项目，执行“放回原处”或手动恢复。
 
 预期：所有已识别 App 和 `MiRemoteV 2ch` 移入当前用户废纸篓，无永久删除；已安装的 Apple Remote HCI helper、对应 LaunchDaemon 和状态目录按卸载器当前实现安全移除或停用，`--restore` 可恢复应保留的项；驱动被移除后 CoreAudio 刷新。BlackHole 和本地设置保留，恢复项目字节与 Bundle ID 不变。
 
-失败判定：PKG 成功但 App、驱动或 HCI helper 仍在原位，项目未进入废纸篓，LaunchDaemon 仍加载，`--restore` 不可用，BlackHole/本地设置被改动，或无法恢复。
+失败判定：PKG 成功但 App、驱动或 HCI helper 仍在原位，1.9.x 旧 App 未被识别，项目未进入废纸篓，LaunchDaemon 仍加载，`--restore` 不可用，BlackHole/本地设置被改动，或无法恢复。
 
 ### 5. 未知同名内容、碰撞与回滚
 

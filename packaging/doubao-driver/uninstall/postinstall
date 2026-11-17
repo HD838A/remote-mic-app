@@ -5,6 +5,9 @@ source "${0:A:h}/driver-naming.zsh"
 TARGET_VOLUME="${3:-/}"
 DRIVER_DESTINATION="${TARGET_VOLUME%/}/Library/Audio/Plug-Ins/HAL/MiRemoteV2ch.driver"
 DRIVER_PLIST="$DRIVER_DESTINATION/Contents/Info.plist"
+# 历史版本兼容：这些路径与 Bundle ID 是所有已发布 App 的卸载身份。
+# 变更或新增身份时必须保留旧值，并同步
+# scripts/test-installer-architecture-guard.sh 与 Testing/MacInstallerUninstaller.md。
 APP_DESTINATIONS=(
   "${TARGET_VOLUME%/}/Applications/SayAll.app"
   "${TARGET_VOLUME%/}/Applications/Remote Mic.app"
