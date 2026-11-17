@@ -1,0 +1,95 @@
+{
+  "batch": "remote-card-settling-20261117",
+  "date": "2026-11-17",
+  "purpose": "Production SettingsView evidence for PR #1110: neutral connected status during the 3-second readiness settling window, plus yellow checking states after the window",
+  "pr": "https://github.com/HD838A/remote-mic-app/pull/1110",
+  "source_commit": "e6c0c226bd37fe3ef385541ef80f38c567d5b003",
+  "storage": "GitHub PR native media attachments; original PNG bytes in persistent external workspace",
+  "app_version": "2.0.8",
+  "mode": "public",
+  "viewport": {
+    "offscreen_content_points": [
+      1067,
+      732
+    ],
+    "png_pixels": [
+      2134,
+      1464
+    ]
+  },
+  "boundary": "Production SettingsView with isolated sample profiles and screenshot-only state injection. Static screenshots prove the neutral and yellow renderings; they do not prove real BLE/HID/audio timing, cold-start behavior, hardware, permissions or third-party voice results.",
+  "items": [
+    {
+      "file": "verifying-zh-Hans-light/mapping-1067x732.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1464,
+      "sha256": "28904e2c07503fe00ff609121415b8c35d8cf7926d2ed93b12a4744dd0cdcd7c",
+      "url": "https://github.com/user-attachments/assets/62169688-3526-40e6-a0e7-9f334dd04279",
+      "label": "确认期内中性“已连接”，中文浅色"
+    },
+    {
+      "file": "verifying-zh-Hans-dark/mapping-1067x732.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1464,
+      "sha256": "663bdf2dbc119922787c8b1eef8cac2e3c8a86c3b05b0ed884e5fbc2e4757e34",
+      "url": "https://github.com/user-attachments/assets/1576ac94-6092-4f2f-a6a8-a597ceaa83af",
+      "label": "确认期内中性“已连接”，中文深色"
+    },
+    {
+      "file": "verifying-en-light/mapping-1067x732.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1464,
+      "sha256": "01e63db3b95f793a7a24c9a4a439664d87edd42766573a277bcda37af2c308ea",
+      "url": "https://github.com/user-attachments/assets/37d74e36-ad32-4a96-b5b2-239c39b26be1",
+      "label": "确认期内中性“Connected”，英文浅色"
+    },
+    {
+      "file": "verifying-en-dark/mapping-1067x732.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1464,
+      "sha256": "fd4e7b188772784780c5786971d50b51f02d84412af396113d40254c1b04a22e",
+      "url": "https://github.com/user-attachments/assets/eb81c419-589e-4e82-93de-9aef4f5dd4d5",
+      "label": "确认期内中性“Connected”，英文深色"
+    },
+    {
+      "file": "checking-zh-Hans-light/mapping-1067x732.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1464,
+      "sha256": "cf5a2f690874e321f1a2f15d49f45f86e1c5f4b8975f1623664cf5e70e572b16",
+      "url": "https://github.com/user-attachments/assets/35bde343-b7b1-4551-b8bd-9ec320cd421b",
+      "label": "确认期后黄色“检查中”，中文浅色"
+    },
+    {
+      "file": "checking-zh-Hans-dark/mapping-1067x732.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1464,
+      "sha256": "8b61f274e4e9f0a243ccf3715d60488a58e7ec3877c9ec6420a703ce90c38e35",
+      "url": "https://github.com/user-attachments/assets/282a6dc9-6d64-4c78-8a63-7ebe36cef28c",
+      "label": "确认期后黄色“检查中”，中文深色"
+    },
+    {
+      "file": "checking-en-light/mapping-1067x732.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1464,
+      "sha256": "d62df7f02c5427ca9caf424f7f042691e73f1287c39a445d8c27f2d04958341f",
+      "url": "https://github.com/user-attachments/assets/de822656-1e69-4945-b730-76a304a74c0b",
+      "label": "确认期后黄色“Checking”，英文浅色"
+    },
+    {
+      "file": "checking-en-dark/mapping-1067x732.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1464,
+      "sha256": "0aca0a85d6e0f80be1087f7b8e057f49177b394c11edc1073c3272ba418765db",
+      "url": "https://github.com/user-attachments/assets/19154d81-a9de-4285-963a-1cee98413e16",
+      "label": "确认期后黄色“Checking”，英文深色"
+    }
+  ]
+}

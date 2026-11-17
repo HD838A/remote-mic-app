@@ -3599,6 +3599,8 @@ struct SettingsView: View {
             modelName: remoteModelName(profile), systemName: remoteSystemName(profile),
             status: status,
             statusDetail: localization.text("remote.card.detail.\(status.rawValue)"),
+            statusDisplayOverride: model.remoteCardStatusDisplayOverride(for: profile.id),
+            settlesTransientStatus: !history && !SettingsVisualRenderingPolicy.isScreenshotHarness,
             selected: !history && settings.selectedRemoteProfileID == profile.id,
             batteryLevel: level, powerState: power,
             showsBattery: connected && (level != nil || power == .charging || power == .externalPower)

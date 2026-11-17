@@ -38,6 +38,65 @@ struct RemoteDeviceCardStatusTests {
         #expect(RemoteFunctionReadiness.buttons(statusKey: nil) == .unknown)
     }
 
+    @Test func fastReadinessSkipsTransientCheckingAndConfirming() {
+        var policy = RemoteCardStatusSettlingPolicy()
+        let start = Date(timeIntervalSinceReferenceDate: 1_000)
+        #expect(policy.observe(.disconnected, at: start).display == .settled(.disconnected))
+
+        let checking = policy.observe(.checking, at: start.addingTimeInterval(0.05))
+        #expect(checking.display == .verifyingConnection)
+        #expect(checking.refreshAfter != nil)
+
+        let confirming = policy.observe(.confirming, at: start.addingTimeInterval(0.2))
+        #expect(confirming.display == .verifyingConnection)
+
+        let connected = policy.observe(.connected, at: start.addingTimeInterval(0.4))
+        #expect(connected.display == .settled(.connected))
+        #expect(connected.refreshAfter == nil)
+    }
+
+    @Test func persistentVerificationAppearsAfterGracePeriod() {
+        var policy = RemoteCardStatusSettlingPolicy()
+        let start = Date(timeIntervalSinceReferenceDate: 2_000)
+        #expect(policy.observe(.checking, at: start).display == .verifyingConnection)
+        #expect(policy.observe(.checking, at: start.addingTimeInterval(2.99)).display == .verifyingConnection)
+
+        let settled = policy.observe(.checking, at: start.addingTimeInterval(3.0))
+        #expect(settled.display == .settled(.checking))
+        #expect(settled.refreshAfter == nil)
+    }
+
+    @Test func observedSlowAudioRecoveryDoesNotFlashOrange() {
+        var policy = RemoteCardStatusSettlingPolicy()
+        let start = Date(timeIntervalSinceReferenceDate: 2_500)
+        #expect(policy.observe(.confirming, at: start).display == .verifyingConnection)
+        #expect(policy.observe(.confirming, at: start.addingTimeInterval(2.37)).display == .verifyingConnection)
+        #expect(policy.observe(.connected, at: start.addingTimeInterval(2.37)).display == .settled(.connected))
+    }
+
+    @Test func shortRecheckKeepsLastVerifiedStatus() {
+        var policy = RemoteCardStatusSettlingPolicy()
+        let start = Date(timeIntervalSinceReferenceDate: 3_000)
+        #expect(policy.observe(.connected, at: start).display == .settled(.connected))
+        #expect(policy.observe(.confirming, at: start.addingTimeInterval(1)).display == .settled(.connected))
+        #expect(policy.observe(.connected, at: start.addingTimeInterval(1.5)).display == .settled(.connected))
+
+        var persistentPolicy = RemoteCardStatusSettlingPolicy()
+        #expect(persistentPolicy.observe(.connected, at: start).display == .settled(.connected))
+        #expect(persistentPolicy.observe(.confirming, at: start.addingTimeInterval(1)).display == .settled(.connected))
+        let persistent = persistentPolicy.observe(.confirming, at: start.addingTimeInterval(4.0))
+        #expect(persistent.display == .settled(.confirming))
+    }
+
+    @Test func failuresAndVerifyingStateStayTruthful() {
+        var policy = RemoteCardStatusSettlingPolicy()
+        let start = Date(timeIntervalSinceReferenceDate: 4_000)
+        #expect(policy.observe(.voiceFailed, at: start).display == .settled(.voiceFailed))
+        #expect(policy.observe(.confirming, at: start.addingTimeInterval(0.1)).display == .settled(.voiceFailed))
+        #expect(RemoteDeviceCardStatusDisplay.verifyingConnection.status == .connected)
+        #expect(RemoteDeviceCardStatusDisplay.verifyingConnection.isVerifying)
+    }
+
     @Test func factoryBluetoothNameSurvivesRestartAndUnavailableObservations() throws {
         let suite = "UnifiedRemoteCards.\(UUID().uuidString)"
         let defaults = try #require(TestUserDefaults(suiteName: suite))
