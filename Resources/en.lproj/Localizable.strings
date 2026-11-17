@@ -1583,3 +1583,15 @@
 "remote.card.install.title" = "Install Apple remote component";
 
 "remote.card.install.detail" = "Apple remote support requires the optional component in the installer. Download the installer, select the Apple remote component, then return here to enable it. Enabling and ordinary buttons do not require membership.";
+
+"connection.siri_remote_component.title" = "Install Siri Remote component";
+
+"connection.siri_remote_component.detail" = "Installation requires one administrator authorization.";
+
+"connection.siri_remote_component.install" = "Install";
+
+"connection.siri_remote_component.retry" = "Retry";
+
+"connection.siri_remote_component.retry_detail" = "The previous installation did not finish. Retry is available; cancelling will not prompt again automatically.";
+
+"connection.siri_remote_component.installing" = "Waiting for administrator authorization…";

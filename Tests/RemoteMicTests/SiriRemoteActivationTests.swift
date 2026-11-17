@@ -4,6 +4,40 @@ import Testing
 
 @Suite("Apple Remote explicit activation")
 struct SiriRemoteActivationTests {
+    @Test func installedHelperReplacesMissingInstallerReceipt() {
+        #expect(!SiriRemoteActivationPolicy.needsActivation(
+            enabled: true,
+            needsUserAction: false,
+            audioStatus: "ready",
+            installerReceiptPresent: false,
+            helperInstalled: true
+        ))
+        #expect(SiriRemoteActivationPolicy.needsActivation(
+            enabled: true,
+            needsUserAction: false,
+            audioStatus: "ready",
+            installerReceiptPresent: false,
+            helperInstalled: false
+        ))
+    }
+
+    @Test func activationStillSurfacesRetryAndUnavailableStates() {
+        #expect(SiriRemoteActivationPolicy.needsActivation(
+            enabled: true,
+            needsUserAction: true,
+            audioStatus: "ready",
+            installerReceiptPresent: true,
+            helperInstalled: true
+        ))
+        #expect(SiriRemoteActivationPolicy.needsActivation(
+            enabled: true,
+            needsUserAction: false,
+            audioStatus: "unavailable:authorization_helper_upgrade_denied",
+            installerReceiptPresent: true,
+            helperInstalled: true
+        ))
+    }
+
     @Test @MainActor func discoveryAndOldOnboardingSelectionDoNotEnableServices() throws {
         let suite = "SiriActivation.\(UUID().uuidString)"
         let defaults = try #require(TestUserDefaults(suiteName: suite))

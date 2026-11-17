@@ -1582,3 +1582,15 @@
 "remote.card.install.title" = "安装苹果遥控器组件";
 
 "remote.card.install.detail" = "苹果遥控器需要独立安装包中的可选组件。请下载安装包并勾选苹果遥控器组件，安装后回到本页启用。启用和普通按键无需会员。";
+
+"connection.siri_remote_component.title" = "安装 Siri Remote 组件";
+
+"connection.siri_remote_component.detail" = "安装需要一次管理员授权。";
+
+"connection.siri_remote_component.install" = "安装组件";
+
+"connection.siri_remote_component.retry" = "重试";
+
+"connection.siri_remote_component.retry_detail" = "上次安装未完成。可以重试；取消后不会自动重复弹窗。";
+
+"connection.siri_remote_component.installing" = "正在等待管理员授权…";

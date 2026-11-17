@@ -577,6 +577,9 @@
   - 仙女魔法棒原型先评估把已验证可用的遥控器或移动端输入能力装入定制外壳，以实体按键触发语音、灯光反馈表示录音状态；挥动手势、空间动作和自研 PCB 后置，第一版优先保证麦克风、连接、停止录音和续航可靠。
   - 两种形态都属于独立的展示与体验原型，不替代标准遥控器兼容路线，也不能使用预录音频或假交互冒充真实功能。详细产品目的、方案关系和验证边界保存在私有产品资料库。
 - [ ] 支持苹果遥控器
+  - [ ] 提供 Siri Remote 组件级卸载
+    - 2026-11-17：连接页安装模块只负责安装，安装成功后完全隐藏，不显示卸载按钮。组件级卸载需要私有 HCI helper 新增受权卸载方法：恢复 PacketLogger HCI 配置、停止 LaunchDaemon，并把 helper、LaunchDaemon 和状态移入废纸篓；同时保留 App、兼容麦克风和按键映射。用户反馈 PacketLogger 可能导致 Mac 死机，开发前必须先收集现场日志、崩溃报告和系统版本，确认是否与 HCI tracing 有关。风险分析与取证清单见 `Bugs/2026-11-17-packetlogger-resource-risk.html`；当前只记录，不修复。真实签名包、管理员授权、取消/失败回滚和真机验证通过前不得标记完成。
+  - 2026-11-17：连接页左侧新增 Siri Remote 组件安装模块，仅在系统 helper 或 LaunchDaemon 缺失时显示，安装成功后完全隐藏；不改动遥控器卡片、按键映射、语音设置或其他页面。公开 1513 项测试和私有定向测试通过；真实 Sparkle 升级、管理员授权取消/重试、实体语音和目标 macOS 仍待验收。
   - 2026-10-20 更新 #710：修复 Apple Remote 数据流释放时崩溃。`SayAllBTPacketLoggerClient` 在 `deinit` 中对自有 `stateQueue` 执行同步调用，当最后一个回调引用恰好在 `stateQueue` 自身上释放时形成队列自等待、触发 `SIGTRAP`。修复引入 `stateQueueKey` 标记队列身份，析构路径先判断是否已在该队列上：是则直接收尾，否则才同步执行停止清理。私有包生命周期测试与公开宿主回归通过；真实 A2854/A2540 的语音、触摸与断连矩阵仍待现场验收，父项保持未完成。见 `Bugs/2026-10-20-apple-remote-packet-logger-deinit.md`。
   - 已完成 SiriRemoteForge、Wand、siri-remote-steamos、SiriRemoteVibe 及其他相关开源项目的可行性研究；当前总体首选 SiriRemoteForge，建议按“按键 → 触摸/滚动 → 麦克风高级组件”分阶段验证。
   - SiriRemoteForge 集成评估、候选项目源码与 Release 对比，以及暂停的 Apple Remote Windows 路线研究均已迁移至独立的产品资料工作区。

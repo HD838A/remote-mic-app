@@ -280,6 +280,7 @@ enum SettingsScreenshotRenderer {
             transcriptArchiveStore: transcriptStore,
             recordingAssetStore: recordingStore
         )
+        model.configureSettingsScreenshotDefaults()
         if let rawModel = ProcessInfo.processInfo.environment[
             "REMOTE_MIC_SETTINGS_SCREENSHOT_REMOTE_MODEL"
         ], let remoteModel = XiaomiRemoteModel(rawValue: rawModel) {
@@ -308,6 +309,11 @@ enum SettingsScreenshotRenderer {
         }
         if let scenario = ProcessInfo.processInfo.environment["REMOTE_MIC_SETTINGS_SCREENSHOT_CARD_SCENARIO"] {
             model.configureUnifiedRemoteCardsForSettingsScreenshot(scenario)
+        }
+        if let state = ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_SETTINGS_SCREENSHOT_APPLE_REMOTE_COMPONENT"
+        ] {
+            model.configureAppleRemoteComponentEntryForSettingsScreenshot(state)
         }
         let updateInformation = UpdateInformationStore(userDefaults: defaults)
         seedAvailableUpdate(updateInformation, language: language)

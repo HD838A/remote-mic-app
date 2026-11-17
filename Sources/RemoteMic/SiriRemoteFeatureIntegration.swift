@@ -36,6 +36,22 @@ private final class RuntimePermissionMonitorAdapter: SayAllSiriRemotePermissionM
 #endif
 #endif
 
+/// The optional Installer receipt and the installed privileged helper both
+/// describe component availability. A helper installed by the App makes the
+/// feature usable even when no PKG receipt exists.
+enum SiriRemoteActivationPolicy {
+    static func needsActivation(
+        enabled: Bool,
+        needsUserAction: Bool,
+        audioStatus: String,
+        installerReceiptPresent: Bool,
+        helperInstalled: Bool
+    ) -> Bool {
+        !enabled || needsUserAction || audioStatus.hasPrefix("unavailable:")
+            || (!installerReceiptPresent && !helperInstalled)
+    }
+}
+
 struct SiriRemoteDeviceIdentity: Hashable {
     let adapterID: String
     let instanceToken: String
