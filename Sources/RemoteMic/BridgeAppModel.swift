@@ -614,6 +614,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     private var screenshotCardStatuses: [UUID: RemoteDeviceCardStatus] = [:]
     private var screenshotCardStatusDisplayOverrides: [UUID: RemoteDeviceCardStatusDisplay] = [:]
     private var screenshotSiriActivationNeeded: Bool?
+    private var screenshotSiriComponentInstalled: Bool?
     @Published private(set) var remoteSystemDeviceNames: [UUID: String] = [:]
     @Published private(set) var audioDevices: [AudioDeviceInfo] = []
     @Published private(set) var macMicrophoneDevices: [AudioDeviceInfo] = []
@@ -7695,8 +7696,36 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
 
     var siriRemoteActivationNeeded: Bool {
         if let screenshotSiriActivationNeeded { return screenshotSiriActivationNeeded }
-        return !settings.siriRemoteEnabled || !OnboardingBuildCapabilities.isSiriRemotePackageInstalled()
-            || settings.siriRemoteNeedsUserAction || siriRemoteAudioStatus.hasPrefix("unavailable:")
+        return SiriRemoteActivationPolicy.needsActivation(
+            enabled: settings.siriRemoteEnabled,
+            needsUserAction: settings.siriRemoteNeedsUserAction,
+            audioStatus: siriRemoteAudioStatus,
+            installerReceiptPresent: OnboardingBuildCapabilities.isSiriRemotePackageInstalled(),
+            helperInstalled: isSiriRemoteHelperInstalled
+        )
+    }
+
+    var isSiriRemoteHelperInstalled: Bool {
+        if let screenshotSiriComponentInstalled { return screenshotSiriComponentInstalled }
+        #if SAYALL_SIRI_REMOTE_ENABLED
+        return AppleRemoteComponentInstallation.isInstalled()
+        #else
+        return true
+        #endif
+    }
+
+    func installSiriRemoteComponent() {
+        guard !isStreaming, activePhysicalVoiceControlSource != .siriRemote else { return }
+        AppLogger.shared.write(
+            "APPLE REMOTE COMPONENT_INSTALL phase=requested action=install source=connection_page"
+        )
+        #if SAYALL_SIRI_REMOTE_ENABLED
+        setSiriRemoteEnabled(true)
+        #else
+        AppLogger.shared.write(
+            "APPLE REMOTE COMPONENT_INSTALL phase=failed result=unsupported reason=build_without_siri_remote"
+        )
+        #endif
     }
 
     func activateSiriRemoteFromCard() {
@@ -7928,6 +7957,34 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         connectionStatus = LocalizedMessage(isConnected ? "common.status.connected" : "connection.history.empty")
         voiceShortcutStatus = LocalizedMessage("connection.history.voice_key_ready")
         isAudioOutputReady = true
+    }
+
+    func configureAppleRemoteComponentEntryForSettingsScreenshot(_ state: String) {
+        guard ProcessInfo.processInfo.environment["REMOTE_MIC_SETTINGS_SCREENSHOT_DIR"] != nil else { return }
+        let xiaomi = settings.registerBluetoothRemote(identifier: UUID())
+        settings.updateRemoteProfileModel(xiaomi, model: .rc003)
+        settings.bindHIDFingerprint("settings-component-entry-xiaomi", to: xiaomi)
+        remoteSystemDeviceNames = [
+            xiaomi: settings.applicationLanguage == .english ? "Living Room Remote" : "客厅遥控器",
+        ]
+        remoteBatteryLevels = [xiaomi: 81]
+        remotePowerStates = [xiaomi: .onBattery]
+        connectedRemoteProfileIDs = []
+        screenshotSiriComponentInstalled = state == "installed"
+        settings.siriRemoteEnabled = false
+        settings.selectRemoteProfile(xiaomi)
+        isConnected = false
+        settings.selectedAudioDeviceUID = "screenshot-output"
+        audioDevices = [AudioDeviceInfo(id: 0, uid: "screenshot-output", name: "SayAll")]
+        audioStatus = LocalizedMessage("audio.output.current_format", arguments: ["SayAll"])
+        connectionStatus = LocalizedMessage("connection.history.empty")
+        voiceShortcutStatus = LocalizedMessage("connection.history.voice_key_ready")
+        isAudioOutputReady = true
+    }
+
+    func configureSettingsScreenshotDefaults() {
+        guard ProcessInfo.processInfo.environment["REMOTE_MIC_SETTINGS_SCREENSHOT_DIR"] != nil else { return }
+        screenshotSiriComponentInstalled = true
     }
 
     func isRemoteConnected(_ profileID: UUID) -> Bool {

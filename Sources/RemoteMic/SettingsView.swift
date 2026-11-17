@@ -1294,8 +1294,13 @@ struct SettingsView: View {
                     VStack(spacing: 14) {
                         connectionDevicePanel
                         previouslyConnectedDevicesPanel
+#if SAYALL_SIRI_REMOTE_ENABLED
+                        if showsAppleRemoteComponentInstallation {
+                            appleRemoteComponentInstallation
+                        }
+#endif
                     }
-                        .frame(width: SettingsPageBehavior.mappingRemoteCardWidth + 32)
+                        .frame(width: SettingsPageBehavior.mappingRemoteCardWidth + 32, alignment: .top)
                     VStack(spacing: 14) {
                         phoneConnectionsPanel
                         audioSettingsPanel
@@ -1311,6 +1316,60 @@ struct SettingsView: View {
             model.refreshVoiceKeyCompatibilityWarning()
         }
     }
+
+#if SAYALL_SIRI_REMOTE_ENABLED
+    /// Upgrade users can have the App without the optional PKG component.
+    /// This module only installs the component; it does not touch remote cards.
+    private var showsAppleRemoteComponentInstallation: Bool {
+        !model.isSiriRemoteHelperInstalled
+    }
+
+    private var appleRemoteComponentInstallation: some View {
+        let showsRetry = settings.siriRemoteNeedsUserAction
+            || model.siriRemoteAudioStatus.hasPrefix("unavailable:authorization_helper_upgrade")
+        let isInstalling = settings.siriRemoteEnabled && model.siriRemoteAudioStatus == "preparing_hci"
+        return GlassPanel {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("connection.siri_remote_component.title")
+                    .font(.system(size: 13, weight: .semibold))
+                Text("connection.siri_remote_component.detail")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                if showsRetry {
+                    Text("connection.siri_remote_component.retry_detail")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if isInstalling {
+                    HStack(spacing: 7) {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text("connection.siri_remote_component.installing")
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                    }
+                } else {
+                    Button {
+                        model.installSiriRemoteComponent()
+                    } label: {
+                        Text(
+                            showsRetry
+                                ? "connection.siri_remote_component.retry"
+                                : "connection.siri_remote_component.install"
+                        )
+                    }
+                    .compatibilityButtonStyle(.standard)
+                    .controlSize(.small)
+                    .disabled(model.isStreaming || model.activePhysicalVoiceControlSource == .siriRemote)
+                    .accessibilityIdentifier("apple-remote-component-install")
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+#endif
 
     private func voiceKeyCompatibilityWarningPanel(
         _ warning: VoiceKeyCompatibilityWarning

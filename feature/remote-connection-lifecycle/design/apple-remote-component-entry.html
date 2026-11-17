@@ -1,0 +1,698 @@
+<!doctype html>
+<html lang="zh-Hans" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>连接与语音 · Siri Remote 组件安装模块</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page-bg: #ececef;
+    --window: #f5f5f7;
+    --sidebar: #e9e9ed;
+    --panel: #ffffff;
+    --panel-subtle: #f4f4f6;
+    --line: rgba(0, 0, 0, .10);
+    --text: #1d1d1f;
+    --muted: #6e6e73;
+    --faint: #8e8e93;
+    --accent: #b9541b;
+    --accent-soft: rgba(185, 84, 27, .09);
+    --accent-line: rgba(185, 84, 27, .26);
+    --button: #ececf0;
+    --button-text: #1d1d1f;
+    --selected: rgba(185, 84, 27, .13);
+    --green: #237a43;
+    --orange: #b25a00;
+    --shadow: 0 28px 80px rgba(0, 0, 0, .20), 0 3px 12px rgba(0, 0, 0, .10);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Helvetica Neue", sans-serif;
+    font-size: 12pt;
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page-bg: #161618;
+    --window: #1e1e20;
+    --sidebar: #29292c;
+    --panel: #2c2c2f;
+    --panel-subtle: #333338;
+    --line: rgba(255, 255, 255, .11);
+    --text: #f2f2f4;
+    --muted: #b0b0b7;
+    --faint: #8d8d95;
+    --accent: #f2a371;
+    --accent-soft: rgba(242, 163, 113, .11);
+    --accent-line: rgba(242, 163, 113, .30);
+    --button: #3a3a3e;
+    --button-text: #f2f2f4;
+    --selected: rgba(242, 163, 113, .16);
+    --green: #82d4a2;
+    --orange: #ffb36b;
+    --shadow: 0 28px 80px rgba(0, 0, 0, .52), 0 3px 12px rgba(0, 0, 0, .38);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; }
+  body {
+    background:
+      radial-gradient(1100px 620px at 15% -10%, rgba(185, 84, 27, .10), transparent 58%),
+      radial-gradient(900px 520px at 96% 6%, rgba(60, 110, 220, .07), transparent 64%),
+      var(--page-bg);
+    color: var(--text);
+    padding: 28px 30px 48px;
+  }
+  .design-header {
+    max-width: 1320px;
+    margin: 0 auto 22px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 28px;
+  }
+  .eyebrow {
+    margin: 0 0 8px;
+    font-size: 10pt;
+    font-weight: 650;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+  h1 {
+    margin: 0;
+    font-size: 22pt;
+    line-height: 1.16;
+    letter-spacing: -.02em;
+  }
+  .lede {
+    max-width: 720px;
+    margin: 9px 0 0;
+    font-size: 12pt;
+    line-height: 1.55;
+    color: var(--muted);
+  }
+  .demo-controls {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+    max-width: 660px;
+  }
+  .control-group {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 6px 7px 6px 10px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--panel) 82%, transparent);
+    backdrop-filter: blur(12px);
+  }
+  .control-group > span {
+    font-size: 10pt;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .segments { display: inline-flex; padding: 2px; border-radius: 7px; background: var(--panel-subtle); gap: 2px; }
+  .segments button {
+    appearance: none;
+    border: 0;
+    border-radius: 5px;
+    padding: 4px 9px;
+    background: transparent;
+    color: var(--muted);
+    font: inherit;
+    font-size: 10.5pt;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .segments button[aria-pressed="true"] {
+    background: var(--panel);
+    color: var(--text);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, .13);
+  }
+  .stage {
+    max-width: 1320px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: minmax(0, 1067px) minmax(240px, 1fr);
+    align-items: start;
+    gap: 26px;
+  }
+  .window {
+    width: 1067px;
+    max-width: 100%;
+    height: 760px;
+    border-radius: 12px;
+    overflow: hidden;
+    background: var(--window);
+    box-shadow: var(--shadow);
+    border: 1px solid rgba(0, 0, 0, .22);
+    display: flex;
+    flex-direction: column;
+  }
+  .titlebar {
+    height: 28px;
+    flex: 0 0 28px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 13px;
+    background: var(--window);
+    border-bottom: 1px solid var(--line);
+  }
+  .traffic { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+  .traffic.red { background: #ff5f57; }
+  .traffic.yellow { background: #febc2e; }
+  .traffic.green { background: #28c840; }
+  .app {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: 136px minmax(0, 1fr);
+  }
+  .sidebar {
+    background: var(--sidebar);
+    border-right: 1px solid var(--line);
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .sidebar-brand {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 18px 14px 16px;
+  }
+  .brand-icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 10px;
+    background: #111;
+    color: #f5e5d8;
+    display: grid;
+    place-items: center;
+    font-weight: 800;
+    font-size: 15pt;
+    letter-spacing: -.04em;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .13);
+  }
+  .brand-name { font-size: 12pt; font-weight: 700; letter-spacing: -.01em; }
+  .brand-version { margin-top: 1px; font-size: 9.5pt; color: var(--faint); }
+  .nav { display: flex; flex-direction: column; gap: 3px; padding: 0 7px; }
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 34px;
+    padding: 7px 9px;
+    border-radius: 8px;
+    color: var(--muted);
+    font-size: 11.5pt;
+    font-weight: 540;
+  }
+  .nav-item svg { width: 17px; height: 17px; flex: 0 0 17px; opacity: .82; }
+  .nav-item.active { background: var(--selected); color: var(--accent); }
+  .sidebar-bottom { margin-top: auto; padding: 12px 14px 16px; border-top: 1px solid var(--line); }
+  .account { display: flex; align-items: center; gap: 8px; font-size: 10.5pt; color: var(--muted); }
+  .avatar { width: 24px; height: 24px; border-radius: 50%; background: var(--panel-subtle); display: grid; place-items: center; color: var(--faint); }
+  .content { min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+  .page-header { padding: 14px 22px 12px; }
+  .page-header h2 { margin: 0; font-size: 24pt; font-weight: 650; letter-spacing: -.025em; }
+  .page-divider { height: 1px; background: var(--line); }
+  .page-scroll { flex: 1; min-height: 0; overflow: hidden; padding: 20px 22px 22px; }
+  .columns {
+    display: grid;
+    grid-template-columns: 264px minmax(0, 1fr);
+    gap: 14px;
+    align-items: start;
+  }
+  .left, .right { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    box-shadow: 0 1px 1px rgba(0, 0, 0, .02);
+  }
+  .panel-inner { padding: 16px; }
+  .empty-device { min-height: 170px; display: grid; place-items: center; text-align: center; padding: 18px 16px; }
+  .empty-device .remote-glyph { opacity: .44; margin-bottom: 10px; }
+  .empty-title { font-size: 13pt; font-weight: 650; }
+  .empty-detail { margin-top: 7px; font-size: 11.5pt; color: var(--muted); }
+  .panel-title { font-size: 12pt; font-weight: 650; letter-spacing: -.01em; }
+  .history-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+  .history-list { display: flex; flex-direction: column; gap: 7px; }
+  .device-card {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto auto auto;
+    gap: 2px 8px;
+    padding: 9px 10px;
+    border-radius: 10px;
+    background: var(--panel-subtle);
+    border: 1px solid transparent;
+  }
+  .device-name { grid-column: 1; font-size: 11.5pt; font-weight: 650; line-height: 1.2; }
+  .device-sub { grid-column: 1; font-size: 10.5pt; color: var(--muted); line-height: 1.25; }
+  .device-status { grid-column: 1; display: flex; align-items: center; gap: 5px; font-size: 10.5pt; color: var(--muted); }
+  .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--faint); }
+  .card-actions { grid-column: 2; grid-row: 1 / span 3; display: flex; align-items: center; gap: 5px; }
+  .mini-button {
+    appearance: none;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 4px 8px;
+    background: var(--button);
+    color: var(--button-text);
+    font: inherit;
+    font-size: 10pt;
+    font-weight: 560;
+    cursor: default;
+    white-space: nowrap;
+  }
+  .component-entry {
+    padding: 16px;
+    transition: opacity .18s ease, transform .18s ease;
+  }
+  .component-entry[hidden] { display: none; }
+  .entry-title { display: flex; align-items: center; gap: 6px; font-size: 12pt; font-weight: 650; letter-spacing: -.01em; }
+  .entry-detail { margin: 7px 0 9px; font-size: 11pt; line-height: 1.42; color: var(--muted); }
+  .entry-status { margin: 0 0 9px; font-size: 10.5pt; line-height: 1.38; color: var(--muted); }
+  .entry-status:empty { display: none; }
+  .primary-button {
+    appearance: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 5px 9px;
+    background: var(--button);
+    color: var(--button-text);
+    font: inherit;
+    font-size: 10.5pt;
+    font-weight: 560;
+    cursor: pointer;
+    min-height: 26px;
+  }
+  .primary-button:disabled { opacity: .62; cursor: default; }
+  .right .panel-inner { padding: 16px; }
+  .section-title { font-size: 12pt; font-weight: 650; margin: 0 0 12px; }
+  .mobile-row { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; gap: 10px; align-items: start; padding: 9px 0; border-top: 1px solid var(--line); }
+  .mobile-row:first-of-type { border-top: 0; padding-top: 0; }
+  .mobile-icon { font-size: 17px; color: var(--accent); text-align: center; line-height: 1.3; }
+  .mobile-title { font-size: 11.5pt; font-weight: 650; }
+  .mobile-detail { margin-top: 2px; font-size: 10.5pt; line-height: 1.35; color: var(--muted); }
+  .mobile-actions { display: flex; gap: 6px; margin-top: 6px; }
+  .mobile-state { font-size: 10pt; color: var(--faint); white-space: nowrap; }
+  .trust-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 8px; padding-top: 10px; border-top: 1px solid var(--line); color: var(--faint); font-size: 10pt; }
+  .voice-row { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 12px; align-items: center; padding: 9px 0; border-top: 1px solid var(--line); font-size: 11pt; }
+  .voice-row:first-of-type { border-top: 0; padding-top: 0; }
+  .voice-label { color: var(--muted); }
+  .voice-value { color: var(--text); }
+  .warning { display: flex; align-items: center; gap: 7px; padding: 10px 0 4px; color: var(--orange); font-size: 10.5pt; line-height: 1.35; }
+  .warning svg { width: 14px; height: 14px; flex: 0 0 14px; }
+  .notes {
+    padding-top: 2px;
+    color: var(--muted);
+    font-size: 10.5pt;
+    line-height: 1.6;
+  }
+  .notes h2 { margin: 0 0 10px; color: var(--text); font-size: 13pt; }
+  .notes h3 { margin: 18px 0 6px; color: var(--text); font-size: 11pt; }
+  .notes ul { margin: 0; padding-left: 18px; }
+  .notes li { margin: 5px 0; }
+  .notes code { font-family: "SF Mono", ui-monospace, monospace; font-size: 9.5pt; background: var(--panel-subtle); padding: 1px 4px; border-radius: 4px; color: var(--text); }
+  .callout { margin-top: 14px; padding: 11px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+  .callout strong { color: var(--text); }
+  .state-note { margin-top: 10px; padding: 9px 10px; border-radius: 8px; background: var(--panel-subtle); color: var(--muted); }
+  .prototype-tag { display: inline-flex; align-items: center; gap: 5px; padding: 3px 7px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: 9.5pt; font-weight: 650; }
+  @media (max-width: 1180px) {
+    .stage { grid-template-columns: minmax(0, 1fr); }
+    .notes { max-width: 1067px; }
+  }
+  @media (max-width: 1100px) {
+    body { padding: 20px 16px 40px; }
+    .design-header { align-items: flex-start; flex-direction: column; }
+    .demo-controls { justify-content: flex-start; }
+    .window { height: auto; min-height: 760px; }
+    .page-scroll { overflow: visible; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+  }
+</style>
+</head>
+<body>
+<header class="design-header">
+  <div>
+    <p class="eyebrow">Interaction prototype · Siri Remote component install</p>
+    <h1>连接与语音 · Siri Remote 组件安装模块</h1>
+    <p class="lede">在连接页左侧新增独立模块，只负责安装 Siri Remote 组件；不改动遥控器卡片、按键映射、语音设置或其他页面。</p>
+  </div>
+  <div class="demo-controls" aria-label="原型演示控制">
+    <div class="control-group">
+      <span>语言</span>
+      <div class="segments" id="language-control">
+        <button type="button" data-value="zh" aria-pressed="true">中文</button>
+        <button type="button" data-value="en" aria-pressed="false">EN</button>
+      </div>
+    </div>
+    <div class="control-group">
+      <span>外观</span>
+      <div class="segments" id="theme-control">
+        <button type="button" data-value="light" aria-pressed="true">浅色</button>
+        <button type="button" data-value="dark" aria-pressed="false">深色</button>
+      </div>
+    </div>
+    <div class="control-group">
+      <span>组件状态</span>
+      <div class="segments" id="state-control">
+        <button type="button" data-value="missing" aria-pressed="true">未安装</button>
+        <button type="button" data-value="installing" aria-pressed="false">安装中</button>
+        <button type="button" data-value="retry" aria-pressed="false">需重试</button>
+        <button type="button" data-value="installed" aria-pressed="false">已安装</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main class="stage">
+  <div class="window" role="img" aria-label="连接与语音页面中的 Siri Remote 组件安装入口设计稿">
+    <div class="titlebar" aria-hidden="true">
+      <span class="traffic red"></span><span class="traffic yellow"></span><span class="traffic green"></span>
+    </div>
+    <div class="app">
+      <aside class="sidebar" aria-label="设置侧边栏">
+        <div class="sidebar-brand">
+          <div class="brand-icon">S</div>
+          <div>
+            <div class="brand-name">SayAll</div>
+            <div class="brand-version">2.0.8</div>
+          </div>
+        </div>
+        <nav class="nav">
+          <div class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 9h1M11 9h1M15 9h1M7 13h1M11 13h1M15 13h1"/></svg><span data-copy="nav.buttons">按键</span></div>
+          <div class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="3" width="7" height="7" rx="1.6"/><rect x="14" y="3" width="7" height="7" rx="1.6"/><rect x="3" y="14" width="7" height="7" rx="1.6"/><rect x="14" y="14" width="7" height="7" rx="1.6"/></svg><span data-copy="nav.focus">聚焦与翻页</span></div>
+          <div class="nav-item active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M9.5 14.5 14.5 9.5M7.2 17.4l-1.5 1.5a3.1 3.1 0 0 1-4.4-4.4l3.1-3.1a3.1 3.1 0 0 1 4.4 0"/><path d="M16.8 6.6l1.5-1.5a3.1 3.1 0 0 1 4.4 4.4l-3.1 3.1a3.1 3.1 0 0 1-4.4 0"/></svg><span data-copy="nav.connection">连接</span></div>
+          <div class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 5h16v11H9l-5 4z"/></svg><span data-copy="nav.history">回眸</span></div>
+          <div class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="3.1"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.6-2-3.4-2.4 1a7 7 0 0 0-2-1.2L14.1 3h-4.2l-.4 2.6a7 7 0 0 0-2 1.2l-2.4-1-2 3.4 2 1.6A7 7 0 0 0 5 12c0 .4 0 .8.1 1.2l-2 1.6 2 3.4 2.4-1a7 7 0 0 0 2 1.2l.4 2.6h4.2l.4-2.6a7 7 0 0 0 2-1.2l2.4 1 2-3.4-2-1.6c.1-.4.1-.8.1-1.2Z"/></svg><span data-copy="nav.settings">设置</span></div>
+        </nav>
+        <div class="sidebar-bottom">
+          <div class="account"><span class="avatar">●</span><span data-copy="account">测试账户</span></div>
+        </div>
+      </aside>
+
+      <section class="content">
+        <header class="page-header"><h2 data-copy="page.title">连接与语音</h2></header>
+        <div class="page-divider"></div>
+        <div class="page-scroll">
+          <div class="columns">
+            <div class="left">
+              <section class="panel empty-device">
+                <div>
+                  <div class="remote-glyph" aria-hidden="true">
+                    <svg width="30" height="58" viewBox="0 0 30 58" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="4" y="1" width="22" height="56" rx="10" opacity=".55"/><circle cx="15" cy="19" r="7" opacity=".55"/><circle cx="15" cy="19" r="2"/><path d="M11 34h8M11 40h8M11 46h8" opacity=".55"/></svg>
+                  </div>
+                  <div class="empty-title" data-copy="empty.title">遥控器未连接</div>
+                  <div class="empty-detail" data-copy="empty.detail">设备配置会保留。</div>
+                </div>
+              </section>
+
+              <section class="panel">
+                <div class="panel-inner">
+                  <div class="history-head">
+                    <div class="panel-title" data-copy="history.title">连接过的设备</div>
+                    <div aria-hidden="true" style="color:var(--muted)">⌄</div>
+                  </div>
+                  <div class="history-list" id="history-list"></div>
+                </div>
+              </section>
+
+              <section class="panel component-entry" id="component-entry" aria-live="polite">
+                <div class="entry-title">
+                  <span id="entry-title"></span>
+                </div>
+                <p class="entry-detail" id="entry-detail"></p>
+                <p class="entry-status" id="entry-status"></p>
+                <button type="button" class="primary-button" id="entry-action">
+                  <span id="entry-action-label"></span>
+                </button>
+              </section>
+            </div>
+
+            <div class="right">
+              <section class="panel">
+                <div class="panel-inner">
+                  <h3 class="section-title" data-copy="mobile.title">无线麦 SayAll 移动端</h3>
+                  <div class="mobile-row">
+                    <div class="mobile-icon" aria-hidden="true">▯</div>
+                    <div><div class="mobile-title" data-copy="mobile.ios">无线麦 SayAll iOS App</div><div class="mobile-detail" data-copy="mobile.ios.detail">开启连接后，打开无线麦 SayAll 会优先自动连接，无需扫码。</div><div class="mobile-actions"><button class="mini-button" type="button" data-copy="mobile.appstore">打开 App Store</button><button class="mini-button" type="button" data-copy="mobile.copy">复制链接</button></div></div>
+                    <div class="mobile-state" data-copy="state.notStarted">尚未开启</div>
+                  </div>
+                  <div class="mobile-row">
+                    <div class="mobile-icon" aria-hidden="true">◉</div>
+                    <div><div class="mobile-title" data-copy="mobile.watch">Apple Watch</div><div class="mobile-detail" data-copy="mobile.watch.detail">Watch 直接连接这台 Mac，可点按持续收音。</div></div>
+                    <div class="mobile-state" data-copy="state.notStarted">尚未开启</div>
+                  </div>
+                  <div class="mobile-row">
+                    <div class="mobile-icon" aria-hidden="true">◎</div>
+                    <div><div class="mobile-title" data-copy="mobile.web">无线麦 SayAll 微信小程序</div><div class="mobile-detail" data-copy="mobile.web.detail">微信扫码即可连接，手机和 Mac 可使用不同网络。</div></div>
+                    <div class="mobile-state" data-copy="state.notEnabled">尚未开启</div>
+                  </div>
+                  <div class="trust-row"><span data-copy="trust.count">0 台受信任设备</span><span data-copy="trust.clear">清除受信任设备</span></div>
+                </div>
+              </section>
+
+              <section class="panel">
+                <div class="panel-inner">
+                  <h3 class="section-title" data-copy="voice.title">语音设备</h3>
+                  <div class="voice-row"><span class="voice-label" data-copy="voice.current">当前收音</span><span class="voice-value" data-copy="voice.remoteMic">遥控器麦克风</span></div>
+                  <div class="voice-row"><span class="voice-label" data-copy="voice.fallback">备用麦克风</span><span class="voice-value" data-copy="voice.none">无</span></div>
+                  <div class="voice-row"><span class="voice-label" data-copy="voice.shortcut">语音快捷键</span><span class="voice-value" data-copy="voice.fn">Fn　按住说话，松开结束</span></div>
+                  <div class="voice-row"><span class="voice-label" data-copy="voice.output">输出设备</span><span class="voice-value" data-copy="voice.sayall">SayAll</span></div>
+                  <div class="warning"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 3 2.8 20h18.4z"/><path d="M12 9v5M12 17.2v.2"/></svg><span data-copy="voice.warning">未检测到兼容虚拟麦克风，语音工具可能收不到遥控器声音。</span></div>
+                </div>
+              </section>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <aside class="notes">
+    <div class="prototype-tag">Design review</div>
+    <h2>设计说明</h2>
+    <p>入口固定在连接页左栏最下方，跟随左侧设备区宽度，不占用右侧语音设置空间。</p>
+    <h3>状态规则</h3>
+    <ul>
+      <li><strong>未安装：</strong>显示安装模块、“安装组件”按钮和一次管理员授权说明。</li>
+      <li><strong>安装中：</strong>按钮禁用，等待系统授权结果。</li>
+      <li><strong>需重试：</strong>取消或失败后保留模块，按钮改为“重试”；不自动重复弹窗。</li>
+      <li><strong>已安装：</strong>安装模块完全不显示，不保留卸载按钮。</li>
+    </ul>
+    <h3>交互</h3>
+    <ul>
+      <li>只负责 Siri Remote 组件的安装；不改动遥控器卡片、按键映射、语音设置或其他页面。</li>
+      <li>安装请求一次管理员授权；模块不购买会员、不修改其他开关。</li>
+      <li>组件级卸载不在本次范围，已登记 TODO，后续单独开发。</li>
+    </ul>
+    <div class="callout"><strong>演示边界：</strong>本页只模拟静态布局和状态切换，不调用真实安装、权限或蓝牙能力。点击按钮只切换演示状态。</div>
+    <div class="state-note" id="state-note"></div>
+  </aside>
+</main>
+
+<script>
+  const copy = {
+    zh: {
+      'nav.buttons': '按键', 'nav.focus': '聚焦与翻页', 'nav.connection': '连接', 'nav.history': '回眸', 'nav.settings': '设置',
+      'account': '测试账户', 'page.title': '连接与语音',
+      'empty.title': '遥控器未连接', 'empty.detail': '设备配置会保留。',
+      'history.title': '连接过的设备',
+      'mobile.title': '无线麦 SayAll 移动端', 'mobile.ios': '无线麦 SayAll iOS App',
+      'mobile.ios.detail': '开启连接后，打开无线麦 SayAll 会优先自动连接，无需扫码。',
+      'mobile.appstore': '打开 App Store', 'mobile.copy': '复制链接',
+      'mobile.watch': 'Apple Watch', 'mobile.watch.detail': 'Watch 直接连接这台 Mac，可点按持续收音。',
+      'mobile.web': '无线麦 SayAll 微信小程序', 'mobile.web.detail': '微信扫码即可连接，手机和 Mac 可使用不同网络。',
+      'state.notStarted': '尚未开启', 'state.notEnabled': '尚未开启',
+      'trust.count': '0 台受信任设备', 'trust.clear': '清除受信任设备',
+      'voice.title': '语音设备', 'voice.current': '当前收音', 'voice.remoteMic': '遥控器麦克风',
+      'voice.fallback': '备用麦克风', 'voice.none': '无',
+      'voice.shortcut': '语音快捷键', 'voice.fn': 'Fn　按住说话，松开结束',
+      'voice.output': '输出设备', 'voice.sayall': 'SayAll',
+      'voice.warning': '未检测到兼容虚拟麦克风，语音工具可能收不到遥控器声音。',
+      'entry.install.title': '安装 Siri Remote 组件',
+      'entry.install.detail': '安装需要一次管理员授权。',
+      'entry.install.action': '安装组件',
+      'entry.retry.status': '上次安装未完成。可以重试；取消后不会自动重复弹窗。',
+      'entry.retry.action': '重试',
+      'entry.installing.detail': '正在等待管理员授权…',
+      'entry.installing.action': '正在安装…',
+      'state.missing': '当前演示：组件未安装。连接页左侧显示安装模块。',
+      'state.installed': '当前演示：组件已安装。安装模块完全不显示。',
+      'state.retry': '当前演示：上次安装未完成。模块保留并提供重试。',
+      'state.installing': '当前演示：安装中。按钮禁用，等待系统授权结果。',
+      'device.xiaomi': '小米蓝牙遥控器 2 Pro', 'device.xiaomi.sub': '客厅遥控器',
+      'device.xiaomi.status': '未连接',
+      'device.connect': '连接',
+      'device.chromecast': 'Chromecast 遥控器', 'device.chromecast.sub': '影音室遥控器'
+    },
+    en: {
+      'nav.buttons': 'Buttons', 'nav.focus': 'Focus/Scroll', 'nav.connection': 'Connection', 'nav.history': 'Reflections', 'nav.settings': 'Settings',
+      'account': 'Test account', 'page.title': 'Connection & Voice',
+      'empty.title': 'No remote connected', 'empty.detail': 'Your device settings are kept.',
+      'history.title': 'Previously connected devices',
+      'mobile.title': 'SayAll Mobile', 'mobile.ios': 'SayAll iOS App',
+      'mobile.ios.detail': 'After enabling connections, open SayAll to connect automatically. No scanning is needed.',
+      'mobile.appstore': 'Open App Store', 'mobile.copy': 'Copy Link',
+      'mobile.watch': 'Apple Watch', 'mobile.watch.detail': 'The Watch connects directly to this Mac for tap-to-record.',
+      'mobile.web': 'SayAll WeChat Mini Program', 'mobile.web.detail': 'Scan with WeChat to connect, even on different networks.',
+      'state.notStarted': 'Not Started', 'state.notEnabled': 'Not Enabled',
+      'trust.count': '0 trusted devices', 'trust.clear': 'Clear Trusted Devices',
+      'voice.title': 'Voice devices', 'voice.current': 'Current input', 'voice.remoteMic': 'Remote microphone',
+      'voice.fallback': 'Fallback mic', 'voice.none': 'None',
+      'voice.shortcut': 'Voice shortcut', 'voice.fn': 'Fn  Hold to speak; release to finish',
+      'voice.output': 'Output device', 'voice.sayall': 'SayAll',
+      'voice.warning': 'No compatible virtual microphone was found. Your voice tool may not receive remote audio.',
+      'entry.install.title': 'Install Siri Remote component',
+      'entry.install.detail': 'Installation requires one administrator authorization.',
+      'entry.install.action': 'Install',
+      'entry.retry.status': 'The previous installation did not finish. Retry is available; cancelling will not prompt again automatically.',
+      'entry.retry.action': 'Retry',
+      'entry.installing.detail': 'Waiting for administrator authorization…',
+      'entry.installing.action': 'Installing…',
+      'state.missing': 'Current demo: component missing. The install module is shown in the left column.',
+      'state.installed': 'Current demo: component installed. The install module is completely hidden.',
+      'state.retry': 'Current demo: previous installation did not finish. The module remains with Retry.',
+      'state.installing': 'Current demo: installing. The button is disabled while waiting for system authorization.',
+      'device.xiaomi': 'Xiaomi Bluetooth Remote 2 Pro', 'device.xiaomi.sub': 'Living Room Remote',
+      'device.xiaomi.status': 'Not connected',
+      'device.connect': 'Connect',
+      'device.chromecast': 'Chromecast Remote', 'device.chromecast.sub': 'Media Room Remote'
+    }
+  };
+
+  const state = { lang: 'zh', theme: 'light', mode: 'missing' };
+
+  const $ = (selector) => document.querySelector(selector);
+  const $$ = (selector) => Array.from(document.querySelectorAll(selector));
+  const t = (key) => copy[state.lang][key] ?? key;
+
+  function setSegmented(control, value) {
+    $$(control + ' button').forEach((button) => {
+      button.setAttribute('aria-pressed', String(button.dataset.value === value));
+    });
+  }
+
+  function renderCopy() {
+    $$('[data-copy]').forEach((node) => {
+      const key = node.dataset.copy;
+      node.textContent = t(key);
+    });
+  }
+
+  function renderHistory() {
+    const items = [
+      { name: t('device.xiaomi'), sub: t('device.xiaomi.sub'), status: t('device.xiaomi.status') },
+      { name: t('device.chromecast'), sub: t('device.chromecast.sub'), status: t('device.xiaomi.status') }
+    ];
+    $('#history-list').innerHTML = items.map((item) => `
+      <div class="device-card">
+        <div class="device-name">${item.name}</div>
+        <div class="device-sub">${item.sub}</div>
+        <div class="device-status"><span class="dot"></span>${item.status}</div>
+        <div class="card-actions"><button class="mini-button" type="button">${t('device.connect')}</button></div>
+      </div>`).join('');
+  }
+
+  function entryModel() {
+    if (state.mode === 'installed') {
+      return { visible: false };
+    }
+    if (state.mode === 'installing') {
+      return {
+        visible: true, title: t('entry.install.title'),
+        detail: t('entry.installing.detail'), action: t('entry.installing.action'), disabled: true, status: ''
+      };
+    }
+    if (state.mode === 'retry') {
+      return {
+        visible: true, title: t('entry.install.title'), detail: t('entry.install.detail'),
+        action: t('entry.retry.action'), disabled: false, status: t('entry.retry.status')
+      };
+    }
+    return {
+      visible: true, title: t('entry.install.title'), detail: t('entry.install.detail'),
+      action: t('entry.install.action'), disabled: false, status: ''
+    };
+  }
+
+  function renderEntry() {
+    const model = entryModel();
+    const entry = $('#component-entry');
+    entry.hidden = !model.visible;
+    if (!model.visible) {
+      return;
+    }
+    $('#entry-title').textContent = model.title;
+    $('#entry-detail').textContent = model.detail;
+    $('#entry-status').textContent = model.status || '';
+    $('#entry-action-label').textContent = model.action;
+    $('#entry-action').disabled = model.disabled;
+  }
+
+  function renderStateNote() {
+    const notes = {
+      missing: 'state.missing', installed: 'state.installed', retry: 'state.retry',
+      installing: 'state.installing'
+    };
+    $('#state-note').textContent = t(notes[state.mode] || 'state.missing');
+  }
+
+  function render() {
+    document.documentElement.dataset.theme = state.theme;
+    document.documentElement.lang = state.lang === 'zh' ? 'zh-Hans' : 'en';
+    renderCopy();
+    renderHistory();
+    renderEntry();
+    renderStateNote();
+    setSegmented('#language-control', state.lang);
+    setSegmented('#theme-control', state.theme);
+    setSegmented('#state-control', state.mode);
+  }
+
+  function setMode(mode) {
+    state.mode = mode;
+    render();
+  }
+
+  $('#language-control').addEventListener('click', (event) => {
+    const button = event.target.closest('button');
+    if (!button) return;
+    state.lang = button.dataset.value;
+    render();
+  });
+  $('#theme-control').addEventListener('click', (event) => {
+    const button = event.target.closest('button');
+    if (!button) return;
+    state.theme = button.dataset.value;
+    render();
+  });
+  $('#state-control').addEventListener('click', (event) => {
+    const button = event.target.closest('button');
+    if (!button) return;
+    setMode(button.dataset.value);
+  });
+  $('#entry-action').addEventListener('click', () => {
+    if (state.mode === 'installing' || state.mode === 'installed') return;
+    state.mode = 'installing';
+    render();
+    window.setTimeout(() => {
+      if (state.mode !== 'installing') return;
+      state.mode = 'installed';
+      render();
+    }, 1200);
+  });
+
+  render();
+</script>
+</body>
+</html>
