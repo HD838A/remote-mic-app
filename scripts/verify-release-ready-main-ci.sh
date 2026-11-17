@@ -195,12 +195,60 @@ is_docs_only_run() {
     ' >/dev/null
 }
 
+is_release_metadata_run() {
+  local run_json="$1"
+  local commit="$2"
+  printf '%s\n' "$run_json" | jq -e \
+    --arg workflow "$WORKFLOW_NAME" \
+    --arg headBranch "$SOURCE_BRANCH" \
+    --arg headSha "$commit" '
+      .workflowName == $workflow and
+      (($headBranch == "main" and .event == "push") or
+       ($headBranch != "main" and (.event == "push" or .event == "workflow_dispatch"))) and
+      .status == "completed" and
+      .conclusion == "success" and
+      .headBranch == $headBranch and
+      .headSha == $headSha and
+      (([.jobs[] | select(
+        .name == "Public Swift tests and dual-architecture build" and
+        .status == "completed" and .conclusion == "success" and
+        ([.steps[] | select(.name == "Run release metadata checks" and .conclusion == "success")] | length) == 1 and
+        ([.steps[] | select((.name == "Run Swift tests" or
+          .name == "Run project self-test" or
+          .name == "Build release configuration (Apple Silicon)" or
+          .name == "Build release configuration (Intel Ventura)") and .conclusion == "success")] | length) == 0
+      )] | length) == 1 or
+      (([.jobs[] | select(
+        (.name == "Swift tests and build (Apple Silicon)" or
+         .name == "Public Swift tests and build (Apple Silicon)") and
+        .status == "completed" and .conclusion == "success" and
+        ([.steps[] | select(.name == "Run release metadata checks" and .conclusion == "success")] | length) == 1 and
+        ([.steps[] | select((.name == "Run Swift tests" or
+          .name == "Run project self-test" or .name == "Build release configuration") and .conclusion == "success")] | length) == 0
+      )] | length) == 1 and
+      ([.jobs[] | select(
+        (.name == "Swift tests and build (Intel Ventura)" or
+         .name == "Public Swift tests and build (Intel Ventura)") and
+        .status == "completed" and .conclusion == "success" and
+        ([.steps[] | select(.name == "Run release metadata checks" and .conclusion == "success")] | length) == 1 and
+        ([.steps[] | select((.name == "Run Swift tests" or
+          .name == "Run project self-test" or .name == "Build release configuration") and .conclusion == "success")] | length) == 0
+      )] | length) == 1))
+    ' >/dev/null
+}
+
 is_docs_only_diff() {
   local base_commit="$1"
   local candidate_commit="$2"
   local classification
   classification="$("$CONTROL_PLANE_DIFF_BIN" --classify "$base_commit" "$candidate_commit")" || return 1
   printf '%s\n' "$classification" | grep -Fxq 'product_change=false'
+}
+
+is_release_metadata_only_diff() {
+  local base_commit="$1"
+  local candidate_commit="$2"
+  "$CONTROL_PLANE_DIFF_BIN" --require-release-metadata-only "$base_commit" "$candidate_commit"
 }
 
 RUN_ID="$(find_successful_source_run_id "$SOURCE_COMMIT")"
@@ -217,10 +265,12 @@ if ! is_full_product_run "$RUN_JSON" "$SOURCE_COMMIT"; then
   inherited_proof_kind=""
   if is_control_plane_run "$RUN_JSON" "$SOURCE_COMMIT"; then
     inherited_proof_kind="control-plane"
+  elif is_release_metadata_run "$RUN_JSON" "$SOURCE_COMMIT"; then
+    inherited_proof_kind="release-metadata"
   elif is_docs_only_run "$RUN_JSON" "$SOURCE_COMMIT"; then
     inherited_proof_kind="docs-only"
   else
-    echo "source-branch CI run $RUN_ID is neither a full product run, docs-only run, nor control-plane-only run" >&2
+    echo "source-branch CI run $RUN_ID is neither a full product run, docs-only run, control-plane-only run, nor release-metadata-only run" >&2
     exit 1
   fi
 
@@ -247,6 +297,11 @@ if ! is_full_product_run "$RUN_JSON" "$SOURCE_COMMIT"; then
     if ! "$CONTROL_PLANE_DIFF_BIN" \
         "$PRODUCT_PROOF_COMMIT" "$SOURCE_COMMIT"; then
       echo "source changes after the inherited product proof are not control-plane-only" >&2
+      exit 1
+    fi
+  elif [[ "$inherited_proof_kind" == "release-metadata" ]]; then
+    if ! is_release_metadata_only_diff "$PRODUCT_PROOF_COMMIT" "$SOURCE_COMMIT"; then
+      echo "source changes after the inherited product proof are not release-metadata-only" >&2
       exit 1
     fi
   elif ! is_docs_only_diff "$PRODUCT_PROOF_COMMIT" "$SOURCE_COMMIT"; then

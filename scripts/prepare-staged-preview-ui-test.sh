@@ -93,13 +93,32 @@ IFS=$'\t' read -r artifact_id artifact_digest artifact_name <<< "$payload_record
 [[ "$artifact_digest" =~ ^sha256:[0-9a-f]{64}$ ]] || exit 1
 commit="${artifact_name##*-}"
 [[ "$commit" =~ ^[0-9a-f]{40}$ ]] || { echo "payload artifact has no source Commit identity" >&2; exit 1; }
+ui_payload_record="$(printf '%s\n' "$artifacts" | jq -r '
+  [.artifacts[] | select(.name | startswith("mac-preview-ui-payload-")) | select(.expired == false)] |
+  if length == 1 then .[0] | [.id,.digest,.name] | @tsv else empty end
+')"
 
 resolved="$OUTPUT_DIR/resolved"
-"$ROOT/scripts/recover-preview-stage.sh" "$RUN_ID" "$run_attempt" "$artifact_id" "$artifact_digest" "$commit" "$resolved" > "$OUTPUT_DIR/recovery.txt"
+if [[ -n "$ui_payload_record" ]]; then
+  IFS="$(printf '\t')" read -r ui_artifact_id ui_artifact_digest ui_artifact_name <<< "$ui_payload_record"
+  [[ "$ui_artifact_digest" =~ ^sha256:[0-9a-f]{64}$ ]] || exit 1
+  [[ "${ui_artifact_name##*-}" == "$commit" ]] || { echo "UI payload artifact has a different source Commit" >&2; exit 1; }
+  "$ROOT/scripts/recover-preview-stage.sh" "$RUN_ID" "$run_attempt" "$ui_artifact_id" "$ui_artifact_digest" "$commit" "$resolved" ui > "$OUTPUT_DIR/recovery.txt"
+else
+  "$ROOT/scripts/recover-preview-stage.sh" "$RUN_ID" "$run_attempt" "$artifact_id" "$artifact_digest" "$commit" "$resolved" > "$OUTPUT_DIR/recovery.txt"
+fi
 manifest="$resolved/bundle/staged-assets.json"
 public_dir="$resolved/bundle/public"
 stage_record="$resolved/stage-record/preview-stage-record.json"
 [[ "$(jq -r '.sourceWorkflowCommit' "$stage_record")" == "$workflow_commit" ]] || exit 1
+[[ "$(jq -r '.signedArtifactId' "$stage_record")" == "$artifact_id" ]] || {
+  echo "staging record does not bind the signed payload artifact" >&2
+  exit 1
+}
+[[ "$(jq -r '.signedArtifactDigest' "$stage_record")" == "$artifact_digest" ]] || {
+  echo "staging record does not bind the signed payload digest" >&2
+  exit 1
+}
 if [[ "$(jq -r '.sourceKind' "$stage_record")" == hotfix ]]; then
   [[ "$(jq -r '.sourceBaseTag' "$stage_record")" == "$BASELINE_TAG" ]] || {
     echo "Hotfix UI baseline must match the stable Tag used to create the Hotfix branch" >&2

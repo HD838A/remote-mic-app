@@ -384,6 +384,36 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+      - name: Prepare immutable UI test payload
+        run: |
+          bundle="$RUNNER_TEMP/preview-bundle"
+          ui="$RUNNER_TEMP/preview-ui-bundle"
+          /bin/mkdir -p "$ui/public"
+          /bin/cp "$bundle/staged-assets.json" "$ui/"
+          schema_version="$(jq -r '.schemaVersion' "$bundle/staged-assets.json")"
+          version="${{ steps.release-meta.outputs.version }}"
+          build="${{ steps.release-meta.outputs.build }}"
+          if [[ "$schema_version" == "2" ]]; then
+            prefix="SayAll-$version-$build"
+          else
+            prefix="Remote-Mic-$version"
+          fi
+          archive="$prefix.zip"
+          /bin/cp "$bundle/public/appcast.xml" "$ui/public/"
+          /bin/cp "$bundle/public/$archive" "$ui/public/"
+          /bin/cp "$bundle/public/$prefix.zh.txt" "$ui/public/"
+          /bin/cp "$bundle/public/$prefix.en.txt" "$ui/public/"
+          grep -Fq "url=\"https://download.sayall.app/mac/releases/v$version/$archive\"" "$ui/public/appcast.xml"
+
+      - name: Upload immutable UI test payload artifact
+        id: ui-payload-upload
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: mac-preview-ui-payload-v${{ steps.release-meta.outputs.version }}-${{ inputs.expected_commit }}
+          path: ${{ runner.temp }}/preview-ui-bundle
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Record immutable staging identity
         env:
           PAYLOAD_ARTIFACT_ID: ${{ steps.payload-upload.outputs.artifact-id }}

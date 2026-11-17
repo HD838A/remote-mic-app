@@ -105,9 +105,31 @@ good_zip="$WORK_DIR/SayAll.zip"
 expect_ok "zip is opened and checked" --asset "$good_zip" --expected-commit "$EXPECTED"
 
 # --- 3) DMG ---------------------------------------------------------------------
-good_dmg="$WORK_DIR/SayAll.dmg"
-hdiutil create -quiet -srcfolder "$good_app" -volname "SayAllSourceTest" -format UDZO "$good_dmg"
-expect_ok "dmg is mounted and checked" --asset "$good_dmg" --expected-commit "$EXPECTED"
+# hdiutil can transiently fail on shared runners. Retry only the local fixture
+# creation and mount; a real source-commit mismatch still fails closed.
+dmg_passed=false
+for attempt in 1 2 3; do
+  good_dmg="$WORK_DIR/SayAll-$attempt-$RANDOM.dmg"
+  volname="SayAllSourceTest-$attempt-$-$RANDOM"
+  if ! hdiutil create -quiet -srcfolder "$good_app" -volname "$volname" -format UDZO "$good_dmg" \
+      > "$WORK_DIR/dmg-create-$attempt.log" 2>&1; then
+    print -u2 "dmg create attempt $attempt failed: $(tail -1 "$WORK_DIR/dmg-create-$attempt.log")"
+    sleep 1
+    continue
+  fi
+  if output="$("$VERIFY" --asset "$good_dmg" --expected-commit "$EXPECTED" 2>&1)"; then
+    (( passed += 1 ))
+    print "PASS dmg is mounted and checked (attempt $attempt)"
+    dmg_passed=true
+    break
+  fi
+  print -u2 "dmg verify attempt $attempt failed: $output"
+  if [[ -d "/Volumes/$volname" ]]; then
+    hdiutil detach "/Volumes/$volname" -force >/dev/null 2>&1 || true
+  fi
+  sleep 1
+done
+$dmg_passed || fail "dmg is mounted and checked after 3 attempts"
 
 # --- 4) PKG ---------------------------------------------------------------------
 good_pkg="$WORK_DIR/SayAll.pkg"

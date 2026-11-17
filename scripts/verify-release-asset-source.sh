@@ -119,15 +119,24 @@ verify_tree() {
 verify_path() {
   local candidate="$1"
   local depth="$2"
-  local temporary_dir attach_output mount_point
+  local temporary_dir attach_output mount_point attach_attempt attach_ok
 
   case "${candidate:e:l}" in
     app)
       verify_app "$candidate"
       ;;
     dmg)
-      attach_output="$(hdiutil attach -readonly -nobrowse -noautoopen "$candidate")" || \
-        fail "could not mount ${candidate:t}"
+      attach_attempt=0
+      attach_ok=false
+      until (( attach_attempt >= 3 )); do
+        (( attach_attempt += 1 ))
+        if attach_output="$(hdiutil attach -readonly -nobrowse -noautoopen "$candidate" 2>&1)"; then
+          attach_ok=true
+          break
+        fi
+        [[ "$attach_attempt" -lt 3 ]] && sleep 1
+      done
+      $attach_ok || fail "could not mount ${candidate:t} after ${attach_attempt} attempts"
       mount_point="$(print -r -- "$attach_output" | /usr/bin/awk -F '\t' '$3 ~ /^\/Volumes\// { print $3; exit }')"
       [[ -n "$mount_point" && -d "$mount_point" ]] || fail "mounted volume not found for ${candidate:t}"
       mounted_volumes+=("$mount_point")

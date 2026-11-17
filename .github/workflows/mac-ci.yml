@@ -26,6 +26,7 @@ jobs:
       product_change: ${{ steps.changes.outputs.product_change }}
       tooling_only: ${{ steps.changes.outputs.tooling_only }}
       repository_only: ${{ steps.changes.outputs.repository_only }}
+      release_metadata_only: ${{ steps.changes.outputs.release_metadata_only }}
       release_checks: ${{ steps.changes.outputs.release_checks }}
     steps:
       - name: Check out repository
@@ -65,7 +66,7 @@ jobs:
   public_test:
     name: Public Swift tests and dual-architecture build
     needs: classify_changes
-    runs-on: ${{ (needs.classify_changes.outputs.product_change == 'true' || needs.classify_changes.outputs.release_checks == 'true') && 'xcode-27' || 'ubuntu-latest' }}
+    runs-on: ${{ (needs.classify_changes.outputs.product_change == 'true' || (needs.classify_changes.outputs.release_checks == 'true' && needs.classify_changes.outputs.release_metadata_only != 'true')) && 'xcode-27' || 'ubuntu-latest' }}
     timeout-minutes: 45
     env:
       DEVELOPER_DIR: /Applications/Xcode_27.0.app/Contents/Developer
@@ -93,7 +94,7 @@ jobs:
           fetch-depth: 0
 
       - name: Ensure macOS CI tools
-        if: needs.classify_changes.outputs.product_change == 'true' || needs.classify_changes.outputs.release_checks == 'true'
+        if: needs.classify_changes.outputs.product_change == 'true' || (needs.classify_changes.outputs.release_checks == 'true' && needs.classify_changes.outputs.release_metadata_only != 'true')
         run: command -v rg >/dev/null || HOMEBREW_NO_AUTO_UPDATE=1 brew install ripgrep
 
       - name: Check patch formatting
@@ -113,6 +114,12 @@ jobs:
             test -f "$file"
           done
           echo "Documentation-only change passed."
+
+      - name: Run release metadata checks
+        if: needs.classify_changes.outputs.release_metadata_only == 'true'
+        env:
+          RELEASE_METADATA_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: ./scripts/verify-release-metadata.sh
 
       - name: Run tooling checks
         if: needs.classify_changes.outputs.tooling_only == 'true'
@@ -143,29 +150,29 @@ jobs:
         run: swift --version
 
       - name: Verify release configuration
-        if: needs.classify_changes.outputs.release_checks == 'true'
+        if: needs.classify_changes.outputs.release_checks == 'true' && needs.classify_changes.outputs.release_metadata_only != 'true'
         run: ./scripts/verify-release-dependency-pins.sh tokens
 
       - name: Run release control-plane fixture
-        if: needs.classify_changes.outputs.release_checks == 'true'
+        if: needs.classify_changes.outputs.release_checks == 'true' && needs.classify_changes.outputs.release_metadata_only != 'true'
         run: |
           command -v rg >/dev/null || HOMEBREW_NO_AUTO_UPDATE=1 brew install ripgrep
           ./scripts/test-macos-release-flow.sh
 
       - name: Verify private Draft asset staging
-        if: needs.classify_changes.outputs.release_checks == 'true'
+        if: needs.classify_changes.outputs.release_checks == 'true' && needs.classify_changes.outputs.release_metadata_only != 'true'
         run: ./scripts/test-prepare-private-draft-assets.sh
 
       - name: Verify release baseline gate
-        if: needs.classify_changes.outputs.release_checks == 'true'
+        if: needs.classify_changes.outputs.release_checks == 'true' && needs.classify_changes.outputs.release_metadata_only != 'true'
         run: ./scripts/test-verify-release-baseline.sh
 
       - name: Verify release asset source check
-        if: needs.classify_changes.outputs.release_checks == 'true'
+        if: needs.classify_changes.outputs.release_checks == 'true' && needs.classify_changes.outputs.release_metadata_only != 'true'
         run: ./scripts/test-verify-release-asset-source.sh
 
       - name: Verify release notes rendering
-        if: needs.classify_changes.outputs.release_checks == 'true'
+        if: needs.classify_changes.outputs.release_checks == 'true' && needs.classify_changes.outputs.release_metadata_only != 'true'
         run: ./scripts/test-render-private-draft-notes.sh
 
       - name: Run Swift tests
@@ -179,7 +186,7 @@ jobs:
           swift test --disable-keychain --filter CoreVoiceInputJourneyTests
 
       - name: Run release build-signing tests
-        if: needs.classify_changes.outputs.release_checks == 'true'
+        if: needs.classify_changes.outputs.release_checks == 'true' && needs.classify_changes.outputs.release_metadata_only != 'true'
         env:
           PRODUCT_CHANGE: ${{ needs.classify_changes.outputs.product_change }}
         # The complete shell fixture already passed before Swift compilation.

@@ -11,18 +11,20 @@ ARTIFACT_ID="${3:-}"
 ARTIFACT_DIGEST="${4:-}"
 EXPECTED_COMMIT="${5:-}"
 OUTPUT_DIR="${6:-}"
+MODE="${7:-full}"
 
 [[ "$REPOSITORY" == "HD838A/remote-mic-app" ]] || {
   echo "Preview artifact recovery is restricted to HD838A/remote-mic-app" >&2
   exit 1
 }
 
-if [[ "$#" -ne 6 || ! "$RUN_ID" =~ ^[1-9][0-9]*$ ||
+if [[ "$#" -lt 6 || "$#" -gt 7 || ! "$RUN_ID" =~ ^[1-9][0-9]*$ ||
       ! "$RUN_ATTEMPT" =~ ^[1-9][0-9]*$ ||
       ! "$ARTIFACT_ID" =~ ^[1-9][0-9]*$ ||
       ! "$ARTIFACT_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ||
-      ! "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ || -z "$OUTPUT_DIR" ]]; then
-  echo "usage: $0 <run-id> <run-attempt> <artifact-id> <sha256:digest> <source-commit> <new-output-directory>" >&2
+      ! "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ || -z "$OUTPUT_DIR" ||
+      ( "$MODE" != "full" && "$MODE" != "ui" ) ]]; then
+  echo "usage: $0 <run-id> <run-attempt> <artifact-id> <sha256:digest> <source-commit> <new-output-directory> [full|ui]" >&2
   exit 2
 fi
 [[ ! -e "$OUTPUT_DIR" ]] || {
@@ -74,14 +76,19 @@ workflow_commit="$(printf '%s\n' "$run_json" | jq -r '.head_sha')"
 
 artifact_json="$($GH_BIN api "repos/$REPOSITORY/actions/artifacts/$ARTIFACT_ID")"
 artifact_name="$(printf '%s\n' "$artifact_json" | jq -r '.name')"
+artifact_pattern="^mac-preview-payload-v[0-9]+[.][0-9]+[.][0-9]+-[0-9a-f]{40}$"
+if [[ "$MODE" == ui ]]; then
+  artifact_pattern="^mac-preview-ui-payload-v[0-9]+[.][0-9]+[.][0-9]+-[0-9a-f]{40}$"
+fi
 printf '%s\n' "$artifact_json" | jq -e \
   --arg digest "$ARTIFACT_DIGEST" \
   --arg workflowCommit "$workflow_commit" \
   --argjson artifact "$ARTIFACT_ID" \
-  --argjson run "$RUN_ID" '
+  --argjson run "$RUN_ID" \
+  --arg pattern "$artifact_pattern" '
     .id == $artifact and .expired == false and
     .digest == $digest and
-    (.name | test("^mac-preview-payload-v[0-9]+[.][0-9]+[.][0-9]+-[0-9a-f]{40}$")) and
+    (.name | test($pattern)) and
     .workflow_run.id == $run and
     .workflow_run.head_branch == "main" and
     .workflow_run.head_sha == $workflowCommit
@@ -153,12 +160,20 @@ public_dir="$(dirname "$manifest")/public"
   exit 1
 }
 version="$(jq -r '.version' "$manifest")"
-expected_artifact_name="mac-preview-payload-v${version}-${EXPECTED_COMMIT}"
+if [[ "$MODE" == ui ]]; then
+  expected_artifact_name="mac-preview-ui-payload-v${version}-${EXPECTED_COMMIT}"
+else
+  expected_artifact_name="mac-preview-payload-v${version}-${EXPECTED_COMMIT}"
+fi
 [[ "$artifact_name" == "$expected_artifact_name" ]] || {
   echo "payload artifact name does not match the staged manifest and source Commit" >&2
   exit 1
 }
-"$ROOT/scripts/verify-staged-release-assets.sh" "$manifest" "$public_dir"
+if [[ "$MODE" == ui ]]; then
+  "$ROOT/scripts/verify-preview-ui-assets.sh" "$manifest" "$public_dir"
+else
+  "$ROOT/scripts/verify-staged-release-assets.sh" "$manifest" "$public_dir"
+fi
 jq -e --arg commit "$EXPECTED_COMMIT" '.sourceCommit == $commit' "$manifest" >/dev/null || {
   echo "staged asset manifest source Commit does not match the Run" >&2
   exit 1
@@ -233,11 +248,34 @@ done < <(/usr/bin/find "$stage_bundle" -name preview-stage-record.json -type f)
   exit 1
 }
 stage_record="${stage_candidates[0]}"
+signed_artifact_id="$ARTIFACT_ID"
+signed_artifact_digest="$ARTIFACT_DIGEST"
+if [[ "$MODE" == ui ]]; then
+  full_payload_info="$(printf '%s\n' "$stage_artifacts" | jq -r \
+    --arg name "mac-preview-payload-v${version}-${EXPECTED_COMMIT}" \
+    --argjson run "$RUN_ID" --arg workflowCommit "$workflow_commit" '
+      [.artifacts[] | select(.name == $name) | select(.expired == false) |
+        select(.workflow_run.id == ($run // 0) and
+               .workflow_run.head_branch == "main" and
+               .workflow_run.head_sha == $workflowCommit)] |
+      if length == 1 then .[0] | [.id,.digest] | @tsv else empty end
+    ')"
+  [[ -n "$full_payload_info" ]] || {
+    echo "UI stage has no unique full payload artifact" >&2
+    exit 1
+  }
+  IFS=$'\t' read -r signed_artifact_id signed_artifact_digest <<< "$full_payload_info"
+  [[ "$signed_artifact_id" =~ ^[1-9][0-9]*$ &&
+     "$signed_artifact_digest" =~ ^sha256:[0-9a-f]{64}$ ]] || {
+    echo "full payload artifact identity is invalid" >&2
+    exit 1
+  }
+fi
 jq -e \
   --arg tag "$tag" --arg version "$version" --arg commit "$EXPECTED_COMMIT" \
   --arg workflowCommit "$workflow_commit" \
   --argjson run "$RUN_ID" --argjson attempt "$RUN_ATTEMPT" \
-  --argjson artifact "$ARTIFACT_ID" --arg digest "$ARTIFACT_DIGEST" \
+  --argjson artifact "$signed_artifact_id" --arg digest "$signed_artifact_digest" \
   --arg manifest "$manifest_sha" \
   '.schemaVersion == 2 and .mode == "preview" and
    (.sourceBranch == "main" or (.sourceBranch | test("^hotfix/v[0-9]+[.][0-9]+[.][0-9]+$"))) and

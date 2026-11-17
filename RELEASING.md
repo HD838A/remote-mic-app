@@ -115,6 +115,8 @@ scripts/verify-release-baseline.sh --require <本次要发布的合并提交>
 3. 脚本只修改这三个文件，并检查 Release Notes 不含内部入口、邀请码、凭据或实现细节。Build 参数是最低请求值：脚本取私有 Draft 远端 `v*-local.<build>` 标签最大值与 main 当前 `CFBundleVersion` 的较大值加 10，再与请求值取较大者；私有 Draft 标签查询失败时停止。若 Tag、Release 或公开分发资产已经占用请求版本，只递增最后一位并选更高 Build；公开资产占用检查覆盖 10 个 CDN 固定路径，只有 HTTP 404 才算可用，2xx/3xx 视为占用，认证、权限、5xx、超时或其他未知响应 fail closed。单纯的 CI、Runner、GitHub、Apple 或网络故障不占用版本，不得升版本。
 4. 运行 git diff --check、Swift/脚本测试和必要的 UI/功能测试，创建普通 PR 合入 main。合入后重新 fetch，记录用于 staging 的精确 `origin/main` SHA；不再同步到其他发布分支。
 
+仅修改 `Resources/Info.plist` 的 `CFBundleShortVersionString`/`CFBundleVersion` 和两份 ReleaseHistory 的元数据 PR 走 `release_metadata_only` 快速通道：CI 只运行元数据校验，不执行 Swift 测试和双架构构建；main 就绪检查继承最近一次 first-parent 全量产品证明，并要求产品证明到该 SHA 的差异仍为 release-metadata-only。任何其他 Info.plist 键、Sources、Tests、Package、config、scripts、workflow 或依赖改动自动回到完整产品验证。staging 仍从该精确 `main` SHA 真实构建双架构并签名、公证，快速通道不生成发布字节。
+
 ReleaseHistory 的版本标题由 `scripts/sync-release-history-labels.mjs` 按 GitHub Release 状态统一标记：正式版使用“正式版 / Stable”，公开候选使用“预发布 / Pre-release”。同步工作流会在 Release 状态变化时运行，并每三天兜底检查一次，也可以手动触发；官网只同步这两份已标记的主仓库文件，不在官网单独判断版本渠道。
 
 元数据 PR 合入后不再创建版本候选分支。产品内容变化必须回到普通产品 PR；公开身份产生后不能覆盖旧 Tag 或资产。Hotfix 的元数据与紧急修复一起位于对应 Hotfix 分支，不另建候选分支。
@@ -138,16 +140,17 @@ AI 整理在本次分发协议中保持关闭。`include_ai=true` 在接触发�
 - 对 App、Framework、XPC、Helper、Installer、PKG 和 ZIP 完成 Developer ID 签名、Apple 公证、staple、Gatekeeper 和权限/符号链接校验；DMG 可以作为内部构建中间产物，但不进入公开下载资产。
 - 使用独立 SwiftPM scratch/output，独立提交可并行的 PKG 公证；
 - 生成 canonical public bundle、staged-assets.json 和 stage record；
-- 上传不可变 payload artifact 与 stage record；
+- 上传不可变 payload artifact、UI 专用 payload artifact 与 stage record；
+- UI 专用 payload 只包含 Apple Silicon ZIP、appcast、双语说明和完整 `staged-assets.json`，用于减少本机 UI 验收下载；publication 仍只使用完整 payload。UI 恢复必须用 stage record 绑定的完整签名 artifact 身份核对，不能用 UI 子集替代签名身份；
 - 不创建 Tag、GitHub Release、appcast 公开地址或任何产品分支。
 
-签名阶段内部 supervisor 1200 秒，单个架构变体预算为 1140 秒，公证阶段预算为 600 秒，GitHub step 硬上限 1800 秒。超时只终止本次阶段并保留第一份错误日志；不静默重打或以升版本掩盖基础设施故障。
+签名阶段内部 supervisor 1200 秒，单个架构变体预算为 1140 秒，Swift 编译单架构预算 600 秒，App 组装预算 450 秒，公证阶段预算为 600 秒，GitHub step 硬上限 1800 秒。超时只终止本次阶段并保留第一份错误日志；不静默重打或以升版本掩盖基础设施故障。
 
 ## 真实 Sparkle UI 验收
 
 受保护 staging 成功后，在公开 Tag/Release 建立前执行：
 
-1. scripts/prepare-staged-preview-ui-test.sh 下载指定 Run、attempt 和 artifact ID，不使用 latest artifact；同时动态下载并验证发布开始时记录的 stable latest 公开归档。
+1. scripts/prepare-staged-preview-ui-test.sh 下载指定 Run、attempt 和 artifact ID，不使用 latest artifact；存在 UI 专用 payload 时优先使用，旧 Run 没有该 artifact 时回退到完整 payload。它同时动态下载并验证发布开始时记录的 stable latest 公开归档。
 2. 用本地固定 feed，只把生产 appcast 的不可变 URL 前缀替换为本地地址，确保 enclosure 是 staging 的同一 ZIP。
 3. 使用稳定版 App 的真实 Sparkle UI 完成 check、download、install、首次启动、退出和二次启动；验证版本/Build、Team ID L3QHLDRPAY、公证、Gatekeeper、Sparkle helper 的 0755 权限和 Versions/Current 链接。
 4. 检查没有新增崩溃报告、应用可以再次启动，并用 scripts/record-preview-ui-attestation.sh 生成结构化证明。仅运行 Sparkle CLI probe、单元测试或静态解压不能替代真实 UI 安装；该步骤未完成时不得公开 Preview。
@@ -175,7 +178,7 @@ BuildSigningTests 按相关源码、资源、构建、安装、依赖或 workflo
 
 仅修改开发启动入口 script/build_and_run.sh 时，不触发产品构建或发布检查；该入口不在 CI 中执行，其改动不能冒充新的产品验证证明。发布只允许继承经核对无产品变化的既有双架构证明。
 
-文档、上述手工入口及精确治理 allowlist（verify-repository-governance.sh、repository-governance.yml）的单类改动在 Ubuntu 分类和检查，不启动 Mac、Swift 或私有 checkout。required contexts 保持原名，但只表示适用检查通过，不表示产品重新构建。混合产品、未知路径、mac-ci.yml 和分类器自身改动仍走完整矩阵。发布遇到快速检查时，必须核对同分支 first-parent 的成功双架构产品证明及整个祖先差异；产品差异不得继承。PR 新提交可取消旧 PR CI；main/Hotfix 按 SHA 隔离并保留必要验证，不因新 Push 取消 running 或替换 pending。
+文档、上述手工入口及精确治理 allowlist（verify-repository-governance.sh、repository-governance.yml）的单类改动在 Ubuntu 分类和检查，不启动 Mac、Swift 或私有 checkout。required contexts 保持原名，但只表示适用检查通过，不表示产品重新构建。release-metadata-only 快速检查同样在 Ubuntu 运行元数据校验；发布继承产品证明时额外要求产品证明到候选 SHA 的整个差异为 release-metadata-only。混合产品、未知路径、mac-ci.yml 和分类器自身改动仍走完整矩阵。发布遇到快速检查时，必须核对同分支 first-parent 的成功双架构产品证明及整个祖先差异；产品差异不得继承。PR 新提交可取消旧 PR CI；main/Hotfix 按 SHA 隔离并保留必要验证，不因新 Push 取消 running 或替换 pending。
 
 2026-10-02 已移除 RC003 专用实验包构建、两个 RC003 启动器、Siri 手工蓝牙 trace、旧语音验收和 Chromecast 旧日志监听工具；这些一次性或过时工具不是当前产品、测试包或日志收集入口。现行测试包使用统一签名、公证流程，日志收集按 Testing/RuntimeLogging.md 执行。历史 Bug 文档中出现的旧工具名称只保留为当时的调查证据。
 
