@@ -59,19 +59,20 @@ struct RemoteDeviceCardStatusTests {
         var policy = RemoteCardStatusSettlingPolicy()
         let start = Date(timeIntervalSinceReferenceDate: 2_000)
         #expect(policy.observe(.checking, at: start).display == .verifyingConnection)
-        #expect(policy.observe(.checking, at: start.addingTimeInterval(2.99)).display == .verifyingConnection)
+        #expect(policy.observe(.checking, at: start.addingTimeInterval(0.79)).display == .verifyingConnection)
 
-        let settled = policy.observe(.checking, at: start.addingTimeInterval(3.0))
+        let settled = policy.observe(.checking, at: start.addingTimeInterval(0.8))
         #expect(settled.display == .settled(.checking))
         #expect(settled.refreshAfter == nil)
     }
 
-    @Test func observedSlowAudioRecoveryDoesNotFlashOrange() {
+    @Test func observedCheckingWindowDoesNotFlashOrange() {
         var policy = RemoteCardStatusSettlingPolicy()
         let start = Date(timeIntervalSinceReferenceDate: 2_500)
-        #expect(policy.observe(.confirming, at: start).display == .verifyingConnection)
-        #expect(policy.observe(.confirming, at: start.addingTimeInterval(2.37)).display == .verifyingConnection)
-        #expect(policy.observe(.connected, at: start.addingTimeInterval(2.37)).display == .settled(.connected))
+        // Longest decrypted 2.0.8 build 404 checking → connected window was 259 ms.
+        #expect(policy.observe(.checking, at: start).display == .verifyingConnection)
+        #expect(policy.observe(.checking, at: start.addingTimeInterval(0.259)).display == .verifyingConnection)
+        #expect(policy.observe(.connected, at: start.addingTimeInterval(0.259)).display == .settled(.connected))
     }
 
     @Test func shortRecheckKeepsLastVerifiedStatus() {
@@ -84,7 +85,7 @@ struct RemoteDeviceCardStatusTests {
         var persistentPolicy = RemoteCardStatusSettlingPolicy()
         #expect(persistentPolicy.observe(.connected, at: start).display == .settled(.connected))
         #expect(persistentPolicy.observe(.confirming, at: start.addingTimeInterval(1)).display == .settled(.connected))
-        let persistent = persistentPolicy.observe(.confirming, at: start.addingTimeInterval(4.0))
+        let persistent = persistentPolicy.observe(.confirming, at: start.addingTimeInterval(1.8))
         #expect(persistent.display == .settled(.confirming))
     }
 
