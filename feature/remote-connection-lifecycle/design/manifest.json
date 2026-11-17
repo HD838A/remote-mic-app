@@ -1,14 +1,20 @@
 {
-  "date": "2026-11-16",
-  "purpose": "Approved unified three-row remote card HTML prototype",
-  "revision": 6,
-  "approval": "User explicitly requested committing the HTML design to the repository, implementing it, testing, and opening a new PR in this conversation.",
+  "date": "2026-11-18",
+  "purpose": "Approved unified three-row remote card and connect-new-device HTML prototypes",
+  "revision": 7,
+  "approval": "User approved the connect-new-device design in this conversation on 2026-11-17 and requested implementation without widening scope.",
   "items": [
     {
       "file": "cards.html",
       "format": "HTML",
       "sha256": "143a9303fecfb185a395455b118175dc2540d66cf0fac174468061fbfa137ba3",
       "note": "Self-contained interactive prototype, simulated device data, 232 × 72 pt cards; not production UI or hardware evidence."
+    },
+    {
+      "file": "connect-new-device.html",
+      "format": "HTML",
+      "sha256": "f703fdd375bb9d885562e479f3d206a0911b99b9eddf1584b00d2a3476cbc676",
+      "note": "Self-contained interactive prototype for the merged 设备 card and 连接新的设备 entry; includes the independent-card alternate. Simulated data; not production UI or hardware evidence."
     }
   ]
 }

@@ -480,9 +480,9 @@
 "audio.action.refresh_devices" = "Refresh Devices";
 "audio.action.learn_virtual_microphones" = "Get BlackHole";
 "audio.action.send_test_tone" = "Play Test Sound";
-"audio.output.privacy_help" = "Voice audio is sent to the selected device. When the last remote disconnects, macOS switches the Mac’s default microphone to a physical microphone if it was using this virtual device. On reconnect, SayAll restores the virtual microphone only if you have not changed that setting. The default speakers are never changed.";
+"audio.output.privacy_help" = "Voice audio is sent to the selected device. When the last device disconnects, macOS switches the Mac’s default microphone to a physical microphone if it was using this virtual device. On reconnect, SayAll restores the virtual microphone only if you have not changed that setting. The default speakers are never changed.";
 "audio.compatibility.open_install_guide" = "Open Driver Installation Guide";
-"audio.compatibility.missing_notice" = "No compatible virtual microphone was found. Your voice tool may not receive remote audio.";
+"audio.compatibility.missing_notice" = "No compatible virtual microphone was found. Your voice tool may not receive device audio.";
 "button_mapping.page.title" = "Button Mapping";
 "button_mapping.page.subtitle" = "Click a button to change its settings";
 "button_mapping.toggle.enabled" = "Custom Buttons";
@@ -1391,9 +1391,9 @@
 "audio.mac_microphone.input" = "Microphone";
 "audio.mac_microphone.none" = "None";
 "audio.mac_microphone.current" = "Current input:";
-"audio.mac_microphone.current.remote" = "Remote microphone";
+"audio.mac_microphone.current.remote" = "Device microphone";
 "audio.mac_microphone.fallback" = "Fallback microphone";
-"audio.mac_microphone.fallback_help" = "Talk into the selected microphone when the remote isn't in use; selecting one switches the macOS input device; remote audio is unaffected.";
+"audio.mac_microphone.fallback_help" = "Talk into the selected microphone when the device isn't in use; selecting one switches the macOS input device; device audio is unaffected.";
 "audio.mac_microphone.start" = "Speak with %@";
 "audio.mac_microphone.stop" = "Stop using %@";
 "audio.mac_microphone.error.no_audio" = "The selected microphone produced no audio. Check the connection or choose another microphone.";
@@ -1521,24 +1521,28 @@
 "button_mapping.profile.created" = "Key profile created";
 
 /* Bounded remote recovery and per-device controls. */
+"connection.devices.title" = "Devices";
+"connection.devices.new.title" = "Connect a device";
+"connection.devices.new.detail" = "Run setup again to pair a new device.";
+"connection.devices.history.empty" = "No previously connected devices. New devices will appear here.";
 "connection.history.title" = "Previously connected devices";
 "connection.history.expanded" = "Expanded";
 "connection.history.collapsed" = "Collapsed";
 "connection.history.all_connected" = "These devices are connected";
 "connection.history.offline" = "Currently offline";
-"connection.history.empty" = "No remote connected";
+"connection.history.empty" = "No device connected";
 "connection.history.keep_configuration" = "Your device settings are kept.";
-"connection.history.find" = "Find a remote";
+"connection.history.find" = "Find a device";
 "connection.history.connect" = "Connect";
 "connection.history.cancel" = "Cancel";
 "connection.history.open_bluetooth" = "Open Bluetooth settings";
-"connection.history.not_found_help" = "Make sure the remote is on and nearby.";
+"connection.history.not_found_help" = "Make sure the device is on and nearby.";
 "connection.history.paused_help" = "Click Connect when you need this device.";
 "connection.history.status.waiting" = "Not connected";
 "connection.history.status.recovering" = "Connecting…";
 "connection.history.status.ready" = "Connected";
 "connection.history.status.paused" = "Auto-connect paused";
-"connection.history.status.not_found" = "Remote not found";
+"connection.history.status.not_found" = "Device not found";
 "connection.history.status.cancelled" = "Connection cancelled";
 "connection.history.retry" = "Retry";
 "connection.history.voice_key_ready" = "Voice button: Fn";
