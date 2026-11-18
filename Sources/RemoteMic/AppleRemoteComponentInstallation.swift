@@ -36,24 +36,3 @@ struct AppleRemoteComponentSnapshot: Equatable {
         helperPresent && launchDaemonPresent
     }
 }
-
-/// Snapshot included in redacted diagnostics so a user never has to inspect
-/// system paths by hand. It intentionally contains only booleans.
-struct SiriRemoteComponentDiagnosticState: Equatable {
-    let buildSupported: Bool
-    let installerReceiptPresent: Bool
-    let helperPresent: Bool
-    let launchDaemonPresent: Bool
-
-    var isInstalled: Bool {
-        helperPresent && launchDaemonPresent
-    }
-
-    var logFields: String {
-        "build_supported=\(buildSupported) " +
-            "installer_receipt_present=\(installerReceiptPresent) " +
-            "helper_present=\(helperPresent) " +
-            "launch_daemon_present=\(launchDaemonPresent) " +
-            "component_installed=\(isInstalled)"
-    }
-}
