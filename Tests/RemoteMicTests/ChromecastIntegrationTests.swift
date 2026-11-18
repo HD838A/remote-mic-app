@@ -75,6 +75,31 @@ struct ChromecastIntegrationTests {
         #expect(!ChromecastVoiceEndReason.cancelled("link_unavailable").isNormal)
     }
 
+    /// 按键已经响应，但私有包的 presence 缓存还没有值时，卡片必须读取实时快照，
+    /// 不能停在 `.unknown` 并显示“状态确认中”。
+    @Test func cardButtonReadinessUsesLiveHIDPresenceWhenCacheIsMissing() {
+        #expect(RemoteFunctionReadiness.chromecastButtons(
+            cachedPresent: nil,
+            livePresent: true
+        ) == .ready)
+        #expect(RemoteFunctionReadiness.chromecastButtons(
+            cachedPresent: nil,
+            livePresent: false
+        ) == .unknown)
+        #expect(RemoteFunctionReadiness.chromecastButtons(
+            cachedPresent: true,
+            livePresent: false
+        ) == .ready)
+        #expect(RemoteFunctionReadiness.chromecastButtons(
+            cachedPresent: false,
+            livePresent: true
+        ) == .ready)
+        #expect(RemoteFunctionReadiness.chromecastButtons(
+            cachedPresent: false,
+            livePresent: false
+        ) == .unknown)
+    }
+
     // MARK: - 缺包时的退化行为
 
     @Test func integrationIsInertWhenPrivatePackageIsAbsent() {
@@ -130,6 +155,7 @@ struct ChromecastIntegrationTests {
         #expect(modelSource.contains("#if SAYALL_CHROMECAST_ENABLED"))
         #expect(modelSource.contains("owner: .chromecast"))
         #expect(modelSource.contains("receiveChromecastAudio"))
+        #expect(modelSource.contains("RemoteFunctionReadiness.chromecastButtons"))
         // 缺失私有包必须是普通的代码路径，不能是构建期 fatalError。
         #expect(!packageSource.contains("fatalError(\"SAYALL_CHROMECAST"))
     }
