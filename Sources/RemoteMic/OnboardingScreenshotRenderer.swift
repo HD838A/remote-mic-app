@@ -161,11 +161,23 @@ enum OnboardingScreenshotRenderer {
             )
             settings.updateRemoteProfileModel(profileID, model: remoteModel)
             settings.selectRemoteProfile(profileID)
+            if let onboardingModel = OnboardingXiaomiRemoteModel(rawValue: remoteModel.rawValue) {
+                settings.setOnboardingXiaomiRemoteModel(onboardingModel, source: "screenshot")
+            }
         }
         if controlSource == .siriRemote {
             settings.setOnboardingAppleRemoteGeneration(
                 requestedAppleRemoteGeneration ?? .generation7
             )
+        }
+        if controlSource == .xiaomiRemote {
+            if ProcessInfo.processInfo.environment[
+                "REMOTE_MIC_ONBOARDING_SCREENSHOT_XIAOMI_MODEL"
+            ] == "none" {
+                settings.setOnboardingXiaomiRemoteModel(nil)
+            } else if settings.onboardingXiaomiRemoteModel == nil {
+                settings.setOnboardingXiaomiRemoteModel(.rc003, source: "screenshot_default")
+            }
         }
         let screenshotAudioName = ProcessInfo.processInfo.environment[
             "REMOTE_MIC_ONBOARDING_SCREENSHOT_AUDIO_NAME"

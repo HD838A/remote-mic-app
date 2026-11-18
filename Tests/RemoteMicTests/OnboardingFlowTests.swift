@@ -554,6 +554,123 @@ struct OnboardingFlowTests {
             "onboarding.controls.web_remote.detail")
     }
 
+    @Test func physicalRemoteCardsSplitXiaomiAndFollowRequiredOrder() {
+        #expect(OnboardingXiaomiRemoteModel.allCases == [.rc003, .rc001])
+        #expect(OnboardingPhysicalRemoteCard.ordered(availableSources: [.xiaomiRemote]) == [
+            .xiaomi(.rc003),
+            .xiaomi(.rc001),
+        ])
+        #expect(OnboardingPhysicalRemoteCard.ordered(
+            availableSources: [.xiaomiRemote, .siriRemote]
+        ) == [
+            .xiaomi(.rc003),
+            .xiaomi(.rc001),
+            .apple(.generation7),
+            .apple(.generation6),
+        ])
+        #expect(OnboardingPhysicalRemoteCard.ordered(
+            availableSources: [.siriRemote]
+        ) == [
+            .apple(.generation7),
+            .apple(.generation6),
+        ])
+    }
+
+    @Test func onboardingControlSourceSelectionRequiresXiaomiModel() {
+        #expect(!OnboardingControlSourceSelectionPolicy.isComplete(
+            source: .unselected,
+            xiaomiModel: nil
+        ))
+        #expect(!OnboardingControlSourceSelectionPolicy.isComplete(
+            source: .xiaomiRemote,
+            xiaomiModel: nil
+        ))
+        #expect(OnboardingControlSourceSelectionPolicy.isComplete(
+            source: .xiaomiRemote,
+            xiaomiModel: .rc001
+        ))
+        #expect(OnboardingControlSourceSelectionPolicy.isComplete(
+            source: .xiaomiRemote,
+            xiaomiModel: .rc003
+        ))
+        #expect(OnboardingControlSourceSelectionPolicy.isComplete(
+            source: .siriRemote,
+            xiaomiModel: nil
+        ))
+        #expect(OnboardingControlSourceSelectionPolicy.isComplete(
+            source: .appleCompanion,
+            xiaomiModel: nil
+        ))
+        #expect(OnboardingControlSourceSelectionPolicy.isComplete(
+            source: .webRemote,
+            xiaomiModel: nil
+        ))
+    }
+
+    @Test func onboardingXiaomiModelPersistsAndRestartClearsIt() throws {
+        let suiteName = "RemoteMicTests.Onboarding.XiaomiModel.\(UUID().uuidString)"
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let settings = AppSettings(defaults: defaults)
+        #expect(settings.onboardingXiaomiRemoteModel == nil)
+        settings.setOnboardingXiaomiRemoteModel(.rc001)
+        #expect(settings.onboardingXiaomiRemoteModel == .rc001)
+
+        let resumed = AppSettings(defaults: defaults)
+        #expect(resumed.onboardingXiaomiRemoteModel == .rc001)
+        resumed.restartOnboarding()
+        #expect(resumed.onboardingXiaomiRemoteModel == nil)
+    }
+
+    @Test func onboardingXiaomiEventPolicyProtectsSelectedModel() {
+        #expect(OnboardingXiaomiEventPolicy.disposition(
+            profileModel: .rc001,
+            selectedModel: .rc001,
+            controlSource: .xiaomiRemote
+        ) == .accept)
+        #expect(OnboardingXiaomiEventPolicy.disposition(
+            profileModel: .rc003,
+            selectedModel: .rc001,
+            controlSource: .xiaomiRemote
+        ) == .rejectOtherModel)
+        #expect(OnboardingXiaomiEventPolicy.disposition(
+            profileModel: .unknown,
+            selectedModel: .rc001,
+            controlSource: .xiaomiRemote
+        ) == .pendingIdentity)
+        #expect(OnboardingXiaomiEventPolicy.disposition(
+            profileModel: .rc003,
+            selectedModel: .rc001,
+            controlSource: .siriRemote
+        ) == .accept)
+
+        #expect(OnboardingXiaomiEventPolicy.shouldAdoptSelection(
+            profileModel: .rc001,
+            selectedModel: .rc001,
+            selectedModelProfileExists: true,
+            controlSource: .xiaomiRemote
+        ))
+        #expect(!OnboardingXiaomiEventPolicy.shouldAdoptSelection(
+            profileModel: .rc003,
+            selectedModel: .rc001,
+            selectedModelProfileExists: true,
+            controlSource: .xiaomiRemote
+        ))
+        #expect(OnboardingXiaomiEventPolicy.shouldAdoptSelection(
+            profileModel: .unknown,
+            selectedModel: .rc001,
+            selectedModelProfileExists: false,
+            controlSource: .xiaomiRemote
+        ))
+        #expect(!OnboardingXiaomiEventPolicy.shouldAdoptSelection(
+            profileModel: .unknown,
+            selectedModel: .rc001,
+            selectedModelProfileExists: true,
+            controlSource: .xiaomiRemote
+        ))
+    }
+
     @Test func siriPairingGuideLandsEveryStepInBothLanguages() throws {
         // 苹果遥控器的配对有两个坑，用户照着一句话版本做基本都会失败：
         // 遥控器会自己连回原来的 Apple TV；这台 Mac 上的旧配对记录会让它连不上。
@@ -872,6 +989,32 @@ struct OnboardingFlowTests {
             "guide.screenshot.zoom=system-fn",
             "guide.screenshot.zoom=-",
         ])
+    }
+
+    @Test @MainActor func guideScreenshotGroupOpensEachImageZoom() throws {
+        let fixture = try OnboardingOffscreenFixture(
+            step: .voiceTool,
+            voiceTool: .doubao,
+            initialInputMethodGuideStep: 3
+        )
+        defer { fixture.close() }
+        let probe = fixture.probe
+
+        #expect(probe.actions["guide.screenshot.zoom.wechat"] != nil)
+        #expect(probe.actions["guide.screenshot.zoom.feishu"] != nil)
+
+        probe.invoke("guide.screenshot.zoom.wechat")
+        fixture.settleLayout()
+        #expect(probe.stateEvents == [
+            "guide.screenshot.zoom=weixin-app-shortcuts",
+        ])
+        probe.invoke("guide.screenshot.zoom.close")
+        fixture.settleLayout()
+
+        probe.invoke("guide.screenshot.zoom.feishu")
+        fixture.settleLayout()
+        #expect(probe.stateEvents.last ==
+            "guide.screenshot.zoom=feishu-settings-remove-shortcuts")
     }
 
     @MainActor
@@ -1544,7 +1687,7 @@ struct OnboardingFlowTests {
         for resourceName in [
             "doubao-menu", "doubao-settings", "weixin-input-menu",
             "weixin-input-settings", "system-fn", "weixin-app-shortcuts",
-            "vokie-step-1", "vokie-step-2",
+            "feishu-settings-remove-shortcuts", "vokie-step-1", "vokie-step-2",
         ] {
             #expect(viewSource.contains(resourceName))
             for appearance in ["light", "dark"] {
@@ -1571,7 +1714,11 @@ struct OnboardingFlowTests {
         #expect(viewSource.contains("columns: physicalColumns"))
         #expect(viewSource.contains("inputMethodGuide(for: settings.onboardingVoiceTool)"))
         #expect(viewSource.contains("content: .systemFunctionKey"))
+        #expect(viewSource.contains("content: .screenshotGroup"))
         #expect(viewSource.contains("onboarding.voice_tool.guide.release_system_fn"))
+        #expect(viewSource.contains("onboarding.voice_tool.guide.release_wechat_feishu_fn"))
+        #expect(viewSource.contains("feishu-settings-remove-shortcuts"))
+        #expect(viewSource.contains("onboarding.voice_tool.guide.screenshot.feishu_app"))
         #expect(viewSource.contains("allRecognizedVoiceToolsUnavailable"))
         #expect(viewSource.contains("onboarding.voice_tool.none_detected"))
         #expect(viewSource.contains("onboarding.voice_tool.other.setup_detail"))
@@ -3771,21 +3918,28 @@ struct OnboardingFlowTests {
         let visibleSources = OnboardingControlSourceVisibilityPolicy.visibleSources(
             OnboardingBuildCapabilities.availableControlSources
         )
+        for card in OnboardingPhysicalRemoteCard.ordered(availableSources: visibleSources) {
+            let id = "control-source.\(card.id)"
+            invoke(id, on: remoteSource)
+            switch card {
+            case let .xiaomi(model):
+                #expect(remoteSource.settings.onboardingControlSource == .xiaomiRemote)
+                #expect(remoteSource.settings.onboardingXiaomiRemoteModel == model)
+                #expect(!remoteSource.settings.siriRemoteEnabled)
+            case let .apple(generation):
+                #expect(remoteSource.settings.onboardingControlSource == .siriRemote)
+                #expect(remoteSource.settings.onboardingAppleRemoteGeneration == generation)
+                #expect(remoteSource.settings.siriRemoteEnabled)
+            }
+        }
         for source in visibleSources where source != .siriRemote {
+            guard source != .xiaomiRemote else { continue }
             let id = "control-source.\(source.rawValue)"
             invoke(id, on: remoteSource)
             #expect(remoteSource.settings.onboardingControlSource == source)
             #expect(!remoteSource.settings.siriRemoteEnabled)
         }
-        #if SAYALL_SIRI_REMOTE_ENABLED
-        for generation in OnboardingAppleRemoteGeneration.allCases {
-            let id = "control-source.siri_remote.\(generation.rawValue)"
-            invoke(id, on: remoteSource)
-            #expect(remoteSource.settings.onboardingAppleRemoteGeneration == generation)
-            #expect(remoteSource.settings.siriRemoteEnabled)
-        }
-        #endif
-        invoke("control-source.xiaomi_remote", on: remoteSource)
+        invoke("control-source.xiaomi_remote.rc001", on: remoteSource)
         invoke("continue", on: remoteSource)
         invoke("back", on: remoteSource)
 
@@ -3987,6 +4141,7 @@ private final class OnboardingOffscreenFixture {
         systemFunctionKeyAvailable: Bool = true,
         initialInputMethodGuideStep: Int? = nil,
         controlSource: OnboardingControlSource? = nil,
+        xiaomiModel: OnboardingXiaomiRemoteModel? = nil,
         voiceToolAvailability: [OnboardingVoiceTool: OnboardingVoiceToolAvailability]? = nil,
         siriRemotePackageInstalled: Bool = true,
         siriRemoteInitiallyEnabled: Bool = false,
@@ -4007,7 +4162,14 @@ private final class OnboardingOffscreenFixture {
         settings.setOnboardingVoiceBindingPreference(bindingPreference)
         settings.setOnboardingRemoteAvailability(remoteAvailability)
         settings.setOnboardingControlMethod(controlMethod)
-        settings.setOnboardingControlSource(controlSource ?? .migrated(from: controlMethod))
+        let resolvedControlSource = controlSource ?? .migrated(from: controlMethod)
+        settings.setOnboardingControlSource(resolvedControlSource)
+        if let xiaomiModel {
+            settings.setOnboardingXiaomiRemoteModel(xiaomiModel)
+        } else if resolvedControlSource == .xiaomiRemote,
+                  step != .remoteAvailability {
+            settings.setOnboardingXiaomiRemoteModel(.rc003)
+        }
         settings.setOnboardingStep(step)
         probe = OnboardingInteractionProbe(openURL: { _ in })
         model = BridgeAppModel(

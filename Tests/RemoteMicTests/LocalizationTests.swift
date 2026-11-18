@@ -14,10 +14,21 @@ struct LocalizationTests {
             ) as? [String: String])
             #expect(copy["onboarding.control_source.siri_remote.detail"]?.contains(language == "en" ? "membership" : "会员") == true)
             #expect(copy["onboarding.complete.siri_membership"]?.isEmpty == false)
-            for key in ["onboarding.voice_tool.guide.screenshot.doubao_settings", "onboarding.voice_tool.guide.screenshot.vokie_step_2"] {
+            for key in [
+                "onboarding.voice_tool.guide.screenshot.doubao_settings",
+                "onboarding.voice_tool.guide.screenshot.weixin_input_settings",
+                "onboarding.voice_tool.guide.screenshot.vokie_step_2",
+            ] {
                 #expect(copy[key]?.contains("SayAll") == true)
-                #expect(copy[key]?.contains("MiRemoteV 2ch") == true)
             }
+            #expect(copy["onboarding.voice_tool.guide.screenshot.vokie_step_2"]?
+                .contains("MiRemoteV 2ch") == true)
+            #expect(copy["onboarding.voice_tool.guide.screenshot.doubao_settings"]?
+                .contains("MiRemoteV 2ch") == false)
+            #expect(copy["onboarding.voice_tool.guide.screenshot.weixin_input_settings"]?
+                .contains(language == "en" ? "microphone" : "麦克风") == true)
+            #expect(copy["onboarding.voice_tool.guide.screenshot.feishu_settings_remove_shortcuts"]?
+                .contains(language == "en" ? "Feishu" : "飞书") == true)
         }
     }
 
