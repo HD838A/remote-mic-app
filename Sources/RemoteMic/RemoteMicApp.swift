@@ -161,13 +161,16 @@ enum RemoteMicApp {
         }
         let bundleIdentifier = Bundle.main.bundleIdentifier
             ?? ApplicationInstanceGuard.fallbackBundleIdentifier
-        let existingInstances = NSRunningApplication.runningApplications(
+        // runningApplications includes this process; expose the other-instance count
+        // explicitly so a normal existing_instances=1 is not mistaken for a duplicate.
+        let runningInstances = NSRunningApplication.runningApplications(
             withBundleIdentifier: bundleIdentifier
         ).count
+        let otherInstances = max(0, runningInstances - 1)
         AppLogger.shared.write(
             "APP INSTANCE phase=launch bundle_id=\(bundleIdentifier) " +
                 "pid=\(ProcessInfo.processInfo.processIdentifier) " +
-                "existing_instances=\(existingInstances)"
+                "existing_instances=\(runningInstances) other_instances=\(otherInstances)"
         )
         var instanceLock: ApplicationInstanceLock?
         if let lockURL = ApplicationInstanceGuard.defaultLockURL() {
