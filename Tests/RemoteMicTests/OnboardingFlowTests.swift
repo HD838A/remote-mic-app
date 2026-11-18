@@ -219,6 +219,21 @@ struct OnboardingFlowTests {
         }
     }
 
+    @Test @MainActor func switchingAwayFromSiriTrialRestoresInitialDisabledState() throws {
+        for initiallyEnabled in [false, true] {
+            let fixture = try OnboardingOffscreenFixture(
+                step: .remoteAvailability,
+                controlSource: .webRemote,
+                siriRemoteInitiallyEnabled: initiallyEnabled
+            )
+            defer { fixture.close() }
+            fixture.model.enableSiriRemoteForOnboarding()
+            #expect(fixture.settings.siriRemoteEnabled)
+            fixture.model.endSiriRemoteOnboardingTrialIfNeeded()
+            #expect(fixture.settings.siriRemoteEnabled == initiallyEnabled)
+        }
+    }
+
     @Test func allAudioNamesKeepTheSavedSelectionAcrossResumeAndRerun() throws {
         for name in ["SayAll", "MiRemoteV 2ch", "BlackHole 2ch"] {
             let suite = "RemoteMicTests.Onboarding.AudioName.\(UUID().uuidString)"

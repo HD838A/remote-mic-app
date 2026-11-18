@@ -4040,6 +4040,14 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         }
     }
 
+    /// Ends the onboarding trial when the user switches to another control source.
+    /// Keep a previously enabled Siri Remote untouched; restore the original disabled
+    /// state only when onboarding itself turned it on.
+    func endSiriRemoteOnboardingTrialIfNeeded() {
+        guard settings.onboardingSiriRemoteInitiallyEnabled == false else { return }
+        setSiriRemoteEnabled(false)
+    }
+
     func completeOnboarding() {
         // 连接、按键与触摸不看会员，因此不再因为无权益把整个 Siri Remote 支持关掉；
         // 语音是否可用改由按键入口的 `canStartAppleRemoteVoice` 判定。
