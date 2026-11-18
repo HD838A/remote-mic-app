@@ -1498,6 +1498,37 @@ for parallel_mode in 0 1; do
     [[ ! -d "$lane_log_dir" ]]
   fi
 done
+
+# Private Draft fast path: Apple Silicon only by default, Intel only on request.
+for private_mode in default include-intel; do
+  private_log="$WORK_DIR/private-$private_mode.log"
+  private_lane_dir="$WORK_DIR/private-$private_mode-lanes"
+  private_args=(--private-draft)
+  if [[ "$private_mode" == "include-intel" ]]; then
+    private_args+=(--include-intel)
+  fi
+  RELEASE_BASELINE_CHECK=0 \
+  RELEASE_VARIANT_LOG_DIR="$private_lane_dir" \
+    GENERATE_SPARKLE_UPDATE=0 \
+    RELEASE_VARIANT_RUNNER="$fake_runner" VARIANT_LOG="$private_log" \
+    "$ROOT/scripts/notarize-release.sh" "${private_args[@]}" \
+    > "$WORK_DIR/private-$private_mode.output"
+  /usr/bin/grep -Fxq 'apple-silicon' "$private_log"
+  if [[ "$private_mode" == "include-intel" ]]; then
+    /usr/bin/grep -Fxq 'intel' "$private_log"
+    [[ "$(/usr/bin/wc -l < "$private_log" | /usr/bin/tr -d ' ')" == "2" ]]
+  else
+    [[ "$(/usr/bin/wc -l < "$private_log" | /usr/bin/tr -d ' ')" == "1" ]]
+  fi
+done
+if RELEASE_BASELINE_CHECK=0 GENERATE_SPARKLE_UPDATE=0 \
+    RELEASE_VARIANT_RUNNER="$fake_runner" VARIANT_LOG="$WORK_DIR/private-invalid.log" \
+    "$ROOT/scripts/notarize-release.sh" --include-intel \
+    > "$WORK_DIR/private-invalid.output" 2>&1; then
+  print -u2 "notarize-release accepted --include-intel without --private-draft"
+  exit 1
+fi
+/usr/bin/grep -Fq -- '--include-intel requires --private-draft' "$WORK_DIR/private-invalid.output"
 print "CI CLASSIFICATION AND VARIANT ENTRY FIXTURE PASS"
 )
 

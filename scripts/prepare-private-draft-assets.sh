@@ -9,8 +9,9 @@ umask 077
 # "Install.SayAll.pkg": no build number, no architecture marker, and a name the
 # publisher can no longer look up by path. Every macOS distribution asset is
 # therefore staged as SayAll-<version>-<build>-<Variant>[-Installer].<ext>, and
-# every variant must cover the same asset kinds so a missing architecture
-# counterpart fails before anything is staged or uploaded.
+# every included variant must cover the same asset kinds. A private Draft
+# defaults to Apple Silicon only; Intel is included only when explicitly
+# requested, and then both variants must carry the full asset set.
 
 ROOT="${REPOSITORY_ROOT:-${0:A:h:h}}"
 
