@@ -1305,8 +1305,13 @@ struct SettingsView: View {
                     VStack(spacing: 14) {
                         phoneConnectionsPanel
                         audioSettingsPanel
-                        // Chromecast 连接卡片已按产品要求移除：启用开关默认常开，
-                        // 语音键模式在语音键设置面板内，状态见侧边栏「连接」的设备列表。
+                        #if SAYALL_CHROMECAST_ENABLED && canImport(SayAllChromecast)
+                        // Chromecast 卡片在系统 HID 或语音链路连接时显示；两者都不在时不渲染，
+                        // 与小米/苹果遥控器卡片一致。启用开关默认常开，语音键模式在语音键设置面板内。
+                        if model.isChromecastHIDPresent || model.chromecastStatus.isConnected {
+                            chromecastConnectionCard
+                        }
+                        #endif
                     }
                     .frame(maxWidth: .infinity, alignment: .topLeading)
                 }
@@ -1436,6 +1441,38 @@ struct SettingsView: View {
         }
     }
 
+    #endif
+
+    #if SAYALL_CHROMECAST_ENABLED && canImport(SayAllChromecast)
+    /// 系统 HID 或语音链路连接时渲染；两者都不在时与小米/苹果遥控器卡片一样隐藏。
+    private var chromecastConnectionCard: some View {
+        GlassPanel {
+            HStack(alignment: .top, spacing: 14) {
+                ChromecastConnectionPhoto()
+                VStack(alignment: .leading, spacing: 9) {
+                    Text("chromecast.section_title")
+                        .font(.headline)
+                    Text("chromecast.section_subtitle")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    connectionStatusLine(
+                        symbol: "antenna.radiowaves.left.and.right",
+                        text: localization.text(model.chromecastStatus.localizationKey),
+                        tint: model.chromecastStatus.isConnected ? .green : .orange
+                    )
+                    Text("chromecast.help.plain")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Button("chromecast.action.reconnect") {
+                        model.reconnectChromecast()
+                    }
+                    .compatibilityButtonStyle(.standard)
+                }
+                Spacer(minLength: 0)
+            }
+        }
+    }
     #endif
 
     private var connectionMembershipRequiredView: some View {
