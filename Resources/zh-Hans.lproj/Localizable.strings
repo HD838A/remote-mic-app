@@ -1195,6 +1195,9 @@
 "onboarding.recovery.voice.session_not_started.detail" = "先点一下输入框，再%@。";
 "onboarding.recovery.voice.session_not_started.action" = "重新测试语音";
 "onboarding.recovery.voice.no_samples.title" = "没有收到语音声音";
+"onboarding.recovery.voice.component_missing.title" = "Siri Remote 组件未安装";
+"onboarding.recovery.voice.component_missing.detail" = "苹果遥控器语音需要系统组件。点击安装组件，并在管理员授权后重试。";
+"onboarding.recovery.voice.component_missing.action" = "安装组件";
 "onboarding.recovery.voice.authorization_required.title" = "苹果遥控器语音需要授权";
 "onboarding.recovery.voice.authorization_required.detail" = "点击重新授权，并允许可能出现的系统请求。随后再测试一句话。";
 "onboarding.recovery.voice.authorization_required.action" = "重新授权";

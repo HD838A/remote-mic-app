@@ -134,6 +134,7 @@ enum FirstUseFailureReason: String, Codable, Equatable {
     case audioSelectedDeviceMissing = "audio.selected_device_missing"
     case audioOutputNotReady = "audio.output_not_ready"
     case voiceSessionNotStarted = "voice.session_not_started"
+    case voiceComponentMissing = "voice.component_missing"
     case voiceAuthorizationRequired = "voice.authorization_required"
     case voiceNoSamples = "voice.no_samples"
     case voiceSessionNotEnded = "voice.session_not_ended"
@@ -157,6 +158,7 @@ enum FirstUseFailureReason: String, Codable, Equatable {
         case .audioNoOutputDevice, .audioSelectedDeviceMissing, .audioOutputNotReady:
             return .audio
         case .voiceSessionNotStarted,
+             .voiceComponentMissing,
              .voiceAuthorizationRequired,
              .voiceNoSamples,
              .voiceSessionNotEnded,
@@ -354,6 +356,7 @@ struct FirstUseDiagnosticContext: Equatable {
     let hasSelectedAudioUID: Bool
     let voiceAttempt: FirstUseVoiceAttemptDiagnostic?
     let remoteInput: FirstUseRemoteInputDiagnostic
+    let voiceComponentMissing: Bool
     let voiceAuthorizationRequired: Bool
 
     init(
@@ -365,6 +368,7 @@ struct FirstUseDiagnosticContext: Equatable {
         hasSelectedAudioUID: Bool,
         voiceAttempt: FirstUseVoiceAttemptDiagnostic? = nil,
         remoteInput: FirstUseRemoteInputDiagnostic = FirstUseRemoteInputDiagnostic(),
+        voiceComponentMissing: Bool = false,
         voiceAuthorizationRequired: Bool = false
     ) {
         self.step = step
@@ -375,6 +379,7 @@ struct FirstUseDiagnosticContext: Equatable {
         self.hasSelectedAudioUID = hasSelectedAudioUID
         self.voiceAttempt = voiceAttempt
         self.remoteInput = remoteInput
+        self.voiceComponentMissing = voiceComponentMissing
         self.voiceAuthorizationRequired = voiceAuthorizationRequired
     }
 
@@ -417,6 +422,7 @@ struct FirstUseDiagnosticContext: Equatable {
                 return .audioOutputNotReady
             }
         case .voiceTest:
+            if voiceComponentMissing { return .voiceComponentMissing }
             if voiceAuthorizationRequired { return .voiceAuthorizationRequired }
             if let voiceAttempt {
                 return voiceAttempt.failureReason
@@ -481,6 +487,27 @@ struct FirstUseEvent: Codable, Equatable {
     }
 }
 
+/// Snapshot included in redacted diagnostics so a user never has to inspect
+/// system paths by hand. It intentionally contains only booleans.
+struct SiriRemoteComponentDiagnosticState: Equatable {
+    let buildSupported: Bool
+    let installerReceiptPresent: Bool
+    let helperPresent: Bool
+    let launchDaemonPresent: Bool
+
+    var isInstalled: Bool {
+        helperPresent && launchDaemonPresent
+    }
+
+    var logFields: String {
+        "build_supported=\(buildSupported) " +
+            "installer_receipt_present=\(installerReceiptPresent) " +
+            "helper_present=\(helperPresent) " +
+            "launch_daemon_present=\(launchDaemonPresent) " +
+            "component_installed=\(isInstalled)"
+    }
+}
+
 struct FirstUseDiagnosticSnapshot {
     static func buildIdentityFields(_ metadata: [String: Any]) -> String {
         let revision = metadata["SayAllSourceCommit"] as? String ?? ""
@@ -513,6 +540,12 @@ struct FirstUseDiagnosticSnapshot {
     let events: [FirstUseEvent]
     let appLanguage: String
     var controlSource: OnboardingControlSource = .unselected
+    var siriRemoteComponent = SiriRemoteComponentDiagnosticState(
+        buildSupported: false,
+        installerReceiptPresent: false,
+        helperPresent: false,
+        launchDaemonPresent: false
+    )
     var voiceBinding: VoiceToolUserBinding? = nil
     let generatedAt = Date()
 
@@ -560,6 +593,11 @@ struct FirstUseDiagnosticSnapshot {
             "onboarding_voice_key_policy=\(onboardingVoiceKeyPolicy)",
             "voice_key_policy_compliant=\(voiceKeyPolicyCompliant)",
             "control_source=\(controlSource.rawValue)",
+            "siri_remote_build_supported=\(siriRemoteComponent.buildSupported)",
+            "siri_remote_installer_receipt_present=\(siriRemoteComponent.installerReceiptPresent)",
+            "siri_remote_helper_present=\(siriRemoteComponent.helperPresent)",
+            "siri_remote_launch_daemon_present=\(siriRemoteComponent.launchDaemonPresent)",
+            "siri_remote_component_installed=\(siriRemoteComponent.isInstalled)",
             "voice_gesture=\(voiceBinding?.gestureMode.rawValue ?? "unresolved")",
             "voice_binding_source=\(voiceBinding?.source.rawValue ?? "unresolved")",
             "voice_binding_validation=\(voiceBinding?.validationState.rawValue ?? "unresolved")",

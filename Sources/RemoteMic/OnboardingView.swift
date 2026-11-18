@@ -98,6 +98,7 @@ struct OnboardingView: View {
     private let remoteInputDiagnosticOverride: FirstUseRemoteInputDiagnostic?
     private let interactionProbe: OnboardingInteractionProbe?
     private let siriRemotePackageInstalled: Bool
+    private let siriRemoteComponentInstalledOverride: Bool?
     /// 离屏渲染等没有前台会话的宿主显式指定周期权限刷新行为；
     /// `nil` 表示跟随运行期的前后台状态。
     private let permissionRefreshInForegroundOverride: Bool?
@@ -173,6 +174,7 @@ struct OnboardingView: View {
         remoteInputDiagnosticOverride: FirstUseRemoteInputDiagnostic? = nil,
         interactionProbe: OnboardingInteractionProbe? = nil,
         siriRemotePackageInstalledOverride: Bool? = nil,
+        siriRemoteComponentInstalledOverride: Bool? = nil,
         permissionRefreshInForegroundOverride: Bool? = nil,
         initialPhoneAppInstalled: Bool = false
     ) {
@@ -188,6 +190,7 @@ struct OnboardingView: View {
         self.permissionRefreshInForegroundOverride = permissionRefreshInForegroundOverride
         siriRemotePackageInstalled = siriRemotePackageInstalledOverride ??
             OnboardingBuildCapabilities.isSiriRemotePackageInstalled()
+        self.siriRemoteComponentInstalledOverride = siriRemoteComponentInstalledOverride
         _voiceToolAvailability = State(
             initialValue: voiceToolAvailabilityOverride ?? Self.detectVoiceToolAvailability()
         )
@@ -3284,7 +3287,10 @@ struct OnboardingView: View {
     }
 
     private var diagnosticContext: FirstUseDiagnosticContext {
-        FirstUseDiagnosticContext(
+        let isSiriRemoteSource = settings.onboardingControlSource == .siriRemote
+        let componentInstalled = siriRemoteComponentInstalledOverride
+            ?? model.isSiriRemoteHelperInstalled
+        return FirstUseDiagnosticContext(
             step: settings.onboardingStep,
             remoteAvailability: settings.onboardingRemoteAvailability,
             controlMethod: settings.onboardingControlMethod,
@@ -3293,7 +3299,8 @@ struct OnboardingView: View {
             hasSelectedAudioUID: !settings.selectedAudioDeviceUID.isEmpty,
             voiceAttempt: settings.onboardingStep == .voiceTest ? voiceAttempt : nil,
             remoteInput: remoteInputDiagnostic,
-            voiceAuthorizationRequired: settings.onboardingControlSource == .siriRemote &&
+            voiceComponentMissing: isSiriRemoteSource && !componentInstalled,
+            voiceAuthorizationRequired: isSiriRemoteSource && componentInstalled &&
                 settings.siriRemoteNeedsUserAction
         )
     }
@@ -3656,7 +3663,8 @@ struct OnboardingView: View {
 
     private var inlineVoiceRecoveryReason: FirstUseFailureReason? {
         switch failureReason {
-        case .voiceAuthorizationRequired, .voiceNoSamples, .voiceAudioDeliveryFailed:
+        case .voiceComponentMissing, .voiceAuthorizationRequired,
+             .voiceNoSamples, .voiceAudioDeliveryFailed:
             return failureReason
         default:
             return nil
@@ -4268,8 +4276,14 @@ struct OnboardingView: View {
     private func recordFailureTransition(_ failure: FirstUseFailureReason?) {
         if settings.onboardingStep == .voiceTest {
             guard failure != lastRecordedFailure else { return }
-            if failure == .voiceAuthorizationRequired {
+            if failure == .voiceAuthorizationRequired || failure == .voiceComponentMissing {
                 settings.recordFirstUseEvent(.blocked, step: .voiceTest, failureReason: failure)
+            }
+            if failure == .voiceComponentMissing {
+                model.logSiriRemoteComponentState(
+                    trigger: "onboarding_voice_test",
+                    force: true
+                )
             }
             // 清除等待标志只表示用户已重试；音频 ready 和真实语音结果由各自链路记录。
             lastRecordedFailure = failure
@@ -4312,6 +4326,9 @@ struct OnboardingView: View {
             }
         }
         switch failure {
+        case .voiceComponentMissing:
+            model.installSiriRemoteComponentForOnboarding()
+            resetVoiceTestForRetry()
         case .bluetoothPermissionDenied:
             requestBluetoothPermission()
         case .inputMonitoringPermissionDenied:
@@ -4762,13 +4779,15 @@ struct OnboardingView: View {
             events: settings.firstUseEvents,
             appLanguage: localization.locale.identifier,
             controlSource: settings.onboardingControlSource,
+            siriRemoteComponent: model.siriRemoteComponentDiagnosticState,
             voiceBinding: settings.stagedVoiceToolBinding ?? settings.verifiedVoiceToolBinding
         )
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(snapshot.redactedText, forType: .string)
         AppLogger.shared.write(
             "ONBOARDING DIAGNOSTICS copied step=\(settings.onboardingStep.rawValue) " +
-                "failure=\(failureReason?.rawValue ?? "none")"
+                "failure=\(failureReason?.rawValue ?? "none") " +
+                "siri_remote_component_installed=\(model.siriRemoteComponentDiagnosticState.isInstalled)"
         )
         AppLogger.shared.writeDiagnosticSummary(
             snapshot.redactedText,

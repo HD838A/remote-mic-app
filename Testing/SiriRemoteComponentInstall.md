@@ -1,7 +1,7 @@
 # Siri Remote 组件安装模块
 
 - 适用版本/分支：本 PR 或已合入 `main` 的精确 Commit；历史分支只作为对应 PR 的审计证据。
-- 适用页面：设置 → 连接与语音，左侧设备列表下方。
+- 适用页面：设置 → 连接与语音，左侧设备列表下方；以及 Onboarding 苹果遥控器语音测试页的组件缺失状态。
 - 产品行为以 [遥控器连接生命周期规范](../feature/remote-connection-lifecycle/PRODUCT_SPEC.md) 为准。
 
 ## 测试前准备
@@ -86,11 +86,29 @@
 
 失败判定：任一既有设备或语音路径回退；模块导致页头、卡片或右侧面板位移；文字被裁切；新增卸载按钮。
 
+## 用例 6：Onboarding 语音测试页入口
+
+1. 在组件缺失但 Installer 收据存在的环境进入苹果遥控器语音测试页。
+2. 查看输入框旁的恢复操作。
+3. 点击“安装组件”，分别执行取消和允许管理员授权。
+
+预期：
+
+- 页面显示“Siri Remote 组件未安装”和“安装组件”，不显示“重新授权”。
+- 点击后请求一次管理员授权；取消后保留安装入口，允许后 helper / LaunchDaemon 安装完成。
+- 安装完成后不再显示组件缺失；随后仍按真实授权、音频和文字门禁判断。
+
+失败判定：组件缺失仍显示“重新授权”、安装入口缺失或点击无反应、取消后入口消失、安装成功后仍显示组件缺失。
+
 ## 日志收集
 
 记录每个用例的开始/结束时间和对应日志。重点核对：
 
 - `APPLE REMOTE COMPONENT_INSTALL phase=requested action=install source=connection_page`
+- `APPLE REMOTE COMPONENT_INSTALL phase=requested action=install source=onboarding`
+- `SIRI REMOTE COMPONENT state trigger=startup|status|onboarding_voice_test|install_requested`，包含 `installer_receipt_present`、`helper_present`、`launch_daemon_present`、`component_installed`、`enabled`、`needs_user_action` 和 `audio_status`
+
+无需要求用户执行 `test -x` 或检查系统路径；以上状态行和复制诊断摘要已经提供判断所需的信息。
 - `SIRI REMOTE ACTIVATION phase=changed enabled=true`
 - `APPLE REMOTE HCI upgrade phase=checking`
 - `APPLE REMOTE HCI upgrade phase=ready result=installed_version_verified`

@@ -615,6 +615,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     private var screenshotCardStatusDisplayOverrides: [UUID: RemoteDeviceCardStatusDisplay] = [:]
     private var screenshotSiriActivationNeeded: Bool?
     private var screenshotSiriComponentInstalled: Bool?
+    private var lastLoggedSiriRemoteComponentState: String?
     @Published private(set) var remoteSystemDeviceNames: [UUID: String] = [:]
     @Published private(set) var audioDevices: [AudioDeviceInfo] = []
     @Published private(set) var macMicrophoneDevices: [AudioDeviceInfo] = []
@@ -1130,6 +1131,9 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         if settings.siriRemoteEnabled, settings.siriRemoteNeedsUserAction {
             siriRemoteAudioStatus = "unavailable:authorization_user_action_required"
         }
+        #if SAYALL_SIRI_REMOTE_ENABLED
+        logSiriRemoteComponentState(trigger: "startup")
+        #endif
         membershipFeature.configureConfigurationBackup(settings: settings)
         macroFeature.configurePortableTransfer(settings: settings) { [weak self] snapshot in
             guard let self else { throw AppConfigurationError.invalidValues }
@@ -1240,6 +1244,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
                 )
             }
             self.siriRemoteAudioStatus = status
+            self.logSiriRemoteComponentState(trigger: "status")
             self.logRemoteCardStatusChanges()
         }
         siriRemoteFeature.onTouchFeedback = { [weak self] feedback in
@@ -3983,7 +3988,13 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     func prepareSiriRemoteFromUserAction() {
 #if SAYALL_SIRI_REMOTE_ENABLED
         guard settings.siriRemoteEnabled else { return }
-        guard activePhysicalVoiceControlSource != .siriRemote else { return }
+        guard activePhysicalVoiceControlSource != .siriRemote || !isSiriRemoteHelperInstalled else {
+            AppLogger.shared.write(
+                "SIRI REMOTE ACTIVATION phase=skipped reason=voice_session_active " +
+                    "component_installed=true"
+            )
+            return
+        }
         settings.siriRemoteNeedsUserAction = false
         if siriRemoteAudioStatus == "disabled" || siriRemoteAudioStatus.hasPrefix("unavailable:") {
             siriRemoteAudioStatus = "preparing_hci"
@@ -7716,18 +7727,64 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         #endif
     }
 
-    func installSiriRemoteComponent() {
-        guard !isStreaming, activePhysicalVoiceControlSource != .siriRemote else { return }
+    var siriRemoteComponentDiagnosticState: SiriRemoteComponentDiagnosticState {
+        #if SAYALL_SIRI_REMOTE_ENABLED
+        let buildSupported = true
+        #else
+        let buildSupported = false
+        #endif
+        let snapshot = AppleRemoteComponentInstallation.snapshot()
+        return SiriRemoteComponentDiagnosticState(
+            buildSupported: buildSupported,
+            installerReceiptPresent: OnboardingBuildCapabilities.isSiriRemotePackageInstalled(),
+            helperPresent: snapshot.helperPresent,
+            launchDaemonPresent: snapshot.launchDaemonPresent
+        )
+    }
+
+    func logSiriRemoteComponentState(trigger: String, force: Bool = false) {
+        let state = siriRemoteComponentDiagnosticState
+        let signature = "\(state.logFields)|\(settings.siriRemoteEnabled)|" +
+            "\(settings.siriRemoteNeedsUserAction)|\(siriRemoteAudioStatus)"
+        guard force || signature != lastLoggedSiriRemoteComponentState else { return }
+        lastLoggedSiriRemoteComponentState = signature
         AppLogger.shared.write(
-            "APPLE REMOTE COMPONENT_INSTALL phase=requested action=install source=connection_page"
+            "SIRI REMOTE COMPONENT state trigger=\(trigger) \(state.logFields) " +
+                "enabled=\(settings.siriRemoteEnabled) " +
+                "needs_user_action=\(settings.siriRemoteNeedsUserAction) " +
+                "audio_status=\(siriRemoteAudioStatus)"
+        )
+    }
+
+    func installSiriRemoteComponent(source: String = "connection_page") {
+        let state = siriRemoteComponentDiagnosticState
+        logSiriRemoteComponentState(trigger: "install_requested", force: true)
+        // 组件缺失时不能因残留的语音收尾状态挡住安装；已安装时仍避免打断真实会话。
+        guard !isStreaming,
+              activePhysicalVoiceControlSource != .siriRemote || !isSiriRemoteHelperInstalled else {
+            AppLogger.shared.write(
+                "APPLE REMOTE COMPONENT_INSTALL phase=skipped result=deferred " +
+                    "reason=voice_session_active source=\(source) \(state.logFields)"
+            )
+            return
+        }
+        AppLogger.shared.write(
+            "APPLE REMOTE COMPONENT_INSTALL phase=requested action=install " +
+                "source=\(source) \(state.logFields)"
         )
         #if SAYALL_SIRI_REMOTE_ENABLED
         setSiriRemoteEnabled(true)
         #else
         AppLogger.shared.write(
-            "APPLE REMOTE COMPONENT_INSTALL phase=failed result=unsupported reason=build_without_siri_remote"
+            "APPLE REMOTE COMPONENT_INSTALL phase=failed result=unsupported " +
+                "reason=build_without_siri_remote \(state.logFields)"
         )
         #endif
+    }
+
+    func installSiriRemoteComponentForOnboarding() {
+        settings.beginOnboardingSiriRemoteTrial()
+        installSiriRemoteComponent(source: "onboarding")
     }
 
     func activateSiriRemoteFromCard() {

@@ -19,5 +19,26 @@ struct AppleRemoteComponentInstallationTests {
             helperExists: { $0 == helper },
             launchDaemonExists: { _ in false }
         ))
+        let snapshot = AppleRemoteComponentInstallation.snapshot(
+            helperExists: { $0 == helper },
+            launchDaemonExists: { _ in false }
+        )
+        #expect(snapshot.helperPresent)
+        #expect(!snapshot.launchDaemonPresent)
+        #expect(!snapshot.isInstalled)
+    }
+
+    @Test func diagnosticStateContainsOnlyNonSensitiveInstallationFacts() {
+        let state = SiriRemoteComponentDiagnosticState(
+            buildSupported: true,
+            installerReceiptPresent: true,
+            helperPresent: false,
+            launchDaemonPresent: false
+        )
+        #expect(state.logFields ==
+            "build_supported=true installer_receipt_present=true " +
+                "helper_present=false launch_daemon_present=false " +
+                "component_installed=false"
+        )
     }
 }
