@@ -49,7 +49,7 @@ App 内 `SMJobBless` 写入的 plist 可以包含 `Program`，而旧 PKG 安装�
 - 私有新增回归覆盖 `ProgramArguments`、`Program`、两者同时存在、额外参数、错误路径和缺失 executable。
 - 私有 `2.12.5` 发布流程完成 release 构建、测试、归档、Tag 和资产发布。
 - `scripts/verify-release-dependency-pins.sh`：`RELEASE DEPENDENCY PINS PASS`，私有包解析到 `2.12.5`。
-- 公开 `SAYALL_PRIVATE_PLATFORM_MODE=public swift test --disable-keychain`：1516 项测试、112 个套件通过；`AppleRemoteComponentInstallationTests` 与 `SiriRemoteActivationTests` 定向 7 项通过。
+- 公开 `SAYALL_PRIVATE_PLATFORM_MODE=public swift test --disable-keychain --scratch-path .build-public`：合并最新 `origin/main` 后 1517 项测试、112 个套件通过；`AppleRemoteComponentInstallationTests` 与 `SiriRemoteActivationTests` 定向 7 项通过。
 - 公开 `scripts/verify-repository-governance.sh`：通过。
 - 使用 `2.12.5` 预构件和独立 scratch path 执行 `swift build --disable-keychain`：通过，确认公开宿主能链接新私有模块。
 - 本地集成测试 App：`2.0.8 (404)`，源码 `1ab3aec8`（其后只有本文档修订），`SayAllPrivatePlatformVersion=2.12.5`，Developer ID `L3QHLDRPAY`，安装到 `~/Applications/SayAll.app`。
