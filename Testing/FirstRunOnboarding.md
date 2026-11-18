@@ -80,6 +80,33 @@ build 314 本机结果：Apple Silicon 用户实测报告无漏字母 `i`、重�
 
 本轮结果：公开宿主 1040 项全量测试、Siri 编译开关下的 120 项定向测试通过。私有 Siri Remote Package 的 105 项测试通过。四组生产离屏截图各 9 张，均为 PNG、2040 × 1600，并逐张查看授权待处理的语音测试页。四张页面证据保存在 [`Screenshots/onboarding-siri-authorization-recovery/`](../Screenshots/onboarding-siri-authorization-recovery/)。输入框旁保留“复制诊断”操作。现场重新选择苹果遥控器并授权后已有文字，可以继续；该结果证明现有准备接口可恢复，不是新候选包的真机验收。真实系统授权保存失败的底层原因、不同遥控器代际和第三方工具仍待签名候选包验收。
 
+## 苹果遥控器语音测试组件缺失（2026-11-18）
+
+适用范围：Installer 收据仍存在，但本机 Siri Remote helper / LaunchDaemon 未安装的升级或自定义安装环境。
+
+测试前准备：
+
+1. 使用隔离测试机或虚拟机制造“App 已安装、Installer 收据存在、Siri Remote 系统组件缺失”的状态；不要手工删除用户机器的系统文件。
+2. 准备真实 A2854 或 A2540 遥控器、受支持虚拟音频设备和语音工具。
+3. 打开 `~/Library/Logs/RemoteMic/runtime.log`。
+
+操作步骤：
+
+1. 进入苹果遥控器语音测试页。预期：输入框旁显示“Siri Remote 组件未安装”和“安装组件”，不得显示“重新授权”。
+2. 点击“安装组件”。预期：请求一次管理员授权；安装期间不能显示已收音或通过。
+3. 在管理员授权窗口点击取消。预期：页面保留“安装组件”，不会自动重复弹窗，也不会误报为普通授权失败。
+4. 再次点击“安装组件”并允许授权。预期：系统 helper 和 LaunchDaemon 安装完成；页面离开组件缺失状态，随后才按真实授权、音频和文字门禁判断结果。
+5. 在已安装组件的环境重新进入语音测试页。预期：不再显示“安装组件”；授权待处理时仍显示“重新授权”。
+6. 使用已安装组件的苹果遥控器完成一次真实语音文字测试，并回归小米遥控器、手机或网页来源。预期：这些来源不出现组件安装入口，首字、尾字、连续会话和返回恢复保持原行为。
+
+失败判定：组件缺失仍显示“重新授权”、点击安装没有管理员授权、取消后入口消失、安装成功但仍显示组件缺失、未安装却显示已就绪、安装入口出现在非苹果遥控器来源，或真实语音文字未完成却被标记通过。
+
+验证范围：自动化覆盖失败原因优先级、恢复控件和生产门禁；离屏截图只证明静态 UI。真实管理员授权、SMJobBless、LaunchDaemon 状态、两代遥控器和第三方文字上屏必须由签名候选包人工验收，不能用单元测试或截图替代。
+
+日志重点核对：`APPLE REMOTE COMPONENT_INSTALL phase=requested action=install source=onboarding`、语音结果原因码 `voice.component_missing`，以及 `SIRI REMOTE COMPONENT state trigger=startup|status|onboarding_voice_test`。该状态行只包含 `build_supported`、`installer_receipt_present`、`helper_present`、`launch_daemon_present`、`component_installed`、`enabled`、`needs_user_action` 和 `audio_status`；用户复制的诊断摘要包含同一组脱敏字段。无需让用户执行 `test -x` 或检查系统路径，直接用上述日志字段判断组件是否安装。日志不得包含设备身份、用户内容、路径或凭据。
+
+本轮结果：`SAYALL_PRIVATE_PLATFORM_MODE=public swift test --disable-keychain --filter OnboardingFlowTests` 通过 114 项；增加 `SAYALL_SIRI_REMOTE_ENABLED` 编译开关后，`OnboardingFlowTests`、`SiriRemoteActivationTests`、`LocalizationTests` 与 `AppleRemoteComponentInstallationTests` 共 133 项通过。中英文浅色、深色各生成一组生产离屏截图，`07-voice-test.png` 均为 PNG、2040 × 1600；逐张查看确认显示“Siri Remote 组件未安装”和“安装组件”，没有“重新授权”，按钮、复制诊断与底部导航未裁切。四张截图的 SHA-256 分别为 `1db4c8c9cfe1b53342b7a3fb67441b771923bc5366af6017dea5dfc79f7621df`（中文浅色）、`fc3eaa6ec75d780c7178bf9bb38424690ca13fc93251997273f152bd88fa839f`（中文深色）、`1be21086673e4ed19e92d1fb7c9e0031c18a8182eb2ea5c0964ca2ab8fca43f7`（英文浅色）、`db13dedbcb49847d7e9b8ae57618fed02f5b53007aacc6ea1e20b20ed8b84b31`（英文深色），原始文件保存在仓库外 `/Users/andy/Develop/Src/AISrc/.screenshot-workdir/onboarding-siri-component-missing-20261118/`。真实管理员授权、SMJobBless 取消/允许、helper 安装完成和两代遥控器语音仍待签名候选包验收。
+
 ## `.sayall` 文件打开与首次 Onboarding
 
 适用范围：用户首次安装 SayAll 后，从 Finder 双击键位方案 `.sayall` 文件。
@@ -1110,7 +1137,7 @@ build 314 本机结果：Apple Silicon 用户实测报告无漏字母 `i`、重�
 1. 保持 Mac 锁屏或不依赖当前屏幕读取权限。
 2. 使用生产隐藏入口构建一次 App，并通过 `REMOTE_MIC_ONBOARDING_SCREENSHOT_DIR`、`REMOTE_MIC_ONBOARDING_SCREENSHOT_APPEARANCE=light|dark` 生成截图；第 2 页为 `02-control-source.png`，第 6 页为 `06-voice-tool.png`。
 3. 公开构建设置 `REMOTE_MIC_ONBOARDING_SCREENSHOT_CONTROL_SOURCE=xiaomi_remote`，按生产页面清单生成适用语言和外观集合；需要指定小米型号真机图时设置 `REMOTE_MIC_ONBOARDING_SCREENSHOT_REMOTE_MODEL=rc001|rc003`。
-4. 包含 Siri 的截图构建可用 `REMOTE_MIC_ONBOARDING_SCREENSHOT_SIRI_REMOTE_INSTALLED=1|0` 注入收据存在/缺失；可用 `REMOTE_MIC_ONBOARDING_SCREENSHOT_SIRI_REMOTE_TRIAL=1` 渲染非会员临时启用的完成提示；这些值仅用于隔离截图，不写入系统。完整 Package 构建分别设置 `REMOTE_MIC_ONBOARDING_SCREENSHOT_CONTROL_SOURCE=xiaomi_remote|siri_remote|chromecast_remote|apple_companion|web_remote`；Apple 来源再用 `REMOTE_MIC_ONBOARDING_SCREENSHOT_APPLE_REMOTE_GENERATION=generation_6|generation_7` 分开生成。按本次构建实际支持的来源、语言和外观生成完整集合，数量由清单推导。
+4. 包含 Siri 的截图构建可用 `REMOTE_MIC_ONBOARDING_SCREENSHOT_SIRI_REMOTE_INSTALLED=1|0` 注入收据存在/缺失，用 `REMOTE_MIC_ONBOARDING_SCREENSHOT_SIRI_COMPONENT_INSTALLED=1|0` 注入系统 helper 组件存在/缺失；可用 `REMOTE_MIC_ONBOARDING_SCREENSHOT_SIRI_REMOTE_TRIAL=1` 渲染非会员临时启用的完成提示；这些值仅用于隔离截图，不写入系统。完整 Package 构建分别设置 `REMOTE_MIC_ONBOARDING_SCREENSHOT_CONTROL_SOURCE=xiaomi_remote|siri_remote|chromecast_remote|apple_companion|web_remote`；Apple 来源再用 `REMOTE_MIC_ONBOARDING_SCREENSHOT_APPLE_REMOTE_GENERATION=generation_6|generation_7` 分开生成。按本次构建实际支持的来源、语言和外观生成完整集合，数量由清单推导。
 5. 对输入工具页额外覆盖豆包、微信、Typeless、Vokie、其他工具，以及 available/not-installed/unknown；每个工具用 `REMOTE_MIC_ONBOARDING_SCREENSHOT_GUIDE_STEP=0...3` 覆盖右栏四项步骤，Vokie 必须分别生成浅色/深色步骤截图。语音测试页另覆盖 Vokie/Typeless 未运行与运行中状态。引导图放大层用 `REMOTE_MIC_ONBOARDING_SCREENSHOT_GUIDE_ZOOM=<资源名>` 单独出图，横版与竖版各一组。
 6. 分别覆盖五个输入工具，确认固定排序、单行卡片标题、Fn staged 配置和右栏步骤无裁切。
 7. 对旧正式配置设置 `REMOTE_MIC_ONBOARDING_SCREENSHOT_VOICE_KEY_MODE=left_command|right_command|right_option`，确认重新运行不会在欢迎或工具选择时立即覆盖；旧 Fn-only 迁移提示不得再被当作现行配置规则。

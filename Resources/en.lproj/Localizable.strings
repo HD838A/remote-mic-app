@@ -1196,6 +1196,9 @@
 "onboarding.recovery.voice.session_not_started.detail" = "Click the text field, then %@.";
 "onboarding.recovery.voice.session_not_started.action" = "Try Voice Again";
 "onboarding.recovery.voice.no_samples.title" = "No voice audio was received";
+"onboarding.recovery.voice.component_missing.title" = "Siri Remote component is not installed";
+"onboarding.recovery.voice.component_missing.detail" = "Apple remote voice needs a system component. Click Install Component and approve the administrator request, then try again.";
+"onboarding.recovery.voice.component_missing.action" = "Install Component";
 "onboarding.recovery.voice.authorization_required.title" = "Allow voice access for your Apple remote";
 "onboarding.recovery.voice.authorization_required.detail" = "Click Allow Voice Access and approve any system request. Then try speaking again.";
 "onboarding.recovery.voice.authorization_required.action" = "Allow Voice Access";

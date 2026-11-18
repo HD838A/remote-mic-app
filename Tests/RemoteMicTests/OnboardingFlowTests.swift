@@ -20,6 +20,39 @@ struct OnboardingFlowTests {
         #expect(context.failureReason?.recoveryStep == .voiceTest)
     }
 
+    @Test func missingSiriRemoteComponentOutranksDeferredAuthorization() {
+        let context = FirstUseDiagnosticContext(
+            step: .voiceTest,
+            controlSource: .siriRemote,
+            capabilities: OnboardingCapabilities(),
+            hasSelectedAudioUID: true,
+            voiceAttempt: FirstUseVoiceAttemptDiagnostic(),
+            voiceComponentMissing: true,
+            voiceAuthorizationRequired: true
+        )
+        #expect(context.failureReason == .voiceComponentMissing)
+        #expect(context.failureReason?.recoveryStep == .voiceTest)
+    }
+
+    #if SAYALL_SIRI_REMOTE_ENABLED && !canImport(SayAllSiriRemote)
+    @Test @MainActor func missingSiriRemoteComponentUsesInstallRecovery() throws {
+        let fixture = try OnboardingOffscreenFixture(
+            step: .voiceTest,
+            controlSource: .siriRemote,
+            siriRemoteInitiallyEnabled: true,
+            siriRemoteNeedsUserAction: true,
+            siriRemoteComponentInstalled: false
+        )
+        defer { fixture.close() }
+        #expect(fixture.probe.actions["voice-test.audio-retry"] != nil)
+        fixture.probe.invoke("voice-test.audio-retry")
+        #expect(fixture.settings.firstUseEvents.contains {
+            $0.kind == .retry && $0.failureReason == .voiceComponentMissing
+        })
+        #expect(!fixture.settings.siriRemoteNeedsUserAction)
+    }
+    #endif
+
     #if SAYALL_SIRI_REMOTE_ENABLED && !canImport(SayAllSiriRemote)
     @Test @MainActor func resumedSiriVoiceTestExposesAuthorizationRetryWithoutRecording() throws {
         let fixture = try OnboardingOffscreenFixture(
@@ -3629,6 +3662,11 @@ struct OnboardingFlowTests {
         #expect(text.contains("voice_fn_tap_mode_enabled=true"))
         #expect(text.contains("voice_key_policy_compliant=true"))
         #expect(text.contains("control_source=xiaomi_remote"))
+        #expect(text.contains("siri_remote_build_supported=false"))
+        #expect(text.contains("siri_remote_installer_receipt_present=false"))
+        #expect(text.contains("siri_remote_helper_present=false"))
+        #expect(text.contains("siri_remote_launch_daemon_present=false"))
+        #expect(text.contains("siri_remote_component_installed=false"))
         #expect(text.contains("voice_gesture=toggle"))
         #expect(text.contains("voice_binding_source=documented_default"))
         #expect(text.contains("voice_binding_validation=staged"))
@@ -3952,7 +3990,8 @@ private final class OnboardingOffscreenFixture {
         voiceToolAvailability: [OnboardingVoiceTool: OnboardingVoiceToolAvailability]? = nil,
         siriRemotePackageInstalled: Bool = true,
         siriRemoteInitiallyEnabled: Bool = false,
-        siriRemoteNeedsUserAction: Bool = false
+        siriRemoteNeedsUserAction: Bool = false,
+        siriRemoteComponentInstalled: Bool = true
     ) throws {
         let suiteName = "RemoteMicTests.Onboarding.Fixture.\(UUID().uuidString)"
         guard let defaults = TestUserDefaults(suiteName: suiteName) else {
@@ -3996,7 +4035,8 @@ private final class OnboardingOffscreenFixture {
             ],
             initialInputMethodGuideStep: initialInputMethodGuideStep,
             interactionProbe: probe,
-            siriRemotePackageInstalledOverride: siriRemotePackageInstalled
+            siriRemotePackageInstalledOverride: siriRemotePackageInstalled,
+            siriRemoteComponentInstalledOverride: siriRemoteComponentInstalled
         )
         .environmentObject(localization)
         .frame(width: 1020, height: 772)
