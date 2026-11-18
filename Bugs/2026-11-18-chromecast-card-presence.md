@@ -26,7 +26,7 @@ Chromecast 按键执行走 `onControlEvent`，该链路完整，所以按键有�
 
 ## 修复
 
-- `ChromecastFeatureIntegration.cardButtonReadiness(cachedPresent:livePresent:)`：缓存没有值时读取私有包实时 `isHIDRemotePresent`；实时在线直接判定按键就绪。
+- `RemoteFunctionReadiness.chromecastButtons(cachedPresent:livePresent:)`：缓存没有值时读取私有包实时 `isHIDRemotePresent`；实时在线直接判定按键就绪。
 - HID 缺失没有可靠的“已确认失败”信号时返回 `.unknown`，不伪报红色“按键异常”。
 - 链路状态变化和普通按键事件到达时刷新 `chromecastHIDIsPresent` 快照，并发送界面更新与脱敏日志。
 - `isChromecastHIDPresent` 同样读取实时快照，设置页 Chromecast 卡片可见性不再依赖失效回调。

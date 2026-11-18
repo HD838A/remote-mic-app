@@ -7838,7 +7838,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         } else if profile.model.isAppleSiriRemote {
             buttons = connectedAppleRemoteProfileIDs.contains(profile.id) ? .ready : .unknown
         } else if profile.model.isChromecastRemote {
-            buttons = ChromecastFeatureIntegration.cardButtonReadiness(
+            buttons = RemoteFunctionReadiness.chromecastButtons(
                 cachedPresent: chromecastHIDIsPresent,
                 livePresent: chromecastFeature.isHIDRemotePresent
             )

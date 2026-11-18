@@ -323,21 +323,6 @@ final class ChromecastFeatureIntegration {
         #endif
     }
 
-    /// HID presence 回调尚未到达时的卡片就绪兜底。
-    ///
-    /// 私有包当前只暴露 `isHIDRemotePresent` 快照，宿主不能把缓存 `nil` 当成“按键未知”；
-    /// 缓存缺失时读取实时快照，避免“按键已响应但卡片一直状态确认中”。
-    static func cardButtonReadiness(
-        cachedPresent: Bool?,
-        livePresent: Bool
-    ) -> RemoteFunctionReadiness {
-        if livePresent || cachedPresent == true {
-            return .ready
-        }
-        // HID 缺失没有可靠的“已确认失败”信号；此时只能保持未知，不能伪报按键异常。
-        return .unknown
-    }
-
     /// 宿主侧语音会话被关闭（用户关闭语音、切换输入源）。包内 latched 状态必须同步清空。
     func notifyHostVoiceSessionEnded() {
         #if SAYALL_CHROMECAST_ENABLED && canImport(SayAllChromecast)
