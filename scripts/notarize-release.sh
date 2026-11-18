@@ -35,22 +35,63 @@ process_finished() {
 }
 
 # Both architectures use the same single-lane signing and notarization path.
-if [[ "${1:-}" == --all ]]; then
-  shift
+# `--private-draft` is the fast internal path: Apple Silicon only by default,
+# and the uninstaller package is not notarized because it is never uploaded.
+# Pass `--include-intel` when an Intel Draft is explicitly required.
+run_multi=0
+private_draft=0
+include_intel=0
+case "${1:-}" in
+  --all)
+    run_multi=1
+    shift
+    ;;
+  --private-draft)
+    run_multi=1
+    private_draft=1
+    shift
+    if [[ "${1:-}" == --include-intel ]]; then
+      include_intel=1
+      shift
+    fi
+    ;;
+  --include-intel)
+    print -u2 -- "--include-intel requires --private-draft"
+    exit 1
+    ;;
+esac
+
+if (( run_multi == 1 )); then
+  if [[ "$#" -ne 0 ]]; then
+    print -u2 "usage: $0 [--all | --private-draft [--include-intel]]"
+    exit 1
+  fi
+  if (( private_draft == 1 )); then
+    export PRIVATE_DRAFT_SKIP_UNINSTALLER_NOTARIZATION="${PRIVATE_DRAFT_SKIP_UNINSTALLER_NOTARIZATION:-1}"
+    export GENERATE_SPARKLE_UPDATE="${GENERATE_SPARKLE_UPDATE:-0}"
+    if (( include_intel == 1 )); then
+      export PARALLEL_RELEASE_VARIANTS="${PARALLEL_RELEASE_VARIANTS:-1}"
+      run_variants=(apple-silicon intel)
+    else
+      run_variants=(apple-silicon)
+    fi
+  else
+    run_variants=(apple-silicon intel)
+  fi
+  GENERATE_SPARKLE_UPDATE="${GENERATE_SPARKLE_UPDATE:-1}"
+  if [[ "$GENERATE_SPARKLE_UPDATE" == "1" && ${#run_variants[@]} -ne 2 ]]; then
+    print -u2 "Sparkle update generation requires both Apple Silicon and Intel variants"
+    exit 1
+  fi
   PARALLEL_RELEASE_VARIANTS="${PARALLEL_RELEASE_VARIANTS:-0}"
   RELEASE_VARIANT_RUNNER="${RELEASE_VARIANT_RUNNER:-$ROOT/scripts/notarize-release.sh}"
   RELEASE_STAGE_TIMEOUTS="${RELEASE_STAGE_TIMEOUTS:-0}"
   RELEASE_VARIANT_TIMEOUT_SECONDS="${RELEASE_VARIANT_TIMEOUT_SECONDS:-1140}"
   RELEASE_STAGE_RUNNER="$ROOT/scripts/run-release-stage.sh"
-  GENERATE_SPARKLE_UPDATE="${GENERATE_SPARKLE_UPDATE:-1}"
   # 并行模式下两条 lane 的输出会交错，失败时无法判断是哪条 lane 出的问题。
   # 每条 lane 额外写一份独立日志（实时输出照旧），退出码仍取 lane 本身。
   RELEASE_VARIANT_LOG_DIR="${RELEASE_VARIANT_LOG_DIR:-$ROOT/.build/release-logs}"
 
-  if [[ "$#" -ne 0 ]]; then
-    print -u2 "usage: $0"
-    exit 1
-  fi
   case "$PARALLEL_RELEASE_VARIANTS" in
     0|1) ;;
     *) print -u2 "PARALLEL_RELEASE_VARIANTS must be 0 or 1"; exit 1 ;;
@@ -126,46 +167,48 @@ if [[ "${1:-}" == --all ]]; then
     wait "$target_pid" 2>/dev/null || true
   }
 
-  if [[ "$PARALLEL_RELEASE_VARIANTS" == "1" ]]; then
+  if [[ "$PARALLEL_RELEASE_VARIANTS" == "1" && ${#run_variants[@]} -gt 1 ]]; then
     # 上一轮的 lane 日志不能混进本轮，先清空再起 lane。
     /bin/mkdir -p "$RELEASE_VARIANT_LOG_DIR"
-    for variant in apple-silicon intel; do
+    for variant in "${run_variants[@]}"; do
       : > "$RELEASE_VARIANT_LOG_DIR/$variant.log"
     done
     print "RELEASE VARIANT LOG DIR: $RELEASE_VARIANT_LOG_DIR"
-    start_variant apple-silicon
-    apple_silicon_pid="$REPLY"
-    start_variant intel
-    intel_pid="$REPLY"
-    apple_silicon_done=0
-    intel_done=0
-    while (( apple_silicon_done == 0 || intel_done == 0 )); do
-      if (( apple_silicon_done == 0 )) && process_finished "$apple_silicon_pid"; then
-        if wait "$apple_silicon_pid"; then apple_silicon_status=0; else apple_silicon_status=$?; fi
-        apple_silicon_done=1
-        if (( apple_silicon_status != 0 )); then
-          (( intel_done == 0 )) && stop_variant_job "$intel_pid" intel
-          print -u2 "parallel signed release variant packaging failed: apple-silicon exit=$apple_silicon_status"
-          dump_variant_log apple-silicon
-          exit 1
+    typeset -A variant_pids
+    typeset -A variant_done
+    for variant in "${run_variants[@]}"; do
+      start_variant "$variant"
+      variant_pids[$variant]="$REPLY"
+      variant_done[$variant]=0
+    done
+    remaining=${#run_variants[@]}
+    while (( remaining > 0 )); do
+      for variant in "${run_variants[@]}"; do
+        (( variant_done[$variant] == 0 )) || continue
+        variant_pid="${variant_pids[$variant]}"
+        if process_finished "$variant_pid"; then
+          if wait "$variant_pid"; then variant_status=0; else variant_status=$?; fi
+          variant_done[$variant]=1
+          remaining=$(( remaining - 1 ))
+          if (( variant_status != 0 )); then
+            for other_variant in "${run_variants[@]}"; do
+              (( variant_done[$other_variant] == 0 )) || continue
+              stop_variant_job "${variant_pids[$other_variant]}" "$other_variant"
+            done
+            print -u2 "parallel signed release variant packaging failed: $variant exit=$variant_status"
+            dump_variant_log "$variant"
+            exit 1
+          fi
         fi
+      done
+      if (( remaining > 0 )); then
+        /bin/sleep 0.2
       fi
-      if (( intel_done == 0 )) && process_finished "$intel_pid"; then
-        if wait "$intel_pid"; then intel_status=0; else intel_status=$?; fi
-        intel_done=1
-        if (( intel_status != 0 )); then
-          (( apple_silicon_done == 0 )) && \
-            stop_variant_job "$apple_silicon_pid" apple-silicon
-          print -u2 "parallel signed release variant packaging failed: intel exit=$intel_status"
-          dump_variant_log intel
-          exit 1
-        fi
-      fi
-      (( apple_silicon_done != 0 && intel_done != 0 )) || /bin/sleep 0.2
     done
   else
-    run_variant apple-silicon
-    run_variant intel
+    for variant in "${run_variants[@]}"; do
+      run_variant "$variant"
+    done
   fi
 
   if [[ "$GENERATE_SPARKLE_UPDATE" == "1" ]]; then
@@ -224,6 +267,7 @@ NOTARY_PROFILE="${NOTARY_PROFILE:-RemoteMic-notary}"
 NOTARY_KEYCHAIN="${NOTARY_KEYCHAIN:-}"
 EXPECTED_DEVELOPER_TEAM_ID="${EXPECTED_DEVELOPER_TEAM_ID:-L3QHLDRPAY}"
 PARALLEL_PACKAGE_NOTARIZATION="${PARALLEL_PACKAGE_NOTARIZATION:-0}"
+PRIVATE_DRAFT_SKIP_UNINSTALLER_NOTARIZATION="${PRIVATE_DRAFT_SKIP_UNINSTALLER_NOTARIZATION:-0}"
 RELEASE_STAGE_TIMEOUTS="${RELEASE_STAGE_TIMEOUTS:-0}"
 RELEASE_NOTARY_TIMEOUT_SECONDS="${RELEASE_NOTARY_TIMEOUT_SECONDS:-600}"
 RELEASE_STAPLE_TIMEOUT_SECONDS="${RELEASE_STAPLE_TIMEOUT_SECONDS:-45}"
@@ -256,6 +300,10 @@ fi
 case "$PARALLEL_PACKAGE_NOTARIZATION" in
   0|1) ;;
   *) print -u2 "PARALLEL_PACKAGE_NOTARIZATION must be 0 or 1"; exit 1 ;;
+esac
+case "$PRIVATE_DRAFT_SKIP_UNINSTALLER_NOTARIZATION" in
+  0|1) ;;
+  *) print -u2 "PRIVATE_DRAFT_SKIP_UNINSTALLER_NOTARIZATION must be 0 or 1"; exit 1 ;;
 esac
 case "$GENERATE_SPARKLE_UPDATE" in
   0|1) ;;
@@ -503,7 +551,7 @@ run_release_stage app-verify-notarized "$RELEASE_VERIFY_TIMEOUT_SECONDS" \
 run_release_stage driver-build 180 "$ROOT/scripts/build-doubao-driver.sh"
 run_release_stage driver-package-build 180 "$ROOT/scripts/build-doubao-driver-pkg.sh"
 
-if [[ "$PARALLEL_PACKAGE_NOTARIZATION" == "1" ]]; then
+if [[ "$PARALLEL_PACKAGE_NOTARIZATION" == "1" && "$PRIVATE_DRAFT_SKIP_UNINSTALLER_NOTARIZATION" != "1" ]]; then
   start_notarize installer-pkg-notary "$INSTALL_PACKAGE"
   install_notary_pid="$REPLY"
   start_notarize uninstaller-pkg-notary "$UNINSTALL_PACKAGE"
@@ -535,7 +583,11 @@ if [[ "$PARALLEL_PACKAGE_NOTARIZATION" == "1" ]]; then
   done
 else
   notarize installer-pkg-notary "$INSTALL_PACKAGE"
-  notarize uninstaller-pkg-notary "$UNINSTALL_PACKAGE"
+  if [[ "$PRIVATE_DRAFT_SKIP_UNINSTALLER_NOTARIZATION" == "1" ]]; then
+    print "PRIVATE DRAFT: skipped uninstaller notarization and stapling"
+  else
+    notarize uninstaller-pkg-notary "$UNINSTALL_PACKAGE"
+  fi
 fi
 
 staple_and_validate installer-pkg "$INSTALL_PACKAGE"
@@ -543,10 +595,18 @@ run_release_stage installer-pkg-verify "$RELEASE_VERIFY_TIMEOUT_SECONDS" \
   env REQUIRE_NOTARIZATION=1 \
   "$ROOT/scripts/verify-doubao-driver-pkg.sh" "$INSTALL_PACKAGE" install
 
-staple_and_validate uninstaller-pkg "$UNINSTALL_PACKAGE"
-run_release_stage uninstaller-pkg-verify "$RELEASE_VERIFY_TIMEOUT_SECONDS" \
-  env REQUIRE_NOTARIZATION=1 \
-  "$ROOT/scripts/verify-doubao-driver-pkg.sh" "$UNINSTALL_PACKAGE" uninstall
+if [[ "$PRIVATE_DRAFT_SKIP_UNINSTALLER_NOTARIZATION" == "1" ]]; then
+  # The uninstaller is never uploaded in a private Draft. Keep its structural
+  # and Developer ID verification so the local package still matches policy,
+  # but do not spend a notarization round on bytes that will not be distributed.
+  run_release_stage uninstaller-pkg-verify "$RELEASE_VERIFY_TIMEOUT_SECONDS" \
+    "$ROOT/scripts/verify-doubao-driver-pkg.sh" "$UNINSTALL_PACKAGE" uninstall
+else
+  staple_and_validate uninstaller-pkg "$UNINSTALL_PACKAGE"
+  run_release_stage uninstaller-pkg-verify "$RELEASE_VERIFY_TIMEOUT_SECONDS" \
+    env REQUIRE_NOTARIZATION=1 \
+    "$ROOT/scripts/verify-doubao-driver-pkg.sh" "$UNINSTALL_PACKAGE" uninstall
+fi
 
 run_release_stage dmg-build 120 env BUILD_COMPONENTS=0 "$ROOT/scripts/build-dmg.sh"
 notarize dmg-notary "$DMG"

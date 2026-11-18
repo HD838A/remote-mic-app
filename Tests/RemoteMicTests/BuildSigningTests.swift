@@ -506,6 +506,35 @@ struct BuildSigningTests {
         #expect(verifySource.contains("Protected release App must declare SayAllBuildChannel=release"))
     }
 
+    @Test func privateDraftDefaultsToAppleSiliconAndSkipsUninstallerNotarization() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let notarizeSource = try String(
+            contentsOf: root.appendingPathComponent("scripts/notarize-release.sh"),
+            encoding: .utf8
+        )
+        let prepareSource = try String(
+            contentsOf: root.appendingPathComponent("scripts/prepare-private-draft-assets.sh"),
+            encoding: .utf8
+        )
+        let releasingSource = try String(
+            contentsOf: root.appendingPathComponent("RELEASING.md"),
+            encoding: .utf8
+        )
+
+        #expect(notarizeSource.contains("--private-draft"))
+        #expect(notarizeSource.contains("--include-intel"))
+        #expect(notarizeSource.contains("run_variants=(apple-silicon)"))
+        #expect(notarizeSource.contains("PRIVATE_DRAFT_SKIP_UNINSTALLER_NOTARIZATION"))
+        #expect(notarizeSource.contains("PRIVATE DRAFT: skipped uninstaller notarization and stapling"))
+        #expect(notarizeSource.contains("Sparkle update generation requires both Apple Silicon and Intel variants"))
+        #expect(prepareSource.contains("defaults to Apple Silicon only"))
+        #expect(releasingSource.contains("--private-draft"))
+        #expect(releasingSource.contains("Apple Silicon 快速包"))
+    }
+
     @Test func productionReleaseAIIsOptInAndVerifiedWhenRequired() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
