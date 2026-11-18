@@ -356,6 +356,7 @@ final class AppSettings: ObservableObject {
         static let onboardingRemoteAvailability = "onboarding.remoteAvailability"
         static let onboardingControlMethod = "onboarding.controlMethod"
         static let onboardingControlSource = "onboarding.controlSource"
+        static let onboardingXiaomiRemoteModel = "onboarding.xiaomiRemoteModel"
         static let onboardingAppleRemoteGeneration = "onboarding.appleRemoteGeneration"
         static let onboardingVoiceTool = "onboarding.voiceTool"
         static let onboardingVoiceBindingPreference = "onboarding.voiceBindingPreference"
@@ -870,6 +871,15 @@ final class AppSettings: ObservableObject {
         }
     }
 
+    @Published private(set) var onboardingXiaomiRemoteModel: OnboardingXiaomiRemoteModel? {
+        didSet {
+            defaults.set(
+                onboardingXiaomiRemoteModel?.rawValue,
+                forKey: Keys.onboardingXiaomiRemoteModel
+            )
+        }
+    }
+
     @Published private(set) var onboardingAppleRemoteGeneration: OnboardingAppleRemoteGeneration? {
         didSet {
             defaults.set(
@@ -1192,6 +1202,17 @@ final class AppSettings: ObservableObject {
         onboardingControlSource = defaults.string(forKey: Keys.onboardingControlSource)
             .flatMap(OnboardingControlSource.init(rawValue:))
             ?? OnboardingControlSource.migrated(from: persistedControlMethod)
+        let persistedXiaomiRemoteModel = defaults.string(
+            forKey: Keys.onboardingXiaomiRemoteModel
+        )
+        let decodedXiaomiRemoteModel = persistedXiaomiRemoteModel
+            .flatMap(OnboardingXiaomiRemoteModel.init(rawValue:))
+        onboardingXiaomiRemoteModel = decodedXiaomiRemoteModel
+        if persistedXiaomiRemoteModel != nil, decodedXiaomiRemoteModel == nil {
+            AppLogger.shared.write(
+                "SETTINGS onboarding_xiaomi_model phase=discarded reason=invalid_value"
+            )
+        }
         onboardingAppleRemoteGeneration = defaults.string(
             forKey: Keys.onboardingAppleRemoteGeneration
         ).flatMap(OnboardingAppleRemoteGeneration.init(rawValue:))
@@ -1449,6 +1470,19 @@ final class AppSettings: ObservableObject {
         stagedVoiceToolBinding = nil
     }
 
+    func setOnboardingXiaomiRemoteModel(
+        _ model: OnboardingXiaomiRemoteModel?,
+        source: String = "user"
+    ) {
+        guard onboardingXiaomiRemoteModel != model else { return }
+        onboardingXiaomiRemoteModel = model
+        if let model {
+            AppLogger.shared.write(
+                "ONBOARDING XIAOMI_MODEL selected=\(model.rawValue) source=\(source)"
+            )
+        }
+    }
+
     func setOnboardingControlSource(_ source: OnboardingControlSource) {
         guard onboardingControlSource != source else { return }
         onboardingControlSource = source
@@ -1603,6 +1637,7 @@ final class AppSettings: ObservableObject {
         onboardingRemoteAvailability = .unselected
         onboardingControlMethod = .unselected
         onboardingControlSource = .unselected
+        onboardingXiaomiRemoteModel = nil
         onboardingAppleRemoteGeneration = nil
         onboardingVoiceBindingPreference = .documentedDefault
         onboardingPreferredGesture = nil

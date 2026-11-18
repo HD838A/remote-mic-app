@@ -601,6 +601,8 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     /// Chromecast 画布的活动按键（控制 ID）。与苹果遥控器链路完全隔离，互不清除。
     @Published private(set) var activeChromecastControlIDs = Set<String>()
     @Published private(set) var lastRemoteButtonPress: RemoteButton?
+    /// 与 `lastRemoteButtonPress` 同时更新，供 Onboarding 判断按键来自哪只小米遥控器。
+    @Published private(set) var lastRemoteButtonPressProfileID: UUID?
     @Published private(set) var connectedRemoteProfileIDs = Set<UUID>()
     @Published private(set) var remoteBatteryLevels: [UUID: Int] = [:]
     @Published private(set) var remotePowerStates: [UUID: RemotePowerState] = [:]
@@ -704,8 +706,19 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     private var recordingPlayback: AVAudioPlayer?
 
     func isOnboardingControlSourceConnected(_ source: OnboardingControlSource) -> Bool {
+        isOnboardingControlSourceConnected(source, xiaomiModel: nil)
+    }
+
+    func isOnboardingControlSourceConnected(
+        _ source: OnboardingControlSource,
+        xiaomiModel: OnboardingXiaomiRemoteModel?
+    ) -> Bool {
         switch source {
         case .xiaomiRemote:
+            if let xiaomiModel {
+                guard let profileID = profileID(forXiaomiModel: xiaomiModel) else { return false }
+                return connectedRemoteProfileIDs.contains(profileID)
+            }
             return connectedRemoteProfileIDs.contains { profileID in
                 guard let model = settings.remoteDeviceProfiles.first(where: {
                     $0.id == profileID
@@ -726,11 +739,77 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         }
     }
 
+    var connectedOnboardingXiaomiModels: Set<OnboardingXiaomiRemoteModel> {
+        Set(settings.remoteDeviceProfiles.compactMap { profile in
+            guard connectedRemoteProfileIDs.contains(profile.id) else { return nil }
+            switch profile.model {
+            case .rc001: return .rc001
+            case .rc003: return .rc003
+            default: return nil
+            }
+        })
+    }
+
+    /// 选择型号时要操作的档案：已连接优先，其次当前选中，最后第一个匹配档案。
+    func profileID(forXiaomiModel model: OnboardingXiaomiRemoteModel) -> UUID? {
+        let matches = settings.remoteDeviceProfiles.filter { $0.model == model.model }
+        if let connected = matches.first(where: { connectedRemoteProfileIDs.contains($0.id) }) {
+            return connected.id
+        }
+        if let selected = matches.first(where: { $0.id == settings.selectedRemoteProfileID }) {
+            return selected.id
+        }
+        return matches.first?.id
+    }
+
+    /// 当前蓝牙语音会话对应的档案；没有活跃会话时为 nil。
+    var activePhysicalVoiceProfileID: UUID? {
+        guard bluetoothVoiceActive,
+              let identifier = activeBluetoothVoiceDeviceIdentifier
+        else { return nil }
+        return settings.profileID(forBluetoothIdentifier: identifier)
+    }
+
     var activePhysicalVoiceControlSource: OnboardingControlSource? {
         if bluetoothVoiceActive { return .xiaomiRemote }
         if !appleRemoteVoiceDevices.isEmpty || appleRemoteVoiceStopping { return .siriRemote }
         if chromecastVoiceActive || chromecastVoiceStopping { return .chromecastRemote }
         return nil
+    }
+
+    /// Onboarding 已选定小米型号时，HID/语音路由必须锁定在该型号。
+    /// 完成后或未选择型号时不改变现有运行时行为。
+    private var isOnboardingXiaomiSelectionLocked: Bool {
+        settings.onboardingCompletedVersion == 0 &&
+            settings.onboardingControlSource == .xiaomiRemote &&
+            settings.onboardingXiaomiRemoteModel != nil
+    }
+
+    private func onboardingXiaomiDisposition(
+        for profileID: UUID,
+        selectedModel: OnboardingXiaomiRemoteModel
+    ) -> OnboardingXiaomiEventDisposition {
+        let profileModel = settings.remoteDeviceProfiles.first { $0.id == profileID }?.model
+        return OnboardingXiaomiEventPolicy.disposition(
+            profileModel: profileModel,
+            selectedModel: selectedModel,
+            controlSource: settings.onboardingControlSource
+        )
+    }
+
+    private func shouldAdoptOnboardingXiaomiProfile(
+        _ candidateProfileID: UUID,
+        selectedModel: OnboardingXiaomiRemoteModel
+    ) -> Bool {
+        let profileModel = settings.remoteDeviceProfiles.first {
+            $0.id == candidateProfileID
+        }?.model
+        return OnboardingXiaomiEventPolicy.shouldAdoptSelection(
+            profileModel: profileModel,
+            selectedModel: selectedModel,
+            selectedModelProfileExists: profileID(forXiaomiModel: selectedModel) != nil,
+            controlSource: settings.onboardingControlSource
+        )
     }
     private let phoneRemoteServer = PhoneRemoteServer(logger: { message in
         AppLogger.shared.write(message)
@@ -4465,7 +4544,35 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
                     self.scheduleHIDMonitorRebuildAfterDiscoveryAdoption()
                 }
             }
-            self.selectRemoteProfile(resolvedProfileID)
+            var onboardingDisposition: OnboardingXiaomiEventDisposition?
+            if isOnboardingXiaomiSelectionLocked,
+               let selectedModel = settings.onboardingXiaomiRemoteModel {
+                let disposition = onboardingXiaomiDisposition(
+                    for: resolvedProfileID,
+                    selectedModel: selectedModel
+                )
+                onboardingDisposition = disposition
+                if disposition == .rejectOtherModel {
+                    AppLogger.shared.write(
+                        "ONBOARDING BUTTON ignored reason=\(disposition.logValue)"
+                    )
+                    return (resolvedProfileID, false)
+                }
+                if shouldAdoptOnboardingXiaomiProfile(
+                    resolvedProfileID,
+                    selectedModel: selectedModel
+                ) {
+                    self.selectRemoteProfile(resolvedProfileID)
+                }
+                if disposition == .pendingIdentity {
+                    AppLogger.shared.write(
+                        "ONBOARDING XIAOMI_MODEL result=pending_model_identity"
+                    )
+                }
+            } else {
+                self.selectRemoteProfile(resolvedProfileID)
+            }
+            self.lastRemoteButtonPressProfileID = resolvedProfileID
             self.lastRemoteButtonPress = button
             self.settings.recordButtonPress(
                 control: .remoteButton(button),
@@ -4481,14 +4588,18 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
                     at: self.settings.onboardingStep,
                     source: self.settings.onboardingControlSource
                 )
-            if suppressConfiguredAction {
+            let holdConfiguredActionForPendingIdentity =
+                onboardingDisposition == .pendingIdentity
+            if suppressConfiguredAction || holdConfiguredActionForPendingIdentity {
                 AppLogger.shared.write(
                     "ONBOARDING CONTROLS button=\(button.rawValue) action=suppressed"
                 )
             }
             return (
                 resolvedProfileID,
-                !self.macroFeature.isEditorActive && !suppressConfiguredAction
+                !self.macroFeature.isEditorActive &&
+                    !suppressConfiguredAction &&
+                    !holdConfiguredActionForPendingIdentity
             )
         }
         monitor.onInternalAction = { [weak self] profileID, action in
@@ -5706,6 +5817,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         var buttons = appleRemoteActiveButtons[device, default: []]
         if phase == .press {
             buttons.insert(button)
+            lastRemoteButtonPressProfileID = profileID
             lastRemoteButtonPress = button
         } else {
             buttons.remove(button)
@@ -7107,6 +7219,26 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             bridge.audioDiagnostics?.rejectStart(reason: "pending_start_busy")
             AppLogger.shared.write("ATVV STREAM rejected_busy reason=pending_start")
             return
+        }
+        if isOnboardingXiaomiSelectionLocked,
+           let selectedModel = settings.onboardingXiaomiRemoteModel,
+           let profileID = registerBluetoothBridgeIfNeeded(bridge) {
+            let disposition = onboardingXiaomiDisposition(
+                for: profileID,
+                selectedModel: selectedModel
+            )
+            if disposition != .accept {
+                _ = bridge.requestMicrophoneClose()
+                bridge.audioDiagnostics?.rejectStart(
+                    reason: disposition == .pendingIdentity
+                        ? "onboarding_model_identity_pending"
+                        : "onboarding_profile_mismatch"
+                )
+                AppLogger.shared.write(
+                    "ONBOARDING VOICE rejected reason=\(disposition.logValue)"
+                )
+                return
+            }
         }
         let outputReadyAtStart = audioOutput.isReadyForTestTone
         if !outputReadyAtStart {
@@ -10467,6 +10599,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
                     control: .remoteButton(event.control.remoteButton),
                     source: .bluetoothRemote
                 )
+                lastRemoteButtonPressProfileID = profileID
                 lastRemoteButtonPress = event.control.remoteButton
                 AppLogger.shared.write(
                     "ONBOARDING CONTROLS button=\(event.control.remoteButton.rawValue) " +
@@ -10507,6 +10640,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
                 control: .remoteButton(event.control.remoteButton),
                 source: .bluetoothRemote
             )
+            lastRemoteButtonPressProfileID = profileID
             lastRemoteButtonPress = event.control.remoteButton
         } else {
             chromecastPressedControls.remove(controlID)

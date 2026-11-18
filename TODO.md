@@ -289,7 +289,8 @@
   - [x] 在 Onboarding 增加遥控器蓝牙配对提示：同时长按“主页 Home + 菜单 Menu”可使遥控器进入蓝牙配对模式。当用户需要首次配对、清除旧连接后重新配对，或连接排障需要重置配对关系时，明确展示这组按键和后续在 macOS“系统设置 → 蓝牙”中重新连接的操作；不能把进入配对模式误写成 App 已自动完成蓝牙重置。
     - 2026-10-23 核对实现状态：提示已随 `1.8.25` Stable 发布（见 `Resources/en.lproj/ReleaseHistory.md`）。`OnboardingView.swift` 的 `physicalRemoteContent` 按 `onboardingControlSource` 渲染 `onboarding.remote.first_pairing.wake` 与 `onboarding.remote.first_pairing.pair` 两步，中英文文案齐备；`open_bluetooth` 提供“打开蓝牙设置”入口。措辞只说明如何进入配对模式，未声称 App 已自动重置蓝牙连接。
     - 两处与原文字面的偏差：**提示落在“遥控器”步骤而非欢迎页**（`OnboardingFlow.visibleCases` 顺序为 welcome → remoteAvailability → permissions → remote → …）；**“系统设置 → 蓝牙”重新连接作为页面独立按钮提供，未并入配对提示的步骤卡**。按产品实际行为记录为已完成，如需把提示前移到欢迎页或并入步骤卡另开工作项。
-  - [x] 输入工具页右栏按当前工具显示四项配置指引：豆包、微信、Vokie 使用浅色/深色真实截图，Typeless 与其他工具使用简短说明；五个工具都显示“去除系统 Fn 占用”和微信 App Fn 冲突步骤，麦克风匹配由语音测试页核对，最终仍由真实文字测试验证。
+  - [x] 输入工具页右栏按当前工具显示四项配置指引：豆包、微信、Vokie 使用浅色/深色真实截图，Typeless 与其他工具使用简短说明；五个工具都显示“去除系统 Fn 占用”和“清空微信与飞书 App 的 Fn 快捷键”步骤，麦克风匹配由语音测试页核对，最终仍由真实文字测试验证。
+    - 2026-11-18：豆包和微信第 2 步截图更新为当前设置界面；第 4 步在同一页上下显示微信和飞书截图，仍需用户逐项查看。真实第三方设置与文字上屏待验收。
   - 2026-09-29 修正英文 Onboarding 的第三方官方名称与普通用户术语：豆包使用 `Doubao`，微信输入法使用 `WeType`，其他入口使用 `Other Voice App`；生产离屏截图支持显式选择中英文，英文页面不得再因固定卡片高度或行数限制而截断。
   - 2026-10-03 修正 Mac 英文术语、语音恢复提示、连接批准弹窗与截图选项对照；保留原始中文截图及现有语音模式，真实设备验收状态不变。
   - [x] 新用户 Onboarding 已改为 staged 语音键统一固定为 Fn，不再根据工具历史配置自动覆盖正式快捷键；真实文字通过后才提交验证后的 Binding。 <!-- workshop:status=已完成;priority=P1 -->
@@ -297,7 +298,7 @@
     - 2026-09-25 已完成候选实现：新增版本化 Profile/Binding/PairingPlan，覆盖豆包、微信、Vokie、Typeless 与其他工具；工具页保持豆包、微信、Vokie、Typeless、其他的相对顺序，其中微信与 Typeless 仅在确认已安装时显示，豆包、Vokie 和其他始终显示；历史 ChatterFly 值迁移为未选择。
     - 工具页不展示快捷键来源、学习路径或 Command/Option 选择；本次 Onboarding 的 staged 语音键统一固定为 Fn，选择工具时不立即改写正式配置。
     - 新配置采用 staged → verified 事务：只有真实会话开始、PCM、正常停止、第三方配置确认与文字上屏全部通过后才持久化；返回、退出或异常中断恢复原配置。
-    - 控制来源已合并成单页并按 Package 门禁：公开构建只显示小米遥控器；完整包增加苹果遥控器第 6/7 代、Chromecast 及 Apple companion/Web 备用方式，实体设备优先展示。
+    - 控制来源已合并成单页并按 Package 门禁：公开构建显示小米 RC003 / RC001 两张独立卡片；完整包增加苹果遥控器第 6/7 代、Chromecast 及 Apple companion/Web 备用方式，实体设备优先展示。小米选择型号后，连接、普通按键、语音、完成门禁和右栏真机图都跟随该型号。
     - Vokie 通过公开 Bundle ID / URL Scheme 后台启动，`sayall://launch` 回流只做激活与日志记录；回流状态不能替代真实语音门禁，也不读取第三方私有配置。
     - 自动化已覆盖默认矩阵、来源转换、Fn 点按、Chromecast 原生 toggle、事务回滚、Package 编译门禁与 Deep Link 解析；仍需完成公开/完整包生产截图、私有 Package 构建、真实第三方工具、iPhone/Watch/Web 模式上报、各硬件真实语音文字与 macOS 14/15/当前系统验收后才能勾选。
     - 详细方案与证据保存在私有资料库 `projects/remote-mic-app/research/onboarding-voice-shortcuts-and-input-method-visibility/v1/ONBOARDING-OPTIMIZATION-PLAN.md`；公开仓只保留行为、兼容边界和验证状态。
@@ -309,6 +310,7 @@
     - 该步骤按所选型号切换示意图：苹果遥控器复用私有 Package 已有真机图与热点资源（A2540 复用 A2854 图片），小米遥控器按型号使用 `RC001-remote-photo.png` 或 `RC003-remote-photo.png`；未做选择时按真实已连接型号或默认型号显示，图片与选择不得长期不一致。
     - 需要同步更新 `feature/first-run-onboarding/PRODUCT_SPEC.md`（选择控制来源）与 `platform-macos.md`、`Testing/FirstRunOnboarding.md` 及完整 UI 截图清单（新增 Siri Remote 实体分支的浅色/深色页面）；真实 A2854/A2540 与 RC003 的首次配对、普通按键、真实语音文字上屏验收通过前不标记完成。
     - 2026-11-18：Installer 收据存在但系统 helper / LaunchDaemon 缺失时，语音测试页改为显示“安装组件”，点击后请求一次管理员安装；不再把该状态显示为“重新授权”。自动化与离屏截图覆盖状态优先级和入口，真实管理员授权、安装完成与两代遥控器语音仍待签名候选包验收。
+    - 2026-11-18：小米遥控器已拆成 RC003 / RC001 两张卡片，顺序为 2 Pro → 2 → 苹果 Type-C → Lightning；选择型号会定向连接对应档案，其他已连接型号不能替代通过。自动化与离屏截图待补，真实 RC003 已连接时连接 RC001、双设备切换和语音文字上屏仍待现场验收。
   - 每一步必须显示“用途、当前实时状态、一个主要操作、验证结果和失败后的下一步”。完成状态来自权限 API、蓝牙/HID、音频设备和真实语音数据检测，不能因为用户访问过页面或点击过系统设置就标记成功。
   - 流程不提供“跳过”或“稍后继续”，必要步骤未通过时不能进入下一页或主面板；关闭 App 后保存当前位置，下次启动直接恢复。设置页提供“重新运行设置向导”入口，并明确说明重新检查不会清除现有连接、按键映射或其他设置。
   - 从系统设置返回 App、App 重新获得焦点、重启、遥控器重连或音频设备变化时自动刷新当前步骤。对于输入监控或辅助功能需要重新勾选、关闭后开启或重启 App 的情况，提供准确操作和“重新启动无线麦”按钮，并在重启后恢复到原步骤。

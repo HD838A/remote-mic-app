@@ -483,6 +483,10 @@ enum OnboardingAppleRemoteGeneration: String, Codable, CaseIterable, Identifiabl
     case generation6 = "generation_6"
     case generation7 = "generation_7"
 
+    /// 页面展示顺序：Type-C 在 Lightning 之前。保留 `allCases` 的声明顺序，
+    /// 避免影响只关心集合而非顺序的调用方。
+    static let displayOrder: [Self] = [.generation7, .generation6]
+
     var id: String { rawValue }
 
     var titleKey: String { "onboarding.control_source.apple_remote.\(rawValue).title" }
@@ -491,6 +495,122 @@ enum OnboardingAppleRemoteGeneration: String, Codable, CaseIterable, Identifiabl
         switch self {
         case .generation6: return .appleSiriRemoteA2540
         case .generation7: return .appleSiriRemoteA2854
+        }
+    }
+}
+
+/// Onboarding 需要用户明确选择的具体小米型号。
+///
+/// 持久化只允许这两个已验证型号；Apple、Chromecast 和 `.unknown` 不属于这个选择。
+enum OnboardingXiaomiRemoteModel: String, Codable, CaseIterable, Identifiable {
+    case rc003
+    case rc001
+
+    var id: String { rawValue }
+
+    var model: XiaomiRemoteModel {
+        switch self {
+        case .rc003: return .rc003
+        case .rc001: return .rc001
+        }
+    }
+
+    var titleKey: String { model.localizationKey }
+    var detailKey: String { "onboarding.control_source.xiaomi_remote.detail" }
+}
+
+/// 控制设备页实际渲染的实体遥控器卡片。
+enum OnboardingPhysicalRemoteCard: Identifiable, Equatable {
+    case xiaomi(OnboardingXiaomiRemoteModel)
+    case apple(OnboardingAppleRemoteGeneration)
+
+    var id: String {
+        switch self {
+        case let .xiaomi(model):
+            return "xiaomi_remote.\(model.rawValue)"
+        case let .apple(generation):
+            return "siri_remote.\(generation.rawValue)"
+        }
+    }
+
+    static func ordered(availableSources: [OnboardingControlSource]) -> [Self] {
+        var cards: [Self] = []
+        if availableSources.contains(.xiaomiRemote) {
+            cards.append(contentsOf: OnboardingXiaomiRemoteModel.allCases.map(Self.xiaomi))
+        }
+        if availableSources.contains(.siriRemote) {
+            cards.append(contentsOf: OnboardingAppleRemoteGeneration.displayOrder.map(Self.apple))
+        }
+        return cards
+    }
+}
+
+enum OnboardingControlSourceSelectionPolicy {
+    static func isComplete(
+        source: OnboardingControlSource,
+        xiaomiModel: OnboardingXiaomiRemoteModel?
+    ) -> Bool {
+        guard source != .unselected else { return false }
+        guard source == .xiaomiRemote else { return true }
+        return xiaomiModel != nil
+    }
+}
+
+/// Onboarding 期间如何对待来自某个小米档案的按键或语音事件。
+enum OnboardingXiaomiEventDisposition: Equatable {
+    /// 事件来自用户选择的型号，可以进入现有门禁。
+    case accept
+    /// 档案型号尚未识别；可以暂存第一条证据，但型号确认前不能通过。
+    case pendingIdentity
+    /// 事件来自另一只已识别的小米遥控器；不得改变选择或满足门禁。
+    case rejectOtherModel
+
+    var logValue: String {
+        switch self {
+        case .accept: return "accepted"
+        case .pendingIdentity: return "pending_identity"
+        case .rejectOtherModel: return "profile_mismatch"
+        }
+    }
+}
+
+enum OnboardingXiaomiEventPolicy {
+    static func disposition(
+        profileModel: XiaomiRemoteModel?,
+        selectedModel: OnboardingXiaomiRemoteModel?,
+        controlSource: OnboardingControlSource
+    ) -> OnboardingXiaomiEventDisposition {
+        guard controlSource == .xiaomiRemote, let selectedModel else { return .accept }
+        switch profileModel {
+        case .rc001?, .rc003?:
+            return profileModel == selectedModel.model ? .accept : .rejectOtherModel
+        case .unknown?, .none:
+            return .pendingIdentity
+        case .appleSiriRemoteA2854?, .appleSiriRemoteA2540?,
+             .chromecastVoiceRemote?:
+            return .rejectOtherModel
+        }
+    }
+
+    /// 未识别档案只有在所选型号还没有可用档案时才接管当前选择。
+    /// 所选型号已经有档案时，未知档案不能把 HID/语音路由切走。
+    static func shouldAdoptSelection(
+        profileModel: XiaomiRemoteModel?,
+        selectedModel: OnboardingXiaomiRemoteModel?,
+        selectedModelProfileExists: Bool,
+        controlSource: OnboardingControlSource
+    ) -> Bool {
+        switch disposition(
+            profileModel: profileModel,
+            selectedModel: selectedModel,
+            controlSource: controlSource
+        ) {
+        case .accept:
+            return true
+        case .pendingIdentity:
+            return !selectedModelProfileExists
+        case .rejectOtherModel:
+            return false
         }
     }
 }
@@ -669,15 +789,17 @@ enum OnboardingRemotePhotoKind: Equatable {
 
     static func resolve(
         source: OnboardingControlSource,
-        selectedModel: XiaomiRemoteModel?
+        selectedModel: XiaomiRemoteModel?,
+        onboardingXiaomiModel: OnboardingXiaomiRemoteModel? = nil
     ) -> Self {
         switch source {
         case .xiaomiRemote:
             // Only a Xiaomi profile may refine the image. A previously selected
             // Apple/Chromecast profile must never replace the Xiaomi card artwork.
-            if let selectedModel,
-               selectedModel == .rc001 || selectedModel == .rc003 {
-                guard let resource = VoiceRemoteCatalog.photoResource(for: selectedModel) else {
+            let preferredModel = onboardingXiaomiModel?.model ?? selectedModel
+            if let preferredModel,
+               preferredModel == .rc001 || preferredModel == .rc003 {
+                guard let resource = VoiceRemoteCatalog.photoResource(for: preferredModel) else {
                     return .placeholder
                 }
                 return .bundled(resourceName: resource)
