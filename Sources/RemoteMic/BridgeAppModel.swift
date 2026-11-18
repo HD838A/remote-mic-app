@@ -8447,7 +8447,13 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             }
         )
         let bindingResult = hasBinding ? "configured" : "missing"
+        #if SAYALL_UNIFIED_BUTTON_CONFIGURATION
+        // 统一按键配置由正常动作路径执行方案绑定；这里的 false 只是旧入口未接管，
+        // 不能记成执行失败。
+        let executionResult = "delegated_to_unified"
+        #else
         let executionResult = handled ? "handled" : "unhandled"
+        #endif
         let sourceKind: String
         if source.hasPrefix("hid:") {
             sourceKind = "hid"
