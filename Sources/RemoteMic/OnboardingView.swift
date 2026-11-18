@@ -4197,6 +4197,7 @@ struct OnboardingView: View {
     private func selectControlSource(_ source: OnboardingControlSource) {
         if source != .siriRemote {
             settings.setOnboardingAppleRemoteGeneration(nil)
+            model.endSiriRemoteOnboardingTrialIfNeeded()
         }
         settings.setOnboardingControlSource(source)
         showAlternativeControlSources = availableAlternativeControlSources.contains(source)
