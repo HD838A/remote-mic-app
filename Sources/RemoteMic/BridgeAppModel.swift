@@ -1017,7 +1017,10 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     @Published private(set) var chromecastStatus: ChromecastLinkStatus =
         ChromecastFeatureIntegration.isPackageIncluded ? .disabled : .unavailable
     /// 系统 HID 是否已发现 Chromecast 遥控器；卡片可见性用，不代表语音 BLE 链路已连接。
-    var isChromecastHIDPresent: Bool { chromecastHIDIsPresent == true }
+    /// 私有包没有 presence 回调时，实时快照仍然是可靠来源。
+    var isChromecastHIDPresent: Bool {
+        chromecastHIDIsPresent == true || chromecastFeature.isHIDRemotePresent
+    }
     /// 遥控器**自报**的能力位；链路不可用时为空集合。
     ///
     /// 界面与语音键驱动都读它（经 `RemoteVoiceCapabilities.resolve`），宿主不再维护第二份型号能力表。
@@ -7835,7 +7838,10 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         } else if profile.model.isAppleSiriRemote {
             buttons = connectedAppleRemoteProfileIDs.contains(profile.id) ? .ready : .unknown
         } else if profile.model.isChromecastRemote {
-            buttons = chromecastHIDIsPresent.map { $0 ? .ready : .failed } ?? .unknown
+            buttons = RemoteFunctionReadiness.chromecastButtons(
+                cachedPresent: chromecastHIDIsPresent,
+                livePresent: chromecastFeature.isHIDRemotePresent
+            )
         } else {
             buttons = remoteButtonReadiness[profile.id]
                 ?? .buttons(statusKey: hidMonitors.values.first(where: { $0.profileID == profile.id })?.status.key)
@@ -8447,7 +8453,13 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             }
         )
         let bindingResult = hasBinding ? "configured" : "missing"
+        #if SAYALL_UNIFIED_BUTTON_CONFIGURATION
+        // 统一按键配置由正常动作路径执行方案绑定；这里的 false 只是旧入口未接管，
+        // 不能记成执行失败。
+        let executionResult = "delegated_to_unified"
+        #else
         let executionResult = handled ? "handled" : "unhandled"
+        #endif
         let sourceKind: String
         if source.hasPrefix("hid:") {
             sourceKind = "hid"
@@ -9993,6 +10005,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             return
         }
         chromecastStatus = status
+        refreshChromecastHIDPresence()
         AppLogger.shared.write("CHROMECAST LINK state=\(status)")
         if case let .connected(displayName) = status {
             let profileID = ensureChromecastProfile()
@@ -10025,6 +10038,17 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         if let profileID = chromecastProfileID { membershipFeature.resetCommonPhrases(source: "chromecast:\(profileID.uuidString)") }
         resetChromecastButtonState(reason: reason)
         refreshBluetoothPresentation()
+    }
+
+    /// 私有包只提供 `isHIDRemotePresent` 快照，没有可靠的 presence 回调。
+    /// 在链路状态变化和按键事件到达时刷新缓存，让卡片与真实按键通道同步。
+    private func refreshChromecastHIDPresence() {
+        let present = chromecastFeature.isHIDRemotePresent
+        guard chromecastHIDIsPresent != present else { return }
+        chromecastHIDIsPresent = present
+        objectWillChange.send()
+        logRemoteCardStatusChanges()
+        AppLogger.shared.write("CHROMECAST HID DEVICE present=\(present) source=snapshot")
     }
 
     private func logChromecastSustain() {
@@ -10403,6 +10427,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     // 一方结束不会清除另一方的状态。
 
     private func handleChromecastControlEvent(_ event: ChromecastRemoteControlEvent) {
+        refreshChromecastHIDPresence()
         let controlID = event.control.canvasControlID
 
         guard event.phase != .cancelled else {

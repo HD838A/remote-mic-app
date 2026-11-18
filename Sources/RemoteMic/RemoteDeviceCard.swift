@@ -4,6 +4,18 @@ import SwiftUI
 enum RemoteFunctionReadiness: Equatable {
     case ready, checking, failed, unknown
 
+    /// Chromecast 的卡片按键就绪。
+    ///
+    /// 私有包当前只暴露 `isHIDRemotePresent` 快照，宿主不能把缓存 `nil` 当成“按键未知”；
+    /// 实时在线优先，避免“按键已响应但卡片一直状态确认中”。
+    static func chromecastButtons(cachedPresent: Bool?, livePresent: Bool) -> Self {
+        if livePresent || cachedPresent == true {
+            return .ready
+        }
+        // HID 缺失没有可靠的“已确认失败”信号；此时只能保持未知，不能伪报按键异常。
+        return .unknown
+    }
+
     static func buttons(statusKey: String?) -> Self {
         guard let statusKey else { return .unknown }
         if statusKey.hasPrefix("button_mapping.error.") || statusKey.hasPrefix("button_mapping.permission.") {
