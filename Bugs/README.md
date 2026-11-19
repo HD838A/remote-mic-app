@@ -120,6 +120,8 @@
 
 - [更新录音应用信息时扫描全部录音](./2026-10-24-recording-metadata-lookup.html)
 
+- [语音键绑定非 Fn 时，Mac 键盘 Fn 仍劫持切换输入法](./2026-10-23-fn-input-source-hijack-non-fn-binding.md)
+
 - [自身前台输入框聚焦导致死锁](./2026-10-23-self-composer-focus-deadlock.html)
 
 - [原生方向键把伪Fn带入自定义快捷键](./2026-10-20-shortcut-inherits-navigation-function.html)

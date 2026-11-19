@@ -4,7 +4,7 @@ import Testing
 
 @Suite("Preferred input source monitor", .serialized)
 struct PreferredInputSourceMonitorTests {
-    @Test func productionRuntimeStartsOnlyWithInputMonitoringAndStopsCleanly() throws {
+    @Test func productionRuntimeStartsOnlyWithInputMonitoringFnBindingAndStopsCleanly() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -15,7 +15,11 @@ struct PreferredInputSourceMonitorTests {
         )
 
         #expect(source.contains("let permissionSnapshot = HIDPermissionSnapshot.current"))
-        #expect(source.contains("if started, permissionSnapshot.inputMonitoringGranted"))
+        #expect(source.contains("if started, permissionSnapshot.inputMonitoringGranted,"))
+        #expect(source.contains(
+            "settings.voiceKeyMode == .function {\n" +
+                "            preferredInputSourceMonitor.start()"
+        ))
         #expect(source.contains("preferredInputSourceMonitor.start()"))
         #expect(source.contains("preferredInputSourceMonitor.stop()"))
 

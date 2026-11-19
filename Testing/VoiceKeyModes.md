@@ -214,7 +214,7 @@
 
 ## Issue #307 回归：输入源确认后再触发 Command
 
-在微信输入法与豆包输入法之间切换，连续执行右 Command 语音会话。预期每次日志先出现 `VOICE INPUT source_prepare` 且当前输入源确认成功，再出现 `VOICE KEY ... DOWN`；激活期间收到的蓝牙音频先记录 `buffered_before_command`，DOWN 成功后记录 `flush_before_command` 并按原顺序补送。超时时不发送孤立 Command，松开后只恢复未被用户改动的原输入源。输入源仍在激活时立即松开语音键，预期记录 `pending_down_cancelled`，不出现 UP 先于 DOWN、不补送已取消音频，也不残留目标输入源；等待期间触发 Fn 或移动端语音，预期 owner 不泄漏，Command 与 Fn 各自松开后才按最后 owner 恢复。
+在微信输入法与豆包输入法之间切换，连续执行右 Command 语音会话。预期每次日志先出现 `VOICE INPUT source_prepare` 且当前输入源确认成功，再出现 `VOICE KEY ... DOWN`；激活期间收到的蓝牙音频先记录 `buffered_before_command`，DOWN 成功后记录 `flush_before_command` 并按原顺序补送。超时时不发送孤立 Command，松开后只恢复未被用户改动的原输入源。输入源仍在激活时立即松开语音键，预期记录 `pending_down_cancelled`，不出现 UP 先于 DOWN、不补送已取消音频，也不残留目标输入源；等待期间触发移动端语音，预期 owner 不泄漏，Command 与移动端各自松开后才按最后 owner 恢复。
 
 ## 2026-10-24：输入源等待 RunLoop 回归
 
@@ -235,3 +235,7 @@
 失败判定：第一次语音失败、取消被记为超时、重复恢复、覆盖第三输入源、卡键、首字延迟增加或尾音缺失。自动化不证明真实 TIS、硬件、权限与第三方文字上屏。
 
 本地验证：定向 81 项、全量 951 项和自检 48 项通过。Apple Silicon macOS 14 与 Intel macOS 13 Release 构建通过。真实环境矩阵仍未验收。
+
+## 回归：非 Fn 绑定下 Mac 键盘 Fn 不切换输入源
+
+语音键绑定左/右 Command 或 Option 且语音工具为豆包/微信时，在任意 App 输入框按住 Mac 键盘自带 Fn/地球键再松开，重复多次。预期全程输入源不切换到语音工具输入法、不出现 `VOICE INPUT function_key edge=down` 日志，松开后无 `source_restore`；遥控器语音会话（Command 长按）期间的 `source_prepare`/`source_restore` 不受影响。切回 Fn 绑定后，Mac 键盘与遥控器 Fn 重新照常准备并恢复输入源。失败判定：非 Fn 绑定下按 Mac Fn 出现输入法切换或 `function_key edge` 日志，或 Fn 绑定下输入源准备/恢复失效。
