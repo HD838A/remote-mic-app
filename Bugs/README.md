@@ -1,5 +1,6 @@
 # Bug 记录
 
+- [Build 409 遥控器可用但卡片持续“状态确认中”](./2026-11-19-remote-card-confirming-on-build-409.md)
 - [虚拟音频启动阻塞导致遥控器卡片长期“状态确认中”](./2026-11-19-audio-configure-timeout-card-stuck.md)
 - [Onboarding 切到非 Siri 来源后仍保持 Siri Remote 临时启用](./2026-11-19-onboarding-source-switch-keeps-siri-enabled.md)
 - [Onboarding 无法在 RC003 已连接时选择并连接 RC001](./2026-11-18-onboarding-xiaomi-remote-model-selection.md)

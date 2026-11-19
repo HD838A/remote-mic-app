@@ -4,6 +4,15 @@ import SwiftUI
 enum RemoteFunctionReadiness: Equatable {
     case ready, checking, failed, unknown
 
+    var diagnosticValue: String {
+        switch self {
+        case .ready: return "ready"
+        case .checking: return "checking"
+        case .failed: return "failed"
+        case .unknown: return "unknown"
+        }
+    }
+
     /// Chromecast 的卡片按键就绪。
     ///
     /// 私有包当前只暴露 `isHIDRemotePresent` 快照，宿主不能把缓存 `nil` 当成“按键未知”；
@@ -60,6 +69,47 @@ enum RemoteDeviceCardStatus: String, CaseIterable {
         if buttons == .checking || voice == .checking { return .checking }
         if buttons == .unknown || voice == .unknown { return .confirming }
         return .connected
+    }
+}
+
+/// The exact inputs that produced a card status.
+///
+/// The status line alone cannot explain a persistent `confirming` state. This
+/// snapshot records only booleans, stable state names and localization keys:
+/// no device names, identifiers, paths or user content.
+struct RemoteCardReadinessSnapshot: Equatable {
+    let status: RemoteDeviceCardStatus
+    let model: String
+    let connected: Bool
+    let history: Bool
+    let buttons: RemoteFunctionReadiness
+    let buttonReason: String
+    let voice: RemoteFunctionReadiness
+    let voiceReason: String
+    let profileHasHID: Bool
+    let profileHasBluetooth: Bool
+    let hidMonitorPresent: Bool
+    let buttonReadinessCached: Bool
+    let appleConnected: Bool
+    let audioStatusKey: String
+    let audioReady: Bool
+    let audioSelected: Bool
+    let bridgeState: String
+    let siriAudioClass: String
+    let profileCount: Int
+    let connectedProfileCount: Int
+
+    func diagnosticLine(cardIndex: Int, operationID: UInt64) -> String {
+        "REMOTE CARD_READINESS operation_id=card_\(operationID) card_index=\(cardIndex) " +
+            "state=\(status.rawValue) model=\(model) connected=\(connected) history=\(history) " +
+            "buttons=\(buttons.diagnosticValue) button_reason=\(buttonReason) " +
+            "voice=\(voice.diagnosticValue) voice_reason=\(voiceReason) " +
+            "profile_hid=\(profileHasHID) profile_bt=\(profileHasBluetooth) " +
+            "hid_monitor=\(hidMonitorPresent) button_cache=\(buttonReadinessCached) " +
+            "apple_connected=\(appleConnected) audio_status=\(audioStatusKey) " +
+            "audio_ready=\(audioReady) audio_selected=\(audioSelected) " +
+            "bridge=\(bridgeState) siri_audio=\(siriAudioClass) " +
+            "profiles=\(profileCount) connected_profiles=\(connectedProfileCount)"
     }
 }
 

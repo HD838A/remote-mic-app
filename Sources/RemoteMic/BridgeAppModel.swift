@@ -613,6 +613,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     @Published private(set) var remoteButtonReadiness: [UUID: RemoteFunctionReadiness] = [:]
     private var chromecastHIDIsPresent: Bool?
     private var lastLoggedCardStatuses: [UUID: RemoteDeviceCardStatus] = [:]
+    private var lastLoggedCardReadiness: [UUID: RemoteCardReadinessSnapshot] = [:]
     private var cardStatusOperation: UInt64 = 0
     private var screenshotCardStatuses: [UUID: RemoteDeviceCardStatus] = [:]
     private var screenshotCardStatusDisplayOverrides: [UUID: RemoteDeviceCardStatusDisplay] = [:]
@@ -5534,6 +5535,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             }
             remoteRecoveryStates.removeValue(forKey: discarded)
             lastLoggedCardStatuses.removeValue(forKey: discarded)
+            lastLoggedCardReadiness.removeValue(forKey: discarded)
             screenshotCardStatuses.removeValue(forKey: discarded)
             screenshotCardStatusDisplayOverrides.removeValue(forKey: discarded)
             for (device, profileID) in appleRemoteProfileIDs where profileID == discarded {
@@ -7959,62 +7961,204 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     }
 
     func remoteCardStatus(for profile: RemoteDeviceProfile, history: Bool = false) -> RemoteDeviceCardStatus {
-        if let status = screenshotCardStatuses[profile.id] { return status }
-        guard isRemoteConnected(profile.id) else {
-            guard history, !profile.model.usesPrivateAdapter else { return .disconnected }
-            switch remoteRecoveryStates[profile.id] {
-            case .recovering: return .connecting
-            case .notFound: return .notFound
-            case .paused: return .paused
-            case .cancelled: return .cancelled
-            default: return .disconnected
-            }
+        remoteCardReadiness(for: profile, history: history).status
+    }
+
+    private func remoteCardReadiness(
+        for profile: RemoteDeviceProfile,
+        history: Bool = false
+    ) -> RemoteCardReadinessSnapshot {
+        let hidMonitor = hidMonitors.values.first(where: { $0.profileID == profile.id })
+        let hidMonitorPresent = hidMonitor != nil
+        let buttonReadinessCached = remoteButtonReadiness[profile.id] != nil
+        let appleConnected = connectedAppleRemoteProfileIDs.contains(profile.id)
+        let bridgeState = bluetoothBridgeStateClass(profile.bluetoothIdentifier)
+        let siriAudioClass = siriRemoteAudioStatusClass(siriRemoteAudioStatus)
+
+        func snapshot(
+            status: RemoteDeviceCardStatus,
+            connected: Bool,
+            buttons: RemoteFunctionReadiness,
+            buttonReason: String,
+            voice: RemoteFunctionReadiness,
+            voiceReason: String
+        ) -> RemoteCardReadinessSnapshot {
+            RemoteCardReadinessSnapshot(
+                status: status,
+                model: profile.model.rawValue,
+                connected: connected,
+                history: history,
+                buttons: buttons,
+                buttonReason: buttonReason,
+                voice: voice,
+                voiceReason: voiceReason,
+                profileHasHID: profile.hidFingerprint != nil,
+                profileHasBluetooth: profile.bluetoothIdentifier != nil,
+                hidMonitorPresent: hidMonitorPresent,
+                buttonReadinessCached: buttonReadinessCached,
+                appleConnected: appleConnected,
+                audioStatusKey: audioStatus.key,
+                audioReady: isAudioOutputReady,
+                audioSelected: !settings.selectedAudioDeviceUID.isEmpty,
+                bridgeState: bridgeState,
+                siriAudioClass: siriAudioClass,
+                profileCount: settings.remoteDeviceProfiles.count,
+                connectedProfileCount: connectedRemoteProfileIDs.count
+            )
         }
+
+        if let status = screenshotCardStatuses[profile.id] {
+            return snapshot(
+                status: status, connected: isRemoteConnected(profile.id),
+                buttons: .unknown, buttonReason: "screenshot_override",
+                voice: .unknown, voiceReason: "screenshot_override"
+            )
+        }
+        guard isRemoteConnected(profile.id) else {
+            let status: RemoteDeviceCardStatus
+            if history, !profile.model.usesPrivateAdapter {
+                switch remoteRecoveryStates[profile.id] {
+                case .recovering: status = .connecting
+                case .notFound: status = .notFound
+                case .paused: status = .paused
+                case .cancelled: status = .cancelled
+                default: status = .disconnected
+                }
+            } else {
+                status = .disconnected
+            }
+            return snapshot(
+                status: status, connected: false,
+                buttons: .unknown, buttonReason: "not_connected",
+                voice: .unknown, voiceReason: "not_connected"
+            )
+        }
+
         let permissions = appliedHIDPermissionSnapshot ?? .current
         let buttons: RemoteFunctionReadiness
+        let buttonReason: String
         if !settings.customMappingEnabled {
             buttons = .ready
+            buttonReason = "custom_mapping_disabled"
         } else if !permissions.inputMonitoringGranted || !permissions.accessibilityGranted {
             buttons = .failed
+            buttonReason = "permission_missing"
         } else if profile.model.isAppleSiriRemote {
-            buttons = connectedAppleRemoteProfileIDs.contains(profile.id) ? .ready : .unknown
+            buttons = appleConnected ? .ready : .unknown
+            buttonReason = appleConnected ? "apple_connected" : "apple_profile_not_connected"
         } else if profile.model.isChromecastRemote {
             buttons = RemoteFunctionReadiness.chromecastButtons(
                 cachedPresent: chromecastHIDIsPresent,
                 livePresent: chromecastFeature.isHIDRemotePresent
             )
+            if chromecastFeature.isHIDRemotePresent {
+                buttonReason = "chromecast_hid_live"
+            } else if chromecastHIDIsPresent == true {
+                buttonReason = "chromecast_hid_cached"
+            } else {
+                buttonReason = "chromecast_hid_unknown"
+            }
+        } else if let cached = remoteButtonReadiness[profile.id] {
+            buttons = cached
+            buttonReason = "button_cache"
+        } else if let hidMonitor {
+            buttons = .buttons(statusKey: hidMonitor.status.key)
+            buttonReason = "hid_monitor_status"
         } else {
-            buttons = remoteButtonReadiness[profile.id]
-                ?? .buttons(statusKey: hidMonitors.values.first(where: { $0.profileID == profile.id })?.status.key)
+            buttons = .unknown
+            buttonReason = "hid_monitor_missing"
         }
+
         let voiceRequired = !profile.model.isAppleSiriRemote || membershipFeature.canUseSiriRemoteVoice
         let voice: RemoteFunctionReadiness
+        let voiceReason: String
         if !voiceRequired {
             voice = .ready
-        } else if settings.selectedAudioDeviceUID.isEmpty || audioStatus.key.contains("failed") || audioStatus.key.contains("unavailable") {
+            voiceReason = "voice_not_required"
+        } else if settings.selectedAudioDeviceUID.isEmpty {
             voice = .failed
+            voiceReason = "audio_selection_empty"
+        } else if audioStatus.key.contains("failed") || audioStatus.key.contains("unavailable") {
+            voice = .failed
+            voiceReason = "audio_status_error"
         } else if !profile.model.usesPrivateAdapter && !Self.canStartBluetoothVoice(
             mode: settings.voiceKeyMode, voiceFnTapModeEnabled: settings.voiceFnTapModeEnabled,
             isVoiceKeyNeutralized: voiceFunctionMapper.isVoiceKeyNeutralized
         ) {
-            voice = voiceFunctionMapper.voiceMappingReadbackMatched == false ? .failed : .checking
+            if voiceFunctionMapper.voiceMappingReadbackMatched == false {
+                voice = .failed
+                voiceReason = "voice_key_mapping_failed"
+            } else {
+                voice = .checking
+                voiceReason = "voice_key_mapping_checking"
+            }
         } else if audioStatus.key != "audio.output.current_format" && !isAudioOutputReady {
             voice = .unknown
+            voiceReason = "audio_not_ready"
         } else if profile.model.isAppleSiriRemote {
-            if siriRemoteAudioStatus == "ready" { voice = .ready }
-            else if siriRemoteAudioStatus.hasPrefix("unavailable:") { voice = .failed }
-            else if siriRemoteAudioStatus.hasPrefix("preparing") { voice = .checking }
-            else { voice = .unknown }
+            switch siriAudioClass {
+            case "ready":
+                voice = .ready
+                voiceReason = "apple_audio_ready"
+            case "unavailable":
+                voice = .failed
+                voiceReason = "apple_audio_unavailable"
+            case "preparing":
+                voice = .checking
+                voiceReason = "apple_audio_preparing"
+            default:
+                voice = .unknown
+                voiceReason = "apple_audio_unknown"
+            }
         } else if profile.model.isChromecastRemote {
             voice = chromecastStatus.isConnected ? .ready : .unknown
+            voiceReason = chromecastStatus.isConnected ? "chromecast_connected" : "chromecast_not_connected"
+        } else if profile.bluetoothIdentifier == nil {
+            voice = .unknown
+            voiceReason = "bluetooth_identifier_missing"
+        } else if let bridge = profile.bluetoothIdentifier.flatMap({ bluetoothBridges[$0] }) {
+            if case .ready = bridge.state {
+                voice = .ready
+                voiceReason = "bluetooth_bridge_ready"
+            } else {
+                voice = .unknown
+                voiceReason = "bluetooth_bridge_not_ready"
+            }
         } else {
-            // A Ready BLE state includes the supported ATVV service and notification handshake.
-            voice = profile.bluetoothIdentifier.flatMap { bluetoothBridges[$0] }.map {
-                if case .ready = $0.state { return .ready }
-                return .unknown
-            } ?? .unknown
+            voice = .unknown
+            voiceReason = "bluetooth_bridge_missing"
         }
-        return .resolve(connected: true, buttons: buttons, voice: voice, voiceRequired: voiceRequired)
+
+        let status = RemoteDeviceCardStatus.resolve(
+            connected: true, buttons: buttons, voice: voice, voiceRequired: voiceRequired
+        )
+        return snapshot(
+            status: status, connected: true,
+            buttons: buttons, buttonReason: buttonReason,
+            voice: voice, voiceReason: voiceReason
+        )
+    }
+
+    private func bluetoothBridgeStateClass(_ identifier: UUID?) -> String {
+        guard let identifier else { return "missing_identifier" }
+        guard let bridge = bluetoothBridges[identifier] else { return "missing_bridge" }
+        switch bridge.state {
+        case .stopped: return "stopped"
+        case .bluetoothUnavailable: return "unavailable"
+        case .scanning: return "scanning"
+        case .connecting: return "connecting"
+        case .discovering: return "discovering"
+        case .ready: return "ready"
+        case .reconnecting: return "reconnecting"
+        case .failed: return "failed"
+        }
+    }
+
+    private func siriRemoteAudioStatusClass(_ status: String) -> String {
+        if status == "ready" { return "ready" }
+        if status.hasPrefix("unavailable:") { return "unavailable" }
+        if status.hasPrefix("preparing") { return "preparing" }
+        return "unknown"
     }
 
     func remoteCardCanRecoverAudio(
@@ -8071,12 +8215,27 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     }
 
     private func logRemoteCardStatusChanges() {
-        for profile in settings.remoteDeviceProfiles {
-            let status = remoteCardStatus(for: profile, history: true)
-            guard lastLoggedCardStatuses[profile.id] != status else { continue }
-            lastLoggedCardStatuses[profile.id] = status
+        for (index, profile) in settings.remoteDeviceProfiles.enumerated() {
+            let readiness = remoteCardReadiness(for: profile, history: true)
+            let statusChanged = lastLoggedCardStatuses[profile.id] != readiness.status
+            let readinessChanged = lastLoggedCardReadiness[profile.id] != readiness
+            guard statusChanged || readinessChanged else { continue }
+            lastLoggedCardStatuses[profile.id] = readiness.status
+            lastLoggedCardReadiness[profile.id] = readiness
             cardStatusOperation &+= 1
-            AppLogger.shared.write("REMOTE CARD_STATUS operation_id=card_\(cardStatusOperation) phase=observed state=\(status.rawValue) scope=local_readiness external_result=unknown")
+            if statusChanged {
+                AppLogger.shared.write(
+                    "REMOTE CARD_STATUS operation_id=card_\(cardStatusOperation) " +
+                        "phase=observed state=\(readiness.status.rawValue) " +
+                        "scope=local_readiness external_result=unknown"
+                )
+            }
+            AppLogger.shared.write(
+                readiness.diagnosticLine(
+                    cardIndex: index,
+                    operationID: cardStatusOperation
+                )
+            )
         }
     }
 
