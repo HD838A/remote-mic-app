@@ -2,6 +2,34 @@
 
 > 执行本手册或修改 Onboarding 前，先完整阅读跨平台产品规范 [`feature/first-run-onboarding/PRODUCT_SPEC.md`](../feature/first-run-onboarding/PRODUCT_SPEC.md) 和 [macOS 平台适配](../feature/first-run-onboarding/platform-macos.md)。未来 Windows 测试应从同一产品规范出发，并使用 [Windows 平台适配](../feature/first-run-onboarding/platform-windows.md) 建立独立测试手册。
 
+## 语音测试松键结束判定修复（2026-11-19）
+
+适用版本为包含本修改的 `main` 或对应候选；验证分支为 `fix/onboarding-voice-test-end-20261119`。影响分类为 Onboarding 流程行为变化：`voiceTest` 松键后必须结束本次尝试并进入文字等待，不改变页面布局、文案或音频链路。
+
+### 自动化与构建
+
+- `./scripts/test.sh`：通过，`RESULT passed=50 failed=0`；新增的语音流策略断言通过，应用 `swift build --disable-keychain` 成功。
+- `xcrun swift test --disable-keychain --filter OnboardingFlowTests`：本机仅安装 Command Line Tools，缺少完整 XCTest 和 Testing/Foundation cross-import overlay，未能运行；等待 CI 或完整 Xcode。
+- `SAYALL_PRIVATE_PLATFORM_MODE=public ./scripts/build-app.sh`：通过（`Build complete! (163.34s)`，`SANITIZE RELEASE PATHS result=passed`，ad-hoc 签名）。
+- 完整 `swift test --disable-keychain` 或 CI：待运行。
+- 回归覆盖点：`isStreaming=false` 且来源已清空时仍执行 `endVoiceAttempt()`；开始语音仍要求来源被接受；未开始的松键事件不产生动作。
+
+### 生产页面检查与截图
+
+- 本修复不改变静态布局，但属于 Onboarding 流程行为变化。按门禁仍需覆盖 `voiceTest` 页面的完成流程截图（中英文、浅色/深色），并在 PR 附件或持久链接提供。
+- 在截图和真机验收补齐前，PR 保持 Draft，不标记 Ready。
+
+### 真实设备验收
+
+- 使用小米 RC003 或 RC001、`MiRemoteV 2ch` 和微信输入法完成一次真实语音测试。
+- 预期：松键后侧边“语音键已按下并松开”完成，外部工具文字出现，页面允许进入 `controls`。
+- 失败判定：日志仍显示 `ONBOARDING TRANSCRIPT_TARGET ... phase=recording`，或侧边第一项不完成，或应用不进入文字等待。
+
+### 验证边界
+
+- 单元测试只证明状态转换策略；真实遥控器信号、微信输入法上屏时机、权限变化和完整 Onboarding 旅程仍需真机验收。
+- 模拟事件、单元测试和构建不能替代真实遥控器与第三方输入法的文字上屏证据。
+
 ## 小米遥控器型号拆分与输入法指引更新（2026-11-18）
 
 适用版本为包含本修改的 `main` 或对应候选；验证分支为 `codex/onboarding-remote-models-20261118`。影响分类为控制来源选择、能力门禁、共享布局和工具页右栏内容变化。

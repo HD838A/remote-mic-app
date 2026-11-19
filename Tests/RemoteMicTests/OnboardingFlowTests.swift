@@ -1897,6 +1897,56 @@ struct OnboardingFlowTests {
         #expect(!OnboardingVoiceTestConfigurationPolicy.requiresGlobalVoiceConfirmation(for: .other))
     }
 
+    @Test func voiceStreamEndEndsAttemptAfterSourceIsCleared() {
+        // `BridgeAppModel` sets isStreaming = false and then clears activeVoiceSource.
+        // The release must still end the attempt even though the source is gone.
+        #expect(OnboardingVoiceStreamPolicy.action(
+            isStreaming: false,
+            step: .voiceTest,
+            voiceSessionStarted: true,
+            sourceAccepted: false
+        ) == .endVoiceAttempt)
+    }
+
+    @Test func voiceStreamEndWithoutStartedAttemptStaysIdle() {
+        #expect(OnboardingVoiceStreamPolicy.action(
+            isStreaming: false,
+            step: .voiceTest,
+            voiceSessionStarted: false,
+            sourceAccepted: false
+        ) == .ignore)
+    }
+
+    @Test func voiceStreamStartStillRequiresTheSelectedSource() {
+        #expect(OnboardingVoiceStreamPolicy.action(
+            isStreaming: true,
+            step: .voiceTest,
+            voiceSessionStarted: false,
+            sourceAccepted: false
+        ) == .ignore)
+        #expect(OnboardingVoiceStreamPolicy.action(
+            isStreaming: true,
+            step: .voiceTest,
+            voiceSessionStarted: false,
+            sourceAccepted: true
+        ) == .beginVoiceAttempt)
+    }
+
+    @Test func remoteVoiceObservationStillRequiresTheSelectedSource() {
+        #expect(OnboardingVoiceStreamPolicy.action(
+            isStreaming: true,
+            step: .remote,
+            voiceSessionStarted: false,
+            sourceAccepted: false
+        ) == .ignore)
+        #expect(OnboardingVoiceStreamPolicy.action(
+            isStreaming: true,
+            step: .remote,
+            voiceSessionStarted: false,
+            sourceAccepted: true
+        ) == .recordRemoteVoiceButtonPress)
+    }
+
     @Test func globalVoiceSupportIsUnknownForToolsWeNeverObserved() {
         // `.other` / `.unselected` 没有观察过设置界面，标记为未知，页面就不追问——
         // 否则会让用户去找一个自己工具里并不存在的开关。
