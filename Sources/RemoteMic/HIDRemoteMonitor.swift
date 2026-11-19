@@ -1709,16 +1709,6 @@ final class HIDRemoteMonitor {
                 if !activeDeviceIsSeized, usesNativePassthrough { eventSuppressor.arm(button: button, edge: .down) }
                 continue
             }
-            let recognizesDoubleClick = settings.configuredAction(
-                for: button,
-                trigger: .doubleClick,
-                profileID: profileID
-            ).action != .disabled || hasOverrideBinding(profileID, button, .doubleClick)
-            let recognizesLongPress = settings.configuredAction(
-                for: button,
-                trigger: .longPress,
-                profileID: profileID
-            ).action != .disabled || hasOverrideBinding(profileID, button, .longPress)
             let action = settings.action(for: button, profileID: profileID)
             if button == .back, handlePendingLayerCloseBack() {
                 continue
@@ -1726,28 +1716,19 @@ final class HIDRemoteMonitor {
             if button == .up || button == .down, handlePendingLayerCloseArrow(button: button) {
                 continue
             }
-            // 会话中，绑定了切换器动作的按键等价于菜单键（Tab）；其余吞掉。
-            let sessionTabAllowed = action == .appSwitcher
-                && !recognizesDoubleClick && !recognizesLongPress
+            // 会话期间按键语义完全由切换器会话接管：绑定「切换 App」的按键等价于
+            // Tab，方向键/OK/返回按会话规则处理，其余按键结束会话并释放 Command。
+            // 映射层配置的双击/长按不参与会话判定，否则已绑定的单击会被静默吞掉。
+            let isSwitcherBinding = action == .appSwitcher
             if appSwitcherSession.isActive,
                handleAppSwitcherControlPress(
                    button,
                    usage: usage,
-                   swallowsOthers: !sessionTabAllowed
+                   isSwitcherBinding: isSwitcherBinding
                ) {
                 continue
             }
-            if appSwitcherSession.isActive, button == .tv {
-                diagnosticLogger(
-                    "HID GESTURE button=tv trigger=singleClick path=app_switcher"
-                )
-                guard performAppSwitcherAction(for: button, trigger: .singleClick) else {
-                    return
-                }
-                continue
-            }
-            if appSwitcherSession.isActive, action == .appSwitcher,
-               !recognizesDoubleClick, !recognizesLongPress {
+            if appSwitcherSession.isActive, isSwitcherBinding {
                 diagnosticLogger(
                     "HID GESTURE button=\(button.rawValue) trigger=singleClick " +
                         "path=app_switcher"
@@ -1756,12 +1737,6 @@ final class HIDRemoteMonitor {
                     return
                 }
                 continue
-            }
-            if appSwitcherSession.isActive, action != .appSwitcher {
-                finishAppSwitcherLifecycle(
-                    reason: "unrelated_button_\(button.rawValue)",
-                    confirmed: false
-                )
             }
             if usesNativePassthrough {
                 nativePassthroughUsages.insert(usage)
@@ -2305,17 +2280,16 @@ final class HIDRemoteMonitor {
             trigger: trigger,
             profileID: profileID
         )
-        if appSwitcherSession.isActive, button == .tv {
-            return performAppSwitcherAction(for: button, trigger: trigger)
-        }
         if configured.action == .appSwitcher {
             return performAppSwitcherAction(for: button, trigger: trigger)
         }
         if appSwitcherSession.isActive {
+            // 会话期间到达的迟到动作同样只结束会话，不再执行该键的旧动作。
             finishAppSwitcherLifecycle(
                 reason: "unrelated_action_\(configured.action.rawValue)",
                 confirmed: false
             )
+            return true
         }
         if configured.action.isAppInternal {
             onInternalAction?(profileID, configured.action)
@@ -2376,7 +2350,7 @@ final class HIDRemoteMonitor {
     private func handleAppSwitcherControlPress(
         _ button: RemoteButton,
         usage: UInt16,
-        swallowsOthers: Bool
+        isSwitcherBinding: Bool
     ) -> Bool {
         switch button {
         case .ok:
@@ -2477,11 +2451,15 @@ final class HIDRemoteMonitor {
             }
             return true
         default:
-            // 会话期间吞掉未绑定切换器的按键（音量、主页等），避免误触。
-            // 绑定了切换器动作的按键（菜单/TV/音量）已在上层放行，等价于 Tab。
-            if !swallowsOthers { return false }
+            // 会话期间未绑定「切换 App」的按键结束会话：先 Escape 再释放 Command，
+            // 同时吞掉该键自身动作，保证任何按键都有可预期的反应，而不是没有响应。
+            if isSwitcherBinding { return false }
             diagnosticLogger(
-                "HID APP SWITCHER swallowed button=\(button.rawValue) phase=session"
+                "HID APP SWITCHER ended_by button=\(button.rawValue) phase=session"
+            )
+            finishAppSwitcherLifecycle(
+                reason: "unrelated_button_\(button.rawValue)",
+                confirmed: false
             )
             return true
         }
