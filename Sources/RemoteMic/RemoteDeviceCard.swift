@@ -169,6 +169,7 @@ struct RemoteDeviceCard: View {
     let enableTitle: String?
     let membershipTitle: String?
     let voiceRecoveryTitle: String?
+    let voiceRecoveryHelp: String?
     let connectionTitle: String?
     let actionsDisabled: Bool
     let voiceRecoveryDisabled: Bool
@@ -224,6 +225,8 @@ struct RemoteDeviceCard: View {
                         .foregroundStyle(Color.accentColor)
                         .fixedSize()
                         .disabled(voiceRecoveryDisabled)
+                        .help(voiceRecoveryHelp ?? voiceRecoveryTitle)
+                        .accessibilityLabel(voiceRecoveryHelp ?? voiceRecoveryTitle)
                 }
                 if let membershipTitle {
                     Button(membershipTitle, action: onMembership)

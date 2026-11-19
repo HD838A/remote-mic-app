@@ -242,6 +242,7 @@ struct RemoteDeviceCardStatusTests {
 
         #expect(settingsSource.contains("let canRecoverVoice = !appleNeedsEnable && model.remoteCardCanRecoverAudio("))
         #expect(settingsSource.contains("voiceRecoveryTitle: canRecoverVoice ? localization.text(\"remote.card.recover_voice\") : nil"))
+        #expect(settingsSource.contains("voiceRecoveryHelp: canRecoverVoice ? localization.text(\"remote.card.recover_voice.help\") : nil"))
         #expect(settingsSource.contains("onRecoverVoice: { model.recoverRemoteVoiceAudio() }"))
         #expect(cardSource.contains("if let voiceRecoveryTitle"))
         #expect(cardSource.contains("Button(voiceRecoveryTitle, action: onRecoverVoice)"))

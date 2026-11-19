@@ -1592,7 +1592,8 @@
 "remote.card.detail.cancelled" = "The connection attempt was cancelled. You can connect again when needed.";
 
 "remote.card.open_membership" = "Join";
-"remote.card.recover_voice" = "Restore Voice";
+"remote.card.recover_voice" = "Restore";
+"remote.card.recover_voice.help" = "Restore Voice";
 
 "remote.card.install.title" = "Install Apple remote component";
 

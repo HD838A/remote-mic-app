@@ -3778,6 +3778,7 @@ struct SettingsView: View {
             enableTitle: appleNeedsEnable ? localization.text("siri_remote.activation.enable") : nil,
             membershipTitle: requiresSiriRemoteMembership(for: profile) ? localization.text("remote.card.open_membership") : nil,
             voiceRecoveryTitle: canRecoverVoice ? localization.text("remote.card.recover_voice") : nil,
+            voiceRecoveryHelp: canRecoverVoice ? localization.text("remote.card.recover_voice.help") : nil,
             connectionTitle: history ? localization.text(recovering ? "connection.history.cancel" : "connection.history.connect") : nil,
             actionsDisabled: model.isStreaming || model.activePhysicalVoiceControlSource == .siriRemote,
             voiceRecoveryDisabled: model.isStreaming

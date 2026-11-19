@@ -1592,6 +1592,7 @@
 
 "remote.card.open_membership" = "开通会员";
 "remote.card.recover_voice" = "恢复语音";
+"remote.card.recover_voice.help" = "重新尝试启动语音输出";
 
 "remote.card.install.title" = "安装苹果遥控器组件";
 
