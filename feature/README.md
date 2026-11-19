@@ -12,6 +12,7 @@
 | [Apple Watch 直连遥控与收音](./apple-watch-direct-remote/) | 候选代码完成，等待真机验收 | Mac 提供独立 Watch 入口，并复用按需开启的附近连接、现有按键映射与移动语音链路。 |
 | [Mac 麦克风语音输入](./mac-microphone-input/PRODUCT_SPEC.md) | 本地候选，等待真实音频与输入工具验收 | 连接页、菜单栏和快捷键显式启停同一会话；下拉框只列可用物理输入，选择后同步系统默认输入；按钮和菜单使用设备名；复用当前虚拟麦克风。 |
 | [常用 macOS 快捷键](./common-mac-shortcuts/) | 已完成 | 常用固定快捷键与无线麦标准退出、关窗行为。 |
+| [应用切换器](./app-switcher/PRODUCT_SPEC.md) | 候选修复完成，自动化与真机验收通过，等待合入 | 遥控器操作系统 `Command-Tab` 切换器的临时会话：绑定键前进、方向键选择、OK 确认、返回取消、15 秒超时与修饰键可靠释放；会话内按键语义由会话独占。 |
 | [常用语按键直发](./common-phrases/PRODUCT_SPEC.md) | macOS 会员功能；旧版验收见手册 | 实现位于私有会员 Package；公开宿主只保留动作 ID、入口和可选适配，显示和使用由会员服务决定。公开构建不承诺包含常用语实现。自动化与用户验收来源、各平台和硬件验证边界见 [测试手册](../Testing/CommonPhrases.md)。 |
 | [Mac 下载 Cloudflare CDN](./cloudflare-download-cdn/) | 候选修复完成，等待发布验收 | 官网固定入口与版本化资产继续走 Cloudflare；新增 stable/preview 双架构 appcast 通道，客户端不再直接请求 GitHub Releases API。 |
 | [私有功能组件集成](./private-feature-integration/) | 已完成 | 公开 App 只保留可选适配层；私有实现、资源、测试和内部文档由独立私有组件维护。 |

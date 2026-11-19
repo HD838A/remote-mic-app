@@ -355,6 +355,22 @@ final class KeyboardEventSuppressor {
             }
             return false
         }
+        if let observation = FnKeyDiagnostics.eventObservation(
+            source: "session_tap",
+            tap: "session",
+            type: type,
+            event: event
+        ) {
+            logger(observation)
+        }
+        if let observation = FnKeyDiagnostics.combinationObservation(
+            source: "session_tap",
+            tap: "session",
+            type: type,
+            event: event
+        ) {
+            logger(observation)
+        }
         if event.getIntegerValueField(.eventSourceUserData) == KeyboardInjector.syntheticEventMarker {
             ShortcutSessionObservation.shared.observe(event, logger: logger)
             return false

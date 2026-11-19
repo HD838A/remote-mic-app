@@ -306,6 +306,27 @@ struct SettingsPageRegressionTests {
         #expect(!settingsSource.contains("model.testToneStatus.text(using: localization)"))
     }
 
+    /// Chromecast 在连接页只出现在左侧当前设备面板和“连接过的设备”，
+    /// 不得恢复独立的右侧连接卡片。
+    @Test func connectionPageHasNoSeparateChromecastCard() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let settingsSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+        let modelSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
+            encoding: .utf8
+        )
+
+        #expect(!settingsSource.contains("chromecastConnectionCard"))
+        #expect(!modelSource.contains("isChromecastHIDPresent"))
+        #expect(settingsSource.contains("connectionRemotePhoto"))
+    }
+
     @Test func connectionPageShowsVoiceKeyCompatibilityWarningOnlyFromModelState() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

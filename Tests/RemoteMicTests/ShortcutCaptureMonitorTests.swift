@@ -175,6 +175,32 @@ struct ShortcutCaptureMonitorTests {
         #expect(captureCount == 0)
     }
 
+    @Test func resolvingAFunctionCombinationRecordsTheFunctionFlag() throws {
+        var logs: [String] = []
+        var captured: [CustomKeyboardShortcut] = []
+        let monitor = ShortcutCaptureMonitor(
+            onCapture: { captured.append($0) },
+            makeShortcut: { _ in
+                CustomKeyboardShortcut(
+                    keyCode: 17,
+                    modifierFlags: .function,
+                    keyLabel: "T"
+                )
+            },
+            dispatchCallback: { $0() },
+            logger: { logs.append($0) }
+        )
+        let functionT = try #require(keyEvent(keyCode: 17, flags: .maskSecondaryFn))
+
+        #expect(monitor.handle(type: .keyDown, event: functionT))
+        #expect(captured.count == 1)
+        #expect(logs.contains {
+            $0.contains("SHORTCUT CAPTURE phase=resolved result=captured") &&
+                $0.contains("has_function=true") &&
+                $0.contains("modifier_count=1")
+        })
+    }
+
     @Test func missingAccessibilityPermissionFailsBeforeCreatingAnEventTap() {
         let monitor = ShortcutCaptureMonitor(
             onCapture: { _ in },

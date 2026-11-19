@@ -175,3 +175,40 @@ swift test --disable-keychain --disable-sandbox --filter ATVVAudioDiagnosticsTes
 失败判定包括来源字段输出无效值、一般键或原始报告进入日志、回读被误记为系统 Fn 送达、前一会话混入下一会话边沿，以及增加语音开始等待、改变正常结束排空或重复触发。
 
 自动化命令为 `swift test --disable-keychain --filter 'VoiceKeyDiagnosticTests|ATVVAudioDiagnosticsTests|ShortcutLifecycleTests|RemoteVoiceFunctionMapperTests|PreferredInputSourceMonitorTests'`。模拟事件与构建仅证明各自边界。Intel 实机 Fn、正常首尾字和目标工具文字须独立验收。
+
+## 用例 11：Typeless Fn 组合诊断
+
+适用于 2026-11-20 之后包含 Fn 诊断的构建。本用例不要求用户做 A/B 测试；按正常方式使用 SayAll 和 Typeless，故障后导出诊断日志。
+
+1. 启动 App，确认 `VOICE KEY fn_snapshot source=launch` 出现。未授予辅助功能时应为 `result=skipped reason=accessibility_denied`，不能写 `result=observed`。
+2. 按一次物理 Fn，再按 `Fn + T`，然后松开。确认 `fn_observe` 的按下、`fn_combo_observe` 和松开三条都可按时间对应；普通按键不得产生 Fn 行。
+3. 如果开启“用所选麦克风说话”，重复第 2 步，并确认出现 `source=hid_tap` 的 `fn_observe`。
+4. 退出 App，确认 `source=terminate_begin` 和 `source=terminate_end` 均出现。
+5. 在 Typeless 中复现快捷键失效后，导出诊断日志并记录时间、版本、Build、macOS 版本、Typeless 版本和是否开启 Mac 麦克风。
+
+预期日志：
+
+```text
+VOICE KEY fn_snapshot source=launch result=observed fn_flag=false key63_down=false secure_input=false system_fn_usage=do_nothing voice_key_mode=fn voice_fn_tap=false voice_tool=<tool>
+VOICE KEY fn_observe source=session_tap tap=session phase=observed synthetic=false pressed=true event_timestamp_ns=<n>
+VOICE KEY fn_combo_observe source=session_tap tap=session phase=observed synthetic=false primary_kind=unclassified event_timestamp_ns=<n>
+VOICE KEY fn_observe source=session_tap tap=session phase=observed synthetic=false pressed=false event_timestamp_ns=<n>
+```
+
+失败判定：普通输入被写成 Fn 观察、记录按键码或字符、方向键/Home 等伪 Fn 键生成组合行、未授权却写 `result=observed`、只有 `fn_submit edge=down` 没有 `edge=up` 却被写成功，或把 `fn_submit result=submitted` 写成 Typeless 已触发。
+
+判定顺序：
+
+- `key63_down=true` 且前一会话有 `fn_submit edge=down` 没有 `edge=up`，或有 `fn_observe pressed=true` 没有对应的 `pressed=false`：Fn 残留（软件注入或遥控器硬件映射）。
+- `fn_observe` 的 HID 层存在、session 层缺失：事件在 HID 与 session 之间被消费。
+- HID 和 session 都存在，`SHORTCUT CAPTURE has_function=true`：SayAll 已观察到 Fn，失败点在外部工具或其上游。
+- `system_fn_usage=assigned` 或 `secure_input=true`：外部系统配置或安全输入边界。
+
+自动化命令：
+
+```bash
+SAYALL_PRIVATE_PLATFORM_MODE=public swift test --disable-keychain \
+  --filter 'FnKeyDiagnosticsTests|KeyboardEventSuppressorTests|ShortcutCaptureMonitorTests|VoiceKeyModeTests'
+```
+
+自动化只证明字段、分类和保守结果；真实物理 Fn、Typeless 和遥控器仍需现场日志。日志只包含稳定枚举、布尔值、计数和进程内时间戳，不包含按键内容、字符、前台 App、设备身份或第三方私有状态。

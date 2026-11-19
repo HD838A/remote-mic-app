@@ -136,10 +136,27 @@ final class MacMicrophoneVoiceKeyMonitor {
         let port = self.port
         let generation = self.generation
         let mode = self.mode
+        let tapLevel = self.tapLevel?.rawValue ?? "unknown"
         lock.unlock()
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
             if let port { CGEvent.tapEnable(tap: port, enable: true) }
             return
+        }
+        if let observation = FnKeyDiagnostics.eventObservation(
+            source: "hid_tap",
+            tap: tapLevel,
+            type: type,
+            event: event
+        ) {
+            AppLogger.shared.write(observation)
+        }
+        if let observation = FnKeyDiagnostics.combinationObservation(
+            source: "hid_tap",
+            tap: tapLevel,
+            type: type,
+            event: event
+        ) {
+            AppLogger.shared.write(observation)
         }
         guard port != nil, let pressed = Self.physicalEdge(type: type, event: event, mode: mode) else { return }
         let observedAt = ProcessInfo.processInfo.systemUptime
