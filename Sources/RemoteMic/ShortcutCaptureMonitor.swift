@@ -31,6 +31,7 @@ final class ShortcutCaptureMonitor {
     private let onCapture: (CustomKeyboardShortcut) -> Void
     private let accessibilityTrusted: () -> Bool
     private let dispatchCallback: CallbackDispatcher
+    private let logger: (String) -> Void
     private let lock = NSLock()
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
@@ -45,12 +46,14 @@ final class ShortcutCaptureMonitor {
         accessibilityTrusted: @escaping () -> Bool = { KeyboardInjector.isAccessibilityTrusted },
         dispatchCallback: @escaping CallbackDispatcher = {
             DispatchQueue.main.async(execute: $0)
-        }
+        },
+        logger: @escaping (String) -> Void = AppLogger.shared.write
     ) {
         self.makeShortcut = makeShortcut
         self.onCapture = onCapture
         self.accessibilityTrusted = accessibilityTrusted
         self.dispatchCallback = dispatchCallback
+        self.logger = logger
     }
 
     func start() -> Result<Void, ShortcutCaptureStartFailure> {
@@ -101,18 +104,23 @@ final class ShortcutCaptureMonitor {
         self.eventTap = eventTap
         self.runLoopSource = runLoopSource
         lock.unlock()
+        logger("SHORTCUT CAPTURE phase=started result=listening source=session_tap")
         return .success(())
     }
 
     func stop() {
         // 回调跑在 tap 专用线程上，端口引用由主线程写入，必须加锁交接。
         lock.lock()
+        let wasRunning = eventTap != nil
         let port = eventTap
         let source = runLoopSource
         eventTap = nil
         runLoopSource = nil
         lock.unlock()
         EventTapPort.release(port: port, source: source)
+        if wasRunning {
+            logger("SHORTCUT CAPTURE phase=stopped result=inactive source=session_tap")
+        }
     }
 
     func handle(type: CGEventType, event: CGEvent) -> Bool {
@@ -156,15 +164,24 @@ final class ShortcutCaptureMonitor {
 
         let makeShortcut = self.makeShortcut
         let capture = onCapture
+        let logger = self.logger
         // Character lookup can enter HIToolbox's main-queue-only input-source APIs.
         // Keep the tap nonblocking and resolve the captured snapshot in the UI callback.
         dispatchCallback {
             guard let nsEvent = NSEvent(cgEvent: capturedEvent) else {
-                AppLogger.shared.write("SHORTCUT CAPTURE phase=failed reason=event_conversion_failed")
+                logger("SHORTCUT CAPTURE phase=failed reason=event_conversion_failed")
                 return
             }
             let shortcut = makeShortcut(nsEvent)
-            AppLogger.shared.write("SHORTCUT CAPTURE phase=resolved result=captured main_thread=\(Thread.isMainThread)")
+            let modifierCount = shortcut.modifierFlags
+                .intersection(CustomKeyboardShortcut.supportedModifiers)
+                .rawValue.nonzeroBitCount
+            logger(
+                "SHORTCUT CAPTURE phase=resolved result=captured " +
+                    "main_thread=\(Thread.isMainThread) " +
+                    "has_function=\(shortcut.modifierFlags.contains(.function)) " +
+                    "modifier_count=\(modifierCount)"
+            )
             capture(shortcut)
         }
         return true
