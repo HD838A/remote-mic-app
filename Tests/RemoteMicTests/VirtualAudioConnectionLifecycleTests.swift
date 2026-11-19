@@ -840,6 +840,14 @@ struct VirtualAudioConnectionLifecycleTests {
         #expect(outputSource.contains("phase=timed_out result=failed reason=prepare_timeout"))
         #expect(outputSource.contains("AUDIO CONFIGURE cleanup"))
         #expect(outputSource.contains("attempts=\\(attempts)"))
+        #expect(outputSource.contains("logStage(\"engine_created\")"))
+        #expect(outputSource.contains("logStage(\"player_created\")"))
+        #expect(outputSource.contains("logStage(\"attach_player_completed\")"))
+        #expect(outputSource.contains("logStage(\"connect_mixer_completed\")"))
+        #expect(outputSource.contains("logStage(\"open_output_unit_completed\")"))
+        #expect(outputSource.contains("logStage(\"select_device_completed\")"))
+        #expect(outputSource.contains("logStage(\"prepare_engine_completed\")"))
+        #expect(outputSource.contains("logStage(\"start_engine_completed\")"))
     }
 
     @Test @MainActor func blockedAudioQueueDoesNotBlockMainThreadConfigurationStopOrDiagnostics() async {

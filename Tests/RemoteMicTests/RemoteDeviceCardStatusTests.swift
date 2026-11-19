@@ -247,4 +247,42 @@ struct RemoteDeviceCardStatusTests {
         #expect(cardSource.contains("if let voiceRecoveryTitle"))
         #expect(cardSource.contains("Button(voiceRecoveryTitle, action: onRecoverVoice)"))
     }
+
+    @Test func readinessDiagnosticSeparatesProfileBindingFromAudioReadiness() {
+        let snapshot = RemoteCardReadinessSnapshot(
+            status: .confirming,
+            model: "rc003",
+            connected: true,
+            history: true,
+            buttons: .unknown,
+            buttonReason: "hid_monitor_missing",
+            voice: .ready,
+            voiceReason: "bluetooth_bridge_ready",
+            profileHasHID: false,
+            profileHasBluetooth: true,
+            hidMonitorPresent: false,
+            buttonReadinessCached: false,
+            appleConnected: false,
+            audioStatusKey: "audio.output.current_format",
+            audioReady: true,
+            audioSelected: true,
+            bridgeState: "ready",
+            siriAudioClass: "unknown",
+            profileCount: 2,
+            connectedProfileCount: 1
+        )
+        let line = snapshot.diagnosticLine(cardIndex: 0, operationID: 7)
+        #expect(line.contains("state=confirming"))
+        #expect(line.contains("buttons=unknown"))
+        #expect(line.contains("button_reason=hid_monitor_missing"))
+        #expect(line.contains("voice=ready"))
+        #expect(line.contains("voice_reason=bluetooth_bridge_ready"))
+        #expect(line.contains("profile_hid=false"))
+        #expect(line.contains("profile_bt=true"))
+        #expect(line.contains("hid_monitor=false"))
+        #expect(line.contains("audio_ready=true"))
+        #expect(line.contains("bridge=ready"))
+        #expect(!line.contains("device_name="))
+        #expect(!line.contains("/Users/"))
+    }
 }

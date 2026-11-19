@@ -2220,17 +2220,59 @@ final class AppSettings: ObservableObject {
         var replacements: [UUID: UUID] = [:]
         for model in [XiaomiRemoteModel.rc001, .rc003] {
             let group = remoteDeviceProfiles.filter { $0.model == model }
-            guard group.count == 2,
-                  let hid = group.first(where: {
-                      $0.hidFingerprint != nil && $0.bluetoothIdentifier == nil
-                  }),
-                  let ble = group.first(where: {
-                      $0.bluetoothIdentifier != nil && $0.hidFingerprint == nil
-                  }),
-                  activeHIDProfileIDs.contains(hid.id) || selectedRemoteProfileID == hid.id,
-                  connectedProfileIDs.contains(ble.id),
+            let hidOnly = group.filter {
+                $0.hidFingerprint != nil && $0.bluetoothIdentifier == nil
+            }
+            let bleOnly = group.filter {
+                $0.bluetoothIdentifier != nil && $0.hidFingerprint == nil
+            }
+            let both = group.filter {
+                $0.hidFingerprint != nil && $0.bluetoothIdentifier != nil
+            }
+            let hidIDs = Set(hidOnly.map(\.id))
+            let bleIDs = Set(bleOnly.map(\.id))
+            let hidLive = hidIDs.contains { activeHIDProfileIDs.contains($0) }
+                || selectedRemoteProfileID.map(hidIDs.contains) == true
+            let bleConnected = bleIDs.contains { connectedProfileIDs.contains($0) }
+
+            func logSkip(_ reason: String) {
+                AppLogger.shared.write(
+                    "SETTINGS REMOTE_PROFILE_PAIR phase=skipped result=not_merged " +
+                        "model=\(model.rawValue) reason=\(reason) " +
+                        "group_count=\(group.count) hid_only=\(hidOnly.count) " +
+                        "ble_only=\(bleOnly.count) both=\(both.count) " +
+                        "active_hid=\(hidLive) " +
+                        "selected_hid=\(selectedRemoteProfileID.map(hidIDs.contains) == true) " +
+                        "connected_ble=\(bleConnected)"
+                )
+            }
+
+            guard group.count == 2 else {
+                logSkip("group_count")
+                continue
+            }
+            guard hidOnly.count == 1 else {
+                logSkip("hid_only_count")
+                continue
+            }
+            guard bleOnly.count == 1 else {
+                logSkip("ble_only_count")
+                continue
+            }
+            guard hidLive else {
+                logSkip("hid_not_live_or_selected")
+                continue
+            }
+            guard bleConnected else {
+                logSkip("ble_not_connected")
+                continue
+            }
+            guard let hid = hidOnly.first, let ble = bleOnly.first,
                   Self.complementaryProfilesMayDescribeTheSameRemote(hid, ble)
-            else { continue }
+            else {
+                logSkip("identity_or_name_conflict")
+                continue
+            }
 
             let merged = Self.mergingRemoteProfile(hid, with: ble)
             guard let index = remoteDeviceProfiles.firstIndex(where: { $0.id == hid.id }) else {
