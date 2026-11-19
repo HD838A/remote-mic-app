@@ -5082,12 +5082,12 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         return settings.profileID(forBluetoothIdentifier: identifier)
     }
 
-    func selectRemoteProfile(_ profileID: UUID) {
+    func selectRemoteProfile(_ profileID: UUID, persistSelection: Bool = true) {
         if buttonGestureLearningProfileID != nil,
            buttonGestureLearningProfileID != profileID {
             cancelButtonGestureLearning(reason: "remote_changed")
         }
-        settings.selectRemoteProfile(profileID)
+        settings.selectRemoteProfile(profileID, persistSelection: persistSelection)
         refreshAppleRemoteHIDStatus()
         refreshBluetoothPresentation()
     }
@@ -5398,15 +5398,17 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             )
             return
         }
+        let persistsFallback = settings.selectedRemoteProfileID == nil
         AppLogger.shared.write(
             "REMOTE MAPPING_DEFAULT phase=completed result=selected " +
-                "reason=previous_remote_absent family=\(profile.model.rawValue) trigger=\(trigger)"
+                "reason=previous_remote_absent family=\(profile.model.rawValue) trigger=\(trigger) " +
+                "persisted=\(persistsFallback)"
         )
         if ProcessInfo.processInfo.environment["REMOTE_MIC_SETTINGS_SCREENSHOT_DIR"] != nil {
-            settings.selectRemoteProfile(profile.id)
+            settings.selectRemoteProfile(profile.id, persistSelection: persistsFallback)
             return
         }
-        selectRemoteProfile(profile.id)
+        selectRemoteProfile(profile.id, persistSelection: persistsFallback)
     }
 
     private func activateRemoteProfile(for bridge: XiaomiBluetoothBridge) -> UUID? {

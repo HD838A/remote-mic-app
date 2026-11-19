@@ -29,6 +29,21 @@ struct RemoteProfilePersistenceTests {
         return Scope(settings: AppSettings(defaults: defaults), defaults: defaults, name: name)
     }
 
+    /// 运行期创建一对共享稳定身份的 HID/BLE 档案。不能预写入默认值后启动，
+    /// 那样加载期去重会先把它们合并，无法验证互补合并本身。
+    private static func registerComplementaryPair(
+        in settings: AppSettings,
+        identity: String = "TESTSERIAL003"
+    ) -> (hid: UUID, ble: UUID) {
+        let hid = settings.registerHIDRemote(fingerprint: "hid-rc003")
+        settings.updateRemoteProfileModel(hid, model: .rc003)
+        settings.updateRemoteProfileHardwareIdentity(hid, serialNumber: identity)
+        let ble = settings.registerBluetoothRemote(identifier: UUID())
+        settings.updateRemoteProfileModel(ble, model: .rc003)
+        settings.updateRemoteProfileHardwareIdentity(ble, serialNumber: identity)
+        return (hid, ble)
+    }
+
     @Test func duplicateHIDProfilesAreCollapsedWithoutLosingSelectedMappings() throws {
         let scope = try Self.scopedSettings("duplicate-hid")
         defer { scope.tearDown() }
@@ -70,6 +85,16 @@ struct RemoteProfilePersistenceTests {
         #expect(migratedMappings.interactionSettings?.mode(for: .back) == .repeatSingle)
         migratedMappings.interactionSettings = nil
         #expect(migratedMappings == configuredMappings)
+
+        let backupData = try #require(scope.defaults.data(
+            forKey: AppSettings.mergedRemoteProfilesBackupKey
+        ))
+        let backup = try JSONDecoder().decode([RemoteDeviceProfile].self, from: backupData)
+        #expect(backup.count == 2)
+        #expect(backup.first(where: { $0.id == selectedID })?.mappings == configuredMappings)
+        #expect(scope.defaults.string(
+            forKey: AppSettings.mergedRemoteProfileSelectionBackupKey
+        ) == selectedID.uuidString)
     }
 
     /// 现场数据的形状：同一台 Apple Remote 留下了两条档案，两条都把序列号存成了设备名
@@ -187,53 +212,287 @@ struct RemoteProfilePersistenceTests {
 
     /// One physical RC003 can leave an HID-only profile and a BLE-only profile. The card
     /// used to ask the BLE profile for HID readiness and stay at "状态确认中"; merging the
-    /// pair keeps the HID monitor, mappings and selection on one record.
+    /// pair keeps the HID monitor, mappings and selection on one record. The merge requires
+    /// a shared stable identity so two different remotes cannot be paired by shape alone.
     @Test func complementaryHIDAndBLEProfilesOfTheSameModelAreMerged() throws {
         let scope = try Self.scopedSettings("complementary-pair")
         defer { scope.tearDown() }
-        let hidID = UUID()
-        let bleID = UUID()
-        var bindings = AppSettings.defaultBindings
-        bindings[.menu] = .openCodex
-        let hid = RemoteDeviceProfile(
-            id: hidID,
-            model: .rc003,
-            hidFingerprint: "hid-rc003",
-            mappings: RemoteDeviceMappings(
-                buttonBindings: bindings,
-                buttonShortcuts: [:],
-                secondaryButtonBindings: [:]
-            )
-        )
-        let ble = RemoteDeviceProfile(
-            id: bleID,
-            model: .rc003,
-            lastKnownBluetoothName: "小米蓝牙语音遥控器",
-            bluetoothIdentifier: UUID(),
-            mappings: RemoteDeviceMappings(
-                buttonBindings: AppSettings.defaultBindings,
-                buttonShortcuts: [:],
-                secondaryButtonBindings: [:]
-            )
-        )
-        scope.defaults.set(try JSONEncoder().encode([hid, ble]), forKey: "remoteDeviceProfiles")
-        scope.defaults.set(hidID.uuidString, forKey: "selectedRemoteProfileID")
+        let settings = scope.settings
+        let pair = Self.registerComplementaryPair(in: settings)
+        settings.selectRemoteProfile(pair.hid)
+        settings.setAction(.openCodex, for: .menu)
+        settings.updateRemoteProfileSystemName(pair.ble, name: "小米蓝牙语音遥控器")
 
-        let settings = AppSettings(defaults: scope.defaults)
         let replacements = settings.reconcileComplementaryRemoteProfiles(
-            connectedProfileIDs: [bleID],
-            activeHIDProfileIDs: [hidID]
+            connectedProfileIDs: [pair.ble],
+            activeHIDProfileIDs: [pair.hid]
         )
 
-        #expect(replacements[bleID] == hidID)
+        #expect(replacements[pair.ble] == pair.hid)
         #expect(settings.remoteDeviceProfiles.count == 1)
         let merged = try #require(settings.remoteDeviceProfiles.first)
-        #expect(merged.id == hidID)
+        #expect(merged.id == pair.hid)
         #expect(merged.hidFingerprint == "hid-rc003")
         #expect(merged.bluetoothIdentifier != nil)
         #expect(merged.lastKnownBluetoothName == "小米蓝牙语音遥控器")
         #expect(merged.mappings.parsedButtonBindings[.menu] == .openCodex)
-        #expect(settings.selectedRemoteProfileID == hidID)
+        #expect(settings.selectedRemoteProfileID == pair.hid)
+
+        let backupData = try #require(scope.defaults.data(
+            forKey: AppSettings.mergedRemoteProfilesBackupKey
+        ))
+        let backup = try JSONDecoder().decode([RemoteDeviceProfile].self, from: backupData)
+        #expect(backup.count == 2)
+        #expect(backup.first(where: { $0.id == pair.hid })?.mappings.parsedButtonBindings[.menu]
+            == .openCodex)
+        #expect(scope.defaults.string(
+            forKey: AppSettings.mergedRemoteProfileSelectionBackupKey
+        ) == pair.hid.uuidString)
+    }
+
+    @Test func complementaryMergeKeepsHIDCustomInteractionSettings() throws {
+        let scope = try Self.scopedSettings("complementary-hid-interaction")
+        defer { scope.tearDown() }
+        let settings = scope.settings
+        let pair = Self.registerComplementaryPair(in: settings)
+        settings.selectRemoteProfile(pair.hid)
+        let custom = RemoteButtonInteractionSettings(doubleClickMilliseconds: 240)
+        settings.interactionSettings = custom
+
+        let replacements = settings.reconcileComplementaryRemoteProfiles(
+            connectedProfileIDs: [pair.ble],
+            activeHIDProfileIDs: [pair.hid]
+        )
+
+        #expect(replacements[pair.ble] == pair.hid)
+        #expect(settings.remoteDeviceProfiles.first?.mappings.interactionSettings == custom)
+    }
+
+    @Test func complementaryMergeCarriesCustomInteractionSettingsFromBLE() throws {
+        let scope = try Self.scopedSettings("complementary-ble-interaction")
+        defer { scope.tearDown() }
+        let settings = scope.settings
+        let pair = Self.registerComplementaryPair(in: settings)
+        settings.selectRemoteProfile(pair.ble)
+        let custom = RemoteButtonInteractionSettings(longPressMilliseconds: 480)
+        settings.interactionSettings = custom
+        settings.selectRemoteProfile(pair.hid)
+
+        let replacements = settings.reconcileComplementaryRemoteProfiles(
+            connectedProfileIDs: [pair.ble],
+            activeHIDProfileIDs: [pair.hid]
+        )
+
+        #expect(replacements[pair.ble] == pair.hid)
+        let mergedSettings = try #require(
+            settings.remoteDeviceProfiles.first?.mappings.interactionSettings
+        )
+        #expect(mergedSettings.doubleClickMilliseconds == custom.doubleClickMilliseconds)
+        #expect(mergedSettings.longPressMilliseconds == custom.longPressMilliseconds)
+        #expect(mergedSettings.migratedRepeatButtons?.isEmpty == false)
+    }
+
+    @Test func complementaryMergeCombinesActionAndInteractionConfigurations() throws {
+        let scope = try Self.scopedSettings("complementary-combined-config")
+        defer { scope.tearDown() }
+        let settings = scope.settings
+        let pair = Self.registerComplementaryPair(in: settings)
+        settings.selectRemoteProfile(pair.hid)
+        let custom = RemoteButtonInteractionSettings(doubleClickMilliseconds: 240)
+        settings.interactionSettings = custom
+        settings.selectRemoteProfile(pair.ble)
+        let shortcut = CustomKeyboardShortcut(
+            keyCode: 40,
+            modifierFlags: [.command, .shift],
+            keyLabel: "K"
+        )
+        let applicationProfileID = UUID()
+        settings.setAction(.customShortcut, for: .menu)
+        settings.setShortcut(shortcut, for: .menu)
+        settings.setApplicationProfileID(applicationProfileID, for: .menu, trigger: .singleClick)
+        settings.setAllowsRapidPress(true, for: .menu)
+        settings.selectRemoteProfile(pair.hid)
+
+        let replacements = settings.reconcileComplementaryRemoteProfiles(
+            connectedProfileIDs: [pair.ble],
+            activeHIDProfileIDs: [pair.hid]
+        )
+
+        #expect(replacements[pair.ble] == pair.hid)
+        let merged = try #require(settings.remoteDeviceProfiles.first)
+        #expect(merged.mappings.parsedButtonBindings[.menu] == .customShortcut)
+        #expect(merged.mappings.parsedButtonShortcuts[.menu] == shortcut)
+        #expect(merged.mappings.parsedButtonApplicationProfileIDs[.menu] == applicationProfileID)
+        #expect(merged.mappings.parsedButtonRapidPressEnabled[.menu] == true)
+        #expect(merged.mappings.interactionSettings == custom)
+        #expect(settings.action(for: .menu) == .customShortcut)
+        #expect(settings.buttonShortcuts[.menu] == shortcut)
+    }
+
+    @Test func complementaryMergePreservesMigratedModesWhenAdoptingCustomTiming() throws {
+        let scope = try Self.scopedSettings("complementary-migrated-modes")
+        defer { scope.tearDown() }
+        let settings = scope.settings
+        let pair = Self.registerComplementaryPair(in: settings)
+        settings.selectRemoteProfile(pair.hid)
+        settings.interactionSettings = RemoteButtonInteractionSettings(
+            modes: ["up": RemoteButtonHoldMode.repeatSingle.rawValue],
+            migratedRepeatButtons: ["up"]
+        )
+        settings.selectRemoteProfile(pair.ble)
+        let custom = RemoteButtonInteractionSettings(longPressMilliseconds: 480)
+        settings.interactionSettings = custom
+        settings.selectRemoteProfile(pair.hid)
+
+        let replacements = settings.reconcileComplementaryRemoteProfiles(
+            connectedProfileIDs: [pair.ble],
+            activeHIDProfileIDs: [pair.hid]
+        )
+
+        #expect(replacements[pair.ble] == pair.hid)
+        let merged = try #require(settings.remoteDeviceProfiles.first)
+        #expect(merged.mappings.interactionSettings?.longPressMilliseconds == 480)
+        #expect(merged.mappings.interactionSettings?.modes["up"]
+            == RemoteButtonHoldMode.repeatSingle.rawValue)
+        #expect(merged.mappings.interactionSettings?.migratedRepeatButtons?.contains("up") == true)
+    }
+
+    @Test func complementaryMergeReloadsMappingsForTheKeptSelectedProfile() throws {
+        let scope = try Self.scopedSettings("complementary-reload-selected")
+        defer { scope.tearDown() }
+        let settings = scope.settings
+        let pair = Self.registerComplementaryPair(in: settings)
+        settings.selectRemoteProfile(pair.ble)
+        settings.setAction(.openCodex, for: .menu)
+
+        let replacements = settings.reconcileComplementaryRemoteProfiles(
+            connectedProfileIDs: [pair.ble],
+            activeHIDProfileIDs: [pair.hid]
+        )
+
+        #expect(replacements[pair.ble] == pair.hid)
+        #expect(settings.selectedRemoteProfileID == pair.hid)
+        // 合并写入存储后，当前执行/编辑内存态也必须立即刷新。
+        #expect(settings.action(for: .menu) == .openCodex)
+    }
+
+    @Test func nonNilDefaultInteractionSettingsDoNotBlockComplementaryMerge() throws {
+        let scope = try Self.scopedSettings("complementary-default-interaction")
+        defer { scope.tearDown() }
+        let settings = scope.settings
+        let pair = Self.registerComplementaryPair(in: settings)
+        settings.selectRemoteProfile(pair.hid)
+        settings.interactionSettings = RemoteButtonInteractionSettings()
+        settings.selectRemoteProfile(pair.ble)
+        let custom = RemoteButtonInteractionSettings(longPressMilliseconds: 480)
+        settings.interactionSettings = custom
+        settings.selectRemoteProfile(pair.hid)
+
+        let replacements = settings.reconcileComplementaryRemoteProfiles(
+            connectedProfileIDs: [pair.ble],
+            activeHIDProfileIDs: [pair.hid]
+        )
+
+        #expect(replacements[pair.ble] == pair.hid)
+        #expect(settings.remoteDeviceProfiles.first?.mappings.interactionSettings == custom)
+    }
+
+    @Test func unidentifiedComplementaryProfilesStaySeparate() throws {
+        let scope = try Self.scopedSettings("complementary-unidentified")
+        defer { scope.tearDown() }
+        let mappings = RemoteDeviceMappings(
+            buttonBindings: AppSettings.defaultBindings,
+            buttonShortcuts: [:],
+            secondaryButtonBindings: [:]
+        )
+        let hid = RemoteDeviceProfile(model: .rc003, hidFingerprint: "hid-rc003", mappings: mappings)
+        let ble = RemoteDeviceProfile(model: .rc003, bluetoothIdentifier: UUID(), mappings: mappings)
+        scope.defaults.set(try JSONEncoder().encode([hid, ble]), forKey: "remoteDeviceProfiles")
+        scope.defaults.set(hid.id.uuidString, forKey: "selectedRemoteProfileID")
+
+        let settings = AppSettings(defaults: scope.defaults)
+        let replacements = settings.reconcileComplementaryRemoteProfiles(
+            connectedProfileIDs: [ble.id],
+            activeHIDProfileIDs: [hid.id]
+        )
+
+        #expect(replacements.isEmpty)
+        #expect(settings.remoteDeviceProfiles.count == 2)
+    }
+
+    @Test func transientDisplaySelectionIsNotPersistedWhenItsProfileIsMerged() throws {
+        let scope = try Self.scopedSettings("transient-selection-merge")
+        defer { scope.tearDown() }
+        let settings = scope.settings
+        let preferred = settings.registerHIDRemote(fingerprint: "preferred-rc001")
+        settings.updateRemoteProfileModel(preferred, model: .rc001)
+        settings.selectRemoteProfile(preferred)
+
+        let pair = Self.registerComplementaryPair(in: settings, identity: "TESTSERIAL-TRANSIENT")
+        settings.selectRemoteProfile(pair.ble, persistSelection: false)
+        #expect(settings.selectedRemoteProfileID == pair.ble)
+
+        let replacements = settings.reconcileComplementaryRemoteProfiles(
+            connectedProfileIDs: [pair.ble],
+            activeHIDProfileIDs: [pair.hid]
+        )
+
+        #expect(replacements[pair.ble] == pair.hid)
+        #expect(settings.selectedRemoteProfileID == pair.hid)
+        #expect(scope.defaults.string(
+            forKey: "selectedRemoteProfileID"
+        ) == preferred.uuidString)
+
+        let afterRestart = AppSettings(defaults: scope.defaults)
+        #expect(afterRestart.selectedRemoteProfileID == preferred)
+    }
+
+    @Test func persistedSelectionIsRemappedWhenItsProfileIsMergedDuringTransientDisplay() throws {
+        let scope = try Self.scopedSettings("persisted-selection-remap")
+        defer { scope.tearDown() }
+        let settings = scope.settings
+        let transient = settings.registerHIDRemote(fingerprint: "transient-rc001")
+        settings.updateRemoteProfileModel(transient, model: .rc001)
+        let pair = Self.registerComplementaryPair(in: settings, identity: "TESTSERIAL-REMAP")
+        settings.selectRemoteProfile(pair.ble)
+        settings.selectRemoteProfile(transient, persistSelection: false)
+        #expect(settings.selectedRemoteProfileID == transient)
+
+        let replacements = settings.reconcileComplementaryRemoteProfiles(
+            connectedProfileIDs: [pair.ble],
+            activeHIDProfileIDs: [pair.hid]
+        )
+
+        #expect(replacements[pair.ble] == pair.hid)
+        #expect(scope.defaults.string(
+            forKey: "selectedRemoteProfileID"
+        ) == pair.hid.uuidString)
+
+        let afterRestart = AppSettings(defaults: scope.defaults)
+        #expect(afterRestart.selectedRemoteProfileID == pair.hid)
+    }
+
+    @Test func mergeBackupCanBeRestored() throws {
+        let scope = try Self.scopedSettings("merge-backup-restore")
+        defer { scope.tearDown() }
+        let settings = scope.settings
+        let pair = Self.registerComplementaryPair(in: settings, identity: "TESTSERIAL-RESTORE")
+        settings.selectRemoteProfile(pair.hid)
+        settings.setAction(.openCodex, for: .menu)
+
+        let replacements = settings.reconcileComplementaryRemoteProfiles(
+            connectedProfileIDs: [pair.ble],
+            activeHIDProfileIDs: [pair.hid]
+        )
+        #expect(replacements[pair.ble] == pair.hid)
+        #expect(settings.remoteDeviceProfiles.count == 1)
+
+        #expect(settings.restoreMergedRemoteProfilesBackup())
+        #expect(settings.remoteDeviceProfiles.count == 2)
+        #expect(settings.selectedRemoteProfileID == pair.hid)
+        #expect(settings.action(for: .menu) == .openCodex)
+        #expect(settings.remoteDeviceProfiles.first(where: { $0.id == pair.ble })?
+            .mappings.parsedButtonBindings == AppSettings.defaultBindings)
     }
 
     @Test func complementaryProfilesOfDifferentModelsStaySeparate() throws {
@@ -295,34 +554,323 @@ struct RemoteProfilePersistenceTests {
         #expect(settings.remoteDeviceProfiles.count == 4)
     }
 
+    @Test func newSameModelRemoteStartsWithIndependentMappings() throws {
+        let scope = try Self.scopedSettings("same-model-independent")
+        defer { scope.tearDown() }
+        let selectedID = UUID()
+        var selectedBindings = AppSettings.defaultBindings
+        selectedBindings[.menu] = .openCodex
+        let selected = RemoteDeviceProfile(
+            id: selectedID,
+            model: .rc003,
+            hidFingerprint: "selected-rc003",
+            mappings: RemoteDeviceMappings(
+                buttonBindings: selectedBindings,
+                buttonShortcuts: [:],
+                secondaryButtonBindings: [:]
+            )
+        )
+        scope.defaults.set(try JSONEncoder().encode([selected]), forKey: "remoteDeviceProfiles")
+        scope.defaults.set(selectedID.uuidString, forKey: "selectedRemoteProfileID")
+
+        let settings = AppSettings(defaults: scope.defaults)
+        let newID = settings.registerBluetoothRemote(identifier: UUID())
+        settings.updateRemoteProfileModel(newID, model: .rc003)
+
+        let newProfile = try #require(settings.remoteDeviceProfiles.first(where: { $0.id == newID }))
+        #expect(newProfile.mappings.parsedButtonBindings == AppSettings.defaultBindings)
+        #expect(newProfile.mappings.parsedButtonShortcuts.isEmpty)
+        let original = try #require(settings.remoteDeviceProfiles.first(where: { $0.id == selectedID }))
+        #expect(original.mappings.parsedButtonBindings[.menu] == .openCodex)
+        #expect(original.mappings.parsedButtonBindings == selectedBindings)
+    }
+
+    @Test func newSameModelAppleRemoteStartsWithDefaults() throws {
+        let scope = try Self.scopedSettings("same-model-apple")
+        defer { scope.tearDown() }
+        let settings = scope.settings
+        let firstID = settings.registerAppleSiriRemote(fingerprint: "apple-first")
+        settings.selectRemoteProfile(firstID)
+        settings.setAction(.openCodex, for: .menu)
+
+        let secondID = settings.registerAppleSiriRemote(fingerprint: "apple-second")
+        let second = try #require(settings.remoteDeviceProfiles.first(where: { $0.id == secondID }))
+        #expect(second.mappings.parsedButtonBindings == AppSettings.defaultBindings)
+        #expect(second.mappings.parsedButtonShortcuts.isEmpty)
+        let first = try #require(settings.remoteDeviceProfiles.first(where: { $0.id == firstID }))
+        #expect(first.mappings.parsedButtonBindings[.menu] == .openCodex)
+    }
+
+    @Test func bleRegistrationDoesNotAdoptAnotherRemotesHIDProfile() throws {
+        let scope = try Self.scopedSettings("ble-hid-adoption")
+        defer { scope.tearDown() }
+        let settings = scope.settings
+        let hid = settings.registerHIDRemote(fingerprint: "hid-one")
+        settings.setAction(.openCodex, for: .menu)
+
+        let ble = settings.registerBluetoothRemote(identifier: UUID())
+
+        #expect(ble != hid)
+        #expect(settings.remoteDeviceProfiles.first(where: { $0.id == hid })?
+            .bluetoothIdentifier == nil)
+        #expect(settings.remoteDeviceProfiles.first(where: { $0.id == ble })?
+            .mappings.parsedButtonBindings[.menu] == AppSettings.defaultBindings[.menu])
+    }
+
+    @Test func hidRegistrationDoesNotAdoptUnselectedBLEProfile() throws {
+        let scope = try Self.scopedSettings("hid-ble-adoption")
+        defer { scope.tearDown() }
+        let settings = scope.settings
+        let selectedHID = settings.registerHIDRemote(fingerprint: "selected-hid")
+        settings.updateRemoteProfileModel(selectedHID, model: .rc003)
+        let unselectedBLE = settings.registerBluetoothRemote(identifier: UUID())
+
+        let newHID = settings.registerHIDRemote(fingerprint: "new-hid")
+
+        #expect(newHID != unselectedBLE)
+        #expect(settings.remoteDeviceProfiles.first(where: { $0.id == unselectedBLE })?
+            .hidFingerprint == nil)
+    }
+
+    @Test func deduplicationReloadsMappingsForSelectedDefaultProfile() throws {
+        let scope = try Self.scopedSettings("dedup-reload-selected")
+        defer { scope.tearDown() }
+        var customBindings = AppSettings.defaultBindings
+        customBindings[.menu] = .openCodex
+        let selected = RemoteDeviceProfile(
+            model: .appleSiriRemoteA2854,
+            hidFingerprint: "dedup-reload",
+            mappings: RemoteDeviceMappings(
+                buttonBindings: AppSettings.defaultBindings,
+                buttonShortcuts: [:],
+                secondaryButtonBindings: [:]
+            )
+        )
+        let custom = RemoteDeviceProfile(
+            model: .appleSiriRemoteA2854,
+            hidFingerprint: "dedup-reload",
+            mappings: RemoteDeviceMappings(
+                buttonBindings: customBindings,
+                buttonShortcuts: [:],
+                secondaryButtonBindings: [:]
+            )
+        )
+        scope.defaults.set(try JSONEncoder().encode([selected, custom]), forKey: "remoteDeviceProfiles")
+        scope.defaults.set(selected.id.uuidString, forKey: "selectedRemoteProfileID")
+
+        let settings = AppSettings(defaults: scope.defaults)
+
+        #expect(settings.remoteDeviceProfiles.count == 1)
+        #expect(settings.selectedRemoteProfileID == selected.id)
+        #expect(settings.action(for: .menu) == .openCodex)
+    }
+
+    @Test func legacyProfilePayloadKeepsCustomMappingsAfterUpgrade() throws {
+        let scope = try Self.scopedSettings("legacy-upgrade")
+        defer { scope.tearDown() }
+        let profileID = UUID()
+        var bindings = AppSettings.defaultBindings
+        bindings[.menu] = .openCodex
+        let profile = RemoteDeviceProfile(
+            id: profileID,
+            model: .rc003,
+            hidFingerprint: "legacy-upgrade",
+            mappings: RemoteDeviceMappings(
+                buttonBindings: bindings,
+                buttonShortcuts: [:],
+                secondaryButtonBindings: [:]
+            )
+        )
+        var payload = try #require(
+            JSONSerialization.jsonObject(with: JSONEncoder().encode([profile]))
+                as? [[String: Any]]
+        )
+        payload[0].removeValue(forKey: "hardwareIdentity")
+        payload[0].removeValue(forKey: "lastKnownBluetoothName")
+        payload[0].removeValue(forKey: "bluetoothIdentifier")
+        scope.defaults.set(
+            try JSONSerialization.data(withJSONObject: payload),
+            forKey: "remoteDeviceProfiles"
+        )
+        scope.defaults.set(profileID.uuidString, forKey: "selectedRemoteProfileID")
+
+        let settings = AppSettings(defaults: scope.defaults)
+
+        #expect(settings.remoteDeviceProfiles.count == 1)
+        #expect(settings.selectedRemoteProfileID == profileID)
+        #expect(settings.selectedRemoteProfile?.mappings.parsedButtonBindings[.menu]
+            == .openCodex)
+    }
+
+    @Test func automaticProfileDisplayDoesNotOverwritePersistedPreference() throws {
+        let scope = try Self.scopedSettings("display-selection")
+        defer { scope.tearDown() }
+        let xiaomiID = UUID()
+        let appleID = UUID()
+        var xiaomiBindings = AppSettings.defaultBindings
+        xiaomiBindings[.menu] = .openCodex
+        let xiaomi = RemoteDeviceProfile(
+            id: xiaomiID,
+            model: .rc003,
+            hidFingerprint: "xiaomi-selection",
+            mappings: RemoteDeviceMappings(
+                buttonBindings: xiaomiBindings,
+                buttonShortcuts: [:],
+                secondaryButtonBindings: [:]
+            )
+        )
+        let apple = RemoteDeviceProfile(
+            id: appleID,
+            model: .appleSiriRemoteA2854,
+            hidFingerprint: "apple-selection",
+            mappings: RemoteDeviceMappings(
+                buttonBindings: AppSettings.defaultBindings,
+                buttonShortcuts: [:],
+                secondaryButtonBindings: [:]
+            )
+        )
+        scope.defaults.set(try JSONEncoder().encode([xiaomi, apple]), forKey: "remoteDeviceProfiles")
+        scope.defaults.set(xiaomiID.uuidString, forKey: "selectedRemoteProfileID")
+
+        let settings = AppSettings(defaults: scope.defaults)
+        settings.selectRemoteProfile(appleID, persistSelection: false)
+
+        #expect(settings.selectedRemoteProfileID == appleID)
+        #expect(settings.remoteDeviceProfiles.first(where: { $0.id == xiaomiID })?
+            .mappings.parsedButtonBindings == xiaomi.mappings.parsedButtonBindings)
+        #expect(settings.remoteDeviceProfiles.first(where: { $0.id == appleID })?
+            .mappings.parsedButtonBindings == apple.mappings.parsedButtonBindings)
+
+        let afterRestart = AppSettings(defaults: scope.defaults)
+        #expect(afterRestart.selectedRemoteProfileID == xiaomiID)
+
+        settings.selectRemoteProfile(appleID)
+        let afterManualSelection = AppSettings(defaults: scope.defaults)
+        #expect(afterManualSelection.selectedRemoteProfileID == appleID)
+    }
+
+    @Test func conflictingDuplicateMappingsAreNotMerged() throws {
+        let scope = try Self.scopedSettings("conflicting-duplicates")
+        defer { scope.tearDown() }
+        let firstID = UUID()
+        let secondID = UUID()
+        var firstBindings = AppSettings.defaultBindings
+        firstBindings[.menu] = .openCodex
+        var secondBindings = AppSettings.defaultBindings
+        secondBindings[.menu] = .openWeChat
+        let first = RemoteDeviceProfile(
+            id: firstID,
+            model: .appleSiriRemoteA2854,
+            hidFingerprint: "shared-fingerprint",
+            mappings: RemoteDeviceMappings(
+                buttonBindings: firstBindings,
+                buttonShortcuts: [:],
+                secondaryButtonBindings: [:]
+            )
+        )
+        let second = RemoteDeviceProfile(
+            id: secondID,
+            model: .appleSiriRemoteA2854,
+            hidFingerprint: "shared-fingerprint",
+            mappings: RemoteDeviceMappings(
+                buttonBindings: secondBindings,
+                buttonShortcuts: [:],
+                secondaryButtonBindings: [:]
+            )
+        )
+        let third = RemoteDeviceProfile(
+            model: .appleSiriRemoteA2854,
+            hidFingerprint: "shared-fingerprint",
+            mappings: first.mappings
+        )
+        scope.defaults.set(
+            try JSONEncoder().encode([first, second, third]),
+            forKey: "remoteDeviceProfiles"
+        )
+        scope.defaults.set(secondID.uuidString, forKey: "selectedRemoteProfileID")
+
+        let settings = AppSettings(defaults: scope.defaults)
+
+        // 同一身份一旦出现冲突，后续同身份档案也不得再并进其中一条。
+        #expect(settings.remoteDeviceProfiles.count == 3)
+        #expect(settings.remoteDeviceProfiles.first(where: { $0.id == firstID })?
+            .mappings.parsedButtonBindings == first.mappings.parsedButtonBindings)
+        #expect(settings.remoteDeviceProfiles.first(where: { $0.id == secondID })?
+            .mappings.parsedButtonBindings == second.mappings.parsedButtonBindings)
+        #expect(settings.remoteDeviceProfiles.first(where: { $0.id == third.id }) != nil)
+        // 冲突档案保留多条相同指纹时，按键查找必须跟随用户当前选中的那张。
+        #expect(settings.profileID(forHIDFingerprint: "shared-fingerprint") == secondID)
+    }
+
+    @Test func semanticallyEqualPartialBindingsDoNotBlockDeduplication() throws {
+        let scope = try Self.scopedSettings("partial-default-bindings")
+        defer { scope.tearDown() }
+        let firstID = UUID()
+        var fullBindings = AppSettings.defaultBindings
+        fullBindings[.menu] = .openCodex
+        let first = RemoteDeviceProfile(
+            id: firstID,
+            model: .appleSiriRemoteA2854,
+            hidFingerprint: "partial-fingerprint",
+            mappings: RemoteDeviceMappings(
+                buttonBindings: [.menu: .openCodex],
+                buttonShortcuts: [:],
+                secondaryButtonBindings: [:]
+            )
+        )
+        let second = RemoteDeviceProfile(
+            model: .appleSiriRemoteA2854,
+            hidFingerprint: "partial-fingerprint",
+            mappings: RemoteDeviceMappings(
+                buttonBindings: fullBindings,
+                buttonShortcuts: [:],
+                secondaryButtonBindings: [:]
+            )
+        )
+        scope.defaults.set(try JSONEncoder().encode([first, second]), forKey: "remoteDeviceProfiles")
+        scope.defaults.set(firstID.uuidString, forKey: "selectedRemoteProfileID")
+
+        let settings = AppSettings(defaults: scope.defaults)
+
+        #expect(settings.remoteDeviceProfiles.count == 1)
+        #expect(settings.action(for: .menu) == .openCodex)
+    }
+
+    @Test func conflictingComplementaryMappingsAreNotMerged() throws {
+        let scope = try Self.scopedSettings("conflicting-complementary")
+        defer { scope.tearDown() }
+        let settings = scope.settings
+        let pair = Self.registerComplementaryPair(in: settings)
+        settings.selectRemoteProfile(pair.hid)
+        settings.setAction(.openCodex, for: .menu)
+        settings.selectRemoteProfile(pair.ble)
+        settings.setAction(.openWeChat, for: .menu)
+        settings.selectRemoteProfile(pair.hid)
+
+        let replacements = settings.reconcileComplementaryRemoteProfiles(
+            connectedProfileIDs: [pair.ble],
+            activeHIDProfileIDs: [pair.hid]
+        )
+
+        #expect(replacements.isEmpty)
+        #expect(settings.remoteDeviceProfiles.count == 2)
+        #expect(settings.remoteDeviceProfiles.first(where: { $0.id == pair.hid })?
+            .mappings.parsedButtonBindings[.menu] == .openCodex)
+        #expect(settings.remoteDeviceProfiles.first(where: { $0.id == pair.ble })?
+            .mappings.parsedButtonBindings[.menu] == .openWeChat)
+    }
+
     @Test func complementaryProfilesWithDifferentNamesStaySeparate() throws {
         let scope = try Self.scopedSettings("complementary-names")
         defer { scope.tearDown() }
-        let mappings = RemoteDeviceMappings(
-            buttonBindings: AppSettings.defaultBindings,
-            buttonShortcuts: [:],
-            secondaryButtonBindings: [:]
-        )
-        let hid = RemoteDeviceProfile(
-            model: .rc003,
-            customName: "书房",
-            lastKnownBluetoothName: "书房遥控器",
-            hidFingerprint: "hid-rc003",
-            mappings: mappings
-        )
-        let ble = RemoteDeviceProfile(
-            model: .rc003,
-            customName: "客厅",
-            lastKnownBluetoothName: "客厅遥控器",
-            bluetoothIdentifier: UUID(),
-            mappings: mappings
-        )
-        scope.defaults.set(try JSONEncoder().encode([hid, ble]), forKey: "remoteDeviceProfiles")
+        let settings = scope.settings
+        let pair = Self.registerComplementaryPair(in: settings, identity: "TESTSERIAL-NAMES")
+        settings.updateRemoteProfile(pair.hid, model: .rc003, customName: "书房")
+        settings.updateRemoteProfile(pair.ble, model: .rc003, customName: "客厅")
 
-        let settings = AppSettings(defaults: scope.defaults)
         let replacements = settings.reconcileComplementaryRemoteProfiles(
-            connectedProfileIDs: [ble.id],
-            activeHIDProfileIDs: [hid.id]
+            connectedProfileIDs: [pair.ble],
+            activeHIDProfileIDs: [pair.hid]
         )
 
         #expect(replacements.isEmpty)
@@ -332,19 +880,12 @@ struct RemoteProfilePersistenceTests {
     @Test func complementaryProfilesRequireBothSidesToBeLive() throws {
         let scope = try Self.scopedSettings("complementary-live")
         defer { scope.tearDown() }
-        let mappings = RemoteDeviceMappings(
-            buttonBindings: AppSettings.defaultBindings,
-            buttonShortcuts: [:],
-            secondaryButtonBindings: [:]
-        )
-        let hid = RemoteDeviceProfile(model: .rc003, hidFingerprint: "hid-rc003", mappings: mappings)
-        let ble = RemoteDeviceProfile(model: .rc003, bluetoothIdentifier: UUID(), mappings: mappings)
-        scope.defaults.set(try JSONEncoder().encode([hid, ble]), forKey: "remoteDeviceProfiles")
+        let settings = scope.settings
+        let pair = Self.registerComplementaryPair(in: settings, identity: "TESTSERIAL-LIVE")
 
-        let settings = AppSettings(defaults: scope.defaults)
         let replacements = settings.reconcileComplementaryRemoteProfiles(
             connectedProfileIDs: [],
-            activeHIDProfileIDs: [hid.id]
+            activeHIDProfileIDs: [pair.hid]
         )
 
         #expect(replacements.isEmpty)

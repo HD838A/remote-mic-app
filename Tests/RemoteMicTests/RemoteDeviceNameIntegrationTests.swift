@@ -56,7 +56,7 @@ struct RemoteDeviceNameIntegrationTests {
         #expect(restored.remoteDeviceProfiles.first { $0.id == second }?.customName == "")
         #expect(restored.remoteDeviceProfiles.map(\.id) == original.map(\.id))
         #expect(restored.remoteDeviceProfiles.map(\.bluetoothIdentifier) == original.map(\.bluetoothIdentifier))
-        #expect(restored.remoteDeviceProfiles.map(\.mappings) == original.map(\.mappings))
+        #expect(restored.remoteDeviceProfiles.actionMappings == original.actionMappings)
         #expect(settings.updateRemoteProfileSystemName(first, name: "MI RC"))
         #expect(settings.remoteDeviceProfiles.first { $0.id == first }?.customName == "")
         #expect(!settings.updateRemoteProfileSystemName(UUID(), name: "Unknown device"))
@@ -153,11 +153,23 @@ struct RemoteDeviceNameIntegrationTests {
         #expect(reloaded.remoteDeviceProfiles.first { $0.id == second }?.customName == serial)
         #expect(reloaded.remoteDeviceProfiles.map(\.id) == original.map(\.id))
         #expect(reloaded.remoteDeviceProfiles.map(\.hidFingerprint) == original.map(\.hidFingerprint))
-        #expect(reloaded.remoteDeviceProfiles.map(\.mappings) == original.map(\.mappings))
+        #expect(reloaded.remoteDeviceProfiles.actionMappings == original.actionMappings)
         #expect(settings.updateRemoteProfileSystemName(first, name: "Office", serialNumber: serial))
         #expect(!settings.updateRemoteProfileSystemName(first, name: nil, serialNumber: serial))
         #expect(settings.remoteDeviceProfiles.first { $0.id == first }?.customName == "Office")
         #expect(settings.updateRemoteProfileSystemName(first, name: serial, serialNumber: serial))
         #expect(settings.remoteDeviceProfiles.first { $0.id == first }?.customName == "")
+    }
+}
+
+private extension Array where Element == RemoteDeviceProfile {
+    /// 启动迁移会为旧档案补 `interactionSettings`。名称变更只允许改设备名，
+    /// 因此这里比较去掉迁移字段后的完整用户动作载荷。
+    var actionMappings: [RemoteDeviceMappings] {
+        map { profile in
+            var mappings = profile.mappings
+            mappings.interactionSettings = nil
+            return mappings
+        }
     }
 }

@@ -4289,7 +4289,7 @@ struct RemoteButtonsTests {
         ).action == .showDesktop)
     }
 
-    @Test func additionalBluetoothRemoteCopiesCurrentMappingsBeforeIndependentEditing() throws {
+    @Test func additionalBluetoothRemoteStartsWithIndependentMappings() throws {
         let suiteName = "RemoteMicTests.\(UUID().uuidString)"
         let defaults = try #require(TestUserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
@@ -4313,12 +4313,17 @@ struct RemoteButtonsTests {
             for: .menu,
             trigger: .singleClick,
             profileID: secondProfileID
-        ).shortcut == shortcut)
+        ).action == AppSettings.defaultBindings[.menu])
+        #expect(settings.configuredAction(
+            for: .menu,
+            trigger: .singleClick,
+            profileID: secondProfileID
+        ).shortcut == nil)
         #expect(settings.configuredAction(
             for: .tv,
             trigger: .doubleClick,
             profileID: secondProfileID
-        ).action == .showDesktop)
+        ).action == .disabled)
 
         settings.selectRemoteProfile(secondProfileID)
         settings.setAction(.openCodex, for: .menu)
@@ -4379,7 +4384,7 @@ struct RemoteButtonsTests {
             for: .menu,
             trigger: .singleClick,
             profileID: secondProfileID
-        ).action == .openCodex)
+        ).action == AppSettings.defaultBindings[.menu])
 
         settings.selectRemoteProfile(secondProfileID)
         settings.setAction(.showDesktop, for: .menu)
