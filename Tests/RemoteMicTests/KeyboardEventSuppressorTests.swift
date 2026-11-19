@@ -919,6 +919,64 @@ struct KeyboardEventSuppressorTests {
         #expect(suppressor.handle(type: down.type, event: down))
     }
 
+    @Test func functionKeyEdgesPassThroughAndAreObserved() throws {
+        var logs: [String] = []
+        let suppressor = KeyboardEventSuppressor(logger: { logs.append($0) })
+        let down = try functionEvent(flags: .maskSecondaryFn)
+        let up = try functionEvent(flags: [])
+
+        #expect(!suppressor.handle(type: .flagsChanged, event: down))
+        #expect(!suppressor.handle(type: .flagsChanged, event: up))
+        #expect(logs.contains {
+            $0.contains("VOICE KEY fn_observe source=session_tap") &&
+                $0.contains("synthetic=false") &&
+                $0.contains("pressed=true")
+        })
+        #expect(logs.contains {
+            $0.contains("VOICE KEY fn_observe source=session_tap") &&
+                $0.contains("pressed=false")
+        })
+    }
+
+    @Test func functionModifiedKeyDownIsObservedWithoutConsumingOrLoggingItsKeyCode() throws {
+        var logs: [String] = []
+        let suppressor = KeyboardEventSuppressor(logger: { logs.append($0) })
+        let letter = try #require(CGEvent(
+            keyboardEventSource: nil,
+            virtualKey: 17,
+            keyDown: true
+        ))
+        letter.flags = .maskSecondaryFn
+
+        #expect(!suppressor.handle(type: .keyDown, event: letter))
+        #expect(logs.contains {
+            $0.contains("VOICE KEY fn_combo_observe source=session_tap") &&
+                $0.contains("primary_kind=unclassified") &&
+                !$0.contains("keycode")
+        })
+
+        logs.removeAll()
+        let arrow = try #require(CGEvent(
+            keyboardEventSource: nil,
+            virtualKey: 126,
+            keyDown: true
+        ))
+        arrow.flags = .maskSecondaryFn
+        #expect(!suppressor.handle(type: .keyDown, event: arrow))
+        #expect(!logs.contains { $0.contains("fn_combo_observe") })
+    }
+
+    private func functionEvent(flags: CGEventFlags) throws -> CGEvent {
+        let event = try #require(CGEvent(
+            keyboardEventSource: nil,
+            virtualKey: 63,
+            keyDown: true
+        ))
+        event.type = .flagsChanged
+        event.flags = flags
+        return event
+    }
+
     private func nativeEvent(_ native: RemoteNativeEvent, down: Bool) throws -> CGEvent {
         switch native {
         case let .keyboard(keyCode):

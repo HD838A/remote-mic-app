@@ -1,5 +1,6 @@
 # Bug 记录
 
+- [Typeless 的 Fn 组合快捷键在 2.0.8 预览版后无法定义](./2026-11-20-typeless-fn-shortcut-unavailable.md)
 - [Build 409 遥控器可用但卡片持续“状态确认中”](./2026-11-19-remote-card-confirming-on-build-409.md)
 - [虚拟音频启动阻塞导致遥控器卡片长期“状态确认中”](./2026-11-19-audio-configure-timeout-card-stuck.md)
 - [Onboarding 切到非 Siri 来源后仍保持 Siri Remote 临时启用](./2026-11-19-onboarding-source-switch-keeps-siri-enabled.md)
@@ -227,6 +228,7 @@
 
 | 时间 | Bug | 状态 |
 | --- | --- | --- |
+| 2026-11-20 | [Typeless 的 Fn 组合快捷键在 2.0.8 预览版后无法定义](./2026-11-20-typeless-fn-shortcut-unavailable.md) | 调查中；已补启动/退出 Fn 快照、HID/session Fn 边沿、Fn 组合观察、软件 Fn 提交和快捷键录入日志；90 项定向测试通过；根因待现场日志确认 |
 | 2026-11-17 | [安装器因重复的兼容麦克风驱动阻止升级](./2026-11-17-installer-duplicate-driver-block.md) | 候选修复：HAL 扫描拆分为 `hal_scan` + 精确 `detail`/`scope`/`level`/`issue` 枚举；可写 HAL 中的本产品多余副本移入 root 废纸篓并强制重启 Core Audio；符号链接、只读 System HAL 副本和权限异常仍停止。隔离夹具全部通过；真实 Installer、CoreAudio 与现场日志待回收 |
 | 2026-11-15 | [PreferredInputSourceMonitor 取消测试依赖真实 timer，CI 偶发超时失败](./2026-11-15-preferred-input-source-activation-timeout-flake.md) | 候选修复：移除 0.04 秒真实 timer，改在 production waiter 的循环内确定触发取消；定向 20/20、1456 项完整测试、48 项项目自检通过；无产品源码改动，等待 CI |
 | 2026-11-15 | [macOS 27 HID device 回调注册后不投递，显示已连接但遥控器无响应](./2026-11-15-hid-device-callback-silent-after-monitor-restart.md) | 候选修复：不再按“回调已注册”丢弃 manager 报告，改为按实际报告去重；新增 `path=` 与 10 秒汇总日志，device 静默时重挂回调并有界退避；180 项定向测试、1456 项完整测试、Release 构建和 48 项项目自检通过，真实 RC001/RC003 断连重连验收待完成 |

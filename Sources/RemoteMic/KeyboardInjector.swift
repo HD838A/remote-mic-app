@@ -509,15 +509,35 @@ enum KeyboardInjector {
         _ mode: VoiceKeyMode,
         isPressed: Bool,
         accessibilityTrusted: () -> Bool = { isAccessibilityTrusted },
-        keyStatePoster: KeyStatePoster = postKeyState
+        keyStatePoster: KeyStatePoster = postKeyState,
+        logger: (String) -> Void = AppLogger.shared.write
     ) -> Bool {
-        guard accessibilityTrusted() else { return false }
+        let edge = isPressed ? "down" : "up"
+        guard accessibilityTrusted() else {
+            if mode == .function {
+                logger(
+                    "VOICE KEY fn_submit mode=fn edge=\(edge) result=rejected " +
+                        "reason=accessibility_denied source=software synthetic=true " +
+                        "target_response=unknown"
+                )
+            }
+            return false
+        }
         let flags = isPressed ? mode.eventFlags : []
-        return keyStatePoster(
+        let submitted = keyStatePoster(
             mode.keyCode,
             isPressed,
             flags
         )
+        if mode == .function {
+            logger(
+                "VOICE KEY fn_submit mode=fn edge=\(edge) " +
+                    "result=\(submitted ? "submitted" : "failed") source=software " +
+                    "synthetic=true event_flags=\(ShortcutEventSequence.diagnosticFlags(flags)) " +
+                    "target_response=unknown"
+            )
+        }
+        return submitted
     }
 
     static func recordedShortcut(
