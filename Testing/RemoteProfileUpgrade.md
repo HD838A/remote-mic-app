@@ -31,6 +31,6 @@
 ## 证据与边界
 
 运行 `swift test --disable-keychain`。定向复验可使用 `--filter 'RemoteButtonsTests|RemoteDeviceNameIntegrationTests|RemoteProfilePersistenceTests|SettingsPageRegressionTests'`。
-2026-11-20 定向运行 **314 tests / 4 suites passed**；公开模式全量 **1550 tests / 112 suites passed**。测试驱动真实 AppSettings 加载，覆盖隔离配置、损坏恢复、同型号设备隔离、自动回退、旧格式升级、内联告警布局和现有持久化基线。
+2026-11-20 定向运行 **319 tests / 4 suites passed**；公开模式全量 **1567 tests / 113 suites passed**。测试驱动真实 AppSettings 加载，覆盖隔离配置、损坏恢复、同型号设备隔离、自动回退、旧格式升级、内联告警布局和现有持久化基线。
 自动化不替代用户升级验收。此修改不改变硬件协议、语音会话和音频路径。
 现场失败日志可由用户主动提供 `.rmlog`，支持环境仅提取稳定错误类型；不得提交原始日志或私钥。

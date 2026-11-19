@@ -68,8 +68,8 @@ BLE 档案没有对应的 HID 监视器，得到 `.unknown`；语音链路为 `.
 
 验证：
 
-- 定向 `swift test --disable-keychain --filter 'RemoteButtonsTests|RemoteDeviceNameIntegrationTests|RemoteProfilePersistenceTests|SettingsPageRegressionTests'`：**314 tests / 4 suites passed**。
-- 公开模式全量 `swift test --disable-keychain`：**1550 tests / 112 suites passed**。
+- 定向 `swift test --disable-keychain --filter 'RemoteButtonsTests|RemoteDeviceNameIntegrationTests|RemoteProfilePersistenceTests|SettingsPageRegressionTests'`：**319 tests / 4 suites passed**。
+- 公开模式全量 `swift test --disable-keychain`：**1567 tests / 113 suites passed**。
 - `scripts/verify-repository-governance.sh` 通过。
 - 新增回归：同型号新设备使用默认映射；自动回退不覆盖持久化首选；临时显示档案合并后仍不写回偏好；持久化偏好指向被并档案时重映射；合并后当前执行内存态立即刷新；冲突档案不合并；第一份和最新合并快照可恢复；单侧自定义动作与交互设置分别保留；迁移生成的按住模式不被自定义时间覆盖；非 nil 默认交互设置不阻止安全合并；无稳定身份的互补档案保持独立；冲突同指纹档案按当前选中项路由；部分默认按键字典不被误判为冲突；BLE 注册不收养另一台设备的 HID 档案；缺失可选字段的旧档案升级后保留映射。
 - 待执行：真实 RC001/RC003 双设备切换、自动回退后重启恢复、旧配置升级后的按键实际执行。
