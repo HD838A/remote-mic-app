@@ -142,7 +142,8 @@
 1. 老版本学过的输入框与滚动区域必须自动出现在「聚焦与翻页」页面，不需要用户重新学习：它们本来就存在同一份 `customApplicationProfiles` 里（`accessibilityTarget`、`scrollRegionTarget`、`focusStrategy`、`focusShortcut`），新页面只是换了一个读取位置，不动键名、不写新键、不改导出格式。升级后 APP 列表的状态必须与旧版一致；处于待验证状态（`portablePendingApplications`）的 APP 继续显示「需要重新验证」。
 2. 按键绑定、方案映射、手势时间的键名与语义保持原样，不做数据迁移。
 3. 配置导出与导入的内容不变；APP 档案仍然是按键配置的一部分，不因为独立成页而变成另一个文件。
-4. 本地化：新增文案必须同时进入中英文表并纳入 `verify-localizations.sh` 校验；`button_mapping.action_filter.application_focus` 与 APP 编辑区内不再使用的键必须从中英文两份表同时移除，`custom_application.focus.scope_note` 保留并改在「聚焦与翻页」页面顶部显示。
+4. 自定义按键配置的保存、迁移、多遥控器隔离和失败恢复以 [`feature/button-mapping/PRODUCT_SPEC.md`](../button-mapping/PRODUCT_SPEC.md#用户数据完整性硬性规范) 的用户数据完整性规范为准；本页任何布局或作用域调整不得改变这些数据边界。
+5. 本地化：新增文案必须同时进入中英文表并纳入 `verify-localizations.sh` 校验；`button_mapping.action_filter.application_focus` 与 APP 编辑区内不再使用的键必须从中英文两份表同时移除，`custom_application.focus.scope_note` 保留并改在「聚焦与翻页」页面顶部显示。
 
 ## 与既有文档、测试的联动（同一 PR 必须完成）
 
