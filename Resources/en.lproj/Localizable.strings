@@ -33,6 +33,12 @@
 "voice_button.status.right_option_enabled" = "The remote voice button will hold Right Option";
 "voice_button.status.right_option_pressed" = "Right Option is held; release the voice button to release it";
 "voice_button.status.right_option_released" = "Right Option released";
+"voice_button.status.right_command_option_enabled" = "The remote voice button will hold Right Command and Right Option together";
+"voice_button.status.right_command_option_pressed" = "Right Command + Right Option are held; release the voice button to release them";
+"voice_button.status.right_command_option_released" = "Right Command + Right Option released";
+"voice_button.status.right_command_option_shift_enabled" = "The remote voice button will hold Right Command, Right Option, and Right Shift together";
+"voice_button.status.right_command_option_shift_pressed" = "Right Command + Right Option + Right Shift are held; release the voice button to release them";
+"voice_button.status.right_command_option_shift_released" = "Right Command + Right Option + Right Shift released";
 "voice_button.status.waiting_for_input" = "Waiting for the text field to be ready";
 "voice_button.status.input_ready" = "Text field ready";
 "voice_button.status.input_unavailable" = "The text field was not ready. Voice input was canceled.";
@@ -397,6 +403,9 @@
 "connection.voice_key.mode.right_command" = "Right Command (⌘)";
 "connection.voice_key.mode.left_option" = "Left Option (⌥)";
 "connection.voice_key.mode.right_option" = "Right Option (⌥)";
+"connection.voice_key.mode.right_command_option" = "Right ⌘ + Right ⌥";
+"connection.voice_key.mode.right_command_option_shift" = "Right ⌘ + Right ⌥ + Right ⇧";
+"connection.voice_key_mode.chord_title" = "Key Combinations";
 "connection.voice_key_mode.help" = "Fn/Globe is the default. Command and Option modes require Accessibility (new name: Device Control and Data Access) permission; many apps merge both sides into a generic modifier, and pressing another key while held may trigger a modifier shortcut.";
 "connection.voice_key_mode.unverified" = "Check Your Voice Trigger Key";
 "connection.voice_key_mode.unverified_detail" = "Open the voice input settings in that app, set its hold-to-talk shortcut to this key, then dictate a sentence to check it. SayAll cannot read that app’s settings, so this step is manual; if no text appears, switch back to Fn/Globe.";

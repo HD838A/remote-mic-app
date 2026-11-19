@@ -488,6 +488,7 @@
   - 2026-08-29 补充 RC003 HID service 晚于 BLE Ready 时的有限恢复：重试完整读取当前 `voiceKeyMode` 的映射流程，不把模式写死为 Fn；Fn 真机已命中 `matched=0 → recovery completed`，Fn 点按与左/右 Command 的恢复自动化已覆盖，真实硬件和第三方 App 仍按测试手册验收。
   - 2026-10-03 清理陈旧标题：主线已支持 Right Option，并重新通过模式持久化、权限门、左右侧注入、Right Option 释放、跨来源 owner 与恢复路径自动化；RC003、移动端入口和第三方语音工具真机矩阵仍未完成，因此父项继续保持未完成。
   - 2026-10-06 增加 Left Option 模式，沿用专用左侧键码与辅助功能权限门；真实遥控器和第三方语音工具矩阵仍待验收。
+  - 2026-11-19 增加右 Command + 右 Option、右 Command + 右 Option + 右 Shift 两个固定组合，按住时顺序按下、松开时反序释放，仍需辅助功能权限且不参与 Fn 点按；自动化与离屏截图已覆盖，RC003 与目标语音工具真机验收待执行，见 `Testing/VoiceKeyModes.md` 用例 10。
 - [x] 语音键短按定位当前 App 聊天输入框
   - 默认关闭，与 Fn 点按模式互斥；短按取消该次短音频并聚焦当前 App，长按继续使用已选语音触发键。
   - Accessibility 通用路径已覆盖 Electron / Chromium 建树重试和安全候选排名；微信仅对精确 Bundle ID 使用有尺寸门禁的窗口相对降级。Lark/飞书、Telegram 和微信已完成 RC003 真机验收。
