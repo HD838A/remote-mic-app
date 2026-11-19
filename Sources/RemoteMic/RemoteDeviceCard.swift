@@ -63,6 +63,35 @@ enum RemoteDeviceCardStatus: String, CaseIterable {
     }
 }
 
+/// Whether the card should offer the explicit audio-output recovery fallback.
+///
+/// This is intentionally narrow: a green/confirming card, a history card, an
+/// Apple non-member card, or a voice failure caused by the component,
+/// membership, HID mapping or the remote link must not show an audio retry
+/// button. The button is only a last-resort recovery for a selected virtual
+/// output that is not ready.
+enum RemoteVoiceRecoveryPolicy {
+    static func shouldOfferAudioRecovery(
+        connected: Bool,
+        history: Bool,
+        voiceRequired: Bool,
+        cardStatus: RemoteDeviceCardStatus,
+        audioOutputReady: Bool,
+        selectedAudioDeviceUID: String,
+        audioStatusKey: String
+    ) -> Bool {
+        guard connected,
+              !history,
+              voiceRequired,
+              cardStatus == .voiceFailed,
+              !audioOutputReady,
+              !selectedAudioDeviceUID.isEmpty
+        else { return false }
+        return audioStatusKey.hasPrefix("audio.output.") &&
+            audioStatusKey != "audio.output.current_format"
+    }
+}
+
 /// What the card's status line is allowed to show right now.
 ///
 /// `isVerifying` keeps the line neutral while the link is already connected but
@@ -139,12 +168,16 @@ struct RemoteDeviceCard: View {
     let showsBattery: Bool
     let enableTitle: String?
     let membershipTitle: String?
+    let voiceRecoveryTitle: String?
+    let voiceRecoveryHelp: String?
     let connectionTitle: String?
     let actionsDisabled: Bool
+    let voiceRecoveryDisabled: Bool
     let connectionDisabled: Bool
     let onSelect: () -> Void
     let onEnable: () -> Void
     let onMembership: () -> Void
+    let onRecoverVoice: () -> Void
     let onConnect: () -> Void
 
     var body: some View {
@@ -186,6 +219,15 @@ struct RemoteDeviceCard: View {
                 )
                 if showsBattery { batteryLabel }
                 Spacer(minLength: 0)
+                if let voiceRecoveryTitle {
+                    Button(voiceRecoveryTitle, action: onRecoverVoice)
+                        .buttonStyle(.borderless)
+                        .foregroundStyle(Color.accentColor)
+                        .fixedSize()
+                        .disabled(voiceRecoveryDisabled)
+                        .help(voiceRecoveryHelp ?? voiceRecoveryTitle)
+                        .accessibilityLabel(voiceRecoveryHelp ?? voiceRecoveryTitle)
+                }
                 if let membershipTitle {
                     Button(membershipTitle, action: onMembership)
                         .buttonStyle(.borderless)

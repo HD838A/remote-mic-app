@@ -590,6 +590,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     @Published private(set) var connectionStatus = LocalizedMessage("bluetooth.status.initializing")
     @Published private(set) var hidStatus = LocalizedMessage("button_mapping.status.disabled")
     @Published private(set) var audioStatus = LocalizedMessage("audio.output.none_selected")
+    @Published private(set) var isRemoteVoiceRecoveryInFlight = false
     @Published private(set) var isStreaming = false
     @Published private(set) var voiceSessionWarningLevel: VoiceSessionWarningLevel = .none
     @Published private(set) var isConnected = false
@@ -8016,6 +8017,53 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         return .resolve(connected: true, buttons: buttons, voice: voice, voiceRequired: voiceRequired)
     }
 
+    func remoteCardCanRecoverAudio(
+        for profile: RemoteDeviceProfile,
+        status: RemoteDeviceCardStatus,
+        history: Bool = false
+    ) -> Bool {
+        let voiceRequired = !profile.model.isAppleSiriRemote || membershipFeature.canUseSiriRemoteVoice
+        return RemoteVoiceRecoveryPolicy.shouldOfferAudioRecovery(
+            connected: isRemoteConnected(profile.id),
+            history: history,
+            voiceRequired: voiceRequired,
+            cardStatus: status,
+            audioOutputReady: isAudioOutputReady,
+            selectedAudioDeviceUID: settings.selectedAudioDeviceUID,
+            audioStatusKey: audioStatus.key
+        )
+    }
+
+    /// Last-resort recovery from the card. Normal voice starts already retry
+    /// the bounded configuration first; this action is for a user who cannot
+    /// start a new voice session.
+    func recoverRemoteVoiceAudio() {
+        guard !isRemoteVoiceRecoveryInFlight else {
+            AppLogger.shared.write(
+                "REMOTE CARD_ACTION phase=cancelled action=recover_voice result=blocked reason=already_in_flight"
+            )
+            return
+        }
+        guard !isStreaming, !isPlayingTestTone else {
+            AppLogger.shared.write(
+                "REMOTE CARD_ACTION phase=cancelled action=recover_voice result=blocked reason=audio_in_use"
+            )
+            return
+        }
+        isRemoteVoiceRecoveryInFlight = true
+        AppLogger.shared.write("REMOTE CARD_ACTION phase=requested action=recover_voice source=user")
+        ensureVirtualAudioOutputReady(reason: "user_requested_voice_recovery") { [weak self] ready in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.isRemoteVoiceRecoveryInFlight = false
+                AppLogger.shared.write(
+                    "REMOTE CARD_ACTION phase=completed action=recover_voice " +
+                        "result=\(ready ? "ready" : "failed")"
+                )
+            }
+        }
+    }
+
     /// Screenshot-only presentation override; production returns nil and lets
     /// the live settling policy decide.
     func remoteCardStatusDisplayOverride(for profileID: UUID) -> RemoteDeviceCardStatusDisplay? {
@@ -8144,7 +8192,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         let status: RemoteDeviceCardStatus
         switch scenario {
         case "buttons": status = .buttonsFailed
-        case "voice", "apple-voice": status = .voiceFailed
+        case "voice", "apple-voice", "audio": status = .voiceFailed
         case "device": status = .deviceFailed
         case "checking": status = .checking
         case "confirming", "verifying": status = .confirming
@@ -8158,10 +8206,15 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         isConnected = !connectedRemoteProfileIDs.isEmpty
         settings.selectedAudioDeviceUID = "screenshot-output"
         audioDevices = [AudioDeviceInfo(id: 0, uid: "screenshot-output", name: "SayAll")]
-        audioStatus = LocalizedMessage("audio.output.current_format", arguments: ["SayAll"])
+        if scenario == "audio" {
+            audioStatus = LocalizedMessage("audio.output.selected_unavailable")
+            isAudioOutputReady = false
+        } else {
+            audioStatus = LocalizedMessage("audio.output.current_format", arguments: ["SayAll"])
+            isAudioOutputReady = true
+        }
         connectionStatus = LocalizedMessage(isConnected ? "common.status.connected" : "connection.history.empty")
         voiceShortcutStatus = LocalizedMessage("connection.history.voice_key_ready")
-        isAudioOutputReady = true
     }
 
     func configureAppleRemoteComponentEntryForSettingsScreenshot(_ state: String) {

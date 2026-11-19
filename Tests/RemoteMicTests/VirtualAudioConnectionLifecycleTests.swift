@@ -776,6 +776,72 @@ struct VirtualAudioConnectionLifecycleTests {
         #expect(!modelSource.contains("audioOutput.configure(deviceUID:"))
     }
 
+    @Test func audioEngineStartReturnsReadyAndFailureOutcomes() {
+        let coordinator = AudioEngineStartCoordinator(timeout: 0.5)
+        let ready = coordinator.start(operationID: 1, attempt: 1) { _ in } cleanup: {}
+        if case .ready = ready {} else { Issue.record("A completed engine start must report ready") }
+
+        let failed = coordinator.start(operationID: 2, attempt: 1) { _ in
+            throw AudioEngineStartTestError.expected
+        } cleanup: {}
+        if case .failed(let error) = failed {
+            #expect(error is AudioEngineStartTestError)
+        } else {
+            Issue.record("A thrown engine start must report failure")
+        }
+    }
+
+    @Test func blockedAudioEngineStartTimesOutAndRunsCleanup() {
+        let queue = DispatchQueue(label: "test.blocked_audio_engine_start")
+        let gate = DispatchSemaphore(value: 0)
+        let cleanupRan = DispatchSemaphore(value: 0)
+        let coordinator = AudioEngineStartCoordinator(
+            timeout: 0.05,
+            queueFactory: { _, _ in queue }
+        )
+        defer { gate.signal() }
+
+        let startedAt = ProcessInfo.processInfo.systemUptime
+        let outcome = coordinator.start(operationID: 1, attempt: 1) { _ in
+            gate.wait()
+        } cleanup: {
+            cleanupRan.signal()
+        }
+
+        if case .timedOut = outcome {} else {
+            Issue.record("A blocked engine preparation must time out")
+        }
+        #expect(ProcessInfo.processInfo.systemUptime - startedAt < 0.5)
+
+        gate.signal()
+        #expect(cleanupRan.wait(timeout: .now() + 1) == .success)
+    }
+
+    @Test func audioConfigurationRetriesOnlyAfterPrepareTimeout() {
+        #expect(AudioConfigurationRetryPolicy.shouldRetry(result: .timedOut, afterAttempt: 1))
+        #expect(!AudioConfigurationRetryPolicy.shouldRetry(result: .timedOut, afterAttempt: 2))
+        #expect(!AudioConfigurationRetryPolicy.shouldRetry(result: .failed, afterAttempt: 1))
+        #expect(!AudioConfigurationRetryPolicy.shouldRetry(result: .ready, afterAttempt: 1))
+    }
+
+    @Test func audioConfigurationUsesBoundedEngineStartAndLogsRetry() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let outputSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/AudioOutput.swift"),
+            encoding: .utf8
+        )
+
+        #expect(outputSource.contains("engineStartCoordinator.start("))
+        #expect(outputSource.contains("AudioConfigurationRetryPolicy.shouldRetry("))
+        #expect(outputSource.contains("AUDIO CONFIGURE retry"))
+        #expect(outputSource.contains("phase=timed_out result=failed reason=prepare_timeout"))
+        #expect(outputSource.contains("AUDIO CONFIGURE cleanup"))
+        #expect(outputSource.contains("attempts=\\(attempts)"))
+    }
+
     @Test @MainActor func blockedAudioQueueDoesNotBlockMainThreadConfigurationStopOrDiagnostics() async {
         let queue = DispatchQueue(label: "test.blocked_audio_engine")
         let gate = DispatchSemaphore(value: 0)
@@ -960,6 +1026,10 @@ struct VirtualAudioConnectionLifecycleTests {
             AudioDeviceDestroyIOProcID(deviceID, ioProcID)
             self.ioProcID = nil
         }
+    }
+
+    private enum AudioEngineStartTestError: Error {
+        case expected
     }
 
     private final class ConfigurationLogRecorder: @unchecked Sendable {
