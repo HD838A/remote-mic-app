@@ -1103,9 +1103,15 @@ final class VirtualAudioOutput {
 
         logStage("connect_mixer")
         let engine = AVAudioEngine()
+        logStage("engine_created")
         let player = AVAudioPlayerNode()
+        logStage("player_created")
+        logStage("attach_player")
         engine.attach(player)
+        logStage("attach_player_completed")
+        logStage("connect_mixer_call")
         engine.connect(player, to: engine.mainMixerNode, format: sourceFormat)
+        logStage("connect_mixer_completed")
 
         logStage("open_output_unit")
         guard let outputUnit = engine.outputNode.audioUnit else {
@@ -1116,6 +1122,7 @@ final class VirtualAudioOutput {
             )
             return .failed
         }
+        logStage("open_output_unit_completed")
         var deviceID = device.id
         logStage("select_device")
         let result = AudioUnitSetProperty(
@@ -1136,6 +1143,7 @@ final class VirtualAudioOutput {
             )
             return .failed
         }
+        logStage("select_device_completed")
 
         let startOutcome = engineStartCoordinator.start(
             operationID: operationID,
@@ -1143,9 +1151,11 @@ final class VirtualAudioOutput {
         ) { token in
             logStage("prepare_engine")
             engine.prepare()
+            logStage("prepare_engine_completed")
             guard !token.isCancelled else { throw AudioEngineStartError.cancelled }
             logStage("start_engine")
             try engine.start()
+            logStage("start_engine_completed")
             guard !token.isCancelled else { throw AudioEngineStartError.cancelled }
         } cleanup: {
             player.stop()
