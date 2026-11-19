@@ -184,6 +184,7 @@ struct PreferredInputSourceMonitorTests {
         var currentInputSourceID: String? = "com.apple.keylayout.ABC"
         var restoredInputSourceIDs: [String] = []
         var logs: [String] = []
+        var pendingRestores: [() -> Void] = []
         let monitor = PreferredInputSourceMonitor(
             voiceTool: { selectedTool },
             prepareInputSource: { _ in
@@ -198,6 +199,7 @@ struct PreferredInputSourceMonitorTests {
             },
             installMonitor: { _ in "monitor" },
             removeMonitor: { _ in },
+            scheduleRestore: { _, work in pendingRestores.append(work) },
             logger: { logs.append($0) }
         )
 
@@ -205,6 +207,8 @@ struct PreferredInputSourceMonitorTests {
         selectedTool = .weixin
         monitor.handleFunctionKeyPressed(true)
         monitor.endVoiceSession()
+        #expect(restoredInputSourceIDs.isEmpty)
+        pendingRestores.forEach { $0() }
 
         #expect(restoredInputSourceIDs == ["com.apple.keylayout.ABC"])
         #expect(logs.contains { $0.contains("reason=target_changed") })
@@ -270,6 +274,199 @@ struct PreferredInputSourceMonitorTests {
         #expect(restoredInputSourceIDs.isEmpty)
         #expect(currentInputSourceID == "com.apple.keylayout.US")
         #expect(logs.contains { $0.contains("reason=source_changed") })
+    }
+
+    /// 现场 2026-11-19：豆包在采集停止后 160–550 ms 才提交文字；SayAll 松键后 13 ms 就切回
+    /// 原输入法时，豆包从未 `Inserting text`，识别结果停在组合态。恢复必须延迟。
+    @Test func explicitVoiceEndDefersRestoreUntilTheVoiceToolCanCommit() {
+        var current: String? = "com.sogou.inputmethod.pinyin"
+        var restored: [String] = []
+        var scheduled: [(TimeInterval, () -> Void)] = []
+        var logs: [String] = []
+        let monitor = PreferredInputSourceMonitor(
+            voiceTool: { .doubao },
+            prepareInputSource: { _ in
+                current = "com.bytedance.inputmethod.doubaoime.pinyin"
+                return .selected
+            },
+            currentInputSourceID: { current },
+            restoreInputSource: { restored.append($0); current = $0; return .selected },
+            waitForInputSourceActivation: { _, _, _ in true },
+            installMonitor: { _ in "monitor" },
+            removeMonitor: { _ in },
+            scheduleRestore: { delay, work in scheduled.append((delay, work)) },
+            logger: { logs.append($0) }
+        )
+
+        #expect(monitor.beginVoiceSession())
+        monitor.endVoiceSession()
+
+        #expect(restored.isEmpty)
+        #expect(current == "com.bytedance.inputmethod.doubaoime.pinyin")
+        #expect(scheduled.count == 1)
+        #expect(scheduled[0].0 == PreferredInputSourceMonitor.explicitRestoreDelay)
+        #expect(PreferredInputSourceMonitor.explicitRestoreDelay >= 1.0)
+        #expect(logs.contains { $0.contains("source_restore phase=deferred") })
+
+        scheduled[0].1()
+        #expect(restored == ["com.sogou.inputmethod.pinyin"])
+        #expect(current == "com.sogou.inputmethod.pinyin")
+        // 再触发同一个回调不会重复恢复。
+        scheduled[0].1()
+        #expect(restored.count == 1)
+    }
+
+    @Test func newVoiceSessionDuringDeferredRestoreKeepsTheVoiceInputSource() {
+        var current: String? = "com.sogou.inputmethod.pinyin"
+        var prepareCount = 0
+        var restored: [String] = []
+        var scheduled: [() -> Void] = []
+        var logs: [String] = []
+        let monitor = PreferredInputSourceMonitor(
+            voiceTool: { .doubao },
+            prepareInputSource: { _ in
+                prepareCount += 1
+                current = "com.bytedance.inputmethod.doubaoime.pinyin"
+                return .selected
+            },
+            currentInputSourceID: { current },
+            restoreInputSource: { restored.append($0); current = $0; return .selected },
+            waitForInputSourceActivation: { _, _, _ in true },
+            installMonitor: { _ in "monitor" },
+            removeMonitor: { _ in },
+            scheduleRestore: { _, work in scheduled.append(work) },
+            logger: { logs.append($0) }
+        )
+
+        #expect(monitor.beginVoiceSession())
+        monitor.endVoiceSession()
+        // 连续会话：等待期间再次按下，不再切走又切回。
+        #expect(monitor.beginVoiceSession())
+        #expect(prepareCount == 1)
+        #expect(logs.contains { $0.contains("phase=cancelled reason=new_voice_session") })
+        scheduled.forEach { $0() }
+        #expect(restored.isEmpty)
+        #expect(current == "com.bytedance.inputmethod.doubaoime.pinyin")
+
+        monitor.endVoiceSession()
+        scheduled.last?()
+        // 最后一次会话结束后只恢复到最初的输入源一次。
+        #expect(restored == ["com.sogou.inputmethod.pinyin"])
+    }
+
+    @Test func deferredRestoreDoesNotOverrideASourceChosenWhileWaiting() {
+        var current: String? = "com.sogou.inputmethod.pinyin"
+        var restored: [String] = []
+        var scheduled: [() -> Void] = []
+        var logs: [String] = []
+        let monitor = PreferredInputSourceMonitor(
+            voiceTool: { .doubao },
+            prepareInputSource: { _ in
+                current = "com.bytedance.inputmethod.doubaoime.pinyin"
+                return .selected
+            },
+            currentInputSourceID: { current },
+            restoreInputSource: { restored.append($0); current = $0; return .selected },
+            waitForInputSourceActivation: { _, _, _ in true },
+            installMonitor: { _ in "monitor" },
+            removeMonitor: { _ in },
+            scheduleRestore: { _, work in scheduled.append(work) },
+            logger: { logs.append($0) }
+        )
+
+        #expect(monitor.beginVoiceSession())
+        monitor.endVoiceSession()
+        current = "com.apple.keylayout.ABC"
+        scheduled.forEach { $0() }
+
+        #expect(restored.isEmpty)
+        #expect(current == "com.apple.keylayout.ABC")
+        #expect(logs.contains { $0.contains("source_restore skipped reason=user_changed") })
+    }
+
+    @Test func stopDuringDeferredRestoreRestoresImmediatelyOnce() {
+        var current: String? = "com.sogou.inputmethod.pinyin"
+        var restored: [String] = []
+        var scheduled: [() -> Void] = []
+        let monitor = PreferredInputSourceMonitor(
+            voiceTool: { .doubao },
+            prepareInputSource: { _ in
+                current = "com.bytedance.inputmethod.doubaoime.pinyin"
+                return .selected
+            },
+            currentInputSourceID: { current },
+            restoreInputSource: { restored.append($0); current = $0; return .selected },
+            waitForInputSourceActivation: { _, _, _ in true },
+            installMonitor: { _ in "monitor" },
+            removeMonitor: { _ in },
+            scheduleRestore: { _, work in scheduled.append(work) },
+            logger: { _ in }
+        )
+
+        #expect(monitor.beginVoiceSession())
+        monitor.endVoiceSession()
+        // 保留显式会话的 stop（例如权限变化重新应用设置）不提前切走。
+        monitor.stop(preservingExplicitVoiceSession: true)
+        #expect(restored.isEmpty)
+        // App 退出等完整 stop 立即恢复，之后到期的回调不再重复恢复。
+        monitor.stop()
+        #expect(restored == ["com.sogou.inputmethod.pinyin"])
+        scheduled.forEach { $0() }
+        #expect(restored.count == 1)
+    }
+
+    @Test func cancelledActivationStillRestoresImmediately() {
+        var current: String? = "com.sogou.inputmethod.pinyin"
+        var restored: [String] = []
+        var scheduledCount = 0
+        var monitor: PreferredInputSourceMonitor!
+        monitor = PreferredInputSourceMonitor(
+            voiceTool: { .doubao },
+            prepareInputSource: { _ in .selected },
+            currentInputSourceID: { current },
+            restoreInputSource: { restored.append($0); current = $0; return .selected },
+            waitForInputSourceActivation: { _, _, _ in
+                // 触发键尚未发出就取消：语音工具没有要提交的文字，直接恢复。
+                monitor.endVoiceSession()
+                return false
+            },
+            installMonitor: { _ in "monitor" },
+            removeMonitor: { _ in },
+            scheduleRestore: { _, _ in scheduledCount += 1 },
+            logger: { _ in }
+        )
+
+        #expect(!monitor.beginVoiceSession())
+        #expect(restored == ["com.sogou.inputmethod.pinyin"])
+        #expect(scheduledCount == 0)
+    }
+
+    @Test func fnKeyReleaseKeepsImmediateRestore() {
+        var handler: ((Bool) -> Void)?
+        var current: String? = "com.sogou.inputmethod.pinyin"
+        var restored: [String] = []
+        var scheduledCount = 0
+        let monitor = PreferredInputSourceMonitor(
+            voiceTool: { .doubao },
+            prepareInputSource: { _ in
+                current = "com.bytedance.inputmethod.doubaoime.pinyin"
+                return .selected
+            },
+            currentInputSourceID: { current },
+            restoreInputSource: { restored.append($0); current = $0; return .selected },
+            installMonitor: { callback in handler = callback; return "monitor" },
+            removeMonitor: { _ in },
+            scheduleRestore: { _, _ in scheduledCount += 1 },
+            logger: { _ in }
+        )
+
+        monitor.start()
+        handler?(true)
+        handler?(false)
+
+        // Fn 绑定路径保持原有即时恢复，不受本次修复影响。
+        #expect(restored == ["com.sogou.inputmethod.pinyin"])
+        #expect(scheduledCount == 0)
     }
 
     @Test func stopRemovesTheMonitorAndClearsThePressedLatch() {
@@ -403,6 +600,7 @@ struct PreferredInputSourceMonitorTests {
         var currentInputSourceID: String? = "com.apple.keylayout.ABC"
         var preparationCount = 0
         var restoredInputSourceIDs: [String] = []
+        var pendingRestores: [() -> Void] = []
         let monitor = PreferredInputSourceMonitor(
             voiceTool: { .weixin },
             prepareInputSource: { _ in
@@ -418,6 +616,7 @@ struct PreferredInputSourceMonitorTests {
             },
             installMonitor: { _ in "monitor" },
             removeMonitor: { _ in },
+            scheduleRestore: { _, work in pendingRestores.append(work) },
             logger: { _ in }
         )
 
@@ -430,6 +629,9 @@ struct PreferredInputSourceMonitorTests {
         #expect(currentInputSourceID == "com.tencent.inputmethod.wetype.pinyin")
 
         monitor.endVoiceSession()
+        // 显式 owner 最后结束时延迟恢复，给语音工具提交文字的时间。
+        #expect(restoredInputSourceIDs.isEmpty)
+        pendingRestores.forEach { $0() }
 
         #expect(restoredInputSourceIDs == ["com.apple.keylayout.ABC"])
         #expect(currentInputSourceID == "com.apple.keylayout.ABC")
@@ -503,6 +705,7 @@ struct PreferredInputSourceMonitorTests {
     @Test func stoppingFunctionMonitoringPreservesAnExplicitCommandVoiceSession() {
         var currentInputSourceID: String? = "com.apple.keylayout.ABC"
         var restoredInputSourceIDs: [String] = []
+        var pendingRestores: [() -> Void] = []
         let monitor = PreferredInputSourceMonitor(
             voiceTool: { .doubao },
             prepareInputSource: { _ in
@@ -517,6 +720,7 @@ struct PreferredInputSourceMonitorTests {
             },
             installMonitor: { _ in "monitor" },
             removeMonitor: { _ in },
+            scheduleRestore: { _, work in pendingRestores.append(work) },
             logger: { _ in }
         )
 
@@ -529,6 +733,8 @@ struct PreferredInputSourceMonitorTests {
         #expect(!monitor.functionKeyIsPressedForDiagnostics)
 
         monitor.endVoiceSession()
+        #expect(restoredInputSourceIDs.isEmpty)
+        pendingRestores.forEach { $0() }
 
         #expect(restoredInputSourceIDs == ["com.apple.keylayout.ABC"])
         #expect(currentInputSourceID == "com.apple.keylayout.ABC")
@@ -562,6 +768,7 @@ struct PreferredInputSourceMonitorTests {
         defer { state.monitor.stop(); state.monitor = nil }
         var activationTimer: Timer?
         defer { activationTimer?.invalidate() }
+        var pendingRestores: [() -> Void] = []
         state.monitor = PreferredInputSourceMonitor(
             voiceTool: { .doubao },
             prepareInputSource: { _ in
@@ -584,6 +791,7 @@ struct PreferredInputSourceMonitorTests {
             },
             installMonitor: { _ in "monitor" },
             removeMonitor: { _ in },
+            scheduleRestore: { _, work in pendingRestores.append(work) },
             logger: { _ in }
         )
 
@@ -596,6 +804,8 @@ struct PreferredInputSourceMonitorTests {
             #expect(!state.monitor.functionKeyIsPressedForDiagnostics)
             state.monitor.endVoiceSession()
             activationTimer?.invalidate()
+            pendingRestores.forEach { $0() }
+            pendingRestores.removeAll()
             #expect(state.current == state.original)
         }
         #expect(state.restored == Array(repeating: state.original, count: 3))

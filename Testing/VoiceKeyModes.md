@@ -277,3 +277,30 @@
 - 自动化：`VoiceKeyModeTests` 新增组合键键码与修饰位、按下顺序与反序释放、部分按下失败回滚、释放部分失败继续、权限门、配置往返与持久化、所有模式本地化完整性；`MacMicrophoneInputTests` 新增组合键物理边沿（全部按下才算按下、任一松开即松开、左 Option 不替代右 Option、忽略合成事件）。公开模式全量 1531 tests 通过。
 - 离屏截图：中文/英文 × 浅色/深色 × 单键选中/组合选中，`1067 × 760`，原件位于仓库外 `~/Pictures/SayAllEvidence/voice-key-chords-20261119/`。
 - 真实 RC003 与第三方语音工具：未执行，待现场验收。
+
+## 回归：修饰键模式松键后延迟恢复输入源
+
+适用分支：`local/main-integration`。Bug 记录：[`Bugs/2026-11-19-modifier-voice-restore-before-commit.md`](../Bugs/2026-11-19-modifier-voice-restore-before-commit.md)。
+
+### 前置
+
+- 日常输入法设为搜狗（或任意非语音输入法），语音工具选豆包；豆包“按住说话”设为与 SayAll 相同的修饰键或组合。
+
+### 步骤
+
+1. 选择 `右 ⌘ + 右 ⌥`，在任意 App 输入框按住遥控器语音键说一句话后松开。
+   - 预期：文字进入输入框，不停留在豆包组合态；松开后约 1.5 秒内菜单栏输入法仍为豆包，之后切回搜狗。日志依次出现 `source_restore phase=deferred ... delay_ms=1500` 与 `source_restore result=selected reason=voice_session_end`。
+2. 对左/右 Command、左/右 Option 单键模式重复步骤 1。
+3. 连续快速说三句（每句间隔小于 1.5 秒）。
+   - 预期：每句都上屏；输入法不在豆包和搜狗之间来回闪烁；日志出现 `phase=cancelled reason=new_voice_session`，最后一句结束约 1.5 秒后只恢复一次。
+4. 松键后立即手动切换到第三种输入法（例如 ABC）。
+   - 预期：到期后不覆盖为搜狗，日志 `source_restore skipped reason=user_changed`。
+5. 改回 Fn 模式，执行用例 2B。
+   - 预期：Fn 行为不变，松键后立即恢复输入源。
+
+### 失败判定
+
+- 修饰键或组合模式下识别结果仍停在组合态，或松键后立即切回原输入法。
+- 连续会话出现输入法闪烁、恢复次数多于一次或最终未恢复。
+- 等待期间用户手动选择的输入法被覆盖。
+- 首字延迟增加、尾字丢失，或 Fn 模式行为改变。
