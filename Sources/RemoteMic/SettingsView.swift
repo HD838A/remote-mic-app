@@ -3758,6 +3758,11 @@ struct SettingsView: View {
         let status = model.remoteCardStatus(for: profile, history: history)
         let recovering = status == .connecting
         let appleNeedsEnable = profile.model.isAppleSiriRemote && model.siriRemoteActivationNeeded
+        let canRecoverVoice = !appleNeedsEnable && model.remoteCardCanRecoverAudio(
+            for: profile,
+            status: status,
+            history: history
+        )
         let level = connected ? model.batteryLevel(for: profile.id) : nil
         let power = connected ? model.powerState(for: profile.id) : nil
         return RemoteDeviceCard(
@@ -3772,8 +3777,12 @@ struct SettingsView: View {
                 && RemoteBatteryPresentationPolicy.shouldShowBattery(model: profile.model, level: level, powerState: power),
             enableTitle: appleNeedsEnable ? localization.text("siri_remote.activation.enable") : nil,
             membershipTitle: requiresSiriRemoteMembership(for: profile) ? localization.text("remote.card.open_membership") : nil,
+            voiceRecoveryTitle: canRecoverVoice ? localization.text("remote.card.recover_voice") : nil,
             connectionTitle: history ? localization.text(recovering ? "connection.history.cancel" : "connection.history.connect") : nil,
             actionsDisabled: model.isStreaming || model.activePhysicalVoiceControlSource == .siriRemote,
+            voiceRecoveryDisabled: model.isStreaming
+                || model.activePhysicalVoiceControlSource == .siriRemote
+                || model.isRemoteVoiceRecoveryInFlight,
             connectionDisabled: !recovering && !model.canConnectRemoteProfile(profile.id),
             onSelect: {
                 model.noteManualRemoteProfileSelection()
@@ -3784,6 +3793,7 @@ struct SettingsView: View {
                 selectedSection = .membership
                 membershipFeature.refreshIfNeeded()
             },
+            onRecoverVoice: { model.recoverRemoteVoiceAudio() },
             onConnect: {
                 if recovering { model.cancelRemoteConnection(profile.id) }
                 else { model.connectRemoteProfile(profile.id) }

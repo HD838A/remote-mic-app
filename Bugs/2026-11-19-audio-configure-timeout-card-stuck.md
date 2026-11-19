@@ -89,6 +89,7 @@ AUDIO CONFIGURE operation_id=1 phase=applying result=pending stage=prepare_engin
 - 新增 `AudioEngineStartCoordinator`：把 `AVAudioEngine.prepare()` 和 `start()` 放到独立工作队列，最多等待 2 秒。
 - 超时后取消启动令牌，并让孤立引擎在工作线程返回后自行停止；共享音频队列不再被 Core Audio 调用永久占用。
 - 配置超时只允许重试一次。重试使用新的引擎和新工作队列，成功后正常恢复卡片；两次都失败时记录明确失败并让卡片进入“语音异常”，不再无限“状态确认中”。
+- 卡片在“已连接 + 语音必需 + 已选择输出设备 + 音频输出明确失败”且当前状态为“语音异常”时，第三行显示“恢复语音”备用入口。点击后调用 `recoverRemoteVoiceAudio()`，重新执行一轮有界配置；语音或测试音进行中禁用，不替代正常语音启动路径。
 - 正常路径不改变：成功后仍在原 `engineQueue` 上启动 player、提交状态和观察配置变化；不 flush、不丢弃尾音，不改变语音会话时序。
 
 新增脱敏日志：
@@ -99,6 +100,9 @@ AUDIO CONFIGURE cleanup operation_id=<id> attempt=<n> phase=completed result=sto
 AUDIO CONFIGURE retry operation_id=<id> attempt=<n> reason=prepare_timeout queue=audio_output
 AUDIO CONFIGURE completed operation_id=<id> phase=completed result=ready|failed reason=ready|configure_failed|configure_timeout attempts=<n>
 AUDIO ERROR start_failed ... operation_id=<id> attempt=<n>
+REMOTE CARD_ACTION phase=requested action=recover_voice source=user
+REMOTE CARD_ACTION phase=completed action=recover_voice result=ready|failed
+REMOTE CARD_ACTION phase=cancelled action=recover_voice result=blocked reason=<stable_reason>
 ```
 
 日志沿用进程内操作号和 attempt，不包含设备身份、用户路径、音频正文或第三方 App 私有状态。
@@ -108,7 +112,8 @@ AUDIO ERROR start_failed ... operation_id=<id> attempt=<n>
 自动化：
 
 - `SAYALL_PRIVATE_PLATFORM_MODE=public swift test --disable-keychain --scratch-path .build-public --filter VirtualAudioConnectionLifecycleTests`：51 项通过。
-- 公开全量 `SAYALL_PRIVATE_PLATFORM_MODE=public swift test --disable-keychain --scratch-path .build-public`：1527 项、112 个套件通过。
+- 卡片、本地化、设置页和音频定向回归：`RemoteDeviceCardStatusTests|LocalizationTests|VirtualAudioConnectionLifecycleTests|SettingsPageRegressionTests`，158 项 / 4 个套件通过。
+- 公开全量 `SAYALL_PRIVATE_PLATFORM_MODE=public swift test --disable-keychain --scratch-path .build-public`：1527 项、112 个套件通过（本次按钮改动后的全量结果待重跑）。
 - 公开 Release 构建 `SAYALL_PRIVATE_PLATFORM_MODE=public swift build --disable-keychain --scratch-path .build-public -c release`：通过。
 - `scripts/verify-repository-governance.sh`：通过。
 - `scripts/check-repository-boundaries.sh`：`REPOSITORY BOUNDARY PASS`。
@@ -118,7 +123,9 @@ AUDIO ERROR start_failed ... operation_id=<id> attempt=<n>
   - 启动抛错返回 `.failed`；
   - 工作线程阻塞时 50 ms 测试超时返回 `.timedOut`，调用方不被阻塞，释放后 cleanup 执行；
   - 只有 `timedOut` 允许重试一次，`failed` 和 `ready` 不重试；
-  - 生产源码接线和 `prepare_timeout` 日志字段检查。
+  - 生产源码接线和 `prepare_timeout` 日志字段检查；
+  - “恢复语音”只在已连接、语音必需、已选择输出且音频输出明确失败时出现；组件、会员、映射和链路失败不出现；
+  - 中英文按钮文案与设置页接线检查。
 
 真实环境边界：
 
