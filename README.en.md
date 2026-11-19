@@ -222,7 +222,7 @@ SayAll does not upload or store voice, does not change the system default input 
 1. Quit SayAll.
 2. Download and run the architecture-matching uninstaller whose name contains the current `VERSION-BUILD` from the same GitHub Release.
 
-Uninstalling the compatible microphone does not change or remove BlackHole.
+The uninstaller also clears the Siri Remote component installation receipt and removes the current user's Dock item that points to the uninstalled app. It does not change or remove BlackHole, app settings, logs, history, or recordings.
 
 When installing over an older release, the installer recognizes legacy `/Applications/Remote Mic.app` and `/Applications/无线麦.app` bundles only when their bundle identifier is `com.hd838a.RemoteMic`. After the new **SayAll.app** has been installed and verified, matching legacy bundles are moved to Trash with collision-safe names so they remain recoverable. If Trash is unavailable, or a bundle at either legacy path is unrelated, it is left untouched.
 

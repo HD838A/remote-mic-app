@@ -418,8 +418,20 @@ case "$MODE" in
     /usr/bin/grep -Fq 'hci_state' "$EXPANDED/Scripts/postinstall"
     /usr/bin/grep -Fq '/bin/mv -n -- "${ITEM_SOURCES[$index]}" "${ITEM_DESTINATIONS[$index]}"' \
       "$EXPANDED/Scripts/postinstall"
-    /usr/bin/grep -Fq 'BlackHole and local settings were not changed.' \
+    /usr/bin/grep -Fq 'BlackHole, app local settings, logs, and user data were not changed.' \
       "$EXPANDED/Scripts/postinstall"
+    /usr/bin/grep -Fq 'SIRI_REMOTE_PACKAGE_ID="com.hd838a.RemoteMic.siri-remote"' \
+      "$EXPANDED/Scripts/postinstall"
+    /usr/bin/grep -Fq -- '--forget' "$EXPANDED/Scripts/postinstall"
+    /usr/bin/grep -Fq 'cleanup_siri_receipt' "$EXPANDED/Scripts/postinstall"
+    /usr/bin/grep -Fq 'persistent-apps' "$EXPANDED/Scripts/postinstall"
+    /usr/bin/grep -Fq 'cleanup_dock_tiles' "$EXPANDED/Scripts/postinstall"
+    /usr/bin/grep -Fq '/usr/bin/killall Dock' "$EXPANDED/Scripts/postinstall"
+    if /usr/bin/grep -Eq 'Library/Preferences|Library/Logs' \
+        "$EXPANDED/Scripts/postinstall"; then
+      print -u2 "uninstaller must not target app preferences or logs"
+      exit 1
+    fi
     # Same guard as the installer: the audio-service restart after the driver
     # was moved to Trash must never abort the uninstaller.
     /usr/bin/grep -Fq '/usr/bin/pgrep -qx coreaudiod' "$EXPANDED/Scripts/postinstall"

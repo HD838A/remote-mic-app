@@ -271,6 +271,7 @@
   - 2026-09-06 安装器发行品牌统一为 SayAll：Apple Silicon 使用 `Install SayAll.pkg` / `Uninstall SayAll.pkg`，Intel 使用带 `Intel` 后缀的对应名称，Installer.app 标题同步为 SayAll；公开 Release 资产使用 `SayAll-VERSION-BUILD-...` 命名。历史 Bundle ID、Package ID、receipt、DMG/ZIP 名称和旧 App 路径保持不变，避免破坏升级兼容。
   - 2026-08-29 修复 Issue #101：`Uninstall Remote Mic.pkg` 不再只删除兼容麦克风，而是在 Bundle ID 校验后把 canonical/历史 App 与 `MiRemoteV 2ch` 一起移入可恢复的 macOS 废纸篓；废纸篓或移动失败时停止并回滚本轮已移动项。安装器替换旧驱动时也保留备份，失败即恢复，成功后才移入 root 废纸篓。本地设置和 BlackHole 明确保留。代码与伪目标卷验证完成；由于仍需最终 Developer ID 候选在 Apple Silicon/Intel 上完成管理员授权、真实废纸篓和取消/失败矩阵，本总任务暂不勾选。
   - 2026-09-06 安装、升级与卸载流程已纳入 Apple Remote HCI 系统服务；安装前会核验既有 Helper 签名标识与 LaunchDaemon 的 Label、可执行路径，无法确认归属时停止覆盖。静态门禁覆盖服务恢复、加载、卸载移入废纸篓和状态目录回滚；真实管理员授权与覆盖升级仍随最终测试包验收。
+  - 2026-11-20 卸载成功后按条件清除 `com.hd838a.RemoteMic.siri-remote` 收据，并移除当前控制台用户 Dock 中指向本次被卸载 App 的固定项；App 本地设置、日志、历史、录音和其他用户数据不进入卸载目标。新增伪卷/偏好回放和 `BuildSigningTests` CI 入口，`test-installer-architecture-guard.sh` 通过；真实签名 PKG、Installer 管理员授权、双账户、真实 Dock 与 Intel Ventura 待验收，本总任务保持未完成。
   - 2026-10-04 已增加 App 更新同步升级 helper 的源码候选：App 携带系统安装副本及签名声明，准备音频前检查已安装和运行版本，同版本不请求安装。已补主动启用门禁：默认关闭，后台禁止交互授权，Cancel 后的等待状态跨重启保留；用户主动启用或重试才请求授权。完整私有集成 868 项与社区 818 项全部通过；上一轮发布 fixture 的 SIGPIPE 失败保留为历史记录。真实旧 PKG 迁移、Sparkle、管理员授权、回滚与实体语音仍待验收，父项保持未完成。启用和重试入口已移入遥控器卡片；启用后不提供停用入口；卡片最多三行，无对勾，启用按钮位于右侧垂直居中；卡片不增加说明文字，遥控器图上方不增加元素。步骤见 `Testing/AppleRemoteHelperUpgrade.html`。
 - [ ] 将虚拟麦克风新安装名称设为 `SayAll`，保留旧用户名称
   - 新安装显示 `SayAll`；已有 `MiRemoteV 2ch` 保持旧名，修复和更新也使用旧名称负载。主 UID、Box UID、Model UID、Bundle ID、安装路径、包 ID 和已保存选择不变。同一系统仅部署一个驱动实例。

@@ -1438,6 +1438,29 @@ struct BuildSigningTests {
         }
     }
 
+    @Test func uninstallerCleanupFixturePasses() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/zsh")
+        process.arguments = [
+            root.appendingPathComponent("scripts/test-uninstaller-cleanup.sh").path,
+        ]
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = pipe
+        try process.run()
+        let output = String(
+            decoding: pipe.fileHandleForReading.readDataToEndOfFile(),
+            as: UTF8.self
+        )
+        process.waitUntilExit()
+        #expect(process.terminationStatus == 0, "\(output)")
+        #expect(output.contains("UNINSTALLER CLEANUP TEST PASS"))
+    }
+
     /// Extracts the shipped `restart_audio_service` function from a script and
     /// runs it under `set -euo pipefail` with PATH stubs for pgrep and killall
     /// whose exit codes are injected. Returns the exit status and combined output.
