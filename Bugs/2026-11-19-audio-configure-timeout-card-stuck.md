@@ -113,11 +113,12 @@ REMOTE CARD_ACTION phase=cancelled action=recover_voice result=blocked reason=<s
 
 - `SAYALL_PRIVATE_PLATFORM_MODE=public swift test --disable-keychain --scratch-path .build-public --filter VirtualAudioConnectionLifecycleTests`：51 项通过。
 - 卡片、本地化、设置页和音频定向回归：`RemoteDeviceCardStatusTests|LocalizationTests|VirtualAudioConnectionLifecycleTests|SettingsPageRegressionTests`，158 项 / 4 个套件通过。
-- 公开全量 `SAYALL_PRIVATE_PLATFORM_MODE=public swift test --disable-keychain --scratch-path .build-public`：1527 项、112 个套件通过（本次按钮改动后的全量结果待重跑）。
+- 公开全量 `SAYALL_PRIVATE_PLATFORM_MODE=public swift test --disable-keychain --scratch-path .build-public`：1529 项、112 个套件通过。
 - 公开 Release 构建 `SAYALL_PRIVATE_PLATFORM_MODE=public swift build --disable-keychain --scratch-path .build-public -c release`：通过。
 - `scripts/verify-repository-governance.sh`：通过。
 - `scripts/check-repository-boundaries.sh`：`REPOSITORY BOUNDARY PASS`。
-- 本地公开测试包 `2.0.8 (406)`，源码 `a8f042d2`（其后仅本文档修订），安装到 `~/Applications/SayAll.app`。首次启动 `AUDIO READY` 69 ms，完全退出后重新启动 `AUDIO READY` 64 ms，均为 `attempt=1`，没有 timeout/retry；日志新增 `attempt=` 和 `attempts=` 字段正确。
+- 本地公开测试包 `2.0.8 (408)`，源码 `46e40d3a`（与 PR 代码树一致，其后仅文档修订），安装到 `~/Applications/SayAll.app`。首次启动 `AUDIO READY` 69 ms，完全退出后重新启动 `AUDIO READY` 64 ms，均为 `attempt=1`，没有 timeout/retry；日志新增 `attempt=` 和 `attempts=` 字段正确。
+- 生产 `SettingsView` 离屏截图夹具 `CARD_SCENARIO=audio`：中文/英文、浅色/深色共 4 张 `1067 × 760`（Retina `2134 × 1520`），“恢复语音”/“Restore”按钮与状态文字无截断，已附 PR；截图只证明静态布局，不替代真实点击和音频恢复验收。
 - 新增覆盖：
   - 启动成功返回 `.ready`；
   - 启动抛错返回 `.failed`；
