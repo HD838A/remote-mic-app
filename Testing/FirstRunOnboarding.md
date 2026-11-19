@@ -9,9 +9,9 @@
 ### 自动化与构建
 
 - `./scripts/test.sh`：通过，`RESULT passed=50 failed=0`；新增的语音流策略断言通过，应用 `swift build --disable-keychain` 成功。
-- `xcrun swift test --disable-keychain --filter OnboardingFlowTests`：本机仅安装 Command Line Tools，缺少完整 XCTest 和 Testing/Foundation cross-import overlay，未能运行；等待 CI 或完整 Xcode。
+- `xcrun swift test --disable-keychain --filter OnboardingFlowTests`：本机仅安装 Command Line Tools，缺少完整 XCTest 和 Testing/Foundation cross-import overlay，未能运行；该用例由 CI 执行。
 - `SAYALL_PRIVATE_PLATFORM_MODE=public ./scripts/build-app.sh`：通过（`Build complete! (163.34s)`，`SANITIZE RELEASE PATHS result=passed`，ad-hoc 签名）。
-- 完整 `swift test --disable-keychain` 或 CI：待运行。
+- CI：Public Swift tests and dual-architecture build、Apple Silicon、Intel Ventura、Repository governance 全部通过。运行：https://github.com/HD838A/remote-mic-app/actions/runs/44472820670
 - 回归覆盖点：`isStreaming=false` 且来源已清空时仍执行 `endVoiceAttempt()`；开始语音仍要求来源被接受；未开始的松键事件不产生动作。
 
 ### 生产页面检查与截图
@@ -24,6 +24,7 @@
 - 使用小米 RC003 或 RC001、`MiRemoteV 2ch` 和微信输入法完成一次真实语音测试。
 - 预期：松键后侧边“语音键已按下并松开”完成，外部工具文字出现，页面允许进入 `controls`。
 - 失败判定：日志仍显示 `ONBOARDING TRANSCRIPT_TARGET ... phase=recording`，或侧边第一项不完成，或应用不进入文字等待。
+- 2026-11-19 实测（Build 176）：attempt 1 通过，`audio_received/scheduled/played=20400`，`focus_loss_count=0`，`transcript_wait_ms=728`；随后 `controls` 和 `complete` 通过，Onboarding 完成。该构建使用与 PR 相同行为修复的最小补丁；策略重构由 CI 覆盖。
 
 ### 验证边界
 

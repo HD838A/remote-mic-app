@@ -2,7 +2,7 @@
 
 ## 状态
 
-代码修复、`scripts/test.sh` 自检和本地构建已完成；完整 Swift Testing 受本机仅安装 Command Line Tools 限制未能运行，等待 CI 或完整 Xcode。真实小米遥控器、微信输入法和完整 Onboarding 旅程验收待完成。Draft PR 待创建。
+代码修复、自检、Release 构建、CI 和真实设备验收已完成；Onboarding 完成流程截图待补，PR 保持 Draft。
 
 ## 复现条件
 
@@ -69,9 +69,11 @@ guard selectedControlAcceptsVoice(model.activeVoiceSource) else { return }
 ## 验证
 
 - `./scripts/test.sh`：通过，`RESULT passed=50 failed=0`；新增的松键结束和开始来源检查均通过，应用 `swift build --disable-keychain` 成功。
-- `xcrun swift test --disable-keychain --filter OnboardingFlowTests`：本地未运行成功。当前机器只安装 Command Line Tools，缺少完整 XCTest 和 Testing/Foundation cross-import overlay；已补充 `OnboardingFlowTests` 回归用例，等待 CI 或完整 Xcode 执行。
+- `xcrun swift test --disable-keychain --filter OnboardingFlowTests`：本地未运行成功。当前机器只安装 Command Line Tools，缺少完整 XCTest 和 Testing/Foundation cross-import overlay；已补充 `OnboardingFlowTests` 回归用例，由 CI 执行。
 - Release 构建：`SAYALL_PRIVATE_PLATFORM_MODE=public ./scripts/build-app.sh` 通过（`Build complete! (163.34s)`，`SANITIZE RELEASE PATHS result=passed`，ad-hoc 签名）。
-- 真实设备验收：待使用 RC003 + `MiRemoteV 2ch` + 微信输入法完成一次语音测试，确认松键后侧边第一项完成、文字出现、进入下一流程。
+- CI：Public Swift tests and dual-architecture build、Apple Silicon、Intel Ventura、Repository governance 全部通过。运行：https://github.com/HD838A/remote-mic-app/actions/runs/44472820670
+- 真实设备验收（Build 176，行为修复版本）：语音尝试 attempt 1 通过；`audio_received/scheduled/played=20400`，`interrupted/pending=0`，`focus_loss_count=0`，`transcript_wait_ms=728`；随后 `controls` 和 `complete` 步骤通过，Onboarding 已完成。
+- 验收边界：Build 176 使用与 PR 相同的行为修复的最小补丁；PR 的 `OnboardingVoiceStreamPolicy` 重构由 CI 和自检覆盖，未再单独用 PR 构建重跑真机。
 - 自动化边界：自检和单元测试覆盖状态转换策略；真实遥控器弱信号、微信输入法上屏时机和完整旅程仍需真机验收。
 
 ## 关联
