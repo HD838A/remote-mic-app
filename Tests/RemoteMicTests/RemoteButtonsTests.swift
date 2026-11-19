@@ -2889,7 +2889,7 @@ struct RemoteButtonsTests {
 
         press(.menu)
         // 配置了双击后，单击动作要等双击窗口结束才提交，会话此时才真正打开。
-        scheduler.advance(toMilliseconds: 300)
+        scheduler.advance(toMilliseconds: HIDRemoteTiming.doubleClickMilliseconds)
         press(.menu)
 
         #expect(performedActions.isEmpty)
@@ -2943,6 +2943,65 @@ struct RemoteButtonsTests {
         ])
         #expect(posted.map { $0.1 } == [true, true, false, true, false])
         #expect(posted.allSatisfy { $0.2.contains(.maskCommand) })
+    }
+
+    @Test func appSwitcherSessionEndsOnDelayedActionFromBeforeSession() throws {
+        let suiteName = "RemoteButtonsTests.appSwitcherLateAction.\(UUID().uuidString)"
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = AppSettings(defaults: defaults)
+        settings.customMappingEnabled = true
+        settings.setAction(.appSwitcher, for: .menu)
+        settings.setAction(.showDesktop, for: .home)
+        settings.setAction(.escape, for: .home, trigger: .doubleClick)
+        let profileID = try #require(settings.selectedRemoteProfileID)
+        let scheduler = RemoteButtonsTestScheduler()
+        var posted: [(CGKeyCode, Bool, CGEventFlags)] = []
+        var performedActions: [ButtonAction] = []
+        var diagnostics: [String] = []
+        let monitor = HIDRemoteMonitor(
+            settings: settings,
+            profileID: profileID,
+            ownsEventSuppressor: false,
+            scheduler: scheduler,
+            runtimePermissions: { true },
+            actionPerformer: { _, _, configured in
+                performedActions.append(configured.action)
+                return true
+            },
+            frontmostBundleIdentifier: { PresetApplication.codex.bundleIdentifier },
+            diagnosticLogger: { diagnostics.append($0) },
+            appSwitcherKeyStatePoster: { code, isDown, flags in
+                posted.append((code, isDown, flags))
+                return true
+            },
+            appSwitcherDismissObserverInstaller: { _ in {} }
+        )
+        monitor.connectSimulatedDevice(fingerprint: UUID().uuidString, profileID: profileID)
+
+        func press(_ button: RemoteButton) {
+            monitor.handleSimulatedReport(
+                reportID: 1,
+                data: Data([UInt8(button.hidUsage), 0, 0, 0, 0, 0])
+            )
+            monitor.handleSimulatedReport(reportID: 1, data: Data(repeating: 0, count: 6))
+        }
+
+        // home 配置了双击，单击要等双击窗口结束才提交；在此之前切换器会话已经打开。
+        press(.home)
+        press(.menu)
+        let countAfterEntry = posted.count
+        scheduler.advance(toMilliseconds: HIDRemoteTiming.doubleClickMilliseconds)
+
+        // 迟到动作只结束会话，不执行 home 的 showDesktop。
+        #expect(performedActions.isEmpty)
+        #expect(posted.count == countAfterEntry + 3)
+        #expect(posted.suffix(3).map { $0.0 } == [
+            53, 53, KeyboardInjector.leftCommandKeyCode,
+        ])
+        #expect(diagnostics.contains {
+            $0.contains("ended reason=unrelated_action_\(ButtonAction.showDesktop.rawValue)")
+        })
     }
 
     @Test func customShortcutPostsRecordedCombinationAndSingleKeyAndRequiresAccessibility() {

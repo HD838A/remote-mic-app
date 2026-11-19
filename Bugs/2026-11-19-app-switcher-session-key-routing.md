@@ -39,11 +39,13 @@
 
 ## 验证
 
-自动化（`Tests/RemoteMicTests/HardwareSimulationIntegrationTests.swift`）：
+自动化（`Tests/RemoteMicTests/RemoteButtonsTests.swift`）：
 
 - `appSwitcherSessionUnboundKeyEndsSessionWithoutPerformingItsAction`：未绑定的 TV 结束会话，事件序列为 `⌘↓ / Tab↓ / Tab↑ / Esc↓ / Esc↑ / ⌘↑`，Escape 动作不执行。
-- `appSwitcherSessionBoundKeyStillAdvancesWhenOtherTriggersConfigured`：单击绑定切换器、双击和长按绑定其他动作时，会话内第二次单击仍发送 Tab。
-- `appSwitcherSessionTVAdvancesWhenBoundToSwitcher`：TV 绑定切换器时仍发送 Tab。
+- `appSwitcherSessionBindingsIgnoreDoubleAndLongTriggers`：单击绑定切换器、双击和长按绑定其他动作时，会话内第二次单击仍发送 Tab。
+- `appSwitcherSessionTVAdvancesOnlyWhenBoundToSwitcher`：TV 绑定切换器时仍发送 Tab。
+- `appSwitcherSessionEndsOnUnboundButtonsWithoutPerformingThem`（改写原「全部吞掉」用例）：音量键结束会话并释放 Command，原动作不执行。
+- `appSwitcherSessionEndsOnDelayedActionFromBeforeSession`：会话开始前按下、双击窗口结束后才提交的动作只结束会话，不执行 `showDesktop`。
 
 现场验收按 `Testing/AppSwitcherRemoteControl.md` 用例 2、15、16 执行；真实 RC003、系统切换器与 Intel / Apple Silicon 两类系统仍待验证。
 
@@ -51,5 +53,7 @@
 
 - 自动化只证明事件序列和修饰标志，不证明 WindowServer 中切换器高亮与最终前台 App。
 - 绑定键同时配置双击时，进入会话仍要等 300ms 双击窗口结束；本次没有改变进入延迟。
+- 「绑定切换器」按单击动作判断：只把切换器绑在双击或长按上的按键，会话中单击仍按未绑定键处理（结束会话）。
 - 音量键在会话中结束会话，但原生音量事件仍由系统处理，音量会同时变化。
+- 语音键不经过 `RemoteButton` 路由（系统 Fn 或遥控器语音 usage），本次不结束会话；提案里「语音键退出」需要单独的语音链路设计。
 - 苹果遥控器走 `BridgeAppModel` 的独立会话路径，本次未改动其 `TV` 特例。
