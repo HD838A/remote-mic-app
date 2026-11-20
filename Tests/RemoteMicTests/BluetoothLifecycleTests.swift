@@ -916,4 +916,108 @@ struct BluetoothLifecycleTests {
         #expect(!XiaomiVoiceRemoteNameMatcher.matches("MI RC2"))
         #expect(!XiaomiVoiceRemoteNameMatcher.matches("小米"))
     }
+
+    @Test func staleBluetoothIdentityIsReplacedOnlyForAUniqueHIDMatch() {
+        let current = UUID()
+        let old = UUID()
+        let fingerprint = RemoteIdentityFingerprint.fingerprint(for: current)
+        let mappings = RemoteDeviceMappings(
+            buttonBindings: [:],
+            buttonShortcuts: [:],
+            secondaryButtonBindings: [:]
+        )
+        let profile = RemoteDeviceProfile(
+            model: .rc003,
+            bluetoothIdentifier: old,
+            hidFingerprint: fingerprint,
+            mappings: mappings
+        )
+
+        let match = RemoteIdentityReconciliationPolicy.replacement(
+            for: current,
+            hidFingerprint: fingerprint,
+            profiles: [profile]
+        )
+        #expect(match == .init(profileID: profile.id, previousIdentifier: old))
+
+        // 新 identifier 已被另一条档案占用时不能抢。
+        let owner = RemoteDeviceProfile(
+            model: .rc001,
+            bluetoothIdentifier: current,
+            hidFingerprint: "different",
+            mappings: mappings
+        )
+        #expect(RemoteIdentityReconciliationPolicy.replacement(
+            for: current,
+            hidFingerprint: fingerprint,
+            profiles: [profile, owner]
+        ) == nil)
+
+        // 重复 HID 指纹说明身份不唯一，不能自动替换。
+        let duplicate = RemoteDeviceProfile(
+            model: .rc003,
+            bluetoothIdentifier: UUID(),
+            hidFingerprint: fingerprint,
+            mappings: mappings
+        )
+        #expect(RemoteIdentityReconciliationPolicy.replacement(
+            for: current,
+            hidFingerprint: fingerprint,
+            profiles: [profile, duplicate]
+        ) == nil)
+
+        // 私有适配器档案不属于小米 BLE 链路。
+        let privateProfile = RemoteDeviceProfile(
+            model: .appleSiriRemoteA2854,
+            bluetoothIdentifier: old,
+            hidFingerprint: fingerprint,
+            mappings: mappings
+        )
+        #expect(RemoteIdentityReconciliationPolicy.replacement(
+            for: current,
+            hidFingerprint: fingerprint,
+            profiles: [privateProfile]
+        ) == nil)
+
+        // 已是当前 identifier 或没有 BLE 字段时不需要替换。
+        #expect(RemoteIdentityReconciliationPolicy.replacement(
+            for: current,
+            hidFingerprint: fingerprint,
+            profiles: [RemoteDeviceProfile(
+                model: .rc003,
+                bluetoothIdentifier: current,
+                hidFingerprint: fingerprint,
+                mappings: mappings
+            )]
+        ) == nil)
+        #expect(RemoteIdentityReconciliationPolicy.replacement(
+            for: current,
+            hidFingerprint: fingerprint,
+            profiles: [RemoteDeviceProfile(
+                model: .rc003,
+                hidFingerprint: fingerprint,
+                mappings: mappings
+            )]
+        ) == nil)
+    }
+
+    @Test func discoveryBridgeReconcilesTheStaleIdentityBeforeAdmission() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let bridgeSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/XiaomiBluetoothBridge.swift"),
+            encoding: .utf8
+        )
+        let modelSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
+            encoding: .utf8
+        )
+
+        #expect(bridgeSource.contains("reconcileCandidateIdentifier?(candidate.identifier)"))
+        #expect(modelSource.contains("reconcileCandidateIdentifier: { [weak self] identifier in"))
+        #expect(modelSource.contains("self?.reconcileStaleRemoteIdentity(for: identifier)"))
+        #expect(modelSource.contains("reconcileStaleRemoteIdentity(for: identifier)"))
+    }
 }

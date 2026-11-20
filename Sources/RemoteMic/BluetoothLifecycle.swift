@@ -1,4 +1,44 @@
+import CryptoKit
 import Foundation
+
+/// HID `PhysicalDeviceUniqueID` 与 CoreBluetooth peripheral identifier 在小米遥控器上是
+/// 同一个系统身份。两个值不能直接比较，必须使用与 `HIDRemoteMonitor.fingerprint` 相同的
+/// SHA-256 规则，才能把当前 BLE 设备与已有档案的 HID 指纹对应起来。
+enum RemoteIdentityFingerprint {
+    static func fingerprint(for identifier: UUID) -> String {
+        SHA256.hash(data: Data(identifier.uuidString.utf8))
+            .map { String(format: "%02x", $0) }
+            .joined()
+    }
+}
+
+/// 当系统重新生成 CoreBluetooth identifier 时，已有档案可能只更新了 HID 指纹，BLE 字段仍
+/// 指向旧配对。只有 HID 指纹能证明是同一物理设备时才允许替换；新设备、重复指纹或 identifier
+/// 已被其他档案占用时必须保持原状，避免串台。
+enum RemoteIdentityReconciliationPolicy {
+    struct Match: Equatable {
+        let profileID: UUID
+        let previousIdentifier: UUID
+    }
+
+    static func replacement(
+        for currentIdentifier: UUID,
+        hidFingerprint: String,
+        profiles: [RemoteDeviceProfile]
+    ) -> Match? {
+        let matches = profiles.filter { profile in
+            profile.hidFingerprint == hidFingerprint && !profile.model.usesPrivateAdapter
+        }
+        guard matches.count == 1, let profile = matches.first else { return nil }
+        guard let previousIdentifier = profile.bluetoothIdentifier,
+              previousIdentifier != currentIdentifier
+        else { return nil }
+        guard !profiles.contains(where: {
+            $0.id != profile.id && $0.bluetoothIdentifier == currentIdentifier
+        }) else { return nil }
+        return Match(profileID: profile.id, previousIdentifier: previousIdentifier)
+    }
+}
 
 enum XiaomiVoiceRemoteNameMatcher {
     /// 白名单集中在 `VoiceRemoteCatalog.adoptedAdvertisedNames`，这里不再单独维护一份。

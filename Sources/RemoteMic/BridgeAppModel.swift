@@ -5011,12 +5011,44 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             else { bridge.start() }
             return
         }
+        reconcileStaleRemoteIdentity(for: identifier)
         let budget = remoteRecoveryBudgets[identifier] ?? RemoteConnectionRecovery()
         remoteRecoveryBudgets[identifier] = budget
         let bridge = XiaomiBluetoothBridge(delegate: self, targetIdentifier: identifier, recovery: budget)
         bluetoothBridges[identifier] = bridge
         bridge.setSystemSuspended(systemAudioSuspensionState.isSuspended, reason: "bridge_start")
         bridge.start(manual: manual)
+    }
+
+    /// 发现回调带来新的 BLE identifier 时，先用 HID 指纹确认它是不是已有档案的同一只
+    /// 物理遥控器。只有唯一命中且 identifier 未被其他档案占用时才替换；新设备、重复指纹
+    /// 或语音进行中都保持原状。
+    @discardableResult
+    private func reconcileStaleRemoteIdentity(for identifier: UUID) -> UUID? {
+        guard !bluetoothVoiceActive else { return nil }
+        guard settings.profileID(forBluetoothIdentifier: identifier) == nil else { return nil }
+        let fingerprint = RemoteIdentityFingerprint.fingerprint(for: identifier)
+        guard let match = RemoteIdentityReconciliationPolicy.replacement(
+            for: identifier,
+            hidFingerprint: fingerprint,
+            profiles: settings.remoteDeviceProfiles
+        ) else { return nil }
+        guard let previousIdentifier = settings.replaceBluetoothIdentifier(
+            for: match.profileID,
+            with: identifier
+        ) else { return nil }
+        if let staleBridge = bluetoothBridges.removeValue(forKey: previousIdentifier) {
+            staleBridge.stop()
+        }
+        if let budget = remoteRecoveryBudgets.removeValue(forKey: previousIdentifier) {
+            remoteRecoveryBudgets[identifier] = budget
+        }
+        let model = settings.remoteDeviceProfiles.first(where: { $0.id == match.profileID })?.model.rawValue
+            ?? "unknown"
+        AppLogger.shared.write(
+            "BLE IDENTITY phase=completed result=replaced reason=hid_fingerprint_match model=\(model)"
+        )
+        return match.profileID
     }
 
     private func startBluetoothDiscoveryIfNeeded(manual: Bool = false) {
@@ -5033,6 +5065,9 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             },
             discoveredCandidate: { [weak self] identifier in
                 self?.connectBluetoothIdentifier(identifier, manual: false)
+            },
+            reconcileCandidateIdentifier: { [weak self] identifier in
+                _ = self?.reconcileStaleRemoteIdentity(for: identifier)
             }
         )
         discoveryBluetoothBridge = bridge

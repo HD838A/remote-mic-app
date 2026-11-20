@@ -128,6 +128,7 @@ final class XiaomiBluetoothBridge: NSObject {
     private let excludedIdentifiers: () -> Set<UUID>
     private let knownIdentifiers: () -> Set<UUID>
     private let discoveredCandidate: ((UUID) -> Void)?
+    private let reconcileCandidateIdentifier: ((UUID) -> Void)?
     private let recovery: RemoteConnectionRecovery
     private var recoveryDeadlineWorkItem: DispatchWorkItem?
     private var discoveryWindowWorkItem: DispatchWorkItem?
@@ -255,6 +256,7 @@ final class XiaomiBluetoothBridge: NSObject {
         excludedIdentifiers: @escaping () -> Set<UUID> = { [] },
         knownIdentifiers: @escaping () -> Set<UUID> = { [] },
         discoveredCandidate: ((UUID) -> Void)? = nil,
+        reconcileCandidateIdentifier: ((UUID) -> Void)? = nil,
         recovery: RemoteConnectionRecovery = RemoteConnectionRecovery()
     ) {
         self.delegate = delegate
@@ -262,6 +264,7 @@ final class XiaomiBluetoothBridge: NSObject {
         self.excludedIdentifiers = excludedIdentifiers
         self.knownIdentifiers = knownIdentifiers
         self.discoveredCandidate = discoveredCandidate
+        self.reconcileCandidateIdentifier = reconcileCandidateIdentifier
         self.recovery = recovery
         super.init()
     }
@@ -727,6 +730,11 @@ final class XiaomiBluetoothBridge: NSObject {
         advertisedName: String?,
         usesCachedTarget: Bool = false
     ) -> Bool {
+        if targetIdentifier == nil {
+            // 发现桥只观察新候选；先用 HID 指纹确认它是否属于已有档案，再走原有采纳。
+            // 只在这里调用，避免档案桥在 adopt 过程中停止自身。
+            reconcileCandidateIdentifier?(candidate.identifier)
+        }
         let decision = VoiceRemoteAdmission.decide(
             identifier: candidate.identifier,
             targetIdentifier: targetIdentifier,

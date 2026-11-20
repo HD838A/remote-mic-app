@@ -160,6 +160,48 @@ struct RemoteDeviceNameIntegrationTests {
         #expect(settings.updateRemoteProfileSystemName(first, name: serial, serialNumber: serial))
         #expect(settings.remoteDeviceProfiles.first { $0.id == first }?.customName == "")
     }
+
+    @Test func replacingStaleBluetoothIdentifierPreservesTheProfileAndRejectsConflicts() throws {
+        let suite = "RemoteIdentity.\(UUID())"
+        let defaults = try #require(TestUserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let settings = AppSettings(defaults: defaults)
+        let oldIdentifier = UUID()
+        let currentIdentifier = UUID()
+        let profileID = settings.registerBluetoothRemote(identifier: oldIdentifier)
+        settings.updateRemoteProfileModel(profileID, model: .rc003)
+        settings.bindHIDFingerprint("identity-fingerprint", to: profileID)
+        let original = try #require(settings.remoteDeviceProfiles.first { $0.id == profileID })
+
+        #expect(settings.replaceBluetoothIdentifier(
+            for: profileID,
+            with: currentIdentifier
+        ) == oldIdentifier)
+
+        let updated = try #require(settings.remoteDeviceProfiles.first { $0.id == profileID })
+        #expect(updated.id == original.id)
+        #expect(updated.bluetoothIdentifier == currentIdentifier)
+        #expect(updated.hidFingerprint == original.hidFingerprint)
+        #expect(updated.model == original.model)
+        #expect(updated.mappings == original.mappings)
+
+        // 已被其他档案占用的 identifier 不能被抢走。
+        let otherProfileID = settings.registerBluetoothRemote(identifier: UUID())
+        #expect(settings.replaceBluetoothIdentifier(
+            for: otherProfileID,
+            with: currentIdentifier
+        ) == nil)
+        #expect(settings.remoteDeviceProfiles.first { $0.id == otherProfileID }?
+            .bluetoothIdentifier != currentIdentifier)
+
+        let restored = AppSettings(defaults: defaults)
+        #expect(restored.remoteDeviceProfiles.first { $0.id == profileID }?
+            .bluetoothIdentifier == currentIdentifier)
+        #expect(restored.remoteDeviceProfiles.first { $0.id == profileID }?
+            .hidFingerprint == original.hidFingerprint)
+        #expect(restored.remoteDeviceProfiles.first { $0.id == profileID }?
+            .mappings == original.mappings)
+    }
 }
 
 private extension Array where Element == RemoteDeviceProfile {

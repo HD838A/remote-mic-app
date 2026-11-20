@@ -1,5 +1,6 @@
 # Bug 记录
 
+- [重新配对后 HID 指纹与 BLE identifier 分裂，遥控器语音链路永久超时](./2026-11-21-stale-bluetooth-identity-after-repair.md)
 - [控制来源未连接时 Onboarding 卡在音频页](./2026-11-20-onboarding-audio-gate-disconnected-remote.md)
 - [Typeless 的 Fn 组合快捷键在 2.0.8 预览版后无法定义](./2026-11-20-typeless-fn-shortcut-unavailable.md)
 - [卸载后残留 Siri Remote 安装收据和 Dock 固定项](./2026-11-20-uninstaller-stale-siri-receipt-and-dock-tile.md)

@@ -86,11 +86,27 @@ Apple、Chromecast 和手机/网页/Watch 入口分别回归，不以小米通�
 
 失败：入口依赖 Apple Remote 卡片出现、点击后没有进入向导、进入后清除已有配置、列表折叠时入口消失、页面在其他位置使用“遥控器”泛称，或 1067 × 760 下入口被裁切。
 
+## 用例 8：重新配对后旧 identifier 与新 HID 身份分裂
+
+1. 使用 RC001 或 RC003，保留一个已有档案和独立按键映射；在 macOS 蓝牙设置中移除并重新配对同一只遥控器，或制造系统 CoreBluetooth identifier 变化。
+2. 重启 App，确认当前 HID 普通按键仍能被识别，连接页进入恢复。
+3. 检查日志：出现 `BLE IDENTITY phase=completed result=replaced reason=hid_fingerprint_match`；随后 `BLE CONNECTING` 使用当前 identifier，而不是旧 identifier。
+4. 等待 `BLE READY`，确认档案数量不变、原映射、自定义名称、选中状态和音量仍保留；第一次普通按键和语音直接可用。
+5. 准备一台没有历史档案的新设备并连接，确认没有 HID 指纹命中时仍创建新档案，不覆盖旧档案。
+6. 准备两台同型号、同名遥控器，确认各自 HID 指纹唯一；任一台重新配对不会把另一台的 identifier 写进错误档案。
+7. 让当前 identifier 已被另一条档案占用，确认不替换并记录跳过，不串台。
+8. 在语音进行中触发同一发现，确认不替换、不结束当前语音。
+
+预期：HID 指纹唯一命中且当前 identifier 未被占用时，只更新原档案的 BLE 字段并复用原档案；旧 identifier 的重连停止，当前 identifier 建立新桥。新设备、重复指纹、identifier 冲突和语音进行中都保持原行为。
+
+失败：生成重复档案、覆盖其他档案、丢失映射或选中状态、继续重连旧 identifier、替换后不尝试当前 identifier、语音被中断，或当前 identifier 仍连接失败时把失败伪装成成功。
+
 ## 自动化与证据边界
 
 - `RemoteConnectionRecoveryTests` 使用虚拟时间验证预算、冷却、短暂 Ready、周期掉线、取消、迟到结果和多设备独立性。
 - `SiriRemoteActivationTests.explicitEnableWithoutMembershipSurvivesRelaunch` 使用无会员配置验证显式启用与持久化，不授予语音权益；真实 Free 账号、组件、按键与触摸仍待现场验收。
-- `BluetoothLifecycleTests` 验证既有发现、扫描、代次和会话门禁；`AppLoggerTests` 验证密集拒绝事件的聚合上限。
+- `BluetoothLifecycleTests` 验证既有发现、扫描、代次和会话门禁；新增 `RemoteIdentityReconciliationPolicy` 用例覆盖唯一 HID 命中、identifier 冲突、重复指纹、私有适配器和发现桥接线。`AppLoggerTests` 验证密集拒绝事件的聚合上限。
+- `RemoteDeviceNameIntegrationTests` 验证替换 BLE identifier 后档案 ID、HID、型号、映射和持久化不变，且已被其他档案占用的 identifier 不写入。
 - 生产 `SettingsView` 的隔离夹具截图只证明页面渲染；夹具不会发起真实蓝牙或录音。
 - `SettingsScreenshotRenderer` 的 connection 场景分别覆盖空档案和离线档案，检查“设备”卡片、连接新的设备入口、空状态和列表；真实窗口截图覆盖中英文与浅深色。点击后进入真实设置向导仍需交互验收。
 - 模拟、策略测试与构建不能证明真实 CoreBluetooth 的发现时机、功耗、首字、尾音和第三方工具文字结果。
