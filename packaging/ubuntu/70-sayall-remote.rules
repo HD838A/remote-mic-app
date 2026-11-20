@@ -1,0 +1,2 @@
+# Grant the active seat access to the paired remote's own evdev nodes.
+SUBSYSTEM=="input", KERNEL=="event*", ATTRS{id/bustype}=="0005", ATTRS{id/vendor}=="2717", ATTRS{id/product}=="32b8", TAG+="uaccess"

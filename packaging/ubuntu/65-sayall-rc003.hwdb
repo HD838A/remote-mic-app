@@ -1,0 +1,4 @@
+# Expose the vendor Back usage as an evdev event; keep voice distinct from a keyboard's F5.
+evdev:input:b0005v2717p32B8*
+ KEYBOARD_KEY_7003e=f13
+ KEYBOARD_KEY_700f1=esc
