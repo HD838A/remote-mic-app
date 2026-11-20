@@ -28,7 +28,8 @@
 
 - 公开构建 `swift build --disable-keychain`：通过。
 - 设置 `SAYALL_SIRI_REMOTE_PACKAGE_PATH` 的苹果遥控器构建：通过。
-- `swift test --disable-keychain --filter OnboardingFlowTests`：123 项通过，包含 RC001 / RC003 唤醒文案差异和连接页末尾句号检查。
+- `swift test --disable-keychain --filter OnboardingFlowTests`：124 项通过，包含 RC001 / RC003 唤醒文案差异和连接页末尾句号检查。
+- `swift test --disable-keychain --filter LocalizationTests`：10 项通过，四组去句号文案的中英文资源与测试期望一致。
 - 生产离屏入口生成 RC003 四张、RC001 一张、苹果遥控器四张，另用临时 `1400 × 1000` 内容尺寸生成小米和苹果遥控器各一张缩放核对图；全部为 PNG，默认窗口图 `2040 × 1600`，缩放核对图 `2800 × 2056`。逐张查看确认右栏检查面板已移除、遥控器放大、高亮同相位且中心落在按键本体上，默认尺寸和大窗口下位置一致。
 - RC003 四张按中文浅色、中文深色、英文浅色、英文深色顺序的 SHA-256 为 `96e7dec03d97c0bd6f3d6cc14b59039c1aabc89ff56e8c84c51e58d7da8945b1`、`5646fc3ca5758447f431012b1909dcc71bc7719707d477264a7a0f2e701ac7b9`、`9e688873a57893c054ba7c5b91b6efce0f02b91afdf98d144de87b18df2bc81d`、`4b8e30fc671971ae32326d189bc1e303247455becc58bacae27892abc54e9ae0`；RC001 核对图为 `c9c878b10863f55c57044850171d3cbba40f23501b692c93e14772835ebb7359`。
 - 苹果遥控器四张按同一顺序的 SHA-256 为 `64abc5ac95173ac16d6bc083b6224843dc1903419c88234eb2d4fd7bd4f538bc`、`9ecf2a2227e53c76ff4def9b6c3e22ad55b3dd1ccbe7fec3ed6324a48c280046`、`5f6ccdedbc4f8e113055fed67efd097a7a42f24890f4938b5e6c8882fd90abb8`、`61223ecc0264a1277a316205024e5d82b88e885b49e8608866a7c51794c729a6`。
