@@ -681,9 +681,16 @@ enum VirtualAudioConnectionLifecyclePolicy {
         mobileVoiceActive: Bool,
         testToneActive: Bool,
         systemSuspended: Bool,
-        idleBridgeReleaseDue: Bool = false
+        idleBridgeReleaseDue: Bool = false,
+        onboardingPreparationActive: Bool = false
     ) -> Bool {
         if bluetoothVoiceActive || mobileVoiceActive || testToneActive {
+            return true
+        }
+        // Onboarding 音频页需要先证明所选虚拟设备可以配置。该页面没有活跃语音，
+        // 遥控器语音链路也可能尚未连接；仅在用户停留于本页时持有临时租约，
+        // 让 bridge 状态变化和空闲释放都不能把刚配置好的输出立即释放。
+        if onboardingPreparationActive && !systemSuspended {
             return true
         }
         return readyBluetoothBridgeCount > 0 && !systemSuspended && !idleBridgeReleaseDue
