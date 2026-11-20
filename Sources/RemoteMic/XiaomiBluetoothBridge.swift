@@ -358,6 +358,10 @@ final class XiaomiBluetoothBridge: NSObject {
     }
 
     func refreshDiscovery(manual: Bool = false) {
+        if manual, discoveryWindowStartedAt != nil {
+            discoveryWasManual = true
+            return
+        }
         let now = ProcessInfo.processInfo.systemUptime
         guard shouldRun, targetIdentifier == nil, !systemSuspension.isSuspended,
               discoveryWindowStartedAt == nil,
@@ -374,6 +378,12 @@ final class XiaomiBluetoothBridge: NSObject {
 
     func cancelDiscovery() {
         guard discoveryWindowStartedAt != nil else { return }
+        endDiscovery(cancelled: true)
+    }
+
+    /// 目标桥开始连接后，自动发现窗口已没有用途；手动查找窗口继续保留。
+    func cancelAutomaticDiscovery() {
+        guard discoveryWindowStartedAt != nil, !discoveryWasManual else { return }
         endDiscovery(cancelled: true)
     }
 

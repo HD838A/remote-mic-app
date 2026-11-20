@@ -1028,4 +1028,27 @@ struct BluetoothLifecycleTests {
         #expect(!source.contains("knownIdentifiers: knownIdentifiers()"))
         #expect(!source.contains("excludedIdentifiers().contains"))
     }
+
+    @Test func connectedTargetSuppressesAutomaticDiscovery() throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        let modelSource = try String(contentsOf: root.appendingPathComponent(
+            "Sources/RemoteMic/BridgeAppModel.swift"
+        ), encoding: .utf8)
+        let bridgeSource = try String(contentsOf: root.appendingPathComponent(
+            "Sources/RemoteMic/XiaomiBluetoothBridge.swift"
+        ), encoding: .utf8)
+        let onboardingSource = try String(contentsOf: root.appendingPathComponent(
+            "Sources/RemoteMic/OnboardingView.swift"
+        ), encoding: .utf8)
+        #expect(modelSource.contains("private var hasBusyBluetoothTarget"))
+        #expect(modelSource.contains("manual || !hasBusyBluetoothTarget"))
+        #expect(modelSource.contains("bridge.isConnectionBusy"))
+        #expect(modelSource.contains("cancelAutomaticDiscovery()"))
+        #expect(bridgeSource.contains("func cancelAutomaticDiscovery()"))
+        #expect(bridgeSource.contains("!discoveryWasManual"))
+        #expect(bridgeSource.contains("if manual, discoveryWindowStartedAt != nil"))
+        #expect(bridgeSource.contains("discoveryWasManual = true"))
+        #expect(onboardingSource.contains("model.findRemoteDevices()"))
+    }
 }

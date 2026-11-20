@@ -2875,7 +2875,7 @@ struct OnboardingFlowTests {
             range: prepareStart.upperBound..<viewSource.endIndex
         ))
         let prepareSource = viewSource[prepareStart.lowerBound..<prepareEnd.lowerBound]
-        #expect(prepareSource.contains("model.refreshRemoteDiscovery()"))
+        #expect(prepareSource.contains("model.findRemoteDevices()"))
         #expect(prepareSource.contains("model.applyHIDSettings()"))
 
         let modelSource = try String(
@@ -2889,6 +2889,8 @@ struct OnboardingFlowTests {
         ))
         let refreshSource = modelSource[refreshStart.lowerBound..<refreshEnd.lowerBound]
         #expect(refreshSource.contains("discoveryBluetoothBridge?.refreshDiscovery()"))
+        #expect(refreshSource.contains("hasBusyBluetoothTarget"))
+        #expect(refreshSource.contains("cancelAutomaticDiscovery()"))
         #expect(!refreshSource.contains("discoveryBluetoothBridge?.reconnectNow()"))
     }
 

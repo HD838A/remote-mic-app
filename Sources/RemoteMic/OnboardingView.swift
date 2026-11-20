@@ -5239,7 +5239,7 @@ struct OnboardingView: View {
 
     private func prepareSelectedXiaomiRemoteConnection() {
         guard let selectedModel = settings.onboardingXiaomiRemoteModel else {
-            model.refreshRemoteDiscovery()
+            model.findRemoteDevices()
             model.applyHIDSettings()
             return
         }
@@ -5260,7 +5260,7 @@ struct OnboardingView: View {
                     "result=discovery_started"
             )
         }
-        model.refreshRemoteDiscovery()
+        model.findRemoteDevices()
         model.applyHIDSettings()
     }
 

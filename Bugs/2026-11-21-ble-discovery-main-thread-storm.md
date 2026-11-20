@@ -69,6 +69,8 @@ serviceMatch || isCandidate(peripheral) || nameMatcher.matches(advertisedName)
   - 明确的外来产品名称，交给统一准入层记录拒绝原因。
 - 其余普通 BLE 广播直接返回，只累加 `ignoredUnrelatedDiscoveryCount`（按回调次数，不是唯一设备数）。
 - 扫描开始时缓存 `excludedIdentifiers` / `knownIdentifiers` 快照，`didDiscover` 和 `adopt` 只读快照；窗口结束前重取一次，已连接候选使用当前配置，避免每个回调重复构造 Set。
+- 自动发现窗口增加守卫：已有目标桥处于连接、重连或 ready 时，`refreshRemoteDiscovery` 和 `startBluetoothDiscoveryIfNeeded` 不再自动开窗口；目标桥进入忙碌状态时取消正在进行的自动窗口。
+- 手动“查找遥控器”和 onboarding 添加新遥控器继续使用 `manual: true` 路径，不受稳定连接守卫影响；`discoveryWasManual` 保证手动窗口不会被自动取消。
 - 扫描结束时只写一条汇总：
 
 ```text
@@ -83,13 +85,15 @@ BLE SCAN TIMEOUT ... result=retrying reason=scan_window_expired ... ignored_unre
 
 自动化：
 
-- `BluetoothLifecycleTests` 新增发现过滤策略、身份快照复用和接线回归。
+- `BluetoothLifecycleTests` 新增发现过滤策略、身份快照复用、稳定连接自动发现守卫和接线回归。
 - 覆盖保存目标、已知身份、ATVV 服务、已知名称、外来产品、AirPods/Watch/音箱等无关设备。
+- 覆盖稳定连接时自动发现被抑制、手动/onboarding 仍可扫描的源码路径。
 - 公开宿主构建和全量测试在修复提交中记录。
 
 待现场验证：
 
 - 在 20 台以上 BLE 设备环境中打开连接页，确认 `ignored_unrelated` 汇总且滚动无明显掉帧。
+- 稳定连接后切回 App 或重开连接页，确认没有新的自动 `BLE DISCOVERY_WINDOW phase=started`；手动查找和 onboarding 仍能发现新遥控器。
 - RC001、RC003 已保存身份重连，已知型号新遥控器发现，外来产品拒绝。
 - 断连、睡眠唤醒、扫描超时和连续打开连接页。
 - 设置页滚动帧率与 `sample SayAll` 主线程栈。
