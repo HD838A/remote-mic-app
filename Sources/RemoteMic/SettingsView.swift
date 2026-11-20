@@ -595,22 +595,128 @@ private struct StatisticsColumnsLayout: Layout {
 }
 
 private struct VoiceGlowPeriodControl: View, Equatable {
-    var fullSession: Bool
-    var select: (Bool) -> Void
+    var mode: AppSettings.VoiceGlowDisplayMode
+    var showsFollowContinuation: Bool
+    var select: (AppSettings.VoiceGlowDisplayMode) -> Void
     var labels: [String]
 
     static func == (lhs: Self, rhs: Self) -> Bool {
-        lhs.fullSession == rhs.fullSession && lhs.labels == rhs.labels
+        lhs.mode == rhs.mode
+            && lhs.showsFollowContinuation == rhs.showsFollowContinuation
+            && lhs.labels == rhs.labels
     }
 
     var body: some View {
-        Picker("", selection: Binding(get: { fullSession }, set: select)) {
-            Text(labels[0]).tag(false)
-            Text(labels[1]).tag(true)
+        let effectiveMode: AppSettings.VoiceGlowDisplayMode =
+            !showsFollowContinuation && mode == .followContinuationThreshold ? .lastTenSeconds : mode
+        Picker("", selection: Binding(get: { effectiveMode }, set: select)) {
+            Text(labels[0]).tag(AppSettings.VoiceGlowDisplayMode.lastTenSeconds)
+            if showsFollowContinuation {
+                Text(labels[1]).tag(AppSettings.VoiceGlowDisplayMode.followContinuationThreshold)
+                Text(labels[2]).tag(AppSettings.VoiceGlowDisplayMode.fullSession)
+            } else {
+                Text(labels[1]).tag(AppSettings.VoiceGlowDisplayMode.fullSession)
+            }
         }
         .pickerStyle(.segmented)
         .labelsHidden()
         .controlSize(.small)
+        .id(labels)
+    }
+}
+
+/// 60 秒语音时间轴可视化滑条：左侧灰色表示常规单次录音区间，右侧绿→红渐变表示可松手续录区间。
+private struct VoiceContinuationTimelineSlider: View {
+    var value: Double
+    var onChange: (Double) -> Void
+    var accessibilityLabel: String
+    var accessibilityValue: String
+
+    private let maxSeconds: Double = 60
+    private let trackHeight: CGFloat = 6
+    private let thumbSize: CGFloat = 15
+
+    var body: some View {
+        GeometryReader { proxy in
+            let width = max(proxy.size.width, thumbSize)
+            let travel = max(width - thumbSize, 1)
+            let clamped = min(maxSeconds, max(0, value))
+            let ratio = CGFloat(clamped / maxSeconds)
+            let thumbCenterX = (thumbSize / 2) + ratio * travel
+            let activeWidth = max(0, width - thumbCenterX)
+
+            ZStack(alignment: .leading) {
+                Capsule(style: .continuous)
+                    .fill(Color.primary.opacity(0.14))
+                    .frame(height: trackHeight)
+
+                if clamped < maxSeconds, activeWidth > 0 {
+                    HStack(spacing: 0) {
+                        Spacer(minLength: 0)
+                        LinearGradient(
+                            colors: [
+                                Color(hue: 0.433, saturation: 0.70, brightness: 0.71),
+                                Color(hue: 0.089, saturation: 0.78, brightness: 0.92),
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                        .opacity(0.52)
+                        .frame(width: activeWidth, height: trackHeight)
+                    }
+                    .frame(width: width, height: trackHeight)
+                    .clipShape(Capsule(style: .continuous))
+                }
+
+                Capsule(style: .continuous)
+                    .stroke(Color.primary.opacity(0.10), lineWidth: 0.5)
+                    .frame(height: trackHeight)
+
+                ForEach([10, 20, 30, 40, 50], id: \.self) { second in
+                    let tickRatio = CGFloat(Double(second) / maxSeconds)
+                    let tickX = (thumbSize / 2) + tickRatio * travel
+                    Circle()
+                        .fill(Color.primary.opacity(0.22))
+                        .frame(width: 2, height: 2)
+                        .position(x: tickX, y: (proxy.size.height / 2) + (trackHeight / 2) + 4)
+                }
+
+                Circle()
+                    .fill(Color.white)
+                    .frame(width: thumbSize, height: thumbSize)
+                    .overlay(
+                        Circle()
+                            .stroke(Color.black.opacity(0.22), lineWidth: 0.5)
+                    )
+                    .shadow(color: Color.black.opacity(0.22), radius: 1.5, x: 0, y: 0.5)
+                    .position(x: thumbCenterX, y: proxy.size.height / 2)
+            }
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { gesture in
+                        let normalized = min(1, max(0, (gesture.location.x - (thumbSize / 2)) / travel))
+                        let rounded = (Double(normalized) * maxSeconds).rounded()
+                        if rounded != clamped {
+                            onChange(rounded)
+                        }
+                    }
+            )
+        }
+        .frame(height: 24)
+        .accessibilityElement()
+        .accessibilityLabel(accessibilityLabel)
+        .accessibilityValue(accessibilityValue)
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment:
+                onChange(min(maxSeconds, value.rounded() + 1))
+            case .decrement:
+                onChange(max(0, value.rounded() - 1))
+            @unknown default:
+                break
+            }
+        }
     }
 }
 
@@ -3453,6 +3559,30 @@ struct SettingsView: View {
         // 能力一律取自「链路自报优先、型号默认兜底」的判定结果（见 RemoteVoiceCapabilities）。
         let capabilities = model.selectedRemoteVoiceCapabilities
         let usesChromecastVoiceMode = settings.selectedRemoteProfile?.model.isChromecastRemote == true
+        let showsHardwareLimitVoiceControls = VoiceHardwareSessionLimitApplicability.isApplicable(
+            model: settings.selectedRemoteProfile?.model
+        )
+        let isVoiceContinuationActive = settings.voiceFnTapModeEnabled && settings.voiceContinuationEnabled
+        let followThresholdLabel: String = {
+            if settings.voiceGlowDisplayMode == .followContinuationThreshold,
+               let startSeconds = settings.voiceGlowThresholdStartSeconds {
+                return String(
+                    format: localization.text("connection.voice_glow.follow_threshold_active"),
+                    String(startSeconds)
+                )
+            }
+            return localization.text("connection.voice_glow.follow_threshold")
+        }()
+        let glowPeriodLabels = isVoiceContinuationActive
+            ? [
+                localization.text("connection.voice_glow.last_ten"),
+                followThresholdLabel,
+                localization.text("connection.voice_glow.full_session"),
+            ]
+            : [
+                localization.text("connection.voice_glow.last_ten"),
+                localization.text("connection.voice_glow.full_session"),
+            ]
         return GlassPanel {
             VStack(alignment: .leading, spacing: 12) {
                 // 左上角标明这是哪颗键的设置；字号与分类胶囊一致。
@@ -3474,47 +3604,58 @@ struct SettingsView: View {
                 if VoiceFunctionKeyTapApplicability.isApplicable(capabilities: capabilities) {
                     Divider()
                     mappingVoiceFnTapControl
-                    Divider()
-                    Toggle("connection.voice_glow.enabled", isOn: Binding(
-                        get: { settings.voiceGlowReminderEnabled },
-                        set: { model.setVoiceGlowReminderEnabled($0) }
-                    ))
-                    .font(.system(size: 12, weight: .medium))
-                    .toggleStyle(.switch)
-                    .help(localization.text("connection.voice_glow.hint"))
-                    if settings.voiceGlowReminderEnabled {
-                        HStack(spacing: 14) {
-                        Text("connection.voice_glow.period").frame(width: 92, alignment: .leading)
-                        VoiceGlowPeriodControl(
-                            fullSession: settings.voiceGlowFullSession,
-                            select: { model.setVoiceGlowFullSession($0) },
-                            labels: [localization.text("connection.voice_glow.last_ten"),
-                                     localization.text("connection.voice_glow.full_session")]
-                        )
-                        .equatable()
-                        .frame(width: 220, height: 24)
+                    if showsHardwareLimitVoiceControls {
+                        Divider()
+                        VStack(alignment: .leading, spacing: 2) {
+                            Toggle("connection.voice_glow.enabled", isOn: Binding(
+                                get: { settings.voiceGlowReminderEnabled },
+                                set: { model.setVoiceGlowReminderEnabled($0) }
+                            ))
+                            .font(.system(size: 12, weight: .medium))
+                            .toggleStyle(.switch)
+                            Text("connection.voice_glow.hint")
+                                .font(.system(size: 12))
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
-                        .transaction { $0.animation = nil }
-                        .help(localization.text("connection.voice_glow.period_hint"))
-                        HStack(spacing: 14) {
-                            Text("connection.voice_glow.width").frame(width: 92, alignment: .leading)
-                            Slider(value: Binding(
-                                get: { settings.voiceGlowWidth },
-                                set: { settings.voiceGlowWidth = $0; model.previewVoiceGlowAppearance() }
-                            ), in: 0.3...0.9, step: 0.02)
-                            Text(settings.voiceGlowWidth.formatted(.percent.precision(.fractionLength(0))))
-                                .monospacedDigit().frame(width: 54, alignment: .trailing)
+                        .help(localization.text("connection.voice_glow.hint"))
+                        if settings.voiceGlowReminderEnabled {
+                            VStack(alignment: .leading, spacing: 12) {
+                                HStack(spacing: 14) {
+                                    Text("connection.voice_glow.period").frame(width: 92, alignment: .leading)
+                                    VoiceGlowPeriodControl(
+                                        mode: settings.voiceGlowDisplayMode,
+                                        showsFollowContinuation: isVoiceContinuationActive,
+                                        select: { model.setVoiceGlowDisplayMode($0) },
+                                        labels: glowPeriodLabels
+                                    )
+                                    .equatable()
+                                    .fixedSize(horizontal: true, vertical: false)
+                                    .frame(height: 24)
+                                }
+                                .transaction { $0.animation = nil }
+                                .help(localization.text("connection.voice_glow.period_hint"))
+                                HStack(spacing: 14) {
+                                    Text("connection.voice_glow.width").frame(width: 92, alignment: .leading)
+                                    Slider(value: Binding(
+                                        get: { settings.voiceGlowWidth },
+                                        set: { settings.voiceGlowWidth = $0; model.previewVoiceGlowAppearance() }
+                                    ), in: 0.3...0.9, step: 0.02)
+                                    Text(settings.voiceGlowWidth.formatted(.percent.precision(.fractionLength(0))))
+                                        .monospacedDigit().frame(width: 54, alignment: .trailing)
+                                }
+                                HStack(spacing: 14) {
+                                    Text("connection.voice_glow.intensity").frame(width: 92, alignment: .leading)
+                                    Slider(value: Binding(
+                                        get: { settings.voiceGlowIntensity },
+                                        set: { settings.voiceGlowIntensity = $0; model.previewVoiceGlowAppearance() }
+                                    ), in: 0.1...1, step: 0.05)
+                                    Text(settings.voiceGlowIntensity.formatted(.percent.precision(.fractionLength(0))))
+                                        .monospacedDigit().frame(width: 54, alignment: .trailing)
+                                }
+                            }
+                            .font(.system(size: 12))
                         }
-                        HStack(spacing: 14) {
-                            Text("connection.voice_glow.intensity").frame(width: 92, alignment: .leading)
-                            Slider(value: Binding(
-                                get: { settings.voiceGlowIntensity },
-                                set: { settings.voiceGlowIntensity = $0; model.previewVoiceGlowAppearance() }
-                            ), in: 0.5...3, step: 0.1)
-                            Text(settings.voiceGlowIntensity.formatted(.percent.precision(.fractionLength(0))))
-                                .monospacedDigit().frame(width: 54, alignment: .trailing)
-                        }
-                        .font(.system(size: 12))
                     }
                 }
                 // 触摸面（滑动箭头/光标反馈）只有具备触摸面的遥控器才显示，页面请求之外再加一道能力门禁。
@@ -3648,52 +3789,112 @@ struct SettingsView: View {
                     .lineLimit(2)
             }
             .help(localization.text("connection.voice_fn_tap.hint"))
-            Divider()
-            VStack(alignment: .leading, spacing: 12) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Toggle("connection.voice_continuation.enabled", isOn: Binding(
-                        get: { settings.voiceContinuationEnabled },
-                        set: { model.setVoiceContinuationEnabled($0) }
-                    ))
-                    .font(.system(size: 12, weight: .medium))
-                    .toggleStyle(.switch)
-                    Text("connection.voice_continuation.subtitle")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                if settings.voiceContinuationEnabled {
-                    HStack(spacing: 14) {
-                        Text("connection.voice_continuation.minimum").frame(width: 100, alignment: .leading)
-                        Slider(value: Binding(
-                            get: { settings.voiceContinuationMinimumDuration },
-                            set: { model.setVoiceContinuationMinimumDuration($0) }
-                        ), in: 0...60, step: 1)
-                        Text(verbatim: String(
-                            format: localization.text("connection.voice_continuation.seconds"),
-                            String(Int(settings.voiceContinuationMinimumDuration))
-                        ))
-                        .monospacedDigit().frame(width: 60, alignment: .trailing)
+            if VoiceHardwareSessionLimitApplicability.isApplicable(
+                model: settings.selectedRemoteProfile?.model
+            ) {
+                let thresholdSeconds = Int(settings.voiceContinuationMinimumDuration.rounded())
+                let remainingSeconds = max(0, 60 - thresholdSeconds)
+                let formattedWaitSeconds = settings.voiceContinuationDelay.formatted(
+                    .number.precision(.fractionLength(0...1))
+                )
+                let thresholdValueText: String = {
+                    if thresholdSeconds <= 0 {
+                        return localization.text("connection.voice_continuation.minimum_value_anytime")
                     }
-                    .help(localization.text("connection.voice_continuation.minimum_hint"))
-                    HStack(spacing: 14) {
-                        Text("connection.voice_continuation.wait").frame(width: 100, alignment: .leading)
-                        Slider(value: Binding(
-                            get: { settings.voiceContinuationDelay },
-                            set: { settings.setVoiceContinuationDelay($0) }
-                        ), in: 0.5...3, step: 0.5)
-                        Text(verbatim: String(
-                            format: localization.text("connection.voice_continuation.seconds"),
-                            settings.voiceContinuationDelay.formatted(.number.precision(.fractionLength(0...1)))
-                        ))
-                        .monospacedDigit().frame(width: 60, alignment: .trailing)
+                    if thresholdSeconds >= 60 {
+                        return localization.text("connection.voice_continuation.minimum_value_limit_only")
                     }
-                    .help(localization.text("connection.voice_continuation.wait_hint"))
+                    return String(
+                        format: localization.text("connection.voice_continuation.minimum_value"),
+                        String(thresholdSeconds),
+                        String(remainingSeconds)
+                    )
+                }()
+                let continuationSubtitleText: String = {
+                    guard settings.voiceFnTapModeEnabled else {
+                        return localization.text("connection.voice_continuation.requires_fn_tap")
+                    }
+                    guard settings.voiceContinuationEnabled else {
+                        return localization.text("connection.voice_continuation.subtitle")
+                    }
+                    if thresholdSeconds <= 0 {
+                        return String(
+                            format: localization.text("connection.voice_continuation.subtitle_anytime"),
+                            formattedWaitSeconds
+                        )
+                    }
+                    if thresholdSeconds >= 60 {
+                        return String(
+                            format: localization.text("connection.voice_continuation.subtitle_limit_only"),
+                            formattedWaitSeconds
+                        )
+                    }
+                    return String(
+                        format: localization.text("connection.voice_continuation.subtitle_active"),
+                        String(thresholdSeconds),
+                        String(remainingSeconds),
+                        formattedWaitSeconds
+                    )
+                }()
+                VStack(alignment: .leading, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Toggle("connection.voice_continuation.enabled", isOn: Binding(
+                            get: { settings.voiceFnTapModeEnabled && settings.voiceContinuationEnabled },
+                            set: { model.setVoiceContinuationEnabled($0) }
+                        ))
+                        .font(.system(size: 12, weight: .medium))
+                        .toggleStyle(.switch)
+                        Text(verbatim: continuationSubtitleText)
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    if settings.voiceFnTapModeEnabled && settings.voiceContinuationEnabled {
+                        HStack(spacing: 14) {
+                            Text("connection.voice_continuation.minimum").frame(width: 100, alignment: .leading)
+                            VoiceContinuationTimelineSlider(
+                                value: settings.voiceContinuationMinimumDuration,
+                                onChange: { model.setVoiceContinuationMinimumDuration($0) },
+                                accessibilityLabel: localization.text("connection.voice_continuation.minimum"),
+                                accessibilityValue: thresholdValueText
+                            )
+                            Text(verbatim: thresholdValueText)
+                                .monospacedDigit()
+                                .frame(width: 118, alignment: .trailing)
+                        }
+                        .help(localization.text("connection.voice_continuation.minimum_hint"))
+                        HStack(spacing: 14) {
+                            Text("connection.voice_continuation.wait").frame(width: 100, alignment: .leading)
+                            Slider(value: Binding(
+                                get: { settings.voiceContinuationDelay },
+                                set: { settings.setVoiceContinuationDelay($0) }
+                            ), in: 0.5...3, step: 0.5)
+                            Text(verbatim: String(
+                                format: localization.text("connection.voice_continuation.seconds"),
+                                formattedWaitSeconds
+                            ))
+                            .monospacedDigit()
+                            .frame(width: 118, alignment: .trailing)
+                        }
+                        .help(localization.text("connection.voice_continuation.wait_hint"))
+                    }
                 }
+                .font(.system(size: 12))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .background(
+                    Color.primary.opacity(0.035),
+                    in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .stroke(Color(nsColor: .separatorColor).opacity(0.45), lineWidth: 1)
+                )
+                .opacity(settings.voiceFnTapModeEnabled ? 1 : 0.55)
+                .disabled(!settings.voiceFnTapModeEnabled)
+                .help(localization.text("connection.voice_continuation.hint"))
             }
-            .font(.system(size: 12))
-            .disabled(!settings.voiceFnTapModeEnabled)
-            .help(localization.text("connection.voice_continuation.hint"))
         }
         .opacity(settings.voiceKeyMode == .function ? 1 : 0.55)
         .disabled(settings.voiceKeyMode != .function)

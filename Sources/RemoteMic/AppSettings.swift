@@ -338,6 +338,7 @@ final class AppSettings: ObservableObject {
         static let voiceContinuationDelay = "voiceContinuationDelay"
         static let voiceContinuationMinimumDuration = "voiceContinuationMinimumDuration"
         static let voiceGlowReminderEnabled = "voiceGlowReminderEnabled"
+        static let voiceGlowDisplayMode = "voiceGlowDisplayMode"
         static let voiceGlowFullSession = "voiceGlowFullSession"
         static let voiceGlowWidth = "voiceGlowWidth"
         static let voiceGlowIntensity = "voiceGlowIntensity"
@@ -755,10 +756,16 @@ final class AppSettings: ObservableObject {
             : 0
     }
 
+    enum VoiceGlowDisplayMode: String, CaseIterable, Equatable {
+        case lastTenSeconds
+        case followContinuationThreshold
+        case fullSession
+    }
+
     var voiceGlowWarningStart: TimeInterval {
-        guard voiceFnTapModeEnabled,
+        guard voiceGlowDisplayMode == .followContinuationThreshold,
+              voiceFnTapModeEnabled,
               voiceContinuationEnabled,
-              voiceContinuationMinimumDuration > 0,
               voiceContinuationMinimumDuration < 60
         else {
             return 50
@@ -766,12 +773,32 @@ final class AppSettings: ObservableObject {
         return voiceContinuationMinimumDuration
     }
 
+    /// Active continuation threshold start time (in seconds) shown on the dynamic
+    /// "Follow threshold" segment when continuation is active and < 60s.
+    var voiceGlowThresholdStartSeconds: Int? {
+        guard voiceFnTapModeEnabled,
+              voiceContinuationEnabled,
+              voiceContinuationMinimumDuration < 60
+        else {
+            return nil
+        }
+        return Int(voiceContinuationMinimumDuration.rounded())
+    }
+
     @Published var voiceGlowReminderEnabled: Bool {
         didSet { defaults.set(voiceGlowReminderEnabled, forKey: Keys.voiceGlowReminderEnabled) }
     }
 
-    @Published var voiceGlowFullSession: Bool {
-        didSet { defaults.set(voiceGlowFullSession, forKey: Keys.voiceGlowFullSession) }
+    @Published var voiceGlowDisplayMode: VoiceGlowDisplayMode {
+        didSet {
+            defaults.set(voiceGlowDisplayMode.rawValue, forKey: Keys.voiceGlowDisplayMode)
+            defaults.set(voiceGlowDisplayMode == .fullSession, forKey: Keys.voiceGlowFullSession)
+        }
+    }
+
+    var voiceGlowFullSession: Bool {
+        get { voiceGlowDisplayMode == .fullSession }
+        set { voiceGlowDisplayMode = newValue ? .fullSession : .lastTenSeconds }
     }
 
     @Published var voiceGlowWidth: Double {
@@ -1212,9 +1239,22 @@ final class AppSettings: ObservableObject {
             : defaults.bool(forKey: Keys.voiceGlowReminderEnabled)
         voiceGlowWidth = defaults.object(forKey: Keys.voiceGlowWidth) == nil
             ? 0.64 : min(0.9, max(0.3, defaults.double(forKey: Keys.voiceGlowWidth)))
-        voiceGlowIntensity = defaults.object(forKey: Keys.voiceGlowIntensity) == nil
-            ? 1 : min(3, max(0.5, defaults.double(forKey: Keys.voiceGlowIntensity)))
-        voiceGlowFullSession = defaults.bool(forKey: Keys.voiceGlowFullSession)
+        if defaults.object(forKey: Keys.voiceGlowIntensity) == nil {
+            voiceGlowIntensity = 0.4
+        } else {
+            let storedIntensity = defaults.double(forKey: Keys.voiceGlowIntensity)
+            // 历史构建使用 0.5...3.0（50%–300%）倍率；现已归一化到 0.1...1.0（10%–100%，满档对应 5.0x）。
+            let normalizedIntensity = storedIntensity > 1 ? storedIntensity / 5 : storedIntensity
+            voiceGlowIntensity = min(1, max(0.1, normalizedIntensity))
+        }
+        if let rawMode = defaults.string(forKey: Keys.voiceGlowDisplayMode),
+           let storedMode = VoiceGlowDisplayMode(rawValue: rawMode) {
+            voiceGlowDisplayMode = storedMode
+        } else {
+            voiceGlowDisplayMode = defaults.bool(forKey: Keys.voiceGlowFullSession)
+                ? .fullSession
+                : .lastTenSeconds
+        }
         voiceContinuationMinimumDuration = defaults.object(forKey: Keys.voiceContinuationMinimumDuration) == nil
             ? 50 : min(60, max(0, defaults.double(forKey: Keys.voiceContinuationMinimumDuration)))
         voiceContinuationEnabled = defaults.bool(forKey: Keys.voiceContinuationEnabled)

@@ -76,7 +76,7 @@ final class VoiceContinuationGlowController {
     private var cachedWindowScreenIndex: Int?
     private var axQuerySucceededForTrackedApp = false
     private var width = 0.64
-    private var intensity = 1.0
+    private var intensity = 0.4
     private var frozen: VoiceGlowState?
     private var transitionFrom: VoiceGlowState?
     private var transitionStartedAt: TimeInterval = 0
@@ -394,9 +394,12 @@ final class VoiceContinuationGlowController {
 
 @MainActor
 final class VoiceContinuationGlowView: NSView {
+    /// 100%（1.0）对应的内部亮度倍率，10%（0.1）对应 0.5x，保证界面刻度始终在 10%–100% 内。
+    static let maxIntensityGain: Double = 5.0
+
     var state = VoiceGlowState()
     var widthFraction = 0.64
-    var intensity = 1.0
+    var intensity = 0.4
 
 
     private func color(hue: Double, saturation: Double, lightness: Double, alpha: Double) -> CGColor {
@@ -405,7 +408,12 @@ final class VoiceContinuationGlowView: NSView {
             let k = (n + hue / 30).truncatingRemainder(dividingBy: 12)
             return CGFloat(lightness - a * max(-1, min(k - 3, 9 - k, 1)))
         }
-        return CGColor(red: channel(0), green: channel(8), blue: channel(4), alpha: CGFloat(min(1, alpha * intensity)))
+        return CGColor(
+            red: channel(0),
+            green: channel(8),
+            blue: channel(4),
+            alpha: CGFloat(min(1, alpha * intensity * Self.maxIntensityGain))
+        )
     }
 
     override func draw(_ dirtyRect: NSRect) {

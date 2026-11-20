@@ -137,17 +137,23 @@ struct VoiceGlowTests {
         let settings = AppSettings(defaults: defaults)
         #expect(settings.voiceGlowReminderEnabled)
         #expect(!settings.voiceGlowFullSession)
+        #expect(settings.voiceGlowIntensity == 0.4)
         settings.voiceGlowReminderEnabled = true
         settings.voiceGlowFullSession = true
         settings.voiceGlowWidth = 0.8
-        settings.voiceGlowIntensity = 2
+        settings.voiceGlowIntensity = 0.8
         let restored = AppSettings(defaults: defaults)
         #expect(restored.voiceGlowWidth == 0.8)
-        #expect(restored.voiceGlowIntensity == 2)
+        #expect(restored.voiceGlowIntensity == 0.8)
         #expect(restored.voiceGlowReminderEnabled)
         #expect(restored.voiceGlowFullSession)
         #expect(!restored.voiceContinuationEnabled)
         #expect(restored.voiceContinuationDelay == 1)
+
+        // 旧版 0.5...3.0（50%–300%）存储值应按 5.0x 满档平滑归一化到 0.1...1.0。
+        defaults.set(3.0, forKey: "voiceGlowIntensity")
+        let migrated = AppSettings(defaults: defaults)
+        #expect(migrated.voiceGlowIntensity == 0.6)
     }
 
     @MainActor @Test func previewEndsOnItsOwnWhileAnotherSourceKeepsRecording() async throws {
@@ -170,6 +176,23 @@ struct VoiceGlowTests {
         #expect(glow.isVisible)
         glow.stop()
         #expect(!glow.isVisible)
+    }
+
+    @MainActor @Test func cancelVoiceSessionWarningTrackingStopsGlowOnMainThread() throws {
+        let suite = "VoiceGlowTests.CancelWarning.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        let settings = AppSettings(defaults: defaults)
+        settings.voiceGlowReminderEnabled = true
+        settings.voiceGlowFullSession = true
+        let model = BridgeAppModel(settings: settings)
+
+        model.startVoiceSessionWarningTracking(for: .rc003)
+        #expect(model.isVoiceContinuationGlowVisible)
+
+        model.cancelVoiceSessionWarningTracking()
+        #expect(!model.isVoiceContinuationGlowVisible)
     }
 
     @MainActor @Test func nativeGlowRenders() throws {

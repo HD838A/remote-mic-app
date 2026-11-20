@@ -99,7 +99,9 @@ struct ATVVProtocolTests {
         let decodeSource = source[decode.lowerBound..<battery.lowerBound]
 
         #expect(decodeSource.contains("pendingCommandVoiceAudio.appendIfWaiting(samples)"))
-        let sessionStart = try #require(startSource.range(of: "voiceFnTapSession.startVoice()"))
+        let sessionStart = try #require(
+            startSource.range(of: "voiceFnTapSession.startVoice(sourceIdentifier: identifier)")
+        )
         let flush = try #require(startSource.range(of: "flushPendingCommandVoiceAudio(for: bridge)"))
         #expect(sessionStart.lowerBound < flush.lowerBound)
     }
@@ -129,9 +131,11 @@ struct ATVVProtocolTests {
         #expect(startSource.contains("pendingBluetoothVoiceStartIdentifier"))
         #expect(startSource.contains("pendingBluetoothVoiceAudio.drain()"))
         #expect(startSource.contains("flush_after_configuration"))
-        #expect(startSource.contains("voiceFnTapSession.startVoice()"))
+        #expect(startSource.contains("voiceFnTapSession.startVoice(sourceIdentifier: identifier)"))
         #expect(startSource.contains("SYSTEM AUDIO voice_start_recovery configured=pending"))
-        let voiceStart = try #require(startSource.range(of: "voiceFnTapSession.startVoice()"))
+        let voiceStart = try #require(
+            startSource.range(of: "voiceFnTapSession.startVoice(sourceIdentifier: identifier)")
+        )
         let asyncConfiguration = try #require(startSource.range(
             of: "ensureVirtualAudioOutputReady(reason: \"bluetooth_voice_start\")",
             range: voiceStart.upperBound..<startSource.endIndex
