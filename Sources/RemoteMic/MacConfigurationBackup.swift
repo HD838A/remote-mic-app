@@ -83,6 +83,8 @@ struct CompleteConfigurationPreferences: Codable {
     var chromecastEnabled: Bool
     var chromecastVoiceMode: ChromecastVoiceMode
     var siriRemoteScrollArrowReversed: Bool
+    /// 旧备份没有该字段；缺失时保持当前值，避免恢复旧配置把反馈重新打开。
+    var siriRemoteCursorFeedbackVisible: Bool?
     var siriRemoteEnabled: Bool
     var siriRemoteNeedsUserAction: Bool
     var localTranscriptHistoryEnabled: Bool

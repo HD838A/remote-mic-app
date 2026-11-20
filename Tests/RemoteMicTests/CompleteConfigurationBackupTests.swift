@@ -30,6 +30,7 @@ struct CompleteConfigurationBackupTests {
         source.localTranscriptHistoryEnabled = false
         source.localOriginalAudioRecordingEnabled = true
         source.siriRemoteScrollArrowReversed = true
+        source.siriRemoteCursorFeedbackVisible = false
         source.chromecastSystemReservedExceptions = ["left", "right"]
         let data = try MacConfigurationBackup(host: source.completeConfigurationSnapshot(), components: nil)
             .encoded(version: "2.0.0", build: "255")
@@ -52,6 +53,7 @@ struct CompleteConfigurationBackupTests {
         #expect(!destination.localTranscriptHistoryEnabled)
         #expect(destination.localOriginalAudioRecordingEnabled)
         #expect(destination.siriRemoteScrollArrowReversed)
+        #expect(!destination.siriRemoteCursorFeedbackVisible)
         #expect(destination.chromecastSystemReservedExceptions == ["left", "right"])
         destination.selectRemoteProfile(first)
         #expect(destination.buttonShortcuts[.home]?.keyCode == 8)

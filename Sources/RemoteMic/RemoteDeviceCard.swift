@@ -4,6 +4,15 @@ import SwiftUI
 enum RemoteFunctionReadiness: Equatable {
     case ready, checking, failed, unknown
 
+    var diagnosticValue: String {
+        switch self {
+        case .ready: return "ready"
+        case .checking: return "checking"
+        case .failed: return "failed"
+        case .unknown: return "unknown"
+        }
+    }
+
     /// Chromecast 的卡片按键就绪。
     ///
     /// 私有包当前只暴露 `isHIDRemotePresent` 快照，宿主不能把缓存 `nil` 当成“按键未知”；
@@ -60,6 +69,76 @@ enum RemoteDeviceCardStatus: String, CaseIterable {
         if buttons == .checking || voice == .checking { return .checking }
         if buttons == .unknown || voice == .unknown { return .confirming }
         return .connected
+    }
+}
+
+/// The exact inputs that produced a card status.
+///
+/// The status line alone cannot explain a persistent `confirming` state. This
+/// snapshot records only booleans, stable state names and localization keys:
+/// no device names, identifiers, paths or user content.
+struct RemoteCardReadinessSnapshot: Equatable {
+    let status: RemoteDeviceCardStatus
+    let model: String
+    let connected: Bool
+    let history: Bool
+    let buttons: RemoteFunctionReadiness
+    let buttonReason: String
+    let voice: RemoteFunctionReadiness
+    let voiceReason: String
+    let profileHasHID: Bool
+    let profileHasBluetooth: Bool
+    let hidMonitorPresent: Bool
+    let buttonReadinessCached: Bool
+    let appleConnected: Bool
+    let audioStatusKey: String
+    let audioReady: Bool
+    let audioSelected: Bool
+    let bridgeState: String
+    let siriAudioClass: String
+    let profileCount: Int
+    let connectedProfileCount: Int
+
+    func diagnosticLine(cardIndex: Int, operationID: UInt64) -> String {
+        "REMOTE CARD_READINESS operation_id=card_\(operationID) card_index=\(cardIndex) " +
+            "state=\(status.rawValue) model=\(model) connected=\(connected) history=\(history) " +
+            "buttons=\(buttons.diagnosticValue) button_reason=\(buttonReason) " +
+            "voice=\(voice.diagnosticValue) voice_reason=\(voiceReason) " +
+            "profile_hid=\(profileHasHID) profile_bt=\(profileHasBluetooth) " +
+            "hid_monitor=\(hidMonitorPresent) button_cache=\(buttonReadinessCached) " +
+            "apple_connected=\(appleConnected) audio_status=\(audioStatusKey) " +
+            "audio_ready=\(audioReady) audio_selected=\(audioSelected) " +
+            "bridge=\(bridgeState) siri_audio=\(siriAudioClass) " +
+            "profiles=\(profileCount) connected_profiles=\(connectedProfileCount)"
+    }
+}
+
+/// Whether the card should offer the explicit audio-output recovery fallback.
+///
+/// This is intentionally narrow: a green/confirming card, a history card, an
+/// Apple non-member card, or a voice failure caused by the component,
+/// membership, HID mapping or the remote link must not show an audio retry
+/// button. The button is only a last-resort recovery for a selected virtual
+/// output that is not ready.
+enum RemoteVoiceRecoveryPolicy {
+    static func shouldOfferAudioRecovery(
+        connected: Bool,
+        history: Bool,
+        voiceRequired: Bool,
+        cardStatus: RemoteDeviceCardStatus,
+        audioOutputReady: Bool,
+        selectedAudioDeviceUID: String,
+        audioStatusKey: String
+    ) -> Bool {
+        guard connected,
+              !history,
+              voiceRequired,
+              cardStatus == .voiceFailed,
+              !audioOutputReady,
+              !selectedAudioDeviceUID.isEmpty
+        else { return false }
+        return audioStatusKey.hasPrefix("audio.output.") &&
+            audioStatusKey != "audio.output.current_format"
     }
 }
 
@@ -139,12 +218,16 @@ struct RemoteDeviceCard: View {
     let showsBattery: Bool
     let enableTitle: String?
     let membershipTitle: String?
+    let voiceRecoveryTitle: String?
+    let voiceRecoveryHelp: String?
     let connectionTitle: String?
     let actionsDisabled: Bool
+    let voiceRecoveryDisabled: Bool
     let connectionDisabled: Bool
     let onSelect: () -> Void
     let onEnable: () -> Void
     let onMembership: () -> Void
+    let onRecoverVoice: () -> Void
     let onConnect: () -> Void
 
     var body: some View {
@@ -186,6 +269,15 @@ struct RemoteDeviceCard: View {
                 )
                 if showsBattery { batteryLabel }
                 Spacer(minLength: 0)
+                if let voiceRecoveryTitle {
+                    Button(voiceRecoveryTitle, action: onRecoverVoice)
+                        .buttonStyle(.borderless)
+                        .foregroundStyle(Color.accentColor)
+                        .fixedSize()
+                        .disabled(voiceRecoveryDisabled)
+                        .help(voiceRecoveryHelp ?? voiceRecoveryTitle)
+                        .accessibilityLabel(voiceRecoveryHelp ?? voiceRecoveryTitle)
+                }
                 if let membershipTitle {
                     Button(membershipTitle, action: onMembership)
                         .buttonStyle(.borderless)

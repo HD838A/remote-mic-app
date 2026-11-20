@@ -69,16 +69,18 @@ enum ScrollRegionInjector {
 
     static func scrollPage(
         direction: ScrollPageDirection,
+        step: ScrollPageStep = .full,
         learnedTarget: ScrollRegionTarget? = nil,
         verifyMovement: Bool = false
     ) -> ScrollPageResult {
         let started = Date()
-        let result = performScroll(direction: direction, learnedTarget: learnedTarget,
+        let result = performScroll(direction: direction, step: step, learnedTarget: learnedTarget,
                                    verifyMovement: verifyMovement)
         let bundle = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "-"
         AppLogger.shared.write(
             "SCROLL PAGE bundle=\(bundle) direction=\(direction == .up ? "up" : "down") " +
-            "strategy=\(learnedTarget?.strategy.rawValue ?? "preset") result=\(result.outcome.rawValue) " +
+            "step=\(step.logName) strategy=\(learnedTarget?.strategy.rawValue ?? "preset") " +
+            "result=\(result.outcome.rawValue) " +
             "verified=\(result.verifiedMovement.map(String.init) ?? "unknown") " +
             "elapsed_ms=\(Int(Date().timeIntervalSince(started) * 1000))"
         )
@@ -87,6 +89,7 @@ enum ScrollRegionInjector {
 
     private static func performScroll(
         direction: ScrollPageDirection,
+        step: ScrollPageStep,
         learnedTarget: ScrollRegionTarget?,
         verifyMovement: Bool
     ) -> ScrollPageResult {
@@ -98,10 +101,10 @@ enum ScrollRegionInjector {
         // 自家窗口不走 AX：同进程 AX 应答会进 SwiftUI view graph（#678 同类）。
         // 翻页键在设置页仍要能用，所以退回一个窗口高度的像素滚轮事件。
         if AXSelfTargetPolicy.isOwnProcess(application.processIdentifier) {
-            let result = scrollOwnWindow(direction: direction)
+            let result = scrollOwnWindow(direction: direction, heightMultiplier: step.fraction)
             AppLogger.shared.write(
                 "SCROLL PAGE bundle=\(bundleIdentifier) direction=\(direction == .up ? "up" : "down") " +
-                    "result=\(result.outcome.rawValue) reason=self_process"
+                    "step=\(step.logName) result=\(result.outcome.rawValue) reason=self_process"
             )
             return result
         }
@@ -117,7 +120,7 @@ enum ScrollRegionInjector {
         if let learnedTarget, !usesContainerMatching(role: learnedTarget.role) {
             return scrollRecordedRect(
                 learnedTarget, window: window, windowFrame: windowFrame,
-                direction: direction, verifyMovement: verifyMovement,
+                direction: direction, step: step, verifyMovement: verifyMovement,
                 isValidTarget: makeTargetValidator(
                     window: window, expectedFrame: windowFrame,
                     processIdentifier: application.processIdentifier
@@ -155,7 +158,7 @@ enum ScrollRegionInjector {
             }
             if preset.placement == .windowRect {
                 return scrollRect(
-                    windowFrame, window: window, direction: direction,
+                    windowFrame, window: window, direction: direction, step: step,
                     verifyMovement: verifyMovement, isValidTarget: isValidTarget
                 )
             }
@@ -169,7 +172,7 @@ enum ScrollRegionInjector {
             }
             guard let found = ScrollRegionRule.presetCandidateIndex(in: containers.map(\.descriptor)) else {
                 return scrollRect(
-                    windowFrame, window: window, direction: direction,
+                    windowFrame, window: window, direction: direction, step: step,
                     verifyMovement: verifyMovement, isValidTarget: isValidTarget
                 )
             }
@@ -179,7 +182,9 @@ enum ScrollRegionInjector {
             ? structuralSignature(in: window, region: candidate.descriptor.frame)
             : [:]
 
-        if axActions(candidate.element).contains("AXScrollUpByPage") {
+        // Native page actions have no half-page variant. Half page always uses
+        // the line-wheel path below, even when the target advertises a page action.
+        if step == .full, axActions(candidate.element).contains("AXScrollUpByPage") {
             let action = direction == .up ? "AXScrollUpByPage" : "AXScrollDownByPage"
             if AXUIElementPerformAction(candidate.element, action as CFString) == .success {
                 return finish(window: window, region: candidate.descriptor.frame, before: before,
@@ -193,12 +198,16 @@ enum ScrollRegionInjector {
             )
         }
 
-        // No page action: scroll the recorded region by its visible height,
+        // No full-page action: scroll the recorded region by its visible height,
         // never by the window centre (S6).
         let center = CGPoint(x: candidate.descriptor.frame.midX, y: candidate.descriptor.frame.midY)
+        let lines = ScrollRegionRule.pageScrollLines(
+            regionHeight: Double(candidate.descriptor.frame.height),
+            step: step
+        )
         let outcome = runPageWheel(
             direction: direction,
-            chunks: ScrollRegionRule.pageScrollChunks(regionHeight: Double(candidate.descriptor.frame.height)),
+            totalLines: lines,
             at: center,
             isValidTarget: isValidTarget,
             waitForCompletion: verifyMovement
@@ -226,7 +235,7 @@ enum ScrollRegionInjector {
 
         // 到顶/到底同样不碰自家 AX；一次足够大的像素滚轮由内容边界截住。
         if AXSelfTargetPolicy.isOwnProcess(application.processIdentifier) {
-            let result = scrollOwnWindow(direction: edge == .top ? .up : .down, pages: 6)
+            let result = scrollOwnWindow(direction: edge == .top ? .up : .down, heightMultiplier: 6)
             AppLogger.shared.write(
                 "SCROLL EDGE bundle=\(bundleIdentifier) edge=\(edge == .top ? "top" : "bottom") " +
                     "result=\(result.outcome.rawValue) reason=self_process"
@@ -308,6 +317,7 @@ enum ScrollRegionInjector {
         window: AXUIElement,
         windowFrame: CGRect,
         direction: ScrollPageDirection,
+        step: ScrollPageStep,
         verifyMovement: Bool,
         isValidTarget: @escaping () -> Bool
     ) -> ScrollPageResult {
@@ -323,7 +333,7 @@ enum ScrollRegionInjector {
             height: frame.height * windowFrame.height
         )
         return scrollRect(
-            rect, window: window, direction: direction,
+            rect, window: window, direction: direction, step: step,
             verifyMovement: verifyMovement, isValidTarget: isValidTarget
         )
     }
@@ -332,6 +342,7 @@ enum ScrollRegionInjector {
         _ rect: CGRect,
         window: AXUIElement,
         direction: ScrollPageDirection,
+        step: ScrollPageStep,
         verifyMovement: Bool,
         isValidTarget: @escaping () -> Bool
     ) -> ScrollPageResult {
@@ -339,9 +350,10 @@ enum ScrollRegionInjector {
             return ScrollPageResult(outcome: .regionUnavailable, verifiedMovement: nil)
         }
         let before = verifyMovement ? structuralSignature(in: window, region: rect) : [:]
+        let lines = ScrollRegionRule.pageScrollLines(regionHeight: Double(rect.height), step: step)
         let outcome = runPageWheel(
             direction: direction,
-            chunks: ScrollRegionRule.pageScrollChunks(regionHeight: Double(rect.height)),
+            totalLines: lines,
             at: CGPoint(x: rect.midX, y: rect.midY),
             isValidTarget: isValidTarget,
             waitForCompletion: verifyMovement
@@ -562,7 +574,7 @@ enum ScrollRegionInjector {
     /// cancelled/superseded, or the caller only got a queue acknowledgement.
     private static func runPageWheel(
         direction: ScrollPageDirection,
-        chunks: Int,
+        totalLines: Int32,
         at point: CGPoint,
         isValidTarget: @escaping () -> Bool,
         waitForCompletion: Bool
@@ -571,7 +583,7 @@ enum ScrollRegionInjector {
         let delivered = LockedBool()
         guard enqueuePageWheel(
             direction: direction,
-            chunks: chunks,
+            totalLines: totalLines,
             at: point,
             isValidTarget: isValidTarget,
             completion: { success in
@@ -634,11 +646,12 @@ enum ScrollRegionInjector {
 
     private static func enqueuePageWheel(
         direction: ScrollPageDirection,
-        chunks: Int,
+        totalLines: Int32,
         at point: CGPoint,
         isValidTarget: @escaping () -> Bool,
         completion: @escaping (Bool) -> Void
     ) -> Bool {
+        let chunks = ScrollRegionRule.pageWheelChunks(totalLines: totalLines)
         guard chunks > 0 else { return false }
         pageStateLock.lock()
         pageGeneration += 1
@@ -646,7 +659,8 @@ enum ScrollRegionInjector {
         pageStateLock.unlock()
 
         AppLogger.shared.write(
-            "SCROLL PAGE wheel chunks=\(chunks) lines_per_chunk=\(ScrollRegionRule.linesPerChunk) " +
+            "SCROLL PAGE wheel total_lines=\(totalLines) chunks=\(chunks) " +
+            "lines_per_chunk=\(ScrollRegionRule.linesPerChunk) " +
             "interval_ms=\(Int(ScrollRegionRule.chunkInterval * 1000)) state=queued"
         )
         pageScrollQueue.async {
@@ -664,11 +678,8 @@ enum ScrollRegionInjector {
                     completion(false)
                     return
                 }
-                guard postLineWheel(
-                    direction: direction,
-                    lines: ScrollRegionRule.linesPerChunk,
-                    at: point
-                ) else {
+                let lines = ScrollRegionRule.pageWheelLines(totalLines: totalLines, index: index)
+                guard postLineWheel(direction: direction, lines: lines, at: point) else {
                     AppLogger.shared.write("SCROLL PAGE wheel aborted reason=event_failed sent=\(index)")
                     completion(false)
                     return
@@ -677,25 +688,27 @@ enum ScrollRegionInjector {
                     Thread.sleep(forTimeInterval: ScrollRegionRule.chunkInterval)
                 }
             }
-            AppLogger.shared.write("SCROLL PAGE wheel completed chunks=\(chunks)")
+            AppLogger.shared.write(
+                "SCROLL PAGE wheel completed chunks=\(chunks) total_lines=\(totalLines)"
+            )
             completion(true)
         }
         return true
     }
 
-    /// 自家窗口的翻页回退：不查 AX，直接按窗口高度投递像素滚轮。
+    /// 自家窗口的翻页回退：不查 AX，直接按内容区高度投递像素滚轮。
     ///
-    /// 目标就是光标下的窗口，所以不设置别的定位；`pages` 只用于「到顶/到底」
-    /// 这种一次性大位移，冲过头由内容边界截住。
+    /// `heightMultiplier` 为整页 0.9、半页 0.5；到顶/到底传 6，让内容边界截住。
     private static func scrollOwnWindow(
         direction: ScrollPageDirection,
-        pages: Int = 1
+        heightMultiplier: Double
     ) -> ScrollPageResult {
         guard let point = CGEvent(source: nil)?.location else {
             return ScrollPageResult(outcome: .regionUnavailable, verifiedMovement: nil)
         }
-        let windowHeight = (NSApp.keyWindow ?? NSApp.mainWindow)?.frame.height ?? 600
-        let pixels = Int32(max(240, windowHeight * CGFloat(pages)).rounded())
+        let window = NSApp.keyWindow ?? NSApp.mainWindow
+        let windowHeight = window?.contentLayoutRect.height ?? window?.frame.height ?? 600
+        let pixels = Int32(max(1, (Double(windowHeight) * heightMultiplier).rounded()))
         guard let source = CGEventSource(stateID: .hidSystemState),
               let event = CGEvent(
                   scrollWheelEvent2Source: source,

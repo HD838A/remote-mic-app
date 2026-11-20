@@ -279,6 +279,13 @@ struct OnboardingView: View {
                 prepareForStep(settings.onboardingStep)
                 refreshSecureInputState()
             }
+            .onDisappear {
+                model.endOnboardingAudioPreparation(reason: "onboarding_view_disappeared")
+            }
+            .onChange(of: model.audioDevices.map(\.uid)) { _ in
+                guard settings.onboardingStep == .audio, audioOutputSelected else { return }
+                model.prepareOnboardingAudioOutput(reason: "onboarding_audio_devices_refreshed")
+            }
             .onReceive(permissionRefreshTimer) { _ in
                 // 权限查询要同步访问 tccd；App 在后台时没有任何用户可见收益，
                 // 用户从系统设置改完权限回到前台时 didBecomeActive 会立即刷新一次。
@@ -314,6 +321,9 @@ struct OnboardingView: View {
                 prepareSelectedControlConnection()
             case .audio:
                 model.refreshAudioDevices()
+                if audioOutputSelected {
+                    model.prepareOnboardingAudioOutput(reason: "onboarding_audio_became_active")
+                }
             case .complete:
                 prepareSelectedControlConnection()
                 model.refreshAudioDevices()
@@ -2143,7 +2153,7 @@ struct OnboardingView: View {
         let isSelected = settings.selectedAudioDeviceUID == device.uid
         return onboardingActionButton(id: "audio.device.\(device.uid)") {
             settings.selectedAudioDeviceUID = device.uid
-            model.applyAudioSettings(reason: "onboarding_audio_device_selected")
+            model.prepareOnboardingAudioOutput(reason: "onboarding_audio_device_selected")
         } label: {
             HStack(spacing: 12) {
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
@@ -4478,6 +4488,9 @@ struct OnboardingView: View {
 
     private func prepareForStep(_ step: OnboardingStep) {
         refreshPermissionStates()
+        if step != .audio {
+            model.endOnboardingAudioPreparation(reason: "onboarding_step_\(step.rawValue)")
+        }
         if settings.onboardingControlSource == .xiaomiRemote {
             reconcileOnboardingXiaomiModel()
             let stepsRequiringModel: Set<OnboardingStep> = [
@@ -4530,6 +4543,9 @@ struct OnboardingView: View {
             prepareSelectedControlConnection()
         case .audio:
             model.refreshAudioDevices()
+            if audioOutputSelected {
+                model.prepareOnboardingAudioOutput(reason: "onboarding_audio_entered")
+            }
         case .voiceTest:
             refreshSelectedVoiceToolRuntimeState()
             ensureSelectedVoiceToolRunning()
@@ -4629,7 +4645,7 @@ struct OnboardingView: View {
         case .audioNoOutputDevice, .audioSelectedDeviceMissing:
             model.refreshAudioDevices()
         case .audioOutputNotReady:
-            model.applyAudioSettings(reason: "onboarding_recovery")
+            model.prepareOnboardingAudioOutput(reason: "onboarding_recovery")
         case .voiceSessionNotStarted,
              .voiceAuthorizationRequired,
              .voiceSessionNotEnded,

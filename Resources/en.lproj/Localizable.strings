@@ -112,6 +112,9 @@
 "siri_remote.scroll_arrow.reverse.title" = "Reverse Scroll Indicator";
 "siri_remote.scroll_arrow.reverse.detail" = "Reverse the direction of the on-screen arrow. The scrolling direction stays the same.";
 "siri_remote.scroll_arrow.reverse.help" = "Off matches the page scroll indicator; on points in the opposite direction.";
+"siri_remote.cursor_feedback.visible.title" = "Show Mouse Feedback";
+"siri_remote.cursor_feedback.visible.detail" = "Turn off to hide the on-screen cursor halo and scrolling arrows. Pointer movement, clicks, and scrolling still work.";
+"siri_remote.cursor_feedback.visible.help" = "Controls the on-screen indicator only. Touch control keeps working when hidden.";
 "chromecast.section_title" = "Chromecast remote";
 "chromecast.section_subtitle" = "Bluetooth voice remote";
 "chromecast.status.unavailable" = "Not included in this build";
@@ -200,6 +203,8 @@
 "action.scroll_down" = "Scroll Down";
 "action.page_up" = "Page Up";
 "action.page_down" = "Page Down";
+"action.page_up_half" = "Half Page Up";
+"action.page_down_half" = "Half Page Down";
 "action.scroll_to_top" = "Scroll to Top";
 "action.scroll_to_bottom" = "Scroll to Bottom";
 "scroll_region.title" = "Scroll Region";
@@ -1592,6 +1597,8 @@
 "remote.card.detail.cancelled" = "The connection attempt was cancelled. You can connect again when needed.";
 
 "remote.card.open_membership" = "Join";
+"remote.card.recover_voice" = "Restore";
+"remote.card.recover_voice.help" = "Restore Voice";
 
 "remote.card.install.title" = "Install Apple remote component";
 

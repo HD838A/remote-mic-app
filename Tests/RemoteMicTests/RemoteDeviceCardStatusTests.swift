@@ -30,6 +30,100 @@ struct RemoteDeviceCardStatusTests {
         }
     }
 
+    @Test func audioRecoveryButtonOnlyTargetsAudioOutputVoiceFailures() {
+        #expect(RemoteVoiceRecoveryPolicy.shouldOfferAudioRecovery(
+            connected: true,
+            history: false,
+            voiceRequired: true,
+            cardStatus: .voiceFailed,
+            audioOutputReady: false,
+            selectedAudioDeviceUID: "MiRemoteV2ch_UID",
+            audioStatusKey: "audio.output.selected_unavailable"
+        ))
+        #expect(RemoteVoiceRecoveryPolicy.shouldOfferAudioRecovery(
+            connected: true,
+            history: false,
+            voiceRequired: true,
+            cardStatus: .voiceFailed,
+            audioOutputReady: false,
+            selectedAudioDeviceUID: "MiRemoteV2ch_UID",
+            audioStatusKey: "audio.output.start_failed"
+        ))
+
+        for status in [
+            RemoteDeviceCardStatus.connected,
+            .confirming,
+            .checking,
+            .deviceFailed,
+            .disconnected,
+        ] {
+            #expect(!RemoteVoiceRecoveryPolicy.shouldOfferAudioRecovery(
+                connected: true,
+                history: false,
+                voiceRequired: true,
+                cardStatus: status,
+                audioOutputReady: false,
+                selectedAudioDeviceUID: "MiRemoteV2ch_UID",
+                audioStatusKey: "audio.output.selected_unavailable"
+            ))
+        }
+
+        #expect(!RemoteVoiceRecoveryPolicy.shouldOfferAudioRecovery(
+            connected: false,
+            history: false,
+            voiceRequired: true,
+            cardStatus: .voiceFailed,
+            audioOutputReady: false,
+            selectedAudioDeviceUID: "MiRemoteV2ch_UID",
+            audioStatusKey: "audio.output.selected_unavailable"
+        ))
+        #expect(!RemoteVoiceRecoveryPolicy.shouldOfferAudioRecovery(
+            connected: true,
+            history: true,
+            voiceRequired: true,
+            cardStatus: .voiceFailed,
+            audioOutputReady: false,
+            selectedAudioDeviceUID: "MiRemoteV2ch_UID",
+            audioStatusKey: "audio.output.selected_unavailable"
+        ))
+        #expect(!RemoteVoiceRecoveryPolicy.shouldOfferAudioRecovery(
+            connected: true,
+            history: false,
+            voiceRequired: false,
+            cardStatus: .voiceFailed,
+            audioOutputReady: false,
+            selectedAudioDeviceUID: "MiRemoteV2ch_UID",
+            audioStatusKey: "audio.output.selected_unavailable"
+        ))
+        #expect(!RemoteVoiceRecoveryPolicy.shouldOfferAudioRecovery(
+            connected: true,
+            history: false,
+            voiceRequired: true,
+            cardStatus: .voiceFailed,
+            audioOutputReady: true,
+            selectedAudioDeviceUID: "MiRemoteV2ch_UID",
+            audioStatusKey: "siri_remote.audio.unavailable"
+        ))
+        #expect(!RemoteVoiceRecoveryPolicy.shouldOfferAudioRecovery(
+            connected: true,
+            history: false,
+            voiceRequired: true,
+            cardStatus: .voiceFailed,
+            audioOutputReady: false,
+            selectedAudioDeviceUID: "",
+            audioStatusKey: "audio.output.selected_unavailable"
+        ))
+        #expect(!RemoteVoiceRecoveryPolicy.shouldOfferAudioRecovery(
+            connected: true,
+            history: false,
+            voiceRequired: true,
+            cardStatus: .voiceFailed,
+            audioOutputReady: false,
+            selectedAudioDeviceUID: "MiRemoteV2ch_UID",
+            audioStatusKey: "audio.output.current_format"
+        ))
+    }
+
     @Test func HIDWarningsAndPermissionsAreNotReportedAsHealthy() {
         #expect(RemoteFunctionReadiness.buttons(statusKey: "button_mapping.status.connected") == .ready)
         #expect(RemoteFunctionReadiness.buttons(statusKey: "button_mapping.status.connected_system_actions_may_remain") == .failed)
@@ -130,5 +224,65 @@ struct RemoteDeviceCardStatusTests {
         #expect(decoded.lastKnownBluetoothName == nil)
         #expect(decoded.customName == "旧设备")
         #expect(decoded.mappings == profile.mappings)
+    }
+
+    @Test func voiceRecoveryActionIsWiredThroughTheNarrowPolicy() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let settingsSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+        let cardSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/RemoteDeviceCard.swift"),
+            encoding: .utf8
+        )
+
+        #expect(settingsSource.contains("let canRecoverVoice = !appleNeedsEnable && model.remoteCardCanRecoverAudio("))
+        #expect(settingsSource.contains("voiceRecoveryTitle: canRecoverVoice ? localization.text(\"remote.card.recover_voice\") : nil"))
+        #expect(settingsSource.contains("voiceRecoveryHelp: canRecoverVoice ? localization.text(\"remote.card.recover_voice.help\") : nil"))
+        #expect(settingsSource.contains("onRecoverVoice: { model.recoverRemoteVoiceAudio() }"))
+        #expect(cardSource.contains("if let voiceRecoveryTitle"))
+        #expect(cardSource.contains("Button(voiceRecoveryTitle, action: onRecoverVoice)"))
+    }
+
+    @Test func readinessDiagnosticSeparatesProfileBindingFromAudioReadiness() {
+        let snapshot = RemoteCardReadinessSnapshot(
+            status: .confirming,
+            model: "rc003",
+            connected: true,
+            history: true,
+            buttons: .unknown,
+            buttonReason: "hid_monitor_missing",
+            voice: .ready,
+            voiceReason: "bluetooth_bridge_ready",
+            profileHasHID: false,
+            profileHasBluetooth: true,
+            hidMonitorPresent: false,
+            buttonReadinessCached: false,
+            appleConnected: false,
+            audioStatusKey: "audio.output.current_format",
+            audioReady: true,
+            audioSelected: true,
+            bridgeState: "ready",
+            siriAudioClass: "unknown",
+            profileCount: 2,
+            connectedProfileCount: 1
+        )
+        let line = snapshot.diagnosticLine(cardIndex: 0, operationID: 7)
+        #expect(line.contains("state=confirming"))
+        #expect(line.contains("buttons=unknown"))
+        #expect(line.contains("button_reason=hid_monitor_missing"))
+        #expect(line.contains("voice=ready"))
+        #expect(line.contains("voice_reason=bluetooth_bridge_ready"))
+        #expect(line.contains("profile_hid=false"))
+        #expect(line.contains("profile_bt=true"))
+        #expect(line.contains("hid_monitor=false"))
+        #expect(line.contains("audio_ready=true"))
+        #expect(line.contains("bridge=ready"))
+        #expect(!line.contains("device_name="))
+        #expect(!line.contains("/Users/"))
     }
 }

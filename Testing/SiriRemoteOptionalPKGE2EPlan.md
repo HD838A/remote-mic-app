@@ -40,7 +40,7 @@
 
 每条路径记录开始/结束 UTC、退出码、选择状态、安装前后 SHA、权限、receipt、`launchctl print`、CoreAudio 枚举和 `/var/log/install.log` 对应时间。日志不得记录密码、用户内容、设备唯一标识或其他 App 私有状态。
 
-以下任一情况判定失败：默认选择 Siri Remote；未选择仍新装 Helper；未选择的升级删除或重置已有 Helper；选择后缺少 Helper/LaunchDaemon/receipt；非管理员失败改变任何已安装字节；卸载后服务或原路径残留；最终资产签名、公证、staple 或 Gatekeeper 任一失败。
+以下任一情况判定失败：默认选择 Siri Remote；未选择仍新装 Helper；未选择的升级删除或重置已有 Helper；选择后缺少 Helper/LaunchDaemon/receipt；非管理员失败改变任何已安装字节；卸载后服务、原路径、Siri 组件收据或 SayAll Dock 固定项残留；最终资产签名、公证、staple 或 Gatekeeper 任一失败。
 
 ## 完成门槛
 

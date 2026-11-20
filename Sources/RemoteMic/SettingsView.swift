@@ -1305,13 +1305,6 @@ struct SettingsView: View {
                     VStack(spacing: 14) {
                         phoneConnectionsPanel
                         audioSettingsPanel
-                        #if SAYALL_CHROMECAST_ENABLED && canImport(SayAllChromecast)
-                        // Chromecast 卡片在系统 HID 或语音链路连接时显示；两者都不在时不渲染，
-                        // 与小米/苹果遥控器卡片一致。启用开关默认常开，语音键模式在语音键设置面板内。
-                        if model.isChromecastHIDPresent || model.chromecastStatus.isConnected {
-                            chromecastConnectionCard
-                        }
-                        #endif
                     }
                     .frame(maxWidth: .infinity, alignment: .topLeading)
                 }
@@ -1441,38 +1434,6 @@ struct SettingsView: View {
         }
     }
 
-    #endif
-
-    #if SAYALL_CHROMECAST_ENABLED && canImport(SayAllChromecast)
-    /// 系统 HID 或语音链路连接时渲染；两者都不在时与小米/苹果遥控器卡片一样隐藏。
-    private var chromecastConnectionCard: some View {
-        GlassPanel {
-            HStack(alignment: .top, spacing: 14) {
-                ChromecastConnectionPhoto()
-                VStack(alignment: .leading, spacing: 9) {
-                    Text("chromecast.section_title")
-                        .font(.headline)
-                    Text("chromecast.section_subtitle")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    connectionStatusLine(
-                        symbol: "antenna.radiowaves.left.and.right",
-                        text: localization.text(model.chromecastStatus.localizationKey),
-                        tint: model.chromecastStatus.isConnected ? .green : .orange
-                    )
-                    Text("chromecast.help.plain")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Button("chromecast.action.reconnect") {
-                        model.reconnectChromecast()
-                    }
-                    .compatibilityButtonStyle(.standard)
-                }
-                Spacer(minLength: 0)
-            }
-        }
-    }
     #endif
 
     private var connectionMembershipRequiredView: some View {
@@ -2939,6 +2900,9 @@ struct SettingsView: View {
                 holdSummary: { button in mappingHoldSummary(for: button) },
                 actionDetail: { button, trigger in mappingActionDetail(for: button, trigger: trigger) },
                 actionSource: { button, trigger in mappingActionSource(for: button, trigger: trigger) },
+                actionConfigured: { button, trigger in
+                    mappingConfiguration(for: button, trigger: trigger).action != .disabled
+                },
                 onEdit: { button, trigger in
                     selectedRemoteButton = button
                     mappingActionFilter = mappingFilterForConfiguredAction(
@@ -3491,13 +3455,16 @@ struct SettingsView: View {
                     Divider()
                     mappingVoiceFnTapControl
                 }
-                // 触摸面（滑动箭头/光标）只有具备触摸面的遥控器才显示，页面请求之外再加一道能力门禁。
+                // 触摸面（滑动箭头/光标反馈）只有具备触摸面的遥控器才显示，页面请求之外再加一道能力门禁。
                 if TouchSurfaceControlApplicability.isApplicable(
                     capabilities: capabilities,
                     pageRequestsControl: includeSiriScrollArrow
                 ) {
                     Divider()
-                    siriRemoteScrollArrowControl
+                    HStack(alignment: .top, spacing: 28) {
+                        siriRemoteScrollArrowControl
+                        siriRemoteCursorFeedbackControl
+                    }
                 }
                 HStack {
                     Spacer(minLength: 0)
@@ -3508,18 +3475,55 @@ struct SettingsView: View {
     }
 
     private var siriRemoteScrollArrowControl: some View {
-        Toggle(isOn: $settings.siriRemoteScrollArrowReversed) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(localization.text("siri_remote.scroll_arrow.reverse.title"))
-                    .font(.system(size: 13, weight: .medium))
-                Text(localization.text("siri_remote.scroll_arrow.reverse.detail"))
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+        siriRemoteTouchToggle(
+            icon: "arrow.up.arrow.down",
+            titleKey: "siri_remote.scroll_arrow.reverse.title",
+            detailKey: "siri_remote.scroll_arrow.reverse.detail",
+            helpKey: "siri_remote.scroll_arrow.reverse.help",
+            isOn: $settings.siriRemoteScrollArrowReversed
+        )
+    }
+
+    private var siriRemoteCursorFeedbackControl: some View {
+        siriRemoteTouchToggle(
+            icon: "computermouse",
+            titleKey: "siri_remote.cursor_feedback.visible.title",
+            detailKey: "siri_remote.cursor_feedback.visible.detail",
+            helpKey: "siri_remote.cursor_feedback.visible.help",
+            isOn: Binding(
+                get: { settings.siriRemoteCursorFeedbackVisible },
+                set: { model.setSiriRemoteCursorFeedbackVisible($0) }
+            )
+        )
+    }
+
+    private func siriRemoteTouchToggle(
+        icon: String,
+        titleKey: String,
+        detailKey: String,
+        helpKey: String,
+        isOn: Binding<Bool>
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Toggle(isOn: isOn) {
+                Label {
+                    Text(localization.text(titleKey))
+                        .font(.system(size: 13, weight: .medium))
+                } icon: {
+                    Image(systemName: icon)
+                        .frame(width: 18, height: 18)
+                        .foregroundStyle(Color.accentColor)
+                }
             }
+            .toggleStyle(.switch)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .help(localization.text(helpKey))
+            Text(localization.text(detailKey))
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
-        .toggleStyle(.switch)
-        .help(localization.text("siri_remote.scroll_arrow.reverse.help"))
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var mappingVoiceKeyModeControl: some View {
@@ -3758,6 +3762,11 @@ struct SettingsView: View {
         let status = model.remoteCardStatus(for: profile, history: history)
         let recovering = status == .connecting
         let appleNeedsEnable = profile.model.isAppleSiriRemote && model.siriRemoteActivationNeeded
+        let canRecoverVoice = !appleNeedsEnable && model.remoteCardCanRecoverAudio(
+            for: profile,
+            status: status,
+            history: history
+        )
         let level = connected ? model.batteryLevel(for: profile.id) : nil
         let power = connected ? model.powerState(for: profile.id) : nil
         return RemoteDeviceCard(
@@ -3772,8 +3781,13 @@ struct SettingsView: View {
                 && RemoteBatteryPresentationPolicy.shouldShowBattery(model: profile.model, level: level, powerState: power),
             enableTitle: appleNeedsEnable ? localization.text("siri_remote.activation.enable") : nil,
             membershipTitle: requiresSiriRemoteMembership(for: profile) ? localization.text("remote.card.open_membership") : nil,
+            voiceRecoveryTitle: canRecoverVoice ? localization.text("remote.card.recover_voice") : nil,
+            voiceRecoveryHelp: canRecoverVoice ? localization.text("remote.card.recover_voice.help") : nil,
             connectionTitle: history ? localization.text(recovering ? "connection.history.cancel" : "connection.history.connect") : nil,
             actionsDisabled: model.isStreaming || model.activePhysicalVoiceControlSource == .siriRemote,
+            voiceRecoveryDisabled: model.isStreaming
+                || model.activePhysicalVoiceControlSource == .siriRemote
+                || model.isRemoteVoiceRecoveryInFlight,
             connectionDisabled: !recovering && !model.canConnectRemoteProfile(profile.id),
             onSelect: {
                 model.noteManualRemoteProfileSelection()
@@ -3784,6 +3798,7 @@ struct SettingsView: View {
                 selectedSection = .membership
                 membershipFeature.refreshIfNeeded()
             },
+            onRecoverVoice: { model.recoverRemoteVoiceAudio() },
             onConnect: {
                 if recovering { model.cancelRemoteConnection(profile.id) }
                 else { model.connectRemoteProfile(profile.id) }

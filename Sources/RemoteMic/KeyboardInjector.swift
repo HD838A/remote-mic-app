@@ -456,10 +456,14 @@ enum KeyboardInjector {
         return ScrollRegionInjector.scrollToEdge(edge, learnedTarget: learned).outcome
     }
 
-    static let defaultScrollPagePoster: (ScrollPageDirection) -> ScrollPageOutcome = { direction in
+    static let defaultScrollPagePoster: (ScrollPageDirection, ScrollPageStep) -> ScrollPageOutcome = { direction, step in
         let bundleIdentifier = NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? ""
         let learned = ScrollRegionTargetStore.shared.target(for: bundleIdentifier)
-        return ScrollRegionInjector.scrollPage(direction: direction, learnedTarget: learned).outcome
+        return ScrollRegionInjector.scrollPage(
+            direction: direction,
+            step: step,
+            learnedTarget: learned
+        ).outcome
     }
 
     private static let focusRequests = ApplicationFocusRequestGate()
@@ -509,15 +513,35 @@ enum KeyboardInjector {
         _ mode: VoiceKeyMode,
         isPressed: Bool,
         accessibilityTrusted: () -> Bool = { isAccessibilityTrusted },
-        keyStatePoster: KeyStatePoster = postKeyState
+        keyStatePoster: KeyStatePoster = postKeyState,
+        logger: (String) -> Void = AppLogger.shared.write
     ) -> Bool {
-        guard accessibilityTrusted() else { return false }
+        let edge = isPressed ? "down" : "up"
+        guard accessibilityTrusted() else {
+            if mode == .function {
+                logger(
+                    "VOICE KEY fn_submit mode=fn edge=\(edge) result=rejected " +
+                        "reason=accessibility_denied source=software synthetic=true " +
+                        "target_response=unknown"
+                )
+            }
+            return false
+        }
         let flags = isPressed ? mode.eventFlags : []
-        return keyStatePoster(
+        let submitted = keyStatePoster(
             mode.keyCode,
             isPressed,
             flags
         )
+        if mode == .function {
+            logger(
+                "VOICE KEY fn_submit mode=fn edge=\(edge) " +
+                    "result=\(submitted ? "submitted" : "failed") source=software " +
+                    "synthetic=true event_flags=\(ShortcutEventSequence.diagnosticFlags(flags)) " +
+                    "target_response=unknown"
+            )
+        }
+        return submitted
     }
 
     static func recordedShortcut(
@@ -563,7 +587,7 @@ enum KeyboardInjector {
         keyPoster: KeyPoster = { postKey(code: $0, flags: $1) },
         keyStatePoster: KeyStatePoster = postKeyState,
         scrollPoster: ScrollPoster = { postScrollWheel(lines: $0) },
-        scrollPagePoster: (ScrollPageDirection) -> ScrollPageOutcome = defaultScrollPagePoster,
+        scrollPagePoster: (ScrollPageDirection, ScrollPageStep) -> ScrollPageOutcome = defaultScrollPagePoster,
         scrollEdgePoster: (ScrollEdge) -> ScrollPageOutcome = defaultScrollEdgePoster,
         systemKeyPoster: SystemKeyPoster = postSystemKey,
         shortcutEventPoster: (CGEvent) -> Bool = ShortcutEventSequence.post,
@@ -704,9 +728,13 @@ enum KeyboardInjector {
         case .scrollDown:
             scrollPoster(-scrollLineCount)
         case .pageUp:
-            return scrollPagePoster(.up).wasHandled
+            return scrollPagePoster(.up, .full).wasHandled
         case .pageDown:
-            return scrollPagePoster(.down).wasHandled
+            return scrollPagePoster(.down, .full).wasHandled
+        case .pageUpHalf:
+            return scrollPagePoster(.up, .half).wasHandled
+        case .pageDownHalf:
+            return scrollPagePoster(.down, .half).wasHandled
         case .scrollToTop:
             return scrollEdgePoster(.top).wasHandled
         case .scrollToBottom:

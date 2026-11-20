@@ -58,6 +58,67 @@ struct VoiceKeyModeTests {
         #expect(posted[1].2.isEmpty)
     }
 
+    @Test func functionVoiceKeySubmissionLogsBothEdgesAndFlags() {
+        var logs: [String] = []
+        let poster: KeyboardInjector.KeyStatePoster = { _, _, _ in true }
+        let logger: (String) -> Void = { logs.append($0) }
+
+        #expect(KeyboardInjector.setVoiceKeyPressed(
+            .function,
+            isPressed: true,
+            accessibilityTrusted: { true },
+            keyStatePoster: poster,
+            logger: logger
+        ))
+        #expect(KeyboardInjector.setVoiceKeyPressed(
+            .function,
+            isPressed: false,
+            accessibilityTrusted: { true },
+            keyStatePoster: poster,
+            logger: logger
+        ))
+
+        #expect(logs.count == 2)
+        #expect(logs[0].contains("VOICE KEY fn_submit mode=fn edge=down"))
+        #expect(logs[0].contains("result=submitted"))
+        #expect(logs[0].contains("source=software synthetic=true"))
+        #expect(logs[0].contains("event_flags=8388608"))
+        #expect(logs[1].contains("VOICE KEY fn_submit mode=fn edge=up"))
+        #expect(logs[1].contains("event_flags=0"))
+    }
+
+    @Test func functionVoiceKeyRejectionNamesThePermissionBoundary() {
+        var logs: [String] = []
+        let logger: (String) -> Void = { logs.append($0) }
+
+        #expect(!KeyboardInjector.setVoiceKeyPressed(
+            .function,
+            isPressed: true,
+            accessibilityTrusted: { false },
+            keyStatePoster: { _, _, _ in true },
+            logger: logger
+        ))
+
+        #expect(logs.count == 1)
+        #expect(logs[0].contains("edge=down result=rejected"))
+        #expect(logs[0].contains("reason=accessibility_denied"))
+    }
+
+    @Test func nonFunctionVoiceKeyDoesNotWriteFunctionDiagnostics() {
+        var logs: [String] = []
+        let logger: (String) -> Void = { logs.append($0) }
+
+        #expect(KeyboardInjector.setVoiceKeyPressed(
+            .leftOption,
+            isPressed: true,
+            accessibilityTrusted: { true },
+            keyStatePoster: { _, _, _ in true },
+            logger: logger
+        ))
+
+        #expect(logs.isEmpty)
+    }
+
     @Test func rightOptionVoiceKeyInjectionPreservesModifierSideAndReleasesCleanly() {
         var posted: [(CGKeyCode, Bool, CGEventFlags)] = []
         let poster: KeyboardInjector.KeyStatePoster = { code, isDown, flags in

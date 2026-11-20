@@ -3107,10 +3107,32 @@ struct OnboardingFlowTests {
         #expect(!audioSource.contains("ForEach(model.audioDevices"))
         #expect(!audioSource.contains("Picker("))
         #expect(audioSource.contains("settings.selectedAudioDeviceUID = device.uid"))
-        #expect(audioSource.contains("model.applyAudioSettings(reason: \"onboarding_audio_device_selected\")"))
+        #expect(audioSource.contains("model.prepareOnboardingAudioOutput(reason: \"onboarding_audio_device_selected\")"))
         #expect(viewSource.contains("OnboardingAudioSelectionPolicy.isSupportedDevice"))
         #expect(viewSource.contains("onboarding.audio.on_demand_detail"))
         #expect(viewSource.contains("onboarding.side.audio_on_demand"))
+    }
+
+    /// 音频页不能要求用户先点重试才配置输出。进入页面、设备枚举完成和重新回到前台
+    /// 都要主动准备；离开页面必须解除临时租约，避免把没有语音来源的引擎长期保留。
+    @Test func onboardingAudioStepPreparesAndReleasesTheTemporaryOutputLease() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let viewSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/OnboardingView.swift"),
+            encoding: .utf8
+        )
+
+        #expect(viewSource.contains("model.prepareOnboardingAudioOutput(reason: \"onboarding_audio_entered\")"))
+        #expect(viewSource.contains("model.prepareOnboardingAudioOutput(reason: \"onboarding_audio_devices_refreshed\")"))
+        #expect(viewSource.contains("model.prepareOnboardingAudioOutput(reason: \"onboarding_audio_became_active\")"))
+        #expect(viewSource.contains("model.prepareOnboardingAudioOutput(reason: \"onboarding_audio_device_selected\")"))
+        #expect(viewSource.contains("model.prepareOnboardingAudioOutput(reason: \"onboarding_recovery\")"))
+        #expect(viewSource.contains("model.endOnboardingAudioPreparation(reason: \"onboarding_step_\\(step.rawValue)\")"))
+        #expect(viewSource.contains("model.endOnboardingAudioPreparation(reason: \"onboarding_view_disappeared\")"))
+        #expect(!viewSource.contains("model.applyAudioSettings(reason: \"onboarding_recovery\")"))
     }
 
     @Test func onlySayAllLegacyMiRemoteAndBlackHoleCanSatisfyTheAudioSelectionGate() {

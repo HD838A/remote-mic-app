@@ -47,14 +47,22 @@ struct ScrollRegionTests {
         #expect(ScrollPageOutcome.scrolledByPixelWheel.didScroll)
     }
 
-    @Test func pageScrollUsesBoundedChunks() {
-        // 884 pt region: 884 * 0.9 / 215 ≈ 3.7 → clamped to 3 chunks.
-        #expect(ScrollRegionRule.pageScrollChunks(regionHeight: 884) == 3)
-        // 300 pt region: 300 * 0.9 / 215 ≈ 1.26 → 1 chunk.
-        #expect(ScrollRegionRule.pageScrollChunks(regionHeight: 300) == 1)
-        #expect(ScrollRegionRule.pageScrollChunks(regionHeight: 10) == 1)
-        #expect(ScrollRegionRule.pageScrollChunks(regionHeight: 0) == 1)
-        #expect(ScrollRegionRule.pageScrollChunks(regionHeight: 100_000) == ScrollRegionRule.maximumPageChunks)
+    @Test func pageScrollUsesVisibleHeightAndSplitsLineChunks() {
+        // 884 pt region: full page targets 0.9 × height, half page targets 0.5 × height.
+        #expect(ScrollRegionRule.pageScrollLines(regionHeight: 884, step: .full) == 66)
+        #expect(ScrollRegionRule.pageScrollLines(regionHeight: 884, step: .half) == 37)
+        #expect(ScrollRegionRule.pageScrollLines(regionHeight: 10, step: .full) == 1)
+        #expect(ScrollRegionRule.pageScrollLines(regionHeight: 0, step: .full) == 1)
+        #expect(ScrollRegionRule.pageScrollLines(regionHeight: 100_000, step: .full) == ScrollRegionRule.maximumPageLines)
+
+        // 29 lines = 20 + 9; 53 lines = 20 + 20 + 13.
+        #expect(ScrollRegionRule.pageWheelChunks(totalLines: 29) == 2)
+        #expect(ScrollRegionRule.pageWheelLines(totalLines: 29, index: 0) == 20)
+        #expect(ScrollRegionRule.pageWheelLines(totalLines: 29, index: 1) == 9)
+        #expect(ScrollRegionRule.pageWheelChunks(totalLines: 53) == 3)
+        #expect(ScrollRegionRule.pageWheelLines(totalLines: 53, index: 2) == 13)
+        #expect(ScrollRegionRule.pageWheelChunks(totalLines: 0) == 0)
+        #expect(ScrollRegionRule.pageWheelLines(totalLines: 29, index: 2) == 0)
     }
 
     @Test func wheelDirectionKeepsExistingLineScrollConvention() {
@@ -176,13 +184,19 @@ struct ScrollRegionTests {
         #expect(decoded.scrollRegionTarget == scrollTarget)
     }
 
-    @Test func pageStepIsAboutOneViewport() {
-        // 一屏 = 区域高度 × 0.9；每块 20 行 × 12 pt = 240 pt，封顶 3 块。
-        #expect(ScrollRegionRule.pageScrollChunks(regionHeight: 700) == 3)
-        #expect(ScrollRegionRule.pageScrollChunks(regionHeight: 300) == 1)
-        let lines = Int(ScrollRegionRule.linesPerChunk) * 3
-        let points = Double(lines) * ScrollRegionRule.pointsPerLine
-        #expect(points >= 600 && points <= 800, "一次翻页应约等于一屏，实际 \(points) pt")
+    @Test func pageStepsScaleWithVisibleHeight() {
+        // 700 pt 内容区：整页 0.9 屏 = 53 行，半页 0.5 屏 = 29 行。
+        #expect(ScrollRegionRule.pageScrollLines(regionHeight: 700, step: .full) == 53)
+        #expect(ScrollRegionRule.pageScrollLines(regionHeight: 700, step: .half) == 29)
+        // 900 pt 内容区：整页 0.9 屏 = 68 行，半页 0.5 屏 = 38 行。
+        #expect(ScrollRegionRule.pageScrollLines(regionHeight: 900, step: .full) == 68)
+        #expect(ScrollRegionRule.pageScrollLines(regionHeight: 900, step: .half) == 38)
+        let fullPoints = Double(ScrollRegionRule.pageScrollLines(regionHeight: 700, step: .full)) *
+            ScrollRegionRule.pointsPerLine
+        let halfPoints = Double(ScrollRegionRule.pageScrollLines(regionHeight: 700, step: .half)) *
+            ScrollRegionRule.pointsPerLine
+        #expect(fullPoints >= 600 && fullPoints <= 800, "整页应约为一屏，实际 \(fullPoints) pt")
+        #expect(halfPoints >= 300 && halfPoints <= 400, "半页应约为半屏，实际 \(halfPoints) pt")
     }
 
     @Test func edgeActionsNeverRepeat() {
@@ -221,13 +235,12 @@ struct ScrollRegionTests {
 
     @Test func pageActionsRepeatWhileHeld() {
         // 按住下键要能连续翻页，和行滚动一致；重复节奏由 HIDRemoteTiming 单独限速。
-        #expect(ButtonAction.pageUp.allowsRepeat)
-        #expect(ButtonAction.pageDown.allowsRepeat)
-        #expect(ButtonAction.pageUp.isPageScroll)
-        #expect(ButtonAction.pageDown.isPageScroll)
+        for action in [ButtonAction.pageUp, .pageDown, .pageUpHalf, .pageDownHalf] {
+            #expect(action.allowsRepeat)
+            #expect(action.isPageScroll)
+            #expect(action.category == .basicKeys)
+        }
         #expect(!ButtonAction.scrollUp.isPageScroll)
-        #expect(ButtonAction.pageUp.category == .basicKeys)
-        #expect(ButtonAction.pageDown.category == .basicKeys)
     }
 
     @Test func pageRepeatsAreRateLimited() {
@@ -243,6 +256,11 @@ struct ScrollRegionTests {
         ))
         // 行滚动不受这个限速影响，仍按按钮自身间隔执行。
         #expect(HIDRemoteTiming.pageRepeatMinimumMilliseconds > 100)
+        // 最长的整页队列为 6 块 × 60ms；连发不能早于它结束。
+        let maximumQueueMilliseconds = UInt64(ScrollRegionRule.pageWheelChunks(
+            totalLines: ScrollRegionRule.maximumPageLines
+        ) - 1) * UInt64(ScrollRegionRule.chunkInterval * 1000)
+        #expect(HIDRemoteTiming.pageRepeatMinimumMilliseconds >= maximumQueueMilliseconds)
     }
 
     @Test func fullWindowWebAreaIsNotTreatedAsARegion() {

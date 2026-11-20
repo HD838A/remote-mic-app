@@ -681,9 +681,16 @@ enum VirtualAudioConnectionLifecyclePolicy {
         mobileVoiceActive: Bool,
         testToneActive: Bool,
         systemSuspended: Bool,
-        idleBridgeReleaseDue: Bool = false
+        idleBridgeReleaseDue: Bool = false,
+        onboardingPreparationActive: Bool = false
     ) -> Bool {
         if bluetoothVoiceActive || mobileVoiceActive || testToneActive {
+            return true
+        }
+        // Onboarding 音频页需要先证明所选虚拟设备可以配置。该页面没有活跃语音，
+        // 遥控器语音链路也可能尚未连接；仅在用户停留于本页时持有临时租约，
+        // 让 bridge 状态变化和空闲释放都不能把刚配置好的输出立即释放。
+        if onboardingPreparationActive && !systemSuspended {
             return true
         }
         return readyBluetoothBridgeCount > 0 && !systemSuspended && !idleBridgeReleaseDue
@@ -747,6 +754,23 @@ enum VirtualAudioHealthPolicy {
             engineRunning: engineRunning,
             playerPlaying: playerPlaying
         ) && boundToSelectedDevice
+    }
+}
+
+enum AudioConfigurationResult: Equatable {
+    case ready
+    case failed
+    case timedOut
+}
+
+enum AudioConfigurationRetryPolicy {
+    static let maximumAttempts = 2
+
+    static func shouldRetry(
+        result: AudioConfigurationResult,
+        afterAttempt attempt: Int
+    ) -> Bool {
+        result == .timedOut && attempt < maximumAttempts
     }
 }
 
@@ -852,6 +876,7 @@ final class VirtualAudioOutput {
     private let uptime: () -> TimeInterval
     private let engineQueue: DispatchQueue
     private let engineQueueKey = DispatchSpecificKey<Void>()
+    private let engineStartCoordinator: AudioEngineStartCoordinator
     private var nextConfigurationOperationID: UInt64 = 0
     /// 用户设定的输出音量：百分比只用于日志，线性系数用于写缓冲。
     private var outputLevelPercent: Double = VirtualAudioOutputLevelPolicy.defaultPercent
@@ -892,11 +917,13 @@ final class VirtualAudioOutput {
         engineQueue: DispatchQueue = DispatchQueue(
             label: "RemoteMic.audioOutput.engine",
             qos: .userInitiated
-        )
+        ),
+        engineStartCoordinator: AudioEngineStartCoordinator = AudioEngineStartCoordinator()
     ) {
         self.logger = logger
         self.uptime = uptime
         self.engineQueue = engineQueue
+        self.engineStartCoordinator = engineStartCoordinator
         engineQueue.setSpecific(key: engineQueueKey, value: ())
     }
 
@@ -941,14 +968,38 @@ final class VirtualAudioOutput {
                 "AUDIO CONFIGURE operation_id=\(operationID) phase=started result=pending queue=audio_output " +
                     "queue_wait_ms=\(max(0, Int((startedAt - requestedAt) * 1_000)))"
             )
-            let configured = self.configureOnEngineQueue(
-                deviceUID: deviceUID,
-                operationID: operationID
-            )
+            var result: AudioConfigurationResult = .failed
+            var attempts = 0
+            for attempt in 1...AudioConfigurationRetryPolicy.maximumAttempts {
+                attempts = attempt
+                result = self.configureOnEngineQueue(
+                    deviceUID: deviceUID,
+                    operationID: operationID,
+                    attempt: attempt
+                )
+                guard AudioConfigurationRetryPolicy.shouldRetry(
+                    result: result,
+                    afterAttempt: attempt
+                ) else { break }
+                self.logger(
+                    "AUDIO CONFIGURE retry operation_id=\(operationID) attempt=\(attempt + 1) " +
+                        "reason=prepare_timeout queue=audio_output"
+                )
+            }
+            let configured = result == .ready
+            let reason: String
+            switch result {
+            case .ready:
+                reason = "ready"
+            case .failed:
+                reason = "configure_failed"
+            case .timedOut:
+                reason = "configure_timeout"
+            }
             self.logger(
                 "AUDIO CONFIGURE operation_id=\(operationID) phase=completed " +
-                    "result=\(configured ? "ready" : "failed") reason=\(configured ? "ready" : "configure_failed") " +
-                    "status_key=\(self.status.key) queue=audio_output " +
+                    "result=\(configured ? "ready" : "failed") reason=\(reason) " +
+                    "status_key=\(self.status.key) attempts=\(attempts) queue=audio_output " +
                     "elapsed_ms=\(max(0, Int((self.uptime() - requestedAt) * 1_000)))"
             )
             completion(configured)
@@ -981,17 +1032,21 @@ final class VirtualAudioOutput {
     @discardableResult
     private func configureOnEngineQueue(
         deviceUID: String,
-        operationID: UInt64
-    ) -> Bool {
+        operationID: UInt64,
+        attempt: Int
+    ) -> AudioConfigurationResult {
         dispatchPrecondition(condition: .onQueue(engineQueue))
         let startedAtUptime = uptime()
+        let logger = self.logger
+        let uptime = self.uptime
         let elapsedMilliseconds = {
-            max(0, Int((self.uptime() - startedAtUptime) * 1_000))
+            max(0, Int((uptime() - startedAtUptime) * 1_000))
         }
         let logStage = { (stage: String) in
-            self.logger(
-                "AUDIO CONFIGURE operation_id=\(operationID) phase=applying result=pending " +
-                    "stage=\(stage) queue=audio_output elapsed_ms=\(elapsedMilliseconds())"
+            logger(
+                "AUDIO CONFIGURE operation_id=\(operationID) attempt=\(attempt) " +
+                    "phase=applying result=pending stage=\(stage) queue=audio_output " +
+                    "elapsed_ms=\(elapsedMilliseconds())"
             )
         }
         let previousState = diagnosticState()
@@ -1003,7 +1058,7 @@ final class VirtualAudioOutput {
                 "AUDIO CONFIGURE skipped reason=no_selected_device queue=audio_output " +
                     "elapsed_ms=\(elapsedMilliseconds()) previous={\(previousState)}"
             )
-            return false
+            return .failed
         }
         logStage("enumerate_devices")
         let availableDevices = CoreAudioDeviceCatalog.outputDevices()
@@ -1014,7 +1069,7 @@ final class VirtualAudioOutput {
                     "queue=audio_output elapsed_ms=\(elapsedMilliseconds()) " +
                     "available={\(CoreAudioDeviceCatalog.outputDevicesDiagnostic(availableDevices))}"
             )
-            return false
+            return .failed
         }
         logger(
             "AUDIO CONFIGURE begin queue=audio_output target={\(CoreAudioDeviceCatalog.deviceDiagnostic(device))} " +
@@ -1050,14 +1105,20 @@ final class VirtualAudioOutput {
                     "target_volume_scalar=\(targetVolumeScalar) " +
                     "device_kind=\(VirtualAudioDeviceDiagnosticKind.classify(device).rawValue)"
             )
-            return false
+            return .failed
         }
 
         logStage("connect_mixer")
         let engine = AVAudioEngine()
+        logStage("engine_created")
         let player = AVAudioPlayerNode()
+        logStage("player_created")
+        logStage("attach_player")
         engine.attach(player)
+        logStage("attach_player_completed")
+        logStage("connect_mixer_call")
         engine.connect(player, to: engine.mainMixerNode, format: sourceFormat)
+        logStage("connect_mixer_completed")
 
         logStage("open_output_unit")
         guard let outputUnit = engine.outputNode.audioUnit else {
@@ -1066,8 +1127,9 @@ final class VirtualAudioOutput {
                 "AUDIO CONFIGURE failed reason=no_output_unit queue=audio_output " +
                     "elapsed_ms=\(elapsedMilliseconds()) target={\(CoreAudioDeviceCatalog.deviceDiagnostic(device))}"
             )
-            return false
+            return .failed
         }
+        logStage("open_output_unit_completed")
         var deviceID = device.id
         logStage("select_device")
         let result = AudioUnitSetProperty(
@@ -1086,55 +1148,96 @@ final class VirtualAudioOutput {
                     "target={\(CoreAudioDeviceCatalog.deviceDiagnostic(device))} " +
                     AppLogger.errorFields(domain: "os_status", code: Int(result))
             )
-            return false
+            return .failed
         }
+        logStage("select_device_completed")
 
-        do {
+        let startOutcome = engineStartCoordinator.start(
+            operationID: operationID,
+            attempt: attempt
+        ) { token in
             logStage("prepare_engine")
             engine.prepare()
+            logStage("prepare_engine_completed")
+            guard !token.isCancelled else { throw AudioEngineStartError.cancelled }
             logStage("start_engine")
             try engine.start()
-            logStage("start_player")
-            guard AudioPlayerNodeSafety.play(player) else {
-                player.stop()
-                engine.stop()
-                status = LocalizedMessage("audio.output.selected_unavailable")
-                logger(
-                    "AUDIO ERROR player_start_exception " +
-                        "queue=audio_output elapsed_ms=\(elapsedMilliseconds()) " +
-                        "target={\(CoreAudioDeviceCatalog.deviceDiagnostic(device))}"
-                )
-                return false
-            }
-            self.engine = engine
-            self.player = player
-            updateOutputState { $0.selectedDevice = device }
-            logStage("verify_output")
-            refreshOutputStateOnEngineQueue()
-            guard isReadyForTestTone else {
-                status = LocalizedMessage("audio.output.selected_unavailable")
-                return false
-            }
-            observeConfigurationChanges(for: engine)
-            status = LocalizedMessage("audio.output.current_format", arguments: [device.name])
+            logStage("start_engine_completed")
+            guard !token.isCancelled else { throw AudioEngineStartError.cancelled }
+        } cleanup: {
+            player.stop()
+            engine.stop()
             logger(
-                "AUDIO READY target={\(CoreAudioDeviceCatalog.deviceDiagnostic(device))} " +
-                    "elapsed_ms=\(elapsedMilliseconds()) " +
-                    "queue=audio_output state={\(diagnosticState())}"
+                "AUDIO CONFIGURE cleanup operation_id=\(operationID) attempt=\(attempt) " +
+                    "phase=completed result=stopped reason=prepare_timeout queue=audio_output"
             )
-            return true
-        } catch {
+        }
+
+        switch startOutcome {
+        case .timedOut:
+            status = LocalizedMessage("audio.output.selected_unavailable")
+            logger(
+                "AUDIO CONFIGURE timeout operation_id=\(operationID) attempt=\(attempt) " +
+                    "phase=timed_out result=failed reason=prepare_timeout completion=forced " +
+                    "pending_buffers=\(pendingVoiceBufferCountForDiagnostics) " +
+                    "queue=audio_output elapsed_ms=\(elapsedMilliseconds()) " +
+                    "target={\(CoreAudioDeviceCatalog.deviceDiagnostic(device))}"
+            )
+            return .timedOut
+        case .failed(let error):
+            player.stop()
+            engine.stop()
             status = LocalizedMessage(
                 "audio.output.start_failed",
                 arguments: [error.localizedDescription]
             )
             logger(
                 "AUDIO ERROR start_failed " + AppLogger.errorFields(error) + " " +
-                    "queue=audio_output elapsed_ms=\(elapsedMilliseconds()) " +
+                    "operation_id=\(operationID) attempt=\(attempt) queue=audio_output " +
+                    "elapsed_ms=\(elapsedMilliseconds()) " +
                     "target={\(CoreAudioDeviceCatalog.deviceDiagnostic(device))} state={\(diagnosticState())}"
             )
-            return false
+            return .failed
+        case .ready:
+            break
         }
+
+        logStage("start_player")
+        guard AudioPlayerNodeSafety.play(player) else {
+            player.stop()
+            engine.stop()
+            status = LocalizedMessage("audio.output.selected_unavailable")
+            logger(
+                "AUDIO ERROR player_start_exception " +
+                    "operation_id=\(operationID) attempt=\(attempt) queue=audio_output " +
+                    "elapsed_ms=\(elapsedMilliseconds()) " +
+                    "target={\(CoreAudioDeviceCatalog.deviceDiagnostic(device))}"
+            )
+            return .failed
+        }
+        self.engine = engine
+        self.player = player
+        updateOutputState { $0.selectedDevice = device }
+        logStage("verify_output")
+        refreshOutputStateOnEngineQueue()
+        guard isReadyForTestTone else {
+            status = LocalizedMessage("audio.output.selected_unavailable")
+            logger(
+                "AUDIO CONFIGURE failed reason=verify_output operation_id=\(operationID) " +
+                    "attempt=\(attempt) queue=audio_output elapsed_ms=\(elapsedMilliseconds()) " +
+                    "target={\(CoreAudioDeviceCatalog.deviceDiagnostic(device))} state={\(diagnosticState())}"
+            )
+            return .failed
+        }
+        observeConfigurationChanges(for: engine)
+        status = LocalizedMessage("audio.output.current_format", arguments: [device.name])
+        logger(
+            "AUDIO READY target={\(CoreAudioDeviceCatalog.deviceDiagnostic(device))} " +
+                "operation_id=\(operationID) attempt=\(attempt) " +
+                "elapsed_ms=\(elapsedMilliseconds()) " +
+                "queue=audio_output state={\(diagnosticState())}"
+        )
+        return .ready
     }
 
     var isReadyForTestTone: Bool {
