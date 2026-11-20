@@ -203,6 +203,8 @@
 "action.scroll_down" = "Scroll Down";
 "action.page_up" = "Page Up";
 "action.page_down" = "Page Down";
+"action.page_up_half" = "Half Page Up";
+"action.page_down_half" = "Half Page Down";
 "action.scroll_to_top" = "Scroll to Top";
 "action.scroll_to_bottom" = "Scroll to Bottom";
 "scroll_region.title" = "Scroll Region";

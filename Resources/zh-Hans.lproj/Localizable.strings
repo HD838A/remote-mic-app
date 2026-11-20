@@ -203,6 +203,8 @@
 "action.scroll_down" = "向下滚动";
 "action.page_up" = "向上翻页";
 "action.page_down" = "向下翻页";
+"action.page_up_half" = "向上翻半页";
+"action.page_down_half" = "向下翻半页";
 "action.scroll_to_top" = "滚到顶部";
 "action.scroll_to_bottom" = "滚到底部";
 "scroll_region.title" = "滚动区域";
