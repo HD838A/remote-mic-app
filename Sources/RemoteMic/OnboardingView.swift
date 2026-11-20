@@ -2569,11 +2569,15 @@ struct OnboardingView: View {
     }
 
     private var physicalRemotePairingGuide: PhysicalRemotePairingGuide {
-        Self.physicalRemotePairingGuide(for: settings.onboardingControlSource)
+        Self.physicalRemotePairingGuide(
+            for: settings.onboardingControlSource,
+            xiaomiModel: settings.onboardingXiaomiRemoteModel
+        )
     }
 
     static func physicalRemotePairingGuide(
-        for source: OnboardingControlSource
+        for source: OnboardingControlSource,
+        xiaomiModel: OnboardingXiaomiRemoteModel? = nil
     ) -> PhysicalRemotePairingGuide {
         switch source {
         case .siriRemote:
@@ -2595,11 +2599,21 @@ struct OnboardingView: View {
                     "onboarding.remote.chromecast_pairing.second",
                 ]
             )
-        case .xiaomiRemote, .appleCompanion, .webRemote, .unselected:
+        case .xiaomiRemote:
+            // 只有 2 Pro 有底部白灯；小米蓝牙遥控器 2 保留唤醒步骤，但不提示白灯。
+            // 型号未知时也使用不带白灯的短文案，避免把 2 当成 2 Pro。
+            let wakeKey = xiaomiModel == .rc003
+                ? "onboarding.remote.first_pairing.wake"
+                : "onboarding.remote.first_pairing.wake_without_light"
+            return PhysicalRemotePairingGuide(
+                title: "onboarding.remote.first_pairing.title",
+                steps: [wakeKey, "onboarding.remote.first_pairing.pair"]
+            )
+        case .appleCompanion, .webRemote, .unselected:
             return PhysicalRemotePairingGuide(
                 title: "onboarding.remote.first_pairing.title",
                 steps: [
-                    "onboarding.remote.first_pairing.wake",
+                    "onboarding.remote.first_pairing.wake_without_light",
                     "onboarding.remote.first_pairing.pair",
                 ]
             )
@@ -2877,6 +2891,24 @@ struct OnboardingView: View {
         .padding(28)
     }
 
+    /// 连接页已经把连接与按键结果写在左栏状态卡里，右栏不再重复同一组检查。
+    /// 去掉右栏面板后遥控器可以放大，配对步骤也能直接落在遥控器图上。
+    private var remotePhotoDisplayWidth: CGFloat {
+        settings.onboardingStep == .remote ? 300 : 190
+    }
+
+    private var shouldShowXiaomiHomeMenuHoldAnimation: Bool {
+        settings.onboardingStep == .remote &&
+            settings.onboardingControlSource == .xiaomiRemote &&
+            !selectedControlConnected
+    }
+
+    private var shouldShowSiriPairingHoldAnimation: Bool {
+        settings.onboardingStep == .remote &&
+            settings.onboardingControlSource == .siriRemote &&
+            !selectedControlConnected
+    }
+
     @ViewBuilder
     private var selectedControlSourceIllustration: some View {
         switch settings.onboardingControlSource {
@@ -2901,16 +2933,32 @@ struct OnboardingView: View {
                 Image(nsImage: image)
                     .resizable()
                     .scaledToFit()
-                    .frame(maxWidth: 190, maxHeight: 480)
+                    .frame(
+                        width: remotePhotoDisplayWidth,
+                        height: remotePhotoDisplayWidth * 1.5
+                    )
                     .shadow(color: .black.opacity(0.20), radius: 16, y: 10)
+                    .overlay {
+                        if shouldShowXiaomiHomeMenuHoldAnimation {
+                            XiaomiHomeMenuHoldAnimation()
+                        }
+                    }
             } else {
                 remotePhotoPlaceholder
             }
         case .siriRemote:
             #if SAYALL_SIRI_REMOTE_ENABLED && canImport(SayAllSiriRemote)
             SiriRemoteConnectionPhoto()
-                .scaleEffect(1.8)
-                .frame(width: 190, height: 360)
+                .overlay {
+                    if shouldShowSiriPairingHoldAnimation {
+                        SiriRemotePairingHoldAnimation()
+                    }
+                }
+                .scaleEffect(settings.onboardingStep == .remote ? 2.5 : 1.8)
+                .frame(
+                    width: settings.onboardingStep == .remote ? 300 : 190,
+                    height: settings.onboardingStep == .remote ? 450 : 360
+                )
             #else
             remotePhotoPlaceholder
             #endif
@@ -3118,14 +3166,7 @@ struct OnboardingView: View {
                 }
                 sideCheck("permission.accessibility.title", isComplete: accessibilityGranted)
             }
-        case .remote:
-            sidePanel(titleKey: "onboarding.side.remote") {
-                sideCheck(
-                    selectedControlConnectedKey,
-                    isComplete: selectedControlConnected
-                )
-                sideCheck("onboarding.side.button_received", isComplete: !observedRemoteButtons.isEmpty)
-            }
+        // `.remote` 的连接与按键结果由左栏状态卡展示，右栏不再重复。
         case .audio:
             sidePanel(titleKey: "onboarding.side.audio") {
                 sideCheck("onboarding.side.device_found", isComplete: !supportedAudioDevices.isEmpty)
@@ -3686,19 +3727,6 @@ struct OnboardingView: View {
             return localization.text("onboarding.web_remote.membership_detail")
         }
         return localization.text("onboarding.web_remote.connection_detail")
-    }
-
-    private var selectedControlConnectedKey: String {
-        switch settings.onboardingControlMethod {
-        case .physicalRemote:
-            return "onboarding.side.remote_connected"
-        case .iPhoneApp:
-            return "onboarding.side.iphone_connected"
-        case .webRemote:
-            return "onboarding.side.web_connected"
-        case .unselected:
-            return "onboarding.side.control_selected"
-        }
     }
 
     private var primaryActionKey: String {
@@ -5656,6 +5684,92 @@ private final class OnboardingTranscriptScrollView: NSScrollView {
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         didMoveToWindowHandler?()
+    }
+}
+
+/// 在遥控器图的指定按键上同步呼吸。两个遥控器只在坐标、直径和内容尺寸上不同，
+/// 视觉节奏共用一套实现，避免两套动画在交互页上出现速度或透明度差异。
+/// 坐标是相对图片容器的归一化值，窗口放大或缩小时圆环随图片一起缩放。
+private struct OnboardingHoldPulsePair: View {
+    let points: [UnitPoint]
+    let diameterRatio: CGFloat
+    let minimumDiameter: CGFloat
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isPressed = false
+
+    var body: some View {
+        GeometryReader { proxy in
+            let diameter = max(minimumDiameter, proxy.size.width * diameterRatio)
+            ZStack {
+                ForEach(Array(points.enumerated()), id: \.offset) { _, point in
+                    indicator(at: point, diameter: diameter, in: proxy.size)
+                }
+            }
+            .onAppear {
+                guard !reduceMotion else { return }
+                withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
+                    isPressed = true
+                }
+            }
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+
+    private func indicator(
+        at point: UnitPoint,
+        diameter: CGFloat,
+        in size: CGSize
+    ) -> some View {
+        ZStack {
+            Circle()
+                .fill(Color.accentColor.opacity(isPressed ? 0.45 : 0.16))
+            Circle()
+                .stroke(
+                    Color.accentColor.opacity(isPressed ? 0.95 : 0.5),
+                    lineWidth: 2
+                )
+        }
+        .frame(width: diameter, height: diameter)
+        .scaleEffect(isPressed ? 1.06 : 0.98)
+        .shadow(
+            color: Color.accentColor.opacity(isPressed ? 0.55 : 0.18),
+            radius: isPressed ? 6 : 2
+        )
+        .position(x: size.width * point.x, y: size.height * point.y)
+    }
+}
+
+/// 小米遥控器首次配对时，在 Home 与 Menu 两颗实体键上同时呼吸，
+/// 把左栏「同时长按」的文字变成遥控器上可直接对位的动作。
+private struct XiaomiHomeMenuHoldAnimation: View {
+    // 坐标按图片原始 1024 × 1536 的按键中心归一化。RC001 与 RC003 的按键位置
+    // 相差不到 1pt，取共同值即可；圆环直径贴合按键本体，避免盖到相邻按键。
+    private static let homeButton = UnitPoint(x: 0.428, y: 0.471)
+    private static let menuButton = UnitPoint(x: 0.428, y: 0.557)
+
+    var body: some View {
+        OnboardingHoldPulsePair(
+            points: [Self.homeButton, Self.menuButton],
+            diameterRatio: 0.116,
+            minimumDiameter: 32
+        )
+    }
+}
+
+/// 苹果遥控器首次配对时，在「返回 + 音量加」组合上同时呼吸。
+/// 坐标基于 SayAllSiriRemote 的 82 × 166 缩略图容器；图片本体按比例居中。
+private struct SiriRemotePairingHoldAnimation: View {
+    private static let backButton = UnitPoint(x: 0.3827, y: 0.3731)
+    private static let volumeUpButton = UnitPoint(x: 0.5985, y: 0.4741)
+
+    var body: some View {
+        OnboardingHoldPulsePair(
+            points: [Self.backButton, Self.volumeUpButton],
+            diameterRatio: 0.152,
+            minimumDiameter: 12
+        )
     }
 }
 
