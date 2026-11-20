@@ -526,9 +526,31 @@ struct OnboardingFlowTests {
     }
 
     @Test func controlSourcePresentationUsesSourceSpecificPairingAndButtons() throws {
-        let xiaomiPairing = OnboardingView.physicalRemotePairingGuide(for: .xiaomiRemote)
-        #expect(xiaomiPairing.steps == [
+        let xiaomiProPairing = OnboardingView.physicalRemotePairingGuide(
+            for: .xiaomiRemote,
+            xiaomiModel: .rc003
+        )
+        #expect(xiaomiProPairing.steps == [
             "onboarding.remote.first_pairing.wake",
+            "onboarding.remote.first_pairing.pair",
+        ])
+
+        // 小米蓝牙遥控器 2 没有底部白灯：保留唤醒步骤，但只说到长按 2 秒。
+        let xiaomi2Pairing = OnboardingView.physicalRemotePairingGuide(
+            for: .xiaomiRemote,
+            xiaomiModel: .rc001
+        )
+        #expect(xiaomi2Pairing.steps == [
+            "onboarding.remote.first_pairing.wake_without_light",
+            "onboarding.remote.first_pairing.pair",
+        ])
+
+        let unknownModelPairing = OnboardingView.physicalRemotePairingGuide(
+            for: .xiaomiRemote,
+            xiaomiModel: nil
+        )
+        #expect(unknownModelPairing.steps == [
+            "onboarding.remote.first_pairing.wake_without_light",
             "onboarding.remote.first_pairing.pair",
         ])
 
@@ -567,6 +589,30 @@ struct OnboardingFlowTests {
             "onboarding.controls.apple_companion.detail")
         #expect(OnboardingView.controlsDetailKey(for: .webRemote) ==
             "onboarding.controls.web_remote.detail")
+    }
+
+    @Test func xiaomiRemote2KeepsWakeStepWithoutWhiteLightCopy() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let zh = try String(
+            contentsOf: root.appendingPathComponent("Resources/zh-Hans.lproj/Localizable.strings"),
+            encoding: .utf8
+        )
+        let en = try String(
+            contentsOf: root.appendingPathComponent("Resources/en.lproj/Localizable.strings"),
+            encoding: .utf8
+        )
+        #expect(zh.contains(
+            "\"onboarding.remote.first_pairing.wake_without_light\" = \"长按 TV 键约 2 秒\";"
+        ))
+        #expect(en.contains(
+            "\"onboarding.remote.first_pairing.wake_without_light\" = \"Hold the TV button for about 2 seconds\";"
+        ))
+        #expect(!zh.contains(
+            "\"onboarding.remote.first_pairing.wake_without_light\" = \"长按 TV 键约 2 秒，直到遥控器底部白灯开始闪烁\";"
+        ))
     }
 
     @Test func physicalRemoteCardsSplitXiaomiAndFollowRequiredOrder() {
@@ -717,11 +763,43 @@ struct OnboardingFlowTests {
         )
         // 「必须做」这一步不能被压成可选项：它是用户按下按键却连不上的最常见原因。
         #expect(zh.contains("这一步必须做"))
-        // 遥控器在蓝牙列表里常常显示成序列号，不能再让用户只按名字找。
-        #expect(zh.contains("名称可能是一串序列号"))
+        // 遥控器在蓝牙列表里常常显示成序列号或通用蓝牙设备名，不能再让用户只按名字找。
+        #expect(zh.contains("名称可能是一串序列号或“蓝牙设备”"))
         // 页面说明不能再写死步数：小米两步、苹果遥控器五步，同一句话会自相矛盾。
         #expect(!zh.contains("下面两步"))
         #expect(zh.contains("首次连接请先按下面的步骤配对"))
+    }
+
+    @Test func connectionPageCopyHasNoTrailingPeriods() throws {
+        // 连接页统一不在文案末尾加句号；内部句子标点保留，避免整段失去停顿。
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let prefixes = [
+            "onboarding.remote.",
+            "onboarding.iphone_remote.",
+            "onboarding.apple_companion.",
+            "onboarding.web_remote.",
+            "onboarding.secure_input.",
+            "onboarding.recovery.remote.",
+        ]
+        for resource in ["zh-Hans", "en"] {
+            let text = try String(
+                contentsOf: root.appendingPathComponent(
+                    "Resources/\(resource).lproj/Localizable.strings"
+                ),
+                encoding: .utf8
+            )
+            for line in text.split(separator: "\n") {
+                guard line.hasPrefix("\""),
+                      let separator = line.range(of: "\" = \"") else { continue }
+                let key = String(line[line.index(after: line.startIndex)..<separator.lowerBound])
+                guard prefixes.contains(where: key.hasPrefix),
+                      line.hasSuffix("。\";") || line.hasSuffix(".\";") else { continue }
+                Issue.record("\(resource) 连接页文案以句号结尾：\(key)")
+            }
+        }
     }
 
     @Test func navigationOrderIsStableAndGroupedIntoThreePhases() {
@@ -2355,7 +2433,7 @@ struct OnboardingFlowTests {
 
         let detailStart = try #require(source.range(of: "private var webRemoteConnectionIsBlocked"))
         let detailEnd = try #require(source.range(
-            of: "private var selectedControlConnectedKey",
+            of: "private var primaryActionKey",
             range: detailStart.upperBound..<source.endIndex
         ))
         let detail = String(source[detailStart.lowerBound..<detailEnd.lowerBound])
@@ -2365,6 +2443,28 @@ struct OnboardingFlowTests {
         // 服务端判定（`.plusRequired`）要一直被算作被挡：本地权益对了也不该放过。
         #expect(detail.contains("case .plusRequired:"))
         #expect(detail.contains("return !membershipFeature.canStartCompanionConnection"))
+    }
+
+    @Test func remoteConnectionPageDoesNotRepeatChecksInTheSidePanel() throws {
+        // 连接页左栏已经用状态卡展示连接和按键结果，右栏再放一份「连接检查」
+        // 既重复又挤掉遥控器。这里锁住右栏面板的移除，避免以后又长回来。
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/OnboardingView.swift"),
+            encoding: .utf8
+        )
+        let panelStart = try #require(source.range(of: "private var sideStatusPanel"))
+        let panelEnd = try #require(source.range(
+            of: "private func sidePanel",
+            range: panelStart.upperBound..<source.endIndex
+        ))
+        let panel = String(source[panelStart.lowerBound..<panelEnd.lowerBound])
+        #expect(!panel.contains("case .remote:"))
+        #expect(!panel.contains("onboarding.side.remote"))
+        #expect(!panel.contains("onboarding.side.button_received"))
     }
 
     @Test func webRemoteMembershipCopyExistsInBothLanguages() throws {
@@ -2381,10 +2481,10 @@ struct OnboardingFlowTests {
             encoding: .utf8
         )
         #expect(chinese.contains(
-            "\"onboarding.web_remote.membership_detail\" = \"开通会员后即可连接；右侧按钮可直接开通。\";"
+            "\"onboarding.web_remote.membership_detail\" = \"开通会员后即可连接；右侧按钮可直接开通\";"
         ))
         #expect(english.contains(
-            "\"onboarding.web_remote.membership_detail\" = \"Open the membership to connect. Use the button on the right.\";"
+            "\"onboarding.web_remote.membership_detail\" = \"Open the membership to connect. Use the button on the right\";"
         ))
         // 权益放开后要用的那句「下一步生成二维码」也得在两边。
         #expect(chinese.contains("\"onboarding.web_remote.preparing\" = \"下一步生成二维码\";"))
@@ -2499,13 +2599,13 @@ struct OnboardingFlowTests {
             "\"onboarding.apple_companion.membership_title\" = \"此连接是会员功能\";"
         ))
         #expect(chinese.contains(
-            "\"onboarding.apple_companion.membership_detail\" = \"开通会员后即可连接；右侧按钮可直接开通。\";"
+            "\"onboarding.apple_companion.membership_detail\" = \"开通会员后即可连接；右侧按钮可直接开通\";"
         ))
         #expect(english.contains(
             "\"onboarding.apple_companion.membership_title\" = \"This connection is a member feature\";"
         ))
         #expect(english.contains(
-            "\"onboarding.apple_companion.membership_detail\" = \"Open the membership to connect. Use the button on the right.\";"
+            "\"onboarding.apple_companion.membership_detail\" = \"Open the membership to connect. Use the button on the right\";"
         ))
         // 门禁态下的重试按钮文案也要两边都有。
         #expect(chinese.contains(
