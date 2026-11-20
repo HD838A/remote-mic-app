@@ -1,6 +1,7 @@
 # Bug 记录
 
 - [连接页扫描逐设备写忽略日志导致主线程 BLE 风暴](./2026-11-21-ble-discovery-main-thread-storm.md)
+- [控制来源未连接时 Onboarding 卡在音频页](./2026-11-20-onboarding-audio-gate-disconnected-remote.md)
 - [Typeless 的 Fn 组合快捷键在 2.0.8 预览版后无法定义](./2026-11-20-typeless-fn-shortcut-unavailable.md)
 - [卸载后残留 Siri Remote 安装收据和 Dock 固定项](./2026-11-20-uninstaller-stale-siri-receipt-and-dock-tile.md)
 - [Build 409 遥控器可用但卡片持续“状态确认中”](./2026-11-19-remote-card-confirming-on-build-409.md)

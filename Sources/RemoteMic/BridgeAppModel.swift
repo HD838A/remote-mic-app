@@ -1764,6 +1764,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         stopRecordingPlayback()
         guard started else { return }
         started = false
+        onboardingAudioPreparationActive = false
         cancelHIDMappingRecovery(reason: "app_stop")
         completedUpdateHIDRecoveryWorkItem?.cancel()
         completedUpdateHIDRecoveryWorkItem = nil
@@ -9473,6 +9474,64 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         idleVirtualAudioReleaseWorkItem = nil
     }
 
+    /// 用户停留于 Onboarding 音频页时持有虚拟音频输出的临时租约。
+    ///
+    /// 音乐/语音都没有开始时，正常生命周期只靠 Ready 的蓝牙桥保持输出。遥控器的
+    /// HID 普通按键可用、但语音 BLE 链路尚未连接时，桥的每次重连状态变化都会释放
+    /// 输出，音频页就会在「已选择设备」和「输出未就绪」之间反复，用户只能反复点
+    /// 重试。该租约只在音频页停留期间成立，离开页面、系统挂起或 App 退出都会解除。
+    private var onboardingAudioPreparationActive = false
+
+    /// 进入 Onboarding 音频页时主动配置所选虚拟音频输出。
+    ///
+    /// 正常设置页只在用户改选设备或测试音时配置；音频页是首次使用验收，不能要求
+    /// 用户先点一次「重试音频设置」。配置完成后由页面现有的 Ready 门禁判断，不改变
+    /// 页面元素或文案。
+    func prepareOnboardingAudioOutput(reason: String) {
+        guard started else { return }
+        let selected = !settings.selectedAudioDeviceUID.isEmpty
+        let available = selectedAudioDeviceIsAvailable
+        guard selected, available else {
+            // 设备尚未枚举、被移除或未选择时不能持有租约，否则旧输出会被无必要地保留。
+            endOnboardingAudioPreparation(reason: "\(reason)_unavailable")
+            AppLogger.shared.write(
+                "AUDIO ONBOARDING prepare deferred reason=\(reason) selected=\(selected) " +
+                    "available=\(available) state={\(audioOutput.diagnosticState())}"
+            )
+            return
+        }
+        onboardingAudioPreparationActive = true
+        cancelVirtualAudioReleaseIfPending(trigger: "onboarding_prepare")
+        cancelIdleVirtualAudioRelease()
+        isAudioOutputReady = audioOutput.isReadyForTestTone
+        guard !isAudioOutputReady else {
+            AppLogger.shared.write("AUDIO ONBOARDING prepare ready reason=\(reason)")
+            return
+        }
+        AppLogger.shared.write(
+            "AUDIO ONBOARDING prepare begin reason=\(reason) " +
+                "ready_bridges=\(readyBluetoothBridgeCount) state={\(audioOutput.diagnosticState())}"
+        )
+        configureVirtualAudioOutput(reason: "onboarding_\(reason)") { [weak self] configured in
+            guard let self else { return }
+            AppLogger.shared.write(
+                "AUDIO ONBOARDING prepare finished reason=\(reason) configured=\(configured) " +
+                    "ready=\(self.isAudioOutputReady) state={\(self.audioOutput.diagnosticState())}"
+            )
+        }
+    }
+
+    /// 离开 Onboarding 音频页后解除临时租约。若没有语音、测试音或 Ready 的桥继续
+    /// 需要输出，会走既有释放路径。
+    func endOnboardingAudioPreparation(reason: String) {
+        guard onboardingAudioPreparationActive else { return }
+        onboardingAudioPreparationActive = false
+        AppLogger.shared.write(
+            "AUDIO ONBOARDING prepare end reason=\(reason) state={\(audioOutput.diagnosticState())}"
+        )
+        releaseVirtualAudioOutputIfUnused(reason: "onboarding_\(reason)")
+    }
+
     private var shouldKeepVirtualAudioActive: Bool {
         shouldKeepVirtualAudioActive(allowingIdleBridgeRelease: false)
     }
@@ -9485,7 +9544,8 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
                 !appleRemoteVoiceDevices.isEmpty || appleRemoteVoiceStopping,
             testToneActive: isPlayingTestTone,
             systemSuspended: systemAudioSuspensionState.isSuspended,
-            idleBridgeReleaseDue: allowingIdleBridgeRelease
+            idleBridgeReleaseDue: allowingIdleBridgeRelease,
+            onboardingPreparationActive: onboardingAudioPreparationActive
         )
     }
 
