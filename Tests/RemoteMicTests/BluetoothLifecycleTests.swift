@@ -1014,4 +1014,18 @@ struct BluetoothLifecycleTests {
         #expect(source.contains("ignored_unrelated="))
         #expect(source.contains("BLE ADOPT IGNORED"))
     }
+
+    @Test func discoveryScanUsesIdentitySnapshots() throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        let source = try String(contentsOf: root.appendingPathComponent(
+            "Sources/RemoteMic/XiaomiBluetoothBridge.swift"
+        ), encoding: .utf8)
+        #expect(source.contains("ignoredUnrelatedDiscoveryCount = 0\n        refreshDiscoveryIdentitySnapshots()"))
+        #expect(source.contains("excludedIdentifiersSnapshot = excludedIdentifiers()"))
+        #expect(source.contains("knownIdentifiersSnapshot = knownIdentifiers()"))
+        #expect(source.contains("knownIdentifiers: knownIdentifiersSnapshot"))
+        #expect(!source.contains("knownIdentifiers: knownIdentifiers()"))
+        #expect(!source.contains("excludedIdentifiers().contains"))
+    }
 }

@@ -68,6 +68,7 @@ serviceMatch || isCandidate(peripheral) || nameMatcher.matches(advertisedName)
   - 已知遥控器名称；
   - 明确的外来产品名称，交给统一准入层记录拒绝原因。
 - 其余普通 BLE 广播直接返回，只累加 `ignoredUnrelatedDiscoveryCount`（按回调次数，不是唯一设备数）。
+- 扫描开始时缓存 `excludedIdentifiers` / `knownIdentifiers` 快照，`didDiscover` 和 `adopt` 只读快照；窗口结束前重取一次，已连接候选使用当前配置，避免每个回调重复构造 Set。
 - 扫描结束时只写一条汇总：
 
 ```text
@@ -82,7 +83,7 @@ BLE SCAN TIMEOUT ... result=retrying reason=scan_window_expired ... ignored_unre
 
 自动化：
 
-- `BluetoothLifecycleTests` 新增发现过滤策略和接线回归。
+- `BluetoothLifecycleTests` 新增发现过滤策略、身份快照复用和接线回归。
 - 覆盖保存目标、已知身份、ATVV 服务、已知名称、外来产品、AirPods/Watch/音箱等无关设备。
 - 公开宿主构建和全量测试在修复提交中记录。
 
