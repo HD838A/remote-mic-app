@@ -10847,10 +10847,9 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             return
         }
 
-        guard chromecastNativeKeyMapper.isPrepared else {
-            AppLogger.shared.write("CHROMECAST ACTION rejected reason=native_input_not_verified")
-            return
-        }
+        // 私有包已在 handleReport 内部用 nativeInputReady 过滤报告：
+        // 独占成功或原生屏蔽成功时才会发出 onControlEvent。宿主再检查
+        // chromecastNativeKeyMapper.isPrepared 会误杀“独占成功但 service 未枚举”的路径。
         // 使用与画布、键位方案相同的保留策略；当前全部普通键可配置。
         if ChromecastRemoteControl.isSystemManaged(
             event.control,

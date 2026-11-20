@@ -75,6 +75,21 @@ struct ChromecastIntegrationTests {
         #expect(!ChromecastVoiceEndReason.cancelled("link_unavailable").isNormal)
     }
 
+    /// 私有桥只在 nativeInputReady 时发出 onControlEvent；宿主重复检查
+    /// chromecastNativeKeyMapper.isPrepared 会把“独占成功但 service 未枚举”误判为失败。
+    @Test func hostTrustsThePrivateBridgeNativeInputGate() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
+            encoding: .utf8
+        )
+        #expect(!source.contains("guard chromecastNativeKeyMapper.isPrepared"))
+        #expect(!source.contains("CHROMECAST ACTION rejected reason=native_input_not_verified"))
+    }
+
     /// 按键已经响应，但私有包的 presence 缓存还没有值时，卡片必须读取实时快照，
     /// 不能停在 `.unknown` 并显示“状态确认中”。
     @Test func cardButtonReadinessUsesLiveHIDPresenceWhenCacheIsMissing() {
