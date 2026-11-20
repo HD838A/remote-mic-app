@@ -56,6 +56,45 @@ enum ForeignVoiceRemoteProduct {
     }
 }
 
+/// 扫描回调的第一层廉价过滤。
+///
+/// CoreBluetooth 在扫描窗口中会把周围所有设备的广播都交回 delegate。2.0.8 曾对每个
+/// 回调执行完整准入判定并写 `BLE ADOPT IGNORED`，在周边设备多的环境里形成主线程风暴。
+/// 这里先按「是否可能与本桥有关」过滤，再进入 `adopt`：
+/// - 有保存目标时只检查目标本身；
+/// - 已知身份、ATVV 服务、已知遥控器名称和明确的外来产品名称才继续判定；
+/// - 其余普通蓝牙设备直接返回，不构造日志。
+enum BluetoothDiscoveryScanPolicy {
+    static func shouldInspect(
+        identifier: UUID,
+        targetIdentifier: UUID?,
+        knownIdentifiers: Set<UUID>,
+        advertisesVoiceService: Bool,
+        advertisedName: String?,
+        peripheralName: String?
+    ) -> Bool {
+        if let targetIdentifier {
+            return identifier == targetIdentifier
+        }
+        if knownIdentifiers.contains(identifier) {
+            return true
+        }
+        if advertisesVoiceService {
+            return true
+        }
+        if XiaomiVoiceRemoteNameMatcher.matches(advertisedName) ||
+            XiaomiVoiceRemoteNameMatcher.matches(peripheralName) {
+            return true
+        }
+        // 外来产品也要进入 `adopt`，由统一准入层记录拒绝原因，避免静默放过。
+        if ForeignVoiceRemoteProduct.isRejected(name: advertisedName) ||
+            ForeignVoiceRemoteProduct.isRejected(name: peripheralName) {
+            return true
+        }
+        return false
+    }
+}
+
 /// 遥控器发现准入结论。
 ///
 /// 为什么必须是「白名单 + 明确结论」而不是布尔值：App 里每款遥控器都有**真机图片**和按键页，
