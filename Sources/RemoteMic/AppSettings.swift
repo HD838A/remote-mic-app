@@ -338,6 +338,7 @@ final class AppSettings: ObservableObject {
         static let chromecastSystemReservedExceptions = "chromecast.systemReservedExceptions"
         static let voiceKeyMode = "voiceKeyMode"
         static let siriRemoteScrollArrowReversed = "siriRemote.scrollArrowReversed"
+        static let siriRemoteCursorFeedbackVisible = "siriRemote.cursorFeedbackVisible"
         static let siriRemoteEnabled = "siriRemote.enabled"
         static let siriRemoteNeedsUserAction = "siriRemote.needsUserAction"
         static let chromecastEnabled = "chromecast.enabled"
@@ -760,6 +761,16 @@ final class AppSettings: ObservableObject {
         }
     }
 
+    /// 只控制触摸反馈是否显示在屏幕上；指针移动、滚动和点击本身不受影响。
+    @Published var siriRemoteCursorFeedbackVisible: Bool {
+        didSet {
+            defaults.set(
+                siriRemoteCursorFeedbackVisible,
+                forKey: Keys.siriRemoteCursorFeedbackVisible
+            )
+        }
+    }
+
     /// Only an explicit user action enables Apple Remote runtime services.
     @Published var siriRemoteEnabled: Bool {
         didSet { defaults.set(siriRemoteEnabled, forKey: Keys.siriRemoteEnabled) }
@@ -1146,6 +1157,9 @@ final class AppSettings: ObservableObject {
         siriRemoteScrollArrowReversed = defaults.bool(
             forKey: Keys.siriRemoteScrollArrowReversed
         )
+        siriRemoteCursorFeedbackVisible = defaults.object(
+            forKey: Keys.siriRemoteCursorFeedbackVisible
+        ) == nil ? true : defaults.bool(forKey: Keys.siriRemoteCursorFeedbackVisible)
         siriRemoteEnabled = defaults.bool(forKey: Keys.siriRemoteEnabled)
         siriRemoteNeedsUserAction = defaults.bool(forKey: Keys.siriRemoteNeedsUserAction)
         // 首次运行默认开启：私有包只会被编入有该硬件的构建，让用户先找开关再测试没有意义。
@@ -3117,6 +3131,7 @@ final class AppSettings: ObservableObject {
             chromecastSystemReservedExceptions: chromecastSystemReservedExceptions.sorted(),
             chromecastEnabled: chromecastEnabled, chromecastVoiceMode: chromecastVoiceMode,
             siriRemoteScrollArrowReversed: siriRemoteScrollArrowReversed,
+            siriRemoteCursorFeedbackVisible: siriRemoteCursorFeedbackVisible,
             siriRemoteEnabled: siriRemoteEnabled, siriRemoteNeedsUserAction: siriRemoteNeedsUserAction,
             localTranscriptHistoryEnabled: localTranscriptHistoryEnabled,
             localOriginalAudioRecordingEnabled: localOriginalAudioRecordingEnabled,
@@ -3229,6 +3244,9 @@ final class AppSettings: ObservableObject {
             chromecastEnabled = preferences.chromecastEnabled
             chromecastVoiceMode = preferences.chromecastVoiceMode
             siriRemoteScrollArrowReversed = preferences.siriRemoteScrollArrowReversed
+            if let visible = preferences.siriRemoteCursorFeedbackVisible {
+                siriRemoteCursorFeedbackVisible = visible
+            }
             siriRemoteEnabled = preferences.siriRemoteEnabled
             siriRemoteNeedsUserAction = preferences.siriRemoteNeedsUserAction
             localTranscriptHistoryEnabled = preferences.localTranscriptHistoryEnabled

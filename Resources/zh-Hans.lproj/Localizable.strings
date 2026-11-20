@@ -112,6 +112,9 @@
 "siri_remote.scroll_arrow.reverse.title" = "反转滚动箭头方向";
 "siri_remote.scroll_arrow.reverse.detail" = "打开后，箭头与页面右侧滚动指示器方向相反；只改变提示，不改变页面实际滚动。";
 "siri_remote.scroll_arrow.reverse.help" = "关闭时箭头与页面右侧滚动指示器一致，打开时方向相反。";
+"siri_remote.cursor_feedback.visible.title" = "显示鼠标反馈";
+"siri_remote.cursor_feedback.visible.detail" = "关闭后，触摸移动和滚动时不再显示光标光环与方向箭头；指针、点击和滚动本身不受影响。";
+"siri_remote.cursor_feedback.visible.help" = "只控制屏幕上的视觉提示；关闭后触控操作仍然正常。";
 "chromecast.section_title" = "Chromecast 遥控器";
 "chromecast.section_subtitle" = "蓝牙语音遥控器";
 "chromecast.status.unavailable" = "本版本未包含";

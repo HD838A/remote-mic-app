@@ -175,6 +175,7 @@ final class SiriRemoteCursorFeedbackController {
     private var hideWorkItem: DispatchWorkItem?
     private var lastRenderUptime: TimeInterval = 0
     private var isFeedbackVisible = false
+    private var visualFeedbackEnabled = true
     private var interactionState = SiriRemoteCursorFeedbackInteractionState()
     private var hoveredElement: AXUIElement?
     private var hoveredElementDepth = 0
@@ -185,6 +186,22 @@ final class SiriRemoteCursorFeedbackController {
     init(logger: @escaping (String) -> Void = { _ in }) {
         self.logger = logger
     }
+
+    /// 只切换屏幕上的视觉反馈；指针、滚动、点击与悬停目标解析保持不变。
+    func setVisualFeedbackEnabled(_ enabled: Bool) {
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { [weak self] in
+                self?.setVisualFeedbackEnabled(enabled)
+            }
+            return
+        }
+        visualFeedbackEnabled = enabled
+        guard !enabled else { return }
+        hide(reason: "feedback_hidden")
+    }
+
+    /// 供回归测试确认关闭视觉反馈后不会创建或保留反馈窗口。
+    var isFeedbackCurrentlyVisible: Bool { isFeedbackVisible }
 
     func handle(
         _ feedback: SiriRemoteTouchFeedbackKind,
@@ -333,6 +350,10 @@ final class SiriRemoteCursorFeedbackController {
     }
 
     private func show(at point: NSPoint, mode: String) {
+        guard visualFeedbackEnabled else {
+            hide(reason: "feedback_hidden")
+            return
+        }
         if window == nil {
             let panel = NSPanel(
                 contentRect: NSRect(x: 0, y: 0, width: 104, height: 104),

@@ -1384,6 +1384,30 @@ struct SettingsPageRegressionTests {
         }
     }
 
+    /// 已配置动作的文字跟随系统主题色；未配置动作仍保持次要文字色。
+    @Test func configuredActionTextUsesAccentColor() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let canvas = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/RemoteMappingCanvas.swift"),
+            encoding: .utf8
+        )
+        let settings = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+
+        #expect(canvas.contains("var actionConfigured: ((RemoteButton, ButtonTrigger) -> Bool)?"))
+        #expect(canvas.contains("actionConfigured?(button, trigger) == true"))
+        #expect(canvas.contains("? Color.accentColor"))
+        #expect(settings.contains("actionConfigured: { button, trigger in"))
+        #expect(settings.contains(
+            "mappingConfiguration(for: button, trigger: trigger).action != .disabled"
+        ))
+    }
+
     @Test func customMappingPromptsOnlyWhenAnEnabledPermissionIsMissing() {
         #expect(MappingPermissionPolicy.requiresPrompt(
             enabled: true,
