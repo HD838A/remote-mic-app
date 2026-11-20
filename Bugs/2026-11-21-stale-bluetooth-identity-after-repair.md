@@ -92,6 +92,7 @@ ONBOARDING EVENT kind=blocked step=audio failure=audio.output_not_ready
 - `swift test --disable-keychain`：1,580 项、113 个 suite 通过。
 - `./scripts/test.sh`：48 项自测通过。
 - 公开模式 `swift build --disable-keychain` 与 `scripts/build-app.sh` Release App 构建通过；`scripts/verify-repository-governance.sh` 通过。
+- PR #1160 GitHub Actions 的 Repository governance、Classify changed files、Public Swift tests and dual-architecture build 全部通过。
 
 覆盖：
 
