@@ -2,7 +2,7 @@
 
 ## 状态
 
-代码修复、自检、Release 构建、CI 和真实设备验收已完成；Onboarding 完成流程截图待补，PR 保持 Draft。
+代码修复、自检、Release 构建、CI、Onboarding 完成截图和真实设备验收已完成；PR #1137 已合入 `main`（`08e0dae5`）。
 
 ## 复现条件
 
@@ -75,6 +75,19 @@ guard selectedControlAcceptsVoice(model.activeVoiceSource) else { return }
 - 真实设备验收（Build 176，行为修复版本）：语音尝试 attempt 1 通过；`audio_received/scheduled/played=20400`，`interrupted/pending=0`，`focus_loss_count=0`，`transcript_wait_ms=728`；随后 `controls` 和 `complete` 步骤通过，Onboarding 已完成。
 - 验收边界：Build 176 使用与 PR 相同的行为修复的最小补丁；PR 的 `OnboardingVoiceStreamPolicy` 重构由 CI 和自检覆盖，未再单独用 PR 构建重跑真机。
 - 自动化边界：自检和单元测试覆盖状态转换策略；真实遥控器弱信号、微信输入法上屏时机和完整旅程仍需真机验收。
+
+## 独立复验与合入（2026-11-21）
+
+- build 413 使用等价修复在 RC003 上连续完成两次会话。两次结束事件都记录
+  `ONBOARDING VOICE_STREAM transition streaming=false ... accepts_source=false`，
+  随后执行 `stream_end_received`；这直接证明旧 guard 会丢弃结束事件。
+- 第二次会话记录 `ONBOARDING EVENT kind=passed step=voiceTest`。音频 46080 样本
+  全部调度并播放，`audio_interrupted_samples=0`，`audio_pending_samples=0`，
+  `audio_enqueue_failures=0`；首样本 154 ms，松键到终态 459 ms，焦点丢失 0 次。
+- 合并后本地 `swift test --disable-keychain --filter 'OnboardingFlowTests|LocalizationTests'`：
+  138 项通过；`scripts/test.sh` 50 项自检通过；`swift build --disable-keychain` 通过。
+- PR #1137 已按普通 Merge 合入 `main`，合并提交 `08e0dae5`。
+- 连接页 UI 改动不属于本修复，已由 #1161 单独合入。
 
 ## 关联
 

@@ -59,6 +59,7 @@
 - 预期：松键后侧边“语音键已按下并松开”完成，外部工具文字出现，页面允许进入 `controls`。
 - 失败判定：日志仍显示 `ONBOARDING TRANSCRIPT_TARGET ... phase=recording`，或侧边第一项不完成，或应用不进入文字等待。
 - 2026-11-19 实测（Build 176）：attempt 1 通过，`audio_received/scheduled/played=20400`，`focus_loss_count=0`，`transcript_wait_ms=728`；随后 `controls` 和 `complete` 通过，Onboarding 完成。该构建使用与 PR 相同行为修复的最小补丁；策略重构由 CI 覆盖。
+- 2026-11-21 已合入 `main`（合并提交 `08e0dae5`）。独立 build 413 在 RC003 上复验通过，证据见该 Bug 记录。
 
 ### 验证边界
 
