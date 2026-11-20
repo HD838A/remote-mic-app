@@ -171,7 +171,11 @@ struct RemoteDeviceNameIntegrationTests {
         let profileID = settings.registerBluetoothRemote(identifier: oldIdentifier)
         settings.updateRemoteProfileModel(profileID, model: .rc003)
         settings.bindHIDFingerprint("identity-fingerprint", to: profileID)
+        settings.updateRemoteProfileSystemName(profileID, name: "Office")
+        settings.updateRemoteProfileHardwareIdentity(profileID, serialNumber: "serial-1")
+        settings.selectRemoteProfile(profileID)
         let original = try #require(settings.remoteDeviceProfiles.first { $0.id == profileID })
+        let originalCount = settings.remoteDeviceProfiles.count
 
         #expect(settings.replaceBluetoothIdentifier(
             for: profileID,
@@ -179,10 +183,15 @@ struct RemoteDeviceNameIntegrationTests {
         ) == oldIdentifier)
 
         let updated = try #require(settings.remoteDeviceProfiles.first { $0.id == profileID })
+        #expect(settings.remoteDeviceProfiles.count == originalCount)
         #expect(updated.id == original.id)
         #expect(updated.bluetoothIdentifier == currentIdentifier)
         #expect(updated.hidFingerprint == original.hidFingerprint)
         #expect(updated.model == original.model)
+        #expect(updated.customName == original.customName)
+        #expect(updated.lastKnownBluetoothName == original.lastKnownBluetoothName)
+        #expect(updated.hardwareIdentity == original.hardwareIdentity)
+        #expect(settings.selectedRemoteProfileID == profileID)
         #expect(updated.mappings == original.mappings)
 
         // 已被其他档案占用的 identifier 不能被抢走。

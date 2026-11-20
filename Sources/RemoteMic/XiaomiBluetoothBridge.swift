@@ -128,7 +128,7 @@ final class XiaomiBluetoothBridge: NSObject {
     private let excludedIdentifiers: () -> Set<UUID>
     private let knownIdentifiers: () -> Set<UUID>
     private let discoveredCandidate: ((UUID) -> Void)?
-    private let reconcileCandidateIdentifier: ((UUID) -> Void)?
+    private let reconcileCandidateIdentifier: ((UUID) -> Bool)?
     private let recovery: RemoteConnectionRecovery
     private var recoveryDeadlineWorkItem: DispatchWorkItem?
     private var discoveryWindowWorkItem: DispatchWorkItem?
@@ -256,7 +256,7 @@ final class XiaomiBluetoothBridge: NSObject {
         excludedIdentifiers: @escaping () -> Set<UUID> = { [] },
         knownIdentifiers: @escaping () -> Set<UUID> = { [] },
         discoveredCandidate: ((UUID) -> Void)? = nil,
-        reconcileCandidateIdentifier: ((UUID) -> Void)? = nil,
+        reconcileCandidateIdentifier: ((UUID) -> Bool)? = nil,
         recovery: RemoteConnectionRecovery = RemoteConnectionRecovery()
     ) {
         self.delegate = delegate
@@ -730,10 +730,16 @@ final class XiaomiBluetoothBridge: NSObject {
         advertisedName: String?,
         usesCachedTarget: Bool = false
     ) -> Bool {
-        if targetIdentifier == nil {
-            // 发现桥只观察新候选；先用 HID 指纹确认它是否属于已有档案，再走原有采纳。
-            // 只在这里调用，避免档案桥在 adopt 过程中停止自身。
-            reconcileCandidateIdentifier?(candidate.identifier)
+        if targetIdentifier == nil,
+           reconcileCandidateIdentifier?(candidate.identifier) == true {
+            // HID 指纹已经证明这是已有档案的同一只物理设备。直接交给发现回调建立
+            // 当前 identifier 的 bridge，不依赖随后可能过期的 knownIdentifiers 快照。
+            guard let discoveredCandidate,
+                  !excludedIdentifiers().contains(candidate.identifier) else {
+                return false
+            }
+            discoveredCandidate(candidate.identifier)
+            return false
         }
         let decision = VoiceRemoteAdmission.decide(
             identifier: candidate.identifier,

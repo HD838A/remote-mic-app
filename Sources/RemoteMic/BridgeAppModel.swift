@@ -5025,9 +5025,21 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     /// 或语音进行中都保持原状。
     @discardableResult
     private func reconcileStaleRemoteIdentity(for identifier: UUID) -> UUID? {
-        guard !bluetoothVoiceActive else { return nil }
+        guard !bluetoothVoiceActive, pendingBluetoothVoiceStartIdentifier == nil else { return nil }
         guard settings.profileID(forBluetoothIdentifier: identifier) == nil else { return nil }
         let fingerprint = RemoteIdentityFingerprint.fingerprint(for: identifier)
+        if let profile = settings.remoteDeviceProfiles.first(where: {
+            $0.hidFingerprint == fingerprint &&
+                ($0.model == .rc001 || $0.model == .rc003)
+        }), profile.bluetoothIdentifier != identifier,
+           settings.remoteDeviceProfiles.contains(where: {
+               $0.id != profile.id && $0.bluetoothIdentifier == identifier
+           }) {
+            AppLogger.shared.write(
+                "BLE IDENTITY phase=completed result=skipped reason=identifier_owned"
+            )
+            return nil
+        }
         guard let match = RemoteIdentityReconciliationPolicy.replacement(
             for: identifier,
             hidFingerprint: fingerprint,
@@ -5037,16 +5049,30 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             for: match.profileID,
             with: identifier
         ) else { return nil }
+        // 旧 identifier 的恢复预算属于旧目标，不能迁移给新 identifier：如果它已经
+        // paused/cancelled，新 bridge 的 begin(manual:) 会直接失败，连 BLE CONNECTING
+        // 都不会出现。这里丢弃两侧旧预算，让 connectBluetoothIdentifier 为新目标创建
+        // 一份全新的恢复预算。
+        let previousStatus = remoteRecoveryBudgets[previousIdentifier]?.status.rawValue
+            ?? "none"
+        let previousShared = settings.remoteDeviceProfiles.filter {
+            $0.id != match.profileID && $0.bluetoothIdentifier == previousIdentifier
+        }.count
+        remoteRecoveryBudgets.removeValue(forKey: previousIdentifier)
+        remoteRecoveryBudgets.removeValue(forKey: identifier)
         if let staleBridge = bluetoothBridges.removeValue(forKey: previousIdentifier) {
+            bluetoothBridgeStates.removeValue(forKey: ObjectIdentifier(staleBridge))
             staleBridge.stop()
         }
-        if let budget = remoteRecoveryBudgets.removeValue(forKey: previousIdentifier) {
-            remoteRecoveryBudgets[identifier] = budget
-        }
+        remoteRecoveryStates.removeValue(forKey: match.profileID)
+        pendingRemoteBatteryLevels.removeValue(forKey: previousIdentifier)
+        pendingRemotePowerStates.removeValue(forKey: previousIdentifier)
+        pendingRemoteModels.removeValue(forKey: previousIdentifier)
         let model = settings.remoteDeviceProfiles.first(where: { $0.id == match.profileID })?.model.rawValue
             ?? "unknown"
         AppLogger.shared.write(
-            "BLE IDENTITY phase=completed result=replaced reason=hid_fingerprint_match model=\(model)"
+            "BLE IDENTITY phase=completed result=replaced reason=hid_fingerprint_match " +
+                "model=\(model) previous_recovery=\(previousStatus) previous_shared=\(previousShared)"
         )
         return match.profileID
     }
@@ -5067,7 +5093,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
                 self?.connectBluetoothIdentifier(identifier, manual: false)
             },
             reconcileCandidateIdentifier: { [weak self] identifier in
-                _ = self?.reconcileStaleRemoteIdentity(for: identifier)
+                self?.reconcileStaleRemoteIdentity(for: identifier) != nil
             }
         )
         discoveryBluetoothBridge = bridge
