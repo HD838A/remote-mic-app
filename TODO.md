@@ -648,3 +648,4 @@
   - 2026-11-18 现场缺陷：Chromecast 已连接且按键有响应时卡片仍“状态确认中”。根因是 HID presence 回调未接线，`chromecastHIDIsPresent` 恒为 nil；卡片改为读取实时 `isHIDRemotePresent`，并在链路状态和按键事件到达时刷新快照。定向 112 项通过，真实 Chromecast 卡片复验待完成，见 `Bugs/2026-11-18-chromecast-card-presence.md`。
   - 2026-11-19 现场候选：音频输出配置在 `prepare_engine` 阻塞，后续配置全部排队，导致小米和苹果卡片同时长期“状态确认中”，退出 App 重开后恢复。新增有界音频启动、一次超时重试、明确终态日志，以及仅在音频输出明确失败时出现的“恢复语音”备用按钮；定向 158 项与公开全量 1529 项通过，真实虚拟声卡重启、按钮点击与第三方语音上屏待验收，见 `Bugs/2026-11-19-audio-configure-timeout-card-stuck.md`。
   - 2026-11-20 现场：连接页右列多出未在规范中的独立 Chromecast 卡片（PR #1118）。已删除卡片和仅为其服务的 `isChromecastHIDPresent`，保留左侧设备面板、连接过的设备和按键页选择器；回归与实机截图待完成，见 `Bugs/2026-11-20-unspecified-chromecast-card.md`。
+  - 2026-11-20 现场：Build 411 首次连接 `native_prepare` 失败但独占成功，宿主仍用 `chromecastNativeKeyMapper.isPrepared` 重复拦截，39 次按键全部 rejected，语音正常。已删除宿主重复门禁，保留私有桥 `nativeInputReady` 唯一门禁；定向、全量与真机复验待完成，见 `Bugs/2026-11-20-chromecast-host-duplicate-native-guard.md`。
