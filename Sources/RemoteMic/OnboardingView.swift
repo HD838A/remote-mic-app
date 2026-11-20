@@ -385,17 +385,20 @@ struct OnboardingView: View {
             }
         }
         .onReceive(model.$isStreaming) { isStreaming in
-            guard selectedControlAcceptsVoice(model.activeVoiceSource) else { return }
-            switch settings.onboardingStep {
-            case .remote where isStreaming:
+            let action = OnboardingVoiceStreamPolicy.action(
+                isStreaming: isStreaming,
+                step: settings.onboardingStep,
+                voiceSessionStarted: voiceSessionStarted,
+                sourceAccepted: selectedControlAcceptsVoice(model.activeVoiceSource)
+            )
+            switch action {
+            case .recordRemoteVoiceButtonPress:
                 recordRemoteVoiceButtonPress()
-            case .voiceTest:
-                if isStreaming {
-                    beginVoiceAttempt(triggerPath: model.activeVoiceSource?.rawValue ?? "unknown")
-                } else if voiceSessionStarted {
-                    endVoiceAttempt()
-                }
-            default:
+            case .beginVoiceAttempt:
+                beginVoiceAttempt(triggerPath: model.activeVoiceSource?.rawValue ?? "unknown")
+            case .endVoiceAttempt:
+                endVoiceAttempt()
+            case .ignore:
                 break
             }
         }
