@@ -916,4 +916,102 @@ struct BluetoothLifecycleTests {
         #expect(!XiaomiVoiceRemoteNameMatcher.matches("MI RC2"))
         #expect(!XiaomiVoiceRemoteNameMatcher.matches("小米"))
     }
+
+    @Test func discoveryScanInspectsOnlyPlausibleCandidates() {
+        let target = UUID()
+        let other = UUID()
+
+        #expect(BluetoothDiscoveryScanPolicy.shouldInspect(
+            identifier: target,
+            targetIdentifier: target,
+            knownIdentifiers: [],
+            advertisesVoiceService: false,
+            advertisedName: nil,
+            peripheralName: nil
+        ))
+        #expect(!BluetoothDiscoveryScanPolicy.shouldInspect(
+            identifier: other,
+            targetIdentifier: target,
+            knownIdentifiers: [],
+            advertisesVoiceService: true,
+            advertisedName: "Xiaomi Bluetooth Remote 2",
+            peripheralName: "Xiaomi Bluetooth Remote 2"
+        ))
+        #expect(BluetoothDiscoveryScanPolicy.shouldInspect(
+            identifier: other,
+            targetIdentifier: nil,
+            knownIdentifiers: [other],
+            advertisesVoiceService: false,
+            advertisedName: nil,
+            peripheralName: nil
+        ))
+        #expect(BluetoothDiscoveryScanPolicy.shouldInspect(
+            identifier: other,
+            targetIdentifier: nil,
+            knownIdentifiers: [],
+            advertisesVoiceService: true,
+            advertisedName: nil,
+            peripheralName: nil
+        ))
+        #expect(BluetoothDiscoveryScanPolicy.shouldInspect(
+            identifier: other,
+            targetIdentifier: nil,
+            knownIdentifiers: [],
+            advertisesVoiceService: false,
+            advertisedName: "Xiaomi Bluetooth Remote 2",
+            peripheralName: nil
+        ))
+        #expect(BluetoothDiscoveryScanPolicy.shouldInspect(
+            identifier: other,
+            targetIdentifier: nil,
+            knownIdentifiers: [],
+            advertisesVoiceService: false,
+            advertisedName: nil,
+            peripheralName: "小米蓝牙语音遥控器"
+        ))
+        #expect(BluetoothDiscoveryScanPolicy.shouldInspect(
+            identifier: other,
+            targetIdentifier: nil,
+            knownIdentifiers: [],
+            advertisesVoiceService: false,
+            advertisedName: "Chromecast Remote",
+            peripheralName: nil
+        ))
+        #expect(!BluetoothDiscoveryScanPolicy.shouldInspect(
+            identifier: other,
+            targetIdentifier: nil,
+            knownIdentifiers: [],
+            advertisesVoiceService: false,
+            advertisedName: "AirPods Pro",
+            peripheralName: "AirPods Pro"
+        ))
+        #expect(!BluetoothDiscoveryScanPolicy.shouldInspect(
+            identifier: other,
+            targetIdentifier: nil,
+            knownIdentifiers: [],
+            advertisesVoiceService: false,
+            advertisedName: nil,
+            peripheralName: "Apple Watch"
+        ))
+        #expect(!BluetoothDiscoveryScanPolicy.shouldInspect(
+            identifier: other,
+            targetIdentifier: nil,
+            knownIdentifiers: [],
+            advertisesVoiceService: false,
+            advertisedName: "OpenFit Air by Shokz",
+            peripheralName: "OpenFit Air by Shokz"
+        ))
+    }
+
+    @Test func discoveryScanPolicyIsWiredBeforeAdmission() throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        let source = try String(contentsOf: root.appendingPathComponent(
+            "Sources/RemoteMic/XiaomiBluetoothBridge.swift"
+        ), encoding: .utf8)
+        #expect(source.contains("BluetoothDiscoveryScanPolicy.shouldInspect("))
+        #expect(source.contains("ignoredUnrelatedDiscoveryCount &+= 1"))
+        #expect(source.contains("ignored_unrelated="))
+        #expect(source.contains("BLE ADOPT IGNORED"))
+    }
 }

@@ -142,6 +142,8 @@ final class XiaomiBluetoothBridge: NSObject {
     private(set) var lastVoiceStopReason: BluetoothVoiceStopReason?
     /// 已被判定为「别的产品」的标识；本桥此后一律不再连接，也不再走扫描回退。
     private var rejectedIdentifiers = Set<UUID>()
+    /// 本轮扫描中在准入前就被判为无关的设备数；只在扫描结束时汇总写一条日志。
+    private var ignoredUnrelatedDiscoveryCount = 0
     private var central: CBCentralManager?
     private var centralGeneration: UInt64?
     private var peripheral: CBPeripheral?
@@ -392,7 +394,10 @@ final class XiaomiBluetoothBridge: NSObject {
         lifecycle = .stopped
         if case .bluetoothUnavailable = state { return }
         state = .failed(LocalizedMessage(cancelled ? "connection.history.status.cancelled" : discoveryWasManual ? "connection.history.status.not_found" : "connection.history.status.waiting"))
-        AppLogger.shared.write("BLE DISCOVERY_WINDOW phase=completed result=\(cancelled ? "cancelled" : "waiting")")
+        AppLogger.shared.write(
+            "BLE DISCOVERY_WINDOW phase=completed result=\(cancelled ? "cancelled" : "waiting") " +
+                "ignored_unrelated=\(ignoredUnrelatedDiscoveryCount)"
+        )
     }
 
     private func armRecoveryDeadline() {
@@ -600,6 +605,7 @@ final class XiaomiBluetoothBridge: NSObject {
               central.state == .poweredOn
         else { return }
         resetPeripheral()
+        ignoredUnrelatedDiscoveryCount = 0
 
         VoiceRemoteDiscovery.run(retrieveCachedTarget: { () -> CBPeripheral? in
             guard let identifier = targetIdentifier else {
@@ -698,7 +704,8 @@ final class XiaomiBluetoothBridge: NSObject {
                 AppLogger.shared.write(
                     "BLE SCAN TIMEOUT operation_id=\(self.discoveryOperationID) generation=\(generation) phase=timed_out "
                         + "result=retrying reason=scan_window_expired window_ms="
-                        + "\(Int((BluetoothScanRecoveryPolicy.scanWindow * 1_000).rounded()))"
+                        + "\(Int((BluetoothScanRecoveryPolicy.scanWindow * 1_000).rounded())) "
+                        + "ignored_unrelated=\(self.ignoredUnrelatedDiscoveryCount)"
                 )
                 self.scheduleReconnect()
             }
@@ -1499,6 +1506,17 @@ extension XiaomiBluetoothBridge: CBCentralManagerDelegate {
               !excludedIdentifiers().contains(peripheral.identifier),
               !rejectedIdentifiers.contains(peripheral.identifier)
         else { return }
+        guard BluetoothDiscoveryScanPolicy.shouldInspect(
+            identifier: peripheral.identifier,
+            targetIdentifier: targetIdentifier,
+            knownIdentifiers: knownIdentifiers(),
+            advertisesVoiceService: serviceMatch,
+            advertisedName: advertisedName,
+            peripheralName: peripheral.name
+        ) else {
+            ignoredUnrelatedDiscoveryCount &+= 1
+            return
+        }
         adopt(
             peripheral,
             using: central,
