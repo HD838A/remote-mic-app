@@ -938,6 +938,8 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     private var voiceSessionUsageSource: UsageEventSource?
     private var voiceSessionApplicationName: String?
     private var bluetoothVoiceActive = false
+    @MainActor
+    private lazy var voiceContinuationGlow = VoiceContinuationGlowController()
     private var voiceSessionWarningTasks: [DispatchWorkItem] = []
     private var voiceSessionWarningGeneration: UInt64 = 0
     private var voiceSessionWarningStartedAt: Date?
@@ -994,7 +996,9 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     )
     private var pendingBluetoothVoiceAudioDiagnostic: ATVVAudioDiagnostics?
     private var pendingBluetoothVoiceStopRequested = false
+    private var pendingBluetoothVoiceStopAt: Date?
     private var activeBluetoothVoiceDeviceIdentifier: UUID?
+    private var lastBluetoothVoiceDeviceIdentifier: UUID?
     private var bluetoothVoiceTraceCounter: UInt64 = 0
     private var activeBluetoothVoiceTraceID: UInt64?
     private var bluetoothVoiceTraceStartedAt: Date?
@@ -1823,7 +1827,9 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         pendingBluetoothVoiceStartIdentifier = nil
         cancelPendingBluetoothVoiceAudio(reason: "app_stop")
         pendingBluetoothVoiceStopRequested = false
+        pendingBluetoothVoiceStopAt = nil
         activeBluetoothVoiceDeviceIdentifier = nil
+        lastBluetoothVoiceDeviceIdentifier = nil
         webRemoteClient.stop()
         isPhoneRemoteConnectionEnabled = false
         updateNearbyRemoteLifecycle(reason: "app_stop")
@@ -4646,6 +4652,98 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         applyHIDSettings()
     }
 
+    private func dispatchVoiceGlow(
+        _ operation: @MainActor @escaping (BridgeAppModel) -> Void
+    ) {
+        if Thread.isMainThread {
+            MainActor.assumeIsolated {
+                operation(self)
+            }
+        } else {
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                MainActor.assumeIsolated {
+                    operation(self)
+                }
+            }
+        }
+    }
+
+    private func syncVoiceGlowForCurrentSession() {
+        dispatchVoiceGlow { model in
+            model.applyVoiceGlowAppearance()
+            model.voiceContinuationGlow.stop()
+            if model.settings.voiceGlowReminderEnabled,
+               let startedAt = model.voiceSessionWarningStartedAt {
+                model.voiceContinuationGlow.start(
+                    elapsed: max(0, Date().timeIntervalSince(startedAt)),
+                    fullSession: model.settings.voiceGlowFullSession,
+                    warningStart: model.settings.voiceGlowWarningStart
+                )
+            }
+        }
+    }
+
+    func previewVoiceGlowAppearance() {
+        dispatchVoiceGlow { model in
+            model.applyVoiceGlowAppearance()
+            guard !model.isStreaming else { return }
+            model.voiceContinuationGlow.preview()
+        }
+    }
+
+    @MainActor
+    private func applyVoiceGlowAppearance() {
+        voiceContinuationGlow.setAppearance(
+            width: settings.voiceGlowWidth,
+            intensity: settings.voiceGlowIntensity
+        )
+        voiceContinuationGlow.setWarningStart(settings.voiceGlowWarningStart)
+    }
+
+    func updateVoiceGlowAppearance() {
+        dispatchVoiceGlow { model in
+            model.applyVoiceGlowAppearance()
+        }
+    }
+
+    func setVoiceGlowReminderEnabled(_ enabled: Bool) {
+        settings.voiceGlowReminderEnabled = enabled
+        syncVoiceGlowForCurrentSession()
+        AppLogger.shared.write("VOICE GLOW setting phase=completed enabled=\(enabled)")
+    }
+
+    func setVoiceGlowDisplayMode(_ mode: AppSettings.VoiceGlowDisplayMode) {
+        settings.voiceGlowDisplayMode = mode
+        syncVoiceGlowForCurrentSession()
+        AppLogger.shared.write("VOICE GLOW setting phase=completed mode=\(mode.rawValue)")
+    }
+
+    func setVoiceGlowFullSession(_ fullSession: Bool) {
+        setVoiceGlowDisplayMode(fullSession ? .fullSession : .lastTenSeconds)
+    }
+
+    func setVoiceContinuationMinimumDuration(_ duration: TimeInterval) {
+        settings.setVoiceContinuationMinimumDuration(duration)
+        dispatchVoiceGlow { model in
+            model.voiceContinuationGlow.setWarningStart(model.settings.voiceGlowWarningStart)
+        }
+    }
+
+    func setVoiceContinuationEnabled(_ enabled: Bool) {
+        settings.voiceContinuationEnabled = enabled
+        if !enabled {
+            voiceFnTapSession.finishContinuationIfWaiting()
+        }
+        dispatchVoiceGlow { model in
+            if !enabled {
+                model.voiceContinuationGlow.finishIfWaiting()
+            }
+            model.voiceContinuationGlow.setWarningStart(model.settings.voiceGlowWarningStart)
+        }
+        AppLogger.shared.write("VOICE CONTINUATION setting phase=completed enabled=\(enabled)")
+    }
+
     func setVoiceFnTapModeEnabled(_ enabled: Bool) {
         guard settings.voiceKeyMode == .function else {
             settings.voiceFnTapModeEnabled = false
@@ -4653,9 +4751,16 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         }
         if enabled {
             enableVoiceFnTapMode()
+            dispatchVoiceGlow { model in
+                model.voiceContinuationGlow.setWarningStart(model.settings.voiceGlowWarningStart)
+            }
             return
         }
         settings.voiceFnTapModeEnabled = false
+        dispatchVoiceGlow { model in
+            model.voiceContinuationGlow.finishIfWaiting()
+            model.voiceContinuationGlow.setWarningStart(model.settings.voiceGlowWarningStart)
+        }
         voiceFnTapSession.setEnabled(false) { [weak self] in
             self?.applyHIDSettings(restartSiriRemote: false)
         }
@@ -7227,6 +7332,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
                 )
             }
         } else {
+            dispatchVoiceGlow { $0.voiceContinuationGlow.stop() }
             voiceFnTapSession.suspend { [weak self] in
                 self?.releaseVirtualAudioOutputIfUnused(reason: "bluetooth_not_ready")
             }
@@ -7392,6 +7498,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             pendingBluetoothVoiceStartIdentifier = nil
             cancelPendingBluetoothVoiceAudio(reason: "voice_key_press_failed")
             pendingBluetoothVoiceStopRequested = false
+            pendingBluetoothVoiceStopAt = nil
             bridge.audioDiagnostics?.rejectStart(reason: "voice_key_press_failed")
             AppLogger.shared.write(
                 "ATVV STREAM rejected reason=voice_key mode=\(settings.voiceKeyMode.rawValue)"
@@ -7410,6 +7517,12 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         let model = profileID
             .flatMap { id in settings.remoteDeviceProfiles.first(where: { $0.id == id })?.model }
             ?? .unknown
+        if let lastIdentifier = lastBluetoothVoiceDeviceIdentifier,
+           lastIdentifier != identifier {
+            voiceFnTapSession.finishContinuationIfWaiting()
+            dispatchVoiceGlow { $0.voiceContinuationGlow.finishIfWaiting() }
+        }
+        lastBluetoothVoiceDeviceIdentifier = identifier
         startVoiceSessionWarningTracking(for: model)
         bluetoothVoiceTraceCounter &+= 1
         activeBluetoothVoiceTraceID = bluetoothVoiceTraceCounter
@@ -7442,7 +7555,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             longRecordingOpenTimer = nil
             AppLogger.shared.write("LONG RECORDING started")
         }
-        _ = voiceFnTapSession.startVoice()
+        _ = voiceFnTapSession.startVoice(sourceIdentifier: identifier)
         beginVoiceSessionIfNeeded(audioDiagnosticOperationID: bridge.audioDiagnostics?.operationID)
         if !outputReadyAtStart {
             let configurationDiagnostic = bridge.audioDiagnostics
@@ -7457,6 +7570,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
                 else { return }
                 let stopRequested = self.pendingBluetoothVoiceStopRequested
                 self.pendingBluetoothVoiceStopRequested = false
+                if !stopRequested { self.pendingBluetoothVoiceStopAt = nil }
                 self.pendingBluetoothVoiceStartIdentifier = nil
                 let bufferedAudio = self.pendingBluetoothVoiceAudio.drain()
                 guard ready else {
@@ -7539,11 +7653,15 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             pendingBluetoothVoiceStartIdentifier = nil
             cancelPendingBluetoothVoiceAudio(reason: "stop_before_audio_ready")
             pendingBluetoothVoiceStopRequested = false
+            pendingBluetoothVoiceStopAt = nil
             AppLogger.shared.write("ATVV STREAM stop_before_audio_ready result=cancelled")
             return
         }
         if pendingBluetoothVoiceStartIdentifier == identifier {
             pendingBluetoothVoiceStopRequested = true
+            if pendingBluetoothVoiceStopAt == nil {
+                pendingBluetoothVoiceStopAt = Date()
+            }
             AppLogger.shared.write(
                 "ATVV STREAM stop_deferred_until_audio_ready result=pending_tail " +
                     "pending_samples=\(pendingBluetoothVoiceAudio.bufferedSampleCount)"
@@ -7563,13 +7681,15 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
                 audioDiagnostic: bridge.audioDiagnostics
             )
         }
+        let effectiveStopAt = pendingBluetoothVoiceStopAt ?? Date()
         activeBluetoothVoiceDeviceIdentifier = nil
         loggedBluetoothVoiceAudioDeviceIdentifier = nil
-        cancelVoiceSessionWarningTracking()
+        cancelVoiceSessionWarningTracking(stopGlow: false)
         bluetoothVoiceActive = false
         pendingBluetoothVoiceStartIdentifier = nil
         cancelPendingBluetoothVoiceAudio(reason: "remote_stop")
         pendingBluetoothVoiceStopRequested = false
+        pendingBluetoothVoiceStopAt = nil
         cancelPendingCommandVoiceAudio(reason: "remote_stop")
         if longRecordingRequested {
             finishLongRecording(reason: "remote_stop")
@@ -7578,10 +7698,27 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             longRecordingCloseTimer = nil
             AppLogger.shared.write("LONG RECORDING close_confirmed")
         }
-        let handledByFnTapMode = voiceFnTapSession.stopVoice()
+        let heldDuration = bluetoothVoiceTraceStartedAt.map {
+            max(0, effectiveStopAt.timeIntervalSince($0))
+        } ?? 0
+        let rawContinuationDelay = VoiceHardwareSessionLimitApplicability.hasHardwareLimit(
+            model: bluetoothVoiceTraceModel
+        )
+            ? settings.continuationDelay(after: heldDuration)
+            : 0
+        let elapsedSinceStop = max(0, Date().timeIntervalSince(effectiveStopAt))
+        let continuationDelay = rawContinuationDelay > elapsedSinceStop
+            ? rawContinuationDelay - elapsedSinceStop
+            : 0
+        let handledByFnTapMode = voiceFnTapSession.stopVoice(continuationDelay: continuationDelay)
+        let glowReleaseDelay = handledByFnTapMode ? continuationDelay : 0
+        dispatchVoiceGlow { model in
+            guard model.voiceSessionWarningStartedAt == nil else { return }
+            model.voiceContinuationGlow.release(delay: glowReleaseDelay)
+        }
         let traceID = activeBluetoothVoiceTraceID ?? 0
         let durationMilliseconds = bluetoothVoiceTraceStartedAt.map {
-            max(0, Int(Date().timeIntervalSince($0) * 1_000))
+            max(0, Int(effectiveStopAt.timeIntervalSince($0) * 1_000))
         } ?? 0
         let shouldFlushAudio = BluetoothVoiceStopPolicy.shouldFlushAudio(
             handledByFnTapMode: handledByFnTapMode
@@ -9182,6 +9319,8 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             return .busy
         }
         cancelVirtualAudioReleaseIfPending(trigger: "mobile_voice_start_\(source.logName)")
+        voiceFnTapSession.finishContinuationIfWaiting()
+        dispatchVoiceGlow { $0.voiceContinuationGlow.finishIfWaiting() }
         let keyStarted = source.updateVoiceTrigger {
             updateVoiceKeyState(streaming: true, forceSoftware: true, owner: .mobile)
         }
@@ -10000,9 +10139,17 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         }
     }
 
-    private func startVoiceSessionWarningTracking(for model: XiaomiRemoteModel) {
-        cancelVoiceSessionWarningTracking()
-        guard model == .rc001 || model == .rc003 else { return }
+    @MainActor
+    var isVoiceContinuationGlowVisible: Bool {
+        voiceContinuationGlow.isVisible
+    }
+
+    func startVoiceSessionWarningTracking(for model: XiaomiRemoteModel) {
+        cancelVoiceSessionWarningTracking(stopGlow: false)
+        guard VoiceHardwareSessionLimitApplicability.hasHardwareLimit(model: model) else {
+            dispatchVoiceGlow { $0.voiceContinuationGlow.stop() }
+            return
+        }
 
         voiceSessionWarningGeneration &+= 1
         let generation = voiceSessionWarningGeneration
@@ -10023,7 +10170,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
                 )
                 guard level != .none, level != self.voiceSessionWarningLevel else { return }
                 self.voiceSessionWarningLevel = level
-                if level == .warning {
+                if level == .warning && !self.settings.voiceGlowReminderEnabled {
                     NSSound.beep()
                     AppLogger.shared.write(
                         "UI VOICE_WARNING phase=completed result=system_alert_sound " +
@@ -10039,10 +10186,23 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: task)
         }
         voiceSessionWarningStartedAt = startedAt
+        dispatchVoiceGlow { model in
+            guard model.voiceSessionWarningGeneration == generation else { return }
+            if model.settings.voiceGlowReminderEnabled {
+                model.applyVoiceGlowAppearance()
+                model.voiceContinuationGlow.start(
+                    fullSession: model.settings.voiceGlowFullSession,
+                    warningStart: model.settings.voiceGlowWarningStart
+                )
+            } else {
+                model.voiceContinuationGlow.stop()
+            }
+        }
     }
 
-    private func cancelVoiceSessionWarningTracking() {
+    func cancelVoiceSessionWarningTracking(stopGlow: Bool = true) {
         voiceSessionWarningGeneration &+= 1
+        let generation = voiceSessionWarningGeneration
         voiceSessionWarningTasks.forEach { $0.cancel() }
         voiceSessionWarningTasks.removeAll()
         voiceSessionWarningStartedAt = nil
@@ -10052,6 +10212,14 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             )
         }
         voiceSessionWarningLevel = .none
+        if stopGlow {
+            dispatchVoiceGlow { model in
+                guard model.voiceSessionWarningGeneration == generation,
+                      model.voiceSessionWarningStartedAt == nil
+                else { return }
+                model.voiceContinuationGlow.stop()
+            }
+        }
     }
 
     private func beginVoiceSessionIfNeeded(audioDiagnosticOperationID: UInt64? = nil) {

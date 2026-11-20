@@ -2,13 +2,28 @@ import AppKit
 import Combine
 import SayAllMacRemoteCore
 
+enum VoiceHardwareSessionLimitApplicability {
+    /// Confirmed remotes with a hardware ~60-second single-session recording limit (Xiaomi RC001/RC003).
+    static func hasHardwareLimit(model: XiaomiRemoteModel) -> Bool {
+        model == .rc001 || model == .rc003
+    }
+
+    /// UI/control gating: shown for Xiaomi RC001/RC003 (and the default Xiaomi canvas before a
+    /// specific model is identified), hidden for remotes without a 60-second hardware cap
+    /// such as Apple Siri Remote and Chromecast.
+    static func isApplicable(model: XiaomiRemoteModel?) -> Bool {
+        guard let model else { return true }
+        return hasHardwareLimit(model: model) || model == .unknown
+    }
+}
+
 enum VoiceSessionWarningLevel: String, Equatable {
     case none
     case warning
     case critical
 
     static func resolve(elapsed: TimeInterval, model: XiaomiRemoteModel) -> Self {
-        guard model == .rc001 || model == .rc003 else { return .none }
+        guard VoiceHardwareSessionLimitApplicability.hasHardwareLimit(model: model) else { return .none }
         if elapsed >= 57 { return .critical }
         if elapsed >= 53 { return .warning }
         return .none

@@ -334,6 +334,14 @@ final class AppSettings: ObservableObject {
         static let checksForPreReleaseUpdates = "checksForPreReleaseUpdates"
         static let experimentalContinuousRecordingEnabled = "experimentalContinuousRecordingEnabled"
         static let voiceFnTapModeEnabled = "voiceFnTapModeEnabled"
+        static let voiceContinuationEnabled = "voiceContinuationEnabled"
+        static let voiceContinuationDelay = "voiceContinuationDelay"
+        static let voiceContinuationMinimumDuration = "voiceContinuationMinimumDuration"
+        static let voiceGlowReminderEnabled = "voiceGlowReminderEnabled"
+        static let voiceGlowDisplayMode = "voiceGlowDisplayMode"
+        static let voiceGlowFullSession = "voiceGlowFullSession"
+        static let voiceGlowWidth = "voiceGlowWidth"
+        static let voiceGlowIntensity = "voiceGlowIntensity"
         static let chromecastAllowSystemReservedKeys = "chromecast.allowSystemReservedKeys"
         static let chromecastSystemReservedExceptions = "chromecast.systemReservedExceptions"
         static let voiceKeyMode = "voiceKeyMode"
@@ -715,6 +723,90 @@ final class AppSettings: ObservableObject {
                 forKey: Keys.experimentalContinuousRecordingEnabled
             )
         }
+    }
+
+    @Published var voiceContinuationEnabled: Bool {
+        didSet { defaults.set(voiceContinuationEnabled, forKey: Keys.voiceContinuationEnabled) }
+    }
+
+    @Published private(set) var voiceContinuationDelay: TimeInterval {
+        didSet { defaults.set(voiceContinuationDelay, forKey: Keys.voiceContinuationDelay) }
+    }
+
+    @Published var voiceContinuationMinimumDuration: TimeInterval {
+        didSet {
+            defaults.set(
+                voiceContinuationMinimumDuration,
+                forKey: Keys.voiceContinuationMinimumDuration
+            )
+        }
+    }
+
+    func setVoiceContinuationMinimumDuration(_ duration: TimeInterval) {
+        voiceContinuationMinimumDuration = min(60, max(0, duration))
+    }
+
+    func setVoiceContinuationDelay(_ delay: TimeInterval) {
+        voiceContinuationDelay = min(3, max(0.5, delay))
+    }
+
+    func continuationDelay(after duration: TimeInterval) -> TimeInterval {
+        voiceContinuationEnabled && duration >= voiceContinuationMinimumDuration
+            ? voiceContinuationDelay
+            : 0
+    }
+
+    enum VoiceGlowDisplayMode: String, CaseIterable, Equatable {
+        case lastTenSeconds
+        case followContinuationThreshold
+        case fullSession
+    }
+
+    var voiceGlowWarningStart: TimeInterval {
+        guard voiceGlowDisplayMode == .followContinuationThreshold,
+              voiceFnTapModeEnabled,
+              voiceContinuationEnabled,
+              voiceContinuationMinimumDuration < 60
+        else {
+            return 50
+        }
+        return voiceContinuationMinimumDuration
+    }
+
+    /// Active continuation threshold start time (in seconds) shown on the dynamic
+    /// "Follow threshold" segment when continuation is active and < 60s.
+    var voiceGlowThresholdStartSeconds: Int? {
+        guard voiceFnTapModeEnabled,
+              voiceContinuationEnabled,
+              voiceContinuationMinimumDuration < 60
+        else {
+            return nil
+        }
+        return Int(voiceContinuationMinimumDuration.rounded())
+    }
+
+    @Published var voiceGlowReminderEnabled: Bool {
+        didSet { defaults.set(voiceGlowReminderEnabled, forKey: Keys.voiceGlowReminderEnabled) }
+    }
+
+    @Published var voiceGlowDisplayMode: VoiceGlowDisplayMode {
+        didSet {
+            defaults.set(voiceGlowDisplayMode.rawValue, forKey: Keys.voiceGlowDisplayMode)
+            defaults.set(voiceGlowDisplayMode == .fullSession, forKey: Keys.voiceGlowFullSession)
+        }
+    }
+
+    var voiceGlowFullSession: Bool {
+        get { voiceGlowDisplayMode == .fullSession }
+        set { voiceGlowDisplayMode = newValue ? .fullSession : .lastTenSeconds }
+    }
+
+    @Published var voiceGlowWidth: Double {
+        didSet { defaults.set(voiceGlowWidth, forKey: Keys.voiceGlowWidth) }
+    }
+
+    @Published var voiceGlowIntensity: Double {
+        didSet { defaults.set(voiceGlowIntensity, forKey: Keys.voiceGlowIntensity) }
     }
 
     @Published var voiceFnTapModeEnabled: Bool {
@@ -1142,6 +1234,33 @@ final class AppSettings: ObservableObject {
         experimentalContinuousRecordingEnabled = defaults.bool(
             forKey: Keys.experimentalContinuousRecordingEnabled
         )
+        voiceGlowReminderEnabled = defaults.object(forKey: Keys.voiceGlowReminderEnabled) == nil
+            ? true
+            : defaults.bool(forKey: Keys.voiceGlowReminderEnabled)
+        voiceGlowWidth = defaults.object(forKey: Keys.voiceGlowWidth) == nil
+            ? 0.64 : min(0.9, max(0.3, defaults.double(forKey: Keys.voiceGlowWidth)))
+        if defaults.object(forKey: Keys.voiceGlowIntensity) == nil {
+            voiceGlowIntensity = 0.4
+        } else {
+            let storedIntensity = defaults.double(forKey: Keys.voiceGlowIntensity)
+            // 历史构建使用 0.5...3.0（50%–300%）倍率；现已归一化到 0.1...1.0（10%–100%，满档对应 5.0x）。
+            let normalizedIntensity = storedIntensity > 1 ? storedIntensity / 5 : storedIntensity
+            voiceGlowIntensity = min(1, max(0.1, normalizedIntensity))
+        }
+        if let rawMode = defaults.string(forKey: Keys.voiceGlowDisplayMode),
+           let storedMode = VoiceGlowDisplayMode(rawValue: rawMode) {
+            voiceGlowDisplayMode = storedMode
+        } else {
+            voiceGlowDisplayMode = defaults.bool(forKey: Keys.voiceGlowFullSession)
+                ? .fullSession
+                : .lastTenSeconds
+        }
+        voiceContinuationMinimumDuration = defaults.object(forKey: Keys.voiceContinuationMinimumDuration) == nil
+            ? 50 : min(60, max(0, defaults.double(forKey: Keys.voiceContinuationMinimumDuration)))
+        voiceContinuationEnabled = defaults.bool(forKey: Keys.voiceContinuationEnabled)
+        voiceContinuationDelay = defaults.object(forKey: Keys.voiceContinuationDelay) == nil
+            ? 1
+            : min(3, max(0.5, defaults.double(forKey: Keys.voiceContinuationDelay)))
         voiceFnTapModeEnabled = defaults.bool(forKey: Keys.voiceFnTapModeEnabled)
         chromecastAllowSystemReservedKeys = defaults.bool(
             forKey: Keys.chromecastAllowSystemReservedKeys

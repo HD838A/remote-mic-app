@@ -135,6 +135,10 @@ enum SettingsScreenshotRenderer {
         }
 
         let settings = AppSettings(defaults: defaults)
+        if ProcessInfo.processInfo.environment["REMOTE_MIC_SETTINGS_SCREENSHOT_CONTINUATION"] == "1" {
+            settings.voiceFnTapModeEnabled = true
+            settings.voiceContinuationEnabled = true
+        }
         settings.applicationLanguage = language
         settings.completeOnboarding()
         if let modelName = ProcessInfo.processInfo.environment[
