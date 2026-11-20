@@ -646,6 +646,9 @@ struct SettingsView: View {
     @State private var selectedChromecastControlID = "select"
     @State private var selectedStatisticsDate: Date?
     @State private var mappingEditingTarget: ShortcutEditingTarget?
+    /// 当前动作编辑状态属于哪台遥控器。跨型号切换会替换整个页面子树，
+    /// 这个设备标识让旧编辑区在清理完成前也不会显示到新遥控器页面上。
+    @State private var mappingPageStateDeviceID: UUID?
     @State private var mappingHoldEditingButton: RemoteButton?
     /// Clicking the same hold entry twice must still bring the editor into view, so the
     /// scroll is driven by a request token instead of the selection identity.
@@ -782,6 +785,7 @@ struct SettingsView: View {
                 ShortcutEditingTarget(button: $0, trigger: initialMappingEditingTrigger)
             } : nil
         )
+        _mappingPageStateDeviceID = State(initialValue: model.settings.selectedRemoteProfileID)
         _mappingHoldEditingButton = State(initialValue: initialMappingHoldEditingButton)
         _isMappingVoiceSettingsPresented = State(initialValue: initialMappingVoiceSettingsPresented)
     }
@@ -858,6 +862,12 @@ struct SettingsView: View {
                 // 进入页面时主动重读一次宏库。
                 macroFeature.reloadButtonProfileMacroLibrary()
             }
+        }
+        // 监听器必须挂在会跨型号页面替换保留的父层。按键页按型号在小米、Siri 和
+        // Chromecast 页面之间切换，挂在页内的 onChange 在跨型号切换时会被移除。
+        .onChange(of: settings.selectedRemoteProfileID) { _ in
+            guard !mappingInteractionBelongsToSelectedRemote else { return }
+            resetMappingPageForRemoteChange()
         }
         .onDisappear {
             model.setMappingPageVisible(false)
@@ -1136,8 +1146,13 @@ struct SettingsView: View {
                             } else {
                                 selectMappingProfile(nil)
                             }
-                            // 只打开动作编辑器；按住是独立分类，不随跳转展开。
+                            // 跳转明确选择的是新设备；父层设备监听不得把这次编辑目标清掉。
+                            mappingPageStateDeviceID = settings.selectedRemoteProfileID
+                            mappingEditingTarget = nil
                             mappingHoldEditingButton = nil
+                            isMappingVoiceSettingsPresented = false
+                            shortcutCaptureTarget = nil
+                            applicationShortcutCaptureProfileID = nil
                             mappingActionFilter = mappingFilterForConfiguredAction(
                                 button: button,
                                 trigger: trigger
@@ -2082,6 +2097,7 @@ struct SettingsView: View {
                     else { return }
                     selectedSiriRemoteControlID = controlID
                     selectedRemoteButton = button
+                    mappingPageStateDeviceID = settings.selectedRemoteProfileID
                     mappingActionFilter = mappingFilterForConfiguredAction(
                         button: button,
                         trigger: trigger
@@ -2100,6 +2116,7 @@ struct SettingsView: View {
                     guard let button = siriRemoteButton(for: controlID) else { return }
                     selectedSiriRemoteControlID = controlID
                     selectedRemoteButton = button
+                    mappingPageStateDeviceID = settings.selectedRemoteProfileID
                     mappingEditingTarget = nil
                     shortcutCaptureTarget = nil
                     applicationShortcutCaptureProfileID = nil
@@ -2185,6 +2202,7 @@ struct SettingsView: View {
                     else { return }
                     selectedChromecastControlID = controlID
                     selectedRemoteButton = button
+                    mappingPageStateDeviceID = settings.selectedRemoteProfileID
                     mappingActionFilter = mappingFilterForConfiguredAction(
                         button: button,
                         trigger: trigger
@@ -2203,6 +2221,7 @@ struct SettingsView: View {
                     guard let button = chromecastButton(for: controlID) else { return }
                     selectedChromecastControlID = controlID
                     selectedRemoteButton = button
+                    mappingPageStateDeviceID = settings.selectedRemoteProfileID
                     mappingEditingTarget = nil
                     shortcutCaptureTarget = nil
                     applicationShortcutCaptureProfileID = nil
@@ -2259,7 +2278,41 @@ struct SettingsView: View {
     /// 语音键没有可配置的单击/双击/长按动作，所以它不打开普通按键的编辑器；反之，打开普通按键
     /// 或按住编辑器时也会收起本面板（见 `hardwareMappingPage` 的 onChange），保证点击之后页面上
     /// 只有这一份与语音键有关的设置。再点一次语音键卡片收起。
+    /// 旧遥控器的编辑状态在新页面出现前不得参与布局或滚动。
+    private var mappingInteractionBelongsToSelectedRemote: Bool {
+        mappingPageStateDeviceID == settings.selectedRemoteProfileID
+    }
+
+    /// 切换到另一台遥控器后，按键页必须从干净状态开始：旧编辑目标、胶囊筛选、
+    /// 方案选择、语音面板和快捷键捕获都属于上一台设备，不能带到新页面。
+    /// 设备切换后固定在页面顶部；每个遥控器独立滚动位置留待后续单独实现。
+    private func resetMappingPageForRemoteChange() {
+        model.cancelButtonGestureLearning(reason: "remote_changed")
+        loadGestureTimingDraft()
+        mappingPageStateDeviceID = settings.selectedRemoteProfileID
+        mappingEditingTarget = nil
+        mappingHoldEditingButton = nil
+        isMappingVoiceSettingsPresented = false
+        shortcutCaptureTarget = nil
+        applicationShortcutCaptureProfileID = nil
+        mappingActionFilter = .all
+        mappingMacroSearch = ""
+        mappingActionSave = .init()
+        mappingHoldSave = .init()
+        mappingProfileCreation = nil
+        shortcutCaptureFeedback = nil
+        gestureTimingSaveConfirmed = false
+        mappingContentIsScrolled = false
+        mappingEditorScrollTarget = "mapping-action-editor"
+        selectedRemoteButton = .ok
+        selectedSiriRemoteControlID = "select"
+        selectedChromecastControlID = "select"
+        // 方案属于具体设备；切换后回到基础映射，避免旧方案胶囊或作用域提示串到新设备。
+        editingMappingProfileID = nil
+    }
+
     private func presentMappingVoiceSettings() {
+        mappingPageStateDeviceID = settings.selectedRemoteProfileID
         mappingEditingTarget = nil
         mappingHoldEditingButton = nil
         shortcutCaptureTarget = nil
@@ -2905,6 +2958,7 @@ struct SettingsView: View {
                 },
                 onEdit: { button, trigger in
                     selectedRemoteButton = button
+                    mappingPageStateDeviceID = settings.selectedRemoteProfileID
                     mappingActionFilter = mappingFilterForConfiguredAction(
                         button: button,
                         trigger: trigger
@@ -2921,6 +2975,7 @@ struct SettingsView: View {
                 },
                 onEditHold: { button in
                     selectedRemoteButton = button
+                    mappingPageStateDeviceID = settings.selectedRemoteProfileID
                     mappingEditingTarget = nil
                     shortcutCaptureTarget = nil
                     applicationShortcutCaptureProfileID = nil
@@ -2985,7 +3040,8 @@ struct SettingsView: View {
 
                             hardwareCanvas()
 
-                            if let target = mappingEditingTarget {
+                            if mappingInteractionBelongsToSelectedRemote,
+                               let target = mappingEditingTarget {
                                 // 分类胶囊和语音键、按键速度两块全局面板都不属于某一颗按键，
                                 // 因此放在编辑面板外面：胶囊在上，全局面板在面板之后。
                                 VStack(alignment: .leading, spacing: 16) {
@@ -3007,14 +3063,16 @@ struct SettingsView: View {
                                             .id("mapping-button-speed-tab")
                                     }
                                 }
-                            } else if let button = mappingHoldEditingButton {
+                            } else if mappingInteractionBelongsToSelectedRemote,
+                                      let button = mappingHoldEditingButton {
                                 mappingHoldEditorPanel(button)
                                     .id("mapping-hold-editor")
                             }
 
                             // 语音键的设置只在点击语音键之后出现，而且是页面上唯一的编辑面板：
                             // 选普通按键会收起它，点它会收起普通按键的编辑器。
-                            if isMappingVoiceSettingsPresented {
+                            if mappingInteractionBelongsToSelectedRemote,
+                               isMappingVoiceSettingsPresented {
                                 mappingVoiceSettingsPanel(includeSiriScrollArrow: includeSiriScrollArrow)
                                     .id("mapping-voice-settings")
                             }
@@ -3044,19 +3102,6 @@ struct SettingsView: View {
                     .id(settings.selectedRemoteProfileID)
                     .compatibilityScrollEdgeEffect()
                 }
-                .onChange(of: settings.selectedRemoteProfileID) { _ in
-                    model.cancelButtonGestureLearning(reason: "remote_changed")
-                    loadGestureTimingDraft()
-                    // 编辑器属于上一只遥控器；切换设备后不得把旧编辑区带到新页面。
-                    mappingEditingTarget = nil
-                    mappingHoldEditingButton = nil
-                    isMappingVoiceSettingsPresented = false
-                    shortcutCaptureTarget = nil
-                    applicationShortcutCaptureProfileID = nil
-                    DispatchQueue.main.async {
-                        proxy.scrollTo("mapping-page-top", anchor: .top)
-                    }
-                }
                 .onChange(of: settings.selectedRemoteProfile?.model) { _ in
                     model.cancelButtonGestureLearning(reason: "remote_model_changed")
                     loadGestureTimingDraft()
@@ -3068,22 +3113,23 @@ struct SettingsView: View {
                             proxy.scrollTo("mapping-gesture-timing", anchor: .top)
                         }
                     }
-                    guard mappingEditingTarget != nil
-                        || mappingHoldEditingButton != nil
-                        || isMappingVoiceSettingsPresented
-                    else { return }
-                    // The hold editor has its own anchor; scrolling to the action editor
-                    // would land on the page top when only the hold editor is open.
-                    let anchor = isMappingVoiceSettingsPresented
+                    // 只恢复属于当前遥控器的编辑区。跨型号切换时旧状态可能还没被父层清理，
+                    // 设备标识会先把它挡在布局和滚动之外，避免“先到顶部再滚下去”。
+                    guard mappingInteractionBelongsToSelectedRemote else { return }
+                    let wantsVoice = isMappingVoiceSettingsPresented
+                    let wantsAction = mappingEditingTarget != nil
+                    let wantsHold = mappingHoldEditingButton != nil
+                    guard wantsVoice || wantsAction || wantsHold else { return }
+                    let anchor = wantsVoice
                         ? "mapping-voice-settings"
-                        : (mappingEditingTarget == nil ? "mapping-hold-editor" : "mapping-action-filter")
+                        : (wantsAction ? "mapping-action-filter" : "mapping-hold-editor")
                     DispatchQueue.main.async {
                         proxy.scrollTo(anchor, anchor: .top)
                     }
                 }
                 .onChange(of: mappingEditingTarget?.id) { targetID in
                     mappingActionSave = .init()
-                    guard targetID != nil else { return }
+                    guard targetID != nil, mappingInteractionBelongsToSelectedRemote else { return }
                     isMappingVoiceSettingsPresented = false
                     DispatchQueue.main.async {
                         withAnimation(.easeInOut(duration: 0.25)) {
@@ -3094,7 +3140,7 @@ struct SettingsView: View {
                 }
                 .onChange(of: mappingHoldEditingButton?.rawValue) { buttonID in
                     clearMappingHoldFeedbackForChangedButton()
-                    guard buttonID != nil else { return }
+                    guard buttonID != nil, mappingInteractionBelongsToSelectedRemote else { return }
                     isMappingVoiceSettingsPresented = false
                     DispatchQueue.main.async {
                         withAnimation(.easeInOut(duration: 0.25)) {
@@ -3118,6 +3164,7 @@ struct SettingsView: View {
                     }
                 }
                 .onChange(of: mappingVoiceSettingsRequest) { _ in
+                    guard mappingInteractionBelongsToSelectedRemote else { return }
                     // 面板是这一刻才插进视图树的，锚点要等下一轮布局完成才可滚动。
                     DispatchQueue.main.async {
                         withAnimation(.easeInOut(duration: 0.25)) {

@@ -1,5 +1,6 @@
 # Bug 记录
 
+- [切换遥控器后残留上一台设备的按键编辑区](./2026-11-20-mapping-remote-switch-stale-editor.md)
 - [Typeless 的 Fn 组合快捷键在 2.0.8 预览版后无法定义](./2026-11-20-typeless-fn-shortcut-unavailable.md)
 - [卸载后残留 Siri Remote 安装收据和 Dock 固定项](./2026-11-20-uninstaller-stale-siri-receipt-and-dock-tile.md)
 - [Build 409 遥控器可用但卡片持续“状态确认中”](./2026-11-19-remote-card-confirming-on-build-409.md)
