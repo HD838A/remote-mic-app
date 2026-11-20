@@ -142,7 +142,7 @@ final class XiaomiBluetoothBridge: NSObject {
     private(set) var lastVoiceStopReason: BluetoothVoiceStopReason?
     /// 已被判定为「别的产品」的标识；本桥此后一律不再连接，也不再走扫描回退。
     private var rejectedIdentifiers = Set<UUID>()
-    /// 本轮扫描中在准入前就被判为无关的设备数；只在扫描结束时汇总写一条日志。
+    /// 本轮扫描中在准入前被跳过的无关广播次数；只在扫描结束时汇总写一条日志。
     private var ignoredUnrelatedDiscoveryCount = 0
     private var central: CBCentralManager?
     private var centralGeneration: UInt64?

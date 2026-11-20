@@ -67,7 +67,7 @@ serviceMatch || isCandidate(peripheral) || nameMatcher.matches(advertisedName)
   - 广播 ATVV 服务；
   - 已知遥控器名称；
   - 明确的外来产品名称，交给统一准入层记录拒绝原因。
-- 其余普通 BLE 设备直接返回，只累加 `ignoredUnrelatedDiscoveryCount`。
+- 其余普通 BLE 广播直接返回，只累加 `ignoredUnrelatedDiscoveryCount`（按回调次数，不是唯一设备数）。
 - 扫描结束时只写一条汇总：
 
 ```text
