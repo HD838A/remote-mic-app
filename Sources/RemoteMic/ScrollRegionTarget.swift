@@ -57,6 +57,26 @@ enum ScrollPageDirection {
     }
 }
 
+/// How far a relative page action moves: one screen or half a screen.
+enum ScrollPageStep {
+    case full
+    case half
+
+    var fraction: Double {
+        switch self {
+        case .full: return ScrollRegionRule.fullPageFraction
+        case .half: return ScrollRegionRule.halfPageFraction
+        }
+    }
+
+    var logName: String {
+        switch self {
+        case .full: return "full"
+        case .half: return "half"
+        }
+    }
+}
+
 enum ScrollRegionMatch {
     case matched(Int)
     case failed(ScrollPageOutcome)
@@ -106,16 +126,19 @@ enum ScrollRegionRule {
     static let sidebarWidthRatio: Double = 0.45
 
     /// Chromium ignores synthetic pixel-unit wheel events and accelerates large
-    /// line deltas, so a page is posted as several equal chunks.
+    /// line deltas, so a page is posted as several line-wheel chunks.
     ///
-    /// 一次翻页必须约等于一屏（见 feature/scroll-region-page-actions/PRODUCT_SPEC.md）：
-    /// 实测 10 行约 120 pt（12 pt/行），因此每块 20 行 ≈ 240 pt，块数按区域高度算、封顶 3 块，
-    /// 64 行 ≈ 一屏。原来的 30 行 × 3 块 ≈ 1080 pt，在多数窗口里超过两屏。
+    /// 目标距离按目标区域可视高度计算（见 feature/scroll-region-page-actions/PRODUCT_SPEC.md）：
+    /// 整页取 0.9 屏，半页取 0.5 屏。因为部分 App 只接受行单位滚轮，这里把目标点数按
+    /// 实测的 12 pt/行换算成总行数，再以 20 行一块投递；最后一块可以不足 20 行。
+    /// 12 pt/行只是行滚轮的换算基准，不是产品层面的“一屏”定义。
     static let overlapRatio: Double = 0.10
+    static let fullPageFraction: Double = 1 - overlapRatio
+    static let halfPageFraction: Double = 0.50
     static let linesPerChunk: Int32 = 20
     static let pointsPerLine: Double = 12
-    static let chunkPoints: Double = Double(linesPerChunk) * pointsPerLine
-    static let maximumPageChunks = 3
+    /// 超高窗口的总行数上限，避免一次按键产生过长的投递队列。
+    static let maximumPageLines: Int32 = 120
     static let chunkInterval: TimeInterval = 0.060
 
     /// 滚到内容两端用的总行数。到边缘是绝对位置语义，冲过头会被内容边界自然截住，
@@ -124,11 +147,27 @@ enum ScrollRegionRule {
     /// 单块上限：一次投递太多行会被部分 App 加速，分块更稳。
     static let edgeLinesPerChunk: Int32 = 150
 
-    /// Number of wheel chunks that approximate one viewport.
-    static func pageScrollChunks(regionHeight: Double) -> Int {
-        guard regionHeight > 0 else { return 1 }
-        let target = regionHeight * (1 - overlapRatio)
-        return min(maximumPageChunks, max(1, Int((target / chunkPoints).rounded())))
+    /// Total line-wheel lines for one page or half page.
+    static func pageScrollLines(regionHeight: Double, step: ScrollPageStep) -> Int32 {
+        guard regionHeight > 0, regionHeight.isFinite else { return 1 }
+        let target = regionHeight * step.fraction
+        let lines = (target / pointsPerLine).rounded()
+        guard lines.isFinite else { return maximumPageLines }
+        return max(1, Int32(min(Double(maximumPageLines), lines)))
+    }
+
+    /// Number of line-wheel chunks needed for a page distance.
+    static func pageWheelChunks(totalLines: Int32) -> Int {
+        guard totalLines > 0 else { return 0 }
+        return Int((totalLines + linesPerChunk - 1) / linesPerChunk)
+    }
+
+    /// Lines sent by one chunk; the final chunk may be shorter than `linesPerChunk`.
+    static func pageWheelLines(totalLines: Int32, index: Int) -> Int32 {
+        guard totalLines > 0, index >= 0 else { return 0 }
+        let sent = Int64(index) * Int64(linesPerChunk)
+        guard sent < Int64(totalLines) else { return 0 }
+        return min(linesPerChunk, totalLines - Int32(sent))
     }
 
     /// Rejects records that would map outside the target window.

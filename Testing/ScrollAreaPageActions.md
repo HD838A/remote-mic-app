@@ -2,16 +2,17 @@
 
 ## 适用范围
 
-- 分支：`codex/scroll-region-learning-20261030`（基线 `origin/main` = `f44b5e14`）
+- 分支：`feat/half-page-scroll-20261120`（基线 `origin/main` = `3f3310de1c8325225d628343dfbc3edde86d181b`）
 - 平台：macOS；RC001 / RC003 通过蓝牙连接
-- 目标：确认「向上翻页 / 向下翻页」滚动的是**正确的区域**，并且不移动焦点、不移动指针、不误翻侧栏
+- 目标：确认「向上/向下翻页」「向上/向下翻半页」滚动的是**正确的区域**，并且不移动焦点、不移动指针、不误翻侧栏
 
 ## 测试前准备
 
 1. 安装本次测试包并启动 App，授予辅助功能与输入监控权限。
-2. 在「按键映射」页把方向上设为「向上翻页」、方向下设为「向下翻页」，其余按键保持默认。
-3. 准备内容长于一屏的样本：cmux 终端、WorkBuddy 或 Claude 的对话、Chrome 长网页、企业微信会话列表。
-4. 记录测试开始时间，保留 `~/Library/Logs/RemoteMic/runtime.log`。
+2. 第一轮在「按键映射」页把方向上设为「向上翻页」、方向下设为「向下翻页」，其余按键保持默认。
+3. 第二轮把方向上设为「向上翻半页」、方向下设为「向下翻半页」，其余配置不变，便于比较同一 App 的整页与半页距离。
+4. 准备内容长于一屏的样本：cmux 终端、WorkBuddy 或 Claude 的对话、Chrome 长网页、企业微信会话列表。
+5. 记录测试开始时间，保留 `~/Library/Logs/RemoteMic/runtime.log`。
 
 ## 用例 1：预置区域（原生 App，cmux）
 
@@ -22,12 +23,33 @@
 
 失败：内容不动、只动侧栏、指针所在窗口被滚动、方向相反。
 
+## 用例 1b：半页距离（行高不同的两个 App）
+
+1. 用第二轮配置，在 cmux 和 WorkBuddy 中各把内容滚到中间位置。
+2. 单击方向上键，记录内容移动距离；再单击方向下键，确认回到接近原位置。
+3. 在同一窗口高度下切换整页配置重复一次，比较整页和半页。
+4. 按住方向上键约 1 秒后松开，确认每次重复都是半页距离，松手立即停止。
+
+预期：半页明显小于整页，约为可视内容区高度的一半；同一 App 的半页落在 `0.35～0.65` 屏；按住连发不把单次半页放大成整页。
+
+失败：半页接近或等于整页、半页超过 `0.75` 屏、半页只移动 3 行、方向相反、松手后继续翻页。
+
+## 用例 1c：原生翻页 App 的半页回退
+
+1. 在 cmux 或企业微信中把内容滚到中间位置。
+2. 使用第二轮半页配置，单击向上/向下各一次。
+3. 检查日志中的 `SCROLL PAGE` 和 `SCROLL PAGE wheel`。
+
+预期：半页不走 `AXScrollUpByPage` / `AXScrollDownByPage`，而是走滚轮路径；如果该 App 接受合成滚轮，内容移动约半屏；如果不接受，明确记录为不支持或未验证。
+
+失败：静默退回整页、把 `state=queued` 当作成功、半页没有移动却记录为通过。
+
 ## 用例 2：Electron 应用（WorkBuddy / Claude / Codex）
 
 1. 同一按键在 WorkBuddy 对话页执行一次向上、一次向下。
 2. 在 Claude 与 Codex 上重复。
 
-预期：所有预置 App 不学习也能翻页。cmux / Chrome 走内容容器；WorkBuddy 及未标定 App 以窗口中心为准，一次约移动 644 pt。只有自定义 App 显示「需学习」。
+预期：所有预置 App 不学习也能翻页。cmux / Chrome 走内容容器；WorkBuddy 及未标定 App 以窗口中心为准，整页约移动一屏，半页约移动半屏。只有自定义 App 显示「需学习」。
 
 失败：翻错区域、翻到右侧面板、什么都不发生却没有提示。
 
@@ -113,14 +135,30 @@ DimAgent 的滚动区域是按真机学习记录内化的预置：记录本身�
 - 「向上滚动 / 向下滚动」仍按行滚动、仍在窗口中心。
 - 语音键按下开始、释放结束，首字与尾字不受影响。
 - 打开 App、聚焦输入框、自定义快捷键、组合动作不受影响。
-- 按键映射页新增的两个动作显示中英文名称，最小窗口 `1067 × 760` 不裁切。
+- 按键映射页新增的整页与半页动作显示中英文名称，最小窗口 `1067 × 760` 不裁切。
+- 半页失败不会改变整页、滚动和翻到边缘的既有行为。
 
 ## 日志
 
-重点查 `SCROLL PAGE`：`bundle`、`direction`、`strategy`、`result`、`verified`、`elapsed_ms`，以及 `SCROLL PAGE wheel ... state=queued` / `completed` / `aborted reason=target_changed|superseded`。`result=needsCalibration` 表示该 App 没有预置区域；`result=regionMismatch` 表示记录失效。
+重点查 `SCROLL PAGE`：`bundle`、`direction`、`step=full|half`、`strategy`、`result`、`verified`、`elapsed_ms`，以及 `SCROLL PAGE wheel total_lines`、`chunks`、`state=queued` / `completed` / `aborted reason=target_changed|superseded`。`result=needsCalibration` 表示该 App 没有预置区域；`result=regionMismatch` 表示记录失效。
+
+半页验收必须同时核对 `step=half`、`total_lines` 和实际位移；只有 `queued` 不能算成功。
 
 ## 验证边界
 
-- 自动化只覆盖纯逻辑：步长、方向、预置筛选、匹配与歧义、配置兼容、动作分组与连发白名单。
-- 不能由自动化证明：原生翻页动作是否真的滚动、Electron 是否接受像素滚轮、自然滚动下的方向、全屏与多显示器行为。
-- 以上用例必须在真实遥控器与真实目标 App 上执行，单元测试与构建通过不能替代。
+- 自动化只覆盖纯逻辑：整页/半页行数换算、末块余数、方向、预置筛选、匹配与歧义、配置兼容、动作分组与连发白名单。
+- 不能由自动化证明：原生翻页动作是否真的滚动、Electron 是否接受合成滚轮、半页在原生翻页 App 上是否可用、自然滚动下的方向、全屏与多显示器行为。
+- 以上用例必须在真实遥控器与真实目标 App 上执行，单元测试与构建通过不能替代。本 PR 未完成真机半页位移测量时，只能标记为候选。
+
+## 自动化与构建记录
+
+2026-11-20：
+
+- 公开模式 `swift build --disable-keychain` 通过。
+- 公开模式 `swift test --disable-keychain` 通过：1572 项 / 113 suites。
+- 滚动区域定向测试 27 项通过。
+- `SKIP_SWIFT_PACKAGE_BUILD=1 ./scripts/test.sh` 通过：48 项。
+- `scripts/verify-localizations.sh`、`scripts/verify-repository-governance.sh`、`git diff --check` 通过。
+- 生产 `SettingsView` 离屏截图覆盖中文/英文、浅色/深色和 `1067 × 760`，确认四个动作名称可见且未裁切。
+
+以上只证明静态 UI、自动化逻辑与构建边界；真实滚轮位移和第三方 App 行为仍未验证。

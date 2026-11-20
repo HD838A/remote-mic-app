@@ -8,11 +8,12 @@
 
 ## 用户功能
 
-- 「基础按键」组新增「向上翻页 / 向下翻页」两个动作，滚动当前前台 App 的内容区一屏。
-- 原生支持翻页动作的 App 由系统定义一屏；其余 App 用分块行滚轮：每块 30 行（实测约 215 pt），块数按区域高度减 10% 计算并封顶 3 块，块间 60 ms，WorkBuddy 实测一次约 644 pt。
+- 「基础按键」组新增「向上翻页 / 向下翻页」和「向上翻半页 / 向下翻半页」四个动作。
+- 整页目标为区域可视高度 × 0.9，半页目标为区域可视高度 × 0.5。原生支持翻页动作的 App 可在整页使用系统动作；半页始终走滚轮路径。
+- 行滚轮实现把目标点数按实测 12 pt/行换算成总行数，再以 20 行一块投递，最后一块可以不足 20 行，块间 60 ms。12 pt/行只是行滚轮的换算基准，不是产品定义的一屏。
 - 所有预置 App 默认可用、不需要学习。有实测内容容器的按容器翻页（cmux、企业微信、Chrome、Slack、Codex）；只暴露整窗 WebArea 或未标定的按窗口矩形翻页（WorkBuddy、Claude、Cursor、Safari、Xcode 等），不会去猜“最大的容器”，避免滚到侧栏。
 - 不在预置列表的自定义 App 需要学习一次：按键映射页的自定义 App 区块里点「学习滚动区域」，倒计时内点一下要翻页的区域（也可以不点，以指针位置为准）。预置 App 也可以学习，用来把默认区域改成更精确的范围。
-- 提供「测试向上翻页 / 测试向下翻页」和「恢复预置」；测试会真实翻一次，并报告内容是否移动。
+- 提供「测试向上翻页 / 测试向下翻页」和「恢复预置」；测试会真实翻一次，并报告内容是否移动。测试按钮仍只验证整页，半页通过真实按键和日志验收。
 - 只有不在预置列表里的 App 才显示「需学习」；预置 App 一律显示「预置可用」。
 
 ## 预置区域策略与验收边界
@@ -29,8 +30,8 @@
 ## 范围与非目标
 
 
-- 按住连发的语义以 `PRODUCT_SPEC.md` 为准（滚动与翻页可连发，翻到边缘不可连发）；间隔、松手停止等实现细节由连发策略处理。
-  本 README 中「每块 30 行 ≈ 215 pt、封顶 3 块」是当时的行数近似，已被规范取代：翻页距离必须按区域可视高度计算。
+- 按住连发的语义以 `PRODUCT_SPEC.md` 为准（滚动、整页和半页可连发，翻到边缘不可连发）；间隔、松手停止等实现细节由连发策略处理。
+  本 README 只记录当前实现参数；一次移动多少、半页允许范围和失败判定以 `PRODUCT_SPEC.md` 为准。
 - 不做键盘焦点导航，不移动焦点、不移动指针、不点击区域中心。
 - 不读取区域内容：只读 role、identifier、祖先结构、frame 和 action 名称，不读 `AXValue`、不截图。
 - 不做覆盖层提示：确认靠真实翻页与结构位移（role + identifier + 尺寸），不做内容比对、不在 SayAll 窗口里画框。
@@ -38,21 +39,21 @@
 
 ## 实现
 
-- `Sources/RemoteMic/ScrollRegionTarget.swift`：区域记录模型、预置规则、页步长、方向语义、预置筛选与匹配评分（纯逻辑，可单测）。
-- `Sources/RemoteMic/ScrollRegionInjector.swift`：Accessibility 遍历、点击命中抓取（窗口优先取 `AXWindow` 属性，父链遍历到 40 层）、翻页执行（先试 `AXScrollUpByPage` / `AXScrollDownByPage`，否则向区域中心分块投递行滚轮；每块前重新校验前台 App 与窗口，切换即取消剩余块）。
-- `Sources/RemoteMic/RemoteButtons.swift`：两个动作、独立的 `scrollRegionTarget` 字段、不参与按住连发。
+- `Sources/RemoteMic/ScrollRegionTarget.swift`：区域记录模型、预置规则、整页/半页步长、方向语义、预置筛选与匹配评分（纯逻辑，可单测）。
+- `Sources/RemoteMic/ScrollRegionInjector.swift`：Accessibility 遍历、点击命中抓取（窗口优先取 `AXWindow` 属性，父链遍历到 40 层）、整页/半页执行（整页可先试 `AXScrollUpByPage` / `AXScrollDownByPage`；半页和回退路径向区域中心分块投递行滚轮；每块前重新校验前台 App 与窗口，切换即取消剩余块）。
+- `Sources/RemoteMic/RemoteButtons.swift`：四个翻页动作、独立的 `scrollRegionTarget` 字段、翻页参与按住连发。
 - `Sources/RemoteMic/KeyboardInjector.swift`：动作执行接入口。
 - `Sources/RemoteMic/AppSettings.swift`：配置持久化、便携配置校验、完整备份不迁移区域记录。
 
 ## 隐私与兼容
 
 - 只使用公开 Accessibility 接口，不读取其他 App 的文件、数据库、私有协议或沙盒内容。
-- 日志只记 bundle、方向、策略、结果、是否验证到位、耗时，不记标题或内容。
+- 日志只记 bundle、方向、整页/半页、策略、总行数、块数、结果、是否验证到位和耗时，不记标题或内容。
 - 完整 `.sayall` 备份与按键级 / 便携导出都不携带区域记录，导入后要求重新学习。
 - 旧配置没有该字段时按「未学习」处理；新动作只在 macOS 提供，Windows 侧不映射成其他行为。
 
 ## 当前状态
 
-自动化：20 项滚动区域测试通过（块数换算、方向、预置白名单、匹配与歧义、矩形越界、配置兼容、动作分组与连发白名单），全量 1099 项通过。
+自动化：27 项滚动区域测试通过（整页/半页行数换算、末块余数、方向、预置白名单、匹配与歧义、矩形越界、配置兼容、动作分组与连发白名单）；全量 1572 项 / 113 suites 通过；项目自检 48 项通过。
 
-待真机验收：真实遥控器逐 App 触发、Electron 是否接受像素滚轮、原生翻页动作是否真的滚动、系统「自然滚动」下的方向、全屏与多显示器。步骤见 [`Testing/ScrollAreaPageActions.md`](../../Testing/ScrollAreaPageActions.md)。
+待真机验收：真实遥控器逐 App 触发整页与半页、Electron 是否接受合成滚轮、原生翻页 App 对半页滚轮路径的响应、系统「自然滚动」下的方向、全屏与多显示器。步骤见 [`Testing/ScrollAreaPageActions.md`](../../Testing/ScrollAreaPageActions.md)。

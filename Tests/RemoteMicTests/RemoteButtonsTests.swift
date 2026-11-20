@@ -606,6 +606,23 @@ struct RemoteButtonsTests {
         #expect(scrolled.isEmpty)
     }
 
+    @Test func pageActionsPassFullAndHalfSteps() {
+        var calls: [String] = []
+        let poster: (ScrollPageDirection, ScrollPageStep) -> ScrollPageOutcome = { direction, step in
+            calls.append("\(direction)-\(step.logName)")
+            return .scrolledByPixelWheel
+        }
+
+        for action in [ButtonAction.pageUp, .pageDown, .pageUpHalf, .pageDownHalf] {
+            #expect(KeyboardInjector.send(
+                action,
+                accessibilityTrusted: { true },
+                scrollPagePoster: poster
+            ))
+        }
+        #expect(calls == ["up-full", "down-full", "up-half", "down-half"])
+    }
+
     @Test func scrollEventsAimAtTheFrontmostWindowAndFallBackToTheCursor() {
         let cursor = CGPoint(x: 12, y: 34)
         #expect(KeyboardInjector.scrollTargetLocation(

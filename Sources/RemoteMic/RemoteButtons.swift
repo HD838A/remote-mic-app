@@ -958,6 +958,8 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
     case scrollDown
     case pageUp
     case pageDown
+    case pageUpHalf
+    case pageDownHalf
     case scrollToTop
     case scrollToBottom
     case deleteBackward
@@ -1039,6 +1041,8 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
         case .scrollDown: return localization.text("action.scroll_down")
         case .pageUp: return localization.text("action.page_up")
         case .pageDown: return localization.text("action.page_down")
+        case .pageUpHalf: return localization.text("action.page_up_half")
+        case .pageDownHalf: return localization.text("action.page_down_half")
         case .scrollToTop: return localization.text("action.scroll_to_top")
         case .scrollToBottom: return localization.text("action.scroll_to_bottom")
         case .deleteBackward: return localization.text("action.delete_backspace")
@@ -1232,7 +1236,8 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
              .commandMinimize, .toggleFullScreen, .commandNewTab, .commandPreviousTab,
              .commandNextTab, .commandNextWindow, .commandHide, .commandNew,
              .arrowUp, .arrowDown, .arrowLeft, .arrowRight, .scrollUp, .scrollDown,
-             .pageUp, .pageDown, .scrollToTop, .scrollToBottom, .deleteBackward:
+             .pageUp, .pageDown, .pageUpHalf, .pageDownHalf,
+             .scrollToTop, .scrollToBottom, .deleteBackward:
             return .basicKeys
         case .showDesktop, .contextMenu, .appSwitcher, .missionControl, .applicationWindows,
              .spaceLeft, .spaceRight, .lockScreen, .screenshot,
@@ -1304,7 +1309,7 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
 
     /// 翻页要靠辅助功能扫描滚动容器，比行滚动贵得多；按住重复时按更长的间隔执行。
     var isPageScroll: Bool {
-        self == .pageUp || self == .pageDown
+        [.pageUp, .pageDown, .pageUpHalf, .pageDownHalf].contains(self)
     }
 
     var isDirectionalOrDeleteBackward: Bool {
