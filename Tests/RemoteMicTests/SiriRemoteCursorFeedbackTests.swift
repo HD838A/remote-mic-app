@@ -111,6 +111,31 @@ struct SiriRemoteCursorFeedbackTests {
         #expect(AppSettings(defaults: defaults).siriRemoteScrollArrowReversed)
     }
 
+    @Test func cursorFeedbackVisibilityDefaultsToShownAndPersists() throws {
+        let suiteName = "RemoteMicTests.SiriRemoteCursorFeedbackVisibility.\(UUID().uuidString)"
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let settings = AppSettings(defaults: defaults)
+        #expect(settings.siriRemoteCursorFeedbackVisible)
+        settings.siriRemoteCursorFeedbackVisible = false
+        #expect(!AppSettings(defaults: defaults).siriRemoteCursorFeedbackVisible)
+    }
+
+    @MainActor
+    @Test func hiddenVisualFeedbackDoesNotShowTheOverlay() {
+        let controller = SiriRemoteCursorFeedbackController()
+        defer { controller.stop() }
+
+        controller.setVisualFeedbackEnabled(false)
+        controller.handle(.scrolled(pixels: 12, speed: 12))
+        #expect(!controller.isFeedbackCurrentlyVisible)
+
+        controller.setVisualFeedbackEnabled(true)
+        controller.handle(.scrolled(pixels: 12, speed: 12))
+        #expect(controller.isFeedbackCurrentlyVisible)
+    }
+
     @Test func scrollArrowSettingHasCompleteLocalizedCopy() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -127,6 +152,9 @@ struct SiriRemoteCursorFeedbackTests {
                 "siri_remote.scroll_arrow.reverse.title",
                 "siri_remote.scroll_arrow.reverse.detail",
                 "siri_remote.scroll_arrow.reverse.help",
+                "siri_remote.cursor_feedback.visible.title",
+                "siri_remote.cursor_feedback.visible.detail",
+                "siri_remote.cursor_feedback.visible.help",
             ] {
                 #expect(contents.contains("\"\(key)\" ="))
             }
@@ -243,6 +271,9 @@ struct SiriRemoteCursorFeedbackTests {
         #expect(model.contains("siriRemoteFeature.onTouchFeedback ="))
         #expect(model.contains("siriRemoteFeature.onCenterTapConfirmation ="))
         #expect(model.contains("scrollArrowReversed: settings.siriRemoteScrollArrowReversed"))
+        #expect(model.contains("siriRemoteCursorFeedback.setVisualFeedbackEnabled("))
+        #expect(model.contains("func setSiriRemoteCursorFeedbackVisible("))
+        #expect(model.contains("settings.siriRemoteCursorFeedbackVisible"))
         #expect(model.contains("siriRemoteCursorFeedback.stop()"))
         #expect(model.contains("siriRemoteCursorFeedback.activateHoveredElementIfAvailable()"))
         #expect(model.contains("appleRemoteHoverClickDevices.insert(event.device)"))
@@ -258,9 +289,14 @@ struct SiriRemoteCursorFeedbackTests {
         let directionControl = try #require(settingsView.range(
             of: "private var siriRemoteScrollArrowControl"
         ))
-        #expect(settingsView[directionControl.lowerBound...].prefix(900).contains(
-            "Toggle(isOn: $settings.siriRemoteScrollArrowReversed)"
+        #expect(settingsView[directionControl.lowerBound...].prefix(1800).contains(
+            "isOn: $settings.siriRemoteScrollArrowReversed"
         ))
+        #expect(settingsView.contains("private var siriRemoteCursorFeedbackControl"))
+        #expect(settingsView.contains(
+            "set: { model.setSiriRemoteCursorFeedbackVisible($0) }"
+        ))
+        #expect(settingsView.contains("siri_remote.cursor_feedback.visible.title"))
     }
 
     @MainActor

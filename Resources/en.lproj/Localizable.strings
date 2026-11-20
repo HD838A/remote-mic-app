@@ -112,6 +112,9 @@
 "siri_remote.scroll_arrow.reverse.title" = "Reverse Scroll Indicator";
 "siri_remote.scroll_arrow.reverse.detail" = "Reverse the direction of the on-screen arrow. The scrolling direction stays the same.";
 "siri_remote.scroll_arrow.reverse.help" = "Off matches the page scroll indicator; on points in the opposite direction.";
+"siri_remote.cursor_feedback.visible.title" = "Show Mouse Feedback";
+"siri_remote.cursor_feedback.visible.detail" = "Turn off to hide the on-screen cursor halo and scrolling arrows. Pointer movement, clicks, and scrolling still work.";
+"siri_remote.cursor_feedback.visible.help" = "Controls the on-screen indicator only. Touch control keeps working when hidden.";
 "chromecast.section_title" = "Chromecast remote";
 "chromecast.section_subtitle" = "Bluetooth voice remote";
 "chromecast.status.unavailable" = "Not included in this build";

@@ -1207,6 +1207,9 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         self.externalActionSender = externalActionSender
         self.customApplicationURLResolver = customApplicationURLResolver
         super.init()
+        siriRemoteCursorFeedback.setVisualFeedbackEnabled(
+            settings.siriRemoteCursorFeedbackVisible
+        )
         if settings.siriRemoteEnabled, settings.siriRemoteNeedsUserAction {
             siriRemoteAudioStatus = "unavailable:authorization_user_action_required"
         }
@@ -1328,6 +1331,9 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         }
         siriRemoteFeature.onTouchFeedback = { [weak self] feedback in
             guard let self else { return }
+            siriRemoteCursorFeedback.setVisualFeedbackEnabled(
+                settings.siriRemoteCursorFeedbackVisible
+            )
             if case .clicked = feedback {
                 _ = siriRemoteCursorFeedback.activateHoveredElementIfAvailable()
             }
@@ -4069,6 +4075,15 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         }
 #endif
         AppLogger.shared.write("SIRI REMOTE ACTIVATION phase=changed enabled=\(enabled)")
+    }
+
+    /// 只切换触摸反馈的可见性；指针移动、滚动、点击和悬停确认保持原逻辑。
+    func setSiriRemoteCursorFeedbackVisible(_ visible: Bool) {
+        settings.siriRemoteCursorFeedbackVisible = visible
+        siriRemoteCursorFeedback.setVisualFeedbackEnabled(visible)
+        AppLogger.shared.write(
+            "APPLE REMOTE TOUCH FEEDBACK phase=preference result=\(visible ? "visible" : "hidden")"
+        )
     }
 
     /// Call only from enable/retry controls, never from startup or device discovery.
