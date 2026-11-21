@@ -936,6 +936,40 @@ enum OnboardingTranscriptInputPolicy {
     }
 }
 
+enum OnboardingVoiceStreamAction: Equatable {
+    case ignore
+    case recordRemoteVoiceButtonPress
+    case beginVoiceAttempt
+    case endVoiceAttempt
+}
+
+/// Decides what an `isStreaming` change means for the current onboarding step.
+///
+/// The end transition deliberately does not require `sourceAccepted`: the model
+/// clears `activeVoiceSource` in the same update that publishes `isStreaming = false`,
+/// so requiring the source again would drop the release and leave the attempt in
+/// `.recording` forever.
+enum OnboardingVoiceStreamPolicy {
+    static func action(
+        isStreaming: Bool,
+        step: OnboardingStep,
+        voiceSessionStarted: Bool,
+        sourceAccepted: Bool
+    ) -> OnboardingVoiceStreamAction {
+        switch step {
+        case .remote where isStreaming:
+            return sourceAccepted ? .recordRemoteVoiceButtonPress : .ignore
+        case .voiceTest:
+            if isStreaming {
+                return sourceAccepted ? .beginVoiceAttempt : .ignore
+            }
+            return voiceSessionStarted ? .endVoiceAttempt : .ignore
+        default:
+            return .ignore
+        }
+    }
+}
+
 enum OnboardingVoiceTestConfigurationPolicy {
     static func requiresGlobalVoiceConfirmation(for voiceTool: OnboardingVoiceTool) -> Bool {
         VoiceToolAdapterProfile.profile(for: voiceTool).globalActivationSupport == true

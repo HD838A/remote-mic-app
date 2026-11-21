@@ -631,6 +631,25 @@ check(
     "a voice device is adopted only with a saved identity or a verified model name"
 )
 
+check(
+    OnboardingVoiceStreamPolicy.action(
+        isStreaming: false,
+        step: .voiceTest,
+        voiceSessionStarted: true,
+        sourceAccepted: false
+    ) == .endVoiceAttempt,
+    "onboarding voice test ends after the source is cleared"
+)
+check(
+    OnboardingVoiceStreamPolicy.action(
+        isStreaming: true,
+        step: .voiceTest,
+        voiceSessionStarted: false,
+        sourceAccepted: false
+    ) == .ignore,
+    "onboarding voice test start still requires the selected source"
+)
+
 print("RESULT passed=\(passed) failed=\(failed)")
 if failed > 0 {
     exit(1)

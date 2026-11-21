@@ -1122,6 +1122,37 @@ struct VirtualAudioConnectionLifecycleTests {
         ))
     }
 
+    @Test func onboardingPreparationKeepsAudioActiveWithoutBridgeOrVoice() {
+        #expect(VirtualAudioConnectionLifecyclePolicy.shouldBeActive(
+            readyBluetoothBridgeCount: 0,
+            bluetoothVoiceActive: false,
+            mobileVoiceActive: false,
+            testToneActive: false,
+            systemSuspended: false,
+            onboardingPreparationActive: true
+        ))
+        // 租约只用于 Onboarding 页面停留，不能突破系统挂起。
+        #expect(!VirtualAudioConnectionLifecyclePolicy.shouldBeActive(
+            readyBluetoothBridgeCount: 0,
+            bluetoothVoiceActive: false,
+            mobileVoiceActive: false,
+            testToneActive: false,
+            systemSuspended: true,
+            onboardingPreparationActive: true
+        ))
+    }
+
+    @Test func onboardingPreparationEndRestoresNormalReleaseBehavior() {
+        #expect(!VirtualAudioConnectionLifecyclePolicy.shouldBeActive(
+            readyBluetoothBridgeCount: 0,
+            bluetoothVoiceActive: false,
+            mobileVoiceActive: false,
+            testToneActive: false,
+            systemSuspended: false,
+            onboardingPreparationActive: false
+        ))
+    }
+
     @Test func connectedIdleBridgeReleasesAudioWhileSystemIsSuspended() {
         #expect(!VirtualAudioConnectionLifecyclePolicy.shouldBeActive(
             readyBluetoothBridgeCount: 1,

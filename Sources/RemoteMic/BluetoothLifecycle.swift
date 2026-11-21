@@ -1,4 +1,48 @@
+import CryptoKit
 import Foundation
+
+/// HID `PhysicalDeviceUniqueID` 与 CoreBluetooth peripheral identifier 在小米遥控器上是
+/// 同一个系统身份。两个值不能直接比较，必须使用与 `HIDRemoteMonitor.fingerprint` 相同的
+/// SHA-256 规则，才能把当前 BLE 设备与已有档案的 HID 指纹对应起来。
+///
+/// 只覆盖 `PhysicalDeviceUniqueID` 分支；HID 指纹若来自序列号、设备地址或 LocationID，
+/// 本函数不会误配，匹配会安全地失败。
+enum RemoteIdentityFingerprint {
+    static func fingerprint(for identifier: UUID) -> String {
+        SHA256.hash(data: Data(identifier.uuidString.utf8))
+            .map { String(format: "%02x", $0) }
+            .joined()
+    }
+}
+
+/// 当系统重新生成 CoreBluetooth identifier 时，已有档案可能只更新了 HID 指纹，BLE 字段仍
+/// 指向旧配对。只有 HID 指纹能证明是同一物理设备时才允许替换；新设备、重复指纹或 identifier
+/// 已被其他档案占用时必须保持原状，避免串台。
+enum RemoteIdentityReconciliationPolicy {
+    struct Match: Equatable {
+        let profileID: UUID
+        let previousIdentifier: UUID
+    }
+
+    static func replacement(
+        for currentIdentifier: UUID,
+        hidFingerprint: String,
+        profiles: [RemoteDeviceProfile]
+    ) -> Match? {
+        let matches = profiles.filter { profile in
+            profile.hidFingerprint == hidFingerprint &&
+                (profile.model == .rc001 || profile.model == .rc003)
+        }
+        guard matches.count == 1, let profile = matches.first else { return nil }
+        guard let previousIdentifier = profile.bluetoothIdentifier,
+              previousIdentifier != currentIdentifier
+        else { return nil }
+        guard !profiles.contains(where: {
+            $0.id != profile.id && $0.bluetoothIdentifier == currentIdentifier
+        }) else { return nil }
+        return Match(profileID: profile.id, previousIdentifier: previousIdentifier)
+    }
+}
 
 enum XiaomiVoiceRemoteNameMatcher {
     /// 白名单集中在 `VoiceRemoteCatalog.adoptedAdvertisedNames`，这里不再单独维护一份。
@@ -53,6 +97,45 @@ enum ForeignVoiceRemoteProduct {
             .replacingOccurrences(of: "-", with: " ")
         let collapsed = trimmed.split(separator: " ").joined(separator: " ")
         return collapsed.isEmpty ? nil : collapsed
+    }
+}
+
+/// 扫描回调的第一层廉价过滤。
+///
+/// CoreBluetooth 在扫描窗口中会把周围所有设备的广播都交回 delegate。2.0.8 曾对每个
+/// 回调执行完整准入判定并写 `BLE ADOPT IGNORED`，在周边设备多的环境里形成主线程风暴。
+/// 这里先按「是否可能与本桥有关」过滤，再进入 `adopt`：
+/// - 有保存目标时只检查目标本身；
+/// - 已知身份、ATVV 服务、已知遥控器名称和明确的外来产品名称才继续判定；
+/// - 其余普通蓝牙设备直接返回，不构造日志。
+enum BluetoothDiscoveryScanPolicy {
+    static func shouldInspect(
+        identifier: UUID,
+        targetIdentifier: UUID?,
+        knownIdentifiers: Set<UUID>,
+        advertisesVoiceService: Bool,
+        advertisedName: String?,
+        peripheralName: String?
+    ) -> Bool {
+        if let targetIdentifier {
+            return identifier == targetIdentifier
+        }
+        if knownIdentifiers.contains(identifier) {
+            return true
+        }
+        if advertisesVoiceService {
+            return true
+        }
+        if XiaomiVoiceRemoteNameMatcher.matches(advertisedName) ||
+            XiaomiVoiceRemoteNameMatcher.matches(peripheralName) {
+            return true
+        }
+        // 外来产品也要进入 `adopt`，由统一准入层记录拒绝原因，避免静默放过。
+        if ForeignVoiceRemoteProduct.isRejected(name: advertisedName) ||
+            ForeignVoiceRemoteProduct.isRejected(name: peripheralName) {
+            return true
+        }
+        return false
     }
 }
 

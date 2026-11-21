@@ -86,11 +86,58 @@ Apple、Chromecast 和手机/网页/Watch 入口分别回归，不以小米通�
 
 失败：入口依赖 Apple Remote 卡片出现、点击后没有进入向导、进入后清除已有配置、列表折叠时入口消失、页面在其他位置使用“遥控器”泛称，或 1067 × 760 下入口被裁切。
 
+## 用例 8：重新配对后旧 identifier 与新 HID 身份分裂
+
+1. 使用 RC001 或 RC003，保留一个已有档案和独立按键映射；在 macOS 蓝牙设置中移除并重新配对同一只遥控器，或制造系统 CoreBluetooth identifier 变化。
+2. 重启 App，确认当前 HID 普通按键仍能被识别，连接页进入恢复。若当前 identifier 没有广播名称或语音服务，确认扫描路径仍能通过 HID 指纹命中，不被 `ignored_unrelated` 过滤。
+3. 检查日志：出现 `BLE IDENTITY phase=completed result=replaced reason=hid_fingerprint_match`，并记录 `previous_recovery`；随后 `BLE CONNECTING` 使用当前 identifier，而不是旧 identifier。
+4. 等待 `BLE READY`，确认档案数量不变、原映射、自定义名称、选中状态和音量仍保留；第一次普通按键和语音直接可用。
+5. 先让旧 identifier 的自动重连预算耗尽（日志出现暂停），再完成重新配对。确认新 identifier 仍会发起 `BLE CONNECTING`，不会因旧预算已暂停而永久不连接；`previous_recovery` 只记录旧状态。
+6. 准备一台没有历史档案的新设备并连接，确认没有 HID 指纹命中时仍创建新档案，不覆盖旧档案。
+7. 准备两台同型号、同名遥控器，确认各自 HID 指纹唯一；任一台重新配对不会把另一台的 identifier 写进错误档案。
+8. 让当前 identifier 已被另一条档案占用，确认不替换并记录 `result=skipped reason=identifier_owned`，不串台。
+9. 在语音进行中或首个语音启动等待中触发同一发现，确认不替换、不结束当前语音。
+10. 构造一条只有 BLE identifier、没有 HID 指纹的历史重复档案。确认本次不会猜测合并它；记录为已知边界，后续需独立修复或在现有界面允许时手动清理。
+
+预期：HID 指纹唯一命中且当前 identifier 未被占用时，只更新原档案的 BLE 字段并复用原档案；旧 identifier 的重连停止，旧恢复预算不迁移，当前 identifier 建立新桥。新设备、重复指纹、identifier 冲突、语音进行中和只有 BLE 的历史重复档案都保持原行为。
+
+失败：生成重复档案、覆盖其他档案、丢失映射或选中状态、继续重连旧 identifier、迁移已暂停的旧预算导致新 identifier 不连接、替换后不尝试当前 identifier、语音被中断，或当前 identifier 仍连接失败时把失败伪装成成功。
+
+## 用例 9：周边蓝牙设备多时的连接页滚动
+
+1. 在周围有至少 20 台其他 BLE 设备（耳机、手表、音箱、键盘等）的环境中打开连接页。
+2. 在 20 秒发现窗口内和结束后分别纵向滚动连接页，再切到按键页滚动。
+3. 观察界面是否持续掉帧、卡顿或输入延迟；记录开始和结束时间。
+4. 检查日志：发现窗口结束时应有 `BLE DISCOVERY_WINDOW phase=completed ... ignored_unrelated=<n>`；`BLE ADOPT IGNORED` 只应出现在通过第一层候选过滤的设备上，不得为每台无关设备逐条输出。
+5. 保持已保存遥控器稳定在线，退出并重新打开连接页，确认原遥控器仍直接可用；再点击“查找遥控器”或进入添加新遥控器向导，确认手动扫描仍能发现已知型号的新遥控器。
+
+预期：滚动过程中不出现持续主线程卡顿；无关 BLE 广播只在扫描结束时汇总计数；已保存身份、已知名称和 ATVV 服务候选仍进入统一准入判定；稳定连接时不再自动开发现窗口，手动查找和添加新遥控器仍能扫描。
+
+失败：每台无关设备仍产生 `BLE ADOPT IGNORED`；`ignored_unrelated` 无界增长或跨扫描累加；已保存遥控器或已知型号新遥控器不再被发现；稳定连接时仍自动开 `BLE DISCOVERY_WINDOW phase=started`；滚动仍明显掉帧。
+
+自动化只证明过滤策略与接线；真实 CoreBluetooth 回调频率、滚动帧率和设备发现仍需现场验证。
+
+## 用例 10：稳定连接时的自动发现抑制
+
+1. 连接并保存一台小米遥控器，等待日志出现 `BLE READY`，确认目标桥稳定在线。
+2. 切到其他 App 再回到 SayAll，或退出并重新进入连接页；等待至少 30 秒。
+3. 检查日志：稳定连接期间不应出现新的自动 `BLE DISCOVERY_WINDOW phase=started window_ms=20000`；如需验证，记录页面出现时间和日志时间。
+4. 点击“查找遥控器”或进入添加新遥控器向导，确认手动扫描仍出现 `BLE DISCOVERY_WINDOW phase=started`，并能发现已知型号的新遥控器。
+5. 断开或移走已保存遥控器，确认目标桥按自己的重连路径扫描，不依赖发现桥。
+
+预期：目标桥处于连接、重连或 ready 时，自动发现窗口被抑制；手动查找和 onboarding 添加新遥控器仍能启动 20 秒窗口；已保存遥控器的连接不受影响。
+
+失败：稳定连接时切回 App 或打开连接页仍自动出现 `BLE DISCOVERY_WINDOW phase=started`；手动查找或 onboarding 无法启动扫描；抑制自动发现后已保存遥控器断开无法重连。
+
+自动化只证明守卫接线和源码路径；真实页面切换、日志和手动扫描仍需现场验证。
+
 ## 自动化与证据边界
 
 - `RemoteConnectionRecoveryTests` 使用虚拟时间验证预算、冷却、短暂 Ready、周期掉线、取消、迟到结果和多设备独立性。
 - `SiriRemoteActivationTests.explicitEnableWithoutMembershipSurvivesRelaunch` 使用无会员配置验证显式启用与持久化，不授予语音权益；真实 Free 账号、组件、按键与触摸仍待现场验收。
-- `BluetoothLifecycleTests` 验证既有发现、扫描、代次和会话门禁；`AppLoggerTests` 验证密集拒绝事件的聚合上限。
+- `BluetoothLifecycleTests` 验证既有发现、扫描、代次和会话门禁；`BluetoothDiscoveryScanPolicy` 用例覆盖无关广播过滤、身份快照和稳定连接时的自动发现抑制；新增 `RemoteIdentityReconciliationPolicy` 用例覆盖唯一 HID 命中、identifier 冲突、重复指纹、私有/未知型号和发现桥接线，并静态确认替换路径不迁移旧恢复预算、会清理旧桥状态。`AppLoggerTests` 验证密集拒绝事件的聚合上限。
+- `RemoteDeviceNameIntegrationTests` 验证替换 BLE identifier 后档案 ID、HID、型号、自定义名称、系统名称、硬件身份、映射、选中状态和持久化不变，且已被其他档案占用的 identifier 不写入。
+- 已暂停的旧恢复预算迁移、`identifier_owned` 跳过和只有 BLE 的历史重复档案属于策略/静态验证边界；真实 CoreBluetooth 事件顺序与真实遥控器仍待现场验收。
 - 生产 `SettingsView` 的隔离夹具截图只证明页面渲染；夹具不会发起真实蓝牙或录音。
 - `SettingsScreenshotRenderer` 的 connection 场景分别覆盖空档案和离线档案，检查“设备”卡片、连接新的设备入口、空状态和列表；真实窗口截图覆盖中英文与浅深色。点击后进入真实设置向导仍需交互验收。
 - 模拟、策略测试与构建不能证明真实 CoreBluetooth 的发现时机、功耗、首字、尾音和第三方工具文字结果。
@@ -100,4 +147,4 @@ Apple、Chromecast 和手机/网页/Watch 入口分别回归，不以小米通�
 
 核对 `BLE DISCOVERY_WINDOW`、`BLE RECOVERY_WINDOW`、`BLE RECOVERY_ATTEMPT`、`BLE CONNECTING`、`BLE READY` 和 `BLE DISCONNECTED`。
 使用窗口 operation_id 与 attempt_id 关联请求、尝试和唯一终态。Ready 只证明本地握手，不能代替最终文字上屏。
-等待或暂停时不应出现周期超时；`BLE REJECTED` 与 `BLE ADOPT IGNORED` 应聚合，不逐设备刷屏。
+等待或暂停时不应出现周期超时；`BLE REJECTED` 与 `BLE ADOPT IGNORED` 只应来自通过第一层候选过滤的设备。普通无关设备在扫描结束时只汇总为 `ignored_unrelated=<n>`，不得逐设备刷屏。
