@@ -942,6 +942,7 @@ final class XiaomiBluetoothBridge: NSObject {
     private func resetSession() {
         audioDiagnostics?.discardPartial(bytes: accumulator.pending.count)
         audioDiagnostics?.stop(reason: "session_reset")
+        lastVoiceStopReason = nil
         if streaming {
             streaming = false
             delegate?.bluetoothBridgeDidStopVoice(self)
