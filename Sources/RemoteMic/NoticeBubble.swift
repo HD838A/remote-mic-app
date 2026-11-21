@@ -21,18 +21,6 @@ enum NoticeTier: String, CaseIterable {
         }
     }
 
-    /// 浅色外观用深色实心底 + 微渐变；深色外观各提亮一档并改用纯色。
-    ///
-    /// 深色下不用渐变，是因为渐变末端更暗，会把“提亮一档”的分离度吃回去。
-    func fill(for scheme: ColorScheme) -> (base: Color, deep: Color) {
-        if scheme == .dark {
-            let hex = NoticePalette.darkFill(self)
-            return (Color(hex: hex), Color(hex: hex))
-        }
-        let pair = NoticePalette.lightFill(self)
-        return (Color(hex: pair.base), Color(hex: pair.deep))
-    }
-
     /// 无障碍播报前缀，让 VoiceOver 先说清严重程度。
     var accessibilityPrefixKey: String? {
         switch self {
@@ -43,48 +31,76 @@ enum NoticeTier: String, CaseIterable {
     }
 }
 
+/// 气泡的一组完整语义色。柔和浅底方案同时需要底色、描边和多级文字色，
+/// 分开取色容易在深浅外观之间漏掉某一项。
+struct NoticeBubbleColors: Equatable {
+    let fill: UInt32
+    let border: UInt32
+    let title: UInt32
+    let body: UInt32
+    let close: UInt32
+    let accent: UInt32
+}
+
 /// 设计稿色值的唯一来源。
 ///
 /// 用十六进制常量而不是直接写 `Color`，是为了让测试能脱离 SwiftUI 计算对比度，
-/// 防止以后调色时悄悄破坏「白字 ≥ 4.5、深色底分离 ≥ 3.0」这两条硬线。
+/// 防止以后调色时悄悄破坏「正文 ≥ 4.5、图标 ≥ 3.0、深色边界 ≥ 3.0」这些硬线。
 enum NoticePalette {
     /// 深色界面里气泡与之比较分离度的背景色。
     static let darkSurface: UInt32 = 0x1C1C1E
 
-    static func lightFill(_ tier: NoticeTier) -> (base: UInt32, deep: UInt32) {
-        switch tier {
-        case .tip: return (0x12704A, 0x0E5E3E)
-        case .warning: return (0x8A4B0F, 0x783F0B)
-        case .error: return (0xA5342C, 0x96291F)
-        }
-    }
-
-    static func darkFill(_ tier: NoticeTier) -> UInt32 {
-        switch tier {
-        case .tip: return 0x1A7A52
-        case .warning: return 0x9E5611
-        case .error: return 0xC04239
-        }
-    }
-
-    /// 内联形态的语义色条与浅底。
+    /// 内联条和侧条使用与气泡相同的浅色底、描边和语义色；
+    /// 深色内联条保持中性底，靠语义图标和动作表达档位。
     static func inlineAccent(_ tier: NoticeTier, dark: Bool) -> UInt32 {
-        dark ? darkFill(tier) : lightFill(tier).base
+        bubble(tier, dark: dark).accent
     }
 
     static func inlineSurface(_ tier: NoticeTier) -> UInt32 {
-        switch tier {
-        case .tip: return 0xEAF7F0
-        case .warning: return 0xFFFAF0
-        case .error: return 0xFFF7F6
-        }
+        bubble(tier, dark: false).fill
     }
 
     static func inlineBorder(_ tier: NoticeTier) -> UInt32 {
+        bubble(tier, dark: false).border
+    }
+
+    /// 柔和浅底气泡。深色档的描边提高到 3:1，边界不依赖填充色。
+    static func bubble(_ tier: NoticeTier, dark: Bool) -> NoticeBubbleColors {
+        if dark {
+            switch tier {
+            case .tip:
+                return NoticeBubbleColors(
+                    fill: 0x1E2B27, border: 0x5F6F65, title: 0xE8F5EF,
+                    body: 0xB9CFC5, close: 0x8FA99D, accent: 0x5FBF97
+                )
+            case .warning:
+                return NoticeBubbleColors(
+                    fill: 0x2C251A, border: 0x7A6A48, title: 0xFFF4E3,
+                    body: 0xD8C4A6, close: 0xB29B79, accent: 0xD9A24E
+                )
+            case .error:
+                return NoticeBubbleColors(
+                    fill: 0x2E1F1E, border: 0x8A625A, title: 0xFFF0EE,
+                    body: 0xD9B9B5, close: 0xB98E89, accent: 0xE07A70
+                )
+            }
+        }
         switch tier {
-        case .tip: return 0xCFE8DB
-        case .warning: return 0xF0E2C6
-        case .error: return 0xF2DBD8
+        case .tip:
+            return NoticeBubbleColors(
+                fill: 0xEAF6F0, border: 0xCBE5D9, title: 0x14553F,
+                body: 0x4E6A5F, close: 0x6C8A7E, accent: 0x2B7A5C
+            )
+        case .warning:
+            return NoticeBubbleColors(
+                fill: 0xFFF7E8, border: 0xF0DDBA, title: 0x6A4515,
+                body: 0x7A5B2E, close: 0x8A6A3A, accent: 0xA26A1E
+            )
+        case .error:
+            return NoticeBubbleColors(
+                fill: 0xFFF1EF, border: 0xF2D2CD, title: 0x7A2C26,
+                body: 0x8A4E48, close: 0xA76A63, accent: 0xB24C42
+            )
         }
     }
 
@@ -137,19 +153,31 @@ struct NoticeBubble: View {
         RoundedRectangle(cornerRadius: 18, style: .continuous)
     }
 
-    private var colors: (base: Color, deep: Color) {
-        tier.fill(for: colorScheme)
+    private var isDark: Bool { colorScheme == .dark }
+
+    private var palette: NoticeBubbleColors {
+        NoticePalette.bubble(tier, dark: isDark)
+    }
+
+    private var surface: Color { Color(hex: palette.fill) }
+    private var border: Color { Color(hex: palette.border) }
+    private var titleColor: Color { Color(hex: palette.title) }
+    private var bodyColor: Color { Color(hex: palette.body) }
+    private var closeColor: Color { Color(hex: palette.close) }
+    private var accentColor: Color { Color(hex: palette.accent) }
+    private var actionBackground: Color {
+        accentColor.opacity(isDark ? 0.16 : 0.13)
     }
 
     var body: some View {
-        NoticeBubbleWidthLayout(maxWidth: 360) {
+        NoticeBubbleWidthLayout(maxWidth: 400) {
             VStack(alignment: .leading, spacing: 5) {
                 titleRow
                 if let text, !text.isEmpty {
                     Text(text)
                         .font(.system(size: 13.5))
                         .lineSpacing(3)
-                        .foregroundStyle(.white.opacity(0.93))
+                        .foregroundStyle(bodyColor)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 if let action {
@@ -163,28 +191,16 @@ struct NoticeBubble: View {
         }
         .background {
             shape
-                .fill(
-                    LinearGradient(
-                        colors: [colors.base, colors.deep],
-                        startPoint: UnitPoint(x: 0.53, y: 0),
-                        endPoint: UnitPoint(x: 0.47, y: 1)
-                    )
-                )
+                .fill(surface)
                 .shadow(
-                    color: .black.opacity(colorScheme == .dark ? 0.50 : 0.20),
-                    radius: colorScheme == .dark ? 20 : 16,
+                    color: .black.opacity(isDark ? 0.35 : 0.14),
+                    radius: isDark ? 16 : 12,
                     x: 0,
-                    y: colorScheme == .dark ? 12 : 8
-                )
-                .shadow(
-                    color: .black.opacity(colorScheme == .dark ? 0.35 : 0.06),
-                    radius: 3,
-                    x: 0,
-                    y: 2
+                    y: isDark ? 9 : 6
                 )
         }
         .overlay(alignment: .topTrailing) { closeButton }
-        .overlay { darkRim }
+        .overlay { shape.strokeBorder(border, lineWidth: 1) }
         .overlay(alignment: tailAlignment) { tailShape }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(Text(accessibilityText))
@@ -198,13 +214,14 @@ struct NoticeBubble: View {
             if tier == .error {
                 Image(systemName: "exclamationmark")
                     .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(accentColor)
                     .accessibilityHidden(true)
             }
             Text(title)
                 .font(.system(size: 14.5, weight: .semibold))
+                .foregroundStyle(titleColor)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .foregroundStyle(.white)
     }
 
     private func actionButton(_ action: NoticeAction) -> some View {
@@ -213,11 +230,11 @@ struct NoticeBubble: View {
         } label: {
             Text(action.title)
                 .font(.system(size: 12.5, weight: .semibold))
-                .foregroundStyle(.white)
+                .foregroundStyle(titleColor)
                 .padding(.horizontal, 11)
                 .padding(.vertical, 5)
                 .background(
-                    .white.opacity(0.17),
+                    actionBackground,
                     in: RoundedRectangle(cornerRadius: 9, style: .continuous)
                 )
         }
@@ -230,7 +247,7 @@ struct NoticeBubble: View {
             Button(action: onClose) {
                 Image(systemName: "xmark")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.62))
+                    .foregroundStyle(closeColor)
                     .frame(width: 24, height: 24)
                     .contentShape(Rectangle())
             }
@@ -244,15 +261,6 @@ struct NoticeBubble: View {
     }
 
     // MARK: - 装饰
-
-    /// 深色外观加 1pt 白 14% 描边：深底上气泡与背景的分离只有 3:1 出头，边界需要补一手。
-    @ViewBuilder
-    private var darkRim: some View {
-        if colorScheme == .dark {
-            shape.strokeBorder(.white.opacity(0.14), lineWidth: 1)
-                .accessibilityHidden(true)
-        }
-    }
 
     private var tailAlignment: Alignment {
         switch tail?.edge {
@@ -268,18 +276,22 @@ struct NoticeBubble: View {
     private var tailShape: some View {
         if let tail {
             let edge = tail.edge
-            NoticeTailShape(edge: edge)
-                .fill(colors.base)
-                .frame(
-                    width: edge.isHorizontal ? 18 : 16,
-                    height: edge.isHorizontal ? 10 : 9
-                )
-                // 向气泡外偏移，并压住 1pt 盖掉接缝
-                .offset(
-                    x: edge == .leading ? -17 : (edge == .trailing ? 17 : 0),
-                    y: edge == .top ? -8 : (edge == .bottom ? 8 : 0)
-                )
-                .accessibilityHidden(true)
+            ZStack {
+                NoticeTailShape(edge: edge)
+                    .fill(surface)
+                NoticeTailOutline(edge: edge)
+                    .stroke(border, lineWidth: 1)
+            }
+            .frame(
+                width: edge.isHorizontal ? 18 : 16,
+                height: edge.isHorizontal ? 10 : 9
+            )
+            // 向气泡外偏移，并压住 1pt 盖掉接缝
+            .offset(
+                x: edge == .leading ? -17 : (edge == .trailing ? 17 : 0),
+                y: edge == .top ? -8 : (edge == .bottom ? 8 : 0)
+            )
+            .accessibilityHidden(true)
         }
     }
 
@@ -291,7 +303,9 @@ struct NoticeBubble: View {
     }
 }
 
-/// 设计稿的 360pt 是上限而不是固定宽度：短文案按内容收窄，长文案在这里换行。
+/// 设计稿的 400pt 是长文案上限，不是固定宽度：短文案按内容收窄，长文案在这里换行。
+/// 常规 360pt 留给短提示；400pt 覆盖设计稿的英文长文案，也让中文错误标题
+/// 在真实宿主（常用语失败窗 380pt）里不会把最后一个字挤到第二行。
 private struct NoticeBubbleWidthLayout: Layout {
     let maxWidth: CGFloat
 
@@ -346,6 +360,34 @@ struct NoticeTailShape: Shape {
             path.addLine(to: CGPoint(x: rect.midX, y: rect.maxY))
         }
         path.closeSubpath()
+        return path
+    }
+}
+
+/// 尾巴外轮廓：只画两条外侧边，底边留给气泡边框接上。
+struct NoticeTailOutline: Shape {
+    let edge: NoticeTail.Edge
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        switch edge {
+        case .leading:
+            path.move(to: CGPoint(x: rect.maxX, y: rect.minY))
+            path.addLine(to: CGPoint(x: rect.minX, y: rect.midY))
+            path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+        case .trailing:
+            path.move(to: CGPoint(x: rect.minX, y: rect.minY))
+            path.addLine(to: CGPoint(x: rect.maxX, y: rect.midY))
+            path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
+        case .top:
+            path.move(to: CGPoint(x: rect.minX, y: rect.maxY))
+            path.addLine(to: CGPoint(x: rect.midX, y: rect.minY))
+            path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+        case .bottom:
+            path.move(to: CGPoint(x: rect.minX, y: rect.minY))
+            path.addLine(to: CGPoint(x: rect.midX, y: rect.maxY))
+            path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+        }
         return path
     }
 }

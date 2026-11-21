@@ -540,6 +540,12 @@ enum SettingsScreenshotRenderer {
                 position: .bottom,
                 dismissible: false
             ))
+        case "common-phrase-input-unavailable":
+            NoticeCenter.shared.show(Notice(
+                tier: .error,
+                title: localization.text("common_phrases.error.input_unavailable"),
+                dismissal: .manual
+            ))
         default:
             return
         }
