@@ -221,7 +221,11 @@ Typeless 等点按 Fn 开始、再次点按结束的语音工具，与小米蓝�
 
 豆包输入法找不到普通虚拟麦克风时，请运行对应架构的 Installer PKG，然后在 SayAll.app 中选择 `SayAll`（旧安装保留 `MiRemoteV 2ch`）。详细步骤见[豆包输入法兼容说明](Resources/豆包输入法兼容说明.md)。
 
-![豆包输入法 Mac 版选择 MiRemoteV 2ch 麦克风](Screenshots/doubao-input-method-macos.png)
+![豆包输入法 Mac 版设置按住说话并使用 SayAll 麦克风](Screenshots/doubao-input-method-macos.png)
+
+微信输入法的设置方式相同：在「语音输入」中开启「按住说话」，并把「麦克风」设为 `SayAll`。外接键盘无法使用 `fn` 键时，可按提示改用其他快捷键。
+
+![微信输入法 Mac 版设置按住说话并使用 SayAll 麦克风](Screenshots/weixin-input-method-macos.png)
 
 ### 遥控器与语音工具的搭配
 
