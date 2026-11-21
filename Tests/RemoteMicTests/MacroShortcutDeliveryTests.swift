@@ -26,7 +26,7 @@ struct MacroShortcutDeliveryTests {
             keyCode: 37, modifiers: ["command"], deviceModifierFlags: 0,
             accessibilityTrusted: { false }, shortcutSender: { _ in
                 Issue.record("Denied request must not send"); return true
-            }) == .permissionDenied("需要辅助功能权限"))
+            }) == .permissionDenied("需要辅助功能（新名称：设备控制和数据访问）权限"))
         #expect(MacroFeatureIntegration.performKeyboardShortcut(
             keyCode: 37, modifiers: ["unknown"], deviceModifierFlags: 0,
             accessibilityTrusted: { true }, shortcutSender: { _ in

@@ -494,7 +494,7 @@ struct OnboardingFlowTests {
             contentsOf: root.appendingPathComponent("README.md"),
             encoding: .utf8
         )
-        #expect(readme.contains("首次设置向导允许“蓝牙”“输入监控”和“辅助功能”三项权限"))
+        #expect(readme.contains("首次设置向导允许“蓝牙”“输入监控”和“辅助功能（新名称：设备控制和数据访问）”三项权限"))
         #expect(readme.contains("系统蓝牙显示已连接不等于 SayAll 已经连接"))
         #expect(readme.contains("--agent-configure --auto --json"))
         #expect(readme.contains("not_found / connected_remote"))

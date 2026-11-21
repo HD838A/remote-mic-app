@@ -38,7 +38,7 @@
 "voice_button.status.input_unavailable" = "目标输入位置未准备完成，已取消本次语音输入";
 "button_mapping.status.system_managed" = "按键由 macOS 原生处理";
 "button_mapping.permission.input_monitoring_required" = "需要输入监控权限；未读取遥控器按键";
-"button_mapping.permission.accessibility_required" = "需要辅助功能权限；未发送映射动作";
+"button_mapping.permission.accessibility_required" = "需要辅助功能（新名称：设备控制和数据访问）权限；未发送映射动作";
 "button_mapping.error.remote_read_failed" = "无法读取遥控器（错误 %1$@）";
 "button_mapping.status.waiting_for_device" = "正在等待遥控器按键连接";
 "button_mapping.error.device_open_failed" = "无法打开遥控器按键设备";
@@ -51,7 +51,7 @@
 "button_mapping.status.connected_fallback" = "按键功能已连接";
 "button_mapping.status.connected_system_actions_may_remain" = "按键功能已连接；部分系统原操作可能仍会触发";
 "button_mapping.status.disconnected" = "遥控器按键已断开";
-"button_mapping.permission.accessibility_expired" = "辅助功能权限已失效；已释放遥控器";
+"button_mapping.permission.accessibility_expired" = "辅助功能（新名称：设备控制和数据访问）权限已失效；已释放遥控器";
 "button_mapping.permission.system_expired" = "系统权限已失效；已释放遥控器";
 "common.status.stopped" = "已停止";
 "connection.status.searching" = "正在查找遥控器";
@@ -228,7 +228,7 @@
 "scroll_region.test_unconfirmed" = "已发送翻页，但没有检测到内容移动；可能已在顶部或底部，或该区域不可滚动。";
 "scroll_region.test_sent" = "已发送翻页；请目视确认内容是否移动。";
 "scroll_region.test_needs_calibration" = "这个 App 没有可用的预置区域，请先学习。";
-"scroll_region.test_failed" = "翻页没有成功，请确认目标 App 在前台并已授予辅助功能权限。";
+"scroll_region.test_failed" = "翻页没有成功，请确认目标 App 在前台并已授予辅助功能（新名称：设备控制和数据访问）权限。";
 "scroll_region.reset" = "恢复预置";
 "scroll_region.clear" = "清除学习结果";
 
@@ -324,18 +324,18 @@
 "custom_application.accessibility.not_recorded" = "尚未记录目标输入框";
 "custom_application.accessibility.recorded" = "已记录目标输入框";
 "custom_application.accessibility.learn" = "开始学习输入框";
-"custom_application.accessibility.learn_help" = "点击后会立即打开目标 App。请在 3 秒内点击需要聚焦的输入框；无线麦 SayAll 只记录辅助功能特征，不读取输入内容。";
+"custom_application.accessibility.learn_help" = "点击后会立即打开目标 App。请在 3 秒内点击需要聚焦的输入框；无线麦 SayAll 只记录输入框的位置和控件特征，不读取输入内容。";
 "custom_application.accessibility.learning" = "正在等待你点击目标输入框……";
 "custom_application.accessibility.learn_succeeded" = "输入框学习成功，可以直接测试打开与聚焦。";
-"custom_application.accessibility.learn_failed" = "没有识别到可用输入框，请确认点击位置和辅助功能权限后重试。";
+"custom_application.accessibility.learn_failed" = "没有识别到可用输入框，请确认点击位置和辅助功能（新名称：设备控制和数据访问）权限后重试。";
 "custom_application.test" = "测试打开与聚焦";
 "custom_application.picker.title" = "选择要打开的 App";
 "custom_application.accessibility.record_title" = "记录目标输入框";
-"custom_application.accessibility.record_instructions" = "继续后将打开目标 App。请在 3 秒内点击需要聚焦的输入框；无线麦 SayAll 只记录控件的辅助功能特征，不读取输入内容。";
+"custom_application.accessibility.record_instructions" = "继续后将打开目标 App。请在 3 秒内点击需要聚焦的输入框；无线麦 SayAll 只记录控件的位置和特征，不读取输入内容。";
 "custom_application.accessibility.record_succeeded_title" = "输入框记录成功";
 "custom_application.accessibility.record_succeeded" = "已保存目标输入框。请使用“测试打开与聚焦”确认实际效果。";
 "custom_application.accessibility.record_failed_title" = "未能记录输入框";
-"custom_application.accessibility.record_failed" = "没有检测到该 App 中可用的文本输入控件。请确认已点击输入框，并检查辅助功能权限。";
+"custom_application.accessibility.record_failed" = "没有检测到该 App 中可用的文本输入控件。请确认已点击输入框，并检查辅助功能（新名称：设备控制和数据访问）权限。";
 "custom_application.error.title" = "无法配置 App";
 "custom_application.error.not_installed" = "目标 App 已移动或卸载，请重新添加。";
 "custom_application.error.open_failed" = "无法打开目标 App。";
@@ -389,7 +389,7 @@
 "common.status.ready" = "已就绪";
 "connection.status.voice_trigger" = "语音触发";
 "connection.voice_fn_tap.enabled" = "语音键模拟 Fn 点按";
-"connection.voice_fn_tap.hint" = "适配点按式语音输入（豆包「免按模式」、Typeless 等）：这类工具只在按键按下时切换状态，松开无效。开启后每次开始收音注入一次 Fn 点按、结束时再注入一次；长按式工具（豆包「长按模式」）请保持关闭。需要辅助功能权限。";
+"connection.voice_fn_tap.hint" = "适配点按式语音输入（豆包「免按模式」、Typeless 等）：这类工具只在按键按下时切换状态，松开无效。开启后每次开始收音注入一次 Fn 点按、结束时再注入一次；长按式工具（豆包「长按模式」）请保持关闭。需要辅助功能（新名称：设备控制和数据访问）权限。";
 "connection.voice_fn_tap.hint_short" = "只在「只能按住收音」的遥控器上需要：用来驱动不支持长按的工具（如 Typeless）。";
 "connection.voice_key_mode.title" = "语音触发键";
 "connection.voice_key.mode.fn" = "Fn";
@@ -397,12 +397,12 @@
 "connection.voice_key.mode.right_command" = "右 Command（⌘）";
 "connection.voice_key.mode.left_option" = "左 Option（⌥）";
 "connection.voice_key.mode.right_option" = "右 Option（⌥）";
-"connection.voice_key_mode.help" = "默认使用 Fn/地球键。Command 与 Option 模式需要辅助功能权限；许多应用会把左右同侧按键合并为通用修饰键，长按期间按其他键可能触发修饰键快捷键。";
+"connection.voice_key_mode.help" = "默认使用 Fn/地球键。Command 与 Option 模式需要辅助功能（新名称：设备控制和数据访问）权限；许多应用会把左右同侧按键合并为通用修饰键，长按期间按其他键可能触发修饰键快捷键。";
 "connection.voice_key_mode.unverified" = "修饰键模式尚未验证";
 "connection.voice_key_mode.unverified_detail" = "打开目标工具的语音输入设置，把「按住说话」设成这个键，再说一句确认文字上屏。无线麦 SayAll 读不到对方的设置，所以需要你手动确认一次；如果仍然没有文字，请改回 Fn/地球键。";
 "connection.voice_key_mode.mismatch.title" = "在语音工具中快捷键也要配置为“%1$@”";
 "connection.voice_key_mode.mismatch.action" = "改回 Fn";
-"connection.voice_key_mode.command_permission" = "修饰键模式需要辅助功能权限";
+"connection.voice_key_mode.command_permission" = "修饰键模式需要辅助功能（新名称：设备控制和数据访问）权限";
 "connection.action.reconnect" = "立即重新连接";
 "connection.phone.section_title" = "无线麦 SayAll 移动端";
 "connection.phone.ios_title" = "无线麦 SayAll iOS App";
@@ -492,7 +492,7 @@
 "button_mapping.page.subtitle" = "点击按键进行设置";
 "button_mapping.toggle.enabled" = "自定义按键";
 "button_mapping.permission_prompt.title" = "需要开启按键权限";
-"button_mapping.permission_prompt.message" = "自定义按键需要“输入监控”和“辅助功能”权限，请前往权限页面完成设置。";
+"button_mapping.permission_prompt.message" = "自定义按键需要“输入监控”和“辅助功能（新名称：设备控制和数据访问）”权限，请前往权限页面完成设置。";
 "button_mapping.permission_prompt.open" = "前往权限页面";
 "button_mapping.continuous_recording_experiment.enabled" = "持续录音实验功能";
 "button_mapping.continuous_recording_experiment.help" = "仅用于小米蓝牙遥控器 2 Pro 功能验证；单次最长 1 分钟，持续使用可能增加遥控器耗电。";
@@ -536,7 +536,7 @@
 "permission.input_monitoring.description" = "读取遥控器按键，并尽量避免系统原操作重复触发";
 "permission.action.request" = "请求权限";
 "permission.action.open_settings" = "打开系统设置";
-"permission.accessibility.title" = "辅助功能";
+"permission.accessibility.title" = "辅助功能（新名称：设备控制和数据访问）";
 "permission.accessibility.description" = "把映射后的按键动作发送给当前应用";
 "permissions.upgrade_identity_help" = "如果升级后权限没有延续，请把这个 Developer ID 签名版本保留在“应用程序”中，并补授权一次；后续同身份签名更新将继续复用该系统权限";
 "diagnostics.title" = "诊断";
@@ -562,8 +562,8 @@
 "shortcut.editor.not_recorded" = "尚未录入";
 "shortcut.editor.recording_prompt" = "现在请按下单个按键、组合键或单独修饰键；本次按键不会触发原本绑定的动作。";
 "shortcut.editor.success" = "快捷键录入成功";
-"shortcut.editor.permission_required" = "录入系统快捷键需要辅助功能权限。请完成系统授权后再次点击录入。";
-"shortcut.editor.capture_unavailable" = "无法启动快捷键录入，请检查辅助功能和输入监控权限，或重新打开无线麦 SayAll 后再试。";
+"shortcut.editor.permission_required" = "录入系统快捷键需要辅助功能（新名称：设备控制和数据访问）权限。请完成系统授权后再次点击录入。";
+"shortcut.editor.capture_unavailable" = "无法启动快捷键录入，请检查“输入监控”和“辅助功能（新名称：设备控制和数据访问）”权限，或重新打开无线麦 SayAll 后再试。";
 "shortcut.picker.selection_method" = "快捷键选择方式";
 "shortcut.picker.mode.presets" = "常用组合";
 "shortcut.picker.mode.keyboard" = "标准键盘";
@@ -926,7 +926,7 @@
 "onboarding.shortcut_learning.captured" = "已识别：%1$@";
 "onboarding.shortcut_learning.unsupported" = "这个组合目前无法作为无线麦 SayAll 语音键，请使用 Fn、左/右 Command 或左/右 Option。";
 "onboarding.shortcut_learning.incompatible" = "这个快捷键和所选控制设备的说话方式无法可靠转换，请更换模式或快捷键。";
-"onboarding.shortcut_learning.permission_required" = "需要先授予辅助功能权限。";
+"onboarding.shortcut_learning.permission_required" = "需要先授予辅助功能（新名称：设备控制和数据访问）权限。";
 "onboarding.shortcut_learning.unavailable" = "暂时无法监听快捷键，请重新授权后重试。";
 "onboarding.remote_availability.title" = "你现在有实体遥控器吗？";
 "onboarding.remote_availability.detail" = "实体遥控器可以获得完整、稳定的无线麦 SayAll 体验。如果当前没有，也可以继续使用手机。";
@@ -1182,7 +1182,7 @@
 "onboarding.recovery.permission.input_monitoring_denied.detail" = "允许输入监控后，才能收到遥控器的实体按键。";
 "onboarding.recovery.permission.input_monitoring_denied.action" = "允许按键访问";
 "onboarding.recovery.permission.accessibility_denied.title" = "还需要操作权限";
-"onboarding.recovery.permission.accessibility_denied.detail" = "允许辅助功能后，才能执行你设置的语音和按键操作。";
+"onboarding.recovery.permission.accessibility_denied.detail" = "允许辅助功能（新名称：设备控制和数据访问）后，才能执行你设置的语音和按键操作。";
 "onboarding.recovery.permission.accessibility_denied.action" = "允许执行操作";
 "onboarding.recovery.remote.not_found.title" = "所选控制方式还没有连接";
 "onboarding.recovery.remote.not_found.detail" = "按照当前页面重新连接实体遥控器、iPhone 或小程序";
@@ -1355,12 +1355,12 @@
 "common_phrases.error.resource_unavailable" = "常用语无法加载。请重新安装；已有内容可从导出的文件恢复。";
 "common_phrases.error.edit_failed" = "无法保存。请检查内容或导入文件格式；原有数据未被修改。";
 "common_phrases.error.no_phrase" = "这个按键尚未分配常用语，请在常用语页面设置。";
-"common_phrases.error.accessibility_required" = "请在系统设置中允许无线麦 SayAll 使用辅助功能。";
+"common_phrases.error.accessibility_required" = "请在系统设置中允许无线麦 SayAll 使用“辅助功能（新名称：设备控制和数据访问）”。";
 "common_phrases.error.input_unavailable" = "光标不在输入框中，请将光标放入输入框后再试";
 "common_phrases.error.target_changed" = "输入目标已改变，请重新打开常用语。";
 "common_phrases.error.clipboard_write_failed" = "无法写入剪贴板，请重试。";
 "common_phrases.error.clipboard_restore_failed" = "粘贴后未能恢复剪贴板，请检查剪贴板内容。";
-"common_phrases.error.paste_failed" = "无法执行粘贴，请检查辅助功能权限后重试。";
+"common_phrases.error.paste_failed" = "无法执行粘贴，请检查辅助功能（新名称：设备控制和数据访问）权限后重试。";
 "common_phrases.error.cancelled" = "插入已取消。";
 "custom_application.accessibility.test" = "测试输入框";
 
@@ -1428,7 +1428,7 @@
 "audio.mac_microphone.error.capture" = "收音或语音触发失败。请重试。";
 "audio.mac_microphone.error.interrupted" = "语音已中断。请重试。";
 "audio.mac_microphone.error.timed_out" = "准备超时。请重试。";
-"audio.mac_microphone.error.accessibility" = "请在系统设置中允许辅助功能访问。";
+"audio.mac_microphone.error.accessibility" = "请在系统设置中允许“辅助功能（新名称：设备控制和数据访问）”。";
 
 // Device gesture timing and hold behavior
 "button_mapping.hold_button_unavailable" = "该按键不支持方向键按住，仅遥控器左键和右键支持。请选择重复模式或清除按住设置。";

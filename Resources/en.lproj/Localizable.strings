@@ -38,7 +38,7 @@
 "voice_button.status.input_unavailable" = "The text field was not ready. Voice input was canceled.";
 "button_mapping.status.system_managed" = "Buttons are handled natively by macOS";
 "button_mapping.permission.input_monitoring_required" = "Allow Input Monitoring to use remote buttons.";
-"button_mapping.permission.accessibility_required" = "Allow Accessibility to run button actions.";
+"button_mapping.permission.accessibility_required" = "Allow Accessibility (new name: Device Control and Data Access) to run button actions.";
 "button_mapping.error.remote_read_failed" = "Unable to read the remote (error %1$@)";
 "button_mapping.status.waiting_for_device" = "Waiting for remote button controls";
 "button_mapping.error.device_open_failed" = "Unable to open the remote button device";
@@ -51,7 +51,7 @@
 "button_mapping.status.connected_fallback" = "Button controls connected";
 "button_mapping.status.connected_system_actions_may_remain" = "Button controls connected; some original system actions may still occur";
 "button_mapping.status.disconnected" = "Remote buttons disconnected";
-"button_mapping.permission.accessibility_expired" = "Accessibility access is unavailable. Button controls have stopped.";
+"button_mapping.permission.accessibility_expired" = "Accessibility (new name: Device Control and Data Access) permission is unavailable. Button controls have stopped.";
 "button_mapping.permission.system_expired" = "Required permissions are no longer available. Button controls have stopped.";
 "common.status.stopped" = "Stopped";
 "connection.status.searching" = "Looking for a remote";
@@ -228,7 +228,7 @@
 "scroll_region.test_unconfirmed" = "Page sent, but no movement was detected. You may already be at the top or bottom, or this area cannot scroll.";
 "scroll_region.test_sent" = "Page sent. Confirm visually that the content moved.";
 "scroll_region.test_needs_calibration" = "This app has no built-in region. Learn one first.";
-"scroll_region.test_failed" = "Paging failed. Make sure the app is frontmost and accessibility is granted.";
+"scroll_region.test_failed" = "Paging failed. Make sure the app is frontmost and Accessibility (new name: Device Control and Data Access) permission is granted.";
 "scroll_region.reset" = "Reset to Built-in";
 "scroll_region.clear" = "Clear learned area";
 
@@ -327,7 +327,7 @@
 "custom_application.accessibility.learn_help" = "Opens the target app. Click the input field within three seconds. SayAll saves information needed to find the field again, without reading its text.";
 "custom_application.accessibility.learning" = "Waiting for you to click the target input field…";
 "custom_application.accessibility.learn_succeeded" = "Input field saved. You can now test opening the app and focusing the field.";
-"custom_application.accessibility.learn_failed" = "No usable input field was detected. Check the clicked control and Accessibility permission, then try again.";
+"custom_application.accessibility.learn_failed" = "No usable input field was detected. Check the clicked control and Accessibility (new name: Device Control and Data Access) permission, then try again.";
 "custom_application.test" = "Test Open and Focus";
 "custom_application.picker.title" = "Choose an App to Open";
 "custom_application.accessibility.record_title" = "Save Target Input Field";
@@ -335,7 +335,7 @@
 "custom_application.accessibility.record_succeeded_title" = "Input Field Saved";
 "custom_application.accessibility.record_succeeded" = "The target input field was saved. Use Test Open and Focus to confirm the result.";
 "custom_application.accessibility.record_failed_title" = "Input Field Not Saved";
-"custom_application.accessibility.record_failed" = "No usable text input was detected in this app. Click the input field and verify Accessibility permission.";
+"custom_application.accessibility.record_failed" = "No usable text input was detected in this app. Click the input field and verify Accessibility (new name: Device Control and Data Access) permission.";
 "custom_application.error.title" = "Unable to Configure App";
 "custom_application.error.not_installed" = "The target app was moved or uninstalled. Add it again.";
 "custom_application.error.open_failed" = "The target app could not be opened.";
@@ -389,7 +389,7 @@
 "common.status.ready" = "Ready";
 "connection.status.voice_trigger" = "Voice trigger";
 "connection.voice_fn_tap.enabled" = "Use Fn Taps for Voice Typing";
-"connection.voice_fn_tap.hint" = "For apps that use one key press to start voice typing and another to stop, such as Typeless or Doubao Hands-Free mode. SayAll sends an Fn tap at the start and end of each session. Leave this off for apps that require you to hold the key, such as Doubao Hold mode. Requires Accessibility permission.";
+"connection.voice_fn_tap.hint" = "For apps that use one key press to start voice typing and another to stop, such as Typeless or Doubao Hands-Free mode. SayAll sends an Fn tap at the start and end of each session. Leave this off for apps that require you to hold the key, such as Doubao Hold mode. Requires Accessibility (new name: Device Control and Data Access) permission.";
 "connection.voice_fn_tap.hint_short" = "Use with hold-to-talk remotes when your voice typing app requires a press to start and another to stop.";
 "connection.voice_key_mode.title" = "Voice Trigger Key";
 "connection.voice_key.mode.fn" = "Fn";
@@ -397,12 +397,12 @@
 "connection.voice_key.mode.right_command" = "Right Command (⌘)";
 "connection.voice_key.mode.left_option" = "Left Option (⌥)";
 "connection.voice_key.mode.right_option" = "Right Option (⌥)";
-"connection.voice_key_mode.help" = "Fn/Globe is the default. Command and Option modes require Accessibility permission; many apps merge both sides into a generic modifier, and pressing another key while held may trigger a modifier shortcut.";
+"connection.voice_key_mode.help" = "Fn/Globe is the default. Command and Option modes require Accessibility (new name: Device Control and Data Access) permission; many apps merge both sides into a generic modifier, and pressing another key while held may trigger a modifier shortcut.";
 "connection.voice_key_mode.unverified" = "Check Your Voice Trigger Key";
 "connection.voice_key_mode.unverified_detail" = "Open the voice input settings in that app, set its hold-to-talk shortcut to this key, then dictate a sentence to check it. SayAll cannot read that app’s settings, so this step is manual; if no text appears, switch back to Fn/Globe.";
 "connection.voice_key_mode.mismatch.title" = "Also set your voice app’s shortcut to “%1$@”";
 "connection.voice_key_mode.mismatch.action" = "Use Fn";
-"connection.voice_key_mode.command_permission" = "Modifier-key mode requires Accessibility permission";
+"connection.voice_key_mode.command_permission" = "Modifier-key mode requires Accessibility (new name: Device Control and Data Access) permission";
 "connection.action.reconnect" = "Reconnect Now";
 "connection.phone.section_title" = "SayAll Mobile";
 "connection.phone.ios_title" = "SayAll iOS App";
@@ -492,7 +492,7 @@
 "button_mapping.page.subtitle" = "Click a button to change its settings";
 "button_mapping.toggle.enabled" = "Custom Buttons";
 "button_mapping.permission_prompt.title" = "Button Permissions Required";
-"button_mapping.permission_prompt.message" = "Custom button controls require Input Monitoring and Accessibility. Open the Permissions page to finish setup.";
+"button_mapping.permission_prompt.message" = "Custom button controls require Input Monitoring and Accessibility (new name: Device Control and Data Access). Open the Permissions page to finish setup.";
 "button_mapping.permission_prompt.open" = "Open Permissions";
 "button_mapping.continuous_recording_experiment.enabled" = "Continuous Recording Experiment";
 "button_mapping.continuous_recording_experiment.help" = "For Xiaomi Bluetooth Remote 2 Pro feature validation only. Each session is limited to 1 minute and may increase remote battery usage.";
@@ -536,7 +536,7 @@
 "permission.input_monitoring.description" = "Detect remote button presses and help prevent duplicate system actions";
 "permission.action.request" = "Request Permission";
 "permission.action.open_settings" = "Open System Settings";
-"permission.accessibility.title" = "Accessibility";
+"permission.accessibility.title" = "Accessibility (new name: Device Control and Data Access)";
 "permission.accessibility.description" = "Send mapped button actions to the current app";
 "permissions.upgrade_identity_help" = "If access was lost after an update, keep SayAll in Applications and grant the missing permission again";
 "diagnostics.title" = "Diagnostics";
@@ -562,8 +562,8 @@
 "shortcut.editor.not_recorded" = "Not Recorded";
 "shortcut.editor.recording_prompt" = "Press a single key, key combination, or standalone modifier now. This key press will not trigger its existing action.";
 "shortcut.editor.success" = "Shortcut recorded successfully";
-"shortcut.editor.permission_required" = "Recording system shortcuts requires Accessibility permission. Grant access, then click Record Shortcut again.";
-"shortcut.editor.capture_unavailable" = "Shortcut recording could not start. Check Accessibility and Input Monitoring permissions, or reopen SayAll and try again.";
+"shortcut.editor.permission_required" = "Recording system shortcuts requires Accessibility (new name: Device Control and Data Access) permission. Grant access, then click Record Shortcut again.";
+"shortcut.editor.capture_unavailable" = "Shortcut recording could not start. Check Accessibility (new name: Device Control and Data Access) and Input Monitoring permissions, or reopen SayAll and try again.";
 "shortcut.picker.selection_method" = "Shortcut Selection Method";
 "shortcut.picker.mode.presets" = "Common Shortcuts";
 "shortcut.picker.mode.keyboard" = "Standard Keyboard";
@@ -927,7 +927,7 @@
 "onboarding.shortcut_learning.captured" = "Captured: %1$@";
 "onboarding.shortcut_learning.unsupported" = "This shortcut cannot be used as a SayAll voice button. Use Fn, left/right Command, or left/right Option.";
 "onboarding.shortcut_learning.incompatible" = "This shortcut cannot be converted reliably for the selected controller. Choose another behavior or shortcut.";
-"onboarding.shortcut_learning.permission_required" = "Grant Accessibility permission first.";
+"onboarding.shortcut_learning.permission_required" = "Grant Accessibility (new name: Device Control and Data Access) permission first.";
 "onboarding.shortcut_learning.unavailable" = "Shortcut capture is unavailable. Re-authorize and try again.";
 "onboarding.remote_availability.title" = "Do you have a physical remote right now?";
 "onboarding.remote_availability.detail" = "A physical remote provides the most complete and reliable SayAll experience. You can continue with a phone if one is not available.";
@@ -1183,7 +1183,7 @@
 "onboarding.recovery.permission.input_monitoring_denied.detail" = "Allow Input Monitoring so physical remote buttons can be detected.";
 "onboarding.recovery.permission.input_monitoring_denied.action" = "Allow Button Access";
 "onboarding.recovery.permission.accessibility_denied.title" = "Action access is still needed";
-"onboarding.recovery.permission.accessibility_denied.detail" = "Allow Accessibility so SayAll can run your configured voice and button actions.";
+"onboarding.recovery.permission.accessibility_denied.detail" = "Allow Accessibility (new name: Device Control and Data Access) so SayAll can run your configured voice and button actions.";
 "onboarding.recovery.permission.accessibility_denied.action" = "Allow Actions";
 "onboarding.recovery.remote.not_found.title" = "The selected control method is not connected yet";
 "onboarding.recovery.remote.not_found.detail" = "Follow this page to reconnect the physical remote, iPhone, or mini program";
@@ -1356,12 +1356,12 @@
 "common_phrases.error.resource_unavailable" = "Phrases could not load. Reinstall, or restore your exported phrases.";
 "common_phrases.error.edit_failed" = "Could not save. Check the content or imported format. Existing data was kept.";
 "common_phrases.error.no_phrase" = "No phrase is assigned to this button. Assign one in Common Phrases.";
-"common_phrases.error.accessibility_required" = "Allow SayAll in System Settings → Accessibility.";
+"common_phrases.error.accessibility_required" = "Allow SayAll in System Settings → Accessibility (new name: Device Control and Data Access).";
 "common_phrases.error.input_unavailable" = "No text field is focused. Click in the field and try again.";
 "common_phrases.error.target_changed" = "The input target changed. Open Common Phrases again.";
 "common_phrases.error.clipboard_write_failed" = "Could not write to the clipboard. Try again.";
 "common_phrases.error.clipboard_restore_failed" = "Could not restore the clipboard after pasting. Check your clipboard.";
-"common_phrases.error.paste_failed" = "Could not paste. Check Accessibility permission and try again.";
+"common_phrases.error.paste_failed" = "Could not paste. Check Accessibility (new name: Device Control and Data Access) permission and try again.";
 "common_phrases.error.cancelled" = "Insertion canceled.";
 "custom_application.accessibility.test" = "Test input field";
 
@@ -1429,7 +1429,7 @@
 "audio.mac_microphone.error.capture" = "Voice capture or the voice trigger failed. Try again.";
 "audio.mac_microphone.error.interrupted" = "Voice input was interrupted. Try again.";
 "audio.mac_microphone.error.timed_out" = "Preparation timed out. Try again.";
-"audio.mac_microphone.error.accessibility" = "Allow Accessibility access in System Settings.";
+"audio.mac_microphone.error.accessibility" = "Allow Accessibility (new name: Device Control and Data Access) in System Settings.";
 
 // Device gesture timing and hold behavior
 "button_mapping.hold_button_unavailable" = "This button cannot hold an arrow key; only the remote’s left and right buttons can. Choose a repeat mode or clear the hold setting.";
