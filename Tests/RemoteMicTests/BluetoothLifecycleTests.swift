@@ -923,6 +923,40 @@ struct BluetoothLifecycleTests {
             "12b9377cbe7e5c94e8a70d9d23929523d14afa954793130f8a3959c7b849aca8")
     }
 
+    @Test func remoteIdentityFingerprintAcceptsSystemLiteralCaseVariants() throws {
+        let identifier = try #require(UUID(uuidString: "ABCDEF01-2345-6789-ABCD-EF0123456789"))
+        let candidates = RemoteIdentityFingerprint.candidates(for: identifier)
+        #expect(candidates == [
+            "5c56c744211d5bac25c31355d2561f3236216467d4258d77ef89b75d4c1e40e1",
+            "5927dbb3765a5914ecb95d06939655d9561d0fc47041902a9600b818d81cc6fa"
+        ])
+
+        // 系统把 PhysicalDeviceUniqueID 写成小写字面量时，HID 档案里存的是小写哈希。
+        // 只认大写变体会静默不修：现场仍是「重配后连不上」，日志里却没有任何 BLE IDENTITY。
+        let mappings = RemoteDeviceMappings(
+            buttonBindings: [:],
+            buttonShortcuts: [:],
+            secondaryButtonBindings: [:]
+        )
+        let lowercaseOnly = RemoteDeviceProfile(
+            model: .rc003,
+            bluetoothIdentifier: UUID(),
+            hidFingerprint: "5927dbb3765a5914ecb95d06939655d9561d0fc47041902a9600b818d81cc6fa",
+            mappings: mappings
+        )
+        #expect(RemoteIdentityReconciliationPolicy.replacement(
+            for: identifier,
+            hidFingerprints: candidates,
+            profiles: [lowercaseOnly]
+        ) != nil)
+        // 只给大写变体时仍然不匹配——说明这条用例真的覆盖了大小写差异，而不是断言恒真。
+        #expect(RemoteIdentityReconciliationPolicy.replacement(
+            for: identifier,
+            hidFingerprints: [RemoteIdentityFingerprint.fingerprint(for: identifier)],
+            profiles: [lowercaseOnly]
+        ) == nil)
+    }
+
     @Test func staleBluetoothIdentityIsReplacedOnlyForAUniqueHIDMatch() {
         let current = UUID()
         let old = UUID()
@@ -941,7 +975,7 @@ struct BluetoothLifecycleTests {
 
         let match = RemoteIdentityReconciliationPolicy.replacement(
             for: current,
-            hidFingerprint: fingerprint,
+            hidFingerprints: [fingerprint],
             profiles: [profile]
         )
         #expect(match == .init(profileID: profile.id, previousIdentifier: old))
@@ -955,7 +989,7 @@ struct BluetoothLifecycleTests {
         )
         #expect(RemoteIdentityReconciliationPolicy.replacement(
             for: current,
-            hidFingerprint: fingerprint,
+            hidFingerprints: [fingerprint],
             profiles: [profile, owner]
         ) == nil)
 
@@ -968,7 +1002,7 @@ struct BluetoothLifecycleTests {
         )
         #expect(RemoteIdentityReconciliationPolicy.replacement(
             for: current,
-            hidFingerprint: fingerprint,
+            hidFingerprints: [fingerprint],
             profiles: [profile, duplicate]
         ) == nil)
 
@@ -982,7 +1016,7 @@ struct BluetoothLifecycleTests {
             )
             #expect(RemoteIdentityReconciliationPolicy.replacement(
                 for: current,
-                hidFingerprint: fingerprint,
+                hidFingerprints: [fingerprint],
                 profiles: [ineligibleProfile]
             ) == nil)
         }
@@ -990,7 +1024,7 @@ struct BluetoothLifecycleTests {
         // 已是当前 identifier 或没有 BLE 字段时不需要替换。
         #expect(RemoteIdentityReconciliationPolicy.replacement(
             for: current,
-            hidFingerprint: fingerprint,
+            hidFingerprints: [fingerprint],
             profiles: [RemoteDeviceProfile(
                 model: .rc003,
                 bluetoothIdentifier: current,
@@ -1000,7 +1034,7 @@ struct BluetoothLifecycleTests {
         ) == nil)
         #expect(RemoteIdentityReconciliationPolicy.replacement(
             for: current,
-            hidFingerprint: fingerprint,
+            hidFingerprints: [fingerprint],
             profiles: [RemoteDeviceProfile(
                 model: .rc003,
                 hidFingerprint: fingerprint,
@@ -1041,7 +1075,19 @@ struct BluetoothLifecycleTests {
         #expect(!reconcile.contains("remoteRecoveryBudgets[identifier] = budget"))
         #expect(reconcile.contains("bluetoothBridgeStates.removeValue"))
         #expect(reconcile.contains("pendingBluetoothVoiceStartIdentifier == nil"))
-        #expect(reconcile.contains("result=skipped reason=identifier_owned"))
+        #expect(reconcile.contains("RemoteIdentityFingerprint.candidates(for: identifier)"))
+        // 「identifier 已被别的档案占用」由 policy 唯一决定。这里曾有一份 `.first(where:)`
+        // 的重复判断：指纹重复时会打出 reason=identifier_owned，把「不唯一」误报成「被占用」。
+        #expect(!reconcile.contains("reason=identifier_owned"))
+
+        // stop() 会把 .stopped 同步回调给 delegate 并重新写回 bluetoothBridgeStates。
+        // 移除必须排在 stop() 之后，否则留下的孤儿状态会被 `allStates.first` 兜底选中，
+        // 把卡片文案钉在「已停止」。
+        let stop = try #require(reconcile.range(of: "staleBridge.stop()"))
+        let remove = try #require(reconcile.range(
+            of: "bluetoothBridgeStates.removeValue(forKey: ObjectIdentifier(staleBridge))"
+        ))
+        #expect(stop.lowerBound < remove.lowerBound)
     }
 
     @Test func discoveryScanInspectsOnlyPlausibleCandidates() {
