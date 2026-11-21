@@ -51,7 +51,8 @@ struct RemoteProfilePersistenceTests {
         bleCustomName: String = "",
         bleBindings: [RemoteMic.RemoteButton: ButtonAction] = AppSettings.defaultBindings,
         bleInteractionSettings: RemoteButtonInteractionSettings? = nil,
-        identityMatches: Bool = true
+        identityMatches: Bool = true,
+        lowercaseIdentityFingerprint: Bool = false
     ) throws -> (
         both: UUID,
         ble: UUID,
@@ -62,9 +63,19 @@ struct RemoteProfilePersistenceTests {
         let bleID = UUID()
         let bothBluetoothIdentifier = UUID()
         let bleBluetoothIdentifier = UUID()
-        let matchingHIDFingerprint = RemoteIdentityFingerprint.fingerprint(
+        // HID 侧哈希的是系统属性的原始字面量，大小写不被保证。用 `candidates` 里的大写
+        // 之外的变体模拟小写档案，验证档案合并路径也接受同一套判定。
+        let uppercaseFingerprint = RemoteIdentityFingerprint.fingerprint(
             for: bleBluetoothIdentifier
         )
+        let matchingHIDFingerprint: String
+        if lowercaseIdentityFingerprint,
+           let lowercase = RemoteIdentityFingerprint.candidates(for: bleBluetoothIdentifier)
+               .first(where: { $0 != uppercaseFingerprint }) {
+            matchingHIDFingerprint = lowercase
+        } else {
+            matchingHIDFingerprint = uppercaseFingerprint
+        }
         var bothBindings = AppSettings.defaultBindings
         bothBindings[.menu] = .openCodex
         let shortcut = CustomKeyboardShortcut(
@@ -161,6 +172,25 @@ struct RemoteProfilePersistenceTests {
         #expect(settings.remoteDeviceProfiles.count == 2)
         #expect(settings.remoteDeviceProfiles.first(where: { $0.id == ids.ble })?
             .mappings.parsedButtonBindings == AppSettings.defaultBindings)
+    }
+
+    @Test func defaultBLEOnlyDuplicateMergesWhenHIDFingerprintUsesLowercaseLiteral() throws {
+        let scope = try Self.scopedSettings("both-ble-lowercase-identity")
+        defer { scope.tearDown() }
+        let ids = try Self.seedBothProfileAndDefaultBLEDuplicate(
+            in: scope,
+            lowercaseIdentityFingerprint: true
+        )
+        let settings = AppSettings(defaults: scope.defaults)
+
+        let replacements = settings.reconcileComplementaryRemoteProfiles(
+            connectedProfileIDs: [ids.ble],
+            activeHIDProfileIDs: [ids.both]
+        )
+
+        #expect(replacements[ids.ble] == ids.both)
+        #expect(settings.remoteDeviceProfiles.count == 1)
+        #expect(settings.remoteDeviceProfiles.first?.id == ids.both)
     }
 
     @Test func BLEOnlyDuplicateWithMismatchedIdentityIsNotMerged() throws {

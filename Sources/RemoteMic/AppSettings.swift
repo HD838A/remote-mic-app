@@ -2604,6 +2604,11 @@ final class AppSettings: ObservableObject {
     /// The system BLE identifier and the HID `PhysicalDeviceUniqueID` can be the same UUID.
     /// HID profiles store its SHA-256; hashing the BLE identifier with the same rule proves the
     /// two records describe one physical remote before anything is removed.
+    ///
+    /// 用 `candidates` 而不是单个 `fingerprint`：HID 侧哈希的是系统属性的原始字面量，
+    /// 大小写不保证；身份同步路径（`BridgeAppModel.reconcileStaleRemoteIdentity`）已经
+    /// 同时接受两个变体，这里必须用同一套判定，否则同一个分裂档案会在一条路径上能修、
+    /// 在另一条路径上静默不修。
     private static func bluetoothIdentifierMatchesHIDFingerprint(
         _ ble: RemoteDeviceProfile,
         _ both: RemoteDeviceProfile
@@ -2611,7 +2616,7 @@ final class AppSettings: ObservableObject {
         guard let identifier = ble.bluetoothIdentifier,
               let hidFingerprint = both.hidFingerprint
         else { return false }
-        return RemoteIdentityFingerprint.fingerprint(for: identifier) == hidFingerprint
+        return RemoteIdentityFingerprint.candidates(for: identifier).contains(hidFingerprint)
     }
 
     /// Identity match proves which two records belong together; this guard proves removing the
