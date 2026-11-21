@@ -980,6 +980,9 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     private var bluetoothBridges: [UUID: XiaomiBluetoothBridge] = [:]
     private var bluetoothBridgeStates: [ObjectIdentifier: BluetoothBridgeState] = [:]
     private var discoveryBluetoothBridge: XiaomiBluetoothBridge?
+    private var hasBusyBluetoothTarget: Bool {
+        bluetoothBridges.values.contains { $0.isConnectionBusy }
+    }
     private var remoteRecoveryBudgets: [UUID: RemoteConnectionRecovery] = [:]
     @Published private(set) var remoteRecoveryStates: [UUID: RemoteConnectionRecoveryStatus] = [:]
     private var screenshotBluetoothConnectionBlock: LocalizedMessage?
@@ -2405,6 +2408,10 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
 
     func refreshRemoteDiscovery() {
         guard started else { return }
+        if hasBusyBluetoothTarget {
+            discoveryBluetoothBridge?.cancelAutomaticDiscovery()
+            return
+        }
         if discoveryBluetoothBridge == nil {
             startBluetoothDiscoveryIfNeeded()
         } else {
@@ -5078,7 +5085,8 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     }
 
     private func startBluetoothDiscoveryIfNeeded(manual: Bool = false) {
-        guard started, discoveryBluetoothBridge == nil else { return }
+        guard started, discoveryBluetoothBridge == nil,
+              manual || !hasBusyBluetoothTarget else { return }
         let bridge = XiaomiBluetoothBridge(
             delegate: self,
             excludedIdentifiers: { [weak self] in
@@ -7208,6 +7216,10 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             currentState: state
         )
         bluetoothBridgeStates[bridgeObjectID] = state
+        // 目标桥一旦进入连接/重连/ready，自动发现桥就不再需要继续扫描；手动查找窗口保留。
+        if bridge !== discoveryBluetoothBridge, bridge.isConnectionBusy {
+            discoveryBluetoothBridge?.cancelAutomaticDiscovery()
+        }
         if case .ready = state {
             _ = registerBluetoothBridgeIfNeeded(bridge)
             voiceFnTapSession.resume()

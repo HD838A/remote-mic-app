@@ -56,6 +56,7 @@ ONBOARDING EVENT kind=blocked step=audio failure=audio.output_not_ready
 - 发现 bridge 在采纳候选前调用同一同步入口；命中后停止旧 identifier 的 bridge，清理旧桥状态、待处理电量 / 型号 / 电源遥测和旧恢复状态。
 - **旧恢复预算不迁移**：旧 identifier 的预算可能已 paused / cancelled。迁移会让新 bridge 的 `begin(manual: false)` 直接失败，连 `BLE CONNECTING` 都不出现。替换时删除旧、新 identifier 两侧旧预算，由 `connectBluetoothIdentifier` 为新目标创建全新预算；日志用 `previous_recovery` 只记录旧状态枚举。
 - 匹配成功后直接调用发现回调，按当前 identifier 建立新 bridge，不依赖随后可能过期的 `knownIdentifiers` 快照（兼容 #1159 的扫描收敛改动）。
+- #1159 的扫描过滤会先丢弃没有名称、没有语音服务且不在已知集合里的广播；当前 identifier 可能正好是这种形态。发现桥在被过滤前再用 HID 指纹给已有档案一次机会，命中后直接走当前 identifier 的发现回调。
 - 新设备没有 HID 指纹命中时保持原行为：连接成功后创建 / 选择新档案，不覆盖旧档案。
 - 当前 identifier 已被另一条档案占用时记录 `BLE IDENTITY phase=completed result=skipped reason=identifier_owned`，不替换、不串台。
 - 语音会话进行中或首个语音启动等待中不替换，避免中断收音。
@@ -88,11 +89,11 @@ ONBOARDING EVENT kind=blocked step=audio failure=audio.output_not_ready
 
 自动化结果：
 
-- `swift test --disable-keychain --filter 'BluetoothLifecycleTests|RemoteDeviceNameIntegrationTests'`：51 项通过。
-- `swift test --disable-keychain`：1,580 项、113 个 suite 通过。
-- `./scripts/test.sh`：48 项自测通过。
+- 合并 #1159 后的 `swift test --disable-keychain --filter 'BluetoothLifecycleTests|RemoteDeviceNameIntegrationTests'`：55 项通过。
+- 合并 #1159 后的 `swift test --disable-keychain`：1,591 项、113 个 suite 通过。
+- 合并 #1159 后的 `./scripts/test.sh`：50 项自测通过。
 - 公开模式 `swift build --disable-keychain` 与 `scripts/build-app.sh` Release App 构建通过；`scripts/verify-repository-governance.sh` 通过。
-- PR #1160 GitHub Actions 的 Repository governance、Classify changed files、Public Swift tests and dual-architecture build 全部通过。
+- 合并前的 PR #1160 GitHub Actions 全部通过；合并后的最终 CI 结果以 PR 最新 head 为准。
 
 覆盖：
 

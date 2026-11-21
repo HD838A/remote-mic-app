@@ -143,6 +143,11 @@ final class XiaomiBluetoothBridge: NSObject {
     private(set) var lastVoiceStopReason: BluetoothVoiceStopReason?
     /// 已被判定为「别的产品」的标识；本桥此后一律不再连接，也不再走扫描回退。
     private var rejectedIdentifiers = Set<UUID>()
+    /// 本轮扫描中在准入前被跳过的无关广播次数；只在扫描结束时汇总写一条日志。
+    private var ignoredUnrelatedDiscoveryCount = 0
+    /// 扫描开始时的身份快照，避免每个广播回调都重新构造 Set。
+    private var excludedIdentifiersSnapshot = Set<UUID>()
+    private var knownIdentifiersSnapshot = Set<UUID>()
     private var central: CBCentralManager?
     private var centralGeneration: UInt64?
     private var peripheral: CBPeripheral?
@@ -356,6 +361,10 @@ final class XiaomiBluetoothBridge: NSObject {
     }
 
     func refreshDiscovery(manual: Bool = false) {
+        if manual, discoveryWindowStartedAt != nil {
+            discoveryWasManual = true
+            return
+        }
         let now = ProcessInfo.processInfo.systemUptime
         guard shouldRun, targetIdentifier == nil, !systemSuspension.isSuspended,
               discoveryWindowStartedAt == nil,
@@ -375,13 +384,21 @@ final class XiaomiBluetoothBridge: NSObject {
         endDiscovery(cancelled: true)
     }
 
+    /// 目标桥开始连接后，自动发现窗口已没有用途；手动查找窗口继续保留。
+    func cancelAutomaticDiscovery() {
+        guard discoveryWindowStartedAt != nil, !discoveryWasManual else { return }
+        endDiscovery(cancelled: true)
+    }
+
     private func endDiscovery(cancelled: Bool = false) {
         guard discoveryWindowStartedAt != nil else { return }
+        // 窗口结束时的身份状态可能已变化；重取一次，让随后的已连接候选判定使用当前配置。
+        refreshDiscoveryIdentitySnapshots()
         // A remote may have joined the system without advertising during this window.
         if !cancelled, !systemSuspension.isSuspended, let central,
            central.state == .poweredOn, let generation = currentGeneration() {
             for candidate in central.retrieveConnectedPeripherals(withServices: [serviceUUID])
-                where !excludedIdentifiers().contains(candidate.identifier) {
+                where !excludedIdentifiersSnapshot.contains(candidate.identifier) {
                 _ = adopt(candidate, using: central, generation: generation,
                           source: "connected_peripheral", advertisesVoiceService: true,
                           advertisedName: nil)
@@ -395,7 +412,10 @@ final class XiaomiBluetoothBridge: NSObject {
         lifecycle = .stopped
         if case .bluetoothUnavailable = state { return }
         state = .failed(LocalizedMessage(cancelled ? "connection.history.status.cancelled" : discoveryWasManual ? "connection.history.status.not_found" : "connection.history.status.waiting"))
-        AppLogger.shared.write("BLE DISCOVERY_WINDOW phase=completed result=\(cancelled ? "cancelled" : "waiting")")
+        AppLogger.shared.write(
+            "BLE DISCOVERY_WINDOW phase=completed result=\(cancelled ? "cancelled" : "waiting") " +
+                "ignored_unrelated=\(ignoredUnrelatedDiscoveryCount)"
+        )
     }
 
     private func armRecoveryDeadline() {
@@ -595,6 +615,11 @@ final class XiaomiBluetoothBridge: NSObject {
         return didWrite
     }
 
+    private func refreshDiscoveryIdentitySnapshots() {
+        excludedIdentifiersSnapshot = excludedIdentifiers()
+        knownIdentifiersSnapshot = knownIdentifiers()
+    }
+
     private func discoverOrScan(using central: CBCentralManager, generation: UInt64) {
         guard shouldRun,
               !systemSuspension.isSuspended,
@@ -603,6 +628,8 @@ final class XiaomiBluetoothBridge: NSObject {
               central.state == .poweredOn
         else { return }
         resetPeripheral()
+        ignoredUnrelatedDiscoveryCount = 0
+        refreshDiscoveryIdentitySnapshots()
 
         VoiceRemoteDiscovery.run(retrieveCachedTarget: { () -> CBPeripheral? in
             guard let identifier = targetIdentifier else {
@@ -635,7 +662,7 @@ final class XiaomiBluetoothBridge: NSObject {
                 "BLE SYSTEM CONNECTED CANDIDATES operation_id=\(discoveryOperationID) generation=\(generation) count=\(connectedCandidates.count)"
             )
             let usableCandidates = connectedCandidates.filter {
-                !excludedIdentifiers().contains($0.identifier) && !rejectedIdentifiers.contains($0.identifier)
+                !excludedIdentifiersSnapshot.contains($0.identifier) && !rejectedIdentifiers.contains($0.identifier)
             }
             // 过滤不留痕时，`count=N` 会让人以为 N 台都进过准入判定；实际可能是 0 台。
             if usableCandidates.count != connectedCandidates.count {
@@ -701,7 +728,8 @@ final class XiaomiBluetoothBridge: NSObject {
                 AppLogger.shared.write(
                     "BLE SCAN TIMEOUT operation_id=\(self.discoveryOperationID) generation=\(generation) phase=timed_out "
                         + "result=retrying reason=scan_window_expired window_ms="
-                        + "\(Int((BluetoothScanRecoveryPolicy.scanWindow * 1_000).rounded()))"
+                        + "\(Int((BluetoothScanRecoveryPolicy.scanWindow * 1_000).rounded())) "
+                        + "ignored_unrelated=\(self.ignoredUnrelatedDiscoveryCount)"
                 )
                 self.scheduleReconnect()
             }
@@ -735,7 +763,7 @@ final class XiaomiBluetoothBridge: NSObject {
             // HID 指纹已经证明这是已有档案的同一只物理设备。直接交给发现回调建立
             // 当前 identifier 的 bridge，不依赖随后可能过期的 knownIdentifiers 快照。
             guard let discoveredCandidate,
-                  !excludedIdentifiers().contains(candidate.identifier) else {
+                  !excludedIdentifiersSnapshot.contains(candidate.identifier) else {
                 return false
             }
             discoveredCandidate(candidate.identifier)
@@ -744,7 +772,7 @@ final class XiaomiBluetoothBridge: NSObject {
         let decision = VoiceRemoteAdmission.decide(
             identifier: candidate.identifier,
             targetIdentifier: targetIdentifier,
-            knownIdentifiers: knownIdentifiers(),
+            knownIdentifiers: knownIdentifiersSnapshot,
             advertisesVoiceService: advertisesVoiceService,
             name: candidate.name,
             advertisedName: advertisedName
@@ -752,7 +780,7 @@ final class XiaomiBluetoothBridge: NSObject {
         switch decision {
         case .adoptSavedIdentity, .adoptRecognizedName:
             if let discoveredCandidate {
-                guard !excludedIdentifiers().contains(candidate.identifier) else { return false }
+                guard !excludedIdentifiersSnapshot.contains(candidate.identifier) else { return false }
                 discoveredCandidate(candidate.identifier)
                 return false
             }
@@ -1510,9 +1538,31 @@ extension XiaomiBluetoothBridge: CBCentralManagerDelegate {
         guard let generation = centralGeneration,
               lifecycle == .scanning(generation),
               self.peripheral == nil,
-              !excludedIdentifiers().contains(peripheral.identifier),
+              !excludedIdentifiersSnapshot.contains(peripheral.identifier),
               !rejectedIdentifiers.contains(peripheral.identifier)
         else { return }
+        guard BluetoothDiscoveryScanPolicy.shouldInspect(
+            identifier: peripheral.identifier,
+            targetIdentifier: targetIdentifier,
+            knownIdentifiers: knownIdentifiersSnapshot,
+            advertisesVoiceService: serviceMatch,
+            advertisedName: advertisedName,
+            peripheralName: peripheral.name
+        ) else {
+            // #1159 的扫描过滤会先丢掉没有名称、没有语音服务且不在已知集合里的广播。
+            // 重新配对后当前 identifier 恰好可能符合这种形态，所以被过滤前再用 HID
+            // 指纹给已有档案一次机会；命中后直接走当前 identifier 的发现回调。
+            if targetIdentifier == nil,
+               reconcileCandidateIdentifier?(peripheral.identifier) == true {
+                if let discoveredCandidate,
+                   !excludedIdentifiersSnapshot.contains(peripheral.identifier) {
+                    discoveredCandidate(peripheral.identifier)
+                }
+                return
+            }
+            ignoredUnrelatedDiscoveryCount &+= 1
+            return
+        }
         adopt(
             peripheral,
             using: central,

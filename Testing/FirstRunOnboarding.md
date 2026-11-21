@@ -2,6 +2,70 @@
 
 > 执行本手册或修改 Onboarding 前，先完整阅读跨平台产品规范 [`feature/first-run-onboarding/PRODUCT_SPEC.md`](../feature/first-run-onboarding/PRODUCT_SPEC.md) 和 [macOS 平台适配](../feature/first-run-onboarding/platform-macos.md)。未来 Windows 测试应从同一产品规范出发，并使用 [Windows 平台适配](../feature/first-run-onboarding/platform-windows.md) 建立独立测试手册。
 
+## 连接页右栏去重、遥控器放大、配对动画与文案收紧（2026-11-20）
+
+适用版本为包含本修改的 `main` 或对应候选；验证分支为 `codex/onboarding-remote-pairing-animation-ui-20261121`。影响分类为局部 UI 与文案变化：连接页右栏移除与左栏重复的连接检查面板；小米实体遥控器图在 `1020 × 772` 窗口内由 `190 × 285 pt` 放大到 `300 × 450 pt`，苹果遥控器图由 `1.8× / 190 × 360 pt` 放大到 `2.5× / 300 × 450 pt`；小米遥控器尚未连接时 Home 与 Menu 同步呼吸，苹果遥控器尚未连接时返回与音量加同步呼吸；连接页文案去掉末尾句号。步骤顺序、连接判定、普通按键门禁、音频、持久化和语音键生命周期均不变。
+
+### 验证步骤
+
+1. 使用生产离屏入口生成中文、英文、浅色和深色的 `04-remote.png`，分别覆盖 `xiaomi_remote` 与 `siri_remote`。预期：右栏底部不再出现“连接检查”面板，左栏状态卡仍然显示连接和按键结果。
+2. 分别选择小米蓝牙遥控器 2 Pro 和小米蓝牙遥控器 2。预期：两者都显示唤醒和 Home + Menu 两步；2 Pro 的唤醒步骤为“长按 TV 键约 2 秒，直到遥控器底部白灯开始闪烁”，小米蓝牙遥控器 2 的唤醒步骤只保留“长按 TV 键约 2 秒”，不出现白灯提示。型号未知时同样使用不带白灯的短唤醒文案。
+3. 检查右栏遥控器图。预期：小米和苹果遥控器都明显大于修改前，完整落在 `1020 × 772` 内容区内，不被裁切，底部留白不挤压左栏或底部导航。
+4. 在未连接状态进入两种小米连接页。预期：Home 与 Menu 两颗键同时出现同相位高亮并持续呼吸；高亮中心与按键中心重合。RC001 与 RC003 都必须显示动画。
+5. 在未连接状态进入苹果遥控器连接页。预期：返回与音量加两颗键同时出现同相位高亮并持续呼吸；高亮中心与按键中心重合，不得亮到音量减、TV 或播放键。
+6. 开启“减弱动态效果”后重新进入连接页。预期：两组高亮都保留静态显示，不播放呼吸动画。
+7. 连接所选遥控器并收到普通按键。预期：配对高亮停止，左栏状态卡继续按原门禁更新。
+8. 检查连接页所有静态文案和状态说明。预期：末尾不加句号；内部句子标点保留。苹果遥控器第 5 步写“名称可能是一串序列号或‘蓝牙设备’”。
+9. 在 `1020 × 772` 和更大的窗口尺寸分别检查两种遥控器。预期：遥控器图保持居中，高亮始终贴合按键；窗口放大或缩小时不得出现圆环漂移。
+10. 依次进入权限、音频、语音测试和普通按键页。预期：这些页面的右栏检查面板不受本次修改影响。
+11. 切换到 iPhone / Apple Watch 或 Web 远程控制方式并进入连接页。预期：右栏同样不再重复连接检查，二维码、会员入口和原有状态卡不被裁切。
+
+失败判定：右栏仍显示“连接检查”或两项检查；小米蓝牙遥控器 2 仍显示白灯步骤，或它的唤醒步骤被整条删除；遥控器仍为旧尺寸、被裁切或挤压导航；动画只覆盖一颗键、位置偏移、窗口缩放后漂移或连接后仍继续播放；减弱动态效果下仍播放动画；连接页文案仍以句号结尾；其他页面的右栏面板被误删；iPhone / Web 连接页出现空白面板或布局跳动，均判定失败。
+
+验证边界：离屏截图只能证明静态布局、文案和高亮位置。真实窗口中的动画流畅度、减弱动态效果、真实 RC001 / RC003 / Apple Remote 连接、普通按键观察以及 iPhone / Web 连接仍须现场验收。本轮公开构建不包含 iPhone / Web 控制来源，未生成这两条路径的截图；苹果遥控器截图使用本地私有源码包构建，公开构建不编译该分支。另发现苹果遥控器英文五步卡在默认 `1020 × 772` 下会把“打开蓝牙设置”推到滚动区底部并部分裁切；这是左栏既有布局，去掉句号后仍未完全消除，未在本轮修改。
+
+### 本轮结果
+
+- 公开构建 `swift build --disable-keychain`：通过。
+- 设置 `SAYALL_SIRI_REMOTE_PACKAGE_PATH` 的苹果遥控器构建：通过。
+- `swift test --disable-keychain --filter OnboardingFlowTests`：124 项通过，包含 RC001 / RC003 唤醒文案差异和连接页末尾句号检查。
+- `swift test --disable-keychain --filter LocalizationTests`：10 项通过，四组去句号文案的中英文资源与测试期望一致。
+- 生产离屏入口生成 RC003 四张、RC001 一张、苹果遥控器四张，另用临时 `1400 × 1000` 内容尺寸生成小米和苹果遥控器各一张缩放核对图；全部为 PNG，默认窗口图 `2040 × 1600`，缩放核对图 `2800 × 2056`。逐张查看确认右栏检查面板已移除、遥控器放大、高亮同相位且中心落在按键本体上，默认尺寸和大窗口下位置一致。
+- RC003 四张按中文浅色、中文深色、英文浅色、英文深色顺序的 SHA-256 为 `96e7dec03d97c0bd6f3d6cc14b59039c1aabc89ff56e8c84c51e58d7da8945b1`、`5646fc3ca5758447f431012b1909dcc71bc7719707d477264a7a0f2e701ac7b9`、`9e688873a57893c054ba7c5b91b6efce0f02b91afdf98d144de87b18df2bc81d`、`4b8e30fc671971ae32326d189bc1e303247455becc58bacae27892abc54e9ae0`；RC001 核对图为 `c9c878b10863f55c57044850171d3cbba40f23501b692c93e14772835ebb7359`。
+- 苹果遥控器四张按同一顺序的 SHA-256 为 `64abc5ac95173ac16d6bc083b6224843dc1903419c88234eb2d4fd7bd4f538bc`、`9ecf2a2227e53c76ff4def9b6c3e22ad55b3dd1ccbe7fec3ed6324a48c280046`、`5f6ccdedbc4f8e113055fed67efd097a7a42f24890f4938b5e6c8882fd90abb8`、`61223ecc0264a1277a316205024e5d82b88e885b49e8608866a7c51794c729a6`。
+- 缩放核对图 SHA-256 为小米 `ecdc073df0526934a3a161a158b071de3e3bc65a019464c868151d7796f59bc8`、苹果 `0e29d86b7cdcb40cfae7cb7ffbb404ed7b24466dbe57bea10b89a5101cd090d1`。原始字节保存在仓库外目录 `/Users/andy/SayAllEvidence/onboarding-remote-pairing-animation-20261120/`，索引见 [`Screenshots/2026-11-20-onboarding-remote-pairing-animation/manifest.json`](../Screenshots/2026-11-20-onboarding-remote-pairing-animation/manifest.json)。
+- 动画在连接成功后的停止、真实窗口流畅度、减弱动态效果、苹果遥控器英文五步卡的既有裁切、iPhone / Web 连接页布局和真实遥控器现场均未在本轮验证。
+
+## 语音测试松键结束判定修复（2026-11-19）
+
+适用版本为包含本修改的 `main` 或对应候选；验证分支为 `fix/onboarding-voice-test-end-20261119`。影响分类为 Onboarding 流程行为变化：`voiceTest` 松键后必须结束本次尝试并进入文字等待，不改变页面布局、文案或音频链路。
+
+### 自动化与构建
+
+- `./scripts/test.sh`：通过，`RESULT passed=50 failed=0`；新增的语音流策略断言通过，应用 `swift build --disable-keychain` 成功。
+- `xcrun swift test --disable-keychain --filter OnboardingFlowTests`：本机仅安装 Command Line Tools，缺少完整 XCTest 和 Testing/Foundation cross-import overlay，未能运行；该用例由 CI 执行。
+- `SAYALL_PRIVATE_PLATFORM_MODE=public ./scripts/build-app.sh`：通过（`Build complete! (163.34s)`，`SANITIZE RELEASE PATHS result=passed`，ad-hoc 签名）。
+- CI：Public Swift tests and dual-architecture build、Apple Silicon、Intel Ventura、Repository governance 全部通过。运行：https://github.com/HD838A/remote-mic-app/actions/runs/44472820670
+- 回归覆盖点：`isStreaming=false` 且来源已清空时仍执行 `endVoiceAttempt()`；开始语音仍要求来源被接受；未开始的松键事件不产生动作。
+
+### 生产页面检查与截图
+
+- 本修复不改变静态布局，但属于 Onboarding 流程行为变化。按门禁仍需覆盖 `voiceTest` 页面的完成流程截图（中英文、浅色/深色），并在 PR 附件或持久链接提供。
+- 在截图和真机验收补齐前，PR 保持 Draft，不标记 Ready。
+
+### 真实设备验收
+
+- 使用小米 RC003 或 RC001、`MiRemoteV 2ch` 和微信输入法完成一次真实语音测试。
+- 预期：松键后侧边“语音键已按下并松开”完成，外部工具文字出现，页面允许进入 `controls`。
+- 失败判定：日志仍显示 `ONBOARDING TRANSCRIPT_TARGET ... phase=recording`，或侧边第一项不完成，或应用不进入文字等待。
+- 2026-11-19 实测（Build 176）：attempt 1 通过，`audio_received/scheduled/played=20400`，`focus_loss_count=0`，`transcript_wait_ms=728`；随后 `controls` 和 `complete` 通过，Onboarding 完成。该构建使用与 PR 相同行为修复的最小补丁；策略重构由 CI 覆盖。
+- 2026-11-21 已合入 `main`（合并提交 `08e0dae5`）。独立 build 413 在 RC003 上复验通过，证据见该 Bug 记录。
+
+### 验证边界
+
+- 单元测试只证明状态转换策略；真实遥控器信号、微信输入法上屏时机、权限变化和完整 Onboarding 旅程仍需真机验收。
+- 模拟事件、单元测试和构建不能替代真实遥控器与第三方输入法的文字上屏证据。
+
 ## 小米遥控器型号拆分与输入法指引更新（2026-11-18）
 
 适用版本为包含本修改的 `main` 或对应候选；验证分支为 `codex/onboarding-remote-models-20261118`。影响分类为控制来源选择、能力门禁、共享布局和工具页右栏内容变化。
