@@ -5105,7 +5105,9 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     private func registerBluetoothBridgeIfNeeded(_ bridge: XiaomiBluetoothBridge) -> UUID? {
         guard let identifier = bluetoothIdentifier(for: bridge) else { return nil }
         let existingProfileID = settings.profileID(forBluetoothIdentifier: identifier)
+        let profileCount = settings.remoteDeviceProfiles.count
         let profileID = existingProfileID ?? settings.registerBluetoothRemote(identifier: identifier)
+        let profileCreated = settings.remoteDeviceProfiles.count > profileCount
         if discoveryBluetoothBridge === bridge {
             discoveryBluetoothBridge = nil
             bluetoothBridges[identifier] = bridge
@@ -5116,7 +5118,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         applyPendingRemoteTelemetry(identifier: identifier, profileID: profileID)
         AppLogger.shared.write(
             "REMOTE PROFILE phase=completed result=persisted reason=verified_remote_path " +
-                "created=\(existingProfileID == nil)"
+                "created=\(profileCreated)"
         )
         return profileID
     }

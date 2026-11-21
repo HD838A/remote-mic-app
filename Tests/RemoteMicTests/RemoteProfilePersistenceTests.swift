@@ -865,6 +865,56 @@ struct RemoteProfilePersistenceTests {
         #expect(first.mappings.parsedButtonBindings[.menu] == .openCodex)
     }
 
+    @Test func bleRegistrationKeepsTheMatchingHIDFirstProfileAndItsMappings() throws {
+        let scope = try Self.scopedSettings("ble-hid-first-verified")
+        defer { scope.tearDown() }
+        let settings = scope.settings
+        let identifier = UUID()
+        let hid = settings.registerHIDRemote(
+            fingerprint: RemoteIdentityFingerprint.fingerprint(for: identifier)
+        )
+        settings.selectRemoteProfile(hid)
+        settings.setAction(.openCodex, for: .menu)
+
+        let ble = settings.registerBluetoothRemote(identifier: identifier)
+        settings.updateRemoteProfileModel(ble, model: .rc003)
+
+        #expect(ble == hid)
+        #expect(settings.remoteDeviceProfiles.count == 1)
+        #expect(settings.selectedRemoteProfile?.model == .rc003)
+        #expect(settings.action(for: .menu) == .openCodex)
+        #expect(settings.registerBluetoothRemote(identifier: identifier) == hid)
+    }
+
+    @Test func splitUnknownHIDProfileUsesTheLiveMatchingBLEModel() throws {
+        let scope = try Self.scopedSettings("hid-first-existing-split")
+        defer { scope.tearDown() }
+        let identifier = UUID()
+        let hid = RemoteDeviceProfile(
+            hidFingerprint: RemoteIdentityFingerprint.fingerprint(for: identifier),
+            mappings: RemoteDeviceMappings(buttonBindings: [.menu: .openCodex],
+                                           buttonShortcuts: [:], secondaryButtonBindings: [:])
+        )
+        let ble = RemoteDeviceProfile(
+            model: .rc003,
+            bluetoothIdentifier: identifier,
+            mappings: RemoteDeviceMappings(buttonBindings: AppSettings.defaultBindings,
+                                           buttonShortcuts: [:], secondaryButtonBindings: [:])
+        )
+        scope.defaults.set(try JSONEncoder().encode([hid, ble]), forKey: "remoteDeviceProfiles")
+        let settings = AppSettings(defaults: scope.defaults)
+        settings.selectRemoteProfile(hid.id)
+
+        #expect(settings.reconcileComplementaryRemoteProfiles(
+            connectedProfileIDs: [ble.id], activeHIDProfileIDs: [hid.id]
+        )[ble.id] == hid.id)
+        #expect(settings.remoteDeviceProfiles.count == 1)
+        #expect(settings.selectedRemoteProfile?.model == .rc003)
+        #expect(settings.action(for: .menu) == .openCodex)
+        #expect(settings.restoreMergedRemoteProfilesBackup())
+        #expect(settings.remoteDeviceProfiles.count == 2)
+    }
+
     @Test func bleRegistrationDoesNotAdoptAnotherRemotesHIDProfile() throws {
         let scope = try Self.scopedSettings("ble-hid-adoption")
         defer { scope.tearDown() }

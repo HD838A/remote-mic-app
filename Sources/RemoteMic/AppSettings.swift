@@ -1917,6 +1917,15 @@ final class AppSettings: ObservableObject {
         if let existing = remoteDeviceProfiles.first(where: { $0.bluetoothIdentifier == identifier }) {
             return existing.id
         }
+        if let index = hidOnlyProfileIndex(matching: identifier) {
+            preserveRemoteProfilesBeforeMerge()
+            remoteDeviceProfiles[index].bluetoothIdentifier = identifier
+            AppLogger.shared.write(
+                "SETTINGS REMOTE_PROFILE_PAIR phase=completed result=linked " +
+                    "reason=hid_fingerprint_match"
+            )
+            return remoteDeviceProfiles[index].id
+        }
         // 只收养完全没有 HID 指纹的临时档案。已有 HID 指纹的档案可能属于另一只
         // 同型号遥控器，不能仅凭「型号未知」就把蓝牙标识写进去。
         if let index = remoteDeviceProfiles.firstIndex(where: {
@@ -1931,6 +1940,19 @@ final class AppSettings: ObservableObject {
         )
         remoteDeviceProfiles.append(profile)
         return profile.id
+    }
+
+    private func hidOnlyProfileIndex(matching identifier: UUID) -> Int? {
+        let fingerprints = RemoteIdentityFingerprint.candidates(for: identifier)
+        let matches = remoteDeviceProfiles.indices.filter { index in
+            remoteDeviceProfiles[index].hidFingerprint.map(fingerprints.contains) == true
+        }
+        guard matches.count == 1, let index = matches.first else { return nil }
+        let profile = remoteDeviceProfiles[index]
+        guard profile.bluetoothIdentifier == nil, !profile.model.usesPrivateAdapter else {
+            return nil
+        }
+        return index
     }
 
     /// 将同一物理设备的新 CoreBluetooth identifier 写回已有档案。
@@ -2428,7 +2450,17 @@ final class AppSettings: ObservableObject {
     ) -> [UUID: UUID] {
         var replacements: [UUID: UUID] = [:]
         for model in [XiaomiRemoteModel.rc001, .rc003] {
-            let group = remoteDeviceProfiles.filter { $0.model == model }
+            var group = remoteDeviceProfiles.filter { $0.model == model }
+            // HID reports do not identify a Xiaomi model. A connected BLE-only record can
+            // supply it when the system identity uniquely matches the existing HID record.
+            if group.count == 1, let ble = group.first,
+               ble.hidFingerprint == nil, connectedProfileIDs.contains(ble.id),
+               let identifier = ble.bluetoothIdentifier,
+               let index = hidOnlyProfileIndex(matching: identifier),
+               remoteDeviceProfiles[index].model == .unknown,
+               activeHIDProfileIDs.contains(remoteDeviceProfiles[index].id) {
+                group.append(remoteDeviceProfiles[index])
+            }
             let hidOnly = group.filter {
                 $0.hidFingerprint != nil && $0.bluetoothIdentifier == nil
             }
@@ -2534,12 +2566,20 @@ final class AppSettings: ObservableObject {
                 continue
             }
             guard let hid = hidOnly.first, let ble = bleOnly.first,
-                  Self.complementaryProfilesMayDescribeTheSameRemote(hid, ble)
+                  Self.complementaryProfilesMayDescribeTheSameRemote(
+                      hid,
+                      ble,
+                      fingerprintMatches: ble.bluetoothIdentifier
+                          .flatMap(hidOnlyProfileIndex(matching:))
+                          .map { remoteDeviceProfiles[$0].id == hid.id } == true
+                  )
             else {
                 logSkip("identity_or_name_conflict")
                 continue
             }
-            guard !Self.remoteMappingsConflict(hid.mappings, ble.mappings) else {
+            guard !unifiedBaseBindings.contains(where: { $0.remoteProfileID == ble.id }),
+                  !Self.remoteMappingsConflict(hid.mappings, ble.mappings)
+            else {
                 logSkip("conflicting_mappings")
                 continue
             }
@@ -2574,7 +2614,8 @@ final class AppSettings: ObservableObject {
     /// their model and identifier shapes complement each other.
     private static func complementaryProfilesMayDescribeTheSameRemote(
         _ hid: RemoteDeviceProfile,
-        _ ble: RemoteDeviceProfile
+        _ ble: RemoteDeviceProfile,
+        fingerprintMatches: Bool
     ) -> Bool {
         // 互补形状只能说明「可能是一台设备的两种传输」，不能证明是同一台物理设备。
         // 没有双方一致的稳定身份时保持两条档案，避免两只同型号遥控器共用映射。
@@ -2582,10 +2623,10 @@ final class AppSettings: ObservableObject {
             ?? RemoteDeviceIdentity.legacyToken(storedName: hid.customName)
         let bleIdentity = ble.hardwareIdentity
             ?? RemoteDeviceIdentity.legacyToken(storedName: ble.customName)
-        guard let hidIdentity, !hidIdentity.isEmpty,
-              let bleIdentity, !bleIdentity.isEmpty,
-              hidIdentity == bleIdentity
-        else { return false }
+        if let hidIdentity, let bleIdentity, hidIdentity != bleIdentity { return false }
+        guard fingerprintMatches || (hidIdentity?.isEmpty == false && hidIdentity == bleIdentity) else {
+            return false
+        }
         let hidName = hid.lastKnownBluetoothName?
             .trimmingCharacters(in: .whitespacesAndNewlines)
         let bleName = ble.lastKnownBluetoothName?
