@@ -448,6 +448,7 @@ final class AppSettings: ObservableObject {
     var configuredActionOverride: ((UUID?, RemoteButton, ButtonTrigger) -> ConfiguredButtonAction?)?
     @Published var unifiedBaseBindings: [UnifiedButtonBinding] = [] {
         didSet {
+            guard !isLoadingStoredSettings else { return }
             onInteractionModeChanged?(selectedRemoteProfileID)
             if let data = try? JSONEncoder().encode(unifiedBaseBindings) {
                 defaults.set(data, forKey: "unifiedBaseBindings")
@@ -1297,6 +1298,11 @@ final class AppSettings: ObservableObject {
             buttonRapidPressEnabled: buttonRapidPressEnabled,
             interactionSettings: interactionSettings
         )
+        unifiedBaseBindings = Self.decodeSetting(
+            [UnifiedButtonBinding].self, forKey: "unifiedBaseBindings",
+            from: defaults, corrupted: &corruptedKeys
+        ) ?? []
+        let scopedBindingsReadable = !corruptedKeys.contains("unifiedBaseBindings")
         let storedRemoteProfilesData = defaults.data(forKey: Keys.remoteDeviceProfiles)
         if
             let decoded = Self.decodeSetting(
@@ -1308,7 +1314,13 @@ final class AppSettings: ObservableObject {
             !decoded.isEmpty
         {
             let savedID = defaults.string(forKey: Keys.selectedRemoteProfileID).flatMap(UUID.init(uuidString:))
-            let deduplicated = Self.deduplicateRemoteProfiles(decoded, selectedProfileID: savedID)
+            let deduplicated = Self.deduplicateRemoteProfiles(
+                decoded,
+                selectedProfileID: savedID,
+                protectedProfileIDs: protectedRemoteProfileIDs(
+                    in: decoded, scopedBindingsReadable: scopedBindingsReadable
+                )
+            )
             if defaults.data(forKey: "buttonInteractionMigrationBackup") == nil,
                let original = defaults.data(forKey: Keys.remoteDeviceProfiles) {
                 defaults.set(original, forKey: "buttonInteractionMigrationBackup")
@@ -1399,10 +1411,6 @@ final class AppSettings: ObservableObject {
             enabled: experimentalContinuousRecordingEnabled,
             backup: continuousRecordingPowerBindingBackup
         )
-        if let data = defaults.data(forKey: "unifiedBaseBindings") {
-            do { unifiedBaseBindings = try JSONDecoder().decode([UnifiedButtonBinding].self, from: data) }
-            catch { corruptedKeys.append("unifiedBaseBindings") }
-        }
         corruptedSettingKeys = corruptedKeys
         if unreadableStoredRemoteProfiles == nil,
            let data = try? JSONEncoder().encode(remoteDeviceProfiles) {
@@ -1981,11 +1989,25 @@ final class AppSettings: ObservableObject {
         if let existing = remoteDeviceProfiles.first(where: { $0.hidFingerprint == fingerprint }) {
             return existing.id
         }
-        let selectedUnboundIndex = remoteDeviceProfiles.firstIndex(where: {
-            $0.id == selectedRemoteProfileID && $0.hidFingerprint == nil
-        })
-        if let index = selectedUnboundIndex ?? remoteDeviceProfiles.firstIndex(where: {
-            $0.hidFingerprint == nil && $0.bluetoothIdentifier == nil
+        let matches = remoteDeviceProfiles.indices.filter { index in
+            let profile = remoteDeviceProfiles[index]
+            guard !profile.model.usesPrivateAdapter, let identifier = profile.bluetoothIdentifier else {
+                return false
+            }
+            return RemoteIdentityFingerprint.candidates(for: identifier).contains(fingerprint)
+        }
+        if matches.count == 1, let index = matches.first,
+           remoteDeviceProfiles[index].hidFingerprint == nil {
+            preserveRemoteProfilesBeforeMerge()
+            remoteDeviceProfiles[index].hidFingerprint = fingerprint
+            AppLogger.shared.write(
+                "SETTINGS REMOTE_PROFILE_PAIR phase=completed result=linked " +
+                    "reason=bluetooth_identifier_match"
+            )
+            return remoteDeviceProfiles[index].id
+        }
+        if let index = remoteDeviceProfiles.firstIndex(where: {
+            !$0.model.usesPrivateAdapter && $0.hidFingerprint == nil && $0.bluetoothIdentifier == nil
         }) {
             remoteDeviceProfiles[index].hidFingerprint = fingerprint
             return remoteDeviceProfiles[index].id
@@ -2117,6 +2139,26 @@ final class AppSettings: ObservableObject {
         var removedCount: Int { replacements.count }
     }
 
+    var privateRemoteProfileReferences: (() -> Set<UUID>?)?
+
+    private func protectedRemoteProfileIDs(
+        in profiles: [RemoteDeviceProfile], scopedBindingsReadable: Bool
+    ) -> Set<UUID> {
+        guard scopedBindingsReadable else { return Set(profiles.map(\.id)) }
+        let local = Set(unifiedBaseBindings.compactMap(\.remoteProfileID))
+        #if canImport(SayAllButtonProfiles) || canImport(SayAllMacroRemoteMic)
+        // The production stores load after AppSettings. Preserve every possible
+        // owner until the components can supply an authoritative reference list.
+        if defaults === UserDefaults.standard {
+            guard let references = privateRemoteProfileReferences?() else {
+                return Set(profiles.map(\.id))
+            }
+            return local.union(references)
+        }
+        #endif
+        return local
+    }
+
     /// 把同一台遥控器的重复档案并成一条。
     ///
     /// 去重键是 `RemoteDeviceIdentity` 给的稳定身份，不再只看 `hidFingerprint`：
@@ -2128,7 +2170,8 @@ final class AppSettings: ObservableObject {
     private static func deduplicateRemoteProfiles(
         _ profiles: [RemoteDeviceProfile],
         selectedProfileID: UUID?,
-        preferredProfileIDs: Set<UUID> = []
+        preferredProfileIDs: Set<UUID> = [],
+        protectedProfileIDs: Set<UUID> = []
     ) -> RemoteProfileDeduplicationResult {
         var result: [RemoteDeviceProfile] = []
         var indicesByIdentity: [String: Int] = [:]
@@ -2158,14 +2201,28 @@ final class AppSettings: ObservableObject {
                 result.append(profile)
                 continue
             }
-            let keepExisting = Self.shouldKeepRemoteProfile(
-                existing,
-                over: profile,
-                selectedProfileID: selectedProfileID,
-                preferredProfileIDs: preferredProfileIDs
-            )
+            let existingProtected = protectedProfileIDs.contains(existing.id)
+            let candidateProtected = protectedProfileIDs.contains(profile.id)
+            let keepExisting = existingProtected != candidateProtected
+                ? existingProtected
+                : Self.shouldKeepRemoteProfile(
+                    existing,
+                    over: profile,
+                    selectedProfileID: selectedProfileID,
+                    preferredProfileIDs: preferredProfileIDs
+                )
             let kept = keepExisting ? existing : profile
             let discarded = keepExisting ? profile : existing
+            if protectedProfileIDs.contains(discarded.id) ||
+                (preferredProfileIDs.contains(discarded.id) && protectedProfileIDs.contains(kept.id)) {
+                conflictedIdentities.insert(identity)
+                result.append(profile)
+                AppLogger.shared.write(
+                    "SETTINGS REMOTE_PROFILES phase=completed result=merge_skipped " +
+                        "reason=scoped_bindings_preserved"
+                )
+                continue
+            }
             result[existingIndex] = Self.mergingRemoteProfile(kept, with: discarded)
             replacements[discarded.id] = kept.id
             // 选中项可能落在被并掉的那条上，跟着搬到留下的那条。
@@ -2407,7 +2464,11 @@ final class AppSettings: ObservableObject {
         let result = Self.deduplicateRemoteProfiles(
             remoteDeviceProfiles,
             selectedProfileID: selectedRemoteProfileID,
-            preferredProfileIDs: preferredProfileIDs
+            preferredProfileIDs: preferredProfileIDs,
+            protectedProfileIDs: protectedRemoteProfileIDs(
+                in: remoteDeviceProfiles,
+                scopedBindingsReadable: !corruptedSettingKeys.contains("unifiedBaseBindings")
+            )
         )
         guard !result.replacements.isEmpty else { return [:] }
         preserveRemoteProfilesBeforeMerge()
@@ -2448,6 +2509,10 @@ final class AppSettings: ObservableObject {
         connectedProfileIDs: Set<UUID> = [],
         activeHIDProfileIDs: Set<UUID> = []
     ) -> [UUID: UUID] {
+        let protectedProfileIDs = protectedRemoteProfileIDs(
+            in: remoteDeviceProfiles,
+            scopedBindingsReadable: !corruptedSettingKeys.contains("unifiedBaseBindings")
+        )
         var replacements: [UUID: UUID] = [:]
         for model in [XiaomiRemoteModel.rc001, .rc003] {
             var group = remoteDeviceProfiles.filter { $0.model == model }
@@ -2519,7 +2584,9 @@ final class AppSettings: ObservableObject {
                     logSkip("identity_mismatch")
                     continue
                 }
-                guard Self.defaultBLEOnlyDuplicateIsSafeToRemove(bleProfile) else {
+                guard !protectedProfileIDs.contains(bleProfile.id),
+                      Self.defaultBLEOnlyDuplicateIsSafeToRemove(bleProfile)
+                else {
                     logSkip("ble_duplicate_has_user_data")
                     continue
                 }
@@ -2577,7 +2644,7 @@ final class AppSettings: ObservableObject {
                 logSkip("identity_or_name_conflict")
                 continue
             }
-            guard !unifiedBaseBindings.contains(where: { $0.remoteProfileID == ble.id }),
+            guard !protectedProfileIDs.contains(ble.id),
                   !Self.remoteMappingsConflict(hid.mappings, ble.mappings)
             else {
                 logSkip("conflicting_mappings")
