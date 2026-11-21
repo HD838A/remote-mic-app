@@ -42,20 +42,17 @@
 
 下一次零报告到达时，`released = activeUsages - usages` 已经为空，松键无法被识别。`repeatSingle` 的计时器只在释放交互时取消，因此计时器继续每 100 ms 执行一次单击动作，表现为“按一下音量，音量一直加”。
 
-同一路径还导致选中设备跟随按下键跳动，而不是只由用户选择。
-
 ## 修复
 
-- 物理按键执行动作时不再改变当前选中设备。只有当前没有选中设备、首次建立显示目标时才自动选择。
 - `cancelMappingInteractions` 保留物理边沿状态：`activeUsages`、`nativePassthroughUsages`、按下/释放时间戳和当前按键显示；仍取消交互、重复计时器、App 切换器会话和手势识别。
 - 新增诊断日志，记录映射取消时保留的物理边沿数量。
+- 不改变现有“按键解析到其他档案时自动选中该档案”的产品行为；本修复只保证选中变化引发的映射重载不会伪造按键释放。
 
 ## 验证
 
 自动化：
 
 - `mappingResetWhileVolumeKeyIsHeldDoesNotLeaveRepeatRunning`：按住音量键期间调用 `cancelMappingInteractions()`，500 ms 前确有重复；零报告后继续推进 1 秒，动作数不再增加。修复前该测试得到 3 次动作后继续增长到 13 次，修复后保持 3 次。
-- `rawButtonPressOnlySelectsProfileWhenNoneIsSelected`：已有选中设备时不自动选择，只有空选中状态才建立首个目标。
 - 公开宿主构建与目标测试通过，命令记录在交付说明中。
 
 待现场验证：

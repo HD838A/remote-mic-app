@@ -883,15 +883,6 @@ struct RemoteButtonsTests {
         #expect(performedActions.count == actionsBeforeRelease)
     }
 
-    @Test func rawButtonPressOnlySelectsProfileWhenNoneIsSelected() {
-        #expect(!BridgeAppModel.shouldSelectProfileForRawButtonPress(
-            selectedProfileID: UUID()
-        ))
-        #expect(BridgeAppModel.shouldSelectProfileForRawButtonPress(
-            selectedProfileID: nil
-        ))
-    }
-
     @Test func stableReleaseDiagnosticsSeparateDeviceBounceFromSwallowedPress() throws {
         final class Clock {
             var milliseconds: UInt64 = 0
