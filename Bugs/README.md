@@ -1,5 +1,6 @@
 # Bug 记录
 
+- [双传输档案旁多出默认 BLE 档案导致卡片常驻“状态确认中”](./2026-11-21-card-confirming-both-ble-duplicate.md)
 - [切换遥控器后残留上一台设备的按键编辑区](./2026-11-20-mapping-remote-switch-stale-editor.md)
 - [重新配对后 HID 指纹与 BLE identifier 分裂，遥控器语音链路永久超时](./2026-11-21-stale-bluetooth-identity-after-repair.md)
 - [连接页扫描逐设备写忽略日志导致主线程 BLE 风暴](./2026-11-21-ble-discovery-main-thread-storm.md)

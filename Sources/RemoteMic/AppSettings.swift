@@ -2460,6 +2460,63 @@ final class AppSettings: ObservableObject {
                 logSkip("group_count")
                 continue
             }
+            if hidOnly.isEmpty, both.count == 1, bleOnly.count == 1,
+               let bothProfile = both.first, let bleProfile = bleOnly.first {
+                // An older BLE registration can leave a default BLE-only record next to the
+                // profile that already owns both transports. The connected BLE identifier must
+                // hash to the both-profile HID fingerprint; only then is the split identity
+                // proven. The default-field check only proves removal cannot lose user data.
+                let bothLive = selectedRemoteProfileID == bothProfile.id
+                    || activeHIDProfileIDs.contains(bothProfile.id)
+                guard bothLive else {
+                    logSkip("both_not_live_or_selected")
+                    continue
+                }
+                guard !connectedProfileIDs.contains(bothProfile.id) else {
+                    logSkip("both_ble_connected")
+                    continue
+                }
+                guard connectedProfileIDs.contains(bleProfile.id) else {
+                    logSkip("ble_not_connected")
+                    continue
+                }
+                guard Self.bluetoothIdentifierMatchesHIDFingerprint(
+                    bleProfile,
+                    bothProfile
+                ) else {
+                    logSkip("identity_mismatch")
+                    continue
+                }
+                guard Self.defaultBLEOnlyDuplicateIsSafeToRemove(bleProfile) else {
+                    logSkip("ble_duplicate_has_user_data")
+                    continue
+                }
+                let merged = Self.mergingDefaultBLEDuplicate(into: bothProfile, from: bleProfile)
+                guard let index = remoteDeviceProfiles.firstIndex(where: {
+                    $0.id == bothProfile.id
+                }) else {
+                    continue
+                }
+                preserveRemoteProfilesBeforeMerge()
+                let previousSelectedID = selectedRemoteProfileID
+                remoteDeviceProfiles[index] = merged
+                remoteDeviceProfiles.removeAll { $0.id == bleProfile.id }
+                if previousSelectedID == bleProfile.id {
+                    selectRemoteProfile(
+                        bothProfile.id,
+                        persistSelection: !selectedRemoteProfileIsTransient
+                    )
+                } else if previousSelectedID == bothProfile.id {
+                    loadRemoteProfileMappings(merged)
+                }
+                replacements[bleProfile.id] = bothProfile.id
+                AppLogger.shared.write(
+                    "SETTINGS REMOTE_PROFILE_PAIR phase=completed result=merged " +
+                        "model=\(model.rawValue) kept=both " +
+                        "reason=default_ble_duplicate_identity_match"
+                )
+                continue
+            }
             guard hidOnly.count == 1 else {
                 logSkip("hid_only_count")
                 continue
@@ -2542,6 +2599,72 @@ final class AppSettings: ObservableObject {
             return false
         }
         return true
+    }
+
+    /// The system BLE identifier and the HID `PhysicalDeviceUniqueID` can be the same UUID.
+    /// HID profiles store its SHA-256; hashing the BLE identifier with the same rule proves the
+    /// two records describe one physical remote before anything is removed.
+    ///
+    /// 用 `candidates` 而不是单个 `fingerprint`：HID 侧哈希的是系统属性的原始字面量，
+    /// 大小写不保证；身份同步路径（`BridgeAppModel.reconcileStaleRemoteIdentity`）已经
+    /// 同时接受两个变体，这里必须用同一套判定，否则同一个分裂档案会在一条路径上能修、
+    /// 在另一条路径上静默不修。
+    private static func bluetoothIdentifierMatchesHIDFingerprint(
+        _ ble: RemoteDeviceProfile,
+        _ both: RemoteDeviceProfile
+    ) -> Bool {
+        guard let identifier = ble.bluetoothIdentifier,
+              let hidFingerprint = both.hidFingerprint
+        else { return false }
+        return RemoteIdentityFingerprint.candidates(for: identifier).contains(hidFingerprint)
+    }
+
+    /// Identity match proves which two records belong together; this guard proves removing the
+    /// BLE-only record cannot discard user edits. The one allowed non-nil field is the migration
+    /// marker that older builds wrote to every profile.
+    private static func defaultBLEOnlyDuplicateIsSafeToRemove(
+        _ ble: RemoteDeviceProfile
+    ) -> Bool {
+        guard ble.customName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else { return false }
+        let mappings = ble.mappings
+        guard mappings.buttonBindings.count == defaultBindings.count,
+              mappings.parsedButtonBindings == defaultBindings,
+              mappings.buttonShortcuts.isEmpty,
+              (mappings.buttonApplicationProfileIDs ?? [:]).isEmpty,
+              mappings.secondaryButtonBindings.isEmpty,
+              (mappings.buttonRapidPressEnabled ?? [:]).isEmpty,
+              interactionSettingsAreMigrationOnly(mappings.interactionSettings)
+        else { return false }
+        return true
+    }
+
+    private static func interactionSettingsAreMigrationOnly(
+        _ settings: RemoteButtonInteractionSettings?
+    ) -> Bool {
+        guard let settings else { return true }
+        guard settings.isWellFormed,
+              settings.doubleClickMilliseconds == 300,
+              settings.longPressMilliseconds == 550
+        else { return false }
+        let migrated = Set(settings.migratedRepeatButtons ?? [])
+        guard Set(settings.modes.keys) == migrated else { return false }
+        return settings.modes.values.allSatisfy {
+            $0 == RemoteButtonHoldMode.repeatSingle.rawValue
+        }
+    }
+
+    private static func mergingDefaultBLEDuplicate(
+        into both: RemoteDeviceProfile,
+        from ble: RemoteDeviceProfile
+    ) -> RemoteDeviceProfile {
+        var merged = both
+        merged.bluetoothIdentifier = ble.bluetoothIdentifier
+        if merged.lastKnownBluetoothName?
+            .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false {
+            merged.lastKnownBluetoothName = ble.lastKnownBluetoothName
+        }
+        return merged
     }
 
     func updateRemoteProfileModel(_ profileID: UUID, model: XiaomiRemoteModel) {
