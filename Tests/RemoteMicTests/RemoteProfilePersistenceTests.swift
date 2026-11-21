@@ -129,6 +129,37 @@ struct RemoteProfilePersistenceTests {
         return (bothID, bleID, bothBluetoothIdentifier, bleBluetoothIdentifier)
     }
 
+    @MainActor
+    @Test(arguments: [true, false])
+    func lateHIDReadyReconcilesAnAlreadyConnectedBLECard(hidStillReady: Bool) async throws {
+        let scope = try Self.scopedSettings("late-hid-ready")
+        defer { scope.tearDown() }
+        let ids = try Self.seedBothProfileAndDefaultBLEDuplicate(in: scope)
+        let settings = AppSettings(defaults: scope.defaults)
+        let model = BridgeAppModel(settings: settings)
+        let bridge = Self.bridge(ids.bleBluetoothIdentifier, settings: settings, delegate: model)
+        let originalMappings = try #require(settings.remoteDeviceProfiles.first { $0.id == ids.both }).mappings
+
+        model.bluetoothBridge(bridge, didChange: .ready("Test 2 Pro"))
+        #expect(model.isRemoteConnected(ids.ble))
+        #expect(!model.isRemoteConnected(ids.both))
+
+        model.recordHIDButtonStatus(LocalizedMessage("button_mapping.status.connected_fallback"), profileID: ids.both)
+        if !hidStillReady {
+            model.recordHIDButtonStatus(LocalizedMessage("button_mapping.status.searching"), profileID: ids.both)
+        }
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            DispatchQueue.main.async { continuation.resume() }
+        }
+
+        #expect(model.isRemoteConnected(ids.ble) == !hidStillReady)
+        #expect(model.isRemoteConnected(ids.both) == hidStillReady)
+        #expect(model.remoteButtonReadiness[ids.both] == (hidStillReady ? .ready : .checking))
+        #expect(settings.remoteDeviceProfiles.count == (hidStillReady ? 1 : 2))
+        #expect(settings.remoteDeviceProfiles.first { $0.id == ids.both }?.mappings == originalMappings)
+        #expect(settings.selectedRemoteProfileID == (hidStillReady ? ids.both : ids.ble))
+    }
+
     @Test func defaultBLEOnlyDuplicateBesideBothProfileIsMerged() throws {
         let scope = try Self.scopedSettings("both-ble-default-duplicate")
         defer { scope.tearDown() }
@@ -863,6 +894,128 @@ struct RemoteProfilePersistenceTests {
         #expect(second.mappings.parsedButtonShortcuts.isEmpty)
         let first = try #require(settings.remoteDeviceProfiles.first(where: { $0.id == firstID }))
         #expect(first.mappings.parsedButtonBindings[.menu] == .openCodex)
+    }
+
+    @Test func bleRegistrationKeepsTheMatchingHIDFirstProfileAndItsMappings() throws {
+        let scope = try Self.scopedSettings("ble-hid-first-verified")
+        defer { scope.tearDown() }
+        let settings = scope.settings
+        let identifier = UUID()
+        let hid = settings.registerHIDRemote(
+            fingerprint: RemoteIdentityFingerprint.fingerprint(for: identifier)
+        )
+        settings.selectRemoteProfile(hid)
+        settings.setAction(.openCodex, for: .menu)
+
+        let ble = settings.registerBluetoothRemote(identifier: identifier)
+        settings.updateRemoteProfileModel(ble, model: .rc003)
+
+        #expect(ble == hid)
+        #expect(settings.remoteDeviceProfiles.count == 1)
+        #expect(settings.selectedRemoteProfile?.model == .rc003)
+        #expect(settings.action(for: .menu) == .openCodex)
+        #expect(settings.registerBluetoothRemote(identifier: identifier) == hid)
+    }
+
+    @Test func splitUnknownHIDProfileUsesTheLiveMatchingBLEModel() throws {
+        let scope = try Self.scopedSettings("hid-first-existing-split")
+        defer { scope.tearDown() }
+        let identifier = UUID()
+        let hid = RemoteDeviceProfile(
+            hidFingerprint: RemoteIdentityFingerprint.fingerprint(for: identifier),
+            mappings: RemoteDeviceMappings(buttonBindings: [.menu: .openCodex],
+                                           buttonShortcuts: [:], secondaryButtonBindings: [:])
+        )
+        let ble = RemoteDeviceProfile(
+            model: .rc003,
+            bluetoothIdentifier: identifier,
+            mappings: RemoteDeviceMappings(buttonBindings: AppSettings.defaultBindings,
+                                           buttonShortcuts: [:], secondaryButtonBindings: [:])
+        )
+        scope.defaults.set(try JSONEncoder().encode([hid, ble]), forKey: "remoteDeviceProfiles")
+        let settings = AppSettings(defaults: scope.defaults)
+        settings.selectRemoteProfile(hid.id)
+
+        #expect(settings.reconcileComplementaryRemoteProfiles(
+            connectedProfileIDs: [ble.id], activeHIDProfileIDs: [hid.id]
+        )[ble.id] == hid.id)
+        #expect(settings.remoteDeviceProfiles.count == 1)
+        #expect(settings.selectedRemoteProfile?.model == .rc003)
+        #expect(settings.action(for: .menu) == .openCodex)
+        #expect(settings.restoreMergedRemoteProfilesBackup())
+        #expect(settings.remoteDeviceProfiles.count == 2)
+    }
+
+    @Test func hidRegistrationUsesVerifiedBLEIdentityInsteadOfTheSelectedRemote() throws {
+        let scope = try Self.scopedSettings("hid-matches-ble")
+        defer { scope.tearDown() }
+        let settings = scope.settings
+        let firstIdentifier = UUID()
+        let secondIdentifier = UUID()
+        let first = settings.registerBluetoothRemote(identifier: firstIdentifier)
+        let second = settings.registerBluetoothRemote(identifier: secondIdentifier)
+        settings.selectRemoteProfile(first)
+        settings.setAction(.openCodex, for: .menu)
+
+        let secondFingerprint = RemoteIdentityFingerprint.fingerprint(for: secondIdentifier)
+        let resolved = settings.registerHIDRemote(fingerprint: secondFingerprint)
+        #expect(resolved == second)
+        #expect(settings.selectedRemoteProfileID == first)
+        #expect(settings.remoteDeviceProfiles.first(where: { $0.id == first })?.hidFingerprint == nil)
+        #expect(settings.action(for: .menu, profileID: second) != .openCodex)
+
+        let unknown = settings.registerHIDRemote(fingerprint: "unrelated")
+        #expect(unknown != first && unknown != second)
+        #expect(settings.remoteDeviceProfiles.count == 3)
+    }
+
+    @Test func startupDedupKeepsTheOwnerOfEveryScopedBinding() throws {
+        let scope = try Self.scopedSettings("scoped-binding-dedup")
+        defer { scope.tearDown() }
+        let mappings = RemoteDeviceMappings(buttonBindings: AppSettings.defaultBindings,
+            buttonShortcuts: [:], secondaryButtonBindings: [:])
+        let owner = RemoteDeviceProfile(model: .appleSiriRemoteA2854, hidFingerprint: "older",
+            hardwareIdentity: "same", mappings: mappings)
+        let selected = RemoteDeviceProfile(model: .appleSiriRemoteA2854, hidFingerprint: "newer",
+            hardwareIdentity: "same", mappings: mappings)
+        let bindings = [RemoteMic.RemoteButton.menu, .back].map { button in
+            UnifiedButtonBinding(remoteProfileID: owner.id, button: button, trigger: .singleClick,
+                configured: ConfiguredButtonAction(action: .openCodex, shortcut: nil))
+        }
+        scope.defaults.set(try JSONEncoder().encode([owner, selected]), forKey: "remoteDeviceProfiles")
+        scope.defaults.set(try JSONEncoder().encode(bindings), forKey: "unifiedBaseBindings")
+        scope.defaults.set(selected.id.uuidString, forKey: "selectedRemoteProfileID")
+
+        for _ in 1...2 {
+            let settings = AppSettings(defaults: scope.defaults)
+            #expect(settings.remoteDeviceProfiles.map(\.id) == [owner.id])
+            #expect(settings.selectedRemoteProfileID == owner.id)
+            #expect(settings.unifiedBaseBindings == bindings)
+            for binding in bindings {
+                #expect(settings.configuredAction(for: binding.button, trigger: .singleClick,
+                                                  profileID: owner.id).action == .openCodex)
+            }
+        }
+    }
+
+    @Test func unreadableScopedBindingStoragePreservesAllCandidateProfiles() throws {
+        let scope = try Self.scopedSettings("unreadable-scoped-bindings")
+        defer { scope.tearDown() }
+        let mappings = RemoteDeviceMappings(buttonBindings: AppSettings.defaultBindings,
+            buttonShortcuts: [:], secondaryButtonBindings: [:])
+        let first = RemoteDeviceProfile(model: .rc003, hidFingerprint: "same", mappings: mappings)
+        let second = RemoteDeviceProfile(model: .rc003, hidFingerprint: "same", mappings: mappings)
+        let raw = Data("unreadable binding fixture".utf8)
+        scope.defaults.set(try JSONEncoder().encode([first, second]), forKey: "remoteDeviceProfiles")
+        scope.defaults.set(raw, forKey: "unifiedBaseBindings")
+
+        let settings = AppSettings(defaults: scope.defaults)
+        let replacements = settings.collapseDuplicateRemoteProfiles()
+        #expect(replacements.isEmpty)
+        #expect(settings.remoteDeviceProfiles.map(\.id) == [first.id, second.id])
+        #expect(settings.corruptedSettingKeys.contains("unifiedBaseBindings"))
+        #expect(scope.defaults.data(forKey: "unifiedBaseBindings") == raw)
+        #expect(scope.defaults.data(forKey: "unifiedBaseBindings.corrupt") == raw)
     }
 
     @Test func bleRegistrationDoesNotAdoptAnotherRemotesHIDProfile() throws {

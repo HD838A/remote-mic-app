@@ -137,9 +137,37 @@ struct ATVVProtocolTests {
             range: voiceStart.upperBound..<startSource.endIndex
         ))
         #expect(voiceStart.lowerBound < asyncConfiguration.lowerBound)
-        #expect(stopSource.contains("stop_before_audio_ready"))
         #expect(stopSource.contains("stop_deferred_until_audio_ready"))
         #expect(decodeSource.contains("buffered_during_configuration"))
+    }
+
+    @Test func consecutiveStreamsKeepDistinctPCMAndStopReasonsUntilPlayback() throws {
+        let first = ATVVAudioDiagnostics(operationID: 1)
+        let second = ATVVAudioDiagnostics(operationID: 2)
+        let foreign = ATVVAudioDiagnostics(operationID: 3)
+        var queue = BluetoothVoiceStartupQueue(maximumSamples: 4)
+        let firstBegan = queue.begin(first)
+        let firstPCM = queue.append([1, 2], to: first)
+        let foreignPCM = queue.append([9], to: foreign)
+        let firstStopped = queue.stop(first, reason: .remoteRelease)
+        let secondBegan = queue.begin(second)
+        let lateFirstPCM = queue.append([9], to: first)
+        let secondPCM = queue.append([3, 4], to: second)
+        let overflow = queue.append([5], to: second)
+        let secondStopped = queue.stop(second, reason: .remoteTimeout)
+        let firstQueued = queue.takeFirst()
+        let secondQueued = queue.takeFirst()
+        let firstEntry = try #require(firstQueued)
+        let secondEntry = try #require(secondQueued)
+
+        #expect(firstBegan && firstStopped && secondBegan && secondStopped)
+        #expect(firstPCM == true && secondPCM == true)
+        #expect(foreignPCM == nil && lateFirstPCM == nil && overflow == false)
+        #expect(firstEntry.diagnostic === first && firstEntry.samples == [1, 2])
+        #expect(firstEntry.stopReason == .remoteRelease)
+        #expect(secondEntry.diagnostic === second && secondEntry.samples == [3, 4])
+        #expect(secondEntry.stopReason == .remoteTimeout)
+        #expect(queue.entries.isEmpty)
     }
 
     @Test func asyncAudioConfigurationCancelsPendingVoiceStartsOnRelease() throws {

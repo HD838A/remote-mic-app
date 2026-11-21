@@ -426,6 +426,8 @@ final class ATVVAudioDiagnostics {
             "interval_basis=main_callback_processing")
     }
 
+    var awaitsOutputConfiguration = false
+
     func rejectStart(reason: String) {
         if startRejectionReason == "none" { startRejectionReason = reason }
         stop(reason: "start_rejected")
@@ -447,9 +449,13 @@ final class ATVVAudioDiagnostics {
 
     private func finishIfObserved() {
         guard !isFinalized, let stoppedAt else { return }
+        let elapsed = uptime() - stoppedAt
+        if awaitsOutputConfiguration, elapsed < Self.maximumOutputObservation {
+            schedule(0.5) { [self] in finishIfObserved() }
+            return
+        }
         let observed = playback?()
         let output = observed?.output
-        let elapsed = uptime() - stoppedAt
         let played = output.map { max(0, $0.counters.playedSamples - countersAtStart.playedSamples) }
         let scheduled = output.map { max(0, $0.counters.scheduledSamples - countersAtStart.scheduledSamples) }
         let interrupted = output.map { max(0, $0.counters.interruptedSamples - countersAtStart.interruptedSamples) }

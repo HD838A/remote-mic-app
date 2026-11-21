@@ -847,7 +847,35 @@ final class MacroFeatureIntegration: ObservableObject {
         #endif
     }
 
+    private lazy var deviceProfileInventoryLoaded: Bool = {
+        #if canImport(SayAllButtonProfiles) && SAYALL_BUTTON_PROFILE_AUTOSAVE
+        return buttonProfilesFeature.reloadMappingProfiles().success
+        #elseif canImport(SayAllButtonProfiles)
+        return false
+        #else
+        return true
+        #endif
+    }()
+
+    private func deviceScopedConfigurationReferences() -> Set<UUID>? {
+        guard deviceProfileInventoryLoaded else { return nil }
+        var references = Set<UUID>()
+        #if canImport(SayAllButtonProfiles)
+        references.formUnion(buttonProfilesFeature.allProfiles.compactMap(\.remoteProfileID))
+        #endif
+        #if canImport(SayAllMacroRemoteMic) && SAYALL_UNIFIED_BUTTON_CONFIGURATION
+        guard feature.hasLoadedLibrary else { return nil }
+        references.formUnion(feature.legacyBindings.compactMap { $0.device })
+        #elseif canImport(SayAllMacroRemoteMic)
+        return nil
+        #endif
+        return references
+    }
+
     func attachBindings(to settings: AppSettings, onProfileChange: @escaping (UUID?) -> Void) {
+        settings.privateRemoteProfileReferences = { [weak self] in
+            self?.deviceScopedConfigurationReferences()
+        }
         settings.interactionModeOverride = { [weak self, weak settings] _, button in
             guard settings?.customMappingEnabled == true else { return nil }
             return self?.profileHoldMode(button: button)

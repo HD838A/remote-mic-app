@@ -765,6 +765,12 @@ enum AudioConfigurationResult: Equatable {
 
 enum AudioConfigurationRetryPolicy {
     static let maximumAttempts = 2
+    // Keep PCM through both engine start attempts and allow one second for
+    // graph setup and queue delivery. Exceeding this bound fails the session.
+    static let bluetoothStartupBufferSampleCount = Int(
+        (AudioEngineStartCoordinator.defaultTimeout * Double(maximumAttempts) + 1) *
+            1_000 * ATVVProtocol.realTimeSamplesPerMillisecond
+    )
 
     static func shouldRetry(
         result: AudioConfigurationResult,

@@ -824,6 +824,25 @@ struct VirtualAudioConnectionLifecycleTests {
         #expect(!AudioConfigurationRetryPolicy.shouldRetry(result: .ready, afterAttempt: 1))
     }
 
+    @Test func bluetoothStartupBufferKeepsAllPCMFromBothEngineStartAttempts() {
+        var buffer = CommandVoiceActivationAudioBuffer(
+            maximumSampleCount: AudioConfigurationRetryPolicy.bluetoothStartupBufferSampleCount
+        )
+        let samplesPerAttempt = Int(
+            AudioEngineStartCoordinator.defaultTimeout * 1_000 * ATVVProtocol.realTimeSamplesPerMillisecond
+        )
+        let initialPCM = Array(repeating: Int16(101), count: samplesPerAttempt)
+        let retryPCM = Array(repeating: Int16(202), count: samplesPerAttempt)
+        buffer.begin()
+        let bufferedInitialPCM = buffer.appendIfWaiting(initialPCM)
+        let bufferedRetryPCM = buffer.appendIfWaiting(retryPCM)
+        let drainedPCM = buffer.drain()
+        let acceptedLatePCM = buffer.appendIfWaiting([303])
+        #expect(bufferedInitialPCM && bufferedRetryPCM)
+        #expect(drainedPCM == initialPCM + retryPCM)
+        #expect(!acceptedLatePCM)
+    }
+
     @Test func audioConfigurationUsesBoundedEngineStartAndLogsRetry() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
