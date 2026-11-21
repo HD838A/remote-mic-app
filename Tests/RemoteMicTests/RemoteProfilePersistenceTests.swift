@@ -1013,6 +1013,22 @@ struct RemoteProfilePersistenceTests {
         #expect(afterManualSelection.selectedRemoteProfileID == appleID)
     }
 
+    @Test func reselectingCurrentProfileDoesNotCancelButtonInteractions() throws {
+        let scope = try Self.scopedSettings("reselect-current-profile")
+        defer { scope.tearDown() }
+        let settings = AppSettings(defaults: scope.defaults)
+        let profile = settings.registerHIDRemote(fingerprint: "reselect-current-profile")
+        settings.selectRemoteProfile(profile, persistSelection: false)
+        var cancellations = 0
+        settings.onInteractionModeChanged = { _ in cancellations += 1 }
+
+        settings.selectRemoteProfile(profile)
+        settings.selectRemoteProfile(profile)
+
+        #expect(cancellations == 0)
+        #expect(AppSettings(defaults: scope.defaults).selectedRemoteProfileID == profile)
+    }
+
     @Test func conflictingDuplicateMappingsAreNotMerged() throws {
         let scope = try Self.scopedSettings("conflicting-duplicates")
         defer { scope.tearDown() }
