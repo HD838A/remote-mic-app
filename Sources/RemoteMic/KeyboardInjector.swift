@@ -89,6 +89,7 @@ enum KeyboardInjector {
         private var optionHoldTask: AnyObject?
         private var optionReleaseTask: AnyObject?
         private var commandReleaseTask: AnyObject?
+        private var modifierReleaseGeneration: UInt64 = 0
         private(set) var isWindowPickerActive = false
         /// 窗口层里是否已经用方向键选中过某个窗口（原生语义：选中后 Enter/Esc 才响应）。
         private(set) var pickerHasHighlight = false
@@ -220,9 +221,12 @@ enum KeyboardInjector {
                 pickerHasHighlight = false
                 commandReleasePending = true
                 hasPendingRelease = true
+                modifierReleaseGeneration &+= 1
+                let generation = modifierReleaseGeneration
                 commandReleaseTask = scheduler(Self.windowPickerCommandReleaseMilliseconds) {
                     [weak self] in
-                    _ = self?.releaseCommandForWindowPicker()
+                    guard let self, self.modifierReleaseGeneration == generation else { return }
+                    _ = self.releaseCommandForWindowPicker()
                 }
                 return pressed && released
             }
@@ -265,8 +269,10 @@ enum KeyboardInjector {
                 return post(leftCommandKeyCode, isDown: false, flags: [], role: "command")
             }
             hasPendingRelease = true
+            modifierReleaseGeneration &+= 1
+            let generation = modifierReleaseGeneration
             optionHoldTask = scheduler(Self.optionHoldMilliseconds) { [weak self] in
-                guard let self else { return }
+                guard let self, self.modifierReleaseGeneration == generation else { return }
                 _ = self.post(
                     KeyboardInjector.leftCommandKeyCode,
                     isDown: false,
@@ -275,7 +281,7 @@ enum KeyboardInjector {
                 )
                 self.optionReleaseTask = self.scheduler(Self.optionReleaseMilliseconds) {
                     [weak self] in
-                    guard let self else { return }
+                    guard let self, self.modifierReleaseGeneration == generation else { return }
                     _ = self.post(
                         KeyboardInjector.leftOptionKeyCode,
                         isDown: false,
@@ -303,6 +309,7 @@ enum KeyboardInjector {
         @discardableResult
         func forceReleaseModifiersIfNeeded() -> Bool {
             guard hasPendingRelease else { return true }
+            modifierReleaseGeneration &+= 1
             let commandReleased = post(
                 leftCommandKeyCode,
                 isDown: false,

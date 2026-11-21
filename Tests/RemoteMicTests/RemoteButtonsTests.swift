@@ -1669,6 +1669,74 @@ struct RemoteButtonsTests {
         #expect(posted[11].2.isEmpty)
     }
 
+    @Test func chromecastSwitcherConsumesTriggerNavigationAndOKBeforeTheirBindings() {
+        var posted: [(CGKeyCode, Bool, CGEventFlags)] = []
+        let scheduler = RemoteButtonsTestScheduler()
+        let session = KeyboardInjector.AppSwitcherSession(
+            keyStatePoster: { posted.append(($0, $1, $2)); return true },
+            scheduler: { _, event in event(); return nil }
+        )
+        let switcher = ChromecastAppSwitcher(
+            session: session, scheduler: scheduler, logger: { _ in }, observeMouseDismiss: { _ in nil }
+        )
+
+        #expect(switcher.start(button: .input))
+        #expect(switcher.handle(.release, button: .input, isSwitcherBinding: true))
+        #expect(switcher.handle(.press, button: .input, isSwitcherBinding: true))
+        #expect(switcher.handle(.release, button: .input, isSwitcherBinding: true))
+        #expect(posted.map(\.0) == [55, 48, 48, 48, 48])
+        #expect(switcher.handle(.press, button: .left, isSwitcherBinding: false))
+        #expect(switcher.handle(.release, button: .left, isSwitcherBinding: false))
+        #expect(switcher.handle(.press, button: .right, isSwitcherBinding: false))
+        #expect(switcher.handle(.release, button: .right, isSwitcherBinding: false))
+        #expect(posted.count == 9)
+        #expect(posted[5].2.contains(.maskCommand))
+        #expect(posted[7].2.contains(.maskCommand))
+        #expect(switcher.handle(.press, button: .ok, isSwitcherBinding: false))
+        #expect(switcher.handle(.release, button: .ok, isSwitcherBinding: false))
+        #expect(posted.suffix(3).map(\.0) == [58, 55, 58])
+        #expect(!posted[10].1)
+        #expect(!switcher.handle(.press, button: .ok, isSwitcherBinding: false))
+    }
+
+    @Test func chromecastSwitcherTimeoutReleasesCommandAndConsumesLateRelease() {
+        var posted: [(CGKeyCode, Bool)] = []
+        let scheduler = RemoteButtonsTestScheduler()
+        let session = KeyboardInjector.AppSwitcherSession(
+            keyStatePoster: { code, down, _ in posted.append((code, down)); return true }
+        )
+        let switcher = ChromecastAppSwitcher(
+            session: session, scheduler: scheduler, logger: { _ in }, observeMouseDismiss: { _ in nil }
+        )
+
+        #expect(switcher.start(button: .input))
+        #expect(switcher.handle(.press, button: .input, isSwitcherBinding: true))
+        scheduler.advance(toMilliseconds: HIDRemoteTiming.appSwitcherTimeoutMilliseconds)
+        #expect(!session.isActive)
+        #expect(posted.suffix(3).map(\.0) == [53, 53, 55])
+        #expect(posted.last?.1 == false)
+        #expect(switcher.handle(.release, button: .input, isSwitcherBinding: true))
+    }
+
+    @Test func forcingModifierReleaseInvalidatesOldConfirmationTasks() {
+        var posted: [(CGKeyCode, Bool)] = []
+        var scheduled: [() -> Void] = []
+        let session = KeyboardInjector.AppSwitcherSession(
+            keyStatePoster: { code, down, _ in posted.append((code, down)); return true },
+            scheduler: { _, action in scheduled.append(action); return nil }
+        )
+
+        #expect(session.trigger())
+        #expect(session.confirm())
+        #expect(session.forceReleaseModifiersIfNeeded())
+        #expect(session.trigger())
+        let eventCount = posted.count
+        scheduled.first?()
+        #expect(posted.count == eventCount)
+        #expect(session.isActive)
+        #expect(session.cancel())
+    }
+
     /// 切换器里松开 ⌘ 就是确认高亮 App；取消必须先在 ⌘ 仍按住时发 Escape。
     @Test func appSwitcherSessionCancelSendsEscapeBeforeReleasingCommand() {
         var posted: [(CGKeyCode, Bool, CGEventFlags)] = []
