@@ -1,0 +1,52 @@
+{
+  "batch": "notice-palette-20261121",
+  "date": "2026-11-21",
+  "purpose": "NoticeBubble 配色方案 B（柔和浅底）的设计预览与组件实渲染",
+  "storage": "external-persistent-directory-and-github-pr-attachments",
+  "storage_path": "~/Pictures/SayAllEvidence/notice-palette-20261121/",
+  "notes": [
+    "色板是设计预览，不是完整 App 窗口截图；当前档、方案 A、方案 B 和方案 C 在同一张图上对照。",
+    "最终采用方案 B：浅色档浅底深字，深色档深底浅字；深色描边在实现中提高到 3:1，比色板草稿更清楚。",
+    "常用语失败提示跟随系统外观；常用语面板保持纯黑不变。",
+    "组件实渲染使用生产 NoticeBubble 源码，背景为模拟桌面；正式设置页截图见 notice-bubble-20261121 批次。",
+    "图片字节不入库，本文件只做文本索引；external_url 在创建 PR 后补为 GitHub 图片附件地址。"
+  ],
+  "images": [
+    {
+      "file": "palette-board.png",
+      "format": "PNG",
+      "width": 2620,
+      "height": 3748,
+      "sha256": "16b52c33a9c3e756fdebc6982f0c29f3f6efe099e3e8455eaba4c08c6cc3594d",
+      "state": "design-board-full",
+      "external_url": "https://github.com/user-attachments/assets/c6d1fc0b-0f3b-4513-ba9f-37226b1b4009"
+    },
+    {
+      "file": "palette-board-preview.png",
+      "format": "PNG",
+      "width": 978,
+      "height": 1400,
+      "sha256": "80291df70c170fd9155b7c10f88111806a1bbd67b1396edb8ec21acb03c37cd9",
+      "state": "design-board-preview",
+      "external_url": "https://github.com/user-attachments/assets/80ba57e8-008b-4896-9ed3-d73f499e9128"
+    },
+    {
+      "file": "after-component-preview-light.png",
+      "format": "PNG",
+      "width": 1040,
+      "height": 400,
+      "sha256": "2917e00acf4196759dcd982afafdab93e19a77e136a17053302f0260dd735bac",
+      "state": "component-preview-light",
+      "external_url": "https://github.com/user-attachments/assets/7aa942a7-f4cf-441f-8cae-ab9dfefa4bc4"
+    },
+    {
+      "file": "after-component-preview-dark.png",
+      "format": "PNG",
+      "width": 1040,
+      "height": 400,
+      "sha256": "04b08b0b01df54b74ee0f1e4839aefb7a5417c739e875dd2b7e0b3d3352a2b5d",
+      "state": "component-preview-dark",
+      "external_url": "https://github.com/user-attachments/assets/6377ee34-1277-4ef9-adf8-61456b76f954"
+    }
+  ]
+}

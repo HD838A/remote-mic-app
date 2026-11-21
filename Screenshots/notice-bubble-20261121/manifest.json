@@ -1,0 +1,81 @@
+{
+  "batch": "notice-bubble-20261121",
+  "date": "2026-11-21",
+  "purpose": "常用语失败提示的呈现与方案 B 配色修复：去掉灰色窗口阴影、长标题单行，并改为柔和浅底",
+  "storage": "external-persistent-directory-and-github-pr-attachments",
+  "storage_path": "~/Pictures/SayAllEvidence/notice-bubble-20261121/",
+  "notes": [
+    "修复前图片来自用户现场截图，原始字节已复制到仓库外持久目录；只保留原图，不重绘、不缩放。",
+    "修复后四张来自公开构建的生产 SettingsView 离屏入口，使用 REMOTE_MIC_SETTINGS_SCREENSHOT_NOTICE=common-phrase-input-unavailable；只证明静态布局，不启动硬件。",
+    "配色为方案 B 柔和浅底：浅色档浅底深字，深色档深底浅字；常用语失败提示跟随系统外观，常用语面板保持纯黑不变。",
+    "灰色窗口阴影由 NoticeHostWindowChromeTests 覆盖：适配器在气泡进入透明提示窗时设置 hasShadow=false；截图是公开设置页，不包含私有提示窗。",
+    "after-component-preview-light/dark.png 是生产 NoticeBubble 源码的组件实渲染，背景为模拟桌面；不是完整 App 窗口截图，只用于直观看气泡本身和气泡阴影。",
+    "公开构建不包含私有常用语提示窗；380pt 宿主宽度由 NoticeBubbleLayoutTests 覆盖，真实失败提示仍须在完整集成包复验。",
+    "图片字节不入库，本文件只做文本索引；external_url 在创建 PR 后补为 GitHub 图片附件地址。"
+  ],
+  "images": [
+    {
+      "file": "before/input-unavailable-before.png",
+      "format": "PNG",
+      "width": 852,
+      "height": 368,
+      "sha256": "d4f282aecf6a2eccdb5bebe95bd741895c2e986aa642c587323a8f1382edd355",
+      "state": "before",
+      "external_url": "https://github.com/user-attachments/assets/7c0ab2e2-9511-40c0-9368-6cf5c048dbc5"
+    },
+    {
+      "file": "zh-light/mapping-1067x760.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1520,
+      "sha256": "5e67fef4dcf1f9be2010dc82d07864850257638468aa8db78774a90df08d7e3b",
+      "state": "after-zh-hans-light",
+      "external_url": "https://github.com/user-attachments/assets/f9343cea-f552-4d18-99cf-70d05d6c2302"
+    },
+    {
+      "file": "zh-dark/mapping-1067x760.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1520,
+      "sha256": "fdd6142fe0534a9cc516e6ac305ca842af1ea648313f5c6ff02f616ba55a23eb",
+      "state": "after-zh-hans-dark",
+      "external_url": "https://github.com/user-attachments/assets/b4e481cc-9f56-42db-8fec-c5c5953d48d0"
+    },
+    {
+      "file": "en-light/mapping-1067x760.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1520,
+      "sha256": "ab959b536cb62f90cdbf912adb7767ea957194e9c5f6f807ad7850fbffdc0494",
+      "state": "after-en-light",
+      "external_url": "https://github.com/user-attachments/assets/110126b7-3c89-4841-9a02-9998a73ace64"
+    },
+    {
+      "file": "en-dark/mapping-1067x760.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1520,
+      "sha256": "555b31b51cc1c3eff4cea946d4043f3ca62f1809dc9fff22093f79ebd0ba69f2",
+      "state": "after-en-dark",
+      "external_url": "https://github.com/user-attachments/assets/397ca5b5-937e-49f1-b5b3-9cf78e1fafcf"
+    },
+    {
+      "file": "after-component-preview-light.png",
+      "format": "PNG",
+      "width": 1040,
+      "height": 400,
+      "sha256": "2917e00acf4196759dcd982afafdab93e19a77e136a17053302f0260dd735bac",
+      "state": "after-component-preview-light",
+      "external_url": "https://github.com/user-attachments/assets/7aa942a7-f4cf-441f-8cae-ab9dfefa4bc4"
+    },
+    {
+      "file": "after-component-preview-dark.png",
+      "format": "PNG",
+      "width": 1040,
+      "height": 400,
+      "sha256": "04b08b0b01df54b74ee0f1e4839aefb7a5417c739e875dd2b7e0b3d3352a2b5d",
+      "state": "after-component-preview-dark",
+      "external_url": "https://github.com/user-attachments/assets/6377ee34-1277-4ef9-adf8-61456b76f954"
+    }
+  ]
+}

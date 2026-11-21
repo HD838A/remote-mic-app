@@ -2,55 +2,69 @@ import Foundation
 import Testing
 @testable import RemoteMic
 
-/// 色值契约：设计稿里的对比度要求在这里变成可执行的断言。
+/// 色值契约：柔和浅底方案的对比度要求在这里变成可执行的断言。
 ///
-/// 以后调色如果破坏「白字 ≥ 4.5」或「深色底分离 ≥ 3.0」，这些测试会直接红，
+/// 以后调色如果破坏「正文 ≥ 4.5、图标 ≥ 3.0、深色边界 ≥ 3.0」，这些测试会直接红，
 /// 而不是等到界面上看不清才发现。
 @Suite("Notice palette contrast")
 struct NoticePaletteTests {
-    private let white: UInt32 = 0xFFFFFF
     private let darkSurface: UInt32 = NoticePalette.darkSurface
 
-    @Test func lightFillsKeepWhiteTextReadable() {
+    @Test func bubbleTextIsReadableOnSoftSurfaces() {
+        for dark in [false, true] {
+            for tier in NoticeTier.allCases {
+                let colors = NoticePalette.bubble(tier, dark: dark)
+                #expect(
+                    contrast(colors.title, colors.fill) >= 4.5,
+                    "\(tier) \(dark ? "深色" : "浅色")标题对比度不足：\(contrast(colors.title, colors.fill))"
+                )
+                #expect(
+                    contrast(colors.body, colors.fill) >= 4.5,
+                    "\(tier) \(dark ? "深色" : "浅色")说明对比度不足：\(contrast(colors.body, colors.fill))"
+                )
+            }
+        }
+    }
+
+    @Test func bubbleIconsAreReadableOnSoftSurfaces() {
+        for dark in [false, true] {
+            for tier in NoticeTier.allCases {
+                let colors = NoticePalette.bubble(tier, dark: dark)
+                #expect(
+                    contrast(colors.accent, colors.fill) >= 3.0,
+                    "\(tier) \(dark ? "深色" : "浅色")语义图标对比度不足：\(contrast(colors.accent, colors.fill))"
+                )
+                #expect(
+                    contrast(colors.close, colors.fill) >= 3.0,
+                    "\(tier) \(dark ? "深色" : "浅色")关闭按钮对比度不足：\(contrast(colors.close, colors.fill))"
+                )
+            }
+        }
+    }
+
+    @Test func darkBubbleBorderSeparatesFromWindow() {
         for tier in NoticeTier.allCases {
-            let pair = NoticePalette.lightFill(tier)
+            let border = NoticePalette.bubble(tier, dark: true).border
             #expect(
-                contrast(pair.base, white) >= 4.5,
-                "\(tier) 浅色起点对比度不足：\(contrast(pair.base, white))"
-            )
-            #expect(
-                contrast(pair.deep, white) >= 4.5,
-                "\(tier) 浅色渐变末端对比度不足：\(contrast(pair.deep, white))"
+                contrast(border, darkSurface) >= 3.0,
+                "\(tier) 深色气泡描边与窗口背景分离不足：\(contrast(border, darkSurface))"
             )
         }
     }
 
-    @Test func darkFillsKeepWhiteTextReadable() {
+    @Test func inlineAccentIsVisibleOnItsSurface() {
         for tier in NoticeTier.allCases {
-            let fill = NoticePalette.darkFill(tier)
+            let lightAccent = NoticePalette.inlineAccent(tier, dark: false)
+            let lightSurface = NoticePalette.inlineSurface(tier)
             #expect(
-                contrast(fill, white) >= 4.5,
-                "\(tier) 深色填充对比度不足：\(contrast(fill, white))"
+                contrast(lightAccent, lightSurface) >= 3.0,
+                "\(tier) 浅色内联色条与底色对比不足：\(contrast(lightAccent, lightSurface))"
             )
-        }
-    }
-
-    @Test func darkFillsSeparateFromWindowBackground() {
-        for tier in NoticeTier.allCases {
-            let fill = NoticePalette.darkFill(tier)
+            let darkAccent = NoticePalette.inlineAccent(tier, dark: true)
             #expect(
-                contrast(fill, darkSurface) >= 3.0,
-                "\(tier) 与深色窗口背景的分离度不足：\(contrast(fill, darkSurface))"
+                contrast(darkAccent, NoticePalette.inlineDarkSurface) >= 3.0,
+                "\(tier) 深色内联色条与底色对比不足：\(contrast(darkAccent, NoticePalette.inlineDarkSurface))"
             )
-        }
-    }
-
-    @Test func inlineBordersAreLighterThanAccent() {
-        for tier in NoticeTier.allCases {
-            let surface = NoticePalette.inlineSurface(tier)
-            let accent = NoticePalette.inlineAccent(tier, dark: false)
-            // 语义色条必须比浅底明显，否则左条会看不见。
-            #expect(contrast(accent, surface) >= 3.0, "\(tier) 内联色条与底色对比不足")
         }
     }
 

@@ -211,8 +211,25 @@ struct NoticeBubbleLayoutTests {
             title: String(repeating: "很长的提示标题", count: 20),
             text: String(repeating: "这里是说明文字。", count: 20)
         )
-        #expect(size.width <= 361)
+        #expect(size.width <= 401)
         #expect(size.height > 100)
+    }
+
+    /// 常用语插入失败时的提示窗宽 380pt。错误档位还有感叹号占位，
+    /// 360pt 上限会把最后 1 个字单独挤到第二行；这里连同宿主的 HStack 一起锁定单行。
+    @Test func commonPhraseErrorTitleFitsOnOneLineInFeedbackPanel() {
+        let root = HStack(spacing: 0) {
+            Spacer(minLength: 0)
+            NoticeBubble(
+                tier: .error,
+                title: "光标不在输入框中，请将光标放入输入框后再试",
+                onClose: {}
+            )
+            Spacer(minLength: 0)
+        }
+        .frame(width: 380)
+        let size = NSHostingView(rootView: root).fittingSize
+        #expect(size.height < 52)
     }
 }
 
@@ -226,6 +243,30 @@ struct NoticeHostBridgeMappingTests {
         #expect(HostNoticeRequest.Tone.tip.noticeTier == .tip)
         #expect(HostNoticeRequest.Tone.warning.noticeTier == .warning)
         #expect(HostNoticeRequest.Tone.error.noticeTier == .error)
+    }
+}
+
+@Suite("Notice host window chrome")
+@MainActor
+struct NoticeHostWindowChromeTests {
+    /// 私有宿主把气泡放进透明面板。系统窗口阴影会沿气泡轮廓形成灰色圆角底；
+    /// 适配器必须在视图进入窗口时关闭它，保留气泡自己的设计阴影。
+    @Test func noticeHostDisablesTheTransparentPanelShadow() {
+        let adapter = NoticeHostAdapter()
+        let view = adapter.makeNoticeView(
+            HostNoticeRequest(tone: .error, title: "测试"),
+            callbacks: HostNoticeCallbacks()
+        )
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 380, height: 88),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
+        window.hasShadow = true
+        window.contentView = NSHostingView(rootView: view)
+        window.contentView?.layoutSubtreeIfNeeded()
+        #expect(window.hasShadow == false)
     }
 }
 #endif
