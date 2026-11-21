@@ -842,7 +842,10 @@ enum KeyboardInjector {
         // through a resign/become-key cycle, which clears the web composer's
         // focus for about two seconds. The focuser below reaches the running
         // instance directly, so the activation step is skipped instead.
-        if let frontmost = frontmostApplication(), frontmost.bundleIdentifier == application.bundleIdentifier {
+        // Reopening SayAll shows its settings window even when it already owns the menu bar.
+        if application != .remoteMic,
+           let frontmost = frontmostApplication(),
+           frontmost.bundleIdentifier == application.bundleIdentifier {
             AppLogger.shared.write("APP ACTION skipped bundle=\(application.bundleIdentifier) reason=already_frontmost")
             if application.focusStrategy != nil {
                 applicationFocuser(url, application, frontmost.processIdentifier, focusRequestID)
