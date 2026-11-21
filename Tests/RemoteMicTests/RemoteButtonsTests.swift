@@ -840,6 +840,58 @@ struct RemoteButtonsTests {
         ))
     }
 
+    @Test func mappingResetWhileVolumeKeyIsHeldDoesNotLeaveRepeatRunning() throws {
+        let suiteName = "RemoteButtonsTests.volumeResetRepeat.\(UUID().uuidString)"
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = AppSettings(defaults: defaults)
+        settings.customMappingEnabled = true
+        settings.setHoldMode(.repeatSingle, for: .volumeUp)
+        let profileID = try #require(settings.selectedRemoteProfileID)
+        var performedActions: [ButtonAction] = []
+        let scheduler = RemoteButtonsTestScheduler()
+        let monitor = HIDRemoteMonitor(
+            settings: settings,
+            profileID: profileID,
+            ownsEventSuppressor: false,
+            scheduler: scheduler,
+            runtimePermissions: { true },
+            actionPerformer: { _, _, configured in
+                performedActions.append(configured.action)
+                return true
+            },
+            frontmostBundleIdentifier: { "com.example.other" },
+            diagnosticLogger: { _ in }
+        )
+        // 模拟按下音量键时设备档案切换导致的映射重载。修复前这里会清空
+        // activeUsages，松键不再被识别，repeatSingle 会永久运行。
+        monitor.onButtonPressed = { _, _, _ in
+            monitor.cancelMappingInteractions()
+            return (profileID, true)
+        }
+        #expect(monitor.connectSimulatedDevice(fingerprint: "volume-reset", profileID: profileID))
+        let press = Data([0x80, 0, 0, 0, 0, 0])
+        let release = Data(repeating: 0, count: press.count)
+
+        monitor.handleSimulatedReport(reportID: 1, data: press)
+        scheduler.advance(toMilliseconds: 500)
+        let actionsBeforeRelease = performedActions.count
+        #expect(actionsBeforeRelease >= 2)
+
+        monitor.handleSimulatedReport(reportID: 1, data: release)
+        scheduler.advance(toMilliseconds: 1_500)
+        #expect(performedActions.count == actionsBeforeRelease)
+    }
+
+    @Test func rawButtonPressOnlySelectsProfileWhenNoneIsSelected() {
+        #expect(!BridgeAppModel.shouldSelectProfileForRawButtonPress(
+            selectedProfileID: UUID()
+        ))
+        #expect(BridgeAppModel.shouldSelectProfileForRawButtonPress(
+            selectedProfileID: nil
+        ))
+    }
+
     @Test func stableReleaseDiagnosticsSeparateDeviceBounceFromSwallowedPress() throws {
         final class Clock {
             var milliseconds: UInt64 = 0

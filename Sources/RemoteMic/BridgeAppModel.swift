@@ -4597,7 +4597,9 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
                         "ONBOARDING XIAOMI_MODEL result=pending_model_identity"
                     )
                 }
-            } else {
+            } else if Self.shouldSelectProfileForRawButtonPress(
+                selectedProfileID: self.settings.selectedRemoteProfileID
+            ) {
                 self.selectRemoteProfile(resolvedProfileID)
             }
             self.lastRemoteButtonPressProfileID = resolvedProfileID
@@ -5099,6 +5101,12 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     private func remoteProfileID(for bridge: XiaomiBluetoothBridge) -> UUID? {
         guard let identifier = bluetoothIdentifier(for: bridge) else { return nil }
         return settings.profileID(forBluetoothIdentifier: identifier)
+    }
+
+    /// 实体按键执行动作时不得改变选中设备。选中项只由用户点击卡片、
+    /// 自动恢复规则或首次建立显示目标改变；按键只使用解析出的 profileID 执行动作。
+    static func shouldSelectProfileForRawButtonPress(selectedProfileID: UUID?) -> Bool {
+        selectedProfileID == nil
     }
 
     func selectRemoteProfile(_ profileID: UUID, persistSelection: Bool = true) {

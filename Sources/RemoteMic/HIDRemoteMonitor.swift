@@ -2938,8 +2938,14 @@ final class HIDRemoteMonitor {
 
     func cancelMappingInteractions() {
         // 按住执行把键真正按下去了，取消映射时必须先走一遍交互取消把键抬起来。
+        // 但物理按键仍在用户手里：保留按下/释放边沿，否则松键会被丢掉，
+        // “按住重复单击”的计时器会一直运行。
         buttonInteractions.cancelAll(reason: "mapping_cancelled")
-        resetInputState()
+        diagnosticLogger(
+            "HID INPUT_RESET reason=mapping_changed " +
+                "active_usages=\(activeUsages.count) physical_edges_preserved=true"
+        )
+        resetInputState(preservingPhysicalEdges: true)
     }
 
     func cancelConfiguredInteractions(reason: String) { buttonInteractions.cancelAll(reason: reason) }
@@ -2955,7 +2961,7 @@ final class HIDRemoteMonitor {
         if appSwitcherSession.isActive { finishAppSwitcherLifecycle(reason: "common_phrases_opened", confirmed: false) }
     }
 
-    private func resetInputState() {
+    private func resetInputState(preservingPhysicalEdges: Bool = false) {
         onInputReset?(profileID)
         if appSwitcherSession.isActive {
             _ = appSwitcherSession.cancel()
@@ -2986,22 +2992,30 @@ final class HIDRemoteMonitor {
         appSwitcherTargetApplication = nil
         appSwitcherPendingLayerClose = nil
         appSwitcherOriginBundleIdentifier = nil
-        for usage in activeUsages.subtracting(nativePassthroughUsages) {
-            if let button = RemoteButton.usageMap[usage], shouldArmNativeEvent(for: button) {
-                eventSuppressor.arm(button: button, edge: .up)
+        if !preservingPhysicalEdges {
+            for usage in activeUsages.subtracting(nativePassthroughUsages) {
+                if let button = RemoteButton.usageMap[usage], shouldArmNativeEvent(for: button) {
+                    eventSuppressor.arm(button: button, edge: .up)
+                }
             }
         }
         repeatTimers.values.forEach { $0.cancel() }
         repeatTimers.removeAll()
-        nativePassthroughUsages.removeAll()
+        if !preservingPhysicalEdges {
+            nativePassthroughUsages.removeAll()
+        }
         nonRepeatableReleaseTimers.values.forEach { $0.cancel() }
         nonRepeatableReleaseTimers.removeAll()
         nonRepeatablePressedButtons.removeAll()
-        physicalPressStartedAt.removeAll()
-        lastPhysicalReleaseAt.removeAll()
+        if !preservingPhysicalEdges {
+            physicalPressStartedAt.removeAll()
+            lastPhysicalReleaseAt.removeAll()
+        }
         resetGestureRecognition()
-        activeUsages.removeAll()
-        onActiveButtons?(profileID, [])
+        if !preservingPhysicalEdges {
+            activeUsages.removeAll()
+            onActiveButtons?(profileID, [])
+        }
     }
 
     private func runtimePermissionsAreValid() -> Bool {
