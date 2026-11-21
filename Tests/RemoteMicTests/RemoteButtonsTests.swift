@@ -840,6 +840,103 @@ struct RemoteButtonsTests {
         ))
     }
 
+    @Test func mappingResetWhileVolumeKeyIsHeldDoesNotLeaveRepeatRunning() throws {
+        let suiteName = "RemoteButtonsTests.volumeResetRepeat.\(UUID().uuidString)"
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = AppSettings(defaults: defaults)
+        settings.customMappingEnabled = true
+        settings.setHoldMode(.repeatSingle, for: .volumeUp)
+        let profileID = try #require(settings.selectedRemoteProfileID)
+        var performedActions: [ButtonAction] = []
+        let scheduler = RemoteButtonsTestScheduler()
+        let monitor = HIDRemoteMonitor(
+            settings: settings,
+            profileID: profileID,
+            ownsEventSuppressor: false,
+            scheduler: scheduler,
+            runtimePermissions: { true },
+            actionPerformer: { _, _, configured in
+                performedActions.append(configured.action)
+                return true
+            },
+            frontmostBundleIdentifier: { "com.example.other" },
+            diagnosticLogger: { _ in }
+        )
+        // 模拟按下音量键时设备档案切换导致的映射重载。修复前这里会清空
+        // activeUsages，松键不再被识别，repeatSingle 会永久运行。
+        monitor.onButtonPressed = { _, _, _ in
+            monitor.cancelMappingInteractions()
+            return (profileID, true)
+        }
+        #expect(monitor.connectSimulatedDevice(fingerprint: "volume-reset", profileID: profileID))
+        let press = Data([0x80, 0, 0, 0, 0, 0])
+        let release = Data(repeating: 0, count: press.count)
+
+        monitor.handleSimulatedReport(reportID: 1, data: press)
+        scheduler.advance(toMilliseconds: 500)
+        let actionsBeforeRelease = performedActions.count
+        #expect(actionsBeforeRelease >= 2)
+
+        monitor.handleSimulatedReport(reportID: 1, data: release)
+        scheduler.advance(toMilliseconds: 1_500)
+        #expect(performedActions.count == actionsBeforeRelease)
+    }
+
+    @Test func physicalPressWhoseReleaseNeverArrivesIsClearedByDeviceRemoval() throws {
+        // `cancelMappingInteractions` 保留物理边沿，等松键来收尾。松键永远不到达时
+        // （遥控器关机、蓝牙断开、电池拔出），保留的边沿必须由设备移除 / stop 的完整重置
+        // 清掉；否则 activeUsages 永久非空，重复计时器和下一次按下都会被这条陈旧状态影响。
+        let suiteName = "RemoteButtonsTests.noReleaseCleanup.\(UUID().uuidString)"
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = AppSettings(defaults: defaults)
+        settings.customMappingEnabled = true
+        settings.setHoldMode(.repeatSingle, for: .volumeUp)
+        let profileID = try #require(settings.selectedRemoteProfileID)
+        var performedActions: [ButtonAction] = []
+        var activeButtonSnapshots: [Set<RemoteButton>] = []
+        let scheduler = RemoteButtonsTestScheduler()
+        let monitor = HIDRemoteMonitor(
+            settings: settings,
+            profileID: profileID,
+            ownsEventSuppressor: false,
+            scheduler: scheduler,
+            runtimePermissions: { true },
+            actionPerformer: { _, _, configured in
+                performedActions.append(configured.action)
+                return true
+            },
+            frontmostBundleIdentifier: { "com.example.other" },
+            diagnosticLogger: { _ in }
+        )
+        monitor.onActiveButtons = { _, buttons in activeButtonSnapshots.append(buttons) }
+        monitor.onButtonPressed = { _, _, _ in
+            monitor.cancelMappingInteractions()
+            return (profileID, true)
+        }
+        #expect(monitor.connectSimulatedDevice(fingerprint: "no-release", profileID: profileID))
+        let press = Data([0x80, 0, 0, 0, 0, 0])
+
+        monitor.handleSimulatedReport(reportID: 1, data: press)
+        scheduler.advance(toMilliseconds: 500)
+        let actionsWhileHeld = performedActions.count
+        #expect(actionsWhileHeld >= 2)
+
+        // 松键没有到达，设备直接消失。
+        monitor.disconnectSimulatedDevice()
+        #expect(activeButtonSnapshots.last == [])
+        let actionsAfterRemoval = performedActions.count
+        scheduler.advance(toMilliseconds: 2_000)
+        #expect(performedActions.count == actionsAfterRemoval)
+
+        // 重新连接后按下仍要生效，证明陈旧边沿没有留下来。
+        #expect(monitor.connectSimulatedDevice(fingerprint: "no-release", profileID: profileID))
+        monitor.handleSimulatedReport(reportID: 1, data: press)
+        scheduler.advance(toMilliseconds: 2_400)
+        #expect(performedActions.count > actionsAfterRemoval)
+    }
+
     @Test func stableReleaseDiagnosticsSeparateDeviceBounceFromSwallowedPress() throws {
         final class Clock {
             var milliseconds: UInt64 = 0
