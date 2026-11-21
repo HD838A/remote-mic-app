@@ -286,6 +286,7 @@ struct RemoteMappingCanvas: View {
 
             HStack(spacing: 4) {
                 ForEach(ButtonTrigger.allCases) { trigger in
+                    let source = actionSource?(button, trigger)
                     Button {
                         selectedButton = button
                         onEdit(button, trigger)
@@ -295,12 +296,19 @@ struct RemoteMappingCanvas: View {
                                 .font(.system(size: 12, weight: .medium))
                                 .foregroundStyle(.secondary)
                             HStack(spacing: 2) {
-                                if actionSource?(button, trigger) == .inherited {
+                                if source == .inherited {
                                     Image(systemName: "link")
                                         .font(.system(size: 12, weight: .medium))
                                         .foregroundStyle(.secondary)
                                         .accessibilityLabel(
                                             Text(localization.text("button_mapping.binding.inherited"))
+                                        )
+                                } else if source == .unavailable {
+                                    Image(systemName: "exclamationmark.triangle.fill")
+                                        .font(.system(size: 12, weight: .medium))
+                                        .foregroundStyle(.orange)
+                                        .accessibilityLabel(
+                                            Text(localization.text("button_mapping.binding.unavailable_short"))
                                         )
                                 }
                                 Text(actionSummary(button, trigger))

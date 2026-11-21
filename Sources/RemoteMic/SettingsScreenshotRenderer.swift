@@ -1,5 +1,8 @@
 import AppKit
 import SwiftUI
+#if canImport(SayAllButtonProfiles)
+import SayAllButtonProfiles
+#endif
 
 @MainActor
 enum SettingsScreenshotRenderer {
@@ -346,6 +349,54 @@ enum SettingsScreenshotRenderer {
                     copying: nil, bindings: [binding], holdModes: [RemoteButton.ok.rawValue: "once"])
             }
             if mappingScenario == "viewer" { model.macroFeature.updateButtonProfilesAccess(.requiresPlus) }
+            #if canImport(SayAllButtonProfiles) && SAYALL_UNIFIED_BUTTON_CONFIGURATION
+            if mappingScenario == "unavailable" {
+                let device = settings.selectedRemoteProfileID
+                settings.setBaseBinding(
+                    ConfiguredButtonAction(action: .pageUp, shortcut: nil),
+                    for: .up,
+                    trigger: .singleClick,
+                    profileID: device
+                )
+                settings.setBaseBinding(
+                    ConfiguredButtonAction(action: .pageDown, shortcut: nil),
+                    for: .down,
+                    trigger: .singleClick,
+                    profileID: device
+                )
+                let profileID = model.macroFeature.createMappingProfile(
+                    named: language == .english ? "Missing References" : "引用失效",
+                    copying: nil,
+                    bindings: [
+                        .init(
+                            remoteProfileID: nil,
+                            button: .ok,
+                            trigger: .singleClick,
+                            configured: .init(action: .commandCopy, shortcut: nil)
+                        )
+                    ],
+                    holdModes: [:]
+                )
+                if let profileID {
+                    // Both cells point at a shortcut ID that is deliberately absent from
+                    // this isolated fixture. The production view must show the base
+                    // fallback and the repair banner, not a dead "configuration unavailable".
+                    model.macroFeature.setRawProfileBinding(
+                        .shortcut(profileKey: "shortcut.screenshot-missing"),
+                        profile: profileID,
+                        button: .up,
+                        trigger: .singleClick
+                    )
+                    model.macroFeature.setRawProfileBinding(
+                        .shortcut(profileKey: "shortcut.screenshot-missing"),
+                        profile: profileID,
+                        button: .down,
+                        trigger: .singleClick
+                    )
+                    seededProfileID = profileID
+                }
+            }
+            #endif
         }
         if membershipAccess == "allowed" {
             model.membershipFeature.applyScreenshotState(isFeatureVisible: true, accessDecision: .allowed(validUntil: .distantFuture))

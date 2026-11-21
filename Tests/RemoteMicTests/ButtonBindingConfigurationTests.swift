@@ -255,6 +255,24 @@ struct ButtonBindingConfigurationTests {
             button: .up, trigger: .longPress) {} else {
             Issue.record("Legacy missing shortcut must be unavailable")
         }
+        // 执行路径不能因为一条失效引用就把物理按键变成死键；返回 nil 让基础映射继续执行。
+        #expect(integration.profileBinding(device: nil, profile: copy,
+            button: .up, trigger: .longPress) == nil)
+
+        let invalidHost = RemoteMicHostActionReference(
+            id: "host.action.invalid",
+            displayName: "Invalid",
+            payload: Data(#"{"action":"customShortcut"}"#.utf8)
+        )
+        integration.setRawProfileBinding(.host(invalidHost), profile: copy,
+            button: .home, trigger: .singleClick)
+        #expect(integration.profileBinding(device: nil, profile: copy,
+            button: .home, trigger: .singleClick) == nil)
+
+        integration.setRawProfileBinding(.focus(profileKey: "focus.missing"), profile: copy,
+            button: .home, trigger: .doubleClick)
+        #expect(integration.profileBinding(device: nil, profile: copy,
+            button: .home, trigger: .doubleClick) == nil)
         if integration.supportsProfileHoldModes {
             #expect(integration.profileHoldMode(profile: copy, button: .ok) == "repeatLong")
         }

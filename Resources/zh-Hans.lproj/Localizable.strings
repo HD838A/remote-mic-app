@@ -1523,6 +1523,14 @@
 "button_mapping.save.unsupported" = "此配置为只读";
 "button_mapping.binding.inherited" = "继承默认方案";
 "button_mapping.binding.clear_override" = "恢复继承默认";
+"button_mapping.binding.unavailable_short" = "引用不可用";
+"button_mapping.binding.unavailable_detail" = "本方案引用的快捷键或动作在本机不存在，已回退基础映射：%@。可在下方重新选择动作，或恢复继承默认。";
+"button_mapping.profile_unavailable.title" = "本方案失效引用：%d 个";
+"button_mapping.profile_unavailable.detail" = "这些手势已回退基础映射，不会变成无响应。可以逐个重新选择动作，或一次清除无效覆盖。";
+"button_mapping.profile_unavailable.clear" = "清除无效覆盖";
+"button_mapping.profile_unavailable.cleared" = "已清除失效覆盖：%d 个";
+"button_mapping.profile_unavailable.clear_failed" = "已清除失效覆盖：%d 个，仍有剩余，请重试";
+"button_mapping.profile_unavailable.reload_failed" = "已清除失效覆盖：%d 个，但刷新方案失败，请重试";
 "button_mapping.save.unavailable" = "配置不可用";
 "button_mapping.save.retry" = "重试";
 "button_mapping.save.partial" = "动作已保存，按住未保存";

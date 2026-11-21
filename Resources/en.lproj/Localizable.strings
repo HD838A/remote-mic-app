@@ -1524,6 +1524,14 @@
 "button_mapping.save.unsupported" = "Read-only configuration";
 "button_mapping.binding.inherited" = "Inherits default profile";
 "button_mapping.binding.clear_override" = "Restore Default";
+"button_mapping.binding.unavailable_short" = "Reference unavailable";
+"button_mapping.binding.unavailable_detail" = "A shortcut or action referenced by this profile is missing on this Mac. The base mapping is used instead: %@. Choose another action below or restore the default.";
+"button_mapping.profile_unavailable.title" = "Unavailable references in this profile: %d";
+"button_mapping.profile_unavailable.detail" = "These bindings fall back to the base mapping instead of doing nothing. Re-select each action or clear all invalid overrides.";
+"button_mapping.profile_unavailable.clear" = "Clear Invalid Overrides";
+"button_mapping.profile_unavailable.cleared" = "Invalid overrides cleared: %d";
+"button_mapping.profile_unavailable.clear_failed" = "Invalid overrides cleared: %d. Some remain. Try again.";
+"button_mapping.profile_unavailable.reload_failed" = "Invalid overrides cleared: %d, but refreshing the profile failed. Try again.";
 "button_mapping.save.unavailable" = "Configuration unavailable";
 "button_mapping.save.retry" = "Retry";
 "button_mapping.save.partial" = "Action saved. Hold not saved.";
