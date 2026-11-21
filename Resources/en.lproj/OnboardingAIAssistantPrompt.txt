@@ -36,7 +36,7 @@ Automatic configuration:
 
 Manual steps when you cannot run terminal commands:
 1. Open SayAll and confirm the remote is connected in the app. A macOS Bluetooth connection is not enough.
-2. Grant Bluetooth, Input Monitoring, and Accessibility in the onboarding flow.
+2. Grant Bluetooth, Input Monitoring, and Accessibility (new name: Device Control and Data Access) in the onboarding flow.
 3. Select the voice typing app and remove the system Fn shortcut as the app instructs.
 4. On the voice-test page, select the SayAll audio output device and set the same device as its microphone in the voice typing app.
 5. Hold the voice button and speak. Confirm the target app actually writes text. Do not treat configuration as voice success.

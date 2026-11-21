@@ -131,7 +131,7 @@ final class MacroFeatureIntegration: ObservableObject {
             keyCode: keyCode, modifiers: modifiers, deviceModifierFlags: deviceModifierFlags
         ) else { return .failed("快捷键配置无效") }
         guard accessibilityTrusted() else {
-            return .permissionDenied("需要辅助功能权限")
+            return .permissionDenied("需要辅助功能（新名称：设备控制和数据访问）权限")
         }
         return shortcutSender(shortcut)
             ? .userResultUnknown("快捷键已提交，目标App结果未知") : .failed("快捷键投递失败")

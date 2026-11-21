@@ -125,7 +125,7 @@ Starting with v1.3.0, official release packages are signed with an Apple Develop
 2. Hold the remote Home and Menu buttons together to enter pairing mode.
 3. Pair the device named MI RC, Xiaomi Bluetooth Remote 2 Pro, or 小米蓝牙语音遥控器.
 4. Launch SayAll and grant Bluetooth access when asked.
-5. To customize ordinary buttons, also grant Input Monitoring and Accessibility. Restarting the app is required only after changing those macOS permissions.
+5. To customize ordinary buttons, also grant Input Monitoring and Accessibility (new name: Device Control and Data Access). Restarting the app is required only after changing those macOS permissions.
 
 Device cards in **Connection & Voice** and **Button Mapping** prefer the custom name from macOS Bluetooth settings. Duplicate names are numbered from 1; unnamed devices keep their existing model numbering. After renaming, return to SayAll or reopen the relevant page to refresh. Offline devices keep their last known name. System name synchronization currently covers Xiaomi and Apple remotes; standalone system API checks have passed on A2854, while full compatibility of the candidate app still awaits validation.
 
@@ -152,7 +152,7 @@ The app checks for updates once per day and asks before installing a newer versi
 4. Choose the same device as the microphone in the app that receives dictation or voice input.
 5. Click the target text field, hold the remote voice button to speak, then release it to finish.
 
-Under **Button Mapping**, the voice-button area lets you choose the default Fn/Globe behavior, a Left Command hold, a Right Command hold, or a Right Option hold. Modifier-key modes require SayAll Accessibility permission and press the selected key when voice starts, then release it when voice ends. The target voice app must support that standalone key; many apps merge both sides into a generic modifier, so verify the target app directly. Pressing another key while the modifier is held may trigger a modifier shortcut. Right Option is the least-used modifier, making it a good dedicated voice trigger, and several voice input tools accept it as their trigger key.
+Under **Button Mapping**, the voice-button area lets you choose the default Fn/Globe behavior, a Left Command hold, a Right Command hold, or a Right Option hold. Modifier-key modes require SayAll Accessibility (new name: Device Control and Data Access) permission and press the selected key when voice starts, then release it when voice ends. The target voice app must support that standalone key; many apps merge both sides into a generic modifier, so verify the target app directly. Pressing another key while the modifier is held may trigger a modifier shortcut. Right Option is the least-used modifier, making it a good dedicated voice trigger, and several voice input tools accept it as their trigger key.
 
 Fn remains the default because it directly matches Fn-hold voice entry in apps such as Doubao and Weixin, Fn-tap entry in Typeless, and the remote's hold-to-capture/release-to-stop lifecycle. F18, F19, F20, or other uncommon keys could be added technically, but this version does not offer an arbitrary voice-key binding: the target voice app must use the same key, and RC003, iPhone, Apple Watch, Web, permissions, and input-source switching must all share one paired press/release lifecycle. Ordinary remote buttons can still use F1–F20 shortcuts.
 
@@ -162,7 +162,7 @@ To confirm the audio path, send a one-second test tone or inspect input level in
 
 ### Typeless compatibility
 
-Tap-to-toggle voice tools such as Typeless are incompatible with the Xiaomi Bluetooth Remote 2 and 2 Pro's default Fn-hold behavior. Enable **Simulate Fn Tap on Voice Key** in the voice-button area under **Button Mapping** to send one Fn tap when the voice stream starts and a matching tap after queued audio drains. Typeless and SayAll must still select the same loopback device, and SayAll needs Accessibility permission.
+Tap-to-toggle voice tools such as Typeless are incompatible with the Xiaomi Bluetooth Remote 2 and 2 Pro's default Fn-hold behavior. Enable **Simulate Fn Tap on Voice Key** in the voice-button area under **Button Mapping** to send one Fn tap when the voice stream starts and a matching tap after queued audio drains. Typeless and SayAll must still select the same loopback device, and SayAll needs Accessibility (new name: Device Control and Data Access) permission.
 
 You must still **hold the Xiaomi Bluetooth Remote 2 or 2 Pro voice key while speaking and release it to finish**. Both remote firmwares stop microphone audio when the key is released, so this is not continuous or hands-free recording. The mode is off by default; keep it off for Fn-hold tools such as Doubao Input Method. Missing permission or incomplete remote HID mapping automatically disables the mode and restores the default Fn-hold mapping.
 
@@ -213,7 +213,7 @@ For AI-assisted installation, consent, client connection, and verification, give
 
 - Bluetooth: connect to the remote and receive voice.
 - Input Monitoring: identify ordinary remote buttons.
-- Accessibility: send mapped button actions to the active app.
+- Accessibility (new name: Device Control and Data Access): send mapped button actions to the active app.
 
 SayAll does not upload or store voice, does not change the system default input or output device, and does not log voice content, Bluetooth addresses, or peripheral identifiers.
 

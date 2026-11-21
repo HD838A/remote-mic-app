@@ -76,11 +76,11 @@ This guide explains names that may appear during installation, device selection,
 
 **When you may see it:** System Settings → Privacy & Security → Input Monitoring.
 
-### Accessibility permission
+### Accessibility (new name: Device Control and Data Access) permission
 
 **Plain-language explanation:** Allows the app to turn remote buttons into shortcuts and send them to the current app.
 
-**When you may see it:** System Settings → Privacy & Security → Accessibility.
+**When you may see it:** System Settings → Privacy & Security → Accessibility (new name: Device Control and Data Access).
 
 ## Installer files
 

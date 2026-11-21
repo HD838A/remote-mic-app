@@ -12,4 +12,4 @@ Advanced users who need only the app and already use another loopback device suc
 
 If the driver was uninstalled or is missing, reinstallation uses SayAll. Old naming records and receipts do not restore the old name.
 
-Allow Bluetooth access when SayAll first launches. To customize remote buttons, also grant Input Monitoring and Accessibility in the **Permissions** page.
+Allow Bluetooth access when SayAll first launches. To customize remote buttons, also grant Input Monitoring and Accessibility (new name: Device Control and Data Access) in the **Permissions** page.
