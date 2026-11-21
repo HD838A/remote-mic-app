@@ -44,6 +44,216 @@ struct RemoteProfilePersistenceTests {
         return (hid, ble)
     }
 
+    /// Seed the field shape reported after 2.0.8: a selected default BLE-only record next to
+    /// a BLE+HID record that owns the user's action and hold customisations.
+    private static func seedBothProfileAndDefaultBLEDuplicate(
+        in scope: Scope,
+        bleCustomName: String = "",
+        bleBindings: [RemoteMic.RemoteButton: ButtonAction] = AppSettings.defaultBindings,
+        bleInteractionSettings: RemoteButtonInteractionSettings? = nil
+    ) throws -> (
+        both: UUID,
+        ble: UUID,
+        bothBluetoothIdentifier: UUID,
+        bleBluetoothIdentifier: UUID
+    ) {
+        let bothID = UUID()
+        let bleID = UUID()
+        let bothBluetoothIdentifier = UUID()
+        let bleBluetoothIdentifier = UUID()
+        var bothBindings = AppSettings.defaultBindings
+        bothBindings[.menu] = .openCodex
+        let shortcut = CustomKeyboardShortcut(
+            keyCode: 40,
+            modifierFlags: [.command],
+            keyLabel: "K"
+        )
+        let applicationProfileID = UUID()
+        let interactionSettings = RemoteButtonInteractionSettings(
+            modes: ["up": RemoteButtonHoldMode.repeatSingle.rawValue],
+            migratedRepeatButtons: ["up"]
+        )
+        let both = RemoteDeviceProfile(
+            id: bothID,
+            model: .rc003,
+            bluetoothIdentifier: bothBluetoothIdentifier,
+            hidFingerprint: "hid-both-custom",
+            mappings: RemoteDeviceMappings(
+                buttonBindings: bothBindings,
+                buttonShortcuts: [.menu: shortcut],
+                buttonApplicationProfileIDs: [.menu: applicationProfileID],
+                secondaryButtonBindings: [
+                    .menu: [
+                        .longPress: ConfiguredButtonAction(
+                            action: .openCodex,
+                            shortcut: nil
+                        )
+                    ]
+                ],
+                buttonRapidPressEnabled: [.menu: true],
+                interactionSettings: interactionSettings
+            )
+        )
+        let ble = RemoteDeviceProfile(
+            id: bleID,
+            model: .rc003,
+            customName: bleCustomName,
+            bluetoothIdentifier: bleBluetoothIdentifier,
+            mappings: RemoteDeviceMappings(
+                buttonBindings: bleBindings,
+                buttonShortcuts: [:],
+                secondaryButtonBindings: [:],
+                interactionSettings: bleInteractionSettings
+            )
+        )
+        scope.defaults.set(
+            try JSONEncoder().encode([both, ble]),
+            forKey: "remoteDeviceProfiles"
+        )
+        scope.defaults.set(bleID.uuidString, forKey: "selectedRemoteProfileID")
+        return (bothID, bleID, bothBluetoothIdentifier, bleBluetoothIdentifier)
+    }
+
+    @Test func defaultBLEOnlyDuplicateBesideBothProfileIsMerged() throws {
+        let scope = try Self.scopedSettings("both-ble-default-duplicate")
+        defer { scope.tearDown() }
+        let ids = try Self.seedBothProfileAndDefaultBLEDuplicate(in: scope)
+        let settings = AppSettings(defaults: scope.defaults)
+        settings.updateRemoteProfileSystemName(ids.ble, name: "小米蓝牙语音遥控器")
+
+        let replacements = settings.reconcileComplementaryRemoteProfiles(
+            connectedProfileIDs: [ids.ble],
+            activeHIDProfileIDs: [ids.both]
+        )
+
+        #expect(replacements[ids.ble] == ids.both)
+        #expect(settings.remoteDeviceProfiles.count == 1)
+        let merged = try #require(settings.remoteDeviceProfiles.first)
+        #expect(merged.id == ids.both)
+        #expect(merged.hidFingerprint == "hid-both-custom")
+        #expect(merged.bluetoothIdentifier == ids.bleBluetoothIdentifier)
+        #expect(merged.lastKnownBluetoothName == "小米蓝牙语音遥控器")
+        #expect(merged.mappings.parsedButtonBindings[.menu] == .openCodex)
+        #expect(merged.mappings.parsedButtonShortcuts[.menu]?.keyLabel == "K")
+        #expect(merged.mappings.parsedButtonApplicationProfileIDs[.menu] != nil)
+        #expect(merged.mappings.parsedSecondaryButtonBindings[.menu]?[.longPress]?
+            .action == .openCodex)
+        #expect(merged.mappings.parsedButtonRapidPressEnabled[.menu] == true)
+        #expect(merged.mappings.interactionSettings?.mode(for: .up) == .repeatSingle)
+        #expect(settings.profileID(forBluetoothIdentifier: ids.bleBluetoothIdentifier) == ids.both)
+        #expect(settings.profileID(forBluetoothIdentifier: ids.bothBluetoothIdentifier) == nil)
+        #expect(settings.selectedRemoteProfileID == ids.both)
+        #expect(settings.action(for: .menu) == .openCodex)
+
+        let backupData = try #require(scope.defaults.data(
+            forKey: AppSettings.mergedRemoteProfilesBackupKey
+        ))
+        let backup = try JSONDecoder().decode([RemoteDeviceProfile].self, from: backupData)
+        #expect(backup.count == 2)
+
+        #expect(settings.restoreMergedRemoteProfilesBackup())
+        #expect(settings.remoteDeviceProfiles.count == 2)
+        #expect(settings.remoteDeviceProfiles.first(where: { $0.id == ids.ble })?
+            .mappings.parsedButtonBindings == AppSettings.defaultBindings)
+    }
+
+    @Test func BLEOnlyDuplicateWithCustomNameIsNotMerged() throws {
+        let scope = try Self.scopedSettings("both-ble-custom-name")
+        defer { scope.tearDown() }
+        let ids = try Self.seedBothProfileAndDefaultBLEDuplicate(
+            in: scope,
+            bleCustomName: "客卧遥控器"
+        )
+        let settings = AppSettings(defaults: scope.defaults)
+
+        let replacements = settings.reconcileComplementaryRemoteProfiles(
+            connectedProfileIDs: [ids.ble],
+            activeHIDProfileIDs: [ids.both]
+        )
+
+        #expect(replacements.isEmpty)
+        #expect(settings.remoteDeviceProfiles.count == 2)
+    }
+
+    @Test func BLEOnlyDuplicateWithCustomActionIsNotMerged() throws {
+        let scope = try Self.scopedSettings("both-ble-custom-action")
+        defer { scope.tearDown() }
+        var customBindings = AppSettings.defaultBindings
+        customBindings[.menu] = .openCodex
+        let ids = try Self.seedBothProfileAndDefaultBLEDuplicate(
+            in: scope,
+            bleBindings: customBindings
+        )
+        let settings = AppSettings(defaults: scope.defaults)
+
+        let replacements = settings.reconcileComplementaryRemoteProfiles(
+            connectedProfileIDs: [ids.ble],
+            activeHIDProfileIDs: [ids.both]
+        )
+
+        #expect(replacements.isEmpty)
+        #expect(settings.remoteDeviceProfiles.count == 2)
+    }
+
+    @Test func BLEOnlyDuplicateWithCustomHoldIsNotMerged() throws {
+        let scope = try Self.scopedSettings("both-ble-custom-hold")
+        defer { scope.tearDown() }
+        let ids = try Self.seedBothProfileAndDefaultBLEDuplicate(
+            in: scope,
+            bleInteractionSettings: RemoteButtonInteractionSettings(modes: ["up": "once"])
+        )
+        let settings = AppSettings(defaults: scope.defaults)
+
+        let replacements = settings.reconcileComplementaryRemoteProfiles(
+            connectedProfileIDs: [ids.ble],
+            activeHIDProfileIDs: [ids.both]
+        )
+
+        #expect(replacements.isEmpty)
+        #expect(settings.remoteDeviceProfiles.count == 2)
+    }
+
+    @Test func BLEOnlyDuplicateWithCustomTimingIsNotMerged() throws {
+        let scope = try Self.scopedSettings("both-ble-custom-timing")
+        defer { scope.tearDown() }
+        let ids = try Self.seedBothProfileAndDefaultBLEDuplicate(
+            in: scope,
+            bleInteractionSettings: RemoteButtonInteractionSettings(
+                doubleClickMilliseconds: 240
+            )
+        )
+        let settings = AppSettings(defaults: scope.defaults)
+
+        let replacements = settings.reconcileComplementaryRemoteProfiles(
+            connectedProfileIDs: [ids.ble],
+            activeHIDProfileIDs: [ids.both]
+        )
+
+        #expect(replacements.isEmpty)
+        #expect(settings.remoteDeviceProfiles.count == 2)
+    }
+
+    @Test func BLEOnlyDuplicateNeedsALiveBothProfileAndOneConnectedSide() throws {
+        let scope = try Self.scopedSettings("both-ble-liveness")
+        defer { scope.tearDown() }
+        let ids = try Self.seedBothProfileAndDefaultBLEDuplicate(in: scope)
+        let settings = AppSettings(defaults: scope.defaults)
+
+        #expect(settings.reconcileComplementaryRemoteProfiles(
+            connectedProfileIDs: [ids.ble],
+            activeHIDProfileIDs: []
+        ).isEmpty)
+        #expect(settings.reconcileComplementaryRemoteProfiles(
+            connectedProfileIDs: [],
+            activeHIDProfileIDs: [ids.both]
+        ).isEmpty)
+        #expect(settings.reconcileComplementaryRemoteProfiles(
+            connectedProfileIDs: [ids.both, ids.ble],
+            activeHIDProfileIDs: [ids.both]
+        ).isEmpty)
+        #expect(settings.remoteDeviceProfiles.count == 2)
+    }
+
     @Test func duplicateHIDProfilesAreCollapsedWithoutLosingSelectedMappings() throws {
         let scope = try Self.scopedSettings("duplicate-hid")
         defer { scope.tearDown() }

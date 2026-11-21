@@ -2439,6 +2439,54 @@ final class AppSettings: ObservableObject {
                 logSkip("group_count")
                 continue
             }
+            if hidOnly.isEmpty, both.count == 1, bleOnly.count == 1,
+               let bothProfile = both.first, let bleProfile = bleOnly.first {
+                // An older BLE registration can leave a default BLE-only record next to the
+                // profile that already owns both transports. Only the default record is
+                // removable: any user name, action or hold customisation keeps both records.
+                let bothLive = selectedRemoteProfileID == bothProfile.id
+                    || activeHIDProfileIDs.contains(bothProfile.id)
+                guard bothLive else {
+                    logSkip("both_not_live_or_selected")
+                    continue
+                }
+                guard !connectedProfileIDs.contains(bothProfile.id) else {
+                    logSkip("both_ble_connected")
+                    continue
+                }
+                guard connectedProfileIDs.contains(bleProfile.id) else {
+                    logSkip("ble_not_connected")
+                    continue
+                }
+                guard Self.defaultBLEOnlyDuplicateMayBelongTo(bothProfile, bleProfile) else {
+                    logSkip("ble_duplicate_has_user_data")
+                    continue
+                }
+                let merged = Self.mergingDefaultBLEDuplicate(into: bothProfile, from: bleProfile)
+                guard let index = remoteDeviceProfiles.firstIndex(where: {
+                    $0.id == bothProfile.id
+                }) else {
+                    continue
+                }
+                preserveRemoteProfilesBeforeMerge()
+                let previousSelectedID = selectedRemoteProfileID
+                remoteDeviceProfiles[index] = merged
+                remoteDeviceProfiles.removeAll { $0.id == bleProfile.id }
+                if previousSelectedID == bleProfile.id {
+                    selectRemoteProfile(
+                        bothProfile.id,
+                        persistSelection: !selectedRemoteProfileIsTransient
+                    )
+                } else if previousSelectedID == bothProfile.id {
+                    loadRemoteProfileMappings(merged)
+                }
+                replacements[bleProfile.id] = bothProfile.id
+                AppLogger.shared.write(
+                    "SETTINGS REMOTE_PROFILE_PAIR phase=completed result=merged " +
+                        "model=\(model.rawValue) kept=both reason=default_ble_duplicate"
+                )
+                continue
+            }
             guard hidOnly.count == 1 else {
                 logSkip("hid_only_count")
                 continue
@@ -2521,6 +2569,59 @@ final class AppSettings: ObservableObject {
             return false
         }
         return true
+    }
+
+    /// A BLE-only record can be a fresh default registration for the same remote whose HID
+    /// profile already owns the mappings. Require every editable field to still be default;
+    /// the one allowed non-nil field is the migration marker that older builds wrote to every
+    /// profile. This is a shape-based repair, not proof of physical identity.
+    private static func defaultBLEOnlyDuplicateMayBelongTo(
+        _ both: RemoteDeviceProfile,
+        _ ble: RemoteDeviceProfile
+    ) -> Bool {
+        guard both.model == ble.model,
+              ble.customName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              both.hardwareIdentity == nil || ble.hardwareIdentity == nil
+                || both.hardwareIdentity == ble.hardwareIdentity
+        else { return false }
+        let mappings = ble.mappings
+        guard mappings.buttonBindings.count == defaultBindings.count,
+              mappings.parsedButtonBindings == defaultBindings,
+              mappings.buttonShortcuts.isEmpty,
+              (mappings.buttonApplicationProfileIDs ?? [:]).isEmpty,
+              mappings.secondaryButtonBindings.isEmpty,
+              (mappings.buttonRapidPressEnabled ?? [:]).isEmpty,
+              interactionSettingsAreMigrationOnly(mappings.interactionSettings)
+        else { return false }
+        return true
+    }
+
+    private static func interactionSettingsAreMigrationOnly(
+        _ settings: RemoteButtonInteractionSettings?
+    ) -> Bool {
+        guard let settings else { return true }
+        guard settings.isWellFormed,
+              settings.doubleClickMilliseconds == 300,
+              settings.longPressMilliseconds == 550
+        else { return false }
+        let migrated = Set(settings.migratedRepeatButtons ?? [])
+        guard Set(settings.modes.keys) == migrated else { return false }
+        return settings.modes.values.allSatisfy {
+            $0 == RemoteButtonHoldMode.repeatSingle.rawValue
+        }
+    }
+
+    private static func mergingDefaultBLEDuplicate(
+        into both: RemoteDeviceProfile,
+        from ble: RemoteDeviceProfile
+    ) -> RemoteDeviceProfile {
+        var merged = both
+        merged.bluetoothIdentifier = ble.bluetoothIdentifier
+        if merged.lastKnownBluetoothName?
+            .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false {
+            merged.lastKnownBluetoothName = ble.lastKnownBluetoothName
+        }
+        return merged
     }
 
     func updateRemoteProfileModel(_ profileID: UUID, model: XiaomiRemoteModel) {
