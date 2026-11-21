@@ -917,6 +917,133 @@ struct BluetoothLifecycleTests {
         #expect(!XiaomiVoiceRemoteNameMatcher.matches("小米"))
     }
 
+    @Test func remoteIdentityFingerprintMatchesTheHIDUniqueIDFormat() throws {
+        let identifier = try #require(UUID(uuidString: "00000000-0000-0000-0000-000000000000"))
+        #expect(RemoteIdentityFingerprint.fingerprint(for: identifier) ==
+            "12b9377cbe7e5c94e8a70d9d23929523d14afa954793130f8a3959c7b849aca8")
+    }
+
+    @Test func staleBluetoothIdentityIsReplacedOnlyForAUniqueHIDMatch() {
+        let current = UUID()
+        let old = UUID()
+        let fingerprint = RemoteIdentityFingerprint.fingerprint(for: current)
+        let mappings = RemoteDeviceMappings(
+            buttonBindings: [:],
+            buttonShortcuts: [:],
+            secondaryButtonBindings: [:]
+        )
+        let profile = RemoteDeviceProfile(
+            model: .rc003,
+            bluetoothIdentifier: old,
+            hidFingerprint: fingerprint,
+            mappings: mappings
+        )
+
+        let match = RemoteIdentityReconciliationPolicy.replacement(
+            for: current,
+            hidFingerprint: fingerprint,
+            profiles: [profile]
+        )
+        #expect(match == .init(profileID: profile.id, previousIdentifier: old))
+
+        // 新 identifier 已被另一条档案占用时不能抢。
+        let owner = RemoteDeviceProfile(
+            model: .rc001,
+            bluetoothIdentifier: current,
+            hidFingerprint: "different",
+            mappings: mappings
+        )
+        #expect(RemoteIdentityReconciliationPolicy.replacement(
+            for: current,
+            hidFingerprint: fingerprint,
+            profiles: [profile, owner]
+        ) == nil)
+
+        // 重复 HID 指纹说明身份不唯一，不能自动替换。
+        let duplicate = RemoteDeviceProfile(
+            model: .rc003,
+            bluetoothIdentifier: UUID(),
+            hidFingerprint: fingerprint,
+            mappings: mappings
+        )
+        #expect(RemoteIdentityReconciliationPolicy.replacement(
+            for: current,
+            hidFingerprint: fingerprint,
+            profiles: [profile, duplicate]
+        ) == nil)
+
+        // 私有适配器档案和未知型号不属于本白名单。
+        for model in [XiaomiRemoteModel.appleSiriRemoteA2854, .chromecastVoiceRemote, .unknown] {
+            let ineligibleProfile = RemoteDeviceProfile(
+                model: model,
+                bluetoothIdentifier: old,
+                hidFingerprint: fingerprint,
+                mappings: mappings
+            )
+            #expect(RemoteIdentityReconciliationPolicy.replacement(
+                for: current,
+                hidFingerprint: fingerprint,
+                profiles: [ineligibleProfile]
+            ) == nil)
+        }
+
+        // 已是当前 identifier 或没有 BLE 字段时不需要替换。
+        #expect(RemoteIdentityReconciliationPolicy.replacement(
+            for: current,
+            hidFingerprint: fingerprint,
+            profiles: [RemoteDeviceProfile(
+                model: .rc003,
+                bluetoothIdentifier: current,
+                hidFingerprint: fingerprint,
+                mappings: mappings
+            )]
+        ) == nil)
+        #expect(RemoteIdentityReconciliationPolicy.replacement(
+            for: current,
+            hidFingerprint: fingerprint,
+            profiles: [RemoteDeviceProfile(
+                model: .rc003,
+                hidFingerprint: fingerprint,
+                mappings: mappings
+            )]
+        ) == nil)
+    }
+
+    @Test func discoveryBridgeReconcilesTheStaleIdentityBeforeAdmission() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let bridgeSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/XiaomiBluetoothBridge.swift"),
+            encoding: .utf8
+        )
+        let modelSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
+            encoding: .utf8
+        )
+
+        #expect(bridgeSource.contains("reconcileCandidateIdentifier?(candidate.identifier) == true"))
+        #expect(bridgeSource.contains("reconcileCandidateIdentifier?(peripheral.identifier) == true"))
+        #expect(bridgeSource.contains("discoveredCandidate(candidate.identifier)"))
+        #expect(bridgeSource.contains("discoveredCandidate(peripheral.identifier)"))
+        #expect(modelSource.contains("reconcileCandidateIdentifier: { [weak self] identifier in"))
+        #expect(modelSource.contains("reconcileStaleRemoteIdentity(for: identifier) != nil"))
+
+        let start = try #require(modelSource.range(of: "private func reconcileStaleRemoteIdentity"))
+        let end = try #require(modelSource.range(
+            of: "private func startBluetoothDiscoveryIfNeeded",
+            range: start.upperBound..<modelSource.endIndex
+        ))
+        let reconcile = modelSource[start.lowerBound..<end.lowerBound]
+        #expect(reconcile.contains("remoteRecoveryBudgets.removeValue(forKey: previousIdentifier)"))
+        #expect(reconcile.contains("remoteRecoveryBudgets.removeValue(forKey: identifier)"))
+        #expect(!reconcile.contains("remoteRecoveryBudgets[identifier] = budget"))
+        #expect(reconcile.contains("bluetoothBridgeStates.removeValue"))
+        #expect(reconcile.contains("pendingBluetoothVoiceStartIdentifier == nil"))
+        #expect(reconcile.contains("result=skipped reason=identifier_owned"))
+    }
+
     @Test func discoveryScanInspectsOnlyPlausibleCandidates() {
         let target = UUID()
         let other = UUID()

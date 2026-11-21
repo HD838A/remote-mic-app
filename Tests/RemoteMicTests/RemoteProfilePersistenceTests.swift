@@ -1,4 +1,3 @@
-import CryptoKit
 import Foundation
 import SayAllMacRemoteCore
 import Testing
@@ -63,9 +62,9 @@ struct RemoteProfilePersistenceTests {
         let bleID = UUID()
         let bothBluetoothIdentifier = UUID()
         let bleBluetoothIdentifier = UUID()
-        let matchingHIDFingerprint = SHA256.hash(
-            data: Data(bleBluetoothIdentifier.uuidString.utf8)
-        ).map { String(format: "%02x", $0) }.joined()
+        let matchingHIDFingerprint = RemoteIdentityFingerprint.fingerprint(
+            for: bleBluetoothIdentifier
+        )
         var bothBindings = AppSettings.defaultBindings
         bothBindings[.menu] = .openCodex
         let shortcut = CustomKeyboardShortcut(
@@ -135,9 +134,9 @@ struct RemoteProfilePersistenceTests {
         #expect(settings.remoteDeviceProfiles.count == 1)
         let merged = try #require(settings.remoteDeviceProfiles.first)
         #expect(merged.id == ids.both)
-        #expect(merged.hidFingerprint == SHA256.hash(
-            data: Data(ids.bleBluetoothIdentifier.uuidString.utf8)
-        ).map { String(format: "%02x", $0) }.joined())
+        #expect(merged.hidFingerprint == RemoteIdentityFingerprint.fingerprint(
+            for: ids.bleBluetoothIdentifier
+        ))
         #expect(merged.bluetoothIdentifier == ids.bleBluetoothIdentifier)
         #expect(merged.lastKnownBluetoothName == "小米蓝牙语音遥控器")
         #expect(merged.mappings.parsedButtonBindings[.menu] == .openCodex)
