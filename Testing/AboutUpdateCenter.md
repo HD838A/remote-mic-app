@@ -120,6 +120,10 @@
 
 失败判定：显示语义 key、语言不切换、读取错误版本的说明、更新按钮无响应，或说明加载失败阻断更新。
 
+2026-11-22 回归补充：固定 appcast 的 enclosure 使用 `SayAll-<版本>-<Build>.zip` 时，关于页必须加载同目录的 `SayAll-<版本>-<Build>.<语言>.txt`；Intel 的 `-Intel.zip` 必须复用不带 `-Intel` 的说明。检查日志出现 `UPDATE RELEASE_NOTES phase=completed result=loaded`，不得出现 `asset_url_unavailable`、`load_failed` 或 `notes_empty`。该用例覆盖 `download.sayall.app` 域名和 Build 限定资产名；旧 `github.com` 加 `Remote-Mic-<版本>` 命名仍须兼容。
+
+2026-11-22 自动化验证：`swift test --disable-keychain --filter UpdateInformationTests` 17 项通过；`swift test --disable-keychain --skip BuildSigningTests` 1585 项、112 个 suite 通过；`SAYALL_PRIVATE_PLATFORM_MODE=public swift build --disable-keychain -c release` 构建通过；`./scripts/verify-repository-governance.sh origin/main` 与 `git diff --check` 通过。真实签名包升级、Sparkle 弹窗与关于页并排验收仍未执行，发布后按用例 3 和用例 6 复验。
+
 ## 用例 4：设置入口新版本红点
 
 1. 使用低于固定候选版本的 App 打开主设置窗口，但先停留在“按键”等其他页面。
@@ -183,7 +187,7 @@
 - [ ] App 图标只展示安装包内真实可用选项，切换、重启恢复和资源缺失回退均通过。
 - [ ] 设置页配置导入/导出同一行；登录时自动启动与启动打开主窗口同一行；权限已授权时仍可打开对应系统设置；“复制诊断摘要”只复制脱敏状态。
 - [ ] 设置页首屏不显示品牌 Hero、反馈大卡或展开二维码；设置页和侧边栏没有分享入口，个人中心顶部可展开二维码。
-- [ ] Sparkle 无更新提示不显示版本历史按钮；设置页直接显示最新版本的本地化更新内容。
+- [ ] Sparkle 无更新提示不显示版本历史按钮；设置页直接显示最新版本的本地化更新内容，并兼容旧 `github.com`/`Remote-Mic-<版本>` 命名和当前 `download.sayall.app`/`SayAll-<版本>-<Build>` 命名。
 - [ ] 检测到更新时设置齿轮显示红点；点击设置后同一版本保持已读，更高版本会再次提醒。
 - [ ] 连接、按键、统计和设置页在最小窗口下无回归；权限与隐私不再有独立侧边栏入口。
 - [ ] 公告成功、过期、404、超时和语言切换用例均通过；公告失败不阻塞设置页。
@@ -192,14 +196,14 @@
 
 ## 日志收集
 
-1. 在设置页打开日志目录，收集本次启动对应的 `.rmlog` 加密会话文件并交给受控支持环境分析，完整方法见 [运行日志测试手册](RuntimeLogging.md)；不要按明文读取或要求 App 解密。支持人员重点检查 `UPDATE CHECK`、`source=cloudflare_channel`、`HARDWARE ANNOUNCEMENT` 与 `APP_ICON CHANGE`；图标日志只包含已注册的可用稳定标识或固定 `unavailable`、阶段、结果与稳定原因码，不记录未知导入标识。公开构建缺失构建公钥时回退到脱敏普通 `runtime.log`，不生成 `.rmlog`；内部包在构建或最终验证阶段拒绝缺失公钥。
+1. 在设置页打开日志目录，收集本次启动对应的 `.rmlog` 加密会话文件并交给受控支持环境分析，完整方法见 [运行日志测试手册](RuntimeLogging.md)；不要按明文读取或要求 App 解密。支持人员重点检查 `UPDATE CHECK`、`UPDATE RELEASE_NOTES`、`source=cloudflare_channel`、`HARDWARE ANNOUNCEMENT` 与 `APP_ICON CHANGE`；更新说明日志只包含版本稳定 token、语言、说明条数、终态和稳定原因码，不记录 URL、路径或用户内容。图标日志只包含已注册的可用稳定标识或固定 `unavailable`、阶段、结果与稳定原因码，不记录未知导入标识。公开构建缺失构建公钥时回退到脱敏普通 `runtime.log`，不生成 `.rmlog`；内部包在构建或最终验证阶段拒绝缺失公钥。
 2. Console：按进程筛选 `RemoteMic`、`Autoupdate`、`Updater` 和 `Installer`。
 3. 崩溃报告：`~/Library/Logs/DiagnosticReports/` 中本次测试时间之后的 Remote Mic 报告。
 4. Sparkle CLI 使用 `--verbose` 保存完整输出；退出码 `4` 表示没有新版本，不判失败。
 
 ## 自动化、代理实测与用户实测边界
 
-自动化可以验证更新策略、stable/preview 与 Apple Silicon/Intel 通道派生、非法 feed 拒绝、更新说明 URL、语言状态、发布脚本和产物结构；本机代理可以验证最终打包 App 的启动、页面截图、固定 appcast 跨版本安装、签名和公证。Cloudflare 通道只能由生产部署后的 HTTP 与字节比较证明；预览版主动检查和正式版自动提示仍需在最终签名安装包中进行真实 UI 验收。
+自动化可以验证更新策略、stable/preview 与 Apple Silicon/Intel 通道派生、非法 feed 拒绝、更新说明 URL（含 `download.sayall.app`、`SayAll-<版本>-<Build>` 和旧 `Remote-Mic-<版本>` 命名）、语言状态、发布脚本和产物结构；本机代理可以验证最终打包 App 的启动、页面截图、固定 appcast 跨版本安装、签名和公证。Cloudflare 通道只能由生产部署后的 HTTP 与字节比较证明；预览版主动检查和正式版自动提示仍需在最终签名安装包中进行真实 UI 验收。
 
 公告自动化只能验证 JSON 解码、过期过滤、受信任来源和链接传递；无法替代真实后端/CDN 可用性、默认浏览器下载、PKG 签名/公证或用户在升级后重新启动 App 的验收。
 

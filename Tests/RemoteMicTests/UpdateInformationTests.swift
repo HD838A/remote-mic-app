@@ -190,43 +190,82 @@ struct UpdateInformationTests {
         #expect(!UpdateVersion.isNewer("1.9.16", than: "1.9.16"))
     }
 
-    @Test func localizedReleaseNotesUseImmutableReleaseAssetURLs() throws {
-        let archiveURL = try #require(URL(
+    @Test func localizedReleaseNotesUseThePublishedAssetName() throws {
+        let legacyArchiveURL = try #require(URL(
             string: "https://github.com/HD838A/remote-mic-app/releases/download/v1.8.6/Remote-Mic-1.8.6.zip"
         ))
 
         #expect(
             UpdateReleaseNotes.assetURL(
-                for: archiveURL,
-                displayVersion: "1.8.6",
+                for: legacyArchiveURL,
                 localeIdentifier: "zh-Hans-CN"
             )?.absoluteString
                 == "https://github.com/HD838A/remote-mic-app/releases/download/v1.8.6/Remote-Mic-1.8.6.zh.txt"
         )
         #expect(
             UpdateReleaseNotes.assetURL(
-                for: archiveURL,
-                displayVersion: "1.8.6",
+                for: legacyArchiveURL,
                 localeIdentifier: "en-US"
             )?.absoluteString
                 == "https://github.com/HD838A/remote-mic-app/releases/download/v1.8.6/Remote-Mic-1.8.6.en.txt"
         )
-        #expect(UpdateReleaseNotes.assetURL(
-            for: URL(string: "https://example.com/Remote-Mic-1.8.6.zip")!,
-            displayVersion: "1.8.6",
-            localeIdentifier: "en"
-        ) == nil)
 
-        let intelArchiveURL = try #require(URL(
+        let legacyIntelArchiveURL = try #require(URL(
             string: "https://github.com/HD838A/remote-mic-app/releases/download/v1.8.6/Remote-Mic-1.8.6-Intel.zip"
         ))
         #expect(
             UpdateReleaseNotes.assetURL(
-                for: intelArchiveURL,
-                displayVersion: "1.8.6",
+                for: legacyIntelArchiveURL,
                 localeIdentifier: "zh-Hans"
             )?.lastPathComponent == "Remote-Mic-1.8.6.zh.txt"
         )
+
+        let cdnArchiveURL = try #require(URL(
+            string: "https://download.sayall.app/mac/releases/v2.0.9/SayAll-2.0.9-424.zip"
+        ))
+        #expect(
+            UpdateReleaseNotes.assetURL(
+                for: cdnArchiveURL,
+                localeIdentifier: "zh-Hans-CN"
+            )?.absoluteString
+                == "https://download.sayall.app/mac/releases/v2.0.9/SayAll-2.0.9-424.zh.txt"
+        )
+        #expect(
+            UpdateReleaseNotes.assetURL(
+                for: cdnArchiveURL,
+                localeIdentifier: "en-US"
+            )?.absoluteString
+                == "https://download.sayall.app/mac/releases/v2.0.9/SayAll-2.0.9-424.en.txt"
+        )
+
+        let cdnIntelArchiveURL = try #require(URL(
+            string: "https://download.sayall.app/mac/releases/v2.0.9/SayAll-2.0.9-424-Intel.zip"
+        ))
+        #expect(
+            UpdateReleaseNotes.assetURL(
+                for: cdnIntelArchiveURL,
+                localeIdentifier: "zh-Hans"
+            )?.lastPathComponent == "SayAll-2.0.9-424.zh.txt"
+        )
+
+        let cdnLegacyArchiveURL = try #require(URL(
+            string: "https://download.sayall.app/mac/releases/v1.9.21/Remote-Mic-1.9.21.zip"
+        ))
+        #expect(
+            UpdateReleaseNotes.assetURL(
+                for: cdnLegacyArchiveURL,
+                localeIdentifier: "zh-Hans"
+            )?.lastPathComponent == "Remote-Mic-1.9.21.zh.txt"
+        )
+
+        #expect(UpdateReleaseNotes.assetURL(
+            for: URL(string: "https://example.com/SayAll-2.0.9-424.zip")!,
+            localeIdentifier: "en"
+        ) == nil)
+        #expect(UpdateReleaseNotes.assetURL(
+            for: URL(string: "https://download.sayall.app/mac/releases/v2.0.9/SayAll-2.0.9-424.dmg")!,
+            localeIdentifier: "en"
+        ) == nil)
     }
 
     @Test func releaseNotesParserKeepsOnlyReadableContent() {
@@ -248,42 +287,42 @@ struct UpdateInformationTests {
                 : "- English release note"
         }
         let archiveURL = try #require(URL(
-            string: "https://github.com/HD838A/remote-mic-app/releases/download/v1.8.6/Remote-Mic-1.8.6.zip"
+            string: "https://download.sayall.app/mac/releases/v2.0.9/SayAll-2.0.9-424.zip"
         ))
 
         store.setAvailable(
-            displayVersion: "1.8.6",
-            buildVersion: "67",
+            displayVersion: "2.0.9",
+            buildVersion: "424",
             archiveURL: archiveURL,
             fallbackDescription: nil,
             localeIdentifier: "zh-Hans"
         )
         for _ in 0..<20 {
             if store.state == .available(AvailableUpdateInformation(
-                displayVersion: "1.8.6",
-                buildVersion: "67",
+                displayVersion: "2.0.9",
+                buildVersion: "424",
                 releaseNotes: ["中文更新内容"]
             )) { break }
             await Task.yield()
         }
         #expect(store.state == .available(AvailableUpdateInformation(
-            displayVersion: "1.8.6",
-            buildVersion: "67",
+            displayVersion: "2.0.9",
+            buildVersion: "424",
             releaseNotes: ["中文更新内容"]
         )))
 
         store.reloadReleaseNotes(localeIdentifier: "en")
         for _ in 0..<20 {
             if store.state == .available(AvailableUpdateInformation(
-                displayVersion: "1.8.6",
-                buildVersion: "67",
+                displayVersion: "2.0.9",
+                buildVersion: "424",
                 releaseNotes: ["English release note"]
             )) { break }
             await Task.yield()
         }
         #expect(store.state == .available(AvailableUpdateInformation(
-            displayVersion: "1.8.6",
-            buildVersion: "67",
+            displayVersion: "2.0.9",
+            buildVersion: "424",
             releaseNotes: ["English release note"]
         )))
     }

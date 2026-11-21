@@ -175,17 +175,22 @@ enum UpdateReleaseNotes {
 
     static func assetURL(
         for updateArchiveURL: URL,
-        displayVersion: String,
         localeIdentifier: String
     ) -> URL? {
         guard updateArchiveURL.scheme == "https",
-              updateArchiveURL.host == "github.com",
-              displayVersion.range(of: #"^[0-9A-Za-z.-]+$"#, options: .regularExpression) != nil
+              let host = updateArchiveURL.host,
+              ["github.com", "download.sayall.app"].contains(host),
+              updateArchiveURL.pathExtension.lowercased() == "zip"
         else { return nil }
+
+        let archiveName = updateArchiveURL.deletingPathExtension().lastPathComponent
+        let notesBaseName = archiveName.hasSuffix("-Intel")
+            ? String(archiveName.dropLast("-Intel".count))
+            : archiveName
         let languageCode = languageCode(for: localeIdentifier)
         return updateArchiveURL
             .deletingLastPathComponent()
-            .appendingPathComponent("Remote-Mic-\(displayVersion).\(languageCode).txt")
+            .appendingPathComponent("\(notesBaseName).\(languageCode).txt")
     }
 
     static func parse(_ text: String) -> [String] {
@@ -352,17 +357,25 @@ final class UpdateInformationStore: ObservableObject {
         localeIdentifier: String
     ) {
         notesTask?.cancel()
-        guard let archiveURL = pending.archiveURL,
-              let notesURL = UpdateReleaseNotes.assetURL(
-                for: archiveURL,
-                displayVersion: pending.displayVersion,
-                localeIdentifier: localeIdentifier
-              )
-        else { return }
+        guard let archiveURL = pending.archiveURL else { return }
+        guard let notesURL = UpdateReleaseNotes.assetURL(
+            for: archiveURL,
+            localeIdentifier: localeIdentifier
+        ) else {
+            AppLogger.shared.write(
+                "UPDATE RELEASE_NOTES phase=completed result=failed " +
+                    "reason=asset_url_unavailable " +
+                    "display_version=\(AppLogger.stableToken(pending.displayVersion)) " +
+                    "language=\(UpdateReleaseNotes.languageCode(for: localeIdentifier))"
+            )
+            return
+        }
 
         notesGeneration += 1
         let generation = notesGeneration
         let notesLoader = notesLoader
+        let logFields = "display_version=\(AppLogger.stableToken(pending.displayVersion)) " +
+            "language=\(UpdateReleaseNotes.languageCode(for: localeIdentifier))"
         notesTask = Task { [weak self] in
             do {
                 let text = try await notesLoader(notesURL)
@@ -371,10 +384,25 @@ final class UpdateInformationStore: ObservableObject {
                       self.pendingUpdate == pending
                 else { return }
                 let notes = UpdateReleaseNotes.parse(text)
-                guard !notes.isEmpty else { return }
+                guard !notes.isEmpty else {
+                    AppLogger.shared.write(
+                        "UPDATE RELEASE_NOTES phase=completed result=failed " +
+                            "reason=notes_empty \(logFields)"
+                    )
+                    return
+                }
                 self.state = .available(self.information(for: pending, notes: notes))
+                AppLogger.shared.write(
+                    "UPDATE RELEASE_NOTES phase=completed result=loaded " +
+                        "\(logFields) notes_count=\(notes.count)"
+                )
             } catch {
                 guard !Task.isCancelled else { return }
+                AppLogger.shared.write(
+                    "UPDATE RELEASE_NOTES phase=completed result=failed " +
+                        "reason=load_failed \(logFields) " +
+                        AppLogger.errorFields(error)
+                )
             }
         }
     }
