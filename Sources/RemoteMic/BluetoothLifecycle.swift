@@ -9,7 +9,22 @@ import Foundation
 /// 本函数不会误配，匹配会安全地失败。
 enum RemoteIdentityFingerprint {
     static func fingerprint(for identifier: UUID) -> String {
-        SHA256.hash(data: Data(identifier.uuidString.utf8))
+        hash(identifier.uuidString)
+    }
+
+    /// 同一设备可能被哈希成哪些值。
+    ///
+    /// HID 侧哈希的是 `PhysicalDeviceUniqueID` 的**原始字面量**，而 CoreBluetooth 只给出
+    /// `UUID`；Foundation 的 `uuidString` 固定大写，系统属性并没有这个保证。大小写不同
+    /// 的同一个 UUID 哈希值不同但不可能与其他设备相撞，所以两个变体都接受，避免系统属性
+    /// 换成小写时静默不修（现场表现仍是「重配后连不上」，日志里却什么都没有）。
+    static func candidates(for identifier: UUID) -> Set<String> {
+        let literal = identifier.uuidString
+        return [hash(literal), hash(literal.lowercased())]
+    }
+
+    private static func hash(_ literal: String) -> String {
+        SHA256.hash(data: Data(literal.utf8))
             .map { String(format: "%02x", $0) }
             .joined()
     }
@@ -26,11 +41,12 @@ enum RemoteIdentityReconciliationPolicy {
 
     static func replacement(
         for currentIdentifier: UUID,
-        hidFingerprint: String,
+        hidFingerprints: Set<String>,
         profiles: [RemoteDeviceProfile]
     ) -> Match? {
         let matches = profiles.filter { profile in
-            profile.hidFingerprint == hidFingerprint &&
+            guard let fingerprint = profile.hidFingerprint else { return false }
+            return hidFingerprints.contains(fingerprint) &&
                 (profile.model == .rc001 || profile.model == .rc003)
         }
         guard matches.count == 1, let profile = matches.first else { return nil }

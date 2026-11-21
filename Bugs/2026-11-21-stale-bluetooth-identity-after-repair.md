@@ -97,7 +97,7 @@ ONBOARDING EVENT kind=blocked step=audio failure=audio.output_not_ready
 
 覆盖：
 
-- `RemoteIdentityFingerprint`：与 HID `PhysicalDeviceUniqueID` 相同的 SHA-256 大写十六进制格式。
+- `RemoteIdentityFingerprint`：与 HID `PhysicalDeviceUniqueID` 相同的 SHA-256 十六进制格式；同时接受系统字面量的大小写变体（小写属性不会再静默不修）。
 - `RemoteIdentityReconciliationPolicy`：唯一命中、identifier 冲突、重复 HID、私有/未知型号、已是当前值、无 BLE 字段。
 - `AppSettings.replaceBluetoothIdentifier`：替换后档案 ID / HID / 型号 / 自定义名称 / 系统名称 / 硬件身份 / 映射 / 选中状态 / 档案数量不变，重启后持久，冲突不写入。
 - 发现 bridge 接线：候选采纳前调用同步入口；匹配后直接使用当前 identifier 的发现回调。
@@ -116,5 +116,5 @@ ONBOARDING EVENT kind=blocked step=audio failure=audio.output_not_ready
 - 自动化不能证明 CoreBluetooth 会接受当前 identifier 的 GATT 连接。若系统 / 遥控器链路本身拒绝连接，档案会更新到当前正确 identifier，但语音仍不可用；此时日志会显示当前 identifier 的连接超时，而不是继续尝试旧值。
 - 本修复不改变音频处理、Onboarding 页面或任何用户可见功能。
 - `RemoteIdentityFingerprint` 只证明 BLE identifier 摘要与 HID `PhysicalDeviceUniqueID` 分支的指纹格式一致；HID 指纹来自序列号、地址或其他分支时格式不同，策略会安全地不命中，不会误替换。现场设备的对应关系仍需真机确认。
-- 只有 BLE identifier、没有 HID 指纹的历史重复档案不会被本修复猜测合并。若当前 identifier 被这种档案占用，会记录 `reason=identifier_owned` 并跳过，避免串台；剩余重复档案需要独立修复或在现有界面允许时手动清理。
-- 已暂停旧预算、`identifier_owned` 跳过和状态清理由静态接线断言覆盖；尚未用真实 CoreBluetooth 事件回放验证新预算一定发起连接。
+- 只有 BLE identifier、没有 HID 指纹的历史重复档案不会被本修复猜测合并。若当前 identifier 被这种档案占用，`RemoteIdentityReconciliationPolicy` 直接返回不命中并跳过，避免串台；这条判断只有策略一份，不再在调用方重复实现。剩余重复档案需要独立修复或在现有界面允许时手动清理。
+- 已暂停旧预算、identifier 冲突跳过和状态清理由静态接线断言覆盖；尚未用真实 CoreBluetooth 事件回放验证新预算一定发起连接。旧桥必须 `stop()` 之后再从 `bluetoothBridgeStates` 移除：`stop()` 会把 `.stopped` 同步回调给 delegate 并重新写回这张表。
