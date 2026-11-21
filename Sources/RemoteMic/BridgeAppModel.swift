@@ -1131,6 +1131,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     private var connectedChromecastProfileIDs = Set<UUID>()
     /// 当前按下的 Chromecast 按键（画布控制 ID）。
     private var chromecastPressedControls = Set<String>()
+    private let chromecastAppSwitcher = ChromecastAppSwitcher()
     private var chromecastButtonGestureRecognizer = RemoteButtonGestureRecognizer()
     private var chromecastDoubleClickTimers: [RemoteButton: DispatchSourceTimer] = [:]
     private var chromecastLongPressTimers: [RemoteButton: DispatchSourceTimer] = [:]
@@ -1405,6 +1406,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         chromecastFeature.onHIDPresenceChange = { [weak self] isPresent in
             self?.objectWillChange.send()
             self?.chromecastHIDIsPresent = isPresent
+            if !isPresent { self?.resetChromecastButtonState(reason: "hid_unavailable") }
             self?.logRemoteCardStatusChanges()
             AppLogger.shared.write("CHROMECAST HID DEVICE present=\(isPresent)")
         }
@@ -1720,11 +1722,14 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
                              NSWorkspace.sessionDidResignActiveNotification] {
             buttonLifecycleObservers.append(NSWorkspace.shared.notificationCenter.addObserver(
                 forName: notification, object: nil, queue: .main
-            ) { [weak self] _ in
+            ) { [weak self] event in
                 guard let self else { return }
                 self.cancelConfiguredButtonInteractions(reason: "environment_changed")
                 self.hidMonitors.values.forEach { $0.cancelConfiguredInteractions(reason: "environment_changed") }
                 self.discoveryHIDMonitor?.cancelConfiguredInteractions(reason: "environment_changed")
+                if event.name != NSWorkspace.didActivateApplicationNotification {
+                    self.chromecastAppSwitcher.cancel(reason: "environment_changed")
+                }
             })
         }
         terminationObserver = NotificationCenter.default.addObserver(
@@ -3890,6 +3895,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         appliedHIDPermissionSnapshot = permissionSnapshot
         if !settings.customMappingEnabled || !permissionSnapshot.accessibilityGranted ||
             !permissionSnapshot.inputMonitoringGranted {
+            chromecastAppSwitcher.cancel(reason: "mapping_or_permission_unavailable")
             remoteNativeKeyMapper.restore()
             siriNativeKeyMapper.restore()
             chromecastNativeKeyMapper.restore()
@@ -9086,6 +9092,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         chromecastLongPressTimers.values.forEach { $0.cancel() }
         chromecastLongPressTimers.removeAll()
         chromecastButtonGestureRecognizer.reset()
+        chromecastAppSwitcher.cancel(reason: "common_phrases_opened")
         if appleRemoteAppSwitcherSession.isActive {
             finishAppleRemoteAppSwitcher(reason: "common_phrases_opened", confirmed: false)
         }
@@ -11052,6 +11059,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     }
 
     private func resetChromecastButtonState(reason: String) {
+        chromecastAppSwitcher.cancel(reason: reason)
         if chromecastProfileID == buttonGestureLearningProfileID {
             cancelButtonGestureLearning(reason: "chromecast_input_reset")
         }
@@ -11079,6 +11087,11 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         phase: RemoteButtonPhase,
         profileID: UUID
     ) {
+        if chromecastAppSwitcher.handle(
+            phase, button: button,
+            isSwitcherBinding: settings.action(for: button, profileID: profileID) == .appSwitcher
+        ) { return }
+
         if handleButtonGestureLearning(
             phase,
             button: button,
@@ -11200,6 +11213,10 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
                     "button=\(button.rawValue) trigger=\(trigger.rawValue)"
             )
             return false
+        }
+        if configured.action == .appSwitcher {
+            cancelConfiguredButtonInteractions(source: "chromecast:\(profileID.uuidString)", reason: "app_switcher_started")
+            return chromecastAppSwitcher.start(button: button)
         }
         guard performExternalConfiguredAction(configured) else {
             AppLogger.shared.write(
