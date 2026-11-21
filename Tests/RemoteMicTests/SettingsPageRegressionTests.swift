@@ -1107,7 +1107,7 @@ struct SettingsPageRegressionTests {
         // 面板由状态门控，并且排在画布之后：页面加载时不存在这份内容。
         let canvas = try #require(pageSource.range(of: "hardwareCanvas()"))
         let gate = try #require(pageSource.range(
-            of: "if isMappingVoiceSettingsPresented {",
+            of: "isMappingVoiceSettingsPresented {",
             range: canvas.upperBound..<pageSource.endIndex
         ))
         #expect(pageSource[gate.upperBound...].contains(
@@ -2867,7 +2867,7 @@ struct SettingsPageRegressionTests {
         )
     }
 
-    @Test func mappingPageResetsEditorAndScrollsToTopWhenRemoteChanges() throws {
+    @Test func mappingPageResetsAllDeviceScopedStateAtStableParentLevel() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -2877,10 +2877,19 @@ struct SettingsPageRegressionTests {
             encoding: .utf8
         )
         #expect(source.contains(".id(\"mapping-page-top\")"))
-        #expect(source.contains(".onChange(of: settings.selectedRemoteProfileID)"))
+        #expect(source.contains(".id(settings.selectedRemoteProfileID)"))
+        // 清理监听必须在型号页面之外，跨型号切换才不会被移除。
+        #expect(source.contains(".onChange(of: settings.selectedRemoteProfileID) { _ in"))
+        #expect(source.contains("guard !mappingInteractionBelongsToSelectedRemote else { return }"))
+        #expect(source.contains("resetMappingPageForRemoteChange()"))
+        #expect(source.contains("private func resetMappingPageForRemoteChange()"))
+        #expect(source.contains("mappingPageStateDeviceID = settings.selectedRemoteProfileID"))
         #expect(source.contains("mappingEditingTarget = nil"))
-        #expect(source.contains("proxy.scrollTo(\"mapping-page-top\", anchor: .top)"))
-        #expect(source.contains("Group {\n                    ScrollView(.vertical, showsIndicators: false)"))
+        #expect(source.contains("mappingActionFilter = .all"))
+        #expect(source.contains("selectedRemoteButton = .ok"))
+        #expect(source.contains("editingMappingProfileID = nil"))
+        #expect(source.contains("if mappingInteractionBelongsToSelectedRemote,"))
+        #expect(!source.contains("proxy.scrollTo(\"mapping-page-top\", anchor: .top)"))
     }
 
     @Test func macroLibraryNavigationKeepsSelectionAndClearsOnlySearch() throws {
