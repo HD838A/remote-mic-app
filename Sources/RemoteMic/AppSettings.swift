@@ -1,4 +1,5 @@
 import Combine
+import CryptoKit
 import Foundation
 
 /// What an import refused to adopt. An exported configuration file is the app's only trust
@@ -2442,8 +2443,9 @@ final class AppSettings: ObservableObject {
             if hidOnly.isEmpty, both.count == 1, bleOnly.count == 1,
                let bothProfile = both.first, let bleProfile = bleOnly.first {
                 // An older BLE registration can leave a default BLE-only record next to the
-                // profile that already owns both transports. Only the default record is
-                // removable: any user name, action or hold customisation keeps both records.
+                // profile that already owns both transports. The connected BLE identifier must
+                // hash to the both-profile HID fingerprint; only then is the split identity
+                // proven. The default-field check only proves removal cannot lose user data.
                 let bothLive = selectedRemoteProfileID == bothProfile.id
                     || activeHIDProfileIDs.contains(bothProfile.id)
                 guard bothLive else {
@@ -2458,7 +2460,14 @@ final class AppSettings: ObservableObject {
                     logSkip("ble_not_connected")
                     continue
                 }
-                guard Self.defaultBLEOnlyDuplicateMayBelongTo(bothProfile, bleProfile) else {
+                guard Self.bluetoothIdentifierMatchesHIDFingerprint(
+                    bleProfile,
+                    bothProfile
+                ) else {
+                    logSkip("identity_mismatch")
+                    continue
+                }
+                guard Self.defaultBLEOnlyDuplicateIsSafeToRemove(bleProfile) else {
                     logSkip("ble_duplicate_has_user_data")
                     continue
                 }
@@ -2483,7 +2492,8 @@ final class AppSettings: ObservableObject {
                 replacements[bleProfile.id] = bothProfile.id
                 AppLogger.shared.write(
                     "SETTINGS REMOTE_PROFILE_PAIR phase=completed result=merged " +
-                        "model=\(model.rawValue) kept=both reason=default_ble_duplicate"
+                        "model=\(model.rawValue) kept=both " +
+                        "reason=default_ble_duplicate_identity_match"
                 )
                 continue
             }
@@ -2571,18 +2581,32 @@ final class AppSettings: ObservableObject {
         return true
     }
 
-    /// A BLE-only record can be a fresh default registration for the same remote whose HID
-    /// profile already owns the mappings. Require every editable field to still be default;
-    /// the one allowed non-nil field is the migration marker that older builds wrote to every
-    /// profile. This is a shape-based repair, not proof of physical identity.
-    private static func defaultBLEOnlyDuplicateMayBelongTo(
-        _ both: RemoteDeviceProfile,
+    /// The system BLE identifier and the HID `PhysicalDeviceUniqueID` can be the same UUID.
+    /// HID profiles store its SHA-256; hashing the BLE identifier with the same rule proves the
+    /// two records describe one physical remote before anything is removed.
+    private static func bluetoothIdentifierMatchesHIDFingerprint(
+        _ ble: RemoteDeviceProfile,
+        _ both: RemoteDeviceProfile
+    ) -> Bool {
+        guard let identifier = ble.bluetoothIdentifier,
+              let hidFingerprint = both.hidFingerprint
+        else { return false }
+        return bluetoothIdentityFingerprint(for: identifier) == hidFingerprint
+    }
+
+    private static func bluetoothIdentityFingerprint(for identifier: UUID) -> String {
+        SHA256.hash(data: Data(identifier.uuidString.utf8))
+            .map { String(format: "%02x", $0) }
+            .joined()
+    }
+
+    /// Identity match proves which two records belong together; this guard proves removing the
+    /// BLE-only record cannot discard user edits. The one allowed non-nil field is the migration
+    /// marker that older builds wrote to every profile.
+    private static func defaultBLEOnlyDuplicateIsSafeToRemove(
         _ ble: RemoteDeviceProfile
     ) -> Bool {
-        guard both.model == ble.model,
-              ble.customName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              both.hardwareIdentity == nil || ble.hardwareIdentity == nil
-                || both.hardwareIdentity == ble.hardwareIdentity
+        guard ble.customName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         else { return false }
         let mappings = ble.mappings
         guard mappings.buttonBindings.count == defaultBindings.count,
