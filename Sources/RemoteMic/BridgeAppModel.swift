@@ -4580,8 +4580,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         monitor.onStatus = { [weak self, weak monitor] value in
             guard let self, let monitor else { return }
             if let profileID = monitor.profileID {
-                self.remoteButtonReadiness[profileID] = .buttons(statusKey: value.key)
-                self.logRemoteCardStatusChanges()
+                self.recordHIDButtonStatus(value, profileID: profileID)
             }
             // A bound HID device appearing is evidence of presence, not a voice-key gesture.
             // It may request recovery, but cannot reset that device's exhausted budget.
@@ -5598,12 +5597,31 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         )
     }
 
+    func recordHIDButtonStatus(_ value: LocalizedMessage, profileID: UUID) {
+        let readiness = RemoteFunctionReadiness.buttons(statusKey: value.key)
+        let previous = remoteButtonReadiness.updateValue(readiness, forKey: profileID)
+        logRemoteCardStatusChanges()
+
+        guard previous != .ready, readiness == .ready,
+              value.key.hasPrefix("button_mapping.status.connected") else { return }
+
+        // Reconcile after the HID callback returns, using the current BLE and HID evidence.
+        DispatchQueue.main.async { [weak self] in
+            guard let self,
+                  self.remoteButtonReadiness[profileID] == .ready,
+                  !self.connectedRemoteProfileIDs.isEmpty,
+                  !self.connectedRemoteProfileIDs.contains(profileID)
+            else { return }
+            self.collapseDuplicateRemoteProfiles(readyHIDProfileID: profileID)
+        }
+    }
+
     /// 把被并掉的档案 ID 从运行时映射里搬走。
     ///
     /// 去重时优先保留正在使用的那条，所以被并掉的通常是没有连接的旧档案；但它的
     /// 显示名、电量、设备映射仍可能留在字典里，必须一起迁到保留下来的那条，
     /// 否则下一次渲染会读到一个已经不存在的档案。
-    private func collapseDuplicateRemoteProfiles() {
+    private func collapseDuplicateRemoteProfiles(readyHIDProfileID: UUID? = nil) {
         // `connectedRemoteProfileIDs` 由 `refreshBluetoothPresentation` 汇总，可能还没跟上
         // 刚刚建好的档案，所以这里把各链路自己的连接集合也带上：正在用的那条必须留下。
         var liveProfileIDs = connectedRemoteProfileIDs
@@ -5612,12 +5630,13 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         var replacements = settings.collapseDuplicateRemoteProfiles(
             preferring: liveProfileIDs
         )
-        let activeHIDProfileIDs = Set(hidMonitors.values.compactMap { monitor -> UUID? in
+        var activeHIDProfileIDs = Set(hidMonitors.values.compactMap { monitor -> UUID? in
             guard monitor.status.key.hasPrefix("button_mapping.status.connected") else {
                 return nil
             }
             return monitor.profileID
         })
+        if let readyHIDProfileID { activeHIDProfileIDs.insert(readyHIDProfileID) }
         let pairedReplacements = settings.reconcileComplementaryRemoteProfiles(
             connectedProfileIDs: liveProfileIDs,
             activeHIDProfileIDs: activeHIDProfileIDs
@@ -5674,7 +5693,8 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         refreshBluetoothPresentation()
         AppLogger.shared.write(
             "REMOTE PROFILES phase=completed result=collapsed merged=\(replacements.count) " +
-                "remaining=\(settings.remoteDeviceProfiles.count)"
+                "remaining=\(settings.remoteDeviceProfiles.count) " +
+                "source=\(readyHIDProfileID == nil ? "metadata_refresh" : "hid_ready")"
         )
     }
 

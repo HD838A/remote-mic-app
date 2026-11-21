@@ -129,6 +129,37 @@ struct RemoteProfilePersistenceTests {
         return (bothID, bleID, bothBluetoothIdentifier, bleBluetoothIdentifier)
     }
 
+    @MainActor
+    @Test(arguments: [true, false])
+    func lateHIDReadyReconcilesAnAlreadyConnectedBLECard(hidStillReady: Bool) async throws {
+        let scope = try Self.scopedSettings("late-hid-ready")
+        defer { scope.tearDown() }
+        let ids = try Self.seedBothProfileAndDefaultBLEDuplicate(in: scope)
+        let settings = AppSettings(defaults: scope.defaults)
+        let model = BridgeAppModel(settings: settings)
+        let bridge = Self.bridge(ids.bleBluetoothIdentifier, settings: settings, delegate: model)
+        let originalMappings = try #require(settings.remoteDeviceProfiles.first { $0.id == ids.both }).mappings
+
+        model.bluetoothBridge(bridge, didChange: .ready("Test 2 Pro"))
+        #expect(model.isRemoteConnected(ids.ble))
+        #expect(!model.isRemoteConnected(ids.both))
+
+        model.recordHIDButtonStatus(LocalizedMessage("button_mapping.status.connected_fallback"), profileID: ids.both)
+        if !hidStillReady {
+            model.recordHIDButtonStatus(LocalizedMessage("button_mapping.status.searching"), profileID: ids.both)
+        }
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            DispatchQueue.main.async { continuation.resume() }
+        }
+
+        #expect(model.isRemoteConnected(ids.ble) == !hidStillReady)
+        #expect(model.isRemoteConnected(ids.both) == hidStillReady)
+        #expect(model.remoteButtonReadiness[ids.both] == (hidStillReady ? .ready : .checking))
+        #expect(settings.remoteDeviceProfiles.count == (hidStillReady ? 1 : 2))
+        #expect(settings.remoteDeviceProfiles.first { $0.id == ids.both }?.mappings == originalMappings)
+        #expect(settings.selectedRemoteProfileID == (hidStillReady ? ids.both : ids.ble))
+    }
+
     @Test func defaultBLEOnlyDuplicateBesideBothProfileIsMerged() throws {
         let scope = try Self.scopedSettings("both-ble-default-duplicate")
         defer { scope.tearDown() }
