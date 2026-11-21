@@ -1933,6 +1933,27 @@ final class AppSettings: ObservableObject {
         return profile.id
     }
 
+    /// 将同一物理设备的新 CoreBluetooth identifier 写回已有档案。
+    ///
+    /// 调用方必须已经用 HID 指纹证明当前 BLE 设备与档案是同一物理设备。这里再次拒绝
+    /// 已被其他档案占用的 identifier，避免新设备或重复数据造成串台；映射和其他字段不动。
+    @discardableResult
+    func replaceBluetoothIdentifier(for profileID: UUID, with identifier: UUID) -> UUID? {
+        guard let index = remoteDeviceProfiles.firstIndex(where: { $0.id == profileID }) else {
+            return nil
+        }
+        let previousIdentifier = remoteDeviceProfiles[index].bluetoothIdentifier
+        guard previousIdentifier != identifier else { return nil }
+        guard !remoteDeviceProfiles.contains(where: {
+            $0.id != profileID && $0.bluetoothIdentifier == identifier
+        }) else { return nil }
+        remoteDeviceProfiles[index].bluetoothIdentifier = identifier
+        AppLogger.shared.write(
+            "SETTINGS REMOTE_IDENTITY phase=completed result=replaced reason=hid_fingerprint_match"
+        )
+        return previousIdentifier
+    }
+
     @discardableResult
     func registerHIDRemote(fingerprint: String) -> UUID {
         if let existing = remoteDeviceProfiles.first(where: { $0.hidFingerprint == fingerprint }) {

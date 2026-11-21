@@ -128,6 +128,7 @@ final class XiaomiBluetoothBridge: NSObject {
     private let excludedIdentifiers: () -> Set<UUID>
     private let knownIdentifiers: () -> Set<UUID>
     private let discoveredCandidate: ((UUID) -> Void)?
+    private let reconcileCandidateIdentifier: ((UUID) -> Bool)?
     private let recovery: RemoteConnectionRecovery
     private var recoveryDeadlineWorkItem: DispatchWorkItem?
     private var discoveryWindowWorkItem: DispatchWorkItem?
@@ -260,6 +261,7 @@ final class XiaomiBluetoothBridge: NSObject {
         excludedIdentifiers: @escaping () -> Set<UUID> = { [] },
         knownIdentifiers: @escaping () -> Set<UUID> = { [] },
         discoveredCandidate: ((UUID) -> Void)? = nil,
+        reconcileCandidateIdentifier: ((UUID) -> Bool)? = nil,
         recovery: RemoteConnectionRecovery = RemoteConnectionRecovery()
     ) {
         self.delegate = delegate
@@ -267,6 +269,7 @@ final class XiaomiBluetoothBridge: NSObject {
         self.excludedIdentifiers = excludedIdentifiers
         self.knownIdentifiers = knownIdentifiers
         self.discoveredCandidate = discoveredCandidate
+        self.reconcileCandidateIdentifier = reconcileCandidateIdentifier
         self.recovery = recovery
         super.init()
     }
@@ -755,6 +758,17 @@ final class XiaomiBluetoothBridge: NSObject {
         advertisedName: String?,
         usesCachedTarget: Bool = false
     ) -> Bool {
+        if targetIdentifier == nil,
+           reconcileCandidateIdentifier?(candidate.identifier) == true {
+            // HID 指纹已经证明这是已有档案的同一只物理设备。直接交给发现回调建立
+            // 当前 identifier 的 bridge，不依赖随后可能过期的 knownIdentifiers 快照。
+            guard let discoveredCandidate,
+                  !excludedIdentifiersSnapshot.contains(candidate.identifier) else {
+                return false
+            }
+            discoveredCandidate(candidate.identifier)
+            return false
+        }
         let decision = VoiceRemoteAdmission.decide(
             identifier: candidate.identifier,
             targetIdentifier: targetIdentifier,
@@ -1535,6 +1549,17 @@ extension XiaomiBluetoothBridge: CBCentralManagerDelegate {
             advertisedName: advertisedName,
             peripheralName: peripheral.name
         ) else {
+            // #1159 的扫描过滤会先丢掉没有名称、没有语音服务且不在已知集合里的广播。
+            // 重新配对后当前 identifier 恰好可能符合这种形态，所以被过滤前再用 HID
+            // 指纹给已有档案一次机会；命中后直接走当前 identifier 的发现回调。
+            if targetIdentifier == nil,
+               reconcileCandidateIdentifier?(peripheral.identifier) == true {
+                if let discoveredCandidate,
+                   !excludedIdentifiersSnapshot.contains(peripheral.identifier) {
+                    discoveredCandidate(peripheral.identifier)
+                }
+                return
+            }
             ignoredUnrelatedDiscoveryCount &+= 1
             return
         }
