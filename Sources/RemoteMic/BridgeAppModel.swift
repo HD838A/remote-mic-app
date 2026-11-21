@@ -5034,22 +5034,9 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     private func reconcileStaleRemoteIdentity(for identifier: UUID) -> UUID? {
         guard !bluetoothVoiceActive, pendingBluetoothVoiceStartIdentifier == nil else { return nil }
         guard settings.profileID(forBluetoothIdentifier: identifier) == nil else { return nil }
-        let fingerprint = RemoteIdentityFingerprint.fingerprint(for: identifier)
-        if let profile = settings.remoteDeviceProfiles.first(where: {
-            $0.hidFingerprint == fingerprint &&
-                ($0.model == .rc001 || $0.model == .rc003)
-        }), profile.bluetoothIdentifier != identifier,
-           settings.remoteDeviceProfiles.contains(where: {
-               $0.id != profile.id && $0.bluetoothIdentifier == identifier
-           }) {
-            AppLogger.shared.write(
-                "BLE IDENTITY phase=completed result=skipped reason=identifier_owned"
-            )
-            return nil
-        }
         guard let match = RemoteIdentityReconciliationPolicy.replacement(
             for: identifier,
-            hidFingerprint: fingerprint,
+            hidFingerprints: RemoteIdentityFingerprint.candidates(for: identifier),
             profiles: settings.remoteDeviceProfiles
         ) else { return nil }
         guard let previousIdentifier = settings.replaceBluetoothIdentifier(
@@ -5068,8 +5055,11 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         remoteRecoveryBudgets.removeValue(forKey: previousIdentifier)
         remoteRecoveryBudgets.removeValue(forKey: identifier)
         if let staleBridge = bluetoothBridges.removeValue(forKey: previousIdentifier) {
-            bluetoothBridgeStates.removeValue(forKey: ObjectIdentifier(staleBridge))
             staleBridge.stop()
+            // `stop()` 会把 `.stopped` 同步回调给 delegate，并重新写进这张表。移除必须放在
+            // 它之后，否则每次身份修复都会留下一条不会再被回收的孤儿状态；`allStates.first`
+            // 兜底选择连接状态时可能选中它，把卡片文案永久钉在「已停止」。
+            bluetoothBridgeStates.removeValue(forKey: ObjectIdentifier(staleBridge))
         }
         remoteRecoveryStates.removeValue(forKey: match.profileID)
         pendingRemoteBatteryLevels.removeValue(forKey: previousIdentifier)
