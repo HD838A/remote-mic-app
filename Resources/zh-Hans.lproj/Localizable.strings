@@ -386,6 +386,12 @@
 "connection.voice_key_compatibility.recheck" = "重新检测语音键";
 "connection.status.waiting_voice_button" = "等待麦克风键";
 "connection.status.voice_active" = "语音中";
+"countdown.seconds_left" = "秒后自动结束";
+"countdown.recording_ended" = "录音已结束";
+"countdown.seconds_left_compact" = "%d 秒后结束";
+"connection.status.voice_ended" = "录音已结束";
+"countdown.accessibility.remaining" = "遥控器录音还剩 %d 秒";
+"countdown.accessibility.ended" = "遥控器录音已结束";
 "common.status.ready" = "已就绪";
 "connection.status.voice_trigger" = "语音触发";
 "connection.voice_fn_tap.enabled" = "语音键模拟 Fn 点按";

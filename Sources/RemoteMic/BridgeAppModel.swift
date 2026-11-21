@@ -593,6 +593,8 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     @Published private(set) var isRemoteVoiceRecoveryInFlight = false
     @Published private(set) var isStreaming = false
     @Published private(set) var voiceSessionWarningLevel: VoiceSessionWarningLevel = .none
+    /// 设置页“语音状态”行的剩余秒数；`.hidden` 表示当前不显示倒计时。
+    @Published private(set) var voiceLimitCountdownState: VoiceLimitCountdownState = .hidden
     @Published private(set) var isConnected = false
     @Published private(set) var isVoiceTriggerEnabled = false
     @Published private(set) var activeRemoteButtons = Set<RemoteButton>()
@@ -1011,6 +1013,10 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     private var transcriptDiagnosticOperations: [(sessionID: UUID, operationID: UInt64)] = []
     private var bluetoothVoiceTraceRoute = "none"
     private var bluetoothVoiceTailDiagnostics = BluetoothVoiceTailDiagnostics()
+    /// 遥控器约 60 秒上限的浮层倒计时；纯展示，不结束会话也不碰音频。
+    private lazy var voiceLimitCountdown = VoiceLimitCountdownController(
+        logger: { AppLogger.shared.write($0) }
+    )
     private let hidEventSuppressor = KeyboardEventSuppressor()
     private var hidMonitors: [String: HIDRemoteMonitor] = [:]
     private var discoveryHIDMonitor: HIDRemoteMonitor?
@@ -1702,6 +1708,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         guard !started else { return }
         started = true
         startAudioSubsystem()
+        applyVoiceCountdownPreviewIfRequested()
 #if SAYALL_SIRI_REMOTE_ENABLED
         if settings.siriRemoteEnabled, !settings.siriRemoteNeedsUserAction {
             siriRemoteFeature.start()
@@ -1834,6 +1841,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         cancelPhoneRemoteMembershipRetry()
         cancelWebRemoteMembershipRetry()
         cancelVoiceSessionWarningTracking()
+        voiceLimitCountdown.stop()
         bluetoothVoiceActive = false
 #if SAYALL_SIRI_REMOTE_ENABLED
         appleRemoteVoiceDevices.removeAll()
@@ -7190,6 +7198,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             let voiceWasActive = identifier.map { $0 == activeBluetoothVoiceDeviceIdentifier } ?? false
             if voiceWasActive {
                 cancelVoiceSessionWarningTracking()
+                voiceLimitCountdown.end(reason: "connection_not_ready")
                 bluetoothVoiceActive = false
                 activeBluetoothVoiceDeviceIdentifier = nil
                 releaseVoiceKeyIfNeeded(owner: .bluetooth, forceSoftware: false)
@@ -7387,6 +7396,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         ) else {
             _ = bridge.requestMicrophoneClose()
             cancelVoiceSessionWarningTracking()
+            voiceLimitCountdown.end(reason: "voice_key_press_failed")
             bluetoothVoiceActive = false
             activeBluetoothVoiceDeviceIdentifier = nil
             pendingBluetoothVoiceStartIdentifier = nil
@@ -7411,6 +7421,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             .flatMap { id in settings.remoteDeviceProfiles.first(where: { $0.id == id })?.model }
             ?? .unknown
         startVoiceSessionWarningTracking(for: model)
+        voiceLimitCountdown.begin(model: model)
         bluetoothVoiceTraceCounter &+= 1
         activeBluetoothVoiceTraceID = bluetoothVoiceTraceCounter
         bluetoothVoiceTraceStartedAt = Date()
@@ -7566,6 +7577,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         activeBluetoothVoiceDeviceIdentifier = nil
         loggedBluetoothVoiceAudioDeviceIdentifier = nil
         cancelVoiceSessionWarningTracking()
+        voiceLimitCountdown.end(reason: "remote_stop")
         bluetoothVoiceActive = false
         pendingBluetoothVoiceStartIdentifier = nil
         cancelPendingBluetoothVoiceAudio(reason: "remote_stop")
@@ -10000,6 +10012,20 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         }
     }
 
+    /// 本机验证入口：`--voice-countdown-preview [10|0]` 立即显示倒计时浮层，
+    /// 不需要真的按住遥控器等到第 50 秒。正常启动不带该参数，行为不受影响。
+    private func applyVoiceCountdownPreviewIfRequested() {
+        guard let raw = VoiceLimitCountdownPreview.argumentValue(in: CommandLine.arguments) else { return }
+        let seconds = TimeInterval(raw) ?? VoiceLimitCountdown.leadTime
+        let state: VoiceLimitCountdownState = seconds <= 0
+            ? .ended(overshoot: 0)
+            : .counting(remaining: Int(seconds.rounded(.up)))
+        voiceLimitCountdown.showPreview(state: state, model: .rc003, seconds: 12)
+        AppLogger.shared.write(
+            "UI VOICE_COUNTDOWN phase=preview result=requested source=command_line"
+        )
+    }
+
     private func startVoiceSessionWarningTracking(for model: XiaomiRemoteModel) {
         cancelVoiceSessionWarningTracking()
         guard model == .rc001 || model == .rc003 else { return }
@@ -10038,6 +10064,22 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             voiceSessionWarningTasks.append(task)
             DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: task)
         }
+        // 设置页需要秒级剩余时间；只在倒计时窗口内发布，窗口外保持 `.hidden`。
+        for second in 0...Int(VoiceLimitCountdown.leadTime) {
+            let delay = VoiceLimitCountdown.limit - VoiceLimitCountdown.leadTime + TimeInterval(second)
+            let task = DispatchWorkItem { [weak self] in
+                guard let self,
+                      self.voiceSessionWarningGeneration == generation,
+                      let startedAt = self.voiceSessionWarningStartedAt
+                else { return }
+                self.voiceLimitCountdownState = VoiceLimitCountdown.state(
+                    elapsed: Date().timeIntervalSince(startedAt),
+                    model: model
+                )
+            }
+            voiceSessionWarningTasks.append(task)
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: task)
+        }
         voiceSessionWarningStartedAt = startedAt
     }
 
@@ -10052,6 +10094,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             )
         }
         voiceSessionWarningLevel = .none
+        voiceLimitCountdownState = .hidden
     }
 
     private func beginVoiceSessionIfNeeded(audioDiagnosticOperationID: UInt64? = nil) {
