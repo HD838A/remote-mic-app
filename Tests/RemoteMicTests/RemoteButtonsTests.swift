@@ -3501,6 +3501,24 @@ struct RemoteButtonsTests {
         #expect(!focusAttempted)
     }
 
+    @Test func openingSayAllReopensItsWindowEvenWhenAlreadyFrontmost() {
+        let bundleURL = URL(fileURLWithPath: "/Applications/SayAll.app")
+        var opened: PresetApplication?
+        let handled = KeyboardInjector.send(
+            .openRemoteMic,
+            applicationURL: { _ in bundleURL },
+            applicationOpener: { url, application, completion in
+                #expect(url == bundleURL)
+                opened = application
+                completion(123, nil)
+            },
+            frontmostApplication: { (PresetApplication.remoteMic.bundleIdentifier, 123) }
+        )
+
+        #expect(handled)
+        #expect(opened == .remoteMic)
+    }
+
     @Test func alreadyFrontmostPresetApplicationSkipsReactivationAndFocusesRunningInstance() {
         let applicationURL = URL(fileURLWithPath: "/Applications/WorkBuddy.app")
         var openerCalled = false
