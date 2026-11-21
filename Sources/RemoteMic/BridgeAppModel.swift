@@ -1289,11 +1289,10 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             if self.siriNativeKeyMapper.prepare(additionalSources: sources) { return true }
             // 苹果遥控器只上报消费类/厂商用途，没有键盘页，系统不接受
             // `HIDKeyboardModifierMappingPairs` 写入，键位中和映射因此永远校验失败。
-            // 这种遥控器随后由适配器以独占方式打开，原生按键不会漏到系统，
-            // 所以不能因为映射未就绪就把整台设备拒掉——那样遥控器连设备卡片都不会出现。
+            // 仍接收设备控制。部分接口独占后仍有原生媒体事件，由宿主按物理边沿配对拦截。
             AppLogger.shared.write(
                 "APPLE REMOTE NATIVE_INPUT phase=fallback reason=mapping_unavailable " +
-                    "isolation=exclusive_open"
+                    "isolation=event_filter native_delivery=unverified"
             )
             return true
         }
@@ -5803,21 +5802,23 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             }
             return
         }
-        if settings.customMappingEnabled, !siriNativeKeyMapper.isPrepared, event.phase == .began {
-            // 键位中和映射不可用时设备已由适配器独占打开，原生事件不会漏到系统，
-            // 因此继续执行用户配置的动作，不再整键丢弃。
-            AppLogger.shared.write(
-                "APPLE REMOTE ACTION phase=continued result=exclusive_open_isolation " +
-                    "control=\(control.rawValue)"
-            )
+        let profileID = appleRemoteProfileIDs[event.device]
+        let nativeEdge: RemoteEventEdge = event.phase == .began ? .down : .up
+        let needsEventFilter = !siriNativeKeyMapper.isPrepared
+        let ownsMappedInput = profileID != nil && (settings.customMappingEnabled || suppressConfiguredAction)
+        if needsEventFilter, ownsMappedInput {
+            // The session tap can receive a native media event while the main thread
+            // updates settings or publishes UI state for the same physical edge.
+            hidEventSuppressor.arm(nativeEvents: control.nativeEvents, edge: nativeEdge)
         }
-        if control == .select {
-            let nativeEdge: RemoteEventEdge = event.phase == .began ? .down : .up
+        if control == .select, !appleRemoteAppSwitcherSession.isActive {
             if !suppressConfiguredAction,
                event.phase == .began,
                siriRemoteCursorFeedback.activateHoveredElementIfAvailable() {
                 appleRemoteHoverClickDevices.insert(event.device)
-                if !siriNativeKeyMapper.isPrepared { hidEventSuppressor.arm(nativeEvents: control.nativeEvents, edge: nativeEdge) }
+                if needsEventFilter, !ownsMappedInput {
+                    hidEventSuppressor.arm(nativeEvents: control.nativeEvents, edge: nativeEdge)
+                }
                 AppLogger.shared.write(
                     "APPLE REMOTE HOVER_CLICK phase=began result=activated action=ax_press"
                 )
@@ -5826,7 +5827,9 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             if !suppressConfiguredAction,
                event.phase == .ended,
                appleRemoteHoverClickDevices.remove(event.device) != nil {
-                if !siriNativeKeyMapper.isPrepared { hidEventSuppressor.arm(nativeEvents: control.nativeEvents, edge: nativeEdge) }
+                if needsEventFilter, !ownsMappedInput {
+                    hidEventSuppressor.arm(nativeEvents: control.nativeEvents, edge: nativeEdge)
+                }
                 AppLogger.shared.write(
                     "APPLE REMOTE HOVER_CLICK phase=ended result=consumed"
                 )
@@ -5842,7 +5845,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             }
             return
         }
-        guard let profileID = appleRemoteProfileIDs[event.device] else {
+        guard let profileID else {
             AppLogger.shared.write(
                 "APPLE REMOTE ACTION phase=failed result=profile_unavailable " +
                     "control=\(control.rawValue)"
@@ -5869,10 +5872,8 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             }
             return
         }
-        let nativeEdge: RemoteEventEdge = event.phase == .began ? .down : .up
-        if !siriNativeKeyMapper.isPrepared { hidEventSuppressor.arm(nativeEvents: control.nativeEvents, edge: nativeEdge) }
         AppLogger.shared.write(
-            "APPLE REMOTE NATIVE_EVENT phase=\(siriNativeKeyMapper.isPrepared ? "source_mapped" : "armed") control=\(control.rawValue) " +
+            "APPLE REMOTE NATIVE_EVENT phase=\(needsEventFilter ? "armed" : "source_mapped") control=\(control.rawValue) " +
                 "edge=\(nativeEdge == .down ? "down" : "up") " +
                 "candidates=\(control.nativeEvents.count)"
         )

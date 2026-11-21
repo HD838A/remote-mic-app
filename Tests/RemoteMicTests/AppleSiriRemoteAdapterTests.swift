@@ -107,7 +107,13 @@ struct AppleSiriRemoteAdapterTests {
             encoding: .utf8
         )
 
-        #expect(modelSource.contains(
+        let controlHandlerStart = try #require(modelSource.range(of: "private func handleAppleRemoteControlEvent"))
+        let controlHandlerEnd = try #require(modelSource.range(of: "private func handleAppleRemoteButton"))
+        let handler = modelSource[controlHandlerStart.lowerBound..<controlHandlerEnd.lowerBound]
+        let mappedInput = try #require(handler.range(of: "if needsEventFilter, ownsMappedInput {"))
+        let hoverPath = try #require(handler.range(of: "if control == .select"))
+        let ordinaryControl = handler[mappedInput.lowerBound..<hoverPath.lowerBound]
+        #expect(ordinaryControl.contains(
             "hidEventSuppressor.arm(nativeEvents: control.nativeEvents, edge: nativeEdge)"
         ))
         #expect(!modelSource.contains("APPLE REMOTE SYSTEM_ACTION"))
