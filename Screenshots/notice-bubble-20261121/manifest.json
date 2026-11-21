@@ -21,7 +21,7 @@
       "height": 368,
       "sha256": "d4f282aecf6a2eccdb5bebe95bd741895c2e986aa642c587323a8f1382edd355",
       "state": "before",
-      "external_url": "pending-pr-attachment"
+      "external_url": "https://github.com/user-attachments/assets/7c0ab2e2-9511-40c0-9368-6cf5c048dbc5"
     },
     {
       "file": "zh-light/mapping-1067x760.png",
@@ -30,7 +30,7 @@
       "height": 1520,
       "sha256": "5e67fef4dcf1f9be2010dc82d07864850257638468aa8db78774a90df08d7e3b",
       "state": "after-zh-hans-light",
-      "external_url": "pending-pr-attachment"
+      "external_url": "https://github.com/user-attachments/assets/f9343cea-f552-4d18-99cf-70d05d6c2302"
     },
     {
       "file": "zh-dark/mapping-1067x760.png",
@@ -39,7 +39,7 @@
       "height": 1520,
       "sha256": "fdd6142fe0534a9cc516e6ac305ca842af1ea648313f5c6ff02f616ba55a23eb",
       "state": "after-zh-hans-dark",
-      "external_url": "pending-pr-attachment"
+      "external_url": "https://github.com/user-attachments/assets/b4e481cc-9f56-42db-8fec-c5c5953d48d0"
     },
     {
       "file": "en-light/mapping-1067x760.png",
@@ -48,7 +48,7 @@
       "height": 1520,
       "sha256": "ab959b536cb62f90cdbf912adb7767ea957194e9c5f6f807ad7850fbffdc0494",
       "state": "after-en-light",
-      "external_url": "pending-pr-attachment"
+      "external_url": "https://github.com/user-attachments/assets/110126b7-3c89-4841-9a02-9998a73ace64"
     },
     {
       "file": "en-dark/mapping-1067x760.png",
@@ -57,7 +57,7 @@
       "height": 1520,
       "sha256": "555b31b51cc1c3eff4cea946d4043f3ca62f1809dc9fff22093f79ebd0ba69f2",
       "state": "after-en-dark",
-      "external_url": "pending-pr-attachment"
+      "external_url": "https://github.com/user-attachments/assets/397ca5b5-937e-49f1-b5b3-9cf78e1fafcf"
     },
     {
       "file": "after-component-preview-light.png",
@@ -66,7 +66,7 @@
       "height": 400,
       "sha256": "2917e00acf4196759dcd982afafdab93e19a77e136a17053302f0260dd735bac",
       "state": "after-component-preview-light",
-      "external_url": "pending-pr-attachment"
+      "external_url": "https://github.com/user-attachments/assets/7aa942a7-f4cf-441f-8cae-ab9dfefa4bc4"
     },
     {
       "file": "after-component-preview-dark.png",
@@ -75,7 +75,7 @@
       "height": 400,
       "sha256": "04b08b0b01df54b74ee0f1e4839aefb7a5417c739e875dd2b7e0b3d3352a2b5d",
       "state": "after-component-preview-dark",
-      "external_url": "pending-pr-attachment"
+      "external_url": "https://github.com/user-attachments/assets/6377ee34-1277-4ef9-adf8-61456b76f954"
     }
   ]
 }

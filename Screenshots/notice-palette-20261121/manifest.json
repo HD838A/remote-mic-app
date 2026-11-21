@@ -19,7 +19,7 @@
       "height": 3748,
       "sha256": "16b52c33a9c3e756fdebc6982f0c29f3f6efe099e3e8455eaba4c08c6cc3594d",
       "state": "design-board-full",
-      "external_url": "pending-pr-attachment"
+      "external_url": "https://github.com/user-attachments/assets/c6d1fc0b-0f3b-4513-ba9f-37226b1b4009"
     },
     {
       "file": "palette-board-preview.png",
@@ -28,7 +28,7 @@
       "height": 1400,
       "sha256": "80291df70c170fd9155b7c10f88111806a1bbd67b1396edb8ec21acb03c37cd9",
       "state": "design-board-preview",
-      "external_url": "pending-pr-attachment"
+      "external_url": "https://github.com/user-attachments/assets/80ba57e8-008b-4896-9ed3-d73f499e9128"
     },
     {
       "file": "after-component-preview-light.png",
@@ -37,7 +37,7 @@
       "height": 400,
       "sha256": "2917e00acf4196759dcd982afafdab93e19a77e136a17053302f0260dd735bac",
       "state": "component-preview-light",
-      "external_url": "pending-pr-attachment"
+      "external_url": "https://github.com/user-attachments/assets/7aa942a7-f4cf-441f-8cae-ab9dfefa4bc4"
     },
     {
       "file": "after-component-preview-dark.png",
@@ -46,7 +46,7 @@
       "height": 400,
       "sha256": "04b08b0b01df54b74ee0f1e4839aefb7a5417c739e875dd2b7e0b3d3352a2b5d",
       "state": "component-preview-dark",
-      "external_url": "pending-pr-attachment"
+      "external_url": "https://github.com/user-attachments/assets/6377ee34-1277-4ef9-adf8-61456b76f954"
     }
   ]
 }
