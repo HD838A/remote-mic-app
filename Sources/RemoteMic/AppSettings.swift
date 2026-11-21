@@ -1869,11 +1869,11 @@ final class AppSettings: ObservableObject {
     func selectRemoteProfile(_ profileID: UUID, persistSelection: Bool = true) {
         guard let profile = remoteDeviceProfiles.first(where: { $0.id == profileID }) else { return }
         if persistSelection, profileID == selectedRemoteProfileID {
+            guard selectedRemoteProfileIsTransient else { return }
             // 自动回退可能只改变当前显示；用户手动点选同一条档案时，必须把
             // 偏好重新落到磁盘，否则下次启动仍会回到旧档案。
             selectedRemoteProfileIsTransient = false
             defaults.set(profileID.uuidString, forKey: Keys.selectedRemoteProfileID)
-            loadRemoteProfileMappings(profile)
             return
         }
         guard profileID != selectedRemoteProfileID else { return }

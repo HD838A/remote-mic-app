@@ -5949,6 +5949,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
                 reason: "unrelated_button_\(button.rawValue)",
                 confirmed: false
             )
+            return
         }
 
         if macroFeature.isEditorActive {
@@ -6389,10 +6390,11 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
                     "direction=unsupported success=true"
             )
             return true
-        case .tv:
-            return performAppleRemoteAppSwitcher(for: button, trigger: .singleClick)
         default:
-            return false
+            guard settings.action(for: button, profileID: appleRemoteAppSwitcherProfileID) == .appSwitcher
+            else { return false }
+            _ = performAppleRemoteAppSwitcher(for: button, trigger: .singleClick)
+            return true
         }
     }
 
