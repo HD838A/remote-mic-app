@@ -14,6 +14,55 @@ struct PortableConfigurationCompatibilityTests {
         let defaults = try #require(TestUserDefaults(suiteName: name))
         return (AppSettings(defaults: defaults), { defaults.removePersistentDomain(forName: name) })
     }
+    #if canImport(SayAllMacroRemoteMic)
+    @Test func profileShortcutExportCarriesItsDefinitionAndRejectsMissingOne() throws {
+        let shortcut = RecordedKeyboardShortcut(
+            id: "shortcut.legacy",
+            displayName: "Legacy Copy",
+            keyCode: 8,
+            keyLabel: "C",
+            modifiers: [.command]
+        )
+        let profile = PortableButtonProfile(
+            id: "profile.legacy-shortcut",
+            name: "Legacy shortcut",
+            remoteModel: "xiaomi-remote-2-pro",
+            bindings: [.init(
+                controlID: "home",
+                gesture: "singlePress",
+                target: .init(kind: .shortcut, referenceID: shortcut.id)
+            )]
+        )
+        let root = PortableRoot(kind: .buttonProfile, id: profile.id)
+        let package = PortableTransferPackage(
+            minimumRemoteMicVersion: "1.9.21",
+            roots: [root],
+            buttonProfiles: [profile]
+        )
+        #expect(throws: PortableTransferError.missingDependency(shortcut.id)) {
+            _ = try PortableTransferGraph.exporting(
+                package,
+                allDefinitions: [],
+                keyboardShortcuts: [],
+                focusProfiles: []
+            )
+        }
+        let exported = try PortableTransferGraph.exporting(
+            package,
+            allDefinitions: [],
+            keyboardShortcuts: [shortcut],
+            focusProfiles: []
+        )
+        #expect(exported.shortcuts.count == 1)
+        #expect(exported.shortcuts[0].keyCode == shortcut.keyCode)
+        #expect(exported.shortcuts[0].modifiers == shortcut.effectiveModifiers)
+        #expect(exported.buttonProfiles[0].bindings[0].target.referenceID
+            == exported.shortcuts[0].id)
+        #expect(exported.roots.count == 1)
+        #expect(exported.roots[0].kind == .buttonProfile)
+    }
+    #endif
+
     @Test func legacy1921ConfigurationImportsAndExportsVersionTwoWithoutLosingMappings() throws {
         let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("Testing/Fixtures/PersonalConfiguration-1.9.21.json")

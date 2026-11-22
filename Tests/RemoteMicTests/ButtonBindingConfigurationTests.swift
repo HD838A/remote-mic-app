@@ -6,7 +6,7 @@ import Testing
 import SayAllButtonProfiles
 #endif
 
-@Suite("Unified button configuration")
+@Suite("Unified button configuration", .serialized)
 struct ButtonBindingConfigurationTests {
     private func settings() -> AppSettings {
         AppSettings(defaults: TestUserDefaults(suiteName: "UnifiedButtons.\(UUID().uuidString)")!)
@@ -137,7 +137,7 @@ struct ButtonBindingConfigurationTests {
         #expect(MappingHostBindingCodec.decode(Data("broken".utf8)) == nil)
     }
 
-    #if SAYALL_BUTTON_PROFILE_AUTOSAVE
+    #if SAYALL_BUTTON_PROFILE_AUTOSAVE && SAYALL_UNIFIED_BUTTON_CONFIGURATION && SAYALL_BUTTON_PROFILE_BINDING_TEXT
     @Test(.enabled(if: ProcessInfo.processInfo.environment["SAYALL_MACRO_STORAGE_ROOT"] != nil))
     @MainActor func mappingProfileAdapterPreservesReadOnlyDisplayAndCompleteCopy() throws {
         // The binary integration runner supplies an isolated storage root.
@@ -191,6 +191,158 @@ struct ButtonBindingConfigurationTests {
         #expect(integration.writeProfileBinding(nil, profile: copy, button: .ok, trigger: .singleClick, displayName: nil))
         #expect(integration.reloadMappingProfiles())
         if case .inherited = integration.displayProfileBinding(device: nil, profile: copy, button: .ok, trigger: .singleClick) {} else { Issue.record("Clear did not persist") }
+    }
+
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["SAYALL_MACRO_STORAGE_ROOT"] != nil))
+    @MainActor func migratesResolvableLegacyShortcutReferencesAndKeepsMissingOnes() async throws {
+        let rootPath = try #require(ProcessInfo.processInfo.environment["SAYALL_MACRO_STORAGE_ROOT"])
+        let root = URL(fileURLWithPath: rootPath, isDirectory: true)
+        let privateDirectory = root.appendingPathComponent("private", isDirectory: true)
+        try FileManager.default.createDirectory(at: privateDirectory, withIntermediateDirectories: true)
+        let documentURL = privateDirectory.appendingPathComponent("local-automation-profiles.json")
+        let shortcutID = "shortcut.migration.\(UUID().uuidString.lowercased())"
+        let missingID = "shortcut.missing.\(UUID().uuidString.lowercased())"
+        let now = ISO8601DateFormatter().string(from: Date())
+        var document = (try? JSONSerialization.jsonObject(with: Data(contentsOf: documentURL))) as? [String: Any]
+            ?? ["formatVersion": 1, "focusProfiles": [], "keyboardShortcuts": []]
+        var shortcuts = document["keyboardShortcuts"] as? [[String: Any]] ?? []
+        shortcuts.append([
+            "id": shortcutID,
+            "displayName": "Migration Copy",
+            "keyCode": 8,
+            "keyLabel": "C",
+            "modifiers": ["command"],
+            "createdAt": now,
+            "updatedAt": now,
+        ])
+        document["keyboardShortcuts"] = shortcuts
+        try JSONSerialization.data(withJSONObject: document, options: [.sortedKeys])
+            .write(to: documentURL, options: .atomic)
+
+        let selfContainedShortcut = CustomKeyboardShortcut(
+            keyCode: 48,
+            modifierFlags: [.command],
+            keyLabel: "Tab"
+        )
+        let selfContainedAction = ConfiguredButtonAction(
+            action: .customShortcut,
+            shortcut: selfContainedShortcut
+        )
+        let selfContainedPayload = try JSONEncoder().encode(selfContainedAction)
+        let selfContainedHost = RemoteMicHostActionReference(
+            id: "host.action.customShortcut",
+            displayName: "Tab",
+            payload: selfContainedPayload
+        )
+        let profileID = UUID()
+        let profileDocumentURL = root.appendingPathComponent("button-profiles.json")
+        var profileDocument = (try? JSONSerialization.jsonObject(with: Data(contentsOf: profileDocumentURL))) as? [String: Any]
+            ?? ["formatVersion": 2, "profiles": [], "selections": [], "applicationRules": []]
+        var profiles = profileDocument["profiles"] as? [[String: Any]] ?? []
+        let defaultID: String
+        if let existingDefault = profiles.first(where: {
+            $0["usesGeneratedDefaultName"] as? Bool == true
+        })?["id"] as? String {
+            defaultID = existingDefault
+        } else {
+            defaultID = UUID().uuidString
+            profiles.append([
+                "id": defaultID,
+                "name": "Default",
+                "usesGeneratedDefaultName": true,
+                "source": "local",
+                "bindings": [],
+            ])
+        }
+        let migrationProfile = RemoteMicButtonProfile(
+            id: profileID,
+            remoteProfileID: nil,
+            name: "Migration",
+            bindings: [
+                .init(button: .home, trigger: .singleClick): .shortcut(profileKey: shortcutID),
+                .init(button: .home, trigger: .doubleClick): .shortcut(profileKey: missingID),
+                .init(button: .home, trigger: .longPress): .host(selfContainedHost),
+            ]
+        )
+        profiles.append(try JSONSerialization.jsonObject(
+            with: JSONEncoder().encode(migrationProfile)
+        ) as? [String: Any] ?? [:])
+        profileDocument["profiles"] = profiles
+        profileDocument["formatVersion"] = 2
+        profileDocument["applicationRules"] = profileDocument["applicationRules"] ?? []
+        var selections = profileDocument["selections"] as? [[String: Any]] ?? []
+        if !selections.contains(where: { ($0["remoteProfileID"] as? String) == nil }) {
+            let selection = RemoteMicButtonProfileSelection(
+                remoteProfileID: nil,
+                manualProfileID: profileID,
+                defaultProfileID: try #require(UUID(uuidString: defaultID))
+            )
+            selections.append(try JSONSerialization.jsonObject(
+                with: JSONEncoder().encode(selection)
+            ) as? [String: Any] ?? [:])
+        }
+        profileDocument["selections"] = selections
+        try JSONSerialization.data(withJSONObject: profileDocument, options: [.sortedKeys])
+            .write(to: profileDocumentURL, options: .atomic)
+
+        let integration = MacroFeatureIntegration(localeIdentifier: "en")
+        integration.loadProfilesForScreenshot()
+        integration.updateButtonProfilesAccess(.allowed(validUntil: .distantFuture))
+        // The controller's initial reload is asynchronous and loads the shortcut library
+        // separately from the synchronous profile helper. Wait until the legacy ref resolves.
+        var resolved = false
+        for _ in 0..<60 {
+            if case let .explicit(value) = integration.displayProfileBinding(
+                device: nil, profile: profileID, button: .home, trigger: .singleClick
+            ), value.configured?.action == .customShortcut,
+                value.configured?.shortcut?.keyCode == 8 {
+                resolved = true
+                break
+            }
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        #expect(resolved)
+
+        // Other suites share the process-wide storage root; wait out a transient
+        // pending import before asserting the migration result.
+        var migration: (reference: RemoteMicHostActionReference,
+                        configured: ConfiguredButtonAction)?
+        for _ in 0..<60 {
+            integration.migrateLegacyShortcutBindingsIfNeeded()
+            if case let .host(reference)? = integration.rawProfileBinding(
+                device: nil, profile: profileID, button: .home, trigger: .singleClick
+            ), let configured = MappingHostBindingCodec.decode(reference.payload)?.configured {
+                migration = (reference, configured)
+                break
+            }
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        guard let (reference, migrated) = migration else {
+            Issue.record("Resolvable shortcut was not migrated to a self-contained host action")
+            return
+        }
+        #expect(reference.displayName.contains("⌘"))
+        #expect(migrated.action == .customShortcut)
+        #expect(migrated.shortcut?.keyCode == 8)
+        #expect(migrated.shortcut?.modifierFlags.contains(.command) == true)
+        #expect(integration.profileBinding(device: nil, profile: profileID,
+            button: .home, trigger: .singleClick) == migrated)
+        #expect(integration.rawProfileBinding(device: nil, profile: profileID,
+            button: .home, trigger: .doubleClick) == .shortcut(profileKey: missingID))
+        #expect(integration.rawProfileBinding(device: nil, profile: profileID,
+            button: .home, trigger: .longPress) == .host(selfContainedHost))
+        #expect(integration.profileBinding(device: nil, profile: profileID,
+            button: .home, trigger: .longPress) == selfContainedAction)
+
+        // A second pass must not rewrite the already self-contained action.
+        integration.migrateLegacyShortcutBindingsIfNeeded()
+        guard case let .host(afterSecondPass)? = integration.rawProfileBinding(
+            device: nil, profile: profileID, button: .home, trigger: .singleClick
+        ) else {
+            Issue.record("Migration was not idempotent")
+            return
+        }
+        #expect(afterSecondPass == reference)
     }
     #endif
 

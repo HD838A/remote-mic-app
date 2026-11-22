@@ -821,3 +821,30 @@ swift test --disable-keychain --filter 'ButtonBindingConfigurationTests|RemoteBu
 | 方案显式禁用 | 中文卡片显示「本方案禁用」，英文显示 `Disabled here`；不得只显示无法辨认的截断前缀。 |
 | 中文/英文、浅色/深色、1020×772 | 常见动作名在卡片中保持可读；英文不得只剩 `This Profile · ...` 或 `Default · No...`。继承的超长动作名允许截断，但编辑区和悬停必须给完整文案。 |
 | 800×650 离屏压力 | 只记录压力布局；生产最小窗口是 1020×772，不把该尺寸的交叠当作生产验收。 |
+
+## 2026-11-22 旧快捷键引用迁移
+
+适用：2.0.8 及更早版本创建、仍保存 `.shortcut(profileKey:)` 的键位方案。测试前准备：使用隔离的 `SAYALL_MACRO_STORAGE_ROOT`，在 `private/local-automation-profiles.json` 写入一个快捷键，在 `button-profiles.json` 写入引用它的方案；另写一个不存在的快捷键引用。
+
+| 操作 | 预期结果与失败判定 |
+| --- | --- |
+| 启动 App 或打开按键页 | 可解析的旧快捷键引用自动改写为自包含动作；快捷键库文件暂时移走后，动作仍可显示和执行。引用仍显示「这个快捷键在本机不可用」判失败。 |
+| 缺失引用的旧方案 | 保持原 `.shortcut` 引用并继续显示警告；不得静默删除或改成「无动作」。 |
+| 连续启动两次 | 已迁移绑定不再变化；不得重复写入或生成不同键码。 |
+| 2.0.8 已重新录制/选择的自定义快捷键 | 原本就是自包含 host 动作，迁移不得改写；升级后执行和显示保持一致。 |
+| 只读/非会员/默认方案 | 不写入，保持只读；出现迁移写入判失败。 |
+| 迁移后导出方案或完整备份 | 导出包包含实际快捷键定义；缺定义时导入必须拒绝，不能只带悬空引用。 |
+| 日志 | 出现 `BUTTON PROFILE MIGRATION ... phase=completed`，只含方案数、候选数、成功数、未解析数和失败数；不得含快捷键内容、方案名、设备身份或路径。 |
+
+自动化入口：
+
+```sh
+SAYALL_MACRO_STORAGE_ROOT=/tmp/sayall-migration-fixture \
+SAYALL_ENABLE_PRIVATE_SWIFTPM=1 \
+SAYALL_PRIVATE_PLATFORM_PACKAGE_PATH=/path/to/sayall-private-platform \
+SAYALL_ENABLE_BUTTON_PROFILES=1 \
+SAYALL_ENABLE_CHROMECAST=1 \
+swift test --disable-keychain --filter 'ButtonBindingConfigurationTests|PortableConfigurationCompatibilityTests'
+```
+
+迁移只证明存储层兼容和导出依赖完整；真实旧安装包、真实快捷键库、实体遥控器和目标 App 仍需签名包验收。
