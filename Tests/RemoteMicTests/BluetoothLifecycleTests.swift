@@ -272,6 +272,29 @@ struct BluetoothLifecycleTests {
         ) == nil)
     }
 
+    /// 小米 2 Pro 现场：服务都在，但系统瞬时多枚举出一份重复服务，写入后回读不一致。
+    /// 这类失败必须也进入有限退避重试，否则一次失败就让整场会话不接管按键。
+    /// 与 `deviceVerificationRetryDelay` 的区别是**不能**用 `hasMatchingServices` 当门槛。
+    @Test func verificationFailureRetriesEvenWhenServicesExist() {
+        let delays = (0 ... 5).map {
+            HIDMappingRecoveryPolicy.verificationFailedRetryDelay(
+                forAttempt: $0,
+                started: true
+            )
+        }
+
+        #expect(delays == [0.5, 1, 2, 4, 8, nil])
+        #expect(HIDMappingRecoveryPolicy.verificationFailedRetryDelay(
+            forAttempt: 0,
+            started: false
+        ) == nil)
+        // 负索引与越界都必须收敛，不能无限重试。
+        #expect(HIDMappingRecoveryPolicy.verificationFailedRetryDelay(
+            forAttempt: -1,
+            started: true
+        ) == nil)
+    }
+
     @Test func generationAndPhaseRejectStaleCallbacks() {
         let phase = BluetoothLifecyclePhase.connecting(1)
         #expect(phase.acceptsDidConnect(generation: 1))

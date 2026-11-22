@@ -1,5 +1,6 @@
 # Bug 记录
 
+- [小米 2 Pro 原生映射校验失败后整场不再接管按键](./2026-11-23-native-mapping-verify-failure-no-retry.md)
 - [键位方案里的 disable 显示成「本方案禁用」，实际含义是「未设置」](./2026-11-22-profile-disabled-label-means-not-set.md)
 - [键位方案引用失效时显示「配置不可用」且按键变成死键](./2026-11-22-profile-unavailable-shortcut-references.md)
 - [键位方案的旧快捷键引用在换机或迁移后失效](./2026-11-22-profile-shortcut-selfcontained-migration.md)
