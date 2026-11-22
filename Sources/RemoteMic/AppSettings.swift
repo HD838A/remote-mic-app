@@ -389,6 +389,9 @@ final class AppSettings: ObservableObject {
     static let mergedRemoteProfilesLatestBackupKey = "remoteDeviceProfilesLatestMergeBackup"
     static let mergedRemoteProfileLatestSelectionBackupKey = "remoteDeviceProfilesLatestMergeSelectionBackup"
     static let remappedScopedBindingConflictsKey = "unifiedBaseBindingsRecoveryConflicts"
+    /// 记录已经检查过快捷键恢复的档案 ID。恢复只针对升级窗口，不能每次启动
+    /// 都把用户后来主动重置的快捷键重新补回。
+    static let shortcutRecoveryEvaluatedKey = "remoteProfileShortcutRecoveryEvaluated"
     /// 旧版本在解码失败或合并前留下的档案快照。只用于恢复仍然被
     /// `unifiedBaseBindings` 引用的档案，不能作为活动档案的来源。
     /// 顺序从较新到较旧；同一按键出现不同值时，先读到的较新值优先。
@@ -835,6 +838,8 @@ final class AppSettings: ObservableObject {
 
     private var isLoadingRemoteProfile = false
     private var persistsSelectedRemoteProfile = true
+    /// 同一进程内只保存一次恢复前快照，避免新增恢复路径覆盖原始证据。
+    private var didPreserveRecoverySnapshot = false
     /// 自动回退只改变当前画布。后续去重/合并迁移这条临时选中项时，不得写回偏好。
     private var selectedRemoteProfileIsTransient = false
 
@@ -1904,6 +1909,7 @@ final class AppSettings: ObservableObject {
         selectedRemoteProfileID = profileID
         loadRemoteProfileMappings(profile)
         persistsSelectedRemoteProfile = true
+        recoverMissingShortcutsFromHistoricalSnapshotsIfNeeded()
     }
 
     /// 把档案映射加载到当前编辑/执行内存态。合并后即使选中 ID 不变，档案内容也可能已补齐，
@@ -2871,6 +2877,9 @@ final class AppSettings: ObservableObject {
     }
 
     func resetBindings() {
+        if let selectedRemoteProfileID {
+            markShortcutRecoveryEvaluated(selectedRemoteProfileID)
+        }
         buttonBindings = Self.defaultBindings
         buttonShortcuts = [:]
         unifiedBaseBindings.removeAll { $0.remoteProfileID == selectedRemoteProfileID }
@@ -3524,6 +3533,9 @@ final class AppSettings: ObservableObject {
         if let supplement, try configurationSupplementSnapshot?() != supplement {
             try configurationSupplementApply?(supplement)
         }
+        if let selectedRemoteProfileID {
+            markShortcutRecoveryEvaluated(selectedRemoteProfileID)
+        }
         defaults.set(pending, forKey: "portableTransferPendingApplications")
         configurationImportNotice = nil
     }
@@ -3736,6 +3748,9 @@ final class AppSettings: ObservableObject {
                 "SETTINGS import_filtered rejected=\(report.rejectedEntryStorageKeys.joined(separator: ",")) " +
                     "missing_apps=\(report.applicationsMissingOnThisMac.count)"
             )
+        }
+        if let selectedRemoteProfileID {
+            markShortcutRecoveryEvaluated(selectedRemoteProfileID)
         }
         configurationImportNotice = report.isClean ? nil : report
     }
@@ -4139,6 +4154,12 @@ final class AppSettings: ObservableObject {
         )
     }
 
+    private func preserveRemoteProfilesBeforeRecovery() {
+        guard !didPreserveRecoverySnapshot else { return }
+        didPreserveRecoverySnapshot = true
+        preserveRemoteProfilesBeforeMerge()
+    }
+
     private static func persistRemoteProfilesRecoverySnapshot(
         _ profiles: [RemoteDeviceProfile],
         selectedProfileID: UUID?,
@@ -4183,21 +4204,34 @@ final class AppSettings: ObservableObject {
         return true
     }
 
+    /// Never rewrite unreadable profiles or a corrupt scoped-binding store. Profile
+    /// selection also checks this gate before invoking recovery.
+    private var canRecoverRemoteProfileData: Bool {
+        unreadableStoredRemoteProfiles == nil &&
+            !corruptedSettingKeys.contains(Keys.remoteDeviceProfiles) &&
+            !corruptedSettingKeys.contains("unifiedBaseBindings")
+    }
+
     /// Reattach custom data that older builds left under profile IDs that are no longer active.
     ///
-    /// Two cases are handled:
+    /// Three cases are handled:
     /// - `unifiedBaseBindings` still references an old profile ID.
     /// - A 1.9.21-style fallback is the only profile and matches a richer history record.
+    /// - The selected known profile lost only its keyboard shortcuts when 2.0.8 removed the
+    ///   older record; the old shortcut remains in a migration snapshot.
     ///
-    /// A reset profile with a known identity is not replayed. An unknown fallback with no HID
-    /// and a matching history record is treated as the old-version wipe case.
+    /// A reset profile with a known identity is not replayed wholesale. Shortcut recovery is
+    /// narrower, runs once per profile, and only fills a missing shortcut plus its
+    /// `customShortcut` action when the current value is still default.
     @discardableResult
     func recoverRemoteProfileDataIfNeeded() -> Bool {
-        // A newer build may have written profiles this build cannot decode. Recovery must not
-        // turn the fallback into the active array while the original bytes are preserved.
-        guard unreadableStoredRemoteProfiles == nil,
-              !corruptedSettingKeys.contains(Keys.remoteDeviceProfiles),
-              !corruptedSettingKeys.contains("unifiedBaseBindings") else { return false }
+        guard canRecoverRemoteProfileData else { return false }
+        let restoredShortcuts = recoverMissingShortcutsFromHistoricalSnapshotsIfNeeded()
+        let restoredProfiles = recoverRemoteProfileDataFromSnapshotsIfNeeded()
+        return restoredShortcuts || restoredProfiles
+    }
+
+    private func recoverRemoteProfileDataFromSnapshotsIfNeeded() -> Bool {
         let activeIDs = Set(remoteDeviceProfiles.map(\.id))
         let orphanIDs = Set(unifiedBaseBindings.compactMap(\.remoteProfileID))
             .subtracting(activeIDs)
@@ -4282,7 +4316,7 @@ final class AppSettings: ObservableObject {
             }
             if candidate != remoteDeviceProfiles[index] {
                 if !preservedBeforeRecovery {
-                    preserveRemoteProfilesBeforeMerge()
+                    preserveRemoteProfilesBeforeRecovery()
                     preservedBeforeRecovery = true
                 }
                 remoteDeviceProfiles[index] = candidate
@@ -4311,6 +4345,131 @@ final class AppSettings: ObservableObject {
                 "profiles=\(replacements.count) bindings=\(remappedBindings)"
         )
         return true
+    }
+
+    /// 2.0.8 could remove the old custom profile while the replacement already had another
+    /// custom action. Its deduplication then skipped copying the old shortcuts, and 2.0.9 had
+    /// no orphan binding or legacy fallback to trigger the broader recovery. Restore only the
+    /// missing keyboard shortcuts from historical snapshots, once per selected profile.
+    private func recoverMissingShortcutsFromHistoricalSnapshotsIfNeeded() -> Bool {
+        guard canRecoverRemoteProfileData,
+              let selected = selectedRemoteProfile else { return false }
+        let evaluatedIDs = Set(
+            defaults.stringArray(forKey: Self.shortcutRecoveryEvaluatedKey) ?? []
+        )
+        guard !evaluatedIDs.contains(selected.id.uuidString) else { return false }
+
+        let defaultBindings = Self.defaultBindings
+        let selectedBindings = selected.mappings.parsedButtonBindings
+        let missingButtons = RemoteButton.allCases.filter { button in
+            guard selected.mappings.parsedButtonShortcuts[button] == nil,
+                  !hasExplicitBaseBinding(
+                      for: button,
+                      trigger: .singleClick,
+                      profileID: selected.id
+                  )
+            else { return false }
+            let action = selectedBindings[button] ?? defaultBindings[button] ?? .disabled
+            let defaultAction = defaultBindings[button] ?? .disabled
+            return action == .customShortcut || action == defaultAction
+        }
+        guard !missingButtons.isEmpty else {
+            markShortcutRecoveryEvaluated(selected.id)
+            return false
+        }
+
+        let activeIDs = Set(remoteDeviceProfiles.map(\.id))
+        var shortcutsByButton: [RemoteButton: [CustomKeyboardShortcut]] = [:]
+        var matchedProfileCount = 0
+        var shortcutConflict = false
+        var readSnapshot = false
+        for key in Self.remoteProfileRecoverySnapshotKeys {
+            guard let data = defaults.data(forKey: key),
+                  let profiles = try? JSONDecoder().decode(
+                      [RemoteDeviceProfile].self,
+                      from: data
+                  )
+            else { continue }
+            readSnapshot = true
+            for profile in profiles {
+                guard !activeIDs.contains(profile.id),
+                      profile.id != selected.id,
+                      Self.uniqueRecoveryTargetID(
+                          for: profile,
+                          in: remoteDeviceProfiles
+                      ) == selected.id
+                else { continue }
+                matchedProfileCount += 1
+                let recoveredBindings = profile.mappings.parsedButtonBindings
+                for button in missingButtons {
+                    let recoveredAction = recoveredBindings[button]
+                        ?? defaultBindings[button] ?? .disabled
+                    guard recoveredAction == .customShortcut,
+                          let shortcut = profile.mappings.parsedButtonShortcuts[button]
+                    else { continue }
+                    if !shortcutsByButton[button, default: []].contains(shortcut) {
+                        shortcutsByButton[button, default: []].append(shortcut)
+                        if shortcutsByButton[button]?.count ?? 0 > 1 {
+                            shortcutConflict = true
+                        }
+                    }
+                }
+            }
+        }
+        guard readSnapshot else { return false }
+
+        var updated = selected
+        var recoveredCount = 0
+        for button in missingButtons {
+            guard let shortcuts = shortcutsByButton[button],
+                  shortcuts.count == 1,
+                  let shortcut = shortcuts.first
+            else { continue }
+            let currentAction = selectedBindings[button]
+                ?? defaultBindings[button] ?? .disabled
+            if currentAction == .customShortcut {
+                // The action is already correct; only the shortcut was removed.
+            } else {
+                let defaultAction = defaultBindings[button] ?? .disabled
+                guard currentAction == defaultAction else { continue }
+                updated.mappings.buttonBindings[button.rawValue] = .customShortcut
+            }
+            updated.mappings.buttonShortcuts[button.rawValue] = shortcut
+            recoveredCount += 1
+        }
+
+        guard recoveredCount > 0,
+              let index = remoteDeviceProfiles.firstIndex(where: {
+                  $0.id == selected.id
+              })
+        else {
+            guard matchedProfileCount > 0 else { return false }
+            AppLogger.shared.write(
+                "SETTINGS REMOTE_PROFILE_RECOVERY phase=completed " +
+                    "result=skipped reason=" +
+                    "\(shortcutConflict ? "shortcut_conflict" : "no_usable_shortcut") " +
+                    "profiles=\(matchedProfileCount) bindings=\(missingButtons.count)"
+            )
+            return false
+        }
+        preserveRemoteProfilesBeforeRecovery()
+        remoteDeviceProfiles[index] = updated
+        loadRemoteProfileMappings(updated)
+        markShortcutRecoveryEvaluated(selected.id)
+        AppLogger.shared.write(
+            "SETTINGS REMOTE_PROFILE_RECOVERY phase=completed " +
+                "result=restored_shortcuts reason=historical_migration " +
+                "profiles=1 bindings=\(recoveredCount)"
+        )
+        return true
+    }
+
+    private func markShortcutRecoveryEvaluated(_ profileID: UUID) {
+        var evaluated = Set(
+            defaults.stringArray(forKey: Self.shortcutRecoveryEvaluatedKey) ?? []
+        )
+        guard evaluated.insert(profileID.uuidString).inserted else { return }
+        defaults.set(evaluated.sorted(), forKey: Self.shortcutRecoveryEvaluatedKey)
     }
 
     private static func legacyFallbackProfileForRecovery(
