@@ -988,6 +988,34 @@ struct SettingsPageRegressionTests {
         #expect(source.contains("button_mapping.hold.profile_repeat_only"))
     }
 
+    @Test func profileDisabledBindingReadsAsNotSet() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+        let zh = try String(
+            contentsOf: root.appendingPathComponent("Resources/zh-Hans.lproj/Localizable.strings"),
+            encoding: .utf8
+        )
+        let en = try String(
+            contentsOf: root.appendingPathComponent("Resources/en.lproj/Localizable.strings"),
+            encoding: .utf8
+        )
+        // 方案里的 disabled 表示“本方案未设置动作”，不是禁用按键。
+        #expect(source.contains("\"button_mapping.action.profile_not_set\""))
+        #expect(!source.contains("button_mapping.action.profile_disabled"))
+        #expect(!source.contains("button_mapping.action.profile_not_set_detail"))
+        #expect(zh.contains("\"button_mapping.action.profile_not_set\" = \"未设置\";"))
+        #expect(en.contains("\"button_mapping.action.profile_not_set\" = \"Not set\";"))
+        // 基础映射的“无动作”和“禁用”保持独立，不改写它们的含义。
+        #expect(zh.contains("\"button_mapping.action.not_set\" = \"无动作\";"))
+        #expect(zh.contains("\"button_mapping.action.no_action\" = \"禁用\";"))
+    }
+
     @Test func nonMemberMappingHeaderUsesContextualMembershipCTA() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
