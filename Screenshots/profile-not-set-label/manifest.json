@@ -1,0 +1,97 @@
+{
+  "batch": "profile-not-set-label",
+  "date": "2026-11-22",
+  "purpose": "PR 1187 键位方案作用域内的 disable 状态统一显示为「未设置」/`Not set`",
+  "branch": "fix/mapping-profile-not-set-label-20261122",
+  "pr": "https://github.com/HD838A/remote-mic-app/pull/1187",
+  "host_base": "dd77961c8ee5c8bb24bd864b247c3d9a054f3f2a",
+  "commit": "513f294b87e6057841e1d77647191f7056e08bab",
+  "window_points": [
+    1020,
+    772
+  ],
+  "storage": "external-persistent-directory-and-github-pr-attachments",
+  "storage_path": "~/Develop/ReleaseArtifacts/profile-not-set-label-20261122/attachments/",
+  "notes": [
+    "由生产 SettingsView 的 REMOTE_MIC_SETTINGS_SCREENSHOT_DIR 离屏入口生成；不是设计稿，也不启动蓝牙硬件。",
+    "使用私有 2.14.0 构件、隔离 SAYALL_MACRO_STORAGE_ROOT 和截图 fixture 方案；方案访问由 fixture 授权，不代表真实会员验收。",
+    "方案卡片和编辑区把 disable 状态显示为「未设置」/`Not set`；编辑区保留「恢复继承默认」入口。",
+    "基础映射的「无动作」和「禁用」文案保持原样，不属于本批次改动；方案内「未设置」仍是显式不执行，不是继承默认。",
+    "图片字节不入库，本文件只做文本索引；外部链接为 PR 1187 的 GitHub 附件。",
+    "截图只证明静态界面和状态文案，不证明真实会员、旧安装包升级或实体遥控器动作。"
+  ],
+  "images": [
+    {
+      "file": "profile-not-set-overview-1020x772-zh-hans-light.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "d28fe15c8c5472a1458d4f90b89fe9f154916ccdce3fb70599a50846326249e4",
+      "state": "after",
+      "external_url": "https://github.com/user-attachments/assets/e2223275-23a5-41b6-8d17-fbf9cf0d2da6"
+    },
+    {
+      "file": "profile-not-set-overview-1020x772-en-light.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "cc4bcce7167c88cc9237e849f582b6f73c629e4682b0c6073fcdf9a422a683df",
+      "state": "after",
+      "external_url": "https://github.com/user-attachments/assets/7c8bfac7-c79f-4809-8a0a-6c5966dbc2cc"
+    },
+    {
+      "file": "profile-not-set-overview-1020x772-zh-hans-dark.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "2884acca2ea7388aa0b4f8008a9571510813dc84a23741befcf68541f841b89c",
+      "state": "after",
+      "external_url": "https://github.com/user-attachments/assets/d51c31af-0e84-40cb-8f03-f66ea2a7b42f"
+    },
+    {
+      "file": "profile-not-set-overview-1020x772-en-dark.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "d851e744af328234972bfa5ba142280aef70271de3a46336d4b69f2d252c994d",
+      "state": "after",
+      "external_url": "https://github.com/user-attachments/assets/4fd53a79-db41-47ed-9e69-777aa1766aa8"
+    },
+    {
+      "file": "profile-not-set-editor-1020x772-zh-hans-light.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "5b472925adc66e02448f21158b7d2c71621aea4c32c2b88c58f174c17eee2f26",
+      "state": "after",
+      "external_url": "https://github.com/user-attachments/assets/e0632bf5-61e6-4a83-96b8-0b3f7cddc306"
+    },
+    {
+      "file": "profile-not-set-editor-1020x772-en-light.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "86a652d139b00874d904bd77c71f7278f7d61ad8335a034a8c9f1a1a194fa494",
+      "state": "after",
+      "external_url": "https://github.com/user-attachments/assets/3132d5ae-4635-46c6-abfc-d6e1184b1934"
+    },
+    {
+      "file": "profile-not-set-editor-1020x772-zh-hans-dark.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "52592eb998d63c9fcfe29edc59c7853a3e236aeb279a33aa2db072bff297f153",
+      "state": "after",
+      "external_url": "https://github.com/user-attachments/assets/49ea51f7-3674-4a40-899e-5236eb73f396"
+    },
+    {
+      "file": "profile-not-set-editor-1020x772-en-dark.png",
+      "format": "PNG",
+      "width": 2040,
+      "height": 1544,
+      "sha256": "b4e6e12ff3b228c51b38387074bb8487d1448e6e83e5538e451969936e4073a8",
+      "state": "after",
+      "external_url": "https://github.com/user-attachments/assets/3f22916a-1119-4309-8d62-1d2d461b3f04"
+    }
+  ]
+}
