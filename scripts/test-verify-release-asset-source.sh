@@ -144,4 +144,28 @@ expect_ok "pkg is expanded and checked" --asset "$good_pkg" --expected-commit "$
 expect_fail "short sha is rejected" "--expected-commit must be a full 40-character" \
   --asset "$good_app" --expected-commit "abc123"
 
+# The signing runner requires the same embedded proof in the update and installer.
+proof_tests() {
+  local -x REQUIRE_CLIENT_PROOF_KEY=1
+  local -x SAYALL_CLIENT_PROOF_KEY="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  expect_fail "required proof absent in update is rejected" "missing the required client proof key" \
+    --asset "$good_zip" --expected-commit "$EXPECTED"
+  expect_fail "required proof absent in installer is rejected" "missing the required client proof key" \
+    --asset "$good_pkg" --expected-commit "$EXPECTED"
+
+  /usr/bin/plutil -insert SayAllClientProofKey -string "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" "$good_app/Contents/Info.plist"
+  expect_fail "different proof is rejected" "client proof key does not match" \
+    --asset "$good_app" --expected-commit "$EXPECTED"
+  /usr/bin/plutil -replace SayAllClientProofKey -string "$SAYALL_CLIENT_PROOF_KEY" "$good_app/Contents/Info.plist"
+  proof_zip="$WORK_DIR/SayAll-proof.zip"
+  /usr/bin/ditto -c -k --keepParent "$good_app" "$proof_zip"
+  expect_ok "packaged update with matching proof passes" --asset "$proof_zip" --expected-commit "$EXPECTED"
+  /bin/cp "$good_app/Contents/Info.plist" "$pkg_root/SayAll.app/Contents/Info.plist"
+  proof_pkg="$WORK_DIR/SayAll-proof.pkg"
+  pkgbuild --quiet --ownership preserve --root "$pkg_root" \
+    --identifier com.example.sayall.source-test --version 1.0 "$proof_pkg"
+  expect_ok "packaged installer with matching proof passes" --asset "$proof_pkg" --expected-commit "$EXPECTED"
+}
+proof_tests
+
 print "RESULT passed=$passed failed=0"

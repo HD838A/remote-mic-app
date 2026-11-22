@@ -137,6 +137,7 @@ AI 整理在本次分发协议中保持关闭。`include_ai=true` 在接触发�
 - 在 mac-release Environment 内使用只读 Match、隔离临时 Keychain 和最小权限；
 - 按 `config/release-dependencies.json` 读取固定 Tag 的持久二进制附件并验证来源与摘要，缺少权限、Tag、附件或组件即停止。
 - 独立构建 Apple Silicon/macOS 14 与 Intel Ventura/macOS 13 两条 lane；
+- 通过 `mac-release` 环境提供 `SAYALL_CLIENT_PROOF_KEY`，使用与目标会员服务匹配的 macOS 客户端证明值。签名前注入 App，上传前从双架构的安装 PKG 和更新 ZIP 读回校验。失败时停止打包，日志只记录结果。
 - 对 App、Framework、XPC、Helper、Installer、PKG 和 ZIP 完成 Developer ID 签名、Apple 公证、staple、Gatekeeper 和权限/符号链接校验；DMG 可以作为内部构建中间产物，但不进入公开下载资产。
 - 使用独立 SwiftPM scratch/output，独立提交可并行的 PKG 公证；
 - 生成 canonical public bundle、staged-assets.json 和 stage record；
@@ -153,6 +154,7 @@ AI 整理在本次分发协议中保持关闭。`include_ai=true` 在接触发�
 1. scripts/prepare-staged-preview-ui-test.sh 下载指定 Run、attempt 和 artifact ID，不使用 latest artifact；存在 UI 专用 payload 时优先使用，旧 Run 没有该 artifact 时回退到完整 payload。它同时动态下载并验证发布开始时记录的 stable latest 公开归档。
 2. 用本地固定 feed，只把生产 appcast 的不可变 URL 前缀替换为本地地址，确保 enclosure 是 staging 的同一 ZIP。
 3. 使用稳定版 App 的真实 Sparkle UI 完成 check、download、install、首次启动、退出和二次启动；验证版本/Build、Team ID L3QHLDRPAY、公证、Gatekeeper、Sparkle helper 的 0755 权限和 Versions/Current 链接。
+   会员客户端证明接入或变更时，还须从当前公开会员 Preview 原位升级，验证安装身份、会话和权益延续，并使用隔离测试环境验收首次注册和登录。服务端强制校验独立评估和变更。
 4. 检查没有新增崩溃报告、应用可以再次启动，并用 scripts/record-preview-ui-attestation.sh 生成结构化证明。仅运行 Sparkle CLI probe、单元测试或静态解压不能替代真实 UI 安装；该步骤未完成时不得公开 Preview。
 5. scripts/record-preview-ui-attestation.sh verify 必须重新核对 stage record、manifest、production/test appcast 摘要和安装结果。
 
