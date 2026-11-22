@@ -1016,6 +1016,26 @@ struct SettingsPageRegressionTests {
         #expect(zh.contains("\"button_mapping.action.no_action\" = \"禁用\";"))
     }
 
+    @Test func profileHoldSummaryUsesTheViewedProfileAction() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+        let integration = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/MacroFeatureIntegration.swift"),
+            encoding: .utf8
+        )
+        // 方案页可能浏览 A 方案，而按键页正在编辑 B 方案；按住标签必须按浏览的方案解析动作。
+        #expect(source.contains("ProfileHoldPresentationResolver.resolve("))
+        #expect(source.contains("profileHoldPresentation(for: button"))
+        #expect(source.contains("holdModeProvider:"))
+        #expect(integration.contains("holdModeProvider:"))
+    }
+
     @Test func nonMemberMappingHeaderUsesContextualMembershipCTA() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

@@ -1439,6 +1439,11 @@
 "button_mapping.hold.repeat_long.description" = "达到当前长按时间后重复执行长按动作，松手后停止。";
 "button_mapping.hold.repeat_single.description" = "按住时重复执行单击动作，松手后停止。";
 "button_mapping.hold.repeat_long.prefix" = "按住时 重复长按动作 ";
+"button_mapping.hold.profile.once" = "按住";
+"button_mapping.hold.profile.repeat_prefix" = "按住：重复 ";
+"button_mapping.hold.profile.repeat_long_prefix" = "按住：重复长按 ";
+"button_mapping.hold.profile.single_hold_prefix" = "按住：按住 ";
+"button_mapping.hold.profile.long_hold_prefix" = "按住：长按后按住 ";
 "button_mapping.hold.entry" = "按住时";
 "button_mapping.hold.description" = "按住时执行所选行为，松手后停止。";
 "button_mapping.hold.clear_long_to_enable" = "清除长按动作";
