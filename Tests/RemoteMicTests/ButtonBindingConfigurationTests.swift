@@ -407,6 +407,47 @@ struct ButtonBindingConfigurationTests {
             button: .up, trigger: .longPress) {} else {
             Issue.record("Legacy missing shortcut must be unavailable")
         }
+        // 执行路径不能因为一条失效引用就把物理按键变成死键；返回 nil 让基础映射继续执行。
+        #expect(integration.profileBinding(device: nil, profile: copy,
+            button: .up, trigger: .longPress) == nil)
+
+        let invalidHost = RemoteMicHostActionReference(
+            id: "host.action.invalid",
+            displayName: "Invalid",
+            payload: Data(#"{"action":"customShortcut"}"#.utf8)
+        )
+        integration.setRawProfileBinding(.host(invalidHost), profile: copy,
+            button: .home, trigger: .singleClick)
+        #expect(integration.profileBinding(device: nil, profile: copy,
+            button: .home, trigger: .singleClick) == nil)
+
+        integration.setRawProfileBinding(.focus(profileKey: "focus.missing"), profile: copy,
+            button: .home, trigger: .doubleClick)
+        #expect(integration.profileBinding(device: nil, profile: copy,
+            button: .home, trigger: .doubleClick) == nil)
+
+        // 2.0.8 的方案自定义快捷键写入自包含 host payload；升级到 2.0.9 后必须原样执行和显示。
+        let v208Shortcut = CustomKeyboardShortcut(
+            keyCode: 8,
+            modifierFlags: [.command],
+            keyLabel: "C"
+        )
+        let v208Action = ConfiguredButtonAction(action: .customShortcut, shortcut: v208Shortcut)
+        let v208Payload = try JSONEncoder().encode(v208Action)
+        integration.setRawProfileBinding(.host(RemoteMicHostActionReference(
+            id: "host.action.customShortcut",
+            displayName: "Copy",
+            payload: v208Payload
+        )), profile: copy, button: .home, trigger: .longPress)
+        #expect(integration.profileBinding(device: nil, profile: copy,
+            button: .home, trigger: .longPress) == v208Action)
+        guard case let .explicit(upgraded) = integration.displayProfileBinding(
+            device: nil, profile: copy, button: .home, trigger: .longPress
+        ) else {
+            Issue.record("2.0.8 shortcut payload was not displayed after upgrade")
+            return
+        }
+        #expect(upgraded.configured == v208Action)
         if integration.supportsProfileHoldModes {
             #expect(integration.profileHoldMode(profile: copy, button: .ok) == "repeatLong")
         }

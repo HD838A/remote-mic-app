@@ -1,5 +1,6 @@
 # Bug 记录
 
+- [键位方案引用失效时显示「配置不可用」且按键变成死键](./2026-11-22-profile-unavailable-shortcut-references.md)
 - [键位方案的旧快捷键引用在换机或迁移后失效](./2026-11-22-profile-shortcut-selfcontained-migration.md)
 - [升级后同一遥控器档案 UUID 变化导致自定义配置丢失](./2026-11-22-remote-profile-continuity-custom-config-loss.md)
 - [关于页显示“此版本暂未提供可展示的更新内容”](./2026-11-22-about-update-release-notes-unavailable.md)

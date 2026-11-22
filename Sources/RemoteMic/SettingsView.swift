@@ -2053,72 +2053,159 @@ struct SettingsView: View {
     #if SAYALL_SIRI_REMOTE_ENABLED && canImport(SayAllSiriRemote)
     private var siriRemoteMappingPage: some View {
         hardwareMappingPage(includeSiriScrollArrow: true) {
-            SiriRemoteMappingCanvas(
-                selectedControlID: $selectedSiriRemoteControlID,
-                activeControlIDs: model.activeAppleRemoteControlIDs,
-                voiceActive: model.activeAppleRemoteControlIDs.contains("siri"),
-                labels: SiriRemoteMappingCanvas.Labels(
-                    voiceTitle: localization.text("siri_remote.mapping.voice.title"),
-                    voiceFixed: localization.text("siri_remote.mapping.voice.fixed"),
-                    voiceDetail: localization.text("siri_remote.mapping.voice.detail"),
-                    missingPhoto: localization.text("siri_remote.mapping.photo.missing")
-                ),
-                buttonTitle: { controlID in
-                    siriRemoteButton(for: controlID)?.displayName(using: localization)
-                        ?? controlID
-                },
-                triggerTitle: { triggerID in
-                    ButtonTrigger(rawValue: triggerID)?.displayName(using: localization)
-                        ?? triggerID
-                },
-                actionSummary: { controlID, triggerID in
-                    guard let button = siriRemoteButton(for: controlID),
-                          let trigger = ButtonTrigger(rawValue: triggerID)
-                    else { return localization.text("action.disabled") }
-                    return mappingActionSummary(for: button, trigger: trigger)
-                },
-                holdSummary: { controlID in
-                    guard let button = siriRemoteButton(for: controlID) else {
-                        return localization.text("button_mapping.hold.entry")
-                    }
-                    return mappingHoldSummary(for: button)
-                },
-                reservedControlIDs: profileScopeReservedSiriControlIDs,
-                onEdit: { controlID, triggerID in
-                    guard let button = siriRemoteButton(for: controlID),
-                          let trigger = ButtonTrigger(rawValue: triggerID)
-                    else { return }
-                    selectedSiriRemoteControlID = controlID
-                    selectedRemoteButton = button
-                    mappingPageStateDeviceID = settings.selectedRemoteProfileID
-                    mappingActionFilter = mappingFilterForConfiguredAction(
-                        button: button,
-                        trigger: trigger
-                    )
-                    // 重复点同一颗键时 mappingEditingTarget 不变，光靠 onChange 不会再滚，
-                    // 所以每次都单独发一次滚动请求。
-                    mappingFilterScrollRequest &+= 1
-                    // 点按键只打开它的动作编辑器；按住是独立分类，不能连带展开。
-                    mappingHoldEditingButton = nil
-                    mappingEditingTarget = ShortcutEditingTarget(
-                        button: button,
-                        trigger: trigger
-                    )
-                },
-                onEditHold: { controlID in
-                    guard let button = siriRemoteButton(for: controlID) else { return }
-                    selectedSiriRemoteControlID = controlID
-                    selectedRemoteButton = button
-                    mappingPageStateDeviceID = settings.selectedRemoteProfileID
-                    mappingEditingTarget = nil
-                    shortcutCaptureTarget = nil
-                    applicationShortcutCaptureProfileID = nil
-                    mappingHoldEditingButton = button
-                    requestMappingEditorScroll(focusHold: true)
-                },
-                onVoiceSettings: presentMappingVoiceSettings
-            )
+            siriRemoteMappingCanvas
         }
+    }
+
+    #if SAYALL_SIRI_PROFILE_ACTION_STYLE
+    /// 与宿主共享画布同一套来源/主题色语义；旧私有组件没有这些闭包时走下面的兼容分支。
+    private var siriRemoteMappingCanvas: some View {
+        SiriRemoteMappingCanvas(
+            selectedControlID: $selectedSiriRemoteControlID,
+            activeControlIDs: model.activeAppleRemoteControlIDs,
+            voiceActive: model.activeAppleRemoteControlIDs.contains("siri"),
+            labels: siriRemoteMappingLabels,
+            buttonTitle: siriRemoteCanvasButtonTitle,
+            triggerTitle: siriRemoteCanvasTriggerTitle,
+            actionSummary: siriRemoteCanvasActionSummary,
+            holdSummary: siriRemoteCanvasHoldSummary,
+            actionConfigured: siriRemoteCanvasActionConfigured,
+            actionSource: siriRemoteCanvasActionSource,
+            reservedControlIDs: profileScopeReservedSiriControlIDs,
+            onEdit: editSiriRemoteControl,
+            onEditHold: editSiriRemoteHold,
+            onVoiceSettings: presentMappingVoiceSettings
+        )
+    }
+    #else
+    private var siriRemoteMappingCanvas: some View {
+        SiriRemoteMappingCanvas(
+            selectedControlID: $selectedSiriRemoteControlID,
+            activeControlIDs: model.activeAppleRemoteControlIDs,
+            voiceActive: model.activeAppleRemoteControlIDs.contains("siri"),
+            labels: siriRemoteMappingLabels,
+            buttonTitle: siriRemoteCanvasButtonTitle,
+            triggerTitle: siriRemoteCanvasTriggerTitle,
+            actionSummary: siriRemoteCanvasActionSummary,
+            holdSummary: siriRemoteCanvasHoldSummary,
+            reservedControlIDs: profileScopeReservedSiriControlIDs,
+            onEdit: editSiriRemoteControl,
+            onEditHold: editSiriRemoteHold,
+            onVoiceSettings: presentMappingVoiceSettings
+        )
+    }
+    #endif
+
+    private var siriRemoteMappingLabels: SiriRemoteMappingCanvas.Labels {
+        #if SAYALL_SIRI_PROFILE_ACTION_STYLE
+        return SiriRemoteMappingCanvas.Labels(
+            voiceTitle: localization.text("siri_remote.mapping.voice.title"),
+            voiceFixed: localization.text("siri_remote.mapping.voice.fixed"),
+            voiceDetail: localization.text("siri_remote.mapping.voice.detail"),
+            missingPhoto: localization.text("siri_remote.mapping.photo.missing"),
+            inherited: localization.text("button_mapping.binding.inherited"),
+            unavailable: localization.text("button_mapping.binding.unavailable_short")
+        )
+        #else
+        return SiriRemoteMappingCanvas.Labels(
+            voiceTitle: localization.text("siri_remote.mapping.voice.title"),
+            voiceFixed: localization.text("siri_remote.mapping.voice.fixed"),
+            voiceDetail: localization.text("siri_remote.mapping.voice.detail"),
+            missingPhoto: localization.text("siri_remote.mapping.photo.missing")
+        )
+        #endif
+    }
+
+    private var siriRemoteCanvasButtonTitle: (String) -> String {
+        { controlID in
+            siriRemoteButton(for: controlID)?.displayName(using: localization)
+                ?? controlID
+        }
+    }
+
+    private var siriRemoteCanvasTriggerTitle: (String) -> String {
+        { triggerID in
+            ButtonTrigger(rawValue: triggerID)?.displayName(using: localization)
+                ?? triggerID
+        }
+    }
+
+    private var siriRemoteCanvasActionSummary: (String, String) -> String {
+        { controlID, triggerID in
+            guard let button = siriRemoteButton(for: controlID),
+                  let trigger = ButtonTrigger(rawValue: triggerID)
+            else { return localization.text("action.disabled") }
+            return mappingActionSummary(for: button, trigger: trigger)
+        }
+    }
+
+    private var siriRemoteCanvasHoldSummary: (String) -> String {
+        { controlID in
+            guard let button = siriRemoteButton(for: controlID) else {
+                return localization.text("button_mapping.hold.entry")
+            }
+            return mappingHoldSummary(for: button)
+        }
+    }
+
+    #if SAYALL_SIRI_PROFILE_ACTION_STYLE
+    private var siriRemoteCanvasActionConfigured: (String, String) -> Bool {
+        { controlID, triggerID in
+            guard let button = siriRemoteButton(for: controlID),
+                  let trigger = ButtonTrigger(rawValue: triggerID)
+            else { return false }
+            return mappingActionIsConfigured(for: button, trigger: trigger)
+        }
+    }
+
+    private var siriRemoteCanvasActionSource:
+        (String, String) -> SiriRemoteMappingCanvas.ActionSource {
+        { controlID, triggerID in
+            guard let button = siriRemoteButton(for: controlID),
+                  let trigger = ButtonTrigger(rawValue: triggerID)
+            else { return .base }
+            switch mappingActionSource(for: button, trigger: trigger) {
+            case .base: return .base
+            case .inherited: return .inherited
+            case .explicit: return .explicit
+            case .unavailable: return .unavailable
+            }
+        }
+    }
+    #endif
+
+    private func editSiriRemoteControl(_ controlID: String, _ triggerID: String) {
+        guard let button = siriRemoteButton(for: controlID),
+              let trigger = ButtonTrigger(rawValue: triggerID)
+        else { return }
+        selectedSiriRemoteControlID = controlID
+        selectedRemoteButton = button
+        mappingPageStateDeviceID = settings.selectedRemoteProfileID
+        mappingActionFilter = mappingFilterForConfiguredAction(
+            button: button,
+            trigger: trigger
+        )
+        // 重复点同一颗键时 mappingEditingTarget 不变，光靠 onChange 不会再滚，
+        // 所以每次都单独发一次滚动请求。
+        mappingFilterScrollRequest &+= 1
+        // 点按键只打开它的动作编辑器；按住是独立分类，不能连带展开。
+        mappingHoldEditingButton = nil
+        mappingEditingTarget = ShortcutEditingTarget(
+            button: button,
+            trigger: trigger
+        )
+    }
+
+    private func editSiriRemoteHold(_ controlID: String) {
+        guard let button = siriRemoteButton(for: controlID) else { return }
+        selectedSiriRemoteControlID = controlID
+        selectedRemoteButton = button
+        mappingPageStateDeviceID = settings.selectedRemoteProfileID
+        mappingEditingTarget = nil
+        shortcutCaptureTarget = nil
+        applicationShortcutCaptureProfileID = nil
+        mappingHoldEditingButton = button
+        requestMappingEditorScroll(focusHold: true)
     }
 
     private func siriRemoteButton(for controlID: String) -> RemoteButton? {
@@ -2334,8 +2421,9 @@ struct SettingsView: View {
     private func mappingConfiguration(for button: RemoteButton, trigger: ButtonTrigger) -> ConfiguredButtonAction {
         switch mappingDisplayConfiguration(for: button, trigger: trigger) {
         case let .explicit(value): return value.configured ?? .disabled
-        case .inherited: return settings.configuredBaseAction(for: button, trigger: trigger).normalizedForExecution
-        case .unavailable: return .disabled
+        case .inherited, .unavailable:
+            // 失效引用在运行时回退基础映射，编辑器和按住判断必须使用同一个实际动作。
+            return settings.configuredBaseAction(for: button, trigger: trigger).normalizedForExecution
         }
     }
 
@@ -2344,7 +2432,9 @@ struct SettingsView: View {
         switch mappingDisplayConfiguration(for: button, trigger: trigger) {
         case let .explicit(value): return value.isEditable
         case .inherited: return true
-        case .unavailable: return false
+        // A stale reference must be replaceable without clearing it first. The
+        // write goes through the same profile API as any other explicit value.
+        case .unavailable: return true
         }
     }
 
@@ -2432,6 +2522,34 @@ struct SettingsView: View {
         profileScopeItems
             .map { $0.displayName(using: localization) }
             .joined(separator: localization.text("common.list.separator"))
+    }
+
+    /// 当前方案里已存在原始绑定、但引用目标无法解析的按键手势。
+    /// 只有原始绑定存在时才允许批量清理；整份方案读取失败或组件不可用不能被误报成“失效覆盖”。
+    private var unavailableProfileBindings: [(button: RemoteButton, trigger: ButtonTrigger)] {
+        #if canImport(SayAllButtonProfiles) && SAYALL_UNIFIED_BUTTON_CONFIGURATION
+        guard let profile = editingMappingProfileID else { return [] }
+        return RemoteButton.allCases
+            .filter { macroFeature.supportsProfileButton($0.rawValue) }
+            .flatMap { button in
+                ButtonTrigger.allCases.compactMap { trigger in
+                    guard macroFeature.rawProfileBinding(
+                        device: settings.selectedRemoteProfileID,
+                        profile: profile,
+                        button: button,
+                        trigger: trigger
+                    ) != nil,
+                        case .unavailable = mappingDisplayConfiguration(
+                            for: button,
+                            trigger: trigger
+                        )
+                    else { return nil }
+                    return (button, trigger)
+                }
+            }
+        #else
+        return []
+        #endif
     }
 
     #if SAYALL_SIRI_REMOTE_ENABLED && canImport(SayAllSiriRemote)
@@ -2946,7 +3064,7 @@ struct SettingsView: View {
                 actionDetail: { button, trigger in mappingActionDetail(for: button, trigger: trigger) },
                 actionSource: { button, trigger in mappingActionSource(for: button, trigger: trigger) },
                 actionConfigured: { button, trigger in
-                    mappingConfiguration(for: button, trigger: trigger).action != .disabled
+                    mappingActionIsConfigured(for: button, trigger: trigger)
                 },
                 onEdit: { button, trigger in
                     selectedRemoteButton = button
@@ -3029,6 +3147,7 @@ struct SettingsView: View {
                             }
                             configurationImportBanner
                             corruptedSettingsBanner
+                            mappingProfileUnavailableBanner
 
                             hardwareCanvas()
 
@@ -3266,6 +3385,45 @@ struct SettingsView: View {
         }
     }
 
+    /// 方案覆盖引用的快捷键/动作已不存在时，页面必须明确指出并给出批量恢复入口。
+    /// 执行路径已经回退基础映射，这里不能继续用笼统的「配置不可用」让用户以为整颗键失效。
+    @ViewBuilder
+    private var mappingProfileUnavailableBanner: some View {
+        let bindings = unavailableProfileBindings
+        if !bindings.isEmpty {
+            GlassPanel {
+                HStack(alignment: .top, spacing: 11) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.orange)
+                        .frame(width: 22)
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(String(
+                            format: localization.text("button_mapping.profile_unavailable.title"),
+                            bindings.count
+                        ))
+                        .font(.system(size: 13, weight: .semibold))
+                        Text(localization.text("button_mapping.profile_unavailable.detail"))
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    if !isMappingProfilePreviewOnly {
+                        Button {
+                            clearUnavailableProfileBindings(bindings)
+                        } label: {
+                            Text(localization.text("button_mapping.profile_unavailable.clear"))
+                                .font(.system(size: 12))
+                        }
+                        .compatibilityButtonStyle(.standard)
+                        .controlSize(.small)
+                    }
+                }
+            }
+        }
+    }
+
     private var mappingHeaderToggle: some View {
         Toggle("button_mapping.toggle.enabled", isOn: Binding(
             get: { settings.customMappingEnabled },
@@ -3310,7 +3468,10 @@ struct SettingsView: View {
                 Text(localization.text("button_mapping.save.unknown")).foregroundStyle(.red)
                     .help(localization.text("button_mapping.save.unknown"))
             } else if unavailable {
-                Text(localization.text("button_mapping.save.unavailable")).foregroundStyle(.red)
+                // 具体原因和基础回退由下方状态行说明；标题只保留短状态，避免再次变成
+                // 一个无法定位失败的笼统「配置不可用」。
+                Text(localization.text("button_mapping.binding.unavailable_short"))
+                    .foregroundStyle(.orange)
             } else if !canWrite {
                 if editingMappingProfileID != nil && membershipCanUnlock {
                     Text(localization.text("button_mapping.save.read_only"))
@@ -3880,8 +4041,15 @@ struct SettingsView: View {
                 }
                 .font(.system(size: 12))
             case .unavailable:
-                HStack(spacing: 8) {
-                    Text(localization.text("button_mapping.save.unavailable")).foregroundStyle(.red)
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                    Text(String(
+                        format: localization.text("button_mapping.binding.unavailable_detail"),
+                        baseMappingActionSummary(for: button, trigger: trigger)
+                    ))
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
                     if !isMappingProfilePreviewOnly {
                         Button(localization.text("button_mapping.binding.clear_override")) {
                             clearMappingOverride(button: button, trigger: trigger)
@@ -3939,6 +4107,59 @@ struct SettingsView: View {
             NoticeCenter.shared.show(Notice(tier: .error, title: title))
         }
         AppLogger.shared.write("BUTTON CONFIGURATION operation_id=\(operationID) action=clear_override phase=completed result=\(String(describing: outcome)) reason=\(outcome == .saved ? "storage_confirmed" : outcome == .unknown ? "reload_failed" : "storage_failed")")
+    }
+
+    /// 一次清除当前方案里所有引用失效的覆盖。单键失败不回滚已成功项，页面按剩余数量继续提示。
+    private func clearUnavailableProfileBindings(
+        _ bindings: [(button: RemoteButton, trigger: ButtonTrigger)]
+    ) {
+        guard let profile = editingMappingProfileID, !isMappingProfilePreviewOnly else { return }
+        let operationID = UUID().uuidString
+        AppLogger.shared.write(
+            "BUTTON PROFILE REPAIR operation_id=\(operationID) scope=profile " +
+                "action=clear_unavailable phase=requested result=requested count=\(bindings.count)"
+        )
+        var cleared = 0
+        for item in bindings {
+            if macroFeature.writeProfileBinding(
+                nil,
+                profile: profile,
+                button: item.button,
+                trigger: item.trigger,
+                displayName: nil
+            ) {
+                cleared += 1
+            }
+        }
+        let reloaded = macroFeature.reloadMappingProfiles()
+        guard reloaded else {
+            NoticeCenter.shared.show(Notice(
+                tier: .error,
+                title: String(
+                    format: localization.text("button_mapping.profile_unavailable.reload_failed"),
+                    cleared
+                )
+            ))
+            AppLogger.shared.write(
+                "BUTTON PROFILE REPAIR operation_id=\(operationID) scope=profile " +
+                    "action=clear_unavailable phase=completed result=unknown " +
+                    "reason=reload_failed cleared=\(cleared)"
+            )
+            return
+        }
+        let remaining = unavailableProfileBindings.count
+        let titleKey = remaining == 0
+            ? "button_mapping.profile_unavailable.cleared"
+            : "button_mapping.profile_unavailable.clear_failed"
+        NoticeCenter.shared.show(Notice(
+            tier: remaining == 0 ? .tip : .error,
+            title: String(format: localization.text(titleKey), cleared)
+        ))
+        AppLogger.shared.write(
+            "BUTTON PROFILE REPAIR operation_id=\(operationID) scope=profile " +
+                "action=clear_unavailable phase=completed result=" +
+                "\(remaining == 0 ? "cleared" : "partial") cleared=\(cleared) remaining=\(remaining)"
+        )
     }
 
     private func mappingTriggerEditor(
@@ -4093,8 +4314,7 @@ struct SettingsView: View {
         if let profile = editingMappingProfileID, macroFeature.supportsProfileButton(button.rawValue) {
             switch macroFeature.displayProfileHoldMode(profile: profile, button: button) {
             case let .explicit(mode): return mode
-            case .unavailable: return .once
-            case .inherited: break
+            case .unavailable, .inherited: break
             }
         }
         return settings.interactionSettings.mode(for: button) ?? .once
@@ -4110,8 +4330,7 @@ struct SettingsView: View {
         if let profileID, macroFeature.supportsProfileButton(button.rawValue) {
             switch macroFeature.displayProfileHoldMode(profile: profileID, button: button) {
             case let .explicit(value): mode = value
-            case .inherited: mode = settings.interactionSettings.mode(for: button)
-            case .unavailable: return localization.text("button_mapping.save.unavailable")
+            case .unavailable, .inherited: mode = settings.interactionSettings.mode(for: button)
             }
         } else { mode = settings.interactionSettings.mode(for: button) }
         guard let mode, mode != .once else {
@@ -6299,7 +6518,10 @@ struct SettingsView: View {
                     return profileActionSummary(configured)
                 }
                 return value.compact
-            case .unavailable: return localization.text("button_mapping.save.unavailable")
+            case .unavailable:
+                // 失效引用在执行路径回退基础映射；卡片显示实际会执行的动作，
+                // 由右上角警告图标和悬停详情说明来源，而不是让整格看起来不可用。
+                return baseMappingActionSummary(for: button, trigger: trigger)
             case .inherited:
                 // 窄卡片不拼接「默认 ·」文字前缀：英文会把动作名挤成
                 // 「Default · No…」。来源由卡片上的链接图标和悬停帮助表达。
@@ -6342,6 +6564,14 @@ struct SettingsView: View {
         )
     }
 
+    /// 失效引用显示的虽然是可执行的基础动作，但来源仍是警告态，不能和显式配置同样使用主题色。
+    private func mappingActionIsConfigured(for button: RemoteButton, trigger: ButtonTrigger) -> Bool {
+        if case .unavailable = mappingDisplayConfiguration(for: button, trigger: trigger) {
+            return false
+        }
+        return mappingConfiguration(for: button, trigger: trigger).action != .disabled
+    }
+
     /// 悬停用的完整形态，和 `mappingActionSummary` 同一来源。
     private func mappingActionSource(for button: RemoteButton,
                                      trigger: ButtonTrigger) -> RemoteMappingActionSource {
@@ -6373,7 +6603,10 @@ struct SettingsView: View {
                 return value.detailed.isEmpty || value.detailed == summary
                     ? source : source + " · " + value.detailed
             case .unavailable:
-                return localization.text("button_mapping.save.unavailable")
+                return String(
+                    format: localization.text("button_mapping.binding.unavailable_detail"),
+                    baseMappingActionSummary(for: button, trigger: trigger)
+                )
             }
         }
         if case let .explicit(value) = display {

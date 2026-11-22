@@ -361,6 +361,11 @@ struct SettingsPageRegressionTests {
         #expect(settingsSource.contains("siriRemoteMappingPage"))
         #expect(settingsSource.contains("model.isAppleSiriRemote"))
         #expect(settingsSource.contains("SiriRemoteMappingCanvas("))
+        // Siri 画布与共享画布共用继承/显式/不可用来源和主题色语义。
+        #expect(settingsSource.contains("SAYALL_SIRI_PROFILE_ACTION_STYLE"))
+        #expect(settingsSource.contains("siriRemoteCanvasActionSource"))
+        #expect(settingsSource.contains("siriRemoteCanvasActionConfigured"))
+        #expect(packageSource.contains("SAYALL_SIRI_PROFILE_ACTION_STYLE"))
         #expect(settingsSource.contains("private func hardwareMappingPage<HardwareCanvas: View>"))
         #expect(settingsSource.components(separatedBy: "hardwareMappingPage").count >= 4)
         #expect(settingsSource.components(separatedBy: "mappingEditorPanel(target)").count == 2)
@@ -933,6 +938,9 @@ struct SettingsPageRegressionTests {
         // 钉住的组合动作版本过期时仍必须可编辑；只在宏已被删除时降为只读。
         #expect(integrationSource.contains("editable = feature.savedMacroVersion(id: reference.macroID) != nil"))
         #expect(integrationSource.contains("supportedProfileHoldModes"))
+        // 执行回退不能把宏库初次加载窗口或失效 focus 目标误判成可执行覆盖。
+        #expect(integrationSource.contains("feature.hasLoadedLibrary, feature.savedMacroVersion"))
+        #expect(integrationSource.contains("case .unavailable = buttonProfilesFeature.displayBinding("))
     }
 
     @Test func mappingProfileBindingStateAndClearEntryStayAvailable() throws {
@@ -952,6 +960,22 @@ struct SettingsPageRegressionTests {
         #expect(source.contains("\"button_mapping.binding.clear_override\""))
         #expect(source.contains("private func clearMappingOverride(button: RemoteButton, trigger: ButtonTrigger)"))
         #expect(source.contains("macroFeature.profileBindingMatches(nil, profile: profile"))
+        // 引用失效时执行回退基础映射，编辑区允许直接替换，并有一次清理全部失效覆盖的入口。
+        #expect(source.contains("button_mapping.binding.unavailable_detail"))
+        #expect(source.contains("button_mapping.profile_unavailable.clear"))
+        #expect(source.contains("private func clearUnavailableProfileBindings("))
+        // 只有原始绑定存在时才算可清理的失效覆盖，整份方案读取失败不能被误报。
+        #expect(source.contains("macroFeature.rawProfileBinding("))
+        // 卡片显示基础回退，但主题色仍标为失效；按住判断使用同一个基础动作。
+        #expect(source.contains("private func mappingActionIsConfigured("))
+        #expect(source.contains("case .inherited, .unavailable:"))
+        #expect(source.contains("case .unavailable: return true"))
+        let canvas = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/RemoteMappingCanvas.swift"),
+            encoding: .utf8
+        )
+        #expect(canvas.contains("exclamationmark.triangle.fill"))
+        #expect(canvas.contains("button_mapping.binding.unavailable_short"))
         // 会员只读门禁不能因直接修改而丢失。
         #expect(source.contains("return !macroFeature.supportsMappingProfileAutosave || !canEditMappingProfiles"))
         #expect(source.contains("guard !isMappingProfilePreviewOnly else { return false }"))
@@ -1118,8 +1142,9 @@ struct SettingsPageRegressionTests {
         #expect(!settingsSource.contains("private func mappingFooter"))
 
         // 三个遥控器画布都走同一个入口，不允许任一页面绕过面板直接展开。
+        // Siri 画布保留新旧私有组件的互斥初始化分支，因此源码里有四个入口、三个运行时画布。
         #expect(!settingsSource.contains("onVoiceSettings: { mappingVoiceSettingsRequest += 1 }"))
-        #expect(settingsSource.components(separatedBy: "onVoiceSettings: presentMappingVoiceSettings").count == 4)
+        #expect(settingsSource.components(separatedBy: "onVoiceSettings: presentMappingVoiceSettings").count == 5)
 
         let presentation = try #require(settingsSource.range(of: "private func presentMappingVoiceSettings()"))
         let presentationEnd = try #require(settingsSource.range(

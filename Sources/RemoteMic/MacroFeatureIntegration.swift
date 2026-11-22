@@ -605,12 +605,40 @@ final class MacroFeatureIntegration: ObservableObject {
             button: button.rawValue, trigger: trigger.rawValue) else { return nil }
         switch binding {
         case let .host(reference):
-            // Corrupt or unknown explicit bindings are consumed, never inherited.
-            return (try? JSONDecoder().decode(ConfiguredButtonAction.self, from: reference.payload)) ?? .disabled
+            // A profile reference that cannot be decoded, or whose action cannot run,
+            // must not turn the physical button into a dead key. Returning nil lets the
+            // base mapping execute; the mapping page renders the same fallback.
+            guard let decoded = try? JSONDecoder().decode(
+                ConfiguredButtonAction.self,
+                from: reference.payload
+            ), decoded.action == .disabled || decoded.normalizedForExecution.action != .disabled
+            else { return nil }
+            if decoded.action == .combinationAction {
+                guard let macroID = decoded.macroID else { return nil }
+                #if canImport(SayAllMacroRemoteMic)
+                if feature.hasLoadedLibrary, feature.savedMacroVersion(id: macroID) == nil {
+                    return nil
+                }
+                #else
+                return nil
+                #endif
+            }
+            return decoded
         case let .macro(reference):
+            #if canImport(SayAllMacroRemoteMic)
+            // The macro library loads asynchronously. Treat a miss as invalid only after
+            // the initial read finishes, otherwise startup would execute a wrong base action.
+            if feature.hasLoadedLibrary, feature.savedMacroVersion(id: reference.macroID) == nil {
+                return nil
+            }
+            #else
+            // A macro reference is meaningless without the macro component; fall back
+            // to the base mapping instead of leaving the button unresponsive.
+            return nil
+            #endif
             return ConfiguredButtonAction(action: .combinationAction, shortcut: nil, macroID: reference.macroID)
         case let .shortcut(key):
-            guard let shortcut = buttonProfilesFeature.shortcut(id: key) else { return .disabled }
+            guard let shortcut = buttonProfilesFeature.shortcut(id: key) else { return nil }
             var flags = NSEvent.ModifierFlags(rawValue: UInt(shortcut.deviceModifierFlags ?? 0))
             for modifier in shortcut.modifiers {
                 switch modifier {
@@ -619,7 +647,7 @@ final class MacroFeatureIntegration: ObservableObject {
                 case "option": flags.insert(.option)
                 case "control": flags.insert(.control)
                 case "function": flags.insert(.function)
-                default: return .disabled
+                default: return nil
                 }
             }
             #if SAYALL_BUTTON_PROFILE_BINDING_TEXT
@@ -631,6 +659,18 @@ final class MacroFeatureIntegration: ObservableObject {
             return ConfiguredButtonAction(action: .customShortcut,
                 shortcut: CustomKeyboardShortcut(keyCode: shortcut.keyCode, modifierFlags: flags, keyLabel: keyLabel))
         case .focus:
+            // Focus targets live in the private component. Reuse its display resolution so a
+            // deleted focus profile falls back instead of silently focusing an unrelated target.
+            #if canImport(SayAllButtonProfiles) && SAYALL_BUTTON_PROFILE_AUTOSAVE
+            if let profileID = profile ?? buttonProfilesFeature.activeProfileID(for: device),
+               case .unavailable = buttonProfilesFeature.displayBinding(
+                   profile: profileID,
+                   button: button.rawValue,
+                   trigger: trigger.rawValue
+               ) {
+                return nil
+            }
+            #endif
             return ConfiguredButtonAction(action: .focusInput, shortcut: nil)
         }
         #else
