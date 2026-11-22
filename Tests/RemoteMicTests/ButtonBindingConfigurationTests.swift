@@ -303,11 +303,21 @@ struct ButtonBindingConfigurationTests {
         }
         #expect(resolved)
 
-        integration.migrateLegacyShortcutBindingsIfNeeded()
-
-        guard case let .host(reference)? = integration.rawProfileBinding(
-            device: nil, profile: profileID, button: .home, trigger: .singleClick
-        ), let migrated = MappingHostBindingCodec.decode(reference.payload)?.configured else {
+        // Other suites share the process-wide storage root; wait out a transient
+        // pending import before asserting the migration result.
+        var migration: (reference: RemoteMicHostActionReference,
+                        configured: ConfiguredButtonAction)?
+        for _ in 0..<60 {
+            integration.migrateLegacyShortcutBindingsIfNeeded()
+            if case let .host(reference)? = integration.rawProfileBinding(
+                device: nil, profile: profileID, button: .home, trigger: .singleClick
+            ), let configured = MappingHostBindingCodec.decode(reference.payload)?.configured {
+                migration = (reference, configured)
+                break
+            }
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        guard let (reference, migrated) = migration else {
             Issue.record("Resolvable shortcut was not migrated to a self-contained host action")
             return
         }
