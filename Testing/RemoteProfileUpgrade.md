@@ -30,11 +30,27 @@
 
 10. **BLE 先到与整组绑定**：先连接两只小米，选中 A 后按 B 的第一枚普通按键。B 有可核对指纹时必须走 B 的档案。无法证明身份时 B 要保持独立，A 的映射、播放与选中项不能被 B 的指纹覆盖。另准备两条同设备的历史档案，在其中一条保存独立基础绑定与设备方案。启动两次并再次触发运行期去重，检查绑定仍能执行。两条各有独立配置或配置库存读取失败时应保留两条，不能删去未知引用。
 
-上述任一项丢失映射、把配置写到另一台设备、重启后选中设备回退错误，均判定失败。
+## 跨版本档案连续性
+
+以下用例必须覆盖 1.9.21 → 2.0.8 → 2.0.9 的真实持久化形状：
+
+1. **原档案沿用**：保存一条 1.9.21 格式档案，包含固定 UUID、蓝牙标识、HID 指纹、自定义动作、快捷键、App 配置、双击/长按、连发和交互设置。用当前版本加载并连续重启三次，UUID、选中项和全部自定义类别必须不变。
+2. **重新登记沿用**：同一档案加载后，再次用相同蓝牙标识和相同 HID 指纹登记，必须返回原 UUID，不能新增档案。
+3. **旧版覆盖恢复**：写入当前 fallback 档案，同时保留 `buttonInteractionMigrationBackup` 中的旧自定义档案和指向旧 UUID 的 `unifiedBaseBindings`。启动后必须把旧自定义类别补入当前档案，并把作用域绑定重映射到当前 UUID。当前选中项不能改变。再用同一 fallback 场景删除 `unifiedBaseBindings`，确认仅靠未知型号、无 HID 指纹的单条 fallback 和同蓝牙标识的旧档案也能恢复快捷键、App 配置、双击/长按和连发。
+4. **HID/BLE 分裂恢复**：同一设备同时存在 BLE-only 当前档案和 HID 当前档案，旧档案同时带两者标识。恢复必须优先匹配 HID 档案，作用域绑定必须落到 HID 档案；BLE-only 档案不能被写入另一台设备的配置。
+5. **不覆盖当前配置**：当前档案已有自定义动作时，恢复不得用备份值覆盖；只允许补齐作用域绑定。
+6. **歧义不猜**：两条当前档案共享同一 HID 指纹时，旧档案的恢复目标不唯一，必须保持原状。
+7. **无档案不猜**：孤儿绑定找不到任何历史档案时，必须保持旧 UUID 和默认动作，不得猜测归属。
+8. **同型号隔离**：两条同型号但标识不同的当前档案，备份只匹配其中一条时，另一条必须保持默认。
+
+上述任一项在健康档案上改变 UUID、删除自定义类别、把配置写到另一台设备或在重启后回退，均判定失败。已由 1.9.21 覆盖的 fallback 保留当前 UUID，只恢复配置，不伪造旧 UUID。
+
+自动化基线：`RemoteProfileContinuityTests` 覆盖上述 1.9.21 → 2.0.8 → 2.0.9 连续性、fallback 恢复、HID 优先重映射、不覆盖当前配置、歧义不猜、无档案不猜和同型号隔离。
 
 ## 证据与边界
 
-运行 `swift test --disable-keychain`。定向复验可使用 `--filter 'RemoteButtonsTests|RemoteDeviceNameIntegrationTests|RemoteProfilePersistenceTests|SettingsPageRegressionTests'`。
+运行 `swift test --disable-keychain`。定向复验可使用 `--filter 'RemoteButtonsTests|RemoteDeviceNameIntegrationTests|RemoteProfilePersistenceTests|RemoteProfileContinuityTests|SettingsPageRegressionTests'`。
 2026-11-20 定向运行 **319 tests / 4 suites passed**；公开模式全量 **1567 tests / 113 suites passed**。测试驱动真实 AppSettings 加载，覆盖隔离配置、损坏恢复、同型号设备隔离、自动回退、旧格式升级、内联告警布局和现有持久化基线。
+2026-11-22 新增 **21 项跨版本连续性测试**；公开模式定向 **93 tests / 5 suites passed**，全量 **1637 tests / 114 suites passed**。覆盖原 UUID 沿用、1.9.21 fallback 恢复、无作用域绑定的 fallback 恢复、HID 优先重映射、不覆盖当前配置、歧义不猜、无档案不猜和同型号隔离。
 自动化不替代用户升级验收。此修改不改变硬件协议、语音会话和音频路径。
 现场失败日志可由用户主动提供 `.rmlog`，支持环境仅提取稳定错误类型；不得提交原始日志或私钥。
