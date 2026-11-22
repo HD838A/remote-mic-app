@@ -1181,7 +1181,11 @@ struct SettingsView: View {
                             settings: settings,
                             holdSummaryProvider: { profileID, buttonRaw in
                                 guard let button = RemoteButton(rawValue: buttonRaw) else { return "" }
-                                return mappingHoldSummary(for: button, profileID: profileID)
+                                return profileHoldSummary(for: button, profileID: profileID)
+                            },
+                            holdModeProvider: { profileID, buttonRaw in
+                                guard let button = RemoteButton(rawValue: buttonRaw) else { return nil }
+                                return profileHoldMode(for: button, profileID: profileID)
                             },
                             onChooseApplication: { completion in
                                 chooseApplicationForProfile(completion)
@@ -2423,6 +2427,29 @@ struct SettingsView: View {
         case let .explicit(value): return value.configured ?? .disabled
         case .inherited, .unavailable:
             // 失效引用在运行时回退基础映射，编辑器和按住判断必须使用同一个实际动作。
+            return settings.configuredBaseAction(for: button, trigger: trigger).normalizedForExecution
+        }
+    }
+
+    /// 按指定方案解析动作。方案总览可能正在查看 A 方案，而按键页正在编辑 B 方案；
+    /// 任何方案作用域的摘要都必须显式传入要解析的方案。
+    private func mappingConfiguration(
+        for button: RemoteButton,
+        trigger: ButtonTrigger,
+        profileID: UUID?
+    ) -> ConfiguredButtonAction {
+        guard let profileID, macroFeature.supportsProfileButton(button.rawValue) else {
+            return settings.configuredBaseAction(for: button, trigger: trigger).normalizedForExecution
+        }
+        switch macroFeature.displayProfileBinding(
+            device: settings.selectedRemoteProfileID,
+            profile: profileID,
+            button: button,
+            trigger: trigger
+        ) {
+        case let .explicit(value):
+            return (value.configured ?? .disabled).normalizedForExecution
+        case .inherited, .unavailable:
             return settings.configuredBaseAction(for: button, trigger: trigger).normalizedForExecution
         }
     }
@@ -4347,18 +4374,76 @@ struct SettingsView: View {
         case .repeatSingle, .once: "button_mapping.hold.repeat_prefix"
         }
         return localization.text(prefixKey) +
-            mappingHoldActionSummary(for: button, trigger: trigger)
+            mappingHoldActionSummary(for: button, trigger: trigger, profileID: profileID)
+    }
+
+    /// 方案页正在查看的方案可能与按键页正在编辑的方案不同。
+    /// 按住标签的模式和动作都必须按传入的方案解析。
+    private func profileHoldPresentation(
+        for button: RemoteButton,
+        profileID: UUID
+    ) -> ProfileHoldPresentation? {
+        ProfileHoldPresentationResolver.resolve(
+            button: button,
+            profileID: profileID,
+            profileMode: { profile, button in
+                macroFeature.displayProfileHoldMode(profile: profile, button: button)
+            },
+            baseMode: { button in
+                settings.interactionSettings.mode(for: button)
+            },
+            profileAction: { profile, button, trigger in
+                mappingConfiguration(for: button, trigger: trigger, profileID: profile)
+            },
+            baseAction: { button, trigger in
+                settings.configuredBaseAction(for: button, trigger: trigger).normalizedForExecution
+            }
+        )
+    }
+
+    private func profileHoldSummary(for button: RemoteButton, profileID: UUID) -> String {
+        guard let presentation = profileHoldPresentation(for: button, profileID: profileID) else {
+            return ""
+        }
+        return presentation.summary(
+            actionSummary: { configured in
+                if configured.action == .disabled {
+                    return localization.text("button_mapping.action.profile_not_set")
+                }
+                return holdActionSummary(configured)
+            },
+            text: { localization.text($0) }
+        )
+    }
+
+    private func profileHoldMode(for button: RemoteButton, profileID: UUID) -> String? {
+        profileHoldPresentation(for: button, profileID: profileID)?.rawMode
     }
 
     /// 按住提示里的动作摘要：方向类动作统一用符号，不再随宽度在「方向左 / ←」之间摇摆。
     private func mappingHoldActionSummary(for button: RemoteButton, trigger: ButtonTrigger) -> String {
-        let configured = mappingConfiguration(for: button, trigger: trigger)
+        mappingHoldActionSummary(
+            for: button,
+            trigger: trigger,
+            profileID: editingMappingProfileID
+        )
+    }
+
+    private func mappingHoldActionSummary(
+        for button: RemoteButton,
+        trigger: ButtonTrigger,
+        profileID: UUID?
+    ) -> String {
+        holdActionSummary(mappingConfiguration(for: button, trigger: trigger, profileID: profileID))
+    }
+
+    private func holdActionSummary(_ configured: ConfiguredButtonAction) -> String {
         switch configured.action {
         case .arrowUp: return "↑"
         case .arrowDown: return "↓"
         case .arrowLeft: return "←"
         case .arrowRight: return "→"
-        default: return mappingActionSummary(for: button, trigger: trigger)
+        default: return actionSummary(configured)
         }
     }
 

@@ -1478,6 +1478,7 @@ final class MacroFeatureIntegration: ObservableObject {
         hostActionSections: [ButtonProfileHostActionSection],
         settings: AppSettings? = nil,
         holdSummaryProvider: ((UUID, String) -> String)? = nil,
+        holdModeProvider: ((UUID, String) -> String?)? = nil,
         onChooseApplication: ((@escaping (String) -> Void) -> Void)? = nil,
         onEditKeys: @escaping (UUID) -> Void = { _ in },
         onChooseCustomApplication: ((@escaping (String, String, Data) -> Void) -> Void)? = nil,
@@ -1485,35 +1486,28 @@ final class MacroFeatureIntegration: ObservableObject {
         membershipNotice: AnyView = AnyView(EmptyView())
     ) -> AnyView {
         #if canImport(SayAllButtonProfiles)
-        #if SAYALL_MACRO_REMOTE_CAPABILITIES
-        return buttonProfilesFeature.buttonProfilesView(
-            selectedRemoteProfileID: selectedRemoteProfileID,
-            remotePresentation: buttonProfilesRemotePresentation(for: remoteModel, chromecastReservedControlIDs: chromecastReservedControlIDs),
-            hostActionSections: hostActionSections.map { section in
-                RemoteMicHostActionSection(
-                    id: section.id,
-                    title: section.title,
-                    actions: section.actions.map { action in
-                        RemoteMicHostActionDescriptor(
-                            reference: RemoteMicHostActionReference(
-                                id: action.id,
-                                displayName: action.title,
-                                payload: action.payload
-                            ),
-                            detail: action.detail,
-                            systemImage: action.systemImage,
-                            isAvailable: action.isAvailable
-                        )
-                    }
-                )
-            },
-            baseBindingSummaries: settings.map { baseBindingSummaries($0, remoteProfileID: selectedRemoteProfileID) } ?? [],
-            holdSummaryProvider: holdSummaryProvider,
-            onChooseApplication: onChooseApplication,
-            onEditKeys: onEditKeys,
-            membershipNotice: membershipNotice,
-            onChooseCustomApplication: onChooseCustomApplication.map { callback in
-                { completion in
+        let mappedHostActionSections = hostActionSections.map { section in
+            RemoteMicHostActionSection(
+                id: section.id,
+                title: section.title,
+                actions: section.actions.map { action in
+                    RemoteMicHostActionDescriptor(
+                        reference: RemoteMicHostActionReference(
+                            id: action.id,
+                            displayName: action.title,
+                            payload: action.payload
+                        ),
+                        detail: action.detail,
+                        systemImage: action.systemImage,
+                        isAvailable: action.isAvailable
+                    )
+                }
+            )
+        }
+        let summaries = settings.map { baseBindingSummaries($0, remoteProfileID: selectedRemoteProfileID) } ?? []
+        let applicationCallback: ((@escaping (RemoteMicHostActionReference) -> Void) -> Void)? =
+            onChooseCustomApplication.map { callback in
+                { (completion: @escaping (RemoteMicHostActionReference) -> Void) in
                     callback { id, displayName, payload in
                         completion(RemoteMicHostActionReference(
                             id: id,
@@ -1523,44 +1517,60 @@ final class MacroFeatureIntegration: ObservableObject {
                     }
                 }
             }
+        #if SAYALL_MACRO_REMOTE_CAPABILITIES
+        let presentation = buttonProfilesRemotePresentation(
+            for: remoteModel,
+            chromecastReservedControlIDs: chromecastReservedControlIDs
+        )
+        #if SAYALL_BUTTON_PROFILE_RESOLVED_HOLD
+        return buttonProfilesFeature.buttonProfilesView(
+            selectedRemoteProfileID: selectedRemoteProfileID,
+            remotePresentation: presentation,
+            hostActionSections: mappedHostActionSections,
+            baseBindingSummaries: summaries,
+            holdSummaryProvider: holdSummaryProvider,
+            holdModeProvider: holdModeProvider,
+            onChooseApplication: onChooseApplication,
+            onEditKeys: onEditKeys,
+            membershipNotice: membershipNotice,
+            onChooseCustomApplication: applicationCallback
         )
         #else
         return buttonProfilesFeature.buttonProfilesView(
             selectedRemoteProfileID: selectedRemoteProfileID,
-            hostActionSections: hostActionSections.map { section in
-                RemoteMicHostActionSection(
-                    id: section.id,
-                    title: section.title,
-                    actions: section.actions.map { action in
-                        RemoteMicHostActionDescriptor(
-                            reference: RemoteMicHostActionReference(
-                                id: action.id,
-                                displayName: action.title,
-                                payload: action.payload
-                            ),
-                            detail: action.detail,
-                            systemImage: action.systemImage,
-                            isAvailable: action.isAvailable
-                        )
-                    }
-                )
-            },
-            baseBindingSummaries: settings.map { baseBindingSummaries($0, remoteProfileID: selectedRemoteProfileID) } ?? [],
+            remotePresentation: presentation,
+            hostActionSections: mappedHostActionSections,
+            baseBindingSummaries: summaries,
             holdSummaryProvider: holdSummaryProvider,
             onChooseApplication: onChooseApplication,
             onEditKeys: onEditKeys,
-            onChooseCustomApplication: onChooseCustomApplication.map { callback in
-                { completion in
-                    callback { id, displayName, payload in
-                        completion(RemoteMicHostActionReference(
-                            id: id,
-                            displayName: displayName,
-                            payload: payload
-                        ))
-                    }
-                }
-            }
+            membershipNotice: membershipNotice,
+            onChooseCustomApplication: applicationCallback
         )
+        #endif
+        #else
+        #if SAYALL_BUTTON_PROFILE_RESOLVED_HOLD
+        return buttonProfilesFeature.buttonProfilesView(
+            selectedRemoteProfileID: selectedRemoteProfileID,
+            hostActionSections: mappedHostActionSections,
+            baseBindingSummaries: summaries,
+            holdSummaryProvider: holdSummaryProvider,
+            holdModeProvider: holdModeProvider,
+            onChooseApplication: onChooseApplication,
+            onEditKeys: onEditKeys,
+            onChooseCustomApplication: applicationCallback
+        )
+        #else
+        return buttonProfilesFeature.buttonProfilesView(
+            selectedRemoteProfileID: selectedRemoteProfileID,
+            hostActionSections: mappedHostActionSections,
+            baseBindingSummaries: summaries,
+            holdSummaryProvider: holdSummaryProvider,
+            onChooseApplication: onChooseApplication,
+            onEditKeys: onEditKeys,
+            onChooseCustomApplication: applicationCallback
+        )
+        #endif
         #endif
         #else
         return AnyView(EmptyView())

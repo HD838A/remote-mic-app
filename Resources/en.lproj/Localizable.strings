@@ -1440,6 +1440,11 @@
 "button_mapping.hold.repeat_long.description" = "Repeat the long-press action after the configured long-press time. Release to stop.";
 "button_mapping.hold.repeat_single.description" = "Repeat the single-click action while held. Release to stop.";
 "button_mapping.hold.repeat_long.prefix" = "While held: repeat long-press action ";
+"button_mapping.hold.profile.once" = "Hold";
+"button_mapping.hold.profile.repeat_prefix" = "Hold: Repeat ";
+"button_mapping.hold.profile.repeat_long_prefix" = "Hold: Repeat Long Press ";
+"button_mapping.hold.profile.single_hold_prefix" = "Hold: Hold ";
+"button_mapping.hold.profile.long_hold_prefix" = "Hold: Long Press then Hold ";
 "button_mapping.hold.entry" = "While held";
 "button_mapping.hold.description" = "Run the selected behavior while held. Release to stop.";
 "button_mapping.hold.clear_long_to_enable" = "Clear long-press action";
