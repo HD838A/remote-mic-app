@@ -80,13 +80,19 @@ trap cleanup EXIT INT TERM
 
 verify_app() {
   local app="$1"
-  local bundle_commit
+  local bundle_commit embedded_proof_key
   [[ -f "$app/Contents/Info.plist" ]] || fail "${app:t} has no Info.plist"
   bundle_commit="$(/usr/bin/plutil -extract SayAllSourceCommit raw -o - "$app/Contents/Info.plist" 2>/dev/null || true)"
   [[ -n "$bundle_commit" ]] || \
     fail "${app:t} has no SayAllSourceCommit; rebuild it with scripts/build-app.sh (packages built before this field existed cannot be published)"
   [[ "$bundle_commit" == "$expected_commit" ]] || \
     fail "${app:t} reports source commit $bundle_commit, expected $expected_commit"
+  if [[ "${REQUIRE_CLIENT_PROOF_KEY:-0}" == "1" ]]; then
+    embedded_proof_key="$(/usr/bin/plutil -extract SayAllClientProofKey raw -expect string -o - "$app/Contents/Info.plist" 2>/dev/null)" ||
+      fail "${app:t} is missing the required client proof key"
+    [[ "$embedded_proof_key" == "${SAYALL_CLIENT_PROOF_KEY:-}" && "$embedded_proof_key" =~ ^[A-Za-z0-9_-]{43}$ ]] ||
+      fail "${app:t} client proof key does not match the protected build input"
+  fi
   print "ASSET_SOURCE_OK app=${app:t} commit=$bundle_commit"
 }
 

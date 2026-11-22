@@ -353,6 +353,8 @@ jobs:
           EARLY_ACCESS_SERVICE_URL: ${{ secrets.EARLY_ACCESS_SERVICE_URL }}
           REMOTE_MIC_SENTRY_DSN: ${{ secrets.REMOTE_MIC_SENTRY_DSN }}
           SAYALL_DIAGNOSTIC_PUBLIC_KEY_BASE64: ${{ secrets.SAYALL_DIAGNOSTIC_PUBLIC_KEY_BASE64 }}
+          SAYALL_CLIENT_PROOF_KEY: ${{ secrets.SAYALL_CLIENT_PROOF_KEY }}
+          REQUIRE_CLIENT_PROOF_KEY: "1"
         run: |
           umask 077
           export RELEASE_STAGE_STATUS_FILE="$RUNNER_TEMP/release-stage-status.jsonl"
