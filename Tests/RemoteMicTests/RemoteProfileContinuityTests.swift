@@ -61,6 +61,18 @@ struct RemoteProfileContinuityTests {
         )
     }
 
+    private static func keyboardShortcutMappings(
+        _ shortcut: CustomKeyboardShortcut
+    ) -> RemoteDeviceMappings {
+        var bindings = AppSettings.defaultBindings
+        bindings[.menu] = .customShortcut
+        return RemoteDeviceMappings(
+            buttonBindings: bindings,
+            buttonShortcuts: [.menu: shortcut],
+            secondaryButtonBindings: [:]
+        )
+    }
+
     private static func defaultMappings() -> RemoteDeviceMappings {
         RemoteDeviceMappings(
             buttonBindings: AppSettings.defaultBindings,
@@ -1090,5 +1102,269 @@ struct RemoteProfileContinuityTests {
         #expect(settings.action(for: .menu, profileID: secondID)
             == AppSettings.defaultBindings[.menu])
         #expect(settings.configuredAction(for: .menu, trigger: .singleClick).action == .openCodex)
+    }
+
+    @Test func knownActiveDefaultProfileRecoversShortcutFromHistoricalSnapshot() throws {
+        let scope = try Self.scopedSettings("known-default-shortcut")
+        defer { scope.tearDown() }
+        let activeID = UUID()
+        let oldID = UUID()
+        let identifier = UUID()
+        var activeMappings = Self.defaultMappings()
+        activeMappings.buttonBindings[RemoteButton.home.rawValue] = .openCodex
+        let active = RemoteDeviceProfile(
+            id: activeID,
+            model: .rc001,
+            bluetoothIdentifier: identifier,
+            hidFingerprint: "known-default-shortcut-hid",
+            mappings: activeMappings
+        )
+        let old = RemoteDeviceProfile(
+            id: oldID,
+            model: .rc001,
+            bluetoothIdentifier: identifier,
+            hidFingerprint: "known-default-shortcut-hid",
+            mappings: Self.keyboardShortcutMappings(Self.shortcut())
+        )
+        scope.defaults.set(
+            try JSONEncoder().encode([active]),
+            forKey: "remoteDeviceProfiles"
+        )
+        scope.defaults.set(activeID.uuidString, forKey: "selectedRemoteProfileID")
+        scope.defaults.set(
+            try JSONEncoder().encode([old]),
+            forKey: "buttonInteractionMigrationBackup"
+        )
+
+        let settings = AppSettings(defaults: scope.defaults)
+        #expect(settings.shortcut(for: .menu) == Self.shortcut())
+        #expect(settings.action(for: .menu) == .customShortcut)
+        #expect(settings.action(for: .home) == .openCodex)
+        #expect(settings.configuredAction(for: .menu, trigger: .singleClick).shortcut
+            == Self.shortcut())
+        #expect(settings.remoteDeviceProfiles.first?.mappings
+            .parsedButtonShortcuts[.menu] == Self.shortcut())
+        #expect(scope.defaults.stringArray(forKey: AppSettings.shortcutRecoveryEvaluatedKey)?
+            .contains(activeID.uuidString) == true)
+
+        let reloaded = AppSettings(defaults: scope.defaults)
+        #expect(reloaded.shortcut(for: .menu) == Self.shortcut())
+        #expect(reloaded.action(for: .menu) == .customShortcut)
+        #expect(reloaded.remoteDeviceProfiles.map(\.id) == [activeID])
+    }
+
+    @Test func shortcutRecoveryDoesNotReplayAfterUserReset() throws {
+        let scope = try Self.scopedSettings("shortcut-reset")
+        defer { scope.tearDown() }
+        let activeID = UUID()
+        let identifier = UUID()
+        let active = RemoteDeviceProfile(
+            id: activeID,
+            model: .rc001,
+            bluetoothIdentifier: identifier,
+            mappings: Self.defaultMappings()
+        )
+        let old = RemoteDeviceProfile(
+            id: UUID(),
+            model: .rc001,
+            bluetoothIdentifier: identifier,
+            hidFingerprint: "shortcut-reset-hid",
+            mappings: Self.keyboardShortcutMappings(Self.shortcut())
+        )
+        scope.defaults.set(
+            try JSONEncoder().encode([active]),
+            forKey: "remoteDeviceProfiles"
+        )
+        scope.defaults.set(activeID.uuidString, forKey: "selectedRemoteProfileID")
+        scope.defaults.set(
+            try JSONEncoder().encode([old]),
+            forKey: "buttonInteractionMigrationBackup"
+        )
+
+        let settings = AppSettings(defaults: scope.defaults)
+        #expect(settings.shortcut(for: .menu) == Self.shortcut())
+
+        settings.resetBindings()
+
+        let reloaded = AppSettings(defaults: scope.defaults)
+        #expect(reloaded.shortcut(for: .menu) == nil)
+        #expect(reloaded.action(for: .menu) == AppSettings.defaultBindings[.menu])
+    }
+
+    @Test func conflictingHistoricalShortcutsAreNotGuessed() throws {
+        let scope = try Self.scopedSettings("shortcut-conflict")
+        defer { scope.tearDown() }
+        let activeID = UUID()
+        let identifier = UUID()
+        let active = RemoteDeviceProfile(
+            id: activeID,
+            model: .rc001,
+            bluetoothIdentifier: identifier,
+            mappings: Self.defaultMappings()
+        )
+        let first = RemoteDeviceProfile(
+            id: UUID(),
+            model: .rc001,
+            bluetoothIdentifier: identifier,
+            hidFingerprint: "shortcut-conflict-one",
+            mappings: Self.keyboardShortcutMappings(Self.shortcut())
+        )
+        let second = RemoteDeviceProfile(
+            id: UUID(),
+            model: .rc001,
+            bluetoothIdentifier: identifier,
+            hidFingerprint: "shortcut-conflict-two",
+            mappings: Self.keyboardShortcutMappings(
+                CustomKeyboardShortcut(
+                    keyCode: 38,
+                    modifierFlags: [.command],
+                    keyLabel: "J"
+                )
+            )
+        )
+        scope.defaults.set(
+            try JSONEncoder().encode([active]),
+            forKey: "remoteDeviceProfiles"
+        )
+        scope.defaults.set(activeID.uuidString, forKey: "selectedRemoteProfileID")
+        scope.defaults.set(
+            try JSONEncoder().encode([first, second]),
+            forKey: "buttonInteractionMigrationBackup"
+        )
+
+        let settings = AppSettings(defaults: scope.defaults)
+        #expect(settings.shortcut(for: .menu) == nil)
+        #expect(settings.action(for: .menu) == AppSettings.defaultBindings[.menu])
+        #expect(scope.defaults.stringArray(forKey: AppSettings.shortcutRecoveryEvaluatedKey)?
+            .contains(activeID.uuidString) != true)
+    }
+
+    @Test func shortcutRecoveryDoesNotOverwriteCustomAction() throws {
+        let scope = try Self.scopedSettings("shortcut-custom-action")
+        defer { scope.tearDown() }
+        let activeID = UUID()
+        let identifier = UUID()
+        var activeMappings = Self.defaultMappings()
+        activeMappings.buttonBindings[RemoteButton.menu.rawValue] = .openCodex
+        let active = RemoteDeviceProfile(
+            id: activeID,
+            model: .rc001,
+            bluetoothIdentifier: identifier,
+            mappings: activeMappings
+        )
+        let old = RemoteDeviceProfile(
+            id: UUID(),
+            model: .rc001,
+            bluetoothIdentifier: identifier,
+            hidFingerprint: "shortcut-custom-action-hid",
+            mappings: Self.keyboardShortcutMappings(Self.shortcut())
+        )
+        scope.defaults.set(
+            try JSONEncoder().encode([active]),
+            forKey: "remoteDeviceProfiles"
+        )
+        scope.defaults.set(activeID.uuidString, forKey: "selectedRemoteProfileID")
+        scope.defaults.set(
+            try JSONEncoder().encode([old]),
+            forKey: "buttonInteractionMigrationBackup"
+        )
+
+        let settings = AppSettings(defaults: scope.defaults)
+        #expect(settings.shortcut(for: .menu) == nil)
+        #expect(settings.action(for: .menu) == .openCodex)
+        #expect(scope.defaults.stringArray(forKey: AppSettings.shortcutRecoveryEvaluatedKey)?
+            .contains(activeID.uuidString) != true)
+
+        settings.resetBindings()
+        let reloaded = AppSettings(defaults: scope.defaults)
+        #expect(reloaded.shortcut(for: .menu) == nil)
+        #expect(reloaded.action(for: .menu) == AppSettings.defaultBindings[.menu])
+    }
+
+    @Test func existingCustomShortcutActionRecoversMissingShortcut() throws {
+        let scope = try Self.scopedSettings("existing-custom-shortcut-action")
+        defer { scope.tearDown() }
+        let activeID = UUID()
+        let identifier = UUID()
+        var activeMappings = Self.defaultMappings()
+        activeMappings.buttonBindings[RemoteButton.menu.rawValue] = .customShortcut
+        let active = RemoteDeviceProfile(
+            id: activeID,
+            model: .rc001,
+            bluetoothIdentifier: identifier,
+            hidFingerprint: "existing-custom-shortcut-hid",
+            mappings: activeMappings
+        )
+        let old = RemoteDeviceProfile(
+            id: UUID(),
+            model: .rc001,
+            bluetoothIdentifier: identifier,
+            hidFingerprint: "existing-custom-shortcut-hid",
+            mappings: Self.keyboardShortcutMappings(Self.shortcut())
+        )
+        scope.defaults.set(
+            try JSONEncoder().encode([active]),
+            forKey: "remoteDeviceProfiles"
+        )
+        scope.defaults.set(activeID.uuidString, forKey: "selectedRemoteProfileID")
+        scope.defaults.set(
+            try JSONEncoder().encode([old]),
+            forKey: "buttonInteractionMigrationBackup"
+        )
+
+        let settings = AppSettings(defaults: scope.defaults)
+        #expect(settings.shortcut(for: .menu) == Self.shortcut())
+        #expect(settings.action(for: .menu) == .customShortcut)
+        #expect(settings.configuredAction(for: .menu, trigger: .singleClick).shortcut
+            == Self.shortcut())
+    }
+
+    @Test func selectingAnotherProfileRecoversItsShortcut() throws {
+        let scope = try Self.scopedSettings("shortcut-select-profile")
+        defer { scope.tearDown() }
+        let firstID = UUID()
+        let secondID = UUID()
+        let firstIdentifier = UUID()
+        let secondIdentifier = UUID()
+        let first = RemoteDeviceProfile(
+            id: firstID,
+            model: .rc003,
+            bluetoothIdentifier: firstIdentifier,
+            mappings: Self.defaultMappings()
+        )
+        let second = RemoteDeviceProfile(
+            id: secondID,
+            model: .rc003,
+            bluetoothIdentifier: secondIdentifier,
+            mappings: Self.defaultMappings()
+        )
+        let oldSecond = RemoteDeviceProfile(
+            id: UUID(),
+            model: .rc003,
+            bluetoothIdentifier: secondIdentifier,
+            hidFingerprint: "shortcut-select-profile-hid",
+            mappings: Self.keyboardShortcutMappings(Self.shortcut())
+        )
+        scope.defaults.set(
+            try JSONEncoder().encode([first, second]),
+            forKey: "remoteDeviceProfiles"
+        )
+        scope.defaults.set(firstID.uuidString, forKey: "selectedRemoteProfileID")
+        scope.defaults.set(
+            try JSONEncoder().encode([oldSecond]),
+            forKey: "buttonInteractionMigrationBackup"
+        )
+
+        let settings = AppSettings(defaults: scope.defaults)
+        #expect(settings.shortcut(for: .menu) == nil)
+
+        settings.selectRemoteProfile(secondID)
+
+        #expect(settings.shortcut(for: .menu) == Self.shortcut())
+        #expect(settings.action(for: .menu) == .customShortcut)
+        #expect(settings.remoteDeviceProfiles.first {
+            $0.id == secondID
+        }?.mappings.parsedButtonShortcuts[.menu] == Self.shortcut())
+        #expect(settings.shortcut(for: .menu, profileID: firstID) == nil)
     }
 }

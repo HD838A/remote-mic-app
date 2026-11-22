@@ -94,16 +94,58 @@
 9. 同身份冲突档案仍按既有规则保留，不为了恢复而误合并。
 10. 多条历史记录分别携带快捷键、App 配置、双击/长按和连发时，必须互补合并；显式停用必须保留。
 
-已实现 `RemoteProfileContinuityTests`，共 21 项，覆盖原 UUID 沿用、fallback 恢复、无作用域绑定的 fallback 恢复、多条历史记录互补合并、快照指纹合并、HID 优先与身份矛盾、不覆盖当前配置、显式停用保留、冲突绑定归档、无法解码档案保护、歧义不猜、无档案不猜和同型号隔离。
+首轮实现 `RemoteProfileContinuityTests`，共 21 项（历史结果），覆盖原 UUID 沿用、fallback 恢复、无作用域绑定的 fallback 恢复、多条历史记录互补合并、快照指纹合并、HID 优先与身份矛盾、不覆盖当前配置、显式停用保留、冲突绑定归档、无法解码档案保护、歧义不猜、无档案不猜和同型号隔离。
+
+## 补充修复：2.0.8 已删除旧档案时的快捷键恢复
+
+首轮修复依赖“旧档案仍在活动数组”或“存在指向旧 UUID 的作用域绑定”。补充调查确认还有一个窄分支：
+
+- 2.0.8 去重时如果保留下来的档案已有任意自定义动作，就不会复制被并档案的整套映射。
+- 被并掉的旧档案只留在 `buttonInteractionMigrationBackup`；快捷键也只在旧档案里。
+- 当前档案是已知型号、映射为默认，且没有 `unifiedBaseBindings` 或 1.9.21 未知 fallback。
+- 2.0.9 原有恢复条件因此不成立，`shortcut(for:)` 读出 `nil`。
+
+临时回归用例已稳定复现：活动档案 rc001、默认映射，旧档案仅在 `buttonInteractionMigrationBackup`，两个快捷键断言失败。
+
+补充修复：
+
+- 新增第三触发：当前选中档案缺少快捷键，且历史快照中存在唯一硬件匹配的旧档案。
+- 只恢复缺失的 `customShortcut` 动作和快捷键；当前动作已被用户改成其他值时跳过。
+- 历史快照对同一按键给出不同快捷键时跳过，不猜测。
+- 恢复成功或当前档案不需要恢复时，把档案 UUID 写入 `remoteProfileShortcutRecoveryEvaluated`。
+- 只评估当前选中档案；用户切换档案时立即评估新选中项，不等下一次启动。
+- “恢复默认”和导入配置会先写一次性标记，避免用户明确重置后又被旧快照覆盖。
+- 一次性标记用于避免用户之后主动重置快捷键时，下次启动又从旧快照回放。
+- 恢复前仍保存一次当前活动档案快照；日志只记录结果和数量。
+
+新增回归：
+
+- 已知型号的默认档案从迁移快照恢复快捷键，并在重启后保持。
+- 用户重置快捷键后，不再从旧快照回放。
+- 两份历史档案给出冲突快捷键时不恢复。
+- 当前动作已是自定义值时，不覆盖动作。
+- 动作已是 `.customShortcut`、只缺快捷键时也能恢复。
+- 多设备切换档案时恢复新选中项，其他同型号档案保持默认。
+
+`RemoteProfileContinuityTests` 从 21 项增加到 27 项。
+补充验证：
+
+- `SAYALL_PRIVATE_PLATFORM_MODE=public swift test --disable-keychain --filter 'RemoteProfileContinuityTests'`：**27 tests passed**。
+- 公开模式全量：**1643 tests / 114 suites passed**。
+- `SAYALL_PRIVATE_PLATFORM_MODE=public swift build --disable-keychain`：通过。
+- `scripts/verify-repository-governance.sh` 与 `git diff --check`：通过。
+
+
+剩余边界：升级前已经主动重置为默认的用户无法与“升级丢配置”区分；首次运行可能补回一次旧快捷键，之后由一次性标记阻止重复回放。
 
 ## 代码位置
 
-- `Sources/RemoteMic/AppSettings.swift`：`recoverRemoteProfileDataIfNeeded()`、`legacyFallbackProfileForRecovery(_:)`、`fallbackRecoveryCandidate(_:matches:)`、`mergingRecoveredProfile(_:with:)`、`mergingMissingRecoveredMappings(_:with:)`、`mergingRecoveredInteractionSettings(kept:discarded:)`、`fillUniqueRecoveredIdentifiers(...)`、`uniqueRecoveryTargetID(for:in:)`、`remapScopedBindings(_:)`。
-- `Tests/RemoteMicTests/RemoteProfileContinuityTests.swift`：21 项跨版本连续性回归。
+- `Sources/RemoteMic/AppSettings.swift`：`recoverRemoteProfileDataIfNeeded()`、`recoverMissingShortcutsFromHistoricalSnapshotsIfNeeded()`、`markShortcutRecoveryEvaluated(_:)`、`legacyFallbackProfileForRecovery(_:)`、`fallbackRecoveryCandidate(_:matches:)`、`mergingRecoveredProfile(_:with:)`、`mergingMissingRecoveredMappings(_:with:)`、`mergingRecoveredInteractionSettings(kept:discarded:)`、`fillUniqueRecoveredIdentifiers(...)`、`uniqueRecoveryTargetID(for:in:)`、`remapScopedBindings(_:)`。
+- `Tests/RemoteMicTests/RemoteProfileContinuityTests.swift`：27 项跨版本连续性回归。
 
 ## 验证
 
-已执行：
+首轮验证（历史）：
 
 - `SAYALL_PRIVATE_PLATFORM_MODE=public swift test --disable-keychain --filter 'RemoteProfileContinuityTests'`：**21 tests passed**。
 - `SAYALL_PRIVATE_PLATFORM_MODE=public swift test --disable-keychain --filter 'RemoteProfilePersistenceTests|SettingsCorruptionRecoveryTests|ButtonBindingConfigurationTests|CompleteConfigurationBackupTests'`：**93 tests / 5 suites passed**。
