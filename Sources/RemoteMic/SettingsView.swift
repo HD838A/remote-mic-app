@@ -4064,7 +4064,8 @@ struct SettingsView: View {
 
     private func explicitProfileBindingLabel(_ value: MappingBindingDisplay) -> String {
         if value.configured?.action == .disabled {
-            return localization.text("button_mapping.action.profile_disabled")
+            // 方案里的 disabled 表示“本方案不设置动作”，不是禁用按键。
+            return localization.text("button_mapping.action.profile_not_set")
         }
         guard value.isEditable, let configured = value.configured else {
             return localization.text("button_mapping.save.read_only")
@@ -6511,7 +6512,8 @@ struct SettingsView: View {
             case let .explicit(value):
                 if let configured = value.configured {
                     if configured.action == .disabled {
-                        return localization.text("button_mapping.action.profile_disabled")
+                        // 方案里的 disabled 是“未设置动作”，不是禁用按键。
+                        return localization.text("button_mapping.action.profile_not_set")
                     }
                     // 卡片宽度固定：显式动作只显示动作名，来源在编辑区头部
                     // 用「本方案 · <动作>」完整呈现，避免长动作名被前缀挤掉。
@@ -6595,6 +6597,9 @@ struct SettingsView: View {
                     baseMappingActionSummary(for: button, trigger: trigger)
             case let .explicit(value):
                 guard let configured = value.configured else { return value.detailed }
+                if configured.action == .disabled {
+                    return localization.text("button_mapping.action.profile_not_set")
+                }
                 let summary = profileActionSummary(configured)
                 let source = String(
                     format: localization.text("button_mapping.source.profile"),
