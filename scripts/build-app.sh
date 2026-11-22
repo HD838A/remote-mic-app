@@ -746,13 +746,20 @@ if [[ -n "$SAYALL_DIAGNOSTIC_PUBLIC_KEY_BASE64" ]]; then
   plutil -insert SayAllDiagnosticPublicKey -string "$SAYALL_DIAGNOSTIC_PUBLIC_KEY_BASE64" \
     "$APP_DIR/Contents/Info.plist"
 fi
-# 会员服务的客户端请求证明密钥。与诊断公钥同一条路径：只在最终产物的 Info.plist 里出现，
-# 不写入仓库中的 Info.plist 源文件，也不经过命令行参数。未提供时留空，客户端请求就不带证明，
-# 服务端在 `CLIENT_PROOF_MODE=off` 下不受影响。
+# 在签名前写入最终 App。通过环境变量传值，避免把密钥放进进程参数。
 plutil -remove SayAllClientProofKey "$APP_DIR/Contents/Info.plist" 2>/dev/null || true
 if [[ -n "$SAYALL_CLIENT_PROOF_KEY" ]]; then
-  plutil -insert SayAllClientProofKey -string "$SAYALL_CLIENT_PROOF_KEY" \
-    "$APP_DIR/Contents/Info.plist"
+  SAYALL_CLIENT_PROOF_KEY="$SAYALL_CLIENT_PROOF_KEY" python3 - "$APP_DIR/Contents/Info.plist" <<'PYTHON'
+import os
+import plistlib
+import sys
+from pathlib import Path
+
+plist = Path(sys.argv[1])
+info = plistlib.loads(plist.read_bytes())
+info["SayAllClientProofKey"] = os.environ["SAYALL_CLIENT_PROOF_KEY"]
+plist.write_bytes(plistlib.dumps(info, sort_keys=False))
+PYTHON
 fi
 plutil -remove SayAllSentryDSN "$APP_DIR/Contents/Info.plist" 2>/dev/null || true
 if [[ -n "$REMOTE_MIC_SENTRY_DSN" ]]; then

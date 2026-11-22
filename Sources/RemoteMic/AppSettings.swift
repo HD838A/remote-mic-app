@@ -388,6 +388,21 @@ final class AppSettings: ObservableObject {
     static let mergedRemoteProfileSelectionBackupKey = "remoteDeviceProfilesMergeSelectionBackup"
     static let mergedRemoteProfilesLatestBackupKey = "remoteDeviceProfilesLatestMergeBackup"
     static let mergedRemoteProfileLatestSelectionBackupKey = "remoteDeviceProfilesLatestMergeSelectionBackup"
+    static let remappedScopedBindingConflictsKey = "unifiedBaseBindingsRecoveryConflicts"
+    /// 记录已经检查过快捷键恢复的档案 ID。恢复只针对升级窗口，不能每次启动
+    /// 都把用户后来主动重置的快捷键重新补回。
+    static let shortcutRecoveryEvaluatedKey = "remoteProfileShortcutRecoveryEvaluated"
+    /// 旧版本在解码失败或合并前留下的档案快照。只用于恢复仍然被
+    /// `unifiedBaseBindings` 引用的档案，不能作为活动档案的来源。
+    /// 顺序从较新到较旧；同一按键出现不同值时，先读到的较新值优先。
+    private static let remoteProfileRecoverySnapshotKeys = [
+        "remoteDeviceProfilesLatestMergeBackup",
+        "remoteDeviceProfilesMergeBackup",
+        "remoteDeviceProfiles.corrupt",
+        "buttonInteractionMigrationBackup",
+        "remoteDeviceProfilesUnreadableBackup",
+        "unifiedRemoteProfilesMigrationBackup",
+    ]
     private lazy var localUsageLedger = LocalUsageLedger(defaults: defaults,
         buttonCount: totalButtonPressCount, voiceDuration: totalVoiceDuration,
         longestVoice: voiceSessionRanking.map(\.duration).max() ?? 0)
@@ -520,6 +535,7 @@ final class AppSettings: ObservableObject {
               let stored = try? JSONDecoder().decode([UnifiedButtonBinding].self, from: data)
         else { return false }
         unifiedBaseBindings = stored
+        recoverRemoteProfileDataIfNeeded()
         return true
     }
 
@@ -822,6 +838,8 @@ final class AppSettings: ObservableObject {
 
     private var isLoadingRemoteProfile = false
     private var persistsSelectedRemoteProfile = true
+    /// 同一进程内只保存一次恢复前快照，避免新增恢复路径覆盖原始证据。
+    private var didPreserveRecoverySnapshot = false
     /// 自动回退只改变当前画布。后续去重/合并迁移这条临时选中项时，不得写回偏好。
     private var selectedRemoteProfileIsTransient = false
 
@@ -1420,6 +1438,7 @@ final class AppSettings: ObservableObject {
             defaults.set(data, forKey: "buttonInteractionSettings")
         }
         isLoadingStoredSettings = false
+        recoverRemoteProfileDataIfNeeded()
         _ = localUsageLedger
     }
 
@@ -1890,6 +1909,7 @@ final class AppSettings: ObservableObject {
         selectedRemoteProfileID = profileID
         loadRemoteProfileMappings(profile)
         persistsSelectedRemoteProfile = true
+        recoverMissingShortcutsFromHistoricalSnapshotsIfNeeded()
     }
 
     /// 把档案映射加载到当前编辑/执行内存态。合并后即使选中 ID 不变，档案内容也可能已补齐，
@@ -2484,6 +2504,7 @@ final class AppSettings: ObservableObject {
         } else if let selected = selectedRemoteProfile {
             loadRemoteProfileMappings(selected)
         }
+        remapScopedBindings(result.replacements)
         remapPersistedSelectedProfile(result.replacements)
         AppLogger.shared.write(
             "SETTINGS REMOTE_PROFILES phase=completed result=deduplicated " +
@@ -2673,6 +2694,7 @@ final class AppSettings: ObservableObject {
                     "model=\(model.rawValue) kept=hid reason=complementary_identity"
             )
         }
+        remapScopedBindings(replacements)
         remapPersistedSelectedProfile(replacements)
         return replacements
     }
@@ -2855,6 +2877,9 @@ final class AppSettings: ObservableObject {
     }
 
     func resetBindings() {
+        if let selectedRemoteProfileID {
+            markShortcutRecoveryEvaluated(selectedRemoteProfileID)
+        }
         buttonBindings = Self.defaultBindings
         buttonShortcuts = [:]
         unifiedBaseBindings.removeAll { $0.remoteProfileID == selectedRemoteProfileID }
@@ -3508,6 +3533,9 @@ final class AppSettings: ObservableObject {
         if let supplement, try configurationSupplementSnapshot?() != supplement {
             try configurationSupplementApply?(supplement)
         }
+        if let selectedRemoteProfileID {
+            markShortcutRecoveryEvaluated(selectedRemoteProfileID)
+        }
         defaults.set(pending, forKey: "portableTransferPendingApplications")
         configurationImportNotice = nil
     }
@@ -3720,6 +3748,9 @@ final class AppSettings: ObservableObject {
                 "SETTINGS import_filtered rejected=\(report.rejectedEntryStorageKeys.joined(separator: ",")) " +
                     "missing_apps=\(report.applicationsMissingOnThisMac.count)"
             )
+        }
+        if let selectedRemoteProfileID {
+            markShortcutRecoveryEvaluated(selectedRemoteProfileID)
         }
         configurationImportNotice = report.isClean ? nil : report
     }
@@ -4123,6 +4154,12 @@ final class AppSettings: ObservableObject {
         )
     }
 
+    private func preserveRemoteProfilesBeforeRecovery() {
+        guard !didPreserveRecoverySnapshot else { return }
+        didPreserveRecoverySnapshot = true
+        preserveRemoteProfilesBeforeMerge()
+    }
+
     private static func persistRemoteProfilesRecoverySnapshot(
         _ profiles: [RemoteDeviceProfile],
         selectedProfileID: UUID?,
@@ -4165,6 +4202,618 @@ final class AppSettings: ObservableObject {
             "SETTINGS REMOTE_PROFILES phase=completed result=restored reason=merge_backup"
         )
         return true
+    }
+
+    /// Never rewrite unreadable profiles or a corrupt scoped-binding store. Profile
+    /// selection also checks this gate before invoking recovery.
+    private var canRecoverRemoteProfileData: Bool {
+        unreadableStoredRemoteProfiles == nil &&
+            !corruptedSettingKeys.contains(Keys.remoteDeviceProfiles) &&
+            !corruptedSettingKeys.contains("unifiedBaseBindings")
+    }
+
+    /// Reattach custom data that older builds left under profile IDs that are no longer active.
+    ///
+    /// Three cases are handled:
+    /// - `unifiedBaseBindings` still references an old profile ID.
+    /// - A 1.9.21-style fallback is the only profile and matches a richer history record.
+    /// - The selected known profile lost only its keyboard shortcuts when 2.0.8 removed the
+    ///   older record; the old shortcut remains in a migration snapshot.
+    ///
+    /// A reset profile with a known identity is not replayed wholesale. Shortcut recovery is
+    /// narrower, runs once per profile, and only fills a missing shortcut plus its
+    /// `customShortcut` action when the current value is still default.
+    @discardableResult
+    func recoverRemoteProfileDataIfNeeded() -> Bool {
+        guard canRecoverRemoteProfileData else { return false }
+        let restoredShortcuts = recoverMissingShortcutsFromHistoricalSnapshotsIfNeeded()
+        let restoredProfiles = recoverRemoteProfileDataFromSnapshotsIfNeeded()
+        return restoredShortcuts || restoredProfiles
+    }
+
+    private func recoverRemoteProfileDataFromSnapshotsIfNeeded() -> Bool {
+        let activeIDs = Set(remoteDeviceProfiles.map(\.id))
+        let orphanIDs = Set(unifiedBaseBindings.compactMap(\.remoteProfileID))
+            .subtracting(activeIDs)
+        let fallbackProfile = Self.legacyFallbackProfileForRecovery(remoteDeviceProfiles)
+        guard !orphanIDs.isEmpty || fallbackProfile != nil else { return false }
+
+        var snapshots: [UUID: RemoteDeviceProfile] = [:]
+        var snapshotOrder: [UUID] = []
+        for key in Self.remoteProfileRecoverySnapshotKeys {
+            guard let data = defaults.data(forKey: key),
+                  let profiles = try? JSONDecoder().decode(
+                      [RemoteDeviceProfile].self,
+                      from: data
+                  )
+            else { continue }
+            for profile in profiles {
+                let isOrphan = orphanIDs.contains(profile.id)
+                let isFallbackCandidate = fallbackProfile.map {
+                    Self.fallbackRecoveryCandidate(profile, matches: $0)
+                } ?? false
+                guard isOrphan || isFallbackCandidate else { continue }
+                if let existing = snapshots[profile.id] {
+                    snapshots[profile.id] = Self.mergingRecoveredProfile(
+                        existing,
+                        with: profile
+                    )
+                } else {
+                    snapshots[profile.id] = profile
+                    snapshotOrder.append(profile.id)
+                }
+            }
+        }
+        guard !snapshots.isEmpty else { return false }
+
+        var replacements: [UUID: UUID] = [:]
+        var selectedMappingsChanged = false
+        var preservedBeforeRecovery = false
+        var usedFallback = false
+        for recoveredID in snapshotOrder {
+            guard let recovered = snapshots[recoveredID] else { continue }
+            let targetID: UUID
+            if let fallbackProfile,
+               Self.fallbackRecoveryCandidate(recovered, matches: fallbackProfile) {
+                targetID = fallbackProfile.id
+                usedFallback = true
+            } else {
+                guard let matchedID = Self.uniqueRecoveryTargetID(
+                    for: recovered,
+                    in: remoteDeviceProfiles
+                ) else {
+                    continue
+                }
+                targetID = matchedID
+            }
+
+            guard let index = remoteDeviceProfiles.firstIndex(where: {
+                $0.id == targetID
+            }) else { continue }
+            var candidate = remoteDeviceProfiles[index]
+            Self.fillMissingRemoteProfileDisplayFields(
+                in: &candidate,
+                from: recovered
+            )
+            Self.fillUniqueRecoveredIdentifiers(
+                in: &candidate,
+                from: recovered,
+                activeProfileID: targetID,
+                active: remoteDeviceProfiles
+            )
+            candidate.mappings = Self.mergingMissingRecoveredMappings(
+                candidate.mappings,
+                with: recovered.mappings
+            )
+            if let model = candidate.model != .unknown ? candidate.model : nil,
+               let timing = candidate.mappings.interactionSettings?.timing,
+               timing.isValid,
+               timing != RemoteButtonGestureTiming(),
+               buttonGestureTimingsByModel[model.rawValue] == nil ||
+                   buttonGestureTimingsByModel[model.rawValue]
+                       == RemoteButtonGestureTiming() {
+                buttonGestureTimingsByModel[model.rawValue] = timing
+            }
+            if candidate != remoteDeviceProfiles[index] {
+                if !preservedBeforeRecovery {
+                    preserveRemoteProfilesBeforeRecovery()
+                    preservedBeforeRecovery = true
+                }
+                remoteDeviceProfiles[index] = candidate
+                if targetID == selectedRemoteProfileID {
+                    selectedMappingsChanged = true
+                }
+            }
+            replacements[recovered.id] = targetID
+        }
+
+        let remappedBindings = remapScopedBindings(replacements)
+        if selectedMappingsChanged, let selected = selectedRemoteProfile {
+            loadRemoteProfileMappings(selected)
+        }
+        guard !replacements.isEmpty || remappedBindings > 0 else {
+            AppLogger.shared.write(
+                "SETTINGS REMOTE_PROFILE_RECOVERY phase=completed result=skipped " +
+                    "reason=no_unique_target profiles=\(snapshots.count) " +
+                    "bindings=\(orphanIDs.count)"
+            )
+            return false
+        }
+        AppLogger.shared.write(
+            "SETTINGS REMOTE_PROFILE_RECOVERY phase=completed result=restored " +
+                "reason=\(usedFallback ? "legacy_fallback" : "orphaned_bindings") " +
+                "profiles=\(replacements.count) bindings=\(remappedBindings)"
+        )
+        return true
+    }
+
+    /// 2.0.8 could remove the old custom profile while the replacement already had another
+    /// custom action. Its deduplication then skipped copying the old shortcuts, and 2.0.9 had
+    /// no orphan binding or legacy fallback to trigger the broader recovery. Restore only the
+    /// missing keyboard shortcuts from historical snapshots, once per selected profile.
+    private func recoverMissingShortcutsFromHistoricalSnapshotsIfNeeded() -> Bool {
+        guard canRecoverRemoteProfileData,
+              let selected = selectedRemoteProfile else { return false }
+        let evaluatedIDs = Set(
+            defaults.stringArray(forKey: Self.shortcutRecoveryEvaluatedKey) ?? []
+        )
+        guard !evaluatedIDs.contains(selected.id.uuidString) else { return false }
+
+        let defaultBindings = Self.defaultBindings
+        let selectedBindings = selected.mappings.parsedButtonBindings
+        let missingButtons = RemoteButton.allCases.filter { button in
+            guard selected.mappings.parsedButtonShortcuts[button] == nil,
+                  !hasExplicitBaseBinding(
+                      for: button,
+                      trigger: .singleClick,
+                      profileID: selected.id
+                  )
+            else { return false }
+            let action = selectedBindings[button] ?? defaultBindings[button] ?? .disabled
+            let defaultAction = defaultBindings[button] ?? .disabled
+            return action == .customShortcut || action == defaultAction
+        }
+        guard !missingButtons.isEmpty else {
+            markShortcutRecoveryEvaluated(selected.id)
+            return false
+        }
+
+        let activeIDs = Set(remoteDeviceProfiles.map(\.id))
+        var shortcutsByButton: [RemoteButton: [CustomKeyboardShortcut]] = [:]
+        var matchedProfileCount = 0
+        var shortcutConflict = false
+        var readSnapshot = false
+        for key in Self.remoteProfileRecoverySnapshotKeys {
+            guard let data = defaults.data(forKey: key),
+                  let profiles = try? JSONDecoder().decode(
+                      [RemoteDeviceProfile].self,
+                      from: data
+                  )
+            else { continue }
+            readSnapshot = true
+            for profile in profiles {
+                guard !activeIDs.contains(profile.id),
+                      profile.id != selected.id,
+                      Self.uniqueRecoveryTargetID(
+                          for: profile,
+                          in: remoteDeviceProfiles
+                      ) == selected.id
+                else { continue }
+                matchedProfileCount += 1
+                let recoveredBindings = profile.mappings.parsedButtonBindings
+                for button in missingButtons {
+                    let recoveredAction = recoveredBindings[button]
+                        ?? defaultBindings[button] ?? .disabled
+                    guard recoveredAction == .customShortcut,
+                          let shortcut = profile.mappings.parsedButtonShortcuts[button]
+                    else { continue }
+                    if !shortcutsByButton[button, default: []].contains(shortcut) {
+                        shortcutsByButton[button, default: []].append(shortcut)
+                        if shortcutsByButton[button]?.count ?? 0 > 1 {
+                            shortcutConflict = true
+                        }
+                    }
+                }
+            }
+        }
+        guard readSnapshot else { return false }
+
+        var updated = selected
+        var recoveredCount = 0
+        for button in missingButtons {
+            guard let shortcuts = shortcutsByButton[button],
+                  shortcuts.count == 1,
+                  let shortcut = shortcuts.first
+            else { continue }
+            let currentAction = selectedBindings[button]
+                ?? defaultBindings[button] ?? .disabled
+            if currentAction == .customShortcut {
+                // The action is already correct; only the shortcut was removed.
+            } else {
+                let defaultAction = defaultBindings[button] ?? .disabled
+                guard currentAction == defaultAction else { continue }
+                updated.mappings.buttonBindings[button.rawValue] = .customShortcut
+            }
+            updated.mappings.buttonShortcuts[button.rawValue] = shortcut
+            recoveredCount += 1
+        }
+
+        guard recoveredCount > 0,
+              let index = remoteDeviceProfiles.firstIndex(where: {
+                  $0.id == selected.id
+              })
+        else {
+            guard matchedProfileCount > 0 else { return false }
+            AppLogger.shared.write(
+                "SETTINGS REMOTE_PROFILE_RECOVERY phase=completed " +
+                    "result=skipped reason=" +
+                    "\(shortcutConflict ? "shortcut_conflict" : "no_usable_shortcut") " +
+                    "profiles=\(matchedProfileCount) bindings=\(missingButtons.count)"
+            )
+            return false
+        }
+        preserveRemoteProfilesBeforeRecovery()
+        remoteDeviceProfiles[index] = updated
+        loadRemoteProfileMappings(updated)
+        markShortcutRecoveryEvaluated(selected.id)
+        AppLogger.shared.write(
+            "SETTINGS REMOTE_PROFILE_RECOVERY phase=completed " +
+                "result=restored_shortcuts reason=historical_migration " +
+                "profiles=1 bindings=\(recoveredCount)"
+        )
+        return true
+    }
+
+    private func markShortcutRecoveryEvaluated(_ profileID: UUID) {
+        var evaluated = Set(
+            defaults.stringArray(forKey: Self.shortcutRecoveryEvaluatedKey) ?? []
+        )
+        guard evaluated.insert(profileID.uuidString).inserted else { return }
+        defaults.set(evaluated.sorted(), forKey: Self.shortcutRecoveryEvaluatedKey)
+    }
+
+    private static func legacyFallbackProfileForRecovery(
+        _ profiles: [RemoteDeviceProfile]
+    ) -> RemoteDeviceProfile? {
+        guard profiles.count == 1, let profile = profiles.first,
+              profile.model == .unknown,
+              profile.hidFingerprint == nil else { return nil }
+        return profile
+    }
+
+    private static func fallbackRecoveryCandidate(
+        _ candidate: RemoteDeviceProfile,
+        matches fallback: RemoteDeviceProfile
+    ) -> Bool {
+        guard candidate.id != fallback.id,
+              candidate.model != .unknown else { return false }
+        func identity(_ profile: RemoteDeviceProfile) -> String? {
+            profile.hardwareIdentity
+                ?? RemoteDeviceIdentity.legacyToken(storedName: profile.customName)
+        }
+        let fallbackIdentity = identity(fallback)
+        let candidateIdentity = identity(candidate)
+        if let fallbackIdentity, !fallbackIdentity.isEmpty,
+           let candidateIdentity, !candidateIdentity.isEmpty,
+           fallbackIdentity != candidateIdentity {
+            return false
+        }
+        if let fallbackIdentifier = fallback.bluetoothIdentifier,
+           candidate.bluetoothIdentifier == fallbackIdentifier {
+            return true
+        }
+        guard let fallbackIdentity, !fallbackIdentity.isEmpty else { return false }
+        return candidateIdentity == fallbackIdentity
+    }
+
+    /// Merge two snapshots of the same profile without letting a later snapshot erase a
+    /// custom category that only the earlier one retained.
+    private static func mergingRecoveredProfile(
+        _ existing: RemoteDeviceProfile,
+        with candidate: RemoteDeviceProfile
+    ) -> RemoteDeviceProfile {
+        var merged = existing
+        Self.fillMissingRemoteProfileDisplayFields(in: &merged, from: candidate)
+        if merged.hardwareIdentity == nil {
+            merged.hardwareIdentity = candidate.hardwareIdentity
+        }
+        if merged.hidFingerprint == nil {
+            merged.hidFingerprint = candidate.hidFingerprint
+        }
+        if merged.bluetoothIdentifier == nil {
+            merged.bluetoothIdentifier = candidate.bluetoothIdentifier
+        }
+        merged.mappings = Self.mergingMissingRecoveredMappings(
+            merged.mappings,
+            with: candidate.mappings
+        )
+        return merged
+    }
+
+    /// Fill only categories that are still default on the fallback profile. Used after an
+    /// older build replaced the profile array with one fallback while custom data survived in
+    /// a migration snapshot.
+    private static func mergingMissingRecoveredMappings(
+        _ target: RemoteDeviceMappings,
+        with recovered: RemoteDeviceMappings
+    ) -> RemoteDeviceMappings {
+        var merged = target
+        let targetBindings = target.parsedButtonBindings
+        let recoveredBindings = recovered.parsedButtonBindings
+        for button in RemoteButton.allCases {
+            let defaultAction = Self.defaultBindings[button] ?? .disabled
+            let targetAction = targetBindings[button] ?? defaultAction
+            if targetAction == defaultAction,
+               let recoveredAction = recoveredBindings[button],
+               recoveredAction != defaultAction {
+                merged.buttonBindings[button.rawValue] = recoveredAction
+            }
+            if merged.buttonShortcuts[button.rawValue] == nil,
+               let shortcut = recovered.buttonShortcuts[button.rawValue] {
+                merged.buttonShortcuts[button.rawValue] = shortcut
+            }
+            if merged.buttonApplicationProfileIDs?[button.rawValue] == nil,
+               let applicationProfileID = recovered.buttonApplicationProfileIDs?[button.rawValue] {
+                var applicationProfileIDs = merged.buttonApplicationProfileIDs ?? [:]
+                applicationProfileIDs[button.rawValue] = applicationProfileID
+                merged.buttonApplicationProfileIDs = applicationProfileIDs
+            }
+            if merged.buttonRapidPressEnabled?[button.rawValue] == nil,
+               recovered.buttonRapidPressEnabled?[button.rawValue] == true {
+                var rapidPressEnabled = merged.buttonRapidPressEnabled ?? [:]
+                rapidPressEnabled[button.rawValue] = true
+                merged.buttonRapidPressEnabled = rapidPressEnabled
+            }
+            guard let recoveredSecondary =
+                recovered.secondaryButtonBindings[button.rawValue] else { continue }
+            var secondary = merged.secondaryButtonBindings[button.rawValue] ?? [:]
+            for (triggerKey, binding) in recoveredSecondary
+            where secondary[triggerKey] == nil {
+                secondary[triggerKey] = binding
+            }
+            if !secondary.isEmpty {
+                merged.secondaryButtonBindings[button.rawValue] = secondary
+            }
+        }
+        merged.interactionSettings = Self.mergingRecoveredInteractionSettings(
+            kept: merged.interactionSettings,
+            discarded: recovered.interactionSettings
+        )
+        return merged
+    }
+
+    /// Complementary recovery merge for interaction settings. Existing explicit values win,
+    /// but custom timing and custom hold modes from different snapshots are both retained.
+    private static func mergingRecoveredInteractionSettings(
+        kept: RemoteButtonInteractionSettings?,
+        discarded: RemoteButtonInteractionSettings?
+    ) -> RemoteButtonInteractionSettings? {
+        guard let discarded, hasCustomInteractionSettings(discarded) else { return kept }
+        let recovered = sanitizingRecoveredInteractionSettings(discarded)
+        guard var merged = kept else { return recovered }
+        guard hasCustomInteractionSettings(merged) else { return recovered }
+        let defaultTiming = RemoteButtonGestureTiming()
+        if merged.doubleClickMilliseconds == defaultTiming.doubleClickMilliseconds,
+           recovered.doubleClickMilliseconds != defaultTiming.doubleClickMilliseconds {
+            merged.doubleClickMilliseconds = recovered.doubleClickMilliseconds
+        }
+        if merged.longPressMilliseconds == defaultTiming.longPressMilliseconds,
+           recovered.longPressMilliseconds != defaultTiming.longPressMilliseconds {
+            merged.longPressMilliseconds = recovered.longPressMilliseconds
+        }
+        let migrated = Set(merged.migratedRepeatButtons ?? [])
+        for (button, mode) in recovered.modes {
+            if let existing = merged.modes[button] {
+                guard existing == RemoteButtonHoldMode.repeatSingle.rawValue,
+                      migrated.contains(button),
+                      mode != existing else { continue }
+            }
+            merged.modes[button] = mode
+            if merged.modes[button] == RemoteButtonHoldMode.repeatSingle.rawValue,
+               recovered.migratedRepeatButtons?.contains(button) == true {
+                var mergedMigrated = merged.migratedRepeatButtons ?? []
+                if !mergedMigrated.contains(button) {
+                    mergedMigrated.append(button)
+                }
+                merged.migratedRepeatButtons = mergedMigrated
+            } else {
+                merged.migratedRepeatButtons?.removeAll { $0 == button }
+            }
+        }
+        return merged
+    }
+
+    /// A migration marker is only meaningful while the stored mode is the synthesized
+    /// `repeatSingle`. Older payloads can pair the marker with another mode; normalize before
+    /// merging so the marker cannot make a real hold choice look replaceable.
+    private static func sanitizingRecoveredInteractionSettings(
+        _ settings: RemoteButtonInteractionSettings
+    ) -> RemoteButtonInteractionSettings {
+        guard let migrated = settings.migratedRepeatButtons else { return settings }
+        var normalized = settings
+        normalized.migratedRepeatButtons = migrated.filter { button in
+            normalized.modes[button] == RemoteButtonHoldMode.repeatSingle.rawValue
+        }
+        return normalized
+    }
+
+    /// Fill display-only metadata. Identifiers are deliberately not copied: they may already
+    /// belong to another active profile and must be proven, not guessed.
+    private static func fillMissingRemoteProfileDisplayFields(
+        in target: inout RemoteDeviceProfile,
+        from recovered: RemoteDeviceProfile
+    ) {
+        if target.model == .unknown, recovered.model != .unknown {
+            target.model = recovered.model
+        }
+        if target.lastKnownBluetoothName == nil {
+            target.lastKnownBluetoothName = recovered.lastKnownBluetoothName
+        }
+        if target.customName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           !recovered.customName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           RemoteDeviceIdentity.legacyToken(storedName: recovered.customName) == nil {
+            target.customName = recovered.customName
+        }
+    }
+
+    /// Fill identifiers only when no other active profile already owns them. This keeps the
+    /// recovered UUID reusable by later BLE/HID registration without creating a duplicate.
+    private static func fillUniqueRecoveredIdentifiers(
+        in target: inout RemoteDeviceProfile,
+        from recovered: RemoteDeviceProfile,
+        activeProfileID: UUID,
+        active: [RemoteDeviceProfile]
+    ) {
+        let others = active.filter { $0.id != activeProfileID }
+        if target.hardwareIdentity == nil,
+           let identity = recovered.hardwareIdentity,
+           !identity.isEmpty,
+           !others.contains(where: { $0.hardwareIdentity == identity }) {
+            target.hardwareIdentity = identity
+        }
+        if target.hidFingerprint == nil,
+           let fingerprint = recovered.hidFingerprint,
+           !fingerprint.isEmpty,
+           !others.contains(where: { $0.hidFingerprint == fingerprint }) {
+            target.hidFingerprint = fingerprint
+        }
+        if target.bluetoothIdentifier == nil,
+           let identifier = recovered.bluetoothIdentifier,
+           !others.contains(where: { $0.bluetoothIdentifier == identifier }) {
+            let matchesHIDFingerprint = target.hidFingerprint.map { fingerprint in
+                RemoteIdentityFingerprint.candidates(for: identifier).contains(fingerprint)
+            } ?? true
+            if matchesHIDFingerprint {
+                target.bluetoothIdentifier = identifier
+            }
+        }
+    }
+
+    /// A recovered profile can only be attached when one active profile wins at the strongest
+    /// available identity tier. Ambiguous matches stay untouched.
+    private static func uniqueRecoveryTargetID(
+        for recovered: RemoteDeviceProfile,
+        in active: [RemoteDeviceProfile]
+    ) -> UUID? {
+        func uniqueMatch(_ matches: [RemoteDeviceProfile]) -> UUID? {
+            matches.count == 1 ? matches[0].id : nil
+        }
+        func hardwareIdentity(_ profile: RemoteDeviceProfile) -> String? {
+            profile.hardwareIdentity
+                ?? RemoteDeviceIdentity.legacyToken(storedName: profile.customName)
+        }
+        if let identity = hardwareIdentity(recovered), !identity.isEmpty {
+            let matches = active.filter { hardwareIdentity($0) == identity }
+            if !matches.isEmpty { return uniqueMatch(matches) }
+            let activeHasIdentity = active.contains {
+                hardwareIdentity($0)?.isEmpty == false
+            }
+            if activeHasIdentity { return nil }
+        }
+        if let fingerprint = recovered.hidFingerprint, !fingerprint.isEmpty {
+            let matches = active.filter { $0.hidFingerprint == fingerprint }
+            if !matches.isEmpty { return uniqueMatch(matches) }
+            // No active profile has this HID. If the active profile sharing the Bluetooth
+            // identifier already has a different HID, the two records contradict each other.
+            // If it has no HID at all, the HID was never captured for the active split and
+            // Bluetooth identity is still the only available link.
+            guard let identifier = recovered.bluetoothIdentifier else { return nil }
+            let sameBluetooth = active.filter { $0.bluetoothIdentifier == identifier }
+            if sameBluetooth.contains(where: { $0.hidFingerprint?.isEmpty == false }) {
+                return nil
+            }
+            return uniqueMatch(sameBluetooth)
+        }
+        if let identifier = recovered.bluetoothIdentifier {
+            return uniqueMatch(active.filter { $0.bluetoothIdentifier == identifier })
+        }
+        return nil
+    }
+
+    /// Move scoped bindings from replaced profiles to the kept profile.
+    ///
+    /// Existing bindings on the kept profile win. The method is idempotent and returns the
+    /// number of moved bindings.
+    @discardableResult
+    private func remapScopedBindings(_ replacements: [UUID: UUID]) -> Int {
+        guard !replacements.isEmpty else { return 0 }
+        struct ScopedBindingKey: Hashable {
+            let profileID: UUID
+            let button: RemoteButton
+            let trigger: ButtonTrigger
+        }
+        var result: [UnifiedButtonBinding] = []
+        var occupied = Set<ScopedBindingKey>()
+        for binding in unifiedBaseBindings {
+            guard let profileID = binding.remoteProfileID else {
+                result.append(binding)
+                continue
+            }
+            if replacements[profileID] != nil { continue }
+            result.append(binding)
+            occupied.insert(ScopedBindingKey(
+                profileID: profileID,
+                button: binding.button,
+                trigger: binding.trigger
+            ))
+        }
+        var moved = 0
+        var conflicts: [UnifiedButtonBinding] = []
+        for binding in unifiedBaseBindings {
+            guard let profileID = binding.remoteProfileID,
+                  let targetID = replacements[profileID],
+                  targetID != profileID else { continue }
+            var remapped = binding
+            remapped.remoteProfileID = targetID
+            let key = ScopedBindingKey(
+                profileID: targetID,
+                button: binding.button,
+                trigger: binding.trigger
+            )
+            guard occupied.insert(key).inserted else {
+                conflicts.append(remapped)
+                continue
+            }
+            result.append(remapped)
+            moved += 1
+        }
+        if !conflicts.isEmpty {
+            persistScopedBindingConflicts(conflicts)
+        }
+        guard moved > 0 || !conflicts.isEmpty else { return 0 }
+        unifiedBaseBindings = result
+        return moved
+    }
+
+    /// Keep a conflicting old binding out of the active list but do not discard the bytes.
+    /// The kept profile's explicit binding wins; the old value remains auditable here.
+    private func persistScopedBindingConflicts(_ conflicts: [UnifiedButtonBinding]) {
+        guard !conflicts.isEmpty else { return }
+        var stored: [UnifiedButtonBinding] = []
+        if let data = defaults.data(forKey: Self.remappedScopedBindingConflictsKey) {
+            if let decoded = try? JSONDecoder().decode(
+                [UnifiedButtonBinding].self,
+                from: data
+            ) {
+                stored = decoded
+            } else {
+                let corruptKey = Self.remappedScopedBindingConflictsKey + ".corrupt"
+                if defaults.data(forKey: corruptKey) == nil {
+                    defaults.set(data, forKey: corruptKey)
+                }
+                AppLogger.shared.write(
+                    "SETTINGS REMOTE_PROFILE_RECOVERY phase=completed " +
+                        "result=archive_preserved_unreadable"
+                )
+            }
+        }
+        stored.append(contentsOf: conflicts)
+        guard let data = try? JSONEncoder().encode(stored) else { return }
+        defaults.set(data, forKey: Self.remappedScopedBindingConflictsKey)
+        AppLogger.shared.write(
+            "SETTINGS REMOTE_PROFILE_RECOVERY phase=completed " +
+                "result=conflict_preserved bindings=\(conflicts.count)"
+        )
     }
 
     private func saveRemoteDeviceProfiles() {

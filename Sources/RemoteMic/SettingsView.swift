@@ -806,7 +806,6 @@ struct SettingsView: View {
             guard url == URL(string: "sayall://membership") else { return .systemAction }
             guard membershipFeature.isFeatureVisible else { return .discarded }
             selectedSection = .membership
-            membershipFeature.refreshIfNeeded()
             return .handled
         })
         .frame(
@@ -824,7 +823,6 @@ struct SettingsView: View {
             refreshPermissionStates()
             loginItemService.refresh()
             macroFeature.setEditorActive(false)
-            membershipFeature.refreshIfNeeded()
             routePendingButtonProfileImportIfNeeded()
             if ButtonProfileMacroRefreshPolicy.shouldRefresh(section: selectedSection) {
                 macroFeature.reloadButtonProfileMacroLibrary()
@@ -879,7 +877,6 @@ struct SettingsView: View {
             refreshPermissionStates()
             loginItemService.refresh()
             resumeCustomMappingIfPermissionsGranted()
-            membershipFeature.refreshIfNeeded()
         }
         .onReceive(privateFeature.$isFeatureVisible.removeDuplicates()) { isVisible in
             if !isVisible, selectedSection == .privateFeature {
@@ -948,7 +945,6 @@ struct SettingsView: View {
             membershipRequiredView: membershipFeature.membershipRequiredView(remoteAuthorizationDenied: true) {
                 isWebRemoteSessionPresented = false
                 selectedSection = .membership
-                membershipFeature.refreshIfNeeded()
             },
             onDiagnostic: { AppLogger.shared.write($0) }
         )
@@ -1203,7 +1199,6 @@ struct SettingsView: View {
                             chromecastReservedControlIDs: buttonProfilesChromecastReservedControls,
                             membershipNotice: membershipFeature.membershipRequiredView(forButtonProfiles: true) {
                                 selectedSection = .membership
-                                membershipFeature.refreshIfNeeded()
                             }
                         )
                     }
@@ -1220,6 +1215,7 @@ struct SettingsView: View {
         case .membership:
             if membershipFeature.isFeatureVisible {
                 membershipFeature.settingsView()
+                    .onAppear { membershipFeature.refreshIfNeeded() }
             } else {
                 aboutPage
             }
@@ -1246,14 +1242,12 @@ struct SettingsView: View {
                 membershipFeature.commonPhrasesSettingsView(
                     onOpenMembership: {
                         selectedSection = .membership
-                        membershipFeature.refreshIfNeeded()
                     },
                     onReturn: { selectedSection = .mapping }
                 )
             } else {
                 membershipFeature.membershipRequiredView {
                     selectedSection = .membership
-                    membershipFeature.refreshIfNeeded()
                 }
             }
         case .transcripts:
@@ -1454,7 +1448,6 @@ struct SettingsView: View {
     private var connectionMembershipRequiredView: some View {
         membershipFeature.membershipRequiredView {
             selectedSection = .membership
-            membershipFeature.refreshIfNeeded()
         }
     }
 
@@ -2941,7 +2934,6 @@ struct SettingsView: View {
                     "MEMBERSHIP ENTRY source=mapping_profile_toolbar state=\(editingMappingProfileID == nil ? "create" : "copy") phase=requested result=requested"
                 )
                 selectedSection = .membership
-                membershipFeature.refreshIfNeeded()
             } label: {
                 HStack(spacing: 4) {
                     Image(systemName: "crown.fill")
@@ -3485,7 +3477,6 @@ struct SettingsView: View {
                     Text(localization.text("button_mapping.save.read_only"))
                     Button(localization.text("button_mapping.save.membership")) {
                         selectedSection = .membership
-                        membershipFeature.refreshIfNeeded()
                     }.buttonStyle(.link)
                 } else if incompatible {
                     Text(localization.text("button_mapping.save.unsupported"))
@@ -4004,7 +3995,6 @@ struct SettingsView: View {
             onEnable: { model.activateSiriRemoteFromCard() },
             onMembership: {
                 selectedSection = .membership
-                membershipFeature.refreshIfNeeded()
             },
             onRecoverVoice: { model.recoverRemoteVoiceAudio() },
             onConnect: {
@@ -5183,7 +5173,6 @@ struct SettingsView: View {
             if !membershipFeature.canUseCommonPhrases {
                 membershipFeature.membershipRequiredView {
                     selectedSection = .membership
-                    membershipFeature.refreshIfNeeded()
                 }
                 .frame(minWidth: 170)
                 .accessibilityIdentifier("common-phrases-membership")
@@ -5194,7 +5183,6 @@ struct SettingsView: View {
                     selectedSection = .commonPhrases
                 } else {
                     selectedSection = .membership
-                    membershipFeature.refreshIfNeeded()
                 }
             } label: {
                 mappingActionLabel(

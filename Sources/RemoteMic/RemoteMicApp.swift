@@ -322,7 +322,6 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         installWorkspaceAudioLifecycleObservers()
         model.privateFeature.refreshAccessIfNeeded()
         model.macroFeature.refreshAccessIfNeeded()
-        model.membershipFeature.refreshIfNeeded()
         if OnboardingLaunchPolicy.shouldStartRuntime(
             isComplete: model.settings.isOnboardingComplete,
             step: model.settings.onboardingStep
@@ -420,7 +419,6 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         model.refreshRemoteDeviceNames(reason: .foreground)
         model.privateFeature.refreshAccessIfNeeded()
         model.macroFeature.refreshAccessIfNeeded()
-        model.membershipFeature.refreshIfNeeded()
         model.refreshHIDAfterPermissionChange()
     }
 
@@ -499,7 +497,6 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
                     if event == .systemDidWake {
                         self.model.privateFeature.refreshAccessIfNeeded()
                         self.model.macroFeature.refreshAccessIfNeeded()
-                        self.model.membershipFeature.refreshIfNeeded()
                     }
                 }
             }

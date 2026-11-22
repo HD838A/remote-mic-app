@@ -24,6 +24,10 @@ if [[ "${GITHUB_ACTIONS:-}" != "true" ]]; then
   print -u2 "this credential bootstrap is restricted to GitHub Actions"
   exit 1
 fi
+if [[ "${REQUIRE_CLIENT_PROOF_KEY:-0}" == "1" && ! "${SAYALL_CLIENT_PROOF_KEY:-}" =~ ^[A-Za-z0-9_-]{43}$ ]]; then
+  print -u2 "protected release requires a valid macOS client proof key"
+  exit 1
+fi
 if [[ "$EXPECTED_DEVELOPER_TEAM_ID" != "L3QHLDRPAY" ]]; then
   print -u2 "refusing to release for an unexpected Apple Developer Team"
   exit 1
@@ -84,12 +88,23 @@ print -r -- "$EXPECTED_COMMIT" | /usr/bin/grep -Eq '^[0-9a-f]{40}$' || {
   print -u2 "EXPECTED_COMMIT must be a full 40-character lowercase SHA"
   exit 1
 }
+artifacts=(
+  "$ROOT"/dist/*.dmg(N) "$ROOT"/dist/SayAll.app(N)
+  "$ROOT"/dist/intel/*.dmg(N) "$ROOT"/dist/intel/SayAll.app(N)
+)
+if [[ "${REQUIRE_CLIENT_PROOF_KEY:-0}" == "1" ]]; then
+  build="$(/usr/bin/plutil -extract CFBundleVersion raw -o - "$ROOT/Resources/Info.plist")"
+  artifacts+=(
+    "$ROOT/dist/Install SayAll.pkg" "$ROOT/dist/SayAll-$VERSION-$build.zip"
+    "$ROOT/dist/intel/Install SayAll Intel.pkg" "$ROOT/dist/intel/SayAll-$VERSION-$build-Intel.zip"
+  )
+else
+  artifacts+=( "$ROOT"/dist/*Install*.pkg(N) "$ROOT"/dist/intel/*Install*.pkg(N) )
+fi
 verified_artifacts=0
-for artifact in \
-  "$ROOT"/dist/*.dmg(N) "$ROOT"/dist/*Install*.pkg(N) "$ROOT"/dist/SayAll.app(N) \
-  "$ROOT"/dist/intel/*.dmg(N) "$ROOT"/dist/intel/*Install*.pkg(N) "$ROOT"/dist/intel/SayAll.app(N); do
+for artifact in "${artifacts[@]}"; do
   "$ROOT/scripts/verify-release-asset-source.sh" --asset "$artifact" --expected-commit "$EXPECTED_COMMIT" || {
-    print -u2 "refusing to publish: ${artifact:t} was not built from $EXPECTED_COMMIT"
+    print -u2 "refusing to stage: verification failed for ${artifact:t}"
     exit 1
   }
   (( verified_artifacts += 1 ))
