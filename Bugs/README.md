@@ -1,5 +1,6 @@
 # Bug 记录
 
+- [睡眠唤醒后自动重连暂停，Fn 语音键必须手动连接或重启才恢复](./2026-11-23-fn-voice-recovery-paused.md)
 - [小米 2 Pro 原生映射校验失败后整场不再接管按键](./2026-11-23-native-mapping-verify-failure-no-retry.md)
 - [键位方案里的 disable 显示成「本方案禁用」，实际含义是「未设置」](./2026-11-22-profile-disabled-label-means-not-set.md)
 - [键位方案引用失效时显示「配置不可用」且按键变成死键](./2026-11-22-profile-unavailable-shortcut-references.md)
@@ -242,6 +243,7 @@
 
 | 时间 | Bug | 状态 |
 | --- | --- | --- |
+| 2026-11-23 | [睡眠唤醒后自动重连暂停，Fn 语音键必须手动连接或重启才恢复](./2026-11-23-fn-voice-recovery-paused.md) | 候选修复：自动失败预算与系统唤醒/语音键意图分离；暂停后选中设备可各执行一次免预算恢复；71 项定向测试通过；真实 RC003、睡眠矩阵和第三方文字上屏待验收 |
 | 2026-11-20 | [Typeless 的 Fn 组合快捷键在 2.0.8 预览版后无法定义](./2026-11-20-typeless-fn-shortcut-unavailable.md) | 调查中；已补启动/退出 Fn 快照、HID/session Fn 边沿、Fn 组合观察、软件 Fn 提交和快捷键录入日志；90 项定向测试通过；根因待现场日志确认 |
 | 2026-11-20 | [卸载后残留 Siri Remote 安装收据和 Dock 固定项](./2026-11-20-uninstaller-stale-siri-receipt-and-dock-tile.md) | 候选修复：卸载成功后按条件清除 Siri Remote 收据；只移除当前控制台用户中指向被卸载 App 的 Dock 固定项；新增伪卷/偏好回放与静态门禁。真实签名 PKG、Installer 授权、双架构和真实 Dock 待验收 |
 | 2026-11-17 | [安装器因重复的兼容麦克风驱动阻止升级](./2026-11-17-installer-duplicate-driver-block.md) | 候选修复：HAL 扫描拆分为 `hal_scan` + 精确 `detail`/`scope`/`level`/`issue` 枚举；可写 HAL 中的本产品多余副本移入 root 废纸篓并强制重启 Core Audio；符号链接、只读 System HAL 副本和权限异常仍停止。隔离夹具全部通过；真实 Installer、CoreAudio 与现场日志待回收 |

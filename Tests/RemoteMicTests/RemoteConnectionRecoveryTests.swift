@@ -172,4 +172,76 @@ struct RemoteConnectionRecoveryTests {
         #expect(!budget.connected(at: 37))
         #expect(budget.status == .cancelled)
     }
+
+    @Test func systemWakeStartsOneAssistedEpisodeAfterFailureBudgetIsPaused() {
+        let budget = RemoteConnectionRecovery()
+        #expect(budget.begin(manual: false, at: 0))
+        for index in 0..<6 {
+            let now = Double(index * 40)
+            #expect(budget.claimAttempt(at: now))
+            budget.connected(at: now + 1)
+            budget.disconnected(at: now + 40)
+        }
+        #expect(!budget.claimAttempt(at: 240))
+        #expect(budget.status == .paused)
+        #expect(budget.begin(trigger: .automatic, at: 240) == .paused)
+
+        #expect(budget.begin(trigger: .systemWake, at: 300) == .started)
+        #expect(budget.deadline == 330)
+        #expect(budget.claimAttempt(at: 300))
+        #expect(budget.retryDelay(at: 301) == nil)
+        #expect(budget.status == .paused)
+        #expect(budget.begin(trigger: .automatic, at: 302) == .paused)
+    }
+
+    @Test func voiceKeyBypassesPausedBudgetWithCooldown() {
+        let budget = RemoteConnectionRecovery()
+        #expect(budget.begin(manual: false, at: 0))
+        for index in 0..<6 {
+            let now = Double(index * 40)
+            #expect(budget.claimAttempt(at: now))
+            budget.connected(at: now + 1)
+            budget.disconnected(at: now + 40)
+        }
+        #expect(!budget.claimAttempt(at: 240))
+        #expect(budget.status == .paused)
+
+        #expect(budget.begin(trigger: .voiceKey, at: 300) == .started)
+        #expect(budget.claimAttempt(at: 300))
+        #expect(budget.retryDelay(at: 301) == nil)
+        #expect(budget.status == .paused)
+        #expect(budget.begin(trigger: .voiceKey, at: 302) == .cooldown)
+        #expect(budget.begin(trigger: .voiceKey, at: 306) == .started)
+        #expect(budget.claimAttempt(at: 306))
+    }
+
+    @Test func wakeRecoveryRequiresReadyBeforeSuspensionAndOneAttempt() {
+        #expect(RemoteWakeRecoveryPolicy.shouldAttempt(
+            wasReadyBeforeSuspension: true,
+            wakeAttemptConsumed: false
+        ))
+        #expect(!RemoteWakeRecoveryPolicy.shouldAttempt(
+            wasReadyBeforeSuspension: true,
+            wakeAttemptConsumed: true
+        ))
+        #expect(!RemoteWakeRecoveryPolicy.shouldAttempt(
+            wasReadyBeforeSuspension: false,
+            wakeAttemptConsumed: false
+        ))
+    }
+
+    @Test func wakeWhileStillReadyForcesOneAssistedEpisode() {
+        let budget = RemoteConnectionRecovery()
+        #expect(budget.begin(manual: false, at: 0))
+        #expect(budget.claimAttempt(at: 0))
+        #expect(budget.connected(at: 1))
+        #expect(budget.status == .ready)
+
+        budget.forceAssistedEpisode(trigger: .systemWake, at: 2)
+        #expect(budget.status == .recovering)
+        #expect(budget.deadline == 32)
+        #expect(budget.claimAttempt(at: 2))
+        #expect(budget.retryDelay(at: 3) == nil)
+        #expect(budget.status == .paused)
+    }
 }

@@ -446,6 +446,9 @@ final class HIDRemoteMonitor {
     var onNativeMappingVerificationFailed: (() -> Void)?
     var onInputReset: ((UUID?) -> Void)?
     var onInternalAction: ((UUID?, ButtonAction) -> Void)?
+    /// A voice-key down edge while the selected remote's audio link may be down.
+    /// The callback only observes intent; the HID event itself is never consumed.
+    var onVoiceUsageDown: ((UUID?) -> Void)?
 
     init(
         settings: AppSettings,
@@ -1636,6 +1639,9 @@ final class HIDRemoteMonitor {
                         "phase=observed correlation=timing_only system_fn_delivery=unknown"
                 )
             }
+        }
+        if pressed.contains(UInt16(0x3E)) || pressed.contains(UInt16(0x0C)) {
+            onVoiceUsageDown?(profileID)
         }
         activeUsages = usages
         onActiveButtons?(profileID, RemoteButton.buttons(for: usages))
