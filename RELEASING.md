@@ -145,7 +145,7 @@ AI 整理在本次分发协议中保持关闭。`include_ai=true` 在接触发�
 - UI 专用 payload 只包含 Apple Silicon ZIP、appcast、双语说明和完整 `staged-assets.json`，用于减少本机 UI 验收下载；publication 仍只使用完整 payload。UI 恢复必须用 stage record 绑定的完整签名 artifact 身份核对，不能用 UI 子集替代签名身份；
 - 不创建 Tag、GitHub Release、appcast 公开地址或任何产品分支。
 
-签名阶段内部 supervisor 1200 秒，单个架构变体预算为 1140 秒，Swift 编译单架构预算 600 秒，App 组装预算 450 秒，公证阶段预算为 600 秒，GitHub step 硬上限 1800 秒。超时只终止本次阶段并保留第一份错误日志；不静默重打或以升版本掩盖基础设施故障。
+签名阶段内部 supervisor 1200 秒，单个架构变体预算为 1140 秒，Swift 编译单架构预算 600 秒，App 组装预算 900 秒（必须大于 Swift 编译预算，避免外层超时先杀掉冷构建），公证阶段预算为 600 秒，GitHub step 硬上限 1800 秒。超时只终止本次阶段并保留第一份错误日志；不静默重打或以升版本掩盖基础设施故障。
 
 ## 真实 Sparkle UI 验收
 

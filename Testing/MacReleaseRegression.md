@@ -19,7 +19,7 @@
 | Onboarding 画布 | `1020 × 772` | `Sources/RemoteMic/OnboardingScreenshotRenderer.swift` |
 | 公开 Preview payload | 10 项 payload 加 `candidate-provenance.json`，不发布 DMG | `config/release-assets.json`；`Testing/MacReleaseAssetMatrix.md` |
 | manifest / provenance schema | manifest `2`；新 publication 生成 provenance `6` | `config/release-assets.json`；`scripts/publish-preview-release.sh` |
-| staging 超时 | supervisor `1200` 秒；单架构 lane `1140` 秒；公证阶段 `600` 秒；签名 step `30` 分钟 | `.github/workflows/mac-release-package.yml`；`scripts/notarize-release.sh` |
+| staging 超时 | supervisor `1200` 秒；单架构 lane `1140` 秒；App 组装 `900` 秒；Swift 编译 `600` 秒；公证阶段 `600` 秒；签名 step `30` 分钟 | `.github/workflows/mac-release-package.yml`；`scripts/notarize-release.sh` |
 | 加密日志 | 单段 `10,000,000` 字节；目录目标 `32 MiB`、保留 7 天、最多 16 段 | `Sources/RemoteMic/AppLogger.swift` |
 | 当前私有平台清单 | 以 `config/release-dependencies.json` 为准，不在本表固定 Tag | `config/release-dependencies.json` |
 | 公开资产下载 | ZIP、Install/Uninstall PKG、appcast、中英文说明、provenance；无 DMG、无 `.sha256` 资产 | `Testing/MacReleaseAssetMatrix.md`；`config/release-assets.json` |

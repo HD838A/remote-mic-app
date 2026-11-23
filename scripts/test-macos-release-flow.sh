@@ -752,7 +752,7 @@ ai_requirement="$(/usr/bin/grep '^export REQUIRE_SAYALL_AI_PACKAGE=' "$notarize_
 /usr/bin/grep -Fq 'test "$TRIGGER_REF_NAME" = main' "$package_workflow"
 /usr/bin/grep -Fq 'verify-public-release-source.sh' "$package_workflow"
 /usr/bin/grep -Fq 'RELEASE_SWIFT_BUILD_TIMEOUT_SECONDS="${RELEASE_SWIFT_BUILD_TIMEOUT_SECONDS:-600}"' "$notarize_release"
-/usr/bin/grep -Fq 'RELEASE_APP_BUILD_TIMEOUT_SECONDS="${RELEASE_APP_BUILD_TIMEOUT_SECONDS:-450}"' "$notarize_release"
+/usr/bin/grep -Fq 'RELEASE_APP_BUILD_TIMEOUT_SECONDS="${RELEASE_APP_BUILD_TIMEOUT_SECONDS:-900}"' "$notarize_release"
 /usr/bin/grep -Fq 'export RELEASE_SWIFT_BUILD_TIMEOUT_SECONDS' "$notarize_release"
 for release_dependency in \
   SAYALL_AI_PACKAGE_PATH \

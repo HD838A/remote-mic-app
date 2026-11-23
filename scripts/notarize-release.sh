@@ -277,7 +277,9 @@ RELEASE_VERIFY_TIMEOUT_SECONDS="${RELEASE_VERIFY_TIMEOUT_SECONDS:-60}"
 # generation. Keep one bounded budget for both lanes so a transiently slower
 # runner cannot terminate a valid release build at the previous 420s limit.
 RELEASE_SWIFT_BUILD_TIMEOUT_SECONDS="${RELEASE_SWIFT_BUILD_TIMEOUT_SECONDS:-600}"
-RELEASE_APP_BUILD_TIMEOUT_SECONDS="${RELEASE_APP_BUILD_TIMEOUT_SECONDS:-450}"
+# The app-build envelope wraps the cold Swift build. Keep it above the Swift
+# budget so the outer timer cannot kill a valid build before the inner budget.
+RELEASE_APP_BUILD_TIMEOUT_SECONDS="${RELEASE_APP_BUILD_TIMEOUT_SECONDS:-900}"
 RELEASE_STAGE_RUNNER="$ROOT/scripts/run-release-stage.sh"
 PRIVATE_PRODUCTION_ENV="$ROOT/Apps/MobileWeb/.private/production.env"
 CDN_DOWNLOAD_PREFIX="${RELEASE_DOWNLOAD_PREFIX:-https://download.sayall.app/mac/releases/$RELEASE_TAG/}"
