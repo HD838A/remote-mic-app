@@ -763,6 +763,50 @@ enum AudioConfigurationResult: Equatable {
     case timedOut
 }
 
+/// Everything the bounded engine worker has to hand back to the serial audio
+/// queue. The engine and player are created inside that worker, because
+/// `AVAudioEngine()` itself reaches the HAL and can block.
+struct BuiltAudioGraph {
+    let engine: AVAudioEngine
+    let player: AVAudioPlayerNode
+    let device: AudioDeviceInfo
+}
+
+/// A build step failed for a reason that already knows its user-facing status
+/// and its diagnostic line. It is thrown from the bounded worker so the serial
+/// queue keeps a single place that writes `status`.
+struct AudioGraphConfigurationFailure: Error {
+    let status: LocalizedMessage
+    let log: String
+}
+
+/// Diagnostic snapshot of the bounded build worker: which device it resolved
+/// and which stage it reached last. Written by the worker, read by the serial
+/// queue when it reports a timeout.
+final class AudioGraphBuildTelemetry: @unchecked Sendable {
+    private let lock = NSLock()
+    private var deviceDescription: String?
+    private var lastStage: String?
+
+    func record(deviceDescription: String) {
+        lock.lock()
+        self.deviceDescription = deviceDescription
+        lock.unlock()
+    }
+
+    func record(stage: String) {
+        lock.lock()
+        lastStage = stage
+        lock.unlock()
+    }
+
+    var snapshot: (deviceDescription: String?, lastStage: String?) {
+        lock.lock()
+        defer { lock.unlock() }
+        return (deviceDescription, lastStage)
+    }
+}
+
 enum AudioConfigurationRetryPolicy {
     static let maximumAttempts = 2
     // Keep PCM through both engine start attempts and allow one second for
@@ -883,6 +927,9 @@ final class VirtualAudioOutput {
     private let engineQueue: DispatchQueue
     private let engineQueueKey = DispatchSpecificKey<Void>()
     private let engineStartCoordinator: AudioEngineStartCoordinator
+    /// 建图入口：默认直接创建引擎和播放器。`AVAudioEngine()` 本身会触达 HAL，
+    /// 因此它必须跑在有界工作队列上；测试注入阻塞或抛错的实现来复现卡死。
+    private let audioGraphFactory: () throws -> (engine: AVAudioEngine, player: AVAudioPlayerNode)
     private var nextConfigurationOperationID: UInt64 = 0
     /// 用户设定的输出音量：百分比只用于日志，线性系数用于写缓冲。
     private var outputLevelPercent: Double = VirtualAudioOutputLevelPolicy.defaultPercent
@@ -924,12 +971,16 @@ final class VirtualAudioOutput {
             label: "RemoteMic.audioOutput.engine",
             qos: .userInitiated
         ),
-        engineStartCoordinator: AudioEngineStartCoordinator = AudioEngineStartCoordinator()
+        engineStartCoordinator: AudioEngineStartCoordinator = AudioEngineStartCoordinator(),
+        audioGraphFactory: @escaping () throws -> (engine: AVAudioEngine, player: AVAudioPlayerNode) = {
+            (engine: AVAudioEngine(), player: AVAudioPlayerNode())
+        }
     ) {
         self.logger = logger
         self.uptime = uptime
         self.engineQueue = engineQueue
         self.engineStartCoordinator = engineStartCoordinator
+        self.audioGraphFactory = audioGraphFactory
         engineQueue.setSpecific(key: engineQueueKey, value: ())
     }
 
@@ -1048,7 +1099,9 @@ final class VirtualAudioOutput {
         let elapsedMilliseconds = {
             max(0, Int((uptime() - startedAtUptime) * 1_000))
         }
+        let buildTelemetry = AudioGraphBuildTelemetry()
         let logStage = { (stage: String) in
+            buildTelemetry.record(stage: stage)
             logger(
                 "AUDIO CONFIGURE operation_id=\(operationID) attempt=\(attempt) " +
                     "phase=applying result=pending stage=\(stage) queue=audio_output " +
@@ -1067,132 +1120,161 @@ final class VirtualAudioOutput {
             return .failed
         }
         logStage("enumerate_devices")
-        let availableDevices = CoreAudioDeviceCatalog.outputDevices()
-        guard let device = availableDevices.first(where: { $0.uid == deviceUID }) else {
-            status = LocalizedMessage("audio.output.selected_unavailable")
-            logger(
-                "AUDIO CONFIGURE failed reason=selected_device_unavailable " +
-                    "queue=audio_output elapsed_ms=\(elapsedMilliseconds()) " +
-                    "available={\(CoreAudioDeviceCatalog.outputDevicesDiagnostic(availableDevices))}"
-            )
-            return .failed
-        }
-        logger(
-            "AUDIO CONFIGURE begin queue=audio_output target={\(CoreAudioDeviceCatalog.deviceDiagnostic(device))} " +
-                "elapsed_ms=\(elapsedMilliseconds()) " +
-                "previous={\(previousState)}"
-        )
-
-        logStage("repair_audibility")
-        // 设备音量固定写成 100%：用户音量由 App 侧出口统一承担，这里只负责保证不被外部留在低位。
-        let targetVolumeScalar = VirtualAudioDeviceLevelPolicy.fixedVolumeScalar
-        let audibilityRepair = CoreAudioDeviceCatalog.applyVirtualAudioDeviceLevel(
-            device,
-            targetVolumeScalar: targetVolumeScalar
-        )
-        if audibilityRepair.applicable {
-            logger(
-                "AUDIO AUDIBILITY repair " +
-                    "device_kind=\(VirtualAudioDeviceDiagnosticKind.classify(device).rawValue) " +
-                    "unmute_attempted=\(audibilityRepair.unmuteAttempted) " +
-                    "volume_adjustment_attempted=\(audibilityRepair.volumeAdjustmentAttempted) " +
-                    "write_failed=\(audibilityRepair.writeFailed) " +
-                    "user_volume_percent=\(Int(outputLevelPercentSnapshot.rounded())) " +
-                    "before={\(audibilityRepair.before.diagnostic(targetVolume: targetVolumeScalar))} " +
-                    "after={\(audibilityRepair.after.diagnostic(targetVolume: targetVolumeScalar))} " +
-                    "result=\(audibilityRepair.isReady ? "ready" : "not_applied")"
-            )
-        }
-        guard audibilityRepair.isReady else {
-            status = LocalizedMessage("audio.output.selected_unavailable")
-            logger(
-                "AUDIO CONFIGURE failed reason=virtual_device_level_not_applied " +
-                    "queue=audio_output elapsed_ms=\(elapsedMilliseconds()) " +
-                    "target_volume_scalar=\(targetVolumeScalar) " +
-                    "device_kind=\(VirtualAudioDeviceDiagnosticKind.classify(device).rawValue)"
-            )
-            return .failed
-        }
-
-        logStage("connect_mixer")
-        let engine = AVAudioEngine()
-        logStage("engine_created")
-        let player = AVAudioPlayerNode()
-        logStage("player_created")
-        logStage("attach_player")
-        engine.attach(player)
-        logStage("attach_player_completed")
-        logStage("connect_mixer_call")
-        engine.connect(player, to: engine.mainMixerNode, format: sourceFormat)
-        logStage("connect_mixer_completed")
-
-        logStage("open_output_unit")
-        guard let outputUnit = engine.outputNode.audioUnit else {
-            status = LocalizedMessage("audio.output.core_audio_open_failed")
-            logger(
-                "AUDIO CONFIGURE failed reason=no_output_unit queue=audio_output " +
-                    "elapsed_ms=\(elapsedMilliseconds()) target={\(CoreAudioDeviceCatalog.deviceDiagnostic(device))}"
-            )
-            return .failed
-        }
-        logStage("open_output_unit_completed")
-        var deviceID = device.id
-        logStage("select_device")
-        let result = AudioUnitSetProperty(
-            outputUnit,
-            kAudioOutputUnitProperty_CurrentDevice,
-            kAudioUnitScope_Global,
-            0,
-            &deviceID,
-            UInt32(MemoryLayout<AudioDeviceID>.size)
-        )
-        guard result == noErr else {
-            status = LocalizedMessage("audio.output.select_failed", arguments: [String(result)])
-            logger(
-                "AUDIO CONFIGURE failed reason=set_current_device " +
-                    "queue=audio_output elapsed_ms=\(elapsedMilliseconds()) " +
-                    "target={\(CoreAudioDeviceCatalog.deviceDiagnostic(device))} " +
-                    AppLogger.errorFields(domain: "os_status", code: Int(result))
-            )
-            return .failed
-        }
-        logStage("select_device_completed")
-
-        let startOutcome = engineStartCoordinator.start(
+        // 枚举设备、修复音量、创建 AVAudioEngine、连线、绑定设备全都是同步 HAL 调用：
+        // Core Audio 卡住时其中任何一个都可能永不返回。这一整段必须和 prepare()/start()
+        // 一起跑在一次性工作队列上并被有界等待，否则共享的串行 engineQueue 会被永久占用，
+        // 后续配置请求只排队不执行，蓝牙语音会话也就永远等不到配置回调。
+        let buildOutcome = engineStartCoordinator.run(
             operationID: operationID,
             attempt: attempt
-        ) { token in
-            logStage("prepare_engine")
-            engine.prepare()
-            logStage("prepare_engine_completed")
-            guard !token.isCancelled else { throw AudioEngineStartError.cancelled }
-            logStage("start_engine")
-            try engine.start()
-            logStage("start_engine_completed")
-            guard !token.isCancelled else { throw AudioEngineStartError.cancelled }
+        ) { token -> BuiltAudioGraph in
+            let availableDevices = CoreAudioDeviceCatalog.outputDevices()
+            guard let device = availableDevices.first(where: { $0.uid == deviceUID }) else {
+                throw AudioGraphConfigurationFailure(
+                    status: LocalizedMessage("audio.output.selected_unavailable"),
+                    log: "AUDIO CONFIGURE failed reason=selected_device_unavailable " +
+                        "queue=audio_output elapsed_ms=\(elapsedMilliseconds()) " +
+                        "available={\(CoreAudioDeviceCatalog.outputDevicesDiagnostic(availableDevices))}"
+                )
+            }
+            buildTelemetry.record(deviceDescription: CoreAudioDeviceCatalog.deviceDiagnostic(device))
+            logger(
+                "AUDIO CONFIGURE begin queue=audio_output " +
+                    "target={\(CoreAudioDeviceCatalog.deviceDiagnostic(device))} " +
+                    "elapsed_ms=\(elapsedMilliseconds()) " +
+                    "previous={\(previousState)}"
+            )
+
+            logStage("repair_audibility")
+            // 设备音量固定写成 100%：用户音量由 App 侧出口统一承担，这里只负责保证不被外部留在低位。
+            let targetVolumeScalar = VirtualAudioDeviceLevelPolicy.fixedVolumeScalar
+            let audibilityRepair = CoreAudioDeviceCatalog.applyVirtualAudioDeviceLevel(
+                device,
+                targetVolumeScalar: targetVolumeScalar
+            )
+            if audibilityRepair.applicable {
+                logger(
+                    "AUDIO AUDIBILITY repair " +
+                        "device_kind=\(VirtualAudioDeviceDiagnosticKind.classify(device).rawValue) " +
+                        "unmute_attempted=\(audibilityRepair.unmuteAttempted) " +
+                        "volume_adjustment_attempted=\(audibilityRepair.volumeAdjustmentAttempted) " +
+                        "write_failed=\(audibilityRepair.writeFailed) " +
+                        "user_volume_percent=\(Int(self.outputLevelPercentSnapshot.rounded())) " +
+                        "before={\(audibilityRepair.before.diagnostic(targetVolume: targetVolumeScalar))} " +
+                        "after={\(audibilityRepair.after.diagnostic(targetVolume: targetVolumeScalar))} " +
+                        "result=\(audibilityRepair.isReady ? "ready" : "not_applied")"
+                )
+            }
+            guard audibilityRepair.isReady else {
+                throw AudioGraphConfigurationFailure(
+                    status: LocalizedMessage("audio.output.selected_unavailable"),
+                    log: "AUDIO CONFIGURE failed reason=virtual_device_level_not_applied " +
+                        "queue=audio_output elapsed_ms=\(elapsedMilliseconds()) " +
+                        "target_volume_scalar=\(targetVolumeScalar) " +
+                        "device_kind=\(VirtualAudioDeviceDiagnosticKind.classify(device).rawValue)"
+                )
+            }
+
+            logStage("connect_mixer")
+            let graph = try self.audioGraphFactory()
+            let engine = graph.engine
+            let player = graph.player
+            guard !token.isCancelled else {
+                engine.stop()
+                throw AudioEngineStartError.cancelled
+            }
+            logStage("engine_created")
+            logStage("player_created")
+            logStage("attach_player")
+            engine.attach(player)
+            logStage("attach_player_completed")
+            logStage("connect_mixer_call")
+            engine.connect(player, to: engine.mainMixerNode, format: self.sourceFormat)
+            logStage("connect_mixer_completed")
+
+            logStage("open_output_unit")
+            guard let outputUnit = engine.outputNode.audioUnit else {
+                engine.stop()
+                throw AudioGraphConfigurationFailure(
+                    status: LocalizedMessage("audio.output.core_audio_open_failed"),
+                    log: "AUDIO CONFIGURE failed reason=no_output_unit queue=audio_output " +
+                        "elapsed_ms=\(elapsedMilliseconds()) " +
+                        "target={\(CoreAudioDeviceCatalog.deviceDiagnostic(device))}"
+                )
+            }
+            logStage("open_output_unit_completed")
+            var deviceID = device.id
+            logStage("select_device")
+            let result = AudioUnitSetProperty(
+                outputUnit,
+                kAudioOutputUnitProperty_CurrentDevice,
+                kAudioUnitScope_Global,
+                0,
+                &deviceID,
+                UInt32(MemoryLayout<AudioDeviceID>.size)
+            )
+            guard result == noErr else {
+                player.stop()
+                engine.stop()
+                throw AudioGraphConfigurationFailure(
+                    status: LocalizedMessage("audio.output.select_failed", arguments: [String(result)]),
+                    log: "AUDIO CONFIGURE failed reason=set_current_device " +
+                        "queue=audio_output elapsed_ms=\(elapsedMilliseconds()) " +
+                        "target={\(CoreAudioDeviceCatalog.deviceDiagnostic(device))} " +
+                        AppLogger.errorFields(domain: "os_status", code: Int(result))
+                )
+            }
+            logStage("select_device_completed")
+
+            do {
+                logStage("prepare_engine")
+                engine.prepare()
+                logStage("prepare_engine_completed")
+                guard !token.isCancelled else { throw AudioEngineStartError.cancelled }
+                logStage("start_engine")
+                try engine.start()
+                logStage("start_engine_completed")
+            } catch {
+                player.stop()
+                engine.stop()
+                throw error
+            }
+            guard !token.isCancelled else {
+                player.stop()
+                engine.stop()
+                throw AudioEngineStartError.cancelled
+            }
+            return BuiltAudioGraph(engine: engine, player: player, device: device)
         } cleanup: {
-            player.stop()
-            engine.stop()
             logger(
                 "AUDIO CONFIGURE cleanup operation_id=\(operationID) attempt=\(attempt) " +
                     "phase=completed result=stopped reason=prepare_timeout queue=audio_output"
             )
         }
 
-        switch startOutcome {
+        let buildSnapshot = buildTelemetry.snapshot
+        let buildTarget = buildSnapshot.deviceDescription ?? "unresolved"
+        let engine: AVAudioEngine
+        let player: AVAudioPlayerNode
+        let device: AudioDeviceInfo
+        switch buildOutcome {
         case .timedOut:
             status = LocalizedMessage("audio.output.selected_unavailable")
             logger(
                 "AUDIO CONFIGURE timeout operation_id=\(operationID) attempt=\(attempt) " +
                     "phase=timed_out result=failed reason=prepare_timeout completion=forced " +
+                    "last_stage=\(buildSnapshot.lastStage ?? "unknown") " +
                     "pending_buffers=\(pendingVoiceBufferCountForDiagnostics) " +
                     "queue=audio_output elapsed_ms=\(elapsedMilliseconds()) " +
-                    "target={\(CoreAudioDeviceCatalog.deviceDiagnostic(device))}"
+                    "target={\(buildTarget)}"
             )
             return .timedOut
         case .failed(let error):
-            player.stop()
-            engine.stop()
+            if let failure = error as? AudioGraphConfigurationFailure {
+                status = failure.status
+                logger(failure.log)
+                return .failed
+            }
             status = LocalizedMessage(
                 "audio.output.start_failed",
                 arguments: [error.localizedDescription]
@@ -1201,11 +1283,13 @@ final class VirtualAudioOutput {
                 "AUDIO ERROR start_failed " + AppLogger.errorFields(error) + " " +
                     "operation_id=\(operationID) attempt=\(attempt) queue=audio_output " +
                     "elapsed_ms=\(elapsedMilliseconds()) " +
-                    "target={\(CoreAudioDeviceCatalog.deviceDiagnostic(device))} state={\(diagnosticState())}"
+                    "target={\(buildTarget)} state={\(diagnosticState())}"
             )
             return .failed
-        case .ready:
-            break
+        case .ready(let built):
+            engine = built.engine
+            player = built.player
+            device = built.device
         }
 
         logStage("start_player")

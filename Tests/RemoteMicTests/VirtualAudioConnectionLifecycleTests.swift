@@ -853,7 +853,7 @@ struct VirtualAudioConnectionLifecycleTests {
             encoding: .utf8
         )
 
-        #expect(outputSource.contains("engineStartCoordinator.start("))
+        #expect(outputSource.contains("engineStartCoordinator.run("))
         #expect(outputSource.contains("AudioConfigurationRetryPolicy.shouldRetry("))
         #expect(outputSource.contains("AUDIO CONFIGURE retry"))
         #expect(outputSource.contains("phase=timed_out result=failed reason=prepare_timeout"))
@@ -867,6 +867,63 @@ struct VirtualAudioConnectionLifecycleTests {
         #expect(outputSource.contains("logStage(\"select_device_completed\")"))
         #expect(outputSource.contains("logStage(\"prepare_engine_completed\")"))
         #expect(outputSource.contains("logStage(\"start_engine_completed\")"))
+
+        // 建图（含 AVAudioEngine 构造）必须和 prepare/start 一起跑在有界工作队列上。
+        let coordinatorRange = try #require(outputSource.range(of: "engineStartCoordinator.run("))
+        let graphRange = try #require(outputSource.range(of: "let graph = try self.audioGraphFactory()"))
+        let prepareRange = try #require(outputSource.range(of: "logStage(\"prepare_engine\")"))
+        #expect(coordinatorRange.lowerBound < graphRange.lowerBound)
+        #expect(graphRange.lowerBound < prepareRange.lowerBound)
+    }
+
+    /// 2026-11-24 现场：`AVAudioEngine()` 构造在 Core Audio 上不再返回，共享的串行配置
+    /// 队列被永久占住，之后 831 次配置请求只有 `phase=requested`、没有一次 `phase=started`，
+    /// 语音会话因此永远等不到配置回调，菜单栏一直停在超时告警上。
+    ///
+    /// 修复后第一次配置必须在有界时间内失败，并且后续配置仍能继续执行。
+    @Test @MainActor func blockedAudioGraphBuildKeepsTheSharedConfigurationQueueMoving() async {
+        guard let device = CoreAudioDeviceCatalog.outputDevices().first(where: {
+            VirtualAudioDeviceDiagnosticKind.classify($0) == .other
+        }) else { return }
+        let logs = ConfigurationLogRecorder()
+        let gate = DispatchSemaphore(value: 0)
+        defer { for _ in 0..<4 { gate.signal() } }
+        let output = VirtualAudioOutput(
+            logger: logs.append,
+            engineStartCoordinator: AudioEngineStartCoordinator(timeout: 0.05),
+            audioGraphFactory: {
+                // 模拟 HAL 在引擎构造处卡住：worker 阻塞，调用方只能等到超时。
+                _ = gate.wait(timeout: .now() + 10)
+                throw AudioEngineStartTestError.expected
+            }
+        )
+
+        let first = AsyncStream<Bool>.makeStream()
+        let startedAt = ProcessInfo.processInfo.systemUptime
+        output.configureAsync(deviceUID: device.uid) {
+            first.continuation.yield($0)
+            first.continuation.finish()
+        }
+        var firstResponses: [Bool] = []
+        for await value in first.stream { firstResponses.append(value) }
+        let firstElapsed = ProcessInfo.processInfo.systemUptime - startedAt
+
+        #expect(firstResponses == [false])
+        #expect(firstElapsed < 2)
+        #expect(logs.values.contains {
+            $0.contains("phase=timed_out") && $0.contains("last_stage=connect_mixer")
+        })
+
+        let second = AsyncStream<Bool>.makeStream()
+        output.configureAsync(deviceUID: device.uid) {
+            second.continuation.yield($0)
+            second.continuation.finish()
+        }
+        var secondResponses: [Bool] = []
+        for await value in second.stream { secondResponses.append(value) }
+
+        #expect(secondResponses == [false])
+        #expect(logs.values.contains { $0.contains("operation_id=2 phase=started") })
     }
 
     @Test @MainActor func blockedAudioQueueDoesNotBlockMainThreadConfigurationStopOrDiagnostics() async {
