@@ -13,7 +13,7 @@
 ## 用例 1：阶段超时与硬上限
 
 1. 检查签名 Job 的 GitHub step timeout-minutes 为 30；job 级上限仍为 180 分钟。
-2. 检查内部 signed-release supervisor 为 1200 秒，单架构 lane 预算为 1140 秒，公证阶段预算为 600 秒。
+2. 检查内部 signed-release supervisor 为 1200 秒，单架构 lane 预算为 1140 秒，App 组装预算为 900 秒，Swift 编译预算为 600 秒，公证阶段预算为 600 秒。
 3. 用假命令让阶段超过内部期限。
 
 预期：supervisor 返回 124，完整子进程树被终止，第一份错误日志保留；不会静默重试或延长期限。
