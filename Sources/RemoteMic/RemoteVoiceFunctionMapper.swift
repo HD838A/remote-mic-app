@@ -92,6 +92,9 @@ enum RemoteVoiceFunctionMappingPolicy {
 struct RemoteVoiceMappingService {
     let registryID: UInt64?
     let locationID: UInt32?
+    /// 诊断用标记：系统为同一台遥控器额外枚举出的重复服务在产品名上带虚拟前缀。
+    /// 只记录"是否带前缀"这一位布尔，不记录名称本身（设备身份不入日志）。
+    let hasVirtualNamePrefix: Bool?
     private let retainedOwner: AnyObject?
     let readMappings: () -> [HIDUsageMapping]
     let setMappings: ([HIDUsageMapping]) -> Bool
@@ -99,12 +102,14 @@ struct RemoteVoiceMappingService {
     init(
         registryID: UInt64?,
         locationID: UInt32? = nil,
+        hasVirtualNamePrefix: Bool? = nil,
         retainedOwner: AnyObject? = nil,
         readMappings: @escaping () -> [HIDUsageMapping],
         setMappings: @escaping ([HIDUsageMapping]) -> Bool
     ) {
         self.registryID = registryID
         self.locationID = locationID
+        self.hasVirtualNamePrefix = hasVirtualNamePrefix
         self.retainedOwner = retainedOwner
         self.readMappings = readMappings
         self.setMappings = setMappings
@@ -355,6 +360,7 @@ final class RemoteVoiceFunctionMapper {
             RemoteVoiceMappingService(
                 registryID: registryID(service),
                 locationID: locationID(service),
+                hasVirtualNamePrefix: hasVirtualNamePrefix(service),
                 retainedOwner: client,
                 readMappings: { readMappings(service) },
                 setMappings: { mappings in
@@ -366,6 +372,15 @@ final class RemoteVoiceFunctionMapper {
                 }
             )
         }
+    }
+
+    /// 只回报"产品名带虚拟前缀"这一位，用于区分同一台遥控器的真实服务与系统复制的重复服务。
+    private static func hasVirtualNamePrefix(_ service: IOHIDServiceClient) -> Bool {
+        guard let name = IOHIDServiceClientCopyProperty(
+            service,
+            kIOHIDProductKey as CFString
+        ) as? String else { return false }
+        return name.hasPrefix("V-")
     }
 
     private static func isTarget(_ service: IOHIDServiceClient, vendorID: Int, productIDs: Set<Int>) -> Bool {

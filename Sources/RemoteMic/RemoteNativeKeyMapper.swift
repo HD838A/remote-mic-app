@@ -78,6 +78,11 @@ final class RemoteNativeKeyMapper {
             log("prepare", result: "pending", reason: "no_service")
             return false
         }
+        let duplicatedTargetCount = targets.filter { ($0.locationID ?? 0) == 0 }.count
+        // 正常只有 1 个服务，逐项列表只在异常枚举（重复服务）时输出，避免日志膨胀。
+        let listing = targets.count == 1 ? "" : " services=\(Self.serviceList(targets))"
+        log("enumerate", result: "observed", reason: "target_services",
+            detail: "targets=\(targets.count) without_location=\(duplicatedTargetCount)\(listing)")
         var before: [UInt64: [HIDUsageMapping]] = [:]
         for service in targets {
             guard let id = service.registryID, before[id] == nil else {
@@ -109,8 +114,16 @@ final class RemoteNativeKeyMapper {
             if matches(nativeMappings(in: current), desiredMappings) { continue }
             attempted.append(service)
             let desired = replacingNativeMappings(in: current, with: desiredMappings)
-            guard service.setMappings(desired),
-                  matches(nativeMappings(in: service.readMappings()), desiredMappings) else {
+            let accepted = service.setMappings(desired)
+            let readback = nativeMappings(in: service.readMappings())
+            let verified = accepted && matches(readback, desiredMappings)
+            // 结果用 accepted/rejected 而不是 verified：单服务写入成功不等于整个 prepare 通过，
+            // 后者只在全部目标都校验一致后才记 result=verified。
+            log("write", result: verified ? "accepted" : "rejected", reason: "service_readback",
+                detail: Self.serviceDetail(service) + " accepted=\(accepted) " +
+                    "desired=\(desiredMappings.count) readback=\(readback.count) " +
+                    "missing=\(Self.sourceList(desiredMappings, missingIn: readback))")
+            guard verified else {
                 var restored = 0
                 for target in attempted.reversed() {
                     guard let id = target.registryID, let snapshot = before[id] else { continue }
@@ -123,13 +136,15 @@ final class RemoteNativeKeyMapper {
                     ) { restored += 1 }
                 }
                 log("prepare", result: "failed", reason: "mapping_not_verified",
-                    detail: "attempted=\(attempted.count) restored=\(restored)")
+                    detail: "attempted=\(attempted.count) restored=\(restored) " +
+                        "failed_service=\(Self.serviceDetail(service))")
                 return false
             }
         }
         isPrepared = true
         log("prepare", result: "verified", reason: "mapping_readback",
-            detail: "services=\(targets.count) native_delivery=unobserved")
+            detail: "services=\(targets.count) without_location=\(duplicatedTargetCount) " +
+                "written=\(attempted.count) native_delivery=unobserved")
         return true
     }
 
@@ -198,6 +213,35 @@ final class RemoteNativeKeyMapper {
 
     private func log(_ phase: String, result: String, reason: String, detail: String = "") {
         logger("HID NATIVE MAPPING phase=\(phase) result=\(result) reason=\(reason) \(detail)")
+    }
+
+    /// 只输出数值标识与"是否虚拟前缀"这一位布尔，避免把设备名称写进日志。
+    private static func serviceDetail(_ service: RemoteVoiceMappingService) -> String {
+        let registry = service.registryID.map { String(format: "0x%llx", $0) } ?? "none"
+        let location = service.locationID.map { String(format: "0x%x", $0) } ?? "none"
+        return "registry=\(registry) location=\(location) " +
+            "virtual_name=\(service.hasVirtualNamePrefix == true ? "true" : "false")"
+    }
+
+    private static let maximumLoggedServices = 8
+
+    private static func serviceList(_ services: [RemoteVoiceMappingService]) -> String {
+        guard !services.isEmpty else { return "none" }
+        let described = services.prefix(maximumLoggedServices).map(serviceDetail)
+        let suffix = services.count > described.count ? ",+\(services.count - described.count)" : ""
+        return described.joined(separator: ",") + suffix
+    }
+
+    private static func sourceList(
+        _ desired: [HIDUsageMapping],
+        missingIn readback: [HIDUsageMapping]
+    ) -> String {
+        let present = Set(readback.map(\.source))
+        let missing = desired.map(\.source).filter { !present.contains($0) }.sorted()
+        guard !missing.isEmpty else { return "none" }
+        let listed = missing.prefix(6).map { String(format: "0x%llx", $0) }
+        let suffix = missing.count > listed.count ? ",+\(missing.count - listed.count)" : ""
+        return listed.joined(separator: ",") + suffix
     }
 
     static func systemBootSession() -> String? {
