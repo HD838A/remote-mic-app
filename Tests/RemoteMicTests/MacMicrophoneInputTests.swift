@@ -1,6 +1,7 @@
 import AppKit
 import AVFoundation
 import Carbon
+import CoreAudio
 import Foundation
 import Testing
 @testable import RemoteMic
@@ -315,6 +316,38 @@ struct MacMicrophoneInputTests {
             systemDefault: headset,
             builtInDeviceIDs: []
         ) == nil)
+    }
+
+    @Test func continuityCaptureInputsAreNotSelectable() {
+        #expect(!MacMicrophoneInputEligibilityPolicy.isSelectable(
+            transport: kAudioDeviceTransportTypeContinuityCaptureWired))
+        #expect(!MacMicrophoneInputEligibilityPolicy.isSelectable(
+            transport: kAudioDeviceTransportTypeContinuityCaptureWireless))
+        #expect(!MacMicrophoneInputEligibilityPolicy.isSelectable(
+            transport: kAudioDeviceTransportTypeVirtual))
+        #expect(!MacMicrophoneInputEligibilityPolicy.isSelectable(
+            transport: kAudioDeviceTransportTypeAggregate))
+        #expect(MacMicrophoneInputEligibilityPolicy.isSelectable(
+            transport: kAudioDeviceTransportTypeBuiltIn))
+        #expect(MacMicrophoneInputEligibilityPolicy.isSelectable(
+            transport: kAudioDeviceTransportTypeUSB))
+        #expect(MacMicrophoneInputEligibilityPolicy.isSelectable(
+            transport: kAudioDeviceTransportTypeBluetooth))
+        #expect(MacMicrophoneInputEligibilityPolicy.isSelectable(
+            transport: kAudioDeviceTransportTypeBluetoothLE))
+        #expect(MacMicrophoneInputEligibilityPolicy.isSelectable(transport: nil))
+    }
+
+    @Test func continuityDefaultInputFallsBackToBuiltIn() {
+        let builtIn = AudioDeviceInfo(id: 11, uid: "built-in", name: "Built-in")
+        let continuity = AudioDeviceInfo(id: 837, uid: "continuity", name: "iPhone Microphone")
+        let selection = MacMicrophoneDefaultInputPolicy.select(
+            available: [builtIn],
+            systemDefault: continuity,
+            builtInDeviceIDs: [builtIn.id]
+        )
+        #expect(selection?.device == builtIn)
+        #expect(selection?.source == .builtIn)
     }
 
     @Test func inputConfigurationChangeOnlyFailsWhenTheDeviceActuallyChanged() {

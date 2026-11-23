@@ -1,5 +1,6 @@
 # Bug 记录
 
+- [Mac 麦克风选择 iPhone 连续互通麦克风后无音频](./2026-11-23-mac-microphone-continuity-capture-slow-start.md)
 - [睡眠唤醒后自动重连暂停，Fn 语音键必须手动连接或重启才恢复](./2026-11-23-fn-voice-recovery-paused.md)
 - [小米 2 Pro 原生映射校验失败后整场不再接管按键](./2026-11-23-native-mapping-verify-failure-no-retry.md)
 - [键位方案里的 disable 显示成「本方案禁用」，实际含义是「未设置」](./2026-11-22-profile-disabled-label-means-not-set.md)

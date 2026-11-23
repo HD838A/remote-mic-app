@@ -14,6 +14,18 @@ enum MacMicrophoneConfigurationChangePolicy {
     }
 }
 
+enum MacMicrophoneInputEligibilityPolicy {
+    /// Continuity Capture inputs can block AVAudioEngine start for seconds.
+    /// A normal voice-key hold then ends before the first PCM arrives.
+    static func isSelectable(transport: AudioDevicePropertyID?) -> Bool {
+        guard let transport else { return true }
+        return transport != kAudioDeviceTransportTypeVirtual &&
+            transport != kAudioDeviceTransportTypeAggregate &&
+            transport != kAudioDeviceTransportTypeContinuityCaptureWired &&
+            transport != kAudioDeviceTransportTypeContinuityCaptureWireless
+    }
+}
+
 enum MacMicrophoneDefaultInputPolicy {
     enum Source: String, Equatable {
         case systemDefault = "system_default"

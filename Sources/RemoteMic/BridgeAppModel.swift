@@ -3113,8 +3113,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         audioPreparationQueue.async { [weak self] in
             let inputs = CoreAudioDeviceCatalog.inputDevices().filter { device in
                 let transport = CoreAudioDeviceCatalog.transportType(for: device.id)
-                return transport != kAudioDeviceTransportTypeVirtual &&
-                    transport != kAudioDeviceTransportTypeAggregate &&
+                return MacMicrophoneInputEligibilityPolicy.isSelectable(transport: transport) &&
                     VirtualAudioDeviceDiagnosticKind.classify(device) == .other
             }
             let builtInDeviceIDs = Set(inputs.compactMap { device in
