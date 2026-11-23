@@ -117,7 +117,9 @@ final class RemoteNativeKeyMapper {
             let accepted = service.setMappings(desired)
             let readback = nativeMappings(in: service.readMappings())
             let verified = accepted && matches(readback, desiredMappings)
-            log("write", result: verified ? "verified" : "rejected", reason: "service_readback",
+            // 结果用 accepted/rejected 而不是 verified：单服务写入成功不等于整个 prepare 通过，
+            // 后者只在全部目标都校验一致后才记 result=verified。
+            log("write", result: verified ? "accepted" : "rejected", reason: "service_readback",
                 detail: Self.serviceDetail(service) + " accepted=\(accepted) " +
                     "desired=\(desiredMappings.count) readback=\(readback.count) " +
                     "missing=\(Self.sourceList(desiredMappings, missingIn: readback))")
