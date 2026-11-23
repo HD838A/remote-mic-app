@@ -28,6 +28,7 @@
 | 设备名称过长、权限失败 | 设备名称可尾部截断，悬停可读全名；错误说明在输入行下方完整显示，不挤走启停按钮。 |
 | 只有一个可用物理输入 | 备用麦克风仍显示下拉框，当前设备可见；选择器只有该设备，不退回纯文字。 |
 | 下拉框内容 | 只列出当前可用、可采集的物理输入；不得显示未连接设备，不得显示“选择麦克风”占位项。没有可用输入时显示“无”并禁用，同时隐藏“用<设备名>说话”按钮。 |
+| iPhone/iPad 连续互通麦克风 | 不出现在下拉框；已保存该设备时回退到内置或当前默认物理输入。不得把连续互通设备记录为默认选择。 |
 | 启用后再操作下拉框 | 点击“用<设备名>说话”进入待命后，下拉框必须禁用，停用前不能切换设备。 |
 | 切换快捷键设置 | 页面不显示“切换快捷键”行；本版本不提供设置入口。旧配置不得阻塞语音键。 |
 | Fn 监听启动 | 日志记录 `tap=hid_head` 或 `tap=session_head`；两者都失败才提示无法监听。不得吞键或额外发送 Fn。 |
@@ -160,3 +161,11 @@
 - 本机包：`scripts/package-local-test-app.sh` 构建并安装 `~/Applications/SayAll.app`，Build 375，source `822014ac`，dirty=true。
 - 生产页面离屏截图：使用 Build 371/374 和 `REMOTE_MIC_SETTINGS_SCREENSHOT_*` 入口，在 1020×772 生产最小窗口下生成中英、浅色/深色、idle/armed/recording 共 12 张，无可用输入状态 4 张，以及 1 张 800×650 窄宽压力图。1020×772 图片为 2040×1544 PNG，压力图为 1600×1300。无设备时选择器显示“无”且启停按钮隐藏；选择器只显示可用设备；启用后选择器禁用；快捷键行隐藏；按钮显示设备名。中文不小于 12pt；设备名按规范截断并可悬停读取全名。截图原件保存在仓库外持久目录，未入库；交付时需以 PR 附件或持久链接提供。
 - 未完成：AirPods 长准备与第二次 Fn 的真实复测、Fn 与豆包共存、物理 Fn 首尾字、20 次真实连续会话。构建、签名、安装包校验和离屏渲染只证明各自边界；通过前保持候选。
+
+## 2026-11-23 iPhone/iPad 连续互通麦克风排除
+
+- 现场日志（2.0.10 Build 431，会话 `B285B1BF`）：选择 iPhone 连续互通麦克风（id=837）后，`engine.start()` 阻塞 `start_ms=3860`；按住 2.54 秒后松键；采集随后以 `samples=0 completion=no_audio` 结束；控制器记录 `result=stopped completion=normal`。内置麦克风（id=139）两次正常：`start_ms=233/5`、`first_pcm=740/707 ms`、`samples=48000/68800`。
+- 修复：按 CoreAudio transport 排除 `kAudioDeviceTransportTypeContinuityCaptureWired` 和 `kAudioDeviceTransportTypeContinuityCaptureWireless`；备用麦克风选择器不显示连续互通麦克风。已保存的连续互通选择因不在候选列表而回退到内置或当前默认物理输入。
+- 自动化：`swift test --disable-keychain --filter MacMicrophoneInputTests` 覆盖 `MacMicrophoneInputEligibilityPolicy` 和连续互通系统默认输入回退。
+- 待真实设备验收：连接 iPhone，确认下拉框不显示连续互通麦克风；保存过 837 的配置启动后回退到内置麦克风；内置麦克风、AirPods、USB 麦克风仍可选；真实文字上屏不受影响。
+- 本修复不改变连续互通麦克风在其他功能或系统默认输入中的可用性；只改变本功能的候选列表。
