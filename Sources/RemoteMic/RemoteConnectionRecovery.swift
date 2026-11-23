@@ -58,6 +58,7 @@ final class RemoteConnectionRecovery {
     private(set) var generation: UInt64 = 0
     private(set) var isManual = false
     private(set) var activeTrigger: RemoteConnectionRecoveryTrigger?
+    private(set) var lastTerminalTrigger: RemoteConnectionRecoveryTrigger?
     private var automaticAttempts: [TimeInterval] = []
     private var lastVoiceKeyAttemptAt: TimeInterval?
     private var readyAt: TimeInterval?
@@ -98,6 +99,7 @@ final class RemoteConnectionRecovery {
             break
         }
         activeTrigger = trigger
+        lastTerminalTrigger = nil
         isManual = trigger == .manual
         attemptCount = 0
         generation &+= 1
@@ -230,6 +232,7 @@ final class RemoteConnectionRecovery {
     func finish(at now: TimeInterval, cancelled: Bool = false) {
         guard isActive else { return }
         if isManual { lastManualCompletion = now }
+        lastTerminalTrigger = activeTrigger
         status = cancelled ? .cancelled : isManual ? .notFound : .paused
         activeTrigger = nil
     }

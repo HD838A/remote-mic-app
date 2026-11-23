@@ -63,7 +63,7 @@ Build 430 在 16:22–16:27 也出现 6 次睡眠/唤醒后 `result=paused attem
 ## 修复
 
 - `RemoteConnectionRecovery` 新增 `automatic` / `systemWake` / `voiceKey` / `manual` 触发器。只有 `automatic` 计入十分钟失败窗口；系统唤醒和语音键各自一轮，不写失败计数。
-- 选中设备在睡眠前 Ready 时，每次真实唤醒允许一次免预算恢复；失败后回到暂停，不再自动重试。睡眠前未 Ready 的历史设备不会被唤醒事件复活。
+- 选中设备在睡眠前 Ready 时，每次真实唤醒允许一次免预算恢复；失败后锁存，不再让后续 40 秒睡眠周期反复握手，直到真实设备出现、语音键或手动操作解除。
 - 语音键下沿在选中设备语音链路未就绪时触发一次 `voice_key` 恢复；只处理按下边沿，受 5 秒冷却约束，按键重复和上沿不重复触发。HID 事件不被消费。
 - 新增稳定日志：`recovery_trigger`、`BLE RECOVERY phase=skipped reason=wake_not_eligible|budget_paused|cooldown`、`VOICE KEY reconnect_requested|reconnect_skipped`。
 - 保留真实握手失败的三次/60 秒和十分钟六次上限，避免重新引入离线历史设备的盲连风暴。

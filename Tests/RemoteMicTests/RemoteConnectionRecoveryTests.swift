@@ -191,6 +191,7 @@ struct RemoteConnectionRecoveryTests {
         #expect(budget.claimAttempt(at: 300))
         #expect(budget.retryDelay(at: 301) == nil)
         #expect(budget.status == .paused)
+        #expect(budget.lastTerminalTrigger == .systemWake)
         #expect(budget.begin(trigger: .automatic, at: 302) == .paused)
     }
 
@@ -218,15 +219,23 @@ struct RemoteConnectionRecoveryTests {
     @Test func wakeRecoveryRequiresReadyBeforeSuspensionAndOneAttempt() {
         #expect(RemoteWakeRecoveryPolicy.shouldAttempt(
             wasReadyBeforeSuspension: true,
-            wakeAttemptConsumed: false
+            wakeAttemptConsumed: false,
+            wakeRecoveryFailed: false
         ))
         #expect(!RemoteWakeRecoveryPolicy.shouldAttempt(
             wasReadyBeforeSuspension: true,
-            wakeAttemptConsumed: true
+            wakeAttemptConsumed: true,
+            wakeRecoveryFailed: false
         ))
         #expect(!RemoteWakeRecoveryPolicy.shouldAttempt(
             wasReadyBeforeSuspension: false,
-            wakeAttemptConsumed: false
+            wakeAttemptConsumed: false,
+            wakeRecoveryFailed: false
+        ))
+        #expect(!RemoteWakeRecoveryPolicy.shouldAttempt(
+            wasReadyBeforeSuspension: true,
+            wakeAttemptConsumed: false,
+            wakeRecoveryFailed: true
         ))
     }
 
