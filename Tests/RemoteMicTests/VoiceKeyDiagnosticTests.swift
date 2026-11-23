@@ -142,4 +142,33 @@ struct VoiceKeyDiagnosticTests {
         #expect(state.functionObservationForDiagnostics.down == nil)
         #expect(state.functionObservationForDiagnostics.up == nil)
     }
+
+    @Test func voiceUsageDownInvokesOneRecoveryIntentPerEdge() throws {
+        let suite = "VoiceKeyDiagnosticTests-\(UUID().uuidString)"
+        let defaults = try #require(TestUserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let settings = AppSettings(defaults: defaults)
+        settings.customMappingEnabled = true
+        let profileID = try #require(settings.selectedRemoteProfileID)
+        var intents: [UUID?] = []
+        let monitor = HIDRemoteMonitor(
+            settings: settings,
+            ownsEventSuppressor: false,
+            runtimePermissions: { true }
+        )
+        monitor.onVoiceUsageDown = { intents.append($0) }
+        #expect(monitor.connectSimulatedDevice(
+            fingerprint: "voice-intent-fixture",
+            profileID: profileID
+        ))
+
+        monitor.handleSimulatedReport(reportID: 1, data: Data([0x3E, 0, 0, 0, 0, 0]))
+        monitor.handleSimulatedReport(reportID: 1, data: Data([0x3E, 0, 0, 0, 0, 0]))
+        monitor.handleSimulatedReport(reportID: 1, data: Data(repeating: 0, count: 6))
+        monitor.handleSimulatedReport(reportID: 1, data: Data([0x0C, 0, 0, 0, 0, 0]))
+        monitor.handleSimulatedReport(reportID: 1, data: Data(repeating: 0, count: 6))
+
+        #expect(intents.count == 2)
+        #expect(intents.allSatisfy { $0 == profileID })
+    }
 }

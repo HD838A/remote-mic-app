@@ -552,6 +552,19 @@ enum BluetoothWakeRecoveryPolicy {
     }
 }
 
+/// A system wake only earns one assisted reconnect for a bridge that was Ready
+/// before the machine slept. It is not a connection failure and must not spend
+/// the automatic failure budget; a bridge that was already offline stays
+/// offline until a real device observation or explicit user intent.
+enum RemoteWakeRecoveryPolicy {
+    static func shouldAttempt(
+        wasReadyBeforeSuspension: Bool,
+        wakeAttemptConsumed: Bool
+    ) -> Bool {
+        wasReadyBeforeSuspension && !wakeAttemptConsumed
+    }
+}
+
 struct BluetoothCentralRecoveryTransition: Equatable {
     let phase: BluetoothLifecyclePhase
     let shouldCancelScheduledReconnect: Bool

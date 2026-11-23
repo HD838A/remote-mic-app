@@ -2447,10 +2447,14 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         )
     }
 
-    private func recoverBluetoothVoiceLink(reason: String) {
+    private func recoverBluetoothVoiceLink(
+        reason: String,
+        trigger: RemoteConnectionRecoveryTrigger = .automatic
+    ) {
         let targets = Array(bluetoothBridges.values)
         AppLogger.shared.write(
-            "BLE RECOVERY phase=begin trigger=\(reason) target_bridges=\(targets.count) " +
+            "BLE RECOVERY phase=begin trigger=\(reason) recovery_trigger=\(trigger.rawValue) " +
+                "target_bridges=\(targets.count) " +
                 "configured_bridges=\(bluetoothBridges.count) " +
                 "discovery=\(discoveryBluetoothBridge != nil) " +
                 "ready_bridges=\(readyBluetoothBridgeCount)"
@@ -2462,8 +2466,42 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             )
             return
         }
-        targets.forEach { $0.recoverVoiceLink(reason: reason) }
-        discoveryBluetoothBridge?.recoverVoiceLink(reason: reason)
+        targets.forEach { $0.recoverVoiceLink(reason: reason, trigger: trigger) }
+        if trigger != .systemWake {
+            discoveryBluetoothBridge?.recoverVoiceLink(reason: reason, trigger: trigger)
+        }
+    }
+
+    /// A voice-key press is explicit user intent. When the selected remote's
+    /// voice link is down, spend one assisted attempt instead of silently
+    /// ignoring the key. The HID event itself is never consumed here.
+    private func handleHIDVoiceUsageDown(profileID: UUID?) {
+        guard started,
+              let profileID,
+              profileID == settings.selectedRemoteProfileID
+        else { return }
+        guard !bluetoothVoiceActive, !isStreaming, !isPlayingTestTone else { return }
+        guard !isRemoteConnected(profileID) else { return }
+        guard let bridge = selectedBluetoothBridge else {
+            AppLogger.shared.write(
+                "VOICE KEY reconnect_skipped reason=no_bluetooth_link source=hid_voice_usage"
+            )
+            return
+        }
+        if bridge.isConnectionBusy {
+            AppLogger.shared.write(
+                "VOICE KEY reconnect_skipped reason=already_recovering source=hid_voice_usage"
+            )
+            return
+        }
+        AppLogger.shared.write(
+            "VOICE KEY reconnect_requested reason=voice_link_down source=hid_voice_usage"
+        )
+        if !bridge.reconnectNow(trigger: .voiceKey) {
+            AppLogger.shared.write(
+                "VOICE KEY reconnect_skipped reason=recovery_rejected source=hid_voice_usage"
+            )
+        }
     }
 
     private func setBluetoothSystemSuspended(_ suspended: Bool, reason: String) {
@@ -3363,7 +3401,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         }
         resumeVirtualAudioOutputIfNeeded(reason: "system_\(event.rawValue)")
         if BluetoothWakeRecoveryPolicy.shouldForceReconnect(event: event, started: started) {
-            recoverBluetoothVoiceLink(reason: "system_wake")
+            recoverBluetoothVoiceLink(reason: "system_wake", trigger: .systemWake)
         } else if BluetoothWakeRecoveryPolicy.shouldRecoverVoiceLinkAfterResume(
             started: started,
             configuredBridgeCount: bluetoothBridges.count,
@@ -4666,6 +4704,9 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         monitor.onActiveButtons = { [weak self] profileID, buttons in
             guard let self, profileID == self.settings.selectedRemoteProfileID else { return }
             self.activeRemoteButtons = buttons
+        }
+        monitor.onVoiceUsageDown = { [weak self] profileID in
+            self?.handleHIDVoiceUsageDown(profileID: profileID)
         }
         monitor.onButtonPressed = { [weak self, weak monitor] profileID, fingerprint, button in
             guard let self, let monitor else {
