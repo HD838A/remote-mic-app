@@ -186,6 +186,10 @@ final class XiaomiBluetoothBridge: NSObject {
     /// A wake episode is one shot. Subsequent wake/session notifications join it
     /// or stay paused instead of starting another handshake.
     private var wakeRecoveryConsumed = false
+    /// A wake attempt that failed means the device is not reachable yet. Do not
+    /// burn one handshake on every subsequent 40-second sleep/wake until a real
+    /// observation, manual request or voice-key intent clears this latch.
+    private var wakeRecoveryFailed = false
     private var capabilities = XiaomiBluetoothBridge.defaultCapabilities
     private var decoder = IMAADPCMDecoder()
     private var accumulator = FrameAccumulator()
@@ -282,6 +286,7 @@ final class XiaomiBluetoothBridge: NSObject {
 
     func start(manual: Bool = false) {
         shouldRun = true
+        wakeRecoveryFailed = false
         if targetIdentifier == nil {
             refreshDiscovery(manual: manual)
             return
@@ -315,6 +320,7 @@ final class XiaomiBluetoothBridge: NSObject {
         shouldRun = false
         wasReadyBeforeSuspension = false
         wakeRecoveryConsumed = false
+        wakeRecoveryFailed = false
         recoveryDeadlineWorkItem?.cancel()
         discoveryWindowWorkItem?.cancel()
         discoveryWindowStartedAt = nil
@@ -337,12 +343,20 @@ final class XiaomiBluetoothBridge: NSObject {
         state = .stopped
     }
 
+    /// Latch a failed assisted wake so a 40-second sleep loop cannot keep
+    /// spending one handshake on every wake while the remote is unreachable.
+    private func noteTerminalRecoveryOutcome() {
+        guard recovery.lastTerminalTrigger == .systemWake,
+              recovery.status == .paused
+        else { return }
+        wakeRecoveryFailed = true
+    }
+
     @discardableResult
     func reconnectNow(
         manual: Bool = false,
         trigger requestedTrigger: RemoteConnectionRecoveryTrigger? = nil
-    ) -> Bool {
-        guard shouldRun, !lifecycle.isReady, !streaming, !microphoneOpened else {
+    ) -> Bool {        guard shouldRun, !lifecycle.isReady, !streaming, !microphoneOpened else {
             return false
         }
         if targetIdentifier == nil {
@@ -354,14 +368,21 @@ final class XiaomiBluetoothBridge: NSObject {
             return false
         }
         let trigger = requestedTrigger ?? (manual ? .manual : .automatic)
+        if trigger == .voiceKey || trigger == .manual {
+            // Explicit user intent may retry even after an earlier wake attempt
+            // already failed and a real device observation has not arrived.
+            wakeRecoveryFailed = false
+        }
         if trigger == .systemWake {
             guard RemoteWakeRecoveryPolicy.shouldAttempt(
                 wasReadyBeforeSuspension: wasReadyBeforeSuspension,
-                wakeAttemptConsumed: wakeRecoveryConsumed
+                wakeAttemptConsumed: wakeRecoveryConsumed,
+                wakeRecoveryFailed: wakeRecoveryFailed
             ) else {
                 AppLogger.shared.write(
                     "BLE RECOVERY phase=skipped trigger=system_wake " +
-                        "reason=wake_not_eligible"
+                        "reason=wake_not_eligible ready_before=\(wasReadyBeforeSuspension) " +
+                        "failed=\(wakeRecoveryFailed) consumed=\(wakeRecoveryConsumed)"
                 )
                 return false
             }
@@ -487,6 +508,7 @@ final class XiaomiBluetoothBridge: NSObject {
         let work = DispatchWorkItem { [weak self] in
             guard let self, self.recovery.generation == generation, self.recovery.isActive else { return }
             self.recovery.finish(at: ProcessInfo.processInfo.systemUptime)
+            self.noteTerminalRecoveryOutcome()
             self.endRecovery()
         }
         recoveryDeadlineWorkItem = work
@@ -536,11 +558,13 @@ final class XiaomiBluetoothBridge: NSObject {
             if trigger == .systemWake {
                 guard RemoteWakeRecoveryPolicy.shouldAttempt(
                     wasReadyBeforeSuspension: wasReadyBeforeSuspension,
-                    wakeAttemptConsumed: wakeRecoveryConsumed
+                    wakeAttemptConsumed: wakeRecoveryConsumed,
+                    wakeRecoveryFailed: wakeRecoveryFailed
                 ) else {
                     AppLogger.shared.write(
                         "BLE RECOVERY phase=skipped trigger=system_wake " +
-                            "reason=wake_not_eligible state=ready"
+                            "reason=wake_not_eligible state=ready ready_before=\(wasReadyBeforeSuspension) " +
+                            "failed=\(wakeRecoveryFailed) consumed=\(wakeRecoveryConsumed)"
                     )
                     return
                 }
@@ -631,6 +655,7 @@ final class XiaomiBluetoothBridge: NSObject {
         guard central == nil else { return }
         if targetIdentifier != nil {
             guard recovery.claimAttempt(at: ProcessInfo.processInfo.systemUptime) else {
+                noteTerminalRecoveryOutcome()
                 endRecovery()
                 return
             }
@@ -1071,7 +1096,10 @@ final class XiaomiBluetoothBridge: NSObject {
     }
 
     private func nextAutomaticReconnectDelay(bypassCachedTarget: Bool) -> TimeInterval? {
-        guard let delay = recovery.retryDelay(at: ProcessInfo.processInfo.systemUptime) else { return nil }
+        guard let delay = recovery.retryDelay(at: ProcessInfo.processInfo.systemUptime) else {
+            noteTerminalRecoveryOutcome()
+            return nil
+        }
         _ = reconnectPolicy.nextAutomaticDelay(
             bypassCachedTarget: bypassCachedTarget,
             jitterUnit: Double.random(in: 0 ... 1)
@@ -1285,6 +1313,7 @@ final class XiaomiBluetoothBridge: NSObject {
             }
             wasReadyBeforeSuspension = false
             wakeRecoveryConsumed = false
+            wakeRecoveryFailed = false
             recoveryDeadlineWorkItem?.cancel()
             recoveryDeadlineWorkItem = nil
             lifecycle = .ready(generation)
@@ -1575,6 +1604,7 @@ extension XiaomiBluetoothBridge: CBCentralManagerDelegate {
             if shouldRun, targetIdentifier != nil {
                 recovery.interrupted(suspended: false, at: ProcessInfo.processInfo.systemUptime)
                 recovery.finish(at: ProcessInfo.processInfo.systemUptime)
+                noteTerminalRecoveryOutcome()
                 recoveryDeadlineWorkItem?.cancel()
                 recoveryDeadlineWorkItem = nil
                 AppLogger.shared.write("BLE RECOVERY_WINDOW operation_id=\(recoveryOperationID) phase=completed result=blocked")

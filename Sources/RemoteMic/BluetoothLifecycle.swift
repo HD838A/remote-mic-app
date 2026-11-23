@@ -559,9 +559,10 @@ enum BluetoothWakeRecoveryPolicy {
 enum RemoteWakeRecoveryPolicy {
     static func shouldAttempt(
         wasReadyBeforeSuspension: Bool,
-        wakeAttemptConsumed: Bool
+        wakeAttemptConsumed: Bool,
+        wakeRecoveryFailed: Bool
     ) -> Bool {
-        wasReadyBeforeSuspension && !wakeAttemptConsumed
+        wasReadyBeforeSuspension && !wakeAttemptConsumed && !wakeRecoveryFailed
     }
 }
 
