@@ -1293,9 +1293,13 @@ final class VirtualAudioOutput {
         else { return nil }
 
         // 唯一的用户音量作用点：所有遥控器链路都汇到这里；超出 ±1 直接限幅，避免削波溢出。
-        let scaled = VirtualAudioOutputLevelPolicy.scaled(samples, scale: currentOutputLevelScale)
-        for index in scaled.indices {
-            channel[index] = scaled[index]
+        // 直接写入缓冲区，避免每批再分配一个等长 [Float] 数组。
+        let scale = currentOutputLevelScale
+        for index in samples.indices {
+            channel[index] = VirtualAudioOutputLevelPolicy.clampedSample(
+                Float(samples[index]) / Float(Int16.max),
+                scale: scale
+            )
         }
         buffer.frameLength = AVAudioFrameCount(samples.count)
         return buffer
