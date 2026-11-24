@@ -43,7 +43,7 @@
 
 - 步骤 1 不保存，显示“快捷键至少需要一个修饰键…”，且未写入设置。
 - 步骤 2 显示组合键，日志出现 `VOICE TRIGGER phase=completed result=configured`、`has_function=true`。
-- 步骤 3 显示 `⇧fn`，日志出现 `modifier_chord=true`；后续会话只发送 Fn/Shift 的按下与释放，不额外发送主键。
+- 步骤 3 显示 `⇧fn`，日志出现 `modifier_chord=true`；后续会话只发送 Fn/Shift 的按下与释放，不额外发送主键。纯修饰键组合至少需要两个不同修饰键；左右同侧 Shift 不会被录成组合。
 - 步骤 4 更新为新组合；步骤 5 显示未设置，日志 `result=cleared`。
 - 日志不包含 `S`、`K`、完整组合或目标 App 名称。
 
