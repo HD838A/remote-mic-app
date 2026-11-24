@@ -10248,13 +10248,12 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         route: VoiceAudioDeliveryRoute
     ) {
         guard !samples.isEmpty, voiceAudioDeliveryDiagnostic.generation > 0 else { return }
-        settings.recordLocalVoiceSamples(samples.count)
+        // Keep the realtime path to counters only. Local usage bookkeeping and the
+        // output snapshot are batched at session end so they do not run every 15 ms
+        // on the main thread while CoreBluetooth is delivering audio notifications.
         voiceAudioDeliveryDiagnostic.route = route
         voiceAudioDeliveryDiagnostic.receivedBatches += 1
         voiceAudioDeliveryDiagnostic.receivedSamples += samples.count
-        voiceAudioDeliveryDiagnostic.outputAtObservation = audioOutput.diagnosticSnapshot(
-            deliveryGeneration: voiceAudioDeliveryDiagnostic.generation
-        )
     }
 
     private func recordVoiceAudioEnqueueOutcome(
@@ -10453,6 +10452,12 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         voiceTargetActivityMonitor.stop()
         let endedAt = Date()
         if let voiceSessionStartedAt {
+            // The receive path only counts samples; commit the local usage ledger
+            // once here so per-batch calendar bookkeeping stays off the realtime path.
+            let receivedSamples = voiceAudioDeliveryDiagnostic.receivedSamples
+            if receivedSamples > 0 {
+                settings.recordLocalVoiceSamples(receivedSamples, endingAt: endedAt)
+            }
             settings.recordVoiceDuration(
                 endedAt.timeIntervalSince(voiceSessionStartedAt),
                 startedAt: voiceSessionStartedAt,
