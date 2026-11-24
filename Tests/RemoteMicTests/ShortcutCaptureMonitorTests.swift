@@ -154,6 +154,26 @@ struct ShortcutCaptureMonitorTests {
         }
     }
 
+    @Test func twoSidesOfTheSameModifierDoNotBecomeAModifierChord() throws {
+        var captured: [CustomKeyboardShortcut] = []
+        let monitor = ShortcutCaptureMonitor(
+            onCapture: { captured.append($0) },
+            allowsModifierChord: true,
+            dispatchCallback: { $0() }
+        )
+        let leftShiftDown = try #require(keyEvent(keyCode: 56, flags: .maskShift))
+        let rightShiftDown = try #require(keyEvent(keyCode: 60, flags: .maskShift))
+        let rightShiftUp = try #require(keyEvent(keyCode: 60, flags: .maskShift))
+        let leftShiftUp = try #require(keyEvent(keyCode: 56, flags: []))
+
+        #expect(monitor.handle(type: .flagsChanged, event: leftShiftDown))
+        #expect(monitor.handle(type: .flagsChanged, event: rightShiftDown))
+        #expect(monitor.handle(type: .flagsChanged, event: rightShiftUp))
+        #expect(monitor.handle(type: .flagsChanged, event: leftShiftUp))
+
+        #expect(captured.isEmpty)
+    }
+
     @Test func capturesAndSuppressesAReservedCommandShortcutOnce() throws {
         var captured: [CustomKeyboardShortcut] = []
         let monitor = ShortcutCaptureMonitor(

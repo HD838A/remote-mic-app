@@ -216,7 +216,9 @@ final class ShortcutCaptureMonitor {
                 standaloneModifierCandidate == modifier
             let shouldCaptureChord = isFinalRelease &&
                 allowsModifierChord &&
-                modifierChordDetected
+                modifierChordDetected &&
+                chordFlags.intersection(CustomKeyboardShortcut.supportedModifiers)
+                    .rawValue.nonzeroBitCount > 1
             if isFinalRelease {
                 standaloneModifierCandidate = nil
                 modifierChordDetected = false
