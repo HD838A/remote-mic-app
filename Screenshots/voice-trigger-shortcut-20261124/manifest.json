@@ -1,0 +1,67 @@
+{
+  "batch": "voice-trigger-shortcut-20261124",
+  "date": "2026-11-24",
+  "purpose": "PR 1202：Fn 点按模式下自定义语音触发快捷键的生产设置页截图，以及纯修饰键组合显示状态。",
+  "storage": "external-persistent-directory-and-github-pr-attachments",
+  "storage_path": "/Users/andy/Pictures/SayAllEvidence/voice-trigger-shortcut-20261124/",
+  "sourceCommit": "a9ad3fb6034375ccbb2ce920829b801d11d70078",
+  "appVersion": "2.0.10",
+  "window_points": [
+    1067,
+    760
+  ],
+  "generation": "本次 ad-hoc 公开构建 SayAll.app 的生产 SettingsView 离屏入口；REMOTE_MIC_SETTINGS_SCREENSHOT_SECTION=mapping、OPEN_VOICE_SETTINGS=1、VOICE_TRIGGER_SHORTCUT=1|chord，使用隔离设置和虚构测试账户。",
+  "notes": [
+    "图片字节不进入版本控制，本文件只保留可审计索引。",
+    "截图只证明静态布局、文案、对比度和组合键显示，不证明真实 RC003、音频、权限或 Typeless 文字上屏。",
+    "离屏渲染不是交互式生产窗口；真实窗口录入、取消和录音中禁用仍待人工验收。",
+    "纯修饰键截图用于验证 Fn + Shift 显示为 ⇧fn，不重复主键。"
+  ],
+  "images": [
+    {
+      "file": "zh-light/mapping-1067x760.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1520,
+      "sha256": "b32c54f5c2ce609157ef82a851d386ac2f3126982ea4a8e32cbb9c6f37821ad7",
+      "state": "zh-Hans light; Fn tap on; Fn + Shift + S",
+      "external_url": "https://github.com/user-attachments/assets/ef07fa5b-70d1-4773-bf53-15983f8ec103"
+    },
+    {
+      "file": "zh-dark/mapping-1067x760.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1520,
+      "sha256": "7b36a767a1369c8a84f3359bec51020f0195736d7ed33490e29354ca1ee9e4e4",
+      "state": "zh-Hans dark; Fn tap on; Fn + Shift + S",
+      "external_url": "https://github.com/user-attachments/assets/39ca36b3-f1bc-4ccb-9b02-a5fa950dd9f4"
+    },
+    {
+      "file": "en-light/mapping-1067x760.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1520,
+      "sha256": "510af3c58942481cd5002d35e956c831859cd4914fe0788f0f90abfec5786d2c",
+      "state": "en light; Fn tap on; Fn + Shift + S",
+      "external_url": "https://github.com/user-attachments/assets/703c6e25-39e0-459d-8d66-57442af3e3ec"
+    },
+    {
+      "file": "en-dark/mapping-1067x760.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1520,
+      "sha256": "7ca1d2095158dfe1d4618f27ac705d2a5b5b732f92ff0ee2092a7cb382262aa3",
+      "state": "en dark; Fn tap on; Fn + Shift + S",
+      "external_url": "https://github.com/user-attachments/assets/9fb0576a-c676-40ea-aa4c-986d9db8ff28"
+    },
+    {
+      "file": "zh-light-chord/mapping-1067x760.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1520,
+      "sha256": "aec2bbdeda57980cc6ddaaf344a3f845e1861c723eaa09d6121efa774405af22",
+      "state": "zh-Hans light; Fn tap on; pure modifier chord Fn + Shift",
+      "external_url": "https://github.com/user-attachments/assets/5bf542fd-05d6-4718-9637-c3208f19a794"
+    }
+  ]
+}

@@ -188,7 +188,7 @@
 | `en-dark/mapping-1067x760.png` | 英文/深色 | Fn 点按开启，Fn + Shift + S | `7ca1d2095158dfe1d4618f27ac705d2a5b5b732f92ff0ee2092a7cb382262aa3` |
 | `zh-light-chord/mapping-1067x760.png` | 中文/浅色 | 纯修饰键组合 Fn + Shift | `aec2bbdeda57980cc6ddaaf344a3f845e1861c723eaa09d6121efa774405af22` |
 
-原件保存在仓库外持久证据目录 `~/Pictures/SayAllEvidence/voice-trigger-shortcut-20261124/`。截图只证明静态布局、文案、对比度和组合键显示，不证明真实遥控器、音频、Typeless 文字上屏或交互时序。
+原件保存在仓库外持久证据目录 `~/Pictures/SayAllEvidence/voice-trigger-shortcut-20261124/`；PR 附件 URL 与逐项摘要见 [证据索引](../Screenshots/voice-trigger-shortcut-20261124/manifest.json)。截图只证明静态布局、文案、对比度和组合键显示，不证明真实遥控器、音频、Typeless 文字上屏或交互时序。
 
 ## 验证边界
 
