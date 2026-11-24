@@ -222,12 +222,128 @@ struct VoiceFnTapSessionControllerTests {
             true, false,
         ])
     }
+
+    @Test func customTriggerReplacesBothFnTapsAndStillDrainsTheTail() {
+        let harness = Harness(customTriggerResults: [true, true])
+        harness.controller.setEnabled(true)
+        #expect(harness.controller.startVoice())
+        #expect(harness.controller.receive([7, 8]))
+
+        harness.scheduler.advance(by: 0.15)
+        #expect(harness.customTriggerCalls == 1)
+        #expect(harness.functionKeyEvents.isEmpty)
+        harness.scheduler.advance(by: 0.12)
+        #expect(harness.controller.phase == .active(1))
+        #expect(harness.enqueuedAudio == [[7, 8]])
+
+        #expect(harness.controller.stopVoice())
+        #expect(harness.drainCompletions.count == 1)
+        #expect(harness.customTriggerCalls == 1)
+        harness.completeNextDrain()
+        #expect(harness.customTriggerCalls == 2)
+        harness.scheduler.advance(by: 0.12)
+
+        #expect(harness.controller.phase == .idle)
+        #expect(harness.functionKeyEvents.isEmpty)
+        #expect(harness.logs.filter { $0.contains("trigger=custom") }.count == 2)
+    }
+
+    @Test func missingCustomTriggerFallsBackToTheFnPair() {
+        let harness = Harness(customTriggerResults: [nil, nil])
+        harness.controller.setEnabled(true)
+        #expect(harness.controller.startVoice())
+        harness.scheduler.advance(by: 0.15)
+        #expect(harness.customTriggerCalls == 1)
+        #expect(harness.functionKeyEvents == [true])
+        harness.scheduler.advance(by: 0.12)
+        #expect(harness.controller.phase == .active(1))
+        #expect(harness.functionKeyEvents == [true, false])
+    }
+
+    @Test func failedCustomTriggerReportsStartFailureWithoutPostingFn() {
+        let harness = Harness(customTriggerResults: [false])
+        harness.controller.setEnabled(true)
+        #expect(harness.controller.startVoice())
+        harness.scheduler.advance(by: 0.15)
+
+        #expect(harness.customTriggerCalls == 1)
+        #expect(harness.failures == [.startTapFailed])
+        #expect(harness.functionKeyEvents.isEmpty)
+        #expect(harness.controller.phase == .idle)
+    }
+
+    @Test func disablingDuringCustomTriggerSettleClosesWithOneMatchingCustomTap() {
+        let harness = Harness(customTriggerResults: [true, true])
+        harness.controller.setEnabled(true)
+        #expect(harness.controller.startVoice())
+        harness.scheduler.advance(by: 0.15)
+        #expect(harness.customTriggerCalls == 1)
+        var disabled = false
+
+        harness.controller.setEnabled(false) { disabled = true }
+
+        #expect(harness.customTriggerCalls == 2)
+        #expect(harness.functionKeyEvents.isEmpty)
+        #expect(harness.controller.phase == .idle)
+        // The remote is still pressed, so the disable completion waits for its
+        // release just like the Fn path does.
+        #expect(!disabled)
+        #expect(!harness.controller.stopVoice())
+        #expect(disabled)
+    }
+
+    @Test func customTriggerIsPinnedSoAStopNeverFallsBackToFn() {
+        let harness = Harness(customTriggerResults: [true, nil])
+        harness.controller.setEnabled(true)
+        harness.startActiveSession()
+        #expect(harness.customTriggerCalls == 1)
+
+        #expect(harness.controller.stopVoice())
+        harness.completeNextDrain()
+
+        #expect(harness.customTriggerCalls == 2)
+        #expect(harness.failures == [.stopTapFailed])
+        #expect(harness.functionKeyEvents.isEmpty)
+        #expect(harness.controller.phase == .idle)
+    }
+
+    @Test func aCustomTriggerAddedMidSessionDoesNotReplaceTheFnStop() {
+        let harness = Harness()
+        harness.controller.setEnabled(true)
+        harness.startActiveSession()
+        #expect(harness.customTriggerCalls == 1)
+        #expect(harness.functionKeyEvents == [true, false])
+
+        harness.customTriggerResults = [true]
+        #expect(harness.controller.stopVoice())
+        harness.completeNextDrain()
+        harness.scheduler.advance(by: 0.12)
+
+        #expect(harness.customTriggerCalls == 1)
+        #expect(harness.functionKeyEvents == [true, false, true, false])
+        #expect(harness.controller.phase == .idle)
+    }
+
+    @Test func shutdownDuringActiveCustomSessionClosesWithTheCustomTrigger() {
+        let harness = Harness(customTriggerResults: [true, true])
+        harness.controller.setEnabled(true)
+        harness.startActiveSession()
+        #expect(harness.customTriggerCalls == 1)
+
+        harness.controller.shutdown()
+
+        #expect(harness.customTriggerCalls == 2)
+        #expect(harness.functionKeyEvents.isEmpty)
+        #expect(harness.controller.phase == .idle)
+    }
 }
 
 private final class Harness {
     let scheduler = ManualScheduler()
     var functionKeyEvents: [Bool] = []
     var functionKeyResults: [Bool]
+    var customTriggerResults: [Bool?]
+    var customTriggerCalls = 0
     var enqueuedAudio: [[Int16]] = []
     var drainCompletions: [() -> Void] = []
     var failures: [VoiceFnTapFailure] = []
@@ -237,6 +353,10 @@ private final class Harness {
         setFunctionKeyPressed: { [unowned self] pressed in
             functionKeyEvents.append(pressed)
             return functionKeyResults.isEmpty ? true : functionKeyResults.removeFirst()
+        },
+        performCustomTrigger: { [unowned self] in
+            customTriggerCalls += 1
+            return customTriggerResults.isEmpty ? nil : customTriggerResults.removeFirst()
         },
         enqueueAudio: { [unowned self] samples in
             enqueuedAudio.append(samples)
@@ -251,8 +371,9 @@ private final class Harness {
         uptime: { [unowned self] in scheduler.currentTime }
     )
 
-    init(functionKeyResults: [Bool] = []) {
+    init(functionKeyResults: [Bool] = [], customTriggerResults: [Bool?] = []) {
         self.functionKeyResults = functionKeyResults
+        self.customTriggerResults = customTriggerResults
     }
 
     func startActiveSession() {

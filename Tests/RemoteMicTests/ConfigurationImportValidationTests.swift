@@ -454,6 +454,7 @@ struct ConfigurationImportValidationTests {
             "experimentalContinuousRecordingEnabled",
             "voiceFnTapModeEnabled",
             "voiceKeyMode",
+            "voiceTriggerShortcut",
             "continuousRecordingPowerBindingBackup",
             "buttonRapidPressEnabled",
         ] {

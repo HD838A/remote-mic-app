@@ -313,6 +313,26 @@ struct CustomKeyboardShortcut: Codable, Equatable {
         StandaloneKeyboardModifier.matching(self)
     }
 
+    /// A voice trigger must carry at least one modifier. A bare key would type
+    /// into the target app, so the settings and import paths reject it.
+    var isValidVoiceTriggerShortcut: Bool {
+        !modifierFlags.intersection(Self.supportedModifiers).isEmpty
+    }
+
+    var activeModifierCount: Int {
+        modifierFlags.intersection(Self.supportedModifiers).rawValue.nonzeroBitCount
+    }
+
+    /// A shortcut whose primary key is one of its own modifiers, for example
+    /// Fn + Shift. It has no separate key event; the trigger sends only the
+    /// modifier down/up sequence.
+    var isModifierChord: Bool {
+        guard let modifier = StandaloneKeyboardModifier.allCases.first(where: {
+            $0.keyCode == keyCode
+        }), modifierFlags.contains(modifier.modifierFlags) else { return false }
+        return modifierFlags != modifier.modifierFlags
+    }
+
     var isMacMicrophoneCombination: Bool {
         keyCode <= 127 && !StandaloneKeyboardModifier.allCases.contains(where: { $0.keyCode == keyCode }) &&
             !modifierFlags.intersection([.command, .control, .option]).isEmpty &&
@@ -376,6 +396,9 @@ struct CustomKeyboardShortcut: Codable, Equatable {
             )
         }
         if modifierFlags.contains(.function) { result += "fn " }
+        if isModifierChord {
+            return result.trimmingCharacters(in: .whitespaces)
+        }
         return result + localizedKeyLabel(using: localization)
     }
 
@@ -410,6 +433,9 @@ struct CustomKeyboardShortcut: Codable, Equatable {
             )
         }
         if modifierFlags.contains(.function) { result += "fn " }
+        if isModifierChord {
+            return result.trimmingCharacters(in: .whitespaces)
+        }
         return result + visualKeyLabel(using: localization)
     }
 
@@ -452,7 +478,9 @@ struct CustomKeyboardShortcut: Codable, Equatable {
             ))
         }
         if modifierFlags.contains(.function) { parts.append(localization.text("shortcut.modifier.function")) }
-        parts.append(detailedKeyLabel(using: localization))
+        if !isModifierChord {
+            parts.append(detailedKeyLabel(using: localization))
+        }
         return parts.joined(separator: " + ")
     }
 

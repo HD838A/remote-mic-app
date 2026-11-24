@@ -58,6 +58,57 @@ struct VoiceKeyModeTests {
         #expect(posted[1].2.isEmpty)
     }
 
+    @Test func modifierChordTriggerEmitsOnlyModifierEdges() {
+        var posted: [(CGKeyCode, CGEventType, CGEventFlags)] = []
+        let result = ShortcutEventSequence.send(
+            keyCode: 63,
+            modifiers: [.maskSecondaryFn, .maskShift],
+            hardwareFlags: { [] },
+            modifierState: ShortcutHardwareModifierState(),
+            eventPoster: { event in
+                posted.append((
+                    CGKeyCode(event.getIntegerValueField(.keyboardEventKeycode)),
+                    event.type,
+                    event.flags
+                ))
+                return true
+            },
+            logger: { _ in },
+            emitPrimaryKey: false
+        )
+
+        #expect(result)
+        #expect(posted.map(\.0) == [56, 63, 63, 56])
+        #expect(posted.allSatisfy { $0.1 == .flagsChanged })
+    }
+
+    @Test func bridgeWiresTheCustomVoiceTriggerIntoTheFnTapSession() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
+            encoding: .utf8
+        )
+        let sessionStart = try #require(source.range(of: "private lazy var voiceFnTapSession"))
+        let sessionEnd = try #require(source.range(
+            of: "private lazy var transcriptCaptureCoordinator",
+            range: sessionStart.upperBound..<source.endIndex
+        ))
+        let sessionSource = source[sessionStart.lowerBound..<sessionEnd.lowerBound]
+        #expect(sessionSource.contains("performCustomTrigger:"))
+        #expect(sessionSource.contains("KeyboardInjector.sendVoiceTrigger(shortcut)"))
+
+        let setterStart = try #require(source.range(of: "func setVoiceTriggerShortcut("))
+        let setterEnd = try #require(source.range(
+            of: "private func enableVoiceFnTapMode()",
+            range: setterStart.upperBound..<source.endIndex
+        ))
+        let setterSource = source[setterStart.lowerBound..<setterEnd.lowerBound]
+        #expect(setterSource.contains("!voiceFnTapSession.requiresCleanupBeforeMapping"))
+    }
+
     @Test func functionVoiceKeySubmissionLogsBothEdgesAndFlags() {
         var logs: [String] = []
         let poster: KeyboardInjector.KeyStatePoster = { _, _, _ in true }

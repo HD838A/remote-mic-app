@@ -35,6 +35,7 @@
   - [`feature/scroll-region-page-actions/PRODUCT_SPEC.md`](feature/scroll-region-page-actions/PRODUCT_SPEC.md)
   - [`feature/remote-connection-lifecycle/PRODUCT_SPEC.md`](feature/remote-connection-lifecycle/PRODUCT_SPEC.md)
   - [`feature/app-switcher/PRODUCT_SPEC.md`](feature/app-switcher/PRODUCT_SPEC.md)
+  - [`feature/voice-trigger-shortcut/PRODUCT_SPEC.md`](feature/voice-trigger-shortcut/PRODUCT_SPEC.md)
 - 平台附件使用 `feature/<feature>/platform-<platform>.md`，只能映射平台差异。当前 Onboarding 附件为：
   - [`feature/first-run-onboarding/platform-macos.md`](feature/first-run-onboarding/platform-macos.md)
   - [`feature/first-run-onboarding/platform-windows.md`](feature/first-run-onboarding/platform-windows.md)

@@ -120,6 +120,40 @@ struct ShortcutCaptureMonitorTests {
         #expect(captured.isEmpty)
     }
 
+    @Test func capturesAModifierChordOnlyWhenTheRecorderAllowsIt() throws {
+        let commandDown = try #require(keyEvent(keyCode: 55, flags: .maskCommand))
+        let shiftDown = try #require(keyEvent(
+            keyCode: 56,
+            flags: [.maskCommand, .maskShift]
+        ))
+        let shiftUp = try #require(keyEvent(keyCode: 56, flags: .maskCommand))
+        let commandUp = try #require(keyEvent(keyCode: 55, flags: []))
+
+        for allowsModifierChord in [false, true] {
+            var captured: [CustomKeyboardShortcut] = []
+            let monitor = ShortcutCaptureMonitor(
+                onCapture: { captured.append($0) },
+                allowsModifierChord: allowsModifierChord,
+                dispatchCallback: { $0() }
+            )
+
+            #expect(monitor.handle(type: .flagsChanged, event: commandDown))
+            #expect(monitor.handle(type: .flagsChanged, event: shiftDown))
+            #expect(monitor.handle(type: .flagsChanged, event: shiftUp))
+            #expect(captured.isEmpty)
+            #expect(monitor.handle(type: .flagsChanged, event: commandUp))
+
+            if allowsModifierChord {
+                #expect(captured.count == 1)
+                #expect(captured.first?.keyCode == 55)
+                #expect(captured.first?.modifierFlags == [.command, .shift])
+                #expect(captured.first?.isModifierChord == true)
+            } else {
+                #expect(captured.isEmpty)
+            }
+        }
+    }
+
     @Test func capturesAndSuppressesAReservedCommandShortcutOnce() throws {
         var captured: [CustomKeyboardShortcut] = []
         let monitor = ShortcutCaptureMonitor(

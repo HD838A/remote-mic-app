@@ -29,6 +29,7 @@ final class ShortcutCaptureMonitor {
 
     private let makeShortcut: (NSEvent) -> CustomKeyboardShortcut
     private let onCapture: (CustomKeyboardShortcut) -> Void
+    private let allowsModifierChord: Bool
     private let accessibilityTrusted: () -> Bool
     private let dispatchCallback: CallbackDispatcher
     private let logger: (String) -> Void
@@ -37,11 +38,13 @@ final class ShortcutCaptureMonitor {
     private var runLoopSource: CFRunLoopSource?
     private var didCapture = false
     private var pressedModifierKeyCodes: Set<UInt16> = []
+    private var chordModifierFlags: NSEvent.ModifierFlags = []
     private var standaloneModifierCandidate: StandaloneKeyboardModifier?
     private var modifierChordDetected = false
 
     init(
         onCapture: @escaping (CustomKeyboardShortcut) -> Void,
+        allowsModifierChord: Bool = false,
         makeShortcut: @escaping (NSEvent) -> CustomKeyboardShortcut = { CustomKeyboardShortcut(event: $0) },
         accessibilityTrusted: @escaping () -> Bool = { KeyboardInjector.isAccessibilityTrusted },
         dispatchCallback: @escaping CallbackDispatcher = {
@@ -51,6 +54,7 @@ final class ShortcutCaptureMonitor {
     ) {
         self.makeShortcut = makeShortcut
         self.onCapture = onCapture
+        self.allowsModifierChord = allowsModifierChord
         self.accessibilityTrusted = accessibilityTrusted
         self.dispatchCallback = dispatchCallback
         self.logger = logger
@@ -68,6 +72,7 @@ final class ShortcutCaptureMonitor {
         lock.lock()
         didCapture = false
         pressedModifierKeyCodes.removeAll()
+        chordModifierFlags = []
         standaloneModifierCandidate = nil
         modifierChordDetected = false
         lock.unlock()
@@ -158,6 +163,7 @@ final class ShortcutCaptureMonitor {
         }
         didCapture = true
         pressedModifierKeyCodes.removeAll()
+        chordModifierFlags = []
         standaloneModifierCandidate = nil
         modifierChordDetected = false
         lock.unlock()
@@ -203,29 +209,52 @@ final class ShortcutCaptureMonitor {
 
         if pressedModifierKeyCodes.contains(keyCode) {
             pressedModifierKeyCodes.remove(keyCode)
-            let shouldCapture = pressedModifierKeyCodes.isEmpty &&
+            let isFinalRelease = pressedModifierKeyCodes.isEmpty
+            let chordFlags = chordModifierFlags
+            let shouldCaptureStandalone = isFinalRelease &&
                 !modifierChordDetected &&
                 standaloneModifierCandidate == modifier
-            if pressedModifierKeyCodes.isEmpty {
+            let shouldCaptureChord = isFinalRelease &&
+                allowsModifierChord &&
+                modifierChordDetected
+            if isFinalRelease {
                 standaloneModifierCandidate = nil
                 modifierChordDetected = false
+                chordModifierFlags = []
             }
-            if shouldCapture {
-                didCapture = true
+            let capturedShortcut: CustomKeyboardShortcut? = if shouldCaptureStandalone {
+                modifier.shortcut
+            } else if shouldCaptureChord {
+                CustomKeyboardShortcut(
+                    keyCode: modifier.keyCode,
+                    modifierFlags: chordFlags,
+                    keyLabel: modifier.keyLabel
+                )
+            } else {
+                nil
             }
+            if capturedShortcut != nil { didCapture = true }
             lock.unlock()
 
-            if shouldCapture {
+            if let capturedShortcut {
                 let capture = onCapture
-                let shortcut = modifier.shortcut
+                let logger = self.logger
+                if shouldCaptureChord {
+                    logger(
+                        "SHORTCUT CAPTURE phase=resolved result=captured modifier_chord=true " +
+                            "has_function=\(capturedShortcut.modifierFlags.contains(.function)) " +
+                            "modifier_count=\(capturedShortcut.activeModifierCount)"
+                    )
+                }
                 dispatchCallback {
-                    capture(shortcut)
+                    capture(capturedShortcut)
                 }
             }
             return true
         }
 
         pressedModifierKeyCodes.insert(keyCode)
+        chordModifierFlags.insert(modifier.modifierFlags)
         if pressedModifierKeyCodes.count == 1 && !modifierChordDetected {
             standaloneModifierCandidate = modifier
         } else {

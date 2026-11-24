@@ -391,6 +391,16 @@
 "connection.voice_fn_tap.enabled" = "语音键模拟 Fn 点按";
 "connection.voice_fn_tap.hint" = "适配点按式语音输入（豆包「免按模式」、Typeless 等）：这类工具只在按键按下时切换状态，松开无效。开启后每次开始收音注入一次 Fn 点按、结束时再注入一次；长按式工具（豆包「长按模式」）请保持关闭。需要辅助功能（新名称：设备控制和数据访问）权限。";
 "connection.voice_fn_tap.hint_short" = "只在「只能按住收音」的遥控器上需要：用来驱动不支持长按的工具（如 Typeless）。";
+"connection.voice_trigger_shortcut.title" = "自定义语音触发";
+"connection.voice_trigger_shortcut.unset" = "未设置（使用 Fn）";
+"connection.voice_trigger_shortcut.record" = "录入";
+"connection.voice_trigger_shortcut.record_again" = "重新录入";
+"connection.voice_trigger_shortcut.clear" = "清除";
+"connection.voice_trigger_shortcut.detail" = "点按式语音工具（如 Typeless）在每次语音开始和结束时各发送一次这个快捷键；留空时发送 Fn。";
+"connection.voice_trigger_shortcut.recording" = "请按下要发送的快捷键";
+"connection.voice_trigger_shortcut.help" = "例如 Typeless 的翻译快捷键 Fn + Shift。组合键至少需要一个修饰键。";
+"connection.voice_trigger_shortcut.error.modifier_required" = "快捷键至少需要一个修饰键，避免把普通字符发送给目标 App。";
+"connection.voice_trigger_shortcut.error.voice_active" = "正在语音输入，结束当前语音后再修改。";
 "connection.voice_key_mode.title" = "语音触发键";
 "connection.voice_key.mode.fn" = "Fn";
 "connection.voice_key.mode.left_command" = "左 Command（⌘）";

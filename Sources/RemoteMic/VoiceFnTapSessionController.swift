@@ -42,6 +42,10 @@ final class VoiceFnTapSessionController {
 
     typealias Scheduler = (TimeInterval, @escaping () -> Void) -> VoiceFnTapScheduledTask
     typealias FunctionKeySetter = (Bool) -> Bool
+    /// `nil` means no custom shortcut is active; the controller falls back to
+    /// the existing Fn tap. A non-nil value reports whether the custom tap was
+    /// submitted.
+    typealias CustomTrigger = () -> Bool?
     typealias AudioEnqueuer = ([Int16]) -> Void
     typealias AudioDrainer = (UInt64, @escaping () -> Void) -> Void
     typealias DestinationReadiness = (
@@ -51,6 +55,14 @@ final class VoiceFnTapSessionController {
     private struct PendingVoice {
         var samples: [Int16] = []
         var ended = false
+    }
+
+    /// Pins one trigger family for the whole session. Switching from custom to
+    /// Fn between start and stop would toggle the target with the wrong key.
+    private enum SessionTrigger {
+        case undecided
+        case fn
+        case custom
     }
 
     /// Upper bound on `.draining`. Comfortably above the audio side's own drain fallback,
@@ -63,6 +75,7 @@ final class VoiceFnTapSessionController {
     private let schedule: Scheduler
     private let destinationReadiness: DestinationReadiness
     private let setFunctionKeyPressed: FunctionKeySetter
+    private let performCustomTrigger: CustomTrigger?
     private let enqueueAudio: AudioEnqueuer
     private let drainAudio: AudioDrainer
     private let onFailure: (VoiceFnTapFailure) -> Void
@@ -78,6 +91,8 @@ final class VoiceFnTapSessionController {
     private var pendingVoice: PendingVoice?
     private var scheduledTasks: [VoiceFnTapScheduledTask] = []
     private var functionKeyIsPressed = false
+    private var sessionTrigger: SessionTrigger = .undecided
+    private var customTriggerIsSettling = false
     private var idleCompletions: [() -> Void] = []
     private var suppressAudioUntilRemoteStop = false
     private var drainOperationID: UInt64?
@@ -94,6 +109,7 @@ final class VoiceFnTapSessionController {
         schedule: @escaping Scheduler = VoiceFnTapScheduledTask.mainQueue,
         destinationReadiness: @escaping DestinationReadiness = { _ in .immediate },
         setFunctionKeyPressed: @escaping FunctionKeySetter,
+        performCustomTrigger: CustomTrigger? = nil,
         enqueueAudio: @escaping AudioEnqueuer,
         drainAudio: @escaping AudioDrainer,
         onFailure: @escaping (VoiceFnTapFailure) -> Void,
@@ -106,6 +122,7 @@ final class VoiceFnTapSessionController {
         self.schedule = schedule
         self.destinationReadiness = destinationReadiness
         self.setFunctionKeyPressed = setFunctionKeyPressed
+        self.performCustomTrigger = performCustomTrigger
         self.enqueueAudio = enqueueAudio
         self.drainAudio = drainAudio
         self.onFailure = onFailure
@@ -220,11 +237,11 @@ final class VoiceFnTapSessionController {
             // Posting another tap here would toggle the target back on.
             needsStopTap = false
         case .starting:
-            needsStopTap = completedInFlightTap
+            needsStopTap = completedInFlightTap || customTriggerIsSettling
         case .idle:
             needsStopTap = false
         }
-        if needsStopTap, !postImmediateFunctionKeyTap() {
+        if needsStopTap, !postImmediateTriggerTap() {
             onFailure(.stopTapFailed)
         }
         logDrainTerminalIfNeeded(result: "cancelled", reason: "shutdown")
@@ -368,16 +385,65 @@ final class VoiceFnTapSessionController {
         completion: @escaping (Bool) -> Void
     ) {
         guard generation == sessionGeneration else { return }
+        if sessionTrigger == .custom {
+            guard let performCustomTrigger, let submitted = performCustomTrigger(), submitted else {
+                logger(
+                    "VOICE FN TAP trigger=custom operation_id=\(sessionGeneration) " +
+                        "phase=completed result=failed reason=trigger_unavailable " +
+                        "target_response=unknown"
+                )
+                completion(false)
+                return
+            }
+            completeCustomTriggerSubmission(generation: sessionGeneration, completion: completion)
+            return
+        }
+        if sessionTrigger == .undecided,
+           let performCustomTrigger,
+           let submitted = performCustomTrigger() {
+            guard submitted else {
+                logger(
+                    "VOICE FN TAP trigger=custom operation_id=\(sessionGeneration) " +
+                        "phase=completed result=failed target_response=unknown"
+                )
+                completion(false)
+                return
+            }
+            sessionTrigger = .custom
+            completeCustomTriggerSubmission(generation: sessionGeneration, completion: completion)
+            return
+        }
         guard setFunctionKeyPressed(true) else {
             completion(false)
             return
         }
+        sessionTrigger = .fn
         functionKeyIsPressed = true
         let task = schedule(tapDuration) { [weak self] in
             guard let self, self.generation == sessionGeneration else { return }
             let success = self.setFunctionKeyPressed(false)
             self.functionKeyIsPressed = !success
             completion(success)
+        }
+        scheduledTasks.append(task)
+    }
+
+    private func completeCustomTriggerSubmission(
+        generation sessionGeneration: UInt64,
+        completion: @escaping (Bool) -> Void
+    ) {
+        customTriggerIsSettling = true
+        logger(
+            "VOICE FN TAP trigger=custom operation_id=\(sessionGeneration) " +
+                "phase=completed result=submitted target_response=unknown"
+        )
+        // The custom shortcut is one complete down/up transaction. Keep the
+        // same settle delay as the Fn tap so the target app can open before
+        // the first buffered audio is released.
+        let task = schedule(tapDuration) { [weak self] in
+            guard let self, self.generation == sessionGeneration else { return }
+            self.customTriggerIsSettling = false
+            completion(true)
         }
         scheduledTasks.append(task)
     }
@@ -399,7 +465,8 @@ final class VoiceFnTapSessionController {
             generation &+= 1
             cancelScheduledTasks()
             let completedStartTap = releaseFunctionKeyIfNeeded()
-            if completedStartTap, !postImmediateFunctionKeyTap() {
+            let needsClosingTap = completedStartTap || customTriggerIsSettling
+            if needsClosingTap, !postImmediateTriggerTap() {
                 onFailure(.stopTapFailed)
             }
             resetSessionState()
@@ -441,6 +508,8 @@ final class VoiceFnTapSessionController {
         remoteEnded = false
         drainOperationID = nil
         drainStartedAtUptime = nil
+        sessionTrigger = .undecided
+        customTriggerIsSettling = false
         cancelScheduledTasks()
         releaseFunctionKeyIfNeeded()
     }
@@ -462,6 +531,20 @@ final class VoiceFnTapSessionController {
         let down = setFunctionKeyPressed(true)
         let up = setFunctionKeyPressed(false)
         return down && up
+    }
+
+    /// Closes a target that this session opened. A custom trigger is a complete
+    /// shortcut transaction, so it is re-sent instead of an Fn tap; otherwise the
+    /// Fn pair is used. Never mix the two inside one session.
+    private func postImmediateTriggerTap() -> Bool {
+        switch sessionTrigger {
+        case .custom:
+            return performCustomTrigger?() == true
+        case .fn:
+            return postImmediateFunctionKeyTap()
+        case .undecided:
+            return true
+        }
     }
 
     private func logDrainTerminalIfNeeded(result: String, reason: String) {

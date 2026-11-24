@@ -666,6 +666,8 @@ struct SettingsView: View {
     @State private var isCapturingMacMicrophoneShortcut = false
     @State private var isHoveringMacMicrophoneButton = false
     @State private var shortcutCaptureTarget: ShortcutEditingTarget?
+    @State private var isCapturingVoiceTriggerShortcut = false
+    @State private var voiceTriggerShortcutErrorKey: String?
     @State private var applicationShortcutCaptureProfileID: UUID?
     /// 「App 输入框和滚动」里正在配置哪个 App。它只决定编辑对象，不写按键绑定：
     /// 聚焦与翻页滚动按 App 生效，App 在前台即可使用，和「打开 App」动作无关。
@@ -841,6 +843,7 @@ struct SettingsView: View {
             settingsNavigation.update(section: section, visible: visibleSections)
             model.setMappingPageVisible(section == .mapping)
             if isCapturingMacMicrophoneShortcut { endMacMicrophoneShortcutCapture() }
+            endVoiceTriggerShortcutCapture()
             // 只取消进行中的学习；已完成的结果要留着，否则离开页面就显示“未开始”。
             if section != .mapping, model.buttonGestureLearningStatus.isActive {
                 model.cancelButtonGestureLearning(reason: "left_mapping_page")
@@ -870,6 +873,7 @@ struct SettingsView: View {
         .onDisappear {
             model.setMappingPageVisible(false)
             endMacMicrophoneShortcutCapture()
+            endVoiceTriggerShortcutCapture()
             model.cancelButtonGestureLearning(reason: "settings_closed")
             macroFeature.setEditorActive(false)
         }
@@ -2052,6 +2056,11 @@ struct SettingsView: View {
         guard isCapturingMacMicrophoneShortcut else { return }
         isCapturingMacMicrophoneShortcut = false
         model.suspendMacMicrophoneShortcutCapture(false)
+    }
+
+    private func endVoiceTriggerShortcutCapture() {
+        isCapturingVoiceTriggerShortcut = false
+        voiceTriggerShortcutErrorKey = nil
     }
 
     #if SAYALL_SIRI_REMOTE_ENABLED && canImport(SayAllSiriRemote)
@@ -3680,6 +3689,10 @@ struct SettingsView: View {
                 if VoiceFunctionKeyTapApplicability.isApplicable(capabilities: capabilities) {
                     Divider()
                     mappingVoiceFnTapControl
+                    if settings.voiceKeyMode == .function, settings.voiceFnTapModeEnabled {
+                        Divider()
+                        mappingVoiceTriggerShortcutControl
+                    }
                 }
                 // 触摸面（滑动箭头/光标反馈）只有具备触摸面的遥控器才显示，页面请求之外再加一道能力门禁。
                 if TouchSurfaceControlApplicability.isApplicable(
@@ -3813,6 +3826,93 @@ struct SettingsView: View {
         .help(localization.text("connection.voice_fn_tap.hint"))
         .opacity(settings.voiceKeyMode == .function ? 1 : 0.55)
         .disabled(settings.voiceKeyMode != .function)
+    }
+
+    private var mappingVoiceTriggerShortcutControl: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("connection.voice_trigger_shortcut.title")
+                        .font(.system(size: 13, weight: .medium))
+                    Text(settings.voiceTriggerShortcut?.displayName(using: localization)
+                        ?? localization.text("connection.voice_trigger_shortcut.unset"))
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+                if isCapturingVoiceTriggerShortcut {
+                    Button("common.action.cancel") {
+                        endVoiceTriggerShortcutCapture()
+                    }
+                    .compatibilityButtonStyle(.standard)
+                    .controlSize(.small)
+                } else {
+                    Button(settings.voiceTriggerShortcut == nil
+                        ? "connection.voice_trigger_shortcut.record"
+                        : "connection.voice_trigger_shortcut.record_again") {
+                        voiceTriggerShortcutErrorKey = nil
+                        isCapturingVoiceTriggerShortcut = true
+                    }
+                    .compatibilityButtonStyle(.standard)
+                    .controlSize(.small)
+                    if settings.voiceTriggerShortcut != nil {
+                        Button("connection.voice_trigger_shortcut.clear") {
+                            _ = model.setVoiceTriggerShortcut(nil)
+                            voiceTriggerShortcutErrorKey = nil
+                        }
+                        .compatibilityButtonStyle(.standard)
+                        .controlSize(.small)
+                    }
+                }
+            }
+            Text("connection.voice_trigger_shortcut.detail")
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            if isCapturingVoiceTriggerShortcut {
+                Text("connection.voice_trigger_shortcut.recording")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Color.accentColor)
+                ShortcutCaptureView(
+                    allowsModifierChord: true,
+                    onCapture: { shortcut in
+                        guard shortcut.isValidVoiceTriggerShortcut else {
+                            voiceTriggerShortcutErrorKey =
+                                "connection.voice_trigger_shortcut.error.modifier_required"
+                            isCapturingVoiceTriggerShortcut = false
+                            return
+                        }
+                        guard model.setVoiceTriggerShortcut(shortcut) else {
+                            voiceTriggerShortcutErrorKey =
+                                "connection.voice_trigger_shortcut.error.voice_active"
+                            isCapturingVoiceTriggerShortcut = false
+                            return
+                        }
+                        voiceTriggerShortcutErrorKey = nil
+                        isCapturingVoiceTriggerShortcut = false
+                    },
+                    onFailure: { failure in
+                        isCapturingVoiceTriggerShortcut = false
+                        voiceTriggerShortcutErrorKey = failure == .accessibilityPermissionRequired
+                            ? "shortcut.editor.permission_required"
+                            : "shortcut.editor.capture_unavailable"
+                        if failure == .accessibilityPermissionRequired {
+                            _ = KeyboardInjector.requestAccessibilityAccess()
+                        }
+                    }
+                )
+                .frame(height: 1)
+            }
+            if let voiceTriggerShortcutErrorKey {
+                Text(LocalizedStringKey(voiceTriggerShortcutErrorKey))
+                    .font(.system(size: 12))
+                    .foregroundStyle(.red)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .help(localization.text("connection.voice_trigger_shortcut.help"))
+        .disabled(model.isStreaming)
+        .onDisappear { endVoiceTriggerShortcutCapture() }
     }
 
     private var mappingRestoreDefaultsButton: some View {
@@ -8427,11 +8527,26 @@ private struct WindowDragArea: NSViewRepresentable {
 }
 
 private struct ShortcutCaptureView: NSViewRepresentable {
+    let allowsModifierChord: Bool
     let onCapture: (CustomKeyboardShortcut) -> Void
     let onFailure: (ShortcutCaptureStartFailure) -> Void
 
+    init(
+        allowsModifierChord: Bool = false,
+        onCapture: @escaping (CustomKeyboardShortcut) -> Void,
+        onFailure: @escaping (ShortcutCaptureStartFailure) -> Void
+    ) {
+        self.allowsModifierChord = allowsModifierChord
+        self.onCapture = onCapture
+        self.onFailure = onFailure
+    }
+
     func makeCoordinator() -> Coordinator {
-        Coordinator(onCapture: onCapture, onFailure: onFailure)
+        Coordinator(
+            allowsModifierChord: allowsModifierChord,
+            onCapture: onCapture,
+            onFailure: onFailure
+        )
     }
 
     func makeNSView(context: Context) -> NSView {
@@ -8450,14 +8565,17 @@ private struct ShortcutCaptureView: NSViewRepresentable {
     }
 
     final class Coordinator {
+        let allowsModifierChord: Bool
         var onCapture: (CustomKeyboardShortcut) -> Void
         var onFailure: (ShortcutCaptureStartFailure) -> Void
         private var monitor: ShortcutCaptureMonitor?
 
         init(
+            allowsModifierChord: Bool,
             onCapture: @escaping (CustomKeyboardShortcut) -> Void,
             onFailure: @escaping (ShortcutCaptureStartFailure) -> Void
         ) {
+            self.allowsModifierChord = allowsModifierChord
             self.onCapture = onCapture
             self.onFailure = onFailure
         }
@@ -8465,7 +8583,10 @@ private struct ShortcutCaptureView: NSViewRepresentable {
         func startMonitoring() {
             guard monitor == nil else { return }
             let capture = onCapture
-            let monitor = ShortcutCaptureMonitor(onCapture: capture)
+            let monitor = ShortcutCaptureMonitor(
+                onCapture: capture,
+                allowsModifierChord: allowsModifierChord
+            )
             self.monitor = monitor
             if case let .failure(failure) = monitor.start() {
                 self.monitor = nil
