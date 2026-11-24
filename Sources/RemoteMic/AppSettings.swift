@@ -3419,6 +3419,9 @@ final class AppSettings: ObservableObject {
                   application.focusShortcut.map({ Self.validatedShortcut($0) == $0 }) ?? true
             else { throw AppConfigurationError.invalidValues }
         }
+        guard configuration.voiceTriggerShortcut.map({
+            Self.validatedShortcut($0) == $0 && $0.isValidVoiceTriggerShortcut
+        }) ?? true else { throw AppConfigurationError.invalidValues }
         guard configuration.interactionSettings?.isWellFormed ?? true else { throw AppConfigurationError.invalidValues }
         guard Self.gestureTimingsAreWellFormed(configuration.buttonGestureTimingsByModel ?? [:])
         else { throw AppConfigurationError.invalidValues }
@@ -3563,6 +3566,11 @@ final class AppSettings: ObservableObject {
         if let value = c.checksForPreReleaseUpdates { checksForPreReleaseUpdates = value }
         voiceKeyMode = c.voiceKeyMode ?? .function
         voiceFnTapModeEnabled = c.voiceFnTapModeEnabled ?? false
+        voiceTriggerShortcut = c.voiceTriggerShortcut.flatMap {
+            Self.validatedShortcut($0)
+        }.flatMap {
+            $0.isValidVoiceTriggerShortcut ? $0 : nil
+        }
         applyContinuousRecordingExperimentState(enabled: c.experimentalContinuousRecordingEnabled ?? false,
             backup: c.continuousRecordingPowerBindingBackup)
         if let preferences {

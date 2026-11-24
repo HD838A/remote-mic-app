@@ -386,10 +386,19 @@ final class VoiceFnTapSessionController {
     ) {
         guard generation == sessionGeneration else { return }
         if sessionTrigger == .custom {
-            guard let performCustomTrigger, let submitted = performCustomTrigger(), submitted else {
+            guard let performCustomTrigger, let submitted = performCustomTrigger() else {
                 logger(
                     "VOICE FN TAP trigger=custom operation_id=\(sessionGeneration) " +
                         "phase=completed result=failed reason=trigger_unavailable " +
+                        "target_response=unknown"
+                )
+                completion(false)
+                return
+            }
+            guard submitted else {
+                logger(
+                    "VOICE FN TAP trigger=custom operation_id=\(sessionGeneration) " +
+                        "phase=completed result=failed reason=submit_failed " +
                         "target_response=unknown"
                 )
                 completion(false)
@@ -404,7 +413,8 @@ final class VoiceFnTapSessionController {
             guard submitted else {
                 logger(
                     "VOICE FN TAP trigger=custom operation_id=\(sessionGeneration) " +
-                        "phase=completed result=failed target_response=unknown"
+                        "phase=completed result=failed reason=submit_failed " +
+                        "target_response=unknown"
                 )
                 completion(false)
                 return

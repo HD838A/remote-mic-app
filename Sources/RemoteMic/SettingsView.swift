@@ -3829,12 +3829,13 @@ struct SettingsView: View {
     }
 
     private var mappingVoiceTriggerShortcutControl: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        let activeShortcut = settings.effectiveVoiceTriggerShortcut
+        return VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("connection.voice_trigger_shortcut.title")
                         .font(.system(size: 13, weight: .medium))
-                    Text(settings.voiceTriggerShortcut?.displayName(using: localization)
+                    Text(activeShortcut?.displayName(using: localization)
                         ?? localization.text("connection.voice_trigger_shortcut.unset"))
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)
@@ -3847,7 +3848,7 @@ struct SettingsView: View {
                     .compatibilityButtonStyle(.standard)
                     .controlSize(.small)
                 } else {
-                    Button(settings.voiceTriggerShortcut == nil
+                    Button(activeShortcut == nil
                         ? "connection.voice_trigger_shortcut.record"
                         : "connection.voice_trigger_shortcut.record_again") {
                         voiceTriggerShortcutErrorKey = nil
@@ -3855,10 +3856,14 @@ struct SettingsView: View {
                     }
                     .compatibilityButtonStyle(.standard)
                     .controlSize(.small)
-                    if settings.voiceTriggerShortcut != nil {
+                    if activeShortcut != nil {
                         Button("connection.voice_trigger_shortcut.clear") {
-                            _ = model.setVoiceTriggerShortcut(nil)
-                            voiceTriggerShortcutErrorKey = nil
+                            if model.setVoiceTriggerShortcut(nil) {
+                                voiceTriggerShortcutErrorKey = nil
+                            } else {
+                                voiceTriggerShortcutErrorKey =
+                                    "connection.voice_trigger_shortcut.error.voice_active"
+                            }
                         }
                         .compatibilityButtonStyle(.standard)
                         .controlSize(.small)
@@ -3911,7 +3916,10 @@ struct SettingsView: View {
             }
         }
         .help(localization.text("connection.voice_trigger_shortcut.help"))
-        .disabled(model.isStreaming)
+        .disabled(model.isVoiceTriggerShortcutEditingBlocked)
+        .onChange(of: model.isVoiceTriggerShortcutEditingBlocked) { blocked in
+            if blocked { endVoiceTriggerShortcutCapture() }
+        }
         .onDisappear { endVoiceTriggerShortcutCapture() }
     }
 

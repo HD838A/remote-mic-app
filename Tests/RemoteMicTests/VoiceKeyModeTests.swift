@@ -106,7 +106,10 @@ struct VoiceKeyModeTests {
             range: setterStart.upperBound..<source.endIndex
         ))
         let setterSource = source[setterStart.lowerBound..<setterEnd.lowerBound]
-        #expect(setterSource.contains("!voiceFnTapSession.requiresCleanupBeforeMapping"))
+        #expect(setterSource.contains("!isVoiceTriggerShortcutEditingBlocked"))
+        #expect(source.contains(
+            "isStreaming || voiceFnTapSession.requiresCleanupBeforeMapping"
+        ))
     }
 
     @Test func functionVoiceKeySubmissionLogsBothEdgesAndFlags() {

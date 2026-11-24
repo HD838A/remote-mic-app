@@ -32,6 +32,13 @@ struct CompleteConfigurationBackupTests {
         source.siriRemoteScrollArrowReversed = true
         source.siriRemoteCursorFeedbackVisible = false
         source.chromecastSystemReservedExceptions = ["left", "right"]
+        source.voiceKeyMode = .function
+        source.voiceFnTapModeEnabled = true
+        source.voiceTriggerShortcut = CustomKeyboardShortcut(
+            keyCode: 63,
+            modifierFlags: [.function, .shift],
+            keyLabel: "Fn"
+        )
         let data = try MacConfigurationBackup(host: source.completeConfigurationSnapshot(), components: nil)
             .encoded(version: "2.0.0", build: "255")
         let root = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
@@ -55,6 +62,8 @@ struct CompleteConfigurationBackupTests {
         #expect(destination.siriRemoteScrollArrowReversed)
         #expect(!destination.siriRemoteCursorFeedbackVisible)
         #expect(destination.chromecastSystemReservedExceptions == ["left", "right"])
+        #expect(destination.effectiveVoiceTriggerShortcut?.isModifierChord == true)
+        #expect(destination.voiceTriggerShortcut == source.voiceTriggerShortcut)
         destination.selectRemoteProfile(first)
         #expect(destination.buttonShortcuts[.home]?.keyCode == 8)
         destination.selectRemoteProfile(second)
@@ -63,6 +72,7 @@ struct CompleteConfigurationBackupTests {
         #expect(restarted.remoteDeviceProfiles == destination.remoteDeviceProfiles)
         #expect(restarted.unifiedBaseBindings == source.unifiedBaseBindings)
         #expect(restarted.customApplicationProfiles.map(\.id) == [app.id])
+        #expect(restarted.voiceTriggerShortcut == source.voiceTriggerShortcut)
     }
 
     @Test func rejectsOtherPlatformsUnknownReadersAndOldAppsBeforeWriting() throws {

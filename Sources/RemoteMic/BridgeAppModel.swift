@@ -4842,7 +4842,10 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     func restoreCompleteConfiguration(_ backup: MacConfigurationBackup) throws {
         let host = try settings.validatedCompleteConfigurationSnapshot(backup.host)
         try macroFeature.validateConfigurationArchive(backup.components)
-        guard !isStreaming, releaseVoiceKeyIfNeeded() else { throw AppConfigurationError.unsafeVoiceKeyChange }
+        guard !isStreaming,
+              !voiceFnTapSession.requiresCleanupBeforeMapping,
+              releaseVoiceKeyIfNeeded()
+        else { throw AppConfigurationError.unsafeVoiceKeyChange }
         if try !macroFeature.restoreConfigurationArchive(backup.components, hostAfter: host) {
             let before = try settings.portableLocalSnapshot()
             do { try settings.applyPortableLocalSnapshot(host) }
@@ -4862,7 +4865,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             changedVoiceKeyConfiguration = try Self.importConfiguration(
                 from: data,
                 into: settings,
-                isStreaming: isStreaming,
+                isStreaming: isStreaming || voiceFnTapSession.requiresCleanupBeforeMapping,
                 releaseVoiceKey: { releaseVoiceKeyIfNeeded() }
             )
         } catch AppConfigurationError.unsafeVoiceKeyChange {
@@ -4918,13 +4921,17 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         )
     }
 
+    var isVoiceTriggerShortcutEditingBlocked: Bool {
+        isStreaming || voiceFnTapSession.requiresCleanupBeforeMapping
+    }
+
     @discardableResult
     func setVoiceTriggerShortcut(_ shortcut: CustomKeyboardShortcut?) -> Bool {
         if let shortcut, !shortcut.isValidVoiceTriggerShortcut {
             AppLogger.shared.write("VOICE TRIGGER rejected reason=modifier_required")
             return false
         }
-        guard !isStreaming, !voiceFnTapSession.requiresCleanupBeforeMapping else {
+        guard !isVoiceTriggerShortcutEditingBlocked else {
             AppLogger.shared.write("VOICE TRIGGER rejected reason=voice_active")
             return false
         }

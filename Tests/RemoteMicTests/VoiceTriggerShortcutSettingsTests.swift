@@ -100,6 +100,45 @@ struct VoiceTriggerShortcutSettingsTests {
         #expect(destination.configurationImportNotice == nil)
     }
 
+    @Test func pureModifierChordRequiresAccessibilityBeforePosting() {
+        let chord = CustomKeyboardShortcut(
+            keyCode: 63,
+            modifierFlags: [.function, .shift],
+            keyLabel: "Fn"
+        )
+        var posted = false
+
+        #expect(!KeyboardInjector.sendVoiceTrigger(
+            chord,
+            accessibilityTrusted: { false },
+            eventPoster: { _ in
+                posted = true
+                return true
+            }
+        ))
+        #expect(!posted)
+    }
+
+    @Test func pureModifierChordRoundTripsThroughExportAndImport() throws {
+        let (source, sourceDefaults, sourceSuite) = try isolatedSettings("chordExport")
+        defer { sourceDefaults.removePersistentDomain(forName: sourceSuite) }
+        let chord = CustomKeyboardShortcut(
+            keyCode: 63,
+            modifierFlags: [.function, .shift],
+            keyLabel: "Fn"
+        )
+        source.voiceKeyMode = .function
+        source.voiceFnTapModeEnabled = true
+        source.voiceTriggerShortcut = chord
+
+        let (destination, destinationDefaults, destinationSuite) = try isolatedSettings("chordImport")
+        defer { destinationDefaults.removePersistentDomain(forName: destinationSuite) }
+        try destination.importConfiguration(from: source.exportedConfigurationData())
+
+        #expect(destination.voiceTriggerShortcut == chord)
+        #expect(destination.effectiveVoiceTriggerShortcut?.isModifierChord == true)
+    }
+
     @Test func importingABareKeyDropsItAndReportsTheRejection() throws {
         let (source, sourceDefaults, sourceSuite) = try isolatedSettings("invalidSource")
         defer { sourceDefaults.removePersistentDomain(forName: sourceSuite) }
