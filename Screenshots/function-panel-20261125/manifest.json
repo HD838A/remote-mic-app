@@ -1,0 +1,80 @@
+{
+  "batch": "function-panel-20261125",
+  "date": "2026-11-25",
+  "purpose": "遥控器功能面板 v4 设置页入口与收藏管理弹层的实际运行截图索引",
+  "storage": "external-persistent-directory-and-github-pr-attachments",
+  "storage_path": "/Users/andy/Pictures/SayAllEvidence/function-panel-20261125/",
+  "contentSize": {
+    "width": 1067,
+    "height": 760
+  },
+  "generation": "生产 SettingsView 的 REMOTE_MIC_SETTINGS_SCREENSHOT_DIR 离屏入口；收藏弹层使用 INTERACTIVE=1 的生产窗口并由 screencapture 捕获；公开模式构建",
+  "baseCommit": "ea5b4b1bef3f47f6f6ca55510416acf4454d6890",
+  "notes": [
+    "图片字节不入库，本文件只做文本索引；外部链接为 PR 附件，上传后补齐。",
+    "四张 mapping 截图证明生产设置页的「面板」筛选、打开功能面板入口和收藏管理按钮；中文/英文、浅色/深色均覆盖。",
+    "收藏弹层截图为生产窗口实际运行状态，包含 2 个已收藏项；screencapture 捕获包含父设置窗口，弹层内容为 620 × 560pt。只证明静态外观、搜索框、星标和保存/取消布局。",
+    "设置页的选中态使用系统强调色；功能面板本体按 v4 使用语义蓝，但面板本体尚无运行截图。",
+    "没有功能面板本体（非激活玻璃横幅）的运行截图；面板本体的语义蓝选中态、非激活玻璃和边缘渐隐必须在真实遥控器与会话中完成验收。",
+    "截图字体与布局只证明 1067 × 760 生产最小内容区；不替代真机按键、语音延迟、尾字、全屏或多屏验收。",
+    "面板预览截图来自生产 FunctionPanelView 的本地预览夹具（7 项，其中微信标为不可用），不是真实遥控器或前台 App 采样验收。"
+  ],
+  "images": [
+    {
+      "file": "light-zh/mapping-1067x760.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1520,
+      "sha256": "fbd3660a229443cfda4af56fbe0a285f0b98b32a1e56fdb432c7e7404a3fe372",
+      "url": "pending-pr-attachment"
+    },
+    {
+      "file": "dark-zh/mapping-1067x760.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1520,
+      "sha256": "e927d75e10eb414bd8f07a6d51669e8a2d2a791fd70f287c5bffa9136562ecdd",
+      "url": "pending-pr-attachment"
+    },
+    {
+      "file": "light-en/mapping-1067x760.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1520,
+      "sha256": "906b982ac934a09f1a26ab42fc9cec2210016e986ddab7deaeb4f897adb9ad08",
+      "url": "pending-pr-attachment"
+    },
+    {
+      "file": "dark-en/mapping-1067x760.png",
+      "format": "PNG",
+      "width": 2134,
+      "height": 1520,
+      "sha256": "b46066e1e3382a03bec15a943c0eaf021e48e4558a6c31444da772b22eed1ae8",
+      "url": "pending-pr-attachment"
+    },
+    {
+      "file": "sheet-zh-light.png",
+      "format": "PNG",
+      "width": 2226,
+      "height": 1612,
+      "sha256": "3ca6b7347a2e4366571333b9e309a2232e38aa95c0e9525110f51b7537b16899",
+      "url": "pending-pr-attachment"
+    },
+    {
+      "file": "sheet-zh-dark.png",
+      "format": "PNG",
+      "width": 2226,
+      "height": 1612,
+      "sha256": "31d7d557217b87ef612b19738eef4f19ca965e7a6132fef0bd21bb2684e58eb2",
+      "url": "pending-pr-attachment"
+    },
+    {
+      "file": "panel-preview-zh.png",
+      "format": "PNG",
+      "width": 1748,
+      "height": 436,
+      "sha256": "11f923a5563da7ddd57d0a96c24d6b60849734cc168c0f56b309514968bc0721",
+      "url": "pending-pr-attachment"
+    }
+  ]
+}

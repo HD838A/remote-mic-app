@@ -86,6 +86,9 @@ enum SettingsScreenshotRenderer {
         let initialActionFilter = ProcessInfo.processInfo.environment[
             "REMOTE_MIC_SETTINGS_SCREENSHOT_ACTION_FILTER"
         ]
+        let opensFunctionPanelFavorites = ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_SETTINGS_SCREENSHOT_FUNCTION_PANEL_FAVORITES"
+        ] == "1"
         let opensMappingEditor = opensShortcutEditor || opensActionEditor
         let showsGestureTiming = ProcessInfo.processInfo.environment[
             "REMOTE_MIC_SETTINGS_SCREENSHOT_GESTURE_TIMING"
@@ -140,6 +143,13 @@ enum SettingsScreenshotRenderer {
         let settings = AppSettings(defaults: defaults)
         settings.applicationLanguage = language
         settings.completeOnboarding()
+        if opensFunctionPanelFavorites {
+            // Screenshot fixture only: show saved stars in the isolated favorites sheet.
+            settings.functionPanelFavoriteIDs = [
+                FunctionPanelCatalog.actionID(.commandCopy),
+                FunctionPanelCatalog.actionID(.showDesktop),
+            ]
+        }
         if let modelName = ProcessInfo.processInfo.environment[
             "REMOTE_MIC_SETTINGS_SCREENSHOT_REMOTE_MODEL"
         ], let remoteModel = XiaomiRemoteModel(rawValue: modelName) {
@@ -460,6 +470,7 @@ enum SettingsScreenshotRenderer {
                 initialMappingSaveScenario: section == .mapping ? mappingScenario : nil,
                 initialShortcutPickerShowsKeyboard: showsStandardKeyboard,
                 initialMappingActionFilter: initialActionFilter,
+                initialFunctionPanelFavoritesPresented: opensFunctionPanelFavorites,
                 initialMappingScrollsToGestureTiming: section == .mapping && showsGestureTiming,
                 initialMappingVoiceSettingsPresented: section == .mapping && opensVoiceSettings,
                 supplementalSettings: supplementalSettings,
@@ -503,6 +514,7 @@ enum SettingsScreenshotRenderer {
                 initialMappingSaveScenario: section == .mapping ? mappingScenario : nil,
                 initialShortcutPickerShowsKeyboard: showsStandardKeyboard,
                 initialMappingActionFilter: initialActionFilter,
+                initialFunctionPanelFavoritesPresented: opensFunctionPanelFavorites,
                 initialMappingScrollsToGestureTiming: section == .mapping && showsGestureTiming,
                 initialMappingVoiceSettingsPresented: section == .mapping && opensVoiceSettings,
                 supplementalSettings: supplementalSettings,

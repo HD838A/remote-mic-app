@@ -1,5 +1,9 @@
 # TODO
 
+- [ ] 遥控器功能面板（#1207）
+  - 2026-11-25：按 v4 系统玻璃横幅设计实现「打开功能面板」动作。面板不激活 SayAll、不成为 key window，列出收藏功能、当前按键映射已配置动作和组合动作库；左右移动并循环、按住连发、OK 执行、返回/菜单/再次按打开键/10 秒/前台 App 变化/语音键/断开连接关闭。设置页新增「面板」筛选、绑定入口与收藏管理弹层。
+  - 当前状态：公开模式构建、5 项目录/布局单元测试和 1672 项完整自动化回归通过；设置页截图已完成；v4 语义蓝选中态、84% 未选中图标和空状态无图标已对齐。Mac 键盘 ←→/Enter/Esc 接管、超过 9 项边缘渐隐、面板本体预览截图已生成但真机非激活/玻璃对比度/全屏与多屏、Apple/Chromecast/手机/Web 来源矩阵、真实语音首字/尾字/连续会话仍待验收。只能标记为候选，不得宣称真机通过；详见 [`Testing/FunctionPanel.md`](Testing/FunctionPanel.md)。
+
 - [ ] 设置页其余提示迁移到统一提示组件
   - 2026-11-11：`NoticeBubble` / `NoticeInline` / `NoticeCenter` 已随 PR #994 进入 `main`；按键页「组合动作不可用」已迁完，形态为 v3 7.3 的内联条（图标 + 标题与说明 + 右侧动作）。
   - 2026-11-11：配置导入与导出结果已迁移。`ConfigurationStatus` 从 `tint` + `systemImage` 改为 `tier: NoticeTier`，显示由一行 caption 换成 `NoticeInline`；设置窗口根 `RemoteMicRootView` 挂上了 `noticeHost()`，气泡从此具备显示条件。
