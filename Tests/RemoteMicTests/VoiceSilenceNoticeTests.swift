@@ -83,7 +83,6 @@ struct VoiceSilenceNoticeTests {
         tracker.audioReceived(at: 100)
         tracker.endSession()
 
-        #expect(!tracker.receivedAudio)
         #expect(tracker.lastAudioAt == nil)
         #expect(!tracker.didPresent)
     }

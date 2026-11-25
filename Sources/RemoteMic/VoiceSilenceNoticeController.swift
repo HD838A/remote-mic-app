@@ -11,25 +11,24 @@ struct VoiceSilenceNoticeTracker: Equatable {
     /// 而「说完忘了按第二次」的人通常已经去干别的了。
     static let silenceThreshold: TimeInterval = 60
 
-    private(set) var receivedAudio = false
+    /// 本段流最近一次收到音频的时刻。`nil` 表示这一段还没收到过任何音频——
+    /// VAD 门控下「开麦未开口」就是 0 帧，此时不能开始计时。
     private(set) var lastAudioAt: TimeInterval?
     private(set) var didPresent = false
 
     /// 会话开始：上一段的音频时刻不能拿来判断这一段。
     mutating func beginSession() {
-        receivedAudio = false
         lastAudioAt = nil
         didPresent = false
     }
 
     mutating func audioReceived(at time: TimeInterval) {
-        receivedAudio = true
         lastAudioAt = time
     }
 
     /// 到点就返回 `true`，并且一次会话只会返回一次。
     mutating func consumePresentationIfDue(now: TimeInterval) -> Bool {
-        guard receivedAudio, !didPresent, let lastAudioAt,
+        guard !didPresent, let lastAudioAt,
               now.isFinite, lastAudioAt.isFinite,
               now - lastAudioAt >= Self.silenceThreshold
         else { return false }
@@ -38,7 +37,6 @@ struct VoiceSilenceNoticeTracker: Equatable {
     }
 
     mutating func endSession() {
-        receivedAudio = false
         lastAudioAt = nil
         didPresent = false
     }
