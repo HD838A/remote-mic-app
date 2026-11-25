@@ -11235,6 +11235,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         guard chromecastSilenceTracker.consumePresentationIfDue(
             now: ProcessInfo.processInfo.systemUptime
         ) else { return }
+        let localization = LocalizationStore(settings: settings)
         let notice = chromecastSilenceNotice ?? {
             let created = VoiceSilenceNoticeController { message in
                 AppLogger.shared.write(message)
