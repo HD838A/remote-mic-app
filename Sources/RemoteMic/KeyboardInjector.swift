@@ -599,12 +599,17 @@ enum KeyboardInjector {
         systemKeyPoster: SystemKeyPoster = postSystemKey,
         shortcutEventPoster: (CGEvent) -> Bool = ShortcutEventSequence.post,
         shortcutHardwareFlags: () -> CGEventFlags = { CGEventSource.flagsState(.hidSystemState) },
-        logger: (String) -> Void = { AppLogger.shared.write($0) }
+        logger: (String) -> Void = { AppLogger.shared.write($0) },
+        completion: ((Bool) -> Void)? = nil
     ) -> Bool {
-        guard action != .disabled else { return true }
+        func finish(_ result: Bool) -> Bool {
+            completion?(result)
+            return result
+        }
+        guard action != .disabled else { return finish(true) }
         if action.isAppInternal {
             AppLogger.shared.write("INTERNAL ACTION ignored_by_keyboard action=\(action.rawValue)")
-            return true
+            return finish(true)
         }
         if let application = action.presetApplication {
             let focusRequestID = focusRequests.begin()
@@ -614,13 +619,15 @@ enum KeyboardInjector {
                 applicationURL: applicationURL,
                 applicationOpener: applicationOpener,
                 applicationFocuser: applicationFocuser,
-                frontmostApplication: frontmostApplication
+                frontmostApplication: frontmostApplication,
+                completion: completion
             )
             return true
         }
         if action == .openCustomApplication {
             guard let applicationProfile else {
                 AppLogger.shared.write("APP ACTION custom unavailable reason=profile_missing")
+                completion?(false)
                 return true
             }
             let focusRequestID = focusRequests.begin()
@@ -631,17 +638,27 @@ enum KeyboardInjector {
                 applicationOpener: customApplicationOpener,
                 applicationFocuser: customApplicationFocuser,
                 frontmostApplication: frontmostApplication,
-                focusAllowed: focusCustomApplication
+                focusAllowed: focusCustomApplication,
+                completion: completion
             )
             return true
         }
         if action == .focusInput {
-            guard accessibilityTrusted() else { return false }
-            return frontmostComposerFocuser { _ in }
+            guard accessibilityTrusted() else { return finish(false) }
+            let focusGate = ActionFeedbackCompletionGate()
+            let started = frontmostComposerFocuser { success in
+                if focusGate.take() {
+                    completion?(success)
+                }
+            }
+            if !started, focusGate.take() {
+                completion?(false)
+            }
+            return started
         }
         if action == .customShortcut, shortcut == nil {
             AppLogger.shared.write("SHORTCUT ACTION ignored reason=not_configured")
-            return true
+            return finish(true)
         }
         if action == .customShortcut, let shortcut, let modifier = shortcut.standaloneModifier {
             let prefix = "SHORTCUT ACTION operation_id=\(UUID().uuidString)"
@@ -653,7 +670,7 @@ enum KeyboardInjector {
                     "\(prefix) phase=completed result=rejected reason=accessibility_denied " +
                         "standalone=true elapsed_ms=\(elapsed) user_visible_result=unknown"
                 )
-                return false
+                return finish(false)
             }
 
             let eventFlags = shortcut.cgEventFlags.union(modifier.deviceFlag)
@@ -669,13 +686,13 @@ enum KeyboardInjector {
                     "press_submitted=\(pressed) release_submitted=\(released) " +
                     "elapsed_ms=\(elapsed) user_visible_result=unknown"
             )
-            return submitted
+            return finish(submitted)
         }
-        guard accessibilityTrusted() else { return false }
+        guard accessibilityTrusted() else { return finish(false) }
 
         switch action {
         case .disabled:
-            return true
+            return finish(true)
         case .escape:
             keyPoster(53, [])
         case .returnKey:
@@ -735,17 +752,17 @@ enum KeyboardInjector {
         case .scrollDown:
             scrollPoster(-scrollLineCount)
         case .pageUp:
-            return scrollPagePoster(.up, .full).wasHandled
+            return finish(scrollPagePoster(.up, .full).wasHandled)
         case .pageDown:
-            return scrollPagePoster(.down, .full).wasHandled
+            return finish(scrollPagePoster(.down, .full).wasHandled)
         case .pageUpHalf:
-            return scrollPagePoster(.up, .half).wasHandled
+            return finish(scrollPagePoster(.up, .half).wasHandled)
         case .pageDownHalf:
-            return scrollPagePoster(.down, .half).wasHandled
+            return finish(scrollPagePoster(.down, .half).wasHandled)
         case .scrollToTop:
-            return scrollEdgePoster(.top).wasHandled
+            return finish(scrollEdgePoster(.top).wasHandled)
         case .scrollToBottom:
-            return scrollEdgePoster(.bottom).wasHandled
+            return finish(scrollEdgePoster(.bottom).wasHandled)
         case .deleteBackward:
             keyPoster(51, [])
         case .showDesktop:
@@ -755,47 +772,47 @@ enum KeyboardInjector {
         case .appSwitcher:
             keyPoster(48, .maskCommand)
         case .missionControl:
-            return postSymbolicHotKey(
+            return finish(postSymbolicHotKey(
                 126,
                 modifiers: [controlModifier],
                 keyFlags: [.maskSecondaryFn, .maskNumericPad],
                 keyStatePoster: keyStatePoster
-            )
+            ))
         case .applicationWindows:
-            return postSymbolicHotKey(
+            return finish(postSymbolicHotKey(
                 125,
                 modifiers: [controlModifier],
                 keyFlags: [.maskSecondaryFn, .maskNumericPad],
                 keyStatePoster: keyStatePoster
-            )
+            ))
         case .spaceLeft:
-            return postSymbolicHotKey(
+            return finish(postSymbolicHotKey(
                 123,
                 modifiers: [controlModifier],
                 keyFlags: [.maskSecondaryFn, .maskNumericPad],
                 keyStatePoster: keyStatePoster
-            )
+            ))
         case .spaceRight:
-            return postSymbolicHotKey(
+            return finish(postSymbolicHotKey(
                 124,
                 modifiers: [controlModifier],
                 keyFlags: [.maskSecondaryFn, .maskNumericPad],
                 keyStatePoster: keyStatePoster
-            )
+            ))
         case .lockScreen:
             // ⌃⌘Q：真实按键顺序是先 Control 再 Command，收尾逆序抬起。
-            return postSymbolicHotKey(
+            return finish(postSymbolicHotKey(
                 12,
                 modifiers: [controlModifier, commandModifier],
                 keyStatePoster: keyStatePoster
-            )
+            ))
         case .screenshot:
             // ⌘⇧3：系统截屏快捷键，需要系统侧该项处于启用状态。
-            return postSymbolicHotKey(
+            return finish(postSymbolicHotKey(
                 20,
                 modifiers: [commandModifier, shiftModifier],
                 keyStatePoster: keyStatePoster
-            )
+            ))
         case .volumeUp:
             postSystemKey(type: 0)
         case .volumeDown:
@@ -809,16 +826,16 @@ enum KeyboardInjector {
         case .nextCommandRight:
             systemKeyPoster(17)
         case .combinationAction:
-            return false // The host action-library adapter owns execution.
+            return finish(false) // The host action-library adapter owns execution.
         case .customShortcut:
             if let shortcut {
                 let eventFlags = shortcut.cgEventFlags
-                return ShortcutEventSequence.send(
+                return finish(ShortcutEventSequence.send(
                     keyCode: CGKeyCode(shortcut.keyCode),
                     modifiers: eventFlags,
                     hardwareFlags: shortcutHardwareFlags,
                     eventPoster: shortcutEventPoster
-                )
+                ))
             }
         case .focusInput:
             break
@@ -830,7 +847,7 @@ enum KeyboardInjector {
              .openSlack, .openWeCom, .openNeteaseMusic, .openChrome, .openSafari, .openZed, .openDimAgent:
             break
         }
-        return true
+        return finish(true)
     }
 
     private static func open(
@@ -839,10 +856,12 @@ enum KeyboardInjector {
         applicationURL: (String) -> URL?,
         applicationOpener: ApplicationOpener,
         applicationFocuser: @escaping ApplicationFocuser,
-        frontmostApplication: FrontmostApplicationProvider
+        frontmostApplication: FrontmostApplicationProvider,
+        completion: ((Bool) -> Void)? = nil
     ) {
         guard let url = applicationURL(application.bundleIdentifier) else {
             AppLogger.shared.write("APP ACTION unavailable bundle=\(application.bundleIdentifier)")
+            completion?(false)
             return
         }
         // Re-activating an app that is already frontmost makes its window go
@@ -857,6 +876,7 @@ enum KeyboardInjector {
             if application.focusStrategy != nil {
                 applicationFocuser(url, application, frontmost.processIdentifier, focusRequestID)
             }
+            completion?(true)
             return
         }
 
@@ -866,11 +886,13 @@ enum KeyboardInjector {
                     "APP ACTION failed bundle=\(application.bundleIdentifier) " +
                         AppLogger.errorFields(error)
                 )
+                completion?(false)
             } else {
                 AppLogger.shared.write("APP ACTION opened bundle=\(application.bundleIdentifier)")
                 if application.focusStrategy != nil, let processIdentifier {
                     applicationFocuser(url, application, processIdentifier, focusRequestID)
                 }
+                completion?(true)
             }
         }
     }
@@ -895,12 +917,14 @@ enum KeyboardInjector {
         applicationOpener: CustomApplicationOpener,
         applicationFocuser: @escaping CustomApplicationFocuser,
         frontmostApplication: FrontmostApplicationProvider,
-        focusAllowed: Bool
+        focusAllowed: Bool,
+        completion: ((Bool) -> Void)? = nil
     ) {
         guard let url = applicationURL(application) else {
             AppLogger.shared.write(
                 "APP ACTION unavailable bundle=\(application.bundleIdentifier) custom=true"
             )
+            completion?(false)
             return
         }
         // Same as the preset path: re-activating an already frontmost app
@@ -911,10 +935,15 @@ enum KeyboardInjector {
             )
             guard focusAllowed else {
                 logCustomApplicationFocusSkipped(application)
+                completion?(true)
                 return
             }
-            guard application.focusStrategy != .none else { return }
+            guard application.focusStrategy != .none else {
+                completion?(true)
+                return
+            }
             applicationFocuser(application, frontmost.processIdentifier, focusRequestID)
+            completion?(true)
             return
         }
 
@@ -924,6 +953,7 @@ enum KeyboardInjector {
                     "APP ACTION failed bundle=\(application.bundleIdentifier) custom=true " +
                         AppLogger.errorFields(error)
                 )
+                completion?(false)
                 return
             }
             AppLogger.shared.write(
@@ -931,10 +961,15 @@ enum KeyboardInjector {
             )
             guard focusAllowed else {
                 logCustomApplicationFocusSkipped(application)
+                completion?(true)
                 return
             }
-            guard application.focusStrategy != .none, let processIdentifier else { return }
+            guard application.focusStrategy != .none, let processIdentifier else {
+                completion?(true)
+                return
+            }
             applicationFocuser(application, processIdentifier, focusRequestID)
+            completion?(true)
         }
     }
 

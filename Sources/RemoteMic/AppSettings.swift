@@ -57,6 +57,8 @@ private struct PersonalizedConfiguration: Codable {
     let appIconIdentifier: AppIconIdentifier?
     let showDockIcon: Bool
     let showStatusBarIcon: Bool?
+    let showActionFeedback: Bool?
+    let showActionSuccessFeedback: Bool?
     let openMainWindowAtLaunch: Bool?
     let checksForPreReleaseUpdates: Bool?
     let experimentalContinuousRecordingEnabled: Bool?
@@ -330,6 +332,8 @@ final class AppSettings: ObservableObject {
         static let appIconIdentifier = "appIconIdentifier"
         static let showDockIcon = "showDockIcon"
         static let showStatusBarIcon = "showStatusBarIcon"
+        static let showActionFeedback = "showActionFeedback"
+        static let showActionSuccessFeedback = "showActionSuccessFeedback"
         static let openMainWindowAtLaunch = "openMainWindowAtLaunch"
         static let checksForPreReleaseUpdates = "checksForPreReleaseUpdates"
         static let experimentalContinuousRecordingEnabled = "experimentalContinuousRecordingEnabled"
@@ -713,6 +717,18 @@ final class AppSettings: ObservableObject {
 
     @Published var showStatusBarIcon: Bool {
         didSet { defaults.set(showStatusBarIcon, forKey: Keys.showStatusBarIcon) }
+    }
+
+    @Published var showActionFeedback: Bool {
+        didSet {
+            defaults.set(showActionFeedback, forKey: Keys.showActionFeedback)
+        }
+    }
+
+    @Published var showActionSuccessFeedback: Bool {
+        didSet {
+            defaults.set(showActionSuccessFeedback, forKey: Keys.showActionSuccessFeedback)
+        }
     }
 
     @Published var openMainWindowAtLaunch: Bool {
@@ -1154,6 +1170,12 @@ final class AppSettings: ObservableObject {
         showStatusBarIcon = defaults.object(forKey: Keys.showStatusBarIcon) == nil
             ? true
             : defaults.bool(forKey: Keys.showStatusBarIcon)
+        showActionFeedback = defaults.object(forKey: Keys.showActionFeedback) == nil
+            ? true
+            : defaults.bool(forKey: Keys.showActionFeedback)
+        showActionSuccessFeedback = defaults.object(forKey: Keys.showActionSuccessFeedback) == nil
+            ? true
+            : defaults.bool(forKey: Keys.showActionSuccessFeedback)
         openMainWindowAtLaunch = defaults.object(forKey: Keys.openMainWindowAtLaunch) == nil
             ? true
             : defaults.bool(forKey: Keys.openMainWindowAtLaunch)
@@ -3277,6 +3299,8 @@ final class AppSettings: ObservableObject {
             appIconIdentifier: appIconIdentifier,
             showDockIcon: showDockIcon,
             showStatusBarIcon: showStatusBarIcon,
+            showActionFeedback: showActionFeedback,
+            showActionSuccessFeedback: showActionSuccessFeedback,
             openMainWindowAtLaunch: openMainWindowAtLaunch,
             checksForPreReleaseUpdates: checksForPreReleaseUpdates,
             experimentalContinuousRecordingEnabled: experimentalContinuousRecordingEnabled,
@@ -3509,6 +3533,8 @@ final class AppSettings: ObservableObject {
         if let value = c.appIconIdentifier { appIconIdentifier = value }
         showDockIcon = c.showDockIcon
         if let value = c.showStatusBarIcon { showStatusBarIcon = value }
+        if let value = c.showActionFeedback { showActionFeedback = value }
+        if let value = c.showActionSuccessFeedback { showActionSuccessFeedback = value }
         if let value = c.openMainWindowAtLaunch { openMainWindowAtLaunch = value }
         if let value = c.checksForPreReleaseUpdates { checksForPreReleaseUpdates = value }
         voiceKeyMode = c.voiceKeyMode ?? .function
@@ -3725,6 +3751,12 @@ final class AppSettings: ObservableObject {
         showDockIcon = configuration.showDockIcon
         if let showStatusBarIcon = configuration.showStatusBarIcon {
             self.showStatusBarIcon = showStatusBarIcon
+        }
+        if let showActionFeedback = configuration.showActionFeedback {
+            self.showActionFeedback = showActionFeedback
+        }
+        if let showActionSuccessFeedback = configuration.showActionSuccessFeedback {
+            self.showActionSuccessFeedback = showActionSuccessFeedback
         }
         if let openMainWindowAtLaunch = configuration.openMainWindowAtLaunch {
             self.openMainWindowAtLaunch = openMainWindowAtLaunch

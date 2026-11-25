@@ -536,6 +536,22 @@ struct RemoteButtonsTests {
         #expect(called)
     }
 
+    @Test func focusInputReportsFinalComposerResultThroughCompletion() {
+        var results: [Bool] = []
+        let handled = KeyboardInjector.send(
+            .focusInput,
+            frontmostComposerFocuser: { completion in
+                completion(false)
+                return true
+            },
+            accessibilityTrusted: { true },
+            completion: { results.append($0) }
+        )
+
+        #expect(handled)
+        #expect(results == [false])
+    }
+
     @Test func focusInputRequiresAccessibilityPermission() {
         var called = false
         let handled = KeyboardInjector.send(
@@ -3412,6 +3428,58 @@ struct RemoteButtonsTests {
     @Test func missingApplicationIsHandledWithoutPermissionFailure() {
         #expect(KeyboardInjector.send(.openCodex, applicationURL: { _ in nil }))
         #expect(KeyboardInjector.send(.openCustomApplication))
+    }
+
+    @Test func reportsFinalResultThroughCompletion() {
+        struct LaunchFailure: Error {}
+        let appURL = URL(fileURLWithPath: "/Applications/Codex.app")
+        var failedResults: [Bool] = []
+        _ = KeyboardInjector.send(
+            .openCodex,
+            applicationURL: { _ in appURL },
+            applicationOpener: { _, _, completion in
+                completion(nil, LaunchFailure())
+            },
+            frontmostApplication: { nil },
+            completion: { failedResults.append($0) }
+        )
+        #expect(failedResults == [false])
+
+        var openedResults: [Bool] = []
+        _ = KeyboardInjector.send(
+            .openCodex,
+            applicationURL: { _ in appURL },
+            applicationOpener: { _, _, completion in
+                completion(4_242, nil)
+            },
+            frontmostApplication: { nil },
+            completion: { openedResults.append($0) }
+        )
+        #expect(openedResults == [true])
+
+        var missingResults: [Bool] = []
+        _ = KeyboardInjector.send(
+            .openCodex,
+            applicationURL: { _ in nil },
+            completion: { missingResults.append($0) }
+        )
+        #expect(missingResults == [false])
+
+        var keyResults: [Bool] = []
+        _ = KeyboardInjector.send(
+            .commandCopy,
+            keyPoster: { _, _ in true },
+            completion: { keyResults.append($0) }
+        )
+        #expect(keyResults == [true])
+
+        var deniedResults: [Bool] = []
+        _ = KeyboardInjector.send(
+            .commandCopy,
+            accessibilityTrusted: { false },
+            completion: { deniedResults.append($0) }
+        )
+        #expect(deniedResults == [false])
     }
 
     @Test func customApplicationLaunchUsesTheSelectedProfileAndFocusStrategy() {

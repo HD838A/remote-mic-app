@@ -156,6 +156,32 @@ final class MacroFeatureIntegration: ObservableObject {
         #endif
     }
 
+    /// 组合动作执行器的最终事件。只在私有组件存在时产生；公开构建不会触发。
+    var onMacroExecutionEvent: ((String, String, String, Int) -> Void)?
+
+    var hasLoadedMacroLibrary: Bool {
+        #if canImport(SayAllMacroRemoteMic) && SAYALL_UNIFIED_BUTTON_CONFIGURATION
+        feature.hasLoadedLibrary
+        #else
+        false
+        #endif
+    }
+
+    func macroName(id: String?) -> String? {
+        guard let id else { return nil }
+        return libraryActions.first(where: { $0.id == id })?.name
+    }
+
+    func macroStepCount(id: String?) -> Int? {
+        guard let id else { return nil }
+        return libraryActions.first(where: { $0.id == id })?.stepCount
+    }
+
+    func hasMacro(id: String?) -> Bool {
+        guard let id else { return false }
+        return libraryActions.contains(where: { $0.id == id })
+    }
+
     var supportsMappingProfileAutosave: Bool {
         #if canImport(SayAllButtonProfiles) && SAYALL_BUTTON_PROFILE_AUTOSAVE
         true
@@ -927,8 +953,9 @@ final class MacroFeatureIntegration: ObservableObject {
             return self?.profileBinding(device: device, button: button, trigger: trigger)
         }
         #if canImport(SayAllMacroRemoteMic) && SAYALL_UNIFIED_BUTTON_CONFIGURATION
-        feature.executionEvents.receive(on: DispatchQueue.main).sink { event in
+        feature.executionEvents.receive(on: DispatchQueue.main).sink { [weak self] event in
             AppLogger.shared.write("MACRO ACTION operation_id=\(event.0) phase=\(event.1) result=\(event.2) elapsed_ms=\(event.3)")
+            self?.onMacroExecutionEvent?(event.0, event.1, event.2, event.3)
         }.store(in: &subscriptions)
         feature.changes.receive(on: DispatchQueue.main).sink { [weak self, weak settings] in
             guard let self, let settings else { return }

@@ -1628,3 +1628,43 @@
 "connection.siri_remote_component.retry_detail" = "上次安装未完成。可以重试；取消后不会自动重复弹窗。";
 
 "connection.siri_remote_component.installing" = "正在等待管理员授权…";
+
+/* 动作执行结果 HUD */
+"action_feedback.success.title" = "已执行「%@」";
+"action_feedback.success.repeat" = "已执行「%@」×%@";
+"action_feedback.success.multiple" = "已执行 %@ 个动作";
+"action_feedback.failure.title" = "「%@」未执行";
+"action_feedback.timeout.title" = "「%@」超时";
+"action_feedback.timeout.context" = "超过 10 秒";
+"action_feedback.timeout.detail" = "目标 App 没有在限定时间内响应。可以重试，或检查 App 是否卡住。";
+"action_feedback.failure.permission_denied.context" = "缺少辅助功能权限";
+"action_feedback.failure.permission_denied.detail" = "无线麦 SayAll 不能把按键发送到其他 App。允许后再按一次这个键。";
+"action_feedback.failure.target_missing.context" = "找不到目标 App";
+"action_feedback.failure.target_missing.detail" = "App 可能已移动或卸载。重新选择后再试。";
+"action_feedback.failure.target_unavailable.context" = "目标 App 未运行";
+"action_feedback.failure.target_unavailable.detail" = "App 没有运行或已经退出。打开后再按一次这个键。";
+"action_feedback.failure.shortcut_not_delivered.context" = "快捷键未送达";
+"action_feedback.failure.shortcut_not_delivered.detail" = "系统没有接受这组快捷键。检查是否被其他 App 占用，然后重试。";
+"action_feedback.failure.configuration_unavailable.context" = "动作配置不可用";
+"action_feedback.failure.configuration_unavailable.detail" = "动作或依赖缺失。重新选择后再试。";
+"action_feedback.failure.execution_failed.context" = "执行失败";
+"action_feedback.failure.execution_failed.detail" = "动作没有完成。可以重试，或检查目标 App 是否响应。";
+"action_feedback.failure.script_failed.context" = "脚本执行失败";
+"action_feedback.failure.script_failed.detail" = "脚本没有正常结束。可以重试；运行输出不会被保存。";
+"action_feedback.failure.unknown_result.context" = "结果未知";
+"action_feedback.failure.unknown_result.detail" = "动作已执行，但目标没有返回明确结果。可以重试。";
+"action_feedback.failure.not_started.context" = "动作未启动";
+"action_feedback.failure.not_started.detail" = "动作可能正在执行，或当前不可用。稍后再试。";
+"action_feedback.action.open_application" = "打开 App";
+"action_feedback.action.reselect" = "重新选择";
+"action_feedback.action.copy_diagnostics" = "复制诊断";
+"action_feedback.action.copied" = "已复制";
+"action_feedback.diagnostics.note" = "不含动作名称、快捷键内容、脚本源码、输入内容或第三方 App 内容。";
+"settings.general.action_feedback.title" = "动作执行结果提示";
+"settings.general.action_feedback.help" = "“关闭所有提示”隐藏成功和失败；“关闭成功提示”只隐藏成功。动作仍会执行，诊断仍会记录。";
+"settings.general.hide_all_action_feedback" = "关闭所有提示";
+"settings.general.hide_action_success_feedback" = "关闭成功提示";
+"action_feedback.open_application_name" = "打开%@";
+"action_feedback.step" = "第 %@ 步";
+"action_feedback.step_of" = "第 %@ 步 / 共 %@ 步";
+"action_feedback.steps" = "共 %@ 步";
