@@ -104,7 +104,7 @@ struct OnboardingView: View {
     private let voiceToolAvailabilityOverride: [OnboardingVoiceTool: OnboardingVoiceToolAvailability]?
     private let remoteInputDiagnosticOverride: FirstUseRemoteInputDiagnostic?
     private let interactionProbe: OnboardingInteractionProbe?
-    private let siriRemotePackageInstalled: Bool
+    private let siriRemoteComponentAvailableOverride: Bool?
     private let siriRemoteComponentInstalledOverride: Bool?
     /// 离屏渲染等没有前台会话的宿主显式指定周期权限刷新行为；
     /// `nil` 表示跟随运行期的前后台状态。
@@ -182,7 +182,7 @@ struct OnboardingView: View {
         initialGuideImageZoomResource: String? = nil,
         remoteInputDiagnosticOverride: FirstUseRemoteInputDiagnostic? = nil,
         interactionProbe: OnboardingInteractionProbe? = nil,
-        siriRemotePackageInstalledOverride: Bool? = nil,
+        siriRemoteComponentAvailableOverride: Bool? = nil,
         siriRemoteComponentInstalledOverride: Bool? = nil,
         permissionRefreshInForegroundOverride: Bool? = nil,
         initialPhoneAppInstalled: Bool = false
@@ -197,8 +197,7 @@ struct OnboardingView: View {
         self.remoteInputDiagnosticOverride = remoteInputDiagnosticOverride
         self.interactionProbe = interactionProbe
         self.permissionRefreshInForegroundOverride = permissionRefreshInForegroundOverride
-        siriRemotePackageInstalled = siriRemotePackageInstalledOverride ??
-            OnboardingBuildCapabilities.isSiriRemotePackageInstalled()
+        self.siriRemoteComponentAvailableOverride = siriRemoteComponentAvailableOverride
         self.siriRemoteComponentInstalledOverride = siriRemoteComponentInstalledOverride
         _voiceToolAvailability = State(
             initialValue: voiceToolAvailabilityOverride ?? Self.detectVoiceToolAvailability()
@@ -271,7 +270,9 @@ struct OnboardingView: View {
             .onAppear {
                 settings.beginOnboardingSiriRemoteTrial()
                 AppLogger.shared.write(
-                    "ONBOARDING SIRI_REMOTE phase=availability installed=\(siriRemotePackageInstalled) " +
+                    "ONBOARDING SIRI_REMOTE phase=availability " +
+                        "receipt_present=\(OnboardingBuildCapabilities.isSiriRemotePackageInstalled()) " +
+                        "component_available=\(siriRemoteComponentAvailable) " +
                         "available=\(availableControlSources.contains(.siriRemote))"
                 )
                 refreshPermissionStates()
@@ -849,9 +850,16 @@ struct OnboardingView: View {
         }
     }
 
+    /// 组件在向导打开后仍可能被安装完成，因此每次取值都重新判断，
+    /// 不在构造视图时固化。
+    private var siriRemoteComponentAvailable: Bool {
+        siriRemoteComponentAvailableOverride
+            ?? OnboardingBuildCapabilities.isSiriRemoteComponentAvailable()
+    }
+
     private var availableControlSources: [OnboardingControlSource] {
         OnboardingBuildCapabilities.availableControlSources(
-            siriRemotePackageInstalled: siriRemotePackageInstalled
+            siriRemoteComponentAvailable: siriRemoteComponentAvailable
         )
     }
 

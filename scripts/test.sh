@@ -25,6 +25,7 @@ xcrun swiftc \
   "$ROOT/Sources/RemoteMic/HIDRemoteScheduler.swift" \
   "$ROOT/Sources/RemoteMic/RemoteDeviceNamePolicy.swift" \
   "$ROOT/Sources/RemoteMic/FirstUseDiagnostics.swift" \
+  "$ROOT/Sources/RemoteMic/AppleRemoteComponentInstallation.swift" \
   "$ROOT/Sources/RemoteMic/OnboardingFlow.swift" \
   "$ROOT/Sources/RemoteMic/VoiceKeyMode.swift" \
   "$ROOT/Sources/RemoteMic/AppIconController.swift" \

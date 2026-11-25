@@ -1255,7 +1255,7 @@ build 314 本机结果：Apple Silicon 用户实测报告无漏字母 `i`、重�
 
 | 矩阵维度 | 适用集合 |
 | --- | --- |
-| 来源 | 公开包：xiaomi_remote，并用 `REMOTE_MIC_ONBOARDING_SCREENSHOT_REMOTE_MODEL=rc001|rc003` 区分所选型号；完整包另含 siri_remote 的 generation_6 / generation_7、chromecast_remote、apple_companion、web_remote；以实际 Package 能力为准；Siri 另需 Installer 收据 |
+| 来源 | 公开包：xiaomi_remote，并用 `REMOTE_MIC_ONBOARDING_SCREENSHOT_REMOTE_MODEL=rc001|rc003` 区分所选型号；完整包另含 siri_remote 的 generation_6 / generation_7、chromecast_remote、apple_companion、web_remote；以实际 Package 能力为准；Siri 另需 Installer 收据或已安装的 helper + LaunchDaemon |
 | 语言 | zh-Hans、en |
 | 外观 | light、dark |
 | 工具附加状态 | 五种工具、右栏四步、可观察的安装/运行状态、Fn 占用、Vokie partial/failed；只用生产入口支持的状态注入，不能把不支持的注入写为通过 |
@@ -1550,3 +1550,41 @@ iPhone / Apple Watch 连接要会员（与小程序路径一致）。做法：
 - 真机复验**通过**：机器上只连一只苹果遥控器，从关于页重新运行设置向导，音频页不再停在「音频输出正常」未勾选，可以继续并走完后续流程。
 - 观察到本次唯一应有的差异：音频页第三项显示「语音开始时连接音频」并已勾选。
 - 未复核：小米遥控器/Chromecast 的真机对照、诊断摘要中 `audio_gate` 的实际取值、干净机器首次安装（需管理员认证）。
+
+## 2026-11-25 Siri Remote 组件可用性按真实安装状态裁决
+
+适用分支：`fix/onboarding-siri-remote-availability-20261125`。本次只改控制设备页的来源可用性判定与求值时机，不改组件安装实现、SMJobBless 授权、PKG 收据写入、会员门禁或语音链路。
+
+### 前置
+
+- 准备三种机器状态，禁止手工删除其他用户的系统文件：
+  - A：PKG 安装且勾选 Siri Remote 组件（`pkgutil --pkg-info com.hd838a.RemoteMic.siri-remote` 成功）。
+  - B：App 内安装组件（连接页「安装组件」完成授权），`/Library/PrivilegedHelperTools` 与 `/Library/LaunchDaemons` 有对应文件，但没有 Installer 收据。
+  - C：两者都没有。
+
+### 步骤
+
+1. 三种状态分别从连接页点「连接新设备」进入向导，停在控制设备页。
+2. 检查「实体遥控器」分组出现的卡片，并查看日志 `ONBOARDING SIRI_REMOTE phase=availability` 的 `receipt_present`、`component_available`、`available`。
+3. 在 B 状态下先走完向导，再回到设置页重新进入一次向导，确认卡片仍存在（组件已安装不应只在首次可见）。
+4. 在状态 A 手工触发一次组件缺失（隔离机器上移除 helper），确认仍能看到苹果遥控器入口，语音测试页给出「安装组件」而不是「重新授权」。
+5. 在 B 状态直接点苹果遥控器卡片的「启用」，确认不再弹出「去下载安装包」提示。
+
+### 预期
+
+- A 与 B 都在控制设备页显示两代苹果遥控器；C 不显示。
+- B 的日志为 `receipt_present=false component_available=true available=true`，A 为 `receipt_present=true`。
+- 状态 A 下组件缺失时仍是「安装组件」入口，可重新安装。
+- B 下点卡片「启用」直接启用，不出现下载安装包提示。
+
+### 失败判定
+
+- B 状态看不到苹果遥控器，或日志 `component_available=false`（本缺陷未修好）。
+- C 状态出现苹果遥控器（收据或 helper 残留被当成可用）。
+- 半装状态（只有 helper、没有 LaunchDaemon，或反向）被当成可用。
+- 公开构建出现苹果遥控器来源。
+- 状态 A 下组件缺失时回到「重新授权」文案。
+
+### 结果
+
+自动化见 [Bugs/2026-11-25-onboarding-siri-remote-hidden-without-installer-receipt.md](../Bugs/2026-11-25-onboarding-siri-remote-hidden-without-installer-receipt.md)。真实 PKG 与 App 内安装两条路径的现场验收尚未完成，静态截图和单元测试不能替代。

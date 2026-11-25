@@ -8291,7 +8291,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     func activateSiriRemoteFromCard() {
         guard !isStreaming, activePhysicalVoiceControlSource != .siriRemote else { return }
         AppLogger.shared.write("REMOTE CARD_ACTION phase=requested action=enable source=user")
-        if !OnboardingBuildCapabilities.isSiriRemotePackageInstalled() {
+        if !OnboardingBuildCapabilities.isSiriRemoteComponentAvailable() {
             // The upgrade path may contain the App but not the optional PKG component.
             let alert = NSAlert()
             let localization = LocalizationStore(settings: settings)
