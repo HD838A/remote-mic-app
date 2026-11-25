@@ -445,7 +445,7 @@ final class HIDRemoteMonitor {
     /// 重连后重试一次即可；由上层决定重试节奏，监视器本身不排程。
     var onNativeMappingVerificationFailed: (() -> Void)?
     var onInputReset: ((UUID?) -> Void)?
-    var onInternalAction: ((UUID?, ButtonAction) -> Void)?
+    var onInternalAction: ((UUID?, ButtonAction, RemoteButton) -> Void)?
     /// A voice-key down edge while the selected remote's audio link may be down.
     /// The callback only observes intent; the HID event itself is never consumed.
     var onVoiceUsageDown: ((UUID?) -> Void)?
@@ -2298,7 +2298,7 @@ final class HIDRemoteMonitor {
             return true
         }
         if configured.action.isAppInternal {
-            onInternalAction?(profileID, configured.action)
+            onInternalAction?(profileID, configured.action, button)
             AppLogger.shared.write(
                 "HID BUTTON button=\(button.rawValue) trigger=\(trigger.rawValue) action=\(configured.action.rawValue)"
             )

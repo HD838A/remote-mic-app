@@ -121,6 +121,9 @@ enum RemoteMicApp {
             let arguments = Array(ProcessInfo.processInfo.arguments.dropFirst())
             exit(AgentConfigurationCommand.run(arguments: arguments))
         }
+        if ProcessInfo.processInfo.environment["REMOTE_MIC_FUNCTION_PANEL_PREVIEW"] == "1" {
+            FunctionPanelPreview.run()
+        }
         if let screenshotDirectory = ProcessInfo.processInfo.environment[
             "REMOTE_MIC_SETTINGS_SCREENSHOT_DIR"
         ] {

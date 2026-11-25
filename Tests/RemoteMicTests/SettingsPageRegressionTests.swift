@@ -1707,7 +1707,11 @@ struct SettingsPageRegressionTests {
         #expect(source.contains("result=editor_presented"))
         #expect(source.contains("configured: configured\n                        )\n                        .disabled(isManagedPowerAction)"))
         // 顺序：打开 App → 按住 → 按键速度。
-        #expect(source.contains("[.commonPhrases, .applications, .hold, .buttonSpeed]"))
+        #expect(source.contains("[.commonPhrases, .panels, .applications, .hold, .buttonSpeed]"))
+        #expect(source.contains("if actions.contains(.openFunctionPanel)"))
+        #expect(source.contains("functionPanelActionControls("))
+        #expect(source.contains("FunctionPanelFavoritesView("))
+        #expect(source.contains("function-panel-manage-favorites"))
         #expect(source.contains("case .hold, .buttonSpeed:"))
         #expect(source.contains("mappingActionFilter == .hold"))
         #expect(source.contains("mapping-hold-tab"))

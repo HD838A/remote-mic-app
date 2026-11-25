@@ -319,6 +319,7 @@ final class AppSettings: ObservableObject {
         static let buttonShortcuts = "buttonShortcuts"
         static let buttonApplicationProfileIDs = "buttonApplicationProfileIDs"
         static let secondaryButtonBindings = "secondaryButtonBindings"
+        static let functionPanelFavoriteIDs = "functionPanel.favoriteIDs"
         static let buttonRapidPressEnabled = "buttonRapidPressEnabled"
         static let buttonGestureTimingsByModel = "buttonGestureTimingsByModel"
         static let buttonGestureLearningsByModel = "buttonGestureLearningsByModel"
@@ -635,6 +636,13 @@ final class AppSettings: ObservableObject {
             onInteractionModeChanged?(selectedRemoteProfileID)
             saveSecondaryBindings()
             saveSelectedRemoteProfileMappings()
+        }
+    }
+
+    /// 功能面板的全局收藏。只保存功能 ID，不保存名称、App 标识或用户内容。
+    @Published var functionPanelFavoriteIDs: [String] = [] {
+        didSet {
+            defaults.set(functionPanelFavoriteIDs, forKey: Keys.functionPanelFavoriteIDs)
         }
     }
 
@@ -1114,6 +1122,10 @@ final class AppSettings: ObservableObject {
         } else {
             buttonRapidPressEnabled = [:]
         }
+
+        functionPanelFavoriteIDs = defaults.stringArray(
+            forKey: Keys.functionPanelFavoriteIDs
+        ) ?? []
 
         if let decoded = Self.decodeSetting(
             [String: [String: ConfiguredButtonAction]].self,

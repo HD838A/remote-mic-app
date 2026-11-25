@@ -447,6 +447,7 @@ private enum MappingActionFilter: String, CaseIterable, Identifiable {
     case custom
     case combinations
     case commonPhrases
+    case panels
     case applications
     case hold
     case buttonSpeed
@@ -462,6 +463,7 @@ private enum MappingActionFilter: String, CaseIterable, Identifiable {
         case .custom: self = .custom
         case .combinations: self = .combinations
         case .commonPhrases: self = .commonPhrases
+        case .panels: self = .panels
         case .applications: self = .applications
         }
     }
@@ -473,7 +475,7 @@ private enum MappingActionFilter: String, CaseIterable, Identifiable {
         if macroFeatureVisible {
             cases.append(.combinations)
         }
-        cases.append(contentsOf: [.commonPhrases, .applications, .hold, .buttonSpeed])
+        cases.append(contentsOf: [.commonPhrases, .panels, .applications, .hold, .buttonSpeed])
         return cases
     }
 
@@ -488,6 +490,7 @@ private enum MappingActionFilter: String, CaseIterable, Identifiable {
         case .custom: return "button_mapping.action_filter.custom"
         case .combinations: return "button_mapping.action_filter.combinations"
         case .commonPhrases: return "button_mapping.action_filter.common_phrases"
+        case .panels: return "button_mapping.action_filter.panels"
         case .applications: return "button_mapping.action_filter.applications"
         case .hold: return "button_mapping.action_filter.hold"
         case .buttonSpeed: return "button_mapping.action_filter.button_speed"
@@ -513,6 +516,8 @@ private enum MappingActionFilter: String, CaseIterable, Identifiable {
             return category == .combinations
         case .commonPhrases:
             return category == .commonPhrases
+        case .panels:
+            return category == .panels
         case .applications:
             return category == .applications
         }
@@ -657,6 +662,7 @@ struct SettingsView: View {
     @State private var mappingContentIsScrolled = false
     @State private var mappingEditorScrollRequest = 0
     @State private var mappingActionFilter: MappingActionFilter = .all
+    @State private var isFunctionPanelFavoritesPresented = false
     @State private var shortcutEditorNavigationID = UUID()
     /// 点胶囊后请求把内容区滚到视口顶部。
     @State private var mappingFilterScrollRequest = 0
@@ -714,6 +720,7 @@ struct SettingsView: View {
         initialMappingSaveScenario: String? = nil,
         initialShortcutPickerShowsKeyboard: Bool = false,
         initialMappingActionFilter: String? = nil,
+        initialFunctionPanelFavoritesPresented: Bool = false,
         initialMappingScrollsToGestureTiming: Bool = false,
         initialMappingVoiceSettingsPresented: Bool = false,
         supplementalSettings: SupplementalSettingsIntegration? = nil,
@@ -764,6 +771,9 @@ struct SettingsView: View {
         self.minimumContentSize = minimumContentSize
         _mappingActionFilter = State(
             initialValue: initialMappingActionFilter.flatMap(MappingActionFilter.init(rawValue:)) ?? .all
+        )
+        _isFunctionPanelFavoritesPresented = State(
+            initialValue: initialFunctionPanelFavoritesPresented
         )
         self.initialShortcutPickerShowsKeyboard = initialShortcutPickerShowsKeyboard
         self.initialMappingScrollsToGestureTiming = initialMappingScrollsToGestureTiming
@@ -902,6 +912,13 @@ struct SettingsView: View {
         }
         .sheet(isPresented: $isWebRemoteSessionPresented) {
             webRemoteSessionView
+        }
+        .sheet(isPresented: $isFunctionPanelFavoritesPresented) {
+            FunctionPanelFavoritesView(
+                model: model,
+                settings: settings,
+                localization: localization
+            )
         }
         .alert(
             localization.text("connection.trusted_devices.clear_confirm.title"),
@@ -5141,7 +5158,9 @@ struct SettingsView: View {
         isManagedPowerAction: Bool,
         onSelect: @escaping (ButtonAction) -> Void
     ) -> some View {
-        let gridActions = actions.filter { $0 != .openCommonPhrases && $0 != .focusInput }
+        let gridActions = actions.filter {
+            $0 != .openCommonPhrases && $0 != .openFunctionPanel && $0 != .focusInput
+        }
         return VStack(alignment: .leading, spacing: 8) {
             if !gridActions.isEmpty {
                 LazyVGrid(
@@ -5178,6 +5197,13 @@ struct SettingsView: View {
             }
             if actions.contains(.openCommonPhrases) {
                 commonPhrasesActionControls(
+                    selectedAction: selectedAction,
+                    isManagedPowerAction: isManagedPowerAction,
+                    onSelect: onSelect
+                )
+            }
+            if actions.contains(.openFunctionPanel) {
+                functionPanelActionControls(
                     selectedAction: selectedAction,
                     isManagedPowerAction: isManagedPowerAction,
                     onSelect: onSelect
@@ -5295,6 +5321,56 @@ struct SettingsView: View {
             .accessibilityIdentifier("common-phrases-example")
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// 功能面板只有一个入口，收藏由独立弹层管理；它不进入普通动作网格。
+    private func functionPanelActionControls(
+        selectedAction: ButtonAction,
+        isManagedPowerAction: Bool,
+        onSelect: @escaping (ButtonAction) -> Void
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .center, spacing: 8) {
+                Button {
+                    onSelect(.openFunctionPanel)
+                } label: {
+                    mappingActionLabel(
+                        title: localization.text("action.open_function_panel"),
+                        isSelected: selectedAction == .openFunctionPanel,
+                        systemImage: selectedAction == .openFunctionPanel
+                            ? "checkmark.circle.fill"
+                            : "circle"
+                    )
+                    .fixedSize(horizontal: true, vertical: false)
+                }
+                .buttonStyle(.plain)
+                .disabled(isManagedPowerAction)
+                .accessibilityIdentifier("function-panel-open")
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            HStack(alignment: .center, spacing: 8) {
+                Text("function_panel.mapping_help")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Spacer(minLength: 4)
+
+                Button {
+                    isFunctionPanelFavoritesPresented = true
+                } label: {
+                    Label(
+                        localization.text("function_panel.manage_favorites"),
+                        systemImage: "star"
+                    )
+                    .font(.system(size: 12, weight: .medium))
+                }
+                .compatibilityButtonStyle(.standard)
+                .accessibilityIdentifier("function-panel-manage-favorites")
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
     }
 
     private func mappingActionLabel(
@@ -6771,6 +6847,7 @@ struct SettingsView: View {
         if action.presetApplication != nil { return "app" }
         switch action {
         case .openCommonPhrases: return "text.quote"
+        case .openFunctionPanel: return "rectangle.3.group"
         case .focusInput: return "scope"
         case .showDesktop: return "macwindow"
         case .appSwitcher: return "command"
@@ -9423,5 +9500,190 @@ enum CorruptedSettingsNotice {
         guard !itemKeys.isEmpty else { return nil }
         let list = itemKeys.map(localize).joined(separator: localize(separatorKey))
         return String(format: localize(summaryKey), list)
+    }
+}
+
+/// 收藏编辑器只改一份草稿，取消不会触碰面板运行时的收藏。
+/// 分组顺序直接复用面板目录，保存后收藏顺序与列表顺序一致。
+private struct FunctionPanelFavoritesView: View {
+    @ObservedObject var model: BridgeAppModel
+    @ObservedObject var localization: LocalizationStore
+    @Environment(\.dismiss) private var dismiss
+    @State private var selection: Set<String>
+    @State private var searchText = ""
+
+    init(
+        model: BridgeAppModel,
+        settings: AppSettings,
+        localization: LocalizationStore
+    ) {
+        self.model = model
+        self.localization = localization
+        _selection = State(initialValue: Set(settings.functionPanelFavoriteIDs))
+    }
+
+    var body: some View {
+        let sections = filteredSections(model.functionPanelFavoriteSections())
+        VStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: 5) {
+                Text(localization.text("function_panel.favorites.title"))
+                    .font(.system(size: 17, weight: .semibold))
+                Text(localization.text("function_panel.favorites.subtitle"))
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(String(
+                    format: localization.text("function_panel.favorites.count"),
+                    "\(selection.count)"
+                ))
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 20)
+            .padding(.top, 18)
+            .padding(.bottom, 12)
+
+            Divider()
+
+            HStack(spacing: 6) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(.secondary)
+                TextField(
+                    localization.text("function_panel.favorites.search"),
+                    text: $searchText
+                )
+                .textFieldStyle(.plain)
+                .font(.system(size: 13))
+                if !searchText.isEmpty {
+                    Button {
+                        searchText = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(Text(localization.text("common.action.cancel")))
+                }
+            }
+            .padding(.horizontal, 10)
+            .frame(height: 30)
+            .background(
+                Color(nsColor: .textBackgroundColor),
+                in: RoundedRectangle(cornerRadius: 7)
+            )
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
+
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 18) {
+                    ForEach(sections) { section in
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(section.title)
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(.secondary)
+                            ForEach(section.entries) { entry in
+                                favoriteRow(entry)
+                            }
+                        }
+                    }
+                    if sections.isEmpty {
+                        Text(localization.text("function_panel.favorites.empty"))
+                            .font(.system(size: 13))
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, minHeight: 120)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 16)
+            }
+
+            Divider()
+
+            HStack(spacing: 10) {
+                Spacer(minLength: 8)
+                Button(localization.text("common.action.cancel")) {
+                    dismiss()
+                }
+                .keyboardShortcut(.cancelAction)
+                Button(localization.text("common.action.save")) {
+                    model.saveFunctionPanelFavoriteIDs(selection)
+                    dismiss()
+                }
+                .keyboardShortcut(.defaultAction)
+                .buttonStyle(.borderedProminent)
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 14)
+        }
+        .frame(width: 620, height: 560)
+        .background(Color(nsColor: .windowBackgroundColor))
+        .accessibilityIdentifier("function-panel-favorites-sheet")
+    }
+
+    private func favoriteRow(_ entry: FunctionPanelCatalogEntry) -> some View {
+        let isSelected = selection.contains(entry.id)
+        return Button {
+            if isSelected {
+                selection.remove(entry.id)
+            } else {
+                selection.insert(entry.id)
+            }
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: entry.systemImage)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(isSelected ? Color.accentColor : .secondary)
+                    .frame(width: 20)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(entry.title)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(.primary)
+                    if let detail = entry.detail {
+                        Text(detail)
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Spacer(minLength: 8)
+                Image(systemName: isSelected ? "star.fill" : "star")
+                    .font(.system(size: 13))
+                    .foregroundStyle(isSelected ? Color.accentColor : .secondary)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .background(
+                isSelected ? Color.accentColor.opacity(0.08) : Color.clear,
+                in: RoundedRectangle(cornerRadius: 7)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(localization.text(
+            isSelected ? "function_panel.favorites.remove" : "function_panel.favorites.add"
+        ))
+        .accessibilityLabel(Text(entry.title))
+        .accessibilityValue(Text(localization.text(
+            isSelected ? "function_panel.favorites.remove" : "function_panel.favorites.add"
+        )))
+    }
+
+    private func filteredSections(
+        _ sections: [FunctionPanelCatalogSection]
+    ) -> [FunctionPanelCatalogSection] {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return sections }
+        return sections.compactMap { section in
+            let sectionMatches = section.title.localizedCaseInsensitiveContains(query)
+            let entries = section.entries.filter {
+                sectionMatches || $0.title.localizedCaseInsensitiveContains(query)
+            }
+            guard !entries.isEmpty else { return nil }
+            return FunctionPanelCatalogSection(
+                id: section.id,
+                title: section.title,
+                entries: entries
+            )
+        }
     }
 }

@@ -280,9 +280,11 @@
 "button_mapping.action_filter.applications" = "App";
 "button_mapping.action_filter.hold" = "Hold";
 "button_mapping.action_filter.button_speed" = "Speed";
+"button_mapping.action_filter.panels" = "Panels";
 "button_mapping.action_group.basic_keys" = "Basic Keys";
 "button_mapping.action_group.system_and_media" = "System & Media";
 "button_mapping.action_group.custom" = "Input Focus";
+"button_mapping.action_group.panels" = "Panels";
 "button_mapping.action_group.applications" = "Open an App";
 "button_mapping.action.disable_switch" = "Disable This Action";
 "button_mapping.focus_input.app_adaptation_hint.prefix" = "To learn a specific app's input field, go to the";
@@ -1314,9 +1316,33 @@
 
 /* Common phrases */
 "action.open_common_phrases" = "Open Common Phrases";
+"action.open_function_panel" = "Open Function Panel";
 "common_phrases.title" = "Common Phrases";
 "common_phrases.adjust" = "Edit Common Phrases";
 "common_phrases.example" = "Common Phrases Example";
+
+/* Function panel */
+"function_panel.title" = "Function Panel";
+"function_panel.empty" = "No functions available";
+"function_panel.manage_favorites" = "Manage Favorites";
+"function_panel.mapping_help" = "When the panel is open, press Left/Right to choose and OK to run.";
+"function_panel.unavailable.accessibility" = "Requires Accessibility";
+"function_panel.unavailable.focus_input" = "Requires Accessibility";
+"function_panel.unavailable.input_monitoring" = "Requires Input Monitoring";
+"function_panel.unavailable.app_missing" = "App not installed";
+"function_panel.unavailable.app_not_set" = "No target app set";
+"function_panel.unavailable.macro_deleted" = "Combination was deleted";
+"function_panel.unavailable.macro_unavailable" = "Unavailable now";
+"function_panel.unavailable.shortcut_missing" = "Shortcut not set";
+"function_panel.unavailable.membership" = "Requires membership";
+"function_panel.unavailable.disabled" = "Unavailable now";
+"function_panel.favorites.title" = "Manage Favorites";
+"function_panel.favorites.subtitle" = "Starred functions appear in the Favorites group of the function panel.";
+"function_panel.favorites.search" = "Search functions";
+"function_panel.favorites.count" = "%@ favorites";
+"function_panel.favorites.add" = "Add to favorites";
+"function_panel.favorites.remove" = "Remove from favorites";
+"function_panel.favorites.empty" = "No functions to favorite";
 "membership.badge" = "Member";
 "common_phrases.return_to_buttons" = "Back";
 "common_phrases.library" = "Phrase Library";

@@ -768,6 +768,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         Bool
     ) -> Bool
     private let customApplicationURLResolver: (String) -> URL?
+    @MainActor private(set) lazy var functionPanel = FunctionPanelController()
     private var recordingPlayback: AVAudioPlayer?
 
     func isOnboardingControlSourceConnected(_ source: OnboardingControlSource) -> Bool {
@@ -2483,6 +2484,9 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     /// voice link is down, spend one assisted attempt instead of silently
     /// ignoring the key. The HID event itself is never consumed here.
     private func handleHIDVoiceUsageDown(profileID: UUID?) {
+        MainActor.assumeIsolated {
+            functionPanel.close(reason: "voice_key")
+        }
         guard started,
               let profileID,
               profileID == settings.selectedRemoteProfileID
@@ -4662,13 +4666,22 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             )
         }
         monitor.claimsRuntimeButton = { [weak self] profileID, button in
-            self?.claimsButtonGestureLearning(profileID: profileID) == true ||
+            if MainActor.assumeIsolated({ self?.functionPanel.isPresented == true }) {
+                return true
+            }
+            return self?.claimsButtonGestureLearning(profileID: profileID) == true ||
             self?.membershipFeature.claimsCommonPhrase(
                 button: button.rawValue,
                 source: Self.commonPhraseHIDSource(profileID)
             ) == true
         }
         monitor.onRuntimeButton = { [weak self] profileID, button, phase, timestampMilliseconds in
+            if let self,
+               MainActor.assumeIsolated({
+                   self.functionPanel.handle(button: button, phase: phase, source: "hid")
+               }) {
+                return true
+            }
             if self?.handleButtonGestureLearning(
                 phase,
                 button: button,
@@ -4794,10 +4807,14 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
                     !holdConfiguredActionForPendingIdentity
             )
         }
-        monitor.onInternalAction = { [weak self] profileID, action in
+        monitor.onInternalAction = { [weak self] profileID, action, button in
             guard let self else { return }
             if let profileID { self.selectRemoteProfile(profileID) }
-            self.performInternalAction(action, source: Self.commonPhraseHIDSource(profileID))
+            self.performInternalAction(
+                action,
+                source: Self.commonPhraseHIDSource(profileID),
+                openingButton: button
+            )
         }
         return monitor
     }
@@ -5836,6 +5853,11 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         isConnected = bluetoothIsReady
             || !connectedAppleRemoteProfileIDs.isEmpty
             || !connectedChromecastProfileIDs.isEmpty
+        if !isConnected {
+            MainActor.assumeIsolated {
+                functionPanel.close(reason: "remote_disconnected")
+            }
+        }
         if let selected = settings.selectedRemoteProfile,
            selected.model.usesPrivateAdapter,
            !connectedRemoteProfileIDs.contains(selected.id) {
@@ -6397,6 +6419,11 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         profileID: UUID,
         captured: ConfiguredButtonAction? = nil
     ) -> Bool {
+        if MainActor.assumeIsolated({
+            functionPanel.handle(button: button, trigger: trigger, source: "apple")
+        }) {
+            return true
+        }
         if performButtonProfileBoundAction(
             profileID: profileID,
             button: button,
@@ -6423,7 +6450,11 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         }
         let handled: Bool
         if configured.action.isAppInternal {
-            handled = performInternalAction(configured.action, source: "apple:\(profileID.uuidString)")
+            handled = performInternalAction(
+                configured.action,
+                source: "apple:\(profileID.uuidString)",
+                openingButton: button
+            )
         } else {
             guard KeyboardInjector.isAccessibilityTrusted else {
                 _ = KeyboardInjector.requestAccessibilityAccess()
@@ -9103,6 +9134,11 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         source: UsageEventSource,
         phraseSource: String? = nil
     ) -> Bool {
+        if MainActor.assumeIsolated({
+            functionPanel.handle(button: button, trigger: trigger, source: "mobile")
+        }) {
+            return true
+        }
         if performButtonProfileBoundAction(
             profileID: settings.selectedRemoteProfileID,
             button: button,
@@ -9117,7 +9153,11 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         }
         let configured = settings.configuredAction(for: button, trigger: trigger)
         if configured.action.isAppInternal {
-            let handled = performInternalAction(configured.action, source: phraseSource ?? "mobile:\(source.rawValue)")
+            let handled = performInternalAction(
+                configured.action,
+                source: phraseSource ?? "mobile:\(source.rawValue)",
+                openingButton: button
+            )
             if handled {
                 settings.recordButtonPress(control: .remoteButton(button), source: source)
             }
@@ -9379,10 +9419,22 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     }
 
     @discardableResult
-    private func performInternalAction(_ action: ButtonAction, source: String = "host_action") -> Bool {
+    private func performInternalAction(
+        _ action: ButtonAction,
+        source: String = "host_action",
+        openingButton: RemoteButton? = nil
+    ) -> Bool {
         if action == .openCommonPhrases {
             cancelPendingCommonPhraseButtonActions()
+            MainActor.assumeIsolated {
+                functionPanel.close(reason: "common_phrases_opened")
+            }
             return membershipFeature.openCommonPhrases(source: source)
+        }
+        if action == .openFunctionPanel {
+            return MainActor.assumeIsolated {
+                openFunctionPanel(source: source, openingButton: openingButton)
+            }
         }
         guard action == .toggleLongRecording else { return false }
         guard action.isEnabled(
@@ -9392,6 +9444,182 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             return false
         }
         return toggleLongRecording()
+    }
+
+    @MainActor
+    private func openFunctionPanel(source: String, openingButton: RemoteButton?) -> Bool {
+        let sourceKind = functionPanelLogSource(source)
+        guard !isStreaming,
+              !bluetoothVoiceActive,
+              activeMobileVoiceSource == nil,
+              !longRecordingRequested else {
+            AppLogger.shared.write(
+                "FUNCTION PANEL ignored reason=voice_active source=\(sourceKind)"
+            )
+            return false
+        }
+        membershipFeature.closeCommonPhrases(reason: "function_panel_open")
+        let localization = LocalizationStore(settings: settings)
+        let macros = functionPanelMacros()
+        let text = functionPanelText(localization: localization)
+        let availability = functionPanelAvailability()
+        let items = FunctionPanelCatalog.items(
+            favoriteIDs: settings.functionPanelFavoriteIDs,
+            configuredActions: functionPanelConfiguredActions(),
+            macros: macros,
+            text: text,
+            availability: availability
+        )
+        functionPanel.present(
+            items: items,
+            emptyText: localization.text("function_panel.empty"),
+            panelTitle: localization.text("function_panel.title"),
+            openButton: openingButton,
+            execute: { [weak self] item in
+                self?.executeFunctionPanelItem(item) ?? false
+            },
+            showUnavailable: { [weak self] reason in
+                self?.showFunctionPanelUnavailable(reason)
+            }
+        )
+        AppLogger.shared.write(
+            "FUNCTION PANEL phase=present source=\(sourceKind) items=\(items.count)"
+        )
+        return true
+    }
+
+    private func functionPanelLogSource(_ source: String) -> String {
+        guard let separator = source.firstIndex(of: ":") else { return source }
+        return String(source[..<separator])
+    }
+
+    @MainActor
+    private func functionPanelMacros() -> [FunctionPanelMacro] {
+        macroFeature.libraryActions.map {
+            FunctionPanelMacro(id: $0.id, name: $0.name, stepCount: $0.stepCount)
+        }
+    }
+
+    @MainActor
+    private func functionPanelText(localization: LocalizationStore) -> FunctionPanelText {
+        FunctionPanelText(
+            actionTitle: { action in
+                action == .openCommonPhrases
+                    ? localization.text("common_phrases.title")
+                    : action.displayName(using: localization)
+            },
+            macroTitle: { $0 },
+            configuredTitle: { configured in
+                switch configured.action {
+                case .combinationAction:
+                    if let id = configured.macroID,
+                       let macro = self.macroFeature.libraryActions.first(where: { $0.id == id }) {
+                        return macro.name
+                    }
+                    return localization.text("button_mapping.action_group.combinations")
+                case .openCommonPhrases:
+                    return localization.text("common_phrases.title")
+                case .openCustomApplication:
+                    return self.settings.customApplicationProfile(
+                        id: configured.applicationProfileID
+                    )?.displayName ?? configured.action.displayName(using: localization)
+                default:
+                    return configured.action.displayName(using: localization)
+                }
+            },
+            categoryTitle: { localization.text($0.localizationKey) },
+            combinationTitle: localization.text("button_mapping.action_group.combinations"),
+            commonPhrasesTitle: localization.text("common_phrases.title"),
+            macroStepCount: {
+                String(format: localization.text("button_mapping.macro_step_count"), $0)
+            },
+            reasonText: { localization.text($0) }
+        )
+    }
+
+    @MainActor
+    private func functionPanelAvailability() -> FunctionPanelAvailability {
+        FunctionPanelAvailability(
+            accessibilityTrusted: KeyboardInjector.isAccessibilityTrusted,
+            membershipAvailable: membershipFeature.canUseCommonPhrases,
+            experimentalRecordingEnabled: settings.experimentalContinuousRecordingEnabled,
+            installedBundleIdentifiers: PresetApplication.installedBundleIdentifiers,
+            customApplicationExists: {
+                self.settings.customApplicationProfile(id: $0) != nil
+            },
+            customApplicationInstalled: { id in
+                guard let profile = self.settings.customApplicationProfile(id: id) else {
+                    return false
+                }
+                return self.customApplicationURLResolver(profile.bundleIdentifier) != nil
+            },
+            macroAvailable: { id in
+                self.macroFeature.libraryActions.contains(where: { $0.id == id })
+            },
+            macroFeatureVisible: macroFeature.isFeatureVisible
+        )
+    }
+
+    /// The settings sheet and the running panel share one catalog so a function
+    /// cannot be favoritable in settings and missing from the panel.
+    @MainActor
+    func functionPanelFavoriteSections() -> [FunctionPanelCatalogSection] {
+        let localization = LocalizationStore(settings: settings)
+        return FunctionPanelCatalog.favoriteSections(
+            macros: functionPanelMacros(),
+            text: functionPanelText(localization: localization),
+            availability: functionPanelAvailability()
+        )
+    }
+
+    @MainActor
+    func saveFunctionPanelFavoriteIDs(_ ids: Set<String>) {
+        let ordered = FunctionPanelCatalog.orderedFavoriteIDs(
+            from: ids,
+            sections: functionPanelFavoriteSections()
+        )
+        guard ordered != settings.functionPanelFavoriteIDs else { return }
+        settings.functionPanelFavoriteIDs = ordered
+        AppLogger.shared.write(
+            "FUNCTION PANEL FAVORITES phase=saved count=\(ordered.count)"
+        )
+    }
+
+    private func functionPanelConfiguredActions() -> [ConfiguredButtonAction] {
+        var result: [ConfiguredButtonAction] = []
+        var seen = Set<String>()
+        for button in RemoteButton.allCases {
+            for trigger in ButtonTrigger.allCases {
+                let configured = settings.configuredAction(for: button, trigger: trigger)
+                guard configured.action != .disabled,
+                      configured.action != .openFunctionPanel else { continue }
+                let id = FunctionPanelCatalog.id(for: configured)
+                guard seen.insert(id).inserted else { continue }
+                result.append(configured)
+            }
+        }
+        return result
+    }
+
+    @MainActor
+    private func executeFunctionPanelItem(_ item: FunctionPanelItem) -> Bool {
+        let configured = item.configuredAction
+        if configured.action.isAppInternal {
+            return performInternalAction(configured.action, source: "function_panel")
+        }
+        return performExternalConfiguredAction(configured)
+    }
+
+    @MainActor
+    private func showFunctionPanelUnavailable(_ reason: String) {
+        let localization = LocalizationStore(settings: settings)
+        NoticeCenter.shared.show(Notice(
+            tier: .warning,
+            title: localization.text("function_panel.unavailable.title"),
+            text: reason,
+            dismissal: .automatic(2.5),
+            position: .bottom
+        ))
     }
 
     private func toggleLongRecording() -> Bool {
@@ -10392,6 +10620,9 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     }
 
     private func beginVoiceSessionIfNeeded(audioDiagnosticOperationID: UInt64? = nil) {
+        MainActor.assumeIsolated {
+            functionPanel.close(reason: "voice_start")
+        }
         guard !isStreaming else { return }
         privateFeature.startVoiceSession()
         cancelTestToneIfNeeded(
@@ -11521,6 +11752,11 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         profileID: UUID,
         captured: ConfiguredButtonAction? = nil
     ) -> Bool {
+        if MainActor.assumeIsolated({
+            functionPanel.handle(button: button, trigger: trigger, source: "chromecast")
+        }) {
+            return true
+        }
         if performButtonProfileBoundAction(
             profileID: profileID,
             button: button,
@@ -11535,7 +11771,11 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         }
         let configured = captured ?? settings.configuredAction(for: button, trigger: trigger, profileID: profileID)
         if configured.action.isAppInternal {
-            let handled = performInternalAction(configured.action, source: "chromecast:\(profileID.uuidString)")
+            let handled = performInternalAction(
+                configured.action,
+                source: "chromecast:\(profileID.uuidString)",
+                openingButton: button
+            )
             AppLogger.shared.write(
                 "CHROMECAST ACTION button=\(button.rawValue) trigger=\(trigger.rawValue) " +
                     "action=\(configured.action.rawValue) handled=\(handled)"

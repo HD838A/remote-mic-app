@@ -280,9 +280,11 @@
 "button_mapping.action_filter.applications" = "打开 App";
 "button_mapping.action_filter.hold" = "按住";
 "button_mapping.action_filter.button_speed" = "按键速度";
+"button_mapping.action_filter.panels" = "面板";
 "button_mapping.action_group.basic_keys" = "基础按键";
 "button_mapping.action_group.system_and_media" = "系统与媒体";
 "button_mapping.action_group.custom" = "输入框";
+"button_mapping.action_group.panels" = "面板";
 "button_mapping.action_group.applications" = "打开 App";
 "button_mapping.action.disable_switch" = "停用此动作";
 "button_mapping.focus_input.app_adaptation_hint.prefix" = "学习指定 App 的输入框请去";
@@ -1313,10 +1315,34 @@
 
 /* Common phrases */
 "action.open_common_phrases" = "打开常用语";
+"action.open_function_panel" = "打开功能面板";
 "common_phrases.title" = "常用语";
 "common_phrases.adjust" = "调整常用语";
 "common_phrases.example" = "常用语示例";
 "membership.badge" = "会员";
+
+/* Function panel */
+"function_panel.title" = "功能面板";
+"function_panel.empty" = "没有可用的功能";
+"function_panel.manage_favorites" = "管理收藏";
+"function_panel.mapping_help" = "面板打开后，用左右键选择，按 OK 执行。";
+"function_panel.unavailable.accessibility" = "需要辅助功能权限";
+"function_panel.unavailable.focus_input" = "需要辅助功能权限";
+"function_panel.unavailable.input_monitoring" = "需要输入监控权限";
+"function_panel.unavailable.app_missing" = "未安装该 App";
+"function_panel.unavailable.app_not_set" = "未设置目标 App";
+"function_panel.unavailable.macro_deleted" = "组合动作已删除";
+"function_panel.unavailable.macro_unavailable" = "暂不可用";
+"function_panel.unavailable.shortcut_missing" = "未设置快捷键";
+"function_panel.unavailable.membership" = "需要会员";
+"function_panel.unavailable.disabled" = "暂不可用";
+"function_panel.favorites.title" = "管理收藏";
+"function_panel.favorites.subtitle" = "星标的功能显示在功能面板的收藏分组。";
+"function_panel.favorites.search" = "搜索功能";
+"function_panel.favorites.count" = "已收藏 %@ 项";
+"function_panel.favorites.add" = "收藏";
+"function_panel.favorites.remove" = "取消收藏";
+"function_panel.favorites.empty" = "没有可收藏的功能";
 "common_phrases.return_to_buttons" = "返回";
 "common_phrases.library" = "常用语库";
 "common_phrases.editor" = "编辑内容";

@@ -904,6 +904,7 @@ enum ButtonActionCategory: String, CaseIterable, Identifiable {
     /// 不是动作网格里的一项，因此不参与 `ButtonAction` 的逐个列举。
     case combinations
     case commonPhrases
+    case panels
     case applications
 
     var id: String { rawValue }
@@ -916,6 +917,7 @@ enum ButtonActionCategory: String, CaseIterable, Identifiable {
         case .custom: return "button_mapping.action_group.custom"
         case .combinations: return "action.combination_action"
         case .commonPhrases: return "common_phrases.title"
+        case .panels: return "button_mapping.action_group.panels"
         case .applications: return "button_mapping.action_group.applications"
         }
     }
@@ -989,6 +991,7 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
     case openCustomApplication
     case toggleLongRecording
     case openCommonPhrases
+    case openFunctionPanel
     case openRemoteMic
     case openCodex
     case openWorkBuddy
@@ -1066,6 +1069,7 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
         case .focusInput: return localization.text("action.focus_input")
         case .openCustomApplication: return localization.text("action.open_custom_application")
         case .openCommonPhrases: return localization.text("action.open_common_phrases")
+        case .openFunctionPanel: return localization.text("action.open_function_panel")
         case .toggleLongRecording: return localization.text("action.toggle_long_recording")
         case .openRemoteMic: return localization.text("action.open_remote_mic")
         case .openCodex: return localization.text("action.open_codex")
@@ -1252,6 +1256,8 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
             return .combinations
         case .openCommonPhrases:
             return .commonPhrases
+        case .openFunctionPanel:
+            return .panels
         case .openCustomApplication:
             return .applications
         case .openRemoteMic, .openCodex, .openWorkBuddy, .openClaude, .openCmux, .openWeChat, .openCursor,
@@ -1317,7 +1323,7 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
     }
 
     var isAppInternal: Bool {
-        self == .toggleLongRecording || self == .openCommonPhrases
+        self == .toggleLongRecording || self == .openCommonPhrases || self == .openFunctionPanel
     }
 
     func isEnabled(experimentalContinuousRecordingEnabled: Bool) -> Bool {
