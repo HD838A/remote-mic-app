@@ -142,10 +142,13 @@ struct NoticeBubble: View {
     let tier: NoticeTier
     let title: String
     var text: String?
+    var context: String? = nil
     var action: NoticeAction?
+    var secondaryAction: NoticeAction? = nil
     var tail: NoticeTail?
     var onClose: (() -> Void)?
     var accessibilityPrefix: String?
+    var closeAccessibilityLabel: String? = nil
 
     @Environment(\.colorScheme) private var colorScheme
 
@@ -173,6 +176,12 @@ struct NoticeBubble: View {
         NoticeBubbleWidthLayout(maxWidth: 400) {
             VStack(alignment: .leading, spacing: 5) {
                 titleRow
+                if let context, !context.isEmpty {
+                    Text(context)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(bodyColor)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 if let text, !text.isEmpty {
                     Text(text)
                         .font(.system(size: 13.5))
@@ -180,9 +189,16 @@ struct NoticeBubble: View {
                         .foregroundStyle(bodyColor)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                if let action {
-                    actionButton(action)
-                        .padding(.top, 6)
+                if action != nil || secondaryAction != nil {
+                    HStack(spacing: 14) {
+                        if let action {
+                            actionButton(action)
+                        }
+                        if let secondaryAction {
+                            secondaryActionButton(secondaryAction)
+                        }
+                    }
+                    .padding(.top, 6)
                 }
             }
             .padding(.leading, 18)
@@ -241,6 +257,20 @@ struct NoticeBubble: View {
         .buttonStyle(.plain)
     }
 
+    private func secondaryActionButton(_ action: NoticeAction) -> some View {
+        Button {
+            action.perform()
+        } label: {
+            Text(action.title)
+                .font(.system(size: 12.5, weight: .medium))
+                .foregroundStyle(bodyColor)
+                .underline()
+                .padding(.vertical, 5)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
     @ViewBuilder
     private var closeButton: some View {
         if let onClose {
@@ -256,7 +286,7 @@ struct NoticeBubble: View {
             // 12pt 图标的上缘与右缘正好落在 13pt。
             .padding(.top, 7)
             .padding(.trailing, 7)
-            .accessibilityLabel(Text(noticeLocalized("notice.accessibility.dismiss")))
+            .accessibilityLabel(Text(closeAccessibilityLabel ?? noticeLocalized("notice.accessibility.dismiss")))
         }
     }
 
@@ -296,9 +326,13 @@ struct NoticeBubble: View {
     }
 
     private var accessibilityText: String {
-        let prefixKey = tier.accessibilityPrefixKey ?? accessibilityPrefix
-        let prefix = prefixKey.map { noticeLocalized($0) } ?? ""
-        let body = [title, text].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: "。")
+        let prefix = accessibilityPrefix
+            ?? tier.accessibilityPrefixKey.map { noticeLocalized($0) }
+            ?? ""
+        let body = [title, context, text]
+            .compactMap { $0 }
+            .filter { !$0.isEmpty }
+            .joined(separator: "。")
         return prefix + body
     }
 }

@@ -790,6 +790,27 @@ struct SettingsView: View {
         _isMappingVoiceSettingsPresented = State(initialValue: initialMappingVoiceSettingsPresented)
     }
 
+    private var hideAllActionFeedback: Binding<Bool> {
+        Binding(
+            get: { !settings.showActionFeedback },
+            set: { isOff in
+                settings.showActionFeedback = !isOff
+                if isOff {
+                    Task { @MainActor in
+                        ActionFeedbackCenter.shared.dismiss()
+                    }
+                }
+            }
+        )
+    }
+
+    private var hideActionSuccessFeedback: Binding<Bool> {
+        Binding(
+            get: { !settings.showActionSuccessFeedback },
+            set: { settings.showActionSuccessFeedback = !$0 }
+        )
+    }
+
     var body: some View {
         HStack(spacing: 0) {
             sidebar
@@ -7543,6 +7564,44 @@ struct SettingsView: View {
                                     .frame(maxWidth: .infinity, alignment: .trailing)
                                     .padding(.bottom, 8)
                             }
+
+                            Divider()
+
+                            HStack(spacing: 14) {
+                                Image(systemName: "bell")
+                                    .font(.title3)
+                                    .foregroundStyle(Color.accentColor)
+                                    .frame(width: 34)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(localization.text(
+                                        "settings.general.action_feedback.title"
+                                    ))
+                                    .font(.subheadline.weight(.semibold))
+                                    Text(localization.text(
+                                        "settings.general.action_feedback.help"
+                                    ))
+                                    .font(.system(size: 12))
+                                        .foregroundStyle(.secondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                                Spacer(minLength: 12)
+                                Toggle(isOn: hideAllActionFeedback) {
+                                    Text(localization.text(
+                                        "settings.general.hide_all_action_feedback"
+                                    ))
+                                    .font(.system(size: 12))
+                                }
+                                .toggleStyle(.switch)
+                                Toggle(isOn: hideActionSuccessFeedback) {
+                                    Text(localization.text(
+                                        "settings.general.hide_action_success_feedback"
+                                    ))
+                                    .font(.system(size: 12))
+                                }
+                                .toggleStyle(.switch)
+                                .disabled(!settings.showActionFeedback)
+                            }
+                            .padding(.vertical, 8)
 
                             Divider()
 

@@ -140,6 +140,16 @@ enum SettingsScreenshotRenderer {
         let settings = AppSettings(defaults: defaults)
         settings.applicationLanguage = language
         settings.completeOnboarding()
+        if let value = ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_SETTINGS_SCREENSHOT_ACTION_FEEDBACK"
+        ] {
+            settings.showActionFeedback = value != "off"
+        }
+        if let value = ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_SETTINGS_SCREENSHOT_ACTION_FEEDBACK_SUCCESS"
+        ] {
+            settings.showActionSuccessFeedback = value != "off"
+        }
         if let modelName = ProcessInfo.processInfo.environment[
             "REMOTE_MIC_SETTINGS_SCREENSHOT_REMOTE_MODEL"
         ], let remoteModel = XiaomiRemoteModel(rawValue: modelName) {
@@ -483,6 +493,13 @@ enum SettingsScreenshotRenderer {
             window.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
             showNoticeFixtureIfNeeded(noticeFixture, section: section, localization: localization)
+            if ProcessInfo.processInfo.environment[
+                "REMOTE_MIC_SETTINGS_SCREENSHOT_SCROLL_BOTTOM"
+            ] == "1" {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                    scrollContentToBottom(in: window)
+                }
+            }
             NSApp.run()
             return
         }
@@ -536,6 +553,12 @@ enum SettingsScreenshotRenderer {
                 }
             }
             RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+            if ProcessInfo.processInfo.environment[
+                "REMOTE_MIC_SETTINGS_SCREENSHOT_SCROLL_BOTTOM"
+            ] == "1" {
+                scrollContentToBottom(in: window)
+                RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+            }
             window.contentView?.layoutSubtreeIfNeeded()
             window.contentView?.displayIfNeeded()
 
@@ -771,6 +794,23 @@ enum SettingsScreenshotRenderer {
         case "zh-hans", "zh", "chinese": return .simplifiedChinese
         case "en", "english": return .english
         case let value: throw RenderingError.invalidLanguage(value)
+        }
+    }
+
+    private static func scrollContentToBottom(in window: NSWindow) {
+        guard let contentView = window.contentView else { return }
+        let scrollViews = descendants(of: contentView).compactMap { $0 as? NSScrollView }
+        guard let scrollView = scrollViews.max(by: { $0.frame.width < $1.frame.width }),
+              let documentView = scrollView.documentView
+        else { return }
+        let maximumY = max(0, documentView.frame.height - scrollView.contentView.bounds.height)
+        scrollView.contentView.scroll(to: NSPoint(x: 0, y: maximumY))
+        scrollView.reflectScrolledClipView(scrollView.contentView)
+    }
+
+    private static func descendants(of view: NSView) -> [NSView] {
+        view.subviews.reduce(into: view.subviews) { result, child in
+            result.append(contentsOf: descendants(of: child))
         }
     }
 }

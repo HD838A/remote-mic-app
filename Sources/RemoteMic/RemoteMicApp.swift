@@ -122,6 +122,19 @@ enum RemoteMicApp {
             exit(AgentConfigurationCommand.run(arguments: arguments))
         }
         if let screenshotDirectory = ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_ACTION_FEEDBACK_SCREENSHOT_DIR"
+        ] {
+            do {
+                try ActionFeedbackScreenshotRenderer.renderAll(
+                    to: URL(fileURLWithPath: screenshotDirectory, isDirectory: true)
+                )
+            } catch {
+                fputs("Action feedback screenshot rendering failed: \(error)\n", stderr)
+                exit(EXIT_FAILURE)
+            }
+            return
+        }
+        if let screenshotDirectory = ProcessInfo.processInfo.environment[
             "REMOTE_MIC_SETTINGS_SCREENSHOT_DIR"
         ] {
             do {
@@ -266,6 +279,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
     /// 因此这里必须保存最新引用，供 `validateMenuItem` 判断。
     private var findMenuItem: NSMenuItem?
     private let settingsNavigation = SettingsNavigationStore()
+    private let actionFeedbackWindow = ActionFeedbackWindowCoordinator()
     /// 「前往」菜单。`configureApplicationMenu()` 在语言切换后会重建菜单，
     /// 因此保存最新引用，供 `menuNeedsUpdate` 识别。
     private var goMenu: NSMenu?
@@ -311,6 +325,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         configureUpdater()
         installTerminationSignalHandlers()
         configureApplicationMenu()
+        configureActionFeedback()
         installApplicationKeyboardShortcuts()
         applyStatusBarIconVisibility(
             model.settings.showStatusBarIcon,
@@ -392,6 +407,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
         )
         model.privateFeature.hideHUDImmediately()
         model.stop()
+        actionFeedbackWindow.stop()
         FnKeyDiagnostics.logSnapshot(
             source: "terminate_end",
             voiceKeyMode: model.settings.voiceKeyMode.rawValue,
@@ -1203,6 +1219,60 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
 
     @objc private func showSettingsFromStatusMenu() {
         showSettingsWindow()
+    }
+
+    private func configureActionFeedback() {
+        ActionFeedbackCenter.shared.configureStandardActions(
+            openSystemSettings: {
+                guard let url = URL(
+                    string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
+                ) else { return }
+                NSWorkspace.shared.open(url)
+            },
+            reselectAction: { [weak self] in
+                self?.showSettingsWindow(initialSection: .mapping)
+            }
+        )
+        actionFeedbackWindow.start()
+        showActionFeedbackPreviewIfRequested()
+    }
+
+    private func showActionFeedbackPreviewIfRequested() {
+        guard let preview = ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_ACTION_FEEDBACK_PREVIEW"
+        ], preview == "success" || preview == "failure" else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+            guard let self else { return }
+            let localization = LocalizationStore(
+                settings: model.settings,
+                resourceBundle: RemoteMicResourceBundle.mainOrDevelopment
+            )
+            let strings = ActionFeedbackStrings(localization: localization)
+            let event: ActionFeedbackEvent
+            if preview == "success" {
+                event = ActionFeedbackEvent(
+                    operationID: "preview-success",
+                    actionID: "openWeChat",
+                    actionName: localization.text("action.open_wechat"),
+                    result: .success,
+                    elapsedMilliseconds: 96
+                )
+            } else {
+                event = ActionFeedbackEvent(
+                    operationID: "preview-failure",
+                    actionID: "combinationAction",
+                    actionName: localization.text("action.combination_action"),
+                    result: .failure(.shortcutNotDelivered),
+                    elapsedMilliseconds: 128,
+                    stepCount: 3
+                )
+            }
+            ActionFeedbackCenter.shared.record(
+                event,
+                strings: strings,
+                handlers: ActionFeedbackActionHandlers(retry: {})
+            )
+        }
     }
 
     private func showSettingsWindow(initialSection: SettingsSection? = nil) {

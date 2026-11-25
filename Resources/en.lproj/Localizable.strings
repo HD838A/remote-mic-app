@@ -1630,6 +1630,46 @@
 
 "connection.siri_remote_component.installing" = "Waiting for administrator authorization…";
 
+/* Action feedback HUD */
+"action_feedback.success.title" = "Ran “%@”";
+"action_feedback.success.repeat" = "Ran “%@” ×%@";
+"action_feedback.success.multiple" = "Ran %@ actions";
+"action_feedback.failure.title" = "“%@” didn’t run";
+"action_feedback.timeout.title" = "“%@” timed out";
+"action_feedback.timeout.context" = "Took longer than 10 seconds";
+"action_feedback.timeout.detail" = "The target app didn’t respond in time. Try again, or check whether the app is stuck.";
+"action_feedback.failure.permission_denied.context" = "Accessibility permission is missing";
+"action_feedback.failure.permission_denied.detail" = "SayAll can’t send keys to other apps. Allow access, then press the button again.";
+"action_feedback.failure.target_missing.context" = "Target app not found";
+"action_feedback.failure.target_missing.detail" = "The app may have moved or been removed. Choose the action again.";
+"action_feedback.failure.target_unavailable.context" = "Target app isn’t running";
+"action_feedback.failure.target_unavailable.detail" = "The app isn’t running or has quit. Open it, then press the button again.";
+"action_feedback.failure.shortcut_not_delivered.context" = "Shortcut wasn’t delivered";
+"action_feedback.failure.shortcut_not_delivered.detail" = "The system didn’t accept this shortcut. Check whether another app uses it, then try again.";
+"action_feedback.failure.configuration_unavailable.context" = "Action configuration is unavailable";
+"action_feedback.failure.configuration_unavailable.detail" = "The action or a dependency is missing. Choose the action again.";
+"action_feedback.failure.execution_failed.context" = "Action failed";
+"action_feedback.failure.execution_failed.detail" = "The action didn’t finish. Try again, or check whether the target app responds.";
+"action_feedback.failure.script_failed.context" = "Script failed";
+"action_feedback.failure.script_failed.detail" = "The script didn’t finish normally. Try again; its output is not saved.";
+"action_feedback.failure.unknown_result.context" = "Result is unknown";
+"action_feedback.failure.unknown_result.detail" = "The action ran, but the target didn’t return a clear result. Try again.";
+"action_feedback.failure.not_started.context" = "Action didn’t start";
+"action_feedback.failure.not_started.detail" = "The action may already be running or is currently unavailable. Try again later.";
+"action_feedback.action.open_application" = "Open App";
+"action_feedback.action.reselect" = "Choose Again";
+"action_feedback.action.copy_diagnostics" = "Copy Diagnostics";
+"action_feedback.action.copied" = "Copied";
+"action_feedback.diagnostics.note" = "No action name, shortcut, script source, input, or third-party app content is included.";
+"settings.general.action_feedback.title" = "Action result feedback";
+"settings.general.action_feedback.help" = "“Turn off all feedback” hides success and failure. “Turn off success feedback” hides success only. Actions still run and diagnostics are still recorded.";
+"settings.general.hide_all_action_feedback" = "Turn off all feedback";
+"settings.general.hide_action_success_feedback" = "Turn off success feedback";
+"action_feedback.open_application_name" = "Open %@";
+"action_feedback.step" = "Step %@";
+"action_feedback.step_of" = "Step %@ of %@";
+"action_feedback.steps" = "%@ steps";
+
 "voice_silence_notice.title" = "Still recording";
 
 "voice_silence_notice.text" = "No sound for %d seconds. Press the voice key once to stop.";
