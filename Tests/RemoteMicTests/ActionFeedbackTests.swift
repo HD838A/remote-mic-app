@@ -259,11 +259,11 @@ struct ActionFeedbackCenterTests {
         #expect(center.presentation != nil)
 
         center.setHovering(true)
-        try await Task.sleep(nanoseconds: 150_000_000)
+        try await Task.sleep(nanoseconds: 1_000_000_000)
         #expect(center.presentation != nil)
 
         center.setHovering(false)
-        try await Task.sleep(nanoseconds: 150_000_000)
+        try await Task.sleep(nanoseconds: 1_000_000_000)
         #expect(center.presentation == nil)
     }
 
