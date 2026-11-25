@@ -285,7 +285,7 @@ REMOTE_MIC_ACTION_FEEDBACK_SCREENSHOT_DIR=<目录> swift run --disable-keychain 
 
 本次本地验证记录（2026-11-25）：
 
-- 公开构建：`swift build --disable-keychain` 通过；完整测试 `1689` 个、`121` 个 suite 通过；最终改动后定向覆盖 `ActionFeedback`（20 个）、`Bridge app model action regression`（3 个）和 `Remote buttons`（202 个）通过。
+- 公开构建：`swift build --disable-keychain` 通过；合并最新 `origin/main`（含 #1210）后完整测试 `1696` 个、`122` 个 suite 通过；最终改动后定向覆盖 `ActionFeedback`（20 个）、`Bridge app model action regression`（3 个）和 `Remote buttons`（202 个）通过。
 - 私有集成构建：使用本机 `sayall-private-platform` 工作副本执行 `SAYALL_ENABLE_PRIVATE_SWIFTPM=1 ... swift build --disable-keychain` 通过；该工作副本落后 `origin/main` 且为 dirty，清单版本与私有 Tag 的一致性未核实，私有面板/组合动作路径仍属候选。本轮「关闭所有提示」改动后未重跑私有构建。
 - 真实浮层：失败面板 `412 × 178`、成功面板 `189 × 82`；日志均为 `y=103`、可见区域高 `987`，即距可见区域底部 `56pt`。成功面板 `ignores_mouse=true`，失败面板 `ignores_mouse=false`；按钮首击行为仍待真实流程验收。证据目录保存在仓库外，并随 PR 附件上传。
 - 设置页：在内容区 `1067 × 732` 的生产内容截图中滚动到「动作执行结果提示」，两个开关在同一行；打开「关闭所有提示」时「关闭成功提示」变灰；中英/浅深四组溢出截图和「关闭所有提示」打开状态见外部证据目录。该批截图为内容区离屏截图，未重新拍摄窗口 chrome；生产窗口整窗 `1067 × 760` 的几何未改。

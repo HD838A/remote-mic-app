@@ -1668,3 +1668,7 @@
 "action_feedback.step" = "第 %@ 步";
 "action_feedback.step_of" = "第 %@ 步 / 共 %@ 步";
 "action_feedback.steps" = "共 %@ 步";
+
+"voice_silence_notice.title" = "还在录音";
+
+"voice_silence_notice.text" = "已经 %d 秒没有声音。按一次语音键结束。";
