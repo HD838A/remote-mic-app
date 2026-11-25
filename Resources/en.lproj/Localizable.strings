@@ -1629,3 +1629,7 @@
 "connection.siri_remote_component.retry_detail" = "The previous installation did not finish. Retry is available; cancelling will not prompt again automatically.";
 
 "connection.siri_remote_component.installing" = "Waiting for administrator authorization…";
+
+"voice_silence_notice.title" = "Still recording";
+
+"voice_silence_notice.text" = "No sound for %d seconds. Press the voice key once to stop.";

@@ -1628,3 +1628,7 @@
 "connection.siri_remote_component.retry_detail" = "上次安装未完成。可以重试；取消后不会自动重复弹窗。";
 
 "connection.siri_remote_component.installing" = "正在等待管理员授权…";
+
+"voice_silence_notice.title" = "还在录音";
+
+"voice_silence_notice.text" = "已经 %d 秒没有声音。按一次语音键结束。";
