@@ -1160,6 +1160,13 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     private var chromecastAudioSampleCount = 0
     private var chromecastAudioEnqueueFailureCount = 0
     private var loggedChromecastInactiveAudioDrop = false
+    /// Chromecast 会话「长时间没有声音」的检测与一次性提示。
+    ///
+    /// toggle 模式下没有物理按住这个事实可依赖：用户说完忘了按第二次时，
+    /// 界面和输入法都会一直停在录音态。这里只负责让用户看见，不结束会话。
+    private var chromecastSilenceTracker = VoiceSilenceNoticeTracker()
+    private var chromecastSilenceTimer: Timer?
+    private var chromecastSilenceNotice: VoiceSilenceNoticeController?
     private var loggedChromecastAudioDevice = false
     /// 设置页展示用。私有包缺失时恒为 `.unavailable`，界面据此隐藏整块内容。
     @Published private(set) var chromecastStatus: ChromecastLinkStatus =
@@ -10936,6 +10943,53 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     /// 0.5s 覆盖中位情形：开读窗口的丢失从最坏 ~0.4s 压到 ~0.1s，代价是识别出字整体晚 0.5s。
     private static let chromecastAudioPrerollDelay: TimeInterval = 0.5
 
+    // MARK: - 静默提示
+
+    /// 会话开始时启动每秒检查。旧会话的音频时刻不能拿来判断新会话。
+    private func startChromecastSilenceMonitoring() {
+        stopChromecastSilenceMonitoring(closeNotice: true, reason: "session_restart")
+        chromecastSilenceTracker.beginSession()
+        let timer = Timer(timeInterval: 1, repeats: true) { [weak self] _ in
+            self?.checkChromecastSilence()
+        }
+        // `.common` 才能在菜单、拖拽等交互模式下继续走。
+        RunLoop.main.add(timer, forMode: .common)
+        chromecastSilenceTimer = timer
+    }
+
+    private func stopChromecastSilenceMonitoring(closeNotice: Bool, reason: String) {
+        chromecastSilenceTimer?.invalidate()
+        chromecastSilenceTimer = nil
+        chromecastSilenceTracker.endSession()
+        if closeNotice {
+            chromecastSilenceNotice?.dismiss(reason: reason)
+        }
+    }
+
+    private func checkChromecastSilence() {
+        guard chromecastVoiceActive || pendingChromecastVoiceStart else {
+            stopChromecastSilenceMonitoring(closeNotice: true, reason: "session_inactive")
+            return
+        }
+        guard chromecastSilenceTracker.consumePresentationIfDue(
+            now: ProcessInfo.processInfo.systemUptime
+        ) else { return }
+        let notice = chromecastSilenceNotice ?? {
+            let created = VoiceSilenceNoticeController { message in
+                AppLogger.shared.write(message)
+            }
+            chromecastSilenceNotice = created
+            return created
+        }()
+        notice.present(
+            title: localization.text("voice_silence_notice.title"),
+            text: String(
+                format: localization.text("voice_silence_notice.text"),
+                Int(VoiceSilenceNoticeTracker.silenceThreshold)
+            )
+        )
+    }
+
     private func beginChromecastVoice() {
         guard !macMicrophoneState.isActive else {
             AppLogger.shared.write("CHROMECAST VOICE phase=rejected reason=mac_microphone_busy")
@@ -11091,9 +11145,13 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
                 "audio_source=chromecast_microphone route=MiRemoteV_2ch " +
                 "mode=\(effectiveChromecastVoiceMode.rawValue)"
         )
+        startChromecastSilenceMonitoring()
     }
 
     private func endChromecastVoice(reason: ChromecastVoiceEndReason) {
+        // 会话一旦收尾，静默提示就没有意义了；后续若被「快速再按」续用，
+        // beginChromecastVoice 会重新开始计时。
+        stopChromecastSilenceMonitoring(closeNotice: true, reason: "session_ended")
         if pendingChromecastVoiceStart {
             pendingChromecastVoiceStopReason = reason
             if chromecastVoiceActive {
@@ -11523,6 +11581,8 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             }
             return
         }
+        // 只要真的收到过音频，后面的静默才有意义：VAD 门控下「开麦未开口」是 0 帧。
+        chromecastSilenceTracker.audioReceived(at: ProcessInfo.processInfo.systemUptime)
         if pendingChromecastVoiceStart,
            pendingChromecastVoiceAudio.appendIfWaiting(samples) {
             AppLogger.shared.write(

@@ -8,6 +8,12 @@
   - 选形态的规则：持续存在的状态用 `NoticeInline`；瞬时事件用 `NoticeBubble` + `NoticeCenter`，需要指向具体元素时用 `noticeAnchor`。
   - 视觉依据在 `Screenshots/design-drafts/unified-notice-20261110/`（本地目录，按仓库规范不入库）：`review.html` 的 04.5 与 04.7 两节，`inline-compare-20261111.html` 记录了内联条的形态取舍。
 
+- [ ] Chromecast 语音长时间静默提示
+  - 2026-11-25：`toggle` 模式没有物理按住可依赖，用户说完忘了按第二次时，界面和输入法会一直停在录音态，除了看菜单栏没有别的线索。新增 `VoiceSilenceNoticeTracker`（会话内先收到过音频、之后静默 60 秒触发一次）与 `VoiceSilenceNoticeController`（屏幕正中一次性浮窗，5 秒，不抢焦点、不挡鼠标、所有 Space 含全屏可见）。
+  - 只提示、不结束会话，也不改语音链路。之所以不用菜单栏黄/红：那两色已被小米的「即将被迫中断」占用，同一通道表达两件事会让用户误判。
+  - 设计稿在仓库外 `~/Develop/ReleaseArtifacts/SayAll-design-chromecast-silence-notice-20261125/`（屏幕正中、一次性、全屏也弹）。
+  - 待补：真实 Chromecast 遥控器按一次开始说话、静默 60 秒的实机验收与 UI 运行截图。
+
 - [ ] 状态菜单显示已连接遥控器的电量（#860）
   - 已实现。2026-11-05 使用小米蓝牙遥控器 2 Pro 实测，菜单和连接页均为 94%，连续打开两次各显示一行。未知读数、断开及多设备已由自动化覆盖，菜单外观截图待补。详见 `Testing/MenuBarVisibility.md` 用例 6。
 
