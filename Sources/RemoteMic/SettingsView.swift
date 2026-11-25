@@ -1245,7 +1245,15 @@ struct SettingsView: View {
                 aboutPage
             }
         case .mapping:
-            if settings.selectedRemoteProfile?.model.isAppleSiriRemote == true {
+            if settings.selectedRemoteProfile?.model == .t1 {
+                VStack(alignment: .leading, spacing: 10) {
+                    PageHeader(title: localization.text("button_mapping.page.title"))
+                    Text(localization.text("button_mapping.t1_voice_only"))
+                        .foregroundStyle(.secondary)
+                }
+                .padding()
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            } else if settings.selectedRemoteProfile?.model.isAppleSiriRemote == true {
                 #if SAYALL_SIRI_REMOTE_ENABLED && canImport(SayAllSiriRemote)
                 siriRemoteMappingPage
                 #else

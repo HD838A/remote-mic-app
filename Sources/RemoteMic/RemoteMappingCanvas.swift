@@ -449,6 +449,7 @@ private enum MappingRemoteImageResource {
     }()
 
     static func image(for model: XiaomiRemoteModel?) -> NSImage? {
+        guard model != .t1 else { return nil }
         let resourceName = VoiceRemoteCatalog.photoResource(for: model ?? .rc003)
             ?? "RC003-remote-photo"
         return images[resourceName]

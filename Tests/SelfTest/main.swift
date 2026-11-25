@@ -75,6 +75,57 @@ check(
     "Xiaomi voice remote matcher rejects blank, nil, and similar non-target names"
 )
 
+check(
+    BluetoothDiscoveryScanPolicy.shouldInspect(
+        identifier: UUID(), targetIdentifier: nil, knownIdentifiers: [],
+        advertisesVoiceService: false, advertisedName: "T1-Remote", peripheralName: nil
+    ) && !BluetoothDiscoveryScanPolicy.shouldInspect(
+        identifier: UUID(), targetIdentifier: nil, knownIdentifiers: [],
+        advertisesVoiceService: false, advertisedName: "T1 Television", peripheralName: nil
+    ),
+    "T1 name is an exact discovery hint without an ATVV advertisement"
+)
+
+let t1Model = Data("hid_mouse".utf8)
+let t1Manufacturer = Data("shenzhen_xingwei".utf8)
+let t1PnPID = Data([1, 0x0A, 0x62, 0x07, 0x04, 0, 0])
+check(
+    T1VoiceRemote.matchesDeviceInformation(model: t1Model, manufacturer: t1Manufacturer, pnp: t1PnPID) &&
+        !T1VoiceRemote.matchesDeviceInformation(model: t1Model, manufacturer: Data("other".utf8), pnp: t1PnPID) &&
+        !T1VoiceRemote.matchesDeviceInformation(model: t1Model, manufacturer: t1Manufacturer, pnp: t1PnPID.dropLast()),
+    "T1 identification requires manufacturer, model and PnP identity"
+)
+let t1Pending = VoiceRemoteAdmission.decide(
+    identifier: UUID(), targetIdentifier: nil, advertisesVoiceService: true,
+    name: "T1-Remote", advertisedName: nil
+)
+check(t1Pending == .probeT1 && !t1Pending.isAdopted, "T1 discovery does not confirm device identity")
+check(
+    T1VoiceRemote.voiceIsHeld(reportID: 1, bytes: [0, 0, 0xAA, 0, 0, 0, 0, 0]) == true &&
+        T1VoiceRemote.voiceIsHeld(reportID: 1, bytes: [1, 0, 0, 0, 0, 0, 0, 0, 0]) == false &&
+        T1VoiceRemote.voiceIsHeld(reportID: 2, bytes: [2, 0, 0]) == nil,
+    "T1 voice uses keyboard slot release and ignores the consumer Search release"
+)
+check(
+    ATVVCapabilities.parse(Data([0x0B, 1, 0, 2, 0, 0, 0x80])).map(T1VoiceRemote.accepts) == true &&
+        versionOne.map(T1VoiceRemote.accepts) == false &&
+        T1VoiceRemote.capabilitiesRequest.last == 0,
+    "T1 voice requires the verified on-request negotiation"
+)
+let t1SearchMapping = HIDUsageMapping(source: T1VoiceRemote.searchUsage, destination: 0)
+let otherMapping = RemoteVoiceFunctionMappingPolicy.remoteVoiceKey
+let remappedT1 = RemoteVoiceFunctionMappingPolicy.applying(
+    to: [otherMapping], voiceMapping: t1SearchMapping, preservePowerKeyMapping: true
+)
+check(
+    remappedT1 == [otherMapping, t1SearchMapping] &&
+        RemoteVoiceFunctionMappingPolicy.restoring(
+            originalVoiceMapping: nil, originalPowerMapping: nil, in: remappedT1,
+            voiceSource: T1VoiceRemote.searchUsage, preservePowerKeyMapping: true
+        ) == [otherMapping],
+    "T1 Search neutralization preserves and restores independent mappings"
+)
+
 let generationOne: UInt64 = 1
 let generationTwo: UInt64 = 2
 let connecting = BluetoothLifecyclePhase.connecting(generationOne)

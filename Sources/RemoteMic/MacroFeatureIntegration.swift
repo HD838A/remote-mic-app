@@ -1664,6 +1664,13 @@ final class MacroFeatureIntegration: ObservableObject {
             return SayAllMacroRemoteMic.RemoteMicRemotePresentation.xiaomiRC001(displayName: "RC001")
         case .rc003, .unknown, nil:
             return SayAllMacroRemoteMic.RemoteMicRemotePresentation.xiaomiRC003(displayName: "RC003")
+        case .t1:
+            return RemoteMicRemotePresentation(
+                capabilities: RemoteMicRemoteCapabilities(
+                    modelID: "t1-air-mouse", configurableButtons: [], reservedButtons: []
+                ),
+                displayName: "T1", image: nil, aspectRatio: 1, anchors: [:]
+            )
         case .chromecastVoiceRemote:
             #if SAYALL_CHROMECAST_ENABLED && canImport(SayAllChromecast)
             let anchors = Dictionary(uniqueKeysWithValues: ChromecastMappingCanvas.placements.compactMap { placement in

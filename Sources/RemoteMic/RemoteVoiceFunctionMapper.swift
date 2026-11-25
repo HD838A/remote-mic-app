@@ -60,7 +60,7 @@ enum RemoteVoiceFunctionMappingPolicy {
         preservePowerKeyMapping: Bool = false
     ) -> [HIDUsageMapping] {
         var desired = existing.filter {
-            $0.source != remoteVoiceKey.source &&
+            $0.source != voiceMapping.source &&
                 (preservePowerKeyMapping || $0.source != suppressedRemotePowerKey.source)
         } + [voiceMapping]
         if let powerMapping {
@@ -73,10 +73,11 @@ enum RemoteVoiceFunctionMappingPolicy {
         originalVoiceMapping: HIDUsageMapping?,
         originalPowerMapping: HIDUsageMapping?,
         in current: [HIDUsageMapping],
+        voiceSource: UInt64 = remoteVoiceKey.source,
         preservePowerKeyMapping: Bool = false
     ) -> [HIDUsageMapping] {
         var restored = current.filter {
-            $0.source != remoteVoiceKey.source &&
+            $0.source != voiceSource &&
                 (preservePowerKeyMapping || $0.source != suppressedRemotePowerKey.source)
         }
         if let originalVoiceMapping {
@@ -129,6 +130,7 @@ final class RemoteVoiceFunctionMapper {
     }
 
     private let serviceProvider: ServiceProvider
+    private let voiceMapping: HIDUsageMapping
     private let diagnosticLogger: (String) -> Void
     private(set) var mappingOperationID: UInt64 = 0
     private(set) var voiceMappingReadbackMatched: Bool?
@@ -144,13 +146,18 @@ final class RemoteVoiceFunctionMapper {
         matchedServiceCount > 0
     }
 
-    init(serviceProvider: @escaping ServiceProvider = RemoteVoiceFunctionMapper.systemServices) {
+    init(
+        voiceMapping: HIDUsageMapping = RemoteVoiceFunctionMappingPolicy.remoteVoiceKey,
+        serviceProvider: @escaping ServiceProvider = RemoteVoiceFunctionMapper.systemServices
+    ) {
+        self.voiceMapping = voiceMapping
         self.serviceProvider = serviceProvider
         diagnosticLogger = AppLogger.shared.write
     }
 
     init(diagnosticLogger: @escaping (String) -> Void, serviceProvider: @escaping ServiceProvider) {
         self.diagnosticLogger = diagnosticLogger
+        self.voiceMapping = RemoteVoiceFunctionMappingPolicy.remoteVoiceKey
         self.serviceProvider = serviceProvider
     }
 
@@ -208,7 +215,7 @@ final class RemoteVoiceFunctionMapper {
                 }
                 originalMappings[registryID] = OriginalMappings(
                     voice: current.first {
-                        $0.source == RemoteVoiceFunctionMappingPolicy.remoteVoiceKey.source
+                        $0.source == voiceMapping.source
                     },
                     power: currentPower == RemoteVoiceFunctionMappingPolicy.suppressedRemotePowerKey
                         ? nil
@@ -219,8 +226,8 @@ final class RemoteVoiceFunctionMapper {
             let desired = RemoteVoiceFunctionMappingPolicy.applying(
                 to: current,
                 voiceMapping: neutralizeVoiceKey
-                    ? RemoteVoiceFunctionMappingPolicy.neutralRemoteVoiceKey
-                    : RemoteVoiceFunctionMappingPolicy.remoteVoiceKey,
+                    ? HIDUsageMapping(source: voiceMapping.source, destination: 0)
+                    : voiceMapping,
                 powerMapping: preservePowerKeyMapping ? nil : (suppressPowerKey
                     ? RemoteVoiceFunctionMappingPolicy.suppressedRemotePowerKey
                     : originalMappings[registryID]?.power),
@@ -242,7 +249,7 @@ final class RemoteVoiceFunctionMapper {
             appliedIndices.append(index)
             // Readback is diagnostic only. It does not prove native Fn delivery
             // and must not change the established mapping success/fallback policy.
-            let source = RemoteVoiceFunctionMappingPolicy.remoteVoiceKey.source
+            let source = voiceMapping.source
             if service.readMappings().filter({ $0.source == source }) ==
                 desired.filter({ $0.source == source }) {
                 verifiedVoiceServiceCount += 1
@@ -298,6 +305,7 @@ final class RemoteVoiceFunctionMapper {
                 originalVoiceMapping: original.voice,
                 originalPowerMapping: original.power,
                 in: service.readMappings(),
+                voiceSource: voiceMapping.source,
                 preservePowerKeyMapping: preservesPowerKeyMapping
             )
             if service.setMappings(restored) {

@@ -3,6 +3,7 @@ import Foundation
 enum XiaomiRemoteModel: String, Codable, CaseIterable, Identifiable {
     case rc001
     case rc003
+    case t1
     case appleSiriRemoteA2854 = "apple_siri_remote_a2854"
     case appleSiriRemoteA2540 = "apple_siri_remote_a2540"
     /// Chromecast（Google Chromecast 语音遥控器）。与苹果遥控器同理，case 始终存在以保证
@@ -31,6 +32,7 @@ enum XiaomiRemoteModel: String, Codable, CaseIterable, Identifiable {
         switch self {
         case .rc001: return "remote.device.model.rc001"
         case .rc003: return "remote.device.model.rc003"
+        case .t1: return "remote.device.model.t1"
         case .appleSiriRemoteA2854:
             return "remote.device.model.apple_siri_remote_a2854"
         case .appleSiriRemoteA2540:
@@ -45,6 +47,7 @@ enum XiaomiRemoteModel: String, Codable, CaseIterable, Identifiable {
         switch self {
         case .rc001: "xiaomi-remote-rc001"
         case .rc003: "xiaomi-remote-2-pro"
+        case .t1: "t1-air-mouse"
         case .appleSiriRemoteA2854: "apple-siri-remote-a2854"
         case .appleSiriRemoteA2540: "apple-siri-remote-a2540"
         case .chromecastVoiceRemote: "chromecast-voice-remote"

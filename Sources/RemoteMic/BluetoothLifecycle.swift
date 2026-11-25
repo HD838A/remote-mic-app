@@ -124,6 +124,36 @@ enum ForeignVoiceRemoteProduct {
 /// - 有保存目标时只检查目标本身；
 /// - 已知身份、ATVV 服务、已知遥控器名称和明确的外来产品名称才继续判定；
 /// - 其余普通蓝牙设备直接返回，不构造日志。
+enum T1VoiceRemote {
+    static let vendorID = 0x620A
+    static let productID = 0x0407
+    // Legacy on-request mode exposes the physical release in keyboard report 1.
+    static let capabilitiesRequest = Data([0x0A, 0x01, 0, 0, 0x03, 0])
+    static let searchUsage: UInt64 = 0x0000_000C_0000_0221
+
+    static func isDiscoveryName(_ name: String?) -> Bool {
+        name?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "t1-remote"
+    }
+
+    static func matchesDeviceInformation(model: Data, manufacturer: Data, pnp: Data) -> Bool {
+        model == Data("hid_mouse".utf8) &&
+            manufacturer == Data("shenzhen_xingwei".utf8) &&
+            pnp.count == 7 && pnp.starts(with: [0x01, 0x0A, 0x62, 0x07, 0x04])
+    }
+
+    static func accepts(_ capabilities: ATVVCapabilities) -> Bool {
+        capabilities.version == 0x0100 && capabilities.selectedCodec == 0x02 &&
+            capabilities.frameSize == 128 && capabilities.interaction == 0
+    }
+
+    static func voiceIsHeld(reportID: UInt32, bytes: [UInt8]) -> Bool? {
+        guard reportID == 1 else { return nil }
+        let report = bytes.count == 9 && bytes.first == 1 ? bytes.dropFirst() : bytes[...]
+        guard report.count == 8 else { return nil }
+        return report.dropFirst(2).contains(0xAA)
+    }
+}
+
 enum BluetoothDiscoveryScanPolicy {
     static func shouldInspect(
         identifier: UUID,
@@ -143,7 +173,9 @@ enum BluetoothDiscoveryScanPolicy {
             return true
         }
         if XiaomiVoiceRemoteNameMatcher.matches(advertisedName) ||
-            XiaomiVoiceRemoteNameMatcher.matches(peripheralName) {
+            XiaomiVoiceRemoteNameMatcher.matches(peripheralName) ||
+            T1VoiceRemote.isDiscoveryName(advertisedName) ||
+            T1VoiceRemote.isDiscoveryName(peripheralName) {
             return true
         }
         // 外来产品也要进入 `adopt`，由统一准入层记录拒绝原因，避免静默放过。
@@ -165,6 +197,7 @@ enum VoiceRemoteAdmissionDecision: Equatable {
     case adoptSavedIdentity
     /// 名称命中本产品的已知型号。
     case adoptRecognizedName(String)
+    case probeT1
     /// 别的产品（Chromecast Remote / RemoteG10 等）。
     case rejectForeignProduct(String)
     /// 广播/上报了名字，但不是任何已知型号：不采用（无身份、又认不出）。
@@ -177,7 +210,7 @@ enum VoiceRemoteAdmissionDecision: Equatable {
     var isAdopted: Bool {
         switch self {
         case .adoptSavedIdentity, .adoptRecognizedName: return true
-        case .rejectForeignProduct, .rejectUnrecognizedName, .rejectUnnamed, .ignore: return false
+        case .probeT1, .rejectForeignProduct, .rejectUnrecognizedName, .rejectUnnamed, .ignore: return false
         }
     }
 
@@ -187,6 +220,7 @@ enum VoiceRemoteAdmissionDecision: Equatable {
         switch self {
         case .adoptSavedIdentity: return "saved_identity"
         case .adoptRecognizedName: return "recognized_name"
+        case .probeT1: return "t1_identity_pending"
         case .rejectForeignProduct: return "foreign_product"
         case .rejectUnrecognizedName: return "unrecognized_name"
         case .rejectUnnamed: return "unnamed"
@@ -220,6 +254,9 @@ enum VoiceRemoteAdmission {
         }
         if let recognized = XiaomiVoiceRemoteNameMatcher.recognizedName(nameForMatch) {
             return .adoptRecognizedName(recognized)
+        }
+        if T1VoiceRemote.isDiscoveryName(nameForMatch) || T1VoiceRemote.isDiscoveryName(name) {
+            return .probeT1
         }
         guard advertisesVoiceService else { return .ignore }
         if let nameForMatch, !nameForMatch.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {

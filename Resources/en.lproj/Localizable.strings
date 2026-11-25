@@ -63,6 +63,7 @@
 "connection.status.chromecast_connected" = "Chromecast remote connected";
 "connection.status.reconnecting" = "Connection lost; preparing to reconnect";
 "connection.error.voice_service_timeout" = "Remote voice service initialization timed out";
+"connection.error.t1_hid_unavailable" = "T1 could not verify its voice key. Check Input Monitoring and connect only one T1.";
 "connection.error.invalid_voice_response" = "The remote returned an invalid voice capability response";
 "connection.error.unsupported_16khz_codec" = "The remote did not provide a supported 16 kHz voice codec";
 "connection.error.unsupported_8khz_codec" = "The remote switched to an unsupported 8 kHz voice codec";
@@ -357,6 +358,7 @@
 "remote.device.model.apple_siri_remote_a2854" = "Apple Remote Type-C";
 "remote.device.model.apple_siri_remote_a2540" = "Apple Remote Lightning";
 "remote.device.model.chromecast_voice_remote" = "Chromecast Remote";
+"remote.device.model.t1" = "T1 Air Mouse";
 "remote.device.model.unknown" = "Unidentified remote";
 "remote.device.custom_name" = "Custom name";
 "remote.device.bind_button" = "Set Up Button Controls";
@@ -488,6 +490,7 @@
 "audio.output.privacy_help" = "Voice audio is sent to the selected device. When the last device disconnects, macOS switches the Mac’s default microphone to a physical microphone if it was using this virtual device. On reconnect, SayAll restores the virtual microphone only if you have not changed that setting. The default speakers are never changed.";
 "audio.compatibility.open_install_guide" = "Open Driver Installation Guide";
 "audio.compatibility.missing_notice" = "No compatible virtual microphone was found. Your voice tool may not receive device audio.";
+"button_mapping.t1_voice_only" = "T1 uses its native keyboard and pointer. SayAll uses the voice key for dictation.";
 "button_mapping.page.title" = "Button Mapping";
 "button_mapping.page.subtitle" = "Click a button to change its settings";
 "button_mapping.toggle.enabled" = "Custom Buttons";

@@ -5197,7 +5197,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         startBluetoothDiscoveryIfNeeded()
     }
 
-    private func connectBluetoothIdentifier(_ identifier: UUID, manual: Bool) {
+    private func connectBluetoothIdentifier(_ identifier: UUID, manual: Bool, probeT1: Bool = false) {
         if let bridge = bluetoothBridges[identifier] {
             if manual { bridge.reconnectNow(manual: true) }
             else { bridge.start() }
@@ -5206,7 +5206,13 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         reconcileStaleRemoteIdentity(for: identifier)
         let budget = remoteRecoveryBudgets[identifier] ?? RemoteConnectionRecovery()
         remoteRecoveryBudgets[identifier] = budget
-        let bridge = XiaomiBluetoothBridge(delegate: self, targetIdentifier: identifier, recovery: budget)
+        let model = settings.profileID(forBluetoothIdentifier: identifier).flatMap { id in
+            settings.remoteDeviceProfiles.first(where: { $0.id == id })?.model
+        }
+        let bridge = XiaomiBluetoothBridge(
+            delegate: self, targetIdentifier: identifier, expectsT1: probeT1 || model == .t1,
+            recovery: budget
+        )
         bluetoothBridges[identifier] = bridge
         bridge.setSystemSuspended(systemAudioSuspensionState.isSuspended, reason: "bridge_start")
         bridge.start(manual: manual)
@@ -5272,8 +5278,8 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
                 guard let self else { return [] }
                 return Set(self.settings.remoteDeviceProfiles.filter { !$0.model.usesPrivateAdapter }.compactMap(\.bluetoothIdentifier))
             },
-            discoveredCandidate: { [weak self] identifier in
-                self?.connectBluetoothIdentifier(identifier, manual: false)
+            discoveredCandidate: { [weak self] identifier, probeT1 in
+                self?.connectBluetoothIdentifier(identifier, manual: false, probeT1: probeT1)
             },
             reconcileCandidateIdentifier: { [weak self] identifier in
                 self?.reconcileStaleRemoteIdentity(for: identifier) != nil
@@ -7587,7 +7593,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         if settings.voiceKeyMode != .function || settings.voiceFnTapModeEnabled {
             applyHIDSettings(allowVoiceKeyModeFallback: false)
         }
-        guard Self.canStartBluetoothVoice(
+        guard bridge.isT1 || Self.canStartBluetoothVoice(
             mode: settings.voiceKeyMode,
             voiceFnTapModeEnabled: settings.voiceFnTapModeEnabled,
             isVoiceKeyNeutralized: voiceFunctionMapper.isVoiceKeyNeutralized
@@ -7643,7 +7649,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         bluetoothVoiceActive = true
         guard updateVoiceKeyState(
             streaming: true,
-            forceSoftware: replayReleasedVoiceKey && !settings.voiceFnTapModeEnabled,
+            forceSoftware: (bridge.isT1 || replayReleasedVoiceKey) && !settings.voiceFnTapModeEnabled,
             owner: .bluetooth,
             audioDiagnostic: diagnostic
         ) else {

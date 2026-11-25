@@ -587,7 +587,7 @@ enum OnboardingXiaomiEventPolicy {
         case .unknown?, .none:
             return .pendingIdentity
         case .appleSiriRemoteA2854?, .appleSiriRemoteA2540?,
-             .chromecastVoiceRemote?:
+             .chromecastVoiceRemote?, .t1?:
             return .rejectOtherModel
         }
     }
