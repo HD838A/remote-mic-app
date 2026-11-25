@@ -113,6 +113,47 @@ enum BluetoothVoiceStopReason: String {
     case remoteTimeout = "remote_timeout"
 }
 
+/// 一条 ATVV 命令交给 CoreBluetooth 之后的实际结果。
+///
+/// `writeValue(_:for:type:)` 没有返回值，系统也不会告诉调用方命令有没有真的发出去。
+/// `.withoutResponse` 在发送队列已满时会被 CoreBluetooth 直接丢弃，应用侧拿不到任何信号。
+/// 于是「命令看起来发了、远端却没反应」在日志里与「命令成功」长得一模一样——
+/// 麦克风被当成已打开、关闭请求被当成已写出，后续所有判断都建立在假事实上。
+/// 因此提交结果必须显式建模，不能继续用 Bool 兼表「参数齐全」。
+enum ATVVCommandSubmission: Equatable {
+    /// 已交给系统发送。`.withoutResponse` 也只保证队列当时可用，不保证远端已收到。
+    case written
+    /// `.withoutResponse` 的发送队列已满：命令没有提交，系统会丢弃。
+    case transmitQueueFull
+    /// peripheral 或发送特征尚未就绪：命令没有提交。
+    case channelUnavailable
+
+    var logToken: String {
+        switch self {
+        case .written: return "written"
+        case .transmitQueueFull: return "transmit_queue_full"
+        case .channelUnavailable: return "channel_unavailable"
+        }
+    }
+
+    var isWritten: Bool { self == .written }
+}
+
+enum ATVVCommandTransmissionPolicy {
+    /// `.withResponse` 由系统排队并在回调里报告结果，不需要预判队列；
+    /// `.withoutResponse` 必须先确认队列可用，否则这次写入会被静默丢弃。
+    static func canSubmit(
+        writeType: CBCharacteristicWriteType,
+        canSendWithoutResponse: Bool
+    ) -> Bool {
+        switch writeType {
+        case .withResponse: return true
+        case .withoutResponse: return canSendWithoutResponse
+        @unknown default: return false
+        }
+    }
+}
+
 final class XiaomiBluetoothBridge: NSObject {
     private static let defaultCapabilities = ATVVCapabilities(
         version: 0x0100,
@@ -696,11 +737,14 @@ final class XiaomiBluetoothBridge: NSObject {
             AppLogger.shared.write("ATVV MIC_OPEN host_request_rejected")
             return false
         }
-        guard write(ATVVProtocol.microphoneOpen(
+        let openSubmission = submit(ATVVProtocol.microphoneOpen(
             version: capabilities.version,
             codec: capabilities.selectedCodec
-        )) else {
-            AppLogger.shared.write("ATVV MIC_OPEN host_request_write_failed")
+        ))
+        guard openSubmission.isWritten else {
+            AppLogger.shared.write(
+                "ATVV MIC_OPEN host_request_write_failed reason=\(openSubmission.logToken)"
+            )
             return false
         }
         cancelledMicrophoneOpenAt = nil
@@ -716,15 +760,21 @@ final class XiaomiBluetoothBridge: NSObject {
             microphoneOpened: microphoneOpened,
             streaming: streaming
         )
-        let didWrite = write(ATVVProtocol.microphoneClose(
+        let closeSubmission = submit(ATVVProtocol.microphoneClose(
             version: capabilities.version,
             sessionID: sessionID
         ))
+        let didWrite = closeSubmission.isWritten
         audioDiagnostics?.microphoneCloseRequested(written: didWrite)
+        // 即使命令没交出去，也必须清掉本地「已开麦」：`requestMicrophoneOpen` 的准入里有
+        // `!microphoneOpened`，留着它会把之后每一次开麦都挡掉，用户只能靠断开遥控器恢复。
+        // 远端麦克风可能仍开着的代价是下一次 `MIC_OPEN` 被样机当成新请求，但那条路径只在
+        // `streaming` 已经结束时才可达（开麦准入还有 `!streaming`），没有流可以被拆。
         microphoneOpened = false
         cancelledMicrophoneOpenAt = cancelledOpenAt
         AppLogger.shared.write(
-            "ATVV MIC_CLOSE request session=\(sessionID) written=\(didWrite)"
+            "ATVV MIC_CLOSE request session=\(sessionID) written=\(didWrite) "
+                + "reason=\(closeSubmission.logToken) microphone_opened=false"
         )
         return didWrite
     }
@@ -1170,14 +1220,24 @@ final class XiaomiBluetoothBridge: NSObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
     }
 
+    /// 提交一条 ATVV 命令，并如实返回它有没有真的交给系统。
+    ///
+    /// 旧实现只要 peripheral 与特征存在就返回 `true`，把「参数齐全」当成「命令已发出」。
+    /// 语音麦克风的开关与续流都靠这个返回值判断，静默丢弃会让上层停在错误状态里。
     @discardableResult
-    private func write(_ data: Data) -> Bool {
-        guard let peripheral, let transmitCharacteristic else { return false }
+    private func submit(_ data: Data) -> ATVVCommandSubmission {
+        guard let peripheral, let transmitCharacteristic else { return .channelUnavailable }
         let type: CBCharacteristicWriteType = transmitCharacteristic.properties.contains(.writeWithoutResponse)
             ? .withoutResponse
             : .withResponse
+        guard ATVVCommandTransmissionPolicy.canSubmit(
+            writeType: type,
+            canSendWithoutResponse: peripheral.canSendWriteWithoutResponse
+        ) else {
+            return .transmitQueueFull
+        }
         peripheral.writeValue(data, for: transmitCharacteristic, type: type)
-        return true
+        return .written
     }
 
     private func closeMicrophoneIfNeeded() {
@@ -1196,11 +1256,15 @@ final class XiaomiBluetoothBridge: NSObject {
               let peripheral
         else { return }
         guard !capabilitiesRequested else { return }
-        capabilitiesRequested = true
-        write(ATVVProtocol.getCapabilitiesV10)
+        let capabilitiesSubmission = submit(ATVVProtocol.getCapabilitiesV10)
+        // 写失败时保持可重试：订阅状态还有机会再次触发本函数；初始化超时仍是最终兜底。
+        capabilitiesRequested = capabilitiesSubmission.isWritten
         lifecycle = .awaitingCapabilities(generation)
         state = .discovering
-        AppLogger.shared.write("ATVV CAPABILITIES requested")
+        AppLogger.shared.write(
+            "ATVV CAPABILITIES requested written=\(capabilitiesSubmission.isWritten) "
+                + "reason=\(capabilitiesSubmission.logToken)"
+        )
     }
 
     private func updateBatteryPollingSchedule(generation: UInt64) {
@@ -1358,13 +1422,14 @@ final class XiaomiBluetoothBridge: NSObject {
             if ATVVSessionGate.shouldIgnoreStreamAfterCancelledOpen(
                 cancelledAt: cancelledMicrophoneOpenAt
             ) {
-                write(ATVVProtocol.microphoneClose(
+                let cancelledCloseSubmission = submit(ATVVProtocol.microphoneClose(
                     version: capabilities.version,
                     sessionID: receivedSessionID
                 ))
                 diagnosticForAudio().rejectStart(reason: "cancelled_open")
                 AppLogger.shared.write(
-                    "ATVV STREAM_START ignored_cancelled session=\(receivedSessionID)"
+                    "ATVV STREAM_START ignored_cancelled session=\(receivedSessionID) "
+                        + "close=\(cancelledCloseSubmission.logToken)"
                 )
                 return
             }
