@@ -328,22 +328,25 @@ siri_receipt_exists() {
 }
 
 # The installer uses this receipt to preselect the optional Siri Remote
-# component, and onboarding uses it as the installed marker. Forget it only
-# when no unverified HCI helper or LaunchDaemon was left behind.
+# component, and onboarding uses it as the installed marker. Forget it on every
+# uninstall: once SayAll is removed from this volume the receipt is stale even
+# when an unverified helper or LaunchDaemon was left in place. Leaving it behind
+# makes the next install preselect a component the user just removed and makes
+# a later app build report a component that may not be ours.
 cleanup_siri_receipt() {
   if ! siri_receipt_exists; then
     print 'SIRI_RECEIPT phase=cleanup result=skipped reason=absent'
     return 0
   fi
   SIRI_RECEIPT_PRESENT=1
-  if [[ "$HCI_SERVICE_UNOWNED" -eq 1 ]]; then
-    print 'SIRI_RECEIPT phase=cleanup result=skipped reason=unowned_component_present'
-    return 0
-  fi
   if /usr/sbin/pkgutil --volume "$TARGET_VOLUME" --forget "$SIRI_REMOTE_PACKAGE_ID" \
       >/dev/null 2>&1; then
     SIRI_RECEIPT_FORGOTTEN=1
-    print 'SIRI_RECEIPT phase=cleanup result=forgotten'
+    if [[ "$HCI_SERVICE_UNOWNED" -eq 1 ]]; then
+      print 'SIRI_RECEIPT phase=cleanup result=forgotten kept_unverified=1'
+    else
+      print 'SIRI_RECEIPT phase=cleanup result=forgotten'
+    fi
     return 0
   fi
   SIRI_RECEIPT_FAILED=1

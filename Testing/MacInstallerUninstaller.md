@@ -96,9 +96,9 @@
 3. 再次执行 `pkgutil --pkg-info com.hd838a.RemoteMic.siri-remote` 和 `ls /var/db/receipts/com.hd838a.RemoteMic.siri-remote.*`。
 4. 重新运行 Install PKG，打开“自定安装”。
 
-预期：卸载后收据和 BOM 均不存在；重新安装时 `苹果遥控器 Siri Remote` 默认未勾选；App 的 Onboarding 不再把 Siri Remote 显示为已安装来源。只有手工保留且无法确认归属的 Siri helper 或 LaunchDaemon 存在时，收据才保留。
+预期：卸载后收据和 BOM 均不存在；重新安装时 `苹果遥控器 Siri Remote` 默认未勾选；App 的 Onboarding 不再把 Siri Remote 显示为已安装来源。无法确认归属的 Siri helper 或 LaunchDaemon 仍然保留原文件，但收据同样清除，卸载日志出现 `SIRI_RECEIPT phase=cleanup result=forgotten kept_unverified=1`。
 
-失败判定：收据仍存在、重装仍自动勾选、Onboarding 仍显示 Siri Remote 来源，或无法确认归属的 helper 被保留但收据被清除。
+失败判定：收据仍存在、重装仍自动勾选、Onboarding 仍显示 Siri Remote 来源，或无法确认归属的 helper 被移动、删除。
 
 ### 8. Dock 固定项在卸载后移除
 

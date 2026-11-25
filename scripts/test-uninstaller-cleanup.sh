@@ -238,8 +238,12 @@ print -r -- "$receipt_output" | /usr/bin/grep -Fq 'result=skipped reason=absent'
   fail 'absent receipt was not skipped'
 
 receipt_output="$("$WORK/receipt-harness.zsh" "$WORK/receipt-functions.zsh" unowned "$FORGET_LOG")"
-print -r -- "$receipt_output" | /usr/bin/grep -Fq 'result=skipped reason=unowned_component_present' || \
-  fail 'unowned component did not preserve the receipt'
+print -r -- "$receipt_output" | /usr/bin/grep -Fq 'result=forgotten kept_unverified=1' || \
+  fail 'unverified component did not clear the stale receipt'
+print -r -- "$receipt_output" | /usr/bin/grep -Fq 'rc=0 present=1 forgotten=1 failed=0' || \
+  fail 'unverified component receipt flags are wrong'
+/usr/bin/grep -Fq 'com.hd838a.RemoteMic.siri-remote' "$FORGET_LOG" || \
+  fail 'unverified component receipt id not forgotten'
 
 if receipt_output="$("$WORK/receipt-harness.zsh" "$WORK/receipt-functions.zsh" forget_failure "$FORGET_LOG" 2>&1)"; then
   fail 'receipt forget failure returned success'

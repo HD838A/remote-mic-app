@@ -52,3 +52,12 @@
 - `defaults` 导出/导入会在短时间内覆盖整个 `com.apple.dock` 域。实现保留导出时的其他键，但无法排除同一时刻的用户 Dock 变更；失败时明确报告。无法读取 Dock 偏好时记录 `preferences_unavailable` 并跳过。
 - 收据清理只针对 `com.hd838a.RemoteMic.siri-remote`，不删除主安装收据 `com.hd838a.RemoteMic.installer`，避免破坏历史驱动名称兼容逻辑。
 - 测试手册见 [Testing/MacInstallerUninstaller.md](../Testing/MacInstallerUninstaller.md)。
+
+## 2026-11-25 口径更新：收据一律清除
+
+原实现只在没有留下无法确认归属的 Siri helper 或 LaunchDaemon 时执行 `pkgutil --forget`。这条保留分支会让卸载后仍读到“组件已安装”，而 App 已经没有可用的组件来解释这个状态：
+
+- 安装器按收据自动勾选可选组件，用户刚卸载掉的组件会在下次安装被自动带回来；
+- Onboarding 和卡片启用都把“有安装证据”当成可用，收据残留会让它显示一个跑不起来的来源。
+
+因此改为每次卸载都清除收据。无法确认归属的 helper 与 LaunchDaemon 仍保留原文件，不做移动或删除，卸载日志用 `SIRI_RECEIPT phase=cleanup result=forgotten kept_unverified=1` 记录这一差别。改动与验收见 [应用内安装 Siri Remote 组件后 Onboarding 仍不显示苹果遥控器](./2026-11-25-onboarding-siri-remote-hidden-without-installer-receipt.md)。
