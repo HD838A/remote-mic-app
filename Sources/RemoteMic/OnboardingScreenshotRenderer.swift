@@ -245,7 +245,7 @@ enum OnboardingScreenshotRenderer {
                 initialInputMethodGuideStep: requestedGuideStep,
                 initialGuideImageZoomResource: requestedGuideZoom,
                 remoteInputDiagnosticOverride: remoteInputDiagnostic,
-                siriRemotePackageInstalledOverride: ProcessInfo.processInfo.environment[
+                siriRemoteComponentAvailableOverride: ProcessInfo.processInfo.environment[
                     "REMOTE_MIC_ONBOARDING_SCREENSHOT_SIRI_REMOTE_INSTALLED"
                 ].map { $0 == "1" },
                 siriRemoteComponentInstalledOverride: ProcessInfo.processInfo.environment[

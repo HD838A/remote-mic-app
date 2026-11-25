@@ -616,23 +616,42 @@ enum OnboardingXiaomiEventPolicy {
 }
 
 enum OnboardingBuildCapabilities {
+    static let siriRemoteReceiptPath =
+        "/var/db/receipts/com.hd838a.RemoteMic.siri-remote.plist"
+
     static var availableControlSources: [OnboardingControlSource] {
-        availableControlSources(siriRemotePackageInstalled: isSiriRemotePackageInstalled())
+        availableControlSources(siriRemoteComponentAvailable: isSiriRemoteComponentAvailable())
     }
 
     /// Installer receipts are public installation metadata owned by SayAll.
     static func isSiriRemotePackageInstalled(
         receiptExists: (String) -> Bool = { FileManager.default.fileExists(atPath: $0) }
     ) -> Bool {
-        receiptExists("/var/db/receipts/com.hd838a.RemoteMic.siri-remote.plist")
+        receiptExists(siriRemoteReceiptPath)
+    }
+
+    /// A component installed by the App through SMJobBless writes the helper and
+    /// its LaunchDaemon but never an Installer receipt. Both describe
+    /// availability, so onboarding must accept either one — the same rule
+    /// `SiriRemoteActivationPolicy` already applies.
+    static func isSiriRemoteComponentAvailable(
+        receiptExists: (String) -> Bool = { FileManager.default.fileExists(atPath: $0) },
+        helperExists: (String) -> Bool = { FileManager.default.fileExists(atPath: $0) },
+        launchDaemonExists: (String) -> Bool = { FileManager.default.fileExists(atPath: $0) }
+    ) -> Bool {
+        isSiriRemotePackageInstalled(receiptExists: receiptExists)
+            || AppleRemoteComponentInstallation.isInstalled(
+                helperExists: helperExists,
+                launchDaemonExists: launchDaemonExists
+            )
     }
 
     static func availableControlSources(
-        siriRemotePackageInstalled: Bool
+        siriRemoteComponentAvailable: Bool
     ) -> [OnboardingControlSource] {
         var sources: [OnboardingControlSource] = [.xiaomiRemote]
         #if SAYALL_SIRI_REMOTE_ENABLED
-        if siriRemotePackageInstalled { sources.append(.siriRemote) }
+        if siriRemoteComponentAvailable { sources.append(.siriRemote) }
         #endif
         #if SAYALL_CHROMECAST_ENABLED
         sources.append(.chromecastRemote)

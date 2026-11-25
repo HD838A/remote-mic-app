@@ -137,23 +137,49 @@ struct OnboardingFlowTests {
         #expect(!english.contains("\"onboarding.web_remote.preparing\" = \"Generating a QR code\";"))
     }
 
-    @Test func siriRemoteRequiresBothBuildSupportAndInstallerReceipt() {
+    @Test func siriRemoteRequiresBuildSupportAndInstalledComponent() {
         #expect(OnboardingBuildCapabilities.isSiriRemotePackageInstalled { path in
             path == "/var/db/receipts/com.hd838a.RemoteMic.siri-remote.plist"
         })
         #expect(!OnboardingBuildCapabilities.isSiriRemotePackageInstalled { _ in false })
         #expect(!OnboardingBuildCapabilities.availableControlSources(
-            siriRemotePackageInstalled: false
+            siriRemoteComponentAvailable: false
         ).contains(.siriRemote))
         #if SAYALL_SIRI_REMOTE_ENABLED
         #expect(OnboardingBuildCapabilities.availableControlSources(
-            siriRemotePackageInstalled: true
+            siriRemoteComponentAvailable: true
         ).contains(.siriRemote))
         #else
         #expect(!OnboardingBuildCapabilities.availableControlSources(
-            siriRemotePackageInstalled: true
+            siriRemoteComponentAvailable: true
         ).contains(.siriRemote))
         #endif
+    }
+
+    /// App 内安装（SMJobBless）只写 helper 与 LaunchDaemon，不写 Installer 收据。
+    /// 只看收据会把这类用户挡在控制设备页之外。
+    @Test func siriRemoteComponentAvailableWithoutInstallerReceipt() {
+        #expect(OnboardingBuildCapabilities.isSiriRemoteComponentAvailable(
+            receiptExists: { _ in false },
+            helperExists: { $0 == "/Library/PrivilegedHelperTools/com.hd838a.SayAll.AppleRemoteHCIService" },
+            launchDaemonExists: { $0 == "/Library/LaunchDaemons/com.hd838a.SayAll.AppleRemoteHCIService.plist" }
+        ))
+        #expect(OnboardingBuildCapabilities.isSiriRemoteComponentAvailable(
+            receiptExists: { $0 == OnboardingBuildCapabilities.siriRemoteReceiptPath },
+            helperExists: { _ in false },
+            launchDaemonExists: { _ in false }
+        ))
+        // 半装状态不能当成可用，否则用户会被引到一个跑不起来的来源。
+        #expect(!OnboardingBuildCapabilities.isSiriRemoteComponentAvailable(
+            receiptExists: { _ in false },
+            helperExists: { _ in true },
+            launchDaemonExists: { _ in false }
+        ))
+        #expect(!OnboardingBuildCapabilities.isSiriRemoteComponentAvailable(
+            receiptExists: { _ in false },
+            helperExists: { _ in false },
+            launchDaemonExists: { _ in true }
+        ))
     }
 
     @Test @MainActor func siriRemoteTrialPreservesEntryStateAndMembershipAccessAcrossResume() throws {
@@ -192,7 +218,7 @@ struct OnboardingFlowTests {
         let fixture = try OnboardingOffscreenFixture(
             step: .remote,
             controlSource: .siriRemote,
-            siriRemotePackageInstalled: false
+            siriRemoteComponentAvailable: false
         )
         defer { fixture.close() }
         #expect(fixture.settings.onboardingStep == .remoteAvailability)
@@ -279,7 +305,7 @@ struct OnboardingFlowTests {
                 .other: .unknown,
             ],
             interactionProbe: probe,
-            siriRemotePackageInstalledOverride: true
+            siriRemoteComponentAvailableOverride: true
         )
         .environmentObject(localization)
         .frame(width: 1020, height: 772)
@@ -1140,7 +1166,7 @@ struct OnboardingFlowTests {
                 .other: .unknown,
             ],
             interactionProbe: probe,
-            siriRemotePackageInstalledOverride: true,
+            siriRemoteComponentAvailableOverride: true,
             initialPhoneAppInstalled: installed
         )
         .environmentObject(localization)
@@ -4332,7 +4358,7 @@ private final class OnboardingOffscreenFixture {
         controlSource: OnboardingControlSource? = nil,
         xiaomiModel: OnboardingXiaomiRemoteModel? = nil,
         voiceToolAvailability: [OnboardingVoiceTool: OnboardingVoiceToolAvailability]? = nil,
-        siriRemotePackageInstalled: Bool = true,
+        siriRemoteComponentAvailable: Bool = true,
         siriRemoteInitiallyEnabled: Bool = false,
         siriRemoteNeedsUserAction: Bool = false,
         siriRemoteComponentInstalled: Bool = true
@@ -4386,7 +4412,7 @@ private final class OnboardingOffscreenFixture {
             ],
             initialInputMethodGuideStep: initialInputMethodGuideStep,
             interactionProbe: probe,
-            siriRemotePackageInstalledOverride: siriRemotePackageInstalled,
+            siriRemoteComponentAvailableOverride: siriRemoteComponentAvailable,
             siriRemoteComponentInstalledOverride: siriRemoteComponentInstalled
         )
         .environmentObject(localization)
