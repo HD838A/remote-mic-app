@@ -766,15 +766,15 @@ final class XiaomiBluetoothBridge: NSObject {
         ))
         let didWrite = closeSubmission.isWritten
         audioDiagnostics?.microphoneCloseRequested(written: didWrite)
-        // 只有真的交给系统才把「麦克风已开」清掉。命令被丢弃时远端麦克风仍开着，
-        // 此时把本地状态置成已关闭，会让后续所有开麦判断都基于假事实。
-        if didWrite {
-            microphoneOpened = false
-            cancelledMicrophoneOpenAt = cancelledOpenAt
-        }
+        // 即使命令没交出去，也必须清掉本地「已开麦」：`requestMicrophoneOpen` 的准入里有
+        // `!microphoneOpened`，留着它会把之后每一次开麦都挡掉，用户只能靠断开遥控器恢复。
+        // 远端麦克风可能仍开着的代价是下一次 `MIC_OPEN` 被样机当成新请求，但那条路径只在
+        // `streaming` 已经结束时才可达（开麦准入还有 `!streaming`），没有流可以被拆。
+        microphoneOpened = false
+        cancelledMicrophoneOpenAt = cancelledOpenAt
         AppLogger.shared.write(
             "ATVV MIC_CLOSE request session=\(sessionID) written=\(didWrite) "
-                + "reason=\(closeSubmission.logToken) microphone_opened=\(microphoneOpened)"
+                + "reason=\(closeSubmission.logToken) microphone_opened=false"
         )
         return didWrite
     }
