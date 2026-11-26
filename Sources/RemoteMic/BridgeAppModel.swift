@@ -1253,6 +1253,9 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     private var pendingVirtualAudioRelease: (generation: UInt64, reason: String)?
     private var idleVirtualAudioReleaseWorkItem: DispatchWorkItem?
     private var systemAudioSuspensionState = SystemAudioSuspensionState()
+    /// `system_did_wake` arrived while another suspension reason (usually the
+    /// sleeping screen) was still active; the final resume owns the wake.
+    private var deferredSystemWake = DeferredSystemWakeTracker()
     private var managedDefaultInputTransition: ManagedDefaultInputTransition?
     private lazy var audioHardwareListener: AudioObjectPropertyListenerBlock = { [weak self] count, addresses in
         let properties = Self.audioHardwarePropertyNames(count: count, addresses: addresses)
@@ -3421,14 +3424,26 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         }
 
         guard !systemAudioSuspensionState.isSuspended else {
+            deferredSystemWake.noteDeferredResume(event)
             AppLogger.shared.write(
                 "SYSTEM AUDIO resume_deferred event=\(event.rawValue) " +
-                    "remaining_reasons=\(systemAudioSuspensionState.diagnostic)"
+                    "remaining_reasons=\(systemAudioSuspensionState.diagnostic) " +
+                    "deferred_system_wake=\(deferredSystemWake.isPending)"
             )
             return
         }
         resumeVirtualAudioOutputIfNeeded(reason: "system_\(event.rawValue)")
-        if BluetoothWakeRecoveryPolicy.shouldForceReconnect(event: event, started: started) {
+        let wakeWasDeferred = deferredSystemWake.consume(onResume: event)
+        if BluetoothWakeRecoveryPolicy.shouldForceReconnect(
+            event: event,
+            started: started,
+            deferredSystemWake: wakeWasDeferred
+        ) {
+            if wakeWasDeferred {
+                AppLogger.shared.write(
+                    "SYSTEM AUDIO wake_recovery event=\(event.rawValue) cause=deferred_system_wake"
+                )
+            }
             recoverBluetoothVoiceLink(reason: "system_wake", trigger: .systemWake)
         } else if BluetoothWakeRecoveryPolicy.shouldRecoverVoiceLinkAfterResume(
             started: started,
@@ -4714,12 +4729,13 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
                 self.recordHIDButtonStatus(value, profileID: profileID)
             }
             // A bound HID device appearing is evidence of presence, not a voice-key gesture.
-            // It may request recovery, but cannot reset that device's exhausted budget.
+            // It may lift a paused budget for one cooled-down attempt, but never resets
+            // that device's rolling failure history.
             if value.key.hasPrefix("button_mapping.status.connected"),
                let profileID = monitor.profileID,
                let profile = self.settings.remoteDeviceProfiles.first(where: { $0.id == profileID }),
                !profile.model.usesPrivateAdapter, let identifier = profile.bluetoothIdentifier {
-                self.connectBluetoothIdentifier(identifier, manual: false)
+                self.noteBluetoothDevicePresence(identifier)
             }
             if self.settings.selectedRemoteProfile?.model.isAppleSiriRemote == true {
                 return
@@ -5195,6 +5211,16 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
 
     private func startBluetoothConnections() {
         startBluetoothDiscoveryIfNeeded()
+    }
+
+    /// The system reconnected a bound remote's HID link. An existing bridge
+    /// treats that as device presence; otherwise start the bridge normally.
+    private func noteBluetoothDevicePresence(_ identifier: UUID) {
+        guard let bridge = bluetoothBridges[identifier] else {
+            connectBluetoothIdentifier(identifier, manual: false)
+            return
+        }
+        bridge.noteDevicePresence()
     }
 
     private func connectBluetoothIdentifier(_ identifier: UUID, manual: Bool) {

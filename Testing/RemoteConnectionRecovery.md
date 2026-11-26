@@ -1,7 +1,7 @@
 # 遥控器有限恢复与手动连接测试
 
 - 适用：连接页当前候选 Head；本轮新增「连接新的设备」入口；macOS；产品行为以 `feature/remote-connection-lifecycle/PRODUCT_SPEC.md` 为准。
-- 状态：自动化与生产 UI 证据见 PR；以下真实设备用例尚未验收，不代表兼容或发布通过。2026-11-23 补充选中设备睡眠唤醒与语音键恢复候选，真实 RC003 + 第三方语音工具仍待验收。
+- 状态：自动化与生产 UI 证据见 PR；以下真实设备用例尚未验收，不代表兼容或发布通过。2026-11-23 补充选中设备睡眠唤醒与语音键恢复候选，真实 RC003 + 第三方语音工具仍待验收。2026-11-26 补充用例 12（短唤醒累计暂停、屏幕后醒顺序、系统 HID 重连后自动恢复），真实设备待验收。
 
 ## 测试前准备
 
@@ -146,9 +146,29 @@ Apple、Chromecast 和手机/网页/Watch 入口分别回归，不以小米通�
 
 真实设备、第三方工具和睡眠矩阵未完成时只能标记候选；自动化不能替代首字/尾字和文字上屏。
 
+## 用例 12：长时间闲置与多次短唤醒后，系统已连上遥控器但 App 仍显示未连接
+
+适用：`fix/remote-recovery-after-idle-sleep-20261126` 候选及之后版本。现场来源与根因见 [Bug 记录](../Bugs/2026-11-26-remote-recovery-paused-after-idle-wakes.md)。
+
+1. 选中 RC003，等待 `BLE READY`，确认一次完整语音和文字上屏。
+2. 不碰遥控器，让 Mac 自然进入睡眠；每次只短暂唤醒（亮屏后约 1 分钟内再睡），累计至少 7 次。笔记本优先合盖，确保日志里出现 `system_did_wake` 先于 `screen_did_wake` 的顺序。
+3. 每次唤醒后查看连接页，确认遥控器不会变成「自动连接已暂停」。
+4. 把遥控器带离蓝牙范围或关机至少 10 分钟，让自动恢复真实失败到暂停；然后带回或开机，不打开连接页，按任意普通键。
+5. 按键后检查连接页状态，再按语音键说一句短句；记录按下到首个 PCM、可观察首字和松键尾字。
+6. 在暂停状态下点击「取消连接」之后再让系统 HID 重连，确认取消结果保留，不自动恢复。
+7. 连续开关遥控器或制造 HID 反复断连，30 秒内只允许一次在场恢复握手。
+
+预期：
+- 第 2–3 步：日志中 `SYSTEM AUDIO resume_deferred ... deferred_system_wake=true` 后出现 `SYSTEM AUDIO wake_recovery event=screen_did_wake cause=deferred_system_wake`，恢复窗口 `recovery_trigger=system_wake`；连接 Ready 超过 30 秒再睡眠的情况下 `automatic_attempt_history=0`，不会进入暂停。
+- 第 4–5 步：`HID CONNECTED` 后出现 `BLE RECOVERY phase=requested trigger=device_presence ... previous_status=paused source=hid_connected`，随后 `BLE RECOVERY_WINDOW ... recovery_trigger=device_presence` 和 `BLE READY`；第一次语音即成功，首尾完整。
+- 第 6 步：日志为 `BLE RECOVERY phase=skipped trigger=device_presence ... previous_status=cancelled`，保持已取消。
+- 第 7 步：冷却内的第二次 HID 连接记录 `reason=cooldown`，不发起新握手；真实握手失败仍受三次/60 秒和十分钟六次上限约束。
+
+失败：短唤醒后进入暂停；系统已连上遥控器、按键有响应但 App 仍显示未连接且需要手动点击；用户取消被 HID 重连覆盖；HID 抖动引发连续握手；第二次及以后语音才可用；首字丢失或尾字截断。
+
 ## 自动化与证据边界
 
-- `RemoteConnectionRecoveryTests` 使用虚拟时间验证预算、冷却、短暂 Ready、周期掉线、取消、迟到结果、多设备独立性，以及系统唤醒/语音键在暂停后的一次性恢复和冷却。
+- `RemoteConnectionRecoveryTests` 使用虚拟时间验证预算、冷却、短暂 Ready、周期掉线、取消、迟到结果、多设备独立性，以及系统唤醒/语音键在暂停后的一次性恢复和冷却。用例 12 新增：回放现场 12 次短唤醒（每次 Ready 约 70 秒）不进入暂停、短暂 Ready 仍受三次上限、设备在场（`device_presence`）解除暂停且 30 秒冷却并保留失败历史、用户取消不被在场覆盖，以及 `system_did_wake` 先于 `screen_did_wake` 时由最终恢复事件承接系统唤醒。
 - `VoiceKeyDiagnosticTests` 验证语音键下沿触发一次恢复意图、重复报告和设备上沿不重复触发；`BluetoothLifecycleTests` 验证 `system_wake` 触发、`RemoteWakeRecoveryPolicy` 资格和语音键接线。
 - `SiriRemoteActivationTests.explicitEnableWithoutMembershipSurvivesRelaunch` 使用无会员配置验证显式启用与持久化，不授予语音权益；真实 Free 账号、组件、按键与触摸仍待现场验收。
 - `BluetoothLifecycleTests` 验证既有发现、扫描、代次和会话门禁；`BluetoothDiscoveryScanPolicy` 用例覆盖无关广播过滤、身份快照和稳定连接时的自动发现抑制；新增 `RemoteIdentityReconciliationPolicy` 用例覆盖唯一 HID 命中、identifier 冲突、重复指纹、私有/未知型号和发现桥接线，并静态确认替换路径不迁移旧恢复预算、会清理旧桥状态。`AppLoggerTests` 验证密集拒绝事件的聚合上限。
@@ -162,6 +182,6 @@ Apple、Chromecast 和手机/网页/Watch 入口分别回归，不以小米通�
 ## 日志判定
 
 核对 `BLE DISCOVERY_WINDOW`、`BLE RECOVERY_WINDOW`、`BLE RECOVERY_ATTEMPT`、`BLE CONNECTING`、`BLE READY` 和 `BLE DISCONNECTED`。
-系统唤醒和语音键恢复额外核对 `recovery_trigger=system_wake|voice_key|automatic|manual`、`BLE RECOVERY phase=skipped ... reason=wake_not_eligible|budget_paused|cooldown`、`VOICE KEY reconnect_requested|reconnect_skipped`。免预算恢复不得增加十分钟失败计数；真实握手失败仍按 `BLE RECOVERY_ATTEMPT` 计数。
+系统唤醒和语音键恢复额外核对 `recovery_trigger=system_wake|voice_key|device_presence|automatic|manual`、`automatic_attempt_history=<n>`、`BLE RECOVERY phase=skipped ... reason=wake_not_eligible|budget_paused|cooldown`、`VOICE KEY reconnect_requested|reconnect_skipped`、`SYSTEM AUDIO wake_recovery ... cause=deferred_system_wake`。免预算恢复不得增加十分钟失败计数；真实握手失败仍按 `BLE RECOVERY_ATTEMPT` 计数。
 使用窗口 operation_id 与 attempt_id 关联请求、尝试和唯一终态。Ready 只证明本地握手，不能代替最终文字上屏。
 等待或暂停时不应出现周期超时；`BLE REJECTED` 与 `BLE ADOPT IGNORED` 只应来自通过第一层候选过滤的设备。普通无关设备在扫描结束时只汇总为 `ignored_unrelated=<n>`，不得逐设备刷屏。

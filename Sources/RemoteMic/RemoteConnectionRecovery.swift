@@ -12,13 +12,16 @@ enum RemoteConnectionRecoveryStatus: String, Equatable {
 /// Why a bounded recovery episode started.
 ///
 /// Only `.automatic` is a connection-failure retry and spends the rolling
-/// failure budget. `.systemWake` and `.voiceKey` are lifecycle/user intent:
-/// they may start one bounded episode even after an automatic failure budget
-/// is exhausted, but they never create a background retry loop.
+/// failure budget. `.systemWake`, `.voiceKey` and `.devicePresence` are
+/// lifecycle/user intent or a real device observation: they may start one
+/// bounded episode even after an automatic failure budget is exhausted, but
+/// they never create a background retry loop.
 enum RemoteConnectionRecoveryTrigger: String, Equatable {
     case automatic
     case systemWake = "system_wake"
     case voiceKey = "voice_key"
+    /// The system reconnected this remote's HID link, so the device is reachable.
+    case devicePresence = "device_presence"
     case manual
 
     var countsAgainstFailureBudget: Bool { self == .automatic }
@@ -50,6 +53,8 @@ final class RemoteConnectionRecovery {
     static let manualWindow: TimeInterval = 30
     static let stableConnection: TimeInterval = 30
     static let manualCooldown: TimeInterval = 5
+    /// HID links can flap; one presence-driven handshake per 30 s at most.
+    static let presenceCooldown: TimeInterval = 30
     static let discoveryWindow: TimeInterval = 20
 
     private(set) var status: RemoteConnectionRecoveryStatus = .waiting
@@ -61,11 +66,14 @@ final class RemoteConnectionRecovery {
     private(set) var lastTerminalTrigger: RemoteConnectionRecoveryTrigger?
     private var automaticAttempts: [TimeInterval] = []
     private var lastVoiceKeyAttemptAt: TimeInterval?
+    private var lastPresenceAttemptAt: TimeInterval?
     private var readyAt: TimeInterval?
     private var lastManualCompletion: TimeInterval?
     private(set) var needsResume = false
 
     var isActive: Bool { status == .recovering }
+    /// Automatic attempts still remembered by the rolling failure window (diagnostics only).
+    var automaticAttemptHistoryCount: Int { automaticAttempts.count }
     var presentationStatus: RemoteConnectionRecoveryStatus { needsResume ? .waiting : status }
     var manualAvailableAt: TimeInterval? { lastManualCompletion.map { $0 + Self.manualCooldown } }
 
@@ -92,6 +100,14 @@ final class RemoteConnectionRecovery {
                 return .cooldown
             }
             lastVoiceKeyAttemptAt = now
+        case .devicePresence:
+            // A user cancellation stays final; presence only lifts the
+            // automatic pause or an earlier "not found" result.
+            guard status != .cancelled else { return .notWaiting }
+            guard lastPresenceAttemptAt.map({ now - $0 >= Self.presenceCooldown }) ?? true else {
+                return .cooldown
+            }
+            lastPresenceAttemptAt = now
         case .systemWake:
             // Eligibility is decided by the bridge from "was Ready before
             // suspension" and "this wake already attempted". The failure
@@ -129,7 +145,7 @@ final class RemoteConnectionRecovery {
             attemptCount += 1
             automaticAttempts.append(now)
             return true
-        case .manual, .systemWake, .voiceKey:
+        case .manual, .systemWake, .voiceKey, .devicePresence:
             // Assisted episodes are one shot. If the one attempt fails, the
             // device stays paused until the next explicit trigger.
             guard attemptCount < 1 else {
@@ -201,6 +217,7 @@ final class RemoteConnectionRecovery {
     func resume(at now: TimeInterval) {
         guard needsResume else { return }
         needsResume = false
+        clearFailureHistoryIfStable(at: now)
         disconnected(at: now)
     }
 
@@ -210,9 +227,18 @@ final class RemoteConnectionRecovery {
     func resume(trigger: RemoteConnectionRecoveryTrigger, at now: TimeInterval) {
         guard needsResume else { return }
         needsResume = false
+        clearFailureHistoryIfStable(at: now)
         readyAt = nil
         status = .waiting
         _ = begin(trigger: trigger, at: now)
+    }
+
+    /// A stable link that only dropped because the Mac slept is not a device
+    /// flap. `systemUptime` stops during sleep, so earlier wake reconnects would
+    /// otherwise pile up inside one rolling window across hours of wall time.
+    private func clearFailureHistoryIfStable(at now: TimeInterval) {
+        guard let readyAt, now - readyAt >= Self.stableConnection else { return }
+        automaticAttempts.removeAll()
     }
 
     /// A wake can arrive while the bridge is still marked Ready. Start a fresh
