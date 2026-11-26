@@ -23,6 +23,21 @@ struct RemoteDeviceCardStatusTests {
         #expect(RemoteDeviceCardStatus.resolve(connected: true, buttons: .unknown, voice: .ready, voiceRequired: true) == .confirming)
     }
 
+    @Test func missingMappingPermissionsAreDistinctFromButtonFailure() {
+        #expect(RemoteDeviceCardStatus.resolve(
+            connected: true, buttons: .failed, voice: .ready, voiceRequired: true,
+            mappingPermissionsMissing: true
+        ) == .mappingPermissionsRequired)
+        #expect(RemoteDeviceCardStatus.resolve(
+            connected: true, buttons: .failed, voice: .failed, voiceRequired: true,
+            mappingPermissionsMissing: true
+        ) == .voiceFailed)
+        #expect(RemoteDeviceCardStatus.resolve(
+            connected: false, buttons: .failed, voice: .ready, voiceRequired: true,
+            mappingPermissionsMissing: true
+        ) == .disconnected)
+    }
+
     @Test func unpurchasedAppleVoiceIsExcludedButButtonsAreStillChecked() {
         for voice in [RemoteFunctionReadiness.ready, .failed, .checking, .unknown] {
             #expect(RemoteDeviceCardStatus.resolve(connected: true, buttons: .ready, voice: voice, voiceRequired: false) == .connected)

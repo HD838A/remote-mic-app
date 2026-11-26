@@ -1109,6 +1109,8 @@ struct SettingsPageRegressionTests {
         let connectionSource = source[connectionPanel.lowerBound..<mappingPage.lowerBound]
         #expect(connectionSource.contains("private var connectionRemotePhoto"))
         #expect(connectionSource.contains("SiriRemoteConnectionPhoto()"))
+        #expect(connectionSource.contains("model == .t1"))
+        #expect(connectionSource.contains("T1RemoteFace("))
 
         let mappingEnd = try #require(source.range(
             of: "private func mappingEditorPanel",

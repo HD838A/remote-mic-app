@@ -1840,7 +1840,24 @@ struct SettingsView: View {
 
     @ViewBuilder
     private var connectionRemotePhoto: some View {
-        if settings.selectedRemoteProfile?.model.isAppleSiriRemote == true {
+        if settings.selectedRemoteProfile?.model == .t1 {
+            let size = RemoteMappingLayout.remoteSize
+            let scale = 166 / size.height
+            T1RemoteFace(
+                selectedButton: nil,
+                activeButtons: [],
+                reservedButtons: [],
+                voiceActive: false,
+                onEdit: { _ in },
+                onVoice: {}
+            )
+            .frame(width: size.width, height: size.height)
+            .scaleEffect(scale)
+            .frame(width: size.width * scale, height: size.height * scale)
+            .allowsHitTesting(false)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(Text("remote.device.model.t1"))
+        } else if settings.selectedRemoteProfile?.model.isAppleSiriRemote == true {
             #if SAYALL_SIRI_REMOTE_ENABLED && canImport(SayAllSiriRemote)
             SiriRemoteConnectionPhoto()
             #else
@@ -3098,7 +3115,7 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 6) {
             PageHeader(title: localization.text("button_mapping.page.title"))
             Text(localization.text(settings.selectedRemoteProfile?.model == .t1
-                ? "button_mapping.t1.navigation_passthrough" : "button_mapping.page.subtitle"))
+                ? "button_mapping.t1.shared_navigation" : "button_mapping.page.subtitle"))
                 .font(.system(size: 13))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -7433,10 +7450,10 @@ struct SettingsView: View {
                                 Spacer(minLength: 16)
                                 Button("about.configuration.export", action: exportConfiguration)
                                     .compatibilityButtonStyle(.standard)
-                                    .frame(width: 92)
+                                    .fixedSize()
                                 Button("about.configuration.import", action: importConfiguration)
                                     .compatibilityButtonStyle(.standard)
-                                    .frame(width: 92)
+                                    .fixedSize()
                             }
                             .padding(.vertical, 8)
                             if macroFeature.isFeatureVisible {
@@ -8276,10 +8293,11 @@ struct SettingsView: View {
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(.secondary)
             }
-            .frame(width: 78, alignment: .leading)
+            .frame(width: 108, alignment: .leading)
             Button(actionTitle, action: action)
                 .compatibilityButtonStyle(.standard)
-                .frame(width: 126)
+                .fixedSize()
+                .frame(minWidth: 140, alignment: .trailing)
         }
         .padding(.vertical, 8)
     }

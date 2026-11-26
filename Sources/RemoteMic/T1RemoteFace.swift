@@ -3,23 +3,28 @@ import SwiftUI
 /// Geometry is normalized to the shared remote illustration frame.
 enum T1RemoteFaceLayout {
     static let voice = UnitPoint(x: 0.655, y: 0.303)
-    static let voiceCardY: CGFloat = 0.535
+    static let voiceCardY: CGFloat = 0.64
 
     static let placements: [RemoteMappingPlacement] = [
-        .init(button: .power, side: .right, anchor: UnitPoint(x: 0.685, y: 0.056), targetY: 0.094),
-        .init(button: .volumeUp, side: .right, anchor: UnitPoint(x: 0.817, y: 0.139), targetY: 0.242),
-        .init(button: .volumeDown, side: .right, anchor: UnitPoint(x: 0.817, y: 0.207), targetY: 0.389),
-        .init(button: .back, side: .left, anchor: UnitPoint(x: 0.345, y: 0.303), targetY: 0.31),
-        .init(button: .mute, side: .left, anchor: UnitPoint(x: 0.345, y: 0.402), targetY: 0.55),
-        .init(button: .home, side: .right, anchor: UnitPoint(x: 0.655, y: 0.409), targetY: 0.682),
-        .init(button: .menu, side: .right, anchor: UnitPoint(x: 0.655, y: 0.515), targetY: 0.829),
+        .init(button: .power, side: .right, anchor: UnitPoint(x: 0.685, y: 0.056), targetY: 0.08),
+        .init(button: .up, side: .left, anchor: UnitPoint(x: 0.5, y: 0.091), targetY: 0.09),
+        .init(button: .left, side: .left, anchor: UnitPoint(x: 0.342, y: 0.169), targetY: 0.25),
+        .init(button: .ok, side: .left, anchor: UnitPoint(x: 0.5, y: 0.169), targetY: 0.41),
+        .init(button: .right, side: .right, anchor: UnitPoint(x: 0.658, y: 0.169), targetY: 0.36),
+        .init(button: .down, side: .left, anchor: UnitPoint(x: 0.5, y: 0.247), targetY: 0.57),
+        .init(button: .volumeUp, side: .right, anchor: UnitPoint(x: 0.817, y: 0.139), targetY: 0.22),
+        .init(button: .volumeDown, side: .right, anchor: UnitPoint(x: 0.817, y: 0.207), targetY: 0.50),
+        .init(button: .back, side: .left, anchor: UnitPoint(x: 0.345, y: 0.303), targetY: 0.73),
+        .init(button: .mute, side: .left, anchor: UnitPoint(x: 0.345, y: 0.402), targetY: 0.89),
+        .init(button: .home, side: .right, anchor: UnitPoint(x: 0.655, y: 0.409), targetY: 0.78),
+        .init(button: .menu, side: .right, anchor: UnitPoint(x: 0.655, y: 0.515), targetY: 0.92),
     ]
 }
 
 struct T1RemoteFace: View {
     @EnvironmentObject private var localization: LocalizationStore
 
-    let selectedButton: RemoteButton
+    let selectedButton: RemoteButton?
     let activeButtons: Set<RemoteButton>
     let reservedButtons: Set<RemoteButton>
     let voiceActive: Bool
@@ -116,14 +121,13 @@ struct T1RemoteFace: View {
                 .overlay { Circle().strokeBorder(Color(white: 0.06), lineWidth: 1) }
                 .padding(22)
         }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text("button_mapping.t1.native_navigation"))
+        .accessibilityHidden(true)
     }
 
     private func key(_ button: RemoteButton) -> some View {
         let sideKey = button == .volumeUp || button == .volumeDown
         let pillKey = button == .mute
-        let keySize: CGFloat = button == .power ? 26 : 42
+        let keySize: CGFloat = button.isDirectional ? 24 : button == .power ? 26 : 42
         let active = activeButtons.contains(button)
         let selected = selectedButton == button
         let reserved = reservedButtons.contains(button)
@@ -131,7 +135,7 @@ struct T1RemoteFace: View {
             onEdit(button)
         } label: {
             ZStack {
-                if !sideKey && !pillKey {
+                if !sideKey && !pillKey && !button.isDirectional {
                     Circle().fill(Color(white: 0.11))
                     Circle().strokeBorder(keyBorder(active: active, selected: selected), lineWidth: 1)
                 } else if active || selected {
@@ -139,7 +143,7 @@ struct T1RemoteFace: View {
                         .fill((active ? Color.orange : Color.accentColor).opacity(0.25))
                 }
                 Image(systemName: symbol(for: button))
-                    .font(.system(size: sideKey ? 8 : 13, weight: .semibold))
+                    .font(.system(size: sideKey ? 8 : button.isDirectional ? 10 : 13, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.9))
             }
             .frame(width: sideKey ? 17 : keySize, height: sideKey ? 26 : keySize)

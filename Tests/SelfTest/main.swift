@@ -128,14 +128,29 @@ check(
 
 var t1FrontButtons = T1FrontButtonTracker()
 check(
-    t1FrontButtons.observe(reportID: 1, bytes: [0, 0, 0x28, 0x52, 0x04, 0xAA, 0, 0]).isEmpty &&
+    t1FrontButtons.observe(reportID: 1, bytes: [0, 0, 0x04, 0xAA, 0, 0, 0, 0]).isEmpty &&
         t1FrontButtons.observe(reportID: 1, bytes: [1, 0, 0, 0x65, 0, 0, 0, 0, 0])
             == [T1FrontButtonEdge(button: .menu, phase: .press)] &&
         t1FrontButtons.observe(reportID: 1, bytes: [0, 0, 1, 1, 1, 1, 1, 1]).isEmpty &&
         t1FrontButtons.observe(reportID: 1, bytes: Array(repeating: 0, count: 8))
             == [T1FrontButtonEdge(button: .menu, phase: .release)],
-    "T1 rear typing, shared navigation, voice and rollover do not trigger ordinary mappings"
+    "T1 rear letters, voice and rollover do not trigger ordinary mappings"
 )
+let t1SharedNavigation: [(UInt8, RemoteButton)] = [
+    (0x52, .up), (0x51, .down), (0x50, .left), (0x4f, .right), (0x28, .ok),
+]
+for (usage, button) in t1SharedNavigation {
+    var tracker = T1FrontButtonTracker()
+    let report: [UInt8] = [1, 0, 0, usage, 0, 0, 0, 0, 0]
+    check(
+        tracker.observe(reportID: 1, bytes: report) == [T1FrontButtonEdge(button: button, phase: .press)] &&
+            tracker.observe(reportID: 1, bytes: report).isEmpty &&
+            tracker.observe(reportID: 1, bytes: [1] + Array(repeating: 0, count: 8)) ==
+                [T1FrontButtonEdge(button: button, phase: .release)] &&
+            T1FrontButtons.nativeMappings.contains(HIDUsageMapping(source: UInt64(7) << 32 | UInt64(usage), destination: 0)),
+        "T1 emits one edge per shared navigation key press and suppresses its duplicate system event"
+    )
+}
 check(
     t1FrontButtons.observe(reportID: 2, bytes: [2, 0x24, 0x02])
         == [T1FrontButtonEdge(button: .back, phase: .press)] &&
@@ -154,8 +169,9 @@ check(
         T1FrontButtons.buttons(reportID: 2, bytes: [0xE2, 0]) == [.mute] &&
         T1FrontButtons.buttons(reportID: 2, bytes: [0x23, 0x02]) == [.home] &&
         T1FrontButtons.buttons(reportID: 2, bytes: [3, 0xE9, 0]) == nil &&
-        T1FrontButtons.configurable == [.power, .menu, .back, .home, .mute, .volumeUp, .volumeDown],
-    "T1 exposes only uniquely addressed front buttons for mapping"
+        T1FrontButtons.configurable == [.power, .menu, .back, .home, .mute, .volumeUp, .volumeDown,
+                                        .up, .down, .left, .right, .ok],
+    "T1 exposes the dedicated front controls and the shared navigation keys"
 )
 
 let generationOne: UInt64 = 1

@@ -1,10 +1,15 @@
 import Foundation
 
 /// T1's keyboard, consumer controls and system controls are independent reports.
-/// Directions and Return share a keyboard usage with the back face.
+/// Directions and Return use the same keyboard report as the back face.
 enum T1FrontButtons {
     static let usageToButton: [UInt64: RemoteButton] = [
         0x0000_0001_0000_0081: .power,
+        0x0000_0007_0000_0028: .ok,
+        0x0000_0007_0000_004F: .right,
+        0x0000_0007_0000_0050: .left,
+        0x0000_0007_0000_0051: .down,
+        0x0000_0007_0000_0052: .up,
         0x0000_0007_0000_0065: .menu,
         0x0000_000C_0000_0224: .back,
         0x0000_000C_0000_0223: .home,
@@ -27,7 +32,7 @@ enum T1FrontButtons {
             let slots = report.dropFirst(2)
             // HID rollover is an invalid snapshot, not a release of the menu key.
             guard !slots.contains(where: { (1...3).contains($0) }) else { return nil }
-            return slots.contains(0x65) ? [.menu] : []
+            return Set(slots.compactMap { usageToButton[0x0000_0007_0000_0000 | UInt64($0)] })
         case 2:
             guard let report = payload(reportID: reportID, bytes: bytes, size: 2) else {
                 return nil

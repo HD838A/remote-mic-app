@@ -8519,14 +8519,15 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         }
 
         let permissions = appliedHIDPermissionSnapshot ?? .current
-        let needsT1Permissions = profile.model == .t1 &&
-            (!permissions.inputMonitoringGranted || !permissions.accessibilityGranted)
+        let permissionsMissing = !permissions.inputMonitoringGranted || !permissions.accessibilityGranted
+        let needsT1Permissions = profile.model == .t1 && permissionsMissing
+        let mappingPermissionsMissing = settings.customMappingEnabled && permissionsMissing
         let buttons: RemoteFunctionReadiness
         let buttonReason: String
         if !settings.customMappingEnabled {
             buttons = .ready
             buttonReason = "custom_mapping_disabled"
-        } else if !permissions.inputMonitoringGranted || !permissions.accessibilityGranted {
+        } else if mappingPermissionsMissing {
             buttons = .failed
             buttonReason = "permission_missing"
         } else if profile.model.isAppleSiriRemote {
@@ -8626,7 +8627,8 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         }
 
         let status = needsT1Permissions ? .permissionsRequired : RemoteDeviceCardStatus.resolve(
-            connected: true, buttons: buttons, voice: voice, voiceRequired: voiceRequired
+            connected: true, buttons: buttons, voice: voice, voiceRequired: voiceRequired,
+            mappingPermissionsMissing: mappingPermissionsMissing
         )
         return snapshot(
             status: status, connected: true,

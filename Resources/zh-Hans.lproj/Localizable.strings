@@ -491,8 +491,7 @@
 "audio.output.privacy_help" = "语音会写入所选设备。最后一只设备断开时，如果系统默认输入正是该虚拟设备，会临时回退到物理麦克风；重连时仅在用户没有手动改选的情况下恢复。系统默认输出不会被修改。";
 "audio.compatibility.open_install_guide" = "打开驱动安装说明";
 "audio.compatibility.missing_notice" = "未检测到兼容虚拟麦克风，语音工具可能收不到设备声音。";
-"button_mapping.t1.navigation_passthrough" = "方向键和 OK 沿用系统键盘输入。";
-"button_mapping.t1.native_navigation" = "方向环和确认键，由系统处理";
+"button_mapping.t1.shared_navigation" = "两面共用方向键和回车映射。";
 "button_mapping.t1.air_mouse" = "飞鼠开关，由遥控器处理";
 "button_mapping.page.title" = "按键映射";
 "button_mapping.page.subtitle" = "点击按键进行设置";
@@ -1599,6 +1598,7 @@
 
 "remote.card.status.permissions_required" = "已连接 · 需授权";
 "remote.card.detail.permissions_required" = "T1 已通过蓝牙连接。请在设置中启用输入监控与辅助功能，以使用语音和按键映射。";
+"remote.card.detail.mapping_permissions_required" = "蓝牙已连接。请在 SayAll 设置中启用输入监控与辅助功能，以使用按键映射。";
 "remote.card.status.voice_failed" = "语音异常";
 "remote.card.detail.voice_failed" = "设备已连接，但已授权的语音功能出现问题。";
 
