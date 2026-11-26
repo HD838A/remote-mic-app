@@ -7,6 +7,7 @@ final class ChromecastAppSwitcher {
     private let scheduler: HIDRemoteScheduling
     private let logger: (String) -> Void
     private let observeMouseDismiss: (@escaping () -> Void) -> (() -> Void)?
+    private let logScope: String
     private var operationID: UUID?
     private var consumedPresses = Set<RemoteButton>()
     private var timeout: HIDRemoteScheduledTask?
@@ -18,12 +19,14 @@ final class ChromecastAppSwitcher {
         session: KeyboardInjector.AppSwitcherSession = .init(),
         scheduler: HIDRemoteScheduling = DispatchHIDRemoteScheduler(),
         logger: @escaping (String) -> Void = AppLogger.shared.write,
-        observeMouseDismiss: @escaping (@escaping () -> Void) -> (() -> Void)? = HIDRemoteMonitor.installMouseClickDismissObserver
+        observeMouseDismiss: @escaping (@escaping () -> Void) -> (() -> Void)? = HIDRemoteMonitor.installMouseClickDismissObserver,
+        logScope: String = "CHROMECAST"
     ) {
         self.session = session
         self.scheduler = scheduler
         self.logger = logger
         self.observeMouseDismiss = observeMouseDismiss
+        self.logScope = logScope
     }
 
     func start(button: RemoteButton) -> Bool {
@@ -131,7 +134,7 @@ final class ChromecastAppSwitcher {
 
     private func log(_ phase: String, result: String, detail: String) {
         guard let operationID else { return }
-        logger("CHROMECAST APP SWITCHER operation_id=\(operationID) phase=\(phase) result=\(result) " +
+        logger("\(logScope) APP SWITCHER operation_id=\(operationID) phase=\(phase) result=\(result) " +
                "\(detail) user_visible_result=unknown")
     }
 }
