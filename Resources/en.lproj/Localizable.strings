@@ -980,6 +980,8 @@
 "onboarding.remote.first_pairing.wake" = "Hold the TV button for about 2 seconds until the white light at the bottom starts flashing";
 "onboarding.remote.first_pairing.wake_without_light" = "Hold the TV button for about 2 seconds";
 "onboarding.remote.first_pairing.pair" = "Then hold Home + Menu together to enter Bluetooth pairing mode";
+"onboarding.remote.t1_pairing.mode" = "Hold Home and Back together until the indicator flashes";
+"onboarding.remote.t1_pairing.connect" = "In System Settings → Bluetooth, connect to T1-Remote";
 "onboarding.remote.siri_pairing.title" = "Connect the Apple Remote for the first time";
 "onboarding.remote.siri_pairing.step1" = "Turn off the Apple TV it was paired with, or it reconnects to that";
 "onboarding.remote.siri_pairing.step2" = "Open System Settings → Bluetooth on your Mac";
@@ -1060,7 +1062,7 @@
 "onboarding.voice_test.success" = "Voice and text input are confirmed";
 "onboarding.controls.title" = "Try your everyday control buttons";
 "onboarding.controls.detail" = "Press three different control buttons to try navigation, OK, Back, Home, or volume control.";
-"onboarding.controls.xiaomi.detail" = "Press three different control buttons on the Xiaomi remote, such as an arrow, OK, Back, Home, or volume.";
+"onboarding.controls.xiaomi.detail" = "Press three different control buttons on your remote, such as an arrow, OK, Back, Home, or volume.";
 "onboarding.controls.siri.detail" = "Press three different control buttons on the Apple Remote, such as an arrow, center, Back, TV, Play, or volume.";
 "onboarding.controls.chromecast.detail" = "Press three different control buttons on Chromecast Voice Remote, such as an arrow, OK, Back, Home, Mute, or volume.";
 "onboarding.controls.apple_companion.detail" = "Tap three different control buttons in the iPhone or Apple Watch remote, such as an arrow, OK, Back, or volume.";

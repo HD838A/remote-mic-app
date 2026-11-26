@@ -579,6 +579,13 @@ struct OnboardingFlowTests {
             "onboarding.remote.first_pairing.wake_without_light",
             "onboarding.remote.first_pairing.pair",
         ])
+        let t1Pairing = OnboardingView.physicalRemotePairingGuide(for: .xiaomiRemote, xiaomiModel: .t1)
+        #expect(t1Pairing.steps == ["onboarding.remote.t1_pairing.mode", "onboarding.remote.t1_pairing.connect"])
+        #expect(Set(OnboardingView.displayedControlButtons(for: .xiaomiRemote, xiaomiModel: .t1) ?? [])
+            == T1FrontButtons.configurable)
+        #expect(OnboardingRemotePhotoKind.resolve(
+            source: .xiaomiRemote, selectedModel: .rc003, onboardingXiaomiModel: .t1
+        ) == .t1)
 
         let siriPairing = OnboardingView.physicalRemotePairingGuide(for: .siriRemote)
         #expect(siriPairing.steps == (1...5).map { "onboarding.remote.siri_pairing.step\($0)" })
@@ -642,16 +649,18 @@ struct OnboardingFlowTests {
     }
 
     @Test func physicalRemoteCardsSplitXiaomiAndFollowRequiredOrder() {
-        #expect(OnboardingXiaomiRemoteModel.allCases == [.rc003, .rc001])
+        #expect(OnboardingXiaomiRemoteModel.allCases == [.rc003, .rc001, .t1])
         #expect(OnboardingPhysicalRemoteCard.ordered(availableSources: [.xiaomiRemote]) == [
             .xiaomi(.rc003),
             .xiaomi(.rc001),
+            .xiaomi(.t1),
         ])
         #expect(OnboardingPhysicalRemoteCard.ordered(
             availableSources: [.xiaomiRemote, .siriRemote]
         ) == [
             .xiaomi(.rc003),
             .xiaomi(.rc001),
+            .xiaomi(.t1),
             .apple(.generation7),
             .apple(.generation6),
         ])
@@ -4155,8 +4164,10 @@ struct OnboardingFlowTests {
             #expect(remoteSource.settings.onboardingControlSource == source)
             #expect(!remoteSource.settings.siriRemoteEnabled)
         }
-        invoke("control-source.xiaomi_remote.rc001", on: remoteSource)
+        invoke("control-source.xiaomi_remote.t1", on: remoteSource)
         invoke("continue", on: remoteSource)
+        #expect(remoteSource.settings.onboardingStep == .permissions)
+        #expect(remoteSource.settings.onboardingXiaomiRemoteModel == .t1)
         invoke("back", on: remoteSource)
 
         let vokieSource = try OnboardingOffscreenFixture(

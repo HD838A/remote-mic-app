@@ -1866,22 +1866,7 @@ struct SettingsView: View {
     @ViewBuilder
     private var connectionRemotePhoto: some View {
         if settings.selectedRemoteProfile?.model == .t1 {
-            let size = RemoteMappingLayout.remoteSize
-            let scale = 166 / size.height
-            T1RemoteFace(
-                selectedButton: nil,
-                activeButtons: [],
-                reservedButtons: [],
-                voiceActive: false,
-                onEdit: { _ in },
-                onVoice: {}
-            )
-            .frame(width: size.width, height: size.height)
-            .scaleEffect(scale)
-            .frame(width: size.width * scale, height: size.height * scale)
-            .allowsHitTesting(false)
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(Text("remote.device.model.t1"))
+            T1RemoteFace.preview(height: 166)
         } else if settings.selectedRemoteProfile?.model.isAppleSiriRemote == true {
             #if SAYALL_SIRI_REMOTE_ENABLED && canImport(SayAllSiriRemote)
             SiriRemoteConnectionPhoto()

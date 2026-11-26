@@ -31,6 +31,21 @@ struct T1RemoteFace: View {
     let onEdit: (RemoteButton) -> Void
     let onVoice: () -> Void
 
+    static func preview(height: CGFloat) -> some View {
+        let size = RemoteMappingLayout.remoteSize
+        let scale = height / size.height
+        return Self(
+            selectedButton: nil, activeButtons: [], reservedButtons: [],
+            voiceActive: false, onEdit: { _ in }, onVoice: {}
+        )
+        .frame(width: size.width, height: size.height)
+        .scaleEffect(scale)
+        .frame(width: size.width * scale, height: height)
+        .allowsHitTesting(false)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text("remote.device.model.t1"))
+    }
+
     var body: some View {
         GeometryReader { geometry in
             let size = geometry.size

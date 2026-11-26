@@ -979,6 +979,8 @@
 "onboarding.remote.first_pairing.wake" = "长按 TV 键约 2 秒，直到遥控器底部白灯开始闪烁";
 "onboarding.remote.first_pairing.wake_without_light" = "长按 TV 键约 2 秒";
 "onboarding.remote.first_pairing.pair" = "同时长按 Home（主页）+ Menu（菜单）键，进入蓝牙配对模式";
+"onboarding.remote.t1_pairing.mode" = "同时长按主页键和返回键，直到指示灯闪烁";
+"onboarding.remote.t1_pairing.connect" = "在系统设置的蓝牙列表中连接 T1-Remote";
 "onboarding.remote.siri_pairing.title" = "首次连接苹果遥控器";
 "onboarding.remote.siri_pairing.step1" = "先关掉它原来配对的 Apple TV，否则遥控器会自动连回去";
 "onboarding.remote.siri_pairing.step2" = "打开 Mac 的“系统设置 → 蓝牙”";
@@ -1059,7 +1061,7 @@
 "onboarding.voice_test.success" = "语音与文字输入都已确认";
 "onboarding.controls.title" = "试试常用的控制按键";
 "onboarding.controls.detail" = "连续按下三个不同的普通按键，感受方向、确认、返回、主页或音量控制。";
-"onboarding.controls.xiaomi.detail" = "在小米遥控器上连续按下三个不同的普通按键，例如方向、确定、返回、主页或音量。";
+"onboarding.controls.xiaomi.detail" = "在遥控器上连续按下三个不同的普通按键，例如方向、确认、返回、主页或音量。";
 "onboarding.controls.siri.detail" = "在苹果遥控器上连续按下三个不同的普通按键，例如方向、中心、返回、TV、播放或音量。";
 "onboarding.controls.chromecast.detail" = "在 Chromecast 遥控器上连续按下三个不同的普通按键，例如方向、确定、返回、主页、静音或音量。";
 "onboarding.controls.apple_companion.detail" = "在 iPhone 或 Apple Watch 遥控器中点按三个不同的普通控制，例如方向、确定、返回或音量。";

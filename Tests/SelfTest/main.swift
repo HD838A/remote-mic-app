@@ -100,6 +100,18 @@ let t1Pending = VoiceRemoteAdmission.decide(
     name: "T1-Remote", advertisedName: nil
 )
 check(t1Pending == .probeT1 && !t1Pending.isAdopted, "T1 discovery does not confirm device identity")
+let onboardingT1 = OnboardingXiaomiRemoteModel(rawValue: "t1")
+check(
+    onboardingT1?.model == .t1 &&
+        OnboardingPhysicalRemoteCard.ordered(availableSources: [.xiaomiRemote]).contains {
+            $0.id == "xiaomi_remote.t1"
+        } && OnboardingXiaomiEventPolicy.disposition(
+            profileModel: .t1, selectedModel: onboardingT1, controlSource: .xiaomiRemote
+        ) == .accept && OnboardingXiaomiEventPolicy.disposition(
+            profileModel: .rc001, selectedModel: onboardingT1, controlSource: .xiaomiRemote
+        ) == .rejectOtherModel,
+    "onboarding can select T1 and validates events from that model only"
+)
 check(
     T1VoiceRemote.voiceIsHeld(reportID: 1, bytes: [0, 0, 0xAA, 0, 0, 0, 0, 0]) == true &&
         T1VoiceRemote.voiceIsHeld(reportID: 1, bytes: [1, 0, 0, 0, 0, 0, 0, 0, 0]) == false &&

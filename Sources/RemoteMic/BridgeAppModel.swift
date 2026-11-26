@@ -815,11 +815,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     var connectedOnboardingXiaomiModels: Set<OnboardingXiaomiRemoteModel> {
         Set(settings.remoteDeviceProfiles.compactMap { profile in
             guard connectedRemoteProfileIDs.contains(profile.id) else { return nil }
-            switch profile.model {
-            case .rc001: return .rc001
-            case .rc003: return .rc003
-            default: return nil
-            }
+            return OnboardingXiaomiRemoteModel(rawValue: profile.model.rawValue)
         })
     }
 
@@ -2410,8 +2406,16 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         }
     }
 
-    func findRemoteDevices() {
+    func findRemoteDevices(expectedModel: OnboardingXiaomiRemoteModel? = nil) {
         guard started else { return }
+        if expectedModel == .t1 {
+            let connected = T1VoiceKeyMonitor.systemConnectedBluetoothIdentifiers()
+            if connected.count == 1, let identifier = connected.first,
+               bluetoothBridges[identifier] == nil {
+                connectBluetoothIdentifier(identifier, manual: false, probeT1: true)
+                return
+            }
+        }
         if discoveryBluetoothBridge == nil { startBluetoothDiscoveryIfNeeded(manual: true) }
         else { discoveryBluetoothBridge?.refreshDiscovery(manual: true) }
     }
@@ -5720,6 +5724,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         guard let profileID = mappedT1ProfileID, remoteProfileID(for: bridge) == profileID,
               bridge.isT1ButtonInputReady, settings.customMappingEnabled
         else { return }
+        if isOnboardingXiaomiSelectionLocked, settings.onboardingXiaomiRemoteModel != .t1 { return }
         let source = t1ButtonSource(profileID)
         let button = edge.button
         if edge.phase == .press {
@@ -5729,6 +5734,9 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         } else {
             activeT1Buttons.remove(button)
         }
+        guard !OnboardingControlValidationPolicy.suppressConfiguredActions(
+            at: settings.onboardingStep, source: settings.onboardingControlSource
+        ) else { return }
         if handleButtonGestureLearning(edge.phase, button: button, profileID: profileID) { return }
         if macroFeature.isEditorActive {
             if edge.phase == .press { macroFeature.noteButtonInteraction(button: button) }
