@@ -6,6 +6,25 @@ import Testing
 
 @Suite("Keyboard event suppressor")
 struct KeyboardEventSuppressorTests {
+    @Test func disabledTapFailsOpenWithoutRequestingImmediateReenable() throws {
+        var logs: [String] = []
+        let suppressor = KeyboardEventSuppressor(logger: { logs.append($0) })
+        let event = try nativeEvent(.keyboard(keyCode: 36), down: true)
+
+        #expect(!suppressor.handle(type: .tapDisabledByTimeout, event: event))
+        #expect(logs.contains { $0.contains("result=fail_open recovery=app_restart") })
+        #expect(!logs.contains { $0.contains("reenable_requested") })
+    }
+
+    @Test func busyLedgerNeverBlocksTheSessionTap() throws {
+        let suppressor = KeyboardEventSuppressor(logger: { _ in })
+        let event = try nativeEvent(.keyboard(keyCode: 36), down: true)
+
+        suppressor.withLockedStateForTesting {
+            #expect(!suppressor.handle(type: event.type, event: event))
+        }
+    }
+
     @Test func capsLockPassesThroughWithoutConsumingArmedMediaKeys() throws {
         var logs: [String] = []
         let suppressor = KeyboardEventSuppressor(logger: { logs.append($0) })
