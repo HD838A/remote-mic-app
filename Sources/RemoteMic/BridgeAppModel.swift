@@ -237,11 +237,6 @@ struct MobileVoiceLifecycleState {
     }
 }
 
-private struct MobileButtonGestureKey: Hashable {
-    let source: UsageEventSource
-    let button: RemoteButton
-}
-
 private struct AppleRemoteButtonGestureKey: Hashable {
     let device: SiriRemoteDeviceIdentity
     let button: RemoteButton
@@ -1048,9 +1043,6 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     private var webRemoteSessionOperationCounter: UInt64 = 0
     private var webRemoteSessionIdempotencyKey: String?
     private var remoteButtonTitles: [String: String] = [:]
-    private var mobileButtonGestureRecognizers: [UsageEventSource: RemoteButtonGestureRecognizer] = [:]
-    private var mobileDoubleClickTimers: [MobileButtonGestureKey: DispatchSourceTimer] = [:]
-    private var mobileLongPressTimers: [MobileButtonGestureKey: DispatchSourceTimer] = [:]
     private var bluetoothBridges: [UUID: XiaomiBluetoothBridge] = [:]
     private var bluetoothBridgeStates: [ObjectIdentifier: BluetoothBridgeState] = [:]
     private var discoveryBluetoothBridge: XiaomiBluetoothBridge?
@@ -1214,6 +1206,8 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     /// 当前按下的 Chromecast 按键（画布控制 ID）。
     private var chromecastPressedControls = Set<String>()
     private let chromecastAppSwitcher = ChromecastAppSwitcher()
+    /// 手机、手表与 Web 遥控共用同一套切换器语义；日志与 Chromecast 分开。
+    private let mobileAppSwitcher = ChromecastAppSwitcher(logScope: "MOBILE REMOTE")
     private var chromecastButtonGestureRecognizer = RemoteButtonGestureRecognizer()
     private var chromecastDoubleClickTimers: [RemoteButton: DispatchSourceTimer] = [:]
     private var chromecastLongPressTimers: [RemoteButton: DispatchSourceTimer] = [:]
@@ -4527,11 +4521,6 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         configuredButtonInteractionOwners[source] = profileID
         let bindingSnapshot = buttonInteractionSnapshot(button, profileID: profileID)
         var snapshot = bindingSnapshot
-        if (source.hasPrefix("mobile:") || source == "watch"),
-           snapshot.settings.migratedRepeatButtons?.contains(button.rawValue) == true,
-           settings.interactionModeOverride?(profileID, button) == nil {
-            snapshot.mode = .once // Companion sources did not have implicit software repeat.
-        }
         let repeated = snapshot.mode == .repeatLong ? snapshot.long : snapshot.single
         snapshot.repeatAllowed = HIDRemoteMonitor.shouldRepeat(configured: repeated,
             frontmostBundleIdentifier: NSWorkspace.shared.frontmostApplication?.bundleIdentifier)
@@ -8973,6 +8962,14 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             }
             return true
         }
+        let profileID = settings.selectedRemoteProfileID
+        let mobileSource = "mobile:\(source.rawValue)"
+        if mobileAppSwitcher.handle(
+            phase,
+            button: button,
+            isSwitcherBinding: resolvedMobileConfiguredAction(for: button, trigger: .singleClick, profileID: profileID)
+                .action == .appSwitcher
+        ) { return true }
         if macroFeature.isEditorActive {
             if phase == .press {
                 macroFeature.noteButtonInteraction(button: button)
@@ -8986,143 +8983,63 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         if membershipFeature.handleCommonPhrase(
             button: button.rawValue,
             phase: phase.rawValue,
-            source: phraseSource ?? "mobile:\(source.rawValue)"
+            source: phraseSource ?? mobileSource
         ) { return true }
-        let profileID = settings.selectedRemoteProfileID
-        let recognizesDoubleClick = settings.configuredAction(
-            for: button,
-            trigger: .doubleClick
-        ).action != .disabled || macroFeature.hasActiveBinding(
-            profileID: profileID,
-            button: button,
-            trigger: .doubleClick
-        )
-        let recognizesLongPress = settings.configuredAction(
-            for: button,
-            trigger: .longPress
-        ).action != .disabled || macroFeature.hasActiveBinding(
-            profileID: profileID,
-            button: button,
-            trigger: .longPress
-        )
-
-        var recognizer = mobileButtonGestureRecognizers[source] ?? RemoteButtonGestureRecognizer()
-        if phase == .press,
-           !recognizesDoubleClick,
-           !recognizesLongPress,
-           !recognizer.isTracking(button) {
-            return performMobileConfiguredAction(
+        handleConfiguredButtonInteraction(phase, button: button, profileID: profileID, source: mobileSource) { [weak self] trigger, configured in
+            self?.performMobileConfiguredAction(
                 for: button,
-                trigger: .singleClick,
+                trigger: trigger,
                 source: source,
-                phraseSource: phraseSource
-            )
-        }
-
-        let commands = recognizer.handle(
-            phase,
-            button: button,
-            recognizesDoubleClick: recognizesDoubleClick,
-            recognizesLongPress: recognizesLongPress
-        )
-        mobileButtonGestureRecognizers[source] = recognizer
-        return processMobileGestureCommands(commands, source: source, phraseSource: phraseSource)
-    }
-
-    private func processMobileGestureCommands(
-        _ commands: [RemoteButtonGestureRecognizer.Command],
-        source: UsageEventSource,
-        phraseSource: String? = nil
-    ) -> Bool {
-        for command in commands {
-            switch command {
-            case let .scheduleDoubleClickTimeout(button):
-                scheduleMobileDoubleClickTimeout(for: button, source: source, phraseSource: phraseSource)
-            case let .cancelDoubleClickTimeout(button):
-                mobileDoubleClickTimers.removeValue(forKey: .init(
-                    source: source,
-                    button: button
-                ))?.cancel()
-            case let .scheduleLongPressTimeout(button):
-                scheduleMobileLongPressTimeout(for: button, source: source, phraseSource: phraseSource)
-            case let .cancelLongPressTimeout(button):
-                mobileLongPressTimers.removeValue(forKey: .init(
-                    source: source,
-                    button: button
-                ))?.cancel()
-            case let .trigger(button, trigger):
-                guard performMobileConfiguredAction(
-                    for: button,
-                    trigger: trigger,
-                    source: source,
-                    phraseSource: phraseSource
-                ) else { return false }
-            }
+                phraseSource: phraseSource,
+                captured: configured
+            ) ?? false
         }
         return true
     }
 
-    private func scheduleMobileDoubleClickTimeout(
-        for button: RemoteButton,
-        source: UsageEventSource,
-        phraseSource: String? = nil
-    ) {
-        let key = MobileButtonGestureKey(source: source, button: button)
-        mobileDoubleClickTimers.removeValue(forKey: key)?.cancel()
-        let timer = DispatchSource.makeTimerSource(queue: .main)
-        timer.schedule(deadline: .now() + .milliseconds(300))
-        timer.setEventHandler { [weak self] in
-            guard let self else { return }
-            mobileDoubleClickTimers.removeValue(forKey: key)
-            guard var recognizer = mobileButtonGestureRecognizers[source] else { return }
-            let commands = recognizer.doubleClickTimedOut(button)
-            mobileButtonGestureRecognizers[source] = recognizer
-            _ = processMobileGestureCommands(commands, source: source, phraseSource: phraseSource)
-        }
-        mobileDoubleClickTimers[key] = timer
-        timer.resume()
-    }
-
-    private func scheduleMobileLongPressTimeout(
-        for button: RemoteButton,
-        source: UsageEventSource,
-        phraseSource: String? = nil
-    ) {
-        let key = MobileButtonGestureKey(source: source, button: button)
-        mobileLongPressTimers.removeValue(forKey: key)?.cancel()
-        let timer = DispatchSource.makeTimerSource(queue: .main)
-        timer.schedule(deadline: .now() + .milliseconds(550))
-        timer.setEventHandler { [weak self] in
-            guard let self else { return }
-            mobileLongPressTimers.removeValue(forKey: key)
-            guard var recognizer = mobileButtonGestureRecognizers[source] else { return }
-            let commands = recognizer.longPressTimedOut(button)
-            mobileButtonGestureRecognizers[source] = recognizer
-            _ = processMobileGestureCommands(commands, source: source, phraseSource: phraseSource)
-        }
-        mobileLongPressTimers[key] = timer
-        timer.resume()
-    }
-
     private func resetMobileButtonGestures(source: UsageEventSource, phraseSource: String? = nil) {
         membershipFeature.resetCommonPhrases(source: phraseSource ?? "mobile:\(source.rawValue)")
-        let doubleClickKeys = mobileDoubleClickTimers.keys.filter { $0.source == source }
-        doubleClickKeys.forEach {
-            mobileDoubleClickTimers.removeValue(forKey: $0)?.cancel()
+        cancelConfiguredButtonInteractions(source: "mobile:\(source.rawValue)", reason: "button_events_reset")
+        mobileAppSwitcher.cancel(reason: "button_events_reset")
+    }
+
+    private func resolvedMobileConfiguredAction(
+        for button: RemoteButton,
+        trigger: ButtonTrigger,
+        profileID: UUID?
+    ) -> ConfiguredButtonAction {
+        if let binding = macroFeature.profileBinding(
+            device: profileID,
+            button: button,
+            trigger: trigger
+        ) {
+            return binding
         }
-        let longPressKeys = mobileLongPressTimers.keys.filter { $0.source == source }
-        longPressKeys.forEach {
-            mobileLongPressTimers.removeValue(forKey: $0)?.cancel()
-        }
-        mobileButtonGestureRecognizers.removeValue(forKey: source)
+        return settings.configuredAction(for: button, trigger: trigger, profileID: profileID)
     }
 
     private func performMobileConfiguredAction(
         for button: RemoteButton,
         trigger: ButtonTrigger,
         source: UsageEventSource,
-        phraseSource: String? = nil
+        phraseSource: String? = nil,
+        captured: ConfiguredButtonAction? = nil
     ) -> Bool {
+        if captured?.action == .appSwitcher {
+            cancelConfiguredButtonInteractions(
+                source: "mobile:\(source.rawValue)",
+                reason: "app_switcher_started"
+            )
+            let started = mobileAppSwitcher.start(button: button)
+            if started {
+                settings.recordButtonPress(control: .remoteButton(button), source: source)
+            }
+            AppLogger.shared.write(
+                "PHONE REMOTE button=\(button.rawValue) trigger=\(trigger.rawValue) " +
+                    "action=appSwitcher started=\(started)"
+            )
+            return started
+        }
         if performButtonProfileBoundAction(
             profileID: settings.selectedRemoteProfileID,
             button: button,
@@ -9135,7 +9052,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             )
             return true
         }
-        let configured = settings.configuredAction(for: button, trigger: trigger)
+        let configured = captured ?? settings.configuredAction(for: button, trigger: trigger)
         if configured.action.isAppInternal {
             let handled = performInternalAction(configured.action, source: phraseSource ?? "mobile:\(source.rawValue)")
             if handled {
@@ -9614,13 +9531,9 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
 
     private func cancelPendingCommonPhraseButtonActions() {
         cancelConfiguredButtonInteractions(reason: "common_phrases_opened")
+        mobileAppSwitcher.cancel(reason: "common_phrases_opened")
         hidMonitors.values.forEach { $0.cancelPendingButtonActions() }
         discoveryHIDMonitor?.cancelPendingButtonActions()
-        mobileDoubleClickTimers.values.forEach { $0.cancel() }
-        mobileDoubleClickTimers.removeAll()
-        mobileLongPressTimers.values.forEach { $0.cancel() }
-        mobileLongPressTimers.removeAll()
-        mobileButtonGestureRecognizers.removeAll()
         appleRemoteDoubleClickTimers.values.forEach { $0.cancel() }
         appleRemoteDoubleClickTimers.removeAll()
         appleRemoteLongPressTimers.values.forEach { $0.cancel() }
