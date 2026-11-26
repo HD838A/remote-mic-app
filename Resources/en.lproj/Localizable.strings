@@ -386,6 +386,12 @@
 "connection.voice_key_compatibility.recheck" = "Recheck voice button";
 "connection.status.waiting_voice_button" = "Waiting for the microphone button";
 "connection.status.voice_active" = "Microphone in use";
+"countdown.seconds_left" = "s left";
+"countdown.recording_ended" = "Recording ended";
+"countdown.seconds_left_compact" = "%ds left";
+"connection.status.voice_ended" = "Recording ended";
+"countdown.accessibility.remaining" = "Remote recording ends in %d seconds";
+"countdown.accessibility.ended" = "Remote recording has ended";
 "common.status.ready" = "Ready";
 "connection.status.voice_trigger" = "Voice trigger";
 "connection.voice_fn_tap.enabled" = "Use Fn Taps for Voice Typing";

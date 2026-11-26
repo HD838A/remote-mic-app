@@ -1708,11 +1708,7 @@ struct SettingsView: View {
                         )
                         connectionStatusLine(
                             symbol: "waveform",
-                            text: localization.text(
-                                model.isStreaming
-                                    ? "connection.status.voice_streaming"
-                                    : "connection.status.voice_ready"
-                            ),
+                            text: streamingStatusText,
                             tint: model.isStreaming ? .orange : .blue
                         )
                         connectionStatusLine(
@@ -8496,6 +8492,28 @@ struct SettingsView: View {
 
     private var connectionTint: Color {
         model.isConnected ? .green : .orange
+    }
+
+    /// 语音状态行。会话接近遥控器上限时追加剩余秒数；
+    /// 已到上限但遥控器还没停时说明录音已结束，避免用户继续说话。
+    private var streamingStatusText: String {
+        switch model.voiceLimitCountdownState {
+        case .hidden:
+            return localization.text(
+                model.isStreaming
+                    ? "connection.status.voice_streaming"
+                    : "connection.status.voice_ready"
+            )
+        case let .counting(remaining):
+            let template = localization.text("connection.status.voice_streaming")
+            let detail = String(
+                format: localization.text("countdown.seconds_left_compact"),
+                remaining
+            )
+            return "\(template) · \(detail)"
+        case .ended:
+            return localization.text("connection.status.voice_ended")
+        }
     }
 
     private var voiceTriggerBadge: String {
