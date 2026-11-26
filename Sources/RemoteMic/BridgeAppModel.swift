@@ -4554,14 +4554,17 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
 
     private func cancelButtonMappingInteractions(
         device: UUID?,
+        includeHIDMonitors: Bool = true,
         includeCompanionSources: Bool = true,
         reason: String = "mapping_changed"
     ) {
         for source in configuredButtonInteractions.keys.filter({ configuredButtonInteractionOwners[$0] == device }) {
             cancelConfiguredButtonInteractions(source: source, reason: reason)
         }
-        hidMonitors.values.filter { $0.profileID == device }.forEach { $0.cancelMappingInteractions() }
-        if discoveryHIDMonitor?.profileID == device { discoveryHIDMonitor?.cancelMappingInteractions() }
+        if includeHIDMonitors {
+            hidMonitors.values.filter { $0.profileID == device }.forEach { $0.cancelMappingInteractions() }
+            if discoveryHIDMonitor?.profileID == device { discoveryHIDMonitor?.cancelMappingInteractions() }
+        }
         if includeCompanionSources, settings.selectedRemoteProfileID == device {
             resetMobileButtonGestures(source: .nearbyPhone)
             resetMobileButtonGestures(source: .webRemote)
@@ -5336,6 +5339,119 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         settings.selectRemoteProfile(profileID, persistSelection: persistSelection)
         refreshAppleRemoteHIDStatus()
         refreshBluetoothPresentation()
+    }
+
+    /// Delete a history-card profile after the user confirms it. Settings owns the persisted
+    /// array and selection fallback; the model must also stop runtime channels that would
+    /// otherwise keep executing for an archive no longer shown anywhere.
+    func deleteRemoteProfile(_ profileID: UUID) {
+        guard let profile = settings.remoteDeviceProfiles.first(where: { $0.id == profileID })
+        else { return }
+        guard !isRemoteConnected(profileID) else {
+            AppLogger.shared.write(
+                "REMOTE PROFILE_DELETE phase=rejected reason=still_connected " +
+                    "model=\(profile.model.rawValue)"
+            )
+            return
+        }
+        guard !isRemoteHIDReady(profileID) else {
+            AppLogger.shared.write(
+                "REMOTE PROFILE_DELETE phase=rejected reason=hid_ready " +
+                    "model=\(profile.model.rawValue)"
+            )
+            return
+        }
+        let wasSelected = settings.selectedRemoteProfileID == profileID
+        let replacementProfileID = settings.remoteDeviceProfiles.first {
+            $0.id != profileID && connectedRemoteProfileIDs.contains($0.id)
+        }?.id
+        AppLogger.shared.write(
+            "REMOTE PROFILE_DELETE phase=requested model=\(profile.model.rawValue) " +
+                "selected=\(wasSelected)"
+        )
+        let currentProfiles = settings.remoteDeviceProfiles
+        let sharesBluetoothIdentity = profile.bluetoothIdentifier.map { identifier in
+            currentProfiles.contains {
+                $0.id != profileID && $0.bluetoothIdentifier == identifier
+            }
+        } ?? false
+        let sharesHIDIdentity = profile.hidFingerprint.map { fingerprint in
+            currentProfiles.contains {
+                $0.id != profileID && $0.hidFingerprint == fingerprint
+            }
+        } ?? false
+        cancelButtonMappingInteractions(
+            device: profileID,
+            includeHIDMonitors: !sharesHIDIdentity,
+            reason: "remote_deleted"
+        )
+        if buttonGestureLearningProfileID == profileID {
+            cancelButtonGestureLearning(reason: "remote_deleted")
+        }
+        // Button profiles are shared app-wide. Removing one remote must not delete a
+        // profile another connected device may still be using.
+
+        guard settings.removeRemoteProfile(profileID, selecting: replacementProfileID) else {
+            return
+        }
+
+        let runtimePreserved = sharesBluetoothIdentity || sharesHIDIdentity
+        // 共享指纹时保留的监视器若仍绑定被删档案，按键会回退到当前选中档案。
+        // 把同一个物理设备的监视器重绑到存活的同指纹档案。
+        if sharesHIDIdentity, let fingerprint = profile.hidFingerprint,
+           let monitor = hidMonitors[fingerprint], monitor.profileID == profileID {
+            let survivors = settings.remoteDeviceProfiles.filter { $0.hidFingerprint == fingerprint }
+            let survivingOwner = survivors.first {
+                connectedRemoteProfileIDs.contains($0.id)
+            } ?? survivors.first
+            if let survivingOwner {
+                monitor.assignProfileID(survivingOwner.id)
+            }
+        }
+        if let fingerprint = profile.hidFingerprint, !sharesHIDIdentity,
+           let monitor = hidMonitors.removeValue(forKey: fingerprint) {
+            monitor.stop()
+        }
+        if let identifier = profile.bluetoothIdentifier, !sharesBluetoothIdentity {
+            remoteRecoveryBudgets.removeValue(forKey: identifier)
+            if let bridge = bluetoothBridges.removeValue(forKey: identifier) {
+                bridge.stop()
+                bluetoothBridgeStates.removeValue(forKey: ObjectIdentifier(bridge))
+            }
+            pendingRemoteBatteryLevels.removeValue(forKey: identifier)
+            pendingRemotePowerStates.removeValue(forKey: identifier)
+            pendingRemoteModels.removeValue(forKey: identifier)
+        }
+        connectedRemoteProfileIDs.remove(profileID)
+        appleRemoteProfileIDs = appleRemoteProfileIDs.filter { $0.value != profileID }
+        connectedAppleRemoteProfileIDs.remove(profileID)
+        #if SAYALL_CHROMECAST_ENABLED
+        if chromecastProfileID == profileID {
+            resetChromecastButtonState(reason: "remote_deleted")
+            chromecastProfileID = nil
+            connectedChromecastProfileIDs.remove(profileID)
+        }
+        #endif
+        remoteButtonReadiness.removeValue(forKey: profileID)
+        remoteBatteryLevels.removeValue(forKey: profileID)
+        remotePowerStates.removeValue(forKey: profileID)
+        remoteRecoveryStates.removeValue(forKey: profileID)
+        remoteSystemDeviceNames.removeValue(forKey: profileID)
+        lastLoggedCardStatuses.removeValue(forKey: profileID)
+        lastLoggedCardReadiness.removeValue(forKey: profileID)
+        screenshotCardStatuses.removeValue(forKey: profileID)
+        screenshotCardStatusDisplayOverrides.removeValue(forKey: profileID)
+        if settings.selectedRemoteProfileID == nil {
+            activeRemoteButtons = []
+        }
+        refreshAppleRemoteHIDStatus()
+        refreshBluetoothPresentation()
+        AppLogger.shared.write(
+            "REMOTE PROFILE_DELETE phase=completed result=deleted " +
+                "runtime=\(runtimePreserved ? "preserved" : "cleared") " +
+                "model=\(profile.model.rawValue) selected=\(wasSelected) " +
+                "remaining=\(settings.remoteDeviceProfiles.count)"
+        )
     }
 
     func connectionStatusText(using localization: LocalizationStore) -> String {
@@ -8777,6 +8893,11 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
 
     func isRemoteConnected(_ profileID: UUID) -> Bool {
         connectedRemoteProfileIDs.contains(profileID)
+    }
+
+    /// HID 已就绪但 BLE 未连接时，设备仍可能执行按键；删除入口按“正在使用”处理。
+    func isRemoteHIDReady(_ profileID: UUID) -> Bool {
+        remoteButtonReadiness[profileID] == .ready
     }
 
     private func requestPhoneApproval(

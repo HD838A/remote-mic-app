@@ -1576,6 +1576,10 @@
 "connection.history.find" = "Find a device";
 "connection.history.connect" = "Connect";
 "connection.history.cancel" = "Cancel";
+"connection.history.delete" = "Delete";
+"connection.history.delete.title" = "Delete device?";
+"connection.history.delete.message" = "Deleting “%@ (%@)” removes its name, connection record, and base button mappings. Shared button profiles are not deleted. This cannot be undone.";
+"connection.history.delete.confirm" = "Delete Device";
 "connection.history.open_bluetooth" = "Open Bluetooth settings";
 "connection.history.not_found_help" = "Make sure the device is on and nearby.";
 "connection.history.paused_help" = "Click Connect when you need this device.";

@@ -20,7 +20,7 @@ let state = {
   remote: Object.hasOwn(remotes,query.get('remote')) ? query.get('remote') : 'apple',
   member: query.get('membership') === 'member', installed: query.get('component') === 'installed',
   connected: query.get('connected') === 'yes', dark: query.get('theme') === 'dark',
-  phase: 'idle', notice: null, batteryExample: 'normal', health: Object.hasOwn(healthStates,query.get('health'))?query.get('health'):'healthy',
+  phase: 'idle', notice: null, noticeRemote: null, batteryExample: 'normal', health: Object.hasOwn(healthStates,query.get('health'))?query.get('health'):'healthy',
 };
 let deadline = null;
 function el(tag, attrs, ...children) {
@@ -42,6 +42,7 @@ function segments(label, options, selected, action) {
 }
 function enableApple(){ state.notice='install'; render(); }
 function membership(){ state.notice='membership'; render(); }
+function deleteRemote(remote){ state.notice='delete'; state.noticeRemote=remote.name; render(); }
 function connect(remote){
   const remoteKey=Object.keys(remotes).find(key=>remotes[key]===remote);
   if(state.remote!==remoteKey){clearTimeout(deadline);state.remote=remoteKey;state.phase='idle';}
@@ -71,7 +72,8 @@ function remoteCard(remote, { placement='mapping', connected=false, member=state
   const appleNeedsMembership = remote.apple && !member;
   return el('article',{class:`remote-card ${selected?'selected':''}`,'data-placement':placement,'data-remote':remote.model,'aria-label':`${remote.name}，${remote.model}`},
     el('div',{class:'card-row card-top'},el('strong',{class:'remote-name',title:remote.model},remote.model),
-      remote.apple && !installed ? button('启用',enableApple,{class:'card-button enable','aria-label':`启用 ${remote.name}`}) : null),
+      remote.apple && !installed ? button('启用',enableApple,{class:'card-button enable','aria-label':`启用 ${remote.name}`}) : null,
+      history ? button('删除',()=>deleteRemote(remote),{class:'card-button delete','aria-label':`删除 ${remote.name}`}) : null),
     el('div',{class:'card-row card-middle'},el('span',{class:'remote-model',title:remote.name},remote.name)),
     el('div',{class:'card-row card-bottom'},
       el('span',{class:`device-status ${overall.tone}`,title:overall.detail,'aria-label':`${status}：${overall.detail}`},el('i',{class:spinning?'spinner':'status-dot','aria-hidden':'true'}),status,
@@ -82,6 +84,9 @@ function remoteCard(remote, { placement='mapping', connected=false, member=state
 function sample(label, card){return el('div',{class:'sample'},el('h3',{},label),card);}
 function notice(){
   if (!state.notice) return null;
+  if (state.notice==='delete') return el('section',{class:'notice',role:'alertdialog'},
+    el('div',{},el('h2',{},`删除 ${state.noticeRemote}？`),el('p',{},'会删除名称、连接记录和该设备的基础按键映射。共享键位方案不会删除。这是 HTML 演示，不会修改数据。')),
+    el('div',{class:'notice-actions'},button('关闭',()=>setState({notice:null}))));
   const install = state.notice==='install';
   return el('section',{class:'notice',role:'status'},el('div',{},el('h2',{},install?'启用苹果遥控器':'苹果遥控器语音'),
     el('p',{},install?'苹果遥控器需要安装独立组件。通过 App 升级的用户也可以从这里开始安装，无需会员。':'普通按键与连接无需会员。开通会员后，可使用苹果遥控器语音。'),
@@ -126,7 +131,7 @@ function render(){
         sample('小米 · 电量',remoteCard(remotes.xiaomi,{placement:'current',connected:true,batteryExample:'normal'})),
         sample('小米 · 充电状态',remoteCard(remotes.xiaomi,{placement:'current',connected:true,batteryExample:'charging'})),
         sample('Chromecast · 当前适配未提供电量',remoteCard(remotes.chromecast,{placement:'current',connected:true})))),
-    el('footer',{class:'muted'},'第一行：型号。第二行：蓝牙名称。第三行：整体状态及有效电池数据。“已连接”表示当前可用功能均正常，未确认时不显示为正常。苹果未安装组件时，右上显示“启用”；安装后隐藏。非会员右下：开通会员。历史设备卡片的“连接”始终位于最右下方。所有内容均保持三行，不增加卡片高度。')));
+    el('footer',{class:'muted'},'第一行：型号。第二行：蓝牙名称。第三行：整体状态及有效电池数据。“已连接”表示当前可用功能均正常，未确认时不显示为正常。苹果未安装组件时，右上显示“启用”；安装后隐藏。非会员右下：开通会员。历史设备卡片的“删除”位于右上角，“连接”始终位于最右下方。所有内容均保持三行，不增加卡片高度。')));
 }
 const rules={
   '*':{boxSizing:'border-box'},
@@ -155,6 +160,7 @@ const rules={
   '.card-actions':{display:'flex',gap:'4pt',alignItems:'center',flexShrink:0,marginLeft:'auto'},
   '.card-button':{fontSize:'12pt',lineHeight:'16pt',minHeight:0,height:'18pt',borderRadius:'4pt',padding:'0 5pt',display:'inline-flex',alignItems:'center',justifyContent:'center',whiteSpace:'nowrap',flexShrink:0},
   '.card-button.enable,.card-button.membership':{color:'var(--accent)',borderColor:'transparent',background:'transparent'},
+  '.card-button.delete':{color:'#bd3333',borderColor:'transparent',background:'transparent'},
   '.card-button.connect':{background:'var(--surface)'},
   '.notice':{display:'flex',justifyContent:'space-between',gap:'24px',background:'var(--surface)',border:'1px solid var(--line)',borderRadius:'12px',padding:'18px',marginTop:'22px'},'.notice p':{fontSize:'16px',lineHeight:1.6,marginTop:'8px'},'.notice-actions':{display:'flex',gap:'8px',alignItems:'center',flexShrink:0},
   '.primary':{background:'var(--accent)',color:'#fff',borderColor:'var(--accent)'},'.operation-demo':{display:'flex',alignItems:'center',gap:'14px',marginTop:'20px'},

@@ -468,7 +468,9 @@ final class AppSettings: ObservableObject {
     @Published var unifiedBaseBindings: [UnifiedButtonBinding] = [] {
         didSet {
             guard !isLoadingStoredSettings else { return }
-            onInteractionModeChanged?(selectedRemoteProfileID)
+            if !isSuppressingInteractionModeChange {
+                onInteractionModeChanged?(selectedRemoteProfileID)
+            }
             if let data = try? JSONEncoder().encode(unifiedBaseBindings) {
                 defaults.set(data, forKey: "unifiedBaseBindings")
             }
@@ -853,6 +855,8 @@ final class AppSettings: ObservableObject {
     }
 
     private var isLoadingRemoteProfile = false
+    /// 删除设备时移除目标设备的 base bindings，不应通知当前选中的其他设备。
+    private var isSuppressingInteractionModeChange = false
     private var persistsSelectedRemoteProfile = true
     /// 同一进程内只保存一次恢复前快照，避免新增恢复路径覆盖原始证据。
     private var didPreserveRecoverySnapshot = false
@@ -1947,6 +1951,119 @@ final class AppSettings: ObservableObject {
         buttonRapidPressEnabled = profile.mappings.parsedButtonRapidPressEnabled
         interactionSettings = profile.mappings.interactionSettings ?? RemoteButtonInteractionSettings()
         isLoadingRemoteProfile = false
+    }
+
+    /// 删除一条已登记档案。只有用户从历史卡片明确确认后调用。
+    ///
+    /// 删除当前显示档案时，优先切到调用方给出的已连接档案；没有可用替代时清空选中，
+    /// 不把选中状态转给另一台历史设备。磁盘偏好指向被删档案时也必须清理或迁移，
+    /// 否则重启后会落回过期 ID。
+    @discardableResult
+    func removeRemoteProfile(_ profileID: UUID, selecting replacementProfileID: UUID? = nil) -> Bool {
+        guard let index = remoteDeviceProfiles.firstIndex(where: { $0.id == profileID }) else {
+            return false
+        }
+        let removed = remoteDeviceProfiles[index]
+        let wasSelected = selectedRemoteProfileID == profileID
+        let validReplacement = replacementProfileID.flatMap { candidate in
+            candidate != profileID && remoteDeviceProfiles.contains(where: { $0.id == candidate })
+                ? candidate
+                : nil
+        }
+        isSuppressingInteractionModeChange = true
+        unifiedBaseBindings.removeAll { $0.remoteProfileID == profileID }
+        isSuppressingInteractionModeChange = false
+        remoteDeviceProfiles.remove(at: index)
+        purgeRemoteProfileFromRecoverySnapshots(removed)
+
+        if wasSelected {
+            if let validReplacement {
+                selectRemoteProfile(validReplacement)
+            } else {
+                selectedRemoteProfileID = nil
+                clearMappingsForNoSelectedProfile()
+            }
+        }
+        if defaults.string(forKey: Keys.selectedRemoteProfileID)
+            .flatMap(UUID.init(uuidString:)) == profileID {
+            if let validReplacement {
+                defaults.set(validReplacement.uuidString, forKey: Keys.selectedRemoteProfileID)
+            } else {
+                defaults.removeObject(forKey: Keys.selectedRemoteProfileID)
+            }
+        }
+        AppLogger.shared.write(
+            "SETTINGS REMOTE_PROFILE phase=completed result=deleted " +
+                "model=\(removed.model.rawValue) selected=\(wasSelected) " +
+                "remaining=\(remoteDeviceProfiles.count)"
+        )
+        return true
+    }
+
+    private func clearMappingsForNoSelectedProfile() {
+        isLoadingRemoteProfile = true
+        buttonBindings = Self.defaultBindings
+        buttonShortcuts = [:]
+        buttonApplicationProfileIDs = [:]
+        secondaryButtonBindings = [:]
+        buttonRapidPressEnabled = [:]
+        interactionSettings = RemoteButtonInteractionSettings()
+        isLoadingRemoteProfile = false
+    }
+
+    /// 删除是显式遗忘：恢复快照里也不能留下这台设备，否则同一硬件重新接入时，
+    /// 快捷键恢复会把已删除设备的数据写进新档案。快照记录可能沿用旧 UUID，
+    /// 所以按硬件身份判断；如果仍有存活档案持有同一身份，则保留快照供其恢复。
+    private func purgeRemoteProfileFromRecoverySnapshots(_ removed: RemoteDeviceProfile) {
+        let removedKeys = Self.recoveryIdentityKeys(for: removed)
+        let activeKeys = remoteDeviceProfiles.reduce(into: Set<String>()) { keys, profile in
+            keys.formUnion(Self.recoveryIdentityKeys(for: profile))
+        }
+        func isDeletedRecord(_ candidate: RemoteDeviceProfile) -> Bool {
+            if candidate.id == removed.id { return true }
+            let keys = Self.recoveryIdentityKeys(for: candidate)
+            return !keys.isDisjoint(with: removedKeys) && keys.isDisjoint(with: activeKeys)
+        }
+        for key in Self.remoteProfileRecoverySnapshotKeys {
+            guard let data = defaults.data(forKey: key),
+                  let profiles = try? JSONDecoder().decode(
+                      [RemoteDeviceProfile].self,
+                      from: data
+                  ),
+                  profiles.contains(where: isDeletedRecord)
+            else { continue }
+            let remaining = profiles.filter { !isDeletedRecord($0) }
+            if remaining.isEmpty {
+                defaults.removeObject(forKey: key)
+            } else if let encoded = try? JSONEncoder().encode(remaining) {
+                defaults.set(encoded, forKey: key)
+            }
+        }
+        if let evaluated = defaults.stringArray(forKey: Self.shortcutRecoveryEvaluatedKey) {
+            let remaining = evaluated.filter { $0 != removed.id.uuidString }
+            if remaining.count != evaluated.count {
+                defaults.set(remaining, forKey: Self.shortcutRecoveryEvaluatedKey)
+            }
+        }
+    }
+
+    /// 与快捷键恢复相同的身份来源：稳定硬件摘要优先，其次 HID 指纹和蓝牙标识。
+    private static func recoveryIdentityKeys(for profile: RemoteDeviceProfile) -> Set<String> {
+        var keys: Set<String> = []
+        if let identity = profile.hardwareIdentity, !identity.isEmpty {
+            keys.insert("hardware:\(identity)")
+        } else if let legacy = RemoteDeviceIdentity.legacyToken(
+            storedName: profile.customName
+        ), !legacy.isEmpty {
+            keys.insert("hardware:\(legacy)")
+        }
+        if let fingerprint = profile.hidFingerprint, !fingerprint.isEmpty {
+            keys.insert("hid:\(fingerprint)")
+        }
+        if let identifier = profile.bluetoothIdentifier {
+            keys.insert("ble:\(identifier.uuidString)")
+        }
+        return keys
     }
 
     /// 临时显示时，磁盘偏好可能指向另一条档案。合并替换表也要更新它，
