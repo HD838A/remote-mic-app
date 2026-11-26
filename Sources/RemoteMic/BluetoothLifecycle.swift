@@ -520,12 +520,35 @@ enum BluetoothCentralRecoveryEvent {
     case unsupported
 }
 
+/// Remembers a `system_did_wake` that arrived while another suspension reason
+/// (usually the sleeping screen) was still active, so the final resume event
+/// can be treated as that system wake.
+struct DeferredSystemWakeTracker {
+    private(set) var isPending = false
+
+    mutating func noteDeferredResume(_ event: SystemAudioLifecycleEvent) {
+        if event == .systemDidWake { isPending = true }
+    }
+
+    /// Called on the final resume. Returns whether that resume completes a
+    /// deferred system wake, and clears the pending state either way.
+    mutating func consume(onResume event: SystemAudioLifecycleEvent) -> Bool {
+        defer { isPending = false }
+        return isPending && event != .systemDidWake
+    }
+}
+
 enum BluetoothWakeRecoveryPolicy {
+    /// `deferredSystemWake` covers the common MacBook order where
+    /// `system_did_wake` arrives while the screen is still asleep and the
+    /// final resume comes from `screen_did_wake`. That resume is still the
+    /// system wake and must use the wake trigger, not the automatic budget.
     static func shouldForceReconnect(
         event: SystemAudioLifecycleEvent,
-        started: Bool
+        started: Bool,
+        deferredSystemWake: Bool = false
     ) -> Bool {
-        started && event == .systemDidWake
+        started && (event == .systemDidWake || deferredSystemWake)
     }
 
     /// 挂起原因全部解除后，是否需要主动重建蓝牙语音链路。

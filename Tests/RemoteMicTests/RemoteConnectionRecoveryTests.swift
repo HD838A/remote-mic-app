@@ -253,4 +253,106 @@ struct RemoteConnectionRecoveryTests {
         #expect(budget.retryDelay(at: 3) == nil)
         #expect(budget.status == .paused)
     }
+
+    /// Field replay (build 256, 2026-11-25): six short wakes, each reconnecting
+    /// and staying Ready about 60–100 s of uptime, then sleeping. Uptime does not
+    /// advance during sleep, so every wake landed in one 10-minute window and the
+    /// seventh was paused with attempts=0.
+    @Test func stableReadyBeforeSleepDoesNotChargeLaterWakeReconnects() {
+        let budget = RemoteConnectionRecovery()
+        var now: TimeInterval = 1000
+        #expect(budget.begin(manual: false, at: now))
+        for wake in 1...12 {
+            #expect(budget.claimAttempt(at: now), "wake \(wake) must reconnect")
+            #expect(budget.connected(at: now + 0.5))
+            now += 70
+            budget.interrupted(suspended: true, at: now)
+            budget.resume(at: now)
+            #expect(budget.status == .recovering)
+            #expect(budget.automaticAttemptHistoryCount == 0)
+        }
+    }
+
+    @Test func briefReadyBeforeSleepStillCountsAgainstTheRollingLimit() {
+        let budget = RemoteConnectionRecovery()
+        var now: TimeInterval = 0
+        #expect(budget.begin(manual: false, at: now))
+        for _ in 0..<3 {
+            #expect(budget.claimAttempt(at: now))
+            #expect(budget.connected(at: now + 1))
+            now += 10
+            budget.interrupted(suspended: true, at: now)
+            budget.resume(at: now)
+        }
+        // Ready for 9 s never qualifies as stable; the episode continues and
+        // the three-attempt cap is enforced.
+        #expect(!budget.claimAttempt(at: now))
+        #expect(budget.status == .paused)
+    }
+
+    @Test func devicePresenceLiftsPausedBudgetOnceWithCooldown() {
+        let budget = RemoteConnectionRecovery()
+        #expect(budget.begin(manual: false, at: 0))
+        for index in 0..<6 {
+            let now = Double(index * 40)
+            #expect(budget.claimAttempt(at: now))
+            budget.connected(at: now + 1)
+            budget.disconnected(at: now + 40)
+        }
+        #expect(!budget.claimAttempt(at: 240))
+        #expect(budget.status == .paused)
+        let history = budget.automaticAttemptHistoryCount
+
+        #expect(budget.begin(trigger: .devicePresence, at: 300) == .started)
+        #expect(budget.deadline == 330)
+        #expect(budget.claimAttempt(at: 300))
+        #expect(budget.retryDelay(at: 301) == nil)
+        #expect(budget.status == .paused)
+        #expect(budget.automaticAttemptHistoryCount == history)
+        #expect(budget.begin(trigger: .automatic, at: 302) == .paused)
+        #expect(budget.begin(trigger: .devicePresence, at: 329) == .cooldown)
+        #expect(budget.begin(trigger: .devicePresence, at: 330) == .started)
+        #expect(budget.claimAttempt(at: 330))
+        #expect(budget.connected(at: 331))
+        #expect(budget.status == .ready)
+    }
+
+    @Test func devicePresenceNeverOverridesUserCancellation() {
+        let budget = RemoteConnectionRecovery()
+        #expect(budget.begin(manual: true, at: 0))
+        budget.finish(at: 1, cancelled: true)
+        #expect(budget.status == .cancelled)
+        #expect(budget.begin(trigger: .devicePresence, at: 100) == .notWaiting)
+        #expect(budget.status == .cancelled)
+    }
+
+    @Test func deferredSystemWakeIsOwnedByTheFinalResume() {
+        // MacBook order: system_did_wake while the screen sleeps, then screen_did_wake.
+        var tracker = DeferredSystemWakeTracker()
+        tracker.noteDeferredResume(.systemDidWake)
+        #expect(tracker.isPending)
+        let deferred = tracker.consume(onResume: .screenDidWake)
+        #expect(deferred)
+        #expect(!tracker.isPending)
+        #expect(BluetoothWakeRecoveryPolicy.shouldForceReconnect(
+            event: .screenDidWake, started: true, deferredSystemWake: deferred
+        ))
+
+        // Screen-only sleep never becomes a system wake.
+        tracker.noteDeferredResume(.screenDidWake)
+        let screenOnly = tracker.consume(onResume: .screenDidWake)
+        #expect(!screenOnly)
+        #expect(!BluetoothWakeRecoveryPolicy.shouldForceReconnect(
+            event: .screenDidWake, started: true, deferredSystemWake: false
+        ))
+
+        // system_did_wake as the final resume is handled by the event itself.
+        tracker.noteDeferredResume(.systemDidWake)
+        let wakeIsFinal = tracker.consume(onResume: .systemDidWake)
+        #expect(!wakeIsFinal)
+        #expect(!tracker.isPending)
+        #expect(!BluetoothWakeRecoveryPolicy.shouldForceReconnect(
+            event: .screenDidWake, started: false, deferredSystemWake: true
+        ))
+    }
 }

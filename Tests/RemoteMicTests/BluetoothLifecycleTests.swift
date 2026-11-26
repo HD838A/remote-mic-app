@@ -180,6 +180,13 @@ struct BluetoothLifecycleTests {
         #expect(source.contains("BluetoothWakeRecoveryPolicy.shouldRecoverVoiceLinkAfterResume("))
         #expect(source.contains("recoverBluetoothVoiceLink(reason: \"session_activated\")"))
         #expect(source.contains("recoverBluetoothVoiceLink(reason: \"system_wake\", trigger: .systemWake)"))
+        // 屏幕后醒的唤醒顺序也必须走系统唤醒恢复，而不是自动失败预算。
+        #expect(source.contains("deferredSystemWake.noteDeferredResume(event)"))
+        #expect(source.contains("deferredSystemWake.consume(onResume: event)"))
+        #expect(source.contains("deferredSystemWake: wakeWasDeferred"))
+        // 系统重新连上已绑定遥控器的 HID 时，作为设备在场证据请求一次恢复。
+        #expect(source.contains("self.noteBluetoothDevicePresence(identifier)"))
+        #expect(source.contains("bridge.noteDevicePresence()"))
         // 恢复入口不能退回成「系统唤醒专用」的旧命名。
         #expect(!source.contains("recoverBluetoothAfterSystemWake"))
         #expect(!source.contains("recoverAfterSystemWake"))

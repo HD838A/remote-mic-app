@@ -409,9 +409,9 @@ final class XiaomiBluetoothBridge: NSObject {
             return false
         }
         let trigger = requestedTrigger ?? (manual ? .manual : .automatic)
-        if trigger == .voiceKey || trigger == .manual {
-            // Explicit user intent may retry even after an earlier wake attempt
-            // already failed and a real device observation has not arrived.
+        if trigger == .voiceKey || trigger == .manual || trigger == .devicePresence {
+            // Explicit user intent or a real device observation may retry even
+            // after an earlier wake attempt already failed.
             wakeRecoveryFailed = false
         }
         if trigger == .systemWake {
@@ -454,7 +454,7 @@ final class XiaomiBluetoothBridge: NSObject {
             armRecoveryDeadline()
         } else if wasActive {
             // User/system intent joins the already running bounded episode.
-            if trigger == .voiceKey || trigger == .systemWake {
+            if trigger == .voiceKey || trigger == .systemWake || trigger == .devicePresence {
                 return true
             }
             if trigger == .manual {
@@ -481,6 +481,27 @@ final class XiaomiBluetoothBridge: NSObject {
         guard recovery.isActive else { return }
         recovery.finish(at: ProcessInfo.processInfo.systemUptime, cancelled: true)
         endRecovery()
+    }
+
+    /// The system re-established this remote's HID link, which proves the
+    /// device is reachable. An idle budget keeps the normal automatic start;
+    /// a paused or "not found" budget gets one bounded presence attempt
+    /// (30 s cooldown) without resetting the rolling failure history.
+    func noteDevicePresence() {
+        guard shouldRun, targetIdentifier != nil,
+              recovery.status == .paused || recovery.status == .notFound
+        else {
+            start()
+            return
+        }
+        guard !lifecycle.isReady else { return }
+        let previousStatus = recovery.status.rawValue
+        let accepted = reconnectNow(trigger: .devicePresence)
+        AppLogger.shared.write(
+            "BLE RECOVERY phase=\(accepted ? "requested" : "skipped") trigger=device_presence " +
+                "recovery_trigger=device_presence previous_status=\(previousStatus) " +
+                "source=hid_connected"
+        )
     }
 
     func refreshDiscovery(manual: Bool = false) {
@@ -554,7 +575,11 @@ final class XiaomiBluetoothBridge: NSObject {
         }
         recoveryDeadlineWorkItem = work
         DispatchQueue.main.asyncAfter(deadline: .now() + max(0, deadline - ProcessInfo.processInfo.systemUptime), execute: work)
-        AppLogger.shared.write("BLE RECOVERY_WINDOW operation_id=\(recoveryOperationID) phase=started result=recovering manual=\(recovery.isManual)")
+        AppLogger.shared.write(
+            "BLE RECOVERY_WINDOW operation_id=\(recoveryOperationID) phase=started result=recovering manual=\(recovery.isManual) " +
+                "recovery_trigger=\(recovery.activeTrigger?.rawValue ?? "none") " +
+                "automatic_attempt_history=\(recovery.automaticAttemptHistoryCount)"
+        )
     }
 
     private func endRecovery() {
