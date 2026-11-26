@@ -311,7 +311,8 @@ enum ShortcutEventSequence {
         hardwareFlags: () -> CGEventFlags,
         modifierState: ShortcutHardwareModifierState = hardwareModifierState,
         eventPoster: (CGEvent) -> Bool,
-        logger: (String) -> Void = { AppLogger.shared.write($0) }
+        logger: (String) -> Void = { AppLogger.shared.write($0) },
+        emitPrimaryKey: Bool = true
     ) -> Bool {
         lock.lock()
         defer { lock.unlock() }
@@ -431,7 +432,7 @@ enum ShortcutEventSequence {
                 break
             }
         }
-        if result {
+        if result, emitPrimaryKey {
             if !emit(keyCode, down: true, modifier: false) {
                 result = false
                 reason = "key_down_failed"

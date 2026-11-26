@@ -551,6 +551,34 @@ enum KeyboardInjector {
         return submitted
     }
 
+    /// Sends one voice-trigger transaction. A pure modifier chord such as
+    /// Fn + Shift has no separate primary key, so only its modifier edges are
+    /// emitted; every other shortcut goes through the normal key sequence.
+    @discardableResult
+    static func sendVoiceTrigger(
+        _ shortcut: CustomKeyboardShortcut,
+        accessibilityTrusted: () -> Bool = { isAccessibilityTrusted },
+        eventPoster: (CGEvent) -> Bool = ShortcutEventSequence.post,
+        logger: (String) -> Void = AppLogger.shared.write
+    ) -> Bool {
+        if shortcut.isModifierChord {
+            guard accessibilityTrusted() else { return false }
+            return ShortcutEventSequence.send(
+                keyCode: CGKeyCode(shortcut.keyCode),
+                modifiers: shortcut.cgEventFlags,
+                hardwareFlags: { CGEventSource.flagsState(.hidSystemState) },
+                eventPoster: eventPoster,
+                logger: logger,
+                emitPrimaryKey: false
+            )
+        }
+        return send(
+            .customShortcut,
+            shortcut: shortcut,
+            accessibilityTrusted: accessibilityTrusted
+        )
+    }
+
     static func recordedShortcut(
         keyCode: UInt16, modifiers: [String], deviceModifierFlags: UInt64
     ) -> CustomKeyboardShortcut? {

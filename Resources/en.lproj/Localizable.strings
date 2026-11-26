@@ -391,6 +391,16 @@
 "connection.voice_fn_tap.enabled" = "Use Fn Taps for Voice Typing";
 "connection.voice_fn_tap.hint" = "For apps that use one key press to start voice typing and another to stop, such as Typeless or Doubao Hands-Free mode. SayAll sends an Fn tap at the start and end of each session. Leave this off for apps that require you to hold the key, such as Doubao Hold mode. Requires Accessibility (new name: Device Control and Data Access) permission.";
 "connection.voice_fn_tap.hint_short" = "Use with hold-to-talk remotes when your voice typing app requires a press to start and another to stop.";
+"connection.voice_trigger_shortcut.title" = "Custom voice trigger";
+"connection.voice_trigger_shortcut.unset" = "Not set (uses Fn)";
+"connection.voice_trigger_shortcut.record" = "Record";
+"connection.voice_trigger_shortcut.record_again" = "Record Again";
+"connection.voice_trigger_shortcut.clear" = "Clear";
+"connection.voice_trigger_shortcut.detail" = "Point-toggle tools such as Typeless receive this shortcut at the start and end of each voice session. Leave it unset to send Fn.";
+"connection.voice_trigger_shortcut.recording" = "Press the shortcut to send";
+"connection.voice_trigger_shortcut.help" = "For example, Typeless translation uses Fn + Shift. A trigger needs at least one modifier.";
+"connection.voice_trigger_shortcut.error.modifier_required" = "The trigger needs at least one modifier so a plain character is not sent to the target app.";
+"connection.voice_trigger_shortcut.error.voice_active" = "Finish the current voice session before changing the trigger.";
 "connection.voice_key_mode.title" = "Voice Trigger Key";
 "connection.voice_key.mode.fn" = "Fn";
 "connection.voice_key.mode.left_command" = "Left Command (⌘)";

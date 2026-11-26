@@ -27,6 +27,17 @@ enum AppConfigurationError: Error {
 struct VoiceKeyConfigurationState: Equatable {
     let mode: VoiceKeyMode
     let fnTapModeEnabled: Bool
+    var voiceTriggerShortcut: CustomKeyboardShortcut?
+
+    init(
+        mode: VoiceKeyMode,
+        fnTapModeEnabled: Bool,
+        voiceTriggerShortcut: CustomKeyboardShortcut? = nil
+    ) {
+        self.mode = mode
+        self.fnTapModeEnabled = fnTapModeEnabled
+        self.voiceTriggerShortcut = voiceTriggerShortcut
+    }
 }
 
 private struct OnboardingVoiceConfigurationSnapshot: Codable {
@@ -64,6 +75,7 @@ private struct PersonalizedConfiguration: Codable {
     let experimentalContinuousRecordingEnabled: Bool?
     let voiceFnTapModeEnabled: Bool?
     let voiceKeyMode: VoiceKeyMode?
+    let voiceTriggerShortcut: CustomKeyboardShortcut?
     let continuousRecordingPowerBindingBackup: ConfiguredButtonAction?
     /// 唯一的用户音量（百分比）。早期配置没有这个字段，导入时回退到 `gainDB`。
     let outputVolumePercent: Double?
@@ -341,6 +353,7 @@ final class AppSettings: ObservableObject {
         static let chromecastAllowSystemReservedKeys = "chromecast.allowSystemReservedKeys"
         static let chromecastSystemReservedExceptions = "chromecast.systemReservedExceptions"
         static let voiceKeyMode = "voiceKeyMode"
+        static let voiceTriggerShortcut = "voiceTriggerShortcut"
         static let siriRemoteScrollArrowReversed = "siriRemote.scrollArrowReversed"
         static let siriRemoteCursorFeedbackVisible = "siriRemote.cursorFeedbackVisible"
         static let siriRemoteEnabled = "siriRemote.enabled"
@@ -785,6 +798,31 @@ final class AppSettings: ObservableObject {
         }
     }
 
+    /// Optional tap trigger used by point-toggle tools such as Typeless. It is
+    /// active only while the Fn tap mode is on and the voice key mode is Fn.
+    @Published var voiceTriggerShortcut: CustomKeyboardShortcut? {
+        didSet {
+            guard let shortcut = voiceTriggerShortcut,
+                  shortcut.isValidVoiceTriggerShortcut,
+                  let data = try? JSONEncoder().encode(shortcut)
+            else {
+                defaults.removeObject(forKey: Keys.voiceTriggerShortcut)
+                if voiceTriggerShortcut != nil { voiceTriggerShortcut = nil }
+                return
+            }
+            defaults.set(data, forKey: Keys.voiceTriggerShortcut)
+        }
+    }
+
+    var effectiveVoiceTriggerShortcut: CustomKeyboardShortcut? {
+        guard voiceKeyMode == .function,
+              voiceFnTapModeEnabled,
+              let shortcut = voiceTriggerShortcut,
+              shortcut.isValidVoiceTriggerShortcut
+        else { return nil }
+        return shortcut
+    }
+
     @Published var siriRemoteScrollArrowReversed: Bool {
         didSet {
             defaults.set(
@@ -1195,6 +1233,14 @@ final class AppSettings: ObservableObject {
         voiceKeyMode = VoiceKeyMode(
             rawValue: defaults.string(forKey: Keys.voiceKeyMode) ?? ""
         ) ?? .function
+        if let data = defaults.data(forKey: Keys.voiceTriggerShortcut),
+           let shortcut = try? JSONDecoder().decode(CustomKeyboardShortcut.self, from: data),
+           shortcut.isValidVoiceTriggerShortcut {
+            voiceTriggerShortcut = shortcut
+        } else {
+            defaults.removeObject(forKey: Keys.voiceTriggerShortcut)
+            voiceTriggerShortcut = nil
+        }
         siriRemoteScrollArrowReversed = defaults.bool(
             forKey: Keys.siriRemoteScrollArrowReversed
         )
@@ -3250,6 +3296,7 @@ final class AppSettings: ObservableObject {
             Keys.appIconIdentifier,
             Keys.voiceFnTapModeEnabled,
             Keys.voiceKeyMode,
+            Keys.voiceTriggerShortcut,
             Keys.totalButtonPressCount,
             Keys.totalVoiceDuration,
             Keys.dailyStatistics,
@@ -3306,6 +3353,9 @@ final class AppSettings: ObservableObject {
             experimentalContinuousRecordingEnabled: experimentalContinuousRecordingEnabled,
             voiceFnTapModeEnabled: voiceFnTapModeEnabled,
             voiceKeyMode: voiceKeyMode,
+            voiceTriggerShortcut: voiceTriggerShortcut?.isValidVoiceTriggerShortcut == true
+                ? voiceTriggerShortcut
+                : nil,
             continuousRecordingPowerBindingBackup: continuousRecordingPowerBindingBackup,
             outputVolumePercent: outputVolumePercent
         )
@@ -3393,6 +3443,9 @@ final class AppSettings: ObservableObject {
                   application.focusShortcut.map({ Self.validatedShortcut($0) == $0 }) ?? true
             else { throw AppConfigurationError.invalidValues }
         }
+        guard configuration.voiceTriggerShortcut.map({
+            Self.validatedShortcut($0) == $0 && $0.isValidVoiceTriggerShortcut
+        }) ?? true else { throw AppConfigurationError.invalidValues }
         guard configuration.interactionSettings?.isWellFormed ?? true else { throw AppConfigurationError.invalidValues }
         guard Self.gestureTimingsAreWellFormed(configuration.buttonGestureTimingsByModel ?? [:])
         else { throw AppConfigurationError.invalidValues }
@@ -3539,6 +3592,11 @@ final class AppSettings: ObservableObject {
         if let value = c.checksForPreReleaseUpdates { checksForPreReleaseUpdates = value }
         voiceKeyMode = c.voiceKeyMode ?? .function
         voiceFnTapModeEnabled = c.voiceFnTapModeEnabled ?? false
+        voiceTriggerShortcut = c.voiceTriggerShortcut.flatMap {
+            Self.validatedShortcut($0)
+        }.flatMap {
+            $0.isValidVoiceTriggerShortcut ? $0 : nil
+        }
         applyContinuousRecordingExperimentState(enabled: c.experimentalContinuousRecordingEnabled ?? false,
             backup: c.continuousRecordingPowerBindingBackup)
         if let preferences {
@@ -3569,7 +3627,10 @@ final class AppSettings: ObservableObject {
     var voiceKeyConfigurationState: VoiceKeyConfigurationState {
         VoiceKeyConfigurationState(
             mode: voiceKeyMode,
-            fnTapModeEnabled: voiceFnTapModeEnabled && voiceKeyMode == .function
+            fnTapModeEnabled: voiceFnTapModeEnabled && voiceKeyMode == .function,
+            voiceTriggerShortcut: voiceTriggerShortcut?.isValidVoiceTriggerShortcut == true
+                ? voiceTriggerShortcut
+                : nil
         )
     }
 
@@ -3577,9 +3638,15 @@ final class AppSettings: ObservableObject {
         let configuration = try Self.validatedConfiguration(from: data)
         let mode = configuration.voiceKeyMode ?? .function
         let fnTapModeEnabled = (configuration.voiceFnTapModeEnabled ?? false) && mode == .function
+        let triggerShortcut = configuration.voiceTriggerShortcut.flatMap {
+            Self.validatedShortcut($0)
+        }.flatMap {
+            $0.isValidVoiceTriggerShortcut ? $0 : nil
+        }
         return VoiceKeyConfigurationState(
             mode: mode,
-            fnTapModeEnabled: fnTapModeEnabled
+            fnTapModeEnabled: fnTapModeEnabled,
+            voiceTriggerShortcut: triggerShortcut
         )
     }
 
@@ -3600,9 +3667,22 @@ final class AppSettings: ObservableObject {
         let importedMode = configuration.voiceKeyMode ?? .function
         let importedFnTapModeEnabled = (configuration.voiceFnTapModeEnabled ?? false) &&
             importedMode == .function
+        let importedVoiceTriggerShortcut: CustomKeyboardShortcut?
+        if let provided = configuration.voiceTriggerShortcut {
+            if let validated = Self.validatedShortcut(provided),
+               validated.isValidVoiceTriggerShortcut {
+                importedVoiceTriggerShortcut = validated
+            } else {
+                rejected.insert(Keys.voiceTriggerShortcut)
+                importedVoiceTriggerShortcut = nil
+            }
+        } else {
+            importedVoiceTriggerShortcut = nil
+        }
         let importedVoiceKeyConfiguration = VoiceKeyConfigurationState(
             mode: importedMode,
-            fnTapModeEnabled: importedFnTapModeEnabled
+            fnTapModeEnabled: importedFnTapModeEnabled,
+            voiceTriggerShortcut: importedVoiceTriggerShortcut
         )
 
         let importedBindings = Dictionary(
@@ -3766,6 +3846,7 @@ final class AppSettings: ObservableObject {
         }
         voiceKeyMode = importedVoiceKeyConfiguration.mode
         voiceFnTapModeEnabled = importedVoiceKeyConfiguration.fnTapModeEnabled && voiceKeyMode == .function
+        voiceTriggerShortcut = importedVoiceKeyConfiguration.voiceTriggerShortcut
         applyContinuousRecordingExperimentState(
             enabled: configuration.experimentalContinuousRecordingEnabled ?? false,
             backup: importedRecordingBackup

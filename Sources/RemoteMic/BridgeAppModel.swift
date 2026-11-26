@@ -937,6 +937,27 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             self?.voiceInputDestinationCoordinator.waitUntilReady(completion: completion) ?? .immediate
         },
         setFunctionKeyPressed: { KeyboardInjector.setFunctionKeyPressed($0) },
+        performCustomTrigger: { [weak self] in
+            // Read the stored trigger rather than `effectiveVoiceTriggerShortcut`:
+            // turning Fn tap mode off mid-session clears the effective gate, but
+            // the closing trigger must stay the one that opened the target.
+            guard let self,
+                  let shortcut = self.settings.voiceTriggerShortcut,
+                  shortcut.isValidVoiceTriggerShortcut
+            else { return nil }
+            AppLogger.shared.write(
+                "VOICE FN TAP trigger=custom phase=requested " +
+                    "has_function=\(shortcut.modifierFlags.contains(.function)) " +
+                    "modifier_count=\(shortcut.activeModifierCount) " +
+                    "modifier_chord=\(shortcut.isModifierChord)"
+            )
+            let submitted = KeyboardInjector.sendVoiceTrigger(shortcut)
+            AppLogger.shared.write(
+                "VOICE FN TAP trigger=custom phase=completed " +
+                    "result=\(submitted ? "submitted" : "failed") target_response=unknown"
+            )
+            return submitted
+        },
         enqueueAudio: { [weak self] samples in
             self?.enqueueVoiceFnTapAudio(samples)
         },
@@ -4838,7 +4859,10 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     func restoreCompleteConfiguration(_ backup: MacConfigurationBackup) throws {
         let host = try settings.validatedCompleteConfigurationSnapshot(backup.host)
         try macroFeature.validateConfigurationArchive(backup.components)
-        guard !isStreaming, releaseVoiceKeyIfNeeded() else { throw AppConfigurationError.unsafeVoiceKeyChange }
+        guard !isStreaming,
+              !voiceFnTapSession.requiresCleanupBeforeMapping,
+              releaseVoiceKeyIfNeeded()
+        else { throw AppConfigurationError.unsafeVoiceKeyChange }
         if try !macroFeature.restoreConfigurationArchive(backup.components, hostAfter: host) {
             let before = try settings.portableLocalSnapshot()
             do { try settings.applyPortableLocalSnapshot(host) }
@@ -4858,7 +4882,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             changedVoiceKeyConfiguration = try Self.importConfiguration(
                 from: data,
                 into: settings,
-                isStreaming: isStreaming,
+                isStreaming: isStreaming || voiceFnTapSession.requiresCleanupBeforeMapping,
                 releaseVoiceKey: { releaseVoiceKeyIfNeeded() }
             )
         } catch AppConfigurationError.unsafeVoiceKeyChange {
@@ -4912,6 +4936,31 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         AppLogger.shared.write(
             "VOICE KEY mode_change completed from=\(previousMode) to=fn result=applied"
         )
+    }
+
+    var isVoiceTriggerShortcutEditingBlocked: Bool {
+        isStreaming || voiceFnTapSession.requiresCleanupBeforeMapping
+    }
+
+    @discardableResult
+    func setVoiceTriggerShortcut(_ shortcut: CustomKeyboardShortcut?) -> Bool {
+        if let shortcut, !shortcut.isValidVoiceTriggerShortcut {
+            AppLogger.shared.write("VOICE TRIGGER rejected reason=modifier_required")
+            return false
+        }
+        guard !isVoiceTriggerShortcutEditingBlocked else {
+            AppLogger.shared.write("VOICE TRIGGER rejected reason=voice_active")
+            return false
+        }
+        settings.voiceTriggerShortcut = shortcut
+        AppLogger.shared.write(
+            "VOICE TRIGGER phase=completed " +
+                "result=\(shortcut == nil ? "cleared" : "configured") " +
+                "has_function=\(shortcut?.modifierFlags.contains(.function) ?? false) " +
+                "modifier_count=\(shortcut?.activeModifierCount ?? 0) " +
+                "modifier_chord=\(shortcut?.isModifierChord ?? false)"
+        )
+        return true
     }
 
     private func enableVoiceFnTapMode() {

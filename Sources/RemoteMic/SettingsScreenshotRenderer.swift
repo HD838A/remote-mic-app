@@ -269,6 +269,23 @@ enum SettingsScreenshotRenderer {
         ], let voiceKeyMode = VoiceKeyMode(rawValue: voiceKeyModeValue) {
             settings.voiceKeyMode = voiceKeyMode
         }
+        if let voiceTriggerValue = ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_SETTINGS_SCREENSHOT_VOICE_TRIGGER_SHORTCUT"
+        ] {
+            settings.voiceKeyMode = .function
+            settings.voiceFnTapModeEnabled = true
+            settings.voiceTriggerShortcut = voiceTriggerValue == "chord"
+                ? CustomKeyboardShortcut(
+                    keyCode: 63,
+                    modifierFlags: [.function, .shift],
+                    keyLabel: "Fn"
+                )
+                : CustomKeyboardShortcut(
+                    keyCode: 1,
+                    modifierFlags: [.function, .shift],
+                    keyLabel: "S"
+                )
+        }
         seedStatisticsForScreenshot(settings)
         let historyDirectory = outputDirectory.appendingPathComponent(UUID().uuidString)
         let transcriptStore = TranscriptArchiveStore(
