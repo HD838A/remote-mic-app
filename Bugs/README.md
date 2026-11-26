@@ -1,5 +1,6 @@
 # Bug 记录
 
+- [事件 tap 回调对象释放后访问](./2026-11-26-event-tap-owner-use-after-free.html)
 - [应用内安装 Siri Remote 组件后 Onboarding 仍不显示苹果遥控器](./2026-11-25-onboarding-siri-remote-hidden-without-installer-receipt.md)
 - [RC003 语音流起始空洞（关联 10/16 秒录音尾字丢失）](./2026-11-24-rc003-early-stream-gap-first-word.md)
 - [虚拟音频引擎初始化阻塞导致语音会话永不结束、菜单栏图标长期变红](./2026-11-24-audio-engine-init-hang-stuck-voice-warning.md)
