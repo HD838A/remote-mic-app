@@ -43,7 +43,7 @@ We process your membership email, WeChat account identifier (mini program only),
 
 Usage statistics
 
-The personal center (Statistics page) shows button presses, voice duration, and longest single session on your device. To understand overall product usage, the Mac app uploads the day's anonymous usage values and a random report ID to our statistics service after each statistical day ends. The upload does not include your name, email, account, membership information, orders, device identifiers, IP address, voice, text, button content, or app names, and it does not require sign-in or membership.
+The personal center (Statistics page) shows button presses, voice duration, and longest single session on your device. To understand overall product usage, the Mac app uploads the day's anonymous usage values and a random report ID to our statistics service after each statistical day ends. Versions that support version reporting send the running App version with the report. We use it to count reporting installations by version. The upload does not include your name, email, account, membership information, orders, device identifiers, IP address, voice, text, button content, or app names, and it does not require sign-in or membership.
 
 The report ID only deduplicates the same upload and cannot be used to look up a user. We use these values only for aggregate statistics, not for billing, rewards, advertising profiles, or personal profiles. The statistics are enabled by default and have no separate switch in the current version; uninstalling the app stops future uploads, and aggregate values already produced are not rolled back. Cloud service providers still process connection IPs and routine request logs for transmission and security.
 
