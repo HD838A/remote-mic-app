@@ -3,6 +3,7 @@ import AVFoundation
 import Carbon
 import CoreAudio
 import Foundation
+import IOKit.hidsystem
 import Testing
 @testable import RemoteMic
 
@@ -206,6 +207,33 @@ struct MacMicrophoneInputTests {
         let release = try #require(CGEvent(keyboardEventSource: nil, virtualKey: 63, keyDown: false))
         release.flags = []
         #expect(MacMicrophoneVoiceKeyMonitor.physicalEdge(type: .flagsChanged, event: release, mode: .function) == false)
+    }
+
+    @Test func physicalChordEdgeRequiresEveryMemberAndEndsWhenAnyIsReleased() throws {
+        let rightCommand = CGEventFlags(rawValue: UInt64(NX_DEVICERCMDKEYMASK))
+        let rightOption = CGEventFlags(rawValue: UInt64(NX_DEVICERALTKEYMASK))
+        let mode = VoiceKeyMode.rightCommandOption
+
+        let commandOnly = try #require(CGEvent(keyboardEventSource: nil, virtualKey: 54, keyDown: true))
+        commandOnly.flags = [.maskCommand, rightCommand]
+        #expect(MacMicrophoneVoiceKeyMonitor.physicalEdge(type: .flagsChanged, event: commandOnly, mode: mode) == false)
+
+        let both = try #require(CGEvent(keyboardEventSource: nil, virtualKey: 61, keyDown: true))
+        both.flags = [.maskCommand, .maskAlternate, rightCommand, rightOption]
+        #expect(MacMicrophoneVoiceKeyMonitor.physicalEdge(type: .flagsChanged, event: both, mode: mode) == true)
+
+        // 左 Option 不能替代右 Option。
+        let leftOption = try #require(CGEvent(keyboardEventSource: nil, virtualKey: 58, keyDown: true))
+        leftOption.flags = [.maskCommand, .maskAlternate, rightCommand,
+                            CGEventFlags(rawValue: UInt64(NX_DEVICELALTKEYMASK))]
+        #expect(MacMicrophoneVoiceKeyMonitor.physicalEdge(type: .flagsChanged, event: leftOption, mode: mode) == nil)
+
+        let optionReleased = try #require(CGEvent(keyboardEventSource: nil, virtualKey: 61, keyDown: false))
+        optionReleased.flags = [.maskCommand, rightCommand]
+        #expect(MacMicrophoneVoiceKeyMonitor.physicalEdge(type: .flagsChanged, event: optionReleased, mode: mode) == false)
+
+        both.setIntegerValueField(.eventSourceUserData, value: KeyboardInjector.syntheticEventMarker)
+        #expect(MacMicrophoneVoiceKeyMonitor.physicalEdge(type: .flagsChanged, event: both, mode: mode) == nil)
     }
 
     @Test(arguments: [44_100.0, 48_000.0])

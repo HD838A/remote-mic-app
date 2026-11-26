@@ -12,6 +12,7 @@ final class PreferredInputSourceMonitor {
     ) -> Bool
     typealias MonitorInstaller = (@escaping (Bool) -> Void) -> Any?
     typealias MonitorRemover = (Any) -> Void
+    typealias RestoreScheduler = (TimeInterval, @escaping () -> Void) -> Void
     typealias Logger = (String) -> Void
 
     private let voiceTool: VoiceToolProvider
@@ -21,6 +22,7 @@ final class PreferredInputSourceMonitor {
     private let waitForInputSourceActivation: InputSourceActivationWaiter
     private let installMonitor: MonitorInstaller
     private let removeMonitor: MonitorRemover
+    private let scheduleRestore: RestoreScheduler
     private let logger: Logger
 
     private var monitor: Any?
@@ -31,6 +33,11 @@ final class PreferredInputSourceMonitor {
     private var managedInputSourceSession: ManagedInputSourceSession?
     private static let activationTimeout: TimeInterval = 0.5
     private static let activationPollInterval: TimeInterval = 0.02
+    /// 软件语音键松开后，语音输入法还要停止采集并把 marked text 提交进输入框。
+    /// 现场统一日志：豆包在采集停止后 160–550 ms 才 `Inserting text`，而采集停止本身
+    /// 又在松键后 150–330 ms；在此之前切走输入源，文字会停在组合态无法上屏。
+    static let explicitRestoreDelay: TimeInterval = 1.5
+    private var deferredRestoreGeneration: UInt64 = 0
 
     var functionKeyIsPressedForDiagnostics: Bool {
         functionKeyIsPressed
@@ -46,6 +53,8 @@ final class PreferredInputSourceMonitor {
         let targetInputSourceID: String
         var owners: Set<Owner>
         var activationPending: Bool
+        /// 所有 owner 已结束，正在等待语音工具提交文字后再恢复原输入源。
+        var restoreDeferred = false
     }
 
     init(
@@ -70,6 +79,9 @@ final class PreferredInputSourceMonitor {
             }
         },
         removeMonitor: @escaping MonitorRemover = NSEvent.removeMonitor,
+        scheduleRestore: @escaping RestoreScheduler = { delay, work in
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
+        },
         logger: @escaping Logger = AppLogger.shared.write
     ) {
         self.voiceTool = voiceTool
@@ -79,6 +91,7 @@ final class PreferredInputSourceMonitor {
         self.waitForInputSourceActivation = waitForInputSourceActivation
         self.installMonitor = installMonitor
         self.removeMonitor = removeMonitor
+        self.scheduleRestore = scheduleRestore
         self.logger = logger
     }
 
@@ -93,10 +106,14 @@ final class PreferredInputSourceMonitor {
         if !preservingExplicitVoiceSession {
             explicitVoiceSessionActivationPending = false
         }
-        finishManagedInputSourceSession(
-            reason: "monitor_stop",
-            owner: preservingExplicitVoiceSession ? .functionKey : nil
-        )
+        if preservingExplicitVoiceSession, managedInputSourceSession?.restoreDeferred == true {
+            // 显式语音会话的延迟恢复仍属于该会话，不因 Fn 监听停止而提前切走输入源。
+        } else {
+            finishManagedInputSourceSession(
+                reason: "monitor_stop",
+                owner: preservingExplicitVoiceSession ? .functionKey : nil
+            )
+        }
         if let monitor {
             removeMonitor(monitor)
             self.monitor = nil
@@ -154,12 +171,66 @@ final class PreferredInputSourceMonitor {
     }
 
     /// Ends an input-source session previously started for a voice key.
+    ///
+    /// When the trigger key was actually delivered, the voice tool still has to
+    /// stop capture and commit its marked text into the focused field. Restoring
+    /// the previous input source immediately takes input focus away from the tool
+    /// and leaves the text stuck in composition, so the restore is deferred.
+    /// A cancelled activation never delivered the trigger and restores at once.
     func endVoiceSession() {
         explicitVoiceSessionActivationPending = false
-        finishManagedInputSourceSession(
-            reason: "voice_session_end",
-            owner: .explicitVoice
+        guard var session = managedInputSourceSession,
+              session.owners.contains(.explicitVoice),
+              !session.activationPending
+        else {
+            finishManagedInputSourceSession(
+                reason: "voice_session_end",
+                owner: .explicitVoice
+            )
+            return
+        }
+        session.owners.remove(.explicitVoice)
+        guard session.owners.isEmpty, session.previousInputSourceID != nil else {
+            managedInputSourceSession = session
+            if session.owners.isEmpty {
+                finishManagedInputSourceSession(reason: "voice_session_end", owner: nil)
+            }
+            return
+        }
+        session.restoreDeferred = true
+        managedInputSourceSession = session
+        deferredRestoreGeneration &+= 1
+        let generation = deferredRestoreGeneration
+        let delay = Self.explicitRestoreDelay
+        logger(
+            "VOICE INPUT source_restore phase=deferred reason=voice_session_end " +
+                "delay_ms=\(Int(delay * 1_000))"
         )
+        scheduleRestore(delay) { [weak self] in
+            guard let self,
+                  self.deferredRestoreGeneration == generation,
+                  self.managedInputSourceSession?.restoreDeferred == true
+            else { return }
+            self.finishManagedInputSourceSession(reason: "voice_session_end", owner: nil)
+        }
+    }
+
+    /// A new voice session that starts while a deferred restore is pending keeps
+    /// the already selected voice input source instead of switching away and back.
+    private func reclaimDeferredRestore(owner: ManagedInputSourceSession.Owner) -> Bool? {
+        guard var session = managedInputSourceSession, session.restoreDeferred else { return nil }
+        deferredRestoreGeneration &+= 1
+        guard currentInputSourceID() == session.targetInputSourceID else {
+            // 用户在等待期间换了输入源：放弃这次恢复，按新会话重新准备。
+            managedInputSourceSession = nil
+            logger("VOICE INPUT source_restore phase=cancelled reason=source_changed")
+            return nil
+        }
+        session.restoreDeferred = false
+        session.owners.insert(owner)
+        managedInputSourceSession = session
+        logger("VOICE INPUT source_restore phase=cancelled reason=new_voice_session")
+        return true
     }
 
     @discardableResult
@@ -176,6 +247,16 @@ final class PreferredInputSourceMonitor {
             )
         }
         guard let targetInputSourceID = selectedVoiceTool.preferredInputSourceID else { return true }
+        if managedInputSourceSession?.restoreDeferred == true,
+           managedInputSourceSession?.targetInputSourceID == targetInputSourceID,
+           let reclaimed = reclaimDeferredRestore(owner: owner) {
+            return reclaimed
+        }
+        if managedInputSourceSession?.restoreDeferred == true {
+            // 目标输入法已变化：立即按原逻辑结束旧会话的恢复，再开始新会话。
+            deferredRestoreGeneration &+= 1
+            finishManagedInputSourceSession(reason: "voice_session_end", owner: nil)
+        }
         if var session = managedInputSourceSession {
             guard session.targetInputSourceID == targetInputSourceID else {
                 logger("VOICE INPUT session_rejected reason=target_changed")
@@ -291,6 +372,7 @@ final class PreferredInputSourceMonitor {
             }
         }
         managedInputSourceSession = nil
+        if session.restoreDeferred { deferredRestoreGeneration &+= 1 }
 
         guard let previousInputSourceID = session.previousInputSourceID else { return }
         let currentSourceID = currentInputSourceID()

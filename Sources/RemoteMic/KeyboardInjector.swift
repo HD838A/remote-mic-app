@@ -534,13 +534,36 @@ enum KeyboardInjector {
             }
             return false
         }
-        let flags = isPressed ? mode.eventFlags : []
-        let submitted = keyStatePoster(
-            mode.keyCode,
-            isPressed,
-            flags
-        )
+        let keys = mode.keys
+        // 组合键按真实键盘顺序逐个按下，每个事件都携带已按住的全部修饰位；
+        // 松开时反序释放，剩余修饰位随之递减，最后一个松开事件不带任何修饰位。
+        func heldFlags(_ count: Int) -> CGEventFlags {
+            keys.prefix(count).reduce(into: CGEventFlags()) { $0.formUnion($1.flags) }
+        }
+        let submitted: Bool
+        if isPressed {
+            var pressedAll = true
+            for index in keys.indices {
+                guard keyStatePoster(keys[index].keyCode, true, heldFlags(index + 1)) else {
+                    // 部分按下失败时把已按下的键反序松开，不留下孤立修饰键。
+                    for pressed in keys.indices.prefix(index).reversed() {
+                        _ = keyStatePoster(keys[pressed].keyCode, false, heldFlags(pressed))
+                    }
+                    pressedAll = false
+                    break
+                }
+            }
+            submitted = pressedAll
+        } else {
+            var released = true
+            for index in keys.indices.reversed() {
+                // 即使某个松开事件提交失败，也继续松开其余键。
+                released = keyStatePoster(keys[index].keyCode, false, heldFlags(index)) && released
+            }
+            submitted = released
+        }
         if mode == .function {
+            let flags = isPressed ? mode.eventFlags : []
             logger(
                 "VOICE KEY fn_submit mode=fn edge=\(edge) " +
                     "result=\(submitted ? "submitted" : "failed") source=software " +

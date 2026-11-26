@@ -1,5 +1,6 @@
 # Bug 记录
 
+- [修饰键语音模式松键后立即切回原输入法，豆包识别结果卡在组合态无法上屏](./2026-11-19-modifier-voice-restore-before-commit.md)
 - [应用内安装 Siri Remote 组件后 Onboarding 仍不显示苹果遥控器](./2026-11-25-onboarding-siri-remote-hidden-without-installer-receipt.md)
 - [RC003 语音流起始空洞（关联 10/16 秒录音尾字丢失）](./2026-11-24-rc003-early-stream-gap-first-word.md)
 - [虚拟音频引擎初始化阻塞导致语音会话永不结束、菜单栏图标长期变红](./2026-11-24-audio-engine-init-hang-stuck-voice-warning.md)
@@ -119,6 +120,8 @@
 - [HID 诊断窗口过期后仍记录普通按键](./2026-10-24-hid-filter-log-window.html)
 
 - [更新录音应用信息时扫描全部录音](./2026-10-24-recording-metadata-lookup.html)
+
+- [语音键绑定非 Fn 时，Mac 键盘 Fn 仍劫持切换输入法](./2026-10-23-fn-input-source-hijack-non-fn-binding.md)
 
 - [自身前台输入框聚焦导致死锁](./2026-10-23-self-composer-focus-deadlock.html)
 

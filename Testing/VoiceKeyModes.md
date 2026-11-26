@@ -4,7 +4,7 @@
 
 - 适用版本：当前待验证 PR 或已合入 `main` 的精确 Commit；原功能分支 `codex/voice-key-command-modes` 只作为历史审计来源。
 - 适用系统：Apple Silicon 使用 macOS 14 或更高版本；Intel 使用 macOS 13 或更高版本。
-- 功能范围：Fn/地球键（默认）、左 Command 长按、右 Command 长按、左 Option 长按、右 Option 长按，以及既有 Fn 点按兼容模式。
+- 功能范围：Fn/地球键（默认）、左 Command 长按、右 Command 长按、左 Option 长按、右 Option 长按、右 Command + 右 Option 组合长按、右 Command + 右 Option + 右 Shift 组合长按，以及既有 Fn 点按兼容模式。
 - 本手册不把模拟 HID、单元测试、构建、签名或截图视为 RC003、iPhone、Apple Watch、网页版、系统权限或第三方语音应用的真实环境验收。
 
 ## 测试前准备
@@ -214,7 +214,7 @@
 
 ## Issue #307 回归：输入源确认后再触发 Command
 
-在微信输入法与豆包输入法之间切换，连续执行右 Command 语音会话。预期每次日志先出现 `VOICE INPUT source_prepare` 且当前输入源确认成功，再出现 `VOICE KEY ... DOWN`；激活期间收到的蓝牙音频先记录 `buffered_before_command`，DOWN 成功后记录 `flush_before_command` 并按原顺序补送。超时时不发送孤立 Command，松开后只恢复未被用户改动的原输入源。输入源仍在激活时立即松开语音键，预期记录 `pending_down_cancelled`，不出现 UP 先于 DOWN、不补送已取消音频，也不残留目标输入源；等待期间触发 Fn 或移动端语音，预期 owner 不泄漏，Command 与 Fn 各自松开后才按最后 owner 恢复。
+在微信输入法与豆包输入法之间切换，连续执行右 Command 语音会话。预期每次日志先出现 `VOICE INPUT source_prepare` 且当前输入源确认成功，再出现 `VOICE KEY ... DOWN`；激活期间收到的蓝牙音频先记录 `buffered_before_command`，DOWN 成功后记录 `flush_before_command` 并按原顺序补送。超时时不发送孤立 Command，松开后只恢复未被用户改动的原输入源。输入源仍在激活时立即松开语音键，预期记录 `pending_down_cancelled`，不出现 UP 先于 DOWN、不补送已取消音频，也不残留目标输入源；等待期间触发移动端语音，预期 owner 不泄漏，Command 与移动端各自松开后才按最后 owner 恢复。
 
 ## 2026-10-24：输入源等待 RunLoop 回归
 
@@ -235,3 +235,72 @@
 失败判定：第一次语音失败、取消被记为超时、重复恢复、覆盖第三输入源、卡键、首字延迟增加或尾音缺失。自动化不证明真实 TIS、硬件、权限与第三方文字上屏。
 
 本地验证：定向 81 项、全量 951 项和自检 48 项通过。Apple Silicon macOS 14 与 Intel macOS 13 Release 构建通过。真实环境矩阵仍未验收。
+
+## 回归：非 Fn 绑定下 Mac 键盘 Fn 不切换输入源
+
+语音键绑定左/右 Command 或 Option 且语音工具为豆包/微信时，在任意 App 输入框按住 Mac 键盘自带 Fn/地球键再松开，重复多次。预期全程输入源不切换到语音工具输入法、不出现 `VOICE INPUT function_key edge=down` 日志，松开后无 `source_restore`；遥控器语音会话（Command 长按）期间的 `source_prepare`/`source_restore` 不受影响。切回 Fn 绑定后，Mac 键盘与遥控器 Fn 重新照常准备并恢复输入源。失败判定：非 Fn 绑定下按 Mac Fn 出现输入法切换或 `function_key edge` 日志，或 Fn 绑定下输入源准备/恢复失效。
+
+## 用例 10：右侧修饰键组合（右 ⌘ + 右 ⌥、右 ⌘ + 右 ⌥ + 右 ⇧）
+
+适用分支：`feat/voice-key-modifier-chords-20261126`（原 `feat/voice-key-modifier-chords-20261119` 重放到 `a8c238bc`）。组合键与单个修饰键共用同一条软件注入路径：按下时按右 Command → 右 Option →（右 Shift）的顺序逐个提交，每个事件携带已按住的全部修饰位与左右设备位；松开时反序逐个释放，最后一个松开事件不带修饰位。组合键需要辅助功能权限，不使用 F5 → Fn 硬件映射，也不参与 Fn 点按。
+
+### 前置
+
+- 准备一个支持“两个及以上修饰键组合”作为按住说话快捷键的语音工具（例如豆包输入法的长按组合键设置），把它的快捷键分别设成 `右 ⌘ + 右 ⌥` 与 `右 ⌘ + 右 ⌥ + 右 ⇧`；记录工具版本，以及它是否区分左右修饰键。
+- RC003 已连接，辅助功能与输入监控已授权。
+
+### 步骤
+
+1. 按键页点击语音键，确认面板显示“语音触发键”五个单键选项和下方“组合键”两个选项；选中任一组合后，上方单键组没有选中项，提示条标题点名该组合，“语音键模拟 Fn 点按”置灰。
+   - 预期：中英文、浅色和深色在 `1067 × 760` 下无裁切，中文不小于 12pt。
+2. 选择 `右 ⌘ + 右 ⌥`，在目标工具输入框按住遥控器语音键说一句话后松开。
+   - 预期：文字上屏；日志依次出现 `VOICE KEY mode=right_command_option edge=down result=event_submitted` 与同一会话的 `edge=up`，之间有完整 `ATVV STREAM START → AUDIO → STOP`。
+3. 连续三次短语音，再说一次约 10 秒长语音。
+   - 预期：每次都首字不延迟、尾字完整，无残留修饰键（松开后在任意 App 按普通字母键不应触发 ⌘/⌥ 快捷键）。
+4. 选择 `右 ⌘ + 右 ⌥ + 右 ⇧`，重复步骤 2～3。
+5. 语音进行中关闭辅助功能权限或断开遥控器。
+   - 预期：组合键全部被释放（任意 App 中不残留 ⌘/⌥/⇧），日志记录释放结果；恢复权限或重连后可再次开始语音。
+6. 选择组合键后退出并重新打开 App；再导出配置检查 `voiceKeyMode`，导入回原值。
+   - 预期：模式持久化；导出值为 `right_command_option` 或 `right_command_option_shift`。
+7. 改回 Fn/地球键，执行用例 2B 的 Fn 稳定基线。
+   - 预期：Fn 行为与组合键改动前一致。
+
+### 失败判定
+
+- 组合键模式下目标工具收不到触发、只收到其中一个键，或左右侧被合并导致误触发其他快捷键。
+- 松开语音键、断连或撤回权限后残留任一修饰键。
+- 首字延迟增加、尾字丢失、连续会话第二次起失败。
+- 旧版配置导入后变成组合键，或 Fn/单个修饰键行为发生变化。
+
+### 结果
+
+- 自动化：`VoiceKeyModeTests` 新增组合键键码与修饰位、按下顺序与反序释放、部分按下失败回滚、释放部分失败继续、权限门、配置往返与持久化、所有模式本地化完整性；`MacMicrophoneInputTests` 新增组合键物理边沿（全部按下才算按下、任一松开即松开、左 Option 不替代右 Option、忽略合成事件）。公开模式全量 1531 tests 通过。
+- 离屏截图：中文/英文 × 浅色/深色 × 单键选中/组合选中，`1067 × 760`，原件位于仓库外 `~/Pictures/SayAllEvidence/voice-key-chords-20261119/`。
+- 真实 RC003 与第三方语音工具：未执行，待现场验收。
+
+## 回归：修饰键模式松键后延迟恢复输入源
+
+适用分支：`feat/voice-key-modifier-chords-20261126`。Bug 记录：[`Bugs/2026-11-19-modifier-voice-restore-before-commit.md`](../Bugs/2026-11-19-modifier-voice-restore-before-commit.md)。
+
+### 前置
+
+- 日常输入法设为搜狗（或任意非语音输入法），语音工具选豆包；豆包“按住说话”设为与 SayAll 相同的修饰键或组合。
+
+### 步骤
+
+1. 选择 `右 ⌘ + 右 ⌥`，在任意 App 输入框按住遥控器语音键说一句话后松开。
+   - 预期：文字进入输入框，不停留在豆包组合态；松开后约 1.5 秒内菜单栏输入法仍为豆包，之后切回搜狗。日志依次出现 `source_restore phase=deferred ... delay_ms=1500` 与 `source_restore result=selected reason=voice_session_end`。
+2. 对左/右 Command、左/右 Option 单键模式重复步骤 1。
+3. 连续快速说三句（每句间隔小于 1.5 秒）。
+   - 预期：每句都上屏；输入法不在豆包和搜狗之间来回闪烁；日志出现 `phase=cancelled reason=new_voice_session`，最后一句结束约 1.5 秒后只恢复一次。
+4. 松键后立即手动切换到第三种输入法（例如 ABC）。
+   - 预期：到期后不覆盖为搜狗，日志 `source_restore skipped reason=user_changed`。
+5. 改回 Fn 模式，执行用例 2B。
+   - 预期：Fn 行为不变，松键后立即恢复输入源。
+
+### 失败判定
+
+- 修饰键或组合模式下识别结果仍停在组合态，或松键后立即切回原输入法。
+- 连续会话出现输入法闪烁、恢复次数多于一次或最终未恢复。
+- 等待期间用户手动选择的输入法被覆盖。
+- 首字延迟增加、尾字丢失，或 Fn 模式行为改变。

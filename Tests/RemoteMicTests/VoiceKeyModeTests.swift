@@ -758,4 +758,166 @@ struct VoiceKeyModeTests {
         #expect(target.voiceKeyMode == .leftCommand)
         #expect(target.gainDB == 12)
     }
+
+    @Test func rightSideModifierChordsDeclareOrderedSideSpecificKeys() {
+        let rightCommand = CGEventFlags(rawValue: UInt64(NX_DEVICERCMDKEYMASK))
+        let rightOption = CGEventFlags(rawValue: UInt64(NX_DEVICERALTKEYMASK))
+        let rightShift = CGEventFlags(rawValue: UInt64(NX_DEVICERSHIFTKEYMASK))
+
+        #expect(VoiceKeyMode.rightCommandOption.rawValue == "right_command_option")
+        #expect(VoiceKeyMode.rightCommandOptionShift.rawValue == "right_command_option_shift")
+        #expect(VoiceKeyMode.rightCommandOption.keys.map(\.keyCode) == [54, 61])
+        #expect(VoiceKeyMode.rightCommandOptionShift.keys.map(\.keyCode) == [54, 61, 60])
+        #expect(VoiceKeyMode.rightCommandOption.eventFlags.contains([.maskCommand, .maskAlternate, rightCommand, rightOption]))
+        #expect(!VoiceKeyMode.rightCommandOption.eventFlags.contains(.maskShift))
+        #expect(VoiceKeyMode.rightCommandOptionShift.eventFlags.contains([
+            .maskCommand, .maskAlternate, .maskShift, rightCommand, rightOption, rightShift,
+        ]))
+        for mode in VoiceKeyMode.chordModes {
+            #expect(mode.isChord)
+            #expect(mode.requiresAccessibility)
+            #expect(!mode.usesHardwareMapping)
+            #expect(!mode.eventFlags.contains(.maskSecondaryFn))
+        }
+        // 单键模式的键码、修饰位和分组保持不变。
+        #expect(VoiceKeyMode.singleKeyModes == [.function, .leftCommand, .rightCommand, .leftOption, .rightOption])
+        #expect(VoiceKeyMode.chordModes == [.rightCommandOption, .rightCommandOptionShift])
+        for mode in VoiceKeyMode.singleKeyModes {
+            #expect(mode.keys.count == 1)
+            #expect(mode.keys[0].keyCode == mode.keyCode)
+            #expect(mode.keys[0].flags == mode.eventFlags)
+        }
+    }
+
+    @Test(arguments: [VoiceKeyMode.rightCommandOption, .rightCommandOptionShift])
+    func chordInjectionPressesInOrderAndReleasesInReverseWithDecreasingFlags(mode: VoiceKeyMode) {
+        var posted: [(CGKeyCode, Bool, CGEventFlags)] = []
+        let poster: KeyboardInjector.KeyStatePoster = { code, isDown, flags in
+            posted.append((code, isDown, flags))
+            return true
+        }
+
+        #expect(KeyboardInjector.setVoiceKeyPressed(
+            mode, isPressed: true, accessibilityTrusted: { true }, keyStatePoster: poster
+        ))
+        #expect(KeyboardInjector.setVoiceKeyPressed(
+            mode, isPressed: false, accessibilityTrusted: { true }, keyStatePoster: poster
+        ))
+
+        let keys = mode.keys
+        #expect(posted.count == keys.count * 2)
+        var held = CGEventFlags()
+        for (index, key) in keys.enumerated() {
+            held.formUnion(key.flags)
+            #expect(posted[index].0 == key.keyCode)
+            #expect(posted[index].1)
+            #expect(posted[index].2 == held)
+        }
+        for (offset, index) in keys.indices.reversed().enumerated() {
+            let event = posted[keys.count + offset]
+            let remaining = keys.prefix(index).reduce(into: CGEventFlags()) { $0.formUnion($1.flags) }
+            #expect(event.0 == keys[index].keyCode)
+            #expect(!event.1)
+            #expect(event.2 == remaining)
+        }
+        #expect(posted.last?.2.isEmpty == true)
+    }
+
+    @Test func chordPartialPressFailureReleasesAlreadyPressedKeysInReverse() {
+        var posted: [(CGKeyCode, Bool, CGEventFlags)] = []
+        let poster: KeyboardInjector.KeyStatePoster = { code, isDown, flags in
+            posted.append((code, isDown, flags))
+            // 第三个按键（右 Shift）的按下提交失败。
+            return !(isDown && code == 60)
+        }
+
+        #expect(!KeyboardInjector.setVoiceKeyPressed(
+            .rightCommandOptionShift,
+            isPressed: true,
+            accessibilityTrusted: { true },
+            keyStatePoster: poster
+        ))
+
+        let downs = posted.filter(\.1).map(\.0)
+        let ups = posted.filter { !$0.1 }.map(\.0)
+        #expect(downs == [54, 61, 60])
+        #expect(ups == [61, 54])
+        #expect(posted.last?.2.isEmpty == true)
+    }
+
+    @Test func chordReleaseContinuesAfterOneKeyUpFails() {
+        var posted: [(CGKeyCode, Bool)] = []
+        let poster: KeyboardInjector.KeyStatePoster = { code, isDown, _ in
+            posted.append((code, isDown))
+            return !(code == 61 && !isDown)
+        }
+
+        #expect(!KeyboardInjector.setVoiceKeyPressed(
+            .rightCommandOptionShift,
+            isPressed: false,
+            accessibilityTrusted: { true },
+            keyStatePoster: poster
+        ))
+        #expect(posted.map(\.0) == [60, 61, 54])
+        #expect(posted.allSatisfy { !$0.1 })
+    }
+
+    @Test func chordInjectionRequiresAccessibility() {
+        var postedCount = 0
+        #expect(!KeyboardInjector.setVoiceKeyPressed(
+            .rightCommandOption,
+            isPressed: true,
+            accessibilityTrusted: { false },
+            keyStatePoster: { _, _, _ in postedCount += 1; return true }
+        ))
+        #expect(postedCount == 0)
+        #expect(HIDPermissionGate.nextPermissionRequest(
+            mappingEnabled: false,
+            voiceKeyMode: .rightCommandOptionShift,
+            inputMonitoringGranted: false,
+            accessibilityGranted: false
+        ) == .accessibility)
+    }
+
+    @Test func configurationRoundTripsChordModes() throws {
+        for mode in VoiceKeyMode.chordModes {
+            let sourceSuite = "RemoteMicTests.voice-key-chord-source.\(UUID().uuidString)"
+            let sourceDefaults = try #require(TestUserDefaults(suiteName: sourceSuite))
+            defer { sourceDefaults.removePersistentDomain(forName: sourceSuite) }
+            let source = AppSettings(defaults: sourceDefaults)
+            source.voiceKeyMode = mode
+            let exported = try source.exportedConfigurationData()
+            let object = try #require(JSONSerialization.jsonObject(with: exported) as? [String: Any])
+            #expect(object["voiceKeyMode"] as? String == mode.rawValue)
+
+            let targetSuite = "RemoteMicTests.voice-key-chord-target.\(UUID().uuidString)"
+            let targetDefaults = try #require(TestUserDefaults(suiteName: targetSuite))
+            defer { targetDefaults.removePersistentDomain(forName: targetSuite) }
+            let target = AppSettings(defaults: targetDefaults)
+            try target.importConfiguration(from: exported)
+            #expect(target.voiceKeyMode == mode)
+
+            // 重新从持久化读取也保持同一模式。
+            #expect(AppSettings(defaults: targetDefaults).voiceKeyMode == mode)
+        }
+    }
+
+    @Test func everyVoiceKeyModeHasLocalizedLabelAndStatusMessages() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        for language in ["zh-Hans", "en"] {
+            let url = root.appendingPathComponent("Resources/\(language).lproj/Localizable.strings")
+            let strings = try #require(NSDictionary(contentsOf: url) as? [String: String])
+            #expect(strings["connection.voice_key_mode.chord_title"] != nil)
+            for mode in VoiceKeyMode.allCases {
+                #expect(strings[mode.localizationKey] != nil, "\(language) missing \(mode.localizationKey)")
+                for suffix in ["enabled", "pressed", "released"] {
+                    let key = "voice_button.status.\(mode.rawValue)_\(suffix)"
+                    #expect(strings[key] != nil, "\(language) missing \(key)")
+                }
+            }
+        }
+    }
 }

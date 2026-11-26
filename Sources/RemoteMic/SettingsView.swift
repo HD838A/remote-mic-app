@@ -3777,20 +3777,12 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 2) {
             Text(localization.text("connection.voice_key_mode.title"))
                 .font(.system(size: 12, weight: .medium))
-            Picker("connection.voice_key_mode.title", selection: Binding(
-                get: { settings.voiceKeyMode },
-                set: { model.setVoiceKeyMode($0) }
-            )) {
-                ForEach(VoiceKeyMode.allCases) { mode in
-                    Text(localization.text(mode.localizationKey)).tag(mode)
-                }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .controlSize(.small)
-            .tint(Color.accentColor)
-            // 只占内容宽度并左对齐，不把整行铺满。
-            .fixedSize(horizontal: true, vertical: false)
+            mappingVoiceKeyModePicker(VoiceKeyMode.singleKeyModes)
+            // 组合键与单键分开成两组：同一个分段控件放七项会挤压，且两类含义不同。
+            Text(localization.text("connection.voice_key_mode.chord_title"))
+                .font(.system(size: 12, weight: .medium))
+                .padding(.top, 6)
+            mappingVoiceKeyModePicker(VoiceKeyMode.chordModes)
             Text(localization.text("connection.voice_key_mode.help"))
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
@@ -3816,6 +3808,24 @@ struct SettingsView: View {
             }
         }
         .help(localization.text("connection.voice_key_mode.help"))
+    }
+
+    /// 一组语音触发键的分段选择；当前模式不在本组时本组不显示选中项。
+    private func mappingVoiceKeyModePicker(_ modes: [VoiceKeyMode]) -> some View {
+        Picker("connection.voice_key_mode.title", selection: Binding<VoiceKeyMode?>(
+            get: { modes.contains(settings.voiceKeyMode) ? settings.voiceKeyMode : nil },
+            set: { if let mode = $0 { model.setVoiceKeyMode(mode) } }
+        )) {
+            ForEach(modes) { mode in
+                Text(localization.text(mode.localizationKey)).tag(Optional(mode))
+            }
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .controlSize(.small)
+        .tint(Color.accentColor)
+        // 只占内容宽度并左对齐，不把整行铺满。
+        .fixedSize(horizontal: true, vertical: false)
     }
 
     private var mappingVoiceFnTapControl: some View {

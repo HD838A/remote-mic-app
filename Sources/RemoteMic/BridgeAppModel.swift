@@ -4037,18 +4037,6 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         if !permissionSnapshot.accessibilityGranted {
             _ = releaseVoiceKeyIfNeeded()
         }
-        if started, permissionSnapshot.inputMonitoringGranted {
-            preferredInputSourceMonitor.start()
-        } else {
-            preferredInputSourceMonitor.stop(
-                preservingExplicitVoiceSession: VoiceKeySessionPreservationPolicy
-                    .shouldPreserveInputSourceSession(
-                        latchHeld: voiceKeyLatch.isHeld,
-                        heldMode: heldVoiceKeyMode,
-                        pendingMode: pendingVoiceKeyMode
-                    )
-            )
-        }
         if !settings.customMappingEnabled {
             stopLongRecording(reason: "mapping_disabled")
         }
@@ -4160,6 +4148,19 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             }
             voiceFnTapSession.setEnabled(false)
             powerKeySuppressed = applyVoiceFunctionMapping(neutralizeVoiceKey: false)
+        }
+        if started, permissionSnapshot.inputMonitoringGranted,
+           settings.voiceKeyMode == .function {
+            preferredInputSourceMonitor.start()
+        } else {
+            preferredInputSourceMonitor.stop(
+                preservingExplicitVoiceSession: VoiceKeySessionPreservationPolicy
+                    .shouldPreserveInputSourceSession(
+                        latchHeld: voiceKeyLatch.isHeld,
+                        heldMode: heldVoiceKeyMode,
+                        pendingMode: pendingVoiceKeyMode
+                    )
+            )
         }
         startHIDMonitors(powerKeySuppressed: powerKeySuppressed)
 #if SAYALL_SIRI_REMOTE_ENABLED

@@ -167,9 +167,11 @@ final class MacMicrophoneVoiceKeyMonitor {
     }
 
     static func physicalEdge(type: CGEventType, event: CGEvent, mode: VoiceKeyMode) -> Bool? {
+        let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
         guard type == .flagsChanged,
-              event.getIntegerValueField(.keyboardEventKeycode) == Int64(mode.keyCode),
+              mode.keys.contains(where: { Int64($0.keyCode) == keyCode }),
               event.getIntegerValueField(.eventSourceUserData) != KeyboardInjector.syntheticEventMarker else { return nil }
+        // 组合键只有全部成员都按住时才算按下；任一成员松开即算松开。
         return event.flags.contains(mode.eventFlags)
     }
 
