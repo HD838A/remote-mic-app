@@ -70,7 +70,7 @@ struct LocalizationTests {
         #expect(chinese["community.help.title"] == "配置有问题？")
         #expect(chinese["community.help.intro"] == "扫码关注抖音或小红书，查看设置教程。")
         #expect(chinese["community.help.douyin_title"] == "抖音 · 无线麦 SayAll App")
-        #expect(chinese["community.help.douyin_hint"] == "用抖音扫一扫")
+        #expect(chinese["community.help.douyin_hint"] == "保存图片后，用抖音扫一扫")
         #expect(chinese["community.help.xiaohongshu_title"] == "小红书 · 无线麦 SayAll App")
         #expect(chinese["community.help.xiaohongshu_hint"] == "用小红书扫一扫")
         #expect(chinese["community.help.douyin_title"]?.contains("SayAll.App") == false)

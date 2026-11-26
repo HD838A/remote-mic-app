@@ -238,7 +238,18 @@ struct OnboardingView: View {
     }
 
     private var onboardingStyledLayout: some View {
-        onboardingFrame
+        ZStack {
+            onboardingFrame
+                .accessibilityHidden(isCommunityHelpPresented)
+
+            if isCommunityHelpPresented {
+                CommunityHelpOverlay(
+                    localization: localization,
+                    source: .onboarding,
+                    onClose: { isCommunityHelpPresented = false }
+                )
+            }
+        }
             .background(Color(nsColor: .windowBackgroundColor).ignoresSafeArea())
             .environment(\.locale, localization.locale)
             .frame(minWidth: 980, minHeight: 732)
@@ -578,9 +589,6 @@ struct OnboardingView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("onboarding.community_help")
-                    .sheet(isPresented: $isCommunityHelpPresented) {
-                        CommunityHelpSheet(localization: localization, source: .onboarding)
-                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .layoutPriority(1)

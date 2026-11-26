@@ -805,7 +805,7 @@
 "community.help.title" = "Trouble with setup?";
 "community.help.intro" = "Scan to follow Douyin or Xiaohongshu and view setup tutorials.";
 "community.help.douyin_title" = "Douyin · SayAll";
-"community.help.douyin_hint" = "Scan with Douyin";
+"community.help.douyin_hint" = "Save this image, then scan it in Douyin";
 "community.help.douyin_accessibility" = "QR code for the SayAll Douyin account";
 "community.help.xiaohongshu_title" = "Xiaohongshu · SayAll";
 "community.help.xiaohongshu_hint" = "Scan with Xiaohongshu";

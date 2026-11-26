@@ -38,19 +38,23 @@ struct CommunityHelpSheetTests {
             contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
             encoding: .utf8
         )
+        let overlay = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/CommunityHelpSheet.swift"),
+            encoding: .utf8
+        )
         let buildScript = try String(
             contentsOf: root.appendingPathComponent("scripts/build-app.sh"),
             encoding: .utf8
         )
 
         #expect(onboarding.contains("onboarding.community_help"))
-        #expect(onboarding.contains(
-            "CommunityHelpSheet(localization: localization, source: .onboarding)"
-        ))
+        #expect(onboarding.contains("source: .onboarding"))
         #expect(settings.contains("settings.community_help"))
-        #expect(settings.contains(
-            "CommunityHelpSheet(localization: localization, source: .settings)"
-        ))
+        #expect(settings.contains("source: .settings"))
+        #expect(onboarding.contains("CommunityHelpOverlay("))
+        #expect(settings.contains("CommunityHelpOverlay("))
+        #expect(overlay.contains(".onTapGesture"))
+        #expect(overlay.contains(".onExitCommand"))
         #expect(buildScript.contains("community-help-douyin-qr.png"))
         #expect(buildScript.contains("community-help-xiaohongshu-qr.png"))
     }

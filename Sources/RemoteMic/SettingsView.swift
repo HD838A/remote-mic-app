@@ -816,14 +816,25 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        HStack(spacing: 0) {
-            sidebar
-                .frame(width: sidebarWidth)
-            Color(nsColor: .separatorColor)
-                .frame(width: 1)
-                .frame(maxHeight: .infinity)
-                .ignoresSafeArea(.container, edges: .top)
-            selectedPage
+        ZStack {
+            HStack(spacing: 0) {
+                sidebar
+                    .frame(width: sidebarWidth)
+                Color(nsColor: .separatorColor)
+                    .frame(width: 1)
+                    .frame(maxHeight: .infinity)
+                    .ignoresSafeArea(.container, edges: .top)
+                selectedPage
+            }
+            .accessibilityHidden(isCommunityHelpPresented)
+
+            if isCommunityHelpPresented {
+                CommunityHelpOverlay(
+                    localization: localization,
+                    source: .settings,
+                    onClose: { isCommunityHelpPresented = false }
+                )
+            }
         }
         .background(Color(nsColor: .controlBackgroundColor).ignoresSafeArea())
         .environment(\.locale, localization.locale)
@@ -7691,9 +7702,6 @@ struct SettingsView: View {
                             .buttonStyle(.plain)
                             .padding(.vertical, 6)
                             .accessibilityIdentifier("settings.community_help")
-                            .sheet(isPresented: $isCommunityHelpPresented) {
-                                CommunityHelpSheet(localization: localization, source: .settings)
-                            }
                             }
                         }
                     }
