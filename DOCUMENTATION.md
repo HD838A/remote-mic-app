@@ -50,6 +50,7 @@
 - 截图、设计稿和界面录制只以 PR 附件或持久链接提供，仓库内只保留 `manifest.json` 索引；规则见 [`AGENTS.md` 的截图与设计稿归档规范](AGENTS.md#截图与设计稿归档规范)。
 - [`Bugs/README.md`](Bugs/README.md) 是证据驱动调查的记录格式和索引；具体调查位于 `Bugs/`。
 - Onboarding 验证按 `AGENTS.md` 分类；生产截图矩阵见 [`Testing/FirstRunOnboarding.md`](Testing/FirstRunOnboarding.md#生产页面与场景清单)。
+- 抖音/小红书教程入口的步骤、失败判定、日志和二维码验收边界见 [`Testing/CommunityHelpEntries.md`](Testing/CommunityHelpEntries.md)。
 - [`TODO.md`](TODO.md) 只记录待办，不是现行产品规范。
 - `feature/<feature>/README.md`、`development.md` 和 `testing.md` 保存功能档案、开发记录和历史验证边界，不覆盖 `PRODUCT_SPEC.md`。
 

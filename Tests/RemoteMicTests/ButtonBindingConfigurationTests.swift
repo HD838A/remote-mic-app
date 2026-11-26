@@ -137,7 +137,9 @@ struct ButtonBindingConfigurationTests {
         #expect(MappingHostBindingCodec.decode(Data("broken".utf8)) == nil)
     }
 
-    #if SAYALL_BUTTON_PROFILE_AUTOSAVE && SAYALL_UNIFIED_BUTTON_CONFIGURATION && SAYALL_BUTTON_PROFILE_BINDING_TEXT
+    // Free-combination-actions 配置会定义下面的功能开关，但不链接私有按钮方案产品；
+    // 缺少 canImport 时这些测试应整体排除，否则测试目标无法编译。
+    #if canImport(SayAllButtonProfiles) && SAYALL_BUTTON_PROFILE_AUTOSAVE && SAYALL_UNIFIED_BUTTON_CONFIGURATION && SAYALL_BUTTON_PROFILE_BINDING_TEXT
     @Test(.enabled(if: ProcessInfo.processInfo.environment["SAYALL_MACRO_STORAGE_ROOT"] != nil))
     @MainActor func mappingProfileAdapterPreservesReadOnlyDisplayAndCompleteCopy() throws {
         // The binary integration runner supplies an isolated storage root.

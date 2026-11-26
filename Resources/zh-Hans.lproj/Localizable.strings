@@ -794,6 +794,10 @@
 "configuration.import.voice_key_busy" = "导入失败：语音键正在使用或无法安全释放，请结束语音输入后重试";
 "configuration.import.invalid_file" = "导入失败：配置文件无效";
 "configuration.import.feature_unavailable" = "导入失败：此版本不支持键位方案文件";
+"configuration.import.drop_title" = "松开以导入配置";
+"configuration.import.drop_detail" = "支持 .sayall 和 .json 配置文件";
+"configuration.import.drop_multiple" = "导入失败：一次只能导入一个配置文件";
+"configuration.import.drop_unsupported" = "导入失败：请拖入 .sayall 或 .json 配置文件";
 "onboarding.phase.prepare" = "准备";
 "onboarding.phase.setup" = "设置";
 "onboarding.phase.try_it" = "试一下";
@@ -801,6 +805,15 @@
 "onboarding.action.start" = "开始设置";
 "onboarding.action.continue" = "继续";
 "onboarding.action.open_app" = "打开无线麦 SayAll";
+"community.help.entry" = "配置有问题？扫码关注抖音、小红书，了解教程";
+"community.help.title" = "配置有问题？";
+"community.help.intro" = "扫码关注抖音或小红书，查看设置教程。";
+"community.help.douyin_title" = "抖音 · 无线麦 SayAll App";
+"community.help.douyin_hint" = "保存图片后，用抖音扫一扫";
+"community.help.douyin_accessibility" = "抖音「无线麦 SayAll App」二维码";
+"community.help.xiaohongshu_title" = "小红书 · 无线麦 SayAll App";
+"community.help.xiaohongshu_hint" = "用小红书扫一扫";
+"community.help.xiaohongshu_accessibility" = "小红书「无线麦 SayAll App」二维码";
 "onboarding.welcome.title" = "让手边的设备成为随手可用的\n无线麦";
 "onboarding.welcome.detail" = "我们会一起选择控制方式，完成权限、语音输出设备和真实语音检查，让你第一次使用时就知道每一部分都在正常工作。";
 "onboarding.welcome.feature.voice" = "按住语音键，直接在常用工具里说话输入";

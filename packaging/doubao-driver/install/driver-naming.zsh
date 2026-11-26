@@ -69,6 +69,12 @@ driver_naming_refusal_message() {
   esac
 }
 
+# Owner lookup isolated behind one probe so fixtures can model a root-owned
+# system directory without the test process running as root.
+driver_naming_directory_owner() {
+  /usr/bin/stat -f %u "$1" 2>/dev/null
+}
+
 # Classify one directory on the path to a HAL plug-in folder. Fixed enums only.
 driver_naming_directory_issue() {
   local directory="$1" owner mode
@@ -84,7 +90,7 @@ driver_naming_directory_issue() {
     print not_directory
     return 0
   fi
-  owner="$(/usr/bin/stat -f %u "$directory" 2>/dev/null)" || { print unreadable; return 0; }
+  owner="$(driver_naming_directory_owner "$directory")" || { print unreadable; return 0; }
   [[ "$owner" == 0 ]] || { print not_root; return 0; }
   mode="$(/usr/bin/stat -f %Lp "$directory" 2>/dev/null)" || { print unreadable; return 0; }
   if (( (8#$mode & 8#022) != 0 )); then
@@ -184,6 +190,29 @@ driver_naming_safe_directory() {
   owner="$(/usr/bin/stat -f %u "$directory")"
   mode="$(/usr/bin/stat -f %Lp "$directory")"
   [[ "$owner" == 0 ]] && (( (8#$mode & 8#022) == 0 ))
+}
+
+# Narrow repair for the single benign case seen in the field: the writable HAL
+# parent is still root-owned and a real directory, but carries a
+# group or other write bit left behind by another audio driver. Dropping those
+# bits restores the mode macOS ships and is the only mutation performed here.
+# Ownership changes, symlinks, missing directories and the read-only System
+# scope still stop the installation through the enum path below.
+driver_naming_repair_writable_directory() {
+  local directory="$1" issue="$2" scope="$3" level="$4" before after
+  [[ "$issue" == group_writable || "$issue" == other_writable ]] || return 1
+  [[ "$scope" == library ]] || return 1
+  case "$level" in hal|plugins|audio) ;; *) return 1 ;; esac
+  [[ -d "$directory" && ! -L "$directory" ]] || return 1
+  [[ "$(driver_naming_directory_owner "$directory")" == 0 ]] || return 1
+  before="$(/usr/bin/stat -f %Lp "$directory" 2>/dev/null)" || return 1
+  # BSD chmod treats "--" as a file name, so the absolute path is passed as is.
+  /bin/chmod go-w "$directory" 2>/dev/null || return 1
+  driver_naming_safe_directory "$directory" || return 1
+  after="$(/usr/bin/stat -f %Lp "$directory" 2>/dev/null)" || return 1
+  DRIVER_NAMING_SCAN_REPAIRED=$((DRIVER_NAMING_SCAN_REPAIRED + 1))
+  print "DRIVER_NAMING phase=repaired result=ready scope=$scope level=$level issue=$issue mode=$before mode_fixed=$after"
+  return 0
 }
 
 prepare_driver_naming_directory() {
@@ -293,7 +322,7 @@ commit_driver_naming_record() {
 # carry fixed enums: no paths, bundle names or third-party identities.
 check_driver_naming_duplicates() {
   local volume="$1" canonical="$2" reconcile="${3:-check}" marker="${4:-}"
-  local scope hal parent issue driver identifier
+  local scope hal parent issue driver identifier level
   local drivers symlinked unreadable external
   local library_extras=0 system_extras=0 symlink_extras=0
   local symlink_scope="" trash_root token counter=0 backup
@@ -305,6 +334,7 @@ check_driver_naming_duplicates() {
   DRIVER_NAMING_SCAN_ISSUE=""
   DRIVER_NAMING_SCAN_EXTRAS=0
   DRIVER_NAMING_SCAN_RECONCILED=0
+  DRIVER_NAMING_SCAN_REPAIRED=0
 
   # Validate the whole path chain before inspecting or moving anything.
   for scope in library system; do
@@ -322,10 +352,16 @@ check_driver_naming_duplicates() {
         issue="$(driver_naming_directory_issue "$parent")"
       fi
       if [[ -n "$issue" ]]; then
+        level="$(driver_naming_path_level "$volume" "$parent")"
+        if [[ "$reconcile" == reconcile ]] && \
+           driver_naming_repair_writable_directory "$parent" "$issue" "$scope" "$level"; then
+          parent="${parent:h}"
+          continue
+        fi
         DRIVER_NAMING_SCAN_REASON=unsafe_hal_parent
         DRIVER_NAMING_SCAN_DETAIL=unsafe_hal_parent
         DRIVER_NAMING_SCAN_SCOPE="$scope"
-        DRIVER_NAMING_SCAN_LEVEL="$(driver_naming_path_level "$volume" "$parent")"
+        DRIVER_NAMING_SCAN_LEVEL="$level"
         DRIVER_NAMING_SCAN_ISSUE="$issue"
         return 1
       fi

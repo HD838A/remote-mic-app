@@ -683,8 +683,10 @@ struct SettingsView: View {
     @State private var configurationExportSequence = 0
     @State private var configurationImportSequence = 0
     @State private var configurationStatus: ConfigurationStatus?
+    @State private var isConfigurationDropTargeted = false
     @State private var isClearTrustedPhonesConfirmationPresented = false
     @State private var isWebRemoteSessionPresented = false
+    @State private var isCommunityHelpPresented = false
     @State private var isAppStoreLinkCopied = false
     @State private var isMappingPermissionAlertPresented = false
     @State private var isWaitingForMappingPermissions = false
@@ -716,6 +718,7 @@ struct SettingsView: View {
         initialMappingActionFilter: String? = nil,
         initialMappingScrollsToGestureTiming: Bool = false,
         initialMappingVoiceSettingsPresented: Bool = false,
+        initialConfigurationDropTargeted: Bool = false,
         supplementalSettings: SupplementalSettingsIntegration? = nil,
         sidebarAccountDisplayName: String? = nil,
         minimumContentSize: CGSize = CGSize(width: 980, height: 732)
@@ -788,6 +791,7 @@ struct SettingsView: View {
         _mappingPageStateDeviceID = State(initialValue: model.settings.selectedRemoteProfileID)
         _mappingHoldEditingButton = State(initialValue: initialMappingHoldEditingButton)
         _isMappingVoiceSettingsPresented = State(initialValue: initialMappingVoiceSettingsPresented)
+        _isConfigurationDropTargeted = State(initialValue: initialConfigurationDropTargeted)
     }
 
     private var hideAllActionFeedback: Binding<Bool> {
@@ -812,14 +816,25 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        HStack(spacing: 0) {
-            sidebar
-                .frame(width: sidebarWidth)
-            Color(nsColor: .separatorColor)
-                .frame(width: 1)
-                .frame(maxHeight: .infinity)
-                .ignoresSafeArea(.container, edges: .top)
-            selectedPage
+        ZStack {
+            HStack(spacing: 0) {
+                sidebar
+                    .frame(width: sidebarWidth)
+                Color(nsColor: .separatorColor)
+                    .frame(width: 1)
+                    .frame(maxHeight: .infinity)
+                    .ignoresSafeArea(.container, edges: .top)
+                selectedPage
+            }
+            .accessibilityHidden(isCommunityHelpPresented)
+
+            if isCommunityHelpPresented {
+                CommunityHelpOverlay(
+                    localization: localization,
+                    source: .settings,
+                    onClose: { isCommunityHelpPresented = false }
+                )
+            }
         }
         .background(Color(nsColor: .controlBackgroundColor).ignoresSafeArea())
         .environment(\.locale, localization.locale)
@@ -833,6 +848,16 @@ struct SettingsView: View {
             minWidth: minimumContentSize.width,
             minHeight: minimumContentSize.height
         )
+        .overlay {
+            if isConfigurationDropTargeted {
+                ConfigurationFileDropOverlay(localization: localization)
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeOut(duration: 0.12), value: isConfigurationDropTargeted)
+        .onDrop(of: [UTType.fileURL], isTargeted: $isConfigurationDropTargeted) { providers in
+            handleConfigurationFileDrop(providers)
+        }
         .onAppear {
             // onChange 不对初始值触发，首次出现时也要把当前页签与可见页签上报给 AppKit 菜单。
             settingsNavigation.update(section: selectedSection, visible: visibleSections)
@@ -7678,6 +7703,28 @@ struct SettingsView: View {
                                 .compatibilityButtonStyle(.standard)
                             }
                             .padding(.vertical, 8)
+
+                            Button {
+                                CommunityHelpLog.write("requested", source: .settings)
+                                isCommunityHelpPresented = true
+                            } label: {
+                                HStack(alignment: .top, spacing: 14) {
+                                    Image(systemName: "qrcode")
+                                        .font(.system(size: 13, weight: .medium))
+                                        .foregroundStyle(Color.accentColor)
+                                        .frame(width: 34, alignment: .leading)
+                                    Text(verbatim: localization.text("community.help.entry"))
+                                        .font(.system(size: 12))
+                                        .foregroundStyle(.secondary)
+                                        .multilineTextAlignment(.leading)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                    Spacer(minLength: 0)
+                                }
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .padding(.vertical, 6)
+                            .accessibilityIdentifier("settings.community_help")
                             }
                         }
                     }
@@ -8146,6 +8193,59 @@ struct SettingsView: View {
         }
     }
 
+    private func handleConfigurationFileDrop(_ providers: [NSItemProvider]) -> Bool {
+        isConfigurationDropTargeted = false
+        guard !providers.isEmpty else {
+            showConfigurationDropFailure(
+                message: LocalizedMessage("configuration.import.drop_unsupported"),
+                reason: "no_file"
+            )
+            return true
+        }
+        guard providers.count == 1, let provider = providers.first else {
+            showConfigurationDropFailure(
+                message: LocalizedMessage("configuration.import.drop_multiple"),
+                reason: "multiple_files"
+            )
+            return true
+        }
+        Task { @MainActor in
+            guard let url = await ConfigurationFileDropLoader.fileURL(from: provider) else {
+                showConfigurationDropFailure(
+                    message: LocalizedMessage("configuration.import.drop_unsupported"),
+                    reason: "file_url_unavailable"
+                )
+                return
+            }
+            routeDroppedConfigurationFile(url)
+        }
+        return true
+    }
+
+    private func routeDroppedConfigurationFile(_ url: URL) {
+        guard ConfigurationFileDropPolicy.accepts(url) else {
+            showConfigurationDropFailure(
+                message: LocalizedMessage("configuration.import.drop_unsupported"),
+                reason: "unsupported_type"
+            )
+            return
+        }
+        let request = buttonProfileImportRequests.enqueue(url: url, source: "settings_drop")
+        AppLogger.shared.write(
+            "CONFIGURATION DROP phase=requested source=settings_drop result=queued " +
+                "extension=\(url.pathExtension.lowercased()) " +
+                "operation_id=button_profile_import_\(request.operationID)"
+        )
+    }
+
+    private func showConfigurationDropFailure(message: LocalizedMessage, reason: String) {
+        selectedSection = .about
+        configurationStatus = ConfigurationStatus(message: message, tier: .error)
+        AppLogger.shared.write(
+            "CONFIGURATION DROP phase=failed source=settings_drop result=no_write reason=\(reason)"
+        )
+    }
+
     private func importConfiguration() {
         configurationStatus = nil
         guard let url = ConfigurationFilePanel.importURL(
@@ -8153,13 +8253,13 @@ struct SettingsView: View {
             prompt: localization.text("configuration.import.prompt"),
             includesPortableConfiguration: true
         ) else { return }
-        importConfiguration(from: url)
+        importConfiguration(from: url, source: "settings_panel")
     }
 
-    private func importConfiguration(from url: URL) {
+    private func importConfiguration(from url: URL, source: String) {
         configurationImportSequence += 1
         let operationID = configurationImportSequence
-        AppLogger.shared.write("CONFIGURATION IMPORT operation_id=\(operationID) phase=requested source=settings_or_finder")
+        AppLogger.shared.write("CONFIGURATION IMPORT operation_id=\(operationID) phase=requested source=\(source)")
         do {
             let data = try MacConfigurationBackup.read(url)
             let object = try JSONSerialization.jsonObject(with: data) as? [String: Any]
@@ -8235,7 +8335,10 @@ struct SettingsView: View {
             buttonProfileImportRequests.clear()
             configurationStatus = ConfigurationStatus(message: LocalizedMessage("configuration.import.invalid_file"),
                 tier: .error)
-            AppLogger.shared.write("CONFIGURATION IMPORT phase=failed result=no_write reason=unreadable_or_unknown_type")
+            AppLogger.shared.write(
+                "CONFIGURATION IMPORT phase=failed source=\(request.source) " +
+                    "result=no_write reason=unreadable_or_unknown_type"
+            )
         }
     }
 
@@ -8245,19 +8348,30 @@ struct SettingsView: View {
             let destination = try ConfigurationImportDestination.detect(MacConfigurationBackup.read(request.url))
             buttonProfileImportRequests.clear()
             if destination == .settings {
-                importConfiguration(from: request.url)
+                importConfiguration(from: request.url, source: request.source)
             } else if macroFeature.requestButtonProfileImport(from: request.url) {
-                AppLogger.shared.write("BUTTON_PROFILE_IMPORT phase=started result=accepted source=finder_file operation_id=button_profile_import_\(request.operationID)")
+                AppLogger.shared.write(
+                    "BUTTON_PROFILE_IMPORT phase=started result=accepted " +
+                        "source=\(request.source) " +
+                        "operation_id=button_profile_import_\(request.operationID)"
+                )
             } else {
                 configurationStatus = ConfigurationStatus(message: LocalizedMessage("configuration.import.feature_unavailable"),
                     tier: .error)
-                AppLogger.shared.write("BUTTON_PROFILE_IMPORT phase=completed result=rejected source=finder_file reason=feature_unavailable operation_id=button_profile_import_\(request.operationID)")
+                AppLogger.shared.write(
+                    "BUTTON_PROFILE_IMPORT phase=completed result=rejected " +
+                        "source=\(request.source) reason=feature_unavailable " +
+                        "operation_id=button_profile_import_\(request.operationID)"
+                )
             }
         } catch {
             buttonProfileImportRequests.clear()
             configurationStatus = ConfigurationStatus(message: LocalizedMessage("configuration.import.invalid_file"),
                 tier: .error)
-            AppLogger.shared.write("CONFIGURATION IMPORT phase=failed result=no_write reason=unreadable_or_unknown_type")
+            AppLogger.shared.write(
+                "CONFIGURATION IMPORT phase=failed source=\(request.source) " +
+                    "result=no_write reason=unreadable_or_unknown_type"
+            )
         }
     }
 

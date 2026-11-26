@@ -86,6 +86,55 @@ struct ButtonProfileFileOpeningTests {
         }
     }
 
+    @MainActor
+    @Test(arguments: ["legacy.sayall", "legacy.json"])
+    func importsLegacyPersonalConfigurationQueuedFromSettingsDrop(fileName: String) async throws {
+        let suite = "RemoteMic.ConfigurationDrop.\(UUID().uuidString)"
+        let defaults = try #require(TestUserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let settings = AppSettings(defaults: defaults)
+        settings.completeOnboarding()
+        let model = BridgeAppModel(settings: settings)
+        let requests = ButtonProfileImportRequestStore()
+        let directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("SayAllConfigurationDropTests/\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.trashItem(at: directory, resultingItemURL: nil) }
+        let fixture = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Testing/Fixtures/PersonalConfiguration-1.9.21.json")
+        let url = directory.appendingPathComponent(fileName)
+        try Data(contentsOf: fixture).write(to: url)
+        let request = requests.enqueue(url: url, source: "settings_drop")
+        #expect(request.source == "settings_drop")
+
+        var viewDidAppear = false
+        let controller = NSHostingController(rootView: SettingsView(
+            model: model,
+            buttonProfileImportRequests: requests,
+            updateInformation: UpdateInformationStore(userDefaults: defaults),
+            initialSection: .connection
+        ).environmentObject(LocalizationStore(settings: settings))
+            .onAppear { viewDidAppear = true })
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1020, height: 772),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentViewController = controller
+        defer { window.close() }
+        window.contentView?.layoutSubtreeIfNeeded()
+        let mounted = try await waitForUIUpdate { viewDidAppear }
+        try #require(mounted, "SettingsView must mount before testing the dropped file")
+
+        _ = try await waitForUIUpdate { requests.pendingRequest == nil }
+        try #require(requests.pendingRequest == nil)
+        #expect(settings.selectedAudioDeviceUID == "synthetic-audio-device")
+        #expect(settings.customMappingEnabled)
+        #expect(settings.buttonShortcuts[.power]?.keyCode == 55)
+        #expect(!model.macroFeature.isEditorActive)
+    }
+
     @Test func queuesAndClearsFinderButtonProfileRequests() throws {
         let store = ButtonProfileImportRequestStore()
         let url = URL(fileURLWithPath: "/Users/test/keyboard-profile.SAYALL")
@@ -94,7 +143,12 @@ struct ButtonProfileFileOpeningTests {
 
         #expect(request.url == url)
         #expect(request.operationID == 1)
+        #expect(request.source == "finder_file")
         #expect(store.pendingRequest == request)
+
+        let dropRequest = store.enqueue(url: url, source: "settings_drop")
+        #expect(dropRequest.source == "settings_drop")
+        #expect(store.pendingRequest == dropRequest)
 
         store.clear()
 

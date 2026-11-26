@@ -110,6 +110,9 @@ enum SettingsScreenshotRenderer {
         ] == "1"
         let onlySection = ProcessInfo.processInfo.environment["REMOTE_MIC_SETTINGS_SCREENSHOT_SECTION"]
         let interactive = ProcessInfo.processInfo.environment["REMOTE_MIC_SETTINGS_SCREENSHOT_INTERACTIVE"] == "1"
+        let showsConfigurationDropTarget = ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_SETTINGS_SCREENSHOT_DROP_TARGET"
+        ] == "1"
         let mappingScenario = ProcessInfo.processInfo.environment["REMOTE_MIC_SETTINGS_SCREENSHOT_MAPPING_SCENARIO"]
         let membershipAccess = ProcessInfo.processInfo.environment[
             "REMOTE_MIC_SETTINGS_SCREENSHOT_MEMBERSHIP_ACCESS"
@@ -472,6 +475,7 @@ enum SettingsScreenshotRenderer {
                 initialMappingActionFilter: initialActionFilter,
                 initialMappingScrollsToGestureTiming: section == .mapping && showsGestureTiming,
                 initialMappingVoiceSettingsPresented: section == .mapping && opensVoiceSettings,
+                initialConfigurationDropTargeted: showsConfigurationDropTarget && section == .about,
                 supplementalSettings: supplementalSettings,
                 sidebarAccountDisplayName: sidebarAccountDisplayName
             ).environmentObject(localization).noticeHost())
@@ -522,6 +526,7 @@ enum SettingsScreenshotRenderer {
                 initialMappingActionFilter: initialActionFilter,
                 initialMappingScrollsToGestureTiming: section == .mapping && showsGestureTiming,
                 initialMappingVoiceSettingsPresented: section == .mapping && opensVoiceSettings,
+                initialConfigurationDropTargeted: showsConfigurationDropTarget && section == .about,
                 supplementalSettings: supplementalSettings,
                 sidebarAccountDisplayName: sidebarAccountDisplayName,
                 minimumContentSize: .zero

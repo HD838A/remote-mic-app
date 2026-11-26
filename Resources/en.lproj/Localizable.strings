@@ -795,6 +795,10 @@
 "configuration.import.voice_key_busy" = "Import failed: the voice button is active or could not be released safely. End voice input and try again.";
 "configuration.import.invalid_file" = "Import failed: the configuration file is invalid";
 "configuration.import.feature_unavailable" = "Import failed: this version does not support button profile files";
+"configuration.import.drop_title" = "Release to import configuration";
+"configuration.import.drop_detail" = "Supports .sayall and .json configuration files";
+"configuration.import.drop_multiple" = "Import failed: import one configuration file at a time";
+"configuration.import.drop_unsupported" = "Import failed: drop a .sayall or .json configuration file";
 "onboarding.phase.prepare" = "Prepare";
 "onboarding.phase.setup" = "Set Up";
 "onboarding.phase.try_it" = "Try It";
@@ -802,6 +806,15 @@
 "onboarding.action.start" = "Start Setup";
 "onboarding.action.continue" = "Continue";
 "onboarding.action.open_app" = "Open SayAll";
+"community.help.entry" = "Trouble with setup? Scan to follow Douyin or Xiaohongshu for tutorials";
+"community.help.title" = "Trouble with setup?";
+"community.help.intro" = "Scan to follow Douyin or Xiaohongshu and view setup tutorials.";
+"community.help.douyin_title" = "Douyin · SayAll";
+"community.help.douyin_hint" = "Save this image, then scan it in Douyin";
+"community.help.douyin_accessibility" = "QR code for the SayAll Douyin account";
+"community.help.xiaohongshu_title" = "Xiaohongshu · SayAll";
+"community.help.xiaohongshu_hint" = "Scan with Xiaohongshu";
+"community.help.xiaohongshu_accessibility" = "QR code for the SayAll Xiaohongshu account";
 "onboarding.welcome.title" = "Turn your remote or phone into a wireless mic";
 "onboarding.welcome.detail" = "Choose how to control your Mac, grant permissions, set up audio, and test voice typing.";
 "onboarding.welcome.feature.voice" = "Dictate into the apps you already use";

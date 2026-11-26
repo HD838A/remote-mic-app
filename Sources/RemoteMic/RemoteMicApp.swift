@@ -94,6 +94,7 @@ enum AppEntryPointVisibilityPolicy {
 struct ButtonProfileImportRequest: Equatable {
     let url: URL
     let operationID: UInt
+    let source: String
 }
 
 final class ButtonProfileImportRequestStore: ObservableObject {
@@ -101,9 +102,13 @@ final class ButtonProfileImportRequestStore: ObservableObject {
     private var nextOperationID: UInt = 0
 
     @discardableResult
-    func enqueue(url: URL) -> ButtonProfileImportRequest {
+    func enqueue(url: URL, source: String = "finder_file") -> ButtonProfileImportRequest {
         nextOperationID += 1
-        let request = ButtonProfileImportRequest(url: url, operationID: nextOperationID)
+        let request = ButtonProfileImportRequest(
+            url: url,
+            operationID: nextOperationID,
+            source: source
+        )
         pendingRequest = request
         return request
     }
@@ -459,7 +464,7 @@ private final class RemoteMicAppDelegate: NSObject, NSApplicationDelegate, NSMen
             let request = buttonProfileImportRequests.enqueue(url: buttonProfileURL)
             AppLogger.shared.write(
                 "BUTTON_PROFILE_IMPORT phase=requested result=accepted " +
-                    "source=finder_file operation_id=button_profile_import_\(request.operationID)"
+                    "source=\(request.source) operation_id=button_profile_import_\(request.operationID)"
             )
             showSettingsWindow()
         }

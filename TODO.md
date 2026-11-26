@@ -293,6 +293,7 @@
   - 2026-10-10：卸载 PKG 将可信名称目录移入废纸篓，失败时随 App 和驱动回滚。驱动不存在时安装 SayAll，覆盖 1.9.21 卸载器保留记录、receipt 和偏好的情况。已有驱动修复及更新仍保留原名；两平台真实安装待验收，父项保持未完成。
   - 2026-10-22：PR #620 已同步最新主线，两架构各 43 个隔离场景通过；最终签名包的真实安装与 CoreAudio 验收仍待完成，不标记为已发布。
   - 2026-11-17：修复可恢复的重复驱动阻断。`preinstall` 输出 `hal_scan` 并区分 `unsafe_hal_parent`/`unsafe_hal_entry`/`duplicate_driver`；可写 HAL 中经身份验证的本产品多余副本移入 root 废纸篓后继续安装，`postinstall` 强制重启 Core Audio；只读 System HAL 副本、符号链接、身份不可验证和权限异常仍停止。隔离夹具全部通过（43 个安装、恢复、卸载重装与直接安装场景）；真实 Installer、CoreAudio 与现场日志仍待验收。
+  - 2026-11-26：现场 2.0.10 Intel 包在 iMac19,1 / macOS 13.5 上被 `preinstall` 拦下，原因是 `/Library/Audio/Plug-Ins/HAL` 带组可写位（`issue=group_writable`），安装器只提示联系支持，用户无法自行完成安装。`reconcile` 现在对「root 所有、真实目录、唯一异常是可写位」的 library 作用域 HAL 层级目录执行 `chmod go-w` 并输出 `DRIVER_NAMING phase=repaired`，随后继续安装；非 root 所有、符号链接、只读 System 作用域与其它异常仍按原枚举停止。隔离夹具新增「自愈成功」与「非 root 仍拦截」两项，禁用自愈时用例转红、恢复后全绿；真实 Installer 与 CoreAudio 现场验收仍未做。详见 [Bug 记录](Bugs/2026-11-26-installer-blocked-by-writable-hal-parent.md)。
   - 自动化与实机边界见 [测试手册](Testing/VirtualMicrophoneNaming.md)。Apple Silicon / Intel 的最终签名包、旧用户升级和第三方语音验收未完成，暂不勾选。
 
 - [x] 设计并实现完整的首次 Onboarding、权限设置流程，并重新布局“连接”和“按键映射”页面 <!-- workshop:status=已完成;priority=P1 -->
@@ -465,6 +466,7 @@
   - “开放接口”和“建设市场”分阶段实施：先验证本地动作包、文档、示例和配置迁移，再考虑官方精选目录，最后才评估社区发布、搜索、评分、举报、签名、审核、依赖、版本兼容、下架、更新回滚和恶意内容治理；市场不可阻塞当前独立语音输入 V1。
   - 该能力可以覆盖 Codex 之外的自定义 Agent，但不能因此删除现有稳定内置动作；旧配置、iOS 和网页版仍使用稳定动作标识，无法识别扩展动作时必须明确显示不可用，而不是执行其他默认动作。详细可行性、接口草案、安全模型和实施顺序保存在私有产品资料库。
 - [x] ~~配置导入导出~~（原有个人配置 v1：支持版本化 JSON 导入导出；本地使用统计不随配置迁移）
+  - 2026-11-26 候选：设置窗口支持拖放 `.sayall` 和 `.json`，按内容分流到设置页或键位方案页；旧 1.9.21 JSON 不需要改名。内容分流同时识别旧个人配置，改名为 `.sayall` 后 Finder 双击也可进入设置页。拖放策略、旧 JSON 分流、设置页导入和既有 Finder 回归的定向测试、公开全量 1701 项及公开 Release App 构建通过；真实 Finder 拖放、中英文浅深色截图和签名包验收待完成。见 [统一配置入口验收](Testing/UnifiedConfigurationEntries.md)。
   - 2026-10-20 更新 #699：设置页配置导出简化为直接唤起系统保存面板，不再要求选择对象、分组、用途和预览步骤。该轮实现随后被同日“完整备份”分流替代（见下一条），当前生效的导出交互以完整备份格式为准。
   - 2026-10-19 完整备份候选：设置页改用独立 macOS 格式，保存全部设备、方案、动作、App、快捷键、常用语及用户偏好；按文件内容分流导入，拒绝旧读取器和其他平台。源码与隔离设置页导出/恢复通过，跨 Mac 验证按 [测试手册](Testing/CompleteConfigurationBackup.md) 执行。历史 v1 完成状态不代表本轮全部验收完成。
   - 2026-10-19 历史候选（已由完整备份分流替代）：Finder 双击 `.sayall` 进入键位方案导入；未完成 Onboarding 时暂存请求，完成后继续。生产页面挂载测试覆盖请求时序，签名安装与首次使用旅程仍待验收。见 `Testing/FirstRunOnboarding.md`。

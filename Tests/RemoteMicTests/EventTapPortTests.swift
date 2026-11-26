@@ -231,6 +231,40 @@ struct EventTapPortTests {
     }
 
     @Test(.enabled(if: EventTapPortTests.canCreateActiveTap))
+    func keyboardEventSuppressorKeepsOwnerAliveUntilStop() {
+        weak var weakSuppressor: KeyboardEventSuppressor?
+        do {
+            let suppressor = KeyboardEventSuppressor(logger: { _ in })
+            weakSuppressor = suppressor
+            #expect(suppressor.start())
+            #expect(weakSuppressor != nil)
+            suppressor.stop()
+        }
+        #expect(weakSuppressor == nil)
+    }
+
+    @Test(.enabled(if: EventTapPortTests.canCreateActiveTap))
+    func shortcutCaptureMonitorKeepsOwnerAliveUntilStop() {
+        weak var weakMonitor: ShortcutCaptureMonitor?
+        do {
+            let monitor = ShortcutCaptureMonitor(
+                onCapture: { _ in },
+                accessibilityTrusted: { true },
+                dispatchCallback: { $0() },
+                logger: { _ in }
+            )
+            weakMonitor = monitor
+            guard case .success = monitor.start() else {
+                Issue.record("Expected the capture monitor to create an event tap")
+                return
+            }
+            #expect(weakMonitor != nil)
+            monitor.stop()
+        }
+        #expect(weakMonitor == nil)
+    }
+
+    @Test(.enabled(if: EventTapPortTests.canCreateActiveTap))
     func shortcutCaptureMonitorDoesNotAccumulateTaps() throws {
         let monitor = ShortcutCaptureMonitor(
             onCapture: { _ in },

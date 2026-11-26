@@ -8,12 +8,12 @@
     "zh-Hans": {
       "title": "隐私政策",
       "file": "zh-Hans.lproj/License.txt",
-      "sha256": "9295695b6a1883fd1ba1ee21dcf03106c4adbde25e218dd96e25cf002df1fab0"
+      "sha256": "e95d7c23fec55c81b7e9728c1bc5464b6e1aeb886cad20dfc5fe5271f9120cf8"
     },
     "en": {
       "title": "Privacy policy",
       "file": "en.lproj/License.txt",
-      "sha256": "bb1188b76358ed12339a2f17cc717b969f2ff2efb622e1c3f72f99d9605a8073"
+      "sha256": "78016873b34a14f7d393bc9c3cc0d736bcf87064cf29f67bd5c587b428903a14"
     }
   }
 }
