@@ -686,6 +686,7 @@ struct SettingsView: View {
     @State private var isConfigurationDropTargeted = false
     @State private var isClearTrustedPhonesConfirmationPresented = false
     @State private var isWebRemoteSessionPresented = false
+    @State private var isCommunityHelpPresented = false
     @State private var isAppStoreLinkCopied = false
     @State private var isMappingPermissionAlertPresented = false
     @State private var isWaitingForMappingPermissions = false
@@ -7668,6 +7669,31 @@ struct SettingsView: View {
                                 .compatibilityButtonStyle(.standard)
                             }
                             .padding(.vertical, 8)
+
+                            Button {
+                                CommunityHelpLog.write("requested", source: .settings)
+                                isCommunityHelpPresented = true
+                            } label: {
+                                HStack(alignment: .top, spacing: 14) {
+                                    Image(systemName: "qrcode")
+                                        .font(.system(size: 13, weight: .medium))
+                                        .foregroundStyle(Color.accentColor)
+                                        .frame(width: 34, alignment: .leading)
+                                    Text(verbatim: localization.text("community.help.entry"))
+                                        .font(.system(size: 12))
+                                        .foregroundStyle(.secondary)
+                                        .multilineTextAlignment(.leading)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                    Spacer(minLength: 0)
+                                }
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .padding(.vertical, 6)
+                            .accessibilityIdentifier("settings.community_help")
+                            .sheet(isPresented: $isCommunityHelpPresented) {
+                                CommunityHelpSheet(localization: localization, source: .settings)
+                            }
                             }
                         }
                     }

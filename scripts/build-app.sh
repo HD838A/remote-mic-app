@@ -878,6 +878,12 @@ ditto --norsrc --noextattr --noqtn --noacl \
   "$ROOT/Resources/RC003-remote-photo.png" \
   "$APP_DIR/Contents/Resources/RC003-remote-photo.png"
 ditto --norsrc --noextattr --noqtn --noacl \
+  "$ROOT/Resources/community-help-douyin-qr.png" \
+  "$APP_DIR/Contents/Resources/community-help-douyin-qr.png"
+ditto --norsrc --noextattr --noqtn --noacl \
+  "$ROOT/Resources/community-help-xiaohongshu-qr.png" \
+  "$APP_DIR/Contents/Resources/community-help-xiaohongshu-qr.png"
+ditto --norsrc --noextattr --noqtn --noacl \
   "$ROOT/Resources/Onboarding" \
   "$APP_DIR/Contents/Resources/Onboarding"
 ditto --norsrc --noextattr --noqtn --noacl \
