@@ -242,7 +242,7 @@
 
 ## 用例 10：右侧修饰键组合（右 ⌘ + 右 ⌥、右 ⌘ + 右 ⌥ + 右 ⇧）
 
-适用分支：`feat/voice-key-modifier-chords-20261119`。组合键与单个修饰键共用同一条软件注入路径：按下时按右 Command → 右 Option →（右 Shift）的顺序逐个提交，每个事件携带已按住的全部修饰位与左右设备位；松开时反序逐个释放，最后一个松开事件不带修饰位。组合键需要辅助功能权限，不使用 F5 → Fn 硬件映射，也不参与 Fn 点按。
+适用分支：`feat/voice-key-modifier-chords-20261126`（原 `feat/voice-key-modifier-chords-20261119` 重放到 `a8c238bc`）。组合键与单个修饰键共用同一条软件注入路径：按下时按右 Command → 右 Option →（右 Shift）的顺序逐个提交，每个事件携带已按住的全部修饰位与左右设备位；松开时反序逐个释放，最后一个松开事件不带修饰位。组合键需要辅助功能权限，不使用 F5 → Fn 硬件映射，也不参与 Fn 点按。
 
 ### 前置
 
@@ -280,7 +280,7 @@
 
 ## 回归：修饰键模式松键后延迟恢复输入源
 
-适用分支：`local/main-integration`。Bug 记录：[`Bugs/2026-11-19-modifier-voice-restore-before-commit.md`](../Bugs/2026-11-19-modifier-voice-restore-before-commit.md)。
+适用分支：`feat/voice-key-modifier-chords-20261126`。Bug 记录：[`Bugs/2026-11-19-modifier-voice-restore-before-commit.md`](../Bugs/2026-11-19-modifier-voice-restore-before-commit.md)。
 
 ### 前置
 
