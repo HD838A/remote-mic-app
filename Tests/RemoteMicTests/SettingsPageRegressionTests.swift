@@ -787,9 +787,11 @@ struct SettingsPageRegressionTests {
         let headerStart = try #require(settingsSource.range(of: "private var mappingPageHeader"))
         let headerSource = settingsSource[headerStart.lowerBound..<mappingPage.lowerBound]
         let title = try #require(headerSource.range(of: "PageHeader(title:"))
-        let subtitle = try #require(headerSource.range(of: "Text(localization.text(\"button_mapping.page.subtitle\"))"))
+        let subtitle = try #require(headerSource.range(of: "\"button_mapping.page.subtitle\""))
+        let t1Subtitle = try #require(headerSource.range(of: "\"button_mapping.t1.shared_navigation\""))
         let toggle = try #require(headerSource.range(of: "mappingHeaderToggle"))
-        #expect(title.lowerBound < subtitle.lowerBound)
+        #expect(title.lowerBound < t1Subtitle.lowerBound)
+        #expect(t1Subtitle.lowerBound < subtitle.lowerBound)
         #expect(subtitle.lowerBound < toggle.lowerBound)
         #expect(headerSource.contains("VStack(alignment: .leading, spacing: 6)"))
         #expect(!headerSource.contains("HStack"))
@@ -1447,7 +1449,16 @@ struct SettingsPageRegressionTests {
         #expect(!settingsSource.contains(".onReceive(model.$activeRemoteButtons)"))
         #expect(!settingsSource.contains("button_mapping.selection_lock"))
         // 按键仍要在画布上显示按下态，锁定只影响选中项。
-        #expect(settingsSource.contains("activeButtons: model.activeRemoteButtons"))
+        let canvasStart = try #require(settingsSource.range(of: "RemoteMappingCanvas("))
+        let binding = try #require(settingsSource.range(
+            of: "activeButtons: settings.selectedRemoteProfile?.model == .t1",
+            range: canvasStart.upperBound..<settingsSource.endIndex
+        ))
+        let voiceBinding = try #require(settingsSource.range(
+            of: "voiceActive:", range: binding.upperBound..<settingsSource.endIndex
+        ))
+        let activeButtons = settingsSource[binding.upperBound..<voiceBinding.lowerBound]
+        #expect(activeButtons.contains("? model.activeT1Buttons : model.activeRemoteButtons"))
         for language in ["zh-Hans", "en"] {
             let strings = try String(
                 contentsOf: root.appendingPathComponent(
@@ -2062,7 +2073,7 @@ struct SettingsPageRegressionTests {
         let selectorSource = source[selectorStart.lowerBound..<selectorEnd.lowerBound]
 
         #expect(selectorSource.contains("model.isRemoteConnected(profile.id)"))
-        #expect(selectorSource.contains("(!vertical && profile.model.usesPrivateAdapter)"))
+        #expect(selectorSource.contains("(!vertical && (profile.model.usesPrivateAdapter || profile.model == .t1))"))
         #expect(selectorSource.contains("profile.model.isAppleSiriRemote") == false)
         #expect(selectorSource.contains("RemoteDeviceNamePolicy.sortedForCards("))
         #expect(selectorSource.contains("modelName: remoteModelName"))

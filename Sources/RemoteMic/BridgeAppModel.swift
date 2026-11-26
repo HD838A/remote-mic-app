@@ -5205,6 +5205,16 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     }
 
     private func startBluetoothConnections() {
+        // T1 uses its own input monitor after BLE initialization. Unlike Xiaomi, it cannot
+        // start a bridge through the regular HID monitor when shared discovery is suppressed.
+        let savedT1Identifiers = Set(settings.remoteDeviceProfiles.lazy
+            .filter { $0.model == .t1 }.compactMap(\.bluetoothIdentifier))
+        if !savedT1Identifiers.isEmpty {
+            let connected = T1VoiceKeyMonitor.systemConnectedBluetoothIdentifiers()
+            for identifier in connected.intersection(savedT1Identifiers) where bluetoothBridges[identifier] == nil {
+                connectBluetoothIdentifier(identifier, manual: false)
+            }
+        }
         startBluetoothDiscoveryIfNeeded()
     }
 

@@ -25,6 +25,32 @@ final class T1VoiceKeyMonitor {
 
     deinit { stop() }
 
+    /// Read active BLE HID identities without opening an input monitor or scanning.
+    static func systemConnectedBluetoothIdentifiers() -> Set<UUID> {
+        let matching = IOServiceMatching("IOHIDDevice") as NSMutableDictionary
+        matching[kIOPropertyMatchKey] = [
+            kIOHIDVendorIDKey: T1VoiceRemote.vendorID,
+            kIOHIDProductIDKey: T1VoiceRemote.productID,
+            kIOHIDTransportKey: "Bluetooth Low Energy",
+        ] as [String: Any]
+        var iterator: io_iterator_t = 0
+        guard IOServiceGetMatchingServices(kIOMainPortDefault, matching as CFDictionary, &iterator)
+            == kIOReturnSuccess else { return [] }
+        defer { IOObjectRelease(iterator) }
+
+        var identifiers = Set<UUID>()
+        while case let service = IOIteratorNext(iterator), service != 0 {
+            defer { IOObjectRelease(service) }
+            let identity = IORegistryEntryCreateCFProperty(
+                service, "PhysicalDeviceUniqueID" as CFString, kCFAllocatorDefault, 0
+            )?.takeRetainedValue() as? String
+            if let identity, let identifier = UUID(uuidString: identity) {
+                identifiers.insert(identifier)
+            }
+        }
+        return identifiers
+    }
+
     func start() -> Bool {
         guard IOHIDCheckAccess(kIOHIDRequestTypeListenEvent) == kIOHIDAccessTypeGranted else {
             return false
