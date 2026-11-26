@@ -49,7 +49,7 @@
 
 `preinstall` 在负载写入前保存名称记录。实际驱动名称优先于旧记录。更新冲突记录前，先把可信旧记录移入 root 废纸篓。写入失败时恢复原记录。记录表示已选名称，不表示驱动已安装或音频可用。名称证据冲突必须通过实际驱动名称、历史记录或兼容规则完成安装；不能因为冲突本身停止安装。只有记录对象不可信、签名无效、权限操作失败或回滚失败等安全故障才阻断本次安装。取消安装后保留可信记录。后续安装在驱动仍存在时保留原名称；驱动不存在时使用 SayAll。
 
-HAL 安全扫描分两步：先校验 `/Library` 与 `/System/Library` 音频驱动目录链的所有权、权限和符号链接，再按 Bundle ID 枚举重复实例。只有可写 HAL 中身份完整、非符号链接的本产品副本会自动移入 root 废纸篓；移动、落盘或回滚失败时不继续，且已移动副本必须恢复。移除副本后，postinstall 必须强制重启 Core Audio，即使规范驱动已健康且同版本。只读 System HAL 中的副本、符号链接、身份不可验证或目录权限异常一律停止安装，不自动删除。
+HAL 安全扫描分两步：先校验 `/Library` 与 `/System/Library` 音频驱动目录链的所有权、权限和符号链接，再按 Bundle ID 枚举重复实例。只有可写 HAL 中身份完整、非符号链接的本产品副本会自动移入 root 废纸篓；移动、落盘或回滚失败时不继续，且已移动副本必须恢复。移除副本后，postinstall 必须强制重启 Core Audio，即使规范驱动已健康且同版本。只读 System HAL 中的副本、符号链接、身份不可验证或目录权限异常一律停止安装，不自动删除。唯一例外：可写 HAL 目录链中 root 所有的真实目录只带组或其他可写位时，`preinstall` 用 `chmod go-w` 恢复该目录并继续安装，同时输出 `DRIVER_NAMING phase=repaired`；所有权变更、符号链接、缺失目录和只读 System 作用域仍按原枚举停止。
 
 ## 安装成功的验收标准
 
@@ -101,6 +101,8 @@ swift test --disable-keychain --filter 'DriverNamingTests|DoubaoAudioDeviceTests
 2026-10-23：Swift 名称、打包和设备身份定向测试 32 项通过；独立自检 48 项通过。最新主线 `53b007725576fc59b979b8cfb7e67b7ba53fcadb` 只新增版本说明和 Bug 文档，与本项无代码交集。
 
 2026-11-17：新增 HAL 重复实例诊断与可恢复归置。`scripts/test-driver-naming.sh` 在原有 43 个隔离场景（安装、恢复、卸载重装与直接安装）上全部通过；新增断言覆盖可写 HAL 副本移入 root 废纸篓、`duplicates-reconciled` 标记及失败回滚、postinstall 标记消费、符号链接不跟随、只读 System HAL 副本停止、目录权限异常停止和阻断文案枚举。真实 Installer、CoreAudio 重启后单实例枚举和现场日志仍未验收。
+
+2026-11-26：现场 iMac19,1 / macOS 13.5 装 2.0.10 Intel 包时，`/Library/Audio/Plug-Ins/HAL` 带组可写位导致 `preinstall` 以 `unsafe_hal_parent` 停止，用户侧无自助修复路径。夹具新增两项：root 所有的 775 目录在 `reconcile` 下被修回 755 并继续安装（含 `phase=repaired` 日志断言），以及 777 但非 root 所有的目录仍然停止且权限不改动。禁用自愈逻辑时两项转红，恢复后全部通过；真实 Installer 与 CoreAudio 现场验收仍未做。
 
 ## 截图与日志
 

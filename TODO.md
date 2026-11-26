@@ -293,6 +293,7 @@
   - 2026-10-10：卸载 PKG 将可信名称目录移入废纸篓，失败时随 App 和驱动回滚。驱动不存在时安装 SayAll，覆盖 1.9.21 卸载器保留记录、receipt 和偏好的情况。已有驱动修复及更新仍保留原名；两平台真实安装待验收，父项保持未完成。
   - 2026-10-22：PR #620 已同步最新主线，两架构各 43 个隔离场景通过；最终签名包的真实安装与 CoreAudio 验收仍待完成，不标记为已发布。
   - 2026-11-17：修复可恢复的重复驱动阻断。`preinstall` 输出 `hal_scan` 并区分 `unsafe_hal_parent`/`unsafe_hal_entry`/`duplicate_driver`；可写 HAL 中经身份验证的本产品多余副本移入 root 废纸篓后继续安装，`postinstall` 强制重启 Core Audio；只读 System HAL 副本、符号链接、身份不可验证和权限异常仍停止。隔离夹具全部通过（43 个安装、恢复、卸载重装与直接安装场景）；真实 Installer、CoreAudio 与现场日志仍待验收。
+  - 2026-11-26：现场 2.0.10 Intel 包在 iMac19,1 / macOS 13.5 上被 `preinstall` 拦下，原因是 `/Library/Audio/Plug-Ins/HAL` 带组可写位（`issue=group_writable`），安装器只提示联系支持，用户无法自行完成安装。`reconcile` 现在对「root 所有、真实目录、唯一异常是可写位」的 library 作用域 HAL 层级目录执行 `chmod go-w` 并输出 `DRIVER_NAMING phase=repaired`，随后继续安装；非 root 所有、符号链接、只读 System 作用域与其它异常仍按原枚举停止。隔离夹具新增「自愈成功」与「非 root 仍拦截」两项，禁用自愈时用例转红、恢复后全绿；真实 Installer 与 CoreAudio 现场验收仍未做。详见 [Bug 记录](Bugs/2026-11-26-installer-blocked-by-writable-hal-parent.md)。
   - 自动化与实机边界见 [测试手册](Testing/VirtualMicrophoneNaming.md)。Apple Silicon / Intel 的最终签名包、旧用户升级和第三方语音验收未完成，暂不勾选。
 
 - [x] 设计并实现完整的首次 Onboarding、权限设置流程，并重新布局“连接”和“按键映射”页面 <!-- workshop:status=已完成;priority=P1 -->
