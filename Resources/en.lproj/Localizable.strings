@@ -490,7 +490,9 @@
 "audio.output.privacy_help" = "Voice audio is sent to the selected device. When the last device disconnects, macOS switches the Mac’s default microphone to a physical microphone if it was using this virtual device. On reconnect, SayAll restores the virtual microphone only if you have not changed that setting. The default speakers are never changed.";
 "audio.compatibility.open_install_guide" = "Open Driver Installation Guide";
 "audio.compatibility.missing_notice" = "No compatible virtual microphone was found. Your voice tool may not receive device audio.";
-"button_mapping.t1_voice_only" = "T1 uses its native keyboard and pointer. SayAll uses the voice key for dictation.";
+"button_mapping.t1.navigation_passthrough" = "Directions and OK use standard keyboard input.";
+"button_mapping.t1.native_navigation" = "Direction ring and OK, managed by macOS";
+"button_mapping.t1.air_mouse" = "Air mouse, managed by the remote";
 "button_mapping.page.title" = "Button Mapping";
 "button_mapping.page.subtitle" = "Click a button to change its settings";
 "button_mapping.toggle.enabled" = "Custom Buttons";

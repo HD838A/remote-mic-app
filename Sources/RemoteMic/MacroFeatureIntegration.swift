@@ -1667,7 +1667,11 @@ final class MacroFeatureIntegration: ObservableObject {
         case .t1:
             return RemoteMicRemotePresentation(
                 capabilities: RemoteMicRemoteCapabilities(
-                    modelID: "t1-air-mouse", configurableButtons: [], reservedButtons: []
+                    modelID: "t1-air-mouse",
+                    configurableButtons: Set(T1FrontButtons.configurable.compactMap {
+                        RemoteMicMacroButton(rawValue: $0.rawValue)
+                    }),
+                    reservedButtons: []
                 ),
                 displayName: "T1", image: nil, aspectRatio: 1, anchors: [:]
             )

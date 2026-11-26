@@ -490,7 +490,9 @@
 "audio.output.privacy_help" = "语音会写入所选设备。最后一只设备断开时，如果系统默认输入正是该虚拟设备，会临时回退到物理麦克风；重连时仅在用户没有手动改选的情况下恢复。系统默认输出不会被修改。";
 "audio.compatibility.open_install_guide" = "打开驱动安装说明";
 "audio.compatibility.missing_notice" = "未检测到兼容虚拟麦克风，语音工具可能收不到设备声音。";
-"button_mapping.t1_voice_only" = "T1 的键盘和指针沿用系统操作，SayAll 接管语音键用于听写。";
+"button_mapping.t1.navigation_passthrough" = "方向键和 OK 沿用系统键盘输入。";
+"button_mapping.t1.native_navigation" = "方向环和确认键，由系统处理";
+"button_mapping.t1.air_mouse" = "飞鼠开关，由遥控器处理";
 "button_mapping.page.title" = "按键映射";
 "button_mapping.page.subtitle" = "点击按键进行设置";
 "button_mapping.toggle.enabled" = "自定义按键";

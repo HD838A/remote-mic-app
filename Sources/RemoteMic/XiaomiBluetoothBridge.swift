@@ -33,6 +33,7 @@ protocol XiaomiBluetoothBridgeDelegate: AnyObject {
     func bluetoothBridge(_ bridge: XiaomiBluetoothBridge, didUpdateBatteryLevel level: Int?)
     func bluetoothBridge(_ bridge: XiaomiBluetoothBridge, didIdentifyRemoteModel model: XiaomiRemoteModel)
     func bluetoothBridge(_ bridge: XiaomiBluetoothBridge, didUpdatePowerState state: RemotePowerState?)
+    func bluetoothBridge(_ bridge: XiaomiBluetoothBridge, didReceiveT1Button edge: T1FrontButtonEdge)
     func bluetoothBridgeDeviceNameDidChange(_ bridge: XiaomiBluetoothBridge)
 }
 
@@ -276,6 +277,7 @@ final class XiaomiBluetoothBridge: NSObject {
     private var t1CloseTimeout: DispatchWorkItem?
     private var t1RearmTimeout: DispatchWorkItem?
     var isT1: Bool { t1KeyMonitor != nil }
+    var isT1ButtonInputReady: Bool { lifecycle.isReady && t1KeyMonitor?.hasUniqueDevice == true }
 
     var deviceIdentifier: UUID? {
         peripheral?.identifier ?? targetIdentifier
@@ -1517,7 +1519,13 @@ final class XiaomiBluetoothBridge: NSObject {
             failInitialization(LocalizedMessage("connection.error.invalid_voice_response"))
             return
         }
-        let monitor = T1VoiceKeyMonitor { [weak self] in self?.t1VoiceKeyReleased() }
+        let monitor = T1VoiceKeyMonitor(
+            onRelease: { [weak self] in self?.t1VoiceKeyReleased() },
+            onButton: { [weak self] edge in
+                guard let self, self.lifecycle.isReady else { return }
+                self.delegate?.bluetoothBridge(self, didReceiveT1Button: edge)
+            }
+        )
         guard monitor.start() else {
             failInitialization(LocalizedMessage("connection.error.t1_hid_unavailable"))
             return

@@ -667,6 +667,8 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     @Published private(set) var isConnected = false
     @Published private(set) var isVoiceTriggerEnabled = false
     @Published private(set) var activeRemoteButtons = Set<RemoteButton>()
+    @Published private(set) var activeT1Buttons = Set<RemoteButton>()
+    @Published private(set) var mappedT1ProfileID: UUID?
     @Published private(set) var buttonGestureLearningStatus = RemoteButtonGestureLearningStatus()
     @Published private(set) var buttonGestureLearningResult: RemoteButtonGestureLearningResult?
     @Published private(set) var activeAppleRemoteControlIDs = Set<String>()
@@ -919,6 +921,12 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     private let webRemoteClient = WebRemoteRelayClient()
     private let voiceFunctionMapper = RemoteVoiceFunctionMapper()
     private let remoteNativeKeyMapper = RemoteNativeKeyMapper()
+    private let t1NativeKeyMapper = RemoteNativeKeyMapper(
+        family: "t1", mappings: T1FrontButtons.nativeMappings, recoveryKey: "sayall.native-key-mapping-recovery.t1.v1",
+        serviceProvider: {
+            RemoteVoiceFunctionMapper.systemServices(vendor: T1VoiceRemote.vendorID, products: [T1VoiceRemote.productID])
+        }
+    )
     private let siriNativeKeyMapper = RemoteNativeKeyMapper(
         family: "siri_remote", mappings: [], recoveryKey: "sayall.native-key-mapping-recovery.siri.v1",
         serviceProvider: { RemoteVoiceFunctionMapper.systemServices(vendor: 0x004c, products: SiriRemoteFeatureIntegration.nativeInputProductIDs) }
@@ -1977,6 +1985,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             audioOutput.stop()
         }
         voiceFunctionMapper.restore()
+        clearT1ButtonMapping()
         remoteNativeKeyMapper.restore()
         siriNativeKeyMapper.restore()
         chromecastNativeKeyMapper.restore()
@@ -4027,6 +4036,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         }
         let permissionSnapshot = HIDPermissionSnapshot.current
         appliedHIDPermissionSnapshot = permissionSnapshot
+        refreshT1ButtonMapping(permissions: permissionSnapshot)
         if !settings.customMappingEnabled || !permissionSnapshot.accessibilityGranted ||
             !permissionSnapshot.inputMonitoringGranted {
             chromecastAppSwitcher.cancel(reason: "mapping_or_permission_unavailable")
@@ -5672,6 +5682,72 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             return
         }
         selectRemoteProfile(profile.id, persistSelection: persistsFallback)
+    }
+
+    private func t1ButtonSource(_ profileID: UUID) -> String {
+        "t1:\(profileID.uuidString)"
+    }
+
+    private func clearT1ButtonMapping() {
+        if let profileID = mappedT1ProfileID {
+            cancelConfiguredButtonInteractions(source: t1ButtonSource(profileID), reason: "t1_input_reset")
+            if buttonGestureLearningProfileID == profileID {
+                cancelButtonGestureLearning(reason: "t1_input_reset")
+            }
+        }
+        if mappedT1ProfileID != nil { mappedT1ProfileID = nil }
+        if !activeT1Buttons.isEmpty { activeT1Buttons.removeAll() }
+        t1NativeKeyMapper.restore()
+    }
+
+    private func refreshT1ButtonMapping(permissions: HIDPermissionSnapshot) {
+        let ready = bluetoothBridges.values.filter(\.isT1ButtonInputReady)
+        guard settings.customMappingEnabled, permissions.inputMonitoringGranted,
+              permissions.accessibilityGranted, ready.count == 1, let bridge = ready.first,
+              let profileID = remoteProfileID(for: bridge)
+        else {
+            clearT1ButtonMapping()
+            return
+        }
+        if mappedT1ProfileID == profileID, t1NativeKeyMapper.isPrepared { return }
+        clearT1ButtonMapping()
+        if t1NativeKeyMapper.prepare() {
+            mappedT1ProfileID = profileID
+        }
+    }
+
+    func bluetoothBridge(_ bridge: XiaomiBluetoothBridge, didReceiveT1Button edge: T1FrontButtonEdge) {
+        guard let profileID = mappedT1ProfileID, remoteProfileID(for: bridge) == profileID,
+              bridge.isT1ButtonInputReady, settings.customMappingEnabled
+        else { return }
+        let source = t1ButtonSource(profileID)
+        let button = edge.button
+        if edge.phase == .press {
+            activeT1Buttons.insert(button)
+            lastRemoteButtonPressProfileID = profileID
+            lastRemoteButtonPress = button
+        } else {
+            activeT1Buttons.remove(button)
+        }
+        if handleButtonGestureLearning(edge.phase, button: button, profileID: profileID) { return }
+        if macroFeature.isEditorActive {
+            if edge.phase == .press { macroFeature.noteButtonInteraction(button: button) }
+            return
+        }
+        if membershipFeature.handleCommonPhrase(
+            button: button.rawValue, phase: edge.phase.rawValue, source: source
+        ) { return }
+        handleConfiguredButtonInteraction(edge.phase, button: button, profileID: profileID, source: source) {
+            [weak self] trigger, configured in
+            guard let self, self.mappedT1ProfileID == profileID else { return false }
+            let handled = self.performButtonProfileBoundAction(
+                profileID: profileID, button: button, trigger: trigger, source: source
+            ) || self.performExternalConfiguredAction(configured)
+            AppLogger.shared.write(
+                "T1 BUTTON button=\(button.rawValue) trigger=\(trigger.rawValue) handled=\(handled)"
+            )
+            return handled
+        }
     }
 
     private func activateRemoteProfile(for bridge: XiaomiBluetoothBridge) -> UUID? {
@@ -7495,6 +7571,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             // （Chromecast 或上一次的档案），必须在这里再判一次优选。
             applyDefaultMappingRemoteAfterConnectionChange()
         }
+        refreshT1ButtonMapping(permissions: appliedHIDPermissionSnapshot ?? .current)
         if isConnected {
             voiceFnTapSession.resume()
             if shouldKeepVirtualAudioActive {
@@ -8446,6 +8523,9 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             } else {
                 buttonReason = "chromecast_hid_unknown"
             }
+        } else if profile.model == .t1 {
+            buttons = mappedT1ProfileID == profile.id ? .ready : .failed
+            buttonReason = mappedT1ProfileID == profile.id ? "t1_native_mapping_verified" : "t1_native_mapping_unavailable"
         } else if let cached = remoteButtonReadiness[profile.id] {
             buttons = cached
             buttonReason = "button_cache"

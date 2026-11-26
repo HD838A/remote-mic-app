@@ -1245,15 +1245,7 @@ struct SettingsView: View {
                 aboutPage
             }
         case .mapping:
-            if settings.selectedRemoteProfile?.model == .t1 {
-                VStack(alignment: .leading, spacing: 10) {
-                    PageHeader(title: localization.text("button_mapping.page.title"))
-                    Text(localization.text("button_mapping.t1_voice_only"))
-                        .foregroundStyle(.secondary)
-                }
-                .padding()
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            } else if settings.selectedRemoteProfile?.model.isAppleSiriRemote == true {
+            if settings.selectedRemoteProfile?.model.isAppleSiriRemote == true {
                 #if SAYALL_SIRI_REMOTE_ENABLED && canImport(SayAllSiriRemote)
                 siriRemoteMappingPage
                 #else
@@ -3100,7 +3092,8 @@ struct SettingsView: View {
     private var mappingPageHeader: some View {
         VStack(alignment: .leading, spacing: 6) {
             PageHeader(title: localization.text("button_mapping.page.title"))
-            Text(localization.text("button_mapping.page.subtitle"))
+            Text(localization.text(settings.selectedRemoteProfile?.model == .t1
+                ? "button_mapping.t1.navigation_passthrough" : "button_mapping.page.subtitle"))
                 .font(.system(size: 13))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -3112,7 +3105,8 @@ struct SettingsView: View {
         hardwareMappingPage {
             RemoteMappingCanvas(
                 selectedButton: $selectedRemoteButton,
-                activeButtons: model.activeRemoteButtons,
+                activeButtons: settings.selectedRemoteProfile?.model == .t1
+                    ? model.activeT1Buttons : model.activeRemoteButtons,
                 voiceActive: model.isStreaming,
                 remoteModel: settings.selectedRemoteProfile?.model,
                 actionSummary: { button, trigger in mappingActionSummary(for: button, trigger: trigger) },
@@ -3865,10 +3859,9 @@ struct SettingsView: View {
         let visibleProfiles = RemoteDeviceNamePolicy.cardsWithoutRepeatedSerial(
             RemoteDeviceNamePolicy.sortedForCards(
                 settings.remoteDeviceProfiles.filter { profile in
-                    // 私有遥控器离线时仍保留在按键页选择器中：画布不依赖蓝牙连接，
-                    // 用户从连接页选中 Chromecast 后必须能在顶部继续看到并切换回它。
+                    // 设备专用画布可离线编辑，标题卡仍应显示对应的遥控器。
                     model.isRemoteConnected(profile.id)
-                        || (!vertical && profile.model.usesPrivateAdapter)
+                        || (!vertical && (profile.model.usesPrivateAdapter || profile.model == .t1))
                 },
                 modelName: remoteModelName,
                 systemName: { model.systemDeviceName(for: $0) }

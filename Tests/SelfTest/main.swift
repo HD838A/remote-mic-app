@@ -126,6 +126,38 @@ check(
     "T1 Search neutralization preserves and restores independent mappings"
 )
 
+var t1FrontButtons = T1FrontButtonTracker()
+check(
+    t1FrontButtons.observe(reportID: 1, bytes: [0, 0, 0x28, 0x52, 0x04, 0xAA, 0, 0]).isEmpty &&
+        t1FrontButtons.observe(reportID: 1, bytes: [1, 0, 0, 0x65, 0, 0, 0, 0, 0])
+            == [T1FrontButtonEdge(button: .menu, phase: .press)] &&
+        t1FrontButtons.observe(reportID: 1, bytes: [0, 0, 1, 1, 1, 1, 1, 1]).isEmpty &&
+        t1FrontButtons.observe(reportID: 1, bytes: Array(repeating: 0, count: 8))
+            == [T1FrontButtonEdge(button: .menu, phase: .release)],
+    "T1 rear typing, shared navigation, voice and rollover do not trigger ordinary mappings"
+)
+check(
+    t1FrontButtons.observe(reportID: 2, bytes: [2, 0x24, 0x02])
+        == [T1FrontButtonEdge(button: .back, phase: .press)] &&
+        t1FrontButtons.observe(reportID: 3, bytes: [1])
+            == [T1FrontButtonEdge(button: .power, phase: .press)] &&
+        t1FrontButtons.observe(reportID: 4, bytes: [0, 0, 0, 0]).isEmpty &&
+        t1FrontButtons.observe(reportID: 2, bytes: [0x21, 0x02])
+            == [T1FrontButtonEdge(button: .back, phase: .release)] &&
+        t1FrontButtons.observe(reportID: 3, bytes: [3, 0])
+            == [T1FrontButtonEdge(button: .power, phase: .release)],
+    "T1 tracks report lifecycles independently and ignores mouse movement and Search"
+)
+check(
+    T1FrontButtons.buttons(reportID: 2, bytes: [0xE9, 0]) == [.volumeUp] &&
+        T1FrontButtons.buttons(reportID: 2, bytes: [0xEA, 0]) == [.volumeDown] &&
+        T1FrontButtons.buttons(reportID: 2, bytes: [0xE2, 0]) == [.mute] &&
+        T1FrontButtons.buttons(reportID: 2, bytes: [0x23, 0x02]) == [.home] &&
+        T1FrontButtons.buttons(reportID: 2, bytes: [3, 0xE9, 0]) == nil &&
+        T1FrontButtons.configurable == [.power, .menu, .back, .home, .mute, .volumeUp, .volumeDown],
+    "T1 exposes only uniquely addressed front buttons for mapping"
+)
+
 let generationOne: UInt64 = 1
 let generationTwo: UInt64 = 2
 let connecting = BluetoothLifecyclePhase.connecting(generationOne)

@@ -1,0 +1,172 @@
+import SwiftUI
+
+/// Geometry is normalized to the shared remote illustration frame.
+enum T1RemoteFaceLayout {
+    static let voice = UnitPoint(x: 0.655, y: 0.303)
+    static let voiceCardY: CGFloat = 0.535
+
+    static let placements: [RemoteMappingPlacement] = [
+        .init(button: .power, side: .right, anchor: UnitPoint(x: 0.685, y: 0.056), targetY: 0.094),
+        .init(button: .volumeUp, side: .right, anchor: UnitPoint(x: 0.817, y: 0.139), targetY: 0.242),
+        .init(button: .volumeDown, side: .right, anchor: UnitPoint(x: 0.817, y: 0.207), targetY: 0.389),
+        .init(button: .back, side: .left, anchor: UnitPoint(x: 0.345, y: 0.303), targetY: 0.31),
+        .init(button: .mute, side: .left, anchor: UnitPoint(x: 0.345, y: 0.402), targetY: 0.55),
+        .init(button: .home, side: .right, anchor: UnitPoint(x: 0.655, y: 0.409), targetY: 0.682),
+        .init(button: .menu, side: .right, anchor: UnitPoint(x: 0.655, y: 0.515), targetY: 0.829),
+    ]
+}
+
+struct T1RemoteFace: View {
+    @EnvironmentObject private var localization: LocalizationStore
+
+    let selectedButton: RemoteButton
+    let activeButtons: Set<RemoteButton>
+    let reservedButtons: Set<RemoteButton>
+    let voiceActive: Bool
+    let onEdit: (RemoteButton) -> Void
+    let onVoice: () -> Void
+
+    var body: some View {
+        GeometryReader { geometry in
+            let size = geometry.size
+            ZStack(alignment: .topLeading) {
+                RoundedRectangle(cornerRadius: 19)
+                    .fill(LinearGradient(
+                        colors: [.white.opacity(0.9), Color(white: 0.48), Color(white: 0.83)],
+                        startPoint: .topLeading, endPoint: .bottomTrailing
+                    ))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 17)
+                            .fill(LinearGradient(
+                                colors: [Color(white: 0.16), Color(white: 0.075)],
+                                startPoint: .top, endPoint: .bottomTrailing
+                            ))
+                            .padding(3)
+                    }
+                    .frame(width: size.width * 0.636, height: size.height - 4)
+                    .position(x: size.width / 2, y: size.height / 2)
+                    .accessibilityHidden(true)
+
+                Circle()
+                    .fill(Color(white: 0.35))
+                    .frame(width: 3, height: 3)
+                    .position(point(UnitPoint(x: 0.5, y: 0.048), in: size))
+                    .accessibilityHidden(true)
+
+                directionRing
+                    .frame(width: size.width * 0.44, height: size.width * 0.44)
+                    .position(point(UnitPoint(x: 0.5, y: 0.169), in: size))
+
+                // The two printed controls on the left share one elongated cap.
+                Capsule()
+                    .fill(Color(white: 0.105))
+                    .overlay { Capsule().strokeBorder(Color(white: 0.24), lineWidth: 1) }
+                    .frame(width: 42, height: 102)
+                    .position(point(UnitPoint(x: 0.345, y: 0.45), in: size))
+                    .accessibilityHidden(true)
+
+                Image(systemName: "computermouse")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.86))
+                    .frame(width: 32, height: 32)
+                    .position(point(UnitPoint(x: 0.345, y: 0.497), in: size))
+                    .accessibilityLabel(Text("button_mapping.t1.air_mouse"))
+
+                Capsule()
+                    .fill(Color(white: 0.095))
+                    .overlay { Capsule().strokeBorder(Color(white: 0.40), lineWidth: 1) }
+                    .frame(width: 11, height: size.height * 0.128)
+                    .position(point(UnitPoint(x: 0.817, y: 0.173), in: size))
+                    .accessibilityHidden(true)
+
+                ForEach(T1RemoteFaceLayout.placements) { placement in
+                    key(placement.button)
+                        .position(point(placement.anchor, in: size))
+                }
+
+                Button(action: onVoice) {
+                    ZStack {
+                        Circle().fill(Color(white: 0.11))
+                        Circle().strokeBorder(keyBorder(active: voiceActive, selected: false), lineWidth: 1)
+                        ZStack {
+                            Circle().frame(width: 9).offset(x: -4, y: -3)
+                            Circle().frame(width: 4).offset(x: 5, y: 2)
+                            Circle().frame(width: 3).offset(x: 8, y: -2)
+                            Circle().frame(width: 5).offset(x: 1, y: 6)
+                        }
+                        .foregroundStyle(.white.opacity(0.92))
+                    }
+                    .frame(width: 42, height: 42)
+                    .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .position(point(T1RemoteFaceLayout.voice, in: size))
+                .accessibilityLabel(Text("button_mapping.voice_button.title"))
+            }
+        }
+    }
+
+    private var directionRing: some View {
+        ZStack {
+            Circle()
+                .fill(LinearGradient(colors: [Color(white: 0.20), Color(white: 0.09)], startPoint: .topLeading, endPoint: .bottomTrailing))
+            Circle().strokeBorder(Color(white: 0.28), lineWidth: 1)
+            Circle()
+                .fill(Color(white: 0.115))
+                .overlay { Circle().strokeBorder(Color(white: 0.06), lineWidth: 1) }
+                .padding(22)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text("button_mapping.t1.native_navigation"))
+    }
+
+    private func key(_ button: RemoteButton) -> some View {
+        let sideKey = button == .volumeUp || button == .volumeDown
+        let pillKey = button == .mute
+        let keySize: CGFloat = button == .power ? 26 : 42
+        let active = activeButtons.contains(button)
+        let selected = selectedButton == button
+        let reserved = reservedButtons.contains(button)
+        return Button {
+            onEdit(button)
+        } label: {
+            ZStack {
+                if !sideKey && !pillKey {
+                    Circle().fill(Color(white: 0.11))
+                    Circle().strokeBorder(keyBorder(active: active, selected: selected), lineWidth: 1)
+                } else if active || selected {
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill((active ? Color.orange : Color.accentColor).opacity(0.25))
+                }
+                Image(systemName: symbol(for: button))
+                    .font(.system(size: sideKey ? 8 : 13, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.9))
+            }
+            .frame(width: sideKey ? 17 : keySize, height: sideKey ? 26 : keySize)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(reserved)
+        .accessibilityLabel(Text(button.displayName(using: localization)))
+        .help(button.displayName(using: localization))
+    }
+
+    private func symbol(for button: RemoteButton) -> String {
+        switch button {
+        case .back: return "arrow.left"
+        case .volumeUp: return "plus"
+        case .volumeDown: return "minus"
+        default: return button.systemImage
+        }
+    }
+
+    private func keyBorder(active: Bool, selected: Bool) -> Color {
+        if active { return .orange }
+        if selected { return .accentColor }
+        return Color(white: 0.24)
+    }
+
+    private func point(_ anchor: UnitPoint, in size: CGSize) -> CGPoint {
+        CGPoint(x: size.width * anchor.x, y: size.height * anchor.y)
+    }
+}
