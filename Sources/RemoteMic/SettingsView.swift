@@ -1675,25 +1675,30 @@ struct SettingsView: View {
 
                 if let profile = settings.selectedRemoteProfile,
                    model.isRemoteConnected(profile.id) {
+                    let shortcutStatus = model.remoteVoiceShortcutStatus(for: profile)
+                    let t1VoiceUnavailable = shortcutStatus.key == "remote.card.detail.permissions_required"
+                        || shortcutStatus.key == "connection.error.t1_hid_unavailable"
                     VStack(alignment: .leading, spacing: 9) {
                         connectionStatusLine(
                             symbol: "antenna.radiowaves.left.and.right",
                             text: model.connectionStatusText(using: localization),
                             tint: connectionTint
                         )
-                        connectionStatusLine(
-                            symbol: "waveform",
-                            text: localization.text(
-                                model.isStreaming
-                                    ? "connection.status.voice_streaming"
-                                    : "connection.status.voice_ready"
-                            ),
-                            tint: model.isStreaming ? .orange : .blue
-                        )
+                        if !t1VoiceUnavailable {
+                            connectionStatusLine(
+                                symbol: "waveform",
+                                text: localization.text(
+                                    model.isStreaming
+                                        ? "connection.status.voice_streaming"
+                                        : "connection.status.voice_ready"
+                                ),
+                                tint: model.isStreaming ? .orange : .blue
+                            )
+                        }
                         connectionStatusLine(
                             symbol: "mic.fill",
-                            text: model.voiceShortcutStatus.text(using: localization),
-                            tint: .blue
+                            text: shortcutStatus.text(using: localization),
+                            tint: t1VoiceUnavailable ? .orange : .blue
                         )
                     }
                 }

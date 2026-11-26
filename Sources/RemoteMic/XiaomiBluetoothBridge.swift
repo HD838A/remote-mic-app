@@ -272,12 +272,15 @@ final class XiaomiBluetoothBridge: NSObject {
     private let pnpUUID = CBUUID(string: "2A50")
     private var probingT1 = false
     private var t1DeviceInformation: [CBUUID: Data] = [:]
+    private var t1IdentityConfirmed = false
     private var t1KeyMonitor: T1VoiceKeyMonitor?
     private var t1ReleasePending = false
     private var t1CloseTimeout: DispatchWorkItem?
     private var t1RearmTimeout: DispatchWorkItem?
-    var isT1: Bool { t1KeyMonitor != nil }
-    var isT1ButtonInputReady: Bool { lifecycle.isReady && t1KeyMonitor?.hasUniqueDevice == true }
+    var isT1: Bool { t1IdentityConfirmed }
+    var isT1ButtonInputReady: Bool {
+        lifecycle.isReady && HIDRemoteMonitor.isInputMonitoringGranted && t1KeyMonitor?.hasUniqueDevice == true
+    }
 
     var deviceIdentifier: UUID? {
         peripheral?.identifier ?? targetIdentifier
@@ -748,7 +751,8 @@ final class XiaomiBluetoothBridge: NSObject {
                   phase: lifecycle,
                   generation: generation,
                   capabilitiesConfirmed: capabilitiesConfirmed,
-                  sampleRate: capabilities.sampleRate
+                  sampleRate: capabilities.sampleRate,
+                  requiredReleaseInputAvailable: !isT1 || isT1ButtonInputReady
               ),
               !microphoneOpened,
               !streaming
@@ -1055,6 +1059,7 @@ final class XiaomiBluetoothBridge: NSObject {
         t1KeyMonitor?.stop()
         t1KeyMonitor = nil
         t1DeviceInformation.removeAll()
+        t1IdentityConfirmed = false
         probingT1 = false
         peripheral?.delegate = nil
         peripheral = nil
@@ -1429,7 +1434,7 @@ final class XiaomiBluetoothBridge: NSObject {
                 AppLogger.shared.write("BLE RECOVERY_WINDOW operation_id=\(recoveryOperationID) phase=completed result=ready attempts=\(recovery.attemptCount)")
             }
         case 0x08:
-            if let monitor = t1KeyMonitor, !monitor.hasUniqueDevice || t1RearmTimeout != nil { return }
+            if isT1, t1RearmTimeout != nil { return }
             guard requestMicrophoneOpen() else {
                 AppLogger.shared.write("ATVV MIC_OPEN remote_request_ignored")
                 return
@@ -1441,7 +1446,8 @@ final class XiaomiBluetoothBridge: NSObject {
                 phase: lifecycle,
                 generation: generation,
                 capabilitiesConfirmed: capabilitiesConfirmed,
-                sampleRate: capabilities.sampleRate
+                sampleRate: capabilities.sampleRate,
+                requiredReleaseInputAvailable: !isT1 || isT1ButtonInputReady
             ) else {
                 diagnosticForAudio().rejectStart(reason: "protocol_not_ready")
                 AppLogger.shared.write("ATVV STREAM_START ignored_not_ready")
@@ -1510,7 +1516,7 @@ final class XiaomiBluetoothBridge: NSObject {
     }
 
     private func finishT1IdentityIfPossible() {
-        guard t1KeyMonitor == nil,
+        guard !t1IdentityConfirmed,
               let model = t1DeviceInformation[modelNumberUUID],
               let manufacturer = t1DeviceInformation[manufacturerUUID],
               let pnp = t1DeviceInformation[pnpUUID]
@@ -1519,6 +1525,15 @@ final class XiaomiBluetoothBridge: NSObject {
             failInitialization(LocalizedMessage("connection.error.invalid_voice_response"))
             return
         }
+        t1IdentityConfirmed = true
+        delegate?.bluetoothBridge(self, didIdentifyRemoteModel: .t1)
+        refreshT1Input()
+        requestCapabilitiesIfPossible()
+    }
+
+    /// Bluetooth status is independent of permission to observe T1's physical release.
+    func refreshT1Input() {
+        guard isT1, t1KeyMonitor == nil, HIDRemoteMonitor.isInputMonitoringGranted else { return }
         let monitor = T1VoiceKeyMonitor(
             onRelease: { [weak self] in self?.t1VoiceKeyReleased() },
             onButton: { [weak self] edge in
@@ -1526,13 +1541,11 @@ final class XiaomiBluetoothBridge: NSObject {
                 self.delegate?.bluetoothBridge(self, didReceiveT1Button: edge)
             }
         )
-        guard monitor.start() else {
-            failInitialization(LocalizedMessage("connection.error.t1_hid_unavailable"))
-            return
+        if monitor.start() {
+            t1KeyMonitor = monitor
+        } else {
+            AppLogger.shared.write("T1 HID phase=failed reason=release_monitor_unavailable")
         }
-        t1KeyMonitor = monitor
-        delegate?.bluetoothBridge(self, didIdentifyRemoteModel: .t1)
-        requestCapabilitiesIfPossible()
     }
 
     private func t1VoiceKeyReleased() {

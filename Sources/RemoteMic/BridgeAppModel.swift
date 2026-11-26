@@ -4036,6 +4036,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         }
         let permissionSnapshot = HIDPermissionSnapshot.current
         appliedHIDPermissionSnapshot = permissionSnapshot
+        for bridge in bluetoothBridges.values { bridge.refreshT1Input() }
         refreshT1ButtonMapping(permissions: permissionSnapshot)
         if !settings.customMappingEnabled || !permissionSnapshot.accessibilityGranted ||
             !permissionSnapshot.inputMonitoringGranted {
@@ -5951,7 +5952,11 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             connectionStatus = LocalizedMessage("connection.status.chromecast_connected")
         } else if let selectedBluetoothBridge,
            let state = bluetoothBridgeStates[ObjectIdentifier(selectedBluetoothBridge)] {
-            connectionStatus = state.message
+            if selectedBluetoothBridge.isT1, case .ready = state {
+                connectionStatus = LocalizedMessage("connection.status.t1_connected")
+            } else {
+                connectionStatus = state.message
+            }
         } else if let ready = allStates.first(where: { state in
             if case .ready = state { return true }
             return false
@@ -8429,6 +8434,20 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         remoteCardReadiness(for: profile, history: history).status
     }
 
+    func remoteVoiceShortcutStatus(for profile: RemoteDeviceProfile?) -> LocalizedMessage {
+        guard let profile, profile.model == .t1, isRemoteConnected(profile.id) else {
+            return voiceShortcutStatus
+        }
+        let permissions = appliedHIDPermissionSnapshot ?? .current
+        if !permissions.inputMonitoringGranted || !permissions.accessibilityGranted {
+            return LocalizedMessage("remote.card.detail.permissions_required")
+        }
+        if profile.bluetoothIdentifier.flatMap({ bluetoothBridges[$0] })?.isT1ButtonInputReady != true {
+            return LocalizedMessage("connection.error.t1_hid_unavailable")
+        }
+        return voiceShortcutStatus
+    }
+
     private func remoteCardReadiness(
         for profile: RemoteDeviceProfile,
         history: Bool = false
@@ -8500,6 +8519,8 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         }
 
         let permissions = appliedHIDPermissionSnapshot ?? .current
+        let needsT1Permissions = profile.model == .t1 &&
+            (!permissions.inputMonitoringGranted || !permissions.accessibilityGranted)
         let buttons: RemoteFunctionReadiness
         let buttonReason: String
         if !settings.customMappingEnabled {
@@ -8540,7 +8561,14 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         let voiceRequired = !profile.model.isAppleSiriRemote || membershipFeature.canUseSiriRemoteVoice
         let voice: RemoteFunctionReadiness
         let voiceReason: String
-        if !voiceRequired {
+        if needsT1Permissions {
+            voice = .failed
+            voiceReason = "t1_permission_missing"
+        } else if profile.model == .t1,
+                  profile.bluetoothIdentifier.flatMap({ bluetoothBridges[$0] })?.isT1ButtonInputReady != true {
+            voice = .failed
+            voiceReason = "t1_release_monitor_unavailable"
+        } else if !voiceRequired {
             voice = .ready
             voiceReason = "voice_not_required"
         } else if settings.selectedAudioDeviceUID.isEmpty {
@@ -8549,7 +8577,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         } else if audioStatus.key.contains("failed") || audioStatus.key.contains("unavailable") {
             voice = .failed
             voiceReason = "audio_status_error"
-        } else if !profile.model.usesPrivateAdapter && !Self.canStartBluetoothVoice(
+        } else if profile.model != .t1 && !profile.model.usesPrivateAdapter && !Self.canStartBluetoothVoice(
             mode: settings.voiceKeyMode, voiceFnTapModeEnabled: settings.voiceFnTapModeEnabled,
             isVoiceKeyNeutralized: voiceFunctionMapper.isVoiceKeyNeutralized
         ) {
@@ -8597,7 +8625,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             voiceReason = "bluetooth_bridge_missing"
         }
 
-        let status = RemoteDeviceCardStatus.resolve(
+        let status = needsT1Permissions ? .permissionsRequired : RemoteDeviceCardStatus.resolve(
             connected: true, buttons: buttons, voice: voice, voiceRequired: voiceRequired
         )
         return snapshot(

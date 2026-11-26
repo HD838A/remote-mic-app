@@ -40,6 +40,7 @@ enum RemoteFunctionReadiness: Equatable {
 enum RemoteDeviceCardStatus: String, CaseIterable {
     case connected, disconnected, checking, confirming
     case buttonsFailed = "buttons_failed", voiceFailed = "voice_failed", deviceFailed = "device_failed"
+    case permissionsRequired = "permissions_required"
     case connecting, notFound = "not_found", paused, cancelled
 
     var message: LocalizedMessage { LocalizedMessage("remote.card.status.\(rawValue)") }
@@ -50,6 +51,7 @@ enum RemoteDeviceCardStatus: String, CaseIterable {
     var isFailure: Bool { self == .buttonsFailed || self == .voiceFailed || self == .deviceFailed || self == .notFound }
     var color: Color {
         if self == .connected { return .green }
+        if self == .permissionsRequired { return .orange }
         if isFailure { return .red }
         if isProgressing { return .orange }
         return .secondary

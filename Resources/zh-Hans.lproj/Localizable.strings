@@ -58,6 +58,7 @@
 "connection.status.searching_for_device" = "正在查找%@";
 "connection.status.connecting" = "正在连接遥控器";
 "connection.status.initializing_voice" = "正在初始化语音服务";
+"connection.status.t1_connected" = "T1 蓝牙已连接";
 "connection.status.connected_to_device" = "小米遥控器已连接";
 "connection.status.apple_remote_connected" = "苹果遥控器已连接";
 "connection.status.chromecast_connected" = "Chromecast 遥控器已连接";
@@ -1596,6 +1597,8 @@
 "remote.card.status.buttons_failed" = "按键异常";
 "remote.card.detail.buttons_failed" = "设备已连接，但按键功能出现问题。";
 
+"remote.card.status.permissions_required" = "已连接 · 需授权";
+"remote.card.detail.permissions_required" = "T1 已通过蓝牙连接。请在设置中启用输入监控与辅助功能，以使用语音和按键映射。";
 "remote.card.status.voice_failed" = "语音异常";
 "remote.card.detail.voice_failed" = "设备已连接，但已授权的语音功能出现问题。";
 

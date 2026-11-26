@@ -166,6 +166,16 @@ let awaiting = BluetoothLifecyclePhase.awaitingCapabilities(generationOne)
 let ready = BluetoothLifecyclePhase.ready(generationOne)
 let disconnecting = BluetoothLifecyclePhase.disconnecting(generationOne)
 check(
+    ready.isReady && !ATVVSessionGate.canOpenMicrophone(
+        phase: ready, generation: generationOne, capabilitiesConfirmed: true,
+        sampleRate: 16_000, requiredReleaseInputAvailable: false
+    ) && ATVVSessionGate.canOpenMicrophone(
+        phase: ready, generation: generationOne, capabilitiesConfirmed: true,
+        sampleRate: 16_000, requiredReleaseInputAvailable: true
+    ),
+    "T1 Bluetooth stays ready while a missing release monitor blocks the microphone"
+)
+check(
     connecting.acceptsDidConnect(generation: generationOne) &&
         connecting.acceptsDidFailToConnect(generation: generationOne) &&
         connecting.acceptsDisconnect(generation: generationOne) &&

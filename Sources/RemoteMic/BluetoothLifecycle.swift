@@ -677,10 +677,12 @@ enum ATVVSessionGate {
         phase: BluetoothLifecyclePhase,
         generation: UInt64,
         capabilitiesConfirmed: Bool,
-        sampleRate: Double
+        sampleRate: Double,
+        requiredReleaseInputAvailable: Bool = true
     ) -> Bool {
         phase.acceptsProtocolData(generation: generation) &&
             capabilitiesConfirmed &&
+            requiredReleaseInputAvailable &&
             ATVVProtocol.supportsAudio(sampleRate: sampleRate)
     }
 
