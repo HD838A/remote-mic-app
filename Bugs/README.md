@@ -1,6 +1,7 @@
 # Bug 记录
 
 - [事件 tap 回调对象释放后访问](./2026-11-26-event-tap-owner-use-after-free.html)
+- [安装器因 HAL 目录带组可写位阻止升级](./2026-11-26-installer-blocked-by-writable-hal-parent.md)
 - [应用内安装 Siri Remote 组件后 Onboarding 仍不显示苹果遥控器](./2026-11-25-onboarding-siri-remote-hidden-without-installer-receipt.md)
 - [RC003 语音流起始空洞（关联 10/16 秒录音尾字丢失）](./2026-11-24-rc003-early-stream-gap-first-word.md)
 - [虚拟音频引擎初始化阻塞导致语音会话永不结束、菜单栏图标长期变红](./2026-11-24-audio-engine-init-hang-stuck-voice-warning.md)
@@ -248,6 +249,7 @@
 
 | 时间 | Bug | 状态 |
 | --- | --- | --- |
+| 2026-11-26 | [安装器因 HAL 目录带组可写位阻止升级](./2026-11-26-installer-blocked-by-writable-hal-parent.md) | 候选修复：`reconcile` 只对 root 所有、真实目录、唯一异常是可写位的 library 作用域 HAL 层级目录执行 `chmod go-w` 并输出 `phase=repaired`；非 root、符号链接、System 只读与其它异常仍停止。新增两项夹具并完成反向验证，治理检查通过；真实签名 PKG 的 Installer 与 CoreAudio 现场验收待完成 |
 | 2026-11-25 | [应用内安装 Siri Remote 组件后 Onboarding 仍不显示苹果遥控器](./2026-11-25-onboarding-siri-remote-hidden-without-installer-receipt.md) | 候选修复：可用性判定统一为「Installer 收据 或 helper + LaunchDaemon」，Onboarding 改为实时求值，向导内安装成功后即可见；卸载器同步改为每次卸载都清除收据；公开与 Siri 开关两种构建定向测试通过；PKG 与 App 内安装两条真实路径待签名候选包验收 |
 | 2026-11-24 | [RC003 语音流起始空洞（关联 10/16 秒录音尾字丢失）](./2026-11-24-rc003-early-stream-gap-first-word.md) | 调查中：与 2026-10-13 RC003 采样缺失关联；Build 442 连续短语音 6 段中 3 段在 165–181ms 出现 88–161ms 空洞；另有 10 秒录音少 55 批次/826ms、16 秒录音少 58 批次/870ms，目标框与回眸录音同缺尾字；App 侧丢弃/入队/播放/录音计数一致；1.9.21 现场覆盖率 83.9%～95.8%，不支持“2.0.10 新引入”；两版都已有回眸录音；`856d169e`/#1028 build 346 真机回归（覆盖率 96.4%→94.3%、目标文字 93→0）已关闭，禁止直接复用；当前候选只减 2.0.10 主线程逐批负载（用量汇总、去掉临时数组），需先解释回归并补 10 次 16 秒真机与 HCI/遥控器端证据 |
 | 2026-11-24 | [虚拟音频引擎初始化阻塞导致语音会话永不结束、菜单栏图标长期变红](./2026-11-24-audio-engine-init-hang-stuck-voice-warning.md) | 候选修复：把设备枚举、`AVAudioEngine()` 构造、连线、绑定设备与 `prepare`/`start` 一并纳入有界执行，一次 HAL 阻塞最多占队列 2 秒；新增阻塞夹具并完成反向验证；真实 MiRemoteV、RC003 和第三方文字上屏待验收 |

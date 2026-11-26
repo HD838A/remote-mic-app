@@ -108,6 +108,28 @@ if check_driver_naming_duplicates "$WORK/unsafe" \
 [[ "$DRIVER_NAMING_SCAN_REASON" == unsafe_hal_parent ]]
 [[ "$DRIVER_NAMING_SCAN_LEVEL" == hal ]]
 [[ "$DRIVER_NAMING_SCAN_ISSUE" == group_writable || "$DRIVER_NAMING_SCAN_ISSUE" == not_root ]]
+# A writable parent that is not root-owned must still stop the installation.
+/bin/mkdir -p "$WORK/unsafe-owner/Library/Audio/Plug-Ins/HAL"
+/bin/chmod 777 "$WORK/unsafe-owner/Library/Audio/Plug-Ins/HAL"
+if check_driver_naming_duplicates "$WORK/unsafe-owner" \
+  "$WORK/unsafe-owner/Library/Audio/Plug-Ins/HAL/MiRemoteV2ch.driver" reconcile; then exit 1; fi
+[[ "$DRIVER_NAMING_SCAN_REASON" == unsafe_hal_parent ]]
+[[ "$DRIVER_NAMING_SCAN_ISSUE" == not_root ]]
+[[ "$DRIVER_NAMING_SCAN_REPAIRED" == 0 ]]
+[[ "$(/usr/bin/stat -f %Lp "$WORK/unsafe-owner/Library/Audio/Plug-Ins/HAL")" == 777 ]]
+# A root-owned directory whose only anomaly is a write bit is repaired instead
+# of stopping the user with a permission error they cannot fix themselves.
+/bin/chmod 775 "$WORK/unsafe/Library/Audio/Plug-Ins/HAL"
+functions[fixture_original_directory_owner]=$functions[driver_naming_directory_owner]
+driver_naming_directory_owner() { print 0 }
+repair_log="$WORK/repair.log"
+check_driver_naming_duplicates "$WORK/unsafe" \
+  "$WORK/unsafe/Library/Audio/Plug-Ins/HAL/MiRemoteV2ch.driver" reconcile >"$repair_log" 2>&1
+functions[driver_naming_directory_owner]=$functions[fixture_original_directory_owner]
+[[ "$DRIVER_NAMING_SCAN_REPAIRED" == 1 ]]
+[[ "$DRIVER_NAMING_SCAN_REASON" == "" ]]
+[[ "$(/usr/bin/stat -f %Lp "$WORK/unsafe/Library/Audio/Plug-Ins/HAL")" == 755 ]]
+[[ "$(<"$repair_log")" == *'phase=repaired result=ready scope=library level=hal issue=group_writable'* ]]
 /bin/chmod 755 "$WORK/unsafe/Library/Audio/Plug-Ins/HAL"
 # The blocked log line carries the enum detail, never a path or a name.
 failure_output="$(LC_ALL=C /bin/zsh -c '
