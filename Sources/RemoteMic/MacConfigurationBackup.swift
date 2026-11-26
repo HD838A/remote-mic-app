@@ -65,12 +65,30 @@ enum ConfigurationImportDestination: Equatable {
               let object = try JSONSerialization.jsonObject(with: data) as? [String: Any]
         else { throw AppConfigurationError.invalidValues }
         if object["format"] as? String == MacConfigurationBackup.format { return .settings }
-        guard object["format"] as? String == "sayall-transfer" else { throw AppConfigurationError.invalidValues }
-        switch object["type"] as? String {
-        case "personalBackup", "macro", "application": return .settings
-        case "buttonProfile": return .buttonProfiles
-        default: throw AppConfigurationError.invalidValues
+        if object["format"] as? String == "sayall-transfer" {
+            switch object["type"] as? String {
+            case "personalBackup", "macro", "application": return .settings
+            case "buttonProfile": return .buttonProfiles
+            default: throw AppConfigurationError.invalidValues
+            }
         }
+        // 旧版个人配置没有 `format` 信封。这里只负责分流，字段校验仍由导入器完成。
+        guard isLegacyPersonalConfiguration(object) else { throw AppConfigurationError.invalidValues }
+        return .settings
+    }
+
+    private static func isLegacyPersonalConfiguration(_ object: [String: Any]) -> Bool {
+        guard let version = object["formatVersion"] as? Int, [1, 2].contains(version),
+              object["gainDB"] is NSNumber,
+              object["selectedAudioDeviceUID"] is String,
+              object["customMappingEnabled"] is Bool,
+              object["buttonBindings"] is [String: Any],
+              object["buttonShortcuts"] is [String: Any],
+              object["secondaryButtonBindings"] is [String: Any],
+              object["applicationLanguage"] is String,
+              object["showDockIcon"] is Bool
+        else { return false }
+        return true
     }
 }
 
