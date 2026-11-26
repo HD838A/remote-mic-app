@@ -41,7 +41,13 @@ enum EventTapPort {
     ///
     /// `port` 为 nil 时只摘除 source；`source` 为 nil 时只处理端口，用于 tap 创建
     /// 中途失败、端口已登记但尚未接入 RunLoop 的情形。
-    static func release(port: CFMachPort?, source: CFRunLoopSource?) {
+    /// - Returns: `true` when the tap RunLoop acknowledged the removal before the
+    ///   timeout. A `false` result means the port was invalidated from the caller
+    ///   thread while the tap thread may still be running a callback. Callers that
+    ///   pass a non-retained `userInfo` callback context must keep that context
+    ///   alive when this returns `false`.
+    @discardableResult
+    static func release(port: CFMachPort?, source: CFRunLoopSource?) -> Bool {
         // 这一步在任何线程上都安全，且立刻生效，先把投递停掉。
         if let port {
             CGEvent.tapEnable(tap: port, enable: false)
@@ -55,11 +61,12 @@ enum EventTapPort {
                 CFMachPortInvalidate(port)
             }
         }
-        guard !detached else { return }
+        guard !detached else { return true }
 
         // 兜底：tap 线程没有在预算内响应。端口必须 invalidate，否则会永久残留在
-        // WindowServer 的 tap 列表里（本类型开头描述的那条泄漏路径）。宁可承担一次
-        // 与回调并发的作废，也不要留下一个永不回收的端口。
+        // WindowServer 的 tap 列表里（本类型开头描述的那条泄漏路径）。此时可能仍有
+        // 回调在 tap 线程上运行；调用方必须继续持有 userInfo 对象，不能用一次
+        // 无保护的 release 造成回调访问已释放对象。
         AppLogger.shared.write(
             "EVENT TAP phase=timed_out action=release result=fallback reason=run_loop_timeout"
         )
@@ -69,5 +76,6 @@ enum EventTapPort {
         if let port {
             CFMachPortInvalidate(port)
         }
+        return false
     }
 }

@@ -61,6 +61,8 @@ final class KeyboardEventSuppressor {
     private static let knownNativeEvents = Set(RemoteButton.allCases.flatMap { $0.nativeEvents })
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
+    /// Keeps the callback's `userInfo` object alive for the tap lifetime.
+    private var tapOwner: Unmanaged<KeyboardEventSuppressor>?
     /// 最近 arm 过的事件（带过期时刻），仅用于诊断日志：只有与这些事件相关的
     /// 未命中才值得记录，避免被无关键盘输入淹没。
     private var recentArmed: [(event: RemoteNativeEvent, until: TimeInterval)] = []
@@ -103,7 +105,8 @@ final class KeyboardEventSuppressor {
             CGEventMask(1 << CGEventType.keyUp.rawValue) |
             CGEventMask(1 << CGEventType.flagsChanged.rawValue) |
             CGEventMask(1 << Self.systemDefinedEventTypeRawValue)
-        let context = Unmanaged.passUnretained(self).toOpaque()
+        let owner = Unmanaged.passRetained(self)
+        let context = owner.toOpaque()
         guard let eventTap = CGEvent.tapCreate(
             tap: .cgSessionEventTap,
             place: .headInsertEventTap,
@@ -112,6 +115,7 @@ final class KeyboardEventSuppressor {
             callback: keyboardEventSuppressorCallback,
             userInfo: context
         ) else {
+            owner.release()
             logger("HID FILTER phase=start_failed reason=tap_create_failed tap=session")
             return false
         }
@@ -122,7 +126,12 @@ final class KeyboardEventSuppressor {
         ) else {
             // tapCreate 成功即已在 WindowServer 侧登记端口；此处失败若不释放端口，
             // 该 tap 会残留到进程退出，必须与 stop() 走同一条清理路径。
-            EventTapPort.release(port: eventTap, source: nil)
+            let drained = EventTapPort.release(port: eventTap, source: nil)
+            if drained {
+                owner.release()
+            } else {
+                logger("HID FILTER phase=owner_retained action=start_cleanup result=fallback reason=tap_thread_unresponsive tap=session")
+            }
             logger("HID FILTER phase=start_failed reason=run_loop_source_failed tap=session")
             return false
         }
@@ -131,13 +140,19 @@ final class KeyboardEventSuppressor {
         guard EventTapPort.activate(port: eventTap, source: runLoopSource) else {
             // 端口已在 WindowServer 侧登记，但没能接入 tap 线程：按启动失败处理并
             // 走同一条清理路径。绝不能留下一个已 enable 却无人承接的 tap。
-            EventTapPort.release(port: eventTap, source: runLoopSource)
+            let drained = EventTapPort.release(port: eventTap, source: runLoopSource)
+            if drained {
+                owner.release()
+            } else {
+                logger("HID FILTER phase=owner_retained action=start_cleanup result=fallback reason=tap_thread_unresponsive tap=session")
+            }
             logger("HID FILTER phase=start_failed reason=tap_activation_failed tap=session")
             return false
         }
         lock.lock()
         self.eventTap = eventTap
         self.runLoopSource = runLoopSource
+        self.tapOwner = owner
         prearmEnabled = true
         lock.unlock()
         isRunning = true
@@ -152,8 +167,10 @@ final class KeyboardEventSuppressor {
         lock.lock()
         let port = eventTap
         let source = runLoopSource
+        let owner = tapOwner
         eventTap = nil
         runLoopSource = nil
+        tapOwner = nil
         prearmEnabled = false
         pendingEvents.removeAll()
         heldEventCounts.removeAll()
@@ -165,7 +182,14 @@ final class KeyboardEventSuppressor {
         passedNativeReleases.removeAll()
         recentArmed.removeAll()
         lock.unlock()
-        EventTapPort.release(port: port, source: source)
+        let drained = EventTapPort.release(port: port, source: source)
+        if drained {
+            owner?.release()
+        } else if owner != nil {
+            // The tap thread may still be in a callback. Keep the owner alive;
+            // the port is invalid, so this is a bounded leak instead of a crash.
+            logger("HID FILTER phase=stop_deferred result=owner_retained reason=tap_thread_unresponsive tap=session")
+        }
         isRunning = false
         if wasRunning { logger("HID FILTER phase=stopped result=inactive tap=session") }
     }
