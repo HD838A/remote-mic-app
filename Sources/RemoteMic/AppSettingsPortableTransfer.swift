@@ -73,6 +73,10 @@ extension AppSettings {
         case .openCustomApplication:
             guard let id = c.applicationProfileID, customApplicationProfile(id: id) != nil else { throw PortableTransferError.missingDependency("App 配置") }
             return .init(kind: .application, referenceID: id.uuidString)
+        case .mouseMoveUp, .mouseMoveDown, .mouseMoveLeft, .mouseMoveRight:
+            // 私有 Portable Transfer 尚未承载鼠标动作和距离参数。明确拒绝，
+            // 不得静默删除动作或改成默认距离。
+            throw PortableTransferError.invalid("鼠标动作暂不支持键位方案导出")
         default:
             guard PortableTransferCodec.hostActions.contains(c.action.rawValue) else { throw PortableTransferError.invalid(c.action.rawValue) }
             return .init(kind: .host, actionID: c.action.rawValue)

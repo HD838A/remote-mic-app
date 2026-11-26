@@ -129,6 +129,119 @@ struct RemoteButtonInteractionTests {
         #expect(repeatCount == countAfterCancellation)
     }
 
+    @Test func repeatSingleMouseMoveStartsOneMotionAndStopsAtRelease() {
+        let clock = InteractionClock()
+        let controller = RemoteButtonInteractionController(scheduler: clock)
+        var config = snapshot(.repeatSingle)
+        config.single = ConfiguredButtonAction(
+            action: .mouseMoveRight,
+            shortcut: nil,
+            mouseMoveDistance: 30
+        )
+        var beginCount = 0
+        var performCount = 0
+        var endReasons: [String] = []
+        let token = MouseMotionToken()
+        func handle(_ phase: RemoteButtonPhase) {
+            controller.handle(
+                phase,
+                button: .right,
+                snapshot: config,
+                valid: { true },
+                perform: { _, _ in performCount += 1; return true },
+                beginMotion: { button, action in
+                    #expect(button == .right)
+                    #expect(action.resolvedMouseMoveDistance == 30)
+                    beginCount += 1
+                    return token
+                },
+                endMotion: { endedToken, reason in
+                    #expect(endedToken == token)
+                    endReasons.append(reason)
+                }
+            )
+        }
+        handle(.press)
+        #expect(beginCount == 1)
+        #expect(performCount == 0)
+        clock.advance(600)
+        #expect(beginCount == 1)
+        #expect(performCount == 0)
+        handle(.release)
+        #expect(endReasons == ["released"])
+    }
+
+    @Test func repeatSingleMouseMoveWaitsForDoubleWindow() {
+        let clock = InteractionClock()
+        let controller = RemoteButtonInteractionController(scheduler: clock)
+        var config = snapshot(.repeatSingle, double: true, d: 200)
+        config.single = ConfiguredButtonAction(action: .mouseMoveUp, shortcut: nil)
+        var beginCount = 0
+        let token = MouseMotionToken()
+        controller.handle(.press, button: .right, snapshot: config, valid: { true },
+            perform: { _, _ in true },
+            beginMotion: { _, _ in beginCount += 1; return token },
+            endMotion: { _, _ in })
+        clock.advance(199)
+        #expect(beginCount == 0)
+        clock.advance(200)
+        #expect(beginCount == 1)
+        controller.handle(.release, button: .right, snapshot: config, valid: { true },
+            perform: { _, _ in true },
+            beginMotion: { _, _ in beginCount += 1; return token },
+            endMotion: { _, _ in })
+    }
+
+    @Test func repeatLongMouseMoveStartsAtLongThreshold() {
+        let clock = InteractionClock()
+        let controller = RemoteButtonInteractionController(scheduler: clock)
+        var config = snapshot(.repeatLong, long: true, l: 400)
+        config.long = ConfiguredButtonAction(action: .mouseMoveDown, shortcut: nil)
+        var beginCount = 0
+        var endReasons: [String] = []
+        let token = MouseMotionToken()
+        func handle(_ phase: RemoteButtonPhase) {
+            controller.handle(phase, button: .right, snapshot: config, valid: { true },
+                perform: { _, _ in true },
+                beginMotion: { _, _ in beginCount += 1; return token },
+                endMotion: { _, reason in endReasons.append(reason) })
+        }
+        handle(.press)
+        clock.advance(399)
+        #expect(beginCount == 0)
+        clock.advance(400)
+        #expect(beginCount == 1)
+        handle(.release)
+        #expect(endReasons == ["released"])
+    }
+
+    @Test func onceMouseMoveUsesOneShotAction() {
+        let clock = InteractionClock()
+        let controller = RemoteButtonInteractionController(scheduler: clock)
+        var config = snapshot(.once)
+        config.single = ConfiguredButtonAction(action: .mouseMoveLeft, shortcut: nil)
+        var performCount = 0
+        var beginCount = 0
+        controller.handle(.press, button: .right, snapshot: config, valid: { true },
+            perform: { _, _ in performCount += 1; return true },
+            beginMotion: { _, _ in beginCount += 1; return MouseMotionToken() })
+        #expect(performCount == 1)
+        #expect(beginCount == 0)
+    }
+
+    @Test func motionStartFailureCancelsInteraction() {
+        let clock = InteractionClock()
+        let controller = RemoteButtonInteractionController(scheduler: clock)
+        var config = snapshot(.repeatSingle)
+        config.single = ConfiguredButtonAction(action: .mouseMoveRight, shortcut: nil)
+        var performCount = 0
+        controller.handle(.press, button: .right, snapshot: config, valid: { true },
+            perform: { _, _ in performCount += 1; return true },
+            beginMotion: { _, _ in nil })
+        #expect(performCount == 0)
+        #expect(!controller.isTracking(.right))
+    }
+
     @Test func invalidModeAndConflictingGesturesNeverFallBack() {
         let clock = InteractionClock()
         let controller = RemoteButtonInteractionController(scheduler: clock)

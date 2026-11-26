@@ -446,6 +446,10 @@ final class HIDRemoteMonitor {
     var onNativeMappingVerificationFailed: (() -> Void)?
     var onInputReset: ((UUID?) -> Void)?
     var onInternalAction: ((UUID?, ButtonAction) -> Void)?
+    /// 鼠标连续移动的开始/结束：由宿主共享同一个引擎，覆盖所有输入来源。
+    var beginMouseMotion: ((RemoteButton, ConfiguredButtonAction) -> MouseMotionToken?)?
+    var endMouseMotion: ((MouseMotionToken, String) -> Void)?
+    var onMouseMotionStop: ((String) -> Void)?
     /// A voice-key down edge while the selected remote's audio link may be down.
     /// The callback only observes intent; the HID event itself is never consumed.
     var onVoiceUsageDown: ((UUID?) -> Void)?
@@ -1789,6 +1793,10 @@ final class HIDRemoteMonitor {
                     self?.holdBeginPerformer(configured) ?? false
                 }, endHold: { [weak self] reason in
                     self?.holdEndPerformer(reason)
+                }, beginMotion: { [weak self] button, configured in
+                    self?.beginMouseMotion?(button, configured)
+                }, endMotion: { [weak self] token, reason in
+                    self?.endMouseMotion?(token, reason)
                 })
         }
 
@@ -2328,6 +2336,7 @@ final class HIDRemoteMonitor {
     ) -> Bool {
         let wasActive = appSwitcherSession.isActive
         if !wasActive {
+            onMouseMotionStop?("app_switcher")
             appSwitcherOriginBundleIdentifier = frontmostBundleIdentifier()
             // 记录打开切换器之前 Dock 的窗口数：切换器开着时 Dock 会多一个窗口。
             appSwitcherDockWindowBaseline = appSwitcherDockWindowCount()
@@ -2968,6 +2977,7 @@ final class HIDRemoteMonitor {
     }
 
     private func resetInputState(preservingPhysicalEdges: Bool = false) {
+        onMouseMotionStop?("input_reset")
         onInputReset?(profileID)
         if appSwitcherSession.isActive {
             _ = appSwitcherSession.cancel()

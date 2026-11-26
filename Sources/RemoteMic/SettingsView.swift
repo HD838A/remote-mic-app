@@ -444,6 +444,7 @@ private enum MappingActionFilter: String, CaseIterable, Identifiable {
     case basicKeys
     case customShortcuts
     case systemAndMedia
+    case mouse
     case custom
     case combinations
     case commonPhrases
@@ -459,6 +460,7 @@ private enum MappingActionFilter: String, CaseIterable, Identifiable {
         case .basicKeys: self = .basicKeys
         case .customShortcuts: self = .customShortcuts
         case .systemAndMedia: self = .systemAndMedia
+        case .mouse: self = .mouse
         case .custom: self = .custom
         case .combinations: self = .combinations
         case .commonPhrases: self = .commonPhrases
@@ -469,7 +471,7 @@ private enum MappingActionFilter: String, CaseIterable, Identifiable {
     /// 公开构建没有注入 Macro Package：此时不显示「组合动作」胶囊，
     /// 而不是让用户点进一个空分类。
     static func visibleCases(macroFeatureVisible: Bool) -> [Self] {
-        var cases: [Self] = [.all, .basicKeys, .customShortcuts, .systemAndMedia, .custom]
+        var cases: [Self] = [.all, .basicKeys, .customShortcuts, .systemAndMedia, .mouse, .custom]
         if macroFeatureVisible {
             cases.append(.combinations)
         }
@@ -485,6 +487,7 @@ private enum MappingActionFilter: String, CaseIterable, Identifiable {
         case .basicKeys: return "button_mapping.action_filter.basic_keys"
         case .customShortcuts: return "button_mapping.action_filter.custom_shortcuts"
         case .systemAndMedia: return "button_mapping.action_filter.system_and_media"
+        case .mouse: return "button_mapping.action_filter.mouse"
         case .custom: return "button_mapping.action_filter.custom"
         case .combinations: return "button_mapping.action_filter.combinations"
         case .commonPhrases: return "button_mapping.action_filter.common_phrases"
@@ -507,6 +510,8 @@ private enum MappingActionFilter: String, CaseIterable, Identifiable {
             return category == .customShortcuts
         case .systemAndMedia:
             return category == .systemAndMedia
+        case .mouse:
+            return category == .mouse
         case .custom:
             return category == .custom
         case .combinations:
@@ -515,6 +520,73 @@ private enum MappingActionFilter: String, CaseIterable, Identifiable {
             return category == .commonPhrases
         case .applications:
             return category == .applications
+        }
+    }
+}
+
+private struct MouseMoveDistanceEditor: View {
+    @EnvironmentObject private var localization: LocalizationStore
+    let distance: Int
+    let onSave: (Int) -> Void
+
+    @State private var draft: String
+    @State private var errorKey: String?
+    @FocusState private var focused: Bool
+
+    init(distance: Int, onSave: @escaping (Int) -> Void) {
+        self.distance = distance
+        self.onSave = onSave
+        _draft = State(initialValue: String(distance))
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Text(localization.text("button_mapping.mouse_distance.label"))
+                    .font(.system(size: 12))
+                TextField("", text: $draft)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.system(size: 12))
+                    .frame(width: 64)
+                    .focused($focused)
+                    .onSubmit(save)
+                    .accessibilityLabel(localization.text("button_mapping.mouse_distance.label"))
+                Text(localization.text("button_mapping.mouse_distance.unit"))
+                    .font(.system(size: 12))
+            }
+            if let errorKey {
+                Text(localization.text(errorKey))
+                    .font(.system(size: 12))
+                    .foregroundStyle(.red)
+            } else {
+                Text(localization.text("button_mapping.mouse_distance.hint"))
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .onChange(of: focused) { isFocused in
+            if !isFocused { save() }
+        }
+        .onChange(of: distance) { value in
+            guard !focused else { return }
+            draft = String(value)
+            errorKey = nil
+        }
+    }
+
+    private func save() {
+        let trimmed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let value = Int(trimmed),
+              ConfiguredButtonAction.mouseMoveDistanceRange.contains(value)
+        else {
+            errorKey = "button_mapping.mouse_distance.error"
+            return
+        }
+        errorKey = nil
+        if value != distance {
+            onSave(value)
+        } else {
+            draft = String(distance)
         }
     }
 }
@@ -4300,6 +4372,19 @@ struct SettingsView: View {
                 }
             }
 
+            // 鼠标移动的每次距离属于当前绑定，放在动作网格下方就地编辑。
+            if configured.action.isMouseMove,
+               mappingActionFilter == .all || mappingActionFilter == .mouse {
+                MouseMoveDistanceEditor(
+                    distance: configured.resolvedMouseMoveDistance,
+                    onSave: { distance in
+                        var updated = configured
+                        updated.mouseMoveDistance = distance
+                        saveMappingBinding(updated, button: button, trigger: trigger)
+                    }
+                )
+            }
+
             // 「目标 APP」属于「打开 App」分类：切到其他胶囊时必须一起隐藏，
             // 不能只凭当前动作是「打开自定义 APP」就常驻在页面上。
             if configured.action == .openCustomApplication,
@@ -4746,8 +4831,14 @@ struct SettingsView: View {
     private func mappingHoldOptionDescription(_ mode: RemoteButtonHoldMode, button: RemoteButton) -> String {
         switch mode {
         case .repeatSingle:
+            if mappingConfiguration(for: button, trigger: .singleClick).isMouseMove {
+                return localization.text("button_mapping.hold.repeat_single.mouse_move_description")
+            }
             return localization.text("button_mapping.hold.repeat_single.description")
         case .repeatLong:
+            if mappingConfiguration(for: button, trigger: .longPress).isMouseMove {
+                return localization.text("button_mapping.hold.repeat_long.mouse_move_description")
+            }
             return localization.text("button_mapping.hold.repeat_long.description")
         case .singleHold:
             return String(
@@ -6785,7 +6876,8 @@ struct SettingsView: View {
             current: .disabled,
             experimentalContinuousRecordingEnabled: settings.experimentalContinuousRecordingEnabled
         ).filter {
-            $0 != .disabled && $0 != .customShortcut && $0 != .openCustomApplication && $0 != .combinationAction
+            $0 != .disabled && $0 != .customShortcut && $0 != .openCustomApplication &&
+                $0 != .combinationAction && !$0.isMouseMove
         }
         return ButtonActionCategory.allCases.compactMap { category in
             let actions: [ButtonProfileHostAction] = availableActions

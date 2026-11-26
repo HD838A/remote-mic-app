@@ -369,6 +369,26 @@ struct RemoteButtonsTests {
         #expect(Set(ButtonAction.allCases.map(\.category)) == Set(ButtonActionCategory.allCases))
     }
 
+    @Test func mouseMoveActionsHaveTheirOwnCategoryAndRepeat() throws {
+        let actions: [ButtonAction] = [
+            .mouseMoveUp, .mouseMoveDown, .mouseMoveLeft, .mouseMoveRight,
+        ]
+        #expect(actions.allSatisfy { $0.category == .mouse })
+        #expect(actions.allSatisfy { $0.allowsRepeat })
+        #expect(actions.allSatisfy { $0.mouseMoveDirection != nil })
+        #expect(ButtonAction.arrowUp.mouseMoveDirection == nil)
+
+        let configured = ConfiguredButtonAction(
+            action: .mouseMoveRight,
+            shortcut: nil,
+            mouseMoveDistance: 33
+        )
+        let data = try JSONEncoder().encode(configured)
+        let decoded = try JSONDecoder().decode(ConfiguredButtonAction.self, from: data)
+        #expect(decoded == configured)
+        #expect(decoded.resolvedMouseMoveDistance == 33)
+    }
+
     @Test func customShortcutsRepeatOnlyForUnmodifiedBackspaceAndDirections() {
         #expect(!ButtonAction.customShortcut.allowsRepeat)
         #expect(!ButtonAction.commandReturn.allowsRepeat)
@@ -3416,6 +3436,34 @@ struct RemoteButtonsTests {
             }
         ))
         #expect(!didPost)
+    }
+
+    @Test func mouseMoveActionSendsConfiguredDistance() {
+        var moves: [(MouseMoveDirection, Int)] = []
+        let handled = KeyboardInjector.send(
+            .mouseMoveRight,
+            mouseMoveDistance: 37,
+            accessibilityTrusted: { true },
+            mouseMovePoster: { direction, distance in
+                moves.append((direction, distance))
+                return true
+            }
+        )
+        #expect(handled)
+        #expect(moves.count == 1)
+        #expect(moves.first?.0 == .right)
+        #expect(moves.first?.1 == 37)
+
+        var defaultDistance = 0
+        _ = KeyboardInjector.send(
+            .mouseMoveUp,
+            accessibilityTrusted: { true },
+            mouseMovePoster: { _, distance in
+                defaultDistance = distance
+                return true
+            }
+        )
+        #expect(defaultDistance == ConfiguredButtonAction.defaultMouseMoveDistance)
     }
 
     @Test func unconfiguredCustomShortcutDoesNotReportPermissionFailure() {

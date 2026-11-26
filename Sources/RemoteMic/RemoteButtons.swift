@@ -628,20 +628,39 @@ struct ConfiguredButtonAction: Codable, Equatable {
     var shortcut: CustomKeyboardShortcut?
     var applicationProfileID: UUID?
     var macroID: String?
+    /// 鼠标移动动作每次轻推的距离（点）。其他动作忽略。
+    /// 旧配置缺字段时为 nil，运行时按 20 点处理。
+    var mouseMoveDistance: Int?
+
+    static let defaultMouseMoveDistance = 20
+    static let mouseMoveDistanceRange = 1...100
 
     init(
         action: ButtonAction,
         shortcut: CustomKeyboardShortcut?,
         applicationProfileID: UUID? = nil,
-        macroID: String? = nil
+        macroID: String? = nil,
+        mouseMoveDistance: Int? = nil
     ) {
         self.action = action
         self.shortcut = shortcut
         self.applicationProfileID = applicationProfileID
         self.macroID = macroID
+        self.mouseMoveDistance = mouseMoveDistance
     }
 
     static let disabled = ConfiguredButtonAction(action: .disabled, shortcut: nil)
+
+    var isMouseMove: Bool {
+        action.isMouseMove
+    }
+
+    var resolvedMouseMoveDistance: Int {
+        min(
+            max(mouseMoveDistance ?? Self.defaultMouseMoveDistance, Self.mouseMoveDistanceRange.lowerBound),
+            Self.mouseMoveDistanceRange.upperBound
+        )
+    }
 
     /// A custom shortcut without recorded keys cannot run. Reading normalises it to
     /// "not set" so an unrecorded shortcut is never stored, exported or shown as a binding.
@@ -899,6 +918,7 @@ enum ButtonActionCategory: String, CaseIterable, Identifiable {
     case basicKeys
     case customShortcuts
     case systemAndMedia
+    case mouse
     case custom
     /// 「组合动作」和「常用语」一样是独立的动作分类：它的候选来自宏库卡片，
     /// 不是动作网格里的一项，因此不参与 `ButtonAction` 的逐个列举。
@@ -913,12 +933,23 @@ enum ButtonActionCategory: String, CaseIterable, Identifiable {
         case .basicKeys: return "button_mapping.action_group.basic_keys"
         case .customShortcuts: return "action.custom_shortcut"
         case .systemAndMedia: return "button_mapping.action_group.system_and_media"
+        case .mouse: return "button_mapping.action_group.mouse"
         case .custom: return "button_mapping.action_group.custom"
         case .combinations: return "action.combination_action"
         case .commonPhrases: return "common_phrases.title"
         case .applications: return "button_mapping.action_group.applications"
         }
     }
+}
+
+/// 鼠标移动动作的方向。与 `ButtonAction` 分开，方便移动引擎和测试只依赖方向。
+enum MouseMoveDirection: String, CaseIterable, Codable, Identifiable {
+    case up
+    case down
+    case left
+    case right
+
+    var id: String { rawValue }
 }
 
 enum ButtonAction: String, CaseIterable, Codable, Identifiable {
@@ -963,6 +994,12 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
     case scrollToTop
     case scrollToBottom
     case deleteBackward
+    /// 把光标当作鼠标移动。距离由 `ConfiguredButtonAction.mouseMoveDistance`
+    /// 提供；按住连发时由 `MousePointerMotionController` 做速度积分。
+    case mouseMoveUp
+    case mouseMoveDown
+    case mouseMoveLeft
+    case mouseMoveRight
     case showDesktop
     case contextMenu
     case appSwitcher
@@ -1046,6 +1083,10 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
         case .scrollToTop: return localization.text("action.scroll_to_top")
         case .scrollToBottom: return localization.text("action.scroll_to_bottom")
         case .deleteBackward: return localization.text("action.delete_backspace")
+        case .mouseMoveUp: return localization.text("action.mouse_move_up")
+        case .mouseMoveDown: return localization.text("action.mouse_move_down")
+        case .mouseMoveLeft: return localization.text("action.mouse_move_left")
+        case .mouseMoveRight: return localization.text("action.mouse_move_right")
         case .showDesktop: return localization.text("action.show_desktop")
         case .contextMenu: return localization.text("action.context_menu")
         case .appSwitcher: return localization.text("action.app_switcher")
@@ -1244,6 +1285,8 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
              .volumeUp, .volumeDown, .volumeMute,
              .playPause, .previousCommandLeft, .nextCommandRight, .toggleLongRecording:
             return .systemAndMedia
+        case .mouseMoveUp, .mouseMoveDown, .mouseMoveLeft, .mouseMoveRight:
+            return .mouse
         case .customShortcut:
             return .customShortcuts
         case .focusInput:
@@ -1314,6 +1357,20 @@ enum ButtonAction: String, CaseIterable, Codable, Identifiable {
 
     var isDirectionalOrDeleteBackward: Bool {
         [.arrowUp, .arrowDown, .arrowLeft, .arrowRight, .deleteBackward].contains(self)
+    }
+
+    var isMouseMove: Bool {
+        mouseMoveDirection != nil
+    }
+
+    var mouseMoveDirection: MouseMoveDirection? {
+        switch self {
+        case .mouseMoveUp: return .up
+        case .mouseMoveDown: return .down
+        case .mouseMoveLeft: return .left
+        case .mouseMoveRight: return .right
+        default: return nil
+        }
     }
 
     var isAppInternal: Bool {

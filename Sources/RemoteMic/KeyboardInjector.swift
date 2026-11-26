@@ -22,6 +22,7 @@ enum KeyboardInjector {
     typealias KeyPoster = (CGKeyCode, CGEventFlags) -> Void
     typealias KeyStatePoster = (CGKeyCode, Bool, CGEventFlags) -> Bool
     typealias ScrollPoster = (Int32) -> Void
+    typealias MouseMovePoster = (MouseMoveDirection, Int) -> Bool
     typealias SystemKeyPoster = (Int32) -> Void
 
     /// Dock 进程当前拥有的窗口数量。
@@ -573,6 +574,7 @@ enum KeyboardInjector {
     static func send(
         _ action: ButtonAction,
         shortcut: CustomKeyboardShortcut? = nil,
+        mouseMoveDistance: Int? = nil,
         applicationProfile: CustomApplicationProfile? = nil,
         focusCustomApplication: Bool = true,
         applicationURL: (String) -> URL? = {
@@ -594,6 +596,7 @@ enum KeyboardInjector {
         keyPoster: KeyPoster = { postKey(code: $0, flags: $1) },
         keyStatePoster: KeyStatePoster = postKeyState,
         scrollPoster: ScrollPoster = { postScrollWheel(lines: $0) },
+        mouseMovePoster: MouseMovePoster = { postMouseMove(direction: $0, distance: $1) },
         scrollPagePoster: (ScrollPageDirection, ScrollPageStep) -> ScrollPageOutcome = defaultScrollPagePoster,
         scrollEdgePoster: (ScrollEdge) -> ScrollPageOutcome = defaultScrollEdgePoster,
         systemKeyPoster: SystemKeyPoster = postSystemKey,
@@ -747,6 +750,14 @@ enum KeyboardInjector {
             keyPoster(123, [])
         case .arrowRight:
             keyPoster(124, [])
+        case .mouseMoveUp:
+            return finish(mouseMovePoster(.up, mouseMoveDistance ?? ConfiguredButtonAction.defaultMouseMoveDistance))
+        case .mouseMoveDown:
+            return finish(mouseMovePoster(.down, mouseMoveDistance ?? ConfiguredButtonAction.defaultMouseMoveDistance))
+        case .mouseMoveLeft:
+            return finish(mouseMovePoster(.left, mouseMoveDistance ?? ConfiguredButtonAction.defaultMouseMoveDistance))
+        case .mouseMoveRight:
+            return finish(mouseMovePoster(.right, mouseMoveDistance ?? ConfiguredButtonAction.defaultMouseMoveDistance))
         case .scrollUp:
             scrollPoster(scrollLineCount)
         case .scrollDown:
@@ -2571,6 +2582,54 @@ enum KeyboardInjector {
             _ = keyStatePoster(modifier.keyCode, false, active)
         }
         return true
+    }
+
+    static func postMouseMoved(to point: CGPoint) -> Bool {
+        guard isAccessibilityTrusted,
+              let source = CGEventSource(stateID: .hidSystemState),
+              let event = CGEvent(
+                  mouseEventSource: source,
+                  mouseType: .mouseMoved,
+                  mouseCursorPosition: point,
+                  mouseButton: .left
+              )
+        else { return false }
+        event.setIntegerValueField(.eventSourceUserData, value: syntheticEventMarker)
+        event.post(tap: .cghidEventTap)
+        return true
+    }
+
+    private static func postMouseMove(direction: MouseMoveDirection, distance: Int) -> Bool {
+        let started = ProcessInfo.processInfo.systemUptime
+        guard let origin = CGEvent(source: nil)?.location else {
+            AppLogger.shared.write(
+                "MOUSE MOVE phase=completed result=failed reason=cursor_unavailable " +
+                    "direction=\(direction.rawValue) target_result=unknown"
+            )
+            return false
+        }
+        let amount = min(
+            max(distance, ConfiguredButtonAction.mouseMoveDistanceRange.lowerBound),
+            ConfiguredButtonAction.mouseMoveDistanceRange.upperBound
+        )
+        let delta: CGPoint = switch direction {
+        case .up: CGPoint(x: 0, y: -amount)
+        case .down: CGPoint(x: 0, y: amount)
+        case .left: CGPoint(x: -amount, y: 0)
+        case .right: CGPoint(x: amount, y: 0)
+        }
+        let target = MousePointerMotionEngine.clamped(
+            CGPoint(x: origin.x + delta.x, y: origin.y + delta.y),
+            to: MousePointerMotionEngine.activeDisplayBounds()
+        )
+        let submitted = postMouseMoved(to: target)
+        let elapsed = Int((ProcessInfo.processInfo.systemUptime - started) * 1_000)
+        AppLogger.shared.write(
+            "MOUSE MOVE phase=completed result=\(submitted ? "submitted" : "failed") " +
+                "reason=\(submitted ? "none" : "event_create_failed") direction=\(direction.rawValue) " +
+                "distance=\(amount) elapsed_ms=\(elapsed) target_result=unknown"
+        )
+        return submitted
     }
 
     private static func postKey(code: CGKeyCode, flags: CGEventFlags = []) {

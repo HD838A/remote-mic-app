@@ -1698,7 +1698,10 @@ struct SettingsPageRegressionTests {
         #expect(source.contains("ButtonActionCategory.allCases"))
         #expect(source.contains("MappingActionFilter.visibleCases"))
         // 自定义按键紧接基础按键，按键速度排在最后。
-        #expect(source.contains("[.all, .basicKeys, .customShortcuts, .systemAndMedia, .custom]"))
+        #expect(source.contains("[.all, .basicKeys, .customShortcuts, .systemAndMedia, .mouse, .custom]"))
+        #expect(source.contains("MouseMoveDistanceEditor"))
+        #expect(source.contains("button_mapping.mouse_distance.label"))
+        #expect(source.contains("button_mapping.action_filter.mouse"))
         #expect(source.contains("cases.append(.combinations)"))
         #expect(source.contains("mappingActionFilter = .customShortcuts"))
         #expect(source.contains("if category == .customShortcuts,"))

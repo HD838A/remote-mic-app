@@ -201,6 +201,10 @@
 "action.arrow_right" = "→";
 "action.scroll_up" = "Scroll Up";
 "action.scroll_down" = "Scroll Down";
+"action.mouse_move_up" = "Mouse Up";
+"action.mouse_move_down" = "Mouse Down";
+"action.mouse_move_left" = "Mouse Left";
+"action.mouse_move_right" = "Mouse Right";
 "action.page_up" = "Page Up";
 "action.page_down" = "Page Down";
 "action.page_up_half" = "Half Page Up";
@@ -274,6 +278,7 @@
 "button_mapping.action_filter.basic_keys" = "Keys";
 "button_mapping.action_filter.custom_shortcuts" = "Custom Keys";
 "button_mapping.action_filter.system_and_media" = "System";
+"button_mapping.action_filter.mouse" = "Mouse";
 "button_mapping.action_filter.custom" = "Input";
 "button_mapping.action_filter.combinations" = "Macro";
 "button_mapping.action_filter.common_phrases" = "Phrases";
@@ -282,6 +287,13 @@
 "button_mapping.action_filter.button_speed" = "Speed";
 "button_mapping.action_group.basic_keys" = "Basic Keys";
 "button_mapping.action_group.system_and_media" = "System & Media";
+"button_mapping.action_group.mouse" = "Mouse Actions";
+"button_mapping.mouse_distance.label" = "Move by";
+"button_mapping.mouse_distance.unit" = "pt";
+"button_mapping.mouse_distance.hint" = "1–100, default 20";
+"button_mapping.mouse_distance.error" = "Enter a whole number from 1 to 100";
+"button_mapping.hold.repeat_single.mouse_move_description" = "Hold to move the pointer continuously; release to stop.";
+"button_mapping.hold.repeat_long.mouse_move_description" = "After the long-press time, move the pointer continuously until release.";
 "button_mapping.action_group.custom" = "Input Focus";
 "button_mapping.action_group.applications" = "Open an App";
 "button_mapping.action.disable_switch" = "Disable This Action";

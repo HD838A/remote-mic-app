@@ -35,7 +35,7 @@ struct BridgeAppModelActionRegressionTests {
         var sent: [(ButtonAction, UUID?, Bool)] = []
         let model = BridgeAppModel(
             settings: settings,
-            externalActionSender: { action, _, applicationProfile, focusAllowed, completion in
+            externalActionSender: { action, _, _, applicationProfile, focusAllowed, completion in
                 sent.append((action, applicationProfile?.id, focusAllowed))
                 completion(true)
                 return true
@@ -71,7 +71,7 @@ struct BridgeAppModelActionRegressionTests {
         var sentCount = 0
         let model = BridgeAppModel(
             settings: settings,
-            externalActionSender: { _, _, _, _, completion in
+            externalActionSender: { _, _, _, _, _, completion in
                 sentCount += 1
                 completion(true)
                 return true
@@ -102,7 +102,7 @@ struct BridgeAppModelActionRegressionTests {
         settings.addCustomApplicationProfile(profile)
         let model = BridgeAppModel(
             settings: settings,
-            externalActionSender: { _, _, _, _, completion in
+            externalActionSender: { _, _, _, _, _, completion in
                 completion(false)
                 return false
             },
