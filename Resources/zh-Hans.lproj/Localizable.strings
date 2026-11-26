@@ -789,6 +789,10 @@
 "configuration.import.voice_key_busy" = "导入失败：语音键正在使用或无法安全释放，请结束语音输入后重试";
 "configuration.import.invalid_file" = "导入失败：配置文件无效";
 "configuration.import.feature_unavailable" = "导入失败：此版本不支持键位方案文件";
+"configuration.import.drop_title" = "松开以导入配置";
+"configuration.import.drop_detail" = "支持 .sayall 和 .json 配置文件";
+"configuration.import.drop_multiple" = "导入失败：一次只能导入一个配置文件";
+"configuration.import.drop_unsupported" = "导入失败：请拖入 .sayall 或 .json 配置文件";
 "onboarding.phase.prepare" = "准备";
 "onboarding.phase.setup" = "设置";
 "onboarding.phase.try_it" = "试一下";

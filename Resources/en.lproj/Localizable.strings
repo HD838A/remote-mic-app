@@ -790,6 +790,10 @@
 "configuration.import.voice_key_busy" = "Import failed: the voice button is active or could not be released safely. End voice input and try again.";
 "configuration.import.invalid_file" = "Import failed: the configuration file is invalid";
 "configuration.import.feature_unavailable" = "Import failed: this version does not support button profile files";
+"configuration.import.drop_title" = "Release to import configuration";
+"configuration.import.drop_detail" = "Supports .sayall and .json configuration files";
+"configuration.import.drop_multiple" = "Import failed: import one configuration file at a time";
+"configuration.import.drop_unsupported" = "Import failed: drop a .sayall or .json configuration file";
 "onboarding.phase.prepare" = "Prepare";
 "onboarding.phase.setup" = "Set Up";
 "onboarding.phase.try_it" = "Try It";

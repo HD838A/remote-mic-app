@@ -98,6 +98,23 @@ struct CompleteConfigurationBackupTests {
         #expect(try ConfigurationImportDestination.detect(document(MacConfigurationBackup.format, "personalBackup")) == .settings)
         #expect(throws: (any Error).self) { try ConfigurationImportDestination.detect(document("unknown", "buttonProfile")) }
         #expect(throws: (any Error).self) { try ConfigurationImportDestination.detect(Data("broken".utf8)) }
+
+        var legacy: [String: Any] = [
+            "formatVersion": 1, "gainDB": 7, "selectedAudioDeviceUID": "synthetic",
+            "customMappingEnabled": true, "buttonBindings": [String: Any](),
+            "buttonShortcuts": [String: Any](), "secondaryButtonBindings": [String: Any](),
+            "applicationLanguage": "system", "showDockIcon": true,
+        ]
+        #expect(try ConfigurationImportDestination.detect(JSONSerialization.data(withJSONObject: legacy)) == .settings)
+        legacy["formatVersion"] = 3
+        #expect(throws: (any Error).self) {
+            try ConfigurationImportDestination.detect(JSONSerialization.data(withJSONObject: legacy))
+        }
+        legacy["formatVersion"] = 1
+        legacy.removeValue(forKey: "buttonBindings")
+        #expect(throws: (any Error).self) {
+            try ConfigurationImportDestination.detect(JSONSerialization.data(withJSONObject: legacy))
+        }
     }
 
     @Test func regularPortableHostImportPersistsNewMappingsInsteadOfOldDeviceSnapshot() throws {
