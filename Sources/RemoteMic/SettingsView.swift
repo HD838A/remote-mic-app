@@ -4068,7 +4068,8 @@ struct SettingsView: View {
             voiceRecoveryTitle: canRecoverVoice ? localization.text("remote.card.recover_voice") : nil,
             voiceRecoveryHelp: canRecoverVoice ? localization.text("remote.card.recover_voice.help") : nil,
             connectionTitle: history ? localization.text(recovering ? "connection.history.cancel" : "connection.history.connect") : nil,
-            deleteTitle: history ? localization.text("connection.history.delete") : nil,
+            deleteTitle: history && !model.isRemoteHIDReady(profile.id)
+                ? localization.text("connection.history.delete") : nil,
             actionsDisabled: model.isStreaming || model.activePhysicalVoiceControlSource == .siriRemote,
             voiceRecoveryDisabled: model.isStreaming
                 || model.activePhysicalVoiceControlSource == .siriRemote

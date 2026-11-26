@@ -226,6 +226,26 @@ struct RemoteProfilePersistenceTests {
         #expect(settings.selectedRemoteProfileID == nil)
     }
 
+    @MainActor
+    @Test func hidReadyProfileCannotBeDeleted() throws {
+        let scope = try Self.scopedSettings("delete-hid-ready")
+        defer { scope.tearDown() }
+        let settings = scope.settings
+        let profileID = settings.registerHIDRemote(fingerprint: "delete-hid-ready")
+        settings.updateRemoteProfileModel(profileID, model: .rc003)
+        settings.selectRemoteProfile(profileID)
+        let model = BridgeAppModel(settings: settings)
+        model.recordHIDButtonStatus(
+            LocalizedMessage("button_mapping.status.connected"),
+            profileID: profileID
+        )
+
+        model.deleteRemoteProfile(profileID)
+
+        #expect(settings.remoteDeviceProfiles.map(\.id) == [profileID])
+        #expect(settings.selectedRemoteProfileID == profileID)
+    }
+
     @Test func deletingNonSelectedProfileDoesNotCancelSelectedInteraction() throws {
         let scope = try Self.scopedSettings("delete-unselected")
         defer { scope.tearDown() }
@@ -249,6 +269,48 @@ struct RemoteProfilePersistenceTests {
         #expect(interactionChanges.isEmpty)
         #expect(settings.selectedRemoteProfileID == selected)
         #expect(!settings.unifiedBaseBindings.contains { $0.remoteProfileID == removed })
+    }
+
+    @Test func deletedProfileIsNotRestoredFromRecoverySnapshots() throws {
+        let scope = try Self.scopedSettings("delete-recovery-snapshot")
+        defer { scope.tearDown() }
+        let settings = scope.settings
+        let removed = settings.registerHIDRemote(fingerprint: "delete-snapshot-hid")
+        settings.updateRemoteProfileModel(removed, model: .rc003)
+        settings.selectRemoteProfile(removed)
+        let shortcut = CustomKeyboardShortcut(
+            keyCode: 40,
+            modifierFlags: [.command],
+            keyLabel: "K"
+        )
+        settings.setAction(.customShortcut, for: .menu)
+        settings.setShortcut(shortcut, for: .menu)
+        let removedProfile = try #require(
+            settings.remoteDeviceProfiles.first(where: { $0.id == removed })
+        )
+        let sameHardwareDuplicate = RemoteDeviceProfile(
+            model: .rc003,
+            hidFingerprint: "delete-snapshot-hid",
+            mappings: removedProfile.mappings
+        )
+        scope.defaults.set(
+            try JSONEncoder().encode([removedProfile, sameHardwareDuplicate]),
+            forKey: "remoteDeviceProfilesLatestMergeBackup"
+        )
+
+        #expect(settings.removeRemoteProfile(removed))
+
+        let replacement = settings.registerHIDRemote(fingerprint: "delete-snapshot-hid")
+        settings.updateRemoteProfileModel(replacement, model: .rc003)
+        settings.selectRemoteProfile(replacement)
+        _ = settings.recoverRemoteProfileDataIfNeeded()
+
+        let replacementProfile = try #require(
+            settings.remoteDeviceProfiles.first(where: { $0.id == replacement })
+        )
+        #expect(replacementProfile.mappings.parsedButtonShortcuts[.menu] == nil)
+        #expect(replacementProfile.mappings.parsedButtonBindings[.menu]
+            == AppSettings.defaultBindings[.menu])
     }
 
     #if canImport(SayAllButtonProfiles) && SAYALL_UNIFIED_BUTTON_CONFIGURATION

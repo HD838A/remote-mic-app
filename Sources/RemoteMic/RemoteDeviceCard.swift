@@ -260,7 +260,7 @@ struct RemoteDeviceCard: View {
                         .foregroundStyle(.red)
                         .fixedSize()
                         .help(deleteTitle)
-                        .accessibilityLabel(Text("\(deleteTitle), \(modelName)"))
+                        .accessibilityLabel(Text(verbatim: "\(deleteTitle), \(modelName)"))
                         .accessibilityIdentifier("remote-card-delete")
                 }
             }

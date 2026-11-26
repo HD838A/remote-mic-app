@@ -1974,6 +1974,7 @@ final class AppSettings: ObservableObject {
         unifiedBaseBindings.removeAll { $0.remoteProfileID == profileID }
         isSuppressingInteractionModeChange = false
         remoteDeviceProfiles.remove(at: index)
+        purgeRemoteProfileFromRecoverySnapshots(removed)
 
         if wasSelected {
             if let validReplacement {
@@ -2008,6 +2009,61 @@ final class AppSettings: ObservableObject {
         buttonRapidPressEnabled = [:]
         interactionSettings = RemoteButtonInteractionSettings()
         isLoadingRemoteProfile = false
+    }
+
+    /// 删除是显式遗忘：恢复快照里也不能留下这台设备，否则同一硬件重新接入时，
+    /// 快捷键恢复会把已删除设备的数据写进新档案。快照记录可能沿用旧 UUID，
+    /// 所以按硬件身份判断；如果仍有存活档案持有同一身份，则保留快照供其恢复。
+    private func purgeRemoteProfileFromRecoverySnapshots(_ removed: RemoteDeviceProfile) {
+        let removedKeys = Self.recoveryIdentityKeys(for: removed)
+        let activeKeys = remoteDeviceProfiles.reduce(into: Set<String>()) { keys, profile in
+            keys.formUnion(Self.recoveryIdentityKeys(for: profile))
+        }
+        func isDeletedRecord(_ candidate: RemoteDeviceProfile) -> Bool {
+            if candidate.id == removed.id { return true }
+            let keys = Self.recoveryIdentityKeys(for: candidate)
+            return !keys.isDisjoint(with: removedKeys) && keys.isDisjoint(with: activeKeys)
+        }
+        for key in Self.remoteProfileRecoverySnapshotKeys {
+            guard let data = defaults.data(forKey: key),
+                  let profiles = try? JSONDecoder().decode(
+                      [RemoteDeviceProfile].self,
+                      from: data
+                  ),
+                  profiles.contains(where: isDeletedRecord)
+            else { continue }
+            let remaining = profiles.filter { !isDeletedRecord($0) }
+            if remaining.isEmpty {
+                defaults.removeObject(forKey: key)
+            } else if let encoded = try? JSONEncoder().encode(remaining) {
+                defaults.set(encoded, forKey: key)
+            }
+        }
+        if let evaluated = defaults.stringArray(forKey: Self.shortcutRecoveryEvaluatedKey) {
+            let remaining = evaluated.filter { $0 != removed.id.uuidString }
+            if remaining.count != evaluated.count {
+                defaults.set(remaining, forKey: Self.shortcutRecoveryEvaluatedKey)
+            }
+        }
+    }
+
+    /// 与快捷键恢复相同的身份来源：稳定硬件摘要优先，其次 HID 指纹和蓝牙标识。
+    private static func recoveryIdentityKeys(for profile: RemoteDeviceProfile) -> Set<String> {
+        var keys: Set<String> = []
+        if let identity = profile.hardwareIdentity, !identity.isEmpty {
+            keys.insert("hardware:\(identity)")
+        } else if let legacy = RemoteDeviceIdentity.legacyToken(
+            storedName: profile.customName
+        ), !legacy.isEmpty {
+            keys.insert("hardware:\(legacy)")
+        }
+        if let fingerprint = profile.hidFingerprint, !fingerprint.isEmpty {
+            keys.insert("hid:\(fingerprint)")
+        }
+        if let identifier = profile.bluetoothIdentifier {
+            keys.insert("ble:\(identifier.uuidString)")
+        }
+        return keys
     }
 
     /// 临时显示时，磁盘偏好可能指向另一条档案。合并替换表也要更新它，

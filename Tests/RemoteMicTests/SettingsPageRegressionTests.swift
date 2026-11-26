@@ -2043,7 +2043,7 @@ struct SettingsPageRegressionTests {
         #expect(cardSource.contains("let onDelete: () -> Void"))
         #expect(cardSource.contains(#"accessibilityIdentifier("remote-card-delete")"#))
         #expect(settingsSource.contains(
-            #"deleteTitle: history ? localization.text("connection.history.delete") : nil"#
+            "deleteTitle: history && !model.isRemoteHIDReady(profile.id)"
         ))
         #expect(settingsSource.contains("onDelete: { remoteProfilePendingDeletion = profile }"))
         #expect(settingsSource.contains("model.deleteRemoteProfile(profile.id)"))

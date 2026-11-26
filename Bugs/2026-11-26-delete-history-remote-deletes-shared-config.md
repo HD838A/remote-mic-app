@@ -25,14 +25,17 @@
 - 保留 `unifiedBaseBindings` 中目标档案的清理，以及选中回退和默认映射恢复；清理目标 base bindings 时不通知当前选中的其他设备。
 - 仅在没有任何其他档案使用同一 BLE identifier 或 HID fingerprint 时，停止对应 bridge/monitor 并清理按标识共享的运行时缓存。
 - 共享指纹保留监视器时，如果监视器仍绑定被删档案，把它重绑到存活的同指纹档案。
+- 删除时按硬件身份清理合并/迁移恢复快照：同一硬件沿用旧 UUID 的记录也不能留下，否则重新接入时快捷键恢复会把已删除设备的数据写进新档案；仍有存活档案持有该身份时保留快照。
+- HID 按键已就绪但 BLE 未连接时，卡片不显示删除入口，模型也拒绝删除，避免停掉正在工作的按键链路。
 - 删除确认文案明确“基础按键映射”和“共享键位方案不会删除”；删除按钮辅助功能标签带型号。
 - 私有构件增加双设备回归，公开设置页回归断言不再存在全局方案删除调用。
 
 ## 验证
 
 - 修复前，私有构件 `2.15.3` 双设备用例在“删除 B 后共享方案仍存在”处失败；修复后通过。
-- 私有 `2.15.3`：`RemoteProfilePersistenceTests` 与 `SettingsPageRegressionTests` 共 144 项通过。
-- 公开模式同两套件共 143 项通过；公开 Release App 构建通过。
+- 私有 `2.15.3`：`RemoteProfilePersistenceTests` 与 `SettingsPageRegressionTests` 共 146 项通过。
+- 公开模式同两套件共 145 项通过；公开 Release App 构建通过。
+- 新增回归：同一 HID 指纹、不同 UUID 的旧记录不会在删除后恢复；HID 按键已就绪的档案不能删除。
 - `scripts/test.sh`：50 项自测通过，随后公开 Swift Package 构建通过。
 - 边界、治理和 `git diff --check` 通过。
 - 本机公开全量 Swift Testing 运行器两次以 signal 11 结束，无断言失败；最终以 CI 全量结果为准。
@@ -45,4 +48,5 @@
 - 多个档案共享同一 HID fingerprint 时可能创建多个同指纹监视器、字典只保留最后一个，属既有问题。
 - 删除选中且无替代档案时会广播 `nil` 交互通知，映射页 discovery 监视器的进行中手势可能被取消；删除入口位于连接页，影响有限。
 - Chromecast/Apple 语音短语状态、`shortcutRecoveryEvaluatedKey` 和 `lastRemoteButtonPressProfileID` 仍可能保留被删 UUID，属低影响残留。
+- 恢复快照记录如果没有稳定硬件身份，且与被删档案没有任何共享标识，无法可靠判断为同一设备，可能保留其快捷键恢复来源。
 - 单元测试不能替代真实蓝牙、HID、苹果遥控器和 Chromecast 的现场验收。

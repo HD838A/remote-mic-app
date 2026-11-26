@@ -5354,6 +5354,13 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             )
             return
         }
+        guard !isRemoteHIDReady(profileID) else {
+            AppLogger.shared.write(
+                "REMOTE PROFILE_DELETE phase=rejected reason=hid_ready " +
+                    "model=\(profile.model.rawValue)"
+            )
+            return
+        }
         let wasSelected = settings.selectedRemoteProfileID == profileID
         let replacementProfileID = settings.remoteDeviceProfiles.first {
             $0.id != profileID && connectedRemoteProfileIDs.contains($0.id)
@@ -8886,6 +8893,11 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
 
     func isRemoteConnected(_ profileID: UUID) -> Bool {
         connectedRemoteProfileIDs.contains(profileID)
+    }
+
+    /// HID 已就绪但 BLE 未连接时，设备仍可能执行按键；删除入口按“正在使用”处理。
+    func isRemoteHIDReady(_ profileID: UUID) -> Bool {
+        remoteButtonReadiness[profileID] == .ready
     }
 
     private func requestPhoneApproval(
