@@ -4072,7 +4072,8 @@ struct OnboardingFlowTests {
 
         let welcome = try OnboardingOffscreenFixture(step: .welcome)
         defer { welcome.close() }
-        #expect(Set(welcome.probe.actions.keys) == ["continue"])
+        #expect(Set(welcome.probe.actions.keys) == ["community-help", "continue"])
+        invoke("community-help", on: welcome)
         invoke("continue", on: welcome)
         #expect(welcome.settings.onboardingStep == .remoteAvailability)
 

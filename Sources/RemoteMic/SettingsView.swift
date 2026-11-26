@@ -686,6 +686,7 @@ struct SettingsView: View {
     @State private var isConfigurationDropTargeted = false
     @State private var isClearTrustedPhonesConfirmationPresented = false
     @State private var isWebRemoteSessionPresented = false
+    @State private var isCommunityHelpPresented = false
     @State private var isAppStoreLinkCopied = false
     @State private var isMappingPermissionAlertPresented = false
     @State private var isWaitingForMappingPermissions = false
@@ -815,14 +816,25 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        HStack(spacing: 0) {
-            sidebar
-                .frame(width: sidebarWidth)
-            Color(nsColor: .separatorColor)
-                .frame(width: 1)
-                .frame(maxHeight: .infinity)
-                .ignoresSafeArea(.container, edges: .top)
-            selectedPage
+        ZStack {
+            HStack(spacing: 0) {
+                sidebar
+                    .frame(width: sidebarWidth)
+                Color(nsColor: .separatorColor)
+                    .frame(width: 1)
+                    .frame(maxHeight: .infinity)
+                    .ignoresSafeArea(.container, edges: .top)
+                selectedPage
+            }
+            .accessibilityHidden(isCommunityHelpPresented)
+
+            if isCommunityHelpPresented {
+                CommunityHelpOverlay(
+                    localization: localization,
+                    source: .settings,
+                    onClose: { isCommunityHelpPresented = false }
+                )
+            }
         }
         .background(Color(nsColor: .controlBackgroundColor).ignoresSafeArea())
         .environment(\.locale, localization.locale)
@@ -7668,6 +7680,28 @@ struct SettingsView: View {
                                 .compatibilityButtonStyle(.standard)
                             }
                             .padding(.vertical, 8)
+
+                            Button {
+                                CommunityHelpLog.write("requested", source: .settings)
+                                isCommunityHelpPresented = true
+                            } label: {
+                                HStack(alignment: .top, spacing: 14) {
+                                    Image(systemName: "qrcode")
+                                        .font(.system(size: 13, weight: .medium))
+                                        .foregroundStyle(Color.accentColor)
+                                        .frame(width: 34, alignment: .leading)
+                                    Text(verbatim: localization.text("community.help.entry"))
+                                        .font(.system(size: 12))
+                                        .foregroundStyle(.secondary)
+                                        .multilineTextAlignment(.leading)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                    Spacer(minLength: 0)
+                                }
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .padding(.vertical, 6)
+                            .accessibilityIdentifier("settings.community_help")
                             }
                         }
                     }

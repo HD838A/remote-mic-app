@@ -95,6 +95,7 @@ struct OnboardingView: View {
     @ObservedObject var model: BridgeAppModel
     @ObservedObject private var membershipFeature: MembershipFeatureIntegration
     @State private var isMembershipPresented = false
+    @State private var isCommunityHelpPresented = false
     @ObservedObject private var settings: AppSettings
     @EnvironmentObject private var localization: LocalizationStore
     @Environment(\.colorScheme) private var colorScheme
@@ -237,7 +238,18 @@ struct OnboardingView: View {
     }
 
     private var onboardingStyledLayout: some View {
-        onboardingFrame
+        ZStack {
+            onboardingFrame
+                .accessibilityHidden(isCommunityHelpPresented)
+
+            if isCommunityHelpPresented {
+                CommunityHelpOverlay(
+                    localization: localization,
+                    source: .onboarding,
+                    onClose: { isCommunityHelpPresented = false }
+                )
+            }
+        }
             .background(Color(nsColor: .windowBackgroundColor).ignoresSafeArea())
             .environment(\.locale, localization.locale)
             .frame(minWidth: 980, minHeight: 732)
@@ -549,17 +561,38 @@ struct OnboardingView: View {
             .scrollIndicators(.hidden)
 
             HStack(alignment: .center, spacing: 16) {
-                // 内置 AI 配置提示词尚未在外部 AI 工具中可靠完成任务，先隐藏入口。
-                // 无屏配置命令和提示词文案保留，待提示词验收通过后再恢复。
-                if settings.onboardingStep == .voiceTool && !canContinue {
-                    Text(verbatim: localization.text("onboarding.voice_tool.guide.continue_hint"))
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .layoutPriority(1)
+                VStack(alignment: .leading, spacing: 5) {
+                    // 内置 AI 配置提示词尚未在外部 AI 工具中可靠完成任务，先隐藏入口。
+                    // 无屏配置命令和提示词文案保留，待提示词验收通过后再恢复。
+                    if settings.onboardingStep == .voiceTool && !canContinue {
+                        Text(verbatim: localization.text("onboarding.voice_tool.guide.continue_hint"))
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    onboardingActionButton(id: "community-help", action: {
+                        CommunityHelpLog.write("requested", source: .onboarding)
+                        isCommunityHelpPresented = true
+                    }) {
+                        HStack(alignment: .center, spacing: 6) {
+                            Image(systemName: "qrcode")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundStyle(Color.accentColor)
+                            Text(verbatim: localization.text("community.help.entry"))
+                                .font(.system(size: 12))
+                                .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.leading)
+                                .lineLimit(2)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("onboarding.community_help")
                 }
-                Spacer(minLength: 0)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .layoutPriority(1)
+
                 onboardingActionButton(id: "continue", action: continueFlow) {
                     Text(localization.text(primaryActionKey))
                         .font(.system(size: 14, weight: .semibold))

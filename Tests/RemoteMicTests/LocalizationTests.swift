@@ -58,6 +58,32 @@ struct LocalizationTests {
         #expect(english["remote.card.detail.device_failed"] == "Device connected, but both the buttons and the entitled voice function are not working.")
     }
 
+    @Test func communityHelpCopyUsesUnifiedProductNaming() throws {
+        let chinese = try strings(
+            at: repositoryRoot.appendingPathComponent("Resources/zh-Hans.lproj/Localizable.strings")
+        )
+        let english = try strings(
+            at: repositoryRoot.appendingPathComponent("Resources/en.lproj/Localizable.strings")
+        )
+
+        #expect(chinese["community.help.entry"] == "配置有问题？扫码关注抖音、小红书，了解教程")
+        #expect(chinese["community.help.title"] == "配置有问题？")
+        #expect(chinese["community.help.intro"] == "扫码关注抖音或小红书，查看设置教程。")
+        #expect(chinese["community.help.douyin_title"] == "抖音 · 无线麦 SayAll App")
+        #expect(chinese["community.help.douyin_hint"] == "保存图片后，用抖音扫一扫")
+        #expect(chinese["community.help.xiaohongshu_title"] == "小红书 · 无线麦 SayAll App")
+        #expect(chinese["community.help.xiaohongshu_hint"] == "用小红书扫一扫")
+        #expect(chinese["community.help.douyin_title"]?.contains("SayAll.App") == false)
+        #expect(chinese["community.help.xiaohongshu_title"]?.contains("无线麦 App") == false)
+        #expect(english["community.help.entry"] ==
+            "Trouble with setup? Scan to follow Douyin or Xiaohongshu for tutorials")
+        #expect(english["community.help.title"] == "Trouble with setup?")
+        #expect(english["community.help.intro"] ==
+            "Scan to follow Douyin or Xiaohongshu and view setup tutorials.")
+        #expect(english["community.help.douyin_title"] == "Douyin · SayAll")
+        #expect(english["community.help.xiaohongshu_title"] == "Xiaohongshu · SayAll")
+    }
+
     @Test func screenshotResourceFallbackLoadsRepositoryLocalizations() throws {
         let suiteName = "RemoteMicTests.Localization.ScreenshotFallback.(UUID().uuidString)"
         let defaults = try #require(TestUserDefaults(suiteName: suiteName))
