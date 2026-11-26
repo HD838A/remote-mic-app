@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=SayAll
+Name[zh_CN]=无线麦 SayAll
+Exec=sayall-ubuntu
+Icon=app.getsayall.remote-mic.ubuntu
+Categories=AudioVideo;Audio;Utility;
+Terminal=false
+StartupNotify=true
