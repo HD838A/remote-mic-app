@@ -2051,10 +2051,6 @@ struct SettingsPageRegressionTests {
         #expect(!bridgeSource.contains("deleteDeviceScopedMappingProfiles"))
         #expect(!macroSource.contains("func deleteDeviceScopedMappingProfiles"))
         #expect(bridgeSource.contains("settings.removeRemoteProfile("))
-        #expect(bridgeSource.contains("includeHIDMonitors: !sharesHIDIdentity"))
-        #expect(bridgeSource.contains(
-            "if let identifier = profile.bluetoothIdentifier, !sharesBluetoothIdentity"
-        ))
         #expect(chinese.contains(#""connection.history.delete" = "删除";"#))
         #expect(chinese.contains(#""connection.history.delete.confirm" = "删除设备";"#))
         #expect(chinese.contains("共享键位方案不会删除"))

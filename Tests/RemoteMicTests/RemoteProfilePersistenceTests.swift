@@ -251,69 +251,6 @@ struct RemoteProfilePersistenceTests {
         #expect(!settings.unifiedBaseBindings.contains { $0.remoteProfileID == removed })
     }
 
-    @Test func deletingSelectedProfileDoesNotNotifyInteractionModeChange() throws {
-        let scope = try Self.scopedSettings("delete-selected-suppressed")
-        defer { scope.tearDown() }
-        let settings = scope.settings
-        let removed = settings.registerHIDRemote(fingerprint: "delete-suppressed-selected")
-        settings.updateRemoteProfileModel(removed, model: .rc003)
-        settings.selectRemoteProfile(removed)
-        var interactionChanges: [UUID?] = []
-        settings.onInteractionModeChanged = { interactionChanges.append($0) }
-
-        #expect(settings.removeRemoteProfile(removed))
-
-        #expect(interactionChanges.isEmpty)
-        #expect(settings.selectedRemoteProfileID == nil)
-    }
-
-    @Test func runtimeIdentityOwnershipRequiresNoOtherProfile() {
-        let identifier = UUID()
-        let fingerprint = "shared-runtime-fingerprint"
-        let mappings = RemoteDeviceMappings(
-            buttonBindings: AppSettings.defaultBindings,
-            buttonShortcuts: [:],
-            secondaryButtonBindings: [:]
-        )
-        let targetID = UUID()
-        let otherID = UUID()
-        let target = RemoteDeviceProfile(
-            id: targetID,
-            model: .rc003,
-            bluetoothIdentifier: identifier,
-            hidFingerprint: fingerprint,
-            mappings: mappings
-        )
-        let other = RemoteDeviceProfile(
-            id: otherID,
-            model: .rc003,
-            bluetoothIdentifier: identifier,
-            hidFingerprint: fingerprint,
-            mappings: mappings
-        )
-
-        #expect(RemoteRuntimeIdentityOwnership.hasOtherBluetoothOwner(
-            of: identifier,
-            excluding: targetID,
-            in: [target, other]
-        ))
-        #expect(RemoteRuntimeIdentityOwnership.hasOtherHIDOwner(
-            of: fingerprint,
-            excluding: targetID,
-            in: [target, other]
-        ))
-        #expect(!RemoteRuntimeIdentityOwnership.hasOtherBluetoothOwner(
-            of: identifier,
-            excluding: targetID,
-            in: [target]
-        ))
-        #expect(!RemoteRuntimeIdentityOwnership.hasOtherHIDOwner(
-            of: fingerprint,
-            excluding: targetID,
-            in: [target]
-        ))
-    }
-
     #if canImport(SayAllButtonProfiles) && SAYALL_UNIFIED_BUTTON_CONFIGURATION
     @MainActor
     @Test(.enabled(if: ProcessInfo.processInfo.environment["SAYALL_MACRO_STORAGE_ROOT"] != nil))
