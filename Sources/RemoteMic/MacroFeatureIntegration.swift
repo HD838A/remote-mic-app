@@ -575,6 +575,17 @@ final class MacroFeatureIntegration: ObservableObject {
         #endif
     }
 
+    /// 删除设备档案时同时移除只属于该设备的键位方案，避免设备入口消失后仍保留私有配置。
+    func deleteDeviceScopedMappingProfiles(forRemoteProfileID remoteProfileID: UUID) {
+        #if canImport(SayAllButtonProfiles) && SAYALL_UNIFIED_BUTTON_CONFIGURATION
+        for profile in buttonProfilesFeature.profiles(for: remoteProfileID) {
+            _ = buttonProfilesFeature.deleteProfile(profile.id)
+        }
+        #else
+        _ = remoteProfileID
+        #endif
+    }
+
     var supportsProfileHoldModes: Bool {
         #if canImport(SayAllButtonProfiles) && SAYALL_BUTTON_HOLD_MODES
         true

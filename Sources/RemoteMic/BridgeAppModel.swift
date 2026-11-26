@@ -5349,6 +5349,82 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         refreshBluetoothPresentation()
     }
 
+    /// Delete a history-card profile after the user confirms it. Settings owns the persisted
+    /// array and selection fallback; the model must also stop runtime channels that would
+    /// otherwise keep executing for an archive no longer shown anywhere.
+    func deleteRemoteProfile(_ profileID: UUID) {
+        guard let profile = settings.remoteDeviceProfiles.first(where: { $0.id == profileID })
+        else { return }
+        guard !isRemoteConnected(profileID) else {
+            AppLogger.shared.write(
+                "REMOTE PROFILE_DELETE phase=rejected reason=still_connected " +
+                    "model=\(profile.model.rawValue)"
+            )
+            return
+        }
+        let wasSelected = settings.selectedRemoteProfileID == profileID
+        let replacementProfileID = settings.remoteDeviceProfiles.first {
+            $0.id != profileID && connectedRemoteProfileIDs.contains($0.id)
+        }?.id
+        AppLogger.shared.write(
+            "REMOTE PROFILE_DELETE phase=requested model=\(profile.model.rawValue) " +
+                "selected=\(wasSelected)"
+        )
+        cancelButtonMappingInteractions(device: profileID, reason: "remote_deleted")
+        if buttonGestureLearningProfileID == profileID {
+            cancelButtonGestureLearning(reason: "remote_deleted")
+        }
+        macroFeature.deleteDeviceScopedMappingProfiles(forRemoteProfileID: profileID)
+
+        guard settings.removeRemoteProfile(profileID, selecting: replacementProfileID) else {
+            return
+        }
+
+        if let fingerprint = profile.hidFingerprint,
+           let monitor = hidMonitors.removeValue(forKey: fingerprint) {
+            monitor.stop()
+        }
+        if let identifier = profile.bluetoothIdentifier {
+            remoteRecoveryBudgets.removeValue(forKey: identifier)
+            if let bridge = bluetoothBridges.removeValue(forKey: identifier) {
+                bridge.stop()
+                bluetoothBridgeStates.removeValue(forKey: ObjectIdentifier(bridge))
+            }
+            pendingRemoteBatteryLevels.removeValue(forKey: identifier)
+            pendingRemotePowerStates.removeValue(forKey: identifier)
+            pendingRemoteModels.removeValue(forKey: identifier)
+        }
+        connectedRemoteProfileIDs.remove(profileID)
+        appleRemoteProfileIDs = appleRemoteProfileIDs.filter { $0.value != profileID }
+        connectedAppleRemoteProfileIDs.remove(profileID)
+        #if SAYALL_CHROMECAST_ENABLED
+        if chromecastProfileID == profileID {
+            resetChromecastButtonState(reason: "remote_deleted")
+            chromecastProfileID = nil
+            connectedChromecastProfileIDs.remove(profileID)
+        }
+        #endif
+        remoteButtonReadiness.removeValue(forKey: profileID)
+        remoteBatteryLevels.removeValue(forKey: profileID)
+        remotePowerStates.removeValue(forKey: profileID)
+        remoteRecoveryStates.removeValue(forKey: profileID)
+        remoteSystemDeviceNames.removeValue(forKey: profileID)
+        lastLoggedCardStatuses.removeValue(forKey: profileID)
+        lastLoggedCardReadiness.removeValue(forKey: profileID)
+        screenshotCardStatuses.removeValue(forKey: profileID)
+        screenshotCardStatusDisplayOverrides.removeValue(forKey: profileID)
+        if settings.selectedRemoteProfileID == nil {
+            activeRemoteButtons = []
+        }
+        refreshAppleRemoteHIDStatus()
+        refreshBluetoothPresentation()
+        AppLogger.shared.write(
+            "REMOTE PROFILE_DELETE phase=completed result=runtime_cleared " +
+                "model=\(profile.model.rawValue) selected=\(wasSelected) " +
+                "remaining=\(settings.remoteDeviceProfiles.count)"
+        )
+    }
+
     func connectionStatusText(using localization: LocalizationStore) -> String {
         guard connectionStatus.key == "connection.status.searching",
               let remoteModel = settings.selectedRemoteProfile?.model,

@@ -673,6 +673,8 @@ struct SettingsView: View {
     @State private var applicationDetailProfileID: UUID?
     /// 正在确认移除的 APP 档案；非空时弹确认框。
     @State private var applicationPendingRemoval: CustomApplicationProfile?
+    /// 正在确认删除的历史设备档案；非空时弹确认框。
+    @State private var remoteProfilePendingDeletion: RemoteDeviceProfile?
     @State private var shortcutCaptureFeedback: ShortcutCaptureFeedback?
     @State private var customApplicationLearningStates: [UUID: CustomApplicationLearningState] = [:]
     @State private var scrollRegionCountdowns: [UUID: Int] = [:]
@@ -966,6 +968,28 @@ struct SettingsView: View {
             }
         } message: {
             Text("button_mapping.permission_prompt.message")
+        }
+        .alert(
+            Text(localization.text("connection.history.delete.title")),
+            isPresented: Binding(
+                get: { remoteProfilePendingDeletion != nil },
+                set: { if !$0 { remoteProfilePendingDeletion = nil } }
+            ),
+            presenting: remoteProfilePendingDeletion
+        ) { profile in
+            Button(localization.text("connection.history.delete.confirm"), role: .destructive) {
+                model.deleteRemoteProfile(profile.id)
+                remoteProfilePendingDeletion = nil
+            }
+            Button(localization.text("common.action.cancel"), role: .cancel) {
+                remoteProfilePendingDeletion = nil
+            }
+        } message: { profile in
+            Text(String(
+                format: localization.text("connection.history.delete.message"),
+                remoteModelName(profile),
+                remoteSystemName(profile)
+            ))
         }
     }
 
@@ -4044,6 +4068,7 @@ struct SettingsView: View {
             voiceRecoveryTitle: canRecoverVoice ? localization.text("remote.card.recover_voice") : nil,
             voiceRecoveryHelp: canRecoverVoice ? localization.text("remote.card.recover_voice.help") : nil,
             connectionTitle: history ? localization.text(recovering ? "connection.history.cancel" : "connection.history.connect") : nil,
+            deleteTitle: history ? localization.text("connection.history.delete") : nil,
             actionsDisabled: model.isStreaming || model.activePhysicalVoiceControlSource == .siriRemote,
             voiceRecoveryDisabled: model.isStreaming
                 || model.activePhysicalVoiceControlSource == .siriRemote
@@ -4061,7 +4086,8 @@ struct SettingsView: View {
             onConnect: {
                 if recovering { model.cancelRemoteConnection(profile.id) }
                 else { model.connectRemoteProfile(profile.id) }
-            }
+            },
+            onDelete: { remoteProfilePendingDeletion = profile }
         )
     }
 

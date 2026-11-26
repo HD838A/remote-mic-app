@@ -2009,6 +2009,56 @@ struct SettingsPageRegressionTests {
         ))
     }
 
+    @Test func historyRemoteCardsExposeConfirmedDeleteAction() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let settingsSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/SettingsView.swift"),
+            encoding: .utf8
+        )
+        let cardSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/RemoteDeviceCard.swift"),
+            encoding: .utf8
+        )
+        let bridgeSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
+            encoding: .utf8
+        )
+        let macroSource = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/MacroFeatureIntegration.swift"),
+            encoding: .utf8
+        )
+        let chinese = try String(
+            contentsOf: root.appendingPathComponent("Resources/zh-Hans.lproj/Localizable.strings"),
+            encoding: .utf8
+        )
+        let english = try String(
+            contentsOf: root.appendingPathComponent("Resources/en.lproj/Localizable.strings"),
+            encoding: .utf8
+        )
+
+        #expect(cardSource.contains("let deleteTitle: String?"))
+        #expect(cardSource.contains("let onDelete: () -> Void"))
+        #expect(cardSource.contains(#"accessibilityIdentifier("remote-card-delete")"#))
+        #expect(settingsSource.contains(
+            #"deleteTitle: history ? localization.text("connection.history.delete") : nil"#
+        ))
+        #expect(settingsSource.contains("onDelete: { remoteProfilePendingDeletion = profile }"))
+        #expect(settingsSource.contains("model.deleteRemoteProfile(profile.id)"))
+        #expect(settingsSource.contains("connection.history.delete.message"))
+        #expect(bridgeSource.contains(
+            "macroFeature.deleteDeviceScopedMappingProfiles(forRemoteProfileID: profileID)"
+        ))
+        #expect(bridgeSource.contains("settings.removeRemoteProfile(profileID, selecting: replacementProfileID)"))
+        #expect(macroSource.contains("func deleteDeviceScopedMappingProfiles(forRemoteProfileID"))
+        #expect(chinese.contains(#""connection.history.delete" = "删除";"#))
+        #expect(chinese.contains(#""connection.history.delete.confirm" = "删除设备";"#))
+        #expect(english.contains(#""connection.history.delete" = "Delete";"#))
+        #expect(english.contains(#""connection.history.delete.confirm" = "Delete Device";"#))
+    }
+
     @Test func siriRemoteBatteryPresentationHidesOnlyWhenEveryPowerSignalIsUnavailable() {
         #expect(!RemoteBatteryPresentationPolicy.shouldShowBattery(
             model: .appleSiriRemoteA2854,

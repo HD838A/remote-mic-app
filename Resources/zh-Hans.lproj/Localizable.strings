@@ -1566,6 +1566,10 @@
 "connection.history.find" = "查找设备";
 "connection.history.connect" = "连接";
 "connection.history.cancel" = "取消";
+"connection.history.delete" = "删除";
+"connection.history.delete.title" = "删除设备？";
+"connection.history.delete.message" = "将删除“%@（%@）”的名称、连接记录和按键映射。此操作无法撤销。";
+"connection.history.delete.confirm" = "删除设备";
 "connection.history.open_bluetooth" = "打开蓝牙设置";
 "connection.history.not_found_help" = "请确认设备已开机并在附近。";
 "connection.history.paused_help" = "需要使用时，点击“连接”。";

@@ -3,9 +3,9 @@ import SayAllMacRemoteCore
 import Testing
 @testable import RemoteMic
 
-/// A device profile is what draws a card in the connection page, and nothing in the app can
-/// delete one. So the question these tests pin is not "is a profile created" but "what does a
-/// peripheral have to prove before one is created for it".
+/// A device profile is what draws a card in the connection page. Most tests pin what a
+/// peripheral has to prove before one is created; the deletion tests pin what explicit removal
+/// clears and how the selected profile falls back without leaking mappings into a new device.
 ///
 /// The reported symptom: two cards, the real remote plus a permanent "小米遥控器" with no model
 /// and no battery. The runtime log showed the second one was a peripheral advertising the
@@ -127,6 +127,103 @@ struct RemoteProfilePersistenceTests {
         )
         scope.defaults.set(bleID.uuidString, forKey: "selectedRemoteProfileID")
         return (bothID, bleID, bothBluetoothIdentifier, bleBluetoothIdentifier)
+    }
+
+    @Test func deletingSelectedProfileUsesConnectedReplacementAndLoadsItsMappings() throws {
+        let scope = try Self.scopedSettings("delete-selected")
+        defer { scope.tearDown() }
+        let settings = scope.settings
+        let kept = settings.registerHIDRemote(fingerprint: "delete-kept")
+        settings.updateRemoteProfileModel(kept, model: .rc003)
+        settings.selectRemoteProfile(kept)
+        settings.setAction(.openCodex, for: .menu)
+
+        let removed = settings.registerHIDRemote(fingerprint: "delete-removed")
+        settings.updateRemoteProfileModel(removed, model: .rc003)
+        settings.selectRemoteProfile(removed)
+        settings.setAction(.arrowDown, for: .up)
+        settings.setBaseBinding(
+            ConfiguredButtonAction(action: .openCodex, shortcut: nil),
+            for: .menu,
+            trigger: .singleClick,
+            profileID: removed
+        )
+        #expect(settings.unifiedBaseBindings.contains { $0.remoteProfileID == removed })
+
+        #expect(settings.removeRemoteProfile(removed, selecting: kept))
+        #expect(settings.remoteDeviceProfiles.map(\.id) == [kept])
+        #expect(!settings.unifiedBaseBindings.contains { $0.remoteProfileID == removed })
+        #expect(settings.selectedRemoteProfileID == kept)
+        #expect(settings.action(for: .menu) == .openCodex)
+        #expect(settings.action(for: .up) == AppSettings.defaultBindings[.up])
+        #expect(scope.defaults.string(forKey: "selectedRemoteProfileID") == kept.uuidString)
+    }
+
+    @Test func deletingLastSelectedProfileClearsMappingsAndDoesNotLeakIntoNextRemote() throws {
+        let scope = try Self.scopedSettings("delete-last")
+        defer { scope.tearDown() }
+        let settings = scope.settings
+        let removed = settings.registerHIDRemote(fingerprint: "delete-last-remote")
+        settings.updateRemoteProfileModel(removed, model: .rc003)
+        settings.selectRemoteProfile(removed)
+        settings.setAction(.openCodex, for: .menu)
+        settings.setAllowsRapidPress(true, for: .menu)
+
+        #expect(settings.removeRemoteProfile(removed))
+        #expect(settings.remoteDeviceProfiles.isEmpty)
+        #expect(settings.selectedRemoteProfileID == nil)
+        #expect(scope.defaults.string(forKey: "selectedRemoteProfileID") == nil)
+        #expect(settings.action(for: .menu) == AppSettings.defaultBindings[.menu])
+
+        let next = settings.registerHIDRemote(fingerprint: "delete-next-remote")
+        let profile = try #require(settings.remoteDeviceProfiles.first(where: { $0.id == next }))
+        #expect(profile.mappings.parsedButtonBindings == AppSettings.defaultBindings)
+        #expect(profile.mappings.parsedButtonShortcuts.isEmpty)
+        #expect(profile.mappings.parsedButtonRapidPressEnabled.isEmpty)
+    }
+
+    @Test func deletingPersistedSelectionWhileAnotherProfileIsDisplayedRetargetsDiskOnly() throws {
+        let scope = try Self.scopedSettings("delete-persisted-selection")
+        defer { scope.tearDown() }
+        let settings = scope.settings
+        let persisted = settings.registerHIDRemote(fingerprint: "delete-persisted")
+        settings.updateRemoteProfileModel(persisted, model: .rc003)
+        settings.selectRemoteProfile(persisted)
+        let displayed = settings.registerHIDRemote(fingerprint: "delete-displayed")
+        settings.updateRemoteProfileModel(displayed, model: .rc003)
+        settings.selectRemoteProfile(displayed, persistSelection: false)
+
+        #expect(settings.removeRemoteProfile(persisted, selecting: displayed))
+        #expect(settings.selectedRemoteProfileID == displayed)
+        #expect(scope.defaults.string(forKey: "selectedRemoteProfileID") == displayed.uuidString)
+    }
+
+    @Test func removingAnUnknownProfileDoesNothing() throws {
+        let scope = try Self.scopedSettings("delete-unknown")
+        defer { scope.tearDown() }
+        let settings = scope.settings
+        let existing = settings.registerHIDRemote(fingerprint: "delete-existing")
+        settings.selectRemoteProfile(existing)
+
+        #expect(!settings.removeRemoteProfile(UUID()))
+        #expect(settings.remoteDeviceProfiles.map(\.id) == [existing])
+        #expect(settings.selectedRemoteProfileID == existing)
+    }
+
+    @MainActor
+    @Test func modelDeletionRemovesProfileAndClearsSelection() throws {
+        let scope = try Self.scopedSettings("delete-through-model")
+        defer { scope.tearDown() }
+        let settings = scope.settings
+        let profileID = settings.registerHIDRemote(fingerprint: "delete-through-model")
+        settings.updateRemoteProfileModel(profileID, model: .rc003)
+        settings.selectRemoteProfile(profileID)
+        let model = BridgeAppModel(settings: settings)
+
+        model.deleteRemoteProfile(profileID)
+
+        #expect(settings.remoteDeviceProfiles.isEmpty)
+        #expect(settings.selectedRemoteProfileID == nil)
     }
 
     @MainActor

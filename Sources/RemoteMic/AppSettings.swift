@@ -1949,6 +1949,61 @@ final class AppSettings: ObservableObject {
         isLoadingRemoteProfile = false
     }
 
+    /// 删除一条已登记档案。只有用户从历史卡片明确确认后调用。
+    ///
+    /// 删除当前显示档案时，优先切到调用方给出的已连接档案；没有可用替代时清空选中，
+    /// 不把选中状态转给另一台历史设备。磁盘偏好指向被删档案时也必须清理或迁移，
+    /// 否则重启后会落回过期 ID。
+    @discardableResult
+    func removeRemoteProfile(_ profileID: UUID, selecting replacementProfileID: UUID? = nil) -> Bool {
+        guard let index = remoteDeviceProfiles.firstIndex(where: { $0.id == profileID }) else {
+            return false
+        }
+        let removed = remoteDeviceProfiles[index]
+        let wasSelected = selectedRemoteProfileID == profileID
+        let validReplacement = replacementProfileID.flatMap { candidate in
+            candidate != profileID && remoteDeviceProfiles.contains(where: { $0.id == candidate })
+                ? candidate
+                : nil
+        }
+        unifiedBaseBindings.removeAll { $0.remoteProfileID == profileID }
+        remoteDeviceProfiles.remove(at: index)
+
+        if wasSelected {
+            if let validReplacement {
+                selectRemoteProfile(validReplacement)
+            } else {
+                selectedRemoteProfileID = nil
+                clearMappingsForNoSelectedProfile()
+            }
+        }
+        if defaults.string(forKey: Keys.selectedRemoteProfileID)
+            .flatMap(UUID.init(uuidString:)) == profileID {
+            if let validReplacement {
+                defaults.set(validReplacement.uuidString, forKey: Keys.selectedRemoteProfileID)
+            } else {
+                defaults.removeObject(forKey: Keys.selectedRemoteProfileID)
+            }
+        }
+        AppLogger.shared.write(
+            "SETTINGS REMOTE_PROFILE phase=completed result=deleted " +
+                "model=\(removed.model.rawValue) selected=\(wasSelected) " +
+                "remaining=\(remoteDeviceProfiles.count)"
+        )
+        return true
+    }
+
+    private func clearMappingsForNoSelectedProfile() {
+        isLoadingRemoteProfile = true
+        buttonBindings = Self.defaultBindings
+        buttonShortcuts = [:]
+        buttonApplicationProfileIDs = [:]
+        secondaryButtonBindings = [:]
+        buttonRapidPressEnabled = [:]
+        interactionSettings = RemoteButtonInteractionSettings()
+        isLoadingRemoteProfile = false
+    }
+
     /// 临时显示时，磁盘偏好可能指向另一条档案。合并替换表也要更新它，
     /// 否则重启后原 ID 已不存在，选中项会退回第一条。
     private func remapPersistedSelectedProfile(_ replacements: [UUID: UUID]) {

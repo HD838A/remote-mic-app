@@ -221,6 +221,7 @@ struct RemoteDeviceCard: View {
     let voiceRecoveryTitle: String?
     let voiceRecoveryHelp: String?
     let connectionTitle: String?
+    let deleteTitle: String?
     let actionsDisabled: Bool
     let voiceRecoveryDisabled: Bool
     let connectionDisabled: Bool
@@ -229,6 +230,7 @@ struct RemoteDeviceCard: View {
     let onMembership: () -> Void
     let onRecoverVoice: () -> Void
     let onConnect: () -> Void
+    let onDelete: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -250,6 +252,16 @@ struct RemoteDeviceCard: View {
                         .foregroundStyle(Color.accentColor)
                         .disabled(actionsDisabled)
                         .fixedSize()
+                }
+                if let deleteTitle {
+                    Button(deleteTitle, action: onDelete)
+                        .buttonStyle(.borderless)
+                        .font(.system(size: 12))
+                        .foregroundStyle(.red)
+                        .fixedSize()
+                        .help(deleteTitle)
+                        .accessibilityLabel(Text(deleteTitle))
+                        .accessibilityIdentifier("remote-card-delete")
                 }
             }
             .frame(height: 16)
