@@ -85,7 +85,7 @@ function sample(label, card){return el('div',{class:'sample'},el('h3',{},label),
 function notice(){
   if (!state.notice) return null;
   if (state.notice==='delete') return el('section',{class:'notice',role:'alertdialog'},
-    el('div',{},el('h2',{},`删除 ${state.noticeRemote}？`),el('p',{},'会删除名称、连接记录和按键映射。这是 HTML 演示，不会修改数据。')),
+    el('div',{},el('h2',{},`删除 ${state.noticeRemote}？`),el('p',{},'会删除名称、连接记录和该设备的基础按键映射。共享键位方案不会删除。这是 HTML 演示，不会修改数据。')),
     el('div',{class:'notice-actions'},button('关闭',()=>setState({notice:null}))));
   const install = state.notice==='install';
   return el('section',{class:'notice',role:'status'},el('div',{},el('h2',{},install?'启用苹果遥控器':'苹果遥控器语音'),

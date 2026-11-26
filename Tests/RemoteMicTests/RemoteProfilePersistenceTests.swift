@@ -226,6 +226,128 @@ struct RemoteProfilePersistenceTests {
         #expect(settings.selectedRemoteProfileID == nil)
     }
 
+    @Test func deletingNonSelectedProfileDoesNotCancelSelectedInteraction() throws {
+        let scope = try Self.scopedSettings("delete-unselected")
+        defer { scope.tearDown() }
+        let settings = scope.settings
+        let selected = settings.registerHIDRemote(fingerprint: "delete-unselected-kept")
+        settings.updateRemoteProfileModel(selected, model: .rc003)
+        settings.selectRemoteProfile(selected)
+        let removed = settings.registerHIDRemote(fingerprint: "delete-unselected-removed")
+        settings.updateRemoteProfileModel(removed, model: .rc003)
+        settings.setBaseBinding(
+            ConfiguredButtonAction(action: .openCodex, shortcut: nil),
+            for: .menu,
+            trigger: .singleClick,
+            profileID: removed
+        )
+        var interactionChanges: [UUID?] = []
+        settings.onInteractionModeChanged = { interactionChanges.append($0) }
+
+        #expect(settings.removeRemoteProfile(removed))
+
+        #expect(interactionChanges.isEmpty)
+        #expect(settings.selectedRemoteProfileID == selected)
+        #expect(!settings.unifiedBaseBindings.contains { $0.remoteProfileID == removed })
+    }
+
+    @Test func deletingSelectedProfileDoesNotNotifyInteractionModeChange() throws {
+        let scope = try Self.scopedSettings("delete-selected-suppressed")
+        defer { scope.tearDown() }
+        let settings = scope.settings
+        let removed = settings.registerHIDRemote(fingerprint: "delete-suppressed-selected")
+        settings.updateRemoteProfileModel(removed, model: .rc003)
+        settings.selectRemoteProfile(removed)
+        var interactionChanges: [UUID?] = []
+        settings.onInteractionModeChanged = { interactionChanges.append($0) }
+
+        #expect(settings.removeRemoteProfile(removed))
+
+        #expect(interactionChanges.isEmpty)
+        #expect(settings.selectedRemoteProfileID == nil)
+    }
+
+    @Test func runtimeIdentityOwnershipRequiresNoOtherProfile() {
+        let identifier = UUID()
+        let fingerprint = "shared-runtime-fingerprint"
+        let mappings = RemoteDeviceMappings(
+            buttonBindings: AppSettings.defaultBindings,
+            buttonShortcuts: [:],
+            secondaryButtonBindings: [:]
+        )
+        let targetID = UUID()
+        let otherID = UUID()
+        let target = RemoteDeviceProfile(
+            id: targetID,
+            model: .rc003,
+            bluetoothIdentifier: identifier,
+            hidFingerprint: fingerprint,
+            mappings: mappings
+        )
+        let other = RemoteDeviceProfile(
+            id: otherID,
+            model: .rc003,
+            bluetoothIdentifier: identifier,
+            hidFingerprint: fingerprint,
+            mappings: mappings
+        )
+
+        #expect(RemoteRuntimeIdentityOwnership.hasOtherBluetoothOwner(
+            of: identifier,
+            excluding: targetID,
+            in: [target, other]
+        ))
+        #expect(RemoteRuntimeIdentityOwnership.hasOtherHIDOwner(
+            of: fingerprint,
+            excluding: targetID,
+            in: [target, other]
+        ))
+        #expect(!RemoteRuntimeIdentityOwnership.hasOtherBluetoothOwner(
+            of: identifier,
+            excluding: targetID,
+            in: [target]
+        ))
+        #expect(!RemoteRuntimeIdentityOwnership.hasOtherHIDOwner(
+            of: fingerprint,
+            excluding: targetID,
+            in: [target]
+        ))
+    }
+
+    #if canImport(SayAllButtonProfiles) && SAYALL_UNIFIED_BUTTON_CONFIGURATION
+    @MainActor
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["SAYALL_MACRO_STORAGE_ROOT"] != nil))
+    func deletingHistoryProfileKeepsSharedButtonProfiles() throws {
+        let scope = try Self.scopedSettings("delete-shared-button-profiles")
+        defer { scope.tearDown() }
+        let settings = scope.settings
+        let kept = settings.registerHIDRemote(fingerprint: "delete-shared-kept")
+        settings.updateRemoteProfileModel(kept, model: .rc003)
+        settings.selectRemoteProfile(kept)
+        let removed = settings.registerHIDRemote(fingerprint: "delete-shared-removed")
+        settings.updateRemoteProfileModel(removed, model: .rc003)
+        let model = BridgeAppModel(settings: settings)
+        model.macroFeature.updateButtonProfilesAccess(.allowed(validUntil: .distantFuture))
+        let sharedProfileID = try #require(
+            model.macroFeature.createMappingProfile(named: "Shared profile")
+        )
+        defer { model.macroFeature.deleteMappingProfile(sharedProfileID) }
+        #expect(
+            model.macroFeature.mappingProfiles(device: nil)
+                .contains { $0.id == sharedProfileID }
+        )
+
+        model.deleteRemoteProfile(removed)
+
+        #expect(
+            model.macroFeature.mappingProfiles(device: nil)
+                .contains { $0.id == sharedProfileID }
+        )
+        #expect(settings.remoteDeviceProfiles.map(\.id) == [kept])
+        #expect(settings.selectedRemoteProfileID == kept)
+    }
+    #endif
+
     @MainActor
     @Test(arguments: [true, false])
     func lateHIDReadyReconcilesAnAlreadyConnectedBLECard(hidStillReady: Bool) async throws {

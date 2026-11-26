@@ -2048,15 +2048,19 @@ struct SettingsPageRegressionTests {
         #expect(settingsSource.contains("onDelete: { remoteProfilePendingDeletion = profile }"))
         #expect(settingsSource.contains("model.deleteRemoteProfile(profile.id)"))
         #expect(settingsSource.contains("connection.history.delete.message"))
+        #expect(!bridgeSource.contains("deleteDeviceScopedMappingProfiles"))
+        #expect(!macroSource.contains("func deleteDeviceScopedMappingProfiles"))
+        #expect(bridgeSource.contains("settings.removeRemoteProfile("))
+        #expect(bridgeSource.contains("includeHIDMonitors: !sharesHIDIdentity"))
         #expect(bridgeSource.contains(
-            "macroFeature.deleteDeviceScopedMappingProfiles(forRemoteProfileID: profileID)"
+            "if let identifier = profile.bluetoothIdentifier, !sharesBluetoothIdentity"
         ))
-        #expect(bridgeSource.contains("settings.removeRemoteProfile(profileID, selecting: replacementProfileID)"))
-        #expect(macroSource.contains("func deleteDeviceScopedMappingProfiles(forRemoteProfileID"))
         #expect(chinese.contains(#""connection.history.delete" = "删除";"#))
         #expect(chinese.contains(#""connection.history.delete.confirm" = "删除设备";"#))
+        #expect(chinese.contains("共享键位方案不会删除"))
         #expect(english.contains(#""connection.history.delete" = "Delete";"#))
         #expect(english.contains(#""connection.history.delete.confirm" = "Delete Device";"#))
+        #expect(english.contains("Shared button profiles are not deleted"))
     }
 
     @Test func siriRemoteBatteryPresentationHidesOnlyWhenEveryPowerSignalIsUnavailable() {

@@ -468,7 +468,7 @@ final class AppSettings: ObservableObject {
     @Published var unifiedBaseBindings: [UnifiedButtonBinding] = [] {
         didSet {
             guard !isLoadingStoredSettings else { return }
-            onInteractionModeChanged?(selectedRemoteProfileID)
+            notifyInteractionModeChanged(selectedRemoteProfileID)
             if let data = try? JSONEncoder().encode(unifiedBaseBindings) {
                 defaults.set(data, forKey: "unifiedBaseBindings")
             }
@@ -612,7 +612,7 @@ final class AppSettings: ObservableObject {
 
     @Published var buttonBindings: [RemoteButton: ButtonAction] {
         didSet {
-            onInteractionModeChanged?(selectedRemoteProfileID)
+            notifyInteractionModeChanged(selectedRemoteProfileID)
             saveBindings()
             saveSelectedRemoteProfileMappings()
         }
@@ -620,7 +620,7 @@ final class AppSettings: ObservableObject {
 
     @Published var buttonShortcuts: [RemoteButton: CustomKeyboardShortcut] {
         didSet {
-            onInteractionModeChanged?(selectedRemoteProfileID)
+            notifyInteractionModeChanged(selectedRemoteProfileID)
             saveShortcuts()
             saveSelectedRemoteProfileMappings()
         }
@@ -628,7 +628,7 @@ final class AppSettings: ObservableObject {
 
     @Published var buttonApplicationProfileIDs: [RemoteButton: UUID] {
         didSet {
-            onInteractionModeChanged?(selectedRemoteProfileID)
+            notifyInteractionModeChanged(selectedRemoteProfileID)
             saveButtonApplicationProfileIDs()
             saveSelectedRemoteProfileMappings()
         }
@@ -636,7 +636,7 @@ final class AppSettings: ObservableObject {
 
     @Published var secondaryButtonBindings: [RemoteButton: [ButtonTrigger: ConfiguredButtonAction]] {
         didSet {
-            onInteractionModeChanged?(selectedRemoteProfileID)
+            notifyInteractionModeChanged(selectedRemoteProfileID)
             saveSecondaryBindings()
             saveSelectedRemoteProfileMappings()
         }
@@ -647,7 +647,7 @@ final class AppSettings: ObservableObject {
         didSet {
             if oldValue.modes != interactionSettings.modes ||
                 oldValue.migratedRepeatButtons != interactionSettings.migratedRepeatButtons {
-                onInteractionModeChanged?(selectedRemoteProfileID)
+                notifyInteractionModeChanged(selectedRemoteProfileID)
             }
             if let data = try? JSONEncoder().encode(interactionSettings) {
                 defaults.set(data, forKey: "buttonInteractionSettings")
@@ -656,6 +656,13 @@ final class AppSettings: ObservableObject {
         }
     }
     var onInteractionModeChanged: ((UUID?) -> Void)?
+
+    /// 删除等显式事务会连续重写选中项和映射；事务内由调用方负责取消运行时通道，
+    /// 不能逐条广播，否则会用已删除或暂为空的选中项取消其它设备的手势。
+    private func notifyInteractionModeChanged(_ profileID: UUID?) {
+        guard !isSuppressingInteractionModeChange else { return }
+        onInteractionModeChanged?(profileID)
+    }
     var interactionModeOverride: ((UUID?, RemoteButton) -> String?)?
 
     @Published private(set) var buttonGestureTimingsByModel: [String: RemoteButtonGestureTiming] = [:] {
@@ -695,7 +702,7 @@ final class AppSettings: ObservableObject {
 
     @Published private(set) var selectedRemoteProfileID: UUID? {
         didSet {
-            onInteractionModeChanged?(oldValue)
+            notifyInteractionModeChanged(oldValue)
             guard persistsSelectedRemoteProfile, !selectedRemoteProfileIsTransient else { return }
             defaults.set(selectedRemoteProfileID?.uuidString, forKey: Keys.selectedRemoteProfileID)
         }
@@ -853,6 +860,8 @@ final class AppSettings: ObservableObject {
     }
 
     private var isLoadingRemoteProfile = false
+    /// 显式事务（如删除设备）内不广播交互模式变化，由调用方取消受影响的运行时通道。
+    private var isSuppressingInteractionModeChange = false
     private var persistsSelectedRemoteProfile = true
     /// 同一进程内只保存一次恢复前快照，避免新增恢复路径覆盖原始证据。
     private var didPreserveRecoverySnapshot = false
@@ -1953,9 +1962,14 @@ final class AppSettings: ObservableObject {
     ///
     /// 删除当前显示档案时，优先切到调用方给出的已连接档案；没有可用替代时清空选中，
     /// 不把选中状态转给另一台历史设备。磁盘偏好指向被删档案时也必须清理或迁移，
-    /// 否则重启后会落回过期 ID。
+    /// 否则重启后会落回过期 ID。整个删除事务不广播交互模式变化：调用方已经按被删设备
+    /// 的身份取消对应通道，逐条广播会用已删除或暂为空的选中项误伤其它设备。
     @discardableResult
-    func removeRemoteProfile(_ profileID: UUID, selecting replacementProfileID: UUID? = nil) -> Bool {
+    func removeRemoteProfile(
+        _ profileID: UUID,
+        selecting replacementProfileID: UUID? = nil,
+        operationID: String? = nil
+    ) -> Bool {
         guard let index = remoteDeviceProfiles.firstIndex(where: { $0.id == profileID }) else {
             return false
         }
@@ -1966,6 +1980,8 @@ final class AppSettings: ObservableObject {
                 ? candidate
                 : nil
         }
+        isSuppressingInteractionModeChange = true
+        defer { isSuppressingInteractionModeChange = false }
         unifiedBaseBindings.removeAll { $0.remoteProfileID == profileID }
         remoteDeviceProfiles.remove(at: index)
 
@@ -1986,9 +2002,9 @@ final class AppSettings: ObservableObject {
             }
         }
         AppLogger.shared.write(
-            "SETTINGS REMOTE_PROFILE phase=completed result=deleted " +
-                "model=\(removed.model.rawValue) selected=\(wasSelected) " +
-                "remaining=\(remoteDeviceProfiles.count)"
+            "SETTINGS REMOTE_PROFILE operation_id=\(operationID ?? "none") " +
+                "phase=completed result=deleted model=\(removed.model.rawValue) " +
+                "selected=\(wasSelected) remaining=\(remoteDeviceProfiles.count)"
         )
         return true
     }

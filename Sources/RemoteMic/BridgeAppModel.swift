@@ -4554,14 +4554,17 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
 
     private func cancelButtonMappingInteractions(
         device: UUID?,
+        includeHIDMonitors: Bool = true,
         includeCompanionSources: Bool = true,
         reason: String = "mapping_changed"
     ) {
         for source in configuredButtonInteractions.keys.filter({ configuredButtonInteractionOwners[$0] == device }) {
             cancelConfiguredButtonInteractions(source: source, reason: reason)
         }
-        hidMonitors.values.filter { $0.profileID == device }.forEach { $0.cancelMappingInteractions() }
-        if discoveryHIDMonitor?.profileID == device { discoveryHIDMonitor?.cancelMappingInteractions() }
+        if includeHIDMonitors {
+            hidMonitors.values.filter { $0.profileID == device }.forEach { $0.cancelMappingInteractions() }
+            if discoveryHIDMonitor?.profileID == device { discoveryHIDMonitor?.cancelMappingInteractions() }
+        }
         if includeCompanionSources, settings.selectedRemoteProfileID == device {
             resetMobileButtonGestures(source: .nearbyPhone)
             resetMobileButtonGestures(source: .webRemote)
@@ -5342,12 +5345,19 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     /// array and selection fallback; the model must also stop runtime channels that would
     /// otherwise keep executing for an archive no longer shown anywhere.
     func deleteRemoteProfile(_ profileID: UUID) {
+        let operationID = UUID().uuidString
         guard let profile = settings.remoteDeviceProfiles.first(where: { $0.id == profileID })
-        else { return }
+        else {
+            AppLogger.shared.write(
+                "REMOTE PROFILE_DELETE operation_id=\(operationID) " +
+                    "phase=completed result=skipped reason=profile_missing"
+            )
+            return
+        }
         guard !isRemoteConnected(profileID) else {
             AppLogger.shared.write(
-                "REMOTE PROFILE_DELETE phase=rejected reason=still_connected " +
-                    "model=\(profile.model.rawValue)"
+                "REMOTE PROFILE_DELETE operation_id=\(operationID) " +
+                    "phase=rejected reason=still_connected model=\(profile.model.rawValue)"
             )
             return
         }
@@ -5356,24 +5366,65 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             $0.id != profileID && connectedRemoteProfileIDs.contains($0.id)
         }?.id
         AppLogger.shared.write(
-            "REMOTE PROFILE_DELETE phase=requested model=\(profile.model.rawValue) " +
-                "selected=\(wasSelected)"
+            "REMOTE PROFILE_DELETE operation_id=\(operationID) phase=requested " +
+                "model=\(profile.model.rawValue) selected=\(wasSelected)"
         )
-        cancelButtonMappingInteractions(device: profileID, reason: "remote_deleted")
+        let currentProfiles = settings.remoteDeviceProfiles
+        let sharesBluetoothIdentity = profile.bluetoothIdentifier.map {
+            RemoteRuntimeIdentityOwnership.hasOtherBluetoothOwner(
+                of: $0,
+                excluding: profileID,
+                in: currentProfiles
+            )
+        } ?? false
+        let sharesHIDIdentity = profile.hidFingerprint.map {
+            RemoteRuntimeIdentityOwnership.hasOtherHIDOwner(
+                of: $0,
+                excluding: profileID,
+                in: currentProfiles
+            )
+        } ?? false
+        cancelButtonMappingInteractions(
+            device: profileID,
+            includeHIDMonitors: !sharesHIDIdentity,
+            reason: "remote_deleted"
+        )
         if buttonGestureLearningProfileID == profileID {
             cancelButtonGestureLearning(reason: "remote_deleted")
         }
-        macroFeature.deleteDeviceScopedMappingProfiles(forRemoteProfileID: profileID)
+        // Button profiles are shared app-wide. Removing one remote must not delete a
+        // profile another connected device may still be using.
 
-        guard settings.removeRemoteProfile(profileID, selecting: replacementProfileID) else {
+        guard settings.removeRemoteProfile(
+            profileID,
+            selecting: replacementProfileID,
+            operationID: operationID
+        ) else {
+            AppLogger.shared.write(
+                "REMOTE PROFILE_DELETE operation_id=\(operationID) " +
+                    "phase=completed result=skipped reason=profile_missing"
+            )
             return
         }
 
-        if let fingerprint = profile.hidFingerprint,
+        let runtimePreserved = sharesBluetoothIdentity || sharesHIDIdentity
+        // 共享指纹时保留的监视器若仍绑定被删档案，按键会回退到当前选中档案。
+        // 把同一个物理设备的监视器重绑到存活的同指纹档案。
+        if sharesHIDIdentity, let fingerprint = profile.hidFingerprint,
+           let monitor = hidMonitors[fingerprint], monitor.profileID == profileID {
+            let survivors = settings.remoteDeviceProfiles.filter { $0.hidFingerprint == fingerprint }
+            let survivingOwner = survivors.first {
+                connectedRemoteProfileIDs.contains($0.id)
+            } ?? survivors.first
+            if let survivingOwner {
+                monitor.assignProfileID(survivingOwner.id)
+            }
+        }
+        if let fingerprint = profile.hidFingerprint, !sharesHIDIdentity,
            let monitor = hidMonitors.removeValue(forKey: fingerprint) {
             monitor.stop()
         }
-        if let identifier = profile.bluetoothIdentifier {
+        if let identifier = profile.bluetoothIdentifier, !sharesBluetoothIdentity {
             remoteRecoveryBudgets.removeValue(forKey: identifier)
             if let bridge = bluetoothBridges.removeValue(forKey: identifier) {
                 bridge.stop()
@@ -5408,7 +5459,8 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         refreshAppleRemoteHIDStatus()
         refreshBluetoothPresentation()
         AppLogger.shared.write(
-            "REMOTE PROFILE_DELETE phase=completed result=runtime_cleared " +
+            "REMOTE PROFILE_DELETE operation_id=\(operationID) phase=completed " +
+                "result=deleted runtime=\(runtimePreserved ? "preserved" : "cleared") " +
                 "model=\(profile.model.rawValue) selected=\(wasSelected) " +
                 "remaining=\(settings.remoteDeviceProfiles.count)"
         )
