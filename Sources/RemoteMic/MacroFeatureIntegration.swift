@@ -98,9 +98,6 @@ final class MacroFeatureIntegration: ObservableObject {
         // 本地测试包没有会员模块，默认决策会让按键方案整页只读（去编辑点了没反应）。
         buttonProfilesFeature.updateButtonProfilesAccess(.allowed(validUntil: .distantFuture))
         #endif
-        #if SAYALL_BUTTON_PROFILE_MOUSE_DISTANCE
-        buttonProfilesFeature.hostActionDistanceUpdater = Self.updateHostActionDistance
-        #endif
 #endif
         #if canImport(SayAllMacroRemoteMic)
         feature.$isFeatureVisible
@@ -1513,25 +1510,6 @@ final class MacroFeatureIntegration: ObservableObject {
     }
 
     #if canImport(SayAllButtonProfiles)
-    #if SAYALL_BUTTON_PROFILE_MOUSE_DISTANCE
-    private static func updateHostActionDistance(
-        _ reference: RemoteMicHostActionReference
-    ) -> RemoteMicHostActionReference? {
-        guard reference.isMouseMove,
-              var configured = try? JSONDecoder().decode(
-                ConfiguredButtonAction.self,
-                from: reference.payload
-              )
-        else { return nil }
-        configured.mouseMoveDistance = reference.resolvedMouseMoveDistance
-        guard let payload = try? JSONEncoder().encode(configured) else { return nil }
-        var updated = reference
-        updated.payload = payload
-        updated.mouseMoveDistance = configured.resolvedMouseMoveDistance
-        return updated
-    }
-    #endif
-
     private static func remoteHostActionReference(
         id: String,
         displayName: String,

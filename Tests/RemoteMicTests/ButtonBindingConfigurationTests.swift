@@ -50,7 +50,7 @@ struct ButtonBindingConfigurationTests {
         ).resolvedMouseMoveDistance == 100)
     }
 
-    @Test func mouseClickOnOKDefaultsTrueAndSurvivesExport() throws {
+    @Test func mouseClickOnOKDefaultsOffAndSurvivesExport() throws {
         let sourceSuite = "MouseClickOnOK.\(UUID().uuidString)"
         let targetSuite = "MouseClickOnOK-target.\(UUID().uuidString)"
         let defaults = try #require(TestUserDefaults(suiteName: sourceSuite))

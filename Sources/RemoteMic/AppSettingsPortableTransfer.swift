@@ -128,6 +128,9 @@ extension AppSettings {
             if c.action == .customShortcut, let s = c.shortcut { p.shortcuts.append(Self.portableShortcut(s,name: s.keyLabel)) }
             if c.action == .openCustomApplication, let id = c.applicationProfileID { requiredApplications.insert(id.uuidString) }
         }
+        #if SAYALL_PORTABLE_MOUSE_DISTANCE
+        if actions.contains(where: \.isMouseMove) { p.requirements.capabilities.append("mouseMove") }
+        #endif
         for a in customApplicationProfiles where requiredApplications.contains(a.id.uuidString) {
             let id = a.id.uuidString
             var app = PortableApplication(id: id, displayName: a.displayName, bundleIdentifier: a.bundleIdentifier,
