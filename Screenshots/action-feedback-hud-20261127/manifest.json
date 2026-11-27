@@ -1,0 +1,154 @@
+{
+  "batch": "action-feedback-hud-20261127",
+  "date": "2026-11-27",
+  "purpose": "动作反馈浮层改为半透明常显监控面板：状态行常驻、失败停在失败态、可整块拖动并置顶",
+  "branch": "feat/draggable-feedback-hud-20261127",
+  "source_commit": "e0e69d05c73811583e5e61a6f85651f40bb88bc4",
+  "source_state": "PNG generated offscreen from the worktree content that became this commit; production ActionFeedbackView",
+  "storage": "external-persistent-directory; PR attachment",
+  "evidence_dir": "/Users/hwwwww/SayAllEvidence/action-feedback-hud-20261127",
+  "renderer": "REMOTE_MIC_ACTION_FEEDBACK_SCREENSHOT_DIR + swift run --disable-keychain RemoteMic",
+  "window_points": [
+    560,
+    260
+  ],
+  "notes": [
+    "面板本身 320pt 宽，画布 560x260 点、2x 输出 1120x520。",
+    "idle 态是本次新增：presence 为空、最近一条为成功、本次会话 4 次。",
+    "离屏渲染不经过真实窗口层级与材质合成，.ultraThinMaterial 在真实桌面上的观感仍需实机截图。"
+  ],
+  "images": [
+    {
+      "file": "action-feedback-en-dark-failure.png",
+      "format": "PNG",
+      "width": 1120,
+      "height": 520,
+      "sha256": "fce5f9dfcf748c9955426dc0ed4b6f64b4645376cc845cdbdec5d66118622184",
+      "bytes": 62375,
+      "language": "en",
+      "appearance": "dark",
+      "state": "failure"
+    },
+    {
+      "file": "action-feedback-en-dark-idle.png",
+      "format": "PNG",
+      "width": 1120,
+      "height": 520,
+      "sha256": "8cf962c0a36191671dd95dcfd15516a2e9850ea0f9eae3217221584af68e3bc5",
+      "bytes": 30207,
+      "language": "en",
+      "appearance": "dark",
+      "state": "idle"
+    },
+    {
+      "file": "action-feedback-en-dark-success.png",
+      "format": "PNG",
+      "width": 1120,
+      "height": 520,
+      "sha256": "9e50ec8c5bf35a0a15af44926515feb63e780d6fa0a628c2739325468a99b196",
+      "bytes": 30685,
+      "language": "en",
+      "appearance": "dark",
+      "state": "success"
+    },
+    {
+      "file": "action-feedback-en-light-failure.png",
+      "format": "PNG",
+      "width": 1120,
+      "height": 520,
+      "sha256": "bc08a562998b43415a6dceba322a25cf90e1813e4bae5886c65ae68ee439382f",
+      "bytes": 69209,
+      "language": "en",
+      "appearance": "light",
+      "state": "failure"
+    },
+    {
+      "file": "action-feedback-en-light-idle.png",
+      "format": "PNG",
+      "width": 1120,
+      "height": 520,
+      "sha256": "864271f276413ece31c05f54523a937f9e9d98fb478acc893c72d394330c1444",
+      "bytes": 37793,
+      "language": "en",
+      "appearance": "light",
+      "state": "idle"
+    },
+    {
+      "file": "action-feedback-en-light-success.png",
+      "format": "PNG",
+      "width": 1120,
+      "height": 520,
+      "sha256": "0a57c1f15236825967e7c4ef579d0843ca8eb3389fb30e1054c9799c0d39fb1f",
+      "bytes": 38365,
+      "language": "en",
+      "appearance": "light",
+      "state": "success"
+    },
+    {
+      "file": "action-feedback-zh-Hans-dark-failure.png",
+      "format": "PNG",
+      "width": 1120,
+      "height": 520,
+      "sha256": "bae336edad315cbd64fecfa06c1b0313eb3e4314fae1e92cdd604af4a5f03117",
+      "bytes": 62678,
+      "language": "zh-Hans",
+      "appearance": "dark",
+      "state": "failure"
+    },
+    {
+      "file": "action-feedback-zh-Hans-dark-idle.png",
+      "format": "PNG",
+      "width": 1120,
+      "height": 520,
+      "sha256": "ce5571039d277e4d533b7b62ce34353d367b2a1f30129f809e62565aaf7c3876",
+      "bytes": 29914,
+      "language": "zh-Hans",
+      "appearance": "dark",
+      "state": "idle"
+    },
+    {
+      "file": "action-feedback-zh-Hans-dark-success.png",
+      "format": "PNG",
+      "width": 1120,
+      "height": 520,
+      "sha256": "76edab586aa66c04a104a9491cabd057b2f425783fdc94d207e10e54575748bd",
+      "bytes": 30085,
+      "language": "zh-Hans",
+      "appearance": "dark",
+      "state": "success"
+    },
+    {
+      "file": "action-feedback-zh-Hans-light-failure.png",
+      "format": "PNG",
+      "width": 1120,
+      "height": 520,
+      "sha256": "1682a5a54189b08b75009f0be339fb826579db8234e33398f43bbf6cf01ad7d6",
+      "bytes": 69937,
+      "language": "zh-Hans",
+      "appearance": "light",
+      "state": "failure"
+    },
+    {
+      "file": "action-feedback-zh-Hans-light-idle.png",
+      "format": "PNG",
+      "width": 1120,
+      "height": 520,
+      "sha256": "836332310c1702c4c5a68807d8782c4d71ed9b1911fd10ac4def26d4204e5e84",
+      "bytes": 37563,
+      "language": "zh-Hans",
+      "appearance": "light",
+      "state": "idle"
+    },
+    {
+      "file": "action-feedback-zh-Hans-light-success.png",
+      "format": "PNG",
+      "width": 1120,
+      "height": 520,
+      "sha256": "2939293fa517cbbedd9aabf1a9b7f10a817b8287d80acbe9f3e92d9f51a32b7f",
+      "bytes": 37765,
+      "language": "zh-Hans",
+      "appearance": "light",
+      "state": "success"
+    }
+  ]
+}
