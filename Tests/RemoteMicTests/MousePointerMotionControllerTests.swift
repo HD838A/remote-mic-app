@@ -29,6 +29,92 @@ struct MousePointerMotionControllerTests {
         ))
     }
 
+
+    private final class ClickHarness {
+        var now: TimeInterval = 100
+        var lastMove: TimeInterval? = 99
+        var enabled = true
+        var postResult = true
+        var clicks = 0
+        var logs: [String] = []
+
+        lazy var controller = MouseClickOnOKController(
+            isEnabled: { [unowned self] in self.enabled },
+            lastSuccessfulMoveAt: { [unowned self] in self.lastMove },
+            now: { [unowned self] in self.now },
+            postClick: { [unowned self] in
+                self.clicks += 1
+                return self.postResult
+            },
+            logger: { [unowned self] in self.logs.append($0) }
+        )
+    }
+
+    @Test func clickOnOKOnlyConsumesAPressWithinTheRecentMoveWindow() {
+        #expect(MouseClickOnOKPolicy.shouldClick(
+            button: .ok,
+            phase: .press,
+            enabled: true,
+            lastSuccessfulMoveAt: 98,
+            now: 100
+        ))
+        #expect(!MouseClickOnOKPolicy.shouldClick(
+            button: .ok,
+            phase: .release,
+            enabled: true,
+            lastSuccessfulMoveAt: 99,
+            now: 100
+        ))
+        #expect(!MouseClickOnOKPolicy.shouldClick(
+            button: .back,
+            phase: .press,
+            enabled: true,
+            lastSuccessfulMoveAt: 99,
+            now: 100
+        ))
+        #expect(!MouseClickOnOKPolicy.shouldClick(
+            button: .ok,
+            phase: .press,
+            enabled: false,
+            lastSuccessfulMoveAt: 99,
+            now: 100
+        ))
+        #expect(!MouseClickOnOKPolicy.shouldClick(
+            button: .ok,
+            phase: .press,
+            enabled: true,
+            lastSuccessfulMoveAt: nil,
+            now: 100
+        ))
+        #expect(!MouseClickOnOKPolicy.shouldClick(
+            button: .ok,
+            phase: .press,
+            enabled: true,
+            lastSuccessfulMoveAt: 97.99,
+            now: 100
+        ))
+    }
+
+    @Test func clickControllerConsumesThePressAndFallsBackOnInjectionFailure() {
+        let harness = ClickHarness()
+        #expect(harness.controller.handle(button: .ok, phase: .press))
+        #expect(harness.clicks == 1)
+        #expect(harness.logs.last?.contains("result=submitted") == true)
+        #expect(harness.logs.last?.contains("reason=ok_after_move") == true)
+
+        harness.clicks = 0
+        harness.now = 102.01
+        #expect(!harness.controller.handle(button: .ok, phase: .press))
+        #expect(harness.clicks == 0)
+
+        harness.now = 100
+        harness.lastMove = 99
+        harness.postResult = false
+        #expect(!harness.controller.handle(button: .ok, phase: .press))
+        #expect(harness.clicks == 1)
+        #expect(harness.logs.last?.contains("result=failed") == true)
+    }
+
     @Test func speedCurveHoldsFineWindowThenAcceleratesAndCaps() {
         #expect(abs(MousePointerMotionEngine.speed(distance: 20, elapsed: 0) - 200) < 0.001)
         #expect(abs(MousePointerMotionEngine.speed(distance: 20, elapsed: 0.5) - 200) < 0.001)
@@ -129,6 +215,16 @@ struct MousePointerMotionControllerTests {
         let ends = missing.tick(now: harness.time)
         #expect(ends.count == 1)
         #expect(ends.first?.reason == "cursor_unavailable")
+    }
+
+    @Test func oneShotMoveRecordsTheOKClickWindow() {
+        let harness = Harness()
+        #expect(harness.engine.lastSuccessfulMoveAt == nil)
+        harness.time = 123
+        harness.engine.recordSuccessfulMove()
+        #expect(harness.engine.lastSuccessfulMoveAt == 123)
+        harness.engine.clearRecentMoveWindow()
+        #expect(harness.engine.lastSuccessfulMoveAt == nil)
     }
 
     @Test func screenEdgeClampsAndDoesNotRefreshRecentMove() throws {

@@ -105,6 +105,13 @@ final class MousePointerMotionEngine {
         recentMoveLock.unlock()
     }
 
+    /// 单次鼠标动作不经过连续会话；成功后也要开启 OK 单击窗口。
+    func recordSuccessfulMove() {
+        recentMoveLock.lock()
+        storedLastSuccessfulMoveAt = dependencies.now()
+        recentMoveLock.unlock()
+    }
+
     func begin(
         button: RemoteButton,
         direction: MouseMoveDirection,
@@ -404,6 +411,12 @@ final class MousePointerMotionController {
     func clearRecentMoveWindow() {
         queue.sync {
             engine.clearRecentMoveWindow()
+        }
+    }
+
+    func recordSuccessfulMove() {
+        queue.sync {
+            engine.recordSuccessfulMove()
         }
     }
 

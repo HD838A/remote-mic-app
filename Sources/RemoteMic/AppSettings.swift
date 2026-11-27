@@ -60,6 +60,8 @@ private struct PersonalizedConfiguration: Codable {
     let showStatusBarIcon: Bool?
     let showActionFeedback: Bool?
     let showActionSuccessFeedback: Bool?
+    /// 鼠标移动后用 OK 单击。旧配置缺字段时按默认开启处理。
+    let mouseClickOnOKEnabled: Bool?
     let openMainWindowAtLaunch: Bool?
     let checksForPreReleaseUpdates: Bool?
     let experimentalContinuousRecordingEnabled: Bool?
@@ -336,6 +338,7 @@ final class AppSettings: ObservableObject {
         static let showStatusBarIcon = "showStatusBarIcon"
         static let showActionFeedback = "showActionFeedback"
         static let showActionSuccessFeedback = "showActionSuccessFeedback"
+        static let mouseClickOnOKEnabled = "mouseClickOnOKEnabled"
         static let openMainWindowAtLaunch = "openMainWindowAtLaunch"
         static let checksForPreReleaseUpdates = "checksForPreReleaseUpdates"
         static let experimentalContinuousRecordingEnabled = "experimentalContinuousRecordingEnabled"
@@ -759,6 +762,13 @@ final class AppSettings: ObservableObject {
     @Published var showActionSuccessFeedback: Bool {
         didSet {
             defaults.set(showActionSuccessFeedback, forKey: Keys.showActionSuccessFeedback)
+        }
+    }
+
+    /// 鼠标移动后，OK 在最近有效移动窗口内改为左键单击。
+    @Published var mouseClickOnOKEnabled: Bool {
+        didSet {
+            defaults.set(mouseClickOnOKEnabled, forKey: Keys.mouseClickOnOKEnabled)
         }
     }
 
@@ -1222,6 +1232,9 @@ final class AppSettings: ObservableObject {
         showActionSuccessFeedback = defaults.object(forKey: Keys.showActionSuccessFeedback) == nil
             ? true
             : defaults.bool(forKey: Keys.showActionSuccessFeedback)
+        mouseClickOnOKEnabled = defaults.object(forKey: Keys.mouseClickOnOKEnabled) == nil
+            ? true
+            : defaults.bool(forKey: Keys.mouseClickOnOKEnabled)
         openMainWindowAtLaunch = defaults.object(forKey: Keys.openMainWindowAtLaunch) == nil
             ? true
             : defaults.bool(forKey: Keys.openMainWindowAtLaunch)
@@ -3362,6 +3375,7 @@ final class AppSettings: ObservableObject {
             showStatusBarIcon: showStatusBarIcon,
             showActionFeedback: showActionFeedback,
             showActionSuccessFeedback: showActionSuccessFeedback,
+            mouseClickOnOKEnabled: mouseClickOnOKEnabled,
             openMainWindowAtLaunch: openMainWindowAtLaunch,
             checksForPreReleaseUpdates: checksForPreReleaseUpdates,
             experimentalContinuousRecordingEnabled: experimentalContinuousRecordingEnabled,
@@ -3602,6 +3616,7 @@ final class AppSettings: ObservableObject {
         if let value = c.showStatusBarIcon { showStatusBarIcon = value }
         if let value = c.showActionFeedback { showActionFeedback = value }
         if let value = c.showActionSuccessFeedback { showActionSuccessFeedback = value }
+        if let value = c.mouseClickOnOKEnabled { mouseClickOnOKEnabled = value }
         if let value = c.openMainWindowAtLaunch { openMainWindowAtLaunch = value }
         if let value = c.checksForPreReleaseUpdates { checksForPreReleaseUpdates = value }
         voiceKeyMode = c.voiceKeyMode ?? .function
@@ -3824,6 +3839,9 @@ final class AppSettings: ObservableObject {
         }
         if let showActionSuccessFeedback = configuration.showActionSuccessFeedback {
             self.showActionSuccessFeedback = showActionSuccessFeedback
+        }
+        if let mouseClickOnOKEnabled = configuration.mouseClickOnOKEnabled {
+            self.mouseClickOnOKEnabled = mouseClickOnOKEnabled
         }
         if let openMainWindowAtLaunch = configuration.openMainWindowAtLaunch {
             self.openMainWindowAtLaunch = openMainWindowAtLaunch

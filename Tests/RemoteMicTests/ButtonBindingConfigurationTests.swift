@@ -50,6 +50,27 @@ struct ButtonBindingConfigurationTests {
         ).resolvedMouseMoveDistance == 100)
     }
 
+    @Test func mouseClickOnOKDefaultsTrueAndSurvivesExport() throws {
+        let sourceSuite = "MouseClickOnOK.\(UUID().uuidString)"
+        let targetSuite = "MouseClickOnOK-target.\(UUID().uuidString)"
+        let defaults = try #require(TestUserDefaults(suiteName: sourceSuite))
+        let targetDefaults = try #require(TestUserDefaults(suiteName: targetSuite))
+        defer {
+            defaults.removePersistentDomain(forName: sourceSuite)
+            targetDefaults.removePersistentDomain(forName: targetSuite)
+        }
+        let settings = AppSettings(defaults: defaults)
+        #expect(settings.mouseClickOnOKEnabled)
+        settings.mouseClickOnOKEnabled = false
+
+        let reopened = AppSettings(defaults: defaults)
+        #expect(!reopened.mouseClickOnOKEnabled)
+
+        let target = AppSettings(defaults: targetDefaults)
+        try target.importConfiguration(from: settings.exportedConfigurationData())
+        #expect(!target.mouseClickOnOKEnabled)
+    }
+
     @Test func mouseMoveDistanceSurvivesActionSwitch() {
         let settings = settings()
         let profileID = settings.selectedRemoteProfileID

@@ -935,6 +935,16 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     )
     /// 所有输入来源共用的鼠标移动引擎：HID、Apple Remote、手机、网页、Chromecast 都从这里开始/结束。
     private lazy var mousePointerMotion = MousePointerMotionController()
+    /// 只有成功移动后的短暂窗口内，OK 才改为单击；编辑器打开时不抢占 OK。
+    private lazy var mouseClickOnOK = MouseClickOnOKController(
+        isEnabled: { [weak self] in
+            guard let self else { return false }
+            return self.settings.mouseClickOnOKEnabled && !self.macroFeature.isEditorActive
+        },
+        lastSuccessfulMoveAt: { [weak self] in self?.mousePointerMotion.lastSuccessfulMoveAt },
+        postClick: { KeyboardInjector.postLeftClick() },
+        logger: { AppLogger.shared.write($0) }
+    )
     private lazy var voiceFnTapSession = VoiceFnTapSessionController(
         destinationReadiness: { [weak self] completion in
             self?.voiceInputDestinationCoordinator.waitUntilReady(completion: completion) ?? .immediate
@@ -4722,6 +4732,9 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
                 self?.mousePointerMotion.stopAll(reason: "common_phrases")
             }
             return handled
+        }
+        monitor.mouseClickOnOKPerformer = { [weak self] button, phase in
+            self?.mouseClickOnOK.handle(button: button, phase: phase) ?? false
         }
         monitor.beginMouseMotion = { [weak self] button, configured in
             guard let self, let direction = configured.action.mouseMoveDirection else { return nil }
@@ -9378,6 +9391,9 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             applicationProfile,
             customApplicationFocusAllowed
         ) { success in
+            if success, configured.action.isMouseMove {
+                self.mousePointerMotion.recordSuccessfulMove()
+            }
             report(
                 success
                     ? .success

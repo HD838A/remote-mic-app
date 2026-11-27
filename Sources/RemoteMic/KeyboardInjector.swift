@@ -2599,6 +2599,31 @@ enum KeyboardInjector {
         return true
     }
 
+    /// 在当前光标位置发送一次左键单击，不移动光标。
+    static func postLeftClick() -> Bool {
+        guard isAccessibilityTrusted,
+              let source = CGEventSource(stateID: .hidSystemState),
+              let point = CGEvent(source: nil)?.location,
+              let down = CGEvent(
+                  mouseEventSource: source,
+                  mouseType: .leftMouseDown,
+                  mouseCursorPosition: point,
+                  mouseButton: .left
+              ),
+              let up = CGEvent(
+                  mouseEventSource: source,
+                  mouseType: .leftMouseUp,
+                  mouseCursorPosition: point,
+                  mouseButton: .left
+              )
+        else { return false }
+        down.setIntegerValueField(.eventSourceUserData, value: syntheticEventMarker)
+        up.setIntegerValueField(.eventSourceUserData, value: syntheticEventMarker)
+        down.post(tap: .cghidEventTap)
+        up.post(tap: .cghidEventTap)
+        return true
+    }
+
     private static func postMouseMove(direction: MouseMoveDirection, distance: Int) -> Bool {
         let started = ProcessInfo.processInfo.systemUptime
         guard let origin = CGEvent(source: nil)?.location else {

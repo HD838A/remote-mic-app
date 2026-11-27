@@ -292,6 +292,8 @@
 "button_mapping.mouse_distance.unit" = "点";
 "button_mapping.mouse_distance.hint" = "1–100，默认 20";
 "button_mapping.mouse_distance.error" = "请输入 1 到 100 之间的整数";
+"button_mapping.mouse_click_on_ok.label" = "移动后按 OK 单击";
+"button_mapping.mouse_click_on_ok.hint" = "移动鼠标后 2 秒内，按 OK 在光标位置单击。";
 "button_mapping.hold.repeat_single.mouse_move_description" = "按住时连续移动光标，松手停止。";
 "button_mapping.hold.repeat_long.mouse_move_description" = "达到长按时间后连续移动光标，松手停止。";
 "button_mapping.action_group.custom" = "输入框";

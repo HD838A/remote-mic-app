@@ -455,6 +455,43 @@ struct HardwareSimulationIntegrationTests {
         #expect(scheduler.pendingTaskCount == 0)
     }
 
+    @Test func mouseClickOnOKConsumesOnlyTheOKPressAndDoesNotRunTheMappedAction() throws {
+        let suiteName = "HardwareSimulationIntegrationTests.mouseClickOnOK.\(UUID().uuidString)"
+        let defaults = try #require(TestUserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = AppSettings(defaults: defaults)
+        settings.customMappingEnabled = true
+        settings.setAction(.escape, for: .ok)
+        let profileID = try #require(settings.selectedRemoteProfileID)
+        var clicks = 0
+        var actions: [ButtonAction] = []
+        let monitor = HIDRemoteMonitor(
+            settings: settings,
+            profileID: profileID,
+            ownsEventSuppressor: false,
+            runtimePermissions: { true },
+            actionPerformer: { _, _, configured in
+                actions.append(configured.action)
+                return true
+            },
+            frontmostBundleIdentifier: { PresetApplication.codex.bundleIdentifier }
+        )
+        monitor.mouseClickOnOKPerformer = { button, phase in
+            guard button == .ok, phase == .press else { return false }
+            clicks += 1
+            return true
+        }
+        monitor.connectSimulatedDevice(fingerprint: "mouse-click", profileID: profileID)
+        let ok = XiaomiVoiceRemoteButton.ok.report
+        let release = Data(repeating: 0, count: ok.data.count)
+        monitor.handleSimulatedReport(reportID: ok.reportID, data: ok.data)
+        monitor.handleSimulatedReport(reportID: ok.reportID, data: release)
+        monitor.disconnectSimulatedDevice()
+
+        #expect(clicks == 1)
+        #expect(actions.isEmpty)
+    }
+
     @Test func appSwitcherSessionUsesAnyMappedButtonAndTVAdvancesThenReleasesOnDisconnect() throws {
         let suiteName = "HardwareSimulationIntegrationTests.appSwitcherSession.\(UUID().uuidString)"
         let defaults = try #require(TestUserDefaults(suiteName: suiteName))

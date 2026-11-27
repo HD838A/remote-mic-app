@@ -450,6 +450,8 @@ final class HIDRemoteMonitor {
     var beginMouseMotion: ((RemoteButton, ConfiguredButtonAction) -> MouseMotionToken?)?
     var endMouseMotion: ((MouseMotionToken, String) -> Void)?
     var onMouseMotionStop: ((String) -> Void)?
+    /// 最近移动过鼠标时，在按下 OK 的原始边沿直接消费本次按键。
+    var mouseClickOnOKPerformer: ((RemoteButton, RemoteButtonPhase) -> Bool)?
     /// A voice-key down edge while the selected remote's audio link may be down.
     /// The callback only observes intent; the HID event itself is never consumed.
     var onVoiceUsageDown: ((UUID?) -> Void)?
@@ -1746,6 +1748,13 @@ final class HIDRemoteMonitor {
                 guard performAppSwitcherAction(for: button, trigger: .singleClick) else {
                     return
                 }
+                continue
+            }
+            if mouseClickOnOKPerformer?(button, .press) == true {
+                finishNonRepeatablePress(button)
+                diagnosticLogger(
+                    "HID GESTURE button=\(button.rawValue) trigger=singleClick path=mouse_click_on_ok"
+                )
                 continue
             }
             if usesNativePassthrough {

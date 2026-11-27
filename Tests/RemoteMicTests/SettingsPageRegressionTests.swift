@@ -1702,6 +1702,8 @@ struct SettingsPageRegressionTests {
         #expect(source.contains("[.commonPhrases, .applications, .mouse, .hold, .buttonSpeed]"))
         #expect(source.contains("MouseMoveDistanceEditor"))
         #expect(source.contains("button_mapping.mouse_distance.label"))
+        #expect(source.contains("settings.mouseClickOnOKEnabled"))
+        #expect(source.contains("button_mapping.mouse_click_on_ok.label"))
         #expect(source.contains("button_mapping.action_filter.mouse"))
         #expect(source.contains("cases.append(.combinations)"))
         #expect(source.contains("mappingActionFilter = .customShortcuts"))

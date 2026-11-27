@@ -4385,6 +4385,27 @@ struct SettingsView: View {
                 )
             }
 
+            // 「移动后按 OK 单击」是鼠标分类的全局辅助开关；选中鼠标分类时
+            // 即使当前按键不是鼠标动作也要可见，避免用户找不到设置。
+            if mappingActionFilter == .mouse ||
+                (mappingActionFilter == .all && configured.action.isMouseMove) {
+                Toggle(isOn: Binding(
+                    get: { settings.mouseClickOnOKEnabled },
+                    set: { settings.mouseClickOnOKEnabled = $0 }
+                )) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(localization.text("button_mapping.mouse_click_on_ok.label"))
+                            .font(.system(size: 13))
+                        Text(localization.text("button_mapping.mouse_click_on_ok.hint"))
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .toggleStyle(.switch)
+                .accessibilityLabel(localization.text("button_mapping.mouse_click_on_ok.label"))
+                .help(localization.text("button_mapping.mouse_click_on_ok.hint"))
+            }
+
             // 「目标 APP」属于「打开 App」分类：切到其他胶囊时必须一起隐藏，
             // 不能只凭当前动作是「打开自定义 APP」就常驻在页面上。
             if configured.action == .openCustomApplication,
