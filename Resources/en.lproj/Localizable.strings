@@ -538,6 +538,16 @@
 "permission.action.open_settings" = "Open System Settings";
 "permission.accessibility.title" = "Accessibility (new name: Device Control and Data Access)";
 "permission.accessibility.description" = "Send mapped button actions to the current app";
+"permission.helper.product" = "SayAll";
+"permission.helper.drag" = "Drag me";
+"permission.helper.hint" = "Drag into the list, or click + to add";
+"permission.helper.idle" = "Checked after you drop it";
+"permission.helper.checking" = "Added. Checking permission…";
+"permission.helper.waiting" = "Waiting for macOS permission";
+"permission.helper.added" = "Added";
+"permission.helper.drag_failed" = "Couldn't drag. Click + to add.";
+"permission.helper.reopen" = "Reopen System Settings";
+"permission.helper.accessibility_label" = "Drag SayAll into the permission list";
 "permissions.upgrade_identity_help" = "If access was lost after an update, keep SayAll in Applications and grant the missing permission again";
 "diagnostics.title" = "Diagnostics";
 "diagnostics.logs.title" = "App Logs";

@@ -538,6 +538,16 @@
 "permission.action.open_settings" = "打开系统设置";
 "permission.accessibility.title" = "辅助功能（新名称：设备控制和数据访问）";
 "permission.accessibility.description" = "把映射后的按键动作发送给当前应用";
+"permission.helper.product" = "无线麦 SayAll";
+"permission.helper.drag" = "拖我";
+"permission.helper.hint" = "拖入列表，或点 + 添加";
+"permission.helper.idle" = "拖入后自动检查";
+"permission.helper.checking" = "已拖入，正在检查权限…";
+"permission.helper.waiting" = "还在等待系统授权";
+"permission.helper.added" = "已添加";
+"permission.helper.drag_failed" = "拖动失败，请点 + 添加";
+"permission.helper.reopen" = "重新打开系统设置";
+"permission.helper.accessibility_label" = "拖动无线麦 SayAll 到权限列表";
 "permissions.upgrade_identity_help" = "如果升级后权限没有延续，请把这个 Developer ID 签名版本保留在“应用程序”中，并补授权一次；后续同身份签名更新将继续复用该系统权限";
 "diagnostics.title" = "诊断";
 "diagnostics.logs.title" = "应用日志";

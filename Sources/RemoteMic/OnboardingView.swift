@@ -5488,12 +5488,12 @@ struct OnboardingView: View {
 
     private func requestInputMonitoringPermission() {
         guard interactionProbe == nil else { return }
-        model.requestInputMonitoringPermission()
+        model.requestInputMonitoringPermission(source: .onboarding)
     }
 
     private func requestAccessibilityPermission() {
         guard interactionProbe == nil else { return }
-        model.requestAccessibilityPermission()
+        model.requestAccessibilityPermission(source: .onboarding)
     }
 
     private func openBluetoothPrivacySettings() {
