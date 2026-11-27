@@ -801,7 +801,8 @@ struct SettingsView: View {
                 settings.showActionFeedback = !isOff
                 if isOff {
                     Task { @MainActor in
-                        ActionFeedbackCenter.shared.dismiss()
+                        // 面板常显，关掉开关要把会话状态一起清掉才会隐藏。
+                        ActionFeedbackCenter.shared.reset()
                     }
                 }
             }

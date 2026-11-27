@@ -27,7 +27,6 @@ struct ActionFeedbackCenterTests {
     private func makeCenter(
         clock: TestClock = TestClock(),
         successDuration: TimeInterval = 60,
-        failureDuration: TimeInterval = 60,
         mergeWindow: TimeInterval = 2,
         copiedDuration: TimeInterval = 2,
         logs: @escaping (String) -> Void = { _ in },
@@ -36,7 +35,6 @@ struct ActionFeedbackCenterTests {
         ActionFeedbackCenter(
             now: { clock.date },
             successDuration: successDuration,
-            failureDuration: failureDuration,
             mergeWindow: mergeWindow,
             copiedDuration: copiedDuration,
             log: logs,
@@ -247,23 +245,65 @@ struct ActionFeedbackCenterTests {
         #expect(logs.contains { $0.contains("presentation=disabled_success") })
     }
 
-    @Test func hoverPausesFailureDismissal() async throws {
+    @Test func failureStaysUntilDismissed() async throws {
         let (localization, defaults, name) = try makeLocalization()
         defer { defaults.removePersistentDomain(forName: name) }
-        let center = makeCenter(failureDuration: 0.08)
+        let center = makeCenter()
         let strings = ActionFeedbackStrings(localization: localization)
         center.record(
             event(result: .failure(.executionFailed)),
             strings: strings
         )
-        #expect(center.presentation != nil)
+        #expect(center.presentation?.kind == .failure)
+
+        try await Task.sleep(nanoseconds: 500_000_000)
+        // 监控面板：失败不自动消失，停在失败态直到用户处理。
+        #expect(center.presentation?.kind == .failure)
+
+        center.dismiss()
+        #expect(center.presentation == nil)
+        // 面板常显，最近一条要继续留在空闲态里。
+        #expect(center.lastPresentation?.kind == .failure)
+        #expect(center.sessionCount == 1)
+    }
+
+    @Test func idleStateKeepsLastPresentationAndCount() async throws {
+        let (localization, defaults, name) = try makeLocalization()
+        defer { defaults.removePersistentDomain(forName: name) }
+        let center = makeCenter(successDuration: 0.05)
+        let strings = ActionFeedbackStrings(localization: localization)
+        center.record(event(), strings: strings)
+        #expect(center.sessionCount == 1)
+
+        try await Task.sleep(nanoseconds: 500_000_000)
+        #expect(center.presentation == nil)
+        #expect(center.lastPresentation?.kind == .success)
+        #expect(center.sessionCount == 1)
+
+        center.reset()
+        #expect(center.lastPresentation == nil)
+        #expect(center.sessionCount == 0)
+    }
+
+    @Test func hoverAndDragPauseSuccessDismissal() async throws {
+        let (localization, defaults, name) = try makeLocalization()
+        defer { defaults.removePersistentDomain(forName: name) }
+        let center = makeCenter(successDuration: 0.08)
+        let strings = ActionFeedbackStrings(localization: localization)
+        center.record(event(), strings: strings)
+        #expect(center.presentation?.kind == .success)
 
         center.setHovering(true)
-        try await Task.sleep(nanoseconds: 1_000_000_000)
+        try await Task.sleep(nanoseconds: 600_000_000)
         #expect(center.presentation != nil)
 
+        center.setDragging(true)
         center.setHovering(false)
-        try await Task.sleep(nanoseconds: 1_000_000_000)
+        try await Task.sleep(nanoseconds: 600_000_000)
+        #expect(center.presentation != nil)
+
+        center.setDragging(false)
+        try await Task.sleep(nanoseconds: 800_000_000)
         #expect(center.presentation == nil)
     }
 
@@ -442,6 +482,80 @@ struct ActionFeedbackLayoutTests {
             windowFrame: CGRect(x: 2_500, y: 100, width: 100, height: 100),
             screenFrames: screens
         ) == nil)
+    }
+
+    @Test func normalizedOriginRoundTripsThroughRestore() {
+        let visibleFrame = CGRect(x: 0, y: 25, width: 1_440, height: 850)
+        let panelSize = CGSize(width: 400, height: 100)
+        let origin = CGPoint(x: 700, y: 500)
+        let normalized = ActionFeedbackLayout.normalizedOrigin(
+            origin: origin,
+            panelSize: panelSize,
+            visibleFrame: visibleFrame
+        )
+        #expect(normalized.x > 0 && normalized.x < 1)
+        #expect(normalized.y > 0 && normalized.y < 1)
+
+        let restored = ActionFeedbackLayout.origin(
+            normalizedX: normalized.x,
+            normalizedY: normalized.y,
+            panelSize: panelSize,
+            visibleFrame: visibleFrame
+        )
+        #expect(abs(restored.x - origin.x) < 0.5)
+        #expect(abs(restored.y - origin.y) < 0.5)
+    }
+
+    @Test func draggedOriginStaysInsideVisibleFrame() {
+        let visibleFrame = CGRect(x: 0, y: 25, width: 1_440, height: 850)
+        let panelSize = CGSize(width: 400, height: 100)
+        let clamped = ActionFeedbackLayout.clampedOrigin(
+            CGPoint(x: -500, y: 5_000),
+            panelSize: panelSize,
+            visibleFrame: visibleFrame
+        )
+        #expect(clamped.x == visibleFrame.minX + ActionFeedbackLayout.edgeMargin)
+        #expect(clamped.y == visibleFrame.maxY - panelSize.height
+            - ActionFeedbackLayout.edgeMargin)
+    }
+
+    @Test func storedCornerSurvivesDisplayChange() {
+        let visibleFrame = CGRect(x: 0, y: 25, width: 1_440, height: 850)
+        let panelSize = CGSize(width: 400, height: 100)
+        let largeFrame = CGRect(x: 0, y: 0, width: 3_840, height: 2_160)
+        let cornerOrigin = CGPoint(
+            x: largeFrame.maxX - panelSize.width - ActionFeedbackLayout.edgeMargin,
+            y: largeFrame.minY + ActionFeedbackLayout.edgeMargin
+        )
+        let normalized = ActionFeedbackLayout.normalizedOrigin(
+            origin: cornerOrigin,
+            panelSize: panelSize,
+            visibleFrame: largeFrame
+        )
+        let restored = ActionFeedbackLayout.origin(
+            normalizedX: normalized.x,
+            normalizedY: normalized.y,
+            panelSize: panelSize,
+            visibleFrame: visibleFrame
+        )
+        #expect(abs(restored.x - (visibleFrame.maxX - panelSize.width
+            - ActionFeedbackLayout.edgeMargin)) < 0.5)
+        #expect(abs(restored.y - (visibleFrame.minY
+            + ActionFeedbackLayout.edgeMargin)) < 0.5)
+    }
+
+    @Test func placementIsRememberedPerDisplay() throws {
+        let name = "ActionFeedbackPlacement.\(UUID().uuidString)"
+        let defaults = try #require(TestUserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        let store = ActionFeedbackPlacementStore(defaults: defaults)
+        let placement = ActionFeedbackPlacement(normalizedX: 0.25, normalizedY: 0.75)
+
+        #expect(store.placement(displayID: 1) == nil)
+
+        store.save(placement, displayID: 1)
+        #expect(store.placement(displayID: 1) == placement)
+        #expect(store.placement(displayID: 2) == nil)
     }
 }
 

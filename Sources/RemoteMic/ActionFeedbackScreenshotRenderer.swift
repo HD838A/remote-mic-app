@@ -55,21 +55,23 @@ enum ActionFeedbackScreenshotRenderer {
                 (NSAppearance.Name.aqua, "light"),
                 (NSAppearance.Name.darkAqua, "dark"),
             ] {
-                for (kind, presentation) in try presentations(
-                    language: language,
-                    strings: strings
-                ) {
+                for state in try states(language: language, strings: strings) {
                     let view = ZStack {
                         appearanceSuffix == "light"
                             ? Color(hex: 0xF2F2F4)
                             : Color(hex: 0x1C1C1E)
                         ActionFeedbackView(
-                            presentation: presentation,
+                            presentation: state.presentation,
+                            lastPresentation: state.lastPresentation,
+                            sessionCount: state.sessionCount,
+                            strings: strings,
                             isCopied: false,
                             onAction: { _ in },
                             onCopy: {},
                             onClose: {},
-                            onHover: { _ in }
+                            onHover: { _ in },
+                            onDrag: { _ in },
+                            onDragEnd: {}
                         )
                     }
                     .frame(width: canvasSize.width, height: canvasSize.height)
@@ -103,7 +105,7 @@ enum ActionFeedbackScreenshotRenderer {
                     ) else {
                         throw RenderingError.pngCreationFailed
                     }
-                    let filename = "action-feedback-\(languageSuffix)-\(appearanceSuffix)-\(kind).png"
+                    let filename = "action-feedback-\(languageSuffix)-\(appearanceSuffix)-\(state.name).png"
                     try png.write(to: outputDirectory.appendingPathComponent(filename))
                     window.orderOut(nil)
                     window.contentView = nil
@@ -112,10 +114,10 @@ enum ActionFeedbackScreenshotRenderer {
         }
     }
 
-    private static func presentations(
+    private static func states(
         language: AppLanguage,
         strings: ActionFeedbackStrings
-    ) throws -> [(kind: String, presentation: ActionFeedbackPresentation)] {
+    ) throws -> [RenderState] {
         let successName = language == .simplifiedChinese ? "打开微信" : "Open WeChat"
         let failureName = language == .simplifiedChinese ? "发送到微信" : "Send to WeChat"
         let success = try presentation(
@@ -141,7 +143,34 @@ enum ActionFeedbackScreenshotRenderer {
             strings: strings,
             handlers: ActionFeedbackActionHandlers(retry: {})
         )
-        return [("success", success), ("failure", failure)]
+        return [
+            RenderState(
+                name: "idle",
+                presentation: nil,
+                lastPresentation: success,
+                sessionCount: 4
+            ),
+            RenderState(
+                name: "success",
+                presentation: success,
+                lastPresentation: success,
+                sessionCount: 1
+            ),
+            RenderState(
+                name: "failure",
+                presentation: failure,
+                lastPresentation: failure,
+                sessionCount: 2
+            ),
+        ]
+    }
+
+    /// 监控面板的一种状态：空闲（presentation 为 nil）、成功、失败。
+    private struct RenderState {
+        let name: String
+        let presentation: ActionFeedbackPresentation?
+        let lastPresentation: ActionFeedbackPresentation?
+        let sessionCount: Int
     }
 
     private static func presentation(
@@ -151,7 +180,6 @@ enum ActionFeedbackScreenshotRenderer {
     ) throws -> ActionFeedbackPresentation {
         let center = ActionFeedbackCenter(
             successDuration: 3_600,
-            failureDuration: 3_600,
             log: { _ in },
             pasteboardWriter: { _ in }
         )
