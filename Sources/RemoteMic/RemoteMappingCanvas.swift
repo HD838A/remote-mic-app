@@ -138,21 +138,38 @@ struct RemoteMappingCanvas: View {
     /// 方案作用域只覆盖 10 个普通按键；不在范围内的按键置灰且不可点。
     var reservedButtons: Set<RemoteButton> = []
 
+    private var isT1: Bool { remoteModel == .t1 }
+    private var placements: [RemoteMappingPlacement] {
+        isT1 ? T1RemoteFaceLayout.placements : RemoteMappingLayout.buttonPlacements
+    }
+    private var voiceAnchor: UnitPoint { isT1 ? T1RemoteFaceLayout.voice : RemoteMappingLayout.voiceAnchor }
+    private var voiceTargetY: CGFloat { isT1 ? T1RemoteFaceLayout.voiceCardY : RemoteMappingLayout.voiceTargetY }
+
     var body: some View {
         GeometryReader { geometry in
             let metrics = Metrics(width: geometry.size.width)
             ZStack {
-                MappingRemotePhoto(model: remoteModel)
-                    .frame(
-                        width: RemoteMappingLayout.remoteSize.width,
-                        height: RemoteMappingLayout.remoteSize.height
-                    )
-                    .position(x: metrics.remoteCenterX, y: RemoteMappingLayout.canvasHeight / 2)
-                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                Group {
+                    if isT1 {
+                        T1RemoteFace(
+                            selectedButton: selectedButton,
+                            activeButtons: activeButtons,
+                            reservedButtons: reservedButtons,
+                            voiceActive: voiceActive,
+                            onEdit: { onEdit($0, .singleClick) },
+                            onVoice: onVoiceSettings
+                        )
+                    } else {
+                        MappingRemotePhoto(model: remoteModel)
+                    }
+                }
+                .frame(width: RemoteMappingLayout.remoteSize.width, height: RemoteMappingLayout.remoteSize.height)
+                .position(x: metrics.remoteCenterX, y: RemoteMappingLayout.canvasHeight / 2)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
 
                 connectionLines(metrics: metrics)
 
-                ForEach(RemoteMappingLayout.buttonPlacements) { placement in
+                ForEach(placements) { placement in
                     mappingCard(placement.button)
                         .frame(width: metrics.cardWidth, height: metrics.cardHeight)
                         .position(
@@ -165,7 +182,7 @@ struct RemoteMappingCanvas: View {
                     .frame(width: metrics.cardWidth, height: metrics.cardHeight)
                     .position(
                         x: metrics.cardCenterX(for: .right),
-                        y: RemoteMappingLayout.canvasHeight * RemoteMappingLayout.voiceTargetY
+                        y: RemoteMappingLayout.canvasHeight * voiceTargetY
                     )
             }
         }
@@ -174,7 +191,7 @@ struct RemoteMappingCanvas: View {
 
     private func connectionLines(metrics: Metrics) -> some View {
         Canvas { context, _ in
-            for placement in RemoteMappingLayout.buttonPlacements {
+            for placement in placements {
                 drawConnection(
                     context: &context,
                     start: metrics.remotePoint(for: placement.anchor),
@@ -186,8 +203,8 @@ struct RemoteMappingCanvas: View {
             }
             drawConnection(
                 context: &context,
-                start: metrics.remotePoint(for: RemoteMappingLayout.voiceAnchor),
-                end: metrics.cardEdgePoint(side: .right, targetY: RemoteMappingLayout.voiceTargetY),
+                start: metrics.remotePoint(for: voiceAnchor),
+                end: metrics.cardEdgePoint(side: .right, targetY: voiceTargetY),
                 side: .right,
                 selected: voiceActive,
                 showsAnchor: voiceActive
@@ -449,6 +466,7 @@ private enum MappingRemoteImageResource {
     }()
 
     static func image(for model: XiaomiRemoteModel?) -> NSImage? {
+        guard model != .t1 else { return nil }
         let resourceName = VoiceRemoteCatalog.photoResource(for: model ?? .rc003)
             ?? "RC003-remote-photo"
         return images[resourceName]

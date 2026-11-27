@@ -75,6 +75,117 @@ check(
     "Xiaomi voice remote matcher rejects blank, nil, and similar non-target names"
 )
 
+check(
+    BluetoothDiscoveryScanPolicy.shouldInspect(
+        identifier: UUID(), targetIdentifier: nil, knownIdentifiers: [],
+        advertisesVoiceService: false, advertisedName: "T1-Remote", peripheralName: nil
+    ) && !BluetoothDiscoveryScanPolicy.shouldInspect(
+        identifier: UUID(), targetIdentifier: nil, knownIdentifiers: [],
+        advertisesVoiceService: false, advertisedName: "T1 Television", peripheralName: nil
+    ),
+    "T1 name is an exact discovery hint without an ATVV advertisement"
+)
+
+let t1Model = Data("hid_mouse".utf8)
+let t1Manufacturer = Data("shenzhen_xingwei".utf8)
+let t1PnPID = Data([1, 0x0A, 0x62, 0x07, 0x04, 0, 0])
+check(
+    T1VoiceRemote.matchesDeviceInformation(model: t1Model, manufacturer: t1Manufacturer, pnp: t1PnPID) &&
+        !T1VoiceRemote.matchesDeviceInformation(model: t1Model, manufacturer: Data("other".utf8), pnp: t1PnPID) &&
+        !T1VoiceRemote.matchesDeviceInformation(model: t1Model, manufacturer: t1Manufacturer, pnp: t1PnPID.dropLast()),
+    "T1 identification requires manufacturer, model and PnP identity"
+)
+let t1Pending = VoiceRemoteAdmission.decide(
+    identifier: UUID(), targetIdentifier: nil, advertisesVoiceService: true,
+    name: "T1-Remote", advertisedName: nil
+)
+check(t1Pending == .probeT1 && !t1Pending.isAdopted, "T1 discovery does not confirm device identity")
+let onboardingT1 = OnboardingXiaomiRemoteModel(rawValue: "t1")
+check(
+    onboardingT1?.model == .t1 &&
+        OnboardingPhysicalRemoteCard.ordered(availableSources: [.xiaomiRemote]).contains {
+            $0.id == "xiaomi_remote.t1"
+        } && OnboardingXiaomiEventPolicy.disposition(
+            profileModel: .t1, selectedModel: onboardingT1, controlSource: .xiaomiRemote
+        ) == .accept && OnboardingXiaomiEventPolicy.disposition(
+            profileModel: .rc001, selectedModel: onboardingT1, controlSource: .xiaomiRemote
+        ) == .rejectOtherModel,
+    "onboarding can select T1 and validates events from that model only"
+)
+check(
+    T1VoiceRemote.voiceIsHeld(reportID: 1, bytes: [0, 0, 0xAA, 0, 0, 0, 0, 0]) == true &&
+        T1VoiceRemote.voiceIsHeld(reportID: 1, bytes: [1, 0, 0, 0, 0, 0, 0, 0, 0]) == false &&
+        T1VoiceRemote.voiceIsHeld(reportID: 2, bytes: [2, 0, 0]) == nil,
+    "T1 voice uses keyboard slot release and ignores the consumer Search release"
+)
+check(
+    ATVVCapabilities.parse(Data([0x0B, 1, 0, 2, 0, 0, 0x80])).map(T1VoiceRemote.accepts) == true &&
+        versionOne.map(T1VoiceRemote.accepts) == false &&
+        T1VoiceRemote.capabilitiesRequest.last == 0,
+    "T1 voice requires the verified on-request negotiation"
+)
+let t1SearchMapping = HIDUsageMapping(source: T1VoiceRemote.searchUsage, destination: 0)
+let otherMapping = RemoteVoiceFunctionMappingPolicy.remoteVoiceKey
+let remappedT1 = RemoteVoiceFunctionMappingPolicy.applying(
+    to: [otherMapping], voiceMapping: t1SearchMapping, preservePowerKeyMapping: true
+)
+check(
+    remappedT1 == [otherMapping, t1SearchMapping] &&
+        RemoteVoiceFunctionMappingPolicy.restoring(
+            originalVoiceMapping: nil, originalPowerMapping: nil, in: remappedT1,
+            voiceSource: T1VoiceRemote.searchUsage, preservePowerKeyMapping: true
+        ) == [otherMapping],
+    "T1 Search neutralization preserves and restores independent mappings"
+)
+
+var t1FrontButtons = T1FrontButtonTracker()
+check(
+    t1FrontButtons.observe(reportID: 1, bytes: [0, 0, 0x04, 0xAA, 0, 0, 0, 0]).isEmpty &&
+        t1FrontButtons.observe(reportID: 1, bytes: [1, 0, 0, 0x65, 0, 0, 0, 0, 0])
+            == [T1FrontButtonEdge(button: .menu, phase: .press)] &&
+        t1FrontButtons.observe(reportID: 1, bytes: [0, 0, 1, 1, 1, 1, 1, 1]).isEmpty &&
+        t1FrontButtons.observe(reportID: 1, bytes: Array(repeating: 0, count: 8))
+            == [T1FrontButtonEdge(button: .menu, phase: .release)],
+    "T1 rear letters, voice and rollover do not trigger ordinary mappings"
+)
+let t1SharedNavigation: [(UInt8, RemoteButton)] = [
+    (0x52, .up), (0x51, .down), (0x50, .left), (0x4f, .right), (0x28, .ok),
+]
+for (usage, button) in t1SharedNavigation {
+    var tracker = T1FrontButtonTracker()
+    let report: [UInt8] = [1, 0, 0, usage, 0, 0, 0, 0, 0]
+    check(
+        tracker.observe(reportID: 1, bytes: report) == [T1FrontButtonEdge(button: button, phase: .press)] &&
+            tracker.observe(reportID: 1, bytes: report).isEmpty &&
+            tracker.observe(reportID: 1, bytes: [1] + Array(repeating: 0, count: 8)) ==
+                [T1FrontButtonEdge(button: button, phase: .release)] &&
+            T1FrontButtons.nativeMappings.contains(HIDUsageMapping(source: UInt64(7) << 32 | UInt64(usage), destination: 0)),
+        "T1 emits one edge per shared navigation key press and suppresses its duplicate system event"
+    )
+}
+check(
+    t1FrontButtons.observe(reportID: 2, bytes: [2, 0x24, 0x02])
+        == [T1FrontButtonEdge(button: .back, phase: .press)] &&
+        t1FrontButtons.observe(reportID: 3, bytes: [1])
+            == [T1FrontButtonEdge(button: .power, phase: .press)] &&
+        t1FrontButtons.observe(reportID: 4, bytes: [0, 0, 0, 0]).isEmpty &&
+        t1FrontButtons.observe(reportID: 2, bytes: [0x21, 0x02])
+            == [T1FrontButtonEdge(button: .back, phase: .release)] &&
+        t1FrontButtons.observe(reportID: 3, bytes: [3, 0])
+            == [T1FrontButtonEdge(button: .power, phase: .release)],
+    "T1 tracks report lifecycles independently and ignores mouse movement and Search"
+)
+check(
+    T1FrontButtons.buttons(reportID: 2, bytes: [0xE9, 0]) == [.volumeUp] &&
+        T1FrontButtons.buttons(reportID: 2, bytes: [0xEA, 0]) == [.volumeDown] &&
+        T1FrontButtons.buttons(reportID: 2, bytes: [0xE2, 0]) == [.mute] &&
+        T1FrontButtons.buttons(reportID: 2, bytes: [0x23, 0x02]) == [.home] &&
+        T1FrontButtons.buttons(reportID: 2, bytes: [3, 0xE9, 0]) == nil &&
+        T1FrontButtons.configurable == [.power, .menu, .back, .home, .mute, .volumeUp, .volumeDown,
+                                        .up, .down, .left, .right, .ok],
+    "T1 exposes the dedicated front controls and the shared navigation keys"
+)
+
 let generationOne: UInt64 = 1
 let generationTwo: UInt64 = 2
 let connecting = BluetoothLifecyclePhase.connecting(generationOne)
@@ -82,6 +193,16 @@ let discovering = BluetoothLifecyclePhase.discovering(generationOne)
 let awaiting = BluetoothLifecyclePhase.awaitingCapabilities(generationOne)
 let ready = BluetoothLifecyclePhase.ready(generationOne)
 let disconnecting = BluetoothLifecyclePhase.disconnecting(generationOne)
+check(
+    ready.isReady && !ATVVSessionGate.canOpenMicrophone(
+        phase: ready, generation: generationOne, capabilitiesConfirmed: true,
+        sampleRate: 16_000, requiredReleaseInputAvailable: false
+    ) && ATVVSessionGate.canOpenMicrophone(
+        phase: ready, generation: generationOne, capabilitiesConfirmed: true,
+        sampleRate: 16_000, requiredReleaseInputAvailable: true
+    ),
+    "T1 Bluetooth stays ready while a missing release monitor blocks the microphone"
+)
 check(
     connecting.acceptsDidConnect(generation: generationOne) &&
         connecting.acceptsDidFailToConnect(generation: generationOne) &&

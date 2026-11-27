@@ -58,11 +58,13 @@
 "connection.status.searching_for_device" = "Looking for %@";
 "connection.status.connecting" = "Connecting to the remote";
 "connection.status.initializing_voice" = "Initializing the voice service";
+"connection.status.t1_connected" = "T1 connected via Bluetooth";
 "connection.status.connected_to_device" = "Xiaomi remote connected";
 "connection.status.apple_remote_connected" = "Apple Remote connected";
 "connection.status.chromecast_connected" = "Chromecast remote connected";
 "connection.status.reconnecting" = "Connection lost; preparing to reconnect";
 "connection.error.voice_service_timeout" = "Remote voice service initialization timed out";
+"connection.error.t1_hid_unavailable" = "T1 could not verify its voice key. Check Input Monitoring and connect only one T1.";
 "connection.error.invalid_voice_response" = "The remote returned an invalid voice capability response";
 "connection.error.unsupported_16khz_codec" = "The remote did not provide a supported 16 kHz voice codec";
 "connection.error.unsupported_8khz_codec" = "The remote switched to an unsupported 8 kHz voice codec";
@@ -357,6 +359,7 @@
 "remote.device.model.apple_siri_remote_a2854" = "Apple Remote Type-C";
 "remote.device.model.apple_siri_remote_a2540" = "Apple Remote Lightning";
 "remote.device.model.chromecast_voice_remote" = "Chromecast Remote";
+"remote.device.model.t1" = "T1 Air Mouse";
 "remote.device.model.unknown" = "Unidentified remote";
 "remote.device.custom_name" = "Custom name";
 "remote.device.bind_button" = "Set Up Button Controls";
@@ -488,6 +491,8 @@
 "audio.output.privacy_help" = "Voice audio is sent to the selected device. When the last device disconnects, macOS switches the Mac’s default microphone to a physical microphone if it was using this virtual device. On reconnect, SayAll restores the virtual microphone only if you have not changed that setting. The default speakers are never changed.";
 "audio.compatibility.open_install_guide" = "Open Driver Installation Guide";
 "audio.compatibility.missing_notice" = "No compatible virtual microphone was found. Your voice tool may not receive device audio.";
+"button_mapping.t1.shared_navigation" = "Both sides share arrow and Return mappings.";
+"button_mapping.t1.air_mouse" = "Air mouse, managed by the remote";
 "button_mapping.page.title" = "Button Mapping";
 "button_mapping.page.subtitle" = "Click a button to change its settings";
 "button_mapping.toggle.enabled" = "Custom Buttons";
@@ -985,6 +990,8 @@
 "onboarding.remote.first_pairing.wake" = "Hold the TV button for about 2 seconds until the white light at the bottom starts flashing";
 "onboarding.remote.first_pairing.wake_without_light" = "Hold the TV button for about 2 seconds";
 "onboarding.remote.first_pairing.pair" = "Then hold Home + Menu together to enter Bluetooth pairing mode";
+"onboarding.remote.t1_pairing.mode" = "Hold Home and Back together until the indicator flashes";
+"onboarding.remote.t1_pairing.connect" = "In System Settings → Bluetooth, connect to T1-Remote";
 "onboarding.remote.siri_pairing.title" = "Connect the Apple Remote for the first time";
 "onboarding.remote.siri_pairing.step1" = "Turn off the Apple TV it was paired with, or it reconnects to that";
 "onboarding.remote.siri_pairing.step2" = "Open System Settings → Bluetooth on your Mac";
@@ -1065,7 +1072,7 @@
 "onboarding.voice_test.success" = "Voice and text input are confirmed";
 "onboarding.controls.title" = "Try your everyday control buttons";
 "onboarding.controls.detail" = "Press three different control buttons to try navigation, OK, Back, Home, or volume control.";
-"onboarding.controls.xiaomi.detail" = "Press three different control buttons on the Xiaomi remote, such as an arrow, OK, Back, Home, or volume.";
+"onboarding.controls.xiaomi.detail" = "Press three different control buttons on your remote, such as an arrow, OK, Back, Home, or volume.";
 "onboarding.controls.siri.detail" = "Press three different control buttons on the Apple Remote, such as an arrow, center, Back, TV, Play, or volume.";
 "onboarding.controls.chromecast.detail" = "Press three different control buttons on Chromecast Voice Remote, such as an arrow, OK, Back, Home, Mute, or volume.";
 "onboarding.controls.apple_companion.detail" = "Tap three different control buttons in the iPhone or Apple Watch remote, such as an arrow, OK, Back, or volume.";
@@ -1615,6 +1622,9 @@
 "remote.card.status.buttons_failed" = "Button issue";
 "remote.card.detail.buttons_failed" = "Device connected, but the buttons are not working.";
 
+"remote.card.status.permissions_required" = "Connected · Limited";
+"remote.card.detail.permissions_required" = "T1 is connected via Bluetooth. Enable Input Monitoring and Accessibility in Settings for voice and button mapping.";
+"remote.card.detail.mapping_permissions_required" = "Bluetooth is connected. Enable Input Monitoring and Accessibility in SayAll Settings to use mapped buttons.";
 "remote.card.status.voice_failed" = "Voice issue";
 "remote.card.detail.voice_failed" = "Device connected, but the entitled voice function is not working.";
 

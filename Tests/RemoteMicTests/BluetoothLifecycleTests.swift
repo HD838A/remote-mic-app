@@ -4,6 +4,31 @@ import Testing
 
 @Suite("Bluetooth lifecycle")
 struct BluetoothLifecycleTests {
+    @Test func startupRestoresSystemConnectedT1EvenWhenDiscoveryIsSuppressed() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("Sources/RemoteMic/BridgeAppModel.swift"),
+            encoding: .utf8
+        )
+        let start = try #require(source.range(of: "private func startBluetoothConnections()"))
+        let end = try #require(source.range(
+            of: "private func connectBluetoothIdentifier",
+            range: start.upperBound..<source.endIndex
+        ))
+        let startup = source[start.upperBound..<end.lowerBound]
+        #expect(startup.contains("T1VoiceKeyMonitor.systemConnectedBluetoothIdentifiers()"))
+        #expect(startup.contains(".intersection(savedT1Identifiers)"))
+        #expect(startup.contains("bluetoothBridges[identifier] == nil"))
+        let restore = try #require(startup.range(
+            of: "connectBluetoothIdentifier(identifier, manual: false)"
+        ))
+        let discovery = try #require(startup.range(of: "startBluetoothDiscoveryIfNeeded()"))
+        #expect(restore.lowerBound < discovery.lowerBound)
+    }
+
     @Test func systemSuspensionOnlyRestartsAnInterruptedConnectionCycle() {
         var readyState = BluetoothSystemSuspensionState()
         let didSuspendReady = readyState.suspend(phase: .ready(1))
@@ -1098,8 +1123,10 @@ struct BluetoothLifecycleTests {
 
         #expect(bridgeSource.contains("reconcileCandidateIdentifier?(candidate.identifier) == true"))
         #expect(bridgeSource.contains("reconcileCandidateIdentifier?(peripheral.identifier) == true"))
-        #expect(bridgeSource.contains("discoveredCandidate(candidate.identifier)"))
-        #expect(bridgeSource.contains("discoveredCandidate(peripheral.identifier)"))
+        #expect(bridgeSource.contains(
+            "discoveredCandidate(candidate.identifier, T1VoiceRemote.isDiscoveryName(candidate.name))"
+        ))
+        #expect(bridgeSource.contains("discoveredCandidate(peripheral.identifier, false)"))
         #expect(modelSource.contains("reconcileCandidateIdentifier: { [weak self] identifier in"))
         #expect(modelSource.contains("reconcileStaleRemoteIdentity(for: identifier) != nil"))
 

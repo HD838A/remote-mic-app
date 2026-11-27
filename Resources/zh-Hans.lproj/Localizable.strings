@@ -58,11 +58,13 @@
 "connection.status.searching_for_device" = "正在查找%@";
 "connection.status.connecting" = "正在连接遥控器";
 "connection.status.initializing_voice" = "正在初始化语音服务";
+"connection.status.t1_connected" = "T1 蓝牙已连接";
 "connection.status.connected_to_device" = "小米遥控器已连接";
 "connection.status.apple_remote_connected" = "苹果遥控器已连接";
 "connection.status.chromecast_connected" = "Chromecast 遥控器已连接";
 "connection.status.reconnecting" = "连接断开，准备重连";
 "connection.error.voice_service_timeout" = "遥控器语音服务初始化超时";
+"connection.error.t1_hid_unavailable" = "无法验证 T1 语音键。请检查输入监控权限，并仅连接一只 T1。";
 "connection.error.invalid_voice_response" = "遥控器返回了无效的语音能力响应";
 "connection.error.unsupported_16khz_codec" = "遥控器未提供受支持的 16 kHz 语音编码";
 "connection.error.unsupported_8khz_codec" = "遥控器切换到了不受支持的 8 kHz 语音编码";
@@ -357,6 +359,7 @@
 "remote.device.model.apple_siri_remote_a2854" = "苹果遥控器 Type-C";
 "remote.device.model.apple_siri_remote_a2540" = "苹果遥控器 Lightning";
 "remote.device.model.chromecast_voice_remote" = "Chromecast 遥控器";
+"remote.device.model.t1" = "艾拍宝 T1";
 "remote.device.model.unknown" = "未识别的遥控器";
 "remote.device.custom_name" = "自定义名称";
 "remote.device.bind_button" = "绑定普通按键";
@@ -488,6 +491,8 @@
 "audio.output.privacy_help" = "语音会写入所选设备。最后一只设备断开时，如果系统默认输入正是该虚拟设备，会临时回退到物理麦克风；重连时仅在用户没有手动改选的情况下恢复。系统默认输出不会被修改。";
 "audio.compatibility.open_install_guide" = "打开驱动安装说明";
 "audio.compatibility.missing_notice" = "未检测到兼容虚拟麦克风，语音工具可能收不到设备声音。";
+"button_mapping.t1.shared_navigation" = "两面共用方向键和回车映射。";
+"button_mapping.t1.air_mouse" = "飞鼠开关，由遥控器处理";
 "button_mapping.page.title" = "按键映射";
 "button_mapping.page.subtitle" = "点击按键进行设置";
 "button_mapping.toggle.enabled" = "自定义按键";
@@ -984,6 +989,8 @@
 "onboarding.remote.first_pairing.wake" = "长按 TV 键约 2 秒，直到遥控器底部白灯开始闪烁";
 "onboarding.remote.first_pairing.wake_without_light" = "长按 TV 键约 2 秒";
 "onboarding.remote.first_pairing.pair" = "同时长按 Home（主页）+ Menu（菜单）键，进入蓝牙配对模式";
+"onboarding.remote.t1_pairing.mode" = "同时长按主页键和返回键，直到指示灯闪烁";
+"onboarding.remote.t1_pairing.connect" = "在系统设置的蓝牙列表中连接 T1-Remote";
 "onboarding.remote.siri_pairing.title" = "首次连接苹果遥控器";
 "onboarding.remote.siri_pairing.step1" = "先关掉它原来配对的 Apple TV，否则遥控器会自动连回去";
 "onboarding.remote.siri_pairing.step2" = "打开 Mac 的“系统设置 → 蓝牙”";
@@ -1064,7 +1071,7 @@
 "onboarding.voice_test.success" = "语音与文字输入都已确认";
 "onboarding.controls.title" = "试试常用的控制按键";
 "onboarding.controls.detail" = "连续按下三个不同的普通按键，感受方向、确认、返回、主页或音量控制。";
-"onboarding.controls.xiaomi.detail" = "在小米遥控器上连续按下三个不同的普通按键，例如方向、确定、返回、主页或音量。";
+"onboarding.controls.xiaomi.detail" = "在遥控器上连续按下三个不同的普通按键，例如方向、确认、返回、主页或音量。";
 "onboarding.controls.siri.detail" = "在苹果遥控器上连续按下三个不同的普通按键，例如方向、中心、返回、TV、播放或音量。";
 "onboarding.controls.chromecast.detail" = "在 Chromecast 遥控器上连续按下三个不同的普通按键，例如方向、确定、返回、主页、静音或音量。";
 "onboarding.controls.apple_companion.detail" = "在 iPhone 或 Apple Watch 遥控器中点按三个不同的普通控制，例如方向、确定、返回或音量。";
@@ -1614,6 +1621,9 @@
 "remote.card.status.buttons_failed" = "按键异常";
 "remote.card.detail.buttons_failed" = "设备已连接，但按键功能出现问题。";
 
+"remote.card.status.permissions_required" = "已连接 · 需授权";
+"remote.card.detail.permissions_required" = "T1 已通过蓝牙连接。请在设置中启用输入监控与辅助功能，以使用语音和按键映射。";
+"remote.card.detail.mapping_permissions_required" = "蓝牙已连接。请在 SayAll 设置中启用输入监控与辅助功能，以使用按键映射。";
 "remote.card.status.voice_failed" = "语音异常";
 "remote.card.detail.voice_failed" = "设备已连接，但已授权的语音功能出现问题。";
 

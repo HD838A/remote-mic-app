@@ -26,6 +26,7 @@ extension AppSettings {
         case .appleSiriRemoteA2854: return "apple-siri-remote-a2854"
         case .appleSiriRemoteA2540: return "apple-siri-remote-a2540"
         case .chromecastVoiceRemote: return "chromecast-voice-remote"
+        case .t1: return "t1-air-mouse"
         default: return "xiaomi-remote-2-pro"
         }
     }

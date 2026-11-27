@@ -499,12 +499,11 @@ enum OnboardingAppleRemoteGeneration: String, Codable, CaseIterable, Identifiabl
     }
 }
 
-/// Onboarding 需要用户明确选择的具体小米型号。
-///
-/// 持久化只允许这两个已验证型号；Apple、Chromecast 和 `.unknown` 不属于这个选择。
+/// 使用公共蓝牙桥的可选遥控器型号。保留现有持久化键和小米型号值。
 enum OnboardingXiaomiRemoteModel: String, Codable, CaseIterable, Identifiable {
     case rc003
     case rc001
+    case t1
 
     var id: String { rawValue }
 
@@ -512,6 +511,7 @@ enum OnboardingXiaomiRemoteModel: String, Codable, CaseIterable, Identifiable {
         switch self {
         case .rc003: return .rc003
         case .rc001: return .rc001
+        case .t1: return .t1
         }
     }
 
@@ -582,7 +582,7 @@ enum OnboardingXiaomiEventPolicy {
     ) -> OnboardingXiaomiEventDisposition {
         guard controlSource == .xiaomiRemote, let selectedModel else { return .accept }
         switch profileModel {
-        case .rc001?, .rc003?:
+        case .rc001?, .rc003?, .t1?:
             return profileModel == selectedModel.model ? .accept : .rejectOtherModel
         case .unknown?, .none:
             return .pendingIdentity
@@ -802,6 +802,7 @@ struct OnboardingVoicePairingPlan: Equatable {
 /// 物理遥控器的图片必须跟随用户选择的来源，不能把一张小米图片当成所有硬件的占位图。
 enum OnboardingRemotePhotoKind: Equatable {
     case bundled(resourceName: String)
+    case t1
     case siriRemote
     case chromecastRemote
     case placeholder
@@ -816,6 +817,7 @@ enum OnboardingRemotePhotoKind: Equatable {
             // Only a Xiaomi profile may refine the image. A previously selected
             // Apple/Chromecast profile must never replace the Xiaomi card artwork.
             let preferredModel = onboardingXiaomiModel?.model ?? selectedModel
+            if preferredModel == .t1 { return .t1 }
             if let preferredModel,
                preferredModel == .rc001 || preferredModel == .rc003 {
                 guard let resource = VoiceRemoteCatalog.photoResource(for: preferredModel) else {

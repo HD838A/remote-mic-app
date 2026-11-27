@@ -4069,6 +4069,12 @@ final class AppSettings: ObservableObject {
         if let model = settingsModel(for: profileID) {
             snapshot.repeatSingleStartMilliseconds = buttonGestureTiming(for: model)
                 .repeatSingleStartMilliseconds
+            if model == .t1, button.isDirectional, timing.modes[button.rawValue] == nil,
+               interactionModeOverride?(profileID ?? selectedRemoteProfileID, button) == nil,
+               snapshot.single.action == Self.defaultBindings[button],
+               !snapshot.hasOpaqueBinding, !snapshot.recognizesDouble, !snapshot.recognizesLong {
+                snapshot.mode = .repeatSingle
+            }
         }
         // 默认取基础层的动作；方案生效时由监听层按活动方案覆盖。
         snapshot.allowsKeyHold = button.allowsKeyHold

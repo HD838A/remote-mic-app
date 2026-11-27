@@ -821,6 +821,7 @@ struct OnboardingView: View {
 
     private var remoteAvailabilityContent: some View {
         let compact = availablePhysicalControlCards.count > 1
+        let dense = availablePhysicalControlCards.count > 4
         let physicalColumns = [GridItem(.flexible())]
         return VStack(alignment: .leading, spacing: compact ? 10 : 16) {
             onboardingTitle("onboarding.control_source.title")
@@ -845,7 +846,7 @@ struct OnboardingView: View {
                 spacing: compact ? 8 : 10
             ) {
                 ForEach(availablePhysicalControlCards) { card in
-                    physicalRemoteCard(card, compact: compact)
+                    physicalRemoteCard(card, compact: compact, dense: dense)
                 }
             }
 
@@ -912,7 +913,8 @@ struct OnboardingView: View {
 
     private func physicalRemoteCard(
         _ card: OnboardingPhysicalRemoteCard,
-        compact: Bool
+        compact: Bool,
+        dense: Bool
     ) -> some View {
         let actionID = "control-source.\(card.id)"
         let isSelected: Bool
@@ -933,7 +935,7 @@ struct OnboardingView: View {
             }
         } label: {
             HStack(alignment: .center, spacing: 11) {
-                physicalCardThumbnail(card, compact: compact)
+                physicalCardThumbnail(card, compact: compact, height: dense ? 48 : compact ? 60 : 72)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(localization.text(physicalCardTitleKey(card)))
                         .font(.system(size: 13, weight: .semibold))
@@ -957,7 +959,7 @@ struct OnboardingView: View {
             .padding(compact ? 10 : 12)
             .frame(
                 maxWidth: .infinity,
-                minHeight: compact ? 84 : 96,
+                minHeight: dense ? 68 : compact ? 84 : 96,
                 alignment: .center
             )
             .background(
@@ -996,7 +998,8 @@ struct OnboardingView: View {
     @ViewBuilder
     private func physicalCardThumbnail(
         _ card: OnboardingPhysicalRemoteCard,
-        compact: Bool
+        compact: Bool,
+        height: CGFloat
     ) -> some View {
         switch card {
         case let .xiaomi(model):
@@ -1005,12 +1008,16 @@ struct OnboardingView: View {
                 selectedModel: nil,
                 onboardingXiaomiModel: model
             )
-            if case let .bundled(resourceName) = photoKind,
+            if photoKind == .t1 {
+                T1RemoteFace.preview(height: height)
+                    .frame(width: compact ? 36 : 42, height: height)
+                    .accessibilityHidden(true)
+            } else if case let .bundled(resourceName) = photoKind,
                let image = bundledRemoteImage(resourceName: resourceName) {
                 Image(nsImage: image)
                     .resizable()
                     .scaledToFit()
-                    .frame(width: compact ? 36 : 42, height: compact ? 60 : 72)
+                    .frame(width: compact ? 36 : 42, height: height)
                     .clipShape(RoundedRectangle(cornerRadius: 8))
             } else {
                 Image(systemName: "appletvremote.gen4.fill")
@@ -1022,8 +1029,8 @@ struct OnboardingView: View {
         case .apple:
             #if SAYALL_SIRI_REMOTE_ENABLED && canImport(SayAllSiriRemote)
             SiriRemoteConnectionPhoto()
-                .scaleEffect(compact ? 0.32 : 0.38)
-                .frame(width: compact ? 36 : 42, height: compact ? 60 : 72)
+                .scaleEffect(height / 188)
+                .frame(width: compact ? 36 : 42, height: height)
                 .clipped()
             #else
             Image(systemName: "appletvremote.gen4.fill")
@@ -1120,7 +1127,11 @@ struct OnboardingView: View {
                 selectedModel: settings.selectedRemoteProfile?.model,
                 onboardingXiaomiModel: settings.onboardingXiaomiRemoteModel
             )
-            if case let .bundled(resourceName) = photoKind,
+            if photoKind == .t1 {
+                T1RemoteFace.preview(height: emphasized ? 72 : 50)
+                    .frame(width: emphasized ? 42 : 30)
+                    .accessibilityHidden(true)
+            } else if case let .bundled(resourceName) = photoKind,
                let image = bundledRemoteImage(resourceName: resourceName) {
                 Image(nsImage: image)
                     .resizable()
@@ -2644,6 +2655,12 @@ struct OnboardingView: View {
                 ]
             )
         case .xiaomiRemote:
+            if xiaomiModel == .t1 {
+                return PhysicalRemotePairingGuide(
+                    title: "onboarding.remote.first_pairing.title",
+                    steps: ["onboarding.remote.t1_pairing.mode", "onboarding.remote.t1_pairing.connect"]
+                )
+            }
             // 只有 2 Pro 有底部白灯；小米蓝牙遥控器 2 保留唤醒步骤，但不提示白灯。
             // 型号未知时也使用不带白灯的短文案，避免把 2 当成 2 Pro。
             let wakeKey = xiaomiModel == .rc003
@@ -2686,14 +2703,18 @@ struct OnboardingView: View {
     }
 
     private var displayedControlButtons: [RemoteButton]? {
-        Self.displayedControlButtons(for: settings.onboardingControlSource)
+        Self.displayedControlButtons(
+            for: settings.onboardingControlSource, xiaomiModel: settings.onboardingXiaomiRemoteModel
+        )
     }
 
     static func displayedControlButtons(
-        for source: OnboardingControlSource
+        for source: OnboardingControlSource,
+        xiaomiModel: OnboardingXiaomiRemoteModel? = nil
     ) -> [RemoteButton]? {
         switch source {
         case .xiaomiRemote:
+            if xiaomiModel == .t1 { return RemoteButton.allCases.filter(T1FrontButtons.configurable.contains) }
             return RemoteButton.xiaomiCases
         case .siriRemote:
             return [
@@ -2990,6 +3011,8 @@ struct OnboardingView: View {
             } else {
                 remotePhotoPlaceholder
             }
+        case .t1:
+            T1RemoteFace.preview(height: settings.onboardingStep == .remote ? 360 : 280)
         case .siriRemote:
             #if SAYALL_SIRI_REMOTE_ENABLED && canImport(SayAllSiriRemote)
             SiriRemoteConnectionPhoto()
@@ -4541,12 +4564,9 @@ struct OnboardingView: View {
     }
 
     private func inferredOnboardingXiaomiModel() -> OnboardingXiaomiRemoteModel? {
-        if let selectedModel = settings.selectedRemoteProfile?.model {
-            switch selectedModel {
-            case .rc001: return .rc001
-            case .rc003: return .rc003
-            default: break
-            }
+        if let selectedModel = settings.selectedRemoteProfile?.model,
+           let onboardingModel = OnboardingXiaomiRemoteModel(rawValue: selectedModel.rawValue) {
+            return onboardingModel
         }
         let connected = model.connectedOnboardingXiaomiModels
         if connected.count == 1 {
@@ -5332,7 +5352,7 @@ struct OnboardingView: View {
                     "result=discovery_started"
             )
         }
-        model.findRemoteDevices()
+        model.findRemoteDevices(expectedModel: selectedModel)
         model.applyHIDSettings()
     }
 
@@ -5356,15 +5376,10 @@ struct OnboardingView: View {
 
     private var preferredConnectedXiaomiModel: OnboardingXiaomiRemoteModel? {
         let connected = model.connectedOnboardingXiaomiModels
-        if let selectedModel = settings.selectedRemoteProfile?.model {
-            switch selectedModel {
-            case .rc001:
-                if connected.contains(.rc001) { return .rc001 }
-            case .rc003:
-                if connected.contains(.rc003) { return .rc003 }
-            default:
-                break
-            }
+        if let selectedModel = settings.selectedRemoteProfile?.model,
+           let onboardingModel = OnboardingXiaomiRemoteModel(rawValue: selectedModel.rawValue),
+           connected.contains(onboardingModel) {
+            return onboardingModel
         }
         return OnboardingXiaomiRemoteModel.allCases.first { connected.contains($0) }
     }

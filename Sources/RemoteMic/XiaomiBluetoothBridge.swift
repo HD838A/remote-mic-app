@@ -33,6 +33,7 @@ protocol XiaomiBluetoothBridgeDelegate: AnyObject {
     func bluetoothBridge(_ bridge: XiaomiBluetoothBridge, didUpdateBatteryLevel level: Int?)
     func bluetoothBridge(_ bridge: XiaomiBluetoothBridge, didIdentifyRemoteModel model: XiaomiRemoteModel)
     func bluetoothBridge(_ bridge: XiaomiBluetoothBridge, didUpdatePowerState state: RemotePowerState?)
+    func bluetoothBridge(_ bridge: XiaomiBluetoothBridge, didReceiveT1Button edge: T1FrontButtonEdge)
     func bluetoothBridgeDeviceNameDidChange(_ bridge: XiaomiBluetoothBridge)
 }
 
@@ -111,6 +112,7 @@ enum BluetoothBatteryPollingPolicy {
 enum BluetoothVoiceStopReason: String {
     case remoteRelease = "remote_release"
     case remoteTimeout = "remote_timeout"
+    case hostCloseTimeout = "host_close_timeout"
 }
 
 /// 一条 ATVV 命令交给 CoreBluetooth 之后的实际结果。
@@ -166,9 +168,10 @@ final class XiaomiBluetoothBridge: NSObject {
 
     private weak var delegate: XiaomiBluetoothBridgeDelegate?
     private let targetIdentifier: UUID?
+    private let expectsT1: Bool
     private let excludedIdentifiers: () -> Set<UUID>
     private let knownIdentifiers: () -> Set<UUID>
-    private let discoveredCandidate: ((UUID) -> Void)?
+    private let discoveredCandidate: ((UUID, Bool) -> Void)?
     private let reconcileCandidateIdentifier: ((UUID) -> Bool)?
     private let recovery: RemoteConnectionRecovery
     private var recoveryDeadlineWorkItem: DispatchWorkItem?
@@ -265,6 +268,19 @@ final class XiaomiBluetoothBridge: NSObject {
     private let batteryLevelStatusUUID = CBUUID(string: "2BED")
     private let deviceInformationServiceUUID = CBUUID(string: "180A")
     private let modelNumberUUID = CBUUID(string: "2A24")
+    private let manufacturerUUID = CBUUID(string: "2A29")
+    private let pnpUUID = CBUUID(string: "2A50")
+    private var probingT1 = false
+    private var t1DeviceInformation: [CBUUID: Data] = [:]
+    private var t1IdentityConfirmed = false
+    private var t1KeyMonitor: T1VoiceKeyMonitor?
+    private var t1ReleasePending = false
+    private var t1CloseTimeout: DispatchWorkItem?
+    private var t1RearmTimeout: DispatchWorkItem?
+    var isT1: Bool { t1IdentityConfirmed }
+    var isT1ButtonInputReady: Bool {
+        lifecycle.isReady && HIDRemoteMonitor.isInputMonitoringGranted && t1KeyMonitor?.hasUniqueDevice == true
+    }
 
     var deviceIdentifier: UUID? {
         peripheral?.identifier ?? targetIdentifier
@@ -309,14 +325,16 @@ final class XiaomiBluetoothBridge: NSObject {
     init(
         delegate: XiaomiBluetoothBridgeDelegate,
         targetIdentifier: UUID? = nil,
+        expectsT1: Bool = false,
         excludedIdentifiers: @escaping () -> Set<UUID> = { [] },
         knownIdentifiers: @escaping () -> Set<UUID> = { [] },
-        discoveredCandidate: ((UUID) -> Void)? = nil,
+        discoveredCandidate: ((UUID, Bool) -> Void)? = nil,
         reconcileCandidateIdentifier: ((UUID) -> Bool)? = nil,
         recovery: RemoteConnectionRecovery = RemoteConnectionRecovery()
     ) {
         self.delegate = delegate
         self.targetIdentifier = targetIdentifier
+        self.expectsT1 = expectsT1
         self.excludedIdentifiers = excludedIdentifiers
         self.knownIdentifiers = knownIdentifiers
         self.discoveredCandidate = discoveredCandidate
@@ -373,6 +391,10 @@ final class XiaomiBluetoothBridge: NSObject {
         reconnectPolicy.reset()
         central?.stopScan()
         closeMicrophoneIfNeeded()
+        if isT1 {
+            _ = submit(ATVVProtocol.getCapabilitiesV10)
+            t1KeyMonitor?.stop()
+        }
         if let central, let peripheral, peripheral.state != .disconnected {
             requestedReconnectDelay = nil
             lifecycle = .disconnecting(lifecycle.generation ?? generationCounter)
@@ -729,7 +751,8 @@ final class XiaomiBluetoothBridge: NSObject {
                   phase: lifecycle,
                   generation: generation,
                   capabilitiesConfirmed: capabilitiesConfirmed,
-                  sampleRate: capabilities.sampleRate
+                  sampleRate: capabilities.sampleRate,
+                  requiredReleaseInputAvailable: !isT1 || isT1ButtonInputReady
               ),
               !microphoneOpened,
               !streaming
@@ -930,7 +953,7 @@ final class XiaomiBluetoothBridge: NSObject {
                   !excludedIdentifiersSnapshot.contains(candidate.identifier) else {
                 return false
             }
-            discoveredCandidate(candidate.identifier)
+            discoveredCandidate(candidate.identifier, T1VoiceRemote.isDiscoveryName(candidate.name))
             return false
         }
         let decision = VoiceRemoteAdmission.decide(
@@ -942,10 +965,10 @@ final class XiaomiBluetoothBridge: NSObject {
             advertisedName: advertisedName
         )
         switch decision {
-        case .adoptSavedIdentity, .adoptRecognizedName:
+        case .adoptSavedIdentity, .adoptRecognizedName, .probeT1:
             if let discoveredCandidate {
                 guard !excludedIdentifiersSnapshot.contains(candidate.identifier) else { return false }
-                discoveredCandidate(candidate.identifier)
+                discoveredCandidate(candidate.identifier, decision == .probeT1)
                 return false
             }
             // 只有真的发起连接才算「已采纳」。前置条件不满足时如实返回 false，
@@ -955,7 +978,8 @@ final class XiaomiBluetoothBridge: NSObject {
                 using: central,
                 generation: generation,
                 source: source,
-                usesCachedTarget: usesCachedTarget
+                usesCachedTarget: usesCachedTarget,
+                probeT1: decision == .probeT1
             )
         case .ignore:
             // `.ignore` 原本完全静默：候选被忽略与候选压根不存在在日志里长得一样，
@@ -993,7 +1017,8 @@ final class XiaomiBluetoothBridge: NSObject {
         using central: CBCentralManager,
         generation: UInt64,
         source: String,
-        usesCachedTarget: Bool = false
+        usesCachedTarget: Bool = false,
+        probeT1: Bool = false
     ) -> Bool {
         if let reason = BluetoothConnectGate.skipReason(
             shouldRun: shouldRun,
@@ -1011,6 +1036,7 @@ final class XiaomiBluetoothBridge: NSObject {
         central.stopScan()
         cancelScanTimeout()
         peripheral = candidate
+        probingT1 = expectsT1 || probeT1 || T1VoiceRemote.isDiscoveryName(candidate.name)
         currentAttemptUsesCachedTarget = usesCachedTarget
         let proxy = XiaomiPeripheralDelegateProxy(generation: generation, owner: self)
         peripheralDelegateProxy = proxy
@@ -1025,6 +1051,16 @@ final class XiaomiBluetoothBridge: NSObject {
 
     private func resetPeripheral() {
         stopBatteryPolling(reason: "peripheral_reset")
+        t1CloseTimeout?.cancel()
+        t1RearmTimeout?.cancel()
+        t1CloseTimeout = nil
+        t1RearmTimeout = nil
+        t1ReleasePending = false
+        t1KeyMonitor?.stop()
+        t1KeyMonitor = nil
+        t1DeviceInformation.removeAll()
+        t1IdentityConfirmed = false
+        probingT1 = false
         peripheral?.delegate = nil
         peripheral = nil
         peripheralDelegateProxy = nil
@@ -1255,8 +1291,8 @@ final class XiaomiBluetoothBridge: NSObject {
               subscribedUUIDs.contains(controlCharacteristic.uuid),
               let peripheral
         else { return }
-        guard !capabilitiesRequested else { return }
-        let capabilitiesSubmission = submit(ATVVProtocol.getCapabilitiesV10)
+        guard !capabilitiesRequested, !probingT1 || isT1 else { return }
+        let capabilitiesSubmission = submit(isT1 ? T1VoiceRemote.capabilitiesRequest : ATVVProtocol.getCapabilitiesV10)
         // 写失败时保持可重试：订阅状态还有机会再次触发本函数；初始化超时仍是最终兜底。
         capabilitiesRequested = capabilitiesSubmission.isWritten
         lifecycle = .awaitingCapabilities(generation)
@@ -1349,11 +1385,22 @@ final class XiaomiBluetoothBridge: NSObject {
 
         switch opcode {
         case 0x0B:
+            if let rearm = t1RearmTimeout, lifecycle.acceptsProtocolData(generation: generation) {
+                guard let parsed = ATVVCapabilities.parse(data), T1VoiceRemote.accepts(parsed) else { return }
+                rearm.cancel()
+                t1RearmTimeout = nil
+                AppLogger.shared.write("ATVV T1 rearmed")
+                return
+            }
             guard lifecycle.acceptsCapabilities(generation: generation) else {
                 AppLogger.shared.write("ATVV CAPS ignored_stale_phase")
                 return
             }
             guard let parsed = ATVVCapabilities.parse(data) else {
+                failInitialization(LocalizedMessage("connection.error.invalid_voice_response"))
+                return
+            }
+            guard !isT1 || T1VoiceRemote.accepts(parsed) else {
                 failInitialization(LocalizedMessage("connection.error.invalid_voice_response"))
                 return
             }
@@ -1387,17 +1434,20 @@ final class XiaomiBluetoothBridge: NSObject {
                 AppLogger.shared.write("BLE RECOVERY_WINDOW operation_id=\(recoveryOperationID) phase=completed result=ready attempts=\(recovery.attemptCount)")
             }
         case 0x08:
+            if isT1, t1RearmTimeout != nil { return }
             guard requestMicrophoneOpen() else {
                 AppLogger.shared.write("ATVV MIC_OPEN remote_request_ignored")
                 return
             }
             AppLogger.shared.write("ATVV MIC_OPEN remote_request")
         case 0x04:
+            guard !isT1 || (microphoneOpened && !streaming && t1RearmTimeout == nil) else { return }
             guard ATVVSessionGate.canOpenMicrophone(
                 phase: lifecycle,
                 generation: generation,
                 capabilitiesConfirmed: capabilitiesConfirmed,
-                sampleRate: capabilities.sampleRate
+                sampleRate: capabilities.sampleRate,
+                requiredReleaseInputAvailable: !isT1 || isT1ButtonInputReady
             ) else {
                 diagnosticForAudio().rejectStart(reason: "protocol_not_ready")
                 AppLogger.shared.write("ATVV STREAM_START ignored_not_ready")
@@ -1437,10 +1487,13 @@ final class XiaomiBluetoothBridge: NSObject {
             sessionID = receivedSessionID
             startStreaming()
             audioDiagnostics?.control(.start, at: controlAt)
+            if t1ReleasePending { t1VoiceKeyReleased() }
         case 0x00:
             guard lifecycle.acceptsProtocolData(generation: generation) else { return }
             audioDiagnostics?.control(.stop, at: controlAt)
+            let wasT1Streaming = isT1 && streaming
             stopStreaming(reason: Self.voiceStopReason(for: bytes))
+            if wasT1Streaming { rearmT1() }
         case 0x0A:
             guard lifecycle.acceptsProtocolData(generation: generation) else { return }
             guard bytes.count >= 7 else { return }
@@ -1460,6 +1513,73 @@ final class XiaomiBluetoothBridge: NSObject {
         default:
             break
         }
+    }
+
+    private func finishT1IdentityIfPossible() {
+        guard !t1IdentityConfirmed,
+              let model = t1DeviceInformation[modelNumberUUID],
+              let manufacturer = t1DeviceInformation[manufacturerUUID],
+              let pnp = t1DeviceInformation[pnpUUID]
+        else { return }
+        guard T1VoiceRemote.matchesDeviceInformation(model: model, manufacturer: manufacturer, pnp: pnp) else {
+            failInitialization(LocalizedMessage("connection.error.invalid_voice_response"))
+            return
+        }
+        t1IdentityConfirmed = true
+        delegate?.bluetoothBridge(self, didIdentifyRemoteModel: .t1)
+        refreshT1Input()
+        requestCapabilitiesIfPossible()
+    }
+
+    /// Bluetooth status is independent of permission to observe T1's physical release.
+    func refreshT1Input() {
+        guard isT1, t1KeyMonitor == nil, HIDRemoteMonitor.isInputMonitoringGranted else { return }
+        let monitor = T1VoiceKeyMonitor(
+            onRelease: { [weak self] in self?.t1VoiceKeyReleased() },
+            onButton: { [weak self] edge in
+                guard let self, self.lifecycle.isReady else { return }
+                self.delegate?.bluetoothBridge(self, didReceiveT1Button: edge)
+            }
+        )
+        if monitor.start() {
+            t1KeyMonitor = monitor
+        } else {
+            AppLogger.shared.write("T1 HID phase=failed reason=release_monitor_unavailable")
+        }
+    }
+
+    private func t1VoiceKeyReleased() {
+        guard isT1, t1CloseTimeout == nil else { return }
+        guard streaming else {
+            t1ReleasePending = microphoneOpened
+            return
+        }
+        t1ReleasePending = false
+        _ = requestMicrophoneClose()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self, self.streaming else { return }
+            self.stopStreaming(reason: .hostCloseTimeout)
+            if let peripheral = self.peripheral {
+                self.central?.cancelPeripheralConnection(peripheral)
+            }
+        }
+        t1CloseTimeout = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2, execute: work)
+    }
+
+    private func rearmT1() {
+        guard isT1, t1RearmTimeout == nil else { return }
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.t1RearmTimeout = nil
+            if let peripheral = self.peripheral {
+                self.central?.cancelPeripheralConnection(peripheral)
+            }
+        }
+        t1RearmTimeout = work
+        let submission = submit(T1VoiceRemote.capabilitiesRequest)
+        AppLogger.shared.write("ATVV T1 rearm requested result=\(submission.logToken)")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2, execute: work)
     }
 
     private func startStreaming(implicit: Bool = false) {
@@ -1495,8 +1615,11 @@ final class XiaomiBluetoothBridge: NSObject {
     private func stopStreaming(reason: BluetoothVoiceStopReason = .remoteRelease) {
         guard streaming else { return }
         lastVoiceStopReason = reason
+        t1CloseTimeout?.cancel()
+        t1CloseTimeout = nil
+        t1ReleasePending = false
         streaming = false
-        audioDiagnostics?.stop(reason: "remote_stop")
+        audioDiagnostics?.stop(reason: reason == .hostCloseTimeout ? "host_close_timeout" : "remote_stop")
         microphoneOpened = false
         let partialFrameBytes = accumulator.pending.count
         audioDiagnostics?.discardPartial(bytes: partialFrameBytes)
@@ -1535,6 +1658,7 @@ final class XiaomiBluetoothBridge: NSObject {
         }
         cancelledMicrophoneOpenAt = nil
         if !streaming {
+            guard !isT1 || (microphoneOpened && t1RearmTimeout == nil) else { return }
             let receivedAt = Date()
             if let lastStopAt, receivedAt.timeIntervalSince(lastStopAt) < 0.3 {
                 audioDiagnostics?.reject(.afterStop)
@@ -1743,7 +1867,7 @@ extension XiaomiBluetoothBridge: CBCentralManagerDelegate {
                reconcileCandidateIdentifier?(peripheral.identifier) == true {
                 if let discoveredCandidate,
                    !excludedIdentifiersSnapshot.contains(peripheral.identifier) {
-                    discoveredCandidate(peripheral.identifier)
+                    discoveredCandidate(peripheral.identifier, false)
                 }
                 return
             }
@@ -1910,7 +2034,8 @@ extension XiaomiBluetoothBridge {
         if let deviceInformationService = peripheral.services?.first(where: {
             $0.uuid == deviceInformationServiceUUID
         }) {
-            peripheral.discoverCharacteristics([modelNumberUUID], for: deviceInformationService)
+            let fields = probingT1 ? [modelNumberUUID, manufacturerUUID, pnpUUID] : [modelNumberUUID]
+            peripheral.discoverCharacteristics(fields, for: deviceInformationService)
         }
     }
 
@@ -1986,10 +2111,9 @@ extension XiaomiBluetoothBridge {
                 )
                 return
             }
-            guard let characteristic = service.characteristics?.first(where: { $0.uuid == modelNumberUUID }) else {
-                return
+            for characteristic in service.characteristics ?? [] {
+                peripheral.readValue(for: characteristic)
             }
-            peripheral.readValue(for: characteristic)
             return
         }
         if let error {
@@ -2150,6 +2274,11 @@ extension XiaomiBluetoothBridge {
                 "BLE POWER state=\(powerState?.logValue ?? "unavailable")"
             )
             delegate?.bluetoothBridge(self, didUpdatePowerState: powerState)
+            return
+        }
+        if probingT1, [modelNumberUUID, manufacturerUUID, pnpUUID].contains(characteristic.uuid) {
+            t1DeviceInformation[characteristic.uuid] = data
+            finishT1IdentityIfPossible()
             return
         }
         if characteristic.uuid == modelNumberUUID {

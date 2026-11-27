@@ -1700,25 +1700,30 @@ struct SettingsView: View {
 
                 if let profile = settings.selectedRemoteProfile,
                    model.isRemoteConnected(profile.id) {
+                    let shortcutStatus = model.remoteVoiceShortcutStatus(for: profile)
+                    let t1VoiceUnavailable = shortcutStatus.key == "remote.card.detail.permissions_required"
+                        || shortcutStatus.key == "connection.error.t1_hid_unavailable"
                     VStack(alignment: .leading, spacing: 9) {
                         connectionStatusLine(
                             symbol: "antenna.radiowaves.left.and.right",
                             text: model.connectionStatusText(using: localization),
                             tint: connectionTint
                         )
-                        connectionStatusLine(
-                            symbol: "waveform",
-                            text: localization.text(
-                                model.isStreaming
-                                    ? "connection.status.voice_streaming"
-                                    : "connection.status.voice_ready"
-                            ),
-                            tint: model.isStreaming ? .orange : .blue
-                        )
+                        if !t1VoiceUnavailable {
+                            connectionStatusLine(
+                                symbol: "waveform",
+                                text: localization.text(
+                                    model.isStreaming
+                                        ? "connection.status.voice_streaming"
+                                        : "connection.status.voice_ready"
+                                ),
+                                tint: model.isStreaming ? .orange : .blue
+                            )
+                        }
                         connectionStatusLine(
                             symbol: "mic.fill",
-                            text: model.voiceShortcutStatus.text(using: localization),
-                            tint: .blue
+                            text: shortcutStatus.text(using: localization),
+                            tint: t1VoiceUnavailable ? .orange : .blue
                         )
                     }
                 }
@@ -1860,7 +1865,9 @@ struct SettingsView: View {
 
     @ViewBuilder
     private var connectionRemotePhoto: some View {
-        if settings.selectedRemoteProfile?.model.isAppleSiriRemote == true {
+        if settings.selectedRemoteProfile?.model == .t1 {
+            T1RemoteFace.preview(height: 166)
+        } else if settings.selectedRemoteProfile?.model.isAppleSiriRemote == true {
             #if SAYALL_SIRI_REMOTE_ENABLED && canImport(SayAllSiriRemote)
             SiriRemoteConnectionPhoto()
             #else
@@ -3117,7 +3124,8 @@ struct SettingsView: View {
     private var mappingPageHeader: some View {
         VStack(alignment: .leading, spacing: 6) {
             PageHeader(title: localization.text("button_mapping.page.title"))
-            Text(localization.text("button_mapping.page.subtitle"))
+            Text(localization.text(settings.selectedRemoteProfile?.model == .t1
+                ? "button_mapping.t1.shared_navigation" : "button_mapping.page.subtitle"))
                 .font(.system(size: 13))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -3129,7 +3137,8 @@ struct SettingsView: View {
         hardwareMappingPage {
             RemoteMappingCanvas(
                 selectedButton: $selectedRemoteButton,
-                activeButtons: model.activeRemoteButtons,
+                activeButtons: settings.selectedRemoteProfile?.model == .t1
+                    ? model.activeT1Buttons : model.activeRemoteButtons,
                 voiceActive: model.isStreaming,
                 remoteModel: settings.selectedRemoteProfile?.model,
                 actionSummary: { button, trigger in mappingActionSummary(for: button, trigger: trigger) },
@@ -3882,10 +3891,9 @@ struct SettingsView: View {
         let visibleProfiles = RemoteDeviceNamePolicy.cardsWithoutRepeatedSerial(
             RemoteDeviceNamePolicy.sortedForCards(
                 settings.remoteDeviceProfiles.filter { profile in
-                    // 私有遥控器离线时仍保留在按键页选择器中：画布不依赖蓝牙连接，
-                    // 用户从连接页选中 Chromecast 后必须能在顶部继续看到并切换回它。
+                    // 设备专用画布可离线编辑，标题卡仍应显示对应的遥控器。
                     model.isRemoteConnected(profile.id)
-                        || (!vertical && profile.model.usesPrivateAdapter)
+                        || (!vertical && (profile.model.usesPrivateAdapter || profile.model == .t1))
                 },
                 modelName: remoteModelName,
                 systemName: { model.systemDeviceName(for: $0) }
@@ -7452,10 +7460,10 @@ struct SettingsView: View {
                                 Spacer(minLength: 16)
                                 Button("about.configuration.export", action: exportConfiguration)
                                     .compatibilityButtonStyle(.standard)
-                                    .frame(width: 92)
+                                    .fixedSize()
                                 Button("about.configuration.import", action: importConfiguration)
                                     .compatibilityButtonStyle(.standard)
-                                    .frame(width: 92)
+                                    .fixedSize()
                             }
                             .padding(.vertical, 8)
                             if macroFeature.isFeatureVisible {
@@ -8384,10 +8392,11 @@ struct SettingsView: View {
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(.secondary)
             }
-            .frame(width: 78, alignment: .leading)
+            .frame(width: 108, alignment: .leading)
             Button(actionTitle, action: action)
                 .compatibilityButtonStyle(.standard)
-                .frame(width: 126)
+                .fixedSize()
+                .frame(minWidth: 140, alignment: .trailing)
         }
         .padding(.vertical, 8)
     }

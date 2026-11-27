@@ -40,9 +40,13 @@ enum RemoteFunctionReadiness: Equatable {
 enum RemoteDeviceCardStatus: String, CaseIterable {
     case connected, disconnected, checking, confirming
     case buttonsFailed = "buttons_failed", voiceFailed = "voice_failed", deviceFailed = "device_failed"
+    case permissionsRequired = "permissions_required", mappingPermissionsRequired = "mapping_permissions_required"
     case connecting, notFound = "not_found", paused, cancelled
 
-    var message: LocalizedMessage { LocalizedMessage("remote.card.status.\(rawValue)") }
+    var message: LocalizedMessage {
+        if self == .mappingPermissionsRequired { return LocalizedMessage("remote.card.status.permissions_required") }
+        return LocalizedMessage("remote.card.status.\(rawValue)")
+    }
     var isProgressing: Bool { self == .checking || self == .confirming || self == .connecting }
     /// Readiness states that normally resolve shortly after the link connects.
     /// They must not be presented until they survive the settling window.
@@ -50,6 +54,7 @@ enum RemoteDeviceCardStatus: String, CaseIterable {
     var isFailure: Bool { self == .buttonsFailed || self == .voiceFailed || self == .deviceFailed || self == .notFound }
     var color: Color {
         if self == .connected { return .green }
+        if self == .permissionsRequired || self == .mappingPermissionsRequired { return .orange }
         if isFailure { return .red }
         if isProgressing { return .orange }
         return .secondary
@@ -59,10 +64,12 @@ enum RemoteDeviceCardStatus: String, CaseIterable {
         connected: Bool,
         buttons: RemoteFunctionReadiness,
         voice: RemoteFunctionReadiness,
-        voiceRequired: Bool
+        voiceRequired: Bool,
+        mappingPermissionsMissing: Bool = false
     ) -> Self {
         guard connected else { return .disconnected }
         let voice = voiceRequired ? voice : .ready
+        if mappingPermissionsMissing { return voice == .failed ? .voiceFailed : .mappingPermissionsRequired }
         if buttons == .failed && voice == .failed { return .deviceFailed }
         if buttons == .failed { return .buttonsFailed }
         if voice == .failed { return .voiceFailed }
@@ -267,6 +274,7 @@ struct RemoteDeviceCard: View {
                     settlesTransientStatus: settlesTransientStatus,
                     onSelect: onSelect
                 )
+                .help(statusDetail)
                 if showsBattery { batteryLabel }
                 Spacer(minLength: 0)
                 if let voiceRecoveryTitle {
