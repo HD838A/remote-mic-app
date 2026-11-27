@@ -201,10 +201,10 @@
 "action.arrow_right" = "→";
 "action.scroll_up" = "向上滚动";
 "action.scroll_down" = "向下滚动";
-"action.mouse_move_up" = "鼠标向上";
-"action.mouse_move_down" = "鼠标向下";
-"action.mouse_move_left" = "鼠标向左";
-"action.mouse_move_right" = "鼠标向右";
+"action.mouse_move_up" = "↑ 鼠标向上";
+"action.mouse_move_down" = "↓ 鼠标向下";
+"action.mouse_move_left" = "← 鼠标向左";
+"action.mouse_move_right" = "→ 鼠标向右";
 "action.page_up" = "向上翻页";
 "action.page_down" = "向下翻页";
 "action.page_up_half" = "向上翻半页";
@@ -278,7 +278,7 @@
 "button_mapping.action_filter.basic_keys" = "基础按键";
 "button_mapping.action_filter.custom_shortcuts" = "自定义按键";
 "button_mapping.action_filter.system_and_media" = "系统与媒体";
-"button_mapping.action_filter.mouse" = "鼠标动作";
+"button_mapping.action_filter.mouse" = "鼠标";
 "button_mapping.action_filter.custom" = "输入框";
 "button_mapping.action_filter.combinations" = "组合动作";
 "button_mapping.action_filter.common_phrases" = "常用语";
@@ -287,7 +287,7 @@
 "button_mapping.action_filter.button_speed" = "按键速度";
 "button_mapping.action_group.basic_keys" = "基础按键";
 "button_mapping.action_group.system_and_media" = "系统与媒体";
-"button_mapping.action_group.mouse" = "鼠标动作";
+"button_mapping.action_group.mouse" = "鼠标";
 "button_mapping.mouse_distance.label" = "每次移动";
 "button_mapping.mouse_distance.unit" = "点";
 "button_mapping.mouse_distance.hint" = "1–100，默认 20";

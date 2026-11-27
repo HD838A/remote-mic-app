@@ -444,11 +444,11 @@ private enum MappingActionFilter: String, CaseIterable, Identifiable {
     case basicKeys
     case customShortcuts
     case systemAndMedia
-    case mouse
     case custom
     case combinations
     case commonPhrases
     case applications
+    case mouse
     case hold
     case buttonSpeed
 
@@ -471,11 +471,11 @@ private enum MappingActionFilter: String, CaseIterable, Identifiable {
     /// 公开构建没有注入 Macro Package：此时不显示「组合动作」胶囊，
     /// 而不是让用户点进一个空分类。
     static func visibleCases(macroFeatureVisible: Bool) -> [Self] {
-        var cases: [Self] = [.all, .basicKeys, .customShortcuts, .systemAndMedia, .mouse, .custom]
+        var cases: [Self] = [.all, .basicKeys, .customShortcuts, .systemAndMedia, .custom]
         if macroFeatureVisible {
             cases.append(.combinations)
         }
-        cases.append(contentsOf: [.commonPhrases, .applications, .hold, .buttonSpeed])
+        cases.append(contentsOf: [.commonPhrases, .applications, .mouse, .hold, .buttonSpeed])
         return cases
     }
 
@@ -6870,6 +6870,14 @@ struct SettingsView: View {
         return configured.action.displayName(using: localization)
     }
 
+    private var supportsProfileMouseActions: Bool {
+        #if SAYALL_BUTTON_PROFILE_MOUSE_DISTANCE
+        true
+        #else
+        false
+        #endif
+    }
+
     private var buttonProfileHostActionSections: [ButtonProfileHostActionSection] {
         let availableActions = ButtonAction.pickerActions(
             installedBundleIdentifiers: PresetApplication.installedBundleIdentifiers,
@@ -6877,23 +6885,26 @@ struct SettingsView: View {
             experimentalContinuousRecordingEnabled: settings.experimentalContinuousRecordingEnabled
         ).filter {
             $0 != .disabled && $0 != .customShortcut && $0 != .openCustomApplication &&
-                $0 != .combinationAction && !$0.isMouseMove
+                $0 != .combinationAction && (!$0.isMouseMove || supportsProfileMouseActions)
         }
         return ButtonActionCategory.allCases.compactMap { category in
             let actions: [ButtonProfileHostAction] = availableActions
                 .filter { $0.category == category }
                 .compactMap { action in
-                guard let payload = try? JSONEncoder().encode(ConfiguredButtonAction(
+                let configured = ConfiguredButtonAction(
                     action: action,
-                    shortcut: nil
-                )) else { return nil }
+                    shortcut: nil,
+                    mouseMoveDistance: action.isMouseMove ? ConfiguredButtonAction.defaultMouseMoveDistance : nil
+                )
+                guard let payload = try? JSONEncoder().encode(configured) else { return nil }
                 return ButtonProfileHostAction(
                     id: "host.action.\(action.rawValue)",
                     title: action.displayName(using: localization),
                     detail: nil,
                     systemImage: buttonProfileSystemImage(for: action),
                     payload: payload,
-                    isAvailable: true
+                    isAvailable: true,
+                    mouseMoveDistance: configured.mouseMoveDistance
                 )
                 }
             guard !actions.isEmpty else { return nil }

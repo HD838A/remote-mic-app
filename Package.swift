@@ -419,6 +419,36 @@ let bindingTextAvailable = privateSwiftPMEnabled
     || (privateArtifactsAvailable
         && (privatePlatformManifestVersion.map { $0 >= bindingTextSince } ?? false))
 if bindingTextAvailable { remoteMicSwiftSettings.append(.define("SAYALL_BUTTON_PROFILE_BINDING_TEXT")) }
+/// 私有按键方案页从该 API 起支持鼠标距离编辑；旧构件继续隐藏该分类。
+let profileMouseDistanceAvailable = [buttonProfilesPackagePath, privateSwiftPMEnabled ? privatePlatformPackagePath.map {
+    URL(fileURLWithPath: $0).appendingPathComponent("packages/macos-button-profiles").path
+} : nil].compactMap { $0 }.contains { path in
+    let api = URL(fileURLWithPath: path).appendingPathComponent("Sources/SayAllButtonProfiles/SayAllButtonProfilesFeature.swift")
+    return (try? String(contentsOf: api, encoding: .utf8))?.contains("hostActionDistanceUpdater") == true
+} || (privateArtifactPackagePath.map { path in
+    ["arm64", "x86_64"].allSatisfy { architecture in
+        let api = URL(fileURLWithPath: path).appendingPathComponent("Artifacts/SayAllButtonProfiles.xcframework/macos-arm64_x86_64/SayAllButtonProfiles.framework/Modules/SayAllButtonProfiles.swiftmodule/\(architecture)-apple-macos.swiftinterface")
+        return (try? String(contentsOf: api, encoding: .utf8))?.contains("hostActionDistanceUpdater") == true
+    }
+} ?? false)
+if profileMouseDistanceAvailable {
+    remoteMicSwiftSettings.append(.define("SAYALL_BUTTON_PROFILE_MOUSE_DISTANCE"))
+}
+/// Portable Transfer 从该字段起承载鼠标距离；旧构件继续拒绝导出。
+let portableMouseDistanceAvailable = [combinationActionsPackagePath, privateSwiftPMEnabled ? privatePlatformPackagePath.map {
+    URL(fileURLWithPath: $0).appendingPathComponent("packages/macos-combination-actions").path
+} : nil].compactMap { $0 }.contains { path in
+    let api = URL(fileURLWithPath: path).appendingPathComponent("Sources/SayAllMacroCore/PortableTransfer.swift")
+    return (try? String(contentsOf: api, encoding: .utf8))?.contains("mouseMoveDistance") == true
+} || (privateArtifactPackagePath.map { path in
+    ["arm64", "x86_64"].allSatisfy { architecture in
+        let api = URL(fileURLWithPath: path).appendingPathComponent("Artifacts/SayAllMacroCore.xcframework/macos-arm64_x86_64/SayAllMacroCore.framework/Modules/SayAllMacroCore.swiftmodule/\(architecture)-apple-macos.swiftinterface")
+        return (try? String(contentsOf: api, encoding: .utf8))?.contains("mouseMoveDistance") == true
+    }
+} ?? false)
+if portableMouseDistanceAvailable {
+    remoteMicSwiftSettings.append(.define("SAYALL_PORTABLE_MOUSE_DISTANCE"))
+}
 if profileResolvedHoldAvailable {
     remoteMicSwiftSettings.append(.define("SAYALL_BUTTON_PROFILE_RESOLVED_HOLD"))
 }
@@ -441,6 +471,12 @@ if directionalProfileHoldAvailable {
     remoteMicTestSwiftSettings.append(.define("SAYALL_BUTTON_PROFILE_DIRECTIONAL_HOLD"))
 }
 if bindingTextAvailable { remoteMicTestSwiftSettings.append(.define("SAYALL_BUTTON_PROFILE_BINDING_TEXT")) }
+if profileMouseDistanceAvailable {
+    remoteMicTestSwiftSettings.append(.define("SAYALL_BUTTON_PROFILE_MOUSE_DISTANCE"))
+}
+if portableMouseDistanceAvailable {
+    remoteMicTestSwiftSettings.append(.define("SAYALL_PORTABLE_MOUSE_DISTANCE"))
+}
 if screenshotProfileSeedAvailable { remoteMicTestSwiftSettings.append(.define("SAYALL_SCREENSHOT_PROFILE_SEED")) }
 if sourceMacroHostShortcutsAvailable || artifactMacroHostShortcutsAvailable {
     remoteMicTestSwiftSettings.append(.define("SAYALL_MACRO_HOST_SHORTCUTS"))

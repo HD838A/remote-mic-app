@@ -201,10 +201,10 @@
 "action.arrow_right" = "→";
 "action.scroll_up" = "Scroll Up";
 "action.scroll_down" = "Scroll Down";
-"action.mouse_move_up" = "Mouse Up";
-"action.mouse_move_down" = "Mouse Down";
-"action.mouse_move_left" = "Mouse Left";
-"action.mouse_move_right" = "Mouse Right";
+"action.mouse_move_up" = "↑ Mouse Up";
+"action.mouse_move_down" = "↓ Mouse Down";
+"action.mouse_move_left" = "← Mouse Left";
+"action.mouse_move_right" = "→ Mouse Right";
 "action.page_up" = "Page Up";
 "action.page_down" = "Page Down";
 "action.page_up_half" = "Half Page Up";
@@ -287,7 +287,7 @@
 "button_mapping.action_filter.button_speed" = "Speed";
 "button_mapping.action_group.basic_keys" = "Basic Keys";
 "button_mapping.action_group.system_and_media" = "System & Media";
-"button_mapping.action_group.mouse" = "Mouse Actions";
+"button_mapping.action_group.mouse" = "Mouse";
 "button_mapping.mouse_distance.label" = "Move by";
 "button_mapping.mouse_distance.unit" = "pt";
 "button_mapping.mouse_distance.hint" = "1–100, default 20";

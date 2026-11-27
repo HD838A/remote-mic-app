@@ -374,6 +374,7 @@ struct RemoteButtonsTests {
             .mouseMoveUp, .mouseMoveDown, .mouseMoveLeft, .mouseMoveRight,
         ]
         #expect(actions.allSatisfy { $0.category == .mouse })
+        #expect(ButtonActionCategory.allCases.last == .mouse)
         #expect(actions.allSatisfy { $0.allowsRepeat })
         #expect(actions.allSatisfy { $0.mouseMoveDirection != nil })
         #expect(ButtonAction.arrowUp.mouseMoveDirection == nil)

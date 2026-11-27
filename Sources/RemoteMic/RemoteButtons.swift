@@ -918,13 +918,13 @@ enum ButtonActionCategory: String, CaseIterable, Identifiable {
     case basicKeys
     case customShortcuts
     case systemAndMedia
-    case mouse
     case custom
     /// 「组合动作」和「常用语」一样是独立的动作分类：它的候选来自宏库卡片，
     /// 不是动作网格里的一项，因此不参与 `ButtonAction` 的逐个列举。
     case combinations
     case commonPhrases
     case applications
+    case mouse
 
     var id: String { rawValue }
 

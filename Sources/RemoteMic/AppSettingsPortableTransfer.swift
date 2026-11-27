@@ -74,9 +74,13 @@ extension AppSettings {
             guard let id = c.applicationProfileID, customApplicationProfile(id: id) != nil else { throw PortableTransferError.missingDependency("App 配置") }
             return .init(kind: .application, referenceID: id.uuidString)
         case .mouseMoveUp, .mouseMoveDown, .mouseMoveLeft, .mouseMoveRight:
-            // 私有 Portable Transfer 尚未承载鼠标动作和距离参数。明确拒绝，
-            // 不得静默删除动作或改成默认距离。
+            #if SAYALL_PORTABLE_MOUSE_DISTANCE
+            return .init(kind: .host, actionID: c.action.rawValue,
+                         mouseMoveDistance: c.resolvedMouseMoveDistance)
+            #else
+            // 旧私有包没有鼠标距离字段；明确拒绝，不能静默删除动作或改成默认距离。
             throw PortableTransferError.invalid("鼠标动作暂不支持键位方案导出")
+            #endif
         default:
             guard PortableTransferCodec.hostActions.contains(c.action.rawValue) else { throw PortableTransferError.invalid(c.action.rawValue) }
             return .init(kind: .host, actionID: c.action.rawValue)
@@ -87,7 +91,12 @@ extension AppSettings {
         case .disabled, .inherit: return .disabled
         case .host:
             guard let id = a.actionID, PortableTransferCodec.hostActions.contains(id), let action = ButtonAction(rawValue: id) else { throw PortableTransferError.invalid("宿主操作") }
+            #if SAYALL_PORTABLE_MOUSE_DISTANCE
+            return .init(action: action, shortcut: nil,
+                         mouseMoveDistance: action.isMouseMove ? a.mouseMoveDistance : nil)
+            #else
             return .init(action: action, shortcut: nil)
+            #endif
         case .shortcut:
             guard let s = package.shortcuts.first(where: { $0.id == a.referenceID }) else { throw PortableTransferError.missingDependency("快捷键") }
             return .init(action: .customShortcut, shortcut: shortcut(s))
