@@ -3707,6 +3707,30 @@ struct SettingsView: View {
         !isMappingProfilePreviewOnly
     }
 
+    /// 鼠标分类的全局辅助开关不随当前按键的可写状态变灰；
+    /// 它影响所有鼠标移动，不能混在某个动作的禁用状态里。
+    @ViewBuilder
+    private func mouseClickOnOKSetting(for button: RemoteButton, trigger: ButtonTrigger) -> some View {
+        if mappingActionFilter == .mouse ||
+            (mappingActionFilter == .all && mappingConfiguration(for: button, trigger: trigger).action.isMouseMove) {
+            Toggle(isOn: Binding(
+                get: { settings.mouseClickOnOKEnabled },
+                set: { settings.mouseClickOnOKEnabled = $0 }
+            )) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(localization.text("button_mapping.mouse_click_on_ok.label"))
+                        .font(.system(size: 13))
+                    Text(localization.text("button_mapping.mouse_click_on_ok.hint"))
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .toggleStyle(.switch)
+            .accessibilityLabel(localization.text("button_mapping.mouse_click_on_ok.label"))
+            .help(localization.text("button_mapping.mouse_click_on_ok.hint"))
+        }
+    }
+
     private func mappingEditorPanel(_ target: ShortcutEditingTarget) -> some View {
         GlassPanel {
             VStack(alignment: .leading, spacing: 14) {
@@ -3765,6 +3789,7 @@ struct SettingsView: View {
 
                 // 只读预览下只禁用会写入的部分；编辑区由下一次按键或手势选择替换。
                 mappingProfileBindingControl(button: target.button, trigger: target.trigger)
+                mouseClickOnOKSetting(for: target.button, trigger: target.trigger)
                 mappingTriggerEditor(target.button, trigger: target.trigger)
                     .disabled(!canWriteMappingBinding(button: target.button, trigger: target.trigger))
             }
@@ -4383,27 +4408,6 @@ struct SettingsView: View {
                         saveMappingBinding(updated, button: button, trigger: trigger)
                     }
                 )
-            }
-
-            // 「移动后按 OK 单击」是鼠标分类的全局辅助开关；选中鼠标分类时
-            // 即使当前按键不是鼠标动作也要可见，避免用户找不到设置。
-            if mappingActionFilter == .mouse ||
-                (mappingActionFilter == .all && configured.action.isMouseMove) {
-                Toggle(isOn: Binding(
-                    get: { settings.mouseClickOnOKEnabled },
-                    set: { settings.mouseClickOnOKEnabled = $0 }
-                )) {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(localization.text("button_mapping.mouse_click_on_ok.label"))
-                            .font(.system(size: 13))
-                        Text(localization.text("button_mapping.mouse_click_on_ok.hint"))
-                            .font(.system(size: 12))
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .toggleStyle(.switch)
-                .accessibilityLabel(localization.text("button_mapping.mouse_click_on_ok.label"))
-                .help(localization.text("button_mapping.mouse_click_on_ok.hint"))
             }
 
             // 「目标 APP」属于「打开 App」分类：切到其他胶囊时必须一起隐藏，
