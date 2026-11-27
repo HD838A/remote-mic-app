@@ -317,7 +317,7 @@ REMOTE_MIC_ACTION_FEEDBACK_SCREENSHOT_DIR=<目录> swift run --disable-keychain 
 本次本地验证记录（2026-11-27，常显监控面板改版）：
 
 - 构建：`swift build --disable-keychain` 通过。
-- 测试：`swift test --disable-keychain --filter ActionFeedback` 26 个测试、4 个 suite 通过；完整 `swift test --disable-keychain` 1713 个测试、124 个 suite 通过（165.9 秒）。
+- 测试：`swift test --disable-keychain --filter ActionFeedback` 26 个测试、4 个 suite 通过；完整 `swift test --disable-keychain` 1722 个测试、125 个 suite 通过（165.8 秒）。
 - 离屏证据：12 张（zh-Hans/en × light/dark × idle/success/failure），每张 `1120 × 520`。目视待命态与中文深色失败态：状态行、分隔线、最近一条、按钮均完整，最小字号 12pt。
 - 未完成：真实面板几何与 `.ultraThinMaterial` 在真实桌面上的观感、拖动与按钮首击的冲突、Dock/菜单栏遮挡、多显示器热插拔与镜像模式、面板常显期间的实机占用均未验证；因此本分支的 PR 保持 Draft。
 
