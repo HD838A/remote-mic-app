@@ -588,6 +588,7 @@ struct OnboardingView: View {
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    .focusable(false)
                     .accessibilityIdentifier("onboarding.community_help")
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)

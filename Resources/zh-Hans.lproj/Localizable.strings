@@ -531,7 +531,8 @@
 "permissions.required.title" = "所需权限";
 "permission.bluetooth.title" = "蓝牙";
 "permission.bluetooth.description" = "连接支持的蓝牙遥控器，并接收按键与语音";
-"permission.bluetooth.open_settings" = "打开蓝牙设置";
+"permission.bluetooth.open_connection" = "打开蓝牙连接";
+"permission.bluetooth.open_privacy" = "打开蓝牙权限";
 "permission.input_monitoring.title" = "输入监控";
 "permission.input_monitoring.description" = "读取遥控器按键，并尽量避免系统原操作重复触发";
 "permission.action.request" = "请求权限";
@@ -814,7 +815,7 @@
 "community.help.title" = "配置有问题？";
 "community.help.intro" = "扫码关注抖音或小红书，查看设置教程。";
 "community.help.douyin_title" = "抖音 · 无线麦 SayAll App";
-"community.help.douyin_hint" = "保存图片后，用抖音扫一扫";
+"community.help.douyin_hint" = "用抖音扫一扫";
 "community.help.douyin_accessibility" = "抖音「无线麦 SayAll App」二维码";
 "community.help.xiaohongshu_title" = "小红书 · 无线麦 SayAll App";
 "community.help.xiaohongshu_hint" = "用小红书扫一扫";
@@ -1007,7 +1008,7 @@
 "onboarding.remote.voice_button_mistake.detail" = "这一步检查普通控制键。请改为短按圆盘中间的确定键或任意方向键";
 "onboarding.remote.reconnect" = "重新查找";
 "onboarding.remote.retry_input" = "重新检测按键";
-"onboarding.remote.open_bluetooth" = "打开蓝牙设置";
+"onboarding.remote.open_bluetooth" = "打开蓝牙连接";
 "onboarding.iphone_remote.title" = "用 iPhone 连接这台 Mac";
 "onboarding.iphone_remote.detail" = "安装并打开无线麦 SayAll iOS App，选择这台 Mac，并核对双方显示的校验码";
 "onboarding.iphone_remote.install" = "安装或打开 iOS App";

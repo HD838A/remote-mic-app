@@ -1,5 +1,6 @@
 # Bug 记录
 
+- [设置页蓝牙入口与教程浮层的文案和关闭按钮](./2026-11-27-permission-ui-clarity.html)
 - [事件 tap 回调对象释放后访问](./2026-11-26-event-tap-owner-use-after-free.html)
 - [安装器因 HAL 目录带组可写位阻止升级](./2026-11-26-installer-blocked-by-writable-hal-parent.md)
 - [应用内安装 Siri Remote 组件后 Onboarding 仍不显示苹果遥控器](./2026-11-25-onboarding-siri-remote-hidden-without-installer-receipt.md)

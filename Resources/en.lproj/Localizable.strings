@@ -531,7 +531,8 @@
 "permissions.required.title" = "Required Permissions";
 "permission.bluetooth.title" = "Bluetooth";
 "permission.bluetooth.description" = "Connect supported Bluetooth remotes and receive button presses and voice audio";
-"permission.bluetooth.open_settings" = "Open Bluetooth Settings";
+"permission.bluetooth.open_connection" = "Open Bluetooth Connection";
+"permission.bluetooth.open_privacy" = "Open Bluetooth Permission";
 "permission.input_monitoring.title" = "Input Monitoring";
 "permission.input_monitoring.description" = "Detect remote button presses and help prevent duplicate system actions";
 "permission.action.request" = "Request Permission";
@@ -815,7 +816,7 @@
 "community.help.title" = "Trouble with setup?";
 "community.help.intro" = "Scan to follow Douyin or Xiaohongshu and view setup tutorials.";
 "community.help.douyin_title" = "Douyin · SayAll";
-"community.help.douyin_hint" = "Save this image, then scan it in Douyin";
+"community.help.douyin_hint" = "Scan with Douyin";
 "community.help.douyin_accessibility" = "QR code for the SayAll Douyin account";
 "community.help.xiaohongshu_title" = "Xiaohongshu · SayAll";
 "community.help.xiaohongshu_hint" = "Scan with Xiaohongshu";
@@ -1008,7 +1009,7 @@
 "onboarding.remote.voice_button_mistake.detail" = "This step checks button controls. Press the center OK button or an arrow button instead";
 "onboarding.remote.reconnect" = "Search Again";
 "onboarding.remote.retry_input" = "Retry Button Detection";
-"onboarding.remote.open_bluetooth" = "Open Bluetooth Settings";
+"onboarding.remote.open_bluetooth" = "Open Bluetooth Connection";
 "onboarding.iphone_remote.title" = "Connect an iPhone to this Mac";
 "onboarding.iphone_remote.detail" = "Install and open the SayAll iOS app, select this Mac, and verify the matching pairing code";
 "onboarding.iphone_remote.install" = "Install or Open the iOS App";

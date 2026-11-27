@@ -15,7 +15,7 @@
     <td align="center">
       <a href="Screenshots/douyin-sayall.jpg"><img src="Screenshots/douyin-sayall.jpg" alt="无线麦 SayAll App 抖音二维码" width="220"></a><br>
       <strong>抖音 · GetSayAll</strong><br>
-      保存图片后，在抖音扫一扫
+      用抖音扫一扫
     </td>
     <td align="center">
       <a href="Screenshots/xhs-sayall.jpg"><img src="Screenshots/xhs-sayall.jpg" alt="无线麦 SayAll App 小红书二维码" width="220"></a><br>
