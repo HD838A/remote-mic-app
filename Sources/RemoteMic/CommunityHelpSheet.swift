@@ -20,7 +20,6 @@ struct CommunityHelpSheet: View {
     var onClose: (() -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
-    @FocusState private var isCloseFocused: Bool
 
     private struct Card: Identifiable {
         let id: String
@@ -64,32 +63,38 @@ struct CommunityHelpSheet: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            HStack(alignment: .top, spacing: 18) {
+            HStack(alignment: .top, spacing: 30) {
                 ForEach(Self.cards) { card in
                     cardView(card)
                 }
             }
 
-            HStack {
-                Spacer(minLength: 0)
-                Button(localization.text("common.action.close")) {
-                    close()
-                }
-                .keyboardShortcut(.cancelAction)
-                .focused($isCloseFocused)
-            }
         }
-        .padding(22)
-        .frame(width: 500)
+        .padding(38)
+        .frame(width: 516)
+        .overlay(alignment: .topTrailing) { closeButton }
         .onAppear {
             CommunityHelpLog.write("presented", source: source)
-            DispatchQueue.main.async {
-                isCloseFocused = true
-            }
         }
         .onDisappear {
             CommunityHelpLog.write("closed", source: source)
         }
+    }
+
+    // 与 NoticeBubble 的弱化关闭按钮保持一致：12pt x、24pt 命中区、次级文字色。
+    private var closeButton: some View {
+        Button(action: close) {
+            Image(systemName: "xmark")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .frame(width: 24, height: 24)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.top, 7)
+        .padding(.trailing, 7)
+        .keyboardShortcut(.cancelAction)
+        .accessibilityLabel(Text(localization.text("common.action.close")))
     }
 
     private func close() {
@@ -184,7 +189,6 @@ struct CommunityHelpOverlay: View {
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .stroke(Color.primary.opacity(0.12), lineWidth: 1)
             }
-            .shadow(color: .black.opacity(0.28), radius: 30, y: 14)
         }
         .onExitCommand {
             onClose()
