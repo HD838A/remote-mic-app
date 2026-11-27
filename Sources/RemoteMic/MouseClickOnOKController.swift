@@ -2,7 +2,7 @@ import Foundation
 
 enum MouseClickOnOKPolicy {
     /// 成功移动后，OK 在这个窗口内改发一次左键单击。
-    static let recentMoveWindow: TimeInterval = 2
+    static let recentMoveWindow: TimeInterval = 5
 
     static func shouldClick(
         button: RemoteButton,

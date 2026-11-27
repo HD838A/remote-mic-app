@@ -60,15 +60,15 @@ struct ButtonBindingConfigurationTests {
             targetDefaults.removePersistentDomain(forName: targetSuite)
         }
         let settings = AppSettings(defaults: defaults)
-        #expect(settings.mouseClickOnOKEnabled)
-        settings.mouseClickOnOKEnabled = false
+        #expect(!settings.mouseClickOnOKEnabled)
+        settings.mouseClickOnOKEnabled = true
 
         let reopened = AppSettings(defaults: defaults)
-        #expect(!reopened.mouseClickOnOKEnabled)
+        #expect(reopened.mouseClickOnOKEnabled)
 
         let target = AppSettings(defaults: targetDefaults)
         try target.importConfiguration(from: settings.exportedConfigurationData())
-        #expect(!target.mouseClickOnOKEnabled)
+        #expect(target.mouseClickOnOKEnabled)
     }
 
     @Test func mouseMoveDistanceSurvivesActionSwitch() {

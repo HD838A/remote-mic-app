@@ -60,7 +60,7 @@ private struct PersonalizedConfiguration: Codable {
     let showStatusBarIcon: Bool?
     let showActionFeedback: Bool?
     let showActionSuccessFeedback: Bool?
-    /// 鼠标移动后用 OK 单击。旧配置缺字段时按默认开启处理。
+    /// 鼠标移动后用 OK 单击。旧配置缺字段时按默认关闭处理，与 Windows 一致。
     let mouseClickOnOKEnabled: Bool?
     let openMainWindowAtLaunch: Bool?
     let checksForPreReleaseUpdates: Bool?
@@ -1232,9 +1232,7 @@ final class AppSettings: ObservableObject {
         showActionSuccessFeedback = defaults.object(forKey: Keys.showActionSuccessFeedback) == nil
             ? true
             : defaults.bool(forKey: Keys.showActionSuccessFeedback)
-        mouseClickOnOKEnabled = defaults.object(forKey: Keys.mouseClickOnOKEnabled) == nil
-            ? true
-            : defaults.bool(forKey: Keys.mouseClickOnOKEnabled)
+        mouseClickOnOKEnabled = defaults.bool(forKey: Keys.mouseClickOnOKEnabled)
         openMainWindowAtLaunch = defaults.object(forKey: Keys.openMainWindowAtLaunch) == nil
             ? true
             : defaults.bool(forKey: Keys.openMainWindowAtLaunch)

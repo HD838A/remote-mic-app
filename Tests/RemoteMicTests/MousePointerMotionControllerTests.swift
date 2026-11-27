@@ -55,7 +55,7 @@ struct MousePointerMotionControllerTests {
             button: .ok,
             phase: .press,
             enabled: true,
-            lastSuccessfulMoveAt: 98,
+            lastSuccessfulMoveAt: 95,
             now: 100
         ))
         #expect(!MouseClickOnOKPolicy.shouldClick(
@@ -90,7 +90,7 @@ struct MousePointerMotionControllerTests {
             button: .ok,
             phase: .press,
             enabled: true,
-            lastSuccessfulMoveAt: 97.99,
+            lastSuccessfulMoveAt: 94.99,
             now: 100
         ))
     }
@@ -103,7 +103,7 @@ struct MousePointerMotionControllerTests {
         #expect(harness.logs.last?.contains("reason=ok_after_move") == true)
 
         harness.clicks = 0
-        harness.now = 102.01
+        harness.now = 105.01
         #expect(!harness.controller.handle(button: .ok, phase: .press))
         #expect(harness.clicks == 0)
 
