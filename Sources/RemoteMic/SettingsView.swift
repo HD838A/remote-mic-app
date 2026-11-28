@@ -595,6 +595,51 @@ private struct MouseMoveDistanceEditor: View {
     }
 }
 
+private struct MouseHoldGuidance: View {
+    @EnvironmentObject private var localization: LocalizationStore
+    let onSet: () -> Void
+    let onKeep: () -> Void
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "hand.tap")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Color.accentColor)
+                .frame(width: 20, height: 20)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(localization.text("button_mapping.mouse_hold_guidance.title"))
+                    .font(.system(size: 12, weight: .semibold))
+                Text(localization.text("button_mapping.mouse_hold_guidance.detail"))
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 8)
+            VStack(alignment: .trailing, spacing: 5) {
+                Button(localization.text("button_mapping.mouse_hold_guidance.set")) {
+                    onSet()
+                }
+                .compatibilityButtonStyle(.standard)
+                .controlSize(.small)
+                Button(localization.text("button_mapping.mouse_hold_guidance.keep")) {
+                    onKeep()
+                }
+                .buttonStyle(.link)
+                .font(.system(size: 12))
+            }
+        }
+        .padding(12)
+        .background(
+            Color.accentColor.opacity(0.06),
+            in: RoundedRectangle(cornerRadius: 10)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(Color.accentColor.opacity(0.14), lineWidth: 1)
+        }
+    }
+}
+
 enum MappingPermissionPolicy {
     static func requiresPrompt(
         enabled: Bool,
@@ -736,6 +781,10 @@ struct SettingsView: View {
     @State private var shortcutEditorNavigationID = UUID()
     /// 点胶囊后请求把内容区滚到视口顶部。
     @State private var mappingFilterScrollRequest = 0
+    /// 鼠标动作的按住引导请求把内容区滚到「按住」面板。
+    @State private var mappingHoldScrollRequest = 0
+    /// 用户选择「保持单次」后，同一按键/触发器的引导不再反复出现。
+    @State private var dismissedMouseHoldGuidance: Set<String> = []
     @State private var gestureTimingDraft = RemoteButtonGestureTiming()
     @State private var gestureTimingDraftModel: XiaomiRemoteModel?
     @State private var gestureTimingSaveConfirmed = false
@@ -3423,6 +3472,15 @@ struct SettingsView: View {
                         }
                     }
                 }
+                .onChange(of: mappingHoldScrollRequest) { _ in
+                    // 鼠标按住引导先切到按住胶囊；面板要等下一轮布局才存在。
+                    guard mappingInteractionBelongsToSelectedRemote else { return }
+                    DispatchQueue.main.async {
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            proxy.scrollTo("mapping-hold-tab", anchor: .top)
+                        }
+                    }
+                }
                 .onChange(of: mappingVoiceSettingsRequest) { _ in
                     guard mappingInteractionBelongsToSelectedRemote else { return }
                     // 面板是这一刻才插进视图树的，锚点要等下一轮布局完成才可滚动。
@@ -4412,6 +4470,20 @@ struct SettingsView: View {
                         saveMappingBinding(updated, button: button, trigger: trigger)
                     }
                 )
+                if let suggestedHoldMode = mouseHoldGuidanceMode(
+                    for: button, trigger: trigger, configured: configured
+                ) {
+                    MouseHoldGuidance(
+                        onSet: {
+                            applyMouseHoldGuidance(suggestedHoldMode, for: button)
+                        },
+                        onKeep: {
+                            dismissedMouseHoldGuidance.insert(
+                                mouseHoldGuidanceKey(button: button, trigger: trigger)
+                            )
+                        }
+                    )
+                }
             }
 
             // 「目标 APP」属于「打开 App」分类：切到其他胶囊时必须一起隐藏，
@@ -4496,6 +4568,42 @@ struct SettingsView: View {
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    /// 鼠标动作默认只执行一次；用户选择后，在同一张卡片里给出按住连续移动的
+    /// 可操作提示。只在建议模式可写、无冲突且用户没有选择“保持单次”时显示。
+    private func mouseHoldGuidanceMode(
+        for button: RemoteButton,
+        trigger: ButtonTrigger,
+        configured: ConfiguredButtonAction
+    ) -> RemoteButtonHoldMode? {
+        guard configured.action.isMouseMove else { return nil }
+        guard trigger == .singleClick || trigger == .longPress else { return nil }
+        guard editingMappingProfileID == nil || macroFeature.supportsProfileHoldModes else { return nil }
+        guard canWriteMappingHold(button) else { return nil }
+        let suggested: RemoteButtonHoldMode = trigger == .longPress ? .repeatLong : .repeatSingle
+        guard mappingHoldMode(for: button) != suggested else { return nil }
+        guard !dismissedMouseHoldGuidance.contains(
+            mouseHoldGuidanceKey(button: button, trigger: trigger)
+        ) else { return nil }
+        guard mappingHoldSnapshot(for: button).blockers(for: suggested).isEmpty else { return nil }
+        return suggested
+    }
+
+    private func mouseHoldGuidanceKey(button: RemoteButton, trigger: ButtonTrigger) -> String {
+        let profile = editingMappingProfileID?.uuidString ?? "base"
+        let device = settings.selectedRemoteProfileID?.uuidString ?? "none"
+        return "\(profile):\(device):\(button.rawValue):\(trigger.rawValue)"
+    }
+
+    private func applyMouseHoldGuidance(
+        _ mode: RemoteButtonHoldMode,
+        for button: RemoteButton
+    ) {
+        _ = setMappingHoldMode(mode, for: button)
+        // 即使写入失败也把用户带到按住面板，让冲突原因和可恢复选项可见。
+        mappingActionFilter = .hold
+        mappingHoldScrollRequest &+= 1
     }
 
     private func mappingHoldMode(for button: RemoteButton) -> RemoteButtonHoldMode {

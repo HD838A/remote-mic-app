@@ -1316,18 +1316,11 @@ final class HIDRemoteMonitor {
 
     /// 方向键是否启用事件级兜底。
     ///
-    /// Intel 现场已证实「映射回读通过 ≠ 系统停止投递」（音量键 227 次、方向键双跳），
-    /// 而 Apple Silicon 上从未观察到该泄漏。方向键的原生码与实体键盘完全同码，
-    /// 在没有泄漏的机器上登记只会开出会吞掉实体键盘方向键的窗口（甚至吞掉 keyUp
-    /// 导致系统认为键仍按下），因此默认只在 Intel 构建启用。
-    /// 若将来在 Apple Silicon 上拿到同样的泄漏日志，把这个默认值改成 true 即可。
-    static let directionalNativeFallbackEnabled: Bool = {
-        #if arch(x86_64)
-        return true
-        #else
-        return false
-        #endif
-    }()
+    /// Intel 与 Apple Silicon 都已出现「映射回读通过 ≠ 系统停止投递」：2026-11-28
+    /// Apple Silicon 现场在鼠标方向动作中同时移动光标并触发 Codex 上键。方向键的
+    /// 原生码与实体键盘完全同码，因此只在遥控器原始报告到来后开启有界窗口，并在
+    /// 松键时清理；不能让它成为常驻吞键窗口。
+    static let directionalNativeFallbackEnabled = true
 
     /// 报告线程可以提前登记的原生事件。
     ///

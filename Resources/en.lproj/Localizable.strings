@@ -292,6 +292,10 @@
 "button_mapping.mouse_distance.unit" = "pt";
 "button_mapping.mouse_distance.hint" = "1–100, default 20";
 "button_mapping.mouse_distance.error" = "Enter a whole number from 1 to 100";
+"button_mapping.mouse_hold_guidance.title" = "Move continuously while held";
+"button_mapping.mouse_hold_guidance.detail" = "Mouse actions move once by default. Set While held to repeat for continuous movement; release to stop.";
+"button_mapping.mouse_hold_guidance.set" = "Set while held";
+"button_mapping.mouse_hold_guidance.keep" = "Keep single";
 "button_mapping.mouse_click_on_ok.label" = "Click with OK after moving";
 "button_mapping.mouse_click_on_ok.hint" = "Within 5 seconds of moving the pointer, OK clicks at the cursor.";
 "button_mapping.hold.repeat_single.mouse_move_description" = "Hold to move the pointer continuously; release to stop.";

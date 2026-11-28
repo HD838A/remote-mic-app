@@ -542,11 +542,11 @@ struct KeyboardEventSuppressorTests {
         #expect(performed == 0)
     }
 
-    /// 反向边界：没有泄漏证据的构建（Apple Silicon 默认）不得为方向键开拦截窗口。
+    /// 反向边界：显式关闭兜底的测试/受控构建不得为方向键开拦截窗口。
     /// 窗口内按下的实体键盘方向键会被吞掉一次，极端情况下只吞掉 keyUp，
     /// 系统会认为该键仍然按下并继续连发。
     @Test(arguments: [RemoteButton.left, .right, .up, .down])
-    func directionalFallbackKeepsNonLeakingBuildsFreeOfSuppressionWindows(
+    func directionalFallbackCanBeExplicitlyDisabledForControlledBuilds(
         _ button: RemoteButton
     ) throws {
         let suite = "KeyboardEventSuppressorTests.directionalFallbackOff.\(UUID().uuidString)"
@@ -631,6 +631,12 @@ struct KeyboardEventSuppressorTests {
         #expect(performed == 1)
     }
 
+    @Test func productionDirectionalFallbackCoversAppleSiliconLeakEvidence() {
+        // 2026-11-28 Apple Silicon 现场确认原生映射回读通过后方向键仍会到达前台
+        // App；方向键兜底不能只在 Intel 构建启用。
+        #expect(HIDRemoteMonitor.directionalNativeFallbackEnabled)
+    }
+
     @Test func directionalPrearmOnlyCoversSessionsWhereTheAppOwnsTheMove() {
         // 报告线程提前登记的范围：Intel 上映射回读一致、非独占时，原生方向键
         // 仍会先于主线程登记到达，必须提前拦。
@@ -647,7 +653,7 @@ struct KeyboardEventSuppressorTests {
         #expect(!HIDRemoteMonitor.prearmsNativeEvent(
             for: .left, seized: true, neutralized: true, directionalFallback: true
         ))
-        // Apple Silicon 等没有泄漏证据的构建不登记，避免开出吞掉键盘方向键的窗口。
+        // 显式关闭兜底的构建不登记，避免开出吞掉键盘方向键的窗口。
         #expect(!HIDRemoteMonitor.prearmsNativeEvent(
             for: .left, seized: false, neutralized: true, directionalFallback: false
         ))
