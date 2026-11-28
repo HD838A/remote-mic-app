@@ -9,11 +9,14 @@ final class RemoteButtonInteractionController {
         let perform: (ButtonTrigger, ConfiguredButtonAction) -> Bool
         let beginHold: ((ConfiguredButtonAction) -> Bool)?
         let endHold: ((String) -> Void)?
+        let beginMotion: ((RemoteButton, ConfiguredButtonAction) -> MouseMotionToken?)?
+        let endMotion: ((MouseMotionToken, String) -> Void)?
         var pressed = true
         var second = false
         var waiting = false
         var consumed = false
         var holding = false
+        var motionToken: MouseMotionToken?
         var count = 0
         var timer: HIDRemoteScheduledTask?
         var longTimer: HIDRemoteScheduledTask?
@@ -21,12 +24,16 @@ final class RemoteButtonInteractionController {
         init(snapshot: RemoteButtonInteractionSnapshot, valid: @escaping () -> Bool,
              perform: @escaping (ButtonTrigger, ConfiguredButtonAction) -> Bool,
              beginHold: ((ConfiguredButtonAction) -> Bool)? = nil,
-             endHold: ((String) -> Void)? = nil) {
+             endHold: ((String) -> Void)? = nil,
+             beginMotion: ((RemoteButton, ConfiguredButtonAction) -> MouseMotionToken?)? = nil,
+             endMotion: ((MouseMotionToken, String) -> Void)? = nil) {
             self.snapshot = snapshot
             self.valid = valid
             self.perform = perform
             self.beginHold = beginHold
             self.endHold = endHold
+            self.beginMotion = beginMotion
+            self.endMotion = endMotion
         }
     }
 
@@ -44,7 +51,9 @@ final class RemoteButtonInteractionController {
                 valid: @escaping () -> Bool,
                 perform: @escaping (ButtonTrigger, ConfiguredButtonAction) -> Bool,
                 beginHold: ((ConfiguredButtonAction) -> Bool)? = nil,
-                endHold: ((String) -> Void)? = nil) {
+                endHold: ((String) -> Void)? = nil,
+                beginMotion: ((RemoteButton, ConfiguredButtonAction) -> MouseMotionToken?)? = nil,
+                endMotion: ((MouseMotionToken, String) -> Void)? = nil) {
         if phase == .release { release(button); return }
         if let current = interactions[button] {
             guard current.waiting else { return }
@@ -56,7 +65,8 @@ final class RemoteButtonInteractionController {
             return
         }
         let current = Interaction(snapshot: snapshot(), valid: valid, perform: perform,
-                                  beginHold: beginHold, endHold: endHold)
+                                  beginHold: beginHold, endHold: endHold,
+                                  beginMotion: beginMotion, endMotion: endMotion)
         interactions[button] = current
         guard current.snapshot.unavailableReason == nil, valid() else {
             current.consumed = true
@@ -92,9 +102,13 @@ final class RemoteButtonInteractionController {
         if mode == .repeatSingle {
             let learnedStart = UInt64(current.snapshot.repeatSingleStartMilliseconds ?? 0)
             if !current.snapshot.recognizesDouble {
-                fire(button, current, .singleClick)
-                scheduleRepeat(button, current, .singleClick,
-                               delay: max(HIDRemoteTiming.repeatStartMilliseconds, learnedStart))
+                if current.snapshot.single.isMouseMove {
+                    startMotion(button, current, trigger: .singleClick)
+                } else {
+                    fire(button, current, .singleClick)
+                    scheduleRepeat(button, current, .singleClick,
+                                   delay: max(HIDRemoteTiming.repeatStartMilliseconds, learnedStart))
+                }
             } else {
                 let delay = max(UInt64(current.snapshot.settings.doubleClickMilliseconds), learnedStart)
                 AppLogger.shared.write(
@@ -103,8 +117,12 @@ final class RemoteButtonInteractionController {
                 )
                 current.timer = schedule(button, current, after: delay) { owner, value in
                     guard value.pressed, !value.second else { return }
-                    owner.fire(button, value, .singleClick)
-                    owner.scheduleRepeat(button, value, .singleClick, delay: value.snapshot.repeatInterval)
+                    if value.snapshot.single.isMouseMove {
+                        owner.startMotion(button, value, trigger: .singleClick)
+                    } else {
+                        owner.fire(button, value, .singleClick)
+                        owner.scheduleRepeat(button, value, .singleClick, delay: value.snapshot.repeatInterval)
+                    }
                 }
             }
         } else if !current.snapshot.recognizesDouble && !current.snapshot.recognizesLong {
@@ -143,6 +161,10 @@ final class RemoteButtonInteractionController {
             // 长按按住：阈值处不是执行一次长按动作，而是把它一直按住。
             if value.snapshot.mode == .longHold {
                 owner.startHold(button, value)
+                return
+            }
+            if value.snapshot.mode == .repeatLong, value.snapshot.long.isMouseMove {
+                owner.startMotion(button, value, trigger: .longPress)
                 return
             }
             owner.fire(button, value, .longPress)
@@ -195,6 +217,30 @@ final class RemoteButtonInteractionController {
         }
     }
 
+    /// 进入鼠标连续移动：由共享引擎按 8ms 节拍推进，松键时结束。
+    private func startMotion(
+        _ button: RemoteButton,
+        _ current: Interaction,
+        trigger: ButtonTrigger
+    ) {
+        guard interactions[button] === current, current.pressed, current.valid() else {
+            cancel(button, reason: "context_changed")
+            return
+        }
+        let action = trigger == .longPress ? current.snapshot.long : current.snapshot.single
+        guard action.isMouseMove, let beginMotion = current.beginMotion else {
+            cancel(button, reason: "motion_unavailable")
+            return
+        }
+        current.consumed = true
+        current.count += 1
+        guard let token = beginMotion(button, action) else {
+            cancel(button, reason: "motion_failed")
+            return
+        }
+        current.motionToken = token
+    }
+
     private func schedule(_ button: RemoteButton, _ current: Interaction, after delay: UInt64,
                           action: @escaping (RemoteButtonInteractionController, Interaction) -> Void) -> HIDRemoteScheduledTask {
         scheduler.schedule(afterMilliseconds: delay, repeatingEveryMilliseconds: nil) { [weak self, weak current] in
@@ -212,6 +258,10 @@ final class RemoteButtonInteractionController {
             current.holding = false
             // 无论因为松键、断连还是上下文变化结束，都必须把系统里的键抬起来。
             current.endHold?(reason)
+        }
+        if let token = current.motionToken {
+            current.motionToken = nil
+            current.endMotion?(token, reason)
         }
         AppLogger.shared.write("BUTTON HOLD operation_id=\(current.id.uuidString) phase=completed reason=\(reason) count=\(current.count) external_result=unknown")
     }

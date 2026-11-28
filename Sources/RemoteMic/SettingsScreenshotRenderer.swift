@@ -143,6 +143,15 @@ enum SettingsScreenshotRenderer {
         let settings = AppSettings(defaults: defaults)
         settings.applicationLanguage = language
         settings.completeOnboarding()
+        // 显式截图夹具：默认值由产品设置决定，截图需要同时覆盖开关开/关。
+        if let value = ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_SETTINGS_SCREENSHOT_MOUSE_CLICK_ON_OK"
+        ] {
+            settings.mouseClickOnOKEnabled = value != "off"
+            // 鼠标动作只有在按键映射开启时才可编辑；截图夹具同时打开映射，
+            // 避免把开关渲染成只读的灰色状态。
+            settings.customMappingEnabled = true
+        }
         if let value = ProcessInfo.processInfo.environment[
             "REMOTE_MIC_SETTINGS_SCREENSHOT_ACTION_FEEDBACK"
         ] {
@@ -303,6 +312,23 @@ enum SettingsScreenshotRenderer {
             let profileID = settings.registerHIDRemote(fingerprint: "settings-screenshot-selected-remote")
             settings.updateRemoteProfileModel(profileID, model: remoteModel)
             model.selectRemoteProfile(profileID)
+        }
+        if ProcessInfo.processInfo.environment[
+            "REMOTE_MIC_SETTINGS_SCREENSHOT_MOUSE_MOVE"
+        ] == "1" {
+            // 鼠标移动动作与距离输入的生产截图夹具。必须在最终设备选择之后写入，
+            // 否则后续 selectRemoteProfile 会切到另一台档案。
+            settings.setBaseBinding(
+                ConfiguredButtonAction(
+                    action: .mouseMoveRight,
+                    shortcut: nil,
+                    mouseMoveDistance: 42
+                ),
+                for: .right,
+                trigger: .singleClick,
+                profileID: settings.selectedRemoteProfileID
+            )
+            settings.setHoldMode(.repeatSingle, for: .right)
         }
         if let state = ProcessInfo.processInfo.environment["REMOTE_MIC_SETTINGS_SCREENSHOT_MAC_MICROPHONE"] {
             model.configureMacMicrophoneForSettingsScreenshot(state)

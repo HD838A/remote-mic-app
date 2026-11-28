@@ -672,3 +672,6 @@
   - 2026-11-19 现场候选：音频输出配置在 `prepare_engine` 阻塞，后续配置全部排队，导致小米和苹果卡片同时长期“状态确认中”，退出 App 重开后恢复。新增有界音频启动、一次超时重试、明确终态日志，以及仅在音频输出明确失败时出现的“恢复语音”备用按钮；定向 158 项与公开全量 1529 项通过，真实虚拟声卡重启、按钮点击与第三方语音上屏待验收，见 `Bugs/2026-11-19-audio-configure-timeout-card-stuck.md`。
   - 2026-11-20 现场：连接页右列多出未在规范中的独立 Chromecast 卡片（PR #1118）。已删除卡片和仅为其服务的 `isChromecastHIDPresent`，保留左侧设备面板、连接过的设备和按键页选择器；回归与实机截图待完成，见 `Bugs/2026-11-20-unspecified-chromecast-card.md`。
   - 2026-11-20 现场：Build 411 首次连接 `native_prepare` 失败但独占成功，宿主仍用 `chromecastNativeKeyMapper.isPrepared` 重复拦截，39 次按键全部 rejected，语音正常。已删除宿主重复门禁，保留私有桥 `nativeInputReady` 唯一门禁；定向、全量与真机复验待完成，见 `Bugs/2026-11-20-chromecast-host-duplicate-native-guard.md`。
+
+- [ ] 遥控器鼠标移动动作（P1，2026-11-27 候选） <!-- workshop:status=候选;priority=P2 -->
+  - 按键映射页新增“鼠标”分类（排在“打开 App”后面）和 ↑/↓/←/→ 四个鼠标动作，每个绑定可配置 1–100 点距离；按住“重复单击/长按”时进入 8ms 速度积分，前 500ms 保持初速、700ms 二次缓入到 5×，松手补位移并停止。鼠标分类另有“移动后按 OK 单击”开关：成功移动后 5 秒内按 OK 发送一次左键单击，按下立即消费，释放不重复且不执行 OK 原绑定。动作分类、距离持久化、完整备份、控制器接线、私有 Portable Transfer 字段和 OK 单击代码/自动化已完成；鼠标距离只在按键映射页编辑，键位方案页只保留概览与跳转；2026-11-28 增加鼠标按住页内引导，并修复 Apple Silicon 方向键原生事件泄漏到前台 App；公开依赖升级、macOS RC001/RC003 真机和 Windows 对应实机复验未完成；Windows 已有独立实现，本 PR 未改 Windows。测试见 `Testing/MousePointerActions.md`；RC001/RC003 真机、权限撤销、睡眠、多显示器和目标 App 验收未完成前保持候选。

@@ -47,6 +47,7 @@ private struct PersonalizedConfiguration: Codable {
     let buttonShortcuts: [String: CustomKeyboardShortcut]
     let unifiedBaseBindings: [UnifiedButtonBinding]?
     let buttonApplicationProfileIDs: [String: UUID]?
+    let buttonMouseMoveDistances: [String: Int]?
     let secondaryButtonBindings: [String: [String: ConfiguredButtonAction]]
     let buttonRapidPressEnabled: [String: Bool]?
     let interactionSettings: RemoteButtonInteractionSettings?
@@ -59,6 +60,8 @@ private struct PersonalizedConfiguration: Codable {
     let showStatusBarIcon: Bool?
     let showActionFeedback: Bool?
     let showActionSuccessFeedback: Bool?
+    /// 鼠标移动后用 OK 单击。旧配置缺字段时按默认关闭处理，与 Windows 一致。
+    let mouseClickOnOKEnabled: Bool?
     let openMainWindowAtLaunch: Bool?
     let checksForPreReleaseUpdates: Bool?
     let experimentalContinuousRecordingEnabled: Bool?
@@ -320,6 +323,7 @@ final class AppSettings: ObservableObject {
         static let buttonBindings = "buttonBindings"
         static let buttonShortcuts = "buttonShortcuts"
         static let buttonApplicationProfileIDs = "buttonApplicationProfileIDs"
+        static let buttonMouseMoveDistances = "buttonMouseMoveDistances"
         static let secondaryButtonBindings = "secondaryButtonBindings"
         static let buttonRapidPressEnabled = "buttonRapidPressEnabled"
         static let buttonGestureTimingsByModel = "buttonGestureTimingsByModel"
@@ -334,6 +338,7 @@ final class AppSettings: ObservableObject {
         static let showStatusBarIcon = "showStatusBarIcon"
         static let showActionFeedback = "showActionFeedback"
         static let showActionSuccessFeedback = "showActionSuccessFeedback"
+        static let mouseClickOnOKEnabled = "mouseClickOnOKEnabled"
         static let openMainWindowAtLaunch = "openMainWindowAtLaunch"
         static let checksForPreReleaseUpdates = "checksForPreReleaseUpdates"
         static let experimentalContinuousRecordingEnabled = "experimentalContinuousRecordingEnabled"
@@ -477,21 +482,42 @@ final class AppSettings: ObservableObject {
 
     func setBaseBinding(_ configured: ConfiguredButtonAction, for button: RemoteButton,
                         trigger: ButtonTrigger, profileID: UUID?) {
+        let stored = normalizedBaseBinding(configured, button: button, profileID: profileID)
         unifiedBaseBindings.removeAll { $0.remoteProfileID == profileID && $0.button == button && $0.trigger == trigger }
         unifiedBaseBindings.append(UnifiedButtonBinding(remoteProfileID: profileID, button: button,
-                                                        trigger: trigger, configured: configured))
+                                                        trigger: trigger, configured: stored))
         guard profileID == selectedRemoteProfileID else { return }
         if trigger == .singleClick {
-            buttonBindings[button] = configured.action
-            buttonShortcuts[button] = configured.shortcut
-            buttonApplicationProfileIDs[button] = configured.applicationProfileID
+            buttonBindings[button] = stored.action
+            buttonShortcuts[button] = stored.shortcut
+            buttonApplicationProfileIDs[button] = stored.applicationProfileID
+            if stored.isMouseMove {
+                buttonMouseMoveDistances[button] = stored.resolvedMouseMoveDistance
+            }
         } else {
             var bindings = secondaryButtonBindings[button] ?? [:]
-            bindings[trigger] = configured
+            bindings[trigger] = stored
             secondaryButtonBindings[button] = bindings
         }
         dropUnrunnableHoldMode(for: button)
         saveSelectedRemoteProfileMappings()
+    }
+
+    /// 鼠标距离是绑定级参数，而不是动作枚举的一部分。动作切走再切回时
+    /// 保持上一次距离；旧配置缺字段时使用仓库默认值。
+    private func normalizedBaseBinding(
+        _ configured: ConfiguredButtonAction,
+        button: RemoteButton,
+        profileID: UUID?
+    ) -> ConfiguredButtonAction {
+        guard configured.isMouseMove, configured.mouseMoveDistance == nil else {
+            return configured
+        }
+        var result = configured
+        result.mouseMoveDistance = profileID == selectedRemoteProfileID
+            ? buttonMouseMoveDistances[button] ?? ConfiguredButtonAction.defaultMouseMoveDistance
+            : ConfiguredButtonAction.defaultMouseMoveDistance
+        return result
     }
 
     @discardableResult
@@ -501,7 +527,8 @@ final class AppSettings: ObservableObject {
         guard let data = defaults.data(forKey: "unifiedBaseBindings"),
               let stored = try? JSONDecoder().decode([UnifiedButtonBinding].self, from: data)
         else { return false }
-        return stored.first { $0.remoteProfileID == profileID && $0.button == button && $0.trigger == trigger }?.configured == configured
+        return stored.first { $0.remoteProfileID == profileID && $0.button == button && $0.trigger == trigger }?.configured
+            == normalizedBaseBinding(configured, button: button, profileID: profileID)
     }
 
     func hasExplicitBaseBinding(for button: RemoteButton, trigger: ButtonTrigger,
@@ -634,6 +661,13 @@ final class AppSettings: ObservableObject {
         }
     }
 
+    @Published var buttonMouseMoveDistances: [RemoteButton: Int] {
+        didSet {
+            saveButtonMouseMoveDistances()
+            saveSelectedRemoteProfileMappings()
+        }
+    }
+
     @Published var secondaryButtonBindings: [RemoteButton: [ButtonTrigger: ConfiguredButtonAction]] {
         didSet {
             onInteractionModeChanged?(selectedRemoteProfileID)
@@ -728,6 +762,13 @@ final class AppSettings: ObservableObject {
     @Published var showActionSuccessFeedback: Bool {
         didSet {
             defaults.set(showActionSuccessFeedback, forKey: Keys.showActionSuccessFeedback)
+        }
+    }
+
+    /// 鼠标移动后，OK 在最近有效移动窗口内改为左键单击。
+    @Published var mouseClickOnOKEnabled: Bool {
+        didSet {
+            defaults.set(mouseClickOnOKEnabled, forKey: Keys.mouseClickOnOKEnabled)
         }
     }
 
@@ -1117,6 +1158,21 @@ final class AppSettings: ObservableObject {
         }
 
         if let decoded = Self.decodeSetting(
+            [String: Int].self,
+            forKey: Keys.buttonMouseMoveDistances,
+            from: defaults,
+            corrupted: &corruptedKeys
+        ) {
+            buttonMouseMoveDistances = Dictionary(
+                uniqueKeysWithValues: decoded.compactMap { key, value in
+                    RemoteButton(rawValue: key).map { ($0, value) }
+                }
+            )
+        } else {
+            buttonMouseMoveDistances = [:]
+        }
+
+        if let decoded = Self.decodeSetting(
             [String: Bool].self,
             forKey: Keys.buttonRapidPressEnabled,
             from: defaults,
@@ -1176,6 +1232,7 @@ final class AppSettings: ObservableObject {
         showActionSuccessFeedback = defaults.object(forKey: Keys.showActionSuccessFeedback) == nil
             ? true
             : defaults.bool(forKey: Keys.showActionSuccessFeedback)
+        mouseClickOnOKEnabled = defaults.bool(forKey: Keys.mouseClickOnOKEnabled)
         openMainWindowAtLaunch = defaults.object(forKey: Keys.openMainWindowAtLaunch) == nil
             ? true
             : defaults.bool(forKey: Keys.openMainWindowAtLaunch)
@@ -1867,7 +1924,8 @@ final class AppSettings: ObservableObject {
             return ConfiguredButtonAction(
                 action: buttonBindings[button] ?? .disabled,
                 shortcut: buttonShortcuts[button],
-                applicationProfileID: applicationProfileID(for: button)
+                applicationProfileID: applicationProfileID(for: button),
+                mouseMoveDistance: buttonMouseMoveDistances[button]
             )
         }
         return secondaryButtonBindings[button]?[trigger] ?? .disabled
@@ -1893,7 +1951,8 @@ final class AppSettings: ObservableObject {
             return ConfiguredButtonAction(
                 action: bindings[button] ?? Self.defaultBindings[button] ?? .disabled,
                 shortcut: shortcuts[button],
-                applicationProfileID: profile.mappings.parsedButtonApplicationProfileIDs[button]
+                applicationProfileID: profile.mappings.parsedButtonApplicationProfileIDs[button],
+                mouseMoveDistance: profile.mappings.parsedButtonMouseMoveDistances[button]
             )
         }
         return profile.mappings.parsedSecondaryButtonBindings[button]?[trigger] ?? .disabled
@@ -1943,6 +2002,7 @@ final class AppSettings: ObservableObject {
         }
         buttonShortcuts = profile.mappings.parsedButtonShortcuts
         buttonApplicationProfileIDs = profile.mappings.parsedButtonApplicationProfileIDs
+        buttonMouseMoveDistances = profile.mappings.parsedButtonMouseMoveDistances
         secondaryButtonBindings = profile.mappings.parsedSecondaryButtonBindings
         buttonRapidPressEnabled = profile.mappings.parsedButtonRapidPressEnabled
         interactionSettings = profile.mappings.interactionSettings ?? RemoteButtonInteractionSettings()
@@ -2166,6 +2226,7 @@ final class AppSettings: ObservableObject {
             buttonBindings: buttonBindings,
             buttonShortcuts: buttonShortcuts,
             buttonApplicationProfileIDs: buttonApplicationProfileIDs,
+            buttonMouseMoveDistances: buttonMouseMoveDistances,
             secondaryButtonBindings: secondaryButtonBindings,
             buttonRapidPressEnabled: buttonRapidPressEnabled,
             interactionSettings: interactionSettings
@@ -2313,6 +2374,7 @@ final class AppSettings: ObservableObject {
             merged.mappings.buttonBindings = discarded.mappings.buttonBindings
             merged.mappings.buttonShortcuts = discarded.mappings.buttonShortcuts
             merged.mappings.buttonApplicationProfileIDs = discarded.mappings.buttonApplicationProfileIDs
+            merged.mappings.buttonMouseMoveDistances = discarded.mappings.buttonMouseMoveDistances
             merged.mappings.secondaryButtonBindings = discarded.mappings.secondaryButtonBindings
             merged.mappings.buttonRapidPressEnabled = discarded.mappings.buttonRapidPressEnabled
         }
@@ -2391,6 +2453,7 @@ final class AppSettings: ObservableObject {
         effectiveButtonBindings(mappings) != defaultBindings ||
             !mappings.parsedButtonShortcuts.isEmpty ||
             !mappings.parsedButtonApplicationProfileIDs.isEmpty ||
+            !mappings.parsedButtonMouseMoveDistances.isEmpty ||
             !mappings.parsedSecondaryButtonBindings.isEmpty ||
             !mappings.parsedButtonRapidPressEnabled.isEmpty
     }
@@ -2402,6 +2465,7 @@ final class AppSettings: ObservableObject {
         effectiveButtonBindings(lhs) == effectiveButtonBindings(rhs) &&
             lhs.parsedButtonShortcuts == rhs.parsedButtonShortcuts &&
             lhs.parsedButtonApplicationProfileIDs == rhs.parsedButtonApplicationProfileIDs &&
+            lhs.parsedButtonMouseMoveDistances == rhs.parsedButtonMouseMoveDistances &&
             lhs.parsedSecondaryButtonBindings == rhs.parsedSecondaryButtonBindings &&
             lhs.parsedButtonRapidPressEnabled == rhs.parsedButtonRapidPressEnabled
     }
@@ -2784,6 +2848,7 @@ final class AppSettings: ObservableObject {
               mappings.parsedButtonBindings == defaultBindings,
               mappings.buttonShortcuts.isEmpty,
               (mappings.buttonApplicationProfileIDs ?? [:]).isEmpty,
+              (mappings.buttonMouseMoveDistances ?? [:]).isEmpty,
               mappings.secondaryButtonBindings.isEmpty,
               (mappings.buttonRapidPressEnabled ?? [:]).isEmpty,
               interactionSettingsAreMigrationOnly(mappings.interactionSettings)
@@ -2837,10 +2902,12 @@ final class AppSettings: ObservableObject {
         var bindings = secondaryButtonBindings[button] ?? [:]
         let shortcut = bindings[trigger]?.shortcut
         let applicationProfileID = bindings[trigger]?.applicationProfileID
+        let mouseMoveDistance = bindings[trigger]?.mouseMoveDistance
         bindings[trigger] = ConfiguredButtonAction(
             action: action,
             shortcut: shortcut,
-            applicationProfileID: applicationProfileID
+            applicationProfileID: applicationProfileID,
+            mouseMoveDistance: mouseMoveDistance
         )
         secondaryButtonBindings[button] = bindings.isEmpty ? nil : bindings
     }
@@ -3276,6 +3343,11 @@ final class AppSettings: ObservableObject {
             buttonApplicationProfileIDs: Dictionary(
                 uniqueKeysWithValues: buttonApplicationProfileIDs.map { ($0.key.rawValue, $0.value) }
             ),
+            buttonMouseMoveDistances: buttonMouseMoveDistances.isEmpty
+                ? nil
+                : Dictionary(
+                    uniqueKeysWithValues: buttonMouseMoveDistances.map { ($0.key.rawValue, $0.value) }
+                ),
             secondaryButtonBindings: Dictionary(
                 uniqueKeysWithValues: secondaryButtonBindings.map { button, bindings in
                     (
@@ -3301,6 +3373,7 @@ final class AppSettings: ObservableObject {
             showStatusBarIcon: showStatusBarIcon,
             showActionFeedback: showActionFeedback,
             showActionSuccessFeedback: showActionSuccessFeedback,
+            mouseClickOnOKEnabled: mouseClickOnOKEnabled,
             openMainWindowAtLaunch: openMainWindowAtLaunch,
             checksForPreReleaseUpdates: checksForPreReleaseUpdates,
             experimentalContinuousRecordingEnabled: experimentalContinuousRecordingEnabled,
@@ -3403,6 +3476,11 @@ final class AppSettings: ObservableObject {
             let mappings = profile.mappings
             try validate(mappings.buttonBindings, mappings.buttonShortcuts,
                 mappings.buttonApplicationProfileIDs ?? [:], mappings.secondaryButtonBindings)
+            for (key, distance) in mappings.buttonMouseMoveDistances ?? [:] {
+                guard RemoteButton(rawValue: key) != nil,
+                      ConfiguredButtonAction.mouseMoveDistanceRange.contains(distance)
+                else { throw AppConfigurationError.invalidValues }
+            }
         }
         // Reuse local pairing only for an existing configuration ID. Never import pairing identities.
         preferences.remoteDeviceProfiles = preferences.remoteDeviceProfiles.map { value in
@@ -3517,6 +3595,7 @@ final class AppSettings: ObservableObject {
         buttonBindings = Dictionary(uniqueKeysWithValues: c.buttonBindings.compactMap { key,value in RemoteButton(rawValue: key).map { ($0,value) } })
         buttonShortcuts = Dictionary(uniqueKeysWithValues: c.buttonShortcuts.compactMap { key,value in RemoteButton(rawValue: key).map { ($0,value) } })
         buttonApplicationProfileIDs = Dictionary(uniqueKeysWithValues: (c.buttonApplicationProfileIDs ?? [:]).compactMap { key,value in RemoteButton(rawValue: key).map { ($0,value) } })
+        buttonMouseMoveDistances = Dictionary(uniqueKeysWithValues: (c.buttonMouseMoveDistances ?? [:]).compactMap { key,value in RemoteButton(rawValue: key).map { ($0,value) } })
         secondaryButtonBindings = Dictionary(uniqueKeysWithValues: c.secondaryButtonBindings.compactMap { key,values in
             RemoteButton(rawValue: key).map { button in (button, Dictionary(uniqueKeysWithValues: values.compactMap { k,v in ButtonTrigger(rawValue: k).map { ($0,v) } })) }
         })
@@ -3535,6 +3614,7 @@ final class AppSettings: ObservableObject {
         if let value = c.showStatusBarIcon { showStatusBarIcon = value }
         if let value = c.showActionFeedback { showActionFeedback = value }
         if let value = c.showActionSuccessFeedback { showActionSuccessFeedback = value }
+        if let value = c.mouseClickOnOKEnabled { mouseClickOnOKEnabled = value }
         if let value = c.openMainWindowAtLaunch { openMainWindowAtLaunch = value }
         if let value = c.checksForPreReleaseUpdates { checksForPreReleaseUpdates = value }
         voiceKeyMode = c.voiceKeyMode ?? .function
@@ -3758,6 +3838,9 @@ final class AppSettings: ObservableObject {
         if let showActionSuccessFeedback = configuration.showActionSuccessFeedback {
             self.showActionSuccessFeedback = showActionSuccessFeedback
         }
+        if let mouseClickOnOKEnabled = configuration.mouseClickOnOKEnabled {
+            self.mouseClickOnOKEnabled = mouseClickOnOKEnabled
+        }
         if let openMainWindowAtLaunch = configuration.openMainWindowAtLaunch {
             self.openMainWindowAtLaunch = openMainWindowAtLaunch
         }
@@ -3817,6 +3900,11 @@ final class AppSettings: ObservableObject {
     private static func validatedConfiguredAction(
         _ binding: ConfiguredButtonAction
     ) -> ConfiguredButtonAction? {
+        if binding.isMouseMove,
+           let distance = binding.mouseMoveDistance,
+           !ConfiguredButtonAction.mouseMoveDistanceRange.contains(distance) {
+            return nil
+        }
         if binding.action == .combinationAction {
             guard let id = binding.macroID, id.range(of: "^[A-Za-z0-9][A-Za-z0-9._-]{7,127}$", options: .regularExpression) != nil else { return nil }
         }
@@ -3942,6 +4030,29 @@ final class AppSettings: ObservableObject {
                 throw AppConfigurationError.invalidValues
             }
         }
+        let validDistance = ConfiguredButtonAction.mouseMoveDistanceRange
+        for binding in configuration.unifiedBaseBindings ?? [] where binding.configured.isMouseMove {
+            guard binding.configured.mouseMoveDistance.map(validDistance.contains) ?? true else {
+                throw AppConfigurationError.invalidValues
+            }
+        }
+        for bindings in configuration.secondaryButtonBindings.values {
+            for binding in bindings.values where binding.isMouseMove {
+                guard binding.mouseMoveDistance.map(validDistance.contains) ?? true else {
+                    throw AppConfigurationError.invalidValues
+                }
+            }
+        }
+        if let backup = configuration.continuousRecordingPowerBindingBackup, backup.isMouseMove {
+            guard backup.mouseMoveDistance.map(validDistance.contains) ?? true else {
+                throw AppConfigurationError.invalidValues
+            }
+        }
+        for distance in (configuration.buttonMouseMoveDistances ?? [:]).values {
+            guard validDistance.contains(distance) else {
+                throw AppConfigurationError.invalidValues
+            }
+        }
         return configuration
     }
 
@@ -3965,6 +4076,15 @@ final class AppSettings: ObservableObject {
         )
         if let data = try? JSONEncoder().encode(raw) {
             defaults.set(data, forKey: Keys.buttonApplicationProfileIDs)
+        }
+    }
+
+    private func saveButtonMouseMoveDistances() {
+        let raw = Dictionary(
+            uniqueKeysWithValues: buttonMouseMoveDistances.map { ($0.key.rawValue, $0.value) }
+        )
+        if let data = try? JSONEncoder().encode(raw) {
+            defaults.set(data, forKey: Keys.buttonMouseMoveDistances)
         }
     }
 
@@ -4165,6 +4285,7 @@ final class AppSettings: ObservableObject {
             buttonBindings: buttonBindings,
             buttonShortcuts: buttonShortcuts,
             buttonApplicationProfileIDs: buttonApplicationProfileIDs,
+            buttonMouseMoveDistances: buttonMouseMoveDistances,
             secondaryButtonBindings: secondaryButtonBindings,
             buttonRapidPressEnabled: buttonRapidPressEnabled,
             interactionSettings: interactionSettings

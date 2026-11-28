@@ -189,11 +189,11 @@ Windows 与网络控制入口未修改，保留稳定基线检查。
 
 适用：2026-11-07 之后把方向键纳入事件级兜底的包。更早的包方向键只靠源头映射，
 在独占失败、映射回读一致的 Intel 机器上一次按下会移动两格。
-必须在 Intel Mac 上执行；Apple Silicon 上源头映射通常能真正阻断原生投递，不能替代。
+必须分别在 Intel 与 Apple Silicon Mac 上执行；2026-11-28 Apple Silicon 现场已确认
+源头映射回读通过后原生方向键仍可能泄漏，不能再假设 Apple Silicon 不需要兜底。
 
-注意：方向键兜底默认**只在 Intel 构建启用**（`#if arch(x86_64)`）。Apple Silicon 包上
-看到「没有 `HID FILTER arm events=key1xx`」是预期行为，不是修复缺失；判定 Apple Silicon
-只看行为（每次一格、键盘方向键不被吞）。
+注意：方向键兜底现在默认在所有架构启用。日志应出现 `HID FILTER directional_fallback=true`；
+若仍没有 `HID FILTER arm events=key1xx`，按修复缺失继续定位。
 
 1. 前置确认：日志里 `HID CONNECTED mode=monitored`、
    `HID NATIVE MAPPING phase=prepare result=verified`，即非独占且映射回读一致。

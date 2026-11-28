@@ -767,6 +767,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     private let externalActionSender: (
         ButtonAction,
         CustomKeyboardShortcut?,
+        Int?,
         CustomApplicationProfile?,
         Bool,
         @escaping (Bool) -> Void
@@ -931,6 +932,18 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         onStateChange: { [weak self] state in
             self?.handleVoiceInputDestinationState(state)
         }
+    )
+    /// 所有输入来源共用的鼠标移动引擎：HID、Apple Remote、手机、网页、Chromecast 都从这里开始/结束。
+    private lazy var mousePointerMotion = MousePointerMotionController()
+    /// 只有成功移动后的短暂窗口内，OK 才改为单击；编辑器打开时不抢占 OK。
+    private lazy var mouseClickOnOK = MouseClickOnOKController(
+        isEnabled: { [weak self] in
+            guard let self else { return false }
+            return self.settings.mouseClickOnOKEnabled && !self.macroFeature.isEditorActive
+        },
+        lastSuccessfulMoveAt: { [weak self] in self?.mousePointerMotion.lastSuccessfulMoveAt },
+        postClick: { KeyboardInjector.postLeftClick() },
+        logger: { AppLogger.shared.write($0) }
     )
     private lazy var voiceFnTapSession = VoiceFnTapSessionController(
         destinationReadiness: { [weak self] completion in
@@ -1220,6 +1233,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     private var remoteDeviceNameRefreshOperation: UInt64 = 0
     private var appliedHIDPermissionSnapshot: HIDPermissionSnapshot?
     private var terminationObserver: NSObjectProtocol?
+    private var screenParametersObserver: NSObjectProtocol?
     private var buttonLifecycleObservers: [NSObjectProtocol] = []
     private var completedUpdateHIDRecoveryWorkItem: DispatchWorkItem?
     private var hidMappingRecoveryWorkItem: DispatchWorkItem?
@@ -1266,6 +1280,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         externalActionSender: @escaping (
             ButtonAction,
             CustomKeyboardShortcut?,
+            Int?,
             CustomApplicationProfile?,
             Bool,
             @escaping (Bool) -> Void
@@ -1273,9 +1288,10 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             KeyboardInjector.send(
                 $0,
                 shortcut: $1,
-                applicationProfile: $2,
-                focusCustomApplication: $3,
-                completion: $4
+                mouseMoveDistance: $2,
+                applicationProfile: $3,
+                focusCustomApplication: $4,
+                completion: $5
             )
         },
         customApplicationURLResolver: @escaping (String) -> URL? = {
@@ -1828,6 +1844,13 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         ) { [weak self] _ in
             self?.stop()
         }
+        screenParametersObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didChangeScreenParametersNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.mousePointerMotion.stopAll(reason: "display_changed")
+        }
         let version = Bundle.main.object(
             forInfoDictionaryKey: "CFBundleShortVersionString"
         ) as? String ?? "development"
@@ -1842,6 +1865,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         hidMonitorRebuildWorkItem = nil
         hidMonitorRebuildPending = false
         cancelConfiguredButtonInteractions(reason: "app_stop")
+        mousePointerMotion.stopAll(reason: "app_stop")
         // 退出、断连或映射关闭都必须抬起被按住的键，绝不让它在系统里留到下次启动。
         KeyboardHoldExecution.shared.end(reason: "app_stop")
         buttonLifecycleObservers.forEach { NSWorkspace.shared.notificationCenter.removeObserver($0) }
@@ -1977,6 +2001,10 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         if let terminationObserver {
             NotificationCenter.default.removeObserver(terminationObserver)
             self.terminationObserver = nil
+        }
+        if let screenParametersObserver {
+            NotificationCenter.default.removeObserver(screenParametersObserver)
+            self.screenParametersObserver = nil
         }
         AppLogger.shared.write("APP STOP")
     }
@@ -4538,6 +4566,15 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
                 self?.beginHeldKeyExecution(configured) ?? false
             }, endHold: { [weak self] reason in
                 self?.endHeldKeyExecution(reason: reason)
+            }, beginMotion: { [weak self] button, configured in
+                guard let self, let direction = configured.action.mouseMoveDirection else { return nil }
+                return self.mousePointerMotion.begin(
+                    button: button,
+                    direction: direction,
+                    distance: configured.resolvedMouseMoveDistance
+                )
+            }, endMotion: { [weak self] token, reason in
+                self?.mousePointerMotion.end(token, reason: reason)
             })
     }
 
@@ -4593,6 +4630,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     }
 
     private func stopHIDMonitors() {
+        mousePointerMotion.stopAll(reason: "hid_monitors_stopped")
         hidMonitors.values.forEach { $0.stop() }
         discoveryHIDMonitor?.stop()
         hidMonitors.removeAll()
@@ -4685,11 +4723,32 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
                 profileID: profileID,
                 timestampMilliseconds: timestampMilliseconds
             ) == true { return true }
-            return self?.membershipFeature.handleCommonPhrase(
+            let handled = self?.membershipFeature.handleCommonPhrase(
                 button: button.rawValue,
                 phase: phase.rawValue,
                 source: Self.commonPhraseHIDSource(profileID)
             ) == true
+            if handled {
+                self?.mousePointerMotion.stopAll(reason: "common_phrases")
+            }
+            return handled
+        }
+        monitor.mouseClickOnOKPerformer = { [weak self] button, phase in
+            self?.mouseClickOnOK.handle(button: button, phase: phase) ?? false
+        }
+        monitor.beginMouseMotion = { [weak self] button, configured in
+            guard let self, let direction = configured.action.mouseMoveDirection else { return nil }
+            return self.mousePointerMotion.begin(
+                button: button,
+                direction: direction,
+                distance: configured.resolvedMouseMoveDistance
+            )
+        }
+        monitor.endMouseMotion = { [weak self] token, reason in
+            self?.mousePointerMotion.end(token, reason: reason)
+        }
+        monitor.onMouseMotionStop = { [weak self] reason in
+            self?.mousePointerMotion.stopAll(reason: reason)
         }
         monitor.onInputReset = { [weak self] profileID in
             if self?.buttonGestureLearningProfileID == profileID {
@@ -6149,7 +6208,12 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
                button: button.rawValue,
                phase: phase.rawValue,
                source: "apple:\(profileID.uuidString)"
-           ) { return }
+           ) {
+            if phase == .press {
+                mousePointerMotion.stopAll(reason: "common_phrases")
+            }
+            return
+        }
 
         if appleRemoteAppSwitcherSession.isActive {
             if phase == .release {
@@ -6629,6 +6693,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
     }
 
     private func startAppleRemoteAppSwitcherLifecycle() {
+        mousePointerMotion.stopAll(reason: "app_switcher")
         scheduleAppleRemoteAppSwitcherTimeout()
         appleRemoteAppSwitcherFrontmostMonitor?.cancel()
         let timer = DispatchSource.makeTimerSource(queue: .main)
@@ -8941,6 +9006,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         }
         if !macroFeature.isEditorActive,
            membershipFeature.claimsCommonPhrase(button: button.rawValue, source: phraseSource ?? "mobile:\(source.rawValue)") {
+            mousePointerMotion.stopAll(reason: "common_phrases")
             _ = membershipFeature.handleCommonPhrase(button: button.rawValue, phase: "press", source: phraseSource ?? "mobile:\(source.rawValue)")
             _ = membershipFeature.handleCommonPhrase(button: button.rawValue, phase: "release", source: phraseSource ?? "mobile:\(source.rawValue)")
             return true
@@ -8978,11 +9044,18 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         }
         let profileID = settings.selectedRemoteProfileID
         let mobileSource = "mobile:\(source.rawValue)"
+        let isSwitcherBinding = resolvedMobileConfiguredAction(
+            for: button,
+            trigger: .singleClick,
+            profileID: profileID
+        ).action == .appSwitcher
+        if phase == .press && isSwitcherBinding {
+            mousePointerMotion.stopAll(reason: "app_switcher")
+        }
         if mobileAppSwitcher.handle(
             phase,
             button: button,
-            isSwitcherBinding: resolvedMobileConfiguredAction(for: button, trigger: .singleClick, profileID: profileID)
-                .action == .appSwitcher
+            isSwitcherBinding: isSwitcherBinding
         ) { return true }
         if macroFeature.isEditorActive {
             if phase == .press {
@@ -8998,7 +9071,12 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             button: button.rawValue,
             phase: phase.rawValue,
             source: phraseSource ?? mobileSource
-        ) { return true }
+        ) {
+            if phase == .press {
+                mousePointerMotion.stopAll(reason: "common_phrases")
+            }
+            return true
+        }
         handleConfiguredButtonInteraction(phase, button: button, profileID: profileID, source: mobileSource) { [weak self] trigger, configured in
             self?.performMobileConfiguredAction(
                 for: button,
@@ -9044,6 +9122,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
                 source: "mobile:\(source.rawValue)",
                 reason: "app_switcher_started"
             )
+            mousePointerMotion.stopAll(reason: "app_switcher")
             let started = mobileAppSwitcher.start(button: button)
             if started {
                 settings.recordButtonPress(control: .remoteButton(button), source: source)
@@ -9190,6 +9269,14 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
                 || KeyboardInjector.isAccessibilityTrusted else {
             return requireAccessibilityForAction(configured)
         }
+        if configured.action.isPageScroll ||
+            configured.action == .scrollUp ||
+            configured.action == .scrollDown {
+            mousePointerMotion.stopAll(reason: "scroll_action")
+        }
+        if configured.action == .lockScreen {
+            mousePointerMotion.stopAll(reason: "lock_screen")
+        }
 
         let localization = LocalizationStore(
             settings: settings,
@@ -9314,9 +9401,13 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         let handled = externalActionSender(
             configured.action,
             configured.shortcut,
+            configured.mouseMoveDistance,
             applicationProfile,
             customApplicationFocusAllowed
         ) { success in
+            if success, configured.action.isMouseMove {
+                self.mousePointerMotion.recordSuccessfulMove()
+            }
             report(
                 success
                     ? .success
@@ -10581,6 +10672,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
 
     private func beginVoiceSessionIfNeeded(audioDiagnosticOperationID: UInt64? = nil) {
         guard !isStreaming else { return }
+        mousePointerMotion.stopAll(reason: "voice_started")
         privateFeature.startVoiceSession()
         cancelTestToneIfNeeded(
             statusMessage: LocalizedMessage("audio.test_tone.blocked_voice_active"),
@@ -11612,9 +11704,13 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         phase: RemoteButtonPhase,
         profileID: UUID
     ) {
+        let isSwitcherBinding = settings.action(for: button, profileID: profileID) == .appSwitcher
+        if phase == .press && isSwitcherBinding {
+            mousePointerMotion.stopAll(reason: "app_switcher")
+        }
         if chromecastAppSwitcher.handle(
             phase, button: button,
-            isSwitcherBinding: settings.action(for: button, profileID: profileID) == .appSwitcher
+            isSwitcherBinding: isSwitcherBinding
         ) { return }
 
         if handleButtonGestureLearning(
@@ -11636,7 +11732,12 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
             button: button.rawValue,
             phase: phase.rawValue,
             source: "chromecast:\(profileID.uuidString)"
-        ) { return }
+        ) {
+            if phase == .press {
+                mousePointerMotion.stopAll(reason: "common_phrases")
+            }
+            return
+        }
 
         handleConfiguredButtonInteraction(phase, button: button, profileID: profileID,
             source: "chromecast:\(profileID.uuidString)") { [weak self] trigger, configured in
@@ -11740,6 +11841,7 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         }
         if configured.action == .appSwitcher {
             cancelConfiguredButtonInteractions(source: "chromecast:\(profileID.uuidString)", reason: "app_switcher_started")
+            mousePointerMotion.stopAll(reason: "app_switcher")
             return chromecastAppSwitcher.start(button: button)
         }
         guard performExternalConfiguredAction(configured) else {

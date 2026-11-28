@@ -446,6 +446,12 @@ final class HIDRemoteMonitor {
     var onNativeMappingVerificationFailed: (() -> Void)?
     var onInputReset: ((UUID?) -> Void)?
     var onInternalAction: ((UUID?, ButtonAction) -> Void)?
+    /// 鼠标连续移动的开始/结束：由宿主共享同一个引擎，覆盖所有输入来源。
+    var beginMouseMotion: ((RemoteButton, ConfiguredButtonAction) -> MouseMotionToken?)?
+    var endMouseMotion: ((MouseMotionToken, String) -> Void)?
+    var onMouseMotionStop: ((String) -> Void)?
+    /// 最近移动过鼠标时，在按下 OK 的原始边沿直接消费本次按键。
+    var mouseClickOnOKPerformer: ((RemoteButton, RemoteButtonPhase) -> Bool)?
     /// A voice-key down edge while the selected remote's audio link may be down.
     /// The callback only observes intent; the HID event itself is never consumed.
     var onVoiceUsageDown: ((UUID?) -> Void)?
@@ -1310,18 +1316,11 @@ final class HIDRemoteMonitor {
 
     /// 方向键是否启用事件级兜底。
     ///
-    /// Intel 现场已证实「映射回读通过 ≠ 系统停止投递」（音量键 227 次、方向键双跳），
-    /// 而 Apple Silicon 上从未观察到该泄漏。方向键的原生码与实体键盘完全同码，
-    /// 在没有泄漏的机器上登记只会开出会吞掉实体键盘方向键的窗口（甚至吞掉 keyUp
-    /// 导致系统认为键仍按下），因此默认只在 Intel 构建启用。
-    /// 若将来在 Apple Silicon 上拿到同样的泄漏日志，把这个默认值改成 true 即可。
-    static let directionalNativeFallbackEnabled: Bool = {
-        #if arch(x86_64)
-        return true
-        #else
-        return false
-        #endif
-    }()
+    /// Intel 与 Apple Silicon 都已出现「映射回读通过 ≠ 系统停止投递」：2026-11-28
+    /// Apple Silicon 现场在鼠标方向动作中同时移动光标并触发 Codex 上键。方向键的
+    /// 原生码与实体键盘完全同码，因此只在遥控器原始报告到来后开启有界窗口，并在
+    /// 松键时清理；不能让它成为常驻吞键窗口。
+    static let directionalNativeFallbackEnabled = true
 
     /// 报告线程可以提前登记的原生事件。
     ///
@@ -1744,6 +1743,13 @@ final class HIDRemoteMonitor {
                 }
                 continue
             }
+            if mouseClickOnOKPerformer?(button, .press) == true {
+                finishNonRepeatablePress(button)
+                diagnosticLogger(
+                    "HID GESTURE button=\(button.rawValue) trigger=singleClick path=mouse_click_on_ok"
+                )
+                continue
+            }
             if usesNativePassthrough {
                 nativePassthroughUsages.insert(usage)
                 diagnosticLogger(
@@ -1789,6 +1795,10 @@ final class HIDRemoteMonitor {
                     self?.holdBeginPerformer(configured) ?? false
                 }, endHold: { [weak self] reason in
                     self?.holdEndPerformer(reason)
+                }, beginMotion: { [weak self] button, configured in
+                    self?.beginMouseMotion?(button, configured)
+                }, endMotion: { [weak self] token, reason in
+                    self?.endMouseMotion?(token, reason)
                 })
         }
 
@@ -2328,6 +2338,7 @@ final class HIDRemoteMonitor {
     ) -> Bool {
         let wasActive = appSwitcherSession.isActive
         if !wasActive {
+            onMouseMotionStop?("app_switcher")
             appSwitcherOriginBundleIdentifier = frontmostBundleIdentifier()
             // 记录打开切换器之前 Dock 的窗口数：切换器开着时 Dock 会多一个窗口。
             appSwitcherDockWindowBaseline = appSwitcherDockWindowCount()
@@ -2968,6 +2979,7 @@ final class HIDRemoteMonitor {
     }
 
     private func resetInputState(preservingPhysicalEdges: Bool = false) {
+        onMouseMotionStop?("input_reset")
         onInputReset?(profileID)
         if appSwitcherSession.isActive {
             _ = appSwitcherSession.cancel()

@@ -1,0 +1,81 @@
+{
+  "batch": "mouse-actions-20261127",
+  "date": "2026-11-27",
+  "purpose": "PR 1231 production SettingsView mouse move action and hold description",
+  "storage": "github-pr-attachments",
+  "sourceCommit": "a60a595574832e74a607f5b2e3064220ee297a03",
+  "appVersion": "2.0.10",
+  "build": "442",
+  "contentSize": {
+    "width": 1067,
+    "height": 760
+  },
+  "generation": "production SettingsView offscreen renderer; RC003 profile, right button mouseMoveRight distance 42, repeatSingle hold mode",
+  "realHardwareAcceptance": "pending",
+  "files": [
+    {
+      "file": "action-zh-Hans-light/mapping-1067x760.png",
+      "format": "png",
+      "width": 2134,
+      "height": 1520,
+      "sha256": "dc09a8c03aa724ef33831a399f91acda68d5333ea90457a5823b934b77754548",
+      "url": "https://github.com/user-attachments/assets/096269f8-4625-4d75-a9a8-6025cb7e89f6"
+    },
+    {
+      "file": "action-zh-Hans-dark/mapping-1067x760.png",
+      "format": "png",
+      "width": 2134,
+      "height": 1520,
+      "sha256": "676250d608d99f624f18dbe73657d5f1f34695da2d42753d230e1a592b3ccc1a",
+      "url": "https://github.com/user-attachments/assets/925e753a-be31-4c51-8b59-ca633b0a6573"
+    },
+    {
+      "file": "action-en-light/mapping-1067x760.png",
+      "format": "png",
+      "width": 2134,
+      "height": 1520,
+      "sha256": "0c1b493e7b21c6e33ed22926d5d83704a8960d983e8eeabe4de9b2cf0873a884",
+      "url": "https://github.com/user-attachments/assets/a3230265-8047-4d1c-bde4-46cfa18f2919"
+    },
+    {
+      "file": "action-en-dark/mapping-1067x760.png",
+      "format": "png",
+      "width": 2134,
+      "height": 1520,
+      "sha256": "71fde97f8206c6d9d4a902c6aa4b2878d9b1b5ce35d4f29842995132598e8fd4",
+      "url": "https://github.com/user-attachments/assets/4efb925e-92ea-4560-94eb-c3ee837f1650"
+    },
+    {
+      "file": "hold-zh-Hans-light/mapping-1067x760.png",
+      "format": "png",
+      "width": 2134,
+      "height": 1520,
+      "sha256": "a7e23dd53b49724e793dd5414e4bde3575db18e0a45f55b18ba76af620a7a7d4",
+      "url": "https://github.com/user-attachments/assets/5ab2d1bd-b37d-40ae-b853-8fb88d603263"
+    },
+    {
+      "file": "hold-zh-Hans-dark/mapping-1067x760.png",
+      "format": "png",
+      "width": 2134,
+      "height": 1520,
+      "sha256": "46e4032c124d39f037f184d38cce2a1004ce8677884ec62e3ec8eb04843668f0",
+      "url": "https://github.com/user-attachments/assets/db860ca5-bd5f-44bb-ac22-ba7dbceb8a5b"
+    },
+    {
+      "file": "hold-en-light/mapping-1067x760.png",
+      "format": "png",
+      "width": 2134,
+      "height": 1520,
+      "sha256": "f8bd9e5255cbc84c0decb576d09efaa27db302cb20f73e52cb7c8ed5b8356fba",
+      "url": "https://github.com/user-attachments/assets/fcd546c1-257e-4aff-a3c0-e0579cfe94ac"
+    },
+    {
+      "file": "hold-en-dark/mapping-1067x760.png",
+      "format": "png",
+      "width": 2134,
+      "height": 1520,
+      "sha256": "0756840b2cf040a8205d346ab70203a83ab7b210f9abff7d2a9df5138834f584",
+      "url": "https://github.com/user-attachments/assets/8b3260f8-e520-4208-a1e3-fb7d448546f6"
+    }
+  ]
+}

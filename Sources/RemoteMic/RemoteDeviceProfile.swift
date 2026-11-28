@@ -190,6 +190,7 @@ struct RemoteDeviceMappings: Codable, Equatable {
     var buttonBindings: [String: ButtonAction]
     var buttonShortcuts: [String: CustomKeyboardShortcut]
     var buttonApplicationProfileIDs: [String: UUID]?
+    var buttonMouseMoveDistances: [String: Int]?
     var secondaryButtonBindings: [String: [String: ConfiguredButtonAction]]
     var buttonRapidPressEnabled: [String: Bool]?
     var interactionSettings: RemoteButtonInteractionSettings?
@@ -198,6 +199,7 @@ struct RemoteDeviceMappings: Codable, Equatable {
         buttonBindings: [RemoteButton: ButtonAction],
         buttonShortcuts: [RemoteButton: CustomKeyboardShortcut],
         buttonApplicationProfileIDs: [RemoteButton: UUID] = [:],
+        buttonMouseMoveDistances: [RemoteButton: Int] = [:],
         secondaryButtonBindings: [RemoteButton: [ButtonTrigger: ConfiguredButtonAction]],
         buttonRapidPressEnabled: [RemoteButton: Bool] = [:],
         interactionSettings: RemoteButtonInteractionSettings? = nil
@@ -213,6 +215,10 @@ struct RemoteDeviceMappings: Codable, Equatable {
             uniqueKeysWithValues: buttonApplicationProfileIDs.map { ($0.key.rawValue, $0.value) }
         )
         self.buttonApplicationProfileIDs = applicationProfileIDs.isEmpty ? nil : applicationProfileIDs
+        let mouseMoveDistances = Dictionary(
+            uniqueKeysWithValues: buttonMouseMoveDistances.map { ($0.key.rawValue, $0.value) }
+        )
+        self.buttonMouseMoveDistances = mouseMoveDistances.isEmpty ? nil : mouseMoveDistances
         self.secondaryButtonBindings = Dictionary(
             uniqueKeysWithValues: secondaryButtonBindings.map { button, bindings in
                 (
@@ -243,6 +249,12 @@ struct RemoteDeviceMappings: Codable, Equatable {
 
     var parsedButtonApplicationProfileIDs: [RemoteButton: UUID] {
         Dictionary(uniqueKeysWithValues: (buttonApplicationProfileIDs ?? [:]).compactMap { key, value in
+            RemoteButton(rawValue: key).map { ($0, value) }
+        })
+    }
+
+    var parsedButtonMouseMoveDistances: [RemoteButton: Int] {
+        Dictionary(uniqueKeysWithValues: (buttonMouseMoveDistances ?? [:]).compactMap { key, value in
             RemoteButton(rawValue: key).map { ($0, value) }
         })
     }

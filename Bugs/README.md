@@ -1,5 +1,6 @@
 # Bug 记录
 
+- [Apple Silicon 方向键原生事件泄漏到前台 App](./2026-11-28-apple-silicon-directional-native-arrow-leak.md)
 - [设置页蓝牙入口与教程浮层的文案和关闭按钮](./2026-11-27-permission-ui-clarity.html)
 - [事件 tap 回调对象释放后访问](./2026-11-26-event-tap-owner-use-after-free.html)
 - [安装器因 HAL 目录带组可写位阻止升级](./2026-11-26-installer-blocked-by-writable-hal-parent.md)

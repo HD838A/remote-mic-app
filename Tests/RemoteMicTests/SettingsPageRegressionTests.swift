@@ -1702,6 +1702,12 @@ struct SettingsPageRegressionTests {
         #expect(source.contains("MappingActionFilter.visibleCases"))
         // 自定义按键紧接基础按键，按键速度排在最后。
         #expect(source.contains("[.all, .basicKeys, .customShortcuts, .systemAndMedia, .custom]"))
+        #expect(source.contains("[.commonPhrases, .applications, .mouse, .hold, .buttonSpeed]"))
+        #expect(source.contains("MouseMoveDistanceEditor"))
+        #expect(source.contains("button_mapping.mouse_distance.label"))
+        #expect(source.contains("settings.mouseClickOnOKEnabled"))
+        #expect(source.contains("button_mapping.mouse_click_on_ok.label"))
+        #expect(source.contains("button_mapping.action_filter.mouse"))
         #expect(source.contains("cases.append(.combinations)"))
         #expect(source.contains("mappingActionFilter = .customShortcuts"))
         #expect(source.contains("if category == .customShortcuts,"))
@@ -1709,8 +1715,8 @@ struct SettingsPageRegressionTests {
         #expect(source.contains("source=basic_keys_header"))
         #expect(source.contains("result=editor_presented"))
         #expect(source.contains("configured: configured\n                        )\n                        .disabled(isManagedPowerAction)"))
-        // 顺序：打开 App → 按住 → 按键速度。
-        #expect(source.contains("[.commonPhrases, .applications, .hold, .buttonSpeed]"))
+        // 顺序：打开 App → 鼠标 → 按住 → 按键速度。
+        #expect(source.contains("[.commonPhrases, .applications, .mouse, .hold, .buttonSpeed]"))
         #expect(source.contains("case .hold, .buttonSpeed:"))
         #expect(source.contains("mappingActionFilter == .hold"))
         #expect(source.contains("mapping-hold-tab"))

@@ -452,6 +452,7 @@ private enum MappingActionFilter: String, CaseIterable, Identifiable {
     case combinations
     case commonPhrases
     case applications
+    case mouse
     case hold
     case buttonSpeed
 
@@ -463,6 +464,7 @@ private enum MappingActionFilter: String, CaseIterable, Identifiable {
         case .basicKeys: self = .basicKeys
         case .customShortcuts: self = .customShortcuts
         case .systemAndMedia: self = .systemAndMedia
+        case .mouse: self = .mouse
         case .custom: self = .custom
         case .combinations: self = .combinations
         case .commonPhrases: self = .commonPhrases
@@ -477,7 +479,7 @@ private enum MappingActionFilter: String, CaseIterable, Identifiable {
         if macroFeatureVisible {
             cases.append(.combinations)
         }
-        cases.append(contentsOf: [.commonPhrases, .applications, .hold, .buttonSpeed])
+        cases.append(contentsOf: [.commonPhrases, .applications, .mouse, .hold, .buttonSpeed])
         return cases
     }
 
@@ -489,6 +491,7 @@ private enum MappingActionFilter: String, CaseIterable, Identifiable {
         case .basicKeys: return "button_mapping.action_filter.basic_keys"
         case .customShortcuts: return "button_mapping.action_filter.custom_shortcuts"
         case .systemAndMedia: return "button_mapping.action_filter.system_and_media"
+        case .mouse: return "button_mapping.action_filter.mouse"
         case .custom: return "button_mapping.action_filter.custom"
         case .combinations: return "button_mapping.action_filter.combinations"
         case .commonPhrases: return "button_mapping.action_filter.common_phrases"
@@ -511,6 +514,8 @@ private enum MappingActionFilter: String, CaseIterable, Identifiable {
             return category == .customShortcuts
         case .systemAndMedia:
             return category == .systemAndMedia
+        case .mouse:
+            return category == .mouse
         case .custom:
             return category == .custom
         case .combinations:
@@ -519,6 +524,120 @@ private enum MappingActionFilter: String, CaseIterable, Identifiable {
             return category == .commonPhrases
         case .applications:
             return category == .applications
+        }
+    }
+}
+
+private struct MouseMoveDistanceEditor: View {
+    @EnvironmentObject private var localization: LocalizationStore
+    let distance: Int
+    let onSave: (Int) -> Void
+
+    @State private var draft: String
+    @State private var errorKey: String?
+    @FocusState private var focused: Bool
+
+    init(distance: Int, onSave: @escaping (Int) -> Void) {
+        self.distance = distance
+        self.onSave = onSave
+        _draft = State(initialValue: String(distance))
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Text(localization.text("button_mapping.mouse_distance.label"))
+                    .font(.system(size: 12))
+                TextField("", text: $draft)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.system(size: 12))
+                    .frame(width: 64)
+                    .focused($focused)
+                    .onSubmit(save)
+                    .accessibilityLabel(localization.text("button_mapping.mouse_distance.label"))
+                Text(localization.text("button_mapping.mouse_distance.unit"))
+                    .font(.system(size: 12))
+            }
+            if let errorKey {
+                Text(localization.text(errorKey))
+                    .font(.system(size: 12))
+                    .foregroundStyle(.red)
+            } else {
+                Text(localization.text("button_mapping.mouse_distance.hint"))
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .onChange(of: focused) { isFocused in
+            if !isFocused { save() }
+        }
+        .onChange(of: distance) { value in
+            guard !focused else { return }
+            draft = String(value)
+            errorKey = nil
+        }
+    }
+
+    private func save() {
+        let trimmed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let value = Int(trimmed),
+              ConfiguredButtonAction.mouseMoveDistanceRange.contains(value)
+        else {
+            errorKey = "button_mapping.mouse_distance.error"
+            return
+        }
+        errorKey = nil
+        if value != distance {
+            onSave(value)
+        } else {
+            draft = String(distance)
+        }
+    }
+}
+
+private struct MouseHoldGuidance: View {
+    @EnvironmentObject private var localization: LocalizationStore
+    let onSet: () -> Void
+    let onKeep: () -> Void
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "hand.tap")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Color.accentColor)
+                .frame(width: 20, height: 20)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(localization.text("button_mapping.mouse_hold_guidance.title"))
+                    .font(.system(size: 12, weight: .semibold))
+                Text(localization.text("button_mapping.mouse_hold_guidance.detail"))
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 8)
+            VStack(alignment: .trailing, spacing: 6) {
+                Button(localization.text("button_mapping.mouse_hold_guidance.set")) {
+                    onSet()
+                }
+                .compatibilityButtonStyle(.prominent)
+                .controlSize(.small)
+                .frame(minWidth: 96)
+                Button(localization.text("button_mapping.mouse_hold_guidance.keep")) {
+                    onKeep()
+                }
+                .compatibilityButtonStyle(.standard)
+                .controlSize(.small)
+                .frame(minWidth: 96)
+            }
+        }
+        .padding(12)
+        .background(
+            Color.accentColor.opacity(0.06),
+            in: RoundedRectangle(cornerRadius: 10)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(Color.accentColor.opacity(0.14), lineWidth: 1)
         }
     }
 }
@@ -664,6 +783,10 @@ struct SettingsView: View {
     @State private var shortcutEditorNavigationID = UUID()
     /// 点胶囊后请求把内容区滚到视口顶部。
     @State private var mappingFilterScrollRequest = 0
+    /// 鼠标动作的按住引导请求把内容区滚到「按住」面板。
+    @State private var mappingHoldScrollRequest = 0
+    /// 用户选择「保持单次」后，同一按键/触发器的引导不再反复出现。
+    @State private var dismissedMouseHoldGuidance: Set<String> = []
     @State private var gestureTimingDraft = RemoteButtonGestureTiming()
     @State private var gestureTimingDraftModel: XiaomiRemoteModel?
     @State private var gestureTimingSaveConfirmed = false
@@ -2407,6 +2530,11 @@ struct SettingsView: View {
         mappingEditorScrollRequest &+= 1
     }
 
+    private func requestMouseHoldGuidanceScroll() {
+        mappingEditorScrollTarget = "mapping-mouse-hold-guidance"
+        mappingEditorScrollRequest &+= 1
+    }
+
     /// 语音键卡片：只展开语音键自己的设置面板。
     ///
     /// 语音键没有可配置的单击/双击/长按动作，所以它不打开普通按键的编辑器；反之，打开普通按键
@@ -3351,6 +3479,15 @@ struct SettingsView: View {
                         }
                     }
                 }
+                .onChange(of: mappingHoldScrollRequest) { _ in
+                    // 鼠标按住引导先切到按住胶囊；面板要等下一轮布局才存在。
+                    guard mappingInteractionBelongsToSelectedRemote else { return }
+                    DispatchQueue.main.async {
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            proxy.scrollTo("mapping-hold-tab", anchor: .top)
+                        }
+                    }
+                }
                 .onChange(of: mappingVoiceSettingsRequest) { _ in
                     guard mappingInteractionBelongsToSelectedRemote else { return }
                     // 面板是这一刻才插进视图树的，锚点要等下一轮布局完成才可滚动。
@@ -3639,6 +3776,30 @@ struct SettingsView: View {
         !isMappingProfilePreviewOnly
     }
 
+    /// 鼠标分类的全局辅助开关不随当前按键的可写状态变灰；
+    /// 它影响所有鼠标移动，不能混在某个动作的禁用状态里。
+    @ViewBuilder
+    private func mouseClickOnOKSetting(for button: RemoteButton, trigger: ButtonTrigger) -> some View {
+        if mappingActionFilter == .mouse ||
+            (mappingActionFilter == .all && mappingConfiguration(for: button, trigger: trigger).action.isMouseMove) {
+            Toggle(isOn: Binding(
+                get: { settings.mouseClickOnOKEnabled },
+                set: { settings.mouseClickOnOKEnabled = $0 }
+            )) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(localization.text("button_mapping.mouse_click_on_ok.label"))
+                        .font(.system(size: 13))
+                    Text(localization.text("button_mapping.mouse_click_on_ok.hint"))
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .toggleStyle(.switch)
+            .accessibilityLabel(localization.text("button_mapping.mouse_click_on_ok.label"))
+            .help(localization.text("button_mapping.mouse_click_on_ok.hint"))
+        }
+    }
+
     private func mappingEditorPanel(_ target: ShortcutEditingTarget) -> some View {
         GlassPanel {
             VStack(alignment: .leading, spacing: 14) {
@@ -3697,6 +3858,7 @@ struct SettingsView: View {
 
                 // 只读预览下只禁用会写入的部分；编辑区由下一次按键或手势选择替换。
                 mappingProfileBindingControl(button: target.button, trigger: target.trigger)
+                mouseClickOnOKSetting(for: target.button, trigger: target.trigger)
                 mappingTriggerEditor(target.button, trigger: target.trigger)
                     .disabled(!canWriteMappingBinding(button: target.button, trigger: target.trigger))
             }
@@ -4284,6 +4446,9 @@ struct SettingsView: View {
                                     return
                                 }
                                 setMappingAction(action, for: button, trigger: trigger)
+                                if action.isMouseMove {
+                                    requestMouseHoldGuidanceScroll()
+                                }
                                 shortcutCaptureTarget = nil
                             }
                         )
@@ -4301,6 +4466,34 @@ struct SettingsView: View {
                         )
                         .disabled(isManagedPowerAction)
                     }
+                }
+            }
+
+            // 鼠标移动的每次距离属于当前绑定，放在动作网格下方就地编辑。
+            if configured.action.isMouseMove,
+               mappingActionFilter == .all || mappingActionFilter == .mouse {
+                MouseMoveDistanceEditor(
+                    distance: configured.resolvedMouseMoveDistance,
+                    onSave: { distance in
+                        var updated = configured
+                        updated.mouseMoveDistance = distance
+                        saveMappingBinding(updated, button: button, trigger: trigger)
+                    }
+                )
+                if let suggestedHoldMode = mouseHoldGuidanceMode(
+                    for: button, trigger: trigger, configured: configured
+                ) {
+                    MouseHoldGuidance(
+                        onSet: {
+                            applyMouseHoldGuidance(suggestedHoldMode, for: button)
+                        },
+                        onKeep: {
+                            dismissedMouseHoldGuidance.insert(
+                                mouseHoldGuidanceKey(button: button, trigger: trigger)
+                            )
+                        }
+                    )
+                    .id("mapping-mouse-hold-guidance")
                 }
             }
 
@@ -4386,6 +4579,42 @@ struct SettingsView: View {
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    /// 鼠标动作默认只执行一次；用户选择后，在同一张卡片里给出按住连续移动的
+    /// 可操作提示。只在建议模式可写、无冲突且用户没有选择“保持单次”时显示。
+    private func mouseHoldGuidanceMode(
+        for button: RemoteButton,
+        trigger: ButtonTrigger,
+        configured: ConfiguredButtonAction
+    ) -> RemoteButtonHoldMode? {
+        guard configured.action.isMouseMove else { return nil }
+        guard trigger == .singleClick || trigger == .longPress else { return nil }
+        guard editingMappingProfileID == nil || macroFeature.supportsProfileHoldModes else { return nil }
+        guard canWriteMappingHold(button) else { return nil }
+        let suggested: RemoteButtonHoldMode = trigger == .longPress ? .repeatLong : .repeatSingle
+        guard mappingHoldMode(for: button) != suggested else { return nil }
+        guard !dismissedMouseHoldGuidance.contains(
+            mouseHoldGuidanceKey(button: button, trigger: trigger)
+        ) else { return nil }
+        guard mappingHoldSnapshot(for: button).blockers(for: suggested).isEmpty else { return nil }
+        return suggested
+    }
+
+    private func mouseHoldGuidanceKey(button: RemoteButton, trigger: ButtonTrigger) -> String {
+        let profile = editingMappingProfileID?.uuidString ?? "base"
+        let device = settings.selectedRemoteProfileID?.uuidString ?? "none"
+        return "\(profile):\(device):\(button.rawValue):\(trigger.rawValue)"
+    }
+
+    private func applyMouseHoldGuidance(
+        _ mode: RemoteButtonHoldMode,
+        for button: RemoteButton
+    ) {
+        _ = setMappingHoldMode(mode, for: button)
+        // 即使写入失败也把用户带到按住面板，让冲突原因和可恢复选项可见。
+        mappingActionFilter = .hold
+        mappingHoldScrollRequest &+= 1
     }
 
     private func mappingHoldMode(for button: RemoteButton) -> RemoteButtonHoldMode {
@@ -4750,8 +4979,14 @@ struct SettingsView: View {
     private func mappingHoldOptionDescription(_ mode: RemoteButtonHoldMode, button: RemoteButton) -> String {
         switch mode {
         case .repeatSingle:
+            if mappingConfiguration(for: button, trigger: .singleClick).isMouseMove {
+                return localization.text("button_mapping.hold.repeat_single.mouse_move_description")
+            }
             return localization.text("button_mapping.hold.repeat_single.description")
         case .repeatLong:
+            if mappingConfiguration(for: button, trigger: .longPress).isMouseMove {
+                return localization.text("button_mapping.hold.repeat_long.mouse_move_description")
+            }
             return localization.text("button_mapping.hold.repeat_long.description")
         case .singleHold:
             return String(
@@ -6783,29 +7018,41 @@ struct SettingsView: View {
         return configured.action.displayName(using: localization)
     }
 
+    private var supportsProfileMouseActions: Bool {
+        #if SAYALL_BUTTON_PROFILE_MOUSE_DISTANCE
+        true
+        #else
+        false
+        #endif
+    }
+
     private var buttonProfileHostActionSections: [ButtonProfileHostActionSection] {
         let availableActions = ButtonAction.pickerActions(
             installedBundleIdentifiers: PresetApplication.installedBundleIdentifiers,
             current: .disabled,
             experimentalContinuousRecordingEnabled: settings.experimentalContinuousRecordingEnabled
         ).filter {
-            $0 != .disabled && $0 != .customShortcut && $0 != .openCustomApplication && $0 != .combinationAction
+            $0 != .disabled && $0 != .customShortcut && $0 != .openCustomApplication &&
+                $0 != .combinationAction && (!$0.isMouseMove || supportsProfileMouseActions)
         }
         return ButtonActionCategory.allCases.compactMap { category in
             let actions: [ButtonProfileHostAction] = availableActions
                 .filter { $0.category == category }
                 .compactMap { action in
-                guard let payload = try? JSONEncoder().encode(ConfiguredButtonAction(
+                let configured = ConfiguredButtonAction(
                     action: action,
-                    shortcut: nil
-                )) else { return nil }
+                    shortcut: nil,
+                    mouseMoveDistance: action.isMouseMove ? ConfiguredButtonAction.defaultMouseMoveDistance : nil
+                )
+                guard let payload = try? JSONEncoder().encode(configured) else { return nil }
                 return ButtonProfileHostAction(
                     id: "host.action.\(action.rawValue)",
                     title: action.displayName(using: localization),
                     detail: nil,
                     systemImage: buttonProfileSystemImage(for: action),
                     payload: payload,
-                    isAvailable: true
+                    isAvailable: true,
+                    mouseMoveDistance: configured.mouseMoveDistance
                 )
                 }
             guard !actions.isEmpty else { return nil }

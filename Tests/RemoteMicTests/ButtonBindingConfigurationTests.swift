@@ -12,6 +12,177 @@ struct ButtonBindingConfigurationTests {
         AppSettings(defaults: TestUserDefaults(suiteName: "UnifiedButtons.\(UUID().uuidString)")!)
     }
 
+    @Test func mouseMoveDistancePersistsAndDefaultsToTwenty() {
+        let settings = settings()
+        let configured = ConfiguredButtonAction(
+            action: .mouseMoveRight,
+            shortcut: nil,
+            mouseMoveDistance: 75
+        )
+        let profileID = settings.selectedRemoteProfileID
+        #expect(settings.writeBaseBinding(
+            configured,
+            for: .right,
+            trigger: .singleClick,
+            profileID: profileID
+        ))
+        #expect(settings.buttonMouseMoveDistances[.right] == 75)
+        #expect(settings.configuredBaseAction(
+            for: .right,
+            trigger: .singleClick
+        ).resolvedMouseMoveDistance == 75)
+
+        let legacy = ConfiguredButtonAction(
+            action: .mouseMoveUp,
+            shortcut: nil,
+            mouseMoveDistance: nil
+        )
+        #expect(legacy.resolvedMouseMoveDistance == 20)
+        #expect(ConfiguredButtonAction(
+            action: .mouseMoveUp,
+            shortcut: nil,
+            mouseMoveDistance: 0
+        ).resolvedMouseMoveDistance == 1)
+        #expect(ConfiguredButtonAction(
+            action: .mouseMoveUp,
+            shortcut: nil,
+            mouseMoveDistance: 101
+        ).resolvedMouseMoveDistance == 100)
+    }
+
+    @Test func mouseClickOnOKDefaultsOffAndSurvivesExport() throws {
+        let sourceSuite = "MouseClickOnOK.\(UUID().uuidString)"
+        let targetSuite = "MouseClickOnOK-target.\(UUID().uuidString)"
+        let defaults = try #require(TestUserDefaults(suiteName: sourceSuite))
+        let targetDefaults = try #require(TestUserDefaults(suiteName: targetSuite))
+        defer {
+            defaults.removePersistentDomain(forName: sourceSuite)
+            targetDefaults.removePersistentDomain(forName: targetSuite)
+        }
+        let settings = AppSettings(defaults: defaults)
+        #expect(!settings.mouseClickOnOKEnabled)
+        settings.mouseClickOnOKEnabled = true
+
+        let reopened = AppSettings(defaults: defaults)
+        #expect(reopened.mouseClickOnOKEnabled)
+
+        let target = AppSettings(defaults: targetDefaults)
+        try target.importConfiguration(from: settings.exportedConfigurationData())
+        #expect(target.mouseClickOnOKEnabled)
+    }
+
+    @Test func mouseMoveDistanceSurvivesActionSwitch() {
+        let settings = settings()
+        let profileID = settings.selectedRemoteProfileID
+        #expect(settings.writeBaseBinding(
+            ConfiguredButtonAction(action: .mouseMoveRight, shortcut: nil, mouseMoveDistance: 42),
+            for: .right,
+            trigger: .singleClick,
+            profileID: profileID
+        ))
+        #expect(settings.writeBaseBinding(
+            ConfiguredButtonAction(action: .returnKey, shortcut: nil),
+            for: .right,
+            trigger: .singleClick,
+            profileID: profileID
+        ))
+        #expect(settings.writeBaseBinding(
+            ConfiguredButtonAction(action: .mouseMoveRight, shortcut: nil),
+            for: .right,
+            trigger: .singleClick,
+            profileID: profileID
+        ))
+        #expect(settings.configuredBaseAction(
+            for: .right,
+            trigger: .singleClick
+        ).resolvedMouseMoveDistance == 42)
+    }
+
+    @Test func mouseMoveDistanceSurvivesShortcutEdit() {
+        let settings = settings()
+        let configured = ConfiguredButtonAction(
+            action: .mouseMoveLeft,
+            shortcut: nil,
+            mouseMoveDistance: 60
+        )
+        let profileID = settings.selectedRemoteProfileID
+        #expect(settings.writeBaseBinding(
+            configured,
+            for: .left,
+            trigger: .longPress,
+            profileID: profileID
+        ))
+        settings.setShortcut(
+            CustomKeyboardShortcut(keyCode: 1, modifierFlags: .command, keyLabel: "S"),
+            for: .left,
+            trigger: .longPress
+        )
+        #expect(settings.configuredBaseAction(
+            for: .left,
+            trigger: .longPress
+        ).resolvedMouseMoveDistance == 60)
+    }
+
+    @Test func mouseMoveDistanceSurvivesBackupRoundTrip() throws {
+        let source = settings()
+        let configured = ConfiguredButtonAction(
+            action: .mouseMoveDown,
+            shortcut: nil,
+            mouseMoveDistance: 42
+        )
+        #expect(source.writeBaseBinding(
+            configured,
+            for: .down,
+            trigger: .singleClick,
+            profileID: nil
+        ))
+        let data = try source.exportedConfigurationData()
+        let target = settings()
+        try target.importConfiguration(from: data)
+        let imported = try #require(target.unifiedBaseBindings.first {
+            $0.button == .down && $0.trigger == .singleClick
+        })
+        #expect(imported.configured.resolvedMouseMoveDistance == 42)
+    }
+
+    @Test func invalidMouseMoveDistanceRejectsImport() throws {
+        let source = settings()
+        let configured = ConfiguredButtonAction(
+            action: .mouseMoveRight,
+            shortcut: nil,
+            mouseMoveDistance: 25
+        )
+        #expect(source.writeBaseBinding(
+            configured,
+            for: .right,
+            trigger: .singleClick,
+            profileID: nil
+        ))
+        let data = try source.exportedConfigurationData()
+        var object = try #require(
+            JSONSerialization.jsonObject(with: data) as? [String: Any]
+        )
+        var bindings = try #require(object["unifiedBaseBindings"] as? [[String: Any]])
+        guard let index = bindings.firstIndex(where: {
+            ($0["button"] as? String) == RemoteButton.right.rawValue &&
+                ($0["trigger"] as? String) == ButtonTrigger.singleClick.rawValue
+        }) else {
+            Issue.record("expected the right-button unified binding")
+            return
+        }
+        var binding = bindings[index]
+        var action = try #require(binding["configured"] as? [String: Any])
+        action["mouseMoveDistance"] = 0
+        binding["configured"] = action
+        bindings[index] = binding
+        object["unifiedBaseBindings"] = bindings
+        let invalid = try JSONSerialization.data(withJSONObject: object)
+        let target = settings()
+        #expect(throws: (any Error).self) {
+            try target.importConfiguration(from: invalid)
+        }
+    }
+
     @Test(arguments: [true, false]) func saveRecoveryDoesNotReloadConfirmedSuccess(success: Bool) {
         var reloads = 0
         var reads = 0

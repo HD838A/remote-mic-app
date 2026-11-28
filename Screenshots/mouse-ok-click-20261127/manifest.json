@@ -1,0 +1,49 @@
+{
+  "batch": "mouse-ok-click-20261127",
+  "date": "2026-11-27",
+  "purpose": "PR 1231 final production SettingsView mouse category, per-binding move distance and move-then-OK click switch",
+  "storage": "github-pr-attachments",
+  "sourceCommit": "ec273cfeff265ea1b25852eec41bfccd03ae9464",
+  "appVersion": "2.0.10",
+  "build": "442",
+  "contentSize": {
+    "width": 1067,
+    "height": 760
+  },
+  "generation": "public-mode production SettingsView offscreen renderer; RC003 fixture, right button mouseMoveRight distance 42, move-then-OK click fixture enabled",
+  "realHardwareAcceptance": "pending",
+  "files": [
+    {
+      "file": "action-zh-Hans-light/mapping-1067x760.png",
+      "format": "png",
+      "width": 2134,
+      "height": 1520,
+      "sha256": "ca6f391406da4ef64ee7e2246aa041df7938023a01d4f90c3bf292cb11ab679e",
+      "url": "https://github.com/user-attachments/assets/e2a97080-3c1d-46c7-90ae-efb93a2a219d"
+    },
+    {
+      "file": "action-zh-Hans-dark/mapping-1067x760.png",
+      "format": "png",
+      "width": 2134,
+      "height": 1520,
+      "sha256": "c909be5362bf07d2ff8b29642fc01b089a281d5fdf77f2574f13503f9d174c31",
+      "url": "https://github.com/user-attachments/assets/ad053f01-2f65-4c35-a112-c793a4eb61ce"
+    },
+    {
+      "file": "action-en-light/mapping-1067x760.png",
+      "format": "png",
+      "width": 2134,
+      "height": 1520,
+      "sha256": "af926c4f7e94e5ad6853fa00469d97cd6b89df93a5cb7fa4da019a8542283ef4",
+      "url": "https://github.com/user-attachments/assets/541d642e-9afb-43eb-864c-e77a8890dd27"
+    },
+    {
+      "file": "action-en-dark/mapping-1067x760.png",
+      "format": "png",
+      "width": 2134,
+      "height": 1520,
+      "sha256": "95c0c626817f8106ed33b6b996ea72dc49c426a0fa27ccce665871f5516b2b78",
+      "url": "https://github.com/user-attachments/assets/04bc797e-2736-4a13-9221-0ff789ecfa41"
+    }
+  ]
+}

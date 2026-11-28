@@ -23,6 +23,7 @@ struct ButtonProfileHostAction: Equatable {
     let systemImage: String
     let payload: Data
     let isAvailable: Bool
+    let mouseMoveDistance: Int?
 }
 
 struct ButtonProfileHostActionSection: Equatable {
@@ -495,8 +496,12 @@ final class MacroFeatureIntegration: ObservableObject {
             return .macro(MacroReference(macroID: id, version: version))
         }
         guard let data = try? JSONEncoder().encode(configured) else { return nil }
-        return .host(RemoteMicHostActionReference(id: "host.action.\(configured.action.rawValue)",
-            displayName: displayName ?? configured.action.rawValue, payload: data))
+        return .host(Self.remoteHostActionReference(
+            id: "host.action.\(configured.action.rawValue)",
+            displayName: displayName ?? configured.action.rawValue,
+            payload: data,
+            mouseMoveDistance: configured.isMouseMove ? configured.resolvedMouseMoveDistance : nil
+        ))
     }
     #endif
 
@@ -777,8 +782,12 @@ final class MacroFeatureIntegration: ObservableObject {
                 binding = .macro(MacroReference(macroID: id, version: version))
             } else {
                 guard let data = try? JSONEncoder().encode(configured) else { return }
-                binding = .host(RemoteMicHostActionReference(id: "host.action.\(configured.action.rawValue)",
-                    displayName: displayName ?? configured.action.rawValue, payload: data))
+                binding = .host(Self.remoteHostActionReference(
+                    id: "host.action.\(configured.action.rawValue)",
+                    displayName: displayName ?? configured.action.rawValue,
+                    payload: data,
+                    mouseMoveDistance: configured.isMouseMove ? configured.resolvedMouseMoveDistance : nil
+                ))
             }
         } else { binding = nil }
         buttonProfilesFeature.setBinding(binding, profile: profile, button: button.rawValue, trigger: trigger.rawValue)
@@ -1115,13 +1124,14 @@ final class MacroFeatureIntegration: ObservableObject {
               ),
               let payload = try? JSONEncoder().encode(configured)
         else { return nil }
-        let reference = RemoteMicHostActionReference(
+        let reference = Self.remoteHostActionReference(
             id: "host.action.customShortcut",
             displayName: Self.shortcutDisplayName(
                 keyLabel: keyLabelForDisplay,
                 modifierFlags: configured.shortcut?.modifierFlags ?? []
             ),
-            payload: payload
+            payload: payload,
+            mouseMoveDistance: nil
         )
         return (reference, configured)
     }
@@ -1499,6 +1509,30 @@ final class MacroFeatureIntegration: ObservableObject {
         #endif
     }
 
+    #if canImport(SayAllButtonProfiles)
+    private static func remoteHostActionReference(
+        id: String,
+        displayName: String,
+        payload: Data,
+        mouseMoveDistance: Int?
+    ) -> RemoteMicHostActionReference {
+        #if SAYALL_BUTTON_PROFILE_MOUSE_DISTANCE
+        return RemoteMicHostActionReference(
+            id: id,
+            displayName: displayName,
+            payload: payload,
+            mouseMoveDistance: mouseMoveDistance
+        )
+        #else
+        return RemoteMicHostActionReference(
+            id: id,
+            displayName: displayName,
+            payload: payload
+        )
+        #endif
+    }
+    #endif
+
     func buttonProfilesView(
         selectedRemoteProfileID: UUID?,
         remoteModel: XiaomiRemoteModel?,
@@ -1519,10 +1553,11 @@ final class MacroFeatureIntegration: ObservableObject {
                 title: section.title,
                 actions: section.actions.map { action in
                     RemoteMicHostActionDescriptor(
-                        reference: RemoteMicHostActionReference(
+                        reference: Self.remoteHostActionReference(
                             id: action.id,
                             displayName: action.title,
-                            payload: action.payload
+                            payload: action.payload,
+                            mouseMoveDistance: action.mouseMoveDistance
                         ),
                         detail: action.detail,
                         systemImage: action.systemImage,
@@ -1536,10 +1571,11 @@ final class MacroFeatureIntegration: ObservableObject {
             onChooseCustomApplication.map { callback in
                 { (completion: @escaping (RemoteMicHostActionReference) -> Void) in
                     callback { id, displayName, payload in
-                        completion(RemoteMicHostActionReference(
+                        completion(Self.remoteHostActionReference(
                             id: id,
                             displayName: displayName,
-                            payload: payload
+                            payload: payload,
+                            mouseMoveDistance: nil
                         ))
                     }
                 }
