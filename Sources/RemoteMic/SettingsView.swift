@@ -619,7 +619,7 @@ private struct MouseHoldGuidance: View {
                 Button(localization.text("button_mapping.mouse_hold_guidance.set")) {
                     onSet()
                 }
-                .compatibilityButtonStyle(.standard)
+                .compatibilityButtonStyle(.prominent)
                 .controlSize(.small)
                 .frame(minWidth: 96)
                 Button(localization.text("button_mapping.mouse_hold_guidance.keep")) {
