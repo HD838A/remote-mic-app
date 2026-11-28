@@ -1,0 +1,49 @@
+{
+  "batch": "mouse-hold-guidance-454-20261128",
+  "date": "2026-11-28",
+  "purpose": "PR 1231 mouse action hold guidance, aligned buttons and auto-scroll target",
+  "storage": "github-pr-attachments",
+  "sourceCommit": "c61b71df2a3bfea2d27334f026e59f127be0d0e0",
+  "appVersion": "2.0.10",
+  "build": "454",
+  "contentSize": {
+    "width": 1067,
+    "height": 760
+  },
+  "generation": "public-mode production SettingsView offscreen renderer; mouseMoveRight distance 42; hold=once",
+  "realHardwareAcceptance": "pending",
+  "files": [
+    {
+      "file": "zh-Hans-light/mapping-1067x760.png",
+      "format": "png",
+      "width": 2134,
+      "height": 1520,
+      "sha256": "8bacf72157b5aee7531ee08671d93c77fd3067b32c978335fa9ff07d5102c4b4",
+      "url": "https://github.com/user-attachments/assets/62e19198-008c-498d-b28e-5ebefd82d94b"
+    },
+    {
+      "file": "zh-Hans-dark/mapping-1067x760.png",
+      "format": "png",
+      "width": 2134,
+      "height": 1520,
+      "sha256": "ac4af36d810eb56339917ac4bd0421558d1185ff4a14802465ae15f0fe3a3ee5",
+      "url": "https://github.com/user-attachments/assets/54623608-cad5-41cd-9f75-7939650cc0da"
+    },
+    {
+      "file": "en-light/mapping-1067x760.png",
+      "format": "png",
+      "width": 2134,
+      "height": 1520,
+      "sha256": "eaa6187b34df06523deeb79709dfb58a913a0fbb7a670c44538847b432539b60",
+      "url": "https://github.com/user-attachments/assets/4394cb20-6b06-45c8-8d6e-1fa5ee0fecea"
+    },
+    {
+      "file": "en-dark/mapping-1067x760.png",
+      "format": "png",
+      "width": 2134,
+      "height": 1520,
+      "sha256": "f3bf6b2dccd6fa666b353259f0b2532f81351124745a576dc39ea5061151d112",
+      "url": "https://github.com/user-attachments/assets/fde9ece1-fdc3-4e0a-8cb8-3717e1e55daa"
+    }
+  ]
+}
