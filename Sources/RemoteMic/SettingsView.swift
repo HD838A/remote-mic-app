@@ -615,17 +615,19 @@ private struct MouseHoldGuidance: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 8)
-            VStack(alignment: .trailing, spacing: 5) {
+            VStack(alignment: .trailing, spacing: 6) {
                 Button(localization.text("button_mapping.mouse_hold_guidance.set")) {
                     onSet()
                 }
                 .compatibilityButtonStyle(.standard)
                 .controlSize(.small)
+                .frame(minWidth: 96)
                 Button(localization.text("button_mapping.mouse_hold_guidance.keep")) {
                     onKeep()
                 }
-                .buttonStyle(.link)
-                .font(.system(size: 12))
+                .compatibilityButtonStyle(.standard)
+                .controlSize(.small)
+                .frame(minWidth: 96)
             }
         }
         .padding(12)
@@ -2525,6 +2527,11 @@ struct SettingsView: View {
 
     private func requestMappingEditorScroll(focusHold: Bool) {
         mappingEditorScrollTarget = focusHold ? "mapping-hold-editor" : "mapping-action-editor"
+        mappingEditorScrollRequest &+= 1
+    }
+
+    private func requestMouseHoldGuidanceScroll() {
+        mappingEditorScrollTarget = "mapping-mouse-hold-guidance"
         mappingEditorScrollRequest &+= 1
     }
 
@@ -4439,6 +4446,9 @@ struct SettingsView: View {
                                     return
                                 }
                                 setMappingAction(action, for: button, trigger: trigger)
+                                if action.isMouseMove {
+                                    requestMouseHoldGuidanceScroll()
+                                }
                                 shortcutCaptureTarget = nil
                             }
                         )
@@ -4483,6 +4493,7 @@ struct SettingsView: View {
                             )
                         }
                     )
+                    .id("mapping-mouse-hold-guidance")
                 }
             }
 
