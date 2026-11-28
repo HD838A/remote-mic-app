@@ -1,0 +1,49 @@
+{
+  "batch": "mouse-hold-guidance-20261128",
+  "date": "2026-11-28",
+  "purpose": "PR 1231 mouse action hold guidance in production SettingsView",
+  "storage": "github-pr-attachments",
+  "sourceCommit": "dc354d8254aff11d86124c73ac4c926961940569",
+  "appVersion": "2.0.10",
+  "build": "452",
+  "contentSize": {
+    "width": 1067,
+    "height": 760
+  },
+  "generation": "public-mode production SettingsView offscreen renderer; mouseMoveRight distance 42; hold=once",
+  "realHardwareAcceptance": "pending",
+  "files": [
+    {
+      "file": "zh-Hans-light/mapping-1067x760.png",
+      "format": "png",
+      "width": 2134,
+      "height": 1520,
+      "sha256": "9d02aeb7b5239a93bf992744a62ba479ea4e1741319f53263e568e1fb329ca2e",
+      "url": "https://github.com/user-attachments/assets/50176b11-4b76-4595-abaf-8d8ce57ae1dc"
+    },
+    {
+      "file": "zh-Hans-dark/mapping-1067x760.png",
+      "format": "png",
+      "width": 2134,
+      "height": 1520,
+      "sha256": "85f424c8afc1916861607f80fff3c7cc91dea663749d4abbe2c709bc121c95a5",
+      "url": "https://github.com/user-attachments/assets/be76fa45-4a51-4076-aa88-8ab776c064ad"
+    },
+    {
+      "file": "en-light/mapping-1067x760.png",
+      "format": "png",
+      "width": 2134,
+      "height": 1520,
+      "sha256": "ce976b3bf35968efec248f06a7d1d7f5645628ae9af7d227e1cd88c7d1741e44",
+      "url": "https://github.com/user-attachments/assets/9840ea8d-c318-496d-b6e1-031166b552e5"
+    },
+    {
+      "file": "en-dark/mapping-1067x760.png",
+      "format": "png",
+      "width": 2134,
+      "height": 1520,
+      "sha256": "5f610240aca7ce8bb15027fa582fc21da1731e56c6de1548e7e838a5a292738c",
+      "url": "https://github.com/user-attachments/assets/08a0a3c1-4c55-4267-85f4-69350b76ab94"
+    }
+  ]
+}
