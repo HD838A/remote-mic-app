@@ -307,6 +307,10 @@ enum SettingsPageBehavior {
         }
     }
 
+    static let bluetoothPrivacyAction = SettingsPermissionAction.openSystemSettings(
+        "x-apple.systempreferences:com.apple.preference.security?Privacy_Bluetooth"
+    )
+
     static func perform(
         _ action: SettingsPermissionAction,
         requestPermission: () -> Void,
@@ -7306,7 +7310,11 @@ struct SettingsView: View {
                 title: localization.text("permission.bluetooth.title"),
                 detail: localization.text("permission.bluetooth.description"),
                 state: bluetoothPermissionState,
-                actionTitle: localization.text("permission.bluetooth.open_settings")
+                actionTitle: localization.text("permission.bluetooth.open_connection"),
+                secondaryActionTitle: localization.text("permission.bluetooth.open_privacy"),
+                secondaryAction: {
+                    performPermissionAction(SettingsPageBehavior.bluetoothPrivacyAction) {}
+                }
             ) {
                 performPermissionAction(bluetoothAction) {}
             }
@@ -7828,6 +7836,7 @@ struct SettingsView: View {
                                 .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
+                            .focusable(false)
                             .padding(.vertical, 6)
                             .accessibilityIdentifier("settings.community_help")
                             }
@@ -8486,6 +8495,8 @@ struct SettingsView: View {
         detail: String,
         state: PermissionVisualState,
         actionTitle: String,
+        secondaryActionTitle: String? = nil,
+        secondaryAction: (() -> Void)? = nil,
         action: @escaping () -> Void
     ) -> some View {
         HStack(spacing: 12) {
@@ -8513,9 +8524,16 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
             .frame(width: 78, alignment: .leading)
-            Button(actionTitle, action: action)
-                .compatibilityButtonStyle(.standard)
-                .frame(width: 126)
+            HStack(spacing: 7) {
+                Button(actionTitle, action: action)
+                    .compatibilityButtonStyle(.standard)
+                    .frame(minWidth: 126)
+                if let secondaryActionTitle, let secondaryAction {
+                    Button(secondaryActionTitle, action: secondaryAction)
+                        .compatibilityButtonStyle(.standard)
+                        .frame(minWidth: 126)
+                }
+            }
         }
         .padding(.vertical, 8)
     }

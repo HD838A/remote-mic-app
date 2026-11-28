@@ -5033,14 +5033,28 @@ final class BridgeAppModel: NSObject, ObservableObject, XiaomiBluetoothBridgeDel
         }
     }
 
-    func requestInputMonitoringPermission() {
+    func requestInputMonitoringPermission(
+        source: PermissionDragHelperSource = .settings
+    ) {
         _ = HIDRemoteMonitor.requestInputMonitoringAccess()
         openPrivacyPane("Privacy_ListenEvent")
+        PermissionDragHelperController.shared.present(
+            pane: .inputMonitoring,
+            source: source,
+            settings: settings
+        )
     }
 
-    func requestAccessibilityPermission() {
+    func requestAccessibilityPermission(
+        source: PermissionDragHelperSource = .settings
+    ) {
         _ = KeyboardInjector.requestAccessibilityAccess()
         openPrivacyPane("Privacy_Accessibility")
+        PermissionDragHelperController.shared.present(
+            pane: .accessibility,
+            source: source,
+            settings: settings
+        )
     }
 
     func openLogFolder() {

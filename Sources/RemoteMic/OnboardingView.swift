@@ -588,6 +588,7 @@ struct OnboardingView: View {
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    .focusable(false)
                     .accessibilityIdentifier("onboarding.community_help")
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -5488,12 +5489,12 @@ struct OnboardingView: View {
 
     private func requestInputMonitoringPermission() {
         guard interactionProbe == nil else { return }
-        model.requestInputMonitoringPermission()
+        model.requestInputMonitoringPermission(source: .onboarding)
     }
 
     private func requestAccessibilityPermission() {
         guard interactionProbe == nil else { return }
-        model.requestAccessibilityPermission()
+        model.requestAccessibilityPermission(source: .onboarding)
     }
 
     private func openBluetoothPrivacySettings() {

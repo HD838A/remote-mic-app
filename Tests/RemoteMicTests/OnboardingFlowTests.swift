@@ -1206,8 +1206,8 @@ struct OnboardingFlowTests {
         #expect(viewSource.contains("action: requestBluetoothPermission"))
         #expect(viewSource.contains("action: requestInputMonitoringPermission"))
         #expect(viewSource.contains("action: requestAccessibilityPermission"))
-        #expect(viewSource.contains("model.requestInputMonitoringPermission()"))
-        #expect(viewSource.contains("model.requestAccessibilityPermission()"))
+        #expect(viewSource.contains("model.requestInputMonitoringPermission(source: .onboarding)"))
+        #expect(viewSource.contains("model.requestAccessibilityPermission(source: .onboarding)"))
         #expect(viewSource.contains("if bluetoothAuthorization == .allowedAlways"))
         #expect(viewSource.contains("Privacy_Bluetooth"))
     }

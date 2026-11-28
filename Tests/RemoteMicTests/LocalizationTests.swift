@@ -58,6 +58,38 @@ struct LocalizationTests {
         #expect(english["remote.card.detail.device_failed"] == "Device connected, but both the buttons and the entitled voice function are not working.")
     }
 
+    @Test func permissionDragHelperCopyUsesUnifiedProductNaming() throws {
+        let chinese = try strings(
+            at: repositoryRoot.appendingPathComponent("Resources/zh-Hans.lproj/Localizable.strings")
+        )
+        let english = try strings(
+            at: repositoryRoot.appendingPathComponent("Resources/en.lproj/Localizable.strings")
+        )
+
+        #expect(chinese["permission.helper.product"] == "无线麦 SayAll")
+        #expect(english["permission.helper.product"] == "SayAll")
+        #expect(chinese["permission.helper.drag"] == "拖我")
+        #expect(english["permission.helper.drag"] == "Drag me")
+        #expect(chinese["permission.helper.hint"] == "拖入列表，或点 + 添加")
+        #expect(english["permission.helper.hint"] == "Drag into the list, or click + to add")
+        #expect(chinese["permission.helper.idle"] == "拖入后自动检查")
+        #expect(english["permission.helper.idle"] == "Checked after you drop it")
+        #expect(chinese["permission.helper.checking"] == "已拖入，正在检查权限…")
+        #expect(english["permission.helper.checking"] == "Added. Checking permission…")
+        #expect(chinese["permission.helper.waiting"] == "还在等待系统授权")
+        #expect(english["permission.helper.waiting"] == "Waiting for macOS permission")
+        #expect(chinese["permission.helper.added"] == "已添加")
+        #expect(english["permission.helper.added"] == "Added")
+        #expect(chinese["permission.helper.drag_failed"] == "拖动失败，请点 + 添加")
+        #expect(english["permission.helper.drag_failed"] == "Couldn't drag. Click + to add.")
+        #expect(chinese["permission.helper.reopen"] == "重新打开系统设置")
+        #expect(english["permission.helper.reopen"] == "Reopen System Settings")
+        #expect(chinese["permission.helper.accessibility_label"]?.contains("无线麦 SayAll") == true)
+        #expect(english["permission.helper.accessibility_label"]?.contains("SayAll") == true)
+        #expect(chinese["permission.helper.product"]?.contains("Remote Mic") == false)
+        #expect(english["permission.helper.product"] == "SayAll")
+    }
+
     @Test func communityHelpCopyUsesUnifiedProductNaming() throws {
         let chinese = try strings(
             at: repositoryRoot.appendingPathComponent("Resources/zh-Hans.lproj/Localizable.strings")
@@ -70,7 +102,7 @@ struct LocalizationTests {
         #expect(chinese["community.help.title"] == "配置有问题？")
         #expect(chinese["community.help.intro"] == "扫码关注抖音或小红书，查看设置教程。")
         #expect(chinese["community.help.douyin_title"] == "抖音 · 无线麦 SayAll App")
-        #expect(chinese["community.help.douyin_hint"] == "保存图片后，用抖音扫一扫")
+        #expect(chinese["community.help.douyin_hint"] == "用抖音扫一扫")
         #expect(chinese["community.help.xiaohongshu_title"] == "小红书 · 无线麦 SayAll App")
         #expect(chinese["community.help.xiaohongshu_hint"] == "用小红书扫一扫")
         #expect(chinese["community.help.douyin_title"]?.contains("SayAll.App") == false)
@@ -82,6 +114,23 @@ struct LocalizationTests {
             "Scan to follow Douyin or Xiaohongshu and view setup tutorials.")
         #expect(english["community.help.douyin_title"] == "Douyin · SayAll")
         #expect(english["community.help.xiaohongshu_title"] == "Xiaohongshu · SayAll")
+        #expect(english["community.help.douyin_hint"] == "Scan with Douyin")
+    }
+
+    @Test func permissionBluetoothAndOnboardingCopyMatchButtons() throws {
+        let chinese = try strings(
+            at: repositoryRoot.appendingPathComponent("Resources/zh-Hans.lproj/Localizable.strings")
+        )
+        let english = try strings(
+            at: repositoryRoot.appendingPathComponent("Resources/en.lproj/Localizable.strings")
+        )
+
+        #expect(chinese["permission.bluetooth.open_connection"] == "打开蓝牙连接")
+        #expect(chinese["permission.bluetooth.open_privacy"] == "打开蓝牙权限")
+        #expect(english["permission.bluetooth.open_connection"] == "Open Bluetooth Connection")
+        #expect(english["permission.bluetooth.open_privacy"] == "Open Bluetooth Permission")
+        #expect(chinese["onboarding.remote.open_bluetooth"] == "打开蓝牙连接")
+        #expect(english["onboarding.remote.open_bluetooth"] == "Open Bluetooth Connection")
     }
 
     @Test func screenshotResourceFallbackLoadsRepositoryLocalizations() throws {

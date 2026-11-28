@@ -52,6 +52,7 @@
 - [`Bugs/README.md`](Bugs/README.md) 是证据驱动调查的记录格式和索引；具体调查位于 `Bugs/`。
 - Onboarding 验证按 `AGENTS.md` 分类；生产截图矩阵见 [`Testing/FirstRunOnboarding.md`](Testing/FirstRunOnboarding.md#生产页面与场景清单)。
 - 抖音/小红书教程入口的步骤、失败判定、日志和二维码验收边界见 [`Testing/CommunityHelpEntries.md`](Testing/CommunityHelpEntries.md)。
+- 权限拖动卡的步骤、失败判定、日志和真实验收边界见 [`Testing/PermissionDragHelper.md`](Testing/PermissionDragHelper.md)。
 - [`TODO.md`](TODO.md) 只记录待办，不是现行产品规范。
 - `feature/<feature>/README.md`、`development.md` 和 `testing.md` 保存功能档案、开发记录和历史验证边界，不覆盖 `PRODUCT_SPEC.md`。
 

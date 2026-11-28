@@ -387,6 +387,9 @@ struct SettingsPageRegressionTests {
         #expect(SettingsPageBehavior.permissionAction(for: .bluetooth, isGranted: false) == .openSystemSettings(
             "x-apple.systempreferences:com.apple.BluetoothSettings"
         ))
+        #expect(SettingsPageBehavior.bluetoothPrivacyAction == .openSystemSettings(
+            "x-apple.systempreferences:com.apple.preference.security?Privacy_Bluetooth"
+        ))
         #expect(SettingsPageBehavior.permissionAction(for: .inputMonitoring, isGranted: true) == .openSystemSettings(
             "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent"
         ))
