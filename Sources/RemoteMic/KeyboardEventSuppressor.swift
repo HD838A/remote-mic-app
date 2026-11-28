@@ -87,6 +87,13 @@ final class KeyboardEventSuppressor {
         lock.unlock()
     }
 
+    /// Only for proving that the event-tap path fails open while the HID ledger is busy.
+    func withLockedStateForTesting(_ body: () -> Void) {
+        lock.lock()
+        defer { lock.unlock() }
+        body()
+    }
+
     init(
         hardwareModifierState: ShortcutHardwareModifierState = ShortcutEventSequence.hardwareModifierState,
         uptime: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
@@ -367,16 +374,9 @@ final class KeyboardEventSuppressor {
             // 窗口、把那一次松开吞掉——正是「系统认为键仍按住并连发」要避免的事。
             // 保留账本时，下一次同码松开到达即自愈（放行并出账），最坏情况只是
             // 该键在下一次按下前少一次拦截，不会出现卡键。
-            // 本回调在 tap 专用线程上执行，端口引用由主线程写入，必须加锁读取。
-            lock.lock()
-            let tap = eventTap
-            lock.unlock()
-            if let tap {
-                CGEvent.tapEnable(tap: tap, enable: true)
-                logger("HID FILTER phase=reenable_requested result=submitted tap=session")
-            } else {
-                logger("HID FILTER phase=reenable_requested result=unavailable tap=session")
-            }
+            // Fail open. Re-enabling the same tap immediately can repeat a slow callback
+            // forever and make every input event in the login session pay the cost.
+            logger("HID FILTER phase=disabled result=fail_open recovery=app_restart tap=session")
             return false
         }
         if let observation = FnKeyDiagnostics.eventObservation(
@@ -403,7 +403,9 @@ final class KeyboardEventSuppressor {
         guard let descriptor = descriptor(type: type, event: event) else { return false }
 
         let now = uptime()
-        lock.lock()
+        // A session tap is on WindowServer's input delivery path. If the HID report
+        // thread owns the ledger, pass this event through instead of waiting for it.
+        guard lock.try() else { return false }
         pendingEvents.removeAll { $0.expiresAt <= now }
         if passedNativeDowns.contains(descriptor.event) {
             if descriptor.edge == .up {
